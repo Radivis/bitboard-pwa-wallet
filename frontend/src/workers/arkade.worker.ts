@@ -38,6 +38,7 @@ import type {
   ArkadeUnilateralExitInProgressRow,
   ArkadeVtxoListResult,
   ArkadeUnrollProgressEvent,
+  ArkadeUnrollResult,
   ArkadeVtxoExpiryStatus,
   EnsureArkadeOperatorConnectionEncryptedParams,
   OpenArkadeSessionParams,
@@ -574,7 +575,7 @@ const arkadeService: ArkadeService = {
   async runUnilateralUnroll(
     params: { txid: string; vout: number },
     onProgress: (event: ArkadeUnrollProgressEvent) => void,
-  ): Promise<{ vtxoTxid: string }> {
+  ): Promise<ArkadeUnrollResult> {
     if (unrollInFlight) {
       throw new Error('Unilateral unroll is already in progress')
     }
@@ -591,7 +592,7 @@ const arkadeService: ArkadeService = {
         ),
       )
       await persistAfterCriticalOperation()
-      return result as { vtxoTxid: string }
+      return result as ArkadeUnrollResult
     } finally {
       unrollInFlight = false
     }

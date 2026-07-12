@@ -17,6 +17,8 @@ pub const CODE_PERSISTENCE: &str = "persistence";
 pub const CODE_WALLET: &str = "wallet";
 pub const CODE_CLIENT: &str = "client";
 pub const CODE_OPERATOR_INDEXER_CATCHING_UP: &str = "operator_indexer_catching_up";
+pub const CODE_UNILATERAL_UNROLL_NOT_CONFIRMED_ON_CHAIN: &str =
+    "unilateral_unroll_not_confirmed_on_chain";
 pub const CODE_BLOCKCHAIN: &str = "blockchain";
 pub const CODE_MNEMONIC: &str = "mnemonic";
 pub const CODE_SERIALIZATION: &str = "serialization";
@@ -78,6 +80,9 @@ pub enum ArkWasmError {
     )]
     OperatorIndexerCatchingUp,
 
+    #[error("Unilateral unroll could not be confirmed on-chain ({txid})")]
+    UnilateralUnrollNotConfirmedOnChain { txid: String },
+
     #[error("{0}")]
     Boarding(String),
 
@@ -131,6 +136,9 @@ impl ArkWasmError {
             | Self::VtxoNotInUnilateralExit { .. }
             | Self::VtxoUnilateralExitNotReady { .. } => CODE_VALIDATION,
             Self::OperatorIndexerCatchingUp => CODE_OPERATOR_INDEXER_CATCHING_UP,
+            Self::UnilateralUnrollNotConfirmedOnChain { .. } => {
+                CODE_UNILATERAL_UNROLL_NOT_CONFIRMED_ON_CHAIN
+            }
             Self::DelegatorNotConfigured | Self::Delegator(_) | Self::InvalidDelegatorFee(_) => {
                 CODE_DELEGATOR
             }
@@ -201,10 +209,45 @@ mod tests {
     }
 
     #[test]
+    fn unilateral_unroll_not_confirmed_on_chain_has_stable_code() {
+        let error = ArkWasmError::UnilateralUnrollNotConfirmedOnChain { txid: "abc".into() };
+        assert_eq!(error.code(), CODE_UNILATERAL_UNROLL_NOT_CONFIRMED_ON_CHAIN);
+        assert!(error.to_string().contains("abc"));
+    }
+
+    #[test]
     fn wasm_payload_round_trips_fields() {
         let error = ArkWasmError::DelegatorNotConfigured;
         let payload = error.to_wasm_payload();
         assert_eq!(payload.code, CODE_DELEGATOR);
         assert_eq!(payload.message, error.to_string());
+    }
+
+    #[test]
+    fn client_join_batch_event_stream_error_surfaces_status_in_wasm_payload() {
+        use ark_client::error::{ErrorContext, IntoError};
+
+        let event_stream_detail = "Event stream request failed with status 500 Internal Server Error: FUNCTION_INVOCATION_FAILED";
+        let enriched_chain = format!("batch event stream: request failed: {event_stream_detail}");
+
+        #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+        let server_error = ark_client::Error::from(ark_client::ark_grpc_wasm_shim::Error::request(
+            std::io::Error::new(std::io::ErrorKind::Other, enriched_chain.clone()),
+        ));
+        #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+        let server_error = enriched_chain.clone().into_error();
+
+        let client_error = server_error.context("Failed to join batch");
+        let wasm_error = ArkWasmError::Client(client_error);
+        let payload = wasm_error.to_wasm_payload();
+
+        assert_eq!(payload.code, CODE_CLIENT);
+        assert!(payload.message.contains("500"));
+        assert!(payload.message.contains("FUNCTION_INVOCATION"));
+        assert!(
+            !payload.message.ends_with("request failed"),
+            "unexpected bare chain: {}",
+            payload.message
+        );
     }
 }

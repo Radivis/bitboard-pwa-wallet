@@ -13,7 +13,7 @@
       "maxDuration": 10
     },
     "api/arkade/operator/[...path].ts": {
-      "maxDuration": 30
+      "maxDuration": 300
     },
     "api/lnurl/[...path].ts": {
       "maxDuration": 10

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use ark_client::Error;
@@ -107,6 +107,19 @@ pub struct PendingExitDeductionRecord {
     pub baseline_offchain_spendable_sats: Option<u64>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct UnilateralExitWatchRecord {
+    pub vtxo_txid: String,
+    pub vout: u32,
+    pub amount_sats: u64,
+    pub registered_at: i64,
+    /// Tip txid from unroll (for Esplora branch checks).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub published_vtxo_txid: Option<String>,
+    #[serde(default)]
+    pub branch_txids: Vec<String>,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct WalletDbSnapshot {
     pub boarding_outputs: Vec<BoardingOutputSnapshot>,
@@ -117,6 +130,8 @@ pub struct WalletDbSnapshot {
     pub offchain_vtxo_snapshot: Option<OffchainVtxoSnapshot>,
     #[serde(default)]
     pub pending_exit_deductions: Vec<PendingExitDeductionRecord>,
+    #[serde(default)]
+    pub unilateral_exit_watches: Vec<UnilateralExitWatchRecord>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -227,6 +242,49 @@ impl JsonPersistenceDb {
 
     pub fn set_pending_exit_deductions(&self, records: Vec<PendingExitDeductionRecord>) {
         lock_persistence(&self.inner).pending_exit_deductions = records;
+    }
+
+    pub fn unilateral_exit_watches(&self) -> Vec<UnilateralExitWatchRecord> {
+        lock_persistence(&self.inner)
+            .unilateral_exit_watches
+            .clone()
+    }
+
+    pub fn set_unilateral_exit_watches(&self, watches: Vec<UnilateralExitWatchRecord>) {
+        lock_persistence(&self.inner).unilateral_exit_watches = watches;
+    }
+
+    pub fn upsert_unilateral_exit_watch(&self, record: UnilateralExitWatchRecord) {
+        let mut inner = lock_persistence(&self.inner);
+        if let Some(existing) = inner
+            .unilateral_exit_watches
+            .iter_mut()
+            .find(|existing| existing.vtxo_txid == record.vtxo_txid && existing.vout == record.vout)
+        {
+            if record.published_vtxo_txid.is_some() {
+                existing.published_vtxo_txid = record.published_vtxo_txid;
+            }
+            if !record.branch_txids.is_empty() {
+                existing.branch_txids = record.branch_txids;
+            }
+            existing.amount_sats = record.amount_sats;
+            return;
+        }
+        inner.unilateral_exit_watches.push(record);
+    }
+
+    pub fn remove_unilateral_exit_watch(&self, txid: &str, vout: u32) {
+        let mut inner = lock_persistence(&self.inner);
+        inner
+            .unilateral_exit_watches
+            .retain(|watch| !(watch.vtxo_txid == txid && watch.vout == vout));
+    }
+
+    pub fn remove_unilateral_exit_watches_for_txids(&self, vtxo_txids: &HashSet<String>) {
+        let mut inner = lock_persistence(&self.inner);
+        inner
+            .unilateral_exit_watches
+            .retain(|watch| !vtxo_txids.contains(&watch.vtxo_txid));
     }
 
     /// Insert or replace a pending exit record (no duplicate deductions on retry).

@@ -1002,6 +1002,9 @@ export function useArkadeUnilateralUnrollMutation() {
     onSuccess: async (result, _params, context) => {
       toast.dismiss(unilateralUnrollProgressToastId({ type: 'done', txid: result.vtxoTxid }))
       toast.success(formatUnilateralUnrollSuccessMessage(result.vtxoTxid))
+      if (result.indexerWarning) {
+        toast.warning(result.indexerWarning, { id: 'arkade-unroll-indexer-warning' })
+      }
       if (activeWalletId != null && activeArkadeConnectionId != null) {
         await invalidateArkadeWalletDataQueries(
           queryClient,
