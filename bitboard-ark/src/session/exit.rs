@@ -28,6 +28,11 @@ use crate::persistence::{
 };
 
 use super::ArkSession;
+use super::exit_autonomous::{
+    autonomous_build_unilateral_branch, autonomous_chain_step_counts,
+    autonomous_exit_candidates_from_snapshot, autonomous_validate_completion_ready,
+    parse_vtxo_txids,
+};
 use super::exit_watch::{
     enrich_unilateral_exit_watch_after_unroll, remove_unilateral_exit_watch_in_wallet_db,
 };
@@ -218,6 +223,9 @@ impl ArkSession {
 
     pub async fn list_exit_candidates(&self) -> ArkResult<Vec<ExitCandidateRow>> {
         let in_progress = self.unilateral_exit_in_progress_outpoints()?;
+        if self.autonomous_mode() {
+            return autonomous_exit_candidates_from_snapshot(self, &in_progress);
+        }
         let (vtxo_list, _) = self.client.list_vtxos().await?;
         let dust = self.client.server_info()?.dust;
         let rows = vtxo_list
@@ -242,7 +250,12 @@ impl ArkSession {
         let pending = self.wallet_db.pending_exit_deductions();
         let started_at_by_outpoint = Self::pending_unilateral_started_at_by_outpoint(&pending);
 
-        let (vtxo_list, _) = self.client.list_vtxos().await?;
+        let (vtxo_list, _) = if self.autonomous_mode() {
+            self.snapshot_vtxo_list_and_script_map()
+                .map(|(list, _)| (list, HashMap::new()))?
+        } else {
+            self.client.list_vtxos().await?
+        };
         let dust = self.client.server_info()?.dust;
         let operator_by_outpoint: HashMap<UnilateralExitOutpointKey, _> = vtxo_list
             .all()
@@ -345,6 +358,7 @@ impl ArkSession {
     }
 
     pub async fn collaborative_exit(&self, params: CollaborativeExitParams) -> ArkResult<String> {
+        self.ensure_operator_rpc_allowed()?;
         let destination = parse_onchain_address(&params.destination_address, self.network())?;
         let buckets = self.resolve_offchain_balance_buckets().await?;
         let baseline_offchain_spendable_sats = buckets.gross_spendable_sats();
@@ -367,6 +381,7 @@ impl ArkSession {
         destination_address: &str,
         amount_sats: Option<u64>,
     ) -> ArkResult<CollaborativeExitFeeEstimateDto> {
+        self.ensure_operator_rpc_allowed()?;
         let fees = self
             .client
             .server_info()?
@@ -447,23 +462,56 @@ impl ArkSession {
         let mut projected_wait_steps = 0u32;
         let mut estimate_error = None;
 
-        match self.client.get_vtxo_chain(outpoint).await {
-            Ok(Some(chain)) => {
-                chain_tx_count = chain.chains.inner.len() as u32;
-                projected_unroll_steps = chain_tx_count.saturating_sub(1);
-                projected_wait_steps = chain
-                    .chains
-                    .inner
-                    .iter()
-                    .map(|link| link.spends.len())
-                    .sum::<usize>() as u32;
+        match if self.autonomous_mode() {
+            let snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot;
+            let materials = snapshot.as_ref().and_then(|snapshot| {
+                crate::unilateral_exit_materials::snapshot_record_materials(
+                    snapshot,
+                    &params.txid,
+                    params.vout,
+                )
+            });
+            if let Some(materials) = materials {
+                match autonomous_chain_step_counts(materials) {
+                    Ok((unroll_steps, wait_steps)) => {
+                        chain_tx_count = unroll_steps.saturating_add(1);
+                        projected_unroll_steps = unroll_steps;
+                        projected_wait_steps = wait_steps;
+                        Ok(())
+                    }
+                    Err(error) => Err(error),
+                }
+            } else {
+                Err(ArkWasmError::AutonomousExitMaterialsMissing)
             }
-            Ok(None) => {
-                estimate_error = Some("VTXO chain not found".to_string());
+        } else {
+            self.client
+                .get_vtxo_chain(outpoint)
+                .await
+                .map(|chain| {
+                    if let Some(chain) = chain {
+                        chain_tx_count = chain.chains.inner.len() as u32;
+                        projected_unroll_steps = chain_tx_count.saturating_sub(1);
+                        projected_wait_steps = chain
+                            .chains
+                            .inner
+                            .iter()
+                            .map(|link| link.spends.len())
+                            .sum::<usize>() as u32;
+                    } else {
+                        estimate_error = Some("VTXO chain not found".to_string());
+                    }
+                })
+                .map_err(|error| ArkWasmError::Client(error))
+        } {
+            Ok(()) => {}
+            Err(ArkWasmError::AutonomousExitMaterialsMissing) => {
+                estimate_error = Some("Exit materials not prefetched for this VTXO".to_string());
             }
-            Err(error) => {
+            Err(ArkWasmError::Client(error)) => {
                 estimate_error = Some(error.to_string());
             }
+            Err(error) => return Err(error),
         }
 
         let estimated_package_fee_sats = if estimate_error.is_none() {
@@ -549,8 +597,13 @@ impl ArkSession {
         }
 
         self.mark_vtxo_unrolled_in_snapshot(txid, vout)?;
-        let poll_outcome = self
-            .poll_operator_unrolled_indexed(
+        let poll_outcome = if self.autonomous_mode() {
+            UnrollPollOutcome {
+                operator_indexer_confirmed: false,
+                indexer_warning: None,
+            }
+        } else {
+            self.poll_operator_unrolled_indexed(
                 txid,
                 vout,
                 &branch_txids,
@@ -565,7 +618,8 @@ impl ArkSession {
                 ) {
                     self.revert_unilateral_unroll_local_state(txid, vout);
                 }
-            })?;
+            })?
+        };
 
         self.persist_unilateral_exit_watch_after_unroll(txid, vout, &done_vtxo_txid, &branch_txids);
 
@@ -684,32 +738,50 @@ impl ArkSession {
             }
         }
 
-        let (vtxo_list, _) = self.client.list_vtxos().await?;
-        let dust = self.client.server_info()?.dust;
-        for vtxo_txid in &deduped_vtxo_txids {
-            let Some(virtual_tx_outpoint) = vtxo_list.all().find(|virtual_tx_outpoint| {
-                virtual_tx_outpoint.outpoint.txid.to_string() == *vtxo_txid
-            }) else {
-                continue;
-            };
-            let candidate = map_exit_candidate(virtual_tx_outpoint, dust);
-            if !candidate.can_complete {
-                return Err(ArkWasmError::VtxoUnilateralExitNotReady {
-                    txid: vtxo_txid.clone(),
-                });
+        let (vtxo_list, _) = if self.autonomous_mode() {
+            autonomous_validate_completion_ready(self, &deduped_vtxo_txids)?;
+            self.snapshot_vtxo_list_and_script_map()
+                .map(|(list, _)| (list, HashMap::new()))?
+        } else {
+            self.client.list_vtxos().await?
+        };
+        if !self.autonomous_mode() {
+            let dust = self.client.server_info()?.dust;
+            for vtxo_txid in &deduped_vtxo_txids {
+                let Some(virtual_tx_outpoint) = vtxo_list.all().find(|virtual_tx_outpoint| {
+                    virtual_tx_outpoint.outpoint.txid.to_string() == *vtxo_txid
+                }) else {
+                    continue;
+                };
+                let candidate = map_exit_candidate(virtual_tx_outpoint, dust);
+                if !candidate.can_complete {
+                    return Err(ArkWasmError::VtxoUnilateralExitNotReady {
+                        txid: vtxo_txid.clone(),
+                    });
+                }
             }
         }
 
-        let vtxo_txids: Vec<Txid> = deduped_vtxo_txids
-            .iter()
-            .map(|txid| {
-                Txid::from_str(txid).map_err(|error| ArkWasmError::InvalidTxid(error.to_string()))
-            })
-            .collect::<Result<_, _>>()?;
+        let vtxo_txids: Vec<Txid> = parse_vtxo_txids(&deduped_vtxo_txids)?;
 
         let destination = parse_onchain_address(&params.destination_address, self.network())?;
         let fee_rate_sat_per_vb =
             resolve_completion_fee_rate_sat_per_vb(params.fee_rate_sat_per_vb);
+        if self.autonomous_mode() {
+            let (vtxo_list, script_map) = self.snapshot_vtxo_list_and_script_map()?;
+            let txid = self
+                .client
+                .send_on_chain_for_vtxo_txids_with_vtxo_list(
+                    destination,
+                    &vtxo_txids,
+                    &vtxo_list,
+                    &script_map,
+                    Some(fee_rate_sat_per_vb),
+                )
+                .await?;
+            self.clear_pending_unilateral_exits_for_txids(&vtxo_txids);
+            return Ok(txid.to_string());
+        }
         let mut last_error: Option<ark_client::Error> = None;
         for _ in 0..OPERATOR_INDEXER_POLL_MAX {
             self.sync_with_operator().await?;
@@ -792,6 +864,45 @@ impl ArkSession {
         let fee_rate_sat_per_vb =
             resolve_completion_fee_rate_sat_per_vb(params.fee_rate_sat_per_vb);
 
+        if self.autonomous_mode() {
+            autonomous_validate_completion_ready(self, &deduped_vtxo_txids)?;
+            let (vtxo_list, script_map) = self.snapshot_vtxo_list_and_script_map()?;
+            match self
+                .client
+                .estimate_send_on_chain_for_vtxo_txids_with_vtxo_list(
+                    destination,
+                    &vtxo_txids,
+                    &vtxo_list,
+                    &script_map,
+                    Some(fee_rate_sat_per_vb),
+                )
+                .await
+            {
+                Ok((fee, to_amount, selected_amount, missing_blocktime_inputs)) => {
+                    return Ok(UnilateralExitCompletionFeeEstimateDto {
+                        selected_total_sats: selected_amount.to_sat(),
+                        estimated_fee_sats: fee.to_sat(),
+                        estimated_receive_sats: to_amount.to_sat(),
+                        fee_rate_sat_per_vb,
+                        estimate_error: None,
+                        missing_blocktime_inputs: map_missing_blocktime_completion_inputs(
+                            &missing_blocktime_inputs,
+                        ),
+                    });
+                }
+                Err(error) => {
+                    return Ok(UnilateralExitCompletionFeeEstimateDto {
+                        selected_total_sats: 0,
+                        estimated_fee_sats: 0,
+                        estimated_receive_sats: 0,
+                        fee_rate_sat_per_vb,
+                        estimate_error: Some(error.to_string()),
+                        missing_blocktime_inputs: Vec::new(),
+                    });
+                }
+            }
+        }
+
         match self
             .client
             .estimate_send_on_chain_for_vtxo_txids(
@@ -828,6 +939,9 @@ impl ArkSession {
         &self,
         target: OutPoint,
     ) -> ArkResult<Vec<bitcoin::Transaction>> {
+        if self.autonomous_mode() {
+            return autonomous_build_unilateral_branch(self, target).await;
+        }
         self.client
             .build_unilateral_exit_branch(target)
             .await
@@ -1040,6 +1154,7 @@ mod unroll_hard_failure_rollback_tests {
                 ark_txid: None,
                 assets: vec![],
                 server_pk_hex: None,
+                unilateral_exit_materials: None,
             }],
         }
     }

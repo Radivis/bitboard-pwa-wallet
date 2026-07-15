@@ -10,6 +10,14 @@ export interface ArkadeOperatorSyncResult {
   exitingVtxoWarning?: string
 }
 
+export interface ArkadeAutonomousModeStatus {
+  active: boolean
+  eligibleCount: number
+  materialsReadyCount: number
+  materialsMissingCount: number
+  cachedOperatorInfoPresent: boolean
+}
+
 export interface ArkadeBalanceInfo {
   confirmedSats: number
   /** Offchain VTXO spendable balance (excludes bumper/boarding). */
@@ -218,6 +226,7 @@ export interface ArkadeCompleteUnilateralExitParams {
 export type ArkadeCollaborativeExitEstimateErrorCode = 'insufficient_cooperative_inputs'
 
 export interface ArkadeCollaborativeExitFeeEstimate {
+  /** getInfo `txFeeRate` echo — informational only; fee math uses CEL intent programs + Esplora. */
   txFeeRate: string
   intentFeeConfigured: {
     offchainInput: boolean
@@ -245,6 +254,7 @@ export interface ArkadeUnilateralExitFeeEstimate {
 export interface ArkadeRecoverableVtxoFeeEstimate {
   recoverableVtxoCount: number
   recoverableTotalSats: number
+  /** getInfo `txFeeRate` echo — informational only; see `ArkadeCollaborativeExitFeeEstimate.txFeeRate`. */
   txFeeRate: string
   intentFeeConfigured: {
     offchainInput: boolean
@@ -285,6 +295,9 @@ export interface ArkadeService {
   setEncryptedWalletSecretsHost(host: EncryptedWalletSecretsHost): Promise<void>
   openSession(params: OpenArkadeSessionParams): Promise<OpenArkadeSessionResult>
   syncWithOperator(): Promise<ArkadeOperatorSyncResult>
+  enterAutonomousMode(): Promise<void>
+  exitAutonomousMode(): Promise<void>
+  getAutonomousModeStatus(): Promise<ArkadeAutonomousModeStatus>
   hasOpenSession(params: {
     walletId: number
     networkMode: ArkadeSupportedNetworkMode

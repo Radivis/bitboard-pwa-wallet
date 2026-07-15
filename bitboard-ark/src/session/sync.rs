@@ -53,27 +53,53 @@ impl ArkSession {
     pub(crate) async fn sync_with_operator_and_vtxo_list(
         &self,
     ) -> ArkResult<(VtxoList, OperatorSyncResultDto)> {
+        self.ensure_operator_rpc_allowed()?;
         let key_discovery_warning = self.sync_offchain_keys().await;
         let (vtxo_list, script_map) = self.client.list_vtxos().await?;
         let prior_snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot.clone();
+        let prior_cached = self.wallet_db.cached_operator_info();
+        let server_info = self.client.server_info()?;
+        let new_digest = server_info.digest.clone();
         let all_points: Vec<VirtualTxOutPoint> = vtxo_list.all().cloned().collect();
         let mut snapshot = snapshot_from_virtual_tx_outpoints_with_script_lookup(
-            self.client.server_info()?.dust.to_sat(),
+            server_info.dust.to_sat(),
             current_unix_timestamp(),
             all_points,
             |script| script_map.get(script).map(|vtxo| vtxo.server_pk()),
+        );
+        if prior_cached
+            .as_ref()
+            .is_some_and(|cached| cached.digest != new_digest)
+        {
+            crate::unilateral_exit_materials::clear_all_unilateral_exit_materials(&mut snapshot);
+        }
+        crate::unilateral_exit_materials::merge_unilateral_exit_materials(
+            prior_snapshot.as_ref(),
+            &mut snapshot,
         );
         merge_sticky_unrolled_flags(prior_snapshot.as_ref(), &mut snapshot);
         let reconcile =
             reconcile_exiting_vtxo_watches(self, snapshot, prior_snapshot.as_ref()).await?;
         snapshot = reconcile.snapshot;
+        let materials_warning =
+            super::exit_materials_prefetch::prefetch_unilateral_exit_materials_for_snapshot(
+                self,
+                &mut snapshot,
+                &vtxo_list,
+            )
+            .await;
         self.wallet_db.set_offchain_vtxo_snapshot(snapshot.clone());
         self.wallet_db
             .set_unilateral_exit_watches(reconcile.watches.clone());
         self.reconcile_pending_exit_deductions_with_snapshot(&snapshot)?;
+        self.persist_cached_operator_info_from_client()?;
         let sync_result = OperatorSyncResultDto {
-            key_discovery_warning,
-            exiting_vtxo_warning: merge_exiting_vtxo_sync_warnings(reconcile.warnings),
+            key_discovery_warning: combine_operator_sync_warning_messages(
+                key_discovery_warning,
+                merge_exiting_vtxo_sync_warnings(reconcile.warnings),
+            )
+            .or(materials_warning),
+            exiting_vtxo_warning: None,
         };
         Ok((vtxo_list, sync_result))
     }

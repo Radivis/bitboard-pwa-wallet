@@ -97,6 +97,7 @@ impl ArkSession {
     }
 
     pub async fn recoverable_vtxo_fee_estimate(&self) -> ArkResult<RecoverableVtxoFeeEstimateDto> {
+        self.ensure_operator_rpc_allowed()?;
         let fees = self
             .client
             .server_info()?
@@ -155,6 +156,7 @@ impl ArkSession {
     }
 
     pub async fn recover_recoverable_vtxos(&self) -> ArkResult<Option<String>> {
+        self.ensure_operator_rpc_allowed()?;
         let mut last_commitment_txid: Option<Txid> = None;
 
         for _ in 0..RECOVER_RECOVERABLE_MAX_ROUNDS {
@@ -193,14 +195,16 @@ impl ArkSession {
         let server_info = self.client.server_info()?;
         let now = current_unix_timestamp();
 
-        if let Ok((vtxo_list, script_map)) = self.client.list_vtxos().await {
-            let rows = map_vtxo_rows_from_list(&vtxo_list, dust, &server_info, now, |script| {
-                script_map.get(script).map(|vtxo| vtxo.server_pk())
-            });
-            return Ok(VtxoListResultDto {
-                rows,
-                from_snapshot_synced_at: None,
-            });
+        if !self.autonomous_mode() {
+            if let Ok((vtxo_list, script_map)) = self.client.list_vtxos().await {
+                let rows = map_vtxo_rows_from_list(&vtxo_list, dust, &server_info, now, |script| {
+                    script_map.get(script).map(|vtxo| vtxo.server_pk())
+                });
+                return Ok(VtxoListResultDto {
+                    rows,
+                    from_snapshot_synced_at: None,
+                });
+            }
         }
 
         if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref() {
@@ -225,7 +229,11 @@ impl ArkSession {
     }
 
     pub async fn vtxo_expiry_status(&self) -> ArkResult<VtxoExpiryStatusDto> {
-        let (vtxo_list, _) = self.client.list_vtxos().await?;
+        let (vtxo_list, _) = if self.autonomous_mode() {
+            self.snapshot_vtxo_list_and_script_map()?
+        } else {
+            self.client.list_vtxos().await?
+        };
         let exclude_pre_unroll_unilateral_exit = unilateral_exit_in_progress_outpoints_from_pending(
             &self.wallet_db.pending_exit_deductions(),
         );
@@ -247,6 +255,7 @@ impl ArkSession {
     }
 
     pub async fn renew_vtxos_now(&self) -> ArkResult<Option<String>> {
+        self.ensure_operator_rpc_allowed()?;
         let expiring = self.expiring_outpoints().await?;
         if expiring.is_empty() {
             return Ok(None);
@@ -257,6 +266,7 @@ impl ArkSession {
     }
 
     pub async fn delegate_spendable_vtxos(&self) -> ArkResult<DelegateSpendableResult> {
+        self.ensure_operator_rpc_allowed()?;
         let Some(delegator) = self.delegator.as_ref() else {
             return Ok(DelegateSpendableResult {
                 delegated: 0,
@@ -304,6 +314,7 @@ impl ArkSession {
     }
 
     pub async fn finalize_pending_transactions(&self) -> ArkResult<FinalizePendingResult> {
+        self.ensure_operator_rpc_allowed()?;
         let pending_before = self.client.list_pending_offchain_txs().await?.len();
         let finalized = self.client.continue_pending_offchain_txs().await?;
         let pending_after = self.client.list_pending_offchain_txs().await?.len();
@@ -314,6 +325,7 @@ impl ArkSession {
     }
 
     pub async fn onboard_boarded_utxos(&self) -> ArkResult<Option<String>> {
+        self.ensure_operator_rpc_allowed()?;
         let status = self.boarding_status().await?;
         if status.spendable_sats == 0 {
             if status.pending_sats > 0 {
@@ -422,7 +434,11 @@ impl ArkSession {
     }
     /// VTXOs in the renewal window for manual renew — excludes unilateral exit in progress.
     async fn expiring_outpoints(&self) -> ArkResult<Vec<OutPoint>> {
-        let (vtxo_list, _) = self.client.list_vtxos().await?;
+        let (vtxo_list, _) = if self.autonomous_mode() {
+            self.snapshot_vtxo_list_and_script_map()?
+        } else {
+            self.client.list_vtxos().await?
+        };
         let exclude_pre_unroll_unilateral_exit = unilateral_exit_in_progress_outpoints_from_pending(
             &self.wallet_db.pending_exit_deductions(),
         );

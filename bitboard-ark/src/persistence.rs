@@ -11,12 +11,13 @@ use bitcoin::{Network, XOnlyPublicKey};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
-/// Current on-disk Arkade persistence format (v3).
+/// Current on-disk Arkade persistence format (v4).
 ///
-/// Versions 1 and 2 were pre-production prototypes only; no production wallets shipped those
-/// blobs. Unknown versions are rejected in [`BitboardArkPersistence::parse_import`] and import
-/// starts from an empty `wallet_db`.
-pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 3;
+/// Versions 1–3 were pre-production or lacked autonomous-exit fields. v3 blobs import cleanly;
+/// export uses v4. Unknown versions are rejected in [`BitboardArkPersistence::parse_import`].
+pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 4;
+/// Legacy import version before autonomous exit materials and cached operator info.
+pub const LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 3;
 const PERSISTENCE_LOCK_POISONED: &str = "persistence lock poisoned";
 
 /// Single-threaded WASM: recover in-memory state after a prior panic instead of re-panicking.
@@ -54,6 +55,19 @@ pub struct VirtualTxOutPointAssetRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct VirtualPsbtRecord {
+    pub virtual_txid: String,
+    pub psbt_hex: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct UnilateralExitMaterialsRecord {
+    pub cached_at: i64,
+    pub chain_json: String,
+    pub virtual_psbts: Vec<VirtualPsbtRecord>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VirtualTxOutPointRecord {
     pub txid: String,
     pub vout: u32,
@@ -78,6 +92,8 @@ pub struct VirtualTxOutPointRecord {
     /// balance buckets from a local snapshot without calling the operator.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub server_pk_hex: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unilateral_exit_materials: Option<UnilateralExitMaterialsRecord>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -132,6 +148,8 @@ pub struct WalletDbSnapshot {
     pub pending_exit_deductions: Vec<PendingExitDeductionRecord>,
     #[serde(default)]
     pub unilateral_exit_watches: Vec<UnilateralExitWatchRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cached_operator_info: Option<crate::cached_operator_info::CachedOperatorInfoRecord>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -192,7 +210,9 @@ impl BitboardArkPersistence {
             Err(_) => return default_parsed_ark_persistence(),
         };
 
-        if envelope.version != BITBOARD_ARK_PERSISTENCE_VERSION {
+        if envelope.version != BITBOARD_ARK_PERSISTENCE_VERSION
+            && envelope.version != LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION
+        {
             warn_unknown_persistence_version(Some(envelope.version as u64));
             return default_parsed_ark_persistence();
         }
@@ -224,6 +244,19 @@ impl JsonPersistenceDb {
 
     pub fn snapshot(&self) -> WalletDbSnapshot {
         lock_persistence(&self.inner).clone()
+    }
+
+    pub fn set_cached_operator_info(
+        &self,
+        info: crate::cached_operator_info::CachedOperatorInfoRecord,
+    ) {
+        lock_persistence(&self.inner).cached_operator_info = Some(info);
+    }
+
+    pub fn cached_operator_info(
+        &self,
+    ) -> Option<crate::cached_operator_info::CachedOperatorInfoRecord> {
+        lock_persistence(&self.inner).cached_operator_info.clone()
     }
 
     pub fn set_offchain_vtxo_snapshot(&self, snapshot: OffchainVtxoSnapshot) {

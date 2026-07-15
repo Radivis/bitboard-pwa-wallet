@@ -203,6 +203,20 @@ export const arkadeUnilateralExitsInProgressQueryKey = (
     'unilateral-exits-in-progress',
   ] as const
 
+export const arkadeAutonomousModeStatusQueryKey = (
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+  connectionId: string,
+) =>
+  [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletId,
+    networkMode,
+    connectionId,
+    'autonomous-mode-status',
+  ] as const
+
 export const arkadeUnilateralExitCompletionFeeQueryKey = (
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,

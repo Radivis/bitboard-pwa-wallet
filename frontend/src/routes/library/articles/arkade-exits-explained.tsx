@@ -47,6 +47,21 @@ export const article: LibraryArticle = {
         </p>
       </ArticleSection>
 
+      <ArticleSection title="Autonomous mode">
+        <p>
+          Under normal use, Bitboard still talks to the operator to build unilateral exit trees and
+          to confirm completion readiness. <strong>Autonomous mode</strong> (Management → Arkade
+          panel) is an explicit switch for when the ASP is unreachable: it reuses cached operator
+          parameters and per-VTXO exit materials prefetched during your last successful sync.
+        </p>
+        <p>
+          While autonomous mode is on, only unilateral exit stays available—collaborative exit,
+          sends, renewals, recoverable settlement, and signer migration are blocked. Esplora is still
+          required for broadcast, UTXO lookup, and timelock checks. Sync with the operator while
+          reachable so exit materials are prefetched before you need autonomous mode.
+        </p>
+      </ArticleSection>
+
       <ArticleSection title="Bumper wallet">
         <p>
           Fund the bumper wallet with a small on-chain send if unilateral exit warns of insufficient

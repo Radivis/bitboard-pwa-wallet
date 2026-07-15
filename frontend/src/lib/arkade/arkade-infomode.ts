@@ -25,6 +25,7 @@ export const ARKADE_INFOMODE_IDS = {
   collaborativeExit: 'arkade-collaborative-exit',
   exitOperatorFees: 'arkade-exit-operator-fees',
   unilateralExit: 'arkade-unilateral-exit',
+  autonomousMode: 'arkade-autonomous-mode',
   bumperWallet: 'arkade-bumper-wallet',
   unroll: 'arkade-unroll',
   activityPayment: 'arkade-activity-payment',

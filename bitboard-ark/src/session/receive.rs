@@ -9,6 +9,7 @@ impl ArkSession {
     }
 
     pub fn reveal_next_offchain_address(&self) -> ArkResult<String> {
+        self.ensure_operator_rpc_allowed()?;
         let (address, _) = self.client.reveal_next_offchain_receive_address()?;
         Ok(address.to_string())
     }

@@ -159,6 +159,7 @@ mod tests {
                 ark_txid: None,
                 assets: vec![],
                 server_pk_hex: None,
+                unilateral_exit_materials: None,
             }],
         });
 

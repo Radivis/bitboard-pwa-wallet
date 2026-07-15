@@ -740,6 +740,15 @@ where
         self.boltz_referral_id.as_deref()
     }
 
+    /// Connect without calling the operator (`get_info` / `discover_keys`). For autonomous mode when
+    /// the ASP is unreachable; uses persisted operator info from a prior successful sync.
+    pub async fn connect_with_cached_info(
+        self,
+        server_info: server::Info,
+    ) -> Result<Client<B, W, S, K>, Error> {
+        self.finish_connect_with_server_info(server_info, false).await
+    }
+
     /// Connects to the Ark server and retrieves server information.
     ///
     /// # Errors
@@ -791,10 +800,18 @@ where
         let server_info = timeout_op(self.timeout, self.network_client.get_info())
             .await
             .context("Failed to get Ark server info")??;
+        self.finish_connect_with_server_info(server_info, true).await
+    }
 
+    async fn finish_connect_with_server_info(
+        mut self,
+        server_info: server::Info,
+        run_discover_keys: bool,
+    ) -> Result<Client<B, W, S, K>, Error> {
         tracing::debug!(
             name = self.name,
             ark_server_url = ?self.network_client,
+            run_discover_keys,
             "Connected to Ark server"
         );
 
@@ -812,9 +829,11 @@ where
 
         let client = Client { inner: self, state };
 
-        if let Err(error) = client.discover_keys(DEFAULT_GAP_LIMIT).await {
-            tracing::warn!(?error, "Failed during key discovery");
-        };
+        if run_discover_keys {
+            if let Err(error) = client.discover_keys(DEFAULT_GAP_LIMIT).await {
+                tracing::warn!(?error, "Failed during key discovery");
+            };
+        }
 
         // Eagerly persist boarding rows for every signer/delay candidate the wallet should watch.
         // The migration boarding leg reads the wallet DB only; without this connect-time seed, a
@@ -879,6 +898,11 @@ where
             .read()
             .map(|state| state.server_info.clone())
             .map_err(|_| Error::ad_hoc("client server state lock poisoned"))
+    }
+
+    /// Replace in-memory operator info without a network round-trip (autonomous mode entry).
+    pub fn install_cached_server_info(&self, server_info: server::Info) -> Result<(), Error> {
+        update_server_state(&self.state, server_info)
     }
 
     fn with_server_state<T>(&self, f: impl FnOnce(&ServerState) -> T) -> Result<T, Error> {

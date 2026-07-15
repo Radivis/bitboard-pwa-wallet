@@ -8,6 +8,7 @@ import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import { CollaborativeExitDialog } from '@/components/wallet/arkade-exit/CollaborativeExitDialog'
 import { CompleteUnilateralExitDialog } from '@/components/wallet/arkade-exit/CompleteUnilateralExitDialog'
 import { UnilateralExitDialog } from '@/components/wallet/arkade-exit/UnilateralExitDialog'
+import { useArkadeAutonomousModeActive } from '@/hooks/useArkadeQueries'
 import { useArkadeExitFlow } from '@/hooks/useArkadeExitFlow'
 import { isSignerRotationCooperativeExitBlocked } from '@/lib/arkade/arkade-cooperative-exit'
 import { useWalletStore } from '@/stores/walletStore'
@@ -23,6 +24,7 @@ export function ArkadeExitSection() {
   const signerMigrationHint = useWalletStore((state) => state.arkadeSignerMigrationHint)
   const collaborativeExitBlockedByRotation =
     isSignerRotationCooperativeExitBlocked(signerMigrationHint)
+  const autonomousModeActive = useArkadeAutonomousModeActive()
 
   return (
     <div className="space-y-2 border-t pt-4">
@@ -61,7 +63,7 @@ export function ArkadeExitSection() {
             type="button"
             variant="outline"
             size="sm"
-            disabled={collaborativeExitBlockedByRotation}
+            disabled={collaborativeExitBlockedByRotation || autonomousModeActive}
             onClick={() => setCollaborativeOpen(true)}
           >
             Collaborative exit
@@ -93,9 +95,11 @@ export function ArkadeExitSection() {
           </Button>
         )}
       </div>
-      {collaborativeExitBlockedByRotation && (
+      {(collaborativeExitBlockedByRotation || autonomousModeActive) && (
         <p className="text-xs text-muted-foreground" data-testid="arkade-exit-collab-unavailable">
-          Cooperative exit is unavailable after signer rotation cutoff. Use unilateral exit.
+          {autonomousModeActive
+            ? 'Collaborative exit is unavailable in autonomous mode. Use unilateral exit.'
+            : 'Cooperative exit is unavailable after signer rotation cutoff. Use unilateral exit.'}
         </p>
       )}
 

@@ -12,6 +12,7 @@ import {
   arkadeDisabledQueryKey,
   ARKADE_QUERY_DISABLED,
   arkadeAddressQueryKey,
+  arkadeAutonomousModeStatusQueryKey,
   arkadeDelegateInfoQueryKey,
   arkadeExitCandidatesQueryKey,
   arkadeHistoryQueryKey,
@@ -1158,4 +1159,71 @@ export function useArkadeUnilateralExitFeeQuery(params: {
       query.state.data?.bumperSufficient ? false : ARKADE_BUMPER_FUNDING_POLL_MS,
     staleTime: ARKADE_FEE_ESTIMATE_STALE_MS,
   })
+}
+
+export function useArkadeAutonomousModeStatusQuery() {
+  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+    useArkadeQueryBase()
+
+  return useQuery({
+    queryKey: walletScopedQueryKey(
+      activeWalletId,
+      networkMode,
+      activeArkadeConnectionId,
+      arkadeAutonomousModeStatusQueryKey,
+      'autonomous-mode',
+    ),
+    enabled: sessionReady,
+    queryFn: () =>
+      withReadyArkadeWorker(() => getArkadeWorker().getAutonomousModeStatus()),
+    staleTime: ARKADE_SESSION_POLL_STALE_MS,
+  })
+}
+
+export function useArkadeAutonomousModeMutation() {
+  const queryClient = useQueryClient()
+  const { networkMode, activeWalletId, activeArkadeConnectionId } = useArkadeQueryBase()
+
+  return useMutation({
+    mutationFn: async (nextActive: boolean) => {
+      await withReadyArkadeWorker(async () => {
+        if (nextActive) {
+          await getArkadeWorker().enterAutonomousMode()
+        } else {
+          await getArkadeWorker().exitAutonomousMode()
+        }
+      })
+    },
+    onSuccess: async () => {
+      if (
+        activeWalletId != null &&
+        activeArkadeConnectionId != null &&
+        isArkadeSupportedNetworkMode(networkMode)
+      ) {
+        await queryClient.invalidateQueries({
+          queryKey: arkadeAutonomousModeStatusQueryKey(
+            activeWalletId,
+            networkMode,
+            activeArkadeConnectionId,
+          ),
+        })
+        await queryClient.invalidateQueries({
+          queryKey: arkadeExitCandidatesQueryKey(
+            activeWalletId,
+            networkMode,
+            activeArkadeConnectionId,
+          ),
+        })
+      }
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : 'Could not update autonomous mode',
+      )
+    },
+  })
+}
+
+export function useArkadeAutonomousModeActive(): boolean {
+  return useArkadeAutonomousModeStatusQuery().data?.active ?? false
 }

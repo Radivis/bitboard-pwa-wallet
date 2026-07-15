@@ -170,6 +170,7 @@ pub(crate) fn map_exit_candidate(
 pub(crate) fn empty_fee_info() -> ark_core::server::FeeInfo {
     ark_core::server::FeeInfo {
         intent_fee: ark_core::server::IntentFeeInfo::default(),
+        // Operator tx_fee_rate is not used by ark-client fee estimation; placeholder only.
         tx_fee_rate: DEFAULT_TX_FEE_RATE.to_string(),
     }
 }

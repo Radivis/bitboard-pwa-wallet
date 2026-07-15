@@ -36,6 +36,7 @@ import type {
   ArkadeUnilateralExitCompletionFeeEstimate,
   ArkadeUnilateralExitCompletionFeeEstimateParams,
   ArkadeUnilateralExitInProgressRow,
+  ArkadeAutonomousModeStatus,
   ArkadeVtxoListResult,
   ArkadeUnrollProgressEvent,
   ArkadeUnrollResult,
@@ -190,6 +191,17 @@ async function flushSdkPersistenceNowOrThrow(): Promise<void> {
   }
 }
 
+async function getAutonomousModeActive(): Promise<boolean> {
+  try {
+    const status = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_autonomous_mode_status(),
+    )
+    return Boolean((status as ArkadeAutonomousModeStatus | undefined)?.active)
+  } catch {
+    return false
+  }
+}
+
 /** WASM operator sync + SDK flush only — store refresh runs on the main thread. */
 async function syncWithOperatorCore(): Promise<ArkadeOperatorSyncResult> {
   const result = await invokeWasmArk((wasmModule) => wasmModule.ark_sync_with_operator())
@@ -203,8 +215,11 @@ async function persistAfterCriticalOperation(): Promise<void> {
   )
   await awaitArkadeSyncQuiescence()
   if (activeSessionParams != null) {
-    await syncWithOperatorCore()
-    return
+    const autonomousActive = await getAutonomousModeActive()
+    if (!autonomousActive) {
+      await syncWithOperatorCore()
+      return
+    }
   }
   await flushSdkPersistenceNowOrThrow()
 }
@@ -342,6 +357,23 @@ const arkadeService: ArkadeService = {
     )
     await awaitArkadeSyncQuiescence()
     return syncWithOperatorCore()
+  },
+
+  async enterAutonomousMode(): Promise<void> {
+    await invokeWasmArk((wasmModule) => wasmModule.ark_enter_autonomous_mode())
+    await flushSdkPersistenceNowOrThrow()
+  },
+
+  async exitAutonomousMode(): Promise<void> {
+    await invokeWasmArk((wasmModule) => wasmModule.ark_exit_autonomous_mode())
+    await flushSdkPersistenceNowOrThrow()
+  },
+
+  async getAutonomousModeStatus(): Promise<ArkadeAutonomousModeStatus> {
+    const status = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_autonomous_mode_status(),
+    )
+    return status as ArkadeAutonomousModeStatus
   },
 
   async migrateDeprecatedSignerVtxos(): Promise<ArkadeSignerMigrationResult> {

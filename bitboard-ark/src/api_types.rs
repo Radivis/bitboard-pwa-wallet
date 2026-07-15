@@ -94,6 +94,16 @@ pub struct OperatorSyncResultDto {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AutonomousModeStatusDto {
+    pub active: bool,
+    pub eligible_count: u32,
+    pub materials_ready_count: u32,
+    pub materials_missing_count: u32,
+    pub cached_operator_info_present: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct VtxoExpiryStatusDto {
     /// Unix seconds; earliest `expires_at` among unspent VTXOs still on the offchain path.
     pub earliest_expires_at: Option<i64>,
@@ -252,6 +262,8 @@ pub struct IntentFeeConfiguredDto {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CollaborativeExitFeeEstimateDto {
+    /// Echo of operator getInfo `txFeeRate` (wire type is string). Unused for fee math —
+    /// cooperative estimates use ark-fees CEL on intent programs; shown in the UI only.
     pub tx_fee_rate: String,
     pub intent_fee_configured: IntentFeeConfiguredDto,
     pub estimated_total_fee_sats: Option<u64>,
@@ -272,6 +284,7 @@ pub const COLLABORATIVE_EXIT_ESTIMATE_ERROR_INSUFFICIENT_COOPERATIVE_INPUTS: &st
 pub struct RecoverableVtxoFeeEstimateDto {
     pub recoverable_vtxo_count: u32,
     pub recoverable_total_sats: u64,
+    /// Echo of operator getInfo `txFeeRate`. Unused for fee math (see [`CollaborativeExitFeeEstimateDto::tx_fee_rate`]).
     pub tx_fee_rate: String,
     pub intent_fee_configured: IntentFeeConfiguredDto,
     pub estimated_total_fee_sats: Option<u64>,

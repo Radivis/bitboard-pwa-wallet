@@ -1,5 +1,6 @@
 use crate::coin_select::coin_select_for_onchain;
 use crate::coin_select::coin_select_vtxo_txids_for_onchain;
+use crate::coin_select::coin_select_vtxo_txids_for_onchain_with_vtxo_list;
 use crate::error::Error;
 use crate::error::ErrorContext;
 use crate::swap_storage::SwapStorage;
@@ -21,13 +22,17 @@ use bitcoin::key::Secp256k1;
 use bitcoin::psbt;
 use ark_core::server::VirtualTxOutPoint;
 use ark_core::server::VtxoChains;
+use ark_core::Vtxo;
+use ark_core::VtxoList;
 use bitcoin::Address;
 use bitcoin::Amount;
 use bitcoin::OutPoint;
 use bitcoin::Psbt;
+use bitcoin::ScriptBuf;
 use bitcoin::Transaction;
 use bitcoin::TxOut;
 use bitcoin::Txid;
+use std::collections::HashMap;
 use std::collections::HashSet;
 
 /// Max iterations when targeting completion tx fee from measured vsize.
@@ -62,6 +67,69 @@ where
     S: SwapStorage + 'static,
     K: crate::KeyProvider,
 {
+    /// Fetch VTXO chain topology and virtual PSBTs needed for autonomous unilateral exit.
+    pub async fn prefetch_unilateral_exit_materials(
+        &self,
+        outpoint: OutPoint,
+    ) -> Result<(VtxoChains, Vec<Psbt>), Error> {
+        let chains = self.fetch_full_vtxo_chain(outpoint).await?;
+        let paths = build_unilateral_exit_tree_txids(&chains, outpoint.txid)?;
+        let txids = HashSet::<Txid>::from_iter(paths.concat());
+        let virtual_txs = self
+            .fetch_all_virtual_txs(txids.iter().map(|txid| txid.to_string()).collect())
+            .await?;
+        Ok((chains, virtual_txs))
+    }
+
+    /// Build the finalized on-chain unroll branch using prefetched materials (no ASP calls).
+    pub async fn build_unilateral_exit_branch_from_materials(
+        &self,
+        target: OutPoint,
+        virtual_tx_outpoint: &VirtualTxOutPoint,
+        vtxo_chains: VtxoChains,
+        virtual_psbts: Vec<Psbt>,
+    ) -> Result<Vec<Transaction>, Error> {
+        let paths =
+            build_unilateral_exit_tree_txids(&vtxo_chains, virtual_tx_outpoint.outpoint.txid)?;
+
+        let paths = paths
+            .into_iter()
+            .map(|path| {
+                path.into_iter()
+                    .map(|txid| {
+                        virtual_psbts
+                            .iter()
+                            .find(|psbt| psbt.unsigned_tx.compute_txid() == txid)
+                            .cloned()
+                            .ok_or_else(|| {
+                                Error::ad_hoc(format!("no PSBT found for virtual TX {txid}"))
+                            })
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let unilateral_exit_tree = UnilateralExitTree::new(
+            virtual_tx_outpoint.commitment_txids.clone(),
+            paths,
+        );
+
+        let branches = self
+            .finalize_unilateral_exit_tree_on_chain(&unilateral_exit_tree)
+            .await?;
+
+        branches
+            .into_iter()
+            .find(|branch| {
+                branch
+                    .last()
+                    .is_some_and(|tx| tx.compute_txid() == target.txid)
+            })
+            .ok_or_else(|| {
+                Error::ad_hoc(format!("No unilateral exit branch found for VTXO {target}"))
+            })
+    }
+
     /// Build the finalized on-chain unroll branch for one VTXO.
     pub async fn build_unilateral_exit_branch(
         &self,
@@ -356,6 +424,59 @@ where
         Ok(txid)
     }
 
+    /// Spend selected unrolled VTXOs using a caller-provided VTXO list (autonomous mode).
+    pub async fn send_on_chain_for_vtxo_txids_with_vtxo_list(
+        &self,
+        to_address: Address,
+        vtxo_txids: &[Txid],
+        vtxo_list: &VtxoList,
+        script_pubkey_to_vtxo: &HashMap<ScriptBuf, Vtxo>,
+        fee_rate_sat_per_vb: Option<f64>,
+    ) -> Result<Txid, Error> {
+        let vtxo_txid_filter: HashSet<Txid> = vtxo_txids.iter().copied().collect();
+        let selection = coin_select_vtxo_txids_for_onchain_with_vtxo_list(
+            self,
+            vtxo_list,
+            script_pubkey_to_vtxo,
+            &vtxo_txid_filter,
+        )
+        .await?;
+        let vtxo_inputs = selection.vtxo_inputs;
+        let selected_amount = selection.selected_amount;
+
+        let (fee, to_amount) = self
+            .resolve_unilateral_completion_fee_and_amount_from_inputs(
+                to_address.clone(),
+                Vec::new(),
+                vtxo_inputs.clone(),
+                selected_amount,
+                fee_rate_sat_per_vb,
+            )
+            .await?;
+
+        let (tx, _) = self
+            .create_send_on_chain_transaction_from_inputs(
+                to_address,
+                to_amount,
+                Vec::new(),
+                vtxo_inputs,
+            )
+            .await?;
+
+        let txid = tx.compute_txid();
+        tracing::info!(
+            %txid,
+            fee = %fee,
+            "Broadcasting selective unilateral exit completion transaction (offline vtxo list)"
+        );
+
+        timeout_op(self.inner.timeout, self.blockchain().broadcast(&tx))
+            .await
+            .with_context(|| format!("failed to broadcast transaction {txid}"))??;
+
+        Ok(txid)
+    }
+
     /// Spend selected unrolled VTXOs to an on-chain address.
     pub async fn send_on_chain_for_vtxo_txids(
         &self,
@@ -400,6 +521,38 @@ where
             .with_context(|| format!("failed to broadcast transaction {txid}"))??;
 
         Ok(txid)
+    }
+
+    /// Estimate completion using a caller-provided VTXO list (autonomous mode).
+    pub async fn estimate_send_on_chain_for_vtxo_txids_with_vtxo_list(
+        &self,
+        to_address: Address,
+        vtxo_txids: &[Txid],
+        vtxo_list: &VtxoList,
+        script_pubkey_to_vtxo: &HashMap<ScriptBuf, Vtxo>,
+        fee_rate_sat_per_vb: Option<f64>,
+    ) -> Result<(Amount, Amount, Amount, Vec<crate::coin_select::MissingBlocktimeCompletionInput>), Error> {
+        let vtxo_txid_filter: HashSet<Txid> = vtxo_txids.iter().copied().collect();
+        let selection = coin_select_vtxo_txids_for_onchain_with_vtxo_list(
+            self,
+            vtxo_list,
+            script_pubkey_to_vtxo,
+            &vtxo_txid_filter,
+        )
+        .await?;
+        let vtxo_inputs = selection.vtxo_inputs;
+        let selected_amount = selection.selected_amount;
+        let missing_blocktime_inputs = selection.missing_blocktime_inputs;
+        let (fee, to_amount) = self
+            .resolve_unilateral_completion_fee_and_amount_from_inputs(
+                to_address,
+                Vec::new(),
+                vtxo_inputs,
+                selected_amount,
+                fee_rate_sat_per_vb,
+            )
+            .await?;
+        Ok((fee, to_amount, selected_amount, missing_blocktime_inputs))
     }
 
     /// Estimate miner fee and receive amount for completing unilateral exit without broadcasting.

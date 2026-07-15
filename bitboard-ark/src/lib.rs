@@ -1,5 +1,6 @@
 mod api_types;
 mod balance_display;
+mod cached_operator_info;
 mod constants;
 mod error;
 mod esplora_blockchain;
@@ -9,6 +10,7 @@ mod offchain_snapshot;
 mod persistence;
 mod session;
 mod signer_migration;
+mod unilateral_exit_materials;
 #[cfg(target_arch = "wasm32")]
 mod wasm_sleep;
 
@@ -156,6 +158,29 @@ pub async fn ark_open_session(params: JsValue) -> Result<JsValue, JsValue> {
 #[wasm_bindgen]
 pub fn ark_operator_signer_pk_hex() -> Result<String, JsValue> {
     map_js_error(with_session(|session| Ok(session.operator_signer_pk_hex())))
+}
+
+#[wasm_bindgen]
+pub async fn ark_enter_autonomous_mode() -> Result<(), JsValue> {
+    map_js_async(async {
+        with_session_async(|session| async move { session.enter_autonomous_mode().await }).await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_exit_autonomous_mode() -> Result<(), JsValue> {
+    map_js_async(async {
+        with_session_async(|session| async move { session.exit_autonomous_mode().await }).await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub fn ark_autonomous_mode_status() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.autonomous_mode_status()?)
+    }))
 }
 
 #[wasm_bindgen]

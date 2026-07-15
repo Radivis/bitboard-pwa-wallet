@@ -7,12 +7,14 @@ import {
   ARKADE_RECOVERABLE_VTXO_BANNER_INFOMODE,
 } from '@/lib/arkade/arkade-infomode'
 import {
+  useArkadeAutonomousModeActive,
   useArkadeBalanceQuery,
   useArkadeRecoverRecoverableVtxosMutation,
   useArkadeRecoverableVtxoFeeQuery,
 } from '@/hooks/useArkadeQueries'
 
 export function ArkadeRecoverableVtxoBanner() {
+  const autonomousModeActive = useArkadeAutonomousModeActive()
   const balanceQuery = useArkadeBalanceQuery()
   const recoverableVtxoCount =
     balanceQuery.data?.recoverableSettleableVtxoCount ?? 0
@@ -81,7 +83,7 @@ export function ArkadeRecoverableVtxoBanner() {
             type="button"
             size="sm"
             variant="secondary"
-            disabled={recoverMutation.isPending}
+            disabled={autonomousModeActive || recoverMutation.isPending}
             onClick={() => recoverMutation.mutate()}
           >
             {recoverMutation.isPending ? (

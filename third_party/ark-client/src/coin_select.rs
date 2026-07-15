@@ -7,13 +7,17 @@ use crate::Client;
 use crate::Error;
 use ark_core::unilateral_exit;
 use ark_core::ExplorerUtxo;
+use ark_core::VtxoList;
 use bitcoin::Amount;
 use bitcoin::OutPoint;
+use bitcoin::ScriptBuf;
 use bitcoin::TxOut;
 use bitcoin::Txid;
+use ark_core::Vtxo;
 use jiff::Timestamp;
 use std::collections::HashSet;
 use std::time::Duration;
+use std::collections::HashMap;
 
 /// Completion input selected without Esplora `confirmation_blocktime` (timelock estimated with zero).
 ///
@@ -206,6 +210,32 @@ where
     }
 
     let (vtxo_list, script_pubkey_to_vtxo) = client.list_vtxos().await?;
+    coin_select_vtxo_txids_for_onchain_with_vtxo_list(
+        client,
+        &vtxo_list,
+        &script_pubkey_to_vtxo,
+        vtxo_txid_filter,
+    )
+    .await
+}
+
+/// Completion coin-select using a caller-provided VTXO list (snapshot / autonomous mode).
+pub async fn coin_select_vtxo_txids_for_onchain_with_vtxo_list<B, W, S, K>(
+    client: &Client<B, W, S, K>,
+    vtxo_list: &VtxoList,
+    script_pubkey_to_vtxo: &HashMap<ScriptBuf, Vtxo>,
+    vtxo_txid_filter: &HashSet<Txid>,
+) -> Result<VtxoCompletionSelection, Error>
+where
+    B: Blockchain,
+    W: BoardingWallet + OnchainWallet,
+    S: SwapStorage + 'static,
+    K: crate::KeyProvider,
+{
+    if vtxo_txid_filter.is_empty() {
+        return Err(Error::coin_select("vtxo txid filter must not be empty"));
+    }
+
     let now = Timestamp::now();
     let mut selected_vtxo_outputs = HashSet::new();
     let mut selected_amount = Amount::ZERO;

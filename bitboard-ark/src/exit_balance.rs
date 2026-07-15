@@ -195,6 +195,7 @@ mod tests {
             ark_txid: None,
             assets: vec![],
             server_pk_hex: None,
+            unilateral_exit_materials: None,
         }
     }
 
@@ -239,6 +240,7 @@ mod tests {
             ark_txid: None,
             assets: vec![],
             server_pk_hex: None,
+            unilateral_exit_materials: None,
         }]);
 
         let mut records = vec![PendingExitDeductionRecord {

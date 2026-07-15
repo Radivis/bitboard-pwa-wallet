@@ -85,6 +85,16 @@ feature:
         description: Completion fee estimate includes missingBlocktimeInputs (virtual txid and on-chain outpoint per affected VTXO) when Esplora omits confirmation blocktime; UI shows a non-blocking list in Complete unilateral exit. Permissive completion coin-select (Duration::ZERO fallback) is intentional for regtest/thin Esplora in CI and local debugging; uncommon on production Esplora.
       - id: ARK-EXIT-05
         description: When complete exit times out waiting for operator indexer after unroll, UI shows a non-destructive indexer-catching-up state instead of a generic failure
+      - id: ARK-EXIT-06
+        description: Autonomous mode unilateral exit never calls ASP indexer or batch APIs for list, chain, virtual tx, or completion coin-select
+      - id: ARK-EXIT-07
+        description: Operator sync prefetches unilateral_exit_materials on exit-eligible VTXO snapshot records and persists cached_operator_info
+      - id: ARK-EXIT-08
+        description: Autonomous start unroll fails fast with autonomous_exit_materials_missing when selected VTXO lacks prefetched materials
+      - id: ARK-EXIT-09
+        description: Autonomous complete uses snapshot readiness plus Esplora only; no operator indexer poll or OperatorIndexerCatchingUp path
+      - id: ARK-EXIT-10
+        description: While autonomous mode is active, collaborative exit, send, renew, recoverable settlement, signer migration, boarding settle, and manual operator sync are blocked in UI and WASM
       - id: ARK-EXIT-11
         description: After unilateral unroll broadcasts, WASM polls operator list_vtxos until is_unrolled and not is_spent (up to 60s); success with indexerWarning when on-chain confirmed but ASP lags; hard error when neither ASP nor chain confirms; sticky is_unrolled merge during poll sync for in-list operator rows
       - id: ARK-EXIT-12

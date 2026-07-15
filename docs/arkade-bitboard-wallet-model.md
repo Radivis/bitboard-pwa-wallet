@@ -103,8 +103,9 @@ Management → Arkade offers two paths:
 |------|-------------------|----------|
 | **Collaborative exit** | Yes | Default; batches with operator; one settlement to your `bc1` address |
 | **Unilateral exit** | No (after unroll) | Operator down or you need trustless exit; per-VTXO; multiple on-chain txs |
+| **Autonomous mode** | No (explicit switch) | ASP unreachable; reuses `cached_operator_info` + per-VTXO `unilateral_exit_materials` from last sync; only unilateral exit allowed; Esplora still required |
 
-Collaborative exit and unilateral unroll are implemented in `bitboard-ark` (`collaborative_redeem`, `broadcast_next_unilateral_exit_node`, etc.). The on-chain bumper wallet shares the same BIP32-derived BDK wallet as boarding. Select one VTXO at a time in the UI.
+Collaborative exit and unilateral unroll are implemented in `bitboard-ark` (`collaborative_redeem`, `broadcast_next_unilateral_exit_node`, etc.). **Autonomous mode** branches the same unilateral exit RPCs to snapshot-backed materials instead of ASP indexer/batch APIs. The on-chain bumper wallet shares the same BIP32-derived BDK wallet as boarding. Select one VTXO at a time in the UI.
 
 ### Unilateral vs collaborative exit balance timing
 
