@@ -54,12 +54,18 @@ impl ArkSession {
         &self,
     ) -> ArkResult<(VtxoList, OperatorSyncResultDto)> {
         self.ensure_operator_rpc_allowed()?;
+        let server_info = self.client.server_info()?;
+        let new_digest = server_info.digest.clone();
+
+        if self.should_block_sync_persist_for_operator_trust(&new_digest) {
+            return self
+                .sync_with_operator_trust_pending_staging(&server_info)
+                .await;
+        }
+
         let key_discovery_warning = self.sync_offchain_keys().await;
         let (vtxo_list, script_map) = self.client.list_vtxos().await?;
         let prior_snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot.clone();
-        let prior_cached = self.wallet_db.cached_operator_info();
-        let server_info = self.client.server_info()?;
-        let new_digest = server_info.digest.clone();
         let all_points: Vec<VirtualTxOutPoint> = vtxo_list.all().cloned().collect();
         let mut snapshot = snapshot_from_virtual_tx_outpoints_with_script_lookup(
             server_info.dust.to_sat(),
@@ -67,12 +73,6 @@ impl ArkSession {
             all_points,
             |script| script_map.get(script).map(|vtxo| vtxo.server_pk()),
         );
-        if prior_cached
-            .as_ref()
-            .is_some_and(|cached| cached.digest != new_digest)
-        {
-            crate::unilateral_exit_materials::clear_all_unilateral_exit_materials(&mut snapshot);
-        }
         crate::unilateral_exit_materials::merge_unilateral_exit_materials(
             prior_snapshot.as_ref(),
             &mut snapshot,
@@ -100,8 +100,23 @@ impl ArkSession {
             )
             .or(materials_warning),
             exiting_vtxo_warning: None,
+            operator_config_trust_pending: false,
         };
         Ok((vtxo_list, sync_result))
+    }
+
+    async fn sync_with_operator_trust_pending_staging(
+        &self,
+        server_info: &ark_core::server::Info,
+    ) -> ArkResult<(VtxoList, OperatorSyncResultDto)> {
+        self.stage_operator_trust_from_server_info(server_info);
+        let sync_result = OperatorSyncResultDto {
+            key_discovery_warning: None,
+            exiting_vtxo_warning: None,
+            operator_config_trust_pending: true,
+        };
+        let empty_vtxo_list = VtxoList::new(server_info.dust, Vec::new());
+        Ok((empty_vtxo_list, sync_result))
     }
 
     pub(crate) fn reconcile_pending_exit_deductions_with_snapshot(

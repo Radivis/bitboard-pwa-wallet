@@ -172,7 +172,21 @@ impl ArkSession {
         wallet_db.set_load_context(network, server_signer);
         sync_onchain_wallet_for_session_open(&client).await;
 
-        if let Ok(server_info) = client.server_info() {
+        let trust_pending = wallet_db.operator_trust_pending();
+        if trust_pending {
+            if let Ok(live_server_info) = client.server_info() {
+                if crate::operator_config_diff::operator_digest_mismatch(
+                    wallet_db.cached_operator_info().as_ref(),
+                    &live_server_info.digest,
+                ) {
+                    wallet_db.set_pending_operator_info(
+                        crate::cached_operator_info::CachedOperatorInfoRecord::from_server_info(
+                            &live_server_info,
+                        ),
+                    );
+                }
+            }
+        } else if let Ok(server_info) = client.server_info() {
             wallet_db.set_cached_operator_info(
                 crate::cached_operator_info::CachedOperatorInfoRecord::from_server_info(
                     &server_info,

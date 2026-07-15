@@ -16,6 +16,8 @@ import {
   arkadeDelegateInfoQueryKey,
   arkadeExitCandidatesQueryKey,
   arkadeHistoryQueryKey,
+  arkadeOperatorConfigDiffQueryKey,
+  arkadeOperatorTrustStatusQueryKey,
   arkadeRecoverableVtxoFeeQueryKey,
   arkadeSignerMigrationPartialResultQueryKey,
   arkadeUnilateralExitCompletionFeeQueryKey,
@@ -44,6 +46,8 @@ import {
   orchestrateArkadeSyncThenSave,
   scheduleBackgroundArkadeOperatorSync,
 } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
+import { orchestrateArkadeSave } from '@/lib/wallet/lifecycle/arkade-save-lifecycle-orchestrator'
+import { refreshArkadeStoreFromLoadedWasm } from '@/lib/arkade/arkade-persistence-store-sync'
 import { readArkadeDashboardStateFromStore } from '@/lib/arkade/arkade-persistence-store-sync'
 import {
   ARKADE_BUMPER_FUNDING_POLL_MS,
@@ -1207,6 +1211,12 @@ export function useArkadeAutonomousModeMutation() {
             activeArkadeConnectionId,
           ),
         })
+        await invalidateOperatorTrustQueries(
+          queryClient,
+          activeWalletId,
+          networkMode,
+          activeArkadeConnectionId,
+        )
         await queryClient.invalidateQueries({
           queryKey: arkadeExitCandidatesQueryKey(
             activeWalletId,
@@ -1226,4 +1236,150 @@ export function useArkadeAutonomousModeMutation() {
 
 export function useArkadeAutonomousModeActive(): boolean {
   return useArkadeAutonomousModeStatusQuery().data?.active ?? false
+}
+
+async function invalidateOperatorTrustQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+  connectionId: string,
+): Promise<void> {
+  await queryClient.invalidateQueries({
+    queryKey: arkadeOperatorTrustStatusQueryKey(walletId, networkMode, connectionId),
+  })
+  await queryClient.invalidateQueries({
+    queryKey: arkadeOperatorConfigDiffQueryKey(walletId, networkMode, connectionId),
+  })
+}
+
+export function useOperatorTrustStatusQuery() {
+  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+    useArkadeQueryBase()
+
+  return useQuery({
+    queryKey: walletScopedQueryKey(
+      activeWalletId,
+      networkMode,
+      activeArkadeConnectionId,
+      arkadeOperatorTrustStatusQueryKey,
+      'operator-trust-status',
+    ),
+    enabled: sessionReady,
+    queryFn: () =>
+      withReadyArkadeWorker(() => getArkadeWorker().getOperatorTrustStatus()),
+    staleTime: ARKADE_SESSION_POLL_STALE_MS,
+  })
+}
+
+export function useOperatorConfigDiffQuery(enabled: boolean) {
+  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+    useArkadeQueryBase()
+
+  return useQuery({
+    queryKey: walletScopedQueryKey(
+      activeWalletId,
+      networkMode,
+      activeArkadeConnectionId,
+      arkadeOperatorConfigDiffQueryKey,
+      'operator-config-diff',
+    ),
+    enabled: sessionReady && enabled,
+    queryFn: () =>
+      withReadyArkadeWorker(() => getArkadeWorker().getOperatorConfigDiff()),
+    staleTime: ARKADE_SLOW_METADATA_STALE_MS,
+  })
+}
+
+export function useAcceptOperatorConfigMutation() {
+  const queryClient = useQueryClient()
+  const { networkMode, activeWalletId, activeArkadeConnectionId } = useArkadeQueryBase()
+
+  return useMutation({
+    mutationFn: async () => {
+      await withReadyArkadeWorker(async () => {
+        await getArkadeWorker().acceptPendingOperatorConfig()
+      })
+      if (
+        activeWalletId != null &&
+        activeArkadeConnectionId != null &&
+        isArkadeSupportedNetworkMode(networkMode)
+      ) {
+        await refreshArkadeStoreFromLoadedWasm(activeArkadeConnectionId)
+        await orchestrateArkadeSave({
+          walletId: activeWalletId,
+          networkMode,
+          connectionId: activeArkadeConnectionId,
+        })
+      }
+    },
+    onSuccess: async () => {
+      if (
+        activeWalletId != null &&
+        activeArkadeConnectionId != null &&
+        isArkadeSupportedNetworkMode(networkMode)
+      ) {
+        await invalidateOperatorTrustQueries(
+          queryClient,
+          activeWalletId,
+          networkMode,
+          activeArkadeConnectionId,
+        )
+        await queryClient.invalidateQueries({
+          queryKey: arkadeAutonomousModeStatusQueryKey(
+            activeWalletId,
+            networkMode,
+            activeArkadeConnectionId,
+          ),
+        })
+        await queryClient.invalidateQueries({
+          queryKey: arkadeBalanceQueryKey(activeWalletId, networkMode, activeArkadeConnectionId),
+        })
+      }
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : 'Could not accept operator configuration',
+      )
+    },
+  })
+}
+
+export function useReviewOperatorConfigInAutonomousMutation() {
+  const queryClient = useQueryClient()
+  const { networkMode, activeWalletId, activeArkadeConnectionId } = useArkadeQueryBase()
+
+  return useMutation({
+    mutationFn: () =>
+      withReadyArkadeWorker(() =>
+        getArkadeWorker().reviewOperatorConfigInAutonomousMode(),
+      ),
+    onSuccess: async () => {
+      if (
+        activeWalletId != null &&
+        activeArkadeConnectionId != null &&
+        isArkadeSupportedNetworkMode(networkMode)
+      ) {
+        await invalidateOperatorTrustQueries(
+          queryClient,
+          activeWalletId,
+          networkMode,
+          activeArkadeConnectionId,
+        )
+        await queryClient.invalidateQueries({
+          queryKey: arkadeAutonomousModeStatusQueryKey(
+            activeWalletId,
+            networkMode,
+            activeArkadeConnectionId,
+          ),
+        })
+      }
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : 'Could not enter autonomous mode for operator review',
+      )
+    },
+  })
 }

@@ -25,6 +25,8 @@ pub const CODE_SERIALIZATION: &str = "serialization";
 pub const CODE_AUTONOMOUS_EXIT_MATERIALS_MISSING: &str = "autonomous_exit_materials_missing";
 pub const CODE_AUTONOMOUS_OPERATOR_INFO_MISSING: &str = "autonomous_operator_info_missing";
 pub const CODE_AUTONOMOUS_MODE_BLOCKS_OPERATOR_RPC: &str = "autonomous_mode_blocks_operator_rpc";
+pub const CODE_OPERATOR_TRUST_PENDING_BLOCKS_AUTONOMOUS_EXIT: &str =
+    "operator_trust_pending_blocks_autonomous_exit";
 
 pub const MSG_SEND_AMOUNT_MUST_BE_POSITIVE: &str = "send amount must be greater than zero";
 
@@ -99,6 +101,11 @@ pub enum ArkWasmError {
     #[error("This operation requires operator connectivity and is blocked in autonomous mode")]
     AutonomousModeBlocksOperatorRpc,
 
+    #[error(
+        "Operator config changes are pending — accept the new ASP terms before leaving autonomous mode"
+    )]
+    OperatorTrustPendingBlocksAutonomousExit,
+
     #[error("{0}")]
     Boarding(String),
 
@@ -154,6 +161,9 @@ impl ArkWasmError {
             Self::AutonomousExitMaterialsMissing => CODE_AUTONOMOUS_EXIT_MATERIALS_MISSING,
             Self::AutonomousOperatorInfoMissing => CODE_AUTONOMOUS_OPERATOR_INFO_MISSING,
             Self::AutonomousModeBlocksOperatorRpc => CODE_AUTONOMOUS_MODE_BLOCKS_OPERATOR_RPC,
+            Self::OperatorTrustPendingBlocksAutonomousExit => {
+                CODE_OPERATOR_TRUST_PENDING_BLOCKS_AUTONOMOUS_EXIT
+            }
             Self::OperatorIndexerCatchingUp => CODE_OPERATOR_INDEXER_CATCHING_UP,
             Self::UnilateralUnrollNotConfirmedOnChain { .. } => {
                 CODE_UNILATERAL_UNROLL_NOT_CONFIRMED_ON_CHAIN
@@ -232,6 +242,15 @@ mod tests {
         let error = ArkWasmError::UnilateralUnrollNotConfirmedOnChain { txid: "abc".into() };
         assert_eq!(error.code(), CODE_UNILATERAL_UNROLL_NOT_CONFIRMED_ON_CHAIN);
         assert!(error.to_string().contains("abc"));
+    }
+
+    #[test]
+    fn operator_trust_pending_blocks_autonomous_exit_error_code() {
+        let error = ArkWasmError::OperatorTrustPendingBlocksAutonomousExit;
+        assert_eq!(
+            error.code(),
+            CODE_OPERATOR_TRUST_PENDING_BLOCKS_AUTONOMOUS_EXIT
+        );
     }
 
     #[test]

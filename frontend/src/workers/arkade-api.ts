@@ -8,6 +8,7 @@ export type { ArkadeOperatorConnectionSummary }
 export interface ArkadeOperatorSyncResult {
   keyDiscoveryWarning?: string
   exitingVtxoWarning?: string
+  operatorConfigTrustPending?: boolean
 }
 
 export interface ArkadeAutonomousModeStatus {
@@ -16,6 +17,26 @@ export interface ArkadeAutonomousModeStatus {
   materialsReadyCount: number
   materialsMissingCount: number
   cachedOperatorInfoPresent: boolean
+  operatorTrustPending: boolean
+  canExitAutonomous: boolean
+}
+
+export interface ArkadeOperatorTrustStatus {
+  operatorTrustPending: boolean
+  reviewingInAutonomous: boolean
+  acceptedDigest?: string
+  pendingDigest?: string
+}
+
+export interface ArkadeOperatorConfigDiffEntry {
+  fieldKey: string
+  fieldLabel: string
+  acceptedValue: string
+  pendingValue: string
+}
+
+export interface ArkadeOperatorConfigDiffResult {
+  entries: ArkadeOperatorConfigDiffEntry[]
 }
 
 export interface ArkadeBalanceInfo {
@@ -295,6 +316,10 @@ export interface ArkadeService {
   setEncryptedWalletSecretsHost(host: EncryptedWalletSecretsHost): Promise<void>
   openSession(params: OpenArkadeSessionParams): Promise<OpenArkadeSessionResult>
   syncWithOperator(): Promise<ArkadeOperatorSyncResult>
+  getOperatorTrustStatus(): Promise<ArkadeOperatorTrustStatus>
+  getOperatorConfigDiff(): Promise<ArkadeOperatorConfigDiffResult>
+  acceptPendingOperatorConfig(): Promise<void>
+  reviewOperatorConfigInAutonomousMode(): Promise<void>
   enterAutonomousMode(): Promise<void>
   exitAutonomousMode(): Promise<void>
   getAutonomousModeStatus(): Promise<ArkadeAutonomousModeStatus>

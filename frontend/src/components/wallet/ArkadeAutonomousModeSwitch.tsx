@@ -25,12 +25,17 @@ export function ArkadeAutonomousModeSwitch() {
   const autonomousModeMutation = useArkadeAutonomousModeMutation()
   const status = statusQuery.data
   const checked = status?.active ?? false
-  const canEnable = status?.cachedOperatorInfoPresent ?? false
+  const canEnable =
+    (status?.cachedOperatorInfoPresent ?? false) && !(status?.operatorTrustPending ?? false)
+  const canDisable = status?.canExitAutonomous ?? true
   const pending = autonomousModeMutation.isPending || statusQuery.isLoading
   const [missingMaterialsConfirmOpen, setMissingMaterialsConfirmOpen] = useState(false)
 
   const handleCheckedChange = (nextChecked: boolean) => {
     if (nextChecked && !canEnable) {
+      return
+    }
+    if (!nextChecked && !canDisable) {
       return
     }
     if (nextChecked && status != null && status.materialsMissingCount > 0) {
@@ -103,7 +108,7 @@ export function ArkadeAutonomousModeSwitch() {
               <Switch
                 id="arkade-autonomous-mode"
                 checked={checked}
-                disabled={pending || (!canEnable && !checked)}
+                disabled={pending || !canEnable}
                 onCheckedChange={handleCheckedChange}
                 aria-label="Autonomous mode"
               />
@@ -115,7 +120,14 @@ export function ArkadeAutonomousModeSwitch() {
           </p>
           {!canEnable && !checked ? (
             <p className="text-xs text-amber-700 dark:text-amber-400">
-              Sync with the operator at least once while reachable before enabling autonomous mode.
+              {status?.operatorTrustPending
+                ? 'Resolve pending operator configuration changes before enabling autonomous mode manually.'
+                : 'Sync with the operator at least once while reachable before enabling autonomous mode.'}
+            </p>
+          ) : null}
+          {checked && status?.operatorTrustPending ? (
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              Accept operator changes before leaving autonomous mode.
             </p>
           ) : null}
           {status != null && checked ? (

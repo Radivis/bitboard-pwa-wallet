@@ -217,6 +217,34 @@ export const arkadeAutonomousModeStatusQueryKey = (
     'autonomous-mode-status',
   ] as const
 
+export const arkadeOperatorTrustStatusQueryKey = (
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+  connectionId: string,
+) =>
+  [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletId,
+    networkMode,
+    connectionId,
+    'operator-trust-status',
+  ] as const
+
+export const arkadeOperatorConfigDiffQueryKey = (
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+  connectionId: string,
+) =>
+  [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletId,
+    networkMode,
+    connectionId,
+    'operator-config-diff',
+  ] as const
+
 export const arkadeUnilateralExitCompletionFeeQueryKey = (
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,

@@ -200,6 +200,17 @@ Contracts `ARK-ROT-01` through `ARK-ROT-05` in `doc/features/arkade.yaml` define
 
 Cooperative fund migration uses `migrate_deprecated_signer_vtxos()` (ark-client 0.9.3+). Bitboard loops migrate passes internally until cooperative work is complete (or a pass cap), and **only then** re-stamps `operator_identity` with the current operator signer. Partial passes keep the migration banner and deprecated signer in persistence; the UI prompts **Migrate again** until complete. Post-cutoff funds appear in `pending_recovery_due_to_expired_signer` until unilateral exit or recoverable settlement; a **pending-recovery-due-to-expired-signer banner** on Dashboard and Management links to unilateral exit when `pendingRecoveryDueToExpiredSignerSats > 0`. This is **not** the admin `WalletInitializerService_Restore` API (operator on-chain wallet setup only).
 
+## Operator digest as terms-of-service gate
+
+The ASP `getInfo` digest is treated as a fingerprint of operator terms and configuration. When it changes relative to the last **accepted** `cached_operator_info`, Bitboard enters `operator_trust_pending`:
+
+- **Strong ToS:** operator sync does not persist snapshot, materials, watches, or a new accepted cache until the user explicitly chooses.
+- **Pending staging:** live `getInfo` is stored as `pending_operator_info` for an offline field-level diff.
+- **User choice:** a blocking modal offers (1) trust ASP and accept, or (2) review safely in autonomous mode (default). Review keeps `operator_trust_pending` true, enters autonomous mode with the **accepted** cache, and blocks leaving autonomous until accept.
+- **Reload:** while trust is pending, session open does not overwrite accepted cache from live `getInfo`; the blocking trust modal is shown again until the user chooses accept or review.
+
+Contracts `ARK-TRUST-01` through `ARK-TRUST-06` in `doc/features/arkade.yaml` define persistence, modal UX, and autonomous exit guards.
+
 ### Recoverable vs pending recovery due to expired signer (manual batch recover)
 
 | Bucket | Typical cause | User action in Bitboard |

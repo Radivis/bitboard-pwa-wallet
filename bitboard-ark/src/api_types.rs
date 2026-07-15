@@ -90,6 +90,34 @@ pub struct OperatorSyncResultDto {
     pub key_discovery_warning: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exiting_vtxo_warning: Option<String>,
+    #[serde(default)]
+    pub operator_config_trust_pending: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OperatorTrustStatusDto {
+    pub operator_trust_pending: bool,
+    pub reviewing_in_autonomous: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub accepted_digest: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pending_digest: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OperatorConfigDiffEntryDto {
+    pub field_key: String,
+    pub field_label: String,
+    pub accepted_value: String,
+    pub pending_value: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OperatorConfigDiffResultDto {
+    pub entries: Vec<OperatorConfigDiffEntryDto>,
 }
 
 #[derive(Debug, Serialize)]
@@ -100,6 +128,8 @@ pub struct AutonomousModeStatusDto {
     pub materials_ready_count: u32,
     pub materials_missing_count: u32,
     pub cached_operator_info_present: bool,
+    pub operator_trust_pending: bool,
+    pub can_exit_autonomous: bool,
 }
 
 #[derive(Debug, Serialize)]

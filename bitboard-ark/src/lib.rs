@@ -7,6 +7,7 @@ mod esplora_blockchain;
 mod exit_balance;
 mod network;
 mod offchain_snapshot;
+mod operator_config_diff;
 mod persistence;
 mod session;
 mod signer_migration;
@@ -189,6 +190,40 @@ pub async fn ark_sync_with_operator() -> Result<JsValue, JsValue> {
         let result =
             with_session_async(|session| async move { session.sync_with_operator().await }).await?;
         to_js_value(result)
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub fn ark_operator_trust_status() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.operator_trust_status())
+    }))
+}
+
+#[wasm_bindgen]
+pub fn ark_operator_config_diff() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.operator_config_diff()?)
+    }))
+}
+
+#[wasm_bindgen]
+pub async fn ark_accept_pending_operator_config() -> Result<(), JsValue> {
+    map_js_async(async {
+        with_session_async(|session| async move { session.accept_pending_operator_config().await })
+            .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_review_operator_config_in_autonomous_mode() -> Result<(), JsValue> {
+    map_js_async(async {
+        with_session_async(|session| async move {
+            session.review_operator_config_in_autonomous_mode().await
+        })
+        .await
     })
     .await
 }

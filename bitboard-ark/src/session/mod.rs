@@ -10,6 +10,7 @@ mod exit_watch_reconcile;
 pub(crate) mod mappers;
 mod offchain_balance;
 mod open;
+mod operator_trust;
 mod payments;
 mod pending_exit;
 mod receive;

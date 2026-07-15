@@ -41,6 +41,9 @@ impl ArkSession {
         if !self.autonomous_mode() {
             return Ok(());
         }
+        if self.wallet_db.operator_trust_pending() {
+            return Err(ArkWasmError::OperatorTrustPendingBlocksAutonomousExit);
+        }
         self.set_autonomous_mode(false);
         if let Err(error) = self.client.refresh_server_info().await {
             #[cfg(target_arch = "wasm32")]
@@ -59,12 +62,15 @@ impl ArkSession {
         let snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot;
         let (eligible_count, materials_ready_count, materials_missing_count) =
             autonomous_exit_materials_status(snapshot.as_ref());
+        let operator_trust_pending = self.wallet_db.operator_trust_pending();
         Ok(AutonomousModeStatusDto {
             active: self.autonomous_mode(),
             eligible_count,
             materials_ready_count,
             materials_missing_count,
             cached_operator_info_present: self.wallet_db.cached_operator_info().is_some(),
+            operator_trust_pending,
+            can_exit_autonomous: !operator_trust_pending,
         })
     }
 

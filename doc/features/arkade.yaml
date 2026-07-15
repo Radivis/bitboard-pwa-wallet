@@ -106,6 +106,19 @@ feature:
         description: A later successful sync without key-discovery failure clears warningMessage
       - id: ARK-SYNC-03
         description: After operator sync, reconcile_exiting_vtxo_watches runs targeted lookups for watched exiting VTXOs; non-blocking exitingVtxoWarning when indexer lag or ASP mismatch; never clear exiting state on full-list absence alone
+    operator_trust:
+      - id: ARK-TRUST-01
+        description: When operator digest differs from accepted cached_operator_info, sync does not persist offchain snapshot, exit watches, materials prefetch, or accepted operator cache
+      - id: ARK-TRUST-02
+        description: Pending getInfo is persisted as pending_operator_info for offline diff review while operator_trust_pending
+      - id: ARK-TRUST-03
+        description: Blocking modal with exactly two choices; Review changes safely in autonomous mode is default focus
+      - id: ARK-TRUST-04
+        description: While operator_trust_pending, exit_autonomous_mode is blocked until accept_pending_operator_config
+      - id: ARK-TRUST-05
+        description: accept_pending_operator_config promotes pending to accepted cache, clears trust state, and runs full operator sync
+      - id: ARK-TRUST-06
+        description: Session open preserves accepted cached_operator_info while operator_trust_pending (no live getInfo overwrite)
     vtxo_viewer:
       - id: ARK-VTX-01
         description: VTXO viewer page lists VTXO cards when session open and Arkade active

@@ -26,6 +26,8 @@ vi.mock('@/hooks/useArkadeQueries', async (importOriginal) => {
         materialsReadyCount: autonomousActive ? 1 : 1,
         materialsMissingCount: 1,
         cachedOperatorInfoPresent: true,
+        operatorTrustPending: false,
+        canExitAutonomous: true,
       },
       isLoading: false,
     }),

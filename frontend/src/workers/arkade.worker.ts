@@ -376,6 +376,30 @@ const arkadeService: ArkadeService = {
     return status as ArkadeAutonomousModeStatus
   },
 
+  async getOperatorTrustStatus(): Promise<ArkadeOperatorTrustStatus> {
+    const status = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_operator_trust_status(),
+    )
+    return status as ArkadeOperatorTrustStatus
+  },
+
+  async getOperatorConfigDiff(): Promise<ArkadeOperatorConfigDiffResult> {
+    const diff = await invokeWasmArk((wasmModule) => wasmModule.ark_operator_config_diff())
+    return diff as ArkadeOperatorConfigDiffResult
+  },
+
+  async acceptPendingOperatorConfig(): Promise<void> {
+    await invokeWasmArk((wasmModule) => wasmModule.ark_accept_pending_operator_config())
+    await flushSdkPersistenceNowOrThrow()
+  },
+
+  async reviewOperatorConfigInAutonomousMode(): Promise<void> {
+    await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_review_operator_config_in_autonomous_mode(),
+    )
+    await flushSdkPersistenceNowOrThrow()
+  },
+
   async migrateDeprecatedSignerVtxos(): Promise<ArkadeSignerMigrationResult> {
     const result = await invokeWasmArk((wasmModule) =>
       wasmModule.ark_migrate_deprecated_signer_vtxos(),

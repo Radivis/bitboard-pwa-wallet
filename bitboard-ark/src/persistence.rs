@@ -11,13 +11,15 @@ use bitcoin::{Network, XOnlyPublicKey};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
-/// Current on-disk Arkade persistence format (v4).
+/// Current on-disk Arkade persistence format (v5).
 ///
-/// Versions 1–3 were pre-production or lacked autonomous-exit fields. v3 blobs import cleanly;
-/// export uses v4. Unknown versions are rejected in [`BitboardArkPersistence::parse_import`].
-pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 4;
-/// Legacy import version before autonomous exit materials and cached operator info.
-pub const LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 3;
+/// v4 added autonomous-exit fields; v5 adds operator trust pending state. v3/v4 blobs import
+/// cleanly; export uses v5. Unknown versions are rejected in [`BitboardArkPersistence::parse_import`].
+pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 5;
+/// Legacy import version before operator trust pending fields.
+pub const LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 4;
+/// Pre-autonomous-exit persistence format.
+pub const LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V3: u32 = 3;
 const PERSISTENCE_LOCK_POISONED: &str = "persistence lock poisoned";
 
 /// Single-threaded WASM: recover in-memory state after a prior panic instead of re-panicking.
@@ -150,6 +152,10 @@ pub struct WalletDbSnapshot {
     pub unilateral_exit_watches: Vec<UnilateralExitWatchRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cached_operator_info: Option<crate::cached_operator_info::CachedOperatorInfoRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending_operator_info: Option<crate::cached_operator_info::CachedOperatorInfoRecord>,
+    #[serde(default)]
+    pub operator_trust_pending: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -175,6 +181,12 @@ fn default_parsed_ark_persistence() -> ParsedArkPersistence {
         wallet_db: WalletDbSnapshot::default(),
         operator_identity: None,
     }
+}
+
+fn is_supported_persistence_import_version(version: u32) -> bool {
+    version == BITBOARD_ARK_PERSISTENCE_VERSION
+        || version == LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION
+        || version == LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V3
 }
 
 fn warn_unknown_persistence_version(version: Option<u64>) {
@@ -210,9 +222,7 @@ impl BitboardArkPersistence {
             Err(_) => return default_parsed_ark_persistence(),
         };
 
-        if envelope.version != BITBOARD_ARK_PERSISTENCE_VERSION
-            && envelope.version != LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION
-        {
+        if !is_supported_persistence_import_version(envelope.version) {
             warn_unknown_persistence_version(Some(envelope.version as u64));
             return default_parsed_ark_persistence();
         }
@@ -257,6 +267,46 @@ impl JsonPersistenceDb {
         &self,
     ) -> Option<crate::cached_operator_info::CachedOperatorInfoRecord> {
         lock_persistence(&self.inner).cached_operator_info.clone()
+    }
+
+    pub fn pending_operator_info(
+        &self,
+    ) -> Option<crate::cached_operator_info::CachedOperatorInfoRecord> {
+        lock_persistence(&self.inner).pending_operator_info.clone()
+    }
+
+    pub fn set_pending_operator_info(
+        &self,
+        info: crate::cached_operator_info::CachedOperatorInfoRecord,
+    ) {
+        lock_persistence(&self.inner).pending_operator_info = Some(info);
+    }
+
+    pub fn clear_pending_operator_info(&self) {
+        lock_persistence(&self.inner).pending_operator_info = None;
+    }
+
+    pub fn operator_trust_pending(&self) -> bool {
+        lock_persistence(&self.inner).operator_trust_pending
+    }
+
+    pub fn set_operator_trust_pending(&self, pending: bool) {
+        lock_persistence(&self.inner).operator_trust_pending = pending;
+    }
+
+    pub fn stage_operator_trust_pending(
+        &self,
+        pending_info: crate::cached_operator_info::CachedOperatorInfoRecord,
+    ) {
+        let mut inner = lock_persistence(&self.inner);
+        inner.pending_operator_info = Some(pending_info);
+        inner.operator_trust_pending = true;
+    }
+
+    pub fn clear_operator_trust_state(&self) {
+        let mut inner = lock_persistence(&self.inner);
+        inner.pending_operator_info = None;
+        inner.operator_trust_pending = false;
     }
 
     pub fn set_offchain_vtxo_snapshot(&self, snapshot: OffchainVtxoSnapshot) {

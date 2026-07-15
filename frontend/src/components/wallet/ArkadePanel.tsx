@@ -12,6 +12,7 @@ import {
   ARKADE_RENEW_VTXOS_INFOMODE,
 } from '@/lib/arkade/arkade-infomode'
 import { ArkadeAutonomousModeSwitch } from '@/components/wallet/ArkadeAutonomousModeSwitch'
+import { ArkadeOperatorTrustGate } from '@/components/wallet/ArkadeOperatorTrustGate'
 import { ArkadeBalanceBreakdown } from '@/components/wallet/ArkadeBalanceBreakdown'
 import { ArkadeSignerMigrationBanner } from '@/components/wallet/ArkadeSignerMigrationBanner'
 import { ArkadePendingRecoveryDueToExpiredSignerBanner } from '@/components/wallet/ArkadePendingRecoveryDueToExpiredSignerBanner'
@@ -83,6 +84,7 @@ export function ArkadePanel() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        <ArkadeOperatorTrustGate />
         <ArkadeAutonomousModeSwitch />
         <ArkadeSignerMigrationBanner />
         <ArkadePendingRecoveryDueToExpiredSignerBanner />

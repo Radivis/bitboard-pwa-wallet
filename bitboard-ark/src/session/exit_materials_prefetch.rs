@@ -5,8 +5,8 @@ use crate::offchain_snapshot::vtxo_list_from_snapshot;
 use crate::persistence::OffchainVtxoSnapshot;
 use crate::session::mappers::current_unix_timestamp;
 use crate::unilateral_exit_materials::{
-    clear_all_unilateral_exit_materials, clear_unilateral_exit_materials_on_ineligible_records,
-    materials_record_from_prefetch, merge_unilateral_exit_materials, record_is_exit_eligible,
+    clear_unilateral_exit_materials_on_ineligible_records, materials_record_from_prefetch,
+    record_is_exit_eligible,
 };
 
 use super::ArkSession;
@@ -57,20 +57,6 @@ pub(crate) async fn prefetch_unilateral_exit_materials_for_snapshot(
         None
     } else {
         Some(warnings.join("\n"))
-    }
-}
-
-pub(crate) fn invalidate_materials_if_operator_digest_changed(
-    session: &ArkSession,
-    snapshot: &mut OffchainVtxoSnapshot,
-    new_digest: &str,
-) {
-    let prior_digest = session
-        .wallet_db
-        .cached_operator_info()
-        .map(|cached| cached.digest);
-    if prior_digest.is_some_and(|digest| digest != new_digest) {
-        clear_all_unilateral_exit_materials(snapshot);
     }
 }
 
