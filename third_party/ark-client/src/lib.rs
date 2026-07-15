@@ -796,7 +796,7 @@ where
         self.finish_connect().await
     }
 
-    async fn finish_connect(mut self) -> Result<Client<B, W, S, K>, Error> {
+    async fn finish_connect(self) -> Result<Client<B, W, S, K>, Error> {
         let server_info = timeout_op(self.timeout, self.network_client.get_info())
             .await
             .context("Failed to get Ark server info")??;

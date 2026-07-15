@@ -195,16 +195,16 @@ impl ArkSession {
         let server_info = self.client.server_info()?;
         let now = current_unix_timestamp();
 
-        if !self.autonomous_mode() {
-            if let Ok((vtxo_list, script_map)) = self.client.list_vtxos().await {
-                let rows = map_vtxo_rows_from_list(&vtxo_list, dust, &server_info, now, |script| {
-                    script_map.get(script).map(|vtxo| vtxo.server_pk())
-                });
-                return Ok(VtxoListResultDto {
-                    rows,
-                    from_snapshot_synced_at: None,
-                });
-            }
+        if !self.autonomous_mode()
+            && let Ok((vtxo_list, script_map)) = self.client.list_vtxos().await
+        {
+            let rows = map_vtxo_rows_from_list(&vtxo_list, dust, &server_info, now, |script| {
+                script_map.get(script).map(|vtxo| vtxo.server_pk())
+            });
+            return Ok(VtxoListResultDto {
+                rows,
+                from_snapshot_synced_at: None,
+            });
         }
 
         if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref() {

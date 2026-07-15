@@ -502,7 +502,7 @@ impl ArkSession {
                         estimate_error = Some("VTXO chain not found".to_string());
                     }
                 })
-                .map_err(|error| ArkWasmError::Client(error))
+                .map_err(ArkWasmError::Client)
         } {
             Ok(()) => {}
             Err(ArkWasmError::AutonomousExitMaterialsMissing) => {

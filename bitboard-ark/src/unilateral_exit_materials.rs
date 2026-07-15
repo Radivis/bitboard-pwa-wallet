@@ -145,12 +145,6 @@ pub fn clear_unilateral_exit_materials_on_ineligible_records(snapshot: &mut Offc
     }
 }
 
-pub fn clear_all_unilateral_exit_materials(snapshot: &mut OffchainVtxoSnapshot) {
-    for record in &mut snapshot.virtual_tx_outpoints {
-        record.unilateral_exit_materials = None;
-    }
-}
-
 pub fn record_is_exit_eligible(record: &VirtualTxOutPointRecord) -> bool {
     !record.is_preconfirmed && !record.is_swept && !record.is_unrolled && !record.is_spent
 }

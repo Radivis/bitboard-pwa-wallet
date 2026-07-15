@@ -1,12 +1,9 @@
 use ark_core::VtxoList;
 
-use crate::error::ArkResult;
-use crate::offchain_snapshot::vtxo_list_from_snapshot;
 use crate::persistence::OffchainVtxoSnapshot;
 use crate::session::mappers::current_unix_timestamp;
 use crate::unilateral_exit_materials::{
     clear_unilateral_exit_materials_on_ineligible_records, materials_record_from_prefetch,
-    record_is_exit_eligible,
 };
 
 use super::ArkSession;
@@ -64,16 +61,4 @@ pub(crate) fn autonomous_exit_materials_status(
     snapshot: Option<&OffchainVtxoSnapshot>,
 ) -> (u32, u32, u32) {
     crate::unilateral_exit_materials::materials_status_from_snapshot(snapshot)
-}
-
-pub(crate) fn snapshot_vtxo_list_for_autonomous(
-    snapshot: &OffchainVtxoSnapshot,
-) -> ArkResult<VtxoList> {
-    vtxo_list_from_snapshot(snapshot)
-}
-
-pub(crate) fn snapshot_record_is_autonomous_exit_candidate(
-    record: &crate::persistence::VirtualTxOutPointRecord,
-) -> bool {
-    record_is_exit_eligible(record) && record.unilateral_exit_materials.is_some()
 }

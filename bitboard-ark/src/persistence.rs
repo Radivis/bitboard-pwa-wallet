@@ -282,16 +282,8 @@ impl JsonPersistenceDb {
         lock_persistence(&self.inner).pending_operator_info = Some(info);
     }
 
-    pub fn clear_pending_operator_info(&self) {
-        lock_persistence(&self.inner).pending_operator_info = None;
-    }
-
     pub fn operator_trust_pending(&self) -> bool {
         lock_persistence(&self.inner).operator_trust_pending
-    }
-
-    pub fn set_operator_trust_pending(&self, pending: bool) {
-        lock_persistence(&self.inner).operator_trust_pending = pending;
     }
 
     pub fn stage_operator_trust_pending(
