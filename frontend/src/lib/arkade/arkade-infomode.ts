@@ -13,6 +13,7 @@ export const ARKADE_INFOMODE_IDS = {
   delegatorFee: 'arkade-delegator-fee',
   renewVtxos: 'arkade-renew-vtxos',
   vtxoExpiryIndicator: 'arkade-vtxo-expiry-indicator',
+  operatorBatchWindow: 'arkade-operator-batch-window',
   boardFromOnchain: 'arkade-board-from-onchain',
   boardFlow: 'arkade-board-flow',
   learnAboutExits: 'arkade-learn-about-exits',
@@ -105,6 +106,11 @@ export const ARKADE_RENEW_VTXOS_INFOMODE = {
 export const ARKADE_VTXO_EXPIRY_INDICATOR_INFOMODE = {
   title: 'VTXO expiry',
   text: 'Each offchain virtual balance unit (VTXO) has an expiry time. Renew before then to stay on the fast Arkade path. The date shown is the soonest expiry among your current VTXOs. Amber text means some are already in the renewal window.',
+} as const
+
+export const ARKADE_OPERATOR_BATCH_WINDOW_INFOMODE = {
+  title: 'Operator batch rounds',
+  text: 'Pre-confirmed VTXOs become confirmed when the operator includes them in an on-chain batch swap. That can take hours or days even though the funds are already offchain-spendable. Bitboard can only show the next batch window when the operator publishes scheduledSession in getInfo. Mutinynet and Arkade mainnet usually omit it, so no countdown is shown. A published schedule (for example on signet.arkade.sh) describes when the operator may run rounds—not a guarantee that your VTXOs settle in the next one.',
 } as const
 
 export const ARKADE_BOARDING_ADDRESS_INFOMODE = {

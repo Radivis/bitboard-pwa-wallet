@@ -122,6 +122,16 @@ pub struct OperatorConfigDiffResultDto {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct OperatorScheduledSessionDto {
+    pub next_start_time: i64,
+    pub next_end_time: i64,
+    pub period: i64,
+    pub duration: i64,
+    pub in_progress: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AutonomousModeStatusDto {
     pub active: bool,
     pub eligible_count: u32,

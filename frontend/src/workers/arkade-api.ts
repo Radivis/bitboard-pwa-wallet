@@ -102,6 +102,15 @@ export interface ArkadeVtxoExpiryStatus {
   expiringSoonCount: number
 }
 
+/** Operator batch round schedule from getInfo `scheduledSession` (unix seconds). */
+export interface ArkadeOperatorScheduledSession {
+  nextStartTime: number
+  nextEndTime: number
+  period: number
+  duration: number
+  inProgress: boolean
+}
+
 export type ArkadeVtxoClassification =
   | 'pre_confirmed'
   | 'confirmed'
@@ -366,6 +375,7 @@ export interface ArkadeService {
   getDelegateInfo(): Promise<ArkadeDelegateInfo>
   getExpiringVtxoCount(): Promise<number>
   getVtxoExpiryStatus(): Promise<ArkadeVtxoExpiryStatus>
+  getOperatorScheduledSession(): Promise<ArkadeOperatorScheduledSession | null>
   renewVtxosNow(): Promise<string | null>
   delegateSpendableVtxos(): Promise<{
     delegated: number

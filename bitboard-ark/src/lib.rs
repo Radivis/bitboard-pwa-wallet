@@ -327,6 +327,13 @@ pub async fn ark_get_expiring_vtxo_count() -> Result<u32, JsValue> {
 }
 
 #[wasm_bindgen]
+pub fn ark_operator_scheduled_session() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.operator_scheduled_session()?)
+    }))
+}
+
+#[wasm_bindgen]
 pub async fn ark_get_vtxo_expiry_status() -> Result<JsValue, JsValue> {
     map_js_async(async {
         export_session_json(|session| async move { session.vtxo_expiry_status().await }).await

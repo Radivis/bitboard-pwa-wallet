@@ -98,6 +98,20 @@ export const arkadeVtxoExpiryQueryKey = (
     'vtxo-expiry',
   ] as const
 
+export const arkadeOperatorScheduledSessionQueryKey = (
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+  connectionId: string,
+) =>
+  [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletId,
+    networkMode,
+    connectionId,
+    'operator-scheduled-session',
+  ] as const
+
 export const arkadeVtxoListQueryKey = (
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,

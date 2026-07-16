@@ -197,7 +197,7 @@ impl CachedFeeInfoRecord {
 }
 
 impl CachedScheduledSessionRecord {
-    fn from_scheduled_session(session: &ScheduledSession) -> Self {
+    pub(crate) fn from_scheduled_session(session: &ScheduledSession) -> Self {
         Self {
             next_start_time: session.next_start_time,
             next_end_time: session.next_end_time,

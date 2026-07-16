@@ -124,6 +124,8 @@ feature:
         description: VTXO viewer page lists VTXO cards when session open and Arkade active
       - id: ARK-VTX-02
         description: Each card shows id, amount, classification, true-only flag chips (including unilateral exit prepared with door-open icon when cached exit materials exist), created and expiry timestamps
+      - id: ARK-ARK-MGMT-01
+        description: Arkade management panel shows next operator batch window when getInfo scheduledSession is available, or an explicit not-published message when it is null
       - id: ARK-VTX-03
         description: Hide finalized defaults on; toggle shows finalized cards
       - id: ARK-VTX-04
@@ -143,6 +145,7 @@ feature:
         - Arkade receive address with copy
         - delegator fee from getDelegateInfo when reachable
         - expiring VTXO count when session open
+        - operator batch round schedule when operator publishes scheduledSession
         - collaborative exit (on-chain destination, optional partial amount) with operator fee estimate from getInfo().fees
         - Start unilateral exit (select VTXO, unroll) with bumper fee estimate; separate Complete unilateral exit for in-progress VTXOs after timelock
         - batch complete multiple ready in-progress VTXOs in one on-chain transaction with dynamic completion fee estimate

@@ -17,6 +17,7 @@ import {
   arkadeExitCandidatesQueryKey,
   arkadeHistoryQueryKey,
   arkadeOperatorConfigDiffQueryKey,
+  arkadeOperatorScheduledSessionQueryKey,
   arkadeOperatorTrustStatusQueryKey,
   arkadeRecoverableVtxoFeeQueryKey,
   arkadeSignerMigrationPartialResultQueryKey,
@@ -232,6 +233,9 @@ async function invalidateArkadeWalletDataQueries(
       queryKey: arkadeVtxoExpiryQueryKey(walletId, networkMode, connectionId),
     }),
     queryClient.invalidateQueries({
+      queryKey: arkadeOperatorScheduledSessionQueryKey(walletId, networkMode, connectionId),
+    }),
+    queryClient.invalidateQueries({
       queryKey: arkadeVtxoListQueryKey(walletId, networkMode, connectionId),
     }),
     queryClient.invalidateQueries({
@@ -444,6 +448,29 @@ export function useArkadeVtxoExpiryQuery() {
       await ensureArkadeSessionOpenForActiveWallet()
       scheduleBackgroundArkadeOperatorSync()
       return getArkadeWorker().getVtxoExpiryStatus()
+    },
+    ...arkadeDashboardPeriodicQueryOptions,
+  })
+}
+
+export function useArkadeOperatorScheduledSessionQuery() {
+  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+    useArkadeQueryBase()
+  const arkadeDashboardPeriodicQueryOptions = useArkadeDashboardPeriodicQueryOptions()
+
+  return useQuery({
+    queryKey: walletScopedQueryKey(
+      activeWalletId,
+      networkMode,
+      activeArkadeConnectionId,
+      arkadeOperatorScheduledSessionQueryKey,
+      'operator-scheduled-session',
+    ),
+    enabled: sessionReady,
+    queryFn: async () => {
+      await ensureArkadeSessionOpenForActiveWallet()
+      scheduleBackgroundArkadeOperatorSync()
+      return getArkadeWorker().getOperatorScheduledSession()
     },
     ...arkadeDashboardPeriodicQueryOptions,
   })
