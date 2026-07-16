@@ -145,15 +145,31 @@ pub fn clear_unilateral_exit_materials_on_ineligible_records(snapshot: &mut Offc
     }
 }
 
+fn vtxo_flags_are_exit_eligible(
+    is_preconfirmed: bool,
+    is_swept: bool,
+    is_unrolled: bool,
+    is_spent: bool,
+) -> bool {
+    !is_preconfirmed && !is_swept && !is_unrolled && !is_spent
+}
+
 pub fn record_is_exit_eligible(record: &VirtualTxOutPointRecord) -> bool {
-    !record.is_preconfirmed && !record.is_swept && !record.is_unrolled && !record.is_spent
+    vtxo_flags_are_exit_eligible(
+        record.is_preconfirmed,
+        record.is_swept,
+        record.is_unrolled,
+        record.is_spent,
+    )
 }
 
 pub fn virtual_tx_outpoint_is_exit_eligible(virtual_tx_outpoint: &VirtualTxOutPoint) -> bool {
-    !virtual_tx_outpoint.is_preconfirmed
-        && !virtual_tx_outpoint.is_swept
-        && !virtual_tx_outpoint.is_unrolled
-        && !virtual_tx_outpoint.is_spent
+    vtxo_flags_are_exit_eligible(
+        virtual_tx_outpoint.is_preconfirmed,
+        virtual_tx_outpoint.is_swept,
+        virtual_tx_outpoint.is_unrolled,
+        virtual_tx_outpoint.is_spent,
+    )
 }
 
 pub fn virtual_tx_outpoint_has_unilateral_exit_prepared(
@@ -246,6 +262,15 @@ mod tests {
         assert_eq!(restored.inner.len(), 1);
         assert_eq!(restored.inner[0].txid, chains.inner[0].txid);
         assert_eq!(restored.inner[0].spends, chains.inner[0].spends);
+    }
+
+    #[test]
+    fn exit_eligibility_requires_all_exit_blocking_flags_cleared() {
+        assert!(vtxo_flags_are_exit_eligible(false, false, false, false));
+        assert!(!vtxo_flags_are_exit_eligible(true, false, false, false));
+        assert!(!vtxo_flags_are_exit_eligible(false, true, false, false));
+        assert!(!vtxo_flags_are_exit_eligible(false, false, true, false));
+        assert!(!vtxo_flags_are_exit_eligible(false, false, false, true));
     }
 
     #[test]

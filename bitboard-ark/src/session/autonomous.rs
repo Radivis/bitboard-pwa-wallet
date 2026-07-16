@@ -9,6 +9,12 @@ use crate::session::open::sync_onchain_wallet_for_session_open;
 use super::ArkSession;
 use super::exit_materials_prefetch::autonomous_exit_materials_status;
 
+/// ARK-EXIT-06: offchain balance and recoverable bucket helpers may call operator
+/// `offchain_balance` / `list_vtxos` only when autonomous mode is inactive.
+pub(crate) fn balance_vtxo_reads_use_operator_rpc(autonomous_mode: bool) -> bool {
+    !autonomous_mode
+}
+
 impl ArkSession {
     pub(crate) fn autonomous_mode(&self) -> bool {
         self.autonomous_mode.get()
@@ -45,6 +51,16 @@ impl ArkSession {
             return Err(ArkWasmError::OperatorTrustPendingBlocksAutonomousExit);
         }
         self.set_autonomous_mode(false);
+        self.refresh_operator_info_after_leaving_autonomous(true)
+            .await
+    }
+
+    /// Reconnect to live operator `getInfo` after autonomous mode ends. Sync is optional because
+    /// trust-accept runs its own full `sync_with_operator` immediately afterward.
+    pub(crate) async fn refresh_operator_info_after_leaving_autonomous(
+        &self,
+        run_full_sync: bool,
+    ) -> ArkResult<()> {
         if let Err(error) = self.client.refresh_server_info().await {
             #[cfg(target_arch = "wasm32")]
             web_sys::console::warn_1(
@@ -54,7 +70,9 @@ impl ArkSession {
             #[cfg(not(target_arch = "wasm32"))]
             let _ = error;
         }
-        let _ = self.sync_with_operator().await;
+        if run_full_sync {
+            let _ = self.sync_with_operator().await;
+        }
         Ok(())
     }
 
@@ -105,5 +123,20 @@ impl ArkSession {
         self.wallet_db
             .set_cached_operator_info(CachedOperatorInfoRecord::from_server_info(&server_info));
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod autonomous_balance_routing_tests {
+    use super::balance_vtxo_reads_use_operator_rpc;
+
+    #[test]
+    fn autonomous_mode_balance_vtxo_reads_skip_operator_rpc() {
+        assert!(!balance_vtxo_reads_use_operator_rpc(true));
+    }
+
+    #[test]
+    fn non_autonomous_mode_balance_vtxo_reads_may_use_operator_rpc() {
+        assert!(balance_vtxo_reads_use_operator_rpc(false));
     }
 }

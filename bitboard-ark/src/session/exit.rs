@@ -29,9 +29,9 @@ use crate::persistence::{
 
 use super::ArkSession;
 use super::exit_autonomous::{
-    autonomous_build_unilateral_branch, autonomous_chain_step_counts,
-    autonomous_exit_candidates_from_snapshot, autonomous_validate_completion_ready,
-    parse_vtxo_txids,
+    autonomous_build_unilateral_branch, autonomous_complete_unilateral_exit,
+    autonomous_estimate_unilateral_exit_completion, autonomous_exit_candidates_from_snapshot,
+    autonomous_unilateral_exit_chain_steps, autonomous_vtxo_list, parse_vtxo_txids,
 };
 use super::exit_watch::{
     enrich_unilateral_exit_watch_after_unroll, remove_unilateral_exit_watch_in_wallet_db,
@@ -251,8 +251,7 @@ impl ArkSession {
         let started_at_by_outpoint = Self::pending_unilateral_started_at_by_outpoint(&pending);
 
         let (vtxo_list, _) = if self.autonomous_mode() {
-            self.snapshot_vtxo_list_and_script_map()
-                .map(|(list, _)| (list, HashMap::new()))?
+            autonomous_vtxo_list(self).map(|list| (list, HashMap::new()))?
         } else {
             self.client.list_vtxos().await?
         };
@@ -463,27 +462,11 @@ impl ArkSession {
         let mut estimate_error = None;
 
         match if self.autonomous_mode() {
-            let snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot;
-            let materials = snapshot.as_ref().and_then(|snapshot| {
-                crate::unilateral_exit_materials::snapshot_record_materials(
-                    snapshot,
-                    &params.txid,
-                    params.vout,
-                )
-            });
-            if let Some(materials) = materials {
-                match autonomous_chain_step_counts(materials) {
-                    Ok((unroll_steps, wait_steps)) => {
-                        chain_tx_count = unroll_steps.saturating_add(1);
-                        projected_unroll_steps = unroll_steps;
-                        projected_wait_steps = wait_steps;
-                        Ok(())
-                    }
-                    Err(error) => Err(error),
-                }
-            } else {
-                Err(ArkWasmError::AutonomousExitMaterialsMissing)
-            }
+            autonomous_unilateral_exit_chain_steps(self, &params.txid, params.vout).map(|steps| {
+                chain_tx_count = steps.chain_tx_count;
+                projected_unroll_steps = steps.projected_unroll_steps;
+                projected_wait_steps = steps.projected_wait_steps;
+            })
         } else {
             self.client
                 .get_vtxo_chain(outpoint)
@@ -738,50 +721,37 @@ impl ArkSession {
             }
         }
 
-        let (vtxo_list, _) = if self.autonomous_mode() {
-            autonomous_validate_completion_ready(self, &deduped_vtxo_txids)?;
-            self.snapshot_vtxo_list_and_script_map()
-                .map(|(list, _)| (list, HashMap::new()))?
-        } else {
-            self.client.list_vtxos().await?
-        };
-        if !self.autonomous_mode() {
-            let dust = self.client.server_info()?.dust;
-            for vtxo_txid in &deduped_vtxo_txids {
-                let Some(virtual_tx_outpoint) = vtxo_list.all().find(|virtual_tx_outpoint| {
-                    virtual_tx_outpoint.outpoint.txid.to_string() == *vtxo_txid
-                }) else {
-                    continue;
-                };
-                let candidate = map_exit_candidate(virtual_tx_outpoint, dust);
-                if !candidate.can_complete {
-                    return Err(ArkWasmError::VtxoUnilateralExitNotReady {
-                        txid: vtxo_txid.clone(),
-                    });
-                }
+        let destination = parse_onchain_address(&params.destination_address, self.network())?;
+        let fee_rate_sat_per_vb =
+            resolve_completion_fee_rate_sat_per_vb(params.fee_rate_sat_per_vb);
+        if self.autonomous_mode() {
+            return autonomous_complete_unilateral_exit(
+                self,
+                &deduped_vtxo_txids,
+                destination,
+                fee_rate_sat_per_vb,
+            )
+            .await;
+        }
+
+        let (vtxo_list, _) = self.client.list_vtxos().await?;
+        let dust = self.client.server_info()?.dust;
+        for vtxo_txid in &deduped_vtxo_txids {
+            let Some(virtual_tx_outpoint) = vtxo_list.all().find(|virtual_tx_outpoint| {
+                virtual_tx_outpoint.outpoint.txid.to_string() == *vtxo_txid
+            }) else {
+                continue;
+            };
+            let candidate = map_exit_candidate(virtual_tx_outpoint, dust);
+            if !candidate.can_complete {
+                return Err(ArkWasmError::VtxoUnilateralExitNotReady {
+                    txid: vtxo_txid.clone(),
+                });
             }
         }
 
         let vtxo_txids: Vec<Txid> = parse_vtxo_txids(&deduped_vtxo_txids)?;
 
-        let destination = parse_onchain_address(&params.destination_address, self.network())?;
-        let fee_rate_sat_per_vb =
-            resolve_completion_fee_rate_sat_per_vb(params.fee_rate_sat_per_vb);
-        if self.autonomous_mode() {
-            let (vtxo_list, script_map) = self.snapshot_vtxo_list_and_script_map()?;
-            let txid = self
-                .client
-                .send_on_chain_for_vtxo_txids_with_vtxo_list(
-                    destination,
-                    &vtxo_txids,
-                    &vtxo_list,
-                    &script_map,
-                    Some(fee_rate_sat_per_vb),
-                )
-                .await?;
-            self.clear_pending_unilateral_exits_for_txids(&vtxo_txids);
-            return Ok(txid.to_string());
-        }
         let mut last_error: Option<ark_client::Error> = None;
         for _ in 0..OPERATOR_INDEXER_POLL_MAX {
             self.sync_with_operator().await?;
@@ -865,18 +835,14 @@ impl ArkSession {
             resolve_completion_fee_rate_sat_per_vb(params.fee_rate_sat_per_vb);
 
         if self.autonomous_mode() {
-            autonomous_validate_completion_ready(self, &deduped_vtxo_txids)?;
-            let (vtxo_list, script_map) = self.snapshot_vtxo_list_and_script_map()?;
-            match self
-                .client
-                .estimate_send_on_chain_for_vtxo_txids_with_vtxo_list(
-                    destination,
-                    &vtxo_txids,
-                    &vtxo_list,
-                    &script_map,
-                    Some(fee_rate_sat_per_vb),
-                )
-                .await
+            match autonomous_estimate_unilateral_exit_completion(
+                self,
+                &deduped_vtxo_txids,
+                &vtxo_txids,
+                destination,
+                fee_rate_sat_per_vb,
+            )
+            .await
             {
                 Ok((fee, to_amount, selected_amount, missing_blocktime_inputs)) => {
                     return Ok(UnilateralExitCompletionFeeEstimateDto {

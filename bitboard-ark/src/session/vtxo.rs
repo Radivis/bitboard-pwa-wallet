@@ -19,6 +19,7 @@ use crate::persistence::OffchainVtxoSnapshot;
 use crate::unilateral_exit_materials::virtual_tx_outpoint_has_unilateral_exit_prepared;
 
 use super::ArkSession;
+use super::autonomous::balance_vtxo_reads_use_operator_rpc;
 use super::mappers::{
     current_unix_timestamp, empty_fee_info, map_intent_fee_configured, parse_delegator_public_key,
 };
@@ -78,7 +79,9 @@ impl ArkSession {
             &self.wallet_db.pending_exit_deductions(),
         );
 
-        if let Ok((vtxo_list, _)) = self.client.list_vtxos().await {
+        if balance_vtxo_reads_use_operator_rpc(self.autonomous_mode())
+            && let Ok((vtxo_list, _)) = self.client.list_vtxos().await
+        {
             return Ok(recoverable_vtxo_buckets_from_list(
                 &vtxo_list,
                 dust,

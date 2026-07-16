@@ -1,7 +1,9 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 
-use bitcoin::{Amount, OutPoint, Txid};
+use ark_client::MissingBlocktimeCompletionInput;
+use ark_core::{Vtxo, VtxoList};
+use bitcoin::{Address, Amount, OutPoint, ScriptBuf, Txid};
 
 use crate::api_types::ExitCandidateRow;
 use crate::error::{ArkResult, ArkWasmError};
@@ -15,6 +17,89 @@ use crate::unilateral_exit_materials::{
 };
 
 use super::ArkSession;
+
+pub(crate) struct AutonomousUnrollChainSteps {
+    pub chain_tx_count: u32,
+    pub projected_unroll_steps: u32,
+    pub projected_wait_steps: u32,
+}
+
+/// Offline VTXO list for autonomous exit flows (no operator `list_vtxos`).
+pub(crate) fn autonomous_vtxo_list(session: &ArkSession) -> ArkResult<VtxoList> {
+    session
+        .snapshot_vtxo_list_and_script_map()
+        .map(|(vtxo_list, _)| vtxo_list)
+}
+
+/// Offline VTXO list and script map for autonomous completion coin-select.
+pub(crate) fn autonomous_vtxo_list_and_script_map(
+    session: &ArkSession,
+) -> ArkResult<(VtxoList, HashMap<ScriptBuf, Vtxo>)> {
+    session.snapshot_vtxo_list_and_script_map()
+}
+
+pub(crate) fn autonomous_unilateral_exit_chain_steps(
+    session: &ArkSession,
+    txid: &str,
+    vout: u32,
+) -> ArkResult<AutonomousUnrollChainSteps> {
+    let snapshot = session.wallet_db.snapshot().offchain_vtxo_snapshot;
+    let materials = snapshot
+        .as_ref()
+        .and_then(|snapshot| snapshot_record_materials(snapshot, txid, vout))
+        .ok_or(ArkWasmError::AutonomousExitMaterialsMissing)?;
+    let (projected_unroll_steps, projected_wait_steps) = autonomous_chain_step_counts(materials)?;
+    Ok(AutonomousUnrollChainSteps {
+        chain_tx_count: projected_unroll_steps.saturating_add(1),
+        projected_unroll_steps,
+        projected_wait_steps,
+    })
+}
+
+pub(crate) async fn autonomous_complete_unilateral_exit(
+    session: &ArkSession,
+    deduped_vtxo_txids: &[String],
+    destination: Address,
+    fee_rate_sat_per_vb: f64,
+) -> ArkResult<String> {
+    autonomous_validate_completion_ready(session, deduped_vtxo_txids)?;
+    let (vtxo_list, script_map) = autonomous_vtxo_list_and_script_map(session)?;
+    let vtxo_txids = parse_vtxo_txids(deduped_vtxo_txids)?;
+    let txid = session
+        .client
+        .send_on_chain_for_vtxo_txids_with_vtxo_list(
+            destination,
+            &vtxo_txids,
+            &vtxo_list,
+            &script_map,
+            Some(fee_rate_sat_per_vb),
+        )
+        .await?;
+    session.clear_pending_unilateral_exits_for_txids(&vtxo_txids);
+    Ok(txid.to_string())
+}
+
+pub(crate) async fn autonomous_estimate_unilateral_exit_completion(
+    session: &ArkSession,
+    deduped_vtxo_txids: &[String],
+    vtxo_txids: &[Txid],
+    destination: Address,
+    fee_rate_sat_per_vb: f64,
+) -> ArkResult<(Amount, Amount, Amount, Vec<MissingBlocktimeCompletionInput>)> {
+    autonomous_validate_completion_ready(session, deduped_vtxo_txids)?;
+    let (vtxo_list, script_map) = autonomous_vtxo_list_and_script_map(session)?;
+    session
+        .client
+        .estimate_send_on_chain_for_vtxo_txids_with_vtxo_list(
+            destination,
+            vtxo_txids,
+            &vtxo_list,
+            &script_map,
+            Some(fee_rate_sat_per_vb),
+        )
+        .await
+        .map_err(Into::into)
+}
 
 pub(crate) fn autonomous_exit_candidates_from_snapshot(
     session: &ArkSession,

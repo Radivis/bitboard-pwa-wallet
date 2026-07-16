@@ -69,16 +69,8 @@ impl ArkSession {
             return Ok(());
         }
         self.set_autonomous_mode(false);
-        if let Err(error) = self.client.refresh_server_info().await {
-            #[cfg(target_arch = "wasm32")]
-            web_sys::console::warn_1(
-                &format!("Failed to refresh operator info when leaving autonomous mode: {error}")
-                    .into(),
-            );
-            #[cfg(not(target_arch = "wasm32"))]
-            let _ = error;
-        }
-        Ok(())
+        self.refresh_operator_info_after_leaving_autonomous(false)
+            .await
     }
 
     pub(crate) fn stage_operator_trust_from_server_info(

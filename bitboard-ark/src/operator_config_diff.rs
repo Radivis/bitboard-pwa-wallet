@@ -1,5 +1,6 @@
 use crate::api_types::OperatorConfigDiffEntryDto;
 use crate::cached_operator_info::CachedOperatorInfoRecord;
+use serde::Serialize;
 
 fn push_if_changed(
     entries: &mut Vec<OperatorConfigDiffEntryDto>,
@@ -31,6 +32,31 @@ fn push_option_u64(
     let pending_text = pending
         .map(|value| value.to_string())
         .unwrap_or_else(|| "—".to_string());
+    push_if_changed(
+        entries,
+        field_key,
+        field_label,
+        &accepted_text,
+        &pending_text,
+    );
+}
+
+fn option_to_json_text<T: Serialize>(value: &Option<T>) -> String {
+    match value {
+        Some(inner) => serde_json::to_string(inner).unwrap_or_else(|_| "—".to_string()),
+        None => "—".to_string(),
+    }
+}
+
+fn push_option_json_if_changed<T: Serialize>(
+    entries: &mut Vec<OperatorConfigDiffEntryDto>,
+    field_key: &str,
+    field_label: &str,
+    accepted: &Option<T>,
+    pending: &Option<T>,
+) {
+    let accepted_text = option_to_json_text(accepted);
+    let pending_text = option_to_json_text(pending);
     push_if_changed(
         entries,
         field_key,
@@ -166,6 +192,21 @@ pub fn operator_config_diff(
         &pending.max_op_return_outputs.to_string(),
     );
 
+    push_option_json_if_changed(
+        &mut entries,
+        "fees",
+        "Fee schedule",
+        &accepted.fees,
+        &pending.fees,
+    );
+    push_option_json_if_changed(
+        &mut entries,
+        "scheduled_session",
+        "Operator batch schedule",
+        &accepted.scheduled_session,
+        &pending.scheduled_session,
+    );
+
     let accepted_deprecated =
         serde_json::to_string(&accepted.deprecated_signers).unwrap_or_else(|_| "[]".to_string());
     let pending_deprecated =
@@ -216,6 +257,9 @@ pub fn operator_digest_mismatch(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cached_operator_info::{
+        CachedFeeInfoRecord, CachedIntentFeeInfoRecord, CachedScheduledSessionRecord,
+    };
     use bitcoin::secp256k1::PublicKey;
     use bitcoin::secp256k1::Secp256k1;
     use bitcoin::{Amount, Network, ScriptBuf, Sequence};
@@ -266,6 +310,86 @@ mod tests {
         let keys: Vec<&str> = diff.iter().map(|entry| entry.field_key.as_str()).collect();
         assert!(keys.contains(&"digest"));
         assert!(keys.contains(&"unilateral_exit_delay_consensus"));
+    }
+
+    #[test]
+    fn operator_config_diff_lists_fees_when_changed() {
+        let accepted = sample_cached("digest-a", 144);
+        let mut pending = accepted.clone();
+        pending.fees = Some(CachedFeeInfoRecord {
+            intent_fee: CachedIntentFeeInfoRecord {
+                offchain_input: Some("1".to_string()),
+                offchain_output: None,
+                onchain_input: None,
+                onchain_output: None,
+            },
+            tx_fee_rate: String::new(),
+        });
+        let diff = operator_config_diff(&accepted, &pending);
+        let fees_entry = diff
+            .iter()
+            .find(|entry| entry.field_key == "fees")
+            .expect("fees diff entry");
+        assert_eq!(fees_entry.field_label, "Fee schedule");
+        assert_eq!(fees_entry.accepted_value, "—");
+        assert!(
+            fees_entry
+                .pending_value
+                .contains("\"offchain_input\":\"1\"")
+        );
+    }
+
+    #[test]
+    fn operator_config_diff_lists_scheduled_session_when_changed() {
+        let accepted = sample_cached("digest-a", 144);
+        let mut pending = accepted.clone();
+        pending.scheduled_session = Some(CachedScheduledSessionRecord {
+            next_start_time: 1_700_000_000,
+            next_end_time: 1_700_001_000,
+            period: 3_600,
+            duration: 1_000,
+            fees: None,
+        });
+        let diff = operator_config_diff(&accepted, &pending);
+        let schedule_entry = diff
+            .iter()
+            .find(|entry| entry.field_key == "scheduled_session")
+            .expect("scheduled_session diff entry");
+        assert_eq!(schedule_entry.field_label, "Operator batch schedule");
+        assert_eq!(schedule_entry.accepted_value, "—");
+        assert!(schedule_entry.pending_value.contains("\"period\":3600"));
+    }
+
+    #[test]
+    fn operator_config_diff_omits_unchanged_fees_and_scheduled_session() {
+        let accepted = sample_cached("digest-a", 144);
+        let mut pending = accepted.clone();
+        pending.digest = "digest-b".to_string();
+        pending.fees = Some(CachedFeeInfoRecord {
+            intent_fee: CachedIntentFeeInfoRecord {
+                offchain_input: None,
+                offchain_output: None,
+                onchain_input: None,
+                onchain_output: None,
+            },
+            tx_fee_rate: "1".to_string(),
+        });
+        pending.scheduled_session = Some(CachedScheduledSessionRecord {
+            next_start_time: 100,
+            next_end_time: 200,
+            period: 300,
+            duration: 100,
+            fees: None,
+        });
+        let mut accepted_with_nested = accepted.clone();
+        accepted_with_nested.fees = pending.fees.clone();
+        accepted_with_nested.scheduled_session = pending.scheduled_session.clone();
+
+        let diff = operator_config_diff(&accepted_with_nested, &pending);
+        let keys: Vec<&str> = diff.iter().map(|entry| entry.field_key.as_str()).collect();
+        assert!(keys.contains(&"digest"));
+        assert!(!keys.contains(&"fees"));
+        assert!(!keys.contains(&"scheduled_session"));
     }
 
     #[test]
