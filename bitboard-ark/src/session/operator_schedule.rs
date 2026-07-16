@@ -37,12 +37,12 @@ impl ArkSession {
                 .and_then(|info| info.scheduled_session);
         }
 
-        if let Ok(server_info) = self.client.server_info() {
-            if let Some(session) = server_info.scheduled_session.as_ref() {
-                return Some(CachedScheduledSessionRecord::from_scheduled_session(
-                    session,
-                ));
-            }
+        if let Ok(server_info) = self.client.server_info()
+            && let Some(session) = server_info.scheduled_session.as_ref()
+        {
+            return Some(CachedScheduledSessionRecord::from_scheduled_session(
+                session,
+            ));
         }
 
         self.wallet_db
