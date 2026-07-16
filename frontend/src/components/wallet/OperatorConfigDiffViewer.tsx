@@ -16,7 +16,10 @@ export function OperatorConfigDiffViewer({ entries }: OperatorConfigDiffViewerPr
 
   return (
     <div className="overflow-x-auto rounded-md border">
-      <table className="w-full text-left text-sm">
+      <table
+        className="w-full text-left text-sm"
+        data-testid="arkade-operator-config-diff-table"
+      >
         <thead className="border-b bg-muted/40 text-xs text-muted-foreground">
           <tr>
             <th className="px-3 py-2 font-medium">Setting</th>

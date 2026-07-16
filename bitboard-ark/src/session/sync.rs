@@ -3,7 +3,7 @@ use ark_core::VtxoList;
 use ark_core::server::VirtualTxOutPoint;
 
 use crate::api_types::OperatorSyncResultDto;
-use crate::error::ArkResult;
+use crate::error::{ArkResult, ArkWasmError};
 use crate::exit_balance::reconcile_pending_exit_deductions;
 use crate::offchain_snapshot::{
     merge_sticky_unrolled_flags, snapshot_from_virtual_tx_outpoints_with_script_lookup,
@@ -54,6 +54,10 @@ impl ArkSession {
         &self,
     ) -> ArkResult<(VtxoList, OperatorSyncResultDto)> {
         self.ensure_operator_rpc_allowed()?;
+        self.client
+            .refresh_server_info()
+            .await
+            .map_err(ArkWasmError::Client)?;
         let server_info = self.client.server_info()?;
         let new_digest = server_info.digest.clone();
 

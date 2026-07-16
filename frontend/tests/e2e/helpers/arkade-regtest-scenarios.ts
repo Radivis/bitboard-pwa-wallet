@@ -68,6 +68,15 @@ export async function prepareFundedArkadeBalance(
   await fundAndBoardToArkade(page, boardSats)
 }
 
+/** Funded boarded wallet on Management with accepted operator config (no trust pending). */
+export async function prepareOperatorTrustBaseline(
+  page: Page,
+  boardSats: number = DEFAULT_BOARD_SATS,
+): Promise<void> {
+  await prepareFundedArkadeBalance(page, boardSats)
+  await goToArkadeManagementPanel(page)
+}
+
 export async function prepareRecoverableVtxoScenario(page: Page): Promise<void> {
   await prepareFundedArkadeBalance(page)
   await mineRegtestBlocks(ARKADE_REGTEST_RECOVERABLE_MINE_BLOCKS)
