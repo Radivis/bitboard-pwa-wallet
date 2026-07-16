@@ -15,6 +15,8 @@ use crate::exit_balance::{
     UnilateralExitOutpointKey, unilateral_exit_in_progress_outpoints_from_pending,
 };
 use crate::offchain_snapshot::{script_to_server_pk_lookup, vtxo_list_from_snapshot};
+use crate::persistence::OffchainVtxoSnapshot;
+use crate::unilateral_exit_materials::virtual_tx_outpoint_has_unilateral_exit_prepared;
 
 use super::ArkSession;
 use super::mappers::{
@@ -198,9 +200,16 @@ impl ArkSession {
         if !self.autonomous_mode()
             && let Ok((vtxo_list, script_map)) = self.client.list_vtxos().await
         {
-            let rows = map_vtxo_rows_from_list(&vtxo_list, dust, &server_info, now, |script| {
-                script_map.get(script).map(|vtxo| vtxo.server_pk())
-            });
+            let wallet_snapshot = self.wallet_db.snapshot();
+            let offchain_snapshot = wallet_snapshot.offchain_vtxo_snapshot.as_ref();
+            let rows = map_vtxo_rows_from_list(
+                &vtxo_list,
+                dust,
+                &server_info,
+                now,
+                |script| script_map.get(script).map(|vtxo| vtxo.server_pk()),
+                offchain_snapshot,
+            );
             return Ok(VtxoListResultDto {
                 rows,
                 from_snapshot_synced_at: None,
@@ -213,9 +222,14 @@ impl ArkSession {
                 snapshot,
                 legacy_signer_pk_fallback(&self.persisted_operator_identity()),
             )?;
-            let rows = map_vtxo_rows_from_list(&vtxo_list, dust, &server_info, now, |script| {
-                script_lookup(script)
-            });
+            let rows = map_vtxo_rows_from_list(
+                &vtxo_list,
+                dust,
+                &server_info,
+                now,
+                |script| script_lookup(script),
+                Some(snapshot),
+            );
             return Ok(VtxoListResultDto {
                 rows,
                 from_snapshot_synced_at: Some(snapshot.synced_at),
@@ -504,6 +518,7 @@ pub(crate) fn map_vtxo_row<F>(
     server_info: &ark_core::server::Info,
     now_unix_secs: i64,
     server_pk_for_script: F,
+    is_unilateral_exit_prepared: bool,
 ) -> VtxoRowDto
 where
     F: Fn(&ScriptBuf) -> Option<XOnlyPublicKey>,
@@ -529,6 +544,7 @@ where
         is_unrolled: virtual_tx_outpoint.is_unrolled,
         is_swept: virtual_tx_outpoint.is_swept,
         is_spent: virtual_tx_outpoint.is_spent,
+        is_unilateral_exit_prepared,
     }
 }
 
@@ -538,6 +554,7 @@ fn map_vtxo_rows_from_list<F>(
     server_info: &ark_core::server::Info,
     now_unix_secs: i64,
     server_pk_for_script: F,
+    offchain_snapshot: Option<&OffchainVtxoSnapshot>,
 ) -> Vec<VtxoRowDto>
 where
     F: Fn(&ScriptBuf) -> Option<XOnlyPublicKey>,
@@ -545,12 +562,17 @@ where
     let mut rows: Vec<VtxoRowDto> = vtxo_list
         .all()
         .map(|virtual_tx_outpoint| {
+            let is_unilateral_exit_prepared = virtual_tx_outpoint_has_unilateral_exit_prepared(
+                offchain_snapshot,
+                virtual_tx_outpoint,
+            );
             map_vtxo_row(
                 virtual_tx_outpoint,
                 dust,
                 server_info,
                 now_unix_secs,
                 &server_pk_for_script,
+                is_unilateral_exit_prepared,
             )
         })
         .collect();
@@ -1122,7 +1144,7 @@ mod vtxo_row_classification_tests {
             "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
             vec![],
         );
-        let row = map_vtxo_row(&vtxo, DUST, &server_info, now, no_server_pk);
+        let row = map_vtxo_row(&vtxo, DUST, &server_info, now, no_server_pk, false);
         assert_eq!(row.id, format!("{}:3", vtxo.outpoint.txid));
         assert_eq!(row.amount_sats, 42_000);
         assert_eq!(row.created_at, vtxo.created_at);
@@ -1133,5 +1155,6 @@ mod vtxo_row_classification_tests {
         assert!(!row.is_unrolled);
         assert!(!row.is_swept);
         assert!(!row.is_spent);
+        assert!(!row.is_unilateral_exit_prepared);
     }
 }

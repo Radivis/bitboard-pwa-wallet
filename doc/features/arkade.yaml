@@ -123,7 +123,7 @@ feature:
       - id: ARK-VTX-01
         description: VTXO viewer page lists VTXO cards when session open and Arkade active
       - id: ARK-VTX-02
-        description: Each card shows id, amount, classification, true-only flag chips, created and expiry timestamps
+        description: Each card shows id, amount, classification, true-only flag chips (including unilateral exit prepared with door-open icon when cached exit materials exist), created and expiry timestamps
       - id: ARK-VTX-03
         description: Hide finalized defaults on; toggle shows finalized cards
       - id: ARK-VTX-04

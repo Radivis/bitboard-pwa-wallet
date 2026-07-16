@@ -166,6 +166,8 @@ pub struct VtxoRowDto {
     pub is_unrolled: bool,
     pub is_swept: bool,
     pub is_spent: bool,
+    /// Cached unilateral-exit chain + PSBTs are stored locally for this VTXO.
+    pub is_unilateral_exit_prepared: bool,
 }
 
 #[derive(Debug, Serialize)]

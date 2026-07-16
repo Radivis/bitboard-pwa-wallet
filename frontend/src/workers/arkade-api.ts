@@ -122,6 +122,7 @@ export interface ArkadeVtxoRowBase {
   isUnrolled: boolean
   isSwept: boolean
   isSpent: boolean
+  isUnilateralExitPrepared: boolean
 }
 
 export interface ArkadeVtxoListResult {

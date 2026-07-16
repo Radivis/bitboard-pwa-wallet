@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use ark_core::server::{ChainedTxType, VtxoChain, VtxoChains};
+use ark_core::server::{ChainedTxType, VirtualTxOutPoint, VtxoChain, VtxoChains};
 use bitcoin::hex::FromHex;
 use bitcoin::{Psbt, Txid};
 use serde::{Deserialize, Serialize};
@@ -147,6 +147,28 @@ pub fn clear_unilateral_exit_materials_on_ineligible_records(snapshot: &mut Offc
 
 pub fn record_is_exit_eligible(record: &VirtualTxOutPointRecord) -> bool {
     !record.is_preconfirmed && !record.is_swept && !record.is_unrolled && !record.is_spent
+}
+
+pub fn virtual_tx_outpoint_is_exit_eligible(virtual_tx_outpoint: &VirtualTxOutPoint) -> bool {
+    !virtual_tx_outpoint.is_preconfirmed
+        && !virtual_tx_outpoint.is_swept
+        && !virtual_tx_outpoint.is_unrolled
+        && !virtual_tx_outpoint.is_spent
+}
+
+pub fn virtual_tx_outpoint_has_unilateral_exit_prepared(
+    snapshot: Option<&OffchainVtxoSnapshot>,
+    virtual_tx_outpoint: &VirtualTxOutPoint,
+) -> bool {
+    if !virtual_tx_outpoint_is_exit_eligible(virtual_tx_outpoint) {
+        return false;
+    }
+    let Some(snapshot) = snapshot else {
+        return false;
+    };
+    let txid = virtual_tx_outpoint.outpoint.txid.to_string();
+    let vout = virtual_tx_outpoint.outpoint.vout;
+    snapshot_record_materials(snapshot, &txid, vout).is_some()
 }
 
 pub fn materials_status_from_snapshot(snapshot: Option<&OffchainVtxoSnapshot>) -> (u32, u32, u32) {
@@ -360,5 +382,75 @@ mod tests {
             ],
         };
         assert_eq!(materials_status_from_snapshot(Some(&snapshot)), (2, 1, 1));
+    }
+
+    #[test]
+    fn virtual_tx_outpoint_has_unilateral_exit_prepared_requires_eligibility_and_materials() {
+        use ark_core::server::VirtualTxOutPoint;
+        use bitcoin::hashes::Hash;
+        use bitcoin::{Amount, OutPoint, ScriptBuf, Txid};
+
+        let materials = UnilateralExitMaterialsRecord {
+            cached_at: 1,
+            chain_json: "{\"inner\":[]}".to_string(),
+            virtual_psbts: vec![],
+        };
+        let txid = Txid::from_byte_array([0xaa; 32]);
+        let snapshot = OffchainVtxoSnapshot {
+            synced_at: 1,
+            dust_sats: 330,
+            virtual_tx_outpoints: vec![VirtualTxOutPointRecord {
+                txid: txid.to_string(),
+                vout: 0,
+                created_at: 0,
+                expires_at: 0,
+                amount_sats: 1_000,
+                script_hex: "00".to_string(),
+                is_preconfirmed: false,
+                is_swept: false,
+                is_unrolled: false,
+                is_spent: false,
+                spent_by: None,
+                commitment_txids: vec![],
+                settled_by: None,
+                ark_txid: None,
+                assets: vec![],
+                server_pk_hex: None,
+                unilateral_exit_materials: Some(materials),
+            }],
+        };
+        let eligible_vtxo = VirtualTxOutPoint {
+            outpoint: OutPoint { txid, vout: 0 },
+            created_at: 0,
+            expires_at: 0,
+            amount: Amount::from_sat(1_000),
+            script: ScriptBuf::from_bytes(vec![0]),
+            is_preconfirmed: false,
+            is_swept: false,
+            is_unrolled: false,
+            is_spent: false,
+            spent_by: None,
+            commitment_txids: vec![],
+            settled_by: None,
+            ark_txid: None,
+            assets: vec![],
+        };
+        assert!(virtual_tx_outpoint_has_unilateral_exit_prepared(
+            Some(&snapshot),
+            &eligible_vtxo
+        ));
+
+        let unrolled_vtxo = VirtualTxOutPoint {
+            is_unrolled: true,
+            ..eligible_vtxo.clone()
+        };
+        assert!(!virtual_tx_outpoint_has_unilateral_exit_prepared(
+            Some(&snapshot),
+            &unrolled_vtxo
+        ));
+        assert!(!virtual_tx_outpoint_has_unilateral_exit_prepared(
+            None,
+            &eligible_vtxo
+        ));
     }
 }

@@ -796,6 +796,10 @@ where
         self.finish_connect().await
     }
 
+    // WASM `NetworkClient::get_info` takes `&mut self` (`ark_grpc_wasm_shim`); native REST uses `&self`.
+    // `mut self` is required on wasm32; on other targets the binding is never mutated before the move
+    // into `finish_connect_with_server_info`, so allow the unused-mut lint there only.
+    #[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut))]
     async fn finish_connect(mut self) -> Result<Client<B, W, S, K>, Error> {
         let server_info = timeout_op(self.timeout, self.network_client.get_info())
             .await
