@@ -92,7 +92,7 @@ feature:
       - id: ARK-EXIT-08
         description: Autonomous start unroll fails fast with autonomous_exit_materials_missing when selected VTXO lacks prefetched materials
       - id: ARK-EXIT-09
-        description: Autonomous complete uses snapshot readiness plus Esplora only; no operator indexer poll or OperatorIndexerCatchingUp path
+        description: Autonomous complete uses snapshot readiness plus Esplora only; no operator indexer poll or OperatorIndexerCatchingUp path; autonomous unroll polls Esplora for branch visibility before setting local is_unrolled and returns unilateral_unroll_not_confirmed_on_chain when chain missing after the poll window
       - id: ARK-EXIT-10
         description: While autonomous mode is active, collaborative exit, send, renew, recoverable settlement, signer migration, boarding settle, and manual operator sync are blocked in UI and WASM
       - id: ARK-EXIT-11

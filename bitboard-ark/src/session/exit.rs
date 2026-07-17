@@ -49,6 +49,9 @@ const OPERATOR_INDEXER_POLL_DELAY: std::time::Duration = std::time::Duration::fr
 
 const UNROLL_INDEXER_PROGRESS_MESSAGE: &str = "Waiting for operator to index unilateral unroll…";
 
+const UNROLL_ESPLORA_CONFIRMATION_PROGRESS_MESSAGE: &str =
+    "Waiting for Esplora to confirm unilateral unroll on-chain…";
+
 pub(crate) const UNROLL_INDEXER_WARNING: &str = "Unroll confirmed on-chain, but the operator indexer has not marked this VTXO as unrolled yet. You can continue; Complete unilateral exit may take longer until the operator catches up.";
 
 #[derive(Debug)]
@@ -117,6 +120,34 @@ async fn unroll_branch_confirmed_on_chain<B: Blockchain>(
         }
     }
     Ok(false)
+}
+
+async fn poll_unroll_branch_confirmed_on_esplora<F>(
+    blockchain: &impl Blockchain,
+    branch_txids: &[Txid],
+    published_vtxo_txid: &str,
+    on_progress: &F,
+) -> ArkResult<()>
+where
+    F: Fn(UnrollProgressEvent),
+{
+    for attempt in 0..OPERATOR_INDEXER_POLL_MAX {
+        if attempt > 0 {
+            sleep(OPERATOR_INDEXER_POLL_DELAY).await;
+        }
+        on_progress(UnrollProgressEvent {
+            event_type: UNROLL_EVENT_TYPE_WAIT.to_string(),
+            message: UNROLL_ESPLORA_CONFIRMATION_PROGRESS_MESSAGE.to_string(),
+            txid: None,
+            vtxo_txid: Some(published_vtxo_txid.to_string()),
+        });
+        if unroll_branch_confirmed_on_chain(blockchain, branch_txids, published_vtxo_txid).await? {
+            return Ok(());
+        }
+    }
+    Err(ArkWasmError::UnilateralUnrollNotConfirmedOnChain {
+        txid: published_vtxo_txid.to_string(),
+    })
 }
 
 fn set_vtxo_unrolled_flag_in_snapshot(
@@ -577,6 +608,25 @@ impl ArkSession {
                     vtxo_txid: None,
                 });
             }
+        }
+
+        if self.autonomous_mode() {
+            poll_unroll_branch_confirmed_on_esplora(
+                self.client.blockchain(),
+                &branch_txids,
+                &done_vtxo_txid,
+                &on_progress,
+            )
+            .await
+            .inspect_err(|error| {
+                if matches!(
+                    error,
+                    ArkWasmError::UnilateralUnrollNotConfirmedOnChain { .. }
+                ) && pending_unilateral_exit_recorded
+                {
+                    self.revert_unilateral_unroll_local_state(txid, vout);
+                }
+            })?;
         }
 
         self.mark_vtxo_unrolled_in_snapshot(txid, vout)?;
