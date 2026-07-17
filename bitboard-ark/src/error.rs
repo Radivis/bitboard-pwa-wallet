@@ -27,6 +27,8 @@ pub const CODE_AUTONOMOUS_OPERATOR_INFO_MISSING: &str = "autonomous_operator_inf
 pub const CODE_AUTONOMOUS_MODE_BLOCKS_OPERATOR_RPC: &str = "autonomous_mode_blocks_operator_rpc";
 pub const CODE_OPERATOR_TRUST_PENDING_BLOCKS_AUTONOMOUS_EXIT: &str =
     "operator_trust_pending_blocks_autonomous_exit";
+pub const CODE_OPERATOR_TRUST_PENDING_DIGEST_CHANGED: &str =
+    "operator_trust_pending_digest_changed";
 
 pub const MSG_SEND_AMOUNT_MUST_BE_POSITIVE: &str = "send amount must be greater than zero";
 
@@ -106,6 +108,11 @@ pub enum ArkWasmError {
     )]
     OperatorTrustPendingBlocksAutonomousExit,
 
+    #[error(
+        "The operator published newer configuration while you were reviewing. Please review the updated changes before accepting."
+    )]
+    OperatorTrustPendingDigestChanged,
+
     #[error("{0}")]
     Boarding(String),
 
@@ -164,6 +171,7 @@ impl ArkWasmError {
             Self::OperatorTrustPendingBlocksAutonomousExit => {
                 CODE_OPERATOR_TRUST_PENDING_BLOCKS_AUTONOMOUS_EXIT
             }
+            Self::OperatorTrustPendingDigestChanged => CODE_OPERATOR_TRUST_PENDING_DIGEST_CHANGED,
             Self::OperatorIndexerCatchingUp => CODE_OPERATOR_INDEXER_CATCHING_UP,
             Self::UnilateralUnrollNotConfirmedOnChain { .. } => {
                 CODE_UNILATERAL_UNROLL_NOT_CONFIRMED_ON_CHAIN
@@ -251,6 +259,13 @@ mod tests {
             error.code(),
             CODE_OPERATOR_TRUST_PENDING_BLOCKS_AUTONOMOUS_EXIT
         );
+    }
+
+    #[test]
+    fn operator_trust_pending_digest_changed_error_code() {
+        let error = ArkWasmError::OperatorTrustPendingDigestChanged;
+        assert_eq!(error.code(), CODE_OPERATOR_TRUST_PENDING_DIGEST_CHANGED);
+        assert!(error.to_string().contains("newer configuration"));
     }
 
     #[test]

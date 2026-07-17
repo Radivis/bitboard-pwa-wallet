@@ -48,6 +48,15 @@ impl ArkSession {
         if self.autonomous_mode() {
             self.exit_autonomous_mode_for_trust_accept().await?;
         }
+        self.client
+            .refresh_server_info()
+            .await
+            .map_err(ArkWasmError::Client)?;
+        let live_server_info = self.client.server_info()?;
+        if pending.digest != live_server_info.digest {
+            self.stage_operator_trust_from_server_info(&live_server_info);
+            return Err(ArkWasmError::OperatorTrustPendingDigestChanged);
+        }
         self.wallet_db.set_cached_operator_info(pending);
         self.wallet_db.clear_operator_trust_state();
         self.sync_with_operator().await?;

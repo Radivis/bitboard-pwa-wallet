@@ -92,6 +92,10 @@ import {
 } from '@/lib/arkade/arkade-boarding-settle-optimistic'
 import { errorMessage } from '@/lib/shared/utils'
 import { isWalletSecretsSessionActive } from '@/lib/wallet/wallet-secrets-session'
+import {
+  isOperatorTrustPendingDigestChangedError,
+  operatorTrustPendingDigestChangedMessage,
+} from '@/lib/arkade/arkade-operator-trust-utils'
 
 const ARKADE_WALLET_UNLOCKED_ERROR = 'Wallet must be unlocked'
 
@@ -1323,9 +1327,39 @@ export function useAcceptOperatorConfigMutation() {
 
   return useMutation({
     mutationFn: async () => {
-      await withReadyArkadeWorker(async () => {
-        await getArkadeWorker().acceptPendingOperatorConfig()
-      })
+      try {
+        await withReadyArkadeWorker(async () => {
+          await getArkadeWorker().acceptPendingOperatorConfig()
+        })
+      } catch (error) {
+        if (
+          isOperatorTrustPendingDigestChangedError(error) &&
+          activeWalletId != null &&
+          activeArkadeConnectionId != null &&
+          isArkadeSupportedNetworkMode(networkMode)
+        ) {
+          await refreshArkadeStoreFromLoadedWasm(activeArkadeConnectionId)
+          await orchestrateArkadeSave({
+            walletId: activeWalletId,
+            networkMode,
+            connectionId: activeArkadeConnectionId,
+          })
+          await invalidateOperatorTrustQueries(
+            queryClient,
+            activeWalletId,
+            networkMode,
+            activeArkadeConnectionId,
+          )
+          await queryClient.invalidateQueries({
+            queryKey: arkadeAutonomousModeStatusQueryKey(
+              activeWalletId,
+              networkMode,
+              activeArkadeConnectionId,
+            ),
+          })
+        }
+        throw error
+      }
       if (
         activeWalletId != null &&
         activeArkadeConnectionId != null &&
@@ -1364,6 +1398,10 @@ export function useAcceptOperatorConfigMutation() {
       }
     },
     onError: (error) => {
+      if (isOperatorTrustPendingDigestChangedError(error)) {
+        toast.info(operatorTrustPendingDigestChangedMessage(error))
+        return
+      }
       toast.error(
         error instanceof Error ? error.message : 'Could not accept operator configuration',
       )

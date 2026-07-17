@@ -116,7 +116,7 @@ feature:
       - id: ARK-TRUST-04
         description: While operator_trust_pending, exit_autonomous_mode is blocked until accept_pending_operator_config
       - id: ARK-TRUST-05
-        description: accept_pending_operator_config promotes pending to accepted cache, clears trust state, and runs full operator sync
+        description: accept_pending_operator_config refreshes live getInfo, promotes pending only when pending.digest matches live digest, otherwise re-stages pending and keeps operator_trust_pending for modal review
       - id: ARK-TRUST-06
         description: Session open preserves accepted cached_operator_info while operator_trust_pending (no live getInfo overwrite)
     vtxo_viewer:
