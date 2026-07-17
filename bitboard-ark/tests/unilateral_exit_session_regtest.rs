@@ -6,7 +6,7 @@
 
 use std::time::Duration;
 
-use bitboard_ark::CompleteUnilateralExitParams;
+use bitboard_ark::{CompleteUnilateralExitParams, VtxoOutpointDto};
 
 mod support;
 
@@ -79,7 +79,10 @@ async fn unilateral_unroll_and_complete_on_regtest() {
     let destination = session.boarding_address().expect("destination address");
     let completion_txid = session
         .complete_unilateral_exit(CompleteUnilateralExitParams {
-            vtxo_txids: vec![candidate.txid.clone()],
+            vtxo_outpoints: vec![VtxoOutpointDto {
+                txid: candidate.txid.clone(),
+                vout: candidate.vout,
+            }],
             destination_address: destination,
             fee_rate_sat_per_vb: None,
         })

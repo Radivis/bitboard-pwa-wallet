@@ -1,6 +1,6 @@
 use crate::coin_select::coin_select_for_onchain;
-use crate::coin_select::coin_select_vtxo_txids_for_onchain;
-use crate::coin_select::coin_select_vtxo_txids_for_onchain_with_vtxo_list;
+use crate::coin_select::coin_select_vtxo_outpoints_for_onchain;
+use crate::coin_select::coin_select_vtxo_outpoints_for_onchain_with_vtxo_list;
 use crate::error::Error;
 use crate::error::ErrorContext;
 use crate::swap_storage::SwapStorage;
@@ -43,8 +43,8 @@ const UNILATERAL_COMPLETION_FEE_INITIAL_SAT: u64 = 1_000;
 
 // # Bitboard vendor patch (fork drift)
 //
-// `resolve_unilateral_completion_fee_and_amount_from_inputs`, `estimate_send_on_chain_for_vtxo_txids`,
-// and dynamic fee targeting in `send_on_chain_for_vtxo_txids` / `create_send_on_chain_transaction_inner`
+// `resolve_unilateral_completion_fee_and_amount_from_inputs`, `estimate_send_on_chain_for_vtxo_outpoints`,
+// and dynamic fee targeting in `send_on_chain_for_vtxo_outpoints` / `create_send_on_chain_transaction_inner`
 // replace the upstream hardcoded 1_000 sat completion fee with build-and-measure targeting via Esplora fee rate.
 
 /// arkd's indexer rejects any request that does not carry an explicit, positive `page.size`
@@ -425,20 +425,20 @@ where
     }
 
     /// Spend selected unrolled VTXOs using a caller-provided VTXO list (autonomous mode).
-    pub async fn send_on_chain_for_vtxo_txids_with_vtxo_list(
+    pub async fn send_on_chain_for_vtxo_outpoints_with_vtxo_list(
         &self,
         to_address: Address,
-        vtxo_txids: &[Txid],
+        vtxo_outpoints: &[OutPoint],
         vtxo_list: &VtxoList,
         script_pubkey_to_vtxo: &HashMap<ScriptBuf, Vtxo>,
         fee_rate_sat_per_vb: Option<f64>,
     ) -> Result<Txid, Error> {
-        let vtxo_txid_filter: HashSet<Txid> = vtxo_txids.iter().copied().collect();
-        let selection = coin_select_vtxo_txids_for_onchain_with_vtxo_list(
+        let vtxo_outpoint_filter: HashSet<OutPoint> = vtxo_outpoints.iter().copied().collect();
+        let selection = coin_select_vtxo_outpoints_for_onchain_with_vtxo_list(
             self,
             vtxo_list,
             script_pubkey_to_vtxo,
-            &vtxo_txid_filter,
+            &vtxo_outpoint_filter,
         )
         .await?;
         let vtxo_inputs = selection.vtxo_inputs;
@@ -478,15 +478,15 @@ where
     }
 
     /// Spend selected unrolled VTXOs to an on-chain address.
-    pub async fn send_on_chain_for_vtxo_txids(
+    pub async fn send_on_chain_for_vtxo_outpoints(
         &self,
         to_address: Address,
-        vtxo_txids: &[Txid],
+        vtxo_outpoints: &[OutPoint],
         fee_rate_sat_per_vb: Option<f64>,
     ) -> Result<Txid, Error> {
-        let vtxo_txid_filter: HashSet<Txid> = vtxo_txids.iter().copied().collect();
+        let vtxo_outpoint_filter: HashSet<OutPoint> = vtxo_outpoints.iter().copied().collect();
         let selection =
-            coin_select_vtxo_txids_for_onchain(self, &vtxo_txid_filter).await?;
+            coin_select_vtxo_outpoints_for_onchain(self, &vtxo_outpoint_filter).await?;
         let vtxo_inputs = selection.vtxo_inputs;
         let selected_amount = selection.selected_amount;
 
@@ -524,20 +524,20 @@ where
     }
 
     /// Estimate completion using a caller-provided VTXO list (autonomous mode).
-    pub async fn estimate_send_on_chain_for_vtxo_txids_with_vtxo_list(
+    pub async fn estimate_send_on_chain_for_vtxo_outpoints_with_vtxo_list(
         &self,
         to_address: Address,
-        vtxo_txids: &[Txid],
+        vtxo_outpoints: &[OutPoint],
         vtxo_list: &VtxoList,
         script_pubkey_to_vtxo: &HashMap<ScriptBuf, Vtxo>,
         fee_rate_sat_per_vb: Option<f64>,
     ) -> Result<(Amount, Amount, Amount, Vec<crate::coin_select::MissingBlocktimeCompletionInput>), Error> {
-        let vtxo_txid_filter: HashSet<Txid> = vtxo_txids.iter().copied().collect();
-        let selection = coin_select_vtxo_txids_for_onchain_with_vtxo_list(
+        let vtxo_outpoint_filter: HashSet<OutPoint> = vtxo_outpoints.iter().copied().collect();
+        let selection = coin_select_vtxo_outpoints_for_onchain_with_vtxo_list(
             self,
             vtxo_list,
             script_pubkey_to_vtxo,
-            &vtxo_txid_filter,
+            &vtxo_outpoint_filter,
         )
         .await?;
         let vtxo_inputs = selection.vtxo_inputs;
@@ -556,15 +556,15 @@ where
     }
 
     /// Estimate miner fee and receive amount for completing unilateral exit without broadcasting.
-    pub async fn estimate_send_on_chain_for_vtxo_txids(
+    pub async fn estimate_send_on_chain_for_vtxo_outpoints(
         &self,
         to_address: Address,
-        vtxo_txids: &[Txid],
+        vtxo_outpoints: &[OutPoint],
         fee_rate_sat_per_vb: Option<f64>,
     ) -> Result<(Amount, Amount, Amount, Vec<crate::coin_select::MissingBlocktimeCompletionInput>), Error> {
-        let vtxo_txid_filter: HashSet<Txid> = vtxo_txids.iter().copied().collect();
+        let vtxo_outpoint_filter: HashSet<OutPoint> = vtxo_outpoints.iter().copied().collect();
         let selection =
-            coin_select_vtxo_txids_for_onchain(self, &vtxo_txid_filter).await?;
+            coin_select_vtxo_outpoints_for_onchain(self, &vtxo_outpoint_filter).await?;
         let vtxo_inputs = selection.vtxo_inputs;
         let selected_amount = selection.selected_amount;
         let missing_blocktime_inputs = selection.missing_blocktime_inputs;

@@ -28,6 +28,8 @@ mod session_mapper_tests;
 #[cfg(not(target_arch = "wasm32"))]
 pub use api_types::CompleteUnilateralExitParams;
 #[cfg(not(target_arch = "wasm32"))]
+pub use api_types::VtxoOutpointDto;
+#[cfg(not(target_arch = "wasm32"))]
 pub use network::NetworkMode;
 #[cfg(not(target_arch = "wasm32"))]
 pub use session::ArkSession;

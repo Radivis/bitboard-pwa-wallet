@@ -216,8 +216,42 @@ export interface ArkadeUnilateralExitCompletionFeeEstimate {
   missingBlocktimeInputs?: ArkadeMissingBlocktimeCompletionInput[]
 }
 
+export interface ArkadeVtxoOutpoint {
+  txid: string
+  vout: number
+}
+
+export function arkadeVtxoOutpointsEqual(
+  left: ArkadeVtxoOutpoint,
+  right: ArkadeVtxoOutpoint,
+): boolean {
+  return left.txid === right.txid && left.vout === right.vout
+}
+
+export function includesArkadeVtxoOutpoint(
+  outpoints: ArkadeVtxoOutpoint[],
+  candidate: ArkadeVtxoOutpoint,
+): boolean {
+  return outpoints.some((outpoint) => arkadeVtxoOutpointsEqual(outpoint, candidate))
+}
+
+export function sortArkadeVtxoOutpoints(
+  outpoints: ArkadeVtxoOutpoint[],
+): ArkadeVtxoOutpoint[] {
+  return [...outpoints].sort((left, right) => {
+    const txidCompare = left.txid.localeCompare(right.txid)
+    return txidCompare !== 0 ? txidCompare : left.vout - right.vout
+  })
+}
+
+export function arkadeVtxoOutpointCacheKey(outpoints: ArkadeVtxoOutpoint[]): string {
+  return sortArkadeVtxoOutpoints(outpoints)
+    .map((outpoint) => `${outpoint.txid}:${outpoint.vout}`)
+    .join(',')
+}
+
 export interface ArkadeUnilateralExitCompletionFeeEstimateParams {
-  vtxoTxids: string[]
+  vtxoOutpoints: ArkadeVtxoOutpoint[]
   destinationAddress: string
   feeRateSatPerVb?: number
 }
@@ -249,7 +283,7 @@ export interface ArkadeUnrollResult {
 }
 
 export interface ArkadeCompleteUnilateralExitParams {
-  vtxoTxids: string[]
+  vtxoOutpoints: ArkadeVtxoOutpoint[]
   destinationAddress: string
   feeRateSatPerVb?: number
 }

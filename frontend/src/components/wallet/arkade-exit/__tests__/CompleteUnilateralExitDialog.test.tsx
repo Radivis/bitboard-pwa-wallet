@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { CompleteUnilateralExitDialog } from '@/components/wallet/arkade-exit/CompleteUnilateralExitDialog'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import type { useArkadeExitFlow } from '@/hooks/useArkadeExitFlow'
+import type { ArkadeVtxoOutpoint } from '@/workers/arkade-api'
 
 type ExitFlow = ReturnType<typeof useArkadeExitFlow>
 
@@ -31,7 +32,7 @@ function buildExitFlow(overrides: Partial<ExitFlow>): ExitFlow {
       useCustomFee: false,
     },
     completeExitMutation: { mutate: vi.fn(), isPending: false, isError: false },
-    selectedInProgressTxids: [],
+    selectedInProgressOutpoints: [],
     selectedInProgressRows: [],
     selectedInProgressTotalSats: 0,
     allSelectedCanComplete: false,
@@ -44,16 +45,21 @@ function buildExitFlow(overrides: Partial<ExitFlow>): ExitFlow {
   } as unknown as ExitFlow
 }
 
+function outpoint(txid: string, vout = 0): ArkadeVtxoOutpoint {
+  return { txid, vout }
+}
+
 describe('CompleteUnilateralExitDialog', () => {
   it('shows operator timelock duration for waiting rows', () => {
+    const waitingTxid = 'aa'.repeat(32)
     renderWithProviders(
       <CompleteUnilateralExitDialog
         exitFlow={buildExitFlow({
-          selectedInProgressTxids: ['aa'.repeat(32)],
+          selectedInProgressOutpoints: [outpoint(waitingTxid)],
           selectedInProgressRows: [
             {
-              id: 'vtxo-1',
-              txid: 'aa'.repeat(32),
+              id: `${waitingTxid}:0`,
+              txid: waitingTxid,
               vout: 0,
               amountSats: 100_000,
               canComplete: false,
@@ -82,7 +88,7 @@ describe('CompleteUnilateralExitDialog', () => {
             isLoading: false,
             data: [
               {
-                id: 'ready',
+                id: `${readyTxid}:0`,
                 txid: readyTxid,
                 vout: 0,
                 amountSats: 50_000,
@@ -90,9 +96,9 @@ describe('CompleteUnilateralExitDialog', () => {
                 virtualStatusState: 'unrolled',
               },
               {
-                id: 'waiting',
+                id: `${waitingTxid}:1`,
                 txid: waitingTxid,
-                vout: 0,
+                vout: 1,
                 amountSats: 75_000,
                 canComplete: false,
                 virtualStatusState: 'unrolled',
@@ -109,10 +115,11 @@ describe('CompleteUnilateralExitDialog', () => {
   })
 
   it('shows completion fee preview when selection and estimate are available', () => {
+    const virtualTxid = 'aa'.repeat(32)
     renderWithProviders(
       <CompleteUnilateralExitDialog
         exitFlow={buildExitFlow({
-          selectedInProgressTxids: ['aa'.repeat(32)],
+          selectedInProgressOutpoints: [outpoint(virtualTxid, 2)],
           completionFeeQuery: {
             isLoading: false,
             data: {
@@ -137,7 +144,7 @@ describe('CompleteUnilateralExitDialog', () => {
     renderWithProviders(
       <CompleteUnilateralExitDialog
         exitFlow={buildExitFlow({
-          selectedInProgressTxids: [virtualTxid],
+          selectedInProgressOutpoints: [outpoint(virtualTxid, 0)],
           completionFeeQuery: {
             isLoading: false,
             data: {

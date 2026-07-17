@@ -355,11 +355,21 @@ impl JsonPersistenceDb {
             .retain(|watch| !(watch.vtxo_txid == txid && watch.vout == vout));
     }
 
-    pub fn remove_unilateral_exit_watches_for_txids(&self, vtxo_txids: &HashSet<String>) {
+    pub fn remove_unilateral_exit_watches_for_outpoints(
+        &self,
+        outpoints: &HashSet<bitcoin::OutPoint>,
+    ) {
         let mut inner = lock_persistence(&self.inner);
-        inner
-            .unilateral_exit_watches
-            .retain(|watch| !vtxo_txids.contains(&watch.vtxo_txid));
+        inner.unilateral_exit_watches.retain(|watch| {
+            let Ok(txid) = bitcoin::Txid::from_str(&watch.vtxo_txid) else {
+                return true;
+            };
+            let watch_outpoint = bitcoin::OutPoint {
+                txid,
+                vout: watch.vout,
+            };
+            !outpoints.contains(&watch_outpoint)
+        });
     }
 
     /// Insert or replace a pending exit record (no duplicate deductions on retry).

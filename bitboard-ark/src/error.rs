@@ -73,14 +73,14 @@ pub enum ArkWasmError {
     #[error("delegator service is not configured")]
     DelegatorNotConfigured,
 
-    #[error("vtxo_txids must not be empty")]
-    EmptyVtxoTxids,
+    #[error("vtxo_outpoints must not be empty")]
+    EmptyVtxoOutpoints,
 
-    #[error("VTXO {txid} is not in unilateral exit")]
-    VtxoNotInUnilateralExit { txid: String },
+    #[error("VTXO {txid}:{vout} is not in unilateral exit")]
+    VtxoNotInUnilateralExit { txid: String, vout: u32 },
 
-    #[error("VTXO {txid} timelock has not elapsed yet — complete is not available")]
-    VtxoUnilateralExitNotReady { txid: String },
+    #[error("VTXO {txid}:{vout} timelock has not elapsed yet — complete is not available")]
+    VtxoUnilateralExitNotReady { txid: String, vout: u32 },
 
     #[error(
         "Operator indexer is still catching up after unilateral unroll. Wait a moment and try Complete exit again."
@@ -162,7 +162,7 @@ impl ArkWasmError {
             | Self::InvalidOnchainAddress(_)
             | Self::InvalidSendAmount
             | Self::VtxoNotFound { .. }
-            | Self::EmptyVtxoTxids
+            | Self::EmptyVtxoOutpoints
             | Self::VtxoNotInUnilateralExit { .. }
             | Self::VtxoUnilateralExitNotReady { .. } => CODE_VALIDATION,
             Self::AutonomousExitMaterialsMissing => CODE_AUTONOMOUS_EXIT_MATERIALS_MISSING,

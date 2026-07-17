@@ -32,7 +32,9 @@ import type {
   ArkadeBoardingStatus,
   ArkadeSignerMigrationResult,
   ArkadeUnrollProgressEvent,
+  ArkadeVtxoOutpoint,
 } from '@/workers/arkade-api'
+import { sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import {
   awaitArkadeLoadQuiescence,
@@ -871,18 +873,18 @@ export function useArkadeUnilateralExitsInProgressQuery(enabled: boolean) {
 
 export function useArkadeUnilateralExitCompletionFeeQuery(params: {
   enabled: boolean
-  vtxoTxids: string[]
+  vtxoOutpoints: ArkadeVtxoOutpoint[]
   destinationAddress: string
   feeRateSatPerVb: number
 }) {
   const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
     useArkadeQueryBase()
   const destinationTrimmed = params.destinationAddress.trim()
-  const sortedVtxoTxids = [...params.vtxoTxids].sort()
+  const sortedVtxoOutpoints = sortArkadeVtxoOutpoints(params.vtxoOutpoints)
   const enabled =
     params.enabled &&
     sessionReady &&
-    sortedVtxoTxids.length > 0 &&
+    sortedVtxoOutpoints.length > 0 &&
     destinationTrimmed.length > 0 &&
     Number.isFinite(params.feeRateSatPerVb) &&
     params.feeRateSatPerVb > 0
@@ -896,7 +898,7 @@ export function useArkadeUnilateralExitCompletionFeeQuery(params: {
             activeWalletId,
             networkMode,
             activeArkadeConnectionId,
-            sortedVtxoTxids,
+            sortedVtxoOutpoints,
             destinationTrimmed,
             params.feeRateSatPerVb,
           )
@@ -905,7 +907,7 @@ export function useArkadeUnilateralExitCompletionFeeQuery(params: {
     queryFn: () =>
       withReadyArkadeWorker(() =>
         getArkadeWorker().estimateUnilateralExitCompletion({
-          vtxoTxids: sortedVtxoTxids,
+          vtxoOutpoints: sortedVtxoOutpoints,
           destinationAddress: destinationTrimmed,
           feeRateSatPerVb: params.feeRateSatPerVb,
         }),
@@ -1067,7 +1069,7 @@ export function useArkadeCompleteUnilateralExitMutation() {
 
   return useMutation({
     mutationFn: async (params: {
-      vtxoTxids: string[]
+      vtxoOutpoints: ArkadeVtxoOutpoint[]
       destinationAddress: string
       feeRateSatPerVb: number
     }) => {

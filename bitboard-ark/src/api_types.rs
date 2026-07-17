@@ -404,10 +404,17 @@ pub struct CollaborativeExitParams {
     pub amount_sats: Option<u64>,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VtxoOutpointDto {
+    pub txid: String,
+    pub vout: u32,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CompleteUnilateralExitParams {
-    pub vtxo_txids: Vec<String>,
+    pub vtxo_outpoints: Vec<VtxoOutpointDto>,
     pub destination_address: String,
     #[serde(default)]
     pub fee_rate_sat_per_vb: Option<f64>,
@@ -416,7 +423,7 @@ pub struct CompleteUnilateralExitParams {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UnilateralExitCompletionFeeEstimateParams {
-    pub vtxo_txids: Vec<String>,
+    pub vtxo_outpoints: Vec<VtxoOutpointDto>,
     pub destination_address: String,
     #[serde(default)]
     pub fee_rate_sat_per_vb: Option<f64>,

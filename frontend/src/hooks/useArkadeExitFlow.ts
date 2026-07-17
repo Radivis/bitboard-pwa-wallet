@@ -24,10 +24,21 @@ import type {
   ArkadeExitCandidateRow,
   ArkadeUnilateralExitInProgressRow,
   ArkadeUnrollProgressEvent,
+  ArkadeVtxoOutpoint,
+} from '@/workers/arkade-api'
+import {
+  arkadeVtxoOutpointsEqual,
+  includesArkadeVtxoOutpoint,
 } from '@/workers/arkade-api'
 import { useWalletStore } from '@/stores/walletStore'
 
 export type UnilateralExitStep = 'select' | 'unroll'
+
+function outpointFromInProgressRow(
+  row: ArkadeUnilateralExitInProgressRow,
+): ArkadeVtxoOutpoint {
+  return { txid: row.txid, vout: row.vout }
+}
 
 export function useArkadeExitFlow() {
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
@@ -47,7 +58,9 @@ export function useArkadeExitFlow() {
     null,
   )
   const [unrollProgress, setUnrollProgress] = useState<ArkadeUnrollProgressEvent[]>([])
-  const [selectedInProgressTxids, setSelectedInProgressTxids] = useState<string[]>([])
+  const [selectedInProgressOutpoints, setSelectedInProgressOutpoints] = useState<
+    ArkadeVtxoOutpoint[]
+  >([])
   const [completeDestination, setCompleteDestination] = useState('')
 
   const completionFeeSelection = useOnchainFeeRateSelection(networkMode)
@@ -79,7 +92,7 @@ export function useArkadeExitFlow() {
   })
   const completionFeeQuery = useArkadeUnilateralExitCompletionFeeQuery({
     enabled: completeUnilateralOpen,
-    vtxoTxids: selectedInProgressTxids,
+    vtxoOutpoints: selectedInProgressOutpoints,
     destinationAddress: completeDestination,
     feeRateSatPerVb: completionFeeRateSatPerVb,
   })
@@ -87,20 +100,16 @@ export function useArkadeExitFlow() {
   const unrollMutation = useArkadeUnilateralUnrollMutation()
   const completeExitMutation = useArkadeCompleteUnilateralExitMutation()
 
-  const inProgressByTxid = useMemo(() => {
-    const map = new Map<string, ArkadeUnilateralExitInProgressRow>()
-    for (const row of inProgressQuery.data ?? []) {
-      map.set(row.txid, row)
-    }
-    return map
-  }, [inProgressQuery.data])
-
   const selectedInProgressRows = useMemo(
     () =>
-      selectedInProgressTxids
-        .map((txid) => inProgressByTxid.get(txid))
+      selectedInProgressOutpoints
+        .map((outpoint) =>
+          inProgressQuery.data?.find((row) =>
+            arkadeVtxoOutpointsEqual(outpointFromInProgressRow(row), outpoint),
+          ),
+        )
         .filter((row): row is ArkadeUnilateralExitInProgressRow => row != null),
-    [inProgressByTxid, selectedInProgressTxids],
+    [inProgressQuery.data, selectedInProgressOutpoints],
   )
 
   const selectedInProgressTotalSats = useMemo(
@@ -129,7 +138,7 @@ export function useArkadeExitFlow() {
 
   useEffect(() => {
     if (!completeUnilateralOpen) {
-      setSelectedInProgressTxids([])
+      setSelectedInProgressOutpoints([])
       setCompleteDestination('')
       resetCompletionFeeSelection()
       return
@@ -201,25 +210,26 @@ export function useArkadeExitFlow() {
   }
 
   const toggleInProgressSelection = (row: ArkadeUnilateralExitInProgressRow) => {
-    setSelectedInProgressTxids((previous) =>
-      previous.includes(row.txid)
-        ? previous.filter((txid) => txid !== row.txid)
-        : [...previous, row.txid],
+    const outpoint = outpointFromInProgressRow(row)
+    setSelectedInProgressOutpoints((previous) =>
+      includesArkadeVtxoOutpoint(previous, outpoint)
+        ? previous.filter((selected) => !arkadeVtxoOutpointsEqual(selected, outpoint))
+        : [...previous, outpoint],
     )
   }
 
   const selectAllReadyInProgress = () => {
-    const readyTxids = (inProgressQuery.data ?? [])
+    const readyOutpoints = (inProgressQuery.data ?? [])
       .filter((row) => row.canComplete)
-      .map((row) => row.txid)
-    setSelectedInProgressTxids(readyTxids)
+      .map(outpointFromInProgressRow)
+    setSelectedInProgressOutpoints(readyOutpoints)
   }
 
   const handleCompleteExit = () => {
     if (!allSelectedCanComplete || completeDestination.trim().length === 0) return
     void completeExitMutation
       .mutateAsync({
-        vtxoTxids: selectedInProgressTxids,
+        vtxoOutpoints: selectedInProgressOutpoints,
         destinationAddress: completeDestination.trim(),
         feeRateSatPerVb: completionFeeRateSatPerVb,
       })
@@ -256,7 +266,7 @@ export function useArkadeExitFlow() {
     setUnilateralStep,
     selectedCandidate,
     unrollProgress,
-    selectedInProgressTxids,
+    selectedInProgressOutpoints,
     selectedInProgressRows,
     selectedInProgressTotalSats,
     allSelectedCanComplete,

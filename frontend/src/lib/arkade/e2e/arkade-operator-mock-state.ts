@@ -53,8 +53,9 @@ function createDefaultMockState(): E2eArkadeOperatorMockState {
 export function clearE2eArkadeOperatorMockDiscoveryState(
   mockState: E2eArkadeOperatorMockState,
 ): void {
+  // Indexed VTXO discovery is rebuilt on each operator sync; queued control payments must
+  // survive `/v1/info` refresh (sync calls refresh_server_info before list_vtxos).
   mockState.paymentsByScript.clear()
-  mockState.pendingIncomingPayment = null
 }
 
 const mockStateByPartition = new Map<string, E2eArkadeOperatorMockState>()
