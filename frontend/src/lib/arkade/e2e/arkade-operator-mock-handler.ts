@@ -257,13 +257,14 @@ function ensureDefaultFixturePaymentOnFirstScript(
   if (scripts.length === 0) {
     return
   }
-  if (mockState.paymentsByScript.size > 0) {
+  if (mockState.defaultFixtureScript == null) {
+    mockState.defaultFixtureScript = scripts[0]
+  }
+  const fixtureScript = mockState.defaultFixtureScript
+  if (mockState.paymentsByScript.has(fixtureScript)) {
     return
   }
-  if (mockState.pendingIncomingPayment != null) {
-    return
-  }
-  mockState.paymentsByScript.set(scripts[0], createDefaultFixturePayment())
+  mockState.paymentsByScript.set(fixtureScript, createDefaultFixturePayment())
 }
 
 function applyPendingIncomingPaymentToFirstUnfundedScript(
@@ -367,7 +368,7 @@ export function handleE2eArkadeOperatorMockRequest(
   const upstreamPath = rawUrl.replace(/^\/api\/arkade\/operator\/signet/, '') || '/'
 
   if (upstreamPath.startsWith('/v1/info')) {
-    // Each WASM session open starts with /v1/info; reset discovery within this partition.
+    // Session open and sync refresh both hit /v1/info; reset indexed discovery only.
     clearE2eArkadeOperatorMockDiscoveryState(mockState)
     res.statusCode = 200
     res.setHeader('Content-Type', 'application/json')

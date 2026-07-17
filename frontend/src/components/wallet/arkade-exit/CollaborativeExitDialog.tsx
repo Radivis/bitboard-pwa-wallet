@@ -171,6 +171,7 @@ export function CollaborativeExitDialog({ exitFlow }: CollaborativeExitDialogPro
               </InfomodeWrapper>
             </p>
             <p className="text-muted-foreground">
+              {/* txFeeRate is operator metadata only; estimates below come from CEL intent fees. */}
               Settlement fee rate: {collaborativeFeeQuery.data.txFeeRate} · Intent fees:{' '}
               {formatIntentFeePrograms(collaborativeFeeQuery.data.intentFeeConfigured)}
             </p>

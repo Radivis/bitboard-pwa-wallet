@@ -57,12 +57,11 @@ pub(crate) fn remove_unilateral_exit_watch_in_wallet_db(
     wallet_db.remove_unilateral_exit_watch(txid, vout);
 }
 
-pub(crate) fn remove_unilateral_exit_watches_for_txids_in_wallet_db(
+pub(crate) fn remove_unilateral_exit_watches_for_outpoints_in_wallet_db(
     wallet_db: &JsonPersistenceDb,
-    vtxo_txids: &[Txid],
+    outpoints: &HashSet<bitcoin::OutPoint>,
 ) {
-    let txid_set: HashSet<String> = vtxo_txids.iter().map(|txid| txid.to_string()).collect();
-    wallet_db.remove_unilateral_exit_watches_for_txids(&txid_set);
+    wallet_db.remove_unilateral_exit_watches_for_outpoints(outpoints);
 }
 
 /// Seed watches from snapshot exiting rows and pending unilateral records when upgrading mid-exit.
@@ -159,6 +158,7 @@ mod tests {
                 ark_txid: None,
                 assets: vec![],
                 server_pk_hex: None,
+                unilateral_exit_materials: None,
             }],
         });
 

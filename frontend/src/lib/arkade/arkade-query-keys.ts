@@ -1,6 +1,8 @@
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import { WALLET_DB_QUERY_KEY_ROOT } from '@/lib/wallet/wallet-query-key-root'
 import { appQueryClient } from '@/lib/shared/app-query-client'
+import type { ArkadeVtxoOutpoint } from '@/workers/arkade-api'
+import { arkadeVtxoOutpointCacheKey } from '@/workers/arkade-api'
 
 /** Sentinel segment for disabled Arkade queries (wallet/network not ready). */
 export const ARKADE_QUERY_DISABLED = 'disabled' as const
@@ -96,6 +98,20 @@ export const arkadeVtxoExpiryQueryKey = (
     networkMode,
     connectionId,
     'vtxo-expiry',
+  ] as const
+
+export const arkadeOperatorScheduledSessionQueryKey = (
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+  connectionId: string,
+) =>
+  [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletId,
+    networkMode,
+    connectionId,
+    'operator-scheduled-session',
   ] as const
 
 export const arkadeVtxoListQueryKey = (
@@ -203,11 +219,53 @@ export const arkadeUnilateralExitsInProgressQueryKey = (
     'unilateral-exits-in-progress',
   ] as const
 
+export const arkadeAutonomousModeStatusQueryKey = (
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+  connectionId: string,
+) =>
+  [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletId,
+    networkMode,
+    connectionId,
+    'autonomous-mode-status',
+  ] as const
+
+export const arkadeOperatorTrustStatusQueryKey = (
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+  connectionId: string,
+) =>
+  [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletId,
+    networkMode,
+    connectionId,
+    'operator-trust-status',
+  ] as const
+
+export const arkadeOperatorConfigDiffQueryKey = (
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+  connectionId: string,
+) =>
+  [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletId,
+    networkMode,
+    connectionId,
+    'operator-config-diff',
+  ] as const
+
 export const arkadeUnilateralExitCompletionFeeQueryKey = (
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,
   connectionId: string,
-  vtxoTxids: string[],
+  vtxoOutpoints: ArkadeVtxoOutpoint[],
   destinationAddress: string,
   feeRateSatPerVb: number,
 ) =>
@@ -219,7 +277,7 @@ export const arkadeUnilateralExitCompletionFeeQueryKey = (
     connectionId,
     'exit-fee',
     'unilateral-completion',
-    [...vtxoTxids].sort().join(','),
+    arkadeVtxoOutpointCacheKey(vtxoOutpoints),
     destinationAddress,
     feeRateSatPerVb,
   ] as const

@@ -80,11 +80,21 @@ feature:
       - id: ARK-EXIT-02
         description: Complete unilateral exit lists in-progress VTXOs from local snapshot and pending deductions when operator indexing lags
       - id: ARK-EXIT-03
-        description: Complete unilateral exit supports multi-select batch completion with fee estimate scaled to selected inputs
+        description: Complete unilateral exit supports multi-select batch completion with explicit virtual outpoints (txid + vout) and fee estimate scaled to selected inputs
       - id: ARK-EXIT-04
-        description: Completion fee estimate includes missingBlocktimeInputs (virtual txid and on-chain outpoint per affected VTXO) when Esplora omits confirmation blocktime; UI shows a non-blocking list in Complete unilateral exit. Permissive completion coin-select (Duration::ZERO fallback) is intentional for regtest/thin Esplora in CI and local debugging; uncommon on production Esplora.
+        description: Completion fee estimate includes missingBlocktimeInputs (virtual outpoint and on-chain outpoint per affected VTXO) when Esplora omits confirmation blocktime; UI shows a non-blocking list in Complete unilateral exit. Permissive completion coin-select (Duration::ZERO fallback) is intentional for regtest/thin Esplora in CI and local debugging; uncommon on production Esplora.
       - id: ARK-EXIT-05
         description: When complete exit times out waiting for operator indexer after unroll, UI shows a non-destructive indexer-catching-up state instead of a generic failure
+      - id: ARK-EXIT-06
+        description: Autonomous mode unilateral exit never calls ASP indexer or batch APIs for list, chain, virtual tx, or completion coin-select
+      - id: ARK-EXIT-07
+        description: Operator sync prefetches unilateral_exit_materials on exit-eligible VTXO snapshot records and persists cached_operator_info
+      - id: ARK-EXIT-08
+        description: Autonomous start unroll fails fast with autonomous_exit_materials_missing when selected VTXO lacks prefetched materials
+      - id: ARK-EXIT-09
+        description: Autonomous complete uses snapshot readiness plus Esplora only; no operator indexer poll or OperatorIndexerCatchingUp path; autonomous unroll polls Esplora for branch visibility before setting local is_unrolled and returns unilateral_unroll_not_confirmed_on_chain when chain missing after the poll window
+      - id: ARK-EXIT-10
+        description: While autonomous mode is active, collaborative exit, send, renew, recoverable settlement, signer migration, boarding settle, and manual operator sync are blocked in UI and WASM
       - id: ARK-EXIT-11
         description: After unilateral unroll broadcasts, WASM polls operator list_vtxos until is_unrolled and not is_spent (up to 60s); success with indexerWarning when on-chain confirmed but ASP lags; hard error when neither ASP nor chain confirms; sticky is_unrolled merge during poll sync for in-list operator rows
       - id: ARK-EXIT-12
@@ -96,11 +106,26 @@ feature:
         description: A later successful sync without key-discovery failure clears warningMessage
       - id: ARK-SYNC-03
         description: After operator sync, reconcile_exiting_vtxo_watches runs targeted lookups for watched exiting VTXOs; non-blocking exitingVtxoWarning when indexer lag or ASP mismatch; never clear exiting state on full-list absence alone
+    operator_trust:
+      - id: ARK-TRUST-01
+        description: When operator digest differs from accepted cached_operator_info, sync does not persist offchain snapshot, exit watches, materials prefetch, or accepted operator cache
+      - id: ARK-TRUST-02
+        description: Pending getInfo is persisted as pending_operator_info for offline diff review while operator_trust_pending
+      - id: ARK-TRUST-03
+        description: Blocking modal with exactly two choices; Review changes safely in autonomous mode is default focus
+      - id: ARK-TRUST-04
+        description: While operator_trust_pending, exit_autonomous_mode is blocked until accept_pending_operator_config
+      - id: ARK-TRUST-05
+        description: accept_pending_operator_config refreshes live getInfo, promotes pending only when pending.digest matches live digest, otherwise re-stages pending and keeps operator_trust_pending for modal review
+      - id: ARK-TRUST-06
+        description: Session open preserves accepted cached_operator_info while operator_trust_pending (no live getInfo overwrite)
     vtxo_viewer:
       - id: ARK-VTX-01
         description: VTXO viewer page lists VTXO cards when session open and Arkade active
       - id: ARK-VTX-02
-        description: Each card shows id, amount, classification, true-only flag chips, created and expiry timestamps
+        description: Each card shows id, amount, classification, true-only flag chips (including unilateral exit prepared with door-open icon when cached exit materials exist), created and expiry timestamps
+      - id: ARK-ARK-MGMT-01
+        description: Arkade management panel shows next operator batch window when getInfo scheduledSession is available, or an explicit not-published message when it is null
       - id: ARK-VTX-03
         description: Hide finalized defaults on; toggle shows finalized cards
       - id: ARK-VTX-04
@@ -120,6 +145,7 @@ feature:
         - Arkade receive address with copy
         - delegator fee from getDelegateInfo when reachable
         - expiring VTXO count when session open
+        - operator batch round schedule when operator publishes scheduledSession
         - collaborative exit (on-chain destination, optional partial amount) with operator fee estimate from getInfo().fees
         - Start unilateral exit (select VTXO, unroll) with bumper fee estimate; separate Complete unilateral exit for in-progress VTXOs after timelock
         - batch complete multiple ready in-progress VTXOs in one on-chain transaction with dynamic completion fee estimate

@@ -1,14 +1,17 @@
 mod api_types;
 mod balance_display;
+mod cached_operator_info;
 mod constants;
 mod error;
 mod esplora_blockchain;
 mod exit_balance;
 mod network;
 mod offchain_snapshot;
+mod operator_config_diff;
 mod persistence;
 mod session;
 mod signer_migration;
+mod unilateral_exit_materials;
 #[cfg(target_arch = "wasm32")]
 mod wasm_sleep;
 
@@ -24,6 +27,8 @@ mod session_exit_candidate_tests;
 mod session_mapper_tests;
 #[cfg(not(target_arch = "wasm32"))]
 pub use api_types::CompleteUnilateralExitParams;
+#[cfg(not(target_arch = "wasm32"))]
+pub use api_types::VtxoOutpointDto;
 #[cfg(not(target_arch = "wasm32"))]
 pub use network::NetworkMode;
 #[cfg(not(target_arch = "wasm32"))]
@@ -159,11 +164,68 @@ pub fn ark_operator_signer_pk_hex() -> Result<String, JsValue> {
 }
 
 #[wasm_bindgen]
+pub async fn ark_enter_autonomous_mode() -> Result<(), JsValue> {
+    map_js_async(async {
+        with_session_async(|session| async move { session.enter_autonomous_mode().await }).await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_exit_autonomous_mode() -> Result<(), JsValue> {
+    map_js_async(async {
+        with_session_async(|session| async move { session.exit_autonomous_mode().await }).await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub fn ark_autonomous_mode_status() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.autonomous_mode_status()?)
+    }))
+}
+
+#[wasm_bindgen]
 pub async fn ark_sync_with_operator() -> Result<JsValue, JsValue> {
     map_js_async(async {
         let result =
             with_session_async(|session| async move { session.sync_with_operator().await }).await?;
         to_js_value(result)
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub fn ark_operator_trust_status() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.operator_trust_status())
+    }))
+}
+
+#[wasm_bindgen]
+pub fn ark_operator_config_diff() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.operator_config_diff()?)
+    }))
+}
+
+#[wasm_bindgen]
+pub async fn ark_accept_pending_operator_config() -> Result<(), JsValue> {
+    map_js_async(async {
+        with_session_async(|session| async move { session.accept_pending_operator_config().await })
+            .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_review_operator_config_in_autonomous_mode() -> Result<(), JsValue> {
+    map_js_async(async {
+        with_session_async(|session| async move {
+            session.review_operator_config_in_autonomous_mode().await
+        })
+        .await
     })
     .await
 }
@@ -264,6 +326,13 @@ pub async fn ark_get_expiring_vtxo_count() -> Result<u32, JsValue> {
         with_session_async(|session| async move { session.expiring_vtxo_count().await }).await
     })
     .await
+}
+
+#[wasm_bindgen]
+pub fn ark_operator_scheduled_session() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.operator_scheduled_session()?)
+    }))
 }
 
 #[wasm_bindgen]

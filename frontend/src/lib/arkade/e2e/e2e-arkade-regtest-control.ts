@@ -5,6 +5,7 @@ import { getArkadeWorker } from '@/workers/arkade-factory'
 import { ensureArkadeEncryptedSecretsHost } from '@/workers/arkade-persistence-channel'
 import { ensureArkadeWorkerSecretsChannel, ensureSecretsChannel } from '@/workers/secrets-channel'
 import { useWalletStore } from '@/stores/walletStore'
+import type { ArkadeOperatorTrustStatus } from '@/workers/arkade-api'
 
 export function isE2eArkadeRegtestControlEnabled(): boolean {
   return import.meta.env.VITE_E2E_ARKADE_REGTEST === 'true' && import.meta.env.DEV
@@ -49,6 +50,10 @@ export async function exportBoardedWalletSdkPersistenceJsonForE2e(): Promise<str
   return sdkPersistenceJson
 }
 
+export async function readOperatorTrustStatusForE2e(): Promise<ArkadeOperatorTrustStatus> {
+  return getArkadeWorker().getOperatorTrustStatus()
+}
+
 export function ensureE2eArkadeRegtestControl(): void {
   if (!isE2eArkadeRegtestControlEnabled() || typeof window === 'undefined') {
     return
@@ -58,4 +63,5 @@ export function ensureE2eArkadeRegtestControl(): void {
   }
 
   window.__e2eExportBoardedWalletSdkPersistenceJson = exportBoardedWalletSdkPersistenceJsonForE2e
+  window.__e2eGetOperatorTrustStatus = readOperatorTrustStatusForE2e
 }

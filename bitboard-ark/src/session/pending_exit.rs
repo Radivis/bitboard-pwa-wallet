@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::str::FromStr;
 
 use crate::error::{ArkResult, ArkWasmError};
 use crate::exit_balance::{
@@ -8,7 +9,7 @@ use crate::persistence::{JsonPersistenceDb, PendingExitDeductionRecord, PendingE
 
 use super::ArkSession;
 use super::exit_watch::{
-    register_unilateral_exit_watch, remove_unilateral_exit_watches_for_txids_in_wallet_db,
+    register_unilateral_exit_watch, remove_unilateral_exit_watches_for_outpoints_in_wallet_db,
 };
 use super::mappers::{current_unix_timestamp, parse_outpoint};
 
@@ -111,19 +112,30 @@ impl ArkSession {
             });
     }
 
-    pub(crate) fn clear_pending_unilateral_exits_for_txids(&self, vtxo_txids: &[bitcoin::Txid]) {
-        let txid_set: HashSet<String> = vtxo_txids.iter().map(|txid| txid.to_string()).collect();
+    pub(crate) fn clear_pending_unilateral_exits_for_outpoints(
+        &self,
+        outpoints: &[bitcoin::OutPoint],
+    ) {
+        let outpoint_set: HashSet<bitcoin::OutPoint> = outpoints.iter().copied().collect();
         let mut pending = self.wallet_db.pending_exit_deductions();
         pending.retain(|record| {
             if record.kind != PendingExitKind::Unilateral {
                 return true;
             }
-            record
-                .vtxo_txid
-                .as_ref()
-                .is_none_or(|txid| !txid_set.contains(txid))
+            let Some(txid) = record.vtxo_txid.as_deref() else {
+                return true;
+            };
+            let vout = record.vout.unwrap_or(0);
+            let Ok(parsed_txid) = bitcoin::Txid::from_str(txid) else {
+                return true;
+            };
+            let record_outpoint = bitcoin::OutPoint {
+                txid: parsed_txid,
+                vout,
+            };
+            !outpoint_set.contains(&record_outpoint)
         });
         self.wallet_db.set_pending_exit_deductions(pending);
-        remove_unilateral_exit_watches_for_txids_in_wallet_db(&self.wallet_db, vtxo_txids);
+        remove_unilateral_exit_watches_for_outpoints_in_wallet_db(&self.wallet_db, &outpoint_set);
     }
 }

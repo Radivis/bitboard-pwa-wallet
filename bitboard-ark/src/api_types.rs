@@ -90,6 +90,56 @@ pub struct OperatorSyncResultDto {
     pub key_discovery_warning: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exiting_vtxo_warning: Option<String>,
+    #[serde(default)]
+    pub operator_config_trust_pending: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OperatorTrustStatusDto {
+    pub operator_trust_pending: bool,
+    pub reviewing_in_autonomous: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub accepted_digest: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pending_digest: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OperatorConfigDiffEntryDto {
+    pub field_key: String,
+    pub field_label: String,
+    pub accepted_value: String,
+    pub pending_value: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OperatorConfigDiffResultDto {
+    pub entries: Vec<OperatorConfigDiffEntryDto>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OperatorScheduledSessionDto {
+    pub next_start_time: i64,
+    pub next_end_time: i64,
+    pub period: i64,
+    pub duration: i64,
+    pub in_progress: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutonomousModeStatusDto {
+    pub active: bool,
+    pub eligible_count: u32,
+    pub materials_ready_count: u32,
+    pub materials_missing_count: u32,
+    pub cached_operator_info_present: bool,
+    pub operator_trust_pending: bool,
+    pub can_exit_autonomous: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -126,6 +176,8 @@ pub struct VtxoRowDto {
     pub is_unrolled: bool,
     pub is_swept: bool,
     pub is_spent: bool,
+    /// Cached unilateral-exit chain + PSBTs are stored locally for this VTXO.
+    pub is_unilateral_exit_prepared: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -252,6 +304,8 @@ pub struct IntentFeeConfiguredDto {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CollaborativeExitFeeEstimateDto {
+    /// Echo of operator getInfo `txFeeRate` (wire type is string). Unused for fee math —
+    /// cooperative estimates use ark-fees CEL on intent programs; shown in the UI only.
     pub tx_fee_rate: String,
     pub intent_fee_configured: IntentFeeConfiguredDto,
     pub estimated_total_fee_sats: Option<u64>,
@@ -272,6 +326,7 @@ pub const COLLABORATIVE_EXIT_ESTIMATE_ERROR_INSUFFICIENT_COOPERATIVE_INPUTS: &st
 pub struct RecoverableVtxoFeeEstimateDto {
     pub recoverable_vtxo_count: u32,
     pub recoverable_total_sats: u64,
+    /// Echo of operator getInfo `txFeeRate`. Unused for fee math (see [`CollaborativeExitFeeEstimateDto::tx_fee_rate`]).
     pub tx_fee_rate: String,
     pub intent_fee_configured: IntentFeeConfiguredDto,
     pub estimated_total_fee_sats: Option<u64>,
@@ -349,10 +404,17 @@ pub struct CollaborativeExitParams {
     pub amount_sats: Option<u64>,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VtxoOutpointDto {
+    pub txid: String,
+    pub vout: u32,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CompleteUnilateralExitParams {
-    pub vtxo_txids: Vec<String>,
+    pub vtxo_outpoints: Vec<VtxoOutpointDto>,
     pub destination_address: String,
     #[serde(default)]
     pub fee_rate_sat_per_vb: Option<f64>,
@@ -361,7 +423,7 @@ pub struct CompleteUnilateralExitParams {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UnilateralExitCompletionFeeEstimateParams {
-    pub vtxo_txids: Vec<String>,
+    pub vtxo_outpoints: Vec<VtxoOutpointDto>,
     pub destination_address: String,
     #[serde(default)]
     pub fee_rate_sat_per_vb: Option<f64>,

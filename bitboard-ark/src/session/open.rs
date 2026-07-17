@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::sync::{Arc, Mutex};
 
 use ark_bdk_wallet::Wallet as ArkBdkWallet;
@@ -64,7 +65,7 @@ fn warn_onchain_sync_during_open(message: &str) {
 
 /// Esplora full scan during open can fail transiently on hosted proxies; retry, then continue
 /// with a stale on-chain view so session open and network switching are not blocked.
-async fn sync_onchain_wallet_for_session_open(client: &ArkClient) {
+pub(crate) async fn sync_onchain_wallet_for_session_open(client: &ArkClient) {
     for attempt in 0..ONCHAIN_SYNC_MAX_ATTEMPTS {
         match client.sync_onchain_wallet().await {
             Ok(()) => return,
@@ -171,6 +172,34 @@ impl ArkSession {
         wallet_db.set_load_context(network, server_signer);
         sync_onchain_wallet_for_session_open(&client).await;
 
+        let trust_pending = wallet_db.operator_trust_pending();
+        if let Ok(live_server_info) = client.server_info() {
+            let accepted = wallet_db.cached_operator_info();
+            let digest_mismatch = crate::operator_config_diff::operator_digest_mismatch(
+                accepted.as_ref(),
+                &live_server_info.digest,
+            );
+            if trust_pending && digest_mismatch {
+                wallet_db.set_pending_operator_info(
+                    crate::cached_operator_info::CachedOperatorInfoRecord::from_server_info(
+                        &live_server_info,
+                    ),
+                );
+            } else if digest_mismatch && accepted.is_some() {
+                wallet_db.stage_operator_trust_pending(
+                    crate::cached_operator_info::CachedOperatorInfoRecord::from_server_info(
+                        &live_server_info,
+                    ),
+                );
+            } else if !digest_mismatch {
+                wallet_db.set_cached_operator_info(
+                    crate::cached_operator_info::CachedOperatorInfoRecord::from_server_info(
+                        &live_server_info,
+                    ),
+                );
+            }
+        }
+
         let operator_identity = Mutex::new(persisted_operator_identity_for_open(
             &migration_hint,
             server_signer,
@@ -184,6 +213,7 @@ impl ArkSession {
                 delegator,
                 network_mode,
                 operator_identity,
+                autonomous_mode: Cell::new(false),
             },
             migration_hint,
         ))

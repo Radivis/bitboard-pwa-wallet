@@ -48,6 +48,10 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
       expiringSoonCount: 0,
     },
   }),
+  useArkadeOperatorScheduledSessionQuery: () => ({
+    isLoading: false,
+    data: null,
+  }),
   useArkadeNewAddressMutation: () => ({ mutate: vi.fn(), isPending: false }),
   useArkadeExitCandidatesQuery: () => ({ data: [], isLoading: false }),
   useArkadeBumperInfoQuery: () => ({ data: null, isLoading: false }),

@@ -48,4 +48,8 @@ interface Window {
   __E2E_ARKADE__?: import('@/lib/arkade/e2e/e2e-arkade-mock-control').E2eArkadeMockControl
   /** DEV + `VITE_E2E_ARKADE_REGTEST`: export boarded-wallet fixture for Rust regtest. */
   __e2eExportBoardedWalletSdkPersistenceJson?: () => Promise<string>
+  /** DEV + `VITE_E2E_ARKADE_REGTEST`: read operator trust status from the live WASM session. */
+  __e2eGetOperatorTrustStatus?: () => Promise<
+    import('@/workers/arkade-api').ArkadeOperatorTrustStatus
+  >
 }

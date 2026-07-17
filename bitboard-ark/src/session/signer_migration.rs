@@ -15,6 +15,7 @@ use super::ArkSession;
 
 impl ArkSession {
     pub async fn migrate_deprecated_signer_vtxos(&self) -> ArkResult<SignerMigrationResultDto> {
+        self.ensure_operator_rpc_allowed()?;
         if let Some(key_discovery_warning) = self.sync_offchain_keys().await {
             return Err(ArkWasmError::Client(ark_client::Error::wallet(
                 key_discovery_warning,

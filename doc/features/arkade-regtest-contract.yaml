@@ -19,6 +19,9 @@ contracts:
   - id: E2E-ARK-REG-05
     description: Fund on pre-rotation signer, rotate-signer with future cutoff, cooperative migrate via banner, assert no pendingRecoveryDueToExpiredSignerSats or pending-recovery-due-to-expired-signer breakdown
     tags: ["@arkade-signer-regtest"]
+  - id: E2E-ARK-REG-06
+    description: Fund boarded wallet, ASP changes three getInfo fields, sync shows trust modal, review in autonomous mode with diff table, accept returns to regular mode (ARK-TRUST-03/04/05)
+    tags: ["@arkade-operator-trust-regtest"]
 
 infrastructure:
   stack: arkade-regtest

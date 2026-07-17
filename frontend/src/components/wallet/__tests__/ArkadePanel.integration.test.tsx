@@ -70,6 +70,10 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
     isLoading: false,
     data: { earliestExpiresAt: null, expiringSoonCount: 0 },
   }),
+  useArkadeOperatorScheduledSessionQuery: () => ({
+    isLoading: false,
+    data: null,
+  }),
   useArkadeSignerMigrationMutation: () => ({
     mutate: vi.fn(),
     isPending: false,

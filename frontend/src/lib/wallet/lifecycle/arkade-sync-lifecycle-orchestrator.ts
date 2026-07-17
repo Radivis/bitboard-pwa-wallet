@@ -28,6 +28,10 @@ import type {
 import type { ArkadeSaveParams } from '@/lib/wallet/lifecycle/arkade-save-lifecycle-types'
 import type { ArkadeOperatorSyncResult, ArkadeSignerMigrationResult } from '@/workers/arkade-api'
 import {
+  arkadeOperatorConfigDiffQueryKey,
+  arkadeOperatorTrustStatusQueryKey,
+} from '@/lib/arkade/arkade-query-keys'
+import {
   LIFECYCLE_SYNC_ERROR_FALLBACK,
   userFacingLifecycleErrorMessage,
 } from '@/lib/shared/utils'
@@ -138,12 +142,34 @@ function applySuccessfulArkadeSyncSnapshot(
   })
 }
 
+async function invalidateOperatorTrustQueriesForScope(scope: ArkadeRailScope): Promise<void> {
+  if (!isArkadeSupportedNetworkMode(scope.networkMode)) {
+    return
+  }
+  const { appQueryClient } = await import('@/lib/shared/app-query-client')
+  await appQueryClient.invalidateQueries({
+    queryKey: arkadeOperatorTrustStatusQueryKey(
+      scope.walletId,
+      scope.networkMode,
+      scope.connectionId,
+    ),
+  })
+  await appQueryClient.invalidateQueries({
+    queryKey: arkadeOperatorConfigDiffQueryKey(
+      scope.walletId,
+      scope.networkMode,
+      scope.connectionId,
+    ),
+  })
+}
+
 async function runArkadeOperatorSyncBody(
-  connectionId: string,
+  scope: ArkadeRailScope,
 ): Promise<ArkadeOperatorSyncResult> {
   const worker = getArkadeWorker()
   const syncResult = await worker.syncWithOperator()
-  await refreshArkadeStoreFromLoadedWasm(connectionId)
+  await refreshArkadeStoreFromLoadedWasm(scope.connectionId)
+  await invalidateOperatorTrustQueriesForScope(scope)
   return syncResult
 }
 
@@ -264,7 +290,7 @@ export async function orchestrateArkadeSyncThenSave(
             await orchestrateArkadeSave(toSaveParams(params))
           }
           try {
-            const syncResult = await runArkadeOperatorSyncBody(params.connectionId)
+            const syncResult = await runArkadeOperatorSyncBody(scope)
             applySuccessfulArkadeSyncSnapshot(scope, syncResult)
           } catch (syncError) {
             setSnapshot({
@@ -281,7 +307,7 @@ export async function orchestrateArkadeSyncThenSave(
           return
         }
 
-        const syncResult = await runArkadeOperatorSyncBody(params.connectionId)
+        const syncResult = await runArkadeOperatorSyncBody(scope)
         applySuccessfulArkadeSyncSnapshot(scope, syncResult)
         try {
           await orchestrateArkadeSave(toSaveParams(params))

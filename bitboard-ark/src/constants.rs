@@ -14,6 +14,7 @@ pub const VTXO_STATUS_PRECONFIRMED: &str = "preconfirmed";
 pub const VTXO_STATUS_RECOVERABLE: &str = "recoverable";
 pub const VTXO_STATUS_SETTLED: &str = "settled";
 
+/// Placeholder when operator getInfo omits `fees.tx_fee_rate`. Not used for fee calculations.
 pub const DEFAULT_TX_FEE_RATE: &str = "1";
 pub const MIN_FEE_RATE_SAT_PER_VB: f64 = 0.1;
 pub const ESPLORA_FEE_ESTIMATE_BLOCK_TARGET: u16 = 1;

@@ -11,12 +11,15 @@ use bitcoin::{Network, XOnlyPublicKey};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
-/// Current on-disk Arkade persistence format (v3).
+/// Current on-disk Arkade persistence format (v5).
 ///
-/// Versions 1 and 2 were pre-production prototypes only; no production wallets shipped those
-/// blobs. Unknown versions are rejected in [`BitboardArkPersistence::parse_import`] and import
-/// starts from an empty `wallet_db`.
-pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 3;
+/// v4 added autonomous-exit fields; v5 adds operator trust pending state. v3/v4 blobs import
+/// cleanly; export uses v5. Unknown versions are rejected in [`BitboardArkPersistence::parse_import`].
+pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 5;
+/// Legacy import version before operator trust pending fields.
+pub const LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 4;
+/// Pre-autonomous-exit persistence format.
+pub const LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V3: u32 = 3;
 const PERSISTENCE_LOCK_POISONED: &str = "persistence lock poisoned";
 
 /// Single-threaded WASM: recover in-memory state after a prior panic instead of re-panicking.
@@ -54,6 +57,19 @@ pub struct VirtualTxOutPointAssetRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct VirtualPsbtRecord {
+    pub virtual_txid: String,
+    pub psbt_hex: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct UnilateralExitMaterialsRecord {
+    pub cached_at: i64,
+    pub chain_json: String,
+    pub virtual_psbts: Vec<VirtualPsbtRecord>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VirtualTxOutPointRecord {
     pub txid: String,
     pub vout: u32,
@@ -78,6 +94,8 @@ pub struct VirtualTxOutPointRecord {
     /// balance buckets from a local snapshot without calling the operator.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub server_pk_hex: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unilateral_exit_materials: Option<UnilateralExitMaterialsRecord>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -132,6 +150,12 @@ pub struct WalletDbSnapshot {
     pub pending_exit_deductions: Vec<PendingExitDeductionRecord>,
     #[serde(default)]
     pub unilateral_exit_watches: Vec<UnilateralExitWatchRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cached_operator_info: Option<crate::cached_operator_info::CachedOperatorInfoRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending_operator_info: Option<crate::cached_operator_info::CachedOperatorInfoRecord>,
+    #[serde(default)]
+    pub operator_trust_pending: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -157,6 +181,12 @@ fn default_parsed_ark_persistence() -> ParsedArkPersistence {
         wallet_db: WalletDbSnapshot::default(),
         operator_identity: None,
     }
+}
+
+fn is_supported_persistence_import_version(version: u32) -> bool {
+    version == BITBOARD_ARK_PERSISTENCE_VERSION
+        || version == LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION
+        || version == LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V3
 }
 
 fn warn_unknown_persistence_version(version: Option<u64>) {
@@ -192,7 +222,7 @@ impl BitboardArkPersistence {
             Err(_) => return default_parsed_ark_persistence(),
         };
 
-        if envelope.version != BITBOARD_ARK_PERSISTENCE_VERSION {
+        if !is_supported_persistence_import_version(envelope.version) {
             warn_unknown_persistence_version(Some(envelope.version as u64));
             return default_parsed_ark_persistence();
         }
@@ -224,6 +254,51 @@ impl JsonPersistenceDb {
 
     pub fn snapshot(&self) -> WalletDbSnapshot {
         lock_persistence(&self.inner).clone()
+    }
+
+    pub fn set_cached_operator_info(
+        &self,
+        info: crate::cached_operator_info::CachedOperatorInfoRecord,
+    ) {
+        lock_persistence(&self.inner).cached_operator_info = Some(info);
+    }
+
+    pub fn cached_operator_info(
+        &self,
+    ) -> Option<crate::cached_operator_info::CachedOperatorInfoRecord> {
+        lock_persistence(&self.inner).cached_operator_info.clone()
+    }
+
+    pub fn pending_operator_info(
+        &self,
+    ) -> Option<crate::cached_operator_info::CachedOperatorInfoRecord> {
+        lock_persistence(&self.inner).pending_operator_info.clone()
+    }
+
+    pub fn set_pending_operator_info(
+        &self,
+        info: crate::cached_operator_info::CachedOperatorInfoRecord,
+    ) {
+        lock_persistence(&self.inner).pending_operator_info = Some(info);
+    }
+
+    pub fn operator_trust_pending(&self) -> bool {
+        lock_persistence(&self.inner).operator_trust_pending
+    }
+
+    pub fn stage_operator_trust_pending(
+        &self,
+        pending_info: crate::cached_operator_info::CachedOperatorInfoRecord,
+    ) {
+        let mut inner = lock_persistence(&self.inner);
+        inner.pending_operator_info = Some(pending_info);
+        inner.operator_trust_pending = true;
+    }
+
+    pub fn clear_operator_trust_state(&self) {
+        let mut inner = lock_persistence(&self.inner);
+        inner.pending_operator_info = None;
+        inner.operator_trust_pending = false;
     }
 
     pub fn set_offchain_vtxo_snapshot(&self, snapshot: OffchainVtxoSnapshot) {
@@ -280,11 +355,21 @@ impl JsonPersistenceDb {
             .retain(|watch| !(watch.vtxo_txid == txid && watch.vout == vout));
     }
 
-    pub fn remove_unilateral_exit_watches_for_txids(&self, vtxo_txids: &HashSet<String>) {
+    pub fn remove_unilateral_exit_watches_for_outpoints(
+        &self,
+        outpoints: &HashSet<bitcoin::OutPoint>,
+    ) {
         let mut inner = lock_persistence(&self.inner);
-        inner
-            .unilateral_exit_watches
-            .retain(|watch| !vtxo_txids.contains(&watch.vtxo_txid));
+        inner.unilateral_exit_watches.retain(|watch| {
+            let Ok(txid) = bitcoin::Txid::from_str(&watch.vtxo_txid) else {
+                return true;
+            };
+            let watch_outpoint = bitcoin::OutPoint {
+                txid,
+                vout: watch.vout,
+            };
+            !outpoints.contains(&watch_outpoint)
+        });
     }
 
     /// Insert or replace a pending exit record (no duplicate deductions on retry).

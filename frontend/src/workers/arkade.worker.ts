@@ -35,7 +35,8 @@ import type {
   ArkadeUnilateralExitFeeEstimateParams,
   ArkadeUnilateralExitCompletionFeeEstimate,
   ArkadeUnilateralExitCompletionFeeEstimateParams,
-  ArkadeUnilateralExitInProgressRow,
+  ArkadeOperatorScheduledSession,
+  ArkadeAutonomousModeStatus,
   ArkadeVtxoListResult,
   ArkadeUnrollProgressEvent,
   ArkadeUnrollResult,
@@ -190,6 +191,17 @@ async function flushSdkPersistenceNowOrThrow(): Promise<void> {
   }
 }
 
+async function getAutonomousModeActive(): Promise<boolean> {
+  try {
+    const status = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_autonomous_mode_status(),
+    )
+    return Boolean((status as ArkadeAutonomousModeStatus | undefined)?.active)
+  } catch {
+    return false
+  }
+}
+
 /** WASM operator sync + SDK flush only — store refresh runs on the main thread. */
 async function syncWithOperatorCore(): Promise<ArkadeOperatorSyncResult> {
   const result = await invokeWasmArk((wasmModule) => wasmModule.ark_sync_with_operator())
@@ -203,8 +215,11 @@ async function persistAfterCriticalOperation(): Promise<void> {
   )
   await awaitArkadeSyncQuiescence()
   if (activeSessionParams != null) {
-    await syncWithOperatorCore()
-    return
+    const autonomousActive = await getAutonomousModeActive()
+    if (!autonomousActive) {
+      await syncWithOperatorCore()
+      return
+    }
   }
   await flushSdkPersistenceNowOrThrow()
 }
@@ -344,6 +359,47 @@ const arkadeService: ArkadeService = {
     return syncWithOperatorCore()
   },
 
+  async enterAutonomousMode(): Promise<void> {
+    await invokeWasmArk((wasmModule) => wasmModule.ark_enter_autonomous_mode())
+    await flushSdkPersistenceNowOrThrow()
+  },
+
+  async exitAutonomousMode(): Promise<void> {
+    await invokeWasmArk((wasmModule) => wasmModule.ark_exit_autonomous_mode())
+    await flushSdkPersistenceNowOrThrow()
+  },
+
+  async getAutonomousModeStatus(): Promise<ArkadeAutonomousModeStatus> {
+    const status = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_autonomous_mode_status(),
+    )
+    return status as ArkadeAutonomousModeStatus
+  },
+
+  async getOperatorTrustStatus(): Promise<ArkadeOperatorTrustStatus> {
+    const status = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_operator_trust_status(),
+    )
+    return status as ArkadeOperatorTrustStatus
+  },
+
+  async getOperatorConfigDiff(): Promise<ArkadeOperatorConfigDiffResult> {
+    const diff = await invokeWasmArk((wasmModule) => wasmModule.ark_operator_config_diff())
+    return diff as ArkadeOperatorConfigDiffResult
+  },
+
+  async acceptPendingOperatorConfig(): Promise<void> {
+    await invokeWasmArk((wasmModule) => wasmModule.ark_accept_pending_operator_config())
+    await flushSdkPersistenceNowOrThrow()
+  },
+
+  async reviewOperatorConfigInAutonomousMode(): Promise<void> {
+    await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_review_operator_config_in_autonomous_mode(),
+    )
+    await flushSdkPersistenceNowOrThrow()
+  },
+
   async migrateDeprecatedSignerVtxos(): Promise<ArkadeSignerMigrationResult> {
     const result = await invokeWasmArk((wasmModule) =>
       wasmModule.ark_migrate_deprecated_signer_vtxos(),
@@ -479,6 +535,13 @@ const arkadeService: ArkadeService = {
   async getVtxoExpiryStatus(): Promise<ArkadeVtxoExpiryStatus> {
     const result = await invokeWasmArk((wasmModule) => wasmModule.ark_get_vtxo_expiry_status())
     return result as ArkadeVtxoExpiryStatus
+  },
+
+  async getOperatorScheduledSession(): Promise<ArkadeOperatorScheduledSession | null> {
+    const result = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_operator_scheduled_session(),
+    )
+    return (result as ArkadeOperatorScheduledSession | null) ?? null
   },
 
   async renewVtxosNow(): Promise<string | null> {

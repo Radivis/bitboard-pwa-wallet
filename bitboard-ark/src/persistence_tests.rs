@@ -279,6 +279,60 @@ fn upsert_pending_unilateral_replaces_same_outpoint() {
 }
 
 #[test]
+fn persistence_v5_round_trips_trust_fields() {
+    let identity = OperatorIdentity {
+        signer_pk_hex: "02abc".to_string(),
+        network: network_label(Network::Signet),
+    };
+    let mut envelope = BitboardArkPersistence::empty(identity);
+    envelope.wallet_db.operator_trust_pending = true;
+    envelope.wallet_db.pending_operator_info =
+        Some(crate::cached_operator_info::CachedOperatorInfoRecord {
+            version: "1".to_string(),
+            signer_pk_hex: "02abc".to_string(),
+            forfeit_pk_hex: "02abc".to_string(),
+            forfeit_address: "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx".to_string(),
+            checkpoint_tapscript_hex: String::new(),
+            network: network_label(Network::Signet),
+            session_duration: 0,
+            unilateral_exit_delay_consensus: 0,
+            boarding_exit_delay_consensus: 0,
+            utxo_min_amount_sats: None,
+            utxo_max_amount_sats: None,
+            vtxo_min_amount_sats: None,
+            vtxo_max_amount_sats: None,
+            dust_sats: 0,
+            fees: None,
+            scheduled_session: None,
+            deprecated_signers: vec![],
+            service_status: HashMap::new(),
+            digest: "pending-digest".to_string(),
+            max_tx_weight: 0,
+            max_op_return_outputs: 0,
+        });
+
+    let json = serde_json::to_string(&envelope).expect("serialize");
+    let parsed = BitboardArkPersistence::parse_import(Some(&json));
+    assert!(parsed.wallet_db.operator_trust_pending);
+    assert_eq!(
+        parsed
+            .wallet_db
+            .pending_operator_info
+            .as_ref()
+            .map(|info| info.digest.as_str()),
+        Some("pending-digest")
+    );
+}
+
+#[test]
+fn persistence_v4_import_defaults_trust_fields() {
+    let legacy_v4_json = r#"{"version":4,"engine":"ark-rs","ark_sdk_version":"0.9.3","operator_identity":{"signer_pk_hex":"02abc","network":"signet"},"wallet_db":{"boarding_outputs":[],"secret_keys_by_owner_pk_hex":{}},"swap_storage":{}}"#;
+    let parsed = BitboardArkPersistence::parse_import(Some(legacy_v4_json));
+    assert!(!parsed.wallet_db.operator_trust_pending);
+    assert!(parsed.wallet_db.pending_operator_info.is_none());
+}
+
+#[test]
 fn upsert_pending_collaborative_replaces_existing_collaborative_record() {
     let db = JsonPersistenceDb::default();
 

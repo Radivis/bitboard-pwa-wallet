@@ -8,6 +8,35 @@ export type { ArkadeOperatorConnectionSummary }
 export interface ArkadeOperatorSyncResult {
   keyDiscoveryWarning?: string
   exitingVtxoWarning?: string
+  operatorConfigTrustPending?: boolean
+}
+
+export interface ArkadeAutonomousModeStatus {
+  active: boolean
+  eligibleCount: number
+  materialsReadyCount: number
+  materialsMissingCount: number
+  cachedOperatorInfoPresent: boolean
+  operatorTrustPending: boolean
+  canExitAutonomous: boolean
+}
+
+export interface ArkadeOperatorTrustStatus {
+  operatorTrustPending: boolean
+  reviewingInAutonomous: boolean
+  acceptedDigest?: string
+  pendingDigest?: string
+}
+
+export interface ArkadeOperatorConfigDiffEntry {
+  fieldKey: string
+  fieldLabel: string
+  acceptedValue: string
+  pendingValue: string
+}
+
+export interface ArkadeOperatorConfigDiffResult {
+  entries: ArkadeOperatorConfigDiffEntry[]
 }
 
 export interface ArkadeBalanceInfo {
@@ -73,6 +102,15 @@ export interface ArkadeVtxoExpiryStatus {
   expiringSoonCount: number
 }
 
+/** Operator batch round schedule from getInfo `scheduledSession` (unix seconds). */
+export interface ArkadeOperatorScheduledSession {
+  nextStartTime: number
+  nextEndTime: number
+  period: number
+  duration: number
+  inProgress: boolean
+}
+
 export type ArkadeVtxoClassification =
   | 'pre_confirmed'
   | 'confirmed'
@@ -93,6 +131,7 @@ export interface ArkadeVtxoRowBase {
   isUnrolled: boolean
   isSwept: boolean
   isSpent: boolean
+  isUnilateralExitPrepared: boolean
 }
 
 export interface ArkadeVtxoListResult {
@@ -177,8 +216,42 @@ export interface ArkadeUnilateralExitCompletionFeeEstimate {
   missingBlocktimeInputs?: ArkadeMissingBlocktimeCompletionInput[]
 }
 
+export interface ArkadeVtxoOutpoint {
+  txid: string
+  vout: number
+}
+
+export function arkadeVtxoOutpointsEqual(
+  left: ArkadeVtxoOutpoint,
+  right: ArkadeVtxoOutpoint,
+): boolean {
+  return left.txid === right.txid && left.vout === right.vout
+}
+
+export function includesArkadeVtxoOutpoint(
+  outpoints: ArkadeVtxoOutpoint[],
+  candidate: ArkadeVtxoOutpoint,
+): boolean {
+  return outpoints.some((outpoint) => arkadeVtxoOutpointsEqual(outpoint, candidate))
+}
+
+export function sortArkadeVtxoOutpoints(
+  outpoints: ArkadeVtxoOutpoint[],
+): ArkadeVtxoOutpoint[] {
+  return [...outpoints].sort((left, right) => {
+    const txidCompare = left.txid.localeCompare(right.txid)
+    return txidCompare !== 0 ? txidCompare : left.vout - right.vout
+  })
+}
+
+export function arkadeVtxoOutpointCacheKey(outpoints: ArkadeVtxoOutpoint[]): string {
+  return sortArkadeVtxoOutpoints(outpoints)
+    .map((outpoint) => `${outpoint.txid}:${outpoint.vout}`)
+    .join(',')
+}
+
 export interface ArkadeUnilateralExitCompletionFeeEstimateParams {
-  vtxoTxids: string[]
+  vtxoOutpoints: ArkadeVtxoOutpoint[]
   destinationAddress: string
   feeRateSatPerVb?: number
 }
@@ -210,7 +283,7 @@ export interface ArkadeUnrollResult {
 }
 
 export interface ArkadeCompleteUnilateralExitParams {
-  vtxoTxids: string[]
+  vtxoOutpoints: ArkadeVtxoOutpoint[]
   destinationAddress: string
   feeRateSatPerVb?: number
 }
@@ -218,6 +291,7 @@ export interface ArkadeCompleteUnilateralExitParams {
 export type ArkadeCollaborativeExitEstimateErrorCode = 'insufficient_cooperative_inputs'
 
 export interface ArkadeCollaborativeExitFeeEstimate {
+  /** getInfo `txFeeRate` echo — informational only; fee math uses CEL intent programs + Esplora. */
   txFeeRate: string
   intentFeeConfigured: {
     offchainInput: boolean
@@ -245,6 +319,7 @@ export interface ArkadeUnilateralExitFeeEstimate {
 export interface ArkadeRecoverableVtxoFeeEstimate {
   recoverableVtxoCount: number
   recoverableTotalSats: number
+  /** getInfo `txFeeRate` echo — informational only; see `ArkadeCollaborativeExitFeeEstimate.txFeeRate`. */
   txFeeRate: string
   intentFeeConfigured: {
     offchainInput: boolean
@@ -285,6 +360,13 @@ export interface ArkadeService {
   setEncryptedWalletSecretsHost(host: EncryptedWalletSecretsHost): Promise<void>
   openSession(params: OpenArkadeSessionParams): Promise<OpenArkadeSessionResult>
   syncWithOperator(): Promise<ArkadeOperatorSyncResult>
+  getOperatorTrustStatus(): Promise<ArkadeOperatorTrustStatus>
+  getOperatorConfigDiff(): Promise<ArkadeOperatorConfigDiffResult>
+  acceptPendingOperatorConfig(): Promise<void>
+  reviewOperatorConfigInAutonomousMode(): Promise<void>
+  enterAutonomousMode(): Promise<void>
+  exitAutonomousMode(): Promise<void>
+  getAutonomousModeStatus(): Promise<ArkadeAutonomousModeStatus>
   hasOpenSession(params: {
     walletId: number
     networkMode: ArkadeSupportedNetworkMode
@@ -327,6 +409,7 @@ export interface ArkadeService {
   getDelegateInfo(): Promise<ArkadeDelegateInfo>
   getExpiringVtxoCount(): Promise<number>
   getVtxoExpiryStatus(): Promise<ArkadeVtxoExpiryStatus>
+  getOperatorScheduledSession(): Promise<ArkadeOperatorScheduledSession | null>
   renewVtxosNow(): Promise<string | null>
   delegateSpendableVtxos(): Promise<{
     delegated: number

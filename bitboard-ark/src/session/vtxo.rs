@@ -15,8 +15,11 @@ use crate::exit_balance::{
     UnilateralExitOutpointKey, unilateral_exit_in_progress_outpoints_from_pending,
 };
 use crate::offchain_snapshot::{script_to_server_pk_lookup, vtxo_list_from_snapshot};
+use crate::persistence::OffchainVtxoSnapshot;
+use crate::unilateral_exit_materials::virtual_tx_outpoint_has_unilateral_exit_prepared;
 
 use super::ArkSession;
+use super::autonomous::balance_vtxo_reads_use_operator_rpc;
 use super::mappers::{
     current_unix_timestamp, empty_fee_info, map_intent_fee_configured, parse_delegator_public_key,
 };
@@ -76,7 +79,9 @@ impl ArkSession {
             &self.wallet_db.pending_exit_deductions(),
         );
 
-        if let Ok((vtxo_list, _)) = self.client.list_vtxos().await {
+        if balance_vtxo_reads_use_operator_rpc(self.autonomous_mode())
+            && let Ok((vtxo_list, _)) = self.client.list_vtxos().await
+        {
             return Ok(recoverable_vtxo_buckets_from_list(
                 &vtxo_list,
                 dust,
@@ -97,6 +102,7 @@ impl ArkSession {
     }
 
     pub async fn recoverable_vtxo_fee_estimate(&self) -> ArkResult<RecoverableVtxoFeeEstimateDto> {
+        self.ensure_operator_rpc_allowed()?;
         let fees = self
             .client
             .server_info()?
@@ -155,6 +161,7 @@ impl ArkSession {
     }
 
     pub async fn recover_recoverable_vtxos(&self) -> ArkResult<Option<String>> {
+        self.ensure_operator_rpc_allowed()?;
         let mut last_commitment_txid: Option<Txid> = None;
 
         for _ in 0..RECOVER_RECOVERABLE_MAX_ROUNDS {
@@ -193,10 +200,19 @@ impl ArkSession {
         let server_info = self.client.server_info()?;
         let now = current_unix_timestamp();
 
-        if let Ok((vtxo_list, script_map)) = self.client.list_vtxos().await {
-            let rows = map_vtxo_rows_from_list(&vtxo_list, dust, &server_info, now, |script| {
-                script_map.get(script).map(|vtxo| vtxo.server_pk())
-            });
+        if !self.autonomous_mode()
+            && let Ok((vtxo_list, script_map)) = self.client.list_vtxos().await
+        {
+            let wallet_snapshot = self.wallet_db.snapshot();
+            let offchain_snapshot = wallet_snapshot.offchain_vtxo_snapshot.as_ref();
+            let rows = map_vtxo_rows_from_list(
+                &vtxo_list,
+                dust,
+                &server_info,
+                now,
+                |script| script_map.get(script).map(|vtxo| vtxo.server_pk()),
+                offchain_snapshot,
+            );
             return Ok(VtxoListResultDto {
                 rows,
                 from_snapshot_synced_at: None,
@@ -209,9 +225,14 @@ impl ArkSession {
                 snapshot,
                 legacy_signer_pk_fallback(&self.persisted_operator_identity()),
             )?;
-            let rows = map_vtxo_rows_from_list(&vtxo_list, dust, &server_info, now, |script| {
-                script_lookup(script)
-            });
+            let rows = map_vtxo_rows_from_list(
+                &vtxo_list,
+                dust,
+                &server_info,
+                now,
+                |script| script_lookup(script),
+                Some(snapshot),
+            );
             return Ok(VtxoListResultDto {
                 rows,
                 from_snapshot_synced_at: Some(snapshot.synced_at),
@@ -225,7 +246,11 @@ impl ArkSession {
     }
 
     pub async fn vtxo_expiry_status(&self) -> ArkResult<VtxoExpiryStatusDto> {
-        let (vtxo_list, _) = self.client.list_vtxos().await?;
+        let (vtxo_list, _) = if self.autonomous_mode() {
+            self.snapshot_vtxo_list_and_script_map()?
+        } else {
+            self.client.list_vtxos().await?
+        };
         let exclude_pre_unroll_unilateral_exit = unilateral_exit_in_progress_outpoints_from_pending(
             &self.wallet_db.pending_exit_deductions(),
         );
@@ -247,6 +272,7 @@ impl ArkSession {
     }
 
     pub async fn renew_vtxos_now(&self) -> ArkResult<Option<String>> {
+        self.ensure_operator_rpc_allowed()?;
         let expiring = self.expiring_outpoints().await?;
         if expiring.is_empty() {
             return Ok(None);
@@ -257,6 +283,7 @@ impl ArkSession {
     }
 
     pub async fn delegate_spendable_vtxos(&self) -> ArkResult<DelegateSpendableResult> {
+        self.ensure_operator_rpc_allowed()?;
         let Some(delegator) = self.delegator.as_ref() else {
             return Ok(DelegateSpendableResult {
                 delegated: 0,
@@ -304,6 +331,7 @@ impl ArkSession {
     }
 
     pub async fn finalize_pending_transactions(&self) -> ArkResult<FinalizePendingResult> {
+        self.ensure_operator_rpc_allowed()?;
         let pending_before = self.client.list_pending_offchain_txs().await?.len();
         let finalized = self.client.continue_pending_offchain_txs().await?;
         let pending_after = self.client.list_pending_offchain_txs().await?.len();
@@ -314,6 +342,7 @@ impl ArkSession {
     }
 
     pub async fn onboard_boarded_utxos(&self) -> ArkResult<Option<String>> {
+        self.ensure_operator_rpc_allowed()?;
         let status = self.boarding_status().await?;
         if status.spendable_sats == 0 {
             if status.pending_sats > 0 {
@@ -422,7 +451,11 @@ impl ArkSession {
     }
     /// VTXOs in the renewal window for manual renew — excludes unilateral exit in progress.
     async fn expiring_outpoints(&self) -> ArkResult<Vec<OutPoint>> {
-        let (vtxo_list, _) = self.client.list_vtxos().await?;
+        let (vtxo_list, _) = if self.autonomous_mode() {
+            self.snapshot_vtxo_list_and_script_map()?
+        } else {
+            self.client.list_vtxos().await?
+        };
         let exclude_pre_unroll_unilateral_exit = unilateral_exit_in_progress_outpoints_from_pending(
             &self.wallet_db.pending_exit_deductions(),
         );
@@ -488,6 +521,7 @@ pub(crate) fn map_vtxo_row<F>(
     server_info: &ark_core::server::Info,
     now_unix_secs: i64,
     server_pk_for_script: F,
+    is_unilateral_exit_prepared: bool,
 ) -> VtxoRowDto
 where
     F: Fn(&ScriptBuf) -> Option<XOnlyPublicKey>,
@@ -513,6 +547,7 @@ where
         is_unrolled: virtual_tx_outpoint.is_unrolled,
         is_swept: virtual_tx_outpoint.is_swept,
         is_spent: virtual_tx_outpoint.is_spent,
+        is_unilateral_exit_prepared,
     }
 }
 
@@ -522,6 +557,7 @@ fn map_vtxo_rows_from_list<F>(
     server_info: &ark_core::server::Info,
     now_unix_secs: i64,
     server_pk_for_script: F,
+    offchain_snapshot: Option<&OffchainVtxoSnapshot>,
 ) -> Vec<VtxoRowDto>
 where
     F: Fn(&ScriptBuf) -> Option<XOnlyPublicKey>,
@@ -529,12 +565,17 @@ where
     let mut rows: Vec<VtxoRowDto> = vtxo_list
         .all()
         .map(|virtual_tx_outpoint| {
+            let is_unilateral_exit_prepared = virtual_tx_outpoint_has_unilateral_exit_prepared(
+                offchain_snapshot,
+                virtual_tx_outpoint,
+            );
             map_vtxo_row(
                 virtual_tx_outpoint,
                 dust,
                 server_info,
                 now_unix_secs,
                 &server_pk_for_script,
+                is_unilateral_exit_prepared,
             )
         })
         .collect();
@@ -1106,7 +1147,7 @@ mod vtxo_row_classification_tests {
             "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
             vec![],
         );
-        let row = map_vtxo_row(&vtxo, DUST, &server_info, now, no_server_pk);
+        let row = map_vtxo_row(&vtxo, DUST, &server_info, now, no_server_pk, false);
         assert_eq!(row.id, format!("{}:3", vtxo.outpoint.txid));
         assert_eq!(row.amount_sats, 42_000);
         assert_eq!(row.created_at, vtxo.created_at);
@@ -1117,5 +1158,6 @@ mod vtxo_row_classification_tests {
         assert!(!row.is_unrolled);
         assert!(!row.is_swept);
         assert!(!row.is_spent);
+        assert!(!row.is_unilateral_exit_prepared);
     }
 }

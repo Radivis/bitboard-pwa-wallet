@@ -312,10 +312,11 @@ fn virtual_tx_outpoint_to_record(
             })
             .collect(),
         server_pk_hex: server_pk.map(|pk| pk.to_string()),
+        unilateral_exit_materials: None,
     }
 }
 
-fn virtual_tx_outpoint_from_record(
+pub(crate) fn virtual_tx_outpoint_from_record(
     record: &VirtualTxOutPointRecord,
 ) -> ArkResult<VirtualTxOutPoint> {
     let txid = Txid::from_str(&record.txid)
@@ -467,6 +468,7 @@ mod tests {
                 ark_txid: None,
                 assets: vec![],
                 server_pk_hex: None,
+                unilateral_exit_materials: None,
             }],
         };
         let mut incoming = snapshot_from_virtual_tx_outpoints(
@@ -517,6 +519,7 @@ mod tests {
                 ark_txid: None,
                 assets: vec![],
                 server_pk_hex: None,
+                unilateral_exit_materials: None,
             }],
         };
         let mut incoming = snapshot_from_virtual_tx_outpoints(
@@ -813,6 +816,7 @@ mod tests {
                 ark_txid: None,
                 assets: vec![],
                 server_pk_hex: None,
+                unilateral_exit_materials: None,
             }],
         };
 
