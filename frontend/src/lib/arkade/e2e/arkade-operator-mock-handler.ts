@@ -257,11 +257,14 @@ function ensureDefaultFixturePaymentOnFirstScript(
   if (scripts.length === 0) {
     return
   }
-  const firstScript = scripts[0]
-  if (mockState.paymentsByScript.has(firstScript)) {
+  if (mockState.defaultFixtureScript == null) {
+    mockState.defaultFixtureScript = scripts[0]
+  }
+  const fixtureScript = mockState.defaultFixtureScript
+  if (mockState.paymentsByScript.has(fixtureScript)) {
     return
   }
-  mockState.paymentsByScript.set(firstScript, createDefaultFixturePayment())
+  mockState.paymentsByScript.set(fixtureScript, createDefaultFixturePayment())
 }
 
 function applyPendingIncomingPaymentToFirstUnfundedScript(

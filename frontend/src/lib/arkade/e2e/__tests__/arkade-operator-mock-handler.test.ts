@@ -63,6 +63,18 @@ describe('arkade operator mock vtxo builder', () => {
     expect(mockState.pendingIncomingPayment).toBeNull()
   })
 
+  it('does not treat scripts[0] on later discovery batches as the default fixture', () => {
+    resetE2eArkadeOperatorMockState(PARTITION)
+    const mockState = getE2eArkadeOperatorMockState(PARTITION)
+
+    buildMockVtxosForScripts(mockState, ['script_a'])
+    clearE2eArkadeOperatorMockDiscoveryState(mockState)
+
+    const laterBatchVtxos = buildMockVtxosForScripts(mockState, ['script_z'])
+    expect(laterBatchVtxos).toHaveLength(0)
+    expect(mockState.paymentsByScript.has('script_z')).toBe(false)
+  })
+
   it('preserves pending incoming payment across getInfo discovery reset', () => {
     resetE2eArkadeOperatorMockState(PARTITION)
     const mockState = getE2eArkadeOperatorMockState(PARTITION)
