@@ -164,6 +164,18 @@ fn set_vtxo_unrolled_flag_in_snapshot(
     }
 }
 
+fn set_leaf_virtual_tx_vtxos_unrolled_flag_in_snapshot(
+    snapshot: &mut OffchainVtxoSnapshot,
+    txid: &str,
+    is_unrolled: bool,
+) {
+    for record in &mut snapshot.virtual_tx_outpoints {
+        if record.txid == txid {
+            record.is_unrolled = is_unrolled;
+        }
+    }
+}
+
 fn set_vtxo_unrolled_flag_in_wallet_db(
     wallet_db: &JsonPersistenceDb,
     txid: &str,
@@ -177,6 +189,18 @@ fn set_vtxo_unrolled_flag_in_wallet_db(
     wallet_db.set_offchain_vtxo_snapshot(snapshot);
 }
 
+fn set_leaf_virtual_tx_vtxos_unrolled_flag_in_wallet_db(
+    wallet_db: &JsonPersistenceDb,
+    txid: &str,
+    is_unrolled: bool,
+) {
+    let Some(mut snapshot) = wallet_db.snapshot().offchain_vtxo_snapshot.clone() else {
+        return;
+    };
+    set_leaf_virtual_tx_vtxos_unrolled_flag_in_snapshot(&mut snapshot, txid, is_unrolled);
+    wallet_db.set_offchain_vtxo_snapshot(snapshot);
+}
+
 fn revert_unilateral_unroll_local_state_in_wallet_db(
     wallet_db: &JsonPersistenceDb,
     txid: &str,
@@ -185,6 +209,31 @@ fn revert_unilateral_unroll_local_state_in_wallet_db(
     set_vtxo_unrolled_flag_in_wallet_db(wallet_db, txid, vout, false);
     clear_pending_unilateral_exit_for_outpoint_in_wallet_db(wallet_db, txid, vout);
     remove_unilateral_exit_watch_in_wallet_db(wallet_db, txid, vout);
+}
+
+fn revert_leaf_virtual_tx_unilateral_unroll_local_state_in_wallet_db(
+    wallet_db: &JsonPersistenceDb,
+    txid: &str,
+) {
+    let vouts = wallet_db
+        .snapshot()
+        .offchain_vtxo_snapshot
+        .as_ref()
+        .map(|snapshot| {
+            snapshot
+                .virtual_tx_outpoints
+                .iter()
+                .filter(|record| record.txid == txid)
+                .map(|record| record.vout)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    set_leaf_virtual_tx_vtxos_unrolled_flag_in_wallet_db(wallet_db, txid, false);
+    for vout in vouts {
+        clear_pending_unilateral_exit_for_outpoint_in_wallet_db(wallet_db, txid, vout);
+        remove_unilateral_exit_watch_in_wallet_db(wallet_db, txid, vout);
+    }
 }
 
 fn collaborative_exit_estimate_error_code(is_coin_select: bool) -> Option<&'static str> {
@@ -625,7 +674,7 @@ impl ArkSession {
                     ArkWasmError::UnilateralUnrollNotConfirmedOnChain { .. }
                 ) && pending_unilateral_exit_recorded
                 {
-                    self.revert_unilateral_unroll_local_state(txid, vout);
+                    self.revert_leaf_virtual_tx_unilateral_unroll_local_state(txid);
                 }
             })?;
         }
@@ -650,7 +699,7 @@ impl ArkSession {
                     error,
                     ArkWasmError::UnilateralUnrollNotConfirmedOnChain { .. }
                 ) {
-                    self.revert_unilateral_unroll_local_state(txid, vout);
+                    self.revert_leaf_virtual_tx_unilateral_unroll_local_state(txid);
                 }
             })?
         };
@@ -737,9 +786,21 @@ impl ArkSession {
         Ok(())
     }
 
+    pub(crate) fn mark_leaf_virtual_tx_vtxos_unrolled_in_snapshot(
+        &self,
+        txid: &str,
+    ) -> ArkResult<()> {
+        set_leaf_virtual_tx_vtxos_unrolled_flag_in_wallet_db(&self.wallet_db, txid, true);
+        Ok(())
+    }
+
     /// Undo optimistic unroll state when neither ASP nor Esplora confirms the broadcast.
     pub(crate) fn revert_unilateral_unroll_local_state(&self, txid: &str, vout: u32) {
         revert_unilateral_unroll_local_state_in_wallet_db(&self.wallet_db, txid, vout);
+    }
+
+    pub(crate) fn revert_leaf_virtual_tx_unilateral_unroll_local_state(&self, txid: &str) {
+        revert_leaf_virtual_tx_unilateral_unroll_local_state_in_wallet_db(&self.wallet_db, txid);
     }
 
     pub async fn complete_unilateral_exit(
@@ -1199,5 +1260,105 @@ mod unroll_hard_failure_rollback_tests {
         assert!(!snapshot.virtual_tx_outpoints[0].is_unrolled);
         assert!(wallet_db.pending_exit_deductions().is_empty());
         assert!(wallet_db.unilateral_exit_watches().is_empty());
+    }
+}
+
+#[cfg(test)]
+mod leaf_virtual_tx_co_mark_tests {
+    use super::{
+        revert_leaf_virtual_tx_unilateral_unroll_local_state_in_wallet_db,
+        set_leaf_virtual_tx_vtxos_unrolled_flag_in_wallet_db,
+    };
+    use crate::persistence::{JsonPersistenceDb, OffchainVtxoSnapshot, VirtualTxOutPointRecord};
+    use bitcoin::Txid;
+    use bitcoin::hashes::Hash;
+
+    fn sibling_snapshot(txid_byte: u8) -> OffchainVtxoSnapshot {
+        let txid = Txid::from_byte_array([txid_byte; 32]).to_string();
+        OffchainVtxoSnapshot {
+            synced_at: 1,
+            dust_sats: 330,
+            virtual_tx_outpoints: vec![
+                VirtualTxOutPointRecord {
+                    txid: txid.clone(),
+                    vout: 0,
+                    created_at: 0,
+                    expires_at: 9_999_999_999,
+                    amount_sats: 50_000,
+                    script_hex: String::new(),
+                    is_preconfirmed: false,
+                    is_swept: false,
+                    is_unrolled: false,
+                    is_spent: false,
+                    spent_by: None,
+                    commitment_txids: vec![],
+                    settled_by: None,
+                    ark_txid: None,
+                    assets: vec![],
+                    server_pk_hex: None,
+                    unilateral_exit_materials: None,
+                },
+                VirtualTxOutPointRecord {
+                    txid,
+                    vout: 1,
+                    created_at: 0,
+                    expires_at: 9_999_999_999,
+                    amount_sats: 25_000,
+                    script_hex: String::new(),
+                    is_preconfirmed: false,
+                    is_swept: false,
+                    is_unrolled: false,
+                    is_spent: false,
+                    spent_by: None,
+                    commitment_txids: vec![],
+                    settled_by: None,
+                    ark_txid: None,
+                    assets: vec![],
+                    server_pk_hex: None,
+                    unilateral_exit_materials: None,
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn mark_leaf_virtual_tx_co_marks_all_vouts_on_tx() {
+        let wallet_db = JsonPersistenceDb::default();
+        let txid = Txid::from_byte_array([0x88; 32]).to_string();
+        wallet_db.set_offchain_vtxo_snapshot(sibling_snapshot(0x88));
+
+        set_leaf_virtual_tx_vtxos_unrolled_flag_in_wallet_db(&wallet_db, &txid, true);
+
+        let snapshot = wallet_db
+            .snapshot()
+            .offchain_vtxo_snapshot
+            .expect("snapshot after co-mark");
+        assert!(
+            snapshot
+                .virtual_tx_outpoints
+                .iter()
+                .all(|record| record.is_unrolled)
+        );
+    }
+
+    #[test]
+    fn revert_leaf_virtual_tx_clears_all_sibling_vouts() {
+        let wallet_db = JsonPersistenceDb::default();
+        let txid = Txid::from_byte_array([0x89; 32]).to_string();
+        wallet_db.set_offchain_vtxo_snapshot(sibling_snapshot(0x89));
+        set_leaf_virtual_tx_vtxos_unrolled_flag_in_wallet_db(&wallet_db, &txid, true);
+
+        revert_leaf_virtual_tx_unilateral_unroll_local_state_in_wallet_db(&wallet_db, &txid);
+
+        let snapshot = wallet_db
+            .snapshot()
+            .offchain_vtxo_snapshot
+            .expect("snapshot after revert");
+        assert!(
+            snapshot
+                .virtual_tx_outpoints
+                .iter()
+                .all(|record| !record.is_unrolled)
+        );
     }
 }

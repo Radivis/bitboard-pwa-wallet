@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   computeExitPathTxids,
   layoutUnilateralExitGraph,
-  leafOutpointNodeId,
+  leafOutpointsForTxid,
   mergeNodeStatuses,
   resolveLayoutDirection,
 } from '@/lib/arkade/unilateral-exit-topology'
@@ -38,7 +38,21 @@ describe('unilateral-exit-topology helpers', () => {
     expect(resolveLayoutDirection(400, 800)).toBe('TB')
   })
 
-  it('layoutUnilateralExitGraph renders one node per leaf outpoint on the same tx', () => {
+  it('leafOutpointsForTxid returns sorted sibling outpoints', () => {
+    const topology: ArkadeUnilateralExitTopology = {
+      ...sampleTopology,
+      leafOutpoints: [
+        { txid: 'cc', vout: 1 },
+        { txid: 'cc', vout: 0 },
+      ],
+    }
+    expect(leafOutpointsForTxid(topology, 'cc')).toEqual([
+      { txid: 'cc', vout: 0 },
+      { txid: 'cc', vout: 1 },
+    ])
+  })
+
+  it('layoutUnilateralExitGraph renders one node per leaf virtual tx', () => {
     const topology: ArkadeUnilateralExitTopology = {
       ...sampleTopology,
       leafOutpoints: [
@@ -48,15 +62,14 @@ describe('unilateral-exit-topology helpers', () => {
     }
     const { nodes, edges } = layoutUnilateralExitGraph({
       topology,
-      selectedLeafOutpoints: [],
+      selectedLeafOutpoints: [{ txid: 'cc', vout: 0 }, { txid: 'cc', vout: 1 }],
       nodeStatuses: [],
       layoutDirection: 'TB',
     })
 
-    expect(nodes.filter((node) => node.data.isLeaf)).toHaveLength(2)
-    expect(nodes.map((node) => node.id).sort()).toEqual(
-      ['aa', 'bb', leafOutpointNodeId({ txid: 'cc', vout: 0 }), leafOutpointNodeId({ txid: 'cc', vout: 1 })].sort(),
-    )
-    expect(edges.filter((edge) => edge.target.startsWith('cc:'))).toHaveLength(2)
+    expect(nodes.filter((node) => node.data.isLeaf)).toHaveLength(1)
+    expect(nodes.map((node) => node.id).sort()).toEqual(['aa', 'bb', 'cc'])
+    expect(nodes.find((node) => node.id === 'cc')?.data.isSelectedLeaf).toBe(true)
+    expect(edges.filter((edge) => edge.target === 'cc')).toHaveLength(1)
   })
 })

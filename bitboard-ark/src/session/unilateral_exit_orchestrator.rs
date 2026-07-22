@@ -25,7 +25,7 @@ use crate::unilateral_exit_materials::{
 
 use super::ArkSession;
 use super::exit_autonomous::dedup_virtual_outpoints;
-use super::exit_watch::enrich_unilateral_exit_watch_after_unroll;
+use super::exit_watch::enrich_unilateral_exit_watches_for_leaf_tx_after_unroll;
 
 const OPERATOR_INDEXER_POLL_MAX: u8 = 60;
 
@@ -441,27 +441,34 @@ impl ArkSession {
 
     async fn finalize_leaves_at_depth(&self, plan: &UnilateralBatchPlan) -> ArkResult<()> {
         let blockchain = self.client.blockchain();
+        let mut processed_leaf_txids = HashSet::new();
+
         for leaf in &plan.leaves {
-            let vtxo_txid = leaf.virtual_outpoint.txid.to_string();
-            if self.leaf_is_marked_unrolled(&vtxo_txid, leaf.virtual_outpoint.vout)? {
+            let leaf_virtual_txid = leaf.virtual_outpoint.txid.to_string();
+            let leaf_txid = leaf.virtual_outpoint.to_bitcoin_outpoint().txid;
+            if !processed_leaf_txids.insert(leaf_txid) {
                 continue;
             }
-            let leaf_txid = leaf.virtual_outpoint.to_bitcoin_outpoint().txid;
+            if self.leaf_virtual_tx_is_marked_unrolled(&leaf_virtual_txid)? {
+                continue;
+            }
             let confirmations = tx_confirmations(blockchain, &leaf_txid).await?;
             if !leaf_reached_finality(confirmations) {
                 continue;
             }
-            self.mark_vtxo_unrolled_in_snapshot(&vtxo_txid, leaf.virtual_outpoint.vout)?;
-            enrich_unilateral_exit_watch_after_unroll(
+            self.mark_leaf_virtual_tx_vtxos_unrolled_in_snapshot(&leaf_virtual_txid)?;
+            enrich_unilateral_exit_watches_for_leaf_tx_after_unroll(
                 &self.wallet_db,
-                &vtxo_txid,
-                leaf.virtual_outpoint.vout,
+                &leaf_virtual_txid,
                 &leaf_txid.to_string(),
                 &leaf.branch_txids,
             );
             if !self.autonomous_mode() {
                 let _ = self
-                    .poll_operator_after_leaf_finality(&vtxo_txid, leaf.virtual_outpoint.vout)
+                    .poll_operator_after_leaf_finality(
+                        &leaf_virtual_txid,
+                        leaf.virtual_outpoint.vout,
+                    )
                     .await;
             }
         }
@@ -482,6 +489,17 @@ impl ArkSession {
             }
         }
         Ok(())
+    }
+
+    fn leaf_virtual_tx_is_marked_unrolled(&self, leaf_txid: &str) -> ArkResult<bool> {
+        let snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot;
+        let Some(snapshot) = snapshot else {
+            return Ok(false);
+        };
+        Ok(snapshot
+            .virtual_tx_outpoints
+            .iter()
+            .any(|record| record.txid == leaf_txid && record.is_unrolled))
     }
 
     fn leaf_is_marked_unrolled(&self, txid: &str, vout: u32) -> ArkResult<bool> {

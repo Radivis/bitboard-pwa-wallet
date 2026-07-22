@@ -22,6 +22,10 @@ export function ArkadeUnilateralExitInfomodeContent() {
       </InfomodeParagraph>
       <InfomodeParagraph>
         <ArticleLink slug={ARKADE_LIBRARY_SLUGS.exits}>Exiting Arkade to on-chain</ArticleLink>
+        {' · '}
+        <ArticleLink slug={ARKADE_LIBRARY_SLUGS.sharedLeafUnilateralExit}>
+          Shared leaf VTXOs
+        </ArticleLink>
       </InfomodeParagraph>
     </div>
   )

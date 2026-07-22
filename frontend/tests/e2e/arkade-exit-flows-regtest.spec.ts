@@ -61,7 +61,7 @@ test.describe('Arkade exit flows regtest @arkade-exit-regtest', () => {
     await page.getByTestId('arkade-unilateral-exit-control').click()
     await expect(page.getByTestId('unilateral-exit-tree-graph')).toBeVisible({ timeout: 120_000 })
     await page.locator('[data-testid^="unilateral-exit-leaf-node-"]').first().click()
-    await page.locator('[data-testid^="unilateral-exit-leaf-select-switch-"]').first().click()
+    await page.locator('[data-testid="unilateral-exit-leaf-select-switch"]').click()
     await ensureOnChainBumperFunds(page, 100_000)
     const proceedButton = page.getByTestId('unilateral-exit-proceed')
     await expect(proceedButton).toBeEnabled({ timeout: 120_000 })

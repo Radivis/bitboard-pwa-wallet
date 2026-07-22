@@ -79,9 +79,9 @@ export function UnilateralExitControlPage() {
     (state) => state.selectedLeafOutpoints,
   )
   const jobStarted = useUnilateralExitControlStore((state) => state.jobStarted)
-  const toggleLeafOutpoint = useUnilateralExitControlStore((state) => state.toggleLeafOutpoint)
-  const setSelectedLeafOutpoints = useUnilateralExitControlStore(
-    (state) => state.setSelectedLeafOutpoints,
+  const toggleLeafTxGroup = useUnilateralExitControlStore((state) => state.toggleLeafTxGroup)
+  const seedSelectionFromInProgress = useUnilateralExitControlStore(
+    (state) => state.seedSelectionFromInProgress,
   )
   const setJobStarted = useUnilateralExitControlStore((state) => state.setJobStarted)
   const bumpGraphRenderEpoch = useUnilateralExitControlStore(
@@ -169,15 +169,16 @@ export function UnilateralExitControlPage() {
     if (selectedLeafOutpoints.length > 0) return
     const inProgressRows = inProgressQuery.data ?? []
     if (inProgressRows.length === 0) return
-    setSelectedLeafOutpoints(
+    const topologyLeafOutpoints = topologyQuery.data?.leafOutpoints ?? []
+    seedSelectionFromInProgress(
       inProgressRows.map((row) => ({ txid: row.txid, vout: row.vout })),
+      topologyLeafOutpoints,
     )
-    setJobStarted(true)
   }, [
     inProgressQuery.data,
     selectedLeafOutpoints.length,
-    setSelectedLeafOutpoints,
-    setJobStarted,
+    seedSelectionFromInProgress,
+    topologyQuery.data?.leafOutpoints,
   ])
 
   const proceedMutation = useArkadeProceedUnilateralExitStepMutation()
@@ -269,7 +270,7 @@ export function UnilateralExitControlPage() {
             infoComponent={ArkadeUnilateralExitInfomodeContent}
             as="span"
           >
-            Tap a node to inspect it. Select leaf VTXOs for exit in the detail panel below the tree.
+            Tap a node to inspect it. Select leaf VTXOs for exit in the detail panel (all outpoints on a leaf move together).
           </InfomodeWrapper>
         </p>
 
@@ -302,7 +303,7 @@ export function UnilateralExitControlPage() {
             nodeStatuses={nodeStatuses}
             exitCandidates={candidates}
             selectedLeafOutpoints={selectedLeafOutpoints}
-            onToggleLeaf={toggleLeafOutpoint}
+            onToggleLeafTxGroup={toggleLeafTxGroup}
           />
         )}
 

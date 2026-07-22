@@ -26,6 +26,7 @@ export const ARKADE_INFOMODE_IDS = {
   collaborativeExit: 'arkade-collaborative-exit',
   exitOperatorFees: 'arkade-exit-operator-fees',
   unilateralExit: 'arkade-unilateral-exit',
+  sharedLeafUnilateralExit: 'arkade-shared-leaf-unilateral-exit',
   autonomousMode: 'arkade-autonomous-mode',
   bumperWallet: 'arkade-bumper-wallet',
   unroll: 'arkade-unroll',
@@ -40,6 +41,7 @@ export const ARKADE_LIBRARY_SLUGS = {
   boarding: 'boarding-to-arkade',
   vtxoExpiry: 'arkade-vtxo-expiry',
   exits: 'arkade-exits-explained',
+  sharedLeafUnilateralExit: 'arkade-unilateral-exit-shared-leaf-vtxos',
   layer2: 'layer-2-networks',
 } as const
 

@@ -1,34 +1,48 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useUnilateralExitControlStore } from '@/stores/unilateralExitControlStore'
 
-const leafA = { txid: 'aa'.repeat(32), vout: 0 }
-const leafB = { txid: 'bb'.repeat(32), vout: 1 }
+const sharedTxid = 'cc'.repeat(32)
+const leafSiblingA = { txid: sharedTxid, vout: 0 }
+const leafSiblingB = { txid: sharedTxid, vout: 1 }
+const leafOther = { txid: 'dd'.repeat(32), vout: 0 }
 
 describe('unilateralExitControlStore', () => {
   beforeEach(() => {
     useUnilateralExitControlStore.getState().reset()
   })
 
-  it('toggles leaf selection and keeps jobStarted across reads', () => {
+  it('toggleLeafTxGroup selects and deselects all sibling outpoints atomically', () => {
     const store = useUnilateralExitControlStore.getState()
-    store.toggleLeafOutpoint(leafA)
-    store.setJobStarted(true)
+    store.toggleLeafTxGroup([leafSiblingA, leafSiblingB])
+    expect(useUnilateralExitControlStore.getState().selectedLeafOutpoints).toEqual([
+      leafSiblingA,
+      leafSiblingB,
+    ])
 
-    expect(useUnilateralExitControlStore.getState().selectedLeafOutpoints).toEqual([leafA])
-    expect(useUnilateralExitControlStore.getState().jobStarted).toBe(true)
-
-    store.toggleLeafOutpoint(leafA)
+    store.toggleLeafTxGroup([leafSiblingA, leafSiblingB])
     expect(useUnilateralExitControlStore.getState().selectedLeafOutpoints).toEqual([])
-    expect(useUnilateralExitControlStore.getState().jobStarted).toBe(true)
   })
 
-  it('adds multiple leaves without duplicates', () => {
+  it('toggleLeafTxGroup ignores empty groups', () => {
     const store = useUnilateralExitControlStore.getState()
-    store.toggleLeafOutpoint(leafA)
-    store.toggleLeafOutpoint(leafB)
-    store.toggleLeafOutpoint(leafA)
+    store.toggleLeafTxGroup([leafSiblingA, leafSiblingB])
+    store.toggleLeafTxGroup([])
 
-    expect(useUnilateralExitControlStore.getState().selectedLeafOutpoints).toEqual([leafB])
+    expect(useUnilateralExitControlStore.getState().selectedLeafOutpoints).toEqual([
+      leafSiblingA,
+      leafSiblingB,
+    ])
+  })
+
+  it('seedSelectionFromInProgress selects full sibling groups from topology', () => {
+    const store = useUnilateralExitControlStore.getState()
+    store.seedSelectionFromInProgress([leafSiblingA], [leafSiblingA, leafSiblingB, leafOther])
+
+    expect(useUnilateralExitControlStore.getState().selectedLeafOutpoints).toEqual([
+      leafSiblingA,
+      leafSiblingB,
+    ])
+    expect(useUnilateralExitControlStore.getState().jobStarted).toBe(true)
   })
 
   it('bumps graphRenderEpoch on each visit signal', () => {

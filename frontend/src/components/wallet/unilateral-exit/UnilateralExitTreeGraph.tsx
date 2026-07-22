@@ -43,7 +43,7 @@ function UnilateralExitTreeNode({
   })
   const Icon = unilateralExitNodeIconComponent(iconKind)
   const nodeTestId = data.isLeaf
-    ? `unilateral-exit-leaf-node-${data.txid.slice(0, 8)}-${data.vout ?? 0}`
+    ? `unilateral-exit-leaf-node-${data.txid.slice(0, 8)}`
     : `unilateral-exit-node-${data.txid.slice(0, 8)}`
 
   return (

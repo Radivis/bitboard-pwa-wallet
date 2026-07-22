@@ -49,6 +49,37 @@ pub(crate) fn enrich_unilateral_exit_watch_after_unroll(
     });
 }
 
+pub(crate) fn enrich_unilateral_exit_watches_for_leaf_tx_after_unroll(
+    wallet_db: &JsonPersistenceDb,
+    leaf_txid: &str,
+    published_vtxo_txid: &str,
+    branch_txids: &[Txid],
+) {
+    let vouts = wallet_db
+        .snapshot()
+        .offchain_vtxo_snapshot
+        .as_ref()
+        .map(|snapshot| {
+            snapshot
+                .virtual_tx_outpoints
+                .iter()
+                .filter(|record| record.txid == leaf_txid)
+                .map(|record| record.vout)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    for vout in vouts {
+        enrich_unilateral_exit_watch_after_unroll(
+            wallet_db,
+            leaf_txid,
+            vout,
+            published_vtxo_txid,
+            branch_txids,
+        );
+    }
+}
+
 pub(crate) fn remove_unilateral_exit_watch_in_wallet_db(
     wallet_db: &JsonPersistenceDb,
     txid: &str,

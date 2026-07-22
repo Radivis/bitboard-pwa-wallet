@@ -1,12 +1,16 @@
 import { Check, Loader2 } from 'lucide-react'
+import { ArkadeSharedLeafUnilateralExitInfomodeContent } from '@/components/arkade/infomode/ArkadeSharedLeafUnilateralExitInfomodeContent'
+import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import {
   formatUnilateralExitTxTypeLabel,
   resolveUnilateralExitNodeIconKind,
   unilateralExitNodeIconComponent,
 } from '@/lib/arkade/unilateral-exit-node-icons'
 import {
+  leafOutpointsForTxid,
   parseUnilateralExitNodeId,
   shortTxid,
 } from '@/lib/arkade/unilateral-exit-topology'
@@ -25,7 +29,7 @@ interface UnilateralExitNodeDetailCardProps {
   nodeStatuses: ArkadeUnilateralExitNodeStatus[]
   exitCandidates: ArkadeExitCandidateRow[]
   selectedLeafOutpoints: ArkadeVtxoOutpoint[]
-  onToggleLeaf: (outpoint: ArkadeVtxoOutpoint) => void
+  onToggleLeafTxGroup: (outpoints: ArkadeVtxoOutpoint[]) => void
 }
 
 function resolveNodeStatus(
@@ -47,18 +51,21 @@ export function UnilateralExitNodeDetailCard({
   nodeStatuses,
   exitCandidates,
   selectedLeafOutpoints,
-  onToggleLeaf,
+  onToggleLeafTxGroup,
 }: UnilateralExitNodeDetailCardProps) {
   const { txid } = parseUnilateralExitNodeId(focusedNodeId)
   const topologyNode = topology.nodes.find((node) => node.txid === txid)
-  const leafOutpointsForTx = topology.leafOutpoints
-    .filter((leaf) => leaf.txid === txid)
-    .sort((left, right) => left.vout - right.vout)
+  const leafOutpointsForTx = leafOutpointsForTxid(topology, txid)
   const isLeaf = leafOutpointsForTx.length > 0
   const txType = topologyNode?.txType ?? 'unknown'
   const status = resolveNodeStatus(txid, nodeStatuses)
   const iconKind = resolveUnilateralExitNodeIconKind({ txType, isLeaf })
   const Icon = unilateralExitNodeIconComponent(iconKind)
+  const allLeafOutpointsSelected =
+    leafOutpointsForTx.length > 0 &&
+    leafOutpointsForTx.every((outpoint) =>
+      includesArkadeVtxoOutpoint(selectedLeafOutpoints, outpoint),
+    )
 
   const statusLabel =
     status.status === 'confirmed'
@@ -104,43 +111,50 @@ export function UnilateralExitNodeDetailCard({
             </p>
           )}
           {isLeaf && (
-            <div className="space-y-2">
-              {leafOutpointsForTx.map((leafOutpoint) => {
-                const candidateRow = exitCandidates.find(
-                  (candidate) =>
-                    candidate.txid === leafOutpoint.txid &&
-                    candidate.vout === leafOutpoint.vout,
-                )
-                const isSelectedForExit = includesArkadeVtxoOutpoint(
-                  selectedLeafOutpoints,
-                  leafOutpoint,
-                )
-                const switchId = `unilateral-exit-leaf-select-${leafOutpoint.vout}`
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">VTXO outpoints on this leaf</p>
+                <ul className="space-y-1">
+                  {leafOutpointsForTx.map((leafOutpoint) => {
+                    const candidateRow = exitCandidates.find(
+                      (candidate) =>
+                        candidate.txid === leafOutpoint.txid &&
+                        candidate.vout === leafOutpoint.vout,
+                    )
 
-                return (
-                  <div
-                    key={`${leafOutpoint.txid}:${leafOutpoint.vout}`}
-                    className="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
-                  >
-                    <div className="space-y-0.5">
-                      <Label htmlFor={switchId} className="text-sm">
-                        Select outpoint {leafOutpoint.vout} for exit
-                      </Label>
-                      <p className="text-xs text-muted-foreground">
-                        {candidateRow != null
-                          ? `${candidateRow.amountSats} sats`
-                          : 'Exit-eligible VTXO'}
-                      </p>
-                    </div>
-                    <Switch
-                      id={switchId}
-                      data-testid={`unilateral-exit-leaf-select-switch-${leafOutpoint.vout}`}
-                      checked={isSelectedForExit}
-                      onCheckedChange={() => onToggleLeaf(leafOutpoint)}
-                    />
-                  </div>
-                )
-              })}
+                    return (
+                      <li
+                        key={`${leafOutpoint.txid}:${leafOutpoint.vout}`}
+                        className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-xs"
+                      >
+                        <span>Outpoint {leafOutpoint.vout}</span>
+                        <span className="text-muted-foreground">
+                          {candidateRow != null
+                            ? `${candidateRow.amountSats} sats`
+                            : 'Exit-eligible VTXO'}
+                        </span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+              <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+                <InfomodeWrapper
+                  infoId={ARKADE_INFOMODE_IDS.sharedLeafUnilateralExit}
+                  infoComponent={ArkadeSharedLeafUnilateralExitInfomodeContent}
+                  as="span"
+                >
+                  <Label htmlFor="unilateral-exit-leaf-select" className="text-sm">
+                    Select this leaf for exit
+                  </Label>
+                </InfomodeWrapper>
+                <Switch
+                  id="unilateral-exit-leaf-select"
+                  data-testid="unilateral-exit-leaf-select-switch"
+                  checked={allLeafOutpointsSelected}
+                  onCheckedChange={() => onToggleLeafTxGroup(leafOutpointsForTx)}
+                />
+              </div>
             </div>
           )}
         </div>

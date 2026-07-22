@@ -75,6 +75,23 @@ function groupLeafOutpointsByTxid(
   return grouped
 }
 
+export function leafOutpointsForTxid(
+  topology: ArkadeUnilateralExitTopology,
+  txid: string,
+): ArkadeVtxoOutpoint[] {
+  return groupLeafOutpointsByTxid(topology.leafOutpoints).get(txid) ?? []
+}
+
+function allLeafOutpointsSelected(
+  leafOutpoints: ArkadeVtxoOutpoint[],
+  selectedLeafOutpoints: ArkadeVtxoOutpoint[],
+): boolean {
+  return (
+    leafOutpoints.length > 0 &&
+    leafOutpoints.every((outpoint) => includesArkadeVtxoOutpoint(selectedLeafOutpoints, outpoint))
+  )
+}
+
 function layoutPosition(params: {
   layoutX: number
   layoutY: number
@@ -180,10 +197,8 @@ export function layoutUnilateralExitGraph(params: {
 
   for (const dagNode of graph.nodes()) {
     const txid = String(dagNode.data)
-    if (leafOutpointsByTxid.has(txid)) {
-      continue
-    }
-
+    const leafOutpoints = leafOutpointsByTxid.get(txid) ?? []
+    const isLeaf = leafOutpoints.length > 0
     const topologyNode = topology.nodes.find((node) => node.txid === txid)
     const status = statusByTxid.get(txid)
     const dagPosition = dagPositionByTxid.get(txid) ?? { layoutX: 0, layoutY: 0 }
@@ -204,8 +219,8 @@ export function layoutUnilateralExitGraph(params: {
         txid,
         vout: null,
         txType: topologyNode?.txType ?? 'unknown',
-        isLeaf: false,
-        selectedLeafOutpoints,
+        isLeaf,
+        isSelectedLeaf: allLeafOutpointsSelected(leafOutpoints, selectedLeafOutpoints),
         pathTxids,
         focusedNodeId,
         status,
@@ -213,60 +228,18 @@ export function layoutUnilateralExitGraph(params: {
     })
   }
 
-  for (const [txid, leafOutpoints] of leafOutpointsByTxid) {
-    const topologyNode = topology.nodes.find((node) => node.txid === txid)
-    const status = statusByTxid.get(txid)
-    const dagPosition = dagPositionByTxid.get(txid) ?? { layoutX: 0, layoutY: 0 }
-
-    leafOutpoints.forEach((leafOutpoint, spreadIndex) => {
-      const nodeId = leafOutpointNodeId(leafOutpoint)
-      const { x, y } = layoutPosition({
-        layoutX: dagPosition.layoutX,
-        layoutY: dagPosition.layoutY,
-        layoutDirection,
-        spreadIndex,
-        spreadCount: leafOutpoints.length,
-      })
-
-      nodes.push({
-        id: nodeId,
-        type: 'unilateralExitTreeNode',
-        position: { x, y },
-        data: buildTreeNodeData({
-          nodeId,
-          txid,
-          vout: leafOutpoint.vout,
-          txType: topologyNode?.txType ?? 'unknown',
-          isLeaf: true,
-          selectedLeafOutpoints,
-          pathTxids,
-          focusedNodeId,
-          status,
-        }),
-      })
-    })
-  }
-
-  const edges: Edge[] = graphLinks.flatMap(([source, target]) => {
-    const targetOutpoints = leafOutpointsByTxid.get(target)
-    const resolvedTargets =
-      targetOutpoints != null
-        ? targetOutpoints.map((outpoint) => leafOutpointNodeId(outpoint))
-        : [target]
-
-    return resolvedTargets.map((resolvedTarget) => {
-      const onPath = pathTxids.has(source) && pathTxids.has(target)
-      return {
-        id: `${source}->${resolvedTarget}`,
-        source,
-        target: resolvedTarget,
-        animated: onPath,
-        style: {
-          stroke: onPath ? EXIT_PATH_EDGE_COLOR : undefined,
-          strokeWidth: onPath ? 2 : 1,
-        },
-      }
-    })
+  const edges: Edge[] = graphLinks.map(([source, target]) => {
+    const onPath = pathTxids.has(source) && pathTxids.has(target)
+    return {
+      id: `${source}->${target}`,
+      source,
+      target,
+      animated: onPath,
+      style: {
+        stroke: onPath ? EXIT_PATH_EDGE_COLOR : undefined,
+        strokeWidth: onPath ? 2 : 1,
+      },
+    }
   })
 
   return { nodes, edges }
@@ -278,24 +251,17 @@ function buildTreeNodeData(params: {
   vout: number | null
   txType: string
   isLeaf: boolean
-  selectedLeafOutpoints: ArkadeVtxoOutpoint[]
+  isSelectedLeaf: boolean
   pathTxids: Set<string>
   focusedNodeId?: string | null
   status: ArkadeUnilateralExitNodeStatus | undefined
 }): UnilateralExitTreeNodeData {
-  const leafOutpoint =
-    params.isLeaf && params.vout != null
-      ? { txid: params.txid, vout: params.vout }
-      : null
-
   return {
     txid: params.txid,
     vout: params.vout,
     txType: params.txType,
     isLeaf: params.isLeaf,
-    isSelectedLeaf:
-      leafOutpoint != null &&
-      includesArkadeVtxoOutpoint(params.selectedLeafOutpoints, leafOutpoint),
+    isSelectedLeaf: params.isSelectedLeaf,
     isOnExitPath: params.pathTxids.has(params.txid),
     isFocused: params.focusedNodeId === params.nodeId,
     status: params.status?.status ?? 'pending',
