@@ -23,6 +23,7 @@ use crate::exit_balance::{
     UnilateralExitOutpointKey, exit_outpoint_key, exit_outpoint_key_from_str,
     is_unilateral_exit_in_progress_outpoint, unilateral_exit_in_progress_outpoints,
 };
+use crate::outpoint::{OnchainOutPoint, VirtualOutPoint};
 use crate::persistence::{
     JsonPersistenceDb, OffchainVtxoSnapshot, PendingExitDeductionRecord, PendingExitKind,
 };
@@ -31,15 +32,14 @@ use super::ArkSession;
 use super::exit_autonomous::{
     autonomous_build_unilateral_branch, autonomous_complete_unilateral_exit,
     autonomous_estimate_unilateral_exit_completion, autonomous_exit_candidates_from_snapshot,
-    autonomous_unilateral_exit_chain_steps, autonomous_vtxo_list, dedup_vtxo_outpoint_dtos,
-    parse_vtxo_outpoints,
+    autonomous_unilateral_exit_chain_steps, autonomous_vtxo_list, dedup_virtual_outpoints,
+    virtual_outpoints_to_bitcoin,
 };
 use super::exit_watch::{
     enrich_unilateral_exit_watch_after_unroll, remove_unilateral_exit_watch_in_wallet_db,
 };
 use super::mappers::{
     empty_fee_info, map_exit_candidate, map_intent_fee_configured, parse_onchain_address,
-    parse_outpoint,
 };
 use super::pending_exit::clear_pending_unilateral_exit_for_outpoint_in_wallet_db;
 
@@ -477,7 +477,7 @@ impl ArkSession {
         &self,
         params: UnilateralExitFeeParams,
     ) -> ArkResult<UnilateralExitFeeEstimateDto> {
-        let outpoint = parse_outpoint(&params.txid, params.vout)?;
+        let outpoint = VirtualOutPoint::parse(&params.txid, params.vout)?.to_bitcoin_outpoint();
 
         let fee_rate = self
             .client
@@ -558,7 +558,7 @@ impl ArkSession {
     where
         F: Fn(UnrollProgressEvent),
     {
-        let target = parse_outpoint(txid, vout)?;
+        let target = VirtualOutPoint::parse(txid, vout)?.to_bitcoin_outpoint();
 
         let amount_sats = self.vtxo_amount_sats_for_outpoint(txid, vout).await?;
         let mut pending_unilateral_exit_recorded = false;
@@ -729,7 +729,7 @@ impl ArkSession {
         resolve_unroll_indexer_poll_timeout(on_chain_confirmed, published_vtxo_txid)
     }
 
-    fn mark_vtxo_unrolled_in_snapshot(&self, txid: &str, vout: u32) -> ArkResult<()> {
+    pub(crate) fn mark_vtxo_unrolled_in_snapshot(&self, txid: &str, vout: u32) -> ArkResult<()> {
         // Local reclassification: VTXO leaves gross spendable (exiting sub-bucket).
         // unilateral_exit_in_progress then counts it from exiting — must not subtract again in
         // build_arkade_balance_dto. See docs/arkade-bitboard-wallet-model.md.
@@ -750,15 +750,15 @@ impl ArkSession {
             return Err(ArkWasmError::EmptyVtxoOutpoints);
         }
 
-        let deduped_vtxo_outpoints = dedup_vtxo_outpoint_dtos(params.vtxo_outpoints);
+        let deduped_vtxo_outpoints = dedup_virtual_outpoints(params.vtxo_outpoints);
 
         let in_progress = self.unilateral_exit_in_progress_outpoints()?;
-        for dto in &deduped_vtxo_outpoints {
-            let parsed_outpoint = parse_outpoint(&dto.txid, dto.vout)?;
+        for outpoint in &deduped_vtxo_outpoints {
+            let parsed_outpoint = outpoint.to_bitcoin_outpoint();
             if !in_progress.contains(&parsed_outpoint) {
                 return Err(ArkWasmError::VtxoNotInUnilateralExit {
-                    txid: dto.txid.clone(),
-                    vout: dto.vout,
+                    txid: outpoint.txid.to_string(),
+                    vout: outpoint.vout,
                 });
             }
         }
@@ -778,27 +778,27 @@ impl ArkSession {
 
         let (vtxo_list, _) = self.client.list_vtxos().await?;
         let dust = self.client.server_info()?.dust;
-        for dto in &deduped_vtxo_outpoints {
-            let parsed_outpoint = parse_outpoint(&dto.txid, dto.vout)?;
+        for outpoint in &deduped_vtxo_outpoints {
+            let parsed_outpoint = outpoint.to_bitcoin_outpoint();
             let Some(virtual_tx_outpoint) = vtxo_list
                 .all()
                 .find(|virtual_tx_outpoint| virtual_tx_outpoint.outpoint == parsed_outpoint)
             else {
                 return Err(ArkWasmError::VtxoUnilateralExitNotReady {
-                    txid: dto.txid.clone(),
-                    vout: dto.vout,
+                    txid: outpoint.txid.to_string(),
+                    vout: outpoint.vout,
                 });
             };
             let candidate = map_exit_candidate(virtual_tx_outpoint, dust);
             if !candidate.can_complete {
                 return Err(ArkWasmError::VtxoUnilateralExitNotReady {
-                    txid: dto.txid.clone(),
-                    vout: dto.vout,
+                    txid: outpoint.txid.to_string(),
+                    vout: outpoint.vout,
                 });
             }
         }
 
-        let vtxo_outpoints = parse_vtxo_outpoints(&deduped_vtxo_outpoints)?;
+        let vtxo_outpoints = virtual_outpoints_to_bitcoin(&deduped_vtxo_outpoints)?;
 
         let mut last_error: Option<ark_client::Error> = None;
         for _ in 0..OPERATOR_INDEXER_POLL_MAX {
@@ -851,9 +851,9 @@ impl ArkSession {
             }
         };
 
-        let deduped_vtxo_outpoints = dedup_vtxo_outpoint_dtos(params.vtxo_outpoints);
+        let deduped_vtxo_outpoints = dedup_virtual_outpoints(params.vtxo_outpoints);
 
-        let vtxo_outpoints = match parse_vtxo_outpoints(&deduped_vtxo_outpoints) {
+        let vtxo_outpoints = match virtual_outpoints_to_bitcoin(&deduped_vtxo_outpoints) {
             Ok(outpoints) => outpoints,
             Err(error) => {
                 return Ok(UnilateralExitCompletionFeeEstimateDto {
@@ -936,7 +936,7 @@ impl ArkSession {
         }
     }
 
-    async fn build_unilateral_branch(
+    pub(crate) async fn build_unilateral_branch(
         &self,
         target: OutPoint,
     ) -> ArkResult<Vec<bitcoin::Transaction>> {
@@ -961,11 +961,14 @@ fn map_missing_blocktime_completion_inputs(
 ) -> Vec<MissingBlocktimeCompletionInputDto> {
     inputs
         .iter()
-        .map(|input| MissingBlocktimeCompletionInputDto {
-            virtual_txid: input.virtual_txid.to_string(),
-            on_chain_txid: input.on_chain_outpoint.txid.to_string(),
-            on_chain_vout: input.on_chain_outpoint.vout,
-            amount_sats: input.amount_sats,
+        .map(|input| {
+            let on_chain_outpoint = OnchainOutPoint::from_bitcoin_outpoint(input.on_chain_outpoint);
+            MissingBlocktimeCompletionInputDto {
+                virtual_txid: input.virtual_txid.to_string(),
+                on_chain_txid: on_chain_outpoint.txid().to_string(),
+                on_chain_vout: on_chain_outpoint.vout(),
+                amount_sats: input.amount_sats,
+            }
         })
         .collect()
 }

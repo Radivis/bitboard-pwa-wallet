@@ -10,7 +10,7 @@ use crate::persistence::{
 use super::ArkSession;
 use super::exit_onchain::{exit_branch_spent_on_chain, unroll_branch_visible_on_chain};
 use super::exit_watch::backfill_unilateral_exit_watches_if_empty;
-use super::mappers::parse_outpoint;
+use crate::outpoint::VirtualOutPoint;
 
 const WARN_ASP_MISMATCH: &str = "Operator reports this exiting VTXO as swept without unrolled; balance kept until the indexer catches up.";
 const WARN_INDEXER_LAG: &str = "Exiting VTXO is missing from the operator list but visible on-chain; waiting for the indexer to catch up.";
@@ -194,7 +194,7 @@ async fn reconcile_missing_watch(
     watch: &UnilateralExitWatchRecord,
     _prior_record: Option<&VirtualTxOutPointRecord>,
 ) -> ArkResult<ExitingVtxoReconcileOutcome> {
-    let outpoint = parse_outpoint(&watch.vtxo_txid, watch.vout)?;
+    let outpoint = VirtualOutPoint::parse(&watch.vtxo_txid, watch.vout)?.to_bitcoin_outpoint();
     if let Ok((vtxo_list, _)) = session
         .client
         .list_vtxos_for_outpoints(vec![outpoint])

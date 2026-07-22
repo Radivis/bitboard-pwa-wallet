@@ -1664,10 +1664,17 @@ where
         let fee_rate = timeout_op(self.inner.timeout, self.blockchain().get_fee_rate())
             .await
             .context("Failed to retrieve fee rate")??;
+        self.bump_tx_at_fee_rate(parent, fee_rate).await
+    }
 
+    /// Bump `parent` using an explicit feerate (sat/vB) instead of the Esplora estimate.
+    pub async fn bump_tx_at_fee_rate(
+        &self,
+        parent: &Transaction,
+        fee_rate_sat_per_vb: f64,
+    ) -> Result<Transaction, Error> {
         let change_address = self.inner.wallet.get_onchain_address()?;
 
-        // Create a closure that converts CoinSelectionResult to UtxoCoinSelection
         let select_coins_fn =
             |target_amount: Amount| -> Result<UtxoCoinSelection, ark_core::Error> {
                 self.inner.wallet.select_coins(target_amount).map_err(|e| {
@@ -1675,20 +1682,45 @@ where
                 })
             };
 
-        // Build the PSBT using ark-core (includes witness UTXO setup)
-        let mut psbt = build_anchor_tx(parent, change_address, fee_rate, select_coins_fn)
-            .map_err(|e| Error::ad_hoc(e.to_string()))?;
+        let mut psbt = build_anchor_tx(
+            parent,
+            change_address,
+            fee_rate_sat_per_vb,
+            select_coins_fn,
+        )
+        .map_err(|e| Error::ad_hoc(e.to_string()))?;
 
-        // Sign the transaction
         self.inner
             .wallet
             .sign(&mut psbt)
             .context("failed to sign bump TX")?;
 
-        // Extract the final transaction
         let tx = psbt.extract_tx().map_err(Error::ad_hoc)?;
 
         Ok(tx)
+    }
+
+    /// Broadcast one unpublished virtual tx from a unilateral exit branch at the given feerate.
+    pub async fn broadcast_unilateral_exit_step_at_fee_rate(
+        &self,
+        parent: &Transaction,
+        fee_rate_sat_per_vb: f64,
+    ) -> Result<Option<Txid>, Error> {
+        let blockchain = self.blockchain();
+        let parent_txid = parent.compute_txid();
+
+        if blockchain.find_tx(&parent_txid).await?.is_some() {
+            return Ok(None);
+        }
+
+        let child_tx = self
+            .bump_tx_at_fee_rate(parent, fee_rate_sat_per_vb)
+            .await?;
+        blockchain
+            .broadcast_package(&[parent, &child_tx])
+            .await?;
+
+        Ok(Some(parent_txid))
     }
 
     /// Subscribe to receive transaction notifications for specific VTXO scripts

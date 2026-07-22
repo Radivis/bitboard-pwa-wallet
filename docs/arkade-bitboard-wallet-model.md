@@ -105,7 +105,9 @@ Management → Arkade offers two paths:
 | **Unilateral exit** | No (after unroll) | Operator down or you need trustless exit; per-VTXO; multiple on-chain txs |
 | **Autonomous mode** | No (explicit switch) | ASP unreachable; reuses `cached_operator_info` + per-VTXO `unilateral_exit_materials` from last sync; only unilateral exit allowed; Esplora still required |
 
-Collaborative exit and unilateral unroll are implemented in `bitboard-ark` (`collaborative_redeem`, `broadcast_next_unilateral_exit_node`, etc.). **Autonomous mode** branches the same unilateral exit RPCs to snapshot-backed materials instead of ASP indexer/batch APIs. The on-chain bumper wallet shares the same BIP32-derived BDK wallet as boarding. Select one VTXO at a time in the UI.
+Collaborative exit and unilateral unroll are implemented in `bitboard-ark` (`collaborative_redeem`, `broadcast_next_unilateral_exit_node`, etc.). **Autonomous mode** branches the same unilateral exit RPCs to snapshot-backed materials instead of ASP indexer/batch APIs. The on-chain bumper wallet shares the same BIP32-derived BDK wallet as boarding.
+
+**Unilateral exit control (V1):** Management links to `/wallet/arkade/unilateral-exit` instead of a modal. The control page shows a deduped VTXO tree (React Flow + d3-dag), supports multi-leaf selection, and advances the unroll **one virtual tx at a time** via `ark_proceed_unilateral_exit_step` with a user-chosen feerate per step. WASM waits for **1 confirmation** on each intermediate virtual tx before returning; a leaf is marked `is_unrolled` only after its leaf virtual tx reaches **6 confirmations** on Esplora. `ark_run_unilateral_unroll` remains for legacy callers but new UI uses the step API.
 
 ### Unilateral vs collaborative exit balance timing
 
@@ -119,7 +121,7 @@ Unilateral exit is more subtle: the **same sats** are tracked in different snaps
 | During unroll (broadcast in flight) | still `confirmed` | Yes | `pending_exit_deductions` (unilateral) | No in WASM/UI steady-state rules* |
 | After unroll | **exiting** (`is_unrolled = true`, `is_spent = false`) | No — excluded by `VtxoList` | sum of **exiting** VTXOs | No — already excluded from gross |
 
-\*The brief “during unroll” window rarely affects the dashboard because the user stays on the unroll modal until WASM returns. Optimistic UI (`arkade-exit-balance-optimistic.ts`) only bumps `unilateralExitInProgressSats` for unilateral paths; it does **not** reduce `confirmedSats` / `offchainSpendableSats`, matching post-unroll WASM behaviour and avoiding double-subtraction once the VTXO moves to **exiting**.
+\*The brief “during unroll” window rarely affects the dashboard because the user stays on the unilateral exit control page until each step completes. Optimistic UI (`arkade-exit-balance-optimistic.ts`) only bumps `unilateralExitInProgressSats` for unilateral paths; it does **not** reduce `confirmedSats` / `offchainSpendableSats`, matching post-unroll WASM behaviour and avoiding double-subtraction once the VTXO moves to **exiting**.
 
 **Handoff between pending record and exiting sub-bucket**
 

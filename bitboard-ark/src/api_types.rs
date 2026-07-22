@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::outpoint::VirtualOutPoint;
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OperatorSignerMigrationHintDto {
@@ -404,17 +406,10 @@ pub struct CollaborativeExitParams {
     pub amount_sats: Option<u64>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct VtxoOutpointDto {
-    pub txid: String,
-    pub vout: u32,
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CompleteUnilateralExitParams {
-    pub vtxo_outpoints: Vec<VtxoOutpointDto>,
+    pub vtxo_outpoints: Vec<VirtualOutPoint>,
     pub destination_address: String,
     #[serde(default)]
     pub fee_rate_sat_per_vb: Option<f64>,
@@ -423,7 +418,7 @@ pub struct CompleteUnilateralExitParams {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UnilateralExitCompletionFeeEstimateParams {
-    pub vtxo_outpoints: Vec<VtxoOutpointDto>,
+    pub vtxo_outpoints: Vec<VirtualOutPoint>,
     pub destination_address: String,
     #[serde(default)]
     pub fee_rate_sat_per_vb: Option<f64>,
@@ -434,4 +429,121 @@ pub struct UnilateralExitCompletionFeeEstimateParams {
 pub struct UnilateralExitFeeParams {
     pub txid: String,
     pub vout: u32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitTopologyParams {
+    #[serde(default)]
+    pub vtxo_outpoints: Vec<VirtualOutPoint>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitTopologyNodeDto {
+    pub txid: String,
+    pub tx_type: String,
+    pub spends: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitTopologyDto {
+    pub nodes: Vec<UnilateralExitTopologyNodeDto>,
+    pub leaf_outpoints: Vec<VirtualOutPoint>,
+    pub exit_branch_txids: Vec<String>,
+    pub commitment_txids: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitBatchEstimateParams {
+    pub vtxo_outpoints: Vec<VirtualOutPoint>,
+    #[serde(default)]
+    pub fee_rate_sat_per_vb: Option<f64>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitBatchEstimateDto {
+    pub projected_unroll_steps: u32,
+    pub estimated_package_fee_sats: u64,
+    pub fee_rate_sat_per_vb: f64,
+    pub bumper_balance_sats: u64,
+    pub bumper_sufficient: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub estimate_error: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProceedUnilateralExitStepParams {
+    pub vtxo_outpoints: Vec<VirtualOutPoint>,
+    pub fee_rate_sat_per_vb: f64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitProgressParams {
+    pub vtxo_outpoints: Vec<VirtualOutPoint>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum UnilateralExitPhase {
+    Idle,
+    Broadcasting,
+    Waiting,
+    Complete,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum UnilateralExitNodeStatusKind {
+    Pending,
+    InProgress,
+    Confirmed,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitLeafStatusDto {
+    pub txid: String,
+    pub vout: u32,
+    pub confirmations: u64,
+    pub is_unrolled: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitNodeStatusDto {
+    pub txid: String,
+    pub confirmations: u64,
+    pub status: UnilateralExitNodeStatusKind,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProceedUnilateralExitStepResultDto {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub step_txid: Option<String>,
+    pub step_index: u32,
+    pub total_steps: u32,
+    pub phase: UnilateralExitPhase,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_step_waiting_since: Option<i64>,
+    pub node_statuses: Vec<UnilateralExitNodeStatusDto>,
+    pub leaf_statuses: Vec<UnilateralExitLeafStatusDto>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitProgressDto {
+    pub step_index: u32,
+    pub total_steps: u32,
+    pub phase: UnilateralExitPhase,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_step_waiting_since: Option<i64>,
+    pub node_statuses: Vec<UnilateralExitNodeStatusDto>,
+    pub leaf_statuses: Vec<UnilateralExitLeafStatusDto>,
 }

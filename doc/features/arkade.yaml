@@ -99,6 +99,14 @@ feature:
         description: After unilateral unroll broadcasts, WASM polls operator list_vtxos until is_unrolled and not is_spent (up to 60s); success with indexerWarning when on-chain confirmed but ASP lags; hard error when neither ASP nor chain confirms; sticky is_unrolled merge during poll sync for in-list operator rows
       - id: ARK-EXIT-12
         description: Explicit unilateral_exit_watches registry in wallet persistence; survives full snapshot replace; cleared only on completion, hard unroll failure, or reconcile evidence (operator spent or on-chain spent)
+      - id: ARK-EXIT-13
+        description: Unilateral exit control page at /wallet/arkade/unilateral-exit with responsive VTXO tree graph (React Flow + d3-dag), multi-select leaves, and Management entry link (Start unilateral exit / Control unilateral exit)
+      - id: ARK-EXIT-14
+        description: ark_estimate_unilateral_exit_batch unions deduped virtual steps across selected VTXO leaves for batch fee estimate and bumper sufficiency gate
+      - id: ARK-EXIT-15
+        description: ark_proceed_unilateral_exit_step advances one virtual tx per call with caller feerate, polls Esplora every 15s until 1-conf (no attempt cap), persists current_step_waiting_since for progress UI, and skips already-on-chain branch txs
+      - id: ARK-EXIT-16
+        description: Leaf virtual tx must reach 6 confirmations on Esplora before WASM marks is_unrolled; cooperative mode still polls operator indexer after leaf finality
     operator_sync:
       - id: ARK-SYNC-01
         description: When discover_keys fails during operator sync but list_vtxos succeeds, sync lifecycle records a warningMessage and dashboard/management show a non-blocking sync warning banner

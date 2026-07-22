@@ -5,10 +5,10 @@ use ark_client::Blockchain;
 use ark_client::wallet::Persistence;
 use ark_core::ExplorerUtxo;
 use ark_core::history::Transaction;
-use bitcoin::OutPoint;
 
 use crate::api_types::BoardingStatusDto;
 use crate::error::ArkResult;
+use crate::outpoint::OnchainOutPoint;
 use crate::persistence::SharedPersistenceDb;
 
 use super::ArkSession;
@@ -79,10 +79,11 @@ impl ArkSession {
                 .await?;
 
             for ExplorerUtxo { outpoint, .. } in outpoints {
+                let onchain_outpoint = OnchainOutPoint::from_bitcoin_outpoint(outpoint);
                 let status = self
                     .client
                     .blockchain()
-                    .get_output_status(&outpoint.txid, outpoint.vout)
+                    .get_output_status(onchain_outpoint.txid(), onchain_outpoint.vout())
                     .await?;
                 if let Some(spend_txid) = status.spend_txid {
                     boarding_commitment_transactions.push(spend_txid);
@@ -124,12 +125,14 @@ impl ArkSession {
     }
 
     /// Newest confirmed boarding UTXO still inside arkd's cooperative settle window.
-    pub(crate) async fn newest_cooperative_boarding_outpoint(&self) -> ArkResult<Option<OutPoint>> {
+    pub(crate) async fn newest_cooperative_boarding_outpoint(
+        &self,
+    ) -> ArkResult<Option<OnchainOutPoint>> {
         let persistence = SharedPersistenceDb(Arc::clone(&self.wallet_db));
         let boarding_outputs = persistence.load_boarding_outputs()?;
         let now_secs = wasm_safe_now().as_secs();
         let mut scanned_addresses = HashSet::new();
-        let mut newest: Option<(OutPoint, u64)> = None;
+        let mut newest: Option<(OnchainOutPoint, u64)> = None;
 
         for boarding_output in boarding_outputs {
             let address = boarding_output.address();
@@ -168,7 +171,10 @@ impl ArkSession {
                 }
 
                 if newest.is_none_or(|(_, ts)| confirmation_blocktime > ts) {
-                    newest = Some((outpoint, confirmation_blocktime));
+                    newest = Some((
+                        OnchainOutPoint::from_bitcoin_outpoint(outpoint),
+                        confirmation_blocktime,
+                    ));
                 }
             }
         }

@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import { CollaborativeExitDialog } from '@/components/wallet/arkade-exit/CollaborativeExitDialog'
 import { CompleteUnilateralExitDialog } from '@/components/wallet/arkade-exit/CompleteUnilateralExitDialog'
-import { UnilateralExitDialog } from '@/components/wallet/arkade-exit/UnilateralExitDialog'
 import { useArkadeAutonomousModeActive } from '@/hooks/useArkadeQueries'
 import { useArkadeExitFlow } from '@/hooks/useArkadeExitFlow'
 import { isSignerRotationCooperativeExitBlocked } from '@/lib/arkade/arkade-cooperative-exit'
@@ -15,12 +14,8 @@ import { useWalletStore } from '@/stores/walletStore'
 
 export function ArkadeExitSection() {
   const exitFlow = useArkadeExitFlow()
-  const {
-    setCollaborativeOpen,
-    setUnilateralOpen,
-    setCompleteUnilateralOpen,
-    unilateralExitInProgressSats,
-  } = exitFlow
+  const { setCollaborativeOpen, setCompleteUnilateralOpen, hasUnilateralExitInProgress } =
+    exitFlow
   const signerMigrationHint = useWalletStore((state) => state.arkadeSignerMigrationHint)
   const collaborativeExitBlockedByRotation =
     isSignerRotationCooperativeExitBlocked(signerMigrationHint)
@@ -74,16 +69,18 @@ export function ArkadeExitSection() {
           infoComponent={ArkadeUnilateralExitInfomodeContent}
           as="span"
         >
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setUnilateralOpen(true)}
-          >
-            Start unilateral exit
+          <Button type="button" variant="outline" size="sm" asChild>
+            <Link
+              to="/wallet/arkade/unilateral-exit"
+              data-testid="arkade-unilateral-exit-control"
+            >
+              {hasUnilateralExitInProgress
+                ? 'Control unilateral exit'
+                : 'Start unilateral exit'}
+            </Link>
           </Button>
         </InfomodeWrapper>
-        {unilateralExitInProgressSats > 0 && (
+        {hasUnilateralExitInProgress && (
           <Button
             type="button"
             variant="outline"
@@ -104,7 +101,6 @@ export function ArkadeExitSection() {
       )}
 
       <CollaborativeExitDialog exitFlow={exitFlow} />
-      <UnilateralExitDialog exitFlow={exitFlow} />
       <CompleteUnilateralExitDialog exitFlow={exitFlow} />
     </div>
   )

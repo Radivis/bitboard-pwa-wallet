@@ -301,6 +301,57 @@ export const arkadeUnilateralExitFeeQueryKey = (
     vout,
   ] as const
 
+export const arkadeUnilateralExitTopologyQueryKey = (
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+  connectionId: string,
+  vtxoOutpoints: ArkadeVtxoOutpoint[],
+) =>
+  [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletId,
+    networkMode,
+    connectionId,
+    'unilateral-exit-topology',
+    arkadeVtxoOutpointCacheKey(vtxoOutpoints),
+  ] as const
+
+export const arkadeUnilateralExitBatchEstimateQueryKey = (
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+  connectionId: string,
+  vtxoOutpoints: ArkadeVtxoOutpoint[],
+  feeRateSatPerVb: number,
+) =>
+  [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletId,
+    networkMode,
+    connectionId,
+    'exit-fee',
+    'unilateral-batch',
+    arkadeVtxoOutpointCacheKey(vtxoOutpoints),
+    feeRateSatPerVb,
+  ] as const
+
+export const arkadeUnilateralExitProgressQueryKey = (
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+  connectionId: string,
+  vtxoOutpoints: ArkadeVtxoOutpoint[],
+) =>
+  [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletId,
+    networkMode,
+    connectionId,
+    'unilateral-exit-progress',
+    arkadeVtxoOutpointCacheKey(vtxoOutpoints),
+  ] as const
+
 export function removeArkadeDashboardQueries(): void {
   appQueryClient.removeQueries({
     queryKey: [...WALLET_DB_QUERY_KEY_ROOT, 'arkade'],

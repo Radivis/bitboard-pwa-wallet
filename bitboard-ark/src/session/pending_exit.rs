@@ -11,7 +11,9 @@ use super::ArkSession;
 use super::exit_watch::{
     register_unilateral_exit_watch, remove_unilateral_exit_watches_for_outpoints_in_wallet_db,
 };
-use super::mappers::{current_unix_timestamp, parse_outpoint};
+use crate::outpoint::VirtualOutPoint;
+
+use super::mappers::current_unix_timestamp;
 
 pub(crate) fn clear_pending_unilateral_exit_for_outpoint_in_wallet_db(
     wallet_db: &JsonPersistenceDb,
@@ -72,7 +74,9 @@ impl ArkSession {
         }
 
         let (vtxo_list, _) = self.client.list_vtxos().await?;
-        let target_txid = parse_outpoint(txid, vout)?.txid;
+        let target_txid = VirtualOutPoint::parse(txid, vout)?
+            .to_bitcoin_outpoint()
+            .txid;
         let amount = vtxo_list
             .all()
             .find(|virtual_tx_outpoint| {

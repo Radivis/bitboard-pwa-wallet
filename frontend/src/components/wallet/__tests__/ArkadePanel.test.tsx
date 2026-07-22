@@ -83,6 +83,7 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
   useArkadeCompleteUnilateralExitMutation: () => ({ mutate: vi.fn(), isPending: false }),
   useArkadeUnilateralExitsInProgressQuery: () => ({ data: [], isLoading: false }),
   useArkadeUnilateralExitCompletionFeeQuery: () => ({ data: undefined, isLoading: false }),
+  useArkadeAutonomousModeActive: () => false,
 }))
 
 vi.mock('@tanstack/react-query', async (importOriginal) => {
@@ -105,7 +106,7 @@ describe('ArkadeExitSection', () => {
   it('shows collaborative and unilateral exit actions', () => {
     const { container } = renderWithProviders(<ArkadeExitSection />)
     expect(screen.getByRole('button', { name: 'Collaborative exit' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Start unilateral exit' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Start unilateral exit' })).toBeInTheDocument()
     expect(
       container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.collaborativeExit}"]`),
     ).not.toBeNull()

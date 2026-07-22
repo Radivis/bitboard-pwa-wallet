@@ -5,7 +5,7 @@ use ark_core::BoardingOutput;
 use ark_core::ExplorerUtxo;
 use ark_core::history::Transaction;
 use ark_core::server::VirtualTxOutPoint;
-use bitcoin::{Address, Network, OutPoint, PublicKey, Txid};
+use bitcoin::{Address, Network, PublicKey};
 
 use crate::api_types::ExitCandidateRow;
 use crate::api_types::{IntentFeeConfiguredDto, PaymentRowDto};
@@ -35,12 +35,6 @@ pub(crate) fn parse_onchain_address(value: &str, network: Network) -> ArkResult<
         .map_err(|error| ArkWasmError::InvalidOnchainAddress(error.to_string()))?
         .require_network(network)
         .map_err(|error| ArkWasmError::InvalidOnchainAddress(error.to_string()))
-}
-
-pub(crate) fn parse_outpoint(txid: &str, vout: u32) -> ArkResult<OutPoint> {
-    let txid =
-        Txid::from_str(txid).map_err(|error| ArkWasmError::InvalidTxid(error.to_string()))?;
-    Ok(OutPoint { txid, vout })
 }
 
 pub(crate) fn payment_direction_and_amount_sats(signed_amount_sats: i64) -> (&'static str, u64) {

@@ -4,12 +4,13 @@ use ark_client::MissingBlocktimeCompletionInput;
 use ark_core::{Vtxo, VtxoList};
 use bitcoin::{Address, Amount, OutPoint, ScriptBuf};
 
-use crate::api_types::{ExitCandidateRow, VtxoOutpointDto};
+use crate::api_types::ExitCandidateRow;
 use crate::error::{ArkResult, ArkWasmError};
 use crate::exit_balance::{UnilateralExitOutpointKey, is_unilateral_exit_in_progress_outpoint};
 use crate::offchain_snapshot::virtual_tx_outpoint_from_record;
+use crate::outpoint::VirtualOutPoint;
 use crate::persistence::OffchainVtxoSnapshot;
-use crate::session::mappers::{map_exit_candidate, parse_outpoint};
+use crate::session::mappers::map_exit_candidate;
 use crate::unilateral_exit_materials::{
     record_is_exit_eligible, snapshot_record_materials, virtual_psbts_from_records,
     vtxo_chains_from_json,
@@ -57,12 +58,12 @@ pub(crate) fn autonomous_unilateral_exit_chain_steps(
 
 pub(crate) async fn autonomous_complete_unilateral_exit(
     session: &ArkSession,
-    vtxo_outpoints: &[VtxoOutpointDto],
+    vtxo_outpoints: &[VirtualOutPoint],
     destination: Address,
     fee_rate_sat_per_vb: f64,
 ) -> ArkResult<String> {
     autonomous_validate_completion_ready(session, vtxo_outpoints)?;
-    let parsed_outpoints = parse_vtxo_outpoints(vtxo_outpoints)?;
+    let parsed_outpoints = virtual_outpoints_to_bitcoin(vtxo_outpoints)?;
     let (vtxo_list, script_map) = autonomous_vtxo_list_and_script_map(session)?;
     let txid = session
         .client
@@ -80,12 +81,12 @@ pub(crate) async fn autonomous_complete_unilateral_exit(
 
 pub(crate) async fn autonomous_estimate_unilateral_exit_completion(
     session: &ArkSession,
-    vtxo_outpoints: &[VtxoOutpointDto],
+    vtxo_outpoints: &[VirtualOutPoint],
     destination: Address,
     fee_rate_sat_per_vb: f64,
 ) -> ArkResult<(Amount, Amount, Amount, Vec<MissingBlocktimeCompletionInput>)> {
     autonomous_validate_completion_ready(session, vtxo_outpoints)?;
-    let parsed_outpoints = parse_vtxo_outpoints(vtxo_outpoints)?;
+    let parsed_outpoints = virtual_outpoints_to_bitcoin(vtxo_outpoints)?;
     let (vtxo_list, script_map) = autonomous_vtxo_list_and_script_map(session)?;
     session
         .client
@@ -174,48 +175,48 @@ pub(crate) async fn autonomous_build_unilateral_branch(
         .map_err(Into::into)
 }
 
-pub(crate) fn dedup_vtxo_outpoint_dtos(dtos: Vec<VtxoOutpointDto>) -> Vec<VtxoOutpointDto> {
+pub(crate) fn dedup_virtual_outpoints(outpoints: Vec<VirtualOutPoint>) -> Vec<VirtualOutPoint> {
     let mut seen = HashSet::new();
     let mut deduped = Vec::new();
-    for dto in dtos {
-        if seen.insert((dto.txid.clone(), dto.vout)) {
-            deduped.push(dto);
+    for outpoint in outpoints {
+        if seen.insert((outpoint.txid, outpoint.vout)) {
+            deduped.push(outpoint);
         }
     }
     deduped
 }
 
-pub(crate) fn parse_vtxo_outpoints(dtos: &[VtxoOutpointDto]) -> ArkResult<Vec<OutPoint>> {
+pub(crate) fn virtual_outpoints_to_bitcoin(
+    outpoints: &[VirtualOutPoint],
+) -> ArkResult<Vec<OutPoint>> {
     let mut seen = HashSet::new();
-    let mut outpoints = Vec::new();
-    for dto in dtos {
-        let outpoint = parse_outpoint(&dto.txid, dto.vout)?;
-        if seen.insert(outpoint) {
-            outpoints.push(outpoint);
+    let mut bitcoin_outpoints = Vec::new();
+    for outpoint in outpoints {
+        let parsed = outpoint.to_bitcoin_outpoint();
+        if seen.insert(parsed) {
+            bitcoin_outpoints.push(parsed);
         }
     }
-    Ok(outpoints)
+    Ok(bitcoin_outpoints)
 }
 
 pub(crate) fn validate_snapshot_completion_ready(
     snapshot: &OffchainVtxoSnapshot,
-    vtxo_outpoints: &[VtxoOutpointDto],
+    vtxo_outpoints: &[VirtualOutPoint],
 ) -> ArkResult<()> {
-    for dto in vtxo_outpoints {
-        let Some(record) = snapshot
-            .virtual_tx_outpoints
-            .iter()
-            .find(|record| record.txid == dto.txid && record.vout == dto.vout)
-        else {
+    for outpoint in vtxo_outpoints {
+        let Some(record) = snapshot.virtual_tx_outpoints.iter().find(|record| {
+            record.txid == outpoint.txid.to_string() && record.vout == outpoint.vout
+        }) else {
             return Err(ArkWasmError::VtxoUnilateralExitNotReady {
-                txid: dto.txid.clone(),
-                vout: dto.vout,
+                txid: outpoint.txid.to_string(),
+                vout: outpoint.vout,
             });
         };
         if !record.is_unrolled || record.is_spent {
             return Err(ArkWasmError::VtxoUnilateralExitNotReady {
-                txid: dto.txid.clone(),
-                vout: dto.vout,
+                txid: outpoint.txid.to_string(),
+                vout: outpoint.vout,
             });
         }
     }
@@ -224,7 +225,7 @@ pub(crate) fn validate_snapshot_completion_ready(
 
 pub(crate) fn autonomous_validate_completion_ready(
     session: &ArkSession,
-    vtxo_outpoints: &[VtxoOutpointDto],
+    vtxo_outpoints: &[VirtualOutPoint],
 ) -> ArkResult<()> {
     let snapshot = session
         .wallet_db
@@ -278,22 +279,13 @@ mod tests {
 
     #[test]
     fn parse_vtxo_outpoints_dedupes_by_outpoint() {
-        let txid = Txid::from_byte_array([0x44; 32]).to_string();
-        let dtos = vec![
-            VtxoOutpointDto {
-                txid: txid.clone(),
-                vout: 0,
-            },
-            VtxoOutpointDto {
-                txid: txid.clone(),
-                vout: 0,
-            },
-            VtxoOutpointDto {
-                txid: txid.clone(),
-                vout: 1,
-            },
+        let txid = Txid::from_byte_array([0x44; 32]);
+        let outpoints = vec![
+            VirtualOutPoint { txid, vout: 0 },
+            VirtualOutPoint { txid, vout: 0 },
+            VirtualOutPoint { txid, vout: 1 },
         ];
-        let parsed = parse_vtxo_outpoints(&dtos).expect("parse outpoints");
+        let parsed = virtual_outpoints_to_bitcoin(&outpoints).expect("parse outpoints");
         assert_eq!(parsed.len(), 2);
         assert_eq!(parsed[0].vout, 0);
         assert_eq!(parsed[1].vout, 1);
@@ -301,29 +293,23 @@ mod tests {
 
     #[test]
     fn validate_snapshot_completion_ready_accepts_ready_outpoint() {
-        let txid = Txid::from_byte_array([0x55; 32]).to_string();
+        let txid = Txid::from_byte_array([0x55; 32]);
         let snapshot = sample_snapshot(vec![snapshot_record(0x55, 0, true, false)]);
-        let outpoints = vec![VtxoOutpointDto {
-            txid: txid.clone(),
-            vout: 0,
-        }];
+        let outpoints = vec![VirtualOutPoint { txid, vout: 0 }];
         validate_snapshot_completion_ready(&snapshot, &outpoints).expect("ready outpoint");
     }
 
     #[test]
     fn validate_snapshot_completion_ready_rejects_unready_sibling_vout() {
-        let txid = Txid::from_byte_array([0x66; 32]).to_string();
+        let txid = Txid::from_byte_array([0x66; 32]);
         let snapshot = sample_snapshot(vec![
             snapshot_record(0x66, 0, true, false),
             snapshot_record(0x66, 1, false, false),
         ]);
-        let ready = vec![VtxoOutpointDto {
-            txid: txid.clone(),
-            vout: 0,
-        }];
+        let ready = vec![VirtualOutPoint { txid, vout: 0 }];
         validate_snapshot_completion_ready(&snapshot, &ready).expect("vout 0 ready");
 
-        let unready = vec![VtxoOutpointDto { txid, vout: 1 }];
+        let unready = vec![VirtualOutPoint { txid, vout: 1 }];
         let error = validate_snapshot_completion_ready(&snapshot, &unready)
             .expect_err("vout 1 not unrolled");
         assert!(matches!(

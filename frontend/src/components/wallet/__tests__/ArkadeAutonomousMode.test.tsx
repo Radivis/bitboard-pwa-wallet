@@ -104,9 +104,8 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
 vi.mock('@/hooks/useArkadeExitFlow', () => ({
   useArkadeExitFlow: () => ({
     setCollaborativeOpen: vi.fn(),
-    setUnilateralOpen: vi.fn(),
     setCompleteUnilateralOpen: vi.fn(),
-    unilateralExitInProgressSats: 0,
+    hasUnilateralExitInProgress: false,
   }),
 }))
 

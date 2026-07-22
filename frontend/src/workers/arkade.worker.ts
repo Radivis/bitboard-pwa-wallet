@@ -35,7 +35,18 @@ import type {
   ArkadeUnilateralExitFeeEstimateParams,
   ArkadeUnilateralExitCompletionFeeEstimate,
   ArkadeUnilateralExitCompletionFeeEstimateParams,
+  ArkadeUnilateralExitTopology,
+  ArkadeUnilateralExitTopologyParams,
+  ArkadeUnilateralExitBatchEstimate,
+  ArkadeUnilateralExitBatchEstimateParams,
+  ArkadeProceedUnilateralExitStepParams,
+  ArkadeProceedUnilateralExitStepResult,
+  ArkadeUnilateralExitProgress,
+  ArkadeUnilateralExitProgressParams,
   ArkadeOperatorScheduledSession,
+  ArkadeOperatorTrustStatus,
+  ArkadeOperatorConfigDiffResult,
+  ArkadeUnilateralExitInProgressRow,
   ArkadeAutonomousModeStatus,
   ArkadeVtxoListResult,
   ArkadeUnrollProgressEvent,
@@ -699,6 +710,51 @@ const arkadeService: ArkadeService = {
         wasmModule.ark_estimate_unilateral_exit_completion(
           params,
         ) as Promise<ArkadeUnilateralExitCompletionFeeEstimate>,
+    )
+  },
+
+  async getUnilateralExitTopology(
+    params: ArkadeUnilateralExitTopologyParams,
+  ): Promise<ArkadeUnilateralExitTopology> {
+    return invokeWasmArk(
+      (wasmModule) =>
+        wasmModule.ark_get_unilateral_exit_topology(
+          params,
+        ) as Promise<ArkadeUnilateralExitTopology>,
+    )
+  },
+
+  async estimateUnilateralExitBatch(
+    params: ArkadeUnilateralExitBatchEstimateParams,
+  ): Promise<ArkadeUnilateralExitBatchEstimate> {
+    return invokeWasmArk(
+      (wasmModule) =>
+        wasmModule.ark_estimate_unilateral_exit_batch(
+          params,
+        ) as Promise<ArkadeUnilateralExitBatchEstimate>,
+    )
+  },
+
+  async proceedUnilateralExitStep(
+    params: ArkadeProceedUnilateralExitStepParams,
+  ): Promise<ArkadeProceedUnilateralExitStepResult> {
+    const result = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_proceed_unilateral_exit_step(
+        params,
+      ) as Promise<ArkadeProceedUnilateralExitStepResult>,
+    )
+    await persistAfterCriticalOperation()
+    return result
+  },
+
+  async getUnilateralExitProgress(
+    params: ArkadeUnilateralExitProgressParams,
+  ): Promise<ArkadeUnilateralExitProgress> {
+    return invokeWasmArk(
+      (wasmModule) =>
+        wasmModule.ark_get_unilateral_exit_progress(
+          params,
+        ) as Promise<ArkadeUnilateralExitProgress>,
     )
   },
 }

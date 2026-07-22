@@ -342,6 +342,86 @@ export interface ArkadeUnilateralExitFeeEstimateParams {
   vout: number
 }
 
+export interface ArkadeUnilateralExitTopologyNode {
+  txid: string
+  txType: string
+  spends: string[]
+}
+
+export interface ArkadeUnilateralExitTopology {
+  nodes: ArkadeUnilateralExitTopologyNode[]
+  leafOutpoints: ArkadeVtxoOutpoint[]
+  exitBranchTxids: string[]
+  commitmentTxids: string[]
+}
+
+export interface ArkadeUnilateralExitTopologyParams {
+  vtxoOutpoints?: ArkadeVtxoOutpoint[]
+}
+
+export interface ArkadeUnilateralExitBatchEstimate {
+  projectedUnrollSteps: number
+  estimatedPackageFeeSats: number
+  feeRateSatPerVb: number
+  bumperBalanceSats: number
+  bumperSufficient: boolean
+  estimateError?: string
+}
+
+export interface ArkadeUnilateralExitBatchEstimateParams {
+  vtxoOutpoints: ArkadeVtxoOutpoint[]
+  feeRateSatPerVb?: number
+}
+
+export type ArkadeUnilateralExitPhaseKind =
+  | 'idle'
+  | 'broadcasting'
+  | 'waiting'
+  | 'complete'
+
+export type ArkadeUnilateralExitNodeStatusKind = 'pending' | 'inProgress' | 'confirmed'
+
+export interface ArkadeUnilateralExitNodeStatus {
+  txid: string
+  confirmations: number
+  status: ArkadeUnilateralExitNodeStatusKind
+}
+
+export interface ArkadeUnilateralExitLeafStatus {
+  txid: string
+  vout: number
+  confirmations: number
+  isUnrolled: boolean
+}
+
+export interface ArkadeProceedUnilateralExitStepParams {
+  vtxoOutpoints: ArkadeVtxoOutpoint[]
+  feeRateSatPerVb: number
+}
+
+export interface ArkadeProceedUnilateralExitStepResult {
+  stepTxid?: string
+  stepIndex: number
+  totalSteps: number
+  phase: ArkadeUnilateralExitPhaseKind
+  currentStepWaitingSince?: number
+  nodeStatuses: ArkadeUnilateralExitNodeStatus[]
+  leafStatuses: ArkadeUnilateralExitLeafStatus[]
+}
+
+export interface ArkadeUnilateralExitProgressParams {
+  vtxoOutpoints: ArkadeVtxoOutpoint[]
+}
+
+export interface ArkadeUnilateralExitProgress {
+  stepIndex: number
+  totalSteps: number
+  phase: ArkadeUnilateralExitPhaseKind
+  currentStepWaitingSince?: number
+  nodeStatuses: ArkadeUnilateralExitNodeStatus[]
+  leafStatuses: ArkadeUnilateralExitLeafStatus[]
+}
+
 export interface EnsureArkadeOperatorConnectionEncryptedParams {
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
@@ -428,7 +508,7 @@ export interface ArkadeService {
   runUnilateralUnroll(
     params: { txid: string; vout: number },
     onProgress: (event: ArkadeUnrollProgressEvent) => void,
-  ): Promise<{ vtxoTxid: string }>
+  ): Promise<ArkadeUnrollResult>
   completeUnilateralExit(params: ArkadeCompleteUnilateralExitParams): Promise<string>
   getCollaborativeExitFeeEstimate(
     params: ArkadeCollaborativeExitFeeEstimateParams,
@@ -439,4 +519,16 @@ export interface ArkadeService {
   estimateUnilateralExitCompletion(
     params: ArkadeUnilateralExitCompletionFeeEstimateParams,
   ): Promise<ArkadeUnilateralExitCompletionFeeEstimate>
+  getUnilateralExitTopology(
+    params: ArkadeUnilateralExitTopologyParams,
+  ): Promise<ArkadeUnilateralExitTopology>
+  estimateUnilateralExitBatch(
+    params: ArkadeUnilateralExitBatchEstimateParams,
+  ): Promise<ArkadeUnilateralExitBatchEstimate>
+  proceedUnilateralExitStep(
+    params: ArkadeProceedUnilateralExitStepParams,
+  ): Promise<ArkadeProceedUnilateralExitStepResult>
+  getUnilateralExitProgress(
+    params: ArkadeUnilateralExitProgressParams,
+  ): Promise<ArkadeUnilateralExitProgress>
 }

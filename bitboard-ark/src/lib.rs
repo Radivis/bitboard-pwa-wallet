@@ -8,6 +8,7 @@ mod exit_balance;
 mod network;
 mod offchain_snapshot;
 mod operator_config_diff;
+mod outpoint;
 mod persistence;
 mod session;
 mod signer_migration;
@@ -28,9 +29,9 @@ mod session_mapper_tests;
 #[cfg(not(target_arch = "wasm32"))]
 pub use api_types::CompleteUnilateralExitParams;
 #[cfg(not(target_arch = "wasm32"))]
-pub use api_types::VtxoOutpointDto;
-#[cfg(not(target_arch = "wasm32"))]
 pub use network::NetworkMode;
+#[cfg(not(target_arch = "wasm32"))]
+pub use outpoint::{OnchainOutPoint, VirtualOutPoint};
 #[cfg(not(target_arch = "wasm32"))]
 pub use session::ArkSession;
 
@@ -500,6 +501,58 @@ pub async fn ark_estimate_unilateral_exit_completion(params: JsValue) -> Result<
         export_session_json(|session| async move {
             session.estimate_unilateral_exit_completion(params).await
         })
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_get_unilateral_exit_topology(params: JsValue) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let params: crate::api_types::UnilateralExitTopologyParams =
+            serde_wasm_bindgen::from_value(params)?;
+        export_session_json(
+            |session| async move { session.get_unilateral_exit_topology(params).await },
+        )
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_estimate_unilateral_exit_batch(params: JsValue) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let params: crate::api_types::UnilateralExitBatchEstimateParams =
+            serde_wasm_bindgen::from_value(params)?;
+        export_session_json(|session| async move {
+            session.estimate_unilateral_exit_batch(params).await
+        })
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_proceed_unilateral_exit_step(params: JsValue) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let params: crate::api_types::ProceedUnilateralExitStepParams =
+            serde_wasm_bindgen::from_value(params)?;
+        export_session_json(
+            |session| async move { session.proceed_unilateral_exit_step(params).await },
+        )
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_get_unilateral_exit_progress(params: JsValue) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let params: crate::api_types::UnilateralExitProgressParams =
+            serde_wasm_bindgen::from_value(params)?;
+        export_session_json(
+            |session| async move { session.get_unilateral_exit_progress(params).await },
+        )
         .await
     })
     .await

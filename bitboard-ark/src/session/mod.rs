@@ -17,6 +17,7 @@ mod pending_exit;
 mod receive;
 mod signer_migration;
 mod sync;
+mod unilateral_exit_orchestrator;
 mod vtxo;
 
 use std::cell::Cell;

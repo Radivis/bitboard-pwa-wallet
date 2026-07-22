@@ -279,6 +279,23 @@ fn upsert_pending_unilateral_replaces_same_outpoint() {
 }
 
 #[test]
+fn ensure_unilateral_exit_step_wait_preserves_started_at_for_same_step() {
+    let db = JsonPersistenceDb::default();
+    let step_txid = "bb".repeat(32);
+
+    let first_started_at = db.ensure_unilateral_exit_step_wait(&step_txid, 2);
+    let second_started_at = db.ensure_unilateral_exit_step_wait(&step_txid, 2);
+    assert_eq!(first_started_at, second_started_at);
+
+    let new_step_txid = "cc".repeat(32);
+    let restarted_at = db.ensure_unilateral_exit_step_wait(&new_step_txid, 3);
+    assert!(restarted_at >= first_started_at);
+
+    db.clear_unilateral_exit_step_wait();
+    assert!(db.unilateral_exit_step_wait().is_none());
+}
+
+#[test]
 fn persistence_v5_round_trips_trust_fields() {
     let identity = OperatorIdentity {
         signer_pk_hex: "02abc".to_string(),

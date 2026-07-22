@@ -24,6 +24,9 @@ import {
   arkadeUnilateralExitCompletionFeeQueryKey,
   arkadeUnilateralExitFeeQueryKey,
   arkadeUnilateralExitsInProgressQueryKey,
+  arkadeUnilateralExitTopologyQueryKey,
+  arkadeUnilateralExitBatchEstimateQueryKey,
+  arkadeUnilateralExitProgressQueryKey,
   arkadeVtxoExpiryQueryKey,
   arkadeVtxoListQueryKey,
 } from '@/lib/arkade/arkade-query-keys'
@@ -32,6 +35,7 @@ import type {
   ArkadeBoardingStatus,
   ArkadeSignerMigrationResult,
   ArkadeUnrollProgressEvent,
+  ArkadeUnrollResult,
   ArkadeVtxoOutpoint,
 } from '@/workers/arkade-api'
 import { sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
@@ -1006,7 +1010,7 @@ export function useArkadeUnilateralUnrollMutation() {
       vout: number
       amountSats: number
       onProgress: (event: ArkadeUnrollProgressEvent) => void
-    }) => {
+    }): Promise<ArkadeUnrollResult> => {
       assertArkadeSessionUnlocked(activeWalletId)
       await awaitArkadeLoadQuiescence()
       return getArkadeWorker().runUnilateralUnroll(
@@ -1447,6 +1451,177 @@ export function useReviewOperatorConfigInAutonomousMutation() {
           ? error.message
           : 'Could not enter autonomous mode for operator review',
       )
+    },
+  })
+}
+
+export function useArkadeUnilateralExitTopologyQuery(params: {
+  enabled: boolean
+  vtxoOutpoints: ArkadeVtxoOutpoint[]
+}) {
+  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+    useArkadeQueryBase()
+  const sortedOutpoints = sortArkadeVtxoOutpoints(params.vtxoOutpoints)
+  const enabled = params.enabled && sessionReady
+
+  return useQuery({
+    queryKey:
+      activeWalletId != null &&
+      activeArkadeConnectionId != null &&
+      isArkadeSupportedNetworkMode(networkMode)
+        ? arkadeUnilateralExitTopologyQueryKey(
+            activeWalletId,
+            networkMode,
+            activeArkadeConnectionId,
+            sortedOutpoints,
+          )
+        : arkadeDisabledQueryKey('unilateral-exit-topology'),
+    enabled,
+    queryFn: () =>
+      withReadyArkadeWorker(() =>
+        getArkadeWorker().getUnilateralExitTopology({
+          vtxoOutpoints: sortedOutpoints,
+        }),
+      ),
+    staleTime: ARKADE_FEE_ESTIMATE_STALE_MS,
+  })
+}
+
+export function useArkadeUnilateralExitBatchEstimateQuery(params: {
+  enabled: boolean
+  vtxoOutpoints: ArkadeVtxoOutpoint[]
+  feeRateSatPerVb: number
+}) {
+  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+    useArkadeQueryBase()
+  const sortedOutpoints = sortArkadeVtxoOutpoints(params.vtxoOutpoints)
+  const enabled =
+    params.enabled && sessionReady && sortedOutpoints.length > 0
+
+  return useQuery({
+    queryKey:
+      activeWalletId != null &&
+      activeArkadeConnectionId != null &&
+      isArkadeSupportedNetworkMode(networkMode)
+        ? arkadeUnilateralExitBatchEstimateQueryKey(
+            activeWalletId,
+            networkMode,
+            activeArkadeConnectionId,
+            sortedOutpoints,
+            params.feeRateSatPerVb,
+          )
+        : arkadeDisabledQueryKey('unilateral-exit-batch-estimate'),
+    enabled,
+    queryFn: () =>
+      withReadyArkadeWorker(() =>
+        getArkadeWorker().estimateUnilateralExitBatch({
+          vtxoOutpoints: sortedOutpoints,
+          feeRateSatPerVb: params.feeRateSatPerVb,
+        }),
+      ),
+    refetchInterval: (query) =>
+      query.state.data?.bumperSufficient ? false : ARKADE_BUMPER_FUNDING_POLL_MS,
+    staleTime: ARKADE_FEE_ESTIMATE_STALE_MS,
+  })
+}
+
+export function useArkadeUnilateralExitProgressQuery(params: {
+  enabled: boolean
+  vtxoOutpoints: ArkadeVtxoOutpoint[]
+}) {
+  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+    useArkadeQueryBase()
+  const sortedOutpoints = sortArkadeVtxoOutpoints(params.vtxoOutpoints)
+  const enabled =
+    params.enabled && sessionReady && sortedOutpoints.length > 0
+
+  return useQuery({
+    queryKey:
+      activeWalletId != null &&
+      activeArkadeConnectionId != null &&
+      isArkadeSupportedNetworkMode(networkMode)
+        ? arkadeUnilateralExitProgressQueryKey(
+            activeWalletId,
+            networkMode,
+            activeArkadeConnectionId,
+            sortedOutpoints,
+          )
+        : arkadeDisabledQueryKey('unilateral-exit-progress'),
+    enabled,
+    queryFn: () =>
+      withReadyArkadeWorker(() =>
+        getArkadeWorker().getUnilateralExitProgress({
+          vtxoOutpoints: sortedOutpoints,
+        }),
+      ),
+    refetchInterval: enabled ? 15_000 : false,
+    staleTime: 0,
+  })
+}
+
+export function useArkadeProceedUnilateralExitStepMutation() {
+  const queryClient = useQueryClient()
+  const { networkMode, activeWalletId, activeArkadeConnectionId } =
+    useArkadeQueryBase()
+
+  return useMutation({
+    mutationFn: async (params: {
+      vtxoOutpoints: ArkadeVtxoOutpoint[]
+      feeRateSatPerVb: number
+      amountSats: number
+    }) => {
+      assertArkadeSessionUnlocked(activeWalletId)
+      await awaitArkadeLoadQuiescence()
+      return getArkadeWorker().proceedUnilateralExitStep({
+        vtxoOutpoints: sortArkadeVtxoOutpoints(params.vtxoOutpoints),
+        feeRateSatPerVb: params.feeRateSatPerVb,
+      })
+    },
+    onMutate: async (params) => {
+      if (
+        activeWalletId == null ||
+        activeArkadeConnectionId == null ||
+        !isArkadeSupportedNetworkMode(networkMode)
+      ) {
+        return undefined
+      }
+      return applyOptimisticExitBalanceDeduction(
+        queryClient,
+        activeWalletId,
+        networkMode,
+        activeArkadeConnectionId,
+        params.amountSats,
+        'unilateralExitInProgressSats',
+      )
+    },
+    onError: (_error, _params, context) => {
+      if (context != null) {
+        revertOptimisticExitBalanceDeduction(queryClient, context)
+      }
+    },
+    onSuccess: async (_result, params, context) => {
+      await reconcileExitBalanceAfterMutation(queryClient, context)
+      if (
+        activeWalletId != null &&
+        activeArkadeConnectionId != null &&
+        isArkadeSupportedNetworkMode(networkMode)
+      ) {
+        await queryClient.invalidateQueries({
+          queryKey: arkadeUnilateralExitProgressQueryKey(
+            activeWalletId,
+            networkMode,
+            activeArkadeConnectionId,
+            sortArkadeVtxoOutpoints(params.vtxoOutpoints),
+          ),
+        })
+        await queryClient.invalidateQueries({
+          queryKey: arkadeBalanceQueryKey(
+            activeWalletId,
+            networkMode,
+            activeArkadeConnectionId,
+          ),
+        })
+      }
     },
   })
 }

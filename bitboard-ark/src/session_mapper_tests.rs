@@ -21,9 +21,9 @@ mod send_amount_validation_tests {
 mod payment_and_history_mapper_tests {
     use crate::constants::{PAYMENT_DIRECTION_INCOMING, PAYMENT_DIRECTION_OUTGOING};
     use crate::error::ArkWasmError;
+    use crate::outpoint::OnchainOutPoint;
     use crate::session::mappers::{
-        map_history_row, map_intent_fee_configured, parse_outpoint,
-        payment_direction_and_amount_sats,
+        map_history_row, map_intent_fee_configured, payment_direction_and_amount_sats,
     };
     use ark_core::history::Transaction;
     use ark_core::server::IntentFeeInfo;
@@ -49,16 +49,18 @@ mod payment_and_history_mapper_tests {
     }
 
     #[test]
-    fn parse_outpoint_accepts_valid_txid() {
+    fn parse_onchain_outpoint_accepts_valid_txid() {
         let txid_hex = Txid::from_byte_array([0x11; 32]).to_string();
-        let outpoint = parse_outpoint(&txid_hex, 3).expect("valid outpoint");
+        let outpoint = OnchainOutPoint::parse(&txid_hex, 3)
+            .expect("valid outpoint")
+            .inner();
         assert_eq!(outpoint.txid.to_string(), txid_hex);
         assert_eq!(outpoint.vout, 3);
     }
 
     #[test]
-    fn parse_outpoint_rejects_invalid_txid() {
-        let error = parse_outpoint("not-a-txid", 0).expect_err("invalid txid");
+    fn parse_onchain_outpoint_rejects_invalid_txid() {
+        let error = OnchainOutPoint::parse("not-a-txid", 0).expect_err("invalid txid");
         assert!(matches!(error, ArkWasmError::InvalidTxid(_)));
     }
 

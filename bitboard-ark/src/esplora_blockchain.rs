@@ -6,6 +6,7 @@ use bitcoin::{Address, OutPoint, Transaction, Txid};
 
 use crate::constants::{ESPLORA_FEE_ESTIMATE_BLOCK_TARGET, MIN_FEE_RATE_SAT_PER_VB};
 use crate::error::{ArkResult, ArkWasmError};
+use crate::outpoint::OnchainOutPoint;
 
 const ESPLORA_HTTP_TIMEOUT_SECS: u64 = 5;
 
@@ -88,6 +89,14 @@ impl EsploraBlockchain {
         txid: &Txid,
     ) -> Result<TxStatus, ark_client::Error> {
         map_tx_status(client, txid).await
+    }
+
+    pub async fn get_tx_confirmations(&self, txid: &Txid) -> ArkResult<u64> {
+        let client = Arc::clone(&self.client);
+        let txid = *txid;
+        map_tx_confirmations(&client, &txid)
+            .await
+            .map_err(|error| ArkWasmError::Blockchain(error.to_string()))
     }
 
     async fn get_output_status_at(
@@ -282,10 +291,11 @@ async fn collect_address_utxos(
 
     let mut explorer_utxos = Vec::with_capacity(utxos.len());
     for utxo in utxos {
-        let outpoint = OutPoint {
+        let outpoint = OnchainOutPoint::from_bitcoin_outpoint(OutPoint {
             txid: utxo.txid,
             vout: utxo.vout,
-        };
+        })
+        .inner();
         let mut confirmation_blocktime = utxo.status.block_time;
         if utxo.status.confirmed && confirmation_blocktime.is_none() {
             let tx_status = client
@@ -317,6 +327,30 @@ async fn map_tx_status(
     Ok(TxStatus {
         confirmed_at: status.block_time.map(|time| time as i64),
     })
+}
+
+async fn map_tx_confirmations(
+    client: &EsploraAsyncClient,
+    txid: &Txid,
+) -> Result<u64, ark_client::Error> {
+    let status = client
+        .get_tx_status(txid)
+        .await
+        .map_err(EsploraBlockchain::map_esplora_error)?;
+    if !status.confirmed {
+        return Ok(0);
+    }
+    let chain_tip_height = client
+        .get_height()
+        .await
+        .map_err(EsploraBlockchain::map_esplora_error)
+        .ok();
+    match (status.block_height, chain_tip_height) {
+        (Some(block_height), Some(tip_height)) => {
+            Ok(u64::from(tip_height.saturating_sub(block_height) + 1))
+        }
+        _ => Ok(1),
+    }
 }
 
 async fn map_output_status(

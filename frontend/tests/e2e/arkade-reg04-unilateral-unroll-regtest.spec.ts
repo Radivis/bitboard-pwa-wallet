@@ -2,10 +2,6 @@
  * E2E-ARK-REG-04 only — full unilateral unroll against a freshly cleaned long-expiry stack.
  *
  * Run: `npm run test:e2e:arkade-regtest-reg04` from `frontend/`.
- *
- * Unlike the serial exit-flows suite, this spec does not restart arkd between attempts: the npm
- * script wipes volumes and boots a clean stack first, which is enough for an isolated run and avoids
- * restoring poisoned sweep/batch state from a prior session.
  */
 import { test, expect, type Page } from '@playwright/test'
 import {
@@ -32,29 +28,29 @@ test.describe('Arkade REG-04 unilateral unroll @arkade-reg04', () => {
     await prepareUnilateralUnrollScenario(page)
     const onChainReceiveAddress = await readOnChainReceiveAddress(page)
     await goToArkadeManagementPanel(page)
-    await page.getByRole('button', { name: 'Start unilateral exit' }).click()
-    await expect(page.getByRole('heading', { name: 'Start unilateral exit' })).toBeVisible()
+    await page.getByTestId('arkade-unilateral-exit-control').click()
+    await expect(page.getByTestId('unilateral-exit-tree-graph')).toBeVisible({ timeout: 120_000 })
+    await page.locator('[data-testid^="unilateral-exit-leaf-node-"]').first().click()
+    await page.locator('[data-testid^="unilateral-exit-leaf-select-switch-"]').first().click()
     await ensureOnChainBumperFunds(page, 100_000)
-    const firstCandidate = page.locator('input[name="arkade-exit-vtxo"]').first()
-    await expect(firstCandidate).toBeVisible({ timeout: 120_000 })
-    await firstCandidate.check()
-    await expect(page.getByRole('button', { name: 'Start unroll' })).toBeEnabled({
-      timeout: 60_000,
-    })
-    await page.getByRole('button', { name: 'Start unroll' }).click()
-    const unrollError = page.getByTestId('arkade-unroll-error')
-    await expect(async () => {
-      if (!(await page.getByRole('heading', { name: 'Start unilateral exit' }).isVisible())) {
-        return
+    const proceedButton = page.getByTestId('unilateral-exit-proceed')
+    await expect(proceedButton).toBeEnabled({ timeout: 120_000 })
+
+    for (let step = 0; step < 24; step += 1) {
+      if (await page.getByText(/branch complete/i).isVisible()) {
+        break
       }
-      if (await unrollError.isVisible()) {
-        throw new Error((await unrollError.textContent())?.trim() ?? 'Unroll failed')
+      if (!(await proceedButton.isEnabled())) {
+        await mineRegtestBlocks(1)
+        continue
       }
-      throw new Error('Unroll still in progress')
-    }).toPass({ timeout: 300_000 })
-    await expect(page.getByText(/Unroll complete/i)).toBeVisible({ timeout: 30_000 })
+      await proceedButton.click()
+      await mineRegtestBlocks(2)
+    }
+
+    await goToArkadeManagementPanel(page)
     await expect(page.getByTestId('arkade-complete-unilateral-exit')).toBeVisible({
-      timeout: 120_000,
+      timeout: 300_000,
     })
     await page.getByTestId('arkade-complete-unilateral-exit').click()
     await expect(page.getByRole('heading', { name: 'Complete unilateral exit' })).toBeVisible()

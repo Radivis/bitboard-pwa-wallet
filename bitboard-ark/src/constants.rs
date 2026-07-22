@@ -25,6 +25,15 @@ pub const VTXO_SELF_RENEW_REMAINING_FRACTION: f64 = 0.10;
 /// Estimated vsize of a unilateral-exit child transaction for fee lower-bound estimates.
 pub const UNILATERAL_EXIT_CHILD_VSIZE_VB: u64 = 140;
 
+/// Confirmations required on the leaf virtual tx before marking `is_unrolled`.
+pub const UNILATERAL_EXIT_LEAF_CONFIRMATIONS: u32 = 6;
+
+/// Confirmations required on each intermediate virtual tx before advancing to the next step.
+pub const UNILATERAL_EXIT_STEP_CONFIRMATIONS: u32 = 1;
+
+/// Esplora poll interval while waiting for the current unroll step to confirm.
+pub const UNILATERAL_EXIT_STEP_CONFIRMATION_POLL_INTERVAL_SECS: u64 = 15;
+
 pub const NETWORK_MODE_MAINNET: &str = "mainnet";
 pub const NETWORK_MODE_TESTNET: &str = "testnet";
 pub const NETWORK_MODE_SIGNET: &str = "signet";

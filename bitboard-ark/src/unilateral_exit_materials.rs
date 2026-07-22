@@ -218,7 +218,7 @@ pub fn snapshot_record_materials<'a>(
         .and_then(|record| record.unilateral_exit_materials.as_ref())
 }
 
-fn chained_tx_type_label(tx_type: &ChainedTxType) -> String {
+pub(crate) fn chained_tx_type_label(tx_type: &ChainedTxType) -> String {
     match tx_type {
         ChainedTxType::Commitment => "commitment".to_string(),
         ChainedTxType::Tree => "tree".to_string(),

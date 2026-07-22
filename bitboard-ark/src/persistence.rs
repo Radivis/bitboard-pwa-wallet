@@ -34,6 +34,13 @@ fn lock_persistence_result<T>(mutex: &Mutex<T>) -> Result<MutexGuard<'_, T>, Err
         .lock()
         .map_err(|_| Error::wallet(PERSISTENCE_LOCK_POISONED))
 }
+
+fn unix_timestamp_now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64
+}
 pub const ARK_RS_ENGINE: &str = "ark-rs";
 pub const ARK_RS_SDK_VERSION: &str = "0.9.3";
 
@@ -138,6 +145,13 @@ pub struct UnilateralExitWatchRecord {
     pub branch_txids: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct UnilateralExitStepWaitRecord {
+    pub step_txid: String,
+    pub step_index: u32,
+    pub started_at: i64,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct WalletDbSnapshot {
     pub boarding_outputs: Vec<BoardingOutputSnapshot>,
@@ -150,6 +164,8 @@ pub struct WalletDbSnapshot {
     pub pending_exit_deductions: Vec<PendingExitDeductionRecord>,
     #[serde(default)]
     pub unilateral_exit_watches: Vec<UnilateralExitWatchRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unilateral_exit_step_wait: Option<UnilateralExitStepWaitRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cached_operator_info: Option<crate::cached_operator_info::CachedOperatorInfoRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -370,6 +386,34 @@ impl JsonPersistenceDb {
             };
             !outpoints.contains(&watch_outpoint)
         });
+    }
+
+    pub fn unilateral_exit_step_wait(&self) -> Option<UnilateralExitStepWaitRecord> {
+        lock_persistence(&self.inner)
+            .unilateral_exit_step_wait
+            .clone()
+    }
+
+    /// Record when we started waiting for the current step's confirmation. Reuses `started_at` when
+    /// the same step is already tracked.
+    pub fn ensure_unilateral_exit_step_wait(&self, step_txid: &str, step_index: u32) -> i64 {
+        let mut inner = lock_persistence(&self.inner);
+        if let Some(existing) = &inner.unilateral_exit_step_wait {
+            if existing.step_txid == step_txid && existing.step_index == step_index {
+                return existing.started_at;
+            }
+        }
+        let started_at = unix_timestamp_now();
+        inner.unilateral_exit_step_wait = Some(UnilateralExitStepWaitRecord {
+            step_txid: step_txid.to_string(),
+            step_index,
+            started_at,
+        });
+        started_at
+    }
+
+    pub fn clear_unilateral_exit_step_wait(&self) {
+        lock_persistence(&self.inner).unilateral_exit_step_wait = None;
     }
 
     /// Insert or replace a pending exit record (no duplicate deductions on retry).

@@ -15,6 +15,7 @@ use crate::exit_balance::{
     UnilateralExitOutpointKey, unilateral_exit_in_progress_outpoints_from_pending,
 };
 use crate::offchain_snapshot::{script_to_server_pk_lookup, vtxo_list_from_snapshot};
+use crate::outpoint::OnchainOutPoint;
 use crate::persistence::OffchainVtxoSnapshot;
 use crate::unilateral_exit_materials::virtual_tx_outpoint_has_unilateral_exit_prepared;
 
@@ -374,7 +375,7 @@ impl ArkSession {
         // (arkd logs `vtxo <outpoint> not found, skipping`) and finalizes a round that does not
         // spend the boarding UTXO. Verify the finalized round actually consumed the input and retry
         // a bounded number of times so a single missed scan does not surface to the user as a hang.
-        let mut skipped_outpoint: Option<OutPoint> = None;
+        let mut skipped_outpoint: Option<OnchainOutPoint> = None;
         for _ in 0..BOARDING_SETTLE_MAX_ATTEMPTS {
             let boarding_outpoint = self
                 .newest_cooperative_boarding_outpoint()
@@ -389,7 +390,7 @@ impl ArkSession {
 
             match self
                 .client
-                .settle_vtxos(&mut rng, &[], &[boarding_outpoint])
+                .settle_vtxos(&mut rng, &[], &[boarding_outpoint.inner()])
                 .await
             {
                 Ok(Some(commitment_txid)) => {
@@ -415,7 +416,7 @@ impl ArkSession {
              boarding UTXO{}. Its chain view had likely not registered the boarding deposit yet — \
              wait for another confirmation and retry.",
             skipped_outpoint
-                .map(|outpoint| format!(" {outpoint}"))
+                .map(|outpoint| format!(" {}", outpoint.inner()))
                 .unwrap_or_default(),
         )))
     }
@@ -429,14 +430,14 @@ impl ArkSession {
     async fn round_consumed_boarding_outpoint(
         &self,
         commitment_txid: Txid,
-        boarding_outpoint: OutPoint,
+        boarding_outpoint: OnchainOutPoint,
     ) -> ArkResult<bool> {
         for _ in 0..COMMITMENT_TX_VISIBILITY_MAX_POLLS {
             if let Some(commitment_tx) = self.client.blockchain().find_tx(&commitment_txid).await? {
                 return Ok(commitment_tx
                     .input
                     .iter()
-                    .any(|tx_in| tx_in.previous_output == boarding_outpoint));
+                    .any(|tx_in| tx_in.previous_output == boarding_outpoint.inner()));
             }
             sleep(COMMITMENT_TX_VISIBILITY_POLL_DELAY).await;
         }
@@ -445,7 +446,7 @@ impl ArkSession {
         let spend_status = self
             .client
             .blockchain()
-            .get_output_status(&boarding_outpoint.txid, boarding_outpoint.vout)
+            .get_output_status(boarding_outpoint.txid(), boarding_outpoint.vout())
             .await?;
         Ok(spend_status.spend_txid.is_some())
     }

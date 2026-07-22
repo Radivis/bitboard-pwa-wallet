@@ -207,7 +207,7 @@ export async function fundAndBoardToArkade(
  * estimate re-syncs this wallet on read, so once the funding confirms the "Start unroll" gate clears
  * the next time a candidate's estimate runs.
  *
- * Requires the Unilateral exit dialog to already be open.
+ * Requires the unilateral exit control page to be open (bumper address in sidebar).
  */
 export async function ensureOnChainBumperFunds(page: Page, sats: number): Promise<void> {
   const bumperAddressEl = page.getByTestId('arkade-bumper-address')
