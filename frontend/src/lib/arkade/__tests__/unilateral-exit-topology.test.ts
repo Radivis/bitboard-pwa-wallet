@@ -52,6 +52,38 @@ describe('unilateral-exit-topology helpers', () => {
     ])
   })
 
+  it('layoutUnilateralExitGraph renders spends edge paths between parent and child nodes', () => {
+    const { nodes, edgePaths } = layoutUnilateralExitGraph({
+      topology: sampleTopology,
+      selectedLeafOutpoints: [],
+      nodeStatuses: [],
+      layoutDirection: 'TB',
+    })
+
+    expect(nodes).toHaveLength(3)
+    expect(edgePaths).toHaveLength(2)
+    expect(edgePaths.map((edgePath) => edgePath.id).sort()).toEqual(['aa->bb', 'bb->cc'])
+    expect(edgePaths.every((edgePath) => edgePath.path.startsWith('M'))).toBe(true)
+    expect(nodes.every((node) => node.sourcePosition != null && node.targetPosition != null)).toBe(
+      true,
+    )
+  })
+
+  it('layoutUnilateralExitGraph falls back to exitBranchTxids when spends are empty', () => {
+    const topology: ArkadeUnilateralExitTopology = {
+      ...sampleTopology,
+      nodes: sampleTopology.nodes.map((node) => ({ ...node, spends: [] })),
+    }
+    const { edgePaths } = layoutUnilateralExitGraph({
+      topology,
+      selectedLeafOutpoints: [],
+      nodeStatuses: [],
+      layoutDirection: 'TB',
+    })
+
+    expect(edgePaths.map((edgePath) => edgePath.id)).toEqual(['bb->cc'])
+  })
+
   it('layoutUnilateralExitGraph renders one node per leaf virtual tx', () => {
     const topology: ArkadeUnilateralExitTopology = {
       ...sampleTopology,
@@ -60,7 +92,7 @@ describe('unilateral-exit-topology helpers', () => {
         { txid: 'cc', vout: 1 },
       ],
     }
-    const { nodes, edges } = layoutUnilateralExitGraph({
+    const { nodes, edgePaths } = layoutUnilateralExitGraph({
       topology,
       selectedLeafOutpoints: [{ txid: 'cc', vout: 0 }, { txid: 'cc', vout: 1 }],
       nodeStatuses: [],
@@ -70,6 +102,6 @@ describe('unilateral-exit-topology helpers', () => {
     expect(nodes.filter((node) => node.data.isLeaf)).toHaveLength(1)
     expect(nodes.map((node) => node.id).sort()).toEqual(['aa', 'bb', 'cc'])
     expect(nodes.find((node) => node.id === 'cc')?.data.isSelectedLeaf).toBe(true)
-    expect(edges.filter((edge) => edge.target === 'cc')).toHaveLength(1)
+    expect(edgePaths.filter((edgePath) => edgePath.id === 'bb->cc')).toHaveLength(1)
   })
 })

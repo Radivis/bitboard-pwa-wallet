@@ -24,6 +24,7 @@ import type {
   ArkadeVtxoOutpoint,
 } from '@/workers/arkade-api'
 import { cn } from '@/lib/shared/utils'
+import { UnilateralExitTreeEdgesOverlay } from '@/components/wallet/unilateral-exit/UnilateralExitTreeEdgesOverlay'
 
 interface UnilateralExitTreeGraphProps {
   renderEpoch: number
@@ -87,7 +88,7 @@ function UnilateralExitTreeGraphCanvas({
   onNodeFocus,
   layoutDirection,
 }: UnilateralExitTreeGraphProps & { layoutDirection: 'LR' | 'TB' }) {
-  const { nodes, edges } = useMemo(
+  const { nodes, edgePaths } = useMemo(
     () =>
       layoutUnilateralExitGraph({
         topology: topology!,
@@ -104,8 +105,9 @@ function UnilateralExitTreeGraphCanvas({
       key={renderEpoch}
       className="h-full w-full"
       nodes={nodes}
-      edges={edges}
+      edges={[]}
       nodeTypes={nodeTypes}
+      nodeOrigin={[0.5, 0.5]}
       fitView
       nodesDraggable={false}
       nodesConnectable={false}
@@ -115,6 +117,7 @@ function UnilateralExitTreeGraphCanvas({
       }}
       proOptions={{ hideAttribution: true }}
     >
+      <UnilateralExitTreeEdgesOverlay edgePaths={edgePaths} />
       <Background />
       <Controls showInteractive={false} />
     </ReactFlow>

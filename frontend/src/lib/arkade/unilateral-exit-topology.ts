@@ -5,7 +5,8 @@ import {
   sugiyama,
   coordSimplex,
 } from 'd3-dag'
-import type { Edge, Node } from '@xyflow/react'
+import type { Node } from '@xyflow/react'
+import { Position, getSmoothStepPath } from '@xyflow/react'
 import type {
   ArkadeUnilateralExitNodeStatus,
   ArkadeUnilateralExitTopology,
@@ -25,6 +26,7 @@ export type UnilateralExitTreeNodeData = {
   isFocused: boolean
   status: ArkadeUnilateralExitNodeStatus['status']
   confirmations: number
+  layoutDirection: UnilateralExitLayoutDirection
 }
 
 /** Rendered node diameter in px (`size-12`). */
@@ -37,6 +39,100 @@ export const UNILATERAL_EXIT_NODE_DIAMETER_PX = 48
 const UNILATERAL_EXIT_LAYOUT_NODE_SIZE_PX = UNILATERAL_EXIT_NODE_DIAMETER_PX * 2
 
 const EXIT_PATH_EDGE_COLOR = '#3b82f6'
+const DEFAULT_EDGE_COLOR = '#94a3b8'
+
+export type UnilateralExitGraphEdgePath = {
+  id: string
+  path: string
+  animated: boolean
+  stroke: string
+  strokeWidth: number
+}
+
+export function resolveNodeConnectionPositions(layoutDirection: UnilateralExitLayoutDirection): {
+  sourcePosition: Position
+  targetPosition: Position
+} {
+  if (layoutDirection === 'LR') {
+    return { sourcePosition: Position.Right, targetPosition: Position.Left }
+  }
+  return { sourcePosition: Position.Bottom, targetPosition: Position.Top }
+}
+
+function connectionPointFromNodeCenter(
+  center: { x: number; y: number },
+  side: Position,
+  nodeDiameter: number = UNILATERAL_EXIT_NODE_DIAMETER_PX,
+): { x: number; y: number } {
+  const radius = nodeDiameter / 2
+  switch (side) {
+    case Position.Top:
+      return { x: center.x, y: center.y - radius }
+    case Position.Bottom:
+      return { x: center.x, y: center.y + radius }
+    case Position.Left:
+      return { x: center.x - radius, y: center.y }
+    case Position.Right:
+      return { x: center.x + radius, y: center.y }
+  }
+}
+
+function buildGraphLinks(
+  topology: ArkadeUnilateralExitTopology,
+): ReadonlyArray<readonly [string, string]> {
+  const linksFromSpends = topology.nodes.flatMap((node) =>
+    node.spends.map((parentTxid) => [parentTxid, node.txid] as const),
+  )
+  if (linksFromSpends.length > 0) {
+    return linksFromSpends
+  }
+
+  const links: Array<readonly [string, string]> = []
+  for (let index = 1; index < topology.exitBranchTxids.length; index += 1) {
+    links.push([topology.exitBranchTxids[index - 1], topology.exitBranchTxids[index]])
+  }
+  return links
+}
+
+function buildEdgePaths(params: {
+  graphLinks: ReadonlyArray<readonly [string, string]>
+  nodePositionById: Map<string, { x: number; y: number }>
+  layoutDirection: UnilateralExitLayoutDirection
+  pathTxids: Set<string>
+}): UnilateralExitGraphEdgePath[] {
+  const { graphLinks, nodePositionById, layoutDirection, pathTxids } = params
+  const { sourcePosition, targetPosition } = resolveNodeConnectionPositions(layoutDirection)
+
+  return graphLinks.flatMap(([source, target]) => {
+    const sourceCenter = nodePositionById.get(source)
+    const targetCenter = nodePositionById.get(target)
+    if (sourceCenter == null || targetCenter == null) {
+      return []
+    }
+
+    const sourcePoint = connectionPointFromNodeCenter(sourceCenter, sourcePosition)
+    const targetPoint = connectionPointFromNodeCenter(targetCenter, targetPosition)
+    const [path] = getSmoothStepPath({
+      sourceX: sourcePoint.x,
+      sourceY: sourcePoint.y,
+      sourcePosition,
+      targetX: targetPoint.x,
+      targetY: targetPoint.y,
+      targetPosition,
+    })
+    const onPath = pathTxids.has(source) && pathTxids.has(target)
+
+    return [
+      {
+        id: `${source}->${target}`,
+        path,
+        animated: onPath,
+        stroke: onPath ? EXIT_PATH_EDGE_COLOR : DEFAULT_EDGE_COLOR,
+        strokeWidth: onPath ? 2.5 : 1.5,
+      },
+    ]
+  })
+}
 
 export function shortTxid(txid: string): string {
   if (txid.length <= 16) return txid
@@ -159,18 +255,16 @@ export function layoutUnilateralExitGraph(params: {
   nodeStatuses: ArkadeUnilateralExitNodeStatus[]
   layoutDirection: UnilateralExitLayoutDirection
   focusedNodeId?: string | null
-}): { nodes: Node<UnilateralExitTreeNodeData>[]; edges: Edge[] } {
+}): { nodes: Node<UnilateralExitTreeNodeData>[]; edgePaths: UnilateralExitGraphEdgePath[] } {
   const { topology, selectedLeafOutpoints, nodeStatuses, layoutDirection, focusedNodeId } = params
   const pathTxids = computeExitPathTxids(topology, selectedLeafOutpoints)
   const statusByTxid = mergeNodeStatuses(topology, nodeStatuses)
   const leafOutpointsByTxid = groupLeafOutpointsByTxid(topology.leafOutpoints)
 
-  const graphLinks = topology.nodes.flatMap((node) =>
-    node.spends.map((parentTxid) => [parentTxid, node.txid] as const),
-  )
+  const graphLinks = buildGraphLinks(topology)
 
   if (graphLinks.length === 0 && topology.nodes.length === 0) {
-    return { nodes: [], edges: [] }
+    return { nodes: [], edgePaths: [] }
   }
 
   const graph = graphConnect()(graphLinks)
@@ -193,7 +287,10 @@ export function layoutUnilateralExitGraph(params: {
     })
   }
 
+  const { sourcePosition, targetPosition } = resolveNodeConnectionPositions(layoutDirection)
+
   const nodes: Node<UnilateralExitTreeNodeData>[] = []
+  const nodePositionById = new Map<string, { x: number; y: number }>()
 
   for (const dagNode of graph.nodes()) {
     const txid = String(dagNode.data)
@@ -209,11 +306,16 @@ export function layoutUnilateralExitGraph(params: {
       spreadIndex: 0,
       spreadCount: 1,
     })
+    nodePositionById.set(txid, { x, y })
 
     nodes.push({
       id: txid,
       type: 'unilateralExitTreeNode',
       position: { x, y },
+      width: UNILATERAL_EXIT_NODE_DIAMETER_PX,
+      height: UNILATERAL_EXIT_NODE_DIAMETER_PX,
+      sourcePosition,
+      targetPosition,
       data: buildTreeNodeData({
         nodeId: txid,
         txid,
@@ -224,25 +326,19 @@ export function layoutUnilateralExitGraph(params: {
         pathTxids,
         focusedNodeId,
         status,
+        layoutDirection,
       }),
     })
   }
 
-  const edges: Edge[] = graphLinks.map(([source, target]) => {
-    const onPath = pathTxids.has(source) && pathTxids.has(target)
-    return {
-      id: `${source}->${target}`,
-      source,
-      target,
-      animated: onPath,
-      style: {
-        stroke: onPath ? EXIT_PATH_EDGE_COLOR : undefined,
-        strokeWidth: onPath ? 2 : 1,
-      },
-    }
+  const edgePaths = buildEdgePaths({
+    graphLinks,
+    nodePositionById,
+    layoutDirection,
+    pathTxids,
   })
 
-  return { nodes, edges }
+  return { nodes, edgePaths }
 }
 
 function buildTreeNodeData(params: {
@@ -255,6 +351,7 @@ function buildTreeNodeData(params: {
   pathTxids: Set<string>
   focusedNodeId?: string | null
   status: ArkadeUnilateralExitNodeStatus | undefined
+  layoutDirection: UnilateralExitLayoutDirection
 }): UnilateralExitTreeNodeData {
   return {
     txid: params.txid,
@@ -266,6 +363,7 @@ function buildTreeNodeData(params: {
     isFocused: params.focusedNodeId === params.nodeId,
     status: params.status?.status ?? 'pending',
     confirmations: params.status?.confirmations ?? 0,
+    layoutDirection: params.layoutDirection,
   }
 }
 
