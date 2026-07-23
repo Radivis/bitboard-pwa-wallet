@@ -201,6 +201,7 @@ fn set_leaf_virtual_tx_vtxos_unrolled_flag_in_wallet_db(
     wallet_db.set_offchain_vtxo_snapshot(snapshot);
 }
 
+#[cfg(test)]
 fn revert_unilateral_unroll_local_state_in_wallet_db(
     wallet_db: &JsonPersistenceDb,
     txid: &str,
@@ -792,11 +793,6 @@ impl ArkSession {
     ) -> ArkResult<()> {
         set_leaf_virtual_tx_vtxos_unrolled_flag_in_wallet_db(&self.wallet_db, txid, true);
         Ok(())
-    }
-
-    /// Undo optimistic unroll state when neither ASP nor Esplora confirms the broadcast.
-    pub(crate) fn revert_unilateral_unroll_local_state(&self, txid: &str, vout: u32) {
-        revert_unilateral_unroll_local_state_in_wallet_db(&self.wallet_db, txid, vout);
     }
 
     pub(crate) fn revert_leaf_virtual_tx_unilateral_unroll_local_state(&self, txid: &str) {

@@ -398,10 +398,11 @@ impl JsonPersistenceDb {
     /// the same step is already tracked.
     pub fn ensure_unilateral_exit_step_wait(&self, step_txid: &str, step_index: u32) -> i64 {
         let mut inner = lock_persistence(&self.inner);
-        if let Some(existing) = &inner.unilateral_exit_step_wait {
-            if existing.step_txid == step_txid && existing.step_index == step_index {
-                return existing.started_at;
-            }
+        if let Some(existing) = &inner.unilateral_exit_step_wait
+            && existing.step_txid == step_txid
+            && existing.step_index == step_index
+        {
+            return existing.started_at;
         }
         let started_at = unix_timestamp_now();
         inner.unilateral_exit_step_wait = Some(UnilateralExitStepWaitRecord {

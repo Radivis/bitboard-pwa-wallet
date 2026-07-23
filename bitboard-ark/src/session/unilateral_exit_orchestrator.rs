@@ -37,7 +37,6 @@ struct LeafUnilateralContext {
     virtual_outpoint: VirtualOutPoint,
     chains: VtxoChains,
     branch_txids: Vec<Txid>,
-    branch_txs: Vec<Transaction>,
     commitment_txids: Vec<Txid>,
     amount_sats: u64,
 }
@@ -258,7 +257,7 @@ impl ArkSession {
             .clone();
 
         let confirmations_before = tx_confirmations(blockchain, &step_txid).await?;
-        let mut phase = UnilateralExitPhase::Waiting;
+        let phase = UnilateralExitPhase::Waiting;
 
         if !step_reached_confirmation(confirmations_before) {
             if confirmations_before == 0 && blockchain.find_tx(&step_txid).await?.is_none() {
@@ -266,7 +265,6 @@ impl ArkSession {
                     .broadcast_unilateral_exit_step_at_fee_rate(&parent_tx, fee_rate_sat_per_vb)
                     .await
                     .map_err(ArkWasmError::Client)?;
-                phase = UnilateralExitPhase::Broadcasting;
             }
 
             self.wallet_db.ensure_unilateral_exit_step_wait(
@@ -275,7 +273,6 @@ impl ArkSession {
             );
             self.wait_for_step_confirmation(blockchain, &step_txid)
                 .await?;
-            phase = UnilateralExitPhase::Waiting;
         } else {
             self.wallet_db.clear_unilateral_exit_step_wait();
         }
@@ -337,11 +334,11 @@ impl ArkSession {
             return Ok(dedup_virtual_outpoints(virtual_outpoints));
         }
         let candidates = self.list_exit_candidates().await?;
-        Ok(candidates
+        candidates
             .into_iter()
             .filter(|candidate| candidate.can_start_unroll)
             .map(|candidate| VirtualOutPoint::parse(&candidate.txid, candidate.vout))
-            .collect::<ArkResult<Vec<_>>>()?)
+            .collect::<ArkResult<Vec<_>>>()
     }
 
     async fn build_unilateral_batch_plan(
@@ -374,7 +371,6 @@ impl ArkSession {
                 virtual_outpoint: virtual_outpoint.clone(),
                 chains,
                 branch_txids,
-                branch_txs,
                 commitment_txids,
                 amount_sats,
             });
