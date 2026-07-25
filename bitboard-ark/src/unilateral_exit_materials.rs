@@ -145,27 +145,16 @@ pub fn clear_unilateral_exit_materials_on_ineligible_records(snapshot: &mut Offc
     }
 }
 
-fn vtxo_flags_are_exit_eligible(
-    is_preconfirmed: bool,
-    is_swept: bool,
-    is_unrolled: bool,
-    is_spent: bool,
-) -> bool {
-    !is_preconfirmed && !is_swept && !is_unrolled && !is_spent
+fn vtxo_flags_are_exit_eligible(is_swept: bool, is_unrolled: bool, is_spent: bool) -> bool {
+    !is_swept && !is_unrolled && !is_spent
 }
 
 pub fn record_is_exit_eligible(record: &VirtualTxOutPointRecord) -> bool {
-    vtxo_flags_are_exit_eligible(
-        record.is_preconfirmed,
-        record.is_swept,
-        record.is_unrolled,
-        record.is_spent,
-    )
+    vtxo_flags_are_exit_eligible(record.is_swept, record.is_unrolled, record.is_spent)
 }
 
 pub fn virtual_tx_outpoint_is_exit_eligible(virtual_tx_outpoint: &VirtualTxOutPoint) -> bool {
     vtxo_flags_are_exit_eligible(
-        virtual_tx_outpoint.is_preconfirmed,
         virtual_tx_outpoint.is_swept,
         virtual_tx_outpoint.is_unrolled,
         virtual_tx_outpoint.is_spent,
@@ -265,12 +254,35 @@ mod tests {
     }
 
     #[test]
-    fn exit_eligibility_requires_all_exit_blocking_flags_cleared() {
-        assert!(vtxo_flags_are_exit_eligible(false, false, false, false));
-        assert!(!vtxo_flags_are_exit_eligible(true, false, false, false));
-        assert!(!vtxo_flags_are_exit_eligible(false, true, false, false));
-        assert!(!vtxo_flags_are_exit_eligible(false, false, true, false));
-        assert!(!vtxo_flags_are_exit_eligible(false, false, false, true));
+    fn exit_eligibility_requires_exit_blocking_flags_cleared() {
+        assert!(vtxo_flags_are_exit_eligible(false, false, false));
+        assert!(!vtxo_flags_are_exit_eligible(true, false, false));
+        assert!(!vtxo_flags_are_exit_eligible(false, true, false));
+        assert!(!vtxo_flags_are_exit_eligible(false, false, true));
+    }
+
+    #[test]
+    fn preconfirmed_vtxo_is_exit_eligible() {
+        let record = VirtualTxOutPointRecord {
+            txid: "aa".repeat(32),
+            vout: 0,
+            created_at: 0,
+            expires_at: 0,
+            amount_sats: 1_000,
+            script_hex: "00".to_string(),
+            is_preconfirmed: true,
+            is_swept: false,
+            is_unrolled: false,
+            is_spent: false,
+            spent_by: None,
+            commitment_txids: vec![],
+            settled_by: None,
+            ark_txid: None,
+            assets: vec![],
+            server_pk_hex: None,
+            unilateral_exit_materials: None,
+        };
+        assert!(record_is_exit_eligible(&record));
     }
 
     #[test]

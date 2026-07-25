@@ -38,6 +38,27 @@ mod exit_candidate_tests {
     }
 
     #[test]
+    fn preconfirmed_vtxo_can_start_unroll() {
+        let future_expiry = current_unix_timestamp() + 86_400;
+        let row = map_exit_candidate(
+            &sample_vtp(
+                future_expiry,
+                VtpFlags {
+                    is_preconfirmed: true,
+                    is_swept: false,
+                    is_unrolled: false,
+                    is_spent: false,
+                },
+            ),
+            DUST,
+        );
+
+        assert_eq!(row.virtual_status_state, "preconfirmed");
+        assert!(row.can_start_unroll);
+        assert!(!row.can_complete);
+    }
+
+    #[test]
     fn settled_vtxo_can_start_unroll() {
         let future_expiry = current_unix_timestamp() + 86_400;
         let row = map_exit_candidate(
