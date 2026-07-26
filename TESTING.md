@@ -102,11 +102,12 @@ npm run test:e2e:sequential   # E2E_SEQUENTIAL=true
 | `test:e2e:arkade-regtest` | `@arkade-regtest` | REG-01/02, short VTXO expiry |
 | `test:e2e:arkade-regtest-longexpiry` | `@arkade-exit-regtest` | REG-03/04, long expiry |
 | `test:e2e:arkade-regtest-reg04` | `@arkade-reg04` | REG-04 only |
+| `test:e2e:arkade-regtest-reg07` | `@arkade-reg07` | REG-07 preconfirmed VTXO + automatic unroll |
 | `test:e2e:arkade-regtest-signer` | `@arkade-signer-regtest` | REG-05 signer migration |
 | `test:e2e:arkade-regtest-operator-trust` | `@arkade-operator-trust-regtest` | REG-06 operator trust / autonomous review |
 | `test:e2e:nwc` | `@nwc` | NWC mock |
 
-Contracts: `doc/features/arkade-regtest-contract.yaml` (E2E-ARK-REG-01 … 06).
+Contracts: `doc/features/arkade-regtest-contract.yaml` (E2E-ARK-REG-01 … 07).
 
 ### Background runner (Linux)
 

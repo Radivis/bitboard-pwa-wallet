@@ -200,11 +200,24 @@ export function useUnilateralExitAutomationRunner() {
           }
 
           try {
-            await proceedUnilateralExitStepWithGuards({
+            const proceedResult = await proceedUnilateralExitStepWithGuards({
               activeWalletId,
               vtxoOutpoints: sortedOutpoints,
               feeRateSatPerVb: feeResolution.feeRateSatPerVb,
             })
+            if (proceedResult.phase === 'complete') {
+              store.completeJob(activeWalletId!, networkMode, activeArkadeConnectionId!)
+              useUnilateralExitControlStore.getState().setJobStarted(false)
+              toast.success('Unilateral exit branch complete.')
+              await invalidateUnilateralExitQueries(
+                queryClient,
+                activeWalletId!,
+                networkMode,
+                activeArkadeConnectionId!,
+                sortedOutpoints,
+              )
+              return
+            }
           } catch (error) {
             const message = error instanceof Error ? error.message : 'Unroll step failed.'
             store.pauseJob(
@@ -230,7 +243,18 @@ export function useUnilateralExitAutomationRunner() {
       }
     }
 
-    void runAutomationLoop()
+    void runAutomationLoop().catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Unroll step failed.'
+      const store = useUnilateralExitAutomationStore.getState()
+      store.pauseJob(
+        activeWalletId!,
+        networkMode,
+        activeArkadeConnectionId!,
+        'error',
+        message,
+      )
+      toast.error(pauseReasonToastMessage('error', message))
+    })
 
     return () => {
       cancelled = true

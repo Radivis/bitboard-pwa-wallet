@@ -117,6 +117,8 @@ feature:
         description: Background automation runner in ActiveWalletBootstrap continues proceed steps while app unlocked and same descriptor wallet selected; pauses on fee cap, bumper, or error; not delegator-based
       - id: ARK-EXIT-21
         description: Manual per-step Proceed remains on control page when Proceed automatically is off
+      - id: ARK-EXIT-22
+        description: Proceed automatically advances all unroll steps for a preconfirmed VTXO until branch complete (E2E-ARK-REG-07)
     operator_sync:
       - id: ARK-SYNC-01
         description: When discover_keys fails during operator sync but list_vtxos succeeds, sync lifecycle records a warningMessage and dashboard/management show a non-blocking sync warning banner

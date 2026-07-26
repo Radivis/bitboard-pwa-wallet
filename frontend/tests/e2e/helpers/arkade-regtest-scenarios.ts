@@ -120,6 +120,23 @@ export async function prepareUnilateralUnrollScenario(page: Page): Promise<void>
 }
 
 /**
+ * Boarded wallet with a **preconfirmed** VTXO (settlement commitment not yet mined).
+ * `fundAndBoardToArkade` already syncs; avoid extra on-chain mines before unroll starts.
+ */
+export async function preparePreconfirmedUnilateralExitScenario(page: Page): Promise<void> {
+  await prepareFundedArkadeBalance(page)
+  await goToArkadeManagementPanel(page)
+}
+
+/** Assert at least one VTXO on the viewer is still preconfirmed (not batch-settled on-chain). */
+export async function assertPreconfirmedVtxoVisibleOnViewer(page: Page): Promise<void> {
+  await goToArkadeManagementPanel(page)
+  await page.getByRole('link', { name: 'View VTXOs' }).click()
+  await expect(page.getByRole('heading', { name: /VTXOs/i })).toBeVisible({ timeout: 60_000 })
+  await expect(page.getByText('Pre-confirmed').first()).toBeVisible({ timeout: 60_000 })
+}
+
+/**
  * Fund and board on the pre-rotation signer, rotate the operator with a future cooperative cutoff,
  * restart arkd, and reload so the wallet reopens with a signer migration hint.
  *

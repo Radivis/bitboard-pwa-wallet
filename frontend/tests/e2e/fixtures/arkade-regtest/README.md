@@ -27,6 +27,7 @@ npm run test:e2e:regtest
 npm run test:e2e:arkade-regtest             # REG-01/02 (recovery, renewal) — short expiry
 npm run test:e2e:arkade-regtest-longexpiry  # REG-03 + REG-04 (collaborative exit, unilateral unroll) — long expiry
 npm run test:e2e:arkade-regtest-reg04       # REG-04 only — clean stack + long expiry (isolated debugging)
+npm run test:e2e:arkade-regtest-reg07       # REG-07 only — preconfirmed VTXO + automatic unroll
 npm run test:e2e:arkade-regtest-signer      # REG-05 signer migration — clean stack + long expiry
 ```
 
@@ -40,6 +41,7 @@ same stack with a different (block-denominated) `ARKD_VTXO_TREE_EXPIRY`:
 | Short | `arkade-core-flows-regtest.spec.ts` | `@arkade-regtest` | `.env.regtest` default (`40` blocks) | REG-01 recoverable recovery, REG-02 renewal |
 | Long  | `arkade-exit-flows-regtest.spec.ts` | `@arkade-exit-regtest` | `ARKD_VTXO_TREE_EXPIRY=200` blocks (set by the npm script) | REG-03 collaborative exit, REG-04 unilateral unroll |
 | REG-04 (isolated) | `arkade-reg04-unilateral-unroll-regtest.spec.ts` | `@arkade-reg04` | same long expiry via npm script | REG-04 only (faster iteration; same flow) |
+| REG-07 (isolated) | `arkade-reg07-preconfirmed-automation-regtest.spec.ts` | `@arkade-reg07` | same long expiry via npm script | REG-07 preconfirmed VTXO + Proceed automatically |
 | Signer migration | `arkade-signer-migration-regtest.spec.ts` | `@arkade-signer-regtest` | `ARKD_VTXO_TREE_EXPIRY=200` via npm script | REG-05 cooperative migrate after `rotate-signer` |
 
 ### REG-05 → Rust fixture (optional)

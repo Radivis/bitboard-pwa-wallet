@@ -128,18 +128,18 @@ describe('useUnilateralExitAutomationRunner', () => {
   it('calls proceed when fee is within cap and bumper is sufficient', async () => {
     let proceedCallCount = 0
     getUnilateralExitProgress.mockImplementation(async () => ({
-      phase: proceedCallCount > 0 ? 'complete' : 'idle',
+      phase: 'idle',
       stepIndex: 0,
-      totalSteps: 2,
+      totalSteps: 1,
       nodeStatuses: [],
       leafStatuses: [],
     }))
     proceedUnilateralExitStep.mockImplementation(async () => {
       proceedCallCount += 1
       return {
-        phase: 'waiting',
+        phase: 'complete',
         stepIndex: 0,
-        totalSteps: 2,
+        totalSteps: 1,
         nodeStatuses: [],
         leafStatuses: [],
       }
@@ -163,6 +163,11 @@ describe('useUnilateralExitAutomationRunner', () => {
 
     await waitFor(() => {
       expect(proceedUnilateralExitStep).toHaveBeenCalledTimes(1)
+      const job = useUnilateralExitAutomationStore
+        .getState()
+        .getJob(walletId, 'regtest', connectionId)
+      expect(job.proceedAutomatically).toBe(false)
+      expect(job.jobStarted).toBe(false)
     })
   })
 })
