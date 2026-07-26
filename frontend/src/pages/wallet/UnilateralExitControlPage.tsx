@@ -275,7 +275,10 @@ export function UnilateralExitControlPage() {
   const nodeStatuses = progress?.nodeStatuses ?? proceedMutation.data?.nodeStatuses ?? []
   const stepIndex = progress?.stepIndex ?? proceedMutation.data?.stepIndex ?? 0
   const totalSteps = progress?.totalSteps ?? proceedMutation.data?.totalSteps ?? 0
-  const phase = progress?.phase ?? proceedMutation.data?.phase ?? 'idle'
+  const phase =
+    proceedMutation.data?.phase === 'complete' || progress?.phase === 'complete'
+      ? 'complete'
+      : (proceedMutation.data?.phase ?? progress?.phase ?? 'idle')
   const currentStepWaitingSince =
     progress?.currentStepWaitingSince ?? proceedMutation.data?.currentStepWaitingSince
   const jobActive = jobStarted || hasInProgressExits || phase !== 'idle'

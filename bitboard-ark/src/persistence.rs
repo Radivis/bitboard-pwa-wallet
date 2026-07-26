@@ -36,10 +36,17 @@ fn lock_persistence_result<T>(mutex: &Mutex<T>) -> Result<MutexGuard<'_, T>, Err
 }
 
 fn unix_timestamp_now() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64
+    #[cfg(target_arch = "wasm32")]
+    {
+        (js_sys::Date::now() / 1000.0) as i64
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64
+    }
 }
 pub const ARK_RS_ENGINE: &str = "ark-rs";
 pub const ARK_RS_SDK_VERSION: &str = "0.9.3";

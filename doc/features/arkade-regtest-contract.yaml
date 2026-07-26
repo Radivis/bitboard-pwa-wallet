@@ -14,7 +14,7 @@ contracts:
     description: Collaborative exit withdraws part of Arkade balance to on-chain receive address
     tags: ["@arkade-regtest"]
   - id: E2E-ARK-REG-04
-    description: Full unilateral unroll — select VTXO, unroll, mine timelock blocks, complete exit on-chain
+    description: Full unilateral unroll — select VTXO, per-step Proceed with mining, branch complete, mine timelock blocks, complete exit on-chain
     tags: ["@arkade-regtest"]
   - id: E2E-ARK-REG-05
     description: Fund on pre-rotation signer, rotate-signer with future cutoff, cooperative migrate via banner, assert no pendingRecoveryDueToExpiredSignerSats or pending-recovery-due-to-expired-signer breakdown

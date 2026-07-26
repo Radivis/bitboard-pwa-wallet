@@ -10,6 +10,7 @@ import {
 } from './helpers/arkade-regtest'
 import { ensureOnChainBumperFunds, goToArkadeManagementPanel } from './helpers/arkade-management'
 import { prepareUnilateralUnrollScenario } from './helpers/arkade-regtest-scenarios'
+import { runManualUnilateralUnrollUntilBranchComplete } from './helpers/arkade-unilateral-exit-reg04'
 import { goToWalletTab } from './helpers/wallet-nav'
 
 const ARKADE_REGTEST_TIMEOUT_MS = 1_200_000
@@ -33,20 +34,7 @@ test.describe('Arkade REG-04 unilateral unroll @arkade-reg04', () => {
     await page.locator('[data-testid^="unilateral-exit-leaf-node-"]').first().click()
     await page.locator('[data-testid="unilateral-exit-leaf-select-switch"]').click()
     await ensureOnChainBumperFunds(page, 100_000)
-    const proceedButton = page.getByTestId('unilateral-exit-proceed')
-    await expect(proceedButton).toBeEnabled({ timeout: 120_000 })
-
-    for (let step = 0; step < 24; step += 1) {
-      if (await page.getByText(/branch complete/i).isVisible()) {
-        break
-      }
-      if (!(await proceedButton.isEnabled())) {
-        await mineRegtestBlocks(1)
-        continue
-      }
-      await proceedButton.click()
-      await mineRegtestBlocks(2)
-    }
+    await runManualUnilateralUnrollUntilBranchComplete(page)
 
     await goToArkadeManagementPanel(page)
     await expect(page.getByTestId('arkade-complete-unilateral-exit')).toBeVisible({

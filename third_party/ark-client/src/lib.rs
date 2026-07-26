@@ -1706,17 +1706,12 @@ where
         parent: &Transaction,
         fee_rate_sat_per_vb: f64,
     ) -> Result<Option<Txid>, Error> {
-        let blockchain = self.blockchain();
         let parent_txid = parent.compute_txid();
-
-        if blockchain.find_tx(&parent_txid).await?.is_some() {
-            return Ok(None);
-        }
 
         let child_tx = self
             .bump_tx_at_fee_rate(parent, fee_rate_sat_per_vb)
             .await?;
-        blockchain
+        self.blockchain()
             .broadcast_package(&[parent, &child_tx])
             .await?;
 

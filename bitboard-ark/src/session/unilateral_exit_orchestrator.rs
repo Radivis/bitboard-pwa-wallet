@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 
-use ark_client::Blockchain;
 use ark_core::build_unilateral_exit_tree_txids;
 use ark_core::server::VtxoChains;
 use bitcoin::{OutPoint, Transaction, Txid};
@@ -260,7 +259,7 @@ impl ArkSession {
         let phase = UnilateralExitPhase::Waiting;
 
         if !step_reached_confirmation(confirmations_before) {
-            if confirmations_before == 0 && blockchain.find_tx(&step_txid).await?.is_none() {
+            if !blockchain.is_tx_relayed_on_network(&step_txid).await? {
                 self.client
                     .broadcast_unilateral_exit_step_at_fee_rate(&parent_tx, fee_rate_sat_per_vb)
                     .await
@@ -607,9 +606,6 @@ impl ArkSession {
 }
 
 async fn tx_confirmations(blockchain: &EsploraBlockchain, txid: &Txid) -> ArkResult<u64> {
-    if blockchain.find_tx(txid).await?.is_none() {
-        return Ok(0);
-    }
     blockchain.get_tx_confirmations(txid).await
 }
 

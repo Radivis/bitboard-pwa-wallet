@@ -99,6 +99,20 @@ impl EsploraBlockchain {
             .map_err(|error| ArkWasmError::Blockchain(error.to_string()))
     }
 
+    /// True when `/tx/{txid}/raw` returns a transaction (mempool or chain).
+    ///
+    /// Unlike [`Self::find_tx_at`], this does not fall back to JSON-only `/tx/{txid}` entries that
+    /// arkade-regtest serves for virtual-tree artifacts before they are relayed.
+    pub async fn is_tx_relayed_on_network(&self, txid: &Txid) -> ArkResult<bool> {
+        let client = Arc::clone(&self.client);
+        let txid = *txid;
+        Ok(client
+            .get_tx(&txid)
+            .await
+            .map_err(EsploraBlockchain::map_esplora_error)?
+            .is_some())
+    }
+
     async fn get_output_status_at(
         client: &EsploraAsyncClient,
         txid: &Txid,
@@ -316,27 +330,25 @@ async fn collect_address_utxos(
     Ok(explorer_utxos)
 }
 
-async fn map_tx_status(
+async fn esplora_tx_status(
     client: &EsploraAsyncClient,
     txid: &Txid,
-) -> Result<TxStatus, ark_client::Error> {
-    let status = client
-        .get_tx_status(txid)
-        .await
-        .map_err(EsploraBlockchain::map_esplora_error)?;
-    Ok(TxStatus {
-        confirmed_at: status.block_time.map(|time| time as i64),
-    })
+) -> Result<Option<esplora_client::api::TxStatus>, ark_client::Error> {
+    match client.get_tx_status(txid).await {
+        Ok(status) => Ok(Some(status)),
+        Err(esplora_client::Error::HttpResponse { status: 404, .. }) => client
+            .get_tx_info(txid)
+            .await
+            .map_err(EsploraBlockchain::map_esplora_error)
+            .map(|tx_info| tx_info.map(|tx| tx.status)),
+        Err(error) => Err(EsploraBlockchain::map_esplora_error(error)),
+    }
 }
 
-async fn map_tx_confirmations(
+async fn confirmations_from_esplora_tx_status(
     client: &EsploraAsyncClient,
-    txid: &Txid,
+    status: &esplora_client::api::TxStatus,
 ) -> Result<u64, ark_client::Error> {
-    let status = client
-        .get_tx_status(txid)
-        .await
-        .map_err(EsploraBlockchain::map_esplora_error)?;
     if !status.confirmed {
         return Ok(0);
     }
@@ -350,6 +362,46 @@ async fn map_tx_confirmations(
             Ok(u64::from(tip_height.saturating_sub(block_height) + 1))
         }
         _ => Ok(1),
+    }
+}
+
+async fn map_tx_status(
+    client: &EsploraAsyncClient,
+    txid: &Txid,
+) -> Result<TxStatus, ark_client::Error> {
+    let status = esplora_tx_status(client, txid).await?;
+    Ok(TxStatus {
+        confirmed_at: status.and_then(|status| status.block_time.map(|time| time as i64)),
+    })
+}
+
+async fn map_tx_confirmations(
+    client: &EsploraAsyncClient,
+    txid: &Txid,
+) -> Result<u64, ark_client::Error> {
+    match client.get_tx_status(txid).await {
+        Ok(status) => confirmations_from_esplora_tx_status(client, &status).await,
+        Err(esplora_client::Error::HttpResponse { status: 404, .. }) => {
+            // arkade-regtest serves virtual-tree txs from JSON `/tx/{txid}` before they are relayed.
+            // Only count confirmations once `/tx/{txid}/raw` shows the tx is actually on the network.
+            let relayed = client
+                .get_tx(txid)
+                .await
+                .map_err(EsploraBlockchain::map_esplora_error)?
+                .is_some();
+            if !relayed {
+                return Ok(0);
+            }
+            let Some(tx_info) = client
+                .get_tx_info(txid)
+                .await
+                .map_err(EsploraBlockchain::map_esplora_error)?
+            else {
+                return Ok(0);
+            };
+            confirmations_from_esplora_tx_status(client, &tx_info.status).await
+        }
+        Err(error) => Err(EsploraBlockchain::map_esplora_error(error)),
     }
 }
 
