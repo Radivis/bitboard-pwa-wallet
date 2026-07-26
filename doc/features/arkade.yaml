@@ -109,6 +109,14 @@ feature:
         description: Leaf virtual tx must reach 6 confirmations on Esplora before WASM marks is_unrolled; cooperative mode still polls operator indexer after leaf finality
       - id: ARK-EXIT-17
         description: When leaf virtual tx reaches 6 conf, WASM marks is_unrolled for every VTXO outpoint on that txid; sticky merge promotes all vouts on the same txid; control page selects sibling leaf outpoints atomically; completion remains per outpoint
+      - id: ARK-EXIT-18
+        description: Control page Proceed automatically switch with congestion warning and max fee rate input; automatic mode uses Low/Medium/High preset degree only (no custom fee)
+      - id: ARK-EXIT-19
+        description: Max fee default max(10 sat/vB, 2×High preset) when enabling auto; automation pauses when live preset for selected degree exceeds max cap
+      - id: ARK-EXIT-20
+        description: Background automation runner in ActiveWalletBootstrap continues proceed steps while app unlocked and same descriptor wallet selected; pauses on fee cap, bumper, or error; not delegator-based
+      - id: ARK-EXIT-21
+        description: Manual per-step Proceed remains on control page when Proceed automatically is off
     operator_sync:
       - id: ARK-SYNC-01
         description: When discover_keys fails during operator sync but list_vtxos succeeds, sync lifecycle records a warningMessage and dashboard/management show a non-blocking sync warning banner

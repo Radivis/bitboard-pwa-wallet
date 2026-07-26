@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
+import { UnilateralExitAutomationSection } from '@/components/wallet/unilateral-exit/UnilateralExitAutomationSection'
 import { UnilateralExitTreeGraph } from '@/components/wallet/unilateral-exit/UnilateralExitTreeGraph'
 import { UnilateralExitNodeDetailCard } from '@/components/wallet/unilateral-exit/UnilateralExitNodeDetailCard'
 import {
@@ -23,12 +24,15 @@ import {
   useArkadeUnilateralExitTopologyQuery,
   useArkadeUnilateralExitsInProgressQuery,
 } from '@/hooks/useArkadeQueries'
+import { useEsploraFeePresets } from '@/hooks/useEsploraFeePresets'
 import { useOnchainFeeRateSelection } from '@/hooks/useOnchainFeeRateSelection'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import { arkadeUnilateralExitInProgressSats } from '@/lib/arkade/arkade-balance-display'
+import { defaultMaxFeeRateSatPerVb } from '@/lib/arkade/unilateral-exit-automation-fees'
 import { formatSatPerVbTwoDecimals } from '@/lib/esplora/esplora-fee-estimates'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import { useUnilateralExitControlStore } from '@/stores/unilateralExitControlStore'
+import { useUnilateralExitAutomationStore, unilateralExitAutomationJobKey } from '@/stores/unilateralExitAutomationStore'
 import {
   arkadeUnilateralExitProgressQueryKey,
   arkadeUnilateralExitTopologyQueryKey,
@@ -74,6 +78,7 @@ export function UnilateralExitControlPage() {
   const exitCandidatesQuery = useArkadeExitCandidatesQuery(true)
   const inProgressQuery = useArkadeUnilateralExitsInProgressQuery(true)
   const bumperInfoQuery = useArkadeBumperInfoQuery(true)
+  const feePresetsQuery = useEsploraFeePresets(networkMode)
 
   const selectedLeafOutpoints = useUnilateralExitControlStore(
     (state) => state.selectedLeafOutpoints,
@@ -90,13 +95,48 @@ export function UnilateralExitControlPage() {
   const graphRenderEpoch = useUnilateralExitControlStore((state) => state.graphRenderEpoch)
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null)
 
+  const automationJob = useUnilateralExitAutomationStore((state) => {
+    if (
+      activeWalletId == null ||
+      activeArkadeConnectionId == null ||
+      !isArkadeSupportedNetworkMode(networkMode)
+    ) {
+      return null
+    }
+    const key = unilateralExitAutomationJobKey(
+      activeWalletId,
+      networkMode,
+      activeArkadeConnectionId,
+    )
+    return state.jobsByKey[key] ?? null
+  })
+
+  const proceedAutomatically = automationJob?.proceedAutomatically ?? false
+  const automationPausedReason = automationJob?.pausedReason
+  const automationLastError = automationJob?.lastErrorMessage
+
   const isOnControlPage = useRouterState({
     select: (routerState) =>
       routerState.location.pathname === '/wallet/arkade/unilateral-exit',
   })
 
   const feeSelection = useOnchainFeeRateSelection(networkMode)
-  const { effectiveFeeRate: feeRateSatPerVb, ...feeRateUi } = feeSelection
+  const { effectiveFeeRate: manualFeeRateSatPerVb, ...feeRateUi } = feeSelection
+
+  const presetSatPerVbByLabel =
+    feePresetsQuery.data ?? feeRateUi.presetSatPerVbByLabel
+
+  const automatedFeeRateSatPerVb =
+    automationJob != null
+      ? presetSatPerVbByLabel[automationJob.feePresetLabel]
+      : manualFeeRateSatPerVb
+
+  const feeRateSatPerVb = proceedAutomatically
+    ? automatedFeeRateSatPerVb
+    : manualFeeRateSatPerVb
+
+  const automationJobActive =
+    proceedAutomatically && (automationJob?.jobStarted ?? false)
 
   const unilateralExitInProgressSats = arkadeUnilateralExitInProgressSats(
     balanceQuery.data ?? { confirmedSats: 0, totalSats: 0 },
@@ -117,7 +157,7 @@ export function UnilateralExitControlPage() {
 
   const progressQuery = useArkadeUnilateralExitProgressQuery({
     enabled:
-      isOnControlPage &&
+      (isOnControlPage || automationJobActive) &&
       (jobStarted || hasInProgressExits) &&
       selectedLeafOutpoints.length > 0,
     vtxoOutpoints: selectedLeafOutpoints,
@@ -127,6 +167,52 @@ export function UnilateralExitControlPage() {
     if (!isOnControlPage) return
     bumpGraphRenderEpoch()
   }, [isOnControlPage, bumpGraphRenderEpoch])
+
+  useEffect(() => {
+    if (
+      activeWalletId == null ||
+      activeArkadeConnectionId == null ||
+      !isArkadeSupportedNetworkMode(networkMode)
+    ) {
+      return
+    }
+    const persistedJob = useUnilateralExitAutomationStore
+      .getState()
+      .getJob(activeWalletId, networkMode, activeArkadeConnectionId)
+    if (
+      persistedJob.jobStarted &&
+      persistedJob.selectedLeafOutpoints.length > 0 &&
+      selectedLeafOutpoints.length === 0
+    ) {
+      useUnilateralExitControlStore.setState({
+        selectedLeafOutpoints: persistedJob.selectedLeafOutpoints,
+        jobStarted: true,
+      })
+    }
+  }, [
+    activeArkadeConnectionId,
+    activeWalletId,
+    networkMode,
+    selectedLeafOutpoints.length,
+  ])
+
+  useEffect(() => {
+    if (
+      activeWalletId == null ||
+      activeArkadeConnectionId == null ||
+      !isArkadeSupportedNetworkMode(networkMode)
+    ) {
+      return
+    }
+    useUnilateralExitAutomationStore
+      .getState()
+      .syncSelectedLeafOutpoints(
+        activeWalletId,
+        networkMode,
+        activeArkadeConnectionId,
+        selectedLeafOutpoints,
+      )
+  }, [activeArkadeConnectionId, activeWalletId, networkMode, selectedLeafOutpoints])
 
   useEffect(() => {
     if (!isOnControlPage) return
@@ -227,19 +313,100 @@ export function UnilateralExitControlPage() {
     )
   }, [batchEstimate, totalSteps])
 
+  const handleProceedAutomaticallyChange = (enabled: boolean) => {
+    if (
+      activeWalletId == null ||
+      activeArkadeConnectionId == null ||
+      !isArkadeSupportedNetworkMode(networkMode)
+    ) {
+      return
+    }
+    const defaultMax = defaultMaxFeeRateSatPerVb(presetSatPerVbByLabel.High)
+    useUnilateralExitAutomationStore
+      .getState()
+      .setProceedAutomatically(
+        activeWalletId,
+        networkMode,
+        activeArkadeConnectionId,
+        enabled,
+        defaultMax,
+      )
+  }
+
+  const handleFeePresetChange = (
+    preset: Parameters<typeof feeRateUi.handleSelectFeePreset>[0],
+    rateSatPerVb: number,
+  ) => {
+    if (
+      activeWalletId == null ||
+      activeArkadeConnectionId == null ||
+      !isArkadeSupportedNetworkMode(networkMode)
+    ) {
+      return
+    }
+    if (proceedAutomatically) {
+      useUnilateralExitAutomationStore
+        .getState()
+        .setFeePresetLabel(activeWalletId, networkMode, activeArkadeConnectionId, preset)
+      useUnilateralExitAutomationStore
+        .getState()
+        .clearPause(activeWalletId, networkMode, activeArkadeConnectionId)
+      return
+    }
+    feeRateUi.handleSelectFeePreset(preset, rateSatPerVb)
+  }
+
+  const handleMaxFeeRateChange = (maxFeeRateSatPerVb: number) => {
+    if (
+      activeWalletId == null ||
+      activeArkadeConnectionId == null ||
+      !isArkadeSupportedNetworkMode(networkMode)
+    ) {
+      return
+    }
+    useUnilateralExitAutomationStore
+      .getState()
+      .setMaxFeeRateSatPerVb(
+        activeWalletId,
+        networkMode,
+        activeArkadeConnectionId,
+        maxFeeRateSatPerVb,
+      )
+    useUnilateralExitAutomationStore
+      .getState()
+      .clearPause(activeWalletId, networkMode, activeArkadeConnectionId)
+  }
+
   const handleProceed = async () => {
     if (selectedLeafOutpoints.length === 0) {
       toast.error('Select at least one exit-eligible VTXO leaf.')
       return
     }
+    if (
+      activeWalletId == null ||
+      activeArkadeConnectionId == null ||
+      !isArkadeSupportedNetworkMode(networkMode)
+    ) {
+      return
+    }
     try {
       setJobStarted(true)
-      await proceedMutation.mutateAsync({
-        vtxoOutpoints: selectedLeafOutpoints,
-        feeRateSatPerVb,
-        amountSats: selectedTotalSats,
-      })
-      toast.success('Unroll step submitted.')
+      useUnilateralExitAutomationStore
+        .getState()
+        .startJob(
+          activeWalletId,
+          networkMode,
+          activeArkadeConnectionId,
+          selectedLeafOutpoints,
+        )
+      if (!proceedAutomatically) {
+        await proceedMutation.mutateAsync({
+          vtxoOutpoints: selectedLeafOutpoints,
+          feeRateSatPerVb,
+          amountSats: selectedTotalSats,
+        })
+        toast.success('Unroll step submitted.')
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unroll step failed.')
     }
@@ -256,6 +423,9 @@ export function UnilateralExitControlPage() {
       </div>
     )
   }
+
+  const automationFeePresetLabel =
+    automationJob?.feePresetLabel ?? feeRateUi.feePresetSelection
 
   return (
     <div className="flex flex-col gap-6">
@@ -314,6 +484,9 @@ export function UnilateralExitControlPage() {
             {stepWaitingDurationLabel != null
               ? ` — waiting for confirmation (${stepWaitingDurationLabel})`
               : ''}
+            {automationJobActive && automationPausedReason == null && phase !== 'complete'
+              ? ' — proceeding automatically'
+              : ''}
           </p>
         )}
       </div>
@@ -369,17 +542,33 @@ export function UnilateralExitControlPage() {
           )}
         </div>
 
-        <SendOnChainFeeSection
-          feePresetSelection={feeRateUi.feePresetSelection}
-          presetSatPerVbByLabel={feeRateUi.presetSatPerVbByLabel}
-          feeEstimatesRefreshing={feeRateUi.feeEstimatesRefreshing}
-          customFeeRate={feeRateUi.customFeeRate}
-          useCustomFee={feeRateUi.useCustomFee}
+        <UnilateralExitAutomationSection
+          proceedAutomatically={proceedAutomatically}
+          feePresetLabel={automationFeePresetLabel}
+          maxFeeRateSatPerVb={automationJob?.maxFeeRateSatPerVb ?? 10}
+          presetSatPerVbByLabel={presetSatPerVbByLabel}
+          feeEstimatesRefreshing={feePresetsQuery.isFetching || feeRateUi.feeEstimatesRefreshing}
           isPending={proceedMutation.isPending}
-          onSelectPreset={feeRateUi.handleSelectFeePreset}
-          setCustomFeeRate={feeRateUi.setCustomFeeRate}
-          onSelectCustomMode={feeRateUi.handleSelectCustomMode}
+          pausedReason={automationPausedReason}
+          lastErrorMessage={automationLastError}
+          onProceedAutomaticallyChange={handleProceedAutomaticallyChange}
+          onFeePresetChange={handleFeePresetChange}
+          onMaxFeeRateChange={handleMaxFeeRateChange}
         />
+
+        {!proceedAutomatically ? (
+          <SendOnChainFeeSection
+            feePresetSelection={feeRateUi.feePresetSelection}
+            presetSatPerVbByLabel={feeRateUi.presetSatPerVbByLabel}
+            feeEstimatesRefreshing={feeRateUi.feeEstimatesRefreshing}
+            customFeeRate={feeRateUi.customFeeRate}
+            useCustomFee={feeRateUi.useCustomFee}
+            isPending={proceedMutation.isPending}
+            onSelectPreset={feeRateUi.handleSelectFeePreset}
+            setCustomFeeRate={feeRateUi.setCustomFeeRate}
+            onSelectCustomMode={feeRateUi.handleSelectCustomMode}
+          />
+        ) : null}
 
         {batchEstimateQuery.isLoading && selectedLeafOutpoints.length > 0 && (
           <p className="text-xs text-muted-foreground">Estimating package fees…</p>
@@ -399,22 +588,24 @@ export function UnilateralExitControlPage() {
           </div>
         )}
 
-        <Button
-          type="button"
-          className="w-full"
-          data-testid="unilateral-exit-proceed"
-          disabled={
-            selectedLeafOutpoints.length === 0 ||
-            bumperLow ||
-            proceedMutation.isPending ||
-            batchEstimateQuery.isLoading ||
-            phase === 'complete'
-          }
-          onClick={handleProceed}
-        >
-          {proceedMutation.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
-          {jobActive ? 'Proceed' : 'Start unroll'}
-        </Button>
+        {(!proceedAutomatically || !jobActive) && (
+          <Button
+            type="button"
+            className="w-full"
+            data-testid="unilateral-exit-proceed"
+            disabled={
+              selectedLeafOutpoints.length === 0 ||
+              bumperLow ||
+              proceedMutation.isPending ||
+              batchEstimateQuery.isLoading ||
+              phase === 'complete'
+            }
+            onClick={handleProceed}
+          >
+            {proceedMutation.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+            {jobActive ? 'Proceed' : 'Start unroll'}
+          </Button>
+        )}
 
         <Button type="button" variant="outline" className="w-full md:col-span-2 xl:col-span-3" asChild>
           <Link to="/wallet/management">Back to Management</Link>

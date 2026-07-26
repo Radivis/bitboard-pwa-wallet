@@ -102,8 +102,10 @@ import {
   isOperatorTrustPendingDigestChangedError,
   operatorTrustPendingDigestChangedMessage,
 } from '@/lib/arkade/arkade-operator-trust-utils'
-
-const ARKADE_WALLET_UNLOCKED_ERROR = 'Wallet must be unlocked'
+import {
+  assertArkadeSessionUnlocked,
+  proceedUnilateralExitStepWithGuards,
+} from '@/lib/arkade/proceed-unilateral-exit-step'
 
 function useArkadeQueryBase() {
   const networkMode = useWalletStore(selectCommittedNetworkMode)
@@ -138,14 +140,6 @@ function useArkadeDelegateQueryBase() {
     isArkadeDelegatorConfigured(networkMode)
 
   return { networkMode, activeWalletId, sessionReady }
-}
-
-function assertArkadeSessionUnlocked(
-  activeWalletId: number | null,
-): asserts activeWalletId is number {
-  if (activeWalletId == null) {
-    throw new Error(ARKADE_WALLET_UNLOCKED_ERROR)
-  }
 }
 
 async function ensureArkadeSessionOpenForActiveWallet(): Promise<void> {
@@ -1570,10 +1564,9 @@ export function useArkadeProceedUnilateralExitStepMutation() {
       feeRateSatPerVb: number
       amountSats: number
     }) => {
-      assertArkadeSessionUnlocked(activeWalletId)
-      await awaitArkadeLoadQuiescence()
-      return getArkadeWorker().proceedUnilateralExitStep({
-        vtxoOutpoints: sortArkadeVtxoOutpoints(params.vtxoOutpoints),
+      return proceedUnilateralExitStepWithGuards({
+        activeWalletId,
+        vtxoOutpoints: params.vtxoOutpoints,
         feeRateSatPerVb: params.feeRateSatPerVb,
       })
     },
