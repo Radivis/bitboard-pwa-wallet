@@ -189,8 +189,8 @@ mod tests {
                 ark_txid: None,
                 assets: vec![],
                 server_pk_hex: None,
-                unilateral_exit_materials: None,
             }],
+            unilateral_exit_materials_by_leaf_tx: std::collections::BTreeMap::new(),
         });
 
         backfill_unilateral_exit_watches_if_empty(&wallet_db);

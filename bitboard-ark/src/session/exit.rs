@@ -4,7 +4,7 @@ use std::str::FromStr;
 
 use ark_client::Blockchain;
 use ark_core::VtxoList;
-use bitcoin::{Amount, OutPoint, Txid, secp256k1::rand::rngs::OsRng};
+use bitcoin::{Amount, Txid, secp256k1::rand::rngs::OsRng};
 
 use crate::api_types::{
     COLLABORATIVE_EXIT_ESTIMATE_ERROR_INSUFFICIENT_COOPERATIVE_INPUTS,
@@ -27,11 +27,11 @@ use crate::outpoint::{OnchainOutPoint, VirtualOutPoint};
 use crate::persistence::{
     JsonPersistenceDb, OffchainVtxoSnapshot, PendingExitDeductionRecord, PendingExitKind,
 };
-use crate::unilateral_exit_materials::snapshot_materials_vout_for_leaf_tx;
+use crate::unilateral_exit_materials::snapshot_materials_for_leaf_tx;
 
 use super::ArkSession;
 use super::exit_autonomous::{
-    autonomous_build_unilateral_branch, autonomous_complete_unilateral_exit,
+    autonomous_build_unilateral_branch_for_leaf_tx, autonomous_complete_unilateral_exit,
     autonomous_estimate_unilateral_exit_completion, autonomous_exit_candidates_from_snapshot,
     autonomous_unilateral_exit_chain_steps, autonomous_vtxo_list, dedup_virtual_outpoints,
     virtual_outpoints_to_bitcoin,
@@ -614,7 +614,9 @@ impl ArkSession {
         let amount_sats = self.vtxo_amount_sats_for_outpoint(txid, vout).await?;
         let mut pending_unilateral_exit_recorded = false;
 
-        let branch = self.build_unilateral_branch(target).await?;
+        let branch = self
+            .build_unilateral_branch_for_leaf_tx(target.txid)
+            .await?;
         let mut done_vtxo_txid = txid.to_string();
         let mut branch_txids = Vec::new();
 
@@ -994,23 +996,37 @@ impl ArkSession {
         }
     }
 
-    pub(crate) async fn build_unilateral_branch(
+    pub(crate) async fn build_unilateral_branch_for_leaf_tx(
         &self,
-        target: OutPoint,
+        leaf_txid: bitcoin::Txid,
     ) -> ArkResult<Vec<bitcoin::Transaction>> {
         if self.autonomous_mode() {
-            return autonomous_build_unilateral_branch(self, target).await;
+            return autonomous_build_unilateral_branch_for_leaf_tx(self, leaf_txid).await;
         }
 
         // Mid-unroll proceed calls rebuild the batch plan with the same outpoints. Once a step
         // broadcasts, the operator may no longer list the VTXO in could_exit_unilaterally() even
         // though prefetched materials remain valid for the rest of the branch.
         if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref() {
-            let txid = target.txid.to_string();
-            if snapshot_materials_vout_for_leaf_tx(snapshot, &txid, target.vout).is_some() {
-                return autonomous_build_unilateral_branch(self, target).await;
+            let txid = leaf_txid.to_string();
+            if snapshot_materials_for_leaf_tx(snapshot, &txid).is_some() {
+                return autonomous_build_unilateral_branch_for_leaf_tx(self, leaf_txid).await;
             }
         }
+
+        let target =
+            if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref() {
+                crate::outpoint::representative_virtual_tx_outpoint_for_leaf_tx(
+                    snapshot,
+                    &leaf_txid.to_string(),
+                )?
+                .outpoint
+            } else {
+                bitcoin::OutPoint {
+                    txid: leaf_txid,
+                    vout: 0,
+                }
+            };
 
         self.client
             .build_unilateral_exit_branch(target)
@@ -1227,8 +1243,8 @@ mod unroll_hard_failure_rollback_tests {
                 ark_txid: None,
                 assets: vec![],
                 server_pk_hex: None,
-                unilateral_exit_materials: None,
             }],
+            unilateral_exit_materials_by_leaf_tx: std::collections::BTreeMap::new(),
         }
     }
 
@@ -1304,7 +1320,6 @@ mod leaf_virtual_tx_co_mark_tests {
                     ark_txid: None,
                     assets: vec![],
                     server_pk_hex: None,
-                    unilateral_exit_materials: None,
                 },
                 VirtualTxOutPointRecord {
                     txid,
@@ -1323,9 +1338,9 @@ mod leaf_virtual_tx_co_mark_tests {
                     ark_txid: None,
                     assets: vec![],
                     server_pk_hex: None,
-                    unilateral_exit_materials: None,
                 },
             ],
+            unilateral_exit_materials_by_leaf_tx: std::collections::BTreeMap::new(),
         }
     }
 

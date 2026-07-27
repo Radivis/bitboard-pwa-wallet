@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use ark_client::Error;
@@ -11,11 +11,13 @@ use bitcoin::{Network, XOnlyPublicKey};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
-/// Current on-disk Arkade persistence format (v5).
+/// Current on-disk Arkade persistence format (v6).
 ///
-/// v4 added autonomous-exit fields; v5 adds operator trust pending state. v3/v4 blobs import
-/// cleanly; export uses v5. Unknown versions are rejected in [`BitboardArkPersistence::parse_import`].
-pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 5;
+/// v6 moves unilateral exit materials to a leaf-tx-keyed map on [`OffchainVtxoSnapshot`].
+/// v5 and earlier import cleanly via migration in [`BitboardArkPersistence::parse_import`].
+pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 6;
+/// Legacy import version before leaf-tx materials map.
+pub const LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V5: u32 = 5;
 /// Legacy import version before operator trust pending fields.
 pub const LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 4;
 /// Pre-autonomous-exit persistence format.
@@ -108,8 +110,6 @@ pub struct VirtualTxOutPointRecord {
     /// balance buckets from a local snapshot without calling the operator.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub server_pk_hex: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub unilateral_exit_materials: Option<UnilateralExitMaterialsRecord>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -117,6 +117,142 @@ pub struct OffchainVtxoSnapshot {
     pub synced_at: i64,
     pub dust_sats: u64,
     pub virtual_tx_outpoints: Vec<VirtualTxOutPointRecord>,
+    #[serde(default)]
+    pub unilateral_exit_materials_by_leaf_tx: BTreeMap<String, UnilateralExitMaterialsRecord>,
+}
+
+mod legacy_import {
+    use super::*;
+
+    #[derive(Debug, Clone, Deserialize)]
+    pub(super) struct VirtualTxOutPointRecordV5 {
+        pub txid: String,
+        pub vout: u32,
+        pub created_at: i64,
+        pub expires_at: i64,
+        pub amount_sats: u64,
+        pub script_hex: String,
+        pub is_preconfirmed: bool,
+        pub is_swept: bool,
+        pub is_unrolled: bool,
+        pub is_spent: bool,
+        #[serde(default)]
+        pub spent_by: Option<String>,
+        #[serde(default)]
+        pub commitment_txids: Vec<String>,
+        #[serde(default)]
+        pub settled_by: Option<String>,
+        #[serde(default)]
+        pub ark_txid: Option<String>,
+        #[serde(default)]
+        pub assets: Vec<VirtualTxOutPointAssetRecord>,
+        #[serde(default)]
+        pub server_pk_hex: Option<String>,
+        #[serde(default)]
+        pub unilateral_exit_materials: Option<UnilateralExitMaterialsRecord>,
+    }
+
+    #[derive(Debug, Clone, Deserialize)]
+    pub(super) struct OffchainVtxoSnapshotV5 {
+        pub synced_at: i64,
+        pub dust_sats: u64,
+        pub virtual_tx_outpoints: Vec<VirtualTxOutPointRecordV5>,
+    }
+
+    #[derive(Debug, Clone, Deserialize)]
+    pub(super) struct BitboardArkPersistenceV5 {
+        pub version: u32,
+        pub engine: String,
+        pub ark_sdk_version: String,
+        pub operator_identity: OperatorIdentity,
+        pub wallet_db: WalletDbSnapshotV5,
+        #[serde(default)]
+        pub swap_storage: SwapStorageSnapshot,
+    }
+
+    #[derive(Debug, Clone, Deserialize)]
+    pub(super) struct WalletDbSnapshotV5 {
+        #[serde(default)]
+        pub boarding_outputs: Vec<BoardingOutputSnapshot>,
+        #[serde(default)]
+        pub secret_keys_by_owner_pk_hex: HashMap<String, String>,
+        #[serde(default)]
+        pub offchain_next_derivation_index: u32,
+        #[serde(default)]
+        pub offchain_vtxo_snapshot: Option<OffchainVtxoSnapshotV5>,
+        #[serde(default)]
+        pub pending_exit_deductions: Vec<PendingExitDeductionRecord>,
+        #[serde(default)]
+        pub unilateral_exit_watches: Vec<UnilateralExitWatchRecord>,
+        #[serde(default)]
+        pub unilateral_exit_step_wait: Option<UnilateralExitStepWaitRecord>,
+        #[serde(default)]
+        pub cached_operator_info: Option<crate::cached_operator_info::CachedOperatorInfoRecord>,
+        #[serde(default)]
+        pub pending_operator_info: Option<crate::cached_operator_info::CachedOperatorInfoRecord>,
+        #[serde(default)]
+        pub operator_trust_pending: bool,
+    }
+
+    pub(super) fn migrate_offchain_vtxo_snapshot_v5_to_v6(
+        v5: OffchainVtxoSnapshotV5,
+    ) -> OffchainVtxoSnapshot {
+        let mut unilateral_exit_materials_by_leaf_tx = BTreeMap::new();
+        let mut virtual_tx_outpoints = Vec::with_capacity(v5.virtual_tx_outpoints.len());
+        for record in v5.virtual_tx_outpoints {
+            if let Some(materials) = record.unilateral_exit_materials {
+                unilateral_exit_materials_by_leaf_tx
+                    .entry(record.txid.clone())
+                    .and_modify(|existing: &mut UnilateralExitMaterialsRecord| {
+                        if materials.cached_at > existing.cached_at {
+                            *existing = materials.clone();
+                        }
+                    })
+                    .or_insert(materials);
+            }
+            virtual_tx_outpoints.push(VirtualTxOutPointRecord {
+                txid: record.txid,
+                vout: record.vout,
+                created_at: record.created_at,
+                expires_at: record.expires_at,
+                amount_sats: record.amount_sats,
+                script_hex: record.script_hex,
+                is_preconfirmed: record.is_preconfirmed,
+                is_swept: record.is_swept,
+                is_unrolled: record.is_unrolled,
+                is_spent: record.is_spent,
+                spent_by: record.spent_by,
+                commitment_txids: record.commitment_txids,
+                settled_by: record.settled_by,
+                ark_txid: record.ark_txid,
+                assets: record.assets,
+                server_pk_hex: record.server_pk_hex,
+            });
+        }
+        OffchainVtxoSnapshot {
+            synced_at: v5.synced_at,
+            dust_sats: v5.dust_sats,
+            virtual_tx_outpoints,
+            unilateral_exit_materials_by_leaf_tx,
+        }
+    }
+
+    pub(super) fn migrate_wallet_db_v5_to_v6(wallet_db: WalletDbSnapshotV5) -> WalletDbSnapshot {
+        WalletDbSnapshot {
+            boarding_outputs: wallet_db.boarding_outputs,
+            secret_keys_by_owner_pk_hex: wallet_db.secret_keys_by_owner_pk_hex,
+            offchain_next_derivation_index: wallet_db.offchain_next_derivation_index,
+            offchain_vtxo_snapshot: wallet_db
+                .offchain_vtxo_snapshot
+                .map(migrate_offchain_vtxo_snapshot_v5_to_v6),
+            pending_exit_deductions: wallet_db.pending_exit_deductions,
+            unilateral_exit_watches: wallet_db.unilateral_exit_watches,
+            unilateral_exit_step_wait: wallet_db.unilateral_exit_step_wait,
+            cached_operator_info: wallet_db.cached_operator_info,
+            pending_operator_info: wallet_db.pending_operator_info,
+            operator_trust_pending: wallet_db.operator_trust_pending,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -208,8 +344,13 @@ fn default_parsed_ark_persistence() -> ParsedArkPersistence {
 
 fn is_supported_persistence_import_version(version: u32) -> bool {
     version == BITBOARD_ARK_PERSISTENCE_VERSION
+        || version == LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V5
         || version == LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION
         || version == LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V3
+}
+
+fn requires_v5_materials_migration(version: u32) -> bool {
+    version == LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V5
 }
 
 fn warn_unknown_persistence_version(version: Option<u64>) {
@@ -240,15 +381,41 @@ impl BitboardArkPersistence {
             return default_parsed_ark_persistence();
         };
 
-        let envelope: BitboardArkPersistence = match serde_json::from_str(raw) {
+        let envelope: serde_json::Value = match serde_json::from_str(raw) {
             Ok(parsed) => parsed,
             Err(_) => return default_parsed_ark_persistence(),
         };
 
-        if !is_supported_persistence_import_version(envelope.version) {
-            warn_unknown_persistence_version(Some(envelope.version as u64));
+        let version = envelope
+            .get("version")
+            .and_then(|value| value.as_u64())
+            .map(|value| value as u32);
+
+        let Some(version) = version else {
+            return default_parsed_ark_persistence();
+        };
+
+        if !is_supported_persistence_import_version(version) {
+            warn_unknown_persistence_version(Some(version as u64));
             return default_parsed_ark_persistence();
         }
+
+        if requires_v5_materials_migration(version) {
+            let legacy: legacy_import::BitboardArkPersistenceV5 =
+                match serde_json::from_value(envelope) {
+                    Ok(parsed) => parsed,
+                    Err(_) => return default_parsed_ark_persistence(),
+                };
+            return ParsedArkPersistence {
+                wallet_db: legacy_import::migrate_wallet_db_v5_to_v6(legacy.wallet_db),
+                operator_identity: Some(legacy.operator_identity),
+            };
+        }
+
+        let envelope: BitboardArkPersistence = match serde_json::from_value(envelope) {
+            Ok(parsed) => parsed,
+            Err(_) => return default_parsed_ark_persistence(),
+        };
 
         ParsedArkPersistence {
             wallet_db: envelope.wallet_db,

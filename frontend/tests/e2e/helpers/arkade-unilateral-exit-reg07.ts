@@ -6,6 +6,18 @@ const AUTOMATIC_UNROLL_DEADLINE_MS = 900_000
 const MAX_MINES_WITHOUT_PROGRESS = 60
 /** Two sibling preconfirmed outpoints need more bumper headroom than a single-leaf REG-04 run. */
 const REG07_BUMPER_FUNDING_SATS = 500_000
+/** Transient regtest broadcast failures (mempool/indexer lag); mine + refresh fee estimate to retry. */
+const RETRYABLE_BROADCAST_ERROR_PATTERN = /sendrawtransaction|code.:.-2[56]/i
+
+function isRetryableBroadcastError(message: string): boolean {
+  return RETRYABLE_BROADCAST_ERROR_PATTERN.test(message)
+}
+
+function isRecoverableAutomationPause(message: string): boolean {
+  return (
+    /insufficient bumper/i.test(message) || isRetryableBroadcastError(message)
+  )
+}
 
 async function isBranchComplete(page: Page): Promise<boolean> {
   if (await page.getByTestId('unilateral-exit-step-progress').getByText(/branch complete/i).isVisible()) {
@@ -48,42 +60,66 @@ async function topUpBumperAndRefreshBatchEstimate(page: Page): Promise<void> {
   await waitForBumperFundingGateToClear(page)
 }
 
-async function isAutomationPaused(page: Page): Promise<boolean> {
-  return page.getByTestId('unilateral-exit-automation-paused').isVisible()
-}
-
-/** Returns true when automation was paused and we attempted recovery. */
-async function recoverFromAutomationPauseIfNeeded(page: Page): Promise<boolean> {
-  if (!(await isAutomationPaused(page))) {
-    return false
-  }
-
-  const paused = page.getByTestId('unilateral-exit-automation-paused')
-  const pauseText = ((await paused.textContent()) ?? '').trim()
-  const broadcastRetryable = /sendrawtransaction|code.:.-26/i.test(pauseText)
-  if (pauseText && !/insufficient bumper/i.test(pauseText) && !broadcastRetryable) {
-    throw new Error(pauseText || 'Automatic unilateral exit paused')
-  }
-
-  await topUpBumperAndRefreshBatchEstimate(page)
-  await expect(paused).not.toBeVisible({ timeout: 60_000 })
-  return true
-}
-
-async function assertNoAutomationOrExitError(page: Page): Promise<void> {
-  if (await isAutomationPaused(page)) {
-    throw new Error(
-      ((await page.getByTestId('unilateral-exit-automation-paused').textContent()) ?? '').trim() ||
-        'Automatic unilateral exit paused',
-    )
-  }
-
+async function readExitErrorToastText(page: Page): Promise<string | null> {
   const errorToast = page
     .locator('[data-sonner-toast][data-type="error"]')
     .filter({ hasText: /unilateral exit|unroll|client|failed|not eligible/i })
     .filter({ hasNotText: /paused/i })
-  if (await errorToast.count()) {
-    throw new Error((await errorToast.first().textContent())?.trim() ?? 'Unilateral exit failed')
+  if ((await errorToast.count()) === 0) {
+    return null
+  }
+  return (await errorToast.first().textContent())?.trim() ?? null
+}
+
+async function readAutomationPauseText(page: Page): Promise<string | null> {
+  if (!(await isAutomationPaused(page))) {
+    return null
+  }
+  return ((await page.getByTestId('unilateral-exit-automation-paused').textContent()) ?? '').trim() || null
+}
+
+async function isAutomationPaused(page: Page): Promise<boolean> {
+  return page.getByTestId('unilateral-exit-automation-paused').isVisible()
+}
+
+/** Returns true when automation was paused or errored and we attempted recovery. */
+async function recoverFromRetryableAutomationFailure(page: Page): Promise<boolean> {
+  const pauseText = await readAutomationPauseText(page)
+  const toastText = await readExitErrorToastText(page)
+  const failureText = pauseText ?? toastText
+
+  if (failureText == null) {
+    return false
+  }
+
+  if (!isRecoverableAutomationPause(failureText)) {
+    throw new Error(failureText || 'Automatic unilateral exit failed')
+  }
+
+  await topUpBumperAndRefreshBatchEstimate(page)
+  const paused = page.getByTestId('unilateral-exit-automation-paused')
+  await expect(paused).not.toBeVisible({ timeout: 60_000 })
+  await expect
+    .poll(async () => readExitErrorToastText(page), { timeout: 15_000 })
+    .toBeNull()
+  return true
+}
+
+async function assertNoAutomationOrExitError(page: Page): Promise<void> {
+  const pauseText = await readAutomationPauseText(page)
+  if (pauseText != null) {
+    if (isRecoverableAutomationPause(pauseText)) {
+      return
+    }
+    throw new Error(pauseText)
+  }
+
+  const toastText = await readExitErrorToastText(page)
+  if (toastText != null) {
+    if (isRecoverableAutomationPause(toastText)) {
+      return
+    }
+    throw new Error(toastText)
   }
 }
 
@@ -135,11 +171,13 @@ export async function runAutomaticUnilateralUnrollUntilBranchComplete(page: Page
   let minesWithoutProgress = 0
 
   while (Date.now() < deadlineMs) {
-    const recoveredFromPause = await recoverFromAutomationPauseIfNeeded(page)
-    if (recoveredFromPause) {
+    const recoveredFromFailure = await recoverFromRetryableAutomationFailure(page)
+    if (recoveredFromFailure) {
       minesWithoutProgress = 0
       lastProgressText = await readStepProgressText(page)
-    } else if (await batchFeeShowsInsufficientBumper(page)) {
+      continue
+    }
+    if (await batchFeeShowsInsufficientBumper(page)) {
       await topUpBumperAndRefreshBatchEstimate(page)
       minesWithoutProgress = 0
       lastProgressText = await readStepProgressText(page)

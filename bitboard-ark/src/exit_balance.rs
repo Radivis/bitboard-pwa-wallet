@@ -195,7 +195,6 @@ mod tests {
             ark_txid: None,
             assets: vec![],
             server_pk_hex: None,
-            unilateral_exit_materials: None,
         }
     }
 
@@ -204,6 +203,7 @@ mod tests {
             synced_at: 1_700_000_000,
             dust_sats: 330,
             virtual_tx_outpoints: records,
+            unilateral_exit_materials_by_leaf_tx: std::collections::BTreeMap::new(),
         }
     }
 
@@ -240,7 +240,6 @@ mod tests {
             ark_txid: None,
             assets: vec![],
             server_pk_hex: None,
-            unilateral_exit_materials: None,
         }]);
 
         let mut records = vec![PendingExitDeductionRecord {

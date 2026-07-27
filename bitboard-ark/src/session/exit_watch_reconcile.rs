@@ -110,7 +110,6 @@ fn record_for_reinject(
         ark_txid: None,
         assets: vec![],
         server_pk_hex: None,
-        unilateral_exit_materials: None,
     }
 }
 
@@ -314,6 +313,7 @@ mod tests {
             synced_at: 1,
             dust_sats: 330,
             virtual_tx_outpoints: vec![],
+            unilateral_exit_materials_by_leaf_tx: std::collections::BTreeMap::new(),
         };
         let mut retained = Vec::new();
         let mut warnings = Vec::new();
@@ -364,8 +364,8 @@ mod tests {
                 ark_txid: None,
                 assets: vec![],
                 server_pk_hex: None,
-                unilateral_exit_materials: None,
             }],
+            unilateral_exit_materials_by_leaf_tx: std::collections::BTreeMap::new(),
         };
         let mut retained = Vec::new();
         let mut warnings = Vec::new();

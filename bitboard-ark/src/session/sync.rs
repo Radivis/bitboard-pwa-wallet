@@ -93,7 +93,7 @@ impl ArkSession {
             &mut snapshot,
             pending_unilateral_outpoints,
         );
-        crate::unilateral_exit_materials::merge_unilateral_exit_materials(
+        crate::unilateral_exit_materials::merge_unilateral_exit_materials_maps(
             prior_snapshot.as_ref(),
             &mut snapshot,
         );

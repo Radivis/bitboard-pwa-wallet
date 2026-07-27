@@ -8,12 +8,12 @@ use crate::api_types::ExitCandidateRow;
 use crate::error::{ArkResult, ArkWasmError};
 use crate::exit_balance::{UnilateralExitOutpointKey, is_unilateral_exit_in_progress_outpoint};
 use crate::offchain_snapshot::virtual_tx_outpoint_from_record;
-use crate::outpoint::VirtualOutPoint;
+use crate::outpoint::{VirtualOutPoint, representative_virtual_tx_outpoint_for_leaf_tx};
 use crate::persistence::OffchainVtxoSnapshot;
 use crate::session::mappers::map_exit_candidate;
 use crate::unilateral_exit_materials::{
-    record_is_exit_eligible, snapshot_materials_vout_for_leaf_tx, snapshot_record_materials,
-    virtual_psbts_from_records, vtxo_chains_from_json,
+    record_is_exit_eligible, snapshot_materials_for_leaf_tx, virtual_psbts_from_records,
+    vtxo_chains_from_json,
 };
 
 use super::ArkSession;
@@ -41,12 +41,12 @@ pub(crate) fn autonomous_vtxo_list_and_script_map(
 pub(crate) fn autonomous_unilateral_exit_chain_steps(
     session: &ArkSession,
     txid: &str,
-    vout: u32,
+    _vout: u32,
 ) -> ArkResult<AutonomousUnrollChainSteps> {
     let snapshot = session.wallet_db.snapshot().offchain_vtxo_snapshot;
     let materials = snapshot
         .as_ref()
-        .and_then(|snapshot| snapshot_record_materials(snapshot, txid, vout))
+        .and_then(|snapshot| snapshot_materials_for_leaf_tx(snapshot, txid))
         .ok_or(ArkWasmError::AutonomousExitMaterialsMissing)?;
     let (projected_unroll_steps, projected_wait_steps) = autonomous_chain_step_counts(materials)?;
     Ok(AutonomousUnrollChainSteps {
@@ -113,7 +113,11 @@ pub(crate) fn autonomous_exit_candidates_from_snapshot(
     let dust = Amount::from_sat(snapshot.dust_sats);
     let mut rows = Vec::new();
     for record in &snapshot.virtual_tx_outpoints {
-        if !record_is_exit_eligible(record) || record.unilateral_exit_materials.is_none() {
+        if !record_is_exit_eligible(record)
+            || !snapshot
+                .unilateral_exit_materials_by_leaf_tx
+                .contains_key(&record.txid)
+        {
             continue;
         }
         let virtual_tx_outpoint = virtual_tx_outpoint_from_record(record)?;
@@ -142,29 +146,23 @@ pub(crate) fn autonomous_chain_step_counts(
     Ok((projected_unroll_steps, projected_wait_steps))
 }
 
-pub(crate) async fn autonomous_build_unilateral_branch(
+pub(crate) async fn autonomous_build_unilateral_branch_for_leaf_tx(
     session: &ArkSession,
-    target: OutPoint,
+    leaf_txid: bitcoin::Txid,
 ) -> ArkResult<Vec<bitcoin::Transaction>> {
     let snapshot = session
         .wallet_db
         .snapshot()
         .offchain_vtxo_snapshot
         .ok_or_else(|| ArkWasmError::Snapshot("offchain snapshot missing".into()))?;
-    let txid = target.txid.to_string();
-    let materials_vout = snapshot_materials_vout_for_leaf_tx(&snapshot, &txid, target.vout)
+    let txid = leaf_txid.to_string();
+    let materials = snapshot_materials_for_leaf_tx(&snapshot, &txid)
         .ok_or(ArkWasmError::AutonomousExitMaterialsMissing)?;
-    let materials = snapshot_record_materials(&snapshot, &txid, materials_vout)
-        .ok_or(ArkWasmError::AutonomousExitMaterialsMissing)?;
-    let record = snapshot
-        .virtual_tx_outpoints
-        .iter()
-        .find(|record| record.txid == txid && record.vout == materials_vout)
-        .ok_or_else(|| ArkWasmError::VtxoNotFound {
-            txid: txid.clone(),
-            vout: materials_vout,
-        })?;
-    let virtual_tx_outpoint = virtual_tx_outpoint_from_record(record)?;
+    let virtual_tx_outpoint = representative_virtual_tx_outpoint_for_leaf_tx(&snapshot, &txid)?;
+    let target = bitcoin::OutPoint {
+        txid: leaf_txid,
+        vout: virtual_tx_outpoint.outpoint.vout,
+    };
     let chains = vtxo_chains_from_json(&materials.chain_json)?;
     let virtual_psbts = virtual_psbts_from_records(&materials.virtual_psbts)?;
     session
@@ -269,7 +267,6 @@ mod tests {
             ark_txid: None,
             assets: vec![],
             server_pk_hex: None,
-            unilateral_exit_materials: None,
         }
     }
 
@@ -278,6 +275,7 @@ mod tests {
             synced_at: 1,
             dust_sats: 330,
             virtual_tx_outpoints: records,
+            unilateral_exit_materials_by_leaf_tx: std::collections::BTreeMap::new(),
         }
     }
 

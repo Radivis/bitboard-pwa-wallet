@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::str::FromStr;
@@ -249,6 +250,7 @@ pub fn snapshot_from_virtual_tx_outpoints_with_script_lookup(
                 virtual_tx_outpoint_to_record(point, server_pk)
             })
             .collect(),
+        unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
     }
 }
 
@@ -312,7 +314,6 @@ fn virtual_tx_outpoint_to_record(
             })
             .collect(),
         server_pk_hex: server_pk.map(|pk| pk.to_string()),
-        unilateral_exit_materials: None,
     }
 }
 
@@ -418,6 +419,7 @@ mod tests {
     use bitcoin::Txid;
     use bitcoin::hashes::Hash;
     use bitcoin::secp256k1::PublicKey;
+    use std::collections::BTreeMap;
     use std::collections::HashMap;
     use std::str::FromStr;
 
@@ -468,8 +470,8 @@ mod tests {
                 ark_txid: None,
                 assets: vec![],
                 server_pk_hex: None,
-                unilateral_exit_materials: None,
             }],
+            unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
         };
         let mut incoming = snapshot_from_virtual_tx_outpoints(
             330,
@@ -519,8 +521,8 @@ mod tests {
                 ark_txid: None,
                 assets: vec![],
                 server_pk_hex: None,
-                unilateral_exit_materials: None,
             }],
+            unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
         };
         let mut incoming = snapshot_from_virtual_tx_outpoints(
             330,
@@ -593,8 +595,8 @@ mod tests {
                 ark_txid: None,
                 assets: vec![],
                 server_pk_hex: None,
-                unilateral_exit_materials: None,
             }],
+            unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
         };
         let mut incoming = snapshot_from_virtual_tx_outpoints(
             330,
@@ -890,8 +892,8 @@ mod tests {
                 ark_txid: None,
                 assets: vec![],
                 server_pk_hex: None,
-                unilateral_exit_materials: None,
             }],
+            unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
         };
 
         let error = vtxo_list_from_snapshot(&snapshot).expect_err("invalid txid");

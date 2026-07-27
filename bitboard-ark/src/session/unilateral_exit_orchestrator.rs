@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use ark_core::build_unilateral_exit_tree_txids;
 use ark_core::server::VtxoChains;
-use bitcoin::{OutPoint, Transaction, Txid};
+use bitcoin::{Transaction, Txid};
 
 use crate::api_types::{
     ProceedUnilateralExitStepParams, ProceedUnilateralExitStepResultDto,
@@ -18,8 +18,11 @@ use crate::constants::{
 use crate::error::{ArkResult, ArkWasmError};
 use crate::esplora_blockchain::EsploraBlockchain;
 use crate::outpoint::VirtualOutPoint;
+use crate::outpoint::{
+    representative_virtual_tx_outpoint_for_leaf_tx, representative_vout_among_virtual_outpoints,
+};
 use crate::unilateral_exit_materials::{
-    chained_tx_type_label, snapshot_record_materials, vtxo_chains_from_json,
+    chained_tx_type_label, snapshot_materials_for_leaf_tx, vtxo_chains_from_json,
 };
 
 use super::ArkSession;
@@ -33,7 +36,7 @@ fn step_confirmation_poll_delay() -> std::time::Duration {
 }
 
 struct LeafUnilateralContext {
-    virtual_outpoint: VirtualOutPoint,
+    leaf_txid: Txid,
     sibling_outpoints: Vec<VirtualOutPoint>,
     chains: VtxoChains,
     branch_txids: Vec<Txid>,
@@ -74,24 +77,21 @@ pub(crate) fn merge_exit_branch_txids(branch_lists: &[Vec<Txid>]) -> Vec<Txid> {
 /// Sibling VTXO outpoints on the same virtual leaf tx share one unroll branch.
 pub(crate) fn group_virtual_outpoints_by_leaf_txid(
     outpoints: &[VirtualOutPoint],
-) -> Vec<(VirtualOutPoint, Vec<VirtualOutPoint>)> {
-    let mut groups: HashMap<String, Vec<VirtualOutPoint>> = HashMap::new();
+) -> Vec<(Txid, Vec<VirtualOutPoint>)> {
+    let mut groups: HashMap<Txid, Vec<VirtualOutPoint>> = HashMap::new();
     for outpoint in outpoints {
         groups
-            .entry(outpoint.txid.to_string())
+            .entry(outpoint.txid)
             .or_default()
             .push(outpoint.clone());
     }
 
     let mut grouped = Vec::new();
-    for mut siblings in groups.into_values() {
+    for (leaf_txid, mut siblings) in groups {
         siblings.sort_by_key(|outpoint| outpoint.vout);
-        let canonical = siblings[0].clone();
-        grouped.push((canonical, siblings));
+        grouped.push((leaf_txid, siblings));
     }
-    grouped.sort_by(|(left, _), (right, _)| {
-        left.txid.cmp(&right.txid).then(left.vout.cmp(&right.vout))
-    });
+    grouped.sort_by(|(left, _), (right, _)| left.cmp(right));
     grouped
 }
 
@@ -376,17 +376,16 @@ impl ArkSession {
         let mut branch_lists = Vec::new();
         let mut tx_by_id = HashMap::new();
 
-        for (canonical_outpoint, sibling_outpoints) in
+        for (leaf_txid, sibling_outpoints) in
             group_virtual_outpoints_by_leaf_txid(virtual_outpoints)
         {
-            let outpoint = canonical_outpoint.to_bitcoin_outpoint();
-            super::exit_materials_prefetch::ensure_unilateral_exit_materials_for_outpoint(
-                self, outpoint,
+            super::exit_materials_prefetch::ensure_unilateral_exit_materials_for_leaf_tx(
+                self, leaf_txid,
             )
             .await?;
-            let chains = self.load_vtxo_chains_for_outpoint(outpoint).await?;
-            let branch_txids = branch_txids_for_leaf(&chains, outpoint.txid)?;
-            let branch_txs = self.build_unilateral_branch(outpoint).await?;
+            let chains = self.load_vtxo_chains_for_leaf_tx(leaf_txid).await?;
+            let branch_txids = branch_txids_for_leaf(&chains, leaf_txid)?;
+            let branch_txs = self.build_unilateral_branch_for_leaf_tx(leaf_txid).await?;
             for tx in &branch_txs {
                 tx_by_id.insert(tx.compute_txid(), tx.clone());
             }
@@ -401,7 +400,7 @@ impl ArkSession {
             }
             branch_lists.push(branch_txids.clone());
             leaves.push(LeafUnilateralContext {
-                virtual_outpoint: canonical_outpoint,
+                leaf_txid,
                 sibling_outpoints,
                 chains,
                 branch_txids,
@@ -418,19 +417,28 @@ impl ArkSession {
         })
     }
 
-    async fn load_vtxo_chains_for_outpoint(&self, outpoint: OutPoint) -> ArkResult<VtxoChains> {
+    async fn load_vtxo_chains_for_leaf_tx(&self, leaf_txid: Txid) -> ArkResult<VtxoChains> {
         if self.autonomous_mode() {
             let snapshot = self
                 .wallet_db
                 .snapshot()
                 .offchain_vtxo_snapshot
                 .ok_or_else(|| ArkWasmError::Snapshot("offchain snapshot missing".into()))?;
-            let txid = outpoint.txid.to_string();
-            let materials = snapshot_record_materials(&snapshot, &txid, outpoint.vout)
+            let txid = leaf_txid.to_string();
+            let materials = snapshot_materials_for_leaf_tx(&snapshot, &txid)
                 .ok_or(ArkWasmError::AutonomousExitMaterialsMissing)?;
             return vtxo_chains_from_json(&materials.chain_json);
         }
 
+        let outpoint = representative_virtual_tx_outpoint_for_leaf_tx(
+            self.wallet_db
+                .snapshot()
+                .offchain_vtxo_snapshot
+                .as_ref()
+                .ok_or_else(|| ArkWasmError::Snapshot("offchain snapshot missing".into()))?,
+            &leaf_txid.to_string(),
+        )?
+        .outpoint;
         let response = self
             .client
             .get_vtxo_chain(outpoint)
@@ -474,8 +482,8 @@ impl ArkSession {
         let mut processed_leaf_txids = HashSet::new();
 
         for leaf in &plan.leaves {
-            let leaf_virtual_txid = leaf.virtual_outpoint.txid.to_string();
-            let leaf_txid = leaf.virtual_outpoint.to_bitcoin_outpoint().txid;
+            let leaf_virtual_txid = leaf.leaf_txid.to_string();
+            let leaf_txid = leaf.leaf_txid;
             if !processed_leaf_txids.insert(leaf_txid) {
                 continue;
             }
@@ -494,11 +502,10 @@ impl ArkSession {
                 &leaf.branch_txids,
             );
             if !self.autonomous_mode() {
+                let representative_vout =
+                    representative_vout_among_virtual_outpoints(&leaf.sibling_outpoints);
                 let _ = self
-                    .poll_operator_after_leaf_finality(
-                        &leaf_virtual_txid,
-                        leaf.virtual_outpoint.vout,
-                    )
+                    .poll_operator_after_leaf_finality(&leaf_virtual_txid, representative_vout)
                     .await;
             }
         }
@@ -600,15 +607,16 @@ impl ArkSession {
     ) -> ArkResult<Vec<UnilateralExitLeafStatusDto>> {
         let mut statuses = Vec::new();
         for leaf in &plan.leaves {
-            let vtxo_txid = leaf.virtual_outpoint.txid.to_string();
-            let leaf_txid = leaf.virtual_outpoint.to_bitcoin_outpoint().txid;
+            let vtxo_txid = leaf.leaf_txid.to_string();
+            let leaf_txid = leaf.leaf_txid;
+            let representative_vout =
+                representative_vout_among_virtual_outpoints(&leaf.sibling_outpoints);
             let confirmations = tx_confirmations(blockchain, &leaf_txid).await?;
             statuses.push(UnilateralExitLeafStatusDto {
                 txid: vtxo_txid.clone(),
-                vout: leaf.virtual_outpoint.vout,
+                vout: representative_vout,
                 confirmations,
-                is_unrolled: self
-                    .leaf_is_marked_unrolled(&vtxo_txid, leaf.virtual_outpoint.vout)?,
+                is_unrolled: self.leaf_is_marked_unrolled(&vtxo_txid, representative_vout)?,
             });
         }
         Ok(statuses)
@@ -676,9 +684,9 @@ mod tests {
             VirtualOutPoint::new(txid(8), 0),
         ]);
         assert_eq!(grouped.len(), 2);
+        assert_eq!(grouped[0].0, txid(8));
         assert_eq!(grouped[0].1.len(), 1);
-        assert_eq!(grouped[0].0.vout, 0);
-        assert_eq!(grouped[1].0.vout, 0);
+        assert_eq!(grouped[1].0, leaf_txid);
         assert_eq!(grouped[1].1.len(), 2);
         assert_eq!(grouped[1].1[0].vout, 0);
         assert_eq!(grouped[1].1[1].vout, 1);
