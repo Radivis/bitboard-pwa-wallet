@@ -77,6 +77,22 @@ impl ArkSession {
             all_points,
             |script| script_map.get(script).map(|vtxo| vtxo.server_pk()),
         );
+        let pending_unilateral_outpoints: Vec<(String, u32)> = self
+            .wallet_db
+            .pending_exit_deductions()
+            .iter()
+            .filter_map(|record| {
+                if record.kind != crate::persistence::PendingExitKind::Unilateral {
+                    return None;
+                }
+                Some((record.vtxo_txid.clone()?, record.vout?))
+            })
+            .collect();
+        crate::unilateral_exit_materials::reinject_pending_unilateral_exit_records(
+            prior_snapshot.as_ref(),
+            &mut snapshot,
+            pending_unilateral_outpoints,
+        );
         crate::unilateral_exit_materials::merge_unilateral_exit_materials(
             prior_snapshot.as_ref(),
             &mut snapshot,

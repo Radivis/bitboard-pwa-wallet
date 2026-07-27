@@ -15,7 +15,10 @@ import {
   setupRegtestArkadeWallet,
 } from './arkade-management'
 import {
+  goToReceiveArkadeMode,
   readDashboardArkadeBalanceSats,
+  readReceiveArkadeAddress,
+  sendArkadeOffchainPayment,
   triggerArkadeRailSync,
   waitForArkadeLoadReady,
   exportBoardedWalletSdkPersistenceJson,
@@ -25,7 +28,10 @@ import { unlockWalletViaUI } from './wallet-setup'
 import { generateMnemonic } from '@scure/bip39'
 import { wordlist as englishWordlist } from '@scure/bip39/wordlists/english.js'
 
-const DEFAULT_BOARD_SATS = 200_000
+export const DEFAULT_BOARD_SATS = 200_000
+
+/** Self-send fraction used to split a boarded VTXO into two preconfirmed outputs (REG-07). */
+export const PRECONFIRMED_SELF_SEND_FRACTION = 0.4
 
 function resolveBoardedFixtureExportPath(): string | undefined {
   const raw = process.env.ARKADE_REGTEST_EXPORT_BOARDED_FIXTURE
@@ -120,20 +126,52 @@ export async function prepareUnilateralUnrollScenario(page: Page): Promise<void>
 }
 
 /**
- * Boarded wallet with a **preconfirmed** VTXO (settlement commitment not yet mined).
- * `fundAndBoardToArkade` already syncs; avoid extra on-chain mines before unroll starts.
+ * Self-send a fraction of the boarded balance to the wallet's own Arkade receive address,
+ * splitting one preconfirmed VTXO into two without mining the settlement commitment.
+ */
+export async function splitBoardedVtxoViaArkadeSelfSend(
+  page: Page,
+  boardSats: number = DEFAULT_BOARD_SATS,
+): Promise<void> {
+  const selfSendSats = Math.floor(boardSats * PRECONFIRMED_SELF_SEND_FRACTION)
+  await goToReceiveArkadeMode(page)
+  const receiveAddress = await readReceiveArkadeAddress(page)
+  await sendArkadeOffchainPayment(page, {
+    recipientAddress: receiveAddress,
+    amountSats: selfSendSats,
+    timeout: 120_000,
+  })
+  await goToWalletTab(page, 'Dashboard')
+  await triggerArkadeRailSync(page, 120_000)
+}
+
+/**
+ * Boarded wallet with **two preconfirmed** VTXOs (settlement commitment not yet mined).
+ * Boards, self-sends 40% to split the balance, then syncs — no on-chain mines before unroll.
  */
 export async function preparePreconfirmedUnilateralExitScenario(page: Page): Promise<void> {
   await prepareFundedArkadeBalance(page)
+  await splitBoardedVtxoViaArkadeSelfSend(page)
   await goToArkadeManagementPanel(page)
 }
 
-/** Assert at least one VTXO on the viewer is still preconfirmed (not batch-settled on-chain). */
-export async function assertPreconfirmedVtxoVisibleOnViewer(page: Page): Promise<void> {
+/** Assert the VTXO viewer shows the expected number of preconfirmed VTXOs. */
+export async function assertPreconfirmedVtxoVisibleOnViewer(
+  page: Page,
+  expectedCount = 2,
+): Promise<void> {
   await goToArkadeManagementPanel(page)
   await page.getByRole('link', { name: 'View VTXOs' }).click()
   await expect(page.getByRole('heading', { name: /VTXOs/i })).toBeVisible({ timeout: 60_000 })
-  await expect(page.getByText('Pre-confirmed').first()).toBeVisible({ timeout: 60_000 })
+
+  const preconfirmedFilter = page.getByRole('button', {
+    name: new RegExp(`^Pre-confirmed \\(${expectedCount}\\)$`),
+  })
+  await expect(preconfirmedFilter).toBeVisible({ timeout: 60_000 })
+  await preconfirmedFilter.click()
+  await expect(page.locator('[data-testid^="arkade-vtxo-card-"]')).toHaveCount(expectedCount, {
+    timeout: 60_000,
+  })
 }
 
 /**

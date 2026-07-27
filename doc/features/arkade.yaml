@@ -118,7 +118,7 @@ feature:
       - id: ARK-EXIT-21
         description: Manual per-step Proceed remains on control page when Proceed automatically is off
       - id: ARK-EXIT-22
-        description: Proceed automatically advances all unroll steps for a preconfirmed VTXO until branch complete (E2E-ARK-REG-07)
+        description: Proceed automatically advances all unroll steps for multiple preconfirmed VTXOs (after self-send split) until branch complete (E2E-ARK-REG-07)
     operator_sync:
       - id: ARK-SYNC-01
         description: When discover_keys fails during operator sync but list_vtxos succeeds, sync lifecycle records a warningMessage and dashboard/management show a non-blocking sync warning banner

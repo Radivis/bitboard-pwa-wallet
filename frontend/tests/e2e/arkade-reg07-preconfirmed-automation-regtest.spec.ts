@@ -9,9 +9,13 @@ import {
   assertPreconfirmedVtxoVisibleOnViewer,
   preparePreconfirmedUnilateralExitScenario,
 } from './helpers/arkade-regtest-scenarios'
-import { runAutomaticUnilateralUnrollUntilBranchComplete } from './helpers/arkade-unilateral-exit-reg07'
+import {
+  runAutomaticUnilateralUnrollUntilBranchComplete,
+  selectAllUnilateralExitLeafNodes,
+  REG07_BUMPER_FUNDING_SATS,
+} from './helpers/arkade-unilateral-exit-reg07'
 
-const ARKADE_REGTEST_TIMEOUT_MS = 600_000
+const ARKADE_REGTEST_TIMEOUT_MS = 1_200_000
 
 test.describe('Arkade REG-07 preconfirmed automation @arkade-reg07', () => {
   test.describe.configure({ timeout: ARKADE_REGTEST_TIMEOUT_MS })
@@ -25,14 +29,16 @@ test.describe('Arkade REG-07 preconfirmed automation @arkade-reg07', () => {
 
   test('E2E-ARK-REG-07 preconfirmed VTXO automatic unilateral unroll', async ({ page }) => {
     await preparePreconfirmedUnilateralExitScenario(page)
-    await assertPreconfirmedVtxoVisibleOnViewer(page)
+    await assertPreconfirmedVtxoVisibleOnViewer(page, 2)
 
     await goToArkadeManagementPanel(page)
     await page.getByTestId('arkade-unilateral-exit-control').click()
     await expect(page.getByTestId('unilateral-exit-tree-graph')).toBeVisible({ timeout: 120_000 })
-    await page.locator('[data-testid^="unilateral-exit-leaf-node-"]').first().click()
-    await page.locator('[data-testid="unilateral-exit-leaf-select-switch"]').click()
-    await ensureOnChainBumperFunds(page, 100_000)
+    await selectAllUnilateralExitLeafNodes(page)
+    await expect(
+      page.locator('p').filter({ hasText: /^Selected leaves$/ }).locator('..').locator('ul > li'),
+    ).toHaveCount(2, { timeout: 60_000 })
+    await ensureOnChainBumperFunds(page, REG07_BUMPER_FUNDING_SATS)
     await runAutomaticUnilateralUnrollUntilBranchComplete(page)
   })
 })

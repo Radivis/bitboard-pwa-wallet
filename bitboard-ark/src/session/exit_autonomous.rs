@@ -12,8 +12,8 @@ use crate::outpoint::VirtualOutPoint;
 use crate::persistence::OffchainVtxoSnapshot;
 use crate::session::mappers::map_exit_candidate;
 use crate::unilateral_exit_materials::{
-    record_is_exit_eligible, snapshot_record_materials, virtual_psbts_from_records,
-    vtxo_chains_from_json,
+    record_is_exit_eligible, snapshot_materials_vout_for_leaf_tx, snapshot_record_materials,
+    virtual_psbts_from_records, vtxo_chains_from_json,
 };
 
 use super::ArkSession;
@@ -152,14 +152,18 @@ pub(crate) async fn autonomous_build_unilateral_branch(
         .offchain_vtxo_snapshot
         .ok_or_else(|| ArkWasmError::Snapshot("offchain snapshot missing".into()))?;
     let txid = target.txid.to_string();
-    let vout = target.vout;
-    let materials = snapshot_record_materials(&snapshot, &txid, vout)
+    let materials_vout = snapshot_materials_vout_for_leaf_tx(&snapshot, &txid, target.vout)
+        .ok_or(ArkWasmError::AutonomousExitMaterialsMissing)?;
+    let materials = snapshot_record_materials(&snapshot, &txid, materials_vout)
         .ok_or(ArkWasmError::AutonomousExitMaterialsMissing)?;
     let record = snapshot
         .virtual_tx_outpoints
         .iter()
-        .find(|record| record.txid == txid && record.vout == vout)
-        .ok_or_else(|| ArkWasmError::VtxoNotFound { txid, vout })?;
+        .find(|record| record.txid == txid && record.vout == materials_vout)
+        .ok_or_else(|| ArkWasmError::VtxoNotFound {
+            txid: txid.clone(),
+            vout: materials_vout,
+        })?;
     let virtual_tx_outpoint = virtual_tx_outpoint_from_record(record)?;
     let chains = vtxo_chains_from_json(&materials.chain_json)?;
     let virtual_psbts = virtual_psbts_from_records(&materials.virtual_psbts)?;

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 
 use ark_core::server::{ChainedTxType, VirtualTxOutPoint, VtxoChain, VtxoChains};
@@ -137,8 +137,40 @@ pub fn merge_unilateral_exit_materials(
     }
 }
 
-pub fn clear_unilateral_exit_materials_on_ineligible_records(snapshot: &mut OffchainVtxoSnapshot) {
+pub fn reinject_pending_unilateral_exit_records(
+    prior_snapshot: Option<&OffchainVtxoSnapshot>,
+    snapshot: &mut OffchainVtxoSnapshot,
+    pending_outpoints: impl IntoIterator<Item = (String, u32)>,
+) {
+    let Some(prior_snapshot) = prior_snapshot else {
+        return;
+    };
+    for (txid, vout) in pending_outpoints {
+        if snapshot
+            .virtual_tx_outpoints
+            .iter()
+            .any(|record| record.txid == txid && record.vout == vout)
+        {
+            continue;
+        }
+        if let Some(prior_record) = prior_snapshot
+            .virtual_tx_outpoints
+            .iter()
+            .find(|record| record.txid == txid && record.vout == vout)
+        {
+            snapshot.virtual_tx_outpoints.push(prior_record.clone());
+        }
+    }
+}
+
+pub fn clear_unilateral_exit_materials_on_ineligible_records(
+    snapshot: &mut OffchainVtxoSnapshot,
+    preserve_materials_outpoints: &HashSet<(String, u32)>,
+) {
     for record in &mut snapshot.virtual_tx_outpoints {
+        if preserve_materials_outpoints.contains(&(record.txid.clone(), record.vout)) {
+            continue;
+        }
         if !record_is_exit_eligible(record) {
             record.unilateral_exit_materials = None;
         }
@@ -205,6 +237,39 @@ pub fn snapshot_record_materials<'a>(
         .iter()
         .find(|record| record.txid == txid && record.vout == vout)
         .and_then(|record| record.unilateral_exit_materials.as_ref())
+}
+
+/// Copy exit materials to every outpoint record on the same virtual leaf tx.
+pub fn apply_unilateral_exit_materials_to_leaf_tx(
+    snapshot: &mut OffchainVtxoSnapshot,
+    txid: &str,
+    materials: UnilateralExitMaterialsRecord,
+) -> bool {
+    let mut applied = false;
+    for record in &mut snapshot.virtual_tx_outpoints {
+        if record.txid == txid {
+            record.unilateral_exit_materials = Some(materials.clone());
+            applied = true;
+        }
+    }
+    applied
+}
+
+/// Resolve which vout on a virtual leaf tx still has cached exit materials.
+pub fn snapshot_materials_vout_for_leaf_tx(
+    snapshot: &OffchainVtxoSnapshot,
+    txid: &str,
+    preferred_vout: u32,
+) -> Option<u32> {
+    if snapshot_record_materials(snapshot, txid, preferred_vout).is_some() {
+        return Some(preferred_vout);
+    }
+    snapshot
+        .virtual_tx_outpoints
+        .iter()
+        .filter(|record| record.txid == txid && record.unilateral_exit_materials.is_some())
+        .map(|record| record.vout)
+        .min()
 }
 
 pub(crate) fn chained_tx_type_label(tx_type: &ChainedTxType) -> String {
@@ -283,6 +348,79 @@ mod tests {
             unilateral_exit_materials: None,
         };
         assert!(record_is_exit_eligible(&record));
+    }
+
+    #[test]
+    fn apply_materials_to_leaf_tx_copies_to_all_sibling_vouts() {
+        let materials = UnilateralExitMaterialsRecord {
+            cached_at: 42,
+            chain_json: "{\"inner\":[]}".to_string(),
+            virtual_psbts: vec![],
+        };
+        let txid = "aa".repeat(32);
+        let mut snapshot = OffchainVtxoSnapshot {
+            synced_at: 1,
+            dust_sats: 330,
+            virtual_tx_outpoints: vec![
+                VirtualTxOutPointRecord {
+                    txid: txid.clone(),
+                    vout: 0,
+                    created_at: 0,
+                    expires_at: 0,
+                    amount_sats: 80_000,
+                    script_hex: "00".to_string(),
+                    is_preconfirmed: true,
+                    is_swept: false,
+                    is_unrolled: false,
+                    is_spent: false,
+                    spent_by: None,
+                    commitment_txids: vec![],
+                    settled_by: None,
+                    ark_txid: None,
+                    assets: vec![],
+                    server_pk_hex: None,
+                    unilateral_exit_materials: None,
+                },
+                VirtualTxOutPointRecord {
+                    txid: txid.clone(),
+                    vout: 1,
+                    created_at: 0,
+                    expires_at: 0,
+                    amount_sats: 118_000,
+                    script_hex: "00".to_string(),
+                    is_preconfirmed: true,
+                    is_swept: false,
+                    is_unrolled: false,
+                    is_spent: false,
+                    spent_by: None,
+                    commitment_txids: vec![],
+                    settled_by: None,
+                    ark_txid: None,
+                    assets: vec![],
+                    server_pk_hex: None,
+                    unilateral_exit_materials: None,
+                },
+            ],
+        };
+        assert!(apply_unilateral_exit_materials_to_leaf_tx(
+            &mut snapshot,
+            &txid,
+            materials.clone()
+        ));
+        assert_eq!(
+            snapshot.virtual_tx_outpoints[0]
+                .unilateral_exit_materials
+                .as_ref()
+                .map(|value| value.cached_at),
+            Some(42)
+        );
+        assert_eq!(
+            snapshot.virtual_tx_outpoints[1]
+                .unilateral_exit_materials
+                .as_ref()
+                .map(|value| value.cached_at),
+            Some(42)
+        );
     }
 
     #[test]

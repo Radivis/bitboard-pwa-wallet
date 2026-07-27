@@ -27,6 +27,7 @@ use crate::outpoint::{OnchainOutPoint, VirtualOutPoint};
 use crate::persistence::{
     JsonPersistenceDb, OffchainVtxoSnapshot, PendingExitDeductionRecord, PendingExitKind,
 };
+use crate::unilateral_exit_materials::snapshot_materials_vout_for_leaf_tx;
 
 use super::ArkSession;
 use super::exit_autonomous::{
@@ -1000,6 +1001,17 @@ impl ArkSession {
         if self.autonomous_mode() {
             return autonomous_build_unilateral_branch(self, target).await;
         }
+
+        // Mid-unroll proceed calls rebuild the batch plan with the same outpoints. Once a step
+        // broadcasts, the operator may no longer list the VTXO in could_exit_unilaterally() even
+        // though prefetched materials remain valid for the rest of the branch.
+        if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref() {
+            let txid = target.txid.to_string();
+            if snapshot_materials_vout_for_leaf_tx(snapshot, &txid, target.vout).is_some() {
+                return autonomous_build_unilateral_branch(self, target).await;
+            }
+        }
+
         self.client
             .build_unilateral_exit_branch(target)
             .await
