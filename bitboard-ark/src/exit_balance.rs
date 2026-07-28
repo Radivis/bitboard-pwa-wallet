@@ -221,6 +221,21 @@ mod tests {
     }
 
     #[test]
+    fn unilateral_exit_in_progress_excludes_spent_unrolled_vtxos() {
+        let snapshot = snapshot_with(vec![
+            sample_vtp_record(1, 0, 180_603, true, false),
+            sample_vtp_record(2, 0, 50_000, true, true),
+        ]);
+
+        assert_eq!(
+            unilateral_exit_in_progress_sats_from_snapshot(&snapshot).expect("sum"),
+            180_603
+        );
+        let keys = unilateral_exit_in_progress_outpoints_from_snapshot(&snapshot).expect("keys");
+        assert_eq!(keys.len(), 1);
+    }
+
+    #[test]
     fn reconcile_pending_clears_unilateral_when_vtxo_unrolled_in_snapshot() {
         let txid = Txid::from_byte_array([9; 32]).to_string();
         let snapshot = snapshot_with(vec![VirtualTxOutPointRecord {

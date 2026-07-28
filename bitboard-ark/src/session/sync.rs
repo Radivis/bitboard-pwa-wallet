@@ -6,12 +6,14 @@ use crate::api_types::OperatorSyncResultDto;
 use crate::error::{ArkResult, ArkWasmError};
 use crate::exit_balance::reconcile_pending_exit_deductions;
 use crate::offchain_snapshot::{
-    merge_sticky_unrolled_flags, snapshot_from_virtual_tx_outpoints_with_script_lookup,
+    merge_sticky_spent_flags, merge_sticky_unrolled_flags,
+    snapshot_from_virtual_tx_outpoints_with_script_lookup,
 };
 
 use super::ArkSession;
 use super::exit_watch_reconcile::{
     merge_exiting_vtxo_sync_warnings, reconcile_exiting_vtxo_watches,
+    reconcile_exiting_vtxos_spent_on_esplora,
 };
 use super::mappers::{current_unix_timestamp, warn_offchain_key_discovery_failed};
 
@@ -98,9 +100,12 @@ impl ArkSession {
             &mut snapshot,
         );
         merge_sticky_unrolled_flags(prior_snapshot.as_ref(), &mut snapshot);
+        merge_sticky_spent_flags(prior_snapshot.as_ref(), &mut snapshot);
         let reconcile =
             reconcile_exiting_vtxo_watches(self, snapshot, prior_snapshot.as_ref()).await?;
         snapshot = reconcile.snapshot;
+        let esplora_healed_outpoints =
+            reconcile_exiting_vtxos_spent_on_esplora(self, &mut snapshot).await?;
         let materials_warning =
             super::exit_materials_prefetch::prefetch_unilateral_exit_materials_for_snapshot(
                 self,
@@ -111,6 +116,9 @@ impl ArkSession {
         self.wallet_db.set_offchain_vtxo_snapshot(snapshot.clone());
         self.wallet_db
             .set_unilateral_exit_watches(reconcile.watches.clone());
+        if !esplora_healed_outpoints.is_empty() {
+            self.clear_pending_unilateral_exits_for_outpoints(&esplora_healed_outpoints);
+        }
         self.reconcile_pending_exit_deductions_with_snapshot(&snapshot)?;
         self.persist_cached_operator_info_from_client()?;
         let sync_result = OperatorSyncResultDto {

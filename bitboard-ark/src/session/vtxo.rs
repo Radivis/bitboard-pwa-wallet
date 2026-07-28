@@ -14,7 +14,10 @@ use crate::error::{ArkResult, ArkWasmError};
 use crate::exit_balance::{
     UnilateralExitOutpointKey, unilateral_exit_in_progress_outpoints_from_pending,
 };
-use crate::offchain_snapshot::{script_to_server_pk_lookup, vtxo_list_from_snapshot};
+use crate::offchain_snapshot::{
+    apply_local_snapshot_flags_to_vtxo, local_snapshot_record_for_outpoint,
+    script_to_server_pk_lookup, vtxo_list_from_snapshot,
+};
 use crate::outpoint::OnchainOutPoint;
 use crate::persistence::OffchainVtxoSnapshot;
 use crate::unilateral_exit_materials::virtual_tx_outpoint_has_unilateral_exit_prepared;
@@ -566,12 +569,22 @@ where
     let mut rows: Vec<VtxoRowDto> = vtxo_list
         .all()
         .map(|virtual_tx_outpoint| {
+            let mut display_vtxo = virtual_tx_outpoint.clone();
+            if let Some(snapshot) = offchain_snapshot
+                && let Some(record) = local_snapshot_record_for_outpoint(
+                    snapshot,
+                    &display_vtxo.outpoint.txid,
+                    display_vtxo.outpoint.vout,
+                )
+            {
+                apply_local_snapshot_flags_to_vtxo(&mut display_vtxo, record);
+            }
             let is_unilateral_exit_prepared = virtual_tx_outpoint_has_unilateral_exit_prepared(
                 offchain_snapshot,
                 virtual_tx_outpoint,
             );
             map_vtxo_row(
-                virtual_tx_outpoint,
+                &display_vtxo,
                 dust,
                 server_info,
                 now_unix_secs,
@@ -1160,5 +1173,76 @@ mod vtxo_row_classification_tests {
         assert!(!row.is_swept);
         assert!(!row.is_spent);
         assert!(!row.is_unilateral_exit_prepared);
+    }
+
+    #[test]
+    fn map_vtxo_rows_apply_local_snapshot_spent_overrides_operator_exit_state() {
+        use ark_core::VtxoList;
+        use std::collections::BTreeMap;
+
+        use crate::persistence::{OffchainVtxoSnapshot, VirtualTxOutPointRecord};
+
+        use super::map_vtxo_rows_from_list;
+
+        let now = current_unix_timestamp();
+        let txid = Txid::from_byte_array([0x69; 32]);
+        let vtxo = VirtualTxOutPoint {
+            outpoint: OutPoint::new(txid, 0),
+            created_at: now - 86_400,
+            expires_at: now + 86_400,
+            amount: Amount::from_sat(50_000),
+            script: ScriptBuf::new(),
+            is_preconfirmed: false,
+            is_swept: false,
+            is_unrolled: true,
+            is_spent: false,
+            spent_by: None,
+            commitment_txids: vec![],
+            settled_by: None,
+            ark_txid: None,
+            assets: vec![],
+        };
+        let vtxo_list = VtxoList::new(DUST, vec![vtxo]);
+        let snapshot = OffchainVtxoSnapshot {
+            synced_at: now,
+            dust_sats: DUST.to_sat(),
+            virtual_tx_outpoints: vec![VirtualTxOutPointRecord {
+                txid: txid.to_string(),
+                vout: 0,
+                created_at: now - 86_400,
+                expires_at: now + 86_400,
+                amount_sats: 50_000,
+                script_hex: String::new(),
+                is_preconfirmed: false,
+                is_swept: false,
+                is_unrolled: true,
+                is_spent: true,
+                spent_by: Some(Txid::from_byte_array([0x7e; 32]).to_string()),
+                commitment_txids: vec![],
+                settled_by: None,
+                ark_txid: None,
+                assets: vec![],
+                server_pk_hex: None,
+            }],
+            unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
+        };
+        let server_info = test_server_info(
+            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            vec![],
+        );
+
+        let rows = map_vtxo_rows_from_list(
+            &vtxo_list,
+            DUST,
+            &server_info,
+            now,
+            no_server_pk,
+            Some(&snapshot),
+        );
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].classification, VtxoClassificationDto::Finalized);
+        assert!(rows[0].is_spent);
+        assert!(rows[0].is_unrolled);
     }
 }

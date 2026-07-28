@@ -75,7 +75,7 @@ pub(crate) async fn autonomous_complete_unilateral_exit(
             Some(fee_rate_sat_per_vb),
         )
         .await?;
-    session.clear_pending_unilateral_exits_for_outpoints(&parsed_outpoints);
+    session.finalize_unilateral_exit_completion_local_state(&parsed_outpoints, &txid.to_string());
     Ok(txid.to_string())
 }
 

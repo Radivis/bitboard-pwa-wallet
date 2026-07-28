@@ -15,6 +15,33 @@ use crate::outpoint::VirtualOutPoint;
 
 use super::mappers::current_unix_timestamp;
 
+pub(crate) fn mark_vtxo_spent_in_snapshot(
+    snapshot: &mut crate::persistence::OffchainVtxoSnapshot,
+    txid: &str,
+    vout: u32,
+    spent_by: &str,
+) {
+    for record in &mut snapshot.virtual_tx_outpoints {
+        if record.txid == txid && record.vout == vout {
+            record.is_spent = true;
+            record.spent_by = Some(spent_by.to_string());
+        }
+    }
+}
+
+pub(crate) fn mark_vtxo_spent_in_wallet_db(
+    wallet_db: &JsonPersistenceDb,
+    txid: &str,
+    vout: u32,
+    spent_by: &str,
+) {
+    let Some(mut snapshot) = wallet_db.snapshot().offchain_vtxo_snapshot.clone() else {
+        return;
+    };
+    mark_vtxo_spent_in_snapshot(&mut snapshot, txid, vout, spent_by);
+    wallet_db.set_offchain_vtxo_snapshot(snapshot);
+}
+
 pub(crate) fn clear_pending_unilateral_exit_for_outpoint_in_wallet_db(
     wallet_db: &JsonPersistenceDb,
     txid: &str,
@@ -141,5 +168,22 @@ impl ArkSession {
         });
         self.wallet_db.set_pending_exit_deductions(pending);
         remove_unilateral_exit_watches_for_outpoints_in_wallet_db(&self.wallet_db, &outpoint_set);
+    }
+
+    /// Local snapshot + pending cleanup after a successful on-chain completion broadcast.
+    pub(crate) fn finalize_unilateral_exit_completion_local_state(
+        &self,
+        vtxo_outpoints: &[bitcoin::OutPoint],
+        completion_txid: &str,
+    ) {
+        for outpoint in vtxo_outpoints {
+            mark_vtxo_spent_in_wallet_db(
+                &self.wallet_db,
+                &outpoint.txid.to_string(),
+                outpoint.vout,
+                completion_txid,
+            );
+        }
+        self.clear_pending_unilateral_exits_for_outpoints(vtxo_outpoints);
     }
 }

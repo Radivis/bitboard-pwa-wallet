@@ -1059,7 +1059,10 @@ impl ArkSession {
                 .await
             {
                 Ok(txid) => {
-                    self.clear_pending_unilateral_exits_for_outpoints(&vtxo_outpoints);
+                    self.finalize_unilateral_exit_completion_local_state(
+                        &vtxo_outpoints,
+                        &txid.to_string(),
+                    );
                     return Ok(txid.to_string());
                 }
                 Err(error) if completion_awaits_unrolled_indexer(&error) => {
@@ -1071,7 +1074,10 @@ impl ArkSession {
                         )
                         .await
                     {
-                        self.clear_pending_unilateral_exits_for_outpoints(&vtxo_outpoints);
+                        self.finalize_unilateral_exit_completion_local_state(
+                            &vtxo_outpoints,
+                            &txid,
+                        );
                         return Ok(txid);
                     }
                     last_error = Some(error);
@@ -1089,7 +1095,7 @@ impl ArkSession {
             )
             .await
         {
-            self.clear_pending_unilateral_exits_for_outpoints(&vtxo_outpoints);
+            self.finalize_unilateral_exit_completion_local_state(&vtxo_outpoints, &txid);
             return Ok(txid);
         }
 

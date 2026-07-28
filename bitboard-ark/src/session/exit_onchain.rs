@@ -1,12 +1,17 @@
+use std::collections::HashSet;
 use std::str::FromStr;
 
 use ark_client::Blockchain;
+use ark_core::build_unilateral_exit_tree_txids;
 use bitcoin::Txid;
 
 use crate::error::ArkResult;
-use crate::persistence::UnilateralExitWatchRecord;
+use crate::persistence::{OffchainVtxoSnapshot, UnilateralExitWatchRecord};
+use crate::unilateral_exit_materials::{snapshot_materials_for_leaf_tx, vtxo_chains_from_json};
 
 use super::exit_watch::parse_branch_txids;
+
+const UNILATERAL_EXIT_ON_CHAIN_TIP_VOUT: u32 = 0;
 
 /// True when any known unroll branch tx or the published tip is visible on Esplora.
 pub(crate) async fn unroll_branch_visible_on_chain<B: Blockchain>(
@@ -27,23 +32,215 @@ pub(crate) async fn unroll_branch_visible_on_chain<B: Blockchain>(
     Ok(false)
 }
 
-/// True when the published unroll tip is on-chain and its primary output is spent (exit claimed).
+/// True when the unilateral exit completion spend is visible on Esplora for this watch.
 pub(crate) async fn exit_branch_spent_on_chain<B: Blockchain>(
     blockchain: &B,
+    snapshot: &OffchainVtxoSnapshot,
     watch: &UnilateralExitWatchRecord,
 ) -> ArkResult<bool> {
-    let Some(published_vtxo_txid) = watch.published_vtxo_txid.as_deref() else {
-        return Ok(false);
+    Ok(detect_exiting_vtxo_completion_on_esplora(
+        blockchain,
+        snapshot,
+        Some(watch),
+        &watch.vtxo_txid,
+        watch.vout,
+    )
+    .await?
+    .is_some())
+}
+
+/// Candidate on-chain tip txids to probe for a completed unilateral exit, most likely first.
+pub(crate) fn exiting_vtxo_on_chain_tip_candidates(
+    snapshot: &OffchainVtxoSnapshot,
+    leaf_txid: &str,
+    watch: Option<&UnilateralExitWatchRecord>,
+) -> Vec<Txid> {
+    let mut candidates = Vec::new();
+    let mut seen = HashSet::new();
+
+    let mut push_candidate = |txid: Txid| {
+        if seen.insert(txid) {
+            candidates.push(txid);
+        }
     };
-    let Ok(target_txid) = Txid::from_str(published_vtxo_txid) else {
-        return Ok(false);
-    };
-    if blockchain.find_tx(&target_txid).await?.is_none() {
-        return Ok(false);
+
+    if let Some(watch) = watch {
+        if let Some(published_vtxo_txid) = watch.published_vtxo_txid.as_deref()
+            && let Ok(published_txid) = Txid::from_str(published_vtxo_txid)
+        {
+            push_candidate(published_txid);
+        }
+        for branch_txid in parse_branch_txids(watch).into_iter().rev() {
+            push_candidate(branch_txid);
+        }
     }
-    Ok(blockchain
-        .get_output_status(&target_txid, 0)
-        .await?
-        .spend_txid
-        .is_some())
+
+    if let Ok(leaf) = Txid::from_str(leaf_txid) {
+        push_candidate(leaf);
+    }
+
+    for branch_txid in branch_txid_hints_from_materials(snapshot, leaf_txid)
+        .into_iter()
+        .rev()
+    {
+        push_candidate(branch_txid);
+    }
+
+    candidates
+}
+
+fn branch_txid_hints_from_materials(snapshot: &OffchainVtxoSnapshot, leaf_txid: &str) -> Vec<Txid> {
+    let Some(materials) = snapshot_materials_for_leaf_tx(snapshot, leaf_txid) else {
+        return Vec::new();
+    };
+    let Ok(chains) = vtxo_chains_from_json(&materials.chain_json) else {
+        return Vec::new();
+    };
+    let Ok(leaf) = Txid::from_str(leaf_txid) else {
+        return Vec::new();
+    };
+    let Ok(paths) = build_unilateral_exit_tree_txids(&chains, leaf) else {
+        return Vec::new();
+    };
+    paths.into_iter().flatten().collect()
+}
+
+/// Returns the completion spend txid when the virtual outpoint or any unroll tip is spent on-chain.
+pub(crate) async fn detect_exiting_vtxo_completion_on_esplora<B: Blockchain>(
+    blockchain: &B,
+    snapshot: &OffchainVtxoSnapshot,
+    watch: Option<&UnilateralExitWatchRecord>,
+    leaf_txid: &str,
+    virtual_vout: u32,
+) -> ArkResult<Option<Txid>> {
+    if let Ok(leaf) = Txid::from_str(leaf_txid)
+        && let Some(spend_txid) = output_spent_on_chain(blockchain, &leaf, virtual_vout).await?
+    {
+        return Ok(Some(spend_txid));
+    }
+
+    let tip_candidates = exiting_vtxo_on_chain_tip_candidates(snapshot, leaf_txid, watch);
+    find_unilateral_exit_completion_spend_on_chain(
+        blockchain,
+        &tip_candidates,
+        leaf_txid,
+        virtual_vout,
+    )
+    .await
+}
+
+/// Returns the completion spend txid when any candidate tip's primary output is spent on-chain.
+pub(crate) async fn find_unilateral_exit_completion_spend_on_chain<B: Blockchain>(
+    blockchain: &B,
+    tip_candidates: &[Txid],
+    skip_txid: &str,
+    skip_vout: u32,
+) -> ArkResult<Option<Txid>> {
+    let Ok(skip_txid) = Txid::from_str(skip_txid) else {
+        return Ok(None);
+    };
+    for tip_txid in tip_candidates {
+        if *tip_txid == skip_txid && UNILATERAL_EXIT_ON_CHAIN_TIP_VOUT == skip_vout {
+            continue;
+        }
+        if let Some(spend_txid) =
+            output_spent_on_chain(blockchain, tip_txid, UNILATERAL_EXIT_ON_CHAIN_TIP_VOUT).await?
+        {
+            return Ok(Some(spend_txid));
+        }
+    }
+    Ok(None)
+}
+
+async fn output_spent_on_chain<B: Blockchain>(
+    blockchain: &B,
+    txid: &Txid,
+    vout: u32,
+) -> ArkResult<Option<Txid>> {
+    Ok(blockchain.get_output_status(txid, vout).await?.spend_txid)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::persistence::{OffchainVtxoSnapshot, UnilateralExitMaterialsRecord};
+    use crate::unilateral_exit_materials::{store_materials_for_leaf_tx, vtxo_chains_to_json};
+    use ark_core::server::{ChainedTxType, VtxoChain, VtxoChains};
+    use bitcoin::hashes::Hash;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn exiting_tip_candidates_prefers_watch_published_then_leaf_then_branch_hints() {
+        let commitment = Txid::from_byte_array([0x01; 32]);
+        let tree = Txid::from_byte_array([0x02; 32]);
+        let leaf_txid = Txid::from_byte_array([0x03; 32]);
+        let published = Txid::from_byte_array([0x04; 32]);
+        let chains = VtxoChains {
+            inner: vec![
+                VtxoChain {
+                    txid: commitment,
+                    tx_type: ChainedTxType::Commitment,
+                    spends: vec![],
+                    expires_at: 0,
+                },
+                VtxoChain {
+                    txid: tree,
+                    tx_type: ChainedTxType::Tree,
+                    spends: vec![commitment],
+                    expires_at: 0,
+                },
+                VtxoChain {
+                    txid: leaf_txid,
+                    tx_type: ChainedTxType::Ark,
+                    spends: vec![tree],
+                    expires_at: 0,
+                },
+            ],
+        };
+        let chain_json = vtxo_chains_to_json(&chains).expect("encode");
+        let mut snapshot = OffchainVtxoSnapshot {
+            synced_at: 1,
+            dust_sats: 330,
+            virtual_tx_outpoints: vec![],
+            unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
+        };
+        store_materials_for_leaf_tx(
+            &mut snapshot,
+            &leaf_txid.to_string(),
+            UnilateralExitMaterialsRecord {
+                cached_at: 1,
+                chain_json,
+                virtual_psbts: vec![],
+            },
+        );
+        let watch = UnilateralExitWatchRecord {
+            vtxo_txid: leaf_txid.to_string(),
+            vout: 0,
+            amount_sats: 50_000,
+            registered_at: 1,
+            published_vtxo_txid: Some(published.to_string()),
+            branch_txids: vec![tree.to_string()],
+        };
+
+        let candidates =
+            exiting_vtxo_on_chain_tip_candidates(&snapshot, &leaf_txid.to_string(), Some(&watch));
+
+        assert_eq!(candidates, vec![published, tree, leaf_txid]);
+    }
+
+    #[test]
+    fn exiting_tip_candidates_without_materials_uses_leaf_only() {
+        let leaf_txid = Txid::from_byte_array([0x44; 32]);
+        let snapshot = OffchainVtxoSnapshot {
+            synced_at: 1,
+            dust_sats: 330,
+            virtual_tx_outpoints: vec![],
+            unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
+        };
+
+        let candidates =
+            exiting_vtxo_on_chain_tip_candidates(&snapshot, &leaf_txid.to_string(), None);
+
+        assert_eq!(candidates, vec![leaf_txid]);
+    }
 }

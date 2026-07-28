@@ -8,9 +8,15 @@ use crate::persistence::{
 };
 
 use super::ArkSession;
-use super::exit_onchain::{exit_branch_spent_on_chain, unroll_branch_visible_on_chain};
+use super::exit_onchain::{
+    detect_exiting_vtxo_completion_on_esplora, exit_branch_spent_on_chain,
+    unroll_branch_visible_on_chain,
+};
 use super::exit_watch::backfill_unilateral_exit_watches_if_empty;
+use super::pending_exit::mark_vtxo_spent_in_snapshot;
 use crate::outpoint::VirtualOutPoint;
+use bitcoin::{OutPoint, Txid};
+use std::str::FromStr;
 
 const WARN_ASP_MISMATCH: &str = "Operator reports this exiting VTXO as swept without unrolled; balance kept until the indexer catches up.";
 const WARN_INDEXER_LAG: &str = "Exiting VTXO is missing from the operator list but visible on-chain; waiting for the indexer to catch up.";
@@ -135,8 +141,56 @@ fn clear_exiting_record(snapshot: &mut OffchainVtxoSnapshot, txid: &str, vout: u
         .iter_mut()
         .find(|record| record.txid == txid && record.vout == vout)
     {
-        existing.is_unrolled = false;
+        existing.is_spent = true;
     }
+}
+
+/// Mark locally completed unilateral exits when Esplora shows the on-chain spend, even if the
+/// operator indexer (or active watch bookkeeping) still treats them as exiting.
+pub(crate) async fn reconcile_exiting_vtxos_spent_on_esplora(
+    session: &ArkSession,
+    snapshot: &mut OffchainVtxoSnapshot,
+) -> ArkResult<Vec<OutPoint>> {
+    let blockchain = session.client.blockchain();
+    let watches = session.wallet_db.unilateral_exit_watches();
+    let watch_by_outpoint: std::collections::HashMap<(String, u32), &UnilateralExitWatchRecord> =
+        watches
+            .iter()
+            .map(|watch| ((watch.vtxo_txid.clone(), watch.vout), watch))
+            .collect();
+
+    let mut probe_targets: Vec<(String, u32)> = snapshot
+        .virtual_tx_outpoints
+        .iter()
+        .filter(|record| record.is_unrolled && !record.is_spent)
+        .map(|record| (record.txid.clone(), record.vout))
+        .collect();
+
+    for watch in &watches {
+        let key = (watch.vtxo_txid.clone(), watch.vout);
+        if !probe_targets.iter().any(|target| target == &key) {
+            probe_targets.push(key);
+        }
+    }
+
+    let mut healed_outpoints = Vec::new();
+    for (leaf_txid, vout) in probe_targets {
+        let watch = watch_by_outpoint.get(&(leaf_txid.clone(), vout)).copied();
+        let Some(spend_txid) = detect_exiting_vtxo_completion_on_esplora(
+            blockchain, snapshot, watch, &leaf_txid, vout,
+        )
+        .await?
+        else {
+            continue;
+        };
+
+        mark_vtxo_spent_in_snapshot(snapshot, &leaf_txid, vout, &spend_txid.to_string());
+        if let Ok(txid) = Txid::from_str(&leaf_txid) {
+            healed_outpoints.push(OutPoint { txid, vout });
+        }
+    }
+
+    Ok(healed_outpoints)
 }
 
 pub(crate) async fn reconcile_exiting_vtxo_watches(
@@ -156,7 +210,13 @@ pub(crate) async fn reconcile_exiting_vtxo_watches(
 
         let outcome = if let Some(record) = snapshot_record(&snapshot, &txid, vout) {
             if record.is_unrolled && !record.is_spent {
-                ExitingVtxoReconcileOutcome::Ok
+                if exit_branch_spent_on_chain(session.client.blockchain(), &snapshot, &watch)
+                    .await?
+                {
+                    ExitingVtxoReconcileOutcome::ClearOnChainSpent
+                } else {
+                    ExitingVtxoReconcileOutcome::Ok
+                }
             } else if record.is_spent {
                 ExitingVtxoReconcileOutcome::ClearSpent
             } else if record.is_swept && !record.is_unrolled {
@@ -168,7 +228,7 @@ pub(crate) async fn reconcile_exiting_vtxo_watches(
                 ExitingVtxoReconcileOutcome::Ok
             }
         } else {
-            reconcile_missing_watch(session, &watch, prior_record).await?
+            reconcile_missing_watch(session, &snapshot, &watch, prior_record).await?
         };
 
         apply_reconcile_outcome(
@@ -190,6 +250,7 @@ pub(crate) async fn reconcile_exiting_vtxo_watches(
 
 async fn reconcile_missing_watch(
     session: &ArkSession,
+    snapshot: &OffchainVtxoSnapshot,
     watch: &UnilateralExitWatchRecord,
     _prior_record: Option<&VirtualTxOutPointRecord>,
 ) -> ArkResult<ExitingVtxoReconcileOutcome> {
@@ -207,7 +268,7 @@ async fn reconcile_missing_watch(
     }
 
     let blockchain = session.client.blockchain();
-    if exit_branch_spent_on_chain(blockchain, watch).await? {
+    if exit_branch_spent_on_chain(blockchain, snapshot, watch).await? {
         return Ok(ExitingVtxoReconcileOutcome::ClearOnChainSpent);
     }
     if unroll_branch_visible_on_chain(blockchain, watch).await? {
@@ -379,7 +440,7 @@ mod tests {
             ExitingVtxoReconcileOutcome::ClearSpent,
         );
 
-        assert!(!snapshot.virtual_tx_outpoints[0].is_unrolled);
+        assert!(snapshot.virtual_tx_outpoints[0].is_spent);
         assert!(retained.is_empty());
     }
 }
