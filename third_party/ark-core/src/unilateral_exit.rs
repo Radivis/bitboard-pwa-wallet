@@ -95,8 +95,11 @@ impl VtxoInput {
     }
 }
 
-/// Build a transaction that spends boarding outputs and VTXOs to an _on-chain_ `to_address`. Any
-/// coins left over after covering the `to_amount` are sent to an on-chain change address.
+/// Build a transaction that spends boarding outputs and VTXOs to an _on-chain_ `to_address`.
+///
+/// When `miner_fee_from_input_residual` is `false`, any coins left over after covering
+/// `to_amount` are sent to an on-chain change address. When `true` (completion sweeps), the
+/// residual pays miners and no change output is added.
 ///
 /// All these outputs are spent unilaterally i.e. without the collaboration of the Ark server.
 ///
@@ -111,6 +114,7 @@ pub fn create_unilateral_exit_transaction<S>(
     onchain_inputs: &[OnChainInput],
     vtxo_inputs: &[VtxoInput],
     sign_fn: S,
+    miner_fee_from_input_residual: bool,
 ) -> Result<Transaction, Error>
 where
     S: Fn(
@@ -143,7 +147,7 @@ where
         ))
     })?;
 
-    if change_amount > Amount::ZERO {
+    if change_amount > Amount::ZERO && !miner_fee_from_input_residual {
         output.push(TxOut {
             value: change_amount,
             script_pubkey: change_address.script_pubkey(),

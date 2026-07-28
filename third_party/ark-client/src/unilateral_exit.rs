@@ -753,6 +753,7 @@ where
             &onchain_inputs,
             &vtxo_inputs,
             sign,
+            true,
         )
         .map_err(Error::from)?;
 
