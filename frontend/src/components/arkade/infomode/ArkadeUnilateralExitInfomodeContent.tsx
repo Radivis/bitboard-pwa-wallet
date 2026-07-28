@@ -23,6 +23,10 @@ export function ArkadeUnilateralExitInfomodeContent() {
       <InfomodeParagraph>
         <ArticleLink slug={ARKADE_LIBRARY_SLUGS.exits}>Exiting Arkade to on-chain</ArticleLink>
         {' · '}
+        <ArticleLink slug={ARKADE_LIBRARY_SLUGS.unilateralExitRisks}>
+          Risks of unilateral exit
+        </ArticleLink>
+        {' · '}
         <ArticleLink slug={ARKADE_LIBRARY_SLUGS.sharedLeafUnilateralExit}>
           Shared leaf VTXOs
         </ArticleLink>

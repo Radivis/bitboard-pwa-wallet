@@ -1,5 +1,6 @@
 import { expect, type Page } from '@playwright/test'
 import { mineRegtestBlocks } from './arkade-regtest'
+import { confirmStartUnilateralExitIfShown } from './arkade-unilateral-exit-start-confirm'
 
 const MANUAL_UNROLL_DEADLINE_MS = 900_000
 const MAX_PROCEED_CLICKS = 24
@@ -47,6 +48,7 @@ async function isProceedMutationPending(page: Page): Promise<boolean> {
 async function clickProceedAndWaitForStep(page: Page): Promise<void> {
   const proceedButton = page.getByTestId('unilateral-exit-proceed')
   await proceedButton.click()
+  await confirmStartUnilateralExitIfShown(page)
 
   const deadlineMs = Date.now() + PROCEED_STEP_TIMEOUT_MS
   while (Date.now() < deadlineMs) {

@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
 import { UnilateralExitAutomationSection } from '@/components/wallet/unilateral-exit/UnilateralExitAutomationSection'
+import { StartUnilateralExitConfirmModal } from '@/components/wallet/unilateral-exit/StartUnilateralExitConfirmModal'
 import { UnilateralExitTreeGraph } from '@/components/wallet/unilateral-exit/UnilateralExitTreeGraph'
 import { UnilateralExitNodeDetailCard } from '@/components/wallet/unilateral-exit/UnilateralExitNodeDetailCard'
 import {
@@ -94,6 +95,7 @@ export function UnilateralExitControlPage() {
   )
   const graphRenderEpoch = useUnilateralExitControlStore((state) => state.graphRenderEpoch)
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null)
+  const [startConfirmOpen, setStartConfirmOpen] = useState(false)
 
   const automationJob = useUnilateralExitAutomationStore((state) => {
     if (
@@ -380,6 +382,14 @@ export function UnilateralExitControlPage() {
       .clearPause(activeWalletId, networkMode, activeArkadeConnectionId)
   }
 
+  const handleProceedClick = () => {
+    if (jobActive) {
+      void handleProceed()
+      return
+    }
+    setStartConfirmOpen(true)
+  }
+
   const handleProceed = async () => {
     if (selectedLeafOutpoints.length === 0) {
       toast.error('Select at least one exit-eligible VTXO leaf.')
@@ -432,6 +442,13 @@ export function UnilateralExitControlPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <StartUnilateralExitConfirmModal
+        open={startConfirmOpen}
+        onOpenChange={setStartConfirmOpen}
+        onConfirm={() => {
+          void handleProceed()
+        }}
+      />
       <div className="flex flex-col gap-4">
         <PageHeader
           title={hasInProgressExits ? 'Control unilateral exit' : 'Unilateral exit control'}
@@ -603,7 +620,7 @@ export function UnilateralExitControlPage() {
               batchEstimateQuery.isLoading ||
               phase === 'complete'
             }
-            onClick={handleProceed}
+            onClick={handleProceedClick}
           >
             {proceedMutation.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
             {jobActive ? 'Proceed' : 'Start unroll'}

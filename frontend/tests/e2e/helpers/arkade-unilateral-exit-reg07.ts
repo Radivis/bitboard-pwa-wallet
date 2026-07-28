@@ -1,6 +1,7 @@
 import { expect, type Page } from '@playwright/test'
 import { ensureOnChainBumperFunds } from './arkade-management'
 import { mineRegtestBlocks } from './arkade-regtest'
+import { confirmStartUnilateralExitIfShown } from './arkade-unilateral-exit-start-confirm'
 
 const AUTOMATIC_UNROLL_DEADLINE_MS = 900_000
 const MAX_MINES_WITHOUT_PROGRESS = 60
@@ -164,6 +165,7 @@ export async function runAutomaticUnilateralUnrollUntilBranchComplete(page: Page
 
   const startButton = page.getByTestId('unilateral-exit-proceed')
   await startButton.click()
+  await confirmStartUnilateralExitIfShown(page)
 
   const deadlineMs = Date.now() + AUTOMATIC_UNROLL_DEADLINE_MS
   let sawProceedingAutomatically = false

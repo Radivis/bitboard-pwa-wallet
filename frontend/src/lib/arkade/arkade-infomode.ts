@@ -42,6 +42,8 @@ export const ARKADE_LIBRARY_SLUGS = {
   vtxoExpiry: 'arkade-vtxo-expiry',
   exits: 'arkade-exits-explained',
   sharedLeafUnilateralExit: 'arkade-unilateral-exit-shared-leaf-vtxos',
+  unilateralExitRisks: 'risks-of-arkade-unilateral-exits',
+  checkpointTransactions: 'arkade-checkpoint-transactions',
   layer2: 'layer-2-networks',
 } as const
 
