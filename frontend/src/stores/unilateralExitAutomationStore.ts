@@ -77,6 +77,7 @@ interface UnilateralExitAutomationState {
     networkMode: NetworkMode,
     arkadeConnectionId: string,
     selectedLeafOutpoints: ArkadeVtxoOutpoint[],
+    proceedAutomatically: boolean,
   ) => void
   pauseJob: (
     walletId: number,
@@ -143,7 +144,9 @@ export const useUnilateralExitAutomationStore = create<UnilateralExitAutomationS
               : {}),
             ...(enabled
               ? { pausedReason: undefined, lastErrorMessage: undefined }
-              : {}),
+              : job.jobStarted
+                ? { pausedReason: 'userDisabled' as const, lastErrorMessage: undefined }
+                : { pausedReason: undefined, lastErrorMessage: undefined }),
           })),
         )
       },
@@ -177,12 +180,19 @@ export const useUnilateralExitAutomationStore = create<UnilateralExitAutomationS
         )
       },
 
-      startJob: (walletId, networkMode, arkadeConnectionId, selectedLeafOutpoints) => {
+      startJob: (
+        walletId,
+        networkMode,
+        arkadeConnectionId,
+        selectedLeafOutpoints,
+        proceedAutomatically,
+      ) => {
         const key = unilateralExitAutomationJobKey(walletId, networkMode, arkadeConnectionId)
         const sorted = sortArkadeVtxoOutpoints(selectedLeafOutpoints)
         set((state) =>
           updateJob(state, key, (job) => ({
             ...job,
+            proceedAutomatically,
             jobStarted: true,
             selectedLeafOutpoints: sorted,
             pausedReason: undefined,
@@ -236,7 +246,8 @@ export const useUnilateralExitAutomationStore = create<UnilateralExitAutomationS
     {
       name: 'unilateral-exit-automation-storage',
       storage: createJSONStorage(() => sqliteStorage),
-      version: 1,
+      version: 3,
+      migrate: (persistedState) => persistedState,
       partialize: (state) => ({ jobsByKey: state.jobsByKey }),
     },
   ),

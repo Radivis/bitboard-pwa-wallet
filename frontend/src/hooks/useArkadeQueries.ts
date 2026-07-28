@@ -1,5 +1,5 @@
 import { awaitInFlightWalletSecretsWrites } from '@/db'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { proxy } from 'comlink'
 import { toast } from 'sonner'
 import { getArkadeWorker } from '@/workers/arkade-factory'
@@ -1477,6 +1477,7 @@ export function useArkadeUnilateralExitTopologyQuery(params: {
           vtxoOutpoints: sortedOutpoints,
         }),
       ),
+    placeholderData: keepPreviousData,
     staleTime: ARKADE_FEE_ESTIMATE_STALE_MS,
   })
 }

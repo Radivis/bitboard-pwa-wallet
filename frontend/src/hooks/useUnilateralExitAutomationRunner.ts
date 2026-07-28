@@ -9,7 +9,7 @@ import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import {
   arkadeBalanceQueryKey,
   arkadeUnilateralExitProgressQueryKey,
-  arkadeUnilateralExitTopologyQueryKey,
+  arkadeUnilateralExitTopologyScopeKey,
 } from '@/lib/arkade/arkade-query-keys'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { proceedUnilateralExitStepWithGuards } from '@/lib/arkade/proceed-unilateral-exit-step'
@@ -22,6 +22,7 @@ import {
   useUnilateralExitAutomationStore,
 } from '@/stores/unilateralExitAutomationStore'
 import { useUnilateralExitControlStore } from '@/stores/unilateralExitControlStore'
+import { usePersistedStoreHydrated } from '@/hooks/usePersistedStoreHydrated'
 import { getArkadeWorker } from '@/workers/arkade-factory'
 import { sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
 
@@ -60,11 +61,10 @@ async function invalidateUnilateralExitQueries(
     queryKey: arkadeBalanceQueryKey(walletId, networkMode, arkadeConnectionId),
   })
   await queryClient.invalidateQueries({
-    queryKey: arkadeUnilateralExitTopologyQueryKey(
+    queryKey: arkadeUnilateralExitTopologyScopeKey(
       walletId,
       networkMode,
       arkadeConnectionId,
-      [],
     ),
   })
 }
@@ -92,11 +92,14 @@ export function useUnilateralExitAutomationRunner() {
     return state.jobsByKey[key] ?? null
   })
 
+  const automationStoreHydrated = usePersistedStoreHydrated(useUnilateralExitAutomationStore)
+
   const runnerGenerationRef = useRef(0)
 
   useEffect(() => {
     const walletUnlocked = walletIsUnlockedOrSyncing(walletStatus)
     const shouldRun =
+      automationStoreHydrated &&
       walletUnlocked &&
       activeWalletId != null &&
       activeArkadeConnectionId != null &&
@@ -268,6 +271,7 @@ export function useUnilateralExitAutomationRunner() {
     automationJob?.pausedReason,
     automationJob?.proceedAutomatically,
     automationJob?.selectedLeafOutpoints,
+    automationStoreHydrated,
     networkMode,
     queryClient,
     walletStatus,

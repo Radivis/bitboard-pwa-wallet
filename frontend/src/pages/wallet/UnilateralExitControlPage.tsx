@@ -27,9 +27,12 @@ import {
 } from '@/hooks/useArkadeQueries'
 import { useEsploraFeePresets } from '@/hooks/useEsploraFeePresets'
 import { useOnchainFeeRateSelection } from '@/hooks/useOnchainFeeRateSelection'
+import { usePersistedStoreHydrated } from '@/hooks/usePersistedStoreHydrated'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import { arkadeUnilateralExitInProgressSats } from '@/lib/arkade/arkade-balance-display'
 import { defaultMaxFeeRateSatPerVb } from '@/lib/arkade/unilateral-exit-automation-fees'
+import { resolveUnilateralExitTopologyOutpoints } from '@/lib/arkade/unilateral-exit-topology'
+import { wasmArkErrorMessage } from '@/lib/shared/wasm-ark-error'
 import { formatSatPerVbTwoDecimals } from '@/lib/esplora/esplora-fee-estimates'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import { useUnilateralExitControlStore } from '@/stores/unilateralExitControlStore'
@@ -113,7 +116,11 @@ export function UnilateralExitControlPage() {
     return state.jobsByKey[key] ?? null
   })
 
-  const proceedAutomatically = automationJob?.proceedAutomatically ?? false
+  const automationStoreHydrated = usePersistedStoreHydrated(useUnilateralExitAutomationStore)
+
+  const proceedAutomatically = automationStoreHydrated
+    ? (automationJob?.proceedAutomatically ?? false)
+    : false
   const automationPausedReason = automationJob?.pausedReason
   const automationLastError = automationJob?.lastErrorMessage
 
@@ -146,9 +153,26 @@ export function UnilateralExitControlPage() {
   const hasInProgressExits =
     unilateralExitInProgressSats > 0 || (inProgressQuery.data?.length ?? 0) > 0
 
+  const topologyOutpoints = useMemo(
+    () =>
+      resolveUnilateralExitTopologyOutpoints({
+        selectedLeafOutpoints,
+        inProgressOutpoints: (inProgressQuery.data ?? []).map((row) => ({
+          txid: row.txid,
+          vout: row.vout,
+        })),
+        persistedJobOutpoints: automationJob?.selectedLeafOutpoints,
+      }),
+    [
+      automationJob?.selectedLeafOutpoints,
+      inProgressQuery.data,
+      selectedLeafOutpoints,
+    ],
+  )
+
   const topologyQuery = useArkadeUnilateralExitTopologyQuery({
     enabled: true,
-    vtxoOutpoints: [],
+    vtxoOutpoints: topologyOutpoints,
   })
 
   const batchEstimateQuery = useArkadeUnilateralExitBatchEstimateQuery({
@@ -231,7 +255,7 @@ export function UnilateralExitControlPage() {
         activeWalletId,
         networkMode,
         activeArkadeConnectionId,
-        [],
+        topologyOutpoints,
       ),
     })
     if (sortedOutpoints.length > 0) {
@@ -251,6 +275,7 @@ export function UnilateralExitControlPage() {
     activeArkadeConnectionId,
     networkMode,
     selectedLeafOutpoints,
+    topologyOutpoints,
   ])
 
   useEffect(() => {
@@ -403,6 +428,10 @@ export function UnilateralExitControlPage() {
       return
     }
     try {
+      if (!automationStoreHydrated) {
+        toast.error('Automation settings are still loading. Try again in a moment.')
+        return
+      }
       setJobStarted(true)
       useUnilateralExitAutomationStore
         .getState()
@@ -411,6 +440,7 @@ export function UnilateralExitControlPage() {
           networkMode,
           activeArkadeConnectionId,
           selectedLeafOutpoints,
+          proceedAutomatically,
         )
       if (!proceedAutomatically) {
         await proceedMutation.mutateAsync({
@@ -464,19 +494,26 @@ export function UnilateralExitControlPage() {
           </InfomodeWrapper>
         </p>
 
-        {topologyQuery.isError ? (
+        {topologyQuery.isError && topologyQuery.data == null ? (
           <div
             className="flex h-[320px] min-h-[280px] w-full items-center justify-center rounded-md border bg-muted/20"
             data-testid="unilateral-exit-tree-error"
           >
             <p className="text-sm text-destructive">
-              {topologyQuery.error instanceof Error
-                ? topologyQuery.error.message
-                : 'Failed to load exit tree.'}
+              {wasmArkErrorMessage(topologyQuery.error) ??
+                (topologyQuery.error instanceof Error
+                  ? topologyQuery.error.message
+                  : 'Failed to load exit tree.')}
             </p>
           </div>
         ) : (
-          <UnilateralExitTreeGraph
+          <>
+            {topologyQuery.isError ? (
+              <p className="text-xs text-destructive" data-testid="unilateral-exit-tree-refresh-error">
+                Could not refresh exit tree. Showing the last loaded view.
+              </p>
+            ) : null}
+            <UnilateralExitTreeGraph
             renderEpoch={graphRenderEpoch}
             topology={topologyQuery.data}
             selectedLeafOutpoints={selectedLeafOutpoints}
@@ -484,6 +521,7 @@ export function UnilateralExitControlPage() {
             focusedNodeId={focusedNodeId}
             onNodeFocus={setFocusedNodeId}
           />
+          </>
         )}
 
         {topologyQuery.data != null && focusedNodeId != null && (
@@ -568,7 +606,7 @@ export function UnilateralExitControlPage() {
           maxFeeRateSatPerVb={automationJob?.maxFeeRateSatPerVb ?? 10}
           presetSatPerVbByLabel={presetSatPerVbByLabel}
           feeEstimatesRefreshing={feePresetsQuery.isFetching || feeRateUi.feeEstimatesRefreshing}
-          isPending={proceedMutation.isPending}
+          isPending={proceedMutation.isPending || !automationStoreHydrated}
           pausedReason={automationPausedReason}
           lastErrorMessage={automationLastError}
           onProceedAutomaticallyChange={handleProceedAutomaticallyChange}
@@ -614,6 +652,7 @@ export function UnilateralExitControlPage() {
             className="w-full"
             data-testid="unilateral-exit-proceed"
             disabled={
+              !automationStoreHydrated ||
               selectedLeafOutpoints.length === 0 ||
               bumperLow ||
               proceedMutation.isPending ||

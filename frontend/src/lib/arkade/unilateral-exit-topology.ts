@@ -12,9 +12,27 @@ import type {
   ArkadeUnilateralExitTopology,
   ArkadeVtxoOutpoint,
 } from '@/workers/arkade-api'
-import { includesArkadeVtxoOutpoint } from '@/workers/arkade-api'
+import { includesArkadeVtxoOutpoint, sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
 
 export type UnilateralExitLayoutDirection = 'LR' | 'TB'
+
+/** Outpoints passed to topology/progress APIs: explicit selection, then in-progress, then job. */
+export function resolveUnilateralExitTopologyOutpoints(params: {
+  selectedLeafOutpoints: ArkadeVtxoOutpoint[]
+  inProgressOutpoints: ArkadeVtxoOutpoint[]
+  persistedJobOutpoints?: ArkadeVtxoOutpoint[]
+}): ArkadeVtxoOutpoint[] {
+  if (params.selectedLeafOutpoints.length > 0) {
+    return sortArkadeVtxoOutpoints(params.selectedLeafOutpoints)
+  }
+  if (params.inProgressOutpoints.length > 0) {
+    return sortArkadeVtxoOutpoints(params.inProgressOutpoints)
+  }
+  if (params.persistedJobOutpoints != null && params.persistedJobOutpoints.length > 0) {
+    return sortArkadeVtxoOutpoints(params.persistedJobOutpoints)
+  }
+  return []
+}
 
 export type UnilateralExitTreeNodeData = {
   txid: string

@@ -64,6 +64,11 @@ describe('useUnilateralExitAutomationRunner', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     useUnilateralExitAutomationStore.setState({ jobsByKey: {} })
+    useUnilateralExitAutomationStore.persist.rehydrate = () => Promise.resolve()
+    Object.defineProperty(useUnilateralExitAutomationStore.persist, 'hasHydrated', {
+      configurable: true,
+      value: () => true,
+    })
     useFeatureStore.setState({ isArkadeEnabled: true } as Partial<
       ReturnType<typeof useFeatureStore.getState>
     >)
@@ -105,7 +110,7 @@ describe('useUnilateralExitAutomationRunner', () => {
     )
     useUnilateralExitAutomationStore.getState().startJob(walletId, 'regtest', connectionId, [
       leaf,
-    ])
+    ], true)
     useUnilateralExitAutomationStore
       .getState()
       .setFeePresetLabel(walletId, 'regtest', connectionId, 'High')
@@ -122,6 +127,24 @@ describe('useUnilateralExitAutomationRunner', () => {
       expect(job.pausedReason).toBe('feeCapExceeded')
     })
 
+    expect(proceedUnilateralExitStep).not.toHaveBeenCalled()
+  })
+
+  it('does not proceed when proceed automatically is off', async () => {
+    useUnilateralExitAutomationStore.getState().startJob(
+      walletId,
+      'regtest',
+      connectionId,
+      [leaf],
+      false,
+    )
+
+    const { unmount } = renderHook(() => useUnilateralExitAutomationRunner(), {
+      wrapper: createWrapper(),
+    })
+    hookUnmounters.push(unmount)
+
+    await new Promise((resolve) => setTimeout(resolve, 50))
     expect(proceedUnilateralExitStep).not.toHaveBeenCalled()
   })
 
@@ -154,7 +177,7 @@ describe('useUnilateralExitAutomationRunner', () => {
     )
     useUnilateralExitAutomationStore.getState().startJob(walletId, 'regtest', connectionId, [
       leaf,
-    ])
+    ], true)
 
     const { unmount } = renderHook(() => useUnilateralExitAutomationRunner(), {
       wrapper: createWrapper(),

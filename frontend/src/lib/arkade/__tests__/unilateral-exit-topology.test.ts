@@ -5,6 +5,7 @@ import {
   leafOutpointsForTxid,
   mergeNodeStatuses,
   resolveLayoutDirection,
+  resolveUnilateralExitTopologyOutpoints,
 } from '@/lib/arkade/unilateral-exit-topology'
 import type { ArkadeUnilateralExitTopology } from '@/workers/arkade-api'
 
@@ -103,5 +104,42 @@ describe('unilateral-exit-topology helpers', () => {
     expect(nodes.map((node) => node.id).sort()).toEqual(['aa', 'bb', 'cc'])
     expect(nodes.find((node) => node.id === 'cc')?.data.isSelectedLeaf).toBe(true)
     expect(edgePaths.filter((edgePath) => edgePath.id === 'bb->cc')).toHaveLength(1)
+  })
+
+  it('resolveUnilateralExitTopologyOutpoints prefers selection, then in-progress, then job', () => {
+    const selected = [{ txid: 'aa'.repeat(32), vout: 0 }]
+    const inProgress = [{ txid: 'bb'.repeat(32), vout: 1 }]
+    const persisted = [{ txid: 'cc'.repeat(32), vout: 2 }]
+
+    expect(
+      resolveUnilateralExitTopologyOutpoints({
+        selectedLeafOutpoints: selected,
+        inProgressOutpoints: inProgress,
+        persistedJobOutpoints: persisted,
+      }),
+    ).toEqual(selected)
+
+    expect(
+      resolveUnilateralExitTopologyOutpoints({
+        selectedLeafOutpoints: [],
+        inProgressOutpoints: inProgress,
+        persistedJobOutpoints: persisted,
+      }),
+    ).toEqual(inProgress)
+
+    expect(
+      resolveUnilateralExitTopologyOutpoints({
+        selectedLeafOutpoints: [],
+        inProgressOutpoints: [],
+        persistedJobOutpoints: persisted,
+      }),
+    ).toEqual(persisted)
+
+    expect(
+      resolveUnilateralExitTopologyOutpoints({
+        selectedLeafOutpoints: [],
+        inProgressOutpoints: [],
+      }),
+    ).toEqual([])
   })
 })

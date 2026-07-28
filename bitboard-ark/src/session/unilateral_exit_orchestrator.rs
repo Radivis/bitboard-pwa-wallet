@@ -357,11 +357,24 @@ impl ArkSession {
             return Ok(dedup_virtual_outpoints(virtual_outpoints));
         }
         let candidates = self.list_exit_candidates().await?;
-        candidates
+        let startable = candidates
             .into_iter()
             .filter(|candidate| candidate.can_start_unroll)
             .map(|candidate| VirtualOutPoint::parse(&candidate.txid, candidate.vout))
-            .collect::<ArkResult<Vec<_>>>()
+            .collect::<ArkResult<Vec<_>>>()?;
+        if !startable.is_empty() {
+            return Ok(dedup_virtual_outpoints(startable));
+        }
+        let in_progress = self.unilateral_exit_in_progress_outpoints()?;
+        if in_progress.is_empty() {
+            return Err(ArkWasmError::EmptyVtxoOutpoints);
+        }
+        Ok(dedup_virtual_outpoints(
+            in_progress
+                .into_iter()
+                .map(VirtualOutPoint::from_bitcoin_outpoint)
+                .collect(),
+        ))
     }
 
     async fn build_unilateral_batch_plan(

@@ -301,11 +301,10 @@ export const arkadeUnilateralExitFeeQueryKey = (
     vout,
   ] as const
 
-export const arkadeUnilateralExitTopologyQueryKey = (
+export const arkadeUnilateralExitTopologyScopeKey = (
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,
   connectionId: string,
-  vtxoOutpoints: ArkadeVtxoOutpoint[],
 ) =>
   [
     ...WALLET_DB_QUERY_KEY_ROOT,
@@ -314,6 +313,16 @@ export const arkadeUnilateralExitTopologyQueryKey = (
     networkMode,
     connectionId,
     'unilateral-exit-topology',
+  ] as const
+
+export const arkadeUnilateralExitTopologyQueryKey = (
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+  connectionId: string,
+  vtxoOutpoints: ArkadeVtxoOutpoint[],
+) =>
+  [
+    ...arkadeUnilateralExitTopologyScopeKey(walletId, networkMode, connectionId),
     arkadeVtxoOutpointCacheKey(vtxoOutpoints),
   ] as const
 
