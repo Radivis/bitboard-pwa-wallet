@@ -51,6 +51,7 @@ export type UnilateralExitTreeNodeData = {
   status: ArkadeUnilateralExitNodeStatus['status']
   confirmations: number
   layoutDirection: UnilateralExitLayoutDirection
+  exitableVtxoCount: number
 }
 
 /** Rendered node diameter in px (`size-12`). */
@@ -347,6 +348,7 @@ export function layoutUnilateralExitGraph(params: {
         txType: topologyNode?.txType ?? 'unknown',
         isLeaf,
         isSelectedLeaf: allLeafOutpointsSelected(leafOutpoints, selectedLeafOutpoints),
+        exitableVtxoCount: leafOutpoints.length,
         pathTxids,
         focusedNodeId,
         status,
@@ -372,6 +374,7 @@ function buildTreeNodeData(params: {
   txType: string
   isLeaf: boolean
   isSelectedLeaf: boolean
+  exitableVtxoCount: number
   pathTxids: Set<string>
   focusedNodeId?: string | null
   status: ArkadeUnilateralExitNodeStatus | undefined
@@ -388,6 +391,7 @@ function buildTreeNodeData(params: {
     status: params.status?.status ?? 'pending',
     confirmations: params.status?.confirmations ?? 0,
     layoutDirection: params.layoutDirection,
+    exitableVtxoCount: params.exitableVtxoCount,
   }
 }
 

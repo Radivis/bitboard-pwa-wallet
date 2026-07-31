@@ -62,6 +62,9 @@ describe('unilateral-exit-topology helpers', () => {
     })
 
     expect(nodes).toHaveLength(3)
+    expect(nodes.find((node) => node.id === 'cc')?.data.exitableVtxoCount).toBe(1)
+    expect(nodes.find((node) => node.id === 'aa')?.data.exitableVtxoCount).toBe(0)
+    expect(nodes.find((node) => node.id === 'bb')?.data.exitableVtxoCount).toBe(0)
     expect(edgePaths).toHaveLength(2)
     expect(edgePaths.map((edgePath) => edgePath.id).sort()).toEqual(['aa->bb', 'bb->cc'])
     expect(edgePaths.every((edgePath) => edgePath.path.startsWith('M'))).toBe(true)
@@ -101,6 +104,7 @@ describe('unilateral-exit-topology helpers', () => {
     })
 
     expect(nodes.filter((node) => node.data.isLeaf)).toHaveLength(1)
+    expect(nodes.find((node) => node.id === 'cc')?.data.exitableVtxoCount).toBe(2)
     expect(nodes.map((node) => node.id).sort()).toEqual(['aa', 'bb', 'cc'])
     expect(nodes.find((node) => node.id === 'cc')?.data.isSelectedLeaf).toBe(true)
     expect(edgePaths.filter((edgePath) => edgePath.id === 'bb->cc')).toHaveLength(1)

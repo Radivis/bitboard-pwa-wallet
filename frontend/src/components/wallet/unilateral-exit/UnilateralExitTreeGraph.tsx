@@ -8,7 +8,7 @@ import {
   type NodeProps,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { Check, Loader2 } from 'lucide-react'
+import { Check, Coins, Loader2 } from 'lucide-react'
 import {
   layoutUnilateralExitGraph,
   resolveLayoutDirection,
@@ -59,6 +59,20 @@ function UnilateralExitTreeNode({
       aria-label={`${data.txType} node`}
     >
       <Icon className="size-5 text-foreground" aria-hidden />
+      {data.exitableVtxoCount > 0 && (
+        <div
+          className="absolute left-1/2 top-[calc(50%+10px)] flex -translate-x-1/2 items-center gap-0.5 rounded-full bg-background px-0.5 text-amber-600 shadow-sm"
+          aria-label={`${data.exitableVtxoCount} exitable VTXO${data.exitableVtxoCount === 1 ? '' : 's'}`}
+          data-testid={`unilateral-exit-vtxo-count-${data.txid.slice(0, 8)}`}
+        >
+          {data.exitableVtxoCount > 1 && (
+            <span className="text-[10px] font-semibold leading-none">
+              {data.exitableVtxoCount}×
+            </span>
+          )}
+          <Coins className="size-3" aria-hidden />
+        </div>
+      )}
       {data.status === 'confirmed' && (
         <Check
           className="absolute -right-1 -top-1 size-4 rounded-full bg-background text-green-600"
