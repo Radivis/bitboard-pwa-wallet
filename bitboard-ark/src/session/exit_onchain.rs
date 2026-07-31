@@ -6,8 +6,14 @@ use ark_core::build_unilateral_exit_tree_txids;
 use bitcoin::Txid;
 
 use crate::error::ArkResult;
+use crate::offchain_snapshot::mark_virtual_tx_vtxos_unrolled_in_snapshot;
 use crate::persistence::{OffchainVtxoSnapshot, UnilateralExitWatchRecord};
-use crate::unilateral_exit_materials::{snapshot_materials_for_leaf_tx, vtxo_chains_from_json};
+use crate::session::unilateral_exit_branch_topology::{
+    terminal_vtxo_host_txids_from_materials_snapshot, virtual_tx_type_hosts_exit_outpoints,
+};
+use crate::unilateral_exit_materials::{
+    chained_tx_type_label, snapshot_materials_for_leaf_tx, vtxo_chains_from_json,
+};
 
 use super::exit_watch::parse_branch_txids;
 
@@ -158,6 +164,55 @@ async fn output_spent_on_chain<B: Blockchain>(
     vout: u32,
 ) -> ArkResult<Option<Txid>> {
     Ok(blockchain.get_output_status(txid, vout).await?.spend_txid)
+}
+
+/// When an upstream vtxo-host virtual tx (`tree` or `ark`) in an exit branch is confirmed on
+/// Esplora, mark its VTXOs unrolled so they cannot be started as a separate unilateral exit.
+pub(crate) async fn reconcile_intermediate_ark_virtual_txs_unrolled_on_esplora<B: Blockchain>(
+    blockchain: &B,
+    snapshot: &mut OffchainVtxoSnapshot,
+) -> ArkResult<()> {
+    let material_leaf_txids: Vec<String> = snapshot
+        .unilateral_exit_materials_by_leaf_tx
+        .keys()
+        .cloned()
+        .collect();
+    if material_leaf_txids.is_empty() {
+        return Ok(());
+    }
+
+    let terminal_txids =
+        terminal_vtxo_host_txids_from_materials_snapshot(snapshot, &material_leaf_txids)?;
+
+    for leaf_txid in material_leaf_txids {
+        let Some(materials) = snapshot_materials_for_leaf_tx(snapshot, &leaf_txid) else {
+            continue;
+        };
+        let Ok(chains) = vtxo_chains_from_json(&materials.chain_json) else {
+            continue;
+        };
+
+        for link in &chains.inner {
+            let tx_type = chained_tx_type_label(&link.tx_type);
+            if !virtual_tx_type_hosts_exit_outpoints(&tx_type) {
+                continue;
+            }
+            let txid = link.txid.to_string();
+            if terminal_txids.contains(&txid) {
+                continue;
+            }
+            if blockchain
+                .find_tx(&link.txid)
+                .await
+                .map_err(crate::error::ArkWasmError::Client)?
+                .is_some()
+            {
+                mark_virtual_tx_vtxos_unrolled_in_snapshot(snapshot, &txid);
+            }
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

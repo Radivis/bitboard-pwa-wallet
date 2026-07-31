@@ -106,6 +106,35 @@ describe('unilateral-exit-topology helpers', () => {
     expect(edgePaths.filter((edgePath) => edgePath.id === 'bb->cc')).toHaveLength(1)
   })
 
+  it('layoutUnilateralExitGraph marks only terminal branch leaves', () => {
+    const topology: ArkadeUnilateralExitTopology = {
+      nodes: [
+        { txid: 'aa', txType: 'commitment', spends: [] },
+        { txid: 'bb', txType: 'tree', spends: ['aa'] },
+        { txid: 'mid', txType: 'ark', spends: ['bb'] },
+        { txid: 'cp', txType: 'checkpoint', spends: ['mid'] },
+        { txid: 'leaf', txType: 'ark', spends: ['cp'] },
+      ],
+      leafOutpoints: [
+        { txid: 'leaf', vout: 0 },
+        { txid: 'leaf', vout: 1 },
+      ],
+      exitBranchTxids: ['bb', 'mid', 'cp', 'leaf'],
+      commitmentTxids: ['aa'],
+    }
+
+    const { nodes } = layoutUnilateralExitGraph({
+      topology,
+      selectedLeafOutpoints: [],
+      nodeStatuses: [],
+      layoutDirection: 'TB',
+    })
+
+    expect(nodes.filter((node) => node.data.isLeaf)).toHaveLength(1)
+    expect(nodes.find((node) => node.id === 'mid')?.data.isLeaf).toBe(false)
+    expect(nodes.find((node) => node.id === 'leaf')?.data.isLeaf).toBe(true)
+  })
+
   it('resolveUnilateralExitTopologyOutpoints prefers selection, then in-progress, then job', () => {
     const selected = [{ txid: 'aa'.repeat(32), vout: 0 }]
     const inProgress = [{ txid: 'bb'.repeat(32), vout: 1 }]
@@ -132,6 +161,15 @@ describe('unilateral-exit-topology helpers', () => {
         selectedLeafOutpoints: [],
         inProgressOutpoints: [],
         persistedJobOutpoints: persisted,
+      }),
+    ).toEqual([])
+
+    expect(
+      resolveUnilateralExitTopologyOutpoints({
+        selectedLeafOutpoints: [],
+        inProgressOutpoints: [],
+        persistedJobOutpoints: persisted,
+        persistedJobStarted: true,
       }),
     ).toEqual(persisted)
 

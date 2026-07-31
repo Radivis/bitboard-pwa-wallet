@@ -9,7 +9,7 @@ use crate::api_types::{
     UnilateralExitBatchEstimateDto, UnilateralExitBatchEstimateParams, UnilateralExitLeafStatusDto,
     UnilateralExitNodeStatusDto, UnilateralExitNodeStatusKind, UnilateralExitPhase,
     UnilateralExitProgressDto, UnilateralExitProgressParams, UnilateralExitTopologyDto,
-    UnilateralExitTopologyNodeDto, UnilateralExitTopologyParams,
+    UnilateralExitTopologyParams,
 };
 use crate::constants::{
     MIN_FEE_RATE_SAT_PER_VB, UNILATERAL_EXIT_CHILD_VSIZE_VB, UNILATERAL_EXIT_LEAF_CONFIRMATIONS,
@@ -28,6 +28,10 @@ use crate::unilateral_exit_materials::{
 use super::ArkSession;
 use super::exit_autonomous::dedup_virtual_outpoints;
 use super::exit_watch::enrich_unilateral_exit_watches_for_leaf_tx_after_unroll;
+use super::unilateral_exit_branch_topology::{
+    merge_topology_nodes_from_chains, terminal_vtxo_host_txids_for_topology,
+    topology_leaf_outpoints,
+};
 
 const OPERATOR_INDEXER_POLL_MAX: u8 = 60;
 
@@ -122,31 +126,6 @@ pub(crate) fn node_status_label(
     }
 }
 
-fn topology_nodes_from_chains(chains: &VtxoChains) -> Vec<UnilateralExitTopologyNodeDto> {
-    chains
-        .inner
-        .iter()
-        .map(|link| UnilateralExitTopologyNodeDto {
-            txid: link.txid.to_string(),
-            tx_type: chained_tx_type_label(&link.tx_type),
-            spends: link.spends.iter().map(|txid| txid.to_string()).collect(),
-        })
-        .collect()
-}
-
-fn merge_topology_nodes(contexts: &[LeafUnilateralContext]) -> Vec<UnilateralExitTopologyNodeDto> {
-    let mut seen = HashSet::new();
-    let mut nodes = Vec::new();
-    for ctx in contexts {
-        for node in topology_nodes_from_chains(&ctx.chains) {
-            if seen.insert(node.txid.clone()) {
-                nodes.push(node);
-            }
-        }
-    }
-    nodes
-}
-
 fn commitment_txids_from_chains(chains: &VtxoChains) -> Vec<Txid> {
     chains
         .inner
@@ -165,13 +144,16 @@ impl ArkSession {
             .resolve_control_outpoints(params.vtxo_outpoints)
             .await?;
         let plan = self.build_unilateral_batch_plan(&virtual_outpoints).await?;
+        let nodes = merge_topology_nodes_from_chains(plan.leaves.iter().map(|leaf| &leaf.chains));
+        let all_outpoints: Vec<VirtualOutPoint> = plan
+            .leaves
+            .iter()
+            .flat_map(|leaf| leaf.sibling_outpoints.iter().cloned())
+            .collect();
+        let terminal_host_txids = terminal_vtxo_host_txids_for_topology(&nodes);
         Ok(UnilateralExitTopologyDto {
-            nodes: merge_topology_nodes(&plan.leaves),
-            leaf_outpoints: plan
-                .leaves
-                .iter()
-                .flat_map(|leaf| leaf.sibling_outpoints.iter().cloned())
-                .collect(),
+            nodes,
+            leaf_outpoints: topology_leaf_outpoints(&all_outpoints, &terminal_host_txids),
             exit_branch_txids: plan
                 .ordered_step_txids
                 .iter()

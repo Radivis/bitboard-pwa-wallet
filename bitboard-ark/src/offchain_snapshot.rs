@@ -306,6 +306,18 @@ pub fn merge_sticky_spent_flags(
     }
 }
 
+/// Mark every VTXO outpoint on a virtual tx as unrolled (all vouts on the same leaf tx).
+pub(crate) fn mark_virtual_tx_vtxos_unrolled_in_snapshot(
+    snapshot: &mut OffchainVtxoSnapshot,
+    txid: &str,
+) {
+    for record in &mut snapshot.virtual_tx_outpoints {
+        if record.txid == txid {
+            record.is_unrolled = true;
+        }
+    }
+}
+
 pub fn local_snapshot_record_for_outpoint<'a>(
     snapshot: &'a OffchainVtxoSnapshot,
     txid: &Txid,

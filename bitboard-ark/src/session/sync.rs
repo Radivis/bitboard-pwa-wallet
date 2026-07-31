@@ -11,6 +11,7 @@ use crate::offchain_snapshot::{
 };
 
 use super::ArkSession;
+use super::exit_onchain::reconcile_intermediate_ark_virtual_txs_unrolled_on_esplora;
 use super::exit_watch_reconcile::{
     merge_exiting_vtxo_sync_warnings, reconcile_exiting_vtxo_watches,
     reconcile_exiting_vtxos_spent_on_esplora,
@@ -104,6 +105,11 @@ impl ArkSession {
         let reconcile =
             reconcile_exiting_vtxo_watches(self, snapshot, prior_snapshot.as_ref()).await?;
         snapshot = reconcile.snapshot;
+        reconcile_intermediate_ark_virtual_txs_unrolled_on_esplora(
+            self.client.blockchain(),
+            &mut snapshot,
+        )
+        .await?;
         let esplora_healed_outpoints =
             reconcile_exiting_vtxos_spent_on_esplora(self, &mut snapshot).await?;
         let materials_warning =

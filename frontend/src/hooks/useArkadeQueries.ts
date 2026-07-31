@@ -1477,7 +1477,7 @@ export function useArkadeUnilateralExitTopologyQuery(params: {
           vtxoOutpoints: sortedOutpoints,
         }),
       ),
-    placeholderData: keepPreviousData,
+    placeholderData: sortedOutpoints.length > 0 ? keepPreviousData : undefined,
     staleTime: ARKADE_FEE_ESTIMATE_STALE_MS,
   })
 }

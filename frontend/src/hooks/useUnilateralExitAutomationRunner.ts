@@ -151,7 +151,7 @@ export function useUnilateralExitAutomationRunner() {
 
           if (progress.phase === 'complete') {
             store.completeJob(activeWalletId!, networkMode, activeArkadeConnectionId!)
-            useUnilateralExitControlStore.getState().setJobStarted(false)
+            useUnilateralExitControlStore.getState().reset()
             toast.success('Unilateral exit branch complete.')
             await invalidateUnilateralExitQueries(
               queryClient,
@@ -210,7 +210,7 @@ export function useUnilateralExitAutomationRunner() {
             })
             if (proceedResult.phase === 'complete') {
               store.completeJob(activeWalletId!, networkMode, activeArkadeConnectionId!)
-              useUnilateralExitControlStore.getState().setJobStarted(false)
+              useUnilateralExitControlStore.getState().reset()
               toast.success('Unilateral exit branch complete.')
               await invalidateUnilateralExitQueries(
                 queryClient,

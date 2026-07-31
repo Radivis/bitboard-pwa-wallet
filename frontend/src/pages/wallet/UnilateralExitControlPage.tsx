@@ -31,6 +31,10 @@ import { usePersistedStoreHydrated } from '@/hooks/usePersistedStoreHydrated'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import { arkadeUnilateralExitInProgressSats } from '@/lib/arkade/arkade-balance-display'
 import { defaultMaxFeeRateSatPerVb } from '@/lib/arkade/unilateral-exit-automation-fees'
+import {
+  isPersistedUnilateralExitJobStale,
+  shouldHydratePersistedUnilateralExitJob,
+} from '@/lib/arkade/unilateral-exit-job-reconcile'
 import { resolveUnilateralExitTopologyOutpoints } from '@/lib/arkade/unilateral-exit-topology'
 import { wasmArkErrorMessage } from '@/lib/shared/wasm-ark-error'
 import { formatSatPerVbTwoDecimals } from '@/lib/esplora/esplora-fee-estimates'
@@ -40,11 +44,12 @@ import { useUnilateralExitAutomationStore, unilateralExitAutomationJobKey } from
 import {
   arkadeUnilateralExitProgressQueryKey,
   arkadeUnilateralExitTopologyQueryKey,
+  arkadeUnilateralExitTopologyScopeKey,
 } from '@/lib/arkade/arkade-query-keys'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import type { ArkadeVtxoOutpoint } from '@/workers/arkade-api'
-import { sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
+import { includesArkadeVtxoOutpoint, sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
 
 function formatStepWaitingDuration(elapsedSeconds: number): string {
   if (elapsedSeconds < 60) {
@@ -96,6 +101,7 @@ export function UnilateralExitControlPage() {
   const bumpGraphRenderEpoch = useUnilateralExitControlStore(
     (state) => state.bumpGraphRenderEpoch,
   )
+  const resetControlStore = useUnilateralExitControlStore((state) => state.reset)
   const graphRenderEpoch = useUnilateralExitControlStore((state) => state.graphRenderEpoch)
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null)
   const [startConfirmOpen, setStartConfirmOpen] = useState(false)
@@ -153,26 +159,71 @@ export function UnilateralExitControlPage() {
   const hasInProgressExits =
     unilateralExitInProgressSats > 0 || (inProgressQuery.data?.length ?? 0) > 0
 
+  const exitCandidateOutpoints = useMemo(
+    () =>
+      (exitCandidatesQuery.data ?? []).map((row) => ({
+        txid: row.txid,
+        vout: row.vout,
+      })),
+    [exitCandidatesQuery.data],
+  )
+
+  const hasBrowsableExitTrees =
+    exitCandidateOutpoints.length > 0 || hasInProgressExits
+
+  const inProgressOutpoints = useMemo(
+    () =>
+      (inProgressQuery.data ?? []).map((row) => ({
+        txid: row.txid,
+        vout: row.vout,
+      })),
+    [inProgressQuery.data],
+  )
+
+  const persistedJobStartedForTopology = useMemo(() => {
+    if (!automationJob?.jobStarted) {
+      return false
+    }
+    if (inProgressQuery.isLoading || balanceQuery.isLoading) {
+      return false
+    }
+    return !isPersistedUnilateralExitJobStale({
+      jobStarted: true,
+      selectedLeafOutpoints: automationJob.selectedLeafOutpoints,
+      inProgressOutpoints,
+      unilateralExitInProgressSats,
+    })
+  }, [
+    automationJob?.jobStarted,
+    automationJob?.selectedLeafOutpoints,
+    balanceQuery.isLoading,
+    inProgressOutpoints,
+    inProgressQuery.isLoading,
+    unilateralExitInProgressSats,
+  ])
+
   const topologyOutpoints = useMemo(
     () =>
       resolveUnilateralExitTopologyOutpoints({
         selectedLeafOutpoints,
-        inProgressOutpoints: (inProgressQuery.data ?? []).map((row) => ({
-          txid: row.txid,
-          vout: row.vout,
-        })),
+        inProgressOutpoints,
         persistedJobOutpoints: automationJob?.selectedLeafOutpoints,
+        persistedJobStarted: persistedJobStartedForTopology,
       }),
     [
       automationJob?.selectedLeafOutpoints,
-      inProgressQuery.data,
+      inProgressOutpoints,
+      persistedJobStartedForTopology,
       selectedLeafOutpoints,
     ],
   )
 
+  const topologyRequestOutpoints =
+    topologyOutpoints.length > 0 ? topologyOutpoints : []
+
   const topologyQuery = useArkadeUnilateralExitTopologyQuery({
-    enabled: true,
-    vtxoOutpoints: topologyOutpoints,
+    enabled: topologyOutpoints.length > 0 || hasBrowsableExitTrees,
+    vtxoOutpoints: topologyRequestOutpoints,
   })
 
   const batchEstimateQuery = useArkadeUnilateralExitBatchEstimateQuery({
@@ -195,6 +246,7 @@ export function UnilateralExitControlPage() {
   }, [isOnControlPage, bumpGraphRenderEpoch])
 
   useEffect(() => {
+    if (!automationStoreHydrated) return
     if (
       activeWalletId == null ||
       activeArkadeConnectionId == null ||
@@ -202,13 +254,44 @@ export function UnilateralExitControlPage() {
     ) {
       return
     }
-    const persistedJob = useUnilateralExitAutomationStore
-      .getState()
-      .getJob(activeWalletId, networkMode, activeArkadeConnectionId)
+    if (inProgressQuery.isLoading || balanceQuery.isLoading) return
+
+    const automationStore = useUnilateralExitAutomationStore.getState()
+    const persistedJob = automationStore.getJob(
+      activeWalletId,
+      networkMode,
+      activeArkadeConnectionId,
+    )
+
+    const stale = isPersistedUnilateralExitJobStale({
+      jobStarted: persistedJob.jobStarted,
+      selectedLeafOutpoints: persistedJob.selectedLeafOutpoints,
+      inProgressOutpoints,
+      unilateralExitInProgressSats,
+    })
+
+    if (stale) {
+      automationStore.completeJob(activeWalletId, networkMode, activeArkadeConnectionId)
+      resetControlStore()
+      setFocusedNodeId(null)
+      queryClient.removeQueries({
+        queryKey: arkadeUnilateralExitTopologyScopeKey(
+          activeWalletId,
+          networkMode,
+          activeArkadeConnectionId,
+        ),
+      })
+      return
+    }
+
     if (
-      persistedJob.jobStarted &&
-      persistedJob.selectedLeafOutpoints.length > 0 &&
-      selectedLeafOutpoints.length === 0
+      shouldHydratePersistedUnilateralExitJob({
+        jobStarted: persistedJob.jobStarted,
+        selectedLeafOutpoints: persistedJob.selectedLeafOutpoints,
+        inProgressOutpoints,
+        unilateralExitInProgressSats,
+        controlStoreSelectionEmpty: selectedLeafOutpoints.length === 0,
+      })
     ) {
       useUnilateralExitControlStore.setState({
         selectedLeafOutpoints: persistedJob.selectedLeafOutpoints,
@@ -218,11 +301,19 @@ export function UnilateralExitControlPage() {
   }, [
     activeArkadeConnectionId,
     activeWalletId,
+    automationStoreHydrated,
+    balanceQuery.isLoading,
+    inProgressOutpoints,
+    inProgressQuery.isLoading,
     networkMode,
+    queryClient,
+    resetControlStore,
     selectedLeafOutpoints.length,
+    unilateralExitInProgressSats,
   ])
 
   useEffect(() => {
+    if (!jobStarted) return
     if (
       activeWalletId == null ||
       activeArkadeConnectionId == null ||
@@ -238,7 +329,7 @@ export function UnilateralExitControlPage() {
         activeArkadeConnectionId,
         selectedLeafOutpoints,
       )
-  }, [activeArkadeConnectionId, activeWalletId, networkMode, selectedLeafOutpoints])
+  }, [activeArkadeConnectionId, activeWalletId, jobStarted, networkMode, selectedLeafOutpoints])
 
   useEffect(() => {
     if (!isOnControlPage) return
@@ -255,7 +346,7 @@ export function UnilateralExitControlPage() {
         activeWalletId,
         networkMode,
         activeArkadeConnectionId,
-        topologyOutpoints,
+        topologyRequestOutpoints,
       ),
     })
     if (sortedOutpoints.length > 0) {
@@ -275,7 +366,7 @@ export function UnilateralExitControlPage() {
     activeArkadeConnectionId,
     networkMode,
     selectedLeafOutpoints,
-    topologyOutpoints,
+    topologyRequestOutpoints,
   ])
 
   useEffect(() => {
@@ -294,6 +385,43 @@ export function UnilateralExitControlPage() {
     topologyQuery.data?.leafOutpoints,
   ])
 
+  useEffect(() => {
+    if (hasInProgressExits || jobStarted) return
+    if (selectedLeafOutpoints.length === 0) return
+
+    const selectionStillActive = selectedLeafOutpoints.some(
+      (outpoint) =>
+        includesArkadeVtxoOutpoint(exitCandidateOutpoints, outpoint) ||
+        includesArkadeVtxoOutpoint(inProgressOutpoints, outpoint),
+    )
+
+    if (!selectionStillActive) {
+      if (
+        activeWalletId != null &&
+        activeArkadeConnectionId != null &&
+        isArkadeSupportedNetworkMode(networkMode) &&
+        automationJob?.jobStarted
+      ) {
+        useUnilateralExitAutomationStore
+          .getState()
+          .completeJob(activeWalletId, networkMode, activeArkadeConnectionId)
+      }
+      resetControlStore()
+      setFocusedNodeId(null)
+    }
+  }, [
+    activeArkadeConnectionId,
+    activeWalletId,
+    automationJob?.jobStarted,
+    exitCandidateOutpoints,
+    hasInProgressExits,
+    inProgressOutpoints,
+    jobStarted,
+    networkMode,
+    resetControlStore,
+    selectedLeafOutpoints,
+  ])
+
   const proceedMutation = useArkadeProceedUnilateralExitStepMutation()
 
   const candidates = exitCandidatesQuery.data ?? []
@@ -302,13 +430,16 @@ export function UnilateralExitControlPage() {
   const nodeStatuses = progress?.nodeStatuses ?? proceedMutation.data?.nodeStatuses ?? []
   const stepIndex = progress?.stepIndex ?? proceedMutation.data?.stepIndex ?? 0
   const totalSteps = progress?.totalSteps ?? proceedMutation.data?.totalSteps ?? 0
-  const phase =
+  const phaseFromQueries =
     proceedMutation.data?.phase === 'complete' || progress?.phase === 'complete'
       ? 'complete'
       : (proceedMutation.data?.phase ?? progress?.phase ?? 'idle')
+  const phase =
+    !hasInProgressExits && !jobStarted ? 'idle' : phaseFromQueries
   const currentStepWaitingSince =
     progress?.currentStepWaitingSince ?? proceedMutation.data?.currentStepWaitingSince
-  const jobActive = jobStarted || hasInProgressExits || phase !== 'idle'
+  const jobActive = jobStarted || hasInProgressExits
+  const canProceedStep = jobActive && phase !== 'complete'
   const [nowUnixSeconds, setNowUnixSeconds] = useState(() => Math.floor(Date.now() / 1000))
 
   useEffect(() => {
@@ -408,7 +539,7 @@ export function UnilateralExitControlPage() {
   }
 
   const handleProceedClick = () => {
-    if (jobActive) {
+    if (canProceedStep) {
       void handleProceed()
       return
     }
@@ -494,7 +625,17 @@ export function UnilateralExitControlPage() {
           </InfomodeWrapper>
         </p>
 
-        {topologyQuery.isError && topologyQuery.data == null ? (
+        {!hasBrowsableExitTrees && topologyOutpoints.length === 0 ? (
+          <div
+            className="flex h-[min(480px,55vh)] min-h-[320px] w-full items-center justify-center rounded-md border bg-muted/20"
+            data-testid="unilateral-exit-tree-idle"
+          >
+            <p className="text-sm text-muted-foreground">
+              No exit-eligible VTXOs right now. Board Arkade funds or sync with the operator, then
+              return here to select leaves in the tree.
+            </p>
+          </div>
+        ) : topologyQuery.isError && topologyQuery.data == null ? (
           <div
             className="flex h-[320px] min-h-[280px] w-full items-center justify-center rounded-md border bg-muted/20"
             data-testid="unilateral-exit-tree-error"
@@ -514,13 +655,13 @@ export function UnilateralExitControlPage() {
               </p>
             ) : null}
             <UnilateralExitTreeGraph
-            renderEpoch={graphRenderEpoch}
-            topology={topologyQuery.data}
-            selectedLeafOutpoints={selectedLeafOutpoints}
-            nodeStatuses={nodeStatuses}
-            focusedNodeId={focusedNodeId}
-            onNodeFocus={setFocusedNodeId}
-          />
+              renderEpoch={graphRenderEpoch}
+              topology={topologyQuery.data}
+              selectedLeafOutpoints={selectedLeafOutpoints}
+              nodeStatuses={nodeStatuses}
+              focusedNodeId={focusedNodeId}
+              onNodeFocus={setFocusedNodeId}
+            />
           </>
         )}
 
@@ -662,7 +803,7 @@ export function UnilateralExitControlPage() {
             onClick={handleProceedClick}
           >
             {proceedMutation.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
-            {jobActive ? 'Proceed' : 'Start unroll'}
+            {canProceedStep ? 'Proceed' : 'Start unroll'}
           </Button>
         )}
 

@@ -46,6 +46,7 @@ use super::mappers::{
     wasm_safe_now,
 };
 use super::pending_exit::clear_pending_unilateral_exit_for_outpoint_in_wallet_db;
+use super::unilateral_exit_branch_topology::filter_exit_candidates_to_terminal_leaves;
 
 /// arkd's indexer can lag behind confirmed unroll broadcasts when marking `is_unrolled`.
 /// Unroll post-broadcast poll and completion retry share the same window (~60s).
@@ -372,20 +373,26 @@ impl ArkSession {
 
     pub async fn list_exit_candidates(&self) -> ArkResult<Vec<ExitCandidateRow>> {
         let in_progress = self.unilateral_exit_in_progress_outpoints()?;
-        if self.autonomous_mode() {
-            return autonomous_exit_candidates_from_snapshot(self, &in_progress);
-        }
-        let (vtxo_list, _) = self.client.list_vtxos().await?;
-        let dust = self.client.server_info()?.dust;
-        let rows = vtxo_list
-            .all()
-            .map(|virtual_tx_outpoint| map_exit_candidate(virtual_tx_outpoint, dust))
-            .filter(|row| {
-                !row.can_complete
-                    && !is_unilateral_exit_in_progress_outpoint(&in_progress, &row.txid, row.vout)
-            })
-            .collect();
-        Ok(rows)
+        let snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot;
+        let rows = if self.autonomous_mode() {
+            autonomous_exit_candidates_from_snapshot(self, &in_progress)?
+        } else {
+            let (vtxo_list, _) = self.client.list_vtxos().await?;
+            let dust = self.client.server_info()?.dust;
+            vtxo_list
+                .all()
+                .map(|virtual_tx_outpoint| map_exit_candidate(virtual_tx_outpoint, dust))
+                .filter(|row| {
+                    !row.can_complete
+                        && !is_unilateral_exit_in_progress_outpoint(
+                            &in_progress,
+                            &row.txid,
+                            row.vout,
+                        )
+                })
+                .collect()
+        };
+        filter_exit_candidates_to_terminal_leaves(snapshot.as_ref(), rows)
     }
 
     pub async fn list_unilateral_exits_in_progress(

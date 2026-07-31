@@ -230,6 +230,7 @@ export const useUnilateralExitAutomationStore = create<UnilateralExitAutomationS
             ...job,
             jobStarted: false,
             proceedAutomatically: false,
+            selectedLeafOutpoints: [],
             pausedReason: undefined,
             lastErrorMessage: undefined,
           })),

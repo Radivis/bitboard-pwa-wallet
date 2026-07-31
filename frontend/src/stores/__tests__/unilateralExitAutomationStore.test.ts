@@ -80,6 +80,7 @@ describe('unilateralExitAutomationStore', () => {
     const job = store.getJob(walletId, networkMode, arkadeConnectionId)
     expect(job.jobStarted).toBe(false)
     expect(job.proceedAutomatically).toBe(false)
+    expect(job.selectedLeafOutpoints).toEqual([])
   })
 
   it('hydrateJobFromPersisted returns active jobs only', () => {
