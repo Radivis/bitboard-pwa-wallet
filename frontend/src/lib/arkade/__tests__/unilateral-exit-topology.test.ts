@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   computeExitPathTxids,
+  hostOutpointsForTxid,
   layoutUnilateralExitGraph,
   leafOutpointsForTxid,
   mergeNodeStatuses,
@@ -16,6 +17,7 @@ const sampleTopology: ArkadeUnilateralExitTopology = {
     { txid: 'cc', txType: 'ark', spends: ['bb'] },
   ],
   leafOutpoints: [{ txid: 'cc', vout: 0 }],
+  hostOutpoints: [{ txid: 'cc', vout: 0, amountSats: 25_000 }],
   exitBranchTxids: ['bb', 'cc'],
   commitmentTxids: ['aa'],
 }
@@ -37,6 +39,20 @@ describe('unilateral-exit-topology helpers', () => {
   it('resolveLayoutDirection prefers LR when width exceeds height', () => {
     expect(resolveLayoutDirection(800, 400)).toBe('LR')
     expect(resolveLayoutDirection(400, 800)).toBe('TB')
+  })
+
+  it('hostOutpointsForTxid returns sorted sibling outpoints', () => {
+    const topology: ArkadeUnilateralExitTopology = {
+      ...sampleTopology,
+      hostOutpoints: [
+        { txid: 'cc', vout: 1, amountSats: 100_000 },
+        { txid: 'cc', vout: 0, amountSats: 25_000 },
+      ],
+    }
+    expect(hostOutpointsForTxid(topology, 'cc')).toEqual([
+      { txid: 'cc', vout: 0, amountSats: 25_000 },
+      { txid: 'cc', vout: 1, amountSats: 100_000 },
+    ])
   })
 
   it('leafOutpointsForTxid returns sorted sibling outpoints', () => {
@@ -92,8 +108,12 @@ describe('unilateral-exit-topology helpers', () => {
     const topology: ArkadeUnilateralExitTopology = {
       ...sampleTopology,
       leafOutpoints: [
-        { txid: 'cc', vout: 0 },
         { txid: 'cc', vout: 1 },
+        { txid: 'cc', vout: 0 },
+      ],
+      hostOutpoints: [
+        { txid: 'cc', vout: 0, amountSats: 25_000 },
+        { txid: 'cc', vout: 1, amountSats: 100_000 },
       ],
     }
     const { nodes, edgePaths } = layoutUnilateralExitGraph({
@@ -123,6 +143,11 @@ describe('unilateral-exit-topology helpers', () => {
         { txid: 'leaf', vout: 0 },
         { txid: 'leaf', vout: 1 },
       ],
+      hostOutpoints: [
+        { txid: 'mid', vout: 0, amountSats: 125_000 },
+        { txid: 'leaf', vout: 0, amountSats: 25_000 },
+        { txid: 'leaf', vout: 1, amountSats: 10_000 },
+      ],
       exitBranchTxids: ['bb', 'mid', 'cp', 'leaf'],
       commitmentTxids: ['aa'],
     }
@@ -136,7 +161,9 @@ describe('unilateral-exit-topology helpers', () => {
 
     expect(nodes.filter((node) => node.data.isLeaf)).toHaveLength(1)
     expect(nodes.find((node) => node.id === 'mid')?.data.isLeaf).toBe(false)
+    expect(nodes.find((node) => node.id === 'mid')?.data.exitableVtxoCount).toBe(1)
     expect(nodes.find((node) => node.id === 'leaf')?.data.isLeaf).toBe(true)
+    expect(nodes.find((node) => node.id === 'leaf')?.data.exitableVtxoCount).toBe(2)
   })
 
   it('resolveUnilateralExitTopologyOutpoints prefers selection, then in-progress, then job', () => {

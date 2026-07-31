@@ -670,7 +670,6 @@ export function UnilateralExitControlPage() {
             topology={topologyQuery.data}
             focusedNodeId={focusedNodeId}
             nodeStatuses={nodeStatuses}
-            exitCandidates={candidates}
             selectedLeafOutpoints={selectedLeafOutpoints}
             onToggleLeafTxGroup={toggleLeafTxGroup}
           />

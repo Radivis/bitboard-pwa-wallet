@@ -21,8 +21,10 @@ use crate::outpoint::VirtualOutPoint;
 use crate::outpoint::{
     representative_virtual_tx_outpoint_for_leaf_tx, representative_vout_among_virtual_outpoints,
 };
+use crate::persistence::VirtualTxOutPointRecord;
 use crate::unilateral_exit_materials::{
-    chained_tx_type_label, snapshot_materials_for_leaf_tx, vtxo_chains_from_json,
+    chained_tx_type_label, record_is_exit_eligible, snapshot_materials_for_leaf_tx,
+    virtual_tx_outpoint_is_exit_eligible, vtxo_chains_from_json,
 };
 
 use super::ArkSession;
@@ -30,7 +32,7 @@ use super::exit_autonomous::dedup_virtual_outpoints;
 use super::exit_watch::enrich_unilateral_exit_watches_for_leaf_tx_after_unroll;
 use super::unilateral_exit_branch_topology::{
     merge_topology_nodes_from_chains, terminal_vtxo_host_txids_for_topology,
-    topology_leaf_outpoints,
+    topology_host_outpoints, topology_leaf_outpoints, virtual_tx_type_hosts_exit_outpoints,
 };
 
 const OPERATOR_INDEXER_POLL_MAX: u8 = 60;
@@ -135,6 +137,42 @@ fn commitment_txids_from_chains(chains: &VtxoChains) -> Vec<Txid> {
         .collect()
 }
 
+fn record_from_virtual_tx_outpoint_for_topology(
+    virtual_tx_outpoint: &ark_core::server::VirtualTxOutPoint,
+) -> VirtualTxOutPointRecord {
+    VirtualTxOutPointRecord {
+        txid: virtual_tx_outpoint.outpoint.txid.to_string(),
+        vout: virtual_tx_outpoint.outpoint.vout,
+        created_at: virtual_tx_outpoint.created_at,
+        expires_at: virtual_tx_outpoint.expires_at,
+        amount_sats: virtual_tx_outpoint.amount.to_sat(),
+        script_hex: hex::encode(virtual_tx_outpoint.script.as_bytes()),
+        is_preconfirmed: virtual_tx_outpoint.is_preconfirmed,
+        is_swept: virtual_tx_outpoint.is_swept,
+        is_unrolled: virtual_tx_outpoint.is_unrolled,
+        is_spent: virtual_tx_outpoint.is_spent,
+        spent_by: virtual_tx_outpoint
+            .spent_by
+            .as_ref()
+            .map(|txid| txid.to_string()),
+        commitment_txids: virtual_tx_outpoint
+            .commitment_txids
+            .iter()
+            .map(|txid| txid.to_string())
+            .collect(),
+        settled_by: virtual_tx_outpoint
+            .settled_by
+            .as_ref()
+            .map(|txid| txid.to_string()),
+        ark_txid: virtual_tx_outpoint
+            .ark_txid
+            .as_ref()
+            .map(|txid| txid.to_string()),
+        assets: vec![],
+        server_pk_hex: None,
+    }
+}
+
 impl ArkSession {
     pub async fn get_unilateral_exit_topology(
         &self,
@@ -151,9 +189,14 @@ impl ArkSession {
             .flat_map(|leaf| leaf.sibling_outpoints.iter().cloned())
             .collect();
         let terminal_host_txids = terminal_vtxo_host_txids_for_topology(&nodes);
+        let host_outpoint_records = self
+            .exit_eligible_records_for_topology_hosts(&nodes)
+            .await?;
+        let host_outpoints = topology_host_outpoints(&nodes, &host_outpoint_records);
         Ok(UnilateralExitTopologyDto {
             nodes,
             leaf_outpoints: topology_leaf_outpoints(&all_outpoints, &terminal_host_txids),
+            host_outpoints,
             exit_branch_txids: plan
                 .ordered_step_txids
                 .iter()
@@ -168,6 +211,44 @@ impl ArkSession {
                 .map(|txid| txid.to_string())
                 .collect(),
         })
+    }
+
+    async fn exit_eligible_records_for_topology_hosts(
+        &self,
+        nodes: &[crate::api_types::UnilateralExitTopologyNodeDto],
+    ) -> ArkResult<Vec<VirtualTxOutPointRecord>> {
+        let host_txids: HashSet<String> = nodes
+            .iter()
+            .filter(|node| virtual_tx_type_hosts_exit_outpoints(&node.tx_type))
+            .map(|node| node.txid.clone())
+            .collect();
+        if host_txids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref() {
+            let matching_records: Vec<VirtualTxOutPointRecord> = snapshot
+                .virtual_tx_outpoints
+                .iter()
+                .filter(|record| {
+                    record_is_exit_eligible(record) && host_txids.contains(&record.txid)
+                })
+                .cloned()
+                .collect();
+            if !matching_records.is_empty() {
+                return Ok(matching_records);
+            }
+        }
+
+        let (vtxo_list, _) = self.client.list_vtxos().await?;
+        Ok(vtxo_list
+            .all()
+            .filter(|virtual_tx_outpoint| {
+                virtual_tx_outpoint_is_exit_eligible(virtual_tx_outpoint)
+                    && host_txids.contains(&virtual_tx_outpoint.outpoint.txid.to_string())
+            })
+            .map(record_from_virtual_tx_outpoint_for_topology)
+            .collect())
     }
 
     pub async fn estimate_unilateral_exit_batch(

@@ -348,9 +348,16 @@ export interface ArkadeUnilateralExitTopologyNode {
   spends: string[]
 }
 
+export interface ArkadeUnilateralExitHostOutpoint {
+  txid: string
+  vout: number
+  amountSats: number
+}
+
 export interface ArkadeUnilateralExitTopology {
   nodes: ArkadeUnilateralExitTopologyNode[]
   leafOutpoints: ArkadeVtxoOutpoint[]
+  hostOutpoints: ArkadeUnilateralExitHostOutpoint[]
   exitBranchTxids: string[]
   commitmentTxids: string[]
 }

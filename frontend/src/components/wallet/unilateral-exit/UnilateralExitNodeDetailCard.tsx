@@ -10,13 +10,13 @@ import {
   unilateralExitNodeIconComponent,
 } from '@/lib/arkade/unilateral-exit-node-icons'
 import {
+  hostOutpointsForTxid,
   leafOutpointsForTxid,
   parseUnilateralExitNodeId,
   shortTxid,
 } from '@/lib/arkade/unilateral-exit-topology'
 import { cn } from '@/lib/shared/utils'
 import type {
-  ArkadeExitCandidateRow,
   ArkadeUnilateralExitNodeStatus,
   ArkadeUnilateralExitTopology,
   ArkadeVtxoOutpoint,
@@ -27,7 +27,6 @@ interface UnilateralExitNodeDetailCardProps {
   topology: ArkadeUnilateralExitTopology
   focusedNodeId: string
   nodeStatuses: ArkadeUnilateralExitNodeStatus[]
-  exitCandidates: ArkadeExitCandidateRow[]
   selectedLeafOutpoints: ArkadeVtxoOutpoint[]
   onToggleLeafTxGroup: (outpoints: ArkadeVtxoOutpoint[]) => void
 }
@@ -49,21 +48,21 @@ export function UnilateralExitNodeDetailCard({
   topology,
   focusedNodeId,
   nodeStatuses,
-  exitCandidates,
   selectedLeafOutpoints,
   onToggleLeafTxGroup,
 }: UnilateralExitNodeDetailCardProps) {
   const { txid } = parseUnilateralExitNodeId(focusedNodeId)
   const topologyNode = topology.nodes.find((node) => node.txid === txid)
-  const leafOutpointsForTx = leafOutpointsForTxid(topology, txid)
-  const isLeaf = leafOutpointsForTx.length > 0
+  const exitStartLeafOutpoints = leafOutpointsForTxid(topology, txid)
+  const hostOutpointsForTx = hostOutpointsForTxid(topology, txid)
+  const isExitStartLeaf = exitStartLeafOutpoints.length > 0
   const txType = topologyNode?.txType ?? 'unknown'
   const status = resolveNodeStatus(txid, nodeStatuses)
-  const iconKind = resolveUnilateralExitNodeIconKind({ txType, isLeaf })
+  const iconKind = resolveUnilateralExitNodeIconKind({ txType, isLeaf: isExitStartLeaf })
   const Icon = unilateralExitNodeIconComponent(iconKind)
   const allLeafOutpointsSelected =
-    leafOutpointsForTx.length > 0 &&
-    leafOutpointsForTx.every((outpoint) =>
+    exitStartLeafOutpoints.length > 0 &&
+    exitStartLeafOutpoints.every((outpoint) =>
       includesArkadeVtxoOutpoint(selectedLeafOutpoints, outpoint),
     )
 
@@ -91,7 +90,7 @@ export function UnilateralExitNodeDetailCard({
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-medium">
-              {formatUnilateralExitTxTypeLabel(txType, isLeaf)}
+              {formatUnilateralExitTxTypeLabel(txType, isExitStartLeaf)}
             </p>
             {status.status === 'confirmed' && (
               <Check className="size-4 text-green-600" aria-label={statusLabel} />
@@ -110,51 +109,45 @@ export function UnilateralExitNodeDetailCard({
               Spends: {topologyNode.spends.map((spendTxid) => shortTxid(spendTxid)).join(', ')}
             </p>
           )}
-          {isLeaf && (
+          {hostOutpointsForTx.length > 0 && (
             <div className="space-y-3">
               <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground">VTXO outpoints on this leaf</p>
+                <p className="text-xs font-medium text-muted-foreground">
+                  VTXO outpoints on this {isExitStartLeaf ? 'leaf' : 'node'}
+                </p>
                 <ul className="space-y-1">
-                  {leafOutpointsForTx.map((leafOutpoint) => {
-                    const candidateRow = exitCandidates.find(
-                      (candidate) =>
-                        candidate.txid === leafOutpoint.txid &&
-                        candidate.vout === leafOutpoint.vout,
-                    )
-
-                    return (
+                  {hostOutpointsForTx.map((hostOutpoint) => (
                       <li
-                        key={`${leafOutpoint.txid}:${leafOutpoint.vout}`}
+                        key={`${hostOutpoint.txid}:${hostOutpoint.vout}`}
                         className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-xs"
                       >
-                        <span>Outpoint {leafOutpoint.vout}</span>
+                        <span>Outpoint {hostOutpoint.vout}</span>
                         <span className="text-muted-foreground">
-                          {candidateRow != null
-                            ? `${candidateRow.amountSats} sats`
-                            : 'Exit-eligible VTXO'}
+                          {`${hostOutpoint.amountSats} sats`}
                         </span>
                       </li>
-                    )
-                  })}
+                    ))}
                 </ul>
               </div>
-              <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
-                <InfomodeWrapper
-                  infoId={ARKADE_INFOMODE_IDS.sharedLeafUnilateralExit}
-                  infoComponent={ArkadeSharedLeafUnilateralExitInfomodeContent}
-                  as="span"
-                >
-                  <Label htmlFor="unilateral-exit-leaf-select" className="text-sm">
-                    Select this leaf for exit
-                  </Label>
-                </InfomodeWrapper>
-                <Switch
-                  id="unilateral-exit-leaf-select"
-                  data-testid="unilateral-exit-leaf-select-switch"
-                  checked={allLeafOutpointsSelected}
-                  onCheckedChange={() => onToggleLeafTxGroup(leafOutpointsForTx)}
-                />
-              </div>
+              {isExitStartLeaf && (
+                <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+                  <InfomodeWrapper
+                    infoId={ARKADE_INFOMODE_IDS.sharedLeafUnilateralExit}
+                    infoComponent={ArkadeSharedLeafUnilateralExitInfomodeContent}
+                    as="span"
+                  >
+                    <Label htmlFor="unilateral-exit-leaf-select" className="text-sm">
+                      Select this leaf for exit
+                    </Label>
+                  </InfomodeWrapper>
+                  <Switch
+                    id="unilateral-exit-leaf-select"
+                    data-testid="unilateral-exit-leaf-select-switch"
+                    checked={allLeafOutpointsSelected}
+                    onCheckedChange={() => onToggleLeafTxGroup(exitStartLeafOutpoints)}
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>

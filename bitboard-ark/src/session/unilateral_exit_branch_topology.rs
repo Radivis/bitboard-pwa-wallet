@@ -2,11 +2,14 @@ use std::collections::{HashMap, HashSet};
 
 use ark_core::server::VtxoChains;
 
-use crate::api_types::{ExitCandidateRow, UnilateralExitTopologyNodeDto};
+use crate::api_types::{
+    ExitCandidateRow, UnilateralExitHostOutpointDto, UnilateralExitTopologyNodeDto,
+};
 use crate::outpoint::VirtualOutPoint;
-use crate::persistence::OffchainVtxoSnapshot;
+use crate::persistence::{OffchainVtxoSnapshot, VirtualTxOutPointRecord};
 use crate::unilateral_exit_materials::{
-    chained_tx_type_label, snapshot_materials_for_leaf_tx, vtxo_chains_from_json,
+    chained_tx_type_label, record_is_exit_eligible, snapshot_materials_for_leaf_tx,
+    vtxo_chains_from_json,
 };
 
 /// Virtual tx types that may carry exit-eligible VTXO outpoints in indexer chains.
@@ -110,6 +113,34 @@ pub(crate) fn topology_leaf_outpoints(
         .collect()
 }
 
+/// Exit-eligible VTXO outpoints on any `tree`/`ark` host tx in the merged topology.
+pub(crate) fn topology_host_outpoints(
+    nodes: &[UnilateralExitTopologyNodeDto],
+    records: &[VirtualTxOutPointRecord],
+) -> Vec<UnilateralExitHostOutpointDto> {
+    let host_txids: HashSet<String> = nodes
+        .iter()
+        .filter(|node| virtual_tx_type_hosts_exit_outpoints(&node.tx_type))
+        .map(|node| node.txid.clone())
+        .collect();
+    if host_txids.is_empty() {
+        return Vec::new();
+    }
+
+    let mut outpoints = records
+        .iter()
+        .filter(|record| record_is_exit_eligible(record) && host_txids.contains(&record.txid))
+        .map(|record| UnilateralExitHostOutpointDto {
+            txid: record.txid.clone(),
+            vout: record.vout,
+            amount_sats: record.amount_sats,
+        })
+        .collect::<Vec<_>>();
+    outpoints.sort_by(|left, right| left.txid.cmp(&right.txid).then(left.vout.cmp(&right.vout)));
+    outpoints.dedup_by(|left, right| left.txid == right.txid && left.vout == right.vout);
+    outpoints
+}
+
 pub(crate) fn terminal_vtxo_host_txids_from_materials_snapshot(
     snapshot: &OffchainVtxoSnapshot,
     candidate_txids: &[String],
@@ -167,6 +198,7 @@ pub(crate) fn filter_exit_candidates_to_terminal_leaves(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::persistence::VirtualTxOutPointRecord;
     use ark_core::server::{ChainedTxType, VtxoChain, VtxoChains};
     use bitcoin::Txid;
     use bitcoin::hashes::Hash;
@@ -277,6 +309,105 @@ mod tests {
         assert_eq!(terminal_txids.len(), 1);
         assert!(terminal_txids.contains(&terminal.to_string()));
         assert!(!terminal_txids.contains(&intermediate.to_string()));
+    }
+
+    #[test]
+    fn topology_host_outpoints_includes_intermediate_and_terminal_hosts() {
+        use crate::unilateral_exit_materials::materials_record_from_prefetch;
+
+        let intermediate = txid(4);
+        let terminal = txid(6);
+        let nodes = vec![
+            UnilateralExitTopologyNodeDto {
+                txid: txid(1).to_string(),
+                tx_type: "commitment".to_string(),
+                spends: vec![],
+            },
+            UnilateralExitTopologyNodeDto {
+                txid: txid(2).to_string(),
+                tx_type: "tree".to_string(),
+                spends: vec![txid(1).to_string()],
+            },
+            UnilateralExitTopologyNodeDto {
+                txid: intermediate.to_string(),
+                tx_type: "ark".to_string(),
+                spends: vec![txid(2).to_string()],
+            },
+            UnilateralExitTopologyNodeDto {
+                txid: txid(5).to_string(),
+                tx_type: "checkpoint".to_string(),
+                spends: vec![intermediate.to_string()],
+            },
+            UnilateralExitTopologyNodeDto {
+                txid: terminal.to_string(),
+                tx_type: "ark".to_string(),
+                spends: vec![txid(5).to_string()],
+            },
+        ];
+        let chains = VtxoChains {
+            inner: vec![
+                chain(txid(1), ChainedTxType::Commitment, vec![]),
+                chain(txid(2), ChainedTxType::Tree, vec![txid(1)]),
+                chain(intermediate, ChainedTxType::Ark, vec![txid(2)]),
+                chain(txid(5), ChainedTxType::Checkpoint, vec![intermediate]),
+                chain(terminal, ChainedTxType::Ark, vec![txid(5)]),
+            ],
+        };
+        let _materials = materials_record_from_prefetch(1, &chains, &[]).expect("materials record");
+        let records = vec![
+            VirtualTxOutPointRecord {
+                txid: intermediate.to_string(),
+                vout: 0,
+                created_at: 0,
+                expires_at: 0,
+                amount_sats: 125_000,
+                script_hex: "00".to_string(),
+                is_preconfirmed: false,
+                is_swept: false,
+                is_unrolled: false,
+                is_spent: false,
+                spent_by: None,
+                commitment_txids: vec![],
+                settled_by: None,
+                ark_txid: None,
+                assets: vec![],
+                server_pk_hex: None,
+            },
+            VirtualTxOutPointRecord {
+                txid: terminal.to_string(),
+                vout: 0,
+                created_at: 0,
+                expires_at: 0,
+                amount_sats: 25_000,
+                script_hex: "00".to_string(),
+                is_preconfirmed: false,
+                is_swept: false,
+                is_unrolled: false,
+                is_spent: false,
+                spent_by: None,
+                commitment_txids: vec![],
+                settled_by: None,
+                ark_txid: None,
+                assets: vec![],
+                server_pk_hex: None,
+            },
+        ];
+
+        let host_outpoints = topology_host_outpoints(&nodes, &records);
+        assert_eq!(host_outpoints.len(), 2);
+        assert_eq!(host_outpoints[0].txid, intermediate.to_string());
+        assert_eq!(host_outpoints[0].amount_sats, 125_000);
+        assert_eq!(host_outpoints[1].txid, terminal.to_string());
+        assert_eq!(host_outpoints[1].amount_sats, 25_000);
+
+        let terminal_host_txids = terminal_vtxo_host_txids_for_topology(&nodes);
+        let plan_outpoints = vec![
+            VirtualOutPoint::new(intermediate, 0),
+            VirtualOutPoint::new(terminal, 0),
+        ];
+        let leaf_outpoints = topology_leaf_outpoints(&plan_outpoints, &terminal_host_txids);
+        assert_eq!(leaf_outpoints.len(), 1);
+        assert_eq!(leaf_outpoints[0].txid, terminal);
     }
 
     #[test]

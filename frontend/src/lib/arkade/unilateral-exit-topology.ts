@@ -8,6 +8,7 @@ import {
 import type { Node } from '@xyflow/react'
 import { Position, getSmoothStepPath } from '@xyflow/react'
 import type {
+  ArkadeUnilateralExitHostOutpoint,
   ArkadeUnilateralExitNodeStatus,
   ArkadeUnilateralExitTopology,
   ArkadeVtxoOutpoint,
@@ -196,6 +197,28 @@ function groupLeafOutpointsByTxid(
   return grouped
 }
 
+function groupHostOutpointsByTxid(
+  hostOutpoints: ArkadeUnilateralExitHostOutpoint[],
+): Map<string, ArkadeUnilateralExitHostOutpoint[]> {
+  const grouped = new Map<string, ArkadeUnilateralExitHostOutpoint[]>()
+  for (const hostOutpoint of hostOutpoints) {
+    const siblings = grouped.get(hostOutpoint.txid) ?? []
+    siblings.push(hostOutpoint)
+    grouped.set(hostOutpoint.txid, siblings)
+  }
+  for (const siblings of grouped.values()) {
+    siblings.sort((left, right) => left.vout - right.vout)
+  }
+  return grouped
+}
+
+export function hostOutpointsForTxid(
+  topology: ArkadeUnilateralExitTopology,
+  txid: string,
+): ArkadeUnilateralExitHostOutpoint[] {
+  return groupHostOutpointsByTxid(topology.hostOutpoints).get(txid) ?? []
+}
+
 export function leafOutpointsForTxid(
   topology: ArkadeUnilateralExitTopology,
   txid: string,
@@ -285,6 +308,7 @@ export function layoutUnilateralExitGraph(params: {
   const pathTxids = computeExitPathTxids(topology, selectedLeafOutpoints)
   const statusByTxid = mergeNodeStatuses(topology, nodeStatuses)
   const leafOutpointsByTxid = groupLeafOutpointsByTxid(topology.leafOutpoints)
+  const hostOutpointsByTxid = groupHostOutpointsByTxid(topology.hostOutpoints)
 
   const graphLinks = buildGraphLinks(topology)
 
@@ -320,6 +344,7 @@ export function layoutUnilateralExitGraph(params: {
   for (const dagNode of graph.nodes()) {
     const txid = String(dagNode.data)
     const leafOutpoints = leafOutpointsByTxid.get(txid) ?? []
+    const hostOutpoints = hostOutpointsByTxid.get(txid) ?? []
     const isLeaf = leafOutpoints.length > 0
     const topologyNode = topology.nodes.find((node) => node.txid === txid)
     const status = statusByTxid.get(txid)
@@ -348,7 +373,7 @@ export function layoutUnilateralExitGraph(params: {
         txType: topologyNode?.txType ?? 'unknown',
         isLeaf,
         isSelectedLeaf: allLeafOutpointsSelected(leafOutpoints, selectedLeafOutpoints),
-        exitableVtxoCount: leafOutpoints.length,
+        exitableVtxoCount: hostOutpoints.length,
         pathTxids,
         focusedNodeId,
         status,

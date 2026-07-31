@@ -448,9 +448,18 @@ pub struct UnilateralExitTopologyNodeDto {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct UnilateralExitHostOutpointDto {
+    pub txid: String,
+    pub vout: u32,
+    pub amount_sats: u64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UnilateralExitTopologyDto {
     pub nodes: Vec<UnilateralExitTopologyNodeDto>,
     pub leaf_outpoints: Vec<VirtualOutPoint>,
+    pub host_outpoints: Vec<UnilateralExitHostOutpointDto>,
     pub exit_branch_txids: Vec<String>,
     pub commitment_txids: Vec<String>,
 }
