@@ -35,19 +35,21 @@ import { useUnilateralExitAutomationSnapshot } from '@/hooks/useUnilateralExitAu
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import { arkadeUnilateralExitInProgressSats } from '@/lib/arkade/arkade-balance-display'
 import { defaultMaxFeeRateSatPerVb } from '@/lib/arkade/unilateral-exit-automation-fees'
+import { resolveUnilateralExitControlJobState } from '@/lib/arkade/unilateral-exit-control-phase'
 import { resolveUnilateralExitTopologyOutpoints } from '@/lib/arkade/unilateral-exit-topology'
 import { wasmArkErrorMessage } from '@/lib/shared/wasm-ark-error'
 import { formatSatPerVbTwoDecimals } from '@/lib/esplora/esplora-fee-estimates'
 import {
   disableAutomaticUnilateralExit,
   enableAutomaticUnilateralExit,
-  kickAutomaticUnilateralExitAdvance,
+  awaitAutomaticUnilateralExitAdvance,
   pauseAutomaticUnilateralExitOnError,
   scheduleAutomaticAdvance,
   setAutomaticUnilateralExitFeePreset,
   setAutomaticUnilateralExitMaxFeeRate,
 } from '@/lib/wallet/lifecycle/unilateral-exit-automation-controller'
 import { useUnilateralExitAutomationPrefsStore } from '@/lib/wallet/lifecycle/unilateral-exit-automation-prefs-persistence'
+import { resolveUnilateralExitJobOutpoints, resolveActiveUnilateralExitWalletScope } from '@/lib/wallet/lifecycle/unilateral-exit-job-scope'
 import {
   hydrateUnilateralExitJobFromPersistence,
   orchestrateUnilateralExitClearJob,
@@ -101,7 +103,6 @@ export function UnilateralExitControlPage() {
   const balanceQuery = useArkadeBalanceQuery()
   const exitCandidatesQuery = useArkadeExitCandidatesQuery(true)
   const inProgressQuery = useArkadeUnilateralExitsInProgressQuery(true)
-  const bumperInfoQuery = useArkadeBumperInfoQuery(true)
   const feePresetsQuery = useEsploraFeePresets(networkMode)
   const lifecycleSnapshot = useUnilateralExitLifecycleSnapshot()
   const automationSnapshot = useUnilateralExitAutomationSnapshot()
@@ -152,10 +153,14 @@ export function UnilateralExitControlPage() {
   const hasInProgressExits =
     unilateralExitInProgressSats > 0 || (inProgressQuery.data?.length ?? 0) > 0
 
-  const jobOutpoints =
-    lifecycleSnapshot.selectedLeafOutpoints.length > 0
-      ? lifecycleSnapshot.selectedLeafOutpoints
-      : selectedLeafOutpoints
+  const jobOutpoints = useMemo(
+    () =>
+      resolveUnilateralExitJobOutpoints({
+        lifecycleOutpoints: lifecycleSnapshot.selectedLeafOutpoints,
+        fallbackOutpoints: selectedLeafOutpoints,
+      }),
+    [lifecycleSnapshot.selectedLeafOutpoints, selectedLeafOutpoints],
+  )
 
   const exitCandidateOutpoints = useMemo(
     () =>
@@ -210,6 +215,12 @@ export function UnilateralExitControlPage() {
     vtxoOutpoints: jobOutpoints,
     feeRateSatPerVb,
   })
+
+  const pollBumperBalanceWhileUnderfunded =
+    jobOutpoints.length > 0 &&
+    batchEstimateQuery.data != null &&
+    !batchEstimateQuery.data.bumperSufficient
+  const bumperInfoQuery = useArkadeBumperInfoQuery(true, pollBumperBalanceWhileUnderfunded)
 
   const trackingExitProgress =
     (lifecycleJobActive ||
@@ -358,34 +369,34 @@ export function UnilateralExitControlPage() {
   ])
 
   const progress =
-    progressQuery.data ??
-    (lifecycleJobActive || hasInProgressExits || proceedPending
+    lifecycleSnapshot.progress != null
       ? lifecycleSnapshot.progress
-      : null)
+      : (progressQuery.data ?? null)
   const nodeStatuses = progress?.nodeStatuses ?? []
   const stepIndex = progress?.stepIndex ?? 0
   const wasmTotalSteps = progress?.totalSteps ?? 0
   const estimatedTotalSteps = batchEstimateQuery.data?.projectedUnrollSteps ?? 0
   const totalSteps = wasmTotalSteps > 0 ? wasmTotalSteps : estimatedTotalSteps
-  const wasmPhase = progress?.phase ?? 'idle'
-  const lifecyclePhase = lifecycleJobActive ? lifecycleSnapshot.phase : 'idle'
-  const phaseFromProgress =
-    wasmPhase === 'complete' || lifecyclePhase === 'complete' ? 'complete' : wasmPhase
-  const exitJobInFlight =
-    lifecycleJobActive ||
-    hasInProgressExits ||
-    proceedPending ||
-    lifecycleSnapshot.phase === 'advancing' ||
-    lifecycleSnapshot.phase === 'waiting-confirm'
-  const phase =
-    !hasInProgressExits && !exitJobInFlight
-      ? 'idle'
-      : lifecycleSnapshot.phase === 'advancing' && progress == null
-        ? 'advancing'
-        : phaseFromProgress
+  const { phase, jobActive, showStepProgress } = useMemo(
+    () =>
+      resolveUnilateralExitControlJobState({
+        progress,
+        lifecyclePhase: lifecycleSnapshot.phase,
+        lifecycleJobActive,
+        hasInProgressExits,
+        proceedPending,
+        totalSteps,
+      }),
+    [
+      progress,
+      lifecycleSnapshot.phase,
+      lifecycleJobActive,
+      hasInProgressExits,
+      proceedPending,
+      totalSteps,
+    ],
+  )
   const currentStepWaitingSince = progress?.currentStepWaitingSince
-  const jobActive = lifecycleJobActive || hasInProgressExits || proceedPending
-  const showStepProgress = exitJobInFlight && totalSteps > 0
   const automationRunning =
     proceedAutomatically &&
     (proceedPending ||
@@ -431,16 +442,7 @@ export function UnilateralExitControlPage() {
     )
   }, [batchEstimate, totalSteps])
 
-  const walletScope =
-    activeWalletId != null &&
-    activeArkadeConnectionId != null &&
-    isArkadeSupportedNetworkMode(networkMode)
-      ? {
-          walletId: activeWalletId,
-          networkMode,
-          connectionId: activeArkadeConnectionId,
-        }
-      : null
+  const walletScope = resolveActiveUnilateralExitWalletScope()
 
   const handleProceedAutomaticallyChange = (enabled: boolean) => {
     if (walletScope == null) return
@@ -503,7 +505,7 @@ export function UnilateralExitControlPage() {
             outpoints: jobOutpoints,
           })
           scheduleAutomaticAdvance()
-          kickAutomaticUnilateralExitAdvance()
+          await awaitAutomaticUnilateralExitAdvance()
           toast.success('Automatic unilateral exit started.')
           return
         }
@@ -636,6 +638,7 @@ export function UnilateralExitControlPage() {
             {proceedAutomatically &&
             automationPausedReason == null &&
             phase !== 'complete' &&
+            phase !== 'waiting' &&
             (lifecycleJobActive || proceedPending || lifecycleSnapshot.phase === 'advancing')
               ? ' — proceeding automatically'
               : ''}

@@ -108,6 +108,7 @@ import {
   assertArkadeSessionUnlocked,
   proceedUnilateralExitStepWithGuards,
 } from '@/lib/arkade/proceed-unilateral-exit-step'
+import { isUnilateralExitBranchComplete } from '@/lib/arkade/unilateral-exit-branch-complete'
 
 function useArkadeQueryBase() {
   const networkMode = useWalletStore(selectCommittedNetworkMode)
@@ -833,7 +834,10 @@ export function useArkadeExitCandidatesQuery(enabled: boolean) {
   })
 }
 
-export function useArkadeBumperInfoQuery(enabled: boolean) {
+export function useArkadeBumperInfoQuery(
+  enabled: boolean,
+  pollWhileUnderfunded = false,
+) {
   const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
     useArkadeQueryBase()
 
@@ -848,9 +852,8 @@ export function useArkadeBumperInfoQuery(enabled: boolean) {
     enabled: enabled && sessionReady,
     queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().getOnchainBumperInfo()),
     staleTime: ARKADE_SESSION_POLL_STALE_MS,
-    // Mid-unroll bumper top-ups land on-chain after session open; poll until the wallet reflects them.
-    refetchInterval: (query) =>
-      (query.state.data?.balanceSats ?? 0) === 0 ? ARKADE_BUMPER_FUNDING_POLL_MS : false,
+    // Poll only while an active exit flow is waiting for a bumper top-up to confirm.
+    refetchInterval: pollWhileUnderfunded ? ARKADE_BUMPER_FUNDING_POLL_MS : false,
   })
 }
 
@@ -1573,7 +1576,7 @@ export function useArkadeUnilateralExitProgressQuery(params: {
       if (progress == null) {
         return progressIdlePollMs
       }
-      if (progress.phase === 'complete') {
+      if (progress != null && isUnilateralExitBranchComplete(progress)) {
         return false
       }
       if (params.unilateralExitJobActive) {

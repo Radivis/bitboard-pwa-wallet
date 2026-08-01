@@ -7,6 +7,13 @@ const orchestrateUnilateralExitRefreshProgress = vi.hoisted(() => vi.fn())
 const lifecycleSnapshotRef = vi.hoisted(() => ({
   phase: 'waiting-confirm' as string,
   selectedLeafOutpoints: [{ txid: 'aa'.repeat(32), vout: 0 }],
+  progress: null as {
+    phase: string
+    stepIndex: number
+    totalSteps: number
+    nodeStatuses: { txid: string; confirmations: number; status: string }[]
+    leafStatuses: unknown[]
+  } | null,
 }))
 
 vi.mock('@/workers/arkade-factory', () => ({
@@ -25,7 +32,7 @@ vi.mock('@/lib/wallet/lifecycle/unilateral-exit-lifecycle-orchestrator', () => (
       connectionId: 'conn-1',
     },
     selectedLeafOutpoints: lifecycleSnapshotRef.selectedLeafOutpoints,
-    progress: null,
+    progress: lifecycleSnapshotRef.progress,
     lastErrorMessage: null,
   }),
   orchestrateUnilateralExitProceedStep,
@@ -87,6 +94,7 @@ import {
   scheduleAutomaticAdvance,
 } from '@/lib/wallet/lifecycle/unilateral-exit-automation-controller'
 import { useUnilateralExitAutomationPrefsStore } from '@/lib/wallet/lifecycle/unilateral-exit-automation-prefs-persistence'
+import { useUnilateralExitLifecyclePersistenceStore } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence'
 
 const walletScope = {
   walletId: 1,
@@ -102,6 +110,8 @@ describe('unilateral-exit-automation-controller', () => {
     vi.clearAllMocks()
     lifecycleSnapshotRef.phase = 'waiting-confirm'
     lifecycleSnapshotRef.selectedLeafOutpoints = [{ txid: 'aa'.repeat(32), vout: 0 }]
+    lifecycleSnapshotRef.progress = null
+    useUnilateralExitLifecyclePersistenceStore.setState({ jobsByKey: {} })
     estimateUnilateralExitBatch.mockResolvedValue({
       bumperSufficient: true,
       projectedUnrollSteps: 3,
@@ -178,5 +188,50 @@ describe('unilateral-exit-automation-controller', () => {
     vi.runAllTimers()
     expect(orchestrateUnilateralExitProceedStep).not.toHaveBeenCalled()
     expect(getUnilateralExitAutomationSnapshot().scheduling).toBe('idle')
+  })
+
+  it('stops after reload when branch is already complete', async () => {
+    lifecycleSnapshotRef.phase = 'idle'
+    lifecycleSnapshotRef.progress = null
+    lifecycleSnapshotRef.selectedLeafOutpoints = [{ txid: 'bb'.repeat(32), vout: 1 }]
+    getUnilateralExitProgress.mockResolvedValue({
+      phase: 'complete',
+      stepIndex: 2,
+      totalSteps: 2,
+      nodeStatuses: [
+        { txid: 'step0', confirmations: 1, status: 'confirmed' },
+        { txid: 'step1', confirmations: 1, status: 'confirmed' },
+      ],
+      leafStatuses: [],
+    })
+
+    enableAutomaticUnilateralExit(walletScope, 10)
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    expect(orchestrateUnilateralExitRefreshProgress).toHaveBeenCalled()
+    expect(orchestrateUnilateralExitProceedStep).not.toHaveBeenCalled()
+    expect(getUnilateralExitAutomationSnapshot().scheduling).toBe('idle')
+  })
+
+  it('uses persisted outpoints when lifecycle snapshot is empty', async () => {
+    const persistedOutpoint = { txid: 'cc'.repeat(32), vout: 2 }
+    lifecycleSnapshotRef.phase = 'idle'
+    lifecycleSnapshotRef.progress = null
+    lifecycleSnapshotRef.selectedLeafOutpoints = []
+    useUnilateralExitLifecyclePersistenceStore
+      .getState()
+      .setActiveJob(walletScope, [persistedOutpoint])
+
+    enableAutomaticUnilateralExit(walletScope, 10)
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    expect(getUnilateralExitProgress).toHaveBeenCalledWith({
+      vtxoOutpoints: [persistedOutpoint],
+    })
+    expect(estimateUnilateralExitBatch).toHaveBeenCalledWith({
+      vtxoOutpoints: [persistedOutpoint],
+      feeRateSatPerVb: 2,
+    })
+    expect(orchestrateUnilateralExitProceedStep).toHaveBeenCalledWith({ feeRateSatPerVb: 2 })
   })
 })

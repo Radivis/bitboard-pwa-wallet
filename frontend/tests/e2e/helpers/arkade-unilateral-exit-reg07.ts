@@ -66,6 +66,10 @@ async function isWaitingForStepConfirmation(page: Page): Promise<boolean> {
   if (!(await progress.isVisible())) {
     return false
   }
+  const progressPhase = await progress.getAttribute('data-progress-phase')
+  if (progressPhase === 'waiting') {
+    return true
+  }
   return progress.getByText(/waiting for confirmation/i).isVisible()
 }
 

@@ -3,7 +3,7 @@ import {
   ESPLORA_FEE_PRESETS_QUERY_KEY,
   presetRatesForNetwork,
 } from '@/hooks/useEsploraFeePresets'
-import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
+import { isUnilateralExitBranchComplete } from '@/lib/arkade/unilateral-exit-branch-complete'
 import { resolveAutomatedStepFeeRateSatPerVb } from '@/lib/arkade/unilateral-exit-automation-fees'
 import { unilateralExitAutomationWaitPollMs } from '@/lib/arkade/arkade-query-timings'
 import { getArkadeLoadLifecycleSnapshot } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
@@ -12,8 +12,12 @@ import type {
   UnilateralExitAutomationPausedReason,
   UnilateralExitAutomationSnapshot,
 } from '@/lib/wallet/lifecycle/unilateral-exit-automation-types'
-import type { UnilateralExitWalletScope } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
 import { getPersistedUnilateralExitJob } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence'
+import {
+  isUnilateralExitAutomationJobInactive,
+  resolveActiveUnilateralExitWalletScope,
+  resolveUnilateralExitJobOutpoints,
+} from '@/lib/wallet/lifecycle/unilateral-exit-job-scope'
 import {
   getUnilateralExitLifecycleSnapshot,
   orchestrateUnilateralExitProceedStep,
@@ -22,10 +26,10 @@ import {
 } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-orchestrator'
 import type { LockLifecyclePhase } from '@/lib/wallet/lifecycle/lock-lifecycle-types'
 import { shouldSkipRailLifecycleResetForLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-phase'
+import type { UnilateralExitWalletScope } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
-import { getCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
+import { useWalletStore } from '@/stores/walletStore'
 import { getArkadeWorker } from '@/workers/arkade-factory'
-import { sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
 
 let automationSnapshot: UnilateralExitAutomationSnapshot = {
   prefs: { enabled: false, feePresetLabel: 'Medium', maxFeeRateSatPerVb: 10 },
@@ -53,20 +57,7 @@ function setAutomationSnapshot(next: UnilateralExitAutomationSnapshot): void {
 }
 
 function activeWalletScope(): UnilateralExitWalletScope | null {
-  const walletState = useWalletStore.getState()
-  const networkMode = getCommittedNetworkMode()
-  if (
-    walletState.activeWalletId == null ||
-    walletState.activeArkadeConnectionId == null ||
-    !isArkadeSupportedNetworkMode(networkMode)
-  ) {
-    return null
-  }
-  return {
-    walletId: walletState.activeWalletId,
-    networkMode,
-    connectionId: walletState.activeArkadeConnectionId,
-  }
+  return resolveActiveUnilateralExitWalletScope()
 }
 
 function pauseReasonToastMessage(
@@ -90,6 +81,19 @@ function clearAdvanceTimer(): void {
     clearTimeout(advanceTimer)
     advanceTimer = null
   }
+}
+
+async function stopAutomationAfterBranchComplete(
+  refreshLifecycle: boolean,
+): Promise<void> {
+  if (refreshLifecycle) {
+    await orchestrateUnilateralExitRefreshProgress()
+  }
+  toast.success('Unilateral exit branch complete.')
+  setAutomationSnapshot({
+    ...getUnilateralExitAutomationSnapshot(),
+    scheduling: 'idle',
+  })
 }
 
 export function getUnilateralExitAutomationSnapshot(): UnilateralExitAutomationSnapshot {
@@ -198,16 +202,11 @@ export function scheduleAutomaticAdvance(): void {
 
   const lifecycle = getUnilateralExitLifecycleSnapshot()
   const persisted = getPersistedUnilateralExitJob(scope)
-  const jobOutpoints =
-    lifecycle.selectedLeafOutpoints.length > 0
-      ? lifecycle.selectedLeafOutpoints
-      : persisted.selectedLeafOutpoints
-  if (
-    lifecycle.phase === 'complete' ||
-    lifecycle.phase === 'error' ||
-    lifecycle.phase === 'not-configured' ||
-    (!persisted.jobActive && jobOutpoints.length === 0)
-  ) {
+  const jobOutpoints = resolveUnilateralExitJobOutpoints({
+    lifecycleOutpoints: lifecycle.selectedLeafOutpoints,
+    persistedJob: persisted,
+  })
+  if (isUnilateralExitAutomationJobInactive(lifecycle, persisted, jobOutpoints)) {
     setAutomationSnapshot({ ...getUnilateralExitAutomationSnapshot(), scheduling: 'idle' })
     return
   }
@@ -226,13 +225,23 @@ export function scheduleAutomaticAdvance(): void {
 
 /** Run one automation tick immediately (e.g. right after enabling automation). */
 export function kickAutomaticUnilateralExitAdvance(): void {
-  void runAutomaticAdvanceTick()
+  void awaitAutomaticUnilateralExitAdvance()
+}
+
+/** Await the in-flight automation tick, or start one when idle. */
+export async function awaitAutomaticUnilateralExitAdvance(): Promise<void> {
+  if (advanceTickInFlight != null) {
+    await advanceTickInFlight
+    return
+  }
+  await runAutomaticAdvanceTick()
 }
 
 let advanceTickInFlight: Promise<void> | null = null
 
 async function runAutomaticAdvanceTick(): Promise<void> {
   if (advanceTickInFlight != null) {
+    await advanceTickInFlight
     return
   }
 
@@ -263,28 +272,23 @@ async function runAutomaticAdvanceTickBody(): Promise<void> {
   }
 
   const lifecycle = getUnilateralExitLifecycleSnapshot()
-  if (
-    lifecycle.phase === 'complete' ||
-    lifecycle.phase === 'not-configured' ||
-    lifecycle.selectedLeafOutpoints.length === 0
-  ) {
+  const persisted = getPersistedUnilateralExitJob(scope)
+  const jobOutpoints = resolveUnilateralExitJobOutpoints({
+    lifecycleOutpoints: lifecycle.selectedLeafOutpoints,
+    persistedJob: persisted,
+  })
+  if (isUnilateralExitAutomationJobInactive(lifecycle, persisted, jobOutpoints)) {
     setAutomationSnapshot({ ...getUnilateralExitAutomationSnapshot(), scheduling: 'idle' })
     return
   }
 
   try {
-    const outpoints = sortArkadeVtxoOutpoints(lifecycle.selectedLeafOutpoints)
-    const shouldSkipPreflightProgress =
-      lifecycle.phase === 'idle' && lifecycle.progress == null
-    if (!shouldSkipPreflightProgress) {
-      const progress = await getArkadeWorker().getUnilateralExitProgress({
-        vtxoOutpoints: outpoints,
-      })
-      if (progress.phase === 'complete') {
-        toast.success('Unilateral exit branch complete.')
-        setAutomationSnapshot({ ...getUnilateralExitAutomationSnapshot(), scheduling: 'idle' })
-        return
-      }
+    const progress = await getArkadeWorker().getUnilateralExitProgress({
+      vtxoOutpoints: jobOutpoints,
+    })
+    if (isUnilateralExitBranchComplete(progress)) {
+      await stopAutomationAfterBranchComplete(true)
+      return
     }
 
     const { appQueryClient } = await import('@/lib/shared/app-query-client')
@@ -309,7 +313,7 @@ async function runAutomaticAdvanceTickBody(): Promise<void> {
     }
 
     const batchEstimate = await getArkadeWorker().estimateUnilateralExitBatch({
-      vtxoOutpoints: outpoints,
+      vtxoOutpoints: jobOutpoints,
       feeRateSatPerVb: feeResolution.feeRateSatPerVb,
     })
     if (!batchEstimate.bumperSufficient) {
@@ -330,8 +334,7 @@ async function runAutomaticAdvanceTickBody(): Promise<void> {
     await orchestrateUnilateralExitRefreshProgress()
     const after = getUnilateralExitLifecycleSnapshot()
     if (after.phase === 'complete') {
-      toast.success('Unilateral exit branch complete.')
-      setAutomationSnapshot({ ...getUnilateralExitAutomationSnapshot(), scheduling: 'idle' })
+      await stopAutomationAfterBranchComplete(false)
       return
     }
 
@@ -386,12 +389,13 @@ export function syncUnilateralExitAutomationWithLockPhase(lockPhase: LockLifecyc
     return
   }
   clearAdvanceTimer()
-  setAutomationSnapshot({
-    prefs: automationSnapshot.prefs,
+  automationSnapshot = {
+    ...automationSnapshot,
     pausedReason: null,
     lastErrorMessage: null,
     scheduling: 'idle',
-  })
+  }
+  notifyAutomationListeners()
 }
 
 /** @internal Test-only reset */

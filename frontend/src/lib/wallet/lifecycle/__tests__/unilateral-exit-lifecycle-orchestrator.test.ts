@@ -180,6 +180,10 @@ describe('unilateral-exit-lifecycle-orchestrator', () => {
 
     expect(getUnilateralExitLifecycleSnapshot().phase).toBe('complete')
     expect(proceedUnilateralExitStep).not.toHaveBeenCalled()
+    const persisted = useUnilateralExitLifecyclePersistenceStore
+      .getState()
+      .getJob(1, 'regtest', 'conn-1')
+    expect(persisted.jobActive).toBe(false)
   })
 
   it('clearJob resets persisted job without implying on-chain abort', async () => {
@@ -218,5 +222,31 @@ describe('unilateral-exit-lifecycle-orchestrator', () => {
     const snap = getUnilateralExitLifecycleSnapshot()
     expect(snap.progress?.stepIndex).toBe(1)
     expect(snap.phase).not.toBe('waiting-confirm')
+  })
+
+  it('clears persisted job when refresh detects branch complete', async () => {
+    await orchestrateUnilateralExitStart({
+      walletScope,
+      outpoints: [leaf],
+      feeRateSatPerVb: 2,
+    })
+    getUnilateralExitProgress.mockResolvedValue({
+      phase: 'complete',
+      stepIndex: 2,
+      totalSteps: 2,
+      nodeStatuses: [
+        { txid: 'step0', confirmations: 1, status: 'confirmed' },
+        { txid: 'step1', confirmations: 1, status: 'confirmed' },
+      ],
+      leafStatuses: [],
+    })
+
+    await orchestrateUnilateralExitRefreshProgress()
+
+    expect(getUnilateralExitLifecycleSnapshot().phase).toBe('complete')
+    const persisted = useUnilateralExitLifecyclePersistenceStore
+      .getState()
+      .getJob(1, 'regtest', 'conn-1')
+    expect(persisted.jobActive).toBe(false)
   })
 })

@@ -13,6 +13,10 @@ import { proceedUnilateralExitStepWithGuards } from '@/lib/arkade/proceed-unilat
 import { isPersistedUnilateralExitJobStale } from '@/lib/arkade/unilateral-exit-job-reconcile'
 import { getArkadeLoadLifecycleSnapshot } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
 import {
+  resolveActiveUnilateralExitWalletScope,
+  resolveUnilateralExitJobOutpoints,
+} from '@/lib/wallet/lifecycle/unilateral-exit-job-scope'
+import {
   clearPersistedUnilateralExitJob,
   getPersistedUnilateralExitJob,
   persistActiveUnilateralExitJob,
@@ -35,7 +39,7 @@ import {
   userFacingLifecycleErrorMessage,
 } from '@/lib/shared/utils'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
-import { getCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
+import { useWalletStore } from '@/stores/walletStore'
 import { getArkadeWorker } from '@/workers/arkade-factory'
 import { sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
 import type { ArkadeUnilateralExitProgress, ArkadeVtxoOutpoint } from '@/workers/arkade-api'
@@ -122,21 +126,18 @@ function snapshotFromProgress(
   }
 }
 
+function applyBranchCompleteSnapshot(
+  walletScope: UnilateralExitWalletScope,
+  outpoints: ArkadeVtxoOutpoint[],
+  progress: ArkadeUnilateralExitProgress,
+): void {
+  clearPersistedUnilateralExitJob(walletScope)
+  const next = snapshotFromProgress(walletScope, outpoints, progress, false)
+  setSnapshot({ ...next, phase: 'complete' })
+}
+
 function activeWalletScopeFromStore(): UnilateralExitWalletScope | null {
-  const walletState = useWalletStore.getState()
-  const networkMode = getCommittedNetworkMode()
-  if (
-    walletState.activeWalletId == null ||
-    walletState.activeArkadeConnectionId == null ||
-    !isArkadeSupportedNetworkMode(networkMode)
-  ) {
-    return null
-  }
-  return {
-    walletId: walletState.activeWalletId,
-    networkMode,
-    connectionId: walletState.activeArkadeConnectionId,
-  }
+  return resolveActiveUnilateralExitWalletScope()
 }
 
 function assertCanRunUnilateralExit(scope: UnilateralExitWalletScope): void {
@@ -224,29 +225,47 @@ async function runProceedBody(
     lastErrorMessage: null,
   })
 
-  let progress = await fetchProgress(sortedOutpoints)
-  if (isUnilateralExitBranchComplete(progress)) {
-    const completeSnapshot = snapshotFromProgress(scope, sortedOutpoints, progress, false)
-    setSnapshot({ ...completeSnapshot, phase: 'complete' })
+  try {
+    let progress = await fetchProgress(sortedOutpoints)
+    if (isUnilateralExitBranchComplete(progress)) {
+      applyBranchCompleteSnapshot(scope, sortedOutpoints, progress)
+      await invalidateUnilateralExitQueries(scope, sortedOutpoints)
+      return getUnilateralExitLifecycleSnapshot()
+    }
+
+    await proceedUnilateralExitStepWithGuards({
+      activeWalletId: scope.walletId,
+      vtxoOutpoints: sortedOutpoints,
+      feeRateSatPerVb,
+    })
+
+    progress = await fetchProgress(sortedOutpoints)
+    const nextSnapshot = snapshotFromProgress(scope, sortedOutpoints, progress, false)
+    if (isUnilateralExitBranchComplete(progress)) {
+      applyBranchCompleteSnapshot(scope, sortedOutpoints, progress)
+    } else {
+      setSnapshot(nextSnapshot)
+    }
     await invalidateUnilateralExitQueries(scope, sortedOutpoints)
     return getUnilateralExitLifecycleSnapshot()
+  } finally {
+    await recoverAdvancingLifecycleSnapshotFromWorker(scope, sortedOutpoints)
   }
+}
 
-  await proceedUnilateralExitStepWithGuards({
-    activeWalletId: scope.walletId,
-    vtxoOutpoints: sortedOutpoints,
-    feeRateSatPerVb,
-  })
-
-  progress = await fetchProgress(sortedOutpoints)
-  const nextSnapshot = snapshotFromProgress(scope, sortedOutpoints, progress, false)
-  if (isUnilateralExitBranchComplete(progress)) {
-    setSnapshot({ ...nextSnapshot, phase: 'complete' })
-  } else {
-    setSnapshot(nextSnapshot)
+async function recoverAdvancingLifecycleSnapshotFromWorker(
+  scope: UnilateralExitWalletScope,
+  outpoints: ArkadeVtxoOutpoint[],
+): Promise<void> {
+  if (getUnilateralExitLifecycleSnapshot().phase !== 'advancing') {
+    return
   }
-  await invalidateUnilateralExitQueries(scope, sortedOutpoints)
-  return getUnilateralExitLifecycleSnapshot()
+  try {
+    const progress = await fetchProgress(outpoints)
+    setSnapshot(snapshotFromProgress(scope, outpoints, progress, false))
+  } catch {
+    // Keep advancing; caller error handling may still apply.
+  }
 }
 
 export function getUnilateralExitLifecycleSnapshot(): UnilateralExitLifecycleSnapshot {
@@ -317,17 +336,22 @@ export async function hydrateUnilateralExitJobFromPersistence(params: {
 
   try {
     const progress = await fetchProgress(persisted.selectedLeafOutpoints)
-    const next = snapshotFromProgress(
-      params.walletScope,
-      persisted.selectedLeafOutpoints,
-      progress,
-      false,
-    )
-    setSnapshot(
-      isUnilateralExitBranchComplete(progress)
-        ? { ...next, phase: 'complete' }
-        : next,
-    )
+    if (isUnilateralExitBranchComplete(progress)) {
+      applyBranchCompleteSnapshot(
+        params.walletScope,
+        persisted.selectedLeafOutpoints,
+        progress,
+      )
+    } else {
+      setSnapshot(
+        snapshotFromProgress(
+          params.walletScope,
+          persisted.selectedLeafOutpoints,
+          progress,
+          false,
+        ),
+      )
+    }
   } catch {
     setSnapshot({
       phase: 'idle',
@@ -380,10 +404,10 @@ export async function orchestrateUnilateralExitProceedStep(
   }
 
   const persisted = getPersistedUnilateralExitJob(scope)
-  const outpoints =
-    snapshot.selectedLeafOutpoints.length > 0
-      ? snapshot.selectedLeafOutpoints
-      : persisted.selectedLeafOutpoints
+  const outpoints = resolveUnilateralExitJobOutpoints({
+    lifecycleOutpoints: snapshot.selectedLeafOutpoints,
+    persistedJob: persisted,
+  })
   if (!persisted.jobActive && outpoints.length === 0) {
     throw new Error('No active unilateral exit job')
   }
@@ -421,19 +445,20 @@ export async function orchestrateUnilateralExitRefreshProgress(): Promise<Unilat
     return getUnilateralExitLifecycleSnapshot()
   }
   const persisted = getPersistedUnilateralExitJob(scope)
-  const outpoints =
-    snapshot.selectedLeafOutpoints.length > 0
-      ? snapshot.selectedLeafOutpoints
-      : persisted.selectedLeafOutpoints
+  const outpoints = resolveUnilateralExitJobOutpoints({
+    lifecycleOutpoints: snapshot.selectedLeafOutpoints,
+    persistedJob: persisted,
+  })
   if (outpoints.length === 0) {
     return getUnilateralExitLifecycleSnapshot()
   }
   assertCanRunUnilateralExit(scope)
   const progress = await fetchProgress(outpoints)
-  const next = snapshotFromProgress(scope, outpoints, progress, false)
-  setSnapshot(
-    isUnilateralExitBranchComplete(progress) ? { ...next, phase: 'complete' } : next,
-  )
+  if (isUnilateralExitBranchComplete(progress)) {
+    applyBranchCompleteSnapshot(scope, outpoints, progress)
+  } else {
+    setSnapshot(snapshotFromProgress(scope, outpoints, progress, false))
+  }
   await invalidateUnilateralExitQueries(scope, outpoints)
   return getUnilateralExitLifecycleSnapshot()
 }

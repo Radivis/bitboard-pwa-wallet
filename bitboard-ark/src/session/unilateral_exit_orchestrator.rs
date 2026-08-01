@@ -304,9 +304,13 @@ impl ArkSession {
             0,
         );
 
-        let first_incomplete = self
+        let (first_incomplete, live_estimate_error) = match self
             .first_incomplete_step_index(self.client.blockchain(), &plan.ordered_step_txids)
-            .await?;
+            .await
+        {
+            Ok(index) => (index, None),
+            Err(error) => (0, Some(error.to_string())),
+        };
         let remaining_steps = plan
             .ordered_step_txids
             .len()
@@ -317,8 +321,8 @@ impl ArkSession {
             fee_rate_sat_per_vb,
             first_incomplete,
         );
-        let bumper_sufficient =
-            remaining_steps == 0 || bumper_balance_sats >= estimated_remaining_fee_sats;
+        let bumper_sufficient = live_estimate_error.is_none()
+            && (remaining_steps == 0 || bumper_balance_sats >= estimated_remaining_fee_sats);
 
         Ok(UnilateralExitBatchEstimateDto {
             projected_unroll_steps,
@@ -326,7 +330,7 @@ impl ArkSession {
             fee_rate_sat_per_vb,
             bumper_balance_sats,
             bumper_sufficient,
-            estimate_error: None,
+            estimate_error: live_estimate_error,
         })
     }
 
