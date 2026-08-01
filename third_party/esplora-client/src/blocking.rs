@@ -335,6 +335,7 @@ impl BlockingClient {
                 .unwrap_or_default()
                 .into_bytes(),
         )?;
+        request = request.with_header("Content-Type", "application/json");
 
         if let Some(maxfeerate) = maxfeerate {
             request = request.with_param("maxfeerate", maxfeerate.to_string())

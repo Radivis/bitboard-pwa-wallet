@@ -84,6 +84,7 @@ Separate from step progress: detecting that the **final exit sweep** spent a VTX
 | Gap | Wallet handling |
 |-----|-----------------|
 | `/fee-estimates` 404 | `map_fee_rate` falls back to `MIN_FEE_RATE_SAT_PER_VB` |
+| `POST /txs/package` without `Content-Type: application/json` | arkade-regtest mempool returns generic `submitpackage` / `sendrawtransaction` RPC `-1`; vendored `esplora-client` sets the header on package submit |
 | Address UTXO listings omit `block_time` | Vendored `coin_select` + status backfill; see [arkade-bitboard-wallet-model.md](arkade-bitboard-wallet-model.md) § unilateral exit completion coin-select |
 | Indexer lag after `mine` | E2E helpers poll tip height / call `triggerArkadeRailSync`; see fixture README troubleshooting |
 

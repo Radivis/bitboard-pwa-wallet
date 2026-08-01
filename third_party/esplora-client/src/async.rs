@@ -272,9 +272,13 @@ impl<S: Sleeper> AsyncClient<S> {
         path: &str,
         body: T,
         query_params: Option<HashSet<(&str, String)>>,
+        content_type: Option<&str>,
     ) -> Result<Response, Error> {
         let url: String = format!("{}{}", self.url, path);
         let mut request = self.client.post(url).body(body);
+        if let Some(content_type) = content_type {
+            request = request.header("Content-Type", content_type);
+        }
         if let Some(d) = self.request_timeout {
             request = request.timeout(d);
         }
@@ -394,7 +398,7 @@ impl<S: Sleeper> AsyncClient<S> {
     /// Broadcast a [`Transaction`] to Esplora.
     pub async fn broadcast(&self, transaction: &Transaction) -> Result<(), Error> {
         let body = serialize::<Transaction>(transaction).to_lower_hex_string();
-        match self.post_request_bytes("/tx", body, None).await {
+        match self.post_request_bytes("/tx", body, None, None).await {
             Ok(_resp) => Ok(()),
             Err(e) => Err(e),
         }
@@ -432,6 +436,7 @@ impl<S: Sleeper> AsyncClient<S> {
                 "/txs/package",
                 serde_json::to_string(&serialized_txs).unwrap_or_default(),
                 Some(queryparams),
+                Some("application/json"),
             )
             .await?;
 

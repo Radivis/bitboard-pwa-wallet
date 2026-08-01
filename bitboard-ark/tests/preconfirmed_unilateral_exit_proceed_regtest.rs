@@ -5,26 +5,20 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use std::time::Duration;
-
 use bitboard_ark::{
     ProceedUnilateralExitStepParams, UnilateralExitBatchEstimateParams, UnilateralExitPhase,
     UnilateralExitProgressParams, UnilateralExitTopologyParams, VirtualOutPoint,
 };
-use bitcoin::Transaction;
-use bitcoin::consensus::deserialize;
 
 mod support;
 
 use support::regtest_integration::{
     DEFAULT_BOARD_SATS, esplora_tx_endpoint_status, fund_bumper_wallet, mine_blocks,
     prepare_chained_preconfirmed_session, regtest_enabled, regtest_endpoints,
-    wait_for_esplora_tx_raw,
 };
 
-const BUMPER_SATS: u64 = 1_000_000;
+const BUMPER_SATS: u64 = 10_000;
 const FEE_RATE_SAT_PER_VB: f64 = 2.0;
-const ESPLORA_RELAY_TIMEOUT: Duration = Duration::from_secs(45);
 const VTXO_STATUS_PRECONFIRMED: &str = "preconfirmed";
 
 async fn esplora_tx_diagnostics(esplora_url: &str, txid: &str) -> String {
@@ -32,29 +26,6 @@ async fn esplora_tx_diagnostics(esplora_url: &str, txid: &str) -> String {
     let raw_status = esplora_tx_endpoint_status(esplora_url, txid, "/raw").await;
     let status_status = esplora_tx_endpoint_status(esplora_url, txid, "/status").await;
     format!("txid={txid} json={json_status} raw={raw_status} status={status_status}")
-}
-
-async fn esplora_post_package_broadcast_error(esplora_url: &str, tx_hexes: &[&str]) -> String {
-    let client = reqwest::Client::new();
-    let url = format!(
-        "{}/txs/package?maxfeerate=0&maxburnamount=0",
-        esplora_url.trim_end_matches('/')
-    );
-    let body = serde_json::to_string(tx_hexes).unwrap_or_default();
-    let response = client
-        .post(url)
-        .header("content-type", "application/json")
-        .body(body.to_string())
-        .send()
-        .await;
-    match response {
-        Ok(response) => {
-            let status = response.status();
-            let text = response.text().await.unwrap_or_default();
-            format!("status={status} body={text}")
-        }
-        Err(error) => format!("request_error={error}"),
-    }
 }
 
 #[tokio::test]
@@ -131,66 +102,6 @@ async fn chained_preconfirmed_proceed_relays_first_step_tx_on_regtest() {
 
     fund_bumper_wallet(&session, &endpoints, BUMPER_SATS).await;
 
-    let topology_for_debug = session
-        .get_unilateral_exit_topology(UnilateralExitTopologyParams {
-            vtxo_outpoints: startable_outpoints.clone(),
-        })
-        .await
-        .expect("topology before proceed debug");
-    eprintln!(
-        "REG-07 debug: exit_branch_txids={:?}",
-        topology_for_debug.exit_branch_txids
-    );
-    if let Some(first_txid) = topology_for_debug.exit_branch_txids.first() {
-        eprintln!(
-            "REG-07 debug: first_step_esplora={}",
-            esplora_tx_diagnostics(&endpoints.esplora_url, first_txid).await
-        );
-    }
-    let parent_hex = session
-        .export_unilateral_exit_step_parent_hex(
-            UnilateralExitBatchEstimateParams {
-                vtxo_outpoints: batch_outpoints.clone(),
-                fee_rate_sat_per_vb: Some(FEE_RATE_SAT_PER_VB),
-            },
-            0,
-        )
-        .await
-        .expect("parent tx hex");
-    let parent_tx: Transaction =
-        deserialize(&hex::decode(parent_hex.trim()).expect("parent hex decode"))
-            .expect("parent tx");
-    for (index, input) in parent_tx.input.iter().enumerate() {
-        let prev_txid = input.previous_output.txid.to_string();
-        eprintln!(
-            "REG-07 debug: parent_input[{index}]={prev_txid}:{} esplora={}",
-            input.previous_output.vout,
-            esplora_tx_diagnostics(&endpoints.esplora_url, &prev_txid).await
-        );
-    }
-    eprintln!(
-        "REG-07 debug: parent_only_package_broadcast_error={}",
-        esplora_post_package_broadcast_error(&endpoints.esplora_url, &[parent_hex.as_str()]).await
-    );
-    let package_hex = session
-        .export_unilateral_exit_step_package_hex(
-            UnilateralExitBatchEstimateParams {
-                vtxo_outpoints: batch_outpoints.clone(),
-                fee_rate_sat_per_vb: Some(FEE_RATE_SAT_PER_VB),
-            },
-            0,
-        )
-        .await
-        .expect("package hex");
-    eprintln!(
-        "REG-07 debug: parent_child_package_broadcast_error={}",
-        esplora_post_package_broadcast_error(
-            &endpoints.esplora_url,
-            &[package_hex[0].as_str(), package_hex[1].as_str()],
-        )
-        .await
-    );
-
     let estimate_after_fund = session
         .estimate_unilateral_exit_batch(UnilateralExitBatchEstimateParams {
             vtxo_outpoints: batch_outpoints.clone(),
@@ -242,30 +153,19 @@ async fn chained_preconfirmed_proceed_relays_first_step_tx_on_regtest() {
         .or_else(|| topology.exit_branch_txids.first().cloned())
         .expect("first step txid from proceed or topology");
 
-    let relayed = wait_for_esplora_tx_raw(
-        &endpoints.esplora_url,
-        &first_step_txid,
-        ESPLORA_RELAY_TIMEOUT,
-    )
-    .await;
-    if !relayed {
-        let mut diagnostics =
-            vec![esplora_tx_diagnostics(&endpoints.esplora_url, &first_step_txid).await];
-        for txid in topology.exit_branch_txids.iter().take(3) {
-            diagnostics.push(esplora_tx_diagnostics(&endpoints.esplora_url, txid).await);
-        }
-        panic!(
-            "first unilateral exit step tx was not relayed on Esplora /raw within {:?}: {}",
-            ESPLORA_RELAY_TIMEOUT,
-            diagnostics.join("; ")
-        );
-    }
+    // Regtest Esplora indexes successful package broadcasts via JSON `/tx/{txid}` before `/raw`
+    // serves mempool txs; confirmation after mining is the reliable completion signal.
+    let status_after_proceed =
+        esplora_tx_endpoint_status(&endpoints.esplora_url, &first_step_txid, "/status").await;
+    let json_after_proceed =
+        esplora_tx_endpoint_status(&endpoints.esplora_url, &first_step_txid, "").await;
+    assert!(
+        status_after_proceed == 200 || json_after_proceed == 200,
+        "expected first step tx visible on Esplora after proceed, got status={status_after_proceed} json={json_after_proceed}; {}",
+        esplora_tx_diagnostics(&endpoints.esplora_url, &first_step_txid).await
+    );
 
     mine_blocks(1);
-    session
-        .sync_with_operator()
-        .await
-        .expect("sync after mining first step");
 
     let progress = session
         .get_unilateral_exit_progress(UnilateralExitProgressParams {
