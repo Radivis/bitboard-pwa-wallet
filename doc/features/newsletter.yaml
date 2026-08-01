@@ -1,0 +1,120 @@
+feature:
+  name: Newsletter
+  description: "Email newsletter with double opt-in subscription, unsubscription, and admin-only sending"
+  user_stories:
+    - As a visitor, I want to subscribe to the newsletter with my name and email
+    - As a subscriber, I want to confirm my subscription via a link in a confirmation email
+    - As a subscriber, I want to unsubscribe via a link included in every newsletter
+    - As an admin, I want to send a newsletter to all confirmed subscribers
+
+  flows:
+    - Subscription:
+      - description: "Double opt-in subscription flow"
+      - endpoint: POST /api/subscriptions
+      - request_body:
+        - name: string (required, non-empty)
+        - email: string (required, valid email)
+      - behavior:
+        - Validates name and email, returns 400 for invalid or empty fields, 422 for missing fields
+        - Creates subscriber with status "pending_confirmation"
+        - Generates a subscription token and sends a confirmation email containing a confirmation link
+        - Subscribing twice with the same email resends the confirmation email with the same token
+        - Returns 500 on database errors
+
+    - Subscription Confirmation:
+      - description: "Confirm a pending subscription via token from the confirmation email"
+      - endpoint: GET /api/subscriptions/confirm?subscription_token=<token>
+      - behavior:
+        - Returns 400 if token is missing or malformed
+        - Returns 401 if token does not exist in the database
+        - On valid token, sets subscriber status to "confirmed" and redirects (303) to /subscribed
+
+    - Unsubscription:
+      - description: "Two-step unsubscribe: GET to preview, POST to confirm removal"
+      - endpoint: GET|POST /api/subscriptions/unsubscribe?subscription_token=<token>
+      - behavior:
+        - Returns 400 if token is missing or malformed (both GET and POST)
+        - Returns 401 if token does not exist (both GET and POST)
+        - GET returns 200 with the subscriber's email for confirmation display
+        - POST deletes the subscriber and their token (via CASCADE) and returns 200
+        - After unsubscription, the token is no longer valid for confirm or unsubscribe
+
+    - Newsletter Sending:
+      - description: "Admin sends a newsletter issue to all confirmed subscribers"
+      - endpoint: POST /api/admin/newsletters
+      - requirements:
+        - Authentication: Admin (returns 401 if not logged in)
+      - request_body:
+        - title: string (required)
+        - text_content: string (required)
+        - html_content: string (required)
+        - idempotency_key: string (required, UUID)
+      - behavior:
+        - Returns 422 for missing required fields
+        - Queues newsletter for delivery, returns 200 with success message
+        - Newsletters are only delivered to confirmed subscribers, not pending ones
+        - Each newsletter email includes an unsubscribe link with the subscriber's token
+        - Idempotent: resubmitting with the same idempotency_key does not send duplicates
+        - Concurrent submissions with the same key are handled gracefully
+        - Idempotency keys expire after 24 hours, allowing resend with the same key
+
+  pages:
+    - Home (subscription form):
+      - description: "The home page includes a subscription form for the newsletter"
+      - path: /
+      - file: frontend/src/pages/Home.tsx
+      - visible_elements:
+        - title: "zero2prod-axum"
+        - subscription form (SubscribeForm component):
+          - legend: "Subscribe to the newsletter to receive updates on this project"
+          - form fields:
+            - email
+            - name
+          - subscribe button
+            - click_event:
+              - submits POST to /api/subscriptions
+              - on success: shows "Please check your email to confirm your subscription."
+              - on error: shows error message
+
+    - Subscribed:
+      - description: "Confirmation landing page shown after a subscriber clicks the confirmation link"
+      - path: /subscribed
+      - file: frontend/src/pages/Subscribed.tsx
+      - visible_elements:
+        - title: "Welcome to our newsletter!"
+
+    - UnsubscribeConfirm:
+      - description: "Two-step unsubscribe page reached via the unsubscribe link in newsletter emails"
+      - path: /subscriptions/unsubscribe?subscription_token=<token>
+      - file: frontend/src/pages/UnsubscribeConfirm.tsx
+      - visible_elements:
+        - title: "Unsubscribe from Newsletter"
+        - loading spinner while fetching subscriber info
+        - error alert for invalid or expired tokens
+        - subscriber email displayed for confirmation
+        - cancel button
+          - click_event:
+            - navigate to home page
+        - confirm unsubscribe button
+          - click_event:
+            - sends POST to unsubscribe endpoint
+            - on success: shows success alert and "Return to Home" button
+
+    - AdminNewsletter:
+      - description: "Admin form to compose and send a newsletter issue"
+      - path: /admin/newsletters
+      - file: frontend/src/pages/AdminNewsletter.tsx
+      - requirements:
+        - Authentication: Admin
+      - visible_elements:
+        - title: "Send a newsletter"
+        - form fields:
+          - title
+          - html_content (multiline)
+          - text_content (multiline)
+        - send newsletter button
+          - click_event:
+            - submits newsletter, shows success or error alert
+        - back button
+          - click_event:
+            - navigate to /admin/dashboard

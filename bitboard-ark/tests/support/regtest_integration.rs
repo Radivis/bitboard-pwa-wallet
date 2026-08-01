@@ -16,6 +16,11 @@ pub const DEFAULT_ESPLORA_URL: &str = "http://localhost:7030/api";
 pub const DEFAULT_ARKD_CONTAINER: &str = "bitboard-regtest-arkd";
 
 pub const DEFAULT_BOARD_SATS: u64 = 200_000;
+/// Self-send fraction used to split a boarded VTXO into two preconfirmed outputs (REG-07).
+pub const PRECONFIRMED_SELF_SEND_FRACTION: f64 = 0.4;
+/// Second-hop self-send fraction — below the first-hop payment so coin selection spends change
+/// from the first split, leaving a sibling vtxo on the upstream ark host (REG-07 topology).
+pub const PRECONFIRMED_CHAINED_SELF_SEND_FRACTION: f64 = 0.3;
 /// Matches E2E `BOARDING_COOPERATIVE_SETTLE_BUDGET_MS` — fund → settle must finish inside arkd's ~30s window.
 pub const BOARDING_COOPERATIVE_SETTLE_BUDGET: Duration = Duration::from_secs(25);
 pub const BOARDING_ESPLORA_CONFIRM_TIMEOUT: Duration = Duration::from_secs(20);
@@ -355,4 +360,105 @@ pub async fn prepare_boarded_session(
     );
 
     (session, mnemonic)
+}
+
+pub async fn send_arkade_self_payment(
+    session: &ArkSession,
+    amount_sats: u64,
+    use_fresh_receive_address: bool,
+) {
+    use bitboard_ark::SendPaymentParams;
+
+    let address = if use_fresh_receive_address {
+        session
+            .reveal_next_offchain_address()
+            .expect("reveal offchain receive address")
+    } else {
+        session
+            .peek_offchain_address()
+            .expect("peek offchain receive address")
+    };
+    session
+        .send_payment(SendPaymentParams {
+            address,
+            amount_sats,
+        })
+        .await
+        .expect("arkade self-send payment");
+    session
+        .sync_with_operator()
+        .await
+        .expect("sync after arkade self-send");
+}
+
+/// Boarded wallet with preconfirmed VTXOs after two chained self-sends (E2E REG-07 topology).
+pub async fn prepare_chained_preconfirmed_session(
+    endpoints: &RegtestEndpoints,
+    board_sats: u64,
+) -> ArkSession {
+    let (session, _) = prepare_boarded_session(endpoints, board_sats).await;
+    let first_self_send_sats = (board_sats as f64 * PRECONFIRMED_SELF_SEND_FRACTION) as u64;
+    send_arkade_self_payment(&session, first_self_send_sats, false).await;
+    let second_self_send_sats =
+        (board_sats as f64 * PRECONFIRMED_CHAINED_SELF_SEND_FRACTION) as u64;
+    send_arkade_self_payment(&session, second_self_send_sats, true).await;
+    session
+}
+
+pub async fn fund_bumper_wallet(
+    session: &ArkSession,
+    endpoints: &RegtestEndpoints,
+    bumper_sats: u64,
+) {
+    let bumper = session.onchain_bumper_info().await.expect("bumper info");
+    fund_regtest_address(&bumper.address, bumper_sats);
+    wait_for_confirmed_esplora_sats(&endpoints.esplora_url, &bumper.address, bumper_sats).await;
+
+    let bumper_deadline = std::time::Instant::now() + Duration::from_secs(30);
+    while std::time::Instant::now() < bumper_deadline {
+        let refreshed = session.onchain_bumper_info().await.expect("bumper re-sync");
+        if refreshed.balance_sats >= bumper_sats.saturating_sub(1_000) {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+    let refreshed = session
+        .onchain_bumper_info()
+        .await
+        .expect("bumper balance check");
+    assert!(
+        refreshed.balance_sats >= bumper_sats.saturating_sub(1_000),
+        "bumper wallet not funded: {} sats (expected at least {})",
+        refreshed.balance_sats,
+        bumper_sats.saturating_sub(1_000)
+    );
+}
+
+pub async fn esplora_http_status(esplora_url: &str, path: &str) -> u16 {
+    let url = format!(
+        "{}/{}",
+        esplora_url.trim_end_matches('/'),
+        path.trim_start_matches('/')
+    );
+    reqwest::Client::new()
+        .get(&url)
+        .send()
+        .await
+        .map(|response| response.status().as_u16())
+        .unwrap_or(0)
+}
+
+pub async fn esplora_tx_endpoint_status(esplora_url: &str, txid: &str, suffix: &str) -> u16 {
+    esplora_http_status(esplora_url, &format!("tx/{txid}{suffix}")).await
+}
+
+pub async fn wait_for_esplora_tx_raw(esplora_url: &str, txid: &str, timeout: Duration) -> bool {
+    let deadline = std::time::Instant::now() + timeout;
+    while std::time::Instant::now() < deadline {
+        if esplora_tx_endpoint_status(esplora_url, txid, "/raw").await == 200 {
+            return true;
+        }
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+    false
 }

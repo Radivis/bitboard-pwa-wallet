@@ -111,31 +111,55 @@ fn branch_txid_hints_from_materials(snapshot: &OffchainVtxoSnapshot, leaf_txid: 
     paths.into_iter().flatten().collect()
 }
 
-/// Returns the completion spend txid when the virtual outpoint or any unroll tip is spent on-chain.
+/// Returns the completion spend txid when the virtual VTXO outpoint itself is spent on-chain.
+///
+/// Do not infer completion from branch-tip `vout 0` spends: each unroll CPFP step spends the
+/// previous parent that way, which would falsely mark exiting VTXOs as finalized.
 pub(crate) async fn detect_exiting_vtxo_completion_on_esplora<B: Blockchain>(
     blockchain: &B,
-    snapshot: &OffchainVtxoSnapshot,
-    watch: Option<&UnilateralExitWatchRecord>,
+    _snapshot: &OffchainVtxoSnapshot,
+    _watch: Option<&UnilateralExitWatchRecord>,
     leaf_txid: &str,
     virtual_vout: u32,
 ) -> ArkResult<Option<Txid>> {
-    if let Ok(leaf) = Txid::from_str(leaf_txid)
-        && let Some(spend_txid) = output_spent_on_chain(blockchain, &leaf, virtual_vout).await?
-    {
-        return Ok(Some(spend_txid));
-    }
+    let leaf = Txid::from_str(leaf_txid)
+        .map_err(|error| crate::error::ArkWasmError::InvalidTxid(error.to_string()))?;
+    output_spent_on_chain(blockchain, &leaf, virtual_vout).await
+}
 
-    let tip_candidates = exiting_vtxo_on_chain_tip_candidates(snapshot, leaf_txid, watch);
-    find_unilateral_exit_completion_spend_on_chain(
-        blockchain,
-        &tip_candidates,
-        leaf_txid,
-        virtual_vout,
-    )
-    .await
+/// Clears local `is_spent` markers that were set without an on-chain spend on the VTXO outpoint.
+pub(crate) async fn heal_false_positive_exiting_vtxo_spent_markers<B: Blockchain>(
+    blockchain: &B,
+    snapshot: &mut OffchainVtxoSnapshot,
+) -> ArkResult<Vec<bitcoin::OutPoint>> {
+    let mut healed_outpoints = Vec::new();
+    for record in &mut snapshot.virtual_tx_outpoints {
+        if !record.is_spent || !record.is_unrolled {
+            continue;
+        }
+        let Ok(txid) = Txid::from_str(&record.txid) else {
+            continue;
+        };
+        if output_spent_on_chain(blockchain, &txid, record.vout)
+            .await?
+            .is_some()
+        {
+            continue;
+        }
+        record.is_spent = false;
+        record.spent_by = None;
+        healed_outpoints.push(bitcoin::OutPoint {
+            txid,
+            vout: record.vout,
+        });
+    }
+    Ok(healed_outpoints)
 }
 
 /// Returns the completion spend txid when any candidate tip's primary output is spent on-chain.
+///
+/// Reserved for explicit published-tip probes; unilateral exit completion detection must not use
+/// branch-tip `vout 0` spends because CPFP bump children spend those during unroll.
 pub(crate) async fn find_unilateral_exit_completion_spend_on_chain<B: Blockchain>(
     blockchain: &B,
     tip_candidates: &[Txid],

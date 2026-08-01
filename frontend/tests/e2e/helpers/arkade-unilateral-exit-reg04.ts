@@ -58,6 +58,14 @@ async function clickProceedAndWaitForStep(page: Page): Promise<void> {
       return
     }
 
+    const waitingForConfirmation = await page
+      .getByTestId('unilateral-exit-step-progress')
+      .getByText(/waiting for confirmation/i)
+      .isVisible()
+    if (waitingForConfirmation) {
+      return
+    }
+
     if (await proceedButton.isEnabled()) {
       // Success toast auto-dismisses quickly; a re-enabled Proceed button without an error
       // toast means the WASM step returned successfully.

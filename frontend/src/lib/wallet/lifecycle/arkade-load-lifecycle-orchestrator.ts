@@ -25,6 +25,7 @@ import {
   configureArkadeSyncForLoadedRail,
   orchestrateArkadePostLoadSync,
 } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
+import { configureUnilateralExitLifecycleForLoadedWallet } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-orchestrator'
 import type {
   ArkadeLoadLifecycleSnapshot,
   ArkadeLoadParams,
@@ -250,6 +251,11 @@ export async function orchestrateArkadeLoad(params: ArkadeLoadParams): Promise<v
       lastLoadedConnectionId = connectionId
       setSnapshot({ loadPhase: 'loaded', networkMode, errorMessage: null })
       configureArkadeSyncForLoadedRail({
+        walletId,
+        networkMode,
+        connectionId,
+      })
+      configureUnilateralExitLifecycleForLoadedWallet({
         walletId,
         networkMode,
         connectionId,

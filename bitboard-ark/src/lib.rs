@@ -27,7 +27,11 @@ mod session_exit_candidate_tests;
 #[cfg(test)]
 mod session_mapper_tests;
 #[cfg(not(target_arch = "wasm32"))]
-pub use api_types::CompleteUnilateralExitParams;
+pub use api_types::{
+    CompleteUnilateralExitParams, ProceedUnilateralExitStepParams, SendPaymentParams,
+    UnilateralExitBatchEstimateParams, UnilateralExitPhase, UnilateralExitProgressParams,
+    UnilateralExitTopologyParams,
+};
 #[cfg(not(target_arch = "wasm32"))]
 pub use network::NetworkMode;
 #[cfg(not(target_arch = "wasm32"))]
@@ -49,9 +53,16 @@ use std::rc::Rc;
 
 use wasm_bindgen::prelude::*;
 
+#[cfg(target_arch = "wasm32")]
 use crate::api_types::{
     CollaborativeExitFeeEstimateParams, CollaborativeExitParams, OpenSessionParams,
     SendPaymentParams, UnilateralExitCompletionFeeEstimateParams, UnilateralExitFeeParams,
+};
+
+#[cfg(not(target_arch = "wasm32"))]
+use crate::api_types::{
+    CollaborativeExitFeeEstimateParams, CollaborativeExitParams, OpenSessionParams,
+    UnilateralExitCompletionFeeEstimateParams, UnilateralExitFeeParams,
 };
 use crate::error::{ArkResult, ArkWasmError, map_js_error};
 

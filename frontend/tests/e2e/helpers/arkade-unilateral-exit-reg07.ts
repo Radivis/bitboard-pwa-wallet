@@ -1,23 +1,34 @@
 import { expect, type Page } from '@playwright/test'
 import { ensureOnChainBumperFunds } from './arkade-management'
+import { formatUnilateralExitFailure } from './esplora-unilateral-exit-diagnostics'
 import { mineRegtestBlocks } from './arkade-regtest'
 import { confirmStartUnilateralExitIfShown } from './arkade-unilateral-exit-start-confirm'
 
-const AUTOMATIC_UNROLL_DEADLINE_MS = 900_000
-const MAX_MINES_WITHOUT_PROGRESS = 60
-/** Two sibling preconfirmed outpoints need more bumper headroom than a single-leaf REG-04 run. */
-const REG07_BUMPER_FUNDING_SATS = 500_000
-/** Transient regtest broadcast failures (mempool/indexer lag); mine + refresh fee estimate to retry. */
-const RETRYABLE_BROADCAST_ERROR_PATTERN = /sendrawtransaction|code.:.-2[56]/i
+/** Inner loop budget; must stay below the Playwright per-test timeout. */
+const AUTOMATIC_UNROLL_DEADLINE_MS = 240_000
+/** ~40 blocks without a step change (2 blocks per iteration). */
+const MAX_MINES_WITHOUT_PROGRESS = 20
+const MAX_AUTOMATION_RECOVERY_ATTEMPTS = 5
+/** Chained 5-step unroll spends far more bumper than the batch estimate suggests (large parent vsizes). */
+const REG07_BUMPER_FUNDING_SATS = 10_000_000
+/** Transient regtest indexer lag; mine and resume. Treat RPC -25/-26 as retryable when rebroadcasting or bumper is depleted. */
+const RETRYABLE_INDEXER_ERROR_PATTERN =
+  /code.:.-26|code.:.-25|txn-already-in-mempool|outspends|failed to get transaction|error sending request|request failed/i
 
-function isRetryableBroadcastError(message: string): boolean {
-  return RETRYABLE_BROADCAST_ERROR_PATTERN.test(message)
+function isRetryableIndexerError(message: string): boolean {
+  return RETRYABLE_INDEXER_ERROR_PATTERN.test(message)
 }
 
 function isRecoverableAutomationPause(message: string): boolean {
   return (
-    /insufficient bumper/i.test(message) || isRetryableBroadcastError(message)
+    /insufficient bumper/i.test(message) ||
+    isRetryableIndexerError(message) ||
+    /sendrawtransaction RPC error.*-25|sendrawtransaction RPC error.*-26|code.:.-25|code.:.-26/i.test(message)
   )
+}
+
+async function failUnilateralExit(page: Page, message: string): Promise<never> {
+  throw new Error(await formatUnilateralExitFailure(page, message))
 }
 
 async function isBranchComplete(page: Page): Promise<boolean> {
@@ -35,30 +46,100 @@ async function readStepProgressText(page: Page): Promise<string> {
   return (await progress.textContent())?.trim() ?? ''
 }
 
-async function batchFeeShowsInsufficientBumper(page: Page): Promise<boolean> {
-  const batchFee = page.getByTestId('unilateral-exit-batch-fee')
-  if (!(await batchFee.isVisible())) {
-    return false
+/** Prefer WASM-backed data attributes over visible text (batch-estimate fallback can lie). */
+async function readStepProgressSignature(page: Page): Promise<string> {
+  const progress = page.getByTestId('unilateral-exit-step-progress')
+  if (!(await progress.isVisible())) {
+    return ''
   }
-  const batchFeeText = (await batchFee.textContent()) ?? ''
-  return /bumper/i.test(batchFeeText) && /insufficient/i.test(batchFeeText)
+  const stepIndex = await progress.getAttribute('data-step-index')
+  const totalSteps = await progress.getAttribute('data-total-steps')
+  const phase = await progress.getAttribute('data-progress-phase')
+  if (stepIndex != null && totalSteps != null) {
+    return `step:${stepIndex}/${totalSteps}:${phase ?? 'unknown'}`
+  }
+  return normalizeStepProgressForComparison(await readStepProgressText(page))
 }
 
-async function waitForBumperFundingGateToClear(page: Page, timeout = 120_000): Promise<void> {
+async function isWaitingForStepConfirmation(page: Page): Promise<boolean> {
+  const progress = page.getByTestId('unilateral-exit-step-progress')
+  if (!(await progress.isVisible())) {
+    return false
+  }
+  return progress.getByText(/waiting for confirmation/i).isVisible()
+}
+
+/** Ignore ticking wait-duration labels so stuck detection cannot be reset every second. */
+function normalizeStepProgressForComparison(progressText: string): string {
+  return progressText
+    .replace(/\s+— waiting for confirmation \(.*\)$/i, '')
+    .replace(/\s+— proceeding automatically$/i, '')
+    .trim()
+}
+
+async function batchFeeShowsInsufficientBumper(page: Page): Promise<boolean> {
+  const bumperBalance = page.getByTestId('unilateral-exit-bumper-balance')
+  if (!(await bumperBalance.isVisible())) {
+    return false
+  }
+  const insufficientBanner = page.getByText('Insufficient bumper balance.')
+  return await insufficientBanner.isVisible()
+}
+
+async function waitForBumperFundingGateToClear(page: Page, timeout = 180_000): Promise<void> {
   await expect(async () => {
-    if (await batchFeeShowsInsufficientBumper(page)) {
-      const batchFeeText = (await page.getByTestId('unilateral-exit-batch-fee').textContent()) ?? ''
-      throw new Error(`Bumper still insufficient: ${batchFeeText}`)
+    await page.getByRole('button', { name: /Medium/i }).click()
+    const balanceSats = await readBumperBalanceSats(page)
+    const insufficient = await batchFeeShowsInsufficientBumper(page)
+    if (insufficient && (balanceSats ?? 0) < 50_000) {
+      throw new Error('Bumper still insufficient after funding')
     }
   }).toPass({ timeout })
+}
+
+async function refreshBatchEstimate(page: Page): Promise<void> {
+  await page.getByRole('button', { name: /Medium/i }).click()
+  await waitForBumperFundingGateToClear(page)
+}
+
+async function readBumperBalanceSats(page: Page): Promise<number | null> {
+  const bumperBalance = page.getByTestId('unilateral-exit-bumper-balance')
+  if (!(await bumperBalance.isVisible())) {
+    return null
+  }
+  const text = (await bumperBalance.textContent()) ?? ''
+  const match = text.match(/([\d.]+)/)
+  if (match == null) {
+    return null
+  }
+  return Math.round(parseFloat(match[1]) * 100_000_000)
+}
+
+async function topUpBumperIfDepleted(page: Page, bumperTopUps: { count: number }): Promise<boolean> {
+  const pauseText = await readAutomationPauseText(page)
+  const pausedForBumper = pauseText?.toLowerCase().includes('insufficient bumper') ?? false
+  const insufficientBanner = await batchFeeShowsInsufficientBumper(page)
+  if (!pausedForBumper && !insufficientBanner) {
+    return false
+  }
+
+  bumperTopUps.count += 1
+  if (bumperTopUps.count > 5) {
+    throw new Error(
+      `Bumper recovery failed after ${bumperTopUps.count} top-ups (last pause: ${pauseText ?? 'insufficient banner'})`,
+    )
+  }
+  await topUpBumperAndRefreshBatchEstimate(page)
+  return true
 }
 
 async function topUpBumperAndRefreshBatchEstimate(page: Page): Promise<void> {
   await mineRegtestBlocks(2)
   await ensureOnChainBumperFunds(page, REG07_BUMPER_FUNDING_SATS)
-  await waitForBumperFundingGateToClear(page)
-  await page.getByRole('button', { name: /Medium/i }).click()
-  await waitForBumperFundingGateToClear(page)
+  await expect
+    .poll(async () => readBumperBalanceSats(page), { timeout: 60_000 })
+    .toBeGreaterThan(50_000)
+  await refreshBatchEstimate(page)
 }
 
 async function readExitErrorToastText(page: Page): Promise<string | null> {
@@ -83,8 +164,21 @@ async function isAutomationPaused(page: Page): Promise<boolean> {
   return page.getByTestId('unilateral-exit-automation-paused').isVisible()
 }
 
+async function clearAutomationPause(page: Page): Promise<void> {
+  await refreshBatchEstimate(page)
+  await expect(page.getByTestId('unilateral-exit-automation-paused')).not.toBeVisible({
+    timeout: 60_000,
+  })
+  await expect
+    .poll(async () => readExitErrorToastText(page), { timeout: 15_000 })
+    .toBeNull()
+}
+
 /** Returns true when automation was paused or errored and we attempted recovery. */
-async function recoverFromRetryableAutomationFailure(page: Page): Promise<boolean> {
+async function recoverFromRetryableAutomationFailure(
+  page: Page,
+  recoveryAttempts: { count: number },
+): Promise<boolean> {
   const pauseText = await readAutomationPauseText(page)
   const toastText = await readExitErrorToastText(page)
   const failureText = pauseText ?? toastText
@@ -94,15 +188,32 @@ async function recoverFromRetryableAutomationFailure(page: Page): Promise<boolea
   }
 
   if (!isRecoverableAutomationPause(failureText)) {
-    throw new Error(failureText || 'Automatic unilateral exit failed')
+    await failUnilateralExit(page, failureText || 'Automatic unilateral exit failed')
   }
 
-  await topUpBumperAndRefreshBatchEstimate(page)
-  const paused = page.getByTestId('unilateral-exit-automation-paused')
-  await expect(paused).not.toBeVisible({ timeout: 60_000 })
-  await expect
-    .poll(async () => readExitErrorToastText(page), { timeout: 15_000 })
-    .toBeNull()
+  recoveryAttempts.count += 1
+  if (recoveryAttempts.count > MAX_AUTOMATION_RECOVERY_ATTEMPTS) {
+    await failUnilateralExit(
+      page,
+      `Automatic unilateral exit failed after ${MAX_AUTOMATION_RECOVERY_ATTEMPTS} recovery attempts: ${failureText}`,
+    )
+  }
+
+  if (/insufficient bumper/i.test(failureText)) {
+    await topUpBumperAndRefreshBatchEstimate(page)
+    await expect(page.getByTestId('unilateral-exit-automation-paused')).not.toBeVisible({
+      timeout: 180_000,
+    })
+  } else if (/sendrawtransaction RPC error|code.:.-2[56]/i.test(failureText)) {
+    await mineRegtestBlocks(5)
+    if ((await readBumperBalanceSats(page) ?? 0) < 50_000) {
+      await topUpBumperAndRefreshBatchEstimate(page)
+    }
+  } else {
+    await mineRegtestBlocks(5)
+  }
+
+  await clearAutomationPause(page)
   return true
 }
 
@@ -112,7 +223,7 @@ async function assertNoAutomationOrExitError(page: Page): Promise<void> {
     if (isRecoverableAutomationPause(pauseText)) {
       return
     }
-    throw new Error(pauseText)
+    await failUnilateralExit(page, pauseText)
   }
 
   const toastText = await readExitErrorToastText(page)
@@ -120,12 +231,12 @@ async function assertNoAutomationOrExitError(page: Page): Promise<void> {
     if (isRecoverableAutomationPause(toastText)) {
       return
     }
-    throw new Error(toastText)
+    await failUnilateralExit(page, toastText)
   }
 }
 
 /** Select every leaf node on the unilateral exit tree graph for a multi-VTXO batch. */
-export async function selectAllUnilateralExitLeafNodes(page: Page): Promise<void> {
+export async function selectAllUnilateralExitLeafNodes(page: Page): Promise<number> {
   const leafNodes = page.locator('[data-testid^="unilateral-exit-leaf-node-"]')
   await expect(leafNodes.first()).toBeVisible({ timeout: 120_000 })
   const leafCount = await leafNodes.count()
@@ -141,6 +252,57 @@ export async function selectAllUnilateralExitLeafNodes(page: Page): Promise<void
     }
     await expect(leafSelectSwitch).toBeChecked()
   }
+
+  return leafCount
+}
+
+/**
+ * Intermediate virtual txs may still host exitable VTXO outpoints after a chained self-send,
+ * but only terminal branch leaves may be selected for unilateral exit.
+ */
+export async function assertIntermediateNodesShowExitableOutpointsButAreNotLeafSelection(
+  page: Page,
+  preconfirmedVtxoCount: number,
+): Promise<void> {
+  const graph = page.getByTestId('unilateral-exit-tree-graph')
+  await expect(graph).toBeVisible({ timeout: 120_000 })
+
+  const leafHostCount = await graph.locator('[data-testid^="unilateral-exit-leaf-node-"]').count()
+  expect(
+    preconfirmedVtxoCount,
+    'Expected more preconfirmed VTXOs than terminal leaf hosts (upstream hosts must be excluded)',
+  ).toBeGreaterThan(leafHostCount)
+
+  const intermediateGraphNodes = graph.locator('[data-testid^="unilateral-exit-node-"]')
+  await expect(intermediateGraphNodes.first()).toBeVisible({ timeout: 120_000 })
+
+  const intermediateCount = await intermediateGraphNodes.count()
+  let intermediateHostsVerified = 0
+
+  for (let index = 0; index < intermediateCount; index += 1) {
+    const node = intermediateGraphNodes.nth(index)
+    const nodeLabel = await node.getAttribute('aria-label')
+    if (nodeLabel !== 'ark node' && nodeLabel !== 'tree node') {
+      continue
+    }
+    if ((await node.getByLabel(/exitable VTXO/i).count()) === 0) {
+      continue
+    }
+    await node.click()
+    await expect(page.getByTestId('unilateral-exit-node-detail')).toBeVisible({ timeout: 30_000 })
+    const showsNodeOutpoints = await page.getByText('VTXO outpoints on this node').isVisible()
+    const leafSelectVisible = await page
+      .getByTestId('unilateral-exit-leaf-select-switch')
+      .isVisible()
+    if (showsNodeOutpoints && !leafSelectVisible) {
+      intermediateHostsVerified += 1
+    }
+  }
+
+  expect(
+    intermediateHostsVerified,
+    'Expected at least one intermediate ark/tree host with exitable VTXO outpoints that cannot be selected for exit',
+  ).toBeGreaterThanOrEqual(1)
 }
 
 async function ensureAutomaticUnilateralExitMode(page: Page): Promise<void> {
@@ -167,22 +329,38 @@ export async function runAutomaticUnilateralUnrollUntilBranchComplete(page: Page
   await startButton.click()
   await confirmStartUnilateralExitIfShown(page)
 
+  await expect(async () => {
+    const progressText = await readStepProgressText(page)
+    const automationPaused = await isAutomationPaused(page)
+    if (!progressText.trim() && !automationPaused && !(await isBranchComplete(page))) {
+      throw new Error('Waiting for unilateral exit step progress or automation pause banner')
+    }
+  }).toPass({ timeout: 120_000 })
+
   const deadlineMs = Date.now() + AUTOMATIC_UNROLL_DEADLINE_MS
+  const recoveryAttempts = { count: 0 }
   let sawProceedingAutomatically = false
-  let lastProgressText = await readStepProgressText(page)
+  let lastProgressText = await readStepProgressSignature(page)
   let minesWithoutProgress = 0
+  let waitConfirmationMines = 0
+  let bumperTopUps = { count: 0 }
 
   while (Date.now() < deadlineMs) {
-    const recoveredFromFailure = await recoverFromRetryableAutomationFailure(page)
+    const recoveredFromFailure = await recoverFromRetryableAutomationFailure(
+      page,
+      recoveryAttempts,
+    )
     if (recoveredFromFailure) {
       minesWithoutProgress = 0
-      lastProgressText = await readStepProgressText(page)
+      lastProgressText = await readStepProgressSignature(page)
       continue
     }
     if (await batchFeeShowsInsufficientBumper(page)) {
-      await topUpBumperAndRefreshBatchEstimate(page)
-      minesWithoutProgress = 0
-      lastProgressText = await readStepProgressText(page)
+      if (await topUpBumperIfDepleted(page, bumperTopUps)) {
+        minesWithoutProgress = 0
+        lastProgressText = await readStepProgressSignature(page)
+        continue
+      }
     }
 
     await assertNoAutomationOrExitError(page)
@@ -191,21 +369,61 @@ export async function runAutomaticUnilateralUnrollUntilBranchComplete(page: Page
       return
     }
 
-    const progressText = await readStepProgressText(page)
-    if (/proceeding automatically|waiting for confirmation/i.test(progressText)) {
+    const rawProgressText = await readStepProgressText(page)
+    const progressText = await readStepProgressSignature(page)
+    if (/proceeding automatically|waiting for confirmation/i.test(rawProgressText)) {
       sawProceedingAutomatically = true
     }
 
-    if ((await startButton.isVisible()) && (await startButton.isEnabled())) {
-      throw new Error(
+    const automationOn = await page.getByTestId('unilateral-exit-proceed-automatically').isChecked()
+    if (
+      automationOn &&
+      (await startButton.isVisible()) &&
+      (await startButton.isEnabled()) &&
+      !(await isAutomationPaused(page))
+    ) {
+      await failUnilateralExit(
+        page,
         'Manual Start/Proceed re-enabled during automation — runner should advance steps without extra clicks',
       )
     }
 
+    const waitingForConfirmation = await isWaitingForStepConfirmation(page)
+    if (waitingForConfirmation) {
+      if (await batchFeeShowsInsufficientBumper(page)) {
+        await topUpBumperAndRefreshBatchEstimate(page)
+        waitConfirmationMines = 0
+        continue
+      }
+      if (
+        waitConfirmationMines >= 15 &&
+        /Step \d+ of \d+/i.test(rawProgressText)
+      ) {
+        const proceedButton = page.getByTestId('unilateral-exit-proceed')
+        if (await proceedButton.isEnabled()) {
+          await proceedButton.click()
+          waitConfirmationMines = 0
+          continue
+        }
+      }
+      await mineRegtestBlocks(2)
+      waitConfirmationMines += 1
+      if (waitConfirmationMines >= 60) {
+        await failUnilateralExit(
+          page,
+          `Step stayed in "waiting for confirmation" after ${waitConfirmationMines * 2} mined blocks. ` +
+            `Last progress: "${rawProgressText || '(empty)'}"`,
+        )
+      }
+      continue
+    }
+    waitConfirmationMines = 0
+
     if (progressText === lastProgressText) {
       minesWithoutProgress += 1
       if (minesWithoutProgress >= MAX_MINES_WITHOUT_PROGRESS) {
-        throw new Error(
+        await failUnilateralExit(
+          page,
           `Automatic unilateral unroll stuck after ${minesWithoutProgress} mined blocks without step progress change. ` +
             `Last progress: "${progressText || '(empty)'}"`,
         )
@@ -218,7 +436,8 @@ export async function runAutomaticUnilateralUnrollUntilBranchComplete(page: Page
     await mineRegtestBlocks(2)
   }
 
-  throw new Error(
+  await failUnilateralExit(
+    page,
     `Automatic unilateral unroll timed out before branch complete (last progress: "${await readStepProgressText(page)}", sawAutomationProgress: ${sawProceedingAutomatically})`,
   )
 }

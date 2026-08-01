@@ -1,0 +1,126 @@
+feature:
+  name: Authentication
+  description: "Simple admin authentication with initial setup, session-based login, password change, and logout"
+  user_stories:
+    - As a first-time deployer, I want to set up an initial admin account
+    - As an admin, I want to log in with my credentials
+    - As an admin, I want to change my password
+    - As an admin, I want to log out
+
+  flows:
+    - Initial Admin Setup:
+      - description: "One-time creation of the first admin user, only available when no users exist"
+      - endpoint: POST /api/initial_password
+      - request_body:
+        - username: string (required)
+        - password: string (required)
+        - password_confirmation: string (required)
+      - behavior:
+        - Returns 400 if users already exist
+        - Returns 400 if passwords do not match
+        - Returns 400 if password has fewer than 12 non-space characters
+        - Returns 400 if password exceeds 128 characters
+        - On success, creates the admin user with Argon2id-hashed password and returns 201
+      - related_endpoint:
+        - GET /api/users/exists — returns { users_exist: bool } to check whether setup is needed
+
+    - Login:
+      - description: "Credential-based login that creates a server-side session"
+      - endpoint: POST /api/login
+      - request_body:
+        - username: string (required)
+        - password: string (required)
+      - behavior:
+        - Returns 401 with error JSON on invalid credentials
+        - On success, creates a session (stored in Redis, 1h expiry) and returns 200 with success JSON
+      - related_endpoint:
+        - GET /api/auth/me — returns current session status for auth checks
+
+    - Session Handling:
+      - description: "Server-side sessions via Redis with cookie-based session IDs"
+      - behavior:
+        - Sessions are managed by tower-sessions with a Redis store
+        - Session cookie expires after 1 hour
+        - Protected admin routes use middleware that checks for a valid session
+
+    - Change Password:
+      - description: "Authenticated password change requiring current password verification"
+      - endpoint: POST /api/admin/password
+      - requirements:
+        - Authentication: Admin (returns 401 if not logged in)
+      - request_body:
+        - current_password: string (required)
+        - new_password: string (required)
+        - new_password_check: string (required)
+      - behavior:
+        - Returns 401 if current password is incorrect
+        - Returns 400 if new password fields do not match
+        - Returns 400 if new password has fewer than 12 non-space characters
+        - Returns 400 if new password exceeds 128 characters
+        - On success, updates the password hash and returns 200
+
+    - Logout:
+      - description: "Destroys the current session"
+      - endpoint: POST /api/admin/logout
+      - requirements:
+        - Authentication: Admin (returns 401 if not logged in)
+      - behavior:
+        - Clears the session and cycles the session ID
+        - Returns 200 with success JSON
+
+  password_policy:
+    - Hashing: Argon2id
+    - Minimum length: 12 non-space characters
+    - Maximum length: 128 characters
+
+  pages:
+    - InitialPassword:
+      - description: "First-time admin setup page, shown when no users exist"
+      - path: /initial-password
+      - file: frontend/src/pages/InitialPassword.tsx
+      - visible_elements:
+        - warning alert: "Store username and password immediately!"
+        - title: "Set Initial Admin Password"
+        - form fields:
+          - username (pre-filled with "admin")
+          - password
+          - confirm password
+        - create admin user button
+          - click_event:
+            - client-side validation (match, length)
+            - on success: navigate to /login
+
+    - Login:
+      - description: "Admin login page"
+      - path: /login
+      - file: frontend/src/pages/Login.tsx
+      - visible_elements:
+        - title: "Login"
+        - form fields:
+          - username
+          - password
+        - login button
+          - click_event:
+            - on success: verify session via /api/auth/me, then navigate to /admin/dashboard
+            - on error: shows error alert
+
+    - AdminPassword:
+      - description: "Change password page for authenticated admins"
+      - path: /admin/password
+      - file: frontend/src/pages/AdminPassword.tsx
+      - requirements:
+        - Authentication: Admin
+      - visible_elements:
+        - title: "Change Password"
+        - form fields:
+          - current password
+          - new password
+          - confirm new password
+        - change password button
+          - click_event:
+            - client-side validation (match, length)
+            - on success: shows success alert, resets form
+            - on error: shows error alert
+        - back button
+          - click_event:
+            - navigate to /admin/dashboard

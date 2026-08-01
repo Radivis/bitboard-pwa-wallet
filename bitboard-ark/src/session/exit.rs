@@ -7,6 +7,7 @@ use ark_core::server::VirtualTxOutPoint;
 use ark_core::{ExplorerUtxo, Vtxo, VtxoList};
 use bitcoin::{Amount, ScriptBuf, Txid, secp256k1::rand::rngs::OsRng};
 
+use super::open::sync_onchain_wallet_with_retries;
 use crate::api_types::{
     COLLABORATIVE_EXIT_ESTIMATE_ERROR_INSUFFICIENT_COOPERATIVE_INPUTS,
     CollaborativeExitFeeEstimateDto, CollaborativeExitParams, CompleteUnilateralExitParams,
@@ -526,7 +527,7 @@ impl ArkSession {
         // here the unilateral-exit dialog would report a stale session-open balance and ignore any
         // funds the user added afterwards. Re-sync before reading so both the displayed balance and
         // the `bumper_sufficient` gate (which goes through this) reflect current on-chain funds.
-        self.client.sync_onchain_wallet().await?;
+        sync_onchain_wallet_with_retries(&self.client).await?;
         let address = self.client.onchain_wallet_address()?;
         let balance = self.client.onchain_wallet_balance()?;
         let server_info = self.client.server_info()?;

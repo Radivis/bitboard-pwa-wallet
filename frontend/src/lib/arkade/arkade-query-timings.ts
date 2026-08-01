@@ -32,3 +32,54 @@ export const ARKADE_EXIT_CANDIDATES_POLL_MS = 5_000
 
 /** Rarely changing metadata (boarding address, delegator info). */
 export const ARKADE_SLOW_METADATA_STALE_MS = 300_000
+
+/** Automatic unilateral-exit runner: poll while waiting for step confirmation (production). */
+export const UNILATERAL_EXIT_AUTOMATION_WAIT_POLL_MS = 15_000
+
+/** Re-broadcast a step when Esplora still reports 0 confirmations (production, 30 minutes). */
+export const UNILATERAL_EXIT_AUTOMATION_STEP_REBROADCAST_WAIT_SECS = 1_800
+
+/** Regtest / E2E: faster poll while steps confirm against a local Esplora. */
+export const UNILATERAL_EXIT_AUTOMATION_WAIT_POLL_MS_REGTEST = 2_000
+
+/** Regtest / E2E: retry broadcast sooner when a step tx never appears on chain. */
+export const UNILATERAL_EXIT_AUTOMATION_STEP_REBROADCAST_WAIT_SECS_REGTEST = 45
+
+export function unilateralExitAutomationWaitPollMs(
+  networkMode: string,
+): number {
+  return networkMode === 'regtest'
+    ? UNILATERAL_EXIT_AUTOMATION_WAIT_POLL_MS_REGTEST
+    : UNILATERAL_EXIT_AUTOMATION_WAIT_POLL_MS
+}
+
+export function unilateralExitAutomationStepRebroadcastWaitSecs(
+  networkMode: string,
+): number {
+  return networkMode === 'regtest'
+    ? UNILATERAL_EXIT_AUTOMATION_STEP_REBROADCAST_WAIT_SECS_REGTEST
+    : UNILATERAL_EXIT_AUTOMATION_STEP_REBROADCAST_WAIT_SECS
+}
+
+/** Progress query poll while a step is waiting for confirmation (production). */
+export const UNILATERAL_EXIT_PROGRESS_POLL_MS = 3_000
+
+/** Progress query poll while phase is idle but the exit job is still active (production). */
+export const UNILATERAL_EXIT_PROGRESS_IDLE_POLL_MS = 15_000
+
+/** Regtest / E2E: poll progress frequently so automation and Playwright see step advances. */
+export const UNILATERAL_EXIT_PROGRESS_POLL_MS_REGTEST = 2_000
+
+export const UNILATERAL_EXIT_PROGRESS_IDLE_POLL_MS_REGTEST = 2_000
+
+export function unilateralExitProgressPollMs(networkMode: string): number {
+  return networkMode === 'regtest'
+    ? UNILATERAL_EXIT_PROGRESS_POLL_MS_REGTEST
+    : UNILATERAL_EXIT_PROGRESS_POLL_MS
+}
+
+export function unilateralExitProgressIdlePollMs(networkMode: string): number {
+  return networkMode === 'regtest'
+    ? UNILATERAL_EXIT_PROGRESS_IDLE_POLL_MS_REGTEST
+    : UNILATERAL_EXIT_PROGRESS_IDLE_POLL_MS
+}

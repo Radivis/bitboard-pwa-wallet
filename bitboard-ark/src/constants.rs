@@ -25,6 +25,35 @@ pub const VTXO_SELF_RENEW_REMAINING_FRACTION: f64 = 0.10;
 /// Estimated vsize of a unilateral-exit child transaction for fee lower-bound estimates.
 pub const UNILATERAL_EXIT_CHILD_VSIZE_VB: u64 = 140;
 
+/// Bitcoin witness scale factor (non-witness bytes count 4× toward block weight).
+const BITCOIN_WITNESS_SCALE_FACTOR: u64 = 4;
+
+// CPFP bump-child weight estimates — mirrors ark-core [`build_anchor_tx`].
+
+/// Non-witness serialized bytes of a P2TR keyspend input (bumper wallet spend).
+const UNILATERAL_EXIT_BUMP_CHILD_P2TR_KEYSPEND_NON_WITNESS_BYTES: u64 = 57;
+/// Witness bytes of a P2TR keyspend input (Schnorr signature).
+const UNILATERAL_EXIT_BUMP_CHILD_P2TR_KEYSPEND_WITNESS_BYTES: u64 = 64;
+/// Weight of the bumper P2TR keyspend input in the CPFP child transaction.
+pub(crate) const UNILATERAL_EXIT_BUMP_CHILD_P2TR_KEYSPEND_INPUT_WEIGHT: u64 =
+    UNILATERAL_EXIT_BUMP_CHILD_P2TR_KEYSPEND_NON_WITNESS_BYTES * BITCOIN_WITNESS_SCALE_FACTOR
+        + UNILATERAL_EXIT_BUMP_CHILD_P2TR_KEYSPEND_WITNESS_BYTES;
+
+/// Non-witness serialized bytes of the nested P2WSH input spending the parent P2A anchor.
+const UNILATERAL_EXIT_BUMP_CHILD_NESTED_P2WSH_NON_WITNESS_BYTES: u64 = 91;
+/// Witness bytes of the nested P2WSH input (minimal witness stack).
+const UNILATERAL_EXIT_BUMP_CHILD_NESTED_P2WSH_WITNESS_BYTES: u64 = 3;
+/// Weight of the nested P2WSH anchor input in the CPFP child transaction.
+pub(crate) const UNILATERAL_EXIT_BUMP_CHILD_NESTED_P2WSH_INPUT_WEIGHT: u64 =
+    UNILATERAL_EXIT_BUMP_CHILD_NESTED_P2WSH_NON_WITNESS_BYTES * BITCOIN_WITNESS_SCALE_FACTOR
+        + UNILATERAL_EXIT_BUMP_CHILD_NESTED_P2WSH_WITNESS_BYTES;
+
+/// Serialized bytes of the P2TR output in the CPFP child transaction.
+const UNILATERAL_EXIT_BUMP_CHILD_P2TR_OUTPUT_SERIALIZED_BYTES: u64 = 43;
+/// Weight of the P2TR output in the CPFP child transaction.
+pub(crate) const UNILATERAL_EXIT_BUMP_CHILD_P2TR_OUTPUT_WEIGHT: u64 =
+    UNILATERAL_EXIT_BUMP_CHILD_P2TR_OUTPUT_SERIALIZED_BYTES * BITCOIN_WITNESS_SCALE_FACTOR;
+
 /// Confirmations required on the leaf virtual tx before marking `is_unrolled`.
 pub const UNILATERAL_EXIT_LEAF_CONFIRMATIONS: u32 = 6;
 

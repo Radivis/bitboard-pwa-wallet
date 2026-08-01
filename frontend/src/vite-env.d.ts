@@ -52,4 +52,8 @@ interface Window {
   __e2eGetOperatorTrustStatus?: () => Promise<
     import('@/workers/arkade-api').ArkadeOperatorTrustStatus
   >
+  /** DEV + `VITE_E2E_ARKADE_REGTEST`: WASM + UI snapshot for unilateral-exit / Esplora debugging. */
+  __e2eExportUnilateralExitDebugSnapshot?: () => Promise<
+    import('@/lib/arkade/e2e/e2e-arkade-regtest-control').E2eUnilateralExitDebugSnapshot
+  >
 }

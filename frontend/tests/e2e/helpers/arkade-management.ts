@@ -10,6 +10,7 @@ import { importWalletViaUI, TEST_PASSWORD } from './wallet-setup'
 import { goToWalletTab } from './wallet-nav'
 import {
   fundRegtestAddress,
+  fundRegtestWalletReceiveAddress,
   waitForConfirmedBalance,
 } from './regtest'
 import {
@@ -216,6 +217,6 @@ export async function ensureOnChainBumperFunds(page: Page, sats: number): Promis
   if (!address?.startsWith('bcrt1')) {
     throw new Error(`Expected regtest bumper address, got: ${address}`)
   }
-  await fundRegtestAddress(address, sats)
-  await waitForConfirmedBalance(address, sats)
+  // Faucet --confirm mines once; mine again so Esplora exposes block_hash + block_time for BDK.
+  await fundRegtestWalletReceiveAddress(address, sats)
 }

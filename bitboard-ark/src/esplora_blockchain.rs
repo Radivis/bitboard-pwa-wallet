@@ -103,6 +103,8 @@ impl EsploraBlockchain {
     ///
     /// Unlike [`Self::find_tx_at`], this does not fall back to JSON-only `/tx/{txid}` entries that
     /// arkade-regtest serves for virtual-tree artifacts before they are relayed.
+    ///
+    /// See `docs/arkade-regtest-esplora-quirks.md` — use for **broadcast gating only**, not step completion.
     pub async fn is_tx_relayed_on_network(&self, txid: &Txid) -> ArkResult<bool> {
         let client = Arc::clone(&self.client);
         let txid = *txid;
@@ -352,17 +354,77 @@ async fn confirmations_from_esplora_tx_status(
     if !status.confirmed {
         return Ok(0);
     }
+    confirmations_from_block_height(client, status.block_height).await
+}
+
+async fn confirmations_from_block_height(
+    client: &EsploraAsyncClient,
+    block_height: Option<u32>,
+) -> Result<u64, ark_client::Error> {
     let chain_tip_height = client
         .get_height()
         .await
         .map_err(EsploraBlockchain::map_esplora_error)
         .ok();
-    match (status.block_height, chain_tip_height) {
+    match (block_height, chain_tip_height) {
         (Some(block_height), Some(tip_height)) => {
             Ok(u64::from(tip_height.saturating_sub(block_height) + 1))
         }
         _ => Ok(1),
     }
+}
+
+async fn confirmations_from_merkle_proof(
+    client: &EsploraAsyncClient,
+    txid: &Txid,
+) -> Result<Option<u64>, ark_client::Error> {
+    let proof = match client.get_merkle_proof(txid).await {
+        Ok(proof) => proof,
+        Err(esplora_client::Error::HttpResponse { status: 404, .. }) => return Ok(None),
+        Err(esplora_client::Error::HttpResponse { status: 500, .. }) => return Ok(None),
+        Err(error) if is_missing_tx_esplora_error(&error) => return Ok(None),
+        Err(error) => return Err(EsploraBlockchain::map_esplora_error(error)),
+    };
+    let Some(proof) = proof else {
+        return Ok(None);
+    };
+    confirmations_from_block_height(client, Some(proof.block_height))
+        .await
+        .map(Some)
+}
+
+fn is_missing_tx_esplora_error(error: &esplora_client::Error) -> bool {
+    match error {
+        esplora_client::Error::HttpResponse { message, .. } => {
+            let lowered = message.to_ascii_lowercase();
+            lowered.contains("no such mempool or blockchain transaction")
+        }
+        _ => false,
+    }
+}
+
+/// When `/status` is missing or still reports unconfirmed, consult relay + JSON status.
+/// Virtual-tree indexes can serve `confirmed: false` from `/status` even after a mined broadcast.
+async fn confirmations_for_relayed_tx(
+    client: &EsploraAsyncClient,
+    txid: &Txid,
+) -> Result<u64, ark_client::Error> {
+    let relayed = client
+        .get_tx(txid)
+        .await
+        .map_err(EsploraBlockchain::map_esplora_error)?
+        .is_some();
+    if !relayed {
+        return Ok(0);
+    }
+    let Some(tx_info) = client
+        .get_tx_info(txid)
+        .await
+        .map_err(EsploraBlockchain::map_esplora_error)?
+    else {
+        return Ok(0);
+    };
+    confirmations_from_esplora_tx_status(client, &tx_info.status).await
 }
 
 async fn map_tx_status(
@@ -379,27 +441,16 @@ async fn map_tx_confirmations(
     client: &EsploraAsyncClient,
     txid: &Txid,
 ) -> Result<u64, ark_client::Error> {
+    if let Some(confirmations) = confirmations_from_merkle_proof(client, txid).await? {
+        return Ok(confirmations);
+    }
+
     match client.get_tx_status(txid).await {
-        Ok(status) => confirmations_from_esplora_tx_status(client, &status).await,
-        Err(esplora_client::Error::HttpResponse { status: 404, .. }) => {
-            // arkade-regtest serves virtual-tree txs from JSON `/tx/{txid}` before they are relayed.
-            // Only count confirmations once `/tx/{txid}/raw` shows the tx is actually on the network.
-            let relayed = client
-                .get_tx(txid)
-                .await
-                .map_err(EsploraBlockchain::map_esplora_error)?
-                .is_some();
-            if !relayed {
-                return Ok(0);
-            }
-            let Some(tx_info) = client
-                .get_tx_info(txid)
-                .await
-                .map_err(EsploraBlockchain::map_esplora_error)?
-            else {
-                return Ok(0);
-            };
-            confirmations_from_esplora_tx_status(client, &tx_info.status).await
+        Ok(status) if status.confirmed => {
+            confirmations_from_esplora_tx_status(client, &status).await
+        }
+        Ok(_) | Err(esplora_client::Error::HttpResponse { status: 404, .. }) => {
+            confirmations_for_relayed_tx(client, txid).await
         }
         Err(error) => Err(EsploraBlockchain::map_esplora_error(error)),
     }
@@ -441,14 +492,27 @@ fn is_mempool_submitpackage_rpc_error(message: &str) -> bool {
 fn is_transaction_already_relayed_error(error: &esplora_client::Error) -> bool {
     match error {
         esplora_client::Error::HttpResponse { message, .. } => {
-            let lowered = message.to_ascii_lowercase();
-            lowered.contains("already in mempool")
-                || lowered.contains("txn-already-in-mempool")
-                || lowered.contains("txn-already-known")
-                || lowered.contains("already known")
+            is_already_relayed_broadcast_error_message(message)
         }
         _ => false,
     }
+}
+
+pub(crate) fn is_redundant_unilateral_exit_broadcast_error(error: &ark_client::Error) -> bool {
+    is_already_relayed_broadcast_error_message(&error.to_string())
+}
+
+fn is_already_relayed_broadcast_error_message(message: &str) -> bool {
+    let lowered = message.to_ascii_lowercase();
+    lowered.contains("already in mempool")
+        || lowered.contains("txn-already-in-mempool")
+        || lowered.contains("txn-already-known")
+        || lowered.contains("already known")
+        || lowered.contains("code\":-25")
+        || lowered.contains("code\": -25")
+        || lowered.contains("\"code\":-25")
+        || lowered.contains("\"code\": -25")
+        || (lowered.contains("sendrawtransaction") && lowered.contains("-25"))
 }
 
 fn validate_submit_package_result(
@@ -490,6 +554,7 @@ mod tests {
     use std::collections::HashMap;
 
     use super::is_mempool_submitpackage_rpc_error;
+    use super::is_missing_tx_esplora_error;
     use super::is_transaction_already_relayed_error;
     use super::utxo_confirmations;
     use super::validate_submit_package_result;
@@ -507,6 +572,25 @@ mod tests {
         let error = esplora_client::Error::HttpResponse {
             status: 400,
             message: "sendrawtransaction RPC error: txn-already-in-mempool".to_string(),
+        };
+        assert!(is_transaction_already_relayed_error(&error));
+    }
+
+    #[test]
+    fn missing_tx_esplora_error_is_detected() {
+        let error = esplora_client::Error::HttpResponse {
+            status: 500,
+            message: r#"{"error":"No such mempool or blockchain transaction. Use gettransaction for wallet transactions."}"#
+                .to_string(),
+        };
+        assert!(is_missing_tx_esplora_error(&error));
+    }
+
+    #[test]
+    fn rpc_minus_25_broadcast_error_is_treated_as_already_relayed() {
+        let error = esplora_client::Error::HttpResponse {
+            status: 400,
+            message: r#"{"error":"sendrawtransaction RPC error: {\"code\":-25}"}"#.to_string(),
         };
         assert!(is_transaction_already_relayed_error(&error));
     }

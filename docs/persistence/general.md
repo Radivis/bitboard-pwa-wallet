@@ -60,7 +60,7 @@ Stores without `persist` hold session-only UI state (e.g. `unilateralExitControl
 | `near_zero_security_active` | `'1'` when mode is on |
 | `near_zero_wrapped_session_secret` | Random session secret wrapped with fixed passphrase `!Near 0 Security!` |
 
-The in-memory flag lives in `nearZeroSecurityStore` (not persisted itself). Documented as offering no meaningful security — convenience for local development only.
+The in-memory flag lives in `nearZeroSecurityStore` (not persisted itself). Documented as offering no meaningful security — convenience for local development or quick app tests only.
 
 ## Library persistence
 

@@ -1,0 +1,38 @@
+feature:
+  name: Lab
+  description: "In-app regtest/lab network for testing: mine blocks, create transactions, send from wallet"
+  user_stories:
+    - As a user, I want to switch to the lab network so I can test without real funds
+    - As a user, I want to mine blocks to a named address or to my wallet so I can get test UTXOs
+    - As a user, I want to create a transaction from one lab address to another (name-to-name or wallet) so I can simulate payments
+    - As a user, I want to send from my loaded wallet in the lab so I can test the full send flow on regtest
+    - As a user, I want to see lab state (blocks, mempool, addresses, UTXOs) and transaction details
+  requirements:
+    - Lab state is persisted (blocks, utxos, addresses, mempool) and restored when returning to lab
+    - Mining and transaction building use the same WASM as the main crypto worker (lab_* functions)
+    - Wallet send in lab is orchestrated on the main thread (lab prepare → crypto buildAndSignLabTransaction → lab addSignedTransaction)
+  pages:
+    - LabIndex:
+      - description: "Lab network view: mine blocks, view state, create transactions"
+      - path: /lab
+      - file: frontend/src/routes/lab/index.tsx
+      - visible_elements:
+        - network indicator showing Lab
+        - mine blocks section (block count, target address/name/wallet, mine button)
+          - click_event:
+            - mine one or more blocks to the chosen target
+        - addresses / UTXOs list
+        - create transaction (from, to, amount, fee rate)
+          - click_event:
+            - create tx and add to mempool
+        - mempool and recent transactions
+        - link or navigation to send page for "send from wallet" in lab
+      - requirements:
+        - Wallet can be loaded for "mine to wallet" and "send from wallet"
+    - LabTxDetail:
+      - description: "Transaction detail view in lab"
+      - path: /lab/tx/:txid
+      - file: frontend/src/routes/lab/tx.$txid.tsx
+      - visible_elements:
+        - txid, block height, confirmations
+        - inputs and outputs with addresses and amounts

@@ -62,6 +62,8 @@ import {
   ARKADE_FEE_ESTIMATE_STALE_MS,
   ARKADE_SESSION_POLL_STALE_MS,
   ARKADE_SLOW_METADATA_STALE_MS,
+  unilateralExitProgressIdlePollMs,
+  unilateralExitProgressPollMs,
 } from '@/lib/arkade/arkade-query-timings'
 import { usePeriodicSyncRefetchInterval } from '@/lib/wallet/periodic-sync/usePeriodicSyncRefetchInterval'
 import {
@@ -846,6 +848,9 @@ export function useArkadeBumperInfoQuery(enabled: boolean) {
     enabled: enabled && sessionReady,
     queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().getOnchainBumperInfo()),
     staleTime: ARKADE_SESSION_POLL_STALE_MS,
+    // Mid-unroll bumper top-ups land on-chain after session open; poll until the wallet reflects them.
+    refetchInterval: (query) =>
+      (query.state.data?.balanceSats ?? 0) === 0 ? ARKADE_BUMPER_FUNDING_POLL_MS : false,
   })
 }
 
@@ -1520,15 +1525,26 @@ export function useArkadeUnilateralExitBatchEstimateQuery(params: {
   })
 }
 
+const ARKADE_UNILATERAL_EXIT_PROGRESS_POLL_MS = 3_000
+const ARKADE_UNILATERAL_EXIT_PROGRESS_IDLE_POLL_MS = 15_000
+
 export function useArkadeUnilateralExitProgressQuery(params: {
   enabled: boolean
   vtxoOutpoints: ArkadeVtxoOutpoint[]
+  /** When true, poll at the active-job interval even if WASM reports phase idle. */
+  unilateralExitJobActive?: boolean
 }) {
   const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
     useArkadeQueryBase()
   const sortedOutpoints = sortArkadeVtxoOutpoints(params.vtxoOutpoints)
   const enabled =
     params.enabled && sessionReady && sortedOutpoints.length > 0
+  const progressPollMs = isArkadeSupportedNetworkMode(networkMode)
+    ? unilateralExitProgressPollMs(networkMode)
+    : ARKADE_UNILATERAL_EXIT_PROGRESS_POLL_MS
+  const progressIdlePollMs = isArkadeSupportedNetworkMode(networkMode)
+    ? unilateralExitProgressIdlePollMs(networkMode)
+    : ARKADE_UNILATERAL_EXIT_PROGRESS_IDLE_POLL_MS
 
   return useQuery({
     queryKey:
@@ -1549,7 +1565,28 @@ export function useArkadeUnilateralExitProgressQuery(params: {
           vtxoOutpoints: sortedOutpoints,
         }),
       ),
-    refetchInterval: enabled ? 15_000 : false,
+    refetchInterval: (query) => {
+      if (!enabled) {
+        return false
+      }
+      const progress = query.state.data
+      if (progress == null) {
+        return progressIdlePollMs
+      }
+      if (progress.phase === 'complete') {
+        return false
+      }
+      if (params.unilateralExitJobActive) {
+        return progressPollMs
+      }
+      if (
+        progress.phase === 'waiting' ||
+        progress.currentStepWaitingSince != null
+      ) {
+        return progressPollMs
+      }
+      return progressIdlePollMs
+    },
     staleTime: 0,
   })
 }

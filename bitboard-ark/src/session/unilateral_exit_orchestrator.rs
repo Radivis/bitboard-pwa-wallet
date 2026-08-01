@@ -12,11 +12,13 @@ use crate::api_types::{
     UnilateralExitTopologyParams,
 };
 use crate::constants::{
-    MIN_FEE_RATE_SAT_PER_VB, UNILATERAL_EXIT_CHILD_VSIZE_VB, UNILATERAL_EXIT_LEAF_CONFIRMATIONS,
-    UNILATERAL_EXIT_STEP_CONFIRMATION_POLL_INTERVAL_SECS, UNILATERAL_EXIT_STEP_CONFIRMATIONS,
+    MIN_FEE_RATE_SAT_PER_VB, UNILATERAL_EXIT_BUMP_CHILD_NESTED_P2WSH_INPUT_WEIGHT,
+    UNILATERAL_EXIT_BUMP_CHILD_P2TR_KEYSPEND_INPUT_WEIGHT,
+    UNILATERAL_EXIT_BUMP_CHILD_P2TR_OUTPUT_WEIGHT, UNILATERAL_EXIT_LEAF_CONFIRMATIONS,
+    UNILATERAL_EXIT_STEP_CONFIRMATIONS,
 };
 use crate::error::{ArkResult, ArkWasmError};
-use crate::esplora_blockchain::EsploraBlockchain;
+use crate::esplora_blockchain::{EsploraBlockchain, is_redundant_unilateral_exit_broadcast_error};
 use crate::outpoint::VirtualOutPoint;
 use crate::outpoint::{
     representative_virtual_tx_outpoint_for_leaf_tx, representative_vout_among_virtual_outpoints,
@@ -35,12 +37,6 @@ use super::unilateral_exit_branch_topology::{
     topology_host_outpoints, topology_leaf_outpoints, virtual_tx_type_hosts_exit_outpoints,
 };
 
-const OPERATOR_INDEXER_POLL_MAX: u8 = 60;
-
-fn step_confirmation_poll_delay() -> std::time::Duration {
-    std::time::Duration::from_secs(UNILATERAL_EXIT_STEP_CONFIRMATION_POLL_INTERVAL_SECS)
-}
-
 struct LeafUnilateralContext {
     leaf_txid: Txid,
     sibling_outpoints: Vec<VirtualOutPoint>,
@@ -56,16 +52,6 @@ struct UnilateralBatchPlan {
     tx_by_id: HashMap<Txid, Transaction>,
 }
 
-#[cfg(target_arch = "wasm32")]
-async fn sleep(duration: std::time::Duration) {
-    bitboard_wasm_sleep::sleep_for(duration).await;
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-async fn sleep(duration: std::time::Duration) {
-    tokio::time::sleep(duration).await;
-}
-
 /// Merge per-leaf exit branches into one serial order, deduping shared virtual txs.
 pub(crate) fn merge_exit_branch_txids(branch_lists: &[Vec<Txid>]) -> Vec<Txid> {
     let mut merged = Vec::new();
@@ -78,6 +64,33 @@ pub(crate) fn merge_exit_branch_txids(branch_lists: &[Vec<Txid>]) -> Vec<Txid> {
         }
     }
     merged
+}
+
+/// Mirrors ark-core [`build_anchor_tx`] package feerate targeting (parent + P2A bump child).
+pub(crate) fn estimate_unilateral_exit_package_fee_sats(
+    parent: &Transaction,
+    fee_rate_sat_per_vb: f64,
+) -> u64 {
+    let child_vsize = (UNILATERAL_EXIT_BUMP_CHILD_NESTED_P2WSH_INPUT_WEIGHT
+        + UNILATERAL_EXIT_BUMP_CHILD_P2TR_KEYSPEND_INPUT_WEIGHT
+        + UNILATERAL_EXIT_BUMP_CHILD_P2TR_OUTPUT_WEIGHT)
+        .div_ceil(4);
+    let package_vsize = child_vsize + parent.weight().to_vbytes_ceil();
+    (package_vsize as f64 * fee_rate_sat_per_vb).ceil() as u64
+}
+
+fn sum_package_fees_for_steps(
+    ordered_step_txids: &[Txid],
+    tx_by_id: &HashMap<Txid, Transaction>,
+    fee_rate_sat_per_vb: f64,
+    start_index: usize,
+) -> u64 {
+    ordered_step_txids
+        .iter()
+        .skip(start_index)
+        .filter_map(|txid| tx_by_id.get(txid))
+        .map(|parent| estimate_unilateral_exit_package_fee_sats(parent, fee_rate_sat_per_vb))
+        .sum()
 }
 
 /// Sibling VTXO outpoints on the same virtual leaf tx share one unroll branch.
@@ -266,32 +279,54 @@ impl ArkSession {
             .unwrap_or(MIN_FEE_RATE_SAT_PER_VB)
             .max(MIN_FEE_RATE_SAT_PER_VB);
 
-        let plan_result = self.build_unilateral_batch_plan(&virtual_outpoints).await;
-        let (projected_unroll_steps, estimate_error) = match plan_result {
-            Ok(plan) => (plan.ordered_step_txids.len().max(1) as u32, None),
-            Err(ArkWasmError::AutonomousExitMaterialsMissing) => (
-                0,
-                Some("Exit materials not prefetched for one or more VTXOs".to_string()),
-            ),
+        let plan = match self.build_unilateral_batch_plan(&virtual_outpoints).await {
+            Ok(plan) => plan,
+            Err(ArkWasmError::AutonomousExitMaterialsMissing) => {
+                return Ok(UnilateralExitBatchEstimateDto {
+                    projected_unroll_steps: 0,
+                    estimated_package_fee_sats: 0,
+                    fee_rate_sat_per_vb,
+                    bumper_balance_sats,
+                    bumper_sufficient: false,
+                    estimate_error: Some(
+                        "Exit materials not prefetched for one or more VTXOs".to_string(),
+                    ),
+                });
+            }
             Err(error) => return Err(error),
         };
 
-        let estimated_package_fee_sats = if estimate_error.is_none() {
-            (projected_unroll_steps as f64
-                * fee_rate_sat_per_vb
-                * UNILATERAL_EXIT_CHILD_VSIZE_VB as f64)
-                .ceil() as u64
-        } else {
-            0
-        };
+        let projected_unroll_steps = plan.ordered_step_txids.len().max(1) as u32;
+        let estimated_package_fee_sats = sum_package_fees_for_steps(
+            &plan.ordered_step_txids,
+            &plan.tx_by_id,
+            fee_rate_sat_per_vb,
+            0,
+        );
+
+        let first_incomplete = self
+            .first_incomplete_step_index(self.client.blockchain(), &plan.ordered_step_txids)
+            .await?;
+        let remaining_steps = plan
+            .ordered_step_txids
+            .len()
+            .saturating_sub(first_incomplete);
+        let estimated_remaining_fee_sats = sum_package_fees_for_steps(
+            &plan.ordered_step_txids,
+            &plan.tx_by_id,
+            fee_rate_sat_per_vb,
+            first_incomplete,
+        );
+        let bumper_sufficient =
+            remaining_steps == 0 || bumper_balance_sats >= estimated_remaining_fee_sats;
 
         Ok(UnilateralExitBatchEstimateDto {
             projected_unroll_steps,
             estimated_package_fee_sats,
             fee_rate_sat_per_vb,
             bumper_balance_sats,
-            bumper_sufficient: bumper_balance_sats >= estimated_package_fee_sats,
-            estimate_error,
+            bumper_sufficient,
+            estimate_error: None,
         })
     }
 
@@ -324,7 +359,7 @@ impl ArkSession {
 
         if current_step_index >= plan.ordered_step_txids.len() {
             self.wallet_db.clear_unilateral_exit_step_wait();
-            self.finalize_leaves_at_depth(&plan).await?;
+            self.mark_unrolled_leaves_at_finality(&plan).await?;
             return self
                 .build_proceed_result(
                     &plan,
@@ -347,23 +382,30 @@ impl ArkSession {
 
         if !step_reached_confirmation(confirmations_before) {
             if !blockchain.is_tx_relayed_on_network(&step_txid).await? {
-                self.client
+                if let Err(error) = self
+                    .client
                     .broadcast_unilateral_exit_step_at_fee_rate(&parent_tx, fee_rate_sat_per_vb)
                     .await
-                    .map_err(ArkWasmError::Client)?;
+                {
+                    // Esplora/mempool may reject a rebroadcast (-25/-26) while the parent is already
+                    // visible; only fail when the step tx is still absent from the network.
+                    if !is_redundant_unilateral_exit_broadcast_error(&error)
+                        && !blockchain.is_tx_relayed_on_network(&step_txid).await?
+                    {
+                        return Err(ArkWasmError::Client(error));
+                    }
+                }
             }
 
             self.wallet_db.ensure_unilateral_exit_step_wait(
                 &step_txid.to_string(),
                 current_step_index as u32,
             );
-            self.wait_for_step_confirmation(blockchain, &step_txid)
-                .await?;
         } else {
             self.wallet_db.clear_unilateral_exit_step_wait();
         }
 
-        self.finalize_leaves_at_depth(&plan).await?;
+        self.mark_unrolled_leaves_at_finality(&plan).await?;
 
         self.build_proceed_result(
             &plan,
@@ -372,6 +414,70 @@ impl ArkSession {
             phase,
         )
         .await
+    }
+
+    /// Native regtest helper: serialized hex of a planned unilateral-exit parent tx before broadcast.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn export_unilateral_exit_step_parent_hex(
+        &self,
+        params: UnilateralExitBatchEstimateParams,
+        step_index: usize,
+    ) -> ArkResult<String> {
+        let virtual_outpoints = dedup_virtual_outpoints(params.vtxo_outpoints);
+        let plan = self.build_unilateral_batch_plan(&virtual_outpoints).await?;
+        let step_txid = plan
+            .ordered_step_txids
+            .get(step_index)
+            .copied()
+            .ok_or_else(|| {
+                ArkWasmError::Snapshot(format!(
+                    "step index {step_index} out of range ({} steps)",
+                    plan.ordered_step_txids.len()
+                ))
+            })?;
+        let parent_tx = plan
+            .tx_by_id
+            .get(&step_txid)
+            .ok_or_else(|| ArkWasmError::Snapshot(format!("missing branch tx for {step_txid}")))?;
+        Ok(bitcoin::consensus::encode::serialize_hex(parent_tx))
+    }
+
+    /// Native regtest helper: parent + CPFP child hexes that `proceed` would submit as a package.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn export_unilateral_exit_step_package_hex(
+        &self,
+        params: UnilateralExitBatchEstimateParams,
+        step_index: usize,
+    ) -> ArkResult<Vec<String>> {
+        let fee_rate_sat_per_vb = params
+            .fee_rate_sat_per_vb
+            .unwrap_or(MIN_FEE_RATE_SAT_PER_VB)
+            .max(MIN_FEE_RATE_SAT_PER_VB);
+        let virtual_outpoints = dedup_virtual_outpoints(params.vtxo_outpoints);
+        let plan = self.build_unilateral_batch_plan(&virtual_outpoints).await?;
+        let step_txid = plan
+            .ordered_step_txids
+            .get(step_index)
+            .copied()
+            .ok_or_else(|| {
+                ArkWasmError::Snapshot(format!(
+                    "step index {step_index} out of range ({} steps)",
+                    plan.ordered_step_txids.len()
+                ))
+            })?;
+        let parent_tx = plan
+            .tx_by_id
+            .get(&step_txid)
+            .ok_or_else(|| ArkWasmError::Snapshot(format!("missing branch tx for {step_txid}")))?;
+        let child_tx = self
+            .client
+            .bump_tx_at_fee_rate(parent_tx, fee_rate_sat_per_vb)
+            .await
+            .map_err(ArkWasmError::Client)?;
+        Ok(vec![
+            bitcoin::consensus::encode::serialize_hex(parent_tx),
+            bitcoin::consensus::encode::serialize_hex(&child_tx),
+        ])
     }
 
     pub async fn get_unilateral_exit_progress(
@@ -383,24 +489,32 @@ impl ArkSession {
         }
         let virtual_outpoints = dedup_virtual_outpoints(params.vtxo_outpoints);
         let plan = self.build_unilateral_batch_plan(&virtual_outpoints).await?;
+        self.mark_unrolled_leaves_at_finality(&plan).await?;
         let blockchain = self.client.blockchain();
         let current_step_index = self
             .first_incomplete_step_index(blockchain, &plan.ordered_step_txids)
             .await?;
+        let current_step_waiting_since = self
+            .current_step_waiting_since(blockchain, &plan, current_step_index)
+            .await?;
         let phase = if current_step_index >= plan.ordered_step_txids.len() {
             UnilateralExitPhase::Complete
+        } else if current_step_waiting_since.is_some() {
+            UnilateralExitPhase::Waiting
         } else {
-            UnilateralExitPhase::Idle
+            let step_txid = plan.ordered_step_txids[current_step_index];
+            let confirmations = tx_confirmations(blockchain, &step_txid).await?;
+            if step_reached_confirmation(confirmations) {
+                UnilateralExitPhase::Idle
+            } else {
+                UnilateralExitPhase::Waiting
+            }
         };
 
         let node_statuses = self
             .node_statuses_for_plan(blockchain, &plan, current_step_index)
             .await?;
         let leaf_statuses = self.leaf_statuses_for_plan(blockchain, &plan).await?;
-
-        let current_step_waiting_since = self
-            .current_step_waiting_since(blockchain, &plan, current_step_index)
-            .await?;
 
         Ok(UnilateralExitProgressDto {
             step_index: current_step_index.min(plan.ordered_step_txids.len()) as u32,
@@ -539,21 +653,9 @@ impl ArkSession {
         Ok(ordered_step_txids.len())
     }
 
-    async fn wait_for_step_confirmation(
-        &self,
-        blockchain: &EsploraBlockchain,
-        txid: &Txid,
-    ) -> ArkResult<()> {
-        loop {
-            if step_reached_confirmation(tx_confirmations(blockchain, txid).await?) {
-                self.wallet_db.clear_unilateral_exit_step_wait();
-                return Ok(());
-            }
-            sleep(step_confirmation_poll_delay()).await;
-        }
-    }
-
-    async fn finalize_leaves_at_depth(&self, plan: &UnilateralBatchPlan) -> ArkResult<()> {
+    /// Marks leaves unrolled in the local snapshot when chain depth is reached.
+    /// Does not block on operator indexer polling — that runs during operator sync.
+    async fn mark_unrolled_leaves_at_finality(&self, plan: &UnilateralBatchPlan) -> ArkResult<()> {
         let blockchain = self.client.blockchain();
         let mut processed_leaf_txids = HashSet::new();
 
@@ -566,8 +668,7 @@ impl ArkSession {
             if self.leaf_virtual_tx_is_marked_unrolled(&leaf_virtual_txid)? {
                 continue;
             }
-            let confirmations = tx_confirmations(blockchain, &leaf_txid).await?;
-            if !leaf_reached_finality(confirmations) {
+            if !leaf_reached_finality(tx_confirmations(blockchain, &leaf_txid).await?) {
                 continue;
             }
             self.mark_leaf_virtual_tx_vtxos_unrolled_in_snapshot(&leaf_virtual_txid)?;
@@ -577,29 +678,6 @@ impl ArkSession {
                 &leaf_txid.to_string(),
                 &leaf.branch_txids,
             );
-            if !self.autonomous_mode() {
-                let representative_vout =
-                    representative_vout_among_virtual_outpoints(&leaf.sibling_outpoints);
-                let _ = self
-                    .poll_operator_after_leaf_finality(&leaf_virtual_txid, representative_vout)
-                    .await;
-            }
-        }
-        Ok(())
-    }
-
-    async fn poll_operator_after_leaf_finality(&self, txid: &str, vout: u32) -> ArkResult<()> {
-        for attempt in 0..OPERATOR_INDEXER_POLL_MAX {
-            if attempt > 0 {
-                sleep(step_confirmation_poll_delay()).await;
-            }
-            let vtxo_list = match self.sync_with_operator_and_vtxo_list().await {
-                Ok((vtxo_list, _sync_result)) => vtxo_list,
-                Err(_) => self.client.list_vtxos().await?.0,
-            };
-            if super::exit::operator_vtxo_is_unrolled(&vtxo_list, txid, vout) {
-                return Ok(());
-            }
         }
         Ok(())
     }
@@ -637,14 +715,16 @@ impl ArkSession {
         let current_step_index = self
             .first_incomplete_step_index(blockchain, &plan.ordered_step_txids)
             .await?;
-        let resolved_phase = if current_step_index >= plan.ordered_step_txids.len() {
-            UnilateralExitPhase::Complete
-        } else {
-            phase
-        };
         let current_step_waiting_since = self
             .current_step_waiting_since(blockchain, plan, current_step_index)
             .await?;
+        let resolved_phase = if current_step_index >= plan.ordered_step_txids.len() {
+            UnilateralExitPhase::Complete
+        } else if current_step_waiting_since.is_some() {
+            UnilateralExitPhase::Waiting
+        } else {
+            phase
+        };
         Ok(ProceedUnilateralExitStepResultDto {
             step_txid,
             step_index: step_index as u32,
@@ -766,6 +846,30 @@ mod tests {
         assert_eq!(grouped[1].1.len(), 2);
         assert_eq!(grouped[1].1[0].vout, 0);
         assert_eq!(grouped[1].1[1].vout, 1);
+    }
+
+    #[test]
+    fn estimate_unilateral_exit_package_fee_includes_parent_vsize() {
+        use bitcoin::absolute::LockTime;
+        use bitcoin::transaction::Version;
+
+        let mut parent = Transaction {
+            version: Version::TWO,
+            lock_time: LockTime::ZERO,
+            input: vec![],
+            output: vec![],
+        };
+        // Pad weight so package fee exceeds the legacy 140-vB child-only estimate.
+        parent.output = vec![bitcoin::TxOut {
+            value: bitcoin::Amount::from_sat(1),
+            script_pubkey: bitcoin::ScriptBuf::from(vec![0u8; 500]),
+        }];
+        let package_fee = estimate_unilateral_exit_package_fee_sats(&parent, 2.0);
+        let child_only_fee = (140_f64 * 2.0).ceil() as u64;
+        assert!(
+            package_fee > child_only_fee,
+            "package fee {package_fee} should exceed child-only {child_only_fee}"
+        );
     }
 
     #[test]

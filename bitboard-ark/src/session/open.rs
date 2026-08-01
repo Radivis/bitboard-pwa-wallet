@@ -63,30 +63,35 @@ fn warn_onchain_sync_during_open(message: &str) {
     eprintln!("{message}");
 }
 
-/// Esplora full scan during open can fail transiently on hosted proxies; retry, then continue
-/// with a stale on-chain view so session open and network switching are not blocked.
-pub(crate) async fn sync_onchain_wallet_for_session_open(client: &ArkClient) {
+/// Esplora full scan can fail transiently on hosted proxies; retry with backoff before giving up.
+pub(crate) async fn sync_onchain_wallet_with_retries(client: &ArkClient) -> ArkResult<()> {
     for attempt in 0..ONCHAIN_SYNC_MAX_ATTEMPTS {
         match client.sync_onchain_wallet().await {
-            Ok(()) => return,
+            Ok(()) => return Ok(()),
             Err(error)
                 if attempt + 1 < ONCHAIN_SYNC_MAX_ATTEMPTS
                     && is_retryable_onchain_sync_error(&error) =>
             {
                 warn_onchain_sync_during_open(&format!(
-                    "On-chain wallet sync failed during session open (attempt {}); retrying: {error}",
+                    "On-chain wallet sync failed (attempt {}); retrying: {error}",
                     attempt + 1
                 ));
                 let backoff_ms = ONCHAIN_SYNC_BASE_BACKOFF_MS.saturating_mul(1 << attempt);
                 sleep_for_backoff(std::time::Duration::from_millis(backoff_ms)).await;
             }
-            Err(error) => {
-                warn_onchain_sync_during_open(&format!(
-                    "On-chain wallet sync failed during session open; continuing with stale on-chain view: {error}"
-                ));
-                return;
-            }
+            Err(error) => return Err(ArkWasmError::Client(error)),
         }
+    }
+    Ok(())
+}
+
+/// Esplora full scan during open can fail transiently on hosted proxies; retry, then continue
+/// with a stale on-chain view so session open and network switching are not blocked.
+pub(crate) async fn sync_onchain_wallet_for_session_open(client: &ArkClient) {
+    if let Err(error) = sync_onchain_wallet_with_retries(client).await {
+        warn_onchain_sync_during_open(&format!(
+            "On-chain wallet sync failed during session open; continuing with stale on-chain view: {error}"
+        ));
     }
 }
 

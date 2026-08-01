@@ -125,6 +125,8 @@ Local stack for `@regtest` and `@arkade-regtest` flows. Detailed ports, expiry p
 
 **[frontend/tests/e2e/fixtures/arkade-regtest/README.md](frontend/tests/e2e/fixtures/arkade-regtest/README.md)**
 
+**Esplora quirks on regtest** (virtual-tree JSON, relay vs confirmation, unilateral-exit pitfalls): **[docs/arkade-regtest-esplora-quirks.md](docs/arkade-regtest-esplora-quirks.md)** — required reading before changing `esplora_blockchain.rs` or unilateral-exit step progress.
+
 ```bash
 # From repo root
 bash scripts/start-arkade-regtest.sh

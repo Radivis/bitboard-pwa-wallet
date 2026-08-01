@@ -1,0 +1,83 @@
+feature:
+  name: Blog
+  description: "Simple blog management system"
+  user_stories:
+    - As an admin, I want to be able to create a new blog post
+    - As an admin, I want to be able to edit a blog post
+    - As an admin, I want to be able to delete a blog post
+    - As a user, I want to be able to view a blog post
+    - As a user, I want to be able to view all blog posts
+  pages:
+    - Blog:
+      - description: "Public blog posts"
+      - path: /blog
+      - file: frontend/src/pages/Blog.tsx
+      - visible_elements:
+        - title:
+          - "Blog"
+        - At least one blog post, if one published blog post exists
+      - requirements:
+        - Infinite scroll to load more blog posts
+    - BlogPost:
+      - description: "View a single blog post"
+      - path: /blog/:id
+      - file: frontend/src/pages/BlogPost.tsx
+      - visible_elements:
+        - title:
+          - Title of blog post
+        - blog post content with markdown formatting, if present
+        - author
+        - created_at
+    - BlogList:
+      - description: "List of all blog posts and new button to create a new blog post"
+      - path: /admin/blog
+      - file: frontend/src/pages/AdminBlogList.tsx
+      - requirements:
+        - Authentication: Admin
+      - visible_elements:
+        - title: "Manage Blog Posts"
+        - new button to create a new blog post
+          - click_event:
+            - navigate to BlogEdit page with new blog post
+        - table
+          - columns:
+            - Title
+            - Author
+            - Status
+            - Created
+            - Updated
+            - Actions
+          - action buttons per row:
+            - edit: edit the blog post
+              - click_event:
+                - navigate to BlogEdit page
+            - delete: delete the blog post
+              - click_event:
+                - confirmation dialog
+                  - click_event on confirm:
+                    - delete the blog post
+    - BlogEdit:
+      - description: "Create or edit a blog post"
+      - paths:
+        - /admin/blog/new
+        - /admin/blog/:id/edit
+      - file: frontend/src/pages/AdminBlogEdit.tsx
+      - requirements:
+        - Authentication: Admin
+      - visible_elements:
+        - title:
+          - "Create New Blog Post" or "Edit Blog Post"
+        - form fields:
+          - title
+          - content
+          - status
+        - SimpleMDE editor
+          - feature_combinations:
+            - name: dark mode
+            - description: "In editor preview mode dark mode and light mode can be toggled separately from the current theme"
+        - save button
+          - click_event:
+            - save the blog post
+        - cancel button
+          - click_event:
+            - navigate to BlogList page

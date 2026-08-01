@@ -42,7 +42,6 @@ describe('unilateralExitControlStore', () => {
       leafSiblingA,
       leafSiblingB,
     ])
-    expect(useUnilateralExitControlStore.getState().jobStarted).toBe(true)
   })
 
   it('bumps graphRenderEpoch on each visit signal', () => {
