@@ -11,6 +11,7 @@ import {
 import { ensureOnChainBumperFunds, goToArkadeManagementPanel } from './helpers/arkade-management'
 import { prepareUnilateralUnrollScenario } from './helpers/arkade-regtest-scenarios'
 import { runManualUnilateralUnrollUntilBranchComplete } from './helpers/arkade-unilateral-exit-reg04'
+import { attachUnilateralExitDiagnosticsOnTestFailure } from './helpers/esplora-unilateral-exit-diagnostics'
 import { goToWalletTab } from './helpers/wallet-nav'
 
 const ARKADE_REGTEST_TIMEOUT_MS = 1_200_000
@@ -23,6 +24,10 @@ test.describe('Arkade REG-04 unilateral unroll @arkade-reg04', () => {
       process.env.VITE_E2E_ARKADE_REGTEST !== 'true',
       'Run with VITE_E2E_ARKADE_REGTEST=true (npm run test:e2e:arkade-regtest-reg04).',
     )
+  })
+
+  test.afterEach(async ({ page }, testInfo) => {
+    await attachUnilateralExitDiagnosticsOnTestFailure(page, testInfo)
   })
 
   test('E2E-ARK-REG-04 full unilateral unroll', async ({ page }) => {

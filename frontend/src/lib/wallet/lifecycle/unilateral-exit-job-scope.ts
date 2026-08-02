@@ -1,8 +1,9 @@
 import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
-import type {
-  PersistedUnilateralExitJob,
-  UnilateralExitLifecycleSnapshot,
-  UnilateralExitWalletScope,
+import {
+  UnilateralExitLifecyclePhase,
+  type PersistedUnilateralExitJob,
+  type UnilateralExitLifecycleSnapshot,
+  type UnilateralExitWalletScope,
 } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
 import type { NetworkMode } from '@/stores/walletStore'
 import { getCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
@@ -55,9 +56,9 @@ export function isUnilateralExitAutomationJobInactive(
   jobOutpoints: ArkadeVtxoOutpoint[],
 ): boolean {
   return (
-    lifecycle.phase === 'complete' ||
-    lifecycle.phase === 'error' ||
-    lifecycle.phase === 'not-configured' ||
+    lifecycle.phase === UnilateralExitLifecyclePhase.Complete ||
+    lifecycle.phase === UnilateralExitLifecyclePhase.Error ||
+    lifecycle.phase === UnilateralExitLifecyclePhase.NotConfigured ||
     (!persisted.jobActive && jobOutpoints.length === 0)
   )
 }

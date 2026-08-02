@@ -153,15 +153,13 @@ async fn chained_preconfirmed_proceed_relays_first_step_tx_on_regtest() {
         .or_else(|| topology.exit_branch_txids.first().cloned())
         .expect("first step txid from proceed or topology");
 
-    // Regtest Esplora indexes successful package broadcasts via JSON `/tx/{txid}` before `/raw`
-    // serves mempool txs; confirmation after mining is the reliable completion signal.
-    let status_after_proceed =
-        esplora_tx_endpoint_status(&endpoints.esplora_url, &first_step_txid, "/status").await;
-    let json_after_proceed =
-        esplora_tx_endpoint_status(&endpoints.esplora_url, &first_step_txid, "").await;
-    assert!(
-        status_after_proceed == 200 || json_after_proceed == 200,
-        "expected first step tx visible on Esplora after proceed, got status={status_after_proceed} json={json_after_proceed}; {}",
+    // esplora_gateway serves `/raw` from bitcoind after package broadcast (REG-07 contract).
+    let raw_after_proceed =
+        esplora_tx_endpoint_status(&endpoints.esplora_url, &first_step_txid, "/raw").await;
+    assert_eq!(
+        raw_after_proceed,
+        200,
+        "expected first step tx on Esplora /raw after proceed (mempool relay); {}",
         esplora_tx_diagnostics(&endpoints.esplora_url, &first_step_txid).await
     );
 

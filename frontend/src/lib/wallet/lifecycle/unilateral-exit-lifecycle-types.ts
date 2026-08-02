@@ -16,13 +16,14 @@ export function unilateralExitWalletScopeKey(
   return `${scope.walletId}:${scope.networkMode}:${scope.connectionId}`
 }
 
-export type UnilateralExitLifecyclePhase =
-  | 'not-configured'
-  | 'idle'
-  | 'advancing'
-  | 'waiting-confirm'
-  | 'complete'
-  | 'error'
+export enum UnilateralExitLifecyclePhase {
+  NotConfigured = 'not-configured',
+  Idle = 'idle',
+  Advancing = 'advancing',
+  WaitingConfirm = 'waiting-confirm',
+  Complete = 'complete',
+  Error = 'error',
+}
 
 export type UnilateralExitLifecycleSnapshot = {
   phase: UnilateralExitLifecyclePhase

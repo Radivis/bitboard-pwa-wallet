@@ -412,6 +412,8 @@ export interface ArkadeProceedUnilateralExitStepResult {
   totalSteps: number
   phase: ArkadeUnilateralExitPhaseKind
   currentStepWaitingSince?: number
+  /** True when `/tx/{step_txid}/raw` is available for the active step. */
+  currentStepTxRelayed: boolean
   nodeStatuses: ArkadeUnilateralExitNodeStatus[]
   leafStatuses: ArkadeUnilateralExitLeafStatus[]
 }
@@ -425,6 +427,8 @@ export interface ArkadeUnilateralExitProgress {
   totalSteps: number
   phase: ArkadeUnilateralExitPhaseKind
   currentStepWaitingSince?: number
+  /** True when `/tx/{step_txid}/raw` is available for the active step. */
+  currentStepTxRelayed: boolean
   nodeStatuses: ArkadeUnilateralExitNodeStatus[]
   leafStatuses: ArkadeUnilateralExitLeafStatus[]
 }

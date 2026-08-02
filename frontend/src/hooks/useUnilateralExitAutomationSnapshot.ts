@@ -1,12 +1,13 @@
 import { useSyncExternalStore } from 'react'
-import {
-  createStableSnapshotGetter,
-} from '@/hooks/lifecycle-snapshot-subscription'
-import {
-  getUnilateralExitAutomationSnapshot,
-  subscribeUnilateralExitAutomation,
-} from '@/lib/wallet/lifecycle/unilateral-exit-automation-controller'
+import { createStableSnapshotGetter } from '@/hooks/lifecycle-snapshot-subscription'
+import { defaultUnilateralExitAutomationPrefs } from '@/lib/wallet/lifecycle/unilateral-exit-automation-types'
+import { useUnilateralExitAutomationPrefsStore } from '@/lib/wallet/lifecycle/unilateral-exit-automation-prefs-persistence'
 import type { UnilateralExitAutomationSnapshot } from '@/lib/wallet/lifecycle/unilateral-exit-automation-types'
+import {
+  getUnilateralExitActorSnapshot,
+  subscribeUnilateralExitActor,
+} from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime'
+import { selectUnilateralExitAutomationSnapshot } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-selectors'
 
 function unilateralExitAutomationSnapshotEqual(
   previous: UnilateralExitAutomationSnapshot,
@@ -22,15 +23,27 @@ function unilateralExitAutomationSnapshotEqual(
   )
 }
 
+function readAutomationSnapshot(): UnilateralExitAutomationSnapshot {
+  const actorSnapshot = getUnilateralExitActorSnapshot()
+  const scope = actorSnapshot.context.walletScope
+  const prefs =
+    scope != null
+      ? useUnilateralExitAutomationPrefsStore
+          .getState()
+          .getPrefs(scope.walletId, scope.networkMode, scope.connectionId)
+      : defaultUnilateralExitAutomationPrefs()
+  return selectUnilateralExitAutomationSnapshot(actorSnapshot, prefs)
+}
+
 const getStableUnilateralExitAutomationSnapshot =
   createStableSnapshotGetter<UnilateralExitAutomationSnapshot>(
-    getUnilateralExitAutomationSnapshot,
+    readAutomationSnapshot,
     unilateralExitAutomationSnapshotEqual,
   )
 
 export function useUnilateralExitAutomationSnapshot(): UnilateralExitAutomationSnapshot {
   return useSyncExternalStore(
-    subscribeUnilateralExitAutomation,
+    subscribeUnilateralExitActor,
     getStableUnilateralExitAutomationSnapshot,
     getStableUnilateralExitAutomationSnapshot,
   )

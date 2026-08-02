@@ -8,9 +8,12 @@ import { confirmStartUnilateralExitIfShown } from './arkade-unilateral-exit-star
 const AUTOMATIC_UNROLL_DEADLINE_MS = 240_000
 /** ~40 blocks without a step change (2 blocks per iteration). */
 const MAX_MINES_WITHOUT_PROGRESS = 20
+/** Advancing-phase cycles before recovery (500ms tail sleep per loop iteration). */
+const ADVANCING_STUCK_RECOVERY_CYCLES = 24
 const MAX_AUTOMATION_RECOVERY_ATTEMPTS = 5
 /** Chained 5-step unroll spends far more bumper than the batch estimate suggests (large parent vsizes). */
 const REG07_BUMPER_FUNDING_SATS = 10_000_000
+const MIN_BUMPER_BALANCE_SATS = 50_000
 /** Transient regtest indexer lag; mine and resume. Treat RPC -25/-26 as retryable when rebroadcasting or bumper is depleted. */
 const RETRYABLE_INDEXER_ERROR_PATTERN =
   /code.:.-26|code.:.-25|txn-already-in-mempool|outspends|failed to get transaction|error sending request|request failed/i
@@ -23,7 +26,11 @@ function isRecoverableAutomationPause(message: string): boolean {
   return (
     /insufficient bumper/i.test(message) ||
     isRetryableIndexerError(message) ||
-    /sendrawtransaction RPC error.*-25|sendrawtransaction RPC error.*-26|code.:.-25|code.:.-26/i.test(message)
+    /sendrawtransaction RPC error.*-25|sendrawtransaction RPC error.*-26|code.:.-25|code.:.-26/i.test(
+      message,
+    ) ||
+    /bad-txns-inputs-missingorspent/i.test(message) ||
+    /insufficient fee, rejecting replacement/i.test(message)
   )
 }
 
@@ -70,7 +77,11 @@ async function isWaitingForStepConfirmation(page: Page): Promise<boolean> {
   if (progressPhase === 'waiting') {
     return true
   }
-  return progress.getByText(/waiting for confirmation/i).isVisible()
+  if (await progress.getByText(/waiting for confirmation/i).isVisible()) {
+    return true
+  }
+  const stepRelayed = await progress.getAttribute('data-step-relayed')
+  return stepRelayed === 'true'
 }
 
 /** Ignore ticking wait-duration labels so stuck detection cannot be reset every second. */
@@ -90,15 +101,79 @@ async function batchFeeShowsInsufficientBumper(page: Page): Promise<boolean> {
   return await insufficientBanner.isVisible()
 }
 
-async function waitForBumperFundingGateToClear(page: Page, timeout = 180_000): Promise<void> {
+async function bumperNeedsTopUp(page: Page): Promise<boolean> {
+  if (await batchFeeShowsInsufficientBumper(page)) {
+    return true
+  }
+  const balanceSats = await readBumperBalanceSatsWithRefresh(page)
+  return balanceSats != null && balanceSats < MIN_BUMPER_BALANCE_SATS
+}
+
+async function isOnLastUnilateralExitStep(page: Page): Promise<boolean> {
+  const progress = page.getByTestId('unilateral-exit-step-progress')
+  if (!(await progress.isVisible())) {
+    return false
+  }
+  const stepIndex = Number(await progress.getAttribute('data-step-index') ?? -1)
+  const totalSteps = Number(await progress.getAttribute('data-total-steps') ?? 0)
+  return stepIndex >= 0 && totalSteps > 0 && stepIndex >= totalSteps - 1
+}
+
+async function refreshBumperBalanceFromWorker(page: Page): Promise<number | null> {
+  return page.evaluate(async () => {
+    const refresh = window.__e2eRefreshOnchainBumperInfo
+    if (refresh == null) {
+      return null
+    }
+    return refresh()
+  })
+}
+
+async function readBumperBalanceSatsWithRefresh(page: Page): Promise<number | null> {
+  const balanceFromWorker = await refreshBumperBalanceFromWorker(page)
+  if (balanceFromWorker != null) {
+    return balanceFromWorker
+  }
+  await page.getByRole('button', { name: /Medium/i }).click()
+  return readBumperBalanceSats(page)
+}
+
+async function waitForBumperBalanceAtLeast(
+  page: Page,
+  minSats: number,
+  timeout = 180_000,
+): Promise<void> {
   await expect(async () => {
-    await page.getByRole('button', { name: /Medium/i }).click()
-    const balanceSats = await readBumperBalanceSats(page)
-    const insufficient = await batchFeeShowsInsufficientBumper(page)
-    if (insufficient && (balanceSats ?? 0) < 50_000) {
-      throw new Error('Bumper still insufficient after funding')
+    const balanceSats = await readBumperBalanceSatsWithRefresh(page)
+    if (balanceSats == null || balanceSats < minSats) {
+      throw new Error(
+        `Bumper balance ${balanceSats ?? 'unavailable'} below ${minSats} sats`,
+      )
     }
   }).toPass({ timeout })
+}
+
+async function waitForBumperFundingGateToClear(page: Page, timeout = 180_000): Promise<void> {
+  await expect(async () => {
+    const balanceSats = await readBumperBalanceSatsWithRefresh(page)
+    if (balanceSats == null || balanceSats < MIN_BUMPER_BALANCE_SATS) {
+      throw new Error(
+        `Bumper balance ${balanceSats ?? 'unavailable'} below ${MIN_BUMPER_BALANCE_SATS} sats`,
+      )
+    }
+    if (await batchFeeShowsInsufficientBumper(page)) {
+      throw new Error('Insufficient bumper balance banner still visible')
+    }
+  }).toPass({ timeout })
+}
+
+/** Wait until WASM bumper sync and batch estimate gate show funded bumper (after on-chain fund). */
+export async function waitForBumperBalanceReady(
+  page: Page,
+  minSats = MIN_BUMPER_BALANCE_SATS,
+): Promise<void> {
+  await waitForBumperBalanceAtLeast(page, minSats)
+  await waitForBumperFundingGateToClear(page)
 }
 
 async function refreshBatchEstimate(page: Page): Promise<void> {
@@ -122,8 +197,8 @@ async function readBumperBalanceSats(page: Page): Promise<number | null> {
 async function topUpBumperIfDepleted(page: Page, bumperTopUps: { count: number }): Promise<boolean> {
   const pauseText = await readAutomationPauseText(page)
   const pausedForBumper = pauseText?.toLowerCase().includes('insufficient bumper') ?? false
-  const insufficientBanner = await batchFeeShowsInsufficientBumper(page)
-  if (!pausedForBumper && !insufficientBanner) {
+  const needsTopUp = pausedForBumper || (await bumperNeedsTopUp(page))
+  if (!needsTopUp) {
     return false
   }
 
@@ -140,9 +215,7 @@ async function topUpBumperIfDepleted(page: Page, bumperTopUps: { count: number }
 async function topUpBumperAndRefreshBatchEstimate(page: Page): Promise<void> {
   await mineRegtestBlocks(2)
   await ensureOnChainBumperFunds(page, REG07_BUMPER_FUNDING_SATS)
-  await expect
-    .poll(async () => readBumperBalanceSats(page), { timeout: 60_000 })
-    .toBeGreaterThan(50_000)
+  await waitForBumperBalanceAtLeast(page, MIN_BUMPER_BALANCE_SATS)
   await refreshBatchEstimate(page)
 }
 
@@ -170,6 +243,12 @@ async function isAutomationPaused(page: Page): Promise<boolean> {
 
 async function clearAutomationPause(page: Page): Promise<void> {
   await refreshBatchEstimate(page)
+  await page.evaluate(() => {
+    const resume = window.__e2eResumeUnilateralExitAutomation
+    if (resume != null) {
+      resume()
+    }
+  })
   await expect(page.getByTestId('unilateral-exit-automation-paused')).not.toBeVisible({
     timeout: 60_000,
   })
@@ -210,7 +289,7 @@ async function recoverFromRetryableAutomationFailure(
     })
   } else if (/sendrawtransaction RPC error|code.:.-2[56]/i.test(failureText)) {
     await mineRegtestBlocks(5)
-    if ((await readBumperBalanceSats(page) ?? 0) < 50_000) {
+    if ((await readBumperBalanceSatsWithRefresh(page) ?? 0) < MIN_BUMPER_BALANCE_SATS) {
       await topUpBumperAndRefreshBatchEstimate(page)
     }
   } else {
@@ -316,7 +395,17 @@ async function ensureAutomaticUnilateralExitMode(page: Page): Promise<void> {
     await autoSwitch.click()
   }
   await expect(autoSwitch).toBeChecked()
-  await topUpBumperAndRefreshBatchEstimate(page)
+
+  const balanceSats = await readBumperBalanceSatsWithRefresh(page)
+  const needsFunding =
+    balanceSats == null ||
+    balanceSats < MIN_BUMPER_BALANCE_SATS ||
+    (await batchFeeShowsInsufficientBumper(page))
+  if (needsFunding) {
+    await topUpBumperAndRefreshBatchEstimate(page)
+  } else {
+    await waitForBumperFundingGateToClear(page)
+  }
 
   const startButton = page.getByTestId('unilateral-exit-proceed')
   await expect(startButton).toBeEnabled({ timeout: 120_000 })
@@ -348,6 +437,7 @@ export async function runAutomaticUnilateralUnrollUntilBranchComplete(page: Page
   let minesWithoutProgress = 0
   let waitConfirmationMines = 0
   let bumperTopUps = { count: 0 }
+  let advancingStuckCycles = 0
 
   while (Date.now() < deadlineMs) {
     const recoveredFromFailure = await recoverFromRetryableAutomationFailure(
@@ -359,9 +449,10 @@ export async function runAutomaticUnilateralUnrollUntilBranchComplete(page: Page
       lastProgressText = await readStepProgressSignature(page)
       continue
     }
-    if (await batchFeeShowsInsufficientBumper(page)) {
+    if (await bumperNeedsTopUp(page)) {
       if (await topUpBumperIfDepleted(page, bumperTopUps)) {
         minesWithoutProgress = 0
+        advancingStuckCycles = 0
         lastProgressText = await readStepProgressSignature(page)
         continue
       }
@@ -394,7 +485,7 @@ export async function runAutomaticUnilateralUnrollUntilBranchComplete(page: Page
 
     const waitingForConfirmation = await isWaitingForStepConfirmation(page)
     if (waitingForConfirmation) {
-      if (await batchFeeShowsInsufficientBumper(page)) {
+      if (await bumperNeedsTopUp(page)) {
         await topUpBumperAndRefreshBatchEstimate(page)
         waitConfirmationMines = 0
         continue
@@ -423,21 +514,53 @@ export async function runAutomaticUnilateralUnrollUntilBranchComplete(page: Page
     }
     waitConfirmationMines = 0
 
-    if (progressText === lastProgressText) {
-      minesWithoutProgress += 1
-      if (minesWithoutProgress >= MAX_MINES_WITHOUT_PROGRESS) {
-        await failUnilateralExit(
-          page,
-          `Automatic unilateral unroll stuck after ${minesWithoutProgress} mined blocks without step progress change. ` +
-            `Last progress: "${progressText || '(empty)'}"`,
-        )
+    const progressPhase = await page
+      .getByTestId('unilateral-exit-step-progress')
+      .getAttribute('data-progress-phase')
+    const isAdvancingPhase =
+      progressPhase === 'advancing' || /proceeding automatically/i.test(rawProgressText)
+
+    if (isAdvancingPhase) {
+      if (progressText !== lastProgressText) {
+        lastProgressText = progressText
+        advancingStuckCycles = 0
+      } else {
+        advancingStuckCycles += 1
+      }
+      minesWithoutProgress = 0
+      if (advancingStuckCycles >= ADVANCING_STUCK_RECOVERY_CYCLES) {
+        if (await bumperNeedsTopUp(page)) {
+          await topUpBumperAndRefreshBatchEstimate(page)
+          advancingStuckCycles = 0
+          continue
+        }
+        // Last step can show "advancing" while the relayed tx waits for confirmations (step-relayed
+        // may lag). Mine only on the terminal step so we do not race an in-flight broadcast.
+        if (await isOnLastUnilateralExitStep(page)) {
+          await mineRegtestBlocks(2)
+          advancingStuckCycles = 0
+          continue
+        }
       }
     } else {
-      lastProgressText = progressText
-      minesWithoutProgress = 0
+      advancingStuckCycles = 0
+      if (progressText === lastProgressText) {
+        minesWithoutProgress += 1
+        if (minesWithoutProgress >= MAX_MINES_WITHOUT_PROGRESS) {
+          await failUnilateralExit(
+            page,
+            `Automatic unilateral unroll stuck after ${minesWithoutProgress} poll cycles without step progress change. ` +
+              `Last progress: "${progressText || '(empty)'}"`,
+          )
+        }
+      } else {
+        lastProgressText = progressText
+        minesWithoutProgress = 0
+      }
     }
 
-    await mineRegtestBlocks(2)
+    // Mine only while waiting for confirmations — mining during broadcast races step inputs.
+    await page.waitForTimeout(500)
   }
 
   await failUnilateralExit(

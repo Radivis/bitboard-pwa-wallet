@@ -23,7 +23,7 @@ import {
   includesArkadeVtxoOutpoint,
 } from '@/workers/arkade-api'
 import { useWalletStore } from '@/stores/walletStore'
-import { orchestrateUnilateralExitClearJob } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-orchestrator'
+import { clearUnilateralExitJob } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime'
 import { useUnilateralExitControlStore } from '@/stores/unilateralExitControlStore'
 
 function outpointFromInProgressRow(
@@ -180,7 +180,7 @@ export function useArkadeExitFlow() {
       .then(() => {
         setCompleteUnilateralOpen(false)
         if (activeWalletId != null && activeArkadeConnectionId != null) {
-          orchestrateUnilateralExitClearJob()
+          clearUnilateralExitJob()
           useUnilateralExitControlStore.getState().reset()
         }
       })

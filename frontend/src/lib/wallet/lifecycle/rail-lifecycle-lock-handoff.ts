@@ -8,8 +8,7 @@ import { syncLightningSyncLifecycleWithLockPhase } from '@/lib/wallet/lifecycle/
 import { syncOnchainLoadLifecycleWithLockPhase } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
 import { syncOnchainSaveLifecycleWithLockPhase } from '@/lib/wallet/lifecycle/onchain-save-lifecycle-orchestrator'
 import { syncOnchainSyncLifecycleWithLockPhase } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
-import { syncUnilateralExitLifecycleWithLockPhase } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-orchestrator'
-import { syncUnilateralExitAutomationWithLockPhase } from '@/lib/wallet/lifecycle/unilateral-exit-automation-controller'
+import { syncUnilateralExitWithLockPhase } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime'
 
 /** Resets all rail load/sync/save lifecycles in response to lock phase transitions. */
 export function syncAllRailLifecyclesWithLockPhase(lockPhase: LockLifecyclePhase): void {
@@ -22,6 +21,5 @@ export function syncAllRailLifecyclesWithLockPhase(lockPhase: LockLifecyclePhase
   syncLightningLoadLifecycleWithLockPhase(lockPhase)
   syncLightningSyncLifecycleWithLockPhase(lockPhase)
   syncLightningSaveLifecycleWithLockPhase(lockPhase)
-  syncUnilateralExitLifecycleWithLockPhase(lockPhase)
-  syncUnilateralExitAutomationWithLockPhase(lockPhase)
+  syncUnilateralExitWithLockPhase(lockPhase)
 }

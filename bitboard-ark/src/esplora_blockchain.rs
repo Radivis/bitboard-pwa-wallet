@@ -374,25 +374,6 @@ async fn confirmations_from_block_height(
     }
 }
 
-async fn confirmations_from_merkle_proof(
-    client: &EsploraAsyncClient,
-    txid: &Txid,
-) -> Result<Option<u64>, ark_client::Error> {
-    let proof = match client.get_merkle_proof(txid).await {
-        Ok(proof) => proof,
-        Err(esplora_client::Error::HttpResponse { status: 404, .. }) => return Ok(None),
-        Err(esplora_client::Error::HttpResponse { status: 500, .. }) => return Ok(None),
-        Err(error) if is_missing_tx_esplora_error(&error) => return Ok(None),
-        Err(error) => return Err(EsploraBlockchain::map_esplora_error(error)),
-    };
-    let Some(proof) = proof else {
-        return Ok(None);
-    };
-    confirmations_from_block_height(client, Some(proof.block_height))
-        .await
-        .map(Some)
-}
-
 fn is_missing_tx_esplora_error(error: &esplora_client::Error) -> bool {
     match error {
         esplora_client::Error::HttpResponse { message, .. } => {
@@ -441,19 +422,16 @@ async fn map_tx_confirmations(
     client: &EsploraAsyncClient,
     txid: &Txid,
 ) -> Result<u64, ark_client::Error> {
-    if let Some(confirmations) = confirmations_from_merkle_proof(client, txid).await? {
-        return Ok(confirmations);
-    }
-
     match client.get_tx_status(txid).await {
         Ok(status) if status.confirmed => {
-            confirmations_from_esplora_tx_status(client, &status).await
+            return confirmations_from_esplora_tx_status(client, &status).await;
         }
-        Ok(_) | Err(esplora_client::Error::HttpResponse { status: 404, .. }) => {
-            confirmations_for_relayed_tx(client, txid).await
-        }
-        Err(error) => Err(EsploraBlockchain::map_esplora_error(error)),
+        Ok(_) => {}
+        Err(esplora_client::Error::HttpResponse { status: 404, .. }) => {}
+        Err(error) => return Err(EsploraBlockchain::map_esplora_error(error)),
     }
+
+    confirmations_for_relayed_tx(client, txid).await
 }
 
 async fn map_output_status(

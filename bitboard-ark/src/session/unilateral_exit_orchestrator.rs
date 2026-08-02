@@ -383,9 +383,15 @@ impl ArkSession {
 
         let confirmations_before = tx_confirmations(blockchain, &step_txid).await?;
         let phase = UnilateralExitPhase::Waiting;
+        let step_wait = self.wallet_db.unilateral_exit_step_wait();
 
         if !step_reached_confirmation(confirmations_before) {
-            if !blockchain.is_tx_relayed_on_network(&step_txid).await? {
+            let broadcast_satisfied = unilateral_exit_step_broadcast_satisfied(
+                blockchain.is_tx_relayed_on_network(&step_txid).await?,
+                &step_txid,
+                step_wait.as_ref(),
+            );
+            if !broadcast_satisfied {
                 if let Err(error) = self
                     .client
                     .broadcast_unilateral_exit_step_at_fee_rate(&parent_tx, fee_rate_sat_per_vb)
@@ -393,8 +399,13 @@ impl ArkSession {
                 {
                     // Esplora/mempool may reject a rebroadcast (-25/-26) while the parent is already
                     // visible; only fail when the step tx is still absent from the network.
+                    let broadcast_satisfied_after_error = unilateral_exit_step_broadcast_satisfied(
+                        blockchain.is_tx_relayed_on_network(&step_txid).await?,
+                        &step_txid,
+                        self.wallet_db.unilateral_exit_step_wait().as_ref(),
+                    );
                     if !is_redundant_unilateral_exit_broadcast_error(&error)
-                        && !blockchain.is_tx_relayed_on_network(&step_txid).await?
+                        && !broadcast_satisfied_after_error
                     {
                         return Err(ArkWasmError::Client(error));
                     }
@@ -437,11 +448,12 @@ impl ArkSession {
         let current_step_waiting_since = self
             .current_step_waiting_since(blockchain, &plan, current_step_index)
             .await?;
+        let current_step_tx_relayed = self
+            .current_step_tx_relayed(blockchain, &plan, current_step_index)
+            .await?;
         let phase = if current_step_index >= plan.ordered_step_txids.len() {
             UnilateralExitPhase::Complete
-        } else if current_step_waiting_since.is_some() {
-            UnilateralExitPhase::Waiting
-        } else {
+        } else if current_step_waiting_since.is_some() || current_step_tx_relayed {
             let step_txid = plan.ordered_step_txids[current_step_index];
             let confirmations = tx_confirmations(blockchain, &step_txid).await?;
             if step_reached_confirmation(confirmations) {
@@ -449,6 +461,8 @@ impl ArkSession {
             } else {
                 UnilateralExitPhase::Waiting
             }
+        } else {
+            UnilateralExitPhase::Idle
         };
 
         let node_statuses = self
@@ -461,6 +475,7 @@ impl ArkSession {
             total_steps: plan.ordered_step_txids.len().max(1) as u32,
             phase,
             current_step_waiting_since,
+            current_step_tx_relayed,
             node_statuses,
             leaf_statuses,
         })
@@ -658,6 +673,9 @@ impl ArkSession {
         let current_step_waiting_since = self
             .current_step_waiting_since(blockchain, plan, current_step_index)
             .await?;
+        let current_step_tx_relayed = self
+            .current_step_tx_relayed(blockchain, plan, current_step_index)
+            .await?;
         let resolved_phase = if current_step_index >= plan.ordered_step_txids.len() {
             UnilateralExitPhase::Complete
         } else if current_step_waiting_since.is_some() {
@@ -671,6 +689,7 @@ impl ArkSession {
             total_steps: plan.ordered_step_txids.len().max(1) as u32,
             phase: resolved_phase,
             current_step_waiting_since,
+            current_step_tx_relayed,
             node_statuses: self
                 .node_statuses_for_plan(blockchain, plan, current_step_index)
                 .await?,
@@ -742,6 +761,34 @@ impl ArkSession {
             .filter(|record| record.step_txid == step_txid.to_string())
             .map(|record| record.started_at))
     }
+
+    async fn current_step_tx_relayed(
+        &self,
+        blockchain: &EsploraBlockchain,
+        plan: &UnilateralBatchPlan,
+        current_step_index: usize,
+    ) -> ArkResult<bool> {
+        if current_step_index >= plan.ordered_step_txids.len() {
+            return Ok(true);
+        }
+        let step_txid = plan.ordered_step_txids[current_step_index];
+        let raw_relayed = blockchain.is_tx_relayed_on_network(&step_txid).await?;
+        Ok(unilateral_exit_step_broadcast_satisfied(
+            raw_relayed,
+            &step_txid,
+            self.wallet_db.unilateral_exit_step_wait().as_ref(),
+        ))
+    }
+}
+
+/// `/raw` is the primary relay signal; regtest Esplora often keeps mempool parents at `/raw` 404
+/// until mined. After `proceed_unilateral_exit_step` stamps a wait record, treat broadcast as done.
+pub(crate) fn unilateral_exit_step_broadcast_satisfied(
+    raw_relayed: bool,
+    step_txid: &Txid,
+    step_wait: Option<&crate::persistence::UnilateralExitStepWaitRecord>,
+) -> bool {
+    raw_relayed || step_wait.is_some_and(|record| record.step_txid == step_txid.to_string())
 }
 
 async fn tx_confirmations(blockchain: &EsploraBlockchain, txid: &Txid) -> ArkResult<u64> {
@@ -786,6 +833,31 @@ mod tests {
         assert_eq!(grouped[1].1.len(), 2);
         assert_eq!(grouped[1].1[0].vout, 0);
         assert_eq!(grouped[1].1[1].vout, 1);
+    }
+
+    #[test]
+    fn step_broadcast_satisfied_when_wait_record_matches_step_txid() {
+        use crate::persistence::UnilateralExitStepWaitRecord;
+
+        let step_txid = txid(42);
+        let wait = UnilateralExitStepWaitRecord {
+            step_txid: step_txid.to_string(),
+            step_index: 0,
+            started_at: 1_700_000_000,
+        };
+        assert!(unilateral_exit_step_broadcast_satisfied(
+            false,
+            &step_txid,
+            Some(&wait),
+        ));
+        assert!(!unilateral_exit_step_broadcast_satisfied(
+            false,
+            &txid(43),
+            Some(&wait),
+        ));
+        assert!(unilateral_exit_step_broadcast_satisfied(
+            true, &step_txid, None
+        ));
     }
 
     #[test]

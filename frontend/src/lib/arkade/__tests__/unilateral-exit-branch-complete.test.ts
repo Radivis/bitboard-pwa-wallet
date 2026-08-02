@@ -12,6 +12,7 @@ function progress(
     stepIndex: 0,
     totalSteps: 2,
     phase: 'idle',
+    currentStepTxRelayed: false,
     nodeStatuses: [],
     leafStatuses: [],
     ...overrides,

@@ -541,6 +541,8 @@ pub struct ProceedUnilateralExitStepResultDto {
     pub phase: UnilateralExitPhase,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub current_step_waiting_since: Option<i64>,
+    /// `true` when the active step is relayed (`/raw`) or `proceed` stamped a wait record (regtest mempool).
+    pub current_step_tx_relayed: bool,
     pub node_statuses: Vec<UnilateralExitNodeStatusDto>,
     pub leaf_statuses: Vec<UnilateralExitLeafStatusDto>,
 }
@@ -553,6 +555,8 @@ pub struct UnilateralExitProgressDto {
     pub phase: UnilateralExitPhase,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub current_step_waiting_since: Option<i64>,
+    /// `true` when the active step is relayed (`/raw`) or `proceed` stamped a wait record (regtest mempool).
+    pub current_step_tx_relayed: bool,
     pub node_statuses: Vec<UnilateralExitNodeStatusDto>,
     pub leaf_statuses: Vec<UnilateralExitLeafStatusDto>,
 }

@@ -29,34 +29,36 @@ import { useOnchainFeeRateSelection } from '@/hooks/useOnchainFeeRateSelection'
 import { usePersistedStoreHydrated } from '@/hooks/usePersistedStoreHydrated'
 import {
   useIsUnilateralExitJobActive,
+  useUnilateralExitActorSnapshot,
   useUnilateralExitLifecycleSnapshot,
 } from '@/hooks/useUnilateralExitLifecycleSnapshot'
 import { useUnilateralExitAutomationSnapshot } from '@/hooks/useUnilateralExitAutomationSnapshot'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import { arkadeUnilateralExitInProgressSats } from '@/lib/arkade/arkade-balance-display'
 import { defaultMaxFeeRateSatPerVb } from '@/lib/arkade/unilateral-exit-automation-fees'
-import { resolveUnilateralExitControlJobState } from '@/lib/arkade/unilateral-exit-control-phase'
+import { useUnilateralExitAutomationPrefsStore } from '@/lib/wallet/lifecycle/unilateral-exit-automation-prefs-persistence'
+import {
+  resolveActiveUnilateralExitWalletScope,
+  resolveUnilateralExitJobOutpoints,
+} from '@/lib/wallet/lifecycle/unilateral-exit-job-scope'
+import { UnilateralExitLifecyclePhase } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
+import { selectUnilateralExitControlJobState } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-selectors'
+import { unilateralExitSnapshotIsProceeding } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-snapshot'
+import { isCurrentStepRelayed } from '@/lib/arkade/unilateral-exit-broadcast'
 import { resolveUnilateralExitTopologyOutpoints } from '@/lib/arkade/unilateral-exit-topology'
 import { wasmArkErrorMessage } from '@/lib/shared/wasm-ark-error'
 import { formatSatPerVbTwoDecimals } from '@/lib/esplora/esplora-fee-estimates'
 import {
+  clearUnilateralExitJob,
   disableAutomaticUnilateralExit,
   enableAutomaticUnilateralExit,
-  awaitAutomaticUnilateralExitAdvance,
-  pauseAutomaticUnilateralExitOnError,
-  scheduleAutomaticAdvance,
+  hydrateUnilateralExitFromPersistence,
+  proceedManualUnilateralExitStep,
   setAutomaticUnilateralExitFeePreset,
   setAutomaticUnilateralExitMaxFeeRate,
-} from '@/lib/wallet/lifecycle/unilateral-exit-automation-controller'
-import { useUnilateralExitAutomationPrefsStore } from '@/lib/wallet/lifecycle/unilateral-exit-automation-prefs-persistence'
-import { resolveUnilateralExitJobOutpoints, resolveActiveUnilateralExitWalletScope } from '@/lib/wallet/lifecycle/unilateral-exit-job-scope'
-import {
-  hydrateUnilateralExitJobFromPersistence,
-  orchestrateUnilateralExitClearJob,
-  orchestrateUnilateralExitPrepareStart,
-  orchestrateUnilateralExitProceedStep,
-  orchestrateUnilateralExitStart,
-} from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-orchestrator'
+  startAutomaticUnilateralExitAsync,
+  startManualUnilateralExitAsync,
+} from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime'
 import {
   arkadeUnilateralExitTopologyQueryKey,
   arkadeUnilateralExitTopologyScopeKey,
@@ -67,6 +69,8 @@ import type { ArkadeVtxoOutpoint } from '@/workers/arkade-api'
 import { includesArkadeVtxoOutpoint } from '@/workers/arkade-api'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import { useUnilateralExitControlStore } from '@/stores/unilateralExitControlStore'
+
+const EMPTY_TOPOLOGY_OUTPOINTS: ArkadeVtxoOutpoint[] = []
 
 function formatStepWaitingDuration(elapsedSeconds: number): string {
   if (elapsedSeconds < 60) {
@@ -105,6 +109,7 @@ export function UnilateralExitControlPage() {
   const inProgressQuery = useArkadeUnilateralExitsInProgressQuery(true)
   const feePresetsQuery = useEsploraFeePresets(networkMode)
   const lifecycleSnapshot = useUnilateralExitLifecycleSnapshot()
+  const actorSnapshot = useUnilateralExitActorSnapshot()
   const automationSnapshot = useUnilateralExitAutomationSnapshot()
   const lifecycleJobActive = useIsUnilateralExitJobActive()
   const automationPrefsHydrated = usePersistedStoreHydrated(useUnilateralExitAutomationPrefsStore)
@@ -126,7 +131,7 @@ export function UnilateralExitControlPage() {
   const graphRenderEpoch = useUnilateralExitControlStore((state) => state.graphRenderEpoch)
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null)
   const [startConfirmOpen, setStartConfirmOpen] = useState(false)
-  const [proceedPending, setProceedPending] = useState(false)
+  const [submitPending, setSubmitPending] = useState(false)
 
   const proceedAutomatically = automationSnapshot.prefs.enabled
   const automationPausedReason = automationSnapshot.pausedReason
@@ -203,7 +208,7 @@ export function UnilateralExitControlPage() {
   )
 
   const topologyRequestOutpoints =
-    topologyOutpoints.length > 0 ? topologyOutpoints : []
+    topologyOutpoints.length > 0 ? topologyOutpoints : EMPTY_TOPOLOGY_OUTPOINTS
 
   const topologyQuery = useArkadeUnilateralExitTopologyQuery({
     enabled: topologyOutpoints.length > 0 || hasBrowsableExitTrees,
@@ -222,12 +227,15 @@ export function UnilateralExitControlPage() {
     !batchEstimateQuery.data.bumperSufficient
   const bumperInfoQuery = useArkadeBumperInfoQuery(true, pollBumperBalanceWhileUnderfunded)
 
+  const machineProceeding = unilateralExitSnapshotIsProceeding(actorSnapshot)
+
   const trackingExitProgress =
     (lifecycleJobActive ||
       hasInProgressExits ||
-      proceedPending ||
-      lifecycleSnapshot.phase === 'advancing' ||
-      lifecycleSnapshot.phase === 'waiting-confirm') &&
+      machineProceeding ||
+      submitPending ||
+      lifecycleSnapshot.phase === UnilateralExitLifecyclePhase.Advancing ||
+      lifecycleSnapshot.phase === UnilateralExitLifecyclePhase.WaitingConfirm) &&
     jobOutpoints.length > 0
 
   const progressQuery = useArkadeUnilateralExitProgressQuery({
@@ -251,7 +259,7 @@ export function UnilateralExitControlPage() {
     }
     if (inProgressQuery.isLoading || balanceQuery.isLoading) return
 
-    void hydrateUnilateralExitJobFromPersistence({
+    void hydrateUnilateralExitFromPersistence({
       walletScope: {
         walletId: activeWalletId,
         networkMode,
@@ -259,15 +267,10 @@ export function UnilateralExitControlPage() {
       },
       inProgressOutpoints,
       unilateralExitInProgressSats,
-    }).then(() => {
-      if (automationSnapshot.prefs.enabled) {
-        scheduleAutomaticAdvance()
-      }
     })
   }, [
     activeArkadeConnectionId,
     activeWalletId,
-    automationSnapshot.prefs.enabled,
     balanceQuery.isLoading,
     inProgressOutpoints,
     inProgressQuery.isLoading,
@@ -338,7 +341,7 @@ export function UnilateralExitControlPage() {
     )
 
     if (!selectionStillActive) {
-      orchestrateUnilateralExitClearJob()
+      clearUnilateralExitJob()
       resetControlStore()
       setFocusedNodeId(null)
       if (
@@ -368,43 +371,30 @@ export function UnilateralExitControlPage() {
     selectedLeafOutpoints,
   ])
 
-  const progress =
-    lifecycleSnapshot.progress != null
-      ? lifecycleSnapshot.progress
-      : (progressQuery.data ?? null)
+  const progress = lifecycleSnapshot.progress ?? progressQuery.data ?? null
   const nodeStatuses = progress?.nodeStatuses ?? []
   const stepIndex = progress?.stepIndex ?? 0
   const wasmTotalSteps = progress?.totalSteps ?? 0
   const estimatedTotalSteps = batchEstimateQuery.data?.projectedUnrollSteps ?? 0
   const totalSteps = wasmTotalSteps > 0 ? wasmTotalSteps : estimatedTotalSteps
-  const { phase, jobActive, showStepProgress } = useMemo(
+  const { phase, jobActive, showStepProgress, isProceeding } = useMemo(
     () =>
-      resolveUnilateralExitControlJobState({
-        progress,
-        lifecyclePhase: lifecycleSnapshot.phase,
-        lifecycleJobActive,
+      selectUnilateralExitControlJobState(actorSnapshot, {
         hasInProgressExits,
-        proceedPending,
         totalSteps,
       }),
-    [
-      progress,
-      lifecycleSnapshot.phase,
-      lifecycleJobActive,
-      hasInProgressExits,
-      proceedPending,
-      totalSteps,
-    ],
+    [actorSnapshot, hasInProgressExits, totalSteps],
   )
   const currentStepWaitingSince = progress?.currentStepWaitingSince
   const automationRunning =
     proceedAutomatically &&
-    (proceedPending ||
-      lifecycleSnapshot.phase === 'advancing' ||
-      lifecycleSnapshot.phase === 'waiting-confirm')
+    (isProceeding ||
+      submitPending ||
+      lifecycleSnapshot.phase === UnilateralExitLifecyclePhase.Advancing ||
+      lifecycleSnapshot.phase === UnilateralExitLifecyclePhase.WaitingConfirm)
 
   const proceedBlocksUi =
-    proceedPending && phase !== 'waiting' && currentStepWaitingSince == null
+    (isProceeding || submitPending) && phase !== 'waiting' && currentStepWaitingSince == null
 
   const canProceedStep = jobActive && phase !== 'complete'
   const [nowUnixSeconds, setNowUnixSeconds] = useState(() => Math.floor(Date.now() / 1000))
@@ -492,7 +482,7 @@ export function UnilateralExitControlPage() {
       return
     }
 
-    setProceedPending(true)
+    setSubmitPending(true)
     try {
       if (!lifecycleJobActive) {
         if (proceedAutomatically) {
@@ -500,16 +490,14 @@ export function UnilateralExitControlPage() {
             walletScope,
             defaultMaxFeeRateSatPerVb(presetSatPerVbByLabel.High),
           )
-          orchestrateUnilateralExitPrepareStart({
+          await startAutomaticUnilateralExitAsync({
             walletScope,
             outpoints: jobOutpoints,
           })
-          scheduleAutomaticAdvance()
-          await awaitAutomaticUnilateralExitAdvance()
           toast.success('Automatic unilateral exit started.')
           return
         }
-        await orchestrateUnilateralExitStart({
+        await startManualUnilateralExitAsync({
           walletScope,
           outpoints: jobOutpoints,
           feeRateSatPerVb,
@@ -518,18 +506,21 @@ export function UnilateralExitControlPage() {
         return
       }
 
-      await orchestrateUnilateralExitProceedStep({ feeRateSatPerVb })
+      if (proceedAutomatically) {
+        enableAutomaticUnilateralExit(
+          walletScope,
+          defaultMaxFeeRateSatPerVb(presetSatPerVbByLabel.High),
+        )
+      }
+      await proceedManualUnilateralExitStep({ feeRateSatPerVb })
       if (!proceedAutomatically) {
         toast.success('Unroll step submitted.')
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unroll step failed.'
-      if (proceedAutomatically && walletScope != null) {
-        pauseAutomaticUnilateralExitOnError(message)
-      }
       toast.error(message)
     } finally {
-      setProceedPending(false)
+      setSubmitPending(false)
     }
   }
 
@@ -626,6 +617,7 @@ export function UnilateralExitControlPage() {
             data-step-index={stepIndex}
             data-total-steps={totalSteps}
             data-progress-phase={phase}
+            data-step-relayed={String(isCurrentStepRelayed(progress))}
           >
             Step {Math.min(stepIndex + 1, totalSteps)} of {totalSteps}
             {phase === 'complete' ? ' — branch complete' : ''}
@@ -639,7 +631,7 @@ export function UnilateralExitControlPage() {
             automationPausedReason == null &&
             phase !== 'complete' &&
             phase !== 'waiting' &&
-            (lifecycleJobActive || proceedPending || lifecycleSnapshot.phase === 'advancing')
+            (lifecycleJobActive || submitPending || machineProceeding || lifecycleSnapshot.phase === UnilateralExitLifecyclePhase.Advancing)
               ? ' — proceeding automatically'
               : ''}
           </p>
@@ -703,7 +695,7 @@ export function UnilateralExitControlPage() {
           maxFeeRateSatPerVb={automationSnapshot.prefs.maxFeeRateSatPerVb}
           presetSatPerVbByLabel={presetSatPerVbByLabel}
           feeEstimatesRefreshing={feePresetsQuery.isFetching || feeRateUi.feeEstimatesRefreshing}
-          isPending={proceedPending || !automationPrefsHydrated}
+          isPending={submitPending || machineProceeding || !automationPrefsHydrated}
           pausedReason={automationPausedReason ?? undefined}
           lastErrorMessage={automationLastError ?? undefined}
           onProceedAutomaticallyChange={handleProceedAutomaticallyChange}
@@ -718,7 +710,7 @@ export function UnilateralExitControlPage() {
             feeEstimatesRefreshing={feeRateUi.feeEstimatesRefreshing}
             customFeeRate={feeRateUi.customFeeRate}
             useCustomFee={feeRateUi.useCustomFee}
-            isPending={proceedPending}
+            isPending={submitPending || machineProceeding}
             onSelectPreset={feeRateUi.handleSelectFeePreset}
             setCustomFeeRate={feeRateUi.setCustomFeeRate}
             onSelectCustomMode={feeRateUi.handleSelectCustomMode}
