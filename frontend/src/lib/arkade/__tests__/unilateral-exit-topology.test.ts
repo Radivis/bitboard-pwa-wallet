@@ -22,10 +22,55 @@ const sampleTopology: ArkadeUnilateralExitTopology = {
   commitmentTxids: ['aa'],
 }
 
+const mergedCheckpointParentsTopology: ArkadeUnilateralExitTopology = {
+  nodes: [
+    { txid: 'commitment', txType: 'commitment', spends: [] },
+    { txid: 'tree_left', txType: 'tree', spends: ['commitment'] },
+    { txid: 'tree_right', txType: 'tree', spends: ['commitment'] },
+    { txid: 'left_cp', txType: 'checkpoint', spends: ['tree_left'] },
+    { txid: 'right_cp', txType: 'checkpoint', spends: ['tree_right'] },
+    { txid: 'ark', txType: 'ark', spends: ['left_cp', 'right_cp'] },
+  ],
+  leafOutpoints: [{ txid: 'ark', vout: 0 }],
+  hostOutpoints: [{ txid: 'ark', vout: 0, amountSats: 25_000 }],
+  exitBranchTxids: ['tree_left', 'left_cp', 'tree_right', 'right_cp', 'ark'],
+  commitmentTxids: ['commitment'],
+}
+
 describe('unilateral-exit-topology helpers', () => {
   it('computeExitPathTxids walks spends from selected leaves', () => {
     const path = computeExitPathTxids(sampleTopology, [{ txid: 'cc', vout: 0 }])
-    expect([...path]).toEqual(['cc', 'bb', 'aa'])
+    expect([...path].sort()).toEqual(['aa', 'bb', 'cc'])
+  })
+
+  it('computeExitPathTxids includes all checkpoint parents when ark merges two branches', () => {
+    const path = computeExitPathTxids(mergedCheckpointParentsTopology, [{ txid: 'ark', vout: 0 }])
+    expect([...path].sort()).toEqual([
+      'ark',
+      'commitment',
+      'left_cp',
+      'right_cp',
+      'tree_left',
+      'tree_right',
+    ])
+  })
+
+  it('layoutUnilateralExitGraph highlights both checkpoint parents into merged ark', () => {
+    const { nodes, edgePaths } = layoutUnilateralExitGraph({
+      topology: mergedCheckpointParentsTopology,
+      selectedLeafOutpoints: [{ txid: 'ark', vout: 0 }],
+      nodeStatuses: [],
+      layoutDirection: 'TB',
+    })
+
+    expect(nodes.find((node) => node.id === 'left_cp')?.data.isOnExitPath).toBe(true)
+    expect(nodes.find((node) => node.id === 'right_cp')?.data.isOnExitPath).toBe(true)
+    expect(nodes.find((node) => node.id === 'ark')?.data.isOnExitPath).toBe(true)
+
+    const leftCpToArk = edgePaths.find((edgePath) => edgePath.id === 'left_cp->ark')
+    const rightCpToArk = edgePaths.find((edgePath) => edgePath.id === 'right_cp->ark')
+    expect(leftCpToArk?.animated).toBe(true)
+    expect(rightCpToArk?.animated).toBe(true)
   })
 
   it('mergeNodeStatuses fills missing nodes as pending', () => {

@@ -252,28 +252,44 @@ function layoutPosition(params: {
   return { x: layoutX + spreadOffset, y: layoutY }
 }
 
+function collectAncestorTxids(
+  startTxid: string,
+  nodeByTxid: Map<string, ArkadeUnilateralExitTopology['nodes'][number]>,
+): Set<string> {
+  const pathTxids = new Set<string>()
+  const stack = [startTxid]
+  const visited = new Set<string>()
+
+  while (stack.length > 0) {
+    const txid = stack.pop()
+    if (txid == null || visited.has(txid)) {
+      continue
+    }
+    visited.add(txid)
+    pathTxids.add(txid)
+    const node = nodeByTxid.get(txid)
+    for (const parentTxid of node?.spends ?? []) {
+      stack.push(parentTxid)
+    }
+  }
+
+  return pathTxids
+}
+
 export function computeExitPathTxids(
   topology: ArkadeUnilateralExitTopology,
   selectedLeafOutpoints: ArkadeVtxoOutpoint[],
 ): Set<string> {
+  if (selectedLeafOutpoints.length === 0) {
+    return new Set()
+  }
+
   const nodeByTxid = new Map(topology.nodes.map((node) => [node.txid, node]))
   const pathTxids = new Set<string>()
 
   for (const leaf of selectedLeafOutpoints) {
-    const leafTxid = leaf.txid
-    if (!nodeByTxid.has(leafTxid)) {
-      pathTxids.add(leafTxid)
-    }
-    let currentTxid: string | undefined = leafTxid
-    const visited = new Set<string>()
-    while (currentTxid != null && !visited.has(currentTxid)) {
-      visited.add(currentTxid)
-      pathTxids.add(currentTxid)
-      const node = nodeByTxid.get(currentTxid)
-      if (node == null || node.spends.length === 0) {
-        break
-      }
-      currentTxid = node.spends[0]
+    for (const txid of collectAncestorTxids(leaf.txid, nodeByTxid)) {
+      pathTxids.add(txid)
     }
   }
 
