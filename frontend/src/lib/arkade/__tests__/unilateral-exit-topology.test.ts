@@ -60,6 +60,7 @@ describe('unilateral-exit-topology helpers', () => {
       topology: mergedCheckpointParentsTopology,
       selectedLeafOutpoints: [{ txid: 'ark', vout: 0 }],
       nodeStatuses: [],
+      inProgressOverlay: null,
       layoutDirection: 'TB',
     })
 
@@ -119,6 +120,7 @@ describe('unilateral-exit-topology helpers', () => {
       topology: sampleTopology,
       selectedLeafOutpoints: [],
       nodeStatuses: [],
+      inProgressOverlay: null,
       layoutDirection: 'TB',
     })
 
@@ -143,6 +145,7 @@ describe('unilateral-exit-topology helpers', () => {
       topology,
       selectedLeafOutpoints: [],
       nodeStatuses: [],
+      inProgressOverlay: null,
       layoutDirection: 'TB',
     })
 
@@ -165,6 +168,7 @@ describe('unilateral-exit-topology helpers', () => {
       topology,
       selectedLeafOutpoints: [{ txid: 'cc', vout: 0 }, { txid: 'cc', vout: 1 }],
       nodeStatuses: [],
+      inProgressOverlay: null,
       layoutDirection: 'TB',
     })
 
@@ -201,6 +205,7 @@ describe('unilateral-exit-topology helpers', () => {
       topology,
       selectedLeafOutpoints: [],
       nodeStatuses: [],
+      inProgressOverlay: null,
       layoutDirection: 'TB',
     })
 
@@ -209,6 +214,19 @@ describe('unilateral-exit-topology helpers', () => {
     expect(nodes.find((node) => node.id === 'mid')?.data.exitableVtxoCount).toBe(1)
     expect(nodes.find((node) => node.id === 'leaf')?.data.isLeaf).toBe(true)
     expect(nodes.find((node) => node.id === 'leaf')?.data.exitableVtxoCount).toBe(2)
+  })
+
+  it('layoutUnilateralExitGraph attaches overlay only to in-progress nodes', () => {
+    const { nodes } = layoutUnilateralExitGraph({
+      topology: sampleTopology,
+      selectedLeafOutpoints: [{ txid: 'cc', vout: 0 }],
+      nodeStatuses: [{ txid: 'bb', confirmations: 0, status: 'inProgress' }],
+      inProgressOverlay: 'waiting',
+      layoutDirection: 'TB',
+    })
+
+    expect(nodes.find((node) => node.id === 'bb')?.data.inProgressOverlay).toBe('waiting')
+    expect(nodes.find((node) => node.id === 'cc')?.data.inProgressOverlay).toBeNull()
   })
 
   it('resolveUnilateralExitTopologyOutpoints prefers selection, then in-progress, then job', () => {

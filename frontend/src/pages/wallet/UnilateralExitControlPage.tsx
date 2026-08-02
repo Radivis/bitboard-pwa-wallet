@@ -43,8 +43,15 @@ import {
 } from '@/lib/wallet/lifecycle/unilateral-exit-job-scope'
 import { UnilateralExitLifecyclePhase } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
 import { selectUnilateralExitControlJobState } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-selectors'
-import { unilateralExitSnapshotIsProceeding } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-snapshot'
+import {
+  UNILATERAL_EXIT_MACHINE_STATE,
+} from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-types'
+import {
+  unilateralExitSnapshotIsInState,
+  unilateralExitSnapshotIsProceeding,
+} from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-snapshot'
 import { isCurrentStepRelayed } from '@/lib/arkade/unilateral-exit-broadcast'
+import { resolveUnilateralExitInProgressOverlay } from '@/lib/arkade/unilateral-exit-control-phase'
 import { resolveUnilateralExitTopologyOutpoints } from '@/lib/arkade/unilateral-exit-topology'
 import { wasmArkErrorMessage } from '@/lib/shared/wasm-ark-error'
 import { formatSatPerVbTwoDecimals } from '@/lib/esplora/esplora-fee-estimates'
@@ -385,6 +392,18 @@ export function UnilateralExitControlPage() {
       }),
     [actorSnapshot, hasInProgressExits, totalSteps],
   )
+  const inProgressOverlay = useMemo(
+    () =>
+      resolveUnilateralExitInProgressOverlay({
+        phase,
+        progress,
+        isEnsuringBroadcast: unilateralExitSnapshotIsInState(
+          actorSnapshot,
+          UNILATERAL_EXIT_MACHINE_STATE.ensuringBroadcast,
+        ),
+      }),
+    [actorSnapshot, phase, progress],
+  )
   const currentStepWaitingSince = progress?.currentStepWaitingSince
   const automationRunning =
     proceedAutomatically &&
@@ -594,6 +613,7 @@ export function UnilateralExitControlPage() {
               topology={topologyQuery.data}
               selectedLeafOutpoints={jobOutpoints}
               nodeStatuses={nodeStatuses}
+              inProgressOverlay={inProgressOverlay}
               focusedNodeId={focusedNodeId}
               onNodeFocus={setFocusedNodeId}
             />

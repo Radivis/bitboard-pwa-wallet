@@ -7,6 +7,7 @@ import {
 } from 'd3-dag'
 import type { Node } from '@xyflow/react'
 import { Position, getSmoothStepPath } from '@xyflow/react'
+import type { UnilateralExitInProgressOverlayKind } from '@/lib/arkade/unilateral-exit-control-phase'
 import type {
   ArkadeUnilateralExitHostOutpoint,
   ArkadeUnilateralExitNodeStatus,
@@ -50,6 +51,7 @@ export type UnilateralExitTreeNodeData = {
   isOnExitPath: boolean
   isFocused: boolean
   status: ArkadeUnilateralExitNodeStatus['status']
+  inProgressOverlay: UnilateralExitInProgressOverlayKind | null
   confirmations: number
   layoutDirection: UnilateralExitLayoutDirection
   exitableVtxoCount: number
@@ -317,10 +319,18 @@ export function layoutUnilateralExitGraph(params: {
   topology: ArkadeUnilateralExitTopology
   selectedLeafOutpoints: ArkadeVtxoOutpoint[]
   nodeStatuses: ArkadeUnilateralExitNodeStatus[]
+  inProgressOverlay: UnilateralExitInProgressOverlayKind | null
   layoutDirection: UnilateralExitLayoutDirection
   focusedNodeId?: string | null
 }): { nodes: Node<UnilateralExitTreeNodeData>[]; edgePaths: UnilateralExitGraphEdgePath[] } {
-  const { topology, selectedLeafOutpoints, nodeStatuses, layoutDirection, focusedNodeId } = params
+  const {
+    topology,
+    selectedLeafOutpoints,
+    nodeStatuses,
+    inProgressOverlay,
+    layoutDirection,
+    focusedNodeId,
+  } = params
   const pathTxids = computeExitPathTxids(topology, selectedLeafOutpoints)
   const statusByTxid = mergeNodeStatuses(topology, nodeStatuses)
   const leafOutpointsByTxid = groupLeafOutpointsByTxid(topology.leafOutpoints)
@@ -393,6 +403,7 @@ export function layoutUnilateralExitGraph(params: {
         pathTxids,
         focusedNodeId,
         status,
+        inProgressOverlay,
         layoutDirection,
       }),
     })
@@ -419,8 +430,10 @@ function buildTreeNodeData(params: {
   pathTxids: Set<string>
   focusedNodeId?: string | null
   status: ArkadeUnilateralExitNodeStatus | undefined
+  inProgressOverlay: UnilateralExitInProgressOverlayKind | null
   layoutDirection: UnilateralExitLayoutDirection
 }): UnilateralExitTreeNodeData {
+  const nodeStatus = params.status?.status ?? 'pending'
   return {
     txid: params.txid,
     vout: params.vout,
@@ -429,7 +442,8 @@ function buildTreeNodeData(params: {
     isSelectedLeaf: params.isSelectedLeaf,
     isOnExitPath: params.pathTxids.has(params.txid),
     isFocused: params.focusedNodeId === params.nodeId,
-    status: params.status?.status ?? 'pending',
+    status: nodeStatus,
+    inProgressOverlay: nodeStatus === 'inProgress' ? params.inProgressOverlay : null,
     confirmations: params.status?.confirmations ?? 0,
     layoutDirection: params.layoutDirection,
     exitableVtxoCount: params.exitableVtxoCount,

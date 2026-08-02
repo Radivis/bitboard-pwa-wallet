@@ -8,7 +8,8 @@ import {
   type NodeProps,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { Check, Coins, Loader2 } from 'lucide-react'
+import { Check, Coins, Loader2, Megaphone, Pickaxe, type LucideIcon } from 'lucide-react'
+import type { UnilateralExitInProgressOverlayKind } from '@/lib/arkade/unilateral-exit-control-phase'
 import {
   layoutUnilateralExitGraph,
   resolveLayoutDirection,
@@ -31,8 +32,43 @@ interface UnilateralExitTreeGraphProps {
   topology: ArkadeUnilateralExitTopology | undefined
   selectedLeafOutpoints: ArkadeVtxoOutpoint[]
   nodeStatuses: ArkadeUnilateralExitNodeStatus[]
+  inProgressOverlay: UnilateralExitInProgressOverlayKind | null
   focusedNodeId: string | null
   onNodeFocus: (nodeId: string) => void
+}
+
+function unilateralExitInProgressOverlayIcon(
+  overlay: UnilateralExitInProgressOverlayKind,
+): LucideIcon {
+  switch (overlay) {
+    case 'ensuringBroadcast':
+      return Megaphone
+    case 'waiting':
+      return Pickaxe
+  }
+}
+
+function UnilateralExitInProgressBadge({
+  overlay,
+}: {
+  overlay: UnilateralExitInProgressOverlayKind | null
+}) {
+  const OverlayIcon = overlay == null ? null : unilateralExitInProgressOverlayIcon(overlay)
+
+  return (
+    <div
+      className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full bg-background"
+      data-testid={
+        overlay == null ? 'unilateral-exit-in-progress' : `unilateral-exit-in-progress-${overlay}`
+      }
+      aria-hidden
+    >
+      <Loader2 className="absolute size-5 animate-spin text-blue-600" />
+      {OverlayIcon != null && (
+        <OverlayIcon className="relative z-10 size-2.5 text-blue-700" strokeWidth={2.5} />
+      )}
+    </div>
+  )
 }
 
 function UnilateralExitTreeNode({
@@ -80,10 +116,7 @@ function UnilateralExitTreeNode({
         />
       )}
       {data.status === 'inProgress' && (
-        <Loader2
-          className="absolute -right-1 -top-1 size-4 animate-spin rounded-full bg-background text-blue-600"
-          aria-hidden
-        />
+        <UnilateralExitInProgressBadge overlay={data.inProgressOverlay} />
       )}
     </div>
   )
@@ -98,6 +131,7 @@ function UnilateralExitTreeGraphCanvas({
   topology,
   selectedLeafOutpoints,
   nodeStatuses,
+  inProgressOverlay,
   focusedNodeId,
   onNodeFocus,
   layoutDirection,
@@ -108,10 +142,18 @@ function UnilateralExitTreeGraphCanvas({
         topology: topology!,
         selectedLeafOutpoints,
         nodeStatuses,
+        inProgressOverlay,
         layoutDirection,
         focusedNodeId,
       }),
-    [topology, selectedLeafOutpoints, nodeStatuses, layoutDirection, focusedNodeId],
+    [
+      topology,
+      selectedLeafOutpoints,
+      nodeStatuses,
+      inProgressOverlay,
+      layoutDirection,
+      focusedNodeId,
+    ],
   )
 
   return (
@@ -143,6 +185,7 @@ export function UnilateralExitTreeGraph({
   topology,
   selectedLeafOutpoints,
   nodeStatuses,
+  inProgressOverlay,
   focusedNodeId,
   onNodeFocus,
 }: UnilateralExitTreeGraphProps) {
@@ -192,6 +235,7 @@ export function UnilateralExitTreeGraph({
               topology={topology}
               selectedLeafOutpoints={selectedLeafOutpoints}
               nodeStatuses={nodeStatuses}
+              inProgressOverlay={inProgressOverlay}
               focusedNodeId={focusedNodeId}
               onNodeFocus={onNodeFocus}
               layoutDirection={layoutDirection}
