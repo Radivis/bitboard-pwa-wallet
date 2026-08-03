@@ -182,7 +182,7 @@ pub(crate) async fn find_unilateral_exit_completion_spend_on_chain<B: Blockchain
     Ok(None)
 }
 
-async fn output_spent_on_chain<B: Blockchain>(
+pub(crate) async fn output_spent_on_chain<B: Blockchain>(
     blockchain: &B,
     txid: &Txid,
     vout: u32,

@@ -6,10 +6,10 @@ use bitcoin::{Transaction, Txid};
 
 use crate::api_types::{
     ProceedUnilateralExitStepParams, ProceedUnilateralExitStepResultDto,
-    UnilateralExitBatchEstimateDto, UnilateralExitBatchEstimateParams, UnilateralExitLeafStatusDto,
-    UnilateralExitNodeStatusDto, UnilateralExitNodeStatusKind, UnilateralExitPhase,
-    UnilateralExitProgressDto, UnilateralExitProgressParams, UnilateralExitTopologyDto,
-    UnilateralExitTopologyParams,
+    UnilateralExitBatchEstimateDto, UnilateralExitBatchEstimateParams,
+    UnilateralExitJobViabilityDto, UnilateralExitLeafStatusDto, UnilateralExitNodeStatusDto,
+    UnilateralExitNodeStatusKind, UnilateralExitPhase, UnilateralExitProgressDto,
+    UnilateralExitProgressParams, UnilateralExitTopologyDto, UnilateralExitTopologyParams,
 };
 use crate::constants::{
     MIN_FEE_RATE_SAT_PER_VB, UNILATERAL_EXIT_BUMP_CHILD_NESTED_P2WSH_INPUT_WEIGHT,
@@ -32,24 +32,31 @@ use crate::unilateral_exit_materials::{
 use super::ArkSession;
 use super::exit_autonomous::dedup_virtual_outpoints;
 use super::exit_watch::enrich_unilateral_exit_watches_for_leaf_tx_after_unroll;
+use super::exit_watch_reconcile::ExitingVtxoReconcileOutcome;
 use super::unilateral_exit_branch_topology::{
     merge_topology_nodes_from_chains, terminal_vtxo_host_txids_for_topology,
     topology_host_outpoints, topology_leaf_outpoints, virtual_tx_type_hosts_exit_outpoints,
 };
+use super::unilateral_exit_job_viability::{
+    checkpoint_txids_on_job_branch, classify_operator_vtxo_outcome,
+    detect_foreign_vtxo_outpoint_spends, exit_relevant_vtxo_outpoints_for_plan,
+    viability_from_asp_swept, viability_from_branch_funding_lost, viability_ok,
+    wallet_unroll_step_txids,
+};
 
-struct LeafUnilateralContext {
-    leaf_txid: Txid,
-    sibling_outpoints: Vec<VirtualOutPoint>,
-    chains: VtxoChains,
-    branch_txids: Vec<Txid>,
-    commitment_txids: Vec<Txid>,
-    amount_sats: u64,
+pub(crate) struct LeafUnilateralContext {
+    pub(crate) leaf_txid: Txid,
+    pub(crate) sibling_outpoints: Vec<VirtualOutPoint>,
+    pub(crate) chains: VtxoChains,
+    pub(crate) branch_txids: Vec<Txid>,
+    pub(crate) commitment_txids: Vec<Txid>,
+    pub(crate) amount_sats: u64,
 }
 
-struct UnilateralBatchPlan {
-    leaves: Vec<LeafUnilateralContext>,
-    ordered_step_txids: Vec<Txid>,
-    tx_by_id: HashMap<Txid, Transaction>,
+pub(crate) struct UnilateralBatchPlan {
+    pub(crate) leaves: Vec<LeafUnilateralContext>,
+    pub(crate) ordered_step_txids: Vec<Txid>,
+    pub(crate) tx_by_id: HashMap<Txid, Transaction>,
 }
 
 /// Merge per-leaf exit branches into one serial order, deduping shared virtual txs.
@@ -479,6 +486,126 @@ impl ArkSession {
             node_statuses,
             leaf_statuses,
         })
+    }
+
+    pub async fn evaluate_unilateral_exit_job_viability(
+        &self,
+        params: UnilateralExitProgressParams,
+    ) -> ArkResult<UnilateralExitJobViabilityDto> {
+        if params.vtxo_outpoints.is_empty() {
+            return Err(ArkWasmError::EmptyVtxoOutpoints);
+        }
+
+        let job_leaf_outpoints = dedup_virtual_outpoints(params.vtxo_outpoints);
+        if self.all_job_leaves_locally_unrolled(&job_leaf_outpoints)? {
+            return Ok(viability_ok());
+        }
+
+        if let Some(outpoint) = self
+            .detect_asp_swept_job_target(&job_leaf_outpoints)
+            .await?
+        {
+            return Ok(viability_from_asp_swept(&outpoint));
+        }
+
+        let plan = self
+            .build_unilateral_batch_plan(&job_leaf_outpoints)
+            .await?;
+        let nodes = merge_topology_nodes_from_chains(plan.leaves.iter().map(|leaf| &leaf.chains));
+        let host_records = self
+            .exit_eligible_records_for_topology_hosts(&nodes)
+            .await?;
+        let blockchain = self.client.blockchain();
+
+        let checkpoint_txids = checkpoint_txids_on_job_branch(&nodes);
+        for checkpoint_txid in &checkpoint_txids {
+            let confirmations = tx_confirmations(blockchain, checkpoint_txid).await?;
+            if step_reached_confirmation(confirmations) {
+                return Ok(viability_from_branch_funding_lost(
+                    format!(
+                        "Checkpoint transaction {checkpoint_txid} is confirmed on-chain before unroll completed."
+                    ),
+                    vec![VirtualOutPoint::new(*checkpoint_txid, 0)],
+                ));
+            }
+        }
+
+        let monitored_outpoints = exit_relevant_vtxo_outpoints_for_plan(&plan, &host_records);
+        let allowed_spend_txids = wallet_unroll_step_txids(&plan);
+        let foreign_outpoint = detect_foreign_vtxo_outpoint_spends(
+            blockchain,
+            &monitored_outpoints,
+            &allowed_spend_txids,
+            |outpoint| {
+                self.leaf_is_marked_unrolled(&outpoint.txid.to_string(), outpoint.vout)
+                    .unwrap_or(false)
+            },
+        )
+        .await?;
+        if let Some(outpoint) = foreign_outpoint {
+            return Ok(viability_from_branch_funding_lost(
+                format!(
+                    "Exit-relevant VTXO outpoint {}:{} was spent by a transaction outside the wallet unroll chain.",
+                    outpoint.txid, outpoint.vout
+                ),
+                vec![outpoint],
+            ));
+        }
+
+        Ok(viability_ok())
+    }
+
+    fn all_job_leaves_locally_unrolled(
+        &self,
+        job_leaf_outpoints: &[VirtualOutPoint],
+    ) -> ArkResult<bool> {
+        for outpoint in job_leaf_outpoints {
+            if !self.leaf_is_marked_unrolled(&outpoint.txid.to_string(), outpoint.vout)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    async fn detect_asp_swept_job_target(
+        &self,
+        job_leaf_outpoints: &[VirtualOutPoint],
+    ) -> ArkResult<Option<VirtualOutPoint>> {
+        let snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot;
+        for outpoint in job_leaf_outpoints {
+            let txid = outpoint.txid.to_string();
+            if self.leaf_is_marked_unrolled(&txid, outpoint.vout)? {
+                continue;
+            }
+            if let Some(snapshot) = snapshot.as_ref() {
+                if let Some(record) = snapshot
+                    .virtual_tx_outpoints
+                    .iter()
+                    .find(|record| record.txid == txid && record.vout == outpoint.vout)
+                    && record.is_swept
+                    && !record.is_unrolled
+                {
+                    return Ok(Some(outpoint.clone()));
+                }
+            }
+        }
+
+        let (vtxo_list, _) = self.client.list_vtxos().await?;
+        for outpoint in job_leaf_outpoints {
+            let txid = outpoint.txid.to_string();
+            if self.leaf_is_marked_unrolled(&txid, outpoint.vout)? {
+                continue;
+            }
+            if let Some(virtual_tx_outpoint) = vtxo_list.all().find(|row| {
+                row.outpoint.txid == outpoint.txid && row.outpoint.vout == outpoint.vout
+            }) && classify_operator_vtxo_outcome(virtual_tx_outpoint)
+                == ExitingVtxoReconcileOutcome::KeepWarnAspMismatch
+            {
+                return Ok(Some(outpoint.clone()));
+            }
+        }
+
+        Ok(None)
     }
 
     async fn resolve_control_outpoints(

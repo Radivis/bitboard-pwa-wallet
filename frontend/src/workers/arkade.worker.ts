@@ -43,6 +43,7 @@ import type {
   ArkadeProceedUnilateralExitStepResult,
   ArkadeUnilateralExitProgress,
   ArkadeUnilateralExitProgressParams,
+  ArkadeUnilateralExitJobViability,
   ArkadeOperatorScheduledSession,
   ArkadeOperatorTrustStatus,
   ArkadeOperatorConfigDiffResult,
@@ -755,6 +756,17 @@ const arkadeService: ArkadeService = {
         wasmModule.ark_get_unilateral_exit_progress(
           params,
         ) as Promise<ArkadeUnilateralExitProgress>,
+    )
+  },
+
+  async evaluateUnilateralExitJobViability(
+    params: ArkadeUnilateralExitProgressParams,
+  ): Promise<ArkadeUnilateralExitJobViability> {
+    return invokeWasmArk(
+      (wasmModule) =>
+        wasmModule.ark_evaluate_unilateral_exit_job_viability(
+          params,
+        ) as Promise<ArkadeUnilateralExitJobViability>,
     )
   },
 }

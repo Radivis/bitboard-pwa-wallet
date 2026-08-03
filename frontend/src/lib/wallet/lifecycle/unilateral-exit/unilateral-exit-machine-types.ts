@@ -1,6 +1,6 @@
 import type { UnilateralExitAutomationPausedReason } from '@/lib/wallet/lifecycle/unilateral-exit-automation-types'
 import type { UnilateralExitWalletScope } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
-import type { ArkadeUnilateralExitProgress, ArkadeVtxoOutpoint } from '@/workers/arkade-api'
+import type { ArkadeUnilateralExitProgress, ArkadeUnilateralExitJobViability, ArkadeVtxoOutpoint } from '@/workers/arkade-api'
 import type { DoneActorEvent, ErrorActorEvent } from 'xstate'
 
 export type UnilateralExitMachineContext = {
@@ -25,12 +25,14 @@ export const UNILATERAL_EXIT_MACHINE_STATE = {
   notConfigured: 'notConfigured',
   idle: 'idle',
   checkingProgress: 'checkingProgress',
+  loadingProgress: 'loadingProgress',
   evaluatingPolicy: 'evaluatingPolicy',
   proceeding: 'proceeding',
   ensuringBroadcast: 'ensuringBroadcast',
   waitingConfirm: 'waitingConfirm',
   paused: 'paused',
   complete: 'complete',
+  terminated: 'terminated',
   error: 'error',
 } as const
 
@@ -83,12 +85,14 @@ export type UnilateralExitMachineActorDoneEvent =
   | DoneActorEvent<ArkadeUnilateralExitProgress, 'proceedStep'>
   | DoneActorEvent<ArkadeUnilateralExitProgress, 'ensureBroadcast'>
   | DoneActorEvent<UnilateralExitPolicyEvaluation, 'evaluateAutomationPolicy'>
+  | DoneActorEvent<ArkadeUnilateralExitJobViability, 'evaluateJobViability'>
 
 export type UnilateralExitMachineActorErrorEvent =
   | ErrorActorEvent<unknown, 'fetchProgress'>
   | ErrorActorEvent<unknown, 'proceedStep'>
   | ErrorActorEvent<unknown, 'ensureBroadcast'>
   | ErrorActorEvent<unknown, 'evaluateAutomationPolicy'>
+  | ErrorActorEvent<unknown, 'evaluateJobViability'>
 
 export type UnilateralExitMachineEvent =
   | UnilateralExitMachineUserEvent

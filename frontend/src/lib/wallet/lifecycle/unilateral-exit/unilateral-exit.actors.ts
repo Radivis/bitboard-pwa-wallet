@@ -20,6 +20,7 @@ import { useUnilateralExitAutomationPrefsStore } from '@/lib/wallet/lifecycle/un
 import type {
   EnsureBroadcastActorInput,
   EvaluateAutomationPolicyActorInput,
+  EvaluateJobViabilityActorInput,
   FetchProgressActorInput,
   ProceedStepActorInput,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.machine'
@@ -29,7 +30,7 @@ import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { useWalletStore } from '@/stores/walletStore'
 import { getArkadeWorker } from '@/workers/arkade-factory'
 import { sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
-import type { ArkadeUnilateralExitProgress } from '@/workers/arkade-api'
+import type { ArkadeUnilateralExitProgress, ArkadeUnilateralExitJobViability } from '@/workers/arkade-api'
 import { fromPromise } from 'xstate'
 
 function assertCanRunUnilateralExit(scope: UnilateralExitWalletScope): void {
@@ -133,6 +134,16 @@ export const fetchProgressActor = fromPromise<
   })
 })
 
+export const evaluateJobViabilityActor = fromPromise<
+  ArkadeUnilateralExitJobViability,
+  EvaluateJobViabilityActorInput
+>(async ({ input }) => {
+  const worker = getArkadeWorker()
+  return worker.evaluateUnilateralExitJobViability({
+    vtxoOutpoints: sortArkadeVtxoOutpoints(input.outpoints),
+  })
+})
+
 export const proceedStepActor = fromPromise<
   ArkadeUnilateralExitProgress,
   ProceedStepActorInput
@@ -219,6 +230,7 @@ export const ensureBroadcastActor = fromPromise<
 
 export const unilateralExitMachineActors = {
   fetchProgressActor,
+  evaluateJobViabilityActor,
   proceedStepActor,
   evaluateAutomationPolicyActor,
   ensureBroadcastActor,

@@ -568,3 +568,18 @@ pub async fn ark_get_unilateral_exit_progress(params: JsValue) -> Result<JsValue
     })
     .await
 }
+
+#[wasm_bindgen]
+pub async fn ark_evaluate_unilateral_exit_job_viability(
+    params: JsValue,
+) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let params: crate::api_types::UnilateralExitProgressParams =
+            serde_wasm_bindgen::from_value(params)?;
+        export_session_json(|session| async move {
+            session.evaluate_unilateral_exit_job_viability(params).await
+        })
+        .await
+    })
+    .await
+}

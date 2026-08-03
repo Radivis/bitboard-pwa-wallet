@@ -35,6 +35,9 @@ function lifecyclePhaseFromMachineState(
   if (unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.complete)) {
     return UnilateralExitLifecyclePhase.Complete
   }
+  if (unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.terminated)) {
+    return UnilateralExitLifecyclePhase.Terminated
+  }
   if (unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.error)) {
     return UnilateralExitLifecyclePhase.Error
   }
@@ -50,6 +53,7 @@ function lifecyclePhaseFromMachineState(
   if (
     unilateralExitSnapshotIsInAnyState(state, [
       UNILATERAL_EXIT_MACHINE_STATE.checkingProgress,
+      UNILATERAL_EXIT_MACHINE_STATE.loadingProgress,
       UNILATERAL_EXIT_MACHINE_STATE.evaluatingPolicy,
       UNILATERAL_EXIT_MACHINE_STATE.paused,
     ])
@@ -113,6 +117,9 @@ export function selectUnilateralExitAutomationSnapshot(
 
 export function selectIsUnilateralExitJobActive(state: UnilateralExitActorSnapshot): boolean {
   const lifecycle = selectUnilateralExitLifecycleSnapshot(state)
+  if (lifecycle.phase === UnilateralExitLifecyclePhase.Terminated) {
+    return false
+  }
   return (
     lifecycle.phase === UnilateralExitLifecyclePhase.Advancing ||
     lifecycle.phase === UnilateralExitLifecyclePhase.WaitingConfirm ||
@@ -164,6 +171,7 @@ export function selectUnilateralExitControlJobState(
               UNILATERAL_EXIT_MACHINE_STATE.proceeding,
               UNILATERAL_EXIT_MACHINE_STATE.ensuringBroadcast,
               UNILATERAL_EXIT_MACHINE_STATE.checkingProgress,
+              UNILATERAL_EXIT_MACHINE_STATE.loadingProgress,
               UNILATERAL_EXIT_MACHINE_STATE.evaluatingPolicy,
             ])
           ? isWaitingForRelayedStepConfirmation(progress)
@@ -205,7 +213,10 @@ export function selectUnilateralExitInProgressOverlay(
     return 'ensuringBroadcast'
   }
   if (
-    unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.checkingProgress)
+    unilateralExitSnapshotIsInAnyState(state, [
+      UNILATERAL_EXIT_MACHINE_STATE.checkingProgress,
+      UNILATERAL_EXIT_MACHINE_STATE.loadingProgress,
+    ])
   ) {
     const progress = state.context.progress
     if (isWaitingForRelayedStepConfirmation(progress)) {

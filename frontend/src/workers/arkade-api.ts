@@ -427,10 +427,25 @@ export interface ArkadeUnilateralExitProgress {
   totalSteps: number
   phase: ArkadeUnilateralExitPhaseKind
   currentStepWaitingSince?: number
-  /** True when `/tx/{step_txid}/raw` is available for the active step. */
   currentStepTxRelayed: boolean
   nodeStatuses: ArkadeUnilateralExitNodeStatus[]
   leafStatuses: ArkadeUnilateralExitLeafStatus[]
+}
+
+export type ArkadeUnilateralExitJobViabilityStatus =
+  | 'ok'
+  | 'aspSweptTargets'
+  | 'branchFundingLost'
+
+export type ArkadeUnilateralExitFailureReasonCode =
+  | 'asp_swept_targets'
+  | 'branch_funding_lost'
+
+export interface ArkadeUnilateralExitJobViability {
+  status: ArkadeUnilateralExitJobViabilityStatus
+  reasonCode: string
+  detailMessage?: string
+  offendingOutpoints: ArkadeVtxoOutpoint[]
 }
 
 export interface EnsureArkadeOperatorConnectionEncryptedParams {
@@ -542,4 +557,7 @@ export interface ArkadeService {
   getUnilateralExitProgress(
     params: ArkadeUnilateralExitProgressParams,
   ): Promise<ArkadeUnilateralExitProgress>
+  evaluateUnilateralExitJobViability(
+    params: ArkadeUnilateralExitProgressParams,
+  ): Promise<ArkadeUnilateralExitJobViability>
 }

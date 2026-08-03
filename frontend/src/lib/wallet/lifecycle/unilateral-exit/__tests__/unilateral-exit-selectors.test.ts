@@ -6,10 +6,13 @@ import {
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-types'
 import { unilateralExitMachine } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.machine'
 import {
+  selectIsUnilateralExitJobActive,
   selectUnilateralExitControlJobState,
   selectUnilateralExitInProgressOverlay,
+  selectUnilateralExitLifecycleSnapshot,
   selectUnilateralExitProceedButtonState,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-selectors'
+import { UnilateralExitLifecyclePhase } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
 import { toUnilateralExitActorSnapshot } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-snapshot'
 import type { ArkadeUnilateralExitProgress } from '@/workers/arkade-api'
 
@@ -272,5 +275,17 @@ describe('selectUnilateralExitInProgressOverlay', () => {
       progress: null,
     })
     expect(selectUnilateralExitInProgressOverlay(snapshot)).toBeNull()
+  })
+})
+
+describe('selectUnilateralExitLifecycleSnapshot terminated', () => {
+  it('maps terminated machine state to terminated lifecycle phase', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.terminated, {
+      jobOutpoints: [leaf],
+    })
+    expect(selectUnilateralExitLifecycleSnapshot(snapshot).phase).toBe(
+      UnilateralExitLifecyclePhase.Terminated,
+    )
+    expect(selectIsUnilateralExitJobActive(snapshot)).toBe(false)
   })
 })

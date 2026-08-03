@@ -8,6 +8,7 @@ vi.mock('@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence', () => ({
     jobActive: false,
     selectedLeafOutpoints: [],
     currentStepRelayedSinceUnix: null,
+    jobStartedAtUnix: 1_700_000_000,
   })),
   useUnilateralExitLifecyclePersistenceStore: {
     getState: () => ({
@@ -15,18 +16,40 @@ vi.mock('@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence', () => ({
         jobActive: false,
         selectedLeafOutpoints: [],
         currentStepRelayedSinceUnix: null,
+        jobStartedAtUnix: 1_700_000_000,
       }),
     }),
     setState: vi.fn(),
   },
 }))
 
+vi.mock('@/lib/wallet/lifecycle/unilateral-exit-failure-persistence', () => ({
+  buildPersistedUnilateralExitFailure: vi.fn((params) => ({
+    ...params,
+    detectedAtUnix: 1_700_000_100,
+  })),
+  persistUnilateralExitFailureRecord: vi.fn(),
+  clearPersistedUnilateralExitFailure: vi.fn(),
+  getPersistedUnilateralExitFailure: vi.fn(() => null),
+  useUnilateralExitFailurePersistenceStore: {
+    getState: () => ({
+      getFailure: () => null,
+      persistFailure: vi.fn(),
+      clearFailure: vi.fn(),
+    }),
+  },
+}))
+
 import { createActor, fromPromise, waitFor } from 'xstate'
-import type { ArkadeUnilateralExitProgress } from '@/workers/arkade-api'
+import type {
+  ArkadeUnilateralExitJobViability,
+  ArkadeUnilateralExitProgress,
+} from '@/workers/arkade-api'
 import {
   unilateralExitMachine,
   type EnsureBroadcastActorInput,
   type EvaluateAutomationPolicyActorInput,
+  type EvaluateJobViabilityActorInput,
   type FetchProgressActorInput,
   type ProceedStepActorInput,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.machine'
@@ -35,6 +58,7 @@ import {
   clearPersistedUnilateralExitJob,
   persistActiveUnilateralExitJob,
 } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence'
+import { persistUnilateralExitFailureRecord } from '@/lib/wallet/lifecycle/unilateral-exit-failure-persistence'
 
 const walletScope = {
   walletId: 1,
@@ -69,6 +93,9 @@ function progress(
 
 function createTestActor(params: {
   fetchProgress?: (input: FetchProgressActorInput) => Promise<ArkadeUnilateralExitProgress>
+  evaluateJobViability?: (
+    input: EvaluateJobViabilityActorInput,
+  ) => Promise<ArkadeUnilateralExitJobViability>
   proceedStep?: (input: ProceedStepActorInput) => Promise<ArkadeUnilateralExitProgress>
   ensureBroadcast?: (input: EnsureBroadcastActorInput) => Promise<ArkadeUnilateralExitProgress>
   evaluatePolicy?: (
@@ -77,6 +104,13 @@ function createTestActor(params: {
 }) {
   const fetchProgress =
     params.fetchProgress ?? vi.fn(async () => progress({ phase: 'idle' }))
+  const evaluateJobViability =
+    params.evaluateJobViability ??
+    vi.fn(async () => ({
+      status: 'ok' as const,
+      reasonCode: 'ok',
+      offendingOutpoints: [],
+    }))
   const proceedStep =
     params.proceedStep ??
     vi.fn(async () =>
@@ -105,6 +139,7 @@ function createTestActor(params: {
     unilateralExitMachine.provide({
       actors: {
         fetchProgressActor: fromPromise(fetchProgress),
+        evaluateJobViabilityActor: fromPromise(evaluateJobViability),
         proceedStepActor: fromPromise(proceedStep),
         ensureBroadcastActor: fromPromise(ensureBroadcast),
         evaluateAutomationPolicyActor: fromPromise(evaluatePolicy),
@@ -113,7 +148,14 @@ function createTestActor(params: {
     { input: { pollDelayMs: 60_000 } },
   )
   testActor.start()
-  return { testActor, fetchProgress, proceedStep, ensureBroadcast, evaluatePolicy }
+  return {
+    testActor,
+    fetchProgress,
+    evaluateJobViability,
+    proceedStep,
+    ensureBroadcast,
+    evaluatePolicy,
+  }
 }
 
 describe('unilateralExitMachine', () => {
@@ -508,5 +550,31 @@ describe('unilateralExitMachine', () => {
 
     await waitFor(testActor, (state) => state.matches('complete'))
     expect(clearPersistedUnilateralExitJob).toHaveBeenCalled()
+  })
+
+  it('terminates job when viability reports asp swept targets', async () => {
+    const evaluateJobViability = vi.fn(async () => ({
+      status: 'aspSweptTargets' as const,
+      reasonCode: 'asp_swept_targets',
+      detailMessage: 'Operator swept target VTXO.',
+      offendingOutpoints: [leaf],
+    }))
+    const fetchProgress = vi.fn(async () => progress({ phase: 'idle' }))
+    const { testActor } = createTestActor({ evaluateJobViability, fetchProgress })
+
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'START_MANUAL',
+      walletScope,
+      outpoints: [leaf],
+      feeRateSatPerVb: 2,
+    })
+
+    await waitFor(testActor, (state) => state.matches('idle'))
+    expect(evaluateJobViability).toHaveBeenCalledTimes(1)
+    expect(fetchProgress).not.toHaveBeenCalled()
+    expect(persistUnilateralExitFailureRecord).toHaveBeenCalled()
+    expect(clearPersistedUnilateralExitJob).toHaveBeenCalled()
+    expect(testActor.getSnapshot().context.jobOutpoints).toEqual([])
   })
 })

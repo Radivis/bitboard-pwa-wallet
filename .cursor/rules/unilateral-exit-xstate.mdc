@@ -39,3 +39,4 @@ Call sites import from `unilateral-exit-runtime.ts` (lifecycle sends, configure/
 - Resolve outpoints via `resolveUnilateralExitJobOutpoints`; never skip when lifecycle outpoints are empty but persistence has them.
 - Branch complete → `complete` state, clear persisted job, invalidate queries.
 - **`waitingConfirm` requires relay** — enter `ensuringBroadcast` first; only transition to `waitingConfirm` when `isCurrentStepRelayed()` is true (WASM `currentStepTxRelayed`, or `currentStepWaitingSince` after proceed on regtest where `/raw` stays 404 in mempool). Use helpers in `unilateral-exit-broadcast.ts`.
+- **ASP interference → `terminated`** — every `checkingProgress` entry runs `evaluateJobViabilityActor` before `fetchProgress`; `aspSweptTargets` / `branchFundingLost` persist failure, clear job, invalidate topology queries — never `complete`.

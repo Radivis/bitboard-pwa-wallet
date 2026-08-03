@@ -14,6 +14,7 @@ export const emptyPersistedUnilateralExitJob: PersistedUnilateralExitJob = {
   selectedLeafOutpoints: [],
   jobActive: false,
   currentStepRelayedSinceUnix: null,
+  jobStartedAtUnix: null,
 }
 
 function defaultPersistedJob(): PersistedUnilateralExitJob {
@@ -58,6 +59,15 @@ function migrateJobToV3(job: LegacyPersistedJob): PersistedUnilateralExitJob {
     selectedLeafOutpoints: job.selectedLeafOutpoints ?? [],
     jobActive: job.jobActive ?? false,
     currentStepRelayedSinceUnix: job.currentStepRelayedSinceUnix ?? null,
+    jobStartedAtUnix: null,
+  }
+}
+
+function migrateJobToV4(job: LegacyPersistedJob): PersistedUnilateralExitJob {
+  const migrated = migrateJobToV3(job)
+  return {
+    ...migrated,
+    jobStartedAtUnix: job.jobStartedAtUnix ?? null,
   }
 }
 
@@ -80,6 +90,7 @@ export const useUnilateralExitLifecyclePersistenceStore =
               selectedLeafOutpoints: sorted,
               jobActive: true,
               currentStepRelayedSinceUnix: null,
+              jobStartedAtUnix: Math.floor(Date.now() / 1000),
             })),
           )
         },
@@ -108,7 +119,7 @@ export const useUnilateralExitLifecyclePersistenceStore =
       {
         name: 'unilateral-exit-lifecycle-storage',
         storage: createJSONStorage(() => sqliteStorage),
-        version: 3,
+        version: 4,
         migrate: (persistedState, version) => {
           const state = persistedState as {
             jobsByKey?: Record<string, LegacyPersistedJob>
@@ -117,14 +128,16 @@ export const useUnilateralExitLifecyclePersistenceStore =
             return persistedState
           }
           const jobsByKey = Object.fromEntries(
-            Object.entries(state.jobsByKey).map(([key, job]) => [
-              key,
-              migrateJobToV3(job),
-            ]),
+            Object.entries(state.jobsByKey).map(([key, job]) => {
+              if (version < 3) {
+                return [key, migrateJobToV4(migrateJobToV3(job))]
+              }
+              if (version < 4) {
+                return [key, migrateJobToV4(job)]
+              }
+              return [key, migrateJobToV4(job)]
+            }),
           )
-          if (version < 3) {
-            return { ...state, jobsByKey }
-          }
           return { ...state, jobsByKey }
         },
         partialize: (state) => ({ jobsByKey: state.jobsByKey }),

@@ -560,3 +560,21 @@ pub struct UnilateralExitProgressDto {
     pub node_statuses: Vec<UnilateralExitNodeStatusDto>,
     pub leaf_statuses: Vec<UnilateralExitLeafStatusDto>,
 }
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum UnilateralExitJobViabilityKind {
+    Ok,
+    AspSweptTargets,
+    BranchFundingLost,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitJobViabilityDto {
+    pub status: UnilateralExitJobViabilityKind,
+    pub reason_code: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail_message: Option<String>,
+    pub offending_outpoints: Vec<VirtualOutPoint>,
+}

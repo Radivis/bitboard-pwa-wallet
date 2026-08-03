@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
 import { UnilateralExitAutomationSection } from '@/components/wallet/unilateral-exit/UnilateralExitAutomationSection'
+import { UnilateralExitFailureBanner } from '@/components/wallet/unilateral-exit/UnilateralExitFailureBanner'
 import { StartUnilateralExitConfirmModal } from '@/components/wallet/unilateral-exit/StartUnilateralExitConfirmModal'
 import { UnilateralExitTreeGraph } from '@/components/wallet/unilateral-exit/UnilateralExitTreeGraph'
 import { UnilateralExitNodeDetailCard } from '@/components/wallet/unilateral-exit/UnilateralExitNodeDetailCard'
@@ -38,6 +39,8 @@ import { arkadeUnilateralExitInProgressSats } from '@/lib/arkade/arkade-balance-
 import { defaultMaxFeeRateSatPerVb } from '@/lib/arkade/unilateral-exit-automation-fees'
 import { useUnilateralExitAutomationPrefsStore } from '@/lib/wallet/lifecycle/unilateral-exit-automation-prefs-persistence'
 import { useUnilateralExitLifecyclePersistenceStore, emptyPersistedUnilateralExitJob } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence'
+import { useUnilateralExitFailurePersistenceStore } from '@/lib/wallet/lifecycle/unilateral-exit-failure-persistence'
+import { UnilateralExitLifecyclePhase } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
 import {
   resolveActiveUnilateralExitWalletScope,
   resolveUnilateralExitJobOutpoints,
@@ -175,6 +178,17 @@ export function UnilateralExitControlPage() {
       return emptyPersistedUnilateralExitJob
     }
     return state.getJob(activeWalletId, networkMode, activeArkadeConnectionId)
+  })
+
+  const persistedFailure = useUnilateralExitFailurePersistenceStore((state) => {
+    if (
+      activeWalletId == null ||
+      activeArkadeConnectionId == null ||
+      !isArkadeSupportedNetworkMode(networkMode)
+    ) {
+      return null
+    }
+    return state.getFailure(activeWalletId, networkMode, activeArkadeConnectionId)
   })
 
   const jobOutpoints = useMemo(
@@ -351,6 +365,22 @@ export function UnilateralExitControlPage() {
     seedSelectionFromInProgress,
     topologyQuery.data?.leafOutpoints,
   ])
+
+  useEffect(() => {
+    if (persistedFailure == null || lifecycleJobActive) {
+      return
+    }
+    resetControlStore()
+    setFocusedNodeId(null)
+  }, [lifecycleJobActive, persistedFailure, resetControlStore])
+
+  useEffect(() => {
+    if (lifecycleSnapshot.phase !== UnilateralExitLifecyclePhase.Terminated) {
+      return
+    }
+    resetControlStore()
+    setFocusedNodeId(null)
+  }, [lifecycleSnapshot.phase, resetControlStore])
 
   useEffect(() => {
     if (hasInProgressExits || lifecycleJobActive) return
@@ -603,6 +633,8 @@ export function UnilateralExitControlPage() {
           </InfomodeWrapper>
         </p>
 
+        <UnilateralExitFailureBanner />
+
         {!hasBrowsableExitTrees && topologyOutpoints.length === 0 ? (
           <div
             className="flex h-[min(480px,55vh)] min-h-[320px] w-full items-center justify-center rounded-md border bg-muted/20"
@@ -664,9 +696,10 @@ export function UnilateralExitControlPage() {
             data-step-relayed={String(isCurrentStepRelayed(progress))}
           >
             Step {Math.min(stepIndex + 1, totalSteps)} of {totalSteps}
-            {phase === 'complete' ? ' — branch complete' : ''}
+            {phase === 'complete' && persistedFailure == null ? ' — branch complete' : ''}
             {(phase === 'waiting' || stepWaitingDurationLabel != null) &&
-            phase !== 'complete'
+            phase !== 'complete' &&
+            persistedFailure == null
               ? ` — waiting for confirmation${
                   stepWaitingDurationLabel != null ? ` (${stepWaitingDurationLabel})` : ''
                 }`
@@ -675,6 +708,7 @@ export function UnilateralExitControlPage() {
             automationPausedReason == null &&
             phase !== 'complete' &&
             phase !== 'waiting' &&
+            persistedFailure == null &&
             (lifecycleJobActive || machineProceeding || isProceeding)
               ? ' — proceeding automatically'
               : ''}

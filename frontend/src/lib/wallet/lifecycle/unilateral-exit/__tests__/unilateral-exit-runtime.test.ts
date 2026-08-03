@@ -74,6 +74,11 @@ vi.mock('@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.actors', () => {
   return {
     unilateralExitMachineActors: {
       fetchProgressActor: fromPromise(async () => progress),
+      evaluateJobViabilityActor: fromPromise(async () => ({
+        status: 'ok' as const,
+        reasonCode: 'ok',
+        offendingOutpoints: [],
+      })),
       proceedStepActor: fromPromise(async () => progress),
       evaluateAutomationPolicyActor: fromPromise(async () => ({
         feeRateSatPerVb: 2,

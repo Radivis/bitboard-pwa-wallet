@@ -6,9 +6,15 @@ import {
 import { unilateralExitAutomationWaitPollMs } from '@/lib/arkade/arkade-query-timings'
 import {
   clearPersistedUnilateralExitJob,
+  getPersistedUnilateralExitJob,
   persistActiveUnilateralExitJob,
   updatePersistedUnilateralExitRelayWait,
 } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence'
+import {
+  buildPersistedUnilateralExitFailure,
+  persistUnilateralExitFailureRecord,
+} from '@/lib/wallet/lifecycle/unilateral-exit-failure-persistence'
+import type { UnilateralExitFailureReasonCode } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
 import {
   createInitialUnilateralExitContext,
   type UnilateralExitMachineContext,
@@ -16,7 +22,7 @@ import {
   type UnilateralExitMachineInput,
   type UnilateralExitPolicyEvaluation,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-types'
-import type { ArkadeUnilateralExitProgress } from '@/workers/arkade-api'
+import type { ArkadeUnilateralExitProgress, ArkadeUnilateralExitJobViability } from '@/workers/arkade-api'
 import { sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
 import { assign, fromPromise, setup } from 'xstate'
 
@@ -31,6 +37,10 @@ export type FetchProgressActorInput = {
   outpoints: UnilateralExitMachineContext['jobOutpoints']
 }
 
+export type EvaluateJobViabilityActorInput = {
+  outpoints: UnilateralExitMachineContext['jobOutpoints']
+}
+
 export type ProceedStepActorInput = {
   walletScope: NonNullable<UnilateralExitMachineContext['walletScope']>
   outpoints: UnilateralExitMachineContext['jobOutpoints']
@@ -40,6 +50,18 @@ export type ProceedStepActorInput = {
 export type EvaluateAutomationPolicyActorInput = {
   walletScope: NonNullable<UnilateralExitMachineContext['walletScope']>
   outpoints: UnilateralExitMachineContext['jobOutpoints']
+}
+
+function viabilityFromEvaluateEvent(
+  event: UnilateralExitMachineEvent,
+): ArkadeUnilateralExitJobViability | null {
+  return event.type === 'xstate.done.actor.evaluateJobViability' ? event.output : null
+}
+
+function isTerminalViabilityStatus(
+  viability: ArkadeUnilateralExitJobViability | null,
+): boolean {
+  return viability?.status === 'aspSweptTargets' || viability?.status === 'branchFundingLost'
 }
 
 function progressFromFetchEvent(
@@ -99,6 +121,11 @@ export const unilateralExitMachineSetup = setup({
     pollDelay: ({ context }) => context.pollDelayMs,
   },
   actors: {
+    evaluateJobViabilityActor: fromPromise<ArkadeUnilateralExitJobViability, EvaluateJobViabilityActorInput>(
+      async () => {
+        throw new Error('evaluateJobViabilityActor implementation missing')
+      },
+    ),
     fetchProgressActor: fromPromise<ArkadeUnilateralExitProgress, FetchProgressActorInput>(
       async () => {
         throw new Error('fetchProgressActor implementation missing')
@@ -183,6 +210,8 @@ export const unilateralExitMachineSetup = setup({
     policyOk: ({ event }) =>
       event.type === 'xstate.done.actor.evaluateAutomationPolicy' &&
       event.output.pausedReason == null,
+    isJobTerminatedFromViabilityEvent: ({ event }) =>
+      isTerminalViabilityStatus(viabilityFromEvaluateEvent(event)),
   },
   actions: {
     assignWalletScope: assign(({ event }) => {
@@ -391,6 +420,50 @@ export const unilateralExitMachineSetup = setup({
             : 'Unroll step failed.'
           : null,
     }),
+    assignErrorFromViability: assign({
+      lastErrorMessage: ({ event }) =>
+        event.type === 'xstate.error.actor.evaluateJobViability'
+          ? event.error instanceof Error
+            ? event.error.message
+            : 'Failed to evaluate unilateral exit job viability.'
+          : null,
+      proceedRequested: false,
+    }),
+    persistUnilateralExitFailureFromViability: ({ context, event }) => {
+      const viability = viabilityFromEvaluateEvent(event)
+      if (context.walletScope == null || viability == null || !isTerminalViabilityStatus(viability)) {
+        return
+      }
+      const reasonCode = viability.reasonCode as UnilateralExitFailureReasonCode
+      if (reasonCode !== 'asp_swept_targets' && reasonCode !== 'branch_funding_lost') {
+        return
+      }
+      const job = getPersistedUnilateralExitJob(context.walletScope)
+      persistUnilateralExitFailureRecord(
+        context.walletScope,
+        buildPersistedUnilateralExitFailure({
+          selectedLeafOutpoints: context.jobOutpoints,
+          jobStartedAtUnix: job.jobStartedAtUnix ?? Math.floor(Date.now() / 1000),
+          reasonCode,
+          detailMessage: viability.detailMessage ?? '',
+        }),
+      )
+    },
+    invalidateUnilateralExitQueriesOnTerminate: ({ context }) => {
+      if (context.walletScope == null || context.jobOutpoints.length === 0) {
+        return
+      }
+      void import('@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.actors').then(
+        (module) =>
+          module.invalidateUnilateralExitQueries(
+            context.walletScope!,
+            context.jobOutpoints,
+          ),
+      )
+    },
+    clearTerminatedProceedRequested: assign({
+      proceedRequested: false,
+    }),
     resetToNotConfigured: assign(() => createInitialUnilateralExitContext()),
   },
 })
@@ -513,6 +586,31 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
       },
     },
     checkingProgress: {
+      on: {
+        AUTOMATION_PREFS_CHANGED: {
+          actions: 'assignAutomationPrefs',
+        },
+      },
+      invoke: {
+        id: 'evaluateJobViability',
+        src: 'evaluateJobViabilityActor',
+        input: ({ context }) => ({ outpoints: context.jobOutpoints }),
+        onDone: [
+          {
+            guard: 'isJobTerminatedFromViabilityEvent',
+            target: 'terminated',
+          },
+          {
+            target: 'loadingProgress',
+          },
+        ],
+        onError: {
+          target: 'error',
+          actions: 'assignErrorFromViability',
+        },
+      },
+    },
+    loadingProgress: {
       on: {
         AUTOMATION_PREFS_CHANGED: {
           actions: 'assignAutomationPrefs',
@@ -709,6 +807,17 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
           target: 'checkingProgress',
           actions: 'assignHydrate',
         },
+      },
+    },
+    terminated: {
+      entry: [
+        'persistUnilateralExitFailureFromViability',
+        'invalidateUnilateralExitQueriesOnTerminate',
+        'clearJobContext',
+        'clearTerminatedProceedRequested',
+      ],
+      always: {
+        target: 'idle',
       },
     },
     error: {

@@ -18,6 +18,7 @@ mod receive;
 mod signer_migration;
 mod sync;
 mod unilateral_exit_branch_topology;
+mod unilateral_exit_job_viability;
 mod unilateral_exit_orchestrator;
 mod vtxo;
 
