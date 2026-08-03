@@ -97,6 +97,7 @@ export type E2eUnilateralExitDebugSnapshot = {
   persistedJob: {
     jobActive: boolean
     selectedLeafOutpoints: ArkadeVtxoOutpoint[]
+    currentStepRelayedSinceUnix: number | null
   }
   progress: ArkadeUnilateralExitProgress | null
   progressError: string | null
@@ -220,6 +221,7 @@ export async function exportUnilateralExitDebugSnapshotForE2e(): Promise<E2eUnil
     persistedJob: {
       jobActive: persistedJob.jobActive,
       selectedLeafOutpoints: persistedJob.selectedLeafOutpoints,
+      currentStepRelayedSinceUnix: persistedJob.currentStepRelayedSinceUnix,
     },
     progress,
     progressError,

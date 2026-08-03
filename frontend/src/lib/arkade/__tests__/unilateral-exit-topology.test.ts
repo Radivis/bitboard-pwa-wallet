@@ -229,10 +229,20 @@ describe('unilateral-exit-topology helpers', () => {
     expect(nodes.find((node) => node.id === 'cc')?.data.inProgressOverlay).toBeNull()
   })
 
-  it('resolveUnilateralExitTopologyOutpoints prefers selection, then in-progress, then job', () => {
+  it('resolveUnilateralExitTopologyOutpoints prefers authoritative job over in-progress inference', () => {
     const selected = [{ txid: 'aa'.repeat(32), vout: 0 }]
     const inProgress = [{ txid: 'bb'.repeat(32), vout: 1 }]
     const persisted = [{ txid: 'cc'.repeat(32), vout: 2 }]
+    const authoritative = [{ txid: 'dd'.repeat(32), vout: 3 }]
+
+    expect(
+      resolveUnilateralExitTopologyOutpoints({
+        authoritativeJobOutpoints: authoritative,
+        selectedLeafOutpoints: selected,
+        inProgressOutpoints: inProgress,
+        persistedJobOutpoints: persisted,
+      }),
+    ).toEqual(authoritative)
 
     expect(
       resolveUnilateralExitTopologyOutpoints({
@@ -247,25 +257,17 @@ describe('unilateral-exit-topology helpers', () => {
         selectedLeafOutpoints: [],
         inProgressOutpoints: inProgress,
         persistedJobOutpoints: persisted,
-      }),
-    ).toEqual(inProgress)
-
-    expect(
-      resolveUnilateralExitTopologyOutpoints({
-        selectedLeafOutpoints: [],
-        inProgressOutpoints: [],
-        persistedJobOutpoints: persisted,
-      }),
-    ).toEqual([])
-
-    expect(
-      resolveUnilateralExitTopologyOutpoints({
-        selectedLeafOutpoints: [],
-        inProgressOutpoints: [],
-        persistedJobOutpoints: persisted,
         persistedJobStarted: true,
       }),
     ).toEqual(persisted)
+
+    expect(
+      resolveUnilateralExitTopologyOutpoints({
+        selectedLeafOutpoints: [],
+        inProgressOutpoints: inProgress,
+        persistedJobOutpoints: persisted,
+      }),
+    ).toEqual(inProgress)
 
     expect(
       resolveUnilateralExitTopologyOutpoints({

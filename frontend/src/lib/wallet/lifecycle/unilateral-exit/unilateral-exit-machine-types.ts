@@ -1,6 +1,7 @@
 import type { UnilateralExitAutomationPausedReason } from '@/lib/wallet/lifecycle/unilateral-exit-automation-types'
 import type { UnilateralExitWalletScope } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
 import type { ArkadeUnilateralExitProgress, ArkadeVtxoOutpoint } from '@/workers/arkade-api'
+import type { DoneActorEvent, ErrorActorEvent } from 'xstate'
 
 export type UnilateralExitMachineContext = {
   walletScope: UnilateralExitWalletScope | null
@@ -12,6 +13,8 @@ export type UnilateralExitMachineContext = {
   feeRateSatPerVb: number | null
   proceedRequested: boolean
   pollDelayMs: number
+  reconcileInProgressSats: number
+  reconcileInProgressOutpoints: ArkadeVtxoOutpoint[]
 }
 
 export type UnilateralExitMachineInput = {
@@ -45,13 +48,17 @@ export type UnilateralExitPolicyEvaluation = {
   pausedReason: UnilateralExitAutomationPausedReason | null
 }
 
-export type UnilateralExitMachineEvent =
+export type UnilateralExitMachineUserEvent =
   | { type: 'WALLET_CONFIGURED'; walletScope: UnilateralExitWalletScope }
   | {
       type: 'HYDRATE_OR_START'
       walletScope: UnilateralExitWalletScope
       outpoints: ArkadeVtxoOutpoint[]
       automationEnabled?: boolean
+      /** When true and automation is enabled, allow auto-proceed after progress fetch. */
+      resumeAutomation?: boolean
+      reconcileInProgressSats?: number
+      reconcileInProgressOutpoints?: ArkadeVtxoOutpoint[]
     }
   | {
       type: 'START_MANUAL'
@@ -70,11 +77,23 @@ export type UnilateralExitMachineEvent =
   | { type: 'CLEAR_JOB' }
   | { type: 'WALLET_RESET' }
   | { type: 'AUTOMATION_PREFS_CHANGED'; automationEnabled: boolean }
-  | {
-      type: 'RESTORE_PERSISTED_JOB'
-      walletScope: UnilateralExitWalletScope
-      outpoints: ArkadeVtxoOutpoint[]
-    }
+
+export type UnilateralExitMachineActorDoneEvent =
+  | DoneActorEvent<ArkadeUnilateralExitProgress, 'fetchProgress'>
+  | DoneActorEvent<ArkadeUnilateralExitProgress, 'proceedStep'>
+  | DoneActorEvent<ArkadeUnilateralExitProgress, 'ensureBroadcast'>
+  | DoneActorEvent<UnilateralExitPolicyEvaluation, 'evaluateAutomationPolicy'>
+
+export type UnilateralExitMachineActorErrorEvent =
+  | ErrorActorEvent<unknown, 'fetchProgress'>
+  | ErrorActorEvent<unknown, 'proceedStep'>
+  | ErrorActorEvent<unknown, 'ensureBroadcast'>
+  | ErrorActorEvent<unknown, 'evaluateAutomationPolicy'>
+
+export type UnilateralExitMachineEvent =
+  | UnilateralExitMachineUserEvent
+  | UnilateralExitMachineActorDoneEvent
+  | UnilateralExitMachineActorErrorEvent
 
 export function createInitialUnilateralExitContext(
   input?: UnilateralExitMachineInput,
@@ -89,5 +108,7 @@ export function createInitialUnilateralExitContext(
     feeRateSatPerVb: null,
     proceedRequested: false,
     pollDelayMs: input?.pollDelayMs ?? 2_000,
+    reconcileInProgressSats: 0,
+    reconcileInProgressOutpoints: [],
   }
 }

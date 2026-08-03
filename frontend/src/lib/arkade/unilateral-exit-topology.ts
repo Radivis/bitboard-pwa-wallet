@@ -18,19 +18,24 @@ import { includesArkadeVtxoOutpoint, sortArkadeVtxoOutpoints } from '@/workers/a
 
 export type UnilateralExitLayoutDirection = 'LR' | 'TB'
 
-/** Outpoints passed to topology/progress APIs: explicit selection, then in-progress, then active job. */
+/** Outpoints passed to topology/progress APIs: authoritative job wins; never infer from in-progress when a job is active. */
 export function resolveUnilateralExitTopologyOutpoints(params: {
+  /** Persisted or machine-owned job outpoints — sole source for active jobs. */
+  authoritativeJobOutpoints?: ArkadeVtxoOutpoint[]
   selectedLeafOutpoints: ArkadeVtxoOutpoint[]
   inProgressOutpoints: ArkadeVtxoOutpoint[]
   persistedJobOutpoints?: ArkadeVtxoOutpoint[]
   /** When false, ignore persisted job outpoints (finished or idle job). */
   persistedJobStarted?: boolean
 }): ArkadeVtxoOutpoint[] {
+  if (
+    params.authoritativeJobOutpoints != null &&
+    params.authoritativeJobOutpoints.length > 0
+  ) {
+    return sortArkadeVtxoOutpoints(params.authoritativeJobOutpoints)
+  }
   if (params.selectedLeafOutpoints.length > 0) {
     return sortArkadeVtxoOutpoints(params.selectedLeafOutpoints)
-  }
-  if (params.inProgressOutpoints.length > 0) {
-    return sortArkadeVtxoOutpoints(params.inProgressOutpoints)
   }
   if (
     params.persistedJobStarted === true &&
@@ -38,6 +43,9 @@ export function resolveUnilateralExitTopologyOutpoints(params: {
     params.persistedJobOutpoints.length > 0
   ) {
     return sortArkadeVtxoOutpoints(params.persistedJobOutpoints)
+  }
+  if (params.inProgressOutpoints.length > 0) {
+    return sortArkadeVtxoOutpoints(params.inProgressOutpoints)
   }
   return []
 }

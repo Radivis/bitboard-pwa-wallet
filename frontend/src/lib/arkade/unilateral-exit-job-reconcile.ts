@@ -10,6 +10,29 @@ export function selectedOutpointsOverlapInProgress(
   )
 }
 
+/**
+ * Defer stale-job clearing while Arkade may still be syncing in-progress exit state.
+ * Avoids wiping a persisted job on the first empty in-progress snapshot after reload.
+ */
+export function shouldDeferPersistedUnilateralExitStaleCheck(params: {
+  jobStarted: boolean
+  inProgressOutpoints: ArkadeVtxoOutpoint[]
+  unilateralExitInProgressSats: number
+  arkadeLoadPhase: 'not-configured' | 'loading' | 'loaded' | 'load-error'
+  arkadeSyncPhase: 'not-configured' | 'not-syncing' | 'syncing' | 'sync-error'
+}): boolean {
+  if (!params.jobStarted) {
+    return false
+  }
+  if (params.inProgressOutpoints.length > 0 || params.unilateralExitInProgressSats > 0) {
+    return false
+  }
+  if (params.arkadeLoadPhase !== 'loaded') {
+    return true
+  }
+  return params.arkadeSyncPhase === 'syncing'
+}
+
 /** True when SQLite still has an active job but WASM reports no matching in-progress exit. */
 export function isPersistedUnilateralExitJobStale(params: {
   jobStarted: boolean

@@ -255,7 +255,7 @@ export async function orchestrateArkadeLoad(params: ArkadeLoadParams): Promise<v
         networkMode,
         connectionId,
       })
-      configureUnilateralExitForLoadedWallet({
+      await configureUnilateralExitForLoadedWallet({
         walletId,
         networkMode,
         connectionId,

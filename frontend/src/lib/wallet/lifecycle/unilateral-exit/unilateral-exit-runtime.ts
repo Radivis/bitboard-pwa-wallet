@@ -1,12 +1,18 @@
 import { toast } from 'sonner'
-import { isPersistedUnilateralExitJobStale } from '@/lib/arkade/unilateral-exit-job-reconcile'
-import { isUnilateralExitBranchComplete } from '@/lib/arkade/unilateral-exit-branch-complete'
+import {
+  isPersistedUnilateralExitJobStale,
+  shouldDeferPersistedUnilateralExitStaleCheck,
+} from '@/lib/arkade/unilateral-exit-job-reconcile'
 import type { SendFeePresetLabel } from '@/lib/esplora/esplora-fee-estimates'
+import { waitForPersistedStoreHydration } from '@/lib/settings/persisted-store-hydration'
+import { getArkadeLoadLifecycleSnapshot } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
+import { getArkadeSyncLifecycleSnapshot } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
 import { useUnilateralExitAutomationPrefsStore } from '@/lib/wallet/lifecycle/unilateral-exit-automation-prefs-persistence'
 import type { UnilateralExitAutomationPausedReason } from '@/lib/wallet/lifecycle/unilateral-exit-automation-types'
 import {
   clearPersistedUnilateralExitJob,
   getPersistedUnilateralExitJob,
+  useUnilateralExitLifecyclePersistenceStore,
 } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence'
 import type {
   UnilateralExitProceedStepParams,
@@ -24,10 +30,10 @@ import {
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-types'
 import {
   toUnilateralExitActorSnapshot,
+  unilateralExitSnapshotIsInAnyState,
   unilateralExitSnapshotIsInState,
   unilateralExitSnapshotIsProceeding,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-snapshot'
-import { selectIsUnilateralExitJobActive } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-selectors'
 import type { LockLifecyclePhase } from '@/lib/wallet/lifecycle/lock-lifecycle-types'
 import { shouldSkipRailLifecycleResetForLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-phase'
 import type { ArkadeVtxoOutpoint } from '@/workers/arkade-api'
@@ -127,9 +133,11 @@ export function sendUnilateralExitEvent(event: UnilateralExitMachineEvent): void
   actor.send(event)
 }
 
-export function configureUnilateralExitForLoadedWallet(
+export async function configureUnilateralExitForLoadedWallet(
   walletScope: UnilateralExitWalletScope,
-): void {
+): Promise<void> {
+  await waitForPersistedStoreHydration(useUnilateralExitLifecyclePersistenceStore)
+
   const current = getUnilateralExitActorSnapshot()
   const scopeMatches =
     current.context.walletScope != null &&
@@ -142,15 +150,7 @@ export function configureUnilateralExitForLoadedWallet(
     return
   }
 
-  const persisted = getPersistedUnilateralExitJob(walletScope)
   sendUnilateralExitEvent({ type: 'WALLET_CONFIGURED', walletScope })
-  if (persisted.jobActive && persisted.selectedLeafOutpoints.length > 0) {
-    sendUnilateralExitEvent({
-      type: 'RESTORE_PERSISTED_JOB',
-      walletScope,
-      outpoints: persisted.selectedLeafOutpoints,
-    })
-  }
 }
 
 export async function hydrateUnilateralExitFromPersistence(params: {
@@ -158,7 +158,27 @@ export async function hydrateUnilateralExitFromPersistence(params: {
   inProgressOutpoints: ArkadeVtxoOutpoint[]
   unilateralExitInProgressSats: number
 }): Promise<void> {
+  await waitForPersistedStoreHydration(useUnilateralExitLifecyclePersistenceStore)
+
   const persisted = getPersistedUnilateralExitJob(params.walletScope)
+  if (!persisted.jobActive || persisted.selectedLeafOutpoints.length === 0) {
+    return
+  }
+
+  const loadSnapshot = getArkadeLoadLifecycleSnapshot()
+  const syncSnapshot = getArkadeSyncLifecycleSnapshot()
+  if (
+    shouldDeferPersistedUnilateralExitStaleCheck({
+      jobStarted: persisted.jobActive,
+      inProgressOutpoints: params.inProgressOutpoints,
+      unilateralExitInProgressSats: params.unilateralExitInProgressSats,
+      arkadeLoadPhase: loadSnapshot.loadPhase,
+      arkadeSyncPhase: syncSnapshot.syncPhase,
+    })
+  ) {
+    return
+  }
+
   if (
     isPersistedUnilateralExitJobStale({
       jobStarted: persisted.jobActive,
@@ -172,10 +192,6 @@ export async function hydrateUnilateralExitFromPersistence(params: {
     return
   }
 
-  if (!persisted.jobActive || persisted.selectedLeafOutpoints.length === 0) {
-    return
-  }
-
   const snapshot = getUnilateralExitActorSnapshot()
   const walletScopeMatches =
     snapshot.context.walletScope != null &&
@@ -185,7 +201,30 @@ export async function hydrateUnilateralExitFromPersistence(params: {
     snapshot.context.jobOutpoints,
     persisted.selectedLeafOutpoints,
   )
-  if (walletScopeMatches && outpointsMatch && selectIsUnilateralExitJobActive(snapshot)) {
+  const alreadyReconciling = unilateralExitSnapshotIsInAnyState(snapshot, [
+    UNILATERAL_EXIT_MACHINE_STATE.checkingProgress,
+    UNILATERAL_EXIT_MACHINE_STATE.evaluatingPolicy,
+    UNILATERAL_EXIT_MACHINE_STATE.proceeding,
+    UNILATERAL_EXIT_MACHINE_STATE.ensuringBroadcast,
+    UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm,
+    UNILATERAL_EXIT_MACHINE_STATE.paused,
+  ])
+  if (walletScopeMatches && outpointsMatch && alreadyReconciling) {
+    return
+  }
+  if (
+    walletScopeMatches &&
+    outpointsMatch &&
+    unilateralExitSnapshotIsInState(snapshot, UNILATERAL_EXIT_MACHINE_STATE.complete)
+  ) {
+    return
+  }
+  if (
+    walletScopeMatches &&
+    outpointsMatch &&
+    unilateralExitSnapshotIsInState(snapshot, UNILATERAL_EXIT_MACHINE_STATE.idle) &&
+    snapshot.context.progress != null
+  ) {
     return
   }
 
@@ -202,6 +241,9 @@ export async function hydrateUnilateralExitFromPersistence(params: {
     walletScope: params.walletScope,
     outpoints: persisted.selectedLeafOutpoints,
     automationEnabled: prefs.enabled,
+    resumeAutomation: false,
+    reconcileInProgressSats: params.unilateralExitInProgressSats,
+    reconcileInProgressOutpoints: params.inProgressOutpoints,
   })
 
   await waitForUnilateralExitActorSettled()
@@ -357,16 +399,10 @@ export async function refreshUnilateralExitProgress(): Promise<UnilateralExitAct
     walletScope: scope,
     outpoints,
     automationEnabled: snapshot.context.automationEnabled,
+    resumeAutomation: snapshot.context.automationEnabled,
+    reconcileInProgressSats: snapshot.context.reconcileInProgressSats,
+    reconcileInProgressOutpoints: snapshot.context.reconcileInProgressOutpoints,
   })
   await waitForUnilateralExitActorSettled()
-  const next = getUnilateralExitActorSnapshot()
-  if (
-    next.context.progress != null &&
-    isUnilateralExitBranchComplete(next.context.progress) &&
-    !unilateralExitSnapshotIsInState(next, UNILATERAL_EXIT_MACHINE_STATE.complete)
-  ) {
-    sendUnilateralExitEvent({ type: 'POLL_TICK' })
-    await waitForUnilateralExitActorSettled()
-  }
   return getUnilateralExitActorSnapshot()
 }

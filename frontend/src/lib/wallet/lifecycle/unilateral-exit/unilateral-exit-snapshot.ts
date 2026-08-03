@@ -94,6 +94,8 @@ export function unilateralExitActorSnapshotEqual(
     previousContext.lastErrorMessage === nextContext.lastErrorMessage &&
     previousContext.feeRateSatPerVb === nextContext.feeRateSatPerVb &&
     previousContext.proceedRequested === nextContext.proceedRequested &&
-    previousContext.pollDelayMs === nextContext.pollDelayMs
+    previousContext.pollDelayMs === nextContext.pollDelayMs &&
+    previousContext.reconcileInProgressSats === nextContext.reconcileInProgressSats &&
+    previousContext.reconcileInProgressOutpoints === nextContext.reconcileInProgressOutpoints
   )
 }

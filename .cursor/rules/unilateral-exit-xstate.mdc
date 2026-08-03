@@ -27,6 +27,7 @@ The unilateral exit job lifecycle is coordinated by **one** XState v5 actor (`un
 4. **Authoritative progress** — during an active job, `actor.context.progress` wins; React Query is display cache only.
 5. **Single automation flag** — `context.automationEnabled` is the only job-level manual/automatic switch; prefs changes flow through `AUTOMATION_PREFS_CHANGED`.
 6. **Typed snapshots** — selectors/runtime use `UnilateralExitActorSnapshot` + `UNILATERAL_EXIT_MACHINE_STATE`; do not call untyped `snapshot.matches()` outside tests.
+7. **Machine state is authoritative for UI** — selectors map `snapshot.value` to display; they never re-run completion guards or override `complete` / in-flight states from raw progress DTOs.
 
 ## Public API
 

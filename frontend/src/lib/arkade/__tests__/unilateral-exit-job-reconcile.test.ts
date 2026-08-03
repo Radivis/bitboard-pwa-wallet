@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   isPersistedUnilateralExitJobStale,
+  shouldDeferPersistedUnilateralExitStaleCheck,
   shouldHydratePersistedUnilateralExitJob,
 } from '@/lib/arkade/unilateral-exit-job-reconcile'
 
@@ -8,7 +9,7 @@ const leafA = { txid: 'aa'.repeat(32), vout: 0 }
 const leafB = { txid: 'bb'.repeat(32), vout: 1 }
 
 describe('unilateral-exit-job-reconcile', () => {
-  it('treats persisted job as stale when nothing is in progress', () => {
+  it('treats persisted job as stale when nothing is in progress after sync settled', () => {
     expect(
       isPersistedUnilateralExitJobStale({
         jobStarted: true,
@@ -61,5 +62,17 @@ describe('unilateral-exit-job-reconcile', () => {
         controlStoreSelectionEmpty: true,
       }),
     ).toBe(false)
+  })
+
+  it('defers stale check while arkade sync is still running', () => {
+    expect(
+      shouldDeferPersistedUnilateralExitStaleCheck({
+        jobStarted: true,
+        inProgressOutpoints: [],
+        unilateralExitInProgressSats: 0,
+        arkadeLoadPhase: 'loaded',
+        arkadeSyncPhase: 'syncing',
+      }),
+    ).toBe(true)
   })
 })

@@ -1,9 +1,13 @@
-import { isUnilateralExitBranchComplete } from '@/lib/arkade/unilateral-exit-branch-complete'
+import type { ArkadeUnilateralExitProgress } from '@/workers/arkade-api'
 import {
   isCurrentStepRelayed,
   isWaitingForRelayedStepConfirmation,
+  needsBroadcastEnsurance,
 } from '@/lib/arkade/unilateral-exit-broadcast'
-import type { UnilateralExitControlDisplayPhase } from '@/lib/arkade/unilateral-exit-control-phase'
+import type {
+  UnilateralExitControlDisplayPhase,
+  UnilateralExitInProgressOverlayKind,
+} from '@/lib/arkade/unilateral-exit-control-phase'
 import type { UnilateralExitAutomationSnapshot } from '@/lib/wallet/lifecycle/unilateral-exit-automation-types'
 import { defaultUnilateralExitAutomationPrefs } from '@/lib/wallet/lifecycle/unilateral-exit-automation-types'
 import {
@@ -133,10 +137,11 @@ export function selectUnilateralExitControlJobState(
   const lifecycle = selectUnilateralExitLifecycleSnapshot(state)
   const progress = state.context.progress
   const wasmPhase = progress?.phase ?? 'idle'
-  const branchComplete =
-    (progress != null && isUnilateralExitBranchComplete(progress)) ||
-    lifecycle.phase === UnilateralExitLifecyclePhase.Complete
-  const phaseFromProgress: UnilateralExitControlDisplayPhase = branchComplete
+  const machineComplete = unilateralExitSnapshotIsInState(
+    state,
+    UNILATERAL_EXIT_MACHINE_STATE.complete,
+  )
+  const phaseFromProgress: UnilateralExitControlDisplayPhase = machineComplete
     ? 'complete'
     : wasmPhase === 'waiting' && !isCurrentStepRelayed(progress)
       ? 'advancing'
@@ -147,20 +152,32 @@ export function selectUnilateralExitControlJobState(
   const exitJobInFlight =
     selectIsUnilateralExitJobActive(state) ||
     params.hasInProgressExits ||
-    isProceeding
+    isProceeding ||
+    machineComplete
 
-  const phase: UnilateralExitControlDisplayPhase =
-    !params.hasInProgressExits && !exitJobInFlight
-      ? 'idle'
-      : lifecycle.phase === UnilateralExitLifecyclePhase.WaitingConfirm
+  const phaseFromMachine: UnilateralExitControlDisplayPhase | null =
+    machineComplete
+      ? 'complete'
+      : unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm)
         ? 'waiting'
         : unilateralExitSnapshotIsInAnyState(state, [
               UNILATERAL_EXIT_MACHINE_STATE.proceeding,
               UNILATERAL_EXIT_MACHINE_STATE.ensuringBroadcast,
-            ]) ||
-            (lifecycle.phase === UnilateralExitLifecyclePhase.Advancing && progress == null)
-          ? 'advancing'
-          : phaseFromProgress
+              UNILATERAL_EXIT_MACHINE_STATE.checkingProgress,
+              UNILATERAL_EXIT_MACHINE_STATE.evaluatingPolicy,
+            ])
+          ? isWaitingForRelayedStepConfirmation(progress)
+            ? 'waiting'
+            : 'advancing'
+          : null
+
+  const phase: UnilateralExitControlDisplayPhase =
+    phaseFromMachine ??
+    (!params.hasInProgressExits && !exitJobInFlight
+      ? 'idle'
+      : lifecycle.phase === UnilateralExitLifecyclePhase.WaitingConfirm
+        ? 'waiting'
+        : phaseFromProgress)
 
   const jobActive =
     selectIsUnilateralExitJobActive(state) || params.hasInProgressExits
@@ -171,6 +188,113 @@ export function selectUnilateralExitControlJobState(
     jobActive,
     showStepProgress: exitJobInFlight && params.totalSteps > 0,
     isProceeding,
+  }
+}
+
+export function selectUnilateralExitInProgressOverlay(
+  state: UnilateralExitActorSnapshot,
+): UnilateralExitInProgressOverlayKind | null {
+  if (
+    unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm)
+  ) {
+    return 'waiting'
+  }
+  if (
+    unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.ensuringBroadcast)
+  ) {
+    return 'ensuringBroadcast'
+  }
+  if (
+    unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.checkingProgress)
+  ) {
+    const progress = state.context.progress
+    if (isWaitingForRelayedStepConfirmation(progress)) {
+      return 'waiting'
+    }
+    if (needsBroadcastEnsurance(progress)) {
+      return 'ensuringBroadcast'
+    }
+  }
+  return null
+}
+
+export function selectUnilateralExitProgressForDisplay(
+  state: UnilateralExitActorSnapshot,
+): ArkadeUnilateralExitProgress | null {
+  if (state.context.jobOutpoints.length > 0) {
+    return state.context.progress
+  }
+  return null
+}
+
+export type UnilateralExitProceedButtonState = {
+  visible: boolean
+  disabled: boolean
+  label: string
+  showSpinner: boolean
+  canProceedStep: boolean
+}
+
+export function selectUnilateralExitProceedButtonState(
+  state: UnilateralExitActorSnapshot,
+  params: {
+    jobOutpointsCount: number
+    automationEnabled: boolean
+    bumperLow: boolean
+    batchEstimateLoading: boolean
+    prefsHydrated: boolean
+    lifecycleJobActive: boolean
+    hasInProgressExits: boolean
+    phase: UnilateralExitControlDisplayPhase
+  },
+): UnilateralExitProceedButtonState {
+  const isProceeding = unilateralExitSnapshotIsProceeding(state)
+  const machineWaiting = unilateralExitSnapshotIsInState(
+    state,
+    UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm,
+  )
+  const machineComplete = unilateralExitSnapshotIsInState(
+    state,
+    UNILATERAL_EXIT_MACHINE_STATE.complete,
+  )
+  const automationRunning =
+    params.automationEnabled &&
+    (isProceeding ||
+      machineWaiting ||
+      unilateralExitSnapshotIsInAnyState(state, [
+        UNILATERAL_EXIT_MACHINE_STATE.evaluatingPolicy,
+        UNILATERAL_EXIT_MACHINE_STATE.proceeding,
+        UNILATERAL_EXIT_MACHINE_STATE.ensuringBroadcast,
+      ]))
+  const canProceedStep = params.lifecycleJobActive && params.phase !== 'complete'
+  const showSpinner = isProceeding && params.phase !== 'waiting'
+  const disabled =
+    !params.prefsHydrated ||
+    params.jobOutpointsCount === 0 ||
+    params.bumperLow ||
+    showSpinner ||
+    machineWaiting ||
+    (canProceedStep && params.batchEstimateLoading) ||
+    params.phase === 'complete' ||
+    automationRunning
+  const visible =
+    (params.lifecycleJobActive || params.jobOutpointsCount > 0) &&
+    (!params.automationEnabled || !params.lifecycleJobActive || automationRunning)
+  let label = 'Start unroll'
+  if (automationRunning) {
+    label = 'Running automatically…'
+  } else if (params.automationEnabled && params.lifecycleJobActive) {
+    label = 'Running automatically…'
+  } else if (canProceedStep) {
+    label = 'Proceed'
+  }
+
+  return {
+    visible,
+    disabled,
+    label,
+    showSpinner,
+    canProceedStep,
   }
 }
 

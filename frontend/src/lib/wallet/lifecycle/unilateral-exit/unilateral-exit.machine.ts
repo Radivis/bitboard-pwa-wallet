@@ -1,4 +1,4 @@
-import { isUnilateralExitBranchComplete } from '@/lib/arkade/unilateral-exit-branch-complete'
+import { isUnilateralExitJobComplete } from '@/lib/arkade/unilateral-exit-branch-complete'
 import {
   isWaitingForRelayedStepConfirmation,
   needsBroadcastEnsurance,
@@ -7,6 +7,7 @@ import { unilateralExitAutomationWaitPollMs } from '@/lib/arkade/arkade-query-ti
 import {
   clearPersistedUnilateralExitJob,
   persistActiveUnilateralExitJob,
+  updatePersistedUnilateralExitRelayWait,
 } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence'
 import {
   createInitialUnilateralExitContext,
@@ -53,6 +54,41 @@ function progressFromEnsureBroadcastEvent(
   return event.type === 'xstate.done.actor.ensureBroadcast' ? event.output : null
 }
 
+function relayWaitUnixFromProgress(
+  progress: ArkadeUnilateralExitProgress | null,
+): number | null {
+  if (progress == null) {
+    return null
+  }
+  if (progress.currentStepWaitingSince != null) {
+    return progress.currentStepWaitingSince
+  }
+  return null
+}
+
+function syncPersistedRelayWait(
+  walletScope: UnilateralExitMachineContext['walletScope'],
+  progress: ArkadeUnilateralExitProgress | null,
+): void {
+  if (walletScope == null) {
+    return
+  }
+  updatePersistedUnilateralExitRelayWait(
+    walletScope,
+    relayWaitUnixFromProgress(progress),
+  )
+}
+
+function isJobCompleteFromProgress(
+  progress: ArkadeUnilateralExitProgress | null,
+  context: UnilateralExitMachineContext,
+): boolean {
+  if (progress == null) {
+    return false
+  }
+  return isUnilateralExitJobComplete(progress, context.jobOutpoints)
+}
+
 export const unilateralExitMachineSetup = setup({
   types: {
     context: {} as UnilateralExitMachineContext,
@@ -86,18 +122,18 @@ export const unilateralExitMachineSetup = setup({
     ),
   },
   guards: {
-    isBranchCompleteFromFetchEvent: ({ event }) => {
+    isJobCompleteFromFetchEvent: ({ context, event }) => {
       const output = progressFromFetchEvent(event)
-      return output != null && isUnilateralExitBranchComplete(output)
+      return isJobCompleteFromProgress(output, context)
     },
-    isBranchCompleteFromProceedEvent: ({ event }) => {
+    isJobCompleteFromProceedEvent: ({ context, event }) => {
       const output =
         event.type === 'xstate.done.actor.proceedStep' ? event.output : null
-      return output != null && isUnilateralExitBranchComplete(output)
+      return isJobCompleteFromProgress(output, context)
     },
-    isBranchCompleteFromEnsureBroadcastEvent: ({ event }) => {
+    isJobCompleteFromEnsureBroadcastEvent: ({ context, event }) => {
       const output = progressFromEnsureBroadcastEvent(event)
-      return output != null && isUnilateralExitBranchComplete(output)
+      return isJobCompleteFromProgress(output, context)
     },
     needsBroadcastFromFetchEvent: ({ event }) =>
       needsBroadcastEnsurance(progressFromFetchEvent(event)),
@@ -115,6 +151,7 @@ export const unilateralExitMachineSetup = setup({
       const output = progressFromFetchEvent(event)
       return (
         context.automationEnabled &&
+        context.proceedRequested &&
         context.pausedReason == null &&
         output?.phase === 'idle' &&
         !needsBroadcastEnsurance(output)
@@ -131,6 +168,7 @@ export const unilateralExitMachineSetup = setup({
     },
     shouldRunAutomationPolicy: ({ context }) =>
       context.automationEnabled &&
+      context.proceedRequested &&
       context.pausedReason == null &&
       context.progress?.phase === 'idle' &&
       !needsBroadcastEnsurance(context.progress),
@@ -154,19 +192,6 @@ export const unilateralExitMachineSetup = setup({
       return {
         walletScope: event.walletScope,
         pollDelayMs: unilateralExitAutomationWaitPollMs(event.walletScope.networkMode),
-      }
-    }),
-    assignRestorePersistedJob: assign(({ event }) => {
-      if (event.type !== 'RESTORE_PERSISTED_JOB') {
-        return {}
-      }
-      return {
-        walletScope: event.walletScope,
-        jobOutpoints: sortArkadeVtxoOutpoints(event.outpoints),
-        progress: null,
-        pausedReason: null,
-        lastErrorMessage: null,
-        proceedRequested: false,
       }
     }),
     assignStartManual: assign(({ event }) => {
@@ -207,14 +232,17 @@ export const unilateralExitMachineSetup = setup({
       }
       const outpoints = sortArkadeVtxoOutpoints(event.outpoints)
       const automationEnabled = event.automationEnabled ?? false
+      const resumeAutomation = event.resumeAutomation ?? false
       return {
         walletScope: event.walletScope,
         jobOutpoints: outpoints,
         automationEnabled,
-        proceedRequested: automationEnabled,
+        proceedRequested: resumeAutomation && automationEnabled,
         progress: null,
         pausedReason: null,
         lastErrorMessage: null,
+        reconcileInProgressSats: event.reconcileInProgressSats ?? 0,
+        reconcileInProgressOutpoints: event.reconcileInProgressOutpoints ?? [],
       }
     }),
     assignProceedManual: assign(({ event }) => {
@@ -261,15 +289,26 @@ export const unilateralExitMachineSetup = setup({
         event.type === 'AUTOMATION_PREFS_CHANGED' ? event.automationEnabled : false,
       pausedReason: null,
       lastErrorMessage: null,
-      proceedRequested: ({ context, event }) =>
-        event.type === 'AUTOMATION_PREFS_CHANGED' &&
-        event.automationEnabled &&
-        context.jobOutpoints.length > 0,
+      proceedRequested: ({ context, event }) => {
+        if (event.type !== 'AUTOMATION_PREFS_CHANGED') {
+          return context.proceedRequested
+        }
+        if (!event.automationEnabled) {
+          return false
+        }
+        return context.jobOutpoints.length > 0
+      },
     }),
     assignResume: assign({
       pausedReason: null,
       lastErrorMessage: null,
       proceedRequested: ({ context }) => context.automationEnabled,
+    }),
+    resumeAutomationProceed: assign({
+      proceedRequested: ({ context }) => context.automationEnabled,
+    }),
+    clearProceedRequested: assign({
+      proceedRequested: false,
     }),
     clearJobContext: assign(({ context }) => {
       if (context.walletScope != null) {
@@ -282,8 +321,24 @@ export const unilateralExitMachineSetup = setup({
         feeRateSatPerVb: null,
         pausedReason: null,
         lastErrorMessage: null,
+        reconcileInProgressSats: 0,
+        reconcileInProgressOutpoints: [],
       }
     }),
+    syncPersistedRelayWaitFromFetch: ({ context, event }) => {
+      syncPersistedRelayWait(context.walletScope, progressFromFetchEvent(event))
+    },
+    syncPersistedRelayWaitFromProceed: ({ context, event }) => {
+      const progress =
+        event.type === 'xstate.done.actor.proceedStep' ? event.output : null
+      syncPersistedRelayWait(context.walletScope, progress)
+    },
+    syncPersistedRelayWaitFromEnsureBroadcast: ({ context, event }) => {
+      syncPersistedRelayWait(
+        context.walletScope,
+        progressFromEnsureBroadcastEvent(event),
+      )
+    },
     clearPersistedOnComplete: ({ context }) => {
       if (context.walletScope != null) {
         clearPersistedUnilateralExitJob(context.walletScope)
@@ -315,87 +370,91 @@ export const unilateralExitMachineSetup = setup({
             : 'Failed to load unilateral exit progress.'
           : null,
     }),
+    assignPolicyError: assign({
+      pausedReason: 'error' as const,
+      lastErrorMessage: ({ event }) =>
+        event.type === 'xstate.error.actor.evaluateAutomationPolicy'
+          ? event.error instanceof Error
+            ? event.error.message
+            : 'Policy check failed.'
+          : null,
+      proceedRequested: false,
+    }),
+    assignAutomationBroadcastFailure: assign({
+      pausedReason: 'error' as const,
+      proceedRequested: false,
+      lastErrorMessage: ({ event }) =>
+        event.type === 'xstate.error.actor.proceedStep' ||
+        event.type === 'xstate.error.actor.ensureBroadcast'
+          ? event.error instanceof Error
+            ? event.error.message
+            : 'Unroll step failed.'
+          : null,
+    }),
     resetToNotConfigured: assign(() => createInitialUnilateralExitContext()),
   },
 })
 
-const resumeAutomationProceed = assign({
-  proceedRequested: ({ context }) => context.automationEnabled,
-})
-
 const checkingProgressOnDone = [
   {
-    guard: 'isBranchCompleteFromFetchEvent',
+    guard: 'isJobCompleteFromFetchEvent',
     target: 'complete',
-    actions: ['assignProgressFromFetch', 'clearPersistedOnComplete'],
+    actions: [
+      'assignProgressFromFetch',
+      'syncPersistedRelayWaitFromFetch',
+      'clearPersistedOnComplete',
+    ],
   },
   {
     guard: 'needsBroadcastBeforeEnsureBroadcast',
     target: 'evaluatingPolicy',
-    actions: 'assignProgressFromFetch',
+    actions: ['assignProgressFromFetch', 'syncPersistedRelayWaitFromFetch'],
   },
   {
     guard: 'needsBroadcastFromFetchEvent',
     target: 'ensuringBroadcast',
-    actions: 'assignProgressFromFetch',
+    actions: ['assignProgressFromFetch', 'syncPersistedRelayWaitFromFetch'],
   },
   {
     guard: 'isWaitingForRelayedStepConfirmationFromEvent',
     target: 'waitingConfirm',
-    actions: 'assignProgressFromFetch',
+    actions: ['assignProgressFromFetch', 'syncPersistedRelayWaitFromFetch'],
   },
   {
     guard: 'shouldRunAutomationPolicyFromEvent',
     target: 'evaluatingPolicy',
-    actions: 'assignProgressFromFetch',
+    actions: ['assignProgressFromFetch', 'syncPersistedRelayWaitFromFetch'],
   },
   {
     guard: 'shouldProceedNowFromEvent',
     target: 'proceeding',
-    actions: 'assignProgressFromFetch',
+    actions: ['assignProgressFromFetch', 'syncPersistedRelayWaitFromFetch'],
   },
   {
     target: 'idle',
-    actions: 'assignProgressFromFetch',
+    actions: ['assignProgressFromFetch', 'syncPersistedRelayWaitFromFetch'],
   },
 ] as const
 
 const ensuringBroadcastOnDone = [
   {
-    guard: 'isBranchCompleteFromEnsureBroadcastEvent',
+    guard: 'isJobCompleteFromEnsureBroadcastEvent',
     target: 'complete',
-    actions: ['assignProgressFromEnsureBroadcast', 'clearPersistedOnComplete'],
+    actions: [
+      'assignProgressFromEnsureBroadcast',
+      'syncPersistedRelayWaitFromEnsureBroadcast',
+      'clearPersistedOnComplete',
+    ],
   },
   {
-    guard: 'isWaitingForRelayedStepConfirmationFromEnsureBroadcastEvent',
     target: 'waitingConfirm',
-    actions: assign({
-      progress: ({ event }) =>
-        event.type === 'xstate.done.actor.ensureBroadcast' ? event.output : null,
-      proceedRequested: false,
-    }),
-  },
-  {
-    target: 'checkingProgress',
-    actions: assign({
-      progress: ({ event }) =>
-        event.type === 'xstate.done.actor.ensureBroadcast' ? event.output : null,
-      proceedRequested: false,
-    }),
+    actions: [
+      'assignProgressFromEnsureBroadcast',
+      'syncPersistedRelayWaitFromEnsureBroadcast',
+      'clearProceedRequested',
+    ],
   },
 ] as const
-
-const automationBroadcastFailureActions = assign({
-  pausedReason: 'error' as const,
-  proceedRequested: false,
-  lastErrorMessage: ({ event }) =>
-    event.type === 'xstate.error.actor.proceedStep' ||
-    event.type === 'xstate.error.actor.ensureBroadcast'
-      ? event.error instanceof Error
-        ? event.error.message
-        : 'Unroll step failed.'
-      : null,
-})
 
 export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
   id: 'unilateralExit',
@@ -415,9 +474,6 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
     },
     idle: {
       on: {
-        RESTORE_PERSISTED_JOB: {
-          actions: 'assignRestorePersistedJob',
-        },
         START_MANUAL: {
           target: 'checkingProgress',
           actions: 'assignStartManual',
@@ -500,12 +556,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
         ],
         onError: {
           target: 'paused',
-          actions: assign({
-            pausedReason: 'error' as const,
-            lastErrorMessage: ({ event }) =>
-              event.error instanceof Error ? event.error.message : 'Policy check failed.',
-            proceedRequested: false,
-          }),
+          actions: 'assignPolicyError',
         },
       },
     },
@@ -525,20 +576,27 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
         }),
         onDone: [
           {
-            guard: 'isBranchCompleteFromProceedEvent',
+            guard: 'isJobCompleteFromProceedEvent',
             target: 'complete',
-            actions: ['assignProgressFromProceed', 'clearPersistedOnComplete'],
+            actions: [
+              'assignProgressFromProceed',
+              'syncPersistedRelayWaitFromProceed',
+              'clearPersistedOnComplete',
+            ],
           },
           {
             target: 'ensuringBroadcast',
-            actions: 'assignProgressFromProceed',
+            actions: [
+              'assignProgressFromProceed',
+              'syncPersistedRelayWaitFromProceed',
+            ],
           },
         ],
         onError: [
           {
             guard: ({ context }) => context.automationEnabled,
             target: 'paused',
-            actions: automationBroadcastFailureActions,
+            actions: 'assignAutomationBroadcastFailure',
           },
           {
             target: 'error',
@@ -567,7 +625,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
           {
             guard: ({ context }) => context.automationEnabled,
             target: 'paused',
-            actions: automationBroadcastFailureActions,
+            actions: 'assignAutomationBroadcastFailure',
           },
           {
             target: 'error',
@@ -580,13 +638,13 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
       after: {
         pollDelay: {
           target: 'checkingProgress',
-          actions: resumeAutomationProceed,
+          actions: 'resumeAutomationProceed',
         },
       },
       on: {
         POLL_TICK: {
           target: 'checkingProgress',
-          actions: resumeAutomationProceed,
+          actions: 'resumeAutomationProceed',
         },
         PROCEED_MANUAL: {
           target: 'checkingProgress',

@@ -3,13 +3,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence', () => ({
   persistActiveUnilateralExitJob: vi.fn(),
   clearPersistedUnilateralExitJob: vi.fn(),
+  updatePersistedUnilateralExitRelayWait: vi.fn(),
   getPersistedUnilateralExitJob: vi.fn(() => ({
     jobActive: false,
     selectedLeafOutpoints: [],
+    currentStepRelayedSinceUnix: null,
   })),
   useUnilateralExitLifecyclePersistenceStore: {
     getState: () => ({
-      getJob: () => ({ jobActive: false, selectedLeafOutpoints: [] }),
+      getJob: () => ({
+        jobActive: false,
+        selectedLeafOutpoints: [],
+        currentStepRelayedSinceUnix: null,
+      }),
     }),
     setState: vi.fn(),
   },
@@ -37,6 +43,15 @@ const walletScope = {
 }
 
 const leaf = { txid: 'aa'.repeat(32), vout: 0 }
+
+function unrolledLeafStatus() {
+  return {
+    txid: leaf.txid,
+    vout: leaf.vout,
+    confirmations: 6,
+    isUnrolled: true,
+  }
+}
 
 function progress(
   overrides: Partial<ArkadeUnilateralExitProgress>,
@@ -166,6 +181,35 @@ describe('unilateralExitMachine', () => {
     expect(ensureBroadcast).toHaveBeenCalledTimes(1)
   })
 
+  it('enters waitingConfirm after ensureBroadcast when relayed but waiting stamp is absent', async () => {
+    const fetchProgress = vi.fn(async () =>
+      progress({
+        phase: 'waiting',
+        currentStepTxRelayed: false,
+      }),
+    )
+    const proceedStep = vi.fn()
+    const ensureBroadcast = vi.fn(async () =>
+      progress({
+        phase: 'waiting',
+        currentStepTxRelayed: true,
+      }),
+    )
+    const { testActor } = createTestActor({ fetchProgress, proceedStep, ensureBroadcast })
+
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'START_MANUAL',
+      walletScope,
+      outpoints: [leaf],
+      feeRateSatPerVb: 2,
+    })
+
+    await waitFor(testActor, (state) => state.matches('waitingConfirm'))
+    expect(ensureBroadcast).toHaveBeenCalledTimes(1)
+    expect(testActor.getSnapshot().context.progress?.currentStepWaitingSince).toBeUndefined()
+  })
+
   it('pre-broadcast waiting routes to ensuringBroadcast instead of waitingConfirm', async () => {
     const fetchProgress = vi.fn(async () =>
       progress({
@@ -196,16 +240,18 @@ describe('unilateralExitMachine', () => {
     expect(ensureBroadcast).toHaveBeenCalledTimes(1)
   })
 
-  it('marks branch complete when all nodes confirmed without proceeding', async () => {
+  it('marks job complete when all selected leaves are unrolled', async () => {
     const fetchProgress = vi.fn(async () =>
       progress({
         phase: 'complete',
         stepIndex: 2,
+        totalSteps: 2,
         currentStepTxRelayed: true,
         nodeStatuses: [
           { txid: 'step0', confirmations: 1, status: 'confirmed' },
           { txid: 'step1', confirmations: 1, status: 'confirmed' },
         ],
+        leafStatuses: [unrolledLeafStatus()],
       }),
     )
     const proceedStep = vi.fn()
@@ -239,16 +285,18 @@ describe('unilateralExitMachine', () => {
     expect(clearPersistedUnilateralExitJob).toHaveBeenCalled()
   })
 
-  it('hydrate complete clears persistence without proceed', async () => {
+  it('hydrate completes when all selected leaves are unrolled', async () => {
     const fetchProgress = vi.fn(async () =>
       progress({
         phase: 'complete',
         stepIndex: 2,
+        totalSteps: 2,
         currentStepTxRelayed: true,
         nodeStatuses: [
           { txid: 'step0', confirmations: 1, status: 'confirmed' },
           { txid: 'step1', confirmations: 1, status: 'confirmed' },
         ],
+        leafStatuses: [unrolledLeafStatus()],
       }),
     )
     const proceedStep = vi.fn()
@@ -339,5 +387,126 @@ describe('unilateralExitMachine', () => {
     testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
     testActor.send({ type: 'WALLET_RESET' })
     expect(testActor.getSnapshot().matches('notConfigured')).toBe(true)
+  })
+
+  it('manual waitingConfirm poll does not set proceedRequested', async () => {
+    const fetchProgress = vi.fn(async () =>
+      progress({
+        phase: 'idle',
+        currentStepTxRelayed: true,
+      }),
+    )
+    const proceedStep = vi.fn()
+    const { testActor } = createTestActor({ fetchProgress, proceedStep })
+
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'START_MANUAL',
+      walletScope,
+      outpoints: [leaf],
+      feeRateSatPerVb: 2,
+    })
+    await waitFor(testActor, (state) => state.matches('waitingConfirm'))
+    expect(testActor.getSnapshot().context.automationEnabled).toBe(false)
+    proceedStep.mockClear()
+
+    testActor.send({ type: 'POLL_TICK' })
+    await waitFor(testActor, (state) => state.matches('idle'))
+    expect(testActor.getSnapshot().context.proceedRequested).toBe(false)
+    expect(proceedStep).not.toHaveBeenCalled()
+  })
+
+  it('does not complete when selected leaves are not unrolled', async () => {
+    const fetchProgress = vi.fn(async () =>
+      progress({
+        phase: 'complete',
+        stepIndex: 2,
+        totalSteps: 2,
+        currentStepTxRelayed: true,
+        nodeStatuses: [
+          { txid: 'step0', confirmations: 1, status: 'confirmed' },
+          { txid: 'step1', confirmations: 0, status: 'inProgress' },
+        ],
+        leafStatuses: [
+          { txid: leaf.txid, vout: leaf.vout, confirmations: 0, isUnrolled: false },
+        ],
+      }),
+    )
+    const proceedStep = vi.fn()
+    const { testActor } = createTestActor({ fetchProgress, proceedStep })
+
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'START_MANUAL',
+      walletScope,
+      outpoints: [leaf],
+      feeRateSatPerVb: 2,
+    })
+
+    await waitFor(testActor, (state) => state.matches('idle'))
+    expect(testActor.getSnapshot().matches('complete')).toBe(false)
+    expect(proceedStep).not.toHaveBeenCalled()
+    expect(clearPersistedUnilateralExitJob).not.toHaveBeenCalled()
+  })
+
+  it('does not complete when WASM branch is complete but leaves are not unrolled', async () => {
+    const fetchProgress = vi.fn(async () =>
+      progress({
+        phase: 'complete',
+        stepIndex: 2,
+        totalSteps: 2,
+        currentStepTxRelayed: true,
+        nodeStatuses: [
+          { txid: 'step0', confirmations: 1, status: 'confirmed' },
+          { txid: 'step1', confirmations: 1, status: 'confirmed' },
+        ],
+        leafStatuses: [
+          { txid: leaf.txid, vout: leaf.vout, confirmations: 0, isUnrolled: false },
+        ],
+      }),
+    )
+    const { testActor } = createTestActor({ fetchProgress })
+
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'START_MANUAL',
+      walletScope,
+      outpoints: [leaf],
+      feeRateSatPerVb: 2,
+    })
+
+    await waitFor(testActor, (state) => state.matches('idle'))
+    expect(testActor.getSnapshot().matches('complete')).toBe(false)
+    expect(clearPersistedUnilateralExitJob).not.toHaveBeenCalled()
+  })
+
+  it('completes when all leaves unrolled even if operator reports in-progress exits', async () => {
+    const fetchProgress = vi.fn(async () =>
+      progress({
+        phase: 'complete',
+        stepIndex: 2,
+        totalSteps: 2,
+        currentStepTxRelayed: true,
+        nodeStatuses: [
+          { txid: 'step0', confirmations: 1, status: 'confirmed' },
+          { txid: 'step1', confirmations: 1, status: 'confirmed' },
+        ],
+        leafStatuses: [unrolledLeafStatus()],
+      }),
+    )
+    const { testActor } = createTestActor({ fetchProgress })
+
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'HYDRATE_OR_START',
+      walletScope,
+      outpoints: [leaf],
+      automationEnabled: false,
+      reconcileInProgressSats: 50_000,
+      reconcileInProgressOutpoints: [leaf],
+    })
+
+    await waitFor(testActor, (state) => state.matches('complete'))
+    expect(clearPersistedUnilateralExitJob).toHaveBeenCalled()
   })
 })

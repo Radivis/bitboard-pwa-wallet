@@ -5,7 +5,11 @@ import {
   type UnilateralExitMachineStateId,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-types'
 import { unilateralExitMachine } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.machine'
-import { selectUnilateralExitControlJobState } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-selectors'
+import {
+  selectUnilateralExitControlJobState,
+  selectUnilateralExitInProgressOverlay,
+  selectUnilateralExitProceedButtonState,
+} from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-selectors'
 import { toUnilateralExitActorSnapshot } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-snapshot'
 import type { ArkadeUnilateralExitProgress } from '@/workers/arkade-api'
 
@@ -104,11 +108,31 @@ describe('selectUnilateralExitControlJobState', () => {
     })
   })
 
-  it('requires all nodes confirmed before showing complete', () => {
+  it('shows complete when machine is complete even if progress snapshot looks incomplete', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.complete, {
+      jobOutpoints: [leaf],
+      progress: progress({
+        phase: 'idle',
+        stepIndex: 1,
+        totalSteps: 5,
+        nodeStatuses: [{ txid: 'aa', confirmations: 0, status: 'inProgress' }],
+      }),
+    })
+    expect(
+      selectUnilateralExitControlJobState(snapshot, {
+        hasInProgressExits: false,
+        totalSteps: 5,
+      }).phase,
+    ).toBe('complete')
+  })
+
+  it('does not infer complete from progress while machine is still waiting', () => {
     const waitingSnapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm, {
       jobOutpoints: [leaf],
       progress: progress({
         phase: 'complete',
+        stepIndex: 2,
+        totalSteps: 2,
         nodeStatuses: [{ txid: 'aa', confirmations: 0, status: 'inProgress' }],
       }),
     })
@@ -119,10 +143,12 @@ describe('selectUnilateralExitControlJobState', () => {
       }).phase,
     ).not.toBe('complete')
 
-    const completeSnapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.idle, {
+    const completeSnapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.complete, {
       jobOutpoints: [leaf],
       progress: progress({
         phase: 'complete',
+        stepIndex: 2,
+        totalSteps: 2,
         nodeStatuses: [
           { txid: 'aa', confirmations: 1, status: 'confirmed' },
           { txid: 'bb', confirmations: 1, status: 'confirmed' },
@@ -140,6 +166,49 @@ describe('selectUnilateralExitControlJobState', () => {
     })
   })
 
+  it('selectUnilateralExitProceedButtonState disables during waiting', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm, {
+      jobOutpoints: [leaf],
+      automationEnabled: false,
+      progress: progress({
+        phase: 'waiting',
+        currentStepTxRelayed: true,
+        currentStepWaitingSince: 100,
+      }),
+    })
+    const button = selectUnilateralExitProceedButtonState(snapshot, {
+      jobOutpointsCount: 1,
+      automationEnabled: false,
+      bumperLow: false,
+      batchEstimateLoading: false,
+      prefsHydrated: true,
+      lifecycleJobActive: true,
+      hasInProgressExits: true,
+      phase: 'waiting',
+    })
+    expect(button.disabled).toBe(true)
+    expect(button.canProceedStep).toBe(true)
+  })
+
+  it('selectUnilateralExitProceedButtonState disables during advancing', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.proceeding, {
+      jobOutpoints: [leaf],
+      progress: null,
+    })
+    const button = selectUnilateralExitProceedButtonState(snapshot, {
+      jobOutpointsCount: 1,
+      automationEnabled: false,
+      bumperLow: false,
+      batchEstimateLoading: false,
+      prefsHydrated: true,
+      lifecycleJobActive: true,
+      hasInProgressExits: true,
+      phase: 'advancing',
+    })
+    expect(button.disabled).toBe(true)
+    expect(button.showSpinner).toBe(true)
+  })
+
   it('treats operator in-progress exits as active even without lifecycle job', () => {
     const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.idle, {
       jobOutpoints: [],
@@ -155,5 +224,53 @@ describe('selectUnilateralExitControlJobState', () => {
       jobActive: true,
       showStepProgress: true,
     })
+  })
+})
+
+describe('selectUnilateralExitInProgressOverlay', () => {
+  it('returns pickaxe overlay in waitingConfirm', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm, {
+      jobOutpoints: [leaf],
+      progress: progress({
+        phase: 'waiting',
+        currentStepTxRelayed: true,
+        currentStepWaitingSince: 100,
+        nodeStatuses: [{ txid: 'step0', confirmations: 0, status: 'inProgress' }],
+      }),
+    })
+    expect(selectUnilateralExitInProgressOverlay(snapshot)).toBe('waiting')
+  })
+
+  it('returns megaphone overlay in ensuringBroadcast', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.ensuringBroadcast, {
+      jobOutpoints: [leaf],
+      progress: progress({
+        phase: 'waiting',
+        currentStepTxRelayed: false,
+        nodeStatuses: [{ txid: 'step0', confirmations: 0, status: 'inProgress' }],
+      }),
+    })
+    expect(selectUnilateralExitInProgressOverlay(snapshot)).toBe('ensuringBroadcast')
+  })
+
+  it('keeps pickaxe overlay while polling from waitingConfirm', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.checkingProgress, {
+      jobOutpoints: [leaf],
+      progress: progress({
+        phase: 'waiting',
+        currentStepTxRelayed: true,
+        currentStepWaitingSince: 100,
+        nodeStatuses: [{ txid: 'step0', confirmations: 0, status: 'inProgress' }],
+      }),
+    })
+    expect(selectUnilateralExitInProgressOverlay(snapshot)).toBe('waiting')
+  })
+
+  it('returns null during proceeding', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.proceeding, {
+      jobOutpoints: [leaf],
+      progress: null,
+    })
+    expect(selectUnilateralExitInProgressOverlay(snapshot)).toBeNull()
   })
 })

@@ -36,6 +36,8 @@ export type UnilateralExitLifecycleSnapshot = {
 export type PersistedUnilateralExitJob = {
   selectedLeafOutpoints: ArkadeVtxoOutpoint[]
   jobActive: boolean
+  /** Unix seconds when the active step was first known relayed; null when not waiting or step confirmed. */
+  currentStepRelayedSinceUnix: number | null
 }
 
 export type UnilateralExitStartParams = {
