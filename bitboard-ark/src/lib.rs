@@ -29,7 +29,8 @@ mod session_mapper_tests;
 #[cfg(not(target_arch = "wasm32"))]
 pub use api_types::{
     CompleteUnilateralExitParams, ProceedUnilateralExitStepParams, SendPaymentParams,
-    UnilateralExitBatchEstimateParams, UnilateralExitPhase, UnilateralExitProgressParams,
+    UnilateralExitBatchEstimateParams, UnilateralExitJobViabilityDto,
+    UnilateralExitJobViabilityKind, UnilateralExitPhase, UnilateralExitProgressParams,
     UnilateralExitTopologyParams,
 };
 #[cfg(not(target_arch = "wasm32"))]

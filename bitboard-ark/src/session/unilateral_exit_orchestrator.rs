@@ -32,16 +32,13 @@ use crate::unilateral_exit_materials::{
 use super::ArkSession;
 use super::exit_autonomous::dedup_virtual_outpoints;
 use super::exit_watch::enrich_unilateral_exit_watches_for_leaf_tx_after_unroll;
-use super::exit_watch_reconcile::ExitingVtxoReconcileOutcome;
 use super::unilateral_exit_branch_topology::{
     merge_topology_nodes_from_chains, terminal_vtxo_host_txids_for_topology,
     topology_host_outpoints, topology_leaf_outpoints, virtual_tx_type_hosts_exit_outpoints,
 };
 use super::unilateral_exit_job_viability::{
-    checkpoint_txids_on_job_branch, classify_operator_vtxo_outcome,
-    detect_foreign_vtxo_outpoint_spends, exit_relevant_vtxo_outpoints_for_plan,
-    viability_from_asp_swept, viability_from_branch_funding_lost, viability_ok,
-    wallet_unroll_step_txids,
+    detect_asp_swept_from_sources, evaluate_branch_funding_interference, viability_from_asp_swept,
+    viability_ok,
 };
 
 pub(crate) struct LeafUnilateralContext {
@@ -501,10 +498,12 @@ impl ArkSession {
             return Ok(viability_ok());
         }
 
-        if let Some(outpoint) = self
-            .detect_asp_swept_job_target(&job_leaf_outpoints)
-            .await?
-        {
+        if let Some(outpoint) = detect_asp_swept_from_sources(
+            &job_leaf_outpoints,
+            self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref(),
+            &self.collect_operator_vtxos_for_asp_check().await?,
+            |txid, vout| self.leaf_is_marked_unrolled(txid, vout).unwrap_or(false),
+        ) {
             return Ok(viability_from_asp_swept(&outpoint));
         }
 
@@ -517,42 +516,65 @@ impl ArkSession {
             .await?;
         let blockchain = self.client.blockchain();
 
-        let checkpoint_txids = checkpoint_txids_on_job_branch(&nodes);
-        for checkpoint_txid in &checkpoint_txids {
-            let confirmations = tx_confirmations(blockchain, checkpoint_txid).await?;
-            if step_reached_confirmation(confirmations) {
-                return Ok(viability_from_branch_funding_lost(
-                    format!(
-                        "Checkpoint transaction {checkpoint_txid} is confirmed on-chain before unroll completed."
-                    ),
-                    vec![VirtualOutPoint::new(*checkpoint_txid, 0)],
-                ));
-            }
-        }
-
-        let monitored_outpoints = exit_relevant_vtxo_outpoints_for_plan(&plan, &host_records);
-        let allowed_spend_txids = wallet_unroll_step_txids(&plan);
-        let foreign_outpoint = detect_foreign_vtxo_outpoint_spends(
-            blockchain,
-            &monitored_outpoints,
-            &allowed_spend_txids,
-            |outpoint| {
+        if let Some(viability) =
+            evaluate_branch_funding_interference(blockchain, &plan, &host_records, |outpoint| {
                 self.leaf_is_marked_unrolled(&outpoint.txid.to_string(), outpoint.vout)
                     .unwrap_or(false)
-            },
-        )
-        .await?;
-        if let Some(outpoint) = foreign_outpoint {
-            return Ok(viability_from_branch_funding_lost(
-                format!(
-                    "Exit-relevant VTXO outpoint {}:{} was spent by a transaction outside the wallet unroll chain.",
-                    outpoint.txid, outpoint.vout
-                ),
-                vec![outpoint],
-            ));
+            })
+            .await?
+        {
+            return Ok(viability);
         }
 
         Ok(viability_ok())
+    }
+
+    async fn collect_operator_vtxos_for_asp_check(
+        &self,
+    ) -> ArkResult<Vec<ark_core::server::VirtualTxOutPoint>> {
+        let (vtxo_list, _) = self.client.list_vtxos().await?;
+        Ok(vtxo_list.all().cloned().collect())
+    }
+
+    /// Test-only hook for native integration tests that need to simulate ASP snapshot interference.
+    #[doc(hidden)]
+    pub fn set_offchain_vtxo_snapshot_for_tests(
+        &self,
+        snapshot: crate::persistence::OffchainVtxoSnapshot,
+    ) {
+        self.wallet_db.set_offchain_vtxo_snapshot(snapshot);
+    }
+
+    /// Marks a job leaf VTXO as ASP-swept (not unrolled) in the persisted offchain snapshot.
+    #[doc(hidden)]
+    pub fn mark_job_target_asp_swept_in_offchain_snapshot_for_tests(
+        &self,
+        txid: &str,
+        vout: u32,
+    ) -> ArkResult<()> {
+        let mut snapshot = self
+            .wallet_db
+            .snapshot()
+            .offchain_vtxo_snapshot
+            .clone()
+            .ok_or_else(|| {
+                ArkWasmError::Snapshot(
+                    "missing offchain vtxo snapshot for ASP sweep injection".into(),
+                )
+            })?;
+        let record = snapshot
+            .virtual_tx_outpoints
+            .iter_mut()
+            .find(|record| record.txid == txid && record.vout == vout)
+            .ok_or_else(|| {
+                ArkWasmError::Snapshot(format!(
+                    "vtxo {txid}:{vout} not found in offchain snapshot for ASP sweep injection"
+                ))
+            })?;
+        record.is_swept = true;
+        record.is_unrolled = false;
+        self.wallet_db.set_offchain_vtxo_snapshot(snapshot);
+        Ok(())
     }
 
     fn all_job_leaves_locally_unrolled(
@@ -565,47 +587,6 @@ impl ArkSession {
             }
         }
         Ok(true)
-    }
-
-    async fn detect_asp_swept_job_target(
-        &self,
-        job_leaf_outpoints: &[VirtualOutPoint],
-    ) -> ArkResult<Option<VirtualOutPoint>> {
-        let snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot;
-        for outpoint in job_leaf_outpoints {
-            let txid = outpoint.txid.to_string();
-            if self.leaf_is_marked_unrolled(&txid, outpoint.vout)? {
-                continue;
-            }
-            if let Some(snapshot) = snapshot.as_ref() {
-                if let Some(record) = snapshot
-                    .virtual_tx_outpoints
-                    .iter()
-                    .find(|record| record.txid == txid && record.vout == outpoint.vout)
-                    && record.is_swept
-                    && !record.is_unrolled
-                {
-                    return Ok(Some(outpoint.clone()));
-                }
-            }
-        }
-
-        let (vtxo_list, _) = self.client.list_vtxos().await?;
-        for outpoint in job_leaf_outpoints {
-            let txid = outpoint.txid.to_string();
-            if self.leaf_is_marked_unrolled(&txid, outpoint.vout)? {
-                continue;
-            }
-            if let Some(virtual_tx_outpoint) = vtxo_list.all().find(|row| {
-                row.outpoint.txid == outpoint.txid && row.outpoint.vout == outpoint.vout
-            }) && classify_operator_vtxo_outcome(virtual_tx_outpoint)
-                == ExitingVtxoReconcileOutcome::KeepWarnAspMismatch
-            {
-                return Ok(Some(outpoint.clone()));
-            }
-        }
-
-        Ok(None)
     }
 
     async fn resolve_control_outpoints(

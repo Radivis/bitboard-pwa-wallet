@@ -439,12 +439,31 @@ async fn map_output_status(
     txid: &Txid,
     vout: u32,
 ) -> Result<SpendStatus, ark_client::Error> {
-    let outspends = client
-        .get_tx_outspends(txid)
-        .await
-        .map_err(EsploraBlockchain::map_esplora_error)?;
+    let outspends = match client.get_tx_outspends(txid).await {
+        Ok(outspends) => outspends,
+        Err(error) if is_non_probeable_outspend_error(&error) => {
+            return Ok(SpendStatus { spend_txid: None });
+        }
+        Err(error) => return Err(EsploraBlockchain::map_esplora_error(error)),
+    };
     let spend_txid = outspends.get(vout as usize).and_then(|output| output.txid);
     Ok(SpendStatus { spend_txid })
+}
+
+/// Virtual-tree txs and other off-chain artifacts may exist as JSON `/tx/{txid}` stubs while
+/// `/tx/{txid}/outspends` returns 404/500 on arkade-regtest. Treat as "spend unknown / unspent".
+fn is_non_probeable_outspend_error(error: &esplora_client::Error) -> bool {
+    match error {
+        esplora_client::Error::HttpResponse { status: 404, .. } => true,
+        esplora_client::Error::HttpResponse {
+            status: 500,
+            message,
+            ..
+        } => {
+            message.contains("outspends") || message.contains("Failed to get transaction outspends")
+        }
+        _ => false,
+    }
 }
 
 async fn map_fee_rate(client: &EsploraAsyncClient) -> Result<f64, ark_client::Error> {

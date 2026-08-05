@@ -3,23 +3,12 @@ use std::collections::HashSet;
 use ark_client::Blockchain;
 use bitcoin::Txid;
 
-use crate::api_types::{
-    UnilateralExitJobViabilityDto, UnilateralExitJobViabilityKind, UnilateralExitTopologyNodeDto,
-};
+use crate::api_types::{UnilateralExitJobViabilityDto, UnilateralExitJobViabilityKind};
 use crate::error::ArkResult;
 use crate::outpoint::VirtualOutPoint;
 use crate::persistence::VirtualTxOutPointRecord;
-use crate::session::exit_onchain::output_spent_on_chain;
 use crate::session::exit_watch_reconcile::{ExitingVtxoReconcileOutcome, classify_operator_vtxo};
 use crate::session::unilateral_exit_orchestrator::UnilateralBatchPlan;
-
-pub(crate) fn checkpoint_txids_on_job_branch(nodes: &[UnilateralExitTopologyNodeDto]) -> Vec<Txid> {
-    nodes
-        .iter()
-        .filter(|node| node.tx_type == "checkpoint")
-        .filter_map(|node| Txid::from_str(&node.txid).ok())
-        .collect()
-}
 
 pub(crate) fn wallet_unroll_step_txids(plan: &UnilateralBatchPlan) -> HashSet<Txid> {
     plan.ordered_step_txids.iter().copied().collect()
@@ -55,6 +44,76 @@ pub(crate) fn exit_relevant_vtxo_outpoints_for_plan(
     outpoints
 }
 
+pub(crate) async fn evaluate_branch_funding_interference<B: Blockchain>(
+    blockchain: &B,
+    plan: &UnilateralBatchPlan,
+    host_records: &[VirtualTxOutPointRecord],
+    leaf_is_marked_unrolled: impl Fn(&VirtualOutPoint) -> bool,
+) -> ArkResult<Option<UnilateralExitJobViabilityDto>> {
+    let monitored_outpoints = exit_relevant_vtxo_outpoints_for_plan(plan, host_records);
+    let allowed_spend_txids = wallet_unroll_step_txids(plan);
+    let foreign_outpoint = detect_foreign_vtxo_outpoint_spends(
+        blockchain,
+        &monitored_outpoints,
+        &allowed_spend_txids,
+        |outpoint| leaf_is_marked_unrolled(outpoint),
+    )
+    .await?;
+    if let Some(outpoint) = foreign_outpoint {
+        return Ok(Some(viability_from_branch_funding_lost(
+            format!(
+                "Exit-relevant VTXO outpoint {}:{} was spent by a transaction outside the wallet unroll chain.",
+                outpoint.txid, outpoint.vout
+            ),
+            vec![outpoint],
+        )));
+    }
+
+    Ok(None)
+}
+
+pub(crate) fn detect_asp_swept_from_sources(
+    job_leaf_outpoints: &[VirtualOutPoint],
+    snapshot: Option<&crate::persistence::OffchainVtxoSnapshot>,
+    operator_vtxos: &[ark_core::server::VirtualTxOutPoint],
+    leaf_is_marked_unrolled: impl Fn(&str, u32) -> bool,
+) -> Option<VirtualOutPoint> {
+    for outpoint in job_leaf_outpoints {
+        let txid = outpoint.txid.to_string();
+        if leaf_is_marked_unrolled(&txid, outpoint.vout) {
+            continue;
+        }
+        if let Some(snapshot) = snapshot {
+            if let Some(record) = snapshot
+                .virtual_tx_outpoints
+                .iter()
+                .find(|record| record.txid == txid && record.vout == outpoint.vout)
+                && record.is_swept
+                && !record.is_unrolled
+            {
+                return Some(outpoint.clone());
+            }
+        }
+    }
+
+    for outpoint in job_leaf_outpoints {
+        let txid = outpoint.txid.to_string();
+        if leaf_is_marked_unrolled(&txid, outpoint.vout) {
+            continue;
+        }
+        if let Some(virtual_tx_outpoint) = operator_vtxos
+            .iter()
+            .find(|row| row.outpoint.txid == outpoint.txid && row.outpoint.vout == outpoint.vout)
+            && classify_operator_vtxo_outcome(virtual_tx_outpoint)
+                == ExitingVtxoReconcileOutcome::KeepWarnAspMismatch
+        {
+            return Some(outpoint.clone());
+        }
+    }
+
+    None
+}
+
 pub(crate) async fn detect_foreign_vtxo_outpoint_spends<B: Blockchain>(
     blockchain: &B,
     monitored_outpoints: &[VirtualOutPoint],
@@ -66,13 +125,32 @@ pub(crate) async fn detect_foreign_vtxo_outpoint_spends<B: Blockchain>(
             continue;
         }
         if let Some(spend_txid) =
-            output_spent_on_chain(blockchain, &outpoint.txid, outpoint.vout).await?
+            spend_txid_on_chain_if_probeable(blockchain, &outpoint.txid, outpoint.vout).await?
             && !allowed_spend_txids.contains(&spend_txid)
         {
             return Ok(Some(outpoint.clone()));
         }
     }
     Ok(None)
+}
+
+async fn spend_txid_on_chain_if_probeable<B: Blockchain>(
+    blockchain: &B,
+    txid: &Txid,
+    vout: u32,
+) -> ArkResult<Option<Txid>> {
+    match blockchain.get_output_status(txid, vout).await {
+        Ok(status) => Ok(status.spend_txid),
+        Err(error) if output_status_probe_unavailable(&error) => Ok(None),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn output_status_probe_unavailable(error: &ark_client::Error) -> bool {
+    let message = error.to_string();
+    message.contains("Failed to get transaction outspends")
+        || (message.contains("status: 500") && message.contains("outspend"))
+        || (message.contains("status: 404") && message.contains("outspend"))
 }
 
 pub(crate) fn viability_from_asp_swept(
@@ -118,7 +196,6 @@ use std::str::FromStr;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::api_types::UnilateralExitTopologyNodeDto;
     use crate::persistence::VirtualTxOutPointRecord;
     use ark_core::server::{ChainedTxType, VtxoChain, VtxoChains};
     use bitcoin::hashes::Hash;
@@ -156,25 +233,6 @@ mod tests {
             ordered_step_txids: vec![step_txid],
             tx_by_id: HashMap::new(),
         }
-    }
-
-    #[test]
-    fn checkpoint_txids_on_job_branch_collects_checkpoint_nodes() {
-        let checkpoint = txid(5);
-        let nodes = vec![
-            UnilateralExitTopologyNodeDto {
-                txid: txid(2).to_string(),
-                tx_type: "tree".to_string(),
-                spends: vec![],
-            },
-            UnilateralExitTopologyNodeDto {
-                txid: checkpoint.to_string(),
-                tx_type: "checkpoint".to_string(),
-                spends: vec![txid(2).to_string()],
-            },
-        ];
-        let collected = checkpoint_txids_on_job_branch(&nodes);
-        assert_eq!(collected, vec![checkpoint]);
     }
 
     #[test]
@@ -251,3 +309,7 @@ mod tests {
         assert!(allowed.contains(&txid(20)));
     }
 }
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+#[path = "unilateral_exit_job_viability_integration_tests.rs"]
+mod integration_tests;

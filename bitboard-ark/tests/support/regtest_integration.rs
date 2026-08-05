@@ -362,6 +362,61 @@ pub async fn prepare_boarded_session(
     (session, mnemonic)
 }
 
+#[derive(Debug, Deserialize)]
+pub struct BoardedWalletFixture {
+    pub mnemonic: String,
+    pub persistence_before_rotate: String,
+}
+
+/// Loads `{ mnemonic, persistence_before_rotate }` from `ARKADE_REGTEST_BOARDED_FIXTURE` or the
+/// default E2E export path when that file exists.
+pub fn load_boarded_fixture() -> Option<BoardedWalletFixture> {
+    let path = std::env::var("ARKADE_REGTEST_BOARDED_FIXTURE")
+        .unwrap_or_else(|_| DEFAULT_BOARDED_FIXTURE_RELATIVE.to_string());
+    let resolved = resolve_regtest_fixture_path(&path);
+    if !resolved.is_file() {
+        return None;
+    }
+    let json = std::fs::read_to_string(&resolved).expect("read boarded wallet fixture");
+    serde_json::from_str(&json).ok()
+}
+
+/// Opens a boarded wallet from an E2E-exported fixture when available; otherwise funds and boards
+/// natively (requires a clean regtest stack — see `prepare_boarded_session`).
+pub async fn open_boarded_session_or_fixture(
+    endpoints: &RegtestEndpoints,
+    board_sats: u64,
+) -> ArkSession {
+    if let Some(fixture) = load_boarded_fixture() {
+        eprintln!(
+            "open_boarded_session_or_fixture: using boarded fixture at {:?}",
+            std::env::var("ARKADE_REGTEST_BOARDED_FIXTURE")
+                .map(PathBuf::from)
+                .unwrap_or_else(|_| repo_root().join(DEFAULT_BOARDED_FIXTURE_RELATIVE))
+        );
+        restart_arkd_operator(endpoints).await;
+        wait_for_regtest_healthy(endpoints).await;
+        let session = open_session(
+            endpoints,
+            &fixture.mnemonic,
+            Some(&fixture.persistence_before_rotate),
+        )
+        .await;
+        session
+            .sync_with_operator()
+            .await
+            .expect("sync after boarded fixture open");
+        let balance = session.balance().await.expect("balance after fixture open");
+        assert!(
+            balance.offchain_spendable_sats > 0 || balance.confirmed_sats > 0,
+            "boarded fixture wallet has no spendable balance"
+        );
+        return session;
+    }
+
+    prepare_boarded_session(endpoints, board_sats).await.0
+}
+
 pub async fn send_arkade_self_payment(
     session: &ArkSession,
     amount_sats: u64,
