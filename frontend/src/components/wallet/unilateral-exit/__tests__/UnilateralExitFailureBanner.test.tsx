@@ -69,6 +69,7 @@ describe('UnilateralExitFailureBanner', () => {
       detectedAtUnix: 1_700_000_100,
       reasonCode: 'asp_swept_targets',
       detailMessage: 'Operator swept target VTXO.',
+      vtxoIds: [],
     })
     renderWithProviders(<UnilateralExitFailureBanner />)
     expect(screen.getByTestId('unilateral-exit-failure-banner')).toBeInTheDocument()
@@ -83,6 +84,7 @@ describe('UnilateralExitFailureBanner', () => {
       detectedAtUnix: 1_700_000_100,
       reasonCode: 'branch_funding_lost',
       detailMessage: 'Checkpoint confirmed on-chain.',
+      vtxoIds: [],
     })
     renderWithProviders(<UnilateralExitFailureBanner />)
     await user.click(screen.getByTestId('unilateral-exit-failure-dismiss'))
@@ -91,5 +93,43 @@ describe('UnilateralExitFailureBanner', () => {
       networkMode: 'regtest',
       connectionId: 'conn-1',
     })
+  })
+
+  it('renders user_aborted banner with vtxo ids and copy action', async () => {
+    const user = userEvent.setup()
+    const vtxoId = 'vtxo-abort-test-id-1234567890'
+    failureStoreMock.mockReturnValue({
+      selectedLeafOutpoints: [{ txid: 'aa'.repeat(32), vout: 0 }],
+      jobStartedAtUnix: 1_700_000_000,
+      detectedAtUnix: 1_700_000_100,
+      reasonCode: 'user_aborted',
+      detailMessage: '',
+      vtxoIds: [vtxoId],
+    })
+
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      clipboard: { writeText },
+    })
+
+    renderWithProviders(<UnilateralExitFailureBanner />)
+
+    expect(screen.getByTestId('unilateral-exit-failure-banner')).toHaveAttribute(
+      'data-reason-code',
+      'user_aborted',
+    )
+    expect(
+      screen.getByText(/You have aborted your previous unilateral exit of the VTXOs with the ids:/i),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/Please restart that exit soon, or consider those coins lost/i),
+    ).toBeInTheDocument()
+    expect(screen.getByTestId(`copy-vtxo-id-${vtxoId}`)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: `Copy VTXO id ${vtxoId}` }))
+    expect(writeText).toHaveBeenCalledWith(vtxoId)
+
+    vi.unstubAllGlobals()
   })
 })

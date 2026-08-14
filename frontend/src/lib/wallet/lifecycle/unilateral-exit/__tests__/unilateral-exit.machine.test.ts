@@ -577,4 +577,60 @@ describe('unilateralExitMachine', () => {
     expect(clearPersistedUnilateralExitJob).toHaveBeenCalled()
     expect(testActor.getSnapshot().context.jobOutpoints).toEqual([])
   })
+
+  it('aborts from proceeding and persists user_aborted failure', async () => {
+    const fetchProgress = vi.fn(async () =>
+      progress({ phase: 'idle', currentStepTxRelayed: true }),
+    )
+    const proceedStep = vi.fn(() => new Promise<ArkadeUnilateralExitProgress>(() => {}))
+    const { testActor } = createTestActor({ fetchProgress, proceedStep })
+
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'START_MANUAL',
+      walletScope,
+      outpoints: [leaf],
+      feeRateSatPerVb: 2,
+    })
+
+    await waitFor(testActor, (state) => state.matches('proceeding'))
+    testActor.send({ type: 'ABORT_ORCHESTRATION', vtxoIds: ['vtxo-id-1'] })
+
+    await waitFor(testActor, (state) => state.matches('idle'))
+    expect(persistUnilateralExitFailureRecord).toHaveBeenCalledWith(
+      walletScope,
+      expect.objectContaining({
+        reasonCode: 'user_aborted',
+        vtxoIds: ['vtxo-id-1'],
+      }),
+    )
+    expect(clearPersistedUnilateralExitJob).toHaveBeenCalled()
+    expect(testActor.getSnapshot().context.jobOutpoints).toEqual([])
+  })
+
+  it('aborts from waitingConfirm and clears job context', async () => {
+    const fetchProgress = vi.fn(async () => progress({ phase: 'idle' }))
+    const { testActor } = createTestActor({ fetchProgress })
+
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'START_MANUAL',
+      walletScope,
+      outpoints: [leaf],
+      feeRateSatPerVb: 2,
+    })
+
+    await waitFor(testActor, (state) => state.matches('waitingConfirm'))
+    testActor.send({ type: 'ABORT_ORCHESTRATION', vtxoIds: ['vtxo-a', 'vtxo-b'] })
+
+    await waitFor(testActor, (state) => state.matches('idle'))
+    expect(persistUnilateralExitFailureRecord).toHaveBeenCalledWith(
+      walletScope,
+      expect.objectContaining({
+        reasonCode: 'user_aborted',
+        vtxoIds: ['vtxo-a', 'vtxo-b'],
+      }),
+    )
+    expect(testActor.getSnapshot().context.jobOutpoints).toEqual([])
+  })
 })

@@ -22,6 +22,7 @@ import type {
 import { unilateralExitWalletScopeKey } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
 import { resolveUnilateralExitJobOutpoints } from '@/lib/wallet/lifecycle/unilateral-exit-job-scope'
 import { unilateralExitMachineActors } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.actors'
+import { resolveVtxoIdsForOutpoints } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-vtxo-ids'
 import type { UnilateralExitMachineEvent } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-types'
 import { unilateralExitMachine } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.machine'
 import type { UnilateralExitActorSnapshot } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-types'
@@ -38,6 +39,7 @@ import type { LockLifecyclePhase } from '@/lib/wallet/lifecycle/lock-lifecycle-t
 import { shouldSkipRailLifecycleResetForLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-phase'
 import type { ArkadeVtxoOutpoint } from '@/workers/arkade-api'
 import { arkadeVtxoOutpointsEqual } from '@/workers/arkade-api'
+import { getArkadeWorker } from '@/workers/arkade-factory'
 import { createActor } from 'xstate'
 
 type ActorListener = (snapshot: UnilateralExitActorSnapshot) => void
@@ -188,7 +190,6 @@ export async function hydrateUnilateralExitFromPersistence(params: {
     })
   ) {
     clearPersistedUnilateralExitJob(params.walletScope)
-    sendUnilateralExitEvent({ type: 'CLEAR_JOB' })
     return
   }
 
@@ -303,6 +304,32 @@ export async function proceedManualUnilateralExitStep(
 
 export function clearUnilateralExitJob(): void {
   sendUnilateralExitEvent({ type: 'CLEAR_JOB' })
+}
+
+export async function abortUnilateralExitOrchestration(
+  scope: UnilateralExitWalletScope,
+): Promise<void> {
+  const snapshot = getUnilateralExitActorSnapshot()
+  const jobOutpoints = snapshot.context.jobOutpoints
+  if (jobOutpoints.length === 0) {
+    return
+  }
+
+  const worker = getArkadeWorker()
+  const [candidates, inProgressRows] = await Promise.all([
+    worker.listExitCandidates(),
+    worker.listUnilateralExitsInProgress(),
+  ])
+  const vtxoIds = resolveVtxoIdsForOutpoints(jobOutpoints, candidates, inProgressRows)
+
+  disableAutomaticUnilateralExit(scope)
+
+  void import('@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.actors').then(
+    (module) => module.invalidateUnilateralExitQueries(scope, jobOutpoints),
+  )
+
+  sendUnilateralExitEvent({ type: 'ABORT_ORCHESTRATION', vtxoIds })
+  await waitForUnilateralExitActorSettled()
 }
 
 export function enableAutomaticUnilateralExit(

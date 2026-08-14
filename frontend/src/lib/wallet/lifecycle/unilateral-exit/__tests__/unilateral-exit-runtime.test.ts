@@ -36,6 +36,8 @@ vi.mock('@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator', () => ({
   })),
 }))
 
+const mockSetAutomationEnabled = vi.fn()
+
 vi.mock('@/lib/wallet/lifecycle/unilateral-exit-automation-prefs-persistence', () => ({
   useUnilateralExitAutomationPrefsStore: {
     getState: () => ({
@@ -44,8 +46,18 @@ vi.mock('@/lib/wallet/lifecycle/unilateral-exit-automation-prefs-persistence', (
         feePresetLabel: 'High',
         maxFeeRateSatPerVb: 20,
       }),
+      setEnabled: mockSetAutomationEnabled,
     }),
   },
+}))
+
+vi.mock('@/workers/arkade-factory', () => ({
+  getArkadeWorker: () => ({
+    listExitCandidates: vi.fn(async () => [
+      { id: 'vtxo-resolved-1', txid: leaf.txid, vout: leaf.vout, amountSats: 50_000 },
+    ]),
+    listUnilateralExitsInProgress: vi.fn(async () => []),
+  }),
 }))
 
 vi.mock('@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence', () => ({
@@ -72,6 +84,7 @@ vi.mock('@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.actors', () => {
     leafStatuses: [],
   }
   return {
+    invalidateUnilateralExitQueries: vi.fn(async () => {}),
     unilateralExitMachineActors: {
       fetchProgressActor: fromPromise(async () => progress),
       evaluateJobViabilityActor: fromPromise(async () => ({
@@ -97,6 +110,7 @@ vi.mock('@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.actors', () => {
 import { getArkadeSyncLifecycleSnapshot } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
 import {
   configureUnilateralExitForLoadedWallet,
+  abortUnilateralExitOrchestration,
   hydrateUnilateralExitFromPersistence,
   resetUnilateralExitActorForTests,
   sendUnilateralExitEvent,
@@ -199,5 +213,45 @@ describe('unilateral-exit-runtime hydration', () => {
       unilateralExitSnapshotIsInState(snapshot, UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm) ||
         unilateralExitSnapshotIsInState(snapshot, UNILATERAL_EXIT_MACHINE_STATE.idle),
     ).toBe(true)
+  })
+
+  it('stale hydrate clears persisted bookmark without CLEAR_JOB event', async () => {
+    persistenceHydrated = true
+    mockGetJob.mockReturnValue({
+      jobActive: true,
+      selectedLeafOutpoints: [leaf],
+      currentStepRelayedSinceUnix: null,
+    })
+
+    await hydrateUnilateralExitFromPersistence({
+      walletScope,
+      inProgressOutpoints: [],
+      unilateralExitInProgressSats: 0,
+    })
+
+    expect(mockClearJob).toHaveBeenCalled()
+    const snapshot = getUnilateralExitActorSnapshot()
+    expect(snapshot.context.jobOutpoints).toEqual([])
+  })
+
+  it('abort orchestration disables automation and clears job', async () => {
+    persistenceHydrated = true
+    mockSetAutomationEnabled.mockClear()
+
+    await configureUnilateralExitForLoadedWallet(walletScope)
+    sendUnilateralExitEvent({
+      type: 'START_MANUAL',
+      walletScope,
+      outpoints: [leaf],
+      feeRateSatPerVb: 2,
+    })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    await abortUnilateralExitOrchestration(walletScope)
+
+    expect(mockSetAutomationEnabled).toHaveBeenCalledWith(walletScope, false)
+    const snapshot = getUnilateralExitActorSnapshot()
+    expect(snapshot.context.jobOutpoints).toEqual([])
+    expect(unilateralExitSnapshotIsInState(snapshot, UNILATERAL_EXIT_MACHINE_STATE.idle)).toBe(true)
   })
 })

@@ -119,6 +119,8 @@ feature:
         description: Manual per-step Proceed remains on control page when Proceed automatically is off
       - id: ARK-EXIT-22
         description: Proceed automatically advances all unroll steps for multiple preconfirmed VTXOs (after chained self-send splits) until branch complete (E2E-ARK-REG-07)
+      - id: ARK-EXIT-23
+        description: Control page offers abort when a frontend unilateral exit job is active; two-step confirmation (info then red risk modal with required checkbox); abort ends orchestration via aborted machine state without deleting unilateral_exit_materials or other WASM persistence; user_aborted failure banner lists VTXO ids with copy actions; backend in-progress state remains until completion or reconcile
     operator_sync:
       - id: ARK-SYNC-01
         description: When discover_keys fails during operator sync but list_vtxos succeeds, sync lifecycle records a warningMessage and dashboard/management show a non-blocking sync warning banner

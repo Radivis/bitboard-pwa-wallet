@@ -14,6 +14,8 @@ import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSe
 import { UnilateralExitAutomationSection } from '@/components/wallet/unilateral-exit/UnilateralExitAutomationSection'
 import { UnilateralExitFailureBanner } from '@/components/wallet/unilateral-exit/UnilateralExitFailureBanner'
 import { StartUnilateralExitConfirmModal } from '@/components/wallet/unilateral-exit/StartUnilateralExitConfirmModal'
+import { AbortUnilateralExitInfoModal } from '@/components/wallet/unilateral-exit/AbortUnilateralExitInfoModal'
+import { AbortUnilateralExitConfirmModal } from '@/components/wallet/unilateral-exit/AbortUnilateralExitConfirmModal'
 import { UnilateralExitTreeGraph } from '@/components/wallet/unilateral-exit/UnilateralExitTreeGraph'
 import { UnilateralExitNodeDetailCard } from '@/components/wallet/unilateral-exit/UnilateralExitNodeDetailCard'
 import {
@@ -62,6 +64,7 @@ import { wasmArkErrorMessage } from '@/lib/shared/wasm-ark-error'
 import { formatSatPerVbTwoDecimals } from '@/lib/esplora/esplora-fee-estimates'
 import {
   clearUnilateralExitJob,
+  abortUnilateralExitOrchestration,
   disableAutomaticUnilateralExit,
   enableAutomaticUnilateralExit,
   hydrateUnilateralExitFromPersistence,
@@ -143,6 +146,8 @@ export function UnilateralExitControlPage() {
   const graphRenderEpoch = useUnilateralExitControlStore((state) => state.graphRenderEpoch)
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null)
   const [startConfirmOpen, setStartConfirmOpen] = useState(false)
+  const [abortInfoOpen, setAbortInfoOpen] = useState(false)
+  const [abortConfirmOpen, setAbortConfirmOpen] = useState(false)
 
   const automationEnabled = actorSnapshot.context.automationEnabled
   const automationPausedReason = automationSnapshot.pausedReason
@@ -547,6 +552,11 @@ export function UnilateralExitControlPage() {
     setStartConfirmOpen(true)
   }
 
+  const handleAbortConfirm = () => {
+    if (walletScope == null) return
+    void abortUnilateralExitOrchestration(walletScope)
+  }
+
   const handleProceed = async () => {
     if (jobOutpoints.length === 0) {
       toast.error('Select at least one exit-eligible VTXO leaf.')
@@ -617,6 +627,16 @@ export function UnilateralExitControlPage() {
         onConfirm={() => {
           void handleProceed()
         }}
+      />
+      <AbortUnilateralExitInfoModal
+        open={abortInfoOpen}
+        onOpenChange={setAbortInfoOpen}
+        onContinue={() => setAbortConfirmOpen(true)}
+      />
+      <AbortUnilateralExitConfirmModal
+        open={abortConfirmOpen}
+        onOpenChange={setAbortConfirmOpen}
+        onConfirm={handleAbortConfirm}
       />
       <div className="flex flex-col gap-4">
         <PageHeader
@@ -823,6 +843,18 @@ export function UnilateralExitControlPage() {
           >
             {proceedButton.showSpinner && <Loader2 className="mr-2 size-4 animate-spin" />}
             {proceedButton.label}
+          </Button>
+        )}
+
+        {lifecycleJobActive && (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive"
+            data-testid="unilateral-exit-abort"
+            onClick={() => setAbortInfoOpen(true)}
+          >
+            Abort unilateral exit
           </Button>
         )}
 

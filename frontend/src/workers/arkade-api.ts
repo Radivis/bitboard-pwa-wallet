@@ -440,6 +440,8 @@ export type ArkadeUnilateralExitJobViabilityStatus =
 export type ArkadeUnilateralExitFailureReasonCode =
   | 'asp_swept_targets'
   | 'branch_funding_lost'
+  /** Frontend-only: user aborted orchestration without deleting WASM materials. */
+  | 'user_aborted'
 
 export interface ArkadeUnilateralExitJobViability {
   status: ArkadeUnilateralExitJobViabilityStatus

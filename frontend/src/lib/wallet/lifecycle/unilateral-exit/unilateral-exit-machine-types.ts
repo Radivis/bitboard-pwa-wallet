@@ -33,6 +33,7 @@ export const UNILATERAL_EXIT_MACHINE_STATE = {
   paused: 'paused',
   complete: 'complete',
   terminated: 'terminated',
+  aborted: 'aborted',
   error: 'error',
 } as const
 
@@ -77,6 +78,7 @@ export type UnilateralExitMachineUserEvent =
   | { type: 'POLL_TICK' }
   | { type: 'RESUME' }
   | { type: 'CLEAR_JOB' }
+  | { type: 'ABORT_ORCHESTRATION'; vtxoIds: string[] }
   | { type: 'WALLET_RESET' }
   | { type: 'AUTOMATION_PREFS_CHANGED'; automationEnabled: boolean }
 

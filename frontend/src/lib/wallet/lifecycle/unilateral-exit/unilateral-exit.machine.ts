@@ -449,6 +449,22 @@ export const unilateralExitMachineSetup = setup({
         }),
       )
     },
+    persistAbortedUnilateralExitFailure: ({ context, event }) => {
+      if (context.walletScope == null || event.type !== 'ABORT_ORCHESTRATION') {
+        return
+      }
+      const job = getPersistedUnilateralExitJob(context.walletScope)
+      persistUnilateralExitFailureRecord(
+        context.walletScope,
+        buildPersistedUnilateralExitFailure({
+          selectedLeafOutpoints: context.jobOutpoints,
+          jobStartedAtUnix: job.jobStartedAtUnix ?? Math.floor(Date.now() / 1000),
+          reasonCode: 'user_aborted',
+          detailMessage: '',
+          vtxoIds: event.vtxoIds,
+        }),
+      )
+    },
     invalidateUnilateralExitQueriesOnTerminate: ({ context }) => {
       if (context.walletScope == null || context.jobOutpoints.length === 0) {
         return
@@ -529,6 +545,8 @@ const ensuringBroadcastOnDone = [
   },
 ] as const
 
+const abortOrchestrationTransition = { target: 'aborted' } as const
+
 export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
   id: 'unilateralExit',
   context: ({ input }) => createInitialUnilateralExitContext(input),
@@ -587,6 +605,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
     },
     checkingProgress: {
       on: {
+        ABORT_ORCHESTRATION: abortOrchestrationTransition,
         AUTOMATION_PREFS_CHANGED: {
           actions: 'assignAutomationPrefs',
         },
@@ -612,6 +631,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
     },
     loadingProgress: {
       on: {
+        ABORT_ORCHESTRATION: abortOrchestrationTransition,
         AUTOMATION_PREFS_CHANGED: {
           actions: 'assignAutomationPrefs',
         },
@@ -629,6 +649,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
     },
     evaluatingPolicy: {
       on: {
+        ABORT_ORCHESTRATION: abortOrchestrationTransition,
         AUTOMATION_PREFS_CHANGED: {
           actions: 'assignAutomationPrefs',
         },
@@ -660,6 +681,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
     },
     proceeding: {
       on: {
+        ABORT_ORCHESTRATION: abortOrchestrationTransition,
         AUTOMATION_PREFS_CHANGED: {
           actions: 'assignAutomationPrefs',
         },
@@ -705,6 +727,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
     },
     ensuringBroadcast: {
       on: {
+        ABORT_ORCHESTRATION: abortOrchestrationTransition,
         AUTOMATION_PREFS_CHANGED: {
           actions: 'assignAutomationPrefs',
         },
@@ -740,6 +763,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
         },
       },
       on: {
+        ABORT_ORCHESTRATION: abortOrchestrationTransition,
         POLL_TICK: {
           target: 'checkingProgress',
           actions: 'resumeAutomationProceed',
@@ -771,6 +795,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
     },
     paused: {
       on: {
+        ABORT_ORCHESTRATION: abortOrchestrationTransition,
         RESUME: {
           target: 'checkingProgress',
           actions: 'assignResume',
@@ -820,8 +845,20 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
         target: 'idle',
       },
     },
+    aborted: {
+      entry: [
+        'persistAbortedUnilateralExitFailure',
+        'invalidateUnilateralExitQueriesOnTerminate',
+        'clearJobContext',
+        'clearTerminatedProceedRequested',
+      ],
+      always: {
+        target: 'idle',
+      },
+    },
     error: {
       on: {
+        ABORT_ORCHESTRATION: abortOrchestrationTransition,
         CLEAR_JOB: {
           target: 'idle',
           actions: 'clearJobContext',

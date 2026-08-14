@@ -52,6 +52,7 @@ export type PersistedUnilateralExitFailure = {
   detectedAtUnix: number
   reasonCode: UnilateralExitFailureReasonCode
   detailMessage: string
+  vtxoIds: string[]
 }
 
 export type UnilateralExitStartParams = {

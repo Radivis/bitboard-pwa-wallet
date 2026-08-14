@@ -62,7 +62,25 @@ export const useUnilateralExitFailurePersistenceStore =
       {
         name: 'unilateral-exit-failure-storage',
         storage: createJSONStorage(() => sqliteStorage),
-        version: 1,
+        version: 2,
+        migrate: (persistedState, version) => {
+          const state = persistedState as {
+            failuresByKey?: Record<string, PersistedUnilateralExitFailure>
+          }
+          if (state.failuresByKey == null || version >= 2) {
+            return persistedState
+          }
+          const failuresByKey = Object.fromEntries(
+            Object.entries(state.failuresByKey).map(([key, failure]) => [
+              key,
+              {
+                ...failure,
+                vtxoIds: failure.vtxoIds ?? [],
+              },
+            ]),
+          )
+          return { ...state, failuresByKey }
+        },
       },
     ),
   )
@@ -91,6 +109,7 @@ export function buildPersistedUnilateralExitFailure(params: {
   jobStartedAtUnix: number
   reasonCode: UnilateralExitFailureReasonCode
   detailMessage: string
+  vtxoIds?: string[]
 }): PersistedUnilateralExitFailure {
   return {
     selectedLeafOutpoints: params.selectedLeafOutpoints,
@@ -98,5 +117,6 @@ export function buildPersistedUnilateralExitFailure(params: {
     detectedAtUnix: Math.floor(Date.now() / 1000),
     reasonCode: params.reasonCode,
     detailMessage: params.detailMessage,
+    vtxoIds: params.vtxoIds ?? [],
   }
 }

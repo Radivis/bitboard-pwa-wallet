@@ -61,13 +61,15 @@ export async function invalidateUnilateralExitQueries(
   }
   const sortedOutpoints = sortArkadeVtxoOutpoints(outpoints)
   const { appQueryClient } = await import('@/lib/shared/app-query-client')
+  const progressQueryKey = arkadeUnilateralExitProgressQueryKey(
+    scope.walletId,
+    scope.networkMode,
+    scope.connectionId,
+    sortedOutpoints,
+  )
+  await appQueryClient.removeQueries({ queryKey: progressQueryKey })
   await appQueryClient.invalidateQueries({
-    queryKey: arkadeUnilateralExitProgressQueryKey(
-      scope.walletId,
-      scope.networkMode,
-      scope.connectionId,
-      sortedOutpoints,
-    ),
+    queryKey: progressQueryKey,
   })
   await appQueryClient.invalidateQueries({
     queryKey: arkadeBalanceQueryKey(scope.walletId, scope.networkMode, scope.connectionId),
