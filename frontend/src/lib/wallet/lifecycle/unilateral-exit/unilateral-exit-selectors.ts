@@ -130,6 +130,32 @@ export function selectIsUnilateralExitJobActive(state: UnilateralExitActorSnapsh
   )
 }
 
+export function selectCanAbortUnilateralExitOrchestration(
+  state: UnilateralExitActorSnapshot,
+  params: {
+    resolvedJobOutpointsCount: number
+    lifecycleJobActive: boolean
+    persistedJobActive: boolean
+    hasInProgressExits: boolean
+  },
+): boolean {
+  if (params.resolvedJobOutpointsCount === 0) {
+    return false
+  }
+  if (unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.complete)) {
+    return false
+  }
+  return (
+    state.context.jobOutpoints.length > 0 ||
+    params.lifecycleJobActive ||
+    params.persistedJobActive ||
+    params.hasInProgressExits ||
+    unilateralExitSnapshotIsProceeding(state) ||
+    unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm) ||
+    unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.paused)
+  )
+}
+
 export function selectUnilateralExitControlJobState(
   state: UnilateralExitActorSnapshot,
   params: {

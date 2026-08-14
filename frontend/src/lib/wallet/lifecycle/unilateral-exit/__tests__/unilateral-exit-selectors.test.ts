@@ -7,6 +7,7 @@ import {
 import { unilateralExitMachine } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.machine'
 import {
   selectIsUnilateralExitJobActive,
+  selectCanAbortUnilateralExitOrchestration,
   selectUnilateralExitControlJobState,
   selectUnilateralExitInProgressOverlay,
   selectUnilateralExitLifecycleSnapshot,
@@ -295,6 +296,48 @@ describe('selectUnilateralExitInProgressOverlay', () => {
       progress: null,
     })
     expect(selectUnilateralExitInProgressOverlay(snapshot)).toBeNull()
+  })
+})
+
+describe('selectCanAbortUnilateralExitOrchestration', () => {
+  const abortParams = {
+    resolvedJobOutpointsCount: 1,
+    lifecycleJobActive: false,
+    persistedJobActive: false,
+    hasInProgressExits: false,
+  }
+
+  it('is true when actor holds job outpoints outside complete', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm, {
+      jobOutpoints: [leaf],
+    })
+    expect(selectCanAbortUnilateralExitOrchestration(snapshot, abortParams)).toBe(true)
+  })
+
+  it('is true for manual in-progress exits without actor job context', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.idle, {
+      jobOutpoints: [],
+    })
+    expect(
+      selectCanAbortUnilateralExitOrchestration(snapshot, {
+        ...abortParams,
+        hasInProgressExits: true,
+      }),
+    ).toBe(true)
+  })
+
+  it('is false when only leaf selection exists without orchestration or in-progress', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.idle, {
+      jobOutpoints: [],
+    })
+    expect(selectCanAbortUnilateralExitOrchestration(snapshot, abortParams)).toBe(false)
+  })
+
+  it('is false after branch complete', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.complete, {
+      jobOutpoints: [leaf],
+    })
+    expect(selectCanAbortUnilateralExitOrchestration(snapshot, abortParams)).toBe(false)
   })
 })
 

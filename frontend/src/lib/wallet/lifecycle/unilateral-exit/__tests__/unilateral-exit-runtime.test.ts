@@ -247,7 +247,7 @@ describe('unilateral-exit-runtime hydration', () => {
     })
     await new Promise((resolve) => setTimeout(resolve, 50))
 
-    await abortUnilateralExitOrchestration(walletScope)
+    await abortUnilateralExitOrchestration(walletScope, [leaf])
 
     expect(mockSetAutomationEnabled).toHaveBeenCalledWith(walletScope, false)
     const snapshot = getUnilateralExitActorSnapshot()

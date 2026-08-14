@@ -78,7 +78,11 @@ export type UnilateralExitMachineUserEvent =
   | { type: 'POLL_TICK' }
   | { type: 'RESUME' }
   | { type: 'CLEAR_JOB' }
-  | { type: 'ABORT_ORCHESTRATION'; vtxoIds: string[] }
+  | {
+      type: 'ABORT_ORCHESTRATION'
+      vtxoIds: string[]
+      resolvedJobOutpoints: ArkadeVtxoOutpoint[]
+    }
   | { type: 'WALLET_RESET' }
   | { type: 'AUTOMATION_PREFS_CHANGED'; automationEnabled: boolean }
 

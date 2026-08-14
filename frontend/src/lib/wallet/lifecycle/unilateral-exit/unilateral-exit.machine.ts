@@ -465,6 +465,17 @@ export const unilateralExitMachineSetup = setup({
         }),
       )
     },
+    stageAbortedJobOutpoints: assign(({ context, event }) => {
+      if (event.type !== 'ABORT_ORCHESTRATION' || context.jobOutpoints.length > 0) {
+        return {}
+      }
+      if (event.resolvedJobOutpoints.length === 0) {
+        return {}
+      }
+      return {
+        jobOutpoints: sortArkadeVtxoOutpoints(event.resolvedJobOutpoints),
+      }
+    }),
     invalidateUnilateralExitQueriesOnTerminate: ({ context }) => {
       if (context.walletScope == null || context.jobOutpoints.length === 0) {
         return
@@ -581,6 +592,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
           target: 'checkingProgress',
           actions: 'assignProceedManual',
         },
+        ABORT_ORCHESTRATION: abortOrchestrationTransition,
         CLEAR_JOB: {
           actions: 'clearJobContext',
         },
@@ -847,6 +859,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
     },
     aborted: {
       entry: [
+        'stageAbortedJobOutpoints',
         'persistAbortedUnilateralExitFailure',
         'invalidateUnilateralExitQueriesOnTerminate',
         'clearJobContext',

@@ -594,7 +594,11 @@ describe('unilateralExitMachine', () => {
     })
 
     await waitFor(testActor, (state) => state.matches('proceeding'))
-    testActor.send({ type: 'ABORT_ORCHESTRATION', vtxoIds: ['vtxo-id-1'] })
+    testActor.send({
+      type: 'ABORT_ORCHESTRATION',
+      vtxoIds: ['vtxo-id-1'],
+      resolvedJobOutpoints: [leaf],
+    })
 
     await waitFor(testActor, (state) => state.matches('idle'))
     expect(persistUnilateralExitFailureRecord).toHaveBeenCalledWith(
@@ -621,7 +625,11 @@ describe('unilateralExitMachine', () => {
     })
 
     await waitFor(testActor, (state) => state.matches('waitingConfirm'))
-    testActor.send({ type: 'ABORT_ORCHESTRATION', vtxoIds: ['vtxo-a', 'vtxo-b'] })
+    testActor.send({
+      type: 'ABORT_ORCHESTRATION',
+      vtxoIds: ['vtxo-a', 'vtxo-b'],
+      resolvedJobOutpoints: [leaf],
+    })
 
     await waitFor(testActor, (state) => state.matches('idle'))
     expect(persistUnilateralExitFailureRecord).toHaveBeenCalledWith(
@@ -629,6 +637,29 @@ describe('unilateralExitMachine', () => {
       expect.objectContaining({
         reasonCode: 'user_aborted',
         vtxoIds: ['vtxo-a', 'vtxo-b'],
+      }),
+    )
+    expect(testActor.getSnapshot().context.jobOutpoints).toEqual([])
+  })
+
+  it('aborts from idle using resolved outpoints when actor context is empty', async () => {
+    const fetchProgress = vi.fn(async () => progress({ phase: 'idle' }))
+    const { testActor } = createTestActor({ fetchProgress })
+
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'ABORT_ORCHESTRATION',
+      vtxoIds: ['vtxo-id-2'],
+      resolvedJobOutpoints: [leaf],
+    })
+
+    await waitFor(testActor, (state) => state.matches('idle'))
+    expect(persistUnilateralExitFailureRecord).toHaveBeenCalledWith(
+      walletScope,
+      expect.objectContaining({
+        reasonCode: 'user_aborted',
+        vtxoIds: ['vtxo-id-2'],
+        selectedLeafOutpoints: [leaf],
       }),
     )
     expect(testActor.getSnapshot().context.jobOutpoints).toEqual([])

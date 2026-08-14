@@ -38,7 +38,7 @@ import {
 import type { LockLifecyclePhase } from '@/lib/wallet/lifecycle/lock-lifecycle-types'
 import { shouldSkipRailLifecycleResetForLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-phase'
 import type { ArkadeVtxoOutpoint } from '@/workers/arkade-api'
-import { arkadeVtxoOutpointsEqual } from '@/workers/arkade-api'
+import { arkadeVtxoOutpointsEqual, sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
 import { getArkadeWorker } from '@/workers/arkade-factory'
 import { createActor } from 'xstate'
 
@@ -308,9 +308,17 @@ export function clearUnilateralExitJob(): void {
 
 export async function abortUnilateralExitOrchestration(
   scope: UnilateralExitWalletScope,
+  resolvedJobOutpoints?: ArkadeVtxoOutpoint[],
 ): Promise<void> {
   const snapshot = getUnilateralExitActorSnapshot()
-  const jobOutpoints = snapshot.context.jobOutpoints
+  const persisted = getPersistedUnilateralExitJob(scope)
+  const jobOutpoints =
+    resolvedJobOutpoints != null && resolvedJobOutpoints.length > 0
+      ? sortArkadeVtxoOutpoints(resolvedJobOutpoints)
+      : resolveUnilateralExitJobOutpoints({
+          lifecycleOutpoints: snapshot.context.jobOutpoints,
+          persistedJob: persisted,
+        })
   if (jobOutpoints.length === 0) {
     return
   }
@@ -328,7 +336,11 @@ export async function abortUnilateralExitOrchestration(
     (module) => module.invalidateUnilateralExitQueries(scope, jobOutpoints),
   )
 
-  sendUnilateralExitEvent({ type: 'ABORT_ORCHESTRATION', vtxoIds })
+  sendUnilateralExitEvent({
+    type: 'ABORT_ORCHESTRATION',
+    vtxoIds,
+    resolvedJobOutpoints: jobOutpoints,
+  })
   await waitForUnilateralExitActorSettled()
 }
 

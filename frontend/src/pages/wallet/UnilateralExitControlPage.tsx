@@ -51,6 +51,7 @@ import { isCurrentStepRelayed } from '@/lib/arkade/unilateral-exit-broadcast'
 import { resolveUnilateralExitTopologyOutpoints } from '@/lib/arkade/unilateral-exit-topology'
 import {
   selectUnilateralExitControlJobState,
+  selectCanAbortUnilateralExitOrchestration,
   selectUnilateralExitInProgressOverlay,
   selectUnilateralExitProceedButtonState,
   selectUnilateralExitProgressForDisplay,
@@ -509,6 +510,22 @@ export function UnilateralExitControlPage() {
       phase,
     ],
   )
+  const showAbortButton = useMemo(
+    () =>
+      selectCanAbortUnilateralExitOrchestration(actorSnapshot, {
+        resolvedJobOutpointsCount: jobOutpoints.length,
+        lifecycleJobActive,
+        persistedJobActive: persistedJob.jobActive,
+        hasInProgressExits,
+      }),
+    [
+      actorSnapshot,
+      hasInProgressExits,
+      jobOutpoints.length,
+      lifecycleJobActive,
+      persistedJob.jobActive,
+    ],
+  )
   const inProgressOverlay = useMemo(
     () => selectUnilateralExitInProgressOverlay(actorSnapshot),
     [actorSnapshot],
@@ -588,7 +605,7 @@ export function UnilateralExitControlPage() {
 
   const handleAbortConfirm = () => {
     if (walletScope == null) return
-    void abortUnilateralExitOrchestration(walletScope)
+    void abortUnilateralExitOrchestration(walletScope, jobOutpoints)
   }
 
   const handleProceed = async () => {
@@ -867,29 +884,33 @@ export function UnilateralExitControlPage() {
           </div>
         )}
 
-        {proceedButton.visible && (
-          <Button
-            type="button"
-            className="w-full"
-            data-testid="unilateral-exit-proceed"
-            disabled={proceedButton.disabled}
-            onClick={handleProceedClick}
-          >
-            {proceedButton.showSpinner && <Loader2 className="mr-2 size-4 animate-spin" />}
-            {proceedButton.label}
-          </Button>
-        )}
+        {(proceedButton.visible || showAbortButton) && (
+          <div className="flex w-full flex-col gap-2 md:col-span-2 xl:col-span-3">
+            {proceedButton.visible && (
+              <Button
+                type="button"
+                className="w-full"
+                data-testid="unilateral-exit-proceed"
+                disabled={proceedButton.disabled}
+                onClick={handleProceedClick}
+              >
+                {proceedButton.showSpinner && <Loader2 className="mr-2 size-4 animate-spin" />}
+                {proceedButton.label}
+              </Button>
+            )}
 
-        {lifecycleJobActive && (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive"
-            data-testid="unilateral-exit-abort"
-            onClick={() => setAbortInfoOpen(true)}
-          >
-            Abort unilateral exit
-          </Button>
+            {showAbortButton && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive"
+                data-testid="unilateral-exit-abort"
+                onClick={() => setAbortInfoOpen(true)}
+              >
+                Abort unilateral exit
+              </Button>
+            )}
+          </div>
         )}
 
         <Button type="button" variant="outline" className="w-full md:col-span-2 xl:col-span-3" asChild>
