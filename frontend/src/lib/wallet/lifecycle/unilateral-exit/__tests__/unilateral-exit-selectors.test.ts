@@ -212,6 +212,26 @@ describe('selectUnilateralExitControlJobState', () => {
     expect(button.showSpinner).toBe(true)
   })
 
+  it('keeps a job with outpoints active after a start error so retry is Proceed', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.error, {
+      jobOutpoints: [leaf],
+      lastErrorMessage: 'Transaction not found',
+    })
+    expect(selectIsUnilateralExitJobActive(snapshot)).toBe(true)
+    expect(
+      selectUnilateralExitProceedButtonState(snapshot, {
+        jobOutpointsCount: 1,
+        automationEnabled: false,
+        bumperLow: false,
+        batchEstimateLoading: false,
+        prefsHydrated: true,
+        lifecycleJobActive: true,
+        hasInProgressExits: false,
+        phase: 'idle',
+      }).label,
+    ).toBe('Proceed')
+  })
+
   it('treats operator in-progress exits as active even without lifecycle job', () => {
     const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.idle, {
       jobOutpoints: [],

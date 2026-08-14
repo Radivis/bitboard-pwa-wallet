@@ -123,6 +123,8 @@ export function selectIsUnilateralExitJobActive(state: UnilateralExitActorSnapsh
   return (
     lifecycle.phase === UnilateralExitLifecyclePhase.Advancing ||
     lifecycle.phase === UnilateralExitLifecyclePhase.WaitingConfirm ||
+    (lifecycle.phase === UnilateralExitLifecyclePhase.Error &&
+      lifecycle.selectedLeafOutpoints.length > 0) ||
     (lifecycle.phase === UnilateralExitLifecyclePhase.Idle &&
       lifecycle.selectedLeafOutpoints.length > 0)
   )

@@ -150,7 +150,8 @@ fn output_status_probe_unavailable(error: &ark_client::Error) -> bool {
     let message = error.to_string();
     message.contains("Failed to get transaction outspends")
         || (message.contains("status: 500") && message.contains("outspend"))
-        || (message.contains("status: 404") && message.contains("outspend"))
+        || message.contains("status: 404")
+        || message.contains("Transaction not found")
 }
 
 pub(crate) fn viability_from_asp_swept(

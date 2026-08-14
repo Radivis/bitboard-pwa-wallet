@@ -43,6 +43,7 @@ const UPSTREAM_ARK_HOST_TX_BYTE: u8 = 0x18;
 struct MockBlockchain {
     output_spends: HashMap<(Txid, u32), Txid>,
     outspend_probe_error: bool,
+    transaction_not_found: bool,
 }
 
 impl MockBlockchain {
@@ -50,6 +51,7 @@ impl MockBlockchain {
         Self {
             output_spends: HashMap::from([((monitored.txid, monitored.vout), foreign_spend_txid)]),
             outspend_probe_error: false,
+            transaction_not_found: false,
         }
     }
 
@@ -57,6 +59,15 @@ impl MockBlockchain {
         Self {
             output_spends: HashMap::new(),
             outspend_probe_error: true,
+            transaction_not_found: false,
+        }
+    }
+
+    fn with_transaction_not_found() -> Self {
+        Self {
+            output_spends: HashMap::new(),
+            outspend_probe_error: false,
+            transaction_not_found: true,
         }
     }
 }
@@ -89,8 +100,14 @@ impl Blockchain for MockBlockchain {
         vout: u32,
     ) -> impl std::future::Future<Output = Result<SpendStatus, Error>> + Send {
         let outspend_probe_error = self.outspend_probe_error;
+        let transaction_not_found = self.transaction_not_found;
         let spend_txid = self.output_spends.get(&(txid.clone(), vout)).cloned();
         async move {
+            if transaction_not_found {
+                return Err(Error::wallet(
+                    "Ark client error: HttpResponse { status: 404, message: \"Transaction not found\" }",
+                ));
+            }
             if outspend_probe_error {
                 return Err(Error::wallet(
                     "HttpResponse { status: 500, message: \"{\\\"error\\\":\\\"Failed to get transaction outspends\\\"}\" }",
@@ -322,6 +339,7 @@ async fn branch_funding_interference_none_when_no_foreign_spend() {
     let blockchain = MockBlockchain {
         output_spends: HashMap::new(),
         outspend_probe_error: false,
+        transaction_not_found: false,
     };
 
     let viability =
@@ -343,6 +361,21 @@ async fn branch_funding_interference_none_when_outspends_endpoint_unavailable() 
         evaluate_branch_funding_interference(&blockchain, &plan, &[], |_outpoint| false)
             .await
             .expect("evaluate branch funding interference when outspends fail");
+
+    assert!(viability.is_none());
+}
+
+#[tokio::test]
+async fn branch_funding_interference_none_when_esplora_returns_transaction_not_found() {
+    let leaf_outpoint = VirtualOutPoint::new(txid(22), 0);
+    let allowed_step_txid = txid(23);
+    let plan = sample_plan(leaf_outpoint, allowed_step_txid);
+    let blockchain = MockBlockchain::with_transaction_not_found();
+
+    let viability =
+        evaluate_branch_funding_interference(&blockchain, &plan, &[], |_outpoint| false)
+            .await
+            .expect("evaluate branch funding interference when tx is not on chain yet");
 
     assert!(viability.is_none());
 }
