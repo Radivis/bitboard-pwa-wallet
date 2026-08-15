@@ -870,8 +870,12 @@ export function useArkadeUnilateralExitsInProgressQuery(enabled: boolean) {
       'unilateral-exits-in-progress',
     ),
     enabled: enabled && sessionReady,
-    queryFn: () =>
-      withReadyArkadeWorker(() => getArkadeWorker().listUnilateralExitsInProgress()),
+    queryFn: async () => {
+      const rows = await withReadyArkadeWorker(() =>
+        getArkadeWorker().listUnilateralExitsInProgress(),
+      )
+      return sortArkadeVtxoOutpoints(rows)
+    },
     refetchInterval: enabled ? ARKADE_EXIT_CANDIDATES_POLL_MS : false,
     staleTime: ARKADE_SESSION_POLL_STALE_MS,
   })

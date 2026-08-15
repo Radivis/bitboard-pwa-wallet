@@ -191,6 +191,10 @@ where
 ///   omits it); missing blocktime is uncommon on mainnet-class networks. Affected inputs are
 ///   recorded in [`VtxoCompletionSelection::missing_blocktime_inputs`] and surfaced in the UI so
 ///   timelock eligibility is known to be estimated conservatively, not proven.
+/// - **One on-chain UTXO per requested virtual outpoint:** `find_outpoints(vtxo.address())` can
+///   return sibling unrolled VTXOs that share the same exit script/address. Sweeping every UTXO
+///   at that address would complete VTXOs the user did not select. Bitboard takes at most one
+///   claimable, not-yet-selected explorer UTXO per filtered virtual outpoint.
 /// - **Diagnostics:** Bitboard adds `tracing::debug!` logging per candidate VTXO.
 ///
 /// Upstream contribution target: <https://github.com/arkade-os/rust-sdk> (`ark-client/src/coin_select.rs`).
@@ -217,6 +221,79 @@ where
         vtxo_outpoint_filter,
     )
     .await
+}
+
+/// Take at most one claimable on-chain UTXO for a single requested virtual outpoint.
+///
+/// Exit scripts are often shared across a wallet's VTXOs, so `find_outpoints` can list siblings
+/// the user did not select. Already-selected explorer outpoints are skipped so two selected
+/// VTXOs at the same address can still consume two distinct UTXOs.
+fn try_select_one_claimable_utxo_for_virtual_outpoint(
+    vtxo: &Vtxo,
+    virtual_txid: Txid,
+    explorer_utxos: &[ExplorerUtxo],
+    now: Timestamp,
+    selected_vtxo_outputs: &mut HashSet<unilateral_exit::VtxoInput>,
+    selected_amount: &mut Amount,
+    missing_blocktime_inputs: &mut Vec<MissingBlocktimeCompletionInput>,
+    missing_blocktime_outpoints: &mut HashSet<OutPoint>,
+) -> Result<(), Error> {
+    for explorer_utxo in explorer_utxos {
+        let ExplorerUtxo {
+            outpoint,
+            amount,
+            confirmation_blocktime,
+            confirmations,
+            is_spent: false,
+        } = explorer_utxo
+        else {
+            continue;
+        };
+
+        let blocktime_missing = confirmation_blocktime.is_none();
+        let confirmation_blocktime = confirmation_blocktime
+            .map(Duration::from_secs)
+            .unwrap_or(Duration::ZERO);
+
+        if !vtxo.can_be_claimed_unilaterally_by_owner(
+            now.as_duration().try_into().map_err(Error::ad_hoc)?,
+            confirmation_blocktime,
+            *confirmations,
+        ) {
+            tracing::debug!(
+                ?outpoint,
+                confirmations,
+                ?confirmation_blocktime,
+                exit_delay = ?vtxo.exit_delay(),
+                "completion coin-select: outpoint not yet claimable"
+            );
+            continue;
+        }
+
+        let vtxo_input = unilateral_exit::VtxoInput::new(
+            *outpoint,
+            vtxo.exit_delay(),
+            TxOut {
+                value: *amount,
+                script_pubkey: vtxo.script_pubkey(),
+            },
+            vtxo.exit_spend_info()?,
+        );
+        if !selected_vtxo_outputs.insert(vtxo_input) {
+            continue;
+        }
+
+        *selected_amount += *amount;
+        if blocktime_missing && missing_blocktime_outpoints.insert(*outpoint) {
+            missing_blocktime_inputs.push(MissingBlocktimeCompletionInput {
+                virtual_txid,
+                on_chain_outpoint: *outpoint,
+                amount_sats: amount.to_sat(),
+            });
+        }
+        return Ok(());
+    }
+    Ok(())
 }
 
 /// Completion coin-select using a caller-provided VTXO list (snapshot / autonomous mode).
@@ -269,55 +346,16 @@ where
             "completion coin-select: candidate VTXO"
         );
 
-        for explorer_utxo in outpoints.iter() {
-            if let ExplorerUtxo {
-                outpoint,
-                amount,
-                confirmation_blocktime,
-                confirmations,
-                is_spent: false,
-            } = explorer_utxo
-            {
-                // Permissive vs upstream: allow missing blocktime for regtest/thin Esplora (see module docs).
-                let blocktime_missing = confirmation_blocktime.is_none();
-                let confirmation_blocktime = confirmation_blocktime
-                    .map(Duration::from_secs)
-                    .unwrap_or(Duration::ZERO);
-
-                if vtxo.can_be_claimed_unilaterally_by_owner(
-                    now.as_duration().try_into().map_err(Error::ad_hoc)?,
-                    confirmation_blocktime,
-                    *confirmations,
-                ) && selected_vtxo_outputs.insert(unilateral_exit::VtxoInput::new(
-                    *outpoint,
-                    vtxo.exit_delay(),
-                    TxOut {
-                        value: *amount,
-                        script_pubkey: vtxo.script_pubkey(),
-                    },
-                    vtxo.exit_spend_info()?,
-                )) {
-                    selected_amount += *amount;
-                    if blocktime_missing
-                        && missing_blocktime_outpoints.insert(*outpoint)
-                    {
-                        missing_blocktime_inputs.push(MissingBlocktimeCompletionInput {
-                            virtual_txid: virtual_tx_outpoint.outpoint.txid,
-                            on_chain_outpoint: *outpoint,
-                            amount_sats: amount.to_sat(),
-                        });
-                    }
-                } else {
-                    tracing::debug!(
-                        ?outpoint,
-                        confirmations,
-                        ?confirmation_blocktime,
-                        exit_delay = ?vtxo.exit_delay(),
-                        "completion coin-select: outpoint not yet claimable"
-                    );
-                }
-            }
-        }
+        try_select_one_claimable_utxo_for_virtual_outpoint(
+            vtxo,
+            virtual_tx_outpoint.outpoint.txid,
+            &outpoints,
+            now,
+            &mut selected_vtxo_outputs,
+            &mut selected_amount,
+            &mut missing_blocktime_inputs,
+            &mut missing_blocktime_outpoints,
+        )?;
     }
 
     if selected_vtxo_outputs.is_empty() {

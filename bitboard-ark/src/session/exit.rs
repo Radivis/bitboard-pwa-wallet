@@ -518,7 +518,13 @@ impl ArkSession {
             });
         }
 
-        rows.sort_by_key(|row| row.started_at.unwrap_or(i64::MAX));
+        rows.sort_by(|left, right| {
+            left.started_at
+                .unwrap_or(i64::MAX)
+                .cmp(&right.started_at.unwrap_or(i64::MAX))
+                .then_with(|| left.txid.cmp(&right.txid))
+                .then_with(|| left.vout.cmp(&right.vout))
+        });
         Ok(rows)
     }
 

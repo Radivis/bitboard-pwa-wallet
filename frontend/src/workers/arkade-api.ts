@@ -235,9 +235,9 @@ export function includesArkadeVtxoOutpoint(
   return outpoints.some((outpoint) => arkadeVtxoOutpointsEqual(outpoint, candidate))
 }
 
-export function sortArkadeVtxoOutpoints(
-  outpoints: ArkadeVtxoOutpoint[],
-): ArkadeVtxoOutpoint[] {
+export function sortArkadeVtxoOutpoints<T extends ArkadeVtxoOutpoint>(
+  outpoints: T[],
+): T[] {
   return [...outpoints].sort((left, right) => {
     const txidCompare = left.txid.localeCompare(right.txid)
     return txidCompare !== 0 ? txidCompare : left.vout - right.vout
