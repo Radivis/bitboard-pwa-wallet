@@ -254,6 +254,14 @@ export function selectUnilateralExitInProgressOverlay(
       return 'ensuringBroadcast'
     }
   }
+  if (
+    (unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.idle) ||
+      unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.error)) &&
+    state.context.jobOutpoints.length > 0 &&
+    needsBroadcastEnsurance(state.context.progress)
+  ) {
+    return 'readyToProceed'
+  }
   return null
 }
 

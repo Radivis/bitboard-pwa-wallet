@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   computeExitPathTxids,
   hostOutpointsForTxid,
@@ -227,6 +227,24 @@ describe('unilateral-exit-topology helpers', () => {
 
     expect(nodes.find((node) => node.id === 'bb')?.data.inProgressOverlay).toBe('waiting')
     expect(nodes.find((node) => node.id === 'cc')?.data.inProgressOverlay).toBeNull()
+  })
+
+  it('layoutUnilateralExitGraph attaches readyToProceed handler only on the in-progress node', () => {
+    const onReadyToProceed = vi.fn()
+    const { nodes } = layoutUnilateralExitGraph({
+      topology: sampleTopology,
+      selectedLeafOutpoints: [{ txid: 'cc', vout: 0 }],
+      nodeStatuses: [{ txid: 'bb', confirmations: 0, status: 'inProgress' }],
+      inProgressOverlay: 'readyToProceed',
+      layoutDirection: 'TB',
+      onReadyToProceed,
+      readyToProceedDisabled: false,
+    })
+
+    expect(nodes.find((node) => node.id === 'bb')?.data.inProgressOverlay).toBe('readyToProceed')
+    expect(nodes.find((node) => node.id === 'bb')?.data.onReadyToProceed).toBe(onReadyToProceed)
+    expect(nodes.find((node) => node.id === 'bb')?.data.readyToProceedDisabled).toBe(false)
+    expect(nodes.find((node) => node.id === 'cc')?.data.onReadyToProceed).toBeUndefined()
   })
 
   it('resolveUnilateralExitTopologyOutpoints prefers authoritative job over in-progress inference', () => {

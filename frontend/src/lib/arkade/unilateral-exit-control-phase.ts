@@ -6,4 +6,7 @@ export type UnilateralExitControlDisplayPhase =
   | ArkadeUnilateralExitPhaseKind
   | 'advancing'
 
-export type UnilateralExitInProgressOverlayKind = 'ensuringBroadcast' | 'waiting'
+export type UnilateralExitInProgressOverlayKind =
+  | 'ensuringBroadcast'
+  | 'waiting'
+  | 'readyToProceed'

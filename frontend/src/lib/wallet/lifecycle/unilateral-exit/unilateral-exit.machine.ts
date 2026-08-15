@@ -162,8 +162,10 @@ export const unilateralExitMachineSetup = setup({
       const output = progressFromEnsureBroadcastEvent(event)
       return isJobCompleteFromProgress(output, context)
     },
-    needsBroadcastFromFetchEvent: ({ event }) =>
-      needsBroadcastEnsurance(progressFromFetchEvent(event)),
+    needsBroadcastFromFetchEvent: ({ context, event }) =>
+      needsBroadcastEnsurance(progressFromFetchEvent(event)) &&
+      (context.automationEnabled ||
+        (context.proceedRequested && context.feeRateSatPerVb != null)),
     needsBroadcastBeforeEnsureBroadcast: ({ context, event }) =>
       needsBroadcastEnsurance(progressFromFetchEvent(event)) &&
       context.automationEnabled &&
@@ -260,6 +262,7 @@ export const unilateralExitMachineSetup = setup({
         return {}
       }
       const outpoints = sortArkadeVtxoOutpoints(event.outpoints)
+      persistActiveUnilateralExitJob(event.walletScope, outpoints)
       const automationEnabled = event.automationEnabled ?? false
       const resumeAutomation = event.resumeAutomation ?? false
       return {

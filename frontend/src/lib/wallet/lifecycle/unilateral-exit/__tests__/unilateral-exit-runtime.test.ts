@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockGetJob = vi.fn()
 const mockClearJob = vi.fn()
+const mockPersistJob = vi.fn()
 let persistenceHydrated = false
 let persistenceHydrationWaiters: Array<() => void> = []
 
@@ -63,7 +64,7 @@ vi.mock('@/workers/arkade-factory', () => ({
 vi.mock('@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence', () => ({
   getPersistedUnilateralExitJob: (...args: unknown[]) => mockGetJob(...args),
   clearPersistedUnilateralExitJob: (...args: unknown[]) => mockClearJob(...args),
-  persistActiveUnilateralExitJob: vi.fn(),
+  persistActiveUnilateralExitJob: (...args: unknown[]) => mockPersistJob(...args),
   updatePersistedUnilateralExitRelayWait: vi.fn(),
   useUnilateralExitLifecyclePersistenceStore: {
     persist: {
@@ -232,6 +233,51 @@ describe('unilateral-exit-runtime hydration', () => {
     expect(mockClearJob).toHaveBeenCalled()
     const snapshot = getUnilateralExitActorSnapshot()
     expect(snapshot.context.jobOutpoints).toEqual([])
+  })
+
+  it('does not clear persisted job when in-progress sats exist before outpoints load', async () => {
+    persistenceHydrated = true
+
+    await hydrateUnilateralExitFromPersistence({
+      walletScope,
+      inProgressOutpoints: [],
+      unilateralExitInProgressSats: 300_000,
+    })
+
+    expect(mockClearJob).not.toHaveBeenCalled()
+  })
+
+  it('does not clear persisted job when in-progress outpoints do not overlap selection', async () => {
+    persistenceHydrated = true
+    const intermediate = { txid: 'bb'.repeat(32), vout: 0 }
+
+    await hydrateUnilateralExitFromPersistence({
+      walletScope,
+      inProgressOutpoints: [intermediate],
+      unilateralExitInProgressSats: 300_000,
+    })
+
+    expect(mockClearJob).not.toHaveBeenCalled()
+  })
+
+  it('hydrate resumes from in-progress outpoints when persisted job is empty', async () => {
+    persistenceHydrated = true
+    mockGetJob.mockReturnValue({
+      jobActive: false,
+      selectedLeafOutpoints: [],
+      currentStepRelayedSinceUnix: null,
+    })
+
+    await configureUnilateralExitForLoadedWallet(walletScope)
+    await hydrateUnilateralExitFromPersistence({
+      walletScope,
+      inProgressOutpoints: [leaf],
+      unilateralExitInProgressSats: 50_000,
+    })
+
+    const snapshot = getUnilateralExitActorSnapshot()
+    expect(snapshot.context.jobOutpoints).toEqual([leaf])
+    expect(mockPersistJob).toHaveBeenCalled()
   })
 
   it('abort orchestration disables automation and clears job', async () => {

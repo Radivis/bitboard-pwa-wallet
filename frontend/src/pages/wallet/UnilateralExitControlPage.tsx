@@ -743,6 +743,8 @@ export function UnilateralExitControlPage() {
               inProgressOverlay={inProgressOverlay}
               focusedNodeId={focusedNodeId}
               onNodeFocus={setFocusedNodeId}
+              onReadyToProceed={handleProceedClick}
+              readyToProceedDisabled={proceedButton.disabled}
             />
           </>
         )}
@@ -785,6 +787,18 @@ export function UnilateralExitControlPage() {
               : ''}
           </p>
         )}
+        {unilateralExitSnapshotIsInState(actorSnapshot, UNILATERAL_EXIT_MACHINE_STATE.error) &&
+        actorSnapshot.context.lastErrorMessage != null ? (
+          <p
+            className="text-sm text-destructive"
+            data-testid="unilateral-exit-step-error"
+            role="alert"
+          >
+            {wasmArkErrorMessage(new Error(actorSnapshot.context.lastErrorMessage)) ??
+              actorSnapshot.context.lastErrorMessage}{' '}
+            Click Proceed to retry this step.
+          </p>
+        ) : null}
       </div>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

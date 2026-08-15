@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Background,
   Controls,
@@ -8,7 +8,7 @@ import {
   type NodeProps,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { Check, Coins, Loader2, Megaphone, Pickaxe, type LucideIcon } from 'lucide-react'
+import { Check, Coins, Loader2, Megaphone, Pickaxe, Play, type LucideIcon } from 'lucide-react'
 import type { UnilateralExitInProgressOverlayKind } from '@/lib/arkade/unilateral-exit-control-phase'
 import {
   layoutUnilateralExitGraph,
@@ -35,24 +35,57 @@ interface UnilateralExitTreeGraphProps {
   inProgressOverlay: UnilateralExitInProgressOverlayKind | null
   focusedNodeId: string | null
   onNodeFocus: (nodeId: string) => void
+  onReadyToProceed?: () => void
+  readyToProceedDisabled?: boolean
 }
 
 function unilateralExitInProgressOverlayIcon(
   overlay: UnilateralExitInProgressOverlayKind,
-): LucideIcon {
+): LucideIcon | null {
   switch (overlay) {
     case 'ensuringBroadcast':
       return Megaphone
     case 'waiting':
       return Pickaxe
+    case 'readyToProceed':
+      return Play
   }
 }
 
 function UnilateralExitInProgressBadge({
   overlay,
+  onReadyToProceed,
+  readyToProceedDisabled,
 }: {
   overlay: UnilateralExitInProgressOverlayKind | null
+  onReadyToProceed?: () => void
+  readyToProceedDisabled?: boolean
 }) {
+  if (overlay === 'readyToProceed') {
+    return (
+      <button
+        type="button"
+        className={cn(
+          'nodrag nopan absolute -right-1 -top-1 z-10 flex size-5 items-center justify-center rounded-full bg-background text-blue-700',
+          readyToProceedDisabled && 'cursor-not-allowed opacity-50',
+        )}
+        data-testid="unilateral-exit-in-progress-readyToProceed"
+        aria-label="Proceed"
+        disabled={readyToProceedDisabled}
+        onClick={(event) => {
+          event.stopPropagation()
+          event.preventDefault()
+          onReadyToProceed?.()
+        }}
+        onMouseDown={(event) => {
+          event.stopPropagation()
+        }}
+      >
+        <Play className="size-3.5 fill-current" aria-hidden />
+      </button>
+    )
+  }
+
   const OverlayIcon = overlay == null ? null : unilateralExitInProgressOverlayIcon(overlay)
 
   return (
@@ -116,7 +149,11 @@ function UnilateralExitTreeNode({
         />
       )}
       {data.status === 'inProgress' && (
-        <UnilateralExitInProgressBadge overlay={data.inProgressOverlay} />
+        <UnilateralExitInProgressBadge
+          overlay={data.inProgressOverlay}
+          onReadyToProceed={data.onReadyToProceed}
+          readyToProceedDisabled={data.readyToProceedDisabled}
+        />
       )}
     </div>
   )
@@ -135,7 +172,15 @@ function UnilateralExitTreeGraphCanvas({
   focusedNodeId,
   onNodeFocus,
   layoutDirection,
+  onReadyToProceed,
+  readyToProceedDisabled,
 }: UnilateralExitTreeGraphProps & { layoutDirection: 'LR' | 'TB' }) {
+  const onReadyToProceedRef = useRef(onReadyToProceed)
+  onReadyToProceedRef.current = onReadyToProceed
+  const dispatchReadyToProceed = useCallback(() => {
+    onReadyToProceedRef.current?.()
+  }, [])
+
   const { nodes, edgePaths } = useMemo(
     () =>
       layoutUnilateralExitGraph({
@@ -145,6 +190,8 @@ function UnilateralExitTreeGraphCanvas({
         inProgressOverlay,
         layoutDirection,
         focusedNodeId,
+        onReadyToProceed: dispatchReadyToProceed,
+        readyToProceedDisabled,
       }),
     [
       topology,
@@ -153,6 +200,8 @@ function UnilateralExitTreeGraphCanvas({
       inProgressOverlay,
       layoutDirection,
       focusedNodeId,
+      dispatchReadyToProceed,
+      readyToProceedDisabled,
     ],
   )
 
@@ -188,6 +237,8 @@ export function UnilateralExitTreeGraph({
   inProgressOverlay,
   focusedNodeId,
   onNodeFocus,
+  onReadyToProceed,
+  readyToProceedDisabled,
 }: UnilateralExitTreeGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [layoutDirection, setLayoutDirection] = useState<'LR' | 'TB'>('TB')
@@ -238,6 +289,8 @@ export function UnilateralExitTreeGraph({
               inProgressOverlay={inProgressOverlay}
               focusedNodeId={focusedNodeId}
               onNodeFocus={onNodeFocus}
+              onReadyToProceed={onReadyToProceed}
+              readyToProceedDisabled={readyToProceedDisabled}
               layoutDirection={layoutDirection}
             />
           </ReactFlowProvider>

@@ -31,7 +31,7 @@ describe('unilateral-exit-job-reconcile', () => {
     ).toBe(false)
   })
 
-  it('treats persisted job as stale when in-progress outpoints do not match selection', () => {
+  it('keeps persisted job when in-progress outpoints differ from original leaves', () => {
     expect(
       isPersistedUnilateralExitJobStale({
         jobStarted: true,
@@ -39,15 +39,36 @@ describe('unilateral-exit-job-reconcile', () => {
         inProgressOutpoints: [leafB],
         unilateralExitInProgressSats: 50_000,
       }),
-    ).toBe(true)
+    ).toBe(false)
   })
 
-  it('hydrates only when job is active and overlaps in-progress selection', () => {
+  it('keeps persisted job when in-progress sats exist before outpoints load', () => {
+    expect(
+      isPersistedUnilateralExitJobStale({
+        jobStarted: true,
+        selectedLeafOutpoints: [leafA],
+        inProgressOutpoints: [],
+        unilateralExitInProgressSats: 300_000,
+      }),
+    ).toBe(false)
+  })
+
+  it('hydrates when job is active and not stale even if outpoints differ', () => {
     expect(
       shouldHydratePersistedUnilateralExitJob({
         jobStarted: true,
         selectedLeafOutpoints: [leafA],
         inProgressOutpoints: [leafA],
+        unilateralExitInProgressSats: 50_000,
+        controlStoreSelectionEmpty: true,
+      }),
+    ).toBe(true)
+
+    expect(
+      shouldHydratePersistedUnilateralExitJob({
+        jobStarted: true,
+        selectedLeafOutpoints: [leafA],
+        inProgressOutpoints: [leafB],
         unilateralExitInProgressSats: 50_000,
         controlStoreSelectionEmpty: true,
       }),
@@ -72,6 +93,18 @@ describe('unilateral-exit-job-reconcile', () => {
         unilateralExitInProgressSats: 0,
         arkadeLoadPhase: 'loaded',
         arkadeSyncPhase: 'syncing',
+      }),
+    ).toBe(true)
+  })
+
+  it('defers stale check when in-progress sats exist before outpoints load', () => {
+    expect(
+      shouldDeferPersistedUnilateralExitStaleCheck({
+        jobStarted: true,
+        inProgressOutpoints: [],
+        unilateralExitInProgressSats: 300_000,
+        arkadeLoadPhase: 'loaded',
+        arkadeSyncPhase: 'not-syncing',
       }),
     ).toBe(true)
   })

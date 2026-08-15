@@ -155,6 +155,73 @@ export async function configureUnilateralExitForLoadedWallet(
   sendUnilateralExitEvent({ type: 'WALLET_CONFIGURED', walletScope })
 }
 
+function actorAlreadyTrackingHydrateOutpoints(
+  snapshot: UnilateralExitActorSnapshot,
+  walletScope: UnilateralExitWalletScope,
+  outpoints: ArkadeVtxoOutpoint[],
+): boolean {
+  const walletScopeMatches =
+    snapshot.context.walletScope != null &&
+    unilateralExitWalletScopeKey(snapshot.context.walletScope) ===
+      unilateralExitWalletScopeKey(walletScope)
+  const outpointsMatch = arkadeVtxoOutpointsEqual(snapshot.context.jobOutpoints, outpoints)
+  if (!walletScopeMatches || !outpointsMatch) {
+    return false
+  }
+  if (
+    unilateralExitSnapshotIsInAnyState(snapshot, [
+      UNILATERAL_EXIT_MACHINE_STATE.checkingProgress,
+      UNILATERAL_EXIT_MACHINE_STATE.evaluatingPolicy,
+      UNILATERAL_EXIT_MACHINE_STATE.proceeding,
+      UNILATERAL_EXIT_MACHINE_STATE.ensuringBroadcast,
+      UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm,
+      UNILATERAL_EXIT_MACHINE_STATE.paused,
+      UNILATERAL_EXIT_MACHINE_STATE.error,
+    ])
+  ) {
+    return true
+  }
+  if (unilateralExitSnapshotIsInState(snapshot, UNILATERAL_EXIT_MACHINE_STATE.complete)) {
+    return true
+  }
+  return (
+    unilateralExitSnapshotIsInState(snapshot, UNILATERAL_EXIT_MACHINE_STATE.idle) &&
+    snapshot.context.progress != null
+  )
+}
+
+async function dispatchHydrateOrStart(params: {
+  walletScope: UnilateralExitWalletScope
+  outpoints: ArkadeVtxoOutpoint[]
+  reconcileInProgressSats: number
+  reconcileInProgressOutpoints: ArkadeVtxoOutpoint[]
+}): Promise<void> {
+  const snapshot = getUnilateralExitActorSnapshot()
+  if (actorAlreadyTrackingHydrateOutpoints(snapshot, params.walletScope, params.outpoints)) {
+    return
+  }
+
+  const prefs = useUnilateralExitAutomationPrefsStore
+    .getState()
+    .getPrefs(
+      params.walletScope.walletId,
+      params.walletScope.networkMode,
+      params.walletScope.connectionId,
+    )
+
+  sendUnilateralExitEvent({
+    type: 'HYDRATE_OR_START',
+    walletScope: params.walletScope,
+    outpoints: params.outpoints,
+    automationEnabled: prefs.enabled,
+    resumeAutomation: false,
+    reconcileInProgressSats: params.reconcileInProgressSats,
+    reconcileInProgressOutpoints: params.reconcileInProgressOutpoints,
+  })
+
+  await waitForUnilateralExitActorSettled()
+}
+
 export async function hydrateUnilateralExitFromPersistence(params: {
   walletScope: UnilateralExitWalletScope
   inProgressOutpoints: ArkadeVtxoOutpoint[]
@@ -164,6 +231,15 @@ export async function hydrateUnilateralExitFromPersistence(params: {
 
   const persisted = getPersistedUnilateralExitJob(params.walletScope)
   if (!persisted.jobActive || persisted.selectedLeafOutpoints.length === 0) {
+    if (params.inProgressOutpoints.length === 0) {
+      return
+    }
+    await dispatchHydrateOrStart({
+      walletScope: params.walletScope,
+      outpoints: params.inProgressOutpoints,
+      reconcileInProgressSats: params.unilateralExitInProgressSats,
+      reconcileInProgressOutpoints: params.inProgressOutpoints,
+    })
     return
   }
 
@@ -193,61 +269,12 @@ export async function hydrateUnilateralExitFromPersistence(params: {
     return
   }
 
-  const snapshot = getUnilateralExitActorSnapshot()
-  const walletScopeMatches =
-    snapshot.context.walletScope != null &&
-    unilateralExitWalletScopeKey(snapshot.context.walletScope) ===
-      unilateralExitWalletScopeKey(params.walletScope)
-  const outpointsMatch = arkadeVtxoOutpointsEqual(
-    snapshot.context.jobOutpoints,
-    persisted.selectedLeafOutpoints,
-  )
-  const alreadyReconciling = unilateralExitSnapshotIsInAnyState(snapshot, [
-    UNILATERAL_EXIT_MACHINE_STATE.checkingProgress,
-    UNILATERAL_EXIT_MACHINE_STATE.evaluatingPolicy,
-    UNILATERAL_EXIT_MACHINE_STATE.proceeding,
-    UNILATERAL_EXIT_MACHINE_STATE.ensuringBroadcast,
-    UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm,
-    UNILATERAL_EXIT_MACHINE_STATE.paused,
-  ])
-  if (walletScopeMatches && outpointsMatch && alreadyReconciling) {
-    return
-  }
-  if (
-    walletScopeMatches &&
-    outpointsMatch &&
-    unilateralExitSnapshotIsInState(snapshot, UNILATERAL_EXIT_MACHINE_STATE.complete)
-  ) {
-    return
-  }
-  if (
-    walletScopeMatches &&
-    outpointsMatch &&
-    unilateralExitSnapshotIsInState(snapshot, UNILATERAL_EXIT_MACHINE_STATE.idle) &&
-    snapshot.context.progress != null
-  ) {
-    return
-  }
-
-  const prefs = useUnilateralExitAutomationPrefsStore
-    .getState()
-    .getPrefs(
-      params.walletScope.walletId,
-      params.walletScope.networkMode,
-      params.walletScope.connectionId,
-    )
-
-  sendUnilateralExitEvent({
-    type: 'HYDRATE_OR_START',
+  await dispatchHydrateOrStart({
     walletScope: params.walletScope,
     outpoints: persisted.selectedLeafOutpoints,
-    automationEnabled: prefs.enabled,
-    resumeAutomation: false,
     reconcileInProgressSats: params.unilateralExitInProgressSats,
     reconcileInProgressOutpoints: params.inProgressOutpoints,
   })
-
-  await waitForUnilateralExitActorSettled()
 }
 
 export function startManualUnilateralExit(

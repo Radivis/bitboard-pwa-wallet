@@ -386,6 +386,80 @@ describe('unilateralExitMachine', () => {
     expect(clearPersistedUnilateralExitJob).toHaveBeenCalled()
   })
 
+  it('hydrate in manual mode waits for Proceed when the current step is not yet broadcast', async () => {
+    const fetchProgress = vi.fn(async () =>
+      progress({
+        phase: 'idle',
+        stepIndex: 4,
+        totalSteps: 7,
+        currentStepTxRelayed: false,
+      }),
+    )
+    const proceedStep = vi.fn()
+    const ensureBroadcast = vi.fn()
+    const { testActor } = createTestActor({ fetchProgress, proceedStep, ensureBroadcast })
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'HYDRATE_OR_START',
+      walletScope,
+      outpoints: [leaf],
+      automationEnabled: false,
+    })
+    await waitFor(testActor, (state) => state.matches('idle'))
+    expect(proceedStep).not.toHaveBeenCalled()
+    expect(ensureBroadcast).not.toHaveBeenCalled()
+    expect(testActor.getSnapshot().context.jobOutpoints).toEqual([leaf])
+    expect(testActor.getSnapshot().context.progress?.stepIndex).toBe(4)
+  })
+
+  it('does not auto-broadcast the next unrelayed step after a manual confirmation poll', async () => {
+    let fetchCount = 0
+    const fetchProgress = vi.fn(async () => {
+      fetchCount += 1
+      if (fetchCount === 1) {
+        return progress({
+          phase: 'idle',
+          stepIndex: 4,
+          totalSteps: 7,
+          currentStepTxRelayed: false,
+        })
+      }
+      return progress({
+        phase: 'idle',
+        stepIndex: 6,
+        totalSteps: 7,
+        currentStepTxRelayed: false,
+      })
+    })
+    const proceedStep = vi.fn()
+    const ensureBroadcast = vi.fn(async () =>
+      progress({
+        phase: 'waiting',
+        stepIndex: 4,
+        totalSteps: 7,
+        currentStepTxRelayed: true,
+        currentStepWaitingSince: 1_700_000_000,
+      }),
+    )
+    const { testActor } = createTestActor({ fetchProgress, proceedStep, ensureBroadcast })
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'START_MANUAL',
+      walletScope,
+      outpoints: [leaf],
+      feeRateSatPerVb: 2,
+    })
+    await waitFor(testActor, (state) => state.matches('waitingConfirm'))
+    expect(ensureBroadcast).toHaveBeenCalledTimes(1)
+
+    testActor.send({ type: 'POLL_TICK' })
+    await waitFor(testActor, (state) => state.matches('idle'))
+    expect(ensureBroadcast).toHaveBeenCalledTimes(1)
+    expect(proceedStep).not.toHaveBeenCalled()
+    expect(testActor.getSnapshot().context.progress?.stepIndex).toBe(6)
+    expect(testActor.getSnapshot().context.proceedRequested).toBe(false)
+  })
+
   it('automation fee cap pauses', async () => {
     const { testActor } = createTestActor({
       evaluatePolicy: vi.fn(async () => ({

@@ -60,6 +60,8 @@ export type UnilateralExitTreeNodeData = {
   isFocused: boolean
   status: ArkadeUnilateralExitNodeStatus['status']
   inProgressOverlay: UnilateralExitInProgressOverlayKind | null
+  onReadyToProceed?: () => void
+  readyToProceedDisabled?: boolean
   confirmations: number
   layoutDirection: UnilateralExitLayoutDirection
   exitableVtxoCount: number
@@ -330,6 +332,8 @@ export function layoutUnilateralExitGraph(params: {
   inProgressOverlay: UnilateralExitInProgressOverlayKind | null
   layoutDirection: UnilateralExitLayoutDirection
   focusedNodeId?: string | null
+  onReadyToProceed?: () => void
+  readyToProceedDisabled?: boolean
 }): { nodes: Node<UnilateralExitTreeNodeData>[]; edgePaths: UnilateralExitGraphEdgePath[] } {
   const {
     topology,
@@ -338,6 +342,8 @@ export function layoutUnilateralExitGraph(params: {
     inProgressOverlay,
     layoutDirection,
     focusedNodeId,
+    onReadyToProceed,
+    readyToProceedDisabled,
   } = params
   const pathTxids = computeExitPathTxids(topology, selectedLeafOutpoints)
   const statusByTxid = mergeNodeStatuses(topology, nodeStatuses)
@@ -412,6 +418,8 @@ export function layoutUnilateralExitGraph(params: {
         focusedNodeId,
         status,
         inProgressOverlay,
+        onReadyToProceed,
+        readyToProceedDisabled,
         layoutDirection,
       }),
     })
@@ -439,9 +447,12 @@ function buildTreeNodeData(params: {
   focusedNodeId?: string | null
   status: ArkadeUnilateralExitNodeStatus | undefined
   inProgressOverlay: UnilateralExitInProgressOverlayKind | null
+  onReadyToProceed?: () => void
+  readyToProceedDisabled?: boolean
   layoutDirection: UnilateralExitLayoutDirection
 }): UnilateralExitTreeNodeData {
   const nodeStatus = params.status?.status ?? 'pending'
+  const overlay = nodeStatus === 'inProgress' ? params.inProgressOverlay : null
   return {
     txid: params.txid,
     vout: params.vout,
@@ -451,7 +462,11 @@ function buildTreeNodeData(params: {
     isOnExitPath: params.pathTxids.has(params.txid),
     isFocused: params.focusedNodeId === params.nodeId,
     status: nodeStatus,
-    inProgressOverlay: nodeStatus === 'inProgress' ? params.inProgressOverlay : null,
+    inProgressOverlay: overlay,
+    onReadyToProceed:
+      overlay === 'readyToProceed' ? params.onReadyToProceed : undefined,
+    readyToProceedDisabled:
+      overlay === 'readyToProceed' ? params.readyToProceedDisabled : undefined,
     confirmations: params.status?.confirmations ?? 0,
     layoutDirection: params.layoutDirection,
     exitableVtxoCount: params.exitableVtxoCount,

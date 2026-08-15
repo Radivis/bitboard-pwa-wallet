@@ -24,6 +24,9 @@ export function shouldDeferPersistedUnilateralExitStaleCheck(params: {
   if (!params.jobStarted) {
     return false
   }
+  if (params.unilateralExitInProgressSats > 0 && params.inProgressOutpoints.length === 0) {
+    return true
+  }
   if (params.inProgressOutpoints.length > 0 || params.unilateralExitInProgressSats > 0) {
     return false
   }
@@ -33,7 +36,11 @@ export function shouldDeferPersistedUnilateralExitStaleCheck(params: {
   return params.arkadeSyncPhase === 'syncing'
 }
 
-/** True when SQLite still has an active job but WASM reports no matching in-progress exit. */
+/**
+ * True when SQLite still has an active job but WASM reports no in-progress exit.
+ * Intermediate (en-passant) VTXOs can differ from the original job leaves, so
+ * non-overlapping outpoints are not treated as stale while sats remain in progress.
+ */
 export function isPersistedUnilateralExitJobStale(params: {
   jobStarted: boolean
   selectedLeafOutpoints: ArkadeVtxoOutpoint[]
@@ -44,21 +51,14 @@ export function isPersistedUnilateralExitJobStale(params: {
     return false
   }
 
-  const hasInProgressExits =
-    params.unilateralExitInProgressSats > 0 || params.inProgressOutpoints.length > 0
-
-  if (!hasInProgressExits) {
-    return true
-  }
-
   if (params.selectedLeafOutpoints.length === 0) {
     return true
   }
 
-  return !selectedOutpointsOverlapInProgress(
-    params.selectedLeafOutpoints,
-    params.inProgressOutpoints,
-  )
+  const hasInProgressExits =
+    params.unilateralExitInProgressSats > 0 || params.inProgressOutpoints.length > 0
+
+  return !hasInProgressExits
 }
 
 /** Restore control-store selection from SQLite only for a still-active exit job. */
@@ -86,8 +86,5 @@ export function shouldHydratePersistedUnilateralExitJob(params: {
     return false
   }
 
-  return selectedOutpointsOverlapInProgress(
-    params.selectedLeafOutpoints,
-    params.inProgressOutpoints,
-  )
+  return true
 }

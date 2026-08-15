@@ -9,9 +9,7 @@ import {
   arkadeUnilateralExitTopologyScopeKey,
 } from '@/lib/arkade/arkade-query-keys'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
-import {
-  isCurrentStepRelayed,
-} from '@/lib/arkade/unilateral-exit-broadcast'
+import { isCurrentStepRelayed } from '@/lib/arkade/unilateral-exit-broadcast'
 import { isUnilateralExitBranchComplete } from '@/lib/arkade/unilateral-exit-branch-complete'
 import { proceedUnilateralExitStepWithGuards } from '@/lib/arkade/proceed-unilateral-exit-step'
 import { resolveAutomatedStepFeeRateSatPerVb } from '@/lib/arkade/unilateral-exit-automation-fees'

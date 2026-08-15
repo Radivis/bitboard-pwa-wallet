@@ -297,6 +297,33 @@ describe('selectUnilateralExitInProgressOverlay', () => {
     })
     expect(selectUnilateralExitInProgressOverlay(snapshot)).toBeNull()
   })
+
+  it('returns readyToProceed overlay when an idle job still needs a broadcast', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.idle, {
+      jobOutpoints: [leaf],
+      progress: progress({
+        phase: 'idle',
+        stepIndex: 6,
+        totalSteps: 7,
+        currentStepTxRelayed: false,
+        nodeStatuses: [{ txid: 'step6', confirmations: 0, status: 'inProgress' }],
+      }),
+    })
+    expect(selectUnilateralExitInProgressOverlay(snapshot)).toBe('readyToProceed')
+  })
+
+  it('returns readyToProceed overlay when a failed broadcast can be retried', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.error, {
+      jobOutpoints: [leaf],
+      lastErrorMessage: 'package-not-child-with-unconfirmed-parents',
+      progress: progress({
+        phase: 'idle',
+        currentStepTxRelayed: false,
+        nodeStatuses: [{ txid: 'step6', confirmations: 0, status: 'inProgress' }],
+      }),
+    })
+    expect(selectUnilateralExitInProgressOverlay(snapshot)).toBe('readyToProceed')
+  })
 })
 
 describe('selectCanAbortUnilateralExitOrchestration', () => {
