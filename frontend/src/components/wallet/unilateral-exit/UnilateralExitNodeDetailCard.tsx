@@ -56,6 +56,18 @@ export function UnilateralExitNodeDetailCard({
   const exitStartLeafOutpoints = leafOutpointsForTxid(topology, txid)
   const hostOutpointsForTx = hostOutpointsForTxid(topology, txid)
   const isExitStartLeaf = exitStartLeafOutpoints.length > 0
+  const vtxoRows =
+    hostOutpointsForTx.length > 0
+      ? hostOutpointsForTx.map((hostOutpoint) => ({
+          key: `${hostOutpoint.txid}:${hostOutpoint.vout}`,
+          vout: hostOutpoint.vout,
+          amountLabel: `${hostOutpoint.amountSats} sats`,
+        }))
+      : exitStartLeafOutpoints.map((leafOutpoint) => ({
+          key: `${leafOutpoint.txid}:${leafOutpoint.vout}`,
+          vout: leafOutpoint.vout,
+          amountLabel: null as string | null,
+        }))
   const txType = topologyNode?.txType ?? 'unknown'
   const status = resolveNodeStatus(txid, nodeStatuses)
   const iconKind = resolveUnilateralExitNodeIconKind({ txType, isLeaf: isExitStartLeaf })
@@ -109,22 +121,22 @@ export function UnilateralExitNodeDetailCard({
               Spends: {topologyNode.spends.map((spendTxid) => shortTxid(spendTxid)).join(', ')}
             </p>
           )}
-          {hostOutpointsForTx.length > 0 && (
+          {vtxoRows.length > 0 && (
             <div className="space-y-3">
               <div className="space-y-2">
                 <p className="text-xs font-medium text-muted-foreground">
                   VTXO outpoints on this {isExitStartLeaf ? 'leaf' : 'node'}
                 </p>
                 <ul className="space-y-1">
-                  {hostOutpointsForTx.map((hostOutpoint) => (
+                  {vtxoRows.map((vtxoRow) => (
                       <li
-                        key={`${hostOutpoint.txid}:${hostOutpoint.vout}`}
+                        key={vtxoRow.key}
                         className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-xs"
                       >
-                        <span>Outpoint {hostOutpoint.vout}</span>
-                        <span className="text-muted-foreground">
-                          {`${hostOutpoint.amountSats} sats`}
-                        </span>
+                        <span>Outpoint {vtxoRow.vout}</span>
+                        {vtxoRow.amountLabel != null ? (
+                          <span className="text-muted-foreground">{vtxoRow.amountLabel}</span>
+                        ) : null}
                       </li>
                     ))}
                 </ul>

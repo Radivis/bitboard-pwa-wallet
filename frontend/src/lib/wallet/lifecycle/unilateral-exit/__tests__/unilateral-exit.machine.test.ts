@@ -312,6 +312,37 @@ describe('unilateralExitMachine', () => {
     expect(clearPersistedUnilateralExitJob).toHaveBeenCalled()
   })
 
+  it('does not complete when a sticky unrolled leaf flag arrives mid-unroll', async () => {
+    const fetchProgress = vi.fn(async () =>
+      progress({
+        phase: 'idle',
+        stepIndex: 2,
+        totalSteps: 7,
+        currentStepTxRelayed: false,
+        nodeStatuses: [
+          { txid: 'step0', confirmations: 1, status: 'confirmed' },
+          { txid: 'step1', confirmations: 1, status: 'confirmed' },
+          { txid: 'step2', confirmations: 0, status: 'inProgress' },
+        ],
+        leafStatuses: [unrolledLeafStatus()],
+      }),
+    )
+    const proceedStep = vi.fn()
+    const { testActor } = createTestActor({ fetchProgress, proceedStep })
+
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'START_MANUAL',
+      walletScope,
+      outpoints: [leaf, { txid: leaf.txid, vout: 1 }],
+      feeRateSatPerVb: 2,
+    })
+
+    await waitFor(testActor, (state) => state.matches('waitingConfirm'))
+    expect(testActor.getSnapshot().matches('complete')).toBe(false)
+    expect(proceedStep).not.toHaveBeenCalled()
+  })
+
   it('clearJob resets persisted job', async () => {
     const { testActor } = createTestActor({})
     testActor.send({ type: 'WALLET_CONFIGURED', walletScope })

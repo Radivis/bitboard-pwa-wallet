@@ -32,6 +32,9 @@ export function isUnilateralExitJobComplete(
   progress: ArkadeUnilateralExitProgress,
   jobOutpoints: ArkadeVtxoOutpoint[],
 ): boolean {
+  if (progress.phase !== 'complete') {
+    return false
+  }
   return areAllJobLeavesUnrolled(jobOutpoints, progress.leafStatuses)
 }
 

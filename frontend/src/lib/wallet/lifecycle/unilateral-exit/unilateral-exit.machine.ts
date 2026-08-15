@@ -836,6 +836,14 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
     },
     complete: {
       on: {
+        START_MANUAL: {
+          target: 'checkingProgress',
+          actions: 'assignStartManual',
+        },
+        START_AUTOMATIC: {
+          target: 'checkingProgress',
+          actions: 'assignStartAutomatic',
+        },
         CLEAR_JOB: {
           target: 'idle',
           actions: 'clearJobContext',
