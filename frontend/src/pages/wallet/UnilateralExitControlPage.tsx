@@ -468,7 +468,11 @@ export function UnilateralExitControlPage() {
   const progress =
     actorProgress ??
     (machineProceeding ||
-    unilateralExitSnapshotIsInState(actorSnapshot, UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm)
+    unilateralExitSnapshotIsInAnyState(actorSnapshot, [
+      UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm,
+      UNILATERAL_EXIT_MACHINE_STATE.waitingForParentData,
+    ]) ||
+    unilateralExitSnapshotIsInState(actorSnapshot, UNILATERAL_EXIT_MACHINE_STATE.complete)
       ? (progressQuery.data ?? null)
       : null)
   const nodeStatuses = progress?.nodeStatuses ?? []
@@ -532,6 +536,29 @@ export function UnilateralExitControlPage() {
   )
   const currentStepRelayedSinceUnix = persistedJob.currentStepRelayedSinceUnix
   const [nowUnixSeconds, setNowUnixSeconds] = useState(() => Math.floor(Date.now() / 1000))
+
+  useEffect(() => {
+    const current = progress?.nodeStatuses[progress.stepIndex]
+    const currentTxType =
+      current == null
+        ? null
+        : (topologyQuery.data?.nodes.find((node) => node.txid === current.txid)?.txType ?? null)
+    const previous = progress?.nodeStatuses[(progress.stepIndex ?? 0) - 1]
+    const previousTxType =
+      previous == null
+        ? null
+        : (topologyQuery.data?.nodes.find((node) => node.txid === previous.txid)?.txType ?? null)
+    // #region agent log
+    fetch('http://127.0.0.1:7757/ingest/cb0f3ed4-7e87-43d6-b1dd-18329fa2e328',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2d2162'},body:JSON.stringify({sessionId:'2d2162',hypothesisId:'C',location:'UnilateralExitControlPage.tsx:stepDisplay',message:'control step display',data:{machineState:actorSnapshot.value,overlay:inProgressOverlay,proceedLabel:proceedButton.label,proceedDisabled:proceedButton.disabled,stepIndex:progress?.stepIndex??null,progressRefreshRequested:actorSnapshot.context.progressRefreshRequested,phase:progress?.phase??null,relayed:progress?.currentStepTxRelayed??null,currentTxid:current?.txid.slice(0,8)??null,currentTxType,currentConf:current?.confirmations??null,previousTxid:previous?.txid.slice(0,8)??null,previousTxType,previousConf:previous?.confirmations??null},timestamp:Date.now(),runId:'post-fix'})}).catch(()=>{});
+    // #endregion
+  }, [
+    actorSnapshot.value,
+    inProgressOverlay,
+    proceedButton.disabled,
+    proceedButton.label,
+    progress,
+    topologyQuery.data,
+  ])
 
   useEffect(() => {
     if (currentStepRelayedSinceUnix == null) {
@@ -770,8 +797,12 @@ export function UnilateralExitControlPage() {
           >
             Step {Math.min(stepIndex + 1, totalSteps)} of {totalSteps}
             {phase === 'complete' && persistedFailure == null ? ' — branch complete' : ''}
+            {phase === 'waitingForParentData' && persistedFailure == null
+              ? ' — waiting for parent data'
+              : ''}
             {(phase === 'waiting' || stepWaitingDurationLabel != null) &&
             phase !== 'complete' &&
+            phase !== 'waitingForParentData' &&
             persistedFailure == null
               ? ` — waiting for confirmation${
                   stepWaitingDurationLabel != null ? ` (${stepWaitingDurationLabel})` : ''
@@ -781,6 +812,7 @@ export function UnilateralExitControlPage() {
             automationPausedReason == null &&
             phase !== 'complete' &&
             phase !== 'waiting' &&
+            phase !== 'waitingForParentData' &&
             persistedFailure == null &&
             (lifecycleJobActive || machineProceeding || isProceeding)
               ? ' — proceeding automatically'

@@ -1,4 +1,5 @@
 import type { ArkadeUnilateralExitProgress } from '@/workers/arkade-api'
+import { isUnilateralExitJobComplete } from '@/lib/arkade/unilateral-exit-branch-complete'
 import {
   isCurrentStepRelayed,
   isWaitingForRelayedStepConfirmation,
@@ -50,6 +51,19 @@ function lifecyclePhaseFromMachineState(
   if (unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm)) {
     return UnilateralExitLifecyclePhase.WaitingConfirm
   }
+  if (unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.waitingForParentData)) {
+    return UnilateralExitLifecyclePhase.WaitingForParentData
+  }
+  if (
+    state.context.unconfirmedParentRetry != null &&
+    state.context.progressRefreshRequested &&
+    unilateralExitSnapshotIsInAnyState(state, [
+      UNILATERAL_EXIT_MACHINE_STATE.checkingProgress,
+      UNILATERAL_EXIT_MACHINE_STATE.loadingProgress,
+    ])
+  ) {
+    return UnilateralExitLifecyclePhase.WaitingForParentData
+  }
   if (
     unilateralExitSnapshotIsInAnyState(state, [
       UNILATERAL_EXIT_MACHINE_STATE.checkingProgress,
@@ -63,6 +77,9 @@ function lifecyclePhaseFromMachineState(
       return UnilateralExitLifecyclePhase.WaitingConfirm
     }
     if (unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.paused)) {
+      return UnilateralExitLifecyclePhase.Idle
+    }
+    if (state.context.progressRefreshRequested) {
       return UnilateralExitLifecyclePhase.Idle
     }
     return state.context.jobOutpoints.length > 0
@@ -98,6 +115,7 @@ export function selectUnilateralExitAutomationSnapshot(
     state.context.automationEnabled &&
     unilateralExitSnapshotIsInAnyState(state, [
       UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm,
+      UNILATERAL_EXIT_MACHINE_STATE.waitingForParentData,
       UNILATERAL_EXIT_MACHINE_STATE.checkingProgress,
       UNILATERAL_EXIT_MACHINE_STATE.evaluatingPolicy,
       UNILATERAL_EXIT_MACHINE_STATE.proceeding,
@@ -123,6 +141,7 @@ export function selectIsUnilateralExitJobActive(state: UnilateralExitActorSnapsh
   return (
     lifecycle.phase === UnilateralExitLifecyclePhase.Advancing ||
     lifecycle.phase === UnilateralExitLifecyclePhase.WaitingConfirm ||
+    lifecycle.phase === UnilateralExitLifecyclePhase.WaitingForParentData ||
     (lifecycle.phase === UnilateralExitLifecyclePhase.Error &&
       lifecycle.selectedLeafOutpoints.length > 0) ||
     (lifecycle.phase === UnilateralExitLifecyclePhase.Idle &&
@@ -152,6 +171,7 @@ export function selectCanAbortUnilateralExitOrchestration(
     params.hasInProgressExits ||
     unilateralExitSnapshotIsProceeding(state) ||
     unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm) ||
+    unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.waitingForParentData) ||
     unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.paused)
   )
 }
@@ -170,7 +190,7 @@ export function selectUnilateralExitControlJobState(
   isProceeding: boolean
 } {
   const lifecycle = selectUnilateralExitLifecycleSnapshot(state)
-  const progress = state.context.progress
+  const progress = selectUnilateralExitProgressForDisplay(state)
   const wasmPhase = progress?.phase ?? 'idle'
   const machineComplete = unilateralExitSnapshotIsInState(
     state,
@@ -195,7 +215,12 @@ export function selectUnilateralExitControlJobState(
       ? 'complete'
       : unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm)
         ? 'waiting'
-        : unilateralExitSnapshotIsInAnyState(state, [
+        : unilateralExitSnapshotIsInState(
+              state,
+              UNILATERAL_EXIT_MACHINE_STATE.waitingForParentData,
+            )
+          ? 'waitingForParentData'
+          : unilateralExitSnapshotIsInAnyState(state, [
               UNILATERAL_EXIT_MACHINE_STATE.proceeding,
               UNILATERAL_EXIT_MACHINE_STATE.ensuringBroadcast,
               UNILATERAL_EXIT_MACHINE_STATE.checkingProgress,
@@ -204,7 +229,9 @@ export function selectUnilateralExitControlJobState(
             ])
           ? isWaitingForRelayedStepConfirmation(progress)
             ? 'waiting'
-            : 'advancing'
+            : state.context.progressRefreshRequested
+              ? null
+              : 'advancing'
           : null
 
   const phase: UnilateralExitControlDisplayPhase =
@@ -213,7 +240,9 @@ export function selectUnilateralExitControlJobState(
       ? 'idle'
       : lifecycle.phase === UnilateralExitLifecyclePhase.WaitingConfirm
         ? 'waiting'
-        : phaseFromProgress)
+        : lifecycle.phase === UnilateralExitLifecyclePhase.WaitingForParentData
+          ? 'waitingForParentData'
+          : phaseFromProgress)
 
   const jobActive =
     selectIsUnilateralExitJobActive(state) || params.hasInProgressExits
@@ -230,10 +259,26 @@ export function selectUnilateralExitControlJobState(
 export function selectUnilateralExitInProgressOverlay(
   state: UnilateralExitActorSnapshot,
 ): UnilateralExitInProgressOverlayKind | null {
+  const progress = selectUnilateralExitProgressForDisplay(state)
   if (
     unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm)
   ) {
     return 'waiting'
+  }
+  if (
+    unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.waitingForParentData)
+  ) {
+    return 'waitingForParentData'
+  }
+  if (
+    state.context.unconfirmedParentRetry != null &&
+    state.context.progressRefreshRequested &&
+    unilateralExitSnapshotIsInAnyState(state, [
+      UNILATERAL_EXIT_MACHINE_STATE.checkingProgress,
+      UNILATERAL_EXIT_MACHINE_STATE.loadingProgress,
+    ])
+  ) {
+    return 'waitingForParentData'
   }
   if (
     unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.ensuringBroadcast)
@@ -246,9 +291,13 @@ export function selectUnilateralExitInProgressOverlay(
       UNILATERAL_EXIT_MACHINE_STATE.loadingProgress,
     ])
   ) {
-    const progress = state.context.progress
     if (isWaitingForRelayedStepConfirmation(progress)) {
       return 'waiting'
+    }
+    if (state.context.progressRefreshRequested) {
+      return state.context.jobOutpoints.length > 0 && progress != null
+        ? 'readyToProceed'
+        : null
     }
     if (needsBroadcastEnsurance(progress)) {
       return 'ensuringBroadcast'
@@ -258,7 +307,8 @@ export function selectUnilateralExitInProgressOverlay(
     (unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.idle) ||
       unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.error)) &&
     state.context.jobOutpoints.length > 0 &&
-    needsBroadcastEnsurance(state.context.progress)
+    progress != null &&
+    !isUnilateralExitJobComplete(progress, state.context.jobOutpoints)
   ) {
     return 'readyToProceed'
   }
@@ -312,9 +362,10 @@ export function selectUnilateralExitProceedButtonState(
         UNILATERAL_EXIT_MACHINE_STATE.evaluatingPolicy,
         UNILATERAL_EXIT_MACHINE_STATE.proceeding,
         UNILATERAL_EXIT_MACHINE_STATE.ensuringBroadcast,
+        UNILATERAL_EXIT_MACHINE_STATE.waitingForParentData,
       ]))
   const canProceedStep = params.lifecycleJobActive && params.phase !== 'complete'
-  const showSpinner = isProceeding && params.phase !== 'waiting'
+  const showSpinner = isProceeding && params.phase !== 'waiting' && params.phase !== 'waitingForParentData'
   const disabled =
     !params.prefsHydrated ||
     params.jobOutpointsCount === 0 ||

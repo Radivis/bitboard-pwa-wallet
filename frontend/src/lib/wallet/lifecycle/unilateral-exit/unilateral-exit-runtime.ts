@@ -86,6 +86,9 @@ function notifyListeners(): void {
 }
 
 function handleActorTransition(snapshot: UnilateralExitActorSnapshot): void {
+  // #region agent log
+  fetch('http://127.0.0.1:7757/ingest/cb0f3ed4-7e87-43d6-b1dd-18329fa2e328',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2d2162'},body:JSON.stringify({sessionId:'2d2162',hypothesisId:'A',location:'unilateral-exit-runtime.ts:handleActorTransition',message:'actor transition',data:{machineState:snapshot.value,proceedRequested:snapshot.context.proceedRequested,proceedTargetStepIndex:snapshot.context.proceedTargetStepIndex,progressRefreshRequested:snapshot.context.progressRefreshRequested,automationEnabled:snapshot.context.automationEnabled,hasFeeRate:snapshot.context.feeRateSatPerVb!=null,stepIndex:snapshot.context.progress?.stepIndex??null,phase:snapshot.context.progress?.phase??null,relayed:snapshot.context.progress?.currentStepTxRelayed??null,error:snapshot.context.lastErrorMessage},timestamp:Date.now(),runId:'post-fix'})}).catch(()=>{});
+  // #endregion
   if (
     unilateralExitSnapshotIsInState(snapshot, UNILATERAL_EXIT_MACHINE_STATE.complete) &&
     !lastCompleteToastShown
@@ -175,6 +178,7 @@ function actorAlreadyTrackingHydrateOutpoints(
       UNILATERAL_EXIT_MACHINE_STATE.proceeding,
       UNILATERAL_EXIT_MACHINE_STATE.ensuringBroadcast,
       UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm,
+      UNILATERAL_EXIT_MACHINE_STATE.waitingForParentData,
       UNILATERAL_EXIT_MACHINE_STATE.paused,
       UNILATERAL_EXIT_MACHINE_STATE.error,
     ])

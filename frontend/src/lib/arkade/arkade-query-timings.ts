@@ -36,6 +36,9 @@ export const ARKADE_SLOW_METADATA_STALE_MS = 300_000
 /** Automatic unilateral-exit runner: poll while waiting for step confirmation (production). */
 export const UNILATERAL_EXIT_AUTOMATION_WAIT_POLL_MS = 15_000
 
+/** After package-not-child, wait before retrying broadcast so the submit node can learn the parent. */
+export const UNILATERAL_EXIT_PARENT_DATA_WAIT_MS = 15_000
+
 /** Re-broadcast a step when Esplora still reports 0 confirmations (production, 30 minutes). */
 export const UNILATERAL_EXIT_AUTOMATION_STEP_REBROADCAST_WAIT_SECS = 1_800
 

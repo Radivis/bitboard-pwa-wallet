@@ -1,5 +1,6 @@
 import type { UnilateralExitAutomationPausedReason } from '@/lib/wallet/lifecycle/unilateral-exit-automation-types'
 import type { UnilateralExitWalletScope } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
+import { UNILATERAL_EXIT_PARENT_DATA_WAIT_MS } from '@/lib/arkade/arkade-query-timings'
 import type { ArkadeUnilateralExitProgress, ArkadeUnilateralExitJobViability, ArkadeVtxoOutpoint } from '@/workers/arkade-api'
 import type { DoneActorEvent, ErrorActorEvent } from 'xstate'
 
@@ -12,13 +13,21 @@ export type UnilateralExitMachineContext = {
   lastErrorMessage: string | null
   feeRateSatPerVb: number | null
   proceedRequested: boolean
+  proceedTargetStepIndex: number | null
+  progressRefreshRequested: boolean
+  unconfirmedParentRetry: {
+    stepIndex: number
+    parentConfirmationsAtFail: number
+  } | null
   pollDelayMs: number
+  parentDataWaitMs: number
   reconcileInProgressSats: number
   reconcileInProgressOutpoints: ArkadeVtxoOutpoint[]
 }
 
 export type UnilateralExitMachineInput = {
   pollDelayMs?: number
+  parentDataWaitMs?: number
 }
 
 export const UNILATERAL_EXIT_MACHINE_STATE = {
@@ -30,6 +39,7 @@ export const UNILATERAL_EXIT_MACHINE_STATE = {
   proceeding: 'proceeding',
   ensuringBroadcast: 'ensuringBroadcast',
   waitingConfirm: 'waitingConfirm',
+  waitingForParentData: 'waitingForParentData',
   paused: 'paused',
   complete: 'complete',
   terminated: 'terminated',
@@ -117,7 +127,11 @@ export function createInitialUnilateralExitContext(
     lastErrorMessage: null,
     feeRateSatPerVb: null,
     proceedRequested: false,
+    proceedTargetStepIndex: null,
+    progressRefreshRequested: false,
+    unconfirmedParentRetry: null,
     pollDelayMs: input?.pollDelayMs ?? 2_000,
+    parentDataWaitMs: input?.parentDataWaitMs ?? UNILATERAL_EXIT_PARENT_DATA_WAIT_MS,
     reconcileInProgressSats: 0,
     reconcileInProgressOutpoints: [],
   }

@@ -2,6 +2,9 @@ import { isUnilateralExitJobComplete } from '@/lib/arkade/unilateral-exit-branch
 import {
   isWaitingForRelayedStepConfirmation,
   needsBroadcastEnsurance,
+  rewoundProgressFromPackageError,
+  isRetryableUnconfirmedParentPackageError,
+  unconfirmedParentRetryFromProgress,
 } from '@/lib/arkade/unilateral-exit-broadcast'
 import { unilateralExitAutomationWaitPollMs } from '@/lib/arkade/arkade-query-timings'
 import {
@@ -76,6 +79,28 @@ function progressFromEnsureBroadcastEvent(
   return event.type === 'xstate.done.actor.ensureBroadcast' ? event.output : null
 }
 
+function errorFromProceedOrEnsureBroadcast(
+  event: UnilateralExitMachineEvent,
+): unknown {
+  if (
+    event.type === 'xstate.error.actor.ensureBroadcast' ||
+    event.type === 'xstate.error.actor.proceedStep'
+  ) {
+    return event.error
+  }
+  return undefined
+}
+
+function stepIndexAdvancedPastContext(
+  previous: ArkadeUnilateralExitProgress | null,
+  next: ArkadeUnilateralExitProgress | null,
+): boolean {
+  if (previous == null || next == null) {
+    return false
+  }
+  return next.stepIndex > previous.stepIndex
+}
+
 function relayWaitUnixFromProgress(
   progress: ArkadeUnilateralExitProgress | null,
 ): number | null {
@@ -119,6 +144,7 @@ export const unilateralExitMachineSetup = setup({
   },
   delays: {
     pollDelay: ({ context }) => context.pollDelayMs,
+    parentDataWait: ({ context }) => context.parentDataWaitMs,
   },
   actors: {
     evaluateJobViabilityActor: fromPromise<ArkadeUnilateralExitJobViability, EvaluateJobViabilityActorInput>(
@@ -162,10 +188,22 @@ export const unilateralExitMachineSetup = setup({
       const output = progressFromEnsureBroadcastEvent(event)
       return isJobCompleteFromProgress(output, context)
     },
-    needsBroadcastFromFetchEvent: ({ context, event }) =>
-      needsBroadcastEnsurance(progressFromFetchEvent(event)) &&
-      (context.automationEnabled ||
-        (context.proceedRequested && context.feeRateSatPerVb != null)),
+    needsBroadcastFromFetchEvent: ({ context, event }) => {
+      const output = progressFromFetchEvent(event)
+      if (!needsBroadcastEnsurance(output)) {
+        return false
+      }
+      if (context.automationEnabled) {
+        return true
+      }
+      if (!context.proceedRequested || context.feeRateSatPerVb == null) {
+        return false
+      }
+      if (context.proceedTargetStepIndex == null) {
+        return true
+      }
+      return output?.stepIndex === context.proceedTargetStepIndex
+    },
     needsBroadcastBeforeEnsureBroadcast: ({ context, event }) =>
       needsBroadcastEnsurance(progressFromFetchEvent(event)) &&
       context.automationEnabled &&
@@ -174,6 +212,38 @@ export const unilateralExitMachineSetup = setup({
       isWaitingForRelayedStepConfirmation(progressFromFetchEvent(event)),
     isWaitingForRelayedStepConfirmationFromEnsureBroadcastEvent: ({ event }) =>
       isWaitingForRelayedStepConfirmation(progressFromEnsureBroadcastEvent(event)),
+    isProgressRefresh: ({ context }) => context.progressRefreshRequested,
+    isUnconfirmedParentRetryProgressRefresh: ({ context }) =>
+      context.unconfirmedParentRetry != null && context.progressRefreshRequested,
+    manualProceedTargetMismatch: ({ context, event }) => {
+      const output = progressFromFetchEvent(event)
+      return (
+        !context.automationEnabled &&
+        context.proceedRequested &&
+        context.proceedTargetStepIndex != null &&
+        output != null &&
+        output.stepIndex !== context.proceedTargetStepIndex
+      )
+    },
+    manualFetchStepIndexAdvanced: ({ context, event }) =>
+      !context.automationEnabled &&
+      !context.proceedRequested &&
+      stepIndexAdvancedPastContext(context.progress, progressFromFetchEvent(event)),
+    hasActiveManualJob: ({ context }) =>
+      !context.automationEnabled &&
+      context.jobOutpoints.length > 0 &&
+      context.progress != null,
+    shouldWaitAfterEnsureBroadcast: ({ context, event }) => {
+      const output = progressFromEnsureBroadcastEvent(event)
+      const waitingRelayed = isWaitingForRelayedStepConfirmation(output)
+      const advanced = stepIndexAdvancedPastContext(context.progress, output)
+      const shouldWait =
+        waitingRelayed && (context.automationEnabled || !advanced)
+      // #region agent log
+      fetch('http://127.0.0.1:7757/ingest/cb0f3ed4-7e87-43d6-b1dd-18329fa2e328',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2d2162'},body:JSON.stringify({sessionId:'2d2162',hypothesisId:'P',runId:'post-fix',location:'unilateral-exit.machine.ts:shouldWaitAfterEnsureBroadcast',message:'should wait after ensureBroadcast',data:{shouldWait,waitingRelayed,advanced,automationEnabled:context.automationEnabled,prevStep:context.progress?.stepIndex??null,nextStep:output?.stepIndex??null,nextRelayed:output?.currentStepTxRelayed??null,nextPhase:output?.phase??null,nextWaitingSince:output?.currentStepWaitingSince??null},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      return shouldWait
+    },
     isWaitingForRelayedStepConfirmation: ({ context }) =>
       isWaitingForRelayedStepConfirmation(context.progress),
     shouldRunAutomationPolicyFromEvent: ({ context, event }) => {
@@ -214,6 +284,8 @@ export const unilateralExitMachineSetup = setup({
       event.output.pausedReason == null,
     isJobTerminatedFromViabilityEvent: ({ event }) =>
       isTerminalViabilityStatus(viabilityFromEvaluateEvent(event)),
+    isUnconfirmedParentPackageError: ({ event }) =>
+      isRetryableUnconfirmedParentPackageError(errorFromProceedOrEnsureBroadcast(event)),
   },
   actions: {
     assignWalletScope: assign(({ event }) => {
@@ -235,6 +307,9 @@ export const unilateralExitMachineSetup = setup({
         walletScope: event.walletScope,
         jobOutpoints: outpoints,
         proceedRequested: true,
+        proceedTargetStepIndex: null,
+        progressRefreshRequested: false,
+        unconfirmedParentRetry: null,
         feeRateSatPerVb: event.feeRateSatPerVb,
         pausedReason: null,
         lastErrorMessage: null,
@@ -252,6 +327,7 @@ export const unilateralExitMachineSetup = setup({
         jobOutpoints: outpoints,
         automationEnabled: true,
         proceedRequested: true,
+        unconfirmedParentRetry: null,
         pausedReason: null,
         lastErrorMessage: null,
         progress: null,
@@ -270,6 +346,9 @@ export const unilateralExitMachineSetup = setup({
         jobOutpoints: outpoints,
         automationEnabled,
         proceedRequested: resumeAutomation && automationEnabled,
+        proceedTargetStepIndex: null,
+        progressRefreshRequested: false,
+        unconfirmedParentRetry: null,
         progress: null,
         pausedReason: null,
         lastErrorMessage: null,
@@ -277,12 +356,17 @@ export const unilateralExitMachineSetup = setup({
         reconcileInProgressOutpoints: event.reconcileInProgressOutpoints ?? [],
       }
     }),
-    assignProceedManual: assign(({ event }) => {
+    assignProceedManual: assign(({ context, event }) => {
       if (event.type !== 'PROCEED_MANUAL') {
         return {}
       }
+      // #region agent log
+      fetch('http://127.0.0.1:7757/ingest/cb0f3ed4-7e87-43d6-b1dd-18329fa2e328',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2d2162'},body:JSON.stringify({sessionId:'2d2162',hypothesisId:'H-drop',location:'unilateral-exit.machine.ts:assignProceedManual',message:'PROCEED_MANUAL accepted',data:{prevProceedRequested:context.proceedRequested,progressRefreshRequested:context.progressRefreshRequested,stepIndex:context.progress?.stepIndex??null},timestamp:Date.now(),runId:'post-fix'})}).catch(()=>{});
+      // #endregion
       return {
         proceedRequested: true,
+        proceedTargetStepIndex: context.progress?.stepIndex ?? null,
+        progressRefreshRequested: false,
         feeRateSatPerVb: event.feeRateSatPerVb,
         pausedReason: null,
         lastErrorMessage: null,
@@ -294,14 +378,28 @@ export const unilateralExitMachineSetup = setup({
     assignProgressFromFetch: assign({
       progress: ({ event }) =>
         event.type === 'xstate.done.actor.fetchProgress' ? event.output : null,
+      unconfirmedParentRetry: ({ event, context }) => {
+        const retry = context.unconfirmedParentRetry
+        if (retry == null) {
+          return null
+        }
+        const output =
+          event.type === 'xstate.done.actor.fetchProgress' ? event.output : null
+        if (output != null && output.stepIndex !== retry.stepIndex) {
+          return null
+        }
+        return retry
+      },
     }),
     assignProgressFromProceed: assign({
       progress: ({ event }) =>
         event.type === 'xstate.done.actor.proceedStep' ? event.output : null,
+      unconfirmedParentRetry: null,
     }),
     assignProgressFromEnsureBroadcast: assign({
       progress: ({ event }) =>
         event.type === 'xstate.done.actor.ensureBroadcast' ? event.output : null,
+      unconfirmedParentRetry: null,
     }),
     assignFeeFromPolicy: assign({
       feeRateSatPerVb: ({ event }) =>
@@ -337,11 +435,43 @@ export const unilateralExitMachineSetup = setup({
       proceedRequested: ({ context }) => context.automationEnabled,
     }),
     resumeAutomationProceed: assign({
-      proceedRequested: ({ context }) => context.automationEnabled,
+      proceedRequested: ({ context }) =>
+        context.unconfirmedParentRetry != null ? false : context.automationEnabled,
+      proceedTargetStepIndex: ({ context }) => {
+        if (context.unconfirmedParentRetry != null) {
+          return context.proceedTargetStepIndex
+        }
+        return context.automationEnabled ? context.proceedTargetStepIndex : null
+      },
+      progressRefreshRequested: false,
+    }),
+    assignProceedForUnconfirmedParentRetry: assign({
+      proceedRequested: true,
+      proceedTargetStepIndex: ({ context }) =>
+        context.unconfirmedParentRetry?.stepIndex ??
+        context.progress?.stepIndex ??
+        null,
+    }),
+    assignProgressRefresh: assign({
+      progressRefreshRequested: true,
+      proceedRequested: false,
+      proceedTargetStepIndex: null,
+    }),
+    clearProgressRefresh: assign({
+      progressRefreshRequested: false,
     }),
     clearProceedRequested: assign({
       proceedRequested: false,
+      proceedTargetStepIndex: null,
+      progressRefreshRequested: false,
     }),
+    logManualIdleInsteadOfAutoWait: ({ context, event }) => {
+      const output =
+        progressFromEnsureBroadcastEvent(event) ?? progressFromFetchEvent(event)
+      // #region agent log
+      fetch('http://127.0.0.1:7757/ingest/cb0f3ed4-7e87-43d6-b1dd-18329fa2e328',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2d2162'},body:JSON.stringify({sessionId:'2d2162',hypothesisId:'F',runId:'post-fix',location:'unilateral-exit.machine.ts:logManualIdleInsteadOfAutoWait',message:'manual idle instead of auto-wait',data:{prevStep:context.progress?.stepIndex??null,nextStep:output?.stepIndex??null,nextRelayed:output?.currentStepTxRelayed??null,nextPhase:output?.phase??null,automationEnabled:context.automationEnabled,proceedRequested:context.proceedRequested,proceedTargetStepIndex:context.proceedTargetStepIndex,progressRefreshRequested:context.progressRefreshRequested,eventType:event.type},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+    },
     clearJobContext: assign(({ context }) => {
       if (context.walletScope != null) {
         clearPersistedUnilateralExitJob(context.walletScope)
@@ -350,6 +480,9 @@ export const unilateralExitMachineSetup = setup({
         jobOutpoints: [],
         progress: null,
         proceedRequested: false,
+        proceedTargetStepIndex: null,
+        progressRefreshRequested: false,
+        unconfirmedParentRetry: null,
         feeRateSatPerVb: null,
         pausedReason: null,
         lastErrorMessage: null,
@@ -384,6 +517,10 @@ export const unilateralExitMachineSetup = setup({
             : 'Unroll step failed.'
           : null,
       proceedRequested: false,
+      progress: ({ event, context }) =>
+        event.type === 'xstate.error.actor.proceedStep'
+          ? (rewoundProgressFromPackageError(event.error) ?? context.progress)
+          : context.progress,
     }),
     assignErrorFromEnsureBroadcast: assign({
       lastErrorMessage: ({ event }) =>
@@ -393,7 +530,34 @@ export const unilateralExitMachineSetup = setup({
             : 'Failed to broadcast unilateral exit step.'
           : null,
       proceedRequested: false,
+      progress: ({ event, context }) =>
+        event.type === 'xstate.error.actor.ensureBroadcast'
+          ? (rewoundProgressFromPackageError(event.error) ?? context.progress)
+          : context.progress,
     }),
+    assignUnconfirmedParentRetry: assign({
+      lastErrorMessage: null,
+      proceedRequested: false,
+      progress: ({ event, context }) =>
+        rewoundProgressFromPackageError(errorFromProceedOrEnsureBroadcast(event)) ??
+        context.progress,
+      unconfirmedParentRetry: ({ event, context }) =>
+        unconfirmedParentRetryFromProgress(
+          rewoundProgressFromPackageError(errorFromProceedOrEnsureBroadcast(event)) ??
+            context.progress,
+        ),
+    }),
+    logUnconfirmedParentRetry: ({ context, event }) => {
+      const error = errorFromProceedOrEnsureBroadcast(event)
+      // #region agent log
+      fetch('http://127.0.0.1:7757/ingest/cb0f3ed4-7e87-43d6-b1dd-18329fa2e328',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2d2162'},body:JSON.stringify({sessionId:'2d2162',hypothesisId:'R',runId:'post-fix',location:'unilateral-exit.machine.ts:logUnconfirmedParentRetry',message:'enter waitingForParentData after package-not-child',data:{machineHadStep:context.progress?.stepIndex??null,rewoundStep:rewoundProgressFromPackageError(error)?.stepIndex??null,unconfirmedParentRetry:context.unconfirmedParentRetry,proceedRequested:context.proceedRequested,proceedTargetStepIndex:context.proceedTargetStepIndex,automationEnabled:context.automationEnabled,parentDataWaitMs:context.parentDataWaitMs,error:error instanceof Error?error.message:String(error??'')},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+    },
+    logWaitingForParentDataRetry: ({ context }) => {
+      // #region agent log
+      fetch('http://127.0.0.1:7757/ingest/cb0f3ed4-7e87-43d6-b1dd-18329fa2e328',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2d2162'},body:JSON.stringify({sessionId:'2d2162',hypothesisId:'S',runId:'post-fix',location:'unilateral-exit.machine.ts:logWaitingForParentDataRetry',message:'waitingForParentData leaving for checkingProgress',data:{stepIndex:context.progress?.stepIndex??null,unconfirmedParentRetry:context.unconfirmedParentRetry,proceedRequested:context.proceedRequested,progressRefreshRequested:context.progressRefreshRequested,parentDataWaitMs:context.parentDataWaitMs},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+    },
     assignErrorFromFetch: assign({
       lastErrorMessage: ({ event }) =>
         event.type === 'xstate.error.actor.fetchProgress'
@@ -509,6 +673,34 @@ const checkingProgressOnDone = [
     ],
   },
   {
+    guard: 'isUnconfirmedParentRetryProgressRefresh',
+    target: 'waitingForParentData',
+    actions: [
+      'assignProgressFromFetch',
+      'syncPersistedRelayWaitFromFetch',
+      'clearProgressRefresh',
+    ],
+  },
+  {
+    guard: 'isProgressRefresh',
+    target: 'idle',
+    actions: [
+      'assignProgressFromFetch',
+      'syncPersistedRelayWaitFromFetch',
+      'clearProgressRefresh',
+    ],
+  },
+  {
+    guard: 'manualProceedTargetMismatch',
+    target: 'idle',
+    actions: [
+      'assignProgressFromFetch',
+      'syncPersistedRelayWaitFromFetch',
+      'clearProceedRequested',
+      'logManualIdleInsteadOfAutoWait',
+    ],
+  },
+  {
     guard: 'needsBroadcastBeforeEnsureBroadcast',
     target: 'evaluatingPolicy',
     actions: ['assignProgressFromFetch', 'syncPersistedRelayWaitFromFetch'],
@@ -519,9 +711,23 @@ const checkingProgressOnDone = [
     actions: ['assignProgressFromFetch', 'syncPersistedRelayWaitFromFetch'],
   },
   {
+    guard: 'manualFetchStepIndexAdvanced',
+    target: 'idle',
+    actions: [
+      'assignProgressFromFetch',
+      'syncPersistedRelayWaitFromFetch',
+      'clearProceedRequested',
+      'logManualIdleInsteadOfAutoWait',
+    ],
+  },
+  {
     guard: 'isWaitingForRelayedStepConfirmationFromEvent',
     target: 'waitingConfirm',
-    actions: ['assignProgressFromFetch', 'syncPersistedRelayWaitFromFetch'],
+    actions: [
+      'assignProgressFromFetch',
+      'syncPersistedRelayWaitFromFetch',
+      'clearProceedRequested',
+    ],
   },
   {
     guard: 'shouldRunAutomationPolicyFromEvent',
@@ -550,11 +756,21 @@ const ensuringBroadcastOnDone = [
     ],
   },
   {
+    guard: 'shouldWaitAfterEnsureBroadcast',
     target: 'waitingConfirm',
     actions: [
       'assignProgressFromEnsureBroadcast',
       'syncPersistedRelayWaitFromEnsureBroadcast',
       'clearProceedRequested',
+    ],
+  },
+  {
+    target: 'idle',
+    actions: [
+      'assignProgressFromEnsureBroadcast',
+      'syncPersistedRelayWaitFromEnsureBroadcast',
+      'clearProceedRequested',
+      'logManualIdleInsteadOfAutoWait',
     ],
   },
 ] as const
@@ -578,6 +794,13 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
       },
     },
     idle: {
+      after: {
+        pollDelay: {
+          guard: 'hasActiveManualJob',
+          target: 'checkingProgress',
+          actions: 'assignProgressRefresh',
+        },
+      },
       on: {
         START_MANUAL: {
           target: 'checkingProgress',
@@ -594,6 +817,11 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
         PROCEED_MANUAL: {
           target: 'checkingProgress',
           actions: 'assignProceedManual',
+        },
+        POLL_TICK: {
+          guard: 'hasActiveManualJob',
+          target: 'checkingProgress',
+          actions: 'assignProgressRefresh',
         },
         ABORT_ORCHESTRATION: abortOrchestrationTransition,
         CLEAR_JOB: {
@@ -621,6 +849,9 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
     checkingProgress: {
       on: {
         ABORT_ORCHESTRATION: abortOrchestrationTransition,
+        PROCEED_MANUAL: {
+          actions: 'assignProceedManual',
+        },
         AUTOMATION_PREFS_CHANGED: {
           actions: 'assignAutomationPrefs',
         },
@@ -647,6 +878,9 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
     loadingProgress: {
       on: {
         ABORT_ORCHESTRATION: abortOrchestrationTransition,
+        PROCEED_MANUAL: {
+          actions: 'assignProceedManual',
+        },
         AUTOMATION_PREFS_CHANGED: {
           actions: 'assignAutomationPrefs',
         },
@@ -729,6 +963,11 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
         ],
         onError: [
           {
+            guard: 'isUnconfirmedParentPackageError',
+            target: 'waitingForParentData',
+            actions: ['assignUnconfirmedParentRetry', 'logUnconfirmedParentRetry'],
+          },
+          {
             guard: ({ context }) => context.automationEnabled,
             target: 'paused',
             actions: 'assignAutomationBroadcastFailure',
@@ -758,6 +997,11 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
         }),
         onDone: ensuringBroadcastOnDone,
         onError: [
+          {
+            guard: 'isUnconfirmedParentPackageError',
+            target: 'waitingForParentData',
+            actions: ['assignUnconfirmedParentRetry', 'logUnconfirmedParentRetry'],
+          },
           {
             guard: ({ context }) => context.automationEnabled,
             target: 'paused',
@@ -802,6 +1046,52 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
             actions: 'assignAutomationPrefs',
           },
         ],
+        CLEAR_JOB: {
+          target: 'idle',
+          actions: 'clearJobContext',
+        },
+      },
+    },
+    waitingForParentData: {
+      after: {
+        parentDataWait: [
+          {
+            guard: ({ context }) => context.automationEnabled,
+            target: 'checkingProgress',
+            actions: [
+              'assignProceedForUnconfirmedParentRetry',
+              'logWaitingForParentDataRetry',
+            ],
+          },
+          {
+            target: 'checkingProgress',
+            actions: ['assignProgressRefresh', 'logWaitingForParentDataRetry'],
+          },
+        ],
+      },
+      on: {
+        ABORT_ORCHESTRATION: abortOrchestrationTransition,
+        POLL_TICK: [
+          {
+            guard: ({ context }) => context.automationEnabled,
+            target: 'checkingProgress',
+            actions: [
+              'assignProceedForUnconfirmedParentRetry',
+              'logWaitingForParentDataRetry',
+            ],
+          },
+          {
+            target: 'checkingProgress',
+            actions: ['assignProgressRefresh', 'logWaitingForParentDataRetry'],
+          },
+        ],
+        PROCEED_MANUAL: {
+          target: 'checkingProgress',
+          actions: ['assignProceedManual', 'logWaitingForParentDataRetry'],
+        },
+        AUTOMATION_PREFS_CHANGED: {
+          actions: 'assignAutomationPrefs',
+        },
         CLEAR_JOB: {
           target: 'idle',
           actions: 'clearJobContext',

@@ -22,6 +22,7 @@ export enum UnilateralExitLifecyclePhase {
   Idle = 'idle',
   Advancing = 'advancing',
   WaitingConfirm = 'waiting-confirm',
+  WaitingForParentData = 'waiting-for-parent-data',
   Complete = 'complete',
   Terminated = 'terminated',
   Error = 'error',

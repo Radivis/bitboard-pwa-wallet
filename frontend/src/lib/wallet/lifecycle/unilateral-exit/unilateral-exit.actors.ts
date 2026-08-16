@@ -9,7 +9,16 @@ import {
   arkadeUnilateralExitTopologyScopeKey,
 } from '@/lib/arkade/arkade-query-keys'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
-import { isCurrentStepRelayed } from '@/lib/arkade/unilateral-exit-broadcast'
+import {
+  isCurrentStepRelayed,
+  isInsufficientConfirmedBumperFundsError,
+  isPackageNotChildWithUnconfirmedParentsError,
+  isWaitingForRelayedStepConfirmation,
+  needsBroadcastEnsurance,
+  broadcastedStepIsVisibleOnNetwork,
+  UNCONFIRMED_PARENT_PACKAGE_RETRY_MESSAGE,
+  type ParentUnconfirmedPackageError,
+} from '@/lib/arkade/unilateral-exit-broadcast'
 import { isUnilateralExitBranchComplete } from '@/lib/arkade/unilateral-exit-branch-complete'
 import { proceedUnilateralExitStepWithGuards } from '@/lib/arkade/proceed-unilateral-exit-step'
 import { resolveAutomatedStepFeeRateSatPerVb } from '@/lib/arkade/unilateral-exit-automation-fees'
@@ -124,14 +133,42 @@ export async function evaluateUnilateralExitAutomationPolicy(
   }
 }
 
+function debugProgressSnapshot(progress: ArkadeUnilateralExitProgress) {
+  const stepIndex = progress.stepIndex
+  const previous = progress.nodeStatuses[stepIndex - 1]
+  const current = progress.nodeStatuses[stepIndex]
+  return {
+    stepIndex,
+    totalSteps: progress.totalSteps,
+    phase: progress.phase,
+    relayed: progress.currentStepTxRelayed,
+    waitingSince: progress.currentStepWaitingSince ?? null,
+    needsBroadcast: needsBroadcastEnsurance(progress),
+    waitingRelayed: isWaitingForRelayedStepConfirmation(progress),
+    prevTxid: previous?.txid.slice(0, 8) ?? null,
+    prevConf: previous?.confirmations ?? null,
+    prevStatus: previous?.status ?? null,
+    currTxid: current?.txid.slice(0, 8) ?? null,
+    currConf: current?.confirmations ?? null,
+    currStatus: current?.status ?? null,
+    nodeTxids: progress.nodeStatuses.map((node) => node.txid.slice(0, 8)),
+    nodeConfs: progress.nodeStatuses.map((node) => node.confirmations),
+    nodeStatuses: progress.nodeStatuses.map((node) => node.status),
+  }
+}
+
 export const fetchProgressActor = fromPromise<
   ArkadeUnilateralExitProgress,
   FetchProgressActorInput
 >(async ({ input }) => {
   const worker = getArkadeWorker()
-  return worker.getUnilateralExitProgress({
+  const progress = await worker.getUnilateralExitProgress({
     vtxoOutpoints: sortArkadeVtxoOutpoints(input.outpoints),
   })
+  // #region agent log
+  fetch('http://127.0.0.1:7757/ingest/cb0f3ed4-7e87-43d6-b1dd-18329fa2e328',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2d2162'},body:JSON.stringify({sessionId:'2d2162',hypothesisId:'B',location:'unilateral-exit.actors.ts:fetchProgressActor',message:'fetchProgress',data:debugProgressSnapshot(progress),timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  return progress
 })
 
 export const evaluateJobViabilityActor = fromPromise<
@@ -153,6 +190,9 @@ export const proceedStepActor = fromPromise<
     throw new Error('Select at least one exit-eligible VTXO leaf.')
   }
   const sortedOutpoints = sortArkadeVtxoOutpoints(input.outpoints)
+  // #region agent log
+  fetch('http://127.0.0.1:7757/ingest/cb0f3ed4-7e87-43d6-b1dd-18329fa2e328',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2d2162'},body:JSON.stringify({sessionId:'2d2162',hypothesisId:'A',location:'unilateral-exit.actors.ts:proceedStepActor',message:'proceedStep about to broadcast',data:{feeRateSatPerVb:input.feeRateSatPerVb},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   await proceedUnilateralExitStepWithGuards({
     activeWalletId: input.walletScope.walletId,
     vtxoOutpoints: sortedOutpoints,
@@ -184,8 +224,12 @@ export const ensureBroadcastActor = fromPromise<
   let progress = await worker.getUnilateralExitProgress({
     vtxoOutpoints: sortedOutpoints,
   })
+  const alreadyRelayed = isCurrentStepRelayed(progress)
+  // #region agent log
+  fetch('http://127.0.0.1:7757/ingest/cb0f3ed4-7e87-43d6-b1dd-18329fa2e328',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2d2162'},body:JSON.stringify({sessionId:'2d2162',hypothesisId:'A',location:'unilateral-exit.actors.ts:ensureBroadcastActor',message:'ensureBroadcast before maybe proceed',data:{...debugProgressSnapshot(progress),alreadyRelayed,automationEnabled:input.automationEnabled,hasFeeRate:input.feeRateSatPerVb!=null},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
 
-  if (isUnilateralExitBranchComplete(progress) || isCurrentStepRelayed(progress)) {
+  if (isUnilateralExitBranchComplete(progress) || alreadyRelayed) {
     return progress
   }
 
@@ -208,17 +252,50 @@ export const ensureBroadcastActor = fromPromise<
     feeRateSatPerVb = policy.feeRateSatPerVb
   }
 
-  await proceedUnilateralExitStepWithGuards({
-    activeWalletId: input.walletScope.walletId,
-    vtxoOutpoints: sortedOutpoints,
-    feeRateSatPerVb,
-  })
+  // #region agent log
+  fetch('http://127.0.0.1:7757/ingest/cb0f3ed4-7e87-43d6-b1dd-18329fa2e328',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2d2162'},body:JSON.stringify({sessionId:'2d2162',hypothesisId:'A',location:'unilateral-exit.actors.ts:ensureBroadcastActor',message:'ensureBroadcast proceeding to broadcast',data:{stepIndex:progress.stepIndex,currTxid:progress.nodeStatuses[progress.stepIndex]?.txid.slice(0,8)??null,prevConf:progress.nodeStatuses[progress.stepIndex-1]?.confirmations??null,currConf:progress.nodeStatuses[progress.stepIndex]?.confirmations??null,automationEnabled:input.automationEnabled},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  try {
+    await proceedUnilateralExitStepWithGuards({
+      activeWalletId: input.walletScope.walletId,
+      vtxoOutpoints: sortedOutpoints,
+      feeRateSatPerVb,
+    })
+  } catch (error) {
+    const packageNotChild =
+      isPackageNotChildWithUnconfirmedParentsError(error) ||
+      isInsufficientConfirmedBumperFundsError(error)
+    // #region agent log
+    fetch('http://127.0.0.1:7757/ingest/cb0f3ed4-7e87-43d6-b1dd-18329fa2e328',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2d2162'},body:JSON.stringify({sessionId:'2d2162',hypothesisId:'D',runId:'post-fix',location:'unilateral-exit.actors.ts:ensureBroadcastActor',message:'ensureBroadcast proceed failed',data:{stepIndex:progress.stepIndex,currTxid:progress.nodeStatuses[progress.stepIndex]?.txid.slice(0,8)??null,prevConf:progress.nodeStatuses[progress.stepIndex-1]?.confirmations??null,packageNotChild,error:error instanceof Error?error.message:String(error)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    if (packageNotChild) {
+      const rewound = await worker.getUnilateralExitProgress({
+        vtxoOutpoints: sortedOutpoints,
+      })
+      await invalidateUnilateralExitQueries(input.walletScope, sortedOutpoints)
+      // #region agent log
+      fetch('http://127.0.0.1:7757/ingest/cb0f3ed4-7e87-43d6-b1dd-18329fa2e328',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2d2162'},body:JSON.stringify({sessionId:'2d2162',hypothesisId:'C',runId:'post-fix',location:'unilateral-exit.actors.ts:ensureBroadcastActor',message:'package-not-child rewound progress',data:{beforeIndex:progress.stepIndex,rewoundIndex:rewound.stepIndex,rewoundTxid:rewound.nodeStatuses[rewound.stepIndex]?.txid.slice(0,8)??null,rewoundConf:rewound.nodeStatuses[rewound.stepIndex]?.confirmations??null,rewoundStatus:rewound.nodeStatuses[rewound.stepIndex]?.status??null},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      const wrapped = new Error(
+        UNCONFIRMED_PARENT_PACKAGE_RETRY_MESSAGE,
+      ) as ParentUnconfirmedPackageError
+      wrapped.rewoundProgress = rewound
+      wrapped.retryableUnconfirmedParent = true
+      throw wrapped
+    }
+    throw error
+  }
 
+  const progressBeforeBroadcast = progress
   progress = await worker.getUnilateralExitProgress({
     vtxoOutpoints: sortedOutpoints,
   })
 
-  if (!isCurrentStepRelayed(progress)) {
+  const visible = broadcastedStepIsVisibleOnNetwork(progressBeforeBroadcast, progress)
+  // #region agent log
+  fetch('http://127.0.0.1:7757/ingest/cb0f3ed4-7e87-43d6-b1dd-18329fa2e328',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2d2162'},body:JSON.stringify({sessionId:'2d2162',hypothesisId:'H-relay',location:'unilateral-exit.actors.ts:ensureBroadcastActor',message:'broadcasted step visibility after proceed',data:{beforeIndex:progressBeforeBroadcast.stepIndex,afterIndex:progress.stepIndex,afterRelayed:progress.currentStepTxRelayed??null,visible},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  if (!visible) {
     throw new Error(
       'Unilateral exit step transaction is not visible on the network after broadcast.',
     )

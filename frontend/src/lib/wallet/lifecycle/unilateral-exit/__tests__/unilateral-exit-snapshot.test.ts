@@ -17,7 +17,11 @@ function createSnapshot(
       lastErrorMessage: null,
       feeRateSatPerVb: null,
       proceedRequested: false,
+      proceedTargetStepIndex: null,
+      progressRefreshRequested: false,
+      unconfirmedParentRetry: null,
       pollDelayMs: 2_000,
+      parentDataWaitMs: 15_000,
       ...overrides,
     },
   }

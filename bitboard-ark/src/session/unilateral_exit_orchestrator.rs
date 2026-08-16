@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use ark_core::build_unilateral_exit_tree_txids;
 use ark_core::server::VtxoChains;
@@ -18,7 +18,11 @@ use crate::constants::{
     UNILATERAL_EXIT_STEP_CONFIRMATIONS,
 };
 use crate::error::{ArkResult, ArkWasmError};
-use crate::esplora_blockchain::{EsploraBlockchain, is_redundant_unilateral_exit_broadcast_error};
+use crate::esplora_blockchain::{
+    EsploraBlockchain, ancestor_inject_is_ignorable,
+    is_package_not_child_with_unconfirmed_parents_error,
+    is_redundant_unilateral_exit_broadcast_error,
+};
 use crate::outpoint::VirtualOutPoint;
 use crate::outpoint::{
     representative_virtual_tx_outpoint_for_leaf_tx, representative_vout_among_virtual_outpoints,
@@ -32,6 +36,7 @@ use crate::unilateral_exit_materials::{
 use super::ArkSession;
 use super::exit_autonomous::dedup_virtual_outpoints;
 use super::exit_watch::enrich_unilateral_exit_watches_for_leaf_tx_after_unroll;
+use super::open::sync_onchain_wallet_with_retries;
 use super::unilateral_exit_branch_topology::{
     merge_topology_nodes_from_chains, terminal_vtxo_host_txids_for_topology,
     topology_host_outpoints, topology_leaf_outpoints, virtual_tx_type_hosts_exit_outpoints,
@@ -57,17 +62,69 @@ pub(crate) struct UnilateralBatchPlan {
 }
 
 /// Merge per-leaf exit branches into one serial order, deduping shared virtual txs.
-pub(crate) fn merge_exit_branch_txids(branch_lists: &[Vec<Txid>]) -> Vec<Txid> {
-    let mut merged = Vec::new();
+pub(crate) fn merge_exit_branch_txids(
+    branch_lists: &[Vec<Txid>],
+    tx_by_id: &HashMap<Txid, Transaction>,
+) -> Vec<Txid> {
+    let mut universe = Vec::new();
     let mut seen = HashSet::new();
     for branch in branch_lists {
         for txid in branch {
             if seen.insert(*txid) {
-                merged.push(*txid);
+                universe.push(*txid);
             }
         }
     }
-    merged
+    topological_order_step_txids(&universe, tx_by_id)
+}
+
+fn topological_order_step_txids(
+    universe: &[Txid],
+    tx_by_id: &HashMap<Txid, Transaction>,
+) -> Vec<Txid> {
+    let universe_set: HashSet<Txid> = universe.iter().copied().collect();
+    let mut remaining_parents: HashMap<Txid, HashSet<Txid>> = universe
+        .iter()
+        .map(|txid| (*txid, HashSet::new()))
+        .collect();
+    for txid in universe {
+        let Some(transaction) = tx_by_id.get(txid) else {
+            continue;
+        };
+        for input in &transaction.input {
+            let parent_txid = input.previous_output.txid;
+            if universe_set.contains(&parent_txid)
+                && let Some(parents) = remaining_parents.get_mut(txid)
+            {
+                parents.insert(parent_txid);
+            }
+        }
+    }
+
+    let mut ready: BTreeSet<Txid> = remaining_parents
+        .iter()
+        .filter(|(_, parents)| parents.is_empty())
+        .map(|(txid, _)| *txid)
+        .collect();
+    let mut ordered = Vec::with_capacity(universe.len());
+    while let Some(txid) = ready.pop_first() {
+        ordered.push(txid);
+        for (child_txid, parents) in remaining_parents.iter_mut() {
+            if parents.remove(&txid) && parents.is_empty() {
+                ready.insert(*child_txid);
+            }
+        }
+    }
+    if ordered.len() < universe.len() {
+        let mut leftover: Vec<Txid> = universe
+            .iter()
+            .copied()
+            .filter(|txid| !ordered.contains(txid))
+            .collect();
+        leftover.sort();
+        ordered.extend(leftover);
+    }
+    ordered
 }
 
 /// Mirrors ark-core [`build_anchor_tx`] package feerate targeting (parent + P2A bump child).
@@ -81,6 +138,69 @@ pub(crate) fn estimate_unilateral_exit_package_fee_sats(
         .div_ceil(4);
     let package_vsize = child_vsize + parent.weight().to_vbytes_ceil();
     (package_vsize as f64 * fee_rate_sat_per_vb).ceil() as u64
+}
+
+fn empty_witness_input_summaries(parent: &Transaction) -> Vec<String> {
+    parent
+        .input
+        .iter()
+        .enumerate()
+        .filter(|(_, input)| input.witness.is_empty())
+        .map(|(index, input)| {
+            format!(
+                "input {index} spending {}:{}",
+                input.previous_output.txid, input.previous_output.vout
+            )
+        })
+        .collect()
+}
+
+const AGENT_DEBUG_SESSION_ID: &str = "2d2162";
+const AGENT_DEBUG_LOG_PATH: &str =
+    "/home/radivis/projects/bitboard-pwa-wallet/.cursor/debug-2d2162.log";
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+const AGENT_DEBUG_INGEST_URL: &str =
+    "http://127.0.0.1:7757/ingest/cb0f3ed4-7e87-43d6-b1dd-18329fa2e328";
+
+fn agent_debug_log(hypothesis_id: &str, location: &str, message: &str, data: serde_json::Value) {
+    let mut payload = serde_json::json!({
+        "sessionId": AGENT_DEBUG_SESSION_ID,
+        "hypothesisId": hypothesis_id,
+        "runId": "post-fix",
+        "location": location,
+        "message": message,
+        "data": data,
+        "timestamp": 0u64,
+    });
+    #[cfg(target_arch = "wasm32")]
+    {
+        let payload_js = payload
+            .to_string()
+            .replace('\\', "\\\\")
+            .replace('\'', "\\'");
+        let script = format!(
+            "fetch('{AGENT_DEBUG_INGEST_URL}',{{method:'POST',headers:{{'Content-Type':'application/json','X-Debug-Session-Id':'{AGENT_DEBUG_SESSION_ID}'}},body:JSON.stringify(Object.assign(JSON.parse('{payload_js}'),{{timestamp:Date.now()}}))}}).catch(function(){{}})"
+        );
+        let _ = js_sys::eval(&script);
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        if let Some(object) = payload.as_object_mut() {
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|duration| duration.as_millis() as u64)
+                .unwrap_or(0);
+            object.insert("timestamp".into(), serde_json::json!(timestamp));
+        }
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(AGENT_DEBUG_LOG_PATH)
+        {
+            use std::io::Write;
+            let _ = writeln!(file, "{payload}");
+        }
+    }
 }
 
 fn sum_package_fees_for_steps(
@@ -132,6 +252,136 @@ pub(crate) fn step_reached_confirmation(confirmations: u64) -> bool {
     confirmations >= u64::from(UNILATERAL_EXIT_STEP_CONFIRMATIONS)
 }
 
+/// Submit-node override when Esplora painted a parent confirmed but `submitpackage` disagreed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum UnspendableParentState {
+    NeedsBroadcast { marked_at_tip: Option<u32> },
+    Broadcasted { broadcast_at_tip: Option<u32> },
+}
+
+pub(crate) fn unroll_parent_txids_in_plan(
+    transaction: &Transaction,
+    ordered_step_txids: &[Txid],
+) -> Vec<Txid> {
+    transaction
+        .input
+        .iter()
+        .map(|input| input.previous_output.txid)
+        .filter(|txid| ordered_step_txids.contains(txid))
+        .collect()
+}
+
+/// Plan ancestors of `transaction`, oldest (lowest plan index) first.
+/// Immediate parents are not enough for `package-not-child`: the submit node may
+/// also be missing grandparents, and wrapping only the parent in a new CPFP still fails.
+pub(crate) fn unroll_ancestor_txids_oldest_first(
+    transaction: &Transaction,
+    ordered_step_txids: &[Txid],
+    tx_by_id: &HashMap<Txid, Transaction>,
+) -> Vec<Txid> {
+    let mut seen = HashSet::new();
+    let mut stack = unroll_parent_txids_in_plan(transaction, ordered_step_txids);
+    while let Some(txid) = stack.pop() {
+        if !seen.insert(txid) {
+            continue;
+        }
+        if let Some(ancestor_tx) = tx_by_id.get(&txid) {
+            stack.extend(unroll_parent_txids_in_plan(ancestor_tx, ordered_step_txids));
+        }
+    }
+    let mut ancestors: Vec<Txid> = seen.into_iter().collect();
+    ancestors.sort_by_key(|txid| {
+        ordered_step_txids
+            .iter()
+            .position(|step| step == txid)
+            .unwrap_or(usize::MAX)
+    });
+    ancestors
+}
+
+/// Parents this wallet already submitted (`index <= wait_index`) must not be marked
+/// unspendable. Without a wait stamp, any plan parent is eligible (cold-start skip).
+pub(crate) fn unroll_parent_already_submitted(
+    parent_index: usize,
+    wait_index: Option<usize>,
+) -> bool {
+    wait_index.is_some_and(|wait| parent_index <= wait)
+}
+
+pub(crate) fn unroll_parent_txids_skipped_after_wait(
+    parent_txids: &[Txid],
+    ordered_step_txids: &[Txid],
+    wait_index: Option<usize>,
+) -> Vec<Txid> {
+    parent_txids
+        .iter()
+        .copied()
+        .filter(|txid| {
+            ordered_step_txids
+                .iter()
+                .position(|step| step == txid)
+                .is_some_and(|index| !unroll_parent_already_submitted(index, wait_index))
+        })
+        .collect()
+}
+
+pub(crate) fn unroll_parent_txs_from_plan(
+    parent_txids: &[Txid],
+    tx_by_id: &HashMap<Txid, Transaction>,
+) -> Vec<Transaction> {
+    parent_txids
+        .iter()
+        .filter_map(|txid| tx_by_id.get(txid).cloned())
+        .collect()
+}
+
+pub(crate) fn unspendable_parent_blocks_step(
+    state: Option<&UnspendableParentState>,
+    current_tip: Option<u32>,
+) -> bool {
+    match state {
+        None => false,
+        Some(UnspendableParentState::NeedsBroadcast { .. }) => true,
+        Some(UnspendableParentState::Broadcasted { broadcast_at_tip }) => {
+            match (current_tip, *broadcast_at_tip) {
+                (Some(tip), Some(broadcast_tip)) if tip > broadcast_tip => false,
+                _ => true,
+            }
+        }
+    }
+}
+
+pub(crate) fn should_force_unilateral_exit_step_broadcast(
+    esplora_confirmations: u64,
+    marked_unspendable: bool,
+) -> bool {
+    marked_unspendable || !step_reached_confirmation(esplora_confirmations)
+}
+
+/// Do not skip a step this wallet has not yet broadcast, even if Esplora paints it confirmed.
+/// `wait_index` is the last step we submitted; the next index stays the cursor.
+pub(crate) fn wait_cap_holds_unbroadcast_successor(
+    index: usize,
+    wait_index: Option<usize>,
+) -> bool {
+    wait_index.is_some_and(|wait| index > wait)
+}
+
+pub(crate) fn first_incomplete_step_from_confirmations(
+    confirmations: &[u64],
+    wait_index: Option<usize>,
+) -> usize {
+    for (index, &confs) in confirmations.iter().enumerate() {
+        if !step_reached_confirmation(confs) {
+            return index;
+        }
+        if wait_cap_holds_unbroadcast_successor(index, wait_index) {
+            return index;
+        }
+    }
+    confirmations.len()
+}
+
 pub(crate) fn node_status_label(
     confirmations: u64,
     is_current_step: bool,
@@ -143,6 +393,34 @@ pub(crate) fn node_status_label(
     } else {
         UnilateralExitNodeStatusKind::Pending
     }
+}
+
+/// Wait-capped successors are not complete for this wallet even if Esplora painted them.
+pub(crate) fn displayed_unroll_step_confirmations(
+    esplora_confirmations: u64,
+    index: usize,
+    wait_index: Option<usize>,
+) -> u64 {
+    if wait_cap_holds_unbroadcast_successor(index, wait_index) {
+        0
+    } else {
+        esplora_confirmations
+    }
+}
+
+pub(crate) fn displayed_unroll_node_status(
+    esplora_confirmations: u64,
+    index: usize,
+    current_step_index: usize,
+    wait_index: Option<usize>,
+) -> UnilateralExitNodeStatusKind {
+    if index == current_step_index {
+        return UnilateralExitNodeStatusKind::InProgress;
+    }
+    if wait_cap_holds_unbroadcast_successor(index, wait_index) {
+        return UnilateralExitNodeStatusKind::Pending;
+    }
+    node_status_label(esplora_confirmations, false)
 }
 
 fn commitment_txids_from_chains(chains: &VtxoChains) -> Vec<Txid> {
@@ -308,6 +586,7 @@ impl ArkSession {
             0,
         );
 
+        self.client.blockchain().prepare_confirmation_scan().await;
         let (first_incomplete, live_estimate_error) = match self
             .first_incomplete_step_index(self.client.blockchain(), &plan.ordered_step_txids)
             .await
@@ -360,6 +639,7 @@ impl ArkSession {
 
         let plan = self.build_unilateral_batch_plan(&virtual_outpoints).await?;
         let blockchain = self.client.blockchain();
+        blockchain.prepare_confirmation_scan().await;
 
         let current_step_index = self
             .first_incomplete_step_index(blockchain, &plan.ordered_step_txids)
@@ -385,24 +665,91 @@ impl ArkSession {
             .ok_or_else(|| ArkWasmError::Snapshot(format!("missing branch tx for {step_txid}")))?
             .clone();
 
+        let parent_inputs: Vec<serde_json::Value> = parent_tx
+            .input
+            .iter()
+            .enumerate()
+            .map(|(index, input)| {
+                serde_json::json!({
+                    "index": index,
+                    "prevTxid": input.previous_output.txid.to_string(),
+                    "vout": input.previous_output.vout,
+                    "witnessLen": input.witness.len(),
+                })
+            })
+            .collect();
+        // #region agent log
+        agent_debug_log(
+            "G",
+            "unilateral_exit_orchestrator.rs:proceed",
+            "parent inputs before broadcast",
+            serde_json::json!({
+                "stepIndex": current_step_index,
+                "stepTxid": step_txid.to_string(),
+                "inputCount": parent_tx.input.len(),
+                "inputs": parent_inputs,
+            }),
+        );
+        // #endregion
+        let empty_witness_inputs = empty_witness_input_summaries(&parent_tx);
+        if !empty_witness_inputs.is_empty() {
+            return Err(ArkWasmError::Client(ark_client::Error::wallet(format!(
+                "refusing to broadcast unsigned unilateral-exit inputs: {}",
+                empty_witness_inputs.join("; ")
+            ))));
+        }
+
         let confirmations_before = tx_confirmations(blockchain, &step_txid).await?;
         let phase = UnilateralExitPhase::Waiting;
         let step_wait = self.wallet_db.unilateral_exit_step_wait();
+        let wait_index = step_wait.as_ref().map(|record| record.step_index as usize);
+        let force_unspendable = self.unroll_parent_blocks_unbroadcast_successor(
+            &step_txid,
+            current_step_index,
+            wait_index,
+        );
+        let already_submitted_this_step = step_wait
+            .as_ref()
+            .is_some_and(|record| record.step_txid == step_txid.to_string());
 
-        if !step_reached_confirmation(confirmations_before) {
-            let broadcast_satisfied = unilateral_exit_step_broadcast_satisfied(
-                blockchain.is_tx_relayed_on_network(&step_txid).await?,
-                &step_txid,
-                step_wait.as_ref(),
+        if force_unspendable || !already_submitted_this_step {
+            let balance_before = self.client.onchain_wallet_balance().ok();
+            if let Err(sync_error) = sync_onchain_wallet_with_retries(&self.client).await {
+                // #region agent log
+                agent_debug_log(
+                    "S",
+                    "unilateral_exit_orchestrator.rs:proceed",
+                    "onchain wallet sync failed before broadcast; continuing",
+                    serde_json::json!({ "error": sync_error.to_string() }),
+                );
+                // #endregion
+            }
+            let balance_after = self.client.onchain_wallet_balance().ok();
+            // #region agent log
+            agent_debug_log(
+                "S",
+                "unilateral_exit_orchestrator.rs:proceed",
+                "onchain wallet synced before broadcast",
+                serde_json::json!({
+                    "stepIndex": current_step_index,
+                    "confirmedBefore": balance_before.map(|b| b.confirmed.to_sat()),
+                    "confirmedAfter": balance_after.map(|b| b.confirmed.to_sat()),
+                    "trustedPendingBefore": balance_before.map(|b| b.trusted_pending.to_sat()),
+                    "trustedPendingAfter": balance_after.map(|b| b.trusted_pending.to_sat()),
+                }),
             );
-            if !broadcast_satisfied {
-                if let Err(error) = self
-                    .client
-                    .broadcast_unilateral_exit_step_at_fee_rate(&parent_tx, fee_rate_sat_per_vb)
-                    .await
-                {
-                    // Esplora/mempool may reject a rebroadcast (-25/-26) while the parent is already
-                    // visible; only fail when the step tx is still absent from the network.
+            // #endregion
+            if let Err(error) = self
+                .client
+                .broadcast_unilateral_exit_step_at_fee_rate(&parent_tx, fee_rate_sat_per_vb)
+                .await
+            {
+                if is_package_not_child_with_unconfirmed_parents_error(&error) {
+                    // Same-package H12 retry cannot help: BDK was just synced, and
+                    // wait-covered ancestors have empty inject lists. Leave waitingForParentData
+                    // to the hydrate/Proceed path (the same path a page reload uses).
+                    return Err(ArkWasmError::Client(error));
+                } else {
                     let broadcast_satisfied_after_error = unilateral_exit_step_broadcast_satisfied(
                         blockchain.is_tx_relayed_on_network(&step_txid).await?,
                         &step_txid,
@@ -415,12 +762,18 @@ impl ArkSession {
                     }
                 }
             }
+            if force_unspendable {
+                self.mark_unspendable_parent_broadcasted(
+                    &step_txid,
+                    blockchain.cached_tip_height(),
+                );
+            }
 
             self.wallet_db.ensure_unilateral_exit_step_wait(
                 &step_txid.to_string(),
                 current_step_index as u32,
             );
-        } else {
+        } else if step_reached_confirmation(confirmations_before) {
             self.wallet_db.clear_unilateral_exit_step_wait();
         }
 
@@ -444,8 +797,9 @@ impl ArkSession {
         }
         let virtual_outpoints = dedup_virtual_outpoints(params.vtxo_outpoints);
         let plan = self.build_unilateral_batch_plan(&virtual_outpoints).await?;
-        self.mark_unrolled_leaves_at_finality(&plan).await?;
         let blockchain = self.client.blockchain();
+        blockchain.prepare_confirmation_scan().await;
+        self.mark_unrolled_leaves_at_finality(&plan).await?;
         let current_step_index = self
             .first_incomplete_step_index(blockchain, &plan.ordered_step_txids)
             .await?;
@@ -459,7 +813,9 @@ impl ArkSession {
             UnilateralExitPhase::Complete
         } else if current_step_waiting_since.is_some() || current_step_tx_relayed {
             let step_txid = plan.ordered_step_txids[current_step_index];
-            let confirmations = tx_confirmations(blockchain, &step_txid).await?;
+            let confirmations = self
+                .step_confirmations_for_unroll(blockchain, &step_txid, current_step_index)
+                .await?;
             if step_reached_confirmation(confirmations) {
                 UnilateralExitPhase::Idle
             } else {
@@ -662,7 +1018,7 @@ impl ArkSession {
             });
         }
 
-        let ordered_step_txids = merge_exit_branch_txids(&branch_lists);
+        let ordered_step_txids = merge_exit_branch_txids(&branch_lists, &tx_by_id);
         Ok(UnilateralBatchPlan {
             leaves,
             ordered_step_txids,
@@ -702,16 +1058,318 @@ impl ArkSession {
             .unwrap_or(VtxoChains { inner: Vec::new() }))
     }
 
+    fn unroll_parent_blocks_step(&self, txid: &Txid) -> bool {
+        let tip = self.client.blockchain().cached_tip_height();
+        let mut parents = self
+            .unspendable_unroll_parents
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let blocks = unspendable_parent_blocks_step(parents.get(txid), tip);
+        if !blocks {
+            parents.remove(txid);
+        }
+        blocks
+    }
+
+    fn release_unspendable_parent(&self, txid: &Txid) -> bool {
+        let mut parents = self
+            .unspendable_unroll_parents
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        parents.remove(txid).is_some()
+    }
+
+    /// Unspendable override only applies to steps this wallet has not already submitted.
+    fn unroll_parent_blocks_unbroadcast_successor(
+        &self,
+        txid: &Txid,
+        index: usize,
+        wait_index: Option<usize>,
+    ) -> bool {
+        if unroll_parent_already_submitted(index, wait_index) {
+            if self.release_unspendable_parent(txid) {
+                // #region agent log
+                agent_debug_log(
+                    "C",
+                    "unilateral_exit_orchestrator.rs:unroll_parent_blocks_unbroadcast_successor",
+                    "released unspendable parent already covered by wait",
+                    serde_json::json!({
+                        "txid": txid.to_string(),
+                        "index": index,
+                        "waitIndex": wait_index,
+                    }),
+                );
+                // #endregion
+            }
+            return false;
+        }
+        self.unroll_parent_blocks_step(txid)
+    }
+
+    #[allow(dead_code)]
+    async fn retry_step_after_unconfirmed_package_parents(
+        &self,
+        parent_tx: &Transaction,
+        plan: &UnilateralBatchPlan,
+        fee_rate_sat_per_vb: f64,
+        wait_index: Option<usize>,
+        current_step_index: usize,
+    ) -> ArkResult<()> {
+        let plan_parents = unroll_parent_txids_in_plan(parent_tx, &plan.ordered_step_txids);
+        let ancestor_txids =
+            unroll_ancestor_txids_oldest_first(parent_tx, &plan.ordered_step_txids, &plan.tx_by_id);
+        // Do not wrap already-submitted ancestors in a new CPFP: their P2A is spent
+        // and submitpackage treats them as already-in-mempool, which is itself
+        // package-not-child. Only inject plan txs this wallet has not broadcast yet.
+        let ancestors_to_inject = unroll_parent_txids_skipped_after_wait(
+            &ancestor_txids,
+            &plan.ordered_step_txids,
+            wait_index,
+        );
+        let ancestors = unroll_parent_txs_from_plan(&ancestors_to_inject, &plan.tx_by_id);
+        let skipped = unroll_parent_txids_skipped_after_wait(
+            &plan_parents,
+            &plan.ordered_step_txids,
+            wait_index,
+        );
+        // #region agent log
+        agent_debug_log(
+            "H12",
+            "unilateral_exit_orchestrator.rs:retry_step_after_unconfirmed_package_parents",
+            "injecting unroll parents then retrying child package",
+            serde_json::json!({
+                "stepIndex": current_step_index,
+                "waitIndex": wait_index,
+                "walk": "unsubmitted-oldest-first",
+                "planParents": plan_parents.iter().map(ToString::to_string).collect::<Vec<_>>(),
+                "ancestorTxids": ancestor_txids.iter().map(ToString::to_string).collect::<Vec<_>>(),
+                "ancestorIndexes": ancestor_txids.iter().filter_map(|txid| {
+                    plan.ordered_step_txids.iter().position(|step| step == txid)
+                }).collect::<Vec<_>>(),
+                "injectTxids": ancestors_to_inject.iter().map(ToString::to_string).collect::<Vec<_>>(),
+                "ancestorCount": ancestors.len(),
+                "skippedToMark": skipped.iter().map(ToString::to_string).collect::<Vec<_>>(),
+            }),
+        );
+        // #endregion
+        for ancestor in &ancestors {
+            let ancestor_txid = ancestor.compute_txid();
+            let ancestor_index = plan
+                .ordered_step_txids
+                .iter()
+                .position(|step| *step == ancestor_txid);
+            match self
+                .client
+                .broadcast_unilateral_exit_step_at_fee_rate(ancestor, fee_rate_sat_per_vb)
+                .await
+            {
+                Ok(_) => {
+                    // #region agent log
+                    agent_debug_log(
+                        "H12",
+                        "unilateral_exit_orchestrator.rs:retry_step_after_unconfirmed_package_parents",
+                        "injected unroll parent into submit mempool",
+                        serde_json::json!({
+                            "txid": ancestor_txid.to_string(),
+                            "index": ancestor_index,
+                        }),
+                    );
+                    // #endregion
+                }
+                Err(error) if ancestor_inject_is_ignorable(&error) => {
+                    // #region agent log
+                    agent_debug_log(
+                        "H12",
+                        "unilateral_exit_orchestrator.rs:retry_step_after_unconfirmed_package_parents",
+                        "unroll parent inject ignored",
+                        serde_json::json!({
+                            "txid": ancestor_txid.to_string(),
+                            "index": ancestor_index,
+                            "error": error.to_string(),
+                        }),
+                    );
+                    // #endregion
+                }
+                Err(error) => {
+                    // #region agent log
+                    agent_debug_log(
+                        "H12",
+                        "unilateral_exit_orchestrator.rs:retry_step_after_unconfirmed_package_parents",
+                        "unroll parent inject failed; still retrying child",
+                        serde_json::json!({
+                            "txid": ancestor_txid.to_string(),
+                            "index": ancestor_index,
+                            "error": error.to_string(),
+                        }),
+                    );
+                    // #endregion
+                }
+            }
+        }
+        match self
+            .client
+            .broadcast_unilateral_exit_step_at_fee_rate(parent_tx, fee_rate_sat_per_vb)
+            .await
+        {
+            Ok(_) => {
+                // #region agent log
+                agent_debug_log(
+                    "H12",
+                    "unilateral_exit_orchestrator.rs:retry_step_after_unconfirmed_package_parents",
+                    "child package retry succeeded after parent inject",
+                    serde_json::json!({
+                        "stepIndex": current_step_index,
+                        "stepTxid": parent_tx.compute_txid().to_string(),
+                    }),
+                );
+                // #endregion
+                Ok(())
+            }
+            Err(retry_error) => {
+                // #region agent log
+                agent_debug_log(
+                    "H12",
+                    "unilateral_exit_orchestrator.rs:retry_step_after_unconfirmed_package_parents",
+                    "child package retry still failed",
+                    serde_json::json!({
+                        "stepIndex": current_step_index,
+                        "error": retry_error.to_string(),
+                    }),
+                );
+                // #endregion
+                if !skipped.is_empty() {
+                    self.mark_unspendable_unroll_parents(
+                        &skipped,
+                        self.client.blockchain().cached_tip_height(),
+                    )
+                    .await;
+                }
+                Err(ArkWasmError::Client(retry_error))
+            }
+        }
+    }
+
+    async fn mark_unspendable_unroll_parents(&self, txids: &[Txid], tip: Option<u32>) {
+        let blockchain = self.client.blockchain();
+        for txid in txids {
+            let probe = blockchain.debug_tx_spendability_probe(txid).await;
+            // #region agent log
+            agent_debug_log(
+                "H3",
+                "unilateral_exit_orchestrator.rs:mark_unspendable_unroll_parents",
+                "package-not-child parent dual-read",
+                probe,
+            );
+            // #endregion
+            let mut parents = self
+                .unspendable_unroll_parents
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            parents
+                .entry(*txid)
+                .or_insert(UnspendableParentState::NeedsBroadcast { marked_at_tip: tip });
+        }
+        // #region agent log
+        agent_debug_log(
+            "C",
+            "unilateral_exit_orchestrator.rs:mark_unspendable_unroll_parents",
+            "marked unroll parents unspendable",
+            serde_json::json!({
+                "txids": txids.iter().map(ToString::to_string).collect::<Vec<_>>(),
+                "tip": tip,
+            }),
+        );
+        // #endregion
+    }
+
+    fn mark_unspendable_parent_broadcasted(&self, txid: &Txid, tip: Option<u32>) {
+        let mut parents = self
+            .unspendable_unroll_parents
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        parents.insert(
+            *txid,
+            UnspendableParentState::Broadcasted {
+                broadcast_at_tip: tip,
+            },
+        );
+        // #region agent log
+        agent_debug_log(
+            "C",
+            "unilateral_exit_orchestrator.rs:mark_unspendable_parent_broadcasted",
+            "unspendable parent force-broadcasted; waiting for next block",
+            serde_json::json!({
+                "txid": txid.to_string(),
+                "broadcastAtTip": tip,
+            }),
+        );
+        // #endregion
+    }
+
+    async fn step_confirmations_for_unroll(
+        &self,
+        blockchain: &EsploraBlockchain,
+        txid: &Txid,
+        index: usize,
+    ) -> ArkResult<u64> {
+        let esplora_confirmations = tx_confirmations(blockchain, txid).await?;
+        let wait_index = self
+            .wallet_db
+            .unilateral_exit_step_wait()
+            .map(|record| record.step_index as usize);
+        if self.unroll_parent_blocks_unbroadcast_successor(txid, index, wait_index) {
+            Ok(0)
+        } else {
+            Ok(esplora_confirmations)
+        }
+    }
+
     async fn first_incomplete_step_index(
         &self,
         blockchain: &EsploraBlockchain,
         ordered_step_txids: &[Txid],
     ) -> ArkResult<usize> {
+        let wait_index = self
+            .wallet_db
+            .unilateral_exit_step_wait()
+            .map(|record| record.step_index as usize);
+        let mut walk = Vec::new();
         for (index, txid) in ordered_step_txids.iter().enumerate() {
-            let confirmations = tx_confirmations(blockchain, txid).await?;
-            if !step_reached_confirmation(confirmations) {
+            let esplora_confirmations = tx_confirmations(blockchain, txid).await?;
+            let blocked = self.unroll_parent_blocks_unbroadcast_successor(txid, index, wait_index);
+            let confirmations = if blocked { 0 } else { esplora_confirmations };
+            walk.push(serde_json::json!({
+                "index": index,
+                "txid": txid.to_string(),
+                "esploraConfs": esplora_confirmations,
+                "blocked": blocked,
+                "waitCovers": unroll_parent_already_submitted(index, wait_index),
+                "confirmations": confirmations,
+                "waitCapped": wait_cap_holds_unbroadcast_successor(index, wait_index),
+            }));
+            if !step_reached_confirmation(confirmations)
+                || wait_cap_holds_unbroadcast_successor(index, wait_index)
+            {
+                // #region agent log
+                agent_debug_log(
+                    "B",
+                    "unilateral_exit_orchestrator.rs:first_incomplete_step_index",
+                    "first incomplete step",
+                    serde_json::json!({
+                        "firstIncomplete": index,
+                        "tipHeight": blockchain.cached_tip_height(),
+                        "waitIndex": wait_index,
+                        "waitCapped": wait_cap_holds_unbroadcast_successor(index, wait_index),
+                        "waitCovers": unroll_parent_already_submitted(index, wait_index),
+                        "esploraConfs": esplora_confirmations,
+                        "blocked": blocked,
+                        "walkTail": walk.iter().rev().take(4).cloned().collect::<Vec<_>>(),
+                    }),
+                );
+                // #endregion
                 return Ok(index);
             }
+            blockchain.store_confirmed_at_tip(*txid, confirmations);
         }
         Ok(ordered_step_txids.len())
     }
@@ -811,14 +1469,54 @@ impl ArkSession {
         plan: &UnilateralBatchPlan,
         current_step_index: usize,
     ) -> ArkResult<Vec<UnilateralExitNodeStatusDto>> {
+        let wait_index = self
+            .wallet_db
+            .unilateral_exit_step_wait()
+            .map(|record| record.step_index as usize);
         let mut statuses = Vec::new();
+        let mut hidden_wait_capped = Vec::new();
         for (index, txid) in plan.ordered_step_txids.iter().enumerate() {
-            let confirmations = tx_confirmations(blockchain, txid).await?;
+            let esplora_confirmations = self
+                .step_confirmations_for_unroll(blockchain, txid, index)
+                .await?;
+            if wait_cap_holds_unbroadcast_successor(index, wait_index)
+                && index != current_step_index
+                && step_reached_confirmation(esplora_confirmations)
+            {
+                hidden_wait_capped.push(serde_json::json!({
+                    "index": index,
+                    "txid": txid.to_string(),
+                    "esploraConfs": esplora_confirmations,
+                }));
+            }
             statuses.push(UnilateralExitNodeStatusDto {
                 txid: txid.to_string(),
-                confirmations,
-                status: node_status_label(confirmations, index == current_step_index),
+                confirmations: displayed_unroll_step_confirmations(
+                    esplora_confirmations,
+                    index,
+                    wait_index,
+                ),
+                status: displayed_unroll_node_status(
+                    esplora_confirmations,
+                    index,
+                    current_step_index,
+                    wait_index,
+                ),
             });
+        }
+        if !hidden_wait_capped.is_empty() {
+            // #region agent log
+            agent_debug_log(
+                "H9",
+                "unilateral_exit_orchestrator.rs:node_statuses_for_plan",
+                "hid Esplora-confirmed wait-capped siblings",
+                serde_json::json!({
+                    "currentStepIndex": current_step_index,
+                    "waitIndex": wait_index,
+                    "hidden": hidden_wait_capped,
+                }),
+            );
+            // #endregion
         }
         Ok(statuses)
     }
@@ -857,8 +1555,14 @@ impl ArkSession {
         }
 
         let step_txid = plan.ordered_step_txids[current_step_index];
-        let confirmations = tx_confirmations(blockchain, &step_txid).await?;
-        if step_reached_confirmation(confirmations) {
+        let confirmations = self
+            .step_confirmations_for_unroll(blockchain, &step_txid, current_step_index)
+            .await?;
+        let step_wait = self.wallet_db.unilateral_exit_step_wait();
+        let wait_matches_current = step_wait
+            .as_ref()
+            .is_some_and(|record| record.step_txid == step_txid.to_string());
+        if wait_matches_current && step_reached_confirmation(confirmations) {
             self.wallet_db.clear_unilateral_exit_step_wait();
             return Ok(None);
         }
@@ -880,11 +1584,20 @@ impl ArkSession {
             return Ok(true);
         }
         let step_txid = plan.ordered_step_txids[current_step_index];
+        let step_wait = self.wallet_db.unilateral_exit_step_wait();
+        if step_wait
+            .as_ref()
+            .is_none_or(|record| record.step_txid != step_txid.to_string())
+        {
+            // Unbroadcast successor: Esplora `/raw` can be ASP-indexed and still unusable
+            // as a submitpackage parent. Require an actual proceed.
+            return Ok(false);
+        }
         let raw_relayed = blockchain.is_tx_relayed_on_network(&step_txid).await?;
         Ok(unilateral_exit_step_broadcast_satisfied(
             raw_relayed,
             &step_txid,
-            self.wallet_db.unilateral_exit_step_wait().as_ref(),
+            step_wait.as_ref(),
         ))
     }
 }
@@ -908,6 +1621,7 @@ mod tests {
     use super::*;
     use ark_core::server::{ChainedTxType, VtxoChain, VtxoChains};
     use bitcoin::Txid;
+    use std::collections::HashMap;
 
     use bitcoin::hashes::Hash;
 
@@ -993,16 +1707,99 @@ mod tests {
     }
 
     #[test]
+    fn empty_witness_input_summaries_lists_unsigned_inputs() {
+        let tx = Transaction {
+            version: bitcoin::transaction::Version::TWO,
+            lock_time: bitcoin::absolute::LockTime::ZERO,
+            input: vec![bitcoin::TxIn {
+                previous_output: bitcoin::OutPoint {
+                    txid: txid(9),
+                    vout: 0,
+                },
+                script_sig: bitcoin::ScriptBuf::new(),
+                sequence: bitcoin::Sequence::MAX,
+                witness: bitcoin::Witness::new(),
+            }],
+            output: vec![],
+        };
+        let summaries = empty_witness_input_summaries(&tx);
+        assert_eq!(summaries.len(), 1);
+        assert!(summaries[0].contains("input 0"));
+        assert!(summaries[0].contains(&txid(9).to_string()));
+    }
+
+    #[test]
     fn merge_exit_branch_txids_dedupes_shared_prefix() {
         let shared = vec![txid(1), txid(2)];
         let leaf_a = [shared.clone(), vec![txid(3), txid(4)]].concat();
         let leaf_b = [shared, vec![txid(5), txid(6)]].concat();
-        let merged = merge_exit_branch_txids(&[leaf_a, leaf_b]);
+        let mut tx_by_id = HashMap::new();
+        tx_by_id.insert(txid(1), dummy_tx_spending(&[]));
+        tx_by_id.insert(txid(2), dummy_tx_spending(&[txid(1)]));
+        tx_by_id.insert(txid(3), dummy_tx_spending(&[txid(2)]));
+        tx_by_id.insert(txid(4), dummy_tx_spending(&[txid(3)]));
+        tx_by_id.insert(txid(5), dummy_tx_spending(&[txid(2)]));
+        tx_by_id.insert(txid(6), dummy_tx_spending(&[txid(5)]));
+        let merged = merge_exit_branch_txids(&[leaf_a, leaf_b], &tx_by_id);
         assert_eq!(merged.len(), 6);
-        assert_eq!(
-            merged,
-            vec![txid(1), txid(2), txid(3), txid(4), txid(5), txid(6)]
-        );
+        assert_eq!(merged[0], txid(1));
+        assert_eq!(merged[1], txid(2));
+        assert!(merged.contains(&txid(3)));
+        assert!(merged.contains(&txid(4)));
+        assert!(merged.contains(&txid(5)));
+        assert!(merged.contains(&txid(6)));
+        let index = |needle: Txid| merged.iter().position(|txid| *txid == needle).unwrap();
+        assert!(index(txid(3)) < index(txid(4)));
+        assert!(index(txid(5)) < index(txid(6)));
+        assert!(index(txid(2)) < index(txid(3)));
+        assert!(index(txid(2)) < index(txid(5)));
+    }
+
+    #[test]
+    fn merge_exit_branch_txids_keeps_parallel_checkpoints_before_merge_ark() {
+        let branch_a = vec![txid(1), txid(2), txid(4)];
+        let branch_b = vec![txid(1), txid(3), txid(4)];
+        let mut tx_by_id = HashMap::new();
+        tx_by_id.insert(txid(1), dummy_tx_spending(&[]));
+        tx_by_id.insert(txid(2), dummy_tx_spending(&[txid(1)]));
+        tx_by_id.insert(txid(3), dummy_tx_spending(&[txid(1)]));
+        tx_by_id.insert(txid(4), dummy_tx_spending(&[txid(2), txid(3)]));
+        let merged = merge_exit_branch_txids(&[branch_a, branch_b], &tx_by_id);
+        assert_eq!(merged[0], txid(1));
+        assert_eq!(merged[3], txid(4));
+        assert!(merged[1] == txid(2) || merged[1] == txid(3));
+        assert!(merged[2] == txid(2) || merged[2] == txid(3));
+        assert_ne!(merged[1], merged[2]);
+    }
+
+    fn dummy_tx_spending(parents: &[Txid]) -> Transaction {
+        let inputs = if parents.is_empty() {
+            vec![bitcoin::TxIn {
+                previous_output: bitcoin::OutPoint::null(),
+                script_sig: bitcoin::ScriptBuf::new(),
+                sequence: bitcoin::Sequence::MAX,
+                witness: bitcoin::Witness::new(),
+            }]
+        } else {
+            parents
+                .iter()
+                .map(|parent| bitcoin::TxIn {
+                    previous_output: bitcoin::OutPoint {
+                        txid: *parent,
+                        vout: 0,
+                    },
+                    script_sig: bitcoin::ScriptBuf::new(),
+                    sequence: bitcoin::Sequence::MAX,
+                    witness: bitcoin::Witness::new(),
+                })
+                .collect()
+        };
+        Transaction {
+            version: bitcoin::transaction::Version::TWO,
+            lock_time: bitcoin::absolute::LockTime::ZERO,
+            input: inputs,
+            output: vec![],
+        }
     }
 
     #[test]
@@ -1038,6 +1835,187 @@ mod tests {
         assert_eq!(
             commitment_txids_from_chains(&chains),
             vec![txid(1), txid(3)]
+        );
+    }
+
+    #[test]
+    fn unroll_parent_txids_in_plan_keeps_only_branch_inputs() {
+        let parent = dummy_tx_spending(&[txid(2), txid(9)]);
+        assert_eq!(
+            unroll_parent_txids_in_plan(&parent, &[txid(1), txid(2), txid(3)]),
+            vec![txid(2)]
+        );
+    }
+
+    #[test]
+    fn unroll_ancestor_txids_oldest_first_walks_the_full_plan_chain() {
+        let child = dummy_tx_spending(&[txid(3)]);
+        let mut tx_by_id = HashMap::new();
+        tx_by_id.insert(txid(1), dummy_tx_spending(&[]));
+        tx_by_id.insert(txid(2), dummy_tx_spending(&[txid(1)]));
+        tx_by_id.insert(txid(3), dummy_tx_spending(&[txid(2)]));
+        tx_by_id.insert(txid(4), child.clone());
+        assert_eq!(
+            unroll_ancestor_txids_oldest_first(
+                &child,
+                &[txid(1), txid(2), txid(3), txid(4)],
+                &tx_by_id
+            ),
+            vec![txid(1), txid(2), txid(3)]
+        );
+    }
+
+    #[test]
+    fn unroll_ancestor_txids_oldest_first_ignores_non_plan_inputs() {
+        let child = dummy_tx_spending(&[txid(2), txid(9)]);
+        let mut tx_by_id = HashMap::new();
+        tx_by_id.insert(txid(1), dummy_tx_spending(&[]));
+        tx_by_id.insert(txid(2), dummy_tx_spending(&[txid(1)]));
+        tx_by_id.insert(txid(3), child.clone());
+        assert_eq!(
+            unroll_ancestor_txids_oldest_first(&child, &[txid(1), txid(2), txid(3)], &tx_by_id),
+            vec![txid(1), txid(2)]
+        );
+    }
+
+    #[test]
+    fn unroll_ancestor_txids_oldest_first_orders_diamond_parents_by_plan_index() {
+        let merge = dummy_tx_spending(&[txid(2), txid(3)]);
+        let mut tx_by_id = HashMap::new();
+        tx_by_id.insert(txid(1), dummy_tx_spending(&[]));
+        tx_by_id.insert(txid(2), dummy_tx_spending(&[txid(1)]));
+        tx_by_id.insert(txid(3), dummy_tx_spending(&[txid(1)]));
+        tx_by_id.insert(txid(4), merge.clone());
+        assert_eq!(
+            unroll_ancestor_txids_oldest_first(
+                &merge,
+                &[txid(1), txid(2), txid(3), txid(4)],
+                &tx_by_id
+            ),
+            vec![txid(1), txid(2), txid(3)]
+        );
+    }
+
+    #[test]
+    fn unroll_parent_txids_skipped_after_wait_ignores_already_submitted_parent() {
+        let parents = vec![txid(1)];
+        let ordered = [txid(1), txid(2), txid(3)];
+        assert!(
+            unroll_parent_txids_skipped_after_wait(&parents, &ordered, Some(0)).is_empty(),
+            "parent at wait_index 0 was already submitted"
+        );
+        assert!(
+            unroll_parent_txids_skipped_after_wait(&parents, &ordered, Some(1)).is_empty(),
+            "parent before wait_index 1 was already submitted"
+        );
+        assert_eq!(
+            unroll_parent_txids_skipped_after_wait(&parents, &ordered, None),
+            vec![txid(1)],
+            "without a wait stamp, cold-start skip still marks the parent"
+        );
+    }
+
+    #[test]
+    fn unroll_parent_txids_skipped_after_wait_keeps_unbroadcast_sibling() {
+        let parents = vec![txid(2)];
+        let ordered = [txid(1), txid(2), txid(3)];
+        assert_eq!(
+            unroll_parent_txids_skipped_after_wait(&parents, &ordered, Some(0)),
+            vec![txid(2)]
+        );
+    }
+
+    #[test]
+    fn unroll_parent_txids_skipped_after_wait_drops_already_submitted_chain() {
+        let ancestors = vec![txid(1), txid(2), txid(3)];
+        let ordered = [txid(1), txid(2), txid(3), txid(4)];
+        assert_eq!(
+            unroll_parent_txids_skipped_after_wait(&ancestors, &ordered, Some(1)),
+            vec![txid(3)]
+        );
+        assert!(unroll_parent_txids_skipped_after_wait(&ancestors, &ordered, Some(2)).is_empty());
+    }
+
+    #[test]
+    fn unroll_parent_txs_from_plan_keeps_signed_parents() {
+        let mut tx_by_id = HashMap::new();
+        tx_by_id.insert(txid(1), dummy_tx_spending(&[]));
+        tx_by_id.insert(txid(2), dummy_tx_spending(&[txid(1)]));
+        let parents = vec![txid(2), txid(9)];
+        let loaded = unroll_parent_txs_from_plan(&parents, &tx_by_id);
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(
+            loaded[0].compute_txid(),
+            dummy_tx_spending(&[txid(1)]).compute_txid()
+        );
+    }
+
+    #[test]
+    fn unspendable_parent_blocks_until_broadcast_and_next_block() {
+        assert!(!unspendable_parent_blocks_step(None, Some(10)));
+        assert!(unspendable_parent_blocks_step(
+            Some(&UnspendableParentState::NeedsBroadcast {
+                marked_at_tip: Some(10)
+            }),
+            Some(11),
+        ));
+        assert!(unspendable_parent_blocks_step(
+            Some(&UnspendableParentState::Broadcasted {
+                broadcast_at_tip: Some(10)
+            }),
+            Some(10),
+        ));
+        assert!(!unspendable_parent_blocks_step(
+            Some(&UnspendableParentState::Broadcasted {
+                broadcast_at_tip: Some(10)
+            }),
+            Some(11),
+        ));
+    }
+
+    #[test]
+    fn force_broadcast_when_unspendable_even_if_esplora_confirmed() {
+        assert!(should_force_unilateral_exit_step_broadcast(8, true));
+        assert!(!should_force_unilateral_exit_step_broadcast(8, false));
+        assert!(should_force_unilateral_exit_step_broadcast(0, false));
+    }
+
+    #[test]
+    fn wait_cap_does_not_skip_sibling_checkpoint_after_last_broadcast() {
+        let confs = [1, 1, 1, 1, 0];
+        assert_eq!(
+            first_incomplete_step_from_confirmations(&confs, Some(1)),
+            2,
+            "after wait at index 1, do not skip Esplora-confirmed index 2"
+        );
+        assert_eq!(first_incomplete_step_from_confirmations(&confs, Some(2)), 3);
+        assert_eq!(
+            first_incomplete_step_from_confirmations(&confs, None),
+            4,
+            "without a wait stamp, Esplora confs still skip to the first 0-conf"
+        );
+    }
+
+    #[test]
+    fn wait_cap_still_rewinds_when_an_earlier_step_drops_to_zero_conf() {
+        let confs = [1, 0, 1, 1];
+        assert_eq!(first_incomplete_step_from_confirmations(&confs, Some(2)), 1);
+    }
+
+    #[test]
+    fn wait_capped_sibling_does_not_display_as_confirmed() {
+        assert_eq!(displayed_unroll_step_confirmations(2, 4, Some(2)), 0);
+        assert_eq!(
+            displayed_unroll_node_status(2, 4, 3, Some(2)),
+            UnilateralExitNodeStatusKind::Pending
+        );
+        assert_eq!(
+            displayed_unroll_node_status(2, 3, 3, Some(2)),
+            UnilateralExitNodeStatusKind::InProgress
+        );
+        assert_eq!(
+            displayed_unroll_node_status(3, 2, 3, Some(2)),
+            UnilateralExitNodeStatusKind::Confirmed
         );
     }
 }

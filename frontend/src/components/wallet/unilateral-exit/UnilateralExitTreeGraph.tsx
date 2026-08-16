@@ -8,7 +8,7 @@ import {
   type NodeProps,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { Check, Coins, Loader2, Megaphone, Pickaxe, Play, type LucideIcon } from 'lucide-react'
+import { Check, Coins, Loader2, Megaphone, Pickaxe, Play, UserRoundArrowLeft, type LucideIcon } from 'lucide-react'
 import type { UnilateralExitInProgressOverlayKind } from '@/lib/arkade/unilateral-exit-control-phase'
 import {
   layoutUnilateralExitGraph,
@@ -47,6 +47,8 @@ function unilateralExitInProgressOverlayIcon(
       return Megaphone
     case 'waiting':
       return Pickaxe
+    case 'waitingForParentData':
+      return UserRoundArrowLeft
     case 'readyToProceed':
       return Play
   }

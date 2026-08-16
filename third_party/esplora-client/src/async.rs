@@ -14,7 +14,10 @@
 use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
+
+static GET_HEIGHT_CACHE_BUSTER: AtomicU64 = AtomicU64::new(1);
 
 use bitcoin::block::Header as BlockHeader;
 use bitcoin::consensus::encode::serialize_hex;
@@ -445,7 +448,8 @@ impl<S: Sleeper> AsyncClient<S> {
 
     /// Get the current height of the blockchain tip
     pub async fn get_height(&self) -> Result<u32, Error> {
-        self.get_response_text("/blocks/tip/height")
+        let nonce = GET_HEIGHT_CACHE_BUSTER.fetch_add(1, Ordering::Relaxed);
+        self.get_response_text(&format!("/blocks/tip/height?_={nonce}"))
             .await
             .map(|height| u32::from_str(&height).map_err(Error::Parsing))?
     }

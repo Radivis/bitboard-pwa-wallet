@@ -1,4 +1,5 @@
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use ark_client::{Blockchain, SpendStatus, TxStatus};
 use ark_core::ExplorerUtxo;
@@ -16,6 +17,61 @@ const ESPLORA_HTTP_TIMEOUT_SECS: u64 = 5;
 const SUBMIT_PACKAGE_MAX_FEE_RATE_BTC_PER_KVB: f64 = 0.0;
 const SUBMIT_PACKAGE_MAX_BURN_AMOUNT_BTC: f64 = 0.0;
 
+const AGENT_DEBUG_SESSION_ID: &str = "2d2162";
+const AGENT_DEBUG_LOG_PATH: &str =
+    "/home/radivis/projects/bitboard-pwa-wallet/.cursor/debug-2d2162.log";
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+const AGENT_DEBUG_INGEST_URL: &str =
+    "http://127.0.0.1:7757/ingest/cb0f3ed4-7e87-43d6-b1dd-18329fa2e328";
+
+#[derive(Default)]
+struct ConfirmationCache {
+    scan_prepared: bool,
+    tip_height: Option<u32>,
+    confirmed_at_tip: HashMap<Txid, u64>,
+}
+
+fn agent_debug_log(hypothesis_id: &str, location: &str, message: &str, data: serde_json::Value) {
+    let mut payload = serde_json::json!({
+        "sessionId": AGENT_DEBUG_SESSION_ID,
+        "hypothesisId": hypothesis_id,
+        "runId": "post-fix",
+        "location": location,
+        "message": message,
+        "data": data,
+        "timestamp": 0u64,
+    });
+    #[cfg(target_arch = "wasm32")]
+    {
+        let payload_js = payload
+            .to_string()
+            .replace('\\', "\\\\")
+            .replace('\'', "\\'");
+        let script = format!(
+            "fetch('{AGENT_DEBUG_INGEST_URL}',{{method:'POST',headers:{{'Content-Type':'application/json','X-Debug-Session-Id':'{AGENT_DEBUG_SESSION_ID}'}},body:JSON.stringify(Object.assign(JSON.parse('{payload_js}'),{{timestamp:Date.now()}}))}}).catch(function(){{}})"
+        );
+        let _ = js_sys::eval(&script);
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        if let Some(object) = payload.as_object_mut() {
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|duration| duration.as_millis() as u64)
+                .unwrap_or(0);
+            object.insert("timestamp".into(), serde_json::json!(timestamp));
+        }
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(AGENT_DEBUG_LOG_PATH)
+        {
+            use std::io::Write;
+            let _ = writeln!(file, "{payload}");
+        }
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
 type EsploraAsyncClient = esplora_client::AsyncClient<crate::wasm_sleep::WasmSleeper>;
 #[cfg(not(target_arch = "wasm32"))]
@@ -23,6 +79,7 @@ type EsploraAsyncClient = esplora_client::AsyncClient;
 
 pub struct EsploraBlockchain {
     client: Arc<EsploraAsyncClient>,
+    confirmation_cache: Mutex<ConfirmationCache>,
 }
 
 impl EsploraBlockchain {
@@ -36,6 +93,8 @@ impl EsploraBlockchain {
             use crate::wasm_sleep::WasmSleeper;
             esplora_client::Builder::new(esplora_url)
                 .timeout(ESPLORA_HTTP_TIMEOUT_SECS)
+                .header("Cache-Control", "no-cache")
+                .header("Pragma", "no-cache")
                 .build_async_with_sleeper::<WasmSleeper>()
                 .map_err(|error| ArkWasmError::Blockchain(error.to_string()))?
         };
@@ -43,11 +102,14 @@ impl EsploraBlockchain {
         #[cfg(not(target_arch = "wasm32"))]
         let client = esplora_client::Builder::new(esplora_url)
             .timeout(ESPLORA_HTTP_TIMEOUT_SECS)
+            .header("Cache-Control", "no-cache")
+            .header("Pragma", "no-cache")
             .build_async_with_sleeper()
             .map_err(|error| ArkWasmError::Blockchain(error.to_string()))?;
 
         Ok(Self {
             client: Arc::new(client),
+            confirmation_cache: Mutex::new(ConfirmationCache::default()),
         })
     }
 
@@ -92,11 +154,98 @@ impl EsploraBlockchain {
     }
 
     pub async fn get_tx_confirmations(&self, txid: &Txid) -> ArkResult<u64> {
+        if !self.confirmation_scan_is_prepared() {
+            self.prepare_confirmation_scan().await;
+        }
+        if let Some(confirmations) = self.cached_confirmed_at_tip(txid) {
+            return Ok(confirmations);
+        }
         let client = Arc::clone(&self.client);
         let txid = *txid;
-        map_tx_confirmations(&client, &txid)
+        let tip_height = self.cached_tip_height();
+        let confirmations = map_tx_confirmations(&client, &txid, tip_height)
             .await
-            .map_err(|error| ArkWasmError::Blockchain(error.to_string()))
+            .map_err(|error| ArkWasmError::Blockchain(error.to_string()))?;
+        Ok(confirmations)
+    }
+
+    /// Snapshot chain tip once so a progress/proceed walk does not refetch `/blocks/tip/height`
+    /// per tx. Confirmed results stay cached until the tip changes.
+    pub async fn prepare_confirmation_scan(&self) {
+        let tip_height = self.client.get_height().await.ok();
+        let mut cache = self
+            .confirmation_cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if cache.tip_height != tip_height {
+            cache.confirmed_at_tip.clear();
+            cache.tip_height = tip_height;
+        }
+        cache.scan_prepared = true;
+    }
+
+    pub fn cached_tip_height(&self) -> Option<u32> {
+        self.confirmation_cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .tip_height
+    }
+
+    fn confirmation_scan_is_prepared(&self) -> bool {
+        self.confirmation_cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .scan_prepared
+    }
+
+    fn cached_confirmed_at_tip(&self, txid: &Txid) -> Option<u64> {
+        self.confirmation_cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .confirmed_at_tip
+            .get(txid)
+            .copied()
+    }
+
+    pub(crate) fn store_confirmed_at_tip(&self, txid: Txid, confirmations: u64) {
+        self.confirmation_cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .confirmed_at_tip
+            .insert(txid, confirmations);
+    }
+
+    /// Extra GETs for RCA dual-read. Call only on skip-jumps or `package-not-child` — not per step.
+    pub async fn debug_tx_spendability_probe(&self, txid: &Txid) -> serde_json::Value {
+        let status = self.client.get_tx_status(txid).await.ok();
+        let raw_present = self.client.get_tx(txid).await.ok().flatten().is_some();
+        let tip_height = self.client.get_height().await.ok();
+        let in_best_chain = match status.as_ref().and_then(|status| status.block_hash) {
+            Some(block_hash) => self
+                .client
+                .get_block_status(&block_hash)
+                .await
+                .ok()
+                .map(|block_status| block_status.in_best_chain),
+            None => None,
+        };
+        let esplora_confs = status.as_ref().map(|status| {
+            if !status.confirmed {
+                0
+            } else {
+                mined_tx_confirmations(status.block_height, tip_height)
+            }
+        });
+        serde_json::json!({
+            "txid": txid.to_string(),
+            "statusConfirmed": status.as_ref().map(|status| status.confirmed),
+            "blockHeight": status.as_ref().and_then(|status| status.block_height),
+            "hasBlockHash": status.as_ref().map(|status| status.block_hash.is_some()),
+            "tipHeight": tip_height,
+            "esploraConfs": esplora_confs,
+            "rawPresent": raw_present,
+            "inBestChain": in_best_chain,
+        })
     }
 
     /// True when `/tx/{txid}/raw` returns a transaction (mempool or chain).
@@ -166,9 +315,65 @@ impl EsploraBlockchain {
             }) if is_mempool_submitpackage_rpc_error(message) => {
                 return Self::broadcast_transactions_sequentially(client, txs).await;
             }
-            Err(error) => return Err(EsploraBlockchain::map_esplora_error(error)),
+            Err(error) => {
+                if is_package_not_child_with_unconfirmed_parents_message(&error.to_string()) {
+                    // #region agent log
+                    agent_debug_log(
+                        "H3",
+                        "esplora_blockchain.rs:broadcast_package_at",
+                        "submitpackage rejected package-not-child",
+                        serde_json::json!({
+                            "packageTxids": owned_transactions
+                                .iter()
+                                .map(|tx| tx.compute_txid().to_string())
+                                .collect::<Vec<_>>(),
+                            "packageInputs": Self::package_input_outpoints(&owned_transactions),
+                            "error": error.to_string(),
+                        }),
+                    );
+                    // #endregion
+                }
+                return Err(EsploraBlockchain::map_esplora_error(error));
+            }
         };
-        validate_submit_package_result(&package_result)
+        if let Err(error) = validate_submit_package_result(&package_result) {
+            if is_package_not_child_with_unconfirmed_parents_message(&error.to_string()) {
+                // #region agent log
+                agent_debug_log(
+                    "H3",
+                    "esplora_blockchain.rs:broadcast_package_at",
+                    "submitpackage result package-not-child",
+                    serde_json::json!({
+                        "packageTxids": owned_transactions
+                            .iter()
+                            .map(|tx| tx.compute_txid().to_string())
+                            .collect::<Vec<_>>(),
+                        "packageInputs": Self::package_input_outpoints(&owned_transactions),
+                        "packageMsg": package_result.package_msg,
+                        "error": error.to_string(),
+                    }),
+                );
+                // #endregion
+            }
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn package_input_outpoints(txs: &[bitcoin::Transaction]) -> Vec<Vec<String>> {
+        txs.iter()
+            .map(|tx| {
+                tx.input
+                    .iter()
+                    .map(|input| {
+                        format!(
+                            "{}:{}",
+                            input.previous_output.txid, input.previous_output.vout
+                        )
+                    })
+                    .collect()
+            })
+            .collect()
     }
 
     async fn broadcast_transactions_sequentially(
@@ -347,30 +552,40 @@ async fn esplora_tx_status(
     }
 }
 
-async fn confirmations_from_esplora_tx_status(
-    client: &EsploraAsyncClient,
+fn confirmations_from_esplora_tx_status(
     status: &esplora_client::api::TxStatus,
-) -> Result<u64, ark_client::Error> {
+    chain_tip_height: Option<u32>,
+) -> u64 {
     if !status.confirmed {
-        return Ok(0);
+        return 0;
     }
-    confirmations_from_block_height(client, status.block_height).await
+    if let (Some(block_height), Some(tip_height)) = (status.block_height, chain_tip_height) {
+        if tip_height < block_height {
+            // #region agent log
+            agent_debug_log(
+                "H4",
+                "esplora_blockchain.rs:confirmations_from_esplora_tx_status",
+                "rejecting confirmation because tip is behind claimed block height",
+                serde_json::json!({
+                    "blockHeight": block_height,
+                    "tipHeight": tip_height,
+                }),
+            );
+            // #endregion
+        }
+    }
+    mined_tx_confirmations(status.block_height, chain_tip_height)
 }
 
-async fn confirmations_from_block_height(
-    client: &EsploraAsyncClient,
-    block_height: Option<u32>,
-) -> Result<u64, ark_client::Error> {
-    let chain_tip_height = client
-        .get_height()
-        .await
-        .map_err(EsploraBlockchain::map_esplora_error)
-        .ok();
+fn mined_tx_confirmations(block_height: Option<u32>, chain_tip_height: Option<u32>) -> u64 {
     match (block_height, chain_tip_height) {
-        (Some(block_height), Some(tip_height)) => {
-            Ok(u64::from(tip_height.saturating_sub(block_height) + 1))
+        (Some(block_height), Some(tip_height)) if tip_height >= block_height => {
+            u64::from(tip_height - block_height + 1)
         }
-        _ => Ok(1),
+        (Some(_), Some(_)) => 0,
+        // Missing tip used to mint fake 1-conf. Fail closed: not confirmed.
+        (Some(_), None) => 0,
+        (None, _) => 0,
     }
 }
 
@@ -389,6 +604,7 @@ fn is_missing_tx_esplora_error(error: &esplora_client::Error) -> bool {
 async fn confirmations_for_relayed_tx(
     client: &EsploraAsyncClient,
     txid: &Txid,
+    chain_tip_height: Option<u32>,
 ) -> Result<u64, ark_client::Error> {
     let relayed = client
         .get_tx(txid)
@@ -405,7 +621,10 @@ async fn confirmations_for_relayed_tx(
     else {
         return Ok(0);
     };
-    confirmations_from_esplora_tx_status(client, &tx_info.status).await
+    Ok(confirmations_from_esplora_tx_status(
+        &tx_info.status,
+        chain_tip_height,
+    ))
 }
 
 async fn map_tx_status(
@@ -421,17 +640,21 @@ async fn map_tx_status(
 async fn map_tx_confirmations(
     client: &EsploraAsyncClient,
     txid: &Txid,
+    chain_tip_height: Option<u32>,
 ) -> Result<u64, ark_client::Error> {
     match client.get_tx_status(txid).await {
         Ok(status) if status.confirmed => {
-            return confirmations_from_esplora_tx_status(client, &status).await;
+            return Ok(confirmations_from_esplora_tx_status(
+                &status,
+                chain_tip_height,
+            ));
         }
         Ok(_) => {}
         Err(esplora_client::Error::HttpResponse { status: 404, .. }) => {}
         Err(error) => return Err(EsploraBlockchain::map_esplora_error(error)),
     }
 
-    confirmations_for_relayed_tx(client, txid).await
+    confirmations_for_relayed_tx(client, txid, chain_tip_height).await
 }
 
 async fn map_output_status(
@@ -499,6 +722,36 @@ pub(crate) fn is_redundant_unilateral_exit_broadcast_error(error: &ark_client::E
     is_already_relayed_broadcast_error_message(&error.to_string())
 }
 
+/// Injecting an unroll parent into the submit mempool can fail because that node already
+/// has the original CPFP or the parent in a block. Retry the child anyway.
+pub(crate) fn ancestor_inject_is_ignorable(error: &ark_client::Error) -> bool {
+    ancestor_inject_is_ignorable_message(&error.to_string())
+}
+
+fn ancestor_inject_is_ignorable_message(message: &str) -> bool {
+    if is_already_relayed_broadcast_error_message(message) {
+        return true;
+    }
+    let lowered = message.to_ascii_lowercase();
+    lowered.contains("missingorspent")
+        || lowered.contains("missing-inputs")
+        || lowered.contains("bad-txns-inputs-spent")
+        || lowered.contains("already in block")
+        || lowered.contains("txn-already-known")
+}
+
+pub(crate) fn is_package_not_child_with_unconfirmed_parents_error(
+    error: &ark_client::Error,
+) -> bool {
+    is_package_not_child_with_unconfirmed_parents_message(&error.to_string())
+}
+
+fn is_package_not_child_with_unconfirmed_parents_message(message: &str) -> bool {
+    message
+        .to_ascii_lowercase()
+        .contains("package-not-child-with-unconfirmed-parents")
+}
+
 fn is_already_relayed_broadcast_error_message(message: &str) -> bool {
     let lowered = message.to_ascii_lowercase();
     lowered.contains("already in mempool")
@@ -550,9 +803,12 @@ mod tests {
     use esplora_client::{SubmitPackageResult, TxResult};
     use std::collections::HashMap;
 
+    use super::ancestor_inject_is_ignorable_message;
     use super::is_mempool_submitpackage_rpc_error;
     use super::is_missing_tx_esplora_error;
+    use super::is_package_not_child_with_unconfirmed_parents_message;
     use super::is_transaction_already_relayed_error;
+    use super::mined_tx_confirmations;
     use super::utxo_confirmations;
     use super::validate_submit_package_result;
 
@@ -650,5 +906,52 @@ mod tests {
             block_time: None,
         };
         assert_eq!(utxo_confirmations(&status, Some(500)), 0);
+    }
+
+    #[test]
+    fn mined_tx_without_block_height_is_not_treated_as_confirmed() {
+        assert_eq!(mined_tx_confirmations(None, Some(100)), 0);
+        assert_eq!(mined_tx_confirmations(None, None), 0);
+    }
+
+    #[test]
+    fn mined_tx_with_height_uses_chain_tip_depth() {
+        assert_eq!(mined_tx_confirmations(Some(100), Some(100)), 1);
+        assert_eq!(mined_tx_confirmations(Some(90), Some(100)), 11);
+        assert_eq!(mined_tx_confirmations(Some(100), None), 0);
+    }
+
+    #[test]
+    fn mined_tx_with_block_height_ahead_of_tip_is_not_confirmed() {
+        assert_eq!(mined_tx_confirmations(Some(3348407), Some(3348236)), 0);
+        assert_eq!(mined_tx_confirmations(Some(101), Some(100)), 0);
+    }
+
+    #[test]
+    fn mined_tx_with_height_but_missing_tip_is_not_confirmed() {
+        assert_eq!(mined_tx_confirmations(Some(100), None), 0);
+    }
+
+    #[test]
+    fn package_not_child_message_is_detected() {
+        assert!(is_package_not_child_with_unconfirmed_parents_message(
+            "transaction package not accepted: package-not-child-with-unconfirmed-parents"
+        ));
+        assert!(!is_package_not_child_with_unconfirmed_parents_message(
+            "min relay fee not met"
+        ));
+    }
+
+    #[test]
+    fn ancestor_inject_ignores_already_known_or_spent_parents() {
+        assert!(ancestor_inject_is_ignorable_message(
+            "txn-already-in-mempool"
+        ));
+        assert!(ancestor_inject_is_ignorable_message(
+            "bad-txns-inputs-missingorspent"
+        ));
+        assert!(!ancestor_inject_is_ignorable_message(
+            "min relay fee not met"
+        ));
     }
 }

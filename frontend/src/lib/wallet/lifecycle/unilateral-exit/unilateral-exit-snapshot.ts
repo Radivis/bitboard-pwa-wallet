@@ -56,6 +56,9 @@ const UNILATERAL_EXIT_PROCEEDING_MACHINE_STATES = [
 export function unilateralExitSnapshotIsProceeding(
   snapshot: UnilateralExitActorSnapshot,
 ): boolean {
+  if (snapshot.context.progressRefreshRequested) {
+    return false
+  }
   return unilateralExitSnapshotIsInAnyState(snapshot, UNILATERAL_EXIT_PROCEEDING_MACHINE_STATES)
 }
 
@@ -95,7 +98,14 @@ export function unilateralExitActorSnapshotEqual(
     previousContext.lastErrorMessage === nextContext.lastErrorMessage &&
     previousContext.feeRateSatPerVb === nextContext.feeRateSatPerVb &&
     previousContext.proceedRequested === nextContext.proceedRequested &&
+    previousContext.proceedTargetStepIndex === nextContext.proceedTargetStepIndex &&
+    previousContext.progressRefreshRequested === nextContext.progressRefreshRequested &&
+    previousContext.unconfirmedParentRetry?.stepIndex ===
+      nextContext.unconfirmedParentRetry?.stepIndex &&
+    previousContext.unconfirmedParentRetry?.parentConfirmationsAtFail ===
+      nextContext.unconfirmedParentRetry?.parentConfirmationsAtFail &&
     previousContext.pollDelayMs === nextContext.pollDelayMs &&
+    previousContext.parentDataWaitMs === nextContext.parentDataWaitMs &&
     previousContext.reconcileInProgressSats === nextContext.reconcileInProgressSats &&
     previousContext.reconcileInProgressOutpoints === nextContext.reconcileInProgressOutpoints
   )

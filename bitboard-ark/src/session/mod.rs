@@ -23,17 +23,19 @@ mod unilateral_exit_orchestrator;
 mod vtxo;
 
 use std::cell::Cell;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use ark_bdk_wallet::Wallet as ArkBdkWallet;
 use ark_client::{Bip32KeyProvider, Client, InMemorySwapStorage};
 use ark_delegator::DelegatorClient;
-use bitcoin::Network;
+use bitcoin::{Network, Txid};
 
 use crate::esplora_blockchain::EsploraBlockchain;
 use crate::network::NetworkMode;
 use crate::persistence::{JsonPersistenceDb, OperatorIdentity, SharedPersistenceDb};
+use unilateral_exit_orchestrator::UnspendableParentState;
 
 pub(crate) const CLIENT_NAME: &str = "bitboard-pwa-wallet";
 pub(crate) const BOLTZ_URL: &str = "https://api.boltz.exchange";
@@ -49,6 +51,8 @@ pub struct ArkSession {
     network_mode: NetworkMode,
     operator_identity: Mutex<OperatorIdentity>,
     autonomous_mode: Cell<bool>,
+    /// Submit-node override: Esplora said confirmed, `submitpackage` said the parent was not.
+    unspendable_unroll_parents: Mutex<HashMap<Txid, UnspendableParentState>>,
 }
 
 impl ArkSession {

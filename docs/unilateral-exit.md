@@ -7,6 +7,7 @@ Related:
 - Persistence (WASM envelope + Zustand job/prefs/failure): [persistence/unilateral-exit.md](persistence/unilateral-exit.md)
 - Balance buckets and exit-line timing: [arkade-bitboard-wallet-model.md](arkade-bitboard-wallet-model.md)
 - Agent ownership rules: [`.cursor/rules/unilateral-exit-xstate.mdc`](../.cursor/rules/unilateral-exit-xstate.mdc)
+- Open Mutinynet false-confirmation / `submitpackage` disagreement: [unilateral-exit-false-confirmation-rca.md](unilateral-exit-false-confirmation-rca.md)
 - Test contracts: `ARK-EXIT-*` in [doc/features/arkade.yaml](../doc/features/arkade.yaml)
 - User-facing risk primer (in-app Library): `risks-of-arkade-unilateral-exits`
 
@@ -79,6 +80,8 @@ Frontend job reconcile must **not** treat non-overlapping in-progress outpoints 
 
 Unroll progress is **not** a monotonic counter. `first_incomplete_step_index` in [`unilateral_exit_orchestrator.rs`](../bitboard-ark/src/session/unilateral_exit_orchestrator.rs) walks `ordered_step_txids` and returns the first tx with fewer than **1** confirmation (`UNILATERAL_EXIT_STEP_CONFIRMATIONS`). A reorg that drops a later step back to 0 conf **rewinds** the current step; the next proceed/progress call broadcasts or waits again.
 
+**Open Mutinynet failure:** Esplora can report ≥1 conf (so the UI skips a checkpoint) while `submitpackage` still returns `package-not-child-with-unconfirmed-parents` for a child of that tx. That is not a second UI cursor problem. Handoff: [unilateral-exit-false-confirmation-rca.md](unilateral-exit-false-confirmation-rca.md).
+
 Leaf `is_unrolled` waits for **6** confs (`UNILATERAL_EXIT_LEAF_CONFIRMATIONS` in [`bitboard-ark/src/constants.rs`](../bitboard-ark/src/constants.rs)) so shallow reorgs do not stamp unroll. Do not persist “step N done” independently of Esplora confirmation depth.
 
 ### Merged DAG, not one tree per leaf
@@ -136,6 +139,8 @@ The job lifecycle is one XState v5 actor: [`unilateral-exit.machine.ts`](../fron
 
 Always enter `checkingProgress` before `proceeding` on hydrate, reload, automation tick, and manual start. `waitingConfirm` requires relay: enter `ensuringBroadcast` first; only wait when `isCurrentStepRelayed()` is true (WASM `currentStepTxRelayed`, or `currentStepWaitingSince` after proceed on regtest where `/raw` stays 404 in mempool). Helpers: [`unilateral-exit-broadcast.ts`](../frontend/src/lib/arkade/unilateral-exit-broadcast.ts).
 
+`package-not-child-with-unconfirmed-parents` is a **different** wait: `waitingForParentData` (graph overlay: Lucide `UserRoundArrowLeft`). Esplora can already show the parent confirmed while the submit node does not. Do not use the pickaxe (`waitingConfirm`) for this. After `parentDataWait` (15s; `UNILATERAL_EXIT_PARENT_DATA_WAIT_MS`) the machine returns to `ensuringBroadcast`. `PROCEED_MANUAL` skips the wait.
+
 `terminated` and `aborted` persist failure, clear the job, invalidate topology/progress/balance queries, then **always** return to `idle`.
 
 ```mermaid
@@ -156,7 +161,9 @@ stateDiagram-v2
   proceeding --> complete: branch complete
   proceeding --> ensuringBroadcast: step submitted
   ensuringBroadcast --> waitingConfirm: relayed
+  ensuringBroadcast --> waitingForParentData: package-not-child
   waitingConfirm --> checkingProgress: after pollDelay OR POLL_TICK
+  waitingForParentData --> ensuringBroadcast: after 15s OR POLL_TICK OR PROCEED_MANUAL
   paused --> checkingProgress: RESUME OR PROCEED_MANUAL
   complete --> idle: CLEAR_JOB
   terminated --> idle

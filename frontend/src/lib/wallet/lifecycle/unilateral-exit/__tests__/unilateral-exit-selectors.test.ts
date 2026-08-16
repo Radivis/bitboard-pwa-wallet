@@ -94,6 +94,27 @@ describe('selectUnilateralExitControlJobState', () => {
     })
   })
 
+  it('maps waitingForParentData to parent-data display phase', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.waitingForParentData, {
+      jobOutpoints: [leaf],
+      progress: progress({
+        phase: 'idle',
+        currentStepTxRelayed: false,
+      }),
+    })
+    expect(
+      selectUnilateralExitControlJobState(snapshot, {
+        hasInProgressExits: false,
+        totalSteps: 2,
+      }),
+    ).toMatchObject({
+      phase: 'waitingForParentData',
+      exitJobInFlight: true,
+      showStepProgress: true,
+      isProceeding: false,
+    })
+  })
+
   it('shows advancing when machine is proceeding before progress loads', () => {
     const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.proceeding, {
       jobOutpoints: [leaf],
@@ -277,6 +298,36 @@ describe('selectUnilateralExitInProgressOverlay', () => {
     expect(selectUnilateralExitInProgressOverlay(snapshot)).toBe('ensuringBroadcast')
   })
 
+  it('returns parent-data overlay in waitingForParentData', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.waitingForParentData, {
+      jobOutpoints: [leaf],
+      progress: progress({
+        phase: 'idle',
+        stepIndex: 14,
+        totalSteps: 27,
+        currentStepTxRelayed: false,
+        nodeStatuses: [{ txid: 'step14', confirmations: 0, status: 'inProgress' }],
+      }),
+    })
+    expect(selectUnilateralExitInProgressOverlay(snapshot)).toBe('waitingForParentData')
+  })
+
+  it('keeps parent-data overlay while progress-refreshing from waitingForParentData', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.checkingProgress, {
+      jobOutpoints: [leaf],
+      progressRefreshRequested: true,
+      unconfirmedParentRetry: { stepIndex: 14, parentConfirmationsAtFail: 3 },
+      progress: progress({
+        phase: 'idle',
+        stepIndex: 14,
+        totalSteps: 27,
+        currentStepTxRelayed: false,
+        nodeStatuses: [{ txid: 'step14', confirmations: 0, status: 'inProgress' }],
+      }),
+    })
+    expect(selectUnilateralExitInProgressOverlay(snapshot)).toBe('waitingForParentData')
+  })
+
   it('keeps pickaxe overlay while polling from waitingConfirm', () => {
     const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.checkingProgress, {
       jobOutpoints: [leaf],
@@ -312,6 +363,21 @@ describe('selectUnilateralExitInProgressOverlay', () => {
     expect(selectUnilateralExitInProgressOverlay(snapshot)).toBe('readyToProceed')
   })
 
+  it('returns readyToProceed overlay when idle on an already-relayed step that still needs confirmations', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.idle, {
+      jobOutpoints: [leaf],
+      progress: progress({
+        phase: 'waiting',
+        stepIndex: 3,
+        totalSteps: 7,
+        currentStepTxRelayed: true,
+        currentStepWaitingSince: 1_700_000_000,
+        nodeStatuses: [{ txid: 'checkpoint', confirmations: 0, status: 'inProgress' }],
+      }),
+    })
+    expect(selectUnilateralExitInProgressOverlay(snapshot)).toBe('readyToProceed')
+  })
+
   it('returns readyToProceed overlay when a failed broadcast can be retried', () => {
     const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.error, {
       jobOutpoints: [leaf],
@@ -323,6 +389,31 @@ describe('selectUnilateralExitInProgressOverlay', () => {
       }),
     })
     expect(selectUnilateralExitInProgressOverlay(snapshot)).toBe('readyToProceed')
+  })
+
+  it('keeps the play overlay during idle progress refresh instead of flashing megaphone', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.checkingProgress, {
+      jobOutpoints: [leaf],
+      progressRefreshRequested: true,
+      proceedRequested: false,
+      progress: progress({
+        phase: 'idle',
+        stepIndex: 15,
+        totalSteps: 23,
+        currentStepTxRelayed: false,
+        nodeStatuses: [{ txid: 'ark', confirmations: 0, status: 'inProgress' }],
+      }),
+    })
+    expect(selectUnilateralExitInProgressOverlay(snapshot)).toBe('readyToProceed')
+    expect(
+      selectUnilateralExitControlJobState(snapshot, {
+        hasInProgressExits: false,
+        totalSteps: 23,
+      }),
+    ).toMatchObject({
+      phase: 'idle',
+      isProceeding: false,
+    })
   })
 })
 
