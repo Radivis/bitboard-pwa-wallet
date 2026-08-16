@@ -11,6 +11,7 @@ This folder documents **what** is persisted, **where**, and **how** reads and wr
 | [bitcoin-onchain.md](bitcoin-onchain.md) | BDK descriptor wallets, changesets, Esplora sync metadata |
 | [lightning.md](lightning.md) | NWC connections, encrypted snapshots, Lightning store |
 | [arkade.md](arkade.md) | Operator connections, `sdkPersistenceJson`, Arkade WASM envelope |
+| [unilateral-exit.md](unilateral-exit.md) | Unilateral-exit materials, watches, job/prefs/failure stores |
 | [lab.md](lab.md) | Lab simulator chain state, entities, mempool |
 | [general.md](general.md) | Shared wallet DB, encryption, Zustand settings, library, backups |
 

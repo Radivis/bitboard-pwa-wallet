@@ -1,0 +1,243 @@
+# Unilateral exit
+
+Developer handbook for Arkade unilateral exit in Bitboard. Lead with invariants that are easy to break; then the XState machine (single source of truth) and what one WASM proceed step actually does.
+
+Related:
+
+- Persistence (WASM envelope + Zustand job/prefs/failure): [persistence/unilateral-exit.md](persistence/unilateral-exit.md)
+- Balance buckets and exit-line timing: [arkade-bitboard-wallet-model.md](arkade-bitboard-wallet-model.md)
+- Agent ownership rules: [`.cursor/rules/unilateral-exit-xstate.mdc`](../.cursor/rules/unilateral-exit-xstate.mdc)
+- Test contracts: `ARK-EXIT-*` in [doc/features/arkade.yaml](../doc/features/arkade.yaml)
+- User-facing risk primer (in-app Library): `risks-of-arkade-unilateral-exits`
+
+---
+
+## Protocol basics
+
+Unilateral exit recovers VTXO funds to on-chain Bitcoin **without operator cooperation**. It has two phases:
+
+| Phase | What happens | Who pays |
+|-------|----------------|----------|
+| **Unroll** | Publish the virtual-tree branch on Bitcoin, one virtual tx at a time | Bumper wallet (CPFP / child txs) |
+| **Complete** | After the unilateral-exit timelock, spend the unrolled output to a `bc1` destination | Same on-chain wallet |
+
+The bumper wallet is the same BIP32-derived BDK wallet used for boarding.
+
+### Online vs offline ASP
+
+Unroll can run while the Ark Service Provider (ASP) is reachable **or** while it is down.
+
+- **Prefetch (sync time, not unroll time).** Operator sync stores per-leaf-tx materials in `unilateral_exit_materials_by_leaf_tx` (`ARK-EXIT-07`): VTXO chain topology plus virtual PSBTs. Autonomous / offline unroll builds the branch from that snapshot.
+- **Esplora is always required.** Broadcast, confirmation depth, and reorg detection go through Esplora. There is no “ASP-only” unroll path.
+- **Autonomous mode** reuses `cached_operator_info` plus those materials and never calls ASP indexer or batch APIs for list/chain/virtual-tx/completion coin-select (`ARK-EXIT-06`). Implementation: [`bitboard-ark/src/session/exit_autonomous.rs`](../bitboard-ark/src/session/exit_autonomous.rs).
+
+### Do not coordinate with the ASP during unroll
+
+Communicating with the ASP during unilateral exit does not advance the chain and is a race surface (indexer lag, sweep, checkpoint). Unroll should be **Esplora + local materials only**.
+
+Known debt, not a feature: vendored ark-client still talks to the Ark server on the cooperative-mode unroll path:
+
+```61:62:third_party/ark-client/src/unilateral_exit.rs
+// TODO: We should not _need_ to connect to the Ark server to perform unilateral exit. Currently we
+// do talk to the Ark server for simplicity.
+```
+
+Bitboard already branches **autonomous** RPCs off snapshot materials. Cooperative-mode leftover ASP contact should be removed; do not add new indexer/batch calls on the proceed/progress path.
+
+### If the ASP is still online, finish quickly
+
+Partial unroll while the operator is reachable lets the ASP broadcast **checkpoint** transactions and reclaim VTXOs. That is protocol defense, not a Bitboard bug.
+
+The XState machine treats ASP interference as **`terminated`**, never `complete`:
+
+- `aspSweptTargets` — operator swept job leaves that were not locally unrolled
+- `branchFundingLost` — an exit-relevant outpoint was spent by a tx **outside** the wallet unroll chain
+
+Every `checkingProgress` entry runs `evaluateJobViabilityActor` **before** `fetchProgress`. User-facing explanation: Library article `risks-of-arkade-unilateral-exits`.
+
+---
+
+## Gotchas
+
+These are the invariants that break wallets when ignored.
+
+### One transaction, many exit-eligible VTXOs
+
+A virtual tx can carry several VTXO outpoints (payment + change on the same leaf). Broadcast cannot target a single vout toward Bitcoin or the ASP — the chain only sees the published tx.
+
+At leaf finality (**6 confirmations**), WASM sets `is_unrolled` on **every** outpoint with that leaf txid (`ARK-EXIT-17`; `mark_leaf_virtual_tx_vtxos_unrolled_in_snapshot` in [`bitboard-ark/src/session/exit.rs`](../bitboard-ark/src/session/exit.rs)). Sticky merge on sync promotes the same flags. The control page shows **one graph node per leaf tx** and selects sibling outpoints atomically ([`unilateralExitControlStore.ts`](../frontend/src/stores/unilateralExitControlStore.ts)). Completion to on-chain remains **per outpoint**.
+
+### Intermediary (en-passant) VTXOs
+
+An exit branch can host exit-eligible VTXOs on upstream `tree` / `ark` virtual txs, not only on the selected leaves. As soon as those txs are visible on Esplora, those VTXOs must be marked unrolled so the user cannot start a **second** unilateral exit for funds already on the published branch.
+
+Implemented in `reconcile_intermediate_ark_virtual_txs_unrolled_on_esplora` ([`bitboard-ark/src/session/exit_onchain.rs`](../bitboard-ark/src/session/exit_onchain.rs)), which runs during operator sync. It currently uses `find_tx` (presence), **not** the 6-conf leaf rule — weaker against shallow reorgs.
+
+Frontend job reconcile must **not** treat non-overlapping in-progress outpoints as a stale job while sats remain in progress. Intermediate VTXOs can differ from the original job leaves ([`unilateral-exit-job-reconcile.ts`](../frontend/src/lib/arkade/unilateral-exit-job-reconcile.ts)).
+
+### Reorgs rewind progress
+
+Unroll progress is **not** a monotonic counter. `first_incomplete_step_index` in [`unilateral_exit_orchestrator.rs`](../bitboard-ark/src/session/unilateral_exit_orchestrator.rs) walks `ordered_step_txids` and returns the first tx with fewer than **1** confirmation (`UNILATERAL_EXIT_STEP_CONFIRMATIONS`). A reorg that drops a later step back to 0 conf **rewinds** the current step; the next proceed/progress call broadcasts or waits again.
+
+Leaf `is_unrolled` waits for **6** confs (`UNILATERAL_EXIT_LEAF_CONFIRMATIONS` in [`bitboard-ark/src/constants.rs`](../bitboard-ark/src/constants.rs)) so shallow reorgs do not stamp unroll. Do not persist “step N done” independently of Esplora confirmation depth.
+
+### Merged DAG, not one tree per leaf
+
+The control page visualizes a **union** of selected leaves: shared branch txs are one node; `ordered_step_txids` is the deduped unroll order. Topology comes from `get_unilateral_exit_topology` (WASM) and is laid out with React Flow + d3-dag ([`unilateral-exit-topology.ts`](../frontend/src/lib/arkade/unilateral-exit-topology.ts), [`UnilateralExitTreeGraph.tsx`](../frontend/src/components/wallet/unilateral-exit/UnilateralExitTreeGraph.tsx)).
+
+While a job is active, graph outpoints come from the **actor** (`resolveUnilateralExitTopologyOutpoints`). Do not infer the job set from WASM “in progress” outpoints — those can include en-passant hosts.
+
+---
+
+## Bitboard app behavior
+
+Route: `/wallet/arkade/unilateral-exit` ([`UnilateralExitControlPage.tsx`](../frontend/src/pages/wallet/UnilateralExitControlPage.tsx)).
+
+The page is a **view** of the XState actor. UI sends events through [`unilateral-exit-runtime.ts`](../frontend/src/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime.ts). It must not invent phase, mutate job outpoints, or schedule `setTimeout` / `setInterval` advance loops. Selectors map `snapshot.value` to display; they never re-run completion guards from raw progress DTOs.
+
+### Manual (default)
+
+The user picks a fee rate **every** step (`START_MANUAL` then `PROCEED_MANUAL`). Custom sat/vB is allowed. The machine stays in `idle` / `waitingConfirm` until the user proceeds.
+
+### Automatic (opt-in)
+
+Optional fire-and-forget mode on the control page (“Proceed automatically”). When enabled, the XState actor in [`frontend/src/lib/wallet/lifecycle/unilateral-exit/`](../frontend/src/lib/wallet/lifecycle/unilateral-exit/) schedules ticks via machine `after` delays (`pollDelay` in `waitingConfirm`; network-dependent ms from `unilateralExitAutomationWaitPollMs`) while the app stays **unlocked** and the **same descriptor wallet** remains selected.
+
+The sticky value is the **preset degree** (Low / Medium / High), not a frozen sat/vB (`ARK-EXIT-18`). Each tick re-resolves the live Esplora preset, capped by a user max sat/vB, then invokes `ark_proceed_unilateral_exit_step` through machine actors (`evaluateAutomationPolicy` → `proceedStep` / `ensureBroadcast`). Default max when enabling auto: `max(10 sat/vB, 2× High preset)` (`ARK-EXIT-19`; [`unilateral-exit-automation-fees.ts`](../frontend/src/lib/arkade/unilateral-exit-automation-fees.ts)).
+
+Job progress and phase live in the **actor context**. The active job (outpoints, relay-wait timestamp) is persisted under `unilateral-exit-lifecycle-storage`; automation prefs (`enabled`, fee preset label, max sat/vB) use `unilateral-exit-automation-prefs`. Details: [persistence/unilateral-exit.md](persistence/unilateral-exit.md).
+
+Automation pauses on:
+
+- `feeCapExceeded` — live preset for the selected degree exceeds max
+- `bumperInsufficient` — bumper cannot cover remaining package fees
+- `error` — proceed / broadcast / policy failure
+
+This is **not** delegator-based. Closing the tab stops automation.
+
+### Abort is an emergency
+
+Two-step confirmation (info modal, then red risk modal with required checkbox). `ABORT_ORCHESTRATION` → transient `aborted` → persist `user_aborted` failure banner with copyable VTXO ids (`ARK-EXIT-23`).
+
+Abort **stops frontend orchestration only**. It does **not** delete `unilateral_exit_materials`, watches, pending deductions, or on-chain broadcasts. Backend in-progress state remains until completion or reconcile. If the ASP is online, an unfinished on-chain unroll can still be seized.
+
+---
+
+## XState machine
+
+The job lifecycle is one XState v5 actor: [`unilateral-exit.machine.ts`](../frontend/src/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.machine.ts). Types: [`unilateral-exit-machine-types.ts`](../frontend/src/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-types.ts).
+
+| Concern | File |
+|---------|------|
+| States, guards, transitions | `unilateral-exit.machine.ts` |
+| WASM / TanStack side effects (`fromPromise` actors) | `unilateral-exit.actors.ts` |
+| Module singleton, public send/subscribe API | `unilateral-exit-runtime.ts` |
+| Snapshot → UI / lifecycle / automation views | `unilateral-exit-selectors.ts` |
+
+Always enter `checkingProgress` before `proceeding` on hydrate, reload, automation tick, and manual start. `waitingConfirm` requires relay: enter `ensuringBroadcast` first; only wait when `isCurrentStepRelayed()` is true (WASM `currentStepTxRelayed`, or `currentStepWaitingSince` after proceed on regtest where `/raw` stays 404 in mempool). Helpers: [`unilateral-exit-broadcast.ts`](../frontend/src/lib/arkade/unilateral-exit-broadcast.ts).
+
+`terminated` and `aborted` persist failure, clear the job, invalidate topology/progress/balance queries, then **always** return to `idle`.
+
+```mermaid
+stateDiagram-v2
+  [*] --> notConfigured
+  notConfigured --> idle: WALLET_CONFIGURED
+  idle --> checkingProgress: START_MANUAL START_AUTOMATIC HYDRATE_OR_START PROCEED_MANUAL
+  checkingProgress --> terminated: aspSweptTargets OR branchFundingLost
+  checkingProgress --> loadingProgress: viability ok
+  loadingProgress --> complete: branch complete
+  loadingProgress --> ensuringBroadcast: needs broadcast
+  loadingProgress --> waitingConfirm: step relayed not yet 1-conf
+  loadingProgress --> evaluatingPolicy: automation idle
+  loadingProgress --> proceeding: manual fee ready
+  loadingProgress --> idle: waiting for user
+  evaluatingPolicy --> paused: cap bumper error
+  evaluatingPolicy --> proceeding: policy ok
+  proceeding --> complete: branch complete
+  proceeding --> ensuringBroadcast: step submitted
+  ensuringBroadcast --> waitingConfirm: relayed
+  waitingConfirm --> checkingProgress: after pollDelay OR POLL_TICK
+  paused --> checkingProgress: RESUME OR PROCEED_MANUAL
+  complete --> idle: CLEAR_JOB
+  terminated --> idle
+  aborted --> idle
+  error --> checkingProgress: PROCEED_MANUAL OR RESUME
+```
+
+### Actors (WASM / policy, not UI)
+
+Implemented in [`unilateral-exit.actors.ts`](../frontend/src/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.actors.ts):
+
+| Actor | Worker RPC / work |
+|-------|-------------------|
+| `evaluateJobViabilityActor` | `evaluateUnilateralExitJobViability` |
+| `fetchProgressActor` | `getUnilateralExitProgress` |
+| `evaluateAutomationPolicyActor` | live Esplora preset + `estimateUnilateralExitBatch` bumper check |
+| `proceedStepActor` | `proceedUnilateralExitStep` then refetch progress |
+| `ensureBroadcastActor` | refetch; if not relayed, proceed (resolve fee from policy when auto) |
+
+React components and hooks must not call `getArkadeWorker()` for proceed/progress during an active job. During an active job, `actor.context.progress` wins; React Query is display cache only.
+
+---
+
+## WASM proceed step
+
+Primary RPC: `ark_proceed_unilateral_exit_step` → `ArkSession::proceed_unilateral_exit_step` in [`unilateral_exit_orchestrator.rs`](../bitboard-ark/src/session/unilateral_exit_orchestrator.rs).
+
+Proceed is **non-blocking**. It broadcasts (if needed) and returns `Waiting`; the machine polls Esplora via `waitingConfirm` → `checkingProgress`. Do not add a WASM 15s confirmation loop.
+
+Sibling RPCs the machine also calls:
+
+| RPC | Role |
+|-----|------|
+| `get_unilateral_exit_progress` | Confirmation-based phase, node/leaf statuses, relay flags |
+| `evaluate_unilateral_exit_job_viability` | ASP sweep / foreign spend → terminate |
+| `estimate_unilateral_exit_batch` | Remaining steps + bumper sufficiency |
+| `get_unilateral_exit_topology` | Merged DAG for the control graph |
+
+Prefetch of exit materials happens on **operator sync**, not inside proceed.
+
+```mermaid
+flowchart TD
+  start[proceed_unilateral_exit_step]
+  start --> pending[record pending_exit_deductions for unmarked leaves]
+  pending --> plan[build_unilateral_batch_plan merged ordered_step_txids]
+  plan --> idx[first_incomplete_step_index via Esplora confs]
+  idx -->|"all steps at 1-conf"| markLeaf[mark_unrolled_leaves_at_finality 6 conf all vouts]
+  markLeaf --> done[phase Complete]
+  idx -->|"current step under 1-conf"| relay{already relayed or step_wait?}
+  relay -->|no| bump[broadcast_unilateral_exit_step_at_fee_rate CPFP]
+  relay -->|yes| waitRec[ensure_unilateral_exit_step_wait]
+  bump --> waitRec
+  waitRec --> markLeaf2[mark_unrolled_leaves_at_finality]
+  markLeaf2 --> waiting[phase Waiting plus node and leaf statuses]
+```
+
+Confirmation constants ([`bitboard-ark/src/constants.rs`](../bitboard-ark/src/constants.rs)):
+
+| Constant | Value | Meaning |
+|----------|-------|---------|
+| `UNILATERAL_EXIT_STEP_CONFIRMATIONS` | 1 | Advance to the next virtual tx |
+| `UNILATERAL_EXIT_LEAF_CONFIRMATIONS` | 6 | Stamp `is_unrolled` on every vout of the leaf tx |
+
+`mark_unrolled_leaves_at_finality` does **not** block on operator indexer polling. Cooperative-mode indexer catch-up runs during operator sync / sticky merge (`ARK-EXIT-11`). Hard failure if neither ASP nor Esplora confirms after the poll window: `unilateral_unroll_not_confirmed_on_chain`.
+
+Redundant mempool rejects (`-25` / `-26`) are ignored when the parent is already visible on the network.
+
+---
+
+## Source-file index
+
+| Area | Paths |
+|------|-------|
+| Machine | `frontend/src/lib/wallet/lifecycle/unilateral-exit/` |
+| Persistence (frontend) | `unilateral-exit-lifecycle-persistence.ts`, `unilateral-exit-automation-prefs-persistence.ts`, `unilateral-exit-failure-persistence.ts` |
+| Control page / DAG | `UnilateralExitControlPage.tsx`, `UnilateralExitTreeGraph.tsx`, `unilateral-exit-topology.ts` |
+| WASM orchestrator | `bitboard-ark/src/session/unilateral_exit_orchestrator.rs` |
+| Topology merge | `bitboard-ark/src/session/unilateral_exit_branch_topology.rs` |
+| Viability | `bitboard-ark/src/session/unilateral_exit_job_viability.rs` |
+| Materials | `bitboard-ark/src/unilateral_exit_materials.rs` |
+| Intermediate unroll | `bitboard-ark/src/session/exit_onchain.rs` |
+| WASM bindings | `bitboard-ark/src/lib.rs` (`ark_proceed_unilateral_exit_step`, …) |
+| Vendored client TODO | `third_party/ark-client/src/unilateral_exit.rs` |
+| Esplora quirks | [arkade-regtest-esplora-quirks.md](arkade-regtest-esplora-quirks.md) |

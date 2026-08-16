@@ -97,6 +97,8 @@ Operator access from the browser uses **REST** (`ark-rest` + grpc API shim), not
 
 ## Exiting to on-chain
 
+Unilateral-exit protocol, gotchas, XState machine, and WASM proceed step: [unilateral-exit.md](unilateral-exit.md). Persistence (materials, watches, job/prefs/failure): [persistence/unilateral-exit.md](persistence/unilateral-exit.md).
+
 Management → Arkade offers two paths:
 
 | Path | Operator required | Use when |
@@ -107,9 +109,7 @@ Management → Arkade offers two paths:
 
 Collaborative exit and unilateral unroll are implemented in `bitboard-ark` (`collaborative_redeem`, `broadcast_next_unilateral_exit_node`, etc.). **Autonomous mode** branches the same unilateral exit RPCs to snapshot-backed materials instead of ASP indexer/batch APIs. The on-chain bumper wallet shares the same BIP32-derived BDK wallet as boarding.
 
-**Unilateral exit control:** Management links to `/wallet/arkade/unilateral-exit` instead of a modal. The control page shows a deduped VTXO tree (React Flow + d3-dag), supports multi-leaf selection, and advances the unroll **one virtual tx at a time** via `ark_proceed_unilateral_exit_step` with a user-chosen feerate per step. WASM waits for **1 confirmation** on each intermediate virtual tx before returning; a leaf is marked `is_unrolled` only after its leaf virtual tx reaches **6 confirmations** on Esplora. **Shared leaf rule:** one leaf virtual tx may carry multiple VTXO outpoints (payment + change); the control page shows one graph node per leaf tx and selects sibling outpoints atomically; at 6 conf WASM sets `is_unrolled` on **every** outpoint with that leaf txid (sticky merge promotes the same on sync). Completion to on-chain remains per outpoint. `ark_run_unilateral_unroll` remains for legacy callers but new UI uses the step API.
-
-**Proceed automatically:** Optional fire-and-forget mode on the control page. When enabled, the XState unilateral-exit actor (`frontend/src/lib/wallet/lifecycle/unilateral-exit/`) schedules automation ticks via machine `after` delays while the app stays **unlocked** and the **same descriptor wallet** remains selected. Each tick re-resolves the selected Low/Medium/High preset (capped by a user-defined max sat/vB) and invokes `ark_proceed_unilateral_exit_step` through machine actors. Job progress and phase live in the actor context (persisted under `unilateral-exit-lifecycle-storage`); automation prefs use `unilateral-exit-automation-prefs`. This is **not** delegator-based — closing the tab stops automation. Automation pauses when the live preset exceeds the max cap, bumper balance is insufficient, or a step errors.
+**Unilateral exit control:** Management links to `/wallet/arkade/unilateral-exit`. The control page is a view of the XState actor: merged DAG (React Flow + d3-dag), multi-leaf selection, one virtual tx per `ark_proceed_unilateral_exit_step`. Proceed is non-blocking; the machine polls until the current step has **1 confirmation**. A leaf is marked `is_unrolled` only after **6 confirmations**. Shared-leaf and automation details: [unilateral-exit.md](unilateral-exit.md). `ark_run_unilateral_unroll` remains for legacy callers.
 
 ### Unilateral vs collaborative exit balance timing
 

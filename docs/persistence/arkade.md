@@ -87,8 +87,12 @@ Main thread code (`EncryptedWalletSecretsHost`) handles **ciphertext only** — 
 | Store | Persisted? | Contents |
 |-------|------------|----------|
 | `walletStore` (Arkade fields) | No | Transient dashboard: balance, payments, receive address |
-| `unilateralExitAutomationStore` (`unilateral-exit-automation-storage`) | Yes | Automation job state per wallet/network/connection |
+| `useUnilateralExitLifecyclePersistenceStore` (`unilateral-exit-lifecycle-storage`) | Yes | Active job outpoints, relay-wait timestamp |
+| `useUnilateralExitAutomationPrefsStore` (`unilateral-exit-automation-prefs`) | Yes | Auto-proceed enabled, fee preset, max sat/vB |
+| `useUnilateralExitFailurePersistenceStore` (`unilateral-exit-failure-storage`) | Yes | Last failure banner (`asp_swept_targets`, `branch_funding_lost`, `user_aborted`) |
 | `unilateralExitControlStore` | No | Selection, graph epoch (memory only) |
+
+Unilateral-exit WASM fields (`unilateral_exit_materials_by_leaf_tx`, watches, step wait, pending deductions) and the Zustand stores above are documented in [unilateral-exit.md](unilateral-exit.md).
 
 ## Legacy IndexedDB
 
