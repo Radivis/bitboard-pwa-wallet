@@ -18,9 +18,16 @@ describe('enrichArkadeOperatorErrorMessage', () => {
     expect(enriched).toContain('Refresh your Ark session')
   })
 
-  it('appends batch wedge warning for duplicated input', () => {
+  it('duplicated_input_enrichment_does_not_push_retry_wedge', () => {
+    const message = 'Failed to join batch: status code 400: duplicated input'
+    const enriched = enrichArkadeOperatorErrorMessage(message)
+    expect(enriched).toBe(message)
+    expect(enriched).not.toContain('do not retry blindly')
+  })
+
+  it('appends batch wedge warning for missing forfeit tx', () => {
     const enriched = enrichArkadeOperatorErrorMessage(
-      'Failed to join batch: status code 400: duplicated input',
+      'Failed to join batch: missing forfeit tx',
     )
     expect(enriched).toContain('do not retry blindly')
   })

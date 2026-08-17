@@ -18,6 +18,8 @@ import {
 } from '@/workers/arkade-worker-encrypted-payload'
 import type {
   ArkadeBalanceInfo,
+  ArkadeBatchJoinResult,
+  ArkadeBoardingStatus,
   ArkadeCollaborativeExitFeeEstimate,
   ArkadeCollaborativeExitFeeEstimateParams,
   ArkadeCollaborativeExitParams,
@@ -27,6 +29,7 @@ import type {
   ArkadeOnchainBumperInfo,
   ArkadeOperatorSyncResult,
   ArkadePaymentRow,
+  ArkadePendingBatchIntentActionParams,
   ArkadeRecoverableVtxoFeeEstimate,
   ArkadeSendParams,
   ArkadeService,
@@ -236,6 +239,31 @@ async function persistAfterCriticalOperation(): Promise<void> {
   await flushSdkPersistenceNowOrThrow()
 }
 
+async function persistBatchJoinResult(result: ArkadeBatchJoinResult): Promise<void> {
+  if (result.status === 'waiting_for_operator') {
+    await flushSdkPersistenceNowOrThrow()
+    return
+  }
+  await persistAfterCriticalOperation()
+}
+
+async function runBatchJoinAndPersist(
+  run: (wasmModule: BitboardArkWasm) => unknown | Promise<unknown>,
+): Promise<ArkadeBatchJoinResult> {
+  try {
+    const result = (await invokeWasmArk(run)) as unknown as ArkadeBatchJoinResult
+    await persistBatchJoinResult(result)
+    return result
+  } catch (error) {
+    try {
+      await flushSdkPersistenceNowOrThrow()
+    } catch {
+      // Best-effort flush if RegisterIntent succeeded before the WASM call threw.
+    }
+    throw error
+  }
+}
+
 async function closeSessionImpl(): Promise<void> {
   try {
     await flushSdkPersistenceNowOrThrow()
@@ -416,6 +444,7 @@ const arkadeService: ArkadeService = {
     const result = await invokeWasmArk((wasmModule) =>
       wasmModule.ark_migrate_deprecated_signer_vtxos(),
     )
+    await flushSdkPersistenceNowOrThrow()
     return result as ArkadeSignerMigrationResult
   },
 
@@ -499,7 +528,13 @@ const arkadeService: ArkadeService = {
   },
 
   async getBoardingStatus() {
-    return invokeWasmArk((wasmModule) => wasmModule.ark_get_boarding_status())
+    const status = (await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_get_boarding_status(),
+    )) as ArkadeBoardingStatus
+    if (status.finalizedCommitmentTxid) {
+      await persistAfterCriticalOperation()
+    }
+    return status
   },
 
   async sendPayment(params: ArkadeSendParams): Promise<string> {
@@ -556,13 +591,8 @@ const arkadeService: ArkadeService = {
     return (result as ArkadeOperatorScheduledSession | null) ?? null
   },
 
-  async renewVtxosNow(): Promise<string | null> {
-    const txid =
-      (await invokeWasmArk((wasmModule) => wasmModule.ark_renew_vtxos_now())) ?? null
-    if (txid != null) {
-      await persistAfterCriticalOperation()
-    }
-    return txid
+  async renewVtxosNow(): Promise<ArkadeBatchJoinResult> {
+    return runBatchJoinAndPersist((wasmModule) => wasmModule.ark_renew_vtxos_now())
   },
 
   async delegateSpendableVtxos(): Promise<{
@@ -585,14 +615,25 @@ const arkadeService: ArkadeService = {
     return result as { finalized: number; pending: number }
   },
 
-  async onboardBoardedUtxos(): Promise<string | null> {
+  async onboardBoardedUtxos(): Promise<ArkadeBatchJoinResult> {
     await this.getBoardingAddress()
-    const txid =
-      (await invokeWasmArk((wasmModule) => wasmModule.ark_onboard_boarded_utxos())) ?? null
-    if (txid != null) {
-      await persistAfterCriticalOperation()
-    }
-    return txid
+    return runBatchJoinAndPersist((wasmModule) => wasmModule.ark_onboard_boarded_utxos())
+  },
+
+  async cancelPendingBatchIntent(
+    params: ArkadePendingBatchIntentActionParams,
+  ): Promise<ArkadeBatchJoinResult> {
+    return runBatchJoinAndPersist((wasmModule) =>
+      wasmModule.ark_cancel_pending_batch_intent(params),
+    )
+  },
+
+  async retryPendingBatchIntent(
+    params: ArkadePendingBatchIntentActionParams,
+  ): Promise<ArkadeBatchJoinResult> {
+    return runBatchJoinAndPersist((wasmModule) =>
+      wasmModule.ark_retry_pending_batch_intent(params),
+    )
   },
 
   async getRecoverableVtxoFeeEstimate(): Promise<ArkadeRecoverableVtxoFeeEstimate> {
@@ -602,14 +643,8 @@ const arkadeService: ArkadeService = {
     )
   },
 
-  async recoverRecoverableVtxos(): Promise<string | null> {
-    const txid =
-      (await invokeWasmArk((wasmModule) => wasmModule.ark_recover_recoverable_vtxos())) ??
-      null
-    if (txid != null) {
-      await persistAfterCriticalOperation()
-    }
-    return txid
+  async recoverRecoverableVtxos(): Promise<ArkadeBatchJoinResult> {
+    return runBatchJoinAndPersist((wasmModule) => wasmModule.ark_recover_recoverable_vtxos())
   },
 
   async listExitCandidates(): Promise<ArkadeExitCandidateRow[]> {
@@ -641,10 +676,8 @@ const arkadeService: ArkadeService = {
     )
   },
 
-  async collaborativeExit(params: ArkadeCollaborativeExitParams): Promise<string> {
-    const txid = await invokeWasmArk((wasmModule) => wasmModule.ark_collaborative_exit(params))
-    await persistAfterCriticalOperation()
-    return txid
+  async collaborativeExit(params: ArkadeCollaborativeExitParams): Promise<ArkadeBatchJoinResult> {
+    return runBatchJoinAndPersist((wasmModule) => wasmModule.ark_collaborative_exit(params))
   },
 
   async runUnilateralUnroll(

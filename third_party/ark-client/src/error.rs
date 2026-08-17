@@ -149,6 +149,22 @@ impl Error {
             };
         }
     }
+
+    /// arkd rejects a second `RegisterIntent` that spends an outpoint already in the intent pool.
+    pub fn is_duplicated_input(&self) -> bool {
+        self.to_string()
+            .to_ascii_lowercase()
+            .contains("duplicated input")
+    }
+
+    /// Delete intent is idempotent; operators may report missing intents once already removed.
+    ///
+    /// arkd uses `INVALID_INTENT_PROOF` with "no matching intents found for intent proof" when
+    /// the pool has no intent for the proven inputs (expired, already deleted, or never selected).
+    pub fn is_intent_not_found(&self) -> bool {
+        let lower = self.to_string().to_ascii_lowercase();
+        lower.contains("intent not found") || lower.contains("no matching intents found")
+    }
 }
 
 impl Kind {
@@ -408,5 +424,25 @@ mod tests {
     fn is_coin_select_is_false_for_ad_hoc_errors() {
         let err = Error::ad_hoc("no matching VTXO outpoints found");
         assert!(!err.is_coin_select());
+    }
+
+    #[test]
+    fn is_duplicated_input_detects_arkd_duplicate_intent() {
+        let err = Error::ad_hoc(
+            "failed to push intent: duplicated input, abc:1 already registered by another intent",
+        );
+        assert!(err.is_duplicated_input());
+    }
+
+    #[test]
+    fn is_intent_not_found_detects_missing_operator_intent() {
+        let err = Error::ad_hoc("delete intent failed: intent not found");
+        assert!(err.is_intent_not_found());
+
+        let arkd = Error::ad_hoc(
+            r#"request failed: error in response: status code 400 Bad Request: {"code":3,"message":"INVALID_INTENT_PROOF (23): no matching intents found for intent proof"}"#,
+        );
+        assert!(arkd.is_intent_not_found());
+        assert!(!Error::ad_hoc("duplicated input").is_intent_not_found());
     }
 }

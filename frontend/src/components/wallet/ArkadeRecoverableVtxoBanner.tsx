@@ -9,12 +9,14 @@ import {
 import {
   useArkadeAutonomousModeActive,
   useArkadeBalanceQuery,
+  useHasPendingBatchIntentKind,
   useArkadeRecoverRecoverableVtxosMutation,
   useArkadeRecoverableVtxoFeeQuery,
 } from '@/hooks/useArkadeQueries'
 
 export function ArkadeRecoverableVtxoBanner() {
   const autonomousModeActive = useArkadeAutonomousModeActive()
+  const hasPendingRecoverIntent = useHasPendingBatchIntentKind('recover')
   const balanceQuery = useArkadeBalanceQuery()
   const recoverableVtxoCount =
     balanceQuery.data?.recoverableSettleableVtxoCount ?? 0
@@ -83,7 +85,9 @@ export function ArkadeRecoverableVtxoBanner() {
             type="button"
             size="sm"
             variant="secondary"
-            disabled={autonomousModeActive || recoverMutation.isPending}
+            disabled={
+              autonomousModeActive || recoverMutation.isPending || hasPendingRecoverIntent
+            }
             onClick={() => recoverMutation.mutate()}
           >
             {recoverMutation.isPending ? (

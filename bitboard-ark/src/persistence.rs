@@ -251,6 +251,7 @@ mod legacy_import {
             cached_operator_info: wallet_db.cached_operator_info,
             pending_operator_info: wallet_db.pending_operator_info,
             operator_trust_pending: wallet_db.operator_trust_pending,
+            pending_batch_intents: Vec::new(),
         }
     }
 }
@@ -295,6 +296,37 @@ pub struct UnilateralExitStepWaitRecord {
     pub started_at: i64,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PendingBatchIntentKind {
+    Board,
+    Recover,
+    Renew,
+    CollaborativeExit,
+    Migrate,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PendingBatchOutpointRecord {
+    pub txid: String,
+    pub vout: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PendingBatchIntentRecord {
+    pub kind: PendingBatchIntentKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub intent_id: Option<String>,
+    #[serde(default)]
+    pub onchain_outpoints: Vec<PendingBatchOutpointRecord>,
+    #[serde(default)]
+    pub vtxo_outpoints: Vec<PendingBatchOutpointRecord>,
+    pub amount_sats: u64,
+    pub registered_at: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub destination_address: Option<String>,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct WalletDbSnapshot {
     pub boarding_outputs: Vec<BoardingOutputSnapshot>,
@@ -315,6 +347,8 @@ pub struct WalletDbSnapshot {
     pub pending_operator_info: Option<crate::cached_operator_info::CachedOperatorInfoRecord>,
     #[serde(default)]
     pub operator_trust_pending: bool,
+    #[serde(default)]
+    pub pending_batch_intents: Vec<PendingBatchIntentRecord>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -509,6 +543,37 @@ impl JsonPersistenceDb {
         lock_persistence(&self.inner).pending_exit_deductions = records;
     }
 
+    pub fn pending_batch_intents(&self) -> Vec<PendingBatchIntentRecord> {
+        lock_persistence(&self.inner).pending_batch_intents.clone()
+    }
+
+    pub fn set_pending_batch_intents(&self, records: Vec<PendingBatchIntentRecord>) {
+        lock_persistence(&self.inner).pending_batch_intents = records;
+    }
+
+    pub fn upsert_pending_batch_intent(&self, record: PendingBatchIntentRecord) {
+        let mut inner = lock_persistence(&self.inner);
+        inner
+            .pending_batch_intents
+            .retain(|existing| !pending_batch_intents_overlap(existing, &record));
+        inner.pending_batch_intents.push(record);
+    }
+
+    pub fn clear_pending_batch_intents(&self) {
+        lock_persistence(&self.inner).pending_batch_intents.clear();
+    }
+
+    pub fn remove_pending_batch_intents_overlapping(
+        &self,
+        onchain_outpoints: &[PendingBatchOutpointRecord],
+        vtxo_outpoints: &[PendingBatchOutpointRecord],
+    ) {
+        let mut inner = lock_persistence(&self.inner);
+        inner.pending_batch_intents.retain(|existing| {
+            !pending_batch_record_overlaps_outpoints(existing, onchain_outpoints, vtxo_outpoints)
+        });
+    }
+
     pub fn unilateral_exit_watches(&self) -> Vec<UnilateralExitWatchRecord> {
         lock_persistence(&self.inner)
             .unilateral_exit_watches
@@ -651,6 +716,33 @@ impl JsonPersistenceDb {
         }
         Ok(boarding_output)
     }
+}
+
+fn pending_batch_intents_overlap(
+    left: &PendingBatchIntentRecord,
+    right: &PendingBatchIntentRecord,
+) -> bool {
+    pending_batch_record_overlaps_outpoints(left, &right.onchain_outpoints, &right.vtxo_outpoints)
+}
+
+fn pending_batch_record_overlaps_outpoints(
+    record: &PendingBatchIntentRecord,
+    onchain_outpoints: &[PendingBatchOutpointRecord],
+    vtxo_outpoints: &[PendingBatchOutpointRecord],
+) -> bool {
+    outpoint_sets_overlap(&record.onchain_outpoints, onchain_outpoints)
+        || outpoint_sets_overlap(&record.vtxo_outpoints, vtxo_outpoints)
+}
+
+fn outpoint_sets_overlap(
+    left: &[PendingBatchOutpointRecord],
+    right: &[PendingBatchOutpointRecord],
+) -> bool {
+    left.iter().any(|candidate| {
+        right
+            .iter()
+            .any(|other| candidate.txid == other.txid && candidate.vout == other.vout)
+    })
 }
 
 /// Shared handle so `ark-bdk-wallet` and persistence export use the same DB.

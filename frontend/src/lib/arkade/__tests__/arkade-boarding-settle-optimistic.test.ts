@@ -82,6 +82,45 @@ describe('arkade-boarding-settle-optimistic', () => {
     expect(queryClient.getQueryData(balanceKey)).toEqual(previousBalance)
   })
 
+  it('waiting_does_not_zero_boarding_in_optimistic_cache', () => {
+    const queryClient = new QueryClient()
+    const boardingStatusKey = arkadeBoardingStatusQueryKey(walletId, networkMode, connectionId)
+    const balanceKey = arkadeBalanceQueryKey(walletId, networkMode, connectionId)
+    const previousStatus = {
+      boardingAddress: 'tb1boarding',
+      trackedAddresses: ['tb1boarding'],
+      spendableSats: 200_000,
+      pendingSats: 0,
+      expiredSats: 0,
+    }
+    const previousBalance = {
+      confirmedSats: 30_603,
+      totalSats: 30_603,
+      boardingSpendableSats: 200_000,
+      boardingPendingSats: 0,
+    }
+
+    queryClient.setQueryData(boardingStatusKey, previousStatus)
+    queryClient.setQueryData(balanceKey, previousBalance)
+    applyOptimisticBoardingSettle(queryClient, walletId, networkMode, connectionId, 200_000)
+    revertOptimisticBoardingSettle(queryClient, {
+      boardingStatusKey,
+      balanceKey,
+      previousStatus,
+      previousBalance,
+      settledSats: 200_000,
+    })
+
+    expect(queryClient.getQueryData(boardingStatusKey)).toMatchObject({
+      spendableSats: 200_000,
+      pendingSats: 0,
+    })
+    expect(queryClient.getQueryData(balanceKey)).toMatchObject({
+      confirmedSats: 30_603,
+      boardingSpendableSats: 200_000,
+    })
+  })
+
   it('clears stale boarding status when Esplora still lists the settled UTXO', () => {
     const reconciled = reconcileBoardingStatusAfterSettle(
       {

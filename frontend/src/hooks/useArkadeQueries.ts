@@ -32,7 +32,9 @@ import {
 } from '@/lib/arkade/arkade-query-keys'
 import type {
   ArkadeBalanceInfo,
+  ArkadeBatchJoinResult,
   ArkadeBoardingStatus,
+  ArkadePendingBatchIntent,
   ArkadeSignerMigrationResult,
   ArkadeUnrollProgressEvent,
   ArkadeUnrollResult,
@@ -56,6 +58,16 @@ import {
 import { orchestrateArkadeSave } from '@/lib/wallet/lifecycle/arkade-save-lifecycle-orchestrator'
 import { refreshArkadeStoreFromLoadedWasm } from '@/lib/arkade/arkade-persistence-store-sync'
 import { readArkadeDashboardStateFromStore } from '@/lib/arkade/arkade-persistence-store-sync'
+import {
+  arkadeRefetchIntervalWithPendingBatchIntent,
+  hasPendingBatchIntent,
+  hasPendingKind,
+  pendingBatchIntentKey,
+  isBatchJoinWaiting,
+  pendingOverlapsOnchain,
+  pendingBatchIntentFromSources,
+  pendingBatchIntentWaitingMessage,
+} from '@/lib/arkade/arkade-pending-batch-intent'
 import {
   ARKADE_BUMPER_FUNDING_POLL_MS,
   ARKADE_EXIT_CANDIDATES_POLL_MS,
@@ -291,6 +303,11 @@ export function useArkadeBalanceQuery() {
       return getArkadeWorker().getBalance()
     },
     ...arkadeDashboardPeriodicQueryOptions,
+    refetchInterval: (query) =>
+      arkadeRefetchIntervalWithPendingBatchIntent(
+        hasPendingBatchIntent(query.state.data?.pendingBatchIntents ?? []),
+        arkadeDashboardPeriodicQueryOptions.refetchInterval,
+      ),
   })
 }
 
@@ -419,9 +436,48 @@ export function useArkadeBoardingStatusQuery() {
     ),
     enabled: sessionReady,
     queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().getBoardingStatus()),
-    refetchInterval,
+    refetchInterval: (query) =>
+      arkadeRefetchIntervalWithPendingBatchIntent(
+        hasPendingBatchIntent(query.state.data?.pendingBatchIntents ?? []),
+        refetchInterval,
+      ),
     staleTime: ARKADE_SESSION_POLL_STALE_MS,
   })
+}
+
+export function usePendingBatchIntents(): ArkadePendingBatchIntent[] {
+  const boardingStatusQuery = useArkadeBoardingStatusQuery()
+  const balanceQuery = useArkadeBalanceQuery()
+  return pendingBatchIntentFromSources(
+    boardingStatusQuery.data?.pendingBatchIntents,
+    balanceQuery.data?.pendingBatchIntents,
+  )
+}
+
+export function useHasPendingBatchIntent(): boolean {
+  return hasPendingBatchIntent(usePendingBatchIntents())
+}
+
+export function useHasPendingOnchainBatchIntent(): boolean {
+  return pendingOverlapsOnchain(usePendingBatchIntents())
+}
+
+export function useHasPendingBatchIntentKind(kind: string): boolean {
+  return hasPendingKind(usePendingBatchIntents(), kind)
+}
+
+export function pendingBatchIntentActionParams(intent: ArkadePendingBatchIntent): {
+  onchainOutpoints: ArkadeVtxoOutpoint[]
+  vtxoOutpoints: ArkadeVtxoOutpoint[]
+} {
+  return {
+    onchainOutpoints: intent.onchainOutpoints,
+    vtxoOutpoints: intent.vtxoOutpoints,
+  }
+}
+
+export function pendingBatchIntentStableKey(intent: ArkadePendingBatchIntent): string {
+  return pendingBatchIntentKey(intent)
 }
 
 export function useArkadeDelegateInfoQuery() {
@@ -540,6 +596,27 @@ export function useArkadeSendMutation() {
   })
 }
 
+function toastBatchJoinResult(
+  result: ArkadeBatchJoinResult,
+  kindFallback: string,
+  completedMessage: string,
+  idleMessage?: string,
+): void {
+  if (isBatchJoinWaiting(result)) {
+    toast.message(
+      pendingBatchIntentWaitingMessage(result.pendingIntent?.kind ?? kindFallback),
+    )
+    return
+  }
+  if (result.commitmentTxid) {
+    toast.success(completedMessage)
+    return
+  }
+  if (idleMessage != null) {
+    toast.message(idleMessage)
+  }
+}
+
 export function useArkadeRenewMutation() {
   const queryClient = useQueryClient()
   const { networkMode, activeWalletId, activeArkadeConnectionId } =
@@ -550,12 +627,13 @@ export function useArkadeRenewMutation() {
       assertArkadeSessionUnlocked(activeWalletId)
       return withReadyArkadeWorker(() => getArkadeWorker().renewVtxosNow())
     },
-    onSuccess: async (txid) => {
-      if (txid) {
-        toast.success('VTXOs renewed')
-      } else {
-        toast.message('No expiring VTXOs to renew right now')
-      }
+    onSuccess: async (result) => {
+      toastBatchJoinResult(
+        result,
+        'renew',
+        'VTXOs renewed',
+        'No expiring VTXOs to renew right now',
+      )
       if (
         activeWalletId != null &&
         activeArkadeConnectionId != null &&
@@ -575,6 +653,63 @@ export function useArkadeRenewMutation() {
   })
 }
 
+export function useArkadeCancelPendingBatchIntentMutation() {
+  const queryClient = useQueryClient()
+  const { networkMode, activeWalletId, activeArkadeConnectionId } = useArkadeQueryBase()
+  return useMutation({
+    mutationFn: async (intent: ArkadePendingBatchIntent) => {
+      assertArkadeSessionUnlocked(activeWalletId)
+      return withReadyArkadeWorker(() =>
+        getArkadeWorker().cancelPendingBatchIntent(pendingBatchIntentActionParams(intent)),
+      )
+    },
+    onSuccess: async () => {
+      if (
+        activeWalletId != null &&
+        activeArkadeConnectionId != null &&
+        isArkadeSupportedNetworkMode(networkMode)
+      ) {
+        await invalidateArkadeWalletDataQueries(
+          queryClient,
+          activeWalletId,
+          networkMode,
+          activeArkadeConnectionId,
+        )
+      }
+    },
+    onError: (err) => toast.error(errorMessage(err)),
+  })
+}
+
+export function useArkadeRetryPendingBatchIntentMutation() {
+  const queryClient = useQueryClient()
+  const { networkMode, activeWalletId, activeArkadeConnectionId } = useArkadeQueryBase()
+  return useMutation({
+    mutationFn: async (intent: ArkadePendingBatchIntent) => {
+      assertArkadeSessionUnlocked(activeWalletId)
+      return withReadyArkadeWorker(() =>
+        getArkadeWorker().retryPendingBatchIntent(pendingBatchIntentActionParams(intent)),
+      )
+    },
+    onSuccess: async (result, intent) => {
+      toastBatchJoinResult(result, intent.kind, 'Batch retry submitted')
+      if (
+        activeWalletId != null &&
+        activeArkadeConnectionId != null &&
+        isArkadeSupportedNetworkMode(networkMode)
+      ) {
+        await invalidateArkadeWalletDataQueries(
+          queryClient,
+          activeWalletId,
+          networkMode,
+          activeArkadeConnectionId,
+        )
+      }
+    },
+    onError: (err) => toast.error(errorMessage(err)),
+  })
+}
+
 export function useArkadeRecoverRecoverableVtxosMutation() {
   const queryClient = useQueryClient()
   const { networkMode, activeWalletId, activeArkadeConnectionId } =
@@ -585,12 +720,13 @@ export function useArkadeRecoverRecoverableVtxosMutation() {
       assertArkadeSessionUnlocked(activeWalletId)
       return withReadyArkadeWorker(() => getArkadeWorker().recoverRecoverableVtxos())
     },
-    onSuccess: async (txid) => {
-      if (txid) {
-        toast.success('Recoverable VTXOs settled')
-      } else {
-        toast.message('No recoverable VTXOs to settle right now')
-      }
+    onSuccess: async (result) => {
+      toastBatchJoinResult(
+        result,
+        'recover',
+        'Recoverable VTXOs settled',
+        'No recoverable VTXOs to settle right now',
+      )
       if (
         activeWalletId != null &&
         activeArkadeConnectionId != null &&
@@ -717,13 +853,9 @@ export function useArkadeOnboardMutation() {
   return useMutation({
     mutationFn: async () => {
       assertArkadeSessionUnlocked(activeWalletId)
-      const txid = await withReadyArkadeWorkerAndOptionalDelegate(networkMode, () =>
+      return withReadyArkadeWorkerAndOptionalDelegate(networkMode, () =>
         getArkadeWorker().onboardBoardedUtxos(),
       )
-      if (!txid) {
-        throw new Error('Boarding settlement did not return a commitment transaction')
-      }
-      return txid
     },
     onMutate: async () => {
       if (
@@ -754,8 +886,15 @@ export function useArkadeOnboardMutation() {
         activeArkadeConnectionId,
       )
     },
-    onSuccess: async (txid, _variables, context) => {
-      if (txid) {
+    onSuccess: async (result, _variables, context) => {
+      if (isBatchJoinWaiting(result)) {
+        if (context != null) {
+          revertOptimisticBoardingSettle(queryClient, context)
+        }
+        toast.message(
+          pendingBatchIntentWaitingMessage(result.pendingIntent?.kind ?? 'board'),
+        )
+      } else {
         toast.success('Boarding settlement submitted to operator')
       }
       if (
@@ -763,6 +902,16 @@ export function useArkadeOnboardMutation() {
         activeArkadeConnectionId == null ||
         !isArkadeSupportedNetworkMode(networkMode)
       ) {
+        return
+      }
+
+      if (isBatchJoinWaiting(result)) {
+        await invalidateArkadeWalletDataQueries(
+          queryClient,
+          activeWalletId,
+          networkMode,
+          activeArkadeConnectionId,
+        )
         return
       }
 
@@ -966,8 +1115,18 @@ export function useArkadeCollaborativeExitMutation() {
         'collaborativeExitInProgressSats',
       )
     },
-    onSuccess: async (txid, _params, context) => {
-      toast.success(`Collaborative exit started (${formatArkadeTxidToastSnippet(txid)})`)
+    onSuccess: async (result, _params, context) => {
+      if (isBatchJoinWaiting(result)) {
+        toast.message(
+          pendingBatchIntentWaitingMessage(
+            result.pendingIntent?.kind ?? 'collaborative_exit',
+          ),
+        )
+      } else if (result.commitmentTxid) {
+        toast.success(
+          `Collaborative exit started (${formatArkadeTxidToastSnippet(result.commitmentTxid)})`,
+        )
+      }
       if (activeWalletId != null && activeArkadeConnectionId != null) {
         await invalidateArkadeWalletDataQueries(
           queryClient,

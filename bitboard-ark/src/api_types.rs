@@ -83,6 +83,8 @@ pub struct BalanceDto {
     pub recoverable_pending_operator_sweep_sats: u64,
     /// Count of VTXOs in [`BalanceDto::recoverable_pending_operator_sweep_sats`].
     pub recoverable_pending_operator_sweep_vtxo_count: u32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pending_batch_intents: Vec<PendingBatchIntentDto>,
 }
 
 #[derive(Debug, Serialize)]
@@ -292,6 +294,51 @@ pub struct BoardingStatusDto {
     pub spendable_sats: u64,
     pub pending_sats: u64,
     pub expired_sats: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pending_batch_intents: Vec<PendingBatchIntentDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub finalized_commitment_txid: Option<String>,
+}
+
+pub const BATCH_JOIN_STATUS_COMPLETED: &str = "completed";
+pub const BATCH_JOIN_STATUS_WAITING: &str = "waiting_for_operator";
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingBatchOutpointDto {
+    pub txid: String,
+    pub vout: u32,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingBatchIntentDto {
+    pub kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub intent_id: Option<String>,
+    pub amount_sats: u64,
+    pub registered_at: i64,
+    pub onchain_outpoints: Vec<PendingBatchOutpointDto>,
+    pub vtxo_outpoints: Vec<PendingBatchOutpointDto>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingBatchIntentActionParams {
+    #[serde(default)]
+    pub onchain_outpoints: Vec<PendingBatchOutpointDto>,
+    #[serde(default)]
+    pub vtxo_outpoints: Vec<PendingBatchOutpointDto>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchJoinResultDto {
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commitment_txid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pending_intent: Option<PendingBatchIntentDto>,
 }
 
 #[derive(Debug, Serialize)]

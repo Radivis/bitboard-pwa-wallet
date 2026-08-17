@@ -121,6 +121,23 @@ feature:
         description: Proceed automatically advances all unroll steps for multiple preconfirmed VTXOs (after chained self-send splits) until branch complete (E2E-ARK-REG-07)
       - id: ARK-EXIT-23
         description: Control page offers abort when a frontend unilateral exit job is active; two-step confirmation (info then red risk modal with required checkbox); abort ends orchestration via aborted machine state without deleting unilateral_exit_materials or other WASM persistence; user_aborted failure banner lists VTXO ids with copy actions; backend in-progress state remains until completion or reconcile
+    batch_intent:
+      - id: ARK-BATCH-01
+        description: After RegisterIntent returns an intent_id, the wallet persists a pending batch-intent record before treating the join as failed
+      - id: ARK-BATCH-02
+        description: Post-register batch timeout, and duplicated input for those outpoints, return waiting_for_operator (not a hard error); do not call RegisterIntent again for overlapping outpoints while pending
+      - id: ARK-BATCH-03
+        description: One banner per open intent (kind and amount) with Cancel and Retry; Board, Recover, Renew, collaborative exit, and migrate buttons are disabled only when that action would register overlapping outpoints
+      - id: ARK-BATCH-04
+        description: While pending, poll the registered outputs; when they are spent, clear the record, operator-sync, and treat boarding/settle as finalized
+      - id: ARK-BATCH-05
+        description: Pending boarding intent whose UTXO leaves the cooperative window is cleared into the existing unilateral-exit-only boarding status (no second settle)
+      - id: ARK-BATCH-06
+        description: Cancel spent-checks first; if outputs are spent, drop the local record without deleteIntent; if still open, deleteIntent then drop the record and do not re-register
+      - id: ARK-BATCH-07
+        description: Retry spent-checks first; if still open, deleteIntent then join_next_batch again for that kind and those outpoints with SSE; if spent, finalize locally and do not delete or re-register
+      - id: ARK-BATCH-08
+        description: Pending batch intents are a keyed collection; uniqueness is the sorted onchain plus VTXO outpoint set; disjoint intents coexist; upsert replaces only overlapping records
     operator_sync:
       - id: ARK-SYNC-01
         description: When discover_keys fails during operator sync but list_vtxos succeeds, sync lifecycle records a warningMessage and dashboard/management show a non-blocking sync warning banner
@@ -175,6 +192,7 @@ feature:
         - signer migration banner when operator signing key rotated (migratable, due now, or expired regimes)
         - pending recovery banner when funds are locked past cooperative migration cutoff
         - recoverable VTXO banner when operator reports swept/expired/sub-dust VTXOs with Recover now action
+        - one pending batch-intent banner per open intent with Cancel and Retry; Recover now, Renew, collaborative exit, and migrate disabled only when that action would register overlapping outpoints
         - View VTXOs link to /wallet/arkade/vtxos
       - requirements:
         - Shown only when isArkadeEnabled and current network supports Arkade
@@ -206,6 +224,10 @@ feature:
         - boarding address from SDK
         - amount to send from on-chain wallet
         - steps for confirm on-chain then onboard via Ramps
+        - one pending batch-intent banner per open intent with Cancel and Retry
+        - Settle boarding UTXO disabled only while a pending intent covers overlapping boarding outpoints
+      - requirements:
+        - Contracts ARK-BATCH-01 through ARK-BATCH-08 apply to boarding settle
     - ArkadeVtxoViewer:
       - path: /wallet/arkade/vtxos
       - file: frontend/src/routes/wallet/arkade/vtxos.tsx
@@ -227,3 +249,4 @@ feature:
       - visible_elements:
         - Arkade balance label
         - confirmed and optional pending balance display
+        - one pending batch-intent banner per open intent with Cancel and Retry

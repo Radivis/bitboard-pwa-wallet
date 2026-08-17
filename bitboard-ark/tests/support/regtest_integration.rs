@@ -292,8 +292,15 @@ pub async fn board_wallet_to_arkade(
         }
 
         match session.onboard_boarded_utxos().await {
-            Ok(Some(_commitment_txid)) => return,
-            Ok(None) => last_error = "onboard returned None".to_string(),
+            Ok(result) if result.status == "completed" => return,
+            Ok(result) if result.status == "waiting_for_operator" => {
+                last_error = "waiting for operator batch".to_string();
+                let status = session.boarding_status().await.expect("boarding status");
+                if status.spendable_sats < board_sats.saturating_sub(10_000) {
+                    return;
+                }
+            }
+            Ok(result) => last_error = format!("onboard returned {}", result.status),
             Err(error) => {
                 let error_message = error.to_string();
                 if boarding_settle_error_must_not_retry(&error_message) {

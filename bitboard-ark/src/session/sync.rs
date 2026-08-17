@@ -145,6 +145,7 @@ impl ArkSession {
             self.clear_pending_unilateral_exits_for_outpoints(&esplora_healed_outpoints);
         }
         self.reconcile_pending_exit_deductions_with_snapshot(&snapshot)?;
+        self.reconcile_pending_batch_intents().await?;
         self.persist_cached_operator_info_from_client()?;
         let sync_result = OperatorSyncResultDto {
             key_discovery_warning: combine_operator_sync_warning_messages(

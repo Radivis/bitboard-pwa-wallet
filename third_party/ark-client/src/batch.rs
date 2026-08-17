@@ -1,6 +1,5 @@
 use crate::error::ErrorContext as _;
 use crate::swap_storage::SwapStorage;
-use crate::utils::sleep;
 use crate::utils::timeout_op;
 use crate::wallet::BoardingWallet;
 use crate::wallet::OnchainWallet;
@@ -21,8 +20,6 @@ use ark_core::ArkAddress;
 use ark_core::ArkNote;
 use ark_core::ExplorerUtxo;
 use ark_core::TxGraph;
-use backon::ExponentialBuilder;
-use backon::Retryable;
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::Hash;
 use bitcoin::hex::DisplayHex;
@@ -43,6 +40,7 @@ use futures::StreamExt;
 use rand::CryptoRng;
 use rand::Rng;
 use std::collections::HashSet;
+use std::time::Duration;
 
 #[path = "batch_vtxo_tree_signing.rs"]
 mod batch_vtxo_tree_signing;
@@ -53,6 +51,40 @@ use batch_vtxo_tree_signing::VtxoTreeStepUpdate;
 
 /// BIP68 encodes time-based relative `nSequence` locks in 512-second intervals.
 const BIP68_TIME_GRANULARITY: u64 = 512;
+
+/// Per-event wait for the batch SSE stream after `RegisterIntent`. Longer than the general client
+/// timeout so a slow operator round is not treated as a failed join (which would tempt a
+/// duplicate-input retry).
+const BATCH_EVENT_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Intent accepted by the operator; the commitment transaction has not been observed yet.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegisteredBatchIntent {
+    pub intent_id: String,
+    pub onchain_outpoints: Vec<OutPoint>,
+    pub vtxo_outpoints: Vec<OutPoint>,
+}
+
+/// Result of participating in an Arkade round after `RegisterIntent`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum JoinBatchOutcome {
+    Completed(Txid),
+    Waiting(RegisteredBatchIntent),
+}
+
+impl JoinBatchOutcome {
+    /// Commitment txid when the round finished. Waiting becomes an error for callers that cannot
+    /// persist a pending intent (Boltz refund, `settle_all`).
+    pub fn completed_txid(self) -> Result<Txid, Error> {
+        match self {
+            Self::Completed(txid) => Ok(txid),
+            Self::Waiting(intent) => Err(Error::ad_hoc(format!(
+                "intent {} registered; waiting for operator batch",
+                intent.intent_id
+            ))),
+        }
+    }
+}
 
 /// arkd `validateBoardingInput` adds `exitDelay.Seconds()` as wall-clock seconds to the
 /// confirmation timestamp, even when the server configured a block-based boarding exit delay.
@@ -121,8 +153,8 @@ where
             &to_address,
         )?;
 
-        let join_next_batch = || async {
-            self.join_next_batch(
+        let outcome = self
+            .join_next_batch(
                 &mut rng.clone(),
                 boarding_inputs.clone(),
                 vtxo_inputs.clone(),
@@ -132,18 +164,9 @@ where
                 },
             )
             .await
-        };
-
-        // Joining a batch can fail depending on the timing, so we try a few times.
-        let commitment_txid = join_next_batch
-            .retry(ExponentialBuilder::default().with_max_times(0))
-            .sleep(sleep)
-            // TODO: Use `when` to only retry certain errors.
-            .notify(|err: &Error, dur: std::time::Duration| {
-                tracing::warn!("Retrying joining next batch after {dur:?}. Error: {err}",);
-            })
-            .await
             .context("Failed to join batch")?;
+
+        let commitment_txid = outcome.completed_txid()?;
 
         tracing::info!(%commitment_txid, "Settlement success");
 
@@ -163,7 +186,7 @@ where
     /// `cannot settle into sub-dust VTXO` error. When the wallet holds isolated sub-dust amounts,
     /// fall back to [`Self::settle_all`], which can roll them in alongside healthy VTXOs that
     /// act as carrier value.
-    pub async fn settle<R>(&self, rng: &mut R) -> Result<Option<Txid>, Error>
+    pub async fn settle<R>(&self, rng: &mut R) -> Result<Option<JoinBatchOutcome>, Error>
     where
         R: Rng + CryptoRng + Clone,
     {
@@ -244,8 +267,8 @@ where
             &to_address,
         )?;
 
-        let join_next_batch = || async {
-            self.join_next_batch(
+        let outcome = self
+            .join_next_batch(
                 &mut rng.clone(),
                 boarding_inputs.clone(),
                 all_vtxo_inputs.clone(),
@@ -255,16 +278,9 @@ where
                 },
             )
             .await
-        };
-
-        let commitment_txid = join_next_batch
-            .retry(ExponentialBuilder::default().with_max_times(0))
-            .sleep(sleep)
-            .notify(|err: &Error, dur: std::time::Duration| {
-                tracing::warn!("Retrying joining next batch after {dur:?}. Error: {err}");
-            })
-            .await
             .context("Failed to join batch")?;
+
+        let commitment_txid = outcome.completed_txid()?;
 
         tracing::info!(%commitment_txid, num_notes = notes.len(), "Settlement with notes success");
 
@@ -281,7 +297,7 @@ where
         rng: &mut R,
         vtxo_outpoints: &[OutPoint],
         boarding_outpoints: &[OutPoint],
-    ) -> Result<Option<Txid>, Error>
+    ) -> Result<Option<JoinBatchOutcome>, Error>
     where
         R: Rng + CryptoRng + Clone,
     {
@@ -331,8 +347,14 @@ where
             &to_address,
         )?;
 
-        let join_next_batch = || async {
-            self.join_next_batch(
+        // Do NOT retry `join_next_batch` here: it registers the intent before participating in the
+        // round, so re-running it after a mid-round failure re-registers the same inputs (arkd:
+        // `duplicated input ... already registered`) and abandons the first intent without its
+        // forfeit tx, wedging the operator into an endless failing-round loop. Post-register
+        // timeout or failure returns [`JoinBatchOutcome::Waiting`] so callers persist the intent
+        // instead of retrying.
+        let outcome = self
+            .join_next_batch(
                 &mut rng.clone(),
                 boarding_inputs.clone(),
                 vtxo_inputs.clone(),
@@ -342,21 +364,80 @@ where
                 },
             )
             .await
-        };
-
-        // Do NOT retry `join_next_batch` here: it registers the intent before participating in the
-        // round, so re-running it after a mid-round failure re-registers the same inputs (arkd:
-        // `duplicated input ... already registered`) and abandons the first intent without its
-        // forfeit tx, wedging the operator into an endless failing-round loop. Callers that need
-        // resilience retry at a higher level with a fresh settle (boarding's settle-attempt loop and
-        // the recoverable-VTXO recovery loop), where each attempt is a clean, fully-completed round.
-        let commitment_txid = join_next_batch()
-            .await
             .context("Failed to join batch")?;
 
-        tracing::info!(%commitment_txid, "Settlement of specific VTXOs success");
+        if let JoinBatchOutcome::Completed(commitment_txid) = &outcome {
+            tracing::info!(%commitment_txid, "Settlement of specific VTXOs success");
+        }
 
-        Ok(Some(commitment_txid))
+        Ok(Some(outcome))
+    }
+
+    /// Delete a previously registered intent for specific input outpoints.
+    pub async fn delete_registered_intent<R>(
+        &self,
+        rng: &mut R,
+        vtxo_outpoints: &[OutPoint],
+        boarding_outpoints: &[OutPoint],
+    ) -> Result<(), Error>
+    where
+        R: Rng + CryptoRng,
+    {
+        let (to_address, _) = self.get_offchain_address()?;
+        let (all_boarding_inputs, all_vtxo_inputs, _) = self
+            .fetch_commitment_transaction_inputs(crate::utils::unix_now()?)
+            .await?;
+
+        let boarding_inputs: Vec<_> = all_boarding_inputs
+            .into_iter()
+            .filter(|input| boarding_outpoints.contains(&input.outpoint()))
+            .collect();
+        let vtxo_inputs: Vec<_> = all_vtxo_inputs
+            .into_iter()
+            .filter(|input| vtxo_outpoints.contains(&input.outpoint()))
+            .collect();
+
+        if boarding_inputs.is_empty() && vtxo_inputs.is_empty() {
+            return Err(Error::ad_hoc("no matching inputs to delete intent"));
+        }
+
+        let total_amount = boarding_inputs
+            .iter()
+            .map(|i| i.amount())
+            .chain(vtxo_inputs.iter().map(|i| i.amount()))
+            .fold(Amount::ZERO, |acc, amount| acc + amount);
+        let to_amount = self.board_to_amount_after_intent_fee(
+            &boarding_inputs,
+            &vtxo_inputs,
+            total_amount,
+            &to_address,
+        )?;
+
+        let prepared = self.prepare_intent(
+            rng,
+            boarding_inputs,
+            vtxo_inputs,
+            BatchOutputType::Board {
+                to_address,
+                to_amount,
+            },
+            PrepareIntentKind::Delete,
+        )?;
+        #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+        {
+            return self
+                .network_client()
+                .delete_intent(prepared.intent)
+                .await
+                .map_err(Error::ark_server);
+        }
+        #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+        {
+            let _ = prepared;
+            Err(Error::wallet(
+                "delete intent is only supported on the WASM transport in this build",
+            ))
+        }
     }
 
     /// Settle _some_ prior VTXOs and boarding outputs into the next batch, generating UTXOs as
@@ -366,7 +447,7 @@ where
         rng: &mut R,
         to_address: Address,
         to_amount: Amount,
-    ) -> Result<Txid, Error>
+    ) -> Result<JoinBatchOutcome, Error>
     where
         R: Rng + CryptoRng + Clone,
     {
@@ -407,8 +488,8 @@ where
             "Attempting to collaboratively redeem outputs"
         );
 
-        let join_next_batch = || async {
-            self.join_next_batch(
+        let outcome = self
+            .join_next_batch(
                 &mut rng.clone(),
                 boarding_inputs.clone(),
                 vtxo_inputs.clone(),
@@ -420,22 +501,13 @@ where
                 },
             )
             .await
-        };
-
-        // Joining a batch can fail depending on the timing, so we try a few times.
-        let commitment_txid = join_next_batch
-            .retry(ExponentialBuilder::default().with_max_times(3))
-            .sleep(sleep)
-            // TODO: Use `when` to only retry certain errors.
-            .notify(|err: &Error, dur: std::time::Duration| {
-                tracing::warn!("Retrying joining next batch after {dur:?}. Error: {err}");
-            })
-            .await
             .context("Failed to join batch")?;
 
-        tracing::info!(%commitment_txid, "Collaborative redeem success");
+        if let JoinBatchOutcome::Completed(commitment_txid) = &outcome {
+            tracing::info!(%commitment_txid, "Collaborative redeem success");
+        }
 
-        Ok(commitment_txid)
+        Ok(outcome)
     }
 
     /// Settle a selection of VTXOs into the next batch, generating UTXOs as
@@ -446,7 +518,7 @@ where
         input_vtxos: impl Iterator<Item = OutPoint> + Clone,
         to_address: Address,
         to_amount: Amount,
-    ) -> Result<Txid, Error>
+    ) -> Result<JoinBatchOutcome, Error>
     where
         R: Rng + CryptoRng + Clone,
     {
@@ -497,8 +569,8 @@ where
             "Attempting to collaboratively redeem outputs"
         );
 
-        let join_next_batch = || async {
-            self.join_next_batch(
+        let outcome = self
+            .join_next_batch(
                 &mut rng.clone(),
                 Vec::new(),
                 vtxo_inputs.clone(),
@@ -510,22 +582,13 @@ where
                 },
             )
             .await
-        };
-
-        // Joining a batch can fail depending on the timing, so we try a few times.
-        let commitment_txid = join_next_batch
-            .retry(ExponentialBuilder::default().with_max_times(3))
-            .sleep(sleep)
-            // TODO: Use `when` to only retry certain errors.
-            .notify(|err: &Error, dur: std::time::Duration| {
-                tracing::warn!("Retrying joining next batch after {dur:?}. Error: {err}");
-            })
-            .await
             .context("Failed to join batch")?;
 
-        tracing::info!(%commitment_txid, "Collaborative redeem success");
+        if let JoinBatchOutcome::Completed(commitment_txid) = &outcome {
+            tracing::info!(%commitment_txid, "Collaborative redeem success");
+        }
 
-        Ok(commitment_txid)
+        Ok(outcome)
     }
 
     pub(crate) async fn selected_batch_settleable_vtxo_inputs(
@@ -754,7 +817,7 @@ where
         let mut batch_expiry = None;
 
         loop {
-            match timeout_op(self.inner.timeout, stream.next())
+            match timeout_op(BATCH_EVENT_TIMEOUT, stream.next())
                 .await
                 .context("timed out waiting for batch event")?
             {
@@ -769,7 +832,7 @@ where
 
                         if e.intent_id_hashes.iter().any(|h| h == &hash) {
                             timeout_op(
-                                self.inner.timeout,
+                                BATCH_EVENT_TIMEOUT,
                                 self.network_client()
                                     .confirm_registration(intent_id.clone()),
                             )
@@ -1297,6 +1360,7 @@ where
                 expire_at,
                 own_cosigner_pks: vec![cosigner_pk],
             },
+            PrepareIntentKind::Delete => intent::IntentMessage::Delete { expire_at },
         };
 
         let intent = intent::make_intent(
@@ -1347,7 +1411,7 @@ where
         onchain_inputs: Vec<batch::OnChainInput>,
         vtxo_inputs: Vec<intent::Input>,
         output_type: BatchOutputType,
-    ) -> Result<Txid, Error>
+    ) -> Result<JoinBatchOutcome, Error>
     where
         R: Rng + CryptoRng,
     {
@@ -1413,14 +1477,21 @@ where
             "Registered intent for batch"
         );
 
+        let waiting_intent = RegisteredBatchIntent {
+            intent_id: intent_id.clone(),
+            onchain_outpoints: onchain_input_outpoints.clone(),
+            vtxo_outpoints: vtxo_input_outpoints.clone(),
+        };
+
         let (ark_forfeit_pk, _) = server_info.forfeit_pk.x_only_public_key();
 
+        let participate_result: Result<Txid, Error> = async {
         let mut vtxo_signing = VtxoBatchTreeSigningState::new();
         let mut connectors_graph_chunks = Some(Vec::new());
         let mut batch_expiry = None;
 
         loop {
-            match timeout_op(self.inner.timeout, stream.next())
+            match timeout_op(BATCH_EVENT_TIMEOUT, stream.next())
                 .await
                 .context("timed out waiting for batch event")?
             {
@@ -1435,7 +1506,7 @@ where
 
                         if e.intent_id_hashes.iter().any(|h| h == &hash) {
                             timeout_op(
-                                self.inner.timeout,
+                                BATCH_EVENT_TIMEOUT,
                                 self.network_client()
                                     .confirm_registration(intent_id.clone()),
                             )
@@ -1704,6 +1775,19 @@ where
                 }
             }
         }
+        }.await;
+
+        match participate_result {
+            Ok(commitment_txid) => Ok(JoinBatchOutcome::Completed(commitment_txid)),
+            Err(error) => {
+                tracing::warn!(
+                    intent_id = %waiting_intent.intent_id,
+                    %error,
+                    "Batch participation failed after intent registration"
+                );
+                Ok(JoinBatchOutcome::Waiting(waiting_intent))
+            }
+        }
     }
 
     /// Boarding intents must reserve the operator intent fee in the offchain output amount
@@ -1834,6 +1918,7 @@ where
 pub(crate) enum PrepareIntentKind {
     Register,
     EstimateFee,
+    Delete,
 }
 
 #[derive(Debug, Clone)]

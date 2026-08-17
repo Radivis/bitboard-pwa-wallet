@@ -258,6 +258,7 @@ mod tests {
             oversized: vec![sample_vtxo_ref(1_000_000)],
             skipped: None,
             error: None,
+            waiting_intent: None,
         };
         let accum = aggregate_leg_report(&leg);
         assert_eq!(accum.migrated_count, 2);

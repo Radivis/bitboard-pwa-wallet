@@ -13,6 +13,7 @@ mod open;
 mod operator_schedule;
 mod operator_trust;
 mod payments;
+mod pending_batch;
 mod pending_exit;
 mod receive;
 mod signer_migration;

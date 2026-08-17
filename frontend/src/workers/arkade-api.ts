@@ -57,6 +57,34 @@ export interface ArkadeBalanceInfo {
   /** Client-expired VTXOs awaiting operator sweep before batch settlement is safe. */
   recoverablePendingOperatorSweepSats?: number
   recoverablePendingOperatorSweepVtxoCount?: number
+  pendingBatchIntents?: ArkadePendingBatchIntent[]
+}
+
+export interface ArkadePendingBatchOutpoint {
+  txid: string
+  vout: number
+}
+
+export interface ArkadePendingBatchIntent {
+  kind: string
+  intentId?: string
+  amountSats: number
+  registeredAt: number
+  onchainOutpoints: ArkadePendingBatchOutpoint[]
+  vtxoOutpoints: ArkadePendingBatchOutpoint[]
+}
+
+export type ArkadeBatchJoinStatus = 'completed' | 'waiting_for_operator'
+
+export interface ArkadeBatchJoinResult {
+  status: ArkadeBatchJoinStatus
+  commitmentTxid?: string
+  pendingIntent?: ArkadePendingBatchIntent
+}
+
+export interface ArkadePendingBatchIntentActionParams {
+  onchainOutpoints: ArkadePendingBatchOutpoint[]
+  vtxoOutpoints: ArkadePendingBatchOutpoint[]
 }
 
 export type ArkadeSignerMigrationDeprecatedStatus = 'migratable' | 'due_now' | 'expired'
@@ -176,6 +204,8 @@ export interface ArkadeBoardingStatus {
   spendableSats: number
   pendingSats: number
   expiredSats: number
+  pendingBatchIntents?: ArkadePendingBatchIntent[]
+  finalizedCommitmentTxid?: string
 }
 
 export interface ArkadeExitCandidateRow {
@@ -518,21 +548,23 @@ export interface ArkadeService {
   getExpiringVtxoCount(): Promise<number>
   getVtxoExpiryStatus(): Promise<ArkadeVtxoExpiryStatus>
   getOperatorScheduledSession(): Promise<ArkadeOperatorScheduledSession | null>
-  renewVtxosNow(): Promise<string | null>
+  renewVtxosNow(): Promise<ArkadeBatchJoinResult>
   delegateSpendableVtxos(): Promise<{
     delegated: number
     failed: number
     errorMessage?: string
   }>
   finalizePendingTransactions(): Promise<{ finalized: number; pending: number }>
-  onboardBoardedUtxos(): Promise<string | null>
+  onboardBoardedUtxos(): Promise<ArkadeBatchJoinResult>
+  cancelPendingBatchIntent(params: ArkadePendingBatchIntentActionParams): Promise<ArkadeBatchJoinResult>
+  retryPendingBatchIntent(params: ArkadePendingBatchIntentActionParams): Promise<ArkadeBatchJoinResult>
   getRecoverableVtxoFeeEstimate(): Promise<ArkadeRecoverableVtxoFeeEstimate>
-  recoverRecoverableVtxos(): Promise<string | null>
+  recoverRecoverableVtxos(): Promise<ArkadeBatchJoinResult>
   listExitCandidates(): Promise<ArkadeExitCandidateRow[]>
   listVtxos(): Promise<ArkadeVtxoListResult>
   listUnilateralExitsInProgress(): Promise<ArkadeUnilateralExitInProgressRow[]>
   getOnchainBumperInfo(): Promise<ArkadeOnchainBumperInfo>
-  collaborativeExit(params: ArkadeCollaborativeExitParams): Promise<string>
+  collaborativeExit(params: ArkadeCollaborativeExitParams): Promise<ArkadeBatchJoinResult>
   runUnilateralUnroll(
     params: { txid: string; vout: number },
     onProgress: (event: ArkadeUnrollProgressEvent) => void,

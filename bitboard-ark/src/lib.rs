@@ -57,13 +57,15 @@ use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use crate::api_types::{
     CollaborativeExitFeeEstimateParams, CollaborativeExitParams, OpenSessionParams,
-    SendPaymentParams, UnilateralExitCompletionFeeEstimateParams, UnilateralExitFeeParams,
+    PendingBatchIntentActionParams, SendPaymentParams, UnilateralExitCompletionFeeEstimateParams,
+    UnilateralExitFeeParams,
 };
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::api_types::{
     CollaborativeExitFeeEstimateParams, CollaborativeExitParams, OpenSessionParams,
-    UnilateralExitCompletionFeeEstimateParams, UnilateralExitFeeParams,
+    PendingBatchIntentActionParams, UnilateralExitCompletionFeeEstimateParams,
+    UnilateralExitFeeParams,
 };
 use crate::error::{ArkResult, ArkWasmError, map_js_error};
 
@@ -357,9 +359,9 @@ pub async fn ark_get_vtxo_expiry_status() -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub async fn ark_renew_vtxos_now() -> Result<Option<String>, JsValue> {
+pub async fn ark_renew_vtxos_now() -> Result<JsValue, JsValue> {
     map_js_async(async {
-        with_session_async(|session| async move { session.renew_vtxos_now().await }).await
+        export_session_json(|session| async move { session.renew_vtxos_now().await }).await
     })
     .await
 }
@@ -382,9 +384,9 @@ pub async fn ark_finalize_pending_transactions() -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub async fn ark_onboard_boarded_utxos() -> Result<Option<String>, JsValue> {
+pub async fn ark_onboard_boarded_utxos() -> Result<JsValue, JsValue> {
     map_js_async(async {
-        with_session_async(|session| async move { session.onboard_boarded_utxos().await }).await
+        export_session_json(|session| async move { session.onboard_boarded_utxos().await }).await
     })
     .await
 }
@@ -399,9 +401,34 @@ pub async fn ark_get_recoverable_vtxo_fee_estimate() -> Result<JsValue, JsValue>
 }
 
 #[wasm_bindgen]
-pub async fn ark_recover_recoverable_vtxos() -> Result<Option<String>, JsValue> {
+pub async fn ark_recover_recoverable_vtxos() -> Result<JsValue, JsValue> {
     map_js_async(async {
-        with_session_async(|session| async move { session.recover_recoverable_vtxos().await }).await
+        export_session_json(|session| async move { session.recover_recoverable_vtxos().await })
+            .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_cancel_pending_batch_intent(params: JsValue) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let params: PendingBatchIntentActionParams = serde_wasm_bindgen::from_value(params)?;
+        export_session_json(
+            |session| async move { session.cancel_pending_batch_intent(params).await },
+        )
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_retry_pending_batch_intent(params: JsValue) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let params: PendingBatchIntentActionParams = serde_wasm_bindgen::from_value(params)?;
+        export_session_json(
+            |session| async move { session.retry_pending_batch_intent(params).await },
+        )
+        .await
     })
     .await
 }
@@ -442,10 +469,10 @@ pub async fn ark_get_onchain_bumper_info() -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub async fn ark_collaborative_exit(params: JsValue) -> Result<String, JsValue> {
+pub async fn ark_collaborative_exit(params: JsValue) -> Result<JsValue, JsValue> {
     map_js_async(async {
         let params: CollaborativeExitParams = serde_wasm_bindgen::from_value(params)?;
-        with_session_async(|session| async move { session.collaborative_exit(params).await }).await
+        export_session_json(|session| async move { session.collaborative_exit(params).await }).await
     })
     .await
 }

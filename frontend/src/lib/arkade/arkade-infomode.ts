@@ -8,6 +8,7 @@ export const ARKADE_INFOMODE_IDS = {
   balanceRecoverable: 'arkade-balance-recoverable',
   balanceRecoverablePendingOperatorSweep: 'arkade-balance-recoverable-pending-operator-sweep',
   recoverableVtxoBanner: 'arkade-recoverable-vtxo-banner',
+  pendingBatchIntentBanner: 'arkade-pending-batch-intent-banner',
   pendingRecoveryDueToExpiredSignerBanner: 'arkade-pending-recovery-due-to-expired-signer-banner',
   managementPanel: 'arkade-management-panel',
   delegatorFee: 'arkade-delegator-fee',
@@ -80,6 +81,11 @@ export const ARKADE_BALANCE_RECOVERABLE_INFOMODE = {
 export const ARKADE_BALANCE_RECOVERABLE_PENDING_OPERATOR_SWEEP_INFOMODE = {
   title: 'Expired — waiting for operator sweep',
   text: 'These VTXOs expired on your device clock, but the operator has not swept them yet. Batch recovery is not available until the operator marks them swept. They are still part of your balance and should become recoverable automatically after the operator sweep.',
+} as const
+
+export const ARKADE_PENDING_BATCH_INTENT_BANNER_INFOMODE = {
+  title: 'Waiting for Arkade operator',
+  text: 'Your intent is already registered with the operator. Bitboard will not register those same coins again blindly. Cancel withdraws that intent, and Retry withdraws then registers it again.',
 } as const
 
 export const ARKADE_RECOVERABLE_VTXO_BANNER_INFOMODE = {

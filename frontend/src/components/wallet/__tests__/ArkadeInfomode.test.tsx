@@ -66,10 +66,55 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
     error: null,
   }),
   useArkadeSignerMigrationPartialResultQuery: () => ({ data: null }),
+  useArkadeAutonomousModeActive: () => false,
+  useHasPendingBatchIntent: () => false,
+  usePendingBatchIntent: () => null,
+  useOperatorTrustStatusQuery: () => ({
+    data: { operatorTrustPending: false, reviewingInAutonomous: false },
+  }),
+  useOperatorConfigDiffQuery: () => ({ isLoading: false, data: { entries: [] } }),
+  useReviewOperatorConfigInAutonomousMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  useAcceptOperatorConfigMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  useArkadeAutonomousModeStatusQuery: () => ({
+    isLoading: false,
+    data: {
+      active: false,
+      cachedOperatorInfoPresent: true,
+      operatorTrustPending: false,
+      canExitAutonomous: true,
+      eligibleCount: 0,
+      materialsReadyCount: 0,
+      materialsMissingCount: 0,
+    },
+  }),
+  useArkadeAutonomousModeMutation: () => ({ mutate: vi.fn(), isPending: false }),
 }))
 
 vi.mock('@/hooks/useArkadeDashboardQueries', () => ({
   useArkadeSyncMetadataQuery: () => ({ data: { isStaleArkade: false } }),
+}))
+
+vi.mock('@/hooks/useArkadeLifecycleSnapshots', () => ({
+  useArkadeLoadLifecycleSnapshot: () => ({
+    loadPhase: 'loaded',
+    networkMode: 'signet',
+    errorMessage: null,
+  }),
+  useArkadeSyncLifecycleSnapshot: () => ({
+    syncPhase: 'not-syncing',
+    railScope: null,
+    errorMessage: null,
+    warningMessage: null,
+  }),
+  useArkadeRailSnapshot: () => ({
+    loadPhase: 'loaded',
+    syncPhase: 'not-syncing',
+    savePhase: 'not-saving',
+  }),
+}))
+
+vi.mock('@/hooks/useRailManualSyncMutations', () => ({
+  useArkadeManualSyncMutation: () => ({ mutate: vi.fn(), isPending: false }),
 }))
 
 vi.mock('@/stores/featureStore', () => ({

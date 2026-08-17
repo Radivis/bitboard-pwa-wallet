@@ -135,7 +135,8 @@ export function useArkadeExitFlow() {
     collabAmountValid &&
     !collaborativeExitMutation.isPending &&
     !collaborativeExitBlockedByRotation &&
-    !collaborativeExitBlockedByFunds
+    !collaborativeExitBlockedByFunds &&
+    (balanceQuery.data?.pendingBatchIntents?.length ?? 0) === 0
 
   const hasUnilateralExitInProgress =
     unilateralExitInProgressSats > 0 || (inProgressQuery.data?.length ?? 0) > 0

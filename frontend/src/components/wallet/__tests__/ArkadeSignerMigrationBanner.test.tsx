@@ -23,6 +23,9 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
   useArkadeSignerMigrationPartialResultQuery: () => ({
     data: partialResultRef.data,
   }),
+  useArkadeAutonomousModeActive: () => false,
+  useHasPendingBatchIntent: () => false,
+  usePendingBatchIntent: () => null,
 }))
 
 const walletStoreState = vi.hoisted(() => ({

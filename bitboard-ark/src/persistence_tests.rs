@@ -1,6 +1,7 @@
 use crate::persistence::{
     BITBOARD_ARK_PERSISTENCE_VERSION, BitboardArkPersistence, JsonPersistenceDb, OperatorIdentity,
-    OperatorSignerMigrationHint, PendingExitDeductionRecord, PendingExitKind, network_label,
+    OperatorSignerMigrationHint, PendingBatchIntentKind, PendingBatchIntentRecord,
+    PendingBatchOutpointRecord, PendingExitDeductionRecord, PendingExitKind, network_label,
     operator_identity_for_connected_signer, persisted_operator_identity_for_open,
     validate_operator_identity,
 };
@@ -241,6 +242,189 @@ fn persistence_import_export_preserves_offchain_next_derivation_index() {
     let parsed = BitboardArkPersistence::parse_import(Some(&json));
 
     assert_eq!(parsed.wallet_db.offchain_next_derivation_index, 2);
+}
+
+#[test]
+fn persistence_round_trips_pending_batch_intent() {
+    use crate::persistence::{
+        PendingBatchIntentKind, PendingBatchIntentRecord, PendingBatchOutpointRecord,
+    };
+
+    let identity = OperatorIdentity {
+        signer_pk_hex: "02abc".to_string(),
+        network: network_label(Network::Signet),
+    };
+    let mut envelope = BitboardArkPersistence::empty(identity);
+    envelope.wallet_db.pending_batch_intents = vec![PendingBatchIntentRecord {
+        kind: PendingBatchIntentKind::Board,
+        intent_id: Some("intent-abc".to_string()),
+        onchain_outpoints: vec![PendingBatchOutpointRecord {
+            txid: "aa".repeat(32),
+            vout: 1,
+        }],
+        vtxo_outpoints: Vec::new(),
+        amount_sats: 50_000,
+        registered_at: 1_700_000_000,
+        destination_address: Some("tb1qexit".to_string()),
+    }];
+
+    let json = serde_json::to_string(&envelope).expect("serialize");
+    let parsed = BitboardArkPersistence::parse_import(Some(&json));
+    assert_eq!(parsed.wallet_db.pending_batch_intents.len(), 1);
+    assert_eq!(
+        parsed.wallet_db.pending_batch_intents[0]
+            .intent_id
+            .as_deref(),
+        Some("intent-abc")
+    );
+    assert_eq!(
+        parsed.wallet_db.pending_batch_intents[0].onchain_outpoints[0].vout,
+        1
+    );
+    assert_eq!(
+        parsed.wallet_db.pending_batch_intents[0]
+            .destination_address
+            .as_deref(),
+        Some("tb1qexit")
+    );
+}
+
+#[test]
+fn destination_address_round_trips_on_pending_batch_intent() {
+    use crate::persistence::{
+        PendingBatchIntentKind, PendingBatchIntentRecord, PendingBatchOutpointRecord,
+    };
+
+    let identity = OperatorIdentity {
+        signer_pk_hex: "02abc".to_string(),
+        network: network_label(Network::Signet),
+    };
+    let mut envelope = BitboardArkPersistence::empty(identity);
+    envelope.wallet_db.pending_batch_intents = vec![PendingBatchIntentRecord {
+        kind: PendingBatchIntentKind::CollaborativeExit,
+        intent_id: Some("intent-exit".to_string()),
+        onchain_outpoints: Vec::new(),
+        vtxo_outpoints: vec![PendingBatchOutpointRecord {
+            txid: "bb".repeat(32),
+            vout: 0,
+        }],
+        amount_sats: 12_000,
+        registered_at: 2,
+        destination_address: Some("tb1qcollab".to_string()),
+    }];
+    let json = serde_json::to_string(&envelope).expect("serialize");
+    let parsed = BitboardArkPersistence::parse_import(Some(&json));
+    assert_eq!(
+        parsed.wallet_db.pending_batch_intents[0]
+            .destination_address
+            .as_deref(),
+        Some("tb1qcollab")
+    );
+}
+
+fn sample_pending_record(
+    kind: PendingBatchIntentKind,
+    intent_id: &str,
+    onchain_vout: Option<u32>,
+    vtxo_vout: Option<u32>,
+) -> PendingBatchIntentRecord {
+    PendingBatchIntentRecord {
+        kind,
+        intent_id: Some(intent_id.to_string()),
+        onchain_outpoints: onchain_vout
+            .map(|vout| PendingBatchOutpointRecord {
+                txid: "aa".repeat(32),
+                vout,
+            })
+            .into_iter()
+            .collect(),
+        vtxo_outpoints: vtxo_vout
+            .map(|vout| PendingBatchOutpointRecord {
+                txid: "bb".repeat(32),
+                vout,
+            })
+            .into_iter()
+            .collect(),
+        amount_sats: 1,
+        registered_at: 1,
+        destination_address: None,
+    }
+}
+
+#[test]
+fn upsert_pending_batch_intent_keeps_disjoint_records() {
+    let db = JsonPersistenceDb::default();
+    db.upsert_pending_batch_intent(sample_pending_record(
+        PendingBatchIntentKind::Board,
+        "board",
+        Some(1),
+        None,
+    ));
+    db.upsert_pending_batch_intent(sample_pending_record(
+        PendingBatchIntentKind::Recover,
+        "recover",
+        None,
+        Some(0),
+    ));
+    let pending = db.pending_batch_intents();
+    assert_eq!(pending.len(), 2);
+    assert!(
+        pending
+            .iter()
+            .any(|record| record.intent_id.as_deref() == Some("board"))
+    );
+    assert!(
+        pending
+            .iter()
+            .any(|record| record.intent_id.as_deref() == Some("recover"))
+    );
+}
+
+#[test]
+fn upsert_pending_batch_intent_replaces_overlapping_record() {
+    let db = JsonPersistenceDb::default();
+    db.upsert_pending_batch_intent(sample_pending_record(
+        PendingBatchIntentKind::Board,
+        "first",
+        Some(1),
+        None,
+    ));
+    db.upsert_pending_batch_intent(sample_pending_record(
+        PendingBatchIntentKind::Board,
+        "second",
+        Some(1),
+        None,
+    ));
+    let pending = db.pending_batch_intents();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].intent_id.as_deref(), Some("second"));
+}
+
+#[test]
+fn remove_overlapping_pending_batch_intents_leaves_disjoint() {
+    let db = JsonPersistenceDb::default();
+    db.upsert_pending_batch_intent(sample_pending_record(
+        PendingBatchIntentKind::Board,
+        "board",
+        Some(1),
+        None,
+    ));
+    db.upsert_pending_batch_intent(sample_pending_record(
+        PendingBatchIntentKind::Recover,
+        "recover",
+        None,
+        Some(0),
+    ));
+    db.remove_pending_batch_intents_overlapping(
+        &[PendingBatchOutpointRecord {
+            txid: "aa".repeat(32),
+            vout: 1,
+        }],
+        &[],
+    );
+    let pending = db.pending_batch_intents();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].intent_id.as_deref(), Some("recover"));
 }
 
 #[test]

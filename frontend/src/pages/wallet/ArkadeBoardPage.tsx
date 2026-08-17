@@ -16,8 +16,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   useArkadeBoardingAddressQuery,
   useArkadeBoardingStatusQuery,
+  useHasPendingOnchainBatchIntent,
   useArkadeOnboardMutation,
 } from '@/hooks/useArkadeQueries'
+import { ArkadePendingBatchIntentBanner } from '@/components/wallet/ArkadePendingBatchIntentBanner'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { formatSats } from '@/lib/wallet/bitcoin-utils'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
@@ -38,6 +40,7 @@ export function ArkadeBoardPage() {
   const onboardMutation = useArkadeOnboardMutation()
   const boardingQuery = useArkadeBoardingAddressQuery()
   const boardingStatusQuery = useArkadeBoardingStatusQuery()
+  const hasPendingOnchainBatchIntent = useHasPendingOnchainBatchIntent()
   const [copied, setCopied] = useState(false)
 
   if (!isArkadeActiveForNetworkMode(networkMode)) {
@@ -79,6 +82,7 @@ export function ArkadeBoardPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
+          <ArkadePendingBatchIntentBanner />
           <ol className="list-decimal space-y-2 pl-5">
             <li>Copy the boarding address below.</li>
             <li>
@@ -167,7 +171,9 @@ export function ArkadeBoardPage() {
 
           <Button
             type="button"
-            disabled={onboardMutation.isPending || !boardingAddress}
+            disabled={
+              onboardMutation.isPending || !boardingAddress || hasPendingOnchainBatchIntent
+            }
             onClick={() => onboardMutation.mutate()}
           >
             {onboardMutation.isPending ? 'Settling…' : 'Settle boarding UTXO'}

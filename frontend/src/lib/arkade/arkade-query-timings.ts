@@ -12,6 +12,9 @@ export const ARKADE_SESSION_POLL_STALE_MS = 15_000
 /** Boarding status background poll interval. */
 export const ARKADE_BOARDING_STATUS_REFETCH_MS = 30_000
 
+/** While a RegisterIntent is waiting for the operator, poll boarding/balance until spend. */
+export const ARKADE_PENDING_BATCH_INTENT_POLL_MS = 8_000
+
 /** Collaborative / unilateral exit fee estimates. */
 export const ARKADE_FEE_ESTIMATE_STALE_MS = 30_000
 

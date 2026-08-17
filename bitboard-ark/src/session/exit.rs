@@ -2,14 +2,14 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::str::FromStr;
 
-use ark_client::Blockchain;
+use ark_client::{Blockchain, JoinBatchOutcome};
 use ark_core::server::VirtualTxOutPoint;
 use ark_core::{ExplorerUtxo, Vtxo, VtxoList};
-use bitcoin::{Amount, ScriptBuf, Txid, secp256k1::rand::rngs::OsRng};
+use bitcoin::{Amount, OutPoint, ScriptBuf, Txid, secp256k1::rand::rngs::OsRng};
 
 use super::open::sync_onchain_wallet_with_retries;
 use crate::api_types::{
-    COLLABORATIVE_EXIT_ESTIMATE_ERROR_INSUFFICIENT_COOPERATIVE_INPUTS,
+    BatchJoinResultDto, COLLABORATIVE_EXIT_ESTIMATE_ERROR_INSUFFICIENT_COOPERATIVE_INPUTS,
     CollaborativeExitFeeEstimateDto, CollaborativeExitParams, CompleteUnilateralExitParams,
     ExitCandidateRow, MissingBlocktimeCompletionInputDto, OnchainBumperInfoDto,
     UnilateralExitCompletionFeeEstimateDto, UnilateralExitCompletionFeeEstimateParams,
@@ -28,7 +28,8 @@ use crate::exit_balance::{
 use crate::offchain_snapshot::virtual_tx_outpoint_from_record;
 use crate::outpoint::{OnchainOutPoint, VirtualOutPoint};
 use crate::persistence::{
-    JsonPersistenceDb, OffchainVtxoSnapshot, PendingExitDeductionRecord, PendingExitKind,
+    JsonPersistenceDb, OffchainVtxoSnapshot, PendingBatchIntentKind, PendingExitDeductionRecord,
+    PendingExitKind,
 };
 use crate::unilateral_exit_materials::snapshot_materials_for_leaf_tx;
 
@@ -547,23 +548,82 @@ impl ArkSession {
         })
     }
 
-    pub async fn collaborative_exit(&self, params: CollaborativeExitParams) -> ArkResult<String> {
+    pub async fn collaborative_exit(
+        &self,
+        params: CollaborativeExitParams,
+    ) -> ArkResult<BatchJoinResultDto> {
         self.ensure_operator_rpc_allowed()?;
+        let overlap_outpoints = self
+            .wallet_db
+            .snapshot()
+            .offchain_vtxo_snapshot
+            .map(|snapshot| {
+                snapshot
+                    .virtual_tx_outpoints
+                    .into_iter()
+                    .filter(|row| !row.is_spent)
+                    .filter_map(|row| {
+                        let txid = Txid::from_str(&row.txid).ok()?;
+                        Some(OutPoint {
+                            txid,
+                            vout: row.vout,
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        if let Some(waiting) = self
+            .existing_pending_batch_join_result(&[], &overlap_outpoints)
+            .await?
+        {
+            return Ok(waiting);
+        }
         let destination = parse_onchain_address(&params.destination_address, self.network())?;
         let buckets = self.resolve_offchain_balance_buckets().await?;
         let baseline_offchain_spendable_sats = buckets.gross_spendable_sats();
         let exit_amount =
             resolve_cooperative_exit_amount(params.amount_sats, baseline_offchain_spendable_sats);
         let mut rng = OsRng;
-        let txid = self
+        match self
             .client
             .collaborative_redeem(&mut rng, destination, exit_amount)
-            .await?;
-        self.record_pending_collaborative_exit(
-            exit_amount.to_sat(),
-            baseline_offchain_spendable_sats,
-        );
-        Ok(txid.to_string())
+            .await
+        {
+            Ok(JoinBatchOutcome::Completed(txid)) => {
+                self.record_pending_collaborative_exit(
+                    exit_amount.to_sat(),
+                    baseline_offchain_spendable_sats,
+                );
+                Ok(Self::batch_join_completed_result(txid))
+            }
+            Ok(JoinBatchOutcome::Waiting(intent)) => {
+                self.record_pending_collaborative_exit(
+                    exit_amount.to_sat(),
+                    baseline_offchain_spendable_sats,
+                );
+                let mut record = super::pending_batch::record_from_registered_intent(
+                    PendingBatchIntentKind::CollaborativeExit,
+                    &intent,
+                    exit_amount.to_sat(),
+                    super::mappers::current_unix_timestamp(),
+                );
+                record.destination_address = Some(params.destination_address.clone());
+                self.wallet_db.upsert_pending_batch_intent(record);
+                Ok(super::pending_batch::waiting_join_result(
+                    self.pending_batch_intent_dto(),
+                ))
+            }
+            Err(error) => {
+                self.map_settle_error(
+                    PendingBatchIntentKind::CollaborativeExit,
+                    error,
+                    &[],
+                    &[],
+                    exit_amount.to_sat(),
+                )
+                .await
+            }
+        }
     }
 
     pub async fn collaborative_exit_fee_estimate(

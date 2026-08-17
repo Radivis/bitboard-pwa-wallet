@@ -4,6 +4,7 @@ import type { ArkadeSignerMigrationHint, ArkadeSignerMigrationResult } from '@/w
 import { formatSignerMigrationPartialStatus } from '@/lib/arkade/arkade-signer-migration-display'
 import {
   useArkadeAutonomousModeActive,
+  useHasPendingBatchIntentKind,
   useArkadeSignerMigrationMutation,
   useArkadeSignerMigrationPartialResultQuery,
 } from '@/hooks/useArkadeQueries'
@@ -71,6 +72,7 @@ function showMigrateAction(
 
 export function ArkadeSignerMigrationBanner() {
   const autonomousModeActive = useArkadeAutonomousModeActive()
+  const hasPendingMigrateIntent = useHasPendingBatchIntentKind('migrate')
   const hint = useWalletStore((state) => state.arkadeSignerMigrationHint)
   const partialMigrationResultQuery = useArkadeSignerMigrationPartialResultQuery()
   const signerMigrationMutation = useArkadeSignerMigrationMutation()
@@ -111,7 +113,11 @@ export function ArkadeSignerMigrationBanner() {
               type="button"
               size="sm"
               variant="secondary"
-              disabled={autonomousModeActive || signerMigrationMutation.isPending}
+              disabled={
+                autonomousModeActive ||
+                signerMigrationMutation.isPending ||
+                hasPendingMigrateIntent
+              }
               onClick={() => signerMigrationMutation.mutate()}
             >
               {signerMigrationMutation.isPending ? (

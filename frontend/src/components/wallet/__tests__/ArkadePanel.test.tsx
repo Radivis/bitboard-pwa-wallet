@@ -84,6 +84,8 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
   useArkadeUnilateralExitsInProgressQuery: () => ({ data: [], isLoading: false }),
   useArkadeUnilateralExitCompletionFeeQuery: () => ({ data: undefined, isLoading: false }),
   useArkadeAutonomousModeActive: () => false,
+  useHasPendingBatchIntent: () => false,
+  usePendingBatchIntent: () => null,
 }))
 
 vi.mock('@tanstack/react-query', async (importOriginal) => {

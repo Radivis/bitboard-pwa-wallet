@@ -89,6 +89,7 @@ pub use coin_select::{
     MissingBlocktimeCompletionInput, VtxoCompletionSelection,
 };
 pub use error::Error;
+pub use crate::batch::{JoinBatchOutcome, RegisteredBatchIntent};
 pub use key_provider::Bip32KeyProvider;
 pub use key_provider::KeyProvider;
 pub use key_provider::StaticKeyProvider;

@@ -79,6 +79,8 @@ vi.mock('@/hooks/useArkadeQueries', async (importOriginal) => {
     useArkadeCompleteUnilateralExitMutation: () => ({ mutate: vi.fn(), isPending: false }),
     useArkadeUnilateralExitsInProgressQuery: () => ({ data: [], isLoading: false }),
     useArkadeUnilateralExitCompletionFeeQuery: () => ({ data: undefined, isLoading: false }),
+    useHasPendingBatchIntent: () => false,
+    usePendingBatchIntent: () => null,
   }
 })
 

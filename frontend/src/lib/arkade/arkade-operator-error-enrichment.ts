@@ -24,10 +24,7 @@ export function enrichArkadeOperatorErrorMessage(message: string): string {
     return `${message} — Refresh your Ark session or update the app, then retry.`
   }
 
-  if (
-    lower.includes('duplicated input') ||
-    lower.includes('missing forfeit tx')
-  ) {
+  if (lower.includes('missing forfeit tx')) {
     return `${message} — Known batch wedge: do not retry blindly; wait for operator batch to clear.`
   }
 
