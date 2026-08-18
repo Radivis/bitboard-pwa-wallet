@@ -8,10 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Autonomous mode that ensures the app doesn't communikate with the Arkade server to simulate its outage (this mode is deliberately not persisted)
 - VTXO viewer for Arkade in wallet management
 - Persist materials needed for unilateral exit in case Arkade operator actually goes down
 - Actually check Arkade operator view when unolloing via post-unroll operator indexer poll with graceful timeout warning when on-chain unroll is confirmed but ASP `is_unrolled` lags; sticky `is_unrolled` merge during operator sync for in-list rows
 - Explicit `unilateral_exit_watches` registry with post-sync reconcile; targeted operator lookups and Esplora probes per truth table; non-blocking `exitingVtxoWarning` on sync
+- **Improved unilateral exit control page with exit graph visualization**
+- The app now checks for changes in the Arkade server info digest and displays a modal with the changes
+- Arkade intents are persisted until they resolve; on banners for the respective waiting intent the user can cancel and retry them - the intent is properly deleted before retying
 
 ### Changed
 - Renamed "spent" bucket internally to "unspendable" for more clarity
