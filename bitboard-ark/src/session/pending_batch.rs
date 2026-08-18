@@ -191,6 +191,12 @@ impl ArkSession {
             );
             return Ok(completed_without_txid());
         }
+        if is_boarding_only_pending_record(&record) {
+            return Err(crate::error::ArkWasmError::Boarding(
+                BOARDING_DELETE_INTENT_UNSUPPORTED.to_string(),
+            )
+            .into());
+        }
         let onchain_outpoints = record
             .onchain_outpoints
             .iter()
@@ -221,19 +227,6 @@ impl ArkSession {
                 );
                 Ok(completed_without_txid())
             }
-            Err(error)
-                if error.is_intent_proof_no_operator_match()
-                    && should_clear_boarding_pending_after_delete_miss(&record) =>
-            {
-                // arkd stores boarding inputs on TimedIntent.BoardingInputs but
-                // verifyIntentProofAndFindMatches only scans TimedIntent.Inputs, so
-                // deleteIntent cannot match boarding-only registrations today.
-                self.wallet_db.remove_pending_batch_intents_overlapping(
-                    &record.onchain_outpoints,
-                    &record.vtxo_outpoints,
-                );
-                Ok(completed_without_txid())
-            }
             Err(error) => Err(error.into()),
         }
     }
@@ -245,6 +238,10 @@ impl ArkSession {
         let Some(record) = self.find_exact_pending_intent(&params) else {
             return Ok(completed_without_txid());
         };
+        if is_boarding_only_pending_record(&record) {
+            // arkd deleteIntent cannot match boarding inputs today; re-join directly instead.
+            return self.retry_pending_record(record).await;
+        }
         let cancel_result = self.cancel_pending_batch_intent(params).await?;
         if cancel_result.status != BATCH_JOIN_STATUS_COMPLETED {
             return Ok(cancel_result);
@@ -604,13 +601,16 @@ fn parse_outpoint_record(record: &PendingBatchOutpointRecord) -> Option<OutPoint
     })
 }
 
+/// arkd `deleteIntent` cannot match boarding-only registrations until ARK-UP-01
+/// (`docs/arkade-upstream-fix-proposals.md`).
+const BOARDING_DELETE_INTENT_UNSUPPORTED: &str = "The operator cannot cancel boarding batch \
+    registrations via deleteIntent yet. Wait for the registration to expire, then use Retry.";
+
 fn should_delete_operator_intent_on_cancel(resolution: &PendingBatchIntentResolution) -> bool {
     matches!(resolution, PendingBatchIntentResolution::StillPending)
 }
 
-/// Boarding-only pending intents cannot be deleted via operator `deleteIntent` until arkd also
-/// matches `TimedIntent.BoardingInputs` in `verifyIntentProofAndFindMatches`.
-fn should_clear_boarding_pending_after_delete_miss(record: &PendingBatchIntentRecord) -> bool {
+fn is_boarding_only_pending_record(record: &PendingBatchIntentRecord) -> bool {
     !record.onchain_outpoints.is_empty() && record.vtxo_outpoints.is_empty()
 }
 
@@ -703,8 +703,8 @@ mod tests {
     }
 
     #[test]
-    fn boarding_only_pending_clears_after_delete_miss() {
-        let record = PendingBatchIntentRecord {
+    fn boarding_only_pending_record_detection() {
+        let boarding = PendingBatchIntentRecord {
             kind: PendingBatchIntentKind::Board,
             intent_id: Some("intent-1".into()),
             onchain_outpoints: vec![PendingBatchOutpointRecord {
@@ -716,16 +716,16 @@ mod tests {
             registered_at: 1,
             destination_address: None,
         };
-        assert!(should_clear_boarding_pending_after_delete_miss(&record));
+        assert!(is_boarding_only_pending_record(&boarding));
 
         let mixed = PendingBatchIntentRecord {
             vtxo_outpoints: vec![PendingBatchOutpointRecord {
                 txid: "vtxo".into(),
                 vout: 1,
             }],
-            ..record.clone()
+            ..boarding
         };
-        assert!(!should_clear_boarding_pending_after_delete_miss(&mixed));
+        assert!(!is_boarding_only_pending_record(&mixed));
     }
 
     #[test]

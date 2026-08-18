@@ -223,3 +223,7 @@ Contracts `ARK-TRUST-01` through `ARK-TRUST-06` in `doc/features/arkade.yaml` de
 | **recoverable** | Expired, operator-swept, or sub-dust VTXOs | Non-blocking banner on Dashboard and Management with count, total, optional fee estimate, and **Recover now** (`settle_vtxos` on recoverable outpoints only—no boarding, no auto-recover on sync) |
 
 Contracts `ARK-REC-01` through `ARK-REC-06` in `doc/features/arkade.yaml` define banner visibility, fee display, and the user-initiated recover action.
+
+## Upstream Arkade issues
+
+Operator/protocol bugs that Bitboard cannot fully fix in vendor forks are tracked in [arkade-upstream-fix-proposals.md](arkade-upstream-fix-proposals.md).
