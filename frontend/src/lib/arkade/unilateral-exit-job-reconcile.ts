@@ -1,5 +1,6 @@
 import type { ArkadeVtxoOutpoint } from '@/workers/arkade-api'
 import { includesArkadeVtxoOutpoint } from '@/workers/arkade-api'
+import { persistedUnilateralExitJobExists } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
 
 export function selectedOutpointsOverlapInProgress(
   selectedLeafOutpoints: ArkadeVtxoOutpoint[],
@@ -15,13 +16,13 @@ export function selectedOutpointsOverlapInProgress(
  * Avoids wiping a persisted job on the first empty in-progress snapshot after reload.
  */
 export function shouldDeferPersistedUnilateralExitStaleCheck(params: {
-  jobStarted: boolean
+  selectedLeafOutpoints: ArkadeVtxoOutpoint[]
   inProgressOutpoints: ArkadeVtxoOutpoint[]
   unilateralExitInProgressSats: number
   arkadeLoadPhase: 'not-configured' | 'loading' | 'loaded' | 'load-error'
   arkadeSyncPhase: 'not-configured' | 'not-syncing' | 'syncing' | 'sync-error'
 }): boolean {
-  if (!params.jobStarted) {
+  if (!persistedUnilateralExitJobExists(params)) {
     return false
   }
   if (params.unilateralExitInProgressSats > 0 && params.inProgressOutpoints.length === 0) {
@@ -37,22 +38,17 @@ export function shouldDeferPersistedUnilateralExitStaleCheck(params: {
 }
 
 /**
- * True when SQLite still has an active job but WASM reports no in-progress exit.
+ * True when SQLite still has a job bookmark but WASM reports no in-progress exit.
  * Intermediate (en-passant) VTXOs can differ from the original job leaves, so
  * non-overlapping outpoints are not treated as stale while sats remain in progress.
  */
 export function isPersistedUnilateralExitJobStale(params: {
-  jobStarted: boolean
   selectedLeafOutpoints: ArkadeVtxoOutpoint[]
   inProgressOutpoints: ArkadeVtxoOutpoint[]
   unilateralExitInProgressSats: number
 }): boolean {
-  if (!params.jobStarted) {
+  if (!persistedUnilateralExitJobExists(params)) {
     return false
-  }
-
-  if (params.selectedLeafOutpoints.length === 0) {
-    return true
   }
 
   const hasInProgressExits =
@@ -61,15 +57,14 @@ export function isPersistedUnilateralExitJobStale(params: {
   return !hasInProgressExits
 }
 
-/** Restore control-store selection from SQLite only for a still-active exit job. */
+/** Restore control-store selection from SQLite only for a still-present exit job. */
 export function shouldHydratePersistedUnilateralExitJob(params: {
-  jobStarted: boolean
   selectedLeafOutpoints: ArkadeVtxoOutpoint[]
   inProgressOutpoints: ArkadeVtxoOutpoint[]
   unilateralExitInProgressSats: number
   controlStoreSelectionEmpty: boolean
 }): boolean {
-  if (!params.jobStarted || params.selectedLeafOutpoints.length === 0) {
+  if (!persistedUnilateralExitJobExists(params)) {
     return false
   }
   if (!params.controlStoreSelectionEmpty) {
@@ -77,7 +72,6 @@ export function shouldHydratePersistedUnilateralExitJob(params: {
   }
   if (
     isPersistedUnilateralExitJobStale({
-      jobStarted: params.jobStarted,
       selectedLeafOutpoints: params.selectedLeafOutpoints,
       inProgressOutpoints: params.inProgressOutpoints,
       unilateralExitInProgressSats: params.unilateralExitInProgressSats,

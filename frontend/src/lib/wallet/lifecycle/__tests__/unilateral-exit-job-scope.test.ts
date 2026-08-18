@@ -19,8 +19,9 @@ describe('unilateral-exit-job-scope', () => {
   it('resolveUnilateralExitJobOutpoints prefers lifecycle, then persisted, then fallback', () => {
     const lifecycle = [{ txid: 'aa'.repeat(32), vout: 0 }]
     const persisted = {
-      jobActive: true,
       selectedLeafOutpoints: [{ txid: 'bb'.repeat(32), vout: 1 }],
+      currentStepRelayedSinceUnix: null,
+      jobStartedAtUnix: 1_700_000_000,
     }
     const fallback = [{ txid: 'cc'.repeat(32), vout: 2 }]
 

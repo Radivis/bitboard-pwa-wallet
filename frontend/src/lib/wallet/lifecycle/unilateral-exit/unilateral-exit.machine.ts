@@ -472,24 +472,24 @@ export const unilateralExitMachineSetup = setup({
       fetch('http://127.0.0.1:7757/ingest/cb0f3ed4-7e87-43d6-b1dd-18329fa2e328',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2d2162'},body:JSON.stringify({sessionId:'2d2162',hypothesisId:'F',runId:'post-fix',location:'unilateral-exit.machine.ts:logManualIdleInsteadOfAutoWait',message:'manual idle instead of auto-wait',data:{prevStep:context.progress?.stepIndex??null,nextStep:output?.stepIndex??null,nextRelayed:output?.currentStepTxRelayed??null,nextPhase:output?.phase??null,automationEnabled:context.automationEnabled,proceedRequested:context.proceedRequested,proceedTargetStepIndex:context.proceedTargetStepIndex,progressRefreshRequested:context.progressRefreshRequested,eventType:event.type},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
     },
-    clearJobContext: assign(({ context }) => {
+    clearJobActorContext: assign(() => ({
+      jobOutpoints: [],
+      progress: null,
+      proceedRequested: false,
+      proceedTargetStepIndex: null,
+      progressRefreshRequested: false,
+      unconfirmedParentRetry: null,
+      feeRateSatPerVb: null,
+      pausedReason: null,
+      lastErrorMessage: null,
+      reconcileInProgressSats: 0,
+      reconcileInProgressOutpoints: [],
+    })),
+    clearPersistedJob: ({ context }) => {
       if (context.walletScope != null) {
         clearPersistedUnilateralExitJob(context.walletScope)
       }
-      return {
-        jobOutpoints: [],
-        progress: null,
-        proceedRequested: false,
-        proceedTargetStepIndex: null,
-        progressRefreshRequested: false,
-        unconfirmedParentRetry: null,
-        feeRateSatPerVb: null,
-        pausedReason: null,
-        lastErrorMessage: null,
-        reconcileInProgressSats: 0,
-        reconcileInProgressOutpoints: [],
-      }
-    }),
+    },
     syncPersistedRelayWaitFromFetch: ({ context, event }) => {
       syncPersistedRelayWait(context.walletScope, progressFromFetchEvent(event))
     },
@@ -781,15 +781,18 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
   id: 'unilateralExit',
   context: ({ input }) => createInitialUnilateralExitContext(input),
   initial: 'notConfigured',
+  on: {
+    WALLET_RESET: {
+      target: '.notConfigured',
+      actions: 'resetToNotConfigured',
+    },
+  },
   states: {
     notConfigured: {
       on: {
         WALLET_CONFIGURED: {
           target: 'idle',
           actions: 'assignWalletScope',
-        },
-        WALLET_RESET: {
-          actions: 'resetToNotConfigured',
         },
       },
     },
@@ -825,11 +828,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
         },
         ABORT_ORCHESTRATION: abortOrchestrationTransition,
         CLEAR_JOB: {
-          actions: 'clearJobContext',
-        },
-        WALLET_RESET: {
-          target: 'notConfigured',
-          actions: 'resetToNotConfigured',
+          actions: ['clearPersistedJob', 'clearJobActorContext'],
         },
         AUTOMATION_PREFS_CHANGED: [
           {
@@ -1048,7 +1047,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
         ],
         CLEAR_JOB: {
           target: 'idle',
-          actions: 'clearJobContext',
+          actions: ['clearPersistedJob', 'clearJobActorContext'],
         },
       },
     },
@@ -1094,7 +1093,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
         },
         CLEAR_JOB: {
           target: 'idle',
-          actions: 'clearJobContext',
+          actions: ['clearPersistedJob', 'clearJobActorContext'],
         },
       },
     },
@@ -1119,7 +1118,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
         ],
         CLEAR_JOB: {
           target: 'idle',
-          actions: 'clearJobContext',
+          actions: ['clearPersistedJob', 'clearJobActorContext'],
         },
         PROCEED_MANUAL: {
           target: 'checkingProgress',
@@ -1139,7 +1138,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
         },
         CLEAR_JOB: {
           target: 'idle',
-          actions: 'clearJobContext',
+          actions: ['clearPersistedJob', 'clearJobActorContext'],
         },
         HYDRATE_OR_START: {
           target: 'checkingProgress',
@@ -1151,7 +1150,8 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
       entry: [
         'persistUnilateralExitFailureFromViability',
         'invalidateUnilateralExitQueriesOnTerminate',
-        'clearJobContext',
+        'clearPersistedJob',
+        'clearJobActorContext',
         'clearTerminatedProceedRequested',
       ],
       always: {
@@ -1163,7 +1163,8 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
         'stageAbortedJobOutpoints',
         'persistAbortedUnilateralExitFailure',
         'invalidateUnilateralExitQueriesOnTerminate',
-        'clearJobContext',
+        'clearPersistedJob',
+        'clearJobActorContext',
         'clearTerminatedProceedRequested',
       ],
       always: {
@@ -1175,7 +1176,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
         ABORT_ORCHESTRATION: abortOrchestrationTransition,
         CLEAR_JOB: {
           target: 'idle',
-          actions: 'clearJobContext',
+          actions: ['clearPersistedJob', 'clearJobActorContext'],
         },
         PROCEED_MANUAL: {
           target: 'checkingProgress',

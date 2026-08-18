@@ -401,25 +401,13 @@ where
             return Err(Error::ad_hoc("no matching inputs to delete intent"));
         }
 
-        let total_amount = boarding_inputs
-            .iter()
-            .map(|i| i.amount())
-            .chain(vtxo_inputs.iter().map(|i| i.amount()))
-            .fold(Amount::ZERO, |acc, amount| acc + amount);
-        let to_amount = self.board_to_amount_after_intent_fee(
-            &boarding_inputs,
-            &vtxo_inputs,
-            total_amount,
-            &to_address,
-        )?;
-
         let prepared = self.prepare_intent(
             rng,
             boarding_inputs,
             vtxo_inputs,
             BatchOutputType::Board {
                 to_address,
-                to_amount,
+                to_amount: Amount::ZERO,
             },
             PrepareIntentKind::Delete,
         )?;
@@ -1228,54 +1216,56 @@ where
 
         let mut outputs = vec![];
 
-        match output_type {
-            BatchOutputType::Board {
-                to_address,
-                to_amount,
-            } => {
-                if to_amount < dust {
-                    return Err(Error::ad_hoc(format!(
-                        "cannot settle into sub-dust VTXO: {to_amount} < {dust}"
-                    )));
+        if !matches!(intent_kind, PrepareIntentKind::Delete) {
+            match output_type {
+                BatchOutputType::Board {
+                    to_address,
+                    to_amount,
+                } => {
+                    if to_amount < dust {
+                        return Err(Error::ad_hoc(format!(
+                            "cannot settle into sub-dust VTXO: {to_amount} < {dust}"
+                        )));
+                    }
+
+                    outputs.push(intent::Output::Offchain(TxOut {
+                        value: to_amount,
+                        script_pubkey: to_address.to_p2tr_script_pubkey(),
+                    }));
                 }
-
-                outputs.push(intent::Output::Offchain(TxOut {
-                    value: to_amount,
-                    script_pubkey: to_address.to_p2tr_script_pubkey(),
-                }));
-            }
-            BatchOutputType::OffBoard {
-                to_address,
-                to_amount,
-                change_amount,
-                ..
-            } if change_amount == Amount::ZERO => {
-                outputs.push(intent::Output::Onchain(TxOut {
-                    value: to_amount,
-                    script_pubkey: to_address.script_pubkey(),
-                }));
-            }
-            BatchOutputType::OffBoard {
-                to_address,
-                to_amount,
-                change_address,
-                change_amount,
-            } => {
-                if change_amount < dust {
-                    return Err(Error::ad_hoc(format!(
-                        "cannot settle with sub-dust change VTXO: {change_amount} < {dust}"
-                    )));
+                BatchOutputType::OffBoard {
+                    to_address,
+                    to_amount,
+                    change_amount,
+                    ..
+                } if change_amount == Amount::ZERO => {
+                    outputs.push(intent::Output::Onchain(TxOut {
+                        value: to_amount,
+                        script_pubkey: to_address.script_pubkey(),
+                    }));
                 }
+                BatchOutputType::OffBoard {
+                    to_address,
+                    to_amount,
+                    change_address,
+                    change_amount,
+                } => {
+                    if change_amount < dust {
+                        return Err(Error::ad_hoc(format!(
+                            "cannot settle with sub-dust change VTXO: {change_amount} < {dust}"
+                        )));
+                    }
 
-                outputs.push(intent::Output::Onchain(TxOut {
-                    value: to_amount,
-                    script_pubkey: to_address.script_pubkey(),
-                }));
+                    outputs.push(intent::Output::Onchain(TxOut {
+                        value: to_amount,
+                        script_pubkey: to_address.script_pubkey(),
+                    }));
 
-                outputs.push(intent::Output::Offchain(TxOut {
-                    value: change_amount,
-                    script_pubkey: change_address.to_p2tr_script_pubkey(),
-                }));
+                    outputs.push(intent::Output::Offchain(TxOut {
+                        value: change_amount,
+                        script_pubkey: change_address.to_p2tr_script_pubkey(),
+                    }));
+                }
             }
         }
 
@@ -1336,8 +1326,10 @@ where
             .map_err(|_| Error::ad_hoc("unix timestamp overflow"))?;
         let expire_at = now + (2 * 60);
 
-        if let Some(packet) = create_asset_preservation_packet(&inputs, &outputs)? {
-            outputs.push(intent::Output::AssetPacket(packet.to_txout()));
+        if !matches!(intent_kind, PrepareIntentKind::Delete) {
+            if let Some(packet) = create_asset_preservation_packet(&inputs, &outputs)? {
+                outputs.push(intent::Output::AssetPacket(packet.to_txout()));
+            }
         }
 
         let mut onchain_output_indexes = Vec::new();
@@ -1360,7 +1352,8 @@ where
                 expire_at,
                 own_cosigner_pks: vec![cosigner_pk],
             },
-            PrepareIntentKind::Delete => intent::IntentMessage::Delete { expire_at },
+            // expire_at = 0: operator does not enforce expiry for ownership-only delete proofs.
+            PrepareIntentKind::Delete => intent::IntentMessage::Delete { expire_at: 0 },
         };
 
         let intent = intent::make_intent(

@@ -154,7 +154,7 @@ export function selectCanAbortUnilateralExitOrchestration(
   params: {
     resolvedJobOutpointsCount: number
     lifecycleJobActive: boolean
-    persistedJobActive: boolean
+    persistedJobExists: boolean
     hasInProgressExits: boolean
   },
 ): boolean {
@@ -167,7 +167,7 @@ export function selectCanAbortUnilateralExitOrchestration(
   return (
     state.context.jobOutpoints.length > 0 ||
     params.lifecycleJobActive ||
-    params.persistedJobActive ||
+    params.persistedJobExists ||
     params.hasInProgressExits ||
     unilateralExitSnapshotIsProceeding(state) ||
     unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm) ||

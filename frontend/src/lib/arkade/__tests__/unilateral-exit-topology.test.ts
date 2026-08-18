@@ -275,7 +275,6 @@ describe('unilateral-exit-topology helpers', () => {
         selectedLeafOutpoints: [],
         inProgressOutpoints: inProgress,
         persistedJobOutpoints: persisted,
-        persistedJobStarted: true,
       }),
     ).toEqual(persisted)
 
@@ -283,7 +282,6 @@ describe('unilateral-exit-topology helpers', () => {
       resolveUnilateralExitTopologyOutpoints({
         selectedLeafOutpoints: [],
         inProgressOutpoints: inProgress,
-        persistedJobOutpoints: persisted,
       }),
     ).toEqual(inProgress)
 

@@ -19,7 +19,10 @@ import type {
   UnilateralExitStartParams,
   UnilateralExitWalletScope,
 } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
-import { unilateralExitWalletScopeKey } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
+import {
+  persistedUnilateralExitJobExists,
+  unilateralExitWalletScopeKey,
+} from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
 import { resolveUnilateralExitJobOutpoints } from '@/lib/wallet/lifecycle/unilateral-exit-job-scope'
 import { unilateralExitMachineActors } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.actors'
 import { resolveVtxoIdsForOutpoints } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-vtxo-ids'
@@ -234,16 +237,7 @@ export async function hydrateUnilateralExitFromPersistence(params: {
   await waitForPersistedStoreHydration(useUnilateralExitLifecyclePersistenceStore)
 
   const persisted = getPersistedUnilateralExitJob(params.walletScope)
-  if (!persisted.jobActive || persisted.selectedLeafOutpoints.length === 0) {
-    if (params.inProgressOutpoints.length === 0) {
-      return
-    }
-    await dispatchHydrateOrStart({
-      walletScope: params.walletScope,
-      outpoints: params.inProgressOutpoints,
-      reconcileInProgressSats: params.unilateralExitInProgressSats,
-      reconcileInProgressOutpoints: params.inProgressOutpoints,
-    })
+  if (!persistedUnilateralExitJobExists(persisted)) {
     return
   }
 
@@ -251,7 +245,7 @@ export async function hydrateUnilateralExitFromPersistence(params: {
   const syncSnapshot = getArkadeSyncLifecycleSnapshot()
   if (
     shouldDeferPersistedUnilateralExitStaleCheck({
-      jobStarted: persisted.jobActive,
+      selectedLeafOutpoints: persisted.selectedLeafOutpoints,
       inProgressOutpoints: params.inProgressOutpoints,
       unilateralExitInProgressSats: params.unilateralExitInProgressSats,
       arkadeLoadPhase: loadSnapshot.loadPhase,
@@ -263,7 +257,6 @@ export async function hydrateUnilateralExitFromPersistence(params: {
 
   if (
     isPersistedUnilateralExitJobStale({
-      jobStarted: persisted.jobActive,
       selectedLeafOutpoints: persisted.selectedLeafOutpoints,
       inProgressOutpoints: params.inProgressOutpoints,
       unilateralExitInProgressSats: params.unilateralExitInProgressSats,

@@ -124,6 +124,8 @@ Two-step confirmation (info modal, then red risk modal with required checkbox). 
 
 Abort **stops frontend orchestration only**. It does **not** delete `unilateral_exit_materials`, watches, pending deductions, or on-chain broadcasts. Backend in-progress state remains until completion or reconcile. If the ASP is online, an unfinished on-chain unroll can still be seized.
 
+Abort and ASP `terminated` clear the frontend job bookmark. The failure banner comes from error persistence (`user_aborted` / terminal viability). Hydrate must not treat leftover WASM in-progress rows as crash recovery: a job is restored only when persisted outpoints are still present.
+
 ---
 
 ## XState machine
@@ -141,7 +143,7 @@ Always enter `checkingProgress` before `proceeding` on hydrate, reload, automati
 
 `package-not-child-with-unconfirmed-parents` is a **different** wait: `waitingForParentData` (graph overlay: Lucide `UserRoundArrowLeft`). Esplora can already show the parent confirmed while the submit node does not. Do not use the pickaxe (`waitingConfirm`) for this. After `parentDataWait` (15s; `UNILATERAL_EXIT_PARENT_DATA_WAIT_MS`) the machine returns to `ensuringBroadcast`. `PROCEED_MANUAL` skips the wait.
 
-`terminated` and `aborted` persist failure, clear the job, invalidate topology/progress/balance queries, then **always** return to `idle`.
+`terminated` and `aborted` persist failure, clear the job, invalidate topology/progress/balance queries, then **always** return to `idle`. `WALLET_RESET` is a root transition to `notConfigured` from every state.
 
 ```mermaid
 stateDiagram-v2

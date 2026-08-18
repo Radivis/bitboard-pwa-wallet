@@ -12,7 +12,6 @@ describe('unilateral-exit-job-reconcile', () => {
   it('treats persisted job as stale when nothing is in progress after sync settled', () => {
     expect(
       isPersistedUnilateralExitJobStale({
-        jobStarted: true,
         selectedLeafOutpoints: [leafA],
         inProgressOutpoints: [],
         unilateralExitInProgressSats: 0,
@@ -23,7 +22,6 @@ describe('unilateral-exit-job-reconcile', () => {
   it('keeps persisted job when selection overlaps in-progress outpoints', () => {
     expect(
       isPersistedUnilateralExitJobStale({
-        jobStarted: true,
         selectedLeafOutpoints: [leafA],
         inProgressOutpoints: [leafA],
         unilateralExitInProgressSats: 50_000,
@@ -34,7 +32,6 @@ describe('unilateral-exit-job-reconcile', () => {
   it('keeps persisted job when in-progress outpoints differ from original leaves', () => {
     expect(
       isPersistedUnilateralExitJobStale({
-        jobStarted: true,
         selectedLeafOutpoints: [leafA],
         inProgressOutpoints: [leafB],
         unilateralExitInProgressSats: 50_000,
@@ -45,7 +42,6 @@ describe('unilateral-exit-job-reconcile', () => {
   it('keeps persisted job when in-progress sats exist before outpoints load', () => {
     expect(
       isPersistedUnilateralExitJobStale({
-        jobStarted: true,
         selectedLeafOutpoints: [leafA],
         inProgressOutpoints: [],
         unilateralExitInProgressSats: 300_000,
@@ -53,10 +49,9 @@ describe('unilateral-exit-job-reconcile', () => {
     ).toBe(false)
   })
 
-  it('hydrates when job is active and not stale even if outpoints differ', () => {
+  it('hydrates when persisted outpoints exist and the job is not stale', () => {
     expect(
       shouldHydratePersistedUnilateralExitJob({
-        jobStarted: true,
         selectedLeafOutpoints: [leafA],
         inProgressOutpoints: [leafA],
         unilateralExitInProgressSats: 50_000,
@@ -66,7 +61,6 @@ describe('unilateral-exit-job-reconcile', () => {
 
     expect(
       shouldHydratePersistedUnilateralExitJob({
-        jobStarted: true,
         selectedLeafOutpoints: [leafA],
         inProgressOutpoints: [leafB],
         unilateralExitInProgressSats: 50_000,
@@ -76,7 +70,6 @@ describe('unilateral-exit-job-reconcile', () => {
 
     expect(
       shouldHydratePersistedUnilateralExitJob({
-        jobStarted: true,
         selectedLeafOutpoints: [leafA],
         inProgressOutpoints: [],
         unilateralExitInProgressSats: 0,
@@ -85,10 +78,21 @@ describe('unilateral-exit-job-reconcile', () => {
     ).toBe(false)
   })
 
+  it('does not hydrate when persisted outpoints are empty', () => {
+    expect(
+      shouldHydratePersistedUnilateralExitJob({
+        selectedLeafOutpoints: [],
+        inProgressOutpoints: [leafA],
+        unilateralExitInProgressSats: 50_000,
+        controlStoreSelectionEmpty: true,
+      }),
+    ).toBe(false)
+  })
+
   it('defers stale check while arkade sync is still running', () => {
     expect(
       shouldDeferPersistedUnilateralExitStaleCheck({
-        jobStarted: true,
+        selectedLeafOutpoints: [leafA],
         inProgressOutpoints: [],
         unilateralExitInProgressSats: 0,
         arkadeLoadPhase: 'loaded',
@@ -100,7 +104,7 @@ describe('unilateral-exit-job-reconcile', () => {
   it('defers stale check when in-progress sats exist before outpoints load', () => {
     expect(
       shouldDeferPersistedUnilateralExitStaleCheck({
-        jobStarted: true,
+        selectedLeafOutpoints: [leafA],
         inProgressOutpoints: [],
         unilateralExitInProgressSats: 300_000,
         arkadeLoadPhase: 'loaded',

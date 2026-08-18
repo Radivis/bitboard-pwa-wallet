@@ -116,6 +116,7 @@ import {
   resetUnilateralExitActorForTests,
   sendUnilateralExitEvent,
   getUnilateralExitActorSnapshot,
+  syncUnilateralExitWithLockPhase,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime'
 import { UNILATERAL_EXIT_MACHINE_STATE } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-types'
 import { unilateralExitSnapshotIsInState } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-snapshot'
@@ -135,9 +136,9 @@ describe('unilateral-exit-runtime hydration', () => {
     persistenceHydrationWaiters = []
     resetUnilateralExitActorForTests()
     mockGetJob.mockReturnValue({
-      jobActive: true,
       selectedLeafOutpoints: [leaf],
       currentStepRelayedSinceUnix: null,
+      jobStartedAtUnix: 1_700_000_000,
     })
     vi.mocked(getArkadeSyncLifecycleSnapshot).mockReturnValue({
       syncPhase: 'not-syncing',
@@ -219,9 +220,9 @@ describe('unilateral-exit-runtime hydration', () => {
   it('stale hydrate clears persisted bookmark without CLEAR_JOB event', async () => {
     persistenceHydrated = true
     mockGetJob.mockReturnValue({
-      jobActive: true,
       selectedLeafOutpoints: [leaf],
       currentStepRelayedSinceUnix: null,
+      jobStartedAtUnix: 1_700_000_000,
     })
 
     await hydrateUnilateralExitFromPersistence({
@@ -260,12 +261,12 @@ describe('unilateral-exit-runtime hydration', () => {
     expect(mockClearJob).not.toHaveBeenCalled()
   })
 
-  it('hydrate resumes from in-progress outpoints when persisted job is empty', async () => {
+  it('hydrate does not resume from in-progress outpoints when persisted job is empty', async () => {
     persistenceHydrated = true
     mockGetJob.mockReturnValue({
-      jobActive: false,
       selectedLeafOutpoints: [],
       currentStepRelayedSinceUnix: null,
+      jobStartedAtUnix: null,
     })
 
     await configureUnilateralExitForLoadedWallet(walletScope)
@@ -276,8 +277,35 @@ describe('unilateral-exit-runtime hydration', () => {
     })
 
     const snapshot = getUnilateralExitActorSnapshot()
-    expect(snapshot.context.jobOutpoints).toEqual([leaf])
-    expect(mockPersistJob).toHaveBeenCalled()
+    expect(snapshot.context.jobOutpoints).toEqual([])
+    expect(mockPersistJob).not.toHaveBeenCalled()
+  })
+
+  it('lock phase locked resets a waitingConfirm actor', async () => {
+    persistenceHydrated = true
+    mockGetJob.mockReturnValue({
+      selectedLeafOutpoints: [leaf],
+      currentStepRelayedSinceUnix: null,
+      jobStartedAtUnix: 1_700_000_000,
+    })
+
+    await configureUnilateralExitForLoadedWallet(walletScope)
+    sendUnilateralExitEvent({
+      type: 'START_MANUAL',
+      walletScope,
+      outpoints: [leaf],
+      feeRateSatPerVb: 2,
+    })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    const beforeLock = getUnilateralExitActorSnapshot()
+    expect(beforeLock.value).toBe(UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm)
+
+    syncUnilateralExitWithLockPhase('locked')
+
+    const afterLock = getUnilateralExitActorSnapshot()
+    expect(afterLock.value).toBe(UNILATERAL_EXIT_MACHINE_STATE.notConfigured)
+    expect(afterLock.context.walletScope).toBeNull()
   })
 
   it('abort orchestration disables automation and clears job', async () => {

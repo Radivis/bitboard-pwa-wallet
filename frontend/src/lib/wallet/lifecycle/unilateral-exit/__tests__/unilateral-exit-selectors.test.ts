@@ -421,7 +421,7 @@ describe('selectCanAbortUnilateralExitOrchestration', () => {
   const abortParams = {
     resolvedJobOutpointsCount: 1,
     lifecycleJobActive: false,
-    persistedJobActive: false,
+    persistedJobExists: false,
     hasInProgressExits: false,
   }
 

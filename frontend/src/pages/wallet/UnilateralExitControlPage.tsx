@@ -42,7 +42,10 @@ import { defaultMaxFeeRateSatPerVb } from '@/lib/arkade/unilateral-exit-automati
 import { useUnilateralExitAutomationPrefsStore } from '@/lib/wallet/lifecycle/unilateral-exit-automation-prefs-persistence'
 import { useUnilateralExitLifecyclePersistenceStore, emptyPersistedUnilateralExitJob } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence'
 import { useUnilateralExitFailurePersistenceStore } from '@/lib/wallet/lifecycle/unilateral-exit-failure-persistence'
-import { UnilateralExitLifecyclePhase } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
+import {
+  UnilateralExitLifecyclePhase,
+  persistedUnilateralExitJobExists,
+} from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
 import {
   resolveActiveUnilateralExitWalletScope,
   resolveUnilateralExitJobOutpoints,
@@ -214,6 +217,7 @@ export function UnilateralExitControlPage() {
     }
     return state.getJob(activeWalletId, networkMode, activeArkadeConnectionId)
   })
+  const persistedJobExists = persistedUnilateralExitJobExists(persistedJob)
 
   const persistedFailure = useUnilateralExitFailurePersistenceStore((state) => {
     if (
@@ -232,12 +236,13 @@ export function UnilateralExitControlPage() {
         lifecycleOutpoints: lifecycleSnapshot.selectedLeafOutpoints,
         persistedJob,
         fallbackOutpoints:
-          persistedJob.jobActive || lifecycleJobActive ? [] : selectedLeafOutpoints,
+          persistedJobExists || lifecycleJobActive ? [] : selectedLeafOutpoints,
       }),
     [
       lifecycleJobActive,
       lifecycleSnapshot.selectedLeafOutpoints,
       persistedJob,
+      persistedJobExists,
       selectedLeafOutpoints,
     ],
   )
@@ -270,12 +275,10 @@ export function UnilateralExitControlPage() {
         selectedLeafOutpoints: jobOutpoints,
         inProgressOutpoints,
         persistedJobOutpoints: persistedJob.selectedLeafOutpoints,
-        persistedJobStarted: persistedJob.jobActive,
       }),
     [
       inProgressOutpoints,
       jobOutpoints,
-      persistedJob.jobActive,
       persistedJob.selectedLeafOutpoints,
     ],
   )
@@ -382,7 +385,7 @@ export function UnilateralExitControlPage() {
   ])
 
   useEffect(() => {
-    if (persistedJob.jobActive || lifecycleJobActive) return
+    if (persistedJobExists || lifecycleJobActive) return
     if (selectedLeafOutpoints.length > 0) return
     const inProgressRows = inProgressQuery.data ?? []
     if (inProgressRows.length === 0) return
@@ -393,7 +396,7 @@ export function UnilateralExitControlPage() {
     )
   }, [
     inProgressQuery.data,
-    persistedJob.jobActive,
+    persistedJobExists,
     lifecycleJobActive,
     selectedLeafOutpoints.length,
     seedSelectionFromInProgress,
@@ -519,7 +522,7 @@ export function UnilateralExitControlPage() {
       selectCanAbortUnilateralExitOrchestration(actorSnapshot, {
         resolvedJobOutpointsCount: jobOutpoints.length,
         lifecycleJobActive,
-        persistedJobActive: persistedJob.jobActive,
+        persistedJobExists,
         hasInProgressExits,
       }),
     [
@@ -527,7 +530,7 @@ export function UnilateralExitControlPage() {
       hasInProgressExits,
       jobOutpoints.length,
       lifecycleJobActive,
-      persistedJob.jobActive,
+      persistedJobExists,
     ],
   )
   const inProgressOverlay = useMemo(

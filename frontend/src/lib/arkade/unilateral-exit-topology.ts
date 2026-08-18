@@ -25,8 +25,6 @@ export function resolveUnilateralExitTopologyOutpoints(params: {
   selectedLeafOutpoints: ArkadeVtxoOutpoint[]
   inProgressOutpoints: ArkadeVtxoOutpoint[]
   persistedJobOutpoints?: ArkadeVtxoOutpoint[]
-  /** When false, ignore persisted job outpoints (finished or idle job). */
-  persistedJobStarted?: boolean
 }): ArkadeVtxoOutpoint[] {
   if (
     params.authoritativeJobOutpoints != null &&
@@ -37,11 +35,7 @@ export function resolveUnilateralExitTopologyOutpoints(params: {
   if (params.selectedLeafOutpoints.length > 0) {
     return sortArkadeVtxoOutpoints(params.selectedLeafOutpoints)
   }
-  if (
-    params.persistedJobStarted === true &&
-    params.persistedJobOutpoints != null &&
-    params.persistedJobOutpoints.length > 0
-  ) {
+  if (params.persistedJobOutpoints != null && params.persistedJobOutpoints.length > 0) {
     return sortArkadeVtxoOutpoints(params.persistedJobOutpoints)
   }
   if (params.inProgressOutpoints.length > 0) {

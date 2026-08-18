@@ -221,6 +221,19 @@ impl ArkSession {
                 );
                 Ok(completed_without_txid())
             }
+            Err(error)
+                if error.is_intent_proof_no_operator_match()
+                    && should_clear_boarding_pending_after_delete_miss(&record) =>
+            {
+                // arkd stores boarding inputs on TimedIntent.BoardingInputs but
+                // verifyIntentProofAndFindMatches only scans TimedIntent.Inputs, so
+                // deleteIntent cannot match boarding-only registrations today.
+                self.wallet_db.remove_pending_batch_intents_overlapping(
+                    &record.onchain_outpoints,
+                    &record.vtxo_outpoints,
+                );
+                Ok(completed_without_txid())
+            }
             Err(error) => Err(error.into()),
         }
     }
@@ -595,6 +608,12 @@ fn should_delete_operator_intent_on_cancel(resolution: &PendingBatchIntentResolu
     matches!(resolution, PendingBatchIntentResolution::StillPending)
 }
 
+/// Boarding-only pending intents cannot be deleted via operator `deleteIntent` until arkd also
+/// matches `TimedIntent.BoardingInputs` in `verifyIntentProofAndFindMatches`.
+fn should_clear_boarding_pending_after_delete_miss(record: &PendingBatchIntentRecord) -> bool {
+    !record.onchain_outpoints.is_empty() && record.vtxo_outpoints.is_empty()
+}
+
 fn pending_record_overlaps_outpoints(
     record: &PendingBatchIntentRecord,
     onchain_outpoints: &[PendingBatchOutpointRecord],
@@ -679,7 +698,34 @@ mod tests {
         let arkd = ark_client::Error::wallet(
             r#"request failed: error in response: status code 400 Bad Request: {"code":3,"message":"INVALID_INTENT_PROOF (23): no matching intents found for intent proof"}"#,
         );
-        assert!(arkd.is_intent_not_found());
+        assert!(!arkd.is_intent_not_found());
+        assert!(arkd.is_intent_proof_no_operator_match());
+    }
+
+    #[test]
+    fn boarding_only_pending_clears_after_delete_miss() {
+        let record = PendingBatchIntentRecord {
+            kind: PendingBatchIntentKind::Board,
+            intent_id: Some("intent-1".into()),
+            onchain_outpoints: vec![PendingBatchOutpointRecord {
+                txid: "abc".into(),
+                vout: 0,
+            }],
+            vtxo_outpoints: vec![],
+            amount_sats: 50_000,
+            registered_at: 1,
+            destination_address: None,
+        };
+        assert!(should_clear_boarding_pending_after_delete_miss(&record));
+
+        let mixed = PendingBatchIntentRecord {
+            vtxo_outpoints: vec![PendingBatchOutpointRecord {
+                txid: "vtxo".into(),
+                vout: 1,
+            }],
+            ..record.clone()
+        };
+        assert!(!should_clear_boarding_pending_after_delete_miss(&mixed));
     }
 
     #[test]

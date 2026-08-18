@@ -86,20 +86,21 @@ First unroll broadcast writes a unilateral pending deduction while the VTXO is s
 
 Plaintext rows in the wallet `settings` table via `sqliteStorage`. Not secrets. Hydration: `waitForPersistedStoreHydration` before `HYDRATE_OR_START`.
 
-### Job: `unilateral-exit-lifecycle-storage` (v4)
+### Job: `unilateral-exit-lifecycle-storage` (v5)
 
 File: [`unilateral-exit-lifecycle-persistence.ts`](../../frontend/src/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence.ts)
 
-`jobsByKey` → `PersistedUnilateralExitJob`:
+`jobsByKey` → `PersistedUnilateralExitJob`. A job exists iff `selectedLeafOutpoints.length > 0`.
 
 | Field | Meaning |
 |-------|---------|
-| `selectedLeafOutpoints` | Sorted job leaves (authoritative set while `jobActive`) |
-| `jobActive` | Frontend orchestration in progress |
+| `selectedLeafOutpoints` | Sorted job leaves; empty means no frontend job |
 | `currentStepRelayedSinceUnix` | When the active step was first known relayed; null when not waiting |
-| `jobStartedAtUnix` | Job start; used in failure records; cleared on `clearJob` |
+| `jobStartedAtUnix` | Job start; copied into failure records; cleared on `clearJob` |
 
-The machine writes this on `START_MANUAL` / `START_AUTOMATIC` / `HYDRATE_OR_START` and clears it on complete, terminate, abort, and `CLEAR_JOB`.
+v5 drops `jobActive`. Inactive v4 rows (`jobActive: false`, including aborted jobs that still listed outpoints) migrate to an empty bookmark.
+
+The machine writes this on `START_MANUAL` / `START_AUTOMATIC` / `HYDRATE_OR_START` and clears it on complete, terminate, abort, and `CLEAR_JOB`. Failures (including user abort) are stored separately in the failure bookmark.
 
 ### Automation prefs: `unilateral-exit-automation-prefs` (v1)
 
@@ -121,15 +122,16 @@ One last failure per scope, for the control-page banner:
 
 ### Control store (not persisted)
 
-[`unilateralExitControlStore.ts`](../../frontend/src/stores/unilateralExitControlStore.ts) holds leaf selection and graph epoch in memory only. On unlock, hydrate selection from the **job store** when the job is still active (`shouldHydratePersistedUnilateralExitJob`).
+[`unilateralExitControlStore.ts`](../../frontend/src/stores/unilateralExitControlStore.ts) holds leaf selection and graph epoch in memory only. On unlock, hydrate selection from the **job store** when persisted outpoints are still present (`shouldHydratePersistedUnilateralExitJob`).
 
 ---
 
 ## Hydrate and authority
 
 1. Unlock / Arkade load → `hydrateUnilateralExitFromPersistence` in [`unilateral-exit-runtime.ts`](../../frontend/src/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime.ts).
-2. If `jobActive` and outpoints are present → `HYDRATE_OR_START` (always via `checkingProgress`).
-3. While the job is active, topology/progress outpoints come from the **actor** (`resolveUnilateralExitTopologyOutpoints` / `resolveUnilateralExitJobOutpoints`). Never skip when lifecycle outpoints are empty but persistence still has them.
-4. Stale-job clearing waits until Arkade load/sync is quiet and WASM reports no in-progress exit **sats**. Non-overlapping en-passant outpoints are not stale by themselves.
+2. If persisted outpoints are present → `HYDRATE_OR_START` (always via `checkingProgress`).
+3. If the job bookmark is empty, hydrate does **not** invent a job from leftover WASM in-progress exits. Those rows stay visible on the control page; the user starts again explicitly. Crash recovery is “persisted outpoints are still there.”
+4. While the job exists, topology/progress outpoints come from the **actor** (`resolveUnilateralExitTopologyOutpoints` / `resolveUnilateralExitJobOutpoints`). Never skip when lifecycle outpoints are empty but persistence still has them.
+5. Stale-job clearing waits until Arkade load/sync is quiet and WASM reports no in-progress exit **sats**. Non-overlapping en-passant outpoints are not stale by themselves.
 
 TanStack Query caches progress/topology/balance for display. Durable writes happen in WASM export (encrypted payload) and Zustand persist (settings). During an active job, `actor.context.progress` is authoritative over the query cache.

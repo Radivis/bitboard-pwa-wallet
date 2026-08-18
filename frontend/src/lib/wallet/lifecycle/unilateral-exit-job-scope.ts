@@ -1,6 +1,7 @@
 import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import {
   UnilateralExitLifecyclePhase,
+  persistedUnilateralExitJobExists,
   type PersistedUnilateralExitJob,
   type UnilateralExitLifecycleSnapshot,
   type UnilateralExitWalletScope,
@@ -59,6 +60,6 @@ export function isUnilateralExitAutomationJobInactive(
     lifecycle.phase === UnilateralExitLifecyclePhase.Complete ||
     lifecycle.phase === UnilateralExitLifecyclePhase.Error ||
     lifecycle.phase === UnilateralExitLifecyclePhase.NotConfigured ||
-    (!persisted.jobActive && jobOutpoints.length === 0)
+    (!persistedUnilateralExitJobExists(persisted) && jobOutpoints.length === 0)
   )
 }

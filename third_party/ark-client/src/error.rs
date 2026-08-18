@@ -158,12 +158,17 @@ impl Error {
     }
 
     /// Delete intent is idempotent; operators may report missing intents once already removed.
-    ///
-    /// arkd uses `INVALID_INTENT_PROOF` with "no matching intents found for intent proof" when
-    /// the pool has no intent for the proven inputs (expired, already deleted, or never selected).
     pub fn is_intent_not_found(&self) -> bool {
-        let lower = self.to_string().to_ascii_lowercase();
-        lower.contains("intent not found") || lower.contains("no matching intents found")
+        self.to_string()
+            .to_ascii_lowercase()
+            .contains("intent not found")
+    }
+
+    /// Proof verified on the operator, but no registered intent shares the proven input outpoints.
+    pub fn is_intent_proof_no_operator_match(&self) -> bool {
+        self.to_string()
+            .to_ascii_lowercase()
+            .contains("no matching intents found for intent proof")
     }
 }
 
@@ -438,11 +443,15 @@ mod tests {
     fn is_intent_not_found_detects_missing_operator_intent() {
         let err = Error::ad_hoc("delete intent failed: intent not found");
         assert!(err.is_intent_not_found());
-
-        let arkd = Error::ad_hoc(
-            r#"request failed: error in response: status code 400 Bad Request: {"code":3,"message":"INVALID_INTENT_PROOF (23): no matching intents found for intent proof"}"#,
-        );
-        assert!(arkd.is_intent_not_found());
         assert!(!Error::ad_hoc("duplicated input").is_intent_not_found());
+    }
+
+    #[test]
+    fn is_intent_proof_no_operator_match_detects_valid_proof_without_intent() {
+        let err = Error::ad_hoc(
+            r#"INVALID_INTENT_PROOF (23): no matching intents found for intent proof"#,
+        );
+        assert!(err.is_intent_proof_no_operator_match());
+        assert!(!err.is_intent_not_found());
     }
 }

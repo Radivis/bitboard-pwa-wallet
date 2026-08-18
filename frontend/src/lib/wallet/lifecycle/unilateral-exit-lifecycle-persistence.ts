@@ -12,7 +12,6 @@ import {
 
 export const emptyPersistedUnilateralExitJob: PersistedUnilateralExitJob = {
   selectedLeafOutpoints: [],
-  jobActive: false,
   currentStepRelayedSinceUnix: null,
   jobStartedAtUnix: null,
 }
@@ -50,23 +49,30 @@ function updateJob(
   }
 }
 
-type LegacyPersistedJob = PersistedUnilateralExitJob & {
+type LegacyPersistedJob = {
+  selectedLeafOutpoints?: ArkadeVtxoOutpoint[]
+  currentStepRelayedSinceUnix?: number | null
+  jobStartedAtUnix?: number | null
   expectedTotalSteps?: number | null
+  jobActive?: boolean
+  suppressHydrateResume?: boolean
 }
 
-function migrateJobToV3(job: LegacyPersistedJob): PersistedUnilateralExitJob {
-  return {
-    selectedLeafOutpoints: job.selectedLeafOutpoints ?? [],
-    jobActive: job.jobActive ?? false,
-    currentStepRelayedSinceUnix: job.currentStepRelayedSinceUnix ?? null,
-    jobStartedAtUnix: null,
+/** v5: a job exists iff outpoints are present. Inactive v4 rows (and abort leftovers) become empty. */
+export function migratePersistedUnilateralExitJob(
+  job: LegacyPersistedJob,
+): PersistedUnilateralExitJob {
+  const selectedLeafOutpoints = job.selectedLeafOutpoints ?? []
+  const inactive =
+    job.jobActive === false ||
+    job.suppressHydrateResume === true ||
+    selectedLeafOutpoints.length === 0
+  if (inactive) {
+    return emptyPersistedUnilateralExitJob
   }
-}
-
-function migrateJobToV4(job: LegacyPersistedJob): PersistedUnilateralExitJob {
-  const migrated = migrateJobToV3(job)
   return {
-    ...migrated,
+    selectedLeafOutpoints,
+    currentStepRelayedSinceUnix: job.currentStepRelayedSinceUnix ?? null,
     jobStartedAtUnix: job.jobStartedAtUnix ?? null,
   }
 }
@@ -88,7 +94,6 @@ export const useUnilateralExitLifecyclePersistenceStore =
           set((state) =>
             updateJob(state, key, () => ({
               selectedLeafOutpoints: sorted,
-              jobActive: true,
               currentStepRelayedSinceUnix: null,
               jobStartedAtUnix: Math.floor(Date.now() / 1000),
             })),
@@ -119,8 +124,8 @@ export const useUnilateralExitLifecyclePersistenceStore =
       {
         name: 'unilateral-exit-lifecycle-storage',
         storage: createJSONStorage(() => sqliteStorage),
-        version: 4,
-        migrate: (persistedState, version) => {
+        version: 5,
+        migrate: (persistedState, _version) => {
           const state = persistedState as {
             jobsByKey?: Record<string, LegacyPersistedJob>
           }
@@ -128,15 +133,10 @@ export const useUnilateralExitLifecyclePersistenceStore =
             return persistedState
           }
           const jobsByKey = Object.fromEntries(
-            Object.entries(state.jobsByKey).map(([key, job]) => {
-              if (version < 3) {
-                return [key, migrateJobToV4(migrateJobToV3(job))]
-              }
-              if (version < 4) {
-                return [key, migrateJobToV4(job)]
-              }
-              return [key, migrateJobToV4(job)]
-            }),
+            Object.entries(state.jobsByKey).map(([key, job]) => [
+              key,
+              migratePersistedUnilateralExitJob(job),
+            ]),
           )
           return { ...state, jobsByKey }
         },

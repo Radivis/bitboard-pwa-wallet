@@ -5,6 +5,7 @@ import { getArkadeEndpoints, isArkadeSupportedNetworkMode } from '@/lib/arkade/a
 import { appQueryClient } from '@/lib/shared/app-query-client'
 import { getArkadeLoadLifecycleSnapshot } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
 import { getPersistedUnilateralExitJob } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence'
+import { persistedUnilateralExitJobExists } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
 import {
   clearAutomaticUnilateralExitPause,
   getUnilateralExitActorSnapshot,
@@ -219,7 +220,7 @@ export async function exportUnilateralExitDebugSnapshotForE2e(): Promise<E2eUnil
       scheduling: automation.scheduling,
     },
     persistedJob: {
-      jobActive: persistedJob.jobActive,
+      jobActive: persistedUnilateralExitJobExists(persistedJob),
       selectedLeafOutpoints: persistedJob.selectedLeafOutpoints,
       currentStepRelayedSinceUnix: persistedJob.currentStepRelayedSinceUnix,
     },

@@ -38,11 +38,16 @@ export type UnilateralExitLifecycleSnapshot = {
 
 export type PersistedUnilateralExitJob = {
   selectedLeafOutpoints: ArkadeVtxoOutpoint[]
-  jobActive: boolean
   /** Unix seconds when the active step was first known relayed; null when not waiting or step confirmed. */
   currentStepRelayedSinceUnix: number | null
   /** Unix seconds when the active job was started; cleared on clearJob. */
   jobStartedAtUnix: number | null
+}
+
+export function persistedUnilateralExitJobExists(
+  job: Pick<PersistedUnilateralExitJob, 'selectedLeafOutpoints'> | null | undefined,
+): boolean {
+  return (job?.selectedLeafOutpoints.length ?? 0) > 0
 }
 
 export type UnilateralExitFailureReasonCode = ArkadeUnilateralExitFailureReasonCode
