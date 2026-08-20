@@ -63,6 +63,9 @@ pub const UNILATERAL_EXIT_STEP_CONFIRMATIONS: u32 = 1;
 /// Esplora poll interval while waiting for the current unroll step to confirm.
 pub const UNILATERAL_EXIT_STEP_CONFIRMATION_POLL_INTERVAL_SECS: u64 = 15;
 
+/// Reuse `/tx/{txid}/outspends` for this long when the probed output is still unspent.
+pub const UNSPENT_OUTSPEND_CACHE_TTL_MS: u64 = 8_000;
+
 pub const NETWORK_MODE_MAINNET: &str = "mainnet";
 pub const NETWORK_MODE_TESTNET: &str = "testnet";
 pub const NETWORK_MODE_SIGNET: &str = "signet";

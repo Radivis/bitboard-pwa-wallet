@@ -7,7 +7,9 @@ use bitcoin::Txid;
 
 use crate::error::ArkResult;
 use crate::offchain_snapshot::mark_virtual_tx_vtxos_unrolled_in_snapshot;
-use crate::persistence::{OffchainVtxoSnapshot, UnilateralExitWatchRecord};
+use crate::persistence::{
+    OffchainVtxoSnapshot, UnilateralExitWatchRecord, VirtualTxOutPointRecord,
+};
 use crate::session::unilateral_exit_branch_topology::{
     terminal_vtxo_host_txids_from_materials_snapshot, virtual_tx_type_hosts_exit_outpoints,
 };
@@ -134,16 +136,14 @@ pub(crate) async fn heal_false_positive_exiting_vtxo_spent_markers<B: Blockchain
 ) -> ArkResult<Vec<bitcoin::OutPoint>> {
     let mut healed_outpoints = Vec::new();
     for record in &mut snapshot.virtual_tx_outpoints {
-        if !record.is_spent || !record.is_unrolled {
+        if !should_reprobe_spent_unrolled_marker(record) {
             continue;
         }
         let Ok(txid) = Txid::from_str(&record.txid) else {
             continue;
         };
-        if output_spent_on_chain(blockchain, &txid, record.vout)
-            .await?
-            .is_some()
-        {
+        if let Some(spend_txid) = output_spent_on_chain(blockchain, &txid, record.vout).await? {
+            record.spent_by = Some(spend_txid.to_string());
             continue;
         }
         record.is_spent = false;
@@ -154,6 +154,10 @@ pub(crate) async fn heal_false_positive_exiting_vtxo_spent_markers<B: Blockchain
         });
     }
     Ok(healed_outpoints)
+}
+
+pub(crate) fn should_reprobe_spent_unrolled_marker(record: &VirtualTxOutPointRecord) -> bool {
+    record.is_spent && record.is_unrolled && record.spent_by.is_none()
 }
 
 /// Returns the completion spend txid when any candidate tip's primary output is spent on-chain.
@@ -321,5 +325,38 @@ mod tests {
             exiting_vtxo_on_chain_tip_candidates(&snapshot, &leaf_txid.to_string(), None);
 
         assert_eq!(candidates, vec![leaf_txid]);
+    }
+
+    fn spent_unrolled_record(
+        spent_by: Option<&str>,
+    ) -> crate::persistence::VirtualTxOutPointRecord {
+        crate::persistence::VirtualTxOutPointRecord {
+            txid: Txid::from_byte_array([0x11; 32]).to_string(),
+            vout: 0,
+            created_at: 1,
+            expires_at: 2,
+            amount_sats: 1_000,
+            script_hex: String::new(),
+            is_preconfirmed: false,
+            is_swept: false,
+            is_unrolled: true,
+            is_spent: true,
+            spent_by: spent_by.map(str::to_string),
+            commitment_txids: vec![],
+            settled_by: None,
+            ark_txid: None,
+            assets: vec![],
+            server_pk_hex: None,
+        }
+    }
+
+    #[test]
+    fn spent_unrolled_marker_skips_reprobe_when_spent_by_is_known() {
+        assert!(should_reprobe_spent_unrolled_marker(
+            &spent_unrolled_record(None)
+        ));
+        assert!(!should_reprobe_spent_unrolled_marker(
+            &spent_unrolled_record(Some("deadbeef"))
+        ));
     }
 }

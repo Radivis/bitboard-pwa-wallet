@@ -18,7 +18,10 @@ import {
 } from '@/lib/wallet/lifecycle/lifecycle-in-flight-tracker'
 import { shouldSkipRailLifecycleResetForLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-phase'
 import { withWalletWriterLock } from '@/lib/shared/opfs-writer-lock'
-import { ARKADE_BACKGROUND_OPERATOR_SYNC_DEBOUNCE_MS } from '@/lib/arkade/arkade-sync-timings'
+import {
+  ARKADE_BACKGROUND_OPERATOR_SYNC_DEBOUNCE_MS,
+  ARKADE_BACKGROUND_OPERATOR_SYNC_MIN_INTERVAL_MS,
+} from '@/lib/arkade/arkade-sync-timings'
 import type {
   ArkadePostLoadSyncParams,
   ArkadeSyncLifecycleSnapshot,
@@ -52,6 +55,8 @@ let snapshot: ArkadeSyncLifecycleSnapshot = {
 }
 
 let dashboardPollTimer: ReturnType<typeof setTimeout> | null = null
+let dashboardPollQueuedWhileSyncing = false
+let lastDashboardPollStartedAtMs = 0
 
 const listeners = new Set<(next: ArkadeSyncLifecycleSnapshot) => void>()
 const inFlightSyncTracker = createInFlightLifecycleTracker()
@@ -186,20 +191,23 @@ export function subscribeArkadeSyncLifecycle(
   }
 }
 
-export async function awaitArkadeSyncQuiescence(): Promise<void> {
+function clearDashboardPollSchedule(): void {
   if (dashboardPollTimer != null) {
     clearTimeout(dashboardPollTimer)
     dashboardPollTimer = null
   }
+  dashboardPollQueuedWhileSyncing = false
+}
+
+export async function awaitArkadeSyncQuiescence(): Promise<void> {
+  clearDashboardPollSchedule()
   await inFlightSyncTracker.awaitQuiescence()
 }
 
 /** Clears sync lifecycle after session teardown (see {@link closeArkadeSession}). */
 export function forceResetArkadeSyncLifecycleForTeardown(): void {
-  if (dashboardPollTimer != null) {
-    clearTimeout(dashboardPollTimer)
-    dashboardPollTimer = null
-  }
+  clearDashboardPollSchedule()
+  lastDashboardPollStartedAtMs = 0
   inFlightSyncTracker.clearCurrent()
   setSnapshot({
     syncPhase: 'not-configured',
@@ -231,10 +239,8 @@ export function syncArkadeSyncLifecycleWithLockPhase(lockPhase: LockLifecyclePha
   ) {
     return
   }
-  if (dashboardPollTimer != null) {
-    clearTimeout(dashboardPollTimer)
-    dashboardPollTimer = null
-  }
+  clearDashboardPollSchedule()
+  lastDashboardPollStartedAtMs = 0
   setSnapshot({
     syncPhase: 'not-configured',
     railScope: null,
@@ -270,65 +276,69 @@ export async function orchestrateArkadeSyncThenSave(
   }
 
   const workPromise = inFlightSyncTracker.begin(key, async () => {
-    await withWalletWriterLock(async () => {
-      assertCanStartArkadeSync(params)
-      const scope = railScopeFromParams(params)
-      configureArkadeSyncForLoadedRail(scope)
+    try {
+      await withWalletWriterLock(async () => {
+        assertCanStartArkadeSync(params)
+        const scope = railScopeFromParams(params)
+        configureArkadeSyncForLoadedRail(scope)
 
-      setSnapshot({
-        syncPhase: 'syncing',
-        railScope: scope,
-        errorMessage: null,
-        warningMessage: null,
-      })
-
-      try {
-        if (params.syncKind === 'signerMigration') {
-          const migrationResult = await runArkadeSignerMigrationBody()
-          signerMigrationResultByInFlightPromise.set(workPromise, migrationResult)
-          if (migrationResult.migrationComplete) {
-            await orchestrateArkadeSave(toSaveParams(params))
-          }
-          try {
-            const syncResult = await runArkadeOperatorSyncBody(scope)
-            applySuccessfulArkadeSyncSnapshot(scope, syncResult)
-          } catch (syncError) {
-            setSnapshot({
-              syncPhase: 'sync-error',
-              railScope: scope,
-              errorMessage: userFacingLifecycleErrorMessage(
-                syncError,
-                LIFECYCLE_SYNC_ERROR_FALLBACK,
-              ),
-              warningMessage: null,
-            })
-            params.onSyncError?.(syncError)
-          }
-          return
-        }
-
-        const syncResult = await runArkadeOperatorSyncBody(scope)
-        applySuccessfulArkadeSyncSnapshot(scope, syncResult)
-        try {
-          await orchestrateArkadeSave(toSaveParams(params))
-        } catch (saveError) {
-          if (throwOnError) {
-            throw saveError
-          }
-        }
-      } catch (error) {
         setSnapshot({
-          syncPhase: 'sync-error',
+          syncPhase: 'syncing',
           railScope: scope,
-          errorMessage: userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK),
+          errorMessage: null,
           warningMessage: null,
         })
-        params.onSyncError?.(error)
-        if (throwOnError) {
-          throw error
+
+        try {
+          if (params.syncKind === 'signerMigration') {
+            const migrationResult = await runArkadeSignerMigrationBody()
+            signerMigrationResultByInFlightPromise.set(workPromise, migrationResult)
+            if (migrationResult.migrationComplete) {
+              await orchestrateArkadeSave(toSaveParams(params))
+            }
+            try {
+              const syncResult = await runArkadeOperatorSyncBody(scope)
+              applySuccessfulArkadeSyncSnapshot(scope, syncResult)
+            } catch (syncError) {
+              setSnapshot({
+                syncPhase: 'sync-error',
+                railScope: scope,
+                errorMessage: userFacingLifecycleErrorMessage(
+                  syncError,
+                  LIFECYCLE_SYNC_ERROR_FALLBACK,
+                ),
+                warningMessage: null,
+              })
+              params.onSyncError?.(syncError)
+            }
+            return
+          }
+
+          const syncResult = await runArkadeOperatorSyncBody(scope)
+          applySuccessfulArkadeSyncSnapshot(scope, syncResult)
+          try {
+            await orchestrateArkadeSave(toSaveParams(params))
+          } catch (saveError) {
+            if (throwOnError) {
+              throw saveError
+            }
+          }
+        } catch (error) {
+          setSnapshot({
+            syncPhase: 'sync-error',
+            railScope: scope,
+            errorMessage: userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK),
+            warningMessage: null,
+          })
+          params.onSyncError?.(error)
+          if (throwOnError) {
+            throw error
+          }
         }
-      }
-    })
+      })
+    } finally {
+      startQueuedDashboardPollAfterSync()
+    }
   })
 
   return awaitInFlightSyncWork(workPromise, params.syncKind)
@@ -354,9 +364,26 @@ export async function orchestrateArkadePostLoadSync(
   }
 }
 
+function dashboardPollDelayMs(): number {
+  if (lastDashboardPollStartedAtMs === 0) {
+    return ARKADE_BACKGROUND_OPERATOR_SYNC_DEBOUNCE_MS
+  }
+  const elapsedMs = Date.now() - lastDashboardPollStartedAtMs
+  const remainingMinIntervalMs = ARKADE_BACKGROUND_OPERATOR_SYNC_MIN_INTERVAL_MS - elapsedMs
+  return Math.max(ARKADE_BACKGROUND_OPERATOR_SYNC_DEBOUNCE_MS, remainingMinIntervalMs)
+}
+
+function startQueuedDashboardPollAfterSync(): void {
+  if (!dashboardPollQueuedWhileSyncing) {
+    return
+  }
+  dashboardPollQueuedWhileSyncing = false
+  scheduleBackgroundArkadeOperatorSync()
+}
+
 export function scheduleBackgroundArkadeOperatorSync(): void {
   if (dashboardPollTimer != null) {
-    clearTimeout(dashboardPollTimer)
+    return
   }
 
   dashboardPollTimer = setTimeout(() => {
@@ -373,10 +400,11 @@ export function scheduleBackgroundArkadeOperatorSync(): void {
     }
 
     if (inFlightSyncTracker.getCurrent() != null) {
-      scheduleBackgroundArkadeOperatorSync()
+      dashboardPollQueuedWhileSyncing = true
       return
     }
 
+    lastDashboardPollStartedAtMs = Date.now()
     void orchestrateArkadeSyncThenSave({
       walletId: walletState.activeWalletId,
       networkMode,
@@ -385,7 +413,7 @@ export function scheduleBackgroundArkadeOperatorSync(): void {
       awaitCompletion: false,
       throwOnError: false,
     })
-  }, ARKADE_BACKGROUND_OPERATOR_SYNC_DEBOUNCE_MS)
+  }, dashboardPollDelayMs())
 }
 
 /** @internal Test-only reset */
@@ -397,9 +425,7 @@ export function resetArkadeSyncLifecycleStateForTests(): void {
     warningMessage: null,
   }
   inFlightSyncTracker.clearCurrent()
-  if (dashboardPollTimer != null) {
-    clearTimeout(dashboardPollTimer)
-    dashboardPollTimer = null
-  }
+  clearDashboardPollSchedule()
+  lastDashboardPollStartedAtMs = 0
   listeners.clear()
 }

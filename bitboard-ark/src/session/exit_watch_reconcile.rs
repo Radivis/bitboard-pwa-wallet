@@ -89,6 +89,10 @@ fn snapshot_record<'a>(
         .find(|record| record.txid == txid && record.vout == vout)
 }
 
+fn snapshot_record_already_spent(snapshot: &OffchainVtxoSnapshot, txid: &str, vout: u32) -> bool {
+    snapshot_record(snapshot, txid, vout).is_some_and(|record| record.is_spent)
+}
+
 fn record_for_reinject(
     prior_record: Option<&VirtualTxOutPointRecord>,
     watch: &UnilateralExitWatchRecord,
@@ -168,6 +172,9 @@ pub(crate) async fn reconcile_exiting_vtxos_spent_on_esplora(
 
     for watch in &watches {
         let key = (watch.vtxo_txid.clone(), watch.vout);
+        if snapshot_record_already_spent(snapshot, &key.0, key.1) {
+            continue;
+        }
         if !probe_targets.iter().any(|target| target == &key) {
             probe_targets.push(key);
         }

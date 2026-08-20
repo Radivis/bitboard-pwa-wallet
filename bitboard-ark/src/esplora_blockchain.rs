@@ -5,7 +5,9 @@ use ark_client::{Blockchain, SpendStatus, TxStatus};
 use ark_core::ExplorerUtxo;
 use bitcoin::{Address, OutPoint, Transaction, Txid};
 
-use crate::constants::{ESPLORA_FEE_ESTIMATE_BLOCK_TARGET, MIN_FEE_RATE_SAT_PER_VB};
+use crate::constants::{
+    ESPLORA_FEE_ESTIMATE_BLOCK_TARGET, MIN_FEE_RATE_SAT_PER_VB, UNSPENT_OUTSPEND_CACHE_TTL_MS,
+};
 use crate::error::{ArkResult, ArkWasmError};
 use crate::outpoint::OnchainOutPoint;
 
@@ -29,6 +31,30 @@ struct ConfirmationCache {
     scan_prepared: bool,
     tip_height: Option<u32>,
     confirmed_at_tip: HashMap<Txid, u64>,
+}
+
+struct CachedOutspends {
+    spend_txids: Vec<Option<Txid>>,
+    fetched_at_ms: u64,
+}
+
+#[derive(Default)]
+struct OutspendCache {
+    by_txid: HashMap<Txid, CachedOutspends>,
+}
+
+fn now_ms() -> u64 {
+    #[cfg(target_arch = "wasm32")]
+    {
+        js_sys::Date::now() as u64
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_millis() as u64)
+            .unwrap_or(0)
+    }
 }
 
 fn agent_debug_log(hypothesis_id: &str, location: &str, message: &str, data: serde_json::Value) {
@@ -80,6 +106,7 @@ type EsploraAsyncClient = esplora_client::AsyncClient;
 pub struct EsploraBlockchain {
     client: Arc<EsploraAsyncClient>,
     confirmation_cache: Mutex<ConfirmationCache>,
+    outspend_cache: Arc<Mutex<OutspendCache>>,
 }
 
 impl EsploraBlockchain {
@@ -110,6 +137,7 @@ impl EsploraBlockchain {
         Ok(Self {
             client: Arc::new(client),
             confirmation_cache: Mutex::new(ConfirmationCache::default()),
+            outspend_cache: Arc::new(Mutex::new(OutspendCache::default())),
         })
     }
 
@@ -266,10 +294,17 @@ impl EsploraBlockchain {
 
     async fn get_output_status_at(
         client: &EsploraAsyncClient,
+        outspend_cache: &Mutex<OutspendCache>,
         txid: &Txid,
         vout: u32,
     ) -> Result<SpendStatus, ark_client::Error> {
-        map_output_status(client, txid, vout).await
+        if let Some(status) = cached_spend_status(outspend_cache, txid, vout) {
+            return Ok(status);
+        }
+        let spend_txids = fetch_and_store_outspends(client, outspend_cache, txid).await?;
+        Ok(SpendStatus {
+            spend_txid: spend_txids.get(vout as usize).copied().flatten(),
+        })
     }
 
     async fn broadcast_at(
@@ -436,8 +471,12 @@ macro_rules! impl_esplora_blockchain {
             ) -> impl std::future::Future<Output = Result<SpendStatus, ark_client::Error>> $($send_bound)*
             {
                 let client = Arc::clone(&self.client);
+                let outspend_cache = Arc::clone(&self.outspend_cache);
                 let txid = *txid;
-                async move { EsploraBlockchain::get_output_status_at(&client, &txid, vout).await }
+                async move {
+                    EsploraBlockchain::get_output_status_at(&client, &outspend_cache, &txid, vout)
+                        .await
+                }
             }
 
             fn broadcast(
@@ -657,20 +696,64 @@ async fn map_tx_confirmations(
     confirmations_for_relayed_tx(client, txid, chain_tip_height).await
 }
 
-async fn map_output_status(
-    client: &EsploraAsyncClient,
+fn cached_spend_status(
+    cache: &Mutex<OutspendCache>,
     txid: &Txid,
     vout: u32,
-) -> Result<SpendStatus, ark_client::Error> {
+) -> Option<SpendStatus> {
+    let cache = cache
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let entry = cache.by_txid.get(txid)?;
+    let spend_txid = entry.spend_txids.get(vout as usize).copied().flatten();
+    if spend_txid.is_some() {
+        return Some(SpendStatus { spend_txid });
+    }
+    let age_ms = now_ms().saturating_sub(entry.fetched_at_ms);
+    if age_ms < UNSPENT_OUTSPEND_CACHE_TTL_MS {
+        return Some(SpendStatus { spend_txid: None });
+    }
+    None
+}
+
+fn store_outspends(cache: &Mutex<OutspendCache>, txid: Txid, spend_txids: Vec<Option<Txid>>) {
+    let mut cache = cache
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    cache.by_txid.insert(
+        txid,
+        CachedOutspends {
+            spend_txids,
+            fetched_at_ms: now_ms(),
+        },
+    );
+}
+
+async fn fetch_and_store_outspends(
+    client: &EsploraAsyncClient,
+    cache: &Mutex<OutspendCache>,
+    txid: &Txid,
+) -> Result<Vec<Option<Txid>>, ark_client::Error> {
+    let spend_txids = load_tx_outspend_txids(client, txid).await?;
+    store_outspends(cache, *txid, spend_txids.clone());
+    Ok(spend_txids)
+}
+
+async fn load_tx_outspend_txids(
+    client: &EsploraAsyncClient,
+    txid: &Txid,
+) -> Result<Vec<Option<Txid>>, ark_client::Error> {
     let outspends = match client.get_tx_outspends(txid).await {
         Ok(outspends) => outspends,
         Err(error) if is_non_probeable_outspend_error(&error) => {
-            return Ok(SpendStatus { spend_txid: None });
+            return Ok(Vec::new());
         }
         Err(error) => return Err(EsploraBlockchain::map_esplora_error(error)),
     };
-    let spend_txid = outspends.get(vout as usize).and_then(|output| output.txid);
-    Ok(SpendStatus { spend_txid })
+    Ok(outspends
+        .iter()
+        .map(|output| output.txid)
+        .collect::<Vec<_>>())
 }
 
 /// Virtual-tree txs and other off-chain artifacts may exist as JSON `/tx/{txid}` stubs while

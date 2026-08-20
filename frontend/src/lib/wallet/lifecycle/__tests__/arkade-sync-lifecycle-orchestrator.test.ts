@@ -51,7 +51,10 @@ import {
   getArkadeSyncLifecycleSnapshot,
   orchestrateArkadeSyncThenSave,
   resetArkadeSyncLifecycleStateForTests,
+  scheduleBackgroundArkadeOperatorSync,
 } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
+import { ARKADE_BACKGROUND_OPERATOR_SYNC_MIN_INTERVAL_MS } from '@/lib/arkade/arkade-sync-timings'
+import { useWalletStore } from '@/stores/walletStore'
 import type { ArkadeSignerMigrationResult } from '@/workers/arkade-api'
 
 function completeMigrationResult(): ArkadeSignerMigrationResult {
@@ -91,6 +94,7 @@ const syncParams = {
 
 describe('arkade-sync-lifecycle-orchestrator', () => {
   beforeEach(() => {
+    vi.useRealTimers()
     resetArkadeSyncLifecycleStateForTests()
     vi.clearAllMocks()
     loadPhaseRef.phase = 'loaded'
@@ -155,6 +159,79 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     await Promise.all([first, second])
 
     expect(syncWithOperator).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not retrigger dashboard poll every debounce while a sync is in flight', async () => {
+    vi.useFakeTimers()
+    try {
+      useWalletStore.setState({
+        activeWalletId: 1,
+        activeArkadeConnectionId: 'conn-1',
+        networkMode: 'signet',
+      })
+
+      let resolveSync!: () => void
+      const syncGate = new Promise<void>((resolve) => {
+        resolveSync = resolve
+      })
+      syncWithOperator.mockImplementation(async () => {
+        await syncGate
+        return {}
+      })
+
+      scheduleBackgroundArkadeOperatorSync()
+      await vi.advanceTimersByTimeAsync(400)
+      await vi.waitFor(() => expect(syncWithOperator).toHaveBeenCalledTimes(1))
+
+      for (let i = 0; i < 20; i += 1) {
+        scheduleBackgroundArkadeOperatorSync()
+        await vi.advanceTimersByTimeAsync(400)
+      }
+      expect(syncWithOperator).toHaveBeenCalledTimes(1)
+
+      resolveSync!()
+      await vi.advanceTimersByTimeAsync(0)
+      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(ARKADE_BACKGROUND_OPERATOR_SYNC_MIN_INTERVAL_MS)
+      await vi.waitFor(() => expect(syncWithOperator).toHaveBeenCalledTimes(2))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not retrigger dashboard poll every debounce while a sync is in flight', async () => {
+    vi.useFakeTimers()
+    useWalletStore.setState({
+      activeWalletId: 1,
+      activeArkadeConnectionId: 'conn-1',
+      networkMode: 'signet',
+    })
+
+    let resolveSync!: () => void
+    const syncGate = new Promise<void>((resolve) => {
+      resolveSync = resolve
+    })
+    syncWithOperator.mockImplementation(async () => {
+      await syncGate
+      return {}
+    })
+
+    scheduleBackgroundArkadeOperatorSync()
+    await vi.advanceTimersByTimeAsync(400)
+    await vi.waitFor(() => expect(syncWithOperator).toHaveBeenCalledTimes(1))
+
+    for (let i = 0; i < 20; i += 1) {
+      scheduleBackgroundArkadeOperatorSync()
+      await vi.advanceTimersByTimeAsync(400)
+    }
+    expect(syncWithOperator).toHaveBeenCalledTimes(1)
+
+    resolveSync!()
+    await vi.advanceTimersByTimeAsync(0)
+    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(ARKADE_BACKGROUND_OPERATOR_SYNC_MIN_INTERVAL_MS)
+    await vi.waitFor(() => expect(syncWithOperator).toHaveBeenCalledTimes(2))
+    vi.useRealTimers()
   })
 
   it('awaitArkadeSyncQuiescence propagates sync errors', async () => {
