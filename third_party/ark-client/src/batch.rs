@@ -52,10 +52,12 @@ use batch_vtxo_tree_signing::VtxoTreeStepUpdate;
 /// BIP68 encodes time-based relative `nSequence` locks in 512-second intervals.
 const BIP68_TIME_GRANULARITY: u64 = 512;
 
-/// Per-event wait for the batch SSE stream after `RegisterIntent`. Longer than the general client
-/// timeout so a slow operator round is not treated as a failed join (which would tempt a
-/// duplicate-input retry).
-const BATCH_EVENT_TIMEOUT: Duration = Duration::from_secs(60);
+/// Per-event wait for the batch SSE stream after `RegisterIntent`.
+///
+/// Must exceed typical ASP `sessionDuration` (Mutinynet is 60s) so we remain subscribed through
+/// at least one registration+confirmation window. Leaving early abandons `ConfirmRegistration`
+/// and poisons the operator with `not enough intent confirmations received` (ARK-UP-03).
+const BATCH_EVENT_TIMEOUT: Duration = Duration::from_secs(180);
 
 /// Intent accepted by the operator; the commitment transaction has not been observed yet.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -835,10 +837,12 @@ where
 
                             batch_expiry = Some(e.batch_expiry);
                         } else {
-                            tracing::debug!(
+                            // Another client's round on overlapping topics, or a prior abandoned
+                            // intent for the same boarding outpoint — keep waiting for ours.
+                            tracing::info!(
                                 batch_id = e.id,
                                 intent_id,
-                                "Intent ID not found for batch"
+                                "BatchStarted without our intent hash — ignoring"
                             );
                         }
                     }
@@ -1391,10 +1395,17 @@ where
             .collect()
     }
 
+    /// Whether a `BatchFailed` SSE event applies to the round we already joined.
+    ///
+    /// Before we see a matching `BatchStarted`, `batch_id` is `None`. Mutinynet (and busy ASPs)
+    /// emit `BatchFailed` for other rounds that share our boarding outpoint topic (e.g. a prior
+    /// abandoned intent still in confirmation). Treating those as fatal aborted the wait before we
+    /// could ack our own registration — classic `not enough intent confirmations` with no
+    /// `/v1/batch/ack` on the wire (ARK-UP-03).
     fn batch_failure_matches_our_round(batch_id: &Option<String>, failed_id: &str) -> bool {
         match batch_id {
             Some(ours) => ours == failed_id,
-            None => true,
+            None => false,
         }
     }
 
@@ -1522,10 +1533,12 @@ where
 
                             batch_expiry = Some(e.batch_expiry);
                         } else {
-                            tracing::debug!(
+                            // Another client's round on overlapping topics, or a prior abandoned
+                            // intent for the same boarding outpoint — keep waiting for ours.
+                            tracing::info!(
                                 batch_id = e.id,
                                 intent_id,
-                                "Intent ID not found for batch"
+                                "BatchStarted without our intent hash — ignoring"
                             );
                         }
                     }
@@ -1942,4 +1955,21 @@ pub(crate) struct PreparedIntent {
     pub onchain_inputs: Vec<batch::OnChainInput>,
     /// The original VTXO inputs (needed for forfeit signing).
     pub vtxo_inputs: Vec<intent::Input>,
+}
+
+#[cfg(test)]
+mod batch_failure_match_tests {
+    use super::Client;
+
+    #[test]
+    fn ignores_batch_failed_before_we_join_a_round() {
+        assert!(!Client::batch_failure_matches_our_round(&None, "any-failed-id"));
+    }
+
+    #[test]
+    fn matches_only_the_round_we_joined() {
+        let ours = Some("round-a".to_string());
+        assert!(Client::batch_failure_matches_our_round(&ours, "round-a"));
+        assert!(!Client::batch_failure_matches_our_round(&ours, "round-b"));
+    }
 }

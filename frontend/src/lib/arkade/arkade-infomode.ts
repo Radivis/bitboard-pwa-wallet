@@ -85,7 +85,7 @@ export const ARKADE_BALANCE_RECOVERABLE_PENDING_OPERATOR_SWEEP_INFOMODE = {
 
 export const ARKADE_PENDING_BATCH_INTENT_BANNER_INFOMODE = {
   title: 'Waiting for Arkade operator',
-  text: 'Your intent is already registered with the operator. Bitboard will not register those same coins again blindly. Cancel withdraws that intent, and Retry withdraws then registers it again.',
+  text: 'Your intent is already registered with the operator. Bitboard will not register those same coins again while that registration is still live — re-registering mid-round can make the operator fail with missing confirmations. Cancel withdraws VTXO intents when the operator supports it; boarding Cancel may need to wait for expiry. Retry waits for expiry on boarding, then registers again.',
 } as const
 
 export const ARKADE_RECOVERABLE_VTXO_BANNER_INFOMODE = {

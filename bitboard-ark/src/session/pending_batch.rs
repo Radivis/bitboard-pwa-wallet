@@ -239,7 +239,14 @@ impl ArkSession {
             return Ok(completed_without_txid());
         };
         if is_boarding_only_pending_record(&record) {
-            // arkd deleteIntent cannot match boarding inputs today; re-join directly instead.
+            if should_refuse_boarding_reregister(&record) {
+                return Err(crate::error::ArkWasmError::Boarding(
+                    BOARDING_REREGISTER_WHILE_INTENT_LIVE.to_string(),
+                )
+                .into());
+            }
+            // arkd deleteIntent cannot match boarding inputs (ARK-UP-01). After the register
+            // expire window, settle again without a prior delete.
             return self.retry_pending_record(record).await;
         }
         let cancel_result = self.cancel_pending_batch_intent(params).await?;
@@ -606,12 +613,30 @@ fn parse_outpoint_record(record: &PendingBatchOutpointRecord) -> Option<OutPoint
 const BOARDING_DELETE_INTENT_UNSUPPORTED: &str = "The operator cannot cancel boarding batch \
     registrations via deleteIntent yet. Wait for the registration to expire, then use Retry.";
 
+/// Matches `prepare_intent` Register `expire_at = now + 2 * 60` in ark-client.
+const BOARDING_REGISTER_INTENT_TTL_SECS: i64 = 2 * 60;
+
+const BOARDING_REREGISTER_WHILE_INTENT_LIVE: &str = "A boarding intent is already registered with \
+    the operator. Re-registering now can make the operator round fail with \"not enough intent \
+    confirmations\". Keep waiting for the batch, or Retry after ~2 minutes when the registration \
+    expires.";
+
 fn should_delete_operator_intent_on_cancel(resolution: &PendingBatchIntentResolution) -> bool {
     matches!(resolution, PendingBatchIntentResolution::StillPending)
 }
 
 fn is_boarding_only_pending_record(record: &PendingBatchIntentRecord) -> bool {
     !record.onchain_outpoints.is_empty() && record.vtxo_outpoints.is_empty()
+}
+
+/// Re-registering while the operator still has (or has popped) this boarding intent causes
+/// BatchStarted to hash a different intent id than the wallet is waiting to ack (ARK-UP-03).
+fn should_refuse_boarding_reregister(record: &PendingBatchIntentRecord) -> bool {
+    if record.intent_id.is_none() {
+        return false;
+    }
+    let now = current_unix_timestamp();
+    now.saturating_sub(record.registered_at) < BOARDING_REGISTER_INTENT_TTL_SECS
 }
 
 fn pending_record_overlaps_outpoints(
@@ -726,6 +751,35 @@ mod tests {
             ..boarding
         };
         assert!(!is_boarding_only_pending_record(&mixed));
+    }
+
+    #[test]
+    fn refuse_boarding_reregister_while_register_ttl_active() {
+        let fresh = PendingBatchIntentRecord {
+            kind: PendingBatchIntentKind::Board,
+            intent_id: Some("intent-1".into()),
+            onchain_outpoints: vec![PendingBatchOutpointRecord {
+                txid: "abc".into(),
+                vout: 0,
+            }],
+            vtxo_outpoints: vec![],
+            amount_sats: 50_000,
+            registered_at: current_unix_timestamp(),
+            destination_address: None,
+        };
+        assert!(should_refuse_boarding_reregister(&fresh));
+
+        let expired = PendingBatchIntentRecord {
+            registered_at: current_unix_timestamp() - BOARDING_REGISTER_INTENT_TTL_SECS - 1,
+            ..fresh.clone()
+        };
+        assert!(!should_refuse_boarding_reregister(&expired));
+
+        let no_id = PendingBatchIntentRecord {
+            intent_id: None,
+            ..fresh
+        };
+        assert!(!should_refuse_boarding_reregister(&no_id));
     }
 
     #[test]

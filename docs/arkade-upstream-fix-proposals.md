@@ -8,6 +8,7 @@ Local vendor patches (things we already forked) live in the `third_party/ark-*/R
 |----|------|---------|--------|
 | ARK-UP-01 | arkd | `deleteIntent` / proof match ignores boarding inputs | Open (not filed) |
 | ARK-UP-02 | arkd | Cooperative boarding window uses CSV seconds as wall-clock | Open (not filed) |
+| ARK-UP-03 | arkd | Short `sessionDuration` + confirm stage poisons boarding retries | Open (not filed) |
 
 ---
 
@@ -44,3 +45,32 @@ The public API says the client should prove ownership of **any input** of the re
 **Bitboard today:** `is_past_arkd_cooperative_boarding_window` in vendored `ark-client`; E2E funds and settles within ~25s. Documented in [arkade-regtest fixture README](../frontend/tests/e2e/fixtures/arkade-regtest/README.md).
 
 **Proposed fix:** Interpret the delay according to the configured locktime type (blocks vs seconds), or document that boarding cooperative expiry is always seconds regardless of CSV denomination.
+
+---
+
+## ARK-UP-03 — Confirmation failures from abandoned / duplicate boarding intents
+
+**Target:** arkd round confirmation stage (`not enough intent confirmations received`)
+
+**Observed on Mutinynet** (`sessionDuration: 60`, no `scheduledSession`):
+
+1. Client `RegisterIntent` succeeds (`intentId` returned).
+2. Client opens `/v1/batch/events` (topics = boarding outpoint + ephemeral cosigner).
+3. Within seconds: `batchFailed` with `INTERNAL_ERROR (0): not enough intent confirmations received`.
+4. Often **no usable `batchStarted` match** for the *current* `intentId` (hash mismatch or client already left the SSE).
+
+**Mechanism:**
+
+- After `BatchStarted`, arkd waits `confirmationDuration()` (~half of remaining session time) for `ConfirmRegistration` / ack keyed by `sha256(intentId)`.
+- If the wallet drops the SSE (timeout) or retries with a **new** registration while the previous intent was already `Pop`'d into the live round, the outpoint is free to register again, but `BatchStarted.intentIdHashes` still list the **old** id.
+- Nobody acks the selected hashes → round fails → intents may be re-pushed → the next attempt repeats.
+
+`deleteIntent` cannot clear boarding-only registrations today (ARK-UP-01), so Mutinynet boarding is especially prone to this loop.
+
+**Proposed operator improvements (any of):**
+
+- Reject `RegisterIntent` when the same boarding outpoint is already selected in the current confirmation session (not only when still in the intent queue).
+- Include boarding outpoints / intent ids in a way clients can detect “your previous intent is in confirmation; do not re-register.”
+- Longer default `sessionDuration` on public test ASPs, or publish `scheduledSession` so wallets can stay subscribed.
+
+**Bitboard today:** Longer post-register SSE wait; boarding Retry refuses to re-register while a fresh `intent_id` is still within the register `expire_at` window (~2 minutes); ignore `BatchFailed` until we have matched a `BatchStarted` for our intent (`batch_failure_matches_our_round` requires `batch_id`).
