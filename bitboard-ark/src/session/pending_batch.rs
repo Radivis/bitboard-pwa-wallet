@@ -27,6 +27,14 @@ enum PendingBatchIntentResolution {
     BoardingWindowExpired,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PendingIntentRetryDecision {
+    CompleteWithoutRetry,
+    RetryAfterDelete,
+    RetryWithoutDelete,
+    RefuseBoardingReregister,
+}
+
 impl ArkSession {
     pub(crate) fn pending_batch_intents_dto(&self) -> Vec<PendingBatchIntentDto> {
         self.wallet_db
@@ -185,10 +193,7 @@ impl ArkSession {
         };
         let resolution = self.pending_batch_intent_resolution(&record).await?;
         if !should_delete_operator_intent_on_cancel(&resolution) {
-            self.wallet_db.remove_pending_batch_intents_overlapping(
-                &record.onchain_outpoints,
-                &record.vtxo_outpoints,
-            );
+            self.drop_pending_intent_record(&record);
             return Ok(completed_without_txid());
         }
         if is_boarding_only_pending_record(&record) {
@@ -214,17 +219,11 @@ impl ArkSession {
             .await
         {
             Ok(()) => {
-                self.wallet_db.remove_pending_batch_intents_overlapping(
-                    &record.onchain_outpoints,
-                    &record.vtxo_outpoints,
-                );
+                self.drop_pending_intent_record(&record);
                 Ok(completed_without_txid())
             }
             Err(error) if error.is_intent_not_found() => {
-                self.wallet_db.remove_pending_batch_intents_overlapping(
-                    &record.onchain_outpoints,
-                    &record.vtxo_outpoints,
-                );
+                self.drop_pending_intent_record(&record);
                 Ok(completed_without_txid())
             }
             Err(error) => Err(error.into()),
@@ -238,22 +237,59 @@ impl ArkSession {
         let Some(record) = self.find_exact_pending_intent(&params) else {
             return Ok(completed_without_txid());
         };
-        if is_boarding_only_pending_record(&record) {
-            if should_refuse_boarding_reregister(&record) {
-                return Err(crate::error::ArkWasmError::Boarding(
+        let resolution = self.pending_batch_intent_resolution(&record).await?;
+        match pending_intent_retry_decision(&resolution, &record) {
+            PendingIntentRetryDecision::CompleteWithoutRetry => {
+                self.drop_pending_intent_record(&record);
+                Ok(completed_without_txid())
+            }
+            PendingIntentRetryDecision::RefuseBoardingReregister => {
+                Err(crate::error::ArkWasmError::Boarding(
                     BOARDING_REREGISTER_WHILE_INTENT_LIVE.to_string(),
                 )
-                .into());
+                .into())
             }
-            // arkd deleteIntent cannot match boarding inputs (ARK-UP-01). After the register
-            // expire window, settle again without a prior delete.
-            return self.retry_pending_record(record).await;
+            PendingIntentRetryDecision::RetryWithoutDelete => {
+                // arkd deleteIntent cannot match boarding inputs (ARK-UP-01). After the
+                // register expire window, settle again without a prior delete.
+                self.retry_pending_record_if_still_pending(record).await
+            }
+            PendingIntentRetryDecision::RetryAfterDelete => {
+                self.retry_after_deleting_operator_intent(record, params)
+                    .await
+            }
         }
+    }
+
+    fn drop_pending_intent_record(&self, record: &PendingBatchIntentRecord) {
+        self.wallet_db.remove_pending_batch_intents_overlapping(
+            &record.onchain_outpoints,
+            &record.vtxo_outpoints,
+        );
+    }
+
+    async fn retry_pending_record_if_still_pending(
+        &self,
+        record: PendingBatchIntentRecord,
+    ) -> ArkResult<BatchJoinResultDto> {
+        let resolution = self.pending_batch_intent_resolution(&record).await?;
+        if !matches!(resolution, PendingBatchIntentResolution::StillPending) {
+            self.drop_pending_intent_record(&record);
+            return Ok(completed_without_txid());
+        }
+        self.retry_pending_record(record).await
+    }
+
+    async fn retry_after_deleting_operator_intent(
+        &self,
+        record: PendingBatchIntentRecord,
+        params: PendingBatchIntentActionParams,
+    ) -> ArkResult<BatchJoinResultDto> {
         let cancel_result = self.cancel_pending_batch_intent(params).await?;
         if cancel_result.status != BATCH_JOIN_STATUS_COMPLETED {
             return Ok(cancel_result);
         }
-        self.retry_pending_record(record).await
+        self.retry_pending_record_if_still_pending(record).await
     }
 
     /// Drop pending intents whose inputs are spent or whose boarding window has closed.
@@ -625,6 +661,22 @@ fn should_delete_operator_intent_on_cancel(resolution: &PendingBatchIntentResolu
     matches!(resolution, PendingBatchIntentResolution::StillPending)
 }
 
+fn pending_intent_retry_decision(
+    resolution: &PendingBatchIntentResolution,
+    record: &PendingBatchIntentRecord,
+) -> PendingIntentRetryDecision {
+    if !matches!(resolution, PendingBatchIntentResolution::StillPending) {
+        return PendingIntentRetryDecision::CompleteWithoutRetry;
+    }
+    if is_boarding_only_pending_record(record) {
+        if should_refuse_boarding_reregister(record) {
+            return PendingIntentRetryDecision::RefuseBoardingReregister;
+        }
+        return PendingIntentRetryDecision::RetryWithoutDelete;
+    }
+    PendingIntentRetryDecision::RetryAfterDelete
+}
+
 fn is_boarding_only_pending_record(record: &PendingBatchIntentRecord) -> bool {
     !record.onchain_outpoints.is_empty() && record.vtxo_outpoints.is_empty()
 }
@@ -795,6 +847,107 @@ mod tests {
         assert!(should_delete_operator_intent_on_cancel(
             &PendingBatchIntentResolution::StillPending
         ));
+    }
+
+    fn sample_vtxo_pending_record() -> PendingBatchIntentRecord {
+        PendingBatchIntentRecord {
+            kind: PendingBatchIntentKind::Recover,
+            intent_id: Some("intent-1".into()),
+            onchain_outpoints: vec![],
+            vtxo_outpoints: vec![PendingBatchOutpointRecord {
+                txid: "aa".into(),
+                vout: 0,
+            }],
+            amount_sats: 12_000,
+            registered_at: 1,
+            destination_address: None,
+        }
+    }
+
+    fn sample_boarding_pending_record(registered_at: i64) -> PendingBatchIntentRecord {
+        PendingBatchIntentRecord {
+            kind: PendingBatchIntentKind::Board,
+            intent_id: Some("intent-1".into()),
+            onchain_outpoints: vec![PendingBatchOutpointRecord {
+                txid: "abc".into(),
+                vout: 0,
+            }],
+            vtxo_outpoints: vec![],
+            amount_sats: 50_000,
+            registered_at,
+            destination_address: None,
+        }
+    }
+
+    #[test]
+    fn spent_vtxo_intent_completes_without_retry() {
+        assert_eq!(
+            pending_intent_retry_decision(
+                &PendingBatchIntentResolution::Spent {
+                    spend_txid: "commitment".into(),
+                },
+                &sample_vtxo_pending_record(),
+            ),
+            PendingIntentRetryDecision::CompleteWithoutRetry
+        );
+    }
+
+    #[test]
+    fn boarding_window_expired_completes_without_retry() {
+        assert_eq!(
+            pending_intent_retry_decision(
+                &PendingBatchIntentResolution::BoardingWindowExpired,
+                &sample_boarding_pending_record(1),
+            ),
+            PendingIntentRetryDecision::CompleteWithoutRetry
+        );
+    }
+
+    #[test]
+    fn spent_boarding_intent_completes_without_retry() {
+        assert_eq!(
+            pending_intent_retry_decision(
+                &PendingBatchIntentResolution::Spent {
+                    spend_txid: "commitment".into(),
+                },
+                &sample_boarding_pending_record(current_unix_timestamp()),
+            ),
+            PendingIntentRetryDecision::CompleteWithoutRetry
+        );
+    }
+
+    #[test]
+    fn still_pending_vtxo_intent_retries_after_delete() {
+        assert_eq!(
+            pending_intent_retry_decision(
+                &PendingBatchIntentResolution::StillPending,
+                &sample_vtxo_pending_record(),
+            ),
+            PendingIntentRetryDecision::RetryAfterDelete
+        );
+    }
+
+    #[test]
+    fn still_pending_boarding_within_register_ttl_refuses_reregister() {
+        assert_eq!(
+            pending_intent_retry_decision(
+                &PendingBatchIntentResolution::StillPending,
+                &sample_boarding_pending_record(current_unix_timestamp()),
+            ),
+            PendingIntentRetryDecision::RefuseBoardingReregister
+        );
+    }
+
+    #[test]
+    fn still_pending_boarding_after_register_ttl_retries_without_delete() {
+        let expired_at = current_unix_timestamp() - BOARDING_REGISTER_INTENT_TTL_SECS - 1;
+        assert_eq!(
+            pending_intent_retry_decision(
+                &PendingBatchIntentResolution::StillPending,
+                &sample_boarding_pending_record(expired_at),
+            ),
+            PendingIntentRetryDecision::RetryWithoutDelete
+        );
     }
 
     #[test]
