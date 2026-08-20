@@ -19,13 +19,6 @@ const ESPLORA_HTTP_TIMEOUT_SECS: u64 = 5;
 const SUBMIT_PACKAGE_MAX_FEE_RATE_BTC_PER_KVB: f64 = 0.0;
 const SUBMIT_PACKAGE_MAX_BURN_AMOUNT_BTC: f64 = 0.0;
 
-const AGENT_DEBUG_SESSION_ID: &str = "2d2162";
-const AGENT_DEBUG_LOG_PATH: &str =
-    "/home/radivis/projects/bitboard-pwa-wallet/.cursor/debug-2d2162.log";
-#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-const AGENT_DEBUG_INGEST_URL: &str =
-    "http://127.0.0.1:7757/ingest/cb0f3ed4-7e87-43d6-b1dd-18329fa2e328";
-
 #[derive(Default)]
 struct ConfirmationCache {
     scan_prepared: bool,
@@ -54,47 +47,6 @@ fn now_ms() -> u64 {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|duration| duration.as_millis() as u64)
             .unwrap_or(0)
-    }
-}
-
-fn agent_debug_log(hypothesis_id: &str, location: &str, message: &str, data: serde_json::Value) {
-    let mut payload = serde_json::json!({
-        "sessionId": AGENT_DEBUG_SESSION_ID,
-        "hypothesisId": hypothesis_id,
-        "runId": "post-fix",
-        "location": location,
-        "message": message,
-        "data": data,
-        "timestamp": 0u64,
-    });
-    #[cfg(target_arch = "wasm32")]
-    {
-        let payload_js = payload
-            .to_string()
-            .replace('\\', "\\\\")
-            .replace('\'', "\\'");
-        let script = format!(
-            "fetch('{AGENT_DEBUG_INGEST_URL}',{{method:'POST',headers:{{'Content-Type':'application/json','X-Debug-Session-Id':'{AGENT_DEBUG_SESSION_ID}'}},body:JSON.stringify(Object.assign(JSON.parse('{payload_js}'),{{timestamp:Date.now()}}))}}).catch(function(){{}})"
-        );
-        let _ = js_sys::eval(&script);
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        if let Some(object) = payload.as_object_mut() {
-            let timestamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|duration| duration.as_millis() as u64)
-                .unwrap_or(0);
-            object.insert("timestamp".into(), serde_json::json!(timestamp));
-        }
-        if let Ok(mut file) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(AGENT_DEBUG_LOG_PATH)
-        {
-            use std::io::Write;
-            let _ = writeln!(file, "{payload}");
-        }
     }
 }
 
@@ -243,39 +195,6 @@ impl EsploraBlockchain {
             .insert(txid, confirmations);
     }
 
-    /// Extra GETs for RCA dual-read. Call only on skip-jumps or `package-not-child` — not per step.
-    pub async fn debug_tx_spendability_probe(&self, txid: &Txid) -> serde_json::Value {
-        let status = self.client.get_tx_status(txid).await.ok();
-        let raw_present = self.client.get_tx(txid).await.ok().flatten().is_some();
-        let tip_height = self.client.get_height().await.ok();
-        let in_best_chain = match status.as_ref().and_then(|status| status.block_hash) {
-            Some(block_hash) => self
-                .client
-                .get_block_status(&block_hash)
-                .await
-                .ok()
-                .map(|block_status| block_status.in_best_chain),
-            None => None,
-        };
-        let esplora_confs = status.as_ref().map(|status| {
-            if !status.confirmed {
-                0
-            } else {
-                mined_tx_confirmations(status.block_height, tip_height)
-            }
-        });
-        serde_json::json!({
-            "txid": txid.to_string(),
-            "statusConfirmed": status.as_ref().map(|status| status.confirmed),
-            "blockHeight": status.as_ref().and_then(|status| status.block_height),
-            "hasBlockHash": status.as_ref().map(|status| status.block_hash.is_some()),
-            "tipHeight": tip_height,
-            "esploraConfs": esplora_confs,
-            "rawPresent": raw_present,
-            "inBestChain": in_best_chain,
-        })
-    }
-
     /// True when `/tx/{txid}/raw` returns a transaction (mempool or chain).
     ///
     /// Unlike [`Self::find_tx_at`], this does not fall back to JSON-only `/tx/{txid}` entries that
@@ -351,64 +270,13 @@ impl EsploraBlockchain {
                 return Self::broadcast_transactions_sequentially(client, txs).await;
             }
             Err(error) => {
-                if is_package_not_child_with_unconfirmed_parents_message(&error.to_string()) {
-                    // #region agent log
-                    agent_debug_log(
-                        "H3",
-                        "esplora_blockchain.rs:broadcast_package_at",
-                        "submitpackage rejected package-not-child",
-                        serde_json::json!({
-                            "packageTxids": owned_transactions
-                                .iter()
-                                .map(|tx| tx.compute_txid().to_string())
-                                .collect::<Vec<_>>(),
-                            "packageInputs": Self::package_input_outpoints(&owned_transactions),
-                            "error": error.to_string(),
-                        }),
-                    );
-                    // #endregion
-                }
                 return Err(EsploraBlockchain::map_esplora_error(error));
             }
         };
         if let Err(error) = validate_submit_package_result(&package_result) {
-            if is_package_not_child_with_unconfirmed_parents_message(&error.to_string()) {
-                // #region agent log
-                agent_debug_log(
-                    "H3",
-                    "esplora_blockchain.rs:broadcast_package_at",
-                    "submitpackage result package-not-child",
-                    serde_json::json!({
-                        "packageTxids": owned_transactions
-                            .iter()
-                            .map(|tx| tx.compute_txid().to_string())
-                            .collect::<Vec<_>>(),
-                        "packageInputs": Self::package_input_outpoints(&owned_transactions),
-                        "packageMsg": package_result.package_msg,
-                        "error": error.to_string(),
-                    }),
-                );
-                // #endregion
-            }
             return Err(error);
         }
         Ok(())
-    }
-
-    fn package_input_outpoints(txs: &[bitcoin::Transaction]) -> Vec<Vec<String>> {
-        txs.iter()
-            .map(|tx| {
-                tx.input
-                    .iter()
-                    .map(|input| {
-                        format!(
-                            "{}:{}",
-                            input.previous_output.txid, input.previous_output.vout
-                        )
-                    })
-                    .collect()
-            })
-            .collect()
     }
 
     async fn broadcast_transactions_sequentially(
@@ -597,21 +465,6 @@ fn confirmations_from_esplora_tx_status(
 ) -> u64 {
     if !status.confirmed {
         return 0;
-    }
-    if let (Some(block_height), Some(tip_height)) = (status.block_height, chain_tip_height) {
-        if tip_height < block_height {
-            // #region agent log
-            agent_debug_log(
-                "H4",
-                "esplora_blockchain.rs:confirmations_from_esplora_tx_status",
-                "rejecting confirmation because tip is behind claimed block height",
-                serde_json::json!({
-                    "blockHeight": block_height,
-                    "tipHeight": tip_height,
-                }),
-            );
-            // #endregion
-        }
     }
     mined_tx_confirmations(status.block_height, chain_tip_height)
 }
@@ -807,6 +660,7 @@ pub(crate) fn is_redundant_unilateral_exit_broadcast_error(error: &ark_client::E
 
 /// Injecting an unroll parent into the submit mempool can fail because that node already
 /// has the original CPFP or the parent in a block. Retry the child anyway.
+#[allow(dead_code)]
 pub(crate) fn ancestor_inject_is_ignorable(error: &ark_client::Error) -> bool {
     ancestor_inject_is_ignorable_message(&error.to_string())
 }

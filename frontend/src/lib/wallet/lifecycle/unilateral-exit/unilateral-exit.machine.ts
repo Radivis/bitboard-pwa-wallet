@@ -237,12 +237,7 @@ export const unilateralExitMachineSetup = setup({
       const output = progressFromEnsureBroadcastEvent(event)
       const waitingRelayed = isWaitingForRelayedStepConfirmation(output)
       const advanced = stepIndexAdvancedPastContext(context.progress, output)
-      const shouldWait =
-        waitingRelayed && (context.automationEnabled || !advanced)
-      // #region agent log
-      fetch('http://127.0.0.1:7757/ingest/cb0f3ed4-7e87-43d6-b1dd-18329fa2e328',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2d2162'},body:JSON.stringify({sessionId:'2d2162',hypothesisId:'P',runId:'post-fix',location:'unilateral-exit.machine.ts:shouldWaitAfterEnsureBroadcast',message:'should wait after ensureBroadcast',data:{shouldWait,waitingRelayed,advanced,automationEnabled:context.automationEnabled,prevStep:context.progress?.stepIndex??null,nextStep:output?.stepIndex??null,nextRelayed:output?.currentStepTxRelayed??null,nextPhase:output?.phase??null,nextWaitingSince:output?.currentStepWaitingSince??null},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-      return shouldWait
+      return waitingRelayed && (context.automationEnabled || !advanced)
     },
     isWaitingForRelayedStepConfirmation: ({ context }) =>
       isWaitingForRelayedStepConfirmation(context.progress),
@@ -360,9 +355,6 @@ export const unilateralExitMachineSetup = setup({
       if (event.type !== 'PROCEED_MANUAL') {
         return {}
       }
-      // #region agent log
-      fetch('http://127.0.0.1:7757/ingest/cb0f3ed4-7e87-43d6-b1dd-18329fa2e328',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2d2162'},body:JSON.stringify({sessionId:'2d2162',hypothesisId:'H-drop',location:'unilateral-exit.machine.ts:assignProceedManual',message:'PROCEED_MANUAL accepted',data:{prevProceedRequested:context.proceedRequested,progressRefreshRequested:context.progressRefreshRequested,stepIndex:context.progress?.stepIndex??null},timestamp:Date.now(),runId:'post-fix'})}).catch(()=>{});
-      // #endregion
       return {
         proceedRequested: true,
         proceedTargetStepIndex: context.progress?.stepIndex ?? null,
@@ -465,13 +457,6 @@ export const unilateralExitMachineSetup = setup({
       proceedTargetStepIndex: null,
       progressRefreshRequested: false,
     }),
-    logManualIdleInsteadOfAutoWait: ({ context, event }) => {
-      const output =
-        progressFromEnsureBroadcastEvent(event) ?? progressFromFetchEvent(event)
-      // #region agent log
-      fetch('http://127.0.0.1:7757/ingest/cb0f3ed4-7e87-43d6-b1dd-18329fa2e328',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2d2162'},body:JSON.stringify({sessionId:'2d2162',hypothesisId:'F',runId:'post-fix',location:'unilateral-exit.machine.ts:logManualIdleInsteadOfAutoWait',message:'manual idle instead of auto-wait',data:{prevStep:context.progress?.stepIndex??null,nextStep:output?.stepIndex??null,nextRelayed:output?.currentStepTxRelayed??null,nextPhase:output?.phase??null,automationEnabled:context.automationEnabled,proceedRequested:context.proceedRequested,proceedTargetStepIndex:context.proceedTargetStepIndex,progressRefreshRequested:context.progressRefreshRequested,eventType:event.type},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-    },
     clearJobActorContext: assign(() => ({
       jobOutpoints: [],
       progress: null,
@@ -547,17 +532,6 @@ export const unilateralExitMachineSetup = setup({
             context.progress,
         ),
     }),
-    logUnconfirmedParentRetry: ({ context, event }) => {
-      const error = errorFromProceedOrEnsureBroadcast(event)
-      // #region agent log
-      fetch('http://127.0.0.1:7757/ingest/cb0f3ed4-7e87-43d6-b1dd-18329fa2e328',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2d2162'},body:JSON.stringify({sessionId:'2d2162',hypothesisId:'R',runId:'post-fix',location:'unilateral-exit.machine.ts:logUnconfirmedParentRetry',message:'enter waitingForParentData after package-not-child',data:{machineHadStep:context.progress?.stepIndex??null,rewoundStep:rewoundProgressFromPackageError(error)?.stepIndex??null,unconfirmedParentRetry:context.unconfirmedParentRetry,proceedRequested:context.proceedRequested,proceedTargetStepIndex:context.proceedTargetStepIndex,automationEnabled:context.automationEnabled,parentDataWaitMs:context.parentDataWaitMs,error:error instanceof Error?error.message:String(error??'')},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-    },
-    logWaitingForParentDataRetry: ({ context }) => {
-      // #region agent log
-      fetch('http://127.0.0.1:7757/ingest/cb0f3ed4-7e87-43d6-b1dd-18329fa2e328',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2d2162'},body:JSON.stringify({sessionId:'2d2162',hypothesisId:'S',runId:'post-fix',location:'unilateral-exit.machine.ts:logWaitingForParentDataRetry',message:'waitingForParentData leaving for checkingProgress',data:{stepIndex:context.progress?.stepIndex??null,unconfirmedParentRetry:context.unconfirmedParentRetry,proceedRequested:context.proceedRequested,progressRefreshRequested:context.progressRefreshRequested,parentDataWaitMs:context.parentDataWaitMs},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-    },
     assignErrorFromFetch: assign({
       lastErrorMessage: ({ event }) =>
         event.type === 'xstate.error.actor.fetchProgress'
@@ -697,7 +671,6 @@ const checkingProgressOnDone = [
       'assignProgressFromFetch',
       'syncPersistedRelayWaitFromFetch',
       'clearProceedRequested',
-      'logManualIdleInsteadOfAutoWait',
     ],
   },
   {
@@ -717,7 +690,6 @@ const checkingProgressOnDone = [
       'assignProgressFromFetch',
       'syncPersistedRelayWaitFromFetch',
       'clearProceedRequested',
-      'logManualIdleInsteadOfAutoWait',
     ],
   },
   {
@@ -770,7 +742,6 @@ const ensuringBroadcastOnDone = [
       'assignProgressFromEnsureBroadcast',
       'syncPersistedRelayWaitFromEnsureBroadcast',
       'clearProceedRequested',
-      'logManualIdleInsteadOfAutoWait',
     ],
   },
 ] as const
@@ -964,7 +935,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
           {
             guard: 'isUnconfirmedParentPackageError',
             target: 'waitingForParentData',
-            actions: ['assignUnconfirmedParentRetry', 'logUnconfirmedParentRetry'],
+            actions: 'assignUnconfirmedParentRetry',
           },
           {
             guard: ({ context }) => context.automationEnabled,
@@ -999,7 +970,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
           {
             guard: 'isUnconfirmedParentPackageError',
             target: 'waitingForParentData',
-            actions: ['assignUnconfirmedParentRetry', 'logUnconfirmedParentRetry'],
+            actions: 'assignUnconfirmedParentRetry',
           },
           {
             guard: ({ context }) => context.automationEnabled,
@@ -1057,14 +1028,11 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
           {
             guard: ({ context }) => context.automationEnabled,
             target: 'checkingProgress',
-            actions: [
-              'assignProceedForUnconfirmedParentRetry',
-              'logWaitingForParentDataRetry',
-            ],
+            actions: 'assignProceedForUnconfirmedParentRetry',
           },
           {
             target: 'checkingProgress',
-            actions: ['assignProgressRefresh', 'logWaitingForParentDataRetry'],
+            actions: 'assignProgressRefresh',
           },
         ],
       },
@@ -1074,19 +1042,16 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
           {
             guard: ({ context }) => context.automationEnabled,
             target: 'checkingProgress',
-            actions: [
-              'assignProceedForUnconfirmedParentRetry',
-              'logWaitingForParentDataRetry',
-            ],
+            actions: 'assignProceedForUnconfirmedParentRetry',
           },
           {
             target: 'checkingProgress',
-            actions: ['assignProgressRefresh', 'logWaitingForParentDataRetry'],
+            actions: 'assignProgressRefresh',
           },
         ],
         PROCEED_MANUAL: {
           target: 'checkingProgress',
-          actions: ['assignProceedManual', 'logWaitingForParentDataRetry'],
+          actions: 'assignProceedManual',
         },
         AUTOMATION_PREFS_CHANGED: {
           actions: 'assignAutomationPrefs',

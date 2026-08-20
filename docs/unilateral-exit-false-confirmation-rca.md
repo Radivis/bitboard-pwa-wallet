@@ -56,8 +56,6 @@ Earlier in the same session (pre-cache-bust), `/blocks/tip/height` was **stuck**
 
 Progress fetches often take **~25–35s** (23 txs × several HTTP calls). A single Proceed can therefore straddle ASP publish + Esplora “confirm” of later checkpoints.
 
-Debug ingest (may be stale after this session): `http://127.0.0.1:7757/ingest/cb0f3ed4-7e87-43d6-b1dd-18329fa2e328`, log file `.cursor/debug-913f52.log`.
-
 ---
 
 ## What was tried (keep / revert / still dirty)
@@ -90,12 +88,9 @@ Debug ingest (may be stale after this session): `http://127.0.0.1:7757/ingest/cb
 
 Extra HTTP **inside** `first_incomplete_step_index` and **before** `submitpackage` (`debug_confirmation_snapshot`: `/status`, JSON, tip, merkle/block, `/raw`). Proceed took ~90s; ASP+chain ran ahead. Do **not** put multi-GET snapshots on the proceed path.
 
-### Still in the tree (debug leftover — remove after a real fix)
+Session ingest (`fetch` to `127.0.0.1:7757`, Rust `agent_debug_log`) was removed after the fix. Do **not** reintroduce snapshot HTTP on the proceed path.
 
-- TS `fetch` ingest in `unilateral-exit.machine.ts`, `unilateral-exit.actors.ts`, `unilateral-exit-runtime.ts`, `UnilateralExitControlPage.tsx`
-- Rust `agent_debug_log` in `esplora_blockchain.rs` and `unilateral_exit_orchestrator.rs` (parent-input log is cheap; inversion log is cheap; **do not** reintroduce snapshot HTTP)
-
-`mined_tx_confirmations` still has `(Some(block_height), None) => 1` (tip fetch **failed**). That is another fake-1-conf path if `get_height` errors.
+`mined_tx_confirmations` fails closed when the tip is missing: `(Some(_), None) => 0`.
 
 ---
 
