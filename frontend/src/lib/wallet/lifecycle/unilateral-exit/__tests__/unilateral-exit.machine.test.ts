@@ -640,6 +640,47 @@ describe('unilateralExitMachine', () => {
     expect(testActor.getSnapshot().context.proceedRequested).toBe(false)
   })
 
+  it('automatic mode continues when ensureBroadcast advances to an unrelayed later step', async () => {
+    let ensureCount = 0
+    const fetchProgress = vi.fn(async () =>
+      progress({
+        phase: 'idle',
+        stepIndex: ensureCount < 1 ? 2 : 3,
+        totalSteps: 7,
+        currentStepTxRelayed: false,
+      }),
+    )
+    const ensureBroadcast = vi.fn(async () => {
+      ensureCount += 1
+      if (ensureCount === 1) {
+        return progress({
+          phase: 'idle',
+          stepIndex: 3,
+          totalSteps: 7,
+          currentStepTxRelayed: false,
+        })
+      }
+      return progress({
+        phase: 'waiting',
+        stepIndex: 3,
+        totalSteps: 7,
+        currentStepTxRelayed: true,
+        currentStepWaitingSince: 1_700_000_000,
+      })
+    })
+    const { testActor } = createTestActor({ fetchProgress, ensureBroadcast })
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'START_AUTOMATIC',
+      walletScope,
+      outpoints: [leaf],
+    })
+    await waitFor(testActor, (state) => state.matches('waitingConfirm'))
+    expect(ensureBroadcast).toHaveBeenCalledTimes(2)
+    expect(testActor.getSnapshot().context.progress?.stepIndex).toBe(3)
+    expect(testActor.getSnapshot().context.automationEnabled).toBe(true)
+  })
+
   it('automatic mode still waits when ensureBroadcast advances to an already-relayed later step', async () => {
     const fetchProgress = vi.fn(async () =>
       progress({

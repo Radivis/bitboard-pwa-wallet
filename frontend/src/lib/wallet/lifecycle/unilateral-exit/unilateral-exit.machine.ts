@@ -233,11 +233,27 @@ export const unilateralExitMachineSetup = setup({
       !context.automationEnabled &&
       context.jobOutpoints.length > 0 &&
       context.progress != null,
+    hasActiveAutomaticJob: ({ context }) =>
+      context.automationEnabled &&
+      context.pausedReason == null &&
+      context.jobOutpoints.length > 0 &&
+      context.progress != null &&
+      !isJobCompleteFromProgress(context.progress, context),
     shouldWaitAfterEnsureBroadcast: ({ context, event }) => {
       const output = progressFromEnsureBroadcastEvent(event)
       const waitingRelayed = isWaitingForRelayedStepConfirmation(output)
       const advanced = stepIndexAdvancedPastContext(context.progress, output)
       return waitingRelayed && (context.automationEnabled || !advanced)
+    },
+    shouldContinueAutomationAfterEnsureBroadcast: ({ context, event }) => {
+      if (!context.automationEnabled || context.pausedReason != null) {
+        return false
+      }
+      const output = progressFromEnsureBroadcastEvent(event)
+      if (output == null || isJobCompleteFromProgress(output, context)) {
+        return false
+      }
+      return !isWaitingForRelayedStepConfirmation(output)
     },
     isWaitingForRelayedStepConfirmation: ({ context }) =>
       isWaitingForRelayedStepConfirmation(context.progress),
@@ -737,6 +753,15 @@ const ensuringBroadcastOnDone = [
     ],
   },
   {
+    guard: 'shouldContinueAutomationAfterEnsureBroadcast',
+    target: 'checkingProgress',
+    actions: [
+      'assignProgressFromEnsureBroadcast',
+      'syncPersistedRelayWaitFromEnsureBroadcast',
+      'resumeAutomationProceed',
+    ],
+  },
+  {
     target: 'idle',
     actions: [
       'assignProgressFromEnsureBroadcast',
@@ -769,11 +794,18 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
     },
     idle: {
       after: {
-        pollDelay: {
-          guard: 'hasActiveManualJob',
-          target: 'checkingProgress',
-          actions: 'assignProgressRefresh',
-        },
+        pollDelay: [
+          {
+            guard: 'hasActiveAutomaticJob',
+            target: 'checkingProgress',
+            actions: 'resumeAutomationProceed',
+          },
+          {
+            guard: 'hasActiveManualJob',
+            target: 'checkingProgress',
+            actions: 'assignProgressRefresh',
+          },
+        ],
       },
       on: {
         START_MANUAL: {
@@ -792,11 +824,18 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
           target: 'checkingProgress',
           actions: 'assignProceedManual',
         },
-        POLL_TICK: {
-          guard: 'hasActiveManualJob',
-          target: 'checkingProgress',
-          actions: 'assignProgressRefresh',
-        },
+        POLL_TICK: [
+          {
+            guard: 'hasActiveAutomaticJob',
+            target: 'checkingProgress',
+            actions: 'resumeAutomationProceed',
+          },
+          {
+            guard: 'hasActiveManualJob',
+            target: 'checkingProgress',
+            actions: 'assignProgressRefresh',
+          },
+        ],
         ABORT_ORCHESTRATION: abortOrchestrationTransition,
         CLEAR_JOB: {
           actions: ['clearPersistedJob', 'clearJobActorContext'],
