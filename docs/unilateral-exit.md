@@ -124,6 +124,8 @@ Two-step confirmation (info modal, then red risk modal with required checkbox). 
 
 Abort **stops frontend orchestration only**. It does **not** delete `unilateral_exit_materials`, watches, pending deductions, or on-chain broadcasts. Backend in-progress state remains until completion or reconcile. If the ASP is online, an unfinished on-chain unroll can still be seized.
 
+`ABORT_ORCHESTRATION` is sent immediately (VTXO id list RPCs must not block it). Copyable ids on the `user_aborted` banner are filled best-effort afterward.
+
 Abort and ASP `terminated` clear the frontend job bookmark. The failure banner comes from error persistence (`user_aborted` / terminal viability). Hydrate must not treat leftover WASM in-progress rows as crash recovery: a job is restored only when persisted outpoints are still present.
 
 ---

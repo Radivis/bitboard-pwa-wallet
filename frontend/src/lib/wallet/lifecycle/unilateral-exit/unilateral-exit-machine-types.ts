@@ -90,7 +90,6 @@ export type UnilateralExitMachineUserEvent =
   | { type: 'CLEAR_JOB' }
   | {
       type: 'ABORT_ORCHESTRATION'
-      vtxoIds: string[]
       resolvedJobOutpoints: ArkadeVtxoOutpoint[]
     }
   | { type: 'WALLET_RESET' }
@@ -102,6 +101,7 @@ export type UnilateralExitMachineActorDoneEvent =
   | DoneActorEvent<ArkadeUnilateralExitProgress, 'ensureBroadcast'>
   | DoneActorEvent<UnilateralExitPolicyEvaluation, 'evaluateAutomationPolicy'>
   | DoneActorEvent<ArkadeUnilateralExitJobViability, 'evaluateJobViability'>
+  | DoneActorEvent<{ vtxoIds: string[] }, 'resolveAbortVtxoIds'>
 
 export type UnilateralExitMachineActorErrorEvent =
   | ErrorActorEvent<unknown, 'fetchProgress'>
@@ -109,6 +109,7 @@ export type UnilateralExitMachineActorErrorEvent =
   | ErrorActorEvent<unknown, 'ensureBroadcast'>
   | ErrorActorEvent<unknown, 'evaluateAutomationPolicy'>
   | ErrorActorEvent<unknown, 'evaluateJobViability'>
+  | ErrorActorEvent<unknown, 'resolveAbortVtxoIds'>
 
 export type UnilateralExitMachineEvent =
   | UnilateralExitMachineUserEvent

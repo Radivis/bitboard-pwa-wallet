@@ -39,6 +39,9 @@ function lifecyclePhaseFromMachineState(
   if (unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.terminated)) {
     return UnilateralExitLifecyclePhase.Terminated
   }
+  if (unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.aborted)) {
+    return UnilateralExitLifecyclePhase.Idle
+  }
   if (unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.error)) {
     return UnilateralExitLifecyclePhase.Error
   }
@@ -134,6 +137,9 @@ export function selectUnilateralExitAutomationSnapshot(
 }
 
 export function selectIsUnilateralExitJobActive(state: UnilateralExitActorSnapshot): boolean {
+  if (unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.aborted)) {
+    return false
+  }
   const lifecycle = selectUnilateralExitLifecycleSnapshot(state)
   if (lifecycle.phase === UnilateralExitLifecyclePhase.Terminated) {
     return false
@@ -162,6 +168,9 @@ export function selectCanAbortUnilateralExitOrchestration(
     return false
   }
   if (unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.complete)) {
+    return false
+  }
+  if (unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.aborted)) {
     return false
   }
   return (

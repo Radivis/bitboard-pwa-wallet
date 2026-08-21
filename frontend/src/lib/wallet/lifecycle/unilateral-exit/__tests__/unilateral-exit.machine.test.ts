@@ -28,7 +28,14 @@ vi.mock('@/lib/wallet/lifecycle/unilateral-exit-failure-persistence', () => ({
   })),
   persistUnilateralExitFailureRecord: vi.fn(),
   clearPersistedUnilateralExitFailure: vi.fn(),
-  getPersistedUnilateralExitFailure: vi.fn(() => null),
+  getPersistedUnilateralExitFailure: vi.fn(() => ({
+    selectedLeafOutpoints: [],
+    jobStartedAtUnix: 1_700_000_000,
+    detectedAtUnix: 1_700_000_100,
+    reasonCode: 'user_aborted' as const,
+    detailMessage: '',
+    vtxoIds: [],
+  })),
   useUnilateralExitFailurePersistenceStore: {
     getState: () => ({
       getFailure: () => null,
@@ -50,6 +57,7 @@ import {
   type EvaluateJobViabilityActorInput,
   type FetchProgressActorInput,
   type ProceedStepActorInput,
+  type ResolveAbortVtxoIdsActorInput,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.machine'
 import type { UnilateralExitPolicyEvaluation } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-types'
 import {
@@ -101,6 +109,9 @@ function createTestActor(params: {
   evaluatePolicy?: (
     input: EvaluateAutomationPolicyActorInput,
   ) => Promise<UnilateralExitPolicyEvaluation>
+  resolveAbortVtxoIds?: (
+    input: ResolveAbortVtxoIdsActorInput,
+  ) => Promise<{ vtxoIds: string[] }>
 }) {
   const fetchProgress =
     params.fetchProgress ?? vi.fn(async () => progress({ phase: 'idle' }))
@@ -135,6 +146,9 @@ function createTestActor(params: {
       pausedReason: null,
     }))
 
+  const resolveAbortVtxoIds =
+    params.resolveAbortVtxoIds ?? vi.fn(async () => ({ vtxoIds: [] as string[] }))
+
   const testActor = createActor(
     unilateralExitMachine.provide({
       actors: {
@@ -143,6 +157,7 @@ function createTestActor(params: {
         proceedStepActor: fromPromise(proceedStep),
         ensureBroadcastActor: fromPromise(ensureBroadcast),
         evaluateAutomationPolicyActor: fromPromise(evaluatePolicy),
+        resolveAbortVtxoIdsActor: fromPromise(resolveAbortVtxoIds),
       },
     }),
     { input: { pollDelayMs: 60_000, parentDataWaitMs: 60_000 } },
@@ -156,6 +171,7 @@ function createTestActor(params: {
     proceedStep,
     ensureBroadcast,
     evaluatePolicy,
+    resolveAbortVtxoIds,
   }
 }
 
@@ -1125,7 +1141,6 @@ describe('unilateralExitMachine', () => {
     await waitFor(testActor, (state) => state.matches('proceeding'))
     testActor.send({
       type: 'ABORT_ORCHESTRATION',
-      vtxoIds: ['vtxo-id-1'],
       resolvedJobOutpoints: [leaf],
     })
 
@@ -1134,7 +1149,7 @@ describe('unilateralExitMachine', () => {
       walletScope,
       expect.objectContaining({
         reasonCode: 'user_aborted',
-        vtxoIds: ['vtxo-id-1'],
+        vtxoIds: [],
       }),
     )
     expect(clearPersistedUnilateralExitJob).toHaveBeenCalledWith(walletScope)
@@ -1156,7 +1171,6 @@ describe('unilateralExitMachine', () => {
     await waitFor(testActor, (state) => state.matches('waitingConfirm'))
     testActor.send({
       type: 'ABORT_ORCHESTRATION',
-      vtxoIds: ['vtxo-a', 'vtxo-b'],
       resolvedJobOutpoints: [leaf],
     })
 
@@ -1165,7 +1179,6 @@ describe('unilateralExitMachine', () => {
       walletScope,
       expect.objectContaining({
         reasonCode: 'user_aborted',
-        vtxoIds: ['vtxo-a', 'vtxo-b'],
       }),
     )
     expect(clearPersistedUnilateralExitJob).toHaveBeenCalledWith(walletScope)
@@ -1179,7 +1192,6 @@ describe('unilateralExitMachine', () => {
     testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
     testActor.send({
       type: 'ABORT_ORCHESTRATION',
-      vtxoIds: ['vtxo-id-2'],
       resolvedJobOutpoints: [leaf],
     })
 
@@ -1188,12 +1200,91 @@ describe('unilateralExitMachine', () => {
       walletScope,
       expect.objectContaining({
         reasonCode: 'user_aborted',
-        vtxoIds: ['vtxo-id-2'],
         selectedLeafOutpoints: [leaf],
       }),
     )
     expect(clearPersistedUnilateralExitJob).toHaveBeenCalledWith(walletScope)
     expect(testActor.getSnapshot().context.jobOutpoints).toEqual([])
+  })
+
+  it('aborts from proceeding even when vtxo-id resolve hangs', async () => {
+    const fetchProgress = vi.fn(async () =>
+      progress({ phase: 'idle', currentStepTxRelayed: true }),
+    )
+    const proceedStep = vi.fn(() => new Promise<ArkadeUnilateralExitProgress>(() => {}))
+    const { testActor } = createTestActor({
+      fetchProgress,
+      proceedStep,
+      resolveAbortVtxoIds: () => new Promise(() => {}),
+    })
+
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'START_MANUAL',
+      walletScope,
+      outpoints: [leaf],
+      feeRateSatPerVb: 2,
+    })
+
+    await waitFor(testActor, (state) => state.matches('proceeding'))
+    testActor.send({
+      type: 'ABORT_ORCHESTRATION',
+      resolvedJobOutpoints: [leaf],
+    })
+
+    await waitFor(testActor, (state) => state.matches('aborted'))
+    expect(persistUnilateralExitFailureRecord).toHaveBeenCalledWith(
+      walletScope,
+      expect.objectContaining({ reasonCode: 'user_aborted' }),
+    )
+    expect(clearPersistedUnilateralExitJob).toHaveBeenCalledWith(walletScope)
+    expect(testActor.getSnapshot().matches('proceeding')).toBe(false)
+  })
+
+  it('aborts and returns to idle when vtxo-id resolve rejects', async () => {
+    const fetchProgress = vi.fn(async () => progress({ phase: 'idle' }))
+    const { testActor } = createTestActor({
+      fetchProgress,
+      resolveAbortVtxoIds: async () => {
+        throw new Error('list failed')
+      },
+    })
+
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'ABORT_ORCHESTRATION',
+      resolvedJobOutpoints: [leaf],
+    })
+
+    await waitFor(testActor, (state) => state.matches('idle'))
+    expect(persistUnilateralExitFailureRecord).toHaveBeenCalledWith(
+      walletScope,
+      expect.objectContaining({ reasonCode: 'user_aborted' }),
+    )
+    expect(clearPersistedUnilateralExitJob).toHaveBeenCalledWith(walletScope)
+  })
+
+  it('patches aborted failure vtxo ids when resolve succeeds', async () => {
+    const fetchProgress = vi.fn(async () => progress({ phase: 'idle' }))
+    const { testActor } = createTestActor({
+      fetchProgress,
+      resolveAbortVtxoIds: async () => ({ vtxoIds: ['vtxo-id-1'] }),
+    })
+
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'ABORT_ORCHESTRATION',
+      resolvedJobOutpoints: [leaf],
+    })
+
+    await waitFor(testActor, (state) => state.matches('idle'))
+    expect(persistUnilateralExitFailureRecord).toHaveBeenCalledWith(
+      walletScope,
+      expect.objectContaining({
+        reasonCode: 'user_aborted',
+        vtxoIds: ['vtxo-id-1'],
+      }),
+    )
   })
 
   it('accepts Proceed during an idle progress refresh and broadcasts after the in-flight fetch', async () => {

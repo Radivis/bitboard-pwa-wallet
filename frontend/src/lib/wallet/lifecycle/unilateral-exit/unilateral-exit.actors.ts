@@ -22,12 +22,14 @@ import { proceedUnilateralExitStepWithGuards } from '@/lib/arkade/proceed-unilat
 import { resolveAutomatedStepFeeRateSatPerVb } from '@/lib/arkade/unilateral-exit-automation-fees'
 import { getArkadeLoadLifecycleSnapshot } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
 import { useUnilateralExitAutomationPrefsStore } from '@/lib/wallet/lifecycle/unilateral-exit-automation-prefs-persistence'
+import { resolveVtxoIdsForOutpoints } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-vtxo-ids'
 import type {
   EnsureBroadcastActorInput,
   EvaluateAutomationPolicyActorInput,
   EvaluateJobViabilityActorInput,
   FetchProgressActorInput,
   ProceedStepActorInput,
+  ResolveAbortVtxoIdsActorInput,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.machine'
 import type { UnilateralExitPolicyEvaluation } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-types'
 import type { UnilateralExitWalletScope } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
@@ -257,10 +259,67 @@ export const ensureBroadcastActor = fromPromise<
   return progress
 })
 
+const ABORT_VTXO_ID_RESOLVE_TIMEOUT_MS = 3_000
+
+async function listOrEmpty<T>(load: () => Promise<T[]>): Promise<T[]> {
+  try {
+    return await load()
+  } catch {
+    return []
+  }
+}
+
+function withTimeoutFallback<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  fallback: T,
+): Promise<T> {
+  return new Promise((resolve) => {
+    const timeoutId = setTimeout(() => resolve(fallback), timeoutMs)
+    void promise.then(
+      (value) => {
+        clearTimeout(timeoutId)
+        resolve(value)
+      },
+      () => {
+        clearTimeout(timeoutId)
+        resolve(fallback)
+      },
+    )
+  })
+}
+
+export async function resolveAbortVtxoIdsBestEffort(
+  outpoints: ResolveAbortVtxoIdsActorInput['outpoints'],
+): Promise<string[]> {
+  try {
+    const worker = getArkadeWorker()
+    const [candidates, inProgressRows] = await Promise.all([
+      listOrEmpty(() => worker.listExitCandidates()),
+      listOrEmpty(() => worker.listUnilateralExitsInProgress()),
+    ])
+    return resolveVtxoIdsForOutpoints(outpoints, candidates, inProgressRows)
+  } catch {
+    return []
+  }
+}
+
+export const resolveAbortVtxoIdsActor = fromPromise<
+  { vtxoIds: string[] },
+  ResolveAbortVtxoIdsActorInput
+>(async ({ input }) => ({
+  vtxoIds: await withTimeoutFallback(
+    resolveAbortVtxoIdsBestEffort(input.outpoints),
+    ABORT_VTXO_ID_RESOLVE_TIMEOUT_MS,
+    [],
+  ),
+}))
+
 export const unilateralExitMachineActors = {
   fetchProgressActor,
   evaluateJobViabilityActor,
   proceedStepActor,
   evaluateAutomationPolicyActor,
   ensureBroadcastActor,
+  resolveAbortVtxoIdsActor,
 }

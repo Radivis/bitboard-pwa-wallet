@@ -120,7 +120,7 @@ feature:
       - id: ARK-EXIT-22
         description: Proceed automatically advances all unroll steps for multiple preconfirmed VTXOs (after chained self-send splits) until branch complete (E2E-ARK-REG-07)
       - id: ARK-EXIT-23
-        description: Control page offers abort when a frontend unilateral exit job is active; two-step confirmation (info then red risk modal with required checkbox); abort ends orchestration via aborted machine state without deleting unilateral_exit_materials or other WASM persistence; user_aborted failure banner lists VTXO ids with copy actions; backend in-progress state remains until completion or reconcile
+        description: Control page offers abort when a frontend unilateral exit job is active; two-step confirmation (info then red risk modal with required checkbox); abort ends orchestration via aborted machine state without waiting on WASM list RPCs and without deleting unilateral_exit_materials or other WASM persistence; user_aborted failure banner lists VTXO ids with copy actions when id lookup succeeds; backend in-progress state remains until completion or reconcile
     batch_intent:
       - id: ARK-BATCH-01
         description: After RegisterIntent returns an intent_id, the wallet persists a pending batch-intent record before treating the join as failed

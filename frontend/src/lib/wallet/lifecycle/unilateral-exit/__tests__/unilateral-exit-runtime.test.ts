@@ -3,6 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mockGetJob = vi.fn()
 const mockClearJob = vi.fn()
 const mockPersistJob = vi.fn()
+const workerListMocks = vi.hoisted(() => ({
+  listExitCandidates: vi.fn(async () => [
+    { id: 'vtxo-resolved-1', txid: 'aa'.repeat(32), vout: 0, amountSats: 50_000 },
+  ]),
+  listUnilateralExitsInProgress: vi.fn(async () => []),
+}))
 let persistenceHydrated = false
 let persistenceHydrationWaiters: Array<() => void> = []
 
@@ -54,10 +60,8 @@ vi.mock('@/lib/wallet/lifecycle/unilateral-exit-automation-prefs-persistence', (
 
 vi.mock('@/workers/arkade-factory', () => ({
   getArkadeWorker: () => ({
-    listExitCandidates: vi.fn(async () => [
-      { id: 'vtxo-resolved-1', txid: leaf.txid, vout: leaf.vout, amountSats: 50_000 },
-    ]),
-    listUnilateralExitsInProgress: vi.fn(async () => []),
+    listExitCandidates: workerListMocks.listExitCandidates,
+    listUnilateralExitsInProgress: workerListMocks.listUnilateralExitsInProgress,
   }),
 }))
 
@@ -104,6 +108,7 @@ vi.mock('@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.actors', () => {
         currentStepTxRelayed: true,
         currentStepWaitingSince: 1_700_000_000,
       })),
+      resolveAbortVtxoIdsActor: fromPromise(async () => ({ vtxoIds: [] as string[] })),
     },
   }
 })
@@ -327,5 +332,33 @@ describe('unilateral-exit-runtime hydration', () => {
     const snapshot = getUnilateralExitActorSnapshot()
     expect(snapshot.context.jobOutpoints).toEqual([])
     expect(unilateralExitSnapshotIsInState(snapshot, UNILATERAL_EXIT_MACHINE_STATE.idle)).toBe(true)
+  })
+
+  it('abort orchestration does not await worker list RPCs', async () => {
+    persistenceHydrated = true
+    workerListMocks.listExitCandidates.mockImplementation(() => new Promise(() => {}))
+    workerListMocks.listUnilateralExitsInProgress.mockImplementation(
+      () => new Promise(() => {}),
+    )
+
+    await configureUnilateralExitForLoadedWallet(walletScope)
+    sendUnilateralExitEvent({
+      type: 'START_MANUAL',
+      walletScope,
+      outpoints: [leaf],
+      feeRateSatPerVb: 2,
+    })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    await abortUnilateralExitOrchestration(walletScope, [leaf])
+
+    expect(workerListMocks.listExitCandidates).not.toHaveBeenCalled()
+    expect(workerListMocks.listUnilateralExitsInProgress).not.toHaveBeenCalled()
+    expect(mockSetAutomationEnabled).toHaveBeenCalledWith(walletScope, false)
+    const snapshot = getUnilateralExitActorSnapshot()
+    expect(
+      unilateralExitSnapshotIsInState(snapshot, UNILATERAL_EXIT_MACHINE_STATE.idle) ||
+        unilateralExitSnapshotIsInState(snapshot, UNILATERAL_EXIT_MACHINE_STATE.aborted),
+    ).toBe(true)
   })
 })

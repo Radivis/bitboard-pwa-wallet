@@ -25,7 +25,6 @@ import {
 } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
 import { resolveUnilateralExitJobOutpoints } from '@/lib/wallet/lifecycle/unilateral-exit-job-scope'
 import { unilateralExitMachineActors } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.actors'
-import { resolveVtxoIdsForOutpoints } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-vtxo-ids'
 import type { UnilateralExitMachineEvent } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-types'
 import { unilateralExitMachine } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.machine'
 import type { UnilateralExitActorSnapshot } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-types'
@@ -42,7 +41,6 @@ import type { LockLifecyclePhase } from '@/lib/wallet/lifecycle/lock-lifecycle-t
 import { shouldSkipRailLifecycleResetForLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-phase'
 import type { ArkadeVtxoOutpoint } from '@/workers/arkade-api'
 import { arkadeVtxoOutpointsEqual, sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
-import { getArkadeWorker } from '@/workers/arkade-factory'
 import { createActor } from 'xstate'
 
 type ActorListener = (snapshot: UnilateralExitActorSnapshot) => void
@@ -344,13 +342,6 @@ export async function abortUnilateralExitOrchestration(
     return
   }
 
-  const worker = getArkadeWorker()
-  const [candidates, inProgressRows] = await Promise.all([
-    worker.listExitCandidates(),
-    worker.listUnilateralExitsInProgress(),
-  ])
-  const vtxoIds = resolveVtxoIdsForOutpoints(jobOutpoints, candidates, inProgressRows)
-
   disableAutomaticUnilateralExit(scope)
 
   void import('@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.actors').then(
@@ -359,7 +350,6 @@ export async function abortUnilateralExitOrchestration(
 
   sendUnilateralExitEvent({
     type: 'ABORT_ORCHESTRATION',
-    vtxoIds,
     resolvedJobOutpoints: jobOutpoints,
   })
   await waitForUnilateralExitActorSettled()

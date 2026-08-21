@@ -15,6 +15,7 @@ import {
 } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence'
 import {
   buildPersistedUnilateralExitFailure,
+  getPersistedUnilateralExitFailure,
   persistUnilateralExitFailureRecord,
 } from '@/lib/wallet/lifecycle/unilateral-exit-failure-persistence'
 import type { UnilateralExitFailureReasonCode } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
@@ -52,6 +53,10 @@ export type ProceedStepActorInput = {
 
 export type EvaluateAutomationPolicyActorInput = {
   walletScope: NonNullable<UnilateralExitMachineContext['walletScope']>
+  outpoints: UnilateralExitMachineContext['jobOutpoints']
+}
+
+export type ResolveAbortVtxoIdsActorInput = {
   outpoints: UnilateralExitMachineContext['jobOutpoints']
 }
 
@@ -171,6 +176,11 @@ export const unilateralExitMachineSetup = setup({
     ensureBroadcastActor: fromPromise<ArkadeUnilateralExitProgress, EnsureBroadcastActorInput>(
       async () => {
         throw new Error('ensureBroadcastActor implementation missing')
+      },
+    ),
+    resolveAbortVtxoIdsActor: fromPromise<{ vtxoIds: string[] }, ResolveAbortVtxoIdsActorInput>(
+      async () => {
+        throw new Error('resolveAbortVtxoIdsActor implementation missing')
       },
     ),
   },
@@ -618,9 +628,25 @@ export const unilateralExitMachineSetup = setup({
           jobStartedAtUnix: job.jobStartedAtUnix ?? Math.floor(Date.now() / 1000),
           reasonCode: 'user_aborted',
           detailMessage: '',
-          vtxoIds: event.vtxoIds,
+          vtxoIds: [],
         }),
       )
+    },
+    patchAbortedFailureVtxoIds: ({ context, event }) => {
+      if (
+        context.walletScope == null ||
+        event.type !== 'xstate.done.actor.resolveAbortVtxoIds'
+      ) {
+        return
+      }
+      const existing = getPersistedUnilateralExitFailure(context.walletScope)
+      if (existing == null || existing.reasonCode !== 'user_aborted') {
+        return
+      }
+      persistUnilateralExitFailureRecord(context.walletScope, {
+        ...existing,
+        vtxoIds: event.output.vtxoIds,
+      })
     },
     stageAbortedJobOutpoints: assign(({ context, event }) => {
       if (event.type !== 'ABORT_ORCHESTRATION' || context.jobOutpoints.length > 0) {
@@ -1168,11 +1194,25 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
         'persistAbortedUnilateralExitFailure',
         'invalidateUnilateralExitQueriesOnTerminate',
         'clearPersistedJob',
-        'clearJobActorContext',
         'clearTerminatedProceedRequested',
       ],
-      always: {
-        target: 'idle',
+      invoke: {
+        id: 'resolveAbortVtxoIds',
+        src: 'resolveAbortVtxoIdsActor',
+        input: ({ context, event }) => ({
+          outpoints:
+            event.type === 'ABORT_ORCHESTRATION' && event.resolvedJobOutpoints.length > 0
+              ? sortArkadeVtxoOutpoints(event.resolvedJobOutpoints)
+              : context.jobOutpoints,
+        }),
+        onDone: {
+          target: 'idle',
+          actions: ['patchAbortedFailureVtxoIds', 'clearJobActorContext'],
+        },
+        onError: {
+          target: 'idle',
+          actions: 'clearJobActorContext',
+        },
       },
     },
     error: {
