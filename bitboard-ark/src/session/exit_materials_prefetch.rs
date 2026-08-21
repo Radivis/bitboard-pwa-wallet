@@ -1,10 +1,7 @@
 use std::collections::HashSet;
 
 use ark_core::VtxoList;
-use bitcoin::Txid;
 
-use crate::error::{ArkResult, ArkWasmError};
-use crate::outpoint::representative_virtual_tx_outpoint_for_leaf_tx;
 use crate::persistence::OffchainVtxoSnapshot;
 use crate::unilateral_exit_materials::{
     materials_record_from_prefetch, pending_unilateral_exit_leaf_txids,
@@ -14,30 +11,6 @@ use crate::unilateral_exit_materials::{
 
 use super::ArkSession;
 use super::mappers::current_unix_timestamp;
-
-pub(crate) async fn ensure_unilateral_exit_materials_for_leaf_tx(
-    session: &ArkSession,
-    leaf_txid: Txid,
-) -> ArkResult<()> {
-    let txid = leaf_txid.to_string();
-    let Some(mut snapshot) = session.wallet_db.snapshot().offchain_vtxo_snapshot.clone() else {
-        return Err(ArkWasmError::Snapshot("offchain snapshot missing".into()));
-    };
-    if snapshot_materials_for_leaf_tx(&snapshot, &txid).is_some() {
-        return Ok(());
-    }
-
-    let outpoint = representative_virtual_tx_outpoint_for_leaf_tx(&snapshot, &txid)?.outpoint;
-    let (chains, psbts) = session
-        .client
-        .prefetch_unilateral_exit_materials(outpoint)
-        .await
-        .map_err(crate::error::ArkWasmError::Client)?;
-    let materials = materials_record_from_prefetch(current_unix_timestamp(), &chains, &psbts)?;
-    store_materials_for_leaf_tx(&mut snapshot, &txid, materials);
-    session.wallet_db.set_offchain_vtxo_snapshot(snapshot);
-    Ok(())
-}
 
 pub(crate) async fn prefetch_unilateral_exit_materials_for_snapshot(
     session: &ArkSession,

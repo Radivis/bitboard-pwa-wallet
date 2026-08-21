@@ -23,14 +23,9 @@ use crate::esplora_blockchain::{
     is_redundant_unilateral_exit_broadcast_error,
 };
 use crate::outpoint::VirtualOutPoint;
-use crate::outpoint::{
-    representative_virtual_tx_outpoint_for_leaf_tx, representative_vout_among_virtual_outpoints,
-};
+use crate::outpoint::representative_vout_among_virtual_outpoints;
 use crate::persistence::VirtualTxOutPointRecord;
-use crate::unilateral_exit_materials::{
-    chained_tx_type_label, record_is_exit_eligible, snapshot_materials_for_leaf_tx,
-    virtual_tx_outpoint_is_exit_eligible, vtxo_chains_from_json,
-};
+use crate::unilateral_exit_materials::{chained_tx_type_label, record_is_exit_eligible};
 
 use super::ArkSession;
 use super::exit_autonomous::dedup_virtual_outpoints;
@@ -383,6 +378,25 @@ fn commitment_txids_from_chains(chains: &VtxoChains) -> Vec<Txid> {
         .collect()
 }
 
+pub(crate) fn exit_eligible_records_for_topology_hosts_from_snapshot(
+    snapshot: Option<&crate::persistence::OffchainVtxoSnapshot>,
+    host_txids: &HashSet<String>,
+) -> Vec<VirtualTxOutPointRecord> {
+    if host_txids.is_empty() {
+        return Vec::new();
+    }
+    let Some(snapshot) = snapshot else {
+        return Vec::new();
+    };
+    snapshot
+        .virtual_tx_outpoints
+        .iter()
+        .filter(|record| record_is_exit_eligible(record) && host_txids.contains(&record.txid))
+        .cloned()
+        .collect()
+}
+
+#[allow(dead_code)]
 fn record_from_virtual_tx_outpoint_for_topology(
     virtual_tx_outpoint: &ark_core::server::VirtualTxOutPoint,
 ) -> VirtualTxOutPointRecord {
@@ -468,33 +482,10 @@ impl ArkSession {
             .filter(|node| virtual_tx_type_hosts_exit_outpoints(&node.tx_type))
             .map(|node| node.txid.clone())
             .collect();
-        if host_txids.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref() {
-            let matching_records: Vec<VirtualTxOutPointRecord> = snapshot
-                .virtual_tx_outpoints
-                .iter()
-                .filter(|record| {
-                    record_is_exit_eligible(record) && host_txids.contains(&record.txid)
-                })
-                .cloned()
-                .collect();
-            if !matching_records.is_empty() {
-                return Ok(matching_records);
-            }
-        }
-
-        let (vtxo_list, _) = self.client.list_vtxos().await?;
-        Ok(vtxo_list
-            .all()
-            .filter(|virtual_tx_outpoint| {
-                virtual_tx_outpoint_is_exit_eligible(virtual_tx_outpoint)
-                    && host_txids.contains(&virtual_tx_outpoint.outpoint.txid.to_string())
-            })
-            .map(record_from_virtual_tx_outpoint_for_topology)
-            .collect())
+        Ok(exit_eligible_records_for_topology_hosts_from_snapshot(
+            self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref(),
+            &host_txids,
+        ))
     }
 
     pub async fn estimate_unilateral_exit_batch(
@@ -757,7 +748,7 @@ impl ArkSession {
         if let Some(outpoint) = detect_asp_swept_from_sources(
             &job_leaf_outpoints,
             self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref(),
-            &self.collect_operator_vtxos_for_asp_check().await?,
+            &[],
             |txid, vout| self.leaf_is_marked_unrolled(txid, vout).unwrap_or(false),
         ) {
             return Ok(viability_from_asp_swept(&outpoint));
@@ -783,13 +774,6 @@ impl ArkSession {
         }
 
         Ok(viability_ok())
-    }
-
-    async fn collect_operator_vtxos_for_asp_check(
-        &self,
-    ) -> ArkResult<Vec<ark_core::server::VirtualTxOutPoint>> {
-        let (vtxo_list, _) = self.client.list_vtxos().await?;
-        Ok(vtxo_list.all().cloned().collect())
     }
 
     /// Test-only hook for native integration tests that need to simulate ASP snapshot interference.
@@ -888,10 +872,15 @@ impl ArkSession {
         for (leaf_txid, sibling_outpoints) in
             group_virtual_outpoints_by_leaf_txid(virtual_outpoints)
         {
-            super::exit_materials_prefetch::ensure_unilateral_exit_materials_for_leaf_tx(
-                self, leaf_txid,
-            )
-            .await?;
+            let snapshot = self
+                .wallet_db
+                .snapshot()
+                .offchain_vtxo_snapshot
+                .ok_or_else(|| ArkWasmError::Snapshot("offchain snapshot missing".into()))?;
+            crate::unilateral_exit_materials::require_unilateral_exit_materials_for_leaf_tx(
+                &snapshot,
+                &leaf_txid.to_string(),
+            )?;
             let chains = self.load_vtxo_chains_for_leaf_tx(leaf_txid).await?;
             let branch_txids = branch_txids_for_leaf(&chains, leaf_txid)?;
             let branch_txs = self.build_unilateral_branch_for_leaf_tx(leaf_txid).await?;
@@ -927,35 +916,15 @@ impl ArkSession {
     }
 
     async fn load_vtxo_chains_for_leaf_tx(&self, leaf_txid: Txid) -> ArkResult<VtxoChains> {
-        if self.autonomous_mode() {
-            let snapshot = self
-                .wallet_db
-                .snapshot()
-                .offchain_vtxo_snapshot
-                .ok_or_else(|| ArkWasmError::Snapshot("offchain snapshot missing".into()))?;
-            let txid = leaf_txid.to_string();
-            let materials = snapshot_materials_for_leaf_tx(&snapshot, &txid)
-                .ok_or(ArkWasmError::AutonomousExitMaterialsMissing)?;
-            return vtxo_chains_from_json(&materials.chain_json);
-        }
-
-        let outpoint = representative_virtual_tx_outpoint_for_leaf_tx(
-            self.wallet_db
-                .snapshot()
-                .offchain_vtxo_snapshot
-                .as_ref()
-                .ok_or_else(|| ArkWasmError::Snapshot("offchain snapshot missing".into()))?,
+        let snapshot = self
+            .wallet_db
+            .snapshot()
+            .offchain_vtxo_snapshot
+            .ok_or_else(|| ArkWasmError::Snapshot("offchain snapshot missing".into()))?;
+        crate::unilateral_exit_materials::vtxo_chains_from_snapshot_materials(
+            &snapshot,
             &leaf_txid.to_string(),
-        )?
-        .outpoint;
-        let response = self
-            .client
-            .get_vtxo_chain(outpoint)
-            .await
-            .map_err(ArkWasmError::Client)?;
-        Ok(response
-            .map(|chain| chain.chains)
-            .unwrap_or(VtxoChains { inner: Vec::new() }))
+        )
     }
 
     fn unroll_parent_blocks_step(&self, txid: &Txid) -> bool {
@@ -1331,7 +1300,7 @@ mod tests {
     use super::*;
     use ark_core::server::{ChainedTxType, VtxoChain, VtxoChains};
     use bitcoin::Txid;
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
 
     use bitcoin::hashes::Hash;
 
@@ -1365,6 +1334,46 @@ mod tests {
         assert_eq!(grouped[1].1.len(), 2);
         assert_eq!(grouped[1].1[0].vout, 0);
         assert_eq!(grouped[1].1[1].vout, 1);
+    }
+
+    #[test]
+    fn exit_eligible_records_for_topology_hosts_from_snapshot_does_not_fallback() {
+        use crate::persistence::{OffchainVtxoSnapshot, VirtualTxOutPointRecord};
+
+        let host = txid(9).to_string();
+        let empty_hosts = HashSet::from([host.clone()]);
+        assert!(
+            exit_eligible_records_for_topology_hosts_from_snapshot(None, &empty_hosts).is_empty()
+        );
+
+        let snapshot = OffchainVtxoSnapshot {
+            synced_at: 1,
+            dust_sats: 330,
+            virtual_tx_outpoints: vec![VirtualTxOutPointRecord {
+                txid: host.clone(),
+                vout: 0,
+                created_at: 0,
+                expires_at: 9_999_999_999,
+                amount_sats: 50_000,
+                script_hex: String::new(),
+                is_preconfirmed: true,
+                is_swept: true,
+                is_unrolled: false,
+                is_spent: false,
+                spent_by: None,
+                commitment_txids: vec![],
+                settled_by: None,
+                ark_txid: None,
+                assets: vec![],
+                server_pk_hex: None,
+            }],
+            unilateral_exit_materials_by_leaf_tx: std::collections::BTreeMap::new(),
+        };
+        // Swept records are not exit-eligible; do not invent an ASP fallback.
+        assert!(
+            exit_eligible_records_for_topology_hosts_from_snapshot(Some(&snapshot), &empty_hosts)
+                .is_empty()
+        );
     }
 
     #[test]

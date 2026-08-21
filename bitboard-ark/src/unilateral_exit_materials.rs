@@ -118,6 +118,37 @@ pub fn snapshot_materials_for_leaf_tx<'a>(
     snapshot.unilateral_exit_materials_by_leaf_tx.get(leaf_txid)
 }
 
+/// Require prefetched materials for a leaf. Unroll/complete never live-prefetch from the ASP.
+pub fn require_unilateral_exit_materials_for_leaf_tx<'a>(
+    snapshot: &'a OffchainVtxoSnapshot,
+    leaf_txid: &str,
+) -> ArkResult<&'a UnilateralExitMaterialsRecord> {
+    snapshot_materials_for_leaf_tx(snapshot, leaf_txid)
+        .ok_or(ArkWasmError::AutonomousExitMaterialsMissing)
+}
+
+pub fn vtxo_chains_from_snapshot_materials(
+    snapshot: &OffchainVtxoSnapshot,
+    leaf_txid: &str,
+) -> ArkResult<VtxoChains> {
+    let materials = require_unilateral_exit_materials_for_leaf_tx(snapshot, leaf_txid)?;
+    vtxo_chains_from_json(&materials.chain_json)
+}
+
+pub fn vtxo_amount_sats_from_snapshot(
+    snapshot: Option<&OffchainVtxoSnapshot>,
+    txid: &str,
+    vout: u32,
+) -> Option<u64> {
+    snapshot.and_then(|snapshot| {
+        snapshot
+            .virtual_tx_outpoints
+            .iter()
+            .find(|record| record.txid == txid && record.vout == vout)
+            .map(|record| record.amount_sats)
+    })
+}
+
 pub fn store_materials_for_leaf_tx(
     snapshot: &mut OffchainVtxoSnapshot,
     leaf_txid: &str,
@@ -340,6 +371,91 @@ mod tests {
     fn preconfirmed_vtxo_is_exit_eligible() {
         let record = sibling_record("aa", 0, false);
         assert!(record_is_exit_eligible(&record));
+    }
+
+    #[test]
+    fn require_unilateral_exit_materials_for_leaf_tx_errors_when_missing() {
+        let txid = "aa".repeat(32);
+        let snapshot = OffchainVtxoSnapshot {
+            synced_at: 1,
+            dust_sats: 330,
+            virtual_tx_outpoints: vec![sibling_record(&txid, 0, false)],
+            unilateral_exit_materials_by_leaf_tx: empty_materials_map(),
+        };
+        let error = require_unilateral_exit_materials_for_leaf_tx(&snapshot, &txid)
+            .expect_err("missing materials");
+        assert!(matches!(
+            error,
+            ArkWasmError::AutonomousExitMaterialsMissing
+        ));
+    }
+
+    #[test]
+    fn require_unilateral_exit_materials_for_leaf_tx_ok_when_present() {
+        let txid = "aa".repeat(32);
+        let mut snapshot = OffchainVtxoSnapshot {
+            synced_at: 1,
+            dust_sats: 330,
+            virtual_tx_outpoints: vec![sibling_record(&txid, 0, false)],
+            unilateral_exit_materials_by_leaf_tx: empty_materials_map(),
+        };
+        store_materials_for_leaf_tx(&mut snapshot, &txid, sample_materials(7));
+        let materials =
+            require_unilateral_exit_materials_for_leaf_tx(&snapshot, &txid).expect("present");
+        assert_eq!(materials.cached_at, 7);
+    }
+
+    #[test]
+    fn vtxo_chains_from_snapshot_materials_loads_cached_chain() {
+        let txid = Txid::from_byte_array([0xab; 32]);
+        let leaf_txid = txid.to_string();
+        let chains = VtxoChains {
+            inner: vec![VtxoChain {
+                txid,
+                tx_type: ChainedTxType::Tree,
+                spends: vec![Txid::from_byte_array([0xcd; 32])],
+                expires_at: 1_700_000_000,
+            }],
+        };
+        let mut snapshot = OffchainVtxoSnapshot {
+            synced_at: 1,
+            dust_sats: 330,
+            virtual_tx_outpoints: vec![sibling_record(&leaf_txid, 0, false)],
+            unilateral_exit_materials_by_leaf_tx: empty_materials_map(),
+        };
+        store_materials_for_leaf_tx(
+            &mut snapshot,
+            &leaf_txid,
+            UnilateralExitMaterialsRecord {
+                cached_at: 1,
+                chain_json: vtxo_chains_to_json(&chains).expect("encode"),
+                virtual_psbts: vec![],
+            },
+        );
+        let restored =
+            vtxo_chains_from_snapshot_materials(&snapshot, &leaf_txid).expect("load chains");
+        assert_eq!(restored.inner.len(), 1);
+        assert_eq!(restored.inner[0].txid, txid);
+    }
+
+    #[test]
+    fn vtxo_amount_sats_from_snapshot_returns_none_when_missing() {
+        let txid = "aa".repeat(32);
+        let snapshot = OffchainVtxoSnapshot {
+            synced_at: 1,
+            dust_sats: 330,
+            virtual_tx_outpoints: vec![sibling_record(&txid, 0, false)],
+            unilateral_exit_materials_by_leaf_tx: empty_materials_map(),
+        };
+        assert_eq!(
+            vtxo_amount_sats_from_snapshot(Some(&snapshot), &txid, 0),
+            Some(1_000)
+        );
+        assert_eq!(
+            vtxo_amount_sats_from_snapshot(Some(&snapshot), &txid, 1),
+            None
+        );
+        assert_eq!(vtxo_amount_sats_from_snapshot(None, &txid, 0), None);
     }
 
     #[test]

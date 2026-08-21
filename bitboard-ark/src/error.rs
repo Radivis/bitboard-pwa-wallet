@@ -16,7 +16,6 @@ pub const CODE_SNAPSHOT: &str = "snapshot";
 pub const CODE_PERSISTENCE: &str = "persistence";
 pub const CODE_WALLET: &str = "wallet";
 pub const CODE_CLIENT: &str = "client";
-pub const CODE_OPERATOR_INDEXER_CATCHING_UP: &str = "operator_indexer_catching_up";
 pub const CODE_UNILATERAL_UNROLL_NOT_CONFIRMED_ON_CHAIN: &str =
     "unilateral_unroll_not_confirmed_on_chain";
 pub const CODE_BLOCKCHAIN: &str = "blockchain";
@@ -81,11 +80,6 @@ pub enum ArkWasmError {
 
     #[error("VTXO {txid}:{vout} timelock has not elapsed yet — complete is not available")]
     VtxoUnilateralExitNotReady { txid: String, vout: u32 },
-
-    #[error(
-        "Operator indexer is still catching up after unilateral unroll. Wait a moment and try Complete exit again."
-    )]
-    OperatorIndexerCatchingUp,
 
     #[error("Unilateral unroll could not be confirmed on-chain ({txid})")]
     UnilateralUnrollNotConfirmedOnChain { txid: String },
@@ -172,7 +166,6 @@ impl ArkWasmError {
                 CODE_OPERATOR_TRUST_PENDING_BLOCKS_AUTONOMOUS_EXIT
             }
             Self::OperatorTrustPendingDigestChanged => CODE_OPERATOR_TRUST_PENDING_DIGEST_CHANGED,
-            Self::OperatorIndexerCatchingUp => CODE_OPERATOR_INDEXER_CATCHING_UP,
             Self::UnilateralUnrollNotConfirmedOnChain { .. } => {
                 CODE_UNILATERAL_UNROLL_NOT_CONFIRMED_ON_CHAIN
             }
@@ -232,17 +225,6 @@ mod tests {
         let error = ArkWasmError::InvalidSendAmount;
         assert_eq!(error.code(), CODE_VALIDATION);
         assert_eq!(error.to_string(), MSG_SEND_AMOUNT_MUST_BE_POSITIVE);
-    }
-
-    #[test]
-    fn operator_indexer_catching_up_has_stable_code() {
-        let error = ArkWasmError::OperatorIndexerCatchingUp;
-        assert_eq!(error.code(), CODE_OPERATOR_INDEXER_CATCHING_UP);
-        assert!(
-            error
-                .to_string()
-                .contains("Operator indexer is still catching up")
-        );
     }
 
     #[test]

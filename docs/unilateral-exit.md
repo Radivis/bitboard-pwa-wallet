@@ -28,22 +28,16 @@ The bumper wallet is the same BIP32-derived BDK wallet used for boarding.
 
 Unroll can run while the Ark Service Provider (ASP) is reachable **or** while it is down.
 
-- **Prefetch (sync time, not unroll time).** Operator sync stores per-leaf-tx materials in `unilateral_exit_materials_by_leaf_tx` (`ARK-EXIT-07`): VTXO chain topology plus virtual PSBTs. Autonomous / offline unroll builds the branch from that snapshot.
+- **Prefetch (sync time, not unroll time).** Operator sync stores per-leaf-tx materials in `unilateral_exit_materials_by_leaf_tx` (`ARK-EXIT-07`): VTXO chain topology plus virtual PSBTs. Unroll and complete build from that snapshot plus Esplora — never from live ASP indexer/batch APIs (`ARK-EXIT-06`).
 - **Esplora is always required.** Broadcast, confirmation depth, and reorg detection go through Esplora. There is no “ASP-only” unroll path.
-- **Autonomous mode** reuses `cached_operator_info` plus those materials and never calls ASP indexer or batch APIs for list/chain/virtual-tx/completion coin-select (`ARK-EXIT-06`). Implementation: [`bitboard-ark/src/session/exit_autonomous.rs`](../bitboard-ark/src/session/exit_autonomous.rs).
+- **Autonomous mode** reuses `cached_operator_info` and blocks non-exit Arkade RPCs (`ARK-EXIT-10`). It does **not** change how unilateral exit talks to the ASP: both modes are snapshot + Esplora. Implementation: [`bitboard-ark/src/session/exit_autonomous.rs`](../bitboard-ark/src/session/exit_autonomous.rs).
+- **Background operator sync stays on during an exit job.** Unroll can take a long time and must not freeze boarding, collab, or other dashboard work. Users may also test exits while the ASP is still online. Dashboard poll skips ASP contact only while autonomous mode is active. Proceed/complete themselves still flush-only (no post-op operator sync).
 
-### Do not coordinate with the ASP during unroll
+### Do not coordinate with the ASP during unroll or complete
 
-Communicating with the ASP during unilateral exit does not advance the chain and is a race surface (indexer lag, sweep, checkpoint). Unroll should be **Esplora + local materials only**.
+Communicating with the ASP during unilateral exit does not advance the chain and is a race surface (indexer lag, sweep, checkpoint). Unroll and complete are **Esplora + local materials only**, regardless of autonomous mode.
 
-Known debt, not a feature: vendored ark-client still talks to the Ark server on the cooperative-mode unroll path:
-
-```61:62:third_party/ark-client/src/unilateral_exit.rs
-// TODO: We should not _need_ to connect to the Ark server to perform unilateral exit. Currently we
-// do talk to the Ark server for simplicity.
-```
-
-Bitboard already branches **autonomous** RPCs off snapshot materials. Cooperative-mode leftover ASP contact should be removed; do not add new indexer/batch calls on the proceed/progress path.
+Vendored ark-client still has a live `build_unilateral_exit_branch` that talks to the Ark server; Bitboard must not call it on proceed/progress/complete. Prefetch remains on operator sync only. Do not add indexer/batch calls on the proceed/progress/complete path.
 
 ### If the ASP is still online, finish quickly
 
@@ -231,7 +225,7 @@ Confirmation constants ([`bitboard-ark/src/constants.rs`](../bitboard-ark/src/co
 | `UNILATERAL_EXIT_STEP_CONFIRMATIONS` | 1 | Advance to the next virtual tx |
 | `UNILATERAL_EXIT_LEAF_CONFIRMATIONS` | 6 | Stamp `is_unrolled` on every vout of the leaf tx |
 
-`mark_unrolled_leaves_at_finality` does **not** block on operator indexer polling. Cooperative-mode indexer catch-up runs during operator sync / sticky merge (`ARK-EXIT-11`). Hard failure if neither ASP nor Esplora confirms after the poll window: `unilateral_unroll_not_confirmed_on_chain`.
+`mark_unrolled_leaves_at_finality` does **not** block on operator indexer polling. Sticky merge and watch reconcile run during operator sync (`ARK-EXIT-11`). Hard failure if Esplora does not confirm the branch after the poll window: `unilateral_unroll_not_confirmed_on_chain`.
 
 Redundant mempool rejects (`-25` / `-26`) are ignored when the parent is already visible on the network.
 

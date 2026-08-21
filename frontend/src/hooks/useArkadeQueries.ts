@@ -87,7 +87,6 @@ import {
 import {
   formatArkadeTxidToastSnippet,
   formatUnilateralUnrollSuccessMessage,
-  isOperatorIndexerCatchingUpError,
   shouldShowUnilateralUnrollProgressToast,
   unilateralUnrollProgressToastId,
 } from '@/lib/arkade/arkade-exit-utils'
@@ -1209,9 +1208,6 @@ export function useArkadeUnilateralUnrollMutation() {
     onSuccess: async (result, _params, context) => {
       toast.dismiss(unilateralUnrollProgressToastId({ type: 'done', txid: result.vtxoTxid }))
       toast.success(formatUnilateralUnrollSuccessMessage(result.vtxoTxid))
-      if (result.indexerWarning) {
-        toast.warning(result.indexerWarning, { id: 'arkade-unroll-indexer-warning' })
-      }
       if (activeWalletId != null && activeArkadeConnectionId != null) {
         await invalidateArkadeWalletDataQueries(
           queryClient,
@@ -1257,9 +1253,6 @@ export function useArkadeCompleteUnilateralExitMutation() {
       }
     },
     onError: (err) => {
-      if (isOperatorIndexerCatchingUpError(err)) {
-        return
-      }
       toast.error(errorMessage(err))
     },
   })

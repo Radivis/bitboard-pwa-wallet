@@ -11,7 +11,6 @@ use super::ArkSession;
 use super::exit_watch::{
     register_unilateral_exit_watch, remove_unilateral_exit_watches_for_outpoints_in_wallet_db,
 };
-use crate::outpoint::VirtualOutPoint;
 
 use super::mappers::current_unix_timestamp;
 
@@ -92,30 +91,18 @@ impl ArkSession {
         txid: &str,
         vout: u32,
     ) -> ArkResult<u64> {
-        if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref() {
-            for record in &snapshot.virtual_tx_outpoints {
-                if record.txid == txid && record.vout == vout {
-                    return Ok(record.amount_sats);
-                }
-            }
+        if let Some(amount_sats) = crate::unilateral_exit_materials::vtxo_amount_sats_from_snapshot(
+            self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref(),
+            txid,
+            vout,
+        ) {
+            return Ok(amount_sats);
         }
 
-        let (vtxo_list, _) = self.client.list_vtxos().await?;
-        let target_txid = VirtualOutPoint::parse(txid, vout)?
-            .to_bitcoin_outpoint()
-            .txid;
-        let amount = vtxo_list
-            .all()
-            .find(|virtual_tx_outpoint| {
-                virtual_tx_outpoint.outpoint.txid == target_txid
-                    && virtual_tx_outpoint.outpoint.vout == vout
-            })
-            .map(|virtual_tx_outpoint| virtual_tx_outpoint.amount.to_sat())
-            .ok_or(ArkWasmError::VtxoNotFound {
-                txid: txid.to_string(),
-                vout,
-            })?;
-        Ok(amount)
+        Err(ArkWasmError::VtxoNotFound {
+            txid: txid.to_string(),
+            vout,
+        })
     }
 
     pub(crate) fn record_pending_unilateral_exit(&self, txid: &str, vout: u32, amount_sats: u64) {

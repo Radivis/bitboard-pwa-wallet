@@ -5,7 +5,6 @@ import {
   formatMissingBlocktimeCompletionWarningLine,
   formatUnilateralExitTimelock,
   formatUnilateralUnrollSuccessMessage,
-  isOperatorIndexerCatchingUpError,
   parseCollaborativeExitAmountSats,
   shouldShowUnilateralUnrollProgressToast,
   unilateralExitCompleteTimelockMessage,
@@ -72,10 +71,9 @@ describe('unilateral unroll toast helpers', () => {
     )
   })
 
-  it('shows info toasts for unroll, wait, and indexer progress', () => {
+  it('shows info toasts for unroll and wait progress', () => {
     expect(shouldShowUnilateralUnrollProgressToast({ type: 'unroll' })).toBe(true)
     expect(shouldShowUnilateralUnrollProgressToast({ type: 'wait' })).toBe(true)
-    expect(shouldShowUnilateralUnrollProgressToast({ type: 'indexer' })).toBe(true)
     expect(shouldShowUnilateralUnrollProgressToast({ type: 'done' })).toBe(false)
   })
 
@@ -138,18 +136,5 @@ describe('missing blocktime completion warning', () => {
     expect(
       formatMissingBlocktimeCompletionWarningLine(warning.lines[1]),
     ).toContain('on-chain')
-  })
-})
-
-describe('isOperatorIndexerCatchingUpError', () => {
-  it('detects structured wasm error code', () => {
-    const error = new Error(
-      JSON.stringify({
-        code: 'operator_indexer_catching_up',
-        message: 'Operator indexer is still catching up after unilateral unroll.',
-      }),
-    )
-    expect(isOperatorIndexerCatchingUpError(error)).toBe(true)
-    expect(isOperatorIndexerCatchingUpError(new Error('other'))).toBe(false)
   })
 })

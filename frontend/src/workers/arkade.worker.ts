@@ -16,6 +16,7 @@ import {
   updateOperatorSyncAtEncrypted,
   type ArkadeEncryptedPayloadDeps,
 } from '@/workers/arkade-worker-encrypted-payload'
+import { shouldSyncOperatorAfterUnilateralExitOperation } from '@/lib/arkade/unilateral-exit-offline'
 import type {
   ArkadeBalanceInfo,
   ArkadeBatchJoinResult,
@@ -222,6 +223,18 @@ async function syncWithOperatorCore(): Promise<ArkadeOperatorSyncResult> {
   const result = await invokeWasmArk((wasmModule) => wasmModule.ark_sync_with_operator())
   await flushSdkPersistenceNowOrThrow()
   return (result ?? {}) as ArkadeOperatorSyncResult
+}
+
+async function persistAfterUnilateralExitOperation(): Promise<void> {
+  const { awaitArkadeSyncQuiescence } = await import(
+    '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
+  )
+  await awaitArkadeSyncQuiescence()
+  if (shouldSyncOperatorAfterUnilateralExitOperation() && activeSessionParams != null) {
+    await syncWithOperatorCore()
+    return
+  }
+  await flushSdkPersistenceNowOrThrow()
 }
 
 async function persistAfterCriticalOperation(): Promise<void> {
@@ -699,7 +712,7 @@ const arkadeService: ArkadeService = {
           },
         ),
       )
-      await persistAfterCriticalOperation()
+      await persistAfterUnilateralExitOperation()
       return result as ArkadeUnrollResult
     } finally {
       unrollInFlight = false
@@ -712,7 +725,7 @@ const arkadeService: ArkadeService = {
     const txid = await invokeWasmArk((wasmModule) =>
       wasmModule.ark_complete_unilateral_exit(params),
     )
-    await persistAfterCriticalOperation()
+    await persistAfterUnilateralExitOperation()
     return txid
   },
 
@@ -777,7 +790,7 @@ const arkadeService: ArkadeService = {
         params,
       ) as Promise<ArkadeProceedUnilateralExitStepResult>,
     )
-    await persistAfterCriticalOperation()
+    await persistAfterUnilateralExitOperation()
     return result
   },
 

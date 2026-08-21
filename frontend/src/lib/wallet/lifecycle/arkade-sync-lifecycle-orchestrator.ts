@@ -38,6 +38,7 @@ import {
   LIFECYCLE_SYNC_ERROR_FALLBACK,
   userFacingLifecycleErrorMessage,
 } from '@/lib/shared/utils'
+import { shouldSkipBackgroundOperatorSyncWhenAutonomous } from '@/lib/arkade/unilateral-exit-offline'
 
 export type {
   ArkadeSyncKind,
@@ -404,15 +405,28 @@ export function scheduleBackgroundArkadeOperatorSync(): void {
       return
     }
 
-    lastDashboardPollStartedAtMs = Date.now()
-    void orchestrateArkadeSyncThenSave({
-      walletId: walletState.activeWalletId,
-      networkMode,
-      connectionId: walletState.activeArkadeConnectionId,
-      syncKind: 'dashboardPoll',
-      awaitCompletion: false,
-      throwOnError: false,
-    })
+    const walletId = walletState.activeWalletId
+    const connectionId = walletState.activeArkadeConnectionId
+    void (async () => {
+      try {
+        const status = await getArkadeWorker().getAutonomousModeStatus()
+        if (shouldSkipBackgroundOperatorSyncWhenAutonomous(Boolean(status?.active))) {
+          return
+        }
+      } catch {
+        // Status unknown: still attempt sync. WASM blocks operator RPC if autonomous.
+      }
+
+      lastDashboardPollStartedAtMs = Date.now()
+      void orchestrateArkadeSyncThenSave({
+        walletId,
+        networkMode,
+        connectionId,
+        syncKind: 'dashboardPoll',
+        awaitCompletion: false,
+        throwOnError: false,
+      })
+    })()
   }, dashboardPollDelayMs())
 }
 

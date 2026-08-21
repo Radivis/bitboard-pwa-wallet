@@ -300,7 +300,7 @@ export interface ArkadeCollaborativeExitParams {
 }
 
 export interface ArkadeUnrollProgressEvent {
-  type: 'wait' | 'unroll' | 'indexer' | 'done'
+  type: 'wait' | 'unroll' | 'done'
   message: string
   txid?: string
   vtxoTxid?: string
@@ -308,8 +308,6 @@ export interface ArkadeUnrollProgressEvent {
 
 export interface ArkadeUnrollResult {
   vtxoTxid: string
-  operatorIndexerConfirmed: boolean
-  indexerWarning?: string
 }
 
 export interface ArkadeCompleteUnilateralExitParams {

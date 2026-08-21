@@ -16,7 +16,7 @@ Related handbook: [unilateral-exit.md](unilateral-exit.md). Esplora endpoint qui
 | No client-side step cursor | A manual “acknowledged index” was implemented and **rejected**. It fights reorgs and duplicates chain state. |
 | One user Proceed per **broadcast** | Manual mode: one click broadcasts **one** virtual parent + CPFP child via `submitpackage([parent, cpfp])`. Already-confirmed steps are skipped because they are confirmed, not because the UI walks them. |
 | ASP-online is hostile | If the ASP is up it **will** publish checkpoint txs. That is protocol defense, not a Bitboard bug. Handbook: “If the ASP is still online, finish quickly.” |
-| Unroll should be Esplora + local materials | Do not add ASP indexer calls on proceed/progress. Vendored ark-client still talks to the server on the cooperative path (`third_party/ark-client/src/unilateral_exit.rs` TODO). |
+| Unroll should be Esplora + local materials | Do not add ASP indexer calls on proceed/progress/complete. Vendored ark-client still exposes a live `build_unilateral_exit_branch`; Bitboard unroll/complete must not call it. |
 
 User-visible manual UX: overlay megaphone = broadcasting, pickaxe = waiting for confirm, play = ready to Proceed. Automation off unless the user opted in.
 

@@ -1,5 +1,3 @@
-import { wasmArkErrorCode } from '@/lib/shared/wasm-ark-error'
-
 export interface ArkadeIntentFeeConfigured {
   offchainInput: boolean
   onchainInput: boolean
@@ -70,7 +68,7 @@ export function unilateralUnrollProgressToastId(
 }
 
 export function shouldShowUnilateralUnrollProgressToast(event: { type: string }): boolean {
-  return event.type === 'unroll' || event.type === 'wait' || event.type === 'indexer'
+  return event.type === 'unroll' || event.type === 'wait'
 }
 
 export type UnilateralExitTimelock = {
@@ -112,8 +110,6 @@ export function unilateralExitCompleteTimelockMessage(
   const duration = formatUnilateralExitTimelock(timelock)
   return `After unroll confirms on-chain, wait for ${duration} (operator CSV timelock) before completing.`
 }
-
-export const OPERATOR_INDEXER_CATCHING_UP_CODE = 'operator_indexer_catching_up'
 
 /** Shown when completion coin-select used a permissive blocktime fallback (see wallet model doc). */
 export const MISSING_BLOCKTIME_COMPLETION_WARNING_SUMMARY =
@@ -157,8 +153,4 @@ export function formatMissingBlocktimeCompletionWarningLine(
   }
   const onChainSnippet = `${line.onChainTxid.slice(0, 12)}…:${line.onChainVout}`
   return `${virtualSnippet} (${line.amountSats} sats, on-chain ${onChainSnippet})`
-}
-
-export function isOperatorIndexerCatchingUpError(error: unknown): boolean {
-  return wasmArkErrorCode(error) === OPERATOR_INDEXER_CATCHING_UP_CODE
 }

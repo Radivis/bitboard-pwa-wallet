@@ -84,19 +84,19 @@ feature:
       - id: ARK-EXIT-04
         description: Completion fee estimate includes missingBlocktimeInputs (virtual outpoint and on-chain outpoint per affected VTXO) when Esplora omits confirmation blocktime; UI shows a non-blocking list in Complete unilateral exit. Permissive completion coin-select (Duration::ZERO fallback) is intentional for regtest/thin Esplora in CI and local debugging; uncommon on production Esplora.
       - id: ARK-EXIT-05
-        description: When complete exit times out waiting for operator indexer after unroll, UI shows a non-destructive indexer-catching-up state instead of a generic failure
+        description: Retired — complete unilateral exit no longer waits on the operator indexer; snapshot readiness plus Esplora only (ARK-EXIT-09). The complete-dialog indexer-catching-up state is unused.
       - id: ARK-EXIT-06
-        description: Autonomous mode unilateral exit never calls ASP indexer or batch APIs for list, chain, virtual tx, or completion coin-select
+        description: Unilateral exit never calls ASP indexer or batch APIs for list, chain, virtual tx, or completion coin-select, regardless of autonomous mode; materials come from operator sync (ARK-EXIT-07)
       - id: ARK-EXIT-07
         description: Operator sync prefetches unilateral_exit_materials on exit-eligible VTXO snapshot records and persists cached_operator_info
       - id: ARK-EXIT-08
-        description: Autonomous start unroll fails fast with autonomous_exit_materials_missing when selected VTXO lacks prefetched materials
+        description: Start unroll/proceed fails fast with autonomous_exit_materials_missing when selected VTXO lacks prefetched materials, regardless of autonomous mode
       - id: ARK-EXIT-09
-        description: Autonomous complete uses snapshot readiness plus Esplora only; no operator indexer poll or OperatorIndexerCatchingUp path; autonomous unroll polls Esplora for branch visibility before setting local is_unrolled and returns unilateral_unroll_not_confirmed_on_chain when chain missing after the poll window
+        description: Complete uses snapshot readiness plus Esplora only; no operator indexer poll; unroll polls Esplora for branch visibility before setting local is_unrolled and returns unilateral_unroll_not_confirmed_on_chain when chain missing after the poll window
       - id: ARK-EXIT-10
-        description: While autonomous mode is active, collaborative exit, send, renew, recoverable settlement, signer migration, boarding settle, and manual operator sync are blocked in UI and WASM
+        description: While autonomous mode is active, collaborative exit, send, renew, recoverable settlement, signer migration, boarding settle, and operator sync (manual and background dashboard poll) are blocked in UI and WASM; an in-progress unilateral-exit job does not skip background operator sync
       - id: ARK-EXIT-11
-        description: After unilateral unroll broadcasts, WASM polls operator list_vtxos until is_unrolled and not is_spent (up to 60s); success with indexerWarning when on-chain confirmed but ASP lags; hard error when neither ASP nor chain confirms; sticky is_unrolled merge during poll sync for in-list operator rows
+        description: After unilateral unroll, WASM does not poll operator list_vtxos; local is_unrolled is set after Esplora confirms the branch; sticky is_unrolled merge and watch reconcile run during operator sync only; hard error unilateral_unroll_not_confirmed_on_chain when the branch is missing on Esplora after the poll window
       - id: ARK-EXIT-12
         description: Explicit unilateral_exit_watches registry in wallet persistence; survives full snapshot replace; cleared only on completion, hard unroll failure, or reconcile evidence (operator spent or on-chain spent)
       - id: ARK-EXIT-13
@@ -106,7 +106,7 @@ feature:
       - id: ARK-EXIT-15
         description: ark_proceed_unilateral_exit_step advances one virtual tx per call with caller feerate, returns without blocking on confirmation, persists current_step_waiting_since for progress UI, and skips already-on-chain branch txs; the XState machine polls until 1-conf
       - id: ARK-EXIT-16
-        description: Leaf virtual tx must reach 6 confirmations on Esplora before WASM marks is_unrolled; cooperative mode still polls operator indexer after leaf finality
+        description: Leaf virtual tx must reach 6 confirmations on Esplora before WASM marks is_unrolled
       - id: ARK-EXIT-17
         description: When leaf virtual tx reaches 6 conf, WASM marks is_unrolled for every VTXO outpoint on that txid; sticky merge promotes all vouts on the same txid; control page selects sibling leaf outpoints atomically; completion remains per outpoint
       - id: ARK-EXIT-18

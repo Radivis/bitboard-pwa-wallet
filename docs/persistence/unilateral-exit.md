@@ -54,7 +54,7 @@ Flushed through the Arkade save lifecycle into `StoredArkadeOperatorConnection.s
 cached_at, chain_json, virtual_psbts[]  { virtual_txid, psbt_hex }
 ```
 
-Filled on operator sync for exit-eligible VTXOs (`ARK-EXIT-07`). Autonomous proceed fails fast with `autonomous_exit_materials_missing` when a selected leaf lacks a record (`ARK-EXIT-08`). `merge_unilateral_exit_materials_maps` keeps prior leaf entries when a new snapshot omits them.
+Filled on operator sync for exit-eligible VTXOs (`ARK-EXIT-07`). Proceed fails fast with `autonomous_exit_materials_missing` when a selected leaf lacks a record (`ARK-EXIT-08`), including when autonomous mode is off. `merge_unilateral_exit_materials_maps` keeps prior leaf entries when a new snapshot omits them.
 
 ### Sticky `is_unrolled`
 

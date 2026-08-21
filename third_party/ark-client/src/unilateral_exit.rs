@@ -58,8 +58,9 @@ const INDEXER_PAGE_SIZE: i32 = 100;
 const COMMITMENT_TX_VISIBILITY_MAX_POLLS: u8 = 20;
 const COMMITMENT_TX_VISIBILITY_POLL_DELAY_MS: u64 = 500;
 
-// TODO: We should not _need_ to connect to the Ark server to perform unilateral exit. Currently we
-// do talk to the Ark server for simplicity.
+// Bitboard unroll/complete must use `prefetch_unilateral_exit_materials` at operator-sync time and
+// `build_unilateral_exit_branch_from_materials` afterward. `build_unilateral_exit_branch` still
+// talks to the Ark server and is not part of the Bitboard exit job path.
 impl<B, W, S, K> Client<B, W, S, K>
 where
     B: Blockchain,

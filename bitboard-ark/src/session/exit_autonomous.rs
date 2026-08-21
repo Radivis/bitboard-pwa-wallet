@@ -24,13 +24,6 @@ pub(crate) struct AutonomousUnrollChainSteps {
     pub projected_wait_steps: u32,
 }
 
-/// Offline VTXO list for autonomous exit flows (no operator `list_vtxos`).
-pub(crate) fn autonomous_vtxo_list(session: &ArkSession) -> ArkResult<VtxoList> {
-    session
-        .snapshot_vtxo_list_and_script_map()
-        .map(|(vtxo_list, _)| vtxo_list)
-}
-
 /// Offline VTXO list and script map for autonomous completion coin-select.
 pub(crate) fn autonomous_vtxo_list_and_script_map(
     session: &ArkSession,
@@ -101,15 +94,10 @@ pub(crate) async fn autonomous_estimate_unilateral_exit_completion(
         .map_err(Into::into)
 }
 
-pub(crate) fn autonomous_exit_candidates_from_snapshot(
-    session: &ArkSession,
+pub(crate) fn exit_candidates_from_snapshot(
+    snapshot: &OffchainVtxoSnapshot,
     in_progress: &HashSet<UnilateralExitOutpointKey>,
 ) -> ArkResult<Vec<ExitCandidateRow>> {
-    let snapshot = session
-        .wallet_db
-        .snapshot()
-        .offchain_vtxo_snapshot
-        .ok_or_else(|| ArkWasmError::Snapshot("offchain snapshot missing".into()))?;
     let dust = Amount::from_sat(snapshot.dust_sats);
     let mut rows = Vec::new();
     for record in &snapshot.virtual_tx_outpoints {
@@ -130,6 +118,18 @@ pub(crate) fn autonomous_exit_candidates_from_snapshot(
         rows.push(candidate);
     }
     Ok(rows)
+}
+
+pub(crate) fn autonomous_exit_candidates_from_snapshot(
+    session: &ArkSession,
+    in_progress: &HashSet<UnilateralExitOutpointKey>,
+) -> ArkResult<Vec<ExitCandidateRow>> {
+    let snapshot = session
+        .wallet_db
+        .snapshot()
+        .offchain_vtxo_snapshot
+        .ok_or_else(|| ArkWasmError::Snapshot("offchain snapshot missing".into()))?;
+    exit_candidates_from_snapshot(&snapshot, in_progress)
 }
 
 pub(crate) fn autonomous_chain_step_counts(
@@ -256,8 +256,8 @@ mod tests {
             created_at: 0,
             expires_at: 9_999_999_999,
             amount_sats: 50_000,
-            script_hex: String::new(),
-            is_preconfirmed: false,
+            script_hex: "00".to_string(),
+            is_preconfirmed: true,
             is_swept: false,
             is_unrolled,
             is_spent,
@@ -267,6 +267,14 @@ mod tests {
             ark_txid: None,
             assets: vec![],
             server_pk_hex: None,
+        }
+    }
+
+    fn sample_materials() -> crate::persistence::UnilateralExitMaterialsRecord {
+        crate::persistence::UnilateralExitMaterialsRecord {
+            cached_at: 1,
+            chain_json: "{\"inner\":[]}".to_string(),
+            virtual_psbts: vec![],
         }
     }
 
@@ -318,5 +326,24 @@ mod tests {
             error,
             ArkWasmError::VtxoUnilateralExitNotReady { vout: 1, .. }
         ));
+    }
+
+    #[test]
+    fn exit_candidates_from_snapshot_omit_leaves_without_materials() {
+        let snapshot = sample_snapshot(vec![snapshot_record(0x21, 0, false, false)]);
+        let rows = exit_candidates_from_snapshot(&snapshot, &HashSet::new()).expect("candidates");
+        assert!(rows.is_empty());
+    }
+
+    #[test]
+    fn exit_candidates_from_snapshot_include_eligible_leaves_with_materials() {
+        let leaf_txid = Txid::from_byte_array([0x22; 32]).to_string();
+        let mut snapshot = sample_snapshot(vec![snapshot_record(0x22, 0, false, false)]);
+        snapshot
+            .unilateral_exit_materials_by_leaf_tx
+            .insert(leaf_txid, sample_materials());
+        let rows = exit_candidates_from_snapshot(&snapshot, &HashSet::new()).expect("candidates");
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].can_start_unroll);
     }
 }

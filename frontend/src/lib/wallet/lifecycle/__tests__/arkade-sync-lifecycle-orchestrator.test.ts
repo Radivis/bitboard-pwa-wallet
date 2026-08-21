@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const syncWithOperator = vi.fn()
 const migrateDeprecatedSignerVtxos = vi.fn()
+const getAutonomousModeStatus = vi.fn()
 const refreshArkadeStoreFromLoadedWasm = vi.fn()
 const orchestrateArkadeSave = vi.fn()
 const loadPhaseRef = vi.hoisted(() => ({ phase: 'loaded' as string }))
@@ -10,6 +11,7 @@ vi.mock('@/workers/arkade-factory', () => ({
   getArkadeWorker: () => ({
     syncWithOperator,
     migrateDeprecatedSignerVtxos,
+    getAutonomousModeStatus,
   }),
 }))
 
@@ -56,6 +58,10 @@ import {
 import { ARKADE_BACKGROUND_OPERATOR_SYNC_MIN_INTERVAL_MS } from '@/lib/arkade/arkade-sync-timings'
 import { useWalletStore } from '@/stores/walletStore'
 import type { ArkadeSignerMigrationResult } from '@/workers/arkade-api'
+import {
+  persistActiveUnilateralExitJob,
+  useUnilateralExitLifecyclePersistenceStore,
+} from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence'
 
 function completeMigrationResult(): ArkadeSignerMigrationResult {
   return {
@@ -107,6 +113,8 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
       networkMode: 'signet',
       connectionId: 'conn-1',
     })
+    getAutonomousModeStatus.mockResolvedValue({ active: false })
+    useUnilateralExitLifecyclePersistenceStore.setState({ jobsByKey: {} })
   })
 
   it('sync rejected while loadPhase loading', async () => {
@@ -199,39 +207,45 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     }
   })
 
-  it('does not retrigger dashboard poll every debounce while a sync is in flight', async () => {
+  it('skips dashboard poll while autonomous mode is active', async () => {
     vi.useFakeTimers()
-    useWalletStore.setState({
-      activeWalletId: 1,
-      activeArkadeConnectionId: 'conn-1',
-      networkMode: 'signet',
-    })
+    try {
+      useWalletStore.setState({
+        activeWalletId: 1,
+        activeArkadeConnectionId: 'conn-1',
+        networkMode: 'signet',
+      })
+      getAutonomousModeStatus.mockResolvedValue({ active: true })
 
-    let resolveSync!: () => void
-    const syncGate = new Promise<void>((resolve) => {
-      resolveSync = resolve
-    })
-    syncWithOperator.mockImplementation(async () => {
-      await syncGate
-      return {}
-    })
-
-    scheduleBackgroundArkadeOperatorSync()
-    await vi.advanceTimersByTimeAsync(400)
-    await vi.waitFor(() => expect(syncWithOperator).toHaveBeenCalledTimes(1))
-
-    for (let i = 0; i < 20; i += 1) {
       scheduleBackgroundArkadeOperatorSync()
       await vi.advanceTimersByTimeAsync(400)
+      await Promise.resolve()
+      expect(syncWithOperator).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
     }
-    expect(syncWithOperator).toHaveBeenCalledTimes(1)
+  })
 
-    resolveSync!()
-    await vi.advanceTimersByTimeAsync(0)
-    await Promise.resolve()
-    await vi.advanceTimersByTimeAsync(ARKADE_BACKGROUND_OPERATOR_SYNC_MIN_INTERVAL_MS)
-    await vi.waitFor(() => expect(syncWithOperator).toHaveBeenCalledTimes(2))
-    vi.useRealTimers()
+  it('does not skip dashboard poll for an active unilateral-exit job while autonomous mode is off', async () => {
+    vi.useFakeTimers()
+    try {
+      useWalletStore.setState({
+        activeWalletId: 1,
+        activeArkadeConnectionId: 'conn-1',
+        networkMode: 'signet',
+      })
+      getAutonomousModeStatus.mockResolvedValue({ active: false })
+      persistActiveUnilateralExitJob(
+        { walletId: 1, networkMode: 'signet', connectionId: 'conn-1' },
+        [{ txid: 'aa'.repeat(32), vout: 0 }],
+      )
+
+      scheduleBackgroundArkadeOperatorSync()
+      await vi.advanceTimersByTimeAsync(400)
+      await vi.waitFor(() => expect(syncWithOperator).toHaveBeenCalledTimes(1))
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('awaitArkadeSyncQuiescence propagates sync errors', async () => {
