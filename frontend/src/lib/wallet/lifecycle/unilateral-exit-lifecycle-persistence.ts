@@ -2,8 +2,11 @@ import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { sqliteStorage } from '@/db/storage-adapter'
 import type { NetworkMode } from '@/stores/walletStore'
-import type { ArkadeVtxoOutpoint } from '@/workers/arkade-api'
-import { sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
+import {
+  arkadeVtxoOutpointCacheKey,
+  sortArkadeVtxoOutpoints,
+  type ArkadeVtxoOutpoint,
+} from '@/workers/arkade-api'
 import {
   unilateralExitWalletScopeKey,
   type PersistedUnilateralExitJob,
@@ -20,6 +23,27 @@ function defaultPersistedJob(): PersistedUnilateralExitJob {
   return emptyPersistedUnilateralExitJob
 }
 
+function newActivePersistedJob(
+  selectedLeafOutpoints: ArkadeVtxoOutpoint[],
+): PersistedUnilateralExitJob {
+  return {
+    selectedLeafOutpoints,
+    currentStepRelayedSinceUnix: null,
+    jobStartedAtUnix: Math.floor(Date.now() / 1000),
+  }
+}
+
+function persistedJobOutpointsUnchanged(
+  current: PersistedUnilateralExitJob,
+  selectedLeafOutpoints: ArkadeVtxoOutpoint[],
+): boolean {
+  return (
+    current.selectedLeafOutpoints.length > 0 &&
+    arkadeVtxoOutpointCacheKey(current.selectedLeafOutpoints) ===
+      arkadeVtxoOutpointCacheKey(selectedLeafOutpoints)
+  )
+}
+
 interface UnilateralExitLifecyclePersistenceState {
   jobsByKey: Record<string, PersistedUnilateralExitJob>
   getJob: (
@@ -28,6 +52,10 @@ interface UnilateralExitLifecyclePersistenceState {
     connectionId: string,
   ) => PersistedUnilateralExitJob
   setActiveJob: (
+    scope: UnilateralExitWalletScope,
+    selectedLeafOutpoints: ArkadeVtxoOutpoint[],
+  ) => void
+  ensureActiveJob: (
     scope: UnilateralExitWalletScope,
     selectedLeafOutpoints: ArkadeVtxoOutpoint[],
   ) => void
@@ -91,13 +119,19 @@ export const useUnilateralExitLifecyclePersistenceStore =
         setActiveJob: (scope, selectedLeafOutpoints) => {
           const key = unilateralExitWalletScopeKey(scope)
           const sorted = sortArkadeVtxoOutpoints(selectedLeafOutpoints)
-          set((state) =>
-            updateJob(state, key, () => ({
-              selectedLeafOutpoints: sorted,
-              currentStepRelayedSinceUnix: null,
-              jobStartedAtUnix: Math.floor(Date.now() / 1000),
-            })),
-          )
+          set((state) => updateJob(state, key, () => newActivePersistedJob(sorted)))
+        },
+
+        ensureActiveJob: (scope, selectedLeafOutpoints) => {
+          const key = unilateralExitWalletScopeKey(scope)
+          const sorted = sortArkadeVtxoOutpoints(selectedLeafOutpoints)
+          set((state) => {
+            const current = state.jobsByKey[key] ?? defaultPersistedJob()
+            if (persistedJobOutpointsUnchanged(current, sorted)) {
+              return state
+            }
+            return updateJob(state, key, () => newActivePersistedJob(sorted))
+          })
         },
 
         updateRelayWait: (scope, sinceUnix) => {
@@ -160,6 +194,15 @@ export function persistActiveUnilateralExitJob(
   useUnilateralExitLifecyclePersistenceStore
     .getState()
     .setActiveJob(scope, selectedLeafOutpoints)
+}
+
+export function ensurePersistedUnilateralExitJob(
+  scope: UnilateralExitWalletScope,
+  selectedLeafOutpoints: ArkadeVtxoOutpoint[],
+): void {
+  useUnilateralExitLifecyclePersistenceStore
+    .getState()
+    .ensureActiveJob(scope, selectedLeafOutpoints)
 }
 
 export function updatePersistedUnilateralExitRelayWait(

@@ -100,7 +100,7 @@ File: [`unilateral-exit-lifecycle-persistence.ts`](../../frontend/src/lib/wallet
 
 v5 drops `jobActive`. Inactive v4 rows (`jobActive: false`, including aborted jobs that still listed outpoints) migrate to an empty bookmark.
 
-The machine writes this on `START_MANUAL` / `START_AUTOMATIC` / `HYDRATE_OR_START` and clears it on complete, terminate, abort, and `CLEAR_JOB`. Failures (including user abort) are stored separately in the failure bookmark.
+The machine writes this on `START_MANUAL` / `START_AUTOMATIC` (`setActiveJob`, new `jobStartedAtUnix` and cleared relay wait) and on `HYDRATE_OR_START` (`ensureActiveJob`, which preserves those timestamps when the outpoints are unchanged). It clears the bookmark on complete, terminate, abort, and `CLEAR_JOB`. Failures (including user abort) are stored separately in the failure bookmark.
 
 ### Automation prefs: `unilateral-exit-automation-prefs` (v1)
 

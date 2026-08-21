@@ -9,6 +9,7 @@ import {
 import { unilateralExitAutomationWaitPollMs } from '@/lib/arkade/arkade-query-timings'
 import {
   clearPersistedUnilateralExitJob,
+  ensurePersistedUnilateralExitJob,
   getPersistedUnilateralExitJob,
   persistActiveUnilateralExitJob,
   updatePersistedUnilateralExitRelayWait,
@@ -359,7 +360,7 @@ export const unilateralExitMachineSetup = setup({
         return {}
       }
       const outpoints = sortArkadeVtxoOutpoints(event.outpoints)
-      persistActiveUnilateralExitJob(event.walletScope, outpoints)
+      ensurePersistedUnilateralExitJob(event.walletScope, outpoints)
       const automationEnabled = event.automationEnabled ?? false
       const resumeAutomation = event.resumeAutomation ?? false
       return {

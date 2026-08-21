@@ -69,6 +69,7 @@ vi.mock('@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence', () => ({
   getPersistedUnilateralExitJob: (...args: unknown[]) => mockGetJob(...args),
   clearPersistedUnilateralExitJob: (...args: unknown[]) => mockClearJob(...args),
   persistActiveUnilateralExitJob: (...args: unknown[]) => mockPersistJob(...args),
+  ensurePersistedUnilateralExitJob: vi.fn(),
   updatePersistedUnilateralExitRelayWait: vi.fn(),
   useUnilateralExitLifecyclePersistenceStore: {
     persist: {

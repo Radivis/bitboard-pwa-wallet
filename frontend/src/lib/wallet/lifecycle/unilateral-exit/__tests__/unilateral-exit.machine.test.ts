@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence', () => ({
   persistActiveUnilateralExitJob: vi.fn(),
+  ensurePersistedUnilateralExitJob: vi.fn(),
   clearPersistedUnilateralExitJob: vi.fn(),
   updatePersistedUnilateralExitRelayWait: vi.fn(),
   getPersistedUnilateralExitJob: vi.fn(() => ({
@@ -62,6 +63,7 @@ import {
 import type { UnilateralExitPolicyEvaluation } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-types'
 import {
   clearPersistedUnilateralExitJob,
+  ensurePersistedUnilateralExitJob,
   persistActiveUnilateralExitJob,
 } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence'
 import { persistUnilateralExitFailureRecord } from '@/lib/wallet/lifecycle/unilateral-exit-failure-persistence'
@@ -380,6 +382,22 @@ describe('unilateralExitMachine', () => {
     testActor.send({ type: 'CLEAR_JOB' })
     expect(testActor.getSnapshot().matches('idle')).toBe(true)
     expect(clearPersistedUnilateralExitJob).toHaveBeenCalled()
+  })
+
+  it('hydrate uses ensurePersistedUnilateralExitJob instead of persistActiveUnilateralExitJob', async () => {
+    const fetchProgress = vi.fn(async () => progress({ phase: 'idle' }))
+    const { testActor } = createTestActor({ fetchProgress })
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    persistActiveUnilateralExitJob.mockClear()
+    ensurePersistedUnilateralExitJob.mockClear()
+    testActor.send({
+      type: 'HYDRATE_OR_START',
+      walletScope,
+      outpoints: [leaf],
+    })
+    await waitFor(testActor, (state) => state.matches('idle'))
+    expect(ensurePersistedUnilateralExitJob).toHaveBeenCalledWith(walletScope, [leaf])
+    expect(persistActiveUnilateralExitJob).not.toHaveBeenCalled()
   })
 
   it('hydrate completes when all selected leaves are unrolled', async () => {
