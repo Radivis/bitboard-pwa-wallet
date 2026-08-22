@@ -64,9 +64,9 @@ At leaf finality (**6 confirmations**), WASM sets `is_unrolled` on **every** out
 
 ### Intermediary (en-passant) VTXOs
 
-An exit branch can host exit-eligible VTXOs on upstream `tree` / `ark` virtual txs, not only on the selected leaves. As soon as those txs are visible on Esplora, those VTXOs must be marked unrolled so the user cannot start a **second** unilateral exit for funds already on the published branch.
+An exit branch can host exit-eligible VTXOs on upstream `tree` / `ark` virtual txs, not only on the selected leaves. After those txs reach **6 confirmations** on Esplora, those VTXOs must be marked unrolled so the user cannot start a **second** unilateral exit for funds already on the published branch.
 
-Implemented in `reconcile_intermediate_ark_virtual_txs_unrolled_on_esplora` ([`bitboard-ark/src/session/exit_onchain.rs`](../bitboard-ark/src/session/exit_onchain.rs)), which runs during operator sync. It currently uses `find_tx` (presence), **not** the 6-conf leaf rule — weaker against shallow reorgs.
+Implemented in `reconcile_intermediate_ark_virtual_txs_unrolled_on_esplora` ([`bitboard-ark/src/session/exit_onchain.rs`](../bitboard-ark/src/session/exit_onchain.rs)), which runs during operator sync. It uses the same 6-conf rule as leaves (`get_tx_confirmations` + `leaf_reached_finality`), not mere tx presence.
 
 Frontend job reconcile must **not** treat a persisted job as stale when WASM reports no in-progress exits (pre-broadcast crash recovery). Non-overlapping in-progress outpoints are also not stale; intermediate VTXOs can differ from the original job leaves ([`unilateral-exit-job-reconcile.ts`](../frontend/src/lib/arkade/unilateral-exit-job-reconcile.ts)).
 
@@ -76,7 +76,7 @@ Unroll progress is **not** a monotonic counter. `first_incomplete_step_index` in
 
 **Open Mutinynet failure:** Esplora can report ≥1 conf (so the UI skips a checkpoint) while `submitpackage` still returns `package-not-child-with-unconfirmed-parents` for a child of that tx. That is not a second UI cursor problem. Handoff: [unilateral-exit-false-confirmation-rca.md](unilateral-exit-false-confirmation-rca.md).
 
-Leaf `is_unrolled` waits for **6** confs (`UNILATERAL_EXIT_LEAF_CONFIRMATIONS` in [`bitboard-ark/src/constants.rs`](../bitboard-ark/src/constants.rs)) so shallow reorgs do not stamp unroll. Do not persist “step N done” independently of Esplora confirmation depth.
+Leaf and intermediate-host `is_unrolled` wait for **6** confs (`UNILATERAL_EXIT_LEAF_CONFIRMATIONS` in [`bitboard-ark/src/constants.rs`](../bitboard-ark/src/constants.rs)) so shallow reorgs do not stamp unroll. Do not persist “step N done” independently of Esplora confirmation depth.
 
 ### Merged DAG, not one tree per leaf
 
@@ -223,7 +223,7 @@ Confirmation constants ([`bitboard-ark/src/constants.rs`](../bitboard-ark/src/co
 | Constant | Value | Meaning |
 |----------|-------|---------|
 | `UNILATERAL_EXIT_STEP_CONFIRMATIONS` | 1 | Advance to the next virtual tx |
-| `UNILATERAL_EXIT_LEAF_CONFIRMATIONS` | 6 | Stamp `is_unrolled` on every vout of the leaf tx |
+| `UNILATERAL_EXIT_LEAF_CONFIRMATIONS` | 6 | Stamp `is_unrolled` on every vout of that virtual tx (leaf or intermediate host) |
 
 `mark_unrolled_leaves_at_finality` does **not** block on operator indexer polling. Sticky merge and watch reconcile run during operator sync (`ARK-EXIT-11`). Hard failure if Esplora does not confirm the branch after the poll window: `unilateral_unroll_not_confirmed_on_chain`.
 

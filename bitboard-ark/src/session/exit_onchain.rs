@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 
 use ark_client::Blockchain;
@@ -6,6 +6,7 @@ use ark_core::build_unilateral_exit_tree_txids;
 use bitcoin::Txid;
 
 use crate::error::ArkResult;
+use crate::esplora_blockchain::EsploraBlockchain;
 use crate::offchain_snapshot::mark_virtual_tx_vtxos_unrolled_in_snapshot;
 use crate::persistence::{
     OffchainVtxoSnapshot, UnilateralExitWatchRecord, VirtualTxOutPointRecord,
@@ -18,6 +19,7 @@ use crate::unilateral_exit_materials::{
 };
 
 use super::exit_watch::parse_branch_txids;
+use super::unilateral_exit_orchestrator::leaf_reached_finality;
 
 const UNILATERAL_EXIT_ON_CHAIN_TIP_VOUT: u32 = 0;
 
@@ -194,24 +196,22 @@ pub(crate) async fn output_spent_on_chain<B: Blockchain>(
     Ok(blockchain.get_output_status(txid, vout).await?.spend_txid)
 }
 
-/// When an upstream vtxo-host virtual tx (`tree` or `ark`) in an exit branch is confirmed on
-/// Esplora, mark its VTXOs unrolled so they cannot be started as a separate unilateral exit.
-pub(crate) async fn reconcile_intermediate_ark_virtual_txs_unrolled_on_esplora<B: Blockchain>(
-    blockchain: &B,
-    snapshot: &mut OffchainVtxoSnapshot,
-) -> ArkResult<()> {
+/// Non-terminal `tree` / `ark` host txids in exit-branch materials.
+fn intermediate_vtxo_host_txids(snapshot: &OffchainVtxoSnapshot) -> ArkResult<Vec<String>> {
     let material_leaf_txids: Vec<String> = snapshot
         .unilateral_exit_materials_by_leaf_tx
         .keys()
         .cloned()
         .collect();
     if material_leaf_txids.is_empty() {
-        return Ok(());
+        return Ok(Vec::new());
     }
 
     let terminal_txids =
         terminal_vtxo_host_txids_from_materials_snapshot(snapshot, &material_leaf_txids)?;
 
+    let mut host_txids = Vec::new();
+    let mut seen = HashSet::new();
     for leaf_txid in material_leaf_txids {
         let Some(materials) = snapshot_materials_for_leaf_tx(snapshot, &leaf_txid) else {
             continue;
@@ -229,18 +229,54 @@ pub(crate) async fn reconcile_intermediate_ark_virtual_txs_unrolled_on_esplora<B
             if terminal_txids.contains(&txid) {
                 continue;
             }
-            if blockchain
-                .find_tx(&link.txid)
-                .await
-                .map_err(crate::error::ArkWasmError::Client)?
-                .is_some()
-            {
-                mark_virtual_tx_vtxos_unrolled_in_snapshot(snapshot, &txid);
+            if seen.insert(txid.clone()) {
+                host_txids.push(txid);
             }
         }
     }
+    Ok(host_txids)
+}
 
+/// Stamp `is_unrolled` on intermediate (non-terminal) vtxo-host virtual txs that have reached
+/// the same unroll finality as leaves (`UNILATERAL_EXIT_LEAF_CONFIRMATIONS`).
+pub(crate) fn stamp_intermediate_hosts_unrolled_at_finality(
+    snapshot: &mut OffchainVtxoSnapshot,
+    confirmations_for_txid: impl Fn(&str) -> u64,
+) -> ArkResult<()> {
+    let host_txids = intermediate_vtxo_host_txids(snapshot)?;
+    for txid in host_txids {
+        if leaf_reached_finality(confirmations_for_txid(&txid)) {
+            mark_virtual_tx_vtxos_unrolled_in_snapshot(snapshot, &txid);
+        }
+    }
     Ok(())
+}
+
+/// When an upstream vtxo-host virtual tx (`tree` or `ark`) in an exit branch reaches 6
+/// confirmations on Esplora, mark its VTXOs unrolled so they cannot be started as a separate
+/// unilateral exit.
+pub(crate) async fn reconcile_intermediate_ark_virtual_txs_unrolled_on_esplora(
+    blockchain: &EsploraBlockchain,
+    snapshot: &mut OffchainVtxoSnapshot,
+) -> ArkResult<()> {
+    let host_txids = intermediate_vtxo_host_txids(snapshot)?;
+    if host_txids.is_empty() {
+        return Ok(());
+    }
+
+    let mut confirmations_by_txid = HashMap::new();
+    for txid_str in &host_txids {
+        let Ok(txid) = Txid::from_str(txid_str) else {
+            continue;
+        };
+        confirmations_by_txid.insert(
+            txid_str.clone(),
+            blockchain.get_tx_confirmations(&txid).await?,
+        );
+    }
+    stamp_intermediate_hosts_unrolled_at_finality(snapshot, |txid| {
+        confirmations_by_txid.get(txid).copied().unwrap_or(0)
+    })
 }
 
 #[cfg(test)]
@@ -325,6 +361,168 @@ mod tests {
             exiting_vtxo_on_chain_tip_candidates(&snapshot, &leaf_txid.to_string(), None);
 
         assert_eq!(candidates, vec![leaf_txid]);
+    }
+
+    fn txid(byte: u8) -> Txid {
+        Txid::from_byte_array([byte; 32])
+    }
+
+    fn chain(txid: Txid, tx_type: ChainedTxType, spends: Vec<Txid>) -> VtxoChain {
+        VtxoChain {
+            txid,
+            tx_type,
+            spends,
+            expires_at: 0,
+        }
+    }
+
+    fn vtxo_record(txid: &Txid, vout: u32) -> crate::persistence::VirtualTxOutPointRecord {
+        crate::persistence::VirtualTxOutPointRecord {
+            txid: txid.to_string(),
+            vout,
+            created_at: 1,
+            expires_at: 2,
+            amount_sats: 1_000,
+            script_hex: String::new(),
+            is_preconfirmed: false,
+            is_swept: false,
+            is_unrolled: false,
+            is_spent: false,
+            spent_by: None,
+            commitment_txids: vec![],
+            settled_by: None,
+            ark_txid: None,
+            assets: vec![],
+            server_pk_hex: None,
+        }
+    }
+
+    fn record_is_unrolled(snapshot: &OffchainVtxoSnapshot, txid: &Txid, vout: u32) -> bool {
+        snapshot
+            .virtual_tx_outpoints
+            .iter()
+            .find(|record| record.txid == txid.to_string() && record.vout == vout)
+            .map(|record| record.is_unrolled)
+            .expect("vtxo record")
+    }
+
+    /// commitment → tree (intermediate, two vouts) → ark (terminal leaf).
+    fn snapshot_with_intermediate_tree_and_ark_leaf() -> (OffchainVtxoSnapshot, Txid, Txid, Txid) {
+        let commitment = txid(0x01);
+        let tree = txid(0x02);
+        let leaf = txid(0x03);
+        let chains = VtxoChains {
+            inner: vec![
+                chain(commitment, ChainedTxType::Commitment, vec![]),
+                chain(tree, ChainedTxType::Tree, vec![commitment]),
+                chain(leaf, ChainedTxType::Ark, vec![tree]),
+            ],
+        };
+        let chain_json = vtxo_chains_to_json(&chains).expect("encode");
+        let mut snapshot = OffchainVtxoSnapshot {
+            synced_at: 1,
+            dust_sats: 330,
+            virtual_tx_outpoints: vec![
+                vtxo_record(&tree, 0),
+                vtxo_record(&tree, 1),
+                vtxo_record(&leaf, 0),
+                vtxo_record(&commitment, 0),
+            ],
+            unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
+        };
+        store_materials_for_leaf_tx(
+            &mut snapshot,
+            &leaf.to_string(),
+            UnilateralExitMaterialsRecord {
+                cached_at: 1,
+                chain_json,
+                virtual_psbts: vec![],
+            },
+        );
+        (snapshot, tree, leaf, commitment)
+    }
+
+    fn stamp_with_uniform_confirmations(snapshot: &mut OffchainVtxoSnapshot, confirmations: u64) {
+        stamp_intermediate_hosts_unrolled_at_finality(snapshot, |_| confirmations)
+            .expect("stamp intermediates");
+    }
+
+    #[test]
+    fn intermediate_host_stays_not_unrolled_at_zero_confirmations() {
+        let (mut snapshot, tree, leaf, _) = snapshot_with_intermediate_tree_and_ark_leaf();
+        stamp_with_uniform_confirmations(&mut snapshot, 0);
+        assert!(!record_is_unrolled(&snapshot, &tree, 0));
+        assert!(!record_is_unrolled(&snapshot, &tree, 1));
+        assert!(!record_is_unrolled(&snapshot, &leaf, 0));
+    }
+
+    #[test]
+    fn intermediate_host_stays_not_unrolled_at_five_confirmations() {
+        let (mut snapshot, tree, leaf, _) = snapshot_with_intermediate_tree_and_ark_leaf();
+        stamp_with_uniform_confirmations(&mut snapshot, 5);
+        assert!(!record_is_unrolled(&snapshot, &tree, 0));
+        assert!(!record_is_unrolled(&snapshot, &tree, 1));
+        assert!(!record_is_unrolled(&snapshot, &leaf, 0));
+    }
+
+    #[test]
+    fn intermediate_host_is_unrolled_at_six_confirmations_for_all_vouts() {
+        let (mut snapshot, tree, leaf, _) = snapshot_with_intermediate_tree_and_ark_leaf();
+        stamp_with_uniform_confirmations(&mut snapshot, 6);
+        assert!(record_is_unrolled(&snapshot, &tree, 0));
+        assert!(record_is_unrolled(&snapshot, &tree, 1));
+        assert!(!record_is_unrolled(&snapshot, &leaf, 0));
+    }
+
+    #[test]
+    fn terminal_leaf_host_is_skipped_even_at_six_confirmations() {
+        let (mut snapshot, _, leaf, _) = snapshot_with_intermediate_tree_and_ark_leaf();
+        stamp_with_uniform_confirmations(&mut snapshot, 6);
+        assert!(!record_is_unrolled(&snapshot, &leaf, 0));
+    }
+
+    #[test]
+    fn checkpoint_and_commitment_links_are_not_stamped() {
+        let commitment = txid(0x11);
+        let tree = txid(0x12);
+        let checkpoint = txid(0x13);
+        let leaf = txid(0x14);
+        let chains = VtxoChains {
+            inner: vec![
+                chain(commitment, ChainedTxType::Commitment, vec![]),
+                chain(tree, ChainedTxType::Tree, vec![commitment]),
+                chain(checkpoint, ChainedTxType::Checkpoint, vec![tree]),
+                chain(leaf, ChainedTxType::Ark, vec![checkpoint]),
+            ],
+        };
+        let chain_json = vtxo_chains_to_json(&chains).expect("encode");
+        let mut snapshot = OffchainVtxoSnapshot {
+            synced_at: 1,
+            dust_sats: 330,
+            virtual_tx_outpoints: vec![
+                vtxo_record(&commitment, 0),
+                vtxo_record(&tree, 0),
+                vtxo_record(&checkpoint, 0),
+                vtxo_record(&leaf, 0),
+            ],
+            unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
+        };
+        store_materials_for_leaf_tx(
+            &mut snapshot,
+            &leaf.to_string(),
+            UnilateralExitMaterialsRecord {
+                cached_at: 1,
+                chain_json,
+                virtual_psbts: vec![],
+            },
+        );
+
+        stamp_with_uniform_confirmations(&mut snapshot, 6);
+
+        assert!(!record_is_unrolled(&snapshot, &commitment, 0));
+        assert!(!record_is_unrolled(&snapshot, &checkpoint, 0));
+        assert!(!record_is_unrolled(&snapshot, &leaf, 0));
+        assert!(record_is_unrolled(&snapshot, &tree, 0));
     }
 
     fn spent_unrolled_record(

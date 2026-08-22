@@ -109,7 +109,7 @@ Management → Arkade offers two paths:
 
 Collaborative exit and unilateral unroll are implemented in `bitboard-ark` (`collaborative_redeem`, `broadcast_next_unilateral_exit_node`, etc.). **Autonomous mode** branches the same unilateral exit RPCs to snapshot-backed materials instead of ASP indexer/batch APIs. The on-chain bumper wallet shares the same BIP32-derived BDK wallet as boarding.
 
-**Unilateral exit control:** Management links to `/wallet/arkade/unilateral-exit`. The control page is a view of the XState actor: merged DAG (React Flow + d3-dag), multi-leaf selection, one virtual tx per `ark_proceed_unilateral_exit_step`. Proceed is non-blocking; the machine polls until the current step has **1 confirmation**. A leaf is marked `is_unrolled` only after **6 confirmations**. Shared-leaf and automation details: [unilateral-exit.md](unilateral-exit.md). `ark_run_unilateral_unroll` remains for legacy callers.
+**Unilateral exit control:** Management links to `/wallet/arkade/unilateral-exit`. The control page is a view of the XState actor: merged DAG (React Flow + d3-dag), multi-leaf selection, one virtual tx per `ark_proceed_unilateral_exit_step`. Proceed is non-blocking; the machine polls until the current step has **1 confirmation**. A virtual tx (leaf or intermediate host) is marked `is_unrolled` only after **6 confirmations**. Shared-leaf and automation details: [unilateral-exit.md](unilateral-exit.md). `ark_run_unilateral_unroll` remains for legacy callers.
 
 ### Unilateral vs collaborative exit balance timing
 

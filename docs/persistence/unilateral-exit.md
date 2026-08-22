@@ -62,7 +62,7 @@ Filled on operator sync for exit-eligible VTXOs (`ARK-EXIT-07`). Proceed fails f
 
 ### Sticky `is_unrolled`
 
-Local stamp after the leaf virtual tx reaches **6 confirmations** (`mark_leaf_virtual_tx_vtxos_unrolled_in_snapshot` — all vouts on that txid). `merge_sticky_unrolled_flags` preserves the flag when the ASP lags. Intermediate (en-passant) hosts are marked when their txs are **visible** on Esplora (`reconcile_intermediate_ark_virtual_txs_unrolled_on_esplora` on operator sync).
+Local stamp after a published virtual tx reaches **6 confirmations**: leaves via `mark_leaf_virtual_tx_vtxos_unrolled_in_snapshot` (all vouts on that txid); intermediate (en-passant) hosts via `reconcile_intermediate_ark_virtual_txs_unrolled_on_esplora` on operator sync. `merge_sticky_unrolled_flags` preserves the flag when the ASP lags.
 
 ### Watches (`UnilateralExitWatchRecord`)
 

@@ -53,7 +53,8 @@ const UNILATERAL_EXIT_BUMP_CHILD_P2TR_OUTPUT_SERIALIZED_BYTES: u64 = 43;
 pub(crate) const UNILATERAL_EXIT_BUMP_CHILD_P2TR_OUTPUT_WEIGHT: u64 =
     UNILATERAL_EXIT_BUMP_CHILD_P2TR_OUTPUT_SERIALIZED_BYTES * BITCOIN_WITNESS_SCALE_FACTOR;
 
-/// Confirmations required on the leaf virtual tx before marking `is_unrolled`.
+/// Confirmations required before stamping `is_unrolled` on a published virtual tx
+/// (leaf or intermediate host).
 pub const UNILATERAL_EXIT_LEAF_CONFIRMATIONS: u32 = 6;
 
 /// Confirmations required on each intermediate virtual tx before advancing to the next step.

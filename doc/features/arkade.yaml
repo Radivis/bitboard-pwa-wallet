@@ -106,7 +106,7 @@ feature:
       - id: ARK-EXIT-15
         description: ark_proceed_unilateral_exit_step advances one virtual tx per call with caller feerate, returns without blocking on confirmation, persists current_step_waiting_since for progress UI, and skips already-on-chain branch txs; the XState machine polls until 1-conf
       - id: ARK-EXIT-16
-        description: Leaf virtual tx must reach 6 confirmations on Esplora before WASM marks is_unrolled
+        description: Leaf and intermediate host virtual txs must reach 6 confirmations on Esplora before WASM marks is_unrolled
       - id: ARK-EXIT-17
         description: When leaf virtual tx reaches 6 conf, WASM marks is_unrolled for every VTXO outpoint on that txid; sticky merge promotes all vouts on the same txid; control page selects sibling leaf outpoints atomically; completion remains per outpoint
       - id: ARK-EXIT-18
