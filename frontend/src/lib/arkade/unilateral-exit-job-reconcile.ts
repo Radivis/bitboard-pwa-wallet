@@ -12,10 +12,10 @@ export function selectedOutpointsOverlapInProgress(
 }
 
 /**
- * Defer stale-job clearing while Arkade may still be syncing in-progress exit state.
- * Avoids wiping a persisted job on the first empty in-progress snapshot after reload.
+ * Defer hydrate while Arkade may still be syncing in-progress exit state.
+ * Avoids starting the machine on the first empty in-progress snapshot after reload.
  */
-export function shouldDeferPersistedUnilateralExitStaleCheck(params: {
+export function shouldDeferPersistedUnilateralExitHydrate(params: {
   selectedLeafOutpoints: ArkadeVtxoOutpoint[]
   inProgressOutpoints: ArkadeVtxoOutpoint[]
   unilateralExitInProgressSats: number
@@ -38,30 +38,21 @@ export function shouldDeferPersistedUnilateralExitStaleCheck(params: {
 }
 
 /**
- * True when SQLite still has a job bookmark but WASM reports no in-progress exit.
- * Intermediate (en-passant) VTXOs can differ from the original job leaves, so
- * non-overlapping outpoints are not treated as stale while sats remain in progress.
+ * A persisted job bookmark is crash recovery, including `START_MANUAL` before the first
+ * unroll tx is visible on chain. WASM reporting no in-progress exits is not stale.
+ * Complete / abort / terminate already clear the bookmark.
  */
-export function isPersistedUnilateralExitJobStale(params: {
+export function isPersistedUnilateralExitJobStale(_params: {
   selectedLeafOutpoints: ArkadeVtxoOutpoint[]
   inProgressOutpoints: ArkadeVtxoOutpoint[]
   unilateralExitInProgressSats: number
 }): boolean {
-  if (!persistedUnilateralExitJobExists(params)) {
-    return false
-  }
-
-  const hasInProgressExits =
-    params.unilateralExitInProgressSats > 0 || params.inProgressOutpoints.length > 0
-
-  return !hasInProgressExits
+  return false
 }
 
 /** Restore control-store selection from SQLite only for a still-present exit job. */
 export function shouldHydratePersistedUnilateralExitJob(params: {
   selectedLeafOutpoints: ArkadeVtxoOutpoint[]
-  inProgressOutpoints: ArkadeVtxoOutpoint[]
-  unilateralExitInProgressSats: number
   controlStoreSelectionEmpty: boolean
 }): boolean {
   if (!persistedUnilateralExitJobExists(params)) {
@@ -70,15 +61,5 @@ export function shouldHydratePersistedUnilateralExitJob(params: {
   if (!params.controlStoreSelectionEmpty) {
     return false
   }
-  if (
-    isPersistedUnilateralExitJobStale({
-      selectedLeafOutpoints: params.selectedLeafOutpoints,
-      inProgressOutpoints: params.inProgressOutpoints,
-      unilateralExitInProgressSats: params.unilateralExitInProgressSats,
-    })
-  ) {
-    return false
-  }
-
   return true
 }

@@ -1,8 +1,5 @@
 import { toast } from 'sonner'
-import {
-  isPersistedUnilateralExitJobStale,
-  shouldDeferPersistedUnilateralExitStaleCheck,
-} from '@/lib/arkade/unilateral-exit-job-reconcile'
+import { shouldDeferPersistedUnilateralExitHydrate } from '@/lib/arkade/unilateral-exit-job-reconcile'
 import type { SendFeePresetLabel } from '@/lib/esplora/esplora-fee-estimates'
 import { waitForPersistedStoreHydration } from '@/lib/settings/persisted-store-hydration'
 import { getArkadeLoadLifecycleSnapshot } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
@@ -10,7 +7,6 @@ import { getArkadeSyncLifecycleSnapshot } from '@/lib/wallet/lifecycle/arkade-sy
 import { useUnilateralExitAutomationPrefsStore } from '@/lib/wallet/lifecycle/unilateral-exit-automation-prefs-persistence'
 import type { UnilateralExitAutomationPausedReason } from '@/lib/wallet/lifecycle/unilateral-exit-automation-types'
 import {
-  clearPersistedUnilateralExitJob,
   getPersistedUnilateralExitJob,
   useUnilateralExitLifecyclePersistenceStore,
 } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence'
@@ -239,7 +235,7 @@ export async function hydrateUnilateralExitFromPersistence(params: {
   const loadSnapshot = getArkadeLoadLifecycleSnapshot()
   const syncSnapshot = getArkadeSyncLifecycleSnapshot()
   if (
-    shouldDeferPersistedUnilateralExitStaleCheck({
+    shouldDeferPersistedUnilateralExitHydrate({
       selectedLeafOutpoints: persisted.selectedLeafOutpoints,
       inProgressOutpoints: params.inProgressOutpoints,
       unilateralExitInProgressSats: params.unilateralExitInProgressSats,
@@ -247,17 +243,6 @@ export async function hydrateUnilateralExitFromPersistence(params: {
       arkadeSyncPhase: syncSnapshot.syncPhase,
     })
   ) {
-    return
-  }
-
-  if (
-    isPersistedUnilateralExitJobStale({
-      selectedLeafOutpoints: persisted.selectedLeafOutpoints,
-      inProgressOutpoints: params.inProgressOutpoints,
-      unilateralExitInProgressSats: params.unilateralExitInProgressSats,
-    })
-  ) {
-    clearPersistedUnilateralExitJob(params.walletScope)
     return
   }
 

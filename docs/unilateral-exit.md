@@ -68,7 +68,7 @@ An exit branch can host exit-eligible VTXOs on upstream `tree` / `ark` virtual t
 
 Implemented in `reconcile_intermediate_ark_virtual_txs_unrolled_on_esplora` ([`bitboard-ark/src/session/exit_onchain.rs`](../bitboard-ark/src/session/exit_onchain.rs)), which runs during operator sync. It currently uses `find_tx` (presence), **not** the 6-conf leaf rule — weaker against shallow reorgs.
 
-Frontend job reconcile must **not** treat non-overlapping in-progress outpoints as a stale job while sats remain in progress. Intermediate VTXOs can differ from the original job leaves ([`unilateral-exit-job-reconcile.ts`](../frontend/src/lib/arkade/unilateral-exit-job-reconcile.ts)).
+Frontend job reconcile must **not** treat a persisted job as stale when WASM reports no in-progress exits (pre-broadcast crash recovery). Non-overlapping in-progress outpoints are also not stale; intermediate VTXOs can differ from the original job leaves ([`unilateral-exit-job-reconcile.ts`](../frontend/src/lib/arkade/unilateral-exit-job-reconcile.ts)).
 
 ### Reorgs rewind progress
 
@@ -235,7 +235,7 @@ Redundant mempool rejects (`-25` / `-26`) are ignored when the parent is already
 
 | Area | Paths |
 |------|-------|
-| Machine | `frontend/src/lib/wallet/lifecycle/unilateral-exit/` |
+| Machine | `unilateral-exit.machine.ts` (states/transitions), `unilateral-exit-machine-setup.ts` (guards/actions/actors), `unilateral-exit.actors.ts` |
 | Persistence (frontend) | `unilateral-exit-lifecycle-persistence.ts`, `unilateral-exit-automation-prefs-persistence.ts`, `unilateral-exit-failure-persistence.ts` |
 | Control page / DAG | `UnilateralExitControlPage.tsx`, `UnilateralExitTreeGraph.tsx`, `unilateral-exit-topology.ts` |
 | WASM orchestrator | `bitboard-ark/src/session/unilateral_exit_orchestrator.rs` |

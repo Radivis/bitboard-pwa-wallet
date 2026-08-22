@@ -223,7 +223,7 @@ describe('unilateral-exit-runtime hydration', () => {
     ).toBe(true)
   })
 
-  it('stale hydrate clears persisted bookmark without CLEAR_JOB event', async () => {
+  it('hydrate resumes a pre-broadcast persisted job instead of clearing it', async () => {
     persistenceHydrated = true
     mockGetJob.mockReturnValue({
       selectedLeafOutpoints: [leaf],
@@ -231,15 +231,16 @@ describe('unilateral-exit-runtime hydration', () => {
       jobStartedAtUnix: 1_700_000_000,
     })
 
+    await configureUnilateralExitForLoadedWallet(walletScope)
     await hydrateUnilateralExitFromPersistence({
       walletScope,
       inProgressOutpoints: [],
       unilateralExitInProgressSats: 0,
     })
 
-    expect(mockClearJob).toHaveBeenCalled()
+    expect(mockClearJob).not.toHaveBeenCalled()
     const snapshot = getUnilateralExitActorSnapshot()
-    expect(snapshot.context.jobOutpoints).toEqual([])
+    expect(snapshot.context.jobOutpoints).toEqual([leaf])
   })
 
   it('does not clear persisted job when in-progress sats exist before outpoints load', async () => {

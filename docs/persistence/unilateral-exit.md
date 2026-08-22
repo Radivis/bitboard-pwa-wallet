@@ -132,6 +132,6 @@ One last failure per scope, for the control-page banner:
 2. If persisted outpoints are present → `HYDRATE_OR_START` (always via `checkingProgress`).
 3. If the job bookmark is empty, hydrate does **not** invent a job from leftover WASM in-progress exits. Those rows stay visible on the control page; the user starts again explicitly. Crash recovery is “persisted outpoints are still there.”
 4. While the job exists, topology/progress outpoints come from the **actor** (`resolveUnilateralExitTopologyOutpoints` / `resolveUnilateralExitJobOutpoints`). Never skip when lifecycle outpoints are empty but persistence still has them.
-5. Stale-job clearing waits until Arkade load/sync is quiet and WASM reports no in-progress exit **sats**. Non-overlapping en-passant outpoints are not stale by themselves.
+5. Hydrate waits until Arkade load/sync is quiet (or until in-progress sats/outpoints are already visible) before sending `HYDRATE_OR_START`. WASM reporting no in-progress exits does **not** clear a persisted job — that is pre-broadcast crash recovery. The machine clears persist on complete / abort / terminate.
 
 TanStack Query caches progress/topology/balance for display. During an active job it does **not** poll or refetch `getUnilateralExitProgress`; actors seed the progress cache after WASM reads. Durable writes happen in WASM export (encrypted payload) and Zustand persist (settings). `actor.context.progress` is authoritative over the query cache.

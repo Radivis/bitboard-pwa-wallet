@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   isPersistedUnilateralExitJobStale,
-  shouldDeferPersistedUnilateralExitStaleCheck,
+  shouldDeferPersistedUnilateralExitHydrate,
   shouldHydratePersistedUnilateralExitJob,
 } from '@/lib/arkade/unilateral-exit-job-reconcile'
 
@@ -9,14 +9,14 @@ const leafA = { txid: 'aa'.repeat(32), vout: 0 }
 const leafB = { txid: 'bb'.repeat(32), vout: 1 }
 
 describe('unilateral-exit-job-reconcile', () => {
-  it('treats persisted job as stale when nothing is in progress after sync settled', () => {
+  it('pre-broadcast persisted job is not stale when WASM has no in-progress exits', () => {
     expect(
       isPersistedUnilateralExitJobStale({
         selectedLeafOutpoints: [leafA],
         inProgressOutpoints: [],
         unilateralExitInProgressSats: 0,
       }),
-    ).toBe(true)
+    ).toBe(false)
   })
 
   it('keeps persisted job when selection overlaps in-progress outpoints', () => {
@@ -53,45 +53,32 @@ describe('unilateral-exit-job-reconcile', () => {
     expect(
       shouldHydratePersistedUnilateralExitJob({
         selectedLeafOutpoints: [leafA],
-        inProgressOutpoints: [leafA],
-        unilateralExitInProgressSats: 50_000,
         controlStoreSelectionEmpty: true,
       }),
     ).toBe(true)
+  })
 
+  it('shouldHydratePersistedUnilateralExitJob is true for a pre-broadcast job', () => {
     expect(
       shouldHydratePersistedUnilateralExitJob({
         selectedLeafOutpoints: [leafA],
-        inProgressOutpoints: [leafB],
-        unilateralExitInProgressSats: 50_000,
         controlStoreSelectionEmpty: true,
       }),
     ).toBe(true)
-
-    expect(
-      shouldHydratePersistedUnilateralExitJob({
-        selectedLeafOutpoints: [leafA],
-        inProgressOutpoints: [],
-        unilateralExitInProgressSats: 0,
-        controlStoreSelectionEmpty: true,
-      }),
-    ).toBe(false)
   })
 
   it('does not hydrate when persisted outpoints are empty', () => {
     expect(
       shouldHydratePersistedUnilateralExitJob({
         selectedLeafOutpoints: [],
-        inProgressOutpoints: [leafA],
-        unilateralExitInProgressSats: 50_000,
         controlStoreSelectionEmpty: true,
       }),
     ).toBe(false)
   })
 
-  it('defers stale check while arkade sync is still running', () => {
+  it('defers hydrate while arkade sync is still running', () => {
     expect(
-      shouldDeferPersistedUnilateralExitStaleCheck({
+      shouldDeferPersistedUnilateralExitHydrate({
         selectedLeafOutpoints: [leafA],
         inProgressOutpoints: [],
         unilateralExitInProgressSats: 0,
@@ -101,9 +88,9 @@ describe('unilateral-exit-job-reconcile', () => {
     ).toBe(true)
   })
 
-  it('defers stale check when in-progress sats exist before outpoints load', () => {
+  it('defers hydrate when in-progress sats exist before outpoints load', () => {
     expect(
-      shouldDeferPersistedUnilateralExitStaleCheck({
+      shouldDeferPersistedUnilateralExitHydrate({
         selectedLeafOutpoints: [leafA],
         inProgressOutpoints: [],
         unilateralExitInProgressSats: 300_000,
