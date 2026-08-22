@@ -268,6 +268,7 @@ fn persistence_round_trips_pending_batch_intent() {
         amount_sats: 50_000,
         registered_at: 1_700_000_000,
         destination_address: Some("tb1qexit".to_string()),
+        lifecycle_phase: crate::persistence::PendingBatchIntentLifecyclePhase::TimedOut,
     }];
 
     let json = serde_json::to_string(&envelope).expect("serialize");
@@ -288,6 +289,35 @@ fn persistence_round_trips_pending_batch_intent() {
             .destination_address
             .as_deref(),
         Some("tb1qexit")
+    );
+    assert_eq!(
+        parsed.wallet_db.pending_batch_intents[0].lifecycle_phase,
+        crate::persistence::PendingBatchIntentLifecyclePhase::TimedOut
+    );
+}
+
+#[test]
+fn missing_lifecycle_phase_deserializes_as_timed_out() {
+    let identity = OperatorIdentity {
+        signer_pk_hex: "02abc".to_string(),
+        network: network_label(Network::Signet),
+    };
+    let mut envelope = BitboardArkPersistence::empty(identity);
+    let json = serde_json::to_string(&envelope).expect("serialize");
+    let mut value: serde_json::Value = serde_json::from_str(&json).expect("parse envelope json");
+    value["wallet_db"]["pending_batch_intents"] = serde_json::json!([{
+        "kind": "board",
+        "intent_id": "legacy",
+        "onchain_outpoints": [],
+        "vtxo_outpoints": [],
+        "amount_sats": 1,
+        "registered_at": 1
+    }]);
+    let parsed: BitboardArkPersistence =
+        serde_json::from_value(value).expect("deserialize without lifecycle_phase");
+    assert_eq!(
+        parsed.wallet_db.pending_batch_intents[0].lifecycle_phase,
+        crate::persistence::PendingBatchIntentLifecyclePhase::TimedOut
     );
 }
 
@@ -313,6 +343,7 @@ fn destination_address_round_trips_on_pending_batch_intent() {
         amount_sats: 12_000,
         registered_at: 2,
         destination_address: Some("tb1qcollab".to_string()),
+        lifecycle_phase: crate::persistence::PendingBatchIntentLifecyclePhase::TimedOut,
     }];
     let json = serde_json::to_string(&envelope).expect("serialize");
     let parsed = BitboardArkPersistence::parse_import(Some(&json));
@@ -350,6 +381,7 @@ fn sample_pending_record(
         amount_sats: 1,
         registered_at: 1,
         destination_address: None,
+        lifecycle_phase: crate::persistence::PendingBatchIntentLifecyclePhase::TimedOut,
     }
 }
 
@@ -437,6 +469,19 @@ fn pending_exit_kind_deserializes_from_lowercase_strings() {
 }
 
 #[test]
+fn collaborative_exit_deduction_missing_retain_flag_deserializes_as_false() {
+    let json = r#"{
+        "kind": "collaborative",
+        "amount_sats": 50000,
+        "started_at": 1,
+        "baseline_offchain_spendable_sats": 500000
+    }"#;
+    let record: PendingExitDeductionRecord = serde_json::from_str(json).expect("deserialize");
+    assert!(!record.retain_until_spendable_drops);
+    assert_eq!(record.amount_sats, 50_000);
+}
+
+#[test]
 fn upsert_pending_unilateral_replaces_same_outpoint() {
     let db = JsonPersistenceDb::default();
     let txid = "aa".repeat(32);
@@ -448,6 +493,7 @@ fn upsert_pending_unilateral_replaces_same_outpoint() {
         amount_sats: 100_000,
         started_at: 1,
         baseline_offchain_spendable_sats: None,
+        retain_until_spendable_drops: false,
     });
     db.upsert_pending_exit_deduction(PendingExitDeductionRecord {
         kind: PendingExitKind::Unilateral,
@@ -456,6 +502,7 @@ fn upsert_pending_unilateral_replaces_same_outpoint() {
         amount_sats: 180_603,
         started_at: 2,
         baseline_offchain_spendable_sats: None,
+        retain_until_spendable_drops: false,
     });
 
     let pending = db.pending_exit_deductions();
@@ -720,6 +767,7 @@ fn upsert_pending_collaborative_replaces_existing_collaborative_record() {
         amount_sats: 50_000,
         started_at: 1,
         baseline_offchain_spendable_sats: Some(200_000),
+        retain_until_spendable_drops: false,
     });
     db.upsert_pending_exit_deduction(PendingExitDeductionRecord {
         kind: PendingExitKind::Collaborative,
@@ -728,6 +776,7 @@ fn upsert_pending_collaborative_replaces_existing_collaborative_record() {
         amount_sats: 100_000,
         started_at: 2,
         baseline_offchain_spendable_sats: Some(180_000),
+        retain_until_spendable_drops: false,
     });
 
     let pending = db.pending_exit_deductions();

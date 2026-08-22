@@ -78,7 +78,7 @@ Replayed from the snapshot (same rules as live `ark-client::offchain_balance`):
 | **boarding_pending** | Unconfirmed boarding UTXOs |
 | **onchain_bumper** | Confirmed sats in the P2A bumper wallet (exit fees only — not Ark spendable balance) |
 | **unilateral_exit_in_progress** | Sum of **exiting** VTXOs (`is_unrolled && !is_spent`) plus pending unilateral records during unroll (informational; already excluded from gross spendable) |
-| **collaborative_exit_in_progress** | Pending exit deduction while the operator snapshot still lists exiting VTXOs as cooperatively spendable |
+| **collaborative_exit_in_progress** | Open CollaborativeExit pending-intent amount, or a retain-until-spendable-drops deduction after join Completed while the snapshot still lists those VTXOs as spendable. Cancel restores spendable immediately. |
 
 #### Layer 4 — Dashboard fields
 
@@ -113,7 +113,7 @@ Collaborative exit and unilateral unroll are implemented in `bitboard-ark` (`col
 
 ### Unilateral vs collaborative exit balance timing
 
-Unilateral and collaborative exits use **different balance mechanics**. Collaborative exit VTXOs stay in the operator snapshot as cooperatively spendable until the operator processes the exit, so `collaborative_exit_in_progress_sats` is subtracted from net spendable fields until sync clears the pending deduction record.
+Unilateral and collaborative exits use **different balance mechanics**. While a CollaborativeExit pending batch intent is open, `collaborative_exit_in_progress_sats` is that intent’s amount (VTXOs stay cooperatively spendable in the snapshot). After join **Completed**, a retain-until-spendable-drops pending deduction covers the gap until operator sync removes those VTXOs. **Cancel** drops the intent and that deduction so net spendable is restored immediately.
 
 Unilateral exit is more subtle: the **same sats** are tracked in different snapshot buckets as unroll progresses, while `unilateral_exit_in_progress_sats` stays stable for the UI “exit pipeline” line.
 
@@ -132,7 +132,7 @@ Unilateral exit is more subtle: the **same sats** are tracked in different snaps
 3. `reconcile_pending_exit_deductions` drops the pending unilateral record once the VTXO is no longer spendable.
 4. `exit_balance_components` counts the same amount from the **exiting** sub-bucket until on-chain completion (`is_spent`).
 
-Bitboard keeps the **exit line amount stable** across steps 1→4. Net spendable must not subtract `unilateral_exit_in_progress_sats` after step 2 — doing so double-counted the exit against unrelated VTXOs (e.g. a fresh boarding credit). Collaborative exit has no equivalent handoff: the field clears when operator sync removes the VTXOs from spendable entirely.
+Bitboard keeps the **exit line amount stable** across steps 1→4. Net spendable must not subtract `unilateral_exit_in_progress_sats` after step 2 — doing so double-counted the exit against unrelated VTXOs (e.g. a fresh boarding credit). Collaborative exit has no unroll handoff: the in-progress line comes from the open CollaborativeExit intent, then a Completed retain deduction until snapshot spendable drops; Cancel must not leave that line in place.
 
 Implementation touchpoints: `build_arkade_balance_dto` (WASM), `exit_balance_components` / `reconcile_pending_exit_deductions` (persistence), `arkade-exit-balance-optimistic.ts` (React Query cache).
 

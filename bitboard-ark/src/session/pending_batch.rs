@@ -1,4 +1,8 @@
+use std::cell::RefCell;
+use std::future::Future;
 use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
 
 use ark_client::{Blockchain, JoinBatchOutcome, RegisteredBatchIntent};
 use bitcoin::secp256k1::rand::rngs::OsRng;
@@ -11,14 +15,111 @@ use crate::api_types::{
 };
 use crate::error::ArkResult;
 use crate::persistence::{
-    PendingBatchIntentKind, PendingBatchIntentRecord, PendingBatchOutpointRecord,
-    SharedPersistenceDb,
+    JsonPersistenceDb, PendingBatchIntentKind, PendingBatchIntentLifecyclePhase,
+    PendingBatchIntentRecord, PendingBatchOutpointRecord, SharedPersistenceDb,
 };
 
 use super::ArkSession;
 use super::mappers::{
     current_unix_timestamp, is_past_arkd_cooperative_boarding_window, wasm_safe_now,
 };
+
+const BATCH_JOIN_ABORT_POLL: Duration = Duration::from_millis(50);
+
+#[derive(Debug, Clone)]
+struct BatchJoinContext {
+    kind: PendingBatchIntentKind,
+    amount_sats: u64,
+    destination_address: Option<String>,
+}
+
+thread_local! {
+    static BATCH_JOIN_CONTEXT: RefCell<Option<BatchJoinContext>> = const { RefCell::new(None) };
+    #[cfg(target_arch = "wasm32")]
+    static ON_INTENT_REGISTERED_JS: RefCell<Option<js_sys::Function>> =
+        const { RefCell::new(None) };
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn sleep_abort_poll() {
+    bitboard_wasm_sleep::sleep_for(BATCH_JOIN_ABORT_POLL).await;
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn sleep_abort_poll() {
+    tokio::time::sleep(BATCH_JOIN_ABORT_POLL).await;
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn set_on_intent_registered_js(callback: Option<js_sys::Function>) {
+    ON_INTENT_REGISTERED_JS.with(|slot| *slot.borrow_mut() = callback);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn set_on_intent_registered_js(_callback: Option<js_sys::Function>) {}
+
+pub(crate) fn install_intent_registered_hook(wallet_db: Arc<JsonPersistenceDb>) {
+    ark_client::set_on_intent_registered(Some(Box::new(move |intent| {
+        let wallet_db = Arc::clone(&wallet_db);
+        let intent = intent.clone();
+        Box::pin(async move {
+            persist_intent_from_join_context(&wallet_db, &intent);
+            notify_intent_registered_js(&intent).await;
+            Ok(())
+        })
+    })));
+}
+
+fn persist_intent_from_join_context(wallet_db: &JsonPersistenceDb, intent: &RegisteredBatchIntent) {
+    let Some(context) = BATCH_JOIN_CONTEXT.with(|slot| slot.borrow().clone()) else {
+        return;
+    };
+    let mut record = record_from_registered_intent(
+        context.kind,
+        intent,
+        context.amount_sats,
+        current_unix_timestamp(),
+    );
+    record.destination_address = context.destination_address;
+    record.lifecycle_phase = PendingBatchIntentLifecyclePhase::Processing;
+    wallet_db.upsert_pending_batch_intent(record);
+}
+
+async fn notify_intent_registered_js(_intent: &RegisteredBatchIntent) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let Some(callback) = ON_INTENT_REGISTERED_JS.with(|slot| slot.borrow().clone()) else {
+            return;
+        };
+        let Some(context) = BATCH_JOIN_CONTEXT.with(|slot| slot.borrow().clone()) else {
+            return;
+        };
+        let mut record = record_from_registered_intent(
+            context.kind,
+            _intent,
+            context.amount_sats,
+            current_unix_timestamp(),
+        );
+        record.destination_address = context.destination_address;
+        record.lifecycle_phase = PendingBatchIntentLifecyclePhase::Processing;
+        let dto = pending_batch_intent_to_dto(record);
+        let Ok(value) = serde_wasm_bindgen::to_value(&dto) else {
+            return;
+        };
+        let Ok(result) = callback.call1(&wasm_bindgen::JsValue::NULL, &value) else {
+            return;
+        };
+        if result.is_undefined() || result.is_null() {
+            return;
+        }
+        use wasm_bindgen::JsCast;
+        if !result.is_instance_of::<js_sys::Promise>() {
+            return;
+        }
+        let promise = js_sys::Promise::from(result);
+        let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
+    }
+}
 
 #[derive(Debug)]
 enum PendingBatchIntentResolution {
@@ -37,6 +138,9 @@ enum PendingIntentRetryDecision {
 
 impl ArkSession {
     pub(crate) fn pending_batch_intents_dto(&self) -> Vec<PendingBatchIntentDto> {
+        if !ark_client::is_batch_join_in_flight() {
+            let _ = self.wallet_db.promote_stranded_processing_intents();
+        }
         self.wallet_db
             .pending_batch_intents()
             .into_iter()
@@ -50,13 +154,91 @@ impl ArkSession {
         intent: &RegisteredBatchIntent,
         amount_sats: u64,
     ) {
-        self.wallet_db
-            .upsert_pending_batch_intent(record_from_registered_intent(
+        self.persist_registered_batch_intent_with_destination(kind, intent, amount_sats, None);
+    }
+
+    pub(crate) fn persist_registered_batch_intent_with_destination(
+        &self,
+        kind: PendingBatchIntentKind,
+        intent: &RegisteredBatchIntent,
+        amount_sats: u64,
+        destination_address: Option<String>,
+    ) {
+        let mut record =
+            record_from_registered_intent(kind, intent, amount_sats, current_unix_timestamp());
+        record.destination_address = destination_address;
+        record.lifecycle_phase = PendingBatchIntentLifecyclePhase::Processing;
+        self.wallet_db.upsert_pending_batch_intent(record);
+    }
+
+    pub(crate) fn stamp_registered_intent_timed_out(
+        &self,
+        intent: &RegisteredBatchIntent,
+        kind: PendingBatchIntentKind,
+        amount_sats: u64,
+        destination_address: Option<String>,
+    ) -> BatchJoinResultDto {
+        let onchain_records = intent
+            .onchain_outpoints
+            .iter()
+            .copied()
+            .map(outpoint_record)
+            .collect::<Vec<_>>();
+        let vtxo_records = intent
+            .vtxo_outpoints
+            .iter()
+            .copied()
+            .map(outpoint_record)
+            .collect::<Vec<_>>();
+        if !self
+            .wallet_db
+            .stamp_overlapping_pending_batch_intent_timed_out(&onchain_records, &vtxo_records)
+        {
+            let mut record =
+                record_from_registered_intent(kind, intent, amount_sats, current_unix_timestamp());
+            record.destination_address = destination_address;
+            record.lifecycle_phase = PendingBatchIntentLifecyclePhase::TimedOut;
+            self.wallet_db.upsert_pending_batch_intent(record);
+        }
+        waiting_join_result(
+            self.find_overlapping_pending_intent(&intent.onchain_outpoints, &intent.vtxo_outpoints)
+                .map(pending_batch_intent_to_dto),
+        )
+    }
+
+    pub(crate) async fn abort_in_flight_batch_join(&self) {
+        ark_client::set_batch_join_abort(true);
+        self.wait_until_batch_join_idle().await;
+    }
+
+    async fn wait_until_batch_join_idle(&self) {
+        while ark_client::is_batch_join_in_flight() {
+            sleep_abort_poll().await;
+        }
+    }
+
+    pub(crate) async fn with_batch_join<F, Fut, T>(
+        &self,
+        kind: PendingBatchIntentKind,
+        amount_sats: u64,
+        destination_address: Option<String>,
+        run: F,
+    ) -> T
+    where
+        F: FnOnce() -> Fut,
+        Fut: Future<Output = T>,
+    {
+        ark_client::set_batch_join_abort(false);
+        BATCH_JOIN_CONTEXT.with(|slot| {
+            *slot.borrow_mut() = Some(BatchJoinContext {
                 kind,
-                intent,
                 amount_sats,
-                current_unix_timestamp(),
-            ));
+                destination_address,
+            });
+        });
+        let result = run().await;
+        BATCH_JOIN_CONTEXT.with(|slot| *slot.borrow_mut() = None);
+        result
     }
 
     pub(crate) fn batch_join_waiting_result(
@@ -65,10 +247,7 @@ impl ArkSession {
         intent: &RegisteredBatchIntent,
         amount_sats: u64,
     ) -> BatchJoinResultDto {
-        persist_and_waiting_join_result(
-            &self.wallet_db,
-            record_from_registered_intent(kind, intent, amount_sats, current_unix_timestamp()),
-        )
+        self.stamp_registered_intent_timed_out(intent, kind, amount_sats, None)
     }
 
     pub(crate) fn batch_join_duplicated_input_result(
@@ -161,6 +340,7 @@ impl ArkSession {
         &self,
         params: PendingBatchIntentActionParams,
     ) -> ArkResult<BatchJoinResultDto> {
+        self.abort_in_flight_batch_join().await;
         let Some(record) = self.find_exact_pending_intent(&params) else {
             return Ok(completed_without_txid());
         };
@@ -193,10 +373,16 @@ impl ArkSession {
         {
             Ok(()) => {
                 self.drop_pending_intent_record(&record);
+                if should_clear_collaborative_exit_deduction_on_cancel(record.kind, &resolution) {
+                    self.clear_pending_collaborative_exit_deduction();
+                }
                 Ok(completed_without_txid())
             }
-            Err(error) if error.is_intent_not_found() => {
+            Err(error) if error.is_idempotent_intent_delete_miss() => {
                 self.drop_pending_intent_record(&record);
+                if should_clear_collaborative_exit_deduction_on_cancel(record.kind, &resolution) {
+                    self.clear_pending_collaborative_exit_deduction();
+                }
                 Ok(completed_without_txid())
             }
             Err(error) => Err(error.into()),
@@ -207,6 +393,7 @@ impl ArkSession {
         &self,
         params: PendingBatchIntentActionParams,
     ) -> ArkResult<BatchJoinResultDto> {
+        self.abort_in_flight_batch_join().await;
         let Some(record) = self.find_exact_pending_intent(&params) else {
             return Ok(completed_without_txid());
         };
@@ -420,11 +607,14 @@ impl ArkSession {
             | PendingBatchIntentKind::Recover
             | PendingBatchIntentKind::Renew => {
                 let mut rng = OsRng;
-                match self
-                    .client
-                    .settle_vtxos(&mut rng, &vtxo_outpoints, &onchain_outpoints)
-                    .await
-                {
+                let settle = self
+                    .with_batch_join(record.kind, record.amount_sats, None, || async {
+                        self.client
+                            .settle_vtxos(&mut rng, &vtxo_outpoints, &onchain_outpoints)
+                            .await
+                    })
+                    .await;
+                match settle {
                     Ok(Some(outcome)) => {
                         self.map_settle_outcome(
                             record.kind,
@@ -554,6 +744,7 @@ pub(crate) fn record_from_registered_intent(
         amount_sats,
         registered_at,
         destination_address: None,
+        lifecycle_phase: PendingBatchIntentLifecyclePhase::Processing,
     }
 }
 
@@ -575,6 +766,8 @@ pub(crate) fn pending_batch_intent_to_dto(
             .into_iter()
             .map(outpoint_dto)
             .collect(),
+        lifecycle_phase: pending_batch_intent_lifecycle_phase_label(record.lifecycle_phase)
+            .to_string(),
     }
 }
 
@@ -590,8 +783,9 @@ pub(crate) fn waiting_join_result(
 
 pub(crate) fn persist_and_waiting_join_result(
     db: &crate::persistence::JsonPersistenceDb,
-    record: PendingBatchIntentRecord,
+    mut record: PendingBatchIntentRecord,
 ) -> BatchJoinResultDto {
+    record.lifecycle_phase = PendingBatchIntentLifecyclePhase::TimedOut;
     db.upsert_pending_batch_intent(record.clone());
     waiting_join_result(Some(pending_batch_intent_to_dto(record)))
 }
@@ -618,6 +812,7 @@ fn duplicated_input_waiting_record(
         amount_sats,
         registered_at: current_unix_timestamp(),
         destination_address: None,
+        lifecycle_phase: PendingBatchIntentLifecyclePhase::TimedOut,
     }
 }
 
@@ -628,6 +823,15 @@ pub(crate) fn pending_batch_intent_kind_label(kind: PendingBatchIntentKind) -> &
         PendingBatchIntentKind::Renew => "renew",
         PendingBatchIntentKind::CollaborativeExit => "collaborative_exit",
         PendingBatchIntentKind::Migrate => "migrate",
+    }
+}
+
+fn pending_batch_intent_lifecycle_phase_label(
+    phase: PendingBatchIntentLifecyclePhase,
+) -> &'static str {
+    match phase {
+        PendingBatchIntentLifecyclePhase::Processing => "processing",
+        PendingBatchIntentLifecyclePhase::TimedOut => "timed_out",
     }
 }
 
@@ -668,6 +872,14 @@ const BOARDING_REREGISTER_WHILE_INTENT_LIVE: &str = "A boarding intent is alread
 
 fn should_delete_operator_intent_on_cancel(resolution: &PendingBatchIntentResolution) -> bool {
     matches!(resolution, PendingBatchIntentResolution::StillPending)
+}
+
+fn should_clear_collaborative_exit_deduction_on_cancel(
+    kind: PendingBatchIntentKind,
+    resolution: &PendingBatchIntentResolution,
+) -> bool {
+    kind == PendingBatchIntentKind::CollaborativeExit
+        && should_delete_operator_intent_on_cancel(resolution)
 }
 
 fn pending_intent_retry_decision(
@@ -786,6 +998,7 @@ mod tests {
         );
         assert!(!arkd.is_intent_not_found());
         assert!(arkd.is_intent_proof_no_operator_match());
+        assert!(arkd.is_idempotent_intent_delete_miss());
     }
 
     #[test]
@@ -801,6 +1014,7 @@ mod tests {
             amount_sats: 50_000,
             registered_at: 1,
             destination_address: None,
+            lifecycle_phase: PendingBatchIntentLifecyclePhase::TimedOut,
         };
         assert!(is_boarding_only_pending_record(&boarding));
 
@@ -827,6 +1041,7 @@ mod tests {
             amount_sats: 50_000,
             registered_at: current_unix_timestamp(),
             destination_address: None,
+            lifecycle_phase: PendingBatchIntentLifecyclePhase::TimedOut,
         };
         assert!(should_refuse_boarding_reregister(&fresh));
 
@@ -858,6 +1073,24 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn cancel_clears_collaborative_exit_deduction_only_while_intent_still_pending() {
+        assert!(should_clear_collaborative_exit_deduction_on_cancel(
+            PendingBatchIntentKind::CollaborativeExit,
+            &PendingBatchIntentResolution::StillPending,
+        ));
+        assert!(!should_clear_collaborative_exit_deduction_on_cancel(
+            PendingBatchIntentKind::CollaborativeExit,
+            &PendingBatchIntentResolution::Spent {
+                spend_txid: "commitment".into(),
+            },
+        ));
+        assert!(!should_clear_collaborative_exit_deduction_on_cancel(
+            PendingBatchIntentKind::Recover,
+            &PendingBatchIntentResolution::StillPending,
+        ));
+    }
+
     fn sample_vtxo_pending_record() -> PendingBatchIntentRecord {
         PendingBatchIntentRecord {
             kind: PendingBatchIntentKind::Recover,
@@ -870,6 +1103,7 @@ mod tests {
             amount_sats: 12_000,
             registered_at: 1,
             destination_address: None,
+            lifecycle_phase: PendingBatchIntentLifecyclePhase::TimedOut,
         }
     }
 
@@ -885,6 +1119,7 @@ mod tests {
             amount_sats: 50_000,
             registered_at,
             destination_address: None,
+            lifecycle_phase: PendingBatchIntentLifecyclePhase::TimedOut,
         }
     }
 
@@ -988,6 +1223,7 @@ mod tests {
             amount_sats: 50_000,
             registered_at: 1,
             destination_address: None,
+            lifecycle_phase: PendingBatchIntentLifecyclePhase::TimedOut,
         };
         let result = waiting_join_result(Some(pending_batch_intent_to_dto(record)));
         assert_eq!(result.status, BATCH_JOIN_STATUS_WAITING);
@@ -1018,6 +1254,7 @@ mod tests {
             amount_sats: 1,
             registered_at: 1,
             destination_address: None,
+            lifecycle_phase: PendingBatchIntentLifecyclePhase::TimedOut,
         };
         let recover_outpoint = outpoint_record(sample_outpoint(0xbb, 0));
         assert!(!pending_record_overlaps_outpoints(
@@ -1052,6 +1289,7 @@ mod tests {
             amount_sats: 12_000,
             registered_at: 1,
             destination_address: None,
+            lifecycle_phase: PendingBatchIntentLifecyclePhase::TimedOut,
         }
     }
 
@@ -1128,6 +1366,7 @@ mod tests {
             amount_sats: 50_000,
             registered_at: 1_700_000_000,
             destination_address: None,
+            lifecycle_phase: PendingBatchIntentLifecyclePhase::TimedOut,
         };
         let dto = crate::api_types::BoardingStatusDto {
             boarding_address: "tb1qboarding".into(),
@@ -1146,6 +1385,53 @@ mod tests {
             json["pendingBatchIntents"][0]["onchainOutpoints"][0]["vout"],
             1
         );
+        assert_eq!(
+            json["pendingBatchIntents"][0]["lifecyclePhase"],
+            "timed_out"
+        );
+    }
+
+    #[test]
+    fn record_from_registered_intent_starts_in_processing() {
+        let intent = RegisteredBatchIntent {
+            intent_id: "intent-1".into(),
+            onchain_outpoints: vec![sample_outpoint(0x11, 1)],
+            vtxo_outpoints: vec![],
+        };
+        let record =
+            record_from_registered_intent(PendingBatchIntentKind::Board, &intent, 50_000, 10);
+        assert_eq!(
+            record.lifecycle_phase,
+            PendingBatchIntentLifecyclePhase::Processing
+        );
+    }
+
+    #[test]
+    fn persist_and_waiting_stamps_timed_out() {
+        let db = crate::persistence::JsonPersistenceDb::default();
+        let mut record =
+            sample_pending_record(PendingBatchIntentKind::Recover, "recover", None, Some(0));
+        record.lifecycle_phase = PendingBatchIntentLifecyclePhase::Processing;
+        persist_and_waiting_join_result(&db, record);
+        assert_eq!(
+            db.pending_batch_intents()[0].lifecycle_phase,
+            PendingBatchIntentLifecyclePhase::TimedOut
+        );
+    }
+
+    #[test]
+    fn promote_stranded_processing_intents_stamps_timed_out() {
+        let db = crate::persistence::JsonPersistenceDb::default();
+        let mut record =
+            sample_pending_record(PendingBatchIntentKind::Board, "board", Some(1), None);
+        record.lifecycle_phase = PendingBatchIntentLifecyclePhase::Processing;
+        db.upsert_pending_batch_intent(record);
+        assert!(db.promote_stranded_processing_intents());
+        assert_eq!(
+            db.pending_batch_intents()[0].lifecycle_phase,
+            PendingBatchIntentLifecyclePhase::TimedOut
+        );
+        assert!(!db.promote_stranded_processing_intents());
     }
 
     #[test]
@@ -1159,6 +1445,7 @@ mod tests {
             amount_sats: 12_000,
             registered_at: 1,
             destination_address: None,
+            lifecycle_phase: PendingBatchIntentLifecyclePhase::TimedOut,
         };
         let snapshot = crate::persistence::OffchainVtxoSnapshot {
             synced_at: 1,

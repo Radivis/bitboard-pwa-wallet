@@ -170,6 +170,12 @@ impl Error {
             .to_ascii_lowercase()
             .contains("no matching intents found for intent proof")
     }
+
+    /// `deleteIntent` is idempotent: the operator may already have dropped the intent
+    /// (expired, selected into a live round, or no cache row for the proven outpoints).
+    pub fn is_idempotent_intent_delete_miss(&self) -> bool {
+        self.is_intent_not_found() || self.is_intent_proof_no_operator_match()
+    }
 }
 
 impl Kind {
@@ -453,5 +459,13 @@ mod tests {
         );
         assert!(err.is_intent_proof_no_operator_match());
         assert!(!err.is_intent_not_found());
+        assert!(err.is_idempotent_intent_delete_miss());
+    }
+
+    #[test]
+    fn idempotent_intent_delete_miss_includes_intent_not_found() {
+        let err = Error::ad_hoc("delete intent failed: intent not found");
+        assert!(err.is_idempotent_intent_delete_miss());
+        assert!(!Error::ad_hoc("duplicated input").is_idempotent_intent_delete_miss());
     }
 }

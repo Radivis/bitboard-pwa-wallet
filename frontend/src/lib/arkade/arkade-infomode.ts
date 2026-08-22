@@ -83,10 +83,18 @@ export const ARKADE_BALANCE_RECOVERABLE_PENDING_OPERATOR_SWEEP_INFOMODE = {
   text: 'These VTXOs expired on your device clock, but the operator has not swept them yet. Batch recovery is not available until the operator marks them swept. They are still part of your balance and should become recoverable automatically after the operator sweep.',
 } as const
 
-export const ARKADE_PENDING_BATCH_INTENT_BANNER_INFOMODE = {
-  title: 'Waiting for Arkade operator',
-  text: 'Your intent is already registered with the operator. Bitboard will not register those same coins again while that registration is still live — re-registering mid-round can make the operator fail with missing confirmations. Cancel withdraws VTXO intents when the operator supports it; boarding Cancel may need to wait for expiry. Retry waits for expiry on boarding, then registers again.',
+export const ARKADE_PENDING_BATCH_INTENT_PROCESSING_INFOMODE = {
+  title: 'Processing Arkade intent',
+  text: 'The operator accepted your intent and is running the batch round. The spinner on this banner means Bitboard is still waiting for that round to finish. Cancel stops a VTXO intent (recover, renew, collaborative exit, or migrate). Boarding has no Cancel because the operator cannot match boarding inputs to deleteIntent.',
 } as const
+
+export const ARKADE_PENDING_BATCH_INTENT_TIMED_OUT_INFOMODE = {
+  title: 'Waiting for Arkade operator',
+  text: 'Your intent is still registered, but the batch round timed out before it completed. Bitboard will not register those same coins again while that registration is live. Cancel withdraws VTXO intents when the operator supports it. Boarding has no Cancel because the operator cannot match boarding inputs to deleteIntent. Retry is available for VTXOs immediately, and for boarding after the register cooldown.',
+} as const
+
+export const ARKADE_PENDING_BATCH_INTENT_BANNER_INFOMODE =
+  ARKADE_PENDING_BATCH_INTENT_TIMED_OUT_INFOMODE
 
 export const ARKADE_RECOVERABLE_VTXO_BANNER_INFOMODE = {
   title: 'Recoverable now',

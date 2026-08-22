@@ -320,6 +320,7 @@ pub struct PendingBatchIntentDto {
     pub registered_at: i64,
     pub onchain_outpoints: Vec<PendingBatchOutpointDto>,
     pub vtxo_outpoints: Vec<PendingBatchOutpointDto>,
+    pub lifecycle_phase: String,
 }
 
 #[derive(Debug, Deserialize)]

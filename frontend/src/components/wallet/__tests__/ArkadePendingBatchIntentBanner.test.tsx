@@ -6,10 +6,31 @@ import { ArkadeRecoverableVtxoBanner } from '@/components/wallet/ArkadeRecoverab
 import { ArkadeBoardPage } from '@/pages/wallet/ArkadeBoardPage'
 import { ArkadePanel } from '@/components/wallet/ArkadePanel'
 import type { ArkadePendingBatchIntent } from '@/workers/arkade-api'
+import {
+  markPendingBatchIntentCancelled,
+  resetPendingBatchIntentSessionTracking,
+} from '@/lib/arkade/arkade-pending-batch-intent'
 
 const pendingIntentsRef = vi.hoisted(() => ({
   current: [] as ArkadePendingBatchIntent[],
 }))
+const onboardMutationRef = vi.hoisted(() => ({ isPending: false }))
+const recoverMutationRef = vi.hoisted(() => ({ isPending: false }))
+const renewMutationRef = vi.hoisted(() => ({ isPending: false }))
+const boardingAddressQueryRef = vi.hoisted(() => ({
+  data: 'tb1qboarding' as string | undefined,
+  isPending: false,
+  isFetching: false,
+  isError: false,
+  error: null as Error | null,
+}))
+const boardingStatusQueryRef = vi.hoisted(() => ({
+  boardingAddress: 'tb1qboarding' as string | undefined,
+  isPending: false,
+  isFetching: false,
+}))
+const toastSuccess = vi.hoisted(() => vi.fn())
+const toastMessage = vi.hoisted(() => vi.fn())
 
 const samplePendingIntent: ArkadePendingBatchIntent = {
   kind: 'board',
@@ -18,6 +39,7 @@ const samplePendingIntent: ArkadePendingBatchIntent = {
   registeredAt: 1_700_000_000,
   onchainOutpoints: [{ txid: 'aa'.repeat(32), vout: 1 }],
   vtxoOutpoints: [],
+  lifecyclePhase: 'timed_out',
 }
 
 const sampleRecoverIntent: ArkadePendingBatchIntent = {
@@ -27,7 +49,26 @@ const sampleRecoverIntent: ArkadePendingBatchIntent = {
   registeredAt: 1_700_000_001,
   onchainOutpoints: [],
   vtxoOutpoints: [{ txid: 'bb'.repeat(32), vout: 0 }],
+  lifecyclePhase: 'timed_out',
 }
+
+const processingBoardIntent: ArkadePendingBatchIntent = {
+  ...samplePendingIntent,
+  lifecyclePhase: 'processing',
+}
+
+const processingRecoverIntent: ArkadePendingBatchIntent = {
+  ...sampleRecoverIntent,
+  lifecyclePhase: 'processing',
+}
+
+vi.mock('sonner', () => ({
+  toast: {
+    success: (...args: unknown[]) => toastSuccess(...args),
+    message: (...args: unknown[]) => toastMessage(...args),
+    error: vi.fn(),
+  },
+}))
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
@@ -51,15 +92,21 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
     pendingIntentsRef.current.some((intent) => intent.kind === kind),
   useArkadeCancelPendingBatchIntentMutation: () => ({ mutate: vi.fn(), isPending: false }),
   useArkadeRetryPendingBatchIntentMutation: () => ({ mutate: vi.fn(), isPending: false }),
-  useArkadeOnboardMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  useArkadeOnboardMutation: () => ({ mutate: vi.fn(), isPending: onboardMutationRef.isPending }),
   useArkadeBoardingAddressQuery: () => ({
-    isLoading: false,
-    data: 'tb1qboarding',
+    isLoading: boardingAddressQueryRef.isPending && boardingAddressQueryRef.isFetching,
+    isPending: boardingAddressQueryRef.isPending,
+    isFetching: boardingAddressQueryRef.isFetching,
+    isError: boardingAddressQueryRef.isError,
+    error: boardingAddressQueryRef.error,
+    data: boardingAddressQueryRef.data,
   }),
   useArkadeBoardingStatusQuery: () => ({
-    isLoading: false,
+    isLoading: boardingStatusQueryRef.isPending && boardingStatusQueryRef.isFetching,
+    isPending: boardingStatusQueryRef.isPending,
+    isFetching: boardingStatusQueryRef.isFetching,
     data: {
-      boardingAddress: 'tb1qboarding',
+      boardingAddress: boardingStatusQueryRef.boardingAddress,
       trackedAddresses: ['tb1qboarding'],
       spendableSats: 50_000,
       pendingSats: 0,
@@ -95,12 +142,12 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
   }),
   useArkadeRecoverRecoverableVtxosMutation: () => ({
     mutate: vi.fn(),
-    isPending: false,
+    isPending: recoverMutationRef.isPending,
   }),
   useArkadeAutonomousModeActive: () => false,
   useArkadeAddressQuery: () => ({ data: 'tark1qtest', isLoading: false }),
   useArkadeDelegateInfoQuery: () => ({ data: null }),
-  useArkadeRenewMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  useArkadeRenewMutation: () => ({ mutate: vi.fn(), isPending: renewMutationRef.isPending }),
   useArkadeVtxoExpiryQuery: () => ({
     isLoading: false,
     data: { earliestExpiresAt: null, expiringSoonCount: 0 },
@@ -156,6 +203,10 @@ vi.mock('@/hooks/useRailManualSyncMutations', () => ({
   useArkadeManualSyncMutation: () => ({ mutate: vi.fn(), isPending: false }),
 }))
 
+vi.mock('@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator', () => ({
+  orchestrateArkadeRetryLoad: vi.fn(),
+}))
+
 vi.mock('@/components/wallet/ArkadeExitSection', () => ({
   ArkadeExitSection: () => <div data-testid="exit-section" />,
 }))
@@ -188,6 +239,20 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
 describe('ArkadePendingBatchIntentBanner', () => {
   beforeEach(() => {
     pendingIntentsRef.current = []
+    onboardMutationRef.isPending = false
+    recoverMutationRef.isPending = false
+    renewMutationRef.isPending = false
+    boardingAddressQueryRef.data = 'tb1qboarding'
+    boardingAddressQueryRef.isPending = false
+    boardingAddressQueryRef.isFetching = false
+    boardingAddressQueryRef.isError = false
+    boardingAddressQueryRef.error = null
+    boardingStatusQueryRef.boardingAddress = 'tb1qboarding'
+    boardingStatusQueryRef.isPending = false
+    boardingStatusQueryRef.isFetching = false
+    toastSuccess.mockClear()
+    toastMessage.mockClear()
+    resetPendingBatchIntentSessionTracking()
   })
 
   it('hides the banner when no pending intent exists', () => {
@@ -197,11 +262,23 @@ describe('ArkadePendingBatchIntentBanner', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('banners_render_one_card_per_intent_with_cancel_retry', () => {
+  it('phase2_processing_banner_hides_boarding_actions_and_shows_recover_cancel_retry', () => {
+    pendingIntentsRef.current = [processingBoardIntent, processingRecoverIntent]
+    renderWithProviders(<ArkadePendingBatchIntentBanner />)
+    expect(screen.getAllByTestId('arkade-pending-batch-intent-banner')).toHaveLength(2)
+    expect(screen.getAllByTestId('arkade-pending-batch-intent-processing-spinner')).toHaveLength(2)
+    expect(screen.getAllByText(/The Arkade server is processing your/)).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: 'Cancel' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: 'Retry' })).toHaveLength(1)
+  })
+
+  it('phase3_timed_out_banner_shows_boarding_retry_without_cancel', () => {
     pendingIntentsRef.current = [samplePendingIntent, sampleRecoverIntent]
     renderWithProviders(<ArkadePendingBatchIntentBanner />)
     expect(screen.getAllByTestId('arkade-pending-batch-intent-banner')).toHaveLength(2)
-    expect(screen.getAllByRole('button', { name: 'Cancel' })).toHaveLength(2)
+    expect(screen.getAllByTestId('arkade-pending-batch-intent-timed-out-icon')).toHaveLength(2)
+    expect(screen.getAllByText('Waiting for Arkade operator')).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: 'Cancel' })).toHaveLength(1)
     expect(screen.getAllByRole('button', { name: 'Retry' })).toHaveLength(2)
   })
 
@@ -233,7 +310,103 @@ describe('ArkadePendingBatchIntentBanner', () => {
     expect(screen.getByRole('button', { name: 'Settle boarding UTXO' })).toBeDisabled()
     expect(screen.getAllByRole('button', { name: 'Recover now' })[0]).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Renew VTXOs now' })).toBeEnabled()
-    expect(screen.getAllByRole('button', { name: 'Cancel' }).length).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'Retry' }).length).toBeGreaterThan(0)
+  })
+
+  it('submit_spinner_only_in_phase1', () => {
+    onboardMutationRef.isPending = true
+    recoverMutationRef.isPending = true
+    renewMutationRef.isPending = true
+    renderWithProviders(
+      <>
+        <ArkadeBoardPage />
+        <ArkadeRecoverableVtxoBanner />
+        <ArkadePanel />
+      </>,
+    )
+    expect(screen.getByRole('button', { name: 'Settling…' })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Recovering…' })[0]).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Renewing…' })).toBeInTheDocument()
+  })
+
+  it('submit_spinner_clears_once_processing_record_exists', () => {
+    onboardMutationRef.isPending = true
+    recoverMutationRef.isPending = true
+    pendingIntentsRef.current = [processingBoardIntent, processingRecoverIntent]
+    renderWithProviders(
+      <>
+        <ArkadeBoardPage />
+        <ArkadeRecoverableVtxoBanner />
+      </>,
+    )
+    expect(screen.getByRole('button', { name: 'Settle boarding UTXO' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Settling…' })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Recover now' })[0]).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Recovering…' })).not.toBeInTheDocument()
+  })
+
+  it('toasts_kind_specific_success_when_pending_record_clears', () => {
+    pendingIntentsRef.current = [processingRecoverIntent]
+    const { rerender } = renderWithProviders(<ArkadePendingBatchIntentBanner />)
+    pendingIntentsRef.current = []
+    rerender(<ArkadePendingBatchIntentBanner />)
+    expect(toastSuccess).toHaveBeenCalledWith('Recoverable VTXOs settled')
+    expect(toastMessage).not.toHaveBeenCalled()
+  })
+
+  it('cancel_does_not_toast_success', () => {
+    pendingIntentsRef.current = [processingRecoverIntent]
+    const { rerender } = renderWithProviders(<ArkadePendingBatchIntentBanner />)
+    markPendingBatchIntentCancelled(processingRecoverIntent)
+    pendingIntentsRef.current = []
+    rerender(<ArkadePendingBatchIntentBanner />)
+    expect(toastSuccess).not.toHaveBeenCalled()
+    expect(toastMessage).toHaveBeenCalledWith('Intent cancelled')
+  })
+})
+
+describe('ArkadeBoardPage boarding address', () => {
+  beforeEach(() => {
+    pendingIntentsRef.current = []
+    onboardMutationRef.isPending = false
+    boardingAddressQueryRef.data = 'tb1qboarding'
+    boardingAddressQueryRef.isPending = false
+    boardingAddressQueryRef.isFetching = false
+    boardingAddressQueryRef.isError = false
+    boardingAddressQueryRef.error = null
+    boardingStatusQueryRef.boardingAddress = 'tb1qboarding'
+    boardingStatusQueryRef.isPending = false
+    boardingStatusQueryRef.isFetching = false
+  })
+
+  it('shows loading while the boarding address query is pending', () => {
+    boardingAddressQueryRef.data = undefined
+    boardingAddressQueryRef.isPending = true
+    boardingStatusQueryRef.boardingAddress = undefined
+    renderWithProviders(<ArkadeBoardPage />)
+    expect(screen.getByText('Loading boarding address…')).toBeInTheDocument()
+    expect(screen.queryByTestId('arkade-boarding-address')).not.toBeInTheDocument()
+  })
+
+  it('falls back to boarding status address when the address query is empty', () => {
+    boardingAddressQueryRef.data = undefined
+    boardingStatusQueryRef.boardingAddress = 'tb1qstatusboarding'
+    renderWithProviders(<ArkadeBoardPage />)
+    expect(screen.getByTestId('arkade-boarding-address')).toHaveTextContent(
+      'tb1qstatusboarding',
+    )
+    expect(screen.getByRole('button', { name: 'Copy boarding address' })).toBeEnabled()
+  })
+
+  it('shows an error instead of an empty address box', () => {
+    boardingAddressQueryRef.data = undefined
+    boardingAddressQueryRef.isError = true
+    boardingAddressQueryRef.error = new Error('operator unreachable')
+    boardingStatusQueryRef.boardingAddress = undefined
+    renderWithProviders(<ArkadeBoardPage />)
+    expect(screen.getByText(/Could not load boarding address/)).toBeInTheDocument()
+    expect(screen.getByText(/operator unreachable/)).toBeInTheDocument()
+    expect(screen.queryByTestId('arkade-boarding-address')).not.toBeInTheDocument()
   })
 })

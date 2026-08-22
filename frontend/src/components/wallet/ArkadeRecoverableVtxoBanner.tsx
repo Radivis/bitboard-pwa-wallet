@@ -13,6 +13,7 @@ import {
   useArkadeRecoverRecoverableVtxosMutation,
   useArkadeRecoverableVtxoFeeQuery,
 } from '@/hooks/useArkadeQueries'
+import { isIntentSubmitPhase1 } from '@/lib/arkade/arkade-pending-batch-intent'
 
 export function ArkadeRecoverableVtxoBanner() {
   const autonomousModeActive = useArkadeAutonomousModeActive()
@@ -25,6 +26,10 @@ export function ArkadeRecoverableVtxoBanner() {
     enabled: recoverableVtxoCount > 0,
   })
   const recoverMutation = useArkadeRecoverRecoverableVtxosMutation()
+  const recoverSubmitPhase1 = isIntentSubmitPhase1({
+    mutationPending: recoverMutation.isPending,
+    pendingForAction: hasPendingRecoverIntent,
+  })
 
   if (recoverableVtxoCount <= 0) {
     return null
@@ -90,7 +95,7 @@ export function ArkadeRecoverableVtxoBanner() {
             }
             onClick={() => recoverMutation.mutate()}
           >
-            {recoverMutation.isPending ? (
+            {recoverSubmitPhase1 ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
                 Recovering…

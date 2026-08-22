@@ -27,6 +27,7 @@ import {
   useArkadeRenewMutation,
   useHasPendingBatchIntentKind,
 } from '@/hooks/useArkadeQueries'
+import { isIntentSubmitPhase1 } from '@/lib/arkade/arkade-pending-batch-intent'
 import {
   useArkadeLoadLifecycleSnapshot,
   useArkadeRailSnapshot,
@@ -56,6 +57,10 @@ export function ArkadePanel() {
   const delegateQuery = useArkadeDelegateInfoQuery()
   const renewMutation = useArkadeRenewMutation()
   const hasPendingRenewIntent = useHasPendingBatchIntentKind('renew')
+  const renewSubmitPhase1 = isIntentSubmitPhase1({
+    mutationPending: renewMutation.isPending,
+    pendingForAction: hasPendingRenewIntent,
+  })
   const addressQuery = useArkadeAddressQuery()
   const arkadeRail = useArkadeRailSnapshot()
   const arkadeLoadSnapshot = useArkadeLoadLifecycleSnapshot()
@@ -186,7 +191,14 @@ export function ArkadePanel() {
               }
               onClick={() => renewMutation.mutate()}
             >
-              Renew VTXOs now
+              {renewSubmitPhase1 ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                  Renewing…
+                </>
+              ) : (
+                'Renew VTXOs now'
+              )}
             </Button>
           </InfomodeWrapper>
         </div>

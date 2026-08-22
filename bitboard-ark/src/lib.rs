@@ -113,6 +113,28 @@ where
     to_js_value(with_session_async(run).await?)
 }
 
+struct OnIntentRegisteredJsGuard;
+
+impl Drop for OnIntentRegisteredJsGuard {
+    fn drop(&mut self) {
+        crate::session::pending_batch::set_on_intent_registered_js(None);
+    }
+}
+
+async fn export_batch_join_json<T, F, Fut>(
+    on_registered: js_sys::Function,
+    run: F,
+) -> ArkResult<JsValue>
+where
+    T: serde::Serialize,
+    F: FnOnce(Rc<ArkSession>) -> Fut,
+    Fut: Future<Output = ArkResult<T>>,
+{
+    crate::session::pending_batch::set_on_intent_registered_js(Some(on_registered));
+    let _clear = OnIntentRegisteredJsGuard;
+    export_session_json(run).await
+}
+
 fn clear_active_session() -> ArkResult<()> {
     ACTIVE_SESSION.with(|session_cell| {
         let mut session_borrow_mut = session_cell
@@ -246,8 +268,12 @@ pub async fn ark_review_operator_config_in_autonomous_mode() -> Result<(), JsVal
 }
 
 #[wasm_bindgen]
-pub async fn ark_migrate_deprecated_signer_vtxos() -> Result<JsValue, JsValue> {
+pub async fn ark_migrate_deprecated_signer_vtxos(
+    on_registered: js_sys::Function,
+) -> Result<JsValue, JsValue> {
     map_js_async(async {
+        crate::session::pending_batch::set_on_intent_registered_js(Some(on_registered));
+        let _clear = OnIntentRegisteredJsGuard;
         let result =
             with_session_async(
                 |session| async move { session.migrate_deprecated_signer_vtxos().await },
@@ -359,9 +385,12 @@ pub async fn ark_get_vtxo_expiry_status() -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub async fn ark_renew_vtxos_now() -> Result<JsValue, JsValue> {
+pub async fn ark_renew_vtxos_now(on_registered: js_sys::Function) -> Result<JsValue, JsValue> {
     map_js_async(async {
-        export_session_json(|session| async move { session.renew_vtxos_now().await }).await
+        export_batch_join_json(on_registered, |session| async move {
+            session.renew_vtxos_now().await
+        })
+        .await
     })
     .await
 }
@@ -384,9 +413,14 @@ pub async fn ark_finalize_pending_transactions() -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub async fn ark_onboard_boarded_utxos() -> Result<JsValue, JsValue> {
+pub async fn ark_onboard_boarded_utxos(
+    on_registered: js_sys::Function,
+) -> Result<JsValue, JsValue> {
     map_js_async(async {
-        export_session_json(|session| async move { session.onboard_boarded_utxos().await }).await
+        export_batch_join_json(on_registered, |session| async move {
+            session.onboard_boarded_utxos().await
+        })
+        .await
     })
     .await
 }
@@ -401,10 +435,14 @@ pub async fn ark_get_recoverable_vtxo_fee_estimate() -> Result<JsValue, JsValue>
 }
 
 #[wasm_bindgen]
-pub async fn ark_recover_recoverable_vtxos() -> Result<JsValue, JsValue> {
+pub async fn ark_recover_recoverable_vtxos(
+    on_registered: js_sys::Function,
+) -> Result<JsValue, JsValue> {
     map_js_async(async {
-        export_session_json(|session| async move { session.recover_recoverable_vtxos().await })
-            .await
+        export_batch_join_json(on_registered, |session| async move {
+            session.recover_recoverable_vtxos().await
+        })
+        .await
     })
     .await
 }
@@ -422,12 +460,27 @@ pub async fn ark_cancel_pending_batch_intent(params: JsValue) -> Result<JsValue,
 }
 
 #[wasm_bindgen]
-pub async fn ark_retry_pending_batch_intent(params: JsValue) -> Result<JsValue, JsValue> {
+pub async fn ark_retry_pending_batch_intent(
+    params: JsValue,
+    on_registered: js_sys::Function,
+) -> Result<JsValue, JsValue> {
     map_js_async(async {
         let params: PendingBatchIntentActionParams = serde_wasm_bindgen::from_value(params)?;
-        export_session_json(
-            |session| async move { session.retry_pending_batch_intent(params).await },
-        )
+        export_batch_join_json(on_registered, |session| async move {
+            session.retry_pending_batch_intent(params).await
+        })
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_abort_in_flight_batch_join() -> Result<(), JsValue> {
+    map_js_async(async {
+        with_session_async(|session| async move {
+            session.abort_in_flight_batch_join().await;
+            Ok(())
+        })
         .await
     })
     .await
@@ -469,10 +522,16 @@ pub async fn ark_get_onchain_bumper_info() -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub async fn ark_collaborative_exit(params: JsValue) -> Result<JsValue, JsValue> {
+pub async fn ark_collaborative_exit(
+    params: JsValue,
+    on_registered: js_sys::Function,
+) -> Result<JsValue, JsValue> {
     map_js_async(async {
         let params: CollaborativeExitParams = serde_wasm_bindgen::from_value(params)?;
-        export_session_json(|session| async move { session.collaborative_exit(params).await }).await
+        export_batch_join_json(on_registered, |session| async move {
+            session.collaborative_exit(params).await
+        })
+        .await
     })
     .await
 }

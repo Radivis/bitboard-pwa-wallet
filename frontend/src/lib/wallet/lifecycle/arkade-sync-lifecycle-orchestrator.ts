@@ -29,7 +29,11 @@ import type {
   ArkadeSyncThenSaveParams,
 } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-types'
 import type { ArkadeSaveParams } from '@/lib/wallet/lifecycle/arkade-save-lifecycle-types'
-import type { ArkadeOperatorSyncResult, ArkadeSignerMigrationResult } from '@/workers/arkade-api'
+import type {
+  ArkadeOperatorSyncResult,
+  ArkadePendingBatchIntent,
+  ArkadeSignerMigrationResult,
+} from '@/workers/arkade-api'
 import {
   arkadeOperatorConfigDiffQueryKey,
   arkadeOperatorTrustStatusQueryKey,
@@ -118,9 +122,11 @@ function toSaveParams(params: ArkadeSyncParams): ArkadeSaveParams {
   }
 }
 
-async function runArkadeSignerMigrationBody(): Promise<ArkadeSignerMigrationResult> {
+async function runArkadeSignerMigrationBody(
+  onIntentRegistered?: (intent: ArkadePendingBatchIntent) => void,
+): Promise<ArkadeSignerMigrationResult> {
   const worker = getArkadeWorker()
-  return worker.migrateDeprecatedSignerVtxos()
+  return worker.migrateDeprecatedSignerVtxos(onIntentRegistered)
 }
 
 function mergeArkadeSyncWarningMessages(
@@ -292,7 +298,9 @@ export async function orchestrateArkadeSyncThenSave(
 
         try {
           if (params.syncKind === 'signerMigration') {
-            const migrationResult = await runArkadeSignerMigrationBody()
+            const migrationResult = await runArkadeSignerMigrationBody(
+              params.onIntentRegistered,
+            )
             signerMigrationResultByInFlightPromise.set(workPromise, migrationResult)
             if (migrationResult.migrationComplete) {
               await orchestrateArkadeSave(toSaveParams(params))

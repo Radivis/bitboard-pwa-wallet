@@ -62,6 +62,7 @@ pub mod wallet;
 
 mod asset;
 mod batch;
+mod batch_join_hooks;
 mod boltz;
 mod coin_select;
 mod fee_estimation;
@@ -90,6 +91,10 @@ pub use coin_select::{
 };
 pub use error::Error;
 pub use crate::batch::{JoinBatchOutcome, RegisteredBatchIntent};
+pub use crate::batch_join_hooks::{
+    is_batch_join_in_flight, set_batch_join_abort, set_on_intent_registered,
+    BATCH_JOIN_ABORTED_MESSAGE, OnIntentRegisteredHook,
+};
 pub use key_provider::Bip32KeyProvider;
 pub use key_provider::KeyProvider;
 pub use key_provider::StaticKeyProvider;
@@ -110,6 +115,14 @@ pub use swap_storage::SwapStorage;
 /// This is the number of consecutive unused addresses to scan before
 /// assuming all used addresses have been found.
 pub const DEFAULT_GAP_LIMIT: u32 = 20;
+
+/// Max scripts/outpoints per GET `/v1/indexer/vtxos`.
+///
+/// The indexer encodes each reference as a repeated query param (`scripts=` / `outpoints=`).
+/// A P2TR script hex is ~68 chars plus the param name, so ~80 bytes per address. Proxies
+/// (nginx ~8KiB request line, Node/Cloudflare ~16KiB headers) return HTTP 431 when the
+/// query string is too large. 40 refs ≈ 3.2KiB, safely under those limits.
+const MAX_GET_VTXOS_REFS_PER_REQUEST: usize = 40;
 
 /// Default Boltz `referralId` sent with swap creation requests when the caller does not
 /// provide one. Identifies traffic originating from this SDK.
@@ -1567,6 +1580,9 @@ where
     }
 
     /// Fetch all VTXOs for a request, handling pagination internally.
+    ///
+    /// Scripts/outpoints are chunked first so each GET stays under proxy URL limits (HTTP 431),
+    /// then each chunk is paged independently.
     async fn fetch_all_vtxos(
         &self,
         request: GetVtxosRequest,
@@ -1575,6 +1591,17 @@ where
             return Ok(Vec::new());
         }
 
+        let mut all_vtxos = Vec::new();
+        for chunk in request.split_references(MAX_GET_VTXOS_REFS_PER_REQUEST) {
+            all_vtxos.extend(self.fetch_paged_vtxos(chunk).await?);
+        }
+        Ok(all_vtxos)
+    }
+
+    async fn fetch_paged_vtxos(
+        &self,
+        request: GetVtxosRequest,
+    ) -> Result<Vec<VirtualTxOutPoint>, Error> {
         let mut all_vtxos = Vec::new();
         let mut cursor = 0;
         const PAGE_SIZE: i32 = 100;

@@ -211,6 +211,7 @@ mod tests {
             amount_sats: 25_000,
             started_at: 42,
             baseline_offchain_spendable_sats: None,
+            retain_until_spendable_drops: false,
         });
 
         backfill_unilateral_exit_watches_if_empty(&wallet_db);

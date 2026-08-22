@@ -506,11 +506,19 @@ impl ArkSession {
         let exit_amount =
             resolve_cooperative_exit_amount(params.amount_sats, baseline_offchain_spendable_sats);
         let mut rng = OsRng;
-        match self
-            .client
-            .collaborative_redeem(&mut rng, destination, exit_amount)
-            .await
-        {
+        let redeem = self
+            .with_batch_join(
+                PendingBatchIntentKind::CollaborativeExit,
+                exit_amount.to_sat(),
+                Some(params.destination_address.clone()),
+                || async {
+                    self.client
+                        .collaborative_redeem(&mut rng, destination, exit_amount)
+                        .await
+                },
+            )
+            .await;
+        match redeem {
             Ok(JoinBatchOutcome::Completed(txid)) => {
                 self.record_pending_collaborative_exit(
                     exit_amount.to_sat(),
@@ -518,23 +526,12 @@ impl ArkSession {
                 );
                 Ok(Self::batch_join_completed_result(txid))
             }
-            Ok(JoinBatchOutcome::Waiting(intent)) => {
-                self.record_pending_collaborative_exit(
-                    exit_amount.to_sat(),
-                    baseline_offchain_spendable_sats,
-                );
-                let mut record = super::pending_batch::record_from_registered_intent(
-                    PendingBatchIntentKind::CollaborativeExit,
-                    &intent,
-                    exit_amount.to_sat(),
-                    super::mappers::current_unix_timestamp(),
-                );
-                record.destination_address = Some(params.destination_address.clone());
-                Ok(super::pending_batch::persist_and_waiting_join_result(
-                    &self.wallet_db,
-                    record,
-                ))
-            }
+            Ok(JoinBatchOutcome::Waiting(intent)) => Ok(self.stamp_registered_intent_timed_out(
+                &intent,
+                PendingBatchIntentKind::CollaborativeExit,
+                exit_amount.to_sat(),
+                Some(params.destination_address.clone()),
+            )),
             Err(error) => {
                 self.map_settle_error(
                     PendingBatchIntentKind::CollaborativeExit,
@@ -1041,6 +1038,7 @@ mod unroll_hard_failure_rollback_tests {
             amount_sats: 50_000,
             started_at: 1,
             baseline_offchain_spendable_sats: None,
+            retain_until_spendable_drops: false,
         });
         register_unilateral_exit_watch(&wallet_db, &txid, 0, 50_000);
 

@@ -1,5 +1,5 @@
 import { awaitInFlightWalletSecretsWrites } from '@/db'
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { proxy } from 'comlink'
 import { toast } from 'sonner'
 import { getArkadeWorker } from '@/workers/arkade-factory'
@@ -59,14 +59,19 @@ import { orchestrateArkadeSave } from '@/lib/wallet/lifecycle/arkade-save-lifecy
 import { refreshArkadeStoreFromLoadedWasm } from '@/lib/arkade/arkade-persistence-store-sync'
 import { readArkadeDashboardStateFromStore } from '@/lib/arkade/arkade-persistence-store-sync'
 import {
+  abandonInFlightRegisteredIntents,
   arkadeRefetchIntervalWithPendingBatchIntent,
   hasPendingBatchIntent,
   hasPendingKind,
   pendingBatchIntentKey,
+  isBatchJoinCompleted,
   isBatchJoinWaiting,
+  markPendingBatchIntentCancelled,
   pendingOverlapsOnchain,
   pendingBatchIntentFromSources,
-  pendingBatchIntentWaitingMessage,
+  pendingBatchIntentSucceededMessage,
+  rememberInFlightRegisteredIntent,
+  settleInFlightRegisteredIntents,
 } from '@/lib/arkade/arkade-pending-batch-intent'
 import {
   ARKADE_BUMPER_FUNDING_POLL_MS,
@@ -603,21 +608,96 @@ export function useArkadeSendMutation() {
 function toastBatchJoinResult(
   result: ArkadeBatchJoinResult,
   kindFallback: string,
-  completedMessage: string,
   idleMessage?: string,
 ): void {
   if (isBatchJoinWaiting(result)) {
-    toast.message(
-      pendingBatchIntentWaitingMessage(result.pendingIntent?.kind ?? kindFallback),
+    abandonInFlightRegisteredIntents()
+    return
+  }
+  if (isBatchJoinCompleted(result) && result.commitmentTxid) {
+    settleInFlightRegisteredIntents()
+    toast.success(
+      pendingBatchIntentSucceededMessage(result.pendingIntent?.kind ?? kindFallback),
     )
     return
   }
-  if (result.commitmentTxid) {
-    toast.success(completedMessage)
-    return
-  }
+  abandonInFlightRegisteredIntents()
   if (idleMessage != null) {
     toast.message(idleMessage)
+  }
+}
+
+function upsertPendingBatchIntent(
+  intents: ArkadePendingBatchIntent[] | undefined,
+  incoming: ArkadePendingBatchIntent,
+): ArkadePendingBatchIntent[] {
+  const incomingKey = pendingBatchIntentKey(incoming)
+  return [
+    ...(intents ?? []).filter((item) => pendingBatchIntentKey(item) !== incomingKey),
+    incoming,
+  ]
+}
+
+function patchPendingBatchIntentQueryCaches(
+  queryClient: QueryClient,
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+  connectionId: string,
+  intent: ArkadePendingBatchIntent,
+): void {
+  rememberInFlightRegisteredIntent(intent)
+  const boardingStatusKey = arkadeBoardingStatusQueryKey(
+    walletId,
+    networkMode,
+    connectionId,
+  )
+  const balanceKey = arkadeBalanceQueryKey(walletId, networkMode, connectionId)
+  queryClient.setQueryData<ArkadeBoardingStatus>(boardingStatusKey, (previous) =>
+    previous == null
+      ? previous
+      : {
+          ...previous,
+          pendingBatchIntents: upsertPendingBatchIntent(
+            previous.pendingBatchIntents,
+            intent,
+          ),
+        },
+  )
+  queryClient.setQueryData<ArkadeBalanceInfo>(balanceKey, (previous) =>
+    previous == null
+      ? previous
+      : {
+          ...previous,
+          pendingBatchIntents: upsertPendingBatchIntent(
+            previous.pendingBatchIntents,
+            intent,
+          ),
+        },
+  )
+}
+
+function pendingBatchIntentOnRegisteredHandler(
+  queryClient: QueryClient,
+  walletId: number | null,
+  networkMode: NetworkMode,
+  connectionId: string | null,
+): (intent: ArkadePendingBatchIntent) => void {
+  return (intent) => {
+    if (
+      walletId == null ||
+      connectionId == null ||
+      !isArkadeSupportedNetworkMode(networkMode)
+    ) {
+      rememberInFlightRegisteredIntent(intent)
+      return
+    }
+    patchPendingBatchIntentQueryCaches(
+      queryClient,
+      walletId,
+      networkMode,
+      connectionId,
+      intent,
+    )
   }
 }
 
@@ -629,13 +709,20 @@ export function useArkadeRenewMutation() {
   return useMutation({
     mutationFn: async () => {
       assertArkadeSessionUnlocked(activeWalletId)
-      return withReadyArkadeWorker(() => getArkadeWorker().renewVtxosNow())
+      const onRegistered = pendingBatchIntentOnRegisteredHandler(
+        queryClient,
+        activeWalletId,
+        networkMode,
+        activeArkadeConnectionId,
+      )
+      return withReadyArkadeWorker(() =>
+        getArkadeWorker().renewVtxosNow(proxy(onRegistered)),
+      )
     },
     onSuccess: async (result) => {
       toastBatchJoinResult(
         result,
         'renew',
-        'VTXOs renewed',
         'No expiring VTXOs to renew right now',
       )
       if (
@@ -667,7 +754,8 @@ export function useArkadeCancelPendingBatchIntentMutation() {
         getArkadeWorker().cancelPendingBatchIntent(pendingBatchIntentActionParams(intent)),
       )
     },
-    onSuccess: async () => {
+    onSuccess: async (_result, intent) => {
+      markPendingBatchIntentCancelled(intent)
       if (
         activeWalletId != null &&
         activeArkadeConnectionId != null &&
@@ -691,12 +779,21 @@ export function useArkadeRetryPendingBatchIntentMutation() {
   return useMutation({
     mutationFn: async (intent: ArkadePendingBatchIntent) => {
       assertArkadeSessionUnlocked(activeWalletId)
+      const onRegistered = pendingBatchIntentOnRegisteredHandler(
+        queryClient,
+        activeWalletId,
+        networkMode,
+        activeArkadeConnectionId,
+      )
       return withReadyArkadeWorker(() =>
-        getArkadeWorker().retryPendingBatchIntent(pendingBatchIntentActionParams(intent)),
+        getArkadeWorker().retryPendingBatchIntent(
+          pendingBatchIntentActionParams(intent),
+          proxy(onRegistered),
+        ),
       )
     },
     onSuccess: async (result, intent) => {
-      toastBatchJoinResult(result, intent.kind, 'Batch retry submitted')
+      toastBatchJoinResult(result, intent.kind)
       if (
         activeWalletId != null &&
         activeArkadeConnectionId != null &&
@@ -722,13 +819,20 @@ export function useArkadeRecoverRecoverableVtxosMutation() {
   return useMutation({
     mutationFn: async () => {
       assertArkadeSessionUnlocked(activeWalletId)
-      return withReadyArkadeWorker(() => getArkadeWorker().recoverRecoverableVtxos())
+      const onRegistered = pendingBatchIntentOnRegisteredHandler(
+        queryClient,
+        activeWalletId,
+        networkMode,
+        activeArkadeConnectionId,
+      )
+      return withReadyArkadeWorker(() =>
+        getArkadeWorker().recoverRecoverableVtxos(proxy(onRegistered)),
+      )
     },
     onSuccess: async (result) => {
       toastBatchJoinResult(
         result,
         'recover',
-        'Recoverable VTXOs settled',
         'No recoverable VTXOs to settle right now',
       )
       if (
@@ -797,6 +901,12 @@ export function useArkadeSignerMigrationMutation() {
       if (activeWalletId == null || activeArkadeConnectionId == null) {
         throw new Error('Arkade session is not ready')
       }
+      const onRegistered = pendingBatchIntentOnRegisteredHandler(
+        queryClient,
+        activeWalletId,
+        networkMode,
+        activeArkadeConnectionId,
+      )
       const migrationResult = await orchestrateArkadeSyncThenSave({
         walletId: activeWalletId,
         networkMode,
@@ -804,6 +914,7 @@ export function useArkadeSignerMigrationMutation() {
         syncKind: 'signerMigration',
         awaitCompletion: true,
         throwOnError: true,
+        onIntentRegistered: proxy(onRegistered),
       })
       if (migrationResult == null) {
         throw new Error('Signer migration did not return a result')
@@ -811,6 +922,12 @@ export function useArkadeSignerMigrationMutation() {
       return migrationResult
     },
     onSuccess: async (migrationResult) => {
+      if (migrationResult.settleTxids.length > 0) {
+        settleInFlightRegisteredIntents()
+        toast.success(pendingBatchIntentSucceededMessage('migrate'))
+      } else {
+        abandonInFlightRegisteredIntents()
+      }
       if (
         activeWalletId == null ||
         activeArkadeConnectionId == null ||
@@ -857,8 +974,14 @@ export function useArkadeOnboardMutation() {
   return useMutation({
     mutationFn: async () => {
       assertArkadeSessionUnlocked(activeWalletId)
+      const onRegistered = pendingBatchIntentOnRegisteredHandler(
+        queryClient,
+        activeWalletId,
+        networkMode,
+        activeArkadeConnectionId,
+      )
       return withReadyArkadeWorkerAndOptionalDelegate(networkMode, () =>
-        getArkadeWorker().onboardBoardedUtxos(),
+        getArkadeWorker().onboardBoardedUtxos(proxy(onRegistered)),
       )
     },
     onMutate: async () => {
@@ -895,12 +1018,8 @@ export function useArkadeOnboardMutation() {
         if (context != null) {
           revertOptimisticBoardingSettle(queryClient, context)
         }
-        toast.message(
-          pendingBatchIntentWaitingMessage(result.pendingIntent?.kind ?? 'board'),
-        )
-      } else {
-        toast.success('Boarding settlement submitted to operator')
       }
+      toastBatchJoinResult(result, 'board')
       if (
         activeWalletId == null ||
         activeArkadeConnectionId == null ||
@@ -1090,7 +1209,15 @@ export function useArkadeCollaborativeExitMutation() {
       amountSats?: number
     }) => {
       assertArkadeSessionUnlocked(activeWalletId)
-      return withReadyArkadeWorker(() => getArkadeWorker().collaborativeExit(params))
+      const onRegistered = pendingBatchIntentOnRegisteredHandler(
+        queryClient,
+        activeWalletId,
+        networkMode,
+        activeArkadeConnectionId,
+      )
+      return withReadyArkadeWorker(() =>
+        getArkadeWorker().collaborativeExit(params, proxy(onRegistered)),
+      )
     },
     onMutate: async (params) => {
       if (
@@ -1120,17 +1247,7 @@ export function useArkadeCollaborativeExitMutation() {
       )
     },
     onSuccess: async (result, _params, context) => {
-      if (isBatchJoinWaiting(result)) {
-        toast.message(
-          pendingBatchIntentWaitingMessage(
-            result.pendingIntent?.kind ?? 'collaborative_exit',
-          ),
-        )
-      } else if (result.commitmentTxid) {
-        toast.success(
-          `Collaborative exit started (${formatArkadeTxidToastSnippet(result.commitmentTxid)})`,
-        )
-      }
+      toastBatchJoinResult(result, 'collaborative_exit')
       if (activeWalletId != null && activeArkadeConnectionId != null) {
         await invalidateArkadeWalletDataQueries(
           queryClient,

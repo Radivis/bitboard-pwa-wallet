@@ -286,6 +286,11 @@ pub struct PendingExitDeductionRecord {
     pub started_at: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub baseline_offchain_spendable_sats: Option<u64>,
+    /// Collaborative only: keep subtracting after the pending batch intent is gone (join
+    /// Completed) until operator snapshot spendable drops. Open intents cover in-progress
+    /// amounts; Cancel and legacy waiting deductions omit this so spendable is restored.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub retain_until_spendable_drops: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -392,6 +397,15 @@ pub enum PendingBatchIntentKind {
     Migrate,
 }
 
+/// Durable subset of the intent UI cycle. Submission and success are not stored.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PendingBatchIntentLifecyclePhase {
+    Processing,
+    #[default]
+    TimedOut,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PendingBatchOutpointRecord {
     pub txid: String,
@@ -411,6 +425,8 @@ pub struct PendingBatchIntentRecord {
     pub registered_at: i64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub destination_address: Option<String>,
+    #[serde(default)]
+    pub lifecycle_phase: PendingBatchIntentLifecyclePhase,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -646,6 +662,36 @@ impl JsonPersistenceDb {
             .pending_batch_intents
             .retain(|existing| !pending_batch_intents_overlap(existing, &record));
         inner.pending_batch_intents.push(record);
+    }
+
+    pub fn stamp_overlapping_pending_batch_intent_timed_out(
+        &self,
+        onchain_outpoints: &[PendingBatchOutpointRecord],
+        vtxo_outpoints: &[PendingBatchOutpointRecord],
+    ) -> bool {
+        let mut inner = lock_persistence(&self.inner);
+        let mut stamped = false;
+        for record in inner.pending_batch_intents.iter_mut() {
+            if pending_batch_record_overlaps_outpoints(record, onchain_outpoints, vtxo_outpoints)
+                && record.lifecycle_phase == PendingBatchIntentLifecyclePhase::Processing
+            {
+                record.lifecycle_phase = PendingBatchIntentLifecyclePhase::TimedOut;
+                stamped = true;
+            }
+        }
+        stamped
+    }
+
+    pub fn promote_stranded_processing_intents(&self) -> bool {
+        let mut inner = lock_persistence(&self.inner);
+        let mut promoted = false;
+        for record in inner.pending_batch_intents.iter_mut() {
+            if record.lifecycle_phase == PendingBatchIntentLifecyclePhase::Processing {
+                record.lifecycle_phase = PendingBatchIntentLifecyclePhase::TimedOut;
+                promoted = true;
+            }
+        }
+        promoted
     }
 
     pub fn clear_pending_batch_intents(&self) {

@@ -180,11 +180,19 @@ impl ArkSession {
             }
 
             let mut rng = OsRng;
-            match self
-                .client
-                .settle_vtxos(&mut rng, &summary.outpoints, &[])
-                .await
-            {
+            let settle = self
+                .with_batch_join(
+                    PendingBatchIntentKind::Recover,
+                    summary.total_sats,
+                    None,
+                    || async {
+                        self.client
+                            .settle_vtxos(&mut rng, &summary.outpoints, &[])
+                            .await
+                    },
+                )
+                .await;
+            match settle {
                 Ok(Some(JoinBatchOutcome::Completed(commitment_txid))) => {
                     last_completed = Some(commitment_txid);
                     self.sync_with_operator().await?;
@@ -336,7 +344,12 @@ impl ArkSession {
             })
             .unwrap_or(0);
         let mut rng = OsRng;
-        match self.client.settle_vtxos(&mut rng, &expiring, &[]).await {
+        let settle = self
+            .with_batch_join(PendingBatchIntentKind::Renew, amount_sats, None, || async {
+                self.client.settle_vtxos(&mut rng, &expiring, &[]).await
+            })
+            .await;
+        match settle {
             Ok(Some(outcome)) => {
                 self.map_settle_outcome(
                     PendingBatchIntentKind::Renew,
@@ -470,6 +483,7 @@ impl ArkSession {
             return Ok(waiting);
         }
 
+        self.with_batch_join(PendingBatchIntentKind::Board, amount_sats, None, || async {
         match self
             .client
             .settle_vtxos(&mut rng, &[], &onchain)
@@ -517,6 +531,8 @@ impl ArkSession {
                 .await
             }
         }
+        })
+        .await
     }
 
     /// Confirm the finalized batch actually spent `boarding_outpoint`.

@@ -63,7 +63,8 @@ impl ArkSession {
     /// Unilateral: sums [`ark_core::VtxoList::exiting`] VTXOs plus any in-flight pending
     /// unilateral records during unroll. This amount is informational in
     /// [`build_arkade_balance_dto`] — do not subtract it from gross spendable after unroll.
-    /// Collaborative: pending records only; those VTXOs are still in gross spendable until sync.
+    /// Collaborative: open CollaborativeExit pending-intent amounts, plus a retain deduction
+    /// after join Completed until snapshot spendable drops. Cancel must not leave that line.
     pub(crate) fn exit_balance_components(&self) -> ArkResult<(u64, u64)> {
         let pending = self.wallet_db.pending_exit_deductions();
         let snapshot_unilateral_sats = self
@@ -79,7 +80,10 @@ impl ArkSession {
         let unilateral_exit_in_progress_sats =
             snapshot_unilateral_sats.saturating_add(pending_unilateral_sats);
         let collaborative_exit_in_progress_sats =
-            sum_pending_exit_sats_by_kind(&pending, PendingExitKind::Collaborative);
+            crate::exit_balance::collaborative_exit_in_progress_sats(
+                &self.wallet_db.pending_batch_intents(),
+                &pending,
+            );
         Ok((
             unilateral_exit_in_progress_sats,
             collaborative_exit_in_progress_sats,
@@ -114,6 +118,7 @@ impl ArkSession {
                 amount_sats,
                 started_at: current_unix_timestamp(),
                 baseline_offchain_spendable_sats: None,
+                retain_until_spendable_drops: false,
             });
         register_unilateral_exit_watch(&self.wallet_db, txid, vout, amount_sats);
     }
@@ -127,7 +132,14 @@ impl ArkSession {
                 amount_sats,
                 started_at: current_unix_timestamp(),
                 baseline_offchain_spendable_sats: Some(baseline_sats),
+                retain_until_spendable_drops: true,
             });
+    }
+
+    pub(crate) fn clear_pending_collaborative_exit_deduction(&self) {
+        let mut pending = self.wallet_db.pending_exit_deductions();
+        pending.retain(|record| record.kind != PendingExitKind::Collaborative);
+        self.wallet_db.set_pending_exit_deductions(pending);
     }
 
     pub(crate) fn clear_pending_unilateral_exits_for_outpoints(

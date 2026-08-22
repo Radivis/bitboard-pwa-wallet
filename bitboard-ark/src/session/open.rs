@@ -212,6 +212,8 @@ impl ArkSession {
             network,
         ));
 
+        super::pending_batch::install_intent_registered_hook(Arc::clone(&wallet_db));
+
         Ok((
             Self {
                 client,

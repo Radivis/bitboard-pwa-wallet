@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Copy, ExternalLink } from 'lucide-react'
+import { Copy, ExternalLink, Loader2 } from 'lucide-react'
 import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
 import { ArkadeBoardingInfomodeContent } from '@/components/arkade/infomode/ArkadeBoardingInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
@@ -19,9 +19,14 @@ import {
   useHasPendingOnchainBatchIntent,
   useArkadeOnboardMutation,
 } from '@/hooks/useArkadeQueries'
+import { useArkadeLoadLifecycleSnapshot } from '@/hooks/useArkadeLifecycleSnapshots'
 import { ArkadePendingBatchIntentBanner } from '@/components/wallet/ArkadePendingBatchIntentBanner'
+import { RailLoadErrorBanner } from '@/components/wallet/RailLoadErrorBanner'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
+import { isIntentSubmitPhase1 } from '@/lib/arkade/arkade-pending-batch-intent'
 import { formatSats } from '@/lib/wallet/bitcoin-utils'
+import { orchestrateArkadeRetryLoad } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
+import { errorMessage } from '@/lib/shared/utils'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import { toast } from 'sonner'
 
@@ -37,10 +42,15 @@ function boardingExplorerUrl(networkMode: string, address: string): string {
 
 export function ArkadeBoardPage() {
   const networkMode = useWalletStore(selectCommittedNetworkMode)
+  const arkadeLoadSnapshot = useArkadeLoadLifecycleSnapshot()
   const onboardMutation = useArkadeOnboardMutation()
   const boardingQuery = useArkadeBoardingAddressQuery()
   const boardingStatusQuery = useArkadeBoardingStatusQuery()
   const hasPendingOnchainBatchIntent = useHasPendingOnchainBatchIntent()
+  const settleSubmitPhase1 = isIntentSubmitPhase1({
+    mutationPending: onboardMutation.isPending,
+    pendingForAction: hasPendingOnchainBatchIntent,
+  })
   const [copied, setCopied] = useState(false)
 
   if (!isArkadeActiveForNetworkMode(networkMode)) {
@@ -55,8 +65,18 @@ export function ArkadeBoardPage() {
     )
   }
 
-  const boardingAddress = boardingQuery.data ?? ''
+  const boardingAddress =
+    boardingQuery.data || boardingStatusQuery.data?.boardingAddress || ''
   const boardingStatus = boardingStatusQuery.data
+  const boardingAddressLoading =
+    boardingAddress.length === 0 &&
+    arkadeLoadSnapshot.loadPhase !== 'load-error' &&
+    (boardingQuery.isPending ||
+      boardingQuery.isFetching ||
+      arkadeLoadSnapshot.loadPhase === 'loading')
+  const boardingAddressError =
+    boardingAddress.length === 0 &&
+    (arkadeLoadSnapshot.loadPhase === 'load-error' || boardingQuery.isError)
 
   const handleCopy = async () => {
     if (!boardingAddress) return
@@ -95,8 +115,25 @@ export function ArkadeBoardPage() {
             <li>Settle the boarding UTXO into Arkade (creates VTXOs).</li>
           </ol>
 
-          {boardingQuery.isLoading ? (
+          {arkadeLoadSnapshot.loadPhase === 'load-error' ? (
+            <RailLoadErrorBanner
+              rail="arkade"
+              loadPhase={arkadeLoadSnapshot.loadPhase}
+              errorMessage={arkadeLoadSnapshot.errorMessage}
+              onRetry={() => {
+                void orchestrateArkadeRetryLoad()
+              }}
+            />
+          ) : null}
+
+          {boardingAddressLoading ? (
             <p className="text-muted-foreground">Loading boarding address…</p>
+          ) : boardingAddressError ? (
+            <p className="text-destructive">
+              Could not load boarding address
+              {boardingQuery.error != null ? `: ${errorMessage(boardingQuery.error)}` : '.'} Unlock
+              the wallet and check that Arkade is connected.
+            </p>
           ) : (
             <>
               <InfomodeWrapper
@@ -105,7 +142,10 @@ export function ArkadeBoardPage() {
                 infoText={ARKADE_BOARDING_ADDRESS_INFOMODE.text}
                 as="span"
               >
-                <p className="break-all rounded-md border bg-muted/40 p-2 font-mono text-xs">
+                <p
+                  className="break-all rounded-md border bg-muted/40 p-2 font-mono text-xs"
+                  data-testid="arkade-boarding-address"
+                >
                   {boardingAddress}
                 </p>
               </InfomodeWrapper>
@@ -130,7 +170,7 @@ export function ArkadeBoardPage() {
             </>
           )}
 
-          {boardingStatusQuery.isLoading ? (
+          {boardingStatusQuery.isPending || boardingStatusQuery.isFetching ? (
             <p className="text-muted-foreground">Checking boarding UTXOs…</p>
           ) : boardingStatus ? (
             <div className="rounded-md border bg-muted/20 p-3 text-sm">
@@ -176,7 +216,14 @@ export function ArkadeBoardPage() {
             }
             onClick={() => onboardMutation.mutate()}
           >
-            {onboardMutation.isPending ? 'Settling…' : 'Settle boarding UTXO'}
+            {settleSubmitPhase1 ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                Settling…
+              </>
+            ) : (
+              'Settle boarding UTXO'
+            )}
           </Button>
         </CardContent>
       </Card>

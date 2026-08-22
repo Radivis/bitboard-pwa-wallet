@@ -1,3 +1,7 @@
+use crate::batch_join_hooks::{
+    is_batch_join_aborted, notify_intent_registered, BatchJoinInFlightGuard,
+    BATCH_JOIN_ABORTED_MESSAGE,
+};
 use crate::error::ErrorContext as _;
 use crate::swap_storage::SwapStorage;
 use crate::utils::timeout_op;
@@ -415,11 +419,12 @@ where
         )?;
         #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
         {
-            return self
-                .network_client()
-                .delete_intent(prepared.intent)
-                .await
-                .map_err(Error::ark_server);
+            return map_delete_intent_result(
+                self.network_client()
+                    .delete_intent(prepared.intent)
+                    .await
+                    .map_err(Error::ark_server),
+            );
         }
         #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
         {
@@ -759,6 +764,7 @@ where
     where
         R: Rng + CryptoRng,
     {
+        let _in_flight = BatchJoinInFlightGuard::acquire();
         // Verify the cosigner key matches
         if own_cosigner_kp.public_key() != delegate.delegate_cosigner_pk {
             return Err(Error::ad_hoc(
@@ -796,6 +802,19 @@ where
             .map(|psbt| psbt.unsigned_tx.input[0].previous_output)
             .collect::<Vec<_>>();
 
+        let waiting_intent = RegisteredBatchIntent {
+            intent_id: intent_id.clone(),
+            onchain_outpoints: Vec::new(),
+            vtxo_outpoints: vtxo_input_outpoints.clone(),
+        };
+        if let Err(error) = notify_intent_registered(&waiting_intent).await {
+            tracing::warn!(
+                intent_id = %waiting_intent.intent_id,
+                ?error,
+                "Delegated intent registered hook failed"
+            );
+        }
+
         let topics = Self::batch_event_stream_topics(&[], &vtxo_input_outpoints, &own_cosigner_pks);
 
         let mut stream = network_client.get_event_stream(topics).await?;
@@ -807,6 +826,9 @@ where
         let mut batch_expiry = None;
 
         loop {
+            if is_batch_join_aborted() {
+                return Err(Error::ad_hoc(BATCH_JOIN_ABORTED_MESSAGE));
+            }
             match timeout_op(BATCH_EVENT_TIMEOUT, stream.next())
                 .await
                 .context("timed out waiting for batch event")?
@@ -1419,6 +1441,7 @@ where
     where
         R: Rng + CryptoRng,
     {
+        let _in_flight = BatchJoinInFlightGuard::acquire();
         let prepared = self.prepare_intent(
             rng,
             onchain_inputs,
@@ -1487,6 +1510,14 @@ where
             vtxo_outpoints: vtxo_input_outpoints.clone(),
         };
 
+        if let Err(error) = notify_intent_registered(&waiting_intent).await {
+            tracing::warn!(
+                intent_id = %waiting_intent.intent_id,
+                ?error,
+                "Intent registered hook failed"
+            );
+        }
+
         let (ark_forfeit_pk, _) = server_info.forfeit_pk.x_only_public_key();
 
         let participate_result: Result<Txid, Error> = async {
@@ -1495,6 +1526,9 @@ where
         let mut batch_expiry = None;
 
         loop {
+            if is_batch_join_aborted() {
+                return Err(Error::ad_hoc(BATCH_JOIN_ABORTED_MESSAGE));
+            }
             match timeout_op(BATCH_EVENT_TIMEOUT, stream.next())
                 .await
                 .context("timed out waiting for batch event")?
@@ -1917,6 +1951,15 @@ where
             .map_err(|error| Error::ad_hoc(error.to_string()))?;
 
         Ok(Amount::from_sat(fee.to_satoshis()))
+    }
+}
+
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+fn map_delete_intent_result(result: Result<(), Error>) -> Result<(), Error> {
+    match result {
+        Ok(()) => Ok(()),
+        Err(error) if error.is_idempotent_intent_delete_miss() => Ok(()),
+        Err(error) => Err(error),
     }
 }
 

@@ -25,6 +25,7 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
   }),
   useArkadeAutonomousModeActive: () => false,
   useHasPendingBatchIntent: () => false,
+  useHasPendingBatchIntentKind: () => false,
   usePendingBatchIntent: () => null,
 }))
 

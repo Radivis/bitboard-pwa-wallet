@@ -43,8 +43,12 @@ impl ArkSession {
 
         for _ in 0..MAX_SIGNER_MIGRATION_PASSES {
             let report = self
-                .client
-                .migrate_deprecated_signer_vtxos(&mut rng)
+                .with_batch_join(
+                    crate::persistence::PendingBatchIntentKind::Migrate,
+                    0,
+                    None,
+                    || async { self.client.migrate_deprecated_signer_vtxos(&mut rng).await },
+                )
                 .await?;
 
             if report.failed() {
@@ -68,10 +72,11 @@ impl ArkSession {
                     .chain(report.boarding.deferred.iter())
                     .map(|item| item.amount.to_sat())
                     .sum();
-                self.persist_registered_batch_intent(
-                    crate::persistence::PendingBatchIntentKind::Migrate,
+                self.stamp_registered_intent_timed_out(
                     waiting,
+                    crate::persistence::PendingBatchIntentKind::Migrate,
                     amount_sats,
+                    None,
                 );
                 break;
             }

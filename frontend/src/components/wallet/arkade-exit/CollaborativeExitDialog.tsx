@@ -1,4 +1,5 @@
 import { Loader2 } from 'lucide-react'
+import { useEffect } from 'react'
 import { ArkadeCollaborativeExitInfomodeContent } from '@/components/arkade/infomode/ArkadeCollaborativeExitInfomodeContent'
 import { ArkadeExitOperatorFeesInfomodeContent } from '@/components/arkade/infomode/ArkadeExitOperatorFeesInfomodeContent'
 import { AppModal } from '@/components/AppModal'
@@ -37,10 +38,18 @@ export function CollaborativeExitDialog({ exitFlow }: CollaborativeExitDialogPro
     collabAmountError,
     collaborativeFeeQuery,
     collaborativeExitMutation,
+    collaborativeExitSubmitPhase1,
+    hasProcessingCollaborativeExit,
     canCollaborativeExit,
     collaborativeExitBlockedByRotation,
     handleCollaborativeExit,
   } = exitFlow
+
+  useEffect(() => {
+    if (hasProcessingCollaborativeExit) {
+      setCollaborativeOpen(false)
+    }
+  }, [hasProcessingCollaborativeExit, setCollaborativeOpen])
 
   return (
     <AppModal
@@ -64,10 +73,17 @@ export function CollaborativeExitDialog({ exitFlow }: CollaborativeExitDialogPro
           </Button>
           <Button
             type="button"
-            disabled={!canCollaborativeExit}
+            disabled={!canCollaborativeExit || collaborativeExitMutation.isPending}
             onClick={handleCollaborativeExit}
           >
-            {collaborativeExitMutation.isPending ? 'Exiting…' : 'Confirm exit'}
+            {collaborativeExitSubmitPhase1 ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                Exiting…
+              </>
+            ) : (
+              'Confirm exit'
+            )}
           </Button>
         </>
       )}

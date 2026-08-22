@@ -943,6 +943,7 @@ mod tests {
             amount_sats: 50_000,
             started_at: 1_000_000,
             baseline_offchain_spendable_sats: None,
+            retain_until_spendable_drops: false,
         }];
         let buckets = offchain_balance_buckets_from_snapshot(
             &snapshot,

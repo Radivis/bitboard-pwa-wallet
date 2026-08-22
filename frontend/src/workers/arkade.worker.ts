@@ -61,6 +61,7 @@ import type {
   ArkadeUnrollProgressEvent,
   ArkadeUnrollResult,
   ArkadeVtxoExpiryStatus,
+  ArkadePendingBatchIntent,
   EnsureArkadeOperatorConnectionEncryptedParams,
   OpenArkadeSessionParams,
   OpenArkadeSessionResult,
@@ -256,6 +257,15 @@ async function persistAfterCriticalOperation(): Promise<void> {
   await flushSdkPersistenceNowOrThrow()
 }
 
+function createOnRegisteredWasmCallback(
+  onRegistered?: (intent: ArkadePendingBatchIntent) => void,
+): (intent: ArkadePendingBatchIntent) => Promise<void> {
+  return async (intent) => {
+    await flushSdkPersistenceNowOrThrow()
+    await Promise.resolve(onRegistered?.(intent))
+  }
+}
+
 async function persistBatchJoinResult(result: ArkadeBatchJoinResult): Promise<void> {
   if (result.status === 'waiting_for_operator') {
     await flushSdkPersistenceNowOrThrow()
@@ -265,10 +275,17 @@ async function persistBatchJoinResult(result: ArkadeBatchJoinResult): Promise<vo
 }
 
 async function runBatchJoinAndPersist(
-  run: (wasmModule: BitboardArkWasm) => unknown | Promise<unknown>,
+  run: (
+    wasmModule: BitboardArkWasm,
+    onRegistered: (intent: ArkadePendingBatchIntent) => Promise<void>,
+  ) => unknown | Promise<unknown>,
+  onRegistered?: (intent: ArkadePendingBatchIntent) => void,
 ): Promise<ArkadeBatchJoinResult> {
+  const wasmOnRegistered = createOnRegisteredWasmCallback(onRegistered)
   try {
-    const result = (await invokeWasmArk(run)) as unknown as ArkadeBatchJoinResult
+    const result = (await invokeWasmArk((wasmModule) =>
+      run(wasmModule, wasmOnRegistered),
+    )) as unknown as ArkadeBatchJoinResult
     await persistBatchJoinResult(result)
     return result
   } catch (error) {
@@ -457,9 +474,12 @@ const arkadeService: ArkadeService = {
     await flushSdkPersistenceNowOrThrow()
   },
 
-  async migrateDeprecatedSignerVtxos(): Promise<ArkadeSignerMigrationResult> {
+  async migrateDeprecatedSignerVtxos(
+    onRegistered?: (intent: ArkadePendingBatchIntent) => void,
+  ): Promise<ArkadeSignerMigrationResult> {
+    const wasmOnRegistered = createOnRegisteredWasmCallback(onRegistered)
     const result = await invokeWasmArk((wasmModule) =>
-      wasmModule.ark_migrate_deprecated_signer_vtxos(),
+      wasmModule.ark_migrate_deprecated_signer_vtxos(wasmOnRegistered),
     )
     await flushSdkPersistenceNowOrThrow()
     return result as ArkadeSignerMigrationResult
@@ -540,7 +560,15 @@ const arkadeService: ArkadeService = {
 
   async getBoardingAddress(): Promise<string> {
     const address = await invokeWasmArk((wasmModule) => wasmModule.ark_get_boarding_address())
-    await persistAfterCriticalOperation()
+    try {
+      await persistAfterCriticalOperation()
+    } catch {
+      try {
+        await flushSdkPersistenceNowOrThrow()
+      } catch {
+        // Keep returning the address so funding is not blocked if save/sync fails.
+      }
+    }
     return address
   },
 
@@ -608,8 +636,13 @@ const arkadeService: ArkadeService = {
     return (result as ArkadeOperatorScheduledSession | null) ?? null
   },
 
-  async renewVtxosNow(): Promise<ArkadeBatchJoinResult> {
-    return runBatchJoinAndPersist((wasmModule) => wasmModule.ark_renew_vtxos_now())
+  async renewVtxosNow(
+    onRegistered?: (intent: ArkadePendingBatchIntent) => void,
+  ): Promise<ArkadeBatchJoinResult> {
+    return runBatchJoinAndPersist(
+      (wasmModule, wasmOnRegistered) => wasmModule.ark_renew_vtxos_now(wasmOnRegistered),
+      onRegistered,
+    )
   },
 
   async delegateSpendableVtxos(): Promise<{
@@ -632,9 +665,14 @@ const arkadeService: ArkadeService = {
     return result as { finalized: number; pending: number }
   },
 
-  async onboardBoardedUtxos(): Promise<ArkadeBatchJoinResult> {
+  async onboardBoardedUtxos(
+    onRegistered?: (intent: ArkadePendingBatchIntent) => void,
+  ): Promise<ArkadeBatchJoinResult> {
     await this.getBoardingAddress()
-    return runBatchJoinAndPersist((wasmModule) => wasmModule.ark_onboard_boarded_utxos())
+    return runBatchJoinAndPersist(
+      (wasmModule, wasmOnRegistered) => wasmModule.ark_onboard_boarded_utxos(wasmOnRegistered),
+      onRegistered,
+    )
   },
 
   async cancelPendingBatchIntent(
@@ -647,10 +685,17 @@ const arkadeService: ArkadeService = {
 
   async retryPendingBatchIntent(
     params: ArkadePendingBatchIntentActionParams,
+    onRegistered?: (intent: ArkadePendingBatchIntent) => void,
   ): Promise<ArkadeBatchJoinResult> {
-    return runBatchJoinAndPersist((wasmModule) =>
-      wasmModule.ark_retry_pending_batch_intent(params),
+    return runBatchJoinAndPersist(
+      (wasmModule, wasmOnRegistered) =>
+        wasmModule.ark_retry_pending_batch_intent(params, wasmOnRegistered),
+      onRegistered,
     )
+  },
+
+  async abortInFlightBatchJoin(): Promise<void> {
+    await invokeWasmArk((wasmModule) => wasmModule.ark_abort_in_flight_batch_join())
   },
 
   async getRecoverableVtxoFeeEstimate(): Promise<ArkadeRecoverableVtxoFeeEstimate> {
@@ -660,8 +705,14 @@ const arkadeService: ArkadeService = {
     )
   },
 
-  async recoverRecoverableVtxos(): Promise<ArkadeBatchJoinResult> {
-    return runBatchJoinAndPersist((wasmModule) => wasmModule.ark_recover_recoverable_vtxos())
+  async recoverRecoverableVtxos(
+    onRegistered?: (intent: ArkadePendingBatchIntent) => void,
+  ): Promise<ArkadeBatchJoinResult> {
+    return runBatchJoinAndPersist(
+      (wasmModule, wasmOnRegistered) =>
+        wasmModule.ark_recover_recoverable_vtxos(wasmOnRegistered),
+      onRegistered,
+    )
   },
 
   async listExitCandidates(): Promise<ArkadeExitCandidateRow[]> {
@@ -693,8 +744,15 @@ const arkadeService: ArkadeService = {
     )
   },
 
-  async collaborativeExit(params: ArkadeCollaborativeExitParams): Promise<ArkadeBatchJoinResult> {
-    return runBatchJoinAndPersist((wasmModule) => wasmModule.ark_collaborative_exit(params))
+  async collaborativeExit(
+    params: ArkadeCollaborativeExitParams,
+    onRegistered?: (intent: ArkadePendingBatchIntent) => void,
+  ): Promise<ArkadeBatchJoinResult> {
+    return runBatchJoinAndPersist(
+      (wasmModule, wasmOnRegistered) =>
+        wasmModule.ark_collaborative_exit(params, wasmOnRegistered),
+      onRegistered,
+    )
   },
 
   async runUnilateralUnroll(

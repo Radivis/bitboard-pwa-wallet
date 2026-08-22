@@ -7,9 +7,16 @@ import {
   useArkadeCompleteUnilateralExitMutation,
   useArkadeUnilateralExitCompletionFeeQuery,
   useArkadeUnilateralExitsInProgressQuery,
+  useHasPendingBatchIntentKind,
+  usePendingBatchIntents,
 } from '@/hooks/useArkadeQueries'
 import { useOnchainFeeRateSelection } from '@/hooks/useOnchainFeeRateSelection'
 import { parseCollaborativeExitAmountSats } from '@/lib/arkade/arkade-exit-utils'
+import {
+  ARKADE_INTENT_LIFECYCLE_PHASES,
+  isIntentSubmitPhase1,
+  pendingIntentBannerPhase,
+} from '@/lib/arkade/arkade-pending-batch-intent'
 import {
   isCollaborativeExitInsufficientFundsError,
   isSignerRotationCooperativeExitBlocked,
@@ -83,6 +90,17 @@ export function useArkadeExitFlow() {
   })
   const collaborativeExitMutation = useArkadeCollaborativeExitMutation()
   const completeExitMutation = useArkadeCompleteUnilateralExitMutation()
+  const pendingBatchIntents = usePendingBatchIntents()
+  const hasPendingCollaborativeExit = useHasPendingBatchIntentKind('collaborative_exit')
+  const hasProcessingCollaborativeExit = pendingBatchIntents.some(
+    (intent) =>
+      intent.kind === 'collaborative_exit' &&
+      pendingIntentBannerPhase(intent) === ARKADE_INTENT_LIFECYCLE_PHASES.processing,
+  )
+  const collaborativeExitSubmitPhase1 = isIntentSubmitPhase1({
+    mutationPending: collaborativeExitMutation.isPending,
+    pendingForAction: hasPendingCollaborativeExit,
+  })
 
   const selectedInProgressRows = useMemo(
     () =>
@@ -218,6 +236,8 @@ export function useArkadeExitFlow() {
     completionFeeRateUi,
     completionFeeRateSatPerVb,
     collaborativeExitMutation,
+    collaborativeExitSubmitPhase1,
+    hasProcessingCollaborativeExit,
     completeExitMutation,
     canCollaborativeExit,
     collaborativeExitBlockedByRotation,
