@@ -530,9 +530,9 @@ impl ArkSession {
                     super::mappers::current_unix_timestamp(),
                 );
                 record.destination_address = Some(params.destination_address.clone());
-                self.wallet_db.upsert_pending_batch_intent(record);
-                Ok(super::pending_batch::waiting_join_result(
-                    self.pending_batch_intent_dto(),
+                Ok(super::pending_batch::persist_and_waiting_join_result(
+                    &self.wallet_db,
+                    record,
                 ))
             }
             Err(error) => {

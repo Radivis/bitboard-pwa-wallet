@@ -44,10 +44,6 @@ impl ArkSession {
             .collect()
     }
 
-    pub(crate) fn pending_batch_intent_dto(&self) -> Option<PendingBatchIntentDto> {
-        self.pending_batch_intents_dto().into_iter().next()
-    }
-
     pub(crate) fn persist_registered_batch_intent(
         &self,
         kind: PendingBatchIntentKind,
@@ -63,41 +59,16 @@ impl ArkSession {
             ));
     }
 
-    pub(crate) fn persist_duplicated_input_waiting(
-        &self,
-        kind: PendingBatchIntentKind,
-        onchain_outpoints: &[OutPoint],
-        vtxo_outpoints: &[OutPoint],
-        amount_sats: u64,
-    ) {
-        self.wallet_db
-            .upsert_pending_batch_intent(PendingBatchIntentRecord {
-                kind,
-                intent_id: None,
-                onchain_outpoints: onchain_outpoints
-                    .iter()
-                    .copied()
-                    .map(outpoint_record)
-                    .collect(),
-                vtxo_outpoints: vtxo_outpoints
-                    .iter()
-                    .copied()
-                    .map(outpoint_record)
-                    .collect(),
-                amount_sats,
-                registered_at: current_unix_timestamp(),
-                destination_address: None,
-            });
-    }
-
     pub(crate) fn batch_join_waiting_result(
         &self,
         kind: PendingBatchIntentKind,
         intent: &RegisteredBatchIntent,
         amount_sats: u64,
     ) -> BatchJoinResultDto {
-        self.persist_registered_batch_intent(kind, intent, amount_sats);
-        waiting_join_result(self.pending_batch_intent_dto())
+        persist_and_waiting_join_result(
+            &self.wallet_db,
+            record_from_registered_intent(kind, intent, amount_sats, current_unix_timestamp()),
+        )
     }
 
     pub(crate) fn batch_join_duplicated_input_result(
@@ -107,8 +78,10 @@ impl ArkSession {
         vtxo_outpoints: &[OutPoint],
         amount_sats: u64,
     ) -> BatchJoinResultDto {
-        self.persist_duplicated_input_waiting(kind, onchain_outpoints, vtxo_outpoints, amount_sats);
-        waiting_join_result(self.pending_batch_intent_dto())
+        persist_and_waiting_join_result(
+            &self.wallet_db,
+            duplicated_input_waiting_record(kind, onchain_outpoints, vtxo_outpoints, amount_sats),
+        )
     }
 
     pub(crate) fn batch_join_completed_result(commitment_txid: Txid) -> BatchJoinResultDto {
@@ -489,7 +462,10 @@ impl ArkSession {
             }
             PendingBatchIntentKind::Migrate => {
                 let _ = self.migrate_deprecated_signer_vtxos().await?;
-                Ok(waiting_join_result(self.pending_batch_intent_dto()))
+                Ok(waiting_join_result(
+                    self.find_overlapping_pending_intent(&onchain_outpoints, &vtxo_outpoints)
+                        .map(pending_batch_intent_to_dto),
+                ))
             }
         }
     }
@@ -609,6 +585,39 @@ pub(crate) fn waiting_join_result(
         status: BATCH_JOIN_STATUS_WAITING.to_string(),
         commitment_txid: None,
         pending_intent,
+    }
+}
+
+pub(crate) fn persist_and_waiting_join_result(
+    db: &crate::persistence::JsonPersistenceDb,
+    record: PendingBatchIntentRecord,
+) -> BatchJoinResultDto {
+    db.upsert_pending_batch_intent(record.clone());
+    waiting_join_result(Some(pending_batch_intent_to_dto(record)))
+}
+
+fn duplicated_input_waiting_record(
+    kind: PendingBatchIntentKind,
+    onchain_outpoints: &[OutPoint],
+    vtxo_outpoints: &[OutPoint],
+    amount_sats: u64,
+) -> PendingBatchIntentRecord {
+    PendingBatchIntentRecord {
+        kind,
+        intent_id: None,
+        onchain_outpoints: onchain_outpoints
+            .iter()
+            .copied()
+            .map(outpoint_record)
+            .collect(),
+        vtxo_outpoints: vtxo_outpoints
+            .iter()
+            .copied()
+            .map(outpoint_record)
+            .collect(),
+        amount_sats,
+        registered_at: current_unix_timestamp(),
+        destination_address: None,
     }
 }
 
@@ -1021,6 +1030,92 @@ mod tests {
             &[outpoint_record(sample_outpoint(0xaa, 1))],
             &[],
         ));
+    }
+
+    fn sample_pending_record(
+        kind: PendingBatchIntentKind,
+        intent_id: &str,
+        onchain_vout: Option<u32>,
+        vtxo_vout: Option<u32>,
+    ) -> PendingBatchIntentRecord {
+        PendingBatchIntentRecord {
+            kind,
+            intent_id: Some(intent_id.into()),
+            onchain_outpoints: onchain_vout
+                .map(|vout| outpoint_record(sample_outpoint(0xaa, vout)))
+                .into_iter()
+                .collect(),
+            vtxo_outpoints: vtxo_vout
+                .map(|vout| outpoint_record(sample_outpoint(0xbb, vout)))
+                .into_iter()
+                .collect(),
+            amount_sats: 12_000,
+            registered_at: 1,
+            destination_address: None,
+        }
+    }
+
+    #[test]
+    fn persist_and_waiting_join_result_returns_recover_when_an_older_board_row_exists() {
+        let db = crate::persistence::JsonPersistenceDb::default();
+        db.upsert_pending_batch_intent(sample_pending_record(
+            PendingBatchIntentKind::Board,
+            "board",
+            Some(1),
+            None,
+        ));
+        let result = persist_and_waiting_join_result(
+            &db,
+            sample_pending_record(PendingBatchIntentKind::Recover, "recover", None, Some(0)),
+        );
+        assert_eq!(
+            result
+                .pending_intent
+                .as_ref()
+                .map(|intent| intent.kind.as_str()),
+            Some("recover")
+        );
+        assert_eq!(
+            result
+                .pending_intent
+                .as_ref()
+                .and_then(|intent| intent.intent_id.as_deref()),
+            Some("recover")
+        );
+    }
+
+    #[test]
+    fn persist_and_waiting_join_result_returns_collaborative_exit_when_an_older_board_row_exists() {
+        let db = crate::persistence::JsonPersistenceDb::default();
+        db.upsert_pending_batch_intent(sample_pending_record(
+            PendingBatchIntentKind::Board,
+            "board",
+            Some(1),
+            None,
+        ));
+        let result = persist_and_waiting_join_result(
+            &db,
+            sample_pending_record(
+                PendingBatchIntentKind::CollaborativeExit,
+                "collab",
+                None,
+                Some(1),
+            ),
+        );
+        assert_eq!(
+            result
+                .pending_intent
+                .as_ref()
+                .map(|intent| intent.kind.as_str()),
+            Some("collaborative_exit")
+        );
+        assert_eq!(
+            result
+                .pending_intent
+                .as_ref()
+                .and_then(|intent| intent.intent_id.as_deref()),
+            Some("collab")
+        );
     }
 
     #[test]

@@ -491,14 +491,11 @@ impl ArkSession {
                         .remove_pending_batch_intents_overlapping(&onchain_records, &[]);
                     return Ok(Self::batch_join_completed_result(commitment_txid));
                 }
-                self.persist_duplicated_input_waiting(
+                Ok(self.batch_join_duplicated_input_result(
                     PendingBatchIntentKind::Board,
                     &onchain,
                     &[],
                     amount_sats,
-                );
-                Ok(super::pending_batch::waiting_join_result(
-                    self.pending_batch_intent_dto(),
                 ))
             }
             Ok(Some(JoinBatchOutcome::Waiting(intent))) => Ok(self.batch_join_waiting_result(
