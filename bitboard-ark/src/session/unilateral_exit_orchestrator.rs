@@ -439,8 +439,27 @@ impl ArkSession {
         params: UnilateralExitTopologyParams,
     ) -> ArkResult<UnilateralExitTopologyDto> {
         let virtual_outpoints = self
-            .resolve_control_outpoints(params.vtxo_outpoints)
+            .resolve_control_outpoints(params.vtxo_outpoints.clone())
             .await?;
+        match self
+            .unilateral_exit_topology_from_outpoints(virtual_outpoints.clone())
+            .await
+        {
+            Ok(topology) => Ok(topology),
+            Err(ArkWasmError::AutonomousExitMaterialsMissing)
+                if !params.vtxo_outpoints.is_empty() =>
+            {
+                let fallback = self.resolve_control_outpoints(Vec::new()).await?;
+                self.unilateral_exit_topology_from_outpoints(fallback).await
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    async fn unilateral_exit_topology_from_outpoints(
+        &self,
+        virtual_outpoints: Vec<VirtualOutPoint>,
+    ) -> ArkResult<UnilateralExitTopologyDto> {
         let plan = self.build_unilateral_batch_plan(&virtual_outpoints).await?;
         let nodes = merge_topology_nodes_from_chains(plan.leaves.iter().map(|leaf| &leaf.chains));
         let all_outpoints: Vec<VirtualOutPoint> = plan

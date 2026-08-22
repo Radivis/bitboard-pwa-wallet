@@ -118,12 +118,36 @@ pub fn snapshot_materials_for_leaf_tx<'a>(
     snapshot.unilateral_exit_materials_by_leaf_tx.get(leaf_txid)
 }
 
+fn materials_cover_leaf_tx(materials: &UnilateralExitMaterialsRecord, leaf_txid: &str) -> bool {
+    let Ok(wanted) = Txid::from_str(leaf_txid) else {
+        return false;
+    };
+    let Ok(chains) = vtxo_chains_from_json(&materials.chain_json) else {
+        return false;
+    };
+    chains.inner.iter().any(|link| link.txid == wanted)
+}
+
+/// Prefetched materials keyed by this leaf, or another leaf whose cached chain includes it.
+pub fn materials_for_unroll_leaf_tx<'a>(
+    snapshot: &'a OffchainVtxoSnapshot,
+    leaf_txid: &str,
+) -> Option<&'a UnilateralExitMaterialsRecord> {
+    if let Some(materials) = snapshot_materials_for_leaf_tx(snapshot, leaf_txid) {
+        return Some(materials);
+    }
+    snapshot
+        .unilateral_exit_materials_by_leaf_tx
+        .values()
+        .find(|materials| materials_cover_leaf_tx(materials, leaf_txid))
+}
+
 /// Require prefetched materials for a leaf. Unroll/complete never live-prefetch from the ASP.
 pub fn require_unilateral_exit_materials_for_leaf_tx<'a>(
     snapshot: &'a OffchainVtxoSnapshot,
     leaf_txid: &str,
 ) -> ArkResult<&'a UnilateralExitMaterialsRecord> {
-    snapshot_materials_for_leaf_tx(snapshot, leaf_txid)
+    materials_for_unroll_leaf_tx(snapshot, leaf_txid)
         .ok_or(ArkWasmError::AutonomousExitMaterialsMissing)
 }
 
@@ -220,11 +244,16 @@ pub fn prune_unilateral_exit_materials_map(
             if preserve_leaf_txids.contains(leaf_txid) {
                 return true;
             }
-            snapshot
-                .virtual_tx_outpoints
-                .iter()
-                .any(|record| record.txid == *leaf_txid && record_is_exit_eligible(record))
+            snapshot.virtual_tx_outpoints.iter().any(|record| {
+                record.txid == *leaf_txid && record_should_retain_exit_materials(record)
+            })
         });
+}
+
+/// Keep prefetched materials while the VTXO can still unroll or is already exiting
+/// (`is_unrolled` but not spent/swept). Drop only after every vout is spent or swept.
+fn record_should_retain_exit_materials(record: &VirtualTxOutPointRecord) -> bool {
+    !record.is_spent && !record.is_swept
 }
 
 fn vtxo_flags_are_exit_eligible(is_swept: bool, is_unrolled: bool, is_spent: bool) -> bool {
@@ -628,6 +657,92 @@ mod tests {
                 .unilateral_exit_materials_by_leaf_tx
                 .contains_key(&txid)
         );
+    }
+
+    #[test]
+    fn prune_retains_materials_for_unrolled_unspent_leaf() {
+        let txid = "aa".repeat(32);
+        let mut snapshot = OffchainVtxoSnapshot {
+            synced_at: 1,
+            dust_sats: 330,
+            virtual_tx_outpoints: vec![VirtualTxOutPointRecord {
+                txid: txid.clone(),
+                vout: 0,
+                created_at: 0,
+                expires_at: 0,
+                amount_sats: 1_000,
+                script_hex: "00".to_string(),
+                is_preconfirmed: true,
+                is_swept: false,
+                is_unrolled: true,
+                is_spent: false,
+                spent_by: None,
+                commitment_txids: vec![],
+                settled_by: None,
+                ark_txid: None,
+                assets: vec![],
+                server_pk_hex: None,
+            }],
+            unilateral_exit_materials_by_leaf_tx: {
+                let mut map = empty_materials_map();
+                map.insert(txid.clone(), sample_materials(1));
+                map
+            },
+        };
+        prune_unilateral_exit_materials_map(&mut snapshot, &HashSet::new());
+        assert!(
+            snapshot
+                .unilateral_exit_materials_by_leaf_tx
+                .contains_key(&txid),
+            "unrolled-but-unspent leaves still need materials for topology/progress"
+        );
+
+        snapshot.virtual_tx_outpoints[0].is_spent = true;
+        prune_unilateral_exit_materials_map(&mut snapshot, &HashSet::new());
+        assert!(
+            !snapshot
+                .unilateral_exit_materials_by_leaf_tx
+                .contains_key(&txid)
+        );
+    }
+
+    #[test]
+    fn require_materials_reuses_covering_chain_from_another_leaf() {
+        let ancestor = Txid::from_byte_array([0x11; 32]);
+        let descendant = Txid::from_byte_array([0x22; 32]);
+        let chains = VtxoChains {
+            inner: vec![
+                VtxoChain {
+                    txid: ancestor,
+                    tx_type: ChainedTxType::Tree,
+                    spends: vec![],
+                    expires_at: 0,
+                },
+                VtxoChain {
+                    txid: descendant,
+                    tx_type: ChainedTxType::Ark,
+                    spends: vec![ancestor],
+                    expires_at: 0,
+                },
+            ],
+        };
+        let mut snapshot = OffchainVtxoSnapshot {
+            synced_at: 1,
+            dust_sats: 330,
+            virtual_tx_outpoints: vec![sibling_record(&ancestor.to_string(), 0, false)],
+            unilateral_exit_materials_by_leaf_tx: empty_materials_map(),
+        };
+        store_materials_for_leaf_tx(
+            &mut snapshot,
+            &descendant.to_string(),
+            UnilateralExitMaterialsRecord {
+                cached_at: 1,
+                chain_json: vtxo_chains_to_json(&chains).expect("encode"),
+                virtual_psbts: vec![],
+            },
+        );
+        require_unilateral_exit_materials_for_leaf_tx(&snapshot, &ancestor.to_string())
+            .expect("covering chain from descendant leaf");
     }
 
     #[test]

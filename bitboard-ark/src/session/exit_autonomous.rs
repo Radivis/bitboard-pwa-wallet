@@ -12,7 +12,7 @@ use crate::outpoint::{VirtualOutPoint, representative_virtual_tx_outpoint_for_le
 use crate::persistence::OffchainVtxoSnapshot;
 use crate::session::mappers::map_exit_candidate;
 use crate::unilateral_exit_materials::{
-    record_is_exit_eligible, snapshot_materials_for_leaf_tx, virtual_psbts_from_records,
+    materials_for_unroll_leaf_tx, record_is_exit_eligible, virtual_psbts_from_records,
     vtxo_chains_from_json,
 };
 
@@ -39,7 +39,7 @@ pub(crate) fn autonomous_unilateral_exit_chain_steps(
     let snapshot = session.wallet_db.snapshot().offchain_vtxo_snapshot;
     let materials = snapshot
         .as_ref()
-        .and_then(|snapshot| snapshot_materials_for_leaf_tx(snapshot, txid))
+        .and_then(|snapshot| materials_for_unroll_leaf_tx(snapshot, txid))
         .ok_or(ArkWasmError::AutonomousExitMaterialsMissing)?;
     let (projected_unroll_steps, projected_wait_steps) = autonomous_chain_step_counts(materials)?;
     Ok(AutonomousUnrollChainSteps {
@@ -156,7 +156,7 @@ pub(crate) async fn autonomous_build_unilateral_branch_for_leaf_tx(
         .offchain_vtxo_snapshot
         .ok_or_else(|| ArkWasmError::Snapshot("offchain snapshot missing".into()))?;
     let txid = leaf_txid.to_string();
-    let materials = snapshot_materials_for_leaf_tx(&snapshot, &txid)
+    let materials = materials_for_unroll_leaf_tx(&snapshot, &txid)
         .ok_or(ArkWasmError::AutonomousExitMaterialsMissing)?;
     let virtual_tx_outpoint = representative_virtual_tx_outpoint_for_leaf_tx(&snapshot, &txid)?;
     let target = bitcoin::OutPoint {
