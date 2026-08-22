@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   Background,
   Controls,
@@ -165,6 +165,15 @@ const nodeTypes = {
   unilateralExitTreeNode: UnilateralExitTreeNode,
 }
 
+/** Theme React Flow zoom buttons with the same tokens as app outline buttons. */
+const UNILATERAL_EXIT_GRAPH_CONTROLS_STYLE = {
+  '--xy-controls-button-background-color': 'var(--background)',
+  '--xy-controls-button-background-color-hover': 'var(--accent)',
+  '--xy-controls-button-border-color': 'var(--border)',
+  '--xy-controls-button-color': 'var(--foreground)',
+  '--xy-controls-button-color-hover': 'var(--foreground)',
+} as CSSProperties
+
 function UnilateralExitTreeGraphCanvas({
   renderEpoch,
   topology,
@@ -226,7 +235,7 @@ function UnilateralExitTreeGraphCanvas({
     >
       <UnilateralExitTreeEdgesOverlay edgePaths={edgePaths} />
       <Background />
-      <Controls showInteractive={false} />
+      <Controls showInteractive={false} style={UNILATERAL_EXIT_GRAPH_CONTROLS_STYLE} />
     </ReactFlow>
   )
 }
