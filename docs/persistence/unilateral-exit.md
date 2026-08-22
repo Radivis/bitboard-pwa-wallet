@@ -134,4 +134,4 @@ One last failure per scope, for the control-page banner:
 4. While the job exists, topology/progress outpoints come from the **actor** (`resolveUnilateralExitTopologyOutpoints` / `resolveUnilateralExitJobOutpoints`). Never skip when lifecycle outpoints are empty but persistence still has them.
 5. Stale-job clearing waits until Arkade load/sync is quiet and WASM reports no in-progress exit **sats**. Non-overlapping en-passant outpoints are not stale by themselves.
 
-TanStack Query caches progress/topology/balance for display. Durable writes happen in WASM export (encrypted payload) and Zustand persist (settings). During an active job, `actor.context.progress` is authoritative over the query cache.
+TanStack Query caches progress/topology/balance for display. During an active job it does **not** poll or refetch `getUnilateralExitProgress`; actors seed the progress cache after WASM reads. Durable writes happen in WASM export (encrypted payload) and Zustand persist (settings). `actor.context.progress` is authoritative over the query cache.

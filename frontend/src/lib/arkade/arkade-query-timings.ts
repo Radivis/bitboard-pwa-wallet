@@ -67,13 +67,13 @@ export function unilateralExitAutomationStepRebroadcastWaitSecs(
     : UNILATERAL_EXIT_AUTOMATION_STEP_REBROADCAST_WAIT_SECS
 }
 
-/** Progress query poll while a step is waiting for confirmation (production). */
+/** Machine poll while a step is waiting for confirmation (production). Not used by the display query while a job is active. */
 export const UNILATERAL_EXIT_PROGRESS_POLL_MS = 3_000
 
-/** Progress query poll while phase is idle but the exit job is still active (production). */
+/** Display-query poll when no job is active and WASM reports phase idle (production). */
 export const UNILATERAL_EXIT_PROGRESS_IDLE_POLL_MS = 15_000
 
-/** Regtest / E2E: poll progress frequently so automation and Playwright see step advances. */
+/** Regtest / E2E: machine wait poll so automation and Playwright see step advances. */
 export const UNILATERAL_EXIT_PROGRESS_POLL_MS_REGTEST = 2_000
 
 export const UNILATERAL_EXIT_PROGRESS_IDLE_POLL_MS_REGTEST = 2_000

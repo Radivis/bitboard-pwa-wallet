@@ -181,7 +181,7 @@ Implemented in [`unilateral-exit.actors.ts`](../frontend/src/lib/wallet/lifecycl
 | `proceedStepActor` | `proceedUnilateralExitStep` then refetch progress |
 | `ensureBroadcastActor` | refetch; if not relayed, proceed (resolve fee from policy when auto) |
 
-React components and hooks must not call `getArkadeWorker()` for proceed/progress during an active job. During an active job, `actor.context.progress` wins; React Query is display cache only.
+React components and hooks must not call `getArkadeWorker()` for proceed/progress during an active job. During an active job, `actor.context.progress` wins; React Query is display cache only (no `refetchInterval`, no progress-query invalidate/refetch). Actors write progress into the query cache with `setQueryData` after WASM reads. Machine `after` delays own confirmation polling.
 
 ---
 

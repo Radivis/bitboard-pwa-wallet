@@ -59,25 +59,38 @@ function assertCanRunUnilateralExit(scope: UnilateralExitWalletScope): void {
   }
 }
 
-export async function invalidateUnilateralExitQueries(
+async function writeUnilateralExitProgressQueryCache(
   scope: UnilateralExitWalletScope,
   outpoints: FetchProgressActorInput['outpoints'],
+  progress: ArkadeUnilateralExitProgress,
 ): Promise<void> {
   if (!isArkadeSupportedNetworkMode(scope.networkMode)) {
     return
   }
-  const sortedOutpoints = sortArkadeVtxoOutpoints(outpoints)
   const { appQueryClient } = await import('@/lib/shared/app-query-client')
-  const progressQueryKey = arkadeUnilateralExitProgressQueryKey(
-    scope.walletId,
-    scope.networkMode,
-    scope.connectionId,
-    sortedOutpoints,
+  appQueryClient.setQueryData(
+    arkadeUnilateralExitProgressQueryKey(
+      scope.walletId,
+      scope.networkMode,
+      scope.connectionId,
+      sortArkadeVtxoOutpoints(outpoints),
+    ),
+    progress,
   )
-  await appQueryClient.removeQueries({ queryKey: progressQueryKey })
-  await appQueryClient.invalidateQueries({
-    queryKey: progressQueryKey,
-  })
+}
+
+export async function invalidateUnilateralExitQueries(
+  scope: UnilateralExitWalletScope,
+  outpoints: FetchProgressActorInput['outpoints'],
+  progress?: ArkadeUnilateralExitProgress,
+): Promise<void> {
+  if (!isArkadeSupportedNetworkMode(scope.networkMode)) {
+    return
+  }
+  const { appQueryClient } = await import('@/lib/shared/app-query-client')
+  if (progress != null) {
+    await writeUnilateralExitProgressQueryCache(scope, outpoints, progress)
+  }
   await appQueryClient.invalidateQueries({
     queryKey: arkadeBalanceQueryKey(scope.walletId, scope.networkMode, scope.connectionId),
   })
@@ -138,9 +151,14 @@ export const fetchProgressActor = fromPromise<
   FetchProgressActorInput
 >(async ({ input }) => {
   const worker = getArkadeWorker()
-  return worker.getUnilateralExitProgress({
-    vtxoOutpoints: sortArkadeVtxoOutpoints(input.outpoints),
+  const sortedOutpoints = sortArkadeVtxoOutpoints(input.outpoints)
+  const progress = await worker.getUnilateralExitProgress({
+    vtxoOutpoints: sortedOutpoints,
   })
+  if (input.walletScope != null) {
+    await writeUnilateralExitProgressQueryCache(input.walletScope, sortedOutpoints, progress)
+  }
+  return progress
 })
 
 export const evaluateJobViabilityActor = fromPromise<
@@ -170,7 +188,7 @@ export const proceedStepActor = fromPromise<
   const progress = await getArkadeWorker().getUnilateralExitProgress({
     vtxoOutpoints: sortedOutpoints,
   })
-  await invalidateUnilateralExitQueries(input.walletScope, sortedOutpoints)
+  await invalidateUnilateralExitQueries(input.walletScope, sortedOutpoints, progress)
   return progress
 })
 
@@ -232,7 +250,7 @@ export const ensureBroadcastActor = fromPromise<
       const rewound = await worker.getUnilateralExitProgress({
         vtxoOutpoints: sortedOutpoints,
       })
-      await invalidateUnilateralExitQueries(input.walletScope, sortedOutpoints)
+      await invalidateUnilateralExitQueries(input.walletScope, sortedOutpoints, rewound)
       const wrapped = new Error(
         UNCONFIRMED_PARENT_PACKAGE_RETRY_MESSAGE,
       ) as ParentUnconfirmedPackageError
@@ -255,7 +273,7 @@ export const ensureBroadcastActor = fromPromise<
     )
   }
 
-  await invalidateUnilateralExitQueries(input.walletScope, sortedOutpoints)
+  await invalidateUnilateralExitQueries(input.walletScope, sortedOutpoints, progress)
   return progress
 })
 

@@ -39,6 +39,7 @@ export type EnsureBroadcastActorInput = {
 }
 
 export type FetchProgressActorInput = {
+  walletScope: UnilateralExitMachineContext['walletScope']
   outpoints: UnilateralExitMachineContext['jobOutpoints']
 }
 
@@ -924,7 +925,10 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
       invoke: {
         id: 'fetchProgress',
         src: 'fetchProgressActor',
-        input: ({ context }) => ({ outpoints: context.jobOutpoints }),
+        input: ({ context }) => ({
+          walletScope: context.walletScope,
+          outpoints: context.jobOutpoints,
+        }),
         onDone: checkingProgressOnDone,
         onError: {
           target: 'error',

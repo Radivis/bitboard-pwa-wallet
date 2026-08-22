@@ -120,6 +120,11 @@ import {
   proceedUnilateralExitStepWithGuards,
 } from '@/lib/arkade/proceed-unilateral-exit-step'
 import { isUnilateralExitBranchComplete } from '@/lib/arkade/unilateral-exit-branch-complete'
+import {
+  isUnilateralExitProgressWaitingForConfirmation,
+  unilateralExitProgressQueryRefetchInterval,
+  unilateralExitProgressQueryShouldFetch,
+} from '@/lib/arkade/unilateral-exit-progress-query'
 
 function useArkadeQueryBase() {
   const networkMode = useWalletStore(selectCommittedNetworkMode)
@@ -1690,14 +1695,17 @@ const ARKADE_UNILATERAL_EXIT_PROGRESS_IDLE_POLL_MS = 15_000
 export function useArkadeUnilateralExitProgressQuery(params: {
   enabled: boolean
   vtxoOutpoints: ArkadeVtxoOutpoint[]
-  /** When true, poll at the active-job interval even if WASM reports phase idle. */
+  /** When true, the XState actor owns progress reads; this query is display cache only. */
   unilateralExitJobActive?: boolean
 }) {
   const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
     useArkadeQueryBase()
   const sortedOutpoints = sortArkadeVtxoOutpoints(params.vtxoOutpoints)
-  const enabled =
-    params.enabled && sessionReady && sortedOutpoints.length > 0
+  const unilateralExitJobActive = params.unilateralExitJobActive === true
+  const enabled = unilateralExitProgressQueryShouldFetch({
+    enabled: params.enabled && sessionReady && sortedOutpoints.length > 0,
+    unilateralExitJobActive,
+  })
   const progressPollMs = isArkadeSupportedNetworkMode(networkMode)
     ? unilateralExitProgressPollMs(networkMode)
     : ARKADE_UNILATERAL_EXIT_PROGRESS_POLL_MS
@@ -1724,28 +1732,18 @@ export function useArkadeUnilateralExitProgressQuery(params: {
           vtxoOutpoints: sortedOutpoints,
         }),
       ),
-    refetchInterval: (query) => {
-      if (!enabled) {
-        return false
-      }
-      const progress = query.state.data
-      if (progress == null) {
-        return progressIdlePollMs
-      }
-      if (progress != null && isUnilateralExitBranchComplete(progress)) {
-        return false
-      }
-      if (params.unilateralExitJobActive) {
-        return progressPollMs
-      }
-      if (
-        progress.phase === 'waiting' ||
-        progress.currentStepWaitingSince != null
-      ) {
-        return progressPollMs
-      }
-      return progressIdlePollMs
-    },
+    refetchInterval: (query) =>
+      unilateralExitProgressQueryRefetchInterval({
+        enabled,
+        unilateralExitJobActive,
+        branchComplete:
+          query.state.data != null && isUnilateralExitBranchComplete(query.state.data),
+        waitingForConfirmation: isUnilateralExitProgressWaitingForConfirmation(
+          query.state.data,
+        ),
+        progressPollMs,
+        progressIdlePollMs,
+      }),
     staleTime: 0,
   })
 }
