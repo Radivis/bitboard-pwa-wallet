@@ -9,22 +9,26 @@ const workerListMocks = vi.hoisted(() => ({
   ]),
   listUnilateralExitsInProgress: vi.fn(async () => []),
 }))
-let persistenceHydrated = false
-let persistenceHydrationWaiters: Array<() => void> = []
+let sdkHydrated = false
+let sdkHydrationWaiters: Array<() => void> = []
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }))
 
-vi.mock('@/lib/settings/persisted-store-hydration', () => ({
-  waitForPersistedStoreHydration: vi.fn(async () => {
-    if (persistenceHydrated) {
+vi.mock('@/lib/wallet/lifecycle/unilateral-exit-frontend-sdk-persistence', () => ({
+  hydrateUnilateralExitFrontendPersistenceFromSdk: vi.fn(async () => {
+    if (sdkHydrated) {
       return
     }
     await new Promise<void>((resolve) => {
-      persistenceHydrationWaiters.push(resolve)
+      sdkHydrationWaiters.push(resolve)
     })
   }),
+  clearUnilateralExitFrontendMemoryForScope: vi.fn(),
+  scheduleUnilateralExitJobSdkWrite: vi.fn(),
+  scheduleUnilateralExitPrefsSdkWrite: vi.fn(),
+  scheduleUnilateralExitFailureSdkWrite: vi.fn(),
 }))
 
 vi.mock('@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator', () => ({
@@ -72,10 +76,9 @@ vi.mock('@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence', () => ({
   ensurePersistedUnilateralExitJob: vi.fn(),
   updatePersistedUnilateralExitRelayWait: vi.fn(),
   useUnilateralExitLifecyclePersistenceStore: {
-    persist: {
-      hasHydrated: () => persistenceHydrated,
-      onFinishHydration: () => () => {},
-    },
+    getState: () => ({
+      getJob: mockGetJob,
+    }),
   },
 }))
 
@@ -138,8 +141,8 @@ const leaf = { txid: 'aa'.repeat(32), vout: 0 }
 describe('unilateral-exit-runtime hydration', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    persistenceHydrated = false
-    persistenceHydrationWaiters = []
+    sdkHydrated = false
+    sdkHydrationWaiters = []
     resetUnilateralExitActorForTests()
     mockGetJob.mockReturnValue({
       selectedLeafOutpoints: [leaf],
@@ -153,7 +156,7 @@ describe('unilateral-exit-runtime hydration', () => {
     })
   })
 
-  it('hydrate waits for lifecycle persistence store before reading job', async () => {
+  it('hydrate waits for SDK frontend persistence before reading job', async () => {
     const hydratePromise = hydrateUnilateralExitFromPersistence({
       walletScope,
       inProgressOutpoints: [leaf],
@@ -163,8 +166,8 @@ describe('unilateral-exit-runtime hydration', () => {
     await Promise.resolve()
     expect(mockGetJob).not.toHaveBeenCalled()
 
-    persistenceHydrated = true
-    for (const resolve of persistenceHydrationWaiters) {
+    sdkHydrated = true
+    for (const resolve of sdkHydrationWaiters) {
       resolve()
     }
     await hydratePromise
@@ -173,7 +176,7 @@ describe('unilateral-exit-runtime hydration', () => {
   })
 
   it('hydrate does not clear job while arkade sync still settling', async () => {
-    persistenceHydrated = true
+    sdkHydrated = true
     vi.mocked(getArkadeSyncLifecycleSnapshot).mockReturnValue({
       syncPhase: 'syncing',
       networkMode: 'regtest',
@@ -190,7 +193,7 @@ describe('unilateral-exit-runtime hydration', () => {
   })
 
   it('restore then hydrate still enters checkingProgress', async () => {
-    persistenceHydrated = true
+    sdkHydrated = true
 
     await configureUnilateralExitForLoadedWallet(walletScope)
 
@@ -224,7 +227,7 @@ describe('unilateral-exit-runtime hydration', () => {
   })
 
   it('hydrate resumes a pre-broadcast persisted job instead of clearing it', async () => {
-    persistenceHydrated = true
+    sdkHydrated = true
     mockGetJob.mockReturnValue({
       selectedLeafOutpoints: [leaf],
       currentStepRelayedSinceUnix: null,
@@ -244,7 +247,7 @@ describe('unilateral-exit-runtime hydration', () => {
   })
 
   it('does not clear persisted job when in-progress sats exist before outpoints load', async () => {
-    persistenceHydrated = true
+    sdkHydrated = true
 
     await hydrateUnilateralExitFromPersistence({
       walletScope,
@@ -256,7 +259,7 @@ describe('unilateral-exit-runtime hydration', () => {
   })
 
   it('does not clear persisted job when in-progress outpoints do not overlap selection', async () => {
-    persistenceHydrated = true
+    sdkHydrated = true
     const intermediate = { txid: 'bb'.repeat(32), vout: 0 }
 
     await hydrateUnilateralExitFromPersistence({
@@ -269,7 +272,7 @@ describe('unilateral-exit-runtime hydration', () => {
   })
 
   it('hydrate does not resume from in-progress outpoints when persisted job is empty', async () => {
-    persistenceHydrated = true
+    sdkHydrated = true
     mockGetJob.mockReturnValue({
       selectedLeafOutpoints: [],
       currentStepRelayedSinceUnix: null,
@@ -289,7 +292,7 @@ describe('unilateral-exit-runtime hydration', () => {
   })
 
   it('lock phase locked resets a waitingConfirm actor', async () => {
-    persistenceHydrated = true
+    sdkHydrated = true
     mockGetJob.mockReturnValue({
       selectedLeafOutpoints: [leaf],
       currentStepRelayedSinceUnix: null,
@@ -316,7 +319,7 @@ describe('unilateral-exit-runtime hydration', () => {
   })
 
   it('abort orchestration disables automation and clears job', async () => {
-    persistenceHydrated = true
+    sdkHydrated = true
     mockSetAutomationEnabled.mockClear()
 
     await configureUnilateralExitForLoadedWallet(walletScope)
@@ -337,7 +340,7 @@ describe('unilateral-exit-runtime hydration', () => {
   })
 
   it('abort orchestration does not await worker list RPCs', async () => {
-    persistenceHydrated = true
+    sdkHydrated = true
     workerListMocks.listExitCandidates.mockImplementation(() => new Promise(() => {}))
     workerListMocks.listUnilateralExitsInProgress.mockImplementation(
       () => new Promise(() => {}),

@@ -38,9 +38,9 @@ File: `bitboard-ark/src/persistence.rs`
 | `OffchainVtxoSnapshot` | VTXO list + unilateral exit materials map (keyed by leaf tx) |
 | `JsonPersistenceDb` | In-memory mutex-backed DB implementing ark-client `Persistence` |
 
-**Current version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 6`
+**Current version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 7`
 
-`BitboardArkPersistence::parse_import()` migrates legacy v3–v5 blobs on load. Unsupported or corrupt blobs start from an empty `wallet_db` on session open.
+`BitboardArkPersistence::parse_import()` migrates legacy v3–v6 blobs on load. Unsupported or corrupt blobs start from an empty `wallet_db` on session open.
 
 ### Offchain receive cursor
 
@@ -87,12 +87,10 @@ Main thread code (`EncryptedWalletSecretsHost`) handles **ciphertext only** — 
 | Store | Persisted? | Contents |
 |-------|------------|----------|
 | `walletStore` (Arkade fields) | No | Transient dashboard: balance, payments, receive address |
-| `useUnilateralExitLifecyclePersistenceStore` (`unilateral-exit-lifecycle-storage`) | Yes | Active job outpoints, relay-wait timestamp |
-| `useUnilateralExitAutomationPrefsStore` (`unilateral-exit-automation-prefs`) | Yes | Auto-proceed enabled, fee preset, max sat/vB |
-| `useUnilateralExitFailurePersistenceStore` (`unilateral-exit-failure-storage`) | Yes | Last failure banner (`asp_swept_targets`, `branch_funding_lost`, `user_aborted`) |
+| Unilateral-exit job/prefs/failure caches | Session only | Hydrated from `unilateral_exit_frontend` in `sdkPersistenceJson` |
 | `unilateralExitControlStore` | No | Selection, graph epoch (memory only) |
 
-Unilateral-exit WASM fields (`unilateral_exit_materials_by_leaf_tx`, watches, step wait, pending deductions) and the Zustand stores above are documented in [unilateral-exit.md](unilateral-exit.md).
+Unilateral-exit WASM fields (`unilateral_exit_materials_by_leaf_tx`, watches, step wait, pending deductions, `unilateral_exit_frontend`) are documented in [unilateral-exit.md](unilateral-exit.md).
 
 ## Legacy IndexedDB
 
@@ -102,6 +100,6 @@ Arkade previously used IndexedDB databases named `bitboard-arkade-{walletId}-{ne
 
 | Layer | Version mechanism |
 |-------|-------------------|
-| `BitboardArkPersistence.version` | Rust constant (6); `parse_import` migrates v3–v5 |
+| `BitboardArkPersistence.version` | Rust constant (7); `parse_import` migrates v3–v6 |
 | Connection metadata | `lastSuccessfulOperatorSyncAt` mirrors on-chain `lastSuccessfulEsploraSyncAt` semantics |
 | Frontend merge | `arkade-payload-merge.ts` ensures receive index only increases |

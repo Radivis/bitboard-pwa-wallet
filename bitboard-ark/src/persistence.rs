@@ -11,11 +11,14 @@ use bitcoin::{Network, XOnlyPublicKey};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
-/// Current on-disk Arkade persistence format (v6).
+/// Current on-disk Arkade persistence format (v7).
 ///
-/// v6 moves unilateral exit materials to a leaf-tx-keyed map on [`OffchainVtxoSnapshot`].
+/// v7 stores frontend unilateral-exit job/prefs/failure on [`WalletDbSnapshot`].
+/// v6 moved unilateral exit materials to a leaf-tx-keyed map on [`OffchainVtxoSnapshot`].
 /// v5 and earlier import cleanly via migration in [`BitboardArkPersistence::parse_import`].
-pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 6;
+pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 7;
+/// Legacy import version before frontend unilateral-exit bundle.
+pub const LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V6: u32 = 6;
 /// Legacy import version before leaf-tx materials map.
 pub const LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V5: u32 = 5;
 /// Legacy import version before operator trust pending fields.
@@ -35,6 +38,14 @@ fn lock_persistence_result<T>(mutex: &Mutex<T>) -> Result<MutexGuard<'_, T>, Err
     mutex
         .lock()
         .map_err(|_| Error::wallet(PERSISTENCE_LOCK_POISONED))
+}
+
+fn ensure_unilateral_exit_frontend(
+    snapshot: &mut WalletDbSnapshot,
+) -> &mut UnilateralExitFrontendPersistence {
+    snapshot
+        .unilateral_exit_frontend
+        .get_or_insert_with(UnilateralExitFrontendPersistence::default)
 }
 
 fn unix_timestamp_now() -> i64 {
@@ -252,6 +263,7 @@ mod legacy_import {
             pending_operator_info: wallet_db.pending_operator_info,
             operator_trust_pending: wallet_db.operator_trust_pending,
             pending_batch_intents: Vec::new(),
+            unilateral_exit_frontend: None,
         }
     }
 }
@@ -294,6 +306,80 @@ pub struct UnilateralExitStepWaitRecord {
     pub step_txid: String,
     pub step_index: u32,
     pub started_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct UnilateralExitLeafOutpointRecord {
+    pub txid: String,
+    pub vout: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct UnilateralExitJobRecord {
+    #[serde(default)]
+    pub selected_leaf_outpoints: Vec<UnilateralExitLeafOutpointRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_step_relayed_since_unix: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub job_started_at_unix: Option<i64>,
+}
+
+impl UnilateralExitJobRecord {
+    pub fn empty() -> Self {
+        Self {
+            selected_leaf_outpoints: Vec::new(),
+            current_step_relayed_since_unix: None,
+            job_started_at_unix: None,
+        }
+    }
+}
+
+impl Default for UnilateralExitJobRecord {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
+pub const DEFAULT_UNILATERAL_EXIT_FEE_PRESET_LABEL: &str = "Medium";
+pub const DEFAULT_UNILATERAL_EXIT_MAX_FEE_RATE_SAT_PER_VB: f64 = 10.0;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UnilateralExitAutomationPrefsRecord {
+    pub enabled: bool,
+    pub fee_preset_label: String,
+    pub max_fee_rate_sat_per_vb: f64,
+}
+
+impl Default for UnilateralExitAutomationPrefsRecord {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            fee_preset_label: DEFAULT_UNILATERAL_EXIT_FEE_PRESET_LABEL.to_string(),
+            max_fee_rate_sat_per_vb: DEFAULT_UNILATERAL_EXIT_MAX_FEE_RATE_SAT_PER_VB,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct UnilateralExitFailureRecord {
+    #[serde(default)]
+    pub selected_leaf_outpoints: Vec<UnilateralExitLeafOutpointRecord>,
+    pub job_started_at_unix: i64,
+    pub detected_at_unix: i64,
+    pub reason_code: String,
+    pub detail_message: String,
+    #[serde(default)]
+    pub vtxo_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct UnilateralExitFrontendPersistence {
+    #[serde(default)]
+    pub job: UnilateralExitJobRecord,
+    #[serde(default)]
+    pub automation_prefs: UnilateralExitAutomationPrefsRecord,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_failure: Option<UnilateralExitFailureRecord>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -349,6 +435,8 @@ pub struct WalletDbSnapshot {
     pub operator_trust_pending: bool,
     #[serde(default)]
     pub pending_batch_intents: Vec<PendingBatchIntentRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unilateral_exit_frontend: Option<UnilateralExitFrontendPersistence>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -378,6 +466,7 @@ fn default_parsed_ark_persistence() -> ParsedArkPersistence {
 
 fn is_supported_persistence_import_version(version: u32) -> bool {
     version == BITBOARD_ARK_PERSISTENCE_VERSION
+        || version == LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V6
         || version == LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V5
         || version == LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION
         || version == LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V3
@@ -654,6 +743,31 @@ impl JsonPersistenceDb {
 
     pub fn clear_unilateral_exit_step_wait(&self) {
         lock_persistence(&self.inner).unilateral_exit_step_wait = None;
+    }
+
+    pub fn unilateral_exit_frontend(&self) -> Option<UnilateralExitFrontendPersistence> {
+        lock_persistence(&self.inner)
+            .unilateral_exit_frontend
+            .clone()
+    }
+
+    pub fn set_unilateral_exit_frontend(&self, bundle: UnilateralExitFrontendPersistence) {
+        lock_persistence(&self.inner).unilateral_exit_frontend = Some(bundle);
+    }
+
+    pub fn set_unilateral_exit_job(&self, job: UnilateralExitJobRecord) {
+        let mut inner = lock_persistence(&self.inner);
+        ensure_unilateral_exit_frontend(&mut inner).job = job;
+    }
+
+    pub fn set_unilateral_exit_automation_prefs(&self, prefs: UnilateralExitAutomationPrefsRecord) {
+        let mut inner = lock_persistence(&self.inner);
+        ensure_unilateral_exit_frontend(&mut inner).automation_prefs = prefs;
+    }
+
+    pub fn set_unilateral_exit_failure(&self, failure: Option<UnilateralExitFailureRecord>) {
+        let mut inner = lock_persistence(&self.inner);
+        ensure_unilateral_exit_frontend(&mut inner).last_failure = failure;
     }
 
     /// Insert or replace a pending exit record (no duplicate deductions on retry).

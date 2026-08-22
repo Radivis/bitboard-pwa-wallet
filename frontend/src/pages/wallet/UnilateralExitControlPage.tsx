@@ -29,7 +29,6 @@ import {
 } from '@/hooks/useArkadeQueries'
 import { useEsploraFeePresets } from '@/hooks/useEsploraFeePresets'
 import { useOnchainFeeRateSelection } from '@/hooks/useOnchainFeeRateSelection'
-import { usePersistedStoreHydrated } from '@/hooks/usePersistedStoreHydrated'
 import {
   useIsUnilateralExitJobActive,
   useUnilateralExitActorSnapshot,
@@ -39,7 +38,6 @@ import { useUnilateralExitAutomationSnapshot } from '@/hooks/useUnilateralExitAu
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import { arkadeUnilateralExitInProgressSats } from '@/lib/arkade/arkade-balance-display'
 import { defaultMaxFeeRateSatPerVb } from '@/lib/arkade/unilateral-exit-automation-fees'
-import { useUnilateralExitAutomationPrefsStore } from '@/lib/wallet/lifecycle/unilateral-exit-automation-prefs-persistence'
 import { useUnilateralExitLifecyclePersistenceStore, emptyPersistedUnilateralExitJob } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence'
 import { useUnilateralExitFailurePersistenceStore } from '@/lib/wallet/lifecycle/unilateral-exit-failure-persistence'
 import {
@@ -160,7 +158,20 @@ export function UnilateralExitControlPage() {
   const actorSnapshot = useUnilateralExitActorSnapshot()
   const automationSnapshot = useUnilateralExitAutomationSnapshot()
   const lifecycleJobActive = useIsUnilateralExitJobActive()
-  const automationPrefsHydrated = usePersistedStoreHydrated(useUnilateralExitAutomationPrefsStore)
+  const automationPrefsHydrated = useUnilateralExitLifecyclePersistenceStore((state) => {
+    if (
+      activeWalletId == null ||
+      activeArkadeConnectionId == null ||
+      !isArkadeSupportedNetworkMode(networkMode)
+    ) {
+      return false
+    }
+    return state.isHydrated({
+      walletId: activeWalletId,
+      networkMode,
+      connectionId: activeArkadeConnectionId,
+    })
+  })
 
   const selectedLeafOutpoints = useUnilateralExitControlStore(
     (state) => state.selectedLeafOutpoints,

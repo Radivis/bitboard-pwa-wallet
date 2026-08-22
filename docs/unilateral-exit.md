@@ -102,7 +102,7 @@ Optional fire-and-forget mode on the control page (“Proceed automatically”).
 
 The sticky value is the **preset degree** (Low / Medium / High), not a frozen sat/vB (`ARK-EXIT-18`). Each tick re-resolves the live Esplora preset, capped by a user max sat/vB, then invokes `ark_proceed_unilateral_exit_step` through machine actors (`evaluateAutomationPolicy` → `proceedStep` / `ensureBroadcast`). Default max when enabling auto: `max(10 sat/vB, 2× High preset)` (`ARK-EXIT-19`; [`unilateral-exit-automation-fees.ts`](../frontend/src/lib/arkade/unilateral-exit-automation-fees.ts)).
 
-Job progress and phase live in the **actor context**. The active job (outpoints, relay-wait timestamp) is persisted under `unilateral-exit-lifecycle-storage`; automation prefs (`enabled`, fee preset label, max sat/vB) use `unilateral-exit-automation-prefs`. Details: [persistence/unilateral-exit.md](persistence/unilateral-exit.md).
+Job progress and phase live in the **actor context**. The active job (outpoints, relay-wait timestamp), automation prefs, and last-failure banner persist in `unilateral_exit_frontend` inside encrypted `sdkPersistenceJson`. Details: [persistence/unilateral-exit.md](persistence/unilateral-exit.md).
 
 Automation pauses on:
 
@@ -236,7 +236,7 @@ Redundant mempool rejects (`-25` / `-26`) are ignored when the parent is already
 | Area | Paths |
 |------|-------|
 | Machine | `unilateral-exit.machine.ts` (states/transitions), `unilateral-exit-machine-setup.ts` (guards/actions/actors), `unilateral-exit.actors.ts` |
-| Persistence (frontend) | `unilateral-exit-lifecycle-persistence.ts`, `unilateral-exit-automation-prefs-persistence.ts`, `unilateral-exit-failure-persistence.ts` |
+| Persistence (frontend) | `unilateral-exit-lifecycle-persistence.ts`, `unilateral-exit-automation-prefs-persistence.ts`, `unilateral-exit-failure-persistence.ts`, `unilateral-exit-frontend-sdk-persistence.ts` |
 | Control page / DAG | `UnilateralExitControlPage.tsx`, `UnilateralExitTreeGraph.tsx`, `unilateral-exit-topology.ts` |
 | WASM orchestrator | `bitboard-ark/src/session/unilateral_exit_orchestrator.rs` |
 | Topology merge | `bitboard-ark/src/session/unilateral_exit_branch_topology.rs` |

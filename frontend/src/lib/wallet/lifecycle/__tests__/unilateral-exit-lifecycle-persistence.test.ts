@@ -1,4 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('@/lib/wallet/lifecycle/unilateral-exit-frontend-sdk-persistence', () => ({
+  scheduleUnilateralExitJobSdkWrite: vi.fn(),
+}))
+
 import { persistedUnilateralExitJobExists } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
 import {
   clearPersistedUnilateralExitJob,
@@ -21,7 +26,7 @@ const leaf = { txid: 'aa'.repeat(32), vout: 0 }
 
 describe('unilateral-exit-lifecycle-persistence', () => {
   beforeEach(() => {
-    useUnilateralExitLifecyclePersistenceStore.setState({ jobsByKey: {} })
+    useUnilateralExitLifecyclePersistenceStore.setState({ jobsByKey: {}, hydratedByKey: {} })
   })
 
   it('persistedUnilateralExitJobExists is true only when outpoints are present', () => {

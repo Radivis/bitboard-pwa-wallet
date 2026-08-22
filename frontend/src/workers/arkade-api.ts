@@ -471,6 +471,33 @@ export type ArkadeUnilateralExitFailureReasonCode =
   /** Frontend-only: user aborted orchestration without deleting WASM materials. */
   | 'user_aborted'
 
+export type ArkadeUnilateralExitJobPersistence = {
+  selectedLeafOutpoints: ArkadeVtxoOutpoint[]
+  currentStepRelayedSinceUnix?: number | null
+  jobStartedAtUnix?: number | null
+}
+
+export type ArkadeUnilateralExitAutomationPrefsPersistence = {
+  enabled: boolean
+  feePresetLabel: string
+  maxFeeRateSatPerVb: number
+}
+
+export type ArkadeUnilateralExitFailurePersistence = {
+  selectedLeafOutpoints: ArkadeVtxoOutpoint[]
+  jobStartedAtUnix: number
+  detectedAtUnix: number
+  reasonCode: string
+  detailMessage: string
+  vtxoIds: string[]
+}
+
+export type ArkadeUnilateralExitFrontendPersistence = {
+  job: ArkadeUnilateralExitJobPersistence
+  automationPrefs: ArkadeUnilateralExitAutomationPrefsPersistence
+  lastFailure?: ArkadeUnilateralExitFailurePersistence | null
+}
+
 export interface ArkadeUnilateralExitJobViability {
   status: ArkadeUnilateralExitJobViabilityStatus
   reasonCode: string
@@ -592,4 +619,15 @@ export interface ArkadeService {
   evaluateUnilateralExitJobViability(
     params: ArkadeUnilateralExitProgressParams,
   ): Promise<ArkadeUnilateralExitJobViability>
+  getUnilateralExitFrontendPersistence(): Promise<ArkadeUnilateralExitFrontendPersistence | null>
+  setUnilateralExitFrontendPersistence(
+    bundle: ArkadeUnilateralExitFrontendPersistence,
+  ): Promise<void>
+  setUnilateralExitJob(job: ArkadeUnilateralExitJobPersistence): Promise<void>
+  setUnilateralExitAutomationPrefs(
+    prefs: ArkadeUnilateralExitAutomationPrefsPersistence,
+  ): Promise<void>
+  setUnilateralExitFailure(
+    failure: ArkadeUnilateralExitFailurePersistence | null,
+  ): Promise<void>
 }

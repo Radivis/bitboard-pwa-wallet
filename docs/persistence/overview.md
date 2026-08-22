@@ -107,7 +107,7 @@ Each rail has a save orchestrator that gates persistence on lifecycle phase. See
 | `bitboard-wallet` | Kysely forward migrations in `frontend/src/db/migrations/wallet/` | Report at OPFS `wallet-schema-migration-failure.json` |
 | `bitboard-lab` | Kysely forward migrations in `frontend/src/db/migrations/lab/` | Same pattern via lab migrator |
 
-Zustand stores may carry their own `version` + `migrate` (e.g. `featureStore`, `periodicSyncStore`). Arkade SDK JSON has an independent version in Rust (`BITBOARD_ARK_PERSISTENCE_VERSION`, currently **6**).
+Zustand stores may carry their own `version` + `migrate` (e.g. `featureStore`, `periodicSyncStore`). Arkade SDK JSON has an independent version in Rust (`BITBOARD_ARK_PERSISTENCE_VERSION`, currently **7**).
 
 ## Key file index
 

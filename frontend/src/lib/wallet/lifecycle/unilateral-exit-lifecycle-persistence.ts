@@ -1,6 +1,4 @@
 import { create } from 'zustand'
-import { createJSONStorage, persist } from 'zustand/middleware'
-import { sqliteStorage } from '@/db/storage-adapter'
 import type { NetworkMode } from '@/stores/walletStore'
 import {
   arkadeVtxoOutpointCacheKey,
@@ -12,6 +10,7 @@ import {
   type PersistedUnilateralExitJob,
   type UnilateralExitWalletScope,
 } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
+import { scheduleUnilateralExitJobSdkWrite } from '@/lib/wallet/lifecycle/unilateral-exit-frontend-sdk-persistence'
 
 export const emptyPersistedUnilateralExitJob: PersistedUnilateralExitJob = {
   selectedLeafOutpoints: [],
@@ -46,11 +45,15 @@ function persistedJobOutpointsUnchanged(
 
 interface UnilateralExitLifecyclePersistenceState {
   jobsByKey: Record<string, PersistedUnilateralExitJob>
+  hydratedByKey: Record<string, boolean>
   getJob: (
     walletId: number,
     networkMode: NetworkMode,
     connectionId: string,
   ) => PersistedUnilateralExitJob
+  isHydrated: (scope: UnilateralExitWalletScope) => boolean
+  markHydrated: (scope: UnilateralExitWalletScope) => void
+  hydrateJob: (scope: UnilateralExitWalletScope, job: PersistedUnilateralExitJob) => void
   setActiveJob: (
     scope: UnilateralExitWalletScope,
     selectedLeafOutpoints: ArkadeVtxoOutpoint[],
@@ -61,6 +64,7 @@ interface UnilateralExitLifecyclePersistenceState {
   ) => void
   updateRelayWait: (scope: UnilateralExitWalletScope, sinceUnix: number | null) => void
   clearJob: (scope: UnilateralExitWalletScope) => void
+  clearScope: (scope: UnilateralExitWalletScope) => void
 }
 
 function updateJob(
@@ -106,78 +110,83 @@ export function migratePersistedUnilateralExitJob(
 }
 
 export const useUnilateralExitLifecyclePersistenceStore =
-  create<UnilateralExitLifecyclePersistenceState>()(
-    persist(
-      (set, get) => ({
-        jobsByKey: {},
+  create<UnilateralExitLifecyclePersistenceState>()((set, get) => ({
+    jobsByKey: {},
+    hydratedByKey: {},
 
-        getJob: (walletId, networkMode, connectionId) => {
-          const key = unilateralExitWalletScopeKey({ walletId, networkMode, connectionId })
-          return get().jobsByKey[key] ?? defaultPersistedJob()
-        },
+    getJob: (walletId, networkMode, connectionId) => {
+      const key = unilateralExitWalletScopeKey({ walletId, networkMode, connectionId })
+      return get().jobsByKey[key] ?? defaultPersistedJob()
+    },
 
-        setActiveJob: (scope, selectedLeafOutpoints) => {
-          const key = unilateralExitWalletScopeKey(scope)
-          const sorted = sortArkadeVtxoOutpoints(selectedLeafOutpoints)
-          set((state) => updateJob(state, key, () => newActivePersistedJob(sorted)))
-        },
+    isHydrated: (scope) => {
+      const key = unilateralExitWalletScopeKey(scope)
+      return get().hydratedByKey[key] === true
+    },
 
-        ensureActiveJob: (scope, selectedLeafOutpoints) => {
-          const key = unilateralExitWalletScopeKey(scope)
-          const sorted = sortArkadeVtxoOutpoints(selectedLeafOutpoints)
-          set((state) => {
-            const current = state.jobsByKey[key] ?? defaultPersistedJob()
-            if (persistedJobOutpointsUnchanged(current, sorted)) {
-              return state
-            }
-            return updateJob(state, key, () => newActivePersistedJob(sorted))
-          })
-        },
+    markHydrated: (scope) => {
+      const key = unilateralExitWalletScopeKey(scope)
+      set((state) => ({
+        hydratedByKey: { ...state.hydratedByKey, [key]: true },
+      }))
+    },
 
-        updateRelayWait: (scope, sinceUnix) => {
-          const key = unilateralExitWalletScopeKey(scope)
-          set((state) => {
-            const current = state.jobsByKey[key] ?? emptyPersistedUnilateralExitJob
-            if (current.currentStepRelayedSinceUnix === sinceUnix) {
-              return state
-            }
-            return updateJob(state, key, (job) => ({
-              ...job,
-              currentStepRelayedSinceUnix: sinceUnix,
-            }))
-          })
-        },
+    hydrateJob: (scope, job) => {
+      const key = unilateralExitWalletScopeKey(scope)
+      set((state) => ({
+        jobsByKey: { ...state.jobsByKey, [key]: job },
+        hydratedByKey: { ...state.hydratedByKey, [key]: true },
+      }))
+    },
 
-        clearJob: (scope) => {
-          const key = unilateralExitWalletScopeKey(scope)
-          set((state) =>
-            updateJob(state, key, () => emptyPersistedUnilateralExitJob),
-          )
-        },
-      }),
-      {
-        name: 'unilateral-exit-lifecycle-storage',
-        storage: createJSONStorage(() => sqliteStorage),
-        version: 5,
-        migrate: (persistedState, _version) => {
-          const state = persistedState as {
-            jobsByKey?: Record<string, LegacyPersistedJob>
-          }
-          if (state.jobsByKey == null) {
-            return persistedState
-          }
-          const jobsByKey = Object.fromEntries(
-            Object.entries(state.jobsByKey).map(([key, job]) => [
-              key,
-              migratePersistedUnilateralExitJob(job),
-            ]),
-          )
-          return { ...state, jobsByKey }
-        },
-        partialize: (state) => ({ jobsByKey: state.jobsByKey }),
-      },
-    ),
-  )
+    setActiveJob: (scope, selectedLeafOutpoints) => {
+      const key = unilateralExitWalletScopeKey(scope)
+      const sorted = sortArkadeVtxoOutpoints(selectedLeafOutpoints)
+      set((state) => updateJob(state, key, () => newActivePersistedJob(sorted)))
+    },
+
+    ensureActiveJob: (scope, selectedLeafOutpoints) => {
+      const key = unilateralExitWalletScopeKey(scope)
+      const sorted = sortArkadeVtxoOutpoints(selectedLeafOutpoints)
+      set((state) => {
+        const current = state.jobsByKey[key] ?? defaultPersistedJob()
+        if (persistedJobOutpointsUnchanged(current, sorted)) {
+          return state
+        }
+        return updateJob(state, key, () => newActivePersistedJob(sorted))
+      })
+    },
+
+    updateRelayWait: (scope, sinceUnix) => {
+      const key = unilateralExitWalletScopeKey(scope)
+      set((state) => {
+        const current = state.jobsByKey[key] ?? emptyPersistedUnilateralExitJob
+        if (current.currentStepRelayedSinceUnix === sinceUnix) {
+          return state
+        }
+        return updateJob(state, key, (job) => ({
+          ...job,
+          currentStepRelayedSinceUnix: sinceUnix,
+        }))
+      })
+    },
+
+    clearJob: (scope) => {
+      const key = unilateralExitWalletScopeKey(scope)
+      set((state) => updateJob(state, key, () => emptyPersistedUnilateralExitJob))
+    },
+
+    clearScope: (scope) => {
+      const key = unilateralExitWalletScopeKey(scope)
+      set((state) => {
+        const jobsByKey = { ...state.jobsByKey }
+        const hydratedByKey = { ...state.hydratedByKey }
+        delete jobsByKey[key]
+        delete hydratedByKey[key]
+        return { jobsByKey, hydratedByKey }
+      })
+    },
+  }))
 
 export function getPersistedUnilateralExitJob(
   scope: UnilateralExitWalletScope,
@@ -194,26 +203,43 @@ export function persistActiveUnilateralExitJob(
   useUnilateralExitLifecyclePersistenceStore
     .getState()
     .setActiveJob(scope, selectedLeafOutpoints)
+  scheduleUnilateralExitJobSdkWrite(scope)
 }
 
 export function ensurePersistedUnilateralExitJob(
   scope: UnilateralExitWalletScope,
   selectedLeafOutpoints: ArkadeVtxoOutpoint[],
 ): void {
+  const before = getPersistedUnilateralExitJob(scope)
   useUnilateralExitLifecyclePersistenceStore
     .getState()
     .ensureActiveJob(scope, selectedLeafOutpoints)
+  const after = getPersistedUnilateralExitJob(scope)
+  if (
+    before.jobStartedAtUnix !== after.jobStartedAtUnix ||
+    before.currentStepRelayedSinceUnix !== after.currentStepRelayedSinceUnix ||
+    arkadeVtxoOutpointCacheKey(before.selectedLeafOutpoints) !==
+      arkadeVtxoOutpointCacheKey(after.selectedLeafOutpoints)
+  ) {
+    scheduleUnilateralExitJobSdkWrite(scope)
+  }
 }
 
 export function updatePersistedUnilateralExitRelayWait(
   scope: UnilateralExitWalletScope,
   sinceUnix: number | null,
 ): void {
+  const current = getPersistedUnilateralExitJob(scope)
+  if (current.currentStepRelayedSinceUnix === sinceUnix) {
+    return
+  }
   useUnilateralExitLifecyclePersistenceStore
     .getState()
     .updateRelayWait(scope, sinceUnix)
+  scheduleUnilateralExitJobSdkWrite(scope)
 }
 
 export function clearPersistedUnilateralExitJob(scope: UnilateralExitWalletScope): void {
   useUnilateralExitLifecyclePersistenceStore.getState().clearJob(scope)
+  scheduleUnilateralExitJobSdkWrite(scope)
 }

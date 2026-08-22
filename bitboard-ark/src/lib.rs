@@ -611,3 +611,49 @@ pub async fn ark_evaluate_unilateral_exit_job_viability(
     })
     .await
 }
+
+#[wasm_bindgen]
+pub fn ark_get_unilateral_exit_frontend() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.unilateral_exit_frontend())
+    }))
+}
+
+#[wasm_bindgen]
+pub fn ark_set_unilateral_exit_frontend(params: JsValue) -> Result<(), JsValue> {
+    map_js_error(with_session(|session| {
+        let dto: crate::api_types::UnilateralExitFrontendPersistenceDto =
+            serde_wasm_bindgen::from_value(params)?;
+        session.set_unilateral_exit_frontend(dto);
+        Ok(())
+    }))
+}
+
+#[wasm_bindgen]
+pub fn ark_set_unilateral_exit_job(params: JsValue) -> Result<(), JsValue> {
+    map_js_error(with_session(|session| {
+        let dto: crate::api_types::UnilateralExitJobDto = serde_wasm_bindgen::from_value(params)?;
+        session.set_unilateral_exit_job(dto);
+        Ok(())
+    }))
+}
+
+#[wasm_bindgen]
+pub fn ark_set_unilateral_exit_automation_prefs(params: JsValue) -> Result<(), JsValue> {
+    map_js_error(with_session(|session| {
+        let dto: crate::api_types::UnilateralExitAutomationPrefsDto =
+            serde_wasm_bindgen::from_value(params)?;
+        session.set_unilateral_exit_automation_prefs(dto);
+        Ok(())
+    }))
+}
+
+#[wasm_bindgen]
+pub fn ark_set_unilateral_exit_failure(params: JsValue) -> Result<(), JsValue> {
+    map_js_error(with_session(|session| {
+        let dto: Option<crate::api_types::UnilateralExitFailureDto> =
+            serde_wasm_bindgen::from_value(params)?;
+        session.set_unilateral_exit_failure(dto);
+        Ok(())
+    }))
+}

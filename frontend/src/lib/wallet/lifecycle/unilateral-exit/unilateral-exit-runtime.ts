@@ -1,15 +1,15 @@
 import { toast } from 'sonner'
 import { shouldDeferPersistedUnilateralExitHydrate } from '@/lib/arkade/unilateral-exit-job-reconcile'
 import type { SendFeePresetLabel } from '@/lib/esplora/esplora-fee-estimates'
-import { waitForPersistedStoreHydration } from '@/lib/settings/persisted-store-hydration'
 import { getArkadeLoadLifecycleSnapshot } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
 import { getArkadeSyncLifecycleSnapshot } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
 import { useUnilateralExitAutomationPrefsStore } from '@/lib/wallet/lifecycle/unilateral-exit-automation-prefs-persistence'
 import type { UnilateralExitAutomationPausedReason } from '@/lib/wallet/lifecycle/unilateral-exit-automation-types'
 import {
-  getPersistedUnilateralExitJob,
-  useUnilateralExitLifecyclePersistenceStore,
-} from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence'
+  clearUnilateralExitFrontendMemoryForScope,
+  hydrateUnilateralExitFrontendPersistenceFromSdk,
+} from '@/lib/wallet/lifecycle/unilateral-exit-frontend-sdk-persistence'
+import { getPersistedUnilateralExitJob } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence'
 import type {
   UnilateralExitProceedStepParams,
   UnilateralExitStartParams,
@@ -135,7 +135,7 @@ export function sendUnilateralExitEvent(event: UnilateralExitMachineEvent): void
 export async function configureUnilateralExitForLoadedWallet(
   walletScope: UnilateralExitWalletScope,
 ): Promise<void> {
-  await waitForPersistedStoreHydration(useUnilateralExitLifecyclePersistenceStore)
+  await hydrateUnilateralExitFrontendPersistenceFromSdk(walletScope)
 
   const current = getUnilateralExitActorSnapshot()
   const scopeMatches =
@@ -225,7 +225,7 @@ export async function hydrateUnilateralExitFromPersistence(params: {
   inProgressOutpoints: ArkadeVtxoOutpoint[]
   unilateralExitInProgressSats: number
 }): Promise<void> {
-  await waitForPersistedStoreHydration(useUnilateralExitLifecyclePersistenceStore)
+  await hydrateUnilateralExitFrontendPersistenceFromSdk(params.walletScope)
 
   const persisted = getPersistedUnilateralExitJob(params.walletScope)
   if (!persistedUnilateralExitJobExists(persisted)) {
@@ -388,7 +388,11 @@ export function syncUnilateralExitWithLockPhase(lockPhase: LockLifecyclePhase): 
   if (shouldSkipRailLifecycleResetForLockPhase(lockPhase, hasInFlightWork)) {
     return
   }
+  const scope = snapshot.context.walletScope
   sendUnilateralExitEvent({ type: 'WALLET_RESET' })
+  if (scope != null) {
+    clearUnilateralExitFrontendMemoryForScope(scope)
+  }
 }
 
 export function bootstrapUnilateralExitAutomation(): void {

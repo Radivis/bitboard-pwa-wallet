@@ -12,6 +12,11 @@ vi.mock('@/workers/arkade-factory', () => ({
     syncWithOperator,
     migrateDeprecatedSignerVtxos,
     getAutonomousModeStatus,
+    setUnilateralExitJob: vi.fn(async () => {}),
+    setUnilateralExitAutomationPrefs: vi.fn(async () => {}),
+    setUnilateralExitFailure: vi.fn(async () => {}),
+    setUnilateralExitFrontendPersistence: vi.fn(async () => {}),
+    getUnilateralExitFrontendPersistence: vi.fn(async () => null),
   }),
 }))
 

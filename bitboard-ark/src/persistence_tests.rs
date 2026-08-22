@@ -1,8 +1,10 @@
 use crate::persistence::{
     BITBOARD_ARK_PERSISTENCE_VERSION, BitboardArkPersistence, JsonPersistenceDb, OperatorIdentity,
     OperatorSignerMigrationHint, PendingBatchIntentKind, PendingBatchIntentRecord,
-    PendingBatchOutpointRecord, PendingExitDeductionRecord, PendingExitKind, network_label,
-    operator_identity_for_connected_signer, persisted_operator_identity_for_open,
+    PendingBatchOutpointRecord, PendingExitDeductionRecord, PendingExitKind,
+    UnilateralExitAutomationPrefsRecord, UnilateralExitFailureRecord,
+    UnilateralExitFrontendPersistence, UnilateralExitJobRecord, UnilateralExitLeafOutpointRecord,
+    network_label, operator_identity_for_connected_signer, persisted_operator_identity_for_open,
     validate_operator_identity,
 };
 use ark_core::server::{DeprecatedSigner, Info};
@@ -609,6 +611,102 @@ fn persistence_v5_import_migrates_sibling_materials_to_leaf_tx_map() {
             .map(|materials| materials.cached_at),
         Some(20)
     );
+    assert!(parsed.wallet_db.unilateral_exit_frontend.is_none());
+}
+
+#[test]
+fn persistence_v6_import_defaults_frontend_bundle_to_none() {
+    use crate::persistence::LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V6;
+
+    let v6_json = format!(
+        r#"{{"version":{version},"engine":"ark-rs","ark_sdk_version":"0.9.3","operator_identity":{{"signer_pk_hex":"02abc","network":"signet"}},"wallet_db":{{"boarding_outputs":[],"secret_keys_by_owner_pk_hex":{{}}}},"swap_storage":{{}}}}"#,
+        version = LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V6,
+    );
+    let parsed = BitboardArkPersistence::parse_import(Some(&v6_json));
+    assert!(parsed.wallet_db.unilateral_exit_frontend.is_none());
+}
+
+#[test]
+fn persistence_v7_round_trips_unilateral_exit_frontend_bundle() {
+    let identity = OperatorIdentity {
+        signer_pk_hex: "02abc".to_string(),
+        network: network_label(Network::Signet),
+    };
+    let leaf = UnilateralExitLeafOutpointRecord {
+        txid: "aa".repeat(32),
+        vout: 1,
+    };
+    let mut envelope = BitboardArkPersistence::empty(identity);
+    envelope.wallet_db.unilateral_exit_frontend = Some(UnilateralExitFrontendPersistence {
+        job: UnilateralExitJobRecord {
+            selected_leaf_outpoints: vec![leaf.clone()],
+            current_step_relayed_since_unix: Some(1_700_000_010),
+            job_started_at_unix: Some(1_700_000_000),
+        },
+        automation_prefs: UnilateralExitAutomationPrefsRecord {
+            enabled: true,
+            fee_preset_label: "High".to_string(),
+            max_fee_rate_sat_per_vb: 20.0,
+        },
+        last_failure: Some(UnilateralExitFailureRecord {
+            selected_leaf_outpoints: vec![leaf],
+            job_started_at_unix: 1_700_000_000,
+            detected_at_unix: 1_700_000_100,
+            reason_code: "user_aborted".to_string(),
+            detail_message: "User aborted".to_string(),
+            vtxo_ids: vec!["vtxo-1".to_string()],
+        }),
+    });
+
+    let json = serde_json::to_string(&envelope).expect("serialize");
+    let parsed = BitboardArkPersistence::parse_import(Some(&json));
+    let bundle = parsed
+        .wallet_db
+        .unilateral_exit_frontend
+        .expect("frontend bundle");
+    assert_eq!(bundle.job.selected_leaf_outpoints.len(), 1);
+    assert_eq!(
+        bundle.job.current_step_relayed_since_unix,
+        Some(1_700_000_010)
+    );
+    assert_eq!(bundle.job.job_started_at_unix, Some(1_700_000_000));
+    assert!(bundle.automation_prefs.enabled);
+    assert_eq!(bundle.automation_prefs.fee_preset_label, "High");
+    assert_eq!(bundle.automation_prefs.max_fee_rate_sat_per_vb, 20.0);
+    let failure = bundle.last_failure.expect("failure");
+    assert_eq!(failure.reason_code, "user_aborted");
+    assert_eq!(failure.vtxo_ids, vec!["vtxo-1".to_string()]);
+}
+
+#[test]
+fn unilateral_exit_frontend_setters_create_bundle_from_none() {
+    let db = JsonPersistenceDb::default();
+    assert!(db.unilateral_exit_frontend().is_none());
+
+    db.set_unilateral_exit_job(UnilateralExitJobRecord::empty());
+    let bundle = db.unilateral_exit_frontend().expect("created");
+    assert!(bundle.job.selected_leaf_outpoints.is_empty());
+    assert!(!bundle.automation_prefs.enabled);
+    assert!(bundle.last_failure.is_none());
+
+    db.set_unilateral_exit_automation_prefs(UnilateralExitAutomationPrefsRecord {
+        enabled: true,
+        fee_preset_label: "Low".to_string(),
+        max_fee_rate_sat_per_vb: 1.0,
+    });
+    db.set_unilateral_exit_failure(None);
+    let bundle = db.unilateral_exit_frontend().expect("still present");
+    assert!(bundle.automation_prefs.enabled);
+    assert_eq!(bundle.automation_prefs.fee_preset_label, "Low");
+    assert!(bundle.last_failure.is_none());
+}
+
+#[test]
+fn empty_unilateral_exit_job_is_some_bundle_not_none() {
+    let db = JsonPersistenceDb::default();
+    db.set_unilateral_exit_frontend(UnilateralExitFrontendPersistence::default());
+    let bundle = db.unilateral_exit_frontend().expect("written");
+    assert!(bundle.job.selected_leaf_outpoints.is_empty());
 }
 
 #[test]

@@ -1,6 +1,6 @@
 # Unilateral exit persistence
 
-Durable state for unilateral exit lives in **two layers**. Abort and `CLEAR_JOB` only touch the **frontend job** layer. WASM materials, watches, pending deductions, and on-chain broadcasts survive abort (`ARK-EXIT-23`).
+Durable state for unilateral exit lives in **encrypted `sdkPersistenceJson`**. Abort and `CLEAR_JOB` only clear the **frontend job** bundle. WASM materials, watches, pending deductions, and on-chain broadcasts survive abort (`ARK-EXIT-23`).
 
 Protocol and orchestration: [unilateral-exit.md](../unilateral-exit.md). Arkade envelope overview: [arkade.md](arkade.md). Wallet-model balance timing: [arkade-bitboard-wallet-model.md](../arkade-bitboard-wallet-model.md).
 
@@ -13,31 +13,33 @@ flowchart TB
     stepWait[unilateral_exit_step_wait]
     deductions[pending_exit_deductions]
     cachedInfo[cached_operator_info]
-  end
-  subgraph zustandLayer [SQLite settings plaintext]
-    jobStore[unilateral-exit-lifecycle-storage]
-    prefsStore[unilateral-exit-automation-prefs]
-    failureStore[unilateral-exit-failure-storage]
+    frontendBundle[unilateral_exit_frontend]
   end
   subgraph memoryOnly [Session only]
+    jobCache[lifecycle memory cache]
+    prefsCache[automation prefs cache]
+    failureCache[failure banner cache]
     controlStore[unilateralExitControlStore]
   end
   actor[XState unilateralExit actor]
-  actor --> jobStore
-  actor --> failureStore
+  actor --> jobCache
+  actor --> failureCache
   actor --> wasmLayer
+  jobCache --> frontendBundle
+  prefsCache --> frontendBundle
+  failureCache --> frontendBundle
   controlStore -.-> actor
 ```
 
-Keys for Zustand stores are `walletId:networkMode:connectionId` (`unilateralExitWalletScopeKey`).
+Memory caches are keyed by `walletId:networkMode:connectionId` (`unilateralExitWalletScopeKey`). Durable fields are per operator connection inside that connection's envelope — no `jobsByKey` map.
 
 ---
 
 ## WASM / encrypted `sdkPersistenceJson`
 
-Flushed through the Arkade save lifecycle into `StoredArkadeOperatorConnection.sdkPersistenceJson`. Types: [`bitboard-ark/src/persistence.rs`](../../bitboard-ark/src/persistence.rs). Materials encode/decode: [`unilateral_exit_materials.rs`](../../bitboard-ark/src/unilateral_exit_materials.rs).
+Flushed through the Arkade save lifecycle into `StoredArkadeOperatorConnection.sdkPersistenceJson`. Types: [`bitboard-ark/src/persistence.rs`](../../bitboard-ark/src/persistence.rs). Materials encode/decode: [`unilateral_exit_materials.rs`](../../bitboard-ark/src/unilateral_exit_materials.rs). Frontend bundle I/O: [`unilateral-exit-frontend-sdk-persistence.ts`](../../frontend/src/lib/wallet/lifecycle/unilateral-exit-frontend-sdk-persistence.ts).
 
-**Envelope version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 6`. `parse_import` migrates v3–v5. v5 stored materials **per VTXO row**; v6 keys them by **leaf txid** (`unilateral_exit_materials_by_leaf_tx`). Sibling outpoints on the same leaf share one materials record.
+**Envelope version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 7`. `parse_import` migrates v3–v6. v5 stored materials **per VTXO row**; v6 keys them by **leaf txid** (`unilateral_exit_materials_by_leaf_tx`). v7 adds `unilateral_exit_frontend` (job, automation prefs, last failure). Missing v7 field on a v6 blob is `None` and triggers a one-shot overlay from legacy SQLite `settings` rows.
 
 | Field | Where | Role |
 |-------|-------|------|
@@ -47,7 +49,9 @@ Flushed through the Arkade save lifecycle into `StoredArkadeOperatorConnection.s
 | `unilateral_exit_step_wait` | `WalletDbSnapshot` | Current step txid, index, `started_at` for relay-wait UI |
 | `pending_exit_deductions` | `WalletDbSnapshot` | Balance-line records during unroll before `is_unrolled` |
 | `cached_operator_info` | `WalletDbSnapshot` | Last `getInfo` snapshot for autonomous mode |
+| `unilateral_exit_frontend` | `WalletDbSnapshot` | Frontend job bookmark, automation prefs, last failure |
 
+### Materials (`UnilateralExitMaterialsRecord`)
 ### Materials (`UnilateralExitMaterialsRecord`)
 
 ```text
@@ -74,55 +78,45 @@ Registered when a leaf is marked unrolled. Cleared only on completion, hard unro
 step_txid, step_index, started_at
 ```
 
-`ensure_unilateral_exit_step_wait` reuses `started_at` when the same step is already tracked. Cleared when the current step reaches 1 confirmation or the branch is complete. Frontend also mirrors relay wait as `currentStepRelayedSinceUnix` in the job store (regtest `/raw` 404 workaround).
+`ensure_unilateral_exit_step_wait` reuses `started_at` when the same step is already tracked. Cleared when the current step reaches 1 confirmation or the branch is complete. Frontend also mirrors relay wait as `currentStepRelayedSinceUnix` in the frontend job bundle (regtest `/raw` 404 workaround).
 
 ### Pending deductions
 
 First unroll broadcast writes a unilateral pending deduction while the VTXO is still spendable in the snapshot. After local `is_unrolled`, `reconcile_pending_exit_deductions` drops the record; the same sats move to the **exiting** sub-bucket. See the wallet-model [balance timing table](../arkade-bitboard-wallet-model.md#unilateral-vs-collaborative-exit-balance-timing).
 
----
+### Frontend bundle (`UnilateralExitFrontendPersistence`)
 
-## Zustand / SQLite `settings`
+Optional on `WalletDbSnapshot`. `None` means the envelope has never been written in v7 (legacy blob or new connection) and should overlay leftover SQLite settings once. `Some` with empty `selected_leaf_outpoints` is an explicit empty job — do **not** re-read settings.
 
-Plaintext rows in the wallet `settings` table via `sqliteStorage`. Not secrets. Hydration: `waitForPersistedStoreHydration` before `HYDRATE_OR_START`.
+```text
+job.selected_leaf_outpoints[]     { txid, vout }
+job.current_step_relayed_since_unix
+job.job_started_at_unix
+automation_prefs.enabled
+automation_prefs.fee_preset_label
+automation_prefs.max_fee_rate_sat_per_vb
+last_failure?                     reason_code, outpoints, timestamps, vtxo_ids
+```
 
-### Job: `unilateral-exit-lifecycle-storage` (v5)
+A job exists iff `selected_leaf_outpoints.length > 0`. The machine writes this on `START_MANUAL` / `START_AUTOMATIC` (new `job_started_at_unix`, cleared relay wait) and on `HYDRATE_OR_START` (`ensureActiveJob`, which preserves those timestamps when the outpoints are unchanged). It clears the job on complete, terminate, abort, and `CLEAR_JOB`. Failures (including user abort) stay in `last_failure`.
 
-File: [`unilateral-exit-lifecycle-persistence.ts`](../../frontend/src/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence.ts)
+`context.automationEnabled` is the only job-level manual/automatic switch; prefs changes still flow as `AUTOMATION_PREFS_CHANGED`.
 
-`jobsByKey` → `PersistedUnilateralExitJob`. A job exists iff `selectedLeafOutpoints.length > 0`.
-
-| Field | Meaning |
-|-------|---------|
-| `selectedLeafOutpoints` | Sorted job leaves; empty means no frontend job |
-| `currentStepRelayedSinceUnix` | When the active step was first known relayed; null when not waiting |
-| `jobStartedAtUnix` | Job start; copied into failure records; cleared on `clearJob` |
-
-v5 drops `jobActive`. Inactive v4 rows (`jobActive: false`, including aborted jobs that still listed outpoints) migrate to an empty bookmark.
-
-The machine writes this on `START_MANUAL` / `START_AUTOMATIC` (`setActiveJob`, new `jobStartedAtUnix` and cleared relay wait) and on `HYDRATE_OR_START` (`ensureActiveJob`, which preserves those timestamps when the outpoints are unchanged). It clears the bookmark on complete, terminate, abort, and `CLEAR_JOB`. Failures (including user abort) are stored separately in the failure bookmark.
-
-### Automation prefs: `unilateral-exit-automation-prefs` (v1)
-
-File: [`unilateral-exit-automation-prefs-persistence.ts`](../../frontend/src/lib/wallet/lifecycle/unilateral-exit-automation-prefs-persistence.ts)
-
-`prefsByKey` → `{ enabled, feePresetLabel, maxFeeRateSatPerVb }`. Changes flow into the actor as `AUTOMATION_PREFS_CHANGED`. `context.automationEnabled` is the only job-level manual/automatic switch.
-
-### Failure: `unilateral-exit-failure-storage` (v2)
-
-File: [`unilateral-exit-failure-persistence.ts`](../../frontend/src/lib/wallet/lifecycle/unilateral-exit-failure-persistence.ts)
-
-One last failure per scope, for the control-page banner:
-
-| `reasonCode` | When |
-|--------------|------|
+| `last_failure.reason_code` | When |
+|----------------------------|------|
 | `asp_swept_targets` | Viability: ASP swept job leaves |
 | `branch_funding_lost` | Viability: foreign spend of branch funding |
-| `user_aborted` | `ABORT_ORCHESTRATION` (includes `vtxoIds` for copy) |
+| `user_aborted` | `ABORT_ORCHESTRATION` (includes `vtxo_ids` for copy) |
+
+Granular WASM setters (`ark_set_unilateral_exit_job` / `_automation_prefs` / `_failure`) flush `sdkPersistenceJson` only — they do not operator-sync.
+
+**Legacy settings overlay:** first session open after upgrade reads `unilateral-exit-lifecycle-storage`, `unilateral-exit-automation-prefs`, and `unilateral-exit-failure-storage` from the `settings` table when the envelope field is `None`, writes the merged bundle, then deletes that scope's key from each JSON (drops the settings row when the map is empty). Inactive v4 job rows (`jobActive: false`) overlay as an empty job.
 
 ### Control store (not persisted)
 
-[`unilateralExitControlStore.ts`](../../frontend/src/stores/unilateralExitControlStore.ts) holds leaf selection and graph epoch in memory only. On unlock, hydrate selection from the **job store** when persisted outpoints are still present (`shouldHydratePersistedUnilateralExitJob`).
+[`unilateralExitControlStore.ts`](../../frontend/src/stores/unilateralExitControlStore.ts) holds leaf selection and graph epoch in memory only. On unlock, hydrate selection from the **job cache** when persisted outpoints are still present (`shouldHydratePersistedUnilateralExitJob`).
+
+Zustand stores for job/prefs/failure are **session caches** (no `sqliteStorage`). Hydration: `hydrateUnilateralExitFrontendPersistenceFromSdk` before `HYDRATE_OR_START` / `WALLET_CONFIGURED`. Lock/`WALLET_RESET` clears the memory cache for the scope; durable state stays in the envelope.
 
 ---
 
@@ -132,6 +126,6 @@ One last failure per scope, for the control-page banner:
 2. If persisted outpoints are present → `HYDRATE_OR_START` (always via `checkingProgress`).
 3. If the job bookmark is empty, hydrate does **not** invent a job from leftover WASM in-progress exits. Those rows stay visible on the control page; the user starts again explicitly. Crash recovery is “persisted outpoints are still there.”
 4. While the job exists, topology/progress outpoints come from the **actor** (`resolveUnilateralExitTopologyOutpoints` / `resolveUnilateralExitJobOutpoints`). Never skip when lifecycle outpoints are empty but persistence still has them.
-5. Hydrate waits until Arkade load/sync is quiet (or until in-progress sats/outpoints are already visible) before sending `HYDRATE_OR_START`. WASM reporting no in-progress exits does **not** clear a persisted job — that is pre-broadcast crash recovery. The machine clears persist on complete / abort / terminate.
+5. Hydrate waits until Arkade load/sync is quiet (or until in-progress sats/outpoints are already visible) before sending `HYDRATE_OR_START`. WASM reporting no in-progress exits does **not** clear a persisted job — that is pre-broadcast crash recovery. The machine clears the job bookmark on complete / abort / terminate.
 
-TanStack Query caches progress/topology/balance for display. During an active job it does **not** poll or refetch `getUnilateralExitProgress`; actors seed the progress cache after WASM reads. Durable writes happen in WASM export (encrypted payload) and Zustand persist (settings). `actor.context.progress` is authoritative over the query cache.
+TanStack Query caches progress/topology/balance for display. During an active job it does **not** poll or refetch `getUnilateralExitProgress`; actors seed the progress cache after WASM reads. Durable writes happen in WASM export (encrypted payload). `actor.context.progress` is authoritative over the query cache.

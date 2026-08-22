@@ -622,3 +622,49 @@ pub struct UnilateralExitJobViabilityDto {
     pub detail_message: Option<String>,
     pub offending_outpoints: Vec<VirtualOutPoint>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitLeafOutpointDto {
+    pub txid: String,
+    pub vout: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitJobDto {
+    pub selected_leaf_outpoints: Vec<UnilateralExitLeafOutpointDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_step_relayed_since_unix: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub job_started_at_unix: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitAutomationPrefsDto {
+    pub enabled: bool,
+    pub fee_preset_label: String,
+    pub max_fee_rate_sat_per_vb: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitFailureDto {
+    pub selected_leaf_outpoints: Vec<UnilateralExitLeafOutpointDto>,
+    pub job_started_at_unix: i64,
+    pub detected_at_unix: i64,
+    pub reason_code: String,
+    pub detail_message: String,
+    #[serde(default)]
+    pub vtxo_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitFrontendPersistenceDto {
+    pub job: UnilateralExitJobDto,
+    pub automation_prefs: UnilateralExitAutomationPrefsDto,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_failure: Option<UnilateralExitFailureDto>,
+}

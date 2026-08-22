@@ -48,6 +48,10 @@ import type {
   ArkadeUnilateralExitProgress,
   ArkadeUnilateralExitProgressParams,
   ArkadeUnilateralExitJobViability,
+  ArkadeUnilateralExitFrontendPersistence,
+  ArkadeUnilateralExitJobPersistence,
+  ArkadeUnilateralExitAutomationPrefsPersistence,
+  ArkadeUnilateralExitFailurePersistence,
   ArkadeOperatorScheduledSession,
   ArkadeOperatorTrustStatus,
   ArkadeOperatorConfigDiffResult,
@@ -814,6 +818,46 @@ const arkadeService: ArkadeService = {
           params,
         ) as Promise<ArkadeUnilateralExitJobViability>,
     )
+  },
+
+  async getUnilateralExitFrontendPersistence(): Promise<ArkadeUnilateralExitFrontendPersistence | null> {
+    const result = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_get_unilateral_exit_frontend(),
+    )
+    if (result == null) {
+      return null
+    }
+    return result as ArkadeUnilateralExitFrontendPersistence
+  },
+
+  async setUnilateralExitFrontendPersistence(
+    bundle: ArkadeUnilateralExitFrontendPersistence,
+  ): Promise<void> {
+    await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_set_unilateral_exit_frontend(bundle),
+    )
+    await flushSdkPersistenceNowOrThrow()
+  },
+
+  async setUnilateralExitJob(job: ArkadeUnilateralExitJobPersistence): Promise<void> {
+    await invokeWasmArk((wasmModule) => wasmModule.ark_set_unilateral_exit_job(job))
+    await flushSdkPersistenceNowOrThrow()
+  },
+
+  async setUnilateralExitAutomationPrefs(
+    prefs: ArkadeUnilateralExitAutomationPrefsPersistence,
+  ): Promise<void> {
+    await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_set_unilateral_exit_automation_prefs(prefs),
+    )
+    await flushSdkPersistenceNowOrThrow()
+  },
+
+  async setUnilateralExitFailure(
+    failure: ArkadeUnilateralExitFailurePersistence | null,
+  ): Promise<void> {
+    await invokeWasmArk((wasmModule) => wasmModule.ark_set_unilateral_exit_failure(failure))
+    await flushSdkPersistenceNowOrThrow()
   },
 }
 

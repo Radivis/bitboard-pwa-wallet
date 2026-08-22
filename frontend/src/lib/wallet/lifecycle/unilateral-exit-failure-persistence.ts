@@ -1,6 +1,4 @@
 import { create } from 'zustand'
-import { createJSONStorage, persist } from 'zustand/middleware'
-import { sqliteStorage } from '@/db/storage-adapter'
 import type { NetworkMode } from '@/stores/walletStore'
 import type { ArkadeVtxoOutpoint } from '@/workers/arkade-api'
 import { sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
@@ -10,6 +8,7 @@ import {
   type UnilateralExitFailureReasonCode,
   type UnilateralExitWalletScope,
 } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
+import { scheduleUnilateralExitFailureSdkWrite } from '@/lib/wallet/lifecycle/unilateral-exit-frontend-sdk-persistence'
 
 interface UnilateralExitFailurePersistenceState {
   failuresByKey: Record<string, PersistedUnilateralExitFailure>
@@ -18,72 +17,74 @@ interface UnilateralExitFailurePersistenceState {
     networkMode: NetworkMode,
     connectionId: string,
   ) => PersistedUnilateralExitFailure | null
+  hydrateFailure: (
+    scope: UnilateralExitWalletScope,
+    failure: PersistedUnilateralExitFailure | null,
+  ) => void
   persistFailure: (scope: UnilateralExitWalletScope, failure: PersistedUnilateralExitFailure) => void
   clearFailure: (scope: UnilateralExitWalletScope) => void
+  clearScope: (scope: UnilateralExitWalletScope) => void
 }
 
 export const useUnilateralExitFailurePersistenceStore =
-  create<UnilateralExitFailurePersistenceState>()(
-    persist(
-      (set, get) => ({
-        failuresByKey: {},
+  create<UnilateralExitFailurePersistenceState>()((set, get) => ({
+    failuresByKey: {},
 
-        getFailure: (walletId, networkMode, connectionId) => {
-          const key = unilateralExitWalletScopeKey({ walletId, networkMode, connectionId })
-          return get().failuresByKey[key] ?? null
-        },
+    getFailure: (walletId, networkMode, connectionId) => {
+      const key = unilateralExitWalletScopeKey({ walletId, networkMode, connectionId })
+      return get().failuresByKey[key] ?? null
+    },
 
-        persistFailure: (scope, failure) => {
-          const key = unilateralExitWalletScopeKey(scope)
-          const sortedOutpoints = sortArkadeVtxoOutpoints(failure.selectedLeafOutpoints)
-          set((state) => ({
-            failuresByKey: {
-              ...state.failuresByKey,
-              [key]: {
-                ...failure,
-                selectedLeafOutpoints: sortedOutpoints,
-              },
-            },
-          }))
-        },
+    hydrateFailure: (scope, failure) => {
+      const key = unilateralExitWalletScopeKey(scope)
+      set((state) => {
+        const failuresByKey = { ...state.failuresByKey }
+        if (failure == null) {
+          delete failuresByKey[key]
+        } else {
+          failuresByKey[key] = failure
+        }
+        return { failuresByKey }
+      })
+    },
 
-        clearFailure: (scope) => {
-          const key = unilateralExitWalletScopeKey(scope)
-          set((state) => {
-            if (state.failuresByKey[key] == null) {
-              return state
-            }
-            const failuresByKey = { ...state.failuresByKey }
-            delete failuresByKey[key]
-            return { failuresByKey }
-          })
+    persistFailure: (scope, failure) => {
+      const key = unilateralExitWalletScopeKey(scope)
+      const sortedOutpoints = sortArkadeVtxoOutpoints(failure.selectedLeafOutpoints)
+      set((state) => ({
+        failuresByKey: {
+          ...state.failuresByKey,
+          [key]: {
+            ...failure,
+            selectedLeafOutpoints: sortedOutpoints,
+          },
         },
-      }),
-      {
-        name: 'unilateral-exit-failure-storage',
-        storage: createJSONStorage(() => sqliteStorage),
-        version: 2,
-        migrate: (persistedState, version) => {
-          const state = persistedState as {
-            failuresByKey?: Record<string, PersistedUnilateralExitFailure>
-          }
-          if (state.failuresByKey == null || version >= 2) {
-            return persistedState
-          }
-          const failuresByKey = Object.fromEntries(
-            Object.entries(state.failuresByKey).map(([key, failure]) => [
-              key,
-              {
-                ...failure,
-                vtxoIds: failure.vtxoIds ?? [],
-              },
-            ]),
-          )
-          return { ...state, failuresByKey }
-        },
-      },
-    ),
-  )
+      }))
+      scheduleUnilateralExitFailureSdkWrite(scope)
+    },
+
+    clearFailure: (scope) => {
+      const key = unilateralExitWalletScopeKey(scope)
+      set((state) => {
+        if (state.failuresByKey[key] == null) {
+          return state
+        }
+        const failuresByKey = { ...state.failuresByKey }
+        delete failuresByKey[key]
+        return { failuresByKey }
+      })
+      scheduleUnilateralExitFailureSdkWrite(scope)
+    },
+
+    clearScope: (scope) => {
+      const key = unilateralExitWalletScopeKey(scope)
+      set((state) => {
+        const failuresByKey = { ...state.failuresByKey }
+        delete failuresByKey[key]
+        return { failuresByKey }
+      })
+    },
+  }))
 
 export function getPersistedUnilateralExitFailure(
   scope: UnilateralExitWalletScope,
