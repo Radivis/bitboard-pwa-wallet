@@ -12,6 +12,7 @@ import {
   selectUnilateralExitInProgressOverlay,
   selectUnilateralExitLifecycleSnapshot,
   selectUnilateralExitProceedButtonState,
+  selectUnilateralExitAutomationSnapshot,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-selectors'
 import { UnilateralExitLifecyclePhase } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
 import { toUnilateralExitActorSnapshot } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-snapshot'
@@ -328,7 +329,7 @@ describe('selectUnilateralExitInProgressOverlay', () => {
     expect(selectUnilateralExitInProgressOverlay(snapshot)).toBe('waitingForParentData')
   })
 
-  it('keeps pickaxe overlay while polling from waitingConfirm', () => {
+  it('does not keep pickaxe overlay while polling from waitingConfirm', () => {
     const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.checkingProgress, {
       jobOutpoints: [leaf],
       progress: progress({
@@ -338,7 +339,16 @@ describe('selectUnilateralExitInProgressOverlay', () => {
         nodeStatuses: [{ txid: 'step0', confirmations: 0, status: 'inProgress' }],
       }),
     })
-    expect(selectUnilateralExitInProgressOverlay(snapshot)).toBe('waiting')
+    expect(selectUnilateralExitInProgressOverlay(snapshot)).toBeNull()
+    expect(
+      selectUnilateralExitControlJobState(snapshot, {
+        hasInProgressExits: false,
+        totalSteps: 2,
+      }).phase,
+    ).toBe('advancing')
+    expect(selectUnilateralExitLifecycleSnapshot(snapshot).phase).toBe(
+      UnilateralExitLifecyclePhase.Advancing,
+    )
   })
 
   it('returns null during proceeding', () => {
@@ -468,5 +478,20 @@ describe('selectUnilateralExitLifecycleSnapshot terminated', () => {
       UnilateralExitLifecyclePhase.Terminated,
     )
     expect(selectIsUnilateralExitJobActive(snapshot)).toBe(false)
+  })
+})
+
+describe('selectUnilateralExitAutomationSnapshot', () => {
+  it('uses machine automationEnabled as the enabled bit', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.idle, {
+      automationEnabled: true,
+    })
+    expect(
+      selectUnilateralExitAutomationSnapshot(snapshot, {
+        enabled: false,
+        feePresetLabel: 'High',
+        maxFeeRateSatPerVb: 20,
+      }).prefs.enabled,
+    ).toBe(true)
   })
 })

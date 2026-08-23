@@ -885,7 +885,7 @@ fn pending_batch_intents_overlap(
     pending_batch_record_overlaps_outpoints(left, &right.onchain_outpoints, &right.vtxo_outpoints)
 }
 
-fn pending_batch_record_overlaps_outpoints(
+pub(crate) fn pending_batch_record_overlaps_outpoints(
     record: &PendingBatchIntentRecord,
     onchain_outpoints: &[PendingBatchOutpointRecord],
     vtxo_outpoints: &[PendingBatchOutpointRecord],

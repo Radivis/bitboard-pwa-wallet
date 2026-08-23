@@ -48,14 +48,19 @@ vi.mock('@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator', () => ({
 }))
 
 const mockSetAutomationEnabled = vi.fn()
+const mockAutomationPrefs = vi.hoisted(() => ({
+  enabled: false,
+  feePresetLabel: 'High' as const,
+  maxFeeRateSatPerVb: 20,
+}))
 
 vi.mock('@/lib/wallet/lifecycle/unilateral-exit-automation-prefs-persistence', () => ({
   useUnilateralExitAutomationPrefsStore: {
     getState: () => ({
       getPrefs: () => ({
-        enabled: false,
-        feePresetLabel: 'High',
-        maxFeeRateSatPerVb: 20,
+        enabled: mockAutomationPrefs.enabled,
+        feePresetLabel: mockAutomationPrefs.feePresetLabel,
+        maxFeeRateSatPerVb: mockAutomationPrefs.maxFeeRateSatPerVb,
       }),
       setEnabled: mockSetAutomationEnabled,
     }),
@@ -127,6 +132,11 @@ import {
   getUnilateralExitActorSnapshot,
   syncUnilateralExitWithLockPhase,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime'
+import {
+  consumePendingBatchIntentCancelled,
+  markPendingBatchIntentCancelled,
+  pendingBatchIntentKey,
+} from '@/lib/arkade/arkade-pending-batch-intent'
 import { UNILATERAL_EXIT_MACHINE_STATE } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-types'
 import { unilateralExitSnapshotIsInState } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-snapshot'
 
@@ -143,6 +153,7 @@ describe('unilateral-exit-runtime hydration', () => {
     vi.clearAllMocks()
     sdkHydrated = false
     sdkHydrationWaiters = []
+    mockAutomationPrefs.enabled = false
     resetUnilateralExitActorForTests()
     mockGetJob.mockReturnValue({
       selectedLeafOutpoints: [leaf],
@@ -365,5 +376,27 @@ describe('unilateral-exit-runtime hydration', () => {
       unilateralExitSnapshotIsInState(snapshot, UNILATERAL_EXIT_MACHINE_STATE.idle) ||
         unilateralExitSnapshotIsInState(snapshot, UNILATERAL_EXIT_MACHINE_STATE.aborted),
     ).toBe(true)
+  })
+
+  it('configure_syncs_automation_prefs_into_machine', async () => {
+    sdkHydrated = true
+    mockAutomationPrefs.enabled = true
+
+    await configureUnilateralExitForLoadedWallet(walletScope)
+
+    expect(getUnilateralExitActorSnapshot().context.automationEnabled).toBe(true)
+  })
+
+  it('lock_reset_clears_pending_intent_session_tracking', () => {
+    const intent = {
+      kind: 'recover',
+      amountSats: 1,
+      registeredAt: 1,
+      onchainOutpoints: [],
+      vtxoOutpoints: [{ txid: 'aa', vout: 0 }],
+    }
+    markPendingBatchIntentCancelled(intent)
+    syncUnilateralExitWithLockPhase('locked')
+    expect(consumePendingBatchIntentCancelled(pendingBatchIntentKey(intent))).toBe(false)
   })
 })

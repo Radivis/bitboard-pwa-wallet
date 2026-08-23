@@ -13,10 +13,12 @@ use crate::api_types::{
     CollaborativeExitParams, PendingBatchIntentActionParams, PendingBatchIntentDto,
     PendingBatchOutpointDto,
 };
+use crate::constants::BOARDING_REGISTER_INTENT_TTL_SECS;
 use crate::error::ArkResult;
 use crate::persistence::{
     JsonPersistenceDb, PendingBatchIntentKind, PendingBatchIntentLifecyclePhase,
     PendingBatchIntentRecord, PendingBatchOutpointRecord, SharedPersistenceDb,
+    pending_batch_record_overlaps_outpoints,
 };
 
 use super::ArkSession;
@@ -138,9 +140,6 @@ enum PendingIntentRetryDecision {
 
 impl ArkSession {
     pub(crate) fn pending_batch_intents_dto(&self) -> Vec<PendingBatchIntentDto> {
-        if !ark_client::is_batch_join_in_flight() {
-            let _ = self.wallet_db.promote_stranded_processing_intents();
-        }
         self.wallet_db
             .pending_batch_intents()
             .into_iter()
@@ -148,27 +147,10 @@ impl ArkSession {
             .collect()
     }
 
-    pub(crate) fn persist_registered_batch_intent(
-        &self,
-        kind: PendingBatchIntentKind,
-        intent: &RegisteredBatchIntent,
-        amount_sats: u64,
-    ) {
-        self.persist_registered_batch_intent_with_destination(kind, intent, amount_sats, None);
-    }
-
-    pub(crate) fn persist_registered_batch_intent_with_destination(
-        &self,
-        kind: PendingBatchIntentKind,
-        intent: &RegisteredBatchIntent,
-        amount_sats: u64,
-        destination_address: Option<String>,
-    ) {
-        let mut record =
-            record_from_registered_intent(kind, intent, amount_sats, current_unix_timestamp());
-        record.destination_address = destination_address;
-        record.lifecycle_phase = PendingBatchIntentLifecyclePhase::Processing;
-        self.wallet_db.upsert_pending_batch_intent(record);
+    fn promote_stranded_processing_intents_if_idle(&self) {
+        if !ark_client::is_batch_join_in_flight() {
+            let _ = self.wallet_db.promote_stranded_processing_intents();
+        }
     }
 
     pub(crate) fn stamp_registered_intent_timed_out(
@@ -238,6 +220,7 @@ impl ArkSession {
         });
         let result = run().await;
         BATCH_JOIN_CONTEXT.with(|slot| *slot.borrow_mut() = None);
+        self.promote_stranded_processing_intents_if_idle();
         result
     }
 
@@ -455,6 +438,7 @@ impl ArkSession {
     /// Drop pending intents whose inputs are spent or whose boarding window has closed.
     /// Returns the spend txid when an intent was finalized this pass.
     pub(crate) async fn reconcile_pending_batch_intents(&self) -> ArkResult<Option<String>> {
+        self.promote_stranded_processing_intents_if_idle();
         let pending = self.wallet_db.pending_batch_intents();
         if pending.is_empty() {
             return Ok(None);
@@ -495,29 +479,27 @@ impl ArkSession {
         &self,
         record: &PendingBatchIntentRecord,
     ) -> ArkResult<PendingBatchIntentResolution> {
-        let Some(outpoint) = record
-            .onchain_outpoints
-            .first()
-            .and_then(parse_outpoint_record)
-        else {
-            return Ok(PendingBatchIntentResolution::StillPending);
-        };
-
-        let spend_status = self
-            .client
-            .blockchain()
-            .get_output_status(&outpoint.txid, outpoint.vout)
-            .await?;
-        let boarding_window_expired = record.kind == PendingBatchIntentKind::Board
-            && spend_status.spend_txid.is_none()
-            && self
-                .boarding_outpoint_past_cooperative_window(outpoint)
+        let mut per_outpoint = Vec::new();
+        for outpoint_record in &record.onchain_outpoints {
+            let Some(outpoint) = parse_outpoint_record(outpoint_record) else {
+                continue;
+            };
+            let spend_status = self
+                .client
+                .blockchain()
+                .get_output_status(&outpoint.txid, outpoint.vout)
                 .await?;
-        Ok(resolve_onchain_output_status(
-            spend_status.spend_txid.map(|txid| txid.to_string()),
-            record.kind,
-            boarding_window_expired,
-        ))
+            let boarding_window_expired = record.kind == PendingBatchIntentKind::Board
+                && spend_status.spend_txid.is_none()
+                && self
+                    .boarding_outpoint_past_cooperative_window(outpoint)
+                    .await?;
+            per_outpoint.push(OnchainOutpointResolution {
+                spend_txid: spend_status.spend_txid.map(|txid| txid.to_string()),
+                boarding_window_expired,
+            });
+        }
+        Ok(resolve_onchain_outputs_status(&per_outpoint, record.kind))
     }
 
     async fn boarding_outpoint_past_cooperative_window(
@@ -571,7 +553,7 @@ impl ArkSession {
             .pending_batch_intents()
             .into_iter()
             .find(|record| {
-                pending_record_overlaps_outpoints(record, &onchain_records, &vtxo_records)
+                pending_batch_record_overlaps_outpoints(record, &onchain_records, &vtxo_records)
             })
     }
 
@@ -586,6 +568,27 @@ impl ArkSession {
                 outpoint_records_equal(&record.onchain_outpoints, &params.onchain_outpoints)
                     && outpoint_records_equal(&record.vtxo_outpoints, &params.vtxo_outpoints)
             })
+    }
+
+    pub(crate) fn latest_pending_outpoints_for_kind(
+        &self,
+        kind: PendingBatchIntentKind,
+    ) -> (Vec<OutPoint>, Vec<OutPoint>) {
+        let Some(record) = latest_pending_record_of_kind(&self.wallet_db, kind) else {
+            return (Vec::new(), Vec::new());
+        };
+        (
+            record
+                .onchain_outpoints
+                .iter()
+                .filter_map(parse_outpoint_record)
+                .collect(),
+            record
+                .vtxo_outpoints
+                .iter()
+                .filter_map(parse_outpoint_record)
+                .collect(),
+        )
     }
 
     async fn retry_pending_record(
@@ -625,7 +628,7 @@ impl ArkSession {
                         )
                         .await
                     }
-                    Ok(None) => Ok(completed_without_txid()),
+                    Ok(None) => join_result_for_absent_settle_inputs(),
                     Err(error) => {
                         self.map_settle_error(
                             record.kind,
@@ -652,24 +655,43 @@ impl ArkSession {
             }
             PendingBatchIntentKind::Migrate => {
                 let _ = self.migrate_deprecated_signer_vtxos().await?;
-                Ok(waiting_join_result(
+                migrate_retry_join_result(
                     self.find_overlapping_pending_intent(&onchain_outpoints, &vtxo_outpoints)
                         .map(pending_batch_intent_to_dto),
-                ))
+                    !self.wallet_db.pending_batch_intents().is_empty(),
+                )
             }
         }
     }
 }
 
-fn resolve_onchain_output_status(
+struct OnchainOutpointResolution {
     spend_txid: Option<String>,
-    kind: PendingBatchIntentKind,
     boarding_window_expired: bool,
+}
+
+/// Spent only when every probed input is spent (same as VTXO reconcile). Boarding window
+/// expires only when none are spent and every input's cooperative window has closed.
+fn resolve_onchain_outputs_status(
+    per_outpoint: &[OnchainOutpointResolution],
+    kind: PendingBatchIntentKind,
 ) -> PendingBatchIntentResolution {
-    if let Some(spend_txid) = spend_txid {
-        return PendingBatchIntentResolution::Spent { spend_txid };
+    if per_outpoint.is_empty() {
+        return PendingBatchIntentResolution::StillPending;
     }
-    if kind == PendingBatchIntentKind::Board && boarding_window_expired {
+    if per_outpoint.iter().all(|item| item.spend_txid.is_some()) {
+        return PendingBatchIntentResolution::Spent {
+            spend_txid: per_outpoint
+                .iter()
+                .find_map(|item| item.spend_txid.clone())
+                .unwrap_or_default(),
+        };
+    }
+    if kind == PendingBatchIntentKind::Board
+        && per_outpoint
+            .iter()
+            .all(|item| item.spend_txid.is_none() && item.boarding_window_expired)
+    {
         return PendingBatchIntentResolution::BoardingWindowExpired;
     }
     PendingBatchIntentResolution::StillPending
@@ -785,9 +807,28 @@ pub(crate) fn persist_and_waiting_join_result(
     db: &crate::persistence::JsonPersistenceDb,
     mut record: PendingBatchIntentRecord,
 ) -> BatchJoinResultDto {
+    if pending_intent_outpoints_empty(&record) {
+        return waiting_join_result(
+            latest_pending_record_of_kind(db, record.kind).map(pending_batch_intent_to_dto),
+        );
+    }
     record.lifecycle_phase = PendingBatchIntentLifecyclePhase::TimedOut;
     db.upsert_pending_batch_intent(record.clone());
     waiting_join_result(Some(pending_batch_intent_to_dto(record)))
+}
+
+fn pending_intent_outpoints_empty(record: &PendingBatchIntentRecord) -> bool {
+    record.onchain_outpoints.is_empty() && record.vtxo_outpoints.is_empty()
+}
+
+fn latest_pending_record_of_kind(
+    db: &crate::persistence::JsonPersistenceDb,
+    kind: PendingBatchIntentKind,
+) -> Option<PendingBatchIntentRecord> {
+    db.pending_batch_intents()
+        .into_iter()
+        .rev()
+        .find(|item| item.kind == kind)
 }
 
 fn duplicated_input_waiting_record(
@@ -863,8 +904,6 @@ const BOARDING_DELETE_INTENT_UNSUPPORTED: &str = "The operator cannot cancel boa
     registrations via deleteIntent yet. Wait for the registration to expire, then use Retry.";
 
 /// Matches `prepare_intent` Register `expire_at = now + 2 * 60` in ark-client.
-const BOARDING_REGISTER_INTENT_TTL_SECS: i64 = 2 * 60;
-
 const BOARDING_REREGISTER_WHILE_INTENT_LIVE: &str = "A boarding intent is already registered with \
     the operator. Re-registering now can make the operator round fail with \"not enough intent \
     confirmations\". Keep waiting for the batch, or Retry after ~2 minutes when the registration \
@@ -912,26 +951,6 @@ fn should_refuse_boarding_reregister(record: &PendingBatchIntentRecord) -> bool 
     now.saturating_sub(record.registered_at) < BOARDING_REGISTER_INTENT_TTL_SECS
 }
 
-fn pending_record_overlaps_outpoints(
-    record: &PendingBatchIntentRecord,
-    onchain_outpoints: &[PendingBatchOutpointRecord],
-    vtxo_outpoints: &[PendingBatchOutpointRecord],
-) -> bool {
-    outpoint_records_overlap(&record.onchain_outpoints, onchain_outpoints)
-        || outpoint_records_overlap(&record.vtxo_outpoints, vtxo_outpoints)
-}
-
-fn outpoint_records_overlap(
-    left: &[PendingBatchOutpointRecord],
-    right: &[PendingBatchOutpointRecord],
-) -> bool {
-    left.iter().any(|left_item| {
-        right.iter().any(|right_item| {
-            left_item.txid == right_item.txid && left_item.vout == right_item.vout
-        })
-    })
-}
-
 fn outpoint_records_equal(
     left: &[PendingBatchOutpointRecord],
     right: &[PendingBatchOutpointDto],
@@ -954,9 +973,37 @@ fn completed_without_txid() -> BatchJoinResultDto {
     }
 }
 
+const SETTLE_RETURNED_NO_MATCHING_INPUTS: &str = "Settle returned no matching inputs even though \
+    the pending intent still looks unspent. Try again in a moment.";
+
+const MIGRATE_RETRY_BLOCKED_BY_OTHER_PENDING: &str =
+    "Cannot retry signer migration while another batch intent is still pending.";
+
+/// Retry / settle mapped `Ok(None)` (no matching spendable inputs). Must not look like success.
+pub(crate) fn join_result_for_absent_settle_inputs() -> ArkResult<BatchJoinResultDto> {
+    Err(crate::error::ArkWasmError::Boarding(SETTLE_RETURNED_NO_MATCHING_INPUTS.to_string()).into())
+}
+
+pub(crate) fn migrate_retry_join_result(
+    overlapping: Option<PendingBatchIntentDto>,
+    other_pending_remain: bool,
+) -> ArkResult<BatchJoinResultDto> {
+    if overlapping.is_some() {
+        return Ok(waiting_join_result(overlapping));
+    }
+    if other_pending_remain {
+        return Err(crate::error::ArkWasmError::Wallet(
+            MIGRATE_RETRY_BLOCKED_BY_OTHER_PENDING.to_string(),
+        )
+        .into());
+    }
+    Ok(completed_without_txid())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::constants::BOARDING_REGISTER_INTENT_TTL_SECS;
     use ark_client::RegisteredBatchIntent;
     use bitcoin::Txid;
     use bitcoin::hashes::Hash;
@@ -1196,16 +1243,96 @@ mod tests {
 
     #[test]
     fn reconcile_clears_pending_boarding_intent_when_outpoint_spent() {
-        match resolve_onchain_output_status(
-            Some("commitment-txid".into()),
+        match resolve_onchain_outputs_status(
+            &[OnchainOutpointResolution {
+                spend_txid: Some("commitment-txid".into()),
+                boarding_window_expired: false,
+            }],
             PendingBatchIntentKind::Board,
-            false,
         ) {
             PendingBatchIntentResolution::Spent { spend_txid } => {
                 assert_eq!(spend_txid, "commitment-txid");
             }
             other => panic!("expected spent, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn resolve_onchain_outputs_spent_only_when_all_inputs_spent() {
+        match resolve_onchain_outputs_status(
+            &[
+                OnchainOutpointResolution {
+                    spend_txid: Some("commitment-a".into()),
+                    boarding_window_expired: false,
+                },
+                OnchainOutpointResolution {
+                    spend_txid: Some("commitment-a".into()),
+                    boarding_window_expired: false,
+                },
+            ],
+            PendingBatchIntentKind::Board,
+        ) {
+            PendingBatchIntentResolution::Spent { spend_txid } => {
+                assert_eq!(spend_txid, "commitment-a");
+            }
+            other => panic!("expected spent, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_onchain_outputs_still_pending_when_mixed_spent() {
+        assert!(matches!(
+            resolve_onchain_outputs_status(
+                &[
+                    OnchainOutpointResolution {
+                        spend_txid: Some("commitment-a".into()),
+                        boarding_window_expired: false,
+                    },
+                    OnchainOutpointResolution {
+                        spend_txid: None,
+                        boarding_window_expired: false,
+                    },
+                ],
+                PendingBatchIntentKind::Board,
+            ),
+            PendingBatchIntentResolution::StillPending
+        ));
+    }
+
+    #[test]
+    fn resolve_onchain_outputs_boarding_expired_only_when_all_windows_expired() {
+        assert!(matches!(
+            resolve_onchain_outputs_status(
+                &[
+                    OnchainOutpointResolution {
+                        spend_txid: None,
+                        boarding_window_expired: true,
+                    },
+                    OnchainOutpointResolution {
+                        spend_txid: None,
+                        boarding_window_expired: true,
+                    },
+                ],
+                PendingBatchIntentKind::Board,
+            ),
+            PendingBatchIntentResolution::BoardingWindowExpired
+        ));
+        assert!(matches!(
+            resolve_onchain_outputs_status(
+                &[
+                    OnchainOutpointResolution {
+                        spend_txid: None,
+                        boarding_window_expired: true,
+                    },
+                    OnchainOutpointResolution {
+                        spend_txid: None,
+                        boarding_window_expired: false,
+                    },
+                ],
+                PendingBatchIntentKind::Board,
+            ),
+            PendingBatchIntentResolution::StillPending
+        ));
     }
 
     #[test]
@@ -1257,12 +1384,12 @@ mod tests {
             lifecycle_phase: PendingBatchIntentLifecyclePhase::TimedOut,
         };
         let recover_outpoint = outpoint_record(sample_outpoint(0xbb, 0));
-        assert!(!pending_record_overlaps_outpoints(
+        assert!(!pending_batch_record_overlaps_outpoints(
             &board,
             &[],
             &[recover_outpoint],
         ));
-        assert!(pending_record_overlaps_outpoints(
+        assert!(pending_batch_record_overlaps_outpoints(
             &board,
             &[outpoint_record(sample_outpoint(0xaa, 1))],
             &[],
@@ -1291,6 +1418,64 @@ mod tests {
             destination_address: None,
             lifecycle_phase: PendingBatchIntentLifecyclePhase::TimedOut,
         }
+    }
+
+    #[test]
+    fn persist_and_waiting_join_result_does_not_insert_empty_outpoint_row() {
+        let db = crate::persistence::JsonPersistenceDb::default();
+        let empty = sample_pending_record(
+            PendingBatchIntentKind::CollaborativeExit,
+            "empty-collab",
+            None,
+            None,
+        );
+        persist_and_waiting_join_result(&db, empty);
+        assert!(
+            db.pending_batch_intents().is_empty(),
+            "empty-outpoint waiting rows can never be cancelled or reconciled"
+        );
+    }
+
+    #[test]
+    fn persist_and_waiting_join_result_empty_outpoints_returns_existing_kind() {
+        let db = crate::persistence::JsonPersistenceDb::default();
+        db.upsert_pending_batch_intent(sample_pending_record(
+            PendingBatchIntentKind::CollaborativeExit,
+            "collab",
+            None,
+            Some(1),
+        ));
+        let empty = sample_pending_record(
+            PendingBatchIntentKind::CollaborativeExit,
+            "empty-collab",
+            None,
+            None,
+        );
+        let result = persist_and_waiting_join_result(&db, empty);
+        assert_eq!(db.pending_batch_intents().len(), 1);
+        assert_eq!(
+            result
+                .pending_intent
+                .as_ref()
+                .and_then(|intent| intent.intent_id.as_deref()),
+            Some("collab")
+        );
+        assert_eq!(
+            result
+                .pending_intent
+                .as_ref()
+                .map(|intent| intent.kind.as_str()),
+            Some("collaborative_exit")
+        );
+    }
+
+    #[test]
+    fn absent_settle_inputs_on_retry_is_error_not_completed() {
+        let result = join_result_for_absent_settle_inputs();
+        assert!(
+            result.is_err(),
+            "settle Ok(None) must not report completed while the pending row may still exist"
+        );
     }
 
     #[test]
@@ -1476,5 +1661,37 @@ mod tests {
             }
             other => panic!("expected spent, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn migrate_retry_errors_when_other_pending_blocks_migrate() {
+        let error = migrate_retry_join_result(None, true).expect_err("unrelated pending");
+        assert!(
+            error.to_string().contains("another batch intent"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn migrate_retry_waiting_when_overlapping_migrate_intent_exists() {
+        let overlapping = PendingBatchIntentDto {
+            kind: "migrate".to_string(),
+            intent_id: Some("intent-1".into()),
+            amount_sats: 1,
+            registered_at: 1,
+            onchain_outpoints: Vec::new(),
+            vtxo_outpoints: Vec::new(),
+            lifecycle_phase: "timed_out".to_string(),
+        };
+        let result = migrate_retry_join_result(Some(overlapping), true).expect("waiting");
+        assert_eq!(result.status, BATCH_JOIN_STATUS_WAITING);
+        assert!(result.pending_intent.is_some());
+    }
+
+    #[test]
+    fn migrate_retry_completed_when_no_pending_remain() {
+        let result = migrate_retry_join_result(None, false).expect("completed");
+        assert_eq!(result.status, BATCH_JOIN_STATUS_COMPLETED);
+        assert!(result.pending_intent.is_none());
     }
 }

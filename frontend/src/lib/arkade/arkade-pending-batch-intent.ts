@@ -4,6 +4,9 @@ import type {
 } from '@/workers/arkade-api'
 import { ARKADE_PENDING_BATCH_INTENT_POLL_MS } from '@/lib/arkade/arkade-query-timings'
 
+/** Keep in sync with `bitboard-ark` `constants::BOARDING_REGISTER_INTENT_TTL_SECS`. */
+export const BOARDING_REGISTER_INTENT_TTL_SECS = 2 * 60
+
 export const BATCH_JOIN_STATUS_COMPLETED = 'completed'
 export const BATCH_JOIN_STATUS_WAITING = 'waiting_for_operator'
 
@@ -69,7 +72,22 @@ export function pendingBatchIntentFromSources(
   boardingIntents: ArkadePendingBatchIntent[] | undefined,
   balanceIntents: ArkadePendingBatchIntent[] | undefined,
 ): ArkadePendingBatchIntent[] {
-  return boardingIntents ?? balanceIntents ?? []
+  const boarding = boardingIntents ?? []
+  const balance = balanceIntents ?? []
+  if (boarding.length === 0) {
+    return balance
+  }
+  if (balance.length === 0) {
+    return boarding
+  }
+  const byKey = new Map<string, ArkadePendingBatchIntent>()
+  for (const intent of balance) {
+    byKey.set(pendingBatchIntentKey(intent), intent)
+  }
+  for (const intent of boarding) {
+    byKey.set(pendingBatchIntentKey(intent), intent)
+  }
+  return [...byKey.values()]
 }
 
 export function pendingBatchIntentKey(intent: ArkadePendingBatchIntent): string {
@@ -116,18 +134,27 @@ export function isIntentSubmitPhase1(options: {
 }
 
 export function isBoardingOnlyPendingIntent(intent: ArkadePendingBatchIntent): boolean {
-  return intent.kind === 'board' && intent.vtxoOutpoints.length === 0
+  return intent.onchainOutpoints.length > 0 && intent.vtxoOutpoints.length === 0
 }
 
 export function pendingIntentAllowsCancel(intent: ArkadePendingBatchIntent): boolean {
   return !isBoardingOnlyPendingIntent(intent)
 }
 
-export function pendingIntentAllowsRetry(intent: ArkadePendingBatchIntent): boolean {
+export function pendingIntentAllowsRetry(
+  intent: ArkadePendingBatchIntent,
+  nowUnixSeconds: number = Math.floor(Date.now() / 1000),
+): boolean {
   if (!isBoardingOnlyPendingIntent(intent)) {
     return true
   }
-  return pendingIntentBannerPhase(intent) === ARKADE_INTENT_LIFECYCLE_PHASES.timedOut
+  if (pendingIntentBannerPhase(intent) !== ARKADE_INTENT_LIFECYCLE_PHASES.timedOut) {
+    return false
+  }
+  if (intent.intentId == null) {
+    return true
+  }
+  return nowUnixSeconds - intent.registeredAt >= BOARDING_REGISTER_INTENT_TTL_SECS
 }
 
 export function pendingBatchIntentProcessingMessage(kind: string): string {
@@ -136,6 +163,15 @@ export function pendingBatchIntentProcessingMessage(kind: string): string {
 
 export function pendingBatchIntentWaitingMessage(kind: string): string {
   return `Your ${pendingBatchIntentKindLabel(kind)} is registered. Waiting for the Arkade operator to include it in a batch.`
+}
+
+export function pendingBatchIntentTimedOutMessage(kind: string): string {
+  return `Your ${pendingBatchIntentKindLabel(kind)} is still registered, but the batch round timed out before it completed.`
+}
+
+export function pendingBatchIntentDurationHint(): string {
+  const minutes = BOARDING_REGISTER_INTENT_TTL_SECS / 60
+  return `This process may take about ${minutes} minutes to complete.`
 }
 
 export function pendingBatchIntentSucceededMessage(kind: string): string {

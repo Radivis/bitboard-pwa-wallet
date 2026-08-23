@@ -122,7 +122,6 @@ import {
 } from '@/lib/arkade/arkade-operator-trust-utils'
 import {
   assertArkadeSessionUnlocked,
-  proceedUnilateralExitStepWithGuards,
 } from '@/lib/arkade/proceed-unilateral-exit-step'
 import { isUnilateralExitBranchComplete } from '@/lib/arkade/unilateral-exit-branch-complete'
 import {
@@ -1862,71 +1861,5 @@ export function useArkadeUnilateralExitProgressQuery(params: {
         progressIdlePollMs,
       }),
     staleTime: 0,
-  })
-}
-
-export function useArkadeProceedUnilateralExitStepMutation() {
-  const queryClient = useQueryClient()
-  const { networkMode, activeWalletId, activeArkadeConnectionId } =
-    useArkadeQueryBase()
-
-  return useMutation({
-    mutationFn: async (params: {
-      vtxoOutpoints: ArkadeVtxoOutpoint[]
-      feeRateSatPerVb: number
-      amountSats: number
-    }) => {
-      return proceedUnilateralExitStepWithGuards({
-        activeWalletId,
-        vtxoOutpoints: params.vtxoOutpoints,
-        feeRateSatPerVb: params.feeRateSatPerVb,
-      })
-    },
-    onMutate: async (params) => {
-      if (
-        activeWalletId == null ||
-        activeArkadeConnectionId == null ||
-        !isArkadeSupportedNetworkMode(networkMode)
-      ) {
-        return undefined
-      }
-      return applyOptimisticExitBalanceDeduction(
-        queryClient,
-        activeWalletId,
-        networkMode,
-        activeArkadeConnectionId,
-        params.amountSats,
-        'unilateralExitInProgressSats',
-      )
-    },
-    onError: (_error, _params, context) => {
-      if (context != null) {
-        revertOptimisticExitBalanceDeduction(queryClient, context)
-      }
-    },
-    onSuccess: async (_result, params, context) => {
-      await reconcileExitBalanceAfterMutation(queryClient, context)
-      if (
-        activeWalletId != null &&
-        activeArkadeConnectionId != null &&
-        isArkadeSupportedNetworkMode(networkMode)
-      ) {
-        await queryClient.invalidateQueries({
-          queryKey: arkadeUnilateralExitProgressQueryKey(
-            activeWalletId,
-            networkMode,
-            activeArkadeConnectionId,
-            sortArkadeVtxoOutpoints(params.vtxoOutpoints),
-          ),
-        })
-        await queryClient.invalidateQueries({
-          queryKey: arkadeBalanceQueryKey(
-            activeWalletId,
-            networkMode,
-            activeArkadeConnectionId,
-          ),
-        })
-      }
-    },
   })
 }

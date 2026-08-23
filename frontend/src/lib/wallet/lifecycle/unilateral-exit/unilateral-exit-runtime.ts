@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import { resetPendingBatchIntentSessionTracking } from '@/lib/arkade/arkade-pending-batch-intent'
 import { shouldDeferPersistedUnilateralExitHydrate } from '@/lib/arkade/unilateral-exit-job-reconcile'
 import type { SendFeePresetLabel } from '@/lib/esplora/esplora-fee-estimates'
 import { getArkadeLoadLifecycleSnapshot } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
@@ -150,6 +151,13 @@ export async function configureUnilateralExitForLoadedWallet(
   }
 
   sendUnilateralExitEvent({ type: 'WALLET_CONFIGURED', walletScope })
+  const prefs = useUnilateralExitAutomationPrefsStore
+    .getState()
+    .getPrefs(walletScope.walletId, walletScope.networkMode, walletScope.connectionId)
+  sendUnilateralExitEvent({
+    type: 'AUTOMATION_PREFS_CHANGED',
+    automationEnabled: prefs.enabled,
+  })
 }
 
 function actorAlreadyTrackingHydrateOutpoints(
@@ -388,6 +396,7 @@ export function syncUnilateralExitWithLockPhase(lockPhase: LockLifecyclePhase): 
   if (shouldSkipRailLifecycleResetForLockPhase(lockPhase, hasInFlightWork)) {
     return
   }
+  resetPendingBatchIntentSessionTracking()
   const scope = snapshot.context.walletScope
   sendUnilateralExitEvent({ type: 'WALLET_RESET' })
   if (scope != null) {
@@ -399,8 +408,11 @@ export function bootstrapUnilateralExitAutomation(): void {
   // Actor handles automation polling internally via waitingConfirm.after.
 }
 
+const UNILATERAL_EXIT_ACTOR_SETTLE_TIMEOUT_MS = 120_000
+const UNILATERAL_EXIT_ACTOR_SETTLE_POLL_MS = 10
+
 export async function waitForUnilateralExitActorSettled(
-  timeoutMs = 120_000,
+  timeoutMs = UNILATERAL_EXIT_ACTOR_SETTLE_TIMEOUT_MS,
 ): Promise<void> {
   const start = Date.now()
   while (Date.now() - start < timeoutMs) {
@@ -408,7 +420,7 @@ export async function waitForUnilateralExitActorSettled(
     if (!unilateralExitSnapshotIsProceeding(snapshot)) {
       return
     }
-    await new Promise((resolve) => setTimeout(resolve, 10))
+    await new Promise((resolve) => setTimeout(resolve, UNILATERAL_EXIT_ACTOR_SETTLE_POLL_MS))
   }
   throw new Error('Unilateral exit actor did not settle in time')
 }

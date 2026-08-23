@@ -222,8 +222,6 @@ export const unilateralExitMachineSetup = setup({
       context.feeRateSatPerVb == null,
     isWaitingForRelayedStepConfirmationFromEvent: ({ event }) =>
       isWaitingForRelayedStepConfirmation(progressFromFetchEvent(event)),
-    isWaitingForRelayedStepConfirmationFromEnsureBroadcastEvent: ({ event }) =>
-      isWaitingForRelayedStepConfirmation(progressFromEnsureBroadcastEvent(event)),
     isProgressRefresh: ({ context }) => context.progressRefreshRequested,
     isUnconfirmedParentRetryProgressRefresh: ({ context }) =>
       context.unconfirmedParentRetry != null && context.progressRefreshRequested,
@@ -267,8 +265,6 @@ export const unilateralExitMachineSetup = setup({
       }
       return !isWaitingForRelayedStepConfirmation(output)
     },
-    isWaitingForRelayedStepConfirmation: ({ context }) =>
-      isWaitingForRelayedStepConfirmation(context.progress),
     shouldRunAutomationPolicyFromEvent: ({ context, event }) => {
       const output = progressFromFetchEvent(event)
       return (
@@ -288,17 +284,6 @@ export const unilateralExitMachineSetup = setup({
         !needsBroadcastEnsurance(output)
       )
     },
-    shouldRunAutomationPolicy: ({ context }) =>
-      context.automationEnabled &&
-      context.proceedRequested &&
-      context.pausedReason == null &&
-      context.progress?.phase === 'idle' &&
-      !needsBroadcastEnsurance(context.progress),
-    shouldProceedNow: ({ context }) =>
-      context.proceedRequested &&
-      context.feeRateSatPerVb != null &&
-      context.progress?.phase === 'idle' &&
-      !needsBroadcastEnsurance(context.progress),
     policyPaused: ({ event }) =>
       event.type === 'xstate.done.actor.evaluateAutomationPolicy' &&
       event.output.pausedReason != null,
@@ -350,7 +335,10 @@ export const unilateralExitMachineSetup = setup({
         jobOutpoints: outpoints,
         automationEnabled: true,
         proceedRequested: true,
+        proceedTargetStepIndex: null,
+        progressRefreshRequested: false,
         unconfirmedParentRetry: null,
+        feeRateSatPerVb: null,
         pausedReason: null,
         lastErrorMessage: null,
         progress: null,
@@ -372,6 +360,7 @@ export const unilateralExitMachineSetup = setup({
         proceedTargetStepIndex: null,
         progressRefreshRequested: false,
         unconfirmedParentRetry: null,
+        ...(automationEnabled ? { feeRateSatPerVb: null } : {}),
         progress: null,
         pausedReason: null,
         lastErrorMessage: null,
@@ -391,9 +380,6 @@ export const unilateralExitMachineSetup = setup({
         pausedReason: null,
         lastErrorMessage: null,
       }
-    }),
-    assignProgress: assign({
-      progress: (_, params: { progress: ArkadeUnilateralExitProgress }) => params.progress,
     }),
     assignProgressFromFetch: assign({
       progress: ({ event }) =>
@@ -439,6 +425,12 @@ export const unilateralExitMachineSetup = setup({
         event.type === 'AUTOMATION_PREFS_CHANGED' ? event.automationEnabled : false,
       pausedReason: null,
       lastErrorMessage: null,
+      feeRateSatPerVb: ({ context, event }) => {
+        if (event.type === 'AUTOMATION_PREFS_CHANGED' && event.automationEnabled) {
+          return null
+        }
+        return context.feeRateSatPerVb
+      },
       proceedRequested: ({ context, event }) => {
         if (event.type !== 'AUTOMATION_PREFS_CHANGED') {
           return context.proceedRequested

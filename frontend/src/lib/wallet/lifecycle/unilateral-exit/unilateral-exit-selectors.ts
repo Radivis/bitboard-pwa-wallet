@@ -1,10 +1,6 @@
 import type { ArkadeUnilateralExitProgress } from '@/workers/arkade-api'
 import { isUnilateralExitJobComplete } from '@/lib/arkade/unilateral-exit-branch-complete'
-import {
-  isCurrentStepRelayed,
-  isWaitingForRelayedStepConfirmation,
-  needsBroadcastEnsurance,
-} from '@/lib/arkade/unilateral-exit-broadcast'
+import { isCurrentStepRelayed } from '@/lib/arkade/unilateral-exit-broadcast'
 import type {
   UnilateralExitControlDisplayPhase,
   UnilateralExitInProgressOverlayKind,
@@ -75,10 +71,6 @@ function lifecyclePhaseFromMachineState(
       UNILATERAL_EXIT_MACHINE_STATE.paused,
     ])
   ) {
-    const progress = state.context.progress
-    if (isWaitingForRelayedStepConfirmation(progress)) {
-      return UnilateralExitLifecyclePhase.WaitingConfirm
-    }
     if (unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.paused)) {
       return UnilateralExitLifecyclePhase.Idle
     }
@@ -129,7 +121,7 @@ export function selectUnilateralExitAutomationSnapshot(
   }
 
   return {
-    prefs,
+    prefs: { ...prefs, enabled: state.context.automationEnabled },
     pausedReason: state.context.pausedReason,
     lastErrorMessage: state.context.lastErrorMessage,
     scheduling,
@@ -236,11 +228,9 @@ export function selectUnilateralExitControlJobState(
               UNILATERAL_EXIT_MACHINE_STATE.loadingProgress,
               UNILATERAL_EXIT_MACHINE_STATE.evaluatingPolicy,
             ])
-          ? isWaitingForRelayedStepConfirmation(progress)
-            ? 'waiting'
-            : state.context.progressRefreshRequested
-              ? null
-              : 'advancing'
+          ? state.context.progressRefreshRequested
+            ? null
+            : 'advancing'
           : null
 
   const phase: UnilateralExitControlDisplayPhase =
@@ -300,16 +290,10 @@ export function selectUnilateralExitInProgressOverlay(
       UNILATERAL_EXIT_MACHINE_STATE.loadingProgress,
     ])
   ) {
-    if (isWaitingForRelayedStepConfirmation(progress)) {
-      return 'waiting'
-    }
     if (state.context.progressRefreshRequested) {
       return state.context.jobOutpoints.length > 0 && progress != null
         ? 'readyToProceed'
         : null
-    }
-    if (needsBroadcastEnsurance(progress)) {
-      return 'ensuringBroadcast'
     }
   }
   if (

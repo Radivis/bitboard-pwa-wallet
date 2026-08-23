@@ -533,11 +533,13 @@ impl ArkSession {
                 Some(params.destination_address.clone()),
             )),
             Err(error) => {
+                let (onchain_outpoints, vtxo_outpoints) = self
+                    .latest_pending_outpoints_for_kind(PendingBatchIntentKind::CollaborativeExit);
                 self.map_settle_error(
                     PendingBatchIntentKind::CollaborativeExit,
                     error,
-                    &[],
-                    &[],
+                    &onchain_outpoints,
+                    &vtxo_outpoints,
                     exit_amount.to_sat(),
                 )
                 .await

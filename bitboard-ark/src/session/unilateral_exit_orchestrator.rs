@@ -647,8 +647,11 @@ impl ArkSession {
             .as_ref()
             .is_some_and(|record| record.step_txid == step_txid.to_string());
 
-        if force_unspendable || !already_submitted_this_step {
-            let _ = sync_onchain_wallet_with_retries(&self.client).await;
+        if should_sync_bumper_wallet_before_unroll_broadcast(
+            force_unspendable,
+            already_submitted_this_step,
+        ) {
+            sync_onchain_wallet_with_retries(&self.client).await?;
             if let Err(error) = self
                 .client
                 .broadcast_unilateral_exit_step_at_fee_rate(&parent_tx, fee_rate_sat_per_vb)
@@ -1300,6 +1303,13 @@ impl ArkSession {
     }
 }
 
+pub(crate) fn should_sync_bumper_wallet_before_unroll_broadcast(
+    force_unspendable: bool,
+    already_submitted_this_step: bool,
+) -> bool {
+    force_unspendable || !already_submitted_this_step
+}
+
 /// `/raw` is the primary relay signal; regtest Esplora often keeps mempool parents at `/raw` 404
 /// until mined. After `proceed_unilateral_exit_step` stamps a wait record, treat broadcast as done.
 pub(crate) fn unilateral_exit_step_broadcast_satisfied(
@@ -1417,6 +1427,19 @@ mod tests {
         ));
         assert!(unilateral_exit_step_broadcast_satisfied(
             true, &step_txid, None
+        ));
+    }
+
+    #[test]
+    fn should_sync_bumper_before_unroll_broadcast() {
+        assert!(should_sync_bumper_wallet_before_unroll_broadcast(
+            false, false
+        ));
+        assert!(should_sync_bumper_wallet_before_unroll_broadcast(
+            true, true
+        ));
+        assert!(!should_sync_bumper_wallet_before_unroll_broadcast(
+            false, true
         ));
     }
 

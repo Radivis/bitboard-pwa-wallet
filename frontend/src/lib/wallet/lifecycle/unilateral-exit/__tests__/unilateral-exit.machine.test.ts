@@ -779,6 +779,75 @@ describe('unilateralExitMachine', () => {
     expect(testActor.getSnapshot().context.pausedReason).toBe('bumperInsufficient')
   })
 
+  it('enabling automation mid-job clears leftover fee so policy runs', async () => {
+    const fetchProgress = vi.fn(async () =>
+      progress({
+        phase: 'idle',
+        currentStepTxRelayed: false,
+      }),
+    )
+    const evaluatePolicy = vi.fn(async () => ({
+      feeRateSatPerVb: 5,
+      pausedReason: 'feeCapExceeded' as const,
+    }))
+    const ensureBroadcast = vi.fn(async () =>
+      progress({
+        phase: 'waiting',
+        currentStepTxRelayed: true,
+        currentStepWaitingSince: 1_700_000_000,
+      }),
+    )
+    const { testActor } = createTestActor({
+      fetchProgress,
+      evaluatePolicy,
+      ensureBroadcast,
+    })
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'START_MANUAL',
+      walletScope,
+      outpoints: [leaf],
+      feeRateSatPerVb: 2,
+    })
+    await waitFor(testActor, (state) => state.matches('waitingConfirm'))
+    expect(testActor.getSnapshot().context.feeRateSatPerVb).toBe(2)
+
+    testActor.send({ type: 'AUTOMATION_PREFS_CHANGED', automationEnabled: true })
+    await waitFor(testActor, (state) => state.matches('paused'))
+    expect(evaluatePolicy).toHaveBeenCalled()
+    expect(ensureBroadcast.mock.calls.length).toBe(1)
+    expect(testActor.getSnapshot().context.pausedReason).toBe('feeCapExceeded')
+    expect(testActor.getSnapshot().context.feeRateSatPerVb).toBeNull()
+  })
+
+  it('START_AUTOMATIC clears leftover manual fee rate', async () => {
+    const fetchProgress = vi.fn(async () =>
+      progress({
+        phase: 'complete',
+        stepIndex: 2,
+        totalSteps: 2,
+        leafStatuses: [unrolledLeafStatus()],
+      }),
+    )
+    const { testActor } = createTestActor({ fetchProgress })
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'START_MANUAL',
+      walletScope,
+      outpoints: [leaf],
+      feeRateSatPerVb: 20,
+    })
+    await waitFor(testActor, (state) => state.matches('complete'))
+    expect(testActor.getSnapshot().context.feeRateSatPerVb).toBe(20)
+
+    testActor.send({
+      type: 'START_AUTOMATIC',
+      walletScope,
+      outpoints: [leaf],
+    })
+    expect(testActor.getSnapshot().context.feeRateSatPerVb).toBeNull()
+  })
+
   it('enables automation mid-job while waiting for confirmation', async () => {
     const fetchProgress = vi.fn(async () => progress({ phase: 'idle' }))
     const { testActor } = createTestActor({ fetchProgress })

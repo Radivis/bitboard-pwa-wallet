@@ -70,3 +70,7 @@ pub const NETWORK_MODE_MAINNET: &str = "mainnet";
 pub const NETWORK_MODE_TESTNET: &str = "testnet";
 pub const NETWORK_MODE_SIGNET: &str = "signet";
 pub const NETWORK_MODE_REGTEST: &str = "regtest";
+
+/// Matches ark-client `prepare_intent` Register `expire_at = now + 2 * 60` (ARK-UP-03).
+/// Keep the frontend `BOARDING_REGISTER_INTENT_TTL_SECS` in sync.
+pub const BOARDING_REGISTER_INTENT_TTL_SECS: i64 = 2 * 60;

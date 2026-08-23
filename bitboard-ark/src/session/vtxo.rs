@@ -484,53 +484,47 @@ impl ArkSession {
         }
 
         self.with_batch_join(PendingBatchIntentKind::Board, amount_sats, None, || async {
-        match self
-            .client
-            .settle_vtxos(&mut rng, &[], &onchain)
-            .await
-        {
-            Ok(Some(JoinBatchOutcome::Completed(commitment_txid))) => {
-                if self
-                    .round_consumed_boarding_outpoint(commitment_txid, boarding_outpoint)
-                    .await?
-                {
-                    let onchain_records = onchain
-                        .iter()
-                        .map(|outpoint| PendingBatchOutpointRecord {
-                            txid: outpoint.txid.to_string(),
-                            vout: outpoint.vout,
-                        })
-                        .collect::<Vec<_>>();
-                    self.wallet_db
-                        .remove_pending_batch_intents_overlapping(&onchain_records, &[]);
-                    return Ok(Self::batch_join_completed_result(commitment_txid));
+            match self.client.settle_vtxos(&mut rng, &[], &onchain).await {
+                Ok(Some(JoinBatchOutcome::Completed(commitment_txid))) => {
+                    if self
+                        .round_consumed_boarding_outpoint(commitment_txid, boarding_outpoint)
+                        .await?
+                    {
+                        let onchain_records = onchain
+                            .iter()
+                            .map(|outpoint| PendingBatchOutpointRecord {
+                                txid: outpoint.txid.to_string(),
+                                vout: outpoint.vout,
+                            })
+                            .collect::<Vec<_>>();
+                        self.wallet_db
+                            .remove_pending_batch_intents_overlapping(&onchain_records, &[]);
+                        return Ok(Self::batch_join_completed_result(commitment_txid));
+                    }
+                    Ok(self.batch_join_duplicated_input_result(
+                        PendingBatchIntentKind::Board,
+                        &onchain,
+                        &[],
+                        amount_sats,
+                    ))
                 }
-                Ok(self.batch_join_duplicated_input_result(
+                Ok(Some(JoinBatchOutcome::Waiting(intent))) => Ok(self.batch_join_waiting_result(
                     PendingBatchIntentKind::Board,
-                    &onchain,
-                    &[],
+                    &intent,
                     amount_sats,
-                ))
+                )),
+                Ok(None) => super::pending_batch::join_result_for_absent_settle_inputs(),
+                Err(error) => {
+                    self.map_settle_error(
+                        PendingBatchIntentKind::Board,
+                        error,
+                        &onchain,
+                        &[],
+                        amount_sats,
+                    )
+                    .await
+                }
             }
-            Ok(Some(JoinBatchOutcome::Waiting(intent))) => Ok(self.batch_join_waiting_result(
-                PendingBatchIntentKind::Board,
-                &intent,
-                amount_sats,
-            )),
-            Ok(None) => Err(ArkWasmError::Boarding(
-                "Settle returned no inputs even though boarding UTXOs looked spendable. Try again in a moment.".to_string(),
-            )),
-            Err(error) => {
-                self.map_settle_error(
-                    PendingBatchIntentKind::Board,
-                    error,
-                    &onchain,
-                    &[],
-                    amount_sats,
-                )
-                .await
-            }
-        }
         })
         .await
     }

@@ -15,9 +15,10 @@ import {
   consumePendingBatchIntentSettledByMutation,
   pendingBatchIntentCancelledMessage,
   pendingBatchIntentKey,
+  pendingBatchIntentDurationHint,
   pendingBatchIntentProcessingMessage,
   pendingBatchIntentSucceededMessage,
-  pendingBatchIntentWaitingMessage,
+  pendingBatchIntentTimedOutMessage,
   pendingIntentAllowsCancel,
   pendingIntentAllowsRetry,
   pendingIntentBannerPhase,
@@ -121,9 +122,8 @@ export function ArkadePendingBatchIntentBanner() {
                 </InfomodeWrapper>
                 <p className="text-muted-foreground">
                   {isProcessing
-                    ? pendingBatchIntentProcessingMessage(pendingIntent.kind)
-                    : pendingBatchIntentWaitingMessage(pendingIntent.kind)}{' '}
-                  This process may take about a minute to complete.
+                    ? `${pendingBatchIntentProcessingMessage(pendingIntent.kind)} ${pendingBatchIntentDurationHint()}`
+                    : pendingBatchIntentTimedOutMessage(pendingIntent.kind)}
                 </p>
                 {showCancel || showRetry ? (
                   <div className="flex gap-2">

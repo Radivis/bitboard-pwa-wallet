@@ -7,6 +7,7 @@ import {
   useArkadeCompleteUnilateralExitMutation,
   useArkadeUnilateralExitCompletionFeeQuery,
   useArkadeUnilateralExitsInProgressQuery,
+  useHasPendingBatchIntent,
   useHasPendingBatchIntentKind,
   usePendingBatchIntents,
 } from '@/hooks/useArkadeQueries'
@@ -91,6 +92,7 @@ export function useArkadeExitFlow() {
   const collaborativeExitMutation = useArkadeCollaborativeExitMutation()
   const completeExitMutation = useArkadeCompleteUnilateralExitMutation()
   const pendingBatchIntents = usePendingBatchIntents()
+  const hasPendingBatchIntent = useHasPendingBatchIntent()
   const hasPendingCollaborativeExit = useHasPendingBatchIntentKind('collaborative_exit')
   const hasProcessingCollaborativeExit = pendingBatchIntents.some(
     (intent) =>
@@ -154,7 +156,7 @@ export function useArkadeExitFlow() {
     !collaborativeExitMutation.isPending &&
     !collaborativeExitBlockedByRotation &&
     !collaborativeExitBlockedByFunds &&
-    (balanceQuery.data?.pendingBatchIntents?.length ?? 0) === 0
+    !hasPendingBatchIntent
 
   const hasUnilateralExitInProgress =
     unilateralExitInProgressSats > 0 || (inProgressQuery.data?.length ?? 0) > 0
