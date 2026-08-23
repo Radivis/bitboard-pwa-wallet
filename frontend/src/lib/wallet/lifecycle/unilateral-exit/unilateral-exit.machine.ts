@@ -183,6 +183,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
           target: 'checkingProgress',
           actions: 'assignProceedManual',
         },
+        // POLL_TICK is the test/manual equivalent of `after.pollDelay`.
         POLL_TICK: [
           {
             guard: 'hasActiveAutomaticJob',

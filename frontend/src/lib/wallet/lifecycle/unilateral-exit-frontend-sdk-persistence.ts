@@ -25,6 +25,7 @@ import type {
   ArkadeUnilateralExitJobPersistence,
 } from '@/workers/arkade-api'
 
+/** Settings-table keys are a one-shot overlay for migrating older wallets. Primary store is encrypted `sdkPersistenceJson`. */
 export const UNILATERAL_EXIT_LIFECYCLE_SETTINGS_KEY = 'unilateral-exit-lifecycle-storage'
 export const UNILATERAL_EXIT_AUTOMATION_PREFS_SETTINGS_KEY = 'unilateral-exit-automation-prefs'
 export const UNILATERAL_EXIT_FAILURE_SETTINGS_KEY = 'unilateral-exit-failure-storage'

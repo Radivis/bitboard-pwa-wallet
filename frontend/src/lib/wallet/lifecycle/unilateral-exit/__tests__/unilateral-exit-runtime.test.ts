@@ -9,6 +9,20 @@ const workerListMocks = vi.hoisted(() => ({
   ]),
   listUnilateralExitsInProgress: vi.fn(async () => []),
 }))
+const actorProgressMocks = vi.hoisted(() => {
+  const idleUnrelayed = {
+    stepIndex: 0,
+    totalSteps: 2,
+    phase: 'idle' as const,
+    currentStepTxRelayed: false,
+    nodeStatuses: [{ txid: 'step0', confirmations: 0, status: 'inProgress' as const }],
+    leafStatuses: [],
+  }
+  return {
+    idleUnrelayed,
+    fetch: vi.fn(async () => idleUnrelayed),
+  }
+})
 let sdkHydrated = false
 let sdkHydrationWaiters: Array<() => void> = []
 
@@ -89,18 +103,11 @@ vi.mock('@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence', () => ({
 
 vi.mock('@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.actors', () => {
   const { fromPromise } = require('xstate')
-  const progress = {
-    stepIndex: 0,
-    totalSteps: 2,
-    phase: 'idle' as const,
-    currentStepTxRelayed: false,
-    nodeStatuses: [{ txid: 'step0', confirmations: 0, status: 'inProgress' as const }],
-    leafStatuses: [],
-  }
+  const progress = actorProgressMocks.idleUnrelayed
   return {
     invalidateUnilateralExitQueries: vi.fn(async () => {}),
     unilateralExitMachineActors: {
-      fetchProgressActor: fromPromise(async () => progress),
+      fetchProgressActor: fromPromise(async () => actorProgressMocks.fetch()),
       evaluateJobViabilityActor: fromPromise(async () => ({
         status: 'ok' as const,
         reasonCode: 'ok',
@@ -154,6 +161,8 @@ describe('unilateral-exit-runtime hydration', () => {
     sdkHydrated = false
     sdkHydrationWaiters = []
     mockAutomationPrefs.enabled = false
+    actorProgressMocks.fetch.mockReset()
+    actorProgressMocks.fetch.mockImplementation(async () => actorProgressMocks.idleUnrelayed)
     resetUnilateralExitActorForTests()
     mockGetJob.mockReturnValue({
       selectedLeafOutpoints: [leaf],
@@ -255,6 +264,34 @@ describe('unilateral-exit-runtime hydration', () => {
     expect(mockClearJob).not.toHaveBeenCalled()
     const snapshot = getUnilateralExitActorSnapshot()
     expect(snapshot.context.jobOutpoints).toEqual([leaf])
+  })
+
+  it('hydrate resumes automation when prefs are enabled', async () => {
+    sdkHydrated = true
+    mockAutomationPrefs.enabled = true
+    actorProgressMocks.fetch.mockImplementation(async () => ({
+      ...actorProgressMocks.idleUnrelayed,
+      currentStepTxRelayed: true,
+    }))
+    mockGetJob.mockReturnValue({
+      selectedLeafOutpoints: [leaf],
+      currentStepRelayedSinceUnix: null,
+      jobStartedAtUnix: 1_700_000_000,
+    })
+
+    await configureUnilateralExitForLoadedWallet(walletScope)
+    await hydrateUnilateralExitFromPersistence({
+      walletScope,
+      inProgressOutpoints: [],
+      unilateralExitInProgressSats: 0,
+    })
+
+    const snapshot = getUnilateralExitActorSnapshot()
+    expect(snapshot.context.automationEnabled).toBe(true)
+    expect(snapshot.context.jobOutpoints).toEqual([leaf])
+    expect(
+      unilateralExitSnapshotIsInState(snapshot, UNILATERAL_EXIT_MACHINE_STATE.idle),
+    ).toBe(false)
   })
 
   it('does not clear persisted job when in-progress sats exist before outpoints load', async () => {

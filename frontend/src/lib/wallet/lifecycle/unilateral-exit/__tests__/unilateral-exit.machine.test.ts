@@ -454,6 +454,64 @@ describe('unilateralExitMachine', () => {
     expect(testActor.getSnapshot().context.progress?.stepIndex).toBe(4)
   })
 
+  it('hydrate with resumeAutomation sets proceedRequested', () => {
+    const fetchProgress = vi.fn(async () => progress({ phase: 'idle' }))
+    const { testActor } = createTestActor({ fetchProgress })
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'HYDRATE_OR_START',
+      walletScope,
+      outpoints: [leaf],
+      automationEnabled: true,
+      resumeAutomation: true,
+    })
+    expect(testActor.getSnapshot().matches('checkingProgress')).toBe(true)
+    expect(testActor.getSnapshot().context.proceedRequested).toBe(true)
+    expect(testActor.getSnapshot().context.automationEnabled).toBe(true)
+  })
+
+  it('hydrate keeps matching progress instead of nulling it', async () => {
+    let fetchCount = 0
+    const fetchProgress = vi.fn(async () => {
+      fetchCount += 1
+      if (fetchCount === 1) {
+        return progress({
+          phase: 'idle',
+          stepIndex: 4,
+          totalSteps: 7,
+          currentStepTxRelayed: false,
+        })
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      return progress({
+        phase: 'idle',
+        stepIndex: 4,
+        totalSteps: 7,
+        currentStepTxRelayed: false,
+      })
+    })
+    const { testActor } = createTestActor({ fetchProgress })
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'HYDRATE_OR_START',
+      walletScope,
+      outpoints: [leaf],
+      automationEnabled: false,
+      resumeAutomation: false,
+    })
+    await waitFor(testActor, (state) => state.matches('idle'))
+    expect(testActor.getSnapshot().context.progress?.stepIndex).toBe(4)
+
+    testActor.send({
+      type: 'HYDRATE_OR_START',
+      walletScope,
+      outpoints: [leaf],
+      automationEnabled: false,
+      resumeAutomation: false,
+    })
+    expect(testActor.getSnapshot().context.progress?.stepIndex).toBe(4)
+  })
+
   it('does not auto-broadcast the next unrelayed step after a manual confirmation poll', async () => {
     let fetchCount = 0
     const fetchProgress = vi.fn(async () => {

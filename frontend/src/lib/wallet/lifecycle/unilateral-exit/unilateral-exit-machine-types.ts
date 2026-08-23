@@ -1,6 +1,9 @@
 import type { UnilateralExitAutomationPausedReason } from '@/lib/wallet/lifecycle/unilateral-exit-automation-types'
 import type { UnilateralExitWalletScope } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
-import { UNILATERAL_EXIT_PARENT_DATA_WAIT_MS } from '@/lib/arkade/arkade-query-timings'
+import {
+  UNILATERAL_EXIT_AUTOMATION_WAIT_POLL_MS_REGTEST,
+  UNILATERAL_EXIT_PARENT_DATA_WAIT_MS,
+} from '@/lib/arkade/arkade-query-timings'
 import type { ArkadeUnilateralExitProgress, ArkadeUnilateralExitJobViability, ArkadeVtxoOutpoint } from '@/workers/arkade-api'
 import type { DoneActorEvent, ErrorActorEvent } from 'xstate'
 
@@ -85,6 +88,7 @@ export type UnilateralExitMachineUserEvent =
       outpoints: ArkadeVtxoOutpoint[]
     }
   | { type: 'PROCEED_MANUAL'; feeRateSatPerVb: number }
+  /** Test / manual kick that mirrors machine `after` delays. Production uses `after`. */
   | { type: 'POLL_TICK' }
   | { type: 'RESUME' }
   | { type: 'CLEAR_JOB' }
@@ -131,7 +135,7 @@ export function createInitialUnilateralExitContext(
     proceedTargetStepIndex: null,
     progressRefreshRequested: false,
     unconfirmedParentRetry: null,
-    pollDelayMs: input?.pollDelayMs ?? 2_000,
+    pollDelayMs: input?.pollDelayMs ?? UNILATERAL_EXIT_AUTOMATION_WAIT_POLL_MS_REGTEST,
     parentDataWaitMs: input?.parentDataWaitMs ?? UNILATERAL_EXIT_PARENT_DATA_WAIT_MS,
     reconcileInProgressSats: 0,
     reconcileInProgressOutpoints: [],

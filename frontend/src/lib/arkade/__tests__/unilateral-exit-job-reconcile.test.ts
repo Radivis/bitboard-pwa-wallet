@@ -1,54 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
-  isPersistedUnilateralExitJobStale,
   shouldDeferPersistedUnilateralExitHydrate,
   shouldHydratePersistedUnilateralExitJob,
 } from '@/lib/arkade/unilateral-exit-job-reconcile'
 
 const leafA = { txid: 'aa'.repeat(32), vout: 0 }
-const leafB = { txid: 'bb'.repeat(32), vout: 1 }
 
 describe('unilateral-exit-job-reconcile', () => {
-  it('pre-broadcast persisted job is not stale when WASM has no in-progress exits', () => {
-    expect(
-      isPersistedUnilateralExitJobStale({
-        selectedLeafOutpoints: [leafA],
-        inProgressOutpoints: [],
-        unilateralExitInProgressSats: 0,
-      }),
-    ).toBe(false)
-  })
-
-  it('keeps persisted job when selection overlaps in-progress outpoints', () => {
-    expect(
-      isPersistedUnilateralExitJobStale({
-        selectedLeafOutpoints: [leafA],
-        inProgressOutpoints: [leafA],
-        unilateralExitInProgressSats: 50_000,
-      }),
-    ).toBe(false)
-  })
-
-  it('keeps persisted job when in-progress outpoints differ from original leaves', () => {
-    expect(
-      isPersistedUnilateralExitJobStale({
-        selectedLeafOutpoints: [leafA],
-        inProgressOutpoints: [leafB],
-        unilateralExitInProgressSats: 50_000,
-      }),
-    ).toBe(false)
-  })
-
-  it('keeps persisted job when in-progress sats exist before outpoints load', () => {
-    expect(
-      isPersistedUnilateralExitJobStale({
-        selectedLeafOutpoints: [leafA],
-        inProgressOutpoints: [],
-        unilateralExitInProgressSats: 300_000,
-      }),
-    ).toBe(false)
-  })
-
   it('hydrates when persisted outpoints exist and the job is not stale', () => {
     expect(
       shouldHydratePersistedUnilateralExitJob({

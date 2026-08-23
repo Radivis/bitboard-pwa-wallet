@@ -23,7 +23,6 @@ import {
   useArkadeBumperInfoQuery,
   useArkadeExitCandidatesQuery,
   useArkadeUnilateralExitBatchEstimateQuery,
-  useArkadeUnilateralExitProgressQuery,
   useArkadeUnilateralExitTopologyQuery,
   useArkadeUnilateralExitsInProgressQuery,
 } from '@/hooks/useArkadeQueries'
@@ -35,6 +34,7 @@ import {
   useUnilateralExitLifecycleSnapshot,
 } from '@/hooks/useUnilateralExitLifecycleSnapshot'
 import { useUnilateralExitAutomationSnapshot } from '@/hooks/useUnilateralExitAutomationSnapshot'
+import { useUnilateralExitStepWaitingClock } from '@/hooks/useUnilateralExitStepWaitingClock'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import { arkadeUnilateralExitInProgressSats } from '@/lib/arkade/arkade-balance-display'
 import { defaultMaxFeeRateSatPerVb } from '@/lib/arkade/unilateral-exit-automation-fees'
@@ -117,21 +117,6 @@ function toastUnilateralExitSettleResult(
 }
 
 const EMPTY_TOPOLOGY_OUTPOINTS: ArkadeVtxoOutpoint[] = []
-
-function formatStepWaitingDuration(elapsedSeconds: number): string {
-  if (elapsedSeconds < 60) {
-    return `${elapsedSeconds}s`
-  }
-  if (elapsedSeconds < 3_600) {
-    const minutes = Math.floor(elapsedSeconds / 60)
-    const seconds = elapsedSeconds % 60
-    return `${minutes}m ${seconds}s`
-  }
-  const hours = Math.floor(elapsedSeconds / 3_600)
-  const minutes = Math.floor((elapsedSeconds % 3_600) / 60)
-  const seconds = elapsedSeconds % 60
-  return `${hours}h ${minutes}m ${seconds}s`
-}
 
 function totalSelectedSats(
   selected: ArkadeVtxoOutpoint[],
@@ -316,15 +301,6 @@ export function UnilateralExitControlPage() {
 
   const machineProceeding = unilateralExitSnapshotIsProceeding(actorSnapshot)
 
-  const trackingExitProgress =
-    (lifecycleJobActive || machineProceeding) && jobOutpoints.length > 0
-
-  const progressQuery = useArkadeUnilateralExitProgressQuery({
-    enabled: trackingExitProgress && isOnControlPage,
-    vtxoOutpoints: jobOutpoints,
-    unilateralExitJobActive: lifecycleJobActive,
-  })
-
   useEffect(() => {
     if (!isOnControlPage) return
     bumpGraphRenderEpoch()
@@ -478,17 +454,7 @@ export function UnilateralExitControlPage() {
     actorSnapshot,
   ])
 
-  const actorProgress = selectUnilateralExitProgressForDisplay(actorSnapshot)
-  const progress =
-    actorProgress ??
-    (machineProceeding ||
-    unilateralExitSnapshotIsInAnyState(actorSnapshot, [
-      UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm,
-      UNILATERAL_EXIT_MACHINE_STATE.waitingForParentData,
-    ]) ||
-    unilateralExitSnapshotIsInState(actorSnapshot, UNILATERAL_EXIT_MACHINE_STATE.complete)
-      ? (progressQuery.data ?? null)
-      : null)
+  const progress = selectUnilateralExitProgressForDisplay(actorSnapshot)
   const nodeStatuses = progress?.nodeStatuses ?? []
   const stepIndex = progress?.stepIndex ?? 0
   const wasmTotalSteps = progress?.totalSteps ?? 0
@@ -549,26 +515,9 @@ export function UnilateralExitControlPage() {
     [actorSnapshot],
   )
   const currentStepRelayedSinceUnix = persistedJob.currentStepRelayedSinceUnix
-  const [nowUnixSeconds, setNowUnixSeconds] = useState(() => Math.floor(Date.now() / 1000))
-
-  useEffect(() => {
-    if (currentStepRelayedSinceUnix == null) {
-      return
-    }
-    setNowUnixSeconds(Math.floor(Date.now() / 1000))
-    const timerId = window.setInterval(() => {
-      setNowUnixSeconds(Math.floor(Date.now() / 1000))
-    }, 1_000)
-    return () => window.clearInterval(timerId)
-  }, [currentStepRelayedSinceUnix])
-
-  const stepWaitingDurationLabel = useMemo(() => {
-    if (currentStepRelayedSinceUnix == null) {
-      return null
-    }
-    const elapsedSeconds = Math.max(0, nowUnixSeconds - currentStepRelayedSinceUnix)
-    return formatStepWaitingDuration(elapsedSeconds)
-  }, [currentStepRelayedSinceUnix, nowUnixSeconds])
+  const stepWaitingDurationLabel = useUnilateralExitStepWaitingClock(
+    currentStepRelayedSinceUnix,
+  )
 
   const candidates = exitCandidatesQuery.data ?? []
   const selectedTotalSats = useMemo(
@@ -791,9 +740,13 @@ export function UnilateralExitControlPage() {
             {phase === 'waitingForParentData' && persistedFailure == null
               ? ' — waiting for parent data'
               : ''}
+            {phase === 'ensuringBroadcast' && persistedFailure == null
+              ? ' — broadcasting'
+              : ''}
             {(phase === 'waiting' || stepWaitingDurationLabel != null) &&
             phase !== 'complete' &&
             phase !== 'waitingForParentData' &&
+            phase !== 'ensuringBroadcast' &&
             persistedFailure == null
               ? ` — waiting for confirmation${
                   stepWaitingDurationLabel != null ? ` (${stepWaitingDurationLabel})` : ''
@@ -804,6 +757,7 @@ export function UnilateralExitControlPage() {
             phase !== 'complete' &&
             phase !== 'waiting' &&
             phase !== 'waitingForParentData' &&
+            phase !== 'ensuringBroadcast' &&
             persistedFailure == null &&
             (lifecycleJobActive || machineProceeding || isProceeding)
               ? ' — proceeding automatically'

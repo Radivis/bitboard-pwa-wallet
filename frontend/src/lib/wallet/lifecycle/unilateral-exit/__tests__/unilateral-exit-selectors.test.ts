@@ -12,6 +12,7 @@ import {
   selectUnilateralExitInProgressOverlay,
   selectUnilateralExitLifecycleSnapshot,
   selectUnilateralExitProceedButtonState,
+  selectUnilateralExitProgressForDisplay,
   selectUnilateralExitAutomationSnapshot,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-selectors'
 import { UnilateralExitLifecyclePhase } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
@@ -134,6 +135,27 @@ describe('selectUnilateralExitControlJobState', () => {
     })
   })
 
+  it('maps ensuringBroadcast to its own display phase', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.ensuringBroadcast, {
+      jobOutpoints: [leaf],
+      progress: progress({
+        phase: 'waiting',
+        currentStepTxRelayed: false,
+      }),
+    })
+    expect(
+      selectUnilateralExitControlJobState(snapshot, {
+        hasInProgressExits: false,
+        totalSteps: 2,
+      }),
+    ).toMatchObject({
+      phase: 'ensuringBroadcast',
+      exitJobInFlight: true,
+      jobActive: true,
+      isProceeding: true,
+    })
+  })
+
   it('shows complete when machine is complete even if progress snapshot looks incomplete', () => {
     const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.complete, {
       jobOutpoints: [leaf],
@@ -190,6 +212,14 @@ describe('selectUnilateralExitControlJobState', () => {
       phase: 'complete',
       jobActive: true,
     })
+  })
+
+  it('selectUnilateralExitProgressForDisplay is null while a job is scoped without actor progress', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.proceeding, {
+      jobOutpoints: [leaf],
+      progress: null,
+    })
+    expect(selectUnilateralExitProgressForDisplay(snapshot)).toBeNull()
   })
 
   it('selectUnilateralExitProceedButtonState disables during waiting', () => {
@@ -355,6 +385,18 @@ describe('selectUnilateralExitInProgressOverlay', () => {
     const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.proceeding, {
       jobOutpoints: [leaf],
       progress: null,
+    })
+    expect(selectUnilateralExitInProgressOverlay(snapshot)).toBeNull()
+  })
+
+  it('returns null overlay when the machine is complete', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.complete, {
+      jobOutpoints: [leaf],
+      progress: progress({
+        phase: 'complete',
+        stepIndex: 2,
+        totalSteps: 2,
+      }),
     })
     expect(selectUnilateralExitInProgressOverlay(snapshot)).toBeNull()
   })

@@ -28,7 +28,7 @@ import {
   type UnilateralExitPolicyEvaluation,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-types'
 import type { ArkadeUnilateralExitProgress, ArkadeUnilateralExitJobViability } from '@/workers/arkade-api'
-import { sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
+import { arkadeVtxoOutpointListsEqual, sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
 import { assign, fromPromise, setup } from 'xstate'
 
 export type EnsureBroadcastActorInput = {
@@ -344,7 +344,7 @@ export const unilateralExitMachineSetup = setup({
         progress: null,
       }
     }),
-    assignHydrate: assign(({ event }) => {
+    assignHydrate: assign(({ context, event }) => {
       if (event.type !== 'HYDRATE_OR_START') {
         return {}
       }
@@ -352,6 +352,9 @@ export const unilateralExitMachineSetup = setup({
       ensurePersistedUnilateralExitJob(event.walletScope, outpoints)
       const automationEnabled = event.automationEnabled ?? false
       const resumeAutomation = event.resumeAutomation ?? false
+      const keepExistingProgress =
+        context.progress != null &&
+        arkadeVtxoOutpointListsEqual(context.jobOutpoints, outpoints)
       return {
         walletScope: event.walletScope,
         jobOutpoints: outpoints,
@@ -361,7 +364,7 @@ export const unilateralExitMachineSetup = setup({
         progressRefreshRequested: false,
         unconfirmedParentRetry: null,
         ...(automationEnabled ? { feeRateSatPerVb: null } : {}),
-        progress: null,
+        progress: keepExistingProgress ? context.progress : null,
         pausedReason: null,
         lastErrorMessage: null,
         reconcileInProgressSats: event.reconcileInProgressSats ?? 0,

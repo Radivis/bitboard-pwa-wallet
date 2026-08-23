@@ -23,7 +23,7 @@ The unilateral exit job lifecycle is coordinated by **one** XState v5 actor (`un
 
 1. **Transitions only in the machine** — UI and hooks send events via `unilateral-exit-runtime.ts`; they do not mutate job phase directly.
 2. **WASM only in actors** — React components and hooks must not call `getArkadeWorker()` for proceed/progress during an active job.
-3. **No external schedulers** — automation polling uses machine `after` delays and `POLL_TICK`; do not add `setTimeout`/`setInterval` advance loops outside the machine.
+3. **No external schedulers** — automation polling uses machine `after` delays. `POLL_TICK` is the test/manual equivalent of those `after` delays; do not add `setTimeout`/`setInterval` advance loops outside the machine.
 4. **Authoritative progress** — during an active job, `actor.context.progress` wins; React Query is display cache only.
 5. **Single automation flag** — `context.automationEnabled` is the only job-level manual/automatic switch; prefs changes flow through `AUTOMATION_PREFS_CHANGED`.
 6. **Typed snapshots** — selectors/runtime use `UnilateralExitActorSnapshot` + `UNILATERAL_EXIT_MACHINE_STATE`; do not call untyped `snapshot.matches()` outside tests.

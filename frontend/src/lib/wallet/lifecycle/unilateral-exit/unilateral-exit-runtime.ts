@@ -36,8 +36,9 @@ import {
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-snapshot'
 import type { LockLifecyclePhase } from '@/lib/wallet/lifecycle/lock-lifecycle-types'
 import { shouldSkipRailLifecycleResetForLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-phase'
+import { UNILATERAL_EXIT_AUTOMATION_WAIT_POLL_MS_REGTEST } from '@/lib/arkade/arkade-query-timings'
 import type { ArkadeVtxoOutpoint } from '@/workers/arkade-api'
-import { arkadeVtxoOutpointsEqual, sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
+import { arkadeVtxoOutpointListsEqual, sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
 import { createActor } from 'xstate'
 
 type ActorListener = (snapshot: UnilateralExitActorSnapshot) => void
@@ -53,7 +54,7 @@ function createUnilateralExitActor() {
       actors: unilateralExitMachineActors,
     }),
     {
-      input: { pollDelayMs: 2_000 },
+      input: { pollDelayMs: UNILATERAL_EXIT_AUTOMATION_WAIT_POLL_MS_REGTEST },
     },
   )
   newActor.start()
@@ -169,7 +170,7 @@ function actorAlreadyTrackingHydrateOutpoints(
     snapshot.context.walletScope != null &&
     unilateralExitWalletScopeKey(snapshot.context.walletScope) ===
       unilateralExitWalletScopeKey(walletScope)
-  const outpointsMatch = arkadeVtxoOutpointsEqual(snapshot.context.jobOutpoints, outpoints)
+  const outpointsMatch = arkadeVtxoOutpointListsEqual(snapshot.context.jobOutpoints, outpoints)
   if (!walletScopeMatches || !outpointsMatch) {
     return false
   }
@@ -220,7 +221,7 @@ async function dispatchHydrateOrStart(params: {
     walletScope: params.walletScope,
     outpoints: params.outpoints,
     automationEnabled: prefs.enabled,
-    resumeAutomation: false,
+    resumeAutomation: prefs.enabled,
     reconcileInProgressSats: params.reconcileInProgressSats,
     reconcileInProgressOutpoints: params.reconcileInProgressOutpoints,
   })
@@ -402,10 +403,6 @@ export function syncUnilateralExitWithLockPhase(lockPhase: LockLifecyclePhase): 
   if (scope != null) {
     clearUnilateralExitFrontendMemoryForScope(scope)
   }
-}
-
-export function bootstrapUnilateralExitAutomation(): void {
-  // Actor handles automation polling internally via waitingConfirm.after.
 }
 
 const UNILATERAL_EXIT_ACTOR_SETTLE_TIMEOUT_MS = 120_000

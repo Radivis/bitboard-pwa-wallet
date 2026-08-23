@@ -518,7 +518,10 @@ export async function runAutomaticUnilateralUnrollUntilBranchComplete(page: Page
       .getByTestId('unilateral-exit-step-progress')
       .getAttribute('data-progress-phase')
     const isAdvancingPhase =
-      progressPhase === 'advancing' || /proceeding automatically/i.test(rawProgressText)
+      progressPhase === 'advancing' ||
+      progressPhase === 'ensuringBroadcast' ||
+      /proceeding automatically/i.test(rawProgressText) ||
+      /broadcasting/i.test(rawProgressText)
 
     if (isAdvancingPhase) {
       if (progressText !== lastProgressText) {

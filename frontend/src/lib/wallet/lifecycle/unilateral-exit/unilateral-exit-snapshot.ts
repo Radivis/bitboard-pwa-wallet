@@ -6,7 +6,7 @@ import {
   type UnilateralExitMachineStateId,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-types'
 import type { unilateralExitMachine } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.machine'
-import { arkadeVtxoOutpointsEqual } from '@/workers/arkade-api'
+import { arkadeVtxoOutpointListsEqual } from '@/workers/arkade-api'
 import type { SnapshotFrom } from 'xstate'
 
 type RuntimeUnilateralExitActorSnapshot = SnapshotFrom<typeof unilateralExitMachine>
@@ -91,7 +91,7 @@ export function unilateralExitActorSnapshotEqual(
   const nextContext = next.context
   return (
     unilateralExitWalletScopesEqual(previousContext.walletScope, nextContext.walletScope) &&
-    arkadeVtxoOutpointsEqual(previousContext.jobOutpoints, nextContext.jobOutpoints) &&
+    arkadeVtxoOutpointListsEqual(previousContext.jobOutpoints, nextContext.jobOutpoints) &&
     previousContext.progress === nextContext.progress &&
     previousContext.automationEnabled === nextContext.automationEnabled &&
     previousContext.pausedReason === nextContext.pausedReason &&

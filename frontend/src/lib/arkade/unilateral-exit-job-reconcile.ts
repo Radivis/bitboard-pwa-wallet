@@ -38,19 +38,11 @@ export function shouldDeferPersistedUnilateralExitHydrate(params: {
 }
 
 /**
- * A persisted job bookmark is crash recovery, including `START_MANUAL` before the first
- * unroll tx is visible on chain. WASM reporting no in-progress exits is not stale.
- * Complete / abort / terminate already clear the bookmark.
+ * Restore control-store selection from SQLite only for a still-present exit job.
+ * A persisted bookmark is crash recovery, including `START_MANUAL` before the first
+ * unroll tx is visible on chain. WASM reporting no in-progress exits is not a reason
+ * to skip hydrate — complete / abort / terminate already clear the bookmark.
  */
-export function isPersistedUnilateralExitJobStale(_params: {
-  selectedLeafOutpoints: ArkadeVtxoOutpoint[]
-  inProgressOutpoints: ArkadeVtxoOutpoint[]
-  unilateralExitInProgressSats: number
-}): boolean {
-  return false
-}
-
-/** Restore control-store selection from SQLite only for a still-present exit job. */
 export function shouldHydratePersistedUnilateralExitJob(params: {
   selectedLeafOutpoints: ArkadeVtxoOutpoint[]
   controlStoreSelectionEmpty: boolean

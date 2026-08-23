@@ -259,6 +259,16 @@ export function arkadeVtxoOutpointsEqual(
   return left.txid === right.txid && left.vout === right.vout
 }
 
+export function arkadeVtxoOutpointListsEqual(
+  left: ArkadeVtxoOutpoint[],
+  right: ArkadeVtxoOutpoint[],
+): boolean {
+  if (left.length !== right.length) {
+    return false
+  }
+  return left.every((outpoint, index) => arkadeVtxoOutpointsEqual(outpoint, right[index]!))
+}
+
 export function includesArkadeVtxoOutpoint(
   outpoints: ArkadeVtxoOutpoint[],
   candidate: ArkadeVtxoOutpoint,

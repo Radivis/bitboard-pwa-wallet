@@ -81,6 +81,8 @@ import {
   ARKADE_SLOW_METADATA_STALE_MS,
   unilateralExitProgressIdlePollMs,
   unilateralExitProgressPollMs,
+  UNILATERAL_EXIT_PROGRESS_IDLE_POLL_MS,
+  UNILATERAL_EXIT_PROGRESS_POLL_MS,
 } from '@/lib/arkade/arkade-query-timings'
 import { usePeriodicSyncRefetchInterval } from '@/lib/wallet/periodic-sync/usePeriodicSyncRefetchInterval'
 import {
@@ -1805,9 +1807,6 @@ export function useArkadeUnilateralExitBatchEstimateQuery(params: {
   })
 }
 
-const ARKADE_UNILATERAL_EXIT_PROGRESS_POLL_MS = 3_000
-const ARKADE_UNILATERAL_EXIT_PROGRESS_IDLE_POLL_MS = 15_000
-
 export function useArkadeUnilateralExitProgressQuery(params: {
   enabled: boolean
   vtxoOutpoints: ArkadeVtxoOutpoint[]
@@ -1824,10 +1823,10 @@ export function useArkadeUnilateralExitProgressQuery(params: {
   })
   const progressPollMs = isArkadeSupportedNetworkMode(networkMode)
     ? unilateralExitProgressPollMs(networkMode)
-    : ARKADE_UNILATERAL_EXIT_PROGRESS_POLL_MS
+    : UNILATERAL_EXIT_PROGRESS_POLL_MS
   const progressIdlePollMs = isArkadeSupportedNetworkMode(networkMode)
     ? unilateralExitProgressIdlePollMs(networkMode)
-    : ARKADE_UNILATERAL_EXIT_PROGRESS_IDLE_POLL_MS
+    : UNILATERAL_EXIT_PROGRESS_IDLE_POLL_MS
 
   return useQuery({
     queryKey:

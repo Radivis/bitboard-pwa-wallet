@@ -89,3 +89,6 @@ export function unilateralExitProgressIdlePollMs(networkMode: string): number {
     ? UNILATERAL_EXIT_PROGRESS_IDLE_POLL_MS_REGTEST
     : UNILATERAL_EXIT_PROGRESS_IDLE_POLL_MS
 }
+
+/** Wall-clock tick for the waiting-step duration label on the control page (not an advance loop). */
+export const UNILATERAL_EXIT_WAITING_CLOCK_TICK_MS = 1_000
