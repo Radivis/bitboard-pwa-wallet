@@ -32,7 +32,7 @@ import type {
   ResolveAbortVtxoIdsActorInput,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.machine'
 import type { UnilateralExitPolicyEvaluation } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-types'
-import type { UnilateralExitWalletScope } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
+import type { ArkadeWalletScope } from '@/lib/arkade/arkade-session-scope'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { useWalletStore } from '@/stores/walletStore'
 import { getArkadeWorker } from '@/workers/arkade-factory'
@@ -40,7 +40,7 @@ import { sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
 import type { ArkadeUnilateralExitProgress, ArkadeUnilateralExitJobViability } from '@/workers/arkade-api'
 import { fromPromise } from 'xstate'
 
-function assertCanRunUnilateralExit(scope: UnilateralExitWalletScope): void {
+function assertCanRunUnilateralExit(scope: ArkadeWalletScope): void {
   if (!walletIsUnlockedOrSyncing(useWalletStore.getState().walletStatus)) {
     throw new Error('Wallet must be unlocked')
   }
@@ -60,7 +60,7 @@ function assertCanRunUnilateralExit(scope: UnilateralExitWalletScope): void {
 }
 
 async function writeUnilateralExitProgressQueryCache(
-  scope: UnilateralExitWalletScope,
+  scope: ArkadeWalletScope,
   outpoints: FetchProgressActorInput['outpoints'],
   progress: ArkadeUnilateralExitProgress,
 ): Promise<void> {
@@ -80,7 +80,7 @@ async function writeUnilateralExitProgressQueryCache(
 }
 
 export async function invalidateUnilateralExitQueries(
-  scope: UnilateralExitWalletScope,
+  scope: ArkadeWalletScope,
   outpoints: FetchProgressActorInput['outpoints'],
   progress?: ArkadeUnilateralExitProgress,
 ): Promise<void> {
@@ -181,7 +181,7 @@ export const proceedStepActor = fromPromise<
   }
   const sortedOutpoints = sortArkadeVtxoOutpoints(input.outpoints)
   await proceedUnilateralExitStepWithGuards({
-    activeWalletId: input.walletScope.walletId,
+    walletScope: input.walletScope,
     vtxoOutpoints: sortedOutpoints,
     feeRateSatPerVb: input.feeRateSatPerVb,
   })
@@ -238,7 +238,7 @@ export const ensureBroadcastActor = fromPromise<
 
   try {
     await proceedUnilateralExitStepWithGuards({
-      activeWalletId: input.walletScope.walletId,
+      walletScope: input.walletScope,
       vtxoOutpoints: sortedOutpoints,
       feeRateSatPerVb,
     })

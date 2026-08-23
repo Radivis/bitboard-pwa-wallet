@@ -137,6 +137,7 @@ import {
   resetUnilateralExitActorForTests,
   sendUnilateralExitEvent,
   getUnilateralExitActorSnapshot,
+  resetUnilateralExitForArkadeSessionTeardown,
   syncUnilateralExitWithLockPhase,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime'
 import {
@@ -151,6 +152,12 @@ const walletScope = {
   walletId: 1,
   networkMode: 'regtest' as const,
   connectionId: 'conn-1',
+}
+
+const otherWalletScope = {
+  walletId: 2,
+  networkMode: 'regtest' as const,
+  connectionId: 'conn-2',
 }
 
 const leaf = { txid: 'aa'.repeat(32), vout: 0 }
@@ -422,6 +429,69 @@ describe('unilateral-exit-runtime hydration', () => {
     await configureUnilateralExitForLoadedWallet(walletScope)
 
     expect(getUnilateralExitActorSnapshot().context.automationEnabled).toBe(true)
+  })
+
+  it('configure resets actor when wallet scope differs', async () => {
+    sdkHydrated = true
+
+    await configureUnilateralExitForLoadedWallet(walletScope)
+    sendUnilateralExitEvent({
+      type: 'START_MANUAL',
+      walletScope,
+      outpoints: [leaf],
+      feeRateSatPerVb: 2,
+    })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    expect(getUnilateralExitActorSnapshot().value).toBe(
+      UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm,
+    )
+
+    await configureUnilateralExitForLoadedWallet(otherWalletScope)
+
+    const snapshot = getUnilateralExitActorSnapshot()
+    expect(snapshot.value).toBe(UNILATERAL_EXIT_MACHINE_STATE.idle)
+    expect(snapshot.context.walletScope).toEqual(otherWalletScope)
+    expect(snapshot.context.jobOutpoints).toEqual([])
+  })
+
+  it('configure does not reset an active job when scope is unchanged', async () => {
+    sdkHydrated = true
+
+    await configureUnilateralExitForLoadedWallet(walletScope)
+    sendUnilateralExitEvent({
+      type: 'START_MANUAL',
+      walletScope,
+      outpoints: [leaf],
+      feeRateSatPerVb: 2,
+    })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    await configureUnilateralExitForLoadedWallet(walletScope)
+
+    const snapshot = getUnilateralExitActorSnapshot()
+    expect(snapshot.value).toBe(UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm)
+    expect(snapshot.context.jobOutpoints).toEqual([leaf])
+  })
+
+  it('session teardown reset returns actor to notConfigured', async () => {
+    sdkHydrated = true
+
+    await configureUnilateralExitForLoadedWallet(walletScope)
+    sendUnilateralExitEvent({
+      type: 'START_MANUAL',
+      walletScope,
+      outpoints: [leaf],
+      feeRateSatPerVb: 2,
+    })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    resetUnilateralExitForArkadeSessionTeardown()
+
+    const snapshot = getUnilateralExitActorSnapshot()
+    expect(snapshot.value).toBe(UNILATERAL_EXIT_MACHINE_STATE.notConfigured)
+    expect(snapshot.context.walletScope).toBeNull()
+    expect(snapshot.context.jobOutpoints).toEqual([])
   })
 
   it('lock_reset_clears_pending_intent_session_tracking', () => {

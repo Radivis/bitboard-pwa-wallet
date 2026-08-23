@@ -9,12 +9,11 @@ import {
   migratePersistedUnilateralExitJob,
   useUnilateralExitLifecyclePersistenceStore,
 } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence'
-import {
-  unilateralExitWalletScopeKey,
-  type PersistedUnilateralExitFailure,
-  type PersistedUnilateralExitJob,
-  type UnilateralExitFailureReasonCode,
-  type UnilateralExitWalletScope,
+import { arkadeWalletScopeKey, type ArkadeWalletScope } from '@/lib/arkade/arkade-session-scope'
+import type {
+  PersistedUnilateralExitFailure,
+  PersistedUnilateralExitJob,
+  UnilateralExitFailureReasonCode,
 } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
 import type { SendFeePresetLabel } from '@/lib/esplora/esplora-fee-estimates'
 import { getArkadeWorker } from '@/workers/arkade-factory'
@@ -231,9 +230,9 @@ async function rewriteOrRemoveSettingsMap(
 }
 
 export async function removeUnilateralExitSettingsScope(
-  scope: UnilateralExitWalletScope,
+  scope: ArkadeWalletScope,
 ): Promise<void> {
-  const scopeKey = unilateralExitWalletScopeKey(scope)
+  const scopeKey = arkadeWalletScopeKey(scope)
   await rewriteOrRemoveSettingsMap(
     UNILATERAL_EXIT_LIFECYCLE_SETTINGS_KEY,
     JOBS_BY_KEY,
@@ -247,12 +246,12 @@ export async function removeUnilateralExitSettingsScope(
   await rewriteOrRemoveSettingsMap(UNILATERAL_EXIT_FAILURE_SETTINGS_KEY, FAILURES_BY_KEY, scopeKey)
 }
 
-async function readSettingsOverlay(scope: UnilateralExitWalletScope): Promise<{
+async function readSettingsOverlay(scope: ArkadeWalletScope): Promise<{
   settingsJob?: Parameters<typeof migratePersistedUnilateralExitJob>[0]
   settingsPrefs?: Partial<UnilateralExitAutomationPrefs>
   settingsFailure?: PersistedUnilateralExitFailure | null
 }> {
-  const scopeKey = unilateralExitWalletScopeKey(scope)
+  const scopeKey = arkadeWalletScopeKey(scope)
   const [jobRaw, prefsRaw, failureRaw] = await Promise.all([
     sqliteStorage.getItem(UNILATERAL_EXIT_LIFECYCLE_SETTINGS_KEY),
     sqliteStorage.getItem(UNILATERAL_EXIT_AUTOMATION_PREFS_SETTINGS_KEY),
@@ -277,7 +276,7 @@ async function readSettingsOverlay(scope: UnilateralExitWalletScope): Promise<{
 }
 
 function applyFrontendBundleToMemory(
-  scope: UnilateralExitWalletScope,
+  scope: ArkadeWalletScope,
   bundle: ArkadeUnilateralExitFrontendPersistence,
 ): void {
   useUnilateralExitLifecyclePersistenceStore
@@ -292,32 +291,32 @@ function applyFrontendBundleToMemory(
 }
 
 export function clearUnilateralExitFrontendMemoryForScope(
-  scope: UnilateralExitWalletScope,
+  scope: ArkadeWalletScope,
 ): void {
   useUnilateralExitLifecyclePersistenceStore.getState().clearScope(scope)
   useUnilateralExitAutomationPrefsStore.getState().clearScope(scope)
   useUnilateralExitFailurePersistenceStore.getState().clearScope(scope)
 }
 
-async function writeJobToSdk(scope: UnilateralExitWalletScope): Promise<void> {
+async function writeJobToSdk(scope: ArkadeWalletScope): Promise<void> {
   const job = useUnilateralExitLifecyclePersistenceStore
     .getState()
     .getJob(scope.walletId, scope.networkMode, scope.connectionId)
-  await getArkadeWorker().setUnilateralExitJob(jobToSdkPersistence(job))
+  await getArkadeWorker().setUnilateralExitJob(scope, jobToSdkPersistence(job))
 }
 
-async function writePrefsToSdk(scope: UnilateralExitWalletScope): Promise<void> {
+async function writePrefsToSdk(scope: ArkadeWalletScope): Promise<void> {
   const prefs = useUnilateralExitAutomationPrefsStore
     .getState()
     .getPrefs(scope.walletId, scope.networkMode, scope.connectionId)
-  await getArkadeWorker().setUnilateralExitAutomationPrefs(prefsToSdkPersistence(prefs))
+  await getArkadeWorker().setUnilateralExitAutomationPrefs(scope, prefsToSdkPersistence(prefs))
 }
 
-async function writeFailureToSdk(scope: UnilateralExitWalletScope): Promise<void> {
+async function writeFailureToSdk(scope: ArkadeWalletScope): Promise<void> {
   const failure = useUnilateralExitFailurePersistenceStore
     .getState()
     .getFailure(scope.walletId, scope.networkMode, scope.connectionId)
-  await getArkadeWorker().setUnilateralExitFailure(failureToSdkPersistence(failure))
+  await getArkadeWorker().setUnilateralExitFailure(scope, failureToSdkPersistence(failure))
 }
 
 function scheduleSdkWrite(run: () => Promise<void>): void {
@@ -326,29 +325,29 @@ function scheduleSdkWrite(run: () => Promise<void>): void {
   })
 }
 
-export function scheduleUnilateralExitJobSdkWrite(scope: UnilateralExitWalletScope): void {
+export function scheduleUnilateralExitJobSdkWrite(scope: ArkadeWalletScope): void {
   scheduleSdkWrite(() => writeJobToSdk(scope))
 }
 
-export function scheduleUnilateralExitPrefsSdkWrite(scope: UnilateralExitWalletScope): void {
+export function scheduleUnilateralExitPrefsSdkWrite(scope: ArkadeWalletScope): void {
   scheduleSdkWrite(() => writePrefsToSdk(scope))
 }
 
-export function scheduleUnilateralExitFailureSdkWrite(scope: UnilateralExitWalletScope): void {
+export function scheduleUnilateralExitFailureSdkWrite(scope: ArkadeWalletScope): void {
   scheduleSdkWrite(() => writeFailureToSdk(scope))
 }
 
 export async function hydrateUnilateralExitFrontendPersistenceFromSdk(
-  scope: UnilateralExitWalletScope,
+  scope: ArkadeWalletScope,
 ): Promise<PersistedUnilateralExitJob> {
-  const wasmBundle = await getArkadeWorker().getUnilateralExitFrontendPersistence()
+  const wasmBundle = await getArkadeWorker().getUnilateralExitFrontendPersistence(scope)
   const settingsOverlay = wasmBundle == null ? await readSettingsOverlay(scope) : {}
   const { bundle, didOverlay } = resolveUnilateralExitFrontendBundle({
     wasmBundle,
     ...settingsOverlay,
   })
   if (didOverlay || wasmBundle == null) {
-    await getArkadeWorker().setUnilateralExitFrontendPersistence(bundle)
+    await getArkadeWorker().setUnilateralExitFrontendPersistence(scope, bundle)
   }
   applyFrontendBundleToMemory(scope, bundle)
   await removeUnilateralExitSettingsScope(scope)
@@ -356,7 +355,7 @@ export async function hydrateUnilateralExitFrontendPersistenceFromSdk(
 }
 
 export function isUnilateralExitFrontendPersistenceHydrated(
-  scope: UnilateralExitWalletScope,
+  scope: ArkadeWalletScope,
 ): boolean {
   return useUnilateralExitLifecyclePersistenceStore.getState().isHydrated(scope)
 }

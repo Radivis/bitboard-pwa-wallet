@@ -2,8 +2,9 @@ import type { EncryptedBlobForDb } from '@/workers/crypto-api'
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import type { ArkadeOperatorConnectionSummary } from '@/lib/arkade/arkade-payload-merge'
 import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
+import type { ArkadeWalletScope } from '@/lib/arkade/arkade-session-scope'
 
-export type { ArkadeOperatorConnectionSummary }
+export type { ArkadeOperatorConnectionSummary, ArkadeWalletScope }
 
 export interface ArkadeOperatorSyncResult {
   keyDiscoveryWarning?: string
@@ -441,6 +442,7 @@ export interface ArkadeUnilateralExitLeafStatus {
 }
 
 export interface ArkadeProceedUnilateralExitStepParams {
+  walletScope: ArkadeWalletScope
   vtxoOutpoints: ArkadeVtxoOutpoint[]
   feeRateSatPerVb: number
 }
@@ -645,15 +647,23 @@ export interface ArkadeService {
   evaluateUnilateralExitJobViability(
     params: ArkadeUnilateralExitProgressParams,
   ): Promise<ArkadeUnilateralExitJobViability>
-  getUnilateralExitFrontendPersistence(): Promise<ArkadeUnilateralExitFrontendPersistence | null>
+  getUnilateralExitFrontendPersistence(
+    walletScope: ArkadeWalletScope,
+  ): Promise<ArkadeUnilateralExitFrontendPersistence | null>
   setUnilateralExitFrontendPersistence(
+    walletScope: ArkadeWalletScope,
     bundle: ArkadeUnilateralExitFrontendPersistence,
   ): Promise<void>
-  setUnilateralExitJob(job: ArkadeUnilateralExitJobPersistence): Promise<void>
+  setUnilateralExitJob(
+    walletScope: ArkadeWalletScope,
+    job: ArkadeUnilateralExitJobPersistence,
+  ): Promise<void>
   setUnilateralExitAutomationPrefs(
+    walletScope: ArkadeWalletScope,
     prefs: ArkadeUnilateralExitAutomationPrefsPersistence,
   ): Promise<void>
   setUnilateralExitFailure(
+    walletScope: ArkadeWalletScope,
     failure: ArkadeUnilateralExitFailurePersistence | null,
   ): Promise<void>
 }

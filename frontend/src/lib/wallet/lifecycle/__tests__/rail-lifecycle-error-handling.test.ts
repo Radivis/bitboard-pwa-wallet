@@ -12,6 +12,23 @@ const workerMocks = vi.hoisted(() => ({
   reconcileActiveConnectionId: vi.fn(),
   finalizePendingTransactions: vi.fn(),
   delegateSpendableVtxos: vi.fn(),
+  getUnilateralExitFrontendPersistence: vi.fn(async () => ({
+    job: {
+      selectedLeafOutpoints: [],
+      currentStepRelayedSinceUnix: null,
+      jobStartedAtUnix: null,
+    },
+    automationPrefs: {
+      enabled: false,
+      feePresetLabel: 'Medium',
+      maxFeeRateSatPerVb: 10,
+    },
+    lastFailure: null,
+  })),
+  setUnilateralExitFrontendPersistence: vi.fn(async () => {}),
+  setUnilateralExitJob: vi.fn(async () => {}),
+  setUnilateralExitAutomationPrefs: vi.fn(async () => {}),
+  setUnilateralExitFailure: vi.fn(async () => {}),
 }))
 
 const findActiveArkadeConnectionSummaryMock = vi.hoisted(() => vi.fn())
@@ -47,6 +64,14 @@ vi.mock('@/db', () => ({
     mnemonic: { ciphertext: new Uint8Array(), iv: new Uint8Array(), salt: new Uint8Array(), kdfPhc: 'x' },
     payload: { ciphertext: new Uint8Array(), iv: new Uint8Array(), salt: new Uint8Array(), kdfPhc: 'x' },
   })),
+}))
+
+vi.mock('@/db/storage-adapter', () => ({
+  sqliteStorage: {
+    getItem: vi.fn(async () => null),
+    setItem: vi.fn(async () => {}),
+    removeItem: vi.fn(async () => {}),
+  },
 }))
 
 vi.mock('@/workers/secrets-channel', () => ({

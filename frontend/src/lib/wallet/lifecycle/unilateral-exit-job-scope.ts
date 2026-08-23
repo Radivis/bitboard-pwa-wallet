@@ -1,28 +1,28 @@
 import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
+import type { ArkadeWalletScope } from '@/lib/arkade/arkade-session-scope'
 import {
   UnilateralExitLifecyclePhase,
   persistedUnilateralExitJobExists,
   type PersistedUnilateralExitJob,
   type UnilateralExitLifecycleSnapshot,
-  type UnilateralExitWalletScope,
 } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
 import type { NetworkMode } from '@/stores/walletStore'
 import { getCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import { sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
 import type { ArkadeVtxoOutpoint } from '@/workers/arkade-api'
 
-export function buildUnilateralExitWalletScope(
+export function buildArkadeWalletScope(
   walletId: number,
   networkMode: NetworkMode,
   connectionId: string,
-): UnilateralExitWalletScope | null {
+): ArkadeWalletScope | null {
   if (!isArkadeSupportedNetworkMode(networkMode)) {
     return null
   }
   return { walletId, networkMode, connectionId }
 }
 
-export function resolveActiveUnilateralExitWalletScope(): UnilateralExitWalletScope | null {
+export function resolveActiveArkadeWalletScope(): ArkadeWalletScope | null {
   const walletState = useWalletStore.getState()
   if (
     walletState.activeWalletId == null ||
@@ -30,7 +30,7 @@ export function resolveActiveUnilateralExitWalletScope(): UnilateralExitWalletSc
   ) {
     return null
   }
-  return buildUnilateralExitWalletScope(
+  return buildArkadeWalletScope(
     walletState.activeWalletId,
     getCommittedNetworkMode(),
     walletState.activeArkadeConnectionId,

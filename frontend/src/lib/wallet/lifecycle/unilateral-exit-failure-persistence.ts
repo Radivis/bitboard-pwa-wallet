@@ -2,11 +2,10 @@ import { create } from 'zustand'
 import type { NetworkMode } from '@/stores/walletStore'
 import type { ArkadeVtxoOutpoint } from '@/workers/arkade-api'
 import { sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
-import {
-  unilateralExitWalletScopeKey,
-  type PersistedUnilateralExitFailure,
-  type UnilateralExitFailureReasonCode,
-  type UnilateralExitWalletScope,
+import { arkadeWalletScopeKey, type ArkadeWalletScope } from '@/lib/arkade/arkade-session-scope'
+import type {
+  PersistedUnilateralExitFailure,
+  UnilateralExitFailureReasonCode,
 } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
 import { scheduleUnilateralExitFailureSdkWrite } from '@/lib/wallet/lifecycle/unilateral-exit-frontend-sdk-persistence'
 
@@ -18,12 +17,12 @@ interface UnilateralExitFailurePersistenceState {
     connectionId: string,
   ) => PersistedUnilateralExitFailure | null
   hydrateFailure: (
-    scope: UnilateralExitWalletScope,
+    scope: ArkadeWalletScope,
     failure: PersistedUnilateralExitFailure | null,
   ) => void
-  persistFailure: (scope: UnilateralExitWalletScope, failure: PersistedUnilateralExitFailure) => void
-  clearFailure: (scope: UnilateralExitWalletScope) => void
-  clearScope: (scope: UnilateralExitWalletScope) => void
+  persistFailure: (scope: ArkadeWalletScope, failure: PersistedUnilateralExitFailure) => void
+  clearFailure: (scope: ArkadeWalletScope) => void
+  clearScope: (scope: ArkadeWalletScope) => void
 }
 
 export const useUnilateralExitFailurePersistenceStore =
@@ -31,12 +30,12 @@ export const useUnilateralExitFailurePersistenceStore =
     failuresByKey: {},
 
     getFailure: (walletId, networkMode, connectionId) => {
-      const key = unilateralExitWalletScopeKey({ walletId, networkMode, connectionId })
+      const key = arkadeWalletScopeKey({ walletId, networkMode, connectionId })
       return get().failuresByKey[key] ?? null
     },
 
     hydrateFailure: (scope, failure) => {
-      const key = unilateralExitWalletScopeKey(scope)
+      const key = arkadeWalletScopeKey(scope)
       set((state) => {
         const failuresByKey = { ...state.failuresByKey }
         if (failure == null) {
@@ -49,7 +48,7 @@ export const useUnilateralExitFailurePersistenceStore =
     },
 
     persistFailure: (scope, failure) => {
-      const key = unilateralExitWalletScopeKey(scope)
+      const key = arkadeWalletScopeKey(scope)
       const sortedOutpoints = sortArkadeVtxoOutpoints(failure.selectedLeafOutpoints)
       set((state) => ({
         failuresByKey: {
@@ -64,7 +63,7 @@ export const useUnilateralExitFailurePersistenceStore =
     },
 
     clearFailure: (scope) => {
-      const key = unilateralExitWalletScopeKey(scope)
+      const key = arkadeWalletScopeKey(scope)
       set((state) => {
         if (state.failuresByKey[key] == null) {
           return state
@@ -77,7 +76,7 @@ export const useUnilateralExitFailurePersistenceStore =
     },
 
     clearScope: (scope) => {
-      const key = unilateralExitWalletScopeKey(scope)
+      const key = arkadeWalletScopeKey(scope)
       set((state) => {
         const failuresByKey = { ...state.failuresByKey }
         delete failuresByKey[key]
@@ -87,7 +86,7 @@ export const useUnilateralExitFailurePersistenceStore =
   }))
 
 export function getPersistedUnilateralExitFailure(
-  scope: UnilateralExitWalletScope,
+  scope: ArkadeWalletScope,
 ): PersistedUnilateralExitFailure | null {
   return useUnilateralExitFailurePersistenceStore
     .getState()
@@ -95,13 +94,13 @@ export function getPersistedUnilateralExitFailure(
 }
 
 export function persistUnilateralExitFailureRecord(
-  scope: UnilateralExitWalletScope,
+  scope: ArkadeWalletScope,
   failure: PersistedUnilateralExitFailure,
 ): void {
   useUnilateralExitFailurePersistenceStore.getState().persistFailure(scope, failure)
 }
 
-export function clearPersistedUnilateralExitFailure(scope: UnilateralExitWalletScope): void {
+export function clearPersistedUnilateralExitFailure(scope: ArkadeWalletScope): void {
   useUnilateralExitFailurePersistenceStore.getState().clearFailure(scope)
 }
 

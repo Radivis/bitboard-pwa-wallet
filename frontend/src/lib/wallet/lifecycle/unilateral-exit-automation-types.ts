@@ -1,6 +1,5 @@
 import type { SendFeePresetLabel } from '@/lib/esplora/esplora-fee-estimates'
-import type { UnilateralExitWalletScope } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
-import { unilateralExitWalletScopeKey } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
+import { arkadeWalletScopeKey, type ArkadeWalletScope } from '@/lib/arkade/arkade-session-scope'
 
 export type UnilateralExitAutomationPausedReason =
   | 'feeCapExceeded'
@@ -30,7 +29,7 @@ export function defaultUnilateralExitAutomationPrefs(): UnilateralExitAutomation
 }
 
 export function unilateralExitAutomationPrefsKey(
-  scope: Pick<UnilateralExitWalletScope, 'walletId' | 'networkMode' | 'connectionId'>,
+  scope: Pick<ArkadeWalletScope, 'walletId' | 'networkMode' | 'connectionId'>,
 ): string {
-  return unilateralExitWalletScopeKey(scope)
+  return arkadeWalletScopeKey(scope)
 }

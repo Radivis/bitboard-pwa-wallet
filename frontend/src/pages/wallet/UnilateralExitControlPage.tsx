@@ -45,7 +45,7 @@ import {
   persistedUnilateralExitJobExists,
 } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
 import {
-  resolveActiveUnilateralExitWalletScope,
+  resolveActiveArkadeWalletScope,
   resolveUnilateralExitJobOutpoints,
 } from '@/lib/wallet/lifecycle/unilateral-exit-job-scope'
 import { isCurrentStepRelayed } from '@/lib/arkade/unilateral-exit-broadcast'
@@ -531,7 +531,7 @@ export function UnilateralExitControlPage() {
     )
   }, [batchEstimate, totalSteps])
 
-  const walletScope = resolveActiveUnilateralExitWalletScope()
+  const walletScope = resolveActiveArkadeWalletScope()
 
   const handleProceedAutomaticallyChange = (enabled: boolean) => {
     if (walletScope == null) return

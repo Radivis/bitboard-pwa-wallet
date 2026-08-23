@@ -5,6 +5,7 @@ import type {
 } from '@/workers/secrets-channel-types'
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import { arkadeSessionKey } from '@/lib/arkade/arkade-session-key'
+import { assertArkadeOpenSessionMatchesScope } from '@/lib/arkade/arkade-session-scope'
 import { rethrowWasmArkErrorForComlink } from '@/lib/shared/wasm-ark-error'
 import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
 import {
@@ -52,6 +53,7 @@ import type {
   ArkadeUnilateralExitJobPersistence,
   ArkadeUnilateralExitAutomationPrefsPersistence,
   ArkadeUnilateralExitFailurePersistence,
+  ArkadeWalletScope,
   ArkadeOperatorScheduledSession,
   ArkadeOperatorTrustStatus,
   ArkadeOperatorConfigDiffResult,
@@ -94,6 +96,10 @@ type SendPaymentInFlight = {
 }
 
 let sendPaymentInFlight: SendPaymentInFlight | null = null
+
+function assertCallerMatchesOpenSession(walletScope: ArkadeWalletScope): void {
+  assertArkadeOpenSessionMatchesScope(activeSessionParams, walletScope)
+}
 
 function sendPaymentFingerprint(params: ArkadeSendParams): string {
   return `${params.address}\0${params.amountSats}`
@@ -847,9 +853,11 @@ const arkadeService: ArkadeService = {
   async proceedUnilateralExitStep(
     params: ArkadeProceedUnilateralExitStepParams,
   ): Promise<ArkadeProceedUnilateralExitStepResult> {
+    const { walletScope, ...wasmParams } = params
+    assertCallerMatchesOpenSession(walletScope)
     const result = await invokeWasmArk((wasmModule) =>
       wasmModule.ark_proceed_unilateral_exit_step(
-        params,
+        wasmParams,
       ) as Promise<ArkadeProceedUnilateralExitStepResult>,
     )
     await persistAfterUnilateralExitOperation()
@@ -878,7 +886,10 @@ const arkadeService: ArkadeService = {
     )
   },
 
-  async getUnilateralExitFrontendPersistence(): Promise<ArkadeUnilateralExitFrontendPersistence | null> {
+  async getUnilateralExitFrontendPersistence(
+    walletScope: ArkadeWalletScope,
+  ): Promise<ArkadeUnilateralExitFrontendPersistence | null> {
+    assertCallerMatchesOpenSession(walletScope)
     const result = await invokeWasmArk((wasmModule) =>
       wasmModule.ark_get_unilateral_exit_frontend(),
     )
@@ -889,22 +900,30 @@ const arkadeService: ArkadeService = {
   },
 
   async setUnilateralExitFrontendPersistence(
+    walletScope: ArkadeWalletScope,
     bundle: ArkadeUnilateralExitFrontendPersistence,
   ): Promise<void> {
+    assertCallerMatchesOpenSession(walletScope)
     await invokeWasmArk((wasmModule) =>
       wasmModule.ark_set_unilateral_exit_frontend(bundle),
     )
     await flushSdkPersistenceNowOrThrow()
   },
 
-  async setUnilateralExitJob(job: ArkadeUnilateralExitJobPersistence): Promise<void> {
+  async setUnilateralExitJob(
+    walletScope: ArkadeWalletScope,
+    job: ArkadeUnilateralExitJobPersistence,
+  ): Promise<void> {
+    assertCallerMatchesOpenSession(walletScope)
     await invokeWasmArk((wasmModule) => wasmModule.ark_set_unilateral_exit_job(job))
     await flushSdkPersistenceNowOrThrow()
   },
 
   async setUnilateralExitAutomationPrefs(
+    walletScope: ArkadeWalletScope,
     prefs: ArkadeUnilateralExitAutomationPrefsPersistence,
   ): Promise<void> {
+    assertCallerMatchesOpenSession(walletScope)
     await invokeWasmArk((wasmModule) =>
       wasmModule.ark_set_unilateral_exit_automation_prefs(prefs),
     )
@@ -912,8 +931,10 @@ const arkadeService: ArkadeService = {
   },
 
   async setUnilateralExitFailure(
+    walletScope: ArkadeWalletScope,
     failure: ArkadeUnilateralExitFailurePersistence | null,
   ): Promise<void> {
+    assertCallerMatchesOpenSession(walletScope)
     await invokeWasmArk((wasmModule) => wasmModule.ark_set_unilateral_exit_failure(failure))
     await flushSdkPersistenceNowOrThrow()
   },

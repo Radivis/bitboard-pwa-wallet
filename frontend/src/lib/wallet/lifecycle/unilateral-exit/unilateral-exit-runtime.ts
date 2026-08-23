@@ -11,15 +11,12 @@ import {
   hydrateUnilateralExitFrontendPersistenceFromSdk,
 } from '@/lib/wallet/lifecycle/unilateral-exit-frontend-sdk-persistence'
 import { getPersistedUnilateralExitJob } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence'
+import { arkadeWalletScopesEqual, type ArkadeWalletScope } from '@/lib/arkade/arkade-session-scope'
 import type {
   UnilateralExitProceedStepParams,
   UnilateralExitStartParams,
-  UnilateralExitWalletScope,
 } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
-import {
-  persistedUnilateralExitJobExists,
-  unilateralExitWalletScopeKey,
-} from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
+import { persistedUnilateralExitJobExists } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
 import { resolveUnilateralExitJobOutpoints } from '@/lib/wallet/lifecycle/unilateral-exit-job-scope'
 import { unilateralExitMachineActors } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.actors'
 import type { UnilateralExitMachineEvent } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-types'
@@ -134,19 +131,39 @@ export function sendUnilateralExitEvent(event: UnilateralExitMachineEvent): void
   actor.send(event)
 }
 
+export function resetUnilateralExitForArkadeSessionTeardown(): void {
+  resetPendingBatchIntentSessionTracking()
+  const snapshot = getUnilateralExitActorSnapshot()
+  const scope = snapshot.context.walletScope
+  sendUnilateralExitEvent({ type: 'WALLET_RESET' })
+  if (scope != null) {
+    clearUnilateralExitFrontendMemoryForScope(scope)
+  }
+}
+
+function resetUnilateralExitActorIfWalletScopeChanged(
+  walletScope: ArkadeWalletScope,
+): void {
+  const current = getUnilateralExitActorSnapshot()
+  if (unilateralExitSnapshotIsInState(current, UNILATERAL_EXIT_MACHINE_STATE.notConfigured)) {
+    return
+  }
+  if (arkadeWalletScopesEqual(current.context.walletScope, walletScope)) {
+    return
+  }
+  resetUnilateralExitForArkadeSessionTeardown()
+}
+
 export async function configureUnilateralExitForLoadedWallet(
-  walletScope: UnilateralExitWalletScope,
+  walletScope: ArkadeWalletScope,
 ): Promise<void> {
+  resetUnilateralExitActorIfWalletScopeChanged(walletScope)
   await hydrateUnilateralExitFrontendPersistenceFromSdk(walletScope)
 
   const current = getUnilateralExitActorSnapshot()
-  const scopeMatches =
-    current.context.walletScope != null &&
-    unilateralExitWalletScopeKey(current.context.walletScope) ===
-      unilateralExitWalletScopeKey(walletScope)
   if (
     !unilateralExitSnapshotIsInState(current, UNILATERAL_EXIT_MACHINE_STATE.notConfigured) &&
-    scopeMatches
+    arkadeWalletScopesEqual(current.context.walletScope, walletScope)
   ) {
     return
   }
@@ -163,15 +180,11 @@ export async function configureUnilateralExitForLoadedWallet(
 
 function actorAlreadyTrackingHydrateOutpoints(
   snapshot: UnilateralExitActorSnapshot,
-  walletScope: UnilateralExitWalletScope,
+  walletScope: ArkadeWalletScope,
   outpoints: ArkadeVtxoOutpoint[],
 ): boolean {
-  const walletScopeMatches =
-    snapshot.context.walletScope != null &&
-    unilateralExitWalletScopeKey(snapshot.context.walletScope) ===
-      unilateralExitWalletScopeKey(walletScope)
   const outpointsMatch = arkadeVtxoOutpointListsEqual(snapshot.context.jobOutpoints, outpoints)
-  if (!walletScopeMatches || !outpointsMatch) {
+  if (!arkadeWalletScopesEqual(snapshot.context.walletScope, walletScope) || !outpointsMatch) {
     return false
   }
   if (
@@ -198,7 +211,7 @@ function actorAlreadyTrackingHydrateOutpoints(
 }
 
 async function dispatchHydrateOrStart(params: {
-  walletScope: UnilateralExitWalletScope
+  walletScope: ArkadeWalletScope
   outpoints: ArkadeVtxoOutpoint[]
   reconcileInProgressSats: number
   reconcileInProgressOutpoints: ArkadeVtxoOutpoint[]
@@ -230,7 +243,7 @@ async function dispatchHydrateOrStart(params: {
 }
 
 export async function hydrateUnilateralExitFromPersistence(params: {
-  walletScope: UnilateralExitWalletScope
+  walletScope: ArkadeWalletScope
   inProgressOutpoints: ArkadeVtxoOutpoint[]
   unilateralExitInProgressSats: number
 }): Promise<void> {
@@ -284,7 +297,7 @@ export async function startManualUnilateralExitAsync(
 }
 
 export function startAutomaticUnilateralExit(params: {
-  walletScope: UnilateralExitWalletScope
+  walletScope: ArkadeWalletScope
   outpoints: ArkadeVtxoOutpoint[]
 }): UnilateralExitActorSnapshot {
   sendUnilateralExitEvent({
@@ -296,7 +309,7 @@ export function startAutomaticUnilateralExit(params: {
 }
 
 export async function startAutomaticUnilateralExitAsync(params: {
-  walletScope: UnilateralExitWalletScope
+  walletScope: ArkadeWalletScope
   outpoints: ArkadeVtxoOutpoint[]
 }): Promise<UnilateralExitActorSnapshot> {
   startAutomaticUnilateralExit(params)
@@ -320,7 +333,7 @@ export function clearUnilateralExitJob(): void {
 }
 
 export async function abortUnilateralExitOrchestration(
-  scope: UnilateralExitWalletScope,
+  scope: ArkadeWalletScope,
   resolvedJobOutpoints?: ArkadeVtxoOutpoint[],
 ): Promise<void> {
   const snapshot = getUnilateralExitActorSnapshot()
@@ -350,7 +363,7 @@ export async function abortUnilateralExitOrchestration(
 }
 
 export function enableAutomaticUnilateralExit(
-  scope: UnilateralExitWalletScope,
+  scope: ArkadeWalletScope,
   defaultMaxFeeRateSatPerVbValue?: number,
 ): void {
   useUnilateralExitAutomationPrefsStore
@@ -359,12 +372,12 @@ export function enableAutomaticUnilateralExit(
   sendUnilateralExitEvent({ type: 'AUTOMATION_PREFS_CHANGED', automationEnabled: true })
 }
 
-export function disableAutomaticUnilateralExit(scope: UnilateralExitWalletScope): void {
+export function disableAutomaticUnilateralExit(scope: ArkadeWalletScope): void {
   useUnilateralExitAutomationPrefsStore.getState().setEnabled(scope, false)
   sendUnilateralExitEvent({ type: 'AUTOMATION_PREFS_CHANGED', automationEnabled: false })
 }
 
-export function clearAutomaticUnilateralExitPause(scope: UnilateralExitWalletScope): void {
+export function clearAutomaticUnilateralExitPause(scope: ArkadeWalletScope): void {
   sendUnilateralExitEvent({ type: 'RESUME' })
   if (
     useUnilateralExitAutomationPrefsStore
@@ -376,7 +389,7 @@ export function clearAutomaticUnilateralExitPause(scope: UnilateralExitWalletSco
 }
 
 export function setAutomaticUnilateralExitFeePreset(
-  scope: UnilateralExitWalletScope,
+  scope: ArkadeWalletScope,
   feePresetLabel: SendFeePresetLabel,
 ): void {
   useUnilateralExitAutomationPrefsStore.getState().setFeePresetLabel(scope, feePresetLabel)
@@ -384,7 +397,7 @@ export function setAutomaticUnilateralExitFeePreset(
 }
 
 export function setAutomaticUnilateralExitMaxFeeRate(
-  scope: UnilateralExitWalletScope,
+  scope: ArkadeWalletScope,
   maxFeeRateSatPerVb: number,
 ): void {
   useUnilateralExitAutomationPrefsStore.getState().setMaxFeeRateSatPerVb(scope, maxFeeRateSatPerVb)
@@ -397,12 +410,7 @@ export function syncUnilateralExitWithLockPhase(lockPhase: LockLifecyclePhase): 
   if (shouldSkipRailLifecycleResetForLockPhase(lockPhase, hasInFlightWork)) {
     return
   }
-  resetPendingBatchIntentSessionTracking()
-  const scope = snapshot.context.walletScope
-  sendUnilateralExitEvent({ type: 'WALLET_RESET' })
-  if (scope != null) {
-    clearUnilateralExitFrontendMemoryForScope(scope)
-  }
+  resetUnilateralExitForArkadeSessionTeardown()
 }
 
 const UNILATERAL_EXIT_ACTOR_SETTLE_TIMEOUT_MS = 120_000

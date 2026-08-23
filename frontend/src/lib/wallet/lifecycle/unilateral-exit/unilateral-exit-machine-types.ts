@@ -1,5 +1,5 @@
 import type { UnilateralExitAutomationPausedReason } from '@/lib/wallet/lifecycle/unilateral-exit-automation-types'
-import type { UnilateralExitWalletScope } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
+import type { ArkadeWalletScope } from '@/lib/arkade/arkade-session-scope'
 import {
   UNILATERAL_EXIT_AUTOMATION_WAIT_POLL_MS_REGTEST,
   UNILATERAL_EXIT_PARENT_DATA_WAIT_MS,
@@ -8,7 +8,7 @@ import type { ArkadeUnilateralExitProgress, ArkadeUnilateralExitJobViability, Ar
 import type { DoneActorEvent, ErrorActorEvent } from 'xstate'
 
 export type UnilateralExitMachineContext = {
-  walletScope: UnilateralExitWalletScope | null
+  walletScope: ArkadeWalletScope | null
   jobOutpoints: ArkadeVtxoOutpoint[]
   progress: ArkadeUnilateralExitProgress | null
   automationEnabled: boolean
@@ -65,10 +65,10 @@ export type UnilateralExitPolicyEvaluation = {
 }
 
 export type UnilateralExitMachineUserEvent =
-  | { type: 'WALLET_CONFIGURED'; walletScope: UnilateralExitWalletScope }
+  | { type: 'WALLET_CONFIGURED'; walletScope: ArkadeWalletScope }
   | {
       type: 'HYDRATE_OR_START'
-      walletScope: UnilateralExitWalletScope
+      walletScope: ArkadeWalletScope
       outpoints: ArkadeVtxoOutpoint[]
       automationEnabled?: boolean
       /** When true and automation is enabled, allow auto-proceed after progress fetch. */
@@ -78,13 +78,13 @@ export type UnilateralExitMachineUserEvent =
     }
   | {
       type: 'START_MANUAL'
-      walletScope: UnilateralExitWalletScope
+      walletScope: ArkadeWalletScope
       outpoints: ArkadeVtxoOutpoint[]
       feeRateSatPerVb: number
     }
   | {
       type: 'START_AUTOMATIC'
-      walletScope: UnilateralExitWalletScope
+      walletScope: ArkadeWalletScope
       outpoints: ArkadeVtxoOutpoint[]
     }
   | { type: 'PROCEED_MANUAL'; feeRateSatPerVb: number }

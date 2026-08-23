@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  buildUnilateralExitWalletScope,
+  buildArkadeWalletScope,
   resolveUnilateralExitJobOutpoints,
 } from '@/lib/wallet/lifecycle/unilateral-exit-job-scope'
 
@@ -11,9 +11,9 @@ const walletScope = {
 }
 
 describe('unilateral-exit-job-scope', () => {
-  it('buildUnilateralExitWalletScope rejects unsupported networks', () => {
-    expect(buildUnilateralExitWalletScope(1, 'mainnet', 'conn-1')).not.toBeNull()
-    expect(buildUnilateralExitWalletScope(1, 'lab', 'conn-1')).toBeNull()
+  it('buildArkadeWalletScope rejects unsupported networks', () => {
+    expect(buildArkadeWalletScope(1, 'mainnet', 'conn-1')).not.toBeNull()
+    expect(buildArkadeWalletScope(1, 'lab', 'conn-1')).toBeNull()
   })
 
   it('resolveUnilateralExitJobOutpoints prefers lifecycle, then persisted, then fallback', () => {

@@ -31,7 +31,7 @@ flowchart TB
   controlStore -.-> actor
 ```
 
-Memory caches are keyed by `walletId:networkMode:connectionId` (`unilateralExitWalletScopeKey`). Durable fields are per operator connection inside that connection's envelope — no `jobsByKey` map.
+Memory caches are keyed by `walletId:networkMode:connectionId` (`arkadeWalletScopeKey`). Durable fields are per operator connection inside that connection's envelope — no `jobsByKey` map.
 
 ---
 

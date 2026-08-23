@@ -21,6 +21,23 @@ const workerMocks = vi.hoisted(() => ({
   getAddress: vi.fn().mockResolvedValue('tark1qtest'),
   reconcileActiveConnectionId: vi.fn().mockResolvedValue(undefined),
   syncWithOperator: vi.fn().mockResolvedValue({}),
+  getUnilateralExitFrontendPersistence: vi.fn().mockResolvedValue({
+    job: {
+      selectedLeafOutpoints: [],
+      currentStepRelayedSinceUnix: null,
+      jobStartedAtUnix: null,
+    },
+    automationPrefs: {
+      enabled: false,
+      feePresetLabel: 'Medium',
+      maxFeeRateSatPerVb: 10,
+    },
+    lastFailure: null,
+  }),
+  setUnilateralExitFrontendPersistence: vi.fn().mockResolvedValue(undefined),
+  setUnilateralExitJob: vi.fn().mockResolvedValue(undefined),
+  setUnilateralExitAutomationPrefs: vi.fn().mockResolvedValue(undefined),
+  setUnilateralExitFailure: vi.fn().mockResolvedValue(undefined),
 }))
 
 const ensureArkadeOperatorConnectionMock = vi.hoisted(() => vi.fn())
@@ -55,6 +72,14 @@ vi.mock('@/db', () => ({
     payload: encryptedPayload,
   }),
   awaitInFlightWalletSecretsWrites: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('@/db/storage-adapter', () => ({
+  sqliteStorage: {
+    getItem: vi.fn(async () => null),
+    setItem: vi.fn(async () => {}),
+    removeItem: vi.fn(async () => {}),
+  },
 }))
 
 vi.mock('@/lib/arkade/arkade-operator-connections', async (importOriginal) => {

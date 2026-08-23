@@ -32,6 +32,30 @@ const syncActiveWalletAndUpdateState = vi.fn()
 const orchestrateOnchainSave = vi.fn()
 const tryReuseExistingArkadeSession = vi.fn()
 
+vi.mock('@/workers/arkade-factory', () => ({
+  getArkadeWorker: () => ({
+    getUnilateralExitFrontendPersistence: vi.fn(async () => ({
+      job: {
+        selectedLeafOutpoints: [],
+        currentStepRelayedSinceUnix: null,
+        jobStartedAtUnix: null,
+      },
+      automationPrefs: {
+        enabled: false,
+        feePresetLabel: 'Medium',
+        maxFeeRateSatPerVb: 10,
+      },
+      lastFailure: null,
+    })),
+    setUnilateralExitFrontendPersistence: vi.fn(async () => {}),
+    setUnilateralExitJob: vi.fn(async () => {}),
+    setUnilateralExitAutomationPrefs: vi.fn(async () => {}),
+    setUnilateralExitFailure: vi.fn(async () => {}),
+  }),
+  getArkadeWorkerIfExists: vi.fn(() => null),
+  terminateArkadeWorker: vi.fn(),
+}))
+
 vi.mock('@/lib/wallet/wallet-utils', () => ({
   syncActiveWalletAndUpdateState: (...args: unknown[]) =>
     syncActiveWalletAndUpdateState(...args),
@@ -73,6 +97,14 @@ vi.mock('@/db', () => ({
       kdfPhc: 'x',
     },
   })),
+}))
+
+vi.mock('@/db/storage-adapter', () => ({
+  sqliteStorage: {
+    getItem: vi.fn(async () => null),
+    setItem: vi.fn(async () => {}),
+    removeItem: vi.fn(async () => {}),
+  },
 }))
 
 vi.mock('@/lib/arkade/arkade-operator-connections', async (importOriginal) => {

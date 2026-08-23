@@ -6,13 +6,16 @@ import {
   emptyPersistedUnilateralExitJob,
   useUnilateralExitLifecyclePersistenceStore,
 } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence'
-import { unilateralExitWalletScopeKey } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
+import { arkadeWalletScopeKey } from '@/lib/arkade/arkade-session-scope'
 import {
   UNILATERAL_EXIT_LIFECYCLE_SETTINGS_KEY,
   hydrateUnilateralExitFrontendPersistenceFromSdk,
   readZustandPersistedMap,
   removeScopeKeyFromZustandSettingsJson,
   resolveUnilateralExitFrontendBundle,
+  scheduleUnilateralExitFailureSdkWrite,
+  scheduleUnilateralExitJobSdkWrite,
+  scheduleUnilateralExitPrefsSdkWrite,
 } from '@/lib/wallet/lifecycle/unilateral-exit-frontend-sdk-persistence'
 
 const walletScope = {
@@ -79,8 +82,8 @@ describe('unilateral-exit frontend sdk persistence overlay', () => {
   })
 
   it('removeScopeKeyFromZustandSettingsJson keeps leftover connection keys', () => {
-    const scopeKey = unilateralExitWalletScopeKey(walletScope)
-    const otherKey = unilateralExitWalletScopeKey(otherScope)
+    const scopeKey = arkadeWalletScopeKey(walletScope)
+    const otherKey = arkadeWalletScopeKey(otherScope)
     const raw = JSON.stringify({
       state: {
         jobsByKey: {
@@ -103,7 +106,7 @@ describe('unilateral-exit frontend sdk persistence overlay', () => {
   })
 
   it('removeScopeKeyFromZustandSettingsJson returns empty when the last key is removed', () => {
-    const scopeKey = unilateralExitWalletScopeKey(walletScope)
+    const scopeKey = arkadeWalletScopeKey(walletScope)
     const raw = JSON.stringify({
       state: { jobsByKey: { [scopeKey]: { selectedLeafOutpoints: [leaf] } } },
       version: 5,
@@ -153,8 +156,8 @@ describe('unilateral-exit frontend sdk persistence overlay', () => {
   })
 
   it('hydrate overlays settings when WASM is null and deletes only this scope key', async () => {
-    const scopeKey = unilateralExitWalletScopeKey(walletScope)
-    const otherKey = unilateralExitWalletScopeKey(otherScope)
+    const scopeKey = arkadeWalletScopeKey(walletScope)
+    const otherKey = arkadeWalletScopeKey(otherScope)
     settingsStore.set(
       UNILATERAL_EXIT_LIFECYCLE_SETTINGS_KEY,
       JSON.stringify({
@@ -194,7 +197,7 @@ describe('unilateral-exit frontend sdk persistence overlay', () => {
   })
 
   it('hydrate does not resurrect a settings job when WASM already has an empty job', async () => {
-    const scopeKey = unilateralExitWalletScopeKey(walletScope)
+    const scopeKey = arkadeWalletScopeKey(walletScope)
     settingsStore.set(
       UNILATERAL_EXIT_LIFECYCLE_SETTINGS_KEY,
       JSON.stringify({
@@ -225,5 +228,72 @@ describe('unilateral-exit frontend sdk persistence overlay', () => {
     expect(job).toEqual(emptyPersistedUnilateralExitJob)
     expect(setUnilateralExitFrontendPersistence).not.toHaveBeenCalled()
     expect(settingsStore.get(UNILATERAL_EXIT_LIFECYCLE_SETTINGS_KEY)).toBeUndefined()
+  })
+
+  it('hydrate passes walletScope to persistence get and overlay set', async () => {
+    getUnilateralExitFrontendPersistence.mockResolvedValue(null)
+
+    await hydrateUnilateralExitFrontendPersistenceFromSdk(walletScope)
+
+    expect(getUnilateralExitFrontendPersistence).toHaveBeenCalledWith(walletScope)
+    expect(setUnilateralExitFrontendPersistence).toHaveBeenCalledWith(
+      walletScope,
+      expect.objectContaining({
+        job: expect.objectContaining({ selectedLeafOutpoints: [] }),
+      }),
+    )
+  })
+
+  it('scheduleUnilateralExitJobSdkWrite passes walletScope to worker', async () => {
+    const job = {
+      selectedLeafOutpoints: [leaf],
+      currentStepRelayedSinceUnix: null,
+      jobStartedAtUnix: 1_700_000_000,
+    }
+    useUnilateralExitLifecyclePersistenceStore.getState().hydrateJob(walletScope, job)
+
+    scheduleUnilateralExitJobSdkWrite(walletScope)
+    await vi.waitFor(() =>
+      expect(setUnilateralExitJob).toHaveBeenCalledWith(
+        walletScope,
+        expect.objectContaining({ selectedLeafOutpoints: [leaf] }),
+      ),
+    )
+  })
+
+  it('scheduleUnilateralExitPrefsSdkWrite passes walletScope to worker', async () => {
+    useUnilateralExitAutomationPrefsStore.getState().hydratePrefs(walletScope, {
+      enabled: true,
+      feePresetLabel: 'High',
+      maxFeeRateSatPerVb: 20,
+    })
+
+    scheduleUnilateralExitPrefsSdkWrite(walletScope)
+    await vi.waitFor(() =>
+      expect(setUnilateralExitAutomationPrefs).toHaveBeenCalledWith(
+        walletScope,
+        expect.objectContaining({ enabled: true, maxFeeRateSatPerVb: 20 }),
+      ),
+    )
+  })
+
+  it('scheduleUnilateralExitFailureSdkWrite passes walletScope to worker', async () => {
+    const failure = {
+      selectedLeafOutpoints: [leaf],
+      jobStartedAtUnix: 1_700_000_000,
+      detectedAtUnix: 1_700_000_100,
+      reasonCode: 'user_aborted' as const,
+      detailMessage: 'aborted',
+      vtxoIds: ['vtxo-1'],
+    }
+    useUnilateralExitFailurePersistenceStore.getState().hydrateFailure(walletScope, failure)
+
+    scheduleUnilateralExitFailureSdkWrite(walletScope)
+    await vi.waitFor(() =>
+      expect(setUnilateralExitFailure).toHaveBeenCalledWith(
+        walletScope,
+        expect.objectContaining({ reasonCode: 'user_aborted', vtxoIds: ['vtxo-1'] }),
+      ),
+    )
   })
 })

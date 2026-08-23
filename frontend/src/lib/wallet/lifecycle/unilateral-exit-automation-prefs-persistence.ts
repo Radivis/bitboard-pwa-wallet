@@ -6,7 +6,7 @@ import {
   unilateralExitAutomationPrefsKey,
   type UnilateralExitAutomationPrefs,
 } from '@/lib/wallet/lifecycle/unilateral-exit-automation-types'
-import type { UnilateralExitWalletScope } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
+import type { ArkadeWalletScope } from '@/lib/arkade/arkade-session-scope'
 import { scheduleUnilateralExitPrefsSdkWrite } from '@/lib/wallet/lifecycle/unilateral-exit-frontend-sdk-persistence'
 
 interface UnilateralExitAutomationPrefsState {
@@ -16,11 +16,11 @@ interface UnilateralExitAutomationPrefsState {
     networkMode: NetworkMode,
     connectionId: string,
   ) => UnilateralExitAutomationPrefs
-  hydratePrefs: (scope: UnilateralExitWalletScope, prefs: UnilateralExitAutomationPrefs) => void
-  setEnabled: (scope: UnilateralExitWalletScope, enabled: boolean, defaultMaxFee?: number) => void
-  setFeePresetLabel: (scope: UnilateralExitWalletScope, feePresetLabel: SendFeePresetLabel) => void
-  setMaxFeeRateSatPerVb: (scope: UnilateralExitWalletScope, maxFeeRateSatPerVb: number) => void
-  clearScope: (scope: UnilateralExitWalletScope) => void
+  hydratePrefs: (scope: ArkadeWalletScope, prefs: UnilateralExitAutomationPrefs) => void
+  setEnabled: (scope: ArkadeWalletScope, enabled: boolean, defaultMaxFee?: number) => void
+  setFeePresetLabel: (scope: ArkadeWalletScope, feePresetLabel: SendFeePresetLabel) => void
+  setMaxFeeRateSatPerVb: (scope: ArkadeWalletScope, maxFeeRateSatPerVb: number) => void
+  clearScope: (scope: ArkadeWalletScope) => void
 }
 
 function updatePrefs(

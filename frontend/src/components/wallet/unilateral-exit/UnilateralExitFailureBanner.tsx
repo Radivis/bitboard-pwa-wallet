@@ -6,7 +6,7 @@ import {
   clearPersistedUnilateralExitFailure,
   useUnilateralExitFailurePersistenceStore,
 } from '@/lib/wallet/lifecycle/unilateral-exit-failure-persistence'
-import type { UnilateralExitWalletScope } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
+import type { ArkadeWalletScope } from '@/lib/arkade/arkade-session-scope'
 import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 
@@ -60,7 +60,7 @@ export function UnilateralExitFailureBanner() {
     return null
   }
 
-  const walletScope: UnilateralExitWalletScope = {
+  const walletScope: ArkadeWalletScope = {
     walletId: activeWalletId!,
     networkMode,
     connectionId: activeArkadeConnectionId!,

@@ -1,4 +1,4 @@
-import type { UnilateralExitWalletScope } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
+import type { ArkadeWalletScope } from '@/lib/arkade/arkade-session-scope'
 import {
   UNILATERAL_EXIT_MACHINE_STATE,
   type UnilateralExitActorSnapshot,
@@ -63,8 +63,8 @@ export function unilateralExitSnapshotIsProceeding(
 }
 
 function unilateralExitWalletScopesEqual(
-  previous: UnilateralExitWalletScope | null,
-  next: UnilateralExitWalletScope | null,
+  previous: ArkadeWalletScope | null,
+  next: ArkadeWalletScope | null,
 ): boolean {
   if (previous === next) {
     return true

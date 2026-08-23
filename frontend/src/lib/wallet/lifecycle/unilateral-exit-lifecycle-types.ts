@@ -1,21 +1,9 @@
-import type { NetworkMode } from '@/stores/walletStore'
+import type { ArkadeWalletScope } from '@/lib/arkade/arkade-session-scope'
 import type {
   ArkadeUnilateralExitProgress,
   ArkadeUnilateralExitFailureReasonCode,
   ArkadeVtxoOutpoint,
 } from '@/workers/arkade-api'
-
-export type UnilateralExitWalletScope = {
-  walletId: number
-  networkMode: NetworkMode
-  connectionId: string
-}
-
-export function unilateralExitWalletScopeKey(
-  scope: Pick<UnilateralExitWalletScope, 'walletId' | 'networkMode' | 'connectionId'>,
-): string {
-  return `${scope.walletId}:${scope.networkMode}:${scope.connectionId}`
-}
 
 export enum UnilateralExitLifecyclePhase {
   NotConfigured = 'not-configured',
@@ -30,7 +18,7 @@ export enum UnilateralExitLifecyclePhase {
 
 export type UnilateralExitLifecycleSnapshot = {
   phase: UnilateralExitLifecyclePhase
-  walletScope: UnilateralExitWalletScope | null
+  walletScope: ArkadeWalletScope | null
   selectedLeafOutpoints: ArkadeVtxoOutpoint[]
   progress: ArkadeUnilateralExitProgress | null
   lastErrorMessage: string | null
@@ -62,7 +50,7 @@ export type PersistedUnilateralExitFailure = {
 }
 
 export type UnilateralExitStartParams = {
-  walletScope: UnilateralExitWalletScope
+  walletScope: ArkadeWalletScope
   outpoints: ArkadeVtxoOutpoint[]
   feeRateSatPerVb: number
 }

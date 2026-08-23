@@ -28,6 +28,11 @@ const workerMocks = vi.hoisted(() => ({
   getAddress: vi.fn(),
   syncWithOperator: vi.fn(),
   reconcileActiveConnectionId: vi.fn(),
+  getUnilateralExitFrontendPersistence: vi.fn(),
+  setUnilateralExitFrontendPersistence: vi.fn(),
+  setUnilateralExitJob: vi.fn(),
+  setUnilateralExitAutomationPrefs: vi.fn(),
+  setUnilateralExitFailure: vi.fn(),
 }))
 
 const awaitInFlightWalletSecretsWritesMock = vi.hoisted(() => vi.fn())
@@ -82,6 +87,14 @@ vi.mock('@/db', () => ({
   })),
   awaitInFlightWalletSecretsWrites: (...args: unknown[]) =>
     awaitInFlightWalletSecretsWritesMock(...args),
+}))
+
+vi.mock('@/db/storage-adapter', () => ({
+  sqliteStorage: {
+    getItem: vi.fn(async () => null),
+    setItem: vi.fn(async () => {}),
+    removeItem: vi.fn(async () => {}),
+  },
 }))
 
 const getArkadeWorkerIfExistsMock = vi.hoisted(() => vi.fn())
@@ -152,6 +165,23 @@ describe('openArkadeSessionForWallet (integration)', () => {
       operatorSignerPkHex: '02deadbeef',
     })
     workerMocks.flushSdkPersistence.mockResolvedValue(undefined)
+    workerMocks.getUnilateralExitFrontendPersistence.mockResolvedValue({
+      job: {
+        selectedLeafOutpoints: [],
+        currentStepRelayedSinceUnix: null,
+        jobStartedAtUnix: null,
+      },
+      automationPrefs: {
+        enabled: false,
+        feePresetLabel: 'Medium',
+        maxFeeRateSatPerVb: 10,
+      },
+      lastFailure: null,
+    })
+    workerMocks.setUnilateralExitFrontendPersistence.mockResolvedValue(undefined)
+    workerMocks.setUnilateralExitJob.mockResolvedValue(undefined)
+    workerMocks.setUnilateralExitAutomationPrefs.mockResolvedValue(undefined)
+    workerMocks.setUnilateralExitFailure.mockResolvedValue(undefined)
     getArkadeWorkerIfExistsMock.mockReturnValue(workerMocks)
     awaitInFlightWalletSecretsWritesMock.mockResolvedValue(undefined)
     workerMocks.finalizePendingTransactions.mockResolvedValue({

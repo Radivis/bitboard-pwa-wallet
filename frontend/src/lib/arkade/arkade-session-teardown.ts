@@ -1,10 +1,10 @@
-import { resetPendingBatchIntentSessionTracking } from '@/lib/arkade/arkade-pending-batch-intent'
 import { clearArkadeDashboardStore } from '@/lib/arkade/arkade-persistence-store-sync'
 import { removeArkadeDashboardSyncQueries } from '@/lib/arkade/arkade-dashboard-sync'
 import { removeArkadeDashboardQueries } from '@/lib/arkade/arkade-query-keys'
 import { forceResetArkadeLoadLifecycleForTeardown } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
 import { forceResetArkadeSaveLifecycleForTeardown } from '@/lib/wallet/lifecycle/arkade-save-lifecycle-orchestrator'
 import { forceResetArkadeSyncLifecycleForTeardown } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
+import { resetUnilateralExitForArkadeSessionTeardown } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime'
 import { terminateArkadeWorker } from '@/workers/arkade-factory'
 
 /**
@@ -15,7 +15,7 @@ import { terminateArkadeWorker } from '@/workers/arkade-factory'
  * terminate the worker and clear the dashboard store — they must not call this helper.
  */
 export function tearDownArkadeWorkerAndClientState(): void {
-  resetPendingBatchIntentSessionTracking()
+  resetUnilateralExitForArkadeSessionTeardown()
   terminateArkadeWorker()
   clearArkadeDashboardStore()
   removeArkadeDashboardQueries()
