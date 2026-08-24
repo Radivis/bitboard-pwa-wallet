@@ -2,6 +2,7 @@ import type { NetworkMode } from '@/stores/walletStore'
 import {
   customEsploraMatchesWhitelistedBase,
   ESPLORA_SAME_ORIGIN_PROXY_PREFIX,
+  REGTEST_ESPLORA_PROXY_LOCAL_PREFIX,
   type EsploraProxyNetwork,
 } from '@/lib/esplora/esplora-service-whitelist'
 import type { BitcoinNetwork, TransactionDetails } from '@/workers/crypto-types'
@@ -172,7 +173,16 @@ export function getEsploraUrl(
     return '' // In-app chain; no Esplora
   }
   if (network === 'regtest') {
-    return customUrl ?? DEFAULT_ESPLORA_URLS[network]
+    if (customUrl) {
+      return customUrl
+    }
+    // Direct localhost:7030 from a 127.0.0.1 E2E origin fails Chromium worker fetch
+    // (`net::ERR_FAILED` on `/address/.../utxo`), which aborts Arkade session hydrate.
+    // Same-origin Vite proxy — same pattern as the Arkade operator.
+    if (typeof globalThis.location !== 'undefined') {
+      return `${globalThis.location.origin}${REGTEST_ESPLORA_PROXY_LOCAL_PREFIX}`
+    }
+    return DEFAULT_ESPLORA_URLS.regtest
   }
   if (
     network === 'mainnet' ||
