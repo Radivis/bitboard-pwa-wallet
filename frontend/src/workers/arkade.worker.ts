@@ -36,8 +36,6 @@ import type {
   ArkadeSendParams,
   ArkadeService,
   ArkadeSignerMigrationResult,
-  ArkadeUnilateralExitFeeEstimate,
-  ArkadeUnilateralExitFeeEstimateParams,
   ArkadeUnilateralExitCompletionFeeEstimate,
   ArkadeUnilateralExitCompletionFeeEstimateParams,
   ArkadeUnilateralExitTopology,
@@ -60,8 +58,6 @@ import type {
   ArkadeUnilateralExitInProgressRow,
   ArkadeAutonomousModeStatus,
   ArkadeVtxoListResult,
-  ArkadeUnrollProgressEvent,
-  ArkadeUnrollResult,
   ArkadeVtxoExpiryStatus,
   ArkadePendingBatchIntent,
   EnsureArkadeOperatorConnectionEncryptedParams,
@@ -87,7 +83,6 @@ let activeSessionParams: {
   networkMode: ArkadeSupportedNetworkMode
   connectionId: string
 } | null = null
-let unrollInFlight = false
 let inFlightPersist: Promise<void> | null = null
 
 type SendPaymentInFlight = {
@@ -319,7 +314,6 @@ async function closeSessionImpl(): Promise<void> {
 
   activeSessionKey = null
   activeSessionParams = null
-  unrollInFlight = false
   sendPaymentInFlight = null
 }
 
@@ -761,32 +755,6 @@ const arkadeService: ArkadeService = {
     )
   },
 
-  async runUnilateralUnroll(
-    params: { txid: string; vout: number },
-    onProgress: (event: ArkadeUnrollProgressEvent) => void,
-  ): Promise<ArkadeUnrollResult> {
-    if (unrollInFlight) {
-      throw new Error('Unilateral unroll is already in progress')
-    }
-
-    unrollInFlight = true
-    try {
-      const result = await invokeWasmArk((wasmModule) =>
-        wasmModule.ark_run_unilateral_unroll(
-          params.txid,
-          params.vout,
-          (event: ArkadeUnrollProgressEvent) => {
-            onProgress(event)
-          },
-        ),
-      )
-      await persistAfterUnilateralExitOperation()
-      return result as ArkadeUnrollResult
-    } finally {
-      unrollInFlight = false
-    }
-  },
-
   async completeUnilateralExit(
     params: ArkadeCompleteUnilateralExitParams,
   ): Promise<string> {
@@ -805,15 +773,6 @@ const arkadeService: ArkadeService = {
         wasmModule.ark_get_collaborative_exit_fee_estimate(
           params,
         ) as Promise<ArkadeCollaborativeExitFeeEstimate>,
-    )
-  },
-
-  async estimateUnilateralExit(
-    params: ArkadeUnilateralExitFeeEstimateParams,
-  ): Promise<ArkadeUnilateralExitFeeEstimate> {
-    return invokeWasmArk(
-      (wasmModule) =>
-        wasmModule.ark_estimate_unilateral_exit(params) as Promise<ArkadeUnilateralExitFeeEstimate>,
     )
   },
 

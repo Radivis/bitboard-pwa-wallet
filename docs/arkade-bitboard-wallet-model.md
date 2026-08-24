@@ -107,9 +107,9 @@ Management → Arkade offers two paths:
 | **Unilateral exit** | No (after unroll) | Operator down or you need trustless exit; per-VTXO; multiple on-chain txs |
 | **Autonomous mode** | No (explicit switch) | ASP unreachable; reuses `cached_operator_info` + per-VTXO `unilateral_exit_materials` from last sync; only unilateral exit allowed; Esplora still required |
 
-Collaborative exit and unilateral unroll are implemented in `bitboard-ark` (`collaborative_redeem`, `broadcast_next_unilateral_exit_node`, etc.). **Autonomous mode** branches the same unilateral exit RPCs to snapshot-backed materials instead of ASP indexer/batch APIs. The on-chain bumper wallet shares the same BIP32-derived BDK wallet as boarding.
+Collaborative exit and unilateral unroll are implemented in `bitboard-ark` (`collaborative_redeem`, `proceed_unilateral_exit_step`, etc.). **Autonomous mode** branches the same unilateral exit RPCs to snapshot-backed materials instead of ASP indexer/batch APIs. The on-chain bumper wallet shares the same BIP32-derived BDK wallet as boarding.
 
-**Unilateral exit control:** Management links to `/wallet/arkade/unilateral-exit`. The control page is a view of the XState actor: merged DAG (React Flow + d3-dag), multi-leaf selection, one virtual tx per `ark_proceed_unilateral_exit_step`. Proceed is non-blocking; the machine polls until the current step has **1 confirmation**. A virtual tx (leaf or intermediate host) is marked `is_unrolled` only after **6 confirmations**. Shared-leaf and automation details: [unilateral-exit.md](unilateral-exit.md). `ark_run_unilateral_unroll` remains for legacy callers.
+**Unilateral exit control:** Management links to `/wallet/arkade/unilateral-exit`. The control page is a view of the XState actor: merged DAG (React Flow + d3-dag), multi-leaf selection, one virtual tx per `ark_proceed_unilateral_exit_step`. Proceed is non-blocking; the machine polls until the current step has **1 confirmation**. A virtual tx (leaf or intermediate host) is marked `is_unrolled` only after **6 confirmations**. Shared-leaf and automation details: [unilateral-exit.md](unilateral-exit.md).
 
 ### Unilateral vs collaborative exit balance timing
 
@@ -128,7 +128,7 @@ Unilateral exit is more subtle: the **same sats** are tracked in different snaps
 **Handoff between pending record and exiting sub-bucket**
 
 1. First unroll broadcast → `record_pending_unilateral_exit` writes a pending deduction; the VTXO is still spendable in the snapshot.
-2. Unroll completes → `mark_vtxo_unrolled_in_snapshot` sets `is_unrolled = true` locally (gross spendable drops **before** operator sync realigns the snapshot).
+2. A virtual tx reaches **6 confirmations** → `mark_leaf_virtual_tx_vtxos_unrolled_in_snapshot` sets `is_unrolled = true` on every vout of that tx (gross spendable drops **before** operator sync realigns the snapshot).
 3. `reconcile_pending_exit_deductions` drops the pending unilateral record once the VTXO is no longer spendable.
 4. `exit_balance_components` counts the same amount from the **exiting** sub-bucket until on-chain completion (`is_spent`).
 
@@ -138,11 +138,10 @@ Implementation touchpoints: `build_arkade_balance_dto` (WASM), `exit_balance_com
 
 ### Post-unroll operator contract (ARK-EXIT-11)
 
-Unroll and complete do **not** call the ASP. After on-chain unroll broadcasts, WASM polls Esplora for branch visibility, then sets local `is_unrolled`. Operator indexer catch-up happens later, if at all, during a separate operator sync.
+Unroll and complete do **not** call the ASP. After each proceed-step broadcast, the XState machine waits until Esplora reports **1 confirmation** on the current virtual tx. WASM stamps local `is_unrolled` only when the leaf or intermediate host has **6 confirmations**. Operator indexer catch-up happens later, if at all, during a separate operator sync.
 
 - **Sticky merge:** `merge_sticky_unrolled_flags` preserves local `is_unrolled` for VTXOs still returned by the operator while ASP lags on the `is_unrolled` flag; missing or divergent watches are reconciled via `unilateral_exit_watches` (ARK-EXIT-12).
 - **Watch reconcile:** After each operator sync, `reconcile_exiting_vtxo_watches` runs targeted `list_vtxos_for_outpoints` and narrow Esplora probes per the truth table — never clears exiting state on full-list absence alone (ARK-SYNC-03).
-- **Hard failure:** If Esplora does not confirm the unroll after the poll window, WASM returns `unilateral_unroll_not_confirmed_on_chain`.
 
 Residual edge cases where ASP reports `is_swept` without `is_unrolled` during an abandoned unilateral exit (cooperative recover override) remain documented in deferred Operation Labyrinth Step 3 work; recover + SSE fixes addressed the common stuck-wallet path.
 

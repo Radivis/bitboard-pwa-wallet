@@ -740,13 +740,6 @@ impl JsonPersistenceDb {
         inner.unilateral_exit_watches.push(record);
     }
 
-    pub fn remove_unilateral_exit_watch(&self, txid: &str, vout: u32) {
-        let mut inner = lock_persistence(&self.inner);
-        inner
-            .unilateral_exit_watches
-            .retain(|watch| !(watch.vtxo_txid == txid && watch.vout == vout));
-    }
-
     pub fn remove_unilateral_exit_watches_for_outpoints(
         &self,
         outpoints: &HashSet<bitcoin::OutPoint>,

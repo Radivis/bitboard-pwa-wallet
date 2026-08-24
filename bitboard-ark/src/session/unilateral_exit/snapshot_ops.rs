@@ -16,37 +16,13 @@ use crate::unilateral_exit_materials::{
     vtxo_chains_from_json,
 };
 
-use super::ArkSession;
-
-pub(crate) struct AutonomousUnrollChainSteps {
-    pub chain_tx_count: u32,
-    pub projected_unroll_steps: u32,
-    pub projected_wait_steps: u32,
-}
+use crate::session::ArkSession;
 
 /// Offline VTXO list and script map for autonomous completion coin-select.
 pub(crate) fn autonomous_vtxo_list_and_script_map(
     session: &ArkSession,
 ) -> ArkResult<(VtxoList, HashMap<ScriptBuf, Vtxo>)> {
     session.snapshot_vtxo_list_and_script_map()
-}
-
-pub(crate) fn autonomous_unilateral_exit_chain_steps(
-    session: &ArkSession,
-    txid: &str,
-    _vout: u32,
-) -> ArkResult<AutonomousUnrollChainSteps> {
-    let snapshot = session.wallet_db.snapshot().offchain_vtxo_snapshot;
-    let materials = snapshot
-        .as_ref()
-        .and_then(|snapshot| materials_for_unroll_leaf_tx(snapshot, txid))
-        .ok_or(ArkWasmError::AutonomousExitMaterialsMissing)?;
-    let (projected_unroll_steps, projected_wait_steps) = autonomous_chain_step_counts(materials)?;
-    Ok(AutonomousUnrollChainSteps {
-        chain_tx_count: projected_unroll_steps.saturating_add(1),
-        projected_unroll_steps,
-        projected_wait_steps,
-    })
 }
 
 pub(crate) async fn autonomous_complete_unilateral_exit(
@@ -130,20 +106,6 @@ pub(crate) fn autonomous_exit_candidates_from_snapshot(
         .offchain_vtxo_snapshot
         .ok_or_else(|| ArkWasmError::Snapshot("offchain snapshot missing".into()))?;
     exit_candidates_from_snapshot(&snapshot, in_progress)
-}
-
-pub(crate) fn autonomous_chain_step_counts(
-    materials: &crate::persistence::UnilateralExitMaterialsRecord,
-) -> ArkResult<(u32, u32)> {
-    let chains = vtxo_chains_from_json(&materials.chain_json)?;
-    let chain_tx_count = chains.inner.len() as u32;
-    let projected_unroll_steps = chain_tx_count.saturating_sub(1);
-    let projected_wait_steps = chains
-        .inner
-        .iter()
-        .map(|link| link.spends.len())
-        .sum::<usize>() as u32;
-    Ok((projected_unroll_steps, projected_wait_steps))
 }
 
 pub(crate) async fn autonomous_build_unilateral_branch_for_leaf_tx(

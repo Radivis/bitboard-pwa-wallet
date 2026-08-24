@@ -7,7 +7,7 @@ use crate::offchain_snapshot::vtxo_list_from_snapshot;
 use crate::session::open::sync_onchain_wallet_for_session_open;
 
 use super::ArkSession;
-use super::exit_materials_prefetch::autonomous_exit_materials_status;
+use super::unilateral_exit::materials_prefetch::autonomous_exit_materials_status;
 
 /// ARK-EXIT-06: offchain balance and recoverable bucket helpers may call operator
 /// `offchain_balance` / `list_vtxos` only when autonomous mode is inactive.

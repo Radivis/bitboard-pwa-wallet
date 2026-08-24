@@ -11,16 +11,16 @@ use crate::offchain_snapshot::{
 };
 
 use super::ArkSession;
-use super::exit_onchain::{
+use super::mappers::{current_unix_timestamp, warn_offchain_key_discovery_failed};
+use super::unilateral_exit::onchain::{
     heal_false_positive_exiting_vtxo_spent_markers,
     reconcile_intermediate_ark_virtual_txs_unrolled_on_esplora,
 };
-use super::exit_watch::register_unilateral_exit_watch;
-use super::exit_watch_reconcile::{
+use super::unilateral_exit::watch::register_unilateral_exit_watch;
+use super::unilateral_exit::watch_reconcile::{
     merge_exiting_vtxo_sync_warnings, reconcile_exiting_vtxo_watches,
     reconcile_exiting_vtxos_spent_on_esplora,
 };
-use super::mappers::{current_unix_timestamp, warn_offchain_key_discovery_failed};
 
 /// User-facing warning when [`ark_client::Client::discover_keys`] fails during operator sync.
 pub(crate) fn operator_sync_key_discovery_warning(error: &ark_client::Error) -> String {
@@ -132,7 +132,7 @@ impl ArkSession {
         let esplora_healed_outpoints =
             reconcile_exiting_vtxos_spent_on_esplora(self, &mut snapshot).await?;
         let materials_warning =
-            super::exit_materials_prefetch::prefetch_unilateral_exit_materials_for_snapshot(
+            super::unilateral_exit::materials_prefetch::prefetch_unilateral_exit_materials_for_snapshot(
                 self,
                 &mut snapshot,
                 &vtxo_list,

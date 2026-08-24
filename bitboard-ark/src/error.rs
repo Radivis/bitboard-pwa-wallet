@@ -16,8 +16,6 @@ pub const CODE_SNAPSHOT: &str = "snapshot";
 pub const CODE_PERSISTENCE: &str = "persistence";
 pub const CODE_WALLET: &str = "wallet";
 pub const CODE_CLIENT: &str = "client";
-pub const CODE_UNILATERAL_UNROLL_NOT_CONFIRMED_ON_CHAIN: &str =
-    "unilateral_unroll_not_confirmed_on_chain";
 pub const CODE_BLOCKCHAIN: &str = "blockchain";
 pub const CODE_MNEMONIC: &str = "mnemonic";
 pub const CODE_SERIALIZATION: &str = "serialization";
@@ -80,9 +78,6 @@ pub enum ArkWasmError {
 
     #[error("VTXO {txid}:{vout} timelock has not elapsed yet — complete is not available")]
     VtxoUnilateralExitNotReady { txid: String, vout: u32 },
-
-    #[error("Unilateral unroll could not be confirmed on-chain ({txid})")]
-    UnilateralUnrollNotConfirmedOnChain { txid: String },
 
     #[error(
         "Exit materials were not prefetched for this VTXO — sync with the operator while reachable"
@@ -166,9 +161,6 @@ impl ArkWasmError {
                 CODE_OPERATOR_TRUST_PENDING_BLOCKS_AUTONOMOUS_EXIT
             }
             Self::OperatorTrustPendingDigestChanged => CODE_OPERATOR_TRUST_PENDING_DIGEST_CHANGED,
-            Self::UnilateralUnrollNotConfirmedOnChain { .. } => {
-                CODE_UNILATERAL_UNROLL_NOT_CONFIRMED_ON_CHAIN
-            }
             Self::DelegatorNotConfigured | Self::Delegator(_) | Self::InvalidDelegatorFee(_) => {
                 CODE_DELEGATOR
             }
@@ -225,13 +217,6 @@ mod tests {
         let error = ArkWasmError::InvalidSendAmount;
         assert_eq!(error.code(), CODE_VALIDATION);
         assert_eq!(error.to_string(), MSG_SEND_AMOUNT_MUST_BE_POSITIVE);
-    }
-
-    #[test]
-    fn unilateral_unroll_not_confirmed_on_chain_has_stable_code() {
-        let error = ArkWasmError::UnilateralUnrollNotConfirmedOnChain { txid: "abc".into() };
-        assert_eq!(error.code(), CODE_UNILATERAL_UNROLL_NOT_CONFIRMED_ON_CHAIN);
-        assert!(error.to_string().contains("abc"));
     }
 
     #[test]

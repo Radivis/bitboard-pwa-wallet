@@ -7,14 +7,14 @@ use crate::persistence::{
     OffchainVtxoSnapshot, UnilateralExitWatchRecord, VirtualTxOutPointRecord,
 };
 
-use super::ArkSession;
-use super::exit_onchain::{
+use super::onchain::{
     detect_exiting_vtxo_completion_on_esplora, exit_branch_spent_on_chain,
     unroll_branch_visible_on_chain,
 };
-use super::exit_watch::backfill_unilateral_exit_watches_if_empty;
-use super::pending_exit::mark_vtxo_spent_in_snapshot;
+use super::watch::backfill_unilateral_exit_watches_if_empty;
 use crate::outpoint::VirtualOutPoint;
+use crate::session::ArkSession;
+use crate::session::pending_exit::mark_vtxo_spent_in_snapshot;
 use bitcoin::{OutPoint, Txid};
 use std::str::FromStr;
 

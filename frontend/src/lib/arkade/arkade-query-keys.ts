@@ -282,25 +282,6 @@ export const arkadeUnilateralExitCompletionFeeQueryKey = (
     feeRateSatPerVb,
   ] as const
 
-export const arkadeUnilateralExitFeeQueryKey = (
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-  connectionId: string,
-  txid: string,
-  vout: number,
-) =>
-  [
-    ...WALLET_DB_QUERY_KEY_ROOT,
-    'arkade',
-    walletId,
-    networkMode,
-    connectionId,
-    'exit-fee',
-    'unilateral',
-    txid,
-    vout,
-  ] as const
-
 export const arkadeUnilateralExitTopologyScopeKey = (
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,

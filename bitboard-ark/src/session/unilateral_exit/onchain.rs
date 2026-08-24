@@ -12,15 +12,15 @@ use crate::offchain_snapshot::mark_virtual_tx_vtxos_unrolled_in_snapshot;
 use crate::persistence::{
     OffchainVtxoSnapshot, UnilateralExitWatchRecord, VirtualTxOutPointRecord,
 };
-use crate::session::unilateral_exit_branch_topology::{
+use crate::session::unilateral_exit::topology::{
     terminal_vtxo_host_txids_from_materials_snapshot, virtual_tx_type_hosts_exit_outpoints,
 };
 use crate::unilateral_exit_materials::{
     chained_tx_type_label, snapshot_materials_for_leaf_tx, vtxo_chains_from_json,
 };
 
-use super::exit_watch::parse_branch_txids;
-use super::unilateral_exit_orchestrator::leaf_reached_finality;
+use super::progress::leaf_reached_finality;
+use super::watch::parse_branch_txids;
 
 #[allow(dead_code)]
 const UNILATERAL_EXIT_ON_CHAIN_TIP_VOUT: u32 = 0;

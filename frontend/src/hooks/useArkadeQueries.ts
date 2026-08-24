@@ -22,7 +22,6 @@ import {
   arkadeRecoverableVtxoFeeQueryKey,
   arkadeSignerMigrationPartialResultQueryKey,
   arkadeUnilateralExitCompletionFeeQueryKey,
-  arkadeUnilateralExitFeeQueryKey,
   arkadeUnilateralExitsInProgressQueryKey,
   arkadeUnilateralExitTopologyQueryKey,
   arkadeUnilateralExitBatchEstimateQueryKey,
@@ -36,8 +35,6 @@ import type {
   ArkadeBoardingStatus,
   ArkadePendingBatchIntent,
   ArkadeSignerMigrationResult,
-  ArkadeUnrollProgressEvent,
-  ArkadeUnrollResult,
   ArkadeVtxoOutpoint,
 } from '@/workers/arkade-api'
 import { sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
@@ -91,12 +88,7 @@ import {
   revertOptimisticExitBalanceDeduction,
   type ExitBalanceOptimisticContext,
 } from '@/lib/arkade/arkade-exit-balance-optimistic'
-import {
-  formatArkadeTxidToastSnippet,
-  formatUnilateralUnrollSuccessMessage,
-  shouldShowUnilateralUnrollProgressToast,
-  unilateralUnrollProgressToastId,
-} from '@/lib/arkade/arkade-exit-utils'
+import { formatArkadeTxidToastSnippet } from '@/lib/arkade/arkade-exit-utils'
 import { arkadeOffchainSpendableSats } from '@/lib/arkade/arkade-balance-display'
 import {
   isArkadeDelegatorConfigured,
@@ -1286,70 +1278,6 @@ async function reconcileExitBalanceAfterMutation(
   })
 }
 
-export function useArkadeUnilateralUnrollMutation() {
-  const queryClient = useQueryClient()
-  const { networkMode, activeWalletId, activeArkadeConnectionId } =
-    useArkadeQueryBase()
-
-  return useMutation({
-    mutationFn: async (params: {
-      txid: string
-      vout: number
-      amountSats: number
-      onProgress: (event: ArkadeUnrollProgressEvent) => void
-    }): Promise<ArkadeUnrollResult> => {
-      assertArkadeSessionUnlocked(activeWalletId)
-      await awaitArkadeLoadQuiescence()
-      return getArkadeWorker().runUnilateralUnroll(
-        { txid: params.txid, vout: params.vout },
-        proxy((event: ArkadeUnrollProgressEvent) => {
-          params.onProgress(event)
-          if (shouldShowUnilateralUnrollProgressToast(event)) {
-            toast.info(event.message, { id: unilateralUnrollProgressToastId(event) })
-          }
-        }),
-      )
-    },
-    onMutate: async (params) => {
-      if (
-        activeWalletId == null ||
-        activeArkadeConnectionId == null ||
-        !isArkadeSupportedNetworkMode(networkMode)
-      ) {
-        return undefined
-      }
-      // Unilateral: exit line only — post-unroll WASM excludes VTXO from spendable via exiting sub-bucket.
-      return applyOptimisticExitBalanceDeduction(
-        queryClient,
-        activeWalletId,
-        networkMode,
-        activeArkadeConnectionId,
-        params.amountSats,
-        'unilateralExitInProgressSats',
-      )
-    },
-    onSuccess: async (result, _params, context) => {
-      toast.dismiss(unilateralUnrollProgressToastId({ type: 'done', txid: result.vtxoTxid }))
-      toast.success(formatUnilateralUnrollSuccessMessage(result.vtxoTxid))
-      if (activeWalletId != null && activeArkadeConnectionId != null) {
-        await invalidateArkadeWalletDataQueries(
-          queryClient,
-          activeWalletId,
-          networkMode,
-          activeArkadeConnectionId,
-        )
-        await reconcileExitBalanceAfterMutation(queryClient, context)
-      }
-    },
-    onError: (err, _params, context) => {
-      if (context != null) {
-        revertOptimisticExitBalanceDeduction(queryClient, context)
-      }
-      toast.error(errorMessage(err))
-    },
-  })
-}
-
 export function useArkadeCompleteUnilateralExitMutation() {
   const queryClient = useQueryClient()
   const { networkMode, activeWalletId, activeArkadeConnectionId } =
@@ -1436,49 +1364,6 @@ export function useArkadeCollaborativeExitFeeQuery(params: {
           amountSats: params.amountSats,
         }),
       ),
-    staleTime: ARKADE_FEE_ESTIMATE_STALE_MS,
-  })
-}
-
-export function useArkadeUnilateralExitFeeQuery(params: {
-  enabled: boolean
-  txid: string | undefined
-  vout: number | undefined
-}) {
-  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
-    useArkadeQueryBase()
-  const enabled =
-    params.enabled && sessionReady && params.txid != null && params.vout != null
-
-  return useQuery({
-    queryKey:
-      activeWalletId != null &&
-      activeArkadeConnectionId != null &&
-      isArkadeSupportedNetworkMode(networkMode) &&
-      params.txid != null &&
-      params.vout != null
-        ? arkadeUnilateralExitFeeQueryKey(
-            activeWalletId,
-            networkMode,
-            activeArkadeConnectionId,
-            params.txid,
-            params.vout,
-          )
-        : arkadeDisabledQueryKey('exit-fee-unilateral'),
-    enabled,
-    queryFn: async () => {
-      const { txid, vout } = params
-      if (txid == null || vout == null) {
-        throw new Error('VTXO outpoint is required')
-      }
-      return withReadyArkadeWorker(() =>
-        getArkadeWorker().estimateUnilateralExit({ txid, vout }),
-      )
-    },
-    // Re-estimate while the bumper is underfunded so the "Start unroll" gate clears automatically
-    // once an on-chain top-up confirms; stop polling once the bumper can cover the estimated fees.
-    refetchInterval: (query) =>
-      query.state.data?.bumperSufficient ? false : ARKADE_BUMPER_FUNDING_POLL_MS,
     staleTime: ARKADE_FEE_ESTIMATE_STALE_MS,
   })
 }

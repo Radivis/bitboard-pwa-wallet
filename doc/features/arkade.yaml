@@ -92,13 +92,13 @@ feature:
       - id: ARK-EXIT-08
         description: Start unroll/proceed fails fast with autonomous_exit_materials_missing when selected VTXO lacks prefetched materials, regardless of autonomous mode
       - id: ARK-EXIT-09
-        description: Complete uses snapshot readiness plus Esplora only; no operator indexer poll; unroll polls Esplora for branch visibility before setting local is_unrolled and returns unilateral_unroll_not_confirmed_on_chain when chain missing after the poll window
+        description: Complete uses snapshot readiness plus Esplora only; no operator indexer poll. Each proceed step is non-blocking; the XState machine waits until the current virtual tx has 1 confirmation, and WASM stamps is_unrolled only after 6 confirmations (ARK-EXIT-15/16)
       - id: ARK-EXIT-10
         description: While autonomous mode is active, collaborative exit, send, renew, recoverable settlement, signer migration, boarding settle, and operator sync (manual and background dashboard poll) are blocked in UI and WASM; an in-progress unilateral-exit job does not skip background operator sync
       - id: ARK-EXIT-11
-        description: After unilateral unroll, WASM does not poll operator list_vtxos; local is_unrolled is set after Esplora confirms the branch; sticky is_unrolled merge and watch reconcile run during operator sync only; hard error unilateral_unroll_not_confirmed_on_chain when the branch is missing on Esplora after the poll window
+        description: After each proceed step, WASM does not poll operator list_vtxos; local is_unrolled is stamped when Esplora reports 6 confirmations on the leaf or intermediate host virtual tx; sticky is_unrolled merge and watch reconcile run during operator sync only
       - id: ARK-EXIT-12
-        description: Explicit unilateral_exit_watches registry in wallet persistence; survives full snapshot replace; cleared only on completion, hard unroll failure, or reconcile evidence (operator spent or on-chain spent)
+        description: Explicit unilateral_exit_watches registry in wallet persistence; survives full snapshot replace; cleared only on completion or reconcile evidence (operator spent or on-chain spent)
       - id: ARK-EXIT-13
         description: Unilateral exit control page at /wallet/arkade/unilateral-exit with responsive VTXO tree graph (React Flow + d3-dag), multi-select leaves, and Management entry link (Start unilateral exit / Control unilateral exit)
       - id: ARK-EXIT-14

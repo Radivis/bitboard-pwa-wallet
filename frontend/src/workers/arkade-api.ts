@@ -311,17 +311,6 @@ export interface ArkadeCollaborativeExitParams {
   amountSats?: number
 }
 
-export interface ArkadeUnrollProgressEvent {
-  type: 'wait' | 'unroll' | 'done'
-  message: string
-  txid?: string
-  vtxoTxid?: string
-}
-
-export interface ArkadeUnrollResult {
-  vtxoTxid: string
-}
-
 export interface ArkadeCompleteUnilateralExitParams {
   vtxoOutpoints: ArkadeVtxoOutpoint[]
   destinationAddress: string
@@ -345,17 +334,6 @@ export interface ArkadeCollaborativeExitFeeEstimate {
   estimateErrorCode?: ArkadeCollaborativeExitEstimateErrorCode
 }
 
-export interface ArkadeUnilateralExitFeeEstimate {
-  chainTxCount: number
-  projectedUnrollSteps: number
-  projectedWaitSteps: number
-  feeRateSatPerVb: number
-  estimatedPackageFeeSats: number
-  bumperBalanceSats: number
-  bumperSufficient: boolean
-  estimateError?: string
-}
-
 export interface ArkadeRecoverableVtxoFeeEstimate {
   recoverableVtxoCount: number
   recoverableTotalSats: number
@@ -375,11 +353,6 @@ export interface ArkadeRecoverableVtxoFeeEstimate {
 export interface ArkadeCollaborativeExitFeeEstimateParams {
   destinationAddress: string
   amountSats?: number
-}
-
-export interface ArkadeUnilateralExitFeeEstimateParams {
-  txid: string
-  vout: number
 }
 
 export interface ArkadeUnilateralExitTopologyNode {
@@ -618,17 +591,10 @@ export interface ArkadeService {
     params: ArkadeCollaborativeExitParams,
     onRegistered?: (intent: ArkadePendingBatchIntent) => void,
   ): Promise<ArkadeBatchJoinResult>
-  runUnilateralUnroll(
-    params: { txid: string; vout: number },
-    onProgress: (event: ArkadeUnrollProgressEvent) => void,
-  ): Promise<ArkadeUnrollResult>
   completeUnilateralExit(params: ArkadeCompleteUnilateralExitParams): Promise<string>
   getCollaborativeExitFeeEstimate(
     params: ArkadeCollaborativeExitFeeEstimateParams,
   ): Promise<ArkadeCollaborativeExitFeeEstimate>
-  estimateUnilateralExit(
-    params: ArkadeUnilateralExitFeeEstimateParams,
-  ): Promise<ArkadeUnilateralExitFeeEstimate>
   estimateUnilateralExitCompletion(
     params: ArkadeUnilateralExitCompletionFeeEstimateParams,
   ): Promise<ArkadeUnilateralExitCompletionFeeEstimate>

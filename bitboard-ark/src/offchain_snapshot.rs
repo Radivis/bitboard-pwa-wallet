@@ -257,7 +257,7 @@ pub fn snapshot_from_virtual_tx_outpoints_with_script_lookup(
 /// Preserve local `is_unrolled` when ASP indexer lags after unilateral unroll.
 ///
 /// Only applies to VTXOs still present in the incoming operator list. Missing watches are
-/// handled by [`crate::session::exit_watch_reconcile::reconcile_exiting_vtxo_watches`].
+/// handled by [`crate::session::unilateral_exit::watch_reconcile::reconcile_exiting_vtxo_watches`].
 pub fn merge_sticky_unrolled_flags(
     prior: Option<&OffchainVtxoSnapshot>,
     incoming: &mut OffchainVtxoSnapshot,

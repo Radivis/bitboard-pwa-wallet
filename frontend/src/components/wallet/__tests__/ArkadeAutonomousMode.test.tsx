@@ -62,25 +62,13 @@ vi.mock('@/hooks/useArkadeQueries', async (importOriginal) => {
         estimatedReceiveSats: 99_500,
       },
     }),
-    useArkadeUnilateralExitFeeQuery: () => ({
-      isLoading: false,
-      isError: false,
-      data: {
-        chainTxCount: 2,
-        projectedUnrollSteps: 1,
-        projectedWaitSteps: 0,
-        feeRateSatPerVb: 5,
-        estimatedPackageFeeSats: 2_000,
-        bumperBalanceSats: 5_000,
-        bumperSufficient: true,
-      },
-    }),
-    useArkadeUnilateralUnrollMutation: () => ({ mutate: vi.fn(), isPending: false }),
     useArkadeCompleteUnilateralExitMutation: () => ({ mutate: vi.fn(), isPending: false }),
     useArkadeUnilateralExitsInProgressQuery: () => ({ data: [], isLoading: false }),
     useArkadeUnilateralExitCompletionFeeQuery: () => ({ data: undefined, isLoading: false }),
     useHasPendingBatchIntent: () => false,
+    useHasPendingBatchIntentKind: () => false,
     usePendingBatchIntent: () => null,
+    usePendingBatchIntents: () => [],
   }
 })
 

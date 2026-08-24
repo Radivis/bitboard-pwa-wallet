@@ -130,8 +130,8 @@ pub fn should_keep_pending_exit_deduction(
     match record.kind {
         PendingExitKind::Unilateral => {
             // During unroll, before is_unrolled is set locally: keep pending record while the VTXO
-            // is still spendable. After mark_vtxo_unrolled_in_snapshot, this returns false and the
-            // same sats are tracked from the exiting sub-bucket instead.
+            // is still spendable. After mark_leaf_virtual_tx_vtxos_unrolled_in_snapshot, this returns
+            // false and the same sats are tracked from the exiting sub-bucket instead.
             let Some(txid) = record.vtxo_txid.as_deref() else {
                 return Ok(false);
             };

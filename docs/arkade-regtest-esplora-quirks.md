@@ -77,7 +77,7 @@ Separate from step progress: detecting that the **final exit sweep** spent a VTX
 
 **Pitfall:** each unroll CPFP step spends the previous branch tx at **`vout 0`**. Treating “anything spent `vout 0` of the branch tip” as exit completion causes false `is_spent` / “Finalized” UI without a completion tx.
 
-**Rule:** completion probes must target the **actual virtual VTXO outpoint** `(leaf_txid, virtual_vout)`, not arbitrary branch-tip spends. See `detect_exiting_vtxo_completion_on_esplora` in `bitboard-ark/src/session/exit_onchain.rs`.
+**Rule:** completion probes must target the **actual virtual VTXO outpoint** `(leaf_txid, virtual_vout)`, not arbitrary branch-tip spends. See `detect_exiting_vtxo_completion_on_esplora` in `bitboard-ark/src/session/unilateral_exit/onchain.rs`.
 
 ---
 
@@ -118,7 +118,7 @@ When REG-04 / REG-07 stuck at “Step 1 of N” despite mining, compare orchestr
 |------|-------------------|
 | E2E `@arkade-reg04` | Manual unilateral unroll + mining |
 | E2E `@arkade-reg07` | Preconfirmed VTXO + automatic unroll |
-| `bitboard-ark/tests/unilateral_exit_session_regtest.rs` | Native unroll + complete (Docker) |
+| `bitboard-ark/tests/autonomous_unilateral_exit_session_regtest.rs` | Native proceed-step unroll + complete in autonomous mode (Docker) |
 | `cargo test -p bitboard-ark --lib` | Unit coverage for orchestrator helpers |
 
 Contracts: `doc/features/arkade-regtest-contract.yaml` (REG-04, REG-07).

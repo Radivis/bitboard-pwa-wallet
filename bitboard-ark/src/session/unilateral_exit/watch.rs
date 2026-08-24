@@ -5,7 +5,7 @@ use bitcoin::Txid;
 
 use crate::persistence::{JsonPersistenceDb, PendingExitKind, UnilateralExitWatchRecord};
 
-use super::mappers::current_unix_timestamp;
+use crate::session::mappers::current_unix_timestamp;
 
 pub(crate) fn register_unilateral_exit_watch(
     wallet_db: &JsonPersistenceDb,
@@ -78,14 +78,6 @@ pub(crate) fn enrich_unilateral_exit_watches_for_leaf_tx_after_unroll(
             branch_txids,
         );
     }
-}
-
-pub(crate) fn remove_unilateral_exit_watch_in_wallet_db(
-    wallet_db: &JsonPersistenceDb,
-    txid: &str,
-    vout: u32,
-) {
-    wallet_db.remove_unilateral_exit_watch(txid, vout);
 }
 
 pub(crate) fn remove_unilateral_exit_watches_for_outpoints_in_wallet_db(

@@ -181,7 +181,7 @@ Manually: open Mutinynet explorer + the wallet’s configured Esplora URL for `d
 
 | Piece | Path |
 |-------|------|
-| `first_incomplete_step_index` | `bitboard-ark/src/session/unilateral_exit_orchestrator.rs` |
+| `first_incomplete_step_index` | `bitboard-ark/src/session/unilateral_exit/progress.rs` |
 | `map_tx_confirmations` / `mined_tx_confirmations` / `broadcast_package_at` | `bitboard-ark/src/esplora_blockchain.rs` |
 | `get_height` cache-bust | `third_party/esplora-client/src/async.rs`, `blocking.rs` |
 | Machine poll / proceed | `frontend/src/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.machine.ts` |

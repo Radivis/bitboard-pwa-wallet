@@ -7,7 +7,7 @@ use crate::persistence::{
     UnilateralExitFrontendPersistence, UnilateralExitJobRecord, UnilateralExitLeafOutpointRecord,
 };
 
-use super::ArkSession;
+use crate::session::ArkSession;
 
 fn leaf_outpoint_to_dto(record: UnilateralExitLeafOutpointRecord) -> UnilateralExitLeafOutpointDto {
     UnilateralExitLeafOutpointDto {

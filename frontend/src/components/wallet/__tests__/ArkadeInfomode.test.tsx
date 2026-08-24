@@ -57,8 +57,6 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
   useArkadeBumperInfoQuery: () => ({ data: null, isLoading: false }),
   useArkadeCollaborativeExitMutation: () => ({ mutate: vi.fn(), isPending: false }),
   useArkadeCollaborativeExitFeeQuery: () => ({ isLoading: false, isError: false, data: null }),
-  useArkadeUnilateralExitFeeQuery: () => ({ isLoading: false, isError: false, data: null }),
-  useArkadeUnrollMutation: () => ({ mutate: vi.fn(), isPending: false }),
   useArkadeCompleteExitMutation: () => ({ mutate: vi.fn(), isPending: false }),
   useArkadeSignerMigrationMutation: () => ({
     mutate: vi.fn(),
@@ -68,7 +66,12 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
   useArkadeSignerMigrationPartialResultQuery: () => ({ data: null }),
   useArkadeAutonomousModeActive: () => false,
   useHasPendingBatchIntent: () => false,
+  useHasPendingBatchIntentKind: () => false,
   usePendingBatchIntent: () => null,
+  usePendingBatchIntents: () => [],
+  useArkadeCancelPendingBatchIntentMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  useArkadeRetryPendingBatchIntentMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  useArkadeBoardingStatusQuery: () => ({ isLoading: false, data: null }),
   useOperatorTrustStatusQuery: () => ({
     data: { operatorTrustPending: false, reviewingInAutonomous: false },
   }),

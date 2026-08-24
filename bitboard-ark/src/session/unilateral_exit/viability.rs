@@ -1,14 +1,23 @@
 use std::collections::HashSet;
+use std::str::FromStr;
 
 use ark_client::Blockchain;
 use bitcoin::Txid;
 
-use crate::api_types::{UnilateralExitJobViabilityDto, UnilateralExitJobViabilityKind};
-use crate::error::ArkResult;
+use crate::api_types::{
+    UnilateralExitJobViabilityDto, UnilateralExitJobViabilityKind, UnilateralExitProgressParams,
+};
+use crate::error::{ArkResult, ArkWasmError};
 use crate::outpoint::VirtualOutPoint;
 use crate::persistence::VirtualTxOutPointRecord;
-use crate::session::exit_watch_reconcile::{ExitingVtxoReconcileOutcome, classify_operator_vtxo};
-use crate::session::unilateral_exit_orchestrator::UnilateralBatchPlan;
+use crate::session::ArkSession;
+use crate::session::unilateral_exit::plan::UnilateralBatchPlan;
+use crate::session::unilateral_exit::watch_reconcile::{
+    ExitingVtxoReconcileOutcome, classify_operator_vtxo,
+};
+
+use super::snapshot_ops::dedup_virtual_outpoints;
+use super::topology::merge_topology_nodes_from_chains;
 
 pub(crate) fn wallet_unroll_step_txids(plan: &UnilateralBatchPlan) -> HashSet<Txid> {
     plan.ordered_step_txids.iter().copied().collect()
@@ -191,7 +200,104 @@ pub(crate) fn classify_operator_vtxo_outcome(
     classify_operator_vtxo(virtual_tx_outpoint)
 }
 
-use std::str::FromStr;
+impl ArkSession {
+    pub async fn evaluate_unilateral_exit_job_viability(
+        &self,
+        params: UnilateralExitProgressParams,
+    ) -> ArkResult<UnilateralExitJobViabilityDto> {
+        if params.vtxo_outpoints.is_empty() {
+            return Err(ArkWasmError::EmptyVtxoOutpoints);
+        }
+
+        let job_leaf_outpoints = dedup_virtual_outpoints(params.vtxo_outpoints);
+        if self.all_job_leaves_locally_unrolled(&job_leaf_outpoints)? {
+            return Ok(viability_ok());
+        }
+
+        if let Some(outpoint) = detect_asp_swept_from_sources(
+            &job_leaf_outpoints,
+            self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref(),
+            &[],
+            |txid, vout| self.leaf_is_marked_unrolled(txid, vout).unwrap_or(false),
+        ) {
+            return Ok(viability_from_asp_swept(&outpoint));
+        }
+
+        let plan = self
+            .build_unilateral_batch_plan(&job_leaf_outpoints)
+            .await?;
+        let nodes = merge_topology_nodes_from_chains(plan.leaves.iter().map(|leaf| &leaf.chains));
+        let host_records = self
+            .exit_eligible_records_for_topology_hosts(&nodes)
+            .await?;
+        let blockchain = self.client.blockchain();
+
+        if let Some(viability) =
+            evaluate_branch_funding_interference(blockchain, &plan, &host_records, |outpoint| {
+                self.leaf_is_marked_unrolled(&outpoint.txid.to_string(), outpoint.vout)
+                    .unwrap_or(false)
+            })
+            .await?
+        {
+            return Ok(viability);
+        }
+
+        Ok(viability_ok())
+    }
+
+    /// Test-only hook for native integration tests that need to simulate ASP snapshot interference.
+    #[doc(hidden)]
+    pub fn set_offchain_vtxo_snapshot_for_tests(
+        &self,
+        snapshot: crate::persistence::OffchainVtxoSnapshot,
+    ) {
+        self.wallet_db.set_offchain_vtxo_snapshot(snapshot);
+    }
+
+    /// Marks a job leaf VTXO as ASP-swept (not unrolled) in the persisted offchain snapshot.
+    #[doc(hidden)]
+    pub fn mark_job_target_asp_swept_in_offchain_snapshot_for_tests(
+        &self,
+        txid: &str,
+        vout: u32,
+    ) -> ArkResult<()> {
+        let mut snapshot = self
+            .wallet_db
+            .snapshot()
+            .offchain_vtxo_snapshot
+            .clone()
+            .ok_or_else(|| {
+                ArkWasmError::Snapshot(
+                    "missing offchain vtxo snapshot for ASP sweep injection".into(),
+                )
+            })?;
+        let record = snapshot
+            .virtual_tx_outpoints
+            .iter_mut()
+            .find(|record| record.txid == txid && record.vout == vout)
+            .ok_or_else(|| {
+                ArkWasmError::Snapshot(format!(
+                    "vtxo {txid}:{vout} not found in offchain snapshot for ASP sweep injection"
+                ))
+            })?;
+        record.is_swept = true;
+        record.is_unrolled = false;
+        self.wallet_db.set_offchain_vtxo_snapshot(snapshot);
+        Ok(())
+    }
+
+    fn all_job_leaves_locally_unrolled(
+        &self,
+        job_leaf_outpoints: &[VirtualOutPoint],
+    ) -> ArkResult<bool> {
+        for outpoint in job_leaf_outpoints {
+            if !self.leaf_is_marked_unrolled(&outpoint.txid.to_string(), outpoint.vout)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -212,7 +318,7 @@ mod tests {
         let step_txid = txid(20);
         UnilateralBatchPlan {
             leaves: vec![
-                crate::session::unilateral_exit_orchestrator::LeafUnilateralContext {
+                crate::session::unilateral_exit::plan::LeafUnilateralContext {
                     leaf_txid,
                     sibling_outpoints: vec![sibling],
                     chains: VtxoChains { inner: vec![] },
@@ -302,5 +408,5 @@ mod tests {
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
-#[path = "unilateral_exit_job_viability_integration_tests.rs"]
+#[path = "viability_integration_tests.rs"]
 mod integration_tests;

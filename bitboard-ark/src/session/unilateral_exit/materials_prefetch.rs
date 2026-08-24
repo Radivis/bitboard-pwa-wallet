@@ -9,8 +9,8 @@ use crate::unilateral_exit_materials::{
     store_materials_for_leaf_tx,
 };
 
-use super::ArkSession;
-use super::mappers::current_unix_timestamp;
+use crate::session::ArkSession;
+use crate::session::mappers::current_unix_timestamp;
 
 pub(crate) async fn prefetch_unilateral_exit_materials_for_snapshot(
     session: &ArkSession,

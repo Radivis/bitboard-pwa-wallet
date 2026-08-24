@@ -1,12 +1,7 @@
 mod autonomous;
 mod balance;
 mod boarding;
-mod exit;
-mod exit_autonomous;
-mod exit_materials_prefetch;
-mod exit_onchain;
-mod exit_watch;
-mod exit_watch_reconcile;
+mod collaborative_exit;
 pub(crate) mod mappers;
 mod offchain_balance;
 mod open;
@@ -18,10 +13,7 @@ mod pending_exit;
 mod receive;
 mod signer_migration;
 mod sync;
-mod unilateral_exit_branch_topology;
-mod unilateral_exit_frontend;
-mod unilateral_exit_job_viability;
-mod unilateral_exit_orchestrator;
+mod unilateral_exit;
 mod vtxo;
 
 use std::cell::Cell;
@@ -37,7 +29,7 @@ use bitcoin::{Network, Txid};
 use crate::esplora_blockchain::EsploraBlockchain;
 use crate::network::NetworkMode;
 use crate::persistence::{JsonPersistenceDb, OperatorIdentity, SharedPersistenceDb};
-use unilateral_exit_orchestrator::UnspendableParentState;
+use unilateral_exit::UnspendableParentState;
 
 pub(crate) const CLIENT_NAME: &str = "bitboard-pwa-wallet";
 pub(crate) const BOLTZ_URL: &str = "https://api.boltz.exchange";

@@ -58,14 +58,12 @@ use wasm_bindgen::prelude::*;
 use crate::api_types::{
     CollaborativeExitFeeEstimateParams, CollaborativeExitParams, OpenSessionParams,
     PendingBatchIntentActionParams, SendPaymentParams, UnilateralExitCompletionFeeEstimateParams,
-    UnilateralExitFeeParams,
 };
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::api_types::{
     CollaborativeExitFeeEstimateParams, CollaborativeExitParams, OpenSessionParams,
     PendingBatchIntentActionParams, UnilateralExitCompletionFeeEstimateParams,
-    UnilateralExitFeeParams,
 };
 use crate::error::{ArkResult, ArkWasmError, map_js_error};
 
@@ -543,37 +541,6 @@ pub async fn ark_get_collaborative_exit_fee_estimate(params: JsValue) -> Result<
         export_session_json(|session| async move {
             session
                 .collaborative_exit_fee_estimate(&params.destination_address, params.amount_sats)
-                .await
-        })
-        .await
-    })
-    .await
-}
-
-#[wasm_bindgen]
-pub async fn ark_estimate_unilateral_exit(params: JsValue) -> Result<JsValue, JsValue> {
-    map_js_async(async {
-        let params: UnilateralExitFeeParams = serde_wasm_bindgen::from_value(params)?;
-        export_session_json(|session| async move { session.estimate_unilateral_exit(params).await })
-            .await
-    })
-    .await
-}
-
-#[wasm_bindgen]
-pub async fn ark_run_unilateral_unroll(
-    txid: String,
-    vout: u32,
-    on_progress: js_sys::Function,
-) -> Result<JsValue, JsValue> {
-    map_js_async(async {
-        export_session_json(|session| async move {
-            session
-                .run_unilateral_unroll(&txid, vout, |event| {
-                    if let Ok(value) = serde_wasm_bindgen::to_value(&event) {
-                        let _ = on_progress.call1(&JsValue::NULL, &value);
-                    }
-                })
                 .await
         })
         .await

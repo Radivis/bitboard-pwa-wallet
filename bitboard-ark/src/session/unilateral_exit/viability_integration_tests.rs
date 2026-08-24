@@ -22,10 +22,10 @@ use bitcoin::{Address, Amount, OutPoint, ScriptBuf, Transaction, Txid};
 use crate::api_types::UnilateralExitJobViabilityKind;
 use crate::outpoint::VirtualOutPoint;
 use crate::persistence::{OffchainVtxoSnapshot, VirtualTxOutPointRecord};
-use crate::session::unilateral_exit_job_viability::{
+use crate::session::unilateral_exit::plan::{LeafUnilateralContext, UnilateralBatchPlan};
+use crate::session::unilateral_exit::viability::{
     detect_asp_swept_from_sources, evaluate_branch_funding_interference,
 };
-use crate::session::unilateral_exit_orchestrator::{LeafUnilateralContext, UnilateralBatchPlan};
 
 fn txid(byte: u8) -> Txid {
     Txid::from_byte_array([byte; 32])

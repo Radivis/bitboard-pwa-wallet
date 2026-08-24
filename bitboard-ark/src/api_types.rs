@@ -385,38 +385,6 @@ pub struct RecoverableVtxoFeeEstimateDto {
     pub estimate_error: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UnilateralExitFeeEstimateDto {
-    pub chain_tx_count: u32,
-    pub projected_unroll_steps: u32,
-    pub projected_wait_steps: u32,
-    pub fee_rate_sat_per_vb: f64,
-    pub estimated_package_fee_sats: u64,
-    pub bumper_balance_sats: u64,
-    pub bumper_sufficient: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub estimate_error: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UnrollProgressEvent {
-    #[serde(rename = "type")]
-    pub event_type: String,
-    pub message: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub txid: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub vtxo_txid: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UnrollResult {
-    pub vtxo_txid: String,
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OpenSessionParams {
@@ -467,13 +435,6 @@ pub struct UnilateralExitCompletionFeeEstimateParams {
     pub destination_address: String,
     #[serde(default)]
     pub fee_rate_sat_per_vb: Option<f64>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UnilateralExitFeeParams {
-    pub txid: String,
-    pub vout: u32,
 }
 
 #[derive(Debug, Deserialize)]
