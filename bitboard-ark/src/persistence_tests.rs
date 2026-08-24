@@ -302,7 +302,7 @@ fn missing_lifecycle_phase_deserializes_as_timed_out() {
         signer_pk_hex: "02abc".to_string(),
         network: network_label(Network::Signet),
     };
-    let mut envelope = BitboardArkPersistence::empty(identity);
+    let envelope = BitboardArkPersistence::empty(identity);
     let json = serde_json::to_string(&envelope).expect("serialize");
     let mut value: serde_json::Value = serde_json::from_str(&json).expect("parse envelope json");
     value["wallet_db"]["pending_batch_intents"] = serde_json::json!([{

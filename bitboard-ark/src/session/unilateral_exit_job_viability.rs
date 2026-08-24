@@ -83,16 +83,15 @@ pub(crate) fn detect_asp_swept_from_sources(
         if leaf_is_marked_unrolled(&txid, outpoint.vout) {
             continue;
         }
-        if let Some(snapshot) = snapshot {
-            if let Some(record) = snapshot
+        if let Some(snapshot) = snapshot
+            && let Some(record) = snapshot
                 .virtual_tx_outpoints
                 .iter()
                 .find(|record| record.txid == txid && record.vout == outpoint.vout)
-                && record.is_swept
-                && !record.is_unrolled
-            {
-                return Some(outpoint.clone());
-            }
+            && record.is_swept
+            && !record.is_unrolled
+        {
+            return Some(outpoint.clone());
         }
     }
 
@@ -198,7 +197,7 @@ use std::str::FromStr;
 mod tests {
     use super::*;
     use crate::persistence::VirtualTxOutPointRecord;
-    use ark_core::server::{ChainedTxType, VtxoChain, VtxoChains};
+    use ark_core::server::VtxoChains;
     use bitcoin::hashes::Hash;
 
     fn txid(byte: u8) -> Txid {
@@ -206,15 +205,6 @@ mod tests {
     }
 
     use std::collections::HashMap;
-
-    fn chain(txid: Txid, tx_type: ChainedTxType, spends: Vec<Txid>) -> VtxoChain {
-        VtxoChain {
-            txid,
-            tx_type,
-            spends,
-            expires_at: 0,
-        }
-    }
 
     fn sample_plan() -> UnilateralBatchPlan {
         let leaf_txid = txid(10);

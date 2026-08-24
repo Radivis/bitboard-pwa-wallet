@@ -335,8 +335,7 @@ impl ArkSession {
         if is_boarding_only_pending_record(&record) {
             return Err(crate::error::ArkWasmError::Boarding(
                 BOARDING_DELETE_INTENT_UNSUPPORTED.to_string(),
-            )
-            .into());
+            ));
         }
         let onchain_outpoints = record
             .onchain_outpoints
@@ -389,8 +388,7 @@ impl ArkSession {
             PendingIntentRetryDecision::RefuseBoardingReregister => {
                 Err(crate::error::ArkWasmError::Boarding(
                     BOARDING_REREGISTER_WHILE_INTENT_LIVE.to_string(),
-                )
-                .into())
+                ))
             }
             PendingIntentRetryDecision::RetryWithoutDelete => {
                 // arkd deleteIntent cannot match boarding inputs (ARK-UP-01). After the
@@ -981,7 +979,9 @@ const MIGRATE_RETRY_BLOCKED_BY_OTHER_PENDING: &str =
 
 /// Retry / settle mapped `Ok(None)` (no matching spendable inputs). Must not look like success.
 pub(crate) fn join_result_for_absent_settle_inputs() -> ArkResult<BatchJoinResultDto> {
-    Err(crate::error::ArkWasmError::Boarding(SETTLE_RETURNED_NO_MATCHING_INPUTS.to_string()).into())
+    Err(crate::error::ArkWasmError::Boarding(
+        SETTLE_RETURNED_NO_MATCHING_INPUTS.to_string(),
+    ))
 }
 
 pub(crate) fn migrate_retry_join_result(
@@ -994,8 +994,7 @@ pub(crate) fn migrate_retry_join_result(
     if other_pending_remain {
         return Err(crate::error::ArkWasmError::Wallet(
             MIGRATE_RETRY_BLOCKED_BY_OTHER_PENDING.to_string(),
-        )
-        .into());
+        ));
     }
     Ok(completed_without_txid())
 }

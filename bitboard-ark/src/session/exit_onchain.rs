@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 
 use ark_client::Blockchain;
+#[cfg(test)]
 use ark_core::build_unilateral_exit_tree_txids;
 use bitcoin::Txid;
 
@@ -21,6 +22,7 @@ use crate::unilateral_exit_materials::{
 use super::exit_watch::parse_branch_txids;
 use super::unilateral_exit_orchestrator::leaf_reached_finality;
 
+#[allow(dead_code)]
 const UNILATERAL_EXIT_ON_CHAIN_TIP_VOUT: u32 = 0;
 
 /// True when any known unroll branch tx or the published tip is visible on Esplora.
@@ -60,6 +62,7 @@ pub(crate) async fn exit_branch_spent_on_chain<B: Blockchain>(
 }
 
 /// Candidate on-chain tip txids to probe for a completed unilateral exit, most likely first.
+#[cfg(test)]
 pub(crate) fn exiting_vtxo_on_chain_tip_candidates(
     snapshot: &OffchainVtxoSnapshot,
     leaf_txid: &str,
@@ -99,6 +102,7 @@ pub(crate) fn exiting_vtxo_on_chain_tip_candidates(
     candidates
 }
 
+#[cfg(test)]
 fn branch_txid_hints_from_materials(snapshot: &OffchainVtxoSnapshot, leaf_txid: &str) -> Vec<Txid> {
     let Some(materials) = snapshot_materials_for_leaf_tx(snapshot, leaf_txid) else {
         return Vec::new();
@@ -166,6 +170,7 @@ pub(crate) fn should_reprobe_spent_unrolled_marker(record: &VirtualTxOutPointRec
 ///
 /// Reserved for explicit published-tip probes; unilateral exit completion detection must not use
 /// branch-tip `vout 0` spends because CPFP bump children spend those during unroll.
+#[allow(dead_code)]
 pub(crate) async fn find_unilateral_exit_completion_spend_on_chain<B: Blockchain>(
     blockchain: &B,
     tip_candidates: &[Txid],

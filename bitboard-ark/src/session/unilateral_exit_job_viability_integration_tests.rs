@@ -73,66 +73,47 @@ impl MockBlockchain {
 }
 
 impl Blockchain for MockBlockchain {
-    fn find_outpoints(
+    async fn find_outpoints(
         &self,
         _address: &Address,
-    ) -> impl std::future::Future<Output = Result<Vec<ark_core::ExplorerUtxo>, Error>> + Send {
-        async { Ok(vec![]) }
+    ) -> Result<Vec<ark_core::ExplorerUtxo>, Error> {
+        Ok(vec![])
     }
 
-    fn find_tx(
-        &self,
-        _txid: &Txid,
-    ) -> impl std::future::Future<Output = Result<Option<Transaction>, Error>> + Send {
-        async move { Ok(None) }
+    async fn find_tx(&self, _txid: &Txid) -> Result<Option<Transaction>, Error> {
+        Ok(None)
     }
 
-    fn get_tx_status(
-        &self,
-        _txid: &Txid,
-    ) -> impl std::future::Future<Output = Result<TxStatus, Error>> + Send {
-        async move { Ok(TxStatus { confirmed_at: None }) }
+    async fn get_tx_status(&self, _txid: &Txid) -> Result<TxStatus, Error> {
+        Ok(TxStatus { confirmed_at: None })
     }
 
-    fn get_output_status(
-        &self,
-        txid: &Txid,
-        vout: u32,
-    ) -> impl std::future::Future<Output = Result<SpendStatus, Error>> + Send {
-        let outspend_probe_error = self.outspend_probe_error;
-        let transaction_not_found = self.transaction_not_found;
-        let spend_txid = self.output_spends.get(&(txid.clone(), vout)).cloned();
-        async move {
-            if transaction_not_found {
-                return Err(Error::wallet(
-                    "Ark client error: HttpResponse { status: 404, message: \"Transaction not found\" }",
-                ));
-            }
-            if outspend_probe_error {
-                return Err(Error::wallet(
-                    "HttpResponse { status: 500, message: \"{\\\"error\\\":\\\"Failed to get transaction outspends\\\"}\" }",
-                ));
-            }
-            Ok(SpendStatus { spend_txid })
+    async fn get_output_status(&self, txid: &Txid, vout: u32) -> Result<SpendStatus, Error> {
+        if self.transaction_not_found {
+            return Err(Error::wallet(
+                "Ark client error: HttpResponse { status: 404, message: \"Transaction not found\" }",
+            ));
         }
+        if self.outspend_probe_error {
+            return Err(Error::wallet(
+                "HttpResponse { status: 500, message: \"{\\\"error\\\":\\\"Failed to get transaction outspends\\\"}\" }",
+            ));
+        }
+        Ok(SpendStatus {
+            spend_txid: self.output_spends.get(&(*txid, vout)).cloned(),
+        })
     }
 
-    fn broadcast(
-        &self,
-        _tx: &Transaction,
-    ) -> impl std::future::Future<Output = Result<(), Error>> + Send {
-        async { Ok(()) }
+    async fn broadcast(&self, _tx: &Transaction) -> Result<(), Error> {
+        Ok(())
     }
 
-    fn get_fee_rate(&self) -> impl std::future::Future<Output = Result<f64, Error>> + Send {
-        async { Ok(1.0) }
+    async fn get_fee_rate(&self) -> Result<f64, Error> {
+        Ok(1.0)
     }
 
-    fn broadcast_package(
-        &self,
-        _txs: &[&Transaction],
-    ) -> impl std::future::Future<Output = Result<(), Error>> + Send {
-        async { Ok(()) }
+    async fn broadcast_package(&self, _txs: &[&Transaction]) -> Result<(), Error> {
+        Ok(())
     }
 }
 
@@ -233,7 +214,7 @@ fn asp_swept_targets_from_offchain_snapshot() {
     let leaf_outpoint = VirtualOutPoint::new(txid(10), 0);
     let snapshot = asp_swept_snapshot(&leaf_outpoint);
     let detected = detect_asp_swept_from_sources(
-        &[leaf_outpoint.clone()],
+        std::slice::from_ref(&leaf_outpoint),
         Some(&snapshot),
         &[],
         |_txid, _vout| false,
@@ -246,7 +227,7 @@ fn asp_swept_targets_from_operator_vtxo_list() {
     let leaf_outpoint = VirtualOutPoint::new(txid(11), 0);
     let operator_vtxos = vec![operator_vtxo_swept(&leaf_outpoint)];
     let detected = detect_asp_swept_from_sources(
-        &[leaf_outpoint.clone()],
+        std::slice::from_ref(&leaf_outpoint),
         None,
         &operator_vtxos,
         |_txid, _vout| false,

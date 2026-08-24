@@ -171,6 +171,7 @@ mod legacy_import {
     }
 
     #[derive(Debug, Clone, Deserialize)]
+    #[allow(dead_code)]
     pub(super) struct BitboardArkPersistenceV5 {
         pub version: u32,
         pub engine: String,
@@ -694,6 +695,7 @@ impl JsonPersistenceDb {
         promoted
     }
 
+    #[allow(dead_code)]
     pub fn clear_pending_batch_intents(&self) {
         lock_persistence(&self.inner).pending_batch_intents.clear();
     }

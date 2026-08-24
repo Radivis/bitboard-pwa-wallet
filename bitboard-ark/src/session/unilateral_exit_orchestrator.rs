@@ -46,6 +46,7 @@ pub(crate) struct LeafUnilateralContext {
     pub(crate) chains: VtxoChains,
     pub(crate) branch_txids: Vec<Txid>,
     pub(crate) commitment_txids: Vec<Txid>,
+    #[allow(dead_code)]
     pub(crate) amount_sats: u64,
 }
 
@@ -288,15 +289,13 @@ pub(crate) fn unspendable_parent_blocks_step(
     match state {
         None => false,
         Some(UnspendableParentState::NeedsBroadcast { .. }) => true,
-        Some(UnspendableParentState::Broadcasted { broadcast_at_tip }) => {
-            match (current_tip, *broadcast_at_tip) {
-                (Some(tip), Some(broadcast_tip)) if tip > broadcast_tip => false,
-                _ => true,
-            }
-        }
+        Some(UnspendableParentState::Broadcasted { broadcast_at_tip }) => current_tip
+            .zip(*broadcast_at_tip)
+            .is_none_or(|(tip, broadcast_tip)| tip <= broadcast_tip),
     }
 }
 
+#[cfg(test)]
 pub(crate) fn should_force_unilateral_exit_step_broadcast(
     esplora_confirmations: u64,
     marked_unspendable: bool,
@@ -313,6 +312,7 @@ pub(crate) fn wait_cap_holds_unbroadcast_successor(
     wait_index.is_some_and(|wait| index > wait)
 }
 
+#[cfg(test)]
 pub(crate) fn first_incomplete_step_from_confirmations(
     confirmations: &[u64],
     wait_index: Option<usize>,

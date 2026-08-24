@@ -40,7 +40,7 @@ pub(crate) fn merge_topology_nodes_from_chains<'a>(
     let mut seen = HashSet::new();
     let mut nodes = Vec::new();
     for chains in chain_sets {
-        for node in topology_nodes_from_chains(&chains) {
+        for node in topology_nodes_from_chains(chains) {
             if seen.insert(node.txid.clone()) {
                 nodes.push(node);
             }

@@ -61,6 +61,8 @@ pub const UNILATERAL_EXIT_LEAF_CONFIRMATIONS: u32 = 6;
 pub const UNILATERAL_EXIT_STEP_CONFIRMATIONS: u32 = 1;
 
 /// Esplora poll interval while waiting for the current unroll step to confirm.
+/// Frontend owns the poll loop (`UNILATERAL_EXIT_PROGRESS_IDLE_POLL_MS`); keep that in sync.
+#[allow(dead_code)]
 pub const UNILATERAL_EXIT_STEP_CONFIRMATION_POLL_INTERVAL_SECS: u64 = 15;
 
 /// Reuse `/tx/{txid}/outspends` for this long when the probed output is still unspent.

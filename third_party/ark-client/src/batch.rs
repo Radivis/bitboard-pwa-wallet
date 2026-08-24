@@ -1116,8 +1116,8 @@ where
 
                     // Only include confirmed boarding outputs with an _inactive_ exit path.
                     if !boarding_output.can_be_claimed_unilaterally_by_owner(
-                        std::time::Duration::from_secs(now),
-                        std::time::Duration::from_secs(*confirmation_blocktime),
+                        Duration::from_secs(now),
+                        Duration::from_secs(*confirmation_blocktime),
                         *confirmations,
                     ) {
                         if is_past_arkd_cooperative_boarding_window(

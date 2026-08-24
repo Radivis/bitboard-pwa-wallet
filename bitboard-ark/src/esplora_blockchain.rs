@@ -273,9 +273,7 @@ impl EsploraBlockchain {
                 return Err(EsploraBlockchain::map_esplora_error(error));
             }
         };
-        if let Err(error) = validate_submit_package_result(&package_result) {
-            return Err(error);
-        }
+        validate_submit_package_result(&package_result)?;
         Ok(())
     }
 
@@ -481,6 +479,7 @@ fn mined_tx_confirmations(block_height: Option<u32>, chain_tip_height: Option<u3
     }
 }
 
+#[cfg(test)]
 fn is_missing_tx_esplora_error(error: &esplora_client::Error) -> bool {
     match error {
         esplora_client::Error::HttpResponse { message, .. } => {
