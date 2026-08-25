@@ -54,7 +54,9 @@ async fn chained_preconfirmed_proceed_relays_first_step_tx_on_regtest() {
 
     let preconfirmed_startable_count = candidates
         .iter()
-        .filter(|row| row.can_start_unroll && row.virtual_status_state == VTXO_STATUS_PRECONFIRMED)
+        .filter(|row| {
+            row.can_start_unroll && row.virtual_status_state.as_str() == VTXO_STATUS_PRECONFIRMED
+        })
         .count();
 
     let topology = session

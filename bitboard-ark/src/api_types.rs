@@ -226,6 +226,51 @@ pub struct FinalizePendingResult {
     pub pending: u32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum VirtualStatusState {
+    Spent,
+    Unrolled,
+    Preconfirmed,
+    Recoverable,
+    Settled,
+}
+
+impl VirtualStatusState {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Spent => "spent",
+            Self::Unrolled => "unrolled",
+            Self::Preconfirmed => "preconfirmed",
+            Self::Recoverable => "recoverable",
+            Self::Settled => "settled",
+        }
+    }
+
+    pub(crate) fn from_spent_and_unrolled(is_spent: bool, is_unrolled: bool) -> Self {
+        Self::from_flags(is_spent, is_unrolled, false, false)
+    }
+
+    pub(crate) fn from_flags(
+        is_spent: bool,
+        is_unrolled: bool,
+        is_preconfirmed: bool,
+        is_recoverable: bool,
+    ) -> Self {
+        if is_spent {
+            Self::Spent
+        } else if is_unrolled {
+            Self::Unrolled
+        } else if is_preconfirmed {
+            Self::Preconfirmed
+        } else if is_recoverable {
+            Self::Recoverable
+        } else {
+            Self::Settled
+        }
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExitCandidateRow {
@@ -233,7 +278,7 @@ pub struct ExitCandidateRow {
     pub txid: String,
     pub vout: u32,
     pub amount_sats: u64,
-    pub virtual_status_state: String,
+    pub virtual_status_state: VirtualStatusState,
     pub is_recoverable: bool,
     pub is_unrolled: bool,
     pub can_start_unroll: bool,
@@ -247,7 +292,7 @@ pub struct UnilateralExitInProgressRow {
     pub txid: String,
     pub vout: u32,
     pub amount_sats: u64,
-    pub virtual_status_state: String,
+    pub virtual_status_state: VirtualStatusState,
     pub can_complete: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub started_at: Option<i64>,

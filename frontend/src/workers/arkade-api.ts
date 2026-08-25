@@ -210,12 +210,19 @@ export interface ArkadeBoardingStatus {
   finalizedCommitmentTxid?: string
 }
 
+export type ArkadeVirtualStatusState =
+  | 'spent'
+  | 'unrolled'
+  | 'preconfirmed'
+  | 'recoverable'
+  | 'settled'
+
 export interface ArkadeExitCandidateRow {
   id: string
   txid: string
   vout: number
   amountSats: number
-  virtualStatusState: string
+  virtualStatusState: ArkadeVirtualStatusState
   isRecoverable: boolean
   isUnrolled: boolean
   canStartUnroll: boolean
@@ -227,7 +234,7 @@ export interface ArkadeUnilateralExitInProgressRow {
   txid: string
   vout: number
   amountSats: number
-  virtualStatusState: string
+  virtualStatusState: ArkadeVirtualStatusState
   canComplete: boolean
   startedAt?: number
 }

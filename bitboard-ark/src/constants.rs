@@ -3,12 +3,6 @@
 pub const PAYMENT_DIRECTION_INCOMING: &str = "incoming";
 pub const PAYMENT_DIRECTION_OUTGOING: &str = "outgoing";
 
-pub const VTXO_STATUS_SPENT: &str = "spent";
-pub const VTXO_STATUS_UNROLLED: &str = "unrolled";
-pub const VTXO_STATUS_PRECONFIRMED: &str = "preconfirmed";
-pub const VTXO_STATUS_RECOVERABLE: &str = "recoverable";
-pub const VTXO_STATUS_SETTLED: &str = "settled";
-
 /// Placeholder when operator getInfo omits `fees.tx_fee_rate`. Not used for fee calculations.
 pub const DEFAULT_TX_FEE_RATE: &str = "1";
 pub const MIN_FEE_RATE_SAT_PER_VB: f64 = 0.1;

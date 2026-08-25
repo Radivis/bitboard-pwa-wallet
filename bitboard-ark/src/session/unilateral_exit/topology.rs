@@ -198,6 +198,7 @@ pub(crate) fn filter_exit_candidates_to_terminal_leaves(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::api_types::VirtualStatusState;
     use crate::persistence::VirtualTxOutPointRecord;
     use ark_core::server::{ChainedTxType, VtxoChain, VtxoChains};
     use bitcoin::Txid;
@@ -444,7 +445,7 @@ mod tests {
                 txid: intermediate.to_string(),
                 vout: 0,
                 amount_sats: 125_000,
-                virtual_status_state: "settled".to_string(),
+                virtual_status_state: VirtualStatusState::Settled,
                 is_recoverable: false,
                 is_unrolled: false,
                 can_start_unroll: true,
@@ -455,7 +456,7 @@ mod tests {
                 txid: terminal.to_string(),
                 vout: 0,
                 amount_sats: 25_000,
-                virtual_status_state: "settled".to_string(),
+                virtual_status_state: VirtualStatusState::Settled,
                 is_recoverable: false,
                 is_unrolled: false,
                 can_start_unroll: true,

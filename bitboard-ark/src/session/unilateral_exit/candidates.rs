@@ -6,7 +6,7 @@ use ark_core::server::VirtualTxOutPoint;
 use ark_core::{ExplorerUtxo, Vtxo};
 use bitcoin::ScriptBuf;
 
-use crate::api_types::{ExitCandidateRow, UnilateralExitInProgressRow};
+use crate::api_types::{ExitCandidateRow, UnilateralExitInProgressRow, VirtualStatusState};
 use crate::error::ArkResult;
 use crate::exit_balance::{
     UnilateralExitOutpointKey, exit_outpoint_key, exit_outpoint_key_from_str,
@@ -193,13 +193,10 @@ impl ArkSession {
                 .iter()
                 .find(|record| record.txid == txid && record.vout == vout)
             {
-                let virtual_status_state = if record.is_spent {
-                    "spent".to_string()
-                } else if record.is_unrolled {
-                    "unrolled".to_string()
-                } else {
-                    "settled".to_string()
-                };
+                let virtual_status_state = VirtualStatusState::from_spent_and_unrolled(
+                    record.is_spent,
+                    record.is_unrolled,
+                );
                 let can_complete = if snapshot_record_ready_for_completion(record) {
                     match virtual_tx_outpoint_from_record(record) {
                         Ok(virtual_tx_outpoint) => {
@@ -237,7 +234,7 @@ impl ArkSession {
                     .find(|watch| watch.vtxo_txid == txid && watch.vout == vout)
                     .map(|watch| watch.amount_sats)
                     .unwrap_or_else(|| Self::pending_unilateral_amount_sats(&pending, &outpoint)),
-                virtual_status_state: "unrolled".to_string(),
+                virtual_status_state: VirtualStatusState::Unrolled,
                 can_complete: false,
                 started_at: started_at_by_outpoint.get(&outpoint).copied(),
             });
