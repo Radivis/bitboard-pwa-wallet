@@ -217,7 +217,7 @@ export type ArkadeVirtualStatusState =
   | 'recoverable'
   | 'settled'
 
-export interface ArkadeExitCandidateRow {
+export interface ArkadeExitCandidateDto {
   id: string
   txid: string
   vout: number
@@ -229,7 +229,7 @@ export interface ArkadeExitCandidateRow {
   canComplete: boolean
 }
 
-export interface ArkadeUnilateralExitInProgressRow {
+export interface ArkadeUnilateralExitInProgressDto {
   id: string
   txid: string
   vout: number
@@ -590,9 +590,9 @@ export interface ArkadeService {
   recoverRecoverableVtxos(
     onRegistered?: (intent: ArkadePendingBatchIntent) => void,
   ): Promise<ArkadeBatchJoinResult>
-  listExitCandidates(): Promise<ArkadeExitCandidateRow[]>
+  listExitCandidates(): Promise<ArkadeExitCandidateDto[]>
   listVtxos(): Promise<ArkadeVtxoListResult>
-  listUnilateralExitsInProgress(): Promise<ArkadeUnilateralExitInProgressRow[]>
+  listUnilateralExitsInProgress(): Promise<ArkadeUnilateralExitInProgressDto[]>
   getOnchainBumperInfo(): Promise<ArkadeOnchainBumperInfo>
   collaborativeExit(
     params: ArkadeCollaborativeExitParams,

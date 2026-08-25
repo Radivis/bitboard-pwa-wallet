@@ -27,7 +27,7 @@ import type {
   ArkadeCollaborativeExitParams,
   ArkadeCompleteUnilateralExitParams,
   ArkadeDelegateInfo,
-  ArkadeExitCandidateRow,
+  ArkadeExitCandidateDto,
   ArkadeOnchainBumperInfo,
   ArkadeOperatorSyncResult,
   ArkadePaymentRow,
@@ -55,7 +55,7 @@ import type {
   ArkadeOperatorScheduledSession,
   ArkadeOperatorTrustStatus,
   ArkadeOperatorConfigDiffResult,
-  ArkadeUnilateralExitInProgressRow,
+  ArkadeUnilateralExitInProgressDto,
   ArkadeAutonomousModeStatus,
   ArkadeVtxoListResult,
   ArkadeVtxoExpiryStatus,
@@ -715,10 +715,10 @@ const arkadeService: ArkadeService = {
     )
   },
 
-  async listExitCandidates(): Promise<ArkadeExitCandidateRow[]> {
+  async listExitCandidates(): Promise<ArkadeExitCandidateDto[]> {
     return invokeWasmArk(
       (wasmModule) =>
-        wasmModule.ark_list_exit_candidates() as Promise<ArkadeExitCandidateRow[]>,
+        wasmModule.ark_list_exit_candidates() as Promise<ArkadeExitCandidateDto[]>,
     )
   },
 
@@ -728,11 +728,11 @@ const arkadeService: ArkadeService = {
     )
   },
 
-  async listUnilateralExitsInProgress(): Promise<ArkadeUnilateralExitInProgressRow[]> {
+  async listUnilateralExitsInProgress(): Promise<ArkadeUnilateralExitInProgressDto[]> {
     return invokeWasmArk(
       (wasmModule) =>
         wasmModule.ark_list_unilateral_exits_in_progress() as Promise<
-          ArkadeUnilateralExitInProgressRow[]
+          ArkadeUnilateralExitInProgressDto[]
         >,
     )
   },

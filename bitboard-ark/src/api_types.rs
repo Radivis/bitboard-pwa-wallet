@@ -273,7 +273,7 @@ impl VirtualStatusState {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ExitCandidateRow {
+pub struct ExitCandidateDto {
     pub id: String,
     pub txid: String,
     pub vout: u32,
@@ -287,7 +287,7 @@ pub struct ExitCandidateRow {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UnilateralExitInProgressRow {
+pub struct UnilateralExitInProgressDto {
     pub id: String,
     pub txid: String,
     pub vout: u32,

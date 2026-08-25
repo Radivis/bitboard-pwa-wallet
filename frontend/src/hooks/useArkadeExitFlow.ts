@@ -23,7 +23,7 @@ import {
   isSignerRotationCooperativeExitBlocked,
 } from '@/lib/arkade/arkade-cooperative-exit'
 import type {
-  ArkadeUnilateralExitInProgressRow,
+  ArkadeUnilateralExitInProgressDto,
   ArkadeVtxoOutpoint,
 } from '@/workers/arkade-api'
 import {
@@ -35,7 +35,7 @@ import { clearUnilateralExitJob } from '@/lib/wallet/lifecycle/unilateral-exit/u
 import { useUnilateralExitControlStore } from '@/stores/unilateralExitControlStore'
 
 function outpointFromInProgressRow(
-  row: ArkadeUnilateralExitInProgressRow,
+  row: ArkadeUnilateralExitInProgressDto,
 ): ArkadeVtxoOutpoint {
   return { txid: row.txid, vout: row.vout }
 }
@@ -112,7 +112,7 @@ export function useArkadeExitFlow() {
             arkadeVtxoOutpointsEqual(outpointFromInProgressRow(row), outpoint),
           ),
         )
-        .filter((row): row is ArkadeUnilateralExitInProgressRow => row != null),
+        .filter((row): row is ArkadeUnilateralExitInProgressDto => row != null),
     [inProgressQuery.data, selectedInProgressOutpoints],
   )
 
@@ -174,7 +174,7 @@ export function useArkadeExitFlow() {
     )
   }
 
-  const toggleInProgressSelection = (row: ArkadeUnilateralExitInProgressRow) => {
+  const toggleInProgressSelection = (row: ArkadeUnilateralExitInProgressDto) => {
     const outpoint = outpointFromInProgressRow(row)
     setSelectedInProgressOutpoints((previous) =>
       includesArkadeVtxoOutpoint(previous, outpoint)

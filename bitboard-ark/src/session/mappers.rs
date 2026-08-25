@@ -8,7 +8,7 @@ use ark_core::server::VirtualTxOutPoint;
 use bitcoin::{Address, Network, PublicKey};
 
 use crate::api_types::{
-    ExitCandidateRow, IntentFeeConfiguredDto, PaymentRowDto, VirtualStatusState,
+    ExitCandidateDto, IntentFeeConfiguredDto, PaymentRowDto, VirtualStatusState,
 };
 use crate::constants::{
     DEFAULT_TX_FEE_RATE, PAYMENT_DIRECTION_INCOMING, PAYMENT_DIRECTION_OUTGOING,
@@ -126,7 +126,7 @@ pub(crate) fn map_history_row(transaction: Transaction) -> Option<PaymentRowDto>
 pub(crate) fn map_exit_candidate(
     virtual_tx_outpoint: &VirtualTxOutPoint,
     dust: bitcoin::Amount,
-) -> ExitCandidateRow {
+) -> ExitCandidateDto {
     let recoverable = virtual_tx_outpoint.is_recoverable(dust);
     let virtual_status_state = VirtualStatusState::from_flags(
         virtual_tx_outpoint.is_spent,
@@ -135,7 +135,7 @@ pub(crate) fn map_exit_candidate(
         recoverable,
     );
 
-    ExitCandidateRow {
+    ExitCandidateDto {
         id: format!(
             "{}:{}",
             virtual_tx_outpoint.outpoint.txid, virtual_tx_outpoint.outpoint.vout

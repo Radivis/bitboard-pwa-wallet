@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use ark_core::server::VtxoChains;
 
 use crate::api_types::{
-    ExitCandidateRow, UnilateralExitHostOutpointDto, UnilateralExitTopologyNodeDto,
+    ExitCandidateDto, UnilateralExitHostOutpointDto, UnilateralExitTopologyNodeDto,
 };
 use crate::outpoint::VirtualOutPoint;
 use crate::persistence::{OffchainVtxoSnapshot, VirtualTxOutPointRecord};
@@ -170,8 +170,8 @@ pub(crate) fn terminal_vtxo_host_txids_from_materials_snapshot(
 /// Only terminal branch leaves may start a unilateral exit; upstream hosts are excluded.
 pub(crate) fn filter_exit_candidates_to_terminal_leaves(
     snapshot: Option<&OffchainVtxoSnapshot>,
-    rows: Vec<ExitCandidateRow>,
-) -> crate::error::ArkResult<Vec<ExitCandidateRow>> {
+    rows: Vec<ExitCandidateDto>,
+) -> crate::error::ArkResult<Vec<ExitCandidateDto>> {
     let Some(snapshot) = snapshot else {
         return Ok(rows);
     };
@@ -440,7 +440,7 @@ mod tests {
         store_materials_for_leaf_tx(&mut snapshot, &terminal.to_string(), materials);
 
         let rows = vec![
-            ExitCandidateRow {
+            ExitCandidateDto {
                 id: "a".to_string(),
                 txid: intermediate.to_string(),
                 vout: 0,
@@ -451,7 +451,7 @@ mod tests {
                 can_start_unroll: true,
                 can_complete: false,
             },
-            ExitCandidateRow {
+            ExitCandidateDto {
                 id: "b".to_string(),
                 txid: terminal.to_string(),
                 vout: 0,

@@ -1,13 +1,13 @@
 import type {
-  ArkadeExitCandidateRow,
-  ArkadeUnilateralExitInProgressRow,
+  ArkadeExitCandidateDto,
+  ArkadeUnilateralExitInProgressDto,
   ArkadeVtxoOutpoint,
 } from '@/workers/arkade-api'
 
 function vtxoIdForOutpoint(
   outpoint: ArkadeVtxoOutpoint,
-  candidates: ArkadeExitCandidateRow[],
-  inProgressRows: ArkadeUnilateralExitInProgressRow[],
+  candidates: ArkadeExitCandidateDto[],
+  inProgressRows: ArkadeUnilateralExitInProgressDto[],
 ): string | null {
   const candidate = candidates.find(
     (row) => row.txid === outpoint.txid && row.vout === outpoint.vout,
@@ -23,8 +23,8 @@ function vtxoIdForOutpoint(
 
 export function resolveVtxoIdsForOutpoints(
   outpoints: ArkadeVtxoOutpoint[],
-  candidates: ArkadeExitCandidateRow[],
-  inProgressRows: ArkadeUnilateralExitInProgressRow[],
+  candidates: ArkadeExitCandidateDto[],
+  inProgressRows: ArkadeUnilateralExitInProgressDto[],
 ): string[] {
   const ids = new Set<string>()
   for (const outpoint of outpoints) {

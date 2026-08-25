@@ -4,7 +4,7 @@ use ark_client::MissingBlocktimeCompletionInput;
 use ark_core::{Vtxo, VtxoList};
 use bitcoin::{Address, Amount, OutPoint, ScriptBuf};
 
-use crate::api_types::ExitCandidateRow;
+use crate::api_types::ExitCandidateDto;
 use crate::error::{ArkResult, ArkWasmError};
 use crate::exit_balance::{UnilateralExitOutpointKey, is_unilateral_exit_in_progress_outpoint};
 use crate::offchain_snapshot::virtual_tx_outpoint_from_record;
@@ -73,7 +73,7 @@ pub(crate) async fn autonomous_estimate_unilateral_exit_completion(
 pub(crate) fn exit_candidates_from_snapshot(
     snapshot: &OffchainVtxoSnapshot,
     in_progress: &HashSet<UnilateralExitOutpointKey>,
-) -> ArkResult<Vec<ExitCandidateRow>> {
+) -> ArkResult<Vec<ExitCandidateDto>> {
     let dust = Amount::from_sat(snapshot.dust_sats);
     let mut rows = Vec::new();
     for record in &snapshot.virtual_tx_outpoints {
@@ -99,7 +99,7 @@ pub(crate) fn exit_candidates_from_snapshot(
 pub(crate) fn autonomous_exit_candidates_from_snapshot(
     session: &ArkSession,
     in_progress: &HashSet<UnilateralExitOutpointKey>,
-) -> ArkResult<Vec<ExitCandidateRow>> {
+) -> ArkResult<Vec<ExitCandidateDto>> {
     let snapshot = session
         .wallet_db
         .snapshot()

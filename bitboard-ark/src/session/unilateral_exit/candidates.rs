@@ -6,7 +6,7 @@ use ark_core::server::VirtualTxOutPoint;
 use ark_core::{ExplorerUtxo, Vtxo};
 use bitcoin::ScriptBuf;
 
-use crate::api_types::{ExitCandidateRow, UnilateralExitInProgressRow, VirtualStatusState};
+use crate::api_types::{ExitCandidateDto, UnilateralExitInProgressDto, VirtualStatusState};
 use crate::error::ArkResult;
 use crate::exit_balance::{
     UnilateralExitOutpointKey, exit_outpoint_key, exit_outpoint_key_from_str,
@@ -118,7 +118,7 @@ impl ArkSession {
             .unwrap_or(0)
     }
 
-    pub async fn list_exit_candidates(&self) -> ArkResult<Vec<ExitCandidateRow>> {
+    pub async fn list_exit_candidates(&self) -> ArkResult<Vec<ExitCandidateDto>> {
         let in_progress = self.unilateral_exit_in_progress_outpoints()?;
         let snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot;
         let rows = autonomous_exit_candidates_from_snapshot(self, &in_progress)?;
@@ -127,7 +127,7 @@ impl ArkSession {
 
     pub async fn list_unilateral_exits_in_progress(
         &self,
-    ) -> ArkResult<Vec<UnilateralExitInProgressRow>> {
+    ) -> ArkResult<Vec<UnilateralExitInProgressDto>> {
         let in_progress = self.unilateral_exit_in_progress_outpoints()?;
         if in_progress.is_empty() {
             return Ok(Vec::new());
@@ -177,7 +177,7 @@ impl ArkSession {
                 } else {
                     false
                 };
-                rows.push(UnilateralExitInProgressRow {
+                rows.push(UnilateralExitInProgressDto {
                     id: candidate.id,
                     txid: candidate.txid,
                     vout: candidate.vout,
@@ -213,7 +213,7 @@ impl ArkSession {
                 } else {
                     false
                 };
-                rows.push(UnilateralExitInProgressRow {
+                rows.push(UnilateralExitInProgressDto {
                     id: format!("{txid}:{vout}"),
                     txid,
                     vout,
@@ -225,7 +225,7 @@ impl ArkSession {
                 continue;
             }
 
-            rows.push(UnilateralExitInProgressRow {
+            rows.push(UnilateralExitInProgressDto {
                 id: format!("{txid}:{vout}"),
                 txid: txid.clone(),
                 vout,
