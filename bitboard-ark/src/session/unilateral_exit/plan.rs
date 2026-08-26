@@ -186,43 +186,6 @@ pub(crate) fn exit_eligible_records_for_topology_hosts_from_snapshot(
         .collect()
 }
 
-#[allow(dead_code)]
-fn record_from_virtual_tx_outpoint_for_topology(
-    virtual_tx_outpoint: &ark_core::server::VirtualTxOutPoint,
-) -> VirtualTxOutPointRecord {
-    VirtualTxOutPointRecord {
-        txid: virtual_tx_outpoint.outpoint.txid.to_string(),
-        vout: virtual_tx_outpoint.outpoint.vout,
-        created_at: virtual_tx_outpoint.created_at,
-        expires_at: virtual_tx_outpoint.expires_at,
-        amount_sats: virtual_tx_outpoint.amount.to_sat(),
-        script_hex: hex::encode(virtual_tx_outpoint.script.as_bytes()),
-        is_preconfirmed: virtual_tx_outpoint.is_preconfirmed,
-        is_swept: virtual_tx_outpoint.is_swept,
-        is_unrolled: virtual_tx_outpoint.is_unrolled,
-        is_spent: virtual_tx_outpoint.is_spent,
-        spent_by: virtual_tx_outpoint
-            .spent_by
-            .as_ref()
-            .map(|txid| txid.to_string()),
-        commitment_txids: virtual_tx_outpoint
-            .commitment_txids
-            .iter()
-            .map(|txid| txid.to_string())
-            .collect(),
-        settled_by: virtual_tx_outpoint
-            .settled_by
-            .as_ref()
-            .map(|txid| txid.to_string()),
-        ark_txid: virtual_tx_outpoint
-            .ark_txid
-            .as_ref()
-            .map(|txid| txid.to_string()),
-        assets: vec![],
-        server_pk_hex: None,
-    }
-}
-
 impl ArkSession {
     pub async fn get_unilateral_exit_topology(
         &self,
