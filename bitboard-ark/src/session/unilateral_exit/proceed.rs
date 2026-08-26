@@ -54,7 +54,7 @@ impl ArkSession {
         let virtual_outpoints = dedup_virtual_outpoints(params.vtxo_outpoints);
         for outpoint in &virtual_outpoints {
             let vtxo_txid = outpoint.txid.to_string();
-            if !self.leaf_is_marked_unrolled(&vtxo_txid, outpoint.vout)? {
+            if !self.virtual_tx_is_marked_unrolled(&vtxo_txid)? {
                 let amount_sats = self
                     .vtxo_amount_sats_for_outpoint(&vtxo_txid, outpoint.vout)
                     .await?;

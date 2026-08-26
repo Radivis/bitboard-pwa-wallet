@@ -217,7 +217,7 @@ fn asp_swept_targets_from_offchain_snapshot() {
         std::slice::from_ref(&leaf_outpoint),
         Some(&snapshot),
         &[],
-        |_txid, _vout| false,
+        |_txid| false,
     );
     assert_eq!(detected, Some(leaf_outpoint));
 }
@@ -230,7 +230,7 @@ fn asp_swept_targets_from_operator_vtxo_list() {
         std::slice::from_ref(&leaf_outpoint),
         None,
         &operator_vtxos,
-        |_txid, _vout| false,
+        |_txid| false,
     );
     assert_eq!(detected, Some(leaf_outpoint));
 }

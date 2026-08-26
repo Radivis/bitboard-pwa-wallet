@@ -85,11 +85,11 @@ pub(crate) fn detect_asp_swept_from_sources(
     job_leaf_outpoints: &[VirtualOutPoint],
     snapshot: Option<&crate::persistence::OffchainVtxoSnapshot>,
     operator_vtxos: &[ark_core::server::VirtualTxOutPoint],
-    leaf_is_marked_unrolled: impl Fn(&str, u32) -> bool,
+    virtual_tx_is_marked_unrolled: impl Fn(&str) -> bool,
 ) -> Option<VirtualOutPoint> {
     for outpoint in job_leaf_outpoints {
         let txid = outpoint.txid.to_string();
-        if leaf_is_marked_unrolled(&txid, outpoint.vout) {
+        if virtual_tx_is_marked_unrolled(&txid) {
             continue;
         }
         if let Some(snapshot) = snapshot
@@ -106,7 +106,7 @@ pub(crate) fn detect_asp_swept_from_sources(
 
     for outpoint in job_leaf_outpoints {
         let txid = outpoint.txid.to_string();
-        if leaf_is_marked_unrolled(&txid, outpoint.vout) {
+        if virtual_tx_is_marked_unrolled(&txid) {
             continue;
         }
         if let Some(virtual_tx_outpoint) = operator_vtxos
@@ -218,7 +218,7 @@ impl ArkSession {
             &job_leaf_outpoints,
             self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref(),
             &[],
-            |txid, vout| self.leaf_is_marked_unrolled(txid, vout).unwrap_or(false),
+            |txid| self.virtual_tx_is_marked_unrolled(txid).unwrap_or(false),
         ) {
             return Ok(viability_from_asp_swept(&outpoint));
         }
@@ -234,7 +234,7 @@ impl ArkSession {
 
         if let Some(viability) =
             evaluate_branch_funding_interference(blockchain, &plan, &host_records, |outpoint| {
-                self.leaf_is_marked_unrolled(&outpoint.txid.to_string(), outpoint.vout)
+                self.virtual_tx_is_marked_unrolled(&outpoint.txid.to_string())
                     .unwrap_or(false)
             })
             .await?
@@ -291,7 +291,7 @@ impl ArkSession {
         job_leaf_outpoints: &[VirtualOutPoint],
     ) -> ArkResult<bool> {
         for outpoint in job_leaf_outpoints {
-            if !self.leaf_is_marked_unrolled(&outpoint.txid.to_string(), outpoint.vout)? {
+            if !self.virtual_tx_is_marked_unrolled(&outpoint.txid.to_string())? {
                 return Ok(false);
             }
         }

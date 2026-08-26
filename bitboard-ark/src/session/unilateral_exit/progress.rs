@@ -185,7 +185,7 @@ impl ArkSession {
             if !processed_leaf_txids.insert(leaf_txid) {
                 continue;
             }
-            if self.leaf_virtual_tx_is_marked_unrolled(&leaf_virtual_txid)? {
+            if self.virtual_tx_is_marked_unrolled(&leaf_virtual_txid)? {
                 continue;
             }
             if !leaf_reached_finality(tx_confirmations(blockchain, &leaf_txid).await?) {
@@ -202,7 +202,7 @@ impl ArkSession {
         Ok(())
     }
 
-    fn leaf_virtual_tx_is_marked_unrolled(&self, leaf_txid: &str) -> ArkResult<bool> {
+    pub(super) fn virtual_tx_is_marked_unrolled(&self, txid: &str) -> ArkResult<bool> {
         let snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot;
         let Some(snapshot) = snapshot else {
             return Ok(false);
@@ -210,18 +210,7 @@ impl ArkSession {
         Ok(snapshot
             .virtual_tx_outpoints
             .iter()
-            .any(|record| record.txid == leaf_txid && record.is_unrolled))
-    }
-
-    pub(super) fn leaf_is_marked_unrolled(&self, txid: &str, vout: u32) -> ArkResult<bool> {
-        let snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot;
-        let Some(snapshot) = snapshot else {
-            return Ok(false);
-        };
-        Ok(snapshot
-            .virtual_tx_outpoints
-            .iter()
-            .any(|record| record.txid == txid && record.vout == vout && record.is_unrolled))
+            .any(|record| record.txid == txid && record.is_unrolled))
     }
     pub(super) async fn node_statuses_for_plan(
         &self,
@@ -270,7 +259,7 @@ impl ArkSession {
                 txid: vtxo_txid.clone(),
                 vout: representative_vout,
                 confirmations,
-                is_unrolled: self.leaf_is_marked_unrolled(&vtxo_txid, representative_vout)?,
+                is_unrolled: self.virtual_tx_is_marked_unrolled(&vtxo_txid)?,
             });
         }
         Ok(statuses)
