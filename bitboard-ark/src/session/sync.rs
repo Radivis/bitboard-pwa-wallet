@@ -12,11 +12,7 @@ use crate::offchain_snapshot::{
 
 use super::ArkSession;
 use super::mappers::{current_unix_timestamp, warn_offchain_key_discovery_failed};
-use super::unilateral_exit::onchain::{
-    heal_false_positive_exiting_vtxo_spent_markers,
-    reconcile_intermediate_ark_virtual_txs_unrolled_on_esplora,
-};
-use super::unilateral_exit::watch::register_unilateral_exit_watch;
+use super::unilateral_exit::onchain::reconcile_intermediate_ark_virtual_txs_unrolled_on_esplora;
 use super::unilateral_exit::watch_reconcile::{
     merge_exiting_vtxo_sync_warnings, reconcile_exiting_vtxo_watches,
     reconcile_exiting_vtxos_spent_on_esplora,
@@ -114,21 +110,6 @@ impl ArkSession {
             &mut snapshot,
         )
         .await?;
-        let healed_false_spent_outpoints =
-            heal_false_positive_exiting_vtxo_spent_markers(self.client.blockchain(), &mut snapshot)
-                .await?;
-        for outpoint in &healed_false_spent_outpoints {
-            let txid = outpoint.txid.to_string();
-            let vout = outpoint.vout;
-            if let Some(record) = snapshot
-                .virtual_tx_outpoints
-                .iter()
-                .find(|record| record.txid == txid && record.vout == vout)
-            {
-                self.record_pending_unilateral_exit(&txid, vout, record.amount_sats);
-                register_unilateral_exit_watch(&self.wallet_db, &txid, vout, record.amount_sats);
-            }
-        }
         let esplora_healed_outpoints =
             reconcile_exiting_vtxos_spent_on_esplora(self, &mut snapshot).await?;
         let materials_warning =
