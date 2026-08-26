@@ -123,9 +123,7 @@ impl ArkSession {
             UnilateralExitPhase::Complete
         } else if current_step_waiting_since.is_some() || current_step_tx_relayed {
             let step_txid = plan.ordered_step_txids[current_step_index];
-            let confirmations = self
-                .step_confirmations_for_unroll(blockchain, &step_txid, current_step_index)
-                .await?;
+            let confirmations = tx_confirmations(blockchain, &step_txid).await?;
             if step_reached_confirmation(confirmations) {
                 UnilateralExitPhase::Idle
             } else {
@@ -150,23 +148,6 @@ impl ArkSession {
             leaf_statuses,
         })
     }
-    async fn step_confirmations_for_unroll(
-        &self,
-        blockchain: &EsploraBlockchain,
-        txid: &Txid,
-        index: usize,
-    ) -> ArkResult<u64> {
-        let esplora_confirmations = tx_confirmations(blockchain, txid).await?;
-        let wait_index = self
-            .wallet_db
-            .unilateral_exit_step_wait()
-            .map(|record| record.step_index as usize);
-        if self.unroll_parent_blocks_unbroadcast_successor(txid, index, wait_index) {
-            Ok(0)
-        } else {
-            Ok(esplora_confirmations)
-        }
-    }
 
     pub(super) async fn first_incomplete_step_index(
         &self,
@@ -178,9 +159,7 @@ impl ArkSession {
             .unilateral_exit_step_wait()
             .map(|record| record.step_index as usize);
         for (index, txid) in ordered_step_txids.iter().enumerate() {
-            let esplora_confirmations = tx_confirmations(blockchain, txid).await?;
-            let blocked = self.unroll_parent_blocks_unbroadcast_successor(txid, index, wait_index);
-            let confirmations = if blocked { 0 } else { esplora_confirmations };
+            let confirmations = tx_confirmations(blockchain, txid).await?;
             if !step_reached_confirmation(confirmations)
                 || wait_cap_holds_unbroadcast_successor(index, wait_index)
             {
@@ -256,9 +235,7 @@ impl ArkSession {
             .map(|record| record.step_index as usize);
         let mut statuses = Vec::new();
         for (index, txid) in plan.ordered_step_txids.iter().enumerate() {
-            let esplora_confirmations = self
-                .step_confirmations_for_unroll(blockchain, txid, index)
-                .await?;
+            let esplora_confirmations = tx_confirmations(blockchain, txid).await?;
             statuses.push(UnilateralExitNodeStatusDto {
                 txid: txid.to_string(),
                 confirmations: displayed_unroll_step_confirmations(
@@ -311,9 +288,7 @@ impl ArkSession {
         }
 
         let step_txid = plan.ordered_step_txids[current_step_index];
-        let confirmations = self
-            .step_confirmations_for_unroll(blockchain, &step_txid, current_step_index)
-            .await?;
+        let confirmations = tx_confirmations(blockchain, &step_txid).await?;
         let step_wait = self.wallet_db.unilateral_exit_step_wait();
         let wait_matches_current = step_wait
             .as_ref()

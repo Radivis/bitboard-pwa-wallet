@@ -657,25 +657,6 @@ pub(crate) fn is_redundant_unilateral_exit_broadcast_error(error: &ark_client::E
     is_already_relayed_broadcast_error_message(&error.to_string())
 }
 
-/// Injecting an unroll parent into the submit mempool can fail because that node already
-/// has the original CPFP or the parent in a block. Retry the child anyway.
-#[allow(dead_code)]
-pub(crate) fn ancestor_inject_is_ignorable(error: &ark_client::Error) -> bool {
-    ancestor_inject_is_ignorable_message(&error.to_string())
-}
-
-fn ancestor_inject_is_ignorable_message(message: &str) -> bool {
-    if is_already_relayed_broadcast_error_message(message) {
-        return true;
-    }
-    let lowered = message.to_ascii_lowercase();
-    lowered.contains("missingorspent")
-        || lowered.contains("missing-inputs")
-        || lowered.contains("bad-txns-inputs-spent")
-        || lowered.contains("already in block")
-        || lowered.contains("txn-already-known")
-}
-
 pub(crate) fn is_package_not_child_with_unconfirmed_parents_error(
     error: &ark_client::Error,
 ) -> bool {
@@ -739,7 +720,6 @@ mod tests {
     use esplora_client::{SubmitPackageResult, TxResult};
     use std::collections::HashMap;
 
-    use super::ancestor_inject_is_ignorable_message;
     use super::is_mempool_submitpackage_rpc_error;
     use super::is_missing_tx_esplora_error;
     use super::is_package_not_child_with_unconfirmed_parents_message;
@@ -874,19 +854,6 @@ mod tests {
             "transaction package not accepted: package-not-child-with-unconfirmed-parents"
         ));
         assert!(!is_package_not_child_with_unconfirmed_parents_message(
-            "min relay fee not met"
-        ));
-    }
-
-    #[test]
-    fn ancestor_inject_ignores_already_known_or_spent_parents() {
-        assert!(ancestor_inject_is_ignorable_message(
-            "txn-already-in-mempool"
-        ));
-        assert!(ancestor_inject_is_ignorable_message(
-            "bad-txns-inputs-missingorspent"
-        ));
-        assert!(!ancestor_inject_is_ignorable_message(
             "min relay fee not met"
         ));
     }

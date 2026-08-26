@@ -1,5 +1,4 @@
 use std::cell::Cell;
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use ark_bdk_wallet::Wallet as ArkBdkWallet;
@@ -222,7 +221,6 @@ impl ArkSession {
                 network_mode,
                 operator_identity,
                 autonomous_mode: Cell::new(false),
-                unspendable_unroll_parents: Mutex::new(HashMap::new()),
             },
             migration_hint,
         ))

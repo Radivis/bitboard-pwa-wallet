@@ -1,6 +1,4 @@
-use std::collections::{HashMap, HashSet};
-
-use bitcoin::{Transaction, Txid};
+use bitcoin::Transaction;
 
 use crate::api_types::{
     ProceedUnilateralExitStepParams, ProceedUnilateralExitStepResultDto, UnilateralExitPhase,
@@ -32,121 +30,12 @@ fn empty_witness_input_summaries(parent: &Transaction) -> Vec<String> {
         })
         .collect()
 }
-/// Submit-node override when Esplora painted a parent confirmed but `submitpackage` disagreed.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum UnspendableParentState {
-    NeedsBroadcast { marked_at_tip: Option<u32> },
-    Broadcasted { broadcast_at_tip: Option<u32> },
-}
-
-pub(crate) fn unroll_parent_txids_in_plan(
-    transaction: &Transaction,
-    ordered_step_txids: &[Txid],
-) -> Vec<Txid> {
-    transaction
-        .input
-        .iter()
-        .map(|input| input.previous_output.txid)
-        .filter(|txid| ordered_step_txids.contains(txid))
-        .collect()
-}
-
-/// Plan ancestors of `transaction`, oldest (lowest plan index) first.
-/// Immediate parents are not enough for `package-not-child`: the submit node may
-/// also be missing grandparents, and wrapping only the parent in a new CPFP still fails.
-pub(crate) fn unroll_ancestor_txids_oldest_first(
-    transaction: &Transaction,
-    ordered_step_txids: &[Txid],
-    tx_by_id: &HashMap<Txid, Transaction>,
-) -> Vec<Txid> {
-    let mut seen = HashSet::new();
-    let mut stack = unroll_parent_txids_in_plan(transaction, ordered_step_txids);
-    while let Some(txid) = stack.pop() {
-        if !seen.insert(txid) {
-            continue;
-        }
-        if let Some(ancestor_tx) = tx_by_id.get(&txid) {
-            stack.extend(unroll_parent_txids_in_plan(ancestor_tx, ordered_step_txids));
-        }
-    }
-    let mut ancestors: Vec<Txid> = seen.into_iter().collect();
-    ancestors.sort_by_key(|txid| {
-        ordered_step_txids
-            .iter()
-            .position(|step| step == txid)
-            .unwrap_or(usize::MAX)
-    });
-    ancestors
-}
-
-/// Parents this wallet already submitted (`index <= wait_index`) must not be marked
-/// unspendable. Without a wait stamp, any plan parent is eligible (cold-start skip).
-pub(crate) fn unroll_parent_already_submitted(
-    parent_index: usize,
-    wait_index: Option<usize>,
-) -> bool {
-    wait_index.is_some_and(|wait| parent_index <= wait)
-}
-
-pub(crate) fn unroll_parent_txids_skipped_after_wait(
-    parent_txids: &[Txid],
-    ordered_step_txids: &[Txid],
-    wait_index: Option<usize>,
-) -> Vec<Txid> {
-    parent_txids
-        .iter()
-        .copied()
-        .filter(|txid| {
-            ordered_step_txids
-                .iter()
-                .position(|step| step == txid)
-                .is_some_and(|index| !unroll_parent_already_submitted(index, wait_index))
-        })
-        .collect()
-}
-
-pub(crate) fn unroll_parent_txs_from_plan(
-    parent_txids: &[Txid],
-    tx_by_id: &HashMap<Txid, Transaction>,
-) -> Vec<Transaction> {
-    parent_txids
-        .iter()
-        .filter_map(|txid| tx_by_id.get(txid).cloned())
-        .collect()
-}
-
-pub(crate) fn unspendable_parent_blocks_step(
-    state: Option<&UnspendableParentState>,
-    current_tip: Option<u32>,
-) -> bool {
-    match state {
-        None => false,
-        Some(UnspendableParentState::NeedsBroadcast { .. }) => true,
-        Some(UnspendableParentState::Broadcasted { broadcast_at_tip }) => current_tip
-            .zip(*broadcast_at_tip)
-            .is_none_or(|(tip, broadcast_tip)| tip <= broadcast_tip),
-    }
-}
-
-#[cfg(test)]
-pub(crate) fn should_force_unilateral_exit_step_broadcast(
-    esplora_confirmations: u64,
-    marked_unspendable: bool,
-) -> bool {
-    marked_unspendable || !step_reached_confirmation(esplora_confirmations)
-}
-pub(crate) fn should_sync_bumper_wallet_before_unroll_broadcast(
-    force_unspendable: bool,
-    already_submitted_this_step: bool,
-) -> bool {
-    force_unspendable || !already_submitted_this_step
-}
 
 /// `/raw` is the primary relay signal; regtest Esplora often keeps mempool parents at `/raw` 404
 /// until mined. After `proceed_unilateral_exit_step` stamps a wait record, treat broadcast as done.
 pub(crate) fn unilateral_exit_step_broadcast_satisfied(
     raw_relayed: bool,
-    step_txid: &Txid,
+    step_txid: &bitcoin::Txid,
     step_wait: Option<&crate::persistence::UnilateralExitStepWaitRecord>,
 ) -> bool {
     raw_relayed || step_wait.is_some_and(|record| record.step_txid == step_txid.to_string())
@@ -211,21 +100,12 @@ impl ArkSession {
 
         let confirmations_before = tx_confirmations(blockchain, &step_txid).await?;
         let phase = UnilateralExitPhase::Waiting;
-        let step_wait = self.wallet_db.unilateral_exit_step_wait();
-        let wait_index = step_wait.as_ref().map(|record| record.step_index as usize);
-        let force_unspendable = self.unroll_parent_blocks_unbroadcast_successor(
-            &step_txid,
-            current_step_index,
-            wait_index,
-        );
-        let already_submitted_this_step = step_wait
-            .as_ref()
+        let already_submitted_this_step = self
+            .wallet_db
+            .unilateral_exit_step_wait()
             .is_some_and(|record| record.step_txid == step_txid.to_string());
 
-        if should_sync_bumper_wallet_before_unroll_broadcast(
-            force_unspendable,
-            already_submitted_this_step,
-        ) {
+        if !already_submitted_this_step {
             sync_onchain_wallet_with_retries(&self.client).await?;
             if let Err(error) = self
                 .client
@@ -233,28 +113,20 @@ impl ArkSession {
                 .await
             {
                 if is_package_not_child_with_unconfirmed_parents_error(&error) {
-                    // Same-package H12 retry cannot help: BDK was just synced, and
-                    // wait-covered ancestors have empty inject lists. Leave waitingForParentData
-                    // to the hydrate/Proceed path (the same path a page reload uses).
+                    // submitpackage rejected this child because a parent is still unconfirmed on
+                    // the submit node. Do not treat as success even if Esplora `/raw` already sees it.
                     return Err(ArkWasmError::Client(error));
-                } else {
-                    let broadcast_satisfied_after_error = unilateral_exit_step_broadcast_satisfied(
-                        blockchain.is_tx_relayed_on_network(&step_txid).await?,
-                        &step_txid,
-                        self.wallet_db.unilateral_exit_step_wait().as_ref(),
-                    );
-                    if !is_redundant_unilateral_exit_broadcast_error(&error)
-                        && !broadcast_satisfied_after_error
-                    {
-                        return Err(ArkWasmError::Client(error));
-                    }
                 }
-            }
-            if force_unspendable {
-                self.mark_unspendable_parent_broadcasted(
+                let broadcast_satisfied_after_error = unilateral_exit_step_broadcast_satisfied(
+                    blockchain.is_tx_relayed_on_network(&step_txid).await?,
                     &step_txid,
-                    blockchain.cached_tip_height(),
+                    self.wallet_db.unilateral_exit_step_wait().as_ref(),
                 );
+                if !is_redundant_unilateral_exit_broadcast_error(&error)
+                    && !broadcast_satisfied_after_error
+                {
+                    return Err(ArkWasmError::Client(error));
+                }
             }
 
             self.wallet_db.ensure_unilateral_exit_step_wait(
@@ -275,115 +147,7 @@ impl ArkSession {
         )
         .await
     }
-    fn unroll_parent_blocks_step(&self, txid: &Txid) -> bool {
-        let tip = self.client.blockchain().cached_tip_height();
-        let mut parents = self
-            .unspendable_unroll_parents
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let blocks = unspendable_parent_blocks_step(parents.get(txid), tip);
-        if !blocks {
-            parents.remove(txid);
-        }
-        blocks
-    }
 
-    fn release_unspendable_parent(&self, txid: &Txid) -> bool {
-        let mut parents = self
-            .unspendable_unroll_parents
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        parents.remove(txid).is_some()
-    }
-
-    /// Unspendable override only applies to steps this wallet has not already submitted.
-    pub(super) fn unroll_parent_blocks_unbroadcast_successor(
-        &self,
-        txid: &Txid,
-        index: usize,
-        wait_index: Option<usize>,
-    ) -> bool {
-        if unroll_parent_already_submitted(index, wait_index) {
-            let _ = self.release_unspendable_parent(txid);
-            return false;
-        }
-        self.unroll_parent_blocks_step(txid)
-    }
-
-    #[allow(dead_code)]
-    async fn retry_step_after_unconfirmed_package_parents(
-        &self,
-        parent_tx: &Transaction,
-        plan: &UnilateralBatchPlan,
-        fee_rate_sat_per_vb: f64,
-        wait_index: Option<usize>,
-        _current_step_index: usize,
-    ) -> ArkResult<()> {
-        let plan_parents = unroll_parent_txids_in_plan(parent_tx, &plan.ordered_step_txids);
-        let ancestor_txids =
-            unroll_ancestor_txids_oldest_first(parent_tx, &plan.ordered_step_txids, &plan.tx_by_id);
-        // Do not wrap already-submitted ancestors in a new CPFP: their P2A is spent
-        // and submitpackage treats them as already-in-mempool, which is itself
-        // package-not-child. Only inject plan txs this wallet has not broadcast yet.
-        let ancestors_to_inject = unroll_parent_txids_skipped_after_wait(
-            &ancestor_txids,
-            &plan.ordered_step_txids,
-            wait_index,
-        );
-        let ancestors = unroll_parent_txs_from_plan(&ancestors_to_inject, &plan.tx_by_id);
-        let skipped = unroll_parent_txids_skipped_after_wait(
-            &plan_parents,
-            &plan.ordered_step_txids,
-            wait_index,
-        );
-        for ancestor in &ancestors {
-            let _ = self
-                .client
-                .broadcast_unilateral_exit_step_at_fee_rate(ancestor, fee_rate_sat_per_vb)
-                .await;
-        }
-        match self
-            .client
-            .broadcast_unilateral_exit_step_at_fee_rate(parent_tx, fee_rate_sat_per_vb)
-            .await
-        {
-            Ok(_) => Ok(()),
-            Err(retry_error) => {
-                if !skipped.is_empty() {
-                    self.mark_unspendable_unroll_parents(
-                        &skipped,
-                        self.client.blockchain().cached_tip_height(),
-                    );
-                }
-                Err(ArkWasmError::Client(retry_error))
-            }
-        }
-    }
-
-    fn mark_unspendable_unroll_parents(&self, txids: &[Txid], tip: Option<u32>) {
-        let mut parents = self
-            .unspendable_unroll_parents
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        for txid in txids {
-            parents
-                .entry(*txid)
-                .or_insert(UnspendableParentState::NeedsBroadcast { marked_at_tip: tip });
-        }
-    }
-
-    fn mark_unspendable_parent_broadcasted(&self, txid: &Txid, tip: Option<u32>) {
-        let mut parents = self
-            .unspendable_unroll_parents
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        parents.insert(
-            *txid,
-            UnspendableParentState::Broadcasted {
-                broadcast_at_tip: tip,
-            },
-        );
-    }
     async fn build_proceed_result(
         &self,
         plan: &UnilateralBatchPlan,
@@ -426,42 +190,12 @@ impl ArkSession {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bitcoin::Transaction;
     use bitcoin::Txid;
     use bitcoin::hashes::Hash;
-    use std::collections::HashMap;
 
     fn txid(byte: u8) -> Txid {
         Txid::from_byte_array([byte; 32])
-    }
-
-    fn dummy_tx_spending(parents: &[Txid]) -> Transaction {
-        let inputs = if parents.is_empty() {
-            vec![bitcoin::TxIn {
-                previous_output: bitcoin::OutPoint::null(),
-                script_sig: bitcoin::ScriptBuf::new(),
-                sequence: bitcoin::Sequence::MAX,
-                witness: bitcoin::Witness::new(),
-            }]
-        } else {
-            parents
-                .iter()
-                .map(|parent| bitcoin::TxIn {
-                    previous_output: bitcoin::OutPoint {
-                        txid: *parent,
-                        vout: 0,
-                    },
-                    script_sig: bitcoin::ScriptBuf::new(),
-                    sequence: bitcoin::Sequence::MAX,
-                    witness: bitcoin::Witness::new(),
-                })
-                .collect()
-        };
-        Transaction {
-            version: bitcoin::transaction::Version::TWO,
-            lock_time: bitcoin::absolute::LockTime::ZERO,
-            input: inputs,
-            output: vec![],
-        }
     }
 
     #[test]
@@ -490,18 +224,6 @@ mod tests {
     }
 
     #[test]
-    fn should_sync_bumper_before_unroll_broadcast() {
-        assert!(should_sync_bumper_wallet_before_unroll_broadcast(
-            false, false
-        ));
-        assert!(should_sync_bumper_wallet_before_unroll_broadcast(
-            true, true
-        ));
-        assert!(!should_sync_bumper_wallet_before_unroll_broadcast(
-            false, true
-        ));
-    }
-    #[test]
     fn empty_witness_input_summaries_lists_unsigned_inputs() {
         let tx = Transaction {
             version: bitcoin::transaction::Version::TWO,
@@ -521,146 +243,5 @@ mod tests {
         assert_eq!(summaries.len(), 1);
         assert!(summaries[0].contains("input 0"));
         assert!(summaries[0].contains(&txid(9).to_string()));
-    }
-    #[test]
-    fn unroll_parent_txids_in_plan_keeps_only_branch_inputs() {
-        let parent = dummy_tx_spending(&[txid(2), txid(9)]);
-        assert_eq!(
-            unroll_parent_txids_in_plan(&parent, &[txid(1), txid(2), txid(3)]),
-            vec![txid(2)]
-        );
-    }
-
-    #[test]
-    fn unroll_ancestor_txids_oldest_first_walks_the_full_plan_chain() {
-        let child = dummy_tx_spending(&[txid(3)]);
-        let mut tx_by_id = HashMap::new();
-        tx_by_id.insert(txid(1), dummy_tx_spending(&[]));
-        tx_by_id.insert(txid(2), dummy_tx_spending(&[txid(1)]));
-        tx_by_id.insert(txid(3), dummy_tx_spending(&[txid(2)]));
-        tx_by_id.insert(txid(4), child.clone());
-        assert_eq!(
-            unroll_ancestor_txids_oldest_first(
-                &child,
-                &[txid(1), txid(2), txid(3), txid(4)],
-                &tx_by_id
-            ),
-            vec![txid(1), txid(2), txid(3)]
-        );
-    }
-
-    #[test]
-    fn unroll_ancestor_txids_oldest_first_ignores_non_plan_inputs() {
-        let child = dummy_tx_spending(&[txid(2), txid(9)]);
-        let mut tx_by_id = HashMap::new();
-        tx_by_id.insert(txid(1), dummy_tx_spending(&[]));
-        tx_by_id.insert(txid(2), dummy_tx_spending(&[txid(1)]));
-        tx_by_id.insert(txid(3), child.clone());
-        assert_eq!(
-            unroll_ancestor_txids_oldest_first(&child, &[txid(1), txid(2), txid(3)], &tx_by_id),
-            vec![txid(1), txid(2)]
-        );
-    }
-
-    #[test]
-    fn unroll_ancestor_txids_oldest_first_orders_diamond_parents_by_plan_index() {
-        let merge = dummy_tx_spending(&[txid(2), txid(3)]);
-        let mut tx_by_id = HashMap::new();
-        tx_by_id.insert(txid(1), dummy_tx_spending(&[]));
-        tx_by_id.insert(txid(2), dummy_tx_spending(&[txid(1)]));
-        tx_by_id.insert(txid(3), dummy_tx_spending(&[txid(1)]));
-        tx_by_id.insert(txid(4), merge.clone());
-        assert_eq!(
-            unroll_ancestor_txids_oldest_first(
-                &merge,
-                &[txid(1), txid(2), txid(3), txid(4)],
-                &tx_by_id
-            ),
-            vec![txid(1), txid(2), txid(3)]
-        );
-    }
-
-    #[test]
-    fn unroll_parent_txids_skipped_after_wait_ignores_already_submitted_parent() {
-        let parents = vec![txid(1)];
-        let ordered = [txid(1), txid(2), txid(3)];
-        assert!(
-            unroll_parent_txids_skipped_after_wait(&parents, &ordered, Some(0)).is_empty(),
-            "parent at wait_index 0 was already submitted"
-        );
-        assert!(
-            unroll_parent_txids_skipped_after_wait(&parents, &ordered, Some(1)).is_empty(),
-            "parent before wait_index 1 was already submitted"
-        );
-        assert_eq!(
-            unroll_parent_txids_skipped_after_wait(&parents, &ordered, None),
-            vec![txid(1)],
-            "without a wait stamp, cold-start skip still marks the parent"
-        );
-    }
-
-    #[test]
-    fn unroll_parent_txids_skipped_after_wait_keeps_unbroadcast_sibling() {
-        let parents = vec![txid(2)];
-        let ordered = [txid(1), txid(2), txid(3)];
-        assert_eq!(
-            unroll_parent_txids_skipped_after_wait(&parents, &ordered, Some(0)),
-            vec![txid(2)]
-        );
-    }
-
-    #[test]
-    fn unroll_parent_txids_skipped_after_wait_drops_already_submitted_chain() {
-        let ancestors = vec![txid(1), txid(2), txid(3)];
-        let ordered = [txid(1), txid(2), txid(3), txid(4)];
-        assert_eq!(
-            unroll_parent_txids_skipped_after_wait(&ancestors, &ordered, Some(1)),
-            vec![txid(3)]
-        );
-        assert!(unroll_parent_txids_skipped_after_wait(&ancestors, &ordered, Some(2)).is_empty());
-    }
-
-    #[test]
-    fn unroll_parent_txs_from_plan_keeps_signed_parents() {
-        let mut tx_by_id = HashMap::new();
-        tx_by_id.insert(txid(1), dummy_tx_spending(&[]));
-        tx_by_id.insert(txid(2), dummy_tx_spending(&[txid(1)]));
-        let parents = vec![txid(2), txid(9)];
-        let loaded = unroll_parent_txs_from_plan(&parents, &tx_by_id);
-        assert_eq!(loaded.len(), 1);
-        assert_eq!(
-            loaded[0].compute_txid(),
-            dummy_tx_spending(&[txid(1)]).compute_txid()
-        );
-    }
-
-    #[test]
-    fn unspendable_parent_blocks_until_broadcast_and_next_block() {
-        assert!(!unspendable_parent_blocks_step(None, Some(10)));
-        assert!(unspendable_parent_blocks_step(
-            Some(&UnspendableParentState::NeedsBroadcast {
-                marked_at_tip: Some(10)
-            }),
-            Some(11),
-        ));
-        assert!(unspendable_parent_blocks_step(
-            Some(&UnspendableParentState::Broadcasted {
-                broadcast_at_tip: Some(10)
-            }),
-            Some(10),
-        ));
-        assert!(!unspendable_parent_blocks_step(
-            Some(&UnspendableParentState::Broadcasted {
-                broadcast_at_tip: Some(10)
-            }),
-            Some(11),
-        ));
-    }
-
-    #[test]
-    fn force_broadcast_when_unspendable_even_if_esplora_confirmed() {
-        assert!(should_force_unilateral_exit_step_broadcast(8, true));
-        assert!(!should_force_unilateral_exit_step_broadcast(8, false));
-        assert!(should_force_unilateral_exit_step_broadcast(0, false));
     }
 }

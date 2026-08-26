@@ -11,5 +11,3 @@ pub(crate) mod topology;
 pub(crate) mod viability;
 pub(crate) mod watch;
 pub(crate) mod watch_reconcile;
-
-pub(crate) use proceed::UnspendableParentState;
