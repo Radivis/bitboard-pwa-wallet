@@ -194,6 +194,7 @@ fn persistence_round_trip_json() {
     let json = serde_json::to_string(&envelope).expect("serialize");
     let parsed = BitboardArkPersistence::parse_import(Some(&json));
     assert_eq!(parsed.operator_identity.as_ref(), Some(&identity));
+    assert!(!parsed.autonomous_mode);
 }
 
 #[test]
@@ -580,6 +581,45 @@ fn persistence_v4_import_defaults_trust_fields() {
     let parsed = BitboardArkPersistence::parse_import(Some(legacy_v4_json));
     assert!(!parsed.wallet_db.operator_trust_pending);
     assert!(parsed.wallet_db.pending_operator_info.is_none());
+    assert!(!parsed.autonomous_mode);
+}
+
+#[test]
+fn persistence_v7_import_defaults_autonomous_mode_false() {
+    use crate::persistence::LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V7;
+
+    let v7_json = format!(
+        r#"{{"version":{version},"engine":"ark-rs","ark_sdk_version":"0.9.3","operator_identity":{{"signer_pk_hex":"02abc","network":"signet"}},"wallet_db":{{"boarding_outputs":[],"secret_keys_by_owner_pk_hex":{{}}}},"swap_storage":{{}}}}"#,
+        version = LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V7,
+    );
+    let parsed = BitboardArkPersistence::parse_import(Some(&v7_json));
+    assert!(!parsed.autonomous_mode);
+}
+
+#[test]
+fn persistence_round_trips_autonomous_mode_true() {
+    let identity = OperatorIdentity {
+        signer_pk_hex: "02abc".to_string(),
+        network: network_label(Network::Signet),
+    };
+    let mut envelope = BitboardArkPersistence::empty(identity);
+    envelope.autonomous_mode = true;
+
+    let json = serde_json::to_string(&envelope).expect("serialize");
+    assert!(json.contains("\"autonomous_mode\":true"));
+    let parsed = BitboardArkPersistence::parse_import(Some(&json));
+    assert!(parsed.autonomous_mode);
+}
+
+#[test]
+fn persistence_empty_omits_false_autonomous_mode() {
+    let identity = OperatorIdentity {
+        signer_pk_hex: "02abc".to_string(),
+        network: network_label(Network::Signet),
+    };
+    let envelope = BitboardArkPersistence::empty(identity);
+    let json = serde_json::to_string(&envelope).expect("serialize");
+    assert!(!json.contains("autonomous_mode"));
 }
 
 #[test]

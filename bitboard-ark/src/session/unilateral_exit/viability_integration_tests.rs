@@ -24,7 +24,8 @@ use crate::outpoint::VirtualOutPoint;
 use crate::persistence::{OffchainVtxoSnapshot, VirtualTxOutPointRecord};
 use crate::session::unilateral_exit::plan::{LeafUnilateralContext, UnilateralBatchPlan};
 use crate::session::unilateral_exit::viability::{
-    detect_asp_swept_from_sources, evaluate_branch_funding_interference,
+    asp_swept_viability_outpoint, detect_asp_swept_from_sources,
+    evaluate_branch_funding_interference,
 };
 
 fn txid(byte: u8) -> Txid {
@@ -214,6 +215,34 @@ fn asp_swept_targets_from_offchain_snapshot() {
     let leaf_outpoint = VirtualOutPoint::new(txid(10), 0);
     let snapshot = asp_swept_snapshot(&leaf_outpoint);
     let detected = detect_asp_swept_from_sources(
+        std::slice::from_ref(&leaf_outpoint),
+        Some(&snapshot),
+        &[],
+        |_txid| false,
+    );
+    assert_eq!(detected, Some(leaf_outpoint));
+}
+
+#[test]
+fn asp_swept_ignored_when_autonomous() {
+    let leaf_outpoint = VirtualOutPoint::new(txid(10), 0);
+    let snapshot = asp_swept_snapshot(&leaf_outpoint);
+    let detected = asp_swept_viability_outpoint(
+        true,
+        std::slice::from_ref(&leaf_outpoint),
+        Some(&snapshot),
+        &[],
+        |_txid| false,
+    );
+    assert_eq!(detected, None);
+}
+
+#[test]
+fn asp_swept_still_detected_when_not_autonomous() {
+    let leaf_outpoint = VirtualOutPoint::new(txid(10), 0);
+    let snapshot = asp_swept_snapshot(&leaf_outpoint);
+    let detected = asp_swept_viability_outpoint(
+        false,
         std::slice::from_ref(&leaf_outpoint),
         Some(&snapshot),
         &[],

@@ -30,7 +30,7 @@ Unroll can run while the Ark Service Provider (ASP) is reachable **or** while it
 
 - **Prefetch (sync time, not unroll time).** Operator sync stores per-leaf-tx materials in `unilateral_exit_materials_by_leaf_tx` (`ARK-EXIT-07`): VTXO chain topology plus virtual PSBTs. Unroll and complete build from that snapshot plus Esplora — never from live ASP indexer/batch APIs (`ARK-EXIT-06`).
 - **Esplora is always required.** Broadcast, confirmation depth, and reorg detection go through Esplora. There is no “ASP-only” unroll path.
-- **Autonomous mode** reuses `cached_operator_info` and blocks non-exit Arkade RPCs (`ARK-EXIT-10`). It does **not** change how unilateral exit talks to the ASP: both modes are snapshot + Esplora. Implementation: [`bitboard-ark/src/session/autonomous.rs`](../bitboard-ark/src/session/autonomous.rs). Snapshot unroll/complete helpers live in [`snapshot_ops.rs`](../bitboard-ark/src/session/unilateral_exit/snapshot_ops.rs).
+- **Autonomous mode** is a persisted per-ASP trust posture (`ARK-AUTO-01`): do not contact or ingest this operator until the user explicitly leaves. It reuses `cached_operator_info` and blocks non-exit Arkade RPCs (`ARK-EXIT-10`). Session open with the flag set uses `connect_with_cached_info` (no `getInfo`). Unilateral exit itself is still snapshot + Esplora in both modes. Implementation: [`bitboard-ark/src/session/autonomous.rs`](../bitboard-ark/src/session/autonomous.rs). Snapshot unroll/complete helpers live in [`snapshot_ops.rs`](../bitboard-ark/src/session/unilateral_exit/snapshot_ops.rs).
 - **Background operator sync stays on during an exit job.** Unroll can take a long time and must not freeze boarding, collab, or other dashboard work. Users may also test exits while the ASP is still online. Dashboard poll skips ASP contact only while autonomous mode is active. Proceed/complete themselves still flush-only (no post-op operator sync).
 
 ### Do not coordinate with the ASP during unroll or complete
@@ -45,8 +45,8 @@ Partial unroll while the operator is reachable lets the ASP broadcast **checkpoi
 
 The XState machine treats ASP interference as **`terminated`**, never `complete`:
 
-- `aspSweptTargets` — operator swept job leaves that were not locally unrolled
-- `branchFundingLost` — an exit-relevant outpoint was spent by a tx **outside** the wallet unroll chain
+- `aspSweptTargets` — operator indexer reports job leaves swept that were not locally unrolled (ignored while autonomous; `ARK-AUTO-05`)
+- `branchFundingLost` — an exit-relevant outpoint was spent by a tx **outside** the wallet unroll chain (Esplora; still terminates in autonomous mode)
 
 Every `checkingProgress` entry runs `evaluateJobViabilityActor` **before** `fetchProgress`. User-facing explanation: Library article `risks-of-arkade-unilateral-exits`.
 

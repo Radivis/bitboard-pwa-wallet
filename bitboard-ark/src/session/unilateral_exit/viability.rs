@@ -23,6 +23,11 @@ pub(crate) fn wallet_unroll_step_txids(plan: &UnilateralBatchPlan) -> HashSet<Tx
     plan.ordered_step_txids.iter().copied().collect()
 }
 
+/// Outpoints whose on-chain spend can steal unroll funding.
+///
+/// Plan siblings are the selected job leaves. Host records add other exit-eligible
+/// VTXOs on `tree`/`ark` topology txs — including upstream hosts that are not in the
+/// job selection. The same outpoint can appear in both; `(txid, vout)` is deduped.
 pub(crate) fn exit_relevant_vtxo_outpoints_for_plan(
     plan: &UnilateralBatchPlan,
     host_records: &[VirtualTxOutPointRecord],
@@ -122,6 +127,24 @@ pub(crate) fn detect_asp_swept_from_sources(
     None
 }
 
+pub(crate) fn asp_swept_viability_outpoint(
+    autonomous_mode: bool,
+    job_leaf_outpoints: &[VirtualOutPoint],
+    snapshot: Option<&crate::persistence::OffchainVtxoSnapshot>,
+    operator_vtxos: &[ark_core::server::VirtualTxOutPoint],
+    virtual_tx_is_marked_unrolled: impl Fn(&str) -> bool,
+) -> Option<VirtualOutPoint> {
+    if autonomous_mode {
+        return None;
+    }
+    detect_asp_swept_from_sources(
+        job_leaf_outpoints,
+        snapshot,
+        operator_vtxos,
+        virtual_tx_is_marked_unrolled,
+    )
+}
+
 pub(crate) async fn detect_foreign_vtxo_outpoint_spends<B: Blockchain>(
     blockchain: &B,
     monitored_outpoints: &[VirtualOutPoint],
@@ -214,7 +237,8 @@ impl ArkSession {
             return Ok(viability_ok());
         }
 
-        if let Some(outpoint) = detect_asp_swept_from_sources(
+        if let Some(outpoint) = asp_swept_viability_outpoint(
+            self.autonomous_mode(),
             &job_leaf_outpoints,
             self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref(),
             &[],

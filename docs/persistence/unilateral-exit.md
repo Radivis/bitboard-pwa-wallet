@@ -39,7 +39,7 @@ Memory caches are keyed by `walletId:networkMode:connectionId` (`arkadeWalletSco
 
 Flushed through the Arkade save lifecycle into `StoredArkadeOperatorConnection.sdkPersistenceJson`. Types: [`bitboard-ark/src/persistence.rs`](../../bitboard-ark/src/persistence.rs). Materials encode/decode: [`unilateral_exit_materials.rs`](../../bitboard-ark/src/unilateral_exit_materials.rs). Frontend bundle I/O: [`unilateral-exit-frontend-sdk-persistence.ts`](../../frontend/src/lib/wallet/lifecycle/unilateral-exit-frontend-sdk-persistence.ts).
 
-**Envelope version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 7`. `parse_import` migrates v3–v6. v5 stored materials **per VTXO row**; v6 keys them by **leaf txid** (`unilateral_exit_materials_by_leaf_tx`). v7 adds `unilateral_exit_frontend` (job, automation prefs, last failure). Missing v7 field on a v6 blob is `None` and triggers a one-shot overlay from legacy SQLite `settings` rows.
+**Envelope version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 8`. `parse_import` migrates v3–v7. v5 stored materials **per VTXO row**; v6 keys them by **leaf txid** (`unilateral_exit_materials_by_leaf_tx`). v7 adds `unilateral_exit_frontend` (job, automation prefs, last failure). v8 adds envelope `autonomous_mode` (default false). Missing v7 field on a v6 blob is `None` and triggers a one-shot overlay from legacy SQLite `settings` rows.
 
 | Field | Where | Role |
 |-------|-------|------|
@@ -49,9 +49,9 @@ Flushed through the Arkade save lifecycle into `StoredArkadeOperatorConnection.s
 | `unilateral_exit_step_wait` | `WalletDbSnapshot` | Current step txid, index, `started_at` for relay-wait UI |
 | `pending_exit_deductions` | `WalletDbSnapshot` | Balance-line records during unroll before `is_unrolled` |
 | `cached_operator_info` | `WalletDbSnapshot` | Last `getInfo` snapshot for autonomous mode |
+| `autonomous_mode` | `BitboardArkPersistence` | Per-ASP trust posture; default false; session open skips operator RPC when true |
 | `unilateral_exit_frontend` | `WalletDbSnapshot` | Frontend job bookmark, automation prefs, last failure |
 
-### Materials (`UnilateralExitMaterialsRecord`)
 ### Materials (`UnilateralExitMaterialsRecord`)
 
 ```text

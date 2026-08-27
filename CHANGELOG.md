@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Autonomous mode that ensures the app doesn't communikate with the Arkade server to simulate its outage (this mode is deliberately not persisted)
+- Autonomous mode persists per operator as a trust posture: the wallet does not contact that ASP until the user explicitly leaves (including after unlock/reload)
 - VTXO viewer for Arkade in wallet management
 - Persist materials needed for unilateral exit in case Arkade operator actually goes down
 - Actually check Arkade operator view when unolloing via post-unroll operator indexer poll with graceful timeout warning when on-chain unroll is confirmed but ASP `is_unrolled` lags; sticky `is_unrolled` merge during operator sync for in-list rows

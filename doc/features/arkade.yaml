@@ -15,6 +15,7 @@ feature:
     - As a user, I want to exit a specific VTXO unilaterally without operator cooperation when needed
     - As a user, I want the app to keep working when the Arkade operator rotates its signing key, with clear guidance on migrating or exiting funds
     - As a user, I want to view individual VTXOs and their state (classification, flags, expiry) in a compact inventory
+    - As a user, I want autonomous mode to persist per operator so an untrusted or hostile ASP is not contacted again after reload until I explicitly leave
   requirements:
     - Arkade is gated by isArkadeEnabled (default off) and isMainnetAccessEnabled for mainnet
     - Arkade is available on mainnet, signet, and regtest (local arkd via arkade-regtest for dev/E2E); not on lab in v1
@@ -23,9 +24,9 @@ feature:
     - Default delegator and operator URLs come from arkade-endpoints.ts (env overrides supported)
     - Network switch terminates and reopens the Arkade worker session for the new network
     - Lock wallet terminates arkade.worker and clears session state
-    - BitboardArkPersistence (engine ark-rs, wire version 3) in sdkPersistenceJson per operator connection inside encrypted wallet_secrets
+    - BitboardArkPersistence (engine ark-rs, wire version 8) in sdkPersistenceJson per operator connection inside encrypted wallet_secrets; autonomous_mode defaults false and is keyed to that ASP
     - Offchain receive derivation cursor is a single scalar in walletDb (see docs/arkade-bitboard-wallet-model.md); no index arrays in sdkPersistenceJson
-    - Wallet reopen hydrates boarding outputs from sdkPersistenceJson; operator required for live balance sync and sends
+    - Wallet reopen hydrates boarding outputs from sdkPersistenceJson; operator required for live balance sync and sends unless persisted autonomous_mode is true
   contracts:
     receive_address:
       - id: ARK-RCV-01
@@ -121,6 +122,17 @@ feature:
         description: Proceed automatically advances all unroll steps for multiple preconfirmed VTXOs (after chained self-send splits) until branch complete (E2E-ARK-REG-07)
       - id: ARK-EXIT-23
         description: Control page offers abort when a frontend unilateral exit job is active; two-step confirmation (info then red risk modal with required checkbox); abort ends orchestration via aborted machine state without waiting on WASM list RPCs and without deleting unilateral_exit_materials or other WASM persistence; user_aborted failure banner lists VTXO ids with copy actions when id lookup succeeds; backend in-progress state remains until completion or reconcile
+    autonomous_mode:
+      - id: ARK-AUTO-01
+        description: BitboardArkPersistence.autonomous_mode is persisted per ASP connection; missing or legacy blobs default false; opt-in is explicit via the Management switch (with confirm) or operator-trust review
+      - id: ARK-AUTO-02
+        description: Entering or leaving autonomous mode, including trust-review enter, flushes sdkPersistenceJson with the current autonomous_mode flag
+      - id: ARK-AUTO-03
+        description: Session open with autonomous_mode true uses cached_operator_info via connect_with_cached_info (no getInfo, no discover_keys); Esplora on-chain sync and optional delegator info stay allowed
+      - id: ARK-AUTO-04
+        description: Session open with autonomous_mode true but missing cached_operator_info fails with autonomous_operator_info_missing and must not fall through to live operator connect
+      - id: ARK-AUTO-05
+        description: While autonomous mode is active, unilateral-exit job viability ignores snapshot asp_swept_targets; branch_funding_lost from Esplora still terminates the job
     batch_intent:
       - id: ARK-BATCH-01
         description: After RegisterIntent returns an intent_id, the wallet persists a pending batch-intent record with lifecycle_phase processing and flushes sdkPersistenceJson before treating the join as in-flight SSE or failed
@@ -171,7 +183,7 @@ feature:
       - id: ARK-TRUST-05
         description: accept_pending_operator_config refreshes live getInfo, promotes pending only when pending.digest matches live digest, otherwise re-stages pending and keeps operator_trust_pending for modal review
       - id: ARK-TRUST-06
-        description: Session open preserves accepted cached_operator_info while operator_trust_pending (no live getInfo overwrite)
+        description: Session open preserves accepted cached_operator_info while operator_trust_pending (no live getInfo overwrite); when persisted autonomous_mode is also true, restore the review banner (reviewingInAutonomous) instead of the blocking modal
     vtxo_viewer:
       - id: ARK-VTX-01
         description: VTXO viewer page lists VTXO cards when session open and Arkade active
@@ -206,6 +218,7 @@ feature:
         - signer migration banner when operator signing key rotated (migratable, due now, or expired regimes)
         - pending recovery banner when funds are locked past cooperative migration cutoff
         - recoverable VTXO banner when operator reports swept/expired/sub-dust VTXOs with Recover now action
+        - autonomous mode switch (persisted per ASP; confirm before enable)
         - one pending batch-intent banner per open intent (processing spinner or timed-out Hourglass; Cancel/Retry per ARK-BATCH-10/11); Recover now, Renew, collaborative exit, and migrate disabled only when that action would register overlapping outpoints
         - View VTXOs link to /wallet/arkade/vtxos
       - requirements:

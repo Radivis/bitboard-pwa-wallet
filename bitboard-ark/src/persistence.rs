@@ -11,12 +11,15 @@ use bitcoin::{Network, XOnlyPublicKey};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
-/// Current on-disk Arkade persistence format (v7).
+/// Current on-disk Arkade persistence format (v8).
 ///
+/// v8 stores `autonomous_mode` on the envelope (per-ASP trust posture; default false).
 /// v7 stores frontend unilateral-exit job/prefs/failure on [`WalletDbSnapshot`].
 /// v6 moved unilateral exit materials to a leaf-tx-keyed map on [`OffchainVtxoSnapshot`].
 /// v5 and earlier import cleanly via migration in [`BitboardArkPersistence::parse_import`].
-pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 7;
+pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 8;
+/// Legacy import version before persisted autonomous mode.
+pub const LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V7: u32 = 7;
 /// Legacy import version before frontend unilateral-exit bundle.
 pub const LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V6: u32 = 6;
 /// Legacy import version before leaf-tx materials map.
@@ -467,22 +470,28 @@ pub struct BitboardArkPersistence {
     pub operator_identity: OperatorIdentity,
     pub wallet_db: WalletDbSnapshot,
     pub swap_storage: SwapStorageSnapshot,
+    /// Per-ASP trust posture: do not contact or ingest this operator until the user leaves.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub autonomous_mode: bool,
 }
 
 pub struct ParsedArkPersistence {
     pub wallet_db: WalletDbSnapshot,
     pub operator_identity: Option<OperatorIdentity>,
+    pub autonomous_mode: bool,
 }
 
 fn default_parsed_ark_persistence() -> ParsedArkPersistence {
     ParsedArkPersistence {
         wallet_db: WalletDbSnapshot::default(),
         operator_identity: None,
+        autonomous_mode: false,
     }
 }
 
 fn is_supported_persistence_import_version(version: u32) -> bool {
     version == BITBOARD_ARK_PERSISTENCE_VERSION
+        || version == LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V7
         || version == LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V6
         || version == LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V5
         || version == LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION
@@ -513,6 +522,7 @@ impl BitboardArkPersistence {
             operator_identity,
             wallet_db: WalletDbSnapshot::default(),
             swap_storage: SwapStorageSnapshot::default(),
+            autonomous_mode: false,
         }
     }
 
@@ -549,6 +559,7 @@ impl BitboardArkPersistence {
             return ParsedArkPersistence {
                 wallet_db: legacy_import::migrate_wallet_db_v5_to_v6(legacy.wallet_db),
                 operator_identity: Some(legacy.operator_identity),
+                autonomous_mode: false,
             };
         }
 
@@ -560,6 +571,7 @@ impl BitboardArkPersistence {
         ParsedArkPersistence {
             wallet_db: envelope.wallet_db,
             operator_identity: Some(envelope.operator_identity),
+            autonomous_mode: envelope.autonomous_mode,
         }
     }
 }

@@ -105,7 +105,7 @@ Management → Arkade offers two paths:
 |------|-------------------|----------|
 | **Collaborative exit** | Yes | Default; batches with operator; one settlement to your `bc1` address |
 | **Unilateral exit** | No (after unroll) | Operator down or you need trustless exit; per-VTXO; multiple on-chain txs |
-| **Autonomous mode** | No (explicit switch) | ASP unreachable; reuses `cached_operator_info` + per-VTXO `unilateral_exit_materials` from last sync; only unilateral exit allowed; Esplora still required |
+| **Autonomous mode** | No (explicit, persisted switch) | Do not contact this ASP (down or untrusted); reuses `cached_operator_info` + per-VTXO `unilateral_exit_materials`; only unilateral exit allowed; Esplora still required; survives reload |
 
 Collaborative exit and unilateral unroll are implemented in `bitboard-ark` (`collaborative_redeem`, `proceed_unilateral_exit_step`, etc.). **Autonomous mode** branches the same unilateral exit RPCs to snapshot-backed materials instead of ASP indexer/batch APIs. The on-chain bumper wallet shares the same BIP32-derived BDK wallet as boarding.
 
@@ -209,7 +209,7 @@ The ASP `getInfo` digest is treated as a fingerprint of operator terms and confi
 - **Strong ToS:** operator sync does not persist snapshot, materials, watches, or a new accepted cache until the user explicitly chooses.
 - **Pending staging:** live `getInfo` is stored as `pending_operator_info` for an offline field-level diff.
 - **User choice:** a blocking modal offers (1) trust ASP and accept, or (2) review safely in autonomous mode (default). Review keeps `operator_trust_pending` true, enters autonomous mode with the **accepted** cache, and blocks leaving autonomous until accept.
-- **Reload:** while trust is pending, session open does not overwrite accepted cache from live `getInfo`; the blocking trust modal is shown again until the user chooses accept or review.
+- **Reload:** while trust is pending, session open does not overwrite accepted cache from live `getInfo`. If autonomous mode was persisted, restore the review banner (`reviewingInAutonomous`) instead of the blocking modal (`ARK-TRUST-06`). Otherwise the blocking trust modal is shown again until the user chooses accept or review.
 
 Contracts `ARK-TRUST-01` through `ARK-TRUST-06` in `doc/features/arkade.yaml` define persistence, modal UX, and autonomous exit guards.
 
