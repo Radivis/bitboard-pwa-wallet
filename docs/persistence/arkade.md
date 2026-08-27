@@ -33,7 +33,7 @@ File: `bitboard-ark/src/persistence.rs`
 
 | Type | Purpose |
 |------|---------|
-| `BitboardArkPersistence` | Top-level JSON envelope (`version`, `engine`, `operator_identity`, `autonomous_mode`, `wallet_db`, `swap_storage`) |
+| `BitboardArkPersistence` | Top-level JSON envelope (`version`, `engine`, `operator_identity`, `autonomous_mode`, `wallet_db`) |
 | `WalletDbSnapshot` | Boarding outputs, secret keys, VTXO snapshot, exit watches, operator trust |
 | `OffchainVtxoSnapshot` | VTXO list + unilateral exit materials map (keyed by leaf tx) |
 | `JsonPersistenceDb` | In-memory mutex-backed DB implementing ark-client `Persistence` |

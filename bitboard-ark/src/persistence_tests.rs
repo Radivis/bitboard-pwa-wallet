@@ -211,6 +211,8 @@ fn persistence_export_version_is_current() {
     };
     let envelope = BitboardArkPersistence::empty(identity);
     assert_eq!(envelope.version, BITBOARD_ARK_PERSISTENCE_VERSION);
+    let json = serde_json::to_value(&envelope).expect("serialize");
+    assert!(json.get("swap_storage").is_none());
 }
 
 #[test]

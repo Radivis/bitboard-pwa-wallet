@@ -181,8 +181,6 @@ mod legacy_import {
         pub ark_sdk_version: String,
         pub operator_identity: OperatorIdentity,
         pub wallet_db: WalletDbSnapshotV5,
-        #[serde(default)]
-        pub swap_storage: SwapStorageSnapshot,
     }
 
     #[derive(Debug, Clone, Deserialize)]
@@ -459,9 +457,6 @@ pub struct WalletDbSnapshot {
     pub unilateral_exit_frontend: Option<UnilateralExitFrontendPersistence>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct SwapStorageSnapshot {}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BitboardArkPersistence {
     pub version: u32,
@@ -469,7 +464,6 @@ pub struct BitboardArkPersistence {
     pub ark_sdk_version: String,
     pub operator_identity: OperatorIdentity,
     pub wallet_db: WalletDbSnapshot,
-    pub swap_storage: SwapStorageSnapshot,
     /// Per-ASP trust posture: do not contact or ingest this operator until the user leaves.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub autonomous_mode: bool,
@@ -521,7 +515,6 @@ impl BitboardArkPersistence {
             ark_sdk_version: ARK_RS_SDK_VERSION.to_string(),
             operator_identity,
             wallet_db: WalletDbSnapshot::default(),
-            swap_storage: SwapStorageSnapshot::default(),
             autonomous_mode: false,
         }
     }
