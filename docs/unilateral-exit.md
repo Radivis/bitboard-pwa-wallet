@@ -6,6 +6,7 @@ Related:
 
 - Persistence (WASM envelope + Zustand job/prefs/failure): [persistence/unilateral-exit.md](persistence/unilateral-exit.md)
 - Balance buckets and exit-line timing: [arkade-bitboard-wallet-model.md](arkade-bitboard-wallet-model.md)
+- VTXO exit lifecycle refactor (staged): [unilateral-exit-vtxo-lifecycle-refactor.md](unilateral-exit-vtxo-lifecycle-refactor.md)
 - Agent ownership rules: [`.cursor/rules/unilateral-exit-xstate.mdc`](../.cursor/rules/unilateral-exit-xstate.mdc)
 - Open Mutinynet false-confirmation / `submitpackage` disagreement: [unilateral-exit-false-confirmation-rca.md](unilateral-exit-false-confirmation-rca.md)
 - Test contracts: `ARK-EXIT-*` in [doc/features/arkade.yaml](../doc/features/arkade.yaml)
