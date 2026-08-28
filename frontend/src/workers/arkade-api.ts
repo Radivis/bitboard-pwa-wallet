@@ -74,6 +74,7 @@ export interface ArkadePendingBatchIntent {
   onchainOutpoints: ArkadePendingBatchOutpoint[]
   vtxoOutpoints: ArkadePendingBatchOutpoint[]
   lifecyclePhase?: 'processing' | 'timed_out'
+  destinationAddress?: string
 }
 
 export type ArkadeBatchJoinStatus = 'completed' | 'waiting_for_operator'

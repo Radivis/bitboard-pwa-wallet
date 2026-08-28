@@ -12,9 +12,6 @@ use crate::outpoint::VirtualOutPoint;
 use crate::persistence::VirtualTxOutPointRecord;
 use crate::session::ArkSession;
 use crate::session::unilateral_exit::plan::UnilateralBatchPlan;
-use crate::session::unilateral_exit::watch_reconcile::{
-    ExitingVtxoReconcileOutcome, classify_operator_vtxo,
-};
 
 use super::snapshot_ops::dedup_virtual_outpoints;
 use super::topology::merge_topology_nodes_from_chains;
@@ -86,10 +83,9 @@ pub(crate) async fn evaluate_branch_funding_interference<B: Blockchain>(
     Ok(None)
 }
 
-pub(crate) fn detect_asp_swept_from_sources(
+pub(crate) fn detect_asp_swept_from_snapshot(
     job_leaf_outpoints: &[VirtualOutPoint],
     snapshot: Option<&crate::persistence::OffchainVtxoSnapshot>,
-    operator_vtxos: &[ark_core::server::VirtualTxOutPoint],
     virtual_tx_is_marked_unrolled: impl Fn(&str) -> bool,
 ) -> Option<VirtualOutPoint> {
     for outpoint in job_leaf_outpoints {
@@ -109,21 +105,6 @@ pub(crate) fn detect_asp_swept_from_sources(
         }
     }
 
-    for outpoint in job_leaf_outpoints {
-        let txid = outpoint.txid.to_string();
-        if virtual_tx_is_marked_unrolled(&txid) {
-            continue;
-        }
-        if let Some(virtual_tx_outpoint) = operator_vtxos
-            .iter()
-            .find(|row| row.outpoint.txid == outpoint.txid && row.outpoint.vout == outpoint.vout)
-            && classify_operator_vtxo_outcome(virtual_tx_outpoint)
-                == ExitingVtxoReconcileOutcome::KeepWarnAspMismatch
-        {
-            return Some(outpoint.clone());
-        }
-    }
-
     None
 }
 
@@ -131,18 +112,12 @@ pub(crate) fn asp_swept_viability_outpoint(
     autonomous_mode: bool,
     job_leaf_outpoints: &[VirtualOutPoint],
     snapshot: Option<&crate::persistence::OffchainVtxoSnapshot>,
-    operator_vtxos: &[ark_core::server::VirtualTxOutPoint],
     virtual_tx_is_marked_unrolled: impl Fn(&str) -> bool,
 ) -> Option<VirtualOutPoint> {
     if autonomous_mode {
         return None;
     }
-    detect_asp_swept_from_sources(
-        job_leaf_outpoints,
-        snapshot,
-        operator_vtxos,
-        virtual_tx_is_marked_unrolled,
-    )
+    detect_asp_swept_from_snapshot(job_leaf_outpoints, snapshot, virtual_tx_is_marked_unrolled)
 }
 
 pub(crate) async fn detect_foreign_vtxo_outpoint_spends<B: Blockchain>(
@@ -217,12 +192,6 @@ pub(crate) fn viability_ok() -> UnilateralExitJobViabilityDto {
     }
 }
 
-pub(crate) fn classify_operator_vtxo_outcome(
-    virtual_tx_outpoint: &ark_core::server::VirtualTxOutPoint,
-) -> ExitingVtxoReconcileOutcome {
-    classify_operator_vtxo(virtual_tx_outpoint)
-}
-
 impl ArkSession {
     pub async fn evaluate_unilateral_exit_job_viability(
         &self,
@@ -241,7 +210,6 @@ impl ArkSession {
             self.autonomous_mode(),
             &job_leaf_outpoints,
             self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref(),
-            &[],
             |txid| self.virtual_tx_is_marked_unrolled(txid).unwrap_or(false),
         ) {
             return Ok(viability_from_asp_swept(&outpoint));
@@ -389,36 +357,6 @@ mod tests {
             outpoints
                 .iter()
                 .any(|outpoint| outpoint.txid == host_txid && outpoint.vout == 1)
-        );
-    }
-
-    #[test]
-    fn classify_operator_vtxo_swept_maps_to_asp_mismatch() {
-        use ark_core::server::VirtualTxOutPoint;
-        use bitcoin::OutPoint;
-
-        let virtual_tx_outpoint = VirtualTxOutPoint {
-            outpoint: OutPoint {
-                txid: txid(1),
-                vout: 0,
-            },
-            created_at: 0,
-            expires_at: 0,
-            amount: bitcoin::Amount::from_sat(1000),
-            script: bitcoin::ScriptBuf::new(),
-            is_preconfirmed: false,
-            is_swept: true,
-            is_unrolled: false,
-            is_spent: false,
-            spent_by: None,
-            commitment_txids: vec![],
-            settled_by: None,
-            ark_txid: None,
-            assets: vec![],
-        };
-        assert_eq!(
-            classify_operator_vtxo_outcome(&virtual_tx_outpoint),
-            ExitingVtxoReconcileOutcome::KeepWarnAspMismatch
         );
     }
 

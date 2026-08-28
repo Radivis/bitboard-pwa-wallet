@@ -139,7 +139,7 @@ feature:
       - id: ARK-BATCH-02
         description: Post-register batch timeout, abort, and duplicated input for those outpoints, stamp lifecycle_phase timed_out and return waiting_for_operator (not a hard error); do not call RegisterIntent again for overlapping outpoints while pending
       - id: ARK-BATCH-03
-        description: One banner per open intent (kind, amount, lifecycle_phase); Board, Recover, Renew, collaborative exit, and migrate buttons are disabled only when that action would register overlapping outpoints
+        description: One banner per open intent (kind, amount, lifecycle_phase); collaborative_exit also shows destination_address when present; Board, Recover, Renew, collaborative exit, and migrate buttons are disabled only when that action would register overlapping outpoints
       - id: ARK-BATCH-04
         description: While pending, poll the registered outputs; when they are spent, clear the record, operator-sync, and treat boarding/settle as finalized with a kind-specific success toast
       - id: ARK-BATCH-05
@@ -219,7 +219,7 @@ feature:
         - pending recovery banner when funds are locked past cooperative migration cutoff
         - recoverable VTXO banner when operator reports swept/expired/sub-dust VTXOs with Recover now action
         - autonomous mode switch (persisted per ASP; confirm before enable)
-        - one pending batch-intent banner per open intent (processing spinner or timed-out Hourglass; Cancel/Retry per ARK-BATCH-10/11); Recover now, Renew, collaborative exit, and migrate disabled only when that action would register overlapping outpoints
+        - one pending batch-intent banner per open intent (processing spinner or timed-out Hourglass; Cancel/Retry per ARK-BATCH-10/11; collaborative-exit banner shows truncated on-chain destination when present); Recover now, Renew, collaborative exit, and migrate disabled only when that action would register overlapping outpoints
         - View VTXOs link to /wallet/arkade/vtxos
       - requirements:
         - Shown only when isArkadeEnabled and current network supports Arkade
@@ -251,7 +251,7 @@ feature:
         - boarding address from SDK
         - amount to send from on-chain wallet
         - steps for confirm on-chain then onboard via Ramps
-        - one pending batch-intent banner per open intent (processing spinner or timed-out Hourglass; Cancel/Retry per ARK-BATCH-10/11)
+        - one pending batch-intent banner per open intent (processing spinner or timed-out Hourglass; Cancel/Retry per ARK-BATCH-10/11; collaborative-exit banner shows truncated on-chain destination when present)
         - Settle boarding UTXO shows a circular spinner only until intent_id; then disabled only while a pending intent covers overlapping boarding outpoints
       - requirements:
         - Contracts ARK-BATCH-01 through ARK-BATCH-14 apply to boarding settle
@@ -276,4 +276,4 @@ feature:
       - visible_elements:
         - Arkade balance label
         - confirmed and optional pending balance display
-        - one pending batch-intent banner per open intent (processing spinner or timed-out Hourglass; Cancel/Retry per ARK-BATCH-10/11)
+        - one pending batch-intent banner per open intent (processing spinner or timed-out Hourglass; Cancel/Retry per ARK-BATCH-10/11; collaborative-exit banner shows truncated on-chain destination when present)

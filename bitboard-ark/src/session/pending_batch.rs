@@ -788,6 +788,7 @@ pub(crate) fn pending_batch_intent_to_dto(
             .collect(),
         lifecycle_phase: pending_batch_intent_lifecycle_phase_label(record.lifecycle_phase)
             .to_string(),
+        destination_address: record.destination_address,
     }
 }
 
@@ -1515,15 +1516,16 @@ mod tests {
             Some(1),
             None,
         ));
-        let result = persist_and_waiting_join_result(
-            &db,
-            sample_pending_record(
+        let result = persist_and_waiting_join_result(&db, {
+            let mut record = sample_pending_record(
                 PendingBatchIntentKind::CollaborativeExit,
                 "collab",
                 None,
                 Some(1),
-            ),
-        );
+            );
+            record.destination_address = Some("tb1qcollab".into());
+            record
+        });
         assert_eq!(
             result
                 .pending_intent
@@ -1537,6 +1539,13 @@ mod tests {
                 .as_ref()
                 .and_then(|intent| intent.intent_id.as_deref()),
             Some("collab")
+        );
+        assert_eq!(
+            result
+                .pending_intent
+                .as_ref()
+                .and_then(|intent| intent.destination_address.as_deref()),
+            Some("tb1qcollab")
         );
     }
 
@@ -1573,6 +1582,31 @@ mod tests {
             json["pendingBatchIntents"][0]["lifecyclePhase"],
             "timed_out"
         );
+        assert!(
+            json["pendingBatchIntents"][0]
+                .get("destinationAddress")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn pending_batch_intent_dto_includes_destination_address() {
+        let record = PendingBatchIntentRecord {
+            kind: PendingBatchIntentKind::CollaborativeExit,
+            intent_id: Some("intent-exit".into()),
+            onchain_outpoints: Vec::new(),
+            vtxo_outpoints: vec![outpoint_record(sample_outpoint(0x22, 0))],
+            amount_sats: 12_000,
+            registered_at: 2,
+            destination_address: Some("tb1qcollab".into()),
+            lifecycle_phase: PendingBatchIntentLifecyclePhase::Processing,
+        };
+        let dto = pending_batch_intent_to_dto(record);
+        assert_eq!(dto.destination_address.as_deref(), Some("tb1qcollab"));
+        let json = serde_json::to_value(&dto).expect("serialize pending intent");
+        assert_eq!(json["destinationAddress"], "tb1qcollab");
+        assert_eq!(json["kind"], "collaborative_exit");
+        assert_eq!(json["lifecyclePhase"], "processing");
     }
 
     #[test]
@@ -1681,6 +1715,7 @@ mod tests {
             onchain_outpoints: Vec::new(),
             vtxo_outpoints: Vec::new(),
             lifecycle_phase: "timed_out".to_string(),
+            destination_address: None,
         };
         let result = migrate_retry_join_result(Some(overlapping), true).expect("waiting");
         assert_eq!(result.status, BATCH_JOIN_STATUS_WAITING);

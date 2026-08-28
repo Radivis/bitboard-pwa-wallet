@@ -9,6 +9,7 @@ import {
   isIntentSubmitPhase1,
   pendingBatchIntentFromSources,
   pendingOverlapsOnchain,
+  pendingBatchIntentDestinationAddress,
   pendingBatchIntentKindLabel,
   pendingBatchIntentProcessingMessage,
   pendingBatchIntentSucceededMessage,
@@ -82,6 +83,26 @@ describe('arkade-pending-batch-intent', () => {
   it('labels known pending-intent kinds', () => {
     expect(pendingBatchIntentKindLabel('board')).toBe('boarding')
     expect(pendingBatchIntentKindLabel('collaborative_exit')).toBe('collaborative exit')
+  })
+
+  it('pending_batch_intent_destination_address_returns_trimmed', () => {
+    expect(
+      pendingBatchIntentDestinationAddress({
+        ...sampleIntent,
+        kind: 'collaborative_exit',
+        destinationAddress: '  tb1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh  ',
+      }),
+    ).toBe('tb1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh')
+  })
+
+  it('pending_batch_intent_destination_address_omits_blank', () => {
+    expect(pendingBatchIntentDestinationAddress(sampleIntent)).toBeNull()
+    expect(
+      pendingBatchIntentDestinationAddress({
+        ...sampleIntent,
+        destinationAddress: '   ',
+      }),
+    ).toBeNull()
   })
 
   it('describes waiting without treating it as a hard error', () => {

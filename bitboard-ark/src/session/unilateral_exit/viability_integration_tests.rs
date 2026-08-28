@@ -17,14 +17,14 @@ use std::collections::{BTreeMap, HashMap};
 use ark_client::{Blockchain, Error, SpendStatus, TxStatus};
 use ark_core::server::{ChainedTxType, VtxoChain, VtxoChains};
 use bitcoin::hashes::Hash;
-use bitcoin::{Address, Amount, OutPoint, ScriptBuf, Transaction, Txid};
+use bitcoin::{Address, Transaction, Txid};
 
 use crate::api_types::UnilateralExitJobViabilityKind;
 use crate::outpoint::VirtualOutPoint;
 use crate::persistence::{OffchainVtxoSnapshot, VirtualTxOutPointRecord};
 use crate::session::unilateral_exit::plan::{LeafUnilateralContext, UnilateralBatchPlan};
 use crate::session::unilateral_exit::viability::{
-    asp_swept_viability_outpoint, detect_asp_swept_from_sources,
+    asp_swept_viability_outpoint, detect_asp_swept_from_snapshot,
     evaluate_branch_funding_interference,
 };
 
@@ -167,28 +167,6 @@ fn asp_swept_snapshot(leaf_outpoint: &VirtualOutPoint) -> OffchainVtxoSnapshot {
     }
 }
 
-fn operator_vtxo_swept(leaf_outpoint: &VirtualOutPoint) -> ark_core::server::VirtualTxOutPoint {
-    ark_core::server::VirtualTxOutPoint {
-        outpoint: OutPoint {
-            txid: leaf_outpoint.txid,
-            vout: leaf_outpoint.vout,
-        },
-        created_at: 0,
-        expires_at: 0,
-        amount: Amount::from_sat(100_000),
-        script: ScriptBuf::new(),
-        is_preconfirmed: false,
-        is_swept: true,
-        is_unrolled: false,
-        is_spent: false,
-        spent_by: None,
-        commitment_txids: vec![],
-        settled_by: None,
-        ark_txid: None,
-        assets: vec![],
-    }
-}
-
 fn exit_eligible_host_record(host_txid: Txid, vout: u32) -> VirtualTxOutPointRecord {
     VirtualTxOutPointRecord {
         txid: host_txid.to_string(),
@@ -214,10 +192,9 @@ fn exit_eligible_host_record(host_txid: Txid, vout: u32) -> VirtualTxOutPointRec
 fn asp_swept_targets_from_offchain_snapshot() {
     let leaf_outpoint = VirtualOutPoint::new(txid(10), 0);
     let snapshot = asp_swept_snapshot(&leaf_outpoint);
-    let detected = detect_asp_swept_from_sources(
+    let detected = detect_asp_swept_from_snapshot(
         std::slice::from_ref(&leaf_outpoint),
         Some(&snapshot),
-        &[],
         |_txid| false,
     );
     assert_eq!(detected, Some(leaf_outpoint));
@@ -231,7 +208,6 @@ fn asp_swept_ignored_when_autonomous() {
         true,
         std::slice::from_ref(&leaf_outpoint),
         Some(&snapshot),
-        &[],
         |_txid| false,
     );
     assert_eq!(detected, None);
@@ -245,20 +221,6 @@ fn asp_swept_still_detected_when_not_autonomous() {
         false,
         std::slice::from_ref(&leaf_outpoint),
         Some(&snapshot),
-        &[],
-        |_txid| false,
-    );
-    assert_eq!(detected, Some(leaf_outpoint));
-}
-
-#[test]
-fn asp_swept_targets_from_operator_vtxo_list() {
-    let leaf_outpoint = VirtualOutPoint::new(txid(11), 0);
-    let operator_vtxos = vec![operator_vtxo_swept(&leaf_outpoint)];
-    let detected = detect_asp_swept_from_sources(
-        std::slice::from_ref(&leaf_outpoint),
-        None,
-        &operator_vtxos,
         |_txid| false,
     );
     assert_eq!(detected, Some(leaf_outpoint));

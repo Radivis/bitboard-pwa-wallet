@@ -14,8 +14,9 @@ import {
   consumePendingBatchIntentCancelled,
   consumePendingBatchIntentSettledByMutation,
   pendingBatchIntentCancelledMessage,
-  pendingBatchIntentKey,
+  pendingBatchIntentDestinationAddress,
   pendingBatchIntentDurationHint,
+  pendingBatchIntentKey,
   pendingBatchIntentProcessingMessage,
   pendingBatchIntentSucceededMessage,
   pendingBatchIntentTimedOutMessage,
@@ -23,6 +24,7 @@ import {
   pendingIntentAllowsRetry,
   pendingIntentBannerPhase,
 } from '@/lib/arkade/arkade-pending-batch-intent'
+import { truncateAddress } from '@/lib/wallet/bitcoin-utils'
 import {
   useArkadeBoardingStatusQuery,
   useArkadeCancelPendingBatchIntentMutation,
@@ -36,6 +38,23 @@ function pendingIntentBannerInfomode(intent: ArkadePendingBatchIntent) {
   return pendingIntentBannerPhase(intent) === ARKADE_INTENT_LIFECYCLE_PHASES.processing
     ? ARKADE_PENDING_BATCH_INTENT_PROCESSING_INFOMODE
     : ARKADE_PENDING_BATCH_INTENT_TIMED_OUT_INFOMODE
+}
+
+function PendingBatchIntentDestinationLine({
+  destinationAddress,
+}: {
+  destinationAddress: string
+}) {
+  return (
+    <p
+      className="text-xs text-muted-foreground"
+      data-testid="arkade-pending-batch-intent-destination"
+      title={destinationAddress}
+    >
+      On-chain destination:{' '}
+      <span className="font-mono">{truncateAddress(destinationAddress)}</span>
+    </p>
+  )
 }
 
 export function ArkadePendingBatchIntentBanner() {
@@ -89,6 +108,7 @@ export function ArkadePendingBatchIntentBanner() {
             pendingBatchIntentKey(retryIntentMutation.variables ?? pendingIntent) === rowKey)
         const showCancel = pendingIntentAllowsCancel(pendingIntent)
         const showRetry = pendingIntentAllowsRetry(pendingIntent)
+        const destinationAddress = pendingBatchIntentDestinationAddress(pendingIntent)
         return (
           <div
             key={rowKey}
@@ -125,6 +145,9 @@ export function ArkadePendingBatchIntentBanner() {
                     ? `${pendingBatchIntentProcessingMessage(pendingIntent.kind)} ${pendingBatchIntentDurationHint()}`
                     : pendingBatchIntentTimedOutMessage(pendingIntent.kind)}
                 </p>
+                {destinationAddress ? (
+                  <PendingBatchIntentDestinationLine destinationAddress={destinationAddress} />
+                ) : null}
                 {showCancel || showRetry ? (
                   <div className="flex gap-2">
                     {showCancel ? (

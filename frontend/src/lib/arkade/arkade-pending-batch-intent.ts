@@ -174,6 +174,16 @@ export function pendingBatchIntentDurationHint(): string {
   return `This process may take about ${minutes} minutes to complete.`
 }
 
+export function pendingBatchIntentDestinationAddress(
+  intent: Pick<ArkadePendingBatchIntent, 'destinationAddress'>,
+): string | null {
+  const destination = intent.destinationAddress?.trim()
+  if (!destination) {
+    return null
+  }
+  return destination
+}
+
 export function pendingBatchIntentSucceededMessage(kind: string): string {
   switch (kind) {
     case 'board':

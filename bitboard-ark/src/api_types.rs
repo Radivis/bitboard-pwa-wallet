@@ -366,6 +366,8 @@ pub struct PendingBatchIntentDto {
     pub onchain_outpoints: Vec<PendingBatchOutpointDto>,
     pub vtxo_outpoints: Vec<PendingBatchOutpointDto>,
     pub lifecycle_phase: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub destination_address: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

@@ -10,6 +10,7 @@ import {
   markPendingBatchIntentCancelled,
   resetPendingBatchIntentSessionTracking,
 } from '@/lib/arkade/arkade-pending-batch-intent'
+import { truncateAddress } from '@/lib/wallet/bitcoin-utils'
 
 const pendingIntentsRef = vi.hoisted(() => ({
   current: [] as ArkadePendingBatchIntent[],
@@ -60,6 +61,20 @@ const processingBoardIntent: ArkadePendingBatchIntent = {
 const processingRecoverIntent: ArkadePendingBatchIntent = {
   ...sampleRecoverIntent,
   lifecyclePhase: 'processing',
+}
+
+const COLLABORATIVE_EXIT_DESTINATION =
+  'tb1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh'
+
+const sampleCollaborativeExitIntent: ArkadePendingBatchIntent = {
+  kind: 'collaborative_exit',
+  intentId: 'intent-exit',
+  amountSats: 12_000,
+  registeredAt: 1_700_000_002,
+  onchainOutpoints: [],
+  vtxoOutpoints: [{ txid: 'cc'.repeat(32), vout: 0 }],
+  lifecyclePhase: 'timed_out',
+  destinationAddress: COLLABORATIVE_EXIT_DESTINATION,
 }
 
 vi.mock('sonner', () => ({
@@ -363,6 +378,25 @@ describe('ArkadePendingBatchIntentBanner', () => {
     rerender(<ArkadePendingBatchIntentBanner />)
     expect(toastSuccess).not.toHaveBeenCalled()
     expect(toastMessage).toHaveBeenCalledWith('Intent cancelled')
+  })
+
+  it('collaborative_exit_banner_shows_truncated_destination', () => {
+    pendingIntentsRef.current = [sampleCollaborativeExitIntent]
+    renderWithProviders(<ArkadePendingBatchIntentBanner />)
+    const destination = screen.getByTestId('arkade-pending-batch-intent-destination')
+    expect(destination).toHaveTextContent('On-chain destination:')
+    expect(destination).toHaveTextContent(
+      truncateAddress(COLLABORATIVE_EXIT_DESTINATION),
+    )
+    expect(destination).toHaveAttribute('title', COLLABORATIVE_EXIT_DESTINATION)
+  })
+
+  it('banner_omits_destination_when_absent', () => {
+    pendingIntentsRef.current = [sampleRecoverIntent]
+    renderWithProviders(<ArkadePendingBatchIntentBanner />)
+    expect(
+      screen.queryByTestId('arkade-pending-batch-intent-destination'),
+    ).not.toBeInTheDocument()
   })
 })
 
