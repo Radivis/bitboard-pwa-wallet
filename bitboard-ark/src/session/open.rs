@@ -259,7 +259,7 @@ impl ArkSession {
             }
         });
 
-        super::pending_batch::install_intent_registered_hook(Arc::clone(&wallet_db));
+        super::intents::install_intent_registered_hook(Arc::clone(&wallet_db));
 
         Ok((
             Self {

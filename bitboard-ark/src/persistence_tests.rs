@@ -1,11 +1,11 @@
 use crate::persistence::{
     BITBOARD_ARK_PERSISTENCE_VERSION, BitboardArkPersistence, JsonPersistenceDb, OperatorIdentity,
-    OperatorSignerMigrationHint, PendingBatchIntentKind, PendingBatchIntentRecord,
-    PendingBatchOutpointRecord, PendingExitDeductionRecord, PendingExitKind,
-    UnilateralExitAutomationPrefsRecord, UnilateralExitFailureRecord,
+    OperatorSignerMigrationHint, PendingBatchIntentKind, PendingBatchIntentLifecyclePhase,
+    PendingBatchIntentRecord, PendingBatchOutpointRecord, PendingExitDeductionRecord,
+    PendingExitKind, UnilateralExitAutomationPrefsRecord, UnilateralExitFailureRecord,
     UnilateralExitFrontendPersistence, UnilateralExitJobRecord, UnilateralExitLeafOutpointRecord,
-    network_label, operator_identity_for_connected_signer, persisted_operator_identity_for_open,
-    validate_operator_identity,
+    network_label, operator_identity_for_connected_signer, pending_batch_record_overlaps_outpoints,
+    persisted_operator_identity_for_open, validate_operator_identity,
 };
 use ark_core::server::{DeprecatedSigner, Info};
 use bitcoin::address::NetworkUnchecked;
@@ -435,6 +435,42 @@ fn upsert_pending_batch_intent_replaces_overlapping_record() {
     let pending = db.pending_batch_intents();
     assert_eq!(pending.len(), 1);
     assert_eq!(pending[0].intent_id.as_deref(), Some("second"));
+}
+
+#[test]
+fn overlapping_pending_blocks_only_shared_outpoints() {
+    let board = sample_pending_record(PendingBatchIntentKind::Board, "board", Some(1), None);
+    let recover_outpoint = PendingBatchOutpointRecord {
+        txid: "bb".repeat(32),
+        vout: 0,
+    };
+    assert!(!pending_batch_record_overlaps_outpoints(
+        &board,
+        &[],
+        &[recover_outpoint],
+    ));
+    assert!(pending_batch_record_overlaps_outpoints(
+        &board,
+        &[PendingBatchOutpointRecord {
+            txid: "aa".repeat(32),
+            vout: 1,
+        }],
+        &[],
+    ));
+}
+
+#[test]
+fn promote_stranded_processing_intents_stamps_timed_out() {
+    let db = JsonPersistenceDb::default();
+    let mut record = sample_pending_record(PendingBatchIntentKind::Board, "board", Some(1), None);
+    record.lifecycle_phase = PendingBatchIntentLifecyclePhase::Processing;
+    db.upsert_pending_batch_intent(record);
+    assert!(db.promote_stranded_processing_intents());
+    assert_eq!(
+        db.pending_batch_intents()[0].lifecycle_phase,
+        PendingBatchIntentLifecyclePhase::TimedOut
+    );
+    assert!(!db.promote_stranded_processing_intents());
 }
 
 #[test]

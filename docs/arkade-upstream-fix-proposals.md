@@ -30,7 +30,7 @@ The public API says the client should prove ownership of **any input** of the re
 
 **Proposed fix:** In the match loop, also compare proof outpoints to `ti.BoardingInputs` (same txid/vout equality as VTXO `Inputs`). Empty match list should stay `INVALID_INTENT_PROOF` only when neither set overlaps.
 
-**Bitboard today:** Ownership-only delete proofs work for VTXO intents. Boarding-only Cancel does not call `deleteIntent` (explicit error). Boarding-only Retry re-joins without deleting first **only when the boarding UTXO is still unspent** (ARK-BATCH-07 spent-check first). Spent or cooperative-window-expired boarding intents are finalized locally and are not re-settled. See `bitboard-ark/src/session/pending_batch.rs` (`pending_intent_retry_decision`). Until arkd ships the match, a leftover still-pending boarding registration can still block Retry with `duplicated input` until the register intent expires (~2 minutes).
+**Bitboard today:** Ownership-only delete proofs work for VTXO intents. Boarding-only Cancel does not call `deleteIntent` (explicit error). Boarding-only Retry re-joins without deleting first **only when the boarding UTXO is still unspent** (ARK-BATCH-07 spent-check first). Spent or cooperative-window-expired boarding intents are finalized locally and are not re-settled. See `bitboard-ark/src/session/intents/actions.rs` (`pending_intent_retry_decision`). Until arkd ships the match, a leftover still-pending boarding registration can still block Retry with `duplicated input` until the register intent expires (~2 minutes).
 
 **Contract:** `ARK-BATCH-06` / `ARK-BATCH-07` in `doc/features/arkade.yaml`.
 

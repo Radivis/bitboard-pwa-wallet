@@ -115,7 +115,7 @@ struct OnIntentRegisteredJsGuard;
 
 impl Drop for OnIntentRegisteredJsGuard {
     fn drop(&mut self) {
-        crate::session::pending_batch::set_on_intent_registered_js(None);
+        crate::session::intents::set_on_intent_registered_js(None);
     }
 }
 
@@ -128,7 +128,7 @@ where
     F: FnOnce(Rc<ArkSession>) -> Fut,
     Fut: Future<Output = ArkResult<T>>,
 {
-    crate::session::pending_batch::set_on_intent_registered_js(Some(on_registered));
+    crate::session::intents::set_on_intent_registered_js(Some(on_registered));
     let _clear = OnIntentRegisteredJsGuard;
     export_session_json(run).await
 }
@@ -270,7 +270,7 @@ pub async fn ark_migrate_deprecated_signer_vtxos(
     on_registered: js_sys::Function,
 ) -> Result<JsValue, JsValue> {
     map_js_async(async {
-        crate::session::pending_batch::set_on_intent_registered_js(Some(on_registered));
+        crate::session::intents::set_on_intent_registered_js(Some(on_registered));
         let _clear = OnIntentRegisteredJsGuard;
         let result =
             with_session_async(

@@ -513,7 +513,7 @@ impl ArkSession {
                     &intent,
                     amount_sats,
                 )),
-                Ok(None) => super::pending_batch::join_result_for_absent_settle_inputs(),
+                Ok(None) => super::intents::join_result_for_absent_settle_inputs(),
                 Err(error) => {
                     self.map_settle_error(
                         PendingBatchIntentKind::Board,
