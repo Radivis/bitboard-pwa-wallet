@@ -17,7 +17,6 @@ import {
   updateOperatorSyncAtEncrypted,
   type ArkadeEncryptedPayloadDeps,
 } from '@/workers/arkade-worker-encrypted-payload'
-import { shouldSyncOperatorAfterUnilateralExitOperation } from '@/lib/arkade/unilateral-exit-offline'
 import type {
   ArkadeBalanceInfo,
   ArkadeBatchJoinResult,
@@ -236,10 +235,7 @@ async function persistAfterUnilateralExitOperation(): Promise<void> {
     '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
   )
   await awaitArkadeSyncQuiescence()
-  if (shouldSyncOperatorAfterUnilateralExitOperation() && activeSessionParams != null) {
-    await syncWithOperatorCore()
-    return
-  }
+  // Unilateral exit never syncs with the ASP after proceed/complete/unroll.
   await flushSdkPersistenceNowOrThrow()
 }
 

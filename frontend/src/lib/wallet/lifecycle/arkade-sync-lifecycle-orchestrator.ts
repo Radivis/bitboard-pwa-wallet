@@ -42,7 +42,6 @@ import {
   LIFECYCLE_SYNC_ERROR_FALLBACK,
   userFacingLifecycleErrorMessage,
 } from '@/lib/shared/utils'
-import { shouldSkipBackgroundOperatorSyncWhenAutonomous } from '@/lib/arkade/unilateral-exit-offline'
 
 export type {
   ArkadeSyncKind,
@@ -418,7 +417,8 @@ export function scheduleBackgroundArkadeOperatorSync(): void {
     void (async () => {
       try {
         const status = await getArkadeWorker().getAutonomousModeStatus()
-        if (shouldSkipBackgroundOperatorSyncWhenAutonomous(Boolean(status?.active))) {
+        // Background dashboard poll talks to the ASP; skip it while autonomous mode is active.
+        if (status?.active) {
           return
         }
       } catch {
