@@ -8,7 +8,7 @@ Related:
 - Balance buckets and exit-line timing: [arkade-bitboard-wallet-model.md](arkade-bitboard-wallet-model.md)
 - VTXO exit lifecycle refactor (staged): [unilateral-exit-vtxo-lifecycle-refactor.md](unilateral-exit-vtxo-lifecycle-refactor.md)
 - Agent ownership rules: [`.cursor/rules/unilateral-exit-xstate.mdc`](../.cursor/rules/unilateral-exit-xstate.mdc)
-- Open Mutinynet false-confirmation / `submitpackage` disagreement: [unilateral-exit-false-confirmation-rca.md](unilateral-exit-false-confirmation-rca.md)
+- Historic Mutinynet false-confirmation investigation (resolved; methodology is not current): [archive/unilateral-exit-false-confirmation-rca.md](archive/unilateral-exit-false-confirmation-rca.md)
 - Test contracts: `ARK-EXIT-*` in [doc/features/arkade.yaml](../doc/features/arkade.yaml)
 - User-facing risk primer (in-app Library): `risks-of-arkade-unilateral-exits`
 
@@ -75,7 +75,7 @@ Frontend job reconcile must **not** treat a persisted job as stale when WASM rep
 
 Unroll progress is **not** a monotonic counter. `first_incomplete_step_index` in [`progress.rs`](../bitboard-ark/src/session/unilateral_exit/progress.rs) walks `ordered_step_txids` and returns the first tx with fewer than **1** confirmation (`UNILATERAL_EXIT_STEP_CONFIRMATIONS`). A reorg that drops a later step back to 0 conf **rewinds** the current step; the next proceed/progress call broadcasts or waits again.
 
-**Open Mutinynet failure:** Esplora can report ≥1 conf (so the UI skips a checkpoint) while `submitpackage` still returns `package-not-child-with-unconfirmed-parents` for a child of that tx. That is not a second UI cursor problem. Handoff: [unilateral-exit-false-confirmation-rca.md](unilateral-exit-false-confirmation-rca.md).
+The cursor also **does not skip** a later step this wallet has not yet broadcast (`wait_cap_holds_unbroadcast_successor`), even if Esplora already reports it confirmed (for example an ASP-published checkpoint). Skipping those used to produce `package-not-child-with-unconfirmed-parents` when submitting the next child. Historic write-up: [archive/unilateral-exit-false-confirmation-rca.md](archive/unilateral-exit-false-confirmation-rca.md) — of interest for the failure mode, not as a description of current gating.
 
 Leaf and intermediate-host `is_unrolled` wait for **6** confs (`UNILATERAL_EXIT_LEAF_CONFIRMATIONS` in [`bitboard-ark/src/constants.rs`](../bitboard-ark/src/constants.rs)) so shallow reorgs do not stamp unroll. Do not persist “step N done” independently of Esplora confirmation depth.
 
@@ -208,7 +208,7 @@ flowchart TD
   start[proceed_unilateral_exit_step]
   start --> pending[record pending_exit_deductions for unmarked leaves]
   pending --> plan[build_unilateral_batch_plan merged ordered_step_txids]
-  plan --> idx[first_incomplete_step_index via Esplora confs]
+  plan --> idx[first_incomplete_step_index via Esplora confs plus wait-cap]
   idx -->|"all steps at 1-conf"| markLeaf[mark_unrolled_leaves_at_finality 6 conf all vouts]
   markLeaf --> done[phase Complete]
   idx -->|"current step under 1-conf"| relay{already relayed or step_wait?}

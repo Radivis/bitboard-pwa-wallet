@@ -1,10 +1,14 @@
-# Unilateral exit: false confirmations vs `submitpackage` (agent handoff)
+# Unilateral exit: false confirmations vs `submitpackage` (archived)
+
+> **Archived.** The Mutinynet skip / `package-not-child-with-unconfirmed-parents` issue described here has been resolved. This file is of historic interest. Proposed approaches below (especially gating `first_incomplete_step_index` on `/raw` or submit-node spendability) **do not fully represent current code**. Live gating is `wait_cap_holds_unbroadcast_successor` in [`progress.rs`](../../bitboard-ark/src/session/unilateral_exit/progress.rs). Current handbook: [unilateral-exit.md](../unilateral-exit.md).
+
+The remainder is the original 2026-08-16 agent handoff, kept for context.
 
 This is a **handoff**, not a closed RCA. Session `913f52` (Mutinynet, manual unroll, ~2026-08-16) spent days patching the XState machine. The remaining failure is **not** “the UI forgot which node the user is on.” It is: **Esplora reports a parent as confirmed (often 1+ confs) while the bitcoind behind `POST /txs/package` still rejects the child with `package-not-child-with-unconfirmed-parents`.**
 
 Do **not** add a second cursor. Do **not** keep stacking XState guards. Confirm Esplora vs submit-node disagreement with runtime evidence, then gate `first_incomplete_step_index` on a truth that `submitpackage` shares.
 
-Related handbook: [unilateral-exit.md](unilateral-exit.md). Esplora endpoint quirks (mostly **regtest**): [arkade-regtest-esplora-quirks.md](arkade-regtest-esplora-quirks.md). Ownership: [`.cursor/rules/unilateral-exit-xstate.mdc`](../.cursor/rules/unilateral-exit-xstate.mdc).
+Related handbook: [unilateral-exit.md](../unilateral-exit.md). Esplora endpoint quirks (mostly **regtest**): [arkade-regtest-esplora-quirks.md](../arkade-regtest-esplora-quirks.md). Ownership: [`.cursor/rules/unilateral-exit-xstate.mdc`](../../.cursor/rules/unilateral-exit-xstate.mdc).
 
 ---
 
@@ -194,6 +198,8 @@ WASM: after Rust changes, `cd frontend && npm run build:wasm` (or ark crate only
 
 ---
 
-## Suggested next agent prompt
+## Suggested next agent prompt (obsolete)
 
-> Mutinynet unilateral exit: Esplora reports checkpoint `d1e8cf0a…` as 1–8 confs so `first_incomplete` skips it; `submitpackage` of the next Ark then returns `package-not-child-with-unconfirmed-parents`. Read `docs/unilateral-exit-false-confirmation-rca.md`. Do not add a UI cursor. Prove whether `/tx/status` and `/txs/package` share a bitcoind, then gate `first_incomplete_step_index` on spendability as a package parent. Keep existing tip-inversion and topo-merge fixes. Strip leftover debug ingest after the gate is proven.
+Do not use this prompt. The issue is resolved; current behavior is in the handbook, not in the proposals above.
+
+> Mutinynet unilateral exit: Esplora reports checkpoint `d1e8cf0a…` as 1–8 confs so `first_incomplete` skips it; `submitpackage` of the next Ark then returns `package-not-child-with-unconfirmed-parents`. Read `docs/archive/unilateral-exit-false-confirmation-rca.md`. Do not add a UI cursor. Prove whether `/tx/status` and `/txs/package` share a bitcoind, then gate `first_incomplete_step_index` on spendability as a package parent. Keep existing tip-inversion and topo-merge fixes. Strip leftover debug ingest after the gate is proven.
