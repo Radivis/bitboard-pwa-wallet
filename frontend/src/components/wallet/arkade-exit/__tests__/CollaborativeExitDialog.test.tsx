@@ -142,11 +142,11 @@ describe('CollaborativeExitDialog', () => {
     ).toBeInTheDocument()
   })
 
-  it('shows Phase 1 spinner on Confirm exit', () => {
+  it('shows submit-phase spinner on Confirm exit', () => {
     renderWithProviders(
       <CollaborativeExitDialog
         exitFlow={buildExitFlow({
-          collaborativeExitSubmitPhase1: true,
+          collaborativeExitSubmitPhase: true,
           collaborativeExitMutation: { mutate: vi.fn(), isPending: true },
         })}
       />,

@@ -23,7 +23,7 @@ import { useArkadeLoadLifecycleSnapshot } from '@/hooks/useArkadeLifecycleSnapsh
 import { ArkadePendingBatchIntentBanner } from '@/components/wallet/ArkadePendingBatchIntentBanner'
 import { RailLoadErrorBanner } from '@/components/wallet/RailLoadErrorBanner'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
-import { isIntentSubmitPhase1 } from '@/lib/arkade/arkade-pending-batch-intent'
+import { isIntentSubmitPhase } from '@/lib/arkade/arkade-pending-batch-intent'
 import { formatSats } from '@/lib/wallet/bitcoin-utils'
 import { orchestrateArkadeRetryLoad } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
 import { errorMessage } from '@/lib/shared/utils'
@@ -47,7 +47,7 @@ export function ArkadeBoardPage() {
   const boardingQuery = useArkadeBoardingAddressQuery()
   const boardingStatusQuery = useArkadeBoardingStatusQuery()
   const hasPendingOnchainBatchIntent = useHasPendingOnchainBatchIntent()
-  const settleSubmitPhase1 = isIntentSubmitPhase1({
+  const settleSubmitPhase = isIntentSubmitPhase({
     mutationPending: onboardMutation.isPending,
     pendingForAction: hasPendingOnchainBatchIntent,
   })
@@ -216,7 +216,7 @@ export function ArkadeBoardPage() {
             }
             onClick={() => onboardMutation.mutate()}
           >
-            {settleSubmitPhase1 ? (
+            {settleSubmitPhase ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
                 Settling…

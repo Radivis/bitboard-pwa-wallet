@@ -27,7 +27,7 @@ import {
   useArkadeRenewMutation,
   useHasPendingBatchIntentKind,
 } from '@/hooks/useArkadeQueries'
-import { isIntentSubmitPhase1 } from '@/lib/arkade/arkade-pending-batch-intent'
+import { isIntentSubmitPhase } from '@/lib/arkade/arkade-pending-batch-intent'
 import {
   useArkadeLoadLifecycleSnapshot,
   useArkadeRailSnapshot,
@@ -57,7 +57,7 @@ export function ArkadePanel() {
   const delegateQuery = useArkadeDelegateInfoQuery()
   const renewMutation = useArkadeRenewMutation()
   const hasPendingRenewIntent = useHasPendingBatchIntentKind('renew')
-  const renewSubmitPhase1 = isIntentSubmitPhase1({
+  const renewSubmitPhase = isIntentSubmitPhase({
     mutationPending: renewMutation.isPending,
     pendingForAction: hasPendingRenewIntent,
   })
@@ -191,7 +191,7 @@ export function ArkadePanel() {
               }
               onClick={() => renewMutation.mutate()}
             >
-              {renewSubmitPhase1 ? (
+              {renewSubmitPhase ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
                   Renewing…

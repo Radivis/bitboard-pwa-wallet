@@ -6,7 +6,7 @@ import {
   hasPendingBatchIntent,
   hasPendingKind,
   isBoardingOnlyPendingIntent,
-  isIntentSubmitPhase1,
+  isIntentSubmitPhase,
   pendingBatchIntentFromSources,
   pendingOverlapsOnchain,
   pendingBatchIntentDestinationAddress,
@@ -219,10 +219,10 @@ describe('arkade-pending-batch-intent', () => {
     )
   })
 
-  it('submit_phase1_only_while_mutation_pending_without_persisted_record', () => {
-    expect(isIntentSubmitPhase1({ mutationPending: true, pendingForAction: false })).toBe(true)
-    expect(isIntentSubmitPhase1({ mutationPending: true, pendingForAction: true })).toBe(false)
-    expect(isIntentSubmitPhase1({ mutationPending: false, pendingForAction: false })).toBe(false)
+  it('submit_phase_only_while_mutation_pending_without_persisted_record', () => {
+    expect(isIntentSubmitPhase({ mutationPending: true, pendingForAction: false })).toBe(true)
+    expect(isIntentSubmitPhase({ mutationPending: true, pendingForAction: true })).toBe(false)
+    expect(isIntentSubmitPhase({ mutationPending: false, pendingForAction: false })).toBe(false)
   })
 
   it('classifies cancel, mutation-settled, boarding expiry, and success disappearances', () => {

@@ -38,7 +38,7 @@ export function CollaborativeExitDialog({ exitFlow }: CollaborativeExitDialogPro
     collabAmountError,
     collaborativeFeeQuery,
     collaborativeExitMutation,
-    collaborativeExitSubmitPhase1,
+    collaborativeExitSubmitPhase,
     hasProcessingCollaborativeExit,
     canCollaborativeExit,
     collaborativeExitBlockedByRotation,
@@ -76,7 +76,7 @@ export function CollaborativeExitDialog({ exitFlow }: CollaborativeExitDialogPro
             disabled={!canCollaborativeExit || collaborativeExitMutation.isPending}
             onClick={handleCollaborativeExit}
           >
-            {collaborativeExitSubmitPhase1 ? (
+            {collaborativeExitSubmitPhase ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
                 Exiting…

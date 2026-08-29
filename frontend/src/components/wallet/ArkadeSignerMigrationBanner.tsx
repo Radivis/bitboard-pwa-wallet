@@ -13,7 +13,7 @@ import {
   userFacingLifecycleErrorMessage,
 } from '@/lib/shared/utils'
 import { useWalletStore } from '@/stores/walletStore'
-import { isIntentSubmitPhase1 } from '@/lib/arkade/arkade-pending-batch-intent'
+import { isIntentSubmitPhase } from '@/lib/arkade/arkade-pending-batch-intent'
 
 function formatCutoffDate(cutoffUnix: number): string | null {
   if (cutoffUnix <= 0) {
@@ -77,7 +77,7 @@ export function ArkadeSignerMigrationBanner() {
   const hint = useWalletStore((state) => state.arkadeSignerMigrationHint)
   const partialMigrationResultQuery = useArkadeSignerMigrationPartialResultQuery()
   const signerMigrationMutation = useArkadeSignerMigrationMutation()
-  const migrateSubmitPhase1 = isIntentSubmitPhase1({
+  const migrateSubmitPhase = isIntentSubmitPhase({
     mutationPending: signerMigrationMutation.isPending,
     pendingForAction: hasPendingMigrateIntent,
   })
@@ -125,7 +125,7 @@ export function ArkadeSignerMigrationBanner() {
               }
               onClick={() => signerMigrationMutation.mutate()}
             >
-              {migrateSubmitPhase1 ? (
+              {migrateSubmitPhase ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
                   Migrating…

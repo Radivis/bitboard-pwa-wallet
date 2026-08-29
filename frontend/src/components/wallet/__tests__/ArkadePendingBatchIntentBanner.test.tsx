@@ -329,7 +329,7 @@ describe('ArkadePendingBatchIntentBanner', () => {
     expect(screen.getAllByRole('button', { name: 'Retry' }).length).toBeGreaterThan(0)
   })
 
-  it('submit_spinner_only_in_phase1', () => {
+  it('submit_spinner_only_in_submit_phase', () => {
     onboardMutationRef.isPending = true
     recoverMutationRef.isPending = true
     renewMutationRef.isPending = true

@@ -126,7 +126,7 @@ export function pendingIntentBannerPhase(
     : ARKADE_INTENT_LIFECYCLE_PHASES.timedOut
 }
 
-export function isIntentSubmitPhase1(options: {
+export function isIntentSubmitPhase(options: {
   mutationPending: boolean
   pendingForAction: boolean
 }): boolean {
