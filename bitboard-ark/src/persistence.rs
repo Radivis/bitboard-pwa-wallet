@@ -700,11 +700,6 @@ impl JsonPersistenceDb {
         promoted
     }
 
-    #[allow(dead_code)]
-    pub fn clear_pending_batch_intents(&self) {
-        lock_persistence(&self.inner).pending_batch_intents.clear();
-    }
-
     pub fn remove_pending_batch_intents_overlapping(
         &self,
         onchain_outpoints: &[PendingBatchOutpointRecord],
