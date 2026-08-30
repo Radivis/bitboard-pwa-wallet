@@ -168,7 +168,6 @@ export function selectCanAbortUnilateralExitOrchestration(
     state.context.jobOutpoints.length > 0 ||
     params.lifecycleJobActive ||
     params.persistedJobExists ||
-    params.hasInProgressExits ||
     unilateralExitSnapshotIsProceeding(state) ||
     unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm) ||
     unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.waitingForParentData) ||
@@ -225,10 +224,10 @@ function controlDisplayPhaseFromProgress(
 
 function controlDisplayPhaseFallback(
   state: UnilateralExitActorSnapshot,
-  params: { hasInProgressExits: boolean; exitJobInFlight: boolean },
+  params: { exitJobInFlight: boolean },
   lifecycle: ReturnType<typeof selectUnilateralExitLifecycleSnapshot>,
 ): UnilateralExitControlDisplayPhase {
-  if (!params.hasInProgressExits && !params.exitJobInFlight) {
+  if (!params.exitJobInFlight) {
     return 'idle'
   }
   if (lifecycle.phase === UnilateralExitLifecyclePhase.WaitingConfirm) {
@@ -261,17 +260,14 @@ export function selectUnilateralExitControlJobState(
   const isProceeding = unilateralExitSnapshotIsProceeding(state)
   const exitJobInFlight =
     selectIsUnilateralExitJobActive(state) ||
-    params.hasInProgressExits ||
     isProceeding ||
     machineComplete
   const phase =
     controlDisplayPhaseFromMachine(state) ??
     controlDisplayPhaseFallback(state, {
-      hasInProgressExits: params.hasInProgressExits,
       exitJobInFlight,
     }, lifecycle)
-  const jobActive =
-    selectIsUnilateralExitJobActive(state) || params.hasInProgressExits
+  const jobActive = selectIsUnilateralExitJobActive(state) || machineComplete
 
   return {
     phase,

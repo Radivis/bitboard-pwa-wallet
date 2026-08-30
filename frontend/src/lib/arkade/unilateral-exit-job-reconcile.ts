@@ -55,3 +55,23 @@ export function shouldHydratePersistedUnilateralExitJob(params: {
   }
   return true
 }
+
+export function shouldLockUnilateralExitLeafSelection(params: {
+  lifecycleJobActive: boolean
+  persistedJobExists: boolean
+}): boolean {
+  return params.lifecycleJobActive || params.persistedJobExists
+}
+
+export function canSelectUnilateralExitLeafForUnroll(params: {
+  leafOutpoints: ArkadeVtxoOutpoint[]
+  startableOutpoints: ArkadeVtxoOutpoint[]
+  selectionLocked: boolean
+}): boolean {
+  if (params.selectionLocked || params.leafOutpoints.length === 0) {
+    return false
+  }
+  return params.leafOutpoints.every((outpoint) =>
+    includesArkadeVtxoOutpoint(params.startableOutpoints, outpoint),
+  )
+}

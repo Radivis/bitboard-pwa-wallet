@@ -65,6 +65,7 @@ import {
   clearPersistedUnilateralExitJob,
   ensurePersistedUnilateralExitJob,
   persistActiveUnilateralExitJob,
+  updatePersistedUnilateralExitRelayWait,
 } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence'
 import { persistUnilateralExitFailureRecord } from '@/lib/wallet/lifecycle/unilateral-exit-failure-persistence'
 
@@ -336,6 +337,7 @@ describe('unilateralExitMachine', () => {
     await waitFor(testActor, (state) => state.matches('complete'))
     expect(proceedStep).not.toHaveBeenCalled()
     expect(clearPersistedUnilateralExitJob).toHaveBeenCalled()
+    expect(updatePersistedUnilateralExitRelayWait).not.toHaveBeenCalled()
   })
 
   it('does not complete when a sticky unrolled leaf flag arrives mid-unroll', async () => {
@@ -426,6 +428,7 @@ describe('unilateralExitMachine', () => {
     await waitFor(testActor, (state) => state.matches('complete'))
     expect(proceedStep).not.toHaveBeenCalled()
     expect(clearPersistedUnilateralExitJob).toHaveBeenCalled()
+    expect(updatePersistedUnilateralExitRelayWait).not.toHaveBeenCalled()
   })
 
   it('hydrate in manual mode waits for Proceed when the current step is not yet broadcast', async () => {

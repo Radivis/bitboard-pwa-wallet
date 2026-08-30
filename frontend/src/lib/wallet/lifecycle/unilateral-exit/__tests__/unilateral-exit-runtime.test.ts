@@ -494,6 +494,19 @@ describe('unilateral-exit-runtime hydration', () => {
     expect(snapshot.context.jobOutpoints).toEqual([])
   })
 
+  it('session teardown reset clears control-store leaf selection', async () => {
+    sdkHydrated = true
+    const { useUnilateralExitControlStore } = await import(
+      '@/stores/unilateralExitControlStore'
+    )
+    useUnilateralExitControlStore.getState().setSelectedLeafOutpoints([leaf])
+
+    await configureUnilateralExitForLoadedWallet(walletScope)
+    resetUnilateralExitForArkadeSessionTeardown()
+
+    expect(useUnilateralExitControlStore.getState().selectedLeafOutpoints).toEqual([])
+  })
+
   it('lock_reset_clears_pending_intent_session_tracking', () => {
     const intent = {
       kind: 'recover',

@@ -285,20 +285,21 @@ describe('selectUnilateralExitControlJobState', () => {
     ).toBe('Proceed')
   })
 
-  it('treats operator in-progress exits as active even without lifecycle job', () => {
+  it('does not treat leftover WASM in-progress as an unroll job', () => {
     const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.idle, {
       jobOutpoints: [],
-      progress: progress({ phase: 'idle', stepIndex: 1 }),
+      progress: null,
     })
     expect(
       selectUnilateralExitControlJobState(snapshot, {
         hasInProgressExits: true,
-        totalSteps: 2,
+        totalSteps: 17,
       }),
     ).toMatchObject({
-      exitJobInFlight: true,
-      jobActive: true,
-      showStepProgress: true,
+      phase: 'idle',
+      exitJobInFlight: false,
+      jobActive: false,
+      showStepProgress: false,
     })
   })
 })
@@ -484,7 +485,7 @@ describe('selectCanAbortUnilateralExitOrchestration', () => {
     expect(selectCanAbortUnilateralExitOrchestration(snapshot, abortParams)).toBe(true)
   })
 
-  it('is true for manual in-progress exits without actor job context', () => {
+  it('is false for leftover WASM in-progress without a frontend job', () => {
     const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.idle, {
       jobOutpoints: [],
     })
@@ -492,6 +493,18 @@ describe('selectCanAbortUnilateralExitOrchestration', () => {
       selectCanAbortUnilateralExitOrchestration(snapshot, {
         ...abortParams,
         hasInProgressExits: true,
+      }),
+    ).toBe(false)
+  })
+
+  it('is true when a persisted frontend job exists without WASM in-progress', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.idle, {
+      jobOutpoints: [],
+    })
+    expect(
+      selectCanAbortUnilateralExitOrchestration(snapshot, {
+        ...abortParams,
+        persistedJobExists: true,
       }),
     ).toBe(true)
   })

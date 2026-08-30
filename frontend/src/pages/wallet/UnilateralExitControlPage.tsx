@@ -52,6 +52,10 @@ import { isCurrentStepRelayed } from '@/lib/arkade/unilateral-exit-broadcast'
 import { UNILATERAL_EXIT_WAITING_FOR_PARENT_DATA_COPY } from '@/lib/arkade/unilateral-exit-control-phase'
 import { resolveUnilateralExitTopologyOutpoints } from '@/lib/arkade/unilateral-exit-topology'
 import {
+  shouldHydratePersistedUnilateralExitJob,
+  shouldLockUnilateralExitLeafSelection,
+} from '@/lib/arkade/unilateral-exit-job-reconcile'
+import {
   selectUnilateralExitControlJobState,
   selectCanAbortUnilateralExitOrchestration,
   selectUnilateralExitInProgressOverlay,
@@ -67,7 +71,6 @@ import {
 import { wasmArkErrorMessage } from '@/lib/shared/wasm-ark-error'
 import { formatSatPerVbTwoDecimals } from '@/lib/esplora/esplora-fee-estimates'
 import {
-  clearUnilateralExitJob,
   abortUnilateralExitOrchestration,
   disableAutomaticUnilateralExit,
   enableAutomaticUnilateralExit,
@@ -79,10 +82,7 @@ import {
   startAutomaticUnilateralExitAsync,
   startManualUnilateralExitAsync,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime'
-import {
-  arkadeUnilateralExitTopologyQueryKey,
-  arkadeUnilateralExitTopologyScopeKey,
-} from '@/lib/arkade/arkade-query-keys'
+import { arkadeUnilateralExitTopologyQueryKey } from '@/lib/arkade/arkade-query-keys'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import type { ArkadeVtxoOutpoint } from '@/workers/arkade-api'
@@ -166,9 +166,6 @@ export function UnilateralExitControlPage() {
     (state) => state.setSelectedLeafOutpoints,
   )
   const toggleLeafTxGroup = useUnilateralExitControlStore((state) => state.toggleLeafTxGroup)
-  const seedSelectionFromInProgress = useUnilateralExitControlStore(
-    (state) => state.seedSelectionFromInProgress,
-  )
   const bumpGraphRenderEpoch = useUnilateralExitControlStore(
     (state) => state.bumpGraphRenderEpoch,
   )
@@ -373,22 +370,19 @@ export function UnilateralExitControlPage() {
   ])
 
   useEffect(() => {
-    if (persistedJobExists || lifecycleJobActive) return
-    if (selectedLeafOutpoints.length > 0) return
-    const inProgressRows = inProgressQuery.data ?? []
-    if (inProgressRows.length === 0) return
-    const topologyLeafOutpoints = topologyQuery.data?.leafOutpoints ?? []
-    seedSelectionFromInProgress(
-      inProgressRows.map((row) => ({ txid: row.txid, vout: row.vout })),
-      topologyLeafOutpoints,
-    )
+    if (
+      !shouldHydratePersistedUnilateralExitJob({
+        selectedLeafOutpoints: persistedJob.selectedLeafOutpoints,
+        controlStoreSelectionEmpty: selectedLeafOutpoints.length === 0,
+      })
+    ) {
+      return
+    }
+    setSelectedLeafOutpoints(persistedJob.selectedLeafOutpoints)
   }, [
-    inProgressQuery.data,
-    persistedJobExists,
-    lifecycleJobActive,
+    persistedJob.selectedLeafOutpoints,
     selectedLeafOutpoints.length,
-    seedSelectionFromInProgress,
-    topologyQuery.data?.leafOutpoints,
+    setSelectedLeafOutpoints,
   ])
 
   useEffect(() => {
@@ -408,51 +402,26 @@ export function UnilateralExitControlPage() {
   }, [lifecycleSnapshot.phase, resetControlStore])
 
   useEffect(() => {
-    if (hasInProgressExits || lifecycleJobActive) return
+    if (lifecycleJobActive || persistedJobExists) return
     if (selectedLeafOutpoints.length === 0) return
-    if (
-      !unilateralExitSnapshotIsInState(actorSnapshot, UNILATERAL_EXIT_MACHINE_STATE.idle) &&
-      !unilateralExitSnapshotIsInState(actorSnapshot, UNILATERAL_EXIT_MACHINE_STATE.complete)
-    ) {
+    if (!unilateralExitSnapshotIsInState(actorSnapshot, UNILATERAL_EXIT_MACHINE_STATE.idle)) {
       return
     }
 
-    const selectionStillActive = selectedLeafOutpoints.some(
-      (outpoint) =>
-        includesArkadeVtxoOutpoint(exitCandidateOutpoints, outpoint) ||
-        includesArkadeVtxoOutpoint(inProgressOutpoints, outpoint),
+    const selectionStillStartable = selectedLeafOutpoints.some((outpoint) =>
+      includesArkadeVtxoOutpoint(exitCandidateOutpoints, outpoint),
     )
+    if (selectionStillStartable) return
 
-    if (!selectionStillActive) {
-      clearUnilateralExitJob()
-      resetControlStore()
-      setFocusedNodeId(null)
-      if (
-        activeWalletId != null &&
-        activeArkadeConnectionId != null &&
-        isArkadeSupportedNetworkMode(networkMode)
-      ) {
-        queryClient.removeQueries({
-          queryKey: arkadeUnilateralExitTopologyScopeKey(
-            activeWalletId,
-            networkMode,
-            activeArkadeConnectionId,
-          ),
-        })
-      }
-    }
+    resetControlStore()
+    setFocusedNodeId(null)
   }, [
-    activeArkadeConnectionId,
-    activeWalletId,
+    actorSnapshot,
     exitCandidateOutpoints,
-    hasInProgressExits,
-    inProgressOutpoints,
     lifecycleJobActive,
-    networkMode,
-    queryClient,
+    persistedJobExists,
     resetControlStore,
     selectedLeafOutpoints,
-    actorSnapshot,
   ])
 
   const progress = selectUnilateralExitProgressForDisplay(actorSnapshot)
@@ -521,6 +490,19 @@ export function UnilateralExitControlPage() {
   )
 
   const candidates = exitCandidatesQuery.data ?? []
+  const startableOutpoints = useMemo(
+    () =>
+      (exitCandidatesQuery.data ?? [])
+        .filter((row) => row.canStartUnroll)
+        .map((row) => ({ txid: row.txid, vout: row.vout })),
+    [exitCandidatesQuery.data],
+  )
+  const selectionLocked = shouldLockUnilateralExitLeafSelection({
+    lifecycleJobActive:
+      lifecycleJobActive ||
+      unilateralExitSnapshotIsInState(actorSnapshot, UNILATERAL_EXIT_MACHINE_STATE.complete),
+    persistedJobExists,
+  })
   const selectedTotalSats = useMemo(
     () => totalSelectedSats(jobOutpoints, candidates),
     [jobOutpoints, candidates],
@@ -724,6 +706,8 @@ export function UnilateralExitControlPage() {
             nodeStatuses={nodeStatuses}
             selectedLeafOutpoints={jobOutpoints}
             onToggleLeafTxGroup={toggleLeafTxGroup}
+            startableOutpoints={startableOutpoints}
+            selectionLocked={selectionLocked}
           />
         )}
 

@@ -15,6 +15,7 @@ import {
   parseUnilateralExitNodeId,
   shortTxid,
 } from '@/lib/arkade/unilateral-exit-topology'
+import { canSelectUnilateralExitLeafForUnroll } from '@/lib/arkade/unilateral-exit-job-reconcile'
 import { cn } from '@/lib/shared/utils'
 import type {
   ArkadeUnilateralExitNodeStatus,
@@ -29,6 +30,8 @@ interface UnilateralExitNodeDetailCardProps {
   nodeStatuses: ArkadeUnilateralExitNodeStatus[]
   selectedLeafOutpoints: ArkadeVtxoOutpoint[]
   onToggleLeafTxGroup: (outpoints: ArkadeVtxoOutpoint[]) => void
+  startableOutpoints?: ArkadeVtxoOutpoint[]
+  selectionLocked?: boolean
 }
 
 function resolveNodeStatus(
@@ -50,6 +53,8 @@ export function UnilateralExitNodeDetailCard({
   nodeStatuses,
   selectedLeafOutpoints,
   onToggleLeafTxGroup,
+  startableOutpoints,
+  selectionLocked = false,
 }: UnilateralExitNodeDetailCardProps) {
   const { txid } = parseUnilateralExitNodeId(focusedNodeId)
   const topologyNode = topology.nodes.find((node) => node.txid === txid)
@@ -77,6 +82,11 @@ export function UnilateralExitNodeDetailCard({
     exitStartLeafOutpoints.every((outpoint) =>
       includesArkadeVtxoOutpoint(selectedLeafOutpoints, outpoint),
     )
+  const leafSelectEnabled = canSelectUnilateralExitLeafForUnroll({
+    leafOutpoints: exitStartLeafOutpoints,
+    startableOutpoints: startableOutpoints ?? exitStartLeafOutpoints,
+    selectionLocked,
+  })
 
   const statusLabel =
     status.status === 'confirmed'
@@ -156,6 +166,7 @@ export function UnilateralExitNodeDetailCard({
                     id="unilateral-exit-leaf-select"
                     data-testid="unilateral-exit-leaf-select-switch"
                     checked={allLeafOutpointsSelected}
+                    disabled={!leafSelectEnabled}
                     onCheckedChange={() => onToggleLeafTxGroup(exitStartLeafOutpoints)}
                   />
                 </div>

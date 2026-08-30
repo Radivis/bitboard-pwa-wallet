@@ -261,6 +261,43 @@ describe('unilateral-exit frontend sdk persistence overlay', () => {
     )
   })
 
+  it('queued SDK job writes apply the latest memory snapshot so a later clear wins', async () => {
+    const completedJobs: Array<{ selectedLeafOutpoints: unknown[] }> = []
+    let releaseFirstWrite: (() => void) | undefined
+    let firstWriteStarted = false
+    const firstWriteStartedPromise = new Promise<void>((resolve) => {
+      setUnilateralExitJob.mockImplementation(async (_scope, job) => {
+        const isFirstWrite = !firstWriteStarted
+        firstWriteStarted = true
+        if (isFirstWrite) {
+          resolve()
+          await new Promise<void>((release) => {
+            releaseFirstWrite = release
+          })
+        }
+        completedJobs.push(job)
+      })
+    })
+    const job = {
+      selectedLeafOutpoints: [leaf],
+      currentStepRelayedSinceUnix: 1_700_000_000,
+      jobStartedAtUnix: 1_700_000_000,
+    }
+    useUnilateralExitLifecyclePersistenceStore.getState().hydrateJob(walletScope, job)
+    scheduleUnilateralExitJobSdkWrite(walletScope)
+    await firstWriteStartedPromise
+
+    useUnilateralExitLifecyclePersistenceStore.getState().clearJob(walletScope)
+    scheduleUnilateralExitJobSdkWrite(walletScope)
+    await Promise.resolve()
+    releaseFirstWrite?.()
+
+    await vi.waitFor(() => expect(completedJobs).toHaveLength(2))
+    expect(completedJobs[1]).toEqual(
+      expect.objectContaining({ selectedLeafOutpoints: [] }),
+    )
+  })
+
   it('scheduleUnilateralExitPrefsSdkWrite passes walletScope to worker', async () => {
     useUnilateralExitAutomationPrefsStore.getState().hydratePrefs(walletScope, {
       enabled: true,

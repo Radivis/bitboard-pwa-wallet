@@ -12,6 +12,7 @@ import {
 } from '@/lib/wallet/lifecycle/unilateral-exit-frontend-sdk-persistence'
 import { getPersistedUnilateralExitJob } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence'
 import { arkadeWalletScopesEqual, type ArkadeWalletScope } from '@/lib/arkade/arkade-session-scope'
+import { useUnilateralExitControlStore } from '@/stores/unilateralExitControlStore'
 import type {
   UnilateralExitProceedStepParams,
   UnilateralExitStartParams,
@@ -139,6 +140,7 @@ export function resetUnilateralExitForArkadeSessionTeardown(): void {
   if (scope != null) {
     clearUnilateralExitFrontendMemoryForScope(scope)
   }
+  useUnilateralExitControlStore.getState().reset()
 }
 
 function resetUnilateralExitActorIfWalletScopeChanged(
@@ -435,6 +437,7 @@ export function resetUnilateralExitActorForTests(): void {
   listeners.clear()
   lastCompleteToastShown = false
   lastPausedReason = null
+  useUnilateralExitControlStore.getState().reset()
   actor = createUnilateralExitActor()
   startActorSubscription()
 }

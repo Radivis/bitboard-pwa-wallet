@@ -12,15 +12,14 @@ export type {
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-setup'
 
 const checkingProgressOnDone = [
-  {
-    guard: 'isJobCompleteFromFetchEvent',
-    target: 'complete',
-    actions: [
-      'assignProgressFromFetch',
-      'syncPersistedRelayWaitFromFetch',
-      'clearPersistedOnComplete',
-    ],
-  },
+    {
+      guard: 'isJobCompleteFromFetchEvent',
+      target: 'complete',
+      actions: [
+        'assignProgressFromFetch',
+        'clearPersistedOnComplete',
+      ],
+    },
   {
     guard: 'isUnconfirmedParentRetryProgressRefresh',
     target: 'waitingForParentData',
@@ -93,15 +92,14 @@ const checkingProgressOnDone = [
 ] as const
 
 const ensuringBroadcastOnDone = [
-  {
-    guard: 'isJobCompleteFromEnsureBroadcastEvent',
-    target: 'complete',
-    actions: [
-      'assignProgressFromEnsureBroadcast',
-      'syncPersistedRelayWaitFromEnsureBroadcast',
-      'clearPersistedOnComplete',
-    ],
-  },
+    {
+      guard: 'isJobCompleteFromEnsureBroadcastEvent',
+      target: 'complete',
+      actions: [
+        'assignProgressFromEnsureBroadcast',
+        'clearPersistedOnComplete',
+      ],
+    },
   {
     guard: 'shouldWaitAfterEnsureBroadcast',
     target: 'waitingConfirm',
@@ -321,7 +319,6 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
             target: 'complete',
             actions: [
               'assignProgressFromProceed',
-              'syncPersistedRelayWaitFromProceed',
               'clearPersistedOnComplete',
             ],
           },
@@ -494,6 +491,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
       },
     },
     complete: {
+      entry: ['invalidateUnilateralExitQueriesOnTerminate'],
       on: {
         START_MANUAL: {
           target: 'checkingProgress',

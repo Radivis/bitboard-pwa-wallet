@@ -123,6 +123,8 @@ Abort **stops frontend orchestration only**. It does **not** delete `unilateral_
 
 Abort and ASP `terminated` clear the frontend job bookmark. The failure banner comes from error persistence (`user_aborted` / terminal viability). Hydrate must not treat leftover WASM in-progress rows as crash recovery: a job is restored only when persisted outpoints are still present.
 
+After a successful unroll (`complete`), the frontend job is cleared. Remaining WASM in-progress / exiting VTXOs are waiting for **claim** (Complete unilateral exit), not a live unroll job. The control page must not show Abort, step progress, or a locked leaf selection for those leftover rows, and must not re-seed the control store from them. Lock/`WALLET_RESET` resets the in-memory control store.
+
 ---
 
 ## XState machine

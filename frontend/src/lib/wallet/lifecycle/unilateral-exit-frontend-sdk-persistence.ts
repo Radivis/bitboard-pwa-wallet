@@ -325,8 +325,18 @@ function scheduleSdkWrite(run: () => Promise<void>): void {
   })
 }
 
+const jobSdkWriteByScope = new Map<string, Promise<void>>()
+
 export function scheduleUnilateralExitJobSdkWrite(scope: ArkadeWalletScope): void {
-  scheduleSdkWrite(() => writeJobToSdk(scope))
+  const key = arkadeWalletScopeKey(scope)
+  const previous = jobSdkWriteByScope.get(key) ?? Promise.resolve()
+  const next = previous
+    .catch(() => undefined)
+    .then(() => writeJobToSdk(scope))
+    .catch((error: unknown) => {
+      console.error('[unilateral-exit] Failed to persist frontend state to sdkPersistenceJson', error)
+    })
+  jobSdkWriteByScope.set(key, next)
 }
 
 export function scheduleUnilateralExitPrefsSdkWrite(scope: ArkadeWalletScope): void {
