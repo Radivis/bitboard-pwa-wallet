@@ -302,6 +302,88 @@ describe('selectUnilateralExitControlJobState', () => {
       showStepProgress: false,
     })
   })
+
+  it('maps idle and error jobs from machine state, not WASM waiting', () => {
+    const waitingProgress = progress({
+      phase: 'waiting',
+      currentStepTxRelayed: true,
+      currentStepWaitingSince: 1_700_000_000,
+    })
+    expect(
+      selectUnilateralExitControlJobState(
+        resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.idle, {
+          jobOutpoints: [leaf],
+          progress: waitingProgress,
+        }),
+        { hasInProgressExits: false, totalSteps: 2 },
+      ).phase,
+    ).toBe('idle')
+    expect(
+      selectUnilateralExitControlJobState(
+        resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.error, {
+          jobOutpoints: [leaf],
+          lastErrorMessage: 'broadcast failed',
+          progress: waitingProgress,
+        }),
+        { hasInProgressExits: false, totalSteps: 2 },
+      ).phase,
+    ).toBe('idle')
+  })
+
+  it('maps paused, aborted, and terminated to idle display', () => {
+    expect(
+      selectUnilateralExitControlJobState(
+        resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.paused, {
+          jobOutpoints: [leaf],
+          pausedReason: 'feeCapExceeded',
+          progress: progress({ phase: 'waiting', currentStepTxRelayed: true }),
+        }),
+        { hasInProgressExits: false, totalSteps: 2 },
+      ).phase,
+    ).toBe('idle')
+    expect(
+      selectUnilateralExitControlJobState(
+        resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.aborted, {
+          jobOutpoints: [leaf],
+        }),
+        { hasInProgressExits: false, totalSteps: 2 },
+      ).phase,
+    ).toBe('idle')
+    expect(
+      selectUnilateralExitControlJobState(
+        resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.terminated, {
+          jobOutpoints: [leaf],
+        }),
+        { hasInProgressExits: false, totalSteps: 2 },
+      ).phase,
+    ).toBe('idle')
+  })
+
+  it('maps evaluatingPolicy to advancing', () => {
+    expect(
+      selectUnilateralExitControlJobState(
+        resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.evaluatingPolicy, {
+          jobOutpoints: [leaf],
+          progress: progress({ phase: 'idle' }),
+        }),
+        { hasInProgressExits: false, totalSteps: 2 },
+      ).phase,
+    ).toBe('advancing')
+  })
+
+  it('keeps waitingForParentData while progress-refreshing the parent-data retry', () => {
+    expect(
+      selectUnilateralExitControlJobState(
+        resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.checkingProgress, {
+          jobOutpoints: [leaf],
+          progressRefreshRequested: true,
+          unconfirmedParentRetry: { stepIndex: 14, parentConfirmationsAtFail: 3 },
+          progress: progress({ phase: 'idle', stepIndex: 14, totalSteps: 27 }),
+        }),
+        { hasInProgressExits: false, totalSteps: 27 },
+      ).phase,
+    ).toBe('waitingForParentData')
+  })
 })
 
 describe('selectUnilateralExitInProgressOverlay', () => {
