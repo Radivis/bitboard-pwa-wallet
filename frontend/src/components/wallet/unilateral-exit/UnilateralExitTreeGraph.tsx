@@ -9,7 +9,10 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { Check, Coins, Loader2, Megaphone, Pickaxe, Play, UserRoundArrowLeft, type LucideIcon } from 'lucide-react'
-import type { UnilateralExitInProgressOverlayKind } from '@/lib/arkade/unilateral-exit-control-phase'
+import {
+  unilateralExitInProgressOverlayLabel,
+  type UnilateralExitInProgressOverlayKind,
+} from '@/lib/arkade/unilateral-exit-control-phase'
 import {
   layoutUnilateralExitGraph,
   resolveLayoutDirection,
@@ -89,6 +92,8 @@ function UnilateralExitInProgressBadge({
   }
 
   const OverlayIcon = overlay == null ? null : unilateralExitInProgressOverlayIcon(overlay)
+  const overlayLabel =
+    overlay == null ? undefined : unilateralExitInProgressOverlayLabel(overlay)
 
   return (
     <div
@@ -96,7 +101,9 @@ function UnilateralExitInProgressBadge({
       data-testid={
         overlay == null ? 'unilateral-exit-in-progress' : `unilateral-exit-in-progress-${overlay}`
       }
-      aria-hidden
+      title={overlayLabel}
+      aria-label={overlayLabel}
+      aria-hidden={overlayLabel == null}
     >
       <Loader2 className="absolute size-5 animate-spin text-blue-600" />
       {OverlayIcon != null && (

@@ -75,7 +75,7 @@ Frontend job reconcile must **not** treat a persisted job as stale when WASM rep
 
 Unroll progress is **not** a monotonic counter. `first_incomplete_step_index` in [`progress.rs`](../bitboard-ark/src/session/unilateral_exit/progress.rs) walks `ordered_step_txids` and returns the first tx with fewer than **1** confirmation (`UNILATERAL_EXIT_STEP_CONFIRMATIONS`). A reorg that drops a later step back to 0 conf **rewinds** the current step; the next proceed/progress call broadcasts or waits again.
 
-The cursor also **does not skip** a later step this wallet has not yet broadcast (`wait_cap_holds_unbroadcast_successor`), even if Esplora already reports it confirmed (for example an ASP-published checkpoint). Skipping those used to produce `package-not-child-with-unconfirmed-parents` when submitting the next child. Historic write-up: [archive/unilateral-exit-false-confirmation-rca.md](archive/unilateral-exit-false-confirmation-rca.md) — of interest for the failure mode, not as a description of current gating.
+The cursor also **does not skip** a later step this wallet has not yet broadcast (`wait_cap_holds_unbroadcast_successor`), even if Esplora already reports it confirmed (for example an ASP-published checkpoint). Skipping those used to produce `package-not-child-with-unconfirmed-parents` when submitting the next child. That skip is fixed; the same RPC can still fire for indexer/submit split, a reorg, or an unconfirmed CPFP bumper — see [`waitingForParentData`](#waitingforparentdata-submitpackage-parent-not-spendable). Historic skip write-up: [archive/unilateral-exit-false-confirmation-rca.md](archive/unilateral-exit-false-confirmation-rca.md).
 
 Leaf and intermediate-host `is_unrolled` wait for **6** confs (`UNILATERAL_EXIT_LEAF_CONFIRMATIONS` in [`bitboard-ark/src/constants.rs`](../bitboard-ark/src/constants.rs)) so shallow reorgs do not stamp unroll. Do not persist “step N done” independently of Esplora confirmation depth.
 
@@ -138,7 +138,24 @@ The job lifecycle is one XState v5 actor: [`unilateral-exit.machine.ts`](../fron
 
 Always enter `checkingProgress` before `proceeding` on hydrate, reload, automation tick, and manual start. `waitingConfirm` requires relay: enter `ensuringBroadcast` first; only wait when `isCurrentStepRelayed()` is true (WASM `currentStepTxRelayed`, or `currentStepWaitingSince` after proceed on regtest where `/raw` stays 404 in mempool). Helpers: [`unilateral-exit-broadcast.ts`](../frontend/src/lib/arkade/unilateral-exit-broadcast.ts).
 
-`package-not-child-with-unconfirmed-parents` is a **different** wait: `waitingForParentData` (graph overlay: Lucide `UserRoundArrowLeft`). Esplora can already show the parent confirmed while the submit node does not. Do not use the pickaxe (`waitingConfirm`) for this. After `parentDataWait` (15s; `UNILATERAL_EXIT_PARENT_DATA_WAIT_MS`) the machine returns to `ensuringBroadcast`. `PROCEED_MANUAL` skips the wait.
+### `waitingForParentData` (submitpackage parent not spendable)
+
+`package-not-child-with-unconfirmed-parents` is Bitcoin Core `submitpackage` (Esplora `POST /txs/package`), not a missing `GET /tx/status` row. The package is always `[unroll_tx, cpfp_child]`. Core requires every unconfirmed parent of that package to be **inside** the hex. Bitboard does not include the previous unroll tx; it assumes that parent is already confirmed **on the submit node**.
+
+Step-complete confirmation (`first_incomplete_step_index`) comes from `GET /tx/{txid}/status`. Those two endpoints are not one snapshot. Do **not** reuse `waitingConfirm` / the pickaxe overlay. Graph overlay is Lucide `UserRoundArrowLeft`. User copy: “Waiting for Esplora to acknowledge parent data” — the graph can already show the parent confirmed.
+
+**Not this wait:** skipping an unbroadcast successor because Esplora already painted it confirmed (ASP-published checkpoint). That was a Bitboard cursor bug. `wait_cap_holds_unbroadcast_successor` is the fix. Historic failure mode: [archive/unilateral-exit-false-confirmation-rca.md](archive/unilateral-exit-false-confirmation-rca.md).
+
+**Why the wait still exists** when Bitboard sequenced correctly (parent may already show confirmations):
+
+1. **Indexer vs submit bitcoind.** Status is the Esplora indexer; `/txs/package` is `submitpackage` on a bitcoind. Same base URL does not mean the same backend. Public Mutinynet can report N confirmations on GET while the write node still treats the parent as unconfirmed or missing. Local arkade-regtest is less exposed (`esplora_gateway` serves `/status` from the same bitcoind).
+2. **Shallow reorg between poll and submit.** Progress walks can take many HTTP calls (`prepare_confirmation_scan` snapshots the tip once). On Mutinynet or regtest a parent can have ≥1 conf at GET, then drop before POST. The machine waited; the chain moved.
+3. **CPFP bumper coin, not the unroll parent.** The child also spends a wallet fee-coin that is **not** in the package, so that coin must be confirmed on the submit node. `ark-bdk-wallet` only selects confirmed bumpers. That “confirmed” is still Esplora/BDK, so (1) and (2) apply. If no confirmed bumper remains, `insufficient confirmed funds` maps to the same wait.
+
+Machine: enter `waitingForParentData`, clear `lastErrorMessage` (not an error or pause), bookmark `unconfirmedParentRetry`. No broadcast on entry. After `parentDataWait` (15s; `UNILATERAL_EXIT_PARENT_DATA_WAIT_MS`) or `POLL_TICK`:
+
+- **Manual:** `checkingProgress` with a progress refresh only. If still on the same step, return to `waitingForParentData`. `PROCEED_MANUAL` skips the wait and retries broadcast.
+- **Automatic:** `checkingProgress` with proceed requested on the failed step, which typically retries `ensuringBroadcast`.
 
 `terminated` and `aborted` persist failure, clear the job, invalidate topology/progress/balance queries, then **always** return to `idle`. `WALLET_RESET` is a root transition to `notConfigured` from every state.
 
@@ -162,7 +179,7 @@ stateDiagram-v2
   ensuringBroadcast --> waitingConfirm: relayed
   ensuringBroadcast --> waitingForParentData: package-not-child
   waitingConfirm --> checkingProgress: after pollDelay OR POLL_TICK
-  waitingForParentData --> ensuringBroadcast: after 15s OR POLL_TICK OR PROCEED_MANUAL
+  waitingForParentData --> checkingProgress: after 15s OR POLL_TICK OR PROCEED_MANUAL
   paused --> checkingProgress: RESUME OR PROCEED_MANUAL
   complete --> idle: CLEAR_JOB
   terminated --> idle

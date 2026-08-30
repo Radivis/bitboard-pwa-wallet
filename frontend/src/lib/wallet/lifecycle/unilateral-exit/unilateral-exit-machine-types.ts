@@ -42,6 +42,7 @@ export const UNILATERAL_EXIT_MACHINE_STATE = {
   proceeding: 'proceeding',
   ensuringBroadcast: 'ensuringBroadcast',
   waitingConfirm: 'waitingConfirm',
+  /** submitpackage parent not spendable on the write node; see docs/unilateral-exit.md. */
   waitingForParentData: 'waitingForParentData',
   paused: 'paused',
   complete: 'complete',

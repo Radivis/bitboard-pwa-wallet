@@ -1,6 +1,6 @@
 # Unilateral exit: false confirmations vs `submitpackage` (archived)
 
-> **Archived.** The Mutinynet skip / `package-not-child-with-unconfirmed-parents` issue described here has been resolved. This file is of historic interest. Proposed approaches below (especially gating `first_incomplete_step_index` on `/raw` or submit-node spendability) **do not fully represent current code**. Live gating is `wait_cap_holds_unbroadcast_successor` in [`progress.rs`](../../bitboard-ark/src/session/unilateral_exit/progress.rs). Current handbook: [unilateral-exit.md](../unilateral-exit.md).
+> **Archived.** The Mutinynet skip / `package-not-child-with-unconfirmed-parents` issue described here has been resolved as a **cursor skip**. Live gating is `wait_cap_holds_unbroadcast_successor` in [`progress.rs`](../../bitboard-ark/src/session/unilateral_exit/progress.rs). The same RPC can still occur after correct sequencing (indexer vs submit bitcoind, reorg, unconfirmed CPFP bumper); that wait is `waitingForParentData` in [unilateral-exit.md](../unilateral-exit.md). Proposed approaches below (especially gating `first_incomplete_step_index` on `/raw` or submit-node spendability) **do not fully represent current code**.
 
 The remainder is the original 2026-08-16 agent handoff, kept for context.
 

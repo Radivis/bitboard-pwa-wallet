@@ -113,8 +113,9 @@ impl ArkSession {
                 .await
             {
                 if is_package_not_child_with_unconfirmed_parents_error(&error) {
-                    // submitpackage rejected this child because a parent is still unconfirmed on
-                    // the submit node. Do not treat as success even if Esplora `/raw` already sees it.
+                    // submitpackage rejected a parent the indexer may already paint confirmed
+                    // (indexer vs write node, reorg, or unconfirmed CPFP bumper). Do not stamp
+                    // step_wait. Frontend parks in waitingForParentData. See docs/unilateral-exit.md.
                     return Err(ArkWasmError::Client(error));
                 }
                 let broadcast_satisfied_after_error = unilateral_exit_step_broadcast_satisfied(

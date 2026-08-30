@@ -53,6 +53,7 @@ export function isInsufficientConfirmedBumperFundsError(error: unknown): boolean
   return message.toLowerCase().includes('insufficient confirmed funds')
 }
 
+/** Internal remap for retry detection. Not user-facing; UI uses waitingForParentData copy. */
 export const UNCONFIRMED_PARENT_PACKAGE_RETRY_MESSAGE =
   'Previous unroll step is not confirmed on-chain yet. Wait for a confirmation, then proceed again.'
 

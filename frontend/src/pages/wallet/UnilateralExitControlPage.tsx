@@ -49,6 +49,7 @@ import {
   resolveUnilateralExitJobOutpoints,
 } from '@/lib/wallet/lifecycle/unilateral-exit-job-scope'
 import { isCurrentStepRelayed } from '@/lib/arkade/unilateral-exit-broadcast'
+import { UNILATERAL_EXIT_WAITING_FOR_PARENT_DATA_COPY } from '@/lib/arkade/unilateral-exit-control-phase'
 import { resolveUnilateralExitTopologyOutpoints } from '@/lib/arkade/unilateral-exit-topology'
 import {
   selectUnilateralExitControlJobState,
@@ -738,7 +739,7 @@ export function UnilateralExitControlPage() {
             Step {Math.min(stepIndex + 1, totalSteps)} of {totalSteps}
             {phase === 'complete' && persistedFailure == null ? ' — branch complete' : ''}
             {phase === 'waitingForParentData' && persistedFailure == null
-              ? ' — waiting for parent data'
+              ? ` — ${UNILATERAL_EXIT_WAITING_FOR_PARENT_DATA_COPY}`
               : ''}
             {phase === 'ensuringBroadcast' && persistedFailure == null
               ? ' — broadcasting'

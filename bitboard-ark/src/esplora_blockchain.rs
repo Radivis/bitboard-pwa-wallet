@@ -657,6 +657,8 @@ pub(crate) fn is_redundant_unilateral_exit_broadcast_error(error: &ark_client::E
     is_already_relayed_broadcast_error_message(&error.to_string())
 }
 
+/// `submitpackage` rejected a parent that GET `/tx/status` may already show as confirmed.
+/// Frontend maps this to `waitingForParentData`. See `docs/unilateral-exit.md`.
 pub(crate) fn is_package_not_child_with_unconfirmed_parents_error(
     error: &ark_client::Error,
 ) -> bool {
