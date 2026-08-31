@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   formatUnilateralExitStepProgressDetail,
   isUnilateralExitProceedingAutomatically,
+  UNILATERAL_EXIT_FIGURING_OUT_COPY,
   UNILATERAL_EXIT_PROCEEDING_AUTOMATICALLY_SUFFIX,
   UNILATERAL_EXIT_WAITING_FOR_PARENT_DATA_COPY,
   unilateralExitInProgressOverlayLabel,
@@ -29,7 +30,7 @@ describe('formatUnilateralExitStepProgressDetail', () => {
     ).toBe(` — ${UNILATERAL_EXIT_WAITING_FOR_PARENT_DATA_COPY}`)
     expect(
       formatUnilateralExitStepProgressDetail({ ...manual, phase: 'ensuringBroadcast' }),
-    ).toBe(' — broadcasting')
+    ).toBe(' — broadcasting and monitoring broadcast success')
     expect(formatUnilateralExitStepProgressDetail({ ...manual, phase: 'waiting' })).toBe(
       ' — waiting for confirmation',
     )
@@ -40,16 +41,20 @@ describe('formatUnilateralExitStepProgressDetail', () => {
         stepWaitingDurationLabel: '1m 2s',
       }),
     ).toBe(' — waiting for confirmation (1m 2s)')
-    expect(formatUnilateralExitStepProgressDetail({ ...manual, phase: 'advancing' })).toBe('')
+    expect(formatUnilateralExitStepProgressDetail({ ...manual, phase: 'advancing' })).toBe(
+      ` — ${UNILATERAL_EXIT_FIGURING_OUT_COPY}`,
+    )
   })
 
   it('appends the automatic suffix to the same phase labels', () => {
     expect(formatUnilateralExitStepProgressDetail({ ...automaticJob, phase: 'advancing' })).toBe(
-      UNILATERAL_EXIT_PROCEEDING_AUTOMATICALLY_SUFFIX,
+      ` — ${UNILATERAL_EXIT_FIGURING_OUT_COPY}${UNILATERAL_EXIT_PROCEEDING_AUTOMATICALLY_SUFFIX}`,
     )
     expect(
       formatUnilateralExitStepProgressDetail({ ...automaticJob, phase: 'ensuringBroadcast' }),
-    ).toBe(` — broadcasting${UNILATERAL_EXIT_PROCEEDING_AUTOMATICALLY_SUFFIX}`)
+    ).toBe(
+      ` — broadcasting and monitoring broadcast success${UNILATERAL_EXIT_PROCEEDING_AUTOMATICALLY_SUFFIX}`,
+    )
     expect(formatUnilateralExitStepProgressDetail({ ...automaticJob, phase: 'waiting' })).toBe(
       ` — waiting for confirmation${UNILATERAL_EXIT_PROCEEDING_AUTOMATICALLY_SUFFIX}`,
     )
@@ -122,6 +127,10 @@ describe('unilateralExitInProgressOverlayLabel', () => {
     expect(
       unilateralExitInProgressOverlayLabel('ensuringBroadcast', { proceedingAutomatically: true }),
     ).toBe(`Broadcasting${UNILATERAL_EXIT_PROCEEDING_AUTOMATICALLY_SUFFIX}`)
+    expect(unilateralExitInProgressOverlayLabel('figuringOut')).toBe('Figuring out what to do next')
+    expect(
+      unilateralExitInProgressOverlayLabel('figuringOut', { proceedingAutomatically: true }),
+    ).toBe(`Figuring out what to do next${UNILATERAL_EXIT_PROCEEDING_AUTOMATICALLY_SUFFIX}`)
     expect(
       unilateralExitInProgressOverlayLabel('readyToProceed', { proceedingAutomatically: true }),
     ).toBeUndefined()

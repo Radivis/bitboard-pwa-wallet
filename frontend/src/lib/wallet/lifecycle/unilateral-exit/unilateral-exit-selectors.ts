@@ -287,6 +287,16 @@ export function selectUnilateralExitInProgressOverlay(
     }
   }
   if (
+    unilateralExitSnapshotIsInAnyState(state, [
+      UNILATERAL_EXIT_MACHINE_STATE.proceeding,
+      UNILATERAL_EXIT_MACHINE_STATE.checkingProgress,
+      UNILATERAL_EXIT_MACHINE_STATE.loadingProgress,
+      UNILATERAL_EXIT_MACHINE_STATE.evaluatingPolicy,
+    ])
+  ) {
+    return 'figuringOut'
+  }
+  if (
     (unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.idle) ||
       unilateralExitSnapshotIsInState(state, UNILATERAL_EXIT_MACHINE_STATE.error)) &&
     state.context.jobOutpoints.length > 0 &&

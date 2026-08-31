@@ -452,7 +452,7 @@ describe('selectUnilateralExitInProgressOverlay', () => {
         nodeStatuses: [{ txid: 'step0', confirmations: 0, status: 'inProgress' }],
       }),
     })
-    expect(selectUnilateralExitInProgressOverlay(snapshot)).toBeNull()
+    expect(selectUnilateralExitInProgressOverlay(snapshot)).toBe('figuringOut')
     expect(
       selectUnilateralExitControlJobState(snapshot, {
         hasInProgressExits: false,
@@ -464,12 +464,20 @@ describe('selectUnilateralExitInProgressOverlay', () => {
     )
   })
 
-  it('returns null during proceeding', () => {
+  it('returns figuringOut overlay during proceeding', () => {
     const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.proceeding, {
       jobOutpoints: [leaf],
       progress: null,
     })
-    expect(selectUnilateralExitInProgressOverlay(snapshot)).toBeNull()
+    expect(selectUnilateralExitInProgressOverlay(snapshot)).toBe('figuringOut')
+  })
+
+  it('returns figuringOut overlay during evaluatingPolicy', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.evaluatingPolicy, {
+      jobOutpoints: [leaf],
+      progress: progress({ phase: 'idle' }),
+    })
+    expect(selectUnilateralExitInProgressOverlay(snapshot)).toBe('figuringOut')
   })
 
   it('returns null overlay when the machine is complete', () => {

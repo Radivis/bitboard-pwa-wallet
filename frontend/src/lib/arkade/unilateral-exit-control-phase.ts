@@ -12,6 +12,7 @@ export type UnilateralExitInProgressOverlayKind =
   | 'ensuringBroadcast'
   | 'waiting'
   | 'waitingForParentData'
+  | 'figuringOut'
   | 'readyToProceed'
 
 /**
@@ -20,6 +21,9 @@ export type UnilateralExitInProgressOverlayKind =
  */
 export const UNILATERAL_EXIT_WAITING_FOR_PARENT_DATA_COPY =
   'Waiting for Esplora to acknowledge parent data'
+
+/** Default label while the machine is in flight but not waiting, broadcasting, or blocked on parent data. */
+export const UNILATERAL_EXIT_FIGURING_OUT_COPY = 'figuring out what to do next'
 
 export const UNILATERAL_EXIT_PROCEEDING_AUTOMATICALLY_SUFFIX =
   ' (proceeding automatically)'
@@ -49,6 +53,11 @@ export function unilateralExitInProgressOverlayLabel(
       return appendAutomaticProceedingSuffix('Waiting for confirmation', proceedingAutomatically)
     case 'ensuringBroadcast':
       return appendAutomaticProceedingSuffix('Broadcasting', proceedingAutomatically)
+    case 'figuringOut':
+      return appendAutomaticProceedingSuffix(
+        'Figuring out what to do next',
+        proceedingAutomatically,
+      )
     case 'readyToProceed':
       return undefined
   }
@@ -75,6 +84,9 @@ function unilateralExitStepProgressPhaseDetail(params: {
     const duration =
       params.stepWaitingDurationLabel != null ? ` (${params.stepWaitingDurationLabel})` : ''
     return ` — waiting for confirmation${duration}`
+  }
+  if (params.phase === 'advancing') {
+    return ` — ${UNILATERAL_EXIT_FIGURING_OUT_COPY}`
   }
   return ''
 }

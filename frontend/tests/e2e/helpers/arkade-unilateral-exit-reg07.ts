@@ -521,7 +521,7 @@ export async function runAutomaticUnilateralUnrollUntilBranchComplete(page: Page
     const isAdvancingPhase =
       progressPhase === 'advancing' ||
       progressPhase === 'ensuringBroadcast' ||
-      /proceeding automatically/i.test(rawProgressText) ||
+      /figuring out what to do next/i.test(rawProgressText) ||
       /broadcasting/i.test(rawProgressText)
 
     if (isAdvancingPhase) {

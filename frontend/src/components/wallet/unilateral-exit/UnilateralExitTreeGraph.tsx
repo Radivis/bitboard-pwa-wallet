@@ -8,7 +8,17 @@ import {
   type NodeProps,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { Check, Coins, Loader2, Megaphone, Pickaxe, Play, UserRoundArrowLeft, type LucideIcon } from 'lucide-react'
+import {
+  Check,
+  Cog,
+  Coins,
+  Loader2,
+  Megaphone,
+  Pickaxe,
+  Play,
+  UserRoundArrowLeft,
+  type LucideIcon,
+} from 'lucide-react'
 import {
   unilateralExitInProgressOverlayLabel,
   type UnilateralExitInProgressOverlayKind,
@@ -53,6 +63,8 @@ function unilateralExitInProgressOverlayIcon(
       return Pickaxe
     case 'waitingForParentData':
       return UserRoundArrowLeft
+    case 'figuringOut':
+      return Cog
     case 'readyToProceed':
       return Play
   }

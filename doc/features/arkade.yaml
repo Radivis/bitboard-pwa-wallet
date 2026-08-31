@@ -124,6 +124,8 @@ feature:
         description: Control page offers abort when a frontend unilateral exit job is active; two-step confirmation (info then red risk modal with required checkbox); abort ends orchestration via aborted machine state without waiting on WASM list RPCs and without deleting unilateral_exit_materials or other WASM persistence; user_aborted failure banner lists VTXO ids with copy actions when id lookup succeeds; backend in-progress state remains until completion or reconcile
       - id: ARK-EXIT-24
         description: Control page step progress and in-progress overlay use the same phase labels in automatic mode as in manual mode, with " (proceeding automatically)" appended while automation is advancing the job
+      - id: ARK-EXIT-25
+        description: In-flight states other than waiting, ensuringBroadcast, and waitingForParentData show "figuring out what to do next" on step progress and a cog overlay (title/aria "Figuring out what to do next"); automatic mode still appends " (proceeding automatically)"
     autonomous_mode:
       - id: ARK-AUTO-01
         description: BitboardArkPersistence.autonomous_mode is persisted per ASP connection; missing or legacy blobs default false; opt-in is explicit via the Management switch (with confirm) or operator-trust review
