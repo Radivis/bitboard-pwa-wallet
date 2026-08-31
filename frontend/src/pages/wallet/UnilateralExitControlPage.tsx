@@ -49,7 +49,10 @@ import {
   resolveUnilateralExitJobOutpoints,
 } from '@/lib/wallet/lifecycle/unilateral-exit-job-scope'
 import { isCurrentStepRelayed } from '@/lib/arkade/unilateral-exit-broadcast'
-import { UNILATERAL_EXIT_WAITING_FOR_PARENT_DATA_COPY } from '@/lib/arkade/unilateral-exit-control-phase'
+import {
+  formatUnilateralExitStepProgressDetail,
+  isUnilateralExitProceedingAutomatically,
+} from '@/lib/arkade/unilateral-exit-control-phase'
 import { resolveUnilateralExitTopologyOutpoints } from '@/lib/arkade/unilateral-exit-topology'
 import {
   shouldHydratePersistedUnilateralExitJob,
@@ -484,6 +487,13 @@ export function UnilateralExitControlPage() {
     () => selectUnilateralExitInProgressOverlay(actorSnapshot),
     [actorSnapshot],
   )
+  const proceedingAutomatically = isUnilateralExitProceedingAutomatically({
+    phase,
+    hasPersistedFailure: persistedFailure != null,
+    automationEnabled,
+    automationPaused: automationPausedReason != null,
+    jobInFlight: lifecycleJobActive || machineProceeding || isProceeding,
+  })
   const currentStepRelayedSinceUnix = persistedJob.currentStepRelayedSinceUnix
   const stepWaitingDurationLabel = useUnilateralExitStepWaitingClock(
     currentStepRelayedSinceUnix,
@@ -691,6 +701,7 @@ export function UnilateralExitControlPage() {
               selectedLeafOutpoints={jobOutpoints}
               nodeStatuses={nodeStatuses}
               inProgressOverlay={inProgressOverlay}
+              proceedingAutomatically={proceedingAutomatically}
               focusedNodeId={focusedNodeId}
               onNodeFocus={setFocusedNodeId}
               onReadyToProceed={handleProceedClick}
@@ -721,32 +732,12 @@ export function UnilateralExitControlPage() {
             data-step-relayed={String(isCurrentStepRelayed(progress))}
           >
             Step {Math.min(stepIndex + 1, totalSteps)} of {totalSteps}
-            {phase === 'complete' && persistedFailure == null ? ' — branch complete' : ''}
-            {phase === 'waitingForParentData' && persistedFailure == null
-              ? ` — ${UNILATERAL_EXIT_WAITING_FOR_PARENT_DATA_COPY}`
-              : ''}
-            {phase === 'ensuringBroadcast' && persistedFailure == null
-              ? ' — broadcasting'
-              : ''}
-            {(phase === 'waiting' || stepWaitingDurationLabel != null) &&
-            phase !== 'complete' &&
-            phase !== 'waitingForParentData' &&
-            phase !== 'ensuringBroadcast' &&
-            persistedFailure == null
-              ? ` — waiting for confirmation${
-                  stepWaitingDurationLabel != null ? ` (${stepWaitingDurationLabel})` : ''
-                }`
-              : ''}
-            {automationEnabled &&
-            automationPausedReason == null &&
-            phase !== 'complete' &&
-            phase !== 'waiting' &&
-            phase !== 'waitingForParentData' &&
-            phase !== 'ensuringBroadcast' &&
-            persistedFailure == null &&
-            (lifecycleJobActive || machineProceeding || isProceeding)
-              ? ' — proceeding automatically'
-              : ''}
+            {formatUnilateralExitStepProgressDetail({
+              phase,
+              hasPersistedFailure: persistedFailure != null,
+              stepWaitingDurationLabel,
+              proceedingAutomatically,
+            })}
           </p>
         )}
         {unilateralExitSnapshotIsInState(actorSnapshot, UNILATERAL_EXIT_MACHINE_STATE.error) &&

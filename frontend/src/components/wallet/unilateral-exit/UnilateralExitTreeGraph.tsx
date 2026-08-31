@@ -36,6 +36,7 @@ interface UnilateralExitTreeGraphProps {
   selectedLeafOutpoints: ArkadeVtxoOutpoint[]
   nodeStatuses: ArkadeUnilateralExitNodeStatus[]
   inProgressOverlay: UnilateralExitInProgressOverlayKind | null
+  proceedingAutomatically?: boolean
   focusedNodeId: string | null
   onNodeFocus: (nodeId: string) => void
   onReadyToProceed?: () => void
@@ -59,10 +60,12 @@ function unilateralExitInProgressOverlayIcon(
 
 function UnilateralExitInProgressBadge({
   overlay,
+  proceedingAutomatically,
   onReadyToProceed,
   readyToProceedDisabled,
 }: {
   overlay: UnilateralExitInProgressOverlayKind | null
+  proceedingAutomatically?: boolean
   onReadyToProceed?: () => void
   readyToProceedDisabled?: boolean
 }) {
@@ -93,7 +96,9 @@ function UnilateralExitInProgressBadge({
 
   const OverlayIcon = overlay == null ? null : unilateralExitInProgressOverlayIcon(overlay)
   const overlayLabel =
-    overlay == null ? undefined : unilateralExitInProgressOverlayLabel(overlay)
+    overlay == null
+      ? undefined
+      : unilateralExitInProgressOverlayLabel(overlay, { proceedingAutomatically })
 
   return (
     <div
@@ -160,6 +165,7 @@ function UnilateralExitTreeNode({
       {data.status === 'inProgress' && (
         <UnilateralExitInProgressBadge
           overlay={data.inProgressOverlay}
+          proceedingAutomatically={data.proceedingAutomatically}
           onReadyToProceed={data.onReadyToProceed}
           readyToProceedDisabled={data.readyToProceedDisabled}
         />
@@ -187,6 +193,7 @@ function UnilateralExitTreeGraphCanvas({
   selectedLeafOutpoints,
   nodeStatuses,
   inProgressOverlay,
+  proceedingAutomatically,
   focusedNodeId,
   onNodeFocus,
   layoutDirection,
@@ -206,6 +213,7 @@ function UnilateralExitTreeGraphCanvas({
         selectedLeafOutpoints,
         nodeStatuses,
         inProgressOverlay,
+        proceedingAutomatically,
         layoutDirection,
         focusedNodeId,
         onReadyToProceed: dispatchReadyToProceed,
@@ -216,6 +224,7 @@ function UnilateralExitTreeGraphCanvas({
       selectedLeafOutpoints,
       nodeStatuses,
       inProgressOverlay,
+      proceedingAutomatically,
       layoutDirection,
       focusedNodeId,
       dispatchReadyToProceed,
@@ -253,6 +262,7 @@ export function UnilateralExitTreeGraph({
   selectedLeafOutpoints,
   nodeStatuses,
   inProgressOverlay,
+  proceedingAutomatically,
   focusedNodeId,
   onNodeFocus,
   onReadyToProceed,
@@ -305,6 +315,7 @@ export function UnilateralExitTreeGraph({
               selectedLeafOutpoints={selectedLeafOutpoints}
               nodeStatuses={nodeStatuses}
               inProgressOverlay={inProgressOverlay}
+              proceedingAutomatically={proceedingAutomatically}
               focusedNodeId={focusedNodeId}
               onNodeFocus={onNodeFocus}
               onReadyToProceed={onReadyToProceed}

@@ -226,7 +226,22 @@ describe('unilateral-exit-topology helpers', () => {
     })
 
     expect(nodes.find((node) => node.id === 'bb')?.data.inProgressOverlay).toBe('waiting')
+    expect(nodes.find((node) => node.id === 'bb')?.data.proceedingAutomatically).toBe(false)
     expect(nodes.find((node) => node.id === 'cc')?.data.inProgressOverlay).toBeNull()
+  })
+
+  it('layoutUnilateralExitGraph marks proceedingAutomatically only on the in-progress overlay node', () => {
+    const { nodes } = layoutUnilateralExitGraph({
+      topology: sampleTopology,
+      selectedLeafOutpoints: [{ txid: 'cc', vout: 0 }],
+      nodeStatuses: [{ txid: 'bb', confirmations: 0, status: 'inProgress' }],
+      inProgressOverlay: 'ensuringBroadcast',
+      proceedingAutomatically: true,
+      layoutDirection: 'TB',
+    })
+
+    expect(nodes.find((node) => node.id === 'bb')?.data.proceedingAutomatically).toBe(true)
+    expect(nodes.find((node) => node.id === 'cc')?.data.proceedingAutomatically).toBe(false)
   })
 
   it('layoutUnilateralExitGraph attaches readyToProceed handler only on the in-progress node', () => {

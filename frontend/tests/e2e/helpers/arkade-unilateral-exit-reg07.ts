@@ -87,6 +87,7 @@ async function isWaitingForStepConfirmation(page: Page): Promise<boolean> {
 /** Ignore ticking wait-duration labels so stuck detection cannot be reset every second. */
 function normalizeStepProgressForComparison(progressText: string): string {
   return progressText
+    .replace(/\s+\(proceeding automatically\)$/i, '')
     .replace(/\s+— waiting for confirmation \(.*\)$/i, '')
     .replace(/\s+— proceeding automatically$/i, '')
     .trim()

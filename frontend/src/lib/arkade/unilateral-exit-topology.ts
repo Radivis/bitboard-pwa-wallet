@@ -54,6 +54,7 @@ export type UnilateralExitTreeNodeData = {
   isFocused: boolean
   status: ArkadeUnilateralExitNodeStatus['status']
   inProgressOverlay: UnilateralExitInProgressOverlayKind | null
+  proceedingAutomatically: boolean
   onReadyToProceed?: () => void
   readyToProceedDisabled?: boolean
   confirmations: number
@@ -324,6 +325,7 @@ export function layoutUnilateralExitGraph(params: {
   selectedLeafOutpoints: ArkadeVtxoOutpoint[]
   nodeStatuses: ArkadeUnilateralExitNodeStatus[]
   inProgressOverlay: UnilateralExitInProgressOverlayKind | null
+  proceedingAutomatically?: boolean
   layoutDirection: UnilateralExitLayoutDirection
   focusedNodeId?: string | null
   onReadyToProceed?: () => void
@@ -334,6 +336,7 @@ export function layoutUnilateralExitGraph(params: {
     selectedLeafOutpoints,
     nodeStatuses,
     inProgressOverlay,
+    proceedingAutomatically = false,
     layoutDirection,
     focusedNodeId,
     onReadyToProceed,
@@ -412,6 +415,7 @@ export function layoutUnilateralExitGraph(params: {
         focusedNodeId,
         status,
         inProgressOverlay,
+        proceedingAutomatically,
         onReadyToProceed,
         readyToProceedDisabled,
         layoutDirection,
@@ -441,6 +445,7 @@ function buildTreeNodeData(params: {
   focusedNodeId?: string | null
   status: ArkadeUnilateralExitNodeStatus | undefined
   inProgressOverlay: UnilateralExitInProgressOverlayKind | null
+  proceedingAutomatically: boolean
   onReadyToProceed?: () => void
   readyToProceedDisabled?: boolean
   layoutDirection: UnilateralExitLayoutDirection
@@ -457,6 +462,10 @@ function buildTreeNodeData(params: {
     isFocused: params.focusedNodeId === params.nodeId,
     status: nodeStatus,
     inProgressOverlay: overlay,
+    proceedingAutomatically:
+      overlay != null && overlay !== 'readyToProceed'
+        ? params.proceedingAutomatically
+        : false,
     onReadyToProceed:
       overlay === 'readyToProceed' ? params.onReadyToProceed : undefined,
     readyToProceedDisabled:
