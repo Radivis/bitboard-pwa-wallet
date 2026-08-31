@@ -23,13 +23,14 @@ import type { UnilateralExitFailureReasonCode } from '@/lib/wallet/lifecycle/uni
 import {
   createInitialUnilateralExitContext,
   type UnilateralExitMachineContext,
-  type UnilateralExitMachineEvent,
+  type UnilateralExitMachineSetupEvent,
   type UnilateralExitMachineInput,
   type UnilateralExitPolicyEvaluation,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-types'
+import { invalidateUnilateralExitQueries } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-query-cache'
 import type { ArkadeUnilateralExitProgress, ArkadeUnilateralExitJobViability } from '@/workers/arkade-api'
 import { arkadeVtxoOutpointListsEqual, sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
-import { assign, fromPromise, setup } from 'xstate'
+import { assertEvent, assign, fromPromise, setup, type PromiseActorLogic } from 'xstate'
 
 export type EnsureBroadcastActorInput = {
   walletScope: NonNullable<UnilateralExitMachineContext['walletScope']>
@@ -62,40 +63,71 @@ export type ResolveAbortVtxoIdsActorInput = {
   outpoints: UnilateralExitMachineContext['jobOutpoints']
 }
 
-function viabilityFromEvaluateEvent(
-  event: UnilateralExitMachineEvent,
-): ArkadeUnilateralExitJobViability | null {
-  return event.type === 'xstate.done.actor.evaluateJobViability' ? event.output : null
+type UnilateralExitSetupActors = {
+  evaluateJobViabilityActor: PromiseActorLogic<
+    ArkadeUnilateralExitJobViability,
+    EvaluateJobViabilityActorInput
+  >
+  fetchProgressActor: PromiseActorLogic<ArkadeUnilateralExitProgress, FetchProgressActorInput>
+  evaluateAutomationPolicyActor: PromiseActorLogic<
+    UnilateralExitPolicyEvaluation,
+    EvaluateAutomationPolicyActorInput
+  >
+  proceedStepActor: PromiseActorLogic<ArkadeUnilateralExitProgress, ProceedStepActorInput>
+  ensureBroadcastActor: PromiseActorLogic<ArkadeUnilateralExitProgress, EnsureBroadcastActorInput>
+  resolveAbortVtxoIdsActor: PromiseActorLogic<{ vtxoIds: string[] }, ResolveAbortVtxoIdsActorInput>
+}
+
+export function requireUnilateralExitWalletScope(
+  walletScope: UnilateralExitMachineContext['walletScope'],
+): NonNullable<UnilateralExitMachineContext['walletScope']> {
+  if (walletScope == null) {
+    throw new Error('Unilateral exit requires a configured wallet scope')
+  }
+  return walletScope
+}
+
+export function requireUnilateralExitFeeRateSatPerVb(feeRateSatPerVb: number | null): number {
+  if (feeRateSatPerVb == null) {
+    throw new Error('Fee rate is required to proceed with a unilateral exit step')
+  }
+  return feeRateSatPerVb
+}
+
+function actorErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback
 }
 
 function isTerminalViabilityStatus(
-  viability: ArkadeUnilateralExitJobViability | null,
+  viability: ArkadeUnilateralExitJobViability,
 ): boolean {
   return viability?.status === 'aspSweptTargets' || viability?.status === 'branchFundingLost'
 }
 
 function progressFromFetchEvent(
-  event: UnilateralExitMachineEvent,
-): ArkadeUnilateralExitProgress | null {
-  return event.type === 'xstate.done.actor.fetchProgress' ? event.output : null
+  event: UnilateralExitMachineSetupEvent,
+): ArkadeUnilateralExitProgress {
+  assertEvent(event, 'xstate.done.actor.fetchProgress')
+  return event.output
+}
+
+function progressFromProceedEvent(
+  event: UnilateralExitMachineSetupEvent,
+): ArkadeUnilateralExitProgress {
+  assertEvent(event, 'xstate.done.actor.proceedStep')
+  return event.output
 }
 
 function progressFromEnsureBroadcastEvent(
-  event: UnilateralExitMachineEvent,
-): ArkadeUnilateralExitProgress | null {
-  return event.type === 'xstate.done.actor.ensureBroadcast' ? event.output : null
+  event: UnilateralExitMachineSetupEvent,
+): ArkadeUnilateralExitProgress {
+  assertEvent(event, 'xstate.done.actor.ensureBroadcast')
+  return event.output
 }
 
-function errorFromProceedOrEnsureBroadcast(
-  event: UnilateralExitMachineEvent,
-): unknown {
-  if (
-    event.type === 'xstate.error.actor.ensureBroadcast' ||
-    event.type === 'xstate.error.actor.proceedStep'
-  ) {
-    return event.error
-  }
-  return undefined
+function errorFromProceedOrEnsureBroadcast(event: UnilateralExitMachineSetupEvent): unknown {
+  assertEvent(event, ['xstate.error.actor.ensureBroadcast', 'xstate.error.actor.proceedStep'])
+  return event.error
 }
 
 function stepIndexAdvancedPastContext(
@@ -146,8 +178,16 @@ function isJobCompleteFromProgress(
 export const unilateralExitMachineSetup = setup({
   types: {
     context: {} as UnilateralExitMachineContext,
-    events: {} as UnilateralExitMachineEvent,
+    events: {} as UnilateralExitMachineSetupEvent,
     input: {} as UnilateralExitMachineInput,
+    children: {} as {
+      evaluateJobViability: 'evaluateJobViabilityActor'
+      fetchProgress: 'fetchProgressActor'
+      evaluateAutomationPolicy: 'evaluateAutomationPolicyActor'
+      proceedStep: 'proceedStepActor'
+      ensureBroadcast: 'ensureBroadcastActor'
+      resolveAbortVtxoIds: 'resolveAbortVtxoIdsActor'
+    },
   },
   delays: {
     pollDelay: ({ context }) => context.pollDelayMs,
@@ -185,15 +225,14 @@ export const unilateralExitMachineSetup = setup({
         throw new Error('resolveAbortVtxoIdsActor implementation missing')
       },
     ),
-  },
+  } satisfies UnilateralExitSetupActors,
   guards: {
     isJobCompleteFromFetchEvent: ({ context, event }) => {
       const output = progressFromFetchEvent(event)
       return isJobCompleteFromProgress(output, context)
     },
     isJobCompleteFromProceedEvent: ({ context, event }) => {
-      const output =
-        event.type === 'xstate.done.actor.proceedStep' ? event.output : null
+      const output = progressFromProceedEvent(event)
       return isJobCompleteFromProgress(output, context)
     },
     isJobCompleteFromEnsureBroadcastEvent: ({ context, event }) => {
@@ -214,7 +253,7 @@ export const unilateralExitMachineSetup = setup({
       if (context.proceedTargetStepIndex == null) {
         return true
       }
-      return output?.stepIndex === context.proceedTargetStepIndex
+      return output.stepIndex === context.proceedTargetStepIndex
     },
     needsBroadcastBeforeEnsureBroadcast: ({ context, event }) =>
       needsBroadcastEnsurance(progressFromFetchEvent(event)) &&
@@ -260,7 +299,7 @@ export const unilateralExitMachineSetup = setup({
         return false
       }
       const output = progressFromEnsureBroadcastEvent(event)
-      if (output == null || isJobCompleteFromProgress(output, context)) {
+      if (isJobCompleteFromProgress(output, context)) {
         return false
       }
       return !isWaitingForRelayedStepConfirmation(output)
@@ -284,33 +323,41 @@ export const unilateralExitMachineSetup = setup({
         !needsBroadcastEnsurance(output)
       )
     },
-    policyPaused: ({ event }) =>
-      event.type === 'xstate.done.actor.evaluateAutomationPolicy' &&
-      event.output.pausedReason != null,
-    policyOk: ({ event }) =>
-      event.type === 'xstate.done.actor.evaluateAutomationPolicy' &&
-      event.output.pausedReason == null,
-    isJobTerminatedFromViabilityEvent: ({ event }) =>
-      isTerminalViabilityStatus(viabilityFromEvaluateEvent(event)),
+    policyPaused: ({ event }) => {
+      assertEvent(event, 'xstate.done.actor.evaluateAutomationPolicy')
+      return event.output.pausedReason != null
+    },
+    policyOk: ({ event }) => {
+      assertEvent(event, 'xstate.done.actor.evaluateAutomationPolicy')
+      return event.output.pausedReason == null
+    },
+    isJobTerminatedFromViabilityEvent: ({ event }) => {
+      assertEvent(event, 'xstate.done.actor.evaluateJobViability')
+      return isTerminalViabilityStatus(event.output)
+    },
     isUnconfirmedParentPackageError: ({ event }) =>
       isRetryableUnconfirmedParentPackageError(errorFromProceedOrEnsureBroadcast(event)),
+    automationEnabled: ({ context }) => context.automationEnabled,
+    prefsEnabled: ({ event }) => {
+      assertEvent(event, 'AUTOMATION_PREFS_CHANGED')
+      return event.automationEnabled
+    },
+    prefsEnabledWithJob: ({ context, event }) => {
+      assertEvent(event, 'AUTOMATION_PREFS_CHANGED')
+      return event.automationEnabled && context.jobOutpoints.length > 0
+    },
   },
   actions: {
     assignWalletScope: assign(({ event }) => {
-      if (event.type !== 'WALLET_CONFIGURED') {
-        return {}
-      }
+      assertEvent(event, 'WALLET_CONFIGURED')
       return {
         walletScope: event.walletScope,
         pollDelayMs: unilateralExitAutomationWaitPollMs(event.walletScope.networkMode),
       }
     }),
     assignStartManual: assign(({ event }) => {
-      if (event.type !== 'START_MANUAL') {
-        return {}
-      }
+      assertEvent(event, 'START_MANUAL')
       const outpoints = sortArkadeVtxoOutpoints(event.outpoints)
-      persistActiveUnilateralExitJob(event.walletScope, outpoints)
       return {
         walletScope: event.walletScope,
         jobOutpoints: outpoints,
@@ -325,11 +372,8 @@ export const unilateralExitMachineSetup = setup({
       }
     }),
     assignStartAutomatic: assign(({ event }) => {
-      if (event.type !== 'START_AUTOMATIC') {
-        return {}
-      }
+      assertEvent(event, 'START_AUTOMATIC')
       const outpoints = sortArkadeVtxoOutpoints(event.outpoints)
-      persistActiveUnilateralExitJob(event.walletScope, outpoints)
       return {
         walletScope: event.walletScope,
         jobOutpoints: outpoints,
@@ -345,11 +389,8 @@ export const unilateralExitMachineSetup = setup({
       }
     }),
     assignHydrate: assign(({ context, event }) => {
-      if (event.type !== 'HYDRATE_OR_START') {
-        return {}
-      }
+      assertEvent(event, 'HYDRATE_OR_START')
       const outpoints = sortArkadeVtxoOutpoints(event.outpoints)
-      ensurePersistedUnilateralExitJob(event.walletScope, outpoints)
       const automationEnabled = event.automationEnabled ?? false
       const resumeAutomation = event.resumeAutomation ?? false
       const keepExistingProgress =
@@ -371,10 +412,20 @@ export const unilateralExitMachineSetup = setup({
         reconcileInProgressOutpoints: event.reconcileInProgressOutpoints ?? [],
       }
     }),
-    assignProceedManual: assign(({ context, event }) => {
-      if (event.type !== 'PROCEED_MANUAL') {
-        return {}
+    persistActiveJobFromContext: ({ context }) => {
+      if (context.walletScope == null) {
+        return
       }
+      persistActiveUnilateralExitJob(context.walletScope, context.jobOutpoints)
+    },
+    ensurePersistedJobFromContext: ({ context }) => {
+      if (context.walletScope == null) {
+        return
+      }
+      ensurePersistedUnilateralExitJob(context.walletScope, context.jobOutpoints)
+    },
+    assignProceedManual: assign(({ context, event }) => {
+      assertEvent(event, 'PROCEED_MANUAL')
       return {
         proceedRequested: true,
         proceedTargetStepIndex: context.progress?.stepIndex ?? null,
@@ -384,65 +435,59 @@ export const unilateralExitMachineSetup = setup({
         lastErrorMessage: null,
       }
     }),
-    assignProgressFromFetch: assign({
-      progress: ({ event }) =>
-        event.type === 'xstate.done.actor.fetchProgress' ? event.output : null,
-      unconfirmedParentRetry: ({ event, context }) => {
-        const retry = context.unconfirmedParentRetry
-        if (retry == null) {
-          return null
-        }
-        const output =
-          event.type === 'xstate.done.actor.fetchProgress' ? event.output : null
-        if (output != null && output.stepIndex !== retry.stepIndex) {
-          return null
-        }
-        return retry
-      },
+    assignProgressFromFetch: assign(({ context, event }) => {
+      assertEvent(event, 'xstate.done.actor.fetchProgress')
+      const retry = context.unconfirmedParentRetry
+      const output = event.output
+      return {
+        progress: output,
+        unconfirmedParentRetry:
+          retry == null || output.stepIndex !== retry.stepIndex ? null : retry,
+      }
     }),
-    assignProgressFromProceed: assign({
-      progress: ({ event }) =>
-        event.type === 'xstate.done.actor.proceedStep' ? event.output : null,
-      unconfirmedParentRetry: null,
+    assignProgressFromProceed: assign(({ event }) => {
+      assertEvent(event, 'xstate.done.actor.proceedStep')
+      return {
+        progress: event.output,
+        unconfirmedParentRetry: null,
+      }
     }),
-    assignProgressFromEnsureBroadcast: assign({
-      progress: ({ event }) =>
-        event.type === 'xstate.done.actor.ensureBroadcast' ? event.output : null,
-      unconfirmedParentRetry: null,
+    assignProgressFromEnsureBroadcast: assign(({ event }) => {
+      assertEvent(event, 'xstate.done.actor.ensureBroadcast')
+      return {
+        progress: event.output,
+        unconfirmedParentRetry: null,
+      }
     }),
     assignFeeFromPolicy: assign({
-      feeRateSatPerVb: ({ event }) =>
-        event.type === 'xstate.done.actor.evaluateAutomationPolicy'
-          ? event.output.feeRateSatPerVb
-          : null,
+      feeRateSatPerVb: ({ event }) => {
+        assertEvent(event, 'xstate.done.actor.evaluateAutomationPolicy')
+        return event.output.feeRateSatPerVb
+      },
     }),
     assignPausedFromPolicy: assign({
-      pausedReason: ({ event }) =>
-        event.type === 'xstate.done.actor.evaluateAutomationPolicy'
-          ? event.output.pausedReason
-          : null,
+      pausedReason: ({ event }) => {
+        assertEvent(event, 'xstate.done.actor.evaluateAutomationPolicy')
+        return event.output.pausedReason
+      },
       proceedRequested: false,
     }),
-    assignAutomationPrefs: assign({
-      automationEnabled: ({ event }) =>
-        event.type === 'AUTOMATION_PREFS_CHANGED' ? event.automationEnabled : false,
-      pausedReason: null,
-      lastErrorMessage: null,
-      feeRateSatPerVb: ({ context, event }) => {
-        if (event.type === 'AUTOMATION_PREFS_CHANGED' && event.automationEnabled) {
-          return null
-        }
-        return context.feeRateSatPerVb
-      },
-      proceedRequested: ({ context, event }) => {
-        if (event.type !== 'AUTOMATION_PREFS_CHANGED') {
-          return context.proceedRequested
-        }
-        if (!event.automationEnabled) {
-          return false
-        }
-        return context.jobOutpoints.length > 0
-      },
+    assignPausedUnknownPolicy: assign({
+      pausedReason: 'error' as const,
+      lastErrorMessage: 'Policy check failed.',
+      proceedRequested: false,
+    }),
+    assignAutomationPrefs: assign(({ context, event }) => {
+      assertEvent(event, 'AUTOMATION_PREFS_CHANGED')
+      return {
+        automationEnabled: event.automationEnabled,
+        pausedReason: null,
+        lastErrorMessage: null,
+        feeRateSatPerVb: event.automationEnabled ? null : context.feeRateSatPerVb,
+        proceedRequested: event.automationEnabled
+          ? context.jobOutpoints.length > 0
+          : false,
+      }
     }),
     assignResume: assign({
       pausedReason: null,
@@ -502,9 +547,7 @@ export const unilateralExitMachineSetup = setup({
       syncPersistedRelayWait(context.walletScope, progressFromFetchEvent(event))
     },
     syncPersistedRelayWaitFromProceed: ({ context, event }) => {
-      const progress =
-        event.type === 'xstate.done.actor.proceedStep' ? event.output : null
-      syncPersistedRelayWait(context.walletScope, progress)
+      syncPersistedRelayWait(context.walletScope, progressFromProceedEvent(event))
     },
     syncPersistedRelayWaitFromEnsureBroadcast: ({ context, event }) => {
       syncPersistedRelayWait(
@@ -512,36 +555,24 @@ export const unilateralExitMachineSetup = setup({
         progressFromEnsureBroadcastEvent(event),
       )
     },
-    clearPersistedOnComplete: ({ context }) => {
-      if (context.walletScope != null) {
-        clearPersistedUnilateralExitJob(context.walletScope)
+    assignErrorFromProceed: assign(({ context, event }) => {
+      assertEvent(event, 'xstate.error.actor.proceedStep')
+      return {
+        lastErrorMessage: actorErrorMessage(event.error, 'Unroll step failed.'),
+        proceedRequested: false,
+        progress: rewoundProgressFromPackageError(event.error) ?? context.progress,
       }
-    },
-    assignErrorFromProceed: assign({
-      lastErrorMessage: ({ event }) =>
-        event.type === 'xstate.error.actor.proceedStep'
-          ? event.error instanceof Error
-            ? event.error.message
-            : 'Unroll step failed.'
-          : null,
-      proceedRequested: false,
-      progress: ({ event, context }) =>
-        event.type === 'xstate.error.actor.proceedStep'
-          ? (rewoundProgressFromPackageError(event.error) ?? context.progress)
-          : context.progress,
     }),
-    assignErrorFromEnsureBroadcast: assign({
-      lastErrorMessage: ({ event }) =>
-        event.type === 'xstate.error.actor.ensureBroadcast'
-          ? event.error instanceof Error
-            ? event.error.message
-            : 'Failed to broadcast unilateral exit step.'
-          : null,
-      proceedRequested: false,
-      progress: ({ event, context }) =>
-        event.type === 'xstate.error.actor.ensureBroadcast'
-          ? (rewoundProgressFromPackageError(event.error) ?? context.progress)
-          : context.progress,
+    assignErrorFromEnsureBroadcast: assign(({ context, event }) => {
+      assertEvent(event, 'xstate.error.actor.ensureBroadcast')
+      return {
+        lastErrorMessage: actorErrorMessage(
+          event.error,
+          'Failed to broadcast unilateral exit step.',
+        ),
+        proceedRequested: false,
+        progress: rewoundProgressFromPackageError(event.error) ?? context.progress,
+      }
     }),
     assignUnconfirmedParentRetry: assign({
       lastErrorMessage: null,
@@ -556,46 +587,41 @@ export const unilateralExitMachineSetup = setup({
         ),
     }),
     assignErrorFromFetch: assign({
-      lastErrorMessage: ({ event }) =>
-        event.type === 'xstate.error.actor.fetchProgress'
-          ? event.error instanceof Error
-            ? event.error.message
-            : 'Failed to load unilateral exit progress.'
-          : null,
+      lastErrorMessage: ({ event }) => {
+        assertEvent(event, 'xstate.error.actor.fetchProgress')
+        return actorErrorMessage(event.error, 'Failed to load unilateral exit progress.')
+      },
     }),
     assignPolicyError: assign({
       pausedReason: 'error' as const,
-      lastErrorMessage: ({ event }) =>
-        event.type === 'xstate.error.actor.evaluateAutomationPolicy'
-          ? event.error instanceof Error
-            ? event.error.message
-            : 'Policy check failed.'
-          : null,
+      lastErrorMessage: ({ event }) => {
+        assertEvent(event, 'xstate.error.actor.evaluateAutomationPolicy')
+        return actorErrorMessage(event.error, 'Policy check failed.')
+      },
       proceedRequested: false,
     }),
     assignAutomationBroadcastFailure: assign({
       pausedReason: 'error' as const,
       proceedRequested: false,
-      lastErrorMessage: ({ event }) =>
-        event.type === 'xstate.error.actor.proceedStep' ||
-        event.type === 'xstate.error.actor.ensureBroadcast'
-          ? event.error instanceof Error
-            ? event.error.message
-            : 'Unroll step failed.'
-          : null,
+      lastErrorMessage: ({ event }) => {
+        assertEvent(event, ['xstate.error.actor.proceedStep', 'xstate.error.actor.ensureBroadcast'])
+        return actorErrorMessage(event.error, 'Unroll step failed.')
+      },
     }),
     assignErrorFromViability: assign({
-      lastErrorMessage: ({ event }) =>
-        event.type === 'xstate.error.actor.evaluateJobViability'
-          ? event.error instanceof Error
-            ? event.error.message
-            : 'Failed to evaluate unilateral exit job viability.'
-          : null,
+      lastErrorMessage: ({ event }) => {
+        assertEvent(event, 'xstate.error.actor.evaluateJobViability')
+        return actorErrorMessage(
+          event.error,
+          'Failed to evaluate unilateral exit job viability.',
+        )
+      },
       proceedRequested: false,
     }),
     persistUnilateralExitFailureFromViability: ({ context, event }) => {
-      const viability = viabilityFromEvaluateEvent(event)
-      if (context.walletScope == null || viability == null || !isTerminalViabilityStatus(viability)) {
+      assertEvent(event, 'xstate.done.actor.evaluateJobViability')
+      const viability = event.output
+      if (context.walletScope == null || !isTerminalViabilityStatus(viability)) {
         return
       }
       const reasonCode = viability.reasonCode as UnilateralExitFailureReasonCode
@@ -614,7 +640,8 @@ export const unilateralExitMachineSetup = setup({
       )
     },
     persistAbortedUnilateralExitFailure: ({ context, event }) => {
-      if (context.walletScope == null || event.type !== 'ABORT_ORCHESTRATION') {
+      assertEvent(event, 'ABORT_ORCHESTRATION')
+      if (context.walletScope == null) {
         return
       }
       const job = getPersistedUnilateralExitJob(context.walletScope)
@@ -630,10 +657,8 @@ export const unilateralExitMachineSetup = setup({
       )
     },
     patchAbortedFailureVtxoIds: ({ context, event }) => {
-      if (
-        context.walletScope == null ||
-        event.type !== 'xstate.done.actor.resolveAbortVtxoIds'
-      ) {
+      assertEvent(event, 'xstate.done.actor.resolveAbortVtxoIds')
+      if (context.walletScope == null) {
         return
       }
       const existing = getPersistedUnilateralExitFailure(context.walletScope)
@@ -646,10 +671,8 @@ export const unilateralExitMachineSetup = setup({
       })
     },
     stageAbortedJobOutpoints: assign(({ context, event }) => {
-      if (event.type !== 'ABORT_ORCHESTRATION' || context.jobOutpoints.length > 0) {
-        return {}
-      }
-      if (event.resolvedJobOutpoints.length === 0) {
+      assertEvent(event, 'ABORT_ORCHESTRATION')
+      if (context.jobOutpoints.length > 0 || event.resolvedJobOutpoints.length === 0) {
         return {}
       }
       return {
@@ -660,13 +683,7 @@ export const unilateralExitMachineSetup = setup({
       if (context.walletScope == null || context.jobOutpoints.length === 0) {
         return
       }
-      void import('@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.actors').then(
-        (module) =>
-          module.invalidateUnilateralExitQueries(
-            context.walletScope!,
-            context.jobOutpoints,
-          ),
-      )
+      void invalidateUnilateralExitQueries(context.walletScope, context.jobOutpoints)
     },
     clearTerminatedProceedRequested: assign({
       proceedRequested: false,

@@ -16,7 +16,7 @@ vi.mock('@/workers/arkade-factory', () => ({
   getArkadeWorker: () => ({}),
 }))
 
-import { invalidateUnilateralExitQueries } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.actors'
+import { invalidateUnilateralExitQueries } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-query-cache'
 import {
   arkadeBalanceQueryKey,
   arkadeUnilateralExitProgressQueryKey,

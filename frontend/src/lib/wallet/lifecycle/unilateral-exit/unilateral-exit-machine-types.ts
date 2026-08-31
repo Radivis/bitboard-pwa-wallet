@@ -116,7 +116,11 @@ export type UnilateralExitMachineActorErrorEvent =
   | ErrorActorEvent<unknown, 'evaluateJobViability'>
   | ErrorActorEvent<unknown, 'resolveAbortVtxoIds'>
 
-export type UnilateralExitMachineEvent =
+/** Public events that callers may send. Actor done/error events are internal. */
+export type UnilateralExitMachineEvent = UnilateralExitMachineUserEvent
+
+/** Full event union used by `setup({ types.events })` so `assertEvent` can narrow done/error. */
+export type UnilateralExitMachineSetupEvent =
   | UnilateralExitMachineUserEvent
   | UnilateralExitMachineActorDoneEvent
   | UnilateralExitMachineActorErrorEvent

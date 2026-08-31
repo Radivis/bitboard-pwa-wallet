@@ -1,5 +1,9 @@
 import { createInitialUnilateralExitContext } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-types'
-import { unilateralExitMachineSetup } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-setup'
+import {
+  requireUnilateralExitFeeRateSatPerVb,
+  requireUnilateralExitWalletScope,
+  unilateralExitMachineSetup,
+} from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-setup'
 import { sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
 
 export type {
@@ -12,14 +16,11 @@ export type {
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-setup'
 
 const checkingProgressOnDone = [
-    {
-      guard: 'isJobCompleteFromFetchEvent',
-      target: 'complete',
-      actions: [
-        'assignProgressFromFetch',
-        'clearPersistedOnComplete',
-      ],
-    },
+  {
+    guard: 'isJobCompleteFromFetchEvent',
+    target: 'complete',
+    actions: ['assignProgressFromFetch', 'clearPersistedJob'],
+  },
   {
     guard: 'isUnconfirmedParentRetryProgressRefresh',
     target: 'waitingForParentData',
@@ -92,14 +93,11 @@ const checkingProgressOnDone = [
 ] as const
 
 const ensuringBroadcastOnDone = [
-    {
-      guard: 'isJobCompleteFromEnsureBroadcastEvent',
-      target: 'complete',
-      actions: [
-        'assignProgressFromEnsureBroadcast',
-        'clearPersistedOnComplete',
-      ],
-    },
+  {
+    guard: 'isJobCompleteFromEnsureBroadcastEvent',
+    target: 'complete',
+    actions: ['assignProgressFromEnsureBroadcast', 'clearPersistedJob'],
+  },
   {
     guard: 'shouldWaitAfterEnsureBroadcast',
     target: 'waitingConfirm',
@@ -130,6 +128,60 @@ const ensuringBroadcastOnDone = [
 
 const abortOrchestrationTransition = { target: 'aborted' } as const
 
+const idlePollTransitions = [
+  {
+    guard: 'hasActiveAutomaticJob',
+    target: 'checkingProgress',
+    actions: 'resumeAutomationProceed',
+  },
+  {
+    guard: 'hasActiveManualJob',
+    target: 'checkingProgress',
+    actions: 'assignProgressRefresh',
+  },
+] as const
+
+const parentDataWaitTransitions = [
+  {
+    guard: 'automationEnabled',
+    target: 'checkingProgress',
+    actions: 'assignProceedForUnconfirmedParentRetry',
+  },
+  {
+    target: 'checkingProgress',
+    actions: 'assignProgressRefresh',
+  },
+] as const
+
+const inFlightAbortAndPrefs = {
+  ABORT_ORCHESTRATION: abortOrchestrationTransition,
+  AUTOMATION_PREFS_CHANGED: {
+    actions: 'assignAutomationPrefs',
+  },
+} as const
+
+const inFlightAbortPrefsAndProceed = {
+  ...inFlightAbortAndPrefs,
+  PROCEED_MANUAL: {
+    actions: 'assignProceedManual',
+  },
+} as const
+
+const startManualTransition = {
+  target: 'checkingProgress',
+  actions: ['assignStartManual', 'persistActiveJobFromContext'],
+} as const
+
+const startAutomaticTransition = {
+  target: 'checkingProgress',
+  actions: ['assignStartAutomatic', 'persistActiveJobFromContext'],
+} as const
+
+const hydrateOrStartTransition = {
+  target: 'checkingProgress',
+  actions: ['assignHydrate', 'ensurePersistedJobFromContext'],
+} as const
+
 export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
   id: 'unilateralExit',
   context: ({ input }) => createInitialUnilateralExitContext(input),
@@ -151,59 +203,25 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
     },
     idle: {
       after: {
-        pollDelay: [
-          {
-            guard: 'hasActiveAutomaticJob',
-            target: 'checkingProgress',
-            actions: 'resumeAutomationProceed',
-          },
-          {
-            guard: 'hasActiveManualJob',
-            target: 'checkingProgress',
-            actions: 'assignProgressRefresh',
-          },
-        ],
+        pollDelay: idlePollTransitions,
       },
       on: {
-        START_MANUAL: {
-          target: 'checkingProgress',
-          actions: 'assignStartManual',
-        },
-        START_AUTOMATIC: {
-          target: 'checkingProgress',
-          actions: 'assignStartAutomatic',
-        },
-        HYDRATE_OR_START: {
-          target: 'checkingProgress',
-          actions: 'assignHydrate',
-        },
+        START_MANUAL: startManualTransition,
+        START_AUTOMATIC: startAutomaticTransition,
+        HYDRATE_OR_START: hydrateOrStartTransition,
         PROCEED_MANUAL: {
           target: 'checkingProgress',
           actions: 'assignProceedManual',
         },
         // POLL_TICK is the test/manual equivalent of `after.pollDelay`.
-        POLL_TICK: [
-          {
-            guard: 'hasActiveAutomaticJob',
-            target: 'checkingProgress',
-            actions: 'resumeAutomationProceed',
-          },
-          {
-            guard: 'hasActiveManualJob',
-            target: 'checkingProgress',
-            actions: 'assignProgressRefresh',
-          },
-        ],
+        POLL_TICK: idlePollTransitions,
         ABORT_ORCHESTRATION: abortOrchestrationTransition,
         CLEAR_JOB: {
           actions: ['clearPersistedJob', 'clearJobActorContext'],
         },
         AUTOMATION_PREFS_CHANGED: [
           {
-            guard: ({ context, event }) =>
-              event.type === 'AUTOMATION_PREFS_CHANGED' &&
-              event.automationEnabled &&
-              context.jobOutpoints.length > 0,
+            guard: 'prefsEnabledWithJob',
             target: 'checkingProgress',
             actions: 'assignAutomationPrefs',
           },
@@ -214,15 +232,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
       },
     },
     checkingProgress: {
-      on: {
-        ABORT_ORCHESTRATION: abortOrchestrationTransition,
-        PROCEED_MANUAL: {
-          actions: 'assignProceedManual',
-        },
-        AUTOMATION_PREFS_CHANGED: {
-          actions: 'assignAutomationPrefs',
-        },
-      },
+      on: inFlightAbortPrefsAndProceed,
       invoke: {
         id: 'evaluateJobViability',
         src: 'evaluateJobViabilityActor',
@@ -243,15 +253,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
       },
     },
     loadingProgress: {
-      on: {
-        ABORT_ORCHESTRATION: abortOrchestrationTransition,
-        PROCEED_MANUAL: {
-          actions: 'assignProceedManual',
-        },
-        AUTOMATION_PREFS_CHANGED: {
-          actions: 'assignAutomationPrefs',
-        },
-      },
+      on: inFlightAbortPrefsAndProceed,
       invoke: {
         id: 'fetchProgress',
         src: 'fetchProgressActor',
@@ -267,17 +269,12 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
       },
     },
     evaluatingPolicy: {
-      on: {
-        ABORT_ORCHESTRATION: abortOrchestrationTransition,
-        AUTOMATION_PREFS_CHANGED: {
-          actions: 'assignAutomationPrefs',
-        },
-      },
+      on: inFlightAbortAndPrefs,
       invoke: {
         id: 'evaluateAutomationPolicy',
         src: 'evaluateAutomationPolicyActor',
         input: ({ context }) => ({
-          walletScope: context.walletScope!,
+          walletScope: requireUnilateralExitWalletScope(context.walletScope),
           outpoints: context.jobOutpoints,
         }),
         onDone: [
@@ -291,6 +288,10 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
             target: 'proceeding',
             actions: 'assignFeeFromPolicy',
           },
+          {
+            target: 'paused',
+            actions: 'assignPausedUnknownPolicy',
+          },
         ],
         onError: {
           target: 'paused',
@@ -299,28 +300,20 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
       },
     },
     proceeding: {
-      on: {
-        ABORT_ORCHESTRATION: abortOrchestrationTransition,
-        AUTOMATION_PREFS_CHANGED: {
-          actions: 'assignAutomationPrefs',
-        },
-      },
+      on: inFlightAbortAndPrefs,
       invoke: {
         id: 'proceedStep',
         src: 'proceedStepActor',
         input: ({ context }) => ({
-          walletScope: context.walletScope!,
+          walletScope: requireUnilateralExitWalletScope(context.walletScope),
           outpoints: context.jobOutpoints,
-          feeRateSatPerVb: context.feeRateSatPerVb!,
+          feeRateSatPerVb: requireUnilateralExitFeeRateSatPerVb(context.feeRateSatPerVb),
         }),
         onDone: [
           {
             guard: 'isJobCompleteFromProceedEvent',
             target: 'complete',
-            actions: [
-              'assignProgressFromProceed',
-              'clearPersistedOnComplete',
-            ],
+            actions: ['assignProgressFromProceed', 'clearPersistedJob'],
           },
           {
             target: 'ensuringBroadcast',
@@ -337,7 +330,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
             actions: 'assignUnconfirmedParentRetry',
           },
           {
-            guard: ({ context }) => context.automationEnabled,
+            guard: 'automationEnabled',
             target: 'paused',
             actions: 'assignAutomationBroadcastFailure',
           },
@@ -349,17 +342,12 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
       },
     },
     ensuringBroadcast: {
-      on: {
-        ABORT_ORCHESTRATION: abortOrchestrationTransition,
-        AUTOMATION_PREFS_CHANGED: {
-          actions: 'assignAutomationPrefs',
-        },
-      },
+      on: inFlightAbortAndPrefs,
       invoke: {
         id: 'ensureBroadcast',
         src: 'ensureBroadcastActor',
         input: ({ context }) => ({
-          walletScope: context.walletScope!,
+          walletScope: requireUnilateralExitWalletScope(context.walletScope),
           outpoints: context.jobOutpoints,
           feeRateSatPerVb: context.feeRateSatPerVb,
           automationEnabled: context.automationEnabled,
@@ -372,7 +360,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
             actions: 'assignUnconfirmedParentRetry',
           },
           {
-            guard: ({ context }) => context.automationEnabled,
+            guard: 'automationEnabled',
             target: 'paused',
             actions: 'assignAutomationBroadcastFailure',
           },
@@ -406,8 +394,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
         },
         AUTOMATION_PREFS_CHANGED: [
           {
-            guard: ({ event }) =>
-              event.type === 'AUTOMATION_PREFS_CHANGED' && event.automationEnabled,
+            guard: 'prefsEnabled',
             target: 'checkingProgress',
             actions: 'assignAutomationPrefs',
           },
@@ -423,37 +410,15 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
     },
     waitingForParentData: {
       after: {
-        parentDataWait: [
-          {
-            guard: ({ context }) => context.automationEnabled,
-            target: 'checkingProgress',
-            actions: 'assignProceedForUnconfirmedParentRetry',
-          },
-          {
-            target: 'checkingProgress',
-            actions: 'assignProgressRefresh',
-          },
-        ],
+        parentDataWait: parentDataWaitTransitions,
       },
       on: {
-        ABORT_ORCHESTRATION: abortOrchestrationTransition,
-        POLL_TICK: [
-          {
-            guard: ({ context }) => context.automationEnabled,
-            target: 'checkingProgress',
-            actions: 'assignProceedForUnconfirmedParentRetry',
-          },
-          {
-            target: 'checkingProgress',
-            actions: 'assignProgressRefresh',
-          },
-        ],
+        ...inFlightAbortAndPrefs,
+        POLL_TICK: parentDataWaitTransitions,
+        // Must target checkingProgress — not the in-flight assign-only PROCEED_MANUAL map.
         PROCEED_MANUAL: {
           target: 'checkingProgress',
           actions: 'assignProceedManual',
-        },
-        AUTOMATION_PREFS_CHANGED: {
-          actions: 'assignAutomationPrefs',
         },
         CLEAR_JOB: {
           target: 'idle',
@@ -470,8 +435,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
         },
         AUTOMATION_PREFS_CHANGED: [
           {
-            guard: ({ event }) =>
-              event.type === 'AUTOMATION_PREFS_CHANGED' && event.automationEnabled,
+            guard: 'prefsEnabled',
             target: 'checkingProgress',
             actions: 'assignAutomationPrefs',
           },
@@ -493,22 +457,13 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
     complete: {
       entry: ['invalidateUnilateralExitQueriesOnTerminate'],
       on: {
-        START_MANUAL: {
-          target: 'checkingProgress',
-          actions: 'assignStartManual',
-        },
-        START_AUTOMATIC: {
-          target: 'checkingProgress',
-          actions: 'assignStartAutomatic',
-        },
+        START_MANUAL: startManualTransition,
+        START_AUTOMATIC: startAutomaticTransition,
         CLEAR_JOB: {
           target: 'idle',
           actions: ['clearPersistedJob', 'clearJobActorContext'],
         },
-        HYDRATE_OR_START: {
-          target: 'checkingProgress',
-          actions: 'assignHydrate',
-        },
+        HYDRATE_OR_START: hydrateOrStartTransition,
       },
     },
     terminated: {

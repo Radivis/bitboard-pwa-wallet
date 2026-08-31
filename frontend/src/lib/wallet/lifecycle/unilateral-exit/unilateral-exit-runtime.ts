@@ -20,6 +20,7 @@ import type {
 import { persistedUnilateralExitJobExists } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
 import { resolveUnilateralExitJobOutpoints } from '@/lib/wallet/lifecycle/unilateral-exit-job-scope'
 import { unilateralExitMachineActors } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.actors'
+import { invalidateUnilateralExitQueries } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-query-cache'
 import type { UnilateralExitMachineEvent } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-types'
 import { unilateralExitMachine } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.machine'
 import type { UnilateralExitActorSnapshot } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-types'
@@ -37,7 +38,7 @@ import { shouldSkipRailLifecycleResetForLockPhase } from '@/lib/wallet/lifecycle
 import { UNILATERAL_EXIT_AUTOMATION_WAIT_POLL_MS_REGTEST } from '@/lib/arkade/arkade-query-timings'
 import type { ArkadeVtxoOutpoint } from '@/workers/arkade-api'
 import { arkadeVtxoOutpointListsEqual, sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
-import { createActor } from 'xstate'
+import { createActor, waitFor } from 'xstate'
 
 type ActorListener = (snapshot: UnilateralExitActorSnapshot) => void
 
@@ -353,9 +354,7 @@ export async function abortUnilateralExitOrchestration(
 
   disableAutomaticUnilateralExit(scope)
 
-  void import('@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.actors').then(
-    (module) => module.invalidateUnilateralExitQueries(scope, jobOutpoints),
-  )
+  void invalidateUnilateralExitQueries(scope, jobOutpoints)
 
   sendUnilateralExitEvent({
     type: 'ABORT_ORCHESTRATION',
@@ -416,20 +415,20 @@ export function syncUnilateralExitWithLockPhase(lockPhase: LockLifecyclePhase): 
 }
 
 const UNILATERAL_EXIT_ACTOR_SETTLE_TIMEOUT_MS = 120_000
-const UNILATERAL_EXIT_ACTOR_SETTLE_POLL_MS = 10
 
 export async function waitForUnilateralExitActorSettled(
   timeoutMs = UNILATERAL_EXIT_ACTOR_SETTLE_TIMEOUT_MS,
 ): Promise<void> {
-  const start = Date.now()
-  while (Date.now() - start < timeoutMs) {
-    const snapshot = getUnilateralExitActorSnapshot()
-    if (!unilateralExitSnapshotIsProceeding(snapshot)) {
-      return
-    }
-    await new Promise((resolve) => setTimeout(resolve, UNILATERAL_EXIT_ACTOR_SETTLE_POLL_MS))
+  try {
+    await waitFor(
+      actor,
+      (snapshot) =>
+        !unilateralExitSnapshotIsProceeding(toUnilateralExitActorSnapshot(snapshot)),
+      { timeout: timeoutMs },
+    )
+  } catch {
+    throw new Error('Unilateral exit actor did not settle in time')
   }
-  throw new Error('Unilateral exit actor did not settle in time')
 }
 
 export function resetUnilateralExitActorForTests(): void {

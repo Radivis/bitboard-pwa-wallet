@@ -3,11 +3,6 @@ import {
   presetRatesForNetwork,
 } from '@/hooks/useEsploraFeePresets'
 import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
-import {
-  arkadeBalanceQueryKey,
-  arkadeUnilateralExitProgressQueryKey,
-  arkadeUnilateralExitTopologyScopeKey,
-} from '@/lib/arkade/arkade-query-keys'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import {
   isCurrentStepRelayed,
@@ -31,6 +26,10 @@ import type {
   ProceedStepActorInput,
   ResolveAbortVtxoIdsActorInput,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.machine'
+import {
+  invalidateUnilateralExitQueries,
+  writeUnilateralExitProgressQueryCache,
+} from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-query-cache'
 import type { UnilateralExitPolicyEvaluation } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-types'
 import type { ArkadeWalletScope } from '@/lib/arkade/arkade-session-scope'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
@@ -59,49 +58,7 @@ function assertCanRunUnilateralExit(scope: ArkadeWalletScope): void {
   }
 }
 
-async function writeUnilateralExitProgressQueryCache(
-  scope: ArkadeWalletScope,
-  outpoints: FetchProgressActorInput['outpoints'],
-  progress: ArkadeUnilateralExitProgress,
-): Promise<void> {
-  if (!isArkadeSupportedNetworkMode(scope.networkMode)) {
-    return
-  }
-  const { appQueryClient } = await import('@/lib/shared/app-query-client')
-  appQueryClient.setQueryData(
-    arkadeUnilateralExitProgressQueryKey(
-      scope.walletId,
-      scope.networkMode,
-      scope.connectionId,
-      sortArkadeVtxoOutpoints(outpoints),
-    ),
-    progress,
-  )
-}
-
-export async function invalidateUnilateralExitQueries(
-  scope: ArkadeWalletScope,
-  outpoints: FetchProgressActorInput['outpoints'],
-  progress?: ArkadeUnilateralExitProgress,
-): Promise<void> {
-  if (!isArkadeSupportedNetworkMode(scope.networkMode)) {
-    return
-  }
-  const { appQueryClient } = await import('@/lib/shared/app-query-client')
-  if (progress != null) {
-    await writeUnilateralExitProgressQueryCache(scope, outpoints, progress)
-  }
-  await appQueryClient.invalidateQueries({
-    queryKey: arkadeBalanceQueryKey(scope.walletId, scope.networkMode, scope.connectionId),
-  })
-  await appQueryClient.invalidateQueries({
-    queryKey: arkadeUnilateralExitTopologyScopeKey(
-      scope.walletId,
-      scope.networkMode,
-      scope.connectionId,
-    ),
-  })
-}
+export { invalidateUnilateralExitQueries }
 
 export async function evaluateUnilateralExitAutomationPolicy(
   input: EvaluateAutomationPolicyActorInput,

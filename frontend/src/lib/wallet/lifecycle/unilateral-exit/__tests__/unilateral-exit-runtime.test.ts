@@ -101,6 +101,11 @@ vi.mock('@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence', () => ({
   },
 }))
 
+vi.mock('@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-query-cache', () => ({
+  invalidateUnilateralExitQueries: vi.fn(async () => {}),
+  writeUnilateralExitProgressQueryCache: vi.fn(async () => {}),
+}))
+
 vi.mock('@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.actors', () => {
   const { fromPromise } = require('xstate')
   const progress = actorProgressMocks.idleUnrelayed
