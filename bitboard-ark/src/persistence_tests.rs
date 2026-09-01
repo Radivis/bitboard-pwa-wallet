@@ -1,8 +1,9 @@
 use crate::persistence::{
-    BITBOARD_ARK_PERSISTENCE_VERSION, BitboardArkPersistence, JsonPersistenceDb, OperatorIdentity,
-    OperatorSignerMigrationHint, PendingBatchIntentKind, PendingBatchIntentLifecyclePhase,
-    PendingBatchIntentRecord, PendingBatchOutpointRecord, PendingExitDeductionRecord,
-    PendingExitKind, UnilateralExitAutomationPrefsRecord, UnilateralExitFailureRecord,
+    BITBOARD_ARK_PERSISTENCE_VERSION, BitboardArkPersistence, JsonPersistenceDb,
+    MIN_SUPPORTED_ARK_PERSISTENCE_IMPORT_VERSION, OperatorIdentity, OperatorSignerMigrationHint,
+    PendingBatchIntentKind, PendingBatchIntentLifecyclePhase, PendingBatchIntentRecord,
+    PendingBatchOutpointRecord, PendingExitDeductionRecord, PendingExitKind,
+    UnilateralExitAutomationPrefsRecord, UnilateralExitFailureRecord,
     UnilateralExitFrontendPersistence, UnilateralExitJobRecord, UnilateralExitLeafOutpointRecord,
     network_label, operator_identity_for_connected_signer, pending_batch_record_overlaps_outpoints,
     persisted_operator_identity_for_open, validate_operator_identity,
@@ -568,7 +569,7 @@ fn ensure_unilateral_exit_step_wait_preserves_started_at_for_same_step() {
 }
 
 #[test]
-fn persistence_v5_round_trips_trust_fields() {
+fn persistence_round_trips_trust_fields() {
     let identity = OperatorIdentity {
         signer_pk_hex: "02abc".to_string(),
         network: network_label(Network::Signet),
@@ -614,24 +615,72 @@ fn persistence_v5_round_trips_trust_fields() {
 }
 
 #[test]
-fn persistence_v4_import_defaults_trust_fields() {
-    let legacy_v4_json = r#"{"version":4,"engine":"ark-rs","ark_sdk_version":"0.9.3","operator_identity":{"signer_pk_hex":"02abc","network":"signet"},"wallet_db":{"boarding_outputs":[],"secret_keys_by_owner_pk_hex":{}},"swap_storage":{}}"#;
-    let parsed = BitboardArkPersistence::parse_import(Some(legacy_v4_json));
+fn persistence_v3_production_import_defaults_current_fields() {
+    let owner_pk = "aa".repeat(32);
+    let secret_hex = "11".repeat(32);
+    let v3_json = format!(
+        r#"{{
+            "version":{version},
+            "engine":"ark-rs",
+            "ark_sdk_version":"0.9.3",
+            "operator_identity":{{"signer_pk_hex":"02abc","network":"signet"}},
+            "wallet_db":{{
+                "boarding_outputs":[{{
+                    "owner_pk_hex":"{owner_pk}",
+                    "exit_delay_consensus":144,
+                    "address":"tb1qboard"
+                }}],
+                "secret_keys_by_owner_pk_hex":{{"{owner_pk}":"{secret_hex}"}},
+                "offchain_next_derivation_index":2
+            }},
+            "swap_storage":{{}}
+        }}"#,
+        version = MIN_SUPPORTED_ARK_PERSISTENCE_IMPORT_VERSION,
+        owner_pk = owner_pk,
+        secret_hex = secret_hex,
+    );
+
+    let parsed = BitboardArkPersistence::parse_import(Some(&v3_json));
+    assert_eq!(
+        parsed
+            .operator_identity
+            .as_ref()
+            .map(|identity| identity.signer_pk_hex.as_str()),
+        Some("02abc")
+    );
+    assert_eq!(parsed.wallet_db.offchain_next_derivation_index, 2);
+    assert_eq!(parsed.wallet_db.boarding_outputs.len(), 1);
+    assert_eq!(
+        parsed.wallet_db.secret_keys_by_owner_pk_hex.get(&owner_pk),
+        Some(&secret_hex)
+    );
     assert!(!parsed.wallet_db.operator_trust_pending);
     assert!(parsed.wallet_db.pending_operator_info.is_none());
+    assert!(parsed.wallet_db.pending_batch_intents.is_empty());
+    assert!(parsed.wallet_db.unilateral_exit_frontend.is_none());
+    assert!(parsed.wallet_db.offchain_vtxo_snapshot.is_none());
     assert!(!parsed.autonomous_mode);
 }
 
 #[test]
-fn persistence_v7_import_defaults_autonomous_mode_false() {
-    use crate::persistence::LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V7;
-
-    let v7_json = format!(
-        r#"{{"version":{version},"engine":"ark-rs","ark_sdk_version":"0.9.3","operator_identity":{{"signer_pk_hex":"02abc","network":"signet"}},"wallet_db":{{"boarding_outputs":[],"secret_keys_by_owner_pk_hex":{{}}}},"swap_storage":{{}}}}"#,
-        version = LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V7,
-    );
-    let parsed = BitboardArkPersistence::parse_import(Some(&v7_json));
-    assert!(!parsed.autonomous_mode);
+fn persistence_leftover_branch_versions_import_without_wiping() {
+    for version in [4_u32, 6, 7] {
+        let json = format!(
+            r#"{{"version":{version},"engine":"ark-rs","ark_sdk_version":"0.9.3","operator_identity":{{"signer_pk_hex":"02abc","network":"signet"}},"wallet_db":{{"boarding_outputs":[],"secret_keys_by_owner_pk_hex":{{}}}},"swap_storage":{{}}}}"#
+        );
+        let parsed = BitboardArkPersistence::parse_import(Some(&json));
+        assert_eq!(
+            parsed
+                .operator_identity
+                .as_ref()
+                .map(|identity| identity.signer_pk_hex.as_str()),
+            Some("02abc"),
+            "version {version} must not wipe identity"
+        );
+        assert!(!parsed.wallet_db.operator_trust_pending);
+        assert!(parsed.wallet_db.unilateral_exit_frontend.is_none());
+        assert!(!parsed.autonomous_mode);
+    }
 }
 
 #[test]
@@ -661,10 +710,8 @@ fn persistence_empty_omits_false_autonomous_mode() {
 }
 
 #[test]
-fn persistence_v5_import_migrates_sibling_materials_to_leaf_tx_map() {
-    use crate::persistence::{
-        LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V5, UnilateralExitMaterialsRecord,
-    };
+fn persistence_v5_import_lifts_sibling_materials_to_leaf_tx_map() {
+    use crate::persistence::UnilateralExitMaterialsRecord;
 
     let txid = "aa".repeat(32);
     let materials_v0 = UnilateralExitMaterialsRecord {
@@ -719,7 +766,7 @@ fn persistence_v5_import_migrates_sibling_materials_to_leaf_tx_map() {
             }},
             "swap_storage":{{}}
         }}"#,
-        version = LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V5,
+        version = 5,
         txid = txid,
         materials_v0 = serde_json::to_string(&materials_v0).expect("serialize"),
         materials_v1 = serde_json::to_string(&materials_v1).expect("serialize"),
@@ -740,19 +787,7 @@ fn persistence_v5_import_migrates_sibling_materials_to_leaf_tx_map() {
 }
 
 #[test]
-fn persistence_v6_import_defaults_frontend_bundle_to_none() {
-    use crate::persistence::LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V6;
-
-    let v6_json = format!(
-        r#"{{"version":{version},"engine":"ark-rs","ark_sdk_version":"0.9.3","operator_identity":{{"signer_pk_hex":"02abc","network":"signet"}},"wallet_db":{{"boarding_outputs":[],"secret_keys_by_owner_pk_hex":{{}}}},"swap_storage":{{}}}}"#,
-        version = LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V6,
-    );
-    let parsed = BitboardArkPersistence::parse_import(Some(&v6_json));
-    assert!(parsed.wallet_db.unilateral_exit_frontend.is_none());
-}
-
-#[test]
-fn persistence_v7_round_trips_unilateral_exit_frontend_bundle() {
+fn persistence_round_trips_unilateral_exit_frontend_bundle() {
     let identity = OperatorIdentity {
         signer_pk_hex: "02abc".to_string(),
         network: network_label(Network::Signet),

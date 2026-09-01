@@ -13,21 +13,15 @@ use std::str::FromStr;
 
 /// Current on-disk Arkade persistence format (v8).
 ///
-/// v8 stores `autonomous_mode` on the envelope (per-ASP trust posture; default false).
-/// v7 stores frontend unilateral-exit job/prefs/failure on [`WalletDbSnapshot`].
-/// v6 moved unilateral exit materials to a leaf-tx-keyed map on [`OffchainVtxoSnapshot`].
-/// v5 and earlier import cleanly via migration in [`BitboardArkPersistence::parse_import`].
+/// Published 0.3.3 wallets used v3. [`BitboardArkPersistence::parse_import`] accepts versions
+/// 3–8: missing fields default, and leftover v4/v6/v7 blobs deserialize as the current types.
+/// v5 is the only structural leftover — materials lived on each VTXO row and are lifted onto
+/// [`OffchainVtxoSnapshot::unilateral_exit_materials_by_leaf_tx`].
 pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 8;
-/// Legacy import version before persisted autonomous mode.
-pub const LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V7: u32 = 7;
-/// Legacy import version before frontend unilateral-exit bundle.
-pub const LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V6: u32 = 6;
-/// Legacy import version before leaf-tx materials map.
-pub const LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V5: u32 = 5;
-/// Legacy import version before operator trust pending fields.
-pub const LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 4;
-/// Pre-autonomous-exit persistence format.
-pub const LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V3: u32 = 3;
+/// Oldest envelope version `parse_import` will load (published 0.3.3).
+pub const MIN_SUPPORTED_ARK_PERSISTENCE_IMPORT_VERSION: u32 = 3;
+/// Leftover branch format with unilateral-exit materials on each VTXO row.
+const V5_ROW_KEYED_MATERIALS_VERSION: u32 = 5;
 const PERSISTENCE_LOCK_POISONED: &str = "persistence lock poisoned";
 
 /// Single-threaded WASM: recover in-memory state after a prior panic instead of re-panicking.
@@ -207,7 +201,7 @@ mod legacy_import {
         pub operator_trust_pending: bool,
     }
 
-    pub(super) fn migrate_offchain_vtxo_snapshot_v5_to_v6(
+    pub(super) fn lift_v5_row_materials_to_leaf_tx_map(
         v5: OffchainVtxoSnapshotV5,
     ) -> OffchainVtxoSnapshot {
         let mut unilateral_exit_materials_by_leaf_tx = BTreeMap::new();
@@ -250,14 +244,14 @@ mod legacy_import {
         }
     }
 
-    pub(super) fn migrate_wallet_db_v5_to_v6(wallet_db: WalletDbSnapshotV5) -> WalletDbSnapshot {
+    pub(super) fn lift_v5_wallet_db_to_current(wallet_db: WalletDbSnapshotV5) -> WalletDbSnapshot {
         WalletDbSnapshot {
             boarding_outputs: wallet_db.boarding_outputs,
             secret_keys_by_owner_pk_hex: wallet_db.secret_keys_by_owner_pk_hex,
             offchain_next_derivation_index: wallet_db.offchain_next_derivation_index,
             offchain_vtxo_snapshot: wallet_db
                 .offchain_vtxo_snapshot
-                .map(migrate_offchain_vtxo_snapshot_v5_to_v6),
+                .map(lift_v5_row_materials_to_leaf_tx_map),
             pending_exit_deductions: wallet_db.pending_exit_deductions,
             unilateral_exit_watches: wallet_db.unilateral_exit_watches,
             unilateral_exit_step_wait: wallet_db.unilateral_exit_step_wait,
@@ -484,16 +478,12 @@ fn default_parsed_ark_persistence() -> ParsedArkPersistence {
 }
 
 fn is_supported_persistence_import_version(version: u32) -> bool {
-    version == BITBOARD_ARK_PERSISTENCE_VERSION
-        || version == LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V7
-        || version == LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V6
-        || version == LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V5
-        || version == LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION
-        || version == LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V3
+    (MIN_SUPPORTED_ARK_PERSISTENCE_IMPORT_VERSION..=BITBOARD_ARK_PERSISTENCE_VERSION)
+        .contains(&version)
 }
 
-fn requires_v5_materials_migration(version: u32) -> bool {
-    version == LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V5
+fn requires_v5_row_materials_lift(version: u32) -> bool {
+    version == V5_ROW_KEYED_MATERIALS_VERSION
 }
 
 fn warn_unknown_persistence_version(version: Option<u64>) {
@@ -543,14 +533,14 @@ impl BitboardArkPersistence {
             return default_parsed_ark_persistence();
         }
 
-        if requires_v5_materials_migration(version) {
+        if requires_v5_row_materials_lift(version) {
             let legacy: legacy_import::BitboardArkPersistenceV5 =
                 match serde_json::from_value(envelope) {
                     Ok(parsed) => parsed,
                     Err(_) => return default_parsed_ark_persistence(),
                 };
             return ParsedArkPersistence {
-                wallet_db: legacy_import::migrate_wallet_db_v5_to_v6(legacy.wallet_db),
+                wallet_db: legacy_import::lift_v5_wallet_db_to_current(legacy.wallet_db),
                 operator_identity: Some(legacy.operator_identity),
                 autonomous_mode: false,
             };

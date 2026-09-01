@@ -39,7 +39,7 @@ Memory caches are keyed by `walletId:networkMode:arkadeAccountId` (`arkadeWallet
 
 Flushed through the Arkade save lifecycle into `StoredArkadeAccount.sdkPersistenceJson`. Types: [`bitboard-ark/src/persistence.rs`](../../bitboard-ark/src/persistence.rs). Materials encode/decode: [`unilateral_exit_materials.rs`](../../bitboard-ark/src/unilateral_exit_materials.rs). Frontend bundle I/O: [`unilateral-exit-frontend-sdk-persistence.ts`](../../frontend/src/lib/wallet/lifecycle/unilateral-exit-frontend-sdk-persistence.ts).
 
-**Envelope version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 8`. `parse_import` migrates v3–v7. v5 stored materials **per VTXO row**; v6 keys them by **leaf txid** (`unilateral_exit_materials_by_leaf_tx`). v7 adds `unilateral_exit_frontend` (job, automation prefs, last failure). v8 adds envelope `autonomous_mode` (default false). Missing v7 field on a v6 blob is `None` and triggers a one-shot overlay from legacy SQLite `settings` rows.
+**Envelope version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 8`. `parse_import` accepts 3–8. Published 0.3.3 wallets used v3; missing fields default (`unilateral_exit_frontend` is `None`, `autonomous_mode` is false). Leftover v5 blobs stored materials **per VTXO row** and are lifted onto `unilateral_exit_materials_by_leaf_tx`. When `unilateral_exit_frontend` is `None`, a one-shot overlay reads leftover SQLite `settings` rows.
 
 | Field | Where | Role |
 |-------|-------|------|
@@ -86,7 +86,7 @@ First unroll broadcast writes a unilateral pending deduction while the VTXO is s
 
 ### Frontend bundle (`UnilateralExitFrontendPersistence`)
 
-Optional on `WalletDbSnapshot`. `None` means the envelope has never been written in v7 (legacy blob or new account) and should overlay leftover SQLite settings once. `Some` with empty `selected_leaf_outpoints` is an explicit empty job — do **not** re-read settings.
+Optional on `WalletDbSnapshot`. `None` means the envelope has never stored a frontend bundle (published v3, leftover branch blob, or new account) and should overlay leftover SQLite settings once. `Some` with empty `selected_leaf_outpoints` is an explicit empty job — do **not** re-read settings.
 
 ```text
 job.selected_leaf_outpoints[]     { txid, vout }
@@ -110,7 +110,7 @@ A job exists iff `selected_leaf_outpoints.length > 0`. The machine writes this o
 
 Granular WASM setters (`ark_set_unilateral_exit_job` / `_automation_prefs` / `_failure`) flush `sdkPersistenceJson` only — they do not operator-sync.
 
-**Legacy settings overlay:** first session open after upgrade reads `unilateral-exit-lifecycle-storage`, `unilateral-exit-automation-prefs`, and `unilateral-exit-failure-storage` from the `settings` table when the envelope field is `None`, writes the merged bundle, then deletes that scope's key from each JSON (drops the settings row when the map is empty). Inactive v4 job rows (`jobActive: false`) overlay as an empty job.
+**Legacy settings overlay:** first session open after upgrade reads `unilateral-exit-lifecycle-storage`, `unilateral-exit-automation-prefs`, and `unilateral-exit-failure-storage` from the `settings` table when the envelope field is `None`, writes the merged bundle, then deletes that scope's key from each JSON (drops the settings row when the map is empty). Inactive SQLite job rows (`jobActive: false`) overlay as an empty job.
 
 ### Control store (not persisted)
 
@@ -124,7 +124,7 @@ Zustand stores for job/prefs/failure are **session caches** (no `sqliteStorage`)
 
 1. Unlock / Arkade load → `hydrateUnilateralExitFromPersistence` in [`unilateral-exit-runtime.ts`](../../frontend/src/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime.ts).
 2. If persisted outpoints are present → `HYDRATE_OR_START` (always via `checkingProgress`).
-3. If the job bookmark is empty, hydrate does **not** invent a job from leftover WASM in-progress exits. Those rows stay visible on the control page; the user starts again explicitly. Crash recovery is “persisted outpoints are still there.”
+3. If the job bookmark is empty, hydrate does **not** invent a job from leftover WASM in-progress exits. Those rows stay visible on the control page; the user starts again explicitly, including re-selecting a not-yet-unrolled leftover leaf (`ARK-EXIT-26`). Crash recovery is “persisted outpoints are still there.”
 4. While the job exists, topology/progress outpoints come from the **actor** (`resolveUnilateralExitTopologyOutpoints` / `resolveUnilateralExitJobOutpoints`). Never skip when lifecycle outpoints are empty but persistence still has them.
 5. Hydrate waits until Arkade load/sync is quiet (or until in-progress sats/outpoints are already visible) before sending `HYDRATE_OR_START`. WASM reporting no in-progress exits does **not** clear a persisted job — that is pre-broadcast crash recovery. The machine clears the job bookmark on complete / abort / terminate.
 

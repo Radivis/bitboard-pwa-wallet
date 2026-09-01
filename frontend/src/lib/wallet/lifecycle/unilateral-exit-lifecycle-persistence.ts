@@ -87,7 +87,7 @@ type LegacyPersistedJob = {
   suppressHydrateResume?: boolean
 }
 
-/** v5: a job exists iff outpoints are present. Inactive v4 rows (and abort leftovers) become empty. */
+/** A job exists iff outpoints are present. Inactive SQLite job rows (`jobActive: false`) and abort leftovers become empty. */
 export function migratePersistedUnilateralExitJob(
   job: LegacyPersistedJob,
 ): PersistedUnilateralExitJob {

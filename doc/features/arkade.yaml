@@ -126,6 +126,8 @@ feature:
         description: Control page step progress and in-progress overlay use the same phase labels in automatic mode as in manual mode, with " (proceeding automatically)" appended while automation is advancing the job
       - id: ARK-EXIT-25
         description: In-flight states other than waiting, ensuringBroadcast, and waitingForParentData show "figuring out what to do next" on step progress and a cog overlay (title/aria "Figuring out what to do next"); automatic mode still appends " (proceeding automatically)"
+      - id: ARK-EXIT-26
+        description: After abort, leftover WASM in-progress leaves that are not yet unrolled remain selectable so the user can start a new frontend job on the same leaf; fully unrolled leftover rows stay unselectable (claim via Complete)
     autonomous_mode:
       - id: ARK-AUTO-01
         description: BitboardArkPersistence.autonomous_mode is persisted per ASP connection; missing or legacy blobs default false; opt-in is explicit via the Management switch (with confirm) or operator-trust review

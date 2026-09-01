@@ -40,7 +40,7 @@ File: `bitboard-ark/src/persistence.rs`
 
 **Current version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 8`
 
-`BitboardArkPersistence::parse_import()` migrates legacy v3–v7 blobs on load. Unsupported or corrupt blobs start from an empty `wallet_db` on session open. `autonomous_mode` (default **false**) is a per-ASP trust posture on the envelope: when true, session open uses `cached_operator_info` and does not call the operator.
+`BitboardArkPersistence::parse_import()` accepts versions 3–8. Published 0.3.3 wallets used v3; missing fields default. Leftover v5 blobs lift row-keyed exit materials onto `unilateral_exit_materials_by_leaf_tx`. Unsupported or corrupt blobs start from an empty `wallet_db` on session open. `autonomous_mode` (default **false**) is a per-ASP trust posture on the envelope: when true, session open uses `cached_operator_info` and does not call the operator.
 
 ### Offchain receive cursor
 
@@ -100,6 +100,6 @@ Arkade previously used IndexedDB databases named `bitboard-arkade-{walletId}-{ne
 
 | Layer | Version mechanism |
 |-------|-------------------|
-| `BitboardArkPersistence.version` | Rust constant (8); `parse_import` migrates v3–v7 |
+| `BitboardArkPersistence.version` | Rust constant (8); `parse_import` accepts 3–8 (0.3.3 was v3) |
 | Account metadata | `lastSuccessfulOperatorSyncAt` mirrors on-chain `lastSuccessfulEsploraSyncAt` semantics |
 | Frontend merge | `arkade-payload-merge.ts` ensures receive index only increases |
