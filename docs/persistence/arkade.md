@@ -6,10 +6,10 @@ For the wallet model and balance buckets, see [arkade wallet model](../arkade-bi
 
 ## Encrypted payload (`wallet_secrets`)
 
-Each Ark Service Provider (ASP) is one row in `WalletSecretsPayload.arkadeOperatorConnections`:
+Each Ark Service Provider (ASP) is one row in `WalletSecretsPayload.arkadeAccounts`:
 
 ```typescript
-interface StoredArkadeOperatorConnection {
+interface StoredArkadeAccount {
   id: string
   label: string
   networkMode: ArkadeSupportedNetworkMode
@@ -23,7 +23,7 @@ interface StoredArkadeOperatorConnection {
 }
 ```
 
-`activeArkadeConnectionIdByNetwork` selects which connection is active per live network (`mainnet`, `testnet`, `signet`).
+`activeArkadeAccountIdByNetwork` selects which Arkade account is active per live network (`mainnet`, `testnet`, `signet`).
 
 **Size limit:** `sdkPersistenceJson` must not exceed 10 MB UTF-8 (`ARKADE_SDK_PERSISTENCE_JSON_MAX_BYTES` in `arkade-sdk-persistence-types.ts`).
 
@@ -66,7 +66,7 @@ sequenceDiagram
   AW->>AW: ark_export_persistence_json()
   AW->>EW: encrypt updated payload
   AW->>Main: EncryptedWalletSecretsHost (ciphertext only)
-  Main->>DB: CAS write sdkPersistenceJson on connection row
+  Main->>DB: CAS write sdkPersistenceJson on account row
 ```
 
 Key modules:
@@ -101,5 +101,5 @@ Arkade previously used IndexedDB databases named `bitboard-arkade-{walletId}-{ne
 | Layer | Version mechanism |
 |-------|-------------------|
 | `BitboardArkPersistence.version` | Rust constant (8); `parse_import` migrates v3–v7 |
-| Connection metadata | `lastSuccessfulOperatorSyncAt` mirrors on-chain `lastSuccessfulEsploraSyncAt` semantics |
+| Account metadata | `lastSuccessfulOperatorSyncAt` mirrors on-chain `lastSuccessfulEsploraSyncAt` semantics |
 | Frontend merge | `arkade-payload-merge.ts` ensures receive index only increases |

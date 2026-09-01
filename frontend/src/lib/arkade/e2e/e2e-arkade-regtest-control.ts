@@ -1,5 +1,5 @@
 import { getDatabase, getWalletSecretsEncrypted } from '@/db'
-import { findActiveArkadeConnectionSummary } from '@/lib/arkade/arkade-encrypted-persistence-manager'
+import { findActiveArkadeAccountSummary } from '@/lib/arkade/arkade-encrypted-persistence-manager'
 import { arkadeBumperInfoQueryKey } from '@/lib/arkade/arkade-query-keys'
 import { getArkadeEndpoints, isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import { appQueryClient } from '@/lib/shared/app-query-client'
@@ -50,18 +50,18 @@ export async function exportBoardedWalletSdkPersistenceJsonForE2e(): Promise<str
   await worker.flushSdkPersistence()
 
   const encrypted = await getWalletSecretsEncrypted(getDatabase(), walletId)
-  const connection = await findActiveArkadeConnectionSummary({
+  const connection = await findActiveArkadeAccountSummary({
     walletId,
     networkMode,
     encryptedPayload: encrypted.payload,
   })
   if (connection == null) {
-    throw new Error('No active Arkade operator connection in wallet secrets')
+    throw new Error('No active Arkade account in wallet secrets')
   }
 
   const sdkPersistenceJson = await worker.readPersistedSdkPersistenceJsonForE2e({
     walletId,
-    connectionId: connection.id,
+    arkadeAccountId: connection.id,
   })
   if (sdkPersistenceJson == null || sdkPersistenceJson.trim() === '') {
     throw new Error('Persisted Arkade SDK JSON missing after boarding — sync or flush failed')
@@ -85,7 +85,7 @@ export type E2eUnilateralExitDebugSnapshot = {
   }
   lifecycle: {
     phase: string
-    walletScope: { walletId: number; networkMode: string; connectionId: string } | null
+    walletScope: { walletId: number; networkMode: string; arkadeAccountId: string } | null
     selectedLeafOutpoints: ArkadeVtxoOutpoint[]
     lastErrorMessage: string | null
   }
@@ -117,10 +117,10 @@ export type E2eUnilateralExitDebugSnapshot = {
 export async function exportUnilateralExitDebugSnapshotForE2e(): Promise<E2eUnilateralExitDebugSnapshot> {
   const walletId = useWalletStore.getState().activeWalletId
   const networkMode = useWalletStore.getState().networkMode
-  const activeArkadeConnectionId = useWalletStore.getState().activeArkadeConnectionId
+  const activeArkadeAccountId = useWalletStore.getState().activeArkadeAccountId
   if (
     walletId == null ||
-    activeArkadeConnectionId == null ||
+    activeArkadeAccountId == null ||
     !isArkadeSupportedNetworkMode(networkMode)
   ) {
     throw new Error('Wallet must be unlocked on an Arkade network to export unilateral-exit debug snapshot')
@@ -134,7 +134,7 @@ export async function exportUnilateralExitDebugSnapshotForE2e(): Promise<E2eUnil
   const persistedJob = getPersistedUnilateralExitJob({
     walletId,
     networkMode,
-    connectionId: activeArkadeConnectionId,
+    arkadeAccountId: activeArkadeAccountId,
   })
   const esploraUrl = getArkadeEndpoints(networkMode).esploraUrl
   const loadSnapshot = getArkadeLoadLifecycleSnapshot()
@@ -258,10 +258,10 @@ export function ensureE2eArkadeRegtestControl(): void {
 export async function refreshOnchainBumperInfoForE2e(): Promise<number> {
   const walletId = useWalletStore.getState().activeWalletId
   const networkMode = useWalletStore.getState().networkMode
-  const connectionId = useWalletStore.getState().activeArkadeConnectionId
+  const arkadeAccountId = useWalletStore.getState().activeArkadeAccountId
   if (
     walletId == null ||
-    connectionId == null ||
+    arkadeAccountId == null ||
     !isArkadeSupportedNetworkMode(networkMode)
   ) {
     return 0
@@ -269,7 +269,7 @@ export async function refreshOnchainBumperInfoForE2e(): Promise<number> {
 
   const info = await getArkadeWorker().getOnchainBumperInfo()
   appQueryClient.setQueryData(
-    arkadeBumperInfoQueryKey(walletId, networkMode, connectionId),
+    arkadeBumperInfoQueryKey(walletId, networkMode, arkadeAccountId),
     info,
   )
   await appQueryClient.invalidateQueries({
@@ -282,10 +282,10 @@ export async function refreshOnchainBumperInfoForE2e(): Promise<number> {
 export function resumeUnilateralExitAutomationForE2e(): void {
   const walletId = useWalletStore.getState().activeWalletId
   const networkMode = useWalletStore.getState().networkMode
-  const connectionId = useWalletStore.getState().activeArkadeConnectionId
+  const arkadeAccountId = useWalletStore.getState().activeArkadeAccountId
   if (
     walletId == null ||
-    connectionId == null ||
+    arkadeAccountId == null ||
     !isArkadeSupportedNetworkMode(networkMode)
   ) {
     return
@@ -293,6 +293,6 @@ export function resumeUnilateralExitAutomationForE2e(): void {
   clearAutomaticUnilateralExitPause({
     walletId,
     networkMode,
-    connectionId,
+    arkadeAccountId,
   })
 }

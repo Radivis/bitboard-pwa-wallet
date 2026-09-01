@@ -69,7 +69,7 @@ export async function evaluateUnilateralExitAutomationPolicy(
     .getPrefs(
       input.walletScope.walletId,
       input.walletScope.networkMode,
-      input.walletScope.connectionId,
+      input.walletScope.arkadeAccountId,
     )
   const { appQueryClient } = await import('@/lib/shared/app-query-client')
   const presetSatPerVbByLabel = await appQueryClient.fetchQuery({

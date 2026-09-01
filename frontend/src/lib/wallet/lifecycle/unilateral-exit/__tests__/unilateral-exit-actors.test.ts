@@ -27,7 +27,7 @@ import type { ArkadeUnilateralExitProgress } from '@/workers/arkade-api'
 const walletScope = {
   walletId: 1,
   networkMode: 'regtest' as const,
-  connectionId: 'conn-1',
+  arkadeAccountId: 'conn-1',
 }
 
 const leaf = { txid: 'aa'.repeat(32), vout: 0 }
@@ -52,7 +52,7 @@ describe('invalidateUnilateralExitQueries', () => {
     const progressQueryKey = arkadeUnilateralExitProgressQueryKey(
       walletScope.walletId,
       walletScope.networkMode,
-      walletScope.connectionId,
+      walletScope.arkadeAccountId,
       [leaf],
     )
     expect(removeQueriesMock).not.toHaveBeenCalled()
@@ -63,14 +63,14 @@ describe('invalidateUnilateralExitQueries', () => {
       queryKey: arkadeBalanceQueryKey(
         walletScope.walletId,
         walletScope.networkMode,
-        walletScope.connectionId,
+        walletScope.arkadeAccountId,
       ),
     })
     expect(invalidateQueriesMock).toHaveBeenCalledWith({
       queryKey: arkadeUnilateralExitTopologyScopeKey(
         walletScope.walletId,
         walletScope.networkMode,
-        walletScope.connectionId,
+        walletScope.arkadeAccountId,
       ),
     })
   })
@@ -82,7 +82,7 @@ describe('invalidateUnilateralExitQueries', () => {
       arkadeUnilateralExitProgressQueryKey(
         walletScope.walletId,
         walletScope.networkMode,
-        walletScope.connectionId,
+        walletScope.arkadeAccountId,
         [leaf],
       ),
       progress,

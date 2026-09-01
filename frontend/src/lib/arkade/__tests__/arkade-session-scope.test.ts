@@ -9,7 +9,7 @@ import {
 const openSession = {
   walletId: 1,
   networkMode: 'regtest',
-  connectionId: 'conn-1',
+  arkadeAccountId: 'conn-1',
 }
 
 describe('arkadeWalletScopesEqual', () => {
@@ -29,7 +29,7 @@ describe('arkadeWalletScopesEqual', () => {
       arkadeWalletScopesEqual(openSession, { ...openSession, networkMode: 'signet' }),
     ).toBe(false)
     expect(
-      arkadeWalletScopesEqual(openSession, { ...openSession, connectionId: 'conn-2' }),
+      arkadeWalletScopesEqual(openSession, { ...openSession, arkadeAccountId: 'conn-2' }),
     ).toBe(false)
   })
 })
@@ -59,11 +59,11 @@ describe('assertArkadeOpenSessionMatchesScope', () => {
     ).toThrow(ARKADE_SESSION_SCOPE_MISMATCH_ERROR)
   })
 
-  it('throws when connectionId differs', () => {
+  it('throws when arkadeAccountId differs', () => {
     expect(() =>
       assertArkadeOpenSessionMatchesScope(openSession, {
         ...openSession,
-        connectionId: 'conn-2',
+        arkadeAccountId: 'conn-2',
       }),
     ).toThrow(ARKADE_SESSION_SCOPE_MISMATCH_ERROR)
   })

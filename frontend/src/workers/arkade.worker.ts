@@ -9,10 +9,10 @@ import { assertArkadeOpenSessionMatchesScope } from '@/lib/arkade/arkade-session
 import { rethrowWasmArkErrorForComlink } from '@/lib/shared/wasm-ark-error'
 import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
 import {
-  ensureOperatorConnectionEncrypted,
-  extractSdkPersistenceJsonForConnection,
-  findActiveConnectionSummary,
-  listConnectionSummaries,
+  ensureArkadeAccountEncrypted,
+  extractSdkPersistenceJsonForAccount,
+  findActiveAccountSummary,
+  listAccountSummaries,
   persistSdkJsonToEncryptedPayload,
   updateOperatorSyncAtEncrypted,
   type ArkadeEncryptedPayloadDeps,
@@ -59,7 +59,7 @@ import type {
   ArkadeVtxoListResult,
   ArkadeVtxoExpiryStatus,
   ArkadePendingBatchIntent,
-  EnsureArkadeOperatorConnectionEncryptedParams,
+  EnsureArkadeAccountEncryptedParams,
   OpenArkadeSessionParams,
   OpenArkadeSessionResult,
 } from '@/workers/arkade-api'
@@ -80,7 +80,7 @@ let activeSessionKey: string | null = null
 let activeSessionParams: {
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
-  connectionId: string
+  arkadeAccountId: string
 } | null = null
 let inFlightPersist: Promise<void> | null = null
 
@@ -200,7 +200,7 @@ async function flushSdkPersistenceNowOrThrow(): Promise<void> {
     )
     await persistSdkJsonToEncryptedPayload(getEncryptedPayloadDeps(), {
       walletId: sessionParams.walletId,
-      connectionId: sessionParams.connectionId,
+      arkadeAccountId: sessionParams.arkadeAccountId,
       sdkPersistenceJson,
     })
   })()
@@ -316,7 +316,7 @@ async function closeSessionImpl(): Promise<void> {
 async function openSessionImpl(
   params: OpenArkadeSessionParams,
 ): Promise<OpenArkadeSessionResult> {
-  const key = arkadeSessionKey(params.walletId, params.networkMode, params.connectionId)
+  const key = arkadeSessionKey(params.walletId, params.networkMode, params.arkadeAccountId)
 
   if (activeSessionKey === key) {
     try {
@@ -334,11 +334,11 @@ async function openSessionImpl(
   deleteLegacyArkadeIndexedDb(params.walletId, params.networkMode)
 
   const encryptedPayloadMessage = encryptedBlobForDbToMessage(params.encryptedPayload)
-  const sdkPersistenceJson = await extractSdkPersistenceJsonForConnection(
+  const sdkPersistenceJson = await extractSdkPersistenceJsonForAccount(
     getEncryptedPayloadDeps(),
     {
       encryptedPayload: encryptedPayloadMessage,
-      connectionId: params.connectionId,
+      arkadeAccountId: params.arkadeAccountId,
     },
   )
 
@@ -346,7 +346,7 @@ async function openSessionImpl(
   activeSessionParams = {
     walletId: params.walletId,
     networkMode: params.networkMode,
-    connectionId: params.connectionId,
+    arkadeAccountId: params.arkadeAccountId,
   }
 
   try {
@@ -397,27 +397,27 @@ const arkadeService: ArkadeService = {
   async hasOpenSession(params: {
     walletId: number
     networkMode: ArkadeSupportedNetworkMode
-    connectionId: string
+    arkadeAccountId: string
   }): Promise<boolean> {
     return activeSessionKey === arkadeSessionKey(
       params.walletId,
       params.networkMode,
-      params.connectionId,
+      params.arkadeAccountId,
     )
   },
 
-  async reconcileActiveConnectionId(connectionId: string): Promise<void> {
+  async reconcileActiveAccountId(arkadeAccountId: string): Promise<void> {
     if (activeSessionParams == null) {
       return
     }
     activeSessionParams = {
       ...activeSessionParams,
-      connectionId,
+      arkadeAccountId,
     }
     activeSessionKey = arkadeSessionKey(
       activeSessionParams.walletId,
       activeSessionParams.networkMode,
-      connectionId,
+      arkadeAccountId,
     )
   },
 
@@ -491,32 +491,32 @@ const arkadeService: ArkadeService = {
 
   async readPersistedSdkPersistenceJsonForE2e(params: {
     walletId: number
-    connectionId: string
+    arkadeAccountId: string
   }): Promise<string | undefined> {
     const encryptedPayload = await getEncryptedPayloadDeps().encryptedHost.readEncryptedPayload(
       params.walletId,
     )
-    return extractSdkPersistenceJsonForConnection(getEncryptedPayloadDeps(), {
+    return extractSdkPersistenceJsonForAccount(getEncryptedPayloadDeps(), {
       encryptedPayload: encryptedBlobForDbToMessage(encryptedPayload),
-      connectionId: params.connectionId,
+      arkadeAccountId: params.arkadeAccountId,
     })
   },
 
-  async findActiveConnectionSummary(params) {
-    return findActiveConnectionSummary(getEncryptedPayloadDeps(), {
+  async findActiveAccountSummary(params) {
+    return findActiveAccountSummary(getEncryptedPayloadDeps(), {
       walletId: params.walletId,
       networkMode: params.networkMode,
       encryptedPayload: encryptedBlobForDbToMessage(params.encryptedPayload),
     })
   },
 
-  async listConnectionSummaries(params) {
-    return listConnectionSummaries(getEncryptedPayloadDeps(), params)
+  async listAccountSummaries(params) {
+    return listAccountSummaries(getEncryptedPayloadDeps(), params)
   },
 
-  async ensureOperatorConnectionEncrypted(params: EnsureArkadeOperatorConnectionEncryptedParams) {
+  async ensureArkadeAccountEncrypted(params: EnsureArkadeAccountEncryptedParams) {
     const { persistInitialSdkFromWasm, ...connectionParams } = params
-    return ensureOperatorConnectionEncrypted(
+    return ensureArkadeAccountEncrypted(
       getEncryptedPayloadDeps(),
       connectionParams,
       persistInitialSdkFromWasm

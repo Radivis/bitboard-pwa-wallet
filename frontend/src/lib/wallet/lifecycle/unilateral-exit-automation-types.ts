@@ -29,7 +29,7 @@ export function defaultUnilateralExitAutomationPrefs(): UnilateralExitAutomation
 }
 
 export function unilateralExitAutomationPrefsKey(
-  scope: Pick<ArkadeWalletScope, 'walletId' | 'networkMode' | 'connectionId'>,
+  scope: Pick<ArkadeWalletScope, 'walletId' | 'networkMode' | 'arkadeAccountId'>,
 ): string {
   return arkadeWalletScopeKey(scope)
 }

@@ -75,7 +75,7 @@ function unilateralExitWalletScopesEqual(
   return (
     previous.walletId === next.walletId &&
     previous.networkMode === next.networkMode &&
-    previous.connectionId === next.connectionId
+    previous.arkadeAccountId === next.arkadeAccountId
   )
 }
 

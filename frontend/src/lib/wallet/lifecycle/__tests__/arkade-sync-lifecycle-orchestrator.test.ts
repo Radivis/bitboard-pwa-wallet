@@ -99,7 +99,7 @@ function completeMigrationResult(): ArkadeSignerMigrationResult {
 const syncParams = {
   walletId: 1,
   networkMode: 'signet' as const,
-  connectionId: 'conn-1',
+  arkadeAccountId: 'conn-1',
   syncKind: 'manual' as const,
 }
 
@@ -116,7 +116,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     configureArkadeSyncForLoadedRail({
       walletId: 1,
       networkMode: 'signet',
-      connectionId: 'conn-1',
+      arkadeAccountId: 'conn-1',
     })
     getAutonomousModeStatus.mockResolvedValue({ active: false })
     useUnilateralExitLifecyclePersistenceStore.setState({ jobsByKey: {} })
@@ -179,7 +179,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     try {
       useWalletStore.setState({
         activeWalletId: 1,
-        activeArkadeConnectionId: 'conn-1',
+        activeArkadeAccountId: 'conn-1',
         networkMode: 'signet',
       })
 
@@ -217,7 +217,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     try {
       useWalletStore.setState({
         activeWalletId: 1,
-        activeArkadeConnectionId: 'conn-1',
+        activeArkadeAccountId: 'conn-1',
         networkMode: 'signet',
       })
       getAutonomousModeStatus.mockResolvedValue({ active: true })
@@ -236,12 +236,12 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     try {
       useWalletStore.setState({
         activeWalletId: 1,
-        activeArkadeConnectionId: 'conn-1',
+        activeArkadeAccountId: 'conn-1',
         networkMode: 'signet',
       })
       getAutonomousModeStatus.mockResolvedValue({ active: false })
       persistActiveUnilateralExitJob(
-        { walletId: 1, networkMode: 'signet', connectionId: 'conn-1' },
+        { walletId: 1, networkMode: 'signet', arkadeAccountId: 'conn-1' },
         [{ txid: 'aa'.repeat(32), vout: 0 }],
       )
 
@@ -276,7 +276,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
       railScope: {
         walletId: 1,
         networkMode: 'signet',
-        connectionId: 'conn-1',
+        arkadeAccountId: 'conn-1',
       },
       errorMessage: 'operator down',
       warningMessage: null,
@@ -296,7 +296,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
       railScope: {
         walletId: 1,
         networkMode: 'signet',
-        connectionId: 'conn-1',
+        arkadeAccountId: 'conn-1',
       },
       errorMessage: null,
       warningMessage:
@@ -419,7 +419,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
       railScope: {
         walletId: 1,
         networkMode: 'signet',
-        connectionId: 'conn-1',
+        arkadeAccountId: 'conn-1',
       },
       errorMessage: 'operator vtxos down',
       warningMessage: null,

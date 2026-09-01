@@ -3,7 +3,7 @@ import type { NetworkMode } from '@/stores/walletStore'
 export type ArkadeWalletScope = {
   walletId: number
   networkMode: NetworkMode
-  connectionId: string
+  arkadeAccountId: string
 }
 
 export const ARKADE_SESSION_NOT_OPEN_ERROR = 'Arkade session is not open'
@@ -11,9 +11,9 @@ export const ARKADE_SESSION_SCOPE_MISMATCH_ERROR =
   'Arkade session scope does not match the open wallet'
 
 export function arkadeWalletScopeKey(
-  scope: Pick<ArkadeWalletScope, 'walletId' | 'networkMode' | 'connectionId'>,
+  scope: Pick<ArkadeWalletScope, 'walletId' | 'networkMode' | 'arkadeAccountId'>,
 ): string {
-  return `${scope.walletId}:${scope.networkMode}:${scope.connectionId}`
+  return `${scope.walletId}:${scope.networkMode}:${scope.arkadeAccountId}`
 }
 
 export function arkadeWalletScopesEqual(

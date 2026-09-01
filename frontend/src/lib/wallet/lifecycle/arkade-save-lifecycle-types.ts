@@ -11,5 +11,5 @@ export type ArkadeSaveLifecycleSnapshot = {
 export type ArkadeSaveParams = {
   walletId: number
   networkMode: NetworkMode
-  connectionId: string
+  arkadeAccountId: string
 }

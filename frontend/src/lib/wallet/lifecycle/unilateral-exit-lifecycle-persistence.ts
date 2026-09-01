@@ -46,7 +46,7 @@ interface UnilateralExitLifecyclePersistenceState {
   getJob: (
     walletId: number,
     networkMode: NetworkMode,
-    connectionId: string,
+    arkadeAccountId: string,
   ) => PersistedUnilateralExitJob
   isHydrated: (scope: ArkadeWalletScope) => boolean
   markHydrated: (scope: ArkadeWalletScope) => void
@@ -111,8 +111,8 @@ export const useUnilateralExitLifecyclePersistenceStore =
     jobsByKey: {},
     hydratedByKey: {},
 
-    getJob: (walletId, networkMode, connectionId) => {
-      const key = arkadeWalletScopeKey({ walletId, networkMode, connectionId })
+    getJob: (walletId, networkMode, arkadeAccountId) => {
+      const key = arkadeWalletScopeKey({ walletId, networkMode, arkadeAccountId })
       return get().jobsByKey[key] ?? defaultPersistedJob()
     },
 
@@ -190,7 +190,7 @@ export function getPersistedUnilateralExitJob(
 ): PersistedUnilateralExitJob {
   return useUnilateralExitLifecyclePersistenceStore
     .getState()
-    .getJob(scope.walletId, scope.networkMode, scope.connectionId)
+    .getJob(scope.walletId, scope.networkMode, scope.arkadeAccountId)
 }
 
 export function persistActiveUnilateralExitJob(

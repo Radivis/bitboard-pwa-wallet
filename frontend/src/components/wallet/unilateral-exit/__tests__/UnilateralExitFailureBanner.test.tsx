@@ -49,7 +49,7 @@ vi.mock('@/stores/walletStore', async () => {
     useWalletStore: (selector: (state: unknown) => unknown) =>
       selector({
         activeWalletId: 1,
-        activeArkadeConnectionId: 'conn-1',
+        activeArkadeAccountId: 'conn-1',
         networkMode: 'regtest',
         loadedDescriptorWallet: null,
       }),
@@ -91,7 +91,7 @@ describe('UnilateralExitFailureBanner', () => {
     expect(clearFailureMock).toHaveBeenCalledWith({
       walletId: 1,
       networkMode: 'regtest',
-      connectionId: 'conn-1',
+      arkadeAccountId: 'conn-1',
     })
   })
 

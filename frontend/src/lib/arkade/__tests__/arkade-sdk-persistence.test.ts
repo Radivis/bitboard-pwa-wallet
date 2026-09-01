@@ -21,7 +21,7 @@ function basePayload(): WalletSecretsPayload {
   return {
     descriptorWallets: [],
     lightningNwcConnections: [],
-    arkadeOperatorConnections: [
+    arkadeAccounts: [
       {
         id: 'conn-1',
         label: 'Mutinynet',
@@ -31,7 +31,7 @@ function basePayload(): WalletSecretsPayload {
         createdAt: '2020-01-01T00:00:00.000Z',
       },
     ],
-    activeArkadeConnectionIdByNetwork: { signet: 'conn-1' },
+    activeArkadeAccountIdByNetwork: { signet: 'conn-1' },
   }
 }
 
@@ -67,7 +67,7 @@ describe('arkade-payload-merge', () => {
     expect(mergeSdkPersistenceJsonMonotonic(indexTwo, indexOne)).toBe(indexTwo)
   })
 
-  it('mergeSdkPersistenceIntoPayload updates connection sdk blob', () => {
+  it('mergeSdkPersistenceIntoPayload updates account sdk blob', () => {
     const sdkPersistenceJson = JSON.stringify({ version: 3, wallet_db: {} })
     const merged = mergeSdkPersistenceIntoPayload(
       basePayload(),
@@ -76,8 +76,8 @@ describe('arkade-payload-merge', () => {
       '2020-01-02T00:00:00.000Z',
     )
 
-    expect(merged.arkadeOperatorConnections[0].sdkPersistenceJson).toBe(sdkPersistenceJson)
-    expect(merged.arkadeOperatorConnections[0].lastSuccessfulOperatorSyncAt).toBe(
+    expect(merged.arkadeAccounts[0].sdkPersistenceJson).toBe(sdkPersistenceJson)
+    expect(merged.arkadeAccounts[0].lastSuccessfulOperatorSyncAt).toBe(
       '2020-01-02T00:00:00.000Z',
     )
   })
@@ -87,9 +87,9 @@ describe('arkade-payload-merge', () => {
     const staleIncomingJson = persistenceJsonWithReceiveIndex(1)
     const payload: WalletSecretsPayload = {
       ...basePayload(),
-      arkadeOperatorConnections: [
+      arkadeAccounts: [
         {
-          ...basePayload().arkadeOperatorConnections[0],
+          ...basePayload().arkadeAccounts[0],
           sdkPersistenceJson: existingJson,
         },
       ],
@@ -97,16 +97,16 @@ describe('arkade-payload-merge', () => {
 
     const merged = mergeSdkPersistenceIntoPayload(payload, 'conn-1', staleIncomingJson)
 
-    expect(merged.arkadeOperatorConnections[0].sdkPersistenceJson).toBe(existingJson)
+    expect(merged.arkadeAccounts[0].sdkPersistenceJson).toBe(existingJson)
   })
 
   it('updateOperatorSyncAtInPayload updates sync timestamp only', () => {
     const existingJson = persistenceJsonWithReceiveIndex(2)
     const payload: WalletSecretsPayload = {
       ...basePayload(),
-      arkadeOperatorConnections: [
+      arkadeAccounts: [
         {
-          ...basePayload().arkadeOperatorConnections[0],
+          ...basePayload().arkadeAccounts[0],
           sdkPersistenceJson: existingJson,
           lastSuccessfulOperatorSyncAt: '2020-01-02T00:00:00.000Z',
         },
@@ -119,8 +119,8 @@ describe('arkade-payload-merge', () => {
       '2020-01-03T00:00:00.000Z',
     )
 
-    expect(merged.arkadeOperatorConnections[0].sdkPersistenceJson).toBe(existingJson)
-    expect(merged.arkadeOperatorConnections[0].lastSuccessfulOperatorSyncAt).toBe(
+    expect(merged.arkadeAccounts[0].sdkPersistenceJson).toBe(existingJson)
+    expect(merged.arkadeAccounts[0].lastSuccessfulOperatorSyncAt).toBe(
       '2020-01-03T00:00:00.000Z',
     )
   })

@@ -156,13 +156,13 @@ import { unilateralExitSnapshotIsInState } from '@/lib/wallet/lifecycle/unilater
 const walletScope = {
   walletId: 1,
   networkMode: 'regtest' as const,
-  connectionId: 'conn-1',
+  arkadeAccountId: 'conn-1',
 }
 
 const otherWalletScope = {
   walletId: 2,
   networkMode: 'regtest' as const,
-  connectionId: 'conn-2',
+  arkadeAccountId: 'conn-2',
 }
 
 const leaf = { txid: 'aa'.repeat(32), vout: 0 }

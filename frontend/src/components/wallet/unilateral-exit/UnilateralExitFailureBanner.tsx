@@ -43,17 +43,17 @@ function failureSummary(reasonCode: string): string | null {
 export function UnilateralExitFailureBanner() {
   const networkMode = useWalletStore(selectCommittedNetworkMode)
   const activeWalletId = useWalletStore((state) => state.activeWalletId)
-  const activeArkadeConnectionId = useWalletStore((state) => state.activeArkadeConnectionId)
+  const activeArkadeAccountId = useWalletStore((state) => state.activeArkadeAccountId)
 
   const failure = useUnilateralExitFailurePersistenceStore((state) => {
     if (
       activeWalletId == null ||
-      activeArkadeConnectionId == null ||
+      activeArkadeAccountId == null ||
       !isArkadeSupportedNetworkMode(networkMode)
     ) {
       return null
     }
-    return state.getFailure(activeWalletId, networkMode, activeArkadeConnectionId)
+    return state.getFailure(activeWalletId, networkMode, activeArkadeAccountId)
   })
 
   if (failure == null) {
@@ -63,7 +63,7 @@ export function UnilateralExitFailureBanner() {
   const walletScope: ArkadeWalletScope = {
     walletId: activeWalletId!,
     networkMode,
-    connectionId: activeArkadeConnectionId!,
+    arkadeAccountId: activeArkadeAccountId!,
   }
 
   const summary = failureSummary(failure.reasonCode)

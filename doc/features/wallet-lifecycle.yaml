@@ -115,7 +115,7 @@ feature:
         description: ArkadeLoadLifecycle loading includes session open, WASM hydration, and refreshArkadeStoreFromLoadedWasm
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-load-lifecycle-orchestrator.test.ts
       - id: LIFE-ARK-LOAD-02
-        description: activeArkadeConnectionId is set when ArkadeLoadLifecycle reaches loaded (not after sync)
+        description: activeArkadeAccountId is set when ArkadeLoadLifecycle reaches loaded (not after sync)
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-load-lifecycle-orchestrator.test.ts
       - id: LIFE-ARK-LOAD-03
         description: Receive address is stable when ArkadeLoadLifecycle is loaded (replaces connection-id ordering patch)

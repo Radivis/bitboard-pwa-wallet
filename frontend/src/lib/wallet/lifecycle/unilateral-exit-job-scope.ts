@@ -14,26 +14,26 @@ import type { ArkadeVtxoOutpoint } from '@/workers/arkade-api'
 export function buildArkadeWalletScope(
   walletId: number,
   networkMode: NetworkMode,
-  connectionId: string,
+  arkadeAccountId: string,
 ): ArkadeWalletScope | null {
   if (!isArkadeSupportedNetworkMode(networkMode)) {
     return null
   }
-  return { walletId, networkMode, connectionId }
+  return { walletId, networkMode, arkadeAccountId }
 }
 
 export function resolveActiveArkadeWalletScope(): ArkadeWalletScope | null {
   const walletState = useWalletStore.getState()
   if (
     walletState.activeWalletId == null ||
-    walletState.activeArkadeConnectionId == null
+    walletState.activeArkadeAccountId == null
   ) {
     return null
   }
   return buildArkadeWalletScope(
     walletState.activeWalletId,
     getCommittedNetworkMode(),
-    walletState.activeArkadeConnectionId,
+    walletState.activeArkadeAccountId,
   )
 }
 

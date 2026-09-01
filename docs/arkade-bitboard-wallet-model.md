@@ -10,12 +10,12 @@ For network switching and Esplora, see [`descriptor-wallet-switching.md`](descri
 - **Arkade** balance and history come from the Arkade operator and **ark-rs** (`bitboard-ark` WASM) in `arkade.worker`.
 - Do not merge Arkade totals into the BDK dashboard balance.
 
-## One Bitboard wallet, operator connections per live network
+## One Bitboard wallet, Arkade accounts per live network
 
-- Arkade state is stored as **operator connections** in encrypted `wallet_secrets` (`arkadeOperatorConnections[]`), NWC-style. Each connection is one ASP with its own `sdkPersistenceJson`, URLs, and canonical `operatorSignerPkHex` from `getInfo`.
-- `activeArkadeConnectionIdByNetwork` picks the connection used for session, dashboard, and sync on `mainnet`, `testnet`, and `signet` (Mutinynet). Switching operators is adding/switching connections—not merging blobs across ASPs.
+- Arkade state is stored as **accounts** in encrypted `wallet_secrets` (`arkadeAccounts[]`). Each account is this wallet's local Arkade partition for one ASP on one network, with its own `sdkPersistenceJson`, URLs, and canonical `operatorSignerPkHex` from `getInfo`.
+- `activeArkadeAccountIdByNetwork` picks the account used for session, dashboard, and sync on `mainnet`, `testnet`, and `signet` (Mutinynet). Switching operators is adding/switching accounts—not merging blobs across ASPs.
 - **BitboardArkPersistence** (`sdkPersistenceJson`, engine `ark-rs`, wire `version: 3`) includes `operator_identity` and an `offchain_vtxo_snapshot` inside `wallet_db`. Balance and history read from the loaded WASM session immediately after unlock (local snapshot + Esplora boarding + on-chain bumper).
-- **Operator sync** (`sync_with_operator`) refreshes the snapshot and re-exports `sdkPersistenceJson` to the active connection row. `lastSuccessfulOperatorSyncAt` on the connection mirrors `lastSuccessfulEsploraSyncAt` for on-chain BDK.
+- **Operator sync** (`sync_with_operator`) refreshes the snapshot and re-exports `sdkPersistenceJson` to the active account row. `lastSuccessfulOperatorSyncAt` on the account mirrors `lastSuccessfulEsploraSyncAt` for on-chain BDK.
 - **Local-first:** Operator failure during a session keeps the last-synced blob; the dashboard may show a stale banner until operator sync succeeds this unlock.
 
 ## Persistence in the worker

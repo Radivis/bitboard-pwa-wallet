@@ -10,7 +10,7 @@ This folder documents **what** is persisted, **where**, and **how** reads and wr
 |----------|--------|
 | [bitcoin-onchain.md](bitcoin-onchain.md) | BDK descriptor wallets, changesets, Esplora sync metadata |
 | [lightning.md](lightning.md) | NWC connections, encrypted snapshots, Lightning store |
-| [arkade.md](arkade.md) | Operator connections, `sdkPersistenceJson`, Arkade WASM envelope |
+| [arkade.md](arkade.md) | Arkade accounts, `sdkPersistenceJson`, Arkade WASM envelope |
 | [unilateral-exit.md](unilateral-exit.md) | Unilateral-exit materials, watches, job/prefs/failure stores |
 | [lab.md](lab.md) | Lab simulator chain state, entities, mempool |
 | [general.md](general.md) | Shared wallet DB, encryption, Zustand settings, library, backups |
@@ -60,8 +60,8 @@ The `wallet_secrets` row holds the mnemonic and a JSON payload (`WalletSecretsPa
 interface WalletSecretsPayload {
   descriptorWallets: DescriptorWalletData[]           // on-chain
   lightningNwcConnections: StoredNwcLightningConnection[]
-  arkadeOperatorConnections: StoredArkadeOperatorConnection[]
-  activeArkadeConnectionIdByNetwork: Partial<Record<ArkadeSupportedNetworkMode, string>>
+  arkadeAccounts: StoredArkadeAccount[]
+  activeArkadeAccountIdByNetwork: Partial<Record<ArkadeSupportedNetworkMode, string>>
 }
 ```
 
@@ -78,7 +78,7 @@ Passwords, mnemonics, and NWC URIs are **never** stored in `localStorage` or `se
 | Worker | WASM crate | Runtime (ephemeral) | Flushed to |
 |--------|------------|---------------------|------------|
 | `crypto.worker` | `crypto` | `ACTIVE_WALLET`, BDK changeset | `descriptorWallets[].changeSet` in encrypted payload |
-| `arkade.worker` | `bitboard-ark` | `JsonPersistenceDb` | `sdkPersistenceJson` on active operator connection |
+| `arkade.worker` | `bitboard-ark` | `JsonPersistenceDb` | `sdkPersistenceJson` on active Arkade account |
 | `lab.worker` | `crypto` (`lab_*`) | In-memory `LabState` | Lab SQLite via `lab-factory.ts` on main thread |
 | `encryption.worker` | `bitboard-encryption` | Session password in worker memory | Not persisted (except near-zero wrapper; see [general.md](general.md)) |
 

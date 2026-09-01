@@ -59,9 +59,10 @@ export interface NwcConnectionSnapshot {
 }
 
 /**
- * One Arkade operator connection (NWC-style). VTXO state lives in `sdkPersistenceJson` for this ASP only.
+ * One Arkade account: this Bitboard wallet's local partition for one ASP on one network.
+ * VTXO state lives in `sdkPersistenceJson` for this account only.
  */
-export interface StoredArkadeOperatorConnection {
+export interface StoredArkadeAccount {
   id: string
   label: string
   networkMode: ArkadeSupportedNetworkMode
@@ -98,10 +99,10 @@ export interface WalletSecretsPayload {
   descriptorWallets: DescriptorWalletData[]
   /** NWC URIs and metadata (empty array when the user has no Lightning connections). */
   lightningNwcConnections: StoredNwcLightningConnection[]
-  /** Arkade operator connections (one blob per ASP). */
-  arkadeOperatorConnections: StoredArkadeOperatorConnection[]
-  /** Active connection id per live network for dashboard/session. */
-  activeArkadeConnectionIdByNetwork: Partial<
+  /** Arkade accounts (one blob per ASP on a network). */
+  arkadeAccounts: StoredArkadeAccount[]
+  /** Active account id per live network for dashboard/session. */
+  activeArkadeAccountIdByNetwork: Partial<
     Record<ArkadeSupportedNetworkMode, string>
   >
 }
@@ -166,9 +167,9 @@ function isNwcConnectionSnapshot(value: unknown): value is NwcConnectionSnapshot
   )
 }
 
-function isStoredArkadeOperatorConnection(
+function isStoredArkadeAccount(
   value: unknown,
-): value is StoredArkadeOperatorConnection {
+): value is StoredArkadeAccount {
   if (!isRecord(value)) return false
   const networkOk =
     typeof value.networkMode === 'string' &&
@@ -258,17 +259,17 @@ export function isWalletSecretsPayload(value: unknown): value is WalletSecretsPa
   ) {
     return false
   }
-  if (!Array.isArray(value.arkadeOperatorConnections)) return false
+  if (!Array.isArray(value.arkadeAccounts)) return false
   if (
-    !value.arkadeOperatorConnections.every((row) =>
-      isStoredArkadeOperatorConnection(row),
+    !value.arkadeAccounts.every((row) =>
+      isStoredArkadeAccount(row),
     )
   ) {
     return false
   }
   if (
-    value.activeArkadeConnectionIdByNetwork !== undefined &&
-    !isRecord(value.activeArkadeConnectionIdByNetwork)
+    value.activeArkadeAccountIdByNetwork !== undefined &&
+    !isRecord(value.activeArkadeAccountIdByNetwork)
   ) {
     return false
   }
@@ -294,17 +295,17 @@ export function isWalletSecrets(value: unknown): value is WalletSecrets {
   ) {
     return false
   }
-  if (!Array.isArray(value.arkadeOperatorConnections)) return false
+  if (!Array.isArray(value.arkadeAccounts)) return false
   if (
-    !value.arkadeOperatorConnections.every((row) =>
-      isStoredArkadeOperatorConnection(row),
+    !value.arkadeAccounts.every((row) =>
+      isStoredArkadeAccount(row),
     )
   ) {
     return false
   }
   if (
-    value.activeArkadeConnectionIdByNetwork !== undefined &&
-    !isRecord(value.activeArkadeConnectionIdByNetwork)
+    value.activeArkadeAccountIdByNetwork !== undefined &&
+    !isRecord(value.activeArkadeAccountIdByNetwork)
   ) {
     return false
   }
@@ -319,8 +320,8 @@ export function assembleWalletSecrets(
     mnemonic,
     descriptorWallets: payload.descriptorWallets,
     lightningNwcConnections: payload.lightningNwcConnections,
-    arkadeOperatorConnections: payload.arkadeOperatorConnections,
-    activeArkadeConnectionIdByNetwork: payload.activeArkadeConnectionIdByNetwork,
+    arkadeAccounts: payload.arkadeAccounts,
+    activeArkadeAccountIdByNetwork: payload.activeArkadeAccountIdByNetwork,
   }
 }
 
@@ -362,72 +363,91 @@ function stripOversizedSdkPersistenceJson(row: Record<string, unknown>): Record<
   return withoutSdkPersistenceJson
 }
 
-function sanitizeStoredArkadeOperatorConnectionRow(
+function sanitizeStoredArkadeAccountRow(
   row: unknown,
-): StoredArkadeOperatorConnection | null {
+): StoredArkadeAccount | null {
   if (!isRecord(row)) {
     return null
   }
   const candidates = [row, stripOversizedSdkPersistenceJson(row)]
   for (const candidate of candidates) {
-    if (isStoredArkadeOperatorConnection(candidate)) {
+    if (isStoredArkadeAccount(candidate)) {
       return candidate
     }
   }
   if (import.meta.env.DEV) {
-    console.warn('[wallet-secrets] Dropping invalid arkadeOperatorConnection row', row)
+    console.warn('[wallet-secrets] Dropping invalid arkadeAccount row', row)
   }
   return null
 }
 
-function sanitizeActiveArkadeConnectionIdByNetwork(
+function sanitizeActiveArkadeAccountIdByNetwork(
   value: unknown,
-  validConnectionIds: ReadonlySet<string>,
+  validAccountIds: ReadonlySet<string>,
 ): Partial<Record<ArkadeSupportedNetworkMode, string>> {
   if (!isRecord(value) || Array.isArray(value)) {
     return {}
   }
   const sanitized: Partial<Record<ArkadeSupportedNetworkMode, string>> = {}
-  for (const [networkMode, connectionId] of Object.entries(value)) {
+  for (const [networkMode, arkadeAccountId] of Object.entries(value)) {
     if (
       !(ARKADE_SUPPORTED_NETWORK_MODES as readonly string[]).includes(networkMode) ||
-      typeof connectionId !== 'string' ||
-      connectionId.trim().length === 0 ||
-      !validConnectionIds.has(connectionId)
+      typeof arkadeAccountId !== 'string' ||
+      arkadeAccountId.trim().length === 0 ||
+      !validAccountIds.has(arkadeAccountId)
     ) {
       continue
     }
-    sanitized[networkMode as ArkadeSupportedNetworkMode] = connectionId
+    sanitized[networkMode as ArkadeSupportedNetworkMode] = arkadeAccountId
   }
   return sanitized
+}
+
+function pickArkadeAccountsField(raw: Record<string, unknown>): unknown {
+  if ('arkadeAccounts' in raw) {
+    return raw.arkadeAccounts
+  }
+  return raw.arkadeOperatorConnections
+}
+
+function pickActiveArkadeAccountIdByNetworkField(raw: Record<string, unknown>): unknown {
+  if ('activeArkadeAccountIdByNetwork' in raw) {
+    return raw.activeArkadeAccountIdByNetwork
+  }
+  return raw.activeArkadeConnectionIdByNetwork
 }
 
 function normalizeWalletSecretsPayload(raw: unknown): unknown {
   if (!isRecord(raw)) return raw
 
-  const withoutLegacyArkadeWallets = { ...raw }
-  delete withoutLegacyArkadeWallets.arkadeWallets
+  const withoutLegacyKeys = { ...raw }
+  delete withoutLegacyKeys.arkadeWallets
 
-  const arkadeOperatorConnections = sanitizeOptionalObjectArray(
-    withoutLegacyArkadeWallets.arkadeOperatorConnections,
-    sanitizeStoredArkadeOperatorConnectionRow,
+  const arkadeAccounts = sanitizeOptionalObjectArray(
+    pickArkadeAccountsField(withoutLegacyKeys),
+    sanitizeStoredArkadeAccountRow,
   )
 
-  const validConnectionIds = new Set(
-    Array.isArray(arkadeOperatorConnections)
-      ? arkadeOperatorConnections.map((connection) => connection.id)
+  const validAccountIds = new Set(
+    Array.isArray(arkadeAccounts)
+      ? arkadeAccounts.map((account) => account.id)
       : [],
   )
 
+  delete withoutLegacyKeys.arkadeOperatorConnections
+  delete withoutLegacyKeys.activeArkadeConnectionIdByNetwork
+  delete withoutLegacyKeys.arkadeAccounts
+  delete withoutLegacyKeys.activeArkadeAccountIdByNetwork
+
   return {
-    ...withoutLegacyArkadeWallets,
+    ...withoutLegacyKeys,
     lightningNwcConnections: coalesceNullishArrayField(
-      withoutLegacyArkadeWallets.lightningNwcConnections,
+      withoutLegacyKeys.lightningNwcConnections,
     ),
-    arkadeOperatorConnections,
-    activeArkadeConnectionIdByNetwork: sanitizeActiveArkadeConnectionIdByNetwork(
-      withoutLegacyArkadeWallets.activeArkadeConnectionIdByNetwork,
-      validConnectionIds,
+    arkadeAccounts,
+    activeArkadeAccountIdByNetwork: sanitizeActiveArkadeAccountIdByNetwork(
+      pickActiveArkadeAccountIdByNetworkField(raw),
+      validAccountIds,
     ),
   }
 }
@@ -456,18 +476,18 @@ function describeWalletSecretsPayloadValidationIssues(value: unknown): string[] 
   ) {
     issues.push('lightningNwcConnections contains an invalid row')
   }
-  if (!Array.isArray(value.arkadeOperatorConnections)) {
-    issues.push('arkadeOperatorConnections must be an array')
+  if (!Array.isArray(value.arkadeAccounts)) {
+    issues.push('arkadeAccounts must be an array')
   } else if (
-    !value.arkadeOperatorConnections.every((row) => isStoredArkadeOperatorConnection(row))
+    !value.arkadeAccounts.every((row) => isStoredArkadeAccount(row))
   ) {
-    issues.push('arkadeOperatorConnections contains an invalid row')
+    issues.push('arkadeAccounts contains an invalid row')
   }
   if (
-    value.activeArkadeConnectionIdByNetwork !== undefined &&
-    !isRecord(value.activeArkadeConnectionIdByNetwork)
+    value.activeArkadeAccountIdByNetwork !== undefined &&
+    !isRecord(value.activeArkadeAccountIdByNetwork)
   ) {
-    issues.push('activeArkadeConnectionIdByNetwork must be an object')
+    issues.push('activeArkadeAccountIdByNetwork must be an object')
   }
   return issues
 }

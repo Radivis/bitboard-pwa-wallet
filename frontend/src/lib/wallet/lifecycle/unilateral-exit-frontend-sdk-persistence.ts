@@ -301,21 +301,21 @@ export function clearUnilateralExitFrontendMemoryForScope(
 async function writeJobToSdk(scope: ArkadeWalletScope): Promise<void> {
   const job = useUnilateralExitLifecyclePersistenceStore
     .getState()
-    .getJob(scope.walletId, scope.networkMode, scope.connectionId)
+    .getJob(scope.walletId, scope.networkMode, scope.arkadeAccountId)
   await getArkadeWorker().setUnilateralExitJob(scope, jobToSdkPersistence(job))
 }
 
 async function writePrefsToSdk(scope: ArkadeWalletScope): Promise<void> {
   const prefs = useUnilateralExitAutomationPrefsStore
     .getState()
-    .getPrefs(scope.walletId, scope.networkMode, scope.connectionId)
+    .getPrefs(scope.walletId, scope.networkMode, scope.arkadeAccountId)
   await getArkadeWorker().setUnilateralExitAutomationPrefs(scope, prefsToSdkPersistence(prefs))
 }
 
 async function writeFailureToSdk(scope: ArkadeWalletScope): Promise<void> {
   const failure = useUnilateralExitFailurePersistenceStore
     .getState()
-    .getFailure(scope.walletId, scope.networkMode, scope.connectionId)
+    .getFailure(scope.walletId, scope.networkMode, scope.arkadeAccountId)
   await getArkadeWorker().setUnilateralExitFailure(scope, failureToSdkPersistence(failure))
 }
 

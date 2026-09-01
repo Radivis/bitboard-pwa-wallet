@@ -71,18 +71,18 @@ const signerMigrationResultByInFlightPromise = new WeakMap<
 >()
 
 function syncKey(
-  params: Pick<ArkadeSyncParams, 'walletId' | 'networkMode' | 'connectionId' | 'syncKind'>,
+  params: Pick<ArkadeSyncParams, 'walletId' | 'networkMode' | 'arkadeAccountId' | 'syncKind'>,
 ): string {
   return `${arkadeRailScopeKey(params)}:${params.syncKind}`
 }
 
 function railScopeFromParams(
-  params: Pick<ArkadeSyncParams, 'walletId' | 'networkMode' | 'connectionId'>,
+  params: Pick<ArkadeSyncParams, 'walletId' | 'networkMode' | 'arkadeAccountId'>,
 ): ArkadeRailScope {
   return {
     walletId: params.walletId,
     networkMode: params.networkMode,
-    connectionId: params.connectionId,
+    arkadeAccountId: params.arkadeAccountId,
   }
 }
 
@@ -117,7 +117,7 @@ function toSaveParams(params: ArkadeSyncParams): ArkadeSaveParams {
   return {
     walletId: params.walletId,
     networkMode: params.networkMode,
-    connectionId: params.connectionId,
+    arkadeAccountId: params.arkadeAccountId,
   }
 }
 
@@ -162,14 +162,14 @@ async function invalidateOperatorTrustQueriesForScope(scope: ArkadeRailScope): P
     queryKey: arkadeOperatorTrustStatusQueryKey(
       scope.walletId,
       scope.networkMode,
-      scope.connectionId,
+      scope.arkadeAccountId,
     ),
   })
   await appQueryClient.invalidateQueries({
     queryKey: arkadeOperatorConfigDiffQueryKey(
       scope.walletId,
       scope.networkMode,
-      scope.connectionId,
+      scope.arkadeAccountId,
     ),
   })
 }
@@ -179,7 +179,7 @@ async function runArkadeOperatorSyncBody(
 ): Promise<ArkadeOperatorSyncResult> {
   const worker = getArkadeWorker()
   const syncResult = await worker.syncWithOperator()
-  await refreshArkadeStoreFromLoadedWasm(scope.connectionId)
+  await refreshArkadeStoreFromLoadedWasm(scope.arkadeAccountId)
   await invalidateOperatorTrustQueriesForScope(scope)
   return syncResult
 }
@@ -359,7 +359,7 @@ export async function orchestrateArkadePostLoadSync(
   const work = orchestrateArkadeSyncThenSave({
     walletId: params.walletId,
     networkMode: params.networkMode,
-    connectionId: params.connectionId,
+    arkadeAccountId: params.arkadeAccountId,
     syncKind: 'postLoad',
     onSyncError: params.onSyncError,
     awaitCompletion,
@@ -401,7 +401,7 @@ export function scheduleBackgroundArkadeOperatorSync(): void {
     const networkMode = getCommittedNetworkMode()
     if (
       walletState.activeWalletId == null ||
-      walletState.activeArkadeConnectionId == null ||
+      walletState.activeArkadeAccountId == null ||
       !isArkadeSupportedNetworkMode(networkMode)
     ) {
       return
@@ -413,7 +413,7 @@ export function scheduleBackgroundArkadeOperatorSync(): void {
     }
 
     const walletId = walletState.activeWalletId
-    const connectionId = walletState.activeArkadeConnectionId
+    const arkadeAccountId = walletState.activeArkadeAccountId
     void (async () => {
       try {
         const status = await getArkadeWorker().getAutonomousModeStatus()
@@ -429,7 +429,7 @@ export function scheduleBackgroundArkadeOperatorSync(): void {
       void orchestrateArkadeSyncThenSave({
         walletId,
         networkMode,
-        connectionId,
+        arkadeAccountId,
         syncKind: 'dashboardPoll',
         awaitCompletion: false,
         throwOnError: false,

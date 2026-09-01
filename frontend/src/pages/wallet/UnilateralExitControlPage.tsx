@@ -138,7 +138,7 @@ export function UnilateralExitControlPage() {
   const queryClient = useQueryClient()
   const networkMode = useWalletStore(selectCommittedNetworkMode)
   const activeWalletId = useWalletStore((state) => state.activeWalletId)
-  const activeArkadeConnectionId = useWalletStore((state) => state.activeArkadeConnectionId)
+  const activeArkadeAccountId = useWalletStore((state) => state.activeArkadeAccountId)
   const balanceQuery = useArkadeBalanceQuery()
   const exitCandidatesQuery = useArkadeExitCandidatesQuery(true)
   const inProgressQuery = useArkadeUnilateralExitsInProgressQuery(true)
@@ -150,7 +150,7 @@ export function UnilateralExitControlPage() {
   const automationPrefsHydrated = useUnilateralExitLifecyclePersistenceStore((state) => {
     if (
       activeWalletId == null ||
-      activeArkadeConnectionId == null ||
+      activeArkadeAccountId == null ||
       !isArkadeSupportedNetworkMode(networkMode)
     ) {
       return false
@@ -158,7 +158,7 @@ export function UnilateralExitControlPage() {
     return state.isHydrated({
       walletId: activeWalletId,
       networkMode,
-      connectionId: activeArkadeConnectionId,
+      arkadeAccountId: activeArkadeAccountId,
     })
   })
 
@@ -207,24 +207,24 @@ export function UnilateralExitControlPage() {
   const persistedJob = useUnilateralExitLifecyclePersistenceStore((state) => {
     if (
       activeWalletId == null ||
-      activeArkadeConnectionId == null ||
+      activeArkadeAccountId == null ||
       !isArkadeSupportedNetworkMode(networkMode)
     ) {
       return emptyPersistedUnilateralExitJob
     }
-    return state.getJob(activeWalletId, networkMode, activeArkadeConnectionId)
+    return state.getJob(activeWalletId, networkMode, activeArkadeAccountId)
   })
   const persistedJobExists = persistedUnilateralExitJobExists(persistedJob)
 
   const persistedFailure = useUnilateralExitFailurePersistenceStore((state) => {
     if (
       activeWalletId == null ||
-      activeArkadeConnectionId == null ||
+      activeArkadeAccountId == null ||
       !isArkadeSupportedNetworkMode(networkMode)
     ) {
       return null
     }
-    return state.getFailure(activeWalletId, networkMode, activeArkadeConnectionId)
+    return state.getFailure(activeWalletId, networkMode, activeArkadeAccountId)
   })
 
   const jobOutpoints = useMemo(
@@ -310,7 +310,7 @@ export function UnilateralExitControlPage() {
   useEffect(() => {
     if (
       activeWalletId == null ||
-      activeArkadeConnectionId == null ||
+      activeArkadeAccountId == null ||
       !isArkadeSupportedNetworkMode(networkMode)
     ) {
       return
@@ -321,13 +321,13 @@ export function UnilateralExitControlPage() {
       walletScope: {
         walletId: activeWalletId,
         networkMode,
-        connectionId: activeArkadeConnectionId,
+        arkadeAccountId: activeArkadeAccountId,
       },
       inProgressOutpoints,
       unilateralExitInProgressSats,
     })
   }, [
-    activeArkadeConnectionId,
+    activeArkadeAccountId,
     activeWalletId,
     balanceQuery.isLoading,
     inProgressOutpoints,
@@ -350,7 +350,7 @@ export function UnilateralExitControlPage() {
     if (!isOnControlPage) return
     if (
       activeWalletId == null ||
-      activeArkadeConnectionId == null ||
+      activeArkadeAccountId == null ||
       !isArkadeSupportedNetworkMode(networkMode)
     ) {
       return
@@ -359,7 +359,7 @@ export function UnilateralExitControlPage() {
       queryKey: arkadeUnilateralExitTopologyQueryKey(
         activeWalletId,
         networkMode,
-        activeArkadeConnectionId,
+        activeArkadeAccountId,
         topologyRequestOutpoints,
       ),
     })
@@ -367,7 +367,7 @@ export function UnilateralExitControlPage() {
     isOnControlPage,
     queryClient,
     activeWalletId,
-    activeArkadeConnectionId,
+    activeArkadeAccountId,
     networkMode,
     topologyRequestOutpoints,
   ])

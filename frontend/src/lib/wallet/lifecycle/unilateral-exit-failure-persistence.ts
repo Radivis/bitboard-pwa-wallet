@@ -14,7 +14,7 @@ interface UnilateralExitFailurePersistenceState {
   getFailure: (
     walletId: number,
     networkMode: NetworkMode,
-    connectionId: string,
+    arkadeAccountId: string,
   ) => PersistedUnilateralExitFailure | null
   hydrateFailure: (
     scope: ArkadeWalletScope,
@@ -29,8 +29,8 @@ export const useUnilateralExitFailurePersistenceStore =
   create<UnilateralExitFailurePersistenceState>()((set, get) => ({
     failuresByKey: {},
 
-    getFailure: (walletId, networkMode, connectionId) => {
-      const key = arkadeWalletScopeKey({ walletId, networkMode, connectionId })
+    getFailure: (walletId, networkMode, arkadeAccountId) => {
+      const key = arkadeWalletScopeKey({ walletId, networkMode, arkadeAccountId })
       return get().failuresByKey[key] ?? null
     },
 
@@ -90,7 +90,7 @@ export function getPersistedUnilateralExitFailure(
 ): PersistedUnilateralExitFailure | null {
   return useUnilateralExitFailurePersistenceStore
     .getState()
-    .getFailure(scope.walletId, scope.networkMode, scope.connectionId)
+    .getFailure(scope.walletId, scope.networkMode, scope.arkadeAccountId)
 }
 
 export function persistUnilateralExitFailureRecord(

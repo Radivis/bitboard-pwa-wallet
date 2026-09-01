@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
   assertOperatorSignerMatches,
-  buildDefaultArkadeOperatorConnection,
+  buildDefaultArkadeAccount,
   defaultArkadeOperatorLabel,
-  findActiveArkadeOperatorConnection,
+  findActiveArkadeAccount,
 } from '@/lib/arkade/arkade-payload-merge'
 import type { WalletSecretsPayload } from '@/lib/wallet/wallet-domain-types'
 
 const basePayload = (): WalletSecretsPayload => ({
   descriptorWallets: [],
   lightningNwcConnections: [],
-  arkadeOperatorConnections: [
+  arkadeAccounts: [
     {
       id: 'conn-a',
       label: 'Mutinynet',
@@ -21,33 +21,33 @@ const basePayload = (): WalletSecretsPayload => ({
       lastSuccessfulOperatorSyncAt: '2020-01-02T00:00:00.000Z',
     },
   ],
-  activeArkadeConnectionIdByNetwork: { signet: 'conn-a' },
+  activeArkadeAccountIdByNetwork: { signet: 'conn-a' },
 })
 
-describe('arkade-operator-connections', () => {
-  it('findActiveArkadeOperatorConnection resolves active id for network', () => {
-    const connection = findActiveArkadeOperatorConnection(basePayload(), 'signet')
-    expect(connection?.id).toBe('conn-a')
-    expect(connection?.operatorSignerPkHex).toBe('02abc')
+describe('arkade-accounts', () => {
+  it('findActiveArkadeAccount resolves active id for network', () => {
+    const account = findActiveArkadeAccount(basePayload(), 'signet')
+    expect(account?.id).toBe('conn-a')
+    expect(account?.operatorSignerPkHex).toBe('02abc')
   })
 
   it('assertOperatorSignerMatches rejects cross-operator blob reuse', () => {
-    const connection = basePayload().arkadeOperatorConnections[0]
-    expect(() => assertOperatorSignerMatches(connection, '02other')).toThrow(
+    const account = basePayload().arkadeAccounts[0]
+    expect(() => assertOperatorSignerMatches(account, '02other')).toThrow(
       /signer public key mismatch/,
     )
   })
 
-  it('buildDefaultArkadeOperatorConnection carries sdkPersistenceJson', () => {
-    const connection = buildDefaultArkadeOperatorConnection({
+  it('buildDefaultArkadeAccount carries sdkPersistenceJson', () => {
+    const account = buildDefaultArkadeAccount({
       networkMode: 'signet',
       operatorUrl: 'https://signet.arkade.example/v1',
       delegatorUrl: 'https://delegator.example',
       operatorSignerPkHex: '02abc',
       sdkPersistenceJson: '{"version":3}',
     })
-    expect(connection.networkMode).toBe('signet')
-    expect(connection.sdkPersistenceJson).toBe('{"version":3}')
-    expect(connection.label).toBe(defaultArkadeOperatorLabel('https://signet.arkade.example/v1'))
+    expect(account.networkMode).toBe('signet')
+    expect(account.sdkPersistenceJson).toBe('{"version":3}')
+    expect(account.label).toBe(defaultArkadeOperatorLabel('https://signet.arkade.example/v1'))
   })
 })

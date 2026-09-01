@@ -62,5 +62,5 @@ export function useUnilateralExitAutomationPrefsForActor() {
   }
   return useUnilateralExitAutomationPrefsStore
     .getState()
-    .getPrefs(scope.walletId, scope.networkMode, scope.connectionId)
+    .getPrefs(scope.walletId, scope.networkMode, scope.arkadeAccountId)
 }

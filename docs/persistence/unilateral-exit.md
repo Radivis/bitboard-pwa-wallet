@@ -31,13 +31,13 @@ flowchart TB
   controlStore -.-> actor
 ```
 
-Memory caches are keyed by `walletId:networkMode:connectionId` (`arkadeWalletScopeKey`). Durable fields are per operator connection inside that connection's envelope — no `jobsByKey` map.
+Memory caches are keyed by `walletId:networkMode:arkadeAccountId` (`arkadeWalletScopeKey`). Durable fields are per Arkade account inside that account's envelope — no `jobsByKey` map.
 
 ---
 
 ## WASM / encrypted `sdkPersistenceJson`
 
-Flushed through the Arkade save lifecycle into `StoredArkadeOperatorConnection.sdkPersistenceJson`. Types: [`bitboard-ark/src/persistence.rs`](../../bitboard-ark/src/persistence.rs). Materials encode/decode: [`unilateral_exit_materials.rs`](../../bitboard-ark/src/unilateral_exit_materials.rs). Frontend bundle I/O: [`unilateral-exit-frontend-sdk-persistence.ts`](../../frontend/src/lib/wallet/lifecycle/unilateral-exit-frontend-sdk-persistence.ts).
+Flushed through the Arkade save lifecycle into `StoredArkadeAccount.sdkPersistenceJson`. Types: [`bitboard-ark/src/persistence.rs`](../../bitboard-ark/src/persistence.rs). Materials encode/decode: [`unilateral_exit_materials.rs`](../../bitboard-ark/src/unilateral_exit_materials.rs). Frontend bundle I/O: [`unilateral-exit-frontend-sdk-persistence.ts`](../../frontend/src/lib/wallet/lifecycle/unilateral-exit-frontend-sdk-persistence.ts).
 
 **Envelope version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 8`. `parse_import` migrates v3–v7. v5 stored materials **per VTXO row**; v6 keys them by **leaf txid** (`unilateral_exit_materials_by_leaf_tx`). v7 adds `unilateral_exit_frontend` (job, automation prefs, last failure). v8 adds envelope `autonomous_mode` (default false). Missing v7 field on a v6 blob is `None` and triggers a one-shot overlay from legacy SQLite `settings` rows.
 
@@ -86,7 +86,7 @@ First unroll broadcast writes a unilateral pending deduction while the VTXO is s
 
 ### Frontend bundle (`UnilateralExitFrontendPersistence`)
 
-Optional on `WalletDbSnapshot`. `None` means the envelope has never been written in v7 (legacy blob or new connection) and should overlay leftover SQLite settings once. `Some` with empty `selected_leaf_outpoints` is an explicit empty job — do **not** re-read settings.
+Optional on `WalletDbSnapshot`. `None` means the envelope has never been written in v7 (legacy blob or new account) and should overlay leftover SQLite settings once. `Some` with empty `selected_leaf_outpoints` is an explicit empty job — do **not** re-read settings.
 
 ```text
 job.selected_leaf_outpoints[]     { txid, vout }

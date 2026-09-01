@@ -33,7 +33,7 @@ const walletStoreState = vi.hoisted(() => ({
   arkadeSignerMigrationHint: null as ArkadeSignerMigrationHint | null,
   networkMode: 'signet' as NetworkMode,
   activeWalletId: 1 as number | null,
-  activeArkadeConnectionId: 'conn-1' as string | null,
+  activeArkadeAccountId: 'conn-1' as string | null,
   setArkadeSignerMigrationHint: vi.fn(),
 }))
 
@@ -61,7 +61,7 @@ describe('ArkadeSignerMigrationBanner', () => {
     signerMigrationMutationRef.error = null
     walletStoreState.arkadeSignerMigrationHint = null
     walletStoreState.activeWalletId = 1
-    walletStoreState.activeArkadeConnectionId = 'conn-1'
+    walletStoreState.activeArkadeAccountId = 'conn-1'
   })
 
   it('renders nothing when migration hint is absent', () => {

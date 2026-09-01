@@ -14,7 +14,7 @@ interface UnilateralExitAutomationPrefsState {
   getPrefs: (
     walletId: number,
     networkMode: NetworkMode,
-    connectionId: string,
+    arkadeAccountId: string,
   ) => UnilateralExitAutomationPrefs
   hydratePrefs: (scope: ArkadeWalletScope, prefs: UnilateralExitAutomationPrefs) => void
   setEnabled: (scope: ArkadeWalletScope, enabled: boolean, defaultMaxFee?: number) => void
@@ -41,8 +41,8 @@ export const useUnilateralExitAutomationPrefsStore = create<UnilateralExitAutoma
   (set, get) => ({
     prefsByKey: {},
 
-    getPrefs: (walletId, networkMode, connectionId) => {
-      const key = unilateralExitAutomationPrefsKey({ walletId, networkMode, connectionId })
+    getPrefs: (walletId, networkMode, arkadeAccountId) => {
+      const key = unilateralExitAutomationPrefsKey({ walletId, networkMode, arkadeAccountId })
       return get().prefsByKey[key] ?? defaultUnilateralExitAutomationPrefs()
     },
 

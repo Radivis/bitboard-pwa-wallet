@@ -1,10 +1,10 @@
 import type { EncryptedBlobForDb } from '@/workers/crypto-api'
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
-import type { ArkadeOperatorConnectionSummary } from '@/lib/arkade/arkade-payload-merge'
+import type { ArkadeAccountSummary } from '@/lib/arkade/arkade-payload-merge'
 import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
 import type { ArkadeWalletScope } from '@/lib/arkade/arkade-session-scope'
 
-export type { ArkadeOperatorConnectionSummary, ArkadeWalletScope }
+export type { ArkadeAccountSummary, ArkadeWalletScope }
 
 export interface ArkadeOperatorSyncResult {
   keyDiscoveryWarning?: string
@@ -184,7 +184,7 @@ export interface OpenArkadeSessionParams {
   encryptedPayload: EncryptedBlobForDb
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
-  connectionId: string
+  arkadeAccountId: string
   arkServerUrl: string
   delegatorUrl: string
   esploraUrl: string
@@ -499,10 +499,10 @@ export interface ArkadeUnilateralExitJobViability {
   offendingOutpoints: ArkadeVtxoOutpoint[]
 }
 
-export interface EnsureArkadeOperatorConnectionEncryptedParams {
+export interface EnsureArkadeAccountEncryptedParams {
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
-  connectionId: string
+  arkadeAccountId: string
   operatorSignerPkHex: string
   operatorUrl: string
   delegatorUrl: string
@@ -527,31 +527,31 @@ export interface ArkadeService {
   hasOpenSession(params: {
     walletId: number
     networkMode: ArkadeSupportedNetworkMode
-    connectionId: string
+    arkadeAccountId: string
   }): Promise<boolean>
-  reconcileActiveConnectionId(connectionId: string): Promise<void>
+  reconcileActiveAccountId(arkadeAccountId: string): Promise<void>
   flushSdkPersistence(): Promise<void>
   /** @internal E2E / DevTools only — live WASM export; not wallet-secrets persistence. */
   exportSdkPersistenceJsonForE2e(): Promise<string>
   /** @internal E2E / DevTools only — reads sdkPersistenceJson from encrypted wallet_secrets via secrets channel. */
   readPersistedSdkPersistenceJsonForE2e(params: {
     walletId: number
-    connectionId: string
+    arkadeAccountId: string
   }): Promise<string | undefined>
-  findActiveConnectionSummary(params: {
+  findActiveAccountSummary(params: {
     walletId: number
     networkMode: ArkadeSupportedNetworkMode
     encryptedPayload: EncryptedBlobForDb
-  }): Promise<ArkadeOperatorConnectionSummary | undefined>
-  listConnectionSummaries(params: {
+  }): Promise<ArkadeAccountSummary | undefined>
+  listAccountSummaries(params: {
     walletId: number
-  }): Promise<ArkadeOperatorConnectionSummary[]>
-  ensureOperatorConnectionEncrypted(
-    params: EnsureArkadeOperatorConnectionEncryptedParams,
-  ): Promise<ArkadeOperatorConnectionSummary>
+  }): Promise<ArkadeAccountSummary[]>
+  ensureArkadeAccountEncrypted(
+    params: EnsureArkadeAccountEncryptedParams,
+  ): Promise<ArkadeAccountSummary>
   updateOperatorSyncAtEncrypted(params: {
     walletId: number
-    connectionId: string
+    arkadeAccountId: string
     lastSuccessfulOperatorSyncAt: string
   }): Promise<void>
   closeSession(): Promise<void>

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const TEST_CONNECTION_ID = 'conn-ready-test'
+const TEST_ACCOUNT_ID = 'conn-ready-test'
 
 const encryptedPayload = vi.hoisted(() => ({
   ciphertext: new Uint8Array([10]),
@@ -19,7 +19,7 @@ const workerMocks = vi.hoisted(() => ({
   getBalance: vi.fn().mockResolvedValue({ confirmedSats: 0, totalSats: 0 }),
   getTransactionHistory: vi.fn().mockResolvedValue([]),
   getAddress: vi.fn().mockResolvedValue('tark1qtest'),
-  reconcileActiveConnectionId: vi.fn().mockResolvedValue(undefined),
+  reconcileActiveAccountId: vi.fn().mockResolvedValue(undefined),
   syncWithOperator: vi.fn().mockResolvedValue({}),
   getUnilateralExitFrontendPersistence: vi.fn().mockResolvedValue({
     job: {
@@ -40,8 +40,8 @@ const workerMocks = vi.hoisted(() => ({
   setUnilateralExitFailure: vi.fn().mockResolvedValue(undefined),
 }))
 
-const ensureArkadeOperatorConnectionMock = vi.hoisted(() => vi.fn())
-const findActiveArkadeConnectionSummaryMock = vi.hoisted(() => vi.fn())
+const ensureArkadeAccountMock = vi.hoisted(() => vi.fn())
+const findActiveArkadeAccountSummaryMock = vi.hoisted(() => vi.fn())
 const refreshArkadeStoreFromLoadedWasmMock = vi.hoisted(() => vi.fn())
 const encryptedMnemonic = vi.hoisted(() => ({
   ciphertext: new Uint8Array([1, 2, 3]),
@@ -82,14 +82,14 @@ vi.mock('@/db/storage-adapter', () => ({
   },
 }))
 
-vi.mock('@/lib/arkade/arkade-operator-connections', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/arkade/arkade-operator-connections')>()
+vi.mock('@/lib/arkade/arkade-accounts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/arkade/arkade-accounts')>()
   return {
     ...actual,
-    findActiveArkadeConnectionSummary: (...args: unknown[]) =>
-      findActiveArkadeConnectionSummaryMock(...args),
-    ensureArkadeOperatorConnection: (...args: unknown[]) =>
-      ensureArkadeOperatorConnectionMock(...args),
+    findActiveArkadeAccountSummary: (...args: unknown[]) =>
+      findActiveArkadeAccountSummaryMock(...args),
+    ensureArkadeAccount: (...args: unknown[]) =>
+      ensureArkadeAccountMock(...args),
   }
 })
 
@@ -129,7 +129,7 @@ vi.mock('@/lib/arkade/arkade-utils', () => ({
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: {
     getState: () => ({
-      setActiveArkadeConnectionId: vi.fn(),
+      setActiveArkadeAccountId: vi.fn(),
       setLastOperatorSyncTime: vi.fn(),
       setArkadeSignerMigrationHint: vi.fn(),
     }),
@@ -146,9 +146,9 @@ describe('awaitArkadeLoadQuiescence (UNLOCK-ARK-03)', () => {
   beforeEach(async () => {
     await closeArkadeSession()
     vi.clearAllMocks()
-    findActiveArkadeConnectionSummaryMock.mockResolvedValue(undefined)
-    ensureArkadeOperatorConnectionMock.mockResolvedValue({
-      id: TEST_CONNECTION_ID,
+    findActiveArkadeAccountSummaryMock.mockResolvedValue(undefined)
+    ensureArkadeAccountMock.mockResolvedValue({
+      id: TEST_ACCOUNT_ID,
       networkMode: 'signet',
       operatorSignerPkHex: '02deadbeef',
     })

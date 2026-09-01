@@ -19,7 +19,7 @@ import {
 const walletScope = {
   walletId: 1,
   networkMode: 'regtest' as const,
-  connectionId: 'conn-1',
+  arkadeAccountId: 'conn-1',
 }
 
 const leaf = { txid: 'aa'.repeat(32), vout: 0 }

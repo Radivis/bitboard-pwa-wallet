@@ -174,7 +174,7 @@ export async function configureUnilateralExitForLoadedWallet(
   sendUnilateralExitEvent({ type: 'WALLET_CONFIGURED', walletScope })
   const prefs = useUnilateralExitAutomationPrefsStore
     .getState()
-    .getPrefs(walletScope.walletId, walletScope.networkMode, walletScope.connectionId)
+    .getPrefs(walletScope.walletId, walletScope.networkMode, walletScope.arkadeAccountId)
   sendUnilateralExitEvent({
     type: 'AUTOMATION_PREFS_CHANGED',
     automationEnabled: prefs.enabled,
@@ -229,7 +229,7 @@ async function dispatchHydrateOrStart(params: {
     .getPrefs(
       params.walletScope.walletId,
       params.walletScope.networkMode,
-      params.walletScope.connectionId,
+      params.walletScope.arkadeAccountId,
     )
 
   sendUnilateralExitEvent({
@@ -383,7 +383,7 @@ export function clearAutomaticUnilateralExitPause(scope: ArkadeWalletScope): voi
   if (
     useUnilateralExitAutomationPrefsStore
       .getState()
-      .getPrefs(scope.walletId, scope.networkMode, scope.connectionId).enabled
+      .getPrefs(scope.walletId, scope.networkMode, scope.arkadeAccountId).enabled
   ) {
     sendUnilateralExitEvent({ type: 'AUTOMATION_PREFS_CHANGED', automationEnabled: true })
   }

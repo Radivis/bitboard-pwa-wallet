@@ -16,7 +16,7 @@ export type ArkadeSyncLifecycleSnapshot = {
 export type ArkadeSyncParams = {
   walletId: number
   networkMode: NetworkMode
-  connectionId: string
+  arkadeAccountId: string
   syncKind: ArkadeSyncKind
   onSyncError?: (err: unknown) => void
   awaitCompletion?: boolean
@@ -30,7 +30,7 @@ export type ArkadeSyncThenSaveParams = ArkadeSyncParams
 export type ArkadePostLoadSyncParams = {
   walletId: number
   networkMode: NetworkMode
-  connectionId: string
+  arkadeAccountId: string
   onSyncError?: (err: unknown) => void
   awaitCompletion?: boolean
 }

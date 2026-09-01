@@ -107,13 +107,13 @@ vi.mock('@/db/storage-adapter', () => ({
   },
 }))
 
-vi.mock('@/lib/arkade/arkade-operator-connections', async (importOriginal) => {
+vi.mock('@/lib/arkade/arkade-accounts', async (importOriginal) => {
   const actual = await importOriginal<
-    typeof import('@/lib/arkade/arkade-operator-connections')
+    typeof import('@/lib/arkade/arkade-accounts')
   >()
   return {
     ...actual,
-    findActiveArkadeConnectionSummary: vi.fn().mockResolvedValue({
+    findActiveArkadeAccountSummary: vi.fn().mockResolvedValue({
       id: 'conn-hook-test',
       networkMode: 'signet',
     }),
@@ -151,7 +151,7 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
       getState: () => ({
         walletStatus: 'unlocked' as const,
         clearArkadeDashboardState: vi.fn(),
-        setActiveArkadeConnectionId: vi.fn(),
+        setActiveArkadeAccountId: vi.fn(),
         setLastOperatorSyncTime: vi.fn(),
         setArkadeSignerMigrationHint: vi.fn(),
       }),

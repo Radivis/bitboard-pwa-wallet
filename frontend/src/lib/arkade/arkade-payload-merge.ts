@@ -8,47 +8,47 @@ import type {
   ArkadeSignerMigrationDeprecatedStatus,
 } from '@/workers/arkade-api'
 import type {
-  StoredArkadeOperatorConnection,
+  StoredArkadeAccount,
   WalletSecretsPayload,
 } from '@/lib/wallet/wallet-domain-types'
 
 export type { ArkadeSignerMigrationHint, ArkadeSignerMigrationDeprecatedStatus }
 
-/** Connection metadata safe to expose on the main thread (no SDK blob). */
-export type ArkadeOperatorConnectionSummary = Omit<
-  StoredArkadeOperatorConnection,
+/** Account metadata safe to expose on the main thread (no SDK blob). */
+export type ArkadeAccountSummary = Omit<
+  StoredArkadeAccount,
   'sdkPersistenceJson'
 >
 
-export function toArkadeOperatorConnectionSummary(
-  connection: StoredArkadeOperatorConnection,
-): ArkadeOperatorConnectionSummary {
-  const { sdkPersistenceJson: _omittedSdkPersistenceJson, ...summary } = connection
+export function toArkadeAccountSummary(
+  account: StoredArkadeAccount,
+): ArkadeAccountSummary {
+  const { sdkPersistenceJson: _omittedSdkPersistenceJson, ...summary } = account
   void _omittedSdkPersistenceJson
   return summary
 }
 
-export function findArkadeOperatorConnection(
+export function findArkadeAccount(
   payload: WalletSecretsPayload,
-  connectionId: string,
-): StoredArkadeOperatorConnection | undefined {
-  return payload.arkadeOperatorConnections.find((row) => row.id === connectionId)
+  arkadeAccountId: string,
+): StoredArkadeAccount | undefined {
+  return payload.arkadeAccounts.find((row) => row.id === arkadeAccountId)
 }
 
-export function findActiveArkadeOperatorConnection(
+export function findActiveArkadeAccount(
   payload: WalletSecretsPayload,
   networkMode: ArkadeSupportedNetworkMode,
-): StoredArkadeOperatorConnection | undefined {
-  const activeId = payload.activeArkadeConnectionIdByNetwork[networkMode]
+): StoredArkadeAccount | undefined {
+  const activeId = payload.activeArkadeAccountIdByNetwork[networkMode]
   if (activeId == null) return undefined
-  return findArkadeOperatorConnection(payload, activeId)
+  return findArkadeAccount(payload, activeId)
 }
 
 export function assertOperatorSignerMatches(
-  connection: StoredArkadeOperatorConnection,
+  account: StoredArkadeAccount,
   operatorSignerPkHex: string,
 ): void {
-  if (connection.operatorSignerPkHex !== operatorSignerPkHex) {
+  if (account.operatorSignerPkHex !== operatorSignerPkHex) {
     throw new Error(
       'Arkade persistence belongs to a different operator (signer public key mismatch)',
     )
@@ -56,20 +56,20 @@ export function assertOperatorSignerMatches(
 }
 
 export function assertOperatorSignerMatchesOrMigration(
-  connection: StoredArkadeOperatorConnection,
+  account: StoredArkadeAccount,
   operatorSignerPkHex: string,
   signerMigrationHint?: ArkadeSignerMigrationHint | null,
 ): void {
-  if (connection.operatorSignerPkHex === operatorSignerPkHex) {
+  if (account.operatorSignerPkHex === operatorSignerPkHex) {
     return
   }
   if (
     signerMigrationHint != null &&
-    connection.operatorSignerPkHex === signerMigrationHint.previousSignerPkHex
+    account.operatorSignerPkHex === signerMigrationHint.previousSignerPkHex
   ) {
     return
   }
-  assertOperatorSignerMatches(connection, operatorSignerPkHex)
+  assertOperatorSignerMatches(account, operatorSignerPkHex)
 }
 
 export function readOffchainNextDerivationIndex(sdkPersistenceJson: string | undefined): number {
@@ -102,22 +102,22 @@ export function assertSdkPersistenceJsonWithinSizeLimit(sdkPersistenceJson: stri
   }
 }
 
-export function upsertArkadeOperatorConnectionInPayload(
+export function upsertArkadeAccountInPayload(
   payload: WalletSecretsPayload,
-  connection: StoredArkadeOperatorConnection,
+  account: StoredArkadeAccount,
   setActiveForNetwork = true,
 ): WalletSecretsPayload {
-  const others = payload.arkadeOperatorConnections.filter((row) => row.id !== connection.id)
-  const activeArkadeConnectionIdByNetwork = {
-    ...payload.activeArkadeConnectionIdByNetwork,
+  const others = payload.arkadeAccounts.filter((row) => row.id !== account.id)
+  const activeArkadeAccountIdByNetwork = {
+    ...payload.activeArkadeAccountIdByNetwork,
   }
   if (setActiveForNetwork) {
-    activeArkadeConnectionIdByNetwork[connection.networkMode] = connection.id
+    activeArkadeAccountIdByNetwork[account.networkMode] = account.id
   }
   return {
     ...payload,
-    arkadeOperatorConnections: [...others, connection],
-    activeArkadeConnectionIdByNetwork,
+    arkadeAccounts: [...others, account],
+    activeArkadeAccountIdByNetwork,
   }
 }
 
@@ -134,13 +134,13 @@ export function defaultArkadeOperatorLabel(operatorUrl: string): string {
   }
 }
 
-export function buildDefaultArkadeOperatorConnection(params: {
+export function buildDefaultArkadeAccount(params: {
   networkMode: ArkadeSupportedNetworkMode
   operatorUrl: string
   delegatorUrl: string
   operatorSignerPkHex: string
   sdkPersistenceJson?: string
-}): StoredArkadeOperatorConnection {
+}): StoredArkadeAccount {
   const now = new Date().toISOString()
   return {
     id: crypto.randomUUID(),
@@ -154,7 +154,7 @@ export function buildDefaultArkadeOperatorConnection(params: {
   }
 }
 
-export function ensureArkadeOperatorConnectionInPayload(
+export function ensureArkadeAccountInPayload(
   payload: WalletSecretsPayload,
   params: {
     networkMode: ArkadeSupportedNetworkMode
@@ -162,18 +162,18 @@ export function ensureArkadeOperatorConnectionInPayload(
     operatorUrl: string
     delegatorUrl: string
     sdkPersistenceJson?: string
-    connectionId?: string
+    arkadeAccountId?: string
     signerMigrationHint?: ArkadeSignerMigrationHint | null
   },
-): { payload: WalletSecretsPayload; connection: StoredArkadeOperatorConnection } {
-  const existingActive = findActiveArkadeOperatorConnection(payload, params.networkMode)
+): { payload: WalletSecretsPayload; account: StoredArkadeAccount } {
+  const existingActive = findActiveArkadeAccount(payload, params.networkMode)
   if (existingActive != null) {
     assertOperatorSignerMatchesOrMigration(
       existingActive,
       params.operatorSignerPkHex,
       params.signerMigrationHint,
     )
-    const connection: StoredArkadeOperatorConnection = {
+    const account: StoredArkadeAccount = {
       ...existingActive,
       operatorUrl: params.operatorUrl,
       delegatorUrl: params.delegatorUrl || undefined,
@@ -182,12 +182,12 @@ export function ensureArkadeOperatorConnectionInPayload(
       lastSessionOpenedAt: new Date().toISOString(),
     }
     return {
-      payload: upsertArkadeOperatorConnectionInPayload(payload, connection),
-      connection,
+      payload: upsertArkadeAccountInPayload(payload, account),
+      account,
     }
   }
 
-  const matchingConnection = payload.arkadeOperatorConnections.find((row) => {
+  const matchingAccount = payload.arkadeAccounts.find((row) => {
     if (row.networkMode !== params.networkMode) {
       return false
     }
@@ -199,49 +199,49 @@ export function ensureArkadeOperatorConnectionInPayload(
       row.operatorSignerPkHex === params.signerMigrationHint.previousSignerPkHex
     )
   })
-  if (matchingConnection != null) {
-    const connection: StoredArkadeOperatorConnection = {
-      ...matchingConnection,
+  if (matchingAccount != null) {
+    const account: StoredArkadeAccount = {
+      ...matchingAccount,
       operatorSignerPkHex: params.operatorSignerPkHex,
-      sdkPersistenceJson: matchingConnection.sdkPersistenceJson ?? params.sdkPersistenceJson,
+      sdkPersistenceJson: matchingAccount.sdkPersistenceJson ?? params.sdkPersistenceJson,
       lastSessionOpenedAt: new Date().toISOString(),
     }
     return {
-      payload: upsertArkadeOperatorConnectionInPayload(payload, connection),
-      connection,
+      payload: upsertArkadeAccountInPayload(payload, account),
+      account,
     }
   }
 
-  const connection = buildDefaultArkadeOperatorConnection({
+  const account = buildDefaultArkadeAccount({
     networkMode: params.networkMode,
     operatorUrl: params.operatorUrl,
     delegatorUrl: params.delegatorUrl,
     operatorSignerPkHex: params.operatorSignerPkHex,
     sdkPersistenceJson: params.sdkPersistenceJson,
   })
-  if (params.connectionId != null) {
-    connection.id = params.connectionId
+  if (params.arkadeAccountId != null) {
+    account.id = params.arkadeAccountId
   }
 
   return {
-    payload: upsertArkadeOperatorConnectionInPayload(payload, connection),
-    connection,
+    payload: upsertArkadeAccountInPayload(payload, account),
+    account,
   }
 }
 
 export function mergeSdkPersistenceIntoPayload(
   payload: WalletSecretsPayload,
-  connectionId: string,
+  arkadeAccountId: string,
   sdkPersistenceJson: string,
   lastSuccessfulOperatorSyncAt?: string,
 ): WalletSecretsPayload {
   assertSdkPersistenceJsonWithinSizeLimit(sdkPersistenceJson)
-  const existing = findArkadeOperatorConnection(payload, connectionId)
+  const existing = findArkadeAccount(payload, arkadeAccountId)
   if (existing == null) {
-    throw new Error(`Unknown Arkade connection: ${connectionId}`)
+    throw new Error(`Unknown Arkade account: ${arkadeAccountId}`)
   }
 
-  const connection: StoredArkadeOperatorConnection = {
+  const account: StoredArkadeAccount = {
     ...existing,
     sdkPersistenceJson: mergeSdkPersistenceJsonMonotonic(
       existing.sdkPersistenceJson,
@@ -251,23 +251,23 @@ export function mergeSdkPersistenceIntoPayload(
       lastSuccessfulOperatorSyncAt ?? existing.lastSuccessfulOperatorSyncAt,
   }
 
-  return upsertArkadeOperatorConnectionInPayload(payload, connection, false)
+  return upsertArkadeAccountInPayload(payload, account, false)
 }
 
 export function updateOperatorSyncAtInPayload(
   payload: WalletSecretsPayload,
-  connectionId: string,
+  arkadeAccountId: string,
   lastSuccessfulOperatorSyncAt: string,
 ): WalletSecretsPayload {
-  const existing = findArkadeOperatorConnection(payload, connectionId)
+  const existing = findArkadeAccount(payload, arkadeAccountId)
   if (existing == null) {
-    throw new Error(`Unknown Arkade connection: ${connectionId}`)
+    throw new Error(`Unknown Arkade account: ${arkadeAccountId}`)
   }
 
-  const connection: StoredArkadeOperatorConnection = {
+  const account: StoredArkadeAccount = {
     ...existing,
     lastSuccessfulOperatorSyncAt,
   }
 
-  return upsertArkadeOperatorConnectionInPayload(payload, connection, false)
+  return upsertArkadeAccountInPayload(payload, account, false)
 }
