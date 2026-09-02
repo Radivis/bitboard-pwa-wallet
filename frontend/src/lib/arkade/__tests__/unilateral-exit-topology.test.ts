@@ -17,7 +17,7 @@ const sampleTopology: ArkadeUnilateralExitTopology = {
     { txid: 'cc', txType: 'ark', spends: ['bb'] },
   ],
   leafOutpoints: [{ txid: 'cc', vout: 0 }],
-  hostOutpoints: [{ txid: 'cc', vout: 0, amountSats: 25_000 }],
+  hostOutpoints: [{ txid: 'cc', vout: 0, amountSats: 25_000, isUnrolled: false }],
   exitBranchTxids: ['bb', 'cc'],
   commitmentTxids: ['aa'],
 }
@@ -32,7 +32,7 @@ const mergedCheckpointParentsTopology: ArkadeUnilateralExitTopology = {
     { txid: 'ark', txType: 'ark', spends: ['left_cp', 'right_cp'] },
   ],
   leafOutpoints: [{ txid: 'ark', vout: 0 }],
-  hostOutpoints: [{ txid: 'ark', vout: 0, amountSats: 25_000 }],
+  hostOutpoints: [{ txid: 'ark', vout: 0, amountSats: 25_000, isUnrolled: false }],
   exitBranchTxids: ['tree_left', 'left_cp', 'tree_right', 'right_cp', 'ark'],
   commitmentTxids: ['commitment'],
 }
@@ -91,13 +91,13 @@ describe('unilateral-exit-topology helpers', () => {
     const topology: ArkadeUnilateralExitTopology = {
       ...sampleTopology,
       hostOutpoints: [
-        { txid: 'cc', vout: 1, amountSats: 100_000 },
-        { txid: 'cc', vout: 0, amountSats: 25_000 },
+        { txid: 'cc', vout: 1, amountSats: 100_000, isUnrolled: false },
+        { txid: 'cc', vout: 0, amountSats: 25_000, isUnrolled: false },
       ],
     }
     expect(hostOutpointsForTxid(topology, 'cc')).toEqual([
-      { txid: 'cc', vout: 0, amountSats: 25_000 },
-      { txid: 'cc', vout: 1, amountSats: 100_000 },
+      { txid: 'cc', vout: 0, amountSats: 25_000, isUnrolled: false },
+      { txid: 'cc', vout: 1, amountSats: 100_000, isUnrolled: false },
     ])
   })
 
@@ -126,6 +126,7 @@ describe('unilateral-exit-topology helpers', () => {
 
     expect(nodes).toHaveLength(3)
     expect(nodes.find((node) => node.id === 'cc')?.data.exitableVtxoCount).toBe(1)
+    expect(nodes.find((node) => node.id === 'cc')?.data.hostsUnrolled).toBe(false)
     expect(nodes.find((node) => node.id === 'aa')?.data.exitableVtxoCount).toBe(0)
     expect(nodes.find((node) => node.id === 'bb')?.data.exitableVtxoCount).toBe(0)
     expect(edgePaths).toHaveLength(2)
@@ -160,8 +161,8 @@ describe('unilateral-exit-topology helpers', () => {
         { txid: 'cc', vout: 0 },
       ],
       hostOutpoints: [
-        { txid: 'cc', vout: 0, amountSats: 25_000 },
-        { txid: 'cc', vout: 1, amountSats: 100_000 },
+        { txid: 'cc', vout: 0, amountSats: 25_000, isUnrolled: false },
+        { txid: 'cc', vout: 1, amountSats: 100_000, isUnrolled: false },
       ],
     }
     const { nodes, edgePaths } = layoutUnilateralExitGraph({
@@ -193,9 +194,9 @@ describe('unilateral-exit-topology helpers', () => {
         { txid: 'leaf', vout: 1 },
       ],
       hostOutpoints: [
-        { txid: 'mid', vout: 0, amountSats: 125_000 },
-        { txid: 'leaf', vout: 0, amountSats: 25_000 },
-        { txid: 'leaf', vout: 1, amountSats: 10_000 },
+        { txid: 'mid', vout: 0, amountSats: 125_000, isUnrolled: false },
+        { txid: 'leaf', vout: 0, amountSats: 25_000, isUnrolled: false },
+        { txid: 'leaf', vout: 1, amountSats: 10_000, isUnrolled: false },
       ],
       exitBranchTxids: ['bb', 'mid', 'cp', 'leaf'],
       commitmentTxids: ['aa'],
@@ -214,6 +215,27 @@ describe('unilateral-exit-topology helpers', () => {
     expect(nodes.find((node) => node.id === 'mid')?.data.exitableVtxoCount).toBe(1)
     expect(nodes.find((node) => node.id === 'leaf')?.data.isLeaf).toBe(true)
     expect(nodes.find((node) => node.id === 'leaf')?.data.exitableVtxoCount).toBe(2)
+  })
+
+  it('layoutUnilateralExitGraph marks unrolled host VTXOs with hostsUnrolled', () => {
+    const topology: ArkadeUnilateralExitTopology = {
+      ...sampleTopology,
+      hostOutpoints: [
+        { txid: 'cc', vout: 0, amountSats: 25_000, isUnrolled: true },
+        { txid: 'cc', vout: 1, amountSats: 10_000, isUnrolled: true },
+      ],
+    }
+    const { nodes } = layoutUnilateralExitGraph({
+      topology,
+      selectedLeafOutpoints: [],
+      nodeStatuses: [],
+      inProgressOverlay: null,
+      layoutDirection: 'TB',
+    })
+
+    expect(nodes.find((node) => node.id === 'cc')?.data.exitableVtxoCount).toBe(2)
+    expect(nodes.find((node) => node.id === 'cc')?.data.hostsUnrolled).toBe(true)
+    expect(nodes.find((node) => node.id === 'bb')?.data.hostsUnrolled).toBe(false)
   })
 
   it('layoutUnilateralExitGraph attaches overlay only to in-progress nodes', () => {

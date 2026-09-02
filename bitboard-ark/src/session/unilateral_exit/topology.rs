@@ -8,8 +8,7 @@ use crate::api_types::{
 use crate::outpoint::VirtualOutPoint;
 use crate::persistence::{OffchainVtxoSnapshot, VirtualTxOutPointRecord};
 use crate::unilateral_exit_materials::{
-    chained_tx_type_label, record_is_exit_eligible, snapshot_materials_for_leaf_tx,
-    vtxo_chains_from_json,
+    chained_tx_type_label, snapshot_materials_for_leaf_tx, vtxo_chains_from_json,
 };
 
 /// Virtual tx types that may carry exit-eligible VTXO outpoints in indexer chains.
@@ -113,7 +112,14 @@ pub(crate) fn topology_leaf_outpoints(
         .collect()
 }
 
-/// Exit-eligible VTXO outpoints on any `tree`/`ark` host tx in the merged topology.
+/// Unspent, unswept VTXO outpoints on any `tree`/`ark` host tx in the merged topology.
+///
+/// Includes exit-eligible hosts and hosts already stamped `is_unrolled` (host tx has 6
+/// confirmations). Spent or swept outpoints are omitted so claimed coins leave the overlay.
+fn record_is_visible_topology_host(record: &VirtualTxOutPointRecord) -> bool {
+    !record.is_spent && !record.is_swept
+}
+
 pub(crate) fn topology_host_outpoints(
     nodes: &[UnilateralExitTopologyNodeDto],
     records: &[VirtualTxOutPointRecord],
@@ -129,11 +135,14 @@ pub(crate) fn topology_host_outpoints(
 
     let mut outpoints = records
         .iter()
-        .filter(|record| record_is_exit_eligible(record) && host_txids.contains(&record.txid))
+        .filter(|record| {
+            record_is_visible_topology_host(record) && host_txids.contains(&record.txid)
+        })
         .map(|record| UnilateralExitHostOutpointDto {
             txid: record.txid.clone(),
             vout: record.vout,
             amount_sats: record.amount_sats,
+            is_unrolled: record.is_unrolled,
         })
         .collect::<Vec<_>>();
     outpoints.sort_by(|left, right| left.txid.cmp(&right.txid).then(left.vout.cmp(&right.vout)));
@@ -398,8 +407,10 @@ mod tests {
         assert_eq!(host_outpoints.len(), 2);
         assert_eq!(host_outpoints[0].txid, intermediate.to_string());
         assert_eq!(host_outpoints[0].amount_sats, 125_000);
+        assert!(!host_outpoints[0].is_unrolled);
         assert_eq!(host_outpoints[1].txid, terminal.to_string());
         assert_eq!(host_outpoints[1].amount_sats, 25_000);
+        assert!(!host_outpoints[1].is_unrolled);
 
         let terminal_host_txids = terminal_vtxo_host_txids_for_topology(&nodes);
         let plan_outpoints = vec![
@@ -409,6 +420,73 @@ mod tests {
         let leaf_outpoints = topology_leaf_outpoints(&plan_outpoints, &terminal_host_txids);
         assert_eq!(leaf_outpoints.len(), 1);
         assert_eq!(leaf_outpoints[0].txid, terminal);
+    }
+
+    fn vtxo_record(
+        txid: Txid,
+        vout: u32,
+        amount_sats: u64,
+        is_unrolled: bool,
+        is_spent: bool,
+        is_swept: bool,
+    ) -> VirtualTxOutPointRecord {
+        VirtualTxOutPointRecord {
+            txid: txid.to_string(),
+            vout,
+            created_at: 0,
+            expires_at: 0,
+            amount_sats,
+            script_hex: "00".to_string(),
+            is_preconfirmed: false,
+            is_swept,
+            is_unrolled,
+            is_spent,
+            spent_by: None,
+            commitment_txids: vec![],
+            settled_by: None,
+            ark_txid: None,
+            assets: vec![],
+            server_pk_hex: None,
+        }
+    }
+
+    #[test]
+    fn topology_host_outpoints_keeps_unrolled_unspent_hosts() {
+        let tree = txid(2);
+        let ark = txid(3);
+        let nodes = vec![
+            UnilateralExitTopologyNodeDto {
+                txid: txid(1).to_string(),
+                tx_type: "commitment".to_string(),
+                spends: vec![],
+            },
+            UnilateralExitTopologyNodeDto {
+                txid: tree.to_string(),
+                tx_type: "tree".to_string(),
+                spends: vec![txid(1).to_string()],
+            },
+            UnilateralExitTopologyNodeDto {
+                txid: ark.to_string(),
+                tx_type: "ark".to_string(),
+                spends: vec![tree.to_string()],
+            },
+        ];
+        let records = vec![
+            vtxo_record(tree, 0, 50_000, false, false, false),
+            vtxo_record(ark, 0, 25_000, true, false, false),
+            vtxo_record(ark, 1, 10_000, true, true, false),
+            vtxo_record(ark, 2, 5_000, true, false, true),
+        ];
+
+        let host_outpoints = topology_host_outpoints(&nodes, &records);
+        assert_eq!(host_outpoints.len(), 2);
+        assert_eq!(host_outpoints[0].txid, tree.to_string());
+        assert!(!host_outpoints[0].is_unrolled);
+        assert_eq!(host_outpoints[0].amount_sats, 50_000);
+        assert_eq!(host_outpoints[1].txid, ark.to_string());
+        assert_eq!(host_outpoints[1].vout, 0);
+        assert!(host_outpoints[1].is_unrolled);
+        assert_eq!(host_outpoints[1].amount_sats, 25_000);
     }
 
     #[test]

@@ -373,6 +373,7 @@ export interface ArkadeUnilateralExitHostOutpoint {
   txid: string
   vout: number
   amountSats: number
+  isUnrolled: boolean
 }
 
 export interface ArkadeUnilateralExitTopology {

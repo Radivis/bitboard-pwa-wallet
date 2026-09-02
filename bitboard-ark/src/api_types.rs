@@ -505,6 +505,7 @@ pub struct UnilateralExitHostOutpointDto {
     pub txid: String,
     pub vout: u32,
     pub amount_sats: u64,
+    pub is_unrolled: bool,
 }
 
 #[derive(Debug, Serialize)]

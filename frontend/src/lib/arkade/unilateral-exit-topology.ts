@@ -60,6 +60,7 @@ export type UnilateralExitTreeNodeData = {
   confirmations: number
   layoutDirection: UnilateralExitLayoutDirection
   exitableVtxoCount: number
+  hostsUnrolled: boolean
 }
 
 /** Rendered node diameter in px (`size-12`). */
@@ -217,6 +218,12 @@ function groupHostOutpointsByTxid(
     siblings.sort((left, right) => left.vout - right.vout)
   }
   return grouped
+}
+
+function hostOutpointsAreUnrolled(
+  hostOutpoints: ArkadeUnilateralExitHostOutpoint[],
+): boolean {
+  return hostOutpoints.length > 0 && hostOutpoints.every((hostOutpoint) => hostOutpoint.isUnrolled)
 }
 
 export function hostOutpointsForTxid(
@@ -411,6 +418,7 @@ export function layoutUnilateralExitGraph(params: {
         isLeaf,
         isSelectedLeaf: allLeafOutpointsSelected(leafOutpoints, selectedLeafOutpoints),
         exitableVtxoCount: hostOutpoints.length,
+        hostsUnrolled: hostOutpointsAreUnrolled(hostOutpoints),
         pathTxids,
         focusedNodeId,
         status,
@@ -441,6 +449,7 @@ function buildTreeNodeData(params: {
   isLeaf: boolean
   isSelectedLeaf: boolean
   exitableVtxoCount: number
+  hostsUnrolled: boolean
   pathTxids: Set<string>
   focusedNodeId?: string | null
   status: ArkadeUnilateralExitNodeStatus | undefined
@@ -473,6 +482,7 @@ function buildTreeNodeData(params: {
     confirmations: params.status?.confirmations ?? 0,
     layoutDirection: params.layoutDirection,
     exitableVtxoCount: params.exitableVtxoCount,
+    hostsUnrolled: params.hostsUnrolled,
   }
 }
 

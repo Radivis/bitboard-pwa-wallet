@@ -81,7 +81,7 @@ Leaf and intermediate-host `is_unrolled` wait for **6** confs (`UNILATERAL_EXIT_
 
 ### Merged DAG, not one tree per leaf
 
-The control page visualizes a **union** of selected leaves: shared branch txs are one node; `ordered_step_txids` is the deduped unroll order. Topology comes from `get_unilateral_exit_topology` (WASM) and is laid out with React Flow + d3-dag ([`unilateral-exit-topology.ts`](../frontend/src/lib/arkade/unilateral-exit-topology.ts), [`UnilateralExitTreeGraph.tsx`](../frontend/src/components/wallet/unilateral-exit/UnilateralExitTreeGraph.tsx)).
+The control page visualizes a **union** of selected leaves: shared branch txs are one node; `ordered_step_txids` is the deduped unroll order. Topology comes from `get_unilateral_exit_topology` (WASM) and is laid out with React Flow + d3-dag ([`unilateral-exit-topology.ts`](../frontend/src/lib/arkade/unilateral-exit-topology.ts), [`UnilateralExitTreeGraph.tsx`](../frontend/src/components/wallet/unilateral-exit/UnilateralExitTreeGraph.tsx)). Unspent VTXOs on a `tree`/`ark` host stay in `hostOutpoints` after the host tx has **6 confirmations** (`is_unrolled`); the graph overlay swaps Lucide `Coins` for `HandCoins` (`ARK-EXIT-13`). All vouts on that host share one unroll state.
 
 While a job is active, graph outpoints come from the **actor** (`resolveUnilateralExitTopologyOutpoints`). Do not infer the job set from WASM “in progress” outpoints — those can include en-passant hosts.
 

@@ -221,10 +221,13 @@ impl ArkSession {
             .flat_map(|leaf| leaf.sibling_outpoints.iter().cloned())
             .collect();
         let terminal_host_txids = terminal_vtxo_host_txids_for_topology(&nodes);
-        let host_outpoint_records = self
-            .exit_eligible_records_for_topology_hosts(&nodes)
-            .await?;
-        let host_outpoints = topology_host_outpoints(&nodes, &host_outpoint_records);
+        let wallet_snapshot = self.wallet_db.snapshot();
+        let host_outpoint_records = wallet_snapshot
+            .offchain_vtxo_snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.virtual_tx_outpoints.as_slice())
+            .unwrap_or(&[]);
+        let host_outpoints = topology_host_outpoints(&nodes, host_outpoint_records);
         Ok(UnilateralExitTopologyDto {
             nodes,
             leaf_outpoints: topology_leaf_outpoints(&all_outpoints, &terminal_host_txids),

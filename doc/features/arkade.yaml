@@ -101,7 +101,7 @@ feature:
       - id: ARK-EXIT-12
         description: Explicit unilateral_exit_watches registry in wallet persistence; survives full snapshot replace; cleared only on completion or reconcile evidence (operator spent or on-chain spent)
       - id: ARK-EXIT-13
-        description: Unilateral exit control page at /wallet/arkade/unilateral-exit with responsive VTXO tree graph (React Flow + d3-dag), multi-select leaves, and Management entry link (Start unilateral exit / Control unilateral exit)
+        description: Unilateral exit control page at /wallet/arkade/unilateral-exit with responsive VTXO tree graph (React Flow + d3-dag), multi-select leaves, and Management entry link (Start unilateral exit / Control unilateral exit). Unspent host VTXOs stay on the graph after unroll (host tx 6 conf); the overlay swaps Lucide Coins for HandCoins.
       - id: ARK-EXIT-14
         description: ark_estimate_unilateral_exit_batch unions deduped virtual steps across selected VTXO leaves for batch fee estimate and bumper sufficiency gate
       - id: ARK-EXIT-15

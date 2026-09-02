@@ -12,6 +12,7 @@ import {
   Check,
   Cog,
   Coins,
+  HandCoins,
   Loader2,
   Megaphone,
   Pickaxe,
@@ -130,6 +131,41 @@ function UnilateralExitInProgressBadge({
   )
 }
 
+function UnilateralExitHostVtxoBadge({
+  txid,
+  count,
+  hostsUnrolled,
+}: {
+  txid: string
+  count: number
+  hostsUnrolled: boolean
+}) {
+  if (count <= 0) {
+    return null
+  }
+  const OverlayIcon = hostsUnrolled ? HandCoins : Coins
+  const vtxoNoun = count === 1 ? 'VTXO' : 'VTXOs'
+  const overlayLabel = hostsUnrolled
+    ? `${count} unrolled ${vtxoNoun}`
+    : `${count} exitable ${vtxoNoun}`
+  const testIdPrefix = hostsUnrolled
+    ? 'unilateral-exit-unrolled-vtxo-count'
+    : 'unilateral-exit-vtxo-count'
+
+  return (
+    <div
+      className="absolute left-1/2 top-[calc(50%+10px)] flex -translate-x-1/2 items-center gap-0.5 rounded-full bg-background px-0.5 text-amber-600 shadow-sm"
+      aria-label={overlayLabel}
+      data-testid={`${testIdPrefix}-${txid.slice(0, 8)}`}
+    >
+      {count > 1 && (
+        <span className="text-[10px] font-semibold leading-none">{count}×</span>
+      )}
+      <OverlayIcon className="size-3" aria-hidden />
+    </div>
+  )
+}
+
 function UnilateralExitTreeNode({
   data,
 }: NodeProps<Node<UnilateralExitTreeNodeData>>) {
@@ -154,20 +190,11 @@ function UnilateralExitTreeNode({
       aria-label={`${data.txType} node`}
     >
       <Icon className="size-5 text-foreground" aria-hidden />
-      {data.exitableVtxoCount > 0 && (
-        <div
-          className="absolute left-1/2 top-[calc(50%+10px)] flex -translate-x-1/2 items-center gap-0.5 rounded-full bg-background px-0.5 text-amber-600 shadow-sm"
-          aria-label={`${data.exitableVtxoCount} exitable VTXO${data.exitableVtxoCount === 1 ? '' : 's'}`}
-          data-testid={`unilateral-exit-vtxo-count-${data.txid.slice(0, 8)}`}
-        >
-          {data.exitableVtxoCount > 1 && (
-            <span className="text-[10px] font-semibold leading-none">
-              {data.exitableVtxoCount}×
-            </span>
-          )}
-          <Coins className="size-3" aria-hidden />
-        </div>
-      )}
+      <UnilateralExitHostVtxoBadge
+        txid={data.txid}
+        count={data.exitableVtxoCount}
+        hostsUnrolled={data.hostsUnrolled}
+      />
       {data.status === 'confirmed' && (
         <Check
           className="absolute -right-1 -top-1 size-4 rounded-full bg-background text-green-600"
