@@ -47,10 +47,16 @@ test.describe('Arkade exit flows regtest @arkade-exit-regtest', () => {
     await page.getByRole('button', { name: 'Use current receive address' }).click()
     await page.getByLabel('Amount (sats, optional)').fill('50000')
     await page.getByRole('button', { name: 'Confirm exit' }).click()
-    await expect(page.getByRole('button', { name: 'Exiting…' })).toBeVisible({
+    await expect(
+      page.getByRole('button', { name: 'Exiting…' }).or(
+        page.getByText(/The Arkade server is processing your collaborative exit/),
+      ),
+    ).toBeVisible({
       timeout: 15_000,
     })
-    await expect(page.getByText(/Collaborative exit started/i)).toBeVisible({
+    await expect(
+      page.getByText(/Collaborative exit completed|Collaborative exit started/i),
+    ).toBeVisible({
       timeout: 180_000,
     })
   })

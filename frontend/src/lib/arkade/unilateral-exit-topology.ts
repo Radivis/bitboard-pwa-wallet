@@ -7,6 +7,7 @@ import {
 } from 'd3-dag'
 import type { Node } from '@xyflow/react'
 import { Position, getSmoothStepPath } from '@xyflow/react'
+import type { UnilateralExitInProgressOverlayKind } from '@/lib/arkade/unilateral-exit-control-phase'
 import type {
   ArkadeUnilateralExitHostOutpoint,
   ArkadeUnilateralExitNodeStatus,
@@ -17,26 +18,28 @@ import { includesArkadeVtxoOutpoint, sortArkadeVtxoOutpoints } from '@/workers/a
 
 export type UnilateralExitLayoutDirection = 'LR' | 'TB'
 
-/** Outpoints passed to topology/progress APIs: explicit selection, then in-progress, then active job. */
+/** Outpoints passed to topology/progress APIs: authoritative job wins; never infer from in-progress when a job is active. */
 export function resolveUnilateralExitTopologyOutpoints(params: {
+  /** Persisted or machine-owned job outpoints — sole source for active jobs. */
+  authoritativeJobOutpoints?: ArkadeVtxoOutpoint[]
   selectedLeafOutpoints: ArkadeVtxoOutpoint[]
   inProgressOutpoints: ArkadeVtxoOutpoint[]
   persistedJobOutpoints?: ArkadeVtxoOutpoint[]
-  /** When false, ignore persisted job outpoints (finished or idle job). */
-  persistedJobStarted?: boolean
 }): ArkadeVtxoOutpoint[] {
+  if (
+    params.authoritativeJobOutpoints != null &&
+    params.authoritativeJobOutpoints.length > 0
+  ) {
+    return sortArkadeVtxoOutpoints(params.authoritativeJobOutpoints)
+  }
   if (params.selectedLeafOutpoints.length > 0) {
     return sortArkadeVtxoOutpoints(params.selectedLeafOutpoints)
   }
+  if (params.persistedJobOutpoints != null && params.persistedJobOutpoints.length > 0) {
+    return sortArkadeVtxoOutpoints(params.persistedJobOutpoints)
+  }
   if (params.inProgressOutpoints.length > 0) {
     return sortArkadeVtxoOutpoints(params.inProgressOutpoints)
-  }
-  if (
-    params.persistedJobStarted === true &&
-    params.persistedJobOutpoints != null &&
-    params.persistedJobOutpoints.length > 0
-  ) {
-    return sortArkadeVtxoOutpoints(params.persistedJobOutpoints)
   }
   return []
 }
@@ -50,9 +53,14 @@ export type UnilateralExitTreeNodeData = {
   isOnExitPath: boolean
   isFocused: boolean
   status: ArkadeUnilateralExitNodeStatus['status']
+  inProgressOverlay: UnilateralExitInProgressOverlayKind | null
+  proceedingAutomatically: boolean
+  onReadyToProceed?: () => void
+  readyToProceedDisabled?: boolean
   confirmations: number
   layoutDirection: UnilateralExitLayoutDirection
   exitableVtxoCount: number
+  hostsUnrolled: boolean
 }
 
 /** Rendered node diameter in px (`size-12`). */
@@ -212,6 +220,12 @@ function groupHostOutpointsByTxid(
   return grouped
 }
 
+function hostOutpointsAreUnrolled(
+  hostOutpoints: ArkadeUnilateralExitHostOutpoint[],
+): boolean {
+  return hostOutpoints.length > 0 && hostOutpoints.every((hostOutpoint) => hostOutpoint.isUnrolled)
+}
+
 export function hostOutpointsForTxid(
   topology: ArkadeUnilateralExitTopology,
   txid: string,
@@ -252,28 +266,44 @@ function layoutPosition(params: {
   return { x: layoutX + spreadOffset, y: layoutY }
 }
 
+function collectAncestorTxids(
+  startTxid: string,
+  nodeByTxid: Map<string, ArkadeUnilateralExitTopology['nodes'][number]>,
+): Set<string> {
+  const pathTxids = new Set<string>()
+  const stack = [startTxid]
+  const visited = new Set<string>()
+
+  while (stack.length > 0) {
+    const txid = stack.pop()
+    if (txid == null || visited.has(txid)) {
+      continue
+    }
+    visited.add(txid)
+    pathTxids.add(txid)
+    const node = nodeByTxid.get(txid)
+    for (const parentTxid of node?.spends ?? []) {
+      stack.push(parentTxid)
+    }
+  }
+
+  return pathTxids
+}
+
 export function computeExitPathTxids(
   topology: ArkadeUnilateralExitTopology,
   selectedLeafOutpoints: ArkadeVtxoOutpoint[],
 ): Set<string> {
+  if (selectedLeafOutpoints.length === 0) {
+    return new Set()
+  }
+
   const nodeByTxid = new Map(topology.nodes.map((node) => [node.txid, node]))
   const pathTxids = new Set<string>()
 
   for (const leaf of selectedLeafOutpoints) {
-    const leafTxid = leaf.txid
-    if (!nodeByTxid.has(leafTxid)) {
-      pathTxids.add(leafTxid)
-    }
-    let currentTxid: string | undefined = leafTxid
-    const visited = new Set<string>()
-    while (currentTxid != null && !visited.has(currentTxid)) {
-      visited.add(currentTxid)
-      pathTxids.add(currentTxid)
-      const node = nodeByTxid.get(currentTxid)
-      if (node == null || node.spends.length === 0) {
-        break
-      }
-      currentTxid = node.spends[0]
+    for (const txid of collectAncestorTxids(leaf.txid, nodeByTxid)) {
+      pathTxids.add(txid)
     }
   }
 
@@ -301,10 +331,24 @@ export function layoutUnilateralExitGraph(params: {
   topology: ArkadeUnilateralExitTopology
   selectedLeafOutpoints: ArkadeVtxoOutpoint[]
   nodeStatuses: ArkadeUnilateralExitNodeStatus[]
+  inProgressOverlay: UnilateralExitInProgressOverlayKind | null
+  proceedingAutomatically?: boolean
   layoutDirection: UnilateralExitLayoutDirection
   focusedNodeId?: string | null
+  onReadyToProceed?: () => void
+  readyToProceedDisabled?: boolean
 }): { nodes: Node<UnilateralExitTreeNodeData>[]; edgePaths: UnilateralExitGraphEdgePath[] } {
-  const { topology, selectedLeafOutpoints, nodeStatuses, layoutDirection, focusedNodeId } = params
+  const {
+    topology,
+    selectedLeafOutpoints,
+    nodeStatuses,
+    inProgressOverlay,
+    proceedingAutomatically = false,
+    layoutDirection,
+    focusedNodeId,
+    onReadyToProceed,
+    readyToProceedDisabled,
+  } = params
   const pathTxids = computeExitPathTxids(topology, selectedLeafOutpoints)
   const statusByTxid = mergeNodeStatuses(topology, nodeStatuses)
   const leafOutpointsByTxid = groupLeafOutpointsByTxid(topology.leafOutpoints)
@@ -374,9 +418,14 @@ export function layoutUnilateralExitGraph(params: {
         isLeaf,
         isSelectedLeaf: allLeafOutpointsSelected(leafOutpoints, selectedLeafOutpoints),
         exitableVtxoCount: hostOutpoints.length,
+        hostsUnrolled: hostOutpointsAreUnrolled(hostOutpoints),
         pathTxids,
         focusedNodeId,
         status,
+        inProgressOverlay,
+        proceedingAutomatically,
+        onReadyToProceed,
+        readyToProceedDisabled,
         layoutDirection,
       }),
     })
@@ -400,11 +449,18 @@ function buildTreeNodeData(params: {
   isLeaf: boolean
   isSelectedLeaf: boolean
   exitableVtxoCount: number
+  hostsUnrolled: boolean
   pathTxids: Set<string>
   focusedNodeId?: string | null
   status: ArkadeUnilateralExitNodeStatus | undefined
+  inProgressOverlay: UnilateralExitInProgressOverlayKind | null
+  proceedingAutomatically: boolean
+  onReadyToProceed?: () => void
+  readyToProceedDisabled?: boolean
   layoutDirection: UnilateralExitLayoutDirection
 }): UnilateralExitTreeNodeData {
+  const nodeStatus = params.status?.status ?? 'pending'
+  const overlay = nodeStatus === 'inProgress' ? params.inProgressOverlay : null
   return {
     txid: params.txid,
     vout: params.vout,
@@ -413,10 +469,20 @@ function buildTreeNodeData(params: {
     isSelectedLeaf: params.isSelectedLeaf,
     isOnExitPath: params.pathTxids.has(params.txid),
     isFocused: params.focusedNodeId === params.nodeId,
-    status: params.status?.status ?? 'pending',
+    status: nodeStatus,
+    inProgressOverlay: overlay,
+    proceedingAutomatically:
+      overlay != null && overlay !== 'readyToProceed'
+        ? params.proceedingAutomatically
+        : false,
+    onReadyToProceed:
+      overlay === 'readyToProceed' ? params.onReadyToProceed : undefined,
+    readyToProceedDisabled:
+      overlay === 'readyToProceed' ? params.readyToProceedDisabled : undefined,
     confirmations: params.status?.confirmations ?? 0,
     layoutDirection: params.layoutDirection,
     exitableVtxoCount: params.exitableVtxoCount,
+    hostsUnrolled: params.hostsUnrolled,
   }
 }
 

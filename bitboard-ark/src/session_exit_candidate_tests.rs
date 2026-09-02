@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod exit_candidate_tests {
-    use crate::constants::{VTXO_STATUS_RECOVERABLE, VTXO_STATUS_SETTLED};
+    use crate::api_types::VirtualStatusState;
     use crate::session::mappers::{current_unix_timestamp, map_exit_candidate};
     use ark_core::server::VirtualTxOutPoint;
     use bitcoin::Amount;
@@ -53,7 +53,7 @@ mod exit_candidate_tests {
             DUST,
         );
 
-        assert_eq!(row.virtual_status_state, "preconfirmed");
+        assert_eq!(row.virtual_status_state, VirtualStatusState::Preconfirmed);
         assert!(row.can_start_unroll);
         assert!(!row.can_complete);
     }
@@ -74,7 +74,7 @@ mod exit_candidate_tests {
             DUST,
         );
 
-        assert_eq!(row.virtual_status_state, VTXO_STATUS_SETTLED);
+        assert_eq!(row.virtual_status_state, VirtualStatusState::Settled);
         assert!(row.can_start_unroll);
         assert!(!row.can_complete);
     }
@@ -95,7 +95,7 @@ mod exit_candidate_tests {
             DUST,
         );
 
-        assert_eq!(row.virtual_status_state, VTXO_STATUS_RECOVERABLE);
+        assert_eq!(row.virtual_status_state, VirtualStatusState::Recoverable);
         assert!(!row.can_start_unroll);
         assert!(!row.can_complete);
     }
@@ -116,8 +116,48 @@ mod exit_candidate_tests {
             DUST,
         );
 
-        assert_eq!(row.virtual_status_state, "unrolled");
+        assert_eq!(row.virtual_status_state, VirtualStatusState::Unrolled);
         assert!(!row.can_start_unroll);
         assert!(row.can_complete);
+    }
+
+    #[test]
+    fn snapshot_status_from_spent_and_unrolled() {
+        assert_eq!(
+            VirtualStatusState::from_spent_and_unrolled(true, true),
+            VirtualStatusState::Spent
+        );
+        assert_eq!(
+            VirtualStatusState::from_spent_and_unrolled(false, true),
+            VirtualStatusState::Unrolled
+        );
+        assert_eq!(
+            VirtualStatusState::from_spent_and_unrolled(false, false),
+            VirtualStatusState::Settled
+        );
+    }
+
+    #[test]
+    fn virtual_status_state_serializes_as_lowercase_wire_strings() {
+        assert_eq!(
+            serde_json::to_string(&VirtualStatusState::Spent).unwrap(),
+            "\"spent\""
+        );
+        assert_eq!(
+            serde_json::to_string(&VirtualStatusState::Unrolled).unwrap(),
+            "\"unrolled\""
+        );
+        assert_eq!(
+            serde_json::to_string(&VirtualStatusState::Preconfirmed).unwrap(),
+            "\"preconfirmed\""
+        );
+        assert_eq!(
+            serde_json::to_string(&VirtualStatusState::Recoverable).unwrap(),
+            "\"recoverable\""
+        );
+        assert_eq!(
+            serde_json::to_string(&VirtualStatusState::Settled).unwrap(),
+            "\"settled\""
+        );
     }
 }

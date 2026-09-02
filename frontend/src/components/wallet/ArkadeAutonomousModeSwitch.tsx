@@ -14,10 +14,21 @@ import { cn } from '@/lib/shared/utils'
 
 const AUTONOMOUS_MODE_IMAGE_SRC = '/autonomous_mode_w600.jpg'
 
-function missingMaterialsConfirmMessage(materialsMissingCount: number): string {
-  return `${materialsMissingCount} exit-eligible VTXO${
-    materialsMissingCount === 1 ? '' : 's'
-  } are missing prefetched exit materials. You can enter autonomous mode, but those VTXOs cannot start a new unilateral exit until materials are prefetched.`
+const ENABLE_AUTONOMOUS_CONFIRM_TITLE = 'Enable autonomous mode'
+
+const ENABLE_AUTONOMOUS_CONFIRM_BASE =
+  'Autonomous mode persists for this operator and blocks all contact with it, including after unlock, until you turn it off. Esplora is still used for on-chain broadcast and timelock checks. Turn this off when you are ready to trust and sync with the operator again.'
+
+function missingMaterialsConfirmSuffix(materialsMissingCount: number): string {
+  const noun = materialsMissingCount === 1 ? 'VTXO is' : 'VTXOs are'
+  return ` ${materialsMissingCount} exit-eligible ${noun} missing prefetched exit materials and cannot start a new unilateral exit until you leave autonomous mode and sync.`
+}
+
+function enableAutonomousConfirmMessage(materialsMissingCount: number): string {
+  if (materialsMissingCount > 0) {
+    return ENABLE_AUTONOMOUS_CONFIRM_BASE + missingMaterialsConfirmSuffix(materialsMissingCount)
+  }
+  return ENABLE_AUTONOMOUS_CONFIRM_BASE
 }
 
 export function ArkadeAutonomousModeSwitch() {
@@ -29,7 +40,7 @@ export function ArkadeAutonomousModeSwitch() {
     (status?.cachedOperatorInfoPresent ?? false) && !(status?.operatorTrustPending ?? false)
   const canDisable = status?.canExitAutonomous ?? true
   const pending = autonomousModeMutation.isPending || statusQuery.isLoading
-  const [missingMaterialsConfirmOpen, setMissingMaterialsConfirmOpen] = useState(false)
+  const [enableConfirmOpen, setEnableConfirmOpen] = useState(false)
 
   const handleCheckedChange = (nextChecked: boolean) => {
     if (nextChecked && !canEnable) {
@@ -38,36 +49,34 @@ export function ArkadeAutonomousModeSwitch() {
     if (!nextChecked && !canDisable) {
       return
     }
-    if (nextChecked && status != null && status.materialsMissingCount > 0) {
-      setMissingMaterialsConfirmOpen(true)
+    if (nextChecked) {
+      setEnableConfirmOpen(true)
       return
     }
     autonomousModeMutation.mutate(nextChecked)
   }
 
-  const handleMissingMaterialsConfirm = () => {
-    setMissingMaterialsConfirmOpen(false)
+  const handleEnableConfirm = () => {
+    setEnableConfirmOpen(false)
     autonomousModeMutation.mutate(true)
   }
 
-  const handleMissingMaterialsCancel = () => {
-    setMissingMaterialsConfirmOpen(false)
+  const handleEnableCancel = () => {
+    setEnableConfirmOpen(false)
   }
 
   return (
     <>
       <ConfirmationDialog
-        open={missingMaterialsConfirmOpen}
-        title="Missing exit materials"
+        open={enableConfirmOpen}
+        title={ENABLE_AUTONOMOUS_CONFIRM_TITLE}
         message={
-          status != null
-            ? missingMaterialsConfirmMessage(status.materialsMissingCount)
-            : ''
+          status != null ? enableAutonomousConfirmMessage(status.materialsMissingCount) : ''
         }
-        confirmText="Continue"
+        confirmText="Enable"
         cancelText="Cancel"
-        onConfirm={handleMissingMaterialsConfirm}
-        onCancel={handleMissingMaterialsCancel}
+        onConfirm={handleEnableConfirm}
+        onCancel={handleEnableCancel}
       />
     <div
       className={cn(
@@ -108,14 +117,14 @@ export function ArkadeAutonomousModeSwitch() {
               <Switch
                 id="arkade-autonomous-mode"
                 checked={checked}
-                disabled={pending || !canEnable}
+                disabled={pending || (!checked && !canEnable) || (checked && !canDisable)}
                 onCheckedChange={handleCheckedChange}
                 aria-label="Autonomous mode"
               />
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            Use cached operator data and prefetched exit materials when the ASP is down. Only
+            Do not contact this operator until you turn this off. The setting survives reload. Only
             unilateral exit stays available.
           </p>
           {!canEnable && !checked ? (
@@ -133,8 +142,9 @@ export function ArkadeAutonomousModeSwitch() {
           {status != null && checked ? (
             <>
               <p className="text-muted-foreground">
-                Operator unreachable — only unilateral exit is available. Esplora is still used for
-                broadcast, UTXO lookup, and timelock checks.
+                Not contacting this operator. Cached operator data and prefetched exit materials are
+                used. Esplora is still used for broadcast, UTXO lookup, and timelock checks. Turn
+                this off to resume operator sync.
               </p>
               <p className="text-xs text-muted-foreground">
                 Exit materials ready for {status.materialsReadyCount} of {status.eligibleCount}{' '}
@@ -147,8 +157,7 @@ export function ArkadeAutonomousModeSwitch() {
                 >
                   {status.materialsMissingCount} exit-eligible VTXO
                   {status.materialsMissingCount === 1 ? '' : 's'} lack prefetched exit materials and
-                  cannot start a new unilateral exit until you sync with the operator while
-                  reachable.
+                  cannot start a new unilateral exit until you leave autonomous mode and sync.
                 </p>
               ) : null}
             </>

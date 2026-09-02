@@ -59,3 +59,4 @@ When it comes to matters of technologies, architecture, or algorithms question t
 - Changing rules for agents
 - Tinkering with wait times in e2e tests (mostly just a dirty fix for a badly understood issue)
 - Compromising on security, even if it's just temporary
+- Creating IndexedDB or other databases that don't fit the current stack

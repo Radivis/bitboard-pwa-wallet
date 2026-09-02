@@ -52,4 +52,12 @@ interface Window {
   __e2eGetOperatorTrustStatus?: () => Promise<
     import('@/workers/arkade-api').ArkadeOperatorTrustStatus
   >
+  /** DEV + `VITE_E2E_ARKADE_REGTEST`: WASM + UI snapshot for unilateral-exit / Esplora debugging. */
+  __e2eExportUnilateralExitDebugSnapshot?: () => Promise<
+    import('@/lib/arkade/e2e/e2e-arkade-regtest-control').E2eUnilateralExitDebugSnapshot
+  >
+  /** DEV + `VITE_E2E_ARKADE_REGTEST`: send RESUME to the unilateral-exit actor after a paused error. */
+  __e2eResumeUnilateralExitAutomation?: () => void
+  /** DEV + VITE_E2E_ARKADE_REGTEST: re-sync bumper wallet and refresh batch estimate queries. */
+  __e2eRefreshOnchainBumperInfo?: () => Promise<number>
 }

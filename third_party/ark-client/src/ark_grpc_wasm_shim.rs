@@ -231,6 +231,18 @@ impl Client {
             .map_err(map_rest_error)
     }
 
+    pub async fn delete_intent(&self, intent: intent::Intent) -> Result<(), Error> {
+        let message_json = intent
+            .serialize_message()
+            .map_err(Error::conversion_message)?;
+        let message: intent::IntentMessage = serde_json::from_str(&message_json)
+            .map_err(Error::conversion_message)?;
+        self.inner
+            .delete_intent(&message, &intent.proof)
+            .await
+            .map_err(map_rest_error)
+    }
+
     pub async fn submit_offchain_transaction_request(
         &self,
         ark_tx: Psbt,

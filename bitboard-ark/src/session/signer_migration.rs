@@ -16,6 +16,18 @@ use super::ArkSession;
 impl ArkSession {
     pub async fn migrate_deprecated_signer_vtxos(&self) -> ArkResult<SignerMigrationResultDto> {
         self.ensure_operator_rpc_allowed()?;
+        if !self.wallet_db.pending_batch_intents().is_empty() {
+            let deprecated_reports = self.client.deprecated_signer_status().await?;
+            let remaining = pre_cutoff_cooperative_remaining(&deprecated_reports);
+            return Ok(build_signer_migration_result_dto(
+                SignerMigrationLegAccum::default(),
+                SignerMigrationLegAccum::default(),
+                0,
+                remaining,
+                Vec::new(),
+                false,
+            ));
+        }
         if let Some(key_discovery_warning) = self.sync_offchain_keys().await {
             return Err(ArkWasmError::Client(ark_client::Error::wallet(
                 key_discovery_warning,
@@ -31,8 +43,12 @@ impl ArkSession {
 
         for _ in 0..MAX_SIGNER_MIGRATION_PASSES {
             let report = self
-                .client
-                .migrate_deprecated_signer_vtxos(&mut rng)
+                .with_batch_join(
+                    crate::persistence::PendingBatchIntentKind::Migrate,
+                    0,
+                    None,
+                    || async { self.client.migrate_deprecated_signer_vtxos(&mut rng).await },
+                )
                 .await?;
 
             if report.failed() {
@@ -43,6 +59,27 @@ impl ArkSession {
             }
 
             pass_count += 1;
+            if let Some(waiting) = report
+                .vtxo
+                .waiting_intent
+                .as_ref()
+                .or(report.boarding.waiting_intent.as_ref())
+            {
+                let amount_sats = report
+                    .vtxo
+                    .deferred
+                    .iter()
+                    .chain(report.boarding.deferred.iter())
+                    .map(|item| item.amount.to_sat())
+                    .sum();
+                self.stamp_registered_intent_timed_out(
+                    waiting,
+                    crate::persistence::PendingBatchIntentKind::Migrate,
+                    amount_sats,
+                    None,
+                );
+                break;
+            }
             let rotated = accumulate_pass_reports(
                 &mut vtxo_total,
                 &mut boarding_total,
@@ -60,7 +97,11 @@ impl ArkSession {
         let remaining = pre_cutoff_cooperative_remaining(&deprecated_reports);
         let migration_complete = migration_cooperatively_complete(&remaining);
 
-        if !migration_complete && !any_pass_rotated && remaining.has_remaining() {
+        if self.wallet_db.pending_batch_intents().is_empty()
+            && !migration_complete
+            && !any_pass_rotated
+            && remaining.has_remaining()
+        {
             return Err(ArkWasmError::Client(ark_client::Error::wallet(
                 false_success_migration_message(&remaining),
             )));
@@ -110,6 +151,7 @@ mod tests {
                 oversized: Vec::new(),
                 skipped: None,
                 error: Some("vtxo settle failed".to_string()),
+                waiting_intent: None,
             },
             boarding: MigrationLegReport {
                 settle_txid: None,
@@ -118,6 +160,7 @@ mod tests {
                 oversized: Vec::new(),
                 skipped: None,
                 error: None,
+                waiting_intent: None,
             },
         };
         assert!(migration_leg_error_message(&report).contains("vtxo settle failed"));

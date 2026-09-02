@@ -14,6 +14,7 @@ import {
 import { ArkadeAutonomousModeSwitch } from '@/components/wallet/ArkadeAutonomousModeSwitch'
 import { ArkadeOperatorTrustGate } from '@/components/wallet/ArkadeOperatorTrustGate'
 import { ArkadeBalanceBreakdown } from '@/components/wallet/ArkadeBalanceBreakdown'
+import { ArkadePendingBatchIntentBanner } from '@/components/wallet/ArkadePendingBatchIntentBanner'
 import { ArkadeSignerMigrationBanner } from '@/components/wallet/ArkadeSignerMigrationBanner'
 import { ArkadePendingRecoveryDueToExpiredSignerBanner } from '@/components/wallet/ArkadePendingRecoveryDueToExpiredSignerBanner'
 import { ArkadeRecoverableVtxoBanner } from '@/components/wallet/ArkadeRecoverableVtxoBanner'
@@ -24,7 +25,9 @@ import {
   useArkadeBalanceQuery,
   useArkadeDelegateInfoQuery,
   useArkadeRenewMutation,
+  useHasPendingBatchIntentKind,
 } from '@/hooks/useArkadeQueries'
+import { isIntentSubmitPhase } from '@/lib/arkade/arkade-pending-batch-intent'
 import {
   useArkadeLoadLifecycleSnapshot,
   useArkadeRailSnapshot,
@@ -53,6 +56,11 @@ export function ArkadePanel() {
   const balanceQuery = useArkadeBalanceQuery()
   const delegateQuery = useArkadeDelegateInfoQuery()
   const renewMutation = useArkadeRenewMutation()
+  const hasPendingRenewIntent = useHasPendingBatchIntentKind('renew')
+  const renewSubmitPhase = isIntentSubmitPhase({
+    mutationPending: renewMutation.isPending,
+    pendingForAction: hasPendingRenewIntent,
+  })
   const addressQuery = useArkadeAddressQuery()
   const arkadeRail = useArkadeRailSnapshot()
   const arkadeLoadSnapshot = useArkadeLoadLifecycleSnapshot()
@@ -87,6 +95,7 @@ export function ArkadePanel() {
       <CardContent className="space-y-4">
         <ArkadeOperatorTrustGate />
         <ArkadeAutonomousModeSwitch />
+        <ArkadePendingBatchIntentBanner />
         <ArkadeSignerMigrationBanner />
         <ArkadePendingRecoveryDueToExpiredSignerBanner />
         <ArkadeRecoverableVtxoBanner />
@@ -177,10 +186,19 @@ export function ArkadePanel() {
               type="button"
               variant="secondary"
               size="sm"
-              disabled={autonomousModeActive || renewMutation.isPending}
+              disabled={
+                autonomousModeActive || renewMutation.isPending || hasPendingRenewIntent
+              }
               onClick={() => renewMutation.mutate()}
             >
-              Renew VTXOs now
+              {renewSubmitPhase ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                  Renewing…
+                </>
+              ) : (
+                'Renew VTXOs now'
+              )}
             </Button>
           </InfomodeWrapper>
         </div>

@@ -1,5 +1,5 @@
 import { awaitInFlightWalletSecretsWrites } from '@/db'
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { proxy } from 'comlink'
 import { toast } from 'sonner'
 import { getArkadeWorker } from '@/workers/arkade-factory'
@@ -22,7 +22,6 @@ import {
   arkadeRecoverableVtxoFeeQueryKey,
   arkadeSignerMigrationPartialResultQueryKey,
   arkadeUnilateralExitCompletionFeeQueryKey,
-  arkadeUnilateralExitFeeQueryKey,
   arkadeUnilateralExitsInProgressQueryKey,
   arkadeUnilateralExitTopologyQueryKey,
   arkadeUnilateralExitBatchEstimateQueryKey,
@@ -32,10 +31,10 @@ import {
 } from '@/lib/arkade/arkade-query-keys'
 import type {
   ArkadeBalanceInfo,
+  ArkadeBatchJoinResult,
   ArkadeBoardingStatus,
+  ArkadePendingBatchIntent,
   ArkadeSignerMigrationResult,
-  ArkadeUnrollProgressEvent,
-  ArkadeUnrollResult,
   ArkadeVtxoOutpoint,
 } from '@/workers/arkade-api'
 import { sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
@@ -57,11 +56,30 @@ import { orchestrateArkadeSave } from '@/lib/wallet/lifecycle/arkade-save-lifecy
 import { refreshArkadeStoreFromLoadedWasm } from '@/lib/arkade/arkade-persistence-store-sync'
 import { readArkadeDashboardStateFromStore } from '@/lib/arkade/arkade-persistence-store-sync'
 import {
+  abandonInFlightRegisteredIntents,
+  arkadeRefetchIntervalWithPendingBatchIntent,
+  hasPendingBatchIntent,
+  hasPendingKind,
+  pendingBatchIntentKey,
+  isBatchJoinCompleted,
+  isBatchJoinWaiting,
+  markPendingBatchIntentCancelled,
+  pendingOverlapsOnchain,
+  pendingBatchIntentFromSources,
+  pendingBatchIntentSucceededMessage,
+  rememberInFlightRegisteredIntent,
+  settleInFlightRegisteredIntents,
+} from '@/lib/arkade/arkade-pending-batch-intent'
+import {
   ARKADE_BUMPER_FUNDING_POLL_MS,
   ARKADE_EXIT_CANDIDATES_POLL_MS,
   ARKADE_FEE_ESTIMATE_STALE_MS,
   ARKADE_SESSION_POLL_STALE_MS,
   ARKADE_SLOW_METADATA_STALE_MS,
+  unilateralExitProgressIdlePollMs,
+  unilateralExitProgressPollMs,
+  UNILATERAL_EXIT_PROGRESS_IDLE_POLL_MS,
+  UNILATERAL_EXIT_PROGRESS_POLL_MS,
 } from '@/lib/arkade/arkade-query-timings'
 import { usePeriodicSyncRefetchInterval } from '@/lib/wallet/periodic-sync/usePeriodicSyncRefetchInterval'
 import {
@@ -70,13 +88,7 @@ import {
   revertOptimisticExitBalanceDeduction,
   type ExitBalanceOptimisticContext,
 } from '@/lib/arkade/arkade-exit-balance-optimistic'
-import {
-  formatArkadeTxidToastSnippet,
-  formatUnilateralUnrollSuccessMessage,
-  isOperatorIndexerCatchingUpError,
-  shouldShowUnilateralUnrollProgressToast,
-  unilateralUnrollProgressToastId,
-} from '@/lib/arkade/arkade-exit-utils'
+import { formatArkadeTxidToastSnippet } from '@/lib/arkade/arkade-exit-utils'
 import { arkadeOffchainSpendableSats } from '@/lib/arkade/arkade-balance-display'
 import {
   isArkadeDelegatorConfigured,
@@ -104,14 +116,19 @@ import {
 } from '@/lib/arkade/arkade-operator-trust-utils'
 import {
   assertArkadeSessionUnlocked,
-  proceedUnilateralExitStepWithGuards,
 } from '@/lib/arkade/proceed-unilateral-exit-step'
+import { isUnilateralExitBranchComplete } from '@/lib/arkade/unilateral-exit-branch-complete'
+import {
+  isUnilateralExitProgressWaitingForConfirmation,
+  unilateralExitProgressQueryRefetchInterval,
+  unilateralExitProgressQueryShouldFetch,
+} from '@/lib/arkade/unilateral-exit-progress-query'
 
 function useArkadeQueryBase() {
   const networkMode = useWalletStore(selectCommittedNetworkMode)
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
-  const activeArkadeConnectionId = useWalletStore(
-    (walletState) => walletState.activeArkadeConnectionId,
+  const activeArkadeAccountId = useWalletStore(
+    (walletState) => walletState.activeArkadeAccountId,
   )
   const arkadeSessionReady = useIsArkadeSessionReady()
   const sessionReady =
@@ -120,7 +137,7 @@ function useArkadeQueryBase() {
     isArkadeSupportedNetworkMode(networkMode) &&
     arkadeSessionReady
 
-  return { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady }
+  return { networkMode, activeWalletId, activeArkadeAccountId, sessionReady }
 }
 
 function useArkadeDashboardPeriodicQueryOptions() {
@@ -193,11 +210,11 @@ async function withReadyArkadeWorkerAndOptionalDelegate<T>(
 function walletScopedQueryKey(
   activeWalletId: number | null,
   networkMode: NetworkMode,
-  connectionId: string | null,
+  arkadeAccountId: string | null,
   buildKey: (
     walletId: number,
     network: ArkadeSupportedNetworkMode,
-    connectionId: string,
+    arkadeAccountId: string,
   ) => readonly unknown[],
   disabledScope: string,
 ): readonly unknown[] {
@@ -205,7 +222,7 @@ function walletScopedQueryKey(
     return buildKey(
       activeWalletId,
       networkMode,
-      connectionId ?? `pending-${networkMode}`,
+      arkadeAccountId ?? `pending-${networkMode}`,
     )
   }
   return arkadeDisabledQueryKey(disabledScope)
@@ -215,42 +232,42 @@ async function invalidateArkadeWalletDataQueries(
   queryClient: ReturnType<typeof useQueryClient>,
   walletId: number,
   networkMode: NetworkMode,
-  connectionId: string,
+  arkadeAccountId: string,
   options?: { skipBalance?: boolean; skipBoardingStatus?: boolean },
 ): Promise<void> {
   if (!isArkadeSupportedNetworkMode(networkMode)) return
 
   const invalidations = [
     queryClient.invalidateQueries({
-      queryKey: arkadeHistoryQueryKey(walletId, networkMode, connectionId),
+      queryKey: arkadeHistoryQueryKey(walletId, networkMode, arkadeAccountId),
     }),
     queryClient.invalidateQueries({
-      queryKey: arkadeExitCandidatesQueryKey(walletId, networkMode, connectionId),
+      queryKey: arkadeExitCandidatesQueryKey(walletId, networkMode, arkadeAccountId),
     }),
     queryClient.invalidateQueries({
-      queryKey: arkadeUnilateralExitsInProgressQueryKey(walletId, networkMode, connectionId),
+      queryKey: arkadeUnilateralExitsInProgressQueryKey(walletId, networkMode, arkadeAccountId),
     }),
     queryClient.invalidateQueries({
-      queryKey: arkadeBumperInfoQueryKey(walletId, networkMode, connectionId),
+      queryKey: arkadeBumperInfoQueryKey(walletId, networkMode, arkadeAccountId),
     }),
     queryClient.invalidateQueries({
-      queryKey: arkadeVtxoExpiryQueryKey(walletId, networkMode, connectionId),
+      queryKey: arkadeVtxoExpiryQueryKey(walletId, networkMode, arkadeAccountId),
     }),
     queryClient.invalidateQueries({
-      queryKey: arkadeOperatorScheduledSessionQueryKey(walletId, networkMode, connectionId),
+      queryKey: arkadeOperatorScheduledSessionQueryKey(walletId, networkMode, arkadeAccountId),
     }),
     queryClient.invalidateQueries({
-      queryKey: arkadeVtxoListQueryKey(walletId, networkMode, connectionId),
+      queryKey: arkadeVtxoListQueryKey(walletId, networkMode, arkadeAccountId),
     }),
     queryClient.invalidateQueries({
-      queryKey: arkadeRecoverableVtxoFeeQueryKey(walletId, networkMode, connectionId),
+      queryKey: arkadeRecoverableVtxoFeeQueryKey(walletId, networkMode, arkadeAccountId),
     }),
   ]
 
   if (!options?.skipBalance) {
     invalidations.unshift(
       queryClient.invalidateQueries({
-        queryKey: arkadeBalanceQueryKey(walletId, networkMode, connectionId),
+        queryKey: arkadeBalanceQueryKey(walletId, networkMode, arkadeAccountId),
       }),
     )
   }
@@ -258,7 +275,7 @@ async function invalidateArkadeWalletDataQueries(
   if (!options?.skipBoardingStatus) {
     invalidations.push(
       queryClient.invalidateQueries({
-        queryKey: arkadeBoardingStatusQueryKey(walletId, networkMode, connectionId),
+        queryKey: arkadeBoardingStatusQueryKey(walletId, networkMode, arkadeAccountId),
       }),
     )
   }
@@ -267,7 +284,7 @@ async function invalidateArkadeWalletDataQueries(
 }
 
 export function useArkadeBalanceQuery() {
-  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+  const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
     useArkadeQueryBase()
   const storeBalance = useWalletStore((walletState) => walletState.arkadeBalance)
   const arkadeDashboardPeriodicQueryOptions = useArkadeDashboardPeriodicQueryOptions()
@@ -276,7 +293,7 @@ export function useArkadeBalanceQuery() {
     queryKey: walletScopedQueryKey(
       activeWalletId,
       networkMode,
-      activeArkadeConnectionId,
+      activeArkadeAccountId,
       arkadeBalanceQueryKey,
       'balance',
     ),
@@ -288,11 +305,16 @@ export function useArkadeBalanceQuery() {
       return getArkadeWorker().getBalance()
     },
     ...arkadeDashboardPeriodicQueryOptions,
+    refetchInterval: (query) =>
+      arkadeRefetchIntervalWithPendingBatchIntent(
+        hasPendingBatchIntent(query.state.data?.pendingBatchIntents ?? []),
+        arkadeDashboardPeriodicQueryOptions.refetchInterval,
+      ),
   })
 }
 
 export function useArkadeHistoryQuery() {
-  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+  const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
     useArkadeQueryBase()
   const storePayments = useWalletStore((walletState) => walletState.arkadePayments)
   const arkadeDashboardPeriodicQueryOptions = useArkadeDashboardPeriodicQueryOptions()
@@ -301,7 +323,7 @@ export function useArkadeHistoryQuery() {
     queryKey: walletScopedQueryKey(
       activeWalletId,
       networkMode,
-      activeArkadeConnectionId,
+      activeArkadeAccountId,
       arkadeHistoryQueryKey,
       'history',
     ),
@@ -317,7 +339,7 @@ export function useArkadeHistoryQuery() {
 }
 
 export function useArkadeAddressQuery() {
-  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+  const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
     useArkadeQueryBase()
   const storeReceiveAddress = useWalletStore((walletState) => walletState.arkadeReceiveAddress)
 
@@ -325,11 +347,11 @@ export function useArkadeAddressQuery() {
     queryKey: walletScopedQueryKey(
       activeWalletId,
       networkMode,
-      activeArkadeConnectionId,
+      activeArkadeAccountId,
       arkadeAddressQueryKey,
       'address',
     ),
-    enabled: sessionReady && activeArkadeConnectionId != null,
+    enabled: sessionReady && activeArkadeAccountId != null,
     initialData: storeReceiveAddress ?? undefined,
     queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().getAddress()),
     staleTime: Number.POSITIVE_INFINITY,
@@ -338,7 +360,7 @@ export function useArkadeAddressQuery() {
 
 export function useArkadeNewAddressMutation() {
   const queryClient = useQueryClient()
-  const { networkMode, activeWalletId, activeArkadeConnectionId } =
+  const { networkMode, activeWalletId, activeArkadeAccountId } =
     useArkadeQueryBase()
 
   return useMutation({
@@ -359,7 +381,7 @@ export function useArkadeNewAddressMutation() {
       const addressQueryKey = walletScopedQueryKey(
         activeWalletId,
         networkMode,
-        activeArkadeConnectionId,
+        activeArkadeAccountId,
         arkadeAddressQueryKey,
         'address',
       )
@@ -384,14 +406,14 @@ export function useArkadeNewAddressMutation() {
 }
 
 export function useArkadeBoardingAddressQuery() {
-  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+  const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
     useArkadeQueryBase()
 
   return useQuery({
     queryKey: walletScopedQueryKey(
       activeWalletId,
       networkMode,
-      activeArkadeConnectionId,
+      activeArkadeAccountId,
       arkadeBoardingAddressQueryKey,
       'boarding-address',
     ),
@@ -402,7 +424,7 @@ export function useArkadeBoardingAddressQuery() {
 }
 
 export function useArkadeBoardingStatusQuery() {
-  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+  const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
     useArkadeQueryBase()
   const refetchInterval = usePeriodicSyncRefetchInterval('arkade')
 
@@ -410,15 +432,54 @@ export function useArkadeBoardingStatusQuery() {
     queryKey: walletScopedQueryKey(
       activeWalletId,
       networkMode,
-      activeArkadeConnectionId,
+      activeArkadeAccountId,
       arkadeBoardingStatusQueryKey,
       'boarding-status',
     ),
     enabled: sessionReady,
     queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().getBoardingStatus()),
-    refetchInterval,
+    refetchInterval: (query) =>
+      arkadeRefetchIntervalWithPendingBatchIntent(
+        hasPendingBatchIntent(query.state.data?.pendingBatchIntents ?? []),
+        refetchInterval,
+      ),
     staleTime: ARKADE_SESSION_POLL_STALE_MS,
   })
+}
+
+export function usePendingBatchIntents(): ArkadePendingBatchIntent[] {
+  const boardingStatusQuery = useArkadeBoardingStatusQuery()
+  const balanceQuery = useArkadeBalanceQuery()
+  return pendingBatchIntentFromSources(
+    boardingStatusQuery.data?.pendingBatchIntents,
+    balanceQuery.data?.pendingBatchIntents,
+  )
+}
+
+export function useHasPendingBatchIntent(): boolean {
+  return hasPendingBatchIntent(usePendingBatchIntents())
+}
+
+export function useHasPendingOnchainBatchIntent(): boolean {
+  return pendingOverlapsOnchain(usePendingBatchIntents())
+}
+
+export function useHasPendingBatchIntentKind(kind: string): boolean {
+  return hasPendingKind(usePendingBatchIntents(), kind)
+}
+
+export function pendingBatchIntentActionParams(intent: ArkadePendingBatchIntent): {
+  onchainOutpoints: ArkadeVtxoOutpoint[]
+  vtxoOutpoints: ArkadeVtxoOutpoint[]
+} {
+  return {
+    onchainOutpoints: intent.onchainOutpoints,
+    vtxoOutpoints: intent.vtxoOutpoints,
+  }
+}
+
+export function pendingBatchIntentStableKey(intent: ArkadePendingBatchIntent): string {
+  return pendingBatchIntentKey(intent)
 }
 
 export function useArkadeDelegateInfoQuery() {
@@ -435,7 +496,7 @@ export function useArkadeDelegateInfoQuery() {
 }
 
 export function useArkadeVtxoExpiryQuery() {
-  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+  const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
     useArkadeQueryBase()
   const arkadeDashboardPeriodicQueryOptions = useArkadeDashboardPeriodicQueryOptions()
 
@@ -443,7 +504,7 @@ export function useArkadeVtxoExpiryQuery() {
     queryKey: walletScopedQueryKey(
       activeWalletId,
       networkMode,
-      activeArkadeConnectionId,
+      activeArkadeAccountId,
       arkadeVtxoExpiryQueryKey,
       'vtxo-expiry',
     ),
@@ -458,7 +519,7 @@ export function useArkadeVtxoExpiryQuery() {
 }
 
 export function useArkadeOperatorScheduledSessionQuery() {
-  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+  const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
     useArkadeQueryBase()
   const arkadeDashboardPeriodicQueryOptions = useArkadeDashboardPeriodicQueryOptions()
 
@@ -466,7 +527,7 @@ export function useArkadeOperatorScheduledSessionQuery() {
     queryKey: walletScopedQueryKey(
       activeWalletId,
       networkMode,
-      activeArkadeConnectionId,
+      activeArkadeAccountId,
       arkadeOperatorScheduledSessionQueryKey,
       'operator-scheduled-session',
     ),
@@ -481,7 +542,7 @@ export function useArkadeOperatorScheduledSessionQuery() {
 }
 
 export function useArkadeVtxoListQuery() {
-  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+  const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
     useArkadeQueryBase()
   const arkadeDashboardPeriodicQueryOptions = useArkadeDashboardPeriodicQueryOptions()
 
@@ -489,7 +550,7 @@ export function useArkadeVtxoListQuery() {
     queryKey: walletScopedQueryKey(
       activeWalletId,
       networkMode,
-      activeArkadeConnectionId,
+      activeArkadeAccountId,
       arkadeVtxoListQueryKey,
       'vtxo-list',
     ),
@@ -505,7 +566,7 @@ export function useArkadeVtxoListQuery() {
 
 export function useArkadeSendMutation() {
   const queryClient = useQueryClient()
-  const { networkMode, activeWalletId, activeArkadeConnectionId } =
+  const { networkMode, activeWalletId, activeArkadeAccountId } =
     useArkadeQueryBase()
 
   return useMutation({
@@ -520,14 +581,14 @@ export function useArkadeSendMutation() {
       toast.success(`Arkade payment sent (${formatArkadeTxidToastSnippet(txid)})`)
       if (
         activeWalletId != null &&
-        activeArkadeConnectionId != null &&
+        activeArkadeAccountId != null &&
         isArkadeSupportedNetworkMode(networkMode)
       ) {
         await invalidateArkadeWalletDataQueries(
           queryClient,
           activeWalletId,
           networkMode,
-          activeArkadeConnectionId,
+          activeArkadeAccountId,
         )
       }
     },
@@ -537,67 +598,246 @@ export function useArkadeSendMutation() {
   })
 }
 
+function toastBatchJoinResult(
+  result: ArkadeBatchJoinResult,
+  kindFallback: string,
+  idleMessage?: string,
+): void {
+  if (isBatchJoinWaiting(result)) {
+    abandonInFlightRegisteredIntents()
+    return
+  }
+  if (isBatchJoinCompleted(result) && result.commitmentTxid) {
+    settleInFlightRegisteredIntents()
+    toast.success(
+      pendingBatchIntentSucceededMessage(result.pendingIntent?.kind ?? kindFallback),
+    )
+    return
+  }
+  abandonInFlightRegisteredIntents()
+  if (idleMessage != null) {
+    toast.message(idleMessage)
+  }
+}
+
+function upsertPendingBatchIntent(
+  intents: ArkadePendingBatchIntent[] | undefined,
+  incoming: ArkadePendingBatchIntent,
+): ArkadePendingBatchIntent[] {
+  const incomingKey = pendingBatchIntentKey(incoming)
+  return [
+    ...(intents ?? []).filter((item) => pendingBatchIntentKey(item) !== incomingKey),
+    incoming,
+  ]
+}
+
+function patchPendingBatchIntentQueryCaches(
+  queryClient: QueryClient,
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+  arkadeAccountId: string,
+  intent: ArkadePendingBatchIntent,
+): void {
+  rememberInFlightRegisteredIntent(intent)
+  const boardingStatusKey = arkadeBoardingStatusQueryKey(
+    walletId,
+    networkMode,
+    arkadeAccountId,
+  )
+  const balanceKey = arkadeBalanceQueryKey(walletId, networkMode, arkadeAccountId)
+  queryClient.setQueryData<ArkadeBoardingStatus>(boardingStatusKey, (previous) =>
+    previous == null
+      ? previous
+      : {
+          ...previous,
+          pendingBatchIntents: upsertPendingBatchIntent(
+            previous.pendingBatchIntents,
+            intent,
+          ),
+        },
+  )
+  queryClient.setQueryData<ArkadeBalanceInfo>(balanceKey, (previous) =>
+    previous == null
+      ? previous
+      : {
+          ...previous,
+          pendingBatchIntents: upsertPendingBatchIntent(
+            previous.pendingBatchIntents,
+            intent,
+          ),
+        },
+  )
+}
+
+function pendingBatchIntentOnRegisteredHandler(
+  queryClient: QueryClient,
+  walletId: number | null,
+  networkMode: NetworkMode,
+  arkadeAccountId: string | null,
+): (intent: ArkadePendingBatchIntent) => void {
+  return (intent) => {
+    if (
+      walletId == null ||
+      arkadeAccountId == null ||
+      !isArkadeSupportedNetworkMode(networkMode)
+    ) {
+      rememberInFlightRegisteredIntent(intent)
+      return
+    }
+    patchPendingBatchIntentQueryCaches(
+      queryClient,
+      walletId,
+      networkMode,
+      arkadeAccountId,
+      intent,
+    )
+  }
+}
+
 export function useArkadeRenewMutation() {
   const queryClient = useQueryClient()
-  const { networkMode, activeWalletId, activeArkadeConnectionId } =
+  const { networkMode, activeWalletId, activeArkadeAccountId } =
     useArkadeQueryBase()
 
   return useMutation({
     mutationFn: async () => {
       assertArkadeSessionUnlocked(activeWalletId)
-      return withReadyArkadeWorker(() => getArkadeWorker().renewVtxosNow())
+      const onRegistered = pendingBatchIntentOnRegisteredHandler(
+        queryClient,
+        activeWalletId,
+        networkMode,
+        activeArkadeAccountId,
+      )
+      return withReadyArkadeWorker(() =>
+        getArkadeWorker().renewVtxosNow(proxy(onRegistered)),
+      )
     },
-    onSuccess: async (txid) => {
-      if (txid) {
-        toast.success('VTXOs renewed')
-      } else {
-        toast.message('No expiring VTXOs to renew right now')
-      }
+    onSuccess: async (result) => {
+      toastBatchJoinResult(
+        result,
+        'renew',
+        'No expiring VTXOs to renew right now',
+      )
       if (
         activeWalletId != null &&
-        activeArkadeConnectionId != null &&
+        activeArkadeAccountId != null &&
         isArkadeSupportedNetworkMode(networkMode)
       ) {
         await invalidateArkadeWalletDataQueries(
           queryClient,
           activeWalletId,
           networkMode,
-          activeArkadeConnectionId,
+          activeArkadeAccountId,
         )
       }
     },
     onError: (err) => {
       toast.error(errorMessage(err))
     },
+  })
+}
+
+export function useArkadeCancelPendingBatchIntentMutation() {
+  const queryClient = useQueryClient()
+  const { networkMode, activeWalletId, activeArkadeAccountId } = useArkadeQueryBase()
+  return useMutation({
+    mutationFn: async (intent: ArkadePendingBatchIntent) => {
+      assertArkadeSessionUnlocked(activeWalletId)
+      return withReadyArkadeWorker(() =>
+        getArkadeWorker().cancelPendingBatchIntent(pendingBatchIntentActionParams(intent)),
+      )
+    },
+    onSuccess: async (_result, intent) => {
+      markPendingBatchIntentCancelled(intent)
+      if (
+        activeWalletId != null &&
+        activeArkadeAccountId != null &&
+        isArkadeSupportedNetworkMode(networkMode)
+      ) {
+        await invalidateArkadeWalletDataQueries(
+          queryClient,
+          activeWalletId,
+          networkMode,
+          activeArkadeAccountId,
+        )
+      }
+    },
+    onError: (err) => toast.error(errorMessage(err)),
+  })
+}
+
+export function useArkadeRetryPendingBatchIntentMutation() {
+  const queryClient = useQueryClient()
+  const { networkMode, activeWalletId, activeArkadeAccountId } = useArkadeQueryBase()
+  return useMutation({
+    mutationFn: async (intent: ArkadePendingBatchIntent) => {
+      assertArkadeSessionUnlocked(activeWalletId)
+      const onRegistered = pendingBatchIntentOnRegisteredHandler(
+        queryClient,
+        activeWalletId,
+        networkMode,
+        activeArkadeAccountId,
+      )
+      return withReadyArkadeWorker(() =>
+        getArkadeWorker().retryPendingBatchIntent(
+          pendingBatchIntentActionParams(intent),
+          proxy(onRegistered),
+        ),
+      )
+    },
+    onSuccess: async (result, intent) => {
+      toastBatchJoinResult(result, intent.kind)
+      if (
+        activeWalletId != null &&
+        activeArkadeAccountId != null &&
+        isArkadeSupportedNetworkMode(networkMode)
+      ) {
+        await invalidateArkadeWalletDataQueries(
+          queryClient,
+          activeWalletId,
+          networkMode,
+          activeArkadeAccountId,
+        )
+      }
+    },
+    onError: (err) => toast.error(errorMessage(err)),
   })
 }
 
 export function useArkadeRecoverRecoverableVtxosMutation() {
   const queryClient = useQueryClient()
-  const { networkMode, activeWalletId, activeArkadeConnectionId } =
+  const { networkMode, activeWalletId, activeArkadeAccountId } =
     useArkadeQueryBase()
 
   return useMutation({
     mutationFn: async () => {
       assertArkadeSessionUnlocked(activeWalletId)
-      return withReadyArkadeWorker(() => getArkadeWorker().recoverRecoverableVtxos())
+      const onRegistered = pendingBatchIntentOnRegisteredHandler(
+        queryClient,
+        activeWalletId,
+        networkMode,
+        activeArkadeAccountId,
+      )
+      return withReadyArkadeWorker(() =>
+        getArkadeWorker().recoverRecoverableVtxos(proxy(onRegistered)),
+      )
     },
-    onSuccess: async (txid) => {
-      if (txid) {
-        toast.success('Recoverable VTXOs settled')
-      } else {
-        toast.message('No recoverable VTXOs to settle right now')
-      }
+    onSuccess: async (result) => {
+      toastBatchJoinResult(
+        result,
+        'recover',
+        'No recoverable VTXOs to settle right now',
+      )
       if (
         activeWalletId != null &&
-        activeArkadeConnectionId != null &&
+        activeArkadeAccountId != null &&
         isArkadeSupportedNetworkMode(networkMode)
       ) {
         await invalidateArkadeWalletDataQueries(
           queryClient,
           activeWalletId,
           networkMode,
-          activeArkadeConnectionId,
+          activeArkadeAccountId,
         )
       }
     },
@@ -612,18 +852,18 @@ export function useArkadeSignerMigrationPartialResultQuery() {
   const migrationHint = useWalletStore(
     (walletState) => walletState.arkadeSignerMigrationHint,
   )
-  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+  const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
     useArkadeQueryBase()
 
   const queryKey = walletScopedQueryKey(
     activeWalletId,
     networkMode,
-    activeArkadeConnectionId,
-    (walletId, scopedNetworkMode, connectionId) =>
+    activeArkadeAccountId,
+    (walletId, scopedNetworkMode, arkadeAccountId) =>
       arkadeSignerMigrationPartialResultQueryKey(
         walletId,
         scopedNetworkMode,
-        connectionId,
+        arkadeAccountId,
         migrationHint?.previousSignerPkHex ?? '',
       ),
     'signer-migration-partial',
@@ -635,7 +875,7 @@ export function useArkadeSignerMigrationPartialResultQuery() {
       migrationHint != null &&
       sessionReady &&
       activeWalletId != null &&
-      activeArkadeConnectionId != null &&
+      activeArkadeAccountId != null &&
       isArkadeSupportedNetworkMode(networkMode),
     queryFn: async () =>
       queryClient.getQueryData<ArkadeSignerMigrationResult>(queryKey) ?? null,
@@ -646,21 +886,28 @@ export function useArkadeSignerMigrationPartialResultQuery() {
 
 export function useArkadeSignerMigrationMutation() {
   const queryClient = useQueryClient()
-  const { networkMode, activeWalletId, activeArkadeConnectionId } =
+  const { networkMode, activeWalletId, activeArkadeAccountId } =
     useArkadeQueryBase()
 
   return useMutation({
     mutationFn: async () => {
-      if (activeWalletId == null || activeArkadeConnectionId == null) {
+      if (activeWalletId == null || activeArkadeAccountId == null) {
         throw new Error('Arkade session is not ready')
       }
+      const onRegistered = pendingBatchIntentOnRegisteredHandler(
+        queryClient,
+        activeWalletId,
+        networkMode,
+        activeArkadeAccountId,
+      )
       const migrationResult = await orchestrateArkadeSyncThenSave({
         walletId: activeWalletId,
         networkMode,
-        connectionId: activeArkadeConnectionId,
+        arkadeAccountId: activeArkadeAccountId,
         syncKind: 'signerMigration',
         awaitCompletion: true,
         throwOnError: true,
+        onIntentRegistered: proxy(onRegistered),
       })
       if (migrationResult == null) {
         throw new Error('Signer migration did not return a result')
@@ -668,9 +915,15 @@ export function useArkadeSignerMigrationMutation() {
       return migrationResult
     },
     onSuccess: async (migrationResult) => {
+      if (migrationResult.settleTxids.length > 0) {
+        settleInFlightRegisteredIntents()
+        toast.success(pendingBatchIntentSucceededMessage('migrate'))
+      } else {
+        abandonInFlightRegisteredIntents()
+      }
       if (
         activeWalletId == null ||
-        activeArkadeConnectionId == null ||
+        activeArkadeAccountId == null ||
         !isArkadeSupportedNetworkMode(networkMode)
       ) {
         return
@@ -682,7 +935,7 @@ export function useArkadeSignerMigrationMutation() {
           ? arkadeSignerMigrationPartialResultQueryKey(
               activeWalletId,
               networkMode,
-              activeArkadeConnectionId,
+              activeArkadeAccountId,
               migrationHint.previousSignerPkHex,
             )
           : null
@@ -700,7 +953,7 @@ export function useArkadeSignerMigrationMutation() {
         queryClient,
         activeWalletId,
         networkMode,
-        activeArkadeConnectionId,
+        activeArkadeAccountId,
       )
     },
   })
@@ -708,24 +961,26 @@ export function useArkadeSignerMigrationMutation() {
 
 export function useArkadeOnboardMutation() {
   const queryClient = useQueryClient()
-  const { networkMode, activeWalletId, activeArkadeConnectionId } =
+  const { networkMode, activeWalletId, activeArkadeAccountId } =
     useArkadeQueryBase()
 
   return useMutation({
     mutationFn: async () => {
       assertArkadeSessionUnlocked(activeWalletId)
-      const txid = await withReadyArkadeWorkerAndOptionalDelegate(networkMode, () =>
-        getArkadeWorker().onboardBoardedUtxos(),
+      const onRegistered = pendingBatchIntentOnRegisteredHandler(
+        queryClient,
+        activeWalletId,
+        networkMode,
+        activeArkadeAccountId,
       )
-      if (!txid) {
-        throw new Error('Boarding settlement did not return a commitment transaction')
-      }
-      return txid
+      return withReadyArkadeWorkerAndOptionalDelegate(networkMode, () =>
+        getArkadeWorker().onboardBoardedUtxos(proxy(onRegistered)),
+      )
     },
     onMutate: async () => {
       if (
         activeWalletId == null ||
-        activeArkadeConnectionId == null ||
+        activeArkadeAccountId == null ||
         !isArkadeSupportedNetworkMode(networkMode)
       ) {
         return undefined
@@ -734,12 +989,12 @@ export function useArkadeOnboardMutation() {
       const boardingStatusKey = arkadeBoardingStatusQueryKey(
         activeWalletId,
         networkMode,
-        activeArkadeConnectionId,
+        activeArkadeAccountId,
       )
       const balanceKey = arkadeBalanceQueryKey(
         activeWalletId,
         networkMode,
-        activeArkadeConnectionId,
+        activeArkadeAccountId,
       )
       await queryClient.cancelQueries({ queryKey: boardingStatusKey })
       await queryClient.cancelQueries({ queryKey: balanceKey })
@@ -748,18 +1003,31 @@ export function useArkadeOnboardMutation() {
         queryClient,
         activeWalletId,
         networkMode,
-        activeArkadeConnectionId,
+        activeArkadeAccountId,
       )
     },
-    onSuccess: async (txid, _variables, context) => {
-      if (txid) {
-        toast.success('Boarding settlement submitted to operator')
+    onSuccess: async (result, _variables, context) => {
+      if (isBatchJoinWaiting(result)) {
+        if (context != null) {
+          revertOptimisticBoardingSettle(queryClient, context)
+        }
       }
+      toastBatchJoinResult(result, 'board')
       if (
         activeWalletId == null ||
-        activeArkadeConnectionId == null ||
+        activeArkadeAccountId == null ||
         !isArkadeSupportedNetworkMode(networkMode)
       ) {
+        return
+      }
+
+      if (isBatchJoinWaiting(result)) {
+        await invalidateArkadeWalletDataQueries(
+          queryClient,
+          activeWalletId,
+          networkMode,
+          activeArkadeAccountId,
+        )
         return
       }
 
@@ -767,12 +1035,12 @@ export function useArkadeOnboardMutation() {
       const boardingStatusKey = arkadeBoardingStatusQueryKey(
         activeWalletId,
         networkMode,
-        activeArkadeConnectionId,
+        activeArkadeAccountId,
       )
       const balanceKey = arkadeBalanceQueryKey(
         activeWalletId,
         networkMode,
-        activeArkadeConnectionId,
+        activeArkadeAccountId,
       )
 
       await queryClient.refetchQueries({ queryKey: balanceKey })
@@ -797,7 +1065,7 @@ export function useArkadeOnboardMutation() {
         queryClient,
         activeWalletId,
         networkMode,
-        activeArkadeConnectionId,
+        activeArkadeAccountId,
         { skipBalance: true, skipBoardingStatus: true },
       )
     },
@@ -811,14 +1079,14 @@ export function useArkadeOnboardMutation() {
 }
 
 export function useArkadeExitCandidatesQuery(enabled: boolean) {
-  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+  const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
     useArkadeQueryBase()
 
   return useQuery({
     queryKey: walletScopedQueryKey(
       activeWalletId,
       networkMode,
-      activeArkadeConnectionId,
+      activeArkadeAccountId,
       arkadeExitCandidatesQueryKey,
       'exit-candidates',
     ),
@@ -831,39 +1099,48 @@ export function useArkadeExitCandidatesQuery(enabled: boolean) {
   })
 }
 
-export function useArkadeBumperInfoQuery(enabled: boolean) {
-  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+export function useArkadeBumperInfoQuery(
+  enabled: boolean,
+  pollWhileUnderfunded = false,
+) {
+  const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
     useArkadeQueryBase()
 
   return useQuery({
     queryKey: walletScopedQueryKey(
       activeWalletId,
       networkMode,
-      activeArkadeConnectionId,
+      activeArkadeAccountId,
       arkadeBumperInfoQueryKey,
       'bumper',
     ),
     enabled: enabled && sessionReady,
     queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().getOnchainBumperInfo()),
     staleTime: ARKADE_SESSION_POLL_STALE_MS,
+    // Poll only while an active exit flow is waiting for a bumper top-up to confirm.
+    refetchInterval: pollWhileUnderfunded ? ARKADE_BUMPER_FUNDING_POLL_MS : false,
   })
 }
 
 export function useArkadeUnilateralExitsInProgressQuery(enabled: boolean) {
-  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+  const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
     useArkadeQueryBase()
 
   return useQuery({
     queryKey: walletScopedQueryKey(
       activeWalletId,
       networkMode,
-      activeArkadeConnectionId,
+      activeArkadeAccountId,
       arkadeUnilateralExitsInProgressQueryKey,
       'unilateral-exits-in-progress',
     ),
     enabled: enabled && sessionReady,
-    queryFn: () =>
-      withReadyArkadeWorker(() => getArkadeWorker().listUnilateralExitsInProgress()),
+    queryFn: async () => {
+      const rows = await withReadyArkadeWorker(() =>
+        getArkadeWorker().listUnilateralExitsInProgress(),
+      )
+      return sortArkadeVtxoOutpoints(rows)
+    },
     refetchInterval: enabled ? ARKADE_EXIT_CANDIDATES_POLL_MS : false,
     staleTime: ARKADE_SESSION_POLL_STALE_MS,
   })
@@ -875,7 +1152,7 @@ export function useArkadeUnilateralExitCompletionFeeQuery(params: {
   destinationAddress: string
   feeRateSatPerVb: number
 }) {
-  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+  const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
     useArkadeQueryBase()
   const destinationTrimmed = params.destinationAddress.trim()
   const sortedVtxoOutpoints = sortArkadeVtxoOutpoints(params.vtxoOutpoints)
@@ -890,12 +1167,12 @@ export function useArkadeUnilateralExitCompletionFeeQuery(params: {
   return useQuery({
     queryKey:
       activeWalletId != null &&
-      activeArkadeConnectionId != null &&
+      activeArkadeAccountId != null &&
       isArkadeSupportedNetworkMode(networkMode)
         ? arkadeUnilateralExitCompletionFeeQueryKey(
             activeWalletId,
             networkMode,
-            activeArkadeConnectionId,
+            activeArkadeAccountId,
             sortedVtxoOutpoints,
             destinationTrimmed,
             params.feeRateSatPerVb,
@@ -916,7 +1193,7 @@ export function useArkadeUnilateralExitCompletionFeeQuery(params: {
 
 export function useArkadeCollaborativeExitMutation() {
   const queryClient = useQueryClient()
-  const { networkMode, activeWalletId, activeArkadeConnectionId } =
+  const { networkMode, activeWalletId, activeArkadeAccountId } =
     useArkadeQueryBase()
 
   return useMutation({
@@ -925,12 +1202,20 @@ export function useArkadeCollaborativeExitMutation() {
       amountSats?: number
     }) => {
       assertArkadeSessionUnlocked(activeWalletId)
-      return withReadyArkadeWorker(() => getArkadeWorker().collaborativeExit(params))
+      const onRegistered = pendingBatchIntentOnRegisteredHandler(
+        queryClient,
+        activeWalletId,
+        networkMode,
+        activeArkadeAccountId,
+      )
+      return withReadyArkadeWorker(() =>
+        getArkadeWorker().collaborativeExit(params, proxy(onRegistered)),
+      )
     },
     onMutate: async (params) => {
       if (
         activeWalletId == null ||
-        activeArkadeConnectionId == null ||
+        activeArkadeAccountId == null ||
         !isArkadeSupportedNetworkMode(networkMode)
       ) {
         return undefined
@@ -938,7 +1223,7 @@ export function useArkadeCollaborativeExitMutation() {
       const balanceKey = arkadeBalanceQueryKey(
         activeWalletId,
         networkMode,
-        activeArkadeConnectionId,
+        activeArkadeAccountId,
       )
       const previousBalance = queryClient.getQueryData<ArkadeBalanceInfo>(balanceKey)
       const deductedSats =
@@ -949,19 +1234,19 @@ export function useArkadeCollaborativeExitMutation() {
         queryClient,
         activeWalletId,
         networkMode,
-        activeArkadeConnectionId,
+        activeArkadeAccountId,
         deductedSats,
         'collaborativeExitInProgressSats',
       )
     },
-    onSuccess: async (txid, _params, context) => {
-      toast.success(`Collaborative exit started (${formatArkadeTxidToastSnippet(txid)})`)
-      if (activeWalletId != null && activeArkadeConnectionId != null) {
+    onSuccess: async (result, _params, context) => {
+      toastBatchJoinResult(result, 'collaborative_exit')
+      if (activeWalletId != null && activeArkadeAccountId != null) {
         await invalidateArkadeWalletDataQueries(
           queryClient,
           activeWalletId,
           networkMode,
-          activeArkadeConnectionId,
+          activeArkadeAccountId,
         )
         await reconcileExitBalanceAfterMutation(queryClient, context)
       }
@@ -993,76 +1278,9 @@ async function reconcileExitBalanceAfterMutation(
   })
 }
 
-export function useArkadeUnilateralUnrollMutation() {
-  const queryClient = useQueryClient()
-  const { networkMode, activeWalletId, activeArkadeConnectionId } =
-    useArkadeQueryBase()
-
-  return useMutation({
-    mutationFn: async (params: {
-      txid: string
-      vout: number
-      amountSats: number
-      onProgress: (event: ArkadeUnrollProgressEvent) => void
-    }): Promise<ArkadeUnrollResult> => {
-      assertArkadeSessionUnlocked(activeWalletId)
-      await awaitArkadeLoadQuiescence()
-      return getArkadeWorker().runUnilateralUnroll(
-        { txid: params.txid, vout: params.vout },
-        proxy((event: ArkadeUnrollProgressEvent) => {
-          params.onProgress(event)
-          if (shouldShowUnilateralUnrollProgressToast(event)) {
-            toast.info(event.message, { id: unilateralUnrollProgressToastId(event) })
-          }
-        }),
-      )
-    },
-    onMutate: async (params) => {
-      if (
-        activeWalletId == null ||
-        activeArkadeConnectionId == null ||
-        !isArkadeSupportedNetworkMode(networkMode)
-      ) {
-        return undefined
-      }
-      // Unilateral: exit line only — post-unroll WASM excludes VTXO from spendable via exiting sub-bucket.
-      return applyOptimisticExitBalanceDeduction(
-        queryClient,
-        activeWalletId,
-        networkMode,
-        activeArkadeConnectionId,
-        params.amountSats,
-        'unilateralExitInProgressSats',
-      )
-    },
-    onSuccess: async (result, _params, context) => {
-      toast.dismiss(unilateralUnrollProgressToastId({ type: 'done', txid: result.vtxoTxid }))
-      toast.success(formatUnilateralUnrollSuccessMessage(result.vtxoTxid))
-      if (result.indexerWarning) {
-        toast.warning(result.indexerWarning, { id: 'arkade-unroll-indexer-warning' })
-      }
-      if (activeWalletId != null && activeArkadeConnectionId != null) {
-        await invalidateArkadeWalletDataQueries(
-          queryClient,
-          activeWalletId,
-          networkMode,
-          activeArkadeConnectionId,
-        )
-        await reconcileExitBalanceAfterMutation(queryClient, context)
-      }
-    },
-    onError: (err, _params, context) => {
-      if (context != null) {
-        revertOptimisticExitBalanceDeduction(queryClient, context)
-      }
-      toast.error(errorMessage(err))
-    },
-  })
-}
-
 export function useArkadeCompleteUnilateralExitMutation() {
   const queryClient = useQueryClient()
-  const { networkMode, activeWalletId, activeArkadeConnectionId } =
+  const { networkMode, activeWalletId, activeArkadeAccountId } =
     useArkadeQueryBase()
 
   return useMutation({
@@ -1076,38 +1294,35 @@ export function useArkadeCompleteUnilateralExitMutation() {
     },
     onSuccess: async (txid) => {
       toast.success(`Exit completed on-chain (${formatArkadeTxidToastSnippet(txid)})`)
-      if (activeWalletId != null && activeArkadeConnectionId != null) {
+      if (activeWalletId != null && activeArkadeAccountId != null) {
         await invalidateArkadeWalletDataQueries(
           queryClient,
           activeWalletId,
           networkMode,
-          activeArkadeConnectionId,
+          activeArkadeAccountId,
         )
       }
     },
     onError: (err) => {
-      if (isOperatorIndexerCatchingUpError(err)) {
-        return
-      }
       toast.error(errorMessage(err))
     },
   })
 }
 
 export function useArkadeRecoverableVtxoFeeQuery(params: { enabled: boolean }) {
-  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+  const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
     useArkadeQueryBase()
   const enabled = params.enabled && sessionReady
 
   return useQuery({
     queryKey:
       activeWalletId != null &&
-      activeArkadeConnectionId != null &&
+      activeArkadeAccountId != null &&
       isArkadeSupportedNetworkMode(networkMode)
         ? arkadeRecoverableVtxoFeeQueryKey(
             activeWalletId,
             networkMode,
-            activeArkadeConnectionId,
+            activeArkadeAccountId,
           )
         : arkadeDisabledQueryKey('recoverable-vtxo-fee'),
     enabled,
@@ -1122,7 +1337,7 @@ export function useArkadeCollaborativeExitFeeQuery(params: {
   destinationAddress: string
   amountSats?: number
 }) {
-  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+  const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
     useArkadeQueryBase()
   const destinationTrimmed = params.destinationAddress.trim()
   const enabled =
@@ -1131,12 +1346,12 @@ export function useArkadeCollaborativeExitFeeQuery(params: {
   return useQuery({
     queryKey:
       activeWalletId != null &&
-      activeArkadeConnectionId != null &&
+      activeArkadeAccountId != null &&
       isArkadeSupportedNetworkMode(networkMode)
         ? arkadeCollaborativeExitFeeQueryKey(
             activeWalletId,
             networkMode,
-            activeArkadeConnectionId,
+            activeArkadeAccountId,
             destinationTrimmed,
             params.amountSats,
           )
@@ -1153,58 +1368,15 @@ export function useArkadeCollaborativeExitFeeQuery(params: {
   })
 }
 
-export function useArkadeUnilateralExitFeeQuery(params: {
-  enabled: boolean
-  txid: string | undefined
-  vout: number | undefined
-}) {
-  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
-    useArkadeQueryBase()
-  const enabled =
-    params.enabled && sessionReady && params.txid != null && params.vout != null
-
-  return useQuery({
-    queryKey:
-      activeWalletId != null &&
-      activeArkadeConnectionId != null &&
-      isArkadeSupportedNetworkMode(networkMode) &&
-      params.txid != null &&
-      params.vout != null
-        ? arkadeUnilateralExitFeeQueryKey(
-            activeWalletId,
-            networkMode,
-            activeArkadeConnectionId,
-            params.txid,
-            params.vout,
-          )
-        : arkadeDisabledQueryKey('exit-fee-unilateral'),
-    enabled,
-    queryFn: async () => {
-      const { txid, vout } = params
-      if (txid == null || vout == null) {
-        throw new Error('VTXO outpoint is required')
-      }
-      return withReadyArkadeWorker(() =>
-        getArkadeWorker().estimateUnilateralExit({ txid, vout }),
-      )
-    },
-    // Re-estimate while the bumper is underfunded so the "Start unroll" gate clears automatically
-    // once an on-chain top-up confirms; stop polling once the bumper can cover the estimated fees.
-    refetchInterval: (query) =>
-      query.state.data?.bumperSufficient ? false : ARKADE_BUMPER_FUNDING_POLL_MS,
-    staleTime: ARKADE_FEE_ESTIMATE_STALE_MS,
-  })
-}
-
 export function useArkadeAutonomousModeStatusQuery() {
-  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+  const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
     useArkadeQueryBase()
 
   return useQuery({
     queryKey: walletScopedQueryKey(
       activeWalletId,
       networkMode,
-      activeArkadeConnectionId,
+      activeArkadeAccountId,
       arkadeAutonomousModeStatusQueryKey,
       'autonomous-mode',
     ),
@@ -1217,7 +1389,7 @@ export function useArkadeAutonomousModeStatusQuery() {
 
 export function useArkadeAutonomousModeMutation() {
   const queryClient = useQueryClient()
-  const { networkMode, activeWalletId, activeArkadeConnectionId } = useArkadeQueryBase()
+  const { networkMode, activeWalletId, activeArkadeAccountId } = useArkadeQueryBase()
 
   return useMutation({
     mutationFn: async (nextActive: boolean) => {
@@ -1232,27 +1404,27 @@ export function useArkadeAutonomousModeMutation() {
     onSuccess: async () => {
       if (
         activeWalletId != null &&
-        activeArkadeConnectionId != null &&
+        activeArkadeAccountId != null &&
         isArkadeSupportedNetworkMode(networkMode)
       ) {
         await queryClient.invalidateQueries({
           queryKey: arkadeAutonomousModeStatusQueryKey(
             activeWalletId,
             networkMode,
-            activeArkadeConnectionId,
+            activeArkadeAccountId,
           ),
         })
         await invalidateOperatorTrustQueries(
           queryClient,
           activeWalletId,
           networkMode,
-          activeArkadeConnectionId,
+          activeArkadeAccountId,
         )
         await queryClient.invalidateQueries({
           queryKey: arkadeExitCandidatesQueryKey(
             activeWalletId,
             networkMode,
-            activeArkadeConnectionId,
+            activeArkadeAccountId,
           ),
         })
       }
@@ -1273,25 +1445,25 @@ async function invalidateOperatorTrustQueries(
   queryClient: ReturnType<typeof useQueryClient>,
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,
-  connectionId: string,
+  arkadeAccountId: string,
 ): Promise<void> {
   await queryClient.invalidateQueries({
-    queryKey: arkadeOperatorTrustStatusQueryKey(walletId, networkMode, connectionId),
+    queryKey: arkadeOperatorTrustStatusQueryKey(walletId, networkMode, arkadeAccountId),
   })
   await queryClient.invalidateQueries({
-    queryKey: arkadeOperatorConfigDiffQueryKey(walletId, networkMode, connectionId),
+    queryKey: arkadeOperatorConfigDiffQueryKey(walletId, networkMode, arkadeAccountId),
   })
 }
 
 export function useOperatorTrustStatusQuery() {
-  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+  const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
     useArkadeQueryBase()
 
   return useQuery({
     queryKey: walletScopedQueryKey(
       activeWalletId,
       networkMode,
-      activeArkadeConnectionId,
+      activeArkadeAccountId,
       arkadeOperatorTrustStatusQueryKey,
       'operator-trust-status',
     ),
@@ -1303,14 +1475,14 @@ export function useOperatorTrustStatusQuery() {
 }
 
 export function useOperatorConfigDiffQuery(enabled: boolean) {
-  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+  const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
     useArkadeQueryBase()
 
   return useQuery({
     queryKey: walletScopedQueryKey(
       activeWalletId,
       networkMode,
-      activeArkadeConnectionId,
+      activeArkadeAccountId,
       arkadeOperatorConfigDiffQueryKey,
       'operator-config-diff',
     ),
@@ -1323,7 +1495,7 @@ export function useOperatorConfigDiffQuery(enabled: boolean) {
 
 export function useAcceptOperatorConfigMutation() {
   const queryClient = useQueryClient()
-  const { networkMode, activeWalletId, activeArkadeConnectionId } = useArkadeQueryBase()
+  const { networkMode, activeWalletId, activeArkadeAccountId } = useArkadeQueryBase()
 
   return useMutation({
     mutationFn: async () => {
@@ -1335,26 +1507,26 @@ export function useAcceptOperatorConfigMutation() {
         if (
           isOperatorTrustPendingDigestChangedError(error) &&
           activeWalletId != null &&
-          activeArkadeConnectionId != null &&
+          activeArkadeAccountId != null &&
           isArkadeSupportedNetworkMode(networkMode)
         ) {
-          await refreshArkadeStoreFromLoadedWasm(activeArkadeConnectionId)
+          await refreshArkadeStoreFromLoadedWasm(activeArkadeAccountId)
           await orchestrateArkadeSave({
             walletId: activeWalletId,
             networkMode,
-            connectionId: activeArkadeConnectionId,
+            arkadeAccountId: activeArkadeAccountId,
           })
           await invalidateOperatorTrustQueries(
             queryClient,
             activeWalletId,
             networkMode,
-            activeArkadeConnectionId,
+            activeArkadeAccountId,
           )
           await queryClient.invalidateQueries({
             queryKey: arkadeAutonomousModeStatusQueryKey(
               activeWalletId,
               networkMode,
-              activeArkadeConnectionId,
+              activeArkadeAccountId,
             ),
           })
         }
@@ -1362,38 +1534,38 @@ export function useAcceptOperatorConfigMutation() {
       }
       if (
         activeWalletId != null &&
-        activeArkadeConnectionId != null &&
+        activeArkadeAccountId != null &&
         isArkadeSupportedNetworkMode(networkMode)
       ) {
-        await refreshArkadeStoreFromLoadedWasm(activeArkadeConnectionId)
+        await refreshArkadeStoreFromLoadedWasm(activeArkadeAccountId)
         await orchestrateArkadeSave({
           walletId: activeWalletId,
           networkMode,
-          connectionId: activeArkadeConnectionId,
+          arkadeAccountId: activeArkadeAccountId,
         })
       }
     },
     onSuccess: async () => {
       if (
         activeWalletId != null &&
-        activeArkadeConnectionId != null &&
+        activeArkadeAccountId != null &&
         isArkadeSupportedNetworkMode(networkMode)
       ) {
         await invalidateOperatorTrustQueries(
           queryClient,
           activeWalletId,
           networkMode,
-          activeArkadeConnectionId,
+          activeArkadeAccountId,
         )
         await queryClient.invalidateQueries({
           queryKey: arkadeAutonomousModeStatusQueryKey(
             activeWalletId,
             networkMode,
-            activeArkadeConnectionId,
+            activeArkadeAccountId,
           ),
         })
         await queryClient.invalidateQueries({
-          queryKey: arkadeBalanceQueryKey(activeWalletId, networkMode, activeArkadeConnectionId),
+          queryKey: arkadeBalanceQueryKey(activeWalletId, networkMode, activeArkadeAccountId),
         })
       }
     },
@@ -1411,7 +1583,7 @@ export function useAcceptOperatorConfigMutation() {
 
 export function useReviewOperatorConfigInAutonomousMutation() {
   const queryClient = useQueryClient()
-  const { networkMode, activeWalletId, activeArkadeConnectionId } = useArkadeQueryBase()
+  const { networkMode, activeWalletId, activeArkadeAccountId } = useArkadeQueryBase()
 
   return useMutation({
     mutationFn: () =>
@@ -1421,20 +1593,20 @@ export function useReviewOperatorConfigInAutonomousMutation() {
     onSuccess: async () => {
       if (
         activeWalletId != null &&
-        activeArkadeConnectionId != null &&
+        activeArkadeAccountId != null &&
         isArkadeSupportedNetworkMode(networkMode)
       ) {
         await invalidateOperatorTrustQueries(
           queryClient,
           activeWalletId,
           networkMode,
-          activeArkadeConnectionId,
+          activeArkadeAccountId,
         )
         await queryClient.invalidateQueries({
           queryKey: arkadeAutonomousModeStatusQueryKey(
             activeWalletId,
             networkMode,
-            activeArkadeConnectionId,
+            activeArkadeAccountId,
           ),
         })
       }
@@ -1453,7 +1625,7 @@ export function useArkadeUnilateralExitTopologyQuery(params: {
   enabled: boolean
   vtxoOutpoints: ArkadeVtxoOutpoint[]
 }) {
-  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+  const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
     useArkadeQueryBase()
   const sortedOutpoints = sortArkadeVtxoOutpoints(params.vtxoOutpoints)
   const enabled = params.enabled && sessionReady
@@ -1461,12 +1633,12 @@ export function useArkadeUnilateralExitTopologyQuery(params: {
   return useQuery({
     queryKey:
       activeWalletId != null &&
-      activeArkadeConnectionId != null &&
+      activeArkadeAccountId != null &&
       isArkadeSupportedNetworkMode(networkMode)
         ? arkadeUnilateralExitTopologyQueryKey(
             activeWalletId,
             networkMode,
-            activeArkadeConnectionId,
+            activeArkadeAccountId,
             sortedOutpoints,
           )
         : arkadeDisabledQueryKey('unilateral-exit-topology'),
@@ -1487,7 +1659,7 @@ export function useArkadeUnilateralExitBatchEstimateQuery(params: {
   vtxoOutpoints: ArkadeVtxoOutpoint[]
   feeRateSatPerVb: number
 }) {
-  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+  const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
     useArkadeQueryBase()
   const sortedOutpoints = sortArkadeVtxoOutpoints(params.vtxoOutpoints)
   const enabled =
@@ -1496,12 +1668,12 @@ export function useArkadeUnilateralExitBatchEstimateQuery(params: {
   return useQuery({
     queryKey:
       activeWalletId != null &&
-      activeArkadeConnectionId != null &&
+      activeArkadeAccountId != null &&
       isArkadeSupportedNetworkMode(networkMode)
         ? arkadeUnilateralExitBatchEstimateQueryKey(
             activeWalletId,
             networkMode,
-            activeArkadeConnectionId,
+            activeArkadeAccountId,
             sortedOutpoints,
             params.feeRateSatPerVb,
           )
@@ -1523,22 +1695,33 @@ export function useArkadeUnilateralExitBatchEstimateQuery(params: {
 export function useArkadeUnilateralExitProgressQuery(params: {
   enabled: boolean
   vtxoOutpoints: ArkadeVtxoOutpoint[]
+  /** When true, the XState actor owns progress reads; this query is display cache only. */
+  unilateralExitJobActive?: boolean
 }) {
-  const { networkMode, activeWalletId, activeArkadeConnectionId, sessionReady } =
+  const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
     useArkadeQueryBase()
   const sortedOutpoints = sortArkadeVtxoOutpoints(params.vtxoOutpoints)
-  const enabled =
-    params.enabled && sessionReady && sortedOutpoints.length > 0
+  const unilateralExitJobActive = params.unilateralExitJobActive === true
+  const enabled = unilateralExitProgressQueryShouldFetch({
+    enabled: params.enabled && sessionReady && sortedOutpoints.length > 0,
+    unilateralExitJobActive,
+  })
+  const progressPollMs = isArkadeSupportedNetworkMode(networkMode)
+    ? unilateralExitProgressPollMs(networkMode)
+    : UNILATERAL_EXIT_PROGRESS_POLL_MS
+  const progressIdlePollMs = isArkadeSupportedNetworkMode(networkMode)
+    ? unilateralExitProgressIdlePollMs(networkMode)
+    : UNILATERAL_EXIT_PROGRESS_IDLE_POLL_MS
 
   return useQuery({
     queryKey:
       activeWalletId != null &&
-      activeArkadeConnectionId != null &&
+      activeArkadeAccountId != null &&
       isArkadeSupportedNetworkMode(networkMode)
         ? arkadeUnilateralExitProgressQueryKey(
             activeWalletId,
             networkMode,
-            activeArkadeConnectionId,
+            activeArkadeAccountId,
             sortedOutpoints,
           )
         : arkadeDisabledQueryKey('unilateral-exit-progress'),
@@ -1549,73 +1732,18 @@ export function useArkadeUnilateralExitProgressQuery(params: {
           vtxoOutpoints: sortedOutpoints,
         }),
       ),
-    refetchInterval: enabled ? 15_000 : false,
+    refetchInterval: (query) =>
+      unilateralExitProgressQueryRefetchInterval({
+        enabled,
+        unilateralExitJobActive,
+        branchComplete:
+          query.state.data != null && isUnilateralExitBranchComplete(query.state.data),
+        waitingForConfirmation: isUnilateralExitProgressWaitingForConfirmation(
+          query.state.data,
+        ),
+        progressPollMs,
+        progressIdlePollMs,
+      }),
     staleTime: 0,
-  })
-}
-
-export function useArkadeProceedUnilateralExitStepMutation() {
-  const queryClient = useQueryClient()
-  const { networkMode, activeWalletId, activeArkadeConnectionId } =
-    useArkadeQueryBase()
-
-  return useMutation({
-    mutationFn: async (params: {
-      vtxoOutpoints: ArkadeVtxoOutpoint[]
-      feeRateSatPerVb: number
-      amountSats: number
-    }) => {
-      return proceedUnilateralExitStepWithGuards({
-        activeWalletId,
-        vtxoOutpoints: params.vtxoOutpoints,
-        feeRateSatPerVb: params.feeRateSatPerVb,
-      })
-    },
-    onMutate: async (params) => {
-      if (
-        activeWalletId == null ||
-        activeArkadeConnectionId == null ||
-        !isArkadeSupportedNetworkMode(networkMode)
-      ) {
-        return undefined
-      }
-      return applyOptimisticExitBalanceDeduction(
-        queryClient,
-        activeWalletId,
-        networkMode,
-        activeArkadeConnectionId,
-        params.amountSats,
-        'unilateralExitInProgressSats',
-      )
-    },
-    onError: (_error, _params, context) => {
-      if (context != null) {
-        revertOptimisticExitBalanceDeduction(queryClient, context)
-      }
-    },
-    onSuccess: async (_result, params, context) => {
-      await reconcileExitBalanceAfterMutation(queryClient, context)
-      if (
-        activeWalletId != null &&
-        activeArkadeConnectionId != null &&
-        isArkadeSupportedNetworkMode(networkMode)
-      ) {
-        await queryClient.invalidateQueries({
-          queryKey: arkadeUnilateralExitProgressQueryKey(
-            activeWalletId,
-            networkMode,
-            activeArkadeConnectionId,
-            sortArkadeVtxoOutpoints(params.vtxoOutpoints),
-          ),
-        })
-        await queryClient.invalidateQueries({
-          queryKey: arkadeBalanceQueryKey(
-            activeWalletId,
-            networkMode,
-            activeArkadeConnectionId,
-          ),
-        })
-      }
-    },
   })
 }

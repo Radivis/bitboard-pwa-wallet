@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   computeExitPathTxids,
   hostOutpointsForTxid,
@@ -17,15 +17,61 @@ const sampleTopology: ArkadeUnilateralExitTopology = {
     { txid: 'cc', txType: 'ark', spends: ['bb'] },
   ],
   leafOutpoints: [{ txid: 'cc', vout: 0 }],
-  hostOutpoints: [{ txid: 'cc', vout: 0, amountSats: 25_000 }],
+  hostOutpoints: [{ txid: 'cc', vout: 0, amountSats: 25_000, isUnrolled: false }],
   exitBranchTxids: ['bb', 'cc'],
   commitmentTxids: ['aa'],
+}
+
+const mergedCheckpointParentsTopology: ArkadeUnilateralExitTopology = {
+  nodes: [
+    { txid: 'commitment', txType: 'commitment', spends: [] },
+    { txid: 'tree_left', txType: 'tree', spends: ['commitment'] },
+    { txid: 'tree_right', txType: 'tree', spends: ['commitment'] },
+    { txid: 'left_cp', txType: 'checkpoint', spends: ['tree_left'] },
+    { txid: 'right_cp', txType: 'checkpoint', spends: ['tree_right'] },
+    { txid: 'ark', txType: 'ark', spends: ['left_cp', 'right_cp'] },
+  ],
+  leafOutpoints: [{ txid: 'ark', vout: 0 }],
+  hostOutpoints: [{ txid: 'ark', vout: 0, amountSats: 25_000, isUnrolled: false }],
+  exitBranchTxids: ['tree_left', 'left_cp', 'tree_right', 'right_cp', 'ark'],
+  commitmentTxids: ['commitment'],
 }
 
 describe('unilateral-exit-topology helpers', () => {
   it('computeExitPathTxids walks spends from selected leaves', () => {
     const path = computeExitPathTxids(sampleTopology, [{ txid: 'cc', vout: 0 }])
-    expect([...path]).toEqual(['cc', 'bb', 'aa'])
+    expect([...path].sort()).toEqual(['aa', 'bb', 'cc'])
+  })
+
+  it('computeExitPathTxids includes all checkpoint parents when ark merges two branches', () => {
+    const path = computeExitPathTxids(mergedCheckpointParentsTopology, [{ txid: 'ark', vout: 0 }])
+    expect([...path].sort()).toEqual([
+      'ark',
+      'commitment',
+      'left_cp',
+      'right_cp',
+      'tree_left',
+      'tree_right',
+    ])
+  })
+
+  it('layoutUnilateralExitGraph highlights both checkpoint parents into merged ark', () => {
+    const { nodes, edgePaths } = layoutUnilateralExitGraph({
+      topology: mergedCheckpointParentsTopology,
+      selectedLeafOutpoints: [{ txid: 'ark', vout: 0 }],
+      nodeStatuses: [],
+      inProgressOverlay: null,
+      layoutDirection: 'TB',
+    })
+
+    expect(nodes.find((node) => node.id === 'left_cp')?.data.isOnExitPath).toBe(true)
+    expect(nodes.find((node) => node.id === 'right_cp')?.data.isOnExitPath).toBe(true)
+    expect(nodes.find((node) => node.id === 'ark')?.data.isOnExitPath).toBe(true)
+
+    const leftCpToArk = edgePaths.find((edgePath) => edgePath.id === 'left_cp->ark')
+    const rightCpToArk = edgePaths.find((edgePath) => edgePath.id === 'right_cp->ark')
+    expect(leftCpToArk?.animated).toBe(true)
+    expect(rightCpToArk?.animated).toBe(true)
   })
 
   it('mergeNodeStatuses fills missing nodes as pending', () => {
@@ -45,13 +91,13 @@ describe('unilateral-exit-topology helpers', () => {
     const topology: ArkadeUnilateralExitTopology = {
       ...sampleTopology,
       hostOutpoints: [
-        { txid: 'cc', vout: 1, amountSats: 100_000 },
-        { txid: 'cc', vout: 0, amountSats: 25_000 },
+        { txid: 'cc', vout: 1, amountSats: 100_000, isUnrolled: false },
+        { txid: 'cc', vout: 0, amountSats: 25_000, isUnrolled: false },
       ],
     }
     expect(hostOutpointsForTxid(topology, 'cc')).toEqual([
-      { txid: 'cc', vout: 0, amountSats: 25_000 },
-      { txid: 'cc', vout: 1, amountSats: 100_000 },
+      { txid: 'cc', vout: 0, amountSats: 25_000, isUnrolled: false },
+      { txid: 'cc', vout: 1, amountSats: 100_000, isUnrolled: false },
     ])
   })
 
@@ -74,11 +120,13 @@ describe('unilateral-exit-topology helpers', () => {
       topology: sampleTopology,
       selectedLeafOutpoints: [],
       nodeStatuses: [],
+      inProgressOverlay: null,
       layoutDirection: 'TB',
     })
 
     expect(nodes).toHaveLength(3)
     expect(nodes.find((node) => node.id === 'cc')?.data.exitableVtxoCount).toBe(1)
+    expect(nodes.find((node) => node.id === 'cc')?.data.hostsUnrolled).toBe(false)
     expect(nodes.find((node) => node.id === 'aa')?.data.exitableVtxoCount).toBe(0)
     expect(nodes.find((node) => node.id === 'bb')?.data.exitableVtxoCount).toBe(0)
     expect(edgePaths).toHaveLength(2)
@@ -98,6 +146,7 @@ describe('unilateral-exit-topology helpers', () => {
       topology,
       selectedLeafOutpoints: [],
       nodeStatuses: [],
+      inProgressOverlay: null,
       layoutDirection: 'TB',
     })
 
@@ -112,14 +161,15 @@ describe('unilateral-exit-topology helpers', () => {
         { txid: 'cc', vout: 0 },
       ],
       hostOutpoints: [
-        { txid: 'cc', vout: 0, amountSats: 25_000 },
-        { txid: 'cc', vout: 1, amountSats: 100_000 },
+        { txid: 'cc', vout: 0, amountSats: 25_000, isUnrolled: false },
+        { txid: 'cc', vout: 1, amountSats: 100_000, isUnrolled: false },
       ],
     }
     const { nodes, edgePaths } = layoutUnilateralExitGraph({
       topology,
       selectedLeafOutpoints: [{ txid: 'cc', vout: 0 }, { txid: 'cc', vout: 1 }],
       nodeStatuses: [],
+      inProgressOverlay: null,
       layoutDirection: 'TB',
     })
 
@@ -144,9 +194,9 @@ describe('unilateral-exit-topology helpers', () => {
         { txid: 'leaf', vout: 1 },
       ],
       hostOutpoints: [
-        { txid: 'mid', vout: 0, amountSats: 125_000 },
-        { txid: 'leaf', vout: 0, amountSats: 25_000 },
-        { txid: 'leaf', vout: 1, amountSats: 10_000 },
+        { txid: 'mid', vout: 0, amountSats: 125_000, isUnrolled: false },
+        { txid: 'leaf', vout: 0, amountSats: 25_000, isUnrolled: false },
+        { txid: 'leaf', vout: 1, amountSats: 10_000, isUnrolled: false },
       ],
       exitBranchTxids: ['bb', 'mid', 'cp', 'leaf'],
       commitmentTxids: ['aa'],
@@ -156,6 +206,7 @@ describe('unilateral-exit-topology helpers', () => {
       topology,
       selectedLeafOutpoints: [],
       nodeStatuses: [],
+      inProgressOverlay: null,
       layoutDirection: 'TB',
     })
 
@@ -166,10 +217,87 @@ describe('unilateral-exit-topology helpers', () => {
     expect(nodes.find((node) => node.id === 'leaf')?.data.exitableVtxoCount).toBe(2)
   })
 
-  it('resolveUnilateralExitTopologyOutpoints prefers selection, then in-progress, then job', () => {
+  it('layoutUnilateralExitGraph marks unrolled host VTXOs with hostsUnrolled', () => {
+    const topology: ArkadeUnilateralExitTopology = {
+      ...sampleTopology,
+      hostOutpoints: [
+        { txid: 'cc', vout: 0, amountSats: 25_000, isUnrolled: true },
+        { txid: 'cc', vout: 1, amountSats: 10_000, isUnrolled: true },
+      ],
+    }
+    const { nodes } = layoutUnilateralExitGraph({
+      topology,
+      selectedLeafOutpoints: [],
+      nodeStatuses: [],
+      inProgressOverlay: null,
+      layoutDirection: 'TB',
+    })
+
+    expect(nodes.find((node) => node.id === 'cc')?.data.exitableVtxoCount).toBe(2)
+    expect(nodes.find((node) => node.id === 'cc')?.data.hostsUnrolled).toBe(true)
+    expect(nodes.find((node) => node.id === 'bb')?.data.hostsUnrolled).toBe(false)
+  })
+
+  it('layoutUnilateralExitGraph attaches overlay only to in-progress nodes', () => {
+    const { nodes } = layoutUnilateralExitGraph({
+      topology: sampleTopology,
+      selectedLeafOutpoints: [{ txid: 'cc', vout: 0 }],
+      nodeStatuses: [{ txid: 'bb', confirmations: 0, status: 'inProgress' }],
+      inProgressOverlay: 'waiting',
+      layoutDirection: 'TB',
+    })
+
+    expect(nodes.find((node) => node.id === 'bb')?.data.inProgressOverlay).toBe('waiting')
+    expect(nodes.find((node) => node.id === 'bb')?.data.proceedingAutomatically).toBe(false)
+    expect(nodes.find((node) => node.id === 'cc')?.data.inProgressOverlay).toBeNull()
+  })
+
+  it('layoutUnilateralExitGraph marks proceedingAutomatically only on the in-progress overlay node', () => {
+    const { nodes } = layoutUnilateralExitGraph({
+      topology: sampleTopology,
+      selectedLeafOutpoints: [{ txid: 'cc', vout: 0 }],
+      nodeStatuses: [{ txid: 'bb', confirmations: 0, status: 'inProgress' }],
+      inProgressOverlay: 'ensuringBroadcast',
+      proceedingAutomatically: true,
+      layoutDirection: 'TB',
+    })
+
+    expect(nodes.find((node) => node.id === 'bb')?.data.proceedingAutomatically).toBe(true)
+    expect(nodes.find((node) => node.id === 'cc')?.data.proceedingAutomatically).toBe(false)
+  })
+
+  it('layoutUnilateralExitGraph attaches readyToProceed handler only on the in-progress node', () => {
+    const onReadyToProceed = vi.fn()
+    const { nodes } = layoutUnilateralExitGraph({
+      topology: sampleTopology,
+      selectedLeafOutpoints: [{ txid: 'cc', vout: 0 }],
+      nodeStatuses: [{ txid: 'bb', confirmations: 0, status: 'inProgress' }],
+      inProgressOverlay: 'readyToProceed',
+      layoutDirection: 'TB',
+      onReadyToProceed,
+      readyToProceedDisabled: false,
+    })
+
+    expect(nodes.find((node) => node.id === 'bb')?.data.inProgressOverlay).toBe('readyToProceed')
+    expect(nodes.find((node) => node.id === 'bb')?.data.onReadyToProceed).toBe(onReadyToProceed)
+    expect(nodes.find((node) => node.id === 'bb')?.data.readyToProceedDisabled).toBe(false)
+    expect(nodes.find((node) => node.id === 'cc')?.data.onReadyToProceed).toBeUndefined()
+  })
+
+  it('resolveUnilateralExitTopologyOutpoints prefers authoritative job over in-progress inference', () => {
     const selected = [{ txid: 'aa'.repeat(32), vout: 0 }]
     const inProgress = [{ txid: 'bb'.repeat(32), vout: 1 }]
     const persisted = [{ txid: 'cc'.repeat(32), vout: 2 }]
+    const authoritative = [{ txid: 'dd'.repeat(32), vout: 3 }]
+
+    expect(
+      resolveUnilateralExitTopologyOutpoints({
+        authoritativeJobOutpoints: authoritative,
+        selectedLeafOutpoints: selected,
+        inProgressOutpoints: inProgress,
+        persistedJobOutpoints: persisted,
+      }),
+    ).toEqual(authoritative)
 
     expect(
       resolveUnilateralExitTopologyOutpoints({
@@ -185,24 +313,14 @@ describe('unilateral-exit-topology helpers', () => {
         inProgressOutpoints: inProgress,
         persistedJobOutpoints: persisted,
       }),
-    ).toEqual(inProgress)
-
-    expect(
-      resolveUnilateralExitTopologyOutpoints({
-        selectedLeafOutpoints: [],
-        inProgressOutpoints: [],
-        persistedJobOutpoints: persisted,
-      }),
-    ).toEqual([])
-
-    expect(
-      resolveUnilateralExitTopologyOutpoints({
-        selectedLeafOutpoints: [],
-        inProgressOutpoints: [],
-        persistedJobOutpoints: persisted,
-        persistedJobStarted: true,
-      }),
     ).toEqual(persisted)
+
+    expect(
+      resolveUnilateralExitTopologyOutpoints({
+        selectedLeafOutpoints: [],
+        inProgressOutpoints: inProgress,
+      }),
+    ).toEqual(inProgress)
 
     expect(
       resolveUnilateralExitTopologyOutpoints({

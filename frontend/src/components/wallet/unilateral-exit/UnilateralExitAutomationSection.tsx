@@ -3,7 +3,7 @@ import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
 import type { SendFeePresetLabel } from '@/lib/esplora/esplora-fee-estimates'
-import type { UnilateralExitAutomationPausedReason } from '@/stores/unilateralExitAutomationStore'
+import type { UnilateralExitAutomationPausedReason } from '@/lib/wallet/lifecycle/unilateral-exit-automation-types'
 
 const PAUSED_REASON_LABELS: Record<UnilateralExitAutomationPausedReason, string> = {
   feeCapExceeded: 'Automatic proceeding paused: live fee rate exceeds your maximum.',

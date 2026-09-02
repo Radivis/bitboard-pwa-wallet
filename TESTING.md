@@ -41,7 +41,7 @@ Arkade wallet session (`ArkSession`), persistence, signer migration, exits. Most
 | File | Focus |
 |------|--------|
 | `tests/signer_migration_session_regtest.rs` | Signer rotation + cooperative migration (happy + error paths) |
-| `tests/unilateral_exit_session_regtest.rs` | Unilateral unroll / complete on regtest |
+| `tests/autonomous_unilateral_exit_session_regtest.rs` | Autonomous proceed-step unroll + complete without operator sync |
 | `tests/pending_recovery_due_to_expired_signer_balance_regression.rs` | Signer-aware balance classification (unit-style, no Docker) |
 | `tests/ark_rest_query_encoding_regression.rs` | REST query encoding |
 
@@ -124,6 +124,8 @@ Runs the full E2E suite in the background and sends a desktop notification on su
 Local stack for `@regtest` and `@arkade-regtest` flows. Detailed ports, expiry profiles, and troubleshooting:
 
 **[frontend/tests/e2e/fixtures/arkade-regtest/README.md](frontend/tests/e2e/fixtures/arkade-regtest/README.md)**
+
+**Esplora quirks on regtest** (virtual-tree JSON, relay vs confirmation, unilateral-exit pitfalls): **[docs/arkade-regtest-esplora-quirks.md](docs/arkade-regtest-esplora-quirks.md)** — required reading before changing `esplora_blockchain.rs` or unilateral-exit step progress.
 
 ```bash
 # From repo root

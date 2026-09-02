@@ -1,65 +1,116 @@
 import { describe, expect, it } from 'vitest'
 import {
-  isPersistedUnilateralExitJobStale,
+  shouldDeferPersistedUnilateralExitHydrate,
   shouldHydratePersistedUnilateralExitJob,
+  shouldLockUnilateralExitLeafSelection,
+  canSelectUnilateralExitLeafForUnroll,
 } from '@/lib/arkade/unilateral-exit-job-reconcile'
 
 const leafA = { txid: 'aa'.repeat(32), vout: 0 }
-const leafB = { txid: 'bb'.repeat(32), vout: 1 }
 
 describe('unilateral-exit-job-reconcile', () => {
-  it('treats persisted job as stale when nothing is in progress', () => {
+  it('hydrates when persisted outpoints exist and the job is not stale', () => {
     expect(
-      isPersistedUnilateralExitJobStale({
-        jobStarted: true,
+      shouldHydratePersistedUnilateralExitJob({
         selectedLeafOutpoints: [leafA],
-        inProgressOutpoints: [],
-        unilateralExitInProgressSats: 0,
+        controlStoreSelectionEmpty: true,
       }),
     ).toBe(true)
   })
 
-  it('keeps persisted job when selection overlaps in-progress outpoints', () => {
+  it('shouldHydratePersistedUnilateralExitJob is true for a pre-broadcast job', () => {
     expect(
-      isPersistedUnilateralExitJobStale({
-        jobStarted: true,
+      shouldHydratePersistedUnilateralExitJob({
         selectedLeafOutpoints: [leafA],
-        inProgressOutpoints: [leafA],
-        unilateralExitInProgressSats: 50_000,
+        controlStoreSelectionEmpty: true,
+      }),
+    ).toBe(true)
+  })
+
+  it('does not hydrate when persisted outpoints are empty', () => {
+    expect(
+      shouldHydratePersistedUnilateralExitJob({
+        selectedLeafOutpoints: [],
+        controlStoreSelectionEmpty: true,
+      }),
+    ).toBe(false)
+  })
+
+  it('does not treat leftover WASM in-progress as control-store crash recovery', () => {
+    expect(
+      shouldHydratePersistedUnilateralExitJob({
+        selectedLeafOutpoints: [],
+        controlStoreSelectionEmpty: true,
+      }),
+    ).toBe(false)
+  })
+
+  it('locks leaf selection only while a frontend job exists', () => {
+    expect(
+      shouldLockUnilateralExitLeafSelection({
+        lifecycleJobActive: false,
+        persistedJobExists: false,
+      }),
+    ).toBe(false)
+    expect(
+      shouldLockUnilateralExitLeafSelection({
+        lifecycleJobActive: true,
+        persistedJobExists: false,
+      }),
+    ).toBe(true)
+    expect(
+      shouldLockUnilateralExitLeafSelection({
+        lifecycleJobActive: false,
+        persistedJobExists: true,
+      }),
+    ).toBe(true)
+  })
+
+  it('does not allow selecting already-unrolled leaves for a new unroll', () => {
+    expect(
+      canSelectUnilateralExitLeafForUnroll({
+        leafOutpoints: [leafA],
+        startableOutpoints: [],
+        selectionLocked: false,
+      }),
+    ).toBe(false)
+    expect(
+      canSelectUnilateralExitLeafForUnroll({
+        leafOutpoints: [leafA],
+        startableOutpoints: [leafA],
+        selectionLocked: false,
+      }),
+    ).toBe(true)
+    expect(
+      canSelectUnilateralExitLeafForUnroll({
+        leafOutpoints: [leafA],
+        startableOutpoints: [leafA],
+        selectionLocked: true,
       }),
     ).toBe(false)
   })
 
-  it('treats persisted job as stale when in-progress outpoints do not match selection', () => {
+  it('defers hydrate while arkade sync is still running', () => {
     expect(
-      isPersistedUnilateralExitJobStale({
-        jobStarted: true,
+      shouldDeferPersistedUnilateralExitHydrate({
         selectedLeafOutpoints: [leafA],
-        inProgressOutpoints: [leafB],
-        unilateralExitInProgressSats: 50_000,
+        inProgressOutpoints: [],
+        unilateralExitInProgressSats: 0,
+        arkadeLoadPhase: 'loaded',
+        arkadeSyncPhase: 'syncing',
       }),
     ).toBe(true)
   })
 
-  it('hydrates only when job is active and overlaps in-progress selection', () => {
+  it('defers hydrate when in-progress sats exist before outpoints load', () => {
     expect(
-      shouldHydratePersistedUnilateralExitJob({
-        jobStarted: true,
-        selectedLeafOutpoints: [leafA],
-        inProgressOutpoints: [leafA],
-        unilateralExitInProgressSats: 50_000,
-        controlStoreSelectionEmpty: true,
-      }),
-    ).toBe(true)
-
-    expect(
-      shouldHydratePersistedUnilateralExitJob({
-        jobStarted: true,
+      shouldDeferPersistedUnilateralExitHydrate({
         selectedLeafOutpoints: [leafA],
         inProgressOutpoints: [],
-        unilateralExitInProgressSats: 0,
-        controlStoreSelectionEmpty: true,
+        unilateralExitInProgressSats: 300_000,
+        arkadeLoadPhase: 'loaded',
+        arkadeSyncPhase: 'not-syncing',
       }),
-    ).toBe(false)
+    ).toBe(true)
   })
 })

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const syncWithOperator = vi.fn()
 const migrateDeprecatedSignerVtxos = vi.fn()
+const getAutonomousModeStatus = vi.fn()
 const refreshArkadeStoreFromLoadedWasm = vi.fn()
 const orchestrateArkadeSave = vi.fn()
 const loadPhaseRef = vi.hoisted(() => ({ phase: 'loaded' as string }))
@@ -10,6 +11,12 @@ vi.mock('@/workers/arkade-factory', () => ({
   getArkadeWorker: () => ({
     syncWithOperator,
     migrateDeprecatedSignerVtxos,
+    getAutonomousModeStatus,
+    setUnilateralExitJob: vi.fn(async () => {}),
+    setUnilateralExitAutomationPrefs: vi.fn(async () => {}),
+    setUnilateralExitFailure: vi.fn(async () => {}),
+    setUnilateralExitFrontendPersistence: vi.fn(async () => {}),
+    getUnilateralExitFrontendPersistence: vi.fn(async () => null),
   }),
 }))
 
@@ -51,8 +58,15 @@ import {
   getArkadeSyncLifecycleSnapshot,
   orchestrateArkadeSyncThenSave,
   resetArkadeSyncLifecycleStateForTests,
+  scheduleBackgroundArkadeOperatorSync,
 } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
+import { ARKADE_BACKGROUND_OPERATOR_SYNC_MIN_INTERVAL_MS } from '@/lib/arkade/arkade-sync-timings'
+import { useWalletStore } from '@/stores/walletStore'
 import type { ArkadeSignerMigrationResult } from '@/workers/arkade-api'
+import {
+  persistActiveUnilateralExitJob,
+  useUnilateralExitLifecyclePersistenceStore,
+} from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence'
 
 function completeMigrationResult(): ArkadeSignerMigrationResult {
   return {
@@ -85,12 +99,13 @@ function completeMigrationResult(): ArkadeSignerMigrationResult {
 const syncParams = {
   walletId: 1,
   networkMode: 'signet' as const,
-  connectionId: 'conn-1',
+  arkadeAccountId: 'conn-1',
   syncKind: 'manual' as const,
 }
 
 describe('arkade-sync-lifecycle-orchestrator', () => {
   beforeEach(() => {
+    vi.useRealTimers()
     resetArkadeSyncLifecycleStateForTests()
     vi.clearAllMocks()
     loadPhaseRef.phase = 'loaded'
@@ -101,8 +116,10 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     configureArkadeSyncForLoadedRail({
       walletId: 1,
       networkMode: 'signet',
-      connectionId: 'conn-1',
+      arkadeAccountId: 'conn-1',
     })
+    getAutonomousModeStatus.mockResolvedValue({ active: false })
+    useUnilateralExitLifecyclePersistenceStore.setState({ jobsByKey: {} })
   })
 
   it('sync rejected while loadPhase loading', async () => {
@@ -157,6 +174,85 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     expect(syncWithOperator).toHaveBeenCalledTimes(1)
   })
 
+  it('does not retrigger dashboard poll every debounce while a sync is in flight', async () => {
+    vi.useFakeTimers()
+    try {
+      useWalletStore.setState({
+        activeWalletId: 1,
+        activeArkadeAccountId: 'conn-1',
+        networkMode: 'signet',
+      })
+
+      let resolveSync!: () => void
+      const syncGate = new Promise<void>((resolve) => {
+        resolveSync = resolve
+      })
+      syncWithOperator.mockImplementation(async () => {
+        await syncGate
+        return {}
+      })
+
+      scheduleBackgroundArkadeOperatorSync()
+      await vi.advanceTimersByTimeAsync(400)
+      await vi.waitFor(() => expect(syncWithOperator).toHaveBeenCalledTimes(1))
+
+      for (let i = 0; i < 20; i += 1) {
+        scheduleBackgroundArkadeOperatorSync()
+        await vi.advanceTimersByTimeAsync(400)
+      }
+      expect(syncWithOperator).toHaveBeenCalledTimes(1)
+
+      resolveSync!()
+      await vi.advanceTimersByTimeAsync(0)
+      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(ARKADE_BACKGROUND_OPERATOR_SYNC_MIN_INTERVAL_MS)
+      await vi.waitFor(() => expect(syncWithOperator).toHaveBeenCalledTimes(2))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('skips dashboard poll while autonomous mode is active', async () => {
+    vi.useFakeTimers()
+    try {
+      useWalletStore.setState({
+        activeWalletId: 1,
+        activeArkadeAccountId: 'conn-1',
+        networkMode: 'signet',
+      })
+      getAutonomousModeStatus.mockResolvedValue({ active: true })
+
+      scheduleBackgroundArkadeOperatorSync()
+      await vi.advanceTimersByTimeAsync(400)
+      await Promise.resolve()
+      expect(syncWithOperator).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not skip dashboard poll for an active unilateral-exit job while autonomous mode is off', async () => {
+    vi.useFakeTimers()
+    try {
+      useWalletStore.setState({
+        activeWalletId: 1,
+        activeArkadeAccountId: 'conn-1',
+        networkMode: 'signet',
+      })
+      getAutonomousModeStatus.mockResolvedValue({ active: false })
+      persistActiveUnilateralExitJob(
+        { walletId: 1, networkMode: 'signet', arkadeAccountId: 'conn-1' },
+        [{ txid: 'aa'.repeat(32), vout: 0 }],
+      )
+
+      scheduleBackgroundArkadeOperatorSync()
+      await vi.advanceTimersByTimeAsync(400)
+      await vi.waitFor(() => expect(syncWithOperator).toHaveBeenCalledTimes(1))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('awaitArkadeSyncQuiescence propagates sync errors', async () => {
     let rejectSync!: (error: Error) => void
     syncWithOperator.mockImplementationOnce(
@@ -180,7 +276,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
       railScope: {
         walletId: 1,
         networkMode: 'signet',
-        connectionId: 'conn-1',
+        arkadeAccountId: 'conn-1',
       },
       errorMessage: 'operator down',
       warningMessage: null,
@@ -200,7 +296,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
       railScope: {
         walletId: 1,
         networkMode: 'signet',
-        connectionId: 'conn-1',
+        arkadeAccountId: 'conn-1',
       },
       errorMessage: null,
       warningMessage:
@@ -323,7 +419,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
       railScope: {
         walletId: 1,
         networkMode: 'signet',
-        connectionId: 'conn-1',
+        arkadeAccountId: 'conn-1',
       },
       errorMessage: 'operator vtxos down',
       warningMessage: null,

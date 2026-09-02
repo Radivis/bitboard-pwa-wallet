@@ -141,4 +141,29 @@ describe('CollaborativeExitDialog', () => {
       screen.getByText('Enter a whole number of satoshis, or leave empty for full balance.'),
     ).toBeInTheDocument()
   })
+
+  it('shows submit-phase spinner on Confirm exit', () => {
+    renderWithProviders(
+      <CollaborativeExitDialog
+        exitFlow={buildExitFlow({
+          collaborativeExitSubmitPhase: true,
+          collaborativeExitMutation: { mutate: vi.fn(), isPending: true },
+        })}
+      />,
+    )
+    expect(screen.getByRole('button', { name: 'Exiting…' })).toBeInTheDocument()
+  })
+
+  it('closes when processing starts', () => {
+    const setCollaborativeOpen = vi.fn()
+    renderWithProviders(
+      <CollaborativeExitDialog
+        exitFlow={buildExitFlow({
+          setCollaborativeOpen,
+          hasProcessingCollaborativeExit: true,
+        })}
+      />,
+    )
+    expect(setCollaborativeOpen).toHaveBeenCalledWith(false)
+  })
 })

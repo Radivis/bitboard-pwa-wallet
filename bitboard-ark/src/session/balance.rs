@@ -34,6 +34,7 @@ impl ArkSession {
             collaborative_exit_in_progress_sats,
             pending_recovery_due_to_expired_signer_sats: offchain_buckets
                 .pending_recovery_due_to_expired_signer_sats,
+            pending_batch_intents: boarding.pending_batch_intents.clone(),
         }))
     }
 }

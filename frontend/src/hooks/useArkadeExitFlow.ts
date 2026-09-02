@@ -7,15 +7,23 @@ import {
   useArkadeCompleteUnilateralExitMutation,
   useArkadeUnilateralExitCompletionFeeQuery,
   useArkadeUnilateralExitsInProgressQuery,
+  useHasPendingBatchIntent,
+  useHasPendingBatchIntentKind,
+  usePendingBatchIntents,
 } from '@/hooks/useArkadeQueries'
 import { useOnchainFeeRateSelection } from '@/hooks/useOnchainFeeRateSelection'
 import { parseCollaborativeExitAmountSats } from '@/lib/arkade/arkade-exit-utils'
+import {
+  ARKADE_INTENT_LIFECYCLE_PHASES,
+  isIntentSubmitPhase,
+  pendingIntentBannerPhase,
+} from '@/lib/arkade/arkade-pending-batch-intent'
 import {
   isCollaborativeExitInsufficientFundsError,
   isSignerRotationCooperativeExitBlocked,
 } from '@/lib/arkade/arkade-cooperative-exit'
 import type {
-  ArkadeUnilateralExitInProgressRow,
+  ArkadeUnilateralExitInProgressDto,
   ArkadeVtxoOutpoint,
 } from '@/workers/arkade-api'
 import {
@@ -23,11 +31,11 @@ import {
   includesArkadeVtxoOutpoint,
 } from '@/workers/arkade-api'
 import { useWalletStore } from '@/stores/walletStore'
-import { useUnilateralExitAutomationStore } from '@/stores/unilateralExitAutomationStore'
+import { clearUnilateralExitJob } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime'
 import { useUnilateralExitControlStore } from '@/stores/unilateralExitControlStore'
 
 function outpointFromInProgressRow(
-  row: ArkadeUnilateralExitInProgressRow,
+  row: ArkadeUnilateralExitInProgressDto,
 ): ArkadeVtxoOutpoint {
   return { txid: row.txid, vout: row.vout }
 }
@@ -35,8 +43,8 @@ function outpointFromInProgressRow(
 export function useArkadeExitFlow() {
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
-  const activeArkadeConnectionId = useWalletStore(
-    (walletState) => walletState.activeArkadeConnectionId,
+  const activeArkadeAccountId = useWalletStore(
+    (walletState) => walletState.activeArkadeAccountId,
   )
   const currentAddress = useWalletStore((walletState) => walletState.currentAddress)
   const signerMigrationHint = useWalletStore((walletState) => walletState.arkadeSignerMigrationHint)
@@ -83,6 +91,18 @@ export function useArkadeExitFlow() {
   })
   const collaborativeExitMutation = useArkadeCollaborativeExitMutation()
   const completeExitMutation = useArkadeCompleteUnilateralExitMutation()
+  const pendingBatchIntents = usePendingBatchIntents()
+  const hasPendingBatchIntent = useHasPendingBatchIntent()
+  const hasPendingCollaborativeExit = useHasPendingBatchIntentKind('collaborative_exit')
+  const hasProcessingCollaborativeExit = pendingBatchIntents.some(
+    (intent) =>
+      intent.kind === 'collaborative_exit' &&
+      pendingIntentBannerPhase(intent) === ARKADE_INTENT_LIFECYCLE_PHASES.processing,
+  )
+  const collaborativeExitSubmitPhase = isIntentSubmitPhase({
+    mutationPending: collaborativeExitMutation.isPending,
+    pendingForAction: hasPendingCollaborativeExit,
+  })
 
   const selectedInProgressRows = useMemo(
     () =>
@@ -92,7 +112,7 @@ export function useArkadeExitFlow() {
             arkadeVtxoOutpointsEqual(outpointFromInProgressRow(row), outpoint),
           ),
         )
-        .filter((row): row is ArkadeUnilateralExitInProgressRow => row != null),
+        .filter((row): row is ArkadeUnilateralExitInProgressDto => row != null),
     [inProgressQuery.data, selectedInProgressOutpoints],
   )
 
@@ -135,7 +155,8 @@ export function useArkadeExitFlow() {
     collabAmountValid &&
     !collaborativeExitMutation.isPending &&
     !collaborativeExitBlockedByRotation &&
-    !collaborativeExitBlockedByFunds
+    !collaborativeExitBlockedByFunds &&
+    !hasPendingBatchIntent
 
   const hasUnilateralExitInProgress =
     unilateralExitInProgressSats > 0 || (inProgressQuery.data?.length ?? 0) > 0
@@ -153,7 +174,7 @@ export function useArkadeExitFlow() {
     )
   }
 
-  const toggleInProgressSelection = (row: ArkadeUnilateralExitInProgressRow) => {
+  const toggleInProgressSelection = (row: ArkadeUnilateralExitInProgressDto) => {
     const outpoint = outpointFromInProgressRow(row)
     setSelectedInProgressOutpoints((previous) =>
       includesArkadeVtxoOutpoint(previous, outpoint)
@@ -179,10 +200,8 @@ export function useArkadeExitFlow() {
       })
       .then(() => {
         setCompleteUnilateralOpen(false)
-        if (activeWalletId != null && activeArkadeConnectionId != null) {
-          useUnilateralExitAutomationStore
-            .getState()
-            .completeJob(activeWalletId, networkMode, activeArkadeConnectionId)
+        if (activeWalletId != null && activeArkadeAccountId != null) {
+          clearUnilateralExitJob()
           useUnilateralExitControlStore.getState().reset()
         }
       })
@@ -219,6 +238,8 @@ export function useArkadeExitFlow() {
     completionFeeRateUi,
     completionFeeRateSatPerVb,
     collaborativeExitMutation,
+    collaborativeExitSubmitPhase,
+    hasProcessingCollaborativeExit,
     completeExitMutation,
     canCollaborativeExit,
     collaborativeExitBlockedByRotation,

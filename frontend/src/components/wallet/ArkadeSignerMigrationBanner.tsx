@@ -4,6 +4,7 @@ import type { ArkadeSignerMigrationHint, ArkadeSignerMigrationResult } from '@/w
 import { formatSignerMigrationPartialStatus } from '@/lib/arkade/arkade-signer-migration-display'
 import {
   useArkadeAutonomousModeActive,
+  useHasPendingBatchIntentKind,
   useArkadeSignerMigrationMutation,
   useArkadeSignerMigrationPartialResultQuery,
 } from '@/hooks/useArkadeQueries'
@@ -12,6 +13,7 @@ import {
   userFacingLifecycleErrorMessage,
 } from '@/lib/shared/utils'
 import { useWalletStore } from '@/stores/walletStore'
+import { isIntentSubmitPhase } from '@/lib/arkade/arkade-pending-batch-intent'
 
 function formatCutoffDate(cutoffUnix: number): string | null {
   if (cutoffUnix <= 0) {
@@ -71,9 +73,14 @@ function showMigrateAction(
 
 export function ArkadeSignerMigrationBanner() {
   const autonomousModeActive = useArkadeAutonomousModeActive()
+  const hasPendingMigrateIntent = useHasPendingBatchIntentKind('migrate')
   const hint = useWalletStore((state) => state.arkadeSignerMigrationHint)
   const partialMigrationResultQuery = useArkadeSignerMigrationPartialResultQuery()
   const signerMigrationMutation = useArkadeSignerMigrationMutation()
+  const migrateSubmitPhase = isIntentSubmitPhase({
+    mutationPending: signerMigrationMutation.isPending,
+    pendingForAction: hasPendingMigrateIntent,
+  })
 
   if (hint == null) {
     return null
@@ -111,10 +118,14 @@ export function ArkadeSignerMigrationBanner() {
               type="button"
               size="sm"
               variant="secondary"
-              disabled={autonomousModeActive || signerMigrationMutation.isPending}
+              disabled={
+                autonomousModeActive ||
+                signerMigrationMutation.isPending ||
+                hasPendingMigrateIntent
+              }
               onClick={() => signerMigrationMutation.mutate()}
             >
-              {signerMigrationMutation.isPending ? (
+              {migrateSubmitPhase ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
                   Migrating…

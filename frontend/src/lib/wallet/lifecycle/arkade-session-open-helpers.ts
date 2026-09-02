@@ -1,9 +1,9 @@
 import type { SplitWalletSecretsEncryptedBlobs } from '@/db'
-import type { ArkadeOperatorConnectionSummary } from '@/lib/arkade/arkade-payload-merge'
+import type { ArkadeAccountSummary } from '@/lib/arkade/arkade-payload-merge'
 import {
-  ensureArkadeOperatorConnection,
-  resolveArkadeEndpointsForConnection,
-} from '@/lib/arkade/arkade-operator-connections'
+  ensureArkadeAccount,
+  resolveArkadeEndpointsForAccount,
+} from '@/lib/arkade/arkade-accounts'
 import { refreshArkadeStoreFromLoadedWasm } from '@/lib/arkade/arkade-persistence-store-sync'
 import {
   getArkadeEndpoints,
@@ -23,19 +23,19 @@ export type ArkadeSessionReuseState = {
 }
 
 /**
- * When the worker already has this wallet/network/connection session open, refresh
+ * When the worker already has this wallet/network/account session open, refresh
  * dashboard state and skip a full reopen.
  */
 export async function tryReuseExistingArkadeSession(params: {
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
-  connection: ArkadeOperatorConnectionSummary
+  account: ArkadeAccountSummary
   sessionReuseState: ArkadeSessionReuseState
 }): Promise<string | null> {
   const sessionKey = arkadeSessionKey(
     params.walletId,
     params.networkMode,
-    params.connection.id,
+    params.account.id,
   )
   if (params.sessionReuseState.lastOpenedSessionKey !== sessionKey) {
     return null
@@ -51,17 +51,17 @@ export async function tryReuseExistingArkadeSession(params: {
     const sessionOpen = await worker.hasOpenSession({
       walletId: params.walletId,
       networkMode: params.networkMode,
-      connectionId: params.connection.id,
+      arkadeAccountId: params.account.id,
     })
     if (!sessionOpen) {
       params.sessionReuseState.setLastOpenedSessionKey(null)
       return null
     }
 
-    await refreshArkadeStoreFromLoadedWasm(params.connection.id)
-    useWalletStore.getState().setActiveArkadeConnectionId(params.connection.id)
+    await refreshArkadeStoreFromLoadedWasm(params.account.id)
+    useWalletStore.getState().setActiveArkadeAccountId(params.account.id)
     useWalletStore.getState().setLastOperatorSyncTime(null)
-    return params.connection.id
+    return params.account.id
   } catch {
     params.sessionReuseState.setLastOpenedSessionKey(null)
     return null
@@ -72,18 +72,18 @@ export async function openFreshArkadeWorkerSession(params: {
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
   encrypted: SplitWalletSecretsEncryptedBlobs
-  connection: ArkadeOperatorConnectionSummary | undefined
-  hadPersistedConnection: boolean
+  account: ArkadeAccountSummary | undefined
+  hadPersistedAccount: boolean
 }): Promise<{
   worker: ArkadeWorker
-  connection: ArkadeOperatorConnectionSummary
+  account: ArkadeAccountSummary
   openResult: OpenArkadeSessionResult
 }> {
   const defaultEndpoints = getArkadeEndpoints(params.networkMode)
-  const endpoints = params.connection
-    ? resolveArkadeEndpointsForConnection(params.connection)
+  const endpoints = params.account
+    ? resolveArkadeEndpointsForAccount(params.account)
     : defaultEndpoints
-  const connectionId = params.connection?.id ?? crypto.randomUUID()
+  const arkadeAccountId = params.account?.id ?? crypto.randomUUID()
 
   const worker = getArkadeWorker()
   await ensureArkadeWorkerSecretsChannel()
@@ -92,31 +92,31 @@ export async function openFreshArkadeWorkerSession(params: {
     encryptedPayload: params.encrypted.payload,
     walletId: params.walletId,
     networkMode: params.networkMode,
-    connectionId,
+    arkadeAccountId,
     arkServerUrl: endpoints.arkServerUrl,
     delegatorUrl: endpoints.delegatorUrl,
     esploraUrl: endpoints.esploraUrl,
   })
 
-  const connection = await ensureArkadeOperatorConnection({
+  const account = await ensureArkadeAccount({
     walletId: params.walletId,
     networkMode: params.networkMode,
-    connectionId,
+    arkadeAccountId,
     operatorSignerPkHex: openResult.operatorSignerPkHex,
     operatorUrl: endpoints.arkServerUrl,
     delegatorUrl: endpoints.delegatorUrl,
-    persistInitialSdkFromWasm: !params.hadPersistedConnection,
+    persistInitialSdkFromWasm: !params.hadPersistedAccount,
     signerMigrationHint: openResult.signerMigrationHint,
   })
 
-  return { worker, connection, openResult }
+  return { worker, account, openResult }
 }
 
 export async function hydrateArkadeDashboardAfterSessionOpen(params: {
   worker: ArkadeWorker
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
-  connectionId: string
+  arkadeAccountId: string
   signerMigrationHint: OpenArkadeSessionResult['signerMigrationHint']
   sessionReuseState: ArkadeSessionReuseState
   runPostOpenMaintenance: (
@@ -130,12 +130,12 @@ export async function hydrateArkadeDashboardAfterSessionOpen(params: {
     useWalletStore.getState().setArkadeSignerMigrationHint(null)
   }
 
-  await params.worker.reconcileActiveConnectionId(params.connectionId)
+  await params.worker.reconcileActiveAccountId(params.arkadeAccountId)
   useWalletStore.getState().setLastOperatorSyncTime(null)
-  await refreshArkadeStoreFromLoadedWasm(params.connectionId)
-  useWalletStore.getState().setActiveArkadeConnectionId(params.connectionId)
+  await refreshArkadeStoreFromLoadedWasm(params.arkadeAccountId)
+  useWalletStore.getState().setActiveArkadeAccountId(params.arkadeAccountId)
   params.sessionReuseState.setLastOpenedSessionKey(
-    arkadeSessionKey(params.walletId, params.networkMode, params.connectionId),
+    arkadeSessionKey(params.walletId, params.networkMode, params.arkadeAccountId),
   )
 
   void params.runPostOpenMaintenance(params.worker, params.networkMode)

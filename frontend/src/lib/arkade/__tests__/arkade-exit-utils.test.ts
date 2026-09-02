@@ -4,12 +4,8 @@ import {
   formatMissingBlocktimeCompletionWarning,
   formatMissingBlocktimeCompletionWarningLine,
   formatUnilateralExitTimelock,
-  formatUnilateralUnrollSuccessMessage,
-  isOperatorIndexerCatchingUpError,
   parseCollaborativeExitAmountSats,
-  shouldShowUnilateralUnrollProgressToast,
   unilateralExitCompleteTimelockMessage,
-  unilateralUnrollProgressToastId,
 } from '@/lib/arkade/arkade-exit-utils'
 
 describe('formatIntentFeePrograms', () => {
@@ -50,42 +46,6 @@ describe('parseCollaborativeExitAmountSats', () => {
     expect(parseCollaborativeExitAmountSats('0.0006').ok).toBe(false)
     expect(parseCollaborativeExitAmountSats('abc').ok).toBe(false)
     expect(parseCollaborativeExitAmountSats('0').ok).toBe(false)
-  })
-})
-
-describe('unilateral unroll toast helpers', () => {
-  it('formats success message with short txid prefix', () => {
-    expect(
-      formatUnilateralUnrollSuccessMessage(
-        '587b597602803187e73cb30ca7791254a146755ee6435244d048c8d4072c72a5',
-      ),
-    ).toBe(
-      'Unroll complete (587b59760280…). Use Complete unilateral exit when the timelock elapses.',
-    )
-  })
-
-  it('uses the same success message when indexer warning is present', () => {
-    expect(
-      formatUnilateralUnrollSuccessMessage('587b597602803187e73cb30ca7791254a146755ee6435244d048c8d4072c72a5'),
-    ).toBe(
-      'Unroll complete (587b59760280…). Use Complete unilateral exit when the timelock elapses.',
-    )
-  })
-
-  it('shows info toasts for unroll, wait, and indexer progress', () => {
-    expect(shouldShowUnilateralUnrollProgressToast({ type: 'unroll' })).toBe(true)
-    expect(shouldShowUnilateralUnrollProgressToast({ type: 'wait' })).toBe(true)
-    expect(shouldShowUnilateralUnrollProgressToast({ type: 'indexer' })).toBe(true)
-    expect(shouldShowUnilateralUnrollProgressToast({ type: 'done' })).toBe(false)
-  })
-
-  it('uses txid-scoped toast ids', () => {
-    expect(
-      unilateralUnrollProgressToastId({
-        type: 'unroll',
-        txid: '587b597602803187e73cb30ca7791254a146755ee6435244d048c8d4072c72a5',
-      }),
-    ).toBe('arkade-unroll-587b597602803187e73cb30ca7791254a146755ee6435244d048c8d4072c72a5')
   })
 })
 
@@ -138,18 +98,5 @@ describe('missing blocktime completion warning', () => {
     expect(
       formatMissingBlocktimeCompletionWarningLine(warning.lines[1]),
     ).toContain('on-chain')
-  })
-})
-
-describe('isOperatorIndexerCatchingUpError', () => {
-  it('detects structured wasm error code', () => {
-    const error = new Error(
-      JSON.stringify({
-        code: 'operator_indexer_catching_up',
-        message: 'Operator indexer is still catching up after unilateral unroll.',
-      }),
-    )
-    expect(isOperatorIndexerCatchingUpError(error)).toBe(true)
-    expect(isOperatorIndexerCatchingUpError(new Error('other'))).toBe(false)
   })
 })

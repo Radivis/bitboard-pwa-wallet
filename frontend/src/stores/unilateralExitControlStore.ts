@@ -8,7 +8,6 @@ import {
 
 interface UnilateralExitControlState {
   selectedLeafOutpoints: ArkadeVtxoOutpoint[]
-  jobStarted: boolean
   /** Bumped on each control-page visit to force React Flow remount. */
   graphRenderEpoch: number
 
@@ -17,14 +16,13 @@ interface UnilateralExitControlState {
     inProgressOutpoints: ArkadeVtxoOutpoint[],
     topologyLeafOutpoints: ArkadeVtxoOutpoint[],
   ) => void
-  setJobStarted: (started: boolean) => void
+  setSelectedLeafOutpoints: (outpoints: ArkadeVtxoOutpoint[]) => void
   bumpGraphRenderEpoch: () => void
   reset: () => void
 }
 
 const initialState = {
   selectedLeafOutpoints: [] as ArkadeVtxoOutpoint[],
-  jobStarted: false,
   graphRenderEpoch: 0,
 }
 
@@ -81,11 +79,11 @@ export const useUnilateralExitControlStore = create<UnilateralExitControlState>(
         selected.length > 0
           ? sortArkadeVtxoOutpoints(selected)
           : sortArkadeVtxoOutpoints(inProgressOutpoints),
-      jobStarted: true,
     })
   },
 
-  setJobStarted: (started) => set({ jobStarted: started }),
+  setSelectedLeafOutpoints: (outpoints) =>
+    set({ selectedLeafOutpoints: sortArkadeVtxoOutpoints(outpoints) }),
 
   bumpGraphRenderEpoch: () =>
     set((state) => ({ graphRenderEpoch: state.graphRenderEpoch + 1 })),

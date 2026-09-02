@@ -47,9 +47,8 @@ All use `sqliteStorage` → `settings` table. Hydration helper: `frontend/src/li
 | `fiatDenominationStore` | `fiat-denomination-storage` | Fiat mode, currency, provider | — |
 | `bitcoinDisplayUnitStore` | `bitcoin-display-unit-storage` | `defaultBitcoinUnit` | — |
 | `periodicSyncStore` | `periodic-sync-storage` | Per-rail sync intervals | 1 |
-| `unilateralExitAutomationStore` | `unilateral-exit-automation-storage` | `jobsByKey` | — |
 
-Stores without `persist` hold session-only UI state (e.g. `unilateralExitControlStore`, `sendStore`).
+Stores without `persist` hold session-only UI state (e.g. `unilateralExitControlStore`, `sendStore`, and the unilateral-exit job/prefs/failure caches hydrated from `sdkPersistenceJson`). Unilateral-exit durable state is documented in [unilateral-exit.md](unilateral-exit.md).
 
 ## Near-zero security mode
 
@@ -60,7 +59,7 @@ Stores without `persist` hold session-only UI state (e.g. `unilateralExitControl
 | `near_zero_security_active` | `'1'` when mode is on |
 | `near_zero_wrapped_session_secret` | Random session secret wrapped with fixed passphrase `!Near 0 Security!` |
 
-The in-memory flag lives in `nearZeroSecurityStore` (not persisted itself). Documented as offering no meaningful security — convenience for local development only.
+The in-memory flag lives in `nearZeroSecurityStore` (not persisted itself). Documented as offering no meaningful security — convenience for local development or quick app tests only.
 
 ## Library persistence
 

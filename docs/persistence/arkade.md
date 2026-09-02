@@ -6,10 +6,10 @@ For the wallet model and balance buckets, see [arkade wallet model](../arkade-bi
 
 ## Encrypted payload (`wallet_secrets`)
 
-Each Ark Service Provider (ASP) is one row in `WalletSecretsPayload.arkadeOperatorConnections`:
+Each Ark Service Provider (ASP) is one row in `WalletSecretsPayload.arkadeAccounts`:
 
 ```typescript
-interface StoredArkadeOperatorConnection {
+interface StoredArkadeAccount {
   id: string
   label: string
   networkMode: ArkadeSupportedNetworkMode
@@ -23,7 +23,7 @@ interface StoredArkadeOperatorConnection {
 }
 ```
 
-`activeArkadeConnectionIdByNetwork` selects which connection is active per live network (`mainnet`, `testnet`, `signet`).
+`activeArkadeAccountIdByNetwork` selects which Arkade account is active per live network (`mainnet`, `testnet`, `signet`).
 
 **Size limit:** `sdkPersistenceJson` must not exceed 10 MB UTF-8 (`ARKADE_SDK_PERSISTENCE_JSON_MAX_BYTES` in `arkade-sdk-persistence-types.ts`).
 
@@ -33,14 +33,14 @@ File: `bitboard-ark/src/persistence.rs`
 
 | Type | Purpose |
 |------|---------|
-| `BitboardArkPersistence` | Top-level JSON envelope (`version`, `engine`, `operator_identity`, `wallet_db`, `swap_storage`) |
+| `BitboardArkPersistence` | Top-level JSON envelope (`version`, `engine`, `operator_identity`, `autonomous_mode`, `wallet_db`) |
 | `WalletDbSnapshot` | Boarding outputs, secret keys, VTXO snapshot, exit watches, operator trust |
 | `OffchainVtxoSnapshot` | VTXO list + unilateral exit materials map (keyed by leaf tx) |
 | `JsonPersistenceDb` | In-memory mutex-backed DB implementing ark-client `Persistence` |
 
-**Current version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 6`
+**Current version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 8`
 
-`BitboardArkPersistence::parse_import()` migrates legacy v3–v5 blobs on load. Unsupported or corrupt blobs start from an empty `wallet_db` on session open.
+`BitboardArkPersistence::parse_import()` accepts versions 3–8. Published 0.3.3 wallets used v3; missing fields default. Leftover v4–v7 blobs deserialize as the current types. Unsupported or corrupt blobs start from an empty `wallet_db` on session open. `autonomous_mode` (default **false**) is a per-ASP trust posture on the envelope: when true, session open uses `cached_operator_info` and does not call the operator.
 
 ### Offchain receive cursor
 
@@ -66,7 +66,7 @@ sequenceDiagram
   AW->>AW: ark_export_persistence_json()
   AW->>EW: encrypt updated payload
   AW->>Main: EncryptedWalletSecretsHost (ciphertext only)
-  Main->>DB: CAS write sdkPersistenceJson on connection row
+  Main->>DB: CAS write sdkPersistenceJson on account row
 ```
 
 Key modules:
@@ -87,8 +87,10 @@ Main thread code (`EncryptedWalletSecretsHost`) handles **ciphertext only** — 
 | Store | Persisted? | Contents |
 |-------|------------|----------|
 | `walletStore` (Arkade fields) | No | Transient dashboard: balance, payments, receive address |
-| `unilateralExitAutomationStore` (`unilateral-exit-automation-storage`) | Yes | Automation job state per wallet/network/connection |
+| Unilateral-exit job/prefs/failure caches | Session only | Hydrated from `unilateral_exit_frontend` in `sdkPersistenceJson` |
 | `unilateralExitControlStore` | No | Selection, graph epoch (memory only) |
+
+Unilateral-exit WASM fields (`unilateral_exit_materials_by_leaf_tx`, watches, step wait, pending deductions, `unilateral_exit_frontend`) are documented in [unilateral-exit.md](unilateral-exit.md).
 
 ## Legacy IndexedDB
 
@@ -98,6 +100,6 @@ Arkade previously used IndexedDB databases named `bitboard-arkade-{walletId}-{ne
 
 | Layer | Version mechanism |
 |-------|-------------------|
-| `BitboardArkPersistence.version` | Rust constant (6); `parse_import` migrates v3–v5 |
-| Connection metadata | `lastSuccessfulOperatorSyncAt` mirrors on-chain `lastSuccessfulEsploraSyncAt` semantics |
+| `BitboardArkPersistence.version` | Rust constant (8); `parse_import` accepts 3–8 (0.3.3 was v3) |
+| Account metadata | `lastSuccessfulOperatorSyncAt` mirrors on-chain `lastSuccessfulEsploraSyncAt` semantics |
 | Frontend merge | `arkade-payload-merge.ts` ensures receive index only increases |

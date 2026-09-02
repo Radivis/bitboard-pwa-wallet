@@ -14,7 +14,10 @@
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
+
+static GET_HEIGHT_CACHE_BUSTER: AtomicU64 = AtomicU64::new(1);
 
 use bitcoin::consensus::encode::serialize_hex;
 #[allow(unused_imports)]
@@ -335,6 +338,7 @@ impl BlockingClient {
                 .unwrap_or_default()
                 .into_bytes(),
         )?;
+        request = request.with_header("Content-Type", "application/json");
 
         if let Some(maxfeerate) = maxfeerate {
             request = request.with_param("maxfeerate", maxfeerate.to_string())
@@ -357,7 +361,8 @@ impl BlockingClient {
 
     /// Get the height of the current blockchain tip.
     pub fn get_height(&self) -> Result<u32, Error> {
-        self.get_response_str("/blocks/tip/height")
+        let nonce = GET_HEIGHT_CACHE_BUSTER.fetch_add(1, Ordering::Relaxed);
+        self.get_response_str(&format!("/blocks/tip/height?_={nonce}"))
             .map(|s| u32::from_str(s.as_str()).map_err(Error::Parsing))?
     }
 
