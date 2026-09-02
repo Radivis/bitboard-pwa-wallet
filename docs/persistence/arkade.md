@@ -40,7 +40,7 @@ File: `bitboard-ark/src/persistence.rs`
 
 **Current version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 8`
 
-`BitboardArkPersistence::parse_import()` accepts versions 3–8. Published 0.3.3 wallets used v3; missing fields default. Leftover v5 blobs lift row-keyed exit materials onto `unilateral_exit_materials_by_leaf_tx`. Unsupported or corrupt blobs start from an empty `wallet_db` on session open. `autonomous_mode` (default **false**) is a per-ASP trust posture on the envelope: when true, session open uses `cached_operator_info` and does not call the operator.
+`BitboardArkPersistence::parse_import()` accepts versions 3–8. Published 0.3.3 wallets used v3; missing fields default. Leftover v4–v7 blobs deserialize as the current types. Unsupported or corrupt blobs start from an empty `wallet_db` on session open. `autonomous_mode` (default **false**) is a per-ASP trust posture on the envelope: when true, session open uses `cached_operator_info` and does not call the operator.
 
 ### Offchain receive cursor
 

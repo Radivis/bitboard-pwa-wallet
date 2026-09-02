@@ -39,7 +39,7 @@ Memory caches are keyed by `walletId:networkMode:arkadeAccountId` (`arkadeWallet
 
 Flushed through the Arkade save lifecycle into `StoredArkadeAccount.sdkPersistenceJson`. Types: [`bitboard-ark/src/persistence.rs`](../../bitboard-ark/src/persistence.rs). Materials encode/decode: [`unilateral_exit_materials.rs`](../../bitboard-ark/src/unilateral_exit_materials.rs). Frontend bundle I/O: [`unilateral-exit-frontend-sdk-persistence.ts`](../../frontend/src/lib/wallet/lifecycle/unilateral-exit-frontend-sdk-persistence.ts).
 
-**Envelope version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 8`. `parse_import` accepts 3–8. Published 0.3.3 wallets used v3; missing fields default (`unilateral_exit_frontend` is `None`, `autonomous_mode` is false). Leftover v5 blobs stored materials **per VTXO row** and are lifted onto `unilateral_exit_materials_by_leaf_tx`. When `unilateral_exit_frontend` is `None`, a one-shot overlay reads leftover SQLite `settings` rows.
+**Envelope version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 8`. `parse_import` accepts 3–8. Published 0.3.3 wallets used v3; missing fields default (`unilateral_exit_frontend` is `None`, `autonomous_mode` is false). When `unilateral_exit_frontend` is `None`, a one-shot overlay reads leftover SQLite `settings` rows.
 
 | Field | Where | Role |
 |-------|-------|------|

@@ -664,7 +664,7 @@ fn persistence_v3_production_import_defaults_current_fields() {
 
 #[test]
 fn persistence_leftover_branch_versions_import_without_wiping() {
-    for version in [4_u32, 6, 7] {
+    for version in [4_u32, 5, 6, 7] {
         let json = format!(
             r#"{{"version":{version},"engine":"ark-rs","ark_sdk_version":"0.9.3","operator_identity":{{"signer_pk_hex":"02abc","network":"signet"}},"wallet_db":{{"boarding_outputs":[],"secret_keys_by_owner_pk_hex":{{}}}},"swap_storage":{{}}}}"#
         );
@@ -707,83 +707,6 @@ fn persistence_empty_omits_false_autonomous_mode() {
     let envelope = BitboardArkPersistence::empty(identity);
     let json = serde_json::to_string(&envelope).expect("serialize");
     assert!(!json.contains("autonomous_mode"));
-}
-
-#[test]
-fn persistence_v5_import_lifts_sibling_materials_to_leaf_tx_map() {
-    use crate::persistence::UnilateralExitMaterialsRecord;
-
-    let txid = "aa".repeat(32);
-    let materials_v0 = UnilateralExitMaterialsRecord {
-        cached_at: 10,
-        chain_json: "{\"inner\":[]}".to_string(),
-        virtual_psbts: vec![],
-    };
-    let materials_v1 = UnilateralExitMaterialsRecord {
-        cached_at: 20,
-        chain_json: "{\"inner\":[]}".to_string(),
-        virtual_psbts: vec![],
-    };
-    let v5_json = format!(
-        r#"{{
-            "version":{version},
-            "engine":"ark-rs",
-            "ark_sdk_version":"0.9.3",
-            "operator_identity":{{"signer_pk_hex":"02abc","network":"signet"}},
-            "wallet_db":{{
-                "offchain_vtxo_snapshot":{{
-                    "synced_at":1,
-                    "dust_sats":330,
-                    "virtual_tx_outpoints":[
-                        {{
-                            "txid":"{txid}",
-                            "vout":0,
-                            "created_at":0,
-                            "expires_at":0,
-                            "amount_sats":80000,
-                            "script_hex":"00",
-                            "is_preconfirmed":true,
-                            "is_swept":false,
-                            "is_unrolled":false,
-                            "is_spent":false,
-                            "unilateral_exit_materials":{materials_v0}
-                        }},
-                        {{
-                            "txid":"{txid}",
-                            "vout":1,
-                            "created_at":0,
-                            "expires_at":0,
-                            "amount_sats":118000,
-                            "script_hex":"00",
-                            "is_preconfirmed":true,
-                            "is_swept":false,
-                            "is_unrolled":false,
-                            "is_spent":false,
-                            "unilateral_exit_materials":{materials_v1}
-                        }}
-                    ]
-                }}
-            }},
-            "swap_storage":{{}}
-        }}"#,
-        version = 5,
-        txid = txid,
-        materials_v0 = serde_json::to_string(&materials_v0).expect("serialize"),
-        materials_v1 = serde_json::to_string(&materials_v1).expect("serialize"),
-    );
-
-    let parsed = BitboardArkPersistence::parse_import(Some(&v5_json));
-    let snapshot = parsed.wallet_db.offchain_vtxo_snapshot.expect("snapshot");
-    assert_eq!(snapshot.virtual_tx_outpoints.len(), 2);
-    assert_eq!(snapshot.unilateral_exit_materials_by_leaf_tx.len(), 1);
-    assert_eq!(
-        snapshot
-            .unilateral_exit_materials_by_leaf_tx
-            .get(&txid)
-            .map(|materials| materials.cached_at),
-        Some(20)
-    );
-    assert!(parsed.wallet_db.unilateral_exit_frontend.is_none());
 }
 
 #[test]
