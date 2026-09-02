@@ -1,13 +1,13 @@
 import type { ArkadeSignerMigrationHint } from '@/workers/arkade-api'
 import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
 import {
-  ensureArkadeOperatorConnectionInPayload,
-  findActiveArkadeOperatorConnection,
-  findArkadeOperatorConnection,
+  ensureArkadeAccountInPayload,
+  findActiveArkadeAccount,
+  findArkadeAccount,
   mergeSdkPersistenceIntoPayload,
-  toArkadeOperatorConnectionSummary,
+  toArkadeAccountSummary,
   updateOperatorSyncAtInPayload,
-  type ArkadeOperatorConnectionSummary,
+  type ArkadeAccountSummary,
 } from '@/lib/arkade/arkade-payload-merge'
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import { parseWalletPayloadJson } from '@/lib/wallet/wallet-domain-types'
@@ -74,46 +74,46 @@ async function writeEncryptedPayload(
   await deps.encryptedHost.writeEncryptedPayloadCAS(walletId, encryptedPayload)
 }
 
-export async function extractSdkPersistenceJsonForConnection(
+export async function extractSdkPersistenceJsonForAccount(
   deps: ArkadeEncryptedPayloadDeps,
   params: {
     encryptedPayload: EncryptedBlobMessage
-    connectionId: string
+    arkadeAccountId: string
   },
 ): Promise<string | undefined> {
   const payload = await decryptPayload(deps, params.encryptedPayload)
-  return findArkadeOperatorConnection(payload, params.connectionId)?.sdkPersistenceJson
+  return findArkadeAccount(payload, params.arkadeAccountId)?.sdkPersistenceJson
 }
 
-export async function findActiveConnectionSummary(
+export async function findActiveAccountSummary(
   deps: ArkadeEncryptedPayloadDeps,
   params: {
     walletId: number
     networkMode: ArkadeSupportedNetworkMode
     encryptedPayload: EncryptedBlobMessage
   },
-): Promise<ArkadeOperatorConnectionSummary | undefined> {
+): Promise<ArkadeAccountSummary | undefined> {
   const payload = await decryptPayload(deps, params.encryptedPayload)
-  const connection = findActiveArkadeOperatorConnection(payload, params.networkMode)
-  return connection == null ? undefined : toArkadeOperatorConnectionSummary(connection)
+  const account = findActiveArkadeAccount(payload, params.networkMode)
+  return account == null ? undefined : toArkadeAccountSummary(account)
 }
 
-export async function listConnectionSummaries(
+export async function listAccountSummaries(
   deps: ArkadeEncryptedPayloadDeps,
   params: {
     walletId: number
   },
-): Promise<ArkadeOperatorConnectionSummary[]> {
+): Promise<ArkadeAccountSummary[]> {
   const encryptedPayload = await readEncryptedPayload(deps, params.walletId)
   const payload = await decryptPayload(deps, encryptedPayload)
-  return payload.arkadeOperatorConnections.map(toArkadeOperatorConnectionSummary)
+  return payload.arkadeAccounts.map(toArkadeAccountSummary)
 }
 
 export async function persistSdkJsonToEncryptedPayload(
   deps: ArkadeEncryptedPayloadDeps,
   params: {
     walletId: number
-    connectionId: string
+    arkadeAccountId: string
     sdkPersistenceJson: string
     lastSuccessfulOperatorSyncAt?: string
   },
@@ -122,7 +122,7 @@ export async function persistSdkJsonToEncryptedPayload(
   const payload = await decryptPayload(deps, encryptedPayload)
   const merged = mergeSdkPersistenceIntoPayload(
     payload,
-    params.connectionId,
+    params.arkadeAccountId,
     params.sdkPersistenceJson,
     params.lastSuccessfulOperatorSyncAt,
   )
@@ -134,7 +134,7 @@ export async function updateOperatorSyncAtEncrypted(
   deps: ArkadeEncryptedPayloadDeps,
   params: {
     walletId: number
-    connectionId: string
+    arkadeAccountId: string
     lastSuccessfulOperatorSyncAt: string
   },
 ): Promise<void> {
@@ -142,19 +142,19 @@ export async function updateOperatorSyncAtEncrypted(
   const payload = await decryptPayload(deps, encryptedPayload)
   const merged = updateOperatorSyncAtInPayload(
     payload,
-    params.connectionId,
+    params.arkadeAccountId,
     params.lastSuccessfulOperatorSyncAt,
   )
   const newEncrypted = await encryptPayload(deps, merged)
   await writeEncryptedPayload(deps, params.walletId, newEncrypted)
 }
 
-export async function ensureOperatorConnectionEncrypted(
+export async function ensureArkadeAccountEncrypted(
   deps: ArkadeEncryptedPayloadDeps,
   params: {
     walletId: number
     networkMode: ArkadeSupportedNetworkMode
-    connectionId: string
+    arkadeAccountId: string
     operatorSignerPkHex: string
     operatorUrl: string
     delegatorUrl: string
@@ -164,7 +164,7 @@ export async function ensureOperatorConnectionEncrypted(
   options?: {
     exportInitialSdkFromWasm?: () => Promise<string>
   },
-): Promise<ArkadeOperatorConnectionSummary> {
+): Promise<ArkadeAccountSummary> {
   let sdkPersistenceJson = params.sdkPersistenceJson
   if (sdkPersistenceJson == null && options?.exportInitialSdkFromWasm != null) {
     sdkPersistenceJson = await options.exportInitialSdkFromWasm()
@@ -172,7 +172,7 @@ export async function ensureOperatorConnectionEncrypted(
 
   const encryptedPayload = await readEncryptedPayload(deps, params.walletId)
   const payload = await decryptPayload(deps, encryptedPayload)
-  const { payload: mergedPayload, connection } = ensureArkadeOperatorConnectionInPayload(
+  const { payload: mergedPayload, account } = ensureArkadeAccountInPayload(
     payload,
     {
       networkMode: params.networkMode,
@@ -180,11 +180,11 @@ export async function ensureOperatorConnectionEncrypted(
       operatorUrl: params.operatorUrl,
       delegatorUrl: params.delegatorUrl,
       sdkPersistenceJson,
-      connectionId: params.connectionId,
+      arkadeAccountId: params.arkadeAccountId,
       signerMigrationHint: params.signerMigrationHint,
     },
   )
   const newEncrypted = await encryptPayload(deps, mergedPayload)
   await writeEncryptedPayload(deps, params.walletId, newEncrypted)
-  return toArkadeOperatorConnectionSummary(connection)
+  return toArkadeAccountSummary(account)
 }

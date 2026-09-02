@@ -170,27 +170,4 @@ describe('CompleteUnilateralExitDialog', () => {
     expect(warning).toHaveTextContent(/Esplora did not report a confirmation time/)
     expect(warning).toHaveTextContent(virtualTxid.slice(0, 12))
   })
-
-  it('shows indexer-catching-up state instead of destructive error', () => {
-    renderWithProviders(
-      <CompleteUnilateralExitDialog
-        exitFlow={buildExitFlow({
-          completeExitMutation: {
-            mutate: vi.fn(),
-            isPending: false,
-            isError: true,
-            error: new Error(
-              JSON.stringify({
-                code: 'operator_indexer_catching_up',
-                message: 'Operator indexer is still catching up after unilateral unroll.',
-              }),
-            ),
-          },
-        })}
-      />,
-    )
-
-    expect(screen.getByTestId('arkade-complete-indexer-catching-up')).toBeInTheDocument()
-    expect(screen.queryByTestId('arkade-complete-error')).not.toBeInTheDocument()
-  })
 })

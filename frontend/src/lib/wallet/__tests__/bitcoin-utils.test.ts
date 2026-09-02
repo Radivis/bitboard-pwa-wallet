@@ -88,8 +88,16 @@ describe('getEsploraUrl', () => {
     )
   })
 
-  it('returns direct URL for regtest default', () => {
-    expect(getEsploraUrl('regtest', null)).toBe('http://localhost:7030/api')
+  it('returns same-origin proxy base for default regtest', () => {
+    expect(getEsploraUrl('regtest', null)).toBe(
+      `${window.location.origin}/api/esplora/default/regtest`,
+    )
+  })
+
+  it('passes through custom regtest Esplora URL', () => {
+    expect(getEsploraUrl('regtest', 'http://127.0.0.1:7030/api')).toBe(
+      'http://127.0.0.1:7030/api',
+    )
   })
 
   it('maps whitelisted custom mempool mainnet to proxy', () => {

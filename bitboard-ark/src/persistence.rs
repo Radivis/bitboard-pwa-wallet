@@ -11,17 +11,13 @@ use bitcoin::{Network, XOnlyPublicKey};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
-/// Current on-disk Arkade persistence format (v6).
+/// Current on-disk Arkade persistence format (v8).
 ///
-/// v6 moves unilateral exit materials to a leaf-tx-keyed map on [`OffchainVtxoSnapshot`].
-/// v5 and earlier import cleanly via migration in [`BitboardArkPersistence::parse_import`].
-pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 6;
-/// Legacy import version before leaf-tx materials map.
-pub const LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V5: u32 = 5;
-/// Legacy import version before operator trust pending fields.
-pub const LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 4;
-/// Pre-autonomous-exit persistence format.
-pub const LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V3: u32 = 3;
+/// Published 0.3.3 wallets used v3. [`BitboardArkPersistence::parse_import`] accepts versions
+/// 3–8: missing fields default. Leftover v4–v7 blobs deserialize as the current types.
+pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 8;
+/// Oldest envelope version `parse_import` will load (published 0.3.3).
+pub const MIN_SUPPORTED_ARK_PERSISTENCE_IMPORT_VERSION: u32 = 3;
 const PERSISTENCE_LOCK_POISONED: &str = "persistence lock poisoned";
 
 /// Single-threaded WASM: recover in-memory state after a prior panic instead of re-panicking.
@@ -35,6 +31,14 @@ fn lock_persistence_result<T>(mutex: &Mutex<T>) -> Result<MutexGuard<'_, T>, Err
     mutex
         .lock()
         .map_err(|_| Error::wallet(PERSISTENCE_LOCK_POISONED))
+}
+
+fn ensure_unilateral_exit_frontend(
+    snapshot: &mut WalletDbSnapshot,
+) -> &mut UnilateralExitFrontendPersistence {
+    snapshot
+        .unilateral_exit_frontend
+        .get_or_insert_with(UnilateralExitFrontendPersistence::default)
 }
 
 fn unix_timestamp_now() -> i64 {
@@ -121,140 +125,6 @@ pub struct OffchainVtxoSnapshot {
     pub unilateral_exit_materials_by_leaf_tx: BTreeMap<String, UnilateralExitMaterialsRecord>,
 }
 
-mod legacy_import {
-    use super::*;
-
-    #[derive(Debug, Clone, Deserialize)]
-    pub(super) struct VirtualTxOutPointRecordV5 {
-        pub txid: String,
-        pub vout: u32,
-        pub created_at: i64,
-        pub expires_at: i64,
-        pub amount_sats: u64,
-        pub script_hex: String,
-        pub is_preconfirmed: bool,
-        pub is_swept: bool,
-        pub is_unrolled: bool,
-        pub is_spent: bool,
-        #[serde(default)]
-        pub spent_by: Option<String>,
-        #[serde(default)]
-        pub commitment_txids: Vec<String>,
-        #[serde(default)]
-        pub settled_by: Option<String>,
-        #[serde(default)]
-        pub ark_txid: Option<String>,
-        #[serde(default)]
-        pub assets: Vec<VirtualTxOutPointAssetRecord>,
-        #[serde(default)]
-        pub server_pk_hex: Option<String>,
-        #[serde(default)]
-        pub unilateral_exit_materials: Option<UnilateralExitMaterialsRecord>,
-    }
-
-    #[derive(Debug, Clone, Deserialize)]
-    pub(super) struct OffchainVtxoSnapshotV5 {
-        pub synced_at: i64,
-        pub dust_sats: u64,
-        pub virtual_tx_outpoints: Vec<VirtualTxOutPointRecordV5>,
-    }
-
-    #[derive(Debug, Clone, Deserialize)]
-    pub(super) struct BitboardArkPersistenceV5 {
-        pub version: u32,
-        pub engine: String,
-        pub ark_sdk_version: String,
-        pub operator_identity: OperatorIdentity,
-        pub wallet_db: WalletDbSnapshotV5,
-        #[serde(default)]
-        pub swap_storage: SwapStorageSnapshot,
-    }
-
-    #[derive(Debug, Clone, Deserialize)]
-    pub(super) struct WalletDbSnapshotV5 {
-        #[serde(default)]
-        pub boarding_outputs: Vec<BoardingOutputSnapshot>,
-        #[serde(default)]
-        pub secret_keys_by_owner_pk_hex: HashMap<String, String>,
-        #[serde(default)]
-        pub offchain_next_derivation_index: u32,
-        #[serde(default)]
-        pub offchain_vtxo_snapshot: Option<OffchainVtxoSnapshotV5>,
-        #[serde(default)]
-        pub pending_exit_deductions: Vec<PendingExitDeductionRecord>,
-        #[serde(default)]
-        pub unilateral_exit_watches: Vec<UnilateralExitWatchRecord>,
-        #[serde(default)]
-        pub unilateral_exit_step_wait: Option<UnilateralExitStepWaitRecord>,
-        #[serde(default)]
-        pub cached_operator_info: Option<crate::cached_operator_info::CachedOperatorInfoRecord>,
-        #[serde(default)]
-        pub pending_operator_info: Option<crate::cached_operator_info::CachedOperatorInfoRecord>,
-        #[serde(default)]
-        pub operator_trust_pending: bool,
-    }
-
-    pub(super) fn migrate_offchain_vtxo_snapshot_v5_to_v6(
-        v5: OffchainVtxoSnapshotV5,
-    ) -> OffchainVtxoSnapshot {
-        let mut unilateral_exit_materials_by_leaf_tx = BTreeMap::new();
-        let mut virtual_tx_outpoints = Vec::with_capacity(v5.virtual_tx_outpoints.len());
-        for record in v5.virtual_tx_outpoints {
-            if let Some(materials) = record.unilateral_exit_materials {
-                unilateral_exit_materials_by_leaf_tx
-                    .entry(record.txid.clone())
-                    .and_modify(|existing: &mut UnilateralExitMaterialsRecord| {
-                        if materials.cached_at > existing.cached_at {
-                            *existing = materials.clone();
-                        }
-                    })
-                    .or_insert(materials);
-            }
-            virtual_tx_outpoints.push(VirtualTxOutPointRecord {
-                txid: record.txid,
-                vout: record.vout,
-                created_at: record.created_at,
-                expires_at: record.expires_at,
-                amount_sats: record.amount_sats,
-                script_hex: record.script_hex,
-                is_preconfirmed: record.is_preconfirmed,
-                is_swept: record.is_swept,
-                is_unrolled: record.is_unrolled,
-                is_spent: record.is_spent,
-                spent_by: record.spent_by,
-                commitment_txids: record.commitment_txids,
-                settled_by: record.settled_by,
-                ark_txid: record.ark_txid,
-                assets: record.assets,
-                server_pk_hex: record.server_pk_hex,
-            });
-        }
-        OffchainVtxoSnapshot {
-            synced_at: v5.synced_at,
-            dust_sats: v5.dust_sats,
-            virtual_tx_outpoints,
-            unilateral_exit_materials_by_leaf_tx,
-        }
-    }
-
-    pub(super) fn migrate_wallet_db_v5_to_v6(wallet_db: WalletDbSnapshotV5) -> WalletDbSnapshot {
-        WalletDbSnapshot {
-            boarding_outputs: wallet_db.boarding_outputs,
-            secret_keys_by_owner_pk_hex: wallet_db.secret_keys_by_owner_pk_hex,
-            offchain_next_derivation_index: wallet_db.offchain_next_derivation_index,
-            offchain_vtxo_snapshot: wallet_db
-                .offchain_vtxo_snapshot
-                .map(migrate_offchain_vtxo_snapshot_v5_to_v6),
-            pending_exit_deductions: wallet_db.pending_exit_deductions,
-            unilateral_exit_watches: wallet_db.unilateral_exit_watches,
-            unilateral_exit_step_wait: wallet_db.unilateral_exit_step_wait,
-            cached_operator_info: wallet_db.cached_operator_info,
-            pending_operator_info: wallet_db.pending_operator_info,
-            operator_trust_pending: wallet_db.operator_trust_pending,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum PendingExitKind {
@@ -273,6 +143,11 @@ pub struct PendingExitDeductionRecord {
     pub started_at: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub baseline_offchain_spendable_sats: Option<u64>,
+    /// Collaborative only: keep subtracting after the pending batch intent is gone (join
+    /// Completed) until operator snapshot spendable drops. Open intents cover in-progress
+    /// amounts; Cancel and legacy waiting deductions omit this so spendable is restored.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub retain_until_spendable_drops: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -295,6 +170,122 @@ pub struct UnilateralExitStepWaitRecord {
     pub started_at: i64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct UnilateralExitLeafOutpointRecord {
+    pub txid: String,
+    pub vout: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct UnilateralExitJobRecord {
+    #[serde(default)]
+    pub selected_leaf_outpoints: Vec<UnilateralExitLeafOutpointRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_step_relayed_since_unix: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub job_started_at_unix: Option<i64>,
+}
+
+impl UnilateralExitJobRecord {
+    pub fn empty() -> Self {
+        Self {
+            selected_leaf_outpoints: Vec::new(),
+            current_step_relayed_since_unix: None,
+            job_started_at_unix: None,
+        }
+    }
+}
+
+impl Default for UnilateralExitJobRecord {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
+pub const DEFAULT_UNILATERAL_EXIT_FEE_PRESET_LABEL: &str = "Medium";
+pub const DEFAULT_UNILATERAL_EXIT_MAX_FEE_RATE_SAT_PER_VB: f64 = 10.0;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UnilateralExitAutomationPrefsRecord {
+    pub enabled: bool,
+    pub fee_preset_label: String,
+    pub max_fee_rate_sat_per_vb: f64,
+}
+
+impl Default for UnilateralExitAutomationPrefsRecord {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            fee_preset_label: DEFAULT_UNILATERAL_EXIT_FEE_PRESET_LABEL.to_string(),
+            max_fee_rate_sat_per_vb: DEFAULT_UNILATERAL_EXIT_MAX_FEE_RATE_SAT_PER_VB,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct UnilateralExitFailureRecord {
+    #[serde(default)]
+    pub selected_leaf_outpoints: Vec<UnilateralExitLeafOutpointRecord>,
+    pub job_started_at_unix: i64,
+    pub detected_at_unix: i64,
+    pub reason_code: String,
+    pub detail_message: String,
+    #[serde(default)]
+    pub vtxo_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct UnilateralExitFrontendPersistence {
+    #[serde(default)]
+    pub job: UnilateralExitJobRecord,
+    #[serde(default)]
+    pub automation_prefs: UnilateralExitAutomationPrefsRecord,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_failure: Option<UnilateralExitFailureRecord>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PendingBatchIntentKind {
+    Board,
+    Recover,
+    Renew,
+    CollaborativeExit,
+    Migrate,
+}
+
+/// Durable subset of the intent UI cycle. Submission and success are not stored.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PendingBatchIntentLifecyclePhase {
+    Processing,
+    #[default]
+    TimedOut,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PendingBatchOutpointRecord {
+    pub txid: String,
+    pub vout: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PendingBatchIntentRecord {
+    pub kind: PendingBatchIntentKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub intent_id: Option<String>,
+    #[serde(default)]
+    pub onchain_outpoints: Vec<PendingBatchOutpointRecord>,
+    #[serde(default)]
+    pub vtxo_outpoints: Vec<PendingBatchOutpointRecord>,
+    pub amount_sats: u64,
+    pub registered_at: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub destination_address: Option<String>,
+    #[serde(default)]
+    pub lifecycle_phase: PendingBatchIntentLifecyclePhase,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct WalletDbSnapshot {
     pub boarding_outputs: Vec<BoardingOutputSnapshot>,
@@ -315,10 +306,11 @@ pub struct WalletDbSnapshot {
     pub pending_operator_info: Option<crate::cached_operator_info::CachedOperatorInfoRecord>,
     #[serde(default)]
     pub operator_trust_pending: bool,
+    #[serde(default)]
+    pub pending_batch_intents: Vec<PendingBatchIntentRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unilateral_exit_frontend: Option<UnilateralExitFrontendPersistence>,
 }
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct SwapStorageSnapshot {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BitboardArkPersistence {
@@ -327,30 +319,28 @@ pub struct BitboardArkPersistence {
     pub ark_sdk_version: String,
     pub operator_identity: OperatorIdentity,
     pub wallet_db: WalletDbSnapshot,
-    pub swap_storage: SwapStorageSnapshot,
+    /// Per-ASP trust posture: do not contact or ingest this operator until the user leaves.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub autonomous_mode: bool,
 }
 
 pub struct ParsedArkPersistence {
     pub wallet_db: WalletDbSnapshot,
     pub operator_identity: Option<OperatorIdentity>,
+    pub autonomous_mode: bool,
 }
 
 fn default_parsed_ark_persistence() -> ParsedArkPersistence {
     ParsedArkPersistence {
         wallet_db: WalletDbSnapshot::default(),
         operator_identity: None,
+        autonomous_mode: false,
     }
 }
 
 fn is_supported_persistence_import_version(version: u32) -> bool {
-    version == BITBOARD_ARK_PERSISTENCE_VERSION
-        || version == LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V5
-        || version == LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION
-        || version == LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V3
-}
-
-fn requires_v5_materials_migration(version: u32) -> bool {
-    version == LEGACY_BITBOARD_ARK_PERSISTENCE_VERSION_V5
+    (MIN_SUPPORTED_ARK_PERSISTENCE_IMPORT_VERSION..=BITBOARD_ARK_PERSISTENCE_VERSION)
+        .contains(&version)
 }
 
 fn warn_unknown_persistence_version(version: Option<u64>) {
@@ -372,7 +362,7 @@ impl BitboardArkPersistence {
             ark_sdk_version: ARK_RS_SDK_VERSION.to_string(),
             operator_identity,
             wallet_db: WalletDbSnapshot::default(),
-            swap_storage: SwapStorageSnapshot::default(),
+            autonomous_mode: false,
         }
     }
 
@@ -400,18 +390,6 @@ impl BitboardArkPersistence {
             return default_parsed_ark_persistence();
         }
 
-        if requires_v5_materials_migration(version) {
-            let legacy: legacy_import::BitboardArkPersistenceV5 =
-                match serde_json::from_value(envelope) {
-                    Ok(parsed) => parsed,
-                    Err(_) => return default_parsed_ark_persistence(),
-                };
-            return ParsedArkPersistence {
-                wallet_db: legacy_import::migrate_wallet_db_v5_to_v6(legacy.wallet_db),
-                operator_identity: Some(legacy.operator_identity),
-            };
-        }
-
         let envelope: BitboardArkPersistence = match serde_json::from_value(envelope) {
             Ok(parsed) => parsed,
             Err(_) => return default_parsed_ark_persistence(),
@@ -420,6 +398,7 @@ impl BitboardArkPersistence {
         ParsedArkPersistence {
             wallet_db: envelope.wallet_db,
             operator_identity: Some(envelope.operator_identity),
+            autonomous_mode: envelope.autonomous_mode,
         }
     }
 }
@@ -509,6 +488,63 @@ impl JsonPersistenceDb {
         lock_persistence(&self.inner).pending_exit_deductions = records;
     }
 
+    pub fn pending_batch_intents(&self) -> Vec<PendingBatchIntentRecord> {
+        lock_persistence(&self.inner).pending_batch_intents.clone()
+    }
+
+    pub fn set_pending_batch_intents(&self, records: Vec<PendingBatchIntentRecord>) {
+        lock_persistence(&self.inner).pending_batch_intents = records;
+    }
+
+    pub fn upsert_pending_batch_intent(&self, record: PendingBatchIntentRecord) {
+        let mut inner = lock_persistence(&self.inner);
+        inner
+            .pending_batch_intents
+            .retain(|existing| !pending_batch_intents_overlap(existing, &record));
+        inner.pending_batch_intents.push(record);
+    }
+
+    pub fn stamp_overlapping_pending_batch_intent_timed_out(
+        &self,
+        onchain_outpoints: &[PendingBatchOutpointRecord],
+        vtxo_outpoints: &[PendingBatchOutpointRecord],
+    ) -> bool {
+        let mut inner = lock_persistence(&self.inner);
+        let mut stamped = false;
+        for record in inner.pending_batch_intents.iter_mut() {
+            if pending_batch_record_overlaps_outpoints(record, onchain_outpoints, vtxo_outpoints)
+                && record.lifecycle_phase == PendingBatchIntentLifecyclePhase::Processing
+            {
+                record.lifecycle_phase = PendingBatchIntentLifecyclePhase::TimedOut;
+                stamped = true;
+            }
+        }
+        stamped
+    }
+
+    pub fn promote_stranded_processing_intents(&self) -> bool {
+        let mut inner = lock_persistence(&self.inner);
+        let mut promoted = false;
+        for record in inner.pending_batch_intents.iter_mut() {
+            if record.lifecycle_phase == PendingBatchIntentLifecyclePhase::Processing {
+                record.lifecycle_phase = PendingBatchIntentLifecyclePhase::TimedOut;
+                promoted = true;
+            }
+        }
+        promoted
+    }
+
+    pub fn remove_pending_batch_intents_overlapping(
+        &self,
+        onchain_outpoints: &[PendingBatchOutpointRecord],
+        vtxo_outpoints: &[PendingBatchOutpointRecord],
+    ) {
+        let mut inner = lock_persistence(&self.inner);
+        inner.pending_batch_intents.retain(|existing| {
+            !pending_batch_record_overlaps_outpoints(existing, onchain_outpoints, vtxo_outpoints)
+        });
+    }
+
     pub fn unilateral_exit_watches(&self) -> Vec<UnilateralExitWatchRecord> {
         lock_persistence(&self.inner)
             .unilateral_exit_watches
@@ -536,13 +572,6 @@ impl JsonPersistenceDb {
             return;
         }
         inner.unilateral_exit_watches.push(record);
-    }
-
-    pub fn remove_unilateral_exit_watch(&self, txid: &str, vout: u32) {
-        let mut inner = lock_persistence(&self.inner);
-        inner
-            .unilateral_exit_watches
-            .retain(|watch| !(watch.vtxo_txid == txid && watch.vout == vout));
     }
 
     pub fn remove_unilateral_exit_watches_for_outpoints(
@@ -589,6 +618,31 @@ impl JsonPersistenceDb {
 
     pub fn clear_unilateral_exit_step_wait(&self) {
         lock_persistence(&self.inner).unilateral_exit_step_wait = None;
+    }
+
+    pub fn unilateral_exit_frontend(&self) -> Option<UnilateralExitFrontendPersistence> {
+        lock_persistence(&self.inner)
+            .unilateral_exit_frontend
+            .clone()
+    }
+
+    pub fn set_unilateral_exit_frontend(&self, bundle: UnilateralExitFrontendPersistence) {
+        lock_persistence(&self.inner).unilateral_exit_frontend = Some(bundle);
+    }
+
+    pub fn set_unilateral_exit_job(&self, job: UnilateralExitJobRecord) {
+        let mut inner = lock_persistence(&self.inner);
+        ensure_unilateral_exit_frontend(&mut inner).job = job;
+    }
+
+    pub fn set_unilateral_exit_automation_prefs(&self, prefs: UnilateralExitAutomationPrefsRecord) {
+        let mut inner = lock_persistence(&self.inner);
+        ensure_unilateral_exit_frontend(&mut inner).automation_prefs = prefs;
+    }
+
+    pub fn set_unilateral_exit_failure(&self, failure: Option<UnilateralExitFailureRecord>) {
+        let mut inner = lock_persistence(&self.inner);
+        ensure_unilateral_exit_frontend(&mut inner).last_failure = failure;
     }
 
     /// Insert or replace a pending exit record (no duplicate deductions on retry).
@@ -651,6 +705,33 @@ impl JsonPersistenceDb {
         }
         Ok(boarding_output)
     }
+}
+
+fn pending_batch_intents_overlap(
+    left: &PendingBatchIntentRecord,
+    right: &PendingBatchIntentRecord,
+) -> bool {
+    pending_batch_record_overlaps_outpoints(left, &right.onchain_outpoints, &right.vtxo_outpoints)
+}
+
+pub(crate) fn pending_batch_record_overlaps_outpoints(
+    record: &PendingBatchIntentRecord,
+    onchain_outpoints: &[PendingBatchOutpointRecord],
+    vtxo_outpoints: &[PendingBatchOutpointRecord],
+) -> bool {
+    outpoint_sets_overlap(&record.onchain_outpoints, onchain_outpoints)
+        || outpoint_sets_overlap(&record.vtxo_outpoints, vtxo_outpoints)
+}
+
+fn outpoint_sets_overlap(
+    left: &[PendingBatchOutpointRecord],
+    right: &[PendingBatchOutpointRecord],
+) -> bool {
+    left.iter().any(|candidate| {
+        right
+            .iter()
+            .any(|other| candidate.txid == other.txid && candidate.vout == other.vout)
+    })
 }
 
 /// Shared handle so `ark-bdk-wallet` and persistence export use the same DB.

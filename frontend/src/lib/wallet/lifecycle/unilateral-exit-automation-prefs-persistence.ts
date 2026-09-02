@@ -1,6 +1,4 @@
 import { create } from 'zustand'
-import { createJSONStorage, persist } from 'zustand/middleware'
-import { sqliteStorage } from '@/db/storage-adapter'
 import type { SendFeePresetLabel } from '@/lib/esplora/esplora-fee-estimates'
 import type { NetworkMode } from '@/stores/walletStore'
 import {
@@ -8,18 +6,21 @@ import {
   unilateralExitAutomationPrefsKey,
   type UnilateralExitAutomationPrefs,
 } from '@/lib/wallet/lifecycle/unilateral-exit-automation-types'
-import type { UnilateralExitWalletScope } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
+import type { ArkadeWalletScope } from '@/lib/arkade/arkade-session-scope'
+import { scheduleUnilateralExitPrefsSdkWrite } from '@/lib/wallet/lifecycle/unilateral-exit-frontend-sdk-persistence'
 
 interface UnilateralExitAutomationPrefsState {
   prefsByKey: Record<string, UnilateralExitAutomationPrefs>
   getPrefs: (
     walletId: number,
     networkMode: NetworkMode,
-    connectionId: string,
+    arkadeAccountId: string,
   ) => UnilateralExitAutomationPrefs
-  setEnabled: (scope: UnilateralExitWalletScope, enabled: boolean, defaultMaxFee?: number) => void
-  setFeePresetLabel: (scope: UnilateralExitWalletScope, feePresetLabel: SendFeePresetLabel) => void
-  setMaxFeeRateSatPerVb: (scope: UnilateralExitWalletScope, maxFeeRateSatPerVb: number) => void
+  hydratePrefs: (scope: ArkadeWalletScope, prefs: UnilateralExitAutomationPrefs) => void
+  setEnabled: (scope: ArkadeWalletScope, enabled: boolean, defaultMaxFee?: number) => void
+  setFeePresetLabel: (scope: ArkadeWalletScope, feePresetLabel: SendFeePresetLabel) => void
+  setMaxFeeRateSatPerVb: (scope: ArkadeWalletScope, maxFeeRateSatPerVb: number) => void
+  clearScope: (scope: ArkadeWalletScope) => void
 }
 
 function updatePrefs(
@@ -37,45 +38,55 @@ function updatePrefs(
 }
 
 export const useUnilateralExitAutomationPrefsStore = create<UnilateralExitAutomationPrefsState>()(
-  persist(
-    (set, get) => ({
-      prefsByKey: {},
+  (set, get) => ({
+    prefsByKey: {},
 
-      getPrefs: (walletId, networkMode, connectionId) => {
-        const key = unilateralExitAutomationPrefsKey({ walletId, networkMode, connectionId })
-        return get().prefsByKey[key] ?? defaultUnilateralExitAutomationPrefs()
-      },
-
-      setEnabled: (scope, enabled, defaultMaxFee) => {
-        const key = unilateralExitAutomationPrefsKey(scope)
-        set((state) =>
-          updatePrefs(state, key, (prefs) => ({
-            ...prefs,
-            enabled,
-            ...(enabled && defaultMaxFee != null ? { maxFeeRateSatPerVb: defaultMaxFee } : {}),
-          })),
-        )
-      },
-
-      setFeePresetLabel: (scope, feePresetLabel) => {
-        const key = unilateralExitAutomationPrefsKey(scope)
-        set((state) => updatePrefs(state, key, (prefs) => ({ ...prefs, feePresetLabel })))
-      },
-
-      setMaxFeeRateSatPerVb: (scope, maxFeeRateSatPerVb) => {
-        if (!Number.isFinite(maxFeeRateSatPerVb) || maxFeeRateSatPerVb <= 0) return
-        const key = unilateralExitAutomationPrefsKey(scope)
-        set((state) =>
-          updatePrefs(state, key, (prefs) => ({ ...prefs, maxFeeRateSatPerVb })),
-        )
-      },
-    }),
-    {
-      name: 'unilateral-exit-automation-prefs',
-      storage: createJSONStorage(() => sqliteStorage),
-      version: 1,
-      migrate: (persistedState) => persistedState,
-      partialize: (state) => ({ prefsByKey: state.prefsByKey }),
+    getPrefs: (walletId, networkMode, arkadeAccountId) => {
+      const key = unilateralExitAutomationPrefsKey({ walletId, networkMode, arkadeAccountId })
+      return get().prefsByKey[key] ?? defaultUnilateralExitAutomationPrefs()
     },
-  ),
+
+    hydratePrefs: (scope, prefs) => {
+      const key = unilateralExitAutomationPrefsKey(scope)
+      set((state) => ({
+        prefsByKey: { ...state.prefsByKey, [key]: prefs },
+      }))
+    },
+
+    setEnabled: (scope, enabled, defaultMaxFee) => {
+      const key = unilateralExitAutomationPrefsKey(scope)
+      set((state) =>
+        updatePrefs(state, key, (prefs) => ({
+          ...prefs,
+          enabled,
+          ...(enabled && defaultMaxFee != null ? { maxFeeRateSatPerVb: defaultMaxFee } : {}),
+        })),
+      )
+      scheduleUnilateralExitPrefsSdkWrite(scope)
+    },
+
+    setFeePresetLabel: (scope, feePresetLabel) => {
+      const key = unilateralExitAutomationPrefsKey(scope)
+      set((state) => updatePrefs(state, key, (prefs) => ({ ...prefs, feePresetLabel })))
+      scheduleUnilateralExitPrefsSdkWrite(scope)
+    },
+
+    setMaxFeeRateSatPerVb: (scope, maxFeeRateSatPerVb) => {
+      if (!Number.isFinite(maxFeeRateSatPerVb) || maxFeeRateSatPerVb <= 0) return
+      const key = unilateralExitAutomationPrefsKey(scope)
+      set((state) =>
+        updatePrefs(state, key, (prefs) => ({ ...prefs, maxFeeRateSatPerVb })),
+      )
+      scheduleUnilateralExitPrefsSdkWrite(scope)
+    },
+
+    clearScope: (scope) => {
+      const key = unilateralExitAutomationPrefsKey(scope)
+      set((state) => {
+        const prefsByKey = { ...state.prefsByKey }
+        delete prefsByKey[key]
+        return { prefsByKey }
+      })
+    },
+  }),
 )

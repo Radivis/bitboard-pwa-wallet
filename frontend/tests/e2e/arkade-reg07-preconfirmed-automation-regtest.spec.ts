@@ -18,8 +18,10 @@ import {
   assertIntermediateNodesShowExitableOutpointsButAreNotLeafSelection,
   runAutomaticUnilateralUnrollUntilBranchComplete,
   selectAllUnilateralExitLeafNodes,
+  waitForBumperBalanceReady,
   REG07_BUMPER_FUNDING_SATS,
 } from './helpers/arkade-unilateral-exit-reg07'
+import { attachUnilateralExitDiagnosticsOnTestFailure } from './helpers/esplora-unilateral-exit-diagnostics'
 
 const ARKADE_REGTEST_TIMEOUT_MS = 1_200_000
 
@@ -31,6 +33,10 @@ test.describe('Arkade REG-07 preconfirmed automation @arkade-reg07', () => {
       process.env.VITE_E2E_ARKADE_REGTEST !== 'true',
       'Run with VITE_E2E_ARKADE_REGTEST=true (npm run test:e2e:arkade-regtest-reg07).',
     )
+  })
+
+  test.afterEach(async ({ page }, testInfo) => {
+    await attachUnilateralExitDiagnosticsOnTestFailure(page, testInfo)
   })
 
   test('E2E-ARK-REG-07 preconfirmed VTXO automatic unilateral unroll', async ({ page }) => {
@@ -55,6 +61,7 @@ test.describe('Arkade REG-07 preconfirmed automation @arkade-reg07', () => {
     expect(await selectedOutpoints.count()).toBeGreaterThanOrEqual(2)
 
     await ensureOnChainBumperFunds(page, REG07_BUMPER_FUNDING_SATS)
+    await waitForBumperBalanceReady(page)
     await runAutomaticUnilateralUnrollUntilBranchComplete(page)
   })
 })

@@ -62,23 +62,13 @@ vi.mock('@/hooks/useArkadeQueries', async (importOriginal) => {
         estimatedReceiveSats: 99_500,
       },
     }),
-    useArkadeUnilateralExitFeeQuery: () => ({
-      isLoading: false,
-      isError: false,
-      data: {
-        chainTxCount: 2,
-        projectedUnrollSteps: 1,
-        projectedWaitSteps: 0,
-        feeRateSatPerVb: 5,
-        estimatedPackageFeeSats: 2_000,
-        bumperBalanceSats: 5_000,
-        bumperSufficient: true,
-      },
-    }),
-    useArkadeUnilateralUnrollMutation: () => ({ mutate: vi.fn(), isPending: false }),
     useArkadeCompleteUnilateralExitMutation: () => ({ mutate: vi.fn(), isPending: false }),
     useArkadeUnilateralExitsInProgressQuery: () => ({ data: [], isLoading: false }),
     useArkadeUnilateralExitCompletionFeeQuery: () => ({ data: undefined, isLoading: false }),
+    useHasPendingBatchIntent: () => false,
+    useHasPendingBatchIntentKind: () => false,
+    usePendingBatchIntent: () => null,
+    usePendingBatchIntents: () => [],
   }
 })
 
@@ -101,6 +91,13 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
   }
 })
 
+vi.mock('@/components/wallet/arkade-exit/CollaborativeExitDialog', () => ({
+  CollaborativeExitDialog: () => null,
+}))
+vi.mock('@/components/wallet/arkade-exit/CompleteUnilateralExitDialog', () => ({
+  CompleteUnilateralExitDialog: () => null,
+}))
+
 vi.mock('@/hooks/useArkadeExitFlow', () => ({
   useArkadeExitFlow: () => ({
     setCollaborativeOpen: vi.fn(),
@@ -120,15 +117,20 @@ describe('Arkade autonomous mode UI', () => {
       screen.queryByRole('img', { name: /castaway building a small boat/i }),
     ).not.toBeInTheDocument()
     await user.click(screen.getByRole('switch', { name: 'Autonomous mode' }))
-    expect(screen.getByRole('dialog', { name: 'Missing exit materials' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Continue' }))
+    expect(screen.getByRole('dialog', { name: 'Enable autonomous mode' })).toBeInTheDocument()
+    expect(
+      screen.getByText(/persists for this operator and blocks all contact/i),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/1 exit-eligible VTXO is missing prefetched exit materials/i)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Enable' }))
     rerender(<ArkadeAutonomousModeSwitch />)
     expect(screen.getByRole('img', { name: /castaway building a small boat/i })).toHaveAttribute(
       'src',
       '/autonomous_mode_w600.jpg',
     )
     expect(screen.getByTestId('arkade-autonomous-materials-missing')).toBeInTheDocument()
-    expect(screen.getByText(/operator unreachable/i)).toBeInTheDocument()
+    expect(screen.getByText(/not contacting this operator/i)).toBeInTheDocument()
+    expect(screen.queryByText(/operator unreachable/i)).not.toBeInTheDocument()
   })
 
   it('disables collaborative exit while autonomous mode is active', async () => {
@@ -138,5 +140,13 @@ describe('Arkade autonomous mode UI', () => {
     expect(screen.getByTestId('arkade-exit-collab-unavailable')).toHaveTextContent(
       /autonomous mode/i,
     )
+  })
+
+  it('shows idle trust-posture copy when autonomous mode is off', () => {
+    autonomousActive = false
+    renderWithProviders(<ArkadeAutonomousModeSwitch />)
+    expect(
+      screen.getByText(/do not contact this operator until you turn this off/i),
+    ).toBeInTheDocument()
   })
 })

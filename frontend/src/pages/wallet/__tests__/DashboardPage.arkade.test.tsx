@@ -137,6 +137,9 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
     error: null,
   }),
   useArkadeSignerMigrationPartialResultQuery: () => ({ data: null }),
+  useArkadeAutonomousModeActive: () => false,
+  useHasPendingBatchIntent: () => false,
+  usePendingBatchIntent: () => null,
 }))
 
 vi.mock('@/hooks/useArkadeDashboardQueries', () => ({

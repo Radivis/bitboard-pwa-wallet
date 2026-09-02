@@ -7,12 +7,11 @@ use ark_core::history::Transaction;
 use ark_core::server::VirtualTxOutPoint;
 use bitcoin::{Address, Network, PublicKey};
 
-use crate::api_types::ExitCandidateRow;
-use crate::api_types::{IntentFeeConfiguredDto, PaymentRowDto};
+use crate::api_types::{
+    ExitCandidateDto, IntentFeeConfiguredDto, PaymentRowDto, VirtualStatusState,
+};
 use crate::constants::{
     DEFAULT_TX_FEE_RATE, PAYMENT_DIRECTION_INCOMING, PAYMENT_DIRECTION_OUTGOING,
-    VTXO_STATUS_PRECONFIRMED, VTXO_STATUS_RECOVERABLE, VTXO_STATUS_SETTLED, VTXO_STATUS_SPENT,
-    VTXO_STATUS_UNROLLED,
 };
 use crate::error::{ArkResult, ArkWasmError};
 
@@ -127,22 +126,16 @@ pub(crate) fn map_history_row(transaction: Transaction) -> Option<PaymentRowDto>
 pub(crate) fn map_exit_candidate(
     virtual_tx_outpoint: &VirtualTxOutPoint,
     dust: bitcoin::Amount,
-) -> ExitCandidateRow {
+) -> ExitCandidateDto {
     let recoverable = virtual_tx_outpoint.is_recoverable(dust);
-    let state = if virtual_tx_outpoint.is_spent {
-        VTXO_STATUS_SPENT
-    } else if virtual_tx_outpoint.is_unrolled {
-        VTXO_STATUS_UNROLLED
-    } else if virtual_tx_outpoint.is_preconfirmed {
-        VTXO_STATUS_PRECONFIRMED
-    } else if recoverable {
-        VTXO_STATUS_RECOVERABLE
-    } else {
-        VTXO_STATUS_SETTLED
-    }
-    .to_string();
+    let virtual_status_state = VirtualStatusState::from_flags(
+        virtual_tx_outpoint.is_spent,
+        virtual_tx_outpoint.is_unrolled,
+        virtual_tx_outpoint.is_preconfirmed,
+        recoverable,
+    );
 
-    ExitCandidateRow {
+    ExitCandidateDto {
         id: format!(
             "{}:{}",
             virtual_tx_outpoint.outpoint.txid, virtual_tx_outpoint.outpoint.vout
@@ -150,7 +143,7 @@ pub(crate) fn map_exit_candidate(
         txid: virtual_tx_outpoint.outpoint.txid.to_string(),
         vout: virtual_tx_outpoint.outpoint.vout,
         amount_sats: virtual_tx_outpoint.amount.to_sat(),
-        virtual_status_state: state,
+        virtual_status_state,
         is_recoverable: recoverable,
         is_unrolled: virtual_tx_outpoint.is_unrolled,
         can_start_unroll: !recoverable

@@ -1,32 +1,24 @@
-import type { NetworkMode } from '@/stores/walletStore'
+import type { ArkadeWalletScope } from '@/lib/arkade/arkade-session-scope'
 import type {
   ArkadeUnilateralExitProgress,
+  ArkadeUnilateralExitFailureReasonCode,
   ArkadeVtxoOutpoint,
 } from '@/workers/arkade-api'
 
-export type UnilateralExitWalletScope = {
-  walletId: number
-  networkMode: NetworkMode
-  connectionId: string
+export enum UnilateralExitLifecyclePhase {
+  NotConfigured = 'not-configured',
+  Idle = 'idle',
+  Advancing = 'advancing',
+  WaitingConfirm = 'waiting-confirm',
+  WaitingForParentData = 'waiting-for-parent-data',
+  Complete = 'complete',
+  Terminated = 'terminated',
+  Error = 'error',
 }
-
-export function unilateralExitWalletScopeKey(
-  scope: Pick<UnilateralExitWalletScope, 'walletId' | 'networkMode' | 'connectionId'>,
-): string {
-  return `${scope.walletId}:${scope.networkMode}:${scope.connectionId}`
-}
-
-export type UnilateralExitLifecyclePhase =
-  | 'not-configured'
-  | 'idle'
-  | 'advancing'
-  | 'waiting-confirm'
-  | 'complete'
-  | 'error'
 
 export type UnilateralExitLifecycleSnapshot = {
   phase: UnilateralExitLifecyclePhase
-  walletScope: UnilateralExitWalletScope | null
+  walletScope: ArkadeWalletScope | null
   selectedLeafOutpoints: ArkadeVtxoOutpoint[]
   progress: ArkadeUnilateralExitProgress | null
   lastErrorMessage: string | null
@@ -34,11 +26,31 @@ export type UnilateralExitLifecycleSnapshot = {
 
 export type PersistedUnilateralExitJob = {
   selectedLeafOutpoints: ArkadeVtxoOutpoint[]
-  jobActive: boolean
+  /** Unix seconds when the active step was first known relayed; null when not waiting or step confirmed. */
+  currentStepRelayedSinceUnix: number | null
+  /** Unix seconds when the active job was started; cleared on clearJob. */
+  jobStartedAtUnix: number | null
+}
+
+export function persistedUnilateralExitJobExists(
+  job: Pick<PersistedUnilateralExitJob, 'selectedLeafOutpoints'> | null | undefined,
+): boolean {
+  return (job?.selectedLeafOutpoints.length ?? 0) > 0
+}
+
+export type UnilateralExitFailureReasonCode = ArkadeUnilateralExitFailureReasonCode
+
+export type PersistedUnilateralExitFailure = {
+  selectedLeafOutpoints: ArkadeVtxoOutpoint[]
+  jobStartedAtUnix: number
+  detectedAtUnix: number
+  reasonCode: UnilateralExitFailureReasonCode
+  detailMessage: string
+  vtxoIds: string[]
 }
 
 export type UnilateralExitStartParams = {
-  walletScope: UnilateralExitWalletScope
+  walletScope: ArkadeWalletScope
   outpoints: ArkadeVtxoOutpoint[]
   feeRateSatPerVb: number
 }

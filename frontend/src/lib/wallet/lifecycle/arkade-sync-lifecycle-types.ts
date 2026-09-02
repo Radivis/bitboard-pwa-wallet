@@ -1,6 +1,7 @@
 import type { NetworkMode } from '@/stores/walletStore'
 import type { SyncLifecyclePhase } from '@/lib/wallet/lifecycle/rail-lifecycle-types'
 import type { ArkadeRailScope } from '@/lib/wallet/lifecycle/arkade-rail-types'
+import type { ArkadePendingBatchIntent } from '@/workers/arkade-api'
 
 export type ArkadeSyncKind = 'postLoad' | 'dashboardPoll' | 'manual' | 'signerMigration'
 
@@ -15,12 +16,13 @@ export type ArkadeSyncLifecycleSnapshot = {
 export type ArkadeSyncParams = {
   walletId: number
   networkMode: NetworkMode
-  connectionId: string
+  arkadeAccountId: string
   syncKind: ArkadeSyncKind
   onSyncError?: (err: unknown) => void
   awaitCompletion?: boolean
   /** When false, sync/save errors do not throw (background post-load). */
   throwOnError?: boolean
+  onIntentRegistered?: (intent: ArkadePendingBatchIntent) => void
 }
 
 export type ArkadeSyncThenSaveParams = ArkadeSyncParams
@@ -28,7 +30,7 @@ export type ArkadeSyncThenSaveParams = ArkadeSyncParams
 export type ArkadePostLoadSyncParams = {
   walletId: number
   networkMode: NetworkMode
-  connectionId: string
+  arkadeAccountId: string
   onSyncError?: (err: unknown) => void
   awaitCompletion?: boolean
 }

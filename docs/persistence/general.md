@@ -47,9 +47,8 @@ All use `sqliteStorage` → `settings` table. Hydration helper: `frontend/src/li
 | `fiatDenominationStore` | `fiat-denomination-storage` | Fiat mode, currency, provider | — |
 | `bitcoinDisplayUnitStore` | `bitcoin-display-unit-storage` | `defaultBitcoinUnit` | — |
 | `periodicSyncStore` | `periodic-sync-storage` | Per-rail sync intervals | 1 |
-| `unilateralExitAutomationStore` | `unilateral-exit-automation-storage` | `jobsByKey` | — |
 
-Stores without `persist` hold session-only UI state (e.g. `unilateralExitControlStore`, `sendStore`).
+Stores without `persist` hold session-only UI state (e.g. `unilateralExitControlStore`, `sendStore`, and the unilateral-exit job/prefs/failure caches hydrated from `sdkPersistenceJson`). Unilateral-exit durable state is documented in [unilateral-exit.md](unilateral-exit.md).
 
 ## Near-zero security mode
 

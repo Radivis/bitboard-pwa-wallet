@@ -81,6 +81,8 @@ pub struct MigrationLegReport {
     /// The settlement error, if this leg's `settle_vtxos` call failed. Set independently of the
     /// other leg — a failure here does not prevent the other leg from running.
     pub error: Option<String>,
+    /// Intent registered with the operator; wait for the round instead of retrying RegisterIntent.
+    pub waiting_intent: Option<crate::RegisteredBatchIntent>,
 }
 
 impl MigrationLegReport {
@@ -93,6 +95,7 @@ impl MigrationLegReport {
             oversized: Vec::new(),
             skipped: Some(reason),
             error: None,
+            waiting_intent: None,
         }
     }
 
@@ -654,6 +657,7 @@ where
                 oversized,
                 skipped: Some(reason),
                 error: None,
+                waiting_intent: None,
             });
         }
 
@@ -667,13 +671,53 @@ where
         // Capture (rather than propagate) the settle error so the caller can still run the other
         // leg — a failure in one leg must not suppress the other.
         Ok(match settle_result {
-            Ok(settle_txid) => MigrationLegReport {
-                settle_txid,
+            Ok(Some(crate::JoinBatchOutcome::Completed(settle_txid))) => MigrationLegReport {
+                settle_txid: Some(settle_txid),
                 migrated: selected,
                 deferred,
                 oversized,
                 skipped: None,
                 error: None,
+                waiting_intent: None,
+            },
+            Ok(Some(crate::JoinBatchOutcome::Waiting(intent))) => MigrationLegReport {
+                settle_txid: None,
+                migrated: Vec::new(),
+                deferred: selected.into_iter().chain(deferred).collect(),
+                oversized,
+                skipped: None,
+                error: None,
+                waiting_intent: Some(intent),
+            },
+            Ok(None) => MigrationLegReport {
+                settle_txid: None,
+                migrated: Vec::new(),
+                deferred: selected.into_iter().chain(deferred).collect(),
+                oversized,
+                skipped: None,
+                error: Some("settle returned no matching inputs".to_string()),
+                waiting_intent: None,
+            },
+            Err(e) if e.is_duplicated_input() => MigrationLegReport {
+                settle_txid: None,
+                migrated: Vec::new(),
+                deferred: selected.into_iter().chain(deferred).collect(),
+                oversized,
+                skipped: None,
+                error: None,
+                waiting_intent: Some(crate::RegisteredBatchIntent {
+                    intent_id: String::new(),
+                    onchain_outpoints: if is_vtxo_leg {
+                        Vec::new()
+                    } else {
+                        selected_outpoints.clone()
+                    },
+                    vtxo_outpoints: if is_vtxo_leg {
+                        selected_outpoints.clone()
+                    } else {
+                        Vec::new()
+                    },
+                }),
             },
             Err(e) => {
                 tracing::warn!(error = %e, "Deprecated-signer migration leg failed to settle");
@@ -686,6 +730,7 @@ where
                     oversized,
                     skipped: None,
                     error: Some(e.to_string()),
+                    waiting_intent: None,
                 }
             }
         })
@@ -922,6 +967,7 @@ mod migration_tests {
                 oversized: Vec::new(),
                 skipped: None,
                 error: Some("settle failed".to_owned()),
+                waiting_intent: None,
             },
             boarding: MigrationLegReport::skipped(MigrationSkipReason::NothingMigratable),
         };

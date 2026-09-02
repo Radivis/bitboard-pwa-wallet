@@ -1,10 +1,20 @@
 import { getDatabase, getWalletSecretsEncrypted } from '@/db'
-import { findActiveArkadeConnectionSummary } from '@/lib/arkade/arkade-encrypted-persistence-manager'
+import { findActiveArkadeAccountSummary } from '@/lib/arkade/arkade-encrypted-persistence-manager'
+import { arkadeBumperInfoQueryKey } from '@/lib/arkade/arkade-query-keys'
 import { getArkadeEndpoints, isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
+import { appQueryClient } from '@/lib/shared/app-query-client'
 import { getArkadeLoadLifecycleSnapshot } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
-import { getUnilateralExitAutomationSnapshot } from '@/lib/wallet/lifecycle/unilateral-exit-automation-controller'
 import { getPersistedUnilateralExitJob } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence'
-import { getUnilateralExitLifecycleSnapshot } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-orchestrator'
+import { persistedUnilateralExitJobExists } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
+import {
+  clearAutomaticUnilateralExitPause,
+  getUnilateralExitActorSnapshot,
+} from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime'
+import {
+  selectUnilateralExitAutomationSnapshot,
+  selectUnilateralExitDebugSnapshot,
+  selectUnilateralExitLifecycleSnapshot,
+} from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-selectors'
 import { getArkadeWorker } from '@/workers/arkade-factory'
 import { ensureArkadeEncryptedSecretsHost } from '@/workers/arkade-persistence-channel'
 import { ensureArkadeWorkerSecretsChannel, ensureSecretsChannel } from '@/workers/secrets-channel'
@@ -40,18 +50,18 @@ export async function exportBoardedWalletSdkPersistenceJsonForE2e(): Promise<str
   await worker.flushSdkPersistence()
 
   const encrypted = await getWalletSecretsEncrypted(getDatabase(), walletId)
-  const connection = await findActiveArkadeConnectionSummary({
+  const connection = await findActiveArkadeAccountSummary({
     walletId,
     networkMode,
     encryptedPayload: encrypted.payload,
   })
   if (connection == null) {
-    throw new Error('No active Arkade operator connection in wallet secrets')
+    throw new Error('No active Arkade account in wallet secrets')
   }
 
   const sdkPersistenceJson = await worker.readPersistedSdkPersistenceJsonForE2e({
     walletId,
-    connectionId: connection.id,
+    arkadeAccountId: connection.id,
   })
   if (sdkPersistenceJson == null || sdkPersistenceJson.trim() === '') {
     throw new Error('Persisted Arkade SDK JSON missing after boarding — sync or flush failed')
@@ -75,7 +85,7 @@ export type E2eUnilateralExitDebugSnapshot = {
   }
   lifecycle: {
     phase: string
-    walletScope: { walletId: number; networkMode: string; connectionId: string } | null
+    walletScope: { walletId: number; networkMode: string; arkadeAccountId: string } | null
     selectedLeafOutpoints: ArkadeVtxoOutpoint[]
     lastErrorMessage: string | null
   }
@@ -88,33 +98,43 @@ export type E2eUnilateralExitDebugSnapshot = {
   persistedJob: {
     jobActive: boolean
     selectedLeafOutpoints: ArkadeVtxoOutpoint[]
+    currentStepRelayedSinceUnix: number | null
   }
   progress: ArkadeUnilateralExitProgress | null
   progressError: string | null
   batchEstimate: ArkadeUnilateralExitBatchEstimate | null
   batchEstimateError: string | null
   exitBranchTxids: string[]
+  machineState: string
+  exitCandidates: {
+    total: number
+    startable: number
+    error: string | null
+  }
+  topologyError: string | null
 }
 
 export async function exportUnilateralExitDebugSnapshotForE2e(): Promise<E2eUnilateralExitDebugSnapshot> {
   const walletId = useWalletStore.getState().activeWalletId
   const networkMode = useWalletStore.getState().networkMode
-  const activeArkadeConnectionId = useWalletStore.getState().activeArkadeConnectionId
+  const activeArkadeAccountId = useWalletStore.getState().activeArkadeAccountId
   if (
     walletId == null ||
-    activeArkadeConnectionId == null ||
+    activeArkadeAccountId == null ||
     !isArkadeSupportedNetworkMode(networkMode)
   ) {
     throw new Error('Wallet must be unlocked on an Arkade network to export unilateral-exit debug snapshot')
   }
 
   const controlStore = useUnilateralExitControlStore.getState()
-  const lifecycle = getUnilateralExitLifecycleSnapshot()
-  const automation = getUnilateralExitAutomationSnapshot()
+  const actorSnapshot = getUnilateralExitActorSnapshot()
+  const machineDebug = selectUnilateralExitDebugSnapshot(actorSnapshot)
+  const lifecycle = selectUnilateralExitLifecycleSnapshot(actorSnapshot)
+  const automation = selectUnilateralExitAutomationSnapshot(actorSnapshot)
   const persistedJob = getPersistedUnilateralExitJob({
     walletId,
     networkMode,
-    connectionId: activeArkadeConnectionId,
+    arkadeAccountId: activeArkadeAccountId,
   })
   const esploraUrl = getArkadeEndpoints(networkMode).esploraUrl
   const loadSnapshot = getArkadeLoadLifecycleSnapshot()
@@ -148,13 +168,34 @@ export async function exportUnilateralExitDebugSnapshotForE2e(): Promise<E2eUnil
   }
 
   let exitBranchTxids: string[] = []
-  if (vtxoOutpoints.length > 0) {
-    try {
-      const topology = await worker.getUnilateralExitTopology({ vtxoOutpoints })
-      exitBranchTxids = topology.exitBranchTxids
-    } catch {
-      exitBranchTxids = progress?.nodeStatuses.map((node) => node.txid) ?? []
+  let topologyError: string | null = null
+
+  let exitCandidatesTotal = 0
+  let exitCandidatesStartable = 0
+  let exitCandidatesError: string | null = null
+  try {
+    const candidates = await worker.listExitCandidates()
+    exitCandidatesTotal = candidates.length
+    exitCandidatesStartable = candidates.filter((row) => row.canStartUnroll).length
+    const topologyOutpointsForProbe =
+      vtxoOutpoints.length > 0
+        ? vtxoOutpoints
+        : candidates
+            .filter((row) => row.canStartUnroll)
+            .map((row) => ({ txid: row.txid, vout: row.vout }))
+    if (topologyOutpointsForProbe.length > 0) {
+      try {
+        const topology = await worker.getUnilateralExitTopology({
+          vtxoOutpoints: topologyOutpointsForProbe,
+        })
+        exitBranchTxids = topology.exitBranchTxids
+      } catch (error) {
+        topologyError = error instanceof Error ? error.message : String(error)
+        exitBranchTxids = progress?.nodeStatuses.map((node) => node.txid) ?? []
+      }
     }
+  } catch (error) {
+    exitCandidatesError = error instanceof Error ? error.message : String(error)
   }
 
   return {
@@ -179,14 +220,22 @@ export async function exportUnilateralExitDebugSnapshotForE2e(): Promise<E2eUnil
       scheduling: automation.scheduling,
     },
     persistedJob: {
-      jobActive: persistedJob.jobActive,
+      jobActive: persistedUnilateralExitJobExists(persistedJob),
       selectedLeafOutpoints: persistedJob.selectedLeafOutpoints,
+      currentStepRelayedSinceUnix: persistedJob.currentStepRelayedSinceUnix,
     },
     progress,
     progressError,
     batchEstimate,
     batchEstimateError,
     exitBranchTxids,
+    machineState: String(machineDebug.machineState),
+    exitCandidates: {
+      total: exitCandidatesTotal,
+      startable: exitCandidatesStartable,
+      error: exitCandidatesError,
+    },
+    topologyError,
   }
 }
 
@@ -201,4 +250,49 @@ export function ensureE2eArkadeRegtestControl(): void {
   window.__e2eExportBoardedWalletSdkPersistenceJson = exportBoardedWalletSdkPersistenceJsonForE2e
   window.__e2eGetOperatorTrustStatus = readOperatorTrustStatusForE2e
   window.__e2eExportUnilateralExitDebugSnapshot = exportUnilateralExitDebugSnapshotForE2e
+  window.__e2eResumeUnilateralExitAutomation = resumeUnilateralExitAutomationForE2e
+  window.__e2eRefreshOnchainBumperInfo = refreshOnchainBumperInfoForE2e
+}
+
+/** Re-sync bumper wallet via WASM and push balance into React Query (E2E funding gate). */
+export async function refreshOnchainBumperInfoForE2e(): Promise<number> {
+  const walletId = useWalletStore.getState().activeWalletId
+  const networkMode = useWalletStore.getState().networkMode
+  const arkadeAccountId = useWalletStore.getState().activeArkadeAccountId
+  if (
+    walletId == null ||
+    arkadeAccountId == null ||
+    !isArkadeSupportedNetworkMode(networkMode)
+  ) {
+    return 0
+  }
+
+  const info = await getArkadeWorker().getOnchainBumperInfo()
+  appQueryClient.setQueryData(
+    arkadeBumperInfoQueryKey(walletId, networkMode, arkadeAccountId),
+    info,
+  )
+  await appQueryClient.invalidateQueries({
+    predicate: (query) =>
+      Array.isArray(query.queryKey) && query.queryKey.includes('unilateral-batch'),
+  })
+  return info.balanceSats
+}
+
+export function resumeUnilateralExitAutomationForE2e(): void {
+  const walletId = useWalletStore.getState().activeWalletId
+  const networkMode = useWalletStore.getState().networkMode
+  const arkadeAccountId = useWalletStore.getState().activeArkadeAccountId
+  if (
+    walletId == null ||
+    arkadeAccountId == null ||
+    !isArkadeSupportedNetworkMode(networkMode)
+  ) {
+    return
+  }
+  clearAutomaticUnilateralExitPause({
+    walletId,
+    networkMode,
+    arkadeAccountId,
+  })
 }

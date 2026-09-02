@@ -1,9 +1,10 @@
 import type { EncryptedBlobForDb } from '@/workers/crypto-api'
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
-import type { ArkadeOperatorConnectionSummary } from '@/lib/arkade/arkade-payload-merge'
+import type { ArkadeAccountSummary } from '@/lib/arkade/arkade-payload-merge'
 import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
+import type { ArkadeWalletScope } from '@/lib/arkade/arkade-session-scope'
 
-export type { ArkadeOperatorConnectionSummary }
+export type { ArkadeAccountSummary, ArkadeWalletScope }
 
 export interface ArkadeOperatorSyncResult {
   keyDiscoveryWarning?: string
@@ -57,6 +58,36 @@ export interface ArkadeBalanceInfo {
   /** Client-expired VTXOs awaiting operator sweep before batch settlement is safe. */
   recoverablePendingOperatorSweepSats?: number
   recoverablePendingOperatorSweepVtxoCount?: number
+  pendingBatchIntents?: ArkadePendingBatchIntent[]
+}
+
+export interface ArkadePendingBatchOutpoint {
+  txid: string
+  vout: number
+}
+
+export interface ArkadePendingBatchIntent {
+  kind: string
+  intentId?: string
+  amountSats: number
+  registeredAt: number
+  onchainOutpoints: ArkadePendingBatchOutpoint[]
+  vtxoOutpoints: ArkadePendingBatchOutpoint[]
+  lifecyclePhase?: 'processing' | 'timed_out'
+  destinationAddress?: string
+}
+
+export type ArkadeBatchJoinStatus = 'completed' | 'waiting_for_operator'
+
+export interface ArkadeBatchJoinResult {
+  status: ArkadeBatchJoinStatus
+  commitmentTxid?: string
+  pendingIntent?: ArkadePendingBatchIntent
+}
+
+export interface ArkadePendingBatchIntentActionParams {
+  onchainOutpoints: ArkadePendingBatchOutpoint[]
+  vtxoOutpoints: ArkadePendingBatchOutpoint[]
 }
 
 export type ArkadeSignerMigrationDeprecatedStatus = 'migratable' | 'due_now' | 'expired'
@@ -153,7 +184,7 @@ export interface OpenArkadeSessionParams {
   encryptedPayload: EncryptedBlobForDb
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
-  connectionId: string
+  arkadeAccountId: string
   arkServerUrl: string
   delegatorUrl: string
   esploraUrl: string
@@ -176,26 +207,35 @@ export interface ArkadeBoardingStatus {
   spendableSats: number
   pendingSats: number
   expiredSats: number
+  pendingBatchIntents?: ArkadePendingBatchIntent[]
+  finalizedCommitmentTxid?: string
 }
 
-export interface ArkadeExitCandidateRow {
+export type ArkadeVirtualStatusState =
+  | 'spent'
+  | 'unrolled'
+  | 'preconfirmed'
+  | 'recoverable'
+  | 'settled'
+
+export interface ArkadeExitCandidateDto {
   id: string
   txid: string
   vout: number
   amountSats: number
-  virtualStatusState: string
+  virtualStatusState: ArkadeVirtualStatusState
   isRecoverable: boolean
   isUnrolled: boolean
   canStartUnroll: boolean
   canComplete: boolean
 }
 
-export interface ArkadeUnilateralExitInProgressRow {
+export interface ArkadeUnilateralExitInProgressDto {
   id: string
   txid: string
   vout: number
   amountSats: number
-  virtualStatusState: string
+  virtualStatusState: ArkadeVirtualStatusState
   canComplete: boolean
   startedAt?: number
 }
@@ -228,6 +268,16 @@ export function arkadeVtxoOutpointsEqual(
   return left.txid === right.txid && left.vout === right.vout
 }
 
+export function arkadeVtxoOutpointListsEqual(
+  left: ArkadeVtxoOutpoint[],
+  right: ArkadeVtxoOutpoint[],
+): boolean {
+  if (left.length !== right.length) {
+    return false
+  }
+  return left.every((outpoint, index) => arkadeVtxoOutpointsEqual(outpoint, right[index]!))
+}
+
 export function includesArkadeVtxoOutpoint(
   outpoints: ArkadeVtxoOutpoint[],
   candidate: ArkadeVtxoOutpoint,
@@ -235,9 +285,9 @@ export function includesArkadeVtxoOutpoint(
   return outpoints.some((outpoint) => arkadeVtxoOutpointsEqual(outpoint, candidate))
 }
 
-export function sortArkadeVtxoOutpoints(
-  outpoints: ArkadeVtxoOutpoint[],
-): ArkadeVtxoOutpoint[] {
+export function sortArkadeVtxoOutpoints<T extends ArkadeVtxoOutpoint>(
+  outpoints: T[],
+): T[] {
   return [...outpoints].sort((left, right) => {
     const txidCompare = left.txid.localeCompare(right.txid)
     return txidCompare !== 0 ? txidCompare : left.vout - right.vout
@@ -269,19 +319,6 @@ export interface ArkadeCollaborativeExitParams {
   amountSats?: number
 }
 
-export interface ArkadeUnrollProgressEvent {
-  type: 'wait' | 'unroll' | 'indexer' | 'done'
-  message: string
-  txid?: string
-  vtxoTxid?: string
-}
-
-export interface ArkadeUnrollResult {
-  vtxoTxid: string
-  operatorIndexerConfirmed: boolean
-  indexerWarning?: string
-}
-
 export interface ArkadeCompleteUnilateralExitParams {
   vtxoOutpoints: ArkadeVtxoOutpoint[]
   destinationAddress: string
@@ -305,17 +342,6 @@ export interface ArkadeCollaborativeExitFeeEstimate {
   estimateErrorCode?: ArkadeCollaborativeExitEstimateErrorCode
 }
 
-export interface ArkadeUnilateralExitFeeEstimate {
-  chainTxCount: number
-  projectedUnrollSteps: number
-  projectedWaitSteps: number
-  feeRateSatPerVb: number
-  estimatedPackageFeeSats: number
-  bumperBalanceSats: number
-  bumperSufficient: boolean
-  estimateError?: string
-}
-
 export interface ArkadeRecoverableVtxoFeeEstimate {
   recoverableVtxoCount: number
   recoverableTotalSats: number
@@ -337,11 +363,6 @@ export interface ArkadeCollaborativeExitFeeEstimateParams {
   amountSats?: number
 }
 
-export interface ArkadeUnilateralExitFeeEstimateParams {
-  txid: string
-  vout: number
-}
-
 export interface ArkadeUnilateralExitTopologyNode {
   txid: string
   txType: string
@@ -352,6 +373,7 @@ export interface ArkadeUnilateralExitHostOutpoint {
   txid: string
   vout: number
   amountSats: number
+  isUnrolled: boolean
 }
 
 export interface ArkadeUnilateralExitTopology {
@@ -402,6 +424,7 @@ export interface ArkadeUnilateralExitLeafStatus {
 }
 
 export interface ArkadeProceedUnilateralExitStepParams {
+  walletScope: ArkadeWalletScope
   vtxoOutpoints: ArkadeVtxoOutpoint[]
   feeRateSatPerVb: number
 }
@@ -412,6 +435,8 @@ export interface ArkadeProceedUnilateralExitStepResult {
   totalSteps: number
   phase: ArkadeUnilateralExitPhaseKind
   currentStepWaitingSince?: number
+  /** True when `/tx/{step_txid}/raw` is available for the active step. */
+  currentStepTxRelayed: boolean
   nodeStatuses: ArkadeUnilateralExitNodeStatus[]
   leafStatuses: ArkadeUnilateralExitLeafStatus[]
 }
@@ -425,14 +450,60 @@ export interface ArkadeUnilateralExitProgress {
   totalSteps: number
   phase: ArkadeUnilateralExitPhaseKind
   currentStepWaitingSince?: number
+  currentStepTxRelayed: boolean
   nodeStatuses: ArkadeUnilateralExitNodeStatus[]
   leafStatuses: ArkadeUnilateralExitLeafStatus[]
 }
 
-export interface EnsureArkadeOperatorConnectionEncryptedParams {
+export type ArkadeUnilateralExitJobViabilityStatus =
+  | 'ok'
+  | 'aspSweptTargets'
+  | 'branchFundingLost'
+
+export type ArkadeUnilateralExitFailureReasonCode =
+  | 'asp_swept_targets'
+  | 'branch_funding_lost'
+  /** Frontend-only: user aborted orchestration without deleting WASM materials. */
+  | 'user_aborted'
+
+export type ArkadeUnilateralExitJobPersistence = {
+  selectedLeafOutpoints: ArkadeVtxoOutpoint[]
+  currentStepRelayedSinceUnix?: number | null
+  jobStartedAtUnix?: number | null
+}
+
+export type ArkadeUnilateralExitAutomationPrefsPersistence = {
+  enabled: boolean
+  feePresetLabel: string
+  maxFeeRateSatPerVb: number
+}
+
+export type ArkadeUnilateralExitFailurePersistence = {
+  selectedLeafOutpoints: ArkadeVtxoOutpoint[]
+  jobStartedAtUnix: number
+  detectedAtUnix: number
+  reasonCode: string
+  detailMessage: string
+  vtxoIds: string[]
+}
+
+export type ArkadeUnilateralExitFrontendPersistence = {
+  job: ArkadeUnilateralExitJobPersistence
+  automationPrefs: ArkadeUnilateralExitAutomationPrefsPersistence
+  lastFailure?: ArkadeUnilateralExitFailurePersistence | null
+}
+
+export interface ArkadeUnilateralExitJobViability {
+  status: ArkadeUnilateralExitJobViabilityStatus
+  reasonCode: string
+  detailMessage?: string
+  offendingOutpoints: ArkadeVtxoOutpoint[]
+}
+
+export interface EnsureArkadeAccountEncryptedParams {
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
-  connectionId: string
+  arkadeAccountId: string
   operatorSignerPkHex: string
   operatorUrl: string
   delegatorUrl: string
@@ -457,35 +528,37 @@ export interface ArkadeService {
   hasOpenSession(params: {
     walletId: number
     networkMode: ArkadeSupportedNetworkMode
-    connectionId: string
+    arkadeAccountId: string
   }): Promise<boolean>
-  reconcileActiveConnectionId(connectionId: string): Promise<void>
+  reconcileActiveAccountId(arkadeAccountId: string): Promise<void>
   flushSdkPersistence(): Promise<void>
   /** @internal E2E / DevTools only — live WASM export; not wallet-secrets persistence. */
   exportSdkPersistenceJsonForE2e(): Promise<string>
   /** @internal E2E / DevTools only — reads sdkPersistenceJson from encrypted wallet_secrets via secrets channel. */
   readPersistedSdkPersistenceJsonForE2e(params: {
     walletId: number
-    connectionId: string
+    arkadeAccountId: string
   }): Promise<string | undefined>
-  findActiveConnectionSummary(params: {
+  findActiveAccountSummary(params: {
     walletId: number
     networkMode: ArkadeSupportedNetworkMode
     encryptedPayload: EncryptedBlobForDb
-  }): Promise<ArkadeOperatorConnectionSummary | undefined>
-  listConnectionSummaries(params: {
+  }): Promise<ArkadeAccountSummary | undefined>
+  listAccountSummaries(params: {
     walletId: number
-  }): Promise<ArkadeOperatorConnectionSummary[]>
-  ensureOperatorConnectionEncrypted(
-    params: EnsureArkadeOperatorConnectionEncryptedParams,
-  ): Promise<ArkadeOperatorConnectionSummary>
+  }): Promise<ArkadeAccountSummary[]>
+  ensureArkadeAccountEncrypted(
+    params: EnsureArkadeAccountEncryptedParams,
+  ): Promise<ArkadeAccountSummary>
   updateOperatorSyncAtEncrypted(params: {
     walletId: number
-    connectionId: string
+    arkadeAccountId: string
     lastSuccessfulOperatorSyncAt: string
   }): Promise<void>
   closeSession(): Promise<void>
-  migrateDeprecatedSignerVtxos(): Promise<ArkadeSignerMigrationResult>
+  migrateDeprecatedSignerVtxos(
+    onRegistered?: (intent: ArkadePendingBatchIntent) => void,
+  ): Promise<ArkadeSignerMigrationResult>
   getBalance(): Promise<ArkadeBalanceInfo>
   getAddress(): Promise<string>
   getNewAddress(): Promise<string>
@@ -497,32 +570,40 @@ export interface ArkadeService {
   getExpiringVtxoCount(): Promise<number>
   getVtxoExpiryStatus(): Promise<ArkadeVtxoExpiryStatus>
   getOperatorScheduledSession(): Promise<ArkadeOperatorScheduledSession | null>
-  renewVtxosNow(): Promise<string | null>
+  renewVtxosNow(
+    onRegistered?: (intent: ArkadePendingBatchIntent) => void,
+  ): Promise<ArkadeBatchJoinResult>
   delegateSpendableVtxos(): Promise<{
     delegated: number
     failed: number
     errorMessage?: string
   }>
   finalizePendingTransactions(): Promise<{ finalized: number; pending: number }>
-  onboardBoardedUtxos(): Promise<string | null>
+  onboardBoardedUtxos(
+    onRegistered?: (intent: ArkadePendingBatchIntent) => void,
+  ): Promise<ArkadeBatchJoinResult>
+  cancelPendingBatchIntent(params: ArkadePendingBatchIntentActionParams): Promise<ArkadeBatchJoinResult>
+  retryPendingBatchIntent(
+    params: ArkadePendingBatchIntentActionParams,
+    onRegistered?: (intent: ArkadePendingBatchIntent) => void,
+  ): Promise<ArkadeBatchJoinResult>
+  abortInFlightBatchJoin(): Promise<void>
   getRecoverableVtxoFeeEstimate(): Promise<ArkadeRecoverableVtxoFeeEstimate>
-  recoverRecoverableVtxos(): Promise<string | null>
-  listExitCandidates(): Promise<ArkadeExitCandidateRow[]>
+  recoverRecoverableVtxos(
+    onRegistered?: (intent: ArkadePendingBatchIntent) => void,
+  ): Promise<ArkadeBatchJoinResult>
+  listExitCandidates(): Promise<ArkadeExitCandidateDto[]>
   listVtxos(): Promise<ArkadeVtxoListResult>
-  listUnilateralExitsInProgress(): Promise<ArkadeUnilateralExitInProgressRow[]>
+  listUnilateralExitsInProgress(): Promise<ArkadeUnilateralExitInProgressDto[]>
   getOnchainBumperInfo(): Promise<ArkadeOnchainBumperInfo>
-  collaborativeExit(params: ArkadeCollaborativeExitParams): Promise<string>
-  runUnilateralUnroll(
-    params: { txid: string; vout: number },
-    onProgress: (event: ArkadeUnrollProgressEvent) => void,
-  ): Promise<ArkadeUnrollResult>
+  collaborativeExit(
+    params: ArkadeCollaborativeExitParams,
+    onRegistered?: (intent: ArkadePendingBatchIntent) => void,
+  ): Promise<ArkadeBatchJoinResult>
   completeUnilateralExit(params: ArkadeCompleteUnilateralExitParams): Promise<string>
   getCollaborativeExitFeeEstimate(
     params: ArkadeCollaborativeExitFeeEstimateParams,
   ): Promise<ArkadeCollaborativeExitFeeEstimate>
-  estimateUnilateralExit(
-    params: ArkadeUnilateralExitFeeEstimateParams,
-  ): Promise<ArkadeUnilateralExitFeeEstimate>
   estimateUnilateralExitCompletion(
     params: ArkadeUnilateralExitCompletionFeeEstimateParams,
   ): Promise<ArkadeUnilateralExitCompletionFeeEstimate>
@@ -538,4 +619,26 @@ export interface ArkadeService {
   getUnilateralExitProgress(
     params: ArkadeUnilateralExitProgressParams,
   ): Promise<ArkadeUnilateralExitProgress>
+  evaluateUnilateralExitJobViability(
+    params: ArkadeUnilateralExitProgressParams,
+  ): Promise<ArkadeUnilateralExitJobViability>
+  getUnilateralExitFrontendPersistence(
+    walletScope: ArkadeWalletScope,
+  ): Promise<ArkadeUnilateralExitFrontendPersistence | null>
+  setUnilateralExitFrontendPersistence(
+    walletScope: ArkadeWalletScope,
+    bundle: ArkadeUnilateralExitFrontendPersistence,
+  ): Promise<void>
+  setUnilateralExitJob(
+    walletScope: ArkadeWalletScope,
+    job: ArkadeUnilateralExitJobPersistence,
+  ): Promise<void>
+  setUnilateralExitAutomationPrefs(
+    walletScope: ArkadeWalletScope,
+    prefs: ArkadeUnilateralExitAutomationPrefsPersistence,
+  ): Promise<void>
+  setUnilateralExitFailure(
+    walletScope: ArkadeWalletScope,
+    failure: ArkadeUnilateralExitFailurePersistence | null,
+  ): Promise<void>
 }

@@ -5,6 +5,7 @@ import { ArkadeOverviewInfomodeContent } from '@/components/arkade/infomode/Arka
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ArkadeBalanceBreakdown } from '@/components/wallet/ArkadeBalanceBreakdown'
+import { ArkadePendingBatchIntentBanner } from '@/components/wallet/ArkadePendingBatchIntentBanner'
 import { ArkadeSignerMigrationBanner } from '@/components/wallet/ArkadeSignerMigrationBanner'
 import { ArkadePendingRecoveryDueToExpiredSignerBanner } from '@/components/wallet/ArkadePendingRecoveryDueToExpiredSignerBanner'
 import { ArkadeRecoverableVtxoBanner } from '@/components/wallet/ArkadeRecoverableVtxoBanner'
@@ -85,6 +86,7 @@ export function ArkadeDashboardBalance() {
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
+        <ArkadePendingBatchIntentBanner />
         <ArkadeSignerMigrationBanner />
         <ArkadePendingRecoveryDueToExpiredSignerBanner />
         <ArkadeRecoverableVtxoBanner />

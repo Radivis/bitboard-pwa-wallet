@@ -11,16 +11,12 @@ use crate::offchain_snapshot::{
 };
 
 use super::ArkSession;
-use super::exit_onchain::{
-    heal_false_positive_exiting_vtxo_spent_markers,
-    reconcile_intermediate_ark_virtual_txs_unrolled_on_esplora,
-};
-use super::exit_watch::register_unilateral_exit_watch;
-use super::exit_watch_reconcile::{
+use super::mappers::{current_unix_timestamp, warn_offchain_key_discovery_failed};
+use super::unilateral_exit::onchain::reconcile_intermediate_ark_virtual_txs_unrolled_on_esplora;
+use super::unilateral_exit::watch_reconcile::{
     merge_exiting_vtxo_sync_warnings, reconcile_exiting_vtxo_watches,
     reconcile_exiting_vtxos_spent_on_esplora,
 };
-use super::mappers::{current_unix_timestamp, warn_offchain_key_discovery_failed};
 
 /// User-facing warning when [`ark_client::Client::discover_keys`] fails during operator sync.
 pub(crate) fn operator_sync_key_discovery_warning(error: &ark_client::Error) -> String {
@@ -114,25 +110,10 @@ impl ArkSession {
             &mut snapshot,
         )
         .await?;
-        let healed_false_spent_outpoints =
-            heal_false_positive_exiting_vtxo_spent_markers(self.client.blockchain(), &mut snapshot)
-                .await?;
-        for outpoint in &healed_false_spent_outpoints {
-            let txid = outpoint.txid.to_string();
-            let vout = outpoint.vout;
-            if let Some(record) = snapshot
-                .virtual_tx_outpoints
-                .iter()
-                .find(|record| record.txid == txid && record.vout == vout)
-            {
-                self.record_pending_unilateral_exit(&txid, vout, record.amount_sats);
-                register_unilateral_exit_watch(&self.wallet_db, &txid, vout, record.amount_sats);
-            }
-        }
         let esplora_healed_outpoints =
             reconcile_exiting_vtxos_spent_on_esplora(self, &mut snapshot).await?;
         let materials_warning =
-            super::exit_materials_prefetch::prefetch_unilateral_exit_materials_for_snapshot(
+            super::unilateral_exit::materials_prefetch::prefetch_unilateral_exit_materials_for_snapshot(
                 self,
                 &mut snapshot,
                 &vtxo_list,
@@ -145,6 +126,7 @@ impl ArkSession {
             self.clear_pending_unilateral_exits_for_outpoints(&esplora_healed_outpoints);
         }
         self.reconcile_pending_exit_deductions_with_snapshot(&snapshot)?;
+        self.reconcile_pending_batch_intents().await?;
         self.persist_cached_operator_info_from_client()?;
         let sync_result = OperatorSyncResultDto {
             key_discovery_warning: combine_operator_sync_warning_messages(

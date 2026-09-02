@@ -1,5 +1,3 @@
-import { wasmArkErrorCode } from '@/lib/shared/wasm-ark-error'
-
 export interface ArkadeIntentFeeConfigured {
   offchainInput: boolean
   onchainInput: boolean
@@ -58,21 +56,6 @@ export function formatArkadeTxidToastSnippet(txid: string): string {
   return `${txid.slice(0, ARKADE_TXID_DISPLAY_PREFIX_LENGTH)}…`
 }
 
-export function formatUnilateralUnrollSuccessMessage(vtxoTxid: string): string {
-  return `Unroll complete (${formatArkadeTxidToastSnippet(vtxoTxid)}). Use Complete unilateral exit when the timelock elapses.`
-}
-
-/** Sonner toast id so in-progress unroll updates one notification per on-chain tx. */
-export function unilateralUnrollProgressToastId(
-  event: Pick<{ type: string; txid?: string }, 'type' | 'txid'>,
-): string {
-  return `arkade-unroll-${event.txid ?? event.type}`
-}
-
-export function shouldShowUnilateralUnrollProgressToast(event: { type: string }): boolean {
-  return event.type === 'unroll' || event.type === 'wait' || event.type === 'indexer'
-}
-
 export type UnilateralExitTimelock = {
   timelockBlocks?: number | null
   timelockSeconds?: number | null
@@ -112,8 +95,6 @@ export function unilateralExitCompleteTimelockMessage(
   const duration = formatUnilateralExitTimelock(timelock)
   return `After unroll confirms on-chain, wait for ${duration} (operator CSV timelock) before completing.`
 }
-
-export const OPERATOR_INDEXER_CATCHING_UP_CODE = 'operator_indexer_catching_up'
 
 /** Shown when completion coin-select used a permissive blocktime fallback (see wallet model doc). */
 export const MISSING_BLOCKTIME_COMPLETION_WARNING_SUMMARY =
@@ -157,8 +138,4 @@ export function formatMissingBlocktimeCompletionWarningLine(
   }
   const onChainSnippet = `${line.onChainTxid.slice(0, 12)}…:${line.onChainVout}`
   return `${virtualSnippet} (${line.amountSats} sats, on-chain ${onChainSnippet})`
-}
-
-export function isOperatorIndexerCatchingUpError(error: unknown): boolean {
-  return wasmArkErrorCode(error) === OPERATOR_INDEXER_CATCHING_UP_CODE
 }

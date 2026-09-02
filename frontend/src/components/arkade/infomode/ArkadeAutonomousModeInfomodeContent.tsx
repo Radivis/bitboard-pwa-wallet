@@ -11,14 +11,15 @@ export function ArkadeAutonomousModeInfomodeContent() {
     <div className={INFOMODE_CONTENT_CLASS}>
       <InfomodeHeading>Autonomous mode</InfomodeHeading>
       <InfomodeParagraph>
-        When the Arkade operator (ASP) is unreachable, turn this on to run unilateral exit using
-        data saved during your last successful operator sync: cached operator parameters and
-        per-VTXO exit materials (virtual PSBT chains).
+        Enable this when you do not trust this Arkade operator (ASP)—or when it is down. The wallet
+        stops contacting the operator, including after unlock or reload, and uses cached operator
+        parameters plus prefetched exit materials from your last successful sync.
       </InfomodeParagraph>
       <InfomodeParagraph>
-        Cooperative exit, sends, renewals, recoverable settlement, signer migration, and manual
-        operator sync are blocked while autonomous mode is active. Esplora is still required for
-        fee rates, broadcast, and timelock checks.
+        Cooperative exit, sends, renewals, recoverable settlement, signer migration, and operator
+        sync are blocked while autonomous mode is active. Esplora is still required for broadcast
+        and timelock checks. Turn autonomous mode off only when you are ready to trust and sync with
+        this operator again.
       </InfomodeParagraph>
       <InfomodeParagraph>
         <ArticleLink slug={ARKADE_LIBRARY_SLUGS.exits}>Exiting Arkade to on-chain</ArticleLink>

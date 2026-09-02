@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   Background,
   Controls,
@@ -8,7 +8,22 @@ import {
   type NodeProps,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { Check, Coins, Loader2 } from 'lucide-react'
+import {
+  Check,
+  Cog,
+  Coins,
+  HandCoins,
+  Loader2,
+  Megaphone,
+  Pickaxe,
+  Play,
+  UserRoundArrowLeft,
+  type LucideIcon,
+} from 'lucide-react'
+import {
+  unilateralExitInProgressOverlayLabel,
+  type UnilateralExitInProgressOverlayKind,
+} from '@/lib/arkade/unilateral-exit-control-phase'
 import {
   layoutUnilateralExitGraph,
   resolveLayoutDirection,
@@ -31,8 +46,124 @@ interface UnilateralExitTreeGraphProps {
   topology: ArkadeUnilateralExitTopology | undefined
   selectedLeafOutpoints: ArkadeVtxoOutpoint[]
   nodeStatuses: ArkadeUnilateralExitNodeStatus[]
+  inProgressOverlay: UnilateralExitInProgressOverlayKind | null
+  proceedingAutomatically?: boolean
   focusedNodeId: string | null
   onNodeFocus: (nodeId: string) => void
+  onReadyToProceed?: () => void
+  readyToProceedDisabled?: boolean
+}
+
+function unilateralExitInProgressOverlayIcon(
+  overlay: UnilateralExitInProgressOverlayKind,
+): LucideIcon | null {
+  switch (overlay) {
+    case 'ensuringBroadcast':
+      return Megaphone
+    case 'waiting':
+      return Pickaxe
+    case 'waitingForParentData':
+      return UserRoundArrowLeft
+    case 'figuringOut':
+      return Cog
+    case 'readyToProceed':
+      return Play
+  }
+}
+
+function UnilateralExitInProgressBadge({
+  overlay,
+  proceedingAutomatically,
+  onReadyToProceed,
+  readyToProceedDisabled,
+}: {
+  overlay: UnilateralExitInProgressOverlayKind | null
+  proceedingAutomatically?: boolean
+  onReadyToProceed?: () => void
+  readyToProceedDisabled?: boolean
+}) {
+  if (overlay === 'readyToProceed') {
+    return (
+      <button
+        type="button"
+        className={cn(
+          'nodrag nopan absolute -right-1 -top-1 z-10 flex size-5 items-center justify-center rounded-full bg-background text-blue-700',
+          readyToProceedDisabled && 'cursor-not-allowed opacity-50',
+        )}
+        data-testid="unilateral-exit-in-progress-readyToProceed"
+        aria-label="Proceed"
+        disabled={readyToProceedDisabled}
+        onClick={(event) => {
+          event.stopPropagation()
+          event.preventDefault()
+          onReadyToProceed?.()
+        }}
+        onMouseDown={(event) => {
+          event.stopPropagation()
+        }}
+      >
+        <Play className="size-3.5 fill-current" aria-hidden />
+      </button>
+    )
+  }
+
+  const OverlayIcon = overlay == null ? null : unilateralExitInProgressOverlayIcon(overlay)
+  const overlayLabel =
+    overlay == null
+      ? undefined
+      : unilateralExitInProgressOverlayLabel(overlay, { proceedingAutomatically })
+
+  return (
+    <div
+      className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full bg-background"
+      data-testid={
+        overlay == null ? 'unilateral-exit-in-progress' : `unilateral-exit-in-progress-${overlay}`
+      }
+      title={overlayLabel}
+      aria-label={overlayLabel}
+      aria-hidden={overlayLabel == null}
+    >
+      <Loader2 className="absolute size-5 animate-spin text-blue-600" />
+      {OverlayIcon != null && (
+        <OverlayIcon className="relative z-10 size-2.5 text-blue-700" strokeWidth={2.5} />
+      )}
+    </div>
+  )
+}
+
+function UnilateralExitHostVtxoBadge({
+  txid,
+  count,
+  hostsUnrolled,
+}: {
+  txid: string
+  count: number
+  hostsUnrolled: boolean
+}) {
+  if (count <= 0) {
+    return null
+  }
+  const OverlayIcon = hostsUnrolled ? HandCoins : Coins
+  const vtxoNoun = count === 1 ? 'VTXO' : 'VTXOs'
+  const overlayLabel = hostsUnrolled
+    ? `${count} unrolled ${vtxoNoun}`
+    : `${count} exitable ${vtxoNoun}`
+  const testIdPrefix = hostsUnrolled
+    ? 'unilateral-exit-unrolled-vtxo-count'
+    : 'unilateral-exit-vtxo-count'
+
+  return (
+    <div
+      className="absolute left-1/2 top-[calc(50%+10px)] flex -translate-x-1/2 items-center gap-0.5 rounded-full bg-background px-0.5 text-amber-600 shadow-sm"
+      aria-label={overlayLabel}
+      data-testid={`${testIdPrefix}-${txid.slice(0, 8)}`}
+    >
+      {count > 1 && (
+        <span className="text-[10px] font-semibold leading-none">{count}×</span>
+      )}
+      <OverlayIcon className="size-3" aria-hidden />
+    </div>
+  )
 }
 
 function UnilateralExitTreeNode({
@@ -59,20 +190,11 @@ function UnilateralExitTreeNode({
       aria-label={`${data.txType} node`}
     >
       <Icon className="size-5 text-foreground" aria-hidden />
-      {data.exitableVtxoCount > 0 && (
-        <div
-          className="absolute left-1/2 top-[calc(50%+10px)] flex -translate-x-1/2 items-center gap-0.5 rounded-full bg-background px-0.5 text-amber-600 shadow-sm"
-          aria-label={`${data.exitableVtxoCount} exitable VTXO${data.exitableVtxoCount === 1 ? '' : 's'}`}
-          data-testid={`unilateral-exit-vtxo-count-${data.txid.slice(0, 8)}`}
-        >
-          {data.exitableVtxoCount > 1 && (
-            <span className="text-[10px] font-semibold leading-none">
-              {data.exitableVtxoCount}×
-            </span>
-          )}
-          <Coins className="size-3" aria-hidden />
-        </div>
-      )}
+      <UnilateralExitHostVtxoBadge
+        txid={data.txid}
+        count={data.exitableVtxoCount}
+        hostsUnrolled={data.hostsUnrolled}
+      />
       {data.status === 'confirmed' && (
         <Check
           className="absolute -right-1 -top-1 size-4 rounded-full bg-background text-green-600"
@@ -80,9 +202,11 @@ function UnilateralExitTreeNode({
         />
       )}
       {data.status === 'inProgress' && (
-        <Loader2
-          className="absolute -right-1 -top-1 size-4 animate-spin rounded-full bg-background text-blue-600"
-          aria-hidden
+        <UnilateralExitInProgressBadge
+          overlay={data.inProgressOverlay}
+          proceedingAutomatically={data.proceedingAutomatically}
+          onReadyToProceed={data.onReadyToProceed}
+          readyToProceedDisabled={data.readyToProceedDisabled}
         />
       )}
     </div>
@@ -93,25 +217,58 @@ const nodeTypes = {
   unilateralExitTreeNode: UnilateralExitTreeNode,
 }
 
+/** Theme React Flow zoom buttons with the same tokens as app outline buttons. */
+const UNILATERAL_EXIT_GRAPH_CONTROLS_STYLE = {
+  '--xy-controls-button-background-color': 'var(--background)',
+  '--xy-controls-button-background-color-hover': 'var(--accent)',
+  '--xy-controls-button-border-color': 'var(--border)',
+  '--xy-controls-button-color': 'var(--foreground)',
+  '--xy-controls-button-color-hover': 'var(--foreground)',
+} as CSSProperties
+
 function UnilateralExitTreeGraphCanvas({
   renderEpoch,
   topology,
   selectedLeafOutpoints,
   nodeStatuses,
+  inProgressOverlay,
+  proceedingAutomatically,
   focusedNodeId,
   onNodeFocus,
   layoutDirection,
+  onReadyToProceed,
+  readyToProceedDisabled,
 }: UnilateralExitTreeGraphProps & { layoutDirection: 'LR' | 'TB' }) {
+  const onReadyToProceedRef = useRef(onReadyToProceed)
+  onReadyToProceedRef.current = onReadyToProceed
+  const dispatchReadyToProceed = useCallback(() => {
+    onReadyToProceedRef.current?.()
+  }, [])
+
   const { nodes, edgePaths } = useMemo(
     () =>
       layoutUnilateralExitGraph({
         topology: topology!,
         selectedLeafOutpoints,
         nodeStatuses,
+        inProgressOverlay,
+        proceedingAutomatically,
         layoutDirection,
         focusedNodeId,
+        onReadyToProceed: dispatchReadyToProceed,
+        readyToProceedDisabled,
       }),
-    [topology, selectedLeafOutpoints, nodeStatuses, layoutDirection, focusedNodeId],
+    [
+      topology,
+      selectedLeafOutpoints,
+      nodeStatuses,
+      inProgressOverlay,
+      proceedingAutomatically,
+      layoutDirection,
+      focusedNodeId,
+      dispatchReadyToProceed,
+      readyToProceedDisabled,
+    ],
   )
 
   return (
@@ -133,7 +290,7 @@ function UnilateralExitTreeGraphCanvas({
     >
       <UnilateralExitTreeEdgesOverlay edgePaths={edgePaths} />
       <Background />
-      <Controls showInteractive={false} />
+      <Controls showInteractive={false} style={UNILATERAL_EXIT_GRAPH_CONTROLS_STYLE} />
     </ReactFlow>
   )
 }
@@ -143,8 +300,12 @@ export function UnilateralExitTreeGraph({
   topology,
   selectedLeafOutpoints,
   nodeStatuses,
+  inProgressOverlay,
+  proceedingAutomatically,
   focusedNodeId,
   onNodeFocus,
+  onReadyToProceed,
+  readyToProceedDisabled,
 }: UnilateralExitTreeGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [layoutDirection, setLayoutDirection] = useState<'LR' | 'TB'>('TB')
@@ -192,8 +353,12 @@ export function UnilateralExitTreeGraph({
               topology={topology}
               selectedLeafOutpoints={selectedLeafOutpoints}
               nodeStatuses={nodeStatuses}
+              inProgressOverlay={inProgressOverlay}
+              proceedingAutomatically={proceedingAutomatically}
               focusedNodeId={focusedNodeId}
               onNodeFocus={onNodeFocus}
+              onReadyToProceed={onReadyToProceed}
+              readyToProceedDisabled={readyToProceedDisabled}
               layoutDirection={layoutDirection}
             />
           </ReactFlowProvider>

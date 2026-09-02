@@ -9,13 +9,13 @@ import { arkadeBalanceQueryKey } from '@/lib/arkade/arkade-query-keys'
 
 const walletId = 1
 const networkMode = 'signet' as const
-const connectionId = 'conn-1'
+const arkadeAccountId = 'conn-1'
 
 // Mirrors docs/arkade-bitboard-wallet-model.md — unilateral vs collaborative exit balance timing.
 describe('arkade-exit-balance-optimistic', () => {
   it('tracks unilateral exit in progress without reducing spendable totals', () => {
     const queryClient = new QueryClient()
-    const balanceKey = arkadeBalanceQueryKey(walletId, networkMode, connectionId)
+    const balanceKey = arkadeBalanceQueryKey(walletId, networkMode, arkadeAccountId)
     const previousBalance = {
       confirmedSats: 200_000,
       totalSats: 200_000,
@@ -29,7 +29,7 @@ describe('arkade-exit-balance-optimistic', () => {
       queryClient,
       walletId,
       networkMode,
-      connectionId,
+      arkadeAccountId,
       180_603,
       'unilateralExitInProgressSats',
     )
@@ -47,7 +47,7 @@ describe('arkade-exit-balance-optimistic', () => {
   // Snapshot still lists exiting VTXOs as spendable until operator sync — deduct net fields.
   it('deducts collaborative exit from cached balance on mutate', () => {
     const queryClient = new QueryClient()
-    const balanceKey = arkadeBalanceQueryKey(walletId, networkMode, connectionId)
+    const balanceKey = arkadeBalanceQueryKey(walletId, networkMode, arkadeAccountId)
     const previousBalance = {
       confirmedSats: 200_000,
       totalSats: 200_000,
@@ -59,7 +59,7 @@ describe('arkade-exit-balance-optimistic', () => {
       queryClient,
       walletId,
       networkMode,
-      connectionId,
+      arkadeAccountId,
       50_000,
       'collaborativeExitInProgressSats',
     )
@@ -73,7 +73,7 @@ describe('arkade-exit-balance-optimistic', () => {
 
   it('reverts optimistic deduction on error', () => {
     const queryClient = new QueryClient()
-    const balanceKey = arkadeBalanceQueryKey(walletId, networkMode, connectionId)
+    const balanceKey = arkadeBalanceQueryKey(walletId, networkMode, arkadeAccountId)
     const previousBalance = {
       confirmedSats: 200_000,
       totalSats: 200_000,
@@ -84,7 +84,7 @@ describe('arkade-exit-balance-optimistic', () => {
       queryClient,
       walletId,
       networkMode,
-      connectionId,
+      arkadeAccountId,
       50_000,
       'collaborativeExitInProgressSats',
     )
@@ -95,7 +95,7 @@ describe('arkade-exit-balance-optimistic', () => {
 
   it('reconciles fetched balance when server exit bucket lags for collaborative exit', () => {
     const context = {
-      balanceKey: arkadeBalanceQueryKey(walletId, networkMode, connectionId),
+      balanceKey: arkadeBalanceQueryKey(walletId, networkMode, arkadeAccountId),
       previousBalance: {
         confirmedSats: 200_000,
         totalSats: 200_000,
@@ -122,7 +122,7 @@ describe('arkade-exit-balance-optimistic', () => {
 
   it('reconciles fetched balance when server exit bucket lags for unilateral exit', () => {
     const context = {
-      balanceKey: arkadeBalanceQueryKey(walletId, networkMode, connectionId),
+      balanceKey: arkadeBalanceQueryKey(walletId, networkMode, arkadeAccountId),
       previousBalance: {
         confirmedSats: 200_000,
         totalSats: 200_000,

@@ -23,7 +23,7 @@ function railScopeFromParams(params: ArkadeSaveParams): ArkadeRailScope {
   return {
     walletId: params.walletId,
     networkMode: params.networkMode,
-    connectionId: params.connectionId,
+    arkadeAccountId: params.arkadeAccountId,
   }
 }
 
@@ -31,7 +31,7 @@ async function runPersistOperatorSyncMetadata(params: ArkadeSaveParams): Promise
   const now = new Date().toISOString()
   await saveLastSuccessfulOperatorSyncAtEncrypted({
     walletId: params.walletId,
-    connectionId: params.connectionId,
+    arkadeAccountId: params.arkadeAccountId,
     lastSuccessfulOperatorSyncAt: now,
   })
   useWalletStore.getState().setLastOperatorSyncTime(new Date())

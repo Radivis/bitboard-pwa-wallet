@@ -1,8 +1,8 @@
 import { getDatabase, getWalletSecretsEncrypted } from '@/db'
 import { clearArkadeDashboardStore } from '@/lib/arkade/arkade-persistence-store-sync'
 import {
-  findActiveArkadeConnectionSummary,
-} from '@/lib/arkade/arkade-operator-connections'
+  findActiveArkadeAccountSummary,
+} from '@/lib/arkade/arkade-accounts'
 import {
   ensureSecretsChannel,
 } from '@/workers/secrets-channel'
@@ -25,7 +25,7 @@ import {
   configureArkadeSyncForLoadedRail,
   orchestrateArkadePostLoadSync,
 } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
-import { configureUnilateralExitLifecycleForLoadedWallet } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-orchestrator'
+import { configureUnilateralExitForLoadedWallet } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime'
 import type {
   ArkadeLoadLifecycleSnapshot,
   ArkadeLoadParams,
@@ -51,7 +51,7 @@ let snapshot: ArkadeLoadLifecycleSnapshot = {
 }
 
 let lastOpenedSessionKey: string | null = null
-let lastLoadedConnectionId: string | null = null
+let lastLoadedAccountId: string | null = null
 
 const arkadeSessionReuseState: ArkadeSessionReuseState = {
   get lastOpenedSessionKey() {
@@ -119,45 +119,45 @@ async function runArkadeSessionOpenBody(params: {
   await ensureArkadeEncryptedSecretsHost()
   const encrypted = await getWalletSecretsEncrypted(getDatabase(), walletId)
 
-  const connection = await findActiveArkadeConnectionSummary({
+  const account = await findActiveArkadeAccountSummary({
     walletId,
     networkMode,
     encryptedPayload: encrypted.payload,
   })
-  const hadPersistedConnection = connection != null
+  const hadPersistedAccount = account != null
 
-  if (connection != null) {
-    const reusedConnectionId = await tryReuseExistingArkadeSession({
+  if (account != null) {
+    const reusedAccountId = await tryReuseExistingArkadeSession({
       walletId,
       networkMode,
-      connection,
+      account,
       sessionReuseState: arkadeSessionReuseState,
     })
-    if (reusedConnectionId != null) {
-      return reusedConnectionId
+    if (reusedAccountId != null) {
+      return reusedAccountId
     }
   }
 
-  const { worker, connection: activeConnection, openResult } =
+  const { worker, account: activeAccount, openResult } =
     await openFreshArkadeWorkerSession({
       walletId,
       networkMode,
       encrypted,
-      connection,
-      hadPersistedConnection,
+      account,
+      hadPersistedAccount,
     })
 
   await hydrateArkadeDashboardAfterSessionOpen({
     worker,
     walletId,
     networkMode,
-    connectionId: activeConnection.id,
+    arkadeAccountId: activeAccount.id,
     signerMigrationHint: openResult.signerMigrationHint,
     sessionReuseState: arkadeSessionReuseState,
     runPostOpenMaintenance: runPostOpenArkadeMaintenance,
   })
 
-  return activeConnection.id
+  return activeAccount.id
 }
 
 export function getArkadeLoadLifecycleSnapshot(): ArkadeLoadLifecycleSnapshot {
@@ -189,7 +189,7 @@ export function isArkadeLoadFailedForNetwork(networkMode: NetworkMode): boolean 
  */
 export function forceResetArkadeLoadLifecycleForTeardown(): void {
   lastOpenedSessionKey = null
-  lastLoadedConnectionId = null
+  lastLoadedAccountId = null
   inFlightLoadTracker.clearCurrent()
   setSnapshot({ loadPhase: 'not-configured', networkMode: null, errorMessage: null })
 }
@@ -204,7 +204,7 @@ export function syncArkadeLoadLifecycleWithLockPhase(lockPhase: LockLifecyclePha
     return
   }
   lastOpenedSessionKey = null
-  lastLoadedConnectionId = null
+  lastLoadedAccountId = null
   setSnapshot({ loadPhase: 'not-configured', networkMode: null, errorMessage: null })
 }
 
@@ -244,26 +244,26 @@ export async function orchestrateArkadeLoad(params: ArkadeLoadParams): Promise<v
   return inFlightLoadTracker.begin(key, async () => {
     setSnapshot({ loadPhase: 'loading', networkMode, errorMessage: null })
     try {
-      const connectionId = await runArkadeSessionOpenBody({
+      const arkadeAccountId = await runArkadeSessionOpenBody({
         walletId,
         networkMode,
       })
-      lastLoadedConnectionId = connectionId
+      lastLoadedAccountId = arkadeAccountId
       setSnapshot({ loadPhase: 'loaded', networkMode, errorMessage: null })
       configureArkadeSyncForLoadedRail({
         walletId,
         networkMode,
-        connectionId,
+        arkadeAccountId,
       })
-      configureUnilateralExitLifecycleForLoadedWallet({
+      await configureUnilateralExitForLoadedWallet({
         walletId,
         networkMode,
-        connectionId,
+        arkadeAccountId,
       })
       void orchestrateArkadePostLoadSync({
         walletId,
         networkMode,
-        connectionId,
+        arkadeAccountId,
       })
     } catch (error) {
       terminateArkadeWorker()
@@ -291,11 +291,11 @@ export function resetArkadeLoadLifecycleStateForTests(): void {
   inFlightLoadTracker.clearCurrent()
   lastLoadParams = null
   lastOpenedSessionKey = null
-  lastLoadedConnectionId = null
+  lastLoadedAccountId = null
   listeners.clear()
 }
 
 /** @internal Test-only access */
 export function getLastLoadedArkadeConnectionIdForTests(): string | null {
-  return lastLoadedConnectionId
+  return lastLoadedAccountId
 }

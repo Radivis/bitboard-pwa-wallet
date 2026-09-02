@@ -22,6 +22,7 @@ impl ArkSession {
     }
 
     pub async fn boarding_status(&self) -> ArkResult<BoardingStatusDto> {
+        let finalized_commitment_txid = self.reconcile_pending_batch_intents().await?;
         let boarding_address = self.client.get_boarding_address()?.to_string();
         let persistence = SharedPersistenceDb(Arc::clone(&self.wallet_db));
         let boarding_outputs = persistence.load_boarding_outputs()?;
@@ -63,6 +64,8 @@ impl ArkSession {
             spendable_sats,
             pending_sats,
             expired_sats,
+            pending_batch_intents: self.pending_batch_intents_dto(),
+            finalized_commitment_txid,
         })
     }
 

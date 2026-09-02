@@ -12,6 +12,9 @@ export const ARKADE_SESSION_POLL_STALE_MS = 15_000
 /** Boarding status background poll interval. */
 export const ARKADE_BOARDING_STATUS_REFETCH_MS = 30_000
 
+/** While a RegisterIntent is waiting for the operator, poll boarding/balance until spend. */
+export const ARKADE_PENDING_BATCH_INTENT_POLL_MS = 8_000
+
 /** Collaborative / unilateral exit fee estimates. */
 export const ARKADE_FEE_ESTIMATE_STALE_MS = 30_000
 
@@ -35,6 +38,13 @@ export const ARKADE_SLOW_METADATA_STALE_MS = 300_000
 
 /** Automatic unilateral-exit runner: poll while waiting for step confirmation (production). */
 export const UNILATERAL_EXIT_AUTOMATION_WAIT_POLL_MS = 15_000
+
+/**
+ * After package-not-child, wait before retrying broadcast so the submit node can
+ * treat the parent as confirmed. Remaining races: indexer vs submit bitcoind,
+ * reorg between poll and submit, unconfirmed CPFP bumper. See docs/unilateral-exit.md.
+ */
+export const UNILATERAL_EXIT_PARENT_DATA_WAIT_MS = 15_000
 
 /** Re-broadcast a step when Esplora still reports 0 confirmations (production, 30 minutes). */
 export const UNILATERAL_EXIT_AUTOMATION_STEP_REBROADCAST_WAIT_SECS = 1_800
@@ -61,13 +71,13 @@ export function unilateralExitAutomationStepRebroadcastWaitSecs(
     : UNILATERAL_EXIT_AUTOMATION_STEP_REBROADCAST_WAIT_SECS
 }
 
-/** Progress query poll while a step is waiting for confirmation (production). */
+/** Machine poll while a step is waiting for confirmation (production). Not used by the display query while a job is active. */
 export const UNILATERAL_EXIT_PROGRESS_POLL_MS = 3_000
 
-/** Progress query poll while phase is idle but the exit job is still active (production). */
+/** Display-query poll when no job is active and WASM reports phase idle (production). */
 export const UNILATERAL_EXIT_PROGRESS_IDLE_POLL_MS = 15_000
 
-/** Regtest / E2E: poll progress frequently so automation and Playwright see step advances. */
+/** Regtest / E2E: machine wait poll so automation and Playwright see step advances. */
 export const UNILATERAL_EXIT_PROGRESS_POLL_MS_REGTEST = 2_000
 
 export const UNILATERAL_EXIT_PROGRESS_IDLE_POLL_MS_REGTEST = 2_000
@@ -83,3 +93,6 @@ export function unilateralExitProgressIdlePollMs(networkMode: string): number {
     ? UNILATERAL_EXIT_PROGRESS_IDLE_POLL_MS_REGTEST
     : UNILATERAL_EXIT_PROGRESS_IDLE_POLL_MS
 }
+
+/** Wall-clock tick for the waiting-step duration label on the control page (not an advance loop). */
+export const UNILATERAL_EXIT_WAITING_CLOCK_TICK_MS = 1_000

@@ -15,8 +15,11 @@ import {
 } from './helpers/regtest'
 import {
   triggerArkadeRailSync,
+  waitForArkadeLoadReady,
 } from './helpers/dashboard-arkade'
 import { goToWalletTab } from './helpers/wallet-nav'
+import { TEST_PASSWORD } from './helpers/wallet-setup'
+import { goToArkadeManagementPanel } from './helpers/arkade-management'
 
 const ARKADE_OPERATOR_TRUST_REGTEST_TIMEOUT_MS = 600_000
 
@@ -127,6 +130,31 @@ test.describe('Arkade operator trust regtest @arkade-operator-trust-regtest', ()
       .click()
 
     await expect(trustModal).not.toBeVisible({ timeout: 30_000 })
+    await expect(page.getByTestId('arkade-operator-trust-review-banner')).toBeVisible({
+      timeout: 30_000,
+    })
+    await expect(autonomousModeSwitch(page)).toHaveAttribute('aria-checked', 'true', {
+      timeout: 30_000,
+    })
+
+    await page.getByRole('button', { name: 'Lock Wallet' }).click()
+    await expect(page.getByRole('heading', { name: 'Library' })).toBeVisible({ timeout: 30_000 })
+    await page.getByRole('button', { name: 'Unlock wallet and go to previous page' }).click()
+    await expect(page.getByRole('heading', { name: 'Unlock Wallet' })).toBeVisible({
+      timeout: 15_000,
+    })
+    await page.getByLabel('Bitboard app password').fill(TEST_PASSWORD)
+    await page.getByRole('button', { name: 'Unlock' }).click()
+    await expect(page.getByRole('button', { name: 'Lock Wallet' })).toBeVisible({
+      timeout: 90_000,
+    })
+    await goToWalletTab(page, 'Dashboard')
+    await waitForArkadeLoadReady(page, 120_000)
+    await goToArkadeManagementPanel(page)
+
+    await expect(
+      page.getByRole('heading', { name: 'Operator configuration changed' }),
+    ).not.toBeVisible()
     await expect(page.getByTestId('arkade-operator-trust-review-banner')).toBeVisible({
       timeout: 30_000,
     })

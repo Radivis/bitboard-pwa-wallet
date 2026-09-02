@@ -8,10 +8,9 @@ use crate::exit_balance::{
 use crate::persistence::{JsonPersistenceDb, PendingExitDeductionRecord, PendingExitKind};
 
 use super::ArkSession;
-use super::exit_watch::{
+use super::unilateral_exit::watch::{
     register_unilateral_exit_watch, remove_unilateral_exit_watches_for_outpoints_in_wallet_db,
 };
-use crate::outpoint::VirtualOutPoint;
 
 use super::mappers::current_unix_timestamp;
 
@@ -42,29 +41,14 @@ pub(crate) fn mark_vtxo_spent_in_wallet_db(
     wallet_db.set_offchain_vtxo_snapshot(snapshot);
 }
 
-pub(crate) fn clear_pending_unilateral_exit_for_outpoint_in_wallet_db(
-    wallet_db: &JsonPersistenceDb,
-    txid: &str,
-    vout: u32,
-) {
-    let mut pending = wallet_db.pending_exit_deductions();
-    pending.retain(|record| {
-        if record.kind != PendingExitKind::Unilateral {
-            return true;
-        }
-        let record_vout = record.vout.unwrap_or(0);
-        !(record.vtxo_txid.as_deref() == Some(txid) && record_vout == vout)
-    });
-    wallet_db.set_pending_exit_deductions(pending);
-}
-
 impl ArkSession {
     /// Stable exit-pipeline totals for the balance DTO.
     ///
     /// Unilateral: sums [`ark_core::VtxoList::exiting`] VTXOs plus any in-flight pending
     /// unilateral records during unroll. This amount is informational in
     /// [`build_arkade_balance_dto`] — do not subtract it from gross spendable after unroll.
-    /// Collaborative: pending records only; those VTXOs are still in gross spendable until sync.
+    /// Collaborative: open CollaborativeExit pending-intent amounts, plus a retain deduction
+    /// after join Completed until snapshot spendable drops. Cancel must not leave that line.
     pub(crate) fn exit_balance_components(&self) -> ArkResult<(u64, u64)> {
         let pending = self.wallet_db.pending_exit_deductions();
         let snapshot_unilateral_sats = self
@@ -80,7 +64,10 @@ impl ArkSession {
         let unilateral_exit_in_progress_sats =
             snapshot_unilateral_sats.saturating_add(pending_unilateral_sats);
         let collaborative_exit_in_progress_sats =
-            sum_pending_exit_sats_by_kind(&pending, PendingExitKind::Collaborative);
+            crate::exit_balance::collaborative_exit_in_progress_sats(
+                &self.wallet_db.pending_batch_intents(),
+                &pending,
+            );
         Ok((
             unilateral_exit_in_progress_sats,
             collaborative_exit_in_progress_sats,
@@ -92,30 +79,18 @@ impl ArkSession {
         txid: &str,
         vout: u32,
     ) -> ArkResult<u64> {
-        if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref() {
-            for record in &snapshot.virtual_tx_outpoints {
-                if record.txid == txid && record.vout == vout {
-                    return Ok(record.amount_sats);
-                }
-            }
+        if let Some(amount_sats) = crate::unilateral_exit_materials::vtxo_amount_sats_from_snapshot(
+            self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref(),
+            txid,
+            vout,
+        ) {
+            return Ok(amount_sats);
         }
 
-        let (vtxo_list, _) = self.client.list_vtxos().await?;
-        let target_txid = VirtualOutPoint::parse(txid, vout)?
-            .to_bitcoin_outpoint()
-            .txid;
-        let amount = vtxo_list
-            .all()
-            .find(|virtual_tx_outpoint| {
-                virtual_tx_outpoint.outpoint.txid == target_txid
-                    && virtual_tx_outpoint.outpoint.vout == vout
-            })
-            .map(|virtual_tx_outpoint| virtual_tx_outpoint.amount.to_sat())
-            .ok_or(ArkWasmError::VtxoNotFound {
-                txid: txid.to_string(),
-                vout,
-            })?;
-        Ok(amount)
+        Err(ArkWasmError::VtxoNotFound {
+            txid: txid.to_string(),
+            vout,
+        })
     }
 
     pub(crate) fn record_pending_unilateral_exit(&self, txid: &str, vout: u32, amount_sats: u64) {
@@ -127,6 +102,7 @@ impl ArkSession {
                 amount_sats,
                 started_at: current_unix_timestamp(),
                 baseline_offchain_spendable_sats: None,
+                retain_until_spendable_drops: false,
             });
         register_unilateral_exit_watch(&self.wallet_db, txid, vout, amount_sats);
     }
@@ -140,7 +116,14 @@ impl ArkSession {
                 amount_sats,
                 started_at: current_unix_timestamp(),
                 baseline_offchain_spendable_sats: Some(baseline_sats),
+                retain_until_spendable_drops: true,
             });
+    }
+
+    pub(crate) fn clear_pending_collaborative_exit_deduction(&self) {
+        let mut pending = self.wallet_db.pending_exit_deductions();
+        pending.retain(|record| record.kind != PendingExitKind::Collaborative);
+        self.wallet_db.set_pending_exit_deductions(pending);
     }
 
     pub(crate) fn clear_pending_unilateral_exits_for_outpoints(

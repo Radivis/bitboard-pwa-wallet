@@ -59,6 +59,9 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
     error: null,
   }),
   useArkadeSignerMigrationPartialResultQuery: () => ({ data: null }),
+  useArkadeAutonomousModeActive: () => false,
+  useHasPendingBatchIntent: () => false,
+  usePendingBatchIntent: () => null,
 }))
 
 const recoverableFeeQueryMock = vi.hoisted(() =>

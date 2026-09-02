@@ -32,6 +32,30 @@ const syncActiveWalletAndUpdateState = vi.fn()
 const orchestrateOnchainSave = vi.fn()
 const tryReuseExistingArkadeSession = vi.fn()
 
+vi.mock('@/workers/arkade-factory', () => ({
+  getArkadeWorker: () => ({
+    getUnilateralExitFrontendPersistence: vi.fn(async () => ({
+      job: {
+        selectedLeafOutpoints: [],
+        currentStepRelayedSinceUnix: null,
+        jobStartedAtUnix: null,
+      },
+      automationPrefs: {
+        enabled: false,
+        feePresetLabel: 'Medium',
+        maxFeeRateSatPerVb: 10,
+      },
+      lastFailure: null,
+    })),
+    setUnilateralExitFrontendPersistence: vi.fn(async () => {}),
+    setUnilateralExitJob: vi.fn(async () => {}),
+    setUnilateralExitAutomationPrefs: vi.fn(async () => {}),
+    setUnilateralExitFailure: vi.fn(async () => {}),
+  }),
+  getArkadeWorkerIfExists: vi.fn(() => null),
+  terminateArkadeWorker: vi.fn(),
+}))
+
 vi.mock('@/lib/wallet/wallet-utils', () => ({
   syncActiveWalletAndUpdateState: (...args: unknown[]) =>
     syncActiveWalletAndUpdateState(...args),
@@ -75,13 +99,21 @@ vi.mock('@/db', () => ({
   })),
 }))
 
-vi.mock('@/lib/arkade/arkade-operator-connections', async (importOriginal) => {
+vi.mock('@/db/storage-adapter', () => ({
+  sqliteStorage: {
+    getItem: vi.fn(async () => null),
+    setItem: vi.fn(async () => {}),
+    removeItem: vi.fn(async () => {}),
+  },
+}))
+
+vi.mock('@/lib/arkade/arkade-accounts', async (importOriginal) => {
   const actual = await importOriginal<
-    typeof import('@/lib/arkade/arkade-operator-connections')
+    typeof import('@/lib/arkade/arkade-accounts')
   >()
   return {
     ...actual,
-    findActiveArkadeConnectionSummary: vi.fn().mockResolvedValue({
+    findActiveArkadeAccountSummary: vi.fn().mockResolvedValue({
       id: 'conn-hook-test',
       networkMode: 'signet',
     }),
@@ -119,7 +151,7 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
       getState: () => ({
         walletStatus: 'unlocked' as const,
         clearArkadeDashboardState: vi.fn(),
-        setActiveArkadeConnectionId: vi.fn(),
+        setActiveArkadeAccountId: vi.fn(),
         setLastOperatorSyncTime: vi.fn(),
         setArkadeSignerMigrationHint: vi.fn(),
       }),

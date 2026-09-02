@@ -14,7 +14,6 @@ import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import {
   formatMissingBlocktimeCompletionWarning,
   formatMissingBlocktimeCompletionWarningLine,
-  isOperatorIndexerCatchingUpError,
   unilateralExitCompleteTimelockMessage,
 } from '@/lib/arkade/arkade-exit-utils'
 import { includesArkadeVtxoOutpoint } from '@/workers/arkade-api'
@@ -74,9 +73,6 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
     completionFeeEstimate.missingBlocktimeInputs.length > 0
       ? formatMissingBlocktimeCompletionWarning(completionFeeEstimate.missingBlocktimeInputs)
       : null
-  const indexerCatchingUp =
-    completeExitMutation.isError &&
-    isOperatorIndexerCatchingUpError(completeExitMutation.error)
 
   const footer = () => (
     <>
@@ -290,17 +286,7 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
           </div>
         )}
 
-        {indexerCatchingUp && (
-          <p
-            className="text-sm text-amber-700 dark:text-amber-300"
-            data-testid="arkade-complete-indexer-catching-up"
-          >
-            Operator indexer is still catching up after your unroll. Wait a moment and try
-            Complete exit again.
-          </p>
-        )}
-
-        {completeExitMutation.isError && !indexerCatchingUp && (
+        {completeExitMutation.isError && (
           <p className="text-sm text-destructive" data-testid="arkade-complete-error">
             Complete exit failed: {errorMessage(completeExitMutation.error)}
           </p>

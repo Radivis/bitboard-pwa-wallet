@@ -1,12 +1,8 @@
 mod autonomous;
 mod balance;
 mod boarding;
-mod exit;
-mod exit_autonomous;
-mod exit_materials_prefetch;
-mod exit_onchain;
-mod exit_watch;
-mod exit_watch_reconcile;
+mod collaborative_exit;
+pub(crate) mod intents;
 pub(crate) mod mappers;
 mod offchain_balance;
 mod open;
@@ -17,8 +13,7 @@ mod pending_exit;
 mod receive;
 mod signer_migration;
 mod sync;
-mod unilateral_exit_branch_topology;
-mod unilateral_exit_orchestrator;
+mod unilateral_exit;
 mod vtxo;
 
 use std::cell::Cell;

@@ -111,19 +111,26 @@ export async function settleBoardingUtxo(page: Page, boardSats: number): Promise
 
   await expect(async () => {
     const isSettling = await page.getByRole('button', { name: 'Settling…' }).isVisible()
+    const isProcessingBoard = await page
+      .getByText(/The Arkade server is processing your boarding/)
+      .isVisible()
+    const isWaitingOperator = await page.getByText('Waiting for Arkade operator').isVisible()
     const settleButton = page.getByRole('button', { name: 'Settle boarding UTXO' })
 
-    if (!settleClicked && !isSettling && (await settleButton.isEnabled())) {
+    if (!settleClicked && !isSettling && !isProcessingBoard && (await settleButton.isEnabled())) {
       await settleButton.click()
       settleClicked = true
       throw new Error('Boarding settle started')
     }
 
-    if (isSettling) {
+    if (isSettling || isProcessingBoard || isWaitingOperator) {
       throw new Error('Boarding settle still in progress')
     }
 
-    if (await page.getByText('Boarding settlement submitted to operator').isVisible()) {
+    if (
+      (await page.getByText('Boarding settlement completed').isVisible()) ||
+      (await page.getByText('Boarding settlement submitted to operator').isVisible())
+    ) {
       await goToWalletTab(page, 'Dashboard')
       await triggerArkadeRailSync(page, 60_000)
       const balanceSats = await readDashboardArkadeBalanceSats(page)

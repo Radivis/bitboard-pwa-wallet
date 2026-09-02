@@ -212,19 +212,24 @@ where
             .read()
             .map_err(|e| Error::consumer(format!("failed to get read lock: {e}")))?;
 
-        // Get all unspent UTXOs
+        // CPFP bumpers go into submitpackage with the unroll parent. An unconfirmed
+        // fee-coin parent is not in that package, so bitcoind returns
+        // package-not-child-with-unconfirmed-parents. Only spend confirmed UTXOs.
         let utxos = wallet.list_unspent();
 
-        // Simple coin selection: pick UTXOs until we reach the target amount
         let mut selected_utxos = Vec::new();
         let mut total_selected = Amount::ZERO;
+        let mut skipped_unconfirmed = 0u32;
 
         for utxo in utxos {
             if total_selected >= target_amount {
                 break;
             }
+            if !utxo.chain_position.is_confirmed() {
+                skipped_unconfirmed += 1;
+                continue;
+            }
 
-            // Get the address for this UTXO
             let address = wallet
                 .peek_address(utxo.keychain, utxo.derivation_index)
                 .address;
@@ -240,7 +245,8 @@ where
 
         if total_selected < target_amount {
             return Err(Error::wallet(format!(
-                "Insufficient funds: need {target_amount}, have {total_selected}"
+                "Insufficient confirmed funds: need {target_amount}, have {total_selected} \
+                 (skipped {skipped_unconfirmed} unconfirmed UTXOs)"
             )));
         }
 
