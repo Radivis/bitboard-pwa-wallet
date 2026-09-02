@@ -1,0 +1,152 @@
+import { describe, expect, it, vi } from 'vitest'
+import { screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { renderWithProviders } from '@/test-utils/test-providers'
+import { ArkadeAutonomousModeSwitch } from '@/components/wallet/ArkadeAutonomousModeSwitch'
+import { ArkadeExitSection } from '@/components/wallet/ArkadeExitSection'
+
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-router')>()
+  return {
+    ...actual,
+    Link: ({ children }: { children: React.ReactNode }) => <a href="#">{children}</a>,
+  }
+})
+
+let autonomousActive = false
+
+vi.mock('@/hooks/useArkadeQueries', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/hooks/useArkadeQueries')>()
+  return {
+    ...actual,
+    useArkadeAutonomousModeStatusQuery: () => ({
+      data: {
+        active: autonomousActive,
+        eligibleCount: 2,
+        materialsReadyCount: autonomousActive ? 1 : 1,
+        materialsMissingCount: 1,
+        cachedOperatorInfoPresent: true,
+        operatorTrustPending: false,
+        canExitAutonomous: true,
+      },
+      isLoading: false,
+    }),
+    useArkadeAutonomousModeMutation: () => ({
+      mutate: (nextActive: boolean) => {
+        autonomousActive = nextActive
+      },
+      isPending: false,
+    }),
+    useArkadeAutonomousModeActive: () => autonomousActive,
+    useArkadeBalanceQuery: () => ({
+      isLoading: false,
+      data: { confirmedSats: 1000, totalSats: 1000 },
+    }),
+    useArkadeDelegateInfoQuery: () => ({ data: null }),
+    useArkadeRenewMutation: () => ({ mutate: vi.fn(), isPending: false }),
+    useArkadeExitCandidatesQuery: () => ({ data: [], isLoading: false }),
+    useArkadeBumperInfoQuery: () => ({ data: null, isLoading: false }),
+    useArkadeCollaborativeExitMutation: () => ({ mutate: vi.fn(), isPending: false }),
+    useArkadeCollaborativeExitFeeQuery: () => ({
+      isLoading: false,
+      isError: false,
+      data: {
+        txFeeRate: '2',
+        intentFeeConfigured: {
+          offchainInput: true,
+          onchainInput: false,
+          offchainOutput: false,
+          onchainOutput: true,
+        },
+        estimatedTotalFeeSats: 500,
+        estimatedReceiveSats: 99_500,
+      },
+    }),
+    useArkadeCompleteUnilateralExitMutation: () => ({ mutate: vi.fn(), isPending: false }),
+    useArkadeUnilateralExitsInProgressQuery: () => ({ data: [], isLoading: false }),
+    useArkadeUnilateralExitCompletionFeeQuery: () => ({ data: undefined, isLoading: false }),
+    useHasPendingBatchIntent: () => false,
+    useHasPendingBatchIntentKind: () => false,
+    usePendingBatchIntent: () => null,
+    usePendingBatchIntents: () => [],
+  }
+})
+
+vi.mock('@/stores/walletStore', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/stores/walletStore')>()
+  const state = {
+    ...actual.useWalletStore.getState(),
+    networkMode: 'signet' as const,
+    activeWalletId: 1,
+    currentAddress: 'tb1qexample',
+    committedNetworkMode: 'signet' as const,
+    arkadeSignerMigrationHint: null,
+  }
+  return {
+    ...actual,
+    useWalletStore: Object.assign(
+      (selector: (walletState: typeof state) => unknown) => selector(state),
+      { getState: () => state },
+    ),
+  }
+})
+
+vi.mock('@/components/wallet/arkade-exit/CollaborativeExitDialog', () => ({
+  CollaborativeExitDialog: () => null,
+}))
+vi.mock('@/components/wallet/arkade-exit/CompleteUnilateralExitDialog', () => ({
+  CompleteUnilateralExitDialog: () => null,
+}))
+
+vi.mock('@/hooks/useArkadeExitFlow', () => ({
+  useArkadeExitFlow: () => ({
+    setCollaborativeOpen: vi.fn(),
+    setCompleteUnilateralOpen: vi.fn(),
+    hasUnilateralExitInProgress: false,
+  }),
+}))
+
+describe('Arkade autonomous mode UI', () => {
+  it('shows autonomous mode image and active copy when enabled', async () => {
+    autonomousActive = false
+
+    const user = userEvent.setup()
+    const { rerender } = renderWithProviders(<ArkadeAutonomousModeSwitch />)
+
+    expect(
+      screen.queryByRole('img', { name: /castaway building a small boat/i }),
+    ).not.toBeInTheDocument()
+    await user.click(screen.getByRole('switch', { name: 'Autonomous mode' }))
+    expect(screen.getByRole('dialog', { name: 'Enable autonomous mode' })).toBeInTheDocument()
+    expect(
+      screen.getByText(/persists for this operator and blocks all contact/i),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/1 exit-eligible VTXO is missing prefetched exit materials/i)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Enable' }))
+    rerender(<ArkadeAutonomousModeSwitch />)
+    expect(screen.getByRole('img', { name: /castaway building a small boat/i })).toHaveAttribute(
+      'src',
+      '/autonomous_mode_w600.jpg',
+    )
+    expect(screen.getByTestId('arkade-autonomous-materials-missing')).toBeInTheDocument()
+    expect(screen.getByText(/not contacting this operator/i)).toBeInTheDocument()
+    expect(screen.queryByText(/operator unreachable/i)).not.toBeInTheDocument()
+  })
+
+  it('disables collaborative exit while autonomous mode is active', async () => {
+    autonomousActive = true
+    renderWithProviders(<ArkadeExitSection />)
+    expect(screen.getByRole('button', { name: 'Collaborative exit' })).toBeDisabled()
+    expect(screen.getByTestId('arkade-exit-collab-unavailable')).toHaveTextContent(
+      /autonomous mode/i,
+    )
+  })
+
+  it('shows idle trust-posture copy when autonomous mode is off', () => {
+    autonomousActive = false
+    renderWithProviders(<ArkadeAutonomousModeSwitch />)
+    expect(
+      screen.getByText(/do not contact this operator until you turn this off/i),
+    ).toBeInTheDocument()
+  })
+})

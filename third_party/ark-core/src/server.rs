@@ -356,6 +356,36 @@ impl GetVtxosRequest {
     pub fn after(&self) -> Option<u64> {
         self.after
     }
+
+    /// Split scripts or outpoints so each GET `/v1/indexer/vtxos` stays under typical proxy
+    /// URL/header limits (HTTP 431 Request Header Fields Too Large).
+    ///
+    /// Pagination (`page`) is cleared on each chunk; callers apply paging per chunk.
+    pub fn split_references(&self, chunk_size: usize) -> Vec<Self> {
+        let chunk_size = chunk_size.max(1);
+        match &self.reference {
+            GetVtxosRequestReference::Scripts(scripts) => scripts
+                .chunks(chunk_size)
+                .map(|chunk| Self {
+                    reference: GetVtxosRequestReference::Scripts(chunk.to_vec()),
+                    filter: self.filter,
+                    page: None,
+                    before: self.before,
+                    after: self.after,
+                })
+                .collect(),
+            GetVtxosRequestReference::OutPoints(outpoints) => outpoints
+                .chunks(chunk_size)
+                .map(|chunk| Self {
+                    reference: GetVtxosRequestReference::OutPoints(chunk.to_vec()),
+                    filter: self.filter,
+                    page: None,
+                    before: self.before,
+                    after: self.after,
+                })
+                .collect(),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -366,9 +396,13 @@ pub enum GetVtxosRequestReference {
 
 impl GetVtxosRequestReference {
     pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn len(&self) -> usize {
         match self {
-            GetVtxosRequestReference::Scripts(script_bufs) => script_bufs.is_empty(),
-            GetVtxosRequestReference::OutPoints(outpoints) => outpoints.is_empty(),
+            GetVtxosRequestReference::Scripts(script_bufs) => script_bufs.len(),
+            GetVtxosRequestReference::OutPoints(outpoints) => outpoints.len(),
         }
     }
 }
@@ -928,6 +962,7 @@ pub fn parse_fee_amount(amount_str: Option<String>) -> Amount {
 mod tests {
     use super::*;
     use bitcoin::address::NetworkUnchecked;
+    use bitcoin::hashes::Hash;
     use bitcoin::secp256k1::PublicKey;
     use std::collections::HashMap;
     use std::str::FromStr;
@@ -1093,5 +1128,41 @@ mod tests {
         let info = make_info(PK_A, vec![(PK_B, now + 100), (PK_C, now - 100)]);
         assert!(!info.is_signer_past_cutoff_at(xonly(PK_B), now));
         assert!(info.is_signer_past_cutoff_at(xonly(PK_C), now));
+    }
+
+    fn dummy_outpoints(count: usize) -> Vec<OutPoint> {
+        (0..count)
+            .map(|index| OutPoint::new(Txid::from_byte_array([index as u8; 32]), 0))
+            .collect()
+    }
+
+    #[test]
+    fn get_vtxos_request_splits_outpoints_into_chunks() {
+        let request = GetVtxosRequest::new_for_outpoints(&dummy_outpoints(5));
+        let chunks = request.split_references(2);
+        assert_eq!(chunks.len(), 3);
+        assert_eq!(chunks[0].reference().len(), 2);
+        assert_eq!(chunks[1].reference().len(), 2);
+        assert_eq!(chunks[2].reference().len(), 1);
+    }
+
+    #[test]
+    fn get_vtxos_request_does_not_split_when_under_limit() {
+        let request = GetVtxosRequest::new_for_outpoints(&dummy_outpoints(3));
+        let chunks = request.split_references(8);
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0].reference().len(), 3);
+    }
+
+    #[test]
+    fn get_vtxos_request_split_preserves_spendable_filter() {
+        let request = GetVtxosRequest::new_for_outpoints(&dummy_outpoints(3))
+            .spendable_only()
+            .expect("filter");
+        let chunks = request.split_references(1);
+        assert_eq!(chunks.len(), 3);
+        assert!(chunks
+            .iter()
+            .all(|chunk| matches!(chunk.filter(), Some(GetVtxosRequestFilter::Spendable))));
     }
 }

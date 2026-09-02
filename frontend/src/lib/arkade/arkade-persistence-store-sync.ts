@@ -16,7 +16,7 @@ import {
 function syncArkadeDashboardQueryCaches(params: {
   walletId: number
   networkMode: NetworkMode
-  connectionId: string
+  arkadeAccountId: string
   balance: ArkadeBalanceInfo
   payments: ArkadePaymentRow[]
   receiveAddress: string
@@ -25,16 +25,16 @@ function syncArkadeDashboardQueryCaches(params: {
     return
   }
   appQueryClient.setQueryData(
-    arkadeBalanceQueryKey(params.walletId, params.networkMode, params.connectionId),
+    arkadeBalanceQueryKey(params.walletId, params.networkMode, params.arkadeAccountId),
     params.balance,
   )
   appQueryClient.setQueryData(
-    arkadeHistoryQueryKey(params.walletId, params.networkMode, params.connectionId),
+    arkadeHistoryQueryKey(params.walletId, params.networkMode, params.arkadeAccountId),
     params.payments,
   )
   if (params.receiveAddress.length > 0) {
     appQueryClient.setQueryData(
-      arkadeAddressQueryKey(params.walletId, params.networkMode, params.connectionId),
+      arkadeAddressQueryKey(params.walletId, params.networkMode, params.arkadeAccountId),
       params.receiveAddress,
     )
   }
@@ -42,7 +42,7 @@ function syncArkadeDashboardQueryCaches(params: {
 
 /** Caller must ensure the Arkade WASM session is already open. */
 export async function refreshArkadeStoreFromLoadedWasm(
-  connectionIdForQueryCache?: string,
+  arkadeAccountIdForQueryCache?: string,
 ): Promise<void> {
   const worker = getArkadeWorker()
   const [balance, payments, receiveAddress] = await Promise.all([
@@ -58,12 +58,12 @@ export async function refreshArkadeStoreFromLoadedWasm(
 
   const walletState = useWalletStore.getState()
   const networkMode = getCommittedNetworkMode()
-  const connectionId = connectionIdForQueryCache ?? walletState.activeArkadeConnectionId
-  if (connectionId != null && walletState.activeWalletId != null) {
+  const arkadeAccountId = arkadeAccountIdForQueryCache ?? walletState.activeArkadeAccountId
+  if (arkadeAccountId != null && walletState.activeWalletId != null) {
     syncArkadeDashboardQueryCaches({
       walletId: walletState.activeWalletId,
       networkMode,
-      connectionId,
+      arkadeAccountId,
       balance,
       payments,
       receiveAddress,

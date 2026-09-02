@@ -53,11 +53,11 @@ export function applyOptimisticExitBalanceDeduction(
   queryClient: QueryClient,
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,
-  connectionId: string,
+  arkadeAccountId: string,
   deductedSats: number,
   exitField: ExitBalanceOptimisticContext['exitField'],
 ): ExitBalanceOptimisticContext {
-  const balanceKey = arkadeBalanceQueryKey(walletId, networkMode, connectionId)
+  const balanceKey = arkadeBalanceQueryKey(walletId, networkMode, arkadeAccountId)
   const previousBalance = queryClient.getQueryData<ArkadeBalanceInfo>(balanceKey)
 
   if (previousBalance != null && deductedSats > 0) {

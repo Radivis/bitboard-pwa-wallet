@@ -70,12 +70,38 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
     isLoading: false,
     data: { earliestExpiresAt: null, expiringSoonCount: 0 },
   }),
+  useArkadeOperatorScheduledSessionQuery: () => ({
+    isLoading: false,
+    data: null,
+  }),
   useArkadeSignerMigrationMutation: () => ({
     mutate: vi.fn(),
     isPending: false,
     error: null,
   }),
   useArkadeSignerMigrationPartialResultQuery: () => ({ data: null }),
+  useArkadeAutonomousModeActive: () => false,
+  useHasPendingBatchIntent: () => false,
+  usePendingBatchIntent: () => null,
+  useOperatorTrustStatusQuery: () => ({
+    data: { operatorTrustPending: false, reviewingInAutonomous: false },
+  }),
+  useOperatorConfigDiffQuery: () => ({ isLoading: false, data: { entries: [] } }),
+  useReviewOperatorConfigInAutonomousMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  useAcceptOperatorConfigMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  useArkadeAutonomousModeStatusQuery: () => ({
+    isLoading: false,
+    data: {
+      active: false,
+      cachedOperatorInfoPresent: true,
+      operatorTrustPending: false,
+      canExitAutonomous: true,
+      eligibleCount: 0,
+      materialsReadyCount: 0,
+      materialsMissingCount: 0,
+    },
+  }),
+  useArkadeAutonomousModeMutation: () => ({ mutate: vi.fn(), isPending: false }),
 }))
 
 vi.mock('@/components/wallet/ArkadeExitSection', () => ({

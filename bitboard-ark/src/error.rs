@@ -16,12 +16,16 @@ pub const CODE_SNAPSHOT: &str = "snapshot";
 pub const CODE_PERSISTENCE: &str = "persistence";
 pub const CODE_WALLET: &str = "wallet";
 pub const CODE_CLIENT: &str = "client";
-pub const CODE_OPERATOR_INDEXER_CATCHING_UP: &str = "operator_indexer_catching_up";
-pub const CODE_UNILATERAL_UNROLL_NOT_CONFIRMED_ON_CHAIN: &str =
-    "unilateral_unroll_not_confirmed_on_chain";
 pub const CODE_BLOCKCHAIN: &str = "blockchain";
 pub const CODE_MNEMONIC: &str = "mnemonic";
 pub const CODE_SERIALIZATION: &str = "serialization";
+pub const CODE_AUTONOMOUS_EXIT_MATERIALS_MISSING: &str = "autonomous_exit_materials_missing";
+pub const CODE_AUTONOMOUS_OPERATOR_INFO_MISSING: &str = "autonomous_operator_info_missing";
+pub const CODE_AUTONOMOUS_MODE_BLOCKS_OPERATOR_RPC: &str = "autonomous_mode_blocks_operator_rpc";
+pub const CODE_OPERATOR_TRUST_PENDING_BLOCKS_AUTONOMOUS_EXIT: &str =
+    "operator_trust_pending_blocks_autonomous_exit";
+pub const CODE_OPERATOR_TRUST_PENDING_DIGEST_CHANGED: &str =
+    "operator_trust_pending_digest_changed";
 
 pub const MSG_SEND_AMOUNT_MUST_BE_POSITIVE: &str = "send amount must be greater than zero";
 
@@ -66,22 +70,37 @@ pub enum ArkWasmError {
     #[error("delegator service is not configured")]
     DelegatorNotConfigured,
 
-    #[error("vtxo_txids must not be empty")]
-    EmptyVtxoTxids,
+    #[error("vtxo_outpoints must not be empty")]
+    EmptyVtxoOutpoints,
 
-    #[error("VTXO {txid} is not in unilateral exit")]
-    VtxoNotInUnilateralExit { txid: String },
+    #[error("VTXO {txid}:{vout} is not in unilateral exit")]
+    VtxoNotInUnilateralExit { txid: String, vout: u32 },
 
-    #[error("VTXO {txid} timelock has not elapsed yet — complete is not available")]
-    VtxoUnilateralExitNotReady { txid: String },
+    #[error("VTXO {txid}:{vout} timelock has not elapsed yet — complete is not available")]
+    VtxoUnilateralExitNotReady { txid: String, vout: u32 },
 
     #[error(
-        "Operator indexer is still catching up after unilateral unroll. Wait a moment and try Complete exit again."
+        "Exit materials were not prefetched for this VTXO — sync with the operator while reachable"
     )]
-    OperatorIndexerCatchingUp,
+    AutonomousExitMaterialsMissing,
 
-    #[error("Unilateral unroll could not be confirmed on-chain ({txid})")]
-    UnilateralUnrollNotConfirmedOnChain { txid: String },
+    #[error(
+        "Cached operator info is missing — sync with the operator before enabling autonomous mode"
+    )]
+    AutonomousOperatorInfoMissing,
+
+    #[error("This operation requires operator connectivity and is blocked in autonomous mode")]
+    AutonomousModeBlocksOperatorRpc,
+
+    #[error(
+        "Operator config changes are pending — accept the new ASP terms before leaving autonomous mode"
+    )]
+    OperatorTrustPendingBlocksAutonomousExit,
+
+    #[error(
+        "The operator published newer configuration while you were reviewing. Please review the updated changes before accepting."
+    )]
+    OperatorTrustPendingDigestChanged,
 
     #[error("{0}")]
     Boarding(String),
@@ -132,13 +151,16 @@ impl ArkWasmError {
             | Self::InvalidOnchainAddress(_)
             | Self::InvalidSendAmount
             | Self::VtxoNotFound { .. }
-            | Self::EmptyVtxoTxids
+            | Self::EmptyVtxoOutpoints
             | Self::VtxoNotInUnilateralExit { .. }
             | Self::VtxoUnilateralExitNotReady { .. } => CODE_VALIDATION,
-            Self::OperatorIndexerCatchingUp => CODE_OPERATOR_INDEXER_CATCHING_UP,
-            Self::UnilateralUnrollNotConfirmedOnChain { .. } => {
-                CODE_UNILATERAL_UNROLL_NOT_CONFIRMED_ON_CHAIN
+            Self::AutonomousExitMaterialsMissing => CODE_AUTONOMOUS_EXIT_MATERIALS_MISSING,
+            Self::AutonomousOperatorInfoMissing => CODE_AUTONOMOUS_OPERATOR_INFO_MISSING,
+            Self::AutonomousModeBlocksOperatorRpc => CODE_AUTONOMOUS_MODE_BLOCKS_OPERATOR_RPC,
+            Self::OperatorTrustPendingBlocksAutonomousExit => {
+                CODE_OPERATOR_TRUST_PENDING_BLOCKS_AUTONOMOUS_EXIT
             }
+            Self::OperatorTrustPendingDigestChanged => CODE_OPERATOR_TRUST_PENDING_DIGEST_CHANGED,
             Self::DelegatorNotConfigured | Self::Delegator(_) | Self::InvalidDelegatorFee(_) => {
                 CODE_DELEGATOR
             }
@@ -198,21 +220,19 @@ mod tests {
     }
 
     #[test]
-    fn operator_indexer_catching_up_has_stable_code() {
-        let error = ArkWasmError::OperatorIndexerCatchingUp;
-        assert_eq!(error.code(), CODE_OPERATOR_INDEXER_CATCHING_UP);
-        assert!(
-            error
-                .to_string()
-                .contains("Operator indexer is still catching up")
+    fn operator_trust_pending_blocks_autonomous_exit_error_code() {
+        let error = ArkWasmError::OperatorTrustPendingBlocksAutonomousExit;
+        assert_eq!(
+            error.code(),
+            CODE_OPERATOR_TRUST_PENDING_BLOCKS_AUTONOMOUS_EXIT
         );
     }
 
     #[test]
-    fn unilateral_unroll_not_confirmed_on_chain_has_stable_code() {
-        let error = ArkWasmError::UnilateralUnrollNotConfirmedOnChain { txid: "abc".into() };
-        assert_eq!(error.code(), CODE_UNILATERAL_UNROLL_NOT_CONFIRMED_ON_CHAIN);
-        assert!(error.to_string().contains("abc"));
+    fn operator_trust_pending_digest_changed_error_code() {
+        let error = ArkWasmError::OperatorTrustPendingDigestChanged;
+        assert_eq!(error.code(), CODE_OPERATOR_TRUST_PENDING_DIGEST_CHANGED);
+        assert!(error.to_string().contains("newer configuration"));
     }
 
     #[test]

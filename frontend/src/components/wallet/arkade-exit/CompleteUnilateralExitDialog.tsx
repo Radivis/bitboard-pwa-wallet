@@ -14,9 +14,9 @@ import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import {
   formatMissingBlocktimeCompletionWarning,
   formatMissingBlocktimeCompletionWarningLine,
-  isOperatorIndexerCatchingUpError,
   unilateralExitCompleteTimelockMessage,
 } from '@/lib/arkade/arkade-exit-utils'
+import { includesArkadeVtxoOutpoint } from '@/workers/arkade-api'
 import type { useArkadeExitFlow } from '@/hooks/useArkadeExitFlow'
 
 type ExitFlow = ReturnType<typeof useArkadeExitFlow>
@@ -54,7 +54,7 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
     completionFeeQuery,
     completionFeeRateUi,
     completeExitMutation,
-    selectedInProgressTxids,
+    selectedInProgressOutpoints,
     selectedInProgressRows,
     selectedInProgressTotalSats,
     allSelectedCanComplete,
@@ -73,9 +73,6 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
     completionFeeEstimate.missingBlocktimeInputs.length > 0
       ? formatMissingBlocktimeCompletionWarning(completionFeeEstimate.missingBlocktimeInputs)
       : null
-  const indexerCatchingUp =
-    completeExitMutation.isError &&
-    isOperatorIndexerCatchingUpError(completeExitMutation.error)
 
   const footer = () => (
     <>
@@ -136,7 +133,7 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
           <>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm text-muted-foreground">
-                {selectedInProgressTxids.length} selected ·{' '}
+                {selectedInProgressOutpoints.length} selected ·{' '}
                 <BitcoinAmountDisplay amountSats={selectedInProgressTotalSats} size="sm" />
               </p>
               {readyCount > 0 && (
@@ -158,7 +155,10 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
                     <input
                       type="checkbox"
                       className="mt-1"
-                      checked={selectedInProgressTxids.includes(row.txid)}
+                      checked={includesArkadeVtxoOutpoint(selectedInProgressOutpoints, {
+                        txid: row.txid,
+                        vout: row.vout,
+                      })}
                       onChange={() => toggleInProgressSelection(row)}
                     />
                     <span className="flex-1 break-all">
@@ -221,7 +221,7 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
           </div>
         </div>
 
-        {selectedInProgressTxids.length > 0 && (
+        {selectedInProgressOutpoints.length > 0 && (
           <SendOnChainFeeSection
             feePresetSelection={completionFeeRateUi.feePresetSelection}
             presetSatPerVbByLabel={completionFeeRateUi.presetSatPerVbByLabel}
@@ -235,13 +235,13 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
           />
         )}
 
-        {selectedInProgressTxids.length > 0 && completionFeeQuery.isLoading && (
+        {selectedInProgressOutpoints.length > 0 && completionFeeQuery.isLoading && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
             Estimating completion fee…
           </div>
         )}
-        {completionFeeEstimate && selectedInProgressTxids.length > 0 && (
+        {completionFeeEstimate && selectedInProgressOutpoints.length > 0 && (
           <div
             className="rounded-md border bg-muted/40 p-2 text-xs space-y-1"
             data-testid="arkade-unilateral-completion-fee"
@@ -270,7 +270,7 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
           </div>
         )}
 
-        {missingBlocktimeWarning != null && selectedInProgressTxids.length > 0 && (
+        {missingBlocktimeWarning != null && selectedInProgressOutpoints.length > 0 && (
           <div
             className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-200"
             data-testid="arkade-complete-blocktime-warning"
@@ -286,17 +286,7 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
           </div>
         )}
 
-        {indexerCatchingUp && (
-          <p
-            className="text-sm text-amber-700 dark:text-amber-300"
-            data-testid="arkade-complete-indexer-catching-up"
-          >
-            Operator indexer is still catching up after your unroll. Wait a moment and try
-            Complete exit again.
-          </p>
-        )}
-
-        {completeExitMutation.isError && !indexerCatchingUp && (
+        {completeExitMutation.isError && (
           <p className="text-sm text-destructive" data-testid="arkade-complete-error">
             Complete exit failed: {errorMessage(completeExitMutation.error)}
           </p>

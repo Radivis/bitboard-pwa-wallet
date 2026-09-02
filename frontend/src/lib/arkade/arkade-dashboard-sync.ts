@@ -2,7 +2,7 @@ import { ensureMigrated } from '@/db/database'
 import { getArkadeSaveLifecycleSnapshot } from '@/lib/wallet/lifecycle/arkade-save-lifecycle-orchestrator'
 import { getArkadeSyncLifecycleSnapshot } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
 import { appQueryClient } from '@/lib/shared/app-query-client'
-import { loadActiveArkadeConnectionForNetwork } from '@/lib/arkade/arkade-operator-connections'
+import { loadActiveArkadeAccountForNetwork } from '@/lib/arkade/arkade-accounts'
 import {
   isArkadeSupportedNetworkMode,
   type ArkadeSupportedNetworkMode,
@@ -20,9 +20,9 @@ export const ARKADE_DASHBOARD_QUERY_KEY = [
 ] as const
 
 export function arkadeOperatorSyncMetadataQueryKey(
-  connectionId: string,
+  arkadeAccountId: string,
 ): readonly ['wallet_db', 'arkade', 'dashboard', 'operator', string] {
-  return [...ARKADE_DASHBOARD_QUERY_KEY, 'operator', connectionId]
+  return [...ARKADE_DASHBOARD_QUERY_KEY, 'operator', arkadeAccountId]
 }
 
 export interface ArkadeOperatorSyncMetadataResult {
@@ -34,15 +34,15 @@ function activeArkadeDashboardContext():
   | {
       networkMode: ArkadeSupportedNetworkMode
       walletId: number
-      connectionId: string
+      arkadeAccountId: string
     }
   | null {
   const walletState = useWalletStore.getState()
-  const { activeWalletId, walletStatus, networkMode, activeArkadeConnectionId } =
+  const { activeWalletId, walletStatus, networkMode, activeArkadeAccountId } =
     walletState
   if (
     activeWalletId == null ||
-    activeArkadeConnectionId == null ||
+    activeArkadeAccountId == null ||
     !isArkadeSupportedNetworkMode(networkMode) ||
     walletStatus === 'locked' ||
     walletStatus === 'none'
@@ -52,7 +52,7 @@ function activeArkadeDashboardContext():
   return {
     networkMode,
     walletId: activeWalletId,
-    connectionId: activeArkadeConnectionId,
+    arkadeAccountId: activeArkadeAccountId,
   }
 }
 
@@ -70,11 +70,11 @@ export async function resolveArkadeOperatorSyncMetadata(): Promise<
   }
 
   await ensureMigrated()
-  const connection = await loadActiveArkadeConnectionForNetwork({
+  const account = await loadActiveArkadeAccountForNetwork({
     walletId: context.walletId,
     networkMode: context.networkMode,
   })
-  const lastSuccessfulOperatorSyncAt = connection?.lastSuccessfulOperatorSyncAt
+  const lastSuccessfulOperatorSyncAt = account?.lastSuccessfulOperatorSyncAt
 
   const isStaleArkade =
     !operatorWorkInProgress &&

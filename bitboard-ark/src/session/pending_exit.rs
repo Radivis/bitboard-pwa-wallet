@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::str::FromStr;
 
 use crate::error::{ArkResult, ArkWasmError};
 use crate::exit_balance::{
@@ -7,25 +8,37 @@ use crate::exit_balance::{
 use crate::persistence::{JsonPersistenceDb, PendingExitDeductionRecord, PendingExitKind};
 
 use super::ArkSession;
-use super::exit_watch::{
-    register_unilateral_exit_watch, remove_unilateral_exit_watches_for_txids_in_wallet_db,
+use super::unilateral_exit::watch::{
+    register_unilateral_exit_watch, remove_unilateral_exit_watches_for_outpoints_in_wallet_db,
 };
-use super::mappers::{current_unix_timestamp, parse_outpoint};
 
-pub(crate) fn clear_pending_unilateral_exit_for_outpoint_in_wallet_db(
+use super::mappers::current_unix_timestamp;
+
+pub(crate) fn mark_vtxo_spent_in_snapshot(
+    snapshot: &mut crate::persistence::OffchainVtxoSnapshot,
+    txid: &str,
+    vout: u32,
+    spent_by: &str,
+) {
+    for record in &mut snapshot.virtual_tx_outpoints {
+        if record.txid == txid && record.vout == vout {
+            record.is_spent = true;
+            record.spent_by = Some(spent_by.to_string());
+        }
+    }
+}
+
+pub(crate) fn mark_vtxo_spent_in_wallet_db(
     wallet_db: &JsonPersistenceDb,
     txid: &str,
     vout: u32,
+    spent_by: &str,
 ) {
-    let mut pending = wallet_db.pending_exit_deductions();
-    pending.retain(|record| {
-        if record.kind != PendingExitKind::Unilateral {
-            return true;
-        }
-        let record_vout = record.vout.unwrap_or(0);
-        !(record.vtxo_txid.as_deref() == Some(txid) && record_vout == vout)
-    });
-    wallet_db.set_pending_exit_deductions(pending);
+    let Some(mut snapshot) = wallet_db.snapshot().offchain_vtxo_snapshot.clone() else {
+        return;
+    };
+    mark_vtxo_spent_in_snapshot(&mut snapshot, txid, vout, spent_by);
+    wallet_db.set_offchain_vtxo_snapshot(snapshot);
 }
 
 impl ArkSession {
@@ -34,7 +47,8 @@ impl ArkSession {
     /// Unilateral: sums [`ark_core::VtxoList::exiting`] VTXOs plus any in-flight pending
     /// unilateral records during unroll. This amount is informational in
     /// [`build_arkade_balance_dto`] — do not subtract it from gross spendable after unroll.
-    /// Collaborative: pending records only; those VTXOs are still in gross spendable until sync.
+    /// Collaborative: open CollaborativeExit pending-intent amounts, plus a retain deduction
+    /// after join Completed until snapshot spendable drops. Cancel must not leave that line.
     pub(crate) fn exit_balance_components(&self) -> ArkResult<(u64, u64)> {
         let pending = self.wallet_db.pending_exit_deductions();
         let snapshot_unilateral_sats = self
@@ -50,7 +64,10 @@ impl ArkSession {
         let unilateral_exit_in_progress_sats =
             snapshot_unilateral_sats.saturating_add(pending_unilateral_sats);
         let collaborative_exit_in_progress_sats =
-            sum_pending_exit_sats_by_kind(&pending, PendingExitKind::Collaborative);
+            crate::exit_balance::collaborative_exit_in_progress_sats(
+                &self.wallet_db.pending_batch_intents(),
+                &pending,
+            );
         Ok((
             unilateral_exit_in_progress_sats,
             collaborative_exit_in_progress_sats,
@@ -62,28 +79,18 @@ impl ArkSession {
         txid: &str,
         vout: u32,
     ) -> ArkResult<u64> {
-        if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref() {
-            for record in &snapshot.virtual_tx_outpoints {
-                if record.txid == txid && record.vout == vout {
-                    return Ok(record.amount_sats);
-                }
-            }
+        if let Some(amount_sats) = crate::unilateral_exit_materials::vtxo_amount_sats_from_snapshot(
+            self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref(),
+            txid,
+            vout,
+        ) {
+            return Ok(amount_sats);
         }
 
-        let (vtxo_list, _) = self.client.list_vtxos().await?;
-        let target_txid = parse_outpoint(txid, vout)?.txid;
-        let amount = vtxo_list
-            .all()
-            .find(|virtual_tx_outpoint| {
-                virtual_tx_outpoint.outpoint.txid == target_txid
-                    && virtual_tx_outpoint.outpoint.vout == vout
-            })
-            .map(|virtual_tx_outpoint| virtual_tx_outpoint.amount.to_sat())
-            .ok_or(ArkWasmError::VtxoNotFound {
-                txid: txid.to_string(),
-                vout,
-            })?;
-        Ok(amount)
+        Err(ArkWasmError::VtxoNotFound {
+            txid: txid.to_string(),
+            vout,
+        })
     }
 
     pub(crate) fn record_pending_unilateral_exit(&self, txid: &str, vout: u32, amount_sats: u64) {
@@ -95,6 +102,7 @@ impl ArkSession {
                 amount_sats,
                 started_at: current_unix_timestamp(),
                 baseline_offchain_spendable_sats: None,
+                retain_until_spendable_drops: false,
             });
         register_unilateral_exit_watch(&self.wallet_db, txid, vout, amount_sats);
     }
@@ -108,22 +116,57 @@ impl ArkSession {
                 amount_sats,
                 started_at: current_unix_timestamp(),
                 baseline_offchain_spendable_sats: Some(baseline_sats),
+                retain_until_spendable_drops: true,
             });
     }
 
-    pub(crate) fn clear_pending_unilateral_exits_for_txids(&self, vtxo_txids: &[bitcoin::Txid]) {
-        let txid_set: HashSet<String> = vtxo_txids.iter().map(|txid| txid.to_string()).collect();
+    pub(crate) fn clear_pending_collaborative_exit_deduction(&self) {
+        let mut pending = self.wallet_db.pending_exit_deductions();
+        pending.retain(|record| record.kind != PendingExitKind::Collaborative);
+        self.wallet_db.set_pending_exit_deductions(pending);
+    }
+
+    pub(crate) fn clear_pending_unilateral_exits_for_outpoints(
+        &self,
+        outpoints: &[bitcoin::OutPoint],
+    ) {
+        let outpoint_set: HashSet<bitcoin::OutPoint> = outpoints.iter().copied().collect();
         let mut pending = self.wallet_db.pending_exit_deductions();
         pending.retain(|record| {
             if record.kind != PendingExitKind::Unilateral {
                 return true;
             }
-            record
-                .vtxo_txid
-                .as_ref()
-                .is_none_or(|txid| !txid_set.contains(txid))
+            let Some(txid) = record.vtxo_txid.as_deref() else {
+                return true;
+            };
+            let vout = record.vout.unwrap_or(0);
+            let Ok(parsed_txid) = bitcoin::Txid::from_str(txid) else {
+                return true;
+            };
+            let record_outpoint = bitcoin::OutPoint {
+                txid: parsed_txid,
+                vout,
+            };
+            !outpoint_set.contains(&record_outpoint)
         });
         self.wallet_db.set_pending_exit_deductions(pending);
-        remove_unilateral_exit_watches_for_txids_in_wallet_db(&self.wallet_db, vtxo_txids);
+        remove_unilateral_exit_watches_for_outpoints_in_wallet_db(&self.wallet_db, &outpoint_set);
+    }
+
+    /// Local snapshot + pending cleanup after a successful on-chain completion broadcast.
+    pub(crate) fn finalize_unilateral_exit_completion_local_state(
+        &self,
+        vtxo_outpoints: &[bitcoin::OutPoint],
+        completion_txid: &str,
+    ) {
+        for outpoint in vtxo_outpoints {
+            mark_vtxo_spent_in_wallet_db(
+                &self.wallet_db,
+                &outpoint.txid.to_string(),
+                outpoint.vout,
+                completion_txid,
+            );
+        }
+        self.clear_pending_unilateral_exits_for_outpoints(vtxo_outpoints);
     }
 }

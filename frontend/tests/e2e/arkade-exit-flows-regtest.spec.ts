@@ -21,6 +21,7 @@ import {
   prepareCollaborativeExitScenario,
   prepareUnilateralUnrollScenario,
 } from './helpers/arkade-regtest-scenarios'
+import { runManualUnilateralUnrollUntilBranchComplete } from './helpers/arkade-unilateral-exit-reg04'
 import { goToWalletTab } from './helpers/wallet-nav'
 
 const ARKADE_REGTEST_TIMEOUT_MS = 600_000
@@ -46,10 +47,16 @@ test.describe('Arkade exit flows regtest @arkade-exit-regtest', () => {
     await page.getByRole('button', { name: 'Use current receive address' }).click()
     await page.getByLabel('Amount (sats, optional)').fill('50000')
     await page.getByRole('button', { name: 'Confirm exit' }).click()
-    await expect(page.getByRole('button', { name: 'Exiting…' })).toBeVisible({
+    await expect(
+      page.getByRole('button', { name: 'Exiting…' }).or(
+        page.getByText(/The Arkade server is processing your collaborative exit/),
+      ),
+    ).toBeVisible({
       timeout: 15_000,
     })
-    await expect(page.getByText(/Collaborative exit started/i)).toBeVisible({
+    await expect(
+      page.getByText(/Collaborative exit completed|Collaborative exit started/i),
+    ).toBeVisible({
       timeout: 180_000,
     })
   })
@@ -58,29 +65,16 @@ test.describe('Arkade exit flows regtest @arkade-exit-regtest', () => {
     await prepareUnilateralUnrollScenario(page)
     const onChainReceiveAddress = await readOnChainReceiveAddress(page)
     await goToArkadeManagementPanel(page)
-    await page.getByRole('button', { name: 'Start unilateral exit' }).click()
-    await expect(page.getByRole('heading', { name: 'Start unilateral exit' })).toBeVisible()
+    await page.getByTestId('arkade-unilateral-exit-control').click()
+    await expect(page.getByTestId('unilateral-exit-tree-graph')).toBeVisible({ timeout: 120_000 })
+    await page.locator('[data-testid^="unilateral-exit-leaf-node-"]').first().click()
+    await page.locator('[data-testid="unilateral-exit-leaf-select-switch"]').click()
     await ensureOnChainBumperFunds(page, 100_000)
-    const firstCandidate = page.locator('input[name="arkade-exit-vtxo"]').first()
-    await expect(firstCandidate).toBeVisible({ timeout: 120_000 })
-    await firstCandidate.check()
-    await expect(page.getByRole('button', { name: 'Start unroll' })).toBeEnabled({
-      timeout: 60_000,
-    })
-    await page.getByRole('button', { name: 'Start unroll' }).click()
-    const unrollError = page.getByTestId('arkade-unroll-error')
-    await expect(async () => {
-      if (!(await page.getByRole('heading', { name: 'Start unilateral exit' }).isVisible())) {
-        return
-      }
-      if (await unrollError.isVisible()) {
-        throw new Error((await unrollError.textContent())?.trim() ?? 'Unroll failed')
-      }
-      throw new Error('Unroll still in progress')
-    }).toPass({ timeout: 300_000 })
-    await expect(page.getByText(/Unroll complete/i)).toBeVisible({ timeout: 30_000 })
+    await runManualUnilateralUnrollUntilBranchComplete(page)
+
+    await goToArkadeManagementPanel(page)
     await expect(page.getByTestId('arkade-complete-unilateral-exit')).toBeVisible({
-      timeout: 120_000,
+      timeout: 300_000,
     })
     await page.getByTestId('arkade-complete-unilateral-exit').click()
     await expect(page.getByRole('heading', { name: 'Complete unilateral exit' })).toBeVisible()

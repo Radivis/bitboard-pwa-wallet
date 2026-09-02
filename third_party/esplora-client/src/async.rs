@@ -14,7 +14,10 @@
 use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
+
+static GET_HEIGHT_CACHE_BUSTER: AtomicU64 = AtomicU64::new(1);
 
 use bitcoin::block::Header as BlockHeader;
 use bitcoin::consensus::encode::serialize_hex;
@@ -272,9 +275,13 @@ impl<S: Sleeper> AsyncClient<S> {
         path: &str,
         body: T,
         query_params: Option<HashSet<(&str, String)>>,
+        content_type: Option<&str>,
     ) -> Result<Response, Error> {
         let url: String = format!("{}{}", self.url, path);
         let mut request = self.client.post(url).body(body);
+        if let Some(content_type) = content_type {
+            request = request.header("Content-Type", content_type);
+        }
         if let Some(d) = self.request_timeout {
             request = request.timeout(d);
         }
@@ -394,7 +401,7 @@ impl<S: Sleeper> AsyncClient<S> {
     /// Broadcast a [`Transaction`] to Esplora.
     pub async fn broadcast(&self, transaction: &Transaction) -> Result<(), Error> {
         let body = serialize::<Transaction>(transaction).to_lower_hex_string();
-        match self.post_request_bytes("/tx", body, None).await {
+        match self.post_request_bytes("/tx", body, None, None).await {
             Ok(_resp) => Ok(()),
             Err(e) => Err(e),
         }
@@ -432,6 +439,7 @@ impl<S: Sleeper> AsyncClient<S> {
                 "/txs/package",
                 serde_json::to_string(&serialized_txs).unwrap_or_default(),
                 Some(queryparams),
+                Some("application/json"),
             )
             .await?;
 
@@ -440,7 +448,8 @@ impl<S: Sleeper> AsyncClient<S> {
 
     /// Get the current height of the blockchain tip
     pub async fn get_height(&self) -> Result<u32, Error> {
-        self.get_response_text("/blocks/tip/height")
+        let nonce = GET_HEIGHT_CACHE_BUSTER.fetch_add(1, Ordering::Relaxed);
+        self.get_response_text(&format!("/blocks/tip/height?_={nonce}"))
             .await
             .map(|height| u32::from_str(&height).map_err(Error::Parsing))?
     }

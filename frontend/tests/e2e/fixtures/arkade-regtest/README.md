@@ -4,6 +4,8 @@ Local [arkade-regtest](https://github.com/ArkLabsHQ/arkade-regtest) stack for `@
 
 Testing strategy and commands: [TESTING.md](../../../../../TESTING.md) at repo root.
 
+**Esplora API quirks (virtual-tree JSON, `/raw` vs `/status`, unilateral-exit pitfalls):** [docs/arkade-regtest-esplora-quirks.md](../../../../../docs/arkade-regtest-esplora-quirks.md) — read before changing `bitboard-ark/src/esplora_blockchain.rs` or unilateral-exit progress logic.
+
 ## Ports (host)
 
 | Service | URL |
@@ -27,6 +29,7 @@ npm run test:e2e:regtest
 npm run test:e2e:arkade-regtest             # REG-01/02 (recovery, renewal) — short expiry
 npm run test:e2e:arkade-regtest-longexpiry  # REG-03 + REG-04 (collaborative exit, unilateral unroll) — long expiry
 npm run test:e2e:arkade-regtest-reg04       # REG-04 only — clean stack + long expiry (isolated debugging)
+npm run test:e2e:arkade-regtest-reg07       # REG-07 only — preconfirmed VTXO + automatic unroll
 npm run test:e2e:arkade-regtest-signer      # REG-05 signer migration — clean stack + long expiry
 ```
 
@@ -40,6 +43,7 @@ same stack with a different (block-denominated) `ARKD_VTXO_TREE_EXPIRY`:
 | Short | `arkade-core-flows-regtest.spec.ts` | `@arkade-regtest` | `.env.regtest` default (`40` blocks) | REG-01 recoverable recovery, REG-02 renewal |
 | Long  | `arkade-exit-flows-regtest.spec.ts` | `@arkade-exit-regtest` | `ARKD_VTXO_TREE_EXPIRY=200` blocks (set by the npm script) | REG-03 collaborative exit, REG-04 unilateral unroll |
 | REG-04 (isolated) | `arkade-reg04-unilateral-unroll-regtest.spec.ts` | `@arkade-reg04` | same long expiry via npm script | REG-04 only (faster iteration; same flow) |
+| REG-07 (isolated) | `arkade-reg07-preconfirmed-automation-regtest.spec.ts` | `@arkade-reg07` | same long expiry via npm script | REG-07 chained preconfirmed topology + automatic unroll |
 | Signer migration | `arkade-signer-migration-regtest.spec.ts` | `@arkade-signer-regtest` | `ARKD_VTXO_TREE_EXPIRY=200` via npm script | REG-05 cooperative migrate after `rotate-signer` |
 
 ### REG-05 → Rust fixture (optional)
@@ -92,12 +96,23 @@ E2E uses `TEST_MNEMONIC` from [`helpers/wallet-setup.ts`](../helpers/wallet-setu
 - **Container name conflict** (`postgres`, `bitcoin`, … already in use): Bitboard loads [`docker/arkade-regtest.override.yml`](../../../../docker/arkade-regtest.override.yml) and sets `ARKADE_REGTEST_CONTAINER_PREFIX=bitboard-regtest-` in `.env.regtest`, so stack containers are named e.g. `bitboard-regtest-postgres` (your standalone `postgres` container is untouched).
 - **Health timeout**: cold Docker pull can take 1–3 minutes on CI; increase `ARKADE_REGTEST_HEALTH_TIMEOUT_MS`.
 - **Port 7030 in use**: change `MEMPOOL_WEB_PORT` in `.env.regtest`.
+- **`/raw` 404 after broadcast** (relay / REG-07 stuck): mempool v3.3.1 electrum mode exposes `/hex` but not `/raw`. Bitboard routes host port `MEMPOOL_WEB_PORT` through `esplora_gateway` ([`docker/esplora-gateway/`](../../../../docker/esplora-gateway/)). Check `docker ps` for `bitboard-regtest-esplora-gateway` and probe `curl -sf -o /dev/null -w "%{http_code}\n" http://localhost:7030/api/tx/<txid>/raw` (expect 200 when bitcoind has the tx). Rebuild after gateway changes: see gateway README.
 - **Flaky Esplora index**: helpers poll tip height after `mine`; run `triggerArkadeRailSync` after chain advances.
 - **Recoverable banner never appears / boarding settle fails**: repeated E2E runs on the same deterministic wallet leave many boarding UTXOs at the same address. After ~30 regtest blocks (`ARKD_BOARDING_EXIT_DELAY=30`), cooperative settle is rejected (`INVALID_PSBT_INPUT … expired`). Reset the stack before a clean run: `node regtest/regtest.mjs clean && node regtest/regtest.mjs start --profile ark` (or restart from repo root via `scripts/start-arkade-regtest.sh` after `clean`).
 - **Boarding settle must be fast**: with block-denominated `ARKD_BOARDING_EXIT_DELAY=30`, arkd still applies a **~30 second** wall-clock cooperative window (`validateBoardingInput` uses `exitDelay.Seconds()` as seconds). Fund → settle within ~25s; the E2E helper enforces this.
-- **REG-04 complete exit failed with `no matching unrolled VTXOs`**: after unroll, arkd's indexer marks the virtual VTXO `is_spent`/`is_unrolled`, which moves it into the exiting / unspendable buckets (`VtxoList::unspendable()`, compat alias `spent()`) — completion coin-select must search `all()`, not only `all_unspent()`. Fixed in vendored `third_party/ark-client/src/coin_select.rs`; native regression: `ARKADE_REGTEST_RUN=1 cargo test -p bitboard-ark unilateral_unroll_and_complete_on_regtest -- --ignored`.
+- **REG-04 complete exit failed with `no matching unrolled VTXOs`**: after unroll, arkd's indexer marks the virtual VTXO `is_spent`/`is_unrolled`, which moves it into the exiting / unspendable buckets (`VtxoList::unspendable()`, compat alias `spent()`) — completion coin-select must search `all()`, not only `all_unspent()`. Fixed in vendored `third_party/ark-client/src/coin_select.rs`; native regression: `ARKADE_REGTEST_RUN=1 cargo test -p bitboard-ark --test autonomous_unilateral_exit_session_regtest -- --ignored` (complete without operator sync).
 - **`Timed out waiting … from config.webServer`**: Playwright waits for Vite on **`http://127.0.0.1:3100`** (not port 3000). E2E Vite binds to `127.0.0.1` explicitly so IPv6-only `localhost` does not cause a silent hang. The `scripts/e2e-dev-server.mjs` wrapper logs probe progress every 5s. `globalSetup` only checks Docker (Esplora + arkd), not Vite.
 - **Signer rotation invalidates in-flight operator state**: the `@arkade-signer-regtest` suite uses a **fresh wallet per test** and calls `restartArkadeOperator` after `rotate-signer` (same isolation pattern as other serial regtest suites). Do not reuse a wallet that boarded before rotation without reloading the session.
+- **Unilateral exit stuck / empty step progress**: probe Esplora from the host while the stack is up:
+  ```bash
+  node regtest/regtest.mjs esplora-tip
+  node regtest/regtest.mjs esplora-tx <branch-txid>   # repeat per step txid
+  ```
+  In the browser (DEV + `VITE_E2E_ARKADE_REGTEST`), dump WASM progress + branch txids:
+  ```js
+  await window.__e2eExportUnilateralExitDebugSnapshot()
+  ```
+  REG-07 failures now attach the same Esplora probe output to the Playwright error (see `helpers/esplora-unilateral-exit-diagnostics.ts`).
 
   ```bash
   # Terminal 1

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   ARKADE_VTXO_VIEWER_PAGE_SIZE,
   filterArkadeVtxoRows,
+  getArkadeVtxoFlagChips,
   paginateArkadeVtxoRows,
   sortArkadeVtxoRows,
   vtxoRowMatchesSearch,
@@ -21,11 +22,19 @@ function sampleRow(
     isUnrolled: false,
     isSwept: false,
     isSpent: false,
+    isUnilateralExitPrepared: false,
     ...overrides,
   }
 }
 
 describe('arkade-vtxo-viewer-display', () => {
+  it('getArkadeVtxoFlagChips_includes_unilateral_exit_prepared_when_set', () => {
+    const chips = getArkadeVtxoFlagChips(
+      sampleRow({ id: 'prepared:0', isUnilateralExitPrepared: true }),
+    )
+    expect(chips).toContain('unilateralExitPrepared')
+  })
+
   it('filter_vtxos_hide_finalized_default', () => {
     const rows = [
       sampleRow({ id: 'active:0', classification: 'confirmed' }),

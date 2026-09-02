@@ -17,7 +17,7 @@ export const ESPLORA_FEE_PRESETS_QUERY_KEY = [
   'esplora-fee-presets',
 ] as const
 
-async function presetRatesForNetwork(
+export async function presetRatesForNetwork(
   networkMode: NetworkMode,
 ): Promise<Record<SendFeePresetLabel, number>> {
   if (networkMode === 'lab') {

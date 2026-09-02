@@ -11,17 +11,23 @@ import {
   ARKADE_INFOMODE_IDS,
   ARKADE_RENEW_VTXOS_INFOMODE,
 } from '@/lib/arkade/arkade-infomode'
+import { ArkadeAutonomousModeSwitch } from '@/components/wallet/ArkadeAutonomousModeSwitch'
+import { ArkadeOperatorTrustGate } from '@/components/wallet/ArkadeOperatorTrustGate'
 import { ArkadeBalanceBreakdown } from '@/components/wallet/ArkadeBalanceBreakdown'
+import { ArkadePendingBatchIntentBanner } from '@/components/wallet/ArkadePendingBatchIntentBanner'
 import { ArkadeSignerMigrationBanner } from '@/components/wallet/ArkadeSignerMigrationBanner'
 import { ArkadePendingRecoveryDueToExpiredSignerBanner } from '@/components/wallet/ArkadePendingRecoveryDueToExpiredSignerBanner'
 import { ArkadeRecoverableVtxoBanner } from '@/components/wallet/ArkadeRecoverableVtxoBanner'
 import { RailSyncWarningBanner } from '@/components/wallet/RailSyncWarningBanner'
 import {
   useArkadeAddressQuery,
+  useArkadeAutonomousModeActive,
   useArkadeBalanceQuery,
   useArkadeDelegateInfoQuery,
   useArkadeRenewMutation,
+  useHasPendingBatchIntentKind,
 } from '@/hooks/useArkadeQueries'
+import { isIntentSubmitPhase } from '@/lib/arkade/arkade-pending-batch-intent'
 import {
   useArkadeLoadLifecycleSnapshot,
   useArkadeRailSnapshot,
@@ -37,6 +43,7 @@ import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import { ArkadeExitSection } from '@/components/wallet/ArkadeExitSection'
 import { ArkadeVtxoExpiryIndicator } from '@/components/wallet/ArkadeVtxoExpiryIndicator'
+import { ArkadeOperatorBatchWindowIndicator } from '@/components/wallet/ArkadeOperatorBatchWindowIndicator'
 
 export function ArkadePanel() {
   const networkMode = useWalletStore(selectCommittedNetworkMode)
@@ -49,11 +56,17 @@ export function ArkadePanel() {
   const balanceQuery = useArkadeBalanceQuery()
   const delegateQuery = useArkadeDelegateInfoQuery()
   const renewMutation = useArkadeRenewMutation()
+  const hasPendingRenewIntent = useHasPendingBatchIntentKind('renew')
+  const renewSubmitPhase = isIntentSubmitPhase({
+    mutationPending: renewMutation.isPending,
+    pendingForAction: hasPendingRenewIntent,
+  })
   const addressQuery = useArkadeAddressQuery()
   const arkadeRail = useArkadeRailSnapshot()
   const arkadeLoadSnapshot = useArkadeLoadLifecycleSnapshot()
   const arkadeSyncSnapshot = useArkadeSyncLifecycleSnapshot()
   const arkadeManualSync = useArkadeManualSyncMutation()
+  const autonomousModeActive = useArkadeAutonomousModeActive()
 
   if (!show) return null
 
@@ -80,6 +93,9 @@ export function ArkadePanel() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        <ArkadeOperatorTrustGate />
+        <ArkadeAutonomousModeSwitch />
+        <ArkadePendingBatchIntentBanner />
         <ArkadeSignerMigrationBanner />
         <ArkadePendingRecoveryDueToExpiredSignerBanner />
         <ArkadeRecoverableVtxoBanner />
@@ -88,8 +104,15 @@ export function ArkadePanel() {
           syncPhase={arkadeSyncSnapshot.syncPhase}
           loadPhase={arkadeLoadSnapshot.loadPhase}
           warningMessage={arkadeSyncSnapshot.warningMessage}
-          onRetry={() => arkadeManualSync.mutate()}
-          isRetrying={arkadeRail.syncPhase === 'syncing' || arkadeManualSync.isPending}
+          onRetry={() => {
+            if (!autonomousModeActive) {
+              arkadeManualSync.mutate()
+            }
+          }}
+          isRetrying={
+            !autonomousModeActive &&
+            (arkadeRail.syncPhase === 'syncing' || arkadeManualSync.isPending)
+          }
         />
         <p className="text-sm text-muted-foreground">
           Instant payments on Arkade use separate addresses from your on-chain{' '}
@@ -108,6 +131,7 @@ export function ArkadePanel() {
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground">Balance</p>
             <ArkadeBalanceBreakdown balance={balance} />
+            <ArkadeOperatorBatchWindowIndicator />
             <ArkadeVtxoExpiryIndicator />
           </div>
         ) : null}
@@ -142,9 +166,15 @@ export function ArkadePanel() {
             infoComponent={ArkadeBoardingInfomodeContent}
             as="span"
           >
-            <Button type="button" variant="outline" size="sm" asChild>
-              <Link to="/wallet/arkade/board">Board from on-chain</Link>
-            </Button>
+            {autonomousModeActive ? (
+              <Button type="button" variant="outline" size="sm" disabled>
+                Board from on-chain
+              </Button>
+            ) : (
+              <Button type="button" variant="outline" size="sm" asChild>
+                <Link to="/wallet/arkade/board">Board from on-chain</Link>
+              </Button>
+            )}
           </InfomodeWrapper>
           <InfomodeWrapper
             infoId={ARKADE_INFOMODE_IDS.renewVtxos}
@@ -156,10 +186,19 @@ export function ArkadePanel() {
               type="button"
               variant="secondary"
               size="sm"
-              disabled={renewMutation.isPending}
+              disabled={
+                autonomousModeActive || renewMutation.isPending || hasPendingRenewIntent
+              }
               onClick={() => renewMutation.mutate()}
             >
-              Renew VTXOs now
+              {renewSubmitPhase ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                  Renewing…
+                </>
+              ) : (
+                'Renew VTXOs now'
+              )}
             </Button>
           </InfomodeWrapper>
         </div>

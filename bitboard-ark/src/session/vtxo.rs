@@ -1,22 +1,32 @@
 use std::collections::HashSet;
 
-use ark_client::Blockchain;
+use ark_client::{Blockchain, JoinBatchOutcome};
 use ark_core::VtxoList;
 use ark_core::server::VirtualTxOutPoint;
 use bitcoin::{Amount, OutPoint, ScriptBuf, Txid, XOnlyPublicKey, secp256k1::rand::rngs::OsRng};
 
 use crate::api_types::{
-    DelegateSpendableResult, FinalizePendingResult, RecoverableVtxoFeeEstimateDto,
-    VtxoClassificationDto, VtxoExpiryStatusDto, VtxoListResultDto, VtxoRowDto,
+    BatchJoinResultDto, DelegateSpendableResult, FinalizePendingResult,
+    RecoverableVtxoFeeEstimateDto, VtxoClassificationDto, VtxoExpiryStatusDto, VtxoListResultDto,
+    VtxoRowDto,
 };
 use crate::constants::VTXO_SELF_RENEW_REMAINING_FRACTION;
 use crate::error::{ArkResult, ArkWasmError};
 use crate::exit_balance::{
     UnilateralExitOutpointKey, unilateral_exit_in_progress_outpoints_from_pending,
 };
-use crate::offchain_snapshot::{script_to_server_pk_lookup, vtxo_list_from_snapshot};
+use crate::offchain_snapshot::{
+    apply_local_snapshot_flags_to_vtxo, local_snapshot_record_for_outpoint,
+    script_to_server_pk_lookup, vtxo_list_from_snapshot,
+};
+use crate::outpoint::OnchainOutPoint;
+use crate::persistence::{
+    OffchainVtxoSnapshot, PendingBatchIntentKind, PendingBatchOutpointRecord,
+};
+use crate::unilateral_exit_materials::virtual_tx_outpoint_has_unilateral_exit_prepared;
 
 use super::ArkSession;
+use super::autonomous::balance_vtxo_reads_use_operator_rpc;
 use super::mappers::{
     current_unix_timestamp, empty_fee_info, map_intent_fee_configured, parse_delegator_public_key,
 };
@@ -36,10 +46,6 @@ pub(crate) struct RecoverableVtxoBuckets {
     /// Client-expired VTXOs not yet swept by the operator (`is_expired && !is_swept && amount >= dust`).
     pub pending_operator_sweep: RecoverableVtxoSummary,
 }
-
-/// How many times to re-run the boarding settle when the operator finalizes a round without
-/// actually spending the boarding UTXO (its chain scanner lagged behind the deposit confirmation).
-const BOARDING_SETTLE_MAX_ATTEMPTS: u8 = 3;
 
 /// Recovery settles every currently-recoverable VTXO in one round, but the operator's rolling sweep
 /// can mark *additional* VTXOs recoverable just after we snapshot the set (e.g. a VTXO whose tree
@@ -76,7 +82,9 @@ impl ArkSession {
             &self.wallet_db.pending_exit_deductions(),
         );
 
-        if let Ok((vtxo_list, _)) = self.client.list_vtxos().await {
+        if balance_vtxo_reads_use_operator_rpc(self.autonomous_mode())
+            && let Ok((vtxo_list, _)) = self.client.list_vtxos().await
+        {
             return Ok(recoverable_vtxo_buckets_from_list(
                 &vtxo_list,
                 dust,
@@ -97,6 +105,7 @@ impl ArkSession {
     }
 
     pub async fn recoverable_vtxo_fee_estimate(&self) -> ArkResult<RecoverableVtxoFeeEstimateDto> {
+        self.ensure_operator_rpc_allowed()?;
         let fees = self
             .client
             .server_info()?
@@ -154,34 +163,70 @@ impl ArkSession {
         }
     }
 
-    pub async fn recover_recoverable_vtxos(&self) -> ArkResult<Option<String>> {
-        let mut last_commitment_txid: Option<Txid> = None;
+    pub async fn recover_recoverable_vtxos(&self) -> ArkResult<BatchJoinResultDto> {
+        self.ensure_operator_rpc_allowed()?;
+        let mut last_completed: Option<bitcoin::Txid> = None;
 
         for _ in 0..RECOVER_RECOVERABLE_MAX_ROUNDS {
             let summary = self.recoverable_vtxo_buckets().await?.settleable;
             if summary.outpoints.is_empty() {
                 break;
             }
+            if let Some(waiting) = self
+                .existing_pending_batch_join_result(&[], &summary.outpoints)
+                .await?
+            {
+                return Ok(waiting);
+            }
 
             let mut rng = OsRng;
-            let commitment_txid = self
-                .client
-                .settle_vtxos(&mut rng, &summary.outpoints, &[])
-                .await?;
-
-            // The operator declined to settle (e.g. the cooperative window closed); stop rather
-            // than re-submitting the same unchanged set on every remaining round.
-            let Some(commitment_txid) = commitment_txid else {
-                break;
-            };
-
-            last_commitment_txid = Some(commitment_txid);
-            // Refresh local state so the next iteration's snapshot reflects both the VTXOs we just
-            // settled and any that the rolling sweep has since marked recoverable.
-            self.sync_with_operator().await?;
+            let settle = self
+                .with_batch_join(
+                    PendingBatchIntentKind::Recover,
+                    summary.total_sats,
+                    None,
+                    || async {
+                        self.client
+                            .settle_vtxos(&mut rng, &summary.outpoints, &[])
+                            .await
+                    },
+                )
+                .await;
+            match settle {
+                Ok(Some(JoinBatchOutcome::Completed(commitment_txid))) => {
+                    last_completed = Some(commitment_txid);
+                    self.sync_with_operator().await?;
+                }
+                Ok(Some(JoinBatchOutcome::Waiting(intent))) => {
+                    return Ok(self.batch_join_waiting_result(
+                        PendingBatchIntentKind::Recover,
+                        &intent,
+                        summary.total_sats,
+                    ));
+                }
+                Ok(None) => break,
+                Err(error) => {
+                    return self
+                        .map_settle_error(
+                            PendingBatchIntentKind::Recover,
+                            error,
+                            &[],
+                            &summary.outpoints,
+                            summary.total_sats,
+                        )
+                        .await;
+                }
+            }
         }
 
-        Ok(last_commitment_txid.map(|id| id.to_string()))
+        Ok(match last_completed {
+            Some(txid) => Self::batch_join_completed_result(txid),
+            None => BatchJoinResultDto {
+                status: crate::api_types::BATCH_JOIN_STATUS_COMPLETED.to_string(),
+                commitment_txid: None,
+                pending_intent: None,
+            },
+        })
     }
 
     pub async fn expiring_vtxo_count(&self) -> ArkResult<u32> {
@@ -193,10 +238,19 @@ impl ArkSession {
         let server_info = self.client.server_info()?;
         let now = current_unix_timestamp();
 
-        if let Ok((vtxo_list, script_map)) = self.client.list_vtxos().await {
-            let rows = map_vtxo_rows_from_list(&vtxo_list, dust, &server_info, now, |script| {
-                script_map.get(script).map(|vtxo| vtxo.server_pk())
-            });
+        if !self.autonomous_mode()
+            && let Ok((vtxo_list, script_map)) = self.client.list_vtxos().await
+        {
+            let wallet_snapshot = self.wallet_db.snapshot();
+            let offchain_snapshot = wallet_snapshot.offchain_vtxo_snapshot.as_ref();
+            let rows = map_vtxo_rows_from_list(
+                &vtxo_list,
+                dust,
+                &server_info,
+                now,
+                |script| script_map.get(script).map(|vtxo| vtxo.server_pk()),
+                offchain_snapshot,
+            );
             return Ok(VtxoListResultDto {
                 rows,
                 from_snapshot_synced_at: None,
@@ -209,9 +263,14 @@ impl ArkSession {
                 snapshot,
                 legacy_signer_pk_fallback(&self.persisted_operator_identity()),
             )?;
-            let rows = map_vtxo_rows_from_list(&vtxo_list, dust, &server_info, now, |script| {
-                script_lookup(script)
-            });
+            let rows = map_vtxo_rows_from_list(
+                &vtxo_list,
+                dust,
+                &server_info,
+                now,
+                |script| script_lookup(script),
+                Some(snapshot),
+            );
             return Ok(VtxoListResultDto {
                 rows,
                 from_snapshot_synced_at: Some(snapshot.synced_at),
@@ -225,7 +284,11 @@ impl ArkSession {
     }
 
     pub async fn vtxo_expiry_status(&self) -> ArkResult<VtxoExpiryStatusDto> {
-        let (vtxo_list, _) = self.client.list_vtxos().await?;
+        let (vtxo_list, _) = if self.autonomous_mode() {
+            self.snapshot_vtxo_list_and_script_map()?
+        } else {
+            self.client.list_vtxos().await?
+        };
         let exclude_pre_unroll_unilateral_exit = unilateral_exit_in_progress_outpoints_from_pending(
             &self.wallet_db.pending_exit_deductions(),
         );
@@ -246,17 +309,77 @@ impl ArkSession {
         })
     }
 
-    pub async fn renew_vtxos_now(&self) -> ArkResult<Option<String>> {
+    pub async fn renew_vtxos_now(&self) -> ArkResult<BatchJoinResultDto> {
+        self.ensure_operator_rpc_allowed()?;
         let expiring = self.expiring_outpoints().await?;
-        if expiring.is_empty() {
-            return Ok(None);
+        if let Some(waiting) = self
+            .existing_pending_batch_join_result(&[], &expiring)
+            .await?
+        {
+            return Ok(waiting);
         }
+        if expiring.is_empty() {
+            return Ok(BatchJoinResultDto {
+                status: crate::api_types::BATCH_JOIN_STATUS_COMPLETED.to_string(),
+                commitment_txid: None,
+                pending_intent: None,
+            });
+        }
+        let amount_sats = self
+            .wallet_db
+            .snapshot()
+            .offchain_vtxo_snapshot
+            .as_ref()
+            .map(|snapshot| {
+                snapshot
+                    .virtual_tx_outpoints
+                    .iter()
+                    .filter(|row| {
+                        expiring.iter().any(|outpoint| {
+                            row.txid == outpoint.txid.to_string() && row.vout == outpoint.vout
+                        })
+                    })
+                    .map(|row| row.amount_sats)
+                    .sum()
+            })
+            .unwrap_or(0);
         let mut rng = OsRng;
-        let txid = self.client.settle_vtxos(&mut rng, &expiring, &[]).await?;
-        Ok(txid.map(|id| id.to_string()))
+        let settle = self
+            .with_batch_join(PendingBatchIntentKind::Renew, amount_sats, None, || async {
+                self.client.settle_vtxos(&mut rng, &expiring, &[]).await
+            })
+            .await;
+        match settle {
+            Ok(Some(outcome)) => {
+                self.map_settle_outcome(
+                    PendingBatchIntentKind::Renew,
+                    outcome,
+                    &[],
+                    &expiring,
+                    amount_sats,
+                )
+                .await
+            }
+            Ok(None) => Ok(BatchJoinResultDto {
+                status: crate::api_types::BATCH_JOIN_STATUS_COMPLETED.to_string(),
+                commitment_txid: None,
+                pending_intent: None,
+            }),
+            Err(error) => {
+                self.map_settle_error(
+                    PendingBatchIntentKind::Renew,
+                    error,
+                    &[],
+                    &expiring,
+                    amount_sats,
+                )
+                .await
+            }
+        }
     }
 
     pub async fn delegate_spendable_vtxos(&self) -> ArkResult<DelegateSpendableResult> {
+        self.ensure_operator_rpc_allowed()?;
         let Some(delegator) = self.delegator.as_ref() else {
             return Ok(DelegateSpendableResult {
                 delegated: 0,
@@ -304,6 +427,7 @@ impl ArkSession {
     }
 
     pub async fn finalize_pending_transactions(&self) -> ArkResult<FinalizePendingResult> {
+        self.ensure_operator_rpc_allowed()?;
         let pending_before = self.client.list_pending_offchain_txs().await?.len();
         let finalized = self.client.continue_pending_offchain_txs().await?;
         let pending_after = self.client.list_pending_offchain_txs().await?.len();
@@ -313,7 +437,8 @@ impl ArkSession {
         })
     }
 
-    pub async fn onboard_boarded_utxos(&self) -> ArkResult<Option<String>> {
+    pub async fn onboard_boarded_utxos(&self) -> ArkResult<BatchJoinResultDto> {
+        self.ensure_operator_rpc_allowed()?;
         let status = self.boarding_status().await?;
         if status.spendable_sats == 0 {
             if status.pending_sats > 0 {
@@ -339,56 +464,69 @@ impl ArkSession {
         }
 
         let mut rng = OsRng;
+        let boarding_outpoint = self
+            .newest_cooperative_boarding_outpoint()
+            .await?
+            .ok_or_else(|| {
+                ArkWasmError::Boarding(
+                    "No boarding UTXO is inside the operator cooperative settle window. \
+                     Fund the boarding address and settle within ~30 seconds of confirmation."
+                        .to_string(),
+                )
+            })?;
+        let amount_sats = status.spendable_sats;
+        let onchain = [boarding_outpoint.inner()];
+        if let Some(waiting) = self
+            .existing_pending_batch_join_result(&onchain, &[])
+            .await?
+        {
+            return Ok(waiting);
+        }
 
-        // Boarding settle races arkd's chain scanner: if the operator builds the round before its
-        // own view registers the freshly confirmed boarding deposit, it silently skips the input
-        // (arkd logs `vtxo <outpoint> not found, skipping`) and finalizes a round that does not
-        // spend the boarding UTXO. Verify the finalized round actually consumed the input and retry
-        // a bounded number of times so a single missed scan does not surface to the user as a hang.
-        let mut skipped_outpoint: Option<OutPoint> = None;
-        for _ in 0..BOARDING_SETTLE_MAX_ATTEMPTS {
-            let boarding_outpoint = self
-                .newest_cooperative_boarding_outpoint()
-                .await?
-                .ok_or_else(|| {
-                    ArkWasmError::Boarding(
-                        "No boarding UTXO is inside the operator cooperative settle window. \
-                         Fund the boarding address and settle within ~30 seconds of confirmation."
-                            .to_string(),
-                    )
-                })?;
-
-            match self
-                .client
-                .settle_vtxos(&mut rng, &[], &[boarding_outpoint])
-                .await
-            {
-                Ok(Some(commitment_txid)) => {
+        self.with_batch_join(PendingBatchIntentKind::Board, amount_sats, None, || async {
+            match self.client.settle_vtxos(&mut rng, &[], &onchain).await {
+                Ok(Some(JoinBatchOutcome::Completed(commitment_txid))) => {
                     if self
                         .round_consumed_boarding_outpoint(commitment_txid, boarding_outpoint)
                         .await?
                     {
-                        return Ok(Some(commitment_txid.to_string()));
+                        let onchain_records = onchain
+                            .iter()
+                            .map(|outpoint| PendingBatchOutpointRecord {
+                                txid: outpoint.txid.to_string(),
+                                vout: outpoint.vout,
+                            })
+                            .collect::<Vec<_>>();
+                        self.wallet_db
+                            .remove_pending_batch_intents_overlapping(&onchain_records, &[]);
+                        return Ok(Self::batch_join_completed_result(commitment_txid));
                     }
-                    skipped_outpoint = Some(boarding_outpoint);
+                    Ok(self.batch_join_duplicated_input_result(
+                        PendingBatchIntentKind::Board,
+                        &onchain,
+                        &[],
+                        amount_sats,
+                    ))
                 }
-                Ok(None) => {
-                    return Err(ArkWasmError::Boarding(
-                        "Settle returned no inputs even though boarding UTXOs looked spendable. Try again in a moment.".to_string(),
-                    ));
+                Ok(Some(JoinBatchOutcome::Waiting(intent))) => Ok(self.batch_join_waiting_result(
+                    PendingBatchIntentKind::Board,
+                    &intent,
+                    amount_sats,
+                )),
+                Ok(None) => super::intents::join_result_for_absent_settle_inputs(),
+                Err(error) => {
+                    self.map_settle_error(
+                        PendingBatchIntentKind::Board,
+                        error,
+                        &onchain,
+                        &[],
+                        amount_sats,
+                    )
+                    .await
                 }
-                Err(error) => return Err(error.into()),
             }
-        }
-
-        Err(ArkWasmError::Boarding(format!(
-            "The operator finalized {BOARDING_SETTLE_MAX_ATTEMPTS} round(s) without spending the \
-             boarding UTXO{}. Its chain view had likely not registered the boarding deposit yet — \
-             wait for another confirmation and retry.",
-            skipped_outpoint
-                .map(|outpoint| format!(" {outpoint}"))
-                .unwrap_or_default(),
-        )))
+        })
+        .await
     }
 
     /// Confirm the finalized batch actually spent `boarding_outpoint`.
@@ -400,14 +538,14 @@ impl ArkSession {
     async fn round_consumed_boarding_outpoint(
         &self,
         commitment_txid: Txid,
-        boarding_outpoint: OutPoint,
+        boarding_outpoint: OnchainOutPoint,
     ) -> ArkResult<bool> {
         for _ in 0..COMMITMENT_TX_VISIBILITY_MAX_POLLS {
             if let Some(commitment_tx) = self.client.blockchain().find_tx(&commitment_txid).await? {
                 return Ok(commitment_tx
                     .input
                     .iter()
-                    .any(|tx_in| tx_in.previous_output == boarding_outpoint));
+                    .any(|tx_in| tx_in.previous_output == boarding_outpoint.inner()));
             }
             sleep(COMMITMENT_TX_VISIBILITY_POLL_DELAY).await;
         }
@@ -416,13 +554,17 @@ impl ArkSession {
         let spend_status = self
             .client
             .blockchain()
-            .get_output_status(&boarding_outpoint.txid, boarding_outpoint.vout)
+            .get_output_status(boarding_outpoint.txid(), boarding_outpoint.vout())
             .await?;
         Ok(spend_status.spend_txid.is_some())
     }
     /// VTXOs in the renewal window for manual renew — excludes unilateral exit in progress.
     async fn expiring_outpoints(&self) -> ArkResult<Vec<OutPoint>> {
-        let (vtxo_list, _) = self.client.list_vtxos().await?;
+        let (vtxo_list, _) = if self.autonomous_mode() {
+            self.snapshot_vtxo_list_and_script_map()?
+        } else {
+            self.client.list_vtxos().await?
+        };
         let exclude_pre_unroll_unilateral_exit = unilateral_exit_in_progress_outpoints_from_pending(
             &self.wallet_db.pending_exit_deductions(),
         );
@@ -488,6 +630,7 @@ pub(crate) fn map_vtxo_row<F>(
     server_info: &ark_core::server::Info,
     now_unix_secs: i64,
     server_pk_for_script: F,
+    is_unilateral_exit_prepared: bool,
 ) -> VtxoRowDto
 where
     F: Fn(&ScriptBuf) -> Option<XOnlyPublicKey>,
@@ -513,6 +656,7 @@ where
         is_unrolled: virtual_tx_outpoint.is_unrolled,
         is_swept: virtual_tx_outpoint.is_swept,
         is_spent: virtual_tx_outpoint.is_spent,
+        is_unilateral_exit_prepared,
     }
 }
 
@@ -522,6 +666,7 @@ fn map_vtxo_rows_from_list<F>(
     server_info: &ark_core::server::Info,
     now_unix_secs: i64,
     server_pk_for_script: F,
+    offchain_snapshot: Option<&OffchainVtxoSnapshot>,
 ) -> Vec<VtxoRowDto>
 where
     F: Fn(&ScriptBuf) -> Option<XOnlyPublicKey>,
@@ -529,12 +674,27 @@ where
     let mut rows: Vec<VtxoRowDto> = vtxo_list
         .all()
         .map(|virtual_tx_outpoint| {
-            map_vtxo_row(
+            let mut display_vtxo = virtual_tx_outpoint.clone();
+            if let Some(snapshot) = offchain_snapshot
+                && let Some(record) = local_snapshot_record_for_outpoint(
+                    snapshot,
+                    &display_vtxo.outpoint.txid,
+                    display_vtxo.outpoint.vout,
+                )
+            {
+                apply_local_snapshot_flags_to_vtxo(&mut display_vtxo, record);
+            }
+            let is_unilateral_exit_prepared = virtual_tx_outpoint_has_unilateral_exit_prepared(
+                offchain_snapshot,
                 virtual_tx_outpoint,
+            );
+            map_vtxo_row(
+                &display_vtxo,
                 dust,
                 server_info,
                 now_unix_secs,
                 &server_pk_for_script,
+                is_unilateral_exit_prepared,
             )
         })
         .collect();
@@ -1106,7 +1266,7 @@ mod vtxo_row_classification_tests {
             "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
             vec![],
         );
-        let row = map_vtxo_row(&vtxo, DUST, &server_info, now, no_server_pk);
+        let row = map_vtxo_row(&vtxo, DUST, &server_info, now, no_server_pk, false);
         assert_eq!(row.id, format!("{}:3", vtxo.outpoint.txid));
         assert_eq!(row.amount_sats, 42_000);
         assert_eq!(row.created_at, vtxo.created_at);
@@ -1117,5 +1277,77 @@ mod vtxo_row_classification_tests {
         assert!(!row.is_unrolled);
         assert!(!row.is_swept);
         assert!(!row.is_spent);
+        assert!(!row.is_unilateral_exit_prepared);
+    }
+
+    #[test]
+    fn map_vtxo_rows_apply_local_snapshot_spent_overrides_operator_exit_state() {
+        use ark_core::VtxoList;
+        use std::collections::BTreeMap;
+
+        use crate::persistence::{OffchainVtxoSnapshot, VirtualTxOutPointRecord};
+
+        use super::map_vtxo_rows_from_list;
+
+        let now = current_unix_timestamp();
+        let txid = Txid::from_byte_array([0x69; 32]);
+        let vtxo = VirtualTxOutPoint {
+            outpoint: OutPoint::new(txid, 0),
+            created_at: now - 86_400,
+            expires_at: now + 86_400,
+            amount: Amount::from_sat(50_000),
+            script: ScriptBuf::new(),
+            is_preconfirmed: false,
+            is_swept: false,
+            is_unrolled: true,
+            is_spent: false,
+            spent_by: None,
+            commitment_txids: vec![],
+            settled_by: None,
+            ark_txid: None,
+            assets: vec![],
+        };
+        let vtxo_list = VtxoList::new(DUST, vec![vtxo]);
+        let snapshot = OffchainVtxoSnapshot {
+            synced_at: now,
+            dust_sats: DUST.to_sat(),
+            virtual_tx_outpoints: vec![VirtualTxOutPointRecord {
+                txid: txid.to_string(),
+                vout: 0,
+                created_at: now - 86_400,
+                expires_at: now + 86_400,
+                amount_sats: 50_000,
+                script_hex: String::new(),
+                is_preconfirmed: false,
+                is_swept: false,
+                is_unrolled: true,
+                is_spent: true,
+                spent_by: Some(Txid::from_byte_array([0x7e; 32]).to_string()),
+                commitment_txids: vec![],
+                settled_by: None,
+                ark_txid: None,
+                assets: vec![],
+                server_pk_hex: None,
+            }],
+            unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
+        };
+        let server_info = test_server_info(
+            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            vec![],
+        );
+
+        let rows = map_vtxo_rows_from_list(
+            &vtxo_list,
+            DUST,
+            &server_info,
+            now,
+            no_server_pk,
+            Some(&snapshot),
+        );
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].classification, VtxoClassificationDto::Finalized);
+        assert!(rows[0].is_spent);
+        assert!(rows[0].is_unrolled);
     }
 }

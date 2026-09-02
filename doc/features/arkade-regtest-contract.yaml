@@ -14,11 +14,22 @@ contracts:
     description: Collaborative exit withdraws part of Arkade balance to on-chain receive address
     tags: ["@arkade-regtest"]
   - id: E2E-ARK-REG-04
-    description: Full unilateral unroll — select VTXO, unroll, mine timelock blocks, complete exit on-chain
+    description: Full unilateral unroll — select VTXO, per-step Proceed with mining, branch complete, mine timelock blocks, complete exit on-chain
     tags: ["@arkade-regtest"]
+  - id: E2E-ARK-REG-07
+    description: Chained self-sends (40% + 30%) — intermediate virtual txs show exitable outpoints but are not leaf-selectable; Proceed automatically on all terminal preconfirmed leaf siblings until branch complete
+    tags: ["@arkade-reg07"]
+    rust_regtest:
+      test: bitboard-ark/tests/preconfirmed_unilateral_exit_proceed_regtest.rs
+      name: chained_preconfirmed_proceed_relays_first_step_tx_on_regtest
+      run: ARKADE_REGTEST_RUN=1 cargo test -p bitboard-ark --test preconfirmed_unilateral_exit_proceed_regtest -- --ignored --nocapture --test-threads=1
+      proves: proceed_unilateral_exit_step relays the first branch tx on Esplora /raw for chained preconfirmed multi-leaf batches (broadcast/bump path; complements E2E automation)
   - id: E2E-ARK-REG-05
     description: Fund on pre-rotation signer, rotate-signer with future cutoff, cooperative migrate via banner, assert no pendingRecoveryDueToExpiredSignerSats or pending-recovery-due-to-expired-signer breakdown
     tags: ["@arkade-signer-regtest"]
+  - id: E2E-ARK-REG-06
+    description: Fund boarded wallet, ASP changes three getInfo fields, sync shows trust modal, review in autonomous mode with diff table, lock/unlock restores autonomous on and the review banner (ARK-AUTO-01/03, ARK-TRUST-06), accept returns to regular mode (ARK-TRUST-03/04/05)
+    tags: ["@arkade-operator-trust-regtest"]
 
 infrastructure:
   stack: arkade-regtest

@@ -7,12 +7,17 @@ import {
   ARKADE_RECOVERABLE_VTXO_BANNER_INFOMODE,
 } from '@/lib/arkade/arkade-infomode'
 import {
+  useArkadeAutonomousModeActive,
   useArkadeBalanceQuery,
+  useHasPendingBatchIntentKind,
   useArkadeRecoverRecoverableVtxosMutation,
   useArkadeRecoverableVtxoFeeQuery,
 } from '@/hooks/useArkadeQueries'
+import { isIntentSubmitPhase } from '@/lib/arkade/arkade-pending-batch-intent'
 
 export function ArkadeRecoverableVtxoBanner() {
+  const autonomousModeActive = useArkadeAutonomousModeActive()
+  const hasPendingRecoverIntent = useHasPendingBatchIntentKind('recover')
   const balanceQuery = useArkadeBalanceQuery()
   const recoverableVtxoCount =
     balanceQuery.data?.recoverableSettleableVtxoCount ?? 0
@@ -21,6 +26,10 @@ export function ArkadeRecoverableVtxoBanner() {
     enabled: recoverableVtxoCount > 0,
   })
   const recoverMutation = useArkadeRecoverRecoverableVtxosMutation()
+  const recoverSubmitPhase = isIntentSubmitPhase({
+    mutationPending: recoverMutation.isPending,
+    pendingForAction: hasPendingRecoverIntent,
+  })
 
   if (recoverableVtxoCount <= 0) {
     return null
@@ -81,10 +90,12 @@ export function ArkadeRecoverableVtxoBanner() {
             type="button"
             size="sm"
             variant="secondary"
-            disabled={recoverMutation.isPending}
+            disabled={
+              autonomousModeActive || recoverMutation.isPending || hasPendingRecoverIntent
+            }
             onClick={() => recoverMutation.mutate()}
           >
-            {recoverMutation.isPending ? (
+            {recoverSubmitPhase ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
                 Recovering…

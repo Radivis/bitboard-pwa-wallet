@@ -1,19 +1,22 @@
+mod autonomous;
 mod balance;
 mod boarding;
-mod exit;
-mod exit_onchain;
-mod exit_watch;
-mod exit_watch_reconcile;
+mod collaborative_exit;
+pub(crate) mod intents;
 pub(crate) mod mappers;
 mod offchain_balance;
 mod open;
+mod operator_schedule;
+mod operator_trust;
 mod payments;
 mod pending_exit;
 mod receive;
 mod signer_migration;
 mod sync;
+mod unilateral_exit;
 mod vtxo;
 
+use std::cell::Cell;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -39,6 +42,7 @@ pub struct ArkSession {
     delegator: Option<DelegatorClient>,
     network_mode: NetworkMode,
     operator_identity: Mutex<OperatorIdentity>,
+    autonomous_mode: Cell<bool>,
 }
 
 impl ArkSession {

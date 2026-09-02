@@ -1,4 +1,5 @@
 use crate::api_types::BalanceDto;
+use crate::api_types::PendingBatchIntentDto;
 
 /// Raw balance buckets passed into [`build_arkade_balance_dto`].
 #[derive(Default)]
@@ -15,6 +16,7 @@ pub struct ArkadeBalanceInputs {
     pub unilateral_exit_in_progress_sats: u64,
     pub collaborative_exit_in_progress_sats: u64,
     pub pending_recovery_due_to_expired_signer_sats: u64,
+    pub pending_batch_intents: Vec<PendingBatchIntentDto>,
 }
 
 /// Maps ark-client offchain buckets to dashboard/send balance fields.
@@ -74,6 +76,7 @@ pub fn build_arkade_balance_dto(inputs: ArkadeBalanceInputs) -> BalanceDto {
         recoverable_pending_operator_sweep_sats: inputs.recoverable_pending_operator_sweep_sats,
         recoverable_pending_operator_sweep_vtxo_count: inputs
             .recoverable_pending_operator_sweep_vtxo_count,
+        pending_batch_intents: inputs.pending_batch_intents,
     }
 }
 

@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::outpoint::VirtualOutPoint;
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OperatorSignerMigrationHintDto {
@@ -81,6 +83,8 @@ pub struct BalanceDto {
     pub recoverable_pending_operator_sweep_sats: u64,
     /// Count of VTXOs in [`BalanceDto::recoverable_pending_operator_sweep_sats`].
     pub recoverable_pending_operator_sweep_vtxo_count: u32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pending_batch_intents: Vec<PendingBatchIntentDto>,
 }
 
 #[derive(Debug, Serialize)]
@@ -90,6 +94,56 @@ pub struct OperatorSyncResultDto {
     pub key_discovery_warning: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exiting_vtxo_warning: Option<String>,
+    #[serde(default)]
+    pub operator_config_trust_pending: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OperatorTrustStatusDto {
+    pub operator_trust_pending: bool,
+    pub reviewing_in_autonomous: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub accepted_digest: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pending_digest: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OperatorConfigDiffEntryDto {
+    pub field_key: String,
+    pub field_label: String,
+    pub accepted_value: String,
+    pub pending_value: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OperatorConfigDiffResultDto {
+    pub entries: Vec<OperatorConfigDiffEntryDto>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OperatorScheduledSessionDto {
+    pub next_start_time: i64,
+    pub next_end_time: i64,
+    pub period: i64,
+    pub duration: i64,
+    pub in_progress: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutonomousModeStatusDto {
+    pub active: bool,
+    pub eligible_count: u32,
+    pub materials_ready_count: u32,
+    pub materials_missing_count: u32,
+    pub cached_operator_info_present: bool,
+    pub operator_trust_pending: bool,
+    pub can_exit_autonomous: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -126,6 +180,8 @@ pub struct VtxoRowDto {
     pub is_unrolled: bool,
     pub is_swept: bool,
     pub is_spent: bool,
+    /// Cached unilateral-exit chain + PSBTs are stored locally for this VTXO.
+    pub is_unilateral_exit_prepared: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -170,14 +226,59 @@ pub struct FinalizePendingResult {
     pub pending: u32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum VirtualStatusState {
+    Spent,
+    Unrolled,
+    Preconfirmed,
+    Recoverable,
+    Settled,
+}
+
+impl VirtualStatusState {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Spent => "spent",
+            Self::Unrolled => "unrolled",
+            Self::Preconfirmed => "preconfirmed",
+            Self::Recoverable => "recoverable",
+            Self::Settled => "settled",
+        }
+    }
+
+    pub(crate) fn from_spent_and_unrolled(is_spent: bool, is_unrolled: bool) -> Self {
+        Self::from_flags(is_spent, is_unrolled, false, false)
+    }
+
+    pub(crate) fn from_flags(
+        is_spent: bool,
+        is_unrolled: bool,
+        is_preconfirmed: bool,
+        is_recoverable: bool,
+    ) -> Self {
+        if is_spent {
+            Self::Spent
+        } else if is_unrolled {
+            Self::Unrolled
+        } else if is_preconfirmed {
+            Self::Preconfirmed
+        } else if is_recoverable {
+            Self::Recoverable
+        } else {
+            Self::Settled
+        }
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ExitCandidateRow {
+pub struct ExitCandidateDto {
     pub id: String,
     pub txid: String,
     pub vout: u32,
     pub amount_sats: u64,
-    pub virtual_status_state: String,
+    pub virtual_status_state: VirtualStatusState,
     pub is_recoverable: bool,
     pub is_unrolled: bool,
     pub can_start_unroll: bool,
@@ -186,12 +287,12 @@ pub struct ExitCandidateRow {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UnilateralExitInProgressRow {
+pub struct UnilateralExitInProgressDto {
     pub id: String,
     pub txid: String,
     pub vout: u32,
     pub amount_sats: u64,
-    pub virtual_status_state: String,
+    pub virtual_status_state: VirtualStatusState,
     pub can_complete: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub started_at: Option<i64>,
@@ -238,6 +339,54 @@ pub struct BoardingStatusDto {
     pub spendable_sats: u64,
     pub pending_sats: u64,
     pub expired_sats: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pending_batch_intents: Vec<PendingBatchIntentDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub finalized_commitment_txid: Option<String>,
+}
+
+pub const BATCH_JOIN_STATUS_COMPLETED: &str = "completed";
+pub const BATCH_JOIN_STATUS_WAITING: &str = "waiting_for_operator";
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingBatchOutpointDto {
+    pub txid: String,
+    pub vout: u32,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingBatchIntentDto {
+    pub kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub intent_id: Option<String>,
+    pub amount_sats: u64,
+    pub registered_at: i64,
+    pub onchain_outpoints: Vec<PendingBatchOutpointDto>,
+    pub vtxo_outpoints: Vec<PendingBatchOutpointDto>,
+    pub lifecycle_phase: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub destination_address: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingBatchIntentActionParams {
+    #[serde(default)]
+    pub onchain_outpoints: Vec<PendingBatchOutpointDto>,
+    #[serde(default)]
+    pub vtxo_outpoints: Vec<PendingBatchOutpointDto>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchJoinResultDto {
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commitment_txid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pending_intent: Option<PendingBatchIntentDto>,
 }
 
 #[derive(Debug, Serialize)]
@@ -252,6 +401,8 @@ pub struct IntentFeeConfiguredDto {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CollaborativeExitFeeEstimateDto {
+    /// Echo of operator getInfo `txFeeRate` (wire type is string). Unused for fee math —
+    /// cooperative estimates use ark-fees CEL on intent programs; shown in the UI only.
     pub tx_fee_rate: String,
     pub intent_fee_configured: IntentFeeConfiguredDto,
     pub estimated_total_fee_sats: Option<u64>,
@@ -272,47 +423,13 @@ pub const COLLABORATIVE_EXIT_ESTIMATE_ERROR_INSUFFICIENT_COOPERATIVE_INPUTS: &st
 pub struct RecoverableVtxoFeeEstimateDto {
     pub recoverable_vtxo_count: u32,
     pub recoverable_total_sats: u64,
+    /// Echo of operator getInfo `txFeeRate`. Unused for fee math (see [`CollaborativeExitFeeEstimateDto::tx_fee_rate`]).
     pub tx_fee_rate: String,
     pub intent_fee_configured: IntentFeeConfiguredDto,
     pub estimated_total_fee_sats: Option<u64>,
     pub estimated_receive_sats: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub estimate_error: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UnilateralExitFeeEstimateDto {
-    pub chain_tx_count: u32,
-    pub projected_unroll_steps: u32,
-    pub projected_wait_steps: u32,
-    pub fee_rate_sat_per_vb: f64,
-    pub estimated_package_fee_sats: u64,
-    pub bumper_balance_sats: u64,
-    pub bumper_sufficient: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub estimate_error: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UnrollProgressEvent {
-    #[serde(rename = "type")]
-    pub event_type: String,
-    pub message: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub txid: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub vtxo_txid: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UnrollResult {
-    pub vtxo_txid: String,
-    pub operator_indexer_confirmed: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub indexer_warning: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -352,7 +469,7 @@ pub struct CollaborativeExitParams {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CompleteUnilateralExitParams {
-    pub vtxo_txids: Vec<String>,
+    pub vtxo_outpoints: Vec<VirtualOutPoint>,
     pub destination_address: String,
     #[serde(default)]
     pub fee_rate_sat_per_vb: Option<f64>,
@@ -361,7 +478,7 @@ pub struct CompleteUnilateralExitParams {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UnilateralExitCompletionFeeEstimateParams {
-    pub vtxo_txids: Vec<String>,
+    pub vtxo_outpoints: Vec<VirtualOutPoint>,
     pub destination_address: String,
     #[serde(default)]
     pub fee_rate_sat_per_vb: Option<f64>,
@@ -369,7 +486,195 @@ pub struct UnilateralExitCompletionFeeEstimateParams {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UnilateralExitFeeParams {
+pub struct UnilateralExitTopologyParams {
+    #[serde(default)]
+    pub vtxo_outpoints: Vec<VirtualOutPoint>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitTopologyNodeDto {
+    pub txid: String,
+    pub tx_type: String,
+    pub spends: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitHostOutpointDto {
     pub txid: String,
     pub vout: u32,
+    pub amount_sats: u64,
+    pub is_unrolled: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitTopologyDto {
+    pub nodes: Vec<UnilateralExitTopologyNodeDto>,
+    pub leaf_outpoints: Vec<VirtualOutPoint>,
+    pub host_outpoints: Vec<UnilateralExitHostOutpointDto>,
+    pub exit_branch_txids: Vec<String>,
+    pub commitment_txids: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitBatchEstimateParams {
+    pub vtxo_outpoints: Vec<VirtualOutPoint>,
+    #[serde(default)]
+    pub fee_rate_sat_per_vb: Option<f64>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitBatchEstimateDto {
+    pub projected_unroll_steps: u32,
+    pub estimated_package_fee_sats: u64,
+    pub fee_rate_sat_per_vb: f64,
+    pub bumper_balance_sats: u64,
+    pub bumper_sufficient: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub estimate_error: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProceedUnilateralExitStepParams {
+    pub vtxo_outpoints: Vec<VirtualOutPoint>,
+    pub fee_rate_sat_per_vb: f64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitProgressParams {
+    pub vtxo_outpoints: Vec<VirtualOutPoint>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum UnilateralExitPhase {
+    Idle,
+    Broadcasting,
+    Waiting,
+    Complete,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum UnilateralExitNodeStatusKind {
+    Pending,
+    InProgress,
+    Confirmed,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitLeafStatusDto {
+    pub txid: String,
+    pub vout: u32,
+    pub confirmations: u64,
+    pub is_unrolled: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitNodeStatusDto {
+    pub txid: String,
+    pub confirmations: u64,
+    pub status: UnilateralExitNodeStatusKind,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProceedUnilateralExitStepResultDto {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub step_txid: Option<String>,
+    pub step_index: u32,
+    pub total_steps: u32,
+    pub phase: UnilateralExitPhase,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_step_waiting_since: Option<i64>,
+    /// `true` when the active step is relayed (`/raw`) or `proceed` stamped a wait record (regtest mempool).
+    pub current_step_tx_relayed: bool,
+    pub node_statuses: Vec<UnilateralExitNodeStatusDto>,
+    pub leaf_statuses: Vec<UnilateralExitLeafStatusDto>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitProgressDto {
+    pub step_index: u32,
+    pub total_steps: u32,
+    pub phase: UnilateralExitPhase,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_step_waiting_since: Option<i64>,
+    /// `true` when the active step is relayed (`/raw`) or `proceed` stamped a wait record (regtest mempool).
+    pub current_step_tx_relayed: bool,
+    pub node_statuses: Vec<UnilateralExitNodeStatusDto>,
+    pub leaf_statuses: Vec<UnilateralExitLeafStatusDto>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum UnilateralExitJobViabilityKind {
+    Ok,
+    AspSweptTargets,
+    BranchFundingLost,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitJobViabilityDto {
+    pub status: UnilateralExitJobViabilityKind,
+    pub reason_code: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail_message: Option<String>,
+    pub offending_outpoints: Vec<VirtualOutPoint>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitLeafOutpointDto {
+    pub txid: String,
+    pub vout: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitJobDto {
+    pub selected_leaf_outpoints: Vec<UnilateralExitLeafOutpointDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_step_relayed_since_unix: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub job_started_at_unix: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitAutomationPrefsDto {
+    pub enabled: bool,
+    pub fee_preset_label: String,
+    pub max_fee_rate_sat_per_vb: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitFailureDto {
+    pub selected_leaf_outpoints: Vec<UnilateralExitLeafOutpointDto>,
+    pub job_started_at_unix: i64,
+    pub detected_at_unix: i64,
+    pub reason_code: String,
+    pub detail_message: String,
+    #[serde(default)]
+    pub vtxo_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitFrontendPersistenceDto {
+    pub job: UnilateralExitJobDto,
+    pub automation_prefs: UnilateralExitAutomationPrefsDto,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_failure: Option<UnilateralExitFailureDto>,
 }

@@ -78,6 +78,7 @@ function sampleRow(
     isUnrolled: false,
     isSwept: false,
     isSpent: false,
+    isUnilateralExitPrepared: false,
     ...overrides,
   }
 }

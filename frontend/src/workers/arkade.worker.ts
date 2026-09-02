@@ -5,42 +5,61 @@ import type {
 } from '@/workers/secrets-channel-types'
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import { arkadeSessionKey } from '@/lib/arkade/arkade-session-key'
+import { assertArkadeOpenSessionMatchesScope } from '@/lib/arkade/arkade-session-scope'
 import { rethrowWasmArkErrorForComlink } from '@/lib/shared/wasm-ark-error'
 import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
 import {
-  ensureOperatorConnectionEncrypted,
-  extractSdkPersistenceJsonForConnection,
-  findActiveConnectionSummary,
-  listConnectionSummaries,
+  ensureArkadeAccountEncrypted,
+  extractSdkPersistenceJsonForAccount,
+  findActiveAccountSummary,
+  listAccountSummaries,
   persistSdkJsonToEncryptedPayload,
   updateOperatorSyncAtEncrypted,
   type ArkadeEncryptedPayloadDeps,
 } from '@/workers/arkade-worker-encrypted-payload'
 import type {
   ArkadeBalanceInfo,
+  ArkadeBatchJoinResult,
+  ArkadeBoardingStatus,
   ArkadeCollaborativeExitFeeEstimate,
   ArkadeCollaborativeExitFeeEstimateParams,
   ArkadeCollaborativeExitParams,
   ArkadeCompleteUnilateralExitParams,
   ArkadeDelegateInfo,
-  ArkadeExitCandidateRow,
+  ArkadeExitCandidateDto,
   ArkadeOnchainBumperInfo,
   ArkadeOperatorSyncResult,
   ArkadePaymentRow,
+  ArkadePendingBatchIntentActionParams,
   ArkadeRecoverableVtxoFeeEstimate,
   ArkadeSendParams,
   ArkadeService,
   ArkadeSignerMigrationResult,
-  ArkadeUnilateralExitFeeEstimate,
-  ArkadeUnilateralExitFeeEstimateParams,
   ArkadeUnilateralExitCompletionFeeEstimate,
   ArkadeUnilateralExitCompletionFeeEstimateParams,
-  ArkadeUnilateralExitInProgressRow,
+  ArkadeUnilateralExitTopology,
+  ArkadeUnilateralExitTopologyParams,
+  ArkadeUnilateralExitBatchEstimate,
+  ArkadeUnilateralExitBatchEstimateParams,
+  ArkadeProceedUnilateralExitStepParams,
+  ArkadeProceedUnilateralExitStepResult,
+  ArkadeUnilateralExitProgress,
+  ArkadeUnilateralExitProgressParams,
+  ArkadeUnilateralExitJobViability,
+  ArkadeUnilateralExitFrontendPersistence,
+  ArkadeUnilateralExitJobPersistence,
+  ArkadeUnilateralExitAutomationPrefsPersistence,
+  ArkadeUnilateralExitFailurePersistence,
+  ArkadeWalletScope,
+  ArkadeOperatorScheduledSession,
+  ArkadeOperatorTrustStatus,
+  ArkadeOperatorConfigDiffResult,
+  ArkadeUnilateralExitInProgressDto,
+  ArkadeAutonomousModeStatus,
   ArkadeVtxoListResult,
-  ArkadeUnrollProgressEvent,
-  ArkadeUnrollResult,
   ArkadeVtxoExpiryStatus,
-  EnsureArkadeOperatorConnectionEncryptedParams,
+  ArkadePendingBatchIntent,
+  EnsureArkadeAccountEncryptedParams,
   OpenArkadeSessionParams,
   OpenArkadeSessionResult,
 } from '@/workers/arkade-api'
@@ -61,9 +80,8 @@ let activeSessionKey: string | null = null
 let activeSessionParams: {
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
-  connectionId: string
+  arkadeAccountId: string
 } | null = null
-let unrollInFlight = false
 let inFlightPersist: Promise<void> | null = null
 
 type SendPaymentInFlight = {
@@ -72,6 +90,10 @@ type SendPaymentInFlight = {
 }
 
 let sendPaymentInFlight: SendPaymentInFlight | null = null
+
+function assertCallerMatchesOpenSession(walletScope: ArkadeWalletScope): void {
+  assertArkadeOpenSessionMatchesScope(activeSessionParams, walletScope)
+}
 
 function sendPaymentFingerprint(params: ArkadeSendParams): string {
   return `${params.address}\0${params.amountSats}`
@@ -178,7 +200,7 @@ async function flushSdkPersistenceNowOrThrow(): Promise<void> {
     )
     await persistSdkJsonToEncryptedPayload(getEncryptedPayloadDeps(), {
       walletId: sessionParams.walletId,
-      connectionId: sessionParams.connectionId,
+      arkadeAccountId: sessionParams.arkadeAccountId,
       sdkPersistenceJson,
     })
   })()
@@ -190,11 +212,31 @@ async function flushSdkPersistenceNowOrThrow(): Promise<void> {
   }
 }
 
+async function getAutonomousModeActive(): Promise<boolean> {
+  try {
+    const status = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_autonomous_mode_status(),
+    )
+    return Boolean((status as ArkadeAutonomousModeStatus | undefined)?.active)
+  } catch {
+    return false
+  }
+}
+
 /** WASM operator sync + SDK flush only — store refresh runs on the main thread. */
 async function syncWithOperatorCore(): Promise<ArkadeOperatorSyncResult> {
   const result = await invokeWasmArk((wasmModule) => wasmModule.ark_sync_with_operator())
   await flushSdkPersistenceNowOrThrow()
   return (result ?? {}) as ArkadeOperatorSyncResult
+}
+
+async function persistAfterUnilateralExitOperation(): Promise<void> {
+  const { awaitArkadeSyncQuiescence } = await import(
+    '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
+  )
+  await awaitArkadeSyncQuiescence()
+  // Unilateral exit never syncs with the ASP after proceed/complete/unroll.
+  await flushSdkPersistenceNowOrThrow()
 }
 
 async function persistAfterCriticalOperation(): Promise<void> {
@@ -203,10 +245,54 @@ async function persistAfterCriticalOperation(): Promise<void> {
   )
   await awaitArkadeSyncQuiescence()
   if (activeSessionParams != null) {
-    await syncWithOperatorCore()
-    return
+    const autonomousActive = await getAutonomousModeActive()
+    if (!autonomousActive) {
+      await syncWithOperatorCore()
+      return
+    }
   }
   await flushSdkPersistenceNowOrThrow()
+}
+
+function createOnRegisteredWasmCallback(
+  onRegistered?: (intent: ArkadePendingBatchIntent) => void,
+): (intent: ArkadePendingBatchIntent) => Promise<void> {
+  return async (intent) => {
+    await flushSdkPersistenceNowOrThrow()
+    await Promise.resolve(onRegistered?.(intent))
+  }
+}
+
+async function persistBatchJoinResult(result: ArkadeBatchJoinResult): Promise<void> {
+  if (result.status === 'waiting_for_operator') {
+    await flushSdkPersistenceNowOrThrow()
+    return
+  }
+  await persistAfterCriticalOperation()
+}
+
+async function runBatchJoinAndPersist(
+  run: (
+    wasmModule: BitboardArkWasm,
+    onRegistered: (intent: ArkadePendingBatchIntent) => Promise<void>,
+  ) => unknown | Promise<unknown>,
+  onRegistered?: (intent: ArkadePendingBatchIntent) => void,
+): Promise<ArkadeBatchJoinResult> {
+  const wasmOnRegistered = createOnRegisteredWasmCallback(onRegistered)
+  try {
+    const result = (await invokeWasmArk((wasmModule) =>
+      run(wasmModule, wasmOnRegistered),
+    )) as unknown as ArkadeBatchJoinResult
+    await persistBatchJoinResult(result)
+    return result
+  } catch (error) {
+    try {
+      await flushSdkPersistenceNowOrThrow()
+    } catch {
+      // Best-effort flush if RegisterIntent succeeded before the WASM call threw.
+    }
+    throw error
+  }
 }
 
 async function closeSessionImpl(): Promise<void> {
@@ -224,14 +310,13 @@ async function closeSessionImpl(): Promise<void> {
 
   activeSessionKey = null
   activeSessionParams = null
-  unrollInFlight = false
   sendPaymentInFlight = null
 }
 
 async function openSessionImpl(
   params: OpenArkadeSessionParams,
 ): Promise<OpenArkadeSessionResult> {
-  const key = arkadeSessionKey(params.walletId, params.networkMode, params.connectionId)
+  const key = arkadeSessionKey(params.walletId, params.networkMode, params.arkadeAccountId)
 
   if (activeSessionKey === key) {
     try {
@@ -249,11 +334,11 @@ async function openSessionImpl(
   deleteLegacyArkadeIndexedDb(params.walletId, params.networkMode)
 
   const encryptedPayloadMessage = encryptedBlobForDbToMessage(params.encryptedPayload)
-  const sdkPersistenceJson = await extractSdkPersistenceJsonForConnection(
+  const sdkPersistenceJson = await extractSdkPersistenceJsonForAccount(
     getEncryptedPayloadDeps(),
     {
       encryptedPayload: encryptedPayloadMessage,
-      connectionId: params.connectionId,
+      arkadeAccountId: params.arkadeAccountId,
     },
   )
 
@@ -261,7 +346,7 @@ async function openSessionImpl(
   activeSessionParams = {
     walletId: params.walletId,
     networkMode: params.networkMode,
-    connectionId: params.connectionId,
+    arkadeAccountId: params.arkadeAccountId,
   }
 
   try {
@@ -312,27 +397,27 @@ const arkadeService: ArkadeService = {
   async hasOpenSession(params: {
     walletId: number
     networkMode: ArkadeSupportedNetworkMode
-    connectionId: string
+    arkadeAccountId: string
   }): Promise<boolean> {
     return activeSessionKey === arkadeSessionKey(
       params.walletId,
       params.networkMode,
-      params.connectionId,
+      params.arkadeAccountId,
     )
   },
 
-  async reconcileActiveConnectionId(connectionId: string): Promise<void> {
+  async reconcileActiveAccountId(arkadeAccountId: string): Promise<void> {
     if (activeSessionParams == null) {
       return
     }
     activeSessionParams = {
       ...activeSessionParams,
-      connectionId,
+      arkadeAccountId,
     }
     activeSessionKey = arkadeSessionKey(
       activeSessionParams.walletId,
       activeSessionParams.networkMode,
-      connectionId,
+      arkadeAccountId,
     )
   },
 
@@ -344,10 +429,55 @@ const arkadeService: ArkadeService = {
     return syncWithOperatorCore()
   },
 
-  async migrateDeprecatedSignerVtxos(): Promise<ArkadeSignerMigrationResult> {
-    const result = await invokeWasmArk((wasmModule) =>
-      wasmModule.ark_migrate_deprecated_signer_vtxos(),
+  async enterAutonomousMode(): Promise<void> {
+    await invokeWasmArk((wasmModule) => wasmModule.ark_enter_autonomous_mode())
+    await flushSdkPersistenceNowOrThrow()
+  },
+
+  async exitAutonomousMode(): Promise<void> {
+    await invokeWasmArk((wasmModule) => wasmModule.ark_exit_autonomous_mode())
+    await flushSdkPersistenceNowOrThrow()
+  },
+
+  async getAutonomousModeStatus(): Promise<ArkadeAutonomousModeStatus> {
+    const status = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_autonomous_mode_status(),
     )
+    return status as ArkadeAutonomousModeStatus
+  },
+
+  async getOperatorTrustStatus(): Promise<ArkadeOperatorTrustStatus> {
+    const status = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_operator_trust_status(),
+    )
+    return status as ArkadeOperatorTrustStatus
+  },
+
+  async getOperatorConfigDiff(): Promise<ArkadeOperatorConfigDiffResult> {
+    const diff = await invokeWasmArk((wasmModule) => wasmModule.ark_operator_config_diff())
+    return diff as ArkadeOperatorConfigDiffResult
+  },
+
+  async acceptPendingOperatorConfig(): Promise<void> {
+    await invokeWasmArk((wasmModule) => wasmModule.ark_accept_pending_operator_config())
+    await flushSdkPersistenceNowOrThrow()
+  },
+
+  async reviewOperatorConfigInAutonomousMode(): Promise<void> {
+    await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_review_operator_config_in_autonomous_mode(),
+    )
+    await flushSdkPersistenceNowOrThrow()
+  },
+
+  async migrateDeprecatedSignerVtxos(
+    onRegistered?: (intent: ArkadePendingBatchIntent) => void,
+  ): Promise<ArkadeSignerMigrationResult> {
+    const wasmOnRegistered = createOnRegisteredWasmCallback(onRegistered)
+    const result = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_migrate_deprecated_signer_vtxos(wasmOnRegistered),
+    )
+    await flushSdkPersistenceNowOrThrow()
     return result as ArkadeSignerMigrationResult
   },
 
@@ -361,32 +491,32 @@ const arkadeService: ArkadeService = {
 
   async readPersistedSdkPersistenceJsonForE2e(params: {
     walletId: number
-    connectionId: string
+    arkadeAccountId: string
   }): Promise<string | undefined> {
     const encryptedPayload = await getEncryptedPayloadDeps().encryptedHost.readEncryptedPayload(
       params.walletId,
     )
-    return extractSdkPersistenceJsonForConnection(getEncryptedPayloadDeps(), {
+    return extractSdkPersistenceJsonForAccount(getEncryptedPayloadDeps(), {
       encryptedPayload: encryptedBlobForDbToMessage(encryptedPayload),
-      connectionId: params.connectionId,
+      arkadeAccountId: params.arkadeAccountId,
     })
   },
 
-  async findActiveConnectionSummary(params) {
-    return findActiveConnectionSummary(getEncryptedPayloadDeps(), {
+  async findActiveAccountSummary(params) {
+    return findActiveAccountSummary(getEncryptedPayloadDeps(), {
       walletId: params.walletId,
       networkMode: params.networkMode,
       encryptedPayload: encryptedBlobForDbToMessage(params.encryptedPayload),
     })
   },
 
-  async listConnectionSummaries(params) {
-    return listConnectionSummaries(getEncryptedPayloadDeps(), params)
+  async listAccountSummaries(params) {
+    return listAccountSummaries(getEncryptedPayloadDeps(), params)
   },
 
-  async ensureOperatorConnectionEncrypted(params: EnsureArkadeOperatorConnectionEncryptedParams) {
+  async ensureArkadeAccountEncrypted(params: EnsureArkadeAccountEncryptedParams) {
     const { persistInitialSdkFromWasm, ...connectionParams } = params
-    return ensureOperatorConnectionEncrypted(
+    return ensureArkadeAccountEncrypted(
       getEncryptedPayloadDeps(),
       connectionParams,
       persistInitialSdkFromWasm
@@ -426,12 +556,26 @@ const arkadeService: ArkadeService = {
 
   async getBoardingAddress(): Promise<string> {
     const address = await invokeWasmArk((wasmModule) => wasmModule.ark_get_boarding_address())
-    await persistAfterCriticalOperation()
+    try {
+      await persistAfterCriticalOperation()
+    } catch {
+      try {
+        await flushSdkPersistenceNowOrThrow()
+      } catch {
+        // Keep returning the address so funding is not blocked if save/sync fails.
+      }
+    }
     return address
   },
 
   async getBoardingStatus() {
-    return invokeWasmArk((wasmModule) => wasmModule.ark_get_boarding_status())
+    const status = (await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_get_boarding_status(),
+    )) as ArkadeBoardingStatus
+    if (status.finalizedCommitmentTxid) {
+      await persistAfterCriticalOperation()
+    }
+    return status
   },
 
   async sendPayment(params: ArkadeSendParams): Promise<string> {
@@ -481,13 +625,20 @@ const arkadeService: ArkadeService = {
     return result as ArkadeVtxoExpiryStatus
   },
 
-  async renewVtxosNow(): Promise<string | null> {
-    const txid =
-      (await invokeWasmArk((wasmModule) => wasmModule.ark_renew_vtxos_now())) ?? null
-    if (txid != null) {
-      await persistAfterCriticalOperation()
-    }
-    return txid
+  async getOperatorScheduledSession(): Promise<ArkadeOperatorScheduledSession | null> {
+    const result = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_operator_scheduled_session(),
+    )
+    return (result as ArkadeOperatorScheduledSession | null) ?? null
+  },
+
+  async renewVtxosNow(
+    onRegistered?: (intent: ArkadePendingBatchIntent) => void,
+  ): Promise<ArkadeBatchJoinResult> {
+    return runBatchJoinAndPersist(
+      (wasmModule, wasmOnRegistered) => wasmModule.ark_renew_vtxos_now(wasmOnRegistered),
+      onRegistered,
+    )
   },
 
   async delegateSpendableVtxos(): Promise<{
@@ -510,14 +661,37 @@ const arkadeService: ArkadeService = {
     return result as { finalized: number; pending: number }
   },
 
-  async onboardBoardedUtxos(): Promise<string | null> {
+  async onboardBoardedUtxos(
+    onRegistered?: (intent: ArkadePendingBatchIntent) => void,
+  ): Promise<ArkadeBatchJoinResult> {
     await this.getBoardingAddress()
-    const txid =
-      (await invokeWasmArk((wasmModule) => wasmModule.ark_onboard_boarded_utxos())) ?? null
-    if (txid != null) {
-      await persistAfterCriticalOperation()
-    }
-    return txid
+    return runBatchJoinAndPersist(
+      (wasmModule, wasmOnRegistered) => wasmModule.ark_onboard_boarded_utxos(wasmOnRegistered),
+      onRegistered,
+    )
+  },
+
+  async cancelPendingBatchIntent(
+    params: ArkadePendingBatchIntentActionParams,
+  ): Promise<ArkadeBatchJoinResult> {
+    return runBatchJoinAndPersist((wasmModule) =>
+      wasmModule.ark_cancel_pending_batch_intent(params),
+    )
+  },
+
+  async retryPendingBatchIntent(
+    params: ArkadePendingBatchIntentActionParams,
+    onRegistered?: (intent: ArkadePendingBatchIntent) => void,
+  ): Promise<ArkadeBatchJoinResult> {
+    return runBatchJoinAndPersist(
+      (wasmModule, wasmOnRegistered) =>
+        wasmModule.ark_retry_pending_batch_intent(params, wasmOnRegistered),
+      onRegistered,
+    )
+  },
+
+  async abortInFlightBatchJoin(): Promise<void> {
+    await invokeWasmArk((wasmModule) => wasmModule.ark_abort_in_flight_batch_join())
   },
 
   async getRecoverableVtxoFeeEstimate(): Promise<ArkadeRecoverableVtxoFeeEstimate> {
@@ -527,20 +701,20 @@ const arkadeService: ArkadeService = {
     )
   },
 
-  async recoverRecoverableVtxos(): Promise<string | null> {
-    const txid =
-      (await invokeWasmArk((wasmModule) => wasmModule.ark_recover_recoverable_vtxos())) ??
-      null
-    if (txid != null) {
-      await persistAfterCriticalOperation()
-    }
-    return txid
+  async recoverRecoverableVtxos(
+    onRegistered?: (intent: ArkadePendingBatchIntent) => void,
+  ): Promise<ArkadeBatchJoinResult> {
+    return runBatchJoinAndPersist(
+      (wasmModule, wasmOnRegistered) =>
+        wasmModule.ark_recover_recoverable_vtxos(wasmOnRegistered),
+      onRegistered,
+    )
   },
 
-  async listExitCandidates(): Promise<ArkadeExitCandidateRow[]> {
+  async listExitCandidates(): Promise<ArkadeExitCandidateDto[]> {
     return invokeWasmArk(
       (wasmModule) =>
-        wasmModule.ark_list_exit_candidates() as Promise<ArkadeExitCandidateRow[]>,
+        wasmModule.ark_list_exit_candidates() as Promise<ArkadeExitCandidateDto[]>,
     )
   },
 
@@ -550,11 +724,11 @@ const arkadeService: ArkadeService = {
     )
   },
 
-  async listUnilateralExitsInProgress(): Promise<ArkadeUnilateralExitInProgressRow[]> {
+  async listUnilateralExitsInProgress(): Promise<ArkadeUnilateralExitInProgressDto[]> {
     return invokeWasmArk(
       (wasmModule) =>
         wasmModule.ark_list_unilateral_exits_in_progress() as Promise<
-          ArkadeUnilateralExitInProgressRow[]
+          ArkadeUnilateralExitInProgressDto[]
         >,
     )
   },
@@ -566,36 +740,15 @@ const arkadeService: ArkadeService = {
     )
   },
 
-  async collaborativeExit(params: ArkadeCollaborativeExitParams): Promise<string> {
-    const txid = await invokeWasmArk((wasmModule) => wasmModule.ark_collaborative_exit(params))
-    await persistAfterCriticalOperation()
-    return txid
-  },
-
-  async runUnilateralUnroll(
-    params: { txid: string; vout: number },
-    onProgress: (event: ArkadeUnrollProgressEvent) => void,
-  ): Promise<ArkadeUnrollResult> {
-    if (unrollInFlight) {
-      throw new Error('Unilateral unroll is already in progress')
-    }
-
-    unrollInFlight = true
-    try {
-      const result = await invokeWasmArk((wasmModule) =>
-        wasmModule.ark_run_unilateral_unroll(
-          params.txid,
-          params.vout,
-          (event: ArkadeUnrollProgressEvent) => {
-            onProgress(event)
-          },
-        ),
-      )
-      await persistAfterCriticalOperation()
-      return result as ArkadeUnrollResult
-    } finally {
-      unrollInFlight = false
-    }
+  async collaborativeExit(
+    params: ArkadeCollaborativeExitParams,
+    onRegistered?: (intent: ArkadePendingBatchIntent) => void,
+  ): Promise<ArkadeBatchJoinResult> {
+    return runBatchJoinAndPersist(
+      (wasmModule, wasmOnRegistered) =>
+        wasmModule.ark_collaborative_exit(params, wasmOnRegistered),
+      onRegistered,
+    )
   },
 
   async completeUnilateralExit(
@@ -604,7 +757,7 @@ const arkadeService: ArkadeService = {
     const txid = await invokeWasmArk((wasmModule) =>
       wasmModule.ark_complete_unilateral_exit(params),
     )
-    await persistAfterCriticalOperation()
+    await persistAfterUnilateralExitOperation()
     return txid
   },
 
@@ -619,15 +772,6 @@ const arkadeService: ArkadeService = {
     )
   },
 
-  async estimateUnilateralExit(
-    params: ArkadeUnilateralExitFeeEstimateParams,
-  ): Promise<ArkadeUnilateralExitFeeEstimate> {
-    return invokeWasmArk(
-      (wasmModule) =>
-        wasmModule.ark_estimate_unilateral_exit(params) as Promise<ArkadeUnilateralExitFeeEstimate>,
-    )
-  },
-
   async estimateUnilateralExitCompletion(
     params: ArkadeUnilateralExitCompletionFeeEstimateParams,
   ): Promise<ArkadeUnilateralExitCompletionFeeEstimate> {
@@ -637,6 +781,117 @@ const arkadeService: ArkadeService = {
           params,
         ) as Promise<ArkadeUnilateralExitCompletionFeeEstimate>,
     )
+  },
+
+  async getUnilateralExitTopology(
+    params: ArkadeUnilateralExitTopologyParams,
+  ): Promise<ArkadeUnilateralExitTopology> {
+    return invokeWasmArk(
+      (wasmModule) =>
+        wasmModule.ark_get_unilateral_exit_topology(
+          params,
+        ) as Promise<ArkadeUnilateralExitTopology>,
+    )
+  },
+
+  async estimateUnilateralExitBatch(
+    params: ArkadeUnilateralExitBatchEstimateParams,
+  ): Promise<ArkadeUnilateralExitBatchEstimate> {
+    return invokeWasmArk(
+      (wasmModule) =>
+        wasmModule.ark_estimate_unilateral_exit_batch(
+          params,
+        ) as Promise<ArkadeUnilateralExitBatchEstimate>,
+    )
+  },
+
+  async proceedUnilateralExitStep(
+    params: ArkadeProceedUnilateralExitStepParams,
+  ): Promise<ArkadeProceedUnilateralExitStepResult> {
+    const { walletScope, ...wasmParams } = params
+    assertCallerMatchesOpenSession(walletScope)
+    const result = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_proceed_unilateral_exit_step(
+        wasmParams,
+      ) as Promise<ArkadeProceedUnilateralExitStepResult>,
+    )
+    await persistAfterUnilateralExitOperation()
+    return result
+  },
+
+  async getUnilateralExitProgress(
+    params: ArkadeUnilateralExitProgressParams,
+  ): Promise<ArkadeUnilateralExitProgress> {
+    return invokeWasmArk(
+      (wasmModule) =>
+        wasmModule.ark_get_unilateral_exit_progress(
+          params,
+        ) as Promise<ArkadeUnilateralExitProgress>,
+    )
+  },
+
+  async evaluateUnilateralExitJobViability(
+    params: ArkadeUnilateralExitProgressParams,
+  ): Promise<ArkadeUnilateralExitJobViability> {
+    return invokeWasmArk(
+      (wasmModule) =>
+        wasmModule.ark_evaluate_unilateral_exit_job_viability(
+          params,
+        ) as Promise<ArkadeUnilateralExitJobViability>,
+    )
+  },
+
+  async getUnilateralExitFrontendPersistence(
+    walletScope: ArkadeWalletScope,
+  ): Promise<ArkadeUnilateralExitFrontendPersistence | null> {
+    assertCallerMatchesOpenSession(walletScope)
+    const result = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_get_unilateral_exit_frontend(),
+    )
+    if (result == null) {
+      return null
+    }
+    return result as ArkadeUnilateralExitFrontendPersistence
+  },
+
+  async setUnilateralExitFrontendPersistence(
+    walletScope: ArkadeWalletScope,
+    bundle: ArkadeUnilateralExitFrontendPersistence,
+  ): Promise<void> {
+    assertCallerMatchesOpenSession(walletScope)
+    await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_set_unilateral_exit_frontend(bundle),
+    )
+    await flushSdkPersistenceNowOrThrow()
+  },
+
+  async setUnilateralExitJob(
+    walletScope: ArkadeWalletScope,
+    job: ArkadeUnilateralExitJobPersistence,
+  ): Promise<void> {
+    assertCallerMatchesOpenSession(walletScope)
+    await invokeWasmArk((wasmModule) => wasmModule.ark_set_unilateral_exit_job(job))
+    await flushSdkPersistenceNowOrThrow()
+  },
+
+  async setUnilateralExitAutomationPrefs(
+    walletScope: ArkadeWalletScope,
+    prefs: ArkadeUnilateralExitAutomationPrefsPersistence,
+  ): Promise<void> {
+    assertCallerMatchesOpenSession(walletScope)
+    await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_set_unilateral_exit_automation_prefs(prefs),
+    )
+    await flushSdkPersistenceNowOrThrow()
+  },
+
+  async setUnilateralExitFailure(
+    walletScope: ArkadeWalletScope,
+    failure: ArkadeUnilateralExitFailurePersistence | null,
+  ): Promise<void> {
+    assertCallerMatchesOpenSession(walletScope)
+    await invokeWasmArk((wasmModule) => wasmModule.ark_set_unilateral_exit_failure(failure))
+    await flushSdkPersistenceNowOrThrow()
   },
 }
 

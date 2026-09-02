@@ -34,7 +34,7 @@ import {
 const saveParams = {
   walletId: 1,
   networkMode: 'signet' as const,
-  connectionId: 'conn-1',
+  arkadeAccountId: 'conn-1',
 }
 
 describe('arkade-save-lifecycle-orchestrator', () => {

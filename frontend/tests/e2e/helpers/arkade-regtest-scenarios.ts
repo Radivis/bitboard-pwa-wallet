@@ -15,7 +15,10 @@ import {
   setupRegtestArkadeWallet,
 } from './arkade-management'
 import {
+  goToReceiveArkadeMode,
   readDashboardArkadeBalanceSats,
+  readReceiveArkadeAddress,
+  sendArkadeOffchainPayment,
   triggerArkadeRailSync,
   waitForArkadeLoadReady,
   exportBoardedWalletSdkPersistenceJson,
@@ -25,7 +28,17 @@ import { unlockWalletViaUI } from './wallet-setup'
 import { generateMnemonic } from '@scure/bip39'
 import { wordlist as englishWordlist } from '@scure/bip39/wordlists/english.js'
 
-const DEFAULT_BOARD_SATS = 200_000
+export const DEFAULT_BOARD_SATS = 200_000
+
+/** Self-send fraction used to split a boarded VTXO into two preconfirmed outputs (REG-07). */
+export const PRECONFIRMED_SELF_SEND_FRACTION = 0.4
+
+/**
+ * Second-hop self-send fraction (30% of boarded amount) — below the first-hop 40% payment size so
+ * coin selection must spend the larger change vtxo from the first split, leaving a sibling vtxo on
+ * the upstream ark host while a downstream ark leaf is created.
+ */
+export const PRECONFIRMED_CHAINED_SELF_SEND_FRACTION = 0.3
 
 function resolveBoardedFixtureExportPath(): string | undefined {
   const raw = process.env.ARKADE_REGTEST_EXPORT_BOARDED_FIXTURE
@@ -68,6 +81,15 @@ export async function prepareFundedArkadeBalance(
   await fundAndBoardToArkade(page, boardSats)
 }
 
+/** Funded boarded wallet on Management with accepted operator config (no trust pending). */
+export async function prepareOperatorTrustBaseline(
+  page: Page,
+  boardSats: number = DEFAULT_BOARD_SATS,
+): Promise<void> {
+  await prepareFundedArkadeBalance(page, boardSats)
+  await goToArkadeManagementPanel(page)
+}
+
 export async function prepareRecoverableVtxoScenario(page: Page): Promise<void> {
   await prepareFundedArkadeBalance(page)
   await mineRegtestBlocks(ARKADE_REGTEST_RECOVERABLE_MINE_BLOCKS)
@@ -108,6 +130,146 @@ export async function prepareUnilateralUnrollScenario(page: Page): Promise<void>
   await prepareFundedArkadeBalance(page)
   await confirmSettledVtxoAndSync(page)
   await goToArkadeManagementPanel(page)
+}
+
+/**
+ * Self-send a fraction of the boarded balance to the wallet's own Arkade receive address,
+ * splitting one preconfirmed VTXO into two without mining the settlement commitment.
+ */
+export async function splitBoardedVtxoViaArkadeSelfSend(
+  page: Page,
+  boardSats: number = DEFAULT_BOARD_SATS,
+): Promise<void> {
+  const selfSendSats = Math.floor(boardSats * PRECONFIRMED_SELF_SEND_FRACTION)
+  await goToReceiveArkadeMode(page)
+  const receiveAddress = await readReceiveArkadeAddress(page)
+  await sendArkadeOffchainPayment(page, {
+    recipientAddress: receiveAddress,
+    amountSats: selfSendSats,
+    timeout: 120_000,
+  })
+  await goToWalletTab(page, 'Dashboard')
+  await triggerArkadeRailSync(page, 120_000)
+}
+
+/**
+ * Self-send to a freshly generated Arkade receive address (second hop in REG-07 chain scenario).
+ */
+export async function selfSendToNewArkadeReceiveAddress(
+  page: Page,
+  amountSats: number,
+): Promise<void> {
+  await goToReceiveArkadeMode(page)
+  const previousAddress = await readReceiveArkadeAddress(page)
+  const generateButton = page.getByTestId('arkade-generate-new-address')
+  await expect(generateButton).toBeEnabled({ timeout: 15_000 })
+  await generateButton.click()
+  await expect(page.getByText('New Arkade address generated')).toBeVisible({ timeout: 60_000 })
+
+  let newAddress = previousAddress
+  await expect(async () => {
+    newAddress = await readReceiveArkadeAddress(page)
+    if (newAddress === previousAddress) {
+      throw new Error('Arkade receive address did not advance after Generate New Address')
+    }
+  }).toPass({ timeout: 60_000 })
+
+  await sendArkadeOffchainPayment(page, {
+    recipientAddress: newAddress,
+    amountSats,
+    timeout: 120_000,
+  })
+  await goToWalletTab(page, 'Dashboard')
+  await triggerArkadeRailSync(page, 120_000)
+}
+
+/**
+ * Boarded wallet with one preconfirmed VTXO (REG-07b automatic unroll happy path).
+ */
+export async function prepareSinglePreconfirmedUnilateralExitScenario(page: Page): Promise<void> {
+  await prepareFundedArkadeBalance(page)
+  await goToArkadeManagementPanel(page)
+}
+
+/**
+ * Boarded wallet with two preconfirmed VTXOs after a single 40% self-send (topology / sibling coverage).
+ */
+export async function prepareSimplePreconfirmedUnilateralExitScenario(page: Page): Promise<void> {
+  await prepareFundedArkadeBalance(page)
+  await splitBoardedVtxoViaArkadeSelfSend(page)
+  await goToArkadeManagementPanel(page)
+}
+
+/**
+ * Boarded wallet with preconfirmed VTXOs after two chained self-sends (REG-07 topology branch).
+ * 1) 40% self-send splits the boarded balance; 2) 30% self-send to a new receive address creates
+ * an intermediate ark host with exitable outpoints that must not be leaf-selectable.
+ */
+export async function prepareChainedPreconfirmedUnilateralExitScenario(page: Page): Promise<void> {
+  await prepareFundedArkadeBalance(page)
+  await splitBoardedVtxoViaArkadeSelfSend(page)
+  const secondSelfSendSats = Math.floor(DEFAULT_BOARD_SATS * PRECONFIRMED_CHAINED_SELF_SEND_FRACTION)
+  await selfSendToNewArkadeReceiveAddress(page, secondSelfSendSats)
+  await goToArkadeManagementPanel(page)
+}
+
+/** @deprecated Use prepareSimplePreconfirmedUnilateralExitScenario or prepareChainedPreconfirmedUnilateralExitScenario */
+export async function preparePreconfirmedUnilateralExitScenario(page: Page): Promise<void> {
+  await prepareChainedPreconfirmedUnilateralExitScenario(page)
+}
+
+/** Assert the VTXO viewer shows at least `minimumCount` preconfirmed VTXOs; returns the actual count. */
+export async function assertPreconfirmedVtxoCountAtLeast(
+  page: Page,
+  minimumCount = 2,
+): Promise<number> {
+  await goToArkadeManagementPanel(page)
+  await page.getByRole('link', { name: 'View VTXOs' }).click()
+  await expect(page.getByRole('heading', { name: /VTXOs/i })).toBeVisible({ timeout: 60_000 })
+  await expect(page.getByText('Loading VTXOs…')).not.toBeVisible({ timeout: 60_000 })
+
+  let actualCount = 0
+  await expect(async () => {
+    const preconfirmedFilter = page.getByRole('button', { name: /^Pre-confirmed \(\d+\)$/ })
+    await expect(preconfirmedFilter).toBeVisible({ timeout: 5_000 })
+    const filterLabel = (await preconfirmedFilter.textContent())?.trim() ?? ''
+    const match = filterLabel.match(/^Pre-confirmed \((\d+)\)$/)
+    if (match == null) {
+      throw new Error(`Unexpected preconfirmed filter label: "${filterLabel}"`)
+    }
+    actualCount = Number(match[1])
+    if (actualCount < minimumCount) {
+      throw new Error(`Expected at least ${minimumCount} preconfirmed VTXOs, saw ${actualCount}`)
+    }
+  }).toPass({ timeout: 60_000 })
+
+  const preconfirmedFilter = page.getByRole('button', {
+    name: new RegExp(`^Pre-confirmed \\(${actualCount}\\)$`),
+  })
+  await preconfirmedFilter.click()
+  await expect(page.locator('[data-testid^="arkade-vtxo-card-"]')).toHaveCount(actualCount, {
+    timeout: 60_000,
+  })
+  return actualCount
+}
+
+/** Assert the VTXO viewer shows the expected number of preconfirmed VTXOs. */
+export async function assertPreconfirmedVtxoVisibleOnViewer(
+  page: Page,
+  expectedCount = 2,
+): Promise<void> {
+  await goToArkadeManagementPanel(page)
+  await page.getByRole('link', { name: 'View VTXOs' }).click()
+  await expect(page.getByRole('heading', { name: /VTXOs/i })).toBeVisible({ timeout: 60_000 })
+
+  const preconfirmedFilter = page.getByRole('button', {
+    name: new RegExp(`^Pre-confirmed \\(${expectedCount}\\)$`),
+  })
+  await expect(preconfirmedFilter).toBeVisible({ timeout: 60_000 })
+  await preconfirmedFilter.click()
+  await expect(page.locator('[data-testid^="arkade-vtxo-card-"]')).toHaveCount(expectedCount, {
+    timeout: 60_000,
+  })
 }
 
 /**

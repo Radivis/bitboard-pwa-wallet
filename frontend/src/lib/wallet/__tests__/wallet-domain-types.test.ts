@@ -56,88 +56,141 @@ describe('parseWalletPayloadJson', () => {
     }
     const parsed = parseWalletPayloadJson(JSON.stringify(payload))
     expect(parsed).not.toHaveProperty('arkadeWallets')
-    expect(parsed.arkadeOperatorConnections).toEqual([])
-    expect(parsed.activeArkadeConnectionIdByNetwork).toEqual({})
+    expect(parsed).not.toHaveProperty('arkadeOperatorConnections')
+    expect(parsed).not.toHaveProperty('activeArkadeConnectionIdByNetwork')
+    expect(parsed.arkadeAccounts).toEqual([])
+    expect(parsed.activeArkadeAccountIdByNetwork).toEqual({})
   })
 
-  it('normalizes missing arkade operator fields to empty defaults', () => {
+  it('normalizes missing arkade account fields to empty defaults', () => {
     const json = JSON.stringify({
       descriptorWallets: [],
       lightningNwcConnections: [],
     })
     const parsed = parseWalletPayloadJson(json)
-    expect(parsed.arkadeOperatorConnections).toEqual([])
-    expect(parsed.activeArkadeConnectionIdByNetwork).toEqual({})
+    expect(parsed.arkadeAccounts).toEqual([])
+    expect(parsed.activeArkadeAccountIdByNetwork).toEqual({})
   })
 
-  it('drops invalid arkadeOperatorConnections instead of rejecting the wallet', () => {
+  const validSignetAccount = {
+    id: 'acct-good',
+    label: 'Mutinynet',
+    networkMode: 'signet',
+    operatorUrl: 'https://signet.arkade.example/v1',
+    operatorSignerPkHex: '02abc',
+    createdAt: '2020-01-01T00:00:00.000Z',
+  }
+
+  it('maps legacy arkadeOperatorConnections onto arkadeAccounts', () => {
     const json = JSON.stringify({
       descriptorWallets: [],
       lightningNwcConnections: [],
       arkadeOperatorConnections: [
-        {
-          id: 'conn-bad',
-          networkMode: 'signet',
-        },
-        {
-          id: 'conn-good',
-          label: 'Mutinynet',
-          networkMode: 'signet',
-          operatorUrl: 'https://signet.arkade.example/v1',
-          operatorSignerPkHex: '02abc',
-          createdAt: '2020-01-01T00:00:00.000Z',
-        },
+        validSignetAccount,
       ],
-      activeArkadeConnectionIdByNetwork: {
-        signet: 'conn-good',
-        testnet: 'conn-bad',
-      },
+      activeArkadeConnectionIdByNetwork: { signet: 'acct-good' },
     })
     const parsed = parseWalletPayloadJson(json)
-    expect(parsed.arkadeOperatorConnections).toHaveLength(1)
-    expect(parsed.arkadeOperatorConnections[0].id).toBe('conn-good')
-    expect(parsed.activeArkadeConnectionIdByNetwork).toEqual({ signet: 'conn-good' })
+    expect(parsed).not.toHaveProperty('arkadeOperatorConnections')
+    expect(parsed).not.toHaveProperty('activeArkadeConnectionIdByNetwork')
+    expect(parsed.arkadeAccounts).toHaveLength(1)
+    expect(parsed.arkadeAccounts[0].id).toBe('acct-good')
+    expect(parsed.activeArkadeAccountIdByNetwork).toEqual({ signet: 'acct-good' })
   })
 
-  it('normalizes null arkadeOperatorConnections to empty array', () => {
+  it('keeps arkadeAccounts when only the new keys are present', () => {
     const json = JSON.stringify({
       descriptorWallets: [],
       lightningNwcConnections: [],
-      arkadeOperatorConnections: null,
-    })
-    const parsed = parseWalletPayloadJson(json)
-    expect(parsed.arkadeOperatorConnections).toEqual([])
-  })
-
-  it('accepts arkadeOperatorConnections and activeArkadeConnectionIdByNetwork', () => {
-    const json = JSON.stringify({
-      descriptorWallets: [],
-      lightningNwcConnections: [],
-      arkadeOperatorConnections: [
+      arkadeAccounts: [
         {
-          id: 'conn-1',
-          label: 'Mutinynet',
-          networkMode: 'signet',
-          operatorUrl: 'https://signet.arkade.example/v1',
-          operatorSignerPkHex: '02abc',
-          createdAt: '2020-01-01T00:00:00.000Z',
+          ...validSignetAccount,
           lastSuccessfulOperatorSyncAt: '2020-01-02T00:00:00.000Z',
         },
       ],
-      activeArkadeConnectionIdByNetwork: { signet: 'conn-1' },
+      activeArkadeAccountIdByNetwork: { signet: 'acct-good' },
     })
     const parsed = parseWalletPayloadJson(json)
-    expect(parsed.arkadeOperatorConnections).toHaveLength(1)
-    expect(parsed.activeArkadeConnectionIdByNetwork.signet).toBe('conn-1')
+    expect(parsed.arkadeAccounts).toHaveLength(1)
+    expect(parsed.activeArkadeAccountIdByNetwork.signet).toBe('acct-good')
+    expect(parsed).not.toHaveProperty('arkadeOperatorConnections')
   })
 
-  it('accepts regtest arkadeOperatorConnections for arkade-regtest E2E', () => {
+  it('prefers new arkadeAccounts keys when both old and new are present', () => {
     const json = JSON.stringify({
       descriptorWallets: [],
       lightningNwcConnections: [],
       arkadeOperatorConnections: [
+        { ...validSignetAccount, id: 'acct-legacy', label: 'Legacy' },
+      ],
+      arkadeAccounts: [validSignetAccount],
+      activeArkadeConnectionIdByNetwork: { signet: 'acct-legacy' },
+      activeArkadeAccountIdByNetwork: { signet: 'acct-good' },
+    })
+    const parsed = parseWalletPayloadJson(json)
+    expect(parsed).not.toHaveProperty('arkadeOperatorConnections')
+    expect(parsed).not.toHaveProperty('activeArkadeConnectionIdByNetwork')
+    expect(parsed.arkadeAccounts).toHaveLength(1)
+    expect(parsed.arkadeAccounts[0].id).toBe('acct-good')
+    expect(parsed.activeArkadeAccountIdByNetwork).toEqual({ signet: 'acct-good' })
+  })
+
+  it('drops invalid arkadeAccounts instead of rejecting the wallet', () => {
+    const json = JSON.stringify({
+      descriptorWallets: [],
+      lightningNwcConnections: [],
+      arkadeAccounts: [
         {
-          id: 'conn-regtest',
+          id: 'acct-bad',
+          networkMode: 'signet',
+        },
+        validSignetAccount,
+      ],
+      activeArkadeAccountIdByNetwork: {
+        signet: 'acct-good',
+        testnet: 'acct-bad',
+      },
+    })
+    const parsed = parseWalletPayloadJson(json)
+    expect(parsed.arkadeAccounts).toHaveLength(1)
+    expect(parsed.arkadeAccounts[0].id).toBe('acct-good')
+    expect(parsed.activeArkadeAccountIdByNetwork).toEqual({ signet: 'acct-good' })
+  })
+
+  it('normalizes null arkadeAccounts to empty array', () => {
+    const json = JSON.stringify({
+      descriptorWallets: [],
+      lightningNwcConnections: [],
+      arkadeAccounts: null,
+    })
+    const parsed = parseWalletPayloadJson(json)
+    expect(parsed.arkadeAccounts).toEqual([])
+  })
+
+  it('accepts arkadeAccounts and activeArkadeAccountIdByNetwork', () => {
+    const json = JSON.stringify({
+      descriptorWallets: [],
+      lightningNwcConnections: [],
+      arkadeAccounts: [
+        {
+          ...validSignetAccount,
+          lastSuccessfulOperatorSyncAt: '2020-01-02T00:00:00.000Z',
+        },
+      ],
+      activeArkadeAccountIdByNetwork: { signet: 'acct-good' },
+    })
+    const parsed = parseWalletPayloadJson(json)
+    expect(parsed.arkadeAccounts).toHaveLength(1)
+    expect(parsed.activeArkadeAccountIdByNetwork.signet).toBe('acct-good')
+  })
+
+  it('accepts regtest arkadeAccounts for arkade-regtest E2E', () => {
+    const json = JSON.stringify({
+      descriptorWallets: [],
+      lightningNwcConnections: [],
+      arkadeAccounts: [
+        {
+          id: 'acct-regtest',
           label: 'regtest',
           networkMode: 'regtest',
           operatorUrl: 'http://127.0.0.1:3100/api/arkade/operator/regtest',
@@ -145,12 +198,12 @@ describe('parseWalletPayloadJson', () => {
           createdAt: '2020-01-01T00:00:00.000Z',
         },
       ],
-      activeArkadeConnectionIdByNetwork: { regtest: 'conn-regtest' },
+      activeArkadeAccountIdByNetwork: { regtest: 'acct-regtest' },
     })
     const parsed = parseWalletPayloadJson(json)
-    expect(parsed.arkadeOperatorConnections).toHaveLength(1)
-    expect(parsed.arkadeOperatorConnections[0].networkMode).toBe('regtest')
-    expect(parsed.activeArkadeConnectionIdByNetwork.regtest).toBe('conn-regtest')
+    expect(parsed.arkadeAccounts).toHaveLength(1)
+    expect(parsed.arkadeAccounts[0].networkMode).toBe('regtest')
+    expect(parsed.activeArkadeAccountIdByNetwork.regtest).toBe('acct-regtest')
   })
 
   it('accepts descriptor wallet with lastSuccessfulEsploraSyncAt', () => {

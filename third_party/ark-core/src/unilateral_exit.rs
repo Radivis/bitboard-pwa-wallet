@@ -5,7 +5,6 @@ use crate::BoardingOutput;
 use crate::Error;
 use crate::ErrorContext;
 use crate::VTXO_CONDITION_KEY;
-use crate::VTXO_INPUT_INDEX;
 use bitcoin::absolute::LockTime;
 use bitcoin::consensus::Decodable;
 use bitcoin::hashes::Hash;
@@ -95,8 +94,11 @@ impl VtxoInput {
     }
 }
 
-/// Build a transaction that spends boarding outputs and VTXOs to an _on-chain_ `to_address`. Any
-/// coins left over after covering the `to_amount` are sent to an on-chain change address.
+/// Build a transaction that spends boarding outputs and VTXOs to an _on-chain_ `to_address`.
+///
+/// When `miner_fee_from_input_residual` is `false`, any coins left over after covering
+/// `to_amount` are sent to an on-chain change address. When `true` (completion sweeps), the
+/// residual pays miners and no change output is added.
 ///
 /// All these outputs are spent unilaterally i.e. without the collaboration of the Ark server.
 ///
@@ -111,6 +113,7 @@ pub fn create_unilateral_exit_transaction<S>(
     onchain_inputs: &[OnChainInput],
     vtxo_inputs: &[VtxoInput],
     sign_fn: S,
+    miner_fee_from_input_residual: bool,
 ) -> Result<Transaction, Error>
 where
     S: Fn(
@@ -143,7 +146,7 @@ where
         ))
     })?;
 
-    if change_amount > Amount::ZERO {
+    if change_amount > Amount::ZERO && !miner_fee_from_input_residual {
         output.push(TxOut {
             value: change_amount,
             script_pubkey: change_address.script_pubkey(),
@@ -501,6 +504,85 @@ mod tests {
 
         assert!(err.to_string().contains("cycle"));
     }
+
+    fn dummy_parent_tx(n: u8) -> Transaction {
+        Transaction {
+            version: transaction::Version::TWO,
+            lock_time: LockTime::ZERO,
+            input: vec![TxIn {
+                previous_output: OutPoint {
+                    txid: Txid::from_byte_array([n; 32]),
+                    vout: 0,
+                },
+                script_sig: ScriptBuf::new(),
+                sequence: Sequence::MAX,
+                witness: Witness::new(),
+            }],
+            output: vec![TxOut {
+                value: Amount::from_sat(100_000),
+                script_pubkey: ScriptBuf::new(),
+            }],
+        }
+    }
+
+    fn dummy_tap_key_sig() -> taproot::Signature {
+        let secp = Secp256k1::new();
+        let keypair = bitcoin::key::Keypair::from_seckey_slice(&secp, &[1u8; 32])
+            .expect("secret key");
+        let message = secp256k1::Message::from_digest([2u8; 32]);
+        taproot::Signature {
+            signature: secp.sign_schnorr(&message, &keypair),
+            sighash_type: TapSighashType::Default,
+        }
+    }
+
+    #[test]
+    fn finalize_unilateral_exit_tree_finalizes_every_input() {
+        let left_parent = dummy_parent_tx(10);
+        let right_parent = dummy_parent_tx(11);
+        let child_unsigned = Transaction {
+            version: transaction::Version::TWO,
+            lock_time: LockTime::ZERO,
+            input: vec![
+                TxIn {
+                    previous_output: OutPoint {
+                        txid: left_parent.compute_txid(),
+                        vout: 0,
+                    },
+                    script_sig: ScriptBuf::new(),
+                    sequence: Sequence::MAX,
+                    witness: Witness::new(),
+                },
+                TxIn {
+                    previous_output: OutPoint {
+                        txid: right_parent.compute_txid(),
+                        vout: 0,
+                    },
+                    script_sig: ScriptBuf::new(),
+                    sequence: Sequence::MAX,
+                    witness: Witness::new(),
+                },
+            ],
+            output: vec![TxOut {
+                value: Amount::from_sat(90_000),
+                script_pubkey: ScriptBuf::new(),
+            }],
+        };
+        let mut child_psbt = Psbt::from_unsigned_tx(child_unsigned).expect("psbt");
+        child_psbt.inputs[0].tap_key_sig = Some(dummy_tap_key_sig());
+        child_psbt.inputs[1].tap_key_sig = Some(dummy_tap_key_sig());
+
+        let tree = UnilateralExitTree::new(
+            vec![left_parent.compute_txid(), right_parent.compute_txid()],
+            vec![vec![child_psbt]],
+        );
+        let finalized =
+            finalize_unilateral_exit_tree(&tree, &[left_parent, right_parent]).expect("finalize");
+
+        assert_eq!(finalized[0][0].input.len(), 2);
+        assert!(!finalized[0][0].input[0].witness.is_empty());
+        assert!(!finalized[0][0].input[1].witness.is_empty());
+    }
 }
 
 /// The full path from a commitment transaction to a VTXO. The entire path must be published
@@ -551,6 +633,15 @@ pub fn finalize_virtual_tx_input(
     input_index: usize,
     witness_utxo: TxOut,
 ) -> Result<Transaction, Error> {
+    apply_finalize_virtual_tx_input(&mut psbt, input_index, witness_utxo)?;
+    psbt.extract_tx().map_err(Error::transaction)
+}
+
+fn apply_finalize_virtual_tx_input(
+    psbt: &mut Psbt,
+    input_index: usize,
+    witness_utxo: TxOut,
+) -> Result<(), Error> {
     let input = psbt
         .inputs
         .get_mut(input_index)
@@ -570,7 +661,41 @@ pub fn finalize_virtual_tx_input(
         input.final_script_witness = Some(finalize_taproot_script_spend_witness(input)?);
     }
 
-    psbt.extract_tx().map_err(Error::transaction)
+    Ok(())
+}
+
+fn witness_utxo_for_virtual_tx_input(
+    psbt: &Psbt,
+    input_index: usize,
+    lookup_txs: &[Transaction],
+) -> Result<TxOut, Error> {
+    if let Some(utxo) = psbt
+        .inputs
+        .get(input_index)
+        .and_then(|input| input.witness_utxo.clone())
+    {
+        return Ok(utxo);
+    }
+
+    let previous_output = psbt
+        .unsigned_tx
+        .input
+        .get(input_index)
+        .ok_or_else(|| Error::transaction(format!("missing tx input {input_index}")))?
+        .previous_output;
+
+    lookup_txs
+        .iter()
+        .find_map(|tx| {
+            (tx.compute_txid() == previous_output.txid)
+                .then(|| tx.output.get(previous_output.vout as usize).cloned())
+                .flatten()
+        })
+        .ok_or_else(|| {
+            Error::ad_hoc(format!(
+                "no witness UTXO found for virtual TX outpoint {previous_output}"
+            ))
+        })
 }
 
 /// Build the final witness for a taproot script-spend input from its PSBT data.
@@ -684,38 +809,39 @@ fn condition_witness_elements(input: &psbt::Input) -> Result<Vec<Vec<u8>>, Error
 }
 
 /// Finalize all virtual transactions needed to commit a VTXO on-chain.
+///
+/// Ark / checkpoint nodes can spend more than one parent. Every input must be finalized; extracting
+/// after only input 0 leaves later inputs with an empty witness and bitcoind rejects the package
+/// (`Witness program was passed an empty witness`).
 pub fn finalize_unilateral_exit_tree(
     unilateral_exit_tree: &UnilateralExitTree,
     commitment_txs: &[Transaction],
 ) -> Result<Vec<Vec<Transaction>>, Error> {
+    let mut lookup_txs: Vec<Transaction> = unilateral_exit_tree
+        .inner
+        .iter()
+        .flatten()
+        .map(|psbt| psbt.unsigned_tx.clone())
+        .collect();
+    lookup_txs.extend(commitment_txs.iter().cloned());
+
     let mut finalized_virtual_tx_branches = Vec::new();
     for unilateral_exit_branch in unilateral_exit_tree.inner.iter() {
         let mut finalized_unilateral_exit_branch = Vec::new();
         for virtual_tx in unilateral_exit_branch.iter() {
-            let psbt = virtual_tx.clone();
-
-            let virtual_tx_previous_output =
-                psbt.unsigned_tx.input[VTXO_INPUT_INDEX].previous_output;
-
-            let witness_utxo = {
-                unilateral_exit_branch
-                    .iter()
-                    .map(|p| &p.unsigned_tx)
-                    .chain(commitment_txs.iter())
-                    .find_map(|other_psbt| {
-                        (other_psbt.compute_txid() == virtual_tx_previous_output.txid).then_some(
-                            other_psbt.output[virtual_tx_previous_output.vout as usize].clone(),
-                        )
-                    })
+            let mut psbt = virtual_tx.clone();
+            let input_count = psbt.unsigned_tx.input.len();
+            if input_count == 0 {
+                return Err(Error::transaction(
+                    "virtual TX has no inputs to finalize".to_string(),
+                ));
             }
-            .ok_or_else(|| {
-                Error::ad_hoc(format!(
-                    "no witness UTXO found for virtual TX outpoint {virtual_tx_previous_output}"
-                ))
-            })?;
-
-            let tx = finalize_virtual_tx_input(psbt, VTXO_INPUT_INDEX, witness_utxo)?;
-
+            for input_index in 0..input_count {
+                let witness_utxo =
+                    witness_utxo_for_virtual_tx_input(&psbt, input_index, &lookup_txs)?;
+                apply_finalize_virtual_tx_input(&mut psbt, input_index, witness_utxo)?;
+            }
+            let tx = psbt.extract_tx().map_err(Error::transaction)?;
             finalized_unilateral_exit_branch.push(tx);
         }
         finalized_virtual_tx_branches.push(finalized_unilateral_exit_branch);

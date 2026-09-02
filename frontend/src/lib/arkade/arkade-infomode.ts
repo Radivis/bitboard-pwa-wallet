@@ -8,11 +8,13 @@ export const ARKADE_INFOMODE_IDS = {
   balanceRecoverable: 'arkade-balance-recoverable',
   balanceRecoverablePendingOperatorSweep: 'arkade-balance-recoverable-pending-operator-sweep',
   recoverableVtxoBanner: 'arkade-recoverable-vtxo-banner',
+  pendingBatchIntentBanner: 'arkade-pending-batch-intent-banner',
   pendingRecoveryDueToExpiredSignerBanner: 'arkade-pending-recovery-due-to-expired-signer-banner',
   managementPanel: 'arkade-management-panel',
   delegatorFee: 'arkade-delegator-fee',
   renewVtxos: 'arkade-renew-vtxos',
   vtxoExpiryIndicator: 'arkade-vtxo-expiry-indicator',
+  operatorBatchWindow: 'arkade-operator-batch-window',
   boardFromOnchain: 'arkade-board-from-onchain',
   boardFlow: 'arkade-board-flow',
   learnAboutExits: 'arkade-learn-about-exits',
@@ -25,6 +27,8 @@ export const ARKADE_INFOMODE_IDS = {
   collaborativeExit: 'arkade-collaborative-exit',
   exitOperatorFees: 'arkade-exit-operator-fees',
   unilateralExit: 'arkade-unilateral-exit',
+  sharedLeafUnilateralExit: 'arkade-shared-leaf-unilateral-exit',
+  autonomousMode: 'arkade-autonomous-mode',
   bumperWallet: 'arkade-bumper-wallet',
   unroll: 'arkade-unroll',
   activityPayment: 'arkade-activity-payment',
@@ -38,6 +42,9 @@ export const ARKADE_LIBRARY_SLUGS = {
   boarding: 'boarding-to-arkade',
   vtxoExpiry: 'arkade-vtxo-expiry',
   exits: 'arkade-exits-explained',
+  sharedLeafUnilateralExit: 'arkade-unilateral-exit-shared-leaf-vtxos',
+  unilateralExitRisks: 'risks-of-arkade-unilateral-exits',
+  checkpointTransactions: 'arkade-checkpoint-transactions',
   layer2: 'layer-2-networks',
 } as const
 
@@ -76,6 +83,19 @@ export const ARKADE_BALANCE_RECOVERABLE_PENDING_OPERATOR_SWEEP_INFOMODE = {
   text: 'These VTXOs expired on your device clock, but the operator has not swept them yet. Batch recovery is not available until the operator marks them swept. They are still part of your balance and should become recoverable automatically after the operator sweep.',
 } as const
 
+export const ARKADE_PENDING_BATCH_INTENT_PROCESSING_INFOMODE = {
+  title: 'Processing Arkade intent',
+  text: 'The operator accepted your intent and is running the batch round. The spinner on this banner means Bitboard is still waiting for that round to finish. Cancel stops a VTXO intent (recover, renew, collaborative exit, or migrate). Boarding has no Cancel because the operator cannot match boarding inputs to deleteIntent.',
+} as const
+
+export const ARKADE_PENDING_BATCH_INTENT_TIMED_OUT_INFOMODE = {
+  title: 'Waiting for Arkade operator',
+  text: 'Your intent is still registered, but the batch round timed out before it completed. Bitboard will not register those same coins again while that registration is live. Cancel withdraws VTXO intents when the operator supports it. Boarding has no Cancel because the operator cannot match boarding inputs to deleteIntent. Retry is available for VTXOs immediately, and for boarding after the register cooldown.',
+} as const
+
+export const ARKADE_PENDING_BATCH_INTENT_BANNER_INFOMODE =
+  ARKADE_PENDING_BATCH_INTENT_TIMED_OUT_INFOMODE
+
 export const ARKADE_RECOVERABLE_VTXO_BANNER_INFOMODE = {
   title: 'Recoverable now',
   text: 'These virtual outputs were swept by the operator or fell below the dust threshold. Batch recovery settles them back into spendable Arkade balance. This is separate from VTXOs still waiting for operator sweep after expiry, and from pending recovery after a signer rotation.',
@@ -104,6 +124,11 @@ export const ARKADE_RENEW_VTXOS_INFOMODE = {
 export const ARKADE_VTXO_EXPIRY_INDICATOR_INFOMODE = {
   title: 'VTXO expiry',
   text: 'Each offchain virtual balance unit (VTXO) has an expiry time. Renew before then to stay on the fast Arkade path. The date shown is the soonest expiry among your current VTXOs. Amber text means some are already in the renewal window.',
+} as const
+
+export const ARKADE_OPERATOR_BATCH_WINDOW_INFOMODE = {
+  title: 'Operator batch rounds',
+  text: 'Pre-confirmed VTXOs become confirmed when the operator includes them in an on-chain batch swap. That can take hours or days even though the funds are already offchain-spendable. Bitboard can only show the next batch window when the operator publishes scheduledSession in getInfo. Mutinynet and Arkade mainnet usually omit it, so no countdown is shown. A published schedule (for example on signet.arkade.sh) describes when the operator may run rounds—not a guarantee that your VTXOs settle in the next one.',
 } as const
 
 export const ARKADE_BOARDING_ADDRESS_INFOMODE = {

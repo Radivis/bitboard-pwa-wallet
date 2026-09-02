@@ -21,6 +21,7 @@ const sampleRow: ArkadeVtxoRowBase = {
   isUnrolled: false,
   isSwept: false,
   isSpent: false,
+  isUnilateralExitPrepared: false,
 }
 
 describe('ArkadeVtxoCard', () => {
@@ -41,6 +42,22 @@ describe('ArkadeVtxoCard', () => {
     expect(screen.queryByText('unrolled')).not.toBeInTheDocument()
     expect(screen.queryByText('swept')).not.toBeInTheDocument()
     expect(screen.queryByText('spent')).not.toBeInTheDocument()
+    expect(screen.queryByText('unilateral exit prepared')).not.toBeInTheDocument()
+  })
+
+  it('ArkadeVtxoCard_shows_unilateral_exit_prepared_chip_with_icon', () => {
+    renderWithProviders(
+      <ArkadeVtxoCard
+        row={{
+          ...sampleRow,
+          isRecoverable: false,
+          isUnilateralExitPrepared: true,
+        }}
+      />,
+    )
+
+    expect(screen.getByText('unilateral exit prepared')).toBeInTheDocument()
+    expect(document.querySelector('.lucide-door-open')).toBeInTheDocument()
   })
 
   it('copies vtxo id on tap', async () => {

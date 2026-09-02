@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
@@ -21,6 +22,13 @@ const REPO_ROOT = path.resolve(
   '../../../..',
 )
 const REGTEST_CLI = path.join(REPO_ROOT, 'regtest', 'regtest.mjs')
+const REGTEST_COMPOSE_BASE = path.join(REPO_ROOT, 'regtest', 'docker', 'compose.base.yml')
+const REGTEST_COMPOSE_ARK = path.join(REPO_ROOT, 'regtest', 'docker', 'compose.ark.yml')
+const REGTEST_COMPOSE_PARENT_OVERRIDE = path.join(
+  REPO_ROOT,
+  'docker',
+  'arkade-regtest.override.yml',
+)
 export const ESPLORA_URL = 'http://localhost:7030/api'
 const DEFAULT_FAUCET_SATS = 100_000
 
@@ -215,7 +223,18 @@ export async function mineRegtestBlocks(count: number = 1): Promise<void> {
 const ARKD_REGTEST_CONTAINER =
   process.env.ARKD_REGTEST_CONTAINER ?? 'bitboard-regtest-arkd'
 
+const ARKD_REGTEST_ARK_DATADIR_VOLUME =
+  process.env.ARKD_REGTEST_ARK_DATADIR_VOLUME ?? 'arkade-regtest_ark_datadir'
+
+const ARKD_REGTEST_IMAGE =
+  process.env.ARKD_IMAGE ?? 'ghcr.io/arkade-os/arkd:v0.9.9-rc.1'
+
+const ARKD_ADMIN_REGTEST_URL =
+  process.env.ARKD_ADMIN_REGTEST_URL ?? 'http://localhost:7071'
+
 const ARKD_RESTART_HEALTH_TIMEOUT_MS = isCi ? 180_000 : 120_000
+
+const ARKD_CONFIG_CHANGE_HEALTH_TIMEOUT_MS = isCi ? 240_000 : 180_000
 
 /**
  * Rotate the regtest arkd operator signer, deprecating the previous key.
@@ -242,6 +261,149 @@ export async function restartArkadeOperator(): Promise<void> {
     '../../../../scripts/arkade-regtest-health.mjs'
   )
   await waitForArkadeRegtestHealthy({ timeoutMs: ARKD_RESTART_HEALTH_TIMEOUT_MS })
+}
+
+/** Baseline values from `.env.regtest` + `regtest/.env.defaults` for operator-trust E2E. */
+export const OPERATOR_TRUST_REGTEST_BASELINE = {
+  sessionDuration: 30,
+  unilateralExitDelay: 20,
+  boardingExitDelay: 30,
+} as const
+
+/** Overrides applied by {@link applyRegtestOperatorConfigTrustMismatch}. */
+export const OPERATOR_TRUST_REGTEST_MISMATCH = {
+  sessionDuration: 45,
+  unilateralExitDelay: 21,
+  boardingExitDelay: 31,
+} as const
+
+function regtestComposeArgs(): string[] {
+  const args = [
+    'compose',
+    '-f',
+    REGTEST_COMPOSE_BASE,
+    '-f',
+    REGTEST_COMPOSE_ARK,
+  ]
+  if (existsSync(REGTEST_COMPOSE_PARENT_OVERRIDE)) {
+    args.push('-f', REGTEST_COMPOSE_PARENT_OVERRIDE)
+  }
+  args.push('--profile', 'base', '--profile', 'ark')
+  return args
+}
+
+/**
+ * Recreate arkd with three getInfo fields changed so operator digest mismatches the wallet's
+ * accepted cache. Preserves arkd-wallet and signer; only the arkd process env changes.
+ *
+ * arkd persists operator config in its SQLite datadir on first boot — env overrides alone do
+ * not change getInfo after the server has initialized. This helper stops arkd, wipes
+ * `ark_datadir`, starts arkd with mismatch env (fresh init from env), and re-applies intent fees.
+ *
+ * Call only after the wallet has synced and accepted the baseline operator config.
+ */
+export async function applyRegtestOperatorConfigTrustMismatch(): Promise<void> {
+  const mismatchEnv = {
+    ...process.env,
+    ARKD_VTXO_TREE_EXPIRY: process.env.ARKD_VTXO_TREE_EXPIRY ?? '200',
+    ARKD_PUBLIC_UNILATERAL_EXIT_DELAY: String(
+      OPERATOR_TRUST_REGTEST_MISMATCH.unilateralExitDelay,
+    ),
+    ARKD_CHECKPOINT_EXIT_DELAY: process.env.ARKD_CHECKPOINT_EXIT_DELAY ?? '10',
+    ARKD_SESSION_DURATION: String(OPERATOR_TRUST_REGTEST_MISMATCH.sessionDuration),
+    ARKD_UNILATERAL_EXIT_DELAY: String(OPERATOR_TRUST_REGTEST_MISMATCH.unilateralExitDelay),
+    ARKD_BOARDING_EXIT_DELAY: String(OPERATOR_TRUST_REGTEST_MISMATCH.boardingExitDelay),
+  }
+
+  await execFileAsync('docker', [...regtestComposeArgs(), 'stop', 'arkd'], {
+    cwd: REPO_ROOT,
+    env: mismatchEnv,
+    maxBuffer: 10 * 1024 * 1024,
+  })
+
+  await execFileAsync(
+    'docker',
+    [
+      'run',
+      '--rm',
+      '--entrypoint',
+      'sh',
+      '-v',
+      `${ARKD_REGTEST_ARK_DATADIR_VOLUME}:/app/data`,
+      ARKD_REGTEST_IMAGE,
+      '-c',
+      'rm -rf /app/data/*',
+    ],
+    { maxBuffer: 10 * 1024 * 1024 },
+  )
+
+  await execFileAsync(
+    'docker',
+    [...regtestComposeArgs(), 'up', '-d', 'arkd'],
+    {
+      cwd: REPO_ROOT,
+      env: mismatchEnv,
+      maxBuffer: 10 * 1024 * 1024,
+    },
+  )
+
+  const { waitForArkadeRegtestHealthy } = await import(
+    '../../../../scripts/arkade-regtest-health.mjs'
+  )
+  await waitForArkadeRegtestHealthy({ timeoutMs: ARKD_CONFIG_CHANGE_HEALTH_TIMEOUT_MS })
+
+  await reapplyRegtestArkdIntentFees()
+
+  await assertRegtestArkdOperatorTrustMismatchConfig()
+}
+
+async function assertRegtestArkdOperatorTrustMismatchConfig(): Promise<void> {
+  const res = await fetch('http://localhost:7070/v1/info')
+  if (!res.ok) {
+    throw new Error(`arkd /v1/info failed (${res.status}) after operator config change`)
+  }
+  const info = (await res.json()) as {
+    sessionDuration?: string
+    unilateralExitDelay?: string
+    boardingExitDelay?: string
+  }
+  const observed = {
+    sessionDuration: info.sessionDuration,
+    unilateralExitDelay: info.unilateralExitDelay,
+    boardingExitDelay: info.boardingExitDelay,
+  }
+  const expected = {
+    sessionDuration: String(OPERATOR_TRUST_REGTEST_MISMATCH.sessionDuration),
+    unilateralExitDelay: String(OPERATOR_TRUST_REGTEST_MISMATCH.unilateralExitDelay),
+    boardingExitDelay: String(OPERATOR_TRUST_REGTEST_MISMATCH.boardingExitDelay),
+  }
+  if (
+    observed.sessionDuration !== expected.sessionDuration ||
+    observed.unilateralExitDelay !== expected.unilateralExitDelay ||
+    observed.boardingExitDelay !== expected.boardingExitDelay
+  ) {
+    throw new Error(
+      `arkd operator config mismatch not applied (observed ${JSON.stringify(observed)}, expected ${JSON.stringify(expected)})`,
+    )
+  }
+}
+
+async function reapplyRegtestArkdIntentFees(): Promise<void> {
+  const fees = {
+    offchainInputFee: process.env.ARK_OFFCHAIN_INPUT_FEE ?? 'amount * 0.01',
+    onchainInputFee: process.env.ARK_ONCHAIN_INPUT_FEE ?? 'amount * 0.01',
+    offchainOutputFee: process.env.ARK_OFFCHAIN_OUTPUT_FEE ?? '0.0',
+    onchainOutputFee: process.env.ARK_ONCHAIN_OUTPUT_FEE ?? '250.0',
+  }
+  const res = await fetch(`${ARKD_ADMIN_REGTEST_URL}/v1/admin/intentFees`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fees }),
+  })
+  if (!res.ok) {
+    const detail = await res.text()
+    throw new Error(`Failed to re-apply arkd intent fees (${res.status}): ${detail}`)
+  }
 }
 
 interface EsploraUtxo {

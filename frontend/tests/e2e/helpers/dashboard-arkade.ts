@@ -108,8 +108,20 @@ export async function triggerArkadeRailSync(
   page: Page,
   timeout = ARKADE_MOCK_UI_TIMEOUT_MS,
 ): Promise<void> {
+  await goToWalletTab(page, 'Dashboard')
+  await waitForArkadeLoadReady(page, timeout)
+
+  const balanceCard = page.getByTestId('dashboard-arkade-balance-card')
   const syncButton = page.getByTestId('rail-sync-arkade')
-  await expect(syncButton).toBeVisible({ timeout })
+  await expect(async () => {
+    if (await syncButton.isVisible()) {
+      return
+    }
+    const loadPhase = await balanceCard.getAttribute('data-rail-arkade-load')
+    throw new Error(
+      `rail-sync-arkade not visible (url=${page.url()}, arkade load=${loadPhase ?? 'card missing'})`,
+    )
+  }).toPass({ timeout })
   await expect(syncButton).toBeEnabled({ timeout })
   await syncButton.click()
   await expect(async () => {
@@ -142,17 +154,32 @@ export async function exportBoardedWalletSdkPersistenceJson(page: Page): Promise
 
 /** Receive route search param — avoids flaky mode-toggle clicks in E2E. */
 async function navigateToReceiveArkadeMode(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    const navigate = (
-      window as unknown as { __e2eNavigateToReceiveArkade?: () => Promise<void> }
-    ).__e2eNavigateToReceiveArkade
-    if (!navigate) {
-      throw new Error(
-        '__e2eNavigateToReceiveArkade not available (DEV only — Playwright E2E must run against Vite dev)',
-      )
-    }
-    await navigate()
-  })
+  const hasE2eNavigate = await page.evaluate(
+    () =>
+      typeof (window as unknown as { __e2eNavigateToReceiveArkade?: () => Promise<void> })
+        .__e2eNavigateToReceiveArkade === 'function',
+  )
+  if (hasE2eNavigate) {
+    await page.evaluate(async () => {
+      await (
+        window as unknown as { __e2eNavigateToReceiveArkade: () => Promise<void> }
+      ).__e2eNavigateToReceiveArkade()
+    })
+    return
+  }
+  await page.goto('/wallet/receive?mode=arkade')
+}
+
+async function waitForReceiveArkadePageReady(
+  page: Page,
+  timeout = ARKADE_MOCK_UI_TIMEOUT_MS,
+): Promise<void> {
+  const hasMockControl = await page.evaluate(() => window.__E2E_ARKADE__ != null)
+  if (hasMockControl) {
+    await waitForArkadeWasmSessionReady(page, timeout)
+    return
+  }
+  await waitForReceiveArkadeAddressReady(page, timeout)
 }
 
 export async function goToReceiveArkadeMode(page: Page): Promise<void> {
@@ -160,7 +187,7 @@ export async function goToReceiveArkadeMode(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Receive on Arkade' })).toBeVisible({
     timeout: 15_000,
   })
-  await waitForArkadeWasmSessionReady(page)
+  await waitForReceiveArkadePageReady(page)
 }
 
 export async function clickArkadeGenerateNewAddress(page: Page): Promise<void> {
@@ -251,6 +278,43 @@ export async function readReceiveArkadeAddress(page: Page): Promise<string> {
     throw new Error(`Expected Arkade receive address, got: ${address}`)
   }
   return address
+}
+
+/** Arkade offchain send from the Send tab (no on-chain review step). */
+export async function sendArkadeOffchainPayment(
+  page: Page,
+  options: { recipientAddress: string; amountSats: number; timeout?: number },
+): Promise<void> {
+  const timeout = options.timeout ?? ARKADE_MOCK_UI_TIMEOUT_MS
+  // Operator sync control is on the Dashboard rail card, not Send.
+  await triggerArkadeRailSync(page, timeout)
+  await waitForDashboardArkadeBalanceAtLeast(page, options.amountSats, timeout)
+  await goToWalletTab(page, 'Send')
+  await page.locator('#recipient-address').fill(options.recipientAddress)
+  await expect(page.getByRole('heading', { name: 'Send on Arkade' })).toBeVisible({ timeout })
+
+  const amountInput = page.locator('#send-amount')
+  const btcAmount = (options.amountSats / 100_000_000).toFixed(8)
+  const sendButton = page.getByRole('button', { name: 'Send on Arkade' })
+
+  await expect(async () => {
+    await amountInput.fill(btcAmount)
+    await expect(amountInput).toHaveValue(btcAmount)
+    await expect(page.getByRole('heading', { name: 'Send on Arkade' })).toBeVisible({ timeout: 5_000 })
+    if (await sendButton.isDisabled()) {
+      await goToWalletTab(page, 'Dashboard')
+      await triggerArkadeRailSync(page, timeout)
+      await waitForDashboardArkadeBalanceAtLeast(page, options.amountSats, timeout)
+      await goToWalletTab(page, 'Send')
+      await page.locator('#recipient-address').fill(options.recipientAddress)
+      await amountInput.fill(btcAmount)
+      throw new Error(
+        `Send on Arkade still disabled after sync (amountSats=${options.amountSats})`,
+      )
+    }
+  }).toPass({ timeout })
+  await sendButton.click()
+  await expect(page.getByText(/Arkade payment sent/i)).toBeVisible({ timeout })
 }
 
 export async function waitForDashboardArkadeBalanceSats(

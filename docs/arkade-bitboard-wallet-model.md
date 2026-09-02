@@ -10,12 +10,12 @@ For network switching and Esplora, see [`descriptor-wallet-switching.md`](descri
 - **Arkade** balance and history come from the Arkade operator and **ark-rs** (`bitboard-ark` WASM) in `arkade.worker`.
 - Do not merge Arkade totals into the BDK dashboard balance.
 
-## One Bitboard wallet, operator connections per live network
+## One Bitboard wallet, Arkade accounts per live network
 
-- Arkade state is stored as **operator connections** in encrypted `wallet_secrets` (`arkadeOperatorConnections[]`), NWC-style. Each connection is one ASP with its own `sdkPersistenceJson`, URLs, and canonical `operatorSignerPkHex` from `getInfo`.
-- `activeArkadeConnectionIdByNetwork` picks the connection used for session, dashboard, and sync on `mainnet`, `testnet`, and `signet` (Mutinynet). Switching operators is adding/switching connections—not merging blobs across ASPs.
+- Arkade state is stored as **accounts** in encrypted `wallet_secrets` (`arkadeAccounts[]`). Each account is this wallet's local Arkade partition for one ASP on one network, with its own `sdkPersistenceJson`, URLs, and canonical `operatorSignerPkHex` from `getInfo`.
+- `activeArkadeAccountIdByNetwork` picks the account used for session, dashboard, and sync on `mainnet`, `testnet`, and `signet` (Mutinynet). Switching operators is adding/switching accounts—not merging blobs across ASPs.
 - **BitboardArkPersistence** (`sdkPersistenceJson`, engine `ark-rs`, wire `version: 3`) includes `operator_identity` and an `offchain_vtxo_snapshot` inside `wallet_db`. Balance and history read from the loaded WASM session immediately after unlock (local snapshot + Esplora boarding + on-chain bumper).
-- **Operator sync** (`sync_with_operator`) refreshes the snapshot and re-exports `sdkPersistenceJson` to the active connection row. `lastSuccessfulOperatorSyncAt` on the connection mirrors `lastSuccessfulEsploraSyncAt` for on-chain BDK.
+- **Operator sync** (`sync_with_operator`) refreshes the snapshot and re-exports `sdkPersistenceJson` to the active account row. `lastSuccessfulOperatorSyncAt` on the account mirrors `lastSuccessfulEsploraSyncAt` for on-chain BDK.
 - **Local-first:** Operator failure during a session keeps the last-synced blob; the dashboard may show a stale banner until operator sync succeeds this unlock.
 
 ## Persistence in the worker
@@ -78,7 +78,7 @@ Replayed from the snapshot (same rules as live `ark-client::offchain_balance`):
 | **boarding_pending** | Unconfirmed boarding UTXOs |
 | **onchain_bumper** | Confirmed sats in the P2A bumper wallet (exit fees only — not Ark spendable balance) |
 | **unilateral_exit_in_progress** | Sum of **exiting** VTXOs (`is_unrolled && !is_spent`) plus pending unilateral records during unroll (informational; already excluded from gross spendable) |
-| **collaborative_exit_in_progress** | Pending exit deduction while the operator snapshot still lists exiting VTXOs as cooperatively spendable |
+| **collaborative_exit_in_progress** | Open CollaborativeExit pending-intent amount, or a retain-until-spendable-drops deduction after join Completed while the snapshot still lists those VTXOs as spendable. Cancel restores spendable immediately. |
 
 #### Layer 4 — Dashboard fields
 
@@ -97,18 +97,23 @@ Operator access from the browser uses **REST** (`ark-rest` + grpc API shim), not
 
 ## Exiting to on-chain
 
+Unilateral-exit protocol, gotchas, XState machine, and WASM proceed step: [unilateral-exit.md](unilateral-exit.md). Staged VTXO lifecycle refactor (spend-lock from `tagged` is Stage 2): [unilateral-exit-vtxo-lifecycle-refactor.md](unilateral-exit-vtxo-lifecycle-refactor.md). Persistence (materials, watches, job/prefs/failure): [persistence/unilateral-exit.md](persistence/unilateral-exit.md).
+
 Management → Arkade offers two paths:
 
 | Path | Operator required | Use when |
 |------|-------------------|----------|
 | **Collaborative exit** | Yes | Default; batches with operator; one settlement to your `bc1` address |
 | **Unilateral exit** | No (after unroll) | Operator down or you need trustless exit; per-VTXO; multiple on-chain txs |
+| **Autonomous mode** | No (explicit, persisted switch) | Do not contact this ASP (down or untrusted); reuses `cached_operator_info` + per-VTXO `unilateral_exit_materials`; only unilateral exit allowed; Esplora still required; survives reload |
 
-Collaborative exit and unilateral unroll are implemented in `bitboard-ark` (`collaborative_redeem`, `broadcast_next_unilateral_exit_node`, etc.). The on-chain bumper wallet shares the same BIP32-derived BDK wallet as boarding. Select one VTXO at a time in the UI.
+Collaborative exit and unilateral unroll are implemented in `bitboard-ark` (`collaborative_redeem`, `proceed_unilateral_exit_step`, etc.). **Autonomous mode** branches the same unilateral exit RPCs to snapshot-backed materials instead of ASP indexer/batch APIs. The on-chain bumper wallet shares the same BIP32-derived BDK wallet as boarding.
+
+**Unilateral exit control:** Management links to `/wallet/arkade/unilateral-exit`. The control page is a view of the XState actor: merged DAG (React Flow + d3-dag), multi-leaf selection, one virtual tx per `ark_proceed_unilateral_exit_step`. Proceed is non-blocking; the machine polls until the current step has **1 confirmation**. A virtual tx (leaf or intermediate host) is marked `is_unrolled` only after **6 confirmations**. Shared-leaf and automation details: [unilateral-exit.md](unilateral-exit.md).
 
 ### Unilateral vs collaborative exit balance timing
 
-Unilateral and collaborative exits use **different balance mechanics**. Collaborative exit VTXOs stay in the operator snapshot as cooperatively spendable until the operator processes the exit, so `collaborative_exit_in_progress_sats` is subtracted from net spendable fields until sync clears the pending deduction record.
+Unilateral and collaborative exits use **different balance mechanics**. While a CollaborativeExit pending batch intent is open, `collaborative_exit_in_progress_sats` is that intent’s amount (VTXOs stay cooperatively spendable in the snapshot). After join **Completed**, a retain-until-spendable-drops pending deduction covers the gap until operator sync removes those VTXOs. **Cancel** drops the intent and that deduction so net spendable is restored immediately.
 
 Unilateral exit is more subtle: the **same sats** are tracked in different snapshot buckets as unroll progresses, while `unilateral_exit_in_progress_sats` stays stable for the UI “exit pipeline” line.
 
@@ -118,27 +123,25 @@ Unilateral exit is more subtle: the **same sats** are tracked in different snaps
 | During unroll (broadcast in flight) | still `confirmed` | Yes | `pending_exit_deductions` (unilateral) | No in WASM/UI steady-state rules* |
 | After unroll | **exiting** (`is_unrolled = true`, `is_spent = false`) | No — excluded by `VtxoList` | sum of **exiting** VTXOs | No — already excluded from gross |
 
-\*The brief “during unroll” window rarely affects the dashboard because the user stays on the unroll modal until WASM returns. Optimistic UI (`arkade-exit-balance-optimistic.ts`) only bumps `unilateralExitInProgressSats` for unilateral paths; it does **not** reduce `confirmedSats` / `offchainSpendableSats`, matching post-unroll WASM behaviour and avoiding double-subtraction once the VTXO moves to **exiting**.
+\*The brief “during unroll” window rarely affects the dashboard because the user stays on the unilateral exit control page until each step completes. Optimistic UI (`arkade-exit-balance-optimistic.ts`) only bumps `unilateralExitInProgressSats` for unilateral paths; it does **not** reduce `confirmedSats` / `offchainSpendableSats`, matching post-unroll WASM behaviour and avoiding double-subtraction once the VTXO moves to **exiting**.
 
 **Handoff between pending record and exiting sub-bucket**
 
 1. First unroll broadcast → `record_pending_unilateral_exit` writes a pending deduction; the VTXO is still spendable in the snapshot.
-2. Unroll completes → `mark_vtxo_unrolled_in_snapshot` sets `is_unrolled = true` locally (gross spendable drops **before** operator sync realigns the snapshot).
+2. A virtual tx reaches **6 confirmations** → `mark_leaf_virtual_tx_vtxos_unrolled_in_snapshot` sets `is_unrolled = true` on every vout of that tx (gross spendable drops **before** operator sync realigns the snapshot).
 3. `reconcile_pending_exit_deductions` drops the pending unilateral record once the VTXO is no longer spendable.
 4. `exit_balance_components` counts the same amount from the **exiting** sub-bucket until on-chain completion (`is_spent`).
 
-Bitboard keeps the **exit line amount stable** across steps 1→4. Net spendable must not subtract `unilateral_exit_in_progress_sats` after step 2 — doing so double-counted the exit against unrelated VTXOs (e.g. a fresh boarding credit). Collaborative exit has no equivalent handoff: the field clears when operator sync removes the VTXOs from spendable entirely.
+Bitboard keeps the **exit line amount stable** across steps 1→4. Net spendable must not subtract `unilateral_exit_in_progress_sats` after step 2 — doing so double-counted the exit against unrelated VTXOs (e.g. a fresh boarding credit). Collaborative exit has no unroll handoff: the in-progress line comes from the open CollaborativeExit intent, then a Completed retain deduction until snapshot spendable drops; Cancel must not leave that line in place.
 
 Implementation touchpoints: `build_arkade_balance_dto` (WASM), `exit_balance_components` / `reconcile_pending_exit_deductions` (persistence), `arkade-exit-balance-optimistic.ts` (React Query cache).
 
 ### Post-unroll operator contract (ARK-EXIT-11)
 
-After on-chain unroll broadcasts, `run_unilateral_unroll` sets local `is_unrolled` immediately, then polls operator `list_vtxos` (with `sync_with_operator` between attempts) until the ASP marks the VTXO `is_unrolled && !is_spent`, or the poll window expires.
+Unroll and complete do **not** call the ASP. After each proceed-step broadcast, the XState machine waits until Esplora reports **1 confirmation** on the current virtual tx. WASM stamps local `is_unrolled` only when the leaf or intermediate host has **6 confirmations**. Operator indexer catch-up happens later, if at all, during a separate operator sync.
 
 - **Sticky merge:** `merge_sticky_unrolled_flags` preserves local `is_unrolled` for VTXOs still returned by the operator while ASP lags on the `is_unrolled` flag; missing or divergent watches are reconciled via `unilateral_exit_watches` (ARK-EXIT-12).
 - **Watch reconcile:** After each operator sync, `reconcile_exiting_vtxo_watches` runs targeted `list_vtxos_for_outpoints` and narrow Esplora probes per the truth table — never clears exiting state on full-list absence alone (ARK-SYNC-03).
-- **Graceful timeout:** If on-chain unroll is visible via Esplora but ASP never sets `is_unrolled` within the poll window, unroll still succeeds with `indexerWarning` — complete exit may retry indexer lag separately (`ARK-EXIT-05`).
-- **Hard failure:** If neither ASP nor Esplora confirms the unroll after the poll window, WASM returns `unilateral_unroll_not_confirmed_on_chain`.
 
 Residual edge cases where ASP reports `is_swept` without `is_unrolled` during an abandoned unilateral exit (cooperative recover override) remain documented in deferred Operation Labyrinth Step 3 work; recover + SSE fixes addressed the common stuck-wallet path.
 
@@ -158,10 +161,10 @@ Contract `ARK-REC-08`.
 
 ### Unilateral exit completion coin-select (vendor fork)
 
-After unroll, completing the exit spends on-chain UTXOs that fund the exit PSBT. Upstream `ark-client` coin-select requires Esplora `confirmation_blocktime` and skips inputs without it. Bitboard vendors a permissive fork in `third_party/ark-client/src/coin_select.rs` (`coin_select_vtxo_txids_for_onchain`):
+After unroll, completing the exit spends on-chain UTXOs that fund the exit PSBT. Upstream `ark-client` coin-select requires Esplora `confirmation_blocktime` and skips inputs without it. Bitboard vendors a permissive fork in `third_party/ark-client/src/coin_select.rs` (`coin_select_vtxo_outpoints_for_onchain`):
 
 - **Why:** arkade-regtest and other minimal Esplora backends often omit `block_time` even for confirmed txs. Requiring blocktime blocked REG-04 completion tests and local unilateral-exit debugging. Production paths usually get blocktime from Esplora; `bitboard-ark` also backfills from `/tx/{txid}/status` when the address UTXO listing omits it.
-- **Behavior:** Missing blocktime is treated as epoch zero for timelock checks; inputs are still selectable. The completion fee estimate includes `missingBlocktimeInputs` (virtual txid + on-chain outpoint) and the UI shows a non-blocking warning (contract `ARK-EXIT-04`).
+- **Behavior:** Missing blocktime is treated as epoch zero for timelock checks; inputs are still selectable. The completion fee estimate includes `missingBlocktimeInputs` (virtual outpoint + on-chain outpoint) and the UI shows a non-blocking warning (contract `ARK-EXIT-04`).
 - **Not a mainnet trust relaxation by design:** The fork exists for regtest convenience and indexer-gap tolerance; missing blocktime should be rare on well-behaved Esplora.
 
 ## Mnemonic alignment
@@ -199,6 +202,17 @@ Contracts `ARK-ROT-01` through `ARK-ROT-05` in `doc/features/arkade.yaml` define
 
 Cooperative fund migration uses `migrate_deprecated_signer_vtxos()` (ark-client 0.9.3+). Bitboard loops migrate passes internally until cooperative work is complete (or a pass cap), and **only then** re-stamps `operator_identity` with the current operator signer. Partial passes keep the migration banner and deprecated signer in persistence; the UI prompts **Migrate again** until complete. Post-cutoff funds appear in `pending_recovery_due_to_expired_signer` until unilateral exit or recoverable settlement; a **pending-recovery-due-to-expired-signer banner** on Dashboard and Management links to unilateral exit when `pendingRecoveryDueToExpiredSignerSats > 0`. This is **not** the admin `WalletInitializerService_Restore` API (operator on-chain wallet setup only).
 
+## Operator digest as terms-of-service gate
+
+The ASP `getInfo` digest is treated as a fingerprint of operator terms and configuration. When it changes relative to the last **accepted** `cached_operator_info`, Bitboard enters `operator_trust_pending`:
+
+- **Strong ToS:** operator sync does not persist snapshot, materials, watches, or a new accepted cache until the user explicitly chooses.
+- **Pending staging:** live `getInfo` is stored as `pending_operator_info` for an offline field-level diff.
+- **User choice:** a blocking modal offers (1) trust ASP and accept, or (2) review safely in autonomous mode (default). Review keeps `operator_trust_pending` true, enters autonomous mode with the **accepted** cache, and blocks leaving autonomous until accept.
+- **Reload:** while trust is pending, session open does not overwrite accepted cache from live `getInfo`. If autonomous mode was persisted, restore the review banner (`reviewingInAutonomous`) instead of the blocking modal (`ARK-TRUST-06`). Otherwise the blocking trust modal is shown again until the user chooses accept or review.
+
+Contracts `ARK-TRUST-01` through `ARK-TRUST-06` in `doc/features/arkade.yaml` define persistence, modal UX, and autonomous exit guards.
+
 ### Recoverable vs pending recovery due to expired signer (manual batch recover)
 
 | Bucket | Typical cause | User action in Bitboard |
@@ -207,3 +221,7 @@ Cooperative fund migration uses `migrate_deprecated_signer_vtxos()` (ark-client 
 | **recoverable** | Expired, operator-swept, or sub-dust VTXOs | Non-blocking banner on Dashboard and Management with count, total, optional fee estimate, and **Recover now** (`settle_vtxos` on recoverable outpoints only—no boarding, no auto-recover on sync) |
 
 Contracts `ARK-REC-01` through `ARK-REC-06` in `doc/features/arkade.yaml` define banner visibility, fee display, and the user-initiated recover action.
+
+## Upstream Arkade issues
+
+Operator/protocol bugs that Bitboard cannot fully fix in vendor forks are tracked in [arkade-upstream-fix-proposals.md](arkade-upstream-fix-proposals.md).
