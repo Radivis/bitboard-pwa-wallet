@@ -6,13 +6,30 @@ Related:
 
 - Persistence (WASM envelope + Zustand job/prefs/failure): [persistence/unilateral-exit.md](persistence/unilateral-exit.md)
 - Balance buckets and exit-line timing: [arkade-bitboard-wallet-model.md](arkade-bitboard-wallet-model.md)
-- VTXO exit lifecycle refactor (staged): [unilateral-exit-vtxo-lifecycle-refactor.md](unilateral-exit-vtxo-lifecycle-refactor.md)
+- VTXO exit lifecycle refactor (staged): [unilateral-exit-vtxo-lifecycle-refactor.md](future/unilateral-exit-vtxo-lifecycle-refactor.md)
 - Agent ownership rules: [`.cursor/rules/unilateral-exit-xstate.mdc`](../.cursor/rules/unilateral-exit-xstate.mdc)
 - Historic Mutinynet false-confirmation investigation (resolved; methodology is not current): [archive/unilateral-exit-false-confirmation-rca.md](archive/unilateral-exit-false-confirmation-rca.md)
 - Test contracts: `ARK-EXIT-*` in [doc/features/arkade.yaml](../doc/features/arkade.yaml)
 - User-facing risk primer (in-app Library): `risks-of-arkade-unilateral-exits`
 
 ---
+
+## VTXO lifecycle (target, staged)
+
+Not shipped. Spec: `ARK-EXIT-27`–`32` in [arkade.yaml](../doc/features/arkade.yaml). Freeze tables: [unilateral-exit-vtxo-lifecycle-refactor.md](future/unilateral-exit-vtxo-lifecycle-refactor.md#stage-0-freeze-agreed). Implementation starts at Stage 1 (B + C + E). The rest of this handbook is **current** behavior.
+
+**Two records** (WASM envelope is durable source of truth):
+
+| Record | Key | Answers |
+|--------|-----|---------|
+| VTXO exit | `(txid, vout)` | Pipeline membership, spend-lock, complete-ready, funding lost |
+| Host-tx observation | virtual `txid` | Broadcast attempted, relayed, confirmations, Esplora hot set |
+
+**Three parallel clocks** (do not merge): job DAG cursor (next unpublished step); host-tx confirmations (0 / relayed / 1-conf / 6-conf via WASM Esplora reconciler B); protocol timelock (`can_be_claimed_unilaterally_by_owner`). UI copy must distinguish waiting for confirmations from waiting for timelock.
+
+**B entry points** (no dedicated 6-conf poll actor): Arkade load including autonomous, operator sync, proceed, progress, `list_unilateral_exits_in_progress`, complete. Stamp every vout on a `tree`/`ark` host at 6 confs; skip `commitment`/`checkpoint`.
+
+The **job machine** stays the broadcaster (`waitingConfirm` remains 1-conf step advance). VTXO child machines are a hydrated view of persisted records (Stages 2/4). After abort, Complete uses `complete_ready`, not in-progress membership and not a leftover frontend job.
 
 ## Protocol basics
 

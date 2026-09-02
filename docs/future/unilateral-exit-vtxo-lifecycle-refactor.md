@@ -10,7 +10,7 @@ Related:
 - Current persistence shards: [persistence/unilateral-exit.md](persistence/unilateral-exit.md)
 - Balance buckets: [arkade-bitboard-wallet-model.md](arkade-bitboard-wallet-model.md)
 - Job XState ownership: [`.cursor/rules/unilateral-exit-xstate.mdc`](../.cursor/rules/unilateral-exit-xstate.mdc)
-- Test contracts: `ARK-EXIT-*` in [doc/features/arkade.yaml](../doc/features/arkade.yaml)
+- Test contracts: `ARK-EXIT-*` in [doc/features/arkade.yaml](../doc/features/arkade.yaml) (`ARK-EXIT-27`–`32` are the Stage 0 target lifecycle; `01`–`26` remain shipped behavior)
 
 ---
 
@@ -27,7 +27,7 @@ Letters from the design discussion. **Near-term lock is B + C + E. D is rejected
 
 **B — Unified Esplora finality reconciler.** One WASM pass: any `tree` / `ark` virtual tx that hosts VTXOs and has ≥6 Esplora confirmations stamps `is_unrolled` on every vout of that txid (terminal leaves included; `commitment` / `checkpoint` skipped). Same constant as today (`UNILATERAL_EXIT_LEAF_CONFIRMATIONS`). Runs on Arkade load (including autonomous), operator sync, proceed, progress, list-in-progress, and complete — not only while a frontend job is polling. Job proceed/progress may still call it for snappy in-job UI.
 
-**C — Host-tx observation registry.** Persist per virtual `txid`: `registered_at`, `relayed`, `confirmations`, `never_seen_probes`, `last_probed_at`. Register **immediately before** broadcast of that step so a false broadcast error cannot skip the row. Hot Esplora set is this table (plus a materials heal for tagged VTXOs if a write was missed). `never_seen` after a probe budget cools the **tx** row; it does not untag VTXOs.
+**C — Host-tx observation registry.** Persist per virtual `txid`: `registered_at`, `relayed`, `confirmations`, `never_seen_probes`, `last_probed_at`. Register **immediately before** broadcast of that step so a false broadcast error cannot skip the row. Hot Esplora set is this table (plus a materials heal for tagged VTXOs if a write was missed). `never_seen` after a probe budget **deletes** the **tx** row; it does not untag VTXOs.
 
 **D — Always-on 6-conf poll actor.** A dedicated unlocked-session ticker (XState `after` or rail poller) that sleeps until 6 confirmations even when the user is idle on the dashboard. Rejected: load/sync/proceed/progress/list/complete already cover “closed the tab for an hour”; a background 6-conf waiter is extra machinery for this purpose.
 
@@ -123,11 +123,11 @@ txid, registered_at, relayed, confirmations, never_seen_probes, last_probed_at
 
 Do **not** register the whole remaining DAG at job start (Esplora-spam + timeout-on-never-broadcast).
 
-**Hot probe set:** rows that are not `never_seen` and still have `confirmations < 6`, plus (after 6 conf) VTXOs in `unrolled` / `complete_ready` that need output-status / timelock probes.
+**Hot probe set:** observation rows that still exist and have `confirmations < 6`, plus (after 6 conf) VTXOs in `unrolled` / `complete_ready` that need output-status / timelock probes. A deleted `never_seen` row is gone from the hot set.
 
-**`never_seen` budget** (evaluated on B entry points, not a sleep loop): first probe after ~10 minutes from `registered_at`, then up to four more at ~1 minute spacing. If still absent:
+**`never_seen` budget** (evaluated on B entry points, not a sleep loop; freeze in [Stage 0 freeze](#stage-0-freeze-agreed)): first eligible miss after `registered_at + 10 minutes`, then up to four more at `last_probed_at + 1 minute`. At most one probe increment per txid per B entry; do not collapse the budget across a time skip. If still absent:
 
-- Cool **this observation row** (stop hot-probing that txid).
+- **Delete** this observation row (that is the cleanup; the txid leaves the hot set).
 - Move VTXOs **back to `tagged`**, not `idle`.
 - User may proceed again (deterministic txid → re-register, reset probe window).
 
@@ -136,7 +136,7 @@ Never drop a VTXO tag because Esplora was slow or the tab was closed.
 | Observation | Action |
 |-------------|--------|
 | ≥6 confs, all vouts stamped | Cool mempool probes. Keep as evidence until VTXOs are `exited` / `funding_lost`. |
-| Never seen after budget | Delete or archive the observation. VTXOs stay `tagged`. |
+| Never seen after budget | **Delete** the observation. VTXOs stay `tagged`. |
 | All VTXOs on that host are `exited` or `funding_lost` | Delete. |
 | Reorg under 1 conf | Do **not** delete. Rewind VTXOs to `host_relayed` / `host_broadcast_attempted`. |
 
@@ -191,11 +191,11 @@ unilateralExit (job)          — broadcaster; abort/terminate/automation
 
 A per-VTXO `after` delay until 6 confirmations is option **D**, which this refactor rejects. Confirmation depth advances in WASM on B’s entry points. Children **rehydrate** when those RPCs return (load, sync, proceed, progress, list, complete). The job machine’s `waitingConfirm` / `pollDelay` stays for **1-conf step advance while broadcasting**, not for leaf finality.
 
-### Split of events (draft for Stage 0 spec)
+### Split of events (frozen in ARK-EXIT-32)
 
 Job machine keeps: `START_*`, `PROCEED_*`, `ABORT_ORCHESTRATION`, automation, viability terminate.
 
-VTXO machine (draft; names freeze in Stage 0 YAML):
+VTXO machine events (frozen):
 
 | Event | Typical source |
 |-------|----------------|
@@ -260,7 +260,33 @@ Document intended behavior in `doc/features/` (new `ARK-EXIT-*` / extend existin
 
 **Out of scope:** code, envelope version bump.
 
-**Exit:** YAML + this doc agreed; no product ambiguity on abort / en-passant / complete-after-abort.
+**Exit:** YAML (`ARK-EXIT-27`–`32` plus annotations on shipped `ARK-EXIT-*` / `ARK-REC-08`) and the [Stage 0 freeze](#stage-0-freeze-agreed) below. This is documentation, not an implementation of Stages 1–4.
+
+### Stage 0 freeze (agreed)
+
+Spec IDs: `ARK-EXIT-27`–`32` in [doc/features/arkade.yaml](../doc/features/arkade.yaml). Shipped `ARK-EXIT-01`–`26` stay current behavior until later stages implement the target.
+
+#### Resolved “or”s
+
+1. **`never_seen` deletes the observation.** When the budget fires, delete the row so the txid leaves the hot set. VTXOs stay `tagged` (Stage 1 analogue: leave pending deductions). Rows kept as 6-conf evidence are still deleted when every VTXO on that host is `exited` or `funding_lost`. Re-proceed with the same deterministic txid **re-registers** and resets the probe window.
+2. **Probe budget is not collapsed across a time skip.** Evaluated only on B entry points (no 6-conf `after` actor). At most one probe increment per txid per B entry. First miss counts only after `registered_at + 10 minutes`; later misses need `last_probed_at + 1 minute`. Five eligible misses (1 + 4) **delete** the row. A single load after an hour counts as one miss. Independent of this, if Esplora shows ≥6 confs, B still stamps (materials heal).
+3. **Complete list vs complete gate.** The dialog still lists pipeline VTXOs (`list_unilateral_exits_in_progress` today; later record-derived) with `can_complete` (`ARK-EXIT-02`). The **RPC** gate is snapshot `complete_ready` (`is_unrolled && !is_spent` plus `can_be_claimed_unilaterally_by_owner`). No `VtxoNotInUnilateralExit` (`ARK-EXIT-31`).
+4. **XState event names** are frozen: `HYDRATE`, `HOST_REGISTERED`, `HOST_RELAYED`, `HOST_CONFIRMED`, `UNROLLED`, `COMPLETE_READY`, `COMPLETE`, `EXITED`, `FUNDING_LOST`, `UNTAG`. Hydrate **sets state from the WASM record** (phase jumps allowed); it does not replay intermediates (`ARK-EXIT-32`).
+
+#### Abort / en-passant / complete-after-abort
+
+| Situation | VTXO after abort | Start unroll | Complete |
+|-----------|------------------|--------------|----------|
+| Job started, nothing registered | `tagged` → `idle` | Eligible again | N/A |
+| Host registered / relayed / any confs | Phase unchanged | Not a second concurrent job; leftover not-yet-unrolled leaves remain **startable** (`ARK-EXIT-26`) | When `complete_ready`, **no job required** |
+| Intermediate host already 6-conf, leaves unpublished | Intermediates walk to `complete_ready`; leaves stay `tagged` | Leaves startable to resume unroll; unrolled hosts excluded (`ARK-EXIT-01`) | En-passant may be claimed while a job (or no job) still exists for descendants |
+| `funding_lost` | Terminal | No | No |
+
+Abort is **not** a VTXO phase. It only stops the frontend job (`ARK-EXIT-23`: no un-broadcast, no materials wipe).
+
+**En-passant:** at job start, tag every outpoint in `exit_relevant_vtxo_outpoints_for_plan`. Register the **host tx** later, immediately before that step’s broadcast — never the whole remaining DAG at start. Completing an en-passant VTXO does not by itself stop the job for remaining tagged leaves.
+
+**Spend-lock from `tagged`** is the Stage 2 **target**. Stage 1 must not change dashboard spendable math.
 
 ### Stage 1 — Close the safety hole (B + C + E)
 

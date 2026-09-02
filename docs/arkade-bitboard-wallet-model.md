@@ -97,7 +97,7 @@ Operator access from the browser uses **REST** (`ark-rest` + grpc API shim), not
 
 ## Exiting to on-chain
 
-Unilateral-exit protocol, gotchas, XState machine, and WASM proceed step: [unilateral-exit.md](unilateral-exit.md). Staged VTXO lifecycle refactor (spend-lock from `tagged` is Stage 2): [unilateral-exit-vtxo-lifecycle-refactor.md](unilateral-exit-vtxo-lifecycle-refactor.md). Persistence (materials, watches, job/prefs/failure): [persistence/unilateral-exit.md](persistence/unilateral-exit.md).
+Unilateral-exit protocol, gotchas, XState machine, and WASM proceed step: [unilateral-exit.md](unilateral-exit.md). Staged VTXO lifecycle refactor (spend-lock from `tagged` is Stage 2): [unilateral-exit-vtxo-lifecycle-refactor.md](future/unilateral-exit-vtxo-lifecycle-refactor.md). Persistence (materials, watches, job/prefs/failure): [persistence/unilateral-exit.md](persistence/unilateral-exit.md).
 
 Management → Arkade offers two paths:
 
@@ -136,6 +136,8 @@ Bitboard keeps the **exit line amount stable** across steps 1→4. Net spendable
 
 Implementation touchpoints: `build_arkade_balance_dto` (WASM), `exit_balance_components` / `reconcile_pending_exit_deductions` (persistence), `arkade-exit-balance-optimistic.ts` (React Query cache).
 
+**Spend-lock from `tagged` is Stage 2, not current.** The timing table above is shipped behavior: during unroll those VTXOs stay in gross spendable; pending deductions are informational until 6 confs. Target (`ARK-EXIT-27` / `ARK-REC-08`): `unilateral_exit_in_progress` includes `tagged` onward, and those sats are not collaboratively spendable (recover / renew / send / collab refuse them). Stage 1 must not change this table.
+
 ### Post-unroll operator contract (ARK-EXIT-11)
 
 Unroll and complete do **not** call the ASP. After each proceed-step broadcast, the XState machine waits until Esplora reports **1 confirmation** on the current virtual tx. WASM stamps local `is_unrolled` only when the leaf or intermediate host has **6 confirmations**. Operator indexer catch-up happens later, if at all, during a separate operator sync.
@@ -157,7 +159,7 @@ During the brief **pre-unroll** window, a pending unilateral record may exist wh
 | Expiring-soon count and **Renew VTXOs now** | `expiring_outpoints` |
 | Earliest expiry indicator | `vtxo_expiry_status` (`earliest_expires_at` scan) |
 
-Contract `ARK-REC-08`.
+Contract `ARK-REC-08`. Stage 2 extends this exclusion from pending deductions to all `tagged`-or-later VTXO exit records (spend-lock target; `ARK-EXIT-27`).
 
 ### Unilateral exit completion coin-select (vendor fork)
 

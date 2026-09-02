@@ -16,6 +16,9 @@ feature:
     - As a user, I want the app to keep working when the Arkade operator rotates its signing key, with clear guidance on migrating or exiting funds
     - As a user, I want to view individual VTXOs and their state (classification, flags, expiry) in a compact inventory
     - As a user, I want autonomous mode to persist per operator so an untrusted or hostile ASP is not contacted again after reload until I explicitly leave
+    - As a user, after I abort an unroll that already broadcast, I still want those coins completable when they confirm and the timelock elapses, without restarting a job
+    - As a user in autonomous mode, I want unrolled stamps from Esplora without operator sync so I can complete after a killed job
+    - As a user, I want waiting for confirmations distinguished from waiting for the unilateral-exit timelock
   requirements:
     - Arkade is gated by isArkadeEnabled (default off) and isMainnetAccessEnabled for mainnet
     - Arkade is available on mainnet, signet, and regtest (local arkd via arkade-regtest for dev/E2E); not on lab in v1
@@ -74,12 +77,12 @@ feature:
       - id: ARK-REC-07
         description: VTXOs in unilateral exit do not contribute to pendingRecoveryDueToExpiredSignerSats even when they would otherwise qualify for pending recovery due to expired signer
       - id: ARK-REC-08
-        description: Pre-unroll pending unilateral outpoints do not contribute to recoverableSettleableVtxoCount, recoverablePendingOperatorSweepVtxoCount, expiring-soon count, or earliest-expiry indicator; post-unroll exiting VTXOs are excluded by vendored ark-core bucketing
+        description: Pre-unroll pending unilateral outpoints do not contribute to recoverableSettleableVtxoCount, recoverablePendingOperatorSweepVtxoCount, expiring-soon count, or earliest-expiry indicator; post-unroll exiting VTXOs are excluded by vendored ark-core bucketing. Stage 2 extends this exclusion from pending deductions to all tagged-or-later VTXO exit records (ARK-EXIT-27 spend-lock target).
     unilateral_exit:
       - id: ARK-EXIT-01
         description: Start unilateral exit lists only VTXOs that can start unroll; in-progress and ready-to-complete VTXOs are excluded
       - id: ARK-EXIT-02
-        description: Complete unilateral exit lists in-progress VTXOs from local snapshot and pending deductions when operator indexing lags
+        description: Complete unilateral exit lists in-progress VTXOs from local snapshot and pending deductions when operator indexing lags. RPC in-progress membership is removed in ARK-EXIT-31 / Stage 1; this ID remains the Complete list.
       - id: ARK-EXIT-03
         description: Complete unilateral exit supports multi-select batch completion with explicit virtual outpoints (txid + vout) and fee estimate scaled to selected inputs
       - id: ARK-EXIT-04
@@ -93,11 +96,11 @@ feature:
       - id: ARK-EXIT-08
         description: Start unroll/proceed fails fast with autonomous_exit_materials_missing when selected VTXO lacks prefetched materials, regardless of autonomous mode
       - id: ARK-EXIT-09
-        description: Complete uses snapshot readiness plus Esplora only; no operator indexer poll. Each proceed step is non-blocking; the XState machine waits until the current virtual tx has 1 confirmation, and WASM stamps is_unrolled only after 6 confirmations (ARK-EXIT-15/16)
+        description: Complete uses snapshot readiness plus Esplora only; no operator indexer poll. Each proceed step is non-blocking; the XState machine waits until the current virtual tx has 1 confirmation, and WASM stamps is_unrolled only after 6 confirmations (ARK-EXIT-15/16). Until Stage 1, leaf is_unrolled is stamped on proceed/progress; ARK-EXIT-29 unifies leaf and intermediate stamping and also runs on autonomous load.
       - id: ARK-EXIT-10
         description: While autonomous mode is active, collaborative exit, send, renew, recoverable settlement, signer migration, boarding settle, and operator sync (manual and background dashboard poll) are blocked in UI and WASM; an in-progress unilateral-exit job does not skip background operator sync
       - id: ARK-EXIT-11
-        description: After each proceed step, WASM does not poll operator list_vtxos; local is_unrolled is stamped when Esplora reports 6 confirmations on the leaf or intermediate host virtual tx; sticky is_unrolled merge and watch reconcile run during operator sync only
+        description: After each proceed step, WASM does not poll operator list_vtxos; local is_unrolled is stamped when Esplora reports 6 confirmations on the leaf or intermediate host virtual tx; sticky is_unrolled merge and watch reconcile run during operator sync only. Until Stage 1, intermediate hosts are stamped only during operator sync; ARK-EXIT-29 unifies the stamper and runs on autonomous load.
       - id: ARK-EXIT-12
         description: Explicit unilateral_exit_watches registry in wallet persistence; survives full snapshot replace; cleared only on completion or reconcile evidence (operator spent or on-chain spent)
       - id: ARK-EXIT-13
@@ -107,9 +110,9 @@ feature:
       - id: ARK-EXIT-15
         description: ark_proceed_unilateral_exit_step advances one virtual tx per call with caller feerate, returns without blocking on confirmation, persists current_step_waiting_since for progress UI, and skips already-on-chain branch txs; the XState machine polls until 1-conf
       - id: ARK-EXIT-16
-        description: Leaf and intermediate host virtual txs must reach 6 confirmations on Esplora before WASM marks is_unrolled
+        description: Leaf and intermediate host virtual txs must reach 6 confirmations on Esplora before WASM marks is_unrolled. ARK-EXIT-29 applies the same 6-conf rule to every tree/ark host including terminals.
       - id: ARK-EXIT-17
-        description: When leaf virtual tx reaches 6 conf, WASM marks is_unrolled for every VTXO outpoint on that txid; sticky merge promotes all vouts on the same txid; control page selects sibling leaf outpoints atomically; completion remains per outpoint
+        description: When leaf virtual tx reaches 6 conf, WASM marks is_unrolled for every VTXO outpoint on that txid; sticky merge promotes all vouts on the same txid; control page selects sibling leaf outpoints atomically; completion remains per outpoint. ARK-EXIT-29 extends all-vouts stamping to any tree/ark host, not only selected leaves.
       - id: ARK-EXIT-18
         description: Control page Proceed automatically switch with congestion warning and max fee rate input; automatic mode uses Low/Medium/High preset degree only (no custom fee)
       - id: ARK-EXIT-19
@@ -121,13 +124,79 @@ feature:
       - id: ARK-EXIT-22
         description: Proceed automatically advances all unroll steps for multiple preconfirmed VTXOs (after chained self-send splits) until branch complete (E2E-ARK-REG-07)
       - id: ARK-EXIT-23
-        description: Control page offers abort when a frontend unilateral exit job is active; two-step confirmation (info then red risk modal with required checkbox); abort ends orchestration via aborted machine state without waiting on WASM list RPCs and without deleting unilateral_exit_materials or other WASM persistence; user_aborted failure banner lists VTXO ids with copy actions when id lookup succeeds; backend in-progress state remains until completion or reconcile
+        description: >-
+          Control page offers abort when a frontend unilateral exit job is active; two-step
+          confirmation (info then red risk modal with required checkbox); abort ends orchestration
+          via aborted machine state without waiting on WASM list RPCs and without deleting
+          unilateral_exit_materials or other WASM persistence; user_aborted failure banner lists
+          VTXO ids with copy actions when id lookup succeeds; backend in-progress state remains
+          until completion or reconcile. VTXO phase after abort is ARK-EXIT-30.
       - id: ARK-EXIT-24
         description: Control page step progress and in-progress overlay use the same phase labels in automatic mode as in manual mode, with " (proceeding automatically)" appended while automation is advancing the job
       - id: ARK-EXIT-25
         description: In-flight states other than waiting, ensuringBroadcast, and waitingForParentData show "figuring out what to do next" on step progress and a cog overlay (title/aria "Figuring out what to do next"); automatic mode still appends " (proceeding automatically)"
       - id: ARK-EXIT-26
-        description: After abort, leftover WASM in-progress leaves that are not yet unrolled remain selectable so the user can start a new frontend job on the same leaf; fully unrolled leftover rows stay unselectable (claim via Complete)
+        description: >-
+          After abort, leftover WASM in-progress leaves that are not yet unrolled remain selectable
+          so the user can start a new frontend job on the same leaf; fully unrolled leftover rows
+          stay unselectable (claim via Complete). VTXO phase after abort and en-passant leftovers
+          is ARK-EXIT-30.
+    unilateral_exit_vtxo_lifecycle:
+      - id: ARK-EXIT-27
+        description: >-
+          VTXO exit phases (target; persist in Stage 2): idle → tagged → host_broadcast_attempted
+          → host_relayed → host_confirmed → unrolled → complete_ready → exited; funding_lost from
+          tagged onward. Abort is not a VTXO phase. WASM persisted records are the durable source
+          of truth. Spend-lock from tagged is Stage 2; Stage 1 must not change dashboard spendable math.
+      - id: ARK-EXIT-28
+        description: >-
+          Host-tx observation registry (C; Stage 1): keyed by virtual txid; fields registered_at,
+          relayed, confirmations, never_seen_probes, last_probed_at. Register immediately before
+          submitpackage of that step (not the whole DAG at job start). One row drives all vouts on
+          that txid. After five eligible misses (first after registered_at + 10 minutes, then four
+          more at last_probed_at + 1 minute, at most one increment per B entry; do not collapse
+          across a time skip), delete the observation; VTXOs stay tagged (Stage 1 analogue: leave
+          pending deductions). Re-proceed with the same deterministic txid re-registers and resets
+          the probe window. Also delete when every VTXO on that host is exited or funding_lost.
+          Reorg under 1 conf rewinds VTXOs to host_relayed / host_broadcast_attempted and does not
+          delete the row.
+      - id: ARK-EXIT-29
+        description: >-
+          Unified Esplora 6-conf reconciler (B; Stage 1): any tree/ark virtual tx that hosts VTXOs
+          (terminals included; commitment/checkpoint skipped) with ≥ UNILATERAL_EXIT_LEAF_CONFIRMATIONS
+          stamps is_unrolled on every vout of that txid and registers watches. Entry points: Arkade
+          load including autonomous, operator sync, proceed, progress, list_unilateral_exits_in_progress,
+          complete. No dedicated 6-conf poll actor (not D). Materials heal: probe host txs of tagged
+          VTXOs in materials even if the observation write was missed.
+      - id: ARK-EXIT-30
+        description: >-
+          Abort, en-passant, and leftover-start (target; abort job rules already in ARK-EXIT-23/26).
+          Abort is not a VTXO phase. Job started with nothing registered: tagged reverts to idle
+          (unlock; Stage 2). Host registered/relayed/any confs: abort does not change VTXO phase.
+          Tagged with a published ancestor: stay tagged. Intermediate host already 6-conf with
+          unpublished leaves: intermediates walk to complete_ready; leaves stay tagged; leaves remain
+          startable to resume unroll; unrolled hosts stay excluded from Start (ARK-EXIT-01).
+          En-passant: tag every exit_relevant_vtxo_outpoints_for_plan outpoint at job start; register
+          host tx later on the proceed step that publishes it; completing an en-passant VTXO does not
+          stop the job for remaining tagged leaves. funding_lost is terminal (not startable, not completable).
+      - id: ARK-EXIT-31
+        description: >-
+          Complete gate is complete_ready (E; Stage 1): complete_unilateral_exit must not require
+          membership in unilateral_exit_in_progress_outpoints (no VtxoNotInUnilateralExit). Gate is
+          validate_snapshot_completion_ready (is_unrolled && !is_spent) plus Esplora
+          can_be_claimed_unilaterally_by_owner. Complete dialog still lists pipeline VTXOs (ARK-EXIT-02)
+          with can_complete; waiting-for-timelock rows remain listed but not submittable. Aborted or
+          failed jobs' unrolled VTXOs remain claimable without a frontend job.
+      - id: ARK-EXIT-32
+        description: >-
+          Job vs VTXO XState split (target; machine files in Stages 2/4). Job machine remains the
+          broadcaster: START_*, PROCEED_*, ABORT_ORCHESTRATION, automation, viability terminate;
+          waitingConfirm is 1-conf step advance only. VTXO children are a hydrated view keyed by
+          (txid, vout); spawn from persisted records not only the job bookmark. Frozen child events:
+          HYDRATE, HOST_REGISTERED, HOST_RELAYED, HOST_CONFIRMED, UNROLLED, COMPLETE_READY, COMPLETE,
+          EXITED, FUNDING_LOST, UNTAG. HYDRATE sets state from the WASM record (phase jumps allowed);
+          it does not replay intermediates. WALLET_RESET/lock stops all actors; next unlock hydrates
+          from WASM. No per-VTXO after delay until 6 confirmations (not D).
     autonomous_mode:
       - id: ARK-AUTO-01
         description: BitboardArkPersistence.autonomous_mode is persisted per ASP connection; missing or legacy blobs default false; opt-in is explicit via the Management switch (with confirm) or operator-trust review
@@ -218,7 +287,7 @@ feature:
         - expiring VTXO count when session open
         - operator batch round schedule when operator publishes scheduledSession
         - collaborative exit (on-chain destination, optional partial amount) with operator fee estimate from getInfo().fees
-        - Start unilateral exit (select VTXO, unroll) with bumper fee estimate; separate Complete unilateral exit for in-progress VTXOs after timelock
+        - Start unilateral exit (select VTXO, unroll) with bumper fee estimate; separate Complete unilateral exit for in-progress VTXOs after timelock, including leftover unrolled or aborted rows claimable without an active job (ARK-EXIT-31)
         - batch complete multiple ready in-progress VTXOs in one on-chain transaction with dynamic completion fee estimate
         - pending_recovery_due_to_expired_signer_sats excludes VTXOs already in unilateral exit (no double-count with unilateral_exit_in_progress_sats)
         - signer migration banner when operator signing key rotated (migratable, due now, or expired regimes)

@@ -129,3 +129,21 @@ Zustand stores for job/prefs/failure are **session caches** (no `sqliteStorage`)
 5. Hydrate waits until Arkade load/sync is quiet (or until in-progress sats/outpoints are already visible) before sending `HYDRATE_OR_START`. WASM reporting no in-progress exits does **not** clear a persisted job — that is pre-broadcast crash recovery. The machine clears the job bookmark on complete / abort / terminate.
 
 TanStack Query caches progress/topology/balance for display. During an active job it does **not** poll or refetch `getUnilateralExitProgress`; actors seed the progress cache after WASM reads. Durable writes happen in WASM export (encrypted payload). `actor.context.progress` is authoritative over the query cache.
+
+---
+
+## Target records (not in envelope v8)
+
+Stage 0 documents intended tables. They are **not** present in `BITBOARD_ARK_PERSISTENCE_VERSION = 8`. Do not treat the field list above as already containing them.
+
+**Stage 1** adds a **host-tx observation** table (`ARK-EXIT-28`), keyed by virtual `txid`:
+
+```text
+txid, registered_at, relayed, confirmations, never_seen_probes, last_probed_at
+```
+
+Register immediately before broadcast of that step. After the `never_seen` probe budget, **delete** the observation; VTXOs stay `tagged`. Also delete when every VTXO on that host is `exited` or `funding_lost`. That stage still keeps pending deductions, watches, and `is_unrolled` as they are; observation plus the unified 6-conf reconciler **feed** `is_unrolled`.
+
+**Stage 2** adds a **VTXO exit** table keyed by `(txid, vout)` with the phase enum (`ARK-EXIT-27`). Candidates, in-progress, and complete-ready become record-derived. Envelope version bumps when those blobs land, not in Stage 0.
+
+Freeze and abort matrix: [unilateral-exit-vtxo-lifecycle-refactor.md](../future/unilateral-exit-vtxo-lifecycle-refactor.md#stage-0-freeze-agreed).
