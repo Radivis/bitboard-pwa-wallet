@@ -1,6 +1,9 @@
 use std::error;
 use std::fmt;
 
+/// Max response body chars included in user-facing HTTP error strings.
+const RESPONSE_ERROR_BODY_SNIPPET_MAX_LEN: usize = 256;
+
 #[derive(Debug, Clone)]
 pub struct ResponseContent<T> {
     pub status: reqwest::StatusCode,
@@ -16,13 +19,36 @@ pub enum Error<T> {
     ResponseError(ResponseContent<T>),
 }
 
+/// Collapse whitespace and cap length for operator error bodies shown in UI chains.
+pub(crate) fn truncate_response_error_body(content: &str) -> String {
+    let collapsed = content.split_whitespace().collect::<Vec<_>>().join(" ");
+    if collapsed.len() <= RESPONSE_ERROR_BODY_SNIPPET_MAX_LEN {
+        return collapsed;
+    }
+    format!(
+        "{}…",
+        &collapsed[..RESPONSE_ERROR_BODY_SNIPPET_MAX_LEN.saturating_sub(1)]
+    )
+}
+
+fn format_response_error_display<T>(response: &ResponseContent<T>) -> String {
+    let body_snippet = truncate_response_error_body(&response.content);
+    if body_snippet.is_empty() {
+        format!("status code {}", response.status)
+    } else {
+        format!("status code {}: {}", response.status, body_snippet)
+    }
+}
+
 impl<T> fmt::Display for Error<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (module, e) = match self {
             Error::Reqwest(e) => ("reqwest", e.to_string()),
             Error::Serde(e) => ("serde", e.to_string()),
             Error::Io(e) => ("IO", e.to_string()),
-            Error::ResponseError(e) => ("response", format!("status code {}", e.status)),
+            Error::ResponseError(response) => {
+                ("response", format_response_error_display(response))
+            }
         };
         write!(f, "error in {}: {}", module, e)
     }
@@ -120,3 +146,28 @@ pub mod wallet_initializer_service_api;
 pub mod wallet_service_api;
 
 pub mod configuration;
+
+#[cfg(test)]
+mod display_tests {
+    use super::*;
+
+    #[test]
+    fn response_error_display_includes_status_and_body_snippet() {
+        let error = Error::<()>::ResponseError(ResponseContent {
+            status: reqwest::StatusCode::BAD_REQUEST,
+            content: r#"{"code":"INVALID_ARGUMENT","message":"duplicated input"}"#.to_string(),
+            entity: None,
+        });
+        let display = error.to_string();
+        assert!(display.contains("status code 400"));
+        assert!(display.contains("duplicated input"));
+    }
+
+    #[test]
+    fn truncate_response_error_body_collapses_whitespace_and_caps_length() {
+        let long_body = "a".repeat(250);
+        let truncated = truncate_response_error_body(&format!("line1\n\n  {long_body}"));
+        assert!(truncated.len() <= RESPONSE_ERROR_BODY_SNIPPET_MAX_LEN);
+        assert!(!truncated.contains('\n'));
+    }
+}

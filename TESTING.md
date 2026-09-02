@@ -41,8 +41,8 @@ Arkade wallet session (`ArkSession`), persistence, signer migration, exits. Most
 | File | Focus |
 |------|--------|
 | `tests/signer_migration_session_regtest.rs` | Signer rotation + cooperative migration (happy + error paths) |
-| `tests/unilateral_exit_session_regtest.rs` | Unilateral unroll / complete on regtest |
-| `tests/pending_recovery_balance_regression.rs` | Signer-aware balance classification (unit-style, no Docker) |
+| `tests/autonomous_unilateral_exit_session_regtest.rs` | Autonomous proceed-step unroll + complete without operator sync |
+| `tests/pending_recovery_due_to_expired_signer_balance_regression.rs` | Signer-aware balance classification (unit-style, no Docker) |
 | `tests/ark_rest_query_encoding_regression.rs` | REST query encoding |
 
 Run ignored regtest tests (serial — shared `rotate-signer` / Docker):
@@ -54,14 +54,14 @@ ARKADE_REGTEST_RUN=1 cargo test -p bitboard-ark --test signer_migration_session_
 # Signer migration with E2E-exported fixture (skip native boarding)
 ARKADE_REGTEST_BOARDED_FIXTURE=frontend/test-results/arkade-boarded-fixture.json ARKADE_REGTEST_RUN=1 \
   cargo test -p bitboard-ark --test signer_migration_session_regtest \
-  cooperative_signer_migration_clears_pending_recovery_with_boarded_fixture -- --ignored --test-threads=1
+  cooperative_signer_migration_clears_pending_recovery_due_to_expired_signer_with_boarded_fixture -- --ignored --test-threads=1
 ```
 
 **Error-path example** (operator down, persistence unchanged):
 
 `migrate_fails_fast_when_discover_keys_cannot_run` in `signer_migration_session_regtest.rs`.
 
-**Happy-path examples:** `cooperative_signer_migration_clears_pending_recovery_with_boarded_fixture` (fixture) or `…_with_native_boarding` (boards via Rust/tonic).
+**Happy-path examples:** `cooperative_signer_migration_clears_pending_recovery_due_to_expired_signer_with_boarded_fixture` (fixture) or `…_with_native_boarding` (boards via Rust/tonic).
 
 ### Vendored Ark crates
 
@@ -102,10 +102,12 @@ npm run test:e2e:sequential   # E2E_SEQUENTIAL=true
 | `test:e2e:arkade-regtest` | `@arkade-regtest` | REG-01/02, short VTXO expiry |
 | `test:e2e:arkade-regtest-longexpiry` | `@arkade-exit-regtest` | REG-03/04, long expiry |
 | `test:e2e:arkade-regtest-reg04` | `@arkade-reg04` | REG-04 only |
+| `test:e2e:arkade-regtest-reg07` | `@arkade-reg07` | REG-07 preconfirmed VTXO + automatic unroll |
 | `test:e2e:arkade-regtest-signer` | `@arkade-signer-regtest` | REG-05 signer migration |
+| `test:e2e:arkade-regtest-operator-trust` | `@arkade-operator-trust-regtest` | REG-06 operator trust / autonomous review |
 | `test:e2e:nwc` | `@nwc` | NWC mock |
 
-Contracts: `doc/features/arkade-regtest-contract.yaml` (E2E-ARK-REG-01 … 05).
+Contracts: `doc/features/arkade-regtest-contract.yaml` (E2E-ARK-REG-01 … 07).
 
 ### Background runner (Linux)
 
@@ -122,6 +124,8 @@ Runs the full E2E suite in the background and sends a desktop notification on su
 Local stack for `@regtest` and `@arkade-regtest` flows. Detailed ports, expiry profiles, and troubleshooting:
 
 **[frontend/tests/e2e/fixtures/arkade-regtest/README.md](frontend/tests/e2e/fixtures/arkade-regtest/README.md)**
+
+**Esplora quirks on regtest** (virtual-tree JSON, relay vs confirmation, unilateral-exit pitfalls): **[docs/arkade-regtest-esplora-quirks.md](docs/arkade-regtest-esplora-quirks.md)** — required reading before changing `esplora_blockchain.rs` or unilateral-exit step progress.
 
 ```bash
 # From repo root

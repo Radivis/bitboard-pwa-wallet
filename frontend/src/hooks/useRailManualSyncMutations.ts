@@ -49,19 +49,19 @@ export function useOnchainFullRescanSyncMutation() {
 export function useArkadeManualSyncMutation() {
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
-  const activeArkadeConnectionId = useWalletStore(
-    (walletState) => walletState.activeArkadeConnectionId,
+  const activeArkadeAccountId = useWalletStore(
+    (walletState) => walletState.activeArkadeAccountId,
   )
 
   return useMutation({
     mutationFn: async () => {
-      if (activeWalletId == null || activeArkadeConnectionId == null) {
+      if (activeWalletId == null || activeArkadeAccountId == null) {
         throw new Error('Arkade session is not ready')
       }
       await orchestrateArkadeSyncThenSave({
         walletId: activeWalletId,
         networkMode,
-        connectionId: activeArkadeConnectionId,
+        arkadeAccountId: activeArkadeAccountId,
         syncKind: 'manual',
         awaitCompletion: true,
         throwOnError: true,

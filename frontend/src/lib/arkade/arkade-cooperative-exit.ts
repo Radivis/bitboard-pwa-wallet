@@ -35,8 +35,10 @@ export function formatCollaborativeExitEstimateError(
   return estimate.estimateError ?? ''
 }
 
-export function arkadeHasPendingRecoveryBalance(balance: ArkadeBalanceInfo): boolean {
-  return (balance.pendingRecoverySats ?? 0) > 0
+export function arkadeHasPendingRecoveryDueToExpiredSignerBalance(
+  balance: ArkadeBalanceInfo,
+): boolean {
+  return (balance.pendingRecoveryDueToExpiredSignerSats ?? 0) > 0
 }
 
 /** Batch-settleable amount available for cooperative exit (aligned with fee estimator when loaded). */

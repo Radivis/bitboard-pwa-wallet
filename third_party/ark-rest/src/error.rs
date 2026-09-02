@@ -81,6 +81,20 @@ impl Error {
             Kind::ServerInfoChanged => "Ark server info changed while processing the request. Server info was refreshed, but the failed operation was not retried. Rebuild the request and retry if safe",
         }
     }
+
+    /// Full error text including nested `source()` chain (for WASM / UI display).
+    pub fn display_chain(&self) -> String {
+        let mut parts = vec![self.description().to_string()];
+        let mut next = self.source();
+        while let Some(source) = next {
+            let segment = source.to_string();
+            if !segment.is_empty() {
+                parts.push(segment);
+            }
+            next = source.source();
+        }
+        parts.join(": ")
+    }
 }
 
 impl fmt::Debug for Error {
@@ -99,7 +113,7 @@ impl fmt::Debug for Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.description())
+        f.write_str(&self.display_chain())
     }
 }
 
@@ -180,5 +194,31 @@ mod tests {
     fn is_server_info_changed_false_for_other_errors() {
         let err = Error::request("DIGEST_MISMATCH");
         assert!(!err.is_server_info_changed());
+    }
+
+    #[test]
+    fn display_chain_surfaces_nested_event_stream_message() {
+        let inner = Error::request(
+            "Event stream request failed with status 500 Internal Server Error: FUNCTION_INVOCATION_FAILED",
+        );
+        let display = inner.display_chain();
+        assert!(display.contains("request failed"));
+        assert!(display.contains("Event stream request failed"));
+        assert!(display.contains("500"));
+        assert!(display.contains("FUNCTION_INVOCATION_FAILED"));
+    }
+
+    #[test]
+    fn display_chain_includes_apis_response_body() {
+        let source = crate::apis::Error::<()>::ResponseError(crate::apis::ResponseContent {
+            status: reqwest::StatusCode::BAD_REQUEST,
+            content: "missing forfeit tx".to_string(),
+            entity: None,
+        });
+        let err = Error::request(source);
+        let display = err.display_chain();
+        assert!(display.contains("request failed"));
+        assert!(display.contains("status code 400"));
+        assert!(display.contains("missing forfeit tx"));
     }
 }

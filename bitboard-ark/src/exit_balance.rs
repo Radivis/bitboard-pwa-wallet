@@ -5,7 +5,10 @@ use bitcoin::{Amount, OutPoint, Txid};
 
 use crate::error::ArkWasmError;
 use crate::offchain_snapshot::vtxo_list_from_snapshot;
-use crate::persistence::{OffchainVtxoSnapshot, PendingExitDeductionRecord, PendingExitKind};
+use crate::persistence::{
+    OffchainVtxoSnapshot, PendingBatchIntentKind, PendingBatchIntentRecord,
+    PendingExitDeductionRecord, PendingExitKind, UnilateralExitWatchRecord,
+};
 
 /// Outpoint identifying a VTXO in unilateral exit (local snapshot or pending deduction).
 pub type UnilateralExitOutpointKey = OutPoint;
@@ -23,12 +26,11 @@ pub fn exit_outpoint_key_from_str(txid: &str, vout: u32) -> Option<UnilateralExi
 pub fn unilateral_exit_in_progress_outpoints_from_snapshot(
     snapshot: &OffchainVtxoSnapshot,
 ) -> crate::error::ArkResult<HashSet<UnilateralExitOutpointKey>> {
-    // Post-unroll VTXOs: excluded from gross spendable via the spent bucket; counted here for the
-    // informational unilateral_exit_in_progress balance field (see wallet model doc).
+    // Post-unroll VTXOs: excluded from gross spendable via the exiting sub-bucket; counted here for
+    // the informational unilateral_exit_in_progress balance field (see wallet model doc).
     let vtxo_list = vtxo_list_from_snapshot(snapshot)?;
     Ok(vtxo_list
-        .spent()
-        .filter(|vtp| vtp.is_unrolled && !vtp.is_spent)
+        .exiting()
         .map(|vtp| exit_outpoint_key(vtp.outpoint.txid, vtp.outpoint.vout))
         .collect())
 }
@@ -47,9 +49,19 @@ pub fn unilateral_exit_in_progress_outpoints_from_pending(
         .collect()
 }
 
+pub fn unilateral_exit_in_progress_outpoints_from_watches(
+    watches: &[UnilateralExitWatchRecord],
+) -> HashSet<UnilateralExitOutpointKey> {
+    watches
+        .iter()
+        .filter_map(|watch| exit_outpoint_key_from_str(&watch.vtxo_txid, watch.vout))
+        .collect()
+}
+
 pub fn unilateral_exit_in_progress_outpoints(
     snapshot: Option<&OffchainVtxoSnapshot>,
     pending: &[PendingExitDeductionRecord],
+    watches: &[UnilateralExitWatchRecord],
 ) -> crate::error::ArkResult<HashSet<UnilateralExitOutpointKey>> {
     let mut keys = HashSet::new();
     if let Some(snapshot) = snapshot {
@@ -58,6 +70,7 @@ pub fn unilateral_exit_in_progress_outpoints(
         )?);
     }
     keys.extend(unilateral_exit_in_progress_outpoints_from_pending(pending));
+    keys.extend(unilateral_exit_in_progress_outpoints_from_watches(watches));
     Ok(keys)
 }
 
@@ -74,8 +87,7 @@ pub fn unilateral_exit_in_progress_sats_from_snapshot(
 ) -> crate::error::ArkResult<u64> {
     let vtxo_list = vtxo_list_from_snapshot(snapshot)?;
     Ok(vtxo_list
-        .spent()
-        .filter(|vtp| vtp.is_unrolled && !vtp.is_spent)
+        .exiting()
         .fold(Amount::ZERO, |acc, vtp| acc + vtp.amount)
         .to_sat())
 }
@@ -118,8 +130,8 @@ pub fn should_keep_pending_exit_deduction(
     match record.kind {
         PendingExitKind::Unilateral => {
             // During unroll, before is_unrolled is set locally: keep pending record while the VTXO
-            // is still spendable. After mark_vtxo_unrolled_in_snapshot, this returns false and the
-            // same sats are tracked from the spent bucket instead.
+            // is still spendable. After mark_leaf_virtual_tx_vtxos_unrolled_in_snapshot, this returns
+            // false and the same sats are tracked from the exiting sub-bucket instead.
             let Some(txid) = record.vtxo_txid.as_deref() else {
                 return Ok(false);
             };
@@ -131,6 +143,9 @@ pub fn should_keep_pending_exit_deduction(
             }
         }
         PendingExitKind::Collaborative => {
+            if !record.retain_until_spendable_drops {
+                return Ok(false);
+            }
             let Some(baseline) = record.baseline_offchain_spendable_sats else {
                 return Ok(false);
             };
@@ -152,6 +167,24 @@ pub fn reconcile_pending_exit_deductions(
     }
     *records = retained;
     Ok(())
+}
+
+/// Open CollaborativeExit intents plus retain-until-spendable-drops deductions after Completed.
+pub fn collaborative_exit_in_progress_sats(
+    pending_batch_intents: &[PendingBatchIntentRecord],
+    pending_exit_deductions: &[PendingExitDeductionRecord],
+) -> u64 {
+    let from_intents = pending_batch_intents
+        .iter()
+        .filter(|record| record.kind == PendingBatchIntentKind::CollaborativeExit)
+        .fold(0u64, |acc, record| acc.saturating_add(record.amount_sats));
+    let from_completed_deductions = pending_exit_deductions
+        .iter()
+        .filter(|record| {
+            record.kind == PendingExitKind::Collaborative && record.retain_until_spendable_drops
+        })
+        .fold(0u64, |acc, record| acc.saturating_add(record.amount_sats));
+    from_intents.saturating_add(from_completed_deductions)
 }
 
 #[cfg(test)]
@@ -192,6 +225,7 @@ mod tests {
             synced_at: 1_700_000_000,
             dust_sats: 330,
             virtual_tx_outpoints: records,
+            unilateral_exit_materials_by_leaf_tx: std::collections::BTreeMap::new(),
         }
     }
 
@@ -206,6 +240,21 @@ mod tests {
             unilateral_exit_in_progress_sats_from_snapshot(&snapshot).expect("sum"),
             180_603
         );
+    }
+
+    #[test]
+    fn unilateral_exit_in_progress_excludes_spent_unrolled_vtxos() {
+        let snapshot = snapshot_with(vec![
+            sample_vtp_record(1, 0, 180_603, true, false),
+            sample_vtp_record(2, 0, 50_000, true, true),
+        ]);
+
+        assert_eq!(
+            unilateral_exit_in_progress_sats_from_snapshot(&snapshot).expect("sum"),
+            180_603
+        );
+        let keys = unilateral_exit_in_progress_outpoints_from_snapshot(&snapshot).expect("keys");
+        assert_eq!(keys.len(), 1);
     }
 
     #[test]
@@ -237,6 +286,7 @@ mod tests {
             amount_sats: 180_603,
             started_at: 1_700_000_000,
             baseline_offchain_spendable_sats: None,
+            retain_until_spendable_drops: false,
         }];
 
         reconcile_pending_exit_deductions(&mut records, &snapshot, 0).expect("reconcile");
@@ -254,6 +304,7 @@ mod tests {
             amount_sats: 100_000,
             started_at: 1_700_000_000,
             baseline_offchain_spendable_sats: Some(130_000),
+            retain_until_spendable_drops: true,
         }];
 
         reconcile_pending_exit_deductions(&mut records, &snapshot, 30_000).expect("reconcile");
@@ -270,6 +321,7 @@ mod tests {
                 amount_sats: 50_000,
                 started_at: 1,
                 baseline_offchain_spendable_sats: None,
+                retain_until_spendable_drops: false,
             },
             PendingExitDeductionRecord {
                 kind: PendingExitKind::Collaborative,
@@ -278,6 +330,7 @@ mod tests {
                 amount_sats: 100_000,
                 started_at: 2,
                 baseline_offchain_spendable_sats: Some(200_000),
+                retain_until_spendable_drops: false,
             },
             PendingExitDeductionRecord {
                 kind: PendingExitKind::Unilateral,
@@ -286,6 +339,7 @@ mod tests {
                 amount_sats: 25_000,
                 started_at: 3,
                 baseline_offchain_spendable_sats: None,
+                retain_until_spendable_drops: false,
             },
         ];
 
@@ -310,6 +364,7 @@ mod tests {
             amount_sats: 50_000,
             started_at: 1_700_000_000,
             baseline_offchain_spendable_sats: None,
+            retain_until_spendable_drops: false,
         }];
 
         reconcile_pending_exit_deductions(&mut records, &snapshot, 0).expect("reconcile");
@@ -337,6 +392,7 @@ mod tests {
             amount_sats: 25_000,
             started_at: 1,
             baseline_offchain_spendable_sats: None,
+            retain_until_spendable_drops: false,
         }];
         let keys = unilateral_exit_in_progress_outpoints_from_pending(&records);
         assert_eq!(keys.len(), 1);
@@ -354,8 +410,10 @@ mod tests {
             amount_sats: 10_000,
             started_at: 1,
             baseline_offchain_spendable_sats: None,
+            retain_until_spendable_drops: false,
         }];
-        let keys = unilateral_exit_in_progress_outpoints(Some(&snapshot), &pending).expect("keys");
+        let keys =
+            unilateral_exit_in_progress_outpoints(Some(&snapshot), &pending, &[]).expect("keys");
         assert_eq!(keys.len(), 2);
         assert!(is_unilateral_exit_in_progress_outpoint(
             &keys,
@@ -367,5 +425,101 @@ mod tests {
             &pending_txid,
             0
         ));
+    }
+
+    #[test]
+    fn in_progress_outpoints_include_watches_without_snapshot() {
+        let txid = "dd".repeat(32);
+        let watches = vec![UnilateralExitWatchRecord {
+            vtxo_txid: txid.clone(),
+            vout: 1,
+            amount_sats: 9_000,
+            registered_at: 1,
+            published_vtxo_txid: None,
+            branch_txids: vec![],
+        }];
+        let keys = unilateral_exit_in_progress_outpoints(None, &[], &watches).expect("keys");
+        assert_eq!(keys.len(), 1);
+        assert!(is_unilateral_exit_in_progress_outpoint(&keys, &txid, 1));
+    }
+
+    fn sample_collaborative_intent(amount_sats: u64) -> PendingBatchIntentRecord {
+        PendingBatchIntentRecord {
+            kind: PendingBatchIntentKind::CollaborativeExit,
+            intent_id: Some("intent-1".into()),
+            onchain_outpoints: vec![],
+            vtxo_outpoints: vec![],
+            amount_sats,
+            registered_at: 1,
+            destination_address: Some("tb1qtest".into()),
+            lifecycle_phase: crate::persistence::PendingBatchIntentLifecyclePhase::TimedOut,
+        }
+    }
+
+    #[test]
+    fn orphan_collaborative_deduction_without_retain_is_dropped() {
+        let snapshot = snapshot_with(vec![sample_vtp_record(2, 0, 500_000, false, false)]);
+        let mut records = vec![PendingExitDeductionRecord {
+            kind: PendingExitKind::Collaborative,
+            vtxo_txid: None,
+            vout: None,
+            amount_sats: 50_000,
+            started_at: 1_700_000_000,
+            baseline_offchain_spendable_sats: Some(500_000),
+            retain_until_spendable_drops: false,
+        }];
+
+        reconcile_pending_exit_deductions(&mut records, &snapshot, 500_000).expect("reconcile");
+        assert!(records.is_empty());
+        assert_eq!(collaborative_exit_in_progress_sats(&[], &records), 0);
+    }
+
+    #[test]
+    fn collaborative_in_progress_uses_open_intent_amount() {
+        let intents = vec![sample_collaborative_intent(50_000)];
+        let deductions = vec![PendingExitDeductionRecord {
+            kind: PendingExitKind::Collaborative,
+            vtxo_txid: None,
+            vout: None,
+            amount_sats: 50_000,
+            started_at: 1,
+            baseline_offchain_spendable_sats: Some(500_000),
+            retain_until_spendable_drops: false,
+        }];
+        assert_eq!(
+            collaborative_exit_in_progress_sats(&intents, &deductions),
+            50_000
+        );
+    }
+
+    #[test]
+    fn collaborative_in_progress_uses_retain_deduction_without_intent() {
+        let deductions = vec![PendingExitDeductionRecord {
+            kind: PendingExitKind::Collaborative,
+            vtxo_txid: None,
+            vout: None,
+            amount_sats: 50_000,
+            started_at: 1,
+            baseline_offchain_spendable_sats: Some(500_000),
+            retain_until_spendable_drops: true,
+        }];
+        assert_eq!(
+            collaborative_exit_in_progress_sats(&[], &deductions),
+            50_000
+        );
+    }
+
+    #[test]
+    fn cancelled_legacy_collaborative_deduction_does_not_reduce_spendable() {
+        let deductions = vec![PendingExitDeductionRecord {
+            kind: PendingExitKind::Collaborative,
+            vtxo_txid: None,
+            vout: None,
+            amount_sats: 50_000,
+            started_at: 1,
+            baseline_offchain_spendable_sats: Some(500_000),
+            retain_until_spendable_drops: false,
+        }];
+        assert_eq!(collaborative_exit_in_progress_sats(&[], &deductions), 0);
     }
 }

@@ -17,10 +17,19 @@ export function ArkadeUnilateralExitInfomodeContent() {
       </InfomodeParagraph>
       <InfomodeParagraph>
         You pay miner fees from the bumper wallet below. Pick a VTXO, unroll, then complete to
-        your bc1 destination.
+        your bc1 destination. If you will not talk to this operator—because it is down or you do not
+        trust it—enable autonomous mode in Management so unilateral exit uses cached exit materials.
       </InfomodeParagraph>
       <InfomodeParagraph>
         <ArticleLink slug={ARKADE_LIBRARY_SLUGS.exits}>Exiting Arkade to on-chain</ArticleLink>
+        {' · '}
+        <ArticleLink slug={ARKADE_LIBRARY_SLUGS.unilateralExitRisks}>
+          Risks of unilateral exit
+        </ArticleLink>
+        {' · '}
+        <ArticleLink slug={ARKADE_LIBRARY_SLUGS.sharedLeafUnilateralExit}>
+          Shared leaf VTXOs
+        </ArticleLink>
       </InfomodeParagraph>
     </div>
   )

@@ -44,10 +44,10 @@ test.describe('Arkade signer migration regtest @arkade-signer-regtest', () => {
     await goToWalletTab(page, 'Dashboard')
     await triggerArkadeRailSync(page, 120_000)
 
-    await expect(page.getByTestId('arkade-pending-recovery-banner')).not.toBeVisible({
+    await expect(page.getByTestId('arkade-pending-recovery-due-to-expired-signer-banner')).not.toBeVisible({
       timeout: 30_000,
     })
-    await expect(page.getByTestId('arkade-balance-pending-recovery')).not.toBeVisible({
+    await expect(page.getByTestId('arkade-balance-pending-recovery-due-to-expired-signer')).not.toBeVisible({
       timeout: 30_000,
     })
 

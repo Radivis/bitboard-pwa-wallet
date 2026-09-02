@@ -5,23 +5,40 @@ const featureState = vi.hoisted(() => ({
   isMainnetAccessEnabled: false,
 }))
 
-const TEST_CONNECTION_ID = 'conn-load-test'
+const TEST_ACCOUNT_ID = 'conn-load-test'
 
 const workerMocks = vi.hoisted(() => ({
   openSession: vi.fn(),
   hasOpenSession: vi.fn(),
   closeSession: vi.fn(),
-  reconcileActiveConnectionId: vi.fn(),
+  reconcileActiveAccountId: vi.fn(),
   finalizePendingTransactions: vi.fn(),
   delegateSpendableVtxos: vi.fn(),
+  getUnilateralExitFrontendPersistence: vi.fn(async () => ({
+    job: {
+      selectedLeafOutpoints: [],
+      currentStepRelayedSinceUnix: null,
+      jobStartedAtUnix: null,
+    },
+    automationPrefs: {
+      enabled: false,
+      feePresetLabel: 'Medium',
+      maxFeeRateSatPerVb: 10,
+    },
+    lastFailure: null,
+  })),
+  setUnilateralExitFrontendPersistence: vi.fn(async () => {}),
+  setUnilateralExitJob: vi.fn(async () => {}),
+  setUnilateralExitAutomationPrefs: vi.fn(async () => {}),
+  setUnilateralExitFailure: vi.fn(async () => {}),
 }))
 
-const setActiveArkadeConnectionIdMock = vi.hoisted(() => vi.fn())
+const setActiveArkadeAccountIdMock = vi.hoisted(() => vi.fn())
 const setLastOperatorSyncTimeMock = vi.hoisted(() => vi.fn())
 const setArkadeSignerMigrationHintMock = vi.hoisted(() => vi.fn())
 const refreshArkadeStoreFromLoadedWasmMock = vi.hoisted(() => vi.fn())
-const findActiveArkadeConnectionSummaryMock = vi.hoisted(() => vi.fn())
-const ensureArkadeOperatorConnectionMock = vi.hoisted(() => vi.fn())
+const findActiveArkadeAccountSummaryMock = vi.hoisted(() => vi.fn())
+const ensureArkadeAccountMock = vi.hoisted(() => vi.fn())
 const orchestrateArkadePostLoadSyncMock = vi.hoisted(() => vi.fn())
 const closeArkadeSessionMock = vi.hoisted(() => vi.fn())
 const getArkadeWorkerIfExistsMock = vi.hoisted(() => vi.fn())
@@ -37,7 +54,7 @@ vi.mock('@/stores/featureStore', () => ({
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: {
     getState: () => ({
-      setActiveArkadeConnectionId: setActiveArkadeConnectionIdMock,
+      setActiveArkadeAccountId: setActiveArkadeAccountIdMock,
       setLastOperatorSyncTime: setLastOperatorSyncTimeMock,
       setArkadeSignerMigrationHint: setArkadeSignerMigrationHintMock,
     }),
@@ -58,6 +75,14 @@ vi.mock('@/db', () => ({
   })),
 }))
 
+vi.mock('@/db/storage-adapter', () => ({
+  sqliteStorage: {
+    getItem: vi.fn(async () => null),
+    setItem: vi.fn(async () => {}),
+    removeItem: vi.fn(async () => {}),
+  },
+}))
+
 vi.mock('@/workers/secrets-channel', () => ({
   ensureSecretsChannel: vi.fn().mockResolvedValue(undefined),
   ensureArkadeWorkerSecretsChannel: vi.fn().mockResolvedValue(undefined),
@@ -67,14 +92,14 @@ vi.mock('@/workers/arkade-persistence-channel', () => ({
   ensureArkadeEncryptedSecretsHost: vi.fn().mockResolvedValue(undefined),
 }))
 
-vi.mock('@/lib/arkade/arkade-operator-connections', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/arkade/arkade-operator-connections')>()
+vi.mock('@/lib/arkade/arkade-accounts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/arkade/arkade-accounts')>()
   return {
     ...actual,
-    findActiveArkadeConnectionSummary: (...args: unknown[]) =>
-      findActiveArkadeConnectionSummaryMock(...args),
-    ensureArkadeOperatorConnection: (...args: unknown[]) =>
-      ensureArkadeOperatorConnectionMock(...args),
+    findActiveArkadeAccountSummary: (...args: unknown[]) =>
+      findActiveArkadeAccountSummaryMock(...args),
+    ensureArkadeAccount: (...args: unknown[]) =>
+      ensureArkadeAccountMock(...args),
   }
 })
 
@@ -119,13 +144,13 @@ describe('arkade-load-lifecycle-orchestrator', () => {
     })
     workerMocks.hasOpenSession.mockResolvedValue(false)
     workerMocks.closeSession.mockResolvedValue(undefined)
-    workerMocks.reconcileActiveConnectionId.mockResolvedValue(undefined)
+    workerMocks.reconcileActiveAccountId.mockResolvedValue(undefined)
     workerMocks.finalizePendingTransactions.mockResolvedValue({ finalized: 0, pending: 0 })
     workerMocks.delegateSpendableVtxos.mockResolvedValue({ delegated: 0, failed: 0 })
     getArkadeWorkerIfExistsMock.mockReturnValue(null)
-    findActiveArkadeConnectionSummaryMock.mockResolvedValue(undefined)
-    ensureArkadeOperatorConnectionMock.mockResolvedValue({
-      id: TEST_CONNECTION_ID,
+    findActiveArkadeAccountSummaryMock.mockResolvedValue(undefined)
+    ensureArkadeAccountMock.mockResolvedValue({
+      id: TEST_ACCOUNT_ID,
       label: 'signet',
       networkMode: 'signet',
       operatorUrl: 'https://asp.example',
@@ -152,7 +177,7 @@ describe('arkade-load-lifecycle-orchestrator', () => {
     refreshArkadeStoreFromLoadedWasmMock.mockImplementation(async () => {
       callOrder.push('refresh')
     })
-    setActiveArkadeConnectionIdMock.mockImplementation(() => {
+    setActiveArkadeAccountIdMock.mockImplementation(() => {
       callOrder.push('setActive')
     })
 
@@ -165,14 +190,14 @@ describe('arkade-load-lifecycle-orchestrator', () => {
       expect.objectContaining({
         walletId: 1,
         networkMode: 'signet',
-        connectionId: TEST_CONNECTION_ID,
+        arkadeAccountId: TEST_ACCOUNT_ID,
       }),
     )
   })
 
-  it('setActiveArkadeConnectionId at loaded before post-load sync', async () => {
+  it('setActiveArkadeAccountId at loaded before post-load sync', async () => {
     const order: string[] = []
-    setActiveArkadeConnectionIdMock.mockImplementation(() => order.push('setActive'))
+    setActiveArkadeAccountIdMock.mockImplementation(() => order.push('setActive'))
     orchestrateArkadePostLoadSyncMock.mockImplementation(async () => {
       order.push('postLoadSync')
     })

@@ -1,13 +1,22 @@
 use ark_client::DEFAULT_GAP_LIMIT;
+use ark_core::VtxoList;
 use ark_core::server::VirtualTxOutPoint;
 
 use crate::api_types::OperatorSyncResultDto;
-use crate::error::ArkResult;
+use crate::error::{ArkResult, ArkWasmError};
 use crate::exit_balance::reconcile_pending_exit_deductions;
-use crate::offchain_snapshot::snapshot_from_virtual_tx_outpoints_with_script_lookup;
+use crate::offchain_snapshot::{
+    merge_sticky_spent_flags, merge_sticky_unrolled_flags,
+    snapshot_from_virtual_tx_outpoints_with_script_lookup,
+};
 
 use super::ArkSession;
 use super::mappers::{current_unix_timestamp, warn_offchain_key_discovery_failed};
+use super::unilateral_exit::onchain::reconcile_intermediate_ark_virtual_txs_unrolled_on_esplora;
+use super::unilateral_exit::watch_reconcile::{
+    merge_exiting_vtxo_sync_warnings, reconcile_exiting_vtxo_watches,
+    reconcile_exiting_vtxos_spent_on_esplora,
+};
 
 /// User-facing warning when [`ark_client::Client::discover_keys`] fails during operator sync.
 pub(crate) fn operator_sync_key_discovery_warning(error: &ark_client::Error) -> String {
@@ -16,22 +25,133 @@ pub(crate) fn operator_sync_key_discovery_warning(error: &ark_client::Error) -> 
     )
 }
 
+/// Mirrors frontend `mergeArkadeSyncWarningMessages` (contract tested here).
+#[allow(dead_code)]
+pub(crate) fn combine_operator_sync_warning_messages(
+    key_discovery_warning: Option<String>,
+    exiting_vtxo_warning: Option<String>,
+) -> Option<String> {
+    let mut parts = Vec::new();
+    if let Some(warning) = key_discovery_warning {
+        parts.push(warning);
+    }
+    if let Some(warning) = exiting_vtxo_warning {
+        parts.push(warning);
+    }
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join("\n"))
+    }
+}
+
 impl ArkSession {
     pub async fn sync_with_operator(&self) -> ArkResult<OperatorSyncResultDto> {
+        let (_, sync_result) = self.sync_with_operator_and_vtxo_list().await?;
+        Ok(sync_result)
+    }
+
+    /// Like [`sync_with_operator`], but also returns the operator `list_vtxos` result from the
+    /// same fetch (avoids a duplicate round-trip when callers need raw operator flags).
+    pub(crate) async fn sync_with_operator_and_vtxo_list(
+        &self,
+    ) -> ArkResult<(VtxoList, OperatorSyncResultDto)> {
+        self.ensure_operator_rpc_allowed()?;
+        self.client
+            .refresh_server_info()
+            .await
+            .map_err(ArkWasmError::Client)?;
+        let server_info = self.client.server_info()?;
+        let new_digest = server_info.digest.clone();
+
+        if self.should_block_sync_persist_for_operator_trust(&new_digest) {
+            return self
+                .sync_with_operator_trust_pending_staging(&server_info)
+                .await;
+        }
+
         let key_discovery_warning = self.sync_offchain_keys().await;
         let (vtxo_list, script_map) = self.client.list_vtxos().await?;
+        let prior_snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot.clone();
         let all_points: Vec<VirtualTxOutPoint> = vtxo_list.all().cloned().collect();
-        let snapshot = snapshot_from_virtual_tx_outpoints_with_script_lookup(
-            self.client.server_info()?.dust.to_sat(),
+        let mut snapshot = snapshot_from_virtual_tx_outpoints_with_script_lookup(
+            server_info.dust.to_sat(),
             current_unix_timestamp(),
             all_points,
             |script| script_map.get(script).map(|vtxo| vtxo.server_pk()),
         );
+        let pending_unilateral_outpoints: Vec<(String, u32)> = self
+            .wallet_db
+            .pending_exit_deductions()
+            .iter()
+            .filter_map(|record| {
+                if record.kind != crate::persistence::PendingExitKind::Unilateral {
+                    return None;
+                }
+                Some((record.vtxo_txid.clone()?, record.vout?))
+            })
+            .collect();
+        crate::unilateral_exit_materials::reinject_pending_unilateral_exit_records(
+            prior_snapshot.as_ref(),
+            &mut snapshot,
+            pending_unilateral_outpoints,
+        );
+        crate::unilateral_exit_materials::merge_unilateral_exit_materials_maps(
+            prior_snapshot.as_ref(),
+            &mut snapshot,
+        );
+        merge_sticky_unrolled_flags(prior_snapshot.as_ref(), &mut snapshot);
+        merge_sticky_spent_flags(prior_snapshot.as_ref(), &mut snapshot);
+        let reconcile =
+            reconcile_exiting_vtxo_watches(self, snapshot, prior_snapshot.as_ref()).await?;
+        snapshot = reconcile.snapshot;
+        reconcile_intermediate_ark_virtual_txs_unrolled_on_esplora(
+            self.client.blockchain(),
+            &mut snapshot,
+        )
+        .await?;
+        let esplora_healed_outpoints =
+            reconcile_exiting_vtxos_spent_on_esplora(self, &mut snapshot).await?;
+        let materials_warning =
+            super::unilateral_exit::materials_prefetch::prefetch_unilateral_exit_materials_for_snapshot(
+                self,
+                &mut snapshot,
+                &vtxo_list,
+            )
+            .await;
         self.wallet_db.set_offchain_vtxo_snapshot(snapshot.clone());
+        self.wallet_db
+            .set_unilateral_exit_watches(reconcile.watches.clone());
+        if !esplora_healed_outpoints.is_empty() {
+            self.clear_pending_unilateral_exits_for_outpoints(&esplora_healed_outpoints);
+        }
         self.reconcile_pending_exit_deductions_with_snapshot(&snapshot)?;
-        Ok(OperatorSyncResultDto {
-            key_discovery_warning,
-        })
+        self.reconcile_pending_batch_intents().await?;
+        self.persist_cached_operator_info_from_client()?;
+        let sync_result = OperatorSyncResultDto {
+            key_discovery_warning: combine_operator_sync_warning_messages(
+                key_discovery_warning,
+                merge_exiting_vtxo_sync_warnings(reconcile.warnings),
+            )
+            .or(materials_warning),
+            exiting_vtxo_warning: None,
+            operator_config_trust_pending: false,
+        };
+        Ok((vtxo_list, sync_result))
+    }
+
+    async fn sync_with_operator_trust_pending_staging(
+        &self,
+        server_info: &ark_core::server::Info,
+    ) -> ArkResult<(VtxoList, OperatorSyncResultDto)> {
+        self.stage_operator_trust_from_server_info(server_info);
+        let sync_result = OperatorSyncResultDto {
+            key_discovery_warning: None,
+            exiting_vtxo_warning: None,
+            operator_config_trust_pending: true,
+        };
+        let empty_vtxo_list = VtxoList::new(server_info.dust, Vec::new());
+        Ok((empty_vtxo_list, sync_result))
     }
 
     pub(crate) fn reconcile_pending_exit_deductions_with_snapshot(
@@ -59,7 +179,7 @@ impl ArkSession {
 
 #[cfg(test)]
 mod tests {
-    use super::operator_sync_key_discovery_warning;
+    use super::{combine_operator_sync_warning_messages, operator_sync_key_discovery_warning};
 
     #[test]
     fn operator_sync_key_discovery_warning_includes_error_detail() {
@@ -68,5 +188,19 @@ mod tests {
         assert!(warning.contains("indexer timeout"));
         assert!(warning.contains("Offchain receive keys could not be refreshed"));
         assert!(warning.contains("Balance may be incomplete"));
+    }
+
+    #[test]
+    fn combine_operator_sync_warning_messages_joins_both_sources() {
+        let combined = combine_operator_sync_warning_messages(
+            Some("key warning".to_string()),
+            Some("exit warning".to_string()),
+        );
+        assert_eq!(combined.as_deref(), Some("key warning\nexit warning"));
+    }
+
+    #[test]
+    fn combine_operator_sync_warning_messages_returns_none_when_empty() {
+        assert!(combine_operator_sync_warning_messages(None, None).is_none());
     }
 }

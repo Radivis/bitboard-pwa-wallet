@@ -34,6 +34,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 ```json
 {
   "rewrites": [
+    { "source": "/api/arkade/operator/:path*", "destination": "/api/arkade/operator/[...path]" },
     { "source": "/api/esplora/:path*", "destination": "/api/esplora/[...path]" },
     { "source": "/api/faucet/:path*", "destination": "/api/faucet/[...path]" },
     { "source": "/api/lnurl/:path*", "destination": "/api/lnurl/[...path]" },
@@ -90,18 +91,32 @@ const HEADERS_TO_DROP = new Set([
 ])
 ```
 
-### 6. Use Buffered Responses, Not Streaming
+### 6. Use Buffered Responses, Not Streaming (with one exception)
 
-**Problem**: Streaming response bodies can cause issues with WASM fetch clients.
+**Problem**: Streaming response bodies can cause issues with WASM fetch clients on **unary** proxy paths.
 
-**Solution**: Buffer the entire response before sending:
+**Solution**: Buffer the entire response before sending for Esplora, faucet, fiat-rates, LNURL, and **unary** Ark operator calls:
 
 ```typescript
 const body = await upstream.arrayBuffer()
 res.status(upstream.status).send(Buffer.from(body))
 ```
 
-### 7. LNURL proxy (`/api/lnurl/fetch`)
+**Exception — Ark operator SSE:** `GET` requests with `Accept: text/event-stream` on batch events, script subscription streams, or `v1/txs` must **not** use `arrayBuffer()` — the upstream connection is infinite. [`frontend/api/arkade/operator/[...path].ts`](../frontend/api/arkade/operator/[...path].ts) branches to a `ReadableStream` passthrough loop (`upstream.body.getReader()` → `res.write`). Detection logic lives in [`frontend/src/lib/arkade/arkade-operator-sse-proxy.ts`](../frontend/src/lib/arkade/arkade-operator-sse-proxy.ts) and is **inlined** into the handler (same as other proxies). Handler `maxDuration` is **300s** for long batch rounds.
+
+### 7. Ark operator proxy SSE streaming
+
+| Concern | Unary path | SSE path |
+|---------|------------|----------|
+| Detection | Default | `isOperatorServerSentEventsRequest` (GET + `text/event-stream` + known path) |
+| Upstream timeout | 9s | ~295s (below `maxDuration`) |
+| Response body | `arrayBuffer()` | Stream chunks until upstream closes |
+| Client disconnect | N/A | `reader.cancel()` + `AbortController` |
+| Headers | Forward safe upstream headers | Force `Cache-Control: no-cache, no-transform`, `X-Accel-Buffering: no` |
+
+Platform `FUNCTION_INVOCATION_FAILED` on `/v1/batch/events` before Step 2 was caused by buffering an infinite SSE body; Step 1 error enrichment remains useful for operator 4xx/5xx on unary calls.
+
+### 8. LNURL proxy (`/api/lnurl/fetch`)
 
 LNURL-pay uses `GET /api/lnurl/fetch?url=<https://…>` when a direct browser fetch to the LNURL host fails (CORS/network). The handler in `frontend/api/lnurl/[...path].ts` inlines SSRF validation (HTTPS-only, block private IPs and localhost) — keep it in sync with `frontend/src/lib/lightning/lnurl-proxy-upstream-url.ts`. Upstream redirects are rejected (`redirect: 'manual'`).
 
@@ -110,11 +125,13 @@ LNURL-pay uses `GET /api/lnurl/fetch?url=<https://…>` when a direct browser fe
 ```json
 {
   "functions": {
+    "api/arkade/operator/[...path].ts": { "maxDuration": 300 },
     "api/**/*.ts": {
       "includeFiles": "src/lib/**"
     }
   },
   "rewrites": [
+    { "source": "/api/arkade/operator/:path*", "destination": "/api/arkade/operator/[...path]" },
     { "source": "/api/esplora/:path*", "destination": "/api/esplora/[...path]" },
     { "source": "/api/faucet/:path*", "destination": "/api/faucet/[...path]" },
     { "source": "/api/lnurl/:path*", "destination": "/api/lnurl/[...path]" },

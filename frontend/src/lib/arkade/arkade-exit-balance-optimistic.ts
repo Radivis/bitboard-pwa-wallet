@@ -5,7 +5,7 @@
  * (Unilateral vs collaborative exit balance timing).
  *
  * - **Unilateral:** only bump `unilateralExitInProgressSats`. After unroll, WASM excludes the
- *   VTXO from gross spendable via the spent bucket; subtracting here would double-count.
+ *   VTXO from gross spendable via the exiting sub-bucket; subtracting here would double-count.
  * - **Collaborative:** also reduce net spendable fields; snapshot still lists exiting VTXOs as
  *   spendable until operator sync.
  */
@@ -53,11 +53,11 @@ export function applyOptimisticExitBalanceDeduction(
   queryClient: QueryClient,
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,
-  connectionId: string,
+  arkadeAccountId: string,
   deductedSats: number,
   exitField: ExitBalanceOptimisticContext['exitField'],
 ): ExitBalanceOptimisticContext {
-  const balanceKey = arkadeBalanceQueryKey(walletId, networkMode, connectionId)
+  const balanceKey = arkadeBalanceQueryKey(walletId, networkMode, arkadeAccountId)
   const previousBalance = queryClient.getQueryData<ArkadeBalanceInfo>(balanceKey)
 
   if (previousBalance != null && deductedSats > 0) {

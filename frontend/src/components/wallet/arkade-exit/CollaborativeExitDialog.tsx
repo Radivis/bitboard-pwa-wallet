@@ -1,4 +1,5 @@
 import { Loader2 } from 'lucide-react'
+import { useEffect } from 'react'
 import { ArkadeCollaborativeExitInfomodeContent } from '@/components/arkade/infomode/ArkadeCollaborativeExitInfomodeContent'
 import { ArkadeExitOperatorFeesInfomodeContent } from '@/components/arkade/infomode/ArkadeExitOperatorFeesInfomodeContent'
 import { AppModal } from '@/components/AppModal'
@@ -12,7 +13,7 @@ import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import { formatIntentFeePrograms } from '@/lib/arkade/arkade-exit-utils'
 import {
   arkadeCooperativeExitSpendableSats,
-  arkadeHasPendingRecoveryBalance,
+  arkadeHasPendingRecoveryDueToExpiredSignerBalance,
   formatCollaborativeExitEstimateError,
 } from '@/lib/arkade/arkade-cooperative-exit'
 import type { useArkadeExitFlow } from '@/hooks/useArkadeExitFlow'
@@ -37,10 +38,18 @@ export function CollaborativeExitDialog({ exitFlow }: CollaborativeExitDialogPro
     collabAmountError,
     collaborativeFeeQuery,
     collaborativeExitMutation,
+    collaborativeExitSubmitPhase,
+    hasProcessingCollaborativeExit,
     canCollaborativeExit,
     collaborativeExitBlockedByRotation,
     handleCollaborativeExit,
   } = exitFlow
+
+  useEffect(() => {
+    if (hasProcessingCollaborativeExit) {
+      setCollaborativeOpen(false)
+    }
+  }, [hasProcessingCollaborativeExit, setCollaborativeOpen])
 
   return (
     <AppModal
@@ -64,10 +73,17 @@ export function CollaborativeExitDialog({ exitFlow }: CollaborativeExitDialogPro
           </Button>
           <Button
             type="button"
-            disabled={!canCollaborativeExit}
+            disabled={!canCollaborativeExit || collaborativeExitMutation.isPending}
             onClick={handleCollaborativeExit}
           >
-            {collaborativeExitMutation.isPending ? 'Exiting…' : 'Confirm exit'}
+            {collaborativeExitSubmitPhase ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                Exiting…
+              </>
+            ) : (
+              'Confirm exit'
+            )}
           </Button>
         </>
       )}
@@ -133,11 +149,11 @@ export function CollaborativeExitDialog({ exitFlow }: CollaborativeExitDialogPro
                   size="sm"
                 />
               </p>
-              {arkadeHasPendingRecoveryBalance(balanceQuery.data) && (
-                <p data-testid="arkade-collab-exit-pending-recovery">
+              {arkadeHasPendingRecoveryDueToExpiredSignerBalance(balanceQuery.data) && (
+                <p data-testid="arkade-collab-exit-pending-recovery-due-to-expired-signer">
                   Pending recovery (unilateral exit only):{' '}
                   <BitcoinAmountDisplay
-                    amountSats={balanceQuery.data.pendingRecoverySats ?? 0}
+                    amountSats={balanceQuery.data.pendingRecoveryDueToExpiredSignerSats ?? 0}
                     size="sm"
                   />
                 </p>
@@ -171,6 +187,7 @@ export function CollaborativeExitDialog({ exitFlow }: CollaborativeExitDialogPro
               </InfomodeWrapper>
             </p>
             <p className="text-muted-foreground">
+              {/* txFeeRate is operator metadata only; estimates below come from CEL intent fees. */}
               Settlement fee rate: {collaborativeFeeQuery.data.txFeeRate} · Intent fees:{' '}
               {formatIntentFeePrograms(collaborativeFeeQuery.data.intentFeeConfigured)}
             </p>

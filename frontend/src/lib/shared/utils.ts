@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { enrichArkadeOperatorErrorMessage } from '@/lib/arkade/arkade-operator-error-enrichment'
 import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
 import { wasmArkErrorMessage } from '@/lib/shared/wasm-ark-error'
 import { wasmCryptoErrorMessage } from '@/lib/shared/wasm-crypto-error'
@@ -19,7 +20,9 @@ export function errorMessage(err: unknown): string {
 
 /** Safe toast/banner text: structured WASM message plus URL/path stripping and length cap. */
 export function userFacingErrorMessage(err: unknown): string {
-  return sanitizeErrorMessageForUi(errorMessage(err))
+  const raw = errorMessage(err)
+  const enriched = enrichArkadeOperatorErrorMessage(raw)
+  return sanitizeErrorMessageForUi(enriched)
 }
 
 /** Like {@link userFacingErrorMessage} but supplies a default when sanitization yields empty. */

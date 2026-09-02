@@ -1,0 +1,45 @@
+---
+description: Unilateral exit lifecycle is owned by the XState actor in unilateral-exit/
+globs:
+  - frontend/src/lib/wallet/lifecycle/unilateral-exit/**
+  - frontend/src/pages/wallet/UnilateralExitControlPage.tsx
+  - frontend/src/hooks/useUnilateralExit*.ts
+---
+
+# Unilateral exit XState ownership
+
+The unilateral exit job lifecycle is coordinated by **one** XState v5 actor (`unilateral-exit.machine.ts`). Do not reintroduce hand-rolled orchestrators, `setTimeout` schedulers, or duplicate state outside the machine.
+
+## Where code belongs
+
+| Concern | File |
+|--------|------|
+| States, guards, transitions | `unilateral-exit.machine.ts` |
+| WASM / TanStack side effects (`fromPromise` actors) | `unilateral-exit.actors.ts` |
+| React Query cache writes / invalidation | `unilateral-exit-query-cache.ts` |
+| Module singleton, public send/subscribe API | `unilateral-exit-runtime.ts` |
+| Snapshot → UI/lifecycle/automation views | `unilateral-exit-selectors.ts` |
+
+## Rules
+
+1. **Transitions only in the machine** — UI and hooks send events via `unilateral-exit-runtime.ts`; they do not mutate job phase directly.
+2. **WASM only in actors** — React components and hooks must not call `getArkadeWorker()` for proceed/progress during an active job.
+3. **No external schedulers** — automation polling uses machine `after` delays. `POLL_TICK` is the test/manual equivalent of those `after` delays. Production settle uses XState `waitFor`, not a `setTimeout` poll loop.
+4. **Authoritative progress** — during an active job, `actor.context.progress` wins; React Query is display cache only.
+5. **Single automation flag** — `context.automationEnabled` is the only job-level manual/automatic switch; prefs changes flow through `AUTOMATION_PREFS_CHANGED`.
+6. **Typed snapshots** — selectors/runtime use `UnilateralExitActorSnapshot` + `UNILATERAL_EXIT_MACHINE_STATE`; do not call untyped `snapshot.matches()` outside tests.
+7. **Machine state is authoritative for UI** — selectors map `snapshot.value` to display; they never re-run completion guards or override `complete` / in-flight states from raw progress DTOs.
+8. **`assign` is pure** — persistence and query invalidation are separate fire-and-forget actions, never inside `assign`.
+
+## Public API
+
+Call sites import from `unilateral-exit-runtime.ts` (lifecycle sends, configure/hydrate, automation prefs helpers). Hooks subscribe via `useSyncExternalStore` + selectors.
+
+## Invariants (PR #58)
+
+- Always enter `checkingProgress` before `proceeding` on hydrate, reload, automation tick, and manual start.
+- Resolve outpoints via `resolveUnilateralExitJobOutpoints`; never skip when lifecycle outpoints are empty but persistence has them.
+- Branch complete → `complete` state, clear persisted job, invalidate queries.
+- **`waitingConfirm` requires relay** — enter `ensuringBroadcast` first; only transition to `waitingConfirm` when `isCurrentStepRelayed()` is true (WASM `currentStepTxRelayed`, or `currentStepWaitingSince` after proceed on regtest where `/raw` stays 404 in mempool). Use helpers in `unilateral-exit-broadcast.ts`.
+- **`waitingForParentData` is only for `package-not-child-with-unconfirmed-parents`** — do not reuse `waitingConfirm` / pickaxe. After `parentDataWait` (15s) or `POLL_TICK` / `PROCEED_MANUAL`, return to `ensuringBroadcast`.
+- **ASP interference → `terminated`** — every `checkingProgress` entry runs `evaluateJobViabilityActor` before `fetchProgress`; `aspSweptTargets` / `branchFundingLost` persist failure, clear job, invalidate topology queries — never `complete`.

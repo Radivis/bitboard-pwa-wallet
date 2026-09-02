@@ -1,8 +1,12 @@
 use crate::persistence::{
-    BITBOARD_ARK_PERSISTENCE_VERSION, BitboardArkPersistence, JsonPersistenceDb, OperatorIdentity,
-    OperatorSignerMigrationHint, PendingExitDeductionRecord, PendingExitKind, network_label,
-    operator_identity_for_connected_signer, persisted_operator_identity_for_open,
-    validate_operator_identity,
+    BITBOARD_ARK_PERSISTENCE_VERSION, BitboardArkPersistence, JsonPersistenceDb,
+    MIN_SUPPORTED_ARK_PERSISTENCE_IMPORT_VERSION, OperatorIdentity, OperatorSignerMigrationHint,
+    PendingBatchIntentKind, PendingBatchIntentLifecyclePhase, PendingBatchIntentRecord,
+    PendingBatchOutpointRecord, PendingExitDeductionRecord, PendingExitKind,
+    UnilateralExitAutomationPrefsRecord, UnilateralExitFailureRecord,
+    UnilateralExitFrontendPersistence, UnilateralExitJobRecord, UnilateralExitLeafOutpointRecord,
+    network_label, operator_identity_for_connected_signer, pending_batch_record_overlaps_outpoints,
+    persisted_operator_identity_for_open, validate_operator_identity,
 };
 use ark_core::server::{DeprecatedSigner, Info};
 use bitcoin::address::NetworkUnchecked;
@@ -191,6 +195,7 @@ fn persistence_round_trip_json() {
     let json = serde_json::to_string(&envelope).expect("serialize");
     let parsed = BitboardArkPersistence::parse_import(Some(&json));
     assert_eq!(parsed.operator_identity.as_ref(), Some(&identity));
+    assert!(!parsed.autonomous_mode);
 }
 
 #[test]
@@ -207,6 +212,8 @@ fn persistence_export_version_is_current() {
     };
     let envelope = BitboardArkPersistence::empty(identity);
     assert_eq!(envelope.version, BITBOARD_ARK_PERSISTENCE_VERSION);
+    let json = serde_json::to_value(&envelope).expect("serialize");
+    assert!(json.get("swap_storage").is_none());
 }
 
 #[test]
@@ -244,10 +251,274 @@ fn persistence_import_export_preserves_offchain_next_derivation_index() {
 }
 
 #[test]
+fn persistence_round_trips_pending_batch_intent() {
+    use crate::persistence::{
+        PendingBatchIntentKind, PendingBatchIntentRecord, PendingBatchOutpointRecord,
+    };
+
+    let identity = OperatorIdentity {
+        signer_pk_hex: "02abc".to_string(),
+        network: network_label(Network::Signet),
+    };
+    let mut envelope = BitboardArkPersistence::empty(identity);
+    envelope.wallet_db.pending_batch_intents = vec![PendingBatchIntentRecord {
+        kind: PendingBatchIntentKind::Board,
+        intent_id: Some("intent-abc".to_string()),
+        onchain_outpoints: vec![PendingBatchOutpointRecord {
+            txid: "aa".repeat(32),
+            vout: 1,
+        }],
+        vtxo_outpoints: Vec::new(),
+        amount_sats: 50_000,
+        registered_at: 1_700_000_000,
+        destination_address: Some("tb1qexit".to_string()),
+        lifecycle_phase: crate::persistence::PendingBatchIntentLifecyclePhase::TimedOut,
+    }];
+
+    let json = serde_json::to_string(&envelope).expect("serialize");
+    let parsed = BitboardArkPersistence::parse_import(Some(&json));
+    assert_eq!(parsed.wallet_db.pending_batch_intents.len(), 1);
+    assert_eq!(
+        parsed.wallet_db.pending_batch_intents[0]
+            .intent_id
+            .as_deref(),
+        Some("intent-abc")
+    );
+    assert_eq!(
+        parsed.wallet_db.pending_batch_intents[0].onchain_outpoints[0].vout,
+        1
+    );
+    assert_eq!(
+        parsed.wallet_db.pending_batch_intents[0]
+            .destination_address
+            .as_deref(),
+        Some("tb1qexit")
+    );
+    assert_eq!(
+        parsed.wallet_db.pending_batch_intents[0].lifecycle_phase,
+        crate::persistence::PendingBatchIntentLifecyclePhase::TimedOut
+    );
+}
+
+#[test]
+fn missing_lifecycle_phase_deserializes_as_timed_out() {
+    let identity = OperatorIdentity {
+        signer_pk_hex: "02abc".to_string(),
+        network: network_label(Network::Signet),
+    };
+    let envelope = BitboardArkPersistence::empty(identity);
+    let json = serde_json::to_string(&envelope).expect("serialize");
+    let mut value: serde_json::Value = serde_json::from_str(&json).expect("parse envelope json");
+    value["wallet_db"]["pending_batch_intents"] = serde_json::json!([{
+        "kind": "board",
+        "intent_id": "legacy",
+        "onchain_outpoints": [],
+        "vtxo_outpoints": [],
+        "amount_sats": 1,
+        "registered_at": 1
+    }]);
+    let parsed: BitboardArkPersistence =
+        serde_json::from_value(value).expect("deserialize without lifecycle_phase");
+    assert_eq!(
+        parsed.wallet_db.pending_batch_intents[0].lifecycle_phase,
+        crate::persistence::PendingBatchIntentLifecyclePhase::TimedOut
+    );
+}
+
+#[test]
+fn destination_address_round_trips_on_pending_batch_intent() {
+    use crate::persistence::{
+        PendingBatchIntentKind, PendingBatchIntentRecord, PendingBatchOutpointRecord,
+    };
+
+    let identity = OperatorIdentity {
+        signer_pk_hex: "02abc".to_string(),
+        network: network_label(Network::Signet),
+    };
+    let mut envelope = BitboardArkPersistence::empty(identity);
+    envelope.wallet_db.pending_batch_intents = vec![PendingBatchIntentRecord {
+        kind: PendingBatchIntentKind::CollaborativeExit,
+        intent_id: Some("intent-exit".to_string()),
+        onchain_outpoints: Vec::new(),
+        vtxo_outpoints: vec![PendingBatchOutpointRecord {
+            txid: "bb".repeat(32),
+            vout: 0,
+        }],
+        amount_sats: 12_000,
+        registered_at: 2,
+        destination_address: Some("tb1qcollab".to_string()),
+        lifecycle_phase: crate::persistence::PendingBatchIntentLifecyclePhase::TimedOut,
+    }];
+    let json = serde_json::to_string(&envelope).expect("serialize");
+    let parsed = BitboardArkPersistence::parse_import(Some(&json));
+    assert_eq!(
+        parsed.wallet_db.pending_batch_intents[0]
+            .destination_address
+            .as_deref(),
+        Some("tb1qcollab")
+    );
+}
+
+fn sample_pending_record(
+    kind: PendingBatchIntentKind,
+    intent_id: &str,
+    onchain_vout: Option<u32>,
+    vtxo_vout: Option<u32>,
+) -> PendingBatchIntentRecord {
+    PendingBatchIntentRecord {
+        kind,
+        intent_id: Some(intent_id.to_string()),
+        onchain_outpoints: onchain_vout
+            .map(|vout| PendingBatchOutpointRecord {
+                txid: "aa".repeat(32),
+                vout,
+            })
+            .into_iter()
+            .collect(),
+        vtxo_outpoints: vtxo_vout
+            .map(|vout| PendingBatchOutpointRecord {
+                txid: "bb".repeat(32),
+                vout,
+            })
+            .into_iter()
+            .collect(),
+        amount_sats: 1,
+        registered_at: 1,
+        destination_address: None,
+        lifecycle_phase: crate::persistence::PendingBatchIntentLifecyclePhase::TimedOut,
+    }
+}
+
+#[test]
+fn upsert_pending_batch_intent_keeps_disjoint_records() {
+    let db = JsonPersistenceDb::default();
+    db.upsert_pending_batch_intent(sample_pending_record(
+        PendingBatchIntentKind::Board,
+        "board",
+        Some(1),
+        None,
+    ));
+    db.upsert_pending_batch_intent(sample_pending_record(
+        PendingBatchIntentKind::Recover,
+        "recover",
+        None,
+        Some(0),
+    ));
+    let pending = db.pending_batch_intents();
+    assert_eq!(pending.len(), 2);
+    assert!(
+        pending
+            .iter()
+            .any(|record| record.intent_id.as_deref() == Some("board"))
+    );
+    assert!(
+        pending
+            .iter()
+            .any(|record| record.intent_id.as_deref() == Some("recover"))
+    );
+}
+
+#[test]
+fn upsert_pending_batch_intent_replaces_overlapping_record() {
+    let db = JsonPersistenceDb::default();
+    db.upsert_pending_batch_intent(sample_pending_record(
+        PendingBatchIntentKind::Board,
+        "first",
+        Some(1),
+        None,
+    ));
+    db.upsert_pending_batch_intent(sample_pending_record(
+        PendingBatchIntentKind::Board,
+        "second",
+        Some(1),
+        None,
+    ));
+    let pending = db.pending_batch_intents();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].intent_id.as_deref(), Some("second"));
+}
+
+#[test]
+fn overlapping_pending_blocks_only_shared_outpoints() {
+    let board = sample_pending_record(PendingBatchIntentKind::Board, "board", Some(1), None);
+    let recover_outpoint = PendingBatchOutpointRecord {
+        txid: "bb".repeat(32),
+        vout: 0,
+    };
+    assert!(!pending_batch_record_overlaps_outpoints(
+        &board,
+        &[],
+        &[recover_outpoint],
+    ));
+    assert!(pending_batch_record_overlaps_outpoints(
+        &board,
+        &[PendingBatchOutpointRecord {
+            txid: "aa".repeat(32),
+            vout: 1,
+        }],
+        &[],
+    ));
+}
+
+#[test]
+fn promote_stranded_processing_intents_stamps_timed_out() {
+    let db = JsonPersistenceDb::default();
+    let mut record = sample_pending_record(PendingBatchIntentKind::Board, "board", Some(1), None);
+    record.lifecycle_phase = PendingBatchIntentLifecyclePhase::Processing;
+    db.upsert_pending_batch_intent(record);
+    assert!(db.promote_stranded_processing_intents());
+    assert_eq!(
+        db.pending_batch_intents()[0].lifecycle_phase,
+        PendingBatchIntentLifecyclePhase::TimedOut
+    );
+    assert!(!db.promote_stranded_processing_intents());
+}
+
+#[test]
+fn remove_overlapping_pending_batch_intents_leaves_disjoint() {
+    let db = JsonPersistenceDb::default();
+    db.upsert_pending_batch_intent(sample_pending_record(
+        PendingBatchIntentKind::Board,
+        "board",
+        Some(1),
+        None,
+    ));
+    db.upsert_pending_batch_intent(sample_pending_record(
+        PendingBatchIntentKind::Recover,
+        "recover",
+        None,
+        Some(0),
+    ));
+    db.remove_pending_batch_intents_overlapping(
+        &[PendingBatchOutpointRecord {
+            txid: "aa".repeat(32),
+            vout: 1,
+        }],
+        &[],
+    );
+    let pending = db.pending_batch_intents();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].intent_id.as_deref(), Some("recover"));
+}
+
+#[test]
 fn pending_exit_kind_deserializes_from_lowercase_strings() {
     let json = r#""collaborative""#;
     let kind: PendingExitKind = serde_json::from_str(json).expect("deserialize");
     assert_eq!(kind, PendingExitKind::Collaborative);
+}
+
+#[test]
+fn collaborative_exit_deduction_missing_retain_flag_deserializes_as_false() {
+    let json = r#"{
+        "kind": "collaborative",
+        "amount_sats": 50000,
+        "started_at": 1,
+        "baseline_offchain_spendable_sats": 500000
+    }"#;
+    let record: PendingExitDeductionRecord = serde_json::from_str(json).expect("deserialize");
+    assert!(!record.retain_until_spendable_drops);
+    assert_eq!(record.amount_sats, 50_000);
 }
 
 #[test]
@@ -262,6 +533,7 @@ fn upsert_pending_unilateral_replaces_same_outpoint() {
         amount_sats: 100_000,
         started_at: 1,
         baseline_offchain_spendable_sats: None,
+        retain_until_spendable_drops: false,
     });
     db.upsert_pending_exit_deduction(PendingExitDeductionRecord {
         kind: PendingExitKind::Unilateral,
@@ -270,12 +542,254 @@ fn upsert_pending_unilateral_replaces_same_outpoint() {
         amount_sats: 180_603,
         started_at: 2,
         baseline_offchain_spendable_sats: None,
+        retain_until_spendable_drops: false,
     });
 
     let pending = db.pending_exit_deductions();
     assert_eq!(pending.len(), 1);
     assert_eq!(pending[0].amount_sats, 180_603);
     assert_eq!(pending[0].started_at, 2);
+}
+
+#[test]
+fn ensure_unilateral_exit_step_wait_preserves_started_at_for_same_step() {
+    let db = JsonPersistenceDb::default();
+    let step_txid = "bb".repeat(32);
+
+    let first_started_at = db.ensure_unilateral_exit_step_wait(&step_txid, 2);
+    let second_started_at = db.ensure_unilateral_exit_step_wait(&step_txid, 2);
+    assert_eq!(first_started_at, second_started_at);
+
+    let new_step_txid = "cc".repeat(32);
+    let restarted_at = db.ensure_unilateral_exit_step_wait(&new_step_txid, 3);
+    assert!(restarted_at >= first_started_at);
+
+    db.clear_unilateral_exit_step_wait();
+    assert!(db.unilateral_exit_step_wait().is_none());
+}
+
+#[test]
+fn persistence_round_trips_trust_fields() {
+    let identity = OperatorIdentity {
+        signer_pk_hex: "02abc".to_string(),
+        network: network_label(Network::Signet),
+    };
+    let mut envelope = BitboardArkPersistence::empty(identity);
+    envelope.wallet_db.operator_trust_pending = true;
+    envelope.wallet_db.pending_operator_info =
+        Some(crate::cached_operator_info::CachedOperatorInfoRecord {
+            version: "1".to_string(),
+            signer_pk_hex: "02abc".to_string(),
+            forfeit_pk_hex: "02abc".to_string(),
+            forfeit_address: "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx".to_string(),
+            checkpoint_tapscript_hex: String::new(),
+            network: network_label(Network::Signet),
+            session_duration: 0,
+            unilateral_exit_delay_consensus: 0,
+            boarding_exit_delay_consensus: 0,
+            utxo_min_amount_sats: None,
+            utxo_max_amount_sats: None,
+            vtxo_min_amount_sats: None,
+            vtxo_max_amount_sats: None,
+            dust_sats: 0,
+            fees: None,
+            scheduled_session: None,
+            deprecated_signers: vec![],
+            service_status: HashMap::new(),
+            digest: "pending-digest".to_string(),
+            max_tx_weight: 0,
+            max_op_return_outputs: 0,
+        });
+
+    let json = serde_json::to_string(&envelope).expect("serialize");
+    let parsed = BitboardArkPersistence::parse_import(Some(&json));
+    assert!(parsed.wallet_db.operator_trust_pending);
+    assert_eq!(
+        parsed
+            .wallet_db
+            .pending_operator_info
+            .as_ref()
+            .map(|info| info.digest.as_str()),
+        Some("pending-digest")
+    );
+}
+
+#[test]
+fn persistence_v3_production_import_defaults_current_fields() {
+    let owner_pk = "aa".repeat(32);
+    let secret_hex = "11".repeat(32);
+    let v3_json = format!(
+        r#"{{
+            "version":{version},
+            "engine":"ark-rs",
+            "ark_sdk_version":"0.9.3",
+            "operator_identity":{{"signer_pk_hex":"02abc","network":"signet"}},
+            "wallet_db":{{
+                "boarding_outputs":[{{
+                    "owner_pk_hex":"{owner_pk}",
+                    "exit_delay_consensus":144,
+                    "address":"tb1qboard"
+                }}],
+                "secret_keys_by_owner_pk_hex":{{"{owner_pk}":"{secret_hex}"}},
+                "offchain_next_derivation_index":2
+            }},
+            "swap_storage":{{}}
+        }}"#,
+        version = MIN_SUPPORTED_ARK_PERSISTENCE_IMPORT_VERSION,
+        owner_pk = owner_pk,
+        secret_hex = secret_hex,
+    );
+
+    let parsed = BitboardArkPersistence::parse_import(Some(&v3_json));
+    assert_eq!(
+        parsed
+            .operator_identity
+            .as_ref()
+            .map(|identity| identity.signer_pk_hex.as_str()),
+        Some("02abc")
+    );
+    assert_eq!(parsed.wallet_db.offchain_next_derivation_index, 2);
+    assert_eq!(parsed.wallet_db.boarding_outputs.len(), 1);
+    assert_eq!(
+        parsed.wallet_db.secret_keys_by_owner_pk_hex.get(&owner_pk),
+        Some(&secret_hex)
+    );
+    assert!(!parsed.wallet_db.operator_trust_pending);
+    assert!(parsed.wallet_db.pending_operator_info.is_none());
+    assert!(parsed.wallet_db.pending_batch_intents.is_empty());
+    assert!(parsed.wallet_db.unilateral_exit_frontend.is_none());
+    assert!(parsed.wallet_db.offchain_vtxo_snapshot.is_none());
+    assert!(!parsed.autonomous_mode);
+}
+
+#[test]
+fn persistence_leftover_branch_versions_import_without_wiping() {
+    for version in [4_u32, 5, 6, 7] {
+        let json = format!(
+            r#"{{"version":{version},"engine":"ark-rs","ark_sdk_version":"0.9.3","operator_identity":{{"signer_pk_hex":"02abc","network":"signet"}},"wallet_db":{{"boarding_outputs":[],"secret_keys_by_owner_pk_hex":{{}}}},"swap_storage":{{}}}}"#
+        );
+        let parsed = BitboardArkPersistence::parse_import(Some(&json));
+        assert_eq!(
+            parsed
+                .operator_identity
+                .as_ref()
+                .map(|identity| identity.signer_pk_hex.as_str()),
+            Some("02abc"),
+            "version {version} must not wipe identity"
+        );
+        assert!(!parsed.wallet_db.operator_trust_pending);
+        assert!(parsed.wallet_db.unilateral_exit_frontend.is_none());
+        assert!(!parsed.autonomous_mode);
+    }
+}
+
+#[test]
+fn persistence_round_trips_autonomous_mode_true() {
+    let identity = OperatorIdentity {
+        signer_pk_hex: "02abc".to_string(),
+        network: network_label(Network::Signet),
+    };
+    let mut envelope = BitboardArkPersistence::empty(identity);
+    envelope.autonomous_mode = true;
+
+    let json = serde_json::to_string(&envelope).expect("serialize");
+    assert!(json.contains("\"autonomous_mode\":true"));
+    let parsed = BitboardArkPersistence::parse_import(Some(&json));
+    assert!(parsed.autonomous_mode);
+}
+
+#[test]
+fn persistence_empty_omits_false_autonomous_mode() {
+    let identity = OperatorIdentity {
+        signer_pk_hex: "02abc".to_string(),
+        network: network_label(Network::Signet),
+    };
+    let envelope = BitboardArkPersistence::empty(identity);
+    let json = serde_json::to_string(&envelope).expect("serialize");
+    assert!(!json.contains("autonomous_mode"));
+}
+
+#[test]
+fn persistence_round_trips_unilateral_exit_frontend_bundle() {
+    let identity = OperatorIdentity {
+        signer_pk_hex: "02abc".to_string(),
+        network: network_label(Network::Signet),
+    };
+    let leaf = UnilateralExitLeafOutpointRecord {
+        txid: "aa".repeat(32),
+        vout: 1,
+    };
+    let mut envelope = BitboardArkPersistence::empty(identity);
+    envelope.wallet_db.unilateral_exit_frontend = Some(UnilateralExitFrontendPersistence {
+        job: UnilateralExitJobRecord {
+            selected_leaf_outpoints: vec![leaf.clone()],
+            current_step_relayed_since_unix: Some(1_700_000_010),
+            job_started_at_unix: Some(1_700_000_000),
+        },
+        automation_prefs: UnilateralExitAutomationPrefsRecord {
+            enabled: true,
+            fee_preset_label: "High".to_string(),
+            max_fee_rate_sat_per_vb: 20.0,
+        },
+        last_failure: Some(UnilateralExitFailureRecord {
+            selected_leaf_outpoints: vec![leaf],
+            job_started_at_unix: 1_700_000_000,
+            detected_at_unix: 1_700_000_100,
+            reason_code: "user_aborted".to_string(),
+            detail_message: "User aborted".to_string(),
+            vtxo_ids: vec!["vtxo-1".to_string()],
+        }),
+    });
+
+    let json = serde_json::to_string(&envelope).expect("serialize");
+    let parsed = BitboardArkPersistence::parse_import(Some(&json));
+    let bundle = parsed
+        .wallet_db
+        .unilateral_exit_frontend
+        .expect("frontend bundle");
+    assert_eq!(bundle.job.selected_leaf_outpoints.len(), 1);
+    assert_eq!(
+        bundle.job.current_step_relayed_since_unix,
+        Some(1_700_000_010)
+    );
+    assert_eq!(bundle.job.job_started_at_unix, Some(1_700_000_000));
+    assert!(bundle.automation_prefs.enabled);
+    assert_eq!(bundle.automation_prefs.fee_preset_label, "High");
+    assert_eq!(bundle.automation_prefs.max_fee_rate_sat_per_vb, 20.0);
+    let failure = bundle.last_failure.expect("failure");
+    assert_eq!(failure.reason_code, "user_aborted");
+    assert_eq!(failure.vtxo_ids, vec!["vtxo-1".to_string()]);
+}
+
+#[test]
+fn unilateral_exit_frontend_setters_create_bundle_from_none() {
+    let db = JsonPersistenceDb::default();
+    assert!(db.unilateral_exit_frontend().is_none());
+
+    db.set_unilateral_exit_job(UnilateralExitJobRecord::empty());
+    let bundle = db.unilateral_exit_frontend().expect("created");
+    assert!(bundle.job.selected_leaf_outpoints.is_empty());
+    assert!(!bundle.automation_prefs.enabled);
+    assert!(bundle.last_failure.is_none());
+
+    db.set_unilateral_exit_automation_prefs(UnilateralExitAutomationPrefsRecord {
+        enabled: true,
+        fee_preset_label: "Low".to_string(),
+        max_fee_rate_sat_per_vb: 1.0,
+    });
+    db.set_unilateral_exit_failure(None);
+    let bundle = db.unilateral_exit_frontend().expect("still present");
+    assert!(bundle.automation_prefs.enabled);
+    assert_eq!(bundle.automation_prefs.fee_preset_label, "Low");
+    assert!(bundle.last_failure.is_none());
+}
+
+#[test]
+fn empty_unilateral_exit_job_is_some_bundle_not_none() {
+    let db = JsonPersistenceDb::default();
+    db.set_unilateral_exit_frontend(UnilateralExitFrontendPersistence::default());
+    let bundle = db.unilateral_exit_frontend().expect("written");
+    assert!(bundle.job.selected_leaf_outpoints.is_empty());
 }
 
 #[test]
@@ -289,6 +803,7 @@ fn upsert_pending_collaborative_replaces_existing_collaborative_record() {
         amount_sats: 50_000,
         started_at: 1,
         baseline_offchain_spendable_sats: Some(200_000),
+        retain_until_spendable_drops: false,
     });
     db.upsert_pending_exit_deduction(PendingExitDeductionRecord {
         kind: PendingExitKind::Collaborative,
@@ -297,6 +812,7 @@ fn upsert_pending_collaborative_replaces_existing_collaborative_record() {
         amount_sats: 100_000,
         started_at: 2,
         baseline_offchain_spendable_sats: Some(180_000),
+        retain_until_spendable_drops: false,
     });
 
     let pending = db.pending_exit_deductions();

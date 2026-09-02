@@ -30,14 +30,14 @@ describe('arkade-rail-snapshot', () => {
     })
     vi.mocked(getArkadeSyncLifecycleSnapshot).mockReturnValue({
       syncPhase: 'syncing',
-      railScope: { walletId: 1, networkMode: 'signet', connectionId: 'c1' },
+      railScope: { walletId: 1, networkMode: 'signet', arkadeAccountId: 'c1' },
       errorMessage: null,
       warningMessage: null,
     })
     vi.mocked(getArkadeSaveLifecycleSnapshot).mockReturnValue({
       savePhase: 'not-saving',
       errorMessage: null,
-      railScope: { walletId: 1, networkMode: 'signet', connectionId: 'c1' },
+      railScope: { walletId: 1, networkMode: 'signet', arkadeAccountId: 'c1' },
     })
   })
 

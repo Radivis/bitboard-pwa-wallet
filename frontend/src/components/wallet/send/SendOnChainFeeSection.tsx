@@ -21,6 +21,7 @@ export function SendOnChainFeeSection(props: {
   onSelectPreset: (preset: SendFeePresetLabel, rateSatPerVb: number) => void
   setCustomFeeRate: (value: string) => void
   onSelectCustomMode: () => void
+  hideCustom?: boolean
 }) {
   const {
     feePresetSelection,
@@ -32,6 +33,7 @@ export function SendOnChainFeeSection(props: {
     onSelectPreset,
     setCustomFeeRate,
     onSelectCustomMode,
+    hideCustom = false,
   } = props
 
   return (
@@ -81,6 +83,7 @@ export function SendOnChainFeeSection(props: {
             </InfomodeWrapper>
           )
         })}
+        {!hideCustom ? (
         <InfomodeWrapper
           infoId="send-fee-custom-button"
           infoTitle="Custom fee"
@@ -98,8 +101,9 @@ export function SendOnChainFeeSection(props: {
             Custom
           </Button>
         </InfomodeWrapper>
+        ) : null}
       </div>
-      {useCustomFee && (
+      {!hideCustom && useCustomFee && (
         <Input
           type="number"
           inputMode="decimal"

@@ -11,6 +11,7 @@ use super::mappers::{map_history_row, validate_send_amount_sats};
 
 impl ArkSession {
     pub async fn send_payment(&self, params: SendPaymentParams) -> ArkResult<String> {
+        self.ensure_operator_rpc_allowed()?;
         validate_send_amount_sats(params.amount_sats)?;
         let address = ArkAddress::decode(&params.address)?;
         let amount = Amount::from_sat(params.amount_sats);

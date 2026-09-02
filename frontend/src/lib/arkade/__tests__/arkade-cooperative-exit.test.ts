@@ -56,7 +56,7 @@ describe('arkade-cooperative-exit', () => {
       confirmedSats: 50_000,
       offchainSpendableSats: 0,
       totalSats: 50_000,
-      pendingRecoverySats: 50_000,
+      pendingRecoveryDueToExpiredSignerSats: 50_000,
     }
     expect(arkadeCooperativeExitSpendableSats(balance, null)).toBe(0)
   })

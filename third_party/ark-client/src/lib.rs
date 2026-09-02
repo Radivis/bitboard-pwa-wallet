@@ -62,6 +62,7 @@ pub mod wallet;
 
 mod asset;
 mod batch;
+mod batch_join_hooks;
 mod boltz;
 mod coin_select;
 mod fee_estimation;
@@ -89,6 +90,11 @@ pub use coin_select::{
     MissingBlocktimeCompletionInput, VtxoCompletionSelection,
 };
 pub use error::Error;
+pub use crate::batch::{JoinBatchOutcome, RegisteredBatchIntent};
+pub use crate::batch_join_hooks::{
+    is_batch_join_in_flight, set_batch_join_abort, set_on_intent_registered,
+    BATCH_JOIN_ABORTED_MESSAGE, OnIntentRegisteredHook,
+};
 pub use key_provider::Bip32KeyProvider;
 pub use key_provider::KeyProvider;
 pub use key_provider::StaticKeyProvider;
@@ -109,6 +115,14 @@ pub use swap_storage::SwapStorage;
 /// This is the number of consecutive unused addresses to scan before
 /// assuming all used addresses have been found.
 pub const DEFAULT_GAP_LIMIT: u32 = 20;
+
+/// Max scripts/outpoints per GET `/v1/indexer/vtxos`.
+///
+/// The indexer encodes each reference as a repeated query param (`scripts=` / `outpoints=`).
+/// A P2TR script hex is ~68 chars plus the param name, so ~80 bytes per address. Proxies
+/// (nginx ~8KiB request line, Node/Cloudflare ~16KiB headers) return HTTP 431 when the
+/// query string is too large. 40 refs ≈ 3.2KiB, safely under those limits.
+const MAX_GET_VTXOS_REFS_PER_REQUEST: usize = 40;
 
 /// Default Boltz `referralId` sent with swap creation requests when the caller does not
 /// provide one. Identifies traffic originating from this SDK.
@@ -740,6 +754,15 @@ where
         self.boltz_referral_id.as_deref()
     }
 
+    /// Connect without calling the operator (`get_info` / `discover_keys`). For autonomous mode when
+    /// the ASP is unreachable; uses persisted operator info from a prior successful sync.
+    pub async fn connect_with_cached_info(
+        self,
+        server_info: server::Info,
+    ) -> Result<Client<B, W, S, K>, Error> {
+        self.finish_connect_with_server_info(server_info, false).await
+    }
+
     /// Connects to the Ark server and retrieves server information.
     ///
     /// # Errors
@@ -787,14 +810,26 @@ where
         self.finish_connect().await
     }
 
+    // WASM `NetworkClient::get_info` takes `&mut self` (`ark_grpc_wasm_shim`); native REST uses `&self`.
+    // `mut self` is required on wasm32; on other targets the binding is never mutated before the move
+    // into `finish_connect_with_server_info`, so allow the unused-mut lint there only.
+    #[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut))]
     async fn finish_connect(mut self) -> Result<Client<B, W, S, K>, Error> {
         let server_info = timeout_op(self.timeout, self.network_client.get_info())
             .await
             .context("Failed to get Ark server info")??;
+        self.finish_connect_with_server_info(server_info, true).await
+    }
 
+    async fn finish_connect_with_server_info(
+        mut self,
+        server_info: server::Info,
+        run_discover_keys: bool,
+    ) -> Result<Client<B, W, S, K>, Error> {
         tracing::debug!(
             name = self.name,
             ark_server_url = ?self.network_client,
+            run_discover_keys,
             "Connected to Ark server"
         );
 
@@ -812,9 +847,11 @@ where
 
         let client = Client { inner: self, state };
 
-        if let Err(error) = client.discover_keys(DEFAULT_GAP_LIMIT).await {
-            tracing::warn!(?error, "Failed during key discovery");
-        };
+        if run_discover_keys {
+            if let Err(error) = client.discover_keys(DEFAULT_GAP_LIMIT).await {
+                tracing::warn!(?error, "Failed during key discovery");
+            };
+        }
 
         // Eagerly persist boarding rows for every signer/delay candidate the wallet should watch.
         // The migration boarding leg reads the wallet DB only; without this connect-time seed, a
@@ -879,6 +916,11 @@ where
             .read()
             .map(|state| state.server_info.clone())
             .map_err(|_| Error::ad_hoc("client server state lock poisoned"))
+    }
+
+    /// Replace in-memory operator info without a network round-trip (autonomous mode entry).
+    pub fn install_cached_server_info(&self, server_info: server::Info) -> Result<(), Error> {
+        update_server_state(&self.state, server_info)
     }
 
     fn with_server_state<T>(&self, f: impl FnOnce(&ServerState) -> T) -> Result<T, Error> {
@@ -1454,17 +1496,19 @@ where
 
         let (vtxo_list, _) = self.list_vtxos().await?;
 
-        let spent_outpoints = vtxo_list.spent().cloned().collect::<Vec<_>>();
+        let unspendable_outpoints = vtxo_list.unspendable().cloned().collect::<Vec<_>>();
         let unspent_outpoints = vtxo_list.all_unspent().cloned().collect::<Vec<_>>();
 
         let incoming_transactions = generate_incoming_vtxo_transaction_history(
-            &spent_outpoints,
+            &unspendable_outpoints,
             &unspent_outpoints,
             &boarding_commitment_transactions,
         )?;
 
-        let outgoing_txs =
-            generate_outgoing_vtxo_transaction_history(&spent_outpoints, &unspent_outpoints)?;
+        let outgoing_txs = generate_outgoing_vtxo_transaction_history(
+            &unspendable_outpoints,
+            &unspent_outpoints,
+        )?;
 
         let mut outgoing_transactions = vec![];
         for tx in outgoing_txs {
@@ -1536,6 +1580,9 @@ where
     }
 
     /// Fetch all VTXOs for a request, handling pagination internally.
+    ///
+    /// Scripts/outpoints are chunked first so each GET stays under proxy URL limits (HTTP 431),
+    /// then each chunk is paged independently.
     async fn fetch_all_vtxos(
         &self,
         request: GetVtxosRequest,
@@ -1544,6 +1591,17 @@ where
             return Ok(Vec::new());
         }
 
+        let mut all_vtxos = Vec::new();
+        for chunk in request.split_references(MAX_GET_VTXOS_REFS_PER_REQUEST) {
+            all_vtxos.extend(self.fetch_paged_vtxos(chunk).await?);
+        }
+        Ok(all_vtxos)
+    }
+
+    async fn fetch_paged_vtxos(
+        &self,
+        request: GetVtxosRequest,
+    ) -> Result<Vec<VirtualTxOutPoint>, Error> {
         let mut all_vtxos = Vec::new();
         let mut cursor = 0;
         const PAGE_SIZE: i32 = 100;
@@ -1634,10 +1692,17 @@ where
         let fee_rate = timeout_op(self.inner.timeout, self.blockchain().get_fee_rate())
             .await
             .context("Failed to retrieve fee rate")??;
+        self.bump_tx_at_fee_rate(parent, fee_rate).await
+    }
 
+    /// Bump `parent` using an explicit feerate (sat/vB) instead of the Esplora estimate.
+    pub async fn bump_tx_at_fee_rate(
+        &self,
+        parent: &Transaction,
+        fee_rate_sat_per_vb: f64,
+    ) -> Result<Transaction, Error> {
         let change_address = self.inner.wallet.get_onchain_address()?;
 
-        // Create a closure that converts CoinSelectionResult to UtxoCoinSelection
         let select_coins_fn =
             |target_amount: Amount| -> Result<UtxoCoinSelection, ark_core::Error> {
                 self.inner.wallet.select_coins(target_amount).map_err(|e| {
@@ -1645,20 +1710,40 @@ where
                 })
             };
 
-        // Build the PSBT using ark-core (includes witness UTXO setup)
-        let mut psbt = build_anchor_tx(parent, change_address, fee_rate, select_coins_fn)
-            .map_err(|e| Error::ad_hoc(e.to_string()))?;
+        let mut psbt = build_anchor_tx(
+            parent,
+            change_address,
+            fee_rate_sat_per_vb,
+            select_coins_fn,
+        )
+        .map_err(|e| Error::ad_hoc(e.to_string()))?;
 
-        // Sign the transaction
         self.inner
             .wallet
             .sign(&mut psbt)
             .context("failed to sign bump TX")?;
 
-        // Extract the final transaction
         let tx = psbt.extract_tx().map_err(Error::ad_hoc)?;
 
         Ok(tx)
+    }
+
+    /// Broadcast one unpublished virtual tx from a unilateral exit branch at the given feerate.
+    pub async fn broadcast_unilateral_exit_step_at_fee_rate(
+        &self,
+        parent: &Transaction,
+        fee_rate_sat_per_vb: f64,
+    ) -> Result<Option<Txid>, Error> {
+        let parent_txid = parent.compute_txid();
+
+        let child_tx = self
+            .bump_tx_at_fee_rate(parent, fee_rate_sat_per_vb)
+            .await?;
+        self.blockchain()
+            .broadcast_package(&[parent, &child_tx])
+            .await?;
+
+        Ok(Some(parent_txid))
     }
 
     /// Subscribe to receive transaction notifications for specific VTXO scripts

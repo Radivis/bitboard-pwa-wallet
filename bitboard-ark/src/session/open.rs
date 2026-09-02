@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::sync::{Arc, Mutex};
 
 use ark_bdk_wallet::Wallet as ArkBdkWallet;
@@ -14,7 +15,8 @@ use crate::esplora_blockchain::EsploraBlockchain;
 use crate::network::NetworkMode;
 use crate::persistence::{
     BitboardArkPersistence, JsonPersistenceDb, OperatorSignerMigrationHint, SharedPersistenceDb,
-    persisted_operator_identity_for_open, validate_operator_identity,
+    operator_identity_for_connected_signer, persisted_operator_identity_for_open,
+    validate_operator_identity,
 };
 
 use super::mappers::{current_unix_timestamp, parse_delegator_public_key};
@@ -22,6 +24,27 @@ use super::{ArkClient, ArkSession, ArkWallet, BOLTZ_URL, CLIENT_NAME, CLIENT_TIM
 
 const ONCHAIN_SYNC_MAX_ATTEMPTS: u32 = 3;
 const ONCHAIN_SYNC_BASE_BACKOFF_MS: u64 = 1_000;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SessionOpenConnectMode {
+    LiveOperator,
+    CachedOperatorInfo,
+}
+
+/// ARK-AUTO-03/04: persisted autonomous mode must not live-connect, and must fail closed
+/// when cached operator info is missing.
+pub(crate) fn session_open_connect_mode(
+    autonomous_mode: bool,
+    cached_operator_info_present: bool,
+) -> ArkResult<SessionOpenConnectMode> {
+    if !autonomous_mode {
+        return Ok(SessionOpenConnectMode::LiveOperator);
+    }
+    if cached_operator_info_present {
+        return Ok(SessionOpenConnectMode::CachedOperatorInfo);
+    }
+    Err(ArkWasmError::AutonomousOperatorInfoMissing)
+}
 
 #[cfg(target_arch = "wasm32")]
 async fn sleep_for_backoff(duration: std::time::Duration) {
@@ -62,30 +85,66 @@ fn warn_onchain_sync_during_open(message: &str) {
     eprintln!("{message}");
 }
 
-/// Esplora full scan during open can fail transiently on hosted proxies; retry, then continue
-/// with a stale on-chain view so session open and network switching are not blocked.
-async fn sync_onchain_wallet_for_session_open(client: &ArkClient) {
+/// Esplora full scan can fail transiently on hosted proxies; retry with backoff before giving up.
+pub(crate) async fn sync_onchain_wallet_with_retries(client: &ArkClient) -> ArkResult<()> {
     for attempt in 0..ONCHAIN_SYNC_MAX_ATTEMPTS {
         match client.sync_onchain_wallet().await {
-            Ok(()) => return,
+            Ok(()) => return Ok(()),
             Err(error)
                 if attempt + 1 < ONCHAIN_SYNC_MAX_ATTEMPTS
                     && is_retryable_onchain_sync_error(&error) =>
             {
                 warn_onchain_sync_during_open(&format!(
-                    "On-chain wallet sync failed during session open (attempt {}); retrying: {error}",
+                    "On-chain wallet sync failed (attempt {}); retrying: {error}",
                     attempt + 1
                 ));
                 let backoff_ms = ONCHAIN_SYNC_BASE_BACKOFF_MS.saturating_mul(1 << attempt);
                 sleep_for_backoff(std::time::Duration::from_millis(backoff_ms)).await;
             }
-            Err(error) => {
-                warn_onchain_sync_during_open(&format!(
-                    "On-chain wallet sync failed during session open; continuing with stale on-chain view: {error}"
-                ));
-                return;
-            }
+            Err(error) => return Err(ArkWasmError::Client(error)),
         }
+    }
+    Ok(())
+}
+
+/// Esplora full scan during open can fail transiently on hosted proxies; retry, then continue
+/// with a stale on-chain view so session open and network switching are not blocked.
+pub(crate) async fn sync_onchain_wallet_for_session_open(client: &ArkClient) {
+    if let Err(error) = sync_onchain_wallet_with_retries(client).await {
+        warn_onchain_sync_during_open(&format!(
+            "On-chain wallet sync failed during session open; continuing with stale on-chain view: {error}"
+        ));
+    }
+}
+
+fn apply_live_operator_digest_on_open(
+    wallet_db: &JsonPersistenceDb,
+    live_server_info: &ark_core::server::Info,
+) {
+    let trust_pending = wallet_db.operator_trust_pending();
+    let accepted = wallet_db.cached_operator_info();
+    let digest_mismatch = crate::operator_config_diff::operator_digest_mismatch(
+        accepted.as_ref(),
+        &live_server_info.digest,
+    );
+    if trust_pending && digest_mismatch {
+        wallet_db.set_pending_operator_info(
+            crate::cached_operator_info::CachedOperatorInfoRecord::from_server_info(
+                live_server_info,
+            ),
+        );
+    } else if digest_mismatch && accepted.is_some() {
+        wallet_db.stage_operator_trust_pending(
+            crate::cached_operator_info::CachedOperatorInfoRecord::from_server_info(
+                live_server_info,
+            ),
+        );
+    } else if !digest_mismatch {
+        wallet_db.set_cached_operator_info(
+            crate::cached_operator_info::CachedOperatorInfoRecord::from_server_info(
+                live_server_info,
+            ),
+        );
     }
 }
 
@@ -99,8 +158,13 @@ impl ArkSession {
         sdk_persistence_json: Option<&str>,
     ) -> ArkResult<(Self, Option<OperatorSignerMigrationHint>)> {
         let parsed = BitboardArkPersistence::parse_import(sdk_persistence_json);
+        let autonomous_mode = parsed.autonomous_mode;
+        let cached_operator_info = parsed.wallet_db.cached_operator_info.clone();
+        let persisted_operator_identity = parsed.operator_identity.clone();
         let offchain_next_derivation_index = parsed.wallet_db.offchain_next_derivation_index;
         let network = network_mode.to_bitcoin_network();
+        let connect_mode =
+            session_open_connect_mode(autonomous_mode, cached_operator_info.is_some())?;
 
         let wallet_db = Arc::new(JsonPersistenceDb::from_snapshot(parsed.wallet_db));
         let secp = Secp256k1::new();
@@ -153,29 +217,49 @@ impl ArkSession {
             vec![],
         );
 
-        let client = offline.connect().await?;
+        let client = match connect_mode {
+            SessionOpenConnectMode::CachedOperatorInfo => {
+                let cached =
+                    cached_operator_info.ok_or(ArkWasmError::AutonomousOperatorInfoMissing)?;
+                let server_info = cached.to_server_info()?;
+                offline.connect_with_cached_info(server_info).await?
+            }
+            SessionOpenConnectMode::LiveOperator => offline.connect().await?,
+        };
         if offchain_next_derivation_index > 0 {
             let warm_through =
                 display_receive_derivation_index(offchain_next_derivation_index).saturating_add(1);
             client.warm_offchain_receive_key_cache(warm_through)?;
         }
         let server_info = client.server_info()?;
-        let migration_hint = validate_operator_identity(
-            parsed.operator_identity.as_ref(),
-            &server_info,
-            network,
-            current_unix_timestamp(),
-        )
-        .map_err(ArkWasmError::Persistence)?;
         let server_signer: XOnlyPublicKey = server_info.signer_pk.into();
         wallet_db.set_load_context(network, server_signer);
         sync_onchain_wallet_for_session_open(&client).await;
 
-        let operator_identity = Mutex::new(persisted_operator_identity_for_open(
-            &migration_hint,
-            server_signer,
-            network,
-        ));
+        let migration_hint = match connect_mode {
+            SessionOpenConnectMode::CachedOperatorInfo => None,
+            SessionOpenConnectMode::LiveOperator => {
+                let hint = validate_operator_identity(
+                    persisted_operator_identity.as_ref(),
+                    &server_info,
+                    network,
+                    current_unix_timestamp(),
+                )
+                .map_err(ArkWasmError::Persistence)?;
+                apply_live_operator_digest_on_open(&wallet_db, &server_info);
+                hint
+            }
+        };
+
+        let operator_identity = Mutex::new(match connect_mode {
+            SessionOpenConnectMode::CachedOperatorInfo => persisted_operator_identity
+                .unwrap_or_else(|| operator_identity_for_connected_signer(server_signer, network)),
+            SessionOpenConnectMode::LiveOperator => {
+                persisted_operator_identity_for_open(&migration_hint, server_signer, network)
+            }
+        });
+
+        super::intents::install_intent_registered_hook(Arc::clone(&wallet_db));
 
         Ok((
             Self {
@@ -184,6 +268,7 @@ impl ArkSession {
                 delegator,
                 network_mode,
                 operator_identity,
+                autonomous_mode: Cell::new(autonomous_mode),
             },
             migration_hint,
         ))
@@ -197,6 +282,7 @@ impl ArkSession {
         wallet_db.offchain_next_derivation_index = next_index;
         let mut envelope = BitboardArkPersistence::empty(self.persisted_operator_identity());
         envelope.wallet_db = wallet_db;
+        envelope.autonomous_mode = self.autonomous_mode();
         Ok(serde_json::to_string(&envelope)?)
     }
 
@@ -210,7 +296,10 @@ impl ArkSession {
 
 #[cfg(test)]
 mod tests {
-    use super::is_retryable_onchain_sync_error;
+    use super::{
+        SessionOpenConnectMode, is_retryable_onchain_sync_error, session_open_connect_mode,
+    };
+    use crate::error::ArkWasmError;
 
     #[test]
     fn retryable_onchain_sync_error_detects_proxy_timeouts() {
@@ -224,5 +313,25 @@ mod tests {
     fn retryable_onchain_sync_error_ignores_permanent_wallet_errors() {
         let error = ark_client::Error::wallet("Insufficient funds: need 1000 sats, have 0 sats");
         assert!(!is_retryable_onchain_sync_error(&error));
+    }
+
+    #[test]
+    fn session_open_connect_mode_live_when_autonomous_off() {
+        let mode = session_open_connect_mode(false, false).expect("live connect");
+        assert_eq!(mode, SessionOpenConnectMode::LiveOperator);
+        let mode = session_open_connect_mode(false, true).expect("live connect with cache");
+        assert_eq!(mode, SessionOpenConnectMode::LiveOperator);
+    }
+
+    #[test]
+    fn session_open_connect_mode_cached_when_autonomous_and_cache() {
+        let mode = session_open_connect_mode(true, true).expect("cached connect");
+        assert_eq!(mode, SessionOpenConnectMode::CachedOperatorInfo);
+    }
+
+    #[test]
+    fn session_open_connect_mode_errors_when_autonomous_without_cache() {
+        let error = session_open_connect_mode(true, false).expect_err("missing cache");
+        assert!(matches!(error, ArkWasmError::AutonomousOperatorInfoMissing));
     }
 }

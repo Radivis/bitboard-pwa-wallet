@@ -3,11 +3,11 @@ import type { NetworkMode } from '@/stores/walletStore'
 export type ArkadeRailScope = {
   walletId: number
   networkMode: NetworkMode
-  connectionId: string
+  arkadeAccountId: string
 }
 
 export function arkadeRailScopeKey(
-  scope: Pick<ArkadeRailScope, 'walletId' | 'networkMode' | 'connectionId'>,
+  scope: Pick<ArkadeRailScope, 'walletId' | 'networkMode' | 'arkadeAccountId'>,
 ): string {
-  return `${scope.walletId}:${scope.networkMode}:${scope.connectionId}`
+  return `${scope.walletId}:${scope.networkMode}:${scope.arkadeAccountId}`
 }

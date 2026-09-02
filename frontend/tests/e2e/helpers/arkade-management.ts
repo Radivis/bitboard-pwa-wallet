@@ -10,6 +10,7 @@ import { importWalletViaUI, TEST_PASSWORD } from './wallet-setup'
 import { goToWalletTab } from './wallet-nav'
 import {
   fundRegtestAddress,
+  fundRegtestWalletReceiveAddress,
   waitForConfirmedBalance,
 } from './regtest'
 import {
@@ -110,19 +111,26 @@ export async function settleBoardingUtxo(page: Page, boardSats: number): Promise
 
   await expect(async () => {
     const isSettling = await page.getByRole('button', { name: 'Settling…' }).isVisible()
+    const isProcessingBoard = await page
+      .getByText(/The Arkade server is processing your boarding/)
+      .isVisible()
+    const isWaitingOperator = await page.getByText('Waiting for Arkade operator').isVisible()
     const settleButton = page.getByRole('button', { name: 'Settle boarding UTXO' })
 
-    if (!settleClicked && !isSettling && (await settleButton.isEnabled())) {
+    if (!settleClicked && !isSettling && !isProcessingBoard && (await settleButton.isEnabled())) {
       await settleButton.click()
       settleClicked = true
       throw new Error('Boarding settle started')
     }
 
-    if (isSettling) {
+    if (isSettling || isProcessingBoard || isWaitingOperator) {
       throw new Error('Boarding settle still in progress')
     }
 
-    if (await page.getByText('Boarding settlement submitted to operator').isVisible()) {
+    if (
+      (await page.getByText('Boarding settlement completed').isVisible()) ||
+      (await page.getByText('Boarding settlement submitted to operator').isVisible())
+    ) {
       await goToWalletTab(page, 'Dashboard')
       await triggerArkadeRailSync(page, 60_000)
       const balanceSats = await readDashboardArkadeBalanceSats(page)
@@ -207,7 +215,7 @@ export async function fundAndBoardToArkade(
  * estimate re-syncs this wallet on read, so once the funding confirms the "Start unroll" gate clears
  * the next time a candidate's estimate runs.
  *
- * Requires the Unilateral exit dialog to already be open.
+ * Requires the unilateral exit control page to be open (bumper address in sidebar).
  */
 export async function ensureOnChainBumperFunds(page: Page, sats: number): Promise<void> {
   const bumperAddressEl = page.getByTestId('arkade-bumper-address')
@@ -216,6 +224,6 @@ export async function ensureOnChainBumperFunds(page: Page, sats: number): Promis
   if (!address?.startsWith('bcrt1')) {
     throw new Error(`Expected regtest bumper address, got: ${address}`)
   }
-  await fundRegtestAddress(address, sats)
-  await waitForConfirmedBalance(address, sats)
+  // Faucet --confirm mines once; mine again so Esplora exposes block_hash + block_time for BDK.
+  await fundRegtestWalletReceiveAddress(address, sats)
 }

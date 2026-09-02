@@ -801,7 +801,8 @@ where
                 },
             )
             .await
-            .context("failed to join batch")?;
+            .context("failed to join batch")?
+            .completed_txid()?;
 
         tracing::info!(txid = %commitment_txid, "Refunded VHTLC via settlement");
 

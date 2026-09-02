@@ -6,8 +6,8 @@ export function arkadeOffchainSpendableSats(balance: ArkadeBalanceInfo): number 
     return balance.offchainSpendableSats
   }
   // Legacy WASM: confirmedSats mixed bumper with offchain — prefer net when pending recovery is split out.
-  const pendingRecoverySats = balance.pendingRecoverySats ?? 0
-  return Math.max(0, balance.confirmedSats - pendingRecoverySats)
+  const pendingRecoveryDueToExpiredSignerSats = balance.pendingRecoveryDueToExpiredSignerSats ?? 0
+  return Math.max(0, balance.confirmedSats - pendingRecoveryDueToExpiredSignerSats)
 }
 
 /** On-chain bumper wallet balance (P2A fees for unilateral exit; not Ark spendable balance). */
@@ -42,8 +42,8 @@ export function arkadeHasExitInProgress(balance: ArkadeBalanceInfo): boolean {
   )
 }
 
-export function arkadePendingRecoverySats(balance: ArkadeBalanceInfo): number {
-  return balance.pendingRecoverySats ?? 0
+export function arkadePendingRecoveryDueToExpiredSignerSats(balance: ArkadeBalanceInfo): number {
+  return balance.pendingRecoveryDueToExpiredSignerSats ?? 0
 }
 
 export function arkadeRecoverableSettleableSats(balance: ArkadeBalanceInfo): number {

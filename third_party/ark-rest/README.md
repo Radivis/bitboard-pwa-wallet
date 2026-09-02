@@ -20,6 +20,7 @@ Regenerating from OpenAPI (`just merge-swagger generate`) can overwrite hand-edi
 | **Mutually exclusive `list_vtxos` params** | Sending both `scripts` and `outpoints`, or conflicting filter flags, caused indexer errors. | High-level `Client::list_vtxos` maps `GetVtxosRequest` to exactly one reference type and one filter mode. | `src/client.rs` | Ark session integration tests |
 | **Digest mismatch recovery** | Server config digest changes (e.g. after restart) invalidate in-flight clients. | `guarded` requests refresh server info and rebuild the HTTP client on digest mismatch. | `src/client.rs` | Manual / reconnect flows |
 | **SSE streaming (WASM)** | Chunk-oriented parsers dropped or mis-parsed events when `data:` lines were split across HTTP reads (common in browser streaming). | Incremental `SseEventParser` accumulates lines until a blank line terminates an event. | `src/sse_stream.rs` | Boarding settle (SSE batch events); `cargo test -p ark-rest --target wasm32-unknown-unknown` |
+| **Error display chain** | `ark_rest::Error` and `apis::Error::ResponseError` dropped HTTP status/body detail before WASM/UI (`request failed: request failed`). | `display_chain()` walks `source()`; response errors include truncated body snippet. | `src/error.rs`, `src/apis/mod.rs` | `cargo test -p ark-rest`; bitboard-ark `client_join_batch_event_stream_error_surfaces_status_in_wasm_payload` |
 
 Upstream contribution target: [arkade-os/rust-sdk](https://github.com/arkade-os/rust-sdk) (`ark-rest`).
 

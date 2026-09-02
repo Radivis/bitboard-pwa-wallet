@@ -1,14 +1,18 @@
 mod api_types;
 mod balance_display;
+mod cached_operator_info;
 mod constants;
 mod error;
 mod esplora_blockchain;
 mod exit_balance;
 mod network;
 mod offchain_snapshot;
+mod operator_config_diff;
+mod outpoint;
 mod persistence;
 mod session;
 mod signer_migration;
+mod unilateral_exit_materials;
 #[cfg(target_arch = "wasm32")]
 mod wasm_sleep;
 
@@ -23,9 +27,16 @@ mod session_exit_candidate_tests;
 #[cfg(test)]
 mod session_mapper_tests;
 #[cfg(not(target_arch = "wasm32"))]
-pub use api_types::CompleteUnilateralExitParams;
+pub use api_types::{
+    CompleteUnilateralExitParams, ProceedUnilateralExitStepParams, SendPaymentParams,
+    UnilateralExitBatchEstimateParams, UnilateralExitJobViabilityDto,
+    UnilateralExitJobViabilityKind, UnilateralExitPhase, UnilateralExitProgressParams,
+    UnilateralExitTopologyParams,
+};
 #[cfg(not(target_arch = "wasm32"))]
 pub use network::NetworkMode;
+#[cfg(not(target_arch = "wasm32"))]
+pub use outpoint::{OnchainOutPoint, VirtualOutPoint};
 #[cfg(not(target_arch = "wasm32"))]
 pub use session::ArkSession;
 
@@ -43,9 +54,16 @@ use std::rc::Rc;
 
 use wasm_bindgen::prelude::*;
 
+#[cfg(target_arch = "wasm32")]
 use crate::api_types::{
     CollaborativeExitFeeEstimateParams, CollaborativeExitParams, OpenSessionParams,
-    SendPaymentParams, UnilateralExitCompletionFeeEstimateParams, UnilateralExitFeeParams,
+    PendingBatchIntentActionParams, SendPaymentParams, UnilateralExitCompletionFeeEstimateParams,
+};
+
+#[cfg(not(target_arch = "wasm32"))]
+use crate::api_types::{
+    CollaborativeExitFeeEstimateParams, CollaborativeExitParams, OpenSessionParams,
+    PendingBatchIntentActionParams, UnilateralExitCompletionFeeEstimateParams,
 };
 use crate::error::{ArkResult, ArkWasmError, map_js_error};
 
@@ -91,6 +109,28 @@ where
     Fut: Future<Output = ArkResult<T>>,
 {
     to_js_value(with_session_async(run).await?)
+}
+
+struct OnIntentRegisteredJsGuard;
+
+impl Drop for OnIntentRegisteredJsGuard {
+    fn drop(&mut self) {
+        crate::session::intents::set_on_intent_registered_js(None);
+    }
+}
+
+async fn export_batch_join_json<T, F, Fut>(
+    on_registered: js_sys::Function,
+    run: F,
+) -> ArkResult<JsValue>
+where
+    T: serde::Serialize,
+    F: FnOnce(Rc<ArkSession>) -> Fut,
+    Fut: Future<Output = ArkResult<T>>,
+{
+    crate::session::intents::set_on_intent_registered_js(Some(on_registered));
+    let _clear = OnIntentRegisteredJsGuard;
+    export_session_json(run).await
 }
 
 fn clear_active_session() -> ArkResult<()> {
@@ -159,6 +199,29 @@ pub fn ark_operator_signer_pk_hex() -> Result<String, JsValue> {
 }
 
 #[wasm_bindgen]
+pub async fn ark_enter_autonomous_mode() -> Result<(), JsValue> {
+    map_js_async(async {
+        with_session_async(|session| async move { session.enter_autonomous_mode().await }).await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_exit_autonomous_mode() -> Result<(), JsValue> {
+    map_js_async(async {
+        with_session_async(|session| async move { session.exit_autonomous_mode().await }).await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub fn ark_autonomous_mode_status() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.autonomous_mode_status()?)
+    }))
+}
+
+#[wasm_bindgen]
 pub async fn ark_sync_with_operator() -> Result<JsValue, JsValue> {
     map_js_async(async {
         let result =
@@ -169,8 +232,46 @@ pub async fn ark_sync_with_operator() -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub async fn ark_migrate_deprecated_signer_vtxos() -> Result<JsValue, JsValue> {
+pub fn ark_operator_trust_status() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.operator_trust_status())
+    }))
+}
+
+#[wasm_bindgen]
+pub fn ark_operator_config_diff() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.operator_config_diff()?)
+    }))
+}
+
+#[wasm_bindgen]
+pub async fn ark_accept_pending_operator_config() -> Result<(), JsValue> {
     map_js_async(async {
+        with_session_async(|session| async move { session.accept_pending_operator_config().await })
+            .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_review_operator_config_in_autonomous_mode() -> Result<(), JsValue> {
+    map_js_async(async {
+        with_session_async(|session| async move {
+            session.review_operator_config_in_autonomous_mode().await
+        })
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_migrate_deprecated_signer_vtxos(
+    on_registered: js_sys::Function,
+) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        crate::session::intents::set_on_intent_registered_js(Some(on_registered));
+        let _clear = OnIntentRegisteredJsGuard;
         let result =
             with_session_async(
                 |session| async move { session.migrate_deprecated_signer_vtxos().await },
@@ -267,6 +368,13 @@ pub async fn ark_get_expiring_vtxo_count() -> Result<u32, JsValue> {
 }
 
 #[wasm_bindgen]
+pub fn ark_operator_scheduled_session() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.operator_scheduled_session()?)
+    }))
+}
+
+#[wasm_bindgen]
 pub async fn ark_get_vtxo_expiry_status() -> Result<JsValue, JsValue> {
     map_js_async(async {
         export_session_json(|session| async move { session.vtxo_expiry_status().await }).await
@@ -275,9 +383,12 @@ pub async fn ark_get_vtxo_expiry_status() -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub async fn ark_renew_vtxos_now() -> Result<Option<String>, JsValue> {
+pub async fn ark_renew_vtxos_now(on_registered: js_sys::Function) -> Result<JsValue, JsValue> {
     map_js_async(async {
-        with_session_async(|session| async move { session.renew_vtxos_now().await }).await
+        export_batch_join_json(on_registered, |session| async move {
+            session.renew_vtxos_now().await
+        })
+        .await
     })
     .await
 }
@@ -300,9 +411,14 @@ pub async fn ark_finalize_pending_transactions() -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub async fn ark_onboard_boarded_utxos() -> Result<Option<String>, JsValue> {
+pub async fn ark_onboard_boarded_utxos(
+    on_registered: js_sys::Function,
+) -> Result<JsValue, JsValue> {
     map_js_async(async {
-        with_session_async(|session| async move { session.onboard_boarded_utxos().await }).await
+        export_batch_join_json(on_registered, |session| async move {
+            session.onboard_boarded_utxos().await
+        })
+        .await
     })
     .await
 }
@@ -317,9 +433,53 @@ pub async fn ark_get_recoverable_vtxo_fee_estimate() -> Result<JsValue, JsValue>
 }
 
 #[wasm_bindgen]
-pub async fn ark_recover_recoverable_vtxos() -> Result<Option<String>, JsValue> {
+pub async fn ark_recover_recoverable_vtxos(
+    on_registered: js_sys::Function,
+) -> Result<JsValue, JsValue> {
     map_js_async(async {
-        with_session_async(|session| async move { session.recover_recoverable_vtxos().await }).await
+        export_batch_join_json(on_registered, |session| async move {
+            session.recover_recoverable_vtxos().await
+        })
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_cancel_pending_batch_intent(params: JsValue) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let params: PendingBatchIntentActionParams = serde_wasm_bindgen::from_value(params)?;
+        export_session_json(
+            |session| async move { session.cancel_pending_batch_intent(params).await },
+        )
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_retry_pending_batch_intent(
+    params: JsValue,
+    on_registered: js_sys::Function,
+) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let params: PendingBatchIntentActionParams = serde_wasm_bindgen::from_value(params)?;
+        export_batch_join_json(on_registered, |session| async move {
+            session.retry_pending_batch_intent(params).await
+        })
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_abort_in_flight_batch_join() -> Result<(), JsValue> {
+    map_js_async(async {
+        with_session_async(|session| async move {
+            session.abort_in_flight_batch_join().await;
+            Ok(())
+        })
+        .await
     })
     .await
 }
@@ -328,6 +488,14 @@ pub async fn ark_recover_recoverable_vtxos() -> Result<Option<String>, JsValue> 
 pub async fn ark_list_exit_candidates() -> Result<JsValue, JsValue> {
     map_js_async(async {
         export_session_json(|session| async move { session.list_exit_candidates().await }).await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_list_vtxos() -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        export_session_json(|session| async move { session.list_vtxos().await }).await
     })
     .await
 }
@@ -352,10 +520,16 @@ pub async fn ark_get_onchain_bumper_info() -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub async fn ark_collaborative_exit(params: JsValue) -> Result<String, JsValue> {
+pub async fn ark_collaborative_exit(
+    params: JsValue,
+    on_registered: js_sys::Function,
+) -> Result<JsValue, JsValue> {
     map_js_async(async {
         let params: CollaborativeExitParams = serde_wasm_bindgen::from_value(params)?;
-        with_session_async(|session| async move { session.collaborative_exit(params).await }).await
+        export_batch_join_json(on_registered, |session| async move {
+            session.collaborative_exit(params).await
+        })
+        .await
     })
     .await
 }
@@ -367,37 +541,6 @@ pub async fn ark_get_collaborative_exit_fee_estimate(params: JsValue) -> Result<
         export_session_json(|session| async move {
             session
                 .collaborative_exit_fee_estimate(&params.destination_address, params.amount_sats)
-                .await
-        })
-        .await
-    })
-    .await
-}
-
-#[wasm_bindgen]
-pub async fn ark_estimate_unilateral_exit(params: JsValue) -> Result<JsValue, JsValue> {
-    map_js_async(async {
-        let params: UnilateralExitFeeParams = serde_wasm_bindgen::from_value(params)?;
-        export_session_json(|session| async move { session.estimate_unilateral_exit(params).await })
-            .await
-    })
-    .await
-}
-
-#[wasm_bindgen]
-pub async fn ark_run_unilateral_unroll(
-    txid: String,
-    vout: u32,
-    on_progress: js_sys::Function,
-) -> Result<JsValue, JsValue> {
-    map_js_async(async {
-        export_session_json(|session| async move {
-            session
-                .run_unilateral_unroll(&txid, vout, |event| {
-                    if let Ok(value) = serde_wasm_bindgen::to_value(&event) {
-                        let _ = on_progress.call1(&JsValue::NULL, &value);
-                    }
-                })
                 .await
         })
         .await
@@ -426,4 +569,117 @@ pub async fn ark_estimate_unilateral_exit_completion(params: JsValue) -> Result<
         .await
     })
     .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_get_unilateral_exit_topology(params: JsValue) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let params: crate::api_types::UnilateralExitTopologyParams =
+            serde_wasm_bindgen::from_value(params)?;
+        export_session_json(
+            |session| async move { session.get_unilateral_exit_topology(params).await },
+        )
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_estimate_unilateral_exit_batch(params: JsValue) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let params: crate::api_types::UnilateralExitBatchEstimateParams =
+            serde_wasm_bindgen::from_value(params)?;
+        export_session_json(|session| async move {
+            session.estimate_unilateral_exit_batch(params).await
+        })
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_proceed_unilateral_exit_step(params: JsValue) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let params: crate::api_types::ProceedUnilateralExitStepParams =
+            serde_wasm_bindgen::from_value(params)?;
+        export_session_json(
+            |session| async move { session.proceed_unilateral_exit_step(params).await },
+        )
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_get_unilateral_exit_progress(params: JsValue) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let params: crate::api_types::UnilateralExitProgressParams =
+            serde_wasm_bindgen::from_value(params)?;
+        export_session_json(
+            |session| async move { session.get_unilateral_exit_progress(params).await },
+        )
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_evaluate_unilateral_exit_job_viability(
+    params: JsValue,
+) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let params: crate::api_types::UnilateralExitProgressParams =
+            serde_wasm_bindgen::from_value(params)?;
+        export_session_json(|session| async move {
+            session.evaluate_unilateral_exit_job_viability(params).await
+        })
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub fn ark_get_unilateral_exit_frontend() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.unilateral_exit_frontend())
+    }))
+}
+
+#[wasm_bindgen]
+pub fn ark_set_unilateral_exit_frontend(params: JsValue) -> Result<(), JsValue> {
+    map_js_error(with_session(|session| {
+        let dto: crate::api_types::UnilateralExitFrontendPersistenceDto =
+            serde_wasm_bindgen::from_value(params)?;
+        session.set_unilateral_exit_frontend(dto);
+        Ok(())
+    }))
+}
+
+#[wasm_bindgen]
+pub fn ark_set_unilateral_exit_job(params: JsValue) -> Result<(), JsValue> {
+    map_js_error(with_session(|session| {
+        let dto: crate::api_types::UnilateralExitJobDto = serde_wasm_bindgen::from_value(params)?;
+        session.set_unilateral_exit_job(dto);
+        Ok(())
+    }))
+}
+
+#[wasm_bindgen]
+pub fn ark_set_unilateral_exit_automation_prefs(params: JsValue) -> Result<(), JsValue> {
+    map_js_error(with_session(|session| {
+        let dto: crate::api_types::UnilateralExitAutomationPrefsDto =
+            serde_wasm_bindgen::from_value(params)?;
+        session.set_unilateral_exit_automation_prefs(dto);
+        Ok(())
+    }))
+}
+
+#[wasm_bindgen]
+pub fn ark_set_unilateral_exit_failure(params: JsValue) -> Result<(), JsValue> {
+    map_js_error(with_session(|session| {
+        let dto: Option<crate::api_types::UnilateralExitFailureDto> =
+            serde_wasm_bindgen::from_value(params)?;
+        session.set_unilateral_exit_failure(dto);
+        Ok(())
+    }))
 }
