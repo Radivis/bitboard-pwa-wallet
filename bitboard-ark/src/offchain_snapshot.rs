@@ -470,10 +470,10 @@ fn generate_outgoing_vtxo_transaction_history(
 #[cfg(test)]
 mod tests {
     use super::{
-        merge_sticky_spent_flags, merge_sticky_unrolled_flags,
-        offchain_balance_buckets_from_snapshot, offchain_balance_sats_from_snapshot,
-        snapshot_from_virtual_tx_outpoints, snapshot_from_virtual_tx_outpoints_with_script_lookup,
-        vtxo_list_from_snapshot,
+        mark_virtual_tx_vtxos_unrolled_in_snapshot, merge_sticky_spent_flags,
+        merge_sticky_unrolled_flags, offchain_balance_buckets_from_snapshot,
+        offchain_balance_sats_from_snapshot, snapshot_from_virtual_tx_outpoints,
+        snapshot_from_virtual_tx_outpoints_with_script_lookup, vtxo_list_from_snapshot,
     };
     use crate::error::ArkWasmError;
     use crate::persistence::{OffchainVtxoSnapshot, VirtualTxOutPointRecord};
@@ -512,6 +512,50 @@ mod tests {
             ark_txid: None,
             assets: vec![],
         }
+    }
+
+    fn sample_snapshot_record(txid: &str, vout: u32, amount_sats: u64) -> VirtualTxOutPointRecord {
+        VirtualTxOutPointRecord {
+            txid: txid.to_string(),
+            vout,
+            created_at: 0,
+            expires_at: 9_999_999_999,
+            amount_sats,
+            script_hex: String::new(),
+            is_preconfirmed: false,
+            is_swept: false,
+            is_unrolled: false,
+            is_spent: false,
+            spent_by: None,
+            commitment_txids: vec![],
+            settled_by: None,
+            ark_txid: None,
+            assets: vec![],
+            server_pk_hex: None,
+        }
+    }
+
+    #[test]
+    fn mark_virtual_tx_vtxos_unrolled_co_marks_all_vouts_on_tx() {
+        let txid = Txid::from_byte_array([0x88; 32]).to_string();
+        let mut snapshot = OffchainVtxoSnapshot {
+            synced_at: 1,
+            dust_sats: 330,
+            virtual_tx_outpoints: vec![
+                sample_snapshot_record(&txid, 0, 50_000),
+                sample_snapshot_record(&txid, 1, 25_000),
+            ],
+            unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
+        };
+
+        mark_virtual_tx_vtxos_unrolled_in_snapshot(&mut snapshot, &txid);
+
+        assert!(
+            snapshot
+                .virtual_tx_outpoints
+                .iter()
+                .all(|record| record.is_unrolled)
+        );
     }
 
     #[test]

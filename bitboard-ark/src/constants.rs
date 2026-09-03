@@ -44,6 +44,13 @@ pub(crate) const UNILATERAL_EXIT_BUMP_CHILD_P2TR_OUTPUT_WEIGHT: u64 =
 /// (leaf or intermediate host).
 pub const UNILATERAL_EXIT_LEAF_CONFIRMATIONS: u32 = 6;
 
+/// First `never_seen` miss is eligible this long after host-tx observation `registered_at`.
+pub const HOST_TX_NEVER_SEEN_FIRST_PROBE_AFTER_SECS: i64 = 10 * 60;
+/// Minimum spacing between subsequent eligible `never_seen` misses.
+pub const HOST_TX_NEVER_SEEN_PROBE_SPACING_SECS: i64 = 60;
+/// Eligible misses after which the observation row is deleted (VTXOs stay tagged / pending).
+pub const HOST_TX_NEVER_SEEN_MAX_ELIGIBLE_MISSES: u32 = 5;
+
 /// Confirmations required on each intermediate virtual tx before advancing to the next step.
 pub const UNILATERAL_EXIT_STEP_CONFIRMATIONS: u32 = 1;
 

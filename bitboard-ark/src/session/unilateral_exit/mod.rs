@@ -1,6 +1,7 @@
 pub(crate) mod candidates;
 pub(crate) mod complete;
 pub(crate) mod frontend;
+pub(crate) mod host_tx_finality;
 pub(crate) mod materials_prefetch;
 pub(crate) mod onchain;
 pub(crate) mod plan;

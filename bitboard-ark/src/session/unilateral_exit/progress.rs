@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use bitcoin::Txid;
 
 use crate::api_types::{
@@ -170,32 +168,21 @@ impl ArkSession {
         Ok(ordered_step_txids.len())
     }
 
-    /// Marks leaves unrolled in the local snapshot when chain depth is reached.
-    /// Does not block on operator indexer polling — that runs during operator sync.
+    /// Unified 6-conf stamper, then enrich plan-leaf watches with branch txids.
     pub(super) async fn mark_unrolled_leaves_at_finality(
         &self,
         plan: &UnilateralBatchPlan,
     ) -> ArkResult<()> {
-        let blockchain = self.client.blockchain();
-        let mut processed_leaf_txids = HashSet::new();
-
+        self.reconcile_host_tx_finality().await?;
         for leaf in &plan.leaves {
             let leaf_virtual_txid = leaf.leaf_txid.to_string();
-            let leaf_txid = leaf.leaf_txid;
-            if !processed_leaf_txids.insert(leaf_txid) {
+            if !self.virtual_tx_is_marked_unrolled(&leaf_virtual_txid)? {
                 continue;
             }
-            if self.virtual_tx_is_marked_unrolled(&leaf_virtual_txid)? {
-                continue;
-            }
-            if !leaf_reached_finality(tx_confirmations(blockchain, &leaf_txid).await?) {
-                continue;
-            }
-            self.mark_leaf_virtual_tx_vtxos_unrolled_in_snapshot(&leaf_virtual_txid)?;
             enrich_unilateral_exit_watches_for_leaf_tx_after_unroll(
                 &self.wallet_db,
                 &leaf_virtual_txid,
-                &leaf_txid.to_string(),
+                &leaf.leaf_txid.to_string(),
                 &leaf.branch_txids,
             );
         }

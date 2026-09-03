@@ -12,6 +12,7 @@ flowchart TB
     watches[unilateral_exit_watches]
     stepWait[unilateral_exit_step_wait]
     deductions[pending_exit_deductions]
+    hostObs[host_tx_observations]
     cachedInfo[cached_operator_info]
     frontendBundle[unilateral_exit_frontend]
   end
@@ -39,7 +40,7 @@ Memory caches are keyed by `walletId:networkMode:arkadeAccountId` (`arkadeWallet
 
 Flushed through the Arkade save lifecycle into `StoredArkadeAccount.sdkPersistenceJson`. Types: [`bitboard-ark/src/persistence.rs`](../../bitboard-ark/src/persistence.rs). Materials encode/decode: [`unilateral_exit_materials.rs`](../../bitboard-ark/src/unilateral_exit_materials.rs). Frontend bundle I/O: [`unilateral-exit-frontend-sdk-persistence.ts`](../../frontend/src/lib/wallet/lifecycle/unilateral-exit-frontend-sdk-persistence.ts).
 
-**Envelope version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 8`. `parse_import` accepts 3–8. Published 0.3.3 wallets used v3; missing fields default (`unilateral_exit_frontend` is `None`, `autonomous_mode` is false). When `unilateral_exit_frontend` is `None`, a one-shot overlay reads leftover SQLite `settings` rows.
+**Envelope version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 9`. `parse_import` accepts 3–9. Published 0.3.3 wallets used v3; missing fields default (`unilateral_exit_frontend` is `None`, `host_tx_observations` is empty, `autonomous_mode` is false). When `unilateral_exit_frontend` is `None`, a one-shot overlay reads leftover SQLite `settings` rows.
 
 | Field | Where | Role |
 |-------|-------|------|
@@ -48,6 +49,7 @@ Flushed through the Arkade save lifecycle into `StoredArkadeAccount.sdkPersisten
 | `unilateral_exit_watches` | `WalletDbSnapshot` | Exit watches that survive a full snapshot replace (`ARK-EXIT-12`) |
 | `unilateral_exit_step_wait` | `WalletDbSnapshot` | Current step txid, index, `started_at` for relay-wait UI |
 | `pending_exit_deductions` | `WalletDbSnapshot` | Balance-line records during unroll before `is_unrolled` |
+| `host_tx_observations` | `WalletDbSnapshot` | Per virtual host txid: broadcast attempt, Esplora relay/confirmations, never-seen probe budget (`ARK-EXIT-28`) |
 | `cached_operator_info` | `WalletDbSnapshot` | Last `getInfo` snapshot for autonomous mode |
 | `autonomous_mode` | `BitboardArkPersistence` | Per-ASP trust posture; default false; session open skips operator RPC when true |
 | `unilateral_exit_frontend` | `WalletDbSnapshot` | Frontend job bookmark, automation prefs, last failure |
@@ -62,7 +64,7 @@ Filled on operator sync for exit-eligible VTXOs (`ARK-EXIT-07`). Proceed fails f
 
 ### Sticky `is_unrolled`
 
-Local stamp after a published virtual tx reaches **6 confirmations**: leaves via `mark_leaf_virtual_tx_vtxos_unrolled_in_snapshot` (all vouts on that txid); intermediate (en-passant) hosts via `reconcile_intermediate_ark_virtual_txs_unrolled_on_esplora` on operator sync. `merge_sticky_unrolled_flags` preserves the flag when the ASP lags.
+Local stamp after a published virtual tx reaches **6 confirmations**: any `tree` / `ark` host (terminals included) via the unified reconciler on load, operator sync, proceed, progress, list, and complete (`ARK-EXIT-29`). `merge_sticky_unrolled_flags` preserves the flag when the ASP lags.
 
 ### Watches (`UnilateralExitWatchRecord`)
 
@@ -132,18 +134,14 @@ TanStack Query caches progress/topology/balance for display. During an active jo
 
 ---
 
-## Target records (not in envelope v8)
-
-Stage 0 documents intended tables. They are **not** present in `BITBOARD_ARK_PERSISTENCE_VERSION = 8`. Do not treat the field list above as already containing them.
-
-**Stage 1** adds a **host-tx observation** table (`ARK-EXIT-28`), keyed by virtual `txid`:
+## Host-tx observations (`HostTxObservationRecord`)
 
 ```text
 txid, registered_at, relayed, confirmations, never_seen_probes, last_probed_at
 ```
 
-Register immediately before broadcast of that step. After the `never_seen` probe budget, **delete** the observation; VTXOs stay `tagged`. Also delete when every VTXO on that host is `exited` or `funding_lost`. That stage still keeps pending deductions, watches, and `is_unrolled` as they are; observation plus the unified 6-conf reconciler **feed** `is_unrolled`.
+Registered immediately before broadcast of that proceed step (`ARK-EXIT-28`). After five eligible `never_seen` misses, **delete** the observation; pending deductions stay. Also delete when every snapshot VTXO on that host is `is_spent`. Observation plus the unified 6-conf reconciler **feed** `is_unrolled`.
 
-**Stage 2** adds a **VTXO exit** table keyed by `(txid, vout)` with the phase enum (`ARK-EXIT-27`). Candidates, in-progress, and complete-ready become record-derived. Envelope version bumps when those blobs land, not in Stage 0.
+**Stage 2** adds a **VTXO exit** table keyed by `(txid, vout)` with the phase enum (`ARK-EXIT-27`). Candidates, in-progress, and complete-ready become record-derived. Envelope version bumps when those blobs land.
 
 Freeze and abort matrix: [unilateral-exit-vtxo-lifecycle-refactor.md](../future/unilateral-exit-vtxo-lifecycle-refactor.md#stage-0-freeze-agreed).

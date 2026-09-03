@@ -78,13 +78,13 @@ These are the invariants that break wallets when ignored.
 
 A virtual tx can carry several VTXO outpoints (payment + change on the same leaf). Broadcast cannot target a single vout toward Bitcoin or the ASP — the chain only sees the published tx.
 
-At leaf finality (**6 confirmations**), WASM sets `is_unrolled` on **every** outpoint with that leaf txid (`ARK-EXIT-17`; `mark_leaf_virtual_tx_vtxos_unrolled_in_snapshot` in [`bitboard-ark/src/session/unilateral_exit/complete.rs`](../bitboard-ark/src/session/unilateral_exit/complete.rs)). Sticky merge on sync promotes the same flags. The control page shows **one graph node per leaf tx** and selects sibling outpoints atomically ([`unilateralExitControlStore.ts`](../frontend/src/stores/unilateralExitControlStore.ts)). Completion to on-chain remains **per outpoint**.
+At leaf finality (**6 confirmations**), WASM sets `is_unrolled` on **every** outpoint with that leaf txid (`ARK-EXIT-17`; `mark_virtual_tx_vtxos_unrolled_in_snapshot` via `reconcile_host_tx_finality` in [`bitboard-ark/src/session/unilateral_exit/host_tx_finality.rs`](../bitboard-ark/src/session/unilateral_exit/host_tx_finality.rs)). Sticky merge on sync promotes the same flags. The control page shows **one graph node per leaf tx** and selects sibling outpoints atomically ([`unilateralExitControlStore.ts`](../frontend/src/stores/unilateralExitControlStore.ts)). Completion to on-chain remains **per outpoint**.
 
 ### Intermediary (en-passant) VTXOs
 
 An exit branch can host exit-eligible VTXOs on upstream `tree` / `ark` virtual txs, not only on the selected leaves. After those txs reach **6 confirmations** on Esplora, those VTXOs must be marked unrolled so the user cannot start a **second** unilateral exit for funds already on the published branch.
 
-Implemented in `reconcile_intermediate_ark_virtual_txs_unrolled_on_esplora` ([`bitboard-ark/src/session/unilateral_exit/onchain.rs`](../bitboard-ark/src/session/unilateral_exit/onchain.rs)), which runs during operator sync. It uses the same 6-conf rule as leaves (`get_tx_confirmations` + `leaf_reached_finality`), not mere tx presence.
+Implemented in `reconcile_host_tx_finality` ([`bitboard-ark/src/session/unilateral_exit/host_tx_finality.rs`](../bitboard-ark/src/session/unilateral_exit/host_tx_finality.rs)), which runs on session open (including autonomous), operator sync, proceed, progress, list, and complete (`ARK-EXIT-29`). It uses the same 6-conf rule as leaves (`UNILATERAL_EXIT_LEAF_CONFIRMATIONS`), not mere tx presence.
 
 Frontend job reconcile must **not** treat a persisted job as stale when WASM reports no in-progress exits (pre-broadcast crash recovery). Non-overlapping in-progress outpoints are also not stale; intermediate VTXOs can differ from the original job leaves ([`unilateral-exit-job-reconcile.ts`](../frontend/src/lib/arkade/unilateral-exit-job-reconcile.ts)).
 
@@ -245,14 +245,15 @@ flowchart TD
   start --> pending[record pending_exit_deductions for unmarked leaves]
   pending --> plan[build_unilateral_batch_plan merged ordered_step_txids]
   plan --> idx[first_incomplete_step_index via Esplora confs plus wait-cap]
-  idx -->|"all steps at 1-conf"| markLeaf[mark_unrolled_leaves_at_finality 6 conf all vouts]
-  markLeaf --> done[phase Complete]
+  idx -->|"all steps at 1-conf"| reconcile[reconcile_host_tx_finality 6 conf all vouts]
+  reconcile --> done[phase Complete]
   idx -->|"current step under 1-conf"| relay{already relayed or step_wait?}
-  relay -->|no| bump[broadcast_unilateral_exit_step_at_fee_rate CPFP]
+  relay -->|no| register[register host_tx_observation]
+  register --> bump[broadcast_unilateral_exit_step_at_fee_rate CPFP]
   relay -->|yes| waitRec[ensure_unilateral_exit_step_wait]
   bump --> waitRec
-  waitRec --> markLeaf2[mark_unrolled_leaves_at_finality]
-  markLeaf2 --> waiting[phase Waiting plus node and leaf statuses]
+  waitRec --> reconcile2[reconcile_host_tx_finality]
+  reconcile2 --> waiting[phase Waiting plus node and leaf statuses]
 ```
 
 Confirmation constants ([`bitboard-ark/src/constants.rs`](../bitboard-ark/src/constants.rs)):
@@ -262,7 +263,7 @@ Confirmation constants ([`bitboard-ark/src/constants.rs`](../bitboard-ark/src/co
 | `UNILATERAL_EXIT_STEP_CONFIRMATIONS` | 1 | Advance to the next virtual tx |
 | `UNILATERAL_EXIT_LEAF_CONFIRMATIONS` | 6 | Stamp `is_unrolled` on every vout of that virtual tx (leaf or intermediate host) |
 
-`mark_unrolled_leaves_at_finality` does **not** block on operator indexer polling. Sticky merge and watch reconcile run during operator sync (`ARK-EXIT-11`).
+`reconcile_host_tx_finality` does **not** block on operator indexer polling. Sticky merge and watch reconcile run during operator sync (`ARK-EXIT-11`). The same stamper also runs on session open (including autonomous), list, progress, and complete (`ARK-EXIT-29`).
 
 Redundant mempool rejects (`-25` / `-26`) are ignored when the parent is already visible on the network.
 

@@ -14,6 +14,7 @@ use super::plan::UnilateralBatchPlan;
 use super::progress::{step_reached_confirmation, tx_confirmations};
 use super::snapshot_ops::dedup_virtual_outpoints;
 use crate::session::ArkSession;
+use crate::session::mappers::current_unix_timestamp;
 use crate::session::open::sync_onchain_wallet_with_retries;
 
 fn empty_witness_input_summaries(parent: &Transaction) -> Vec<String> {
@@ -106,6 +107,8 @@ impl ArkSession {
             .is_some_and(|record| record.step_txid == step_txid.to_string());
 
         if !already_submitted_this_step {
+            self.wallet_db
+                .register_host_tx_observation(&step_txid.to_string(), current_unix_timestamp());
             sync_onchain_wallet_with_retries(&self.client).await?;
             if let Err(error) = self
                 .client

@@ -34,13 +34,13 @@ File: `bitboard-ark/src/persistence.rs`
 | Type | Purpose |
 |------|---------|
 | `BitboardArkPersistence` | Top-level JSON envelope (`version`, `engine`, `operator_identity`, `autonomous_mode`, `wallet_db`) |
-| `WalletDbSnapshot` | Boarding outputs, secret keys, VTXO snapshot, exit watches, operator trust |
+| `WalletDbSnapshot` | Boarding outputs, secret keys, VTXO snapshot, exit watches, host-tx observations, operator trust |
 | `OffchainVtxoSnapshot` | VTXO list + unilateral exit materials map (keyed by leaf tx) |
 | `JsonPersistenceDb` | In-memory mutex-backed DB implementing ark-client `Persistence` |
 
-**Current version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 8`
+**Current version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 9`
 
-`BitboardArkPersistence::parse_import()` accepts versions 3–8. Published 0.3.3 wallets used v3; missing fields default. Leftover v4–v7 blobs deserialize as the current types. Unsupported or corrupt blobs start from an empty `wallet_db` on session open. `autonomous_mode` (default **false**) is a per-ASP trust posture on the envelope: when true, session open uses `cached_operator_info` and does not call the operator.
+`BitboardArkPersistence::parse_import()` accepts versions 3–9. Published 0.3.3 wallets used v3; missing fields default. Leftover v4–v8 blobs deserialize as the current types. Unsupported or corrupt blobs start from an empty `wallet_db` on session open. `autonomous_mode` (default **false**) is a per-ASP trust posture on the envelope: when true, session open uses `cached_operator_info` and does not call the operator.
 
 ### Offchain receive cursor
 

@@ -27,7 +27,7 @@ feature:
     - Default delegator and operator URLs come from arkade-endpoints.ts (env overrides supported)
     - Network switch terminates and reopens the Arkade worker session for the new network
     - Lock wallet terminates arkade.worker and clears session state
-    - BitboardArkPersistence (engine ark-rs, wire version 8) in sdkPersistenceJson per Arkade account inside encrypted wallet_secrets; autonomous_mode defaults false and is keyed to that ASP
+    - BitboardArkPersistence (engine ark-rs, wire version 9) in sdkPersistenceJson per Arkade account inside encrypted wallet_secrets; autonomous_mode defaults false and is keyed to that ASP
     - Offchain receive derivation cursor is a single scalar in walletDb (see docs/arkade-bitboard-wallet-model.md); no index arrays in sdkPersistenceJson
     - Wallet reopen hydrates boarding outputs from sdkPersistenceJson; operator required for live balance sync and sends unless persisted autonomous_mode is true
   contracts:
@@ -82,7 +82,7 @@ feature:
       - id: ARK-EXIT-01
         description: Start unilateral exit lists only VTXOs that can start unroll; in-progress and ready-to-complete VTXOs are excluded
       - id: ARK-EXIT-02
-        description: Complete unilateral exit lists in-progress VTXOs from local snapshot and pending deductions when operator indexing lags. RPC in-progress membership is removed in ARK-EXIT-31 / Stage 1; this ID remains the Complete list.
+        description: Complete unilateral exit lists in-progress VTXOs from local snapshot and pending deductions when operator indexing lags. Complete RPC does not require in-progress membership (ARK-EXIT-31); this ID remains the Complete list.
       - id: ARK-EXIT-03
         description: Complete unilateral exit supports multi-select batch completion with explicit virtual outpoints (txid + vout) and fee estimate scaled to selected inputs
       - id: ARK-EXIT-04
@@ -96,11 +96,11 @@ feature:
       - id: ARK-EXIT-08
         description: Start unroll/proceed fails fast with autonomous_exit_materials_missing when selected VTXO lacks prefetched materials, regardless of autonomous mode
       - id: ARK-EXIT-09
-        description: Complete uses snapshot readiness plus Esplora only; no operator indexer poll. Each proceed step is non-blocking; the XState machine waits until the current virtual tx has 1 confirmation, and WASM stamps is_unrolled only after 6 confirmations (ARK-EXIT-15/16). Until Stage 1, leaf is_unrolled is stamped on proceed/progress; ARK-EXIT-29 unifies leaf and intermediate stamping and also runs on autonomous load.
+        description: Complete uses snapshot readiness plus Esplora only; no operator indexer poll. Each proceed step is non-blocking; the XState machine waits until the current virtual tx has 1 confirmation, and WASM stamps is_unrolled only after 6 confirmations (ARK-EXIT-15/16). The unified stamper (ARK-EXIT-29) runs on autonomous load, operator sync, proceed, progress, list, and complete (terminals included).
       - id: ARK-EXIT-10
         description: While autonomous mode is active, collaborative exit, send, renew, recoverable settlement, signer migration, boarding settle, and operator sync (manual and background dashboard poll) are blocked in UI and WASM; an in-progress unilateral-exit job does not skip background operator sync
       - id: ARK-EXIT-11
-        description: After each proceed step, WASM does not poll operator list_vtxos; local is_unrolled is stamped when Esplora reports 6 confirmations on the leaf or intermediate host virtual tx; sticky is_unrolled merge and watch reconcile run during operator sync only. Until Stage 1, intermediate hosts are stamped only during operator sync; ARK-EXIT-29 unifies the stamper and runs on autonomous load.
+        description: After each proceed step, WASM does not poll operator list_vtxos; local is_unrolled is stamped when Esplora reports 6 confirmations on the leaf or intermediate host virtual tx; sticky is_unrolled merge and watch reconcile run during operator sync only. The unified stamper (ARK-EXIT-29) also runs on autonomous load, proceed, progress, list, and complete.
       - id: ARK-EXIT-12
         description: Explicit unilateral_exit_watches registry in wallet persistence; survives full snapshot replace; cleared only on completion or reconcile evidence (operator spent or on-chain spent)
       - id: ARK-EXIT-13
@@ -150,7 +150,7 @@ feature:
           of truth. Spend-lock from tagged is Stage 2; Stage 1 must not change dashboard spendable math.
       - id: ARK-EXIT-28
         description: >-
-          Host-tx observation registry (C; Stage 1): keyed by virtual txid; fields registered_at,
+          Host-tx observation registry (C; shipped, envelope v9): keyed by virtual txid; fields registered_at,
           relayed, confirmations, never_seen_probes, last_probed_at. Register immediately before
           submitpackage of that step (not the whole DAG at job start). One row drives all vouts on
           that txid. After five eligible misses (first after registered_at + 10 minutes, then four
@@ -162,7 +162,7 @@ feature:
           delete the row.
       - id: ARK-EXIT-29
         description: >-
-          Unified Esplora 6-conf reconciler (B; Stage 1): any tree/ark virtual tx that hosts VTXOs
+          Unified Esplora 6-conf reconciler (B; shipped): any tree/ark virtual tx that hosts VTXOs
           (terminals included; commitment/checkpoint skipped) with ≥ UNILATERAL_EXIT_LEAF_CONFIRMATIONS
           stamps is_unrolled on every vout of that txid and registers watches. Entry points: Arkade
           load including autonomous, operator sync, proceed, progress, list_unilateral_exits_in_progress,
@@ -181,7 +181,7 @@ feature:
           stop the job for remaining tagged leaves. funding_lost is terminal (not startable, not completable).
       - id: ARK-EXIT-31
         description: >-
-          Complete gate is complete_ready (E; Stage 1): complete_unilateral_exit must not require
+          Complete gate is complete_ready (E; shipped): complete_unilateral_exit must not require
           membership in unilateral_exit_in_progress_outpoints (no VtxoNotInUnilateralExit). Gate is
           validate_snapshot_completion_ready (is_unrolled && !is_spent) plus Esplora
           can_be_claimed_unilaterally_by_owner. Complete dialog still lists pipeline VTXOs (ARK-EXIT-02)

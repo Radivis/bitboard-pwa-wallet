@@ -264,6 +264,28 @@ mod tests {
     }
 
     #[test]
+    fn complete_gate_accepts_unrolled_outpoint_without_in_progress_membership() {
+        let txid = Txid::from_byte_array([0x55; 32]);
+        let snapshot = sample_snapshot(vec![snapshot_record(0x55, 0, true, false)]);
+        let outpoints = vec![VirtualOutPoint { txid, vout: 0 }];
+        validate_snapshot_completion_ready(&snapshot, &outpoints)
+            .expect("unrolled unspent outpoint is completable without in-progress membership");
+    }
+
+    #[test]
+    fn complete_gate_rejects_when_not_unrolled() {
+        let txid = Txid::from_byte_array([0x77; 32]);
+        let snapshot = sample_snapshot(vec![snapshot_record(0x77, 0, false, false)]);
+        let outpoints = vec![VirtualOutPoint { txid, vout: 0 }];
+        let error =
+            validate_snapshot_completion_ready(&snapshot, &outpoints).expect_err("not unrolled");
+        assert!(matches!(
+            error,
+            ArkWasmError::VtxoUnilateralExitNotReady { vout: 0, .. }
+        ));
+    }
+
+    #[test]
     fn validate_snapshot_completion_ready_accepts_ready_outpoint() {
         let txid = Txid::from_byte_array([0x55; 32]);
         let snapshot = sample_snapshot(vec![snapshot_record(0x55, 0, true, false)]);

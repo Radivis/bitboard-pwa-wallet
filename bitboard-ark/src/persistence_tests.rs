@@ -1,9 +1,9 @@
 use crate::persistence::{
-    BITBOARD_ARK_PERSISTENCE_VERSION, BitboardArkPersistence, JsonPersistenceDb,
-    MIN_SUPPORTED_ARK_PERSISTENCE_IMPORT_VERSION, OperatorIdentity, OperatorSignerMigrationHint,
-    PendingBatchIntentKind, PendingBatchIntentLifecyclePhase, PendingBatchIntentRecord,
-    PendingBatchOutpointRecord, PendingExitDeductionRecord, PendingExitKind,
-    UnilateralExitAutomationPrefsRecord, UnilateralExitFailureRecord,
+    BITBOARD_ARK_PERSISTENCE_VERSION, BitboardArkPersistence, HostTxObservationRecord,
+    JsonPersistenceDb, MIN_SUPPORTED_ARK_PERSISTENCE_IMPORT_VERSION, OperatorIdentity,
+    OperatorSignerMigrationHint, PendingBatchIntentKind, PendingBatchIntentLifecyclePhase,
+    PendingBatchIntentRecord, PendingBatchOutpointRecord, PendingExitDeductionRecord,
+    PendingExitKind, UnilateralExitAutomationPrefsRecord, UnilateralExitFailureRecord,
     UnilateralExitFrontendPersistence, UnilateralExitJobRecord, UnilateralExitLeafOutpointRecord,
     network_label, operator_identity_for_connected_signer, pending_batch_record_overlaps_outpoints,
     persisted_operator_identity_for_open, validate_operator_identity,
@@ -659,12 +659,13 @@ fn persistence_v3_production_import_defaults_current_fields() {
     assert!(parsed.wallet_db.pending_batch_intents.is_empty());
     assert!(parsed.wallet_db.unilateral_exit_frontend.is_none());
     assert!(parsed.wallet_db.offchain_vtxo_snapshot.is_none());
+    assert!(parsed.wallet_db.host_tx_observations.is_empty());
     assert!(!parsed.autonomous_mode);
 }
 
 #[test]
 fn persistence_leftover_branch_versions_import_without_wiping() {
-    for version in [4_u32, 5, 6, 7] {
+    for version in [4_u32, 5, 6, 7, 8] {
         let json = format!(
             r#"{{"version":{version},"engine":"ark-rs","ark_sdk_version":"0.9.3","operator_identity":{{"signer_pk_hex":"02abc","network":"signet"}},"wallet_db":{{"boarding_outputs":[],"secret_keys_by_owner_pk_hex":{{}}}},"swap_storage":{{}}}}"#
         );
@@ -679,8 +680,62 @@ fn persistence_leftover_branch_versions_import_without_wiping() {
         );
         assert!(!parsed.wallet_db.operator_trust_pending);
         assert!(parsed.wallet_db.unilateral_exit_frontend.is_none());
+        assert!(parsed.wallet_db.host_tx_observations.is_empty());
         assert!(!parsed.autonomous_mode);
     }
+}
+
+#[test]
+fn persistence_v8_blob_loads_empty_host_tx_observations() {
+    let json = r#"{
+        "version":8,
+        "engine":"ark-rs",
+        "ark_sdk_version":"0.9.3",
+        "operator_identity":{"signer_pk_hex":"02abc","network":"signet"},
+        "wallet_db":{"boarding_outputs":[],"secret_keys_by_owner_pk_hex":{}},
+        "swap_storage":{}
+    }"#;
+    let parsed = BitboardArkPersistence::parse_import(Some(json));
+    assert!(parsed.wallet_db.host_tx_observations.is_empty());
+    assert_eq!(
+        parsed
+            .operator_identity
+            .as_ref()
+            .map(|identity| identity.signer_pk_hex.as_str()),
+        Some("02abc")
+    );
+}
+
+#[test]
+fn host_tx_observation_round_trips_in_envelope() {
+    let identity = OperatorIdentity {
+        signer_pk_hex: "02abc".to_string(),
+        network: network_label(Network::Signet),
+    };
+    let mut envelope = BitboardArkPersistence::empty(identity);
+    envelope.wallet_db.host_tx_observations.insert(
+        "aa".repeat(32),
+        HostTxObservationRecord {
+            registered_at: 1_700_000_000,
+            relayed: true,
+            confirmations: 6,
+            never_seen_probes: 0,
+            last_probed_at: 1_700_000_100,
+        },
+    );
+
+    let json = serde_json::to_string(&envelope).expect("serialize");
+    let parsed = BitboardArkPersistence::parse_import(Some(&json));
+    let row = parsed
+        .wallet_db
+        .host_tx_observations
+        .get(&"aa".repeat(32))
+        .expect("observation");
+    assert_eq!(row.registered_at, 1_700_000_000);
+    assert!(row.relayed);
+    assert_eq!(row.confirmations, 6);
+    assert_eq!(row.never_seen_probes, 0);
+    assert_eq!(row.last_probed_at, 1_700_000_100);
 }
 
 #[test]

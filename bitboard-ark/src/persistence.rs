@@ -11,11 +11,11 @@ use bitcoin::{Network, XOnlyPublicKey};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
-/// Current on-disk Arkade persistence format (v8).
+/// Current on-disk Arkade persistence format (v9).
 ///
 /// Published 0.3.3 wallets used v3. [`BitboardArkPersistence::parse_import`] accepts versions
-/// 3–8: missing fields default. Leftover v4–v7 blobs deserialize as the current types.
-pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 8;
+/// 3–9: missing fields default. Leftover v4–v8 blobs deserialize as the current types.
+pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 9;
 /// Oldest envelope version `parse_import` will load (published 0.3.3).
 pub const MIN_SUPPORTED_ARK_PERSISTENCE_IMPORT_VERSION: u32 = 3;
 const PERSISTENCE_LOCK_POISONED: &str = "persistence lock poisoned";
@@ -170,6 +170,39 @@ pub struct UnilateralExitStepWaitRecord {
     pub started_at: i64,
 }
 
+/// Per virtual host tx: broadcast attempt, Esplora relay/confirmations, never-seen probe budget.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HostTxObservationRecord {
+    pub registered_at: i64,
+    pub relayed: bool,
+    pub confirmations: u64,
+    pub never_seen_probes: u32,
+    pub last_probed_at: i64,
+}
+
+impl HostTxObservationRecord {
+    pub fn freshly_registered(now: i64) -> Self {
+        Self {
+            registered_at: now,
+            relayed: false,
+            confirmations: 0,
+            never_seen_probes: 0,
+            last_probed_at: 0,
+        }
+    }
+}
+
+pub fn insert_host_tx_observation(
+    observations: &mut BTreeMap<String, HostTxObservationRecord>,
+    txid: &str,
+    now: i64,
+) {
+    observations.insert(
+        txid.to_string(),
+        HostTxObservationRecord::freshly_registered(now),
+    );
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct UnilateralExitLeafOutpointRecord {
     pub txid: String,
@@ -310,6 +343,8 @@ pub struct WalletDbSnapshot {
     pub pending_batch_intents: Vec<PendingBatchIntentRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unilateral_exit_frontend: Option<UnilateralExitFrontendPersistence>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub host_tx_observations: BTreeMap<String, HostTxObservationRecord>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -553,6 +588,22 @@ impl JsonPersistenceDb {
 
     pub fn set_unilateral_exit_watches(&self, watches: Vec<UnilateralExitWatchRecord>) {
         lock_persistence(&self.inner).unilateral_exit_watches = watches;
+    }
+
+    pub fn host_tx_observations(&self) -> BTreeMap<String, HostTxObservationRecord> {
+        lock_persistence(&self.inner).host_tx_observations.clone()
+    }
+
+    pub fn set_host_tx_observations(
+        &self,
+        observations: BTreeMap<String, HostTxObservationRecord>,
+    ) {
+        lock_persistence(&self.inner).host_tx_observations = observations;
+    }
+
+    pub fn register_host_tx_observation(&self, txid: &str, now: i64) {
+        let mut inner = lock_persistence(&self.inner);
+        insert_host_tx_observation(&mut inner.host_tx_observations, txid, now);
     }
 
     pub fn upsert_unilateral_exit_watch(&self, record: UnilateralExitWatchRecord) {

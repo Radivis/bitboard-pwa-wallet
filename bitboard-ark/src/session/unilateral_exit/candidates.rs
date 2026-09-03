@@ -128,6 +128,7 @@ impl ArkSession {
     pub async fn list_unilateral_exits_in_progress(
         &self,
     ) -> ArkResult<Vec<UnilateralExitInProgressDto>> {
+        self.reconcile_host_tx_finality().await?;
         let in_progress = self.unilateral_exit_in_progress_outpoints()?;
         if in_progress.is_empty() {
             return Ok(Vec::new());

@@ -1,5 +1,7 @@
-use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
+
+#[cfg(test)]
+use std::collections::HashSet;
 
 use ark_client::Blockchain;
 #[cfg(test)]
@@ -7,15 +9,11 @@ use ark_core::build_unilateral_exit_tree_txids;
 use bitcoin::Txid;
 
 use crate::error::ArkResult;
-use crate::esplora_blockchain::EsploraBlockchain;
 use crate::offchain_snapshot::mark_virtual_tx_vtxos_unrolled_in_snapshot;
 use crate::persistence::{OffchainVtxoSnapshot, UnilateralExitWatchRecord};
-use crate::session::unilateral_exit::topology::{
-    terminal_vtxo_host_txids_from_materials_snapshot, virtual_tx_type_hosts_exit_outpoints,
-};
-use crate::unilateral_exit_materials::{
-    chained_tx_type_label, snapshot_materials_for_leaf_tx, vtxo_chains_from_json,
-};
+use crate::session::unilateral_exit::host_tx_finality::vtxo_host_txids_from_materials;
+#[cfg(test)]
+use crate::unilateral_exit_materials::{snapshot_materials_for_leaf_tx, vtxo_chains_from_json};
 
 use super::progress::leaf_reached_finality;
 use super::watch::parse_branch_txids;
@@ -168,49 +166,13 @@ pub(crate) async fn output_spent_on_chain<B: Blockchain>(
     Ok(blockchain.get_output_status(txid, vout).await?.spend_txid)
 }
 
-/// Non-terminal `tree` / `ark` host txids in exit-branch materials.
+/// `tree` / `ark` host txids in exit-branch materials (terminals included).
 fn intermediate_vtxo_host_txids(snapshot: &OffchainVtxoSnapshot) -> ArkResult<Vec<String>> {
-    let material_leaf_txids: Vec<String> = snapshot
-        .unilateral_exit_materials_by_leaf_tx
-        .keys()
-        .cloned()
-        .collect();
-    if material_leaf_txids.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let terminal_txids =
-        terminal_vtxo_host_txids_from_materials_snapshot(snapshot, &material_leaf_txids)?;
-
-    let mut host_txids = Vec::new();
-    let mut seen = HashSet::new();
-    for leaf_txid in material_leaf_txids {
-        let Some(materials) = snapshot_materials_for_leaf_tx(snapshot, &leaf_txid) else {
-            continue;
-        };
-        let Ok(chains) = vtxo_chains_from_json(&materials.chain_json) else {
-            continue;
-        };
-
-        for link in &chains.inner {
-            let tx_type = chained_tx_type_label(&link.tx_type);
-            if !virtual_tx_type_hosts_exit_outpoints(&tx_type) {
-                continue;
-            }
-            let txid = link.txid.to_string();
-            if terminal_txids.contains(&txid) {
-                continue;
-            }
-            if seen.insert(txid.clone()) {
-                host_txids.push(txid);
-            }
-        }
-    }
-    Ok(host_txids)
+    vtxo_host_txids_from_materials(snapshot)
 }
 
-/// Stamp `is_unrolled` on intermediate (non-terminal) vtxo-host virtual txs that have reached
-/// the same unroll finality as leaves (`UNILATERAL_EXIT_LEAF_CONFIRMATIONS`).
+/// Stamp `is_unrolled` on vtxo-host virtual txs (`tree` / `ark`, terminals included) that have
+/// reached unroll finality (`UNILATERAL_EXIT_LEAF_CONFIRMATIONS`).
 pub(crate) fn stamp_intermediate_hosts_unrolled_at_finality(
     snapshot: &mut OffchainVtxoSnapshot,
     confirmations_for_txid: impl Fn(&str) -> u64,
@@ -222,33 +184,6 @@ pub(crate) fn stamp_intermediate_hosts_unrolled_at_finality(
         }
     }
     Ok(())
-}
-
-/// When an upstream vtxo-host virtual tx (`tree` or `ark`) in an exit branch reaches 6
-/// confirmations on Esplora, mark its VTXOs unrolled so they cannot be started as a separate
-/// unilateral exit.
-pub(crate) async fn reconcile_intermediate_ark_virtual_txs_unrolled_on_esplora(
-    blockchain: &EsploraBlockchain,
-    snapshot: &mut OffchainVtxoSnapshot,
-) -> ArkResult<()> {
-    let host_txids = intermediate_vtxo_host_txids(snapshot)?;
-    if host_txids.is_empty() {
-        return Ok(());
-    }
-
-    let mut confirmations_by_txid = HashMap::new();
-    for txid_str in &host_txids {
-        let Ok(txid) = Txid::from_str(txid_str) else {
-            continue;
-        };
-        confirmations_by_txid.insert(
-            txid_str.clone(),
-            blockchain.get_tx_confirmations(&txid).await?,
-        );
-    }
-    stamp_intermediate_hosts_unrolled_at_finality(snapshot, |txid| {
-        confirmations_by_txid.get(txid).copied().unwrap_or(0)
-    })
 }
 
 #[cfg(test)]
@@ -443,14 +378,14 @@ mod tests {
         stamp_with_uniform_confirmations(&mut snapshot, 6);
         assert!(record_is_unrolled(&snapshot, &tree, 0));
         assert!(record_is_unrolled(&snapshot, &tree, 1));
-        assert!(!record_is_unrolled(&snapshot, &leaf, 0));
+        assert!(record_is_unrolled(&snapshot, &leaf, 0));
     }
 
     #[test]
-    fn terminal_leaf_host_is_skipped_even_at_six_confirmations() {
+    fn terminal_leaf_host_is_unrolled_at_six_confirmations() {
         let (mut snapshot, _, leaf, _) = snapshot_with_intermediate_tree_and_ark_leaf();
         stamp_with_uniform_confirmations(&mut snapshot, 6);
-        assert!(!record_is_unrolled(&snapshot, &leaf, 0));
+        assert!(record_is_unrolled(&snapshot, &leaf, 0));
     }
 
     #[test]
@@ -493,7 +428,7 @@ mod tests {
 
         assert!(!record_is_unrolled(&snapshot, &commitment, 0));
         assert!(!record_is_unrolled(&snapshot, &checkpoint, 0));
-        assert!(!record_is_unrolled(&snapshot, &leaf, 0));
+        assert!(record_is_unrolled(&snapshot, &leaf, 0));
         assert!(record_is_unrolled(&snapshot, &tree, 0));
     }
 }

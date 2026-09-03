@@ -362,6 +362,7 @@ async function openSessionImpl(
     )
 
     activeSessionKey = key
+    await persistAfterUnilateralExitOperation()
     return {
       arkadeAddress: openResult.arkadeAddress as string,
       operatorSignerPkHex: openResult.operatorSignerPkHex as string,
@@ -725,12 +726,14 @@ const arkadeService: ArkadeService = {
   },
 
   async listUnilateralExitsInProgress(): Promise<ArkadeUnilateralExitInProgressDto[]> {
-    return invokeWasmArk(
+    const rows = await invokeWasmArk(
       (wasmModule) =>
         wasmModule.ark_list_unilateral_exits_in_progress() as Promise<
           ArkadeUnilateralExitInProgressDto[]
         >,
     )
+    await persistAfterUnilateralExitOperation()
+    return rows
   },
 
   async getOnchainBumperInfo(): Promise<ArkadeOnchainBumperInfo> {
@@ -822,12 +825,14 @@ const arkadeService: ArkadeService = {
   async getUnilateralExitProgress(
     params: ArkadeUnilateralExitProgressParams,
   ): Promise<ArkadeUnilateralExitProgress> {
-    return invokeWasmArk(
+    const progress = await invokeWasmArk(
       (wasmModule) =>
         wasmModule.ark_get_unilateral_exit_progress(
           params,
         ) as Promise<ArkadeUnilateralExitProgress>,
     )
+    await persistAfterUnilateralExitOperation()
+    return progress
   },
 
   async evaluateUnilateralExitJobViability(

@@ -128,7 +128,7 @@ Unilateral exit is more subtle: the **same sats** are tracked in different snaps
 **Handoff between pending record and exiting sub-bucket**
 
 1. First unroll broadcast → `record_pending_unilateral_exit` writes a pending deduction; the VTXO is still spendable in the snapshot.
-2. A virtual tx reaches **6 confirmations** → `mark_leaf_virtual_tx_vtxos_unrolled_in_snapshot` sets `is_unrolled = true` on every vout of that tx (gross spendable drops **before** operator sync realigns the snapshot).
+2. A virtual tx reaches **6 confirmations** → `reconcile_host_tx_finality` sets `is_unrolled = true` on every vout of that tx (gross spendable drops **before** operator sync realigns the snapshot).
 3. `reconcile_pending_exit_deductions` drops the pending unilateral record once the VTXO is no longer spendable.
 4. `exit_balance_components` counts the same amount from the **exiting** sub-bucket until on-chain completion (`is_spent`).
 
