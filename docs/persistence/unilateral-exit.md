@@ -10,6 +10,7 @@ flowchart TB
     materials[unilateral_exit_materials_by_leaf_tx]
     vtxos[virtual_tx_outpoints is_unrolled]
     watches[unilateral_exit_watches]
+    records[vtxo_exit_records]
     stepWait[unilateral_exit_step_wait]
     deductions[pending_exit_deductions]
     hostObs[host_tx_observations]
@@ -40,7 +41,7 @@ Memory caches are keyed by `walletId:networkMode:arkadeAccountId` (`arkadeWallet
 
 Flushed through the Arkade save lifecycle into `StoredArkadeAccount.sdkPersistenceJson`. Types: [`bitboard-ark/src/persistence.rs`](../../bitboard-ark/src/persistence.rs). Materials encode/decode: [`unilateral_exit_materials.rs`](../../bitboard-ark/src/unilateral_exit_materials.rs). Frontend bundle I/O: [`unilateral-exit-frontend-sdk-persistence.ts`](../../frontend/src/lib/wallet/lifecycle/unilateral-exit-frontend-sdk-persistence.ts).
 
-**Envelope version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 9`. `parse_import` accepts 3–9. Published 0.3.3 wallets used v3; missing fields default (`unilateral_exit_frontend` is `None`, `host_tx_observations` is empty, `autonomous_mode` is false). When `unilateral_exit_frontend` is `None`, a one-shot overlay reads leftover SQLite `settings` rows.
+**Envelope version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 10`. `parse_import` accepts 3–10. Published 0.3.3 wallets used v3; missing fields default (`unilateral_exit_frontend` is `None`, `host_tx_observations` is empty, `vtxo_exit_records` is empty, `autonomous_mode` is false). When `unilateral_exit_frontend` is `None`, a one-shot overlay reads leftover SQLite `settings` rows. On open / first B, empty `vtxo_exit_records` heal from leftover pending unilateral deductions, watches, and snapshot `is_unrolled && !is_spent` rows.
 
 | Field | Where | Role |
 |-------|-------|------|
@@ -48,7 +49,8 @@ Flushed through the Arkade save lifecycle into `StoredArkadeAccount.sdkPersisten
 | `unilateral_exit_materials_by_leaf_tx` | `OffchainVtxoSnapshot` | Chain JSON + virtual PSBTs for autonomous unroll |
 | `unilateral_exit_watches` | `WalletDbSnapshot` | Exit watches that survive a full snapshot replace (`ARK-EXIT-12`) |
 | `unilateral_exit_step_wait` | `WalletDbSnapshot` | Current step txid, index, `started_at` for relay-wait UI |
-| `pending_exit_deductions` | `WalletDbSnapshot` | Balance-line records during unroll before `is_unrolled` |
+| `pending_exit_deductions` | `WalletDbSnapshot` | Collaborative retain records; unilateral rows are a derived mirror of tagged…host_confirmed (not an independent proceed write) |
+| `vtxo_exit_records` | `WalletDbSnapshot` | Per-outpoint exit pipeline (`ARK-EXIT-27`); spend-lock, lists, recover/renew exclusion |
 | `host_tx_observations` | `WalletDbSnapshot` | Per virtual host txid: broadcast attempt, Esplora relay/confirmations, never-seen probe budget (`ARK-EXIT-28`) |
 | `cached_operator_info` | `WalletDbSnapshot` | Last `getInfo` snapshot for autonomous mode |
 | `autonomous_mode` | `BitboardArkPersistence` | Per-ASP trust posture; default false; session open skips operator RPC when true |
@@ -82,9 +84,19 @@ step_txid, step_index, started_at
 
 `ensure_unilateral_exit_step_wait` reuses `started_at` when the same step is already tracked. Cleared when the current step reaches 1 confirmation or the branch is complete. Frontend also mirrors relay wait as `currentStepRelayedSinceUnix` in the frontend job bundle (regtest `/raw` 404 workaround).
 
+### VTXO exit records (`VtxoExitRecord`)
+
+```text
+phase, tagged_at, host_txid, amount_sats
+```
+
+Keyed by `"{txid}:{vout}"` on `WalletDbSnapshot` (same layer as watches / observations, so replacing `offchain_vtxo_snapshot` cannot drop pipeline membership). Idle is no row. Phases: `tagged` | `host_broadcast_attempted` | `host_relayed` | `host_confirmed` | `unrolled` | `complete_ready` | `exited`. Do not persist `funding_lost` yet.
+
+`START_MANUAL` / `START_AUTOMATIC` invoke WASM `tag_unilateral_exit_plan` **before** writing the frontend job bookmark (`taggingPlan`). Abort calls `untag_unilateral_exit_plan_if_safe`: delete only `tagged` rows with no `host_tx_observations` row for that `host_txid`. Hydrate of an existing bookmark re-tags (idempotent).
+
 ### Pending deductions
 
-First unroll broadcast writes a unilateral pending deduction while the VTXO is still spendable in the snapshot. After local `is_unrolled`, `reconcile_pending_exit_deductions` drops the record; the same sats move to the **exiting** sub-bucket. See the wallet-model [balance timing table](../arkade-bitboard-wallet-model.md#unilateral-vs-collaborative-exit-balance-timing).
+Collaborative pending deductions are unchanged. Unilateral pending rows are no longer written independently at proceed; they are a derived mirror of records in `tagged`…`host_confirmed` (or unused for in-progress union). After local `is_unrolled`, the same sats are already out of gross spendable via the **exiting** sub-bucket. See the wallet-model [balance timing table](../arkade-bitboard-wallet-model.md#unilateral-vs-collaborative-exit-balance-timing).
 
 ### Frontend bundle (`UnilateralExitFrontendPersistence`)
 
@@ -100,7 +112,7 @@ automation_prefs.max_fee_rate_sat_per_vb
 last_failure?                     reason_code, outpoints, timestamps, vtxo_ids
 ```
 
-A job exists iff `selected_leaf_outpoints.length > 0`. The machine writes this on `START_MANUAL` / `START_AUTOMATIC` (new `job_started_at_unix`, cleared relay wait) and on `HYDRATE_OR_START` (`ensureActiveJob`, which preserves those timestamps when the outpoints are unchanged). It clears the job on complete, terminate, abort, and `CLEAR_JOB`. Failures (including user abort) stay in `last_failure`.
+A job exists iff `selected_leaf_outpoints.length > 0`. The machine writes this on `START_MANUAL` / `START_AUTOMATIC` **after** WASM tag succeeds (new `job_started_at_unix`, cleared relay wait) and on `HYDRATE_OR_START` after the same tag RPC (`ensureActiveJob`, which preserves those timestamps when the outpoints are unchanged). Tag failure does not leave a new job bookmark. It clears the job on complete, terminate, abort, and `CLEAR_JOB`. Failures (including user abort) stay in `last_failure`.
 
 `context.automationEnabled` is the only job-level manual/automatic switch; prefs changes still flow as `AUTOMATION_PREFS_CHANGED`.
 
@@ -125,7 +137,7 @@ Zustand stores for job/prefs/failure are **session caches** (no `sqliteStorage`)
 ## Hydrate and authority
 
 1. Unlock / Arkade load → `hydrateUnilateralExitFromPersistence` in [`unilateral-exit-runtime.ts`](../../frontend/src/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime.ts).
-2. If persisted outpoints are present → `HYDRATE_OR_START` (always via `checkingProgress`).
+2. If persisted outpoints are present → `HYDRATE_OR_START` (always via `taggingPlan`, then `checkingProgress`).
 3. If the job bookmark is empty, hydrate does **not** invent a job from leftover WASM in-progress exits. Those rows stay visible on the control page; the user starts again explicitly, including re-selecting a not-yet-unrolled leftover leaf (`ARK-EXIT-26`). Crash recovery is “persisted outpoints are still there.”
 4. While the job exists, topology/progress outpoints come from the **actor** (`resolveUnilateralExitTopologyOutpoints` / `resolveUnilateralExitJobOutpoints`). Never skip when lifecycle outpoints are empty but persistence still has them.
 5. Hydrate waits until Arkade load/sync is quiet (or until in-progress sats/outpoints are already visible) before sending `HYDRATE_OR_START`. WASM reporting no in-progress exits does **not** clear a persisted job — that is pre-broadcast crash recovery. The machine clears the job bookmark on complete / abort / terminate.
@@ -140,8 +152,8 @@ TanStack Query caches progress/topology/balance for display. During an active jo
 txid, registered_at, relayed, confirmations, never_seen_probes, last_probed_at
 ```
 
-Registered immediately before broadcast of that proceed step (`ARK-EXIT-28`). After five eligible `never_seen` misses, **delete** the observation; pending deductions stay. Also delete when every snapshot VTXO on that host is `is_spent`. Observation plus the unified 6-conf reconciler **feed** `is_unrolled`.
+Registered immediately before broadcast of that proceed step (`ARK-EXIT-28`). After five eligible `never_seen` misses, **delete** the observation and rewind that host’s VTXO records to **`tagged`** (keep the rows). Also delete when every VTXO on that host is `exited` (or every snapshot vout `is_spent`). Observation plus the unified 6-conf reconciler **feed** `is_unrolled` and record phase advances.
 
-**Stage 2** adds a **VTXO exit** table keyed by `(txid, vout)` with the phase enum (`ARK-EXIT-27`). Candidates, in-progress, and complete-ready become record-derived. Envelope version bumps when those blobs land.
+VTXO exit records (`ARK-EXIT-27`) are the list and spend-lock source of truth. Candidates, in-progress, complete-ready, and recover/renew exclusion are record-derived. Envelope version is **10**.
 
 Freeze and abort matrix: [unilateral-exit-vtxo-lifecycle-refactor.md](../future/unilateral-exit-vtxo-lifecycle-refactor.md#stage-0-freeze-agreed).

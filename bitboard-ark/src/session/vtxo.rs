@@ -12,9 +12,7 @@ use crate::api_types::{
 };
 use crate::constants::VTXO_SELF_RENEW_REMAINING_FRACTION;
 use crate::error::{ArkResult, ArkWasmError};
-use crate::exit_balance::{
-    UnilateralExitOutpointKey, unilateral_exit_in_progress_outpoints_from_pending,
-};
+use crate::exit_balance::UnilateralExitOutpointKey;
 use crate::offchain_snapshot::{
     apply_local_snapshot_flags_to_vtxo, local_snapshot_record_for_outpoint,
     script_to_server_pk_lookup, vtxo_list_from_snapshot,
@@ -74,13 +72,11 @@ async fn sleep(duration: std::time::Duration) {
 impl ArkSession {
     /// Recoverable sub-buckets for balance, fee estimate, and batch recover.
     ///
-    /// Excludes pre-unroll unilateral pending outpoints only — post-unroll exiting VTXOs are kept
-    /// out of recoverable by vendored ark-core bucketing. See `docs/arkade-bitboard-wallet-model.md`.
+    /// Excludes unilateral-exit pipeline records (`ARK-REC-08`). Post-unroll exiting VTXOs
+    /// are kept out of recoverable by vendored ark-core bucketing.
     pub(crate) async fn recoverable_vtxo_buckets(&self) -> ArkResult<RecoverableVtxoBuckets> {
         let dust = self.client.server_info()?.dust;
-        let exclude_pre_unroll_unilateral_exit = unilateral_exit_in_progress_outpoints_from_pending(
-            &self.wallet_db.pending_exit_deductions(),
-        );
+        let exclude_unilateral_exit_pipeline = self.pipeline_outpoints();
 
         if balance_vtxo_reads_use_operator_rpc(self.autonomous_mode())
             && let Ok((vtxo_list, _)) = self.client.list_vtxos().await
@@ -88,7 +84,7 @@ impl ArkSession {
             return Ok(recoverable_vtxo_buckets_from_list(
                 &vtxo_list,
                 dust,
-                &exclude_pre_unroll_unilateral_exit,
+                &exclude_unilateral_exit_pipeline,
             ));
         }
 
@@ -97,7 +93,7 @@ impl ArkSession {
             return Ok(recoverable_vtxo_buckets_from_list(
                 &vtxo_list,
                 dust,
-                &exclude_pre_unroll_unilateral_exit,
+                &exclude_unilateral_exit_pipeline,
             ));
         }
 
@@ -289,14 +285,12 @@ impl ArkSession {
         } else {
             self.client.list_vtxos().await?
         };
-        let exclude_pre_unroll_unilateral_exit = unilateral_exit_in_progress_outpoints_from_pending(
-            &self.wallet_db.pending_exit_deductions(),
-        );
+        let exclude_unilateral_exit_pipeline = self.pipeline_outpoints();
         let now = current_unix_timestamp();
         let earliest_expires_at = vtxo_list
             .all_unspent()
             .filter(|virtual_tx_outpoint| {
-                !exclude_pre_unroll_unilateral_exit.contains(&virtual_tx_outpoint.outpoint)
+                !exclude_unilateral_exit_pipeline.contains(&virtual_tx_outpoint.outpoint)
                     && virtual_tx_outpoint.created_at > 0
                     && virtual_tx_outpoint.expires_at > now
             })
@@ -395,7 +389,11 @@ impl ArkSession {
         let mut error_message = None;
 
         let cosigner_pk = delegator_pubkey.inner;
-        match self.client.generate_delegate(cosigner_pk).await {
+        match self
+            .client
+            .generate_delegate_excluding_vtxos(cosigner_pk, &self.pipeline_outpoints())
+            .await
+        {
             Ok(mut delegate) => {
                 if let Err(error) = self
                     .client
@@ -565,14 +563,12 @@ impl ArkSession {
         } else {
             self.client.list_vtxos().await?
         };
-        let exclude_pre_unroll_unilateral_exit = unilateral_exit_in_progress_outpoints_from_pending(
-            &self.wallet_db.pending_exit_deductions(),
-        );
+        let exclude_unilateral_exit_pipeline = self.pipeline_outpoints();
         let now = current_unix_timestamp();
         Ok(vtxo_list
             .all_unspent()
             .filter(|virtual_tx_outpoint| {
-                if exclude_pre_unroll_unilateral_exit.contains(&virtual_tx_outpoint.outpoint) {
+                if exclude_unilateral_exit_pipeline.contains(&virtual_tx_outpoint.outpoint) {
                     return false;
                 }
                 if virtual_tx_outpoint.expires_at <= 0 || virtual_tx_outpoint.created_at <= 0 {
@@ -756,16 +752,16 @@ fn recoverable_vtxo_summary_from_filtered<'a>(
 /// operator's own clock/sweep state can still expect a forfeit — it then fails the round with
 /// `missing forfeit tx` and wedges subsequent rounds. Only swept or sub-dust VTXOs are actionable.
 ///
-/// `exclude_pre_unroll_unilateral_exit` drops VTXOs with a pending unilateral record before
-/// `is_unrolled` is indexed locally (brief pre-unroll window).
+/// `exclude_unilateral_exit_pipeline` drops VTXOs with a unilateral-exit record (`ARK-REC-08`),
+/// including tagged leftovers before `is_unrolled` is indexed locally.
 pub(crate) fn recoverable_vtxo_buckets_from_list(
     vtxo_list: &ark_core::VtxoList,
     dust: Amount,
-    exclude_pre_unroll_unilateral_exit: &HashSet<UnilateralExitOutpointKey>,
+    exclude_unilateral_exit_pipeline: &HashSet<UnilateralExitOutpointKey>,
 ) -> RecoverableVtxoBuckets {
     let all_recoverable: Vec<_> = vtxo_list
         .recoverable()
-        .filter(|vtxo| !exclude_pre_unroll_unilateral_exit.contains(&vtxo.outpoint))
+        .filter(|vtxo| !exclude_unilateral_exit_pipeline.contains(&vtxo.outpoint))
         .collect();
     RecoverableVtxoBuckets {
         settleable: recoverable_vtxo_summary_from_filtered(

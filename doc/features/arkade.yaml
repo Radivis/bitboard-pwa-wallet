@@ -27,7 +27,7 @@ feature:
     - Default delegator and operator URLs come from arkade-endpoints.ts (env overrides supported)
     - Network switch terminates and reopens the Arkade worker session for the new network
     - Lock wallet terminates arkade.worker and clears session state
-    - BitboardArkPersistence (engine ark-rs, wire version 9) in sdkPersistenceJson per Arkade account inside encrypted wallet_secrets; autonomous_mode defaults false and is keyed to that ASP
+    - BitboardArkPersistence (engine ark-rs, wire version 10) in sdkPersistenceJson per Arkade account inside encrypted wallet_secrets; autonomous_mode defaults false and is keyed to that ASP
     - Offchain receive derivation cursor is a single scalar in walletDb (see docs/arkade-bitboard-wallet-model.md); no index arrays in sdkPersistenceJson
     - Wallet reopen hydrates boarding outputs from sdkPersistenceJson; operator required for live balance sync and sends unless persisted autonomous_mode is true
   contracts:
@@ -77,12 +77,12 @@ feature:
       - id: ARK-REC-07
         description: VTXOs in unilateral exit do not contribute to pendingRecoveryDueToExpiredSignerSats even when they would otherwise qualify for pending recovery due to expired signer
       - id: ARK-REC-08
-        description: Pre-unroll pending unilateral outpoints do not contribute to recoverableSettleableVtxoCount, recoverablePendingOperatorSweepVtxoCount, expiring-soon count, or earliest-expiry indicator; post-unroll exiting VTXOs are excluded by vendored ark-core bucketing. Stage 2 extends this exclusion from pending deductions to all tagged-or-later VTXO exit records (ARK-EXIT-27 spend-lock target).
+        description: Tagged-or-later VTXO exit records do not contribute to recoverableSettleableVtxoCount, recoverablePendingOperatorSweepVtxoCount, expiring-soon count, or earliest-expiry indicator; post-unroll exiting VTXOs are excluded by vendored ark-core bucketing. Exclusion is record-derived (not pending-deduction-only).
     unilateral_exit:
       - id: ARK-EXIT-01
-        description: Start unilateral exit lists only VTXOs that can start unroll; in-progress and ready-to-complete VTXOs are excluded
+        description: Start unilateral exit lists only VTXOs that can start unroll; unrolled, complete_ready, and exited records are excluded. Tagged leftovers that are not yet unrolled remain startable after abort (ARK-EXIT-26/30). Concurrent second job stays a frontend selection lock.
       - id: ARK-EXIT-02
-        description: Complete unilateral exit lists in-progress VTXOs from local snapshot and pending deductions when operator indexing lags. Complete RPC does not require in-progress membership (ARK-EXIT-31); this ID remains the Complete list.
+        description: Complete unilateral exit lists in-progress VTXOs from persisted VTXO exit records (tagged through complete_ready). Complete RPC does not require in-progress membership (ARK-EXIT-31); this ID remains the Complete list.
       - id: ARK-EXIT-03
         description: Complete unilateral exit supports multi-select batch completion with explicit virtual outpoints (txid + vout) and fee estimate scaled to selected inputs
       - id: ARK-EXIT-04
@@ -144,10 +144,11 @@ feature:
     unilateral_exit_vtxo_lifecycle:
       - id: ARK-EXIT-27
         description: >-
-          VTXO exit phases (target; persist in Stage 2): idle → tagged → host_broadcast_attempted
-          → host_relayed → host_confirmed → unrolled → complete_ready → exited; funding_lost from
-          tagged onward. Abort is not a VTXO phase. WASM persisted records are the durable source
-          of truth. Spend-lock from tagged is Stage 2; Stage 1 must not change dashboard spendable math.
+          VTXO exit phases (shipped, envelope v10): idle (no row) → tagged → host_broadcast_attempted
+          → host_relayed → host_confirmed → unrolled → complete_ready → exited. funding_lost is not
+          persisted yet (Stage 3). Abort is not a VTXO phase. WASM persisted records are the durable
+          source of truth. Spend-lock starts at tagged; subtract from net spendable only while the
+          coin is still in gross spendable (not yet is_unrolled / exiting).
       - id: ARK-EXIT-28
         description: >-
           Host-tx observation registry (C; shipped, envelope v9): keyed by virtual txid; fields registered_at,
@@ -170,15 +171,16 @@ feature:
           VTXOs in materials even if the observation write was missed.
       - id: ARK-EXIT-30
         description: >-
-          Abort, en-passant, and leftover-start (target; abort job rules already in ARK-EXIT-23/26).
-          Abort is not a VTXO phase. Job started with nothing registered: tagged reverts to idle
-          (unlock; Stage 2). Host registered/relayed/any confs: abort does not change VTXO phase.
-          Tagged with a published ancestor: stay tagged. Intermediate host already 6-conf with
-          unpublished leaves: intermediates walk to complete_ready; leaves stay tagged; leaves remain
-          startable to resume unroll; unrolled hosts stay excluded from Start (ARK-EXIT-01).
-          En-passant: tag every exit_relevant_vtxo_outpoints_for_plan outpoint at job start; register
-          host tx later on the proceed step that publishes it; completing an en-passant VTXO does not
-          stop the job for remaining tagged leaves. funding_lost is terminal (not startable, not completable).
+          Abort, en-passant, and leftover-start (shipped). Abort is not a VTXO phase. Job started
+          with nothing registered: tagged reverts to idle (unlock). Host registered/relayed/any confs:
+          abort does not change VTXO phase. Tagged with a published ancestor: stay tagged.
+          Intermediate host already 6-conf with unpublished leaves: intermediates walk to
+          complete_ready; leaves stay tagged; leaves remain startable to resume unroll; unrolled
+          hosts stay excluded from Start (ARK-EXIT-01). En-passant: tag every
+          exit_relevant_vtxo_outpoints_for_plan outpoint at job start; register host tx later on the
+          proceed step that publishes it; completing an en-passant VTXO does not stop the job for
+          remaining tagged leaves. funding_lost is terminal (not startable, not completable) and
+          is not persisted yet (Stage 3).
       - id: ARK-EXIT-31
         description: >-
           Complete gate is complete_ready (E; shipped): complete_unilateral_exit must not require
@@ -189,7 +191,7 @@ feature:
           failed jobs' unrolled VTXOs remain claimable without a frontend job.
       - id: ARK-EXIT-32
         description: >-
-          Job vs VTXO XState split (target; machine files in Stages 2/4). Job machine remains the
+          Job vs VTXO XState split (target; Stage 4). Job machine remains the
           broadcaster: START_*, PROCEED_*, ABORT_ORCHESTRATION, automation, viability terminate;
           waitingConfirm is 1-conf step advance only. VTXO children are a hydrated view keyed by
           (txid, vout); spawn from persisted records not only the job bookmark. Frozen child events:

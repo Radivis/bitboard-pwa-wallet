@@ -192,6 +192,7 @@ function actorAlreadyTrackingHydrateOutpoints(
   }
   if (
     unilateralExitSnapshotIsInAnyState(snapshot, [
+      UNILATERAL_EXIT_MACHINE_STATE.taggingPlan,
       UNILATERAL_EXIT_MACHINE_STATE.checkingProgress,
       UNILATERAL_EXIT_MACHINE_STATE.evaluatingPolicy,
       UNILATERAL_EXIT_MACHINE_STATE.proceeding,

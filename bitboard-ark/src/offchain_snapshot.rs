@@ -15,14 +15,12 @@ use bitcoin::hex::FromHex;
 use bitcoin::{Amount, OutPoint, ScriptBuf, Txid, XOnlyPublicKey};
 
 use crate::error::{ArkResult, ArkWasmError};
-use crate::exit_balance::{
-    UnilateralExitOutpointKey, is_unilateral_exit_in_progress_outpoint,
-    unilateral_exit_in_progress_outpoints,
-};
+use crate::exit_balance::{UnilateralExitOutpointKey, is_unilateral_exit_in_progress_outpoint};
 use crate::persistence::{
     OffchainVtxoSnapshot, PendingExitDeductionRecord, VirtualTxOutPointAssetRecord,
-    VirtualTxOutPointRecord,
+    VirtualTxOutPointRecord, VtxoExitRecord,
 };
+use crate::session::unilateral_exit::vtxo_exit::unilateral_exit_pipeline_outpoints;
 
 /// Signer-aware offchain balance buckets in satoshis.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -91,17 +89,21 @@ pub fn offchain_balance_buckets_from_snapshot(
     legacy_signer_pk_fallback: Option<XOnlyPublicKey>,
     pending_exit_deductions: &[PendingExitDeductionRecord],
     unilateral_exit_watches: &[crate::persistence::UnilateralExitWatchRecord],
+    vtxo_exit_records: &BTreeMap<String, VtxoExitRecord>,
 ) -> ArkResult<OffchainBalanceBuckets> {
     let vtxo_list = vtxo_list_from_snapshot(snapshot)?;
     let script_lookup = script_to_server_pk_lookup(snapshot, legacy_signer_pk_fallback)?;
     let balance = compute_offchain_balance(&vtxo_list, &script_lookup, server_info, now)
         .map_err(ArkWasmError::from)?;
     let mut buckets = OffchainBalanceBuckets::from_live(&balance);
-    let in_progress = unilateral_exit_in_progress_outpoints(
-        Some(snapshot),
-        pending_exit_deductions,
-        unilateral_exit_watches,
-    )?;
+    let mut in_progress = unilateral_exit_pipeline_outpoints(vtxo_exit_records);
+    if in_progress.is_empty() {
+        in_progress = crate::exit_balance::unilateral_exit_in_progress_outpoints(
+            Some(snapshot),
+            pending_exit_deductions,
+            unilateral_exit_watches,
+        )?;
+    }
     buckets.pending_recovery_due_to_expired_signer_sats =
         pending_recovery_due_to_expired_signer_sats_excluding_unilateral_exit(
             &vtxo_list,
@@ -925,6 +927,7 @@ mod tests {
             None,
             &[],
             &[],
+            &BTreeMap::new(),
         )
         .expect("snapshot buckets");
 
@@ -996,6 +999,7 @@ mod tests {
             None,
             &pending,
             &[],
+            &BTreeMap::new(),
         )
         .expect("snapshot buckets");
 

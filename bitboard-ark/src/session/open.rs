@@ -269,6 +269,7 @@ impl ArkSession {
             operator_identity,
             autonomous_mode: Cell::new(autonomous_mode),
         };
+        session.heal_vtxo_exit_records();
         session.reconcile_host_tx_finality_best_effort().await;
         Ok((session, migration_hint))
     }

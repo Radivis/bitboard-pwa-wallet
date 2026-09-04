@@ -464,6 +464,22 @@ describe('selectUnilateralExitInProgressOverlay', () => {
     )
   })
 
+  it('returns figuringOut overlay while tagging the plan', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.taggingPlan, {
+      jobOutpoints: [leaf],
+    })
+    expect(selectUnilateralExitInProgressOverlay(snapshot)).toBe('figuringOut')
+    expect(
+      selectUnilateralExitControlJobState(snapshot, {
+        hasInProgressExits: false,
+        totalSteps: 0,
+      }).phase,
+    ).toBe('advancing')
+    expect(selectUnilateralExitLifecycleSnapshot(snapshot).phase).toBe(
+      UnilateralExitLifecyclePhase.Advancing,
+    )
+  })
+
   it('returns figuringOut overlay during proceeding', () => {
     const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.proceeding, {
       jobOutpoints: [leaf],

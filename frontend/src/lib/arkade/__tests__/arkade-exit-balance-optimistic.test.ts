@@ -13,7 +13,7 @@ const arkadeAccountId = 'conn-1'
 
 // Mirrors docs/arkade-bitboard-wallet-model.md — unilateral vs collaborative exit balance timing.
 describe('arkade-exit-balance-optimistic', () => {
-  it('tracks unilateral exit in progress without reducing spendable totals', () => {
+  it('tracks unilateral exit in progress and reduces spendable totals at tag', () => {
     const queryClient = new QueryClient()
     const balanceKey = arkadeBalanceQueryKey(walletId, networkMode, arkadeAccountId)
     const previousBalance = {
@@ -35,9 +35,9 @@ describe('arkade-exit-balance-optimistic', () => {
     )
 
     expect(queryClient.getQueryData(balanceKey)).toEqual({
-      confirmedSats: 200_000,
-      totalSats: 200_000,
-      offchainSpendableSats: 200_000,
+      confirmedSats: 19_397,
+      totalSats: 19_397,
+      offchainSpendableSats: 19_397,
       unilateralExitInProgressSats: 180_603,
       collaborativeExitInProgressSats: 0,
     })
@@ -145,7 +145,8 @@ describe('arkade-exit-balance-optimistic', () => {
       context,
     )
 
-    expect(reconciled.confirmedSats).toBe(200_000)
+    expect(reconciled.confirmedSats).toBe(19_397)
+    expect(reconciled.offchainSpendableSats).toBe(19_397)
     expect(reconciled.unilateralExitInProgressSats).toBe(180_603)
   })
 })

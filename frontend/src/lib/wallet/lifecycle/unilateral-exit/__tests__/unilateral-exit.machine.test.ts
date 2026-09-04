@@ -59,11 +59,13 @@ import {
   type FetchProgressActorInput,
   type ProceedStepActorInput,
   type ResolveAbortVtxoIdsActorInput,
+  type TagPlanActorInput,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.machine'
 import type { UnilateralExitPolicyEvaluation } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-types'
 import {
   clearPersistedUnilateralExitJob,
   ensurePersistedUnilateralExitJob,
+  getPersistedUnilateralExitJob,
   persistActiveUnilateralExitJob,
   updatePersistedUnilateralExitRelayWait,
 } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence'
@@ -115,6 +117,7 @@ function createTestActor(params: {
   resolveAbortVtxoIds?: (
     input: ResolveAbortVtxoIdsActorInput,
   ) => Promise<{ vtxoIds: string[] }>
+  tagPlan?: (input: TagPlanActorInput) => Promise<void>
 }) {
   const fetchProgress =
     params.fetchProgress ?? vi.fn(async () => progress({ phase: 'idle' }))
@@ -151,6 +154,7 @@ function createTestActor(params: {
 
   const resolveAbortVtxoIds =
     params.resolveAbortVtxoIds ?? vi.fn(async () => ({ vtxoIds: [] as string[] }))
+  const tagPlan = params.tagPlan ?? vi.fn(async () => {})
 
   const testActor = createActor(
     unilateralExitMachine.provide({
@@ -161,6 +165,7 @@ function createTestActor(params: {
         ensureBroadcastActor: fromPromise(ensureBroadcast),
         evaluateAutomationPolicyActor: fromPromise(evaluatePolicy),
         resolveAbortVtxoIdsActor: fromPromise(resolveAbortVtxoIds),
+        tagPlanActor: fromPromise(tagPlan),
       },
     }),
     { input: { pollDelayMs: 60_000, parentDataWaitMs: 60_000 } },
@@ -175,12 +180,18 @@ function createTestActor(params: {
     ensureBroadcast,
     evaluatePolicy,
     resolveAbortVtxoIds,
+    tagPlan,
   }
 }
 
 describe('unilateralExitMachine', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(getPersistedUnilateralExitJob).mockReturnValue({
+      selectedLeafOutpoints: [],
+      currentStepRelayedSinceUnix: null,
+      jobStartedAtUnix: 1_700_000_000,
+    })
   })
 
   afterEach(() => {
@@ -386,9 +397,15 @@ describe('unilateralExitMachine', () => {
     expect(clearPersistedUnilateralExitJob).toHaveBeenCalled()
   })
 
-  it('hydrate uses ensurePersistedUnilateralExitJob instead of persistActiveUnilateralExitJob', async () => {
+  it('hydrate tags the plan then ensures the existing job bookmark', async () => {
     const fetchProgress = vi.fn(async () => progress({ phase: 'idle' }))
-    const { testActor } = createTestActor({ fetchProgress })
+    const tagPlan = vi.fn(async () => {})
+    vi.mocked(getPersistedUnilateralExitJob).mockReturnValue({
+      selectedLeafOutpoints: [leaf],
+      currentStepRelayedSinceUnix: null,
+      jobStartedAtUnix: 1_700_000_000,
+    })
+    const { testActor } = createTestActor({ fetchProgress, tagPlan })
     testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
     persistActiveUnilateralExitJob.mockClear()
     ensurePersistedUnilateralExitJob.mockClear()
@@ -398,8 +415,47 @@ describe('unilateralExitMachine', () => {
       outpoints: [leaf],
     })
     await waitFor(testActor, (state) => state.matches('idle'))
+    expect(tagPlan).toHaveBeenCalled()
     expect(ensurePersistedUnilateralExitJob).toHaveBeenCalledWith(walletScope, [leaf])
     expect(persistActiveUnilateralExitJob).not.toHaveBeenCalled()
+  })
+
+  it('manual start tags the plan before persisting a new job bookmark', async () => {
+    const tagPlan = vi.fn(async () => {})
+    const { testActor } = createTestActor({ tagPlan })
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    persistActiveUnilateralExitJob.mockClear()
+    testActor.send({
+      type: 'START_MANUAL',
+      walletScope,
+      outpoints: [leaf],
+      feeRateSatPerVb: 2,
+    })
+    await waitFor(testActor, (state) => state.matches('waitingConfirm'))
+    expect(tagPlan).toHaveBeenCalled()
+    expect(persistActiveUnilateralExitJob).toHaveBeenCalledWith(walletScope, [leaf])
+  })
+
+  it('tag plan failure goes to error without persisting a job bookmark', async () => {
+    const tagPlan = vi.fn(async () => {
+      throw new Error('autonomous_exit_materials_missing')
+    })
+    const { testActor } = createTestActor({ tagPlan })
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    persistActiveUnilateralExitJob.mockClear()
+    ensurePersistedUnilateralExitJob.mockClear()
+    testActor.send({
+      type: 'START_MANUAL',
+      walletScope,
+      outpoints: [leaf],
+      feeRateSatPerVb: 2,
+    })
+    await waitFor(testActor, (state) => state.matches('error'))
+    expect(persistActiveUnilateralExitJob).not.toHaveBeenCalled()
+    expect(ensurePersistedUnilateralExitJob).not.toHaveBeenCalled()
+    expect(testActor.getSnapshot().context.lastErrorMessage).toBe(
+      'autonomous_exit_materials_missing',
+    )
   })
 
   it('hydrate completes when all selected leaves are unrolled', async () => {
@@ -457,7 +513,7 @@ describe('unilateralExitMachine', () => {
     expect(testActor.getSnapshot().context.progress?.stepIndex).toBe(4)
   })
 
-  it('hydrate with resumeAutomation sets proceedRequested', () => {
+  it('hydrate with resumeAutomation sets proceedRequested', async () => {
     const fetchProgress = vi.fn(async () => progress({ phase: 'idle' }))
     const { testActor } = createTestActor({ fetchProgress })
     testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
@@ -468,7 +524,7 @@ describe('unilateralExitMachine', () => {
       automationEnabled: true,
       resumeAutomation: true,
     })
-    expect(testActor.getSnapshot().matches('checkingProgress')).toBe(true)
+    await waitFor(testActor, (state) => state.matches('checkingProgress'))
     expect(testActor.getSnapshot().context.proceedRequested).toBe(true)
     expect(testActor.getSnapshot().context.automationEnabled).toBe(true)
   })

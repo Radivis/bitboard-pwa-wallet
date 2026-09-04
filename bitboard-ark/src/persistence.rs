@@ -11,11 +11,11 @@ use bitcoin::{Network, XOnlyPublicKey};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
-/// Current on-disk Arkade persistence format (v9).
+/// Current on-disk Arkade persistence format (v10).
 ///
 /// Published 0.3.3 wallets used v3. [`BitboardArkPersistence::parse_import`] accepts versions
-/// 3–9: missing fields default. Leftover v4–v8 blobs deserialize as the current types.
-pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 9;
+/// 3–10: missing fields default. Leftover v4–v9 blobs deserialize as the current types.
+pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 10;
 /// Oldest envelope version `parse_import` will load (published 0.3.3).
 pub const MIN_SUPPORTED_ARK_PERSISTENCE_IMPORT_VERSION: u32 = 3;
 const PERSISTENCE_LOCK_POISONED: &str = "persistence lock poisoned";
@@ -192,6 +192,53 @@ impl HostTxObservationRecord {
     }
 }
 
+/// Per-VTXO unilateral-exit lifecycle phase. Idle is absence of a row (`ARK-EXIT-27`).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "snake_case")]
+pub enum VtxoExitPhase {
+    Tagged,
+    HostBroadcastAttempted,
+    HostRelayed,
+    HostConfirmed,
+    Unrolled,
+    CompleteReady,
+    Exited,
+}
+
+impl VtxoExitPhase {
+    pub fn is_pipeline(self) -> bool {
+        !matches!(self, Self::Exited)
+    }
+
+    pub fn locks_collaborative_spend(self) -> bool {
+        self.is_pipeline()
+    }
+
+    pub fn is_start_list_excluded(self) -> bool {
+        matches!(self, Self::Unrolled | Self::CompleteReady | Self::Exited)
+    }
+
+    pub fn contributes_pending_mirror(self) -> bool {
+        matches!(
+            self,
+            Self::Tagged | Self::HostBroadcastAttempted | Self::HostRelayed | Self::HostConfirmed
+        )
+    }
+}
+
+/// Persisted VTXO exit record keyed by `"{txid}:{vout}"` on [`WalletDbSnapshot`].
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct VtxoExitRecord {
+    pub phase: VtxoExitPhase,
+    pub tagged_at: i64,
+    pub host_txid: String,
+    pub amount_sats: u64,
+}
+
+pub fn vtxo_exit_record_key(txid: &str, vout: u32) -> String {
+    format!("{txid}:{vout}")
+}
+
 pub fn insert_host_tx_observation(
     observations: &mut BTreeMap<String, HostTxObservationRecord>,
     txid: &str,
@@ -345,6 +392,8 @@ pub struct WalletDbSnapshot {
     pub unilateral_exit_frontend: Option<UnilateralExitFrontendPersistence>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub host_tx_observations: BTreeMap<String, HostTxObservationRecord>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub vtxo_exit_records: BTreeMap<String, VtxoExitRecord>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -604,6 +653,14 @@ impl JsonPersistenceDb {
     pub fn register_host_tx_observation(&self, txid: &str, now: i64) {
         let mut inner = lock_persistence(&self.inner);
         insert_host_tx_observation(&mut inner.host_tx_observations, txid, now);
+    }
+
+    pub fn vtxo_exit_records(&self) -> BTreeMap<String, VtxoExitRecord> {
+        lock_persistence(&self.inner).vtxo_exit_records.clone()
+    }
+
+    pub fn set_vtxo_exit_records(&self, records: BTreeMap<String, VtxoExitRecord>) {
+        lock_persistence(&self.inner).vtxo_exit_records = records;
     }
 
     pub fn upsert_unilateral_exit_watch(&self, record: UnilateralExitWatchRecord) {

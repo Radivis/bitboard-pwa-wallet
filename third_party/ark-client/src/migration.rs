@@ -352,9 +352,30 @@ where
     ///
     /// When the server advertises no deprecated signers, returns an empty
     /// [`MigrationSkipReason::NothingMigratable`] report without touching the wallet.
+    ///
+    /// Compatibility wrapper around [`Self::migrate_deprecated_signer_vtxos_excluding`] with an
+    /// empty exclude set (omit nothing — original public API). Spend-lock callers must pass
+    /// tagged-or-later VTXOs to the excluding variant.
     pub async fn migrate_deprecated_signer_vtxos<R>(
         &self,
         rng: &mut R,
+    ) -> Result<DeprecatedSignerMigrationReport, Error>
+    where
+        R: rand::Rng + rand::CryptoRng + Clone,
+    {
+        // Empty set: exclude nothing. Same inputs as this method before the excluding variant.
+        self.migrate_deprecated_signer_vtxos_excluding(rng, &HashSet::new())
+            .await
+    }
+
+    /// Like [`Self::migrate_deprecated_signer_vtxos`], omitting tagged VTXO outpoints.
+    ///
+    /// An empty `exclude_vtxo_outpoints` set is equivalent to
+    /// [`Self::migrate_deprecated_signer_vtxos`].
+    pub async fn migrate_deprecated_signer_vtxos_excluding<R>(
+        &self,
+        rng: &mut R,
+        exclude_vtxo_outpoints: &HashSet<OutPoint>,
     ) -> Result<DeprecatedSignerMigrationReport, Error>
     where
         R: rand::Rng + rand::CryptoRng + Clone,
@@ -398,6 +419,9 @@ where
         // Build the candidate (outpoint, amount, signer, cutoff) list for the VTXO leg.
         let mut vtxo_candidates: Vec<MigrationVtxoRef> = Vec::new();
         for input in &vtxo_inputs {
+            if exclude_vtxo_outpoints.contains(&input.outpoint()) {
+                continue;
+            }
             let Some(vtxo) = script_map.get(input.script_pubkey()) else {
                 tracing::debug!(
                     outpoint = %input.outpoint(),

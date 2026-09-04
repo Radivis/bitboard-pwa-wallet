@@ -4,8 +4,10 @@
  * Unilateral vs collaborative paths differ — see `docs/arkade-bitboard-wallet-model.md`
  * (Unilateral vs collaborative exit balance timing).
  *
- * - **Unilateral:** only bump `unilateralExitInProgressSats`. After unroll, WASM excludes the
- *   VTXO from gross spendable via the exiting sub-bucket; subtracting here would double-count.
+ * - **Unilateral:** bump `unilateralExitInProgressSats` and reduce net spendable fields at
+ *   job start / tag. WASM spend-lock from `tagged` is the durable truth after refetch.
+ *   After 6-conf unroll, WASM already drops those VTXOs from gross spendable — do not
+ *   subtract the in-progress line again in display math.
  * - **Collaborative:** also reduce net spendable fields; snapshot still lists exiting VTXOs as
  *   spendable until operator sync.
  */
@@ -28,25 +30,16 @@ function applyExitDeductionToBalance(
   exitField: ExitBalanceOptimisticContext['exitField'],
 ): ArkadeBalanceInfo {
   const previousExitSats = balance[exitField] ?? 0
-  const nextBalance: ArkadeBalanceInfo = {
+  return {
     ...balance,
     [exitField]: previousExitSats + deductedSats,
+    confirmedSats: Math.max(0, balance.confirmedSats - deductedSats),
+    totalSats: Math.max(0, balance.totalSats - deductedSats),
+    offchainSpendableSats:
+      balance.offchainSpendableSats != null
+        ? Math.max(0, balance.offchainSpendableSats - deductedSats)
+        : undefined,
   }
-
-  if (exitField === 'collaborativeExitInProgressSats') {
-    return {
-      ...nextBalance,
-      confirmedSats: Math.max(0, balance.confirmedSats - deductedSats),
-      totalSats: Math.max(0, balance.totalSats - deductedSats),
-      offchainSpendableSats:
-        balance.offchainSpendableSats != null
-          ? Math.max(0, balance.offchainSpendableSats - deductedSats)
-          : undefined,
-    }
-  }
-
-  // Unilateral: exit line only — spendable totals unchanged (matches post-unroll WASM).
-  return nextBalance
 }
 
 export function applyOptimisticExitBalanceDeduction(
@@ -98,7 +91,7 @@ export function revertOptimisticExitBalanceDeduction(
 
 /**
  * Prefer WASM balance after operator sync; patch only the exit-in-progress field if WASM lags.
- * For unilateral paths, never reduces spendable totals — see module doc above.
+ * Unilateral and collaborative both reduce spendable totals while the coins are still in gross.
  */
 export function reconcileBalanceAfterExitOperation(
   fetched: ArkadeBalanceInfo,

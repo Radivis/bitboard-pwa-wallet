@@ -656,6 +656,26 @@ pub fn ark_set_unilateral_exit_frontend(params: JsValue) -> Result<(), JsValue> 
 }
 
 #[wasm_bindgen]
+pub fn ark_tag_unilateral_exit_plan(params: JsValue) -> Result<(), JsValue> {
+    map_js_error(with_session(|session| {
+        let params: crate::api_types::UnilateralExitProgressParams =
+            serde_wasm_bindgen::from_value(params)?;
+        session.tag_unilateral_exit_plan(&params.vtxo_outpoints)?;
+        Ok(())
+    }))
+}
+
+#[wasm_bindgen]
+pub fn ark_untag_unilateral_exit_plan_if_safe(params: JsValue) -> Result<(), JsValue> {
+    map_js_error(with_session(|session| {
+        let params: crate::api_types::UnilateralExitProgressParams =
+            serde_wasm_bindgen::from_value(params)?;
+        session.untag_unilateral_exit_plan_if_safe(&params.vtxo_outpoints)?;
+        Ok(())
+    }))
+}
+
+#[wasm_bindgen]
 pub fn ark_set_unilateral_exit_job(params: JsValue) -> Result<(), JsValue> {
     map_js_error(with_session(|session| {
         let dto: crate::api_types::UnilateralExitJobDto = serde_wasm_bindgen::from_value(params)?;

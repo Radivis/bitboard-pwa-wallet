@@ -85,6 +85,8 @@ vi.mock('@/workers/arkade-factory', () => ({
   getArkadeWorker: () => ({
     listExitCandidates: workerListMocks.listExitCandidates,
     listUnilateralExitsInProgress: workerListMocks.listUnilateralExitsInProgress,
+    tagUnilateralExitPlan: vi.fn(async () => {}),
+    untagUnilateralExitPlanIfSafe: vi.fn(async () => {}),
   }),
 }))
 
@@ -130,6 +132,7 @@ vi.mock('@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.actors', () => {
         currentStepWaitingSince: 1_700_000_000,
       })),
       resolveAbortVtxoIdsActor: fromPromise(async () => ({ vtxoIds: [] as string[] })),
+      tagPlanActor: fromPromise(async () => {}),
     },
   }
 })

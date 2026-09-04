@@ -12,12 +12,16 @@ use crate::esplora_blockchain::EsploraBlockchain;
 use crate::offchain_snapshot::mark_virtual_tx_vtxos_unrolled_in_snapshot;
 use crate::persistence::{
     HostTxObservationRecord, OffchainVtxoSnapshot, PendingExitDeductionRecord, PendingExitKind,
-    UnilateralExitWatchRecord,
+    UnilateralExitWatchRecord, VtxoExitPhase, VtxoExitRecord,
 };
 use crate::session::ArkSession;
 use crate::session::mappers::current_unix_timestamp;
 use crate::session::unilateral_exit::progress::leaf_reached_finality;
 use crate::session::unilateral_exit::topology::virtual_tx_type_hosts_exit_outpoints;
+use crate::session::unilateral_exit::vtxo_exit::{
+    apply_host_observation_to_vtxo_exit_records, host_txids_from_vtxo_exit_records,
+    observation_all_records_exited, rewind_records_on_host,
+};
 use crate::unilateral_exit_materials::{
     chained_tx_type_label, snapshot_materials_for_leaf_tx, vtxo_chains_from_json,
 };
@@ -87,11 +91,19 @@ pub(crate) fn host_txids_to_probe(
     snapshot: &OffchainVtxoSnapshot,
     observations: &BTreeMap<String, HostTxObservationRecord>,
     pending: &[PendingExitDeductionRecord],
+    vtxo_exit_records: &BTreeMap<String, VtxoExitRecord>,
 ) -> ArkResult<BTreeSet<String>> {
     let mut txids = BTreeSet::new();
     for (txid, record) in observations {
         if record.confirmations < u64::from(UNILATERAL_EXIT_LEAF_CONFIRMATIONS) {
             txids.insert(txid.clone());
+        }
+    }
+    for host_txid in host_txids_from_vtxo_exit_records(vtxo_exit_records) {
+        if observations.get(&host_txid).is_none_or(|record| {
+            record.confirmations < u64::from(UNILATERAL_EXIT_LEAF_CONFIRMATIONS)
+        }) {
+            txids.insert(host_txid);
         }
     }
     let pending_leaves = pending_unilateral_leaf_txids(pending);
@@ -182,13 +194,14 @@ pub(crate) fn reconcile_host_tx_finality_state(
     observations: &mut BTreeMap<String, HostTxObservationRecord>,
     pending: &[PendingExitDeductionRecord],
     watches: &mut Vec<UnilateralExitWatchRecord>,
+    vtxo_exit_records: &mut BTreeMap<String, VtxoExitRecord>,
     now: i64,
     probe: impl Fn(&str) -> Option<HostTxProbe>,
 ) -> ArkResult<()> {
     let stampable_hosts: HashSet<String> = vtxo_host_txids_from_materials(snapshot)?
         .into_iter()
         .collect();
-    let txids = host_txids_to_probe(snapshot, observations, pending)?;
+    let txids = host_txids_to_probe(snapshot, observations, pending, vtxo_exit_records)?;
     let mut delete_txids = Vec::new();
 
     for txid in txids {
@@ -200,27 +213,71 @@ pub(crate) fn reconcile_host_tx_finality_state(
             continue;
         };
         if let Some(record) = observations.get_mut(&txid) {
+            let previous_confirmations = record.confirmations;
+            let previously_relayed = record.relayed;
             if confirmations > 0 || seen {
+                if previous_confirmations >= 1 && confirmations == 0 {
+                    rewind_records_on_host(
+                        vtxo_exit_records,
+                        &txid,
+                        if seen {
+                            VtxoExitPhase::HostRelayed
+                        } else {
+                            VtxoExitPhase::HostBroadcastAttempted
+                        },
+                    );
+                }
                 record.relayed = true;
                 record.confirmations = confirmations;
                 record.last_probed_at = now;
                 record.never_seen_probes = 0;
-                if stampable_hosts.contains(&txid) {
-                    stamp_host_if_final(snapshot, watches, &txid, confirmations, now);
-                }
+                let unrolled = if stampable_hosts.contains(&txid) {
+                    stamp_host_if_final(snapshot, watches, &txid, confirmations, now)
+                } else {
+                    false
+                };
+                apply_host_observation_to_vtxo_exit_records(
+                    vtxo_exit_records,
+                    &txid,
+                    true,
+                    confirmations,
+                    unrolled,
+                );
+            } else if previously_relayed || previous_confirmations >= 1 {
+                record.relayed = false;
+                record.confirmations = 0;
+                record.last_probed_at = now;
+                rewind_records_on_host(
+                    vtxo_exit_records,
+                    &txid,
+                    VtxoExitPhase::HostBroadcastAttempted,
+                );
             } else if apply_absent_probe(record, now) {
                 delete_txids.push(txid);
             }
         } else if stampable_hosts.contains(&txid) {
-            stamp_host_if_final(snapshot, watches, &txid, confirmations, now);
+            let unrolled = stamp_host_if_final(snapshot, watches, &txid, confirmations, now);
+            if seen || confirmations > 0 {
+                apply_host_observation_to_vtxo_exit_records(
+                    vtxo_exit_records,
+                    &txid,
+                    seen || confirmations > 0,
+                    confirmations,
+                    unrolled,
+                );
+            }
         }
     }
 
-    for txid in delete_txids {
-        observations.remove(&txid);
+    for txid in &delete_txids {
+        rewind_records_on_host(vtxo_exit_records, txid, VtxoExitPhase::Tagged);
+        observations.remove(txid);
     }
 
-    observations.retain(|txid, _| !observation_all_snapshot_vouts_spent(snapshot, txid));
+    observations.retain(|txid, _| {
+        !observation_all_snapshot_vouts_spent(snapshot, txid)
+            && !observation_all_records_exited(vtxo_exit_records, txid)
+    });
     Ok(())
 }
 
@@ -273,7 +330,16 @@ impl ArkSession {
         let mut observations = self.wallet_db.host_tx_observations();
         let pending = self.wallet_db.pending_exit_deductions();
         let mut watches = self.wallet_db.unilateral_exit_watches();
-        let txids = host_txids_to_probe(&snapshot, &observations, &pending)?;
+        let mut vtxo_exit_records = self.wallet_db.vtxo_exit_records();
+        crate::session::unilateral_exit::vtxo_exit::heal_vtxo_exit_records_from_legacy(
+            Some(&snapshot),
+            &pending,
+            &watches,
+            &observations,
+            &mut vtxo_exit_records,
+            current_unix_timestamp(),
+        );
+        let txids = host_txids_to_probe(&snapshot, &observations, &pending, &vtxo_exit_records)?;
         let blockchain = self.client.blockchain();
         if !txids.is_empty() {
             blockchain.prepare_confirmation_scan().await;
@@ -293,12 +359,14 @@ impl ArkSession {
             &mut observations,
             &pending,
             &mut watches,
+            &mut vtxo_exit_records,
             now,
             |txid| probes.get(txid).copied(),
         )?;
         self.wallet_db.set_offchain_vtxo_snapshot(snapshot);
         self.wallet_db.set_host_tx_observations(observations);
         self.wallet_db.set_unilateral_exit_watches(watches);
+        self.wallet_db.set_vtxo_exit_records(vtxo_exit_records);
         Ok(())
     }
 
@@ -422,12 +490,21 @@ mod tests {
         confirmations: u64,
         seen: bool,
     ) {
-        reconcile_host_tx_finality_state(snapshot, observations, pending, watches, now, |_| {
-            Some(HostTxProbe {
-                seen,
-                confirmations,
-            })
-        })
+        let mut vtxo_exit_records = BTreeMap::new();
+        reconcile_host_tx_finality_state(
+            snapshot,
+            observations,
+            pending,
+            watches,
+            &mut vtxo_exit_records,
+            now,
+            |_| {
+                Some(HostTxProbe {
+                    seen,
+                    confirmations,
+                })
+            },
+        )
         .expect("reconcile");
     }
 
@@ -628,11 +705,13 @@ mod tests {
         );
         let pending = pending_for_leaf(&leaf);
         let mut watches = Vec::new();
+        let mut vtxo_exit_records = BTreeMap::new();
         reconcile_host_tx_finality_state(
             &mut snapshot,
             &mut observations,
             &pending,
             &mut watches,
+            &mut vtxo_exit_records,
             HOST_TX_NEVER_SEEN_FIRST_PROBE_AFTER_SECS - 1,
             |_| {
                 Some(HostTxProbe {
@@ -662,11 +741,13 @@ mod tests {
         );
         let pending = pending_for_leaf(&leaf);
         let mut watches = Vec::new();
+        let mut vtxo_exit_records = BTreeMap::new();
         reconcile_host_tx_finality_state(
             &mut snapshot,
             &mut observations,
             &pending,
             &mut watches,
+            &mut vtxo_exit_records,
             3_600,
             |_| {
                 Some(HostTxProbe {
@@ -699,11 +780,13 @@ mod tests {
         let mut watches = Vec::new();
         let mut now = HOST_TX_NEVER_SEEN_FIRST_PROBE_AFTER_SECS;
         for _ in 0..HOST_TX_NEVER_SEEN_MAX_ELIGIBLE_MISSES {
+            let mut vtxo_exit_records = BTreeMap::new();
             reconcile_host_tx_finality_state(
                 &mut snapshot,
                 &mut observations,
                 &pending,
                 &mut watches,
+                &mut vtxo_exit_records,
                 now,
                 |_| {
                     Some(HostTxProbe {
@@ -735,11 +818,13 @@ mod tests {
         );
         let pending = pending_for_leaf(&leaf);
         let mut watches = Vec::new();
+        let mut vtxo_exit_records = BTreeMap::new();
         reconcile_host_tx_finality_state(
             &mut snapshot,
             &mut observations,
             &pending,
             &mut watches,
+            &mut vtxo_exit_records,
             HOST_TX_NEVER_SEEN_PROBE_SPACING_SECS,
             |_| {
                 Some(HostTxProbe {
@@ -755,6 +840,58 @@ mod tests {
                 .any(|record| { record.vtxo_txid.as_deref() == Some(leaf.to_string().as_str()) })
         );
         assert!(!observations.contains_key(&leaf.to_string()));
+    }
+
+    #[test]
+    fn never_seen_rewinds_vtxo_exit_records_to_tagged() {
+        use crate::persistence::{VtxoExitPhase, VtxoExitRecord, vtxo_exit_record_key};
+        let (mut snapshot, _, leaf, _) = snapshot_with_intermediate_tree_and_ark_leaf();
+        let mut observations = BTreeMap::new();
+        observations.insert(
+            leaf.to_string(),
+            HostTxObservationRecord {
+                registered_at: 0,
+                relayed: false,
+                confirmations: 0,
+                never_seen_probes: HOST_TX_NEVER_SEEN_MAX_ELIGIBLE_MISSES - 1,
+                last_probed_at: 0,
+            },
+        );
+        let pending = pending_for_leaf(&leaf);
+        let mut watches = Vec::new();
+        let mut vtxo_exit_records = BTreeMap::new();
+        vtxo_exit_records.insert(
+            vtxo_exit_record_key(&leaf.to_string(), 0),
+            VtxoExitRecord {
+                phase: VtxoExitPhase::HostBroadcastAttempted,
+                tagged_at: 1,
+                host_txid: leaf.to_string(),
+                amount_sats: 1_000,
+            },
+        );
+        reconcile_host_tx_finality_state(
+            &mut snapshot,
+            &mut observations,
+            &pending,
+            &mut watches,
+            &mut vtxo_exit_records,
+            HOST_TX_NEVER_SEEN_PROBE_SPACING_SECS,
+            |_| {
+                Some(HostTxProbe {
+                    seen: false,
+                    confirmations: 0,
+                })
+            },
+        )
+        .expect("reconcile");
+        assert!(!observations.contains_key(&leaf.to_string()));
+        assert_eq!(
+            vtxo_exit_records
+                .get(&vtxo_exit_record_key(&leaf.to_string(), 0))
+                .expect("kept")
+                .phase,
+            VtxoExitPhase::Tagged
+        );
     }
 
     #[test]
@@ -799,11 +936,13 @@ mod tests {
         );
         let pending = pending_for_leaf(&leaf);
         let mut watches = Vec::new();
+        let mut vtxo_exit_records = BTreeMap::new();
         reconcile_host_tx_finality_state(
             &mut snapshot,
             &mut observations,
             &pending,
             &mut watches,
+            &mut vtxo_exit_records,
             10,
             |txid| {
                 if txid == tree.to_string() {

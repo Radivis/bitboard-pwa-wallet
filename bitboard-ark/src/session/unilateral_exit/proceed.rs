@@ -53,15 +53,6 @@ impl ArkSession {
         let fee_rate_sat_per_vb = params.fee_rate_sat_per_vb.max(MIN_FEE_RATE_SAT_PER_VB);
 
         let virtual_outpoints = dedup_virtual_outpoints(params.vtxo_outpoints);
-        for outpoint in &virtual_outpoints {
-            let vtxo_txid = outpoint.txid.to_string();
-            if !self.virtual_tx_is_marked_unrolled(&vtxo_txid)? {
-                let amount_sats = self
-                    .vtxo_amount_sats_for_outpoint(&vtxo_txid, outpoint.vout)
-                    .await?;
-                self.record_pending_unilateral_exit(&vtxo_txid, outpoint.vout, amount_sats);
-            }
-        }
 
         let plan = self.build_unilateral_batch_plan(&virtual_outpoints).await?;
         let blockchain = self.client.blockchain();
@@ -107,8 +98,15 @@ impl ArkSession {
             .is_some_and(|record| record.step_txid == step_txid.to_string());
 
         if !already_submitted_this_step {
+            let step_txid_text = step_txid.to_string();
             self.wallet_db
-                .register_host_tx_observation(&step_txid.to_string(), current_unix_timestamp());
+                .register_host_tx_observation(&step_txid_text, current_unix_timestamp());
+            let mut records = self.wallet_db.vtxo_exit_records();
+            crate::session::unilateral_exit::vtxo_exit::advance_records_for_host_registered(
+                &mut records,
+                &step_txid_text,
+            );
+            self.wallet_db.set_vtxo_exit_records(records);
             sync_onchain_wallet_with_retries(&self.client).await?;
             if let Err(error) = self
                 .client

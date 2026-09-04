@@ -238,6 +238,7 @@ export interface ArkadeUnilateralExitInProgressDto {
   virtualStatusState: ArkadeVirtualStatusState
   canComplete: boolean
   startedAt?: number
+  phase?: string
 }
 
 export interface ArkadeMissingBlocktimeCompletionInput {
@@ -619,6 +620,8 @@ export interface ArkadeService {
   getUnilateralExitProgress(
     params: ArkadeUnilateralExitProgressParams,
   ): Promise<ArkadeUnilateralExitProgress>
+  tagUnilateralExitPlan(params: ArkadeUnilateralExitProgressParams): Promise<void>
+  untagUnilateralExitPlanIfSafe(params: ArkadeUnilateralExitProgressParams): Promise<void>
   evaluateUnilateralExitJobViability(
     params: ArkadeUnilateralExitProgressParams,
   ): Promise<ArkadeUnilateralExitJobViability>

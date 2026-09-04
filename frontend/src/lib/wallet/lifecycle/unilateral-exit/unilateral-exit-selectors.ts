@@ -69,6 +69,7 @@ function lifecyclePhaseFromMachineState(
   }
   if (
     unilateralExitSnapshotIsInAnyState(state, [
+      UNILATERAL_EXIT_MACHINE_STATE.taggingPlan,
       UNILATERAL_EXIT_MACHINE_STATE.checkingProgress,
       UNILATERAL_EXIT_MACHINE_STATE.loadingProgress,
       UNILATERAL_EXIT_MACHINE_STATE.evaluatingPolicy,
@@ -115,6 +116,7 @@ export function selectUnilateralExitAutomationSnapshot(
     unilateralExitSnapshotIsInAnyState(state, [
       UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm,
       UNILATERAL_EXIT_MACHINE_STATE.waitingForParentData,
+      UNILATERAL_EXIT_MACHINE_STATE.taggingPlan,
       UNILATERAL_EXIT_MACHINE_STATE.checkingProgress,
       UNILATERAL_EXIT_MACHINE_STATE.evaluatingPolicy,
       UNILATERAL_EXIT_MACHINE_STATE.proceeding,
@@ -209,6 +211,7 @@ function controlDisplayPhaseFromMachine(
   }
   if (
     unilateralExitSnapshotIsInAnyState(state, [
+      UNILATERAL_EXIT_MACHINE_STATE.taggingPlan,
       UNILATERAL_EXIT_MACHINE_STATE.proceeding,
       UNILATERAL_EXIT_MACHINE_STATE.checkingProgress,
       UNILATERAL_EXIT_MACHINE_STATE.loadingProgress,
@@ -288,6 +291,7 @@ export function selectUnilateralExitInProgressOverlay(
   }
   if (
     unilateralExitSnapshotIsInAnyState(state, [
+      UNILATERAL_EXIT_MACHINE_STATE.taggingPlan,
       UNILATERAL_EXIT_MACHINE_STATE.proceeding,
       UNILATERAL_EXIT_MACHINE_STATE.checkingProgress,
       UNILATERAL_EXIT_MACHINE_STATE.loadingProgress,
@@ -341,10 +345,6 @@ export function selectUnilateralExitProceedButtonState(
   const machineWaiting = unilateralExitSnapshotIsInState(
     state,
     UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm,
-  )
-  const machineComplete = unilateralExitSnapshotIsInState(
-    state,
-    UNILATERAL_EXIT_MACHINE_STATE.complete,
   )
   const automationRunning =
     params.automationEnabled &&

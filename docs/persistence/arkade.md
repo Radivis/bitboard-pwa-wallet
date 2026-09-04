@@ -34,13 +34,13 @@ File: `bitboard-ark/src/persistence.rs`
 | Type | Purpose |
 |------|---------|
 | `BitboardArkPersistence` | Top-level JSON envelope (`version`, `engine`, `operator_identity`, `autonomous_mode`, `wallet_db`) |
-| `WalletDbSnapshot` | Boarding outputs, secret keys, VTXO snapshot, exit watches, host-tx observations, operator trust |
+| `WalletDbSnapshot` | Boarding outputs, secret keys, VTXO snapshot, exit watches, host-tx observations, VTXO exit records, operator trust |
 | `OffchainVtxoSnapshot` | VTXO list + unilateral exit materials map (keyed by leaf tx) |
 | `JsonPersistenceDb` | In-memory mutex-backed DB implementing ark-client `Persistence` |
 
-**Current version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 9`
+**Current version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 10`
 
-`BitboardArkPersistence::parse_import()` accepts versions 3–9. Published 0.3.3 wallets used v3; missing fields default. Leftover v4–v8 blobs deserialize as the current types. Unsupported or corrupt blobs start from an empty `wallet_db` on session open. `autonomous_mode` (default **false**) is a per-ASP trust posture on the envelope: when true, session open uses `cached_operator_info` and does not call the operator.
+`BitboardArkPersistence::parse_import()` accepts versions 3–10. Published 0.3.3 wallets used v3; missing fields default. Leftover v4–v9 blobs deserialize as the current types (`vtxo_exit_records` empty until heal). Unsupported or corrupt blobs start from an empty `wallet_db` on session open. `autonomous_mode` (default **false**) is a per-ASP trust posture on the envelope: when true, session open uses `cached_operator_info` and does not call the operator.
 
 ### Offchain receive cursor
 
@@ -90,7 +90,7 @@ Main thread code (`EncryptedWalletSecretsHost`) handles **ciphertext only** — 
 | Unilateral-exit job/prefs/failure caches | Session only | Hydrated from `unilateral_exit_frontend` in `sdkPersistenceJson` |
 | `unilateralExitControlStore` | No | Selection, graph epoch (memory only) |
 
-Unilateral-exit WASM fields (`unilateral_exit_materials_by_leaf_tx`, watches, step wait, pending deductions, `unilateral_exit_frontend`) are documented in [unilateral-exit.md](unilateral-exit.md).
+Unilateral-exit WASM fields (`unilateral_exit_materials_by_leaf_tx`, watches, host-tx observations, `vtxo_exit_records`, step wait, pending deductions, `unilateral_exit_frontend`) are documented in [unilateral-exit.md](unilateral-exit.md).
 
 ## Legacy IndexedDB
 
@@ -100,6 +100,6 @@ Arkade previously used IndexedDB databases named `bitboard-arkade-{walletId}-{ne
 
 | Layer | Version mechanism |
 |-------|-------------------|
-| `BitboardArkPersistence.version` | Rust constant (8); `parse_import` accepts 3–8 (0.3.3 was v3) |
+| `BitboardArkPersistence.version` | Rust constant (10); `parse_import` accepts 3–10 (0.3.3 was v3) |
 | Account metadata | `lastSuccessfulOperatorSyncAt` mirrors on-chain `lastSuccessfulEsploraSyncAt` semantics |
 | Frontend merge | `arkade-payload-merge.ts` ensures receive index only increases |

@@ -835,6 +835,22 @@ const arkadeService: ArkadeService = {
     return progress
   },
 
+  async tagUnilateralExitPlan(
+    params: ArkadeUnilateralExitProgressParams,
+  ): Promise<void> {
+    await invokeWasmArk((wasmModule) => wasmModule.ark_tag_unilateral_exit_plan(params))
+    await persistAfterUnilateralExitOperation()
+  },
+
+  async untagUnilateralExitPlanIfSafe(
+    params: ArkadeUnilateralExitProgressParams,
+  ): Promise<void> {
+    await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_untag_unilateral_exit_plan_if_safe(params),
+    )
+    await persistAfterUnilateralExitOperation()
+  },
+
   async evaluateUnilateralExitJobViability(
     params: ArkadeUnilateralExitProgressParams,
   ): Promise<ArkadeUnilateralExitJobViability> {

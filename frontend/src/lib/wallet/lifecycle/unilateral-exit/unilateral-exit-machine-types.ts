@@ -36,6 +36,7 @@ export type UnilateralExitMachineInput = {
 export const UNILATERAL_EXIT_MACHINE_STATE = {
   notConfigured: 'notConfigured',
   idle: 'idle',
+  taggingPlan: 'taggingPlan',
   checkingProgress: 'checkingProgress',
   loadingProgress: 'loadingProgress',
   evaluatingPolicy: 'evaluatingPolicy',
@@ -107,6 +108,7 @@ export type UnilateralExitMachineActorDoneEvent =
   | DoneActorEvent<UnilateralExitPolicyEvaluation, 'evaluateAutomationPolicy'>
   | DoneActorEvent<ArkadeUnilateralExitJobViability, 'evaluateJobViability'>
   | DoneActorEvent<{ vtxoIds: string[] }, 'resolveAbortVtxoIds'>
+  | DoneActorEvent<void, 'tagPlan'>
 
 export type UnilateralExitMachineActorErrorEvent =
   | ErrorActorEvent<unknown, 'fetchProgress'>
@@ -115,6 +117,7 @@ export type UnilateralExitMachineActorErrorEvent =
   | ErrorActorEvent<unknown, 'evaluateAutomationPolicy'>
   | ErrorActorEvent<unknown, 'evaluateJobViability'>
   | ErrorActorEvent<unknown, 'resolveAbortVtxoIds'>
+  | ErrorActorEvent<unknown, 'tagPlan'>
 
 /** Public events that callers may send. Actor done/error events are internal. */
 export type UnilateralExitMachineEvent = UnilateralExitMachineUserEvent

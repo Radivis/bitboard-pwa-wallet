@@ -46,6 +46,7 @@ export function unilateralExitSnapshotIsInAnyState(
 }
 
 const UNILATERAL_EXIT_PROCEEDING_MACHINE_STATES = [
+  UNILATERAL_EXIT_MACHINE_STATE.taggingPlan,
   UNILATERAL_EXIT_MACHINE_STATE.proceeding,
   UNILATERAL_EXIT_MACHINE_STATE.checkingProgress,
   UNILATERAL_EXIT_MACHINE_STATE.loadingProgress,

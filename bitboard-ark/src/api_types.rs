@@ -296,6 +296,8 @@ pub struct UnilateralExitInProgressDto {
     pub can_complete: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub started_at: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub phase: Option<crate::persistence::VtxoExitPhase>,
 }
 
 #[derive(Debug, Serialize)]

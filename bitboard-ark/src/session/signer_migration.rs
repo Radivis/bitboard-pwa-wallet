@@ -42,12 +42,17 @@ impl ArkSession {
         let mut any_pass_rotated = false;
 
         for _ in 0..MAX_SIGNER_MIGRATION_PASSES {
+            let exclude_vtxos = self.pipeline_outpoints();
             let report = self
                 .with_batch_join(
                     crate::persistence::PendingBatchIntentKind::Migrate,
                     0,
                     None,
-                    || async { self.client.migrate_deprecated_signer_vtxos(&mut rng).await },
+                    || async {
+                        self.client
+                            .migrate_deprecated_signer_vtxos_excluding(&mut rng, &exclude_vtxos)
+                            .await
+                    },
                 )
                 .await?;
 

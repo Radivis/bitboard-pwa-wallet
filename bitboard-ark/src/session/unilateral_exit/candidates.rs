@@ -10,11 +10,12 @@ use crate::api_types::{ExitCandidateDto, UnilateralExitInProgressDto, VirtualSta
 use crate::error::ArkResult;
 use crate::exit_balance::{
     UnilateralExitOutpointKey, exit_outpoint_key, exit_outpoint_key_from_str,
-    unilateral_exit_in_progress_outpoints,
 };
 use crate::offchain_snapshot::virtual_tx_outpoint_from_record;
-use crate::persistence::PendingExitDeductionRecord;
-use crate::persistence::PendingExitKind;
+use crate::persistence::VtxoExitPhase;
+use crate::session::unilateral_exit::vtxo_exit::{
+    mark_record_complete_ready, parse_vtxo_exit_record_key, unilateral_exit_pipeline_outpoints,
+};
 
 use super::snapshot_ops::{
     autonomous_exit_candidates_from_snapshot, autonomous_vtxo_list_and_script_map,
@@ -78,50 +79,13 @@ impl ArkSession {
     pub(crate) fn unilateral_exit_in_progress_outpoints(
         &self,
     ) -> ArkResult<HashSet<UnilateralExitOutpointKey>> {
-        let wallet_snapshot = self.wallet_db.snapshot();
-        let snapshot = wallet_snapshot.offchain_vtxo_snapshot.as_ref();
-        let pending = self.wallet_db.pending_exit_deductions();
-        let watches = self.wallet_db.unilateral_exit_watches();
-        unilateral_exit_in_progress_outpoints(snapshot, &pending, &watches)
-    }
-
-    fn pending_unilateral_started_at_by_outpoint(
-        pending: &[PendingExitDeductionRecord],
-    ) -> HashMap<UnilateralExitOutpointKey, i64> {
-        pending
-            .iter()
-            .filter(|record| record.kind == PendingExitKind::Unilateral)
-            .filter_map(|record| {
-                let txid = record.vtxo_txid.as_deref()?;
-                let vout = record.vout?;
-                let outpoint = exit_outpoint_key_from_str(txid, vout)?;
-                Some((outpoint, record.started_at))
-            })
-            .collect()
-    }
-
-    fn pending_unilateral_amount_sats(
-        pending: &[PendingExitDeductionRecord],
-        outpoint: &UnilateralExitOutpointKey,
-    ) -> u64 {
-        pending
-            .iter()
-            .find(|record| {
-                record.kind == PendingExitKind::Unilateral
-                    && record
-                        .vtxo_txid
-                        .as_deref()
-                        .and_then(|txid| exit_outpoint_key_from_str(txid, record.vout?))
-                        == Some(*outpoint)
-            })
-            .map(|record| record.amount_sats)
-            .unwrap_or(0)
+        Ok(self.pipeline_outpoints())
     }
 
     pub async fn list_exit_candidates(&self) -> ArkResult<Vec<ExitCandidateDto>> {
-        let in_progress = self.unilateral_exit_in_progress_outpoints()?;
+        let start_excluded = self.start_list_excluded_outpoints();
         let snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot;
-        let rows = autonomous_exit_candidates_from_snapshot(self, &in_progress)?;
+        let rows = autonomous_exit_candidates_from_snapshot(self, &start_excluded)?;
         filter_exit_candidates_to_terminal_leaves(snapshot.as_ref(), rows)
     }
 
@@ -129,13 +93,11 @@ impl ArkSession {
         &self,
     ) -> ArkResult<Vec<UnilateralExitInProgressDto>> {
         self.reconcile_host_tx_finality().await?;
-        let in_progress = self.unilateral_exit_in_progress_outpoints()?;
+        let mut records = self.wallet_db.vtxo_exit_records();
+        let in_progress = unilateral_exit_pipeline_outpoints(&records);
         if in_progress.is_empty() {
             return Ok(Vec::new());
         }
-
-        let pending = self.wallet_db.pending_exit_deductions();
-        let started_at_by_outpoint = Self::pending_unilateral_started_at_by_outpoint(&pending);
 
         let (vtxo_list, script_pubkey_to_vtxo) = autonomous_vtxo_list_and_script_map(self)?;
         let offchain_script_map = self.offchain_script_map().unwrap_or_default();
@@ -159,25 +121,43 @@ impl ArkSession {
             .as_ref()
             .map(|snapshot| snapshot.virtual_tx_outpoints.as_slice())
             .unwrap_or(&[]);
-        let watches = wallet_snapshot.unilateral_exit_watches;
 
         let mut rows = Vec::with_capacity(in_progress.len());
-        for outpoint in in_progress {
-            let txid = outpoint.txid.to_string();
-            let vout = outpoint.vout;
+        let mut stamped_complete_ready = false;
+        let pipeline_keys: Vec<String> = records
+            .iter()
+            .filter(|(_, record)| record.phase.is_pipeline())
+            .map(|(key, _)| key.clone())
+            .collect();
+        for key in pipeline_keys {
+            let Some(record) = records.get(&key).cloned() else {
+                continue;
+            };
+            let Some((txid, vout)) = parse_vtxo_exit_record_key(&key) else {
+                continue;
+            };
+            let Some(outpoint) = exit_outpoint_key_from_str(&txid, vout) else {
+                continue;
+            };
+            let phase = record.phase;
             if let Some(virtual_tx_outpoint) = operator_by_outpoint.get(&outpoint) {
                 let candidate = map_exit_candidate(virtual_tx_outpoint, dust);
-                let can_complete = if candidate.can_complete {
-                    resolve_vtxo_completion_claimable(
+                let mut can_complete = phase == VtxoExitPhase::CompleteReady;
+                if !can_complete && (candidate.can_complete || phase == VtxoExitPhase::Unrolled) {
+                    can_complete = resolve_vtxo_completion_claimable(
                         self,
                         virtual_tx_outpoint,
                         &script_pubkey_to_vtxo,
                         &offchain_script_map,
                     )
-                    .await?
-                } else {
-                    false
-                };
+                    .await?;
+                    if can_complete {
+                        if let Some(record) = records.get_mut(&key) {
+                            mark_record_complete_ready(record);
+                            stamped_complete_ready = true;
+                        }
+                    }
+                }
                 rows.push(UnilateralExitInProgressDto {
                     id: candidate.id,
                     txid: candidate.txid,
@@ -185,21 +165,22 @@ impl ArkSession {
                     amount_sats: candidate.amount_sats,
                     virtual_status_state: candidate.virtual_status_state,
                     can_complete,
-                    started_at: started_at_by_outpoint.get(&outpoint).copied(),
+                    started_at: Some(record.tagged_at),
+                    phase: Some(phase),
                 });
                 continue;
             }
 
-            if let Some(record) = snapshot_records
-                .iter()
-                .find(|record| record.txid == txid && record.vout == vout)
-            {
+            if let Some(snapshot_record) = snapshot_records.iter().find(|snapshot_record| {
+                snapshot_record.txid == txid && snapshot_record.vout == vout
+            }) {
                 let virtual_status_state = VirtualStatusState::from_spent_and_unrolled(
-                    record.is_spent,
-                    record.is_unrolled,
+                    snapshot_record.is_spent,
+                    snapshot_record.is_unrolled,
                 );
-                let can_complete = if snapshot_record_ready_for_completion(record) {
-                    match virtual_tx_outpoint_from_record(record) {
+                let mut can_complete = phase == VtxoExitPhase::CompleteReady;
+                if !can_complete && snapshot_record_ready_for_completion(snapshot_record) {
+                    can_complete = match virtual_tx_outpoint_from_record(snapshot_record) {
                         Ok(virtual_tx_outpoint) => {
                             resolve_vtxo_completion_claimable(
                                 self,
@@ -210,35 +191,41 @@ impl ArkSession {
                             .await?
                         }
                         Err(_) => false,
+                    };
+                    if can_complete {
+                        if let Some(record) = records.get_mut(&key) {
+                            mark_record_complete_ready(record);
+                            stamped_complete_ready = true;
+                        }
                     }
-                } else {
-                    false
-                };
+                }
                 rows.push(UnilateralExitInProgressDto {
                     id: format!("{txid}:{vout}"),
                     txid,
                     vout,
-                    amount_sats: record.amount_sats,
+                    amount_sats: snapshot_record.amount_sats,
                     virtual_status_state,
                     can_complete,
-                    started_at: started_at_by_outpoint.get(&outpoint).copied(),
+                    started_at: Some(record.tagged_at),
+                    phase: Some(phase),
                 });
                 continue;
             }
 
             rows.push(UnilateralExitInProgressDto {
                 id: format!("{txid}:{vout}"),
-                txid: txid.clone(),
+                txid,
                 vout,
-                amount_sats: watches
-                    .iter()
-                    .find(|watch| watch.vtxo_txid == txid && watch.vout == vout)
-                    .map(|watch| watch.amount_sats)
-                    .unwrap_or_else(|| Self::pending_unilateral_amount_sats(&pending, &outpoint)),
+                amount_sats: record.amount_sats,
                 virtual_status_state: VirtualStatusState::Unrolled,
-                can_complete: false,
-                started_at: started_at_by_outpoint.get(&outpoint).copied(),
+                can_complete: phase == VtxoExitPhase::CompleteReady,
+                started_at: Some(record.tagged_at),
+                phase: Some(phase),
             });
+        }
+
+        if stamped_complete_ready {
+            self.wallet_db.set_vtxo_exit_records(records);
         }
 
         rows.sort_by(|left, right| {

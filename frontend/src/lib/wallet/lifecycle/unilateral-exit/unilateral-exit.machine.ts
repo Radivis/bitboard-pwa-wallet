@@ -13,6 +13,7 @@ export type {
   FetchProgressActorInput,
   ProceedStepActorInput,
   ResolveAbortVtxoIdsActorInput,
+  TagPlanActorInput,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-setup'
 
 const checkingProgressOnDone = [
@@ -168,18 +169,18 @@ const inFlightAbortPrefsAndProceed = {
 } as const
 
 const startManualTransition = {
-  target: 'checkingProgress',
-  actions: ['assignStartManual', 'persistActiveJobFromContext'],
+  target: 'taggingPlan',
+  actions: ['assignStartManual'],
 } as const
 
 const startAutomaticTransition = {
-  target: 'checkingProgress',
-  actions: ['assignStartAutomatic', 'persistActiveJobFromContext'],
+  target: 'taggingPlan',
+  actions: ['assignStartAutomatic'],
 } as const
 
 const hydrateOrStartTransition = {
-  target: 'checkingProgress',
-  actions: ['assignHydrate', 'ensurePersistedJobFromContext'],
+  target: 'taggingPlan',
+  actions: ['assignHydrate'],
 } as const
 
 export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
@@ -229,6 +230,32 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
             actions: 'assignAutomationPrefs',
           },
         ],
+      },
+    },
+    taggingPlan: {
+      on: inFlightAbortAndPrefs,
+      invoke: {
+        id: 'tagPlan',
+        src: 'tagPlanActor',
+        input: ({ context }) => ({
+          walletScope: requireUnilateralExitWalletScope(context.walletScope),
+          outpoints: context.jobOutpoints,
+        }),
+        onDone: [
+          {
+            guard: 'persistedJobMatchesContextOutpoints',
+            target: 'checkingProgress',
+            actions: ['ensurePersistedJobFromContext'],
+          },
+          {
+            target: 'checkingProgress',
+            actions: ['persistActiveJobFromContext'],
+          },
+        ],
+        onError: {
+          target: 'error',
+          actions: 'assignErrorFromTagPlan',
+        },
       },
     },
     checkingProgress: {

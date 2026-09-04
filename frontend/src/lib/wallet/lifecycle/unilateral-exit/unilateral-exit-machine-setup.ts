@@ -63,6 +63,11 @@ export type ResolveAbortVtxoIdsActorInput = {
   outpoints: UnilateralExitMachineContext['jobOutpoints']
 }
 
+export type TagPlanActorInput = {
+  walletScope: NonNullable<UnilateralExitMachineContext['walletScope']>
+  outpoints: UnilateralExitMachineContext['jobOutpoints']
+}
+
 type UnilateralExitSetupActors = {
   evaluateJobViabilityActor: PromiseActorLogic<
     ArkadeUnilateralExitJobViability,
@@ -76,6 +81,7 @@ type UnilateralExitSetupActors = {
   proceedStepActor: PromiseActorLogic<ArkadeUnilateralExitProgress, ProceedStepActorInput>
   ensureBroadcastActor: PromiseActorLogic<ArkadeUnilateralExitProgress, EnsureBroadcastActorInput>
   resolveAbortVtxoIdsActor: PromiseActorLogic<{ vtxoIds: string[] }, ResolveAbortVtxoIdsActorInput>
+  tagPlanActor: PromiseActorLogic<void, TagPlanActorInput>
 }
 
 export function requireUnilateralExitWalletScope(
@@ -187,6 +193,7 @@ export const unilateralExitMachineSetup = setup({
       proceedStep: 'proceedStepActor'
       ensureBroadcast: 'ensureBroadcastActor'
       resolveAbortVtxoIds: 'resolveAbortVtxoIdsActor'
+      tagPlan: 'tagPlanActor'
     },
   },
   delays: {
@@ -225,6 +232,9 @@ export const unilateralExitMachineSetup = setup({
         throw new Error('resolveAbortVtxoIdsActor implementation missing')
       },
     ),
+    tagPlanActor: fromPromise<void, TagPlanActorInput>(async () => {
+      throw new Error('tagPlanActor implementation missing')
+    }),
   } satisfies UnilateralExitSetupActors,
   guards: {
     isJobCompleteFromFetchEvent: ({ context, event }) => {
@@ -346,6 +356,13 @@ export const unilateralExitMachineSetup = setup({
       assertEvent(event, 'AUTOMATION_PREFS_CHANGED')
       return event.automationEnabled && context.jobOutpoints.length > 0
     },
+    persistedJobMatchesContextOutpoints: ({ context }) => {
+      if (context.walletScope == null || context.jobOutpoints.length === 0) {
+        return false
+      }
+      const existing = getPersistedUnilateralExitJob(context.walletScope)
+      return arkadeVtxoOutpointListsEqual(existing.selectedLeafOutpoints, context.jobOutpoints)
+    },
   },
   actions: {
     assignWalletScope: assign(({ event }) => {
@@ -418,6 +435,13 @@ export const unilateralExitMachineSetup = setup({
       }
       persistActiveUnilateralExitJob(context.walletScope, context.jobOutpoints)
     },
+    assignErrorFromTagPlan: assign({
+      lastErrorMessage: ({ event }) => {
+        assertEvent(event, 'xstate.error.actor.tagPlan')
+        return actorErrorMessage(event.error, 'Failed to lock VTXOs for unilateral exit.')
+      },
+      proceedRequested: false,
+    }),
     ensurePersistedJobFromContext: ({ context }) => {
       if (context.walletScope == null) {
         return

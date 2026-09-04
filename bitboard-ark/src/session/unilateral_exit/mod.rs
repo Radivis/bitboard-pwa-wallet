@@ -10,5 +10,6 @@ pub(crate) mod progress;
 pub(crate) mod snapshot_ops;
 pub(crate) mod topology;
 pub(crate) mod viability;
+pub(crate) mod vtxo_exit;
 pub(crate) mod watch;
 pub(crate) mod watch_reconcile;

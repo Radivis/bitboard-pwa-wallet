@@ -14,9 +14,9 @@ Related:
 
 ---
 
-## VTXO lifecycle (target, staged)
+## VTXO lifecycle (staged)
 
-Not shipped. Spec: `ARK-EXIT-27`–`32` in [arkade.yaml](../doc/features/arkade.yaml). Freeze tables: [unilateral-exit-vtxo-lifecycle-refactor.md](future/unilateral-exit-vtxo-lifecycle-refactor.md#stage-0-freeze-agreed). Implementation starts at Stage 1 (B + C + E). The rest of this handbook is **current** behavior.
+Stage 2 records and spend-lock are **shipped** (`ARK-EXIT-27`, `ARK-EXIT-30`, `ARK-REC-08`). Host-tx observations and unified B remain Stage 1. VTXO child machines (`ARK-EXIT-32`) and `funding_lost` (Stage 3) are still target. Freeze tables: [unilateral-exit-vtxo-lifecycle-refactor.md](future/unilateral-exit-vtxo-lifecycle-refactor.md#stage-0-freeze-agreed).
 
 **Two records** (WASM envelope is durable source of truth):
 
@@ -29,7 +29,7 @@ Not shipped. Spec: `ARK-EXIT-27`–`32` in [arkade.yaml](../doc/features/arkade.
 
 **B entry points** (no dedicated 6-conf poll actor): Arkade load including autonomous, operator sync, proceed, progress, `list_unilateral_exits_in_progress`, complete. Stamp every vout on a `tree`/`ark` host at 6 confs; skip `commitment`/`checkpoint`.
 
-The **job machine** stays the broadcaster (`waitingConfirm` remains 1-conf step advance). VTXO child machines are a hydrated view of persisted records (Stages 2/4). After abort, Complete uses `complete_ready`, not in-progress membership and not a leftover frontend job.
+The **job machine** stays the broadcaster (`waitingConfirm` remains 1-conf step advance). `START_*` invokes `taggingPlan` (WASM tag, then persist job). Abort untags only `tagged` rows with no host observation. VTXO child machines are a hydrated view of persisted records (Stage 4). After abort, Complete uses `complete_ready`, not in-progress membership and not a leftover frontend job.
 
 ## Protocol basics
 

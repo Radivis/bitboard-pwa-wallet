@@ -5,8 +5,9 @@ use crate::persistence::{
     PendingBatchIntentRecord, PendingBatchOutpointRecord, PendingExitDeductionRecord,
     PendingExitKind, UnilateralExitAutomationPrefsRecord, UnilateralExitFailureRecord,
     UnilateralExitFrontendPersistence, UnilateralExitJobRecord, UnilateralExitLeafOutpointRecord,
-    network_label, operator_identity_for_connected_signer, pending_batch_record_overlaps_outpoints,
-    persisted_operator_identity_for_open, validate_operator_identity,
+    VtxoExitPhase, VtxoExitRecord, network_label, operator_identity_for_connected_signer,
+    pending_batch_record_overlaps_outpoints, persisted_operator_identity_for_open,
+    validate_operator_identity, vtxo_exit_record_key,
 };
 use ark_core::server::{DeprecatedSigner, Info};
 use bitcoin::address::NetworkUnchecked;
@@ -660,6 +661,7 @@ fn persistence_v3_production_import_defaults_current_fields() {
     assert!(parsed.wallet_db.unilateral_exit_frontend.is_none());
     assert!(parsed.wallet_db.offchain_vtxo_snapshot.is_none());
     assert!(parsed.wallet_db.host_tx_observations.is_empty());
+    assert!(parsed.wallet_db.vtxo_exit_records.is_empty());
     assert!(!parsed.autonomous_mode);
 }
 
@@ -681,8 +683,54 @@ fn persistence_leftover_branch_versions_import_without_wiping() {
         assert!(!parsed.wallet_db.operator_trust_pending);
         assert!(parsed.wallet_db.unilateral_exit_frontend.is_none());
         assert!(parsed.wallet_db.host_tx_observations.is_empty());
+        assert!(parsed.wallet_db.vtxo_exit_records.is_empty());
         assert!(!parsed.autonomous_mode);
     }
+}
+
+#[test]
+fn persistence_v9_blob_loads_empty_vtxo_exit_records() {
+    let json = r#"{
+        "version":9,
+        "engine":"ark-rs",
+        "ark_sdk_version":"0.9.3",
+        "operator_identity":{"signer_pk_hex":"02abc","network":"signet"},
+        "wallet_db":{"boarding_outputs":[],"secret_keys_by_owner_pk_hex":{}},
+        "swap_storage":{}
+    }"#;
+    let parsed = BitboardArkPersistence::parse_import(Some(json));
+    assert!(parsed.wallet_db.vtxo_exit_records.is_empty());
+    assert!(parsed.wallet_db.host_tx_observations.is_empty());
+}
+
+#[test]
+fn persistence_v10_round_trips_vtxo_exit_records() {
+    let identity = OperatorIdentity {
+        signer_pk_hex: "02abc".to_string(),
+        network: network_label(Network::Signet),
+    };
+    let mut envelope = BitboardArkPersistence::empty(identity);
+    envelope.wallet_db.vtxo_exit_records.insert(
+        vtxo_exit_record_key(&"aa".repeat(32), 1),
+        VtxoExitRecord {
+            phase: VtxoExitPhase::HostConfirmed,
+            tagged_at: 1_700_000_000,
+            host_txid: "aa".repeat(32),
+            amount_sats: 50_000,
+        },
+    );
+
+    let json = serde_json::to_string(&envelope).expect("serialize");
+    assert!(json.contains("\"version\":10"));
+    let parsed = BitboardArkPersistence::parse_import(Some(&json));
+    let row = parsed
+        .wallet_db
+        .vtxo_exit_records
+        .get(&vtxo_exit_record_key(&"aa".repeat(32), 1))
+        .expect("record");
+    assert_eq!(row.phase, VtxoExitPhase::HostConfirmed);
+    assert_eq!(row.tagged_at, 1_700_000_000);
+    assert_eq!(row.amount_sats, 50_000);
 }
 
 #[test]
