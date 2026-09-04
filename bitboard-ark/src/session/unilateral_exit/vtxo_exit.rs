@@ -776,11 +776,7 @@ mod tests {
         assert_eq!(record_phase(&records, &leaf, 0), VtxoExitPhase::Tagged);
         assert_eq!(record_phase(&records, &tree, 0), VtxoExitPhase::Tagged);
         assert_eq!(record_phase(&records, &tree, 1), VtxoExitPhase::Tagged);
-        assert!(
-            records
-                .get(&vtxo_exit_record_key(&commitment.to_string(), 0))
-                .is_none()
-        );
+        assert!(!records.contains_key(&vtxo_exit_record_key(&commitment.to_string(), 0)));
         assert_eq!(
             records
                 .get(&vtxo_exit_record_key(&leaf.to_string(), 0))
@@ -888,9 +884,7 @@ mod tests {
             VtxoExitPhase::HostBroadcastAttempted
         );
         assert!(
-            records
-                .get(&vtxo_exit_record_key(&leaf.to_string(), 0))
-                .is_none(),
+            !records.contains_key(&vtxo_exit_record_key(&leaf.to_string(), 0)),
             "tagged leaf with no host observation unlocks"
         );
     }

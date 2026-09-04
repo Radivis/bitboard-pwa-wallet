@@ -151,11 +151,9 @@ impl ArkSession {
                         &offchain_script_map,
                     )
                     .await?;
-                    if can_complete {
-                        if let Some(record) = records.get_mut(&key) {
-                            mark_record_complete_ready(record);
-                            stamped_complete_ready = true;
-                        }
+                    if can_complete && let Some(record) = records.get_mut(&key) {
+                        mark_record_complete_ready(record);
+                        stamped_complete_ready = true;
                     }
                 }
                 rows.push(UnilateralExitInProgressDto {
@@ -192,11 +190,9 @@ impl ArkSession {
                         }
                         Err(_) => false,
                     };
-                    if can_complete {
-                        if let Some(record) = records.get_mut(&key) {
-                            mark_record_complete_ready(record);
-                            stamped_complete_ready = true;
-                        }
+                    if can_complete && let Some(record) = records.get_mut(&key) {
+                        mark_record_complete_ready(record);
+                        stamped_complete_ready = true;
                     }
                 }
                 rows.push(UnilateralExitInProgressDto {

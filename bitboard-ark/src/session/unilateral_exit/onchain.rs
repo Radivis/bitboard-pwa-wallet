@@ -9,12 +9,15 @@ use ark_core::build_unilateral_exit_tree_txids;
 use bitcoin::Txid;
 
 use crate::error::ArkResult;
+#[cfg(test)]
 use crate::offchain_snapshot::mark_virtual_tx_vtxos_unrolled_in_snapshot;
 use crate::persistence::{OffchainVtxoSnapshot, UnilateralExitWatchRecord};
+#[cfg(test)]
 use crate::session::unilateral_exit::host_tx_finality::vtxo_host_txids_from_materials;
 #[cfg(test)]
 use crate::unilateral_exit_materials::{snapshot_materials_for_leaf_tx, vtxo_chains_from_json};
 
+#[cfg(test)]
 use super::progress::leaf_reached_finality;
 use super::watch::parse_branch_txids;
 
@@ -167,12 +170,14 @@ pub(crate) async fn output_spent_on_chain<B: Blockchain>(
 }
 
 /// `tree` / `ark` host txids in exit-branch materials (terminals included).
+#[cfg(test)]
 fn intermediate_vtxo_host_txids(snapshot: &OffchainVtxoSnapshot) -> ArkResult<Vec<String>> {
     vtxo_host_txids_from_materials(snapshot)
 }
 
 /// Stamp `is_unrolled` on vtxo-host virtual txs (`tree` / `ark`, terminals included) that have
 /// reached unroll finality (`UNILATERAL_EXIT_LEAF_CONFIRMATIONS`).
+#[cfg(test)]
 pub(crate) fn stamp_intermediate_hosts_unrolled_at_finality(
     snapshot: &mut OffchainVtxoSnapshot,
     confirmations_for_txid: impl Fn(&str) -> u64,

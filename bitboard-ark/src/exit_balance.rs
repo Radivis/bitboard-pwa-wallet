@@ -1,7 +1,9 @@
 use std::collections::HashSet;
 use std::str::FromStr;
 
-use bitcoin::{Amount, OutPoint, Txid};
+#[cfg(test)]
+use bitcoin::Amount;
+use bitcoin::{OutPoint, Txid};
 
 use crate::error::ArkWasmError;
 use crate::offchain_snapshot::vtxo_list_from_snapshot;
@@ -82,6 +84,7 @@ pub fn is_unilateral_exit_in_progress_outpoint(
     exit_outpoint_key_from_str(txid, vout).is_some_and(|outpoint| keys.contains(&outpoint))
 }
 
+#[cfg(test)]
 pub fn unilateral_exit_in_progress_sats_from_snapshot(
     snapshot: &OffchainVtxoSnapshot,
 ) -> crate::error::ArkResult<u64> {
@@ -92,6 +95,7 @@ pub fn unilateral_exit_in_progress_sats_from_snapshot(
         .to_sat())
 }
 
+#[cfg(test)]
 pub fn sum_pending_exit_sats_by_kind(
     records: &[PendingExitDeductionRecord],
     kind: PendingExitKind,
