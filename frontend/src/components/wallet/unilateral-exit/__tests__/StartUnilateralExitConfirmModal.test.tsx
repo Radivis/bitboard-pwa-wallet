@@ -5,6 +5,36 @@ import { StartUnilateralExitConfirmModal } from '@/components/wallet/unilateral-
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { ARKADE_LIBRARY_SLUGS } from '@/lib/arkade/arkade-infomode'
 
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-router')>()
+  return {
+    ...actual,
+    Link: ({
+      children,
+      to,
+      params,
+      ...props
+    }: {
+      children: React.ReactNode
+      to: string
+      params?: Record<string, string>
+    }) => {
+      const href =
+        params == null
+          ? to
+          : Object.entries(params).reduce(
+              (path, [key, value]) => path.replace(`$${key}`, value),
+              to,
+            )
+      return (
+        <a href={href} {...props}>
+          {children}
+        </a>
+      )
+    },
+  }
+})
+
 describe('StartUnilateralExitConfirmModal', () => {
   it('keeps Start unroll disabled until risks are acknowledged', async () => {
     const user = userEvent.setup()
