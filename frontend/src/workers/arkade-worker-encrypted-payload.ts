@@ -74,6 +74,21 @@ async function writeEncryptedPayload(
   await deps.encryptedHost.writeEncryptedPayloadCAS(walletId, encryptedPayload)
 }
 
+export async function loadArkadeAccountSdkPersistence(
+  deps: ArkadeEncryptedPayloadDeps,
+  params: {
+    encryptedPayload: EncryptedBlobMessage
+    arkadeAccountId: string
+  },
+): Promise<{ accountFound: boolean; sdkPersistenceJson: string | undefined }> {
+  const payload = await decryptPayload(deps, params.encryptedPayload)
+  const account = findArkadeAccount(payload, params.arkadeAccountId)
+  return {
+    accountFound: account != null,
+    sdkPersistenceJson: account?.sdkPersistenceJson,
+  }
+}
+
 export async function extractSdkPersistenceJsonForAccount(
   deps: ArkadeEncryptedPayloadDeps,
   params: {
@@ -81,8 +96,8 @@ export async function extractSdkPersistenceJsonForAccount(
     arkadeAccountId: string
   },
 ): Promise<string | undefined> {
-  const payload = await decryptPayload(deps, params.encryptedPayload)
-  return findArkadeAccount(payload, params.arkadeAccountId)?.sdkPersistenceJson
+  const loaded = await loadArkadeAccountSdkPersistence(deps, params)
+  return loaded.sdkPersistenceJson
 }
 
 export async function findActiveAccountSummary(

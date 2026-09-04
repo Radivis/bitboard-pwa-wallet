@@ -13,6 +13,7 @@ import {
   extractSdkPersistenceJsonForAccount,
   findActiveAccountSummary,
   listAccountSummaries,
+  loadArkadeAccountSdkPersistence,
   persistSdkJsonToEncryptedPayload,
   updateOperatorSyncAtEncrypted,
   type ArkadeEncryptedPayloadDeps,
@@ -334,7 +335,7 @@ async function openSessionImpl(
   deleteLegacyArkadeIndexedDb(params.walletId, params.networkMode)
 
   const encryptedPayloadMessage = encryptedBlobForDbToMessage(params.encryptedPayload)
-  const sdkPersistenceJson = await extractSdkPersistenceJsonForAccount(
+  const { accountFound, sdkPersistenceJson } = await loadArkadeAccountSdkPersistence(
     getEncryptedPayloadDeps(),
     {
       encryptedPayload: encryptedPayloadMessage,
@@ -362,7 +363,9 @@ async function openSessionImpl(
     )
 
     activeSessionKey = key
-    await persistAfterUnilateralExitOperation()
+    if (accountFound) {
+      await persistAfterUnilateralExitOperation()
+    }
     return {
       arkadeAddress: openResult.arkadeAddress as string,
       operatorSignerPkHex: openResult.operatorSignerPkHex as string,
