@@ -66,7 +66,7 @@ Filled on operator sync for exit-eligible VTXOs (`ARK-EXIT-07`). Proceed fails f
 
 ### Sticky `is_unrolled`
 
-Local stamp after a published virtual tx reaches **6 confirmations**: any `tree` / `ark` host (terminals included) via the unified reconciler on load, operator sync, proceed, progress, list, and complete (`ARK-EXIT-29`). `merge_sticky_unrolled_flags` preserves the flag when the ASP lags.
+Local stamp after a published virtual tx reaches **6 confirmations**: any `tree` / `ark` host (terminals included) via the unified reconciler on load, operator sync, proceed, progress, list, and complete (`ARK-EXIT-29`). `merge_sticky_unrolled_flags` preserves the flag when the ASP lags, only for hosts with 6-conf observations or watches that recorded a published unroll tx.
 
 ### Watches (`UnilateralExitWatchRecord`)
 

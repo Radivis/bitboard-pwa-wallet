@@ -217,8 +217,8 @@ pub(crate) fn rewind_records_on_host(
 ///
 /// `unrolled` is 6-conf (`UNILATERAL_EXIT_LEAF_CONFIRMATIONS`); `confirmations >= 1` is
 /// `host_confirmed` (step wait). `complete_ready` / `exited` are not moved from here — claimable
-/// overlay and complete RPC own those. Monotonic: never lowers phase except via
-/// [`rewind_records_on_host`].
+/// overlay and complete RPC own those. A premature `unrolled` phase (heal from a false snapshot
+/// stamp) is pulled back when Esplora is still below 6-conf.
 pub fn apply_host_observation_to_vtxo_exit_records(
     records: &mut BTreeMap<String, VtxoExitRecord>,
     host_txid: &str,
@@ -246,6 +246,10 @@ pub fn apply_host_observation_to_vtxo_exit_records(
         }
         if unrolled && record.phase < VtxoExitPhase::Unrolled {
             record.phase = VtxoExitPhase::Unrolled;
+            continue;
+        }
+        if !unrolled && record.phase == VtxoExitPhase::Unrolled {
+            record.phase = next;
             continue;
         }
         if record.phase < next && next < VtxoExitPhase::Unrolled {
@@ -951,6 +955,31 @@ mod tests {
         );
         assert_eq!(record_phase(&records, &leaf, 0), VtxoExitPhase::Unrolled);
         assert_eq!(record_phase(&records, &tree, 0), VtxoExitPhase::Tagged);
+    }
+
+    #[test]
+    fn b_rewinds_unrolled_phase_before_six_confirmations() {
+        let (snapshot, _, leaf, _) = snapshot_with_intermediate_tree_and_ark_leaf();
+        let mut records = BTreeMap::new();
+        tag_unilateral_exit_plan_in_records(
+            &snapshot,
+            &[VirtualOutPoint::new(leaf, 0)],
+            &mut records,
+            1,
+        )
+        .expect("tag");
+        records
+            .get_mut(&vtxo_exit_record_key(&leaf.to_string(), 0))
+            .expect("leaf")
+            .phase = VtxoExitPhase::Unrolled;
+        apply_host_observation_to_vtxo_exit_records(
+            &mut records,
+            &leaf.to_string(),
+            true,
+            0,
+            false,
+        );
+        assert_eq!(record_phase(&records, &leaf, 0), VtxoExitPhase::HostRelayed);
     }
 
     #[test]

@@ -14,11 +14,13 @@ use bitcoin::hex::DisplayHex;
 use bitcoin::hex::FromHex;
 use bitcoin::{Amount, OutPoint, ScriptBuf, Txid, XOnlyPublicKey};
 
+use crate::constants::UNILATERAL_EXIT_LEAF_CONFIRMATIONS;
 use crate::error::{ArkResult, ArkWasmError};
 use crate::exit_balance::{UnilateralExitOutpointKey, is_unilateral_exit_in_progress_outpoint};
 use crate::persistence::{
-    OffchainVtxoSnapshot, PendingExitDeductionRecord, VirtualTxOutPointAssetRecord,
-    VirtualTxOutPointRecord, VtxoExitRecord,
+    HostTxObservationRecord, OffchainVtxoSnapshot, PendingExitDeductionRecord,
+    UnilateralExitWatchRecord, VirtualTxOutPointAssetRecord, VirtualTxOutPointRecord,
+    VtxoExitRecord,
 };
 use crate::session::unilateral_exit::vtxo_exit::unilateral_exit_pipeline_outpoints;
 
@@ -258,11 +260,37 @@ pub fn snapshot_from_virtual_tx_outpoints_with_script_lookup(
 
 /// Preserve local `is_unrolled` when ASP indexer lags after unilateral unroll.
 ///
+/// `confirmed_unroll_host_txids` is independent evidence that unroll actually reached 6-conf
+/// (host-tx observations or watches with `published_vtxo_txid`). Tag-time watches alone must
+/// not keep a premature local stamp.
+///
 /// Only applies to VTXOs still present in the incoming operator list. Missing watches are
 /// handled by [`crate::session::unilateral_exit::watch_reconcile::reconcile_exiting_vtxo_watches`].
+pub fn confirmed_unroll_sticky_host_txids(
+    observations: &BTreeMap<String, HostTxObservationRecord>,
+    watches: &[UnilateralExitWatchRecord],
+) -> HashSet<String> {
+    let mut txids = HashSet::new();
+    for (txid, observation) in observations {
+        if observation.confirmations >= u64::from(UNILATERAL_EXIT_LEAF_CONFIRMATIONS) {
+            txids.insert(txid.clone());
+        }
+    }
+    for watch in watches {
+        if let Some(published) = watch.published_vtxo_txid.as_deref()
+            && !published.is_empty()
+        {
+            txids.insert(published.to_string());
+            txids.insert(watch.vtxo_txid.clone());
+        }
+    }
+    txids
+}
+
 pub fn merge_sticky_unrolled_flags(
     prior: Option<&OffchainVtxoSnapshot>,
     incoming: &mut OffchainVtxoSnapshot,
+    confirmed_unroll_host_txids: &HashSet<String>,
 ) {
     let Some(prior) = prior else {
         return;
@@ -272,6 +300,7 @@ pub fn merge_sticky_unrolled_flags(
         .iter()
         .filter(|record| record.is_unrolled && !record.is_spent)
         .map(|record| record.txid.clone())
+        .filter(|txid| confirmed_unroll_host_txids.contains(txid))
         .collect();
 
     for record in &mut incoming.virtual_tx_outpoints {
@@ -316,6 +345,18 @@ pub(crate) fn mark_virtual_tx_vtxos_unrolled_in_snapshot(
     for record in &mut snapshot.virtual_tx_outpoints {
         if record.txid == txid {
             record.is_unrolled = true;
+        }
+    }
+}
+
+/// Drop a premature local `is_unrolled` stamp when this host has not reached 6-conf finality.
+pub(crate) fn clear_virtual_tx_vtxos_unrolled_in_snapshot(
+    snapshot: &mut OffchainVtxoSnapshot,
+    txid: &str,
+) {
+    for record in &mut snapshot.virtual_tx_outpoints {
+        if record.txid == txid {
+            record.is_unrolled = false;
         }
     }
 }
@@ -490,6 +531,7 @@ mod tests {
     use bitcoin::secp256k1::PublicKey;
     use std::collections::BTreeMap;
     use std::collections::HashMap;
+    use std::collections::HashSet;
     use std::str::FromStr;
 
     fn sample_vtp(
@@ -607,8 +649,59 @@ mod tests {
             }],
         );
 
-        merge_sticky_unrolled_flags(Some(&prior), &mut incoming);
+        merge_sticky_unrolled_flags(Some(&prior), &mut incoming, &HashSet::from([txid.clone()]));
         assert!(incoming.virtual_tx_outpoints[0].is_unrolled);
+    }
+
+    #[test]
+    fn merge_sticky_unrolled_does_not_preserve_without_confirmed_host() {
+        let txid = Txid::from_byte_array([0x46; 32]).to_string();
+        let prior = OffchainVtxoSnapshot {
+            synced_at: 1,
+            dust_sats: 330,
+            virtual_tx_outpoints: vec![VirtualTxOutPointRecord {
+                txid: txid.clone(),
+                vout: 0,
+                created_at: 0,
+                expires_at: 9_999_999_999,
+                amount_sats: 50_000,
+                script_hex: String::new(),
+                is_preconfirmed: false,
+                is_swept: false,
+                is_unrolled: true,
+                is_spent: false,
+                spent_by: None,
+                commitment_txids: vec![],
+                settled_by: None,
+                ark_txid: None,
+                assets: vec![],
+                server_pk_hex: None,
+            }],
+            unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
+        };
+        let mut incoming = snapshot_from_virtual_tx_outpoints(
+            330,
+            2,
+            vec![VirtualTxOutPoint {
+                outpoint: OutPoint::new(Txid::from_str(&txid).expect("txid"), 0),
+                created_at: 0,
+                expires_at: 9_999_999_999,
+                amount: Amount::from_sat(50_000),
+                script: ScriptBuf::new(),
+                is_preconfirmed: false,
+                is_swept: false,
+                is_unrolled: false,
+                is_spent: false,
+                spent_by: None,
+                commitment_txids: vec![],
+                settled_by: None,
+                ark_txid: None,
+                assets: vec![],
+            }],
+        );
+
+        merge_sticky_unrolled_flags(Some(&prior), &mut incoming, &HashSet::new());
+        assert!(!incoming.virtual_tx_outpoints[0].is_unrolled);
     }
 
     #[test]
@@ -676,7 +769,7 @@ mod tests {
             ],
         );
 
-        merge_sticky_unrolled_flags(Some(&prior), &mut incoming);
+        merge_sticky_unrolled_flags(Some(&prior), &mut incoming, &HashSet::from([txid.clone()]));
         assert!(
             incoming
                 .virtual_tx_outpoints
@@ -732,7 +825,7 @@ mod tests {
             }],
         );
 
-        merge_sticky_unrolled_flags(Some(&prior), &mut incoming);
+        merge_sticky_unrolled_flags(Some(&prior), &mut incoming, &HashSet::from([txid.clone()]));
         assert!(!incoming.virtual_tx_outpoints[0].is_unrolled);
     }
 

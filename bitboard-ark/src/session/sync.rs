@@ -99,7 +99,11 @@ impl ArkSession {
             prior_snapshot.as_ref(),
             &mut snapshot,
         );
-        merge_sticky_unrolled_flags(prior_snapshot.as_ref(), &mut snapshot);
+        let sticky_unroll_hosts = crate::offchain_snapshot::confirmed_unroll_sticky_host_txids(
+            &self.wallet_db.host_tx_observations(),
+            &self.wallet_db.unilateral_exit_watches(),
+        );
+        merge_sticky_unrolled_flags(prior_snapshot.as_ref(), &mut snapshot, &sticky_unroll_hosts);
         merge_sticky_spent_flags(prior_snapshot.as_ref(), &mut snapshot);
         let reconcile =
             reconcile_exiting_vtxo_watches(self, snapshot, prior_snapshot.as_ref()).await?;

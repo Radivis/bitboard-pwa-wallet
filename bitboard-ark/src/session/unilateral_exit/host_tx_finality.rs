@@ -9,7 +9,9 @@ use crate::constants::{
 };
 use crate::error::ArkResult;
 use crate::esplora_blockchain::EsploraBlockchain;
-use crate::offchain_snapshot::mark_virtual_tx_vtxos_unrolled_in_snapshot;
+use crate::offchain_snapshot::{
+    clear_virtual_tx_vtxos_unrolled_in_snapshot, mark_virtual_tx_vtxos_unrolled_in_snapshot,
+};
 use crate::persistence::{
     HostTxObservationRecord, OffchainVtxoSnapshot, PendingExitDeductionRecord, PendingExitKind,
     UnilateralExitWatchRecord, VtxoExitPhase, VtxoExitRecord,
@@ -168,6 +170,7 @@ fn stamp_host_if_final(
     now: i64,
 ) -> bool {
     if !leaf_reached_finality(confirmations) {
+        clear_virtual_tx_vtxos_unrolled_in_snapshot(snapshot, host_txid);
         return false;
     }
     mark_virtual_tx_vtxos_unrolled_in_snapshot(snapshot, host_txid);
@@ -212,6 +215,9 @@ pub(crate) fn reconcile_host_tx_finality_state(
         else {
             continue;
         };
+        if stampable_hosts.contains(&txid) {
+            stamp_host_if_final(snapshot, watches, &txid, confirmations, now);
+        }
         if let Some(record) = observations.get_mut(&txid) {
             let previous_confirmations = record.confirmations;
             let previously_relayed = record.relayed;
@@ -558,6 +564,31 @@ mod tests {
             false,
         );
         assert!(!record_is_unrolled(&snapshot, &tree, 0));
+        assert!(!record_is_unrolled(&snapshot, &leaf, 0));
+    }
+
+    #[test]
+    fn unified_stamp_clears_premature_local_unroll_below_finality() {
+        let (mut snapshot, tree, leaf, _) = snapshot_with_intermediate_tree_and_ark_leaf();
+        for record in &mut snapshot.virtual_tx_outpoints {
+            if record.txid == tree.to_string() || record.txid == leaf.to_string() {
+                record.is_unrolled = true;
+            }
+        }
+        let pending = pending_for_leaf(&leaf);
+        let mut observations = BTreeMap::new();
+        let mut watches = Vec::new();
+        reconcile_with_uniform_confs(
+            &mut snapshot,
+            &mut observations,
+            &pending,
+            &mut watches,
+            0,
+            0,
+            false,
+        );
+        assert!(!record_is_unrolled(&snapshot, &tree, 0));
+        assert!(!record_is_unrolled(&snapshot, &tree, 1));
         assert!(!record_is_unrolled(&snapshot, &leaf, 0));
     }
 
