@@ -1327,6 +1327,32 @@ describe('unilateralExitMachine', () => {
     expect(testActor.getSnapshot().context.jobOutpoints).toEqual([])
   })
 
+  it('terminates job immediately when viability reports branch funding lost', async () => {
+    const evaluateJobViability = vi.fn(async () => ({
+      status: 'branchFundingLost' as const,
+      reasonCode: 'branch_funding_lost',
+      detailMessage: 'Exit-relevant VTXO outpoint was spent outside the wallet unroll chain.',
+      offendingOutpoints: [leaf],
+    }))
+    const fetchProgress = vi.fn(async () => progress({ phase: 'idle' }))
+    const { testActor } = createTestActor({ evaluateJobViability, fetchProgress })
+
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'START_MANUAL',
+      walletScope,
+      outpoints: [leaf],
+      feeRateSatPerVb: 2,
+    })
+
+    await waitFor(testActor, (state) => state.matches('idle'))
+    expect(evaluateJobViability).toHaveBeenCalledTimes(1)
+    expect(fetchProgress).not.toHaveBeenCalled()
+    expect(persistUnilateralExitFailureRecord).toHaveBeenCalled()
+    expect(clearPersistedUnilateralExitJob).toHaveBeenCalledWith(walletScope)
+    expect(testActor.getSnapshot().context.jobOutpoints).toEqual([])
+  })
+
   it('aborts from proceeding and persists user_aborted failure', async () => {
     const fetchProgress = vi.fn(async () =>
       progress({ phase: 'idle', currentStepTxRelayed: true }),
