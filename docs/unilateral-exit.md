@@ -16,7 +16,7 @@ Related:
 
 ## VTXO lifecycle (staged)
 
-Stage 2 records and spend-lock are **shipped** (`ARK-EXIT-27`, `ARK-EXIT-30`, `ARK-REC-08`). Host-tx observations and unified B remain Stage 1. VTXO child machines (`ARK-EXIT-32`) and `funding_lost` (Stage 3) are still target. Freeze tables: [unilateral-exit-vtxo-lifecycle-refactor.md](future/unilateral-exit-vtxo-lifecycle-refactor.md#stage-0-freeze-agreed).
+Stage 3 records, watch fold, and `funding_lost` are **shipped** (`ARK-EXIT-12`, `ARK-EXIT-27`, `ARK-EXIT-30`, `ARK-EXIT-33`, `ARK-SYNC-03`, `ARK-REC-08`). Host-tx observations and unified B remain Stage 1. VTXO child machines (`ARK-EXIT-32`) are Stage 4. Freeze tables: [unilateral-exit-vtxo-lifecycle-refactor.md](future/unilateral-exit-vtxo-lifecycle-refactor.md#stage-0-freeze-agreed).
 
 **Two records** (WASM envelope is durable source of truth):
 
@@ -64,7 +64,7 @@ Partial unroll while the operator is reachable lets the ASP broadcast **checkpoi
 The XState machine treats ASP interference as **`terminated`**, never `complete`:
 
 - `aspSweptTargets` — operator indexer reports job leaves swept that were not locally unrolled (ignored while autonomous; `ARK-AUTO-05`)
-- `branchFundingLost` — an exit-relevant outpoint was spent by a tx **outside** the wallet unroll chain (Esplora; still terminates in autonomous mode)
+- `branchFundingLost` — Esplora reports a spend **outside** the wallet unroll chain: the first unroll step’s prevout(s) (commitment funding; covers an ASP batch sweep before any virtual tx is on chain), or an already-on-chain tree/ark VTXO outpoint. Still terminates in autonomous mode. The first-step prevout is re-probed on every viability/reconcile pass while pre-unroll records exist (reorgs).
 
 Every `checkingProgress` entry runs `evaluateJobViabilityActor` **before** `fetchProgress`. User-facing explanation: Library article `risks-of-arkade-unilateral-exits`.
 
@@ -134,7 +134,7 @@ This is **not** delegator-based. Closing the tab stops automation.
 
 Two-step confirmation (info modal, then red risk modal with required checkbox). `ABORT_ORCHESTRATION` → transient `aborted` → persist `user_aborted` failure banner with copyable VTXO ids (`ARK-EXIT-23`).
 
-Abort **stops frontend orchestration only**. It does **not** delete `unilateral_exit_materials`, watches, pending deductions, or on-chain broadcasts. Backend in-progress state remains until completion or reconcile. If the ASP is online, an unfinished on-chain unroll can still be seized.
+Abort **stops frontend orchestration only**. It does **not** delete `unilateral_exit_materials`, pending deductions, or on-chain broadcasts. Backend in-progress state remains until completion or reconcile. If the ASP is online, an unfinished on-chain unroll can still be seized.
 
 `ABORT_ORCHESTRATION` is sent immediately (VTXO id list RPCs must not block it). Copyable ids on the `user_aborted` banner are filled best-effort afterward.
 
@@ -233,7 +233,7 @@ Sibling RPCs the machine also calls:
 | RPC | Role |
 |-----|------|
 | `get_unilateral_exit_progress` | Confirmation-based phase, node/leaf statuses, relay flags |
-| `evaluate_unilateral_exit_job_viability` | ASP sweep / foreign spend → terminate |
+| `evaluate_unilateral_exit_job_viability` | ASP sweep / foreign spend of first-step prevout or tree/ark VTXO → terminate |
 | `estimate_unilateral_exit_batch` | Remaining steps + bumper sufficiency |
 | `get_unilateral_exit_topology` | Merged DAG for the control graph |
 
@@ -263,7 +263,7 @@ Confirmation constants ([`bitboard-ark/src/constants.rs`](../bitboard-ark/src/co
 | `UNILATERAL_EXIT_STEP_CONFIRMATIONS` | 1 | Advance to the next virtual tx |
 | `UNILATERAL_EXIT_LEAF_CONFIRMATIONS` | 6 | Stamp `is_unrolled` on every vout of that virtual tx (leaf or intermediate host) |
 
-`reconcile_host_tx_finality` does **not** block on operator indexer polling. Sticky merge and watch reconcile run during operator sync (`ARK-EXIT-11`). The same stamper also runs on session open (including autonomous), list, progress, and complete (`ARK-EXIT-29`).
+`reconcile_host_tx_finality` does **not** block on operator indexer polling. Sticky merge and unrolled+ record reconcile run during operator sync (`ARK-EXIT-11`). The same stamper also runs on session open (including autonomous), list, progress, and complete (`ARK-EXIT-29`).
 
 Redundant mempool rejects (`-25` / `-26`) are ignored when the parent is already visible on the network.
 

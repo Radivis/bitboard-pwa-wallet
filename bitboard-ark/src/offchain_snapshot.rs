@@ -19,8 +19,7 @@ use crate::error::{ArkResult, ArkWasmError};
 use crate::exit_balance::{UnilateralExitOutpointKey, is_unilateral_exit_in_progress_outpoint};
 use crate::persistence::{
     HostTxObservationRecord, OffchainVtxoSnapshot, PendingExitDeductionRecord,
-    UnilateralExitWatchRecord, VirtualTxOutPointAssetRecord, VirtualTxOutPointRecord,
-    VtxoExitRecord,
+    VirtualTxOutPointAssetRecord, VirtualTxOutPointRecord, VtxoExitPhase, VtxoExitRecord,
 };
 use crate::session::unilateral_exit::vtxo_exit::unilateral_exit_pipeline_outpoints;
 
@@ -261,14 +260,14 @@ pub fn snapshot_from_virtual_tx_outpoints_with_script_lookup(
 /// Preserve local `is_unrolled` when ASP indexer lags after unilateral unroll.
 ///
 /// `confirmed_unroll_host_txids` is independent evidence that unroll actually reached 6-conf
-/// (host-tx observations or watches with `published_vtxo_txid`). Tag-time watches alone must
-/// not keep a premature local stamp.
+/// (host-tx observations or VTXO exit records at `unrolled+`). Tag-time records must not keep a
+/// premature local stamp.
 ///
-/// Only applies to VTXOs still present in the incoming operator list. Missing watches are
-/// handled by [`crate::session::unilateral_exit::watch_reconcile::reconcile_exiting_vtxo_watches`].
+/// Only applies to VTXOs still present in the incoming operator list. Missing unrolled+ records
+/// are handled by [`crate::session::unilateral_exit::watch_reconcile::reconcile_exiting_vtxo_watches`].
 pub fn confirmed_unroll_sticky_host_txids(
     observations: &BTreeMap<String, HostTxObservationRecord>,
-    watches: &[UnilateralExitWatchRecord],
+    vtxo_exit_records: &BTreeMap<String, VtxoExitRecord>,
 ) -> HashSet<String> {
     let mut txids = HashSet::new();
     for (txid, observation) in observations {
@@ -276,12 +275,12 @@ pub fn confirmed_unroll_sticky_host_txids(
             txids.insert(txid.clone());
         }
     }
-    for watch in watches {
-        if let Some(published) = watch.published_vtxo_txid.as_deref()
-            && !published.is_empty()
-        {
-            txids.insert(published.to_string());
-            txids.insert(watch.vtxo_txid.clone());
+    for record in vtxo_exit_records.values() {
+        if matches!(
+            record.phase,
+            VtxoExitPhase::Unrolled | VtxoExitPhase::CompleteReady
+        ) {
+            txids.insert(record.host_txid.clone());
         }
     }
     txids
@@ -651,6 +650,23 @@ mod tests {
 
         merge_sticky_unrolled_flags(Some(&prior), &mut incoming, &HashSet::from([txid.clone()]));
         assert!(incoming.virtual_tx_outpoints[0].is_unrolled);
+    }
+
+    #[test]
+    fn confirmed_unroll_sticky_host_txids_include_unrolled_records_without_watches() {
+        let host = Txid::from_byte_array([0x47; 32]).to_string();
+        let mut records = BTreeMap::new();
+        records.insert(
+            crate::persistence::vtxo_exit_record_key(&host, 0),
+            crate::persistence::VtxoExitRecord {
+                phase: crate::persistence::VtxoExitPhase::Unrolled,
+                tagged_at: 1,
+                host_txid: host.clone(),
+                amount_sats: 50_000,
+            },
+        );
+        let sticky = super::confirmed_unroll_sticky_host_txids(&BTreeMap::new(), &records);
+        assert!(sticky.contains(&host));
     }
 
     #[test]

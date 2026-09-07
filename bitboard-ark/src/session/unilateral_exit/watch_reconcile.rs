@@ -4,17 +4,17 @@ use ark_core::server::VirtualTxOutPoint;
 
 use crate::error::ArkResult;
 use crate::persistence::{
-    OffchainVtxoSnapshot, UnilateralExitWatchRecord, VirtualTxOutPointRecord,
+    OffchainVtxoSnapshot, UnilateralExitWatchRecord, VirtualTxOutPointRecord, VtxoExitPhase,
 };
 
 use super::onchain::{
     detect_exiting_vtxo_completion_on_esplora, exit_branch_spent_on_chain,
     unroll_branch_visible_on_chain,
 };
-use super::watch::backfill_unilateral_exit_watches_if_empty;
 use crate::outpoint::VirtualOutPoint;
 use crate::session::ArkSession;
 use crate::session::pending_exit::mark_vtxo_spent_in_snapshot;
+use crate::session::unilateral_exit::vtxo_exit::parse_vtxo_exit_record_key;
 use bitcoin::{OutPoint, Txid};
 use std::str::FromStr;
 
@@ -35,7 +35,6 @@ pub(crate) enum ExitingVtxoReconcileOutcome {
 pub(crate) struct ExitingVtxoReconcileResult {
     pub snapshot: OffchainVtxoSnapshot,
     pub warnings: Vec<String>,
-    pub watches: Vec<UnilateralExitWatchRecord>,
 }
 
 pub(crate) fn merge_exiting_vtxo_sync_warnings(warnings: Vec<String>) -> Option<String> {
@@ -78,25 +77,31 @@ pub(crate) fn classify_operator_vtxo(
     ExitingVtxoReconcileOutcome::Ok
 }
 
-/// When a watch exists for a VTXO the operator still lists as spendable, only force
-/// `is_unrolled` if this watch has a published unroll host. Tag-time watches must not
+/// When a survival record exists for a VTXO the operator still lists as spendable, only force
+/// `is_unrolled` if this record is already `unrolled` / `complete_ready`. Tagged records must not
 /// classify the VTXO as unrolled (that made the control graph show HandCoins at step 3).
-pub(crate) fn watch_has_published_unroll_host(watch: &UnilateralExitWatchRecord) -> bool {
-    watch
-        .published_vtxo_txid
-        .as_deref()
-        .is_some_and(|txid| !txid.is_empty())
+pub(crate) fn record_has_confirmed_unroll(phase: VtxoExitPhase) -> bool {
+    matches!(
+        phase,
+        VtxoExitPhase::Unrolled | VtxoExitPhase::CompleteReady
+    )
 }
 
-fn apply_watch_unroll_stickiness_for_present_spendable(
+fn apply_record_unroll_stickiness_for_present_spendable(
     snapshot: &mut OffchainVtxoSnapshot,
-    watch: &UnilateralExitWatchRecord,
+    txid: &str,
+    vout: u32,
+    amount_sats: u64,
+    phase: VtxoExitPhase,
     prior_record: Option<&VirtualTxOutPointRecord>,
 ) {
-    if !watch_has_published_unroll_host(watch) {
+    if !record_has_confirmed_unroll(phase) {
         return;
     }
-    reinject_exiting_record(snapshot, record_for_reinject(prior_record, watch));
+    reinject_exiting_record(
+        snapshot,
+        record_for_reinject(prior_record, txid, vout, amount_sats),
+    );
 }
 
 fn snapshot_record<'a>(
@@ -116,7 +121,9 @@ fn snapshot_record_already_spent(snapshot: &OffchainVtxoSnapshot, txid: &str, vo
 
 fn record_for_reinject(
     prior_record: Option<&VirtualTxOutPointRecord>,
-    watch: &UnilateralExitWatchRecord,
+    txid: &str,
+    vout: u32,
+    amount_sats: u64,
 ) -> VirtualTxOutPointRecord {
     if let Some(prior) = prior_record {
         let mut record = prior.clone();
@@ -125,11 +132,11 @@ fn record_for_reinject(
         return record;
     }
     VirtualTxOutPointRecord {
-        txid: watch.vtxo_txid.clone(),
-        vout: watch.vout,
+        txid: txid.to_string(),
+        vout,
+        amount_sats,
         created_at: 0,
         expires_at: i64::MAX,
-        amount_sats: watch.amount_sats,
         script_hex: String::new(),
         is_preconfirmed: false,
         is_swept: false,
@@ -171,18 +178,13 @@ fn clear_exiting_record(snapshot: &mut OffchainVtxoSnapshot, txid: &str, vout: u
 }
 
 /// Mark locally completed unilateral exits when Esplora shows the on-chain spend, even if the
-/// operator indexer (or active watch bookkeeping) still treats them as exiting.
+/// operator indexer still treats them as exiting.
 pub(crate) async fn reconcile_exiting_vtxos_spent_on_esplora(
     session: &ArkSession,
     snapshot: &mut OffchainVtxoSnapshot,
 ) -> ArkResult<Vec<OutPoint>> {
     let blockchain = session.client.blockchain();
-    let watches = session.wallet_db.unilateral_exit_watches();
-    let watch_by_outpoint: std::collections::HashMap<(String, u32), &UnilateralExitWatchRecord> =
-        watches
-            .iter()
-            .map(|watch| ((watch.vtxo_txid.clone(), watch.vout), watch))
-            .collect();
+    let records = session.wallet_db.vtxo_exit_records();
 
     let mut probe_targets: Vec<(String, u32)> = snapshot
         .virtual_tx_outpoints
@@ -191,23 +193,27 @@ pub(crate) async fn reconcile_exiting_vtxos_spent_on_esplora(
         .map(|record| (record.txid.clone(), record.vout))
         .collect();
 
-    for watch in &watches {
-        let key = (watch.vtxo_txid.clone(), watch.vout);
-        if snapshot_record_already_spent(snapshot, &key.0, key.1) {
+    for (key, record) in &records {
+        if !record_has_confirmed_unroll(record.phase) && record.phase != VtxoExitPhase::Unrolled {
             continue;
         }
-        if !probe_targets.iter().any(|target| target == &key) {
-            probe_targets.push(key);
+        let Some((txid, vout)) = parse_vtxo_exit_record_key(key) else {
+            continue;
+        };
+        if snapshot_record_already_spent(snapshot, &txid, vout) {
+            continue;
+        }
+        let target = (txid, vout);
+        if !probe_targets.iter().any(|existing| existing == &target) {
+            probe_targets.push(target);
         }
     }
 
     let mut healed_outpoints = Vec::new();
     for (leaf_txid, vout) in probe_targets {
-        let watch = watch_by_outpoint.get(&(leaf_txid.clone(), vout)).copied();
-        let Some(spend_txid) = detect_exiting_vtxo_completion_on_esplora(
-            blockchain, snapshot, watch, &leaf_txid, vout,
-        )
-        .await?
+        let Some(spend_txid) =
+            detect_exiting_vtxo_completion_on_esplora(blockchain, snapshot, None, &leaf_txid, vout)
+                .await?
         else {
             continue;
         };
@@ -226,20 +232,38 @@ pub(crate) async fn reconcile_exiting_vtxo_watches(
     mut snapshot: OffchainVtxoSnapshot,
     prior_snapshot: Option<&OffchainVtxoSnapshot>,
 ) -> ArkResult<ExitingVtxoReconcileResult> {
-    backfill_unilateral_exit_watches_if_empty(&session.wallet_db);
-    let mut watches = session.wallet_db.unilateral_exit_watches();
+    let records = session.wallet_db.vtxo_exit_records();
     let mut warnings = Vec::new();
-    let mut retained_watches = Vec::with_capacity(watches.len());
 
-    for watch in watches.drain(..) {
-        let txid = watch.vtxo_txid.clone();
-        let vout = watch.vout;
+    for (key, exit_record) in &records {
+        if !record_has_confirmed_unroll(exit_record.phase) {
+            continue;
+        }
+        let Some((txid, vout)) = parse_vtxo_exit_record_key(key) else {
+            continue;
+        };
         let prior_record = prior_snapshot.and_then(|prior| snapshot_record(prior, &txid, vout));
+        let survival_watch = UnilateralExitWatchRecord {
+            vtxo_txid: txid.clone(),
+            vout,
+            amount_sats: exit_record.amount_sats,
+            registered_at: exit_record.tagged_at,
+            published_vtxo_txid: Some(exit_record.host_txid.clone()),
+            branch_txids:
+                crate::session::unilateral_exit::vtxo_exit::materials_chain_txid_strings_for_host(
+                    &snapshot,
+                    &exit_record.host_txid,
+                ),
+        };
 
         let outcome = if let Some(record) = snapshot_record(&snapshot, &txid, vout) {
             if record.is_unrolled && !record.is_spent {
-                if exit_branch_spent_on_chain(session.client.blockchain(), &snapshot, &watch)
-                    .await?
+                if exit_branch_spent_on_chain(
+                    session.client.blockchain(),
+                    &snapshot,
+                    &survival_watch,
+                )
+                .await?
                 {
                     ExitingVtxoReconcileOutcome::ClearOnChainSpent
                 } else {
@@ -250,9 +274,12 @@ pub(crate) async fn reconcile_exiting_vtxo_watches(
             } else if record.is_swept && !record.is_unrolled {
                 ExitingVtxoReconcileOutcome::KeepWarnAspMismatch
             } else if !record.is_unrolled {
-                apply_watch_unroll_stickiness_for_present_spendable(
+                apply_record_unroll_stickiness_for_present_spendable(
                     &mut snapshot,
-                    &watch,
+                    &txid,
+                    vout,
+                    exit_record.amount_sats,
+                    exit_record.phase,
                     prior_record,
                 );
                 ExitingVtxoReconcileOutcome::Ok
@@ -260,27 +287,25 @@ pub(crate) async fn reconcile_exiting_vtxo_watches(
                 ExitingVtxoReconcileOutcome::Ok
             }
         } else {
-            reconcile_missing_watch(session, &snapshot, &watch, prior_record).await?
+            reconcile_missing_survival(session, &snapshot, &survival_watch, prior_record).await?
         };
 
         apply_reconcile_outcome(
             &mut snapshot,
-            &mut retained_watches,
             &mut warnings,
-            watch,
+            &txid,
+            vout,
+            exit_record.amount_sats,
+            record_has_confirmed_unroll(exit_record.phase),
             prior_record,
             outcome,
         );
     }
 
-    Ok(ExitingVtxoReconcileResult {
-        snapshot,
-        warnings,
-        watches: retained_watches,
-    })
+    Ok(ExitingVtxoReconcileResult { snapshot, warnings })
 }
 
-async fn reconcile_missing_watch(
+async fn reconcile_missing_survival(
     session: &ArkSession,
     snapshot: &OffchainVtxoSnapshot,
     watch: &UnilateralExitWatchRecord,
@@ -311,33 +336,37 @@ async fn reconcile_missing_watch(
 
 fn apply_reconcile_outcome(
     snapshot: &mut OffchainVtxoSnapshot,
-    retained_watches: &mut Vec<UnilateralExitWatchRecord>,
     warnings: &mut Vec<String>,
-    watch: UnilateralExitWatchRecord,
+    txid: &str,
+    vout: u32,
+    amount_sats: u64,
+    has_confirmed_unroll: bool,
     prior_record: Option<&VirtualTxOutPointRecord>,
     outcome: ExitingVtxoReconcileOutcome,
 ) {
     match outcome {
         ExitingVtxoReconcileOutcome::Ok => {
-            if snapshot_record(snapshot, &watch.vtxo_txid, watch.vout).is_none()
-                && watch_has_published_unroll_host(&watch)
-            {
-                reinject_exiting_record(snapshot, record_for_reinject(prior_record, &watch));
+            if snapshot_record(snapshot, txid, vout).is_none() && has_confirmed_unroll {
+                reinject_exiting_record(
+                    snapshot,
+                    record_for_reinject(prior_record, txid, vout, amount_sats),
+                );
             }
-            retained_watches.push(watch);
         }
         ExitingVtxoReconcileOutcome::ClearSpent
         | ExitingVtxoReconcileOutcome::ClearOnChainSpent => {
-            clear_exiting_record(snapshot, &watch.vtxo_txid, watch.vout);
+            clear_exiting_record(snapshot, txid, vout);
         }
         ExitingVtxoReconcileOutcome::KeepWarnAspMismatch
         | ExitingVtxoReconcileOutcome::KeepWarnIndexerLag
         | ExitingVtxoReconcileOutcome::KeepWarnMissingIndex => {
-            reinject_exiting_record(snapshot, record_for_reinject(prior_record, &watch));
+            reinject_exiting_record(
+                snapshot,
+                record_for_reinject(prior_record, txid, vout, amount_sats),
+            );
             if let Some(warning) = warning_for_outcome(outcome) {
                 warnings.push(warning.to_string());
             }
-            retained_watches.push(watch);
         }
     }
 }
@@ -345,7 +374,7 @@ fn apply_reconcile_outcome(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::persistence::{UnilateralExitWatchRecord, VirtualTxOutPointRecord};
+    use crate::persistence::VirtualTxOutPointRecord;
     use ark_core::server::VirtualTxOutPoint;
     use bitcoin::hashes::Hash;
     use bitcoin::{Amount, OutPoint, ScriptBuf, Txid};
@@ -396,49 +425,34 @@ mod tests {
 
     #[test]
     fn apply_reconcile_keep_warn_reinjects_missing_record() {
-        let watch = UnilateralExitWatchRecord {
-            vtxo_txid: Txid::from_byte_array([0x22; 32]).to_string(),
-            vout: 0,
-            amount_sats: 12_000,
-            registered_at: 1,
-            published_vtxo_txid: None,
-            branch_txids: vec![],
-        };
+        let txid = Txid::from_byte_array([0x22; 32]).to_string();
         let mut snapshot = OffchainVtxoSnapshot {
             synced_at: 1,
             dust_sats: 330,
             virtual_tx_outpoints: vec![],
             unilateral_exit_materials_by_leaf_tx: std::collections::BTreeMap::new(),
         };
-        let mut retained = Vec::new();
         let mut warnings = Vec::new();
 
         apply_reconcile_outcome(
             &mut snapshot,
-            &mut retained,
             &mut warnings,
-            watch,
+            &txid,
+            0,
+            12_000,
+            true,
             None,
             ExitingVtxoReconcileOutcome::KeepWarnMissingIndex,
         );
 
         assert_eq!(snapshot.virtual_tx_outpoints.len(), 1);
         assert!(snapshot.virtual_tx_outpoints[0].is_unrolled);
-        assert_eq!(retained.len(), 1);
         assert_eq!(warnings.len(), 1);
     }
 
     #[test]
     fn apply_reconcile_clear_spent_removes_exiting_flag() {
         let txid = Txid::from_byte_array([0x33; 32]).to_string();
-        let watch = UnilateralExitWatchRecord {
-            vtxo_txid: txid.clone(),
-            vout: 0,
-            amount_sats: 12_000,
-            registered_at: 1,
-            published_vtxo_txid: None,
-            branch_txids: vec![],
-        };
         let mut snapshot = OffchainVtxoSnapshot {
             synced_at: 1,
             dust_sats: 330,
@@ -462,20 +476,20 @@ mod tests {
             }],
             unilateral_exit_materials_by_leaf_tx: std::collections::BTreeMap::new(),
         };
-        let mut retained = Vec::new();
         let mut warnings = Vec::new();
 
         apply_reconcile_outcome(
             &mut snapshot,
-            &mut retained,
             &mut warnings,
-            watch,
+            &txid,
+            0,
+            12_000,
+            true,
             None,
             ExitingVtxoReconcileOutcome::ClearSpent,
         );
 
         assert!(snapshot.virtual_tx_outpoints[0].is_spent);
-        assert!(retained.is_empty());
     }
 
     fn spendable_snapshot_record(txid: &str, amount_sats: u64) -> VirtualTxOutPointRecord {
@@ -500,16 +514,8 @@ mod tests {
     }
 
     #[test]
-    fn tagged_watch_does_not_stamp_unrolled_on_spendable_snapshot() {
+    fn tagged_record_does_not_stamp_unrolled_on_spendable_snapshot() {
         let txid = Txid::from_byte_array([0x44; 32]).to_string();
-        let watch = UnilateralExitWatchRecord {
-            vtxo_txid: txid.clone(),
-            vout: 0,
-            amount_sats: 12_000,
-            registered_at: 1,
-            published_vtxo_txid: None,
-            branch_txids: vec![],
-        };
         let mut snapshot = OffchainVtxoSnapshot {
             synced_at: 1,
             dust_sats: 330,
@@ -517,25 +523,52 @@ mod tests {
             unilateral_exit_materials_by_leaf_tx: std::collections::BTreeMap::new(),
         };
 
-        apply_watch_unroll_stickiness_for_present_spendable(&mut snapshot, &watch, None);
+        apply_record_unroll_stickiness_for_present_spendable(
+            &mut snapshot,
+            &txid,
+            0,
+            12_000,
+            VtxoExitPhase::Tagged,
+            None,
+        );
 
         assert!(
             !snapshot.virtual_tx_outpoints[0].is_unrolled,
-            "tag-time watches must not mark VTXOs unrolled"
+            "tagged records must not mark VTXOs unrolled"
         );
     }
 
     #[test]
-    fn published_watch_stamps_unrolled_when_operator_still_lists_spendable() {
+    fn snapshot_omit_of_unrolled_record_reinjects_without_watch() {
         let txid = Txid::from_byte_array([0x45; 32]).to_string();
-        let watch = UnilateralExitWatchRecord {
-            vtxo_txid: txid.clone(),
-            vout: 0,
-            amount_sats: 12_000,
-            registered_at: 1,
-            published_vtxo_txid: Some(txid.clone()),
-            branch_txids: vec![],
+        let mut snapshot = OffchainVtxoSnapshot {
+            synced_at: 1,
+            dust_sats: 330,
+            virtual_tx_outpoints: vec![],
+            unilateral_exit_materials_by_leaf_tx: std::collections::BTreeMap::new(),
         };
+        let mut warnings = Vec::new();
+
+        apply_reconcile_outcome(
+            &mut snapshot,
+            &mut warnings,
+            &txid,
+            0,
+            12_000,
+            true,
+            None,
+            ExitingVtxoReconcileOutcome::Ok,
+        );
+
+        assert_eq!(snapshot.virtual_tx_outpoints.len(), 1);
+        assert!(snapshot.virtual_tx_outpoints[0].is_unrolled);
+        assert_eq!(snapshot.virtual_tx_outpoints[0].amount_sats, 12_000);
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn unrolled_record_stamps_when_operator_still_lists_spendable() {
+        let txid = Txid::from_byte_array([0x46; 32]).to_string();
         let mut snapshot = OffchainVtxoSnapshot {
             synced_at: 1,
             dust_sats: 330,
@@ -543,7 +576,14 @@ mod tests {
             unilateral_exit_materials_by_leaf_tx: std::collections::BTreeMap::new(),
         };
 
-        apply_watch_unroll_stickiness_for_present_spendable(&mut snapshot, &watch, None);
+        apply_record_unroll_stickiness_for_present_spendable(
+            &mut snapshot,
+            &txid,
+            0,
+            12_000,
+            VtxoExitPhase::Unrolled,
+            None,
+        );
 
         assert!(snapshot.virtual_tx_outpoints[0].is_unrolled);
     }

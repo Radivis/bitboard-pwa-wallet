@@ -196,7 +196,11 @@ pub(crate) fn autonomous_validate_completion_ready(
         .snapshot()
         .offchain_vtxo_snapshot
         .ok_or_else(|| ArkWasmError::Snapshot("offchain snapshot missing".into()))?;
-    validate_snapshot_completion_ready(&snapshot, vtxo_outpoints)
+    validate_snapshot_completion_ready(&snapshot, vtxo_outpoints)?;
+    crate::session::unilateral_exit::vtxo_exit::validate_records_not_funding_lost(
+        &session.wallet_db.vtxo_exit_records(),
+        vtxo_outpoints,
+    )
 }
 
 #[cfg(test)]

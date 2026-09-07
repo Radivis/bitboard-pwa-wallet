@@ -52,8 +52,13 @@ pub(crate) async fn prefetch_unilateral_exit_materials_for_snapshot(
 
     let mut preserve_leaf_txids =
         pending_unilateral_exit_leaf_txids(&session.wallet_db.pending_exit_deductions());
-    for watch in session.wallet_db.unilateral_exit_watches() {
-        preserve_leaf_txids.insert(watch.vtxo_txid);
+    for (key, record) in session.wallet_db.vtxo_exit_records() {
+        preserve_leaf_txids.insert(record.host_txid);
+        if let Some((txid, _)) =
+            crate::session::unilateral_exit::vtxo_exit::parse_vtxo_exit_record_key(&key)
+        {
+            preserve_leaf_txids.insert(txid);
+        }
     }
     prune_unilateral_exit_materials_map(snapshot, &preserve_leaf_txids);
     if warnings.is_empty() {

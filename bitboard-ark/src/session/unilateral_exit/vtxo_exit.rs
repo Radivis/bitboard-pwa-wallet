@@ -6,9 +6,9 @@
 //! they are not themselves the spend-lock.
 //!
 //! Phase order (persisted): `tagged` → `host_broadcast_attempted` → `host_relayed` →
-//! `host_confirmed` → `unrolled` → `complete_ready` → `exited`. Never persist `funding_lost`
-//! (Stage 3). Never downgrade a higher phase back to `tagged` except the explicit rewinds
-//! (`never_seen` → `tagged`; reorg under 1 conf → relayed / attempted).
+//! `host_confirmed` → `unrolled` → `complete_ready` → `exited`. `funding_lost` is a terminal
+//! side-branch (`ARK-EXIT-33`). Never downgrade a higher phase back to `tagged` except the
+//! explicit rewinds (`never_seen` → `tagged`; reorg under 1 conf → relayed / attempted).
 //!
 //! `host_txid` on a record is the virtual tx that **hosts that outpoint** (the VTXO's own txid),
 //! not an ancestor unless the outpoint lives on that ancestor.
@@ -31,8 +31,8 @@ use crate::session::unilateral_exit::topology::{
     merge_topology_nodes_from_chains, virtual_tx_type_hosts_exit_outpoints,
 };
 use crate::unilateral_exit_materials::{
-    require_unilateral_exit_materials_for_leaf_tx, vtxo_amount_sats_from_snapshot,
-    vtxo_chains_from_snapshot_materials,
+    chained_tx_type_label, require_unilateral_exit_materials_for_leaf_tx,
+    vtxo_amount_sats_from_snapshot, vtxo_chains_from_json, vtxo_chains_from_snapshot_materials,
 };
 
 /// Parse a persisted map key `"{txid}:{vout}"`. Returns `None` if the suffix is not a `u32`.
@@ -206,7 +206,7 @@ pub(crate) fn rewind_records_on_host(
         if record.host_txid != host_txid {
             continue;
         }
-        if record.phase >= VtxoExitPhase::Unrolled {
+        if !record.phase.is_pre_unroll() {
             continue;
         }
         record.phase = phase;
@@ -241,10 +241,10 @@ pub fn apply_host_observation_to_vtxo_exit_records(
         if record.host_txid != host_txid {
             continue;
         }
-        if record.phase >= VtxoExitPhase::CompleteReady {
+        if record.phase.is_terminal() || record.phase == VtxoExitPhase::CompleteReady {
             continue;
         }
-        if unrolled && record.phase < VtxoExitPhase::Unrolled {
+        if unrolled && record.phase.is_pre_unroll() {
             record.phase = VtxoExitPhase::Unrolled;
             continue;
         }
@@ -252,10 +252,30 @@ pub fn apply_host_observation_to_vtxo_exit_records(
             record.phase = next;
             continue;
         }
-        if record.phase < next && next < VtxoExitPhase::Unrolled {
+        if record.phase.is_pre_unroll() && record.phase < next && next < VtxoExitPhase::Unrolled {
             record.phase = next;
         }
     }
+}
+
+/// Complete RPC must refuse `funding_lost` even if the snapshot still looks unrolled.
+pub fn validate_records_not_funding_lost(
+    records: &BTreeMap<String, VtxoExitRecord>,
+    vtxo_outpoints: &[VirtualOutPoint],
+) -> ArkResult<()> {
+    for outpoint in vtxo_outpoints {
+        let key = vtxo_exit_record_key(&outpoint.txid.to_string(), outpoint.vout);
+        if records
+            .get(&key)
+            .is_some_and(|record| record.phase == VtxoExitPhase::FundingLost)
+        {
+            return Err(ArkWasmError::VtxoFundingLost {
+                txid: outpoint.txid.to_string(),
+                vout: outpoint.vout,
+            });
+        }
+    }
+    Ok(())
 }
 
 /// Complete success: mark the claimed outpoints `exited`. Missing keys are ignored (Stage 1 E:
@@ -343,7 +363,7 @@ fn upsert_healed_record(
 ///
 /// Sources, in order of typical evidence: snapshot `is_unrolled && !is_spent`, exit watches, then
 /// leftover unilateral pending deductions. Phase comes from `is_unrolled` plus host observation
-/// when present; otherwise `tagged`. Existing v10 rows are only raised, never replaced downward.
+/// when present; otherwise `tagged`. Existing rows are only raised, never replaced downward.
 pub fn heal_vtxo_exit_records_from_legacy(
     snapshot: Option<&OffchainVtxoSnapshot>,
     pending: &[PendingExitDeductionRecord],
@@ -505,14 +525,15 @@ pub fn host_txids_from_vtxo_exit_records(
 ) -> HashSet<String> {
     records
         .values()
-        .filter(|record| record.phase < VtxoExitPhase::Unrolled)
+        .filter(|record| record.phase.is_pre_unroll())
         .map(|record| record.host_txid.clone())
         .collect()
 }
 
-/// True when this host has at least one record and every such record is `exited`. Used to drop the
-/// host-tx observation after complete. No records for the host → false (do not delete on emptiness).
-pub fn observation_all_records_exited(
+/// True when this host has at least one record and every such record is `exited` or
+/// `funding_lost`. Used to drop the host-tx observation after complete or seizure. No records
+/// for the host → false (do not delete on emptiness).
+pub fn observation_all_records_terminal(
     records: &BTreeMap<String, VtxoExitRecord>,
     host_txid: &str,
 ) -> bool {
@@ -522,11 +543,157 @@ pub fn observation_all_records_exited(
             continue;
         }
         any = true;
-        if record.phase != VtxoExitPhase::Exited {
+        if !record.phase.is_terminal() {
             return false;
         }
     }
     any
+}
+
+/// Stamp every still-pre-unroll record whose key is in `keys` as `funding_lost`. Leaves
+/// `unrolled` / `complete_ready` / `exited` unchanged (`ARK-EXIT-33` mixed outcomes).
+pub fn stamp_pre_unroll_records_funding_lost(
+    records: &mut BTreeMap<String, VtxoExitRecord>,
+    keys: &HashSet<String>,
+) {
+    for key in keys {
+        let Some(record) = records.get_mut(key) else {
+            continue;
+        };
+        if record.phase.is_pre_unroll() {
+            record.phase = VtxoExitPhase::FundingLost;
+        }
+    }
+}
+
+/// Host txids of `tree` / `ark` links in any materials chain that includes `seed_host_txid`.
+///
+/// Missing or unusable materials is a hard failure: do not invent a one-txid branch.
+pub fn host_txids_on_same_materials_branch(
+    snapshot: &OffchainVtxoSnapshot,
+    seed_host_txid: &str,
+) -> ArkResult<HashSet<String>> {
+    let mut host_txids = HashSet::new();
+    for materials in snapshot.unilateral_exit_materials_by_leaf_tx.values() {
+        let Ok(chains) = vtxo_chains_from_json(&materials.chain_json) else {
+            continue;
+        };
+        let chain_includes_seed = chains
+            .inner
+            .iter()
+            .any(|link| link.txid.to_string() == seed_host_txid);
+        if !chain_includes_seed {
+            continue;
+        }
+        for link in &chains.inner {
+            let tx_type = chained_tx_type_label(&link.tx_type);
+            if virtual_tx_type_hosts_exit_outpoints(&tx_type) {
+                host_txids.insert(link.txid.to_string());
+            }
+        }
+    }
+    if host_txids.is_empty() {
+        return Err(ArkWasmError::AutonomousExitMaterialsMissing);
+    }
+    Ok(host_txids)
+}
+
+/// All chain-link txids from materials whose chain includes `seed_host_txid` (Esplora unroll-visible probes).
+pub fn materials_chain_txid_strings_for_host(
+    snapshot: &OffchainVtxoSnapshot,
+    seed_host_txid: &str,
+) -> Vec<String> {
+    let mut txids = Vec::new();
+    let mut seen = HashSet::new();
+    let push = |txid: String, txids: &mut Vec<String>, seen: &mut HashSet<String>| {
+        if seen.insert(txid.clone()) {
+            txids.push(txid);
+        }
+    };
+    push(seed_host_txid.to_string(), &mut txids, &mut seen);
+    for materials in snapshot.unilateral_exit_materials_by_leaf_tx.values() {
+        let Ok(chains) = vtxo_chains_from_json(&materials.chain_json) else {
+            continue;
+        };
+        let chain_includes_seed = chains
+            .inner
+            .iter()
+            .any(|link| link.txid.to_string() == seed_host_txid);
+        if !chain_includes_seed {
+            continue;
+        }
+        for link in &chains.inner {
+            push(link.txid.to_string(), &mut txids, &mut seen);
+        }
+    }
+    txids
+}
+
+/// Stamp still-pre-unroll records on seized ASP-swept branches (`ARK-EXIT-33` / `ARK-AUTO-05`).
+///
+/// Autonomous mode never stamps from snapshot `is_swept`. Locally unrolled hosts are skipped
+/// (indexer lag). Already `unrolled` / `complete_ready` siblings are left claimable.
+pub fn stamp_pre_unroll_records_funding_lost_for_asp_swept(
+    snapshot: &OffchainVtxoSnapshot,
+    records: &mut BTreeMap<String, VtxoExitRecord>,
+    autonomous_mode: bool,
+    virtual_tx_is_marked_unrolled: impl Fn(&str) -> bool,
+) -> ArkResult<bool> {
+    if autonomous_mode {
+        return Ok(false);
+    }
+    let pre_unroll: Vec<(String, u32)> = records
+        .iter()
+        .filter(|(_, record)| record.phase.is_pre_unroll())
+        .filter_map(|(key, _)| parse_vtxo_exit_record_key(key))
+        .collect();
+    let mut keys_to_stamp = HashSet::new();
+    for (txid, vout) in pre_unroll {
+        if virtual_tx_is_marked_unrolled(&txid) {
+            continue;
+        }
+        let Some(row) = snapshot
+            .virtual_tx_outpoints
+            .iter()
+            .find(|row| row.txid == txid && row.vout == vout)
+        else {
+            continue;
+        };
+        if !(row.is_swept && !row.is_unrolled) {
+            continue;
+        }
+        keys_to_stamp.extend(pre_unroll_record_keys_on_same_branch(
+            snapshot, records, &txid, vout,
+        )?);
+    }
+    if keys_to_stamp.is_empty() {
+        return Ok(false);
+    }
+    stamp_pre_unroll_records_funding_lost(records, &keys_to_stamp);
+    Ok(true)
+}
+
+/// Pre-unroll record keys that share a materials branch with `seed` (`ARK-EXIT-33`).
+pub fn pre_unroll_record_keys_on_same_branch(
+    snapshot: &OffchainVtxoSnapshot,
+    records: &BTreeMap<String, VtxoExitRecord>,
+    seed_txid: &str,
+    seed_vout: u32,
+) -> ArkResult<HashSet<String>> {
+    let seed_key = vtxo_exit_record_key(seed_txid, seed_vout);
+    let seed_host = records
+        .get(&seed_key)
+        .map(|record| record.host_txid.clone())
+        .unwrap_or_else(|| seed_txid.to_string());
+    let branch_hosts = host_txids_on_same_materials_branch(snapshot, &seed_host)?;
+    let mut keys = HashSet::new();
+    keys.insert(seed_key);
+    for (key, record) in records {
+        if record.phase.is_pre_unroll() && branch_hosts.contains(&record.host_txid) {
+            keys.insert(key.clone());
+        }
+    }
+    Ok(keys)
 }
 
 impl crate::session::ArkSession {
@@ -543,9 +710,10 @@ impl crate::session::ArkSession {
             crate::session::mappers::current_unix_timestamp(),
         );
         self.wallet_db.set_vtxo_exit_records(records);
+        self.wallet_db.set_unilateral_exit_watches(Vec::new());
     }
 
-    /// Job start: tag the plan and register watches for tagged outpoints so B heal cannot miss them.
+    /// Job start: tag the plan. Survival across snapshot replace is unrolled+ records, not watches.
     pub fn tag_unilateral_exit_plan(&self, selected_leaves: &[VirtualOutPoint]) -> ArkResult<()> {
         let snapshot = self
             .wallet_db
@@ -559,19 +727,7 @@ impl crate::session::ArkSession {
             &mut records,
             crate::session::mappers::current_unix_timestamp(),
         )?;
-        self.wallet_db.set_vtxo_exit_records(records.clone());
-        // Idempotent watches for the whole map, not only newly inserted keys.
-        for (key, record) in &records {
-            let Some((txid, vout)) = parse_vtxo_exit_record_key(key) else {
-                continue;
-            };
-            crate::session::unilateral_exit::watch::register_unilateral_exit_watch(
-                &self.wallet_db,
-                &txid,
-                vout,
-                record.amount_sats,
-            );
-        }
+        self.wallet_db.set_vtxo_exit_records(records);
         Ok(())
     }
 
@@ -610,7 +766,7 @@ impl crate::session::ArkSession {
         Ok(())
     }
 
-    /// Start-list hide set: `unrolled` / `complete_ready` / `exited` only.
+    /// Start-list hide set: `unrolled` / `complete_ready` / `exited` / `funding_lost`.
     pub(crate) fn start_list_excluded_outpoints(&self) -> HashSet<UnilateralExitOutpointKey> {
         start_list_excluded_outpoints_from_records(&self.wallet_db.vtxo_exit_records())
     }
@@ -1134,5 +1290,237 @@ mod tests {
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].txid, txid(0x99));
         let _ = tree;
+    }
+
+    #[test]
+    fn abort_keeps_host_broadcast_attempted_and_funding_lost() {
+        let (snapshot, tree, leaf, _) = snapshot_with_intermediate_tree_and_ark_leaf();
+        let mut records = BTreeMap::new();
+        tag_unilateral_exit_plan_in_records(
+            &snapshot,
+            &[VirtualOutPoint::new(leaf, 0)],
+            &mut records,
+            1,
+        )
+        .expect("tag");
+        advance_records_for_host_registered(&mut records, &tree.to_string());
+        records
+            .get_mut(&vtxo_exit_record_key(&leaf.to_string(), 0))
+            .expect("leaf")
+            .phase = VtxoExitPhase::FundingLost;
+        let mut observations = BTreeMap::new();
+        insert_host_tx_observation(&mut observations, &tree.to_string(), 2);
+        untag_unilateral_exit_plan_if_safe_in_records(
+            &snapshot,
+            &[VirtualOutPoint::new(leaf, 0)],
+            &mut records,
+            &observations,
+        )
+        .expect("untag");
+        assert_eq!(
+            record_phase(&records, &tree, 0),
+            VtxoExitPhase::HostBroadcastAttempted
+        );
+        assert_eq!(record_phase(&records, &leaf, 0), VtxoExitPhase::FundingLost);
+    }
+
+    #[test]
+    fn host_txids_on_same_materials_branch_errors_when_materials_missing() {
+        let (mut snapshot, tree, _, _) = snapshot_with_intermediate_tree_and_ark_leaf();
+        snapshot.unilateral_exit_materials_by_leaf_tx.clear();
+        let error = host_txids_on_same_materials_branch(&snapshot, &tree.to_string())
+            .expect_err("missing exit materials must not invent a one-txid branch");
+        assert!(matches!(
+            error,
+            ArkWasmError::AutonomousExitMaterialsMissing
+        ));
+    }
+
+    #[test]
+    fn seized_branch_stamps_pre_unroll_records_funding_lost_keeps_complete_ready_sibling() {
+        let (snapshot, tree, leaf, _) = snapshot_with_intermediate_tree_and_ark_leaf();
+        let mut records = BTreeMap::new();
+        tag_unilateral_exit_plan_in_records(
+            &snapshot,
+            &[VirtualOutPoint::new(leaf, 0)],
+            &mut records,
+            1,
+        )
+        .expect("tag");
+        records
+            .get_mut(&vtxo_exit_record_key(&tree.to_string(), 1))
+            .expect("en-passant")
+            .phase = VtxoExitPhase::CompleteReady;
+        let keys = pre_unroll_record_keys_on_same_branch(&snapshot, &records, &leaf.to_string(), 0)
+            .expect("exit materials describe the seized branch");
+        stamp_pre_unroll_records_funding_lost(&mut records, &keys);
+        assert_eq!(record_phase(&records, &leaf, 0), VtxoExitPhase::FundingLost);
+        assert_eq!(record_phase(&records, &tree, 0), VtxoExitPhase::FundingLost);
+        assert_eq!(
+            record_phase(&records, &tree, 1),
+            VtxoExitPhase::CompleteReady
+        );
+    }
+
+    #[test]
+    fn b_does_not_advance_or_rewind_funding_lost() {
+        let (snapshot, _, leaf, _) = snapshot_with_intermediate_tree_and_ark_leaf();
+        let mut records = BTreeMap::new();
+        tag_unilateral_exit_plan_in_records(
+            &snapshot,
+            &[VirtualOutPoint::new(leaf, 0)],
+            &mut records,
+            1,
+        )
+        .expect("tag");
+        records
+            .get_mut(&vtxo_exit_record_key(&leaf.to_string(), 0))
+            .expect("leaf")
+            .phase = VtxoExitPhase::FundingLost;
+        apply_host_observation_to_vtxo_exit_records(
+            &mut records,
+            &leaf.to_string(),
+            true,
+            u64::from(UNILATERAL_EXIT_LEAF_CONFIRMATIONS),
+            true,
+        );
+        assert_eq!(record_phase(&records, &leaf, 0), VtxoExitPhase::FundingLost);
+        rewind_records_on_host(&mut records, &leaf.to_string(), VtxoExitPhase::Tagged);
+        assert_eq!(record_phase(&records, &leaf, 0), VtxoExitPhase::FundingLost);
+    }
+
+    #[test]
+    fn observation_deleted_when_all_vouts_exited_or_funding_lost() {
+        let (snapshot, tree, leaf, _) = snapshot_with_intermediate_tree_and_ark_leaf();
+        let mut records = BTreeMap::new();
+        tag_unilateral_exit_plan_in_records(
+            &snapshot,
+            &[VirtualOutPoint::new(leaf, 0)],
+            &mut records,
+            1,
+        )
+        .expect("tag");
+        records
+            .get_mut(&vtxo_exit_record_key(&tree.to_string(), 0))
+            .expect("tree0")
+            .phase = VtxoExitPhase::Exited;
+        records
+            .get_mut(&vtxo_exit_record_key(&tree.to_string(), 1))
+            .expect("tree1")
+            .phase = VtxoExitPhase::FundingLost;
+        assert!(observation_all_records_terminal(
+            &records,
+            &tree.to_string()
+        ));
+        assert!(!observation_all_records_terminal(
+            &records,
+            &leaf.to_string()
+        ));
+    }
+
+    #[test]
+    fn heal_v10_watches_into_records_then_clears_watches() {
+        let (mut snapshot, tree, leaf, _) = snapshot_with_intermediate_tree_and_ark_leaf();
+        snapshot.virtual_tx_outpoints[0].is_unrolled = true;
+        let watches = vec![UnilateralExitWatchRecord {
+            vtxo_txid: tree.to_string(),
+            vout: 0,
+            amount_sats: 2_000,
+            registered_at: 1,
+            published_vtxo_txid: Some(tree.to_string()),
+            branch_txids: vec![],
+        }];
+        let mut records = BTreeMap::new();
+        heal_vtxo_exit_records_from_legacy(
+            Some(&snapshot),
+            &[],
+            &watches,
+            &BTreeMap::new(),
+            &mut records,
+            10,
+        );
+        assert_eq!(record_phase(&records, &tree, 0), VtxoExitPhase::Unrolled);
+        // Heal reads leftover v10 watches into records; callers then clear watches so they
+        // cannot resurrect idle rows (`heal_vtxo_exit_records`).
+        let _ = leaf;
+    }
+
+    #[test]
+    fn funding_lost_is_not_completable() {
+        let (snapshot, _, leaf, _) = snapshot_with_intermediate_tree_and_ark_leaf();
+        let mut records = BTreeMap::new();
+        tag_unilateral_exit_plan_in_records(
+            &snapshot,
+            &[VirtualOutPoint::new(leaf, 0)],
+            &mut records,
+            1,
+        )
+        .expect("tag");
+        records
+            .get_mut(&vtxo_exit_record_key(&leaf.to_string(), 0))
+            .expect("leaf")
+            .phase = VtxoExitPhase::FundingLost;
+        let error = validate_records_not_funding_lost(&records, &[VirtualOutPoint::new(leaf, 0)])
+            .expect_err("funding_lost is not completable");
+        assert!(matches!(
+            error,
+            ArkWasmError::VtxoFundingLost { vout: 0, .. }
+        ));
+    }
+
+    #[test]
+    fn b_scan_stamps_funding_lost_on_aborted_leftover_without_job_outpoints() {
+        let (mut snapshot, _, leaf, _) = snapshot_with_intermediate_tree_and_ark_leaf();
+        let mut records = BTreeMap::new();
+        tag_unilateral_exit_plan_in_records(
+            &snapshot,
+            &[VirtualOutPoint::new(leaf, 0)],
+            &mut records,
+            1,
+        )
+        .expect("tag");
+        for row in &mut snapshot.virtual_tx_outpoints {
+            if row.txid == leaf.to_string() && row.vout == 0 {
+                row.is_swept = true;
+                row.is_unrolled = false;
+            }
+        }
+        let stamped = stamp_pre_unroll_records_funding_lost_for_asp_swept(
+            &snapshot,
+            &mut records,
+            false,
+            |_| false,
+        )
+        .expect("exit materials describe the seized branch");
+        assert!(stamped);
+        assert_eq!(record_phase(&records, &leaf, 0), VtxoExitPhase::FundingLost);
+    }
+
+    #[test]
+    fn autonomous_mode_does_not_stamp_funding_lost_from_snapshot_swept() {
+        let (mut snapshot, _, leaf, _) = snapshot_with_intermediate_tree_and_ark_leaf();
+        let mut records = BTreeMap::new();
+        tag_unilateral_exit_plan_in_records(
+            &snapshot,
+            &[VirtualOutPoint::new(leaf, 0)],
+            &mut records,
+            1,
+        )
+        .expect("tag");
+        for row in &mut snapshot.virtual_tx_outpoints {
+            if row.txid == leaf.to_string() && row.vout == 0 {
+                row.is_swept = true;
+                row.is_unrolled = false;
+            }
+        }
+        let stamped = stamp_pre_unroll_records_funding_lost_for_asp_swept(
+            &snapshot,
+            &mut records,
+            true,
+            |_| false,
+        )
+        .expect("autonomous mode skips snapshot is_swept without reading materials");
+        assert!(!stamped);
+        assert_eq!(record_phase(&records, &leaf, 0), VtxoExitPhase::Tagged);
     }
 }

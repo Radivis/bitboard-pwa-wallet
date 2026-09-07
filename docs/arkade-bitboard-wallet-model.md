@@ -138,14 +138,14 @@ Bitboard keeps the **exit line amount stable** across steps 1→4. Net spendable
 
 Implementation touchpoints: `build_arkade_balance_dto` (WASM), `exit_balance_components` / `vtxo_exit_records` (persistence), `arkade-exit-balance-optimistic.ts` (React Query cache).
 
-**Spend-lock from `tagged` is current** (`ARK-EXIT-27` / `ARK-REC-08`). Headline spendable drops at job start. Recover / renew / send / collab refuse tagged-or-later outpoints. `funding_lost` and watch folding remain Stage 3.
+**Spend-lock from `tagged` is current** (`ARK-EXIT-27` / `ARK-REC-08`). Headline spendable drops at job start. Recover / renew / send / collab refuse tagged-or-later outpoints, including `funding_lost` while the coin is still in gross. Unrolled+ records survive snapshot replace (`ARK-EXIT-12`); leftover v10 watches heal then are cleared.
 
 ### Post-unroll operator contract (ARK-EXIT-11)
 
 Unroll and complete do **not** call the ASP. After each proceed-step broadcast, the XState machine waits until Esplora reports **1 confirmation** on the current virtual tx. WASM stamps local `is_unrolled` only when the leaf or intermediate host has **6 confirmations**. Operator indexer catch-up happens later, if at all, during a separate operator sync.
 
-- **Sticky merge:** `merge_sticky_unrolled_flags` preserves local `is_unrolled` for VTXOs still returned by the operator while ASP lags, and only when a host-tx observation has 6 confirmations or a watch has `published_vtxo_txid` (ARK-EXIT-12). Tag-time watches alone must not keep the flag. Missing or divergent watches are reconciled via `unilateral_exit_watches`.
-- **Watch reconcile:** After each operator sync, `reconcile_exiting_vtxo_watches` runs targeted `list_vtxos_for_outpoints` and narrow Esplora probes per the truth table — never clears exiting state on full-list absence alone (ARK-SYNC-03).
+- **Sticky merge:** `merge_sticky_unrolled_flags` preserves local `is_unrolled` for VTXOs still returned by the operator while ASP lags, and only when a host-tx observation has 6 confirmations or a VTXO exit record is `unrolled` / `complete_ready` (ARK-EXIT-12). Tag-time records must not keep the flag. Missing unrolled+ rows are reconciled from those records.
+- **Record reconcile:** After each operator sync, `reconcile_exiting_vtxo_watches` iterates unrolled+ VTXO exit records with targeted `list_vtxos_for_outpoints` and narrow Esplora probes per the truth table — never clears exiting state on full-list absence alone (ARK-SYNC-03).
 
 Residual edge cases where ASP reports `is_swept` without `is_unrolled` during an abandoned unilateral exit (cooperative recover override) remain documented in deferred Operation Labyrinth Step 3 work; recover + SSE fixes addressed the common stuck-wallet path.
 

@@ -11,11 +11,11 @@ use bitcoin::{Network, XOnlyPublicKey};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
-/// Current on-disk Arkade persistence format (v10).
+/// Current on-disk Arkade persistence format (v11).
 ///
 /// Published 0.3.3 wallets used v3. [`BitboardArkPersistence::parse_import`] accepts versions
-/// 3–10: missing fields default. Leftover v4–v9 blobs deserialize as the current types.
-pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 10;
+/// 3–11: missing fields default. Leftover v4–v10 blobs deserialize as the current types.
+pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 11;
 /// Oldest envelope version `parse_import` will load (published 0.3.3).
 pub const MIN_SUPPORTED_ARK_PERSISTENCE_IMPORT_VERSION: u32 = 3;
 const PERSISTENCE_LOCK_POISONED: &str = "persistence lock poisoned";
@@ -193,6 +193,9 @@ impl HostTxObservationRecord {
 }
 
 /// Per-VTXO unilateral-exit lifecycle phase. Idle is absence of a row (`ARK-EXIT-27`).
+///
+/// `FundingLost` is a terminal side-branch, not a later step after `Exited`. Do not use
+/// [`PartialOrd`] to decide pipeline vs terminal; use the helpers below.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
 pub enum VtxoExitPhase {
@@ -203,26 +206,46 @@ pub enum VtxoExitPhase {
     Unrolled,
     CompleteReady,
     Exited,
+    FundingLost,
 }
 
 impl VtxoExitPhase {
+    pub fn is_terminal(self) -> bool {
+        matches!(self, Self::Exited | Self::FundingLost)
+    }
+
     pub fn is_pipeline(self) -> bool {
-        !matches!(self, Self::Exited)
+        matches!(
+            self,
+            Self::Tagged
+                | Self::HostBroadcastAttempted
+                | Self::HostRelayed
+                | Self::HostConfirmed
+                | Self::Unrolled
+                | Self::CompleteReady
+        )
     }
 
     pub fn locks_collaborative_spend(self) -> bool {
-        self.is_pipeline()
+        self.is_pipeline() || matches!(self, Self::FundingLost)
     }
 
     pub fn is_start_list_excluded(self) -> bool {
-        matches!(self, Self::Unrolled | Self::CompleteReady | Self::Exited)
+        matches!(
+            self,
+            Self::Unrolled | Self::CompleteReady | Self::Exited | Self::FundingLost
+        )
     }
 
-    pub fn contributes_pending_mirror(self) -> bool {
+    pub fn is_pre_unroll(self) -> bool {
         matches!(
             self,
             Self::Tagged | Self::HostBroadcastAttempted | Self::HostRelayed | Self::HostConfirmed
         )
+    }
+
+    pub fn contributes_pending_mirror(self) -> bool {
+        self.is_pre_unroll()
     }
 }
 
@@ -376,6 +399,7 @@ pub struct WalletDbSnapshot {
     pub offchain_vtxo_snapshot: Option<OffchainVtxoSnapshot>,
     #[serde(default)]
     pub pending_exit_deductions: Vec<PendingExitDeductionRecord>,
+    /// Leftover v10 import only. Heal into `vtxo_exit_records` then clear; not a write path.
     #[serde(default)]
     pub unilateral_exit_watches: Vec<UnilateralExitWatchRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -661,25 +685,6 @@ impl JsonPersistenceDb {
 
     pub fn set_vtxo_exit_records(&self, records: BTreeMap<String, VtxoExitRecord>) {
         lock_persistence(&self.inner).vtxo_exit_records = records;
-    }
-
-    pub fn upsert_unilateral_exit_watch(&self, record: UnilateralExitWatchRecord) {
-        let mut inner = lock_persistence(&self.inner);
-        if let Some(existing) = inner
-            .unilateral_exit_watches
-            .iter_mut()
-            .find(|existing| existing.vtxo_txid == record.vtxo_txid && existing.vout == record.vout)
-        {
-            if record.published_vtxo_txid.is_some() {
-                existing.published_vtxo_txid = record.published_vtxo_txid;
-            }
-            if !record.branch_txids.is_empty() {
-                existing.branch_txids = record.branch_txids;
-            }
-            existing.amount_sats = record.amount_sats;
-            return;
-        }
-        inner.unilateral_exit_watches.push(record);
     }
 
     pub fn remove_unilateral_exit_watches_for_outpoints(

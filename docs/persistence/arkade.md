@@ -38,9 +38,9 @@ File: `bitboard-ark/src/persistence.rs`
 | `OffchainVtxoSnapshot` | VTXO list + unilateral exit materials map (keyed by leaf tx) |
 | `JsonPersistenceDb` | In-memory mutex-backed DB implementing ark-client `Persistence` |
 
-**Current version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 10`
+**Current version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 11`
 
-`BitboardArkPersistence::parse_import()` accepts versions 3–10. Published 0.3.3 wallets used v3; missing fields default. Leftover v4–v9 blobs deserialize as the current types (`vtxo_exit_records` empty until heal). Unsupported or corrupt blobs start from an empty `wallet_db` on session open. `autonomous_mode` (default **false**) is a per-ASP trust posture on the envelope: when true, session open uses `cached_operator_info` and does not call the operator.
+`BitboardArkPersistence::parse_import()` accepts versions 3–11. Published 0.3.3 wallets used v3; missing fields default. Leftover v4–v10 blobs deserialize as the current types (`vtxo_exit_records` empty until heal; leftover `unilateral_exit_watches` heal into records then are cleared). Unsupported or corrupt blobs start from an empty `wallet_db` on session open. `autonomous_mode` (default **false**) is a per-ASP trust posture on the envelope: when true, session open uses `cached_operator_info` and does not call the operator.
 
 ### Offchain receive cursor
 
@@ -100,6 +100,6 @@ Arkade previously used IndexedDB databases named `bitboard-arkade-{walletId}-{ne
 
 | Layer | Version mechanism |
 |-------|-------------------|
-| `BitboardArkPersistence.version` | Rust constant (10); `parse_import` accepts 3–10 (0.3.3 was v3) |
+| `BitboardArkPersistence.version` | Rust constant (11); `parse_import` accepts 3–11 (0.3.3 was v3) |
 | Account metadata | `lastSuccessfulOperatorSyncAt` mirrors on-chain `lastSuccessfulEsploraSyncAt` semantics |
 | Frontend merge | `arkade-payload-merge.ts` ensures receive index only increases |

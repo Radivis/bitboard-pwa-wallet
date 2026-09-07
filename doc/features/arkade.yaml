@@ -27,7 +27,7 @@ feature:
     - Default delegator and operator URLs come from arkade-endpoints.ts (env overrides supported)
     - Network switch terminates and reopens the Arkade worker session for the new network
     - Lock wallet terminates arkade.worker and clears session state
-    - BitboardArkPersistence (engine ark-rs, wire version 10) in sdkPersistenceJson per Arkade account inside encrypted wallet_secrets; autonomous_mode defaults false and is keyed to that ASP
+    - BitboardArkPersistence (engine ark-rs, wire version 11) in sdkPersistenceJson per Arkade account inside encrypted wallet_secrets; autonomous_mode defaults false and is keyed to that ASP
     - Offchain receive derivation cursor is a single scalar in walletDb (see docs/arkade-bitboard-wallet-model.md); no index arrays in sdkPersistenceJson
     - Wallet reopen hydrates boarding outputs from sdkPersistenceJson; operator required for live balance sync and sends unless persisted autonomous_mode is true
   contracts:
@@ -80,7 +80,7 @@ feature:
         description: Tagged-or-later VTXO exit records do not contribute to recoverableSettleableVtxoCount, recoverablePendingOperatorSweepVtxoCount, expiring-soon count, or earliest-expiry indicator; post-unroll exiting VTXOs are excluded by vendored ark-core bucketing. Exclusion is record-derived (not pending-deduction-only).
     unilateral_exit:
       - id: ARK-EXIT-01
-        description: Start unilateral exit lists only VTXOs that can start unroll; unrolled, complete_ready, and exited records are excluded. Tagged leftovers that are not yet unrolled remain startable after abort (ARK-EXIT-26/30). Concurrent second job stays a frontend selection lock.
+        description: Start unilateral exit lists only VTXOs that can start unroll; unrolled, complete_ready, exited, and funding_lost records are excluded. Tagged leftovers that are not yet unrolled remain startable after abort (ARK-EXIT-26/30). Concurrent second job stays a frontend selection lock.
       - id: ARK-EXIT-02
         description: Complete unilateral exit lists in-progress VTXOs from persisted VTXO exit records (tagged through complete_ready). Complete RPC does not require in-progress membership (ARK-EXIT-31); this ID remains the Complete list.
       - id: ARK-EXIT-03
@@ -94,15 +94,15 @@ feature:
       - id: ARK-EXIT-07
         description: Operator sync prefetches unilateral_exit_materials on exit-eligible VTXO snapshot records and persists cached_operator_info
       - id: ARK-EXIT-08
-        description: Start unroll/proceed fails fast with autonomous_exit_materials_missing when selected VTXO lacks prefetched materials, regardless of autonomous mode
+        description: Fail fast with autonomous_exit_materials_missing when exit materials are missing or cannot describe the VTXO or seized branch (start unroll/proceed, funding_lost stamping), regardless of autonomous mode
       - id: ARK-EXIT-09
         description: Complete uses snapshot readiness plus Esplora only; no operator indexer poll. Each proceed step is non-blocking; the XState machine waits until the current virtual tx has 1 confirmation, and WASM stamps is_unrolled only after 6 confirmations (ARK-EXIT-15/16). The unified stamper (ARK-EXIT-29) runs on autonomous load, operator sync, proceed, progress, list, and complete (terminals included).
       - id: ARK-EXIT-10
         description: While autonomous mode is active, collaborative exit, send, renew, recoverable settlement, signer migration, boarding settle, and operator sync (manual and background dashboard poll) are blocked in UI and WASM; an in-progress unilateral-exit job does not skip background operator sync
       - id: ARK-EXIT-11
-        description: After each proceed step, WASM does not poll operator list_vtxos; local is_unrolled is stamped when Esplora reports 6 confirmations on the leaf or intermediate host virtual tx; sticky is_unrolled merge and watch reconcile run during operator sync only. The unified stamper (ARK-EXIT-29) also runs on autonomous load, proceed, progress, list, and complete.
+        description: After each proceed step, WASM does not poll operator list_vtxos; local is_unrolled is stamped when Esplora reports 6 confirmations on the leaf or intermediate host virtual tx; sticky is_unrolled merge and unrolled+ record reconcile run during operator sync only. The unified stamper (ARK-EXIT-29) also runs on autonomous load, proceed, progress, list, and complete.
       - id: ARK-EXIT-12
-        description: Explicit unilateral_exit_watches registry in wallet persistence; survives full snapshot replace; cleared only on completion or reconcile evidence (operator spent or on-chain spent)
+        description: Unrolled+ VTXO exit records survive full snapshot replace (Stage 3 fold of unilateral_exit_watches). Reinject missing snapshot rows from those records; never clear exiting state on full-list absence alone. Leftover v10 watches heal into records then are cleared. Cleared on completion, funding_lost, or reconcile evidence (operator spent or on-chain spent).
       - id: ARK-EXIT-13
         description: Unilateral exit control page at /wallet/arkade/unilateral-exit with responsive VTXO tree graph (React Flow + d3-dag), multi-select leaves, and Management entry link (Start unilateral exit / Control unilateral exit). Unspent host VTXOs stay on the graph after unroll (host tx 6 conf); the overlay swaps Lucide Coins for HandCoins.
       - id: ARK-EXIT-14
@@ -144,11 +144,12 @@ feature:
     unilateral_exit_vtxo_lifecycle:
       - id: ARK-EXIT-27
         description: >-
-          VTXO exit phases (shipped, envelope v10): idle (no row) → tagged → host_broadcast_attempted
-          → host_relayed → host_confirmed → unrolled → complete_ready → exited. funding_lost is not
-          persisted yet (Stage 3). Abort is not a VTXO phase. WASM persisted records are the durable
-          source of truth. Spend-lock starts at tagged; subtract from net spendable only while the
-          coin is still in gross spendable (not yet is_unrolled / exiting).
+          VTXO exit phases (shipped, envelope v11): idle (no row) → tagged → host_broadcast_attempted
+          → host_relayed → host_confirmed → unrolled → complete_ready → exited. funding_lost is a
+          terminal side-branch from tagged onward (ARK-EXIT-33). Abort is not a VTXO phase. WASM
+          persisted records are the durable source of truth. Spend-lock starts at tagged; subtract
+          from net spendable only while the coin is still in gross spendable (not yet is_unrolled /
+          exiting). funding_lost still locks collaborative spend while the coin remains in gross.
       - id: ARK-EXIT-28
         description: >-
           Host-tx observation registry (C; shipped, envelope v9): keyed by virtual txid; fields registered_at,
@@ -165,10 +166,12 @@ feature:
         description: >-
           Unified Esplora 6-conf reconciler (B; shipped): any tree/ark virtual tx that hosts VTXOs
           (terminals included; commitment/checkpoint skipped) with ≥ UNILATERAL_EXIT_LEAF_CONFIRMATIONS
-          stamps is_unrolled on every vout of that txid and registers watches. Entry points: Arkade
-          load including autonomous, operator sync, proceed, progress, list_unilateral_exits_in_progress,
-          complete. No dedicated 6-conf poll actor (not D). Materials heal: probe host txs of tagged
-          VTXOs in materials even if the observation write was missed.
+          stamps is_unrolled on every vout of that txid and advances VTXO exit records. Survival
+          across snapshot replace is those unrolled+ records (ARK-EXIT-12), not watches. Entry
+          points: Arkade load including autonomous, operator sync, proceed, progress,
+          list_unilateral_exits_in_progress, complete. No dedicated 6-conf poll actor (not D).
+          Materials heal: probe host txs of tagged VTXOs in materials even if the observation write
+          was missed.
       - id: ARK-EXIT-30
         description: >-
           Abort, en-passant, and leftover-start (shipped). Abort is not a VTXO phase. Job started
@@ -180,15 +183,16 @@ feature:
           exit_relevant_vtxo_outpoints_for_plan outpoint at job start; register host tx later on the
           proceed step that publishes it; completing an en-passant VTXO does not stop the job for
           remaining tagged leaves. funding_lost is terminal (not startable, not completable) and
-          is not persisted yet (Stage 3).
+          is persisted (ARK-EXIT-33).
       - id: ARK-EXIT-31
         description: >-
           Complete gate is complete_ready (E; shipped): complete_unilateral_exit must not require
           membership in unilateral_exit_in_progress_outpoints (no VtxoNotInUnilateralExit). Gate is
-          validate_snapshot_completion_ready (is_unrolled && !is_spent) plus Esplora
-          can_be_claimed_unilaterally_by_owner. Complete dialog still lists pipeline VTXOs (ARK-EXIT-02)
-          with can_complete; waiting-for-timelock rows remain listed but not submittable. Aborted or
-          failed jobs' unrolled VTXOs remain claimable without a frontend job.
+          validate_snapshot_completion_ready (is_unrolled && !is_spent) plus record phase must not
+          be funding_lost plus Esplora can_be_claimed_unilaterally_by_owner. Complete dialog still
+          lists pipeline VTXOs (ARK-EXIT-02) with can_complete; waiting-for-timelock rows remain
+          listed but not submittable. Aborted or failed jobs' unrolled VTXOs remain claimable
+          without a frontend job. funding_lost coins are not listed and not completable (ARK-EXIT-33).
       - id: ARK-EXIT-32
         description: >-
           Job vs VTXO XState split (target; Stage 4). Job machine remains the
@@ -199,6 +203,20 @@ feature:
           EXITED, FUNDING_LOST, UNTAG. HYDRATE sets state from the WASM record (phase jumps allowed);
           it does not replay intermediates. WALLET_RESET/lock stops all actors; next unlock hydrates
           from WASM. No per-VTXO after delay until 6 confirmations (not D).
+      - id: ARK-EXIT-33
+        description: >-
+          Persist funding_lost on VTXO exit records (envelope v11). Viability/reconcile scans
+          pipeline records including aborted leftovers on B entry points, not only the active job
+          leaf set. ASP seizure of an exit branch stamps every still-pre-unroll record on that
+          plan funding_lost; a sibling already unrolled or complete_ready stays claimable. If
+          exit materials cannot describe the seized branch, fail with
+          autonomous_exit_materials_missing (ARK-EXIT-08) instead of inventing a one-txid
+          branch. Job machine terminate guards are unchanged (aspSweptTargets / branchFundingLost
+          still terminate immediately). Autonomous mode does not stamp funding_lost from snapshot
+          asp_swept (ARK-AUTO-05); Esplora branch_funding_lost still stamps, including a foreign
+          spend of the first unroll step's prevout(s) (commitment funding). That prevout probe
+          repeats on each job viability check and B-entry reconcile while pre-unroll records exist
+          (reorgs); it does not stop after N confirmations.
     autonomous_mode:
       - id: ARK-AUTO-01
         description: BitboardArkPersistence.autonomous_mode is persisted per ASP connection; missing or legacy blobs default false; opt-in is explicit via the Management switch (with confirm) or operator-trust review
@@ -209,7 +227,7 @@ feature:
       - id: ARK-AUTO-04
         description: Session open with autonomous_mode true but missing cached_operator_info fails with autonomous_operator_info_missing and must not fall through to live operator connect
       - id: ARK-AUTO-05
-        description: While autonomous mode is active, unilateral-exit job viability ignores snapshot asp_swept_targets; branch_funding_lost from Esplora still terminates the job
+        description: While autonomous mode is active, unilateral-exit job viability ignores snapshot asp_swept_targets and does not stamp funding_lost from ASP sweep; branch_funding_lost from Esplora still stamps funding_lost and still terminates the job, including a foreign spend of the first unroll step's prevout(s)
     batch_intent:
       - id: ARK-BATCH-01
         description: After RegisterIntent returns an intent_id, the wallet persists a pending batch-intent record with lifecycle_phase processing and flushes sdkPersistenceJson before treating the join as in-flight SSE or failed
@@ -247,10 +265,10 @@ feature:
       - id: ARK-SYNC-02
         description: A later successful sync without key-discovery failure clears warningMessage
       - id: ARK-SYNC-03
-        description: After operator sync, reconcile_exiting_vtxo_watches runs targeted lookups for watched exiting VTXOs; non-blocking exitingVtxoWarning when indexer lag or ASP mismatch; never clear exiting state on full-list absence alone
+        description: After operator sync, reconcile of unrolled+ VTXO exit records runs targeted lookups; non-blocking exitingVtxoWarning when indexer lag or ASP mismatch; never clear exiting state on full-list absence alone (ARK-EXIT-12)
     operator_trust:
       - id: ARK-TRUST-01
-        description: When operator digest differs from accepted cached_operator_info, sync does not persist offchain snapshot, exit watches, materials prefetch, or accepted operator cache
+        description: When operator digest differs from accepted cached_operator_info, sync does not persist offchain snapshot, VTXO exit records survival reconcile, materials prefetch, or accepted operator cache
       - id: ARK-TRUST-02
         description: Pending getInfo is persisted as pending_operator_info for offline diff review while operator_trust_pending
       - id: ARK-TRUST-03

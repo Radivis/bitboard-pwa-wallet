@@ -12,7 +12,6 @@ use crate::outpoint::representative_vout_among_virtual_outpoints;
 use super::plan::UnilateralBatchPlan;
 use super::proceed::unilateral_exit_step_broadcast_satisfied;
 use super::snapshot_ops::dedup_virtual_outpoints;
-use super::watch::enrich_unilateral_exit_watches_for_leaf_tx_after_unroll;
 use crate::session::ArkSession;
 
 pub(crate) fn leaf_reached_finality(confirmations: u64) -> bool {
@@ -168,24 +167,12 @@ impl ArkSession {
         Ok(ordered_step_txids.len())
     }
 
-    /// Unified 6-conf stamper, then enrich plan-leaf watches with branch txids.
+    /// Unified 6-conf stamper for plan-leaf hosts.
     pub(super) async fn mark_unrolled_leaves_at_finality(
         &self,
-        plan: &UnilateralBatchPlan,
+        _plan: &UnilateralBatchPlan,
     ) -> ArkResult<()> {
         self.reconcile_host_tx_finality().await?;
-        for leaf in &plan.leaves {
-            let leaf_virtual_txid = leaf.leaf_txid.to_string();
-            if !self.virtual_tx_is_marked_unrolled(&leaf_virtual_txid)? {
-                continue;
-            }
-            enrich_unilateral_exit_watches_for_leaf_tx_after_unroll(
-                &self.wallet_db,
-                &leaf_virtual_txid,
-                &leaf.leaf_txid.to_string(),
-                &leaf.branch_txids,
-            );
-        }
         Ok(())
     }
 

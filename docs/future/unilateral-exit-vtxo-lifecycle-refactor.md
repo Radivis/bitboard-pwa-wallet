@@ -10,7 +10,7 @@ Related:
 - Current persistence shards: [persistence/unilateral-exit.md](persistence/unilateral-exit.md)
 - Balance buckets: [arkade-bitboard-wallet-model.md](arkade-bitboard-wallet-model.md)
 - Job XState ownership: [`.cursor/rules/unilateral-exit-xstate.mdc`](../.cursor/rules/unilateral-exit-xstate.mdc)
-- Test contracts: `ARK-EXIT-*` in [doc/features/arkade.yaml](../doc/features/arkade.yaml) (`ARK-EXIT-27`–`32` are the Stage 0 target lifecycle; `01`–`26` remain shipped behavior)
+- Test contracts: `ARK-EXIT-*` in [doc/features/arkade.yaml](../doc/features/arkade.yaml) (`ARK-EXIT-27`–`33` are the Stage 0 target lifecycle; `01`–`26` remain shipped behavior)
 
 ---
 
@@ -232,7 +232,7 @@ End state: VTXO exit table + host-tx observation table are authoritative. Until 
 | Frontend job `selected_leaf_outpoints` | Orchestration cursor: which tagged VTXOs is the user broadcasting? |
 | `pending_exit_deductions` (unilateral) | `tagged` … `host_confirmed` (balance line) |
 | `is_unrolled` + exiting bucket | `unrolled` / `complete_ready` |
-| `unilateral_exit_watches` | Survival of `unrolled+` across snapshot replace (fold into records in Stage 3) |
+| `unilateral_exit_watches` | Survival of `unrolled+` across snapshot replace — **folded into records (Stage 3 shipped)** |
 | `unilateral_exit_step_wait` | Job cursor + host `relayed` fallback |
 | `unilateral_exit_in_progress_outpoints` union | **Derived** from VTXO records |
 | Complete `VtxoNotInUnilateralExit` | Deleted (E) |
@@ -320,8 +320,10 @@ The original bug. Ship this even if later stages slip.
 
 ### Stage 3 — Absorb watches and viability
 
+**Shipped** (envelope v11). Records replace watches as the survival set. `funding_lost` is persisted per VTXO. Job terminate guards are unchanged: `aspSweptTargets` / `branchFundingLost` still go to `terminated` immediately. Mixed outcomes live on records after the job dies (pre-unroll coins `funding_lost`; already-`unrolled` / `complete_ready` siblings stay claimable).
+
 - Fold `unilateral_exit_watches` into records that must survive snapshot replace (`ARK-EXIT-12` / `ARK-SYNC-03` truth table).
-- `funding_lost` is per-VTXO; job `terminated` is “no remaining broadcastable tagged VTXOs” plus banners.
+- `funding_lost` is per-VTXO. Happy-path job `complete` is “no remaining broadcastable tagged VTXOs.” ASP seizure still terminates the job immediately.
 - Abort never clears records past `host_broadcast_attempted`.
 - Viability checks run against records, not only the active job leaf set (so aborted branches still detect ASP sweep / foreign spend).
 

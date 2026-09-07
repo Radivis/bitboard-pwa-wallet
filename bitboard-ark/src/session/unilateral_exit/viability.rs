@@ -13,11 +13,97 @@ use crate::persistence::VirtualTxOutPointRecord;
 use crate::session::ArkSession;
 use crate::session::unilateral_exit::plan::UnilateralBatchPlan;
 
+use super::plan::branch_txids_for_leaf;
 use super::snapshot_ops::dedup_virtual_outpoints;
 use super::topology::merge_topology_nodes_from_chains;
+use super::vtxo_exit::{
+    parse_vtxo_exit_record_key, pre_unroll_record_keys_on_same_branch,
+    stamp_pre_unroll_records_funding_lost, stamp_pre_unroll_records_funding_lost_for_asp_swept,
+};
+use crate::persistence::vtxo_exit_record_key;
+use crate::unilateral_exit_materials::{
+    require_unilateral_exit_materials_for_leaf_tx, virtual_psbts_from_records,
+    vtxo_chains_from_json,
+};
 
 pub(crate) fn wallet_unroll_step_txids(plan: &UnilateralBatchPlan) -> HashSet<Txid> {
     plan.ordered_step_txids.iter().copied().collect()
+}
+
+/// Prevouts of `ordered_step_txids[0]` — the on-chain commitment (or other parent) that funds
+/// the first unroll step. Empty when the plan has no first step or `tx_by_id` lacks that tx.
+pub(crate) fn first_unroll_step_funding_prevouts(
+    plan: &UnilateralBatchPlan,
+) -> Vec<VirtualOutPoint> {
+    let Some(first_step) = plan.ordered_step_txids.first() else {
+        return Vec::new();
+    };
+    let Some(tx) = plan.tx_by_id.get(first_step) else {
+        return Vec::new();
+    };
+    funding_prevouts_from_transaction(tx)
+}
+
+/// Same prevouts as [`first_unroll_step_funding_prevouts`], derived from snapshot materials
+/// (chain order + virtual PSBT unsigned inputs) for B-entry reconcile without a job plan.
+pub(crate) fn first_unroll_step_funding_prevouts_from_snapshot(
+    snapshot: &crate::persistence::OffchainVtxoSnapshot,
+    seed_host_txid: &str,
+) -> ArkResult<Vec<VirtualOutPoint>> {
+    let materials = require_unilateral_exit_materials_for_leaf_tx(snapshot, seed_host_txid)?;
+    let chains = vtxo_chains_from_json(&materials.chain_json)?;
+    let seed_txid =
+        Txid::from_str(seed_host_txid).map_err(|_| ArkWasmError::AutonomousExitMaterialsMissing)?;
+    let branch = branch_txids_for_leaf(&chains, seed_txid)
+        .map_err(|_| ArkWasmError::AutonomousExitMaterialsMissing)?;
+    let Some(first_step) = branch.first() else {
+        return Err(ArkWasmError::AutonomousExitMaterialsMissing);
+    };
+    let psbts = virtual_psbts_from_records(&materials.virtual_psbts)?;
+    let Some(psbt) = psbts
+        .iter()
+        .find(|psbt| psbt.unsigned_tx.compute_txid() == *first_step)
+    else {
+        return Err(ArkWasmError::AutonomousExitMaterialsMissing);
+    };
+    Ok(funding_prevouts_from_transaction(&psbt.unsigned_tx))
+}
+
+fn funding_prevouts_from_transaction(tx: &bitcoin::Transaction) -> Vec<VirtualOutPoint> {
+    tx.input
+        .iter()
+        .filter(|input| !input.previous_output.is_null())
+        .map(|input| VirtualOutPoint::new(input.previous_output.txid, input.previous_output.vout))
+        .collect()
+}
+
+fn plan_sibling_outpoints(plan: &UnilateralBatchPlan) -> Vec<VirtualOutPoint> {
+    plan.leaves
+        .iter()
+        .flat_map(|leaf| leaf.sibling_outpoints.iter().cloned())
+        .collect()
+}
+
+/// VTXO outpoints to pass to the funding-lost stamper.
+///
+/// This does not stamp. A commitment prevout is not a VTXO exit record, so when that is
+/// the Esplora hit, use the plan's job-leaf siblings instead.
+fn vtxo_outpoints_to_mark_funding_lost(
+    plan: &UnilateralBatchPlan,
+    offending_outpoints: &[VirtualOutPoint],
+) -> Vec<VirtualOutPoint> {
+    let first_prevouts: HashSet<(Txid, u32)> = first_unroll_step_funding_prevouts(plan)
+        .into_iter()
+        .map(|outpoint| (outpoint.txid, outpoint.vout))
+        .collect();
+    if offending_outpoints
+        .iter()
+        .any(|outpoint| first_prevouts.contains(&(outpoint.txid, outpoint.vout)))
+    {
+        plan_sibling_outpoints(plan)
+    } else {
+        offending_outpoints.to_vec()
+    }
 }
 
 /// Outpoints whose on-chain spend can steal unroll funding.
@@ -61,8 +147,20 @@ pub(crate) async fn evaluate_branch_funding_interference<B: Blockchain>(
     host_records: &[VirtualTxOutPointRecord],
     leaf_is_marked_unrolled: impl Fn(&VirtualOutPoint) -> bool,
 ) -> ArkResult<Option<UnilateralExitJobViabilityDto>> {
-    let monitored_outpoints = exit_relevant_vtxo_outpoints_for_plan(plan, host_records);
     let allowed_spend_txids = wallet_unroll_step_txids(plan);
+    let first_step_prevouts = first_unroll_step_funding_prevouts(plan);
+    if let Some(outpoint) = detect_foreign_vtxo_outpoint_spends(
+        blockchain,
+        &first_step_prevouts,
+        &allowed_spend_txids,
+        |_| false,
+    )
+    .await?
+    {
+        return Ok(Some(viability_from_foreign_unroll_spend(outpoint)));
+    }
+
+    let monitored_outpoints = exit_relevant_vtxo_outpoints_for_plan(plan, host_records);
     let foreign_outpoint = detect_foreign_vtxo_outpoint_spends(
         blockchain,
         &monitored_outpoints,
@@ -71,13 +169,7 @@ pub(crate) async fn evaluate_branch_funding_interference<B: Blockchain>(
     )
     .await?;
     if let Some(outpoint) = foreign_outpoint {
-        return Ok(Some(viability_from_branch_funding_lost(
-            format!(
-                "Exit-relevant VTXO outpoint {}:{} was spent by a transaction outside the wallet unroll chain.",
-                outpoint.txid, outpoint.vout
-            ),
-            vec![outpoint],
-        )));
+        return Ok(Some(viability_from_foreign_unroll_spend(outpoint)));
     }
 
     Ok(None)
@@ -183,6 +275,16 @@ pub(crate) fn viability_from_branch_funding_lost(
     }
 }
 
+fn viability_from_foreign_unroll_spend(outpoint: VirtualOutPoint) -> UnilateralExitJobViabilityDto {
+    viability_from_branch_funding_lost(
+        format!(
+            "Exit-relevant VTXO outpoint {}:{} was spent by a transaction outside the wallet unroll chain.",
+            outpoint.txid, outpoint.vout
+        ),
+        vec![outpoint],
+    )
+}
+
 pub(crate) fn viability_ok() -> UnilateralExitJobViabilityDto {
     UnilateralExitJobViabilityDto {
         status: UnilateralExitJobViabilityKind::Ok,
@@ -190,6 +292,35 @@ pub(crate) fn viability_ok() -> UnilateralExitJobViabilityDto {
         detail_message: None,
         offending_outpoints: vec![],
     }
+}
+
+fn wallet_unroll_step_txids_from_snapshot_materials(
+    snapshot: &crate::persistence::OffchainVtxoSnapshot,
+) -> HashSet<Txid> {
+    let mut txids = HashSet::new();
+    for materials in snapshot.unilateral_exit_materials_by_leaf_tx.values() {
+        let Ok(chains) =
+            crate::unilateral_exit_materials::vtxo_chains_from_json(&materials.chain_json)
+        else {
+            continue;
+        };
+        for link in &chains.inner {
+            txids.insert(link.txid);
+        }
+    }
+    txids
+}
+
+fn wallet_unroll_step_txids_from_host(
+    snapshot: &crate::persistence::OffchainVtxoSnapshot,
+    host_txid: &str,
+) -> ArkResult<HashSet<Txid>> {
+    Ok(
+        super::vtxo_exit::host_txids_on_same_materials_branch(snapshot, host_txid)?
+            .into_iter()
+            .filter_map(|txid| Txid::from_str(&txid).ok())
+            .collect(),
+    )
 }
 
 impl ArkSession {
@@ -212,6 +343,7 @@ impl ArkSession {
             self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref(),
             |txid| self.virtual_tx_is_marked_unrolled(txid).unwrap_or(false),
         ) {
+            self.stamp_funding_lost_for_seized_outpoints(std::slice::from_ref(&outpoint))?;
             return Ok(viability_from_asp_swept(&outpoint));
         }
 
@@ -231,10 +363,131 @@ impl ArkSession {
             })
             .await?
         {
+            let vtxo_outpoints =
+                vtxo_outpoints_to_mark_funding_lost(&plan, &viability.offending_outpoints);
+            self.stamp_funding_lost_for_seized_outpoints(&vtxo_outpoints)?;
             return Ok(viability);
         }
 
         Ok(viability_ok())
+    }
+
+    fn stamp_funding_lost_for_seized_outpoints(
+        &self,
+        offending_outpoints: &[VirtualOutPoint],
+    ) -> ArkResult<()> {
+        let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot else {
+            return Ok(());
+        };
+        let mut records = self.wallet_db.vtxo_exit_records();
+        let mut keys = HashSet::new();
+        for outpoint in offending_outpoints {
+            keys.extend(pre_unroll_record_keys_on_same_branch(
+                &snapshot,
+                &records,
+                &outpoint.txid.to_string(),
+                outpoint.vout,
+            )?);
+        }
+        stamp_pre_unroll_records_funding_lost(&mut records, &keys);
+        self.wallet_db.set_vtxo_exit_records(records);
+        Ok(())
+    }
+
+    /// Record-scoped viability on B entry points (`ARK-EXIT-33`). Stamps `funding_lost` on
+    /// unpublished VTXOs of a seized branch, including aborted leftovers with no frontend job.
+    pub(crate) async fn reconcile_vtxo_exit_viability(&self) -> ArkResult<Vec<String>> {
+        let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot else {
+            return Ok(Vec::new());
+        };
+        let mut records = self.wallet_db.vtxo_exit_records();
+        let pre_unroll: Vec<(String, u32)> = records
+            .iter()
+            .filter(|(_, record)| record.phase.is_pre_unroll())
+            .filter_map(|(key, _)| parse_vtxo_exit_record_key(key))
+            .collect();
+        if pre_unroll.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut stamped = stamp_pre_unroll_records_funding_lost_for_asp_swept(
+            &snapshot,
+            &mut records,
+            self.autonomous_mode(),
+            |host| self.virtual_tx_is_marked_unrolled(host).unwrap_or(false),
+        )?;
+
+        let blockchain = self.client.blockchain();
+        let mut allowed = wallet_unroll_step_txids_from_snapshot_materials(&snapshot);
+        let mut probed_first_step_prevouts = HashSet::new();
+        let mut seized_first_step_prevouts = HashSet::new();
+        for (txid, vout) in &pre_unroll {
+            let record_key = vtxo_exit_record_key(txid, *vout);
+            if records
+                .get(&record_key)
+                .is_some_and(|record| !record.phase.is_pre_unroll())
+            {
+                continue;
+            }
+            let outpoint = match VirtualOutPoint::parse(txid, *vout) {
+                Ok(outpoint) => outpoint,
+                Err(_) => continue,
+            };
+            let host_txid = records
+                .get(&record_key)
+                .map(|record| record.host_txid.clone())
+                .unwrap_or_else(|| txid.clone());
+            allowed.extend(wallet_unroll_step_txids_from_host(&snapshot, &host_txid)?);
+            let first_step_prevouts =
+                first_unroll_step_funding_prevouts_from_snapshot(&snapshot, &host_txid)?;
+            for prevout in &first_step_prevouts {
+                let key = (prevout.txid, prevout.vout);
+                if !probed_first_step_prevouts.insert(key) {
+                    continue;
+                }
+                if detect_foreign_vtxo_outpoint_spends(
+                    blockchain,
+                    std::slice::from_ref(prevout),
+                    &allowed,
+                    |_| false,
+                )
+                .await?
+                .is_some()
+                {
+                    seized_first_step_prevouts.insert(key);
+                }
+            }
+            let first_step_seized = first_step_prevouts
+                .iter()
+                .any(|prevout| seized_first_step_prevouts.contains(&(prevout.txid, prevout.vout)));
+            if first_step_seized
+                || detect_foreign_vtxo_outpoint_spends(
+                    blockchain,
+                    std::slice::from_ref(&outpoint),
+                    &allowed,
+                    |monitored| {
+                        self.virtual_tx_is_marked_unrolled(&monitored.txid.to_string())
+                            .unwrap_or(false)
+                    },
+                )
+                .await?
+                .is_some()
+            {
+                let keys = pre_unroll_record_keys_on_same_branch(&snapshot, &records, txid, *vout)?;
+                stamp_pre_unroll_records_funding_lost(&mut records, &keys);
+                stamped = true;
+            }
+        }
+
+        self.wallet_db.set_vtxo_exit_records(records);
+        if stamped {
+            Ok(vec![
+                "One or more VTXOs in a unilateral-exit branch lost funding (operator sweep or on-chain seizure). Already-unrolled coins remain claimable via Complete."
+                    .to_string(),
+            ])
+        } else {
+            Ok(Vec::new())
+        }
     }
 
     /// Test-only hook for native integration tests that need to simulate ASP snapshot interference.

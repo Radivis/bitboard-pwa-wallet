@@ -22,7 +22,7 @@ use crate::session::unilateral_exit::progress::leaf_reached_finality;
 use crate::session::unilateral_exit::topology::virtual_tx_type_hosts_exit_outpoints;
 use crate::session::unilateral_exit::vtxo_exit::{
     apply_host_observation_to_vtxo_exit_records, host_txids_from_vtxo_exit_records,
-    observation_all_records_exited, rewind_records_on_host,
+    observation_all_records_terminal, rewind_records_on_host,
 };
 use crate::unilateral_exit_materials::{
     chained_tx_type_label, snapshot_materials_for_leaf_tx, vtxo_chains_from_json,
@@ -133,48 +133,16 @@ fn apply_absent_probe(record: &mut HostTxObservationRecord, now: i64) -> bool {
     record.never_seen_probes >= HOST_TX_NEVER_SEEN_MAX_ELIGIBLE_MISSES
 }
 
-fn enrich_watches_for_stamped_host(
-    watches: &mut Vec<UnilateralExitWatchRecord>,
-    snapshot: &OffchainVtxoSnapshot,
-    host_txid: &str,
-    now: i64,
-) {
-    for record in &snapshot.virtual_tx_outpoints {
-        if record.txid != host_txid {
-            continue;
-        }
-        if let Some(existing) = watches
-            .iter_mut()
-            .find(|watch| watch.vtxo_txid == record.txid && watch.vout == record.vout)
-        {
-            existing.published_vtxo_txid = Some(host_txid.to_string());
-            existing.amount_sats = record.amount_sats;
-            continue;
-        }
-        watches.push(UnilateralExitWatchRecord {
-            vtxo_txid: record.txid.clone(),
-            vout: record.vout,
-            amount_sats: record.amount_sats,
-            registered_at: now,
-            published_vtxo_txid: Some(host_txid.to_string()),
-            branch_txids: Vec::new(),
-        });
-    }
-}
-
 fn stamp_host_if_final(
     snapshot: &mut OffchainVtxoSnapshot,
-    watches: &mut Vec<UnilateralExitWatchRecord>,
     host_txid: &str,
     confirmations: u64,
-    now: i64,
 ) -> bool {
     if !leaf_reached_finality(confirmations) {
         clear_virtual_tx_vtxos_unrolled_in_snapshot(snapshot, host_txid);
         return false;
     }
     mark_virtual_tx_vtxos_unrolled_in_snapshot(snapshot, host_txid);
-    enrich_watches_for_stamped_host(watches, snapshot, host_txid, now);
     true
 }
 
@@ -196,7 +164,7 @@ pub(crate) fn reconcile_host_tx_finality_state(
     snapshot: &mut OffchainVtxoSnapshot,
     observations: &mut BTreeMap<String, HostTxObservationRecord>,
     pending: &[PendingExitDeductionRecord],
-    watches: &mut Vec<UnilateralExitWatchRecord>,
+    _watches: &mut Vec<UnilateralExitWatchRecord>,
     vtxo_exit_records: &mut BTreeMap<String, VtxoExitRecord>,
     now: i64,
     probe: impl Fn(&str) -> Option<HostTxProbe>,
@@ -216,7 +184,7 @@ pub(crate) fn reconcile_host_tx_finality_state(
             continue;
         };
         if stampable_hosts.contains(&txid) {
-            stamp_host_if_final(snapshot, watches, &txid, confirmations, now);
+            stamp_host_if_final(snapshot, &txid, confirmations);
         }
         if let Some(record) = observations.get_mut(&txid) {
             let previous_confirmations = record.confirmations;
@@ -238,7 +206,7 @@ pub(crate) fn reconcile_host_tx_finality_state(
                 record.last_probed_at = now;
                 record.never_seen_probes = 0;
                 let unrolled = if stampable_hosts.contains(&txid) {
-                    stamp_host_if_final(snapshot, watches, &txid, confirmations, now)
+                    stamp_host_if_final(snapshot, &txid, confirmations)
                 } else {
                     false
                 };
@@ -262,7 +230,7 @@ pub(crate) fn reconcile_host_tx_finality_state(
                 delete_txids.push(txid);
             }
         } else if stampable_hosts.contains(&txid) {
-            let unrolled = stamp_host_if_final(snapshot, watches, &txid, confirmations, now);
+            let unrolled = stamp_host_if_final(snapshot, &txid, confirmations);
             if seen || confirmations > 0 {
                 apply_host_observation_to_vtxo_exit_records(
                     vtxo_exit_records,
@@ -282,7 +250,7 @@ pub(crate) fn reconcile_host_tx_finality_state(
 
     observations.retain(|txid, _| {
         !observation_all_snapshot_vouts_spent(snapshot, txid)
-            && !observation_all_records_exited(vtxo_exit_records, txid)
+            && !observation_all_records_terminal(vtxo_exit_records, txid)
     });
     Ok(())
 }
@@ -329,9 +297,9 @@ async fn probe_host_tx_on_esplora(
 impl ArkSession {
     /// Unified 6-conf stamper plus never-seen budget (ARK-EXIT-28/29). Probe HTTP errors skip
     /// that txid rather than failing the pass or incrementing `never_seen`.
-    pub(crate) async fn reconcile_host_tx_finality(&self) -> ArkResult<()> {
+    pub(crate) async fn reconcile_host_tx_finality(&self) -> ArkResult<Vec<String>> {
         let Some(mut snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.clone() else {
-            return Ok(());
+            return Ok(Vec::new());
         };
         let mut observations = self.wallet_db.host_tx_observations();
         let pending = self.wallet_db.pending_exit_deductions();
@@ -371,9 +339,9 @@ impl ArkSession {
         )?;
         self.wallet_db.set_offchain_vtxo_snapshot(snapshot);
         self.wallet_db.set_host_tx_observations(observations);
-        self.wallet_db.set_unilateral_exit_watches(watches);
+        self.wallet_db.set_unilateral_exit_watches(Vec::new());
         self.wallet_db.set_vtxo_exit_records(vtxo_exit_records);
-        Ok(())
+        self.reconcile_vtxo_exit_viability().await
     }
 
     pub(crate) async fn reconcile_host_tx_finality_best_effort(&self) {
@@ -686,7 +654,7 @@ mod tests {
     }
 
     #[test]
-    fn unified_stamp_enriches_watches_for_all_vouts() {
+    fn unified_stamp_does_not_write_watches() {
         let (mut snapshot, tree, leaf, _) = snapshot_with_intermediate_tree_and_ark_leaf();
         let pending = pending_for_leaf(&leaf);
         let mut observations = BTreeMap::new();
@@ -700,24 +668,9 @@ mod tests {
             6,
             true,
         );
-        let tree_watches: Vec<_> = watches
-            .iter()
-            .filter(|watch| watch.vtxo_txid == tree.to_string())
-            .collect();
-        assert_eq!(tree_watches.len(), 2);
-        assert!(
-            tree_watches
-                .iter()
-                .all(|watch| watch.published_vtxo_txid.as_deref() == Some(&tree.to_string()))
-        );
-        let leaf_watch = watches
-            .iter()
-            .find(|watch| watch.vtxo_txid == leaf.to_string() && watch.vout == 0)
-            .expect("leaf watch");
-        assert_eq!(
-            leaf_watch.published_vtxo_txid.as_deref(),
-            Some(leaf.to_string().as_str())
-        );
+        assert!(watches.is_empty());
+        assert!(record_is_unrolled(&snapshot, &tree, 0));
+        assert!(record_is_unrolled(&snapshot, &leaf, 0));
     }
 
     #[test]
