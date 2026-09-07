@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { BLOCKCHAIN_EXPLORER_UNREACHABLE_UI_MESSAGE } from '@/lib/shared/sanitize-error-for-ui'
 import {
   LIFECYCLE_SYNC_ERROR_FALLBACK,
   errorMessage,
@@ -13,6 +14,14 @@ describe('userFacingErrorMessage', () => {
     expect(userFacingErrorMessage(err)).toBe(
       'Blockchain error: failed [url]',
     )
+  })
+
+  it('remaps WASM reqwest Failed to fetch dumps to a short explorer message', () => {
+    const err = new Error(
+      'Blockchain error: Reqwest(reqwest::Error { kind: Request, source: "JsValue(TypeError: Failed to fetch\\n' +
+        'TypeError: Failed to fetch\\n at __wbg_fetch (http://localhost:3000/src/wasm-pkg/bitboard_ark/bitboard_ark_bg.js:1:1)" })',
+    )
+    expect(userFacingErrorMessage(err)).toBe(BLOCKCHAIN_EXPLORER_UNREACHABLE_UI_MESSAGE)
   })
 
   it('parses structured Ark WASM payload and preserves operator HTTP detail', () => {

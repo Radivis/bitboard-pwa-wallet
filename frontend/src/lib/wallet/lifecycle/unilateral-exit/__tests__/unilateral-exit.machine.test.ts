@@ -458,6 +458,26 @@ describe('unilateralExitMachine', () => {
     )
   })
 
+  it('tag plan Failed to fetch stores a short explorer-unreachable message', async () => {
+    const tagPlan = vi.fn(async () => {
+      throw new Error(
+        'Blockchain error: Reqwest(reqwest::Error { kind: Request, source: "JsValue(TypeError: Failed to fetch\\nTypeError: Failed to fetch)" })',
+      )
+    })
+    const { testActor } = createTestActor({ tagPlan })
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'START_MANUAL',
+      walletScope,
+      outpoints: [leaf],
+      feeRateSatPerVb: 2,
+    })
+    await waitFor(testActor, (state) => state.matches('error'))
+    expect(testActor.getSnapshot().context.lastErrorMessage).toBe(
+      'Could not reach the Bitcoin explorer. This is usually temporary.',
+    )
+  })
+
   it('hydrate completes when all selected leaves are unrolled', async () => {
     const fetchProgress = vi.fn(async () =>
       progress({

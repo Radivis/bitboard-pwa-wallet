@@ -135,6 +135,12 @@ feature:
         description: Control page step progress and in-progress overlay use the same phase labels in automatic mode as in manual mode, with " (proceeding automatically)" appended while automation is advancing the job
       - id: ARK-EXIT-25
         description: In-flight states other than waiting, ensuringBroadcast, and waitingForParentData show "figuring out what to do next" on step progress and a cog overlay (title/aria "Figuring out what to do next"); automatic mode still appends " (proceeding automatically)"
+      - id: ARK-EXIT-34
+        description: >-
+          Control page step-error copy never shows raw WASM/reqwest stack traces. Transient Esplora
+          GET failures (browser Failed to fetch, request timeout) are retried at the explorer client
+          and on progress/viability WASM calls; remaining failures show a short explorer-unreachable
+          message plus Click Proceed to retry this step.
       - id: ARK-EXIT-26
         description: >-
           After abort, leftover WASM in-progress leaves that are not yet unrolled remain selectable

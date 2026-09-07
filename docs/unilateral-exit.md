@@ -126,7 +126,7 @@ Automation pauses on:
 
 - `feeCapExceeded` — live preset for the selected degree exceeds max
 - `bumperInsufficient` — bumper cannot cover remaining package fees
-- `error` — proceed / broadcast / policy failure
+- `error` — proceed / broadcast / policy / progress failure after retries; explorer `Failed to fetch` is retried then shown as a short unreachable message (`ARK-EXIT-34`)
 
 This is **not** delegator-based. Closing the tab stops automation.
 

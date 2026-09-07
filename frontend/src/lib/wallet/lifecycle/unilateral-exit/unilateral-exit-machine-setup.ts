@@ -30,6 +30,7 @@ import {
 import { invalidateUnilateralExitQueries } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-query-cache'
 import type { ArkadeUnilateralExitProgress, ArkadeUnilateralExitJobViability } from '@/workers/arkade-api'
 import { arkadeVtxoOutpointListsEqual, sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
+import { userFacingLifecycleErrorMessage } from '@/lib/shared/utils'
 import { assertEvent, assign, fromPromise, setup, type PromiseActorLogic } from 'xstate'
 
 export type EnsureBroadcastActorInput = {
@@ -101,7 +102,7 @@ export function requireUnilateralExitFeeRateSatPerVb(feeRateSatPerVb: number | n
 }
 
 function actorErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback
+  return userFacingLifecycleErrorMessage(error, fallback)
 }
 
 function isTerminalViabilityStatus(

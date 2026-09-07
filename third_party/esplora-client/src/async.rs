@@ -650,7 +650,8 @@ impl<S: Sleeper> AsyncClient<S> {
     }
 
     /// Sends a GET request to the given `url`, retrying failed attempts
-    /// for retryable error codes until max retries hit.
+    /// for retryable HTTP statuses and transport errors (timeout, Failed to fetch)
+    /// until max retries hit.
     async fn get_with_retry(&self, url: &str) -> Result<Response, Error> {
         let mut delay = BASE_BACKOFF_MILLIS;
         let mut attempts = 0;
@@ -660,13 +661,19 @@ impl<S: Sleeper> AsyncClient<S> {
             if let Some(d) = self.request_timeout {
                 req = req.timeout(d);
             }
-            match req.send().await? {
-                resp if attempts < self.max_retries && is_status_retryable(resp.status()) => {
+            match req.send().await {
+                Ok(resp) if attempts < self.max_retries && is_status_retryable(resp.status()) => {
                     S::sleep(delay).await;
                     attempts += 1;
                     delay *= 2;
                 }
-                resp => return Ok(resp),
+                Ok(resp) => return Ok(resp),
+                Err(err) if attempts < self.max_retries && is_transport_retryable(&err) => {
+                    S::sleep(delay).await;
+                    attempts += 1;
+                    delay *= 2;
+                }
+                Err(err) => return Err(err.into()),
             }
         }
     }
@@ -674,6 +681,20 @@ impl<S: Sleeper> AsyncClient<S> {
 
 fn is_status_retryable(status: reqwest::StatusCode) -> bool {
     RETRYABLE_ERROR_CODES.contains(&status.as_u16())
+}
+
+/// Browser WASM `TypeError: Failed to fetch` is a reqwest Request error, not an HTTP status.
+fn is_transport_retryable(error: &reqwest::Error) -> bool {
+    if error.is_timeout() || error.is_request() {
+        return true;
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        if error.is_connect() {
+            return true;
+        }
+    }
+    false
 }
 
 /// Sleeper trait that allows any async runtime to be used.

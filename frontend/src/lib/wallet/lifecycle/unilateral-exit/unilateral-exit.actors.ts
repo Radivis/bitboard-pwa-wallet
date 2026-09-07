@@ -47,6 +47,7 @@ import {
   type ArkadeVtxoOutpoint,
 } from '@/workers/arkade-api'
 import { fromPromise } from 'xstate'
+import { withEsploraFullScanRetries } from '@/lib/esplora/esplora-full-scan-retry'
 
 function assertCanRunUnilateralExit(scope: ArkadeWalletScope): void {
   if (!walletIsUnlockedOrSyncing(useWalletStore.getState().walletStatus)) {
@@ -134,30 +135,47 @@ async function listOrEmpty<T>(load: () => Promise<T[]>): Promise<T[]> {
   }
 }
 
-export const fetchProgressActor = fromPromise<
-  ArkadeUnilateralExitProgress,
-  FetchProgressActorInput
->(async ({ input }) => {
-  const worker = getArkadeWorker()
+async function loadProgressFromWorker(
+  sortedOutpoints: ArkadeVtxoOutpoint[],
+): Promise<ArkadeUnilateralExitProgress> {
+  return withEsploraFullScanRetries(() =>
+    getArkadeWorker().getUnilateralExitProgress({
+      vtxoOutpoints: sortedOutpoints,
+    }),
+  )
+}
+
+export async function loadUnilateralExitProgressWithRetries(
+  input: FetchProgressActorInput,
+): Promise<ArkadeUnilateralExitProgress> {
   const sortedOutpoints = sortArkadeVtxoOutpoints(input.outpoints)
-  const progress = await worker.getUnilateralExitProgress({
-    vtxoOutpoints: sortedOutpoints,
-  })
+  const progress = await loadProgressFromWorker(sortedOutpoints)
   if (input.walletScope != null) {
     await writeUnilateralExitProgressQueryCache(input.walletScope, sortedOutpoints, progress)
   }
   return progress
-})
+}
+
+export async function evaluateUnilateralExitJobViabilityWithRetries(
+  input: EvaluateJobViabilityActorInput,
+): Promise<ArkadeUnilateralExitJobViability> {
+  const worker = getArkadeWorker()
+  return withEsploraFullScanRetries(() =>
+    worker.evaluateUnilateralExitJobViability({
+      vtxoOutpoints: sortArkadeVtxoOutpoints(input.outpoints),
+    }),
+  )
+}
+
+export const fetchProgressActor = fromPromise<
+  ArkadeUnilateralExitProgress,
+  FetchProgressActorInput
+>(async ({ input }) => loadUnilateralExitProgressWithRetries(input))
 
 export const evaluateJobViabilityActor = fromPromise<
   ArkadeUnilateralExitJobViability,
   EvaluateJobViabilityActorInput
->(async ({ input }) => {
-  const worker = getArkadeWorker()
-  return worker.evaluateUnilateralExitJobViability({
-    vtxoOutpoints: sortArkadeVtxoOutpoints(input.outpoints),
-  })
-})
+>(async ({ input }) => evaluateUnilateralExitJobViabilityWithRetries(input))
 
 export const tagPlanActor = fromPromise<void, TagPlanActorInput>(async ({ input }) => {
   assertCanRunUnilateralExit(input.walletScope)
@@ -207,9 +225,7 @@ export const proceedStepActor = fromPromise<
     vtxoOutpoints: sortedOutpoints,
     feeRateSatPerVb: input.feeRateSatPerVb,
   })
-  const progress = await getArkadeWorker().getUnilateralExitProgress({
-    vtxoOutpoints: sortedOutpoints,
-  })
+  const progress = await loadProgressFromWorker(sortedOutpoints)
   await invalidateUnilateralExitQueries(input.walletScope, sortedOutpoints, progress)
   return progress
 })
@@ -229,10 +245,7 @@ export const ensureBroadcastActor = fromPromise<
   }
 
   const sortedOutpoints = sortArkadeVtxoOutpoints(input.outpoints)
-  const worker = getArkadeWorker()
-  let progress = await worker.getUnilateralExitProgress({
-    vtxoOutpoints: sortedOutpoints,
-  })
+  let progress = await loadProgressFromWorker(sortedOutpoints)
   const alreadyRelayed = isCurrentStepRelayed(progress)
 
   if (isUnilateralExitBranchComplete(progress) || alreadyRelayed) {
@@ -269,9 +282,7 @@ export const ensureBroadcastActor = fromPromise<
       isPackageNotChildWithUnconfirmedParentsError(error) ||
       isInsufficientConfirmedBumperFundsError(error)
     if (packageNotChild) {
-      const rewound = await worker.getUnilateralExitProgress({
-        vtxoOutpoints: sortedOutpoints,
-      })
+      const rewound = await loadProgressFromWorker(sortedOutpoints)
       await invalidateUnilateralExitQueries(input.walletScope, sortedOutpoints, rewound)
       const wrapped = new Error(
         UNCONFIRMED_PARENT_PACKAGE_RETRY_MESSAGE,
@@ -284,9 +295,7 @@ export const ensureBroadcastActor = fromPromise<
   }
 
   const progressBeforeBroadcast = progress
-  progress = await worker.getUnilateralExitProgress({
-    vtxoOutpoints: sortedOutpoints,
-  })
+  progress = await loadProgressFromWorker(sortedOutpoints)
 
   const visible = broadcastedStepIsVisibleOnNetwork(progressBeforeBroadcast, progress)
   if (!visible) {

@@ -7,11 +7,42 @@ const MAX_UI_ERROR_LENGTH = 320
  */
 const REDUNDANT_ARK_REQUEST_FAILED_CHAIN = 'request failed: request failed'
 
+/** Short copy when WASM Esplora GET dies as browser `Failed to fetch` / reqwest timeout. */
+export const BLOCKCHAIN_EXPLORER_UNREACHABLE_UI_MESSAGE =
+  'Could not reach the Bitcoin explorer. This is usually temporary.'
+
 function collapseRedundantArkOperatorErrorSegments(message: string): string {
   if (!message.includes(REDUNDANT_ARK_REQUEST_FAILED_CHAIN)) {
     return message
   }
   return message.replaceAll(REDUNDANT_ARK_REQUEST_FAILED_CHAIN, 'request failed')
+}
+
+/** Raw WASM/reqwest transport dump from Esplora, not a structured Ark error payload. */
+export function isRawBlockchainFetchFailureMessage(message: string): boolean {
+  if (!message) return false
+  const lower = message.toLowerCase()
+  const looksLikeReqwestDump =
+    lower.includes('reqwest') ||
+    lower.includes('jsvalue') ||
+    lower.includes('__wbg_fetch')
+  if (!looksLikeReqwestDump) {
+    return false
+  }
+  return (
+    lower.includes('failed to fetch') ||
+    lower.includes('timedout') ||
+    lower.includes('timed out') ||
+    lower.includes('kind: request')
+  )
+}
+
+/** Replace reqwest/WASM fetch dumps with short explorer-unreachable copy (ARK-EXIT-34). */
+export function replaceRawBlockchainFetchErrorMessage(message: string): string {
+  if (!isRawBlockchainFetchFailureMessage(message)) {
+    return message
+  }
+  return BLOCKCHAIN_EXPLORER_UNREACHABLE_UI_MESSAGE
 }
 
 /**
@@ -22,7 +53,8 @@ function collapseRedundantArkOperatorErrorSegments(message: string): string {
 export function sanitizeErrorMessageForUi(raw: string): string {
   if (!raw) return ''
 
-  let normalizedMessage = raw.replace(/\r\n/g, '\n').trim()
+  const explorerReplaced = replaceRawBlockchainFetchErrorMessage(raw)
+  let normalizedMessage = explorerReplaced.replace(/\r\n/g, '\n').trim()
 
   normalizedMessage = normalizedMessage.replace(/file:\/\/[^\s<>'"`)]+/gi, '[file]')
   normalizedMessage = normalizedMessage.replace(/https?:\/\/[^\s<>'"`)]+/gi, '[url]')

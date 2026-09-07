@@ -71,7 +71,7 @@ import {
   unilateralExitSnapshotIsInState,
   unilateralExitSnapshotIsProceeding,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-snapshot'
-import { wasmArkErrorMessage } from '@/lib/shared/wasm-ark-error'
+import { userFacingErrorMessage } from '@/lib/shared/utils'
 import { formatSatPerVbTwoDecimals } from '@/lib/esplora/esplora-fee-estimates'
 import {
   abortUnilateralExitOrchestration,
@@ -98,10 +98,9 @@ function toastUnilateralExitSettleResult(
   successMessage: string,
 ): void {
   if (unilateralExitSnapshotIsInState(snapshot, UNILATERAL_EXIT_MACHINE_STATE.error)) {
-    const message =
-      wasmArkErrorMessage(new Error(snapshot.context.lastErrorMessage ?? '')) ??
-      snapshot.context.lastErrorMessage ??
-      'Unroll step failed.'
+    const message = userFacingErrorMessage(
+      snapshot.context.lastErrorMessage ?? 'Unroll step failed.',
+    )
     toast.error(message)
     return
   }
@@ -613,8 +612,7 @@ export function UnilateralExitControlPage() {
         toastUnilateralExitSettleResult(settled, 'Unroll step submitted.')
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unroll step failed.'
-      toast.error(message)
+      toast.error(userFacingErrorMessage(error) || 'Unroll step failed.')
     }
   }
 
@@ -682,10 +680,7 @@ export function UnilateralExitControlPage() {
             data-testid="unilateral-exit-tree-error"
           >
             <p className="text-sm text-destructive">
-              {wasmArkErrorMessage(topologyQuery.error) ??
-                (topologyQuery.error instanceof Error
-                  ? topologyQuery.error.message
-                  : 'Failed to load exit tree.')}
+              {userFacingErrorMessage(topologyQuery.error) || 'Failed to load exit tree.'}
             </p>
           </div>
         ) : (
@@ -747,8 +742,7 @@ export function UnilateralExitControlPage() {
             data-testid="unilateral-exit-step-error"
             role="alert"
           >
-            {wasmArkErrorMessage(new Error(actorSnapshot.context.lastErrorMessage)) ??
-              actorSnapshot.context.lastErrorMessage}{' '}
+            {userFacingErrorMessage(actorSnapshot.context.lastErrorMessage)}{' '}
             Click Proceed to retry this step.
           </p>
         ) : null}
