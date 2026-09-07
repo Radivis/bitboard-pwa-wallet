@@ -15,6 +15,7 @@ use ark_core::history::sort_transactions_by_created_at;
 use ark_core::history::OutgoingTransaction;
 use ark_core::server;
 use ark_core::server::GetVtxosRequest;
+use ark_core::server::IndexerPage;
 use ark_core::server::SubscriptionResponse;
 use ark_core::server::VirtualTxOutPoint;
 use ark_core::ArkAddress;
@@ -1390,7 +1391,7 @@ where
     ///
     /// arkd's indexer rejects a request without an explicit, positive `page.size`
     /// (`InvalidArgument: invalid page size`), so we always send a real page size and walk the
-    /// cursor until every page is collected.
+    /// cursor until every page is collected. Pages are 1-indexed (`IndexerPage::next_page_index`).
     pub async fn get_vtxo_chain(
         &self,
         out_point: OutPoint,
@@ -1409,10 +1410,13 @@ where
             .await
             .context("Failed to fetch VTXO chain")??;
 
-            let next_page_index = match &response.page {
-                Some(page) if page.next < page.total => Some(page.next),
-                _ => None,
-            };
+            // arkd is 1-indexed: page 1 of 2 is current=1, next=2, total=2.
+            // `next < total` is false there and dropped the commitment ancestors of
+            // long self-send chains (Mutinynet VTXO-chain prefetch).
+            let next_page_index = response
+                .page
+                .as_ref()
+                .and_then(IndexerPage::next_page_index);
 
             match accumulated.as_mut() {
                 Some(acc) => acc.chains.inner.extend(response.chains.inner),
@@ -1617,12 +1621,13 @@ where
 
             all_vtxos.extend(response.vtxos);
 
-            // Use server-provided cursor for next page; next == total means end
-            match response.page {
-                Some(page) if page.next < page.total => {
-                    cursor = page.next;
-                }
-                _ => break,
+            match response
+                .page
+                .as_ref()
+                .and_then(IndexerPage::next_page_index)
+            {
+                Some(index) => cursor = index,
+                None => break,
             }
         }
 

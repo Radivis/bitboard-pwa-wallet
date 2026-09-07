@@ -860,6 +860,29 @@ pub struct IndexerPage {
     pub total: i32,
 }
 
+impl IndexerPage {
+    /// Next 1-based page index to request, if more pages remain.
+    ///
+    /// arkd's `paginate` is 1-indexed. On the first of two pages it returns
+    /// `current=1, next=2, total=2`, so `next < total` is false and drops page 2.
+    /// Continue while `current < total` and `next` actually advances.
+    pub fn next_page_index(&self) -> Option<i32> {
+        if self.current < self.total && self.next > self.current {
+            Some(self.next)
+        } else {
+            None
+        }
+    }
+}
+
+/// Parse an indexer `spends` entry as a transaction ID.
+///
+/// Ark txs list parent txids. Checkpoint txs list previous outpoints (`txid:vout`).
+pub fn indexer_spend_txid(spend: &str) -> Result<Txid, Error> {
+    let txid_hex = spend.split_once(':').map(|(txid, _)| txid).unwrap_or(spend);
+    txid_hex.parse().map_err(Error::ad_hoc)
+}
+
 #[derive(Clone, Debug)]
 pub enum Network {
     Bitcoin,
@@ -1164,5 +1187,73 @@ mod tests {
         assert!(chunks
             .iter()
             .all(|chunk| matches!(chunk.filter(), Some(GetVtxosRequestFilter::Spendable))));
+    }
+
+    fn indexer_page(current: i32, next: i32, total: i32) -> IndexerPage {
+        IndexerPage {
+            current,
+            next,
+            total,
+        }
+    }
+
+    fn sample_spend_txid() -> Txid {
+        Txid::from_str("d2294c8b8789d8b80e418a2b950a67c981413d41616716a3165e0d442f68f4cb")
+            .expect("valid txid")
+    }
+
+    #[test]
+    fn next_page_index_continues_when_first_of_two_pages_has_next_equal_total() {
+        let page = indexer_page(1, 2, 2);
+        assert_eq!(page.next_page_index(), Some(2));
+    }
+
+    #[test]
+    fn next_page_index_stops_on_last_page_when_next_equals_current_and_total() {
+        let page = indexer_page(2, 2, 2);
+        assert_eq!(page.next_page_index(), None);
+    }
+
+    #[test]
+    fn next_page_index_stops_on_single_page() {
+        let page = indexer_page(1, 1, 1);
+        assert_eq!(page.next_page_index(), None);
+    }
+
+    #[test]
+    fn next_page_index_stops_when_next_does_not_advance() {
+        let page = indexer_page(1, 1, 2);
+        assert_eq!(page.next_page_index(), None);
+    }
+
+    #[test]
+    fn indexer_spend_txid_accepts_plain_txid() {
+        let txid = sample_spend_txid();
+        assert_eq!(
+            indexer_spend_txid(&txid.to_string()).expect("plain txid"),
+            txid
+        );
+    }
+
+    #[test]
+    fn indexer_spend_txid_strips_outpoint_vout() {
+        let txid = sample_spend_txid();
+        assert_eq!(
+            indexer_spend_txid(&format!("{txid}:0")).expect("outpoint vout 0"),
+            txid
+        );
+        assert_eq!(
+            indexer_spend_txid(&format!("{txid}:1")).expect("outpoint vout 1"),
+            txid
+        );
+    }
+
+    #[test]
+    fn indexer_spend_txid_strips_two_digit_vout() {
+        let txid = sample_spend_txid();
+        assert_eq!(
+            indexer_spend_txid(&format!("{txid}:10")).expect("outpoint vout 10"),
+            txid
+        );
     }
 }

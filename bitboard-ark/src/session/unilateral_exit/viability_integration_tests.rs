@@ -15,6 +15,9 @@
 //! VTXO probes only fire once the hosting virtual tx is probeable on Esplora. Pure off-chain
 //! VTXOs (pre-unroll boarded leaves) return outspend 404/500 and are skipped — no false
 //! positive. The first-step prevout is already on-chain (the commitment) and closes that hole.
+//!
+//! **Autonomous mode (`ARK-AUTO-05`):** snapshot `is_swept` is ignored. Job viability still
+//! runs the first-step prevout Esplora probe and still reports `branch_funding_lost`.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -23,14 +26,14 @@ use ark_core::server::{ChainedTxType, VtxoChain, VtxoChains};
 use bitcoin::hashes::Hash;
 use bitcoin::{Address, Transaction, Txid};
 
-use crate::api_types::UnilateralExitJobViabilityKind;
+use crate::api_types::{UnilateralExitJobViabilityDto, UnilateralExitJobViabilityKind};
 use crate::outpoint::VirtualOutPoint;
 use crate::persistence::{OffchainVtxoSnapshot, VirtualTxOutPointRecord};
 use crate::session::unilateral_exit::plan::{LeafUnilateralContext, UnilateralBatchPlan};
 use crate::session::unilateral_exit::viability::{
     asp_swept_viability_outpoint, detect_asp_swept_from_snapshot,
     evaluate_branch_funding_interference, first_unroll_step_funding_prevouts,
-    first_unroll_step_funding_prevouts_from_snapshot,
+    first_unroll_step_funding_prevouts_from_snapshot, viability_from_asp_swept, viability_ok,
 };
 use crate::unilateral_exit_materials::{
     materials_record_from_prefetch, store_materials_for_leaf_tx,
@@ -181,6 +184,33 @@ fn sample_plan_with_first_step_prevout() -> (UnilateralBatchPlan, VirtualOutPoin
     plan.tx_by_id.insert(first_step_txid, first_step_tx);
     let commitment_prevout = VirtualOutPoint::new(commitment, 0);
     (plan, commitment_prevout, first_step_txid)
+}
+
+fn plan_job_leaf(plan: &UnilateralBatchPlan) -> VirtualOutPoint {
+    plan.leaves[0].sibling_outpoints[0].clone()
+}
+
+/// Same oracle order as job viability: snapshot `is_swept` first (skipped while autonomous),
+/// then Esplora first-step prevout / VTXO probes.
+async fn evaluate_job_viability_oracles(
+    autonomous_mode: bool,
+    job_leaf_outpoints: &[VirtualOutPoint],
+    snapshot: &OffchainVtxoSnapshot,
+    blockchain: &MockBlockchain,
+    plan: &UnilateralBatchPlan,
+) -> UnilateralExitJobViabilityDto {
+    if let Some(outpoint) = asp_swept_viability_outpoint(
+        autonomous_mode,
+        job_leaf_outpoints,
+        Some(snapshot),
+        |_txid| false,
+    ) {
+        return viability_from_asp_swept(&outpoint);
+    }
+    evaluate_branch_funding_interference(blockchain, plan, &[], |_outpoint| false)
+        .await
+        .expect("evaluate branch funding interference")
+        .unwrap_or_else(viability_ok)
 }
 
 fn asp_swept_snapshot(leaf_outpoint: &VirtualOutPoint) -> OffchainVtxoSnapshot {
@@ -533,6 +563,82 @@ async fn first_step_prevout_probe_not_skipped_when_leaf_marked_unrolled() {
         UnilateralExitJobViabilityKind::BranchFundingLost
     );
     assert_eq!(viability.offending_outpoints, vec![commitment_prevout]);
+}
+
+#[tokio::test]
+async fn autonomous_mode_reports_branch_funding_lost_from_first_step_prevout_despite_snapshot_swept()
+ {
+    let (plan, commitment_prevout, _first_step_txid) = sample_plan_with_first_step_prevout();
+    let leaf = plan_job_leaf(&plan);
+    let snapshot = asp_swept_snapshot(&leaf);
+    let blockchain =
+        MockBlockchain::with_foreign_spend(commitment_prevout.clone(), txid(ASP_SEIZURE_TX_BYTE));
+
+    let viability = evaluate_job_viability_oracles(
+        true,
+        std::slice::from_ref(&leaf),
+        &snapshot,
+        &blockchain,
+        &plan,
+    )
+    .await;
+
+    assert_eq!(
+        viability.status,
+        UnilateralExitJobViabilityKind::BranchFundingLost
+    );
+    assert_eq!(viability.reason_code, "branch_funding_lost");
+    assert_eq!(viability.offending_outpoints, vec![commitment_prevout]);
+}
+
+#[tokio::test]
+async fn autonomous_mode_ignores_snapshot_swept_when_first_step_prevout_unspent() {
+    let (plan, _commitment_prevout, _first_step_txid) = sample_plan_with_first_step_prevout();
+    let leaf = plan_job_leaf(&plan);
+    let snapshot = asp_swept_snapshot(&leaf);
+    let blockchain = MockBlockchain {
+        output_spends: HashMap::new(),
+        outspend_probe_error: false,
+        transaction_not_found: false,
+    };
+
+    let viability = evaluate_job_viability_oracles(
+        true,
+        std::slice::from_ref(&leaf),
+        &snapshot,
+        &blockchain,
+        &plan,
+    )
+    .await;
+
+    assert_eq!(viability.status, UnilateralExitJobViabilityKind::Ok);
+    assert_eq!(viability.reason_code, "ok");
+    assert!(viability.offending_outpoints.is_empty());
+}
+
+#[tokio::test]
+async fn trusted_asp_short_circuits_to_asp_swept_before_first_step_prevout_probe() {
+    let (plan, commitment_prevout, _first_step_txid) = sample_plan_with_first_step_prevout();
+    let leaf = plan_job_leaf(&plan);
+    let snapshot = asp_swept_snapshot(&leaf);
+    let blockchain =
+        MockBlockchain::with_foreign_spend(commitment_prevout, txid(ASP_SEIZURE_TX_BYTE));
+
+    let viability = evaluate_job_viability_oracles(
+        false,
+        std::slice::from_ref(&leaf),
+        &snapshot,
+        &blockchain,
+        &plan,
+    )
+    .await;
+
+    assert_eq!(
+        viability.status,
+        UnilateralExitJobViabilityKind::AspSweptTargets
+    );
+    assert_eq!(viability.reason_code, "asp_swept_targets");
+    assert_eq!(viability.offending_outpoints, vec![leaf]);
 }
 
 #[test]

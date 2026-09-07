@@ -8,7 +8,7 @@ use ark_core::intent;
 use ark_core::server::{
     self, ChainedTxType, FinalizeOffchainTxResponse, GetVtxosRequest, IndexerPage,
     PendingTx, StreamEvent, SubmitOffchainTxResponse, SubscriptionResponse,
-    VirtualTxsResponse, VtxoChain, VtxoChains,
+    VirtualTxsResponse, VtxoChain, VtxoChains, indexer_spend_txid,
 };
 use ark_rest::apis::ark_service_api::{
     ark_service_estimate_intent_fee, ark_service_get_pending_tx,
@@ -550,12 +550,7 @@ fn indexer_chain_to_vtxo_chain(value: &ark_rest::models::IndexerChain) -> Result
             .clone()
             .unwrap_or_default()
             .iter()
-            .map(|txid| {
-                let txid_str = if txid.len() == 66 { &txid[..64] } else { txid.as_str() };
-                txid_str
-                    .parse()
-                    .map_err(|error: bitcoin::hex::HexToArrayError| Error::conversion_message(error))
-            })
+            .map(|spend| indexer_spend_txid(spend).map_err(Error::conversion))
             .collect::<Result<Vec<_>, Error>>()?;
 
         let tx_type = match value.r#type {
