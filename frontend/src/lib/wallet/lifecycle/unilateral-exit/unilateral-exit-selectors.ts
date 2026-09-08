@@ -236,17 +236,10 @@ export function selectUnilateralExitControlJobState(
   showStepProgress: boolean
   isProceeding: boolean
 } {
-  const machineComplete = unilateralExitSnapshotIsInState(
-    state,
-    UNILATERAL_EXIT_MACHINE_STATE.complete,
-  )
   const isProceeding = unilateralExitSnapshotIsProceeding(state)
-  const exitJobInFlight =
-    selectIsUnilateralExitJobActive(state) ||
-    isProceeding ||
-    machineComplete
+  const exitJobInFlight = selectIsUnilateralExitJobActive(state) || isProceeding
   const phase = controlDisplayPhaseFromMachine(state)
-  const jobActive = selectIsUnilateralExitJobActive(state) || machineComplete
+  const jobActive = selectIsUnilateralExitJobActive(state)
 
   return {
     phase,

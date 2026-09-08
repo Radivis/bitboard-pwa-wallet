@@ -38,13 +38,25 @@ import { shouldSkipRailLifecycleResetForLockPhase } from '@/lib/wallet/lifecycle
 import { UNILATERAL_EXIT_AUTOMATION_WAIT_POLL_MS_REGTEST } from '@/lib/arkade/arkade-query-timings'
 import type { ArkadeVtxoOutpoint } from '@/workers/arkade-api'
 import { arkadeVtxoOutpointListsEqual, sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
+import { getArkadeWorker } from '@/workers/arkade-factory'
 import { createActor, waitFor } from 'xstate'
+import type { AnyActorRef, Subscription } from 'xstate'
+import {
+  isVtxoExitChildId,
+  vtxoExitOutpointKey,
+  type VtxoExitChildSnapshotMap,
+  type VtxoExitChildView,
+  type VtxoExitMachineContext,
+} from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit-machine-types'
+import {
+  vtxoExitPhaseFromMachineState,
+  vtxoExitSnapshotState,
+} from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit.machine'
 
 type ActorListener = (snapshot: UnilateralExitActorSnapshot) => void
 
 let actor = createUnilateralExitActor()
 const listeners = new Set<ActorListener>()
-let lastCompleteToastShown = false
 let lastPausedReason: UnilateralExitAutomationPausedReason | null = null
 
 function createUnilateralExitActor() {
@@ -84,17 +96,6 @@ function notifyListeners(): void {
 }
 
 function handleActorTransition(snapshot: UnilateralExitActorSnapshot): void {
-  if (
-    unilateralExitSnapshotIsInState(snapshot, UNILATERAL_EXIT_MACHINE_STATE.complete) &&
-    !lastCompleteToastShown
-  ) {
-    lastCompleteToastShown = true
-    toast.success('Unilateral exit branch complete.')
-  }
-  if (!unilateralExitSnapshotIsInState(snapshot, UNILATERAL_EXIT_MACHINE_STATE.complete)) {
-    lastCompleteToastShown = false
-  }
-
   const pausedReason = snapshot.context.pausedReason
   if (
     unilateralExitSnapshotIsInState(snapshot, UNILATERAL_EXIT_MACHINE_STATE.paused) &&
@@ -129,6 +130,107 @@ export function subscribeUnilateralExitActor(listener: ActorListener): () => voi
   }
 }
 
+export function getVtxoExitChildSnapshotMap(): VtxoExitChildSnapshotMap {
+  const children = actor.getSnapshot().children as Record<string, AnyActorRef | undefined>
+  const map: VtxoExitChildSnapshotMap = {}
+  for (const [childId, child] of Object.entries(children)) {
+    if (!isVtxoExitChildId(childId) || child == null) {
+      continue
+    }
+    const childSnapshot = child.getSnapshot()
+    const machineState = vtxoExitSnapshotState(childSnapshot.value)
+    const context = childSnapshot.context as VtxoExitMachineContext
+    const phase = context.phase ?? vtxoExitPhaseFromMachineState(machineState)
+    if (phase == null) {
+      continue
+    }
+    const view: VtxoExitChildView = {
+      childId,
+      txid: context.txid,
+      vout: context.vout,
+      phase,
+      machineState,
+    }
+    map[vtxoExitOutpointKey(context.txid, context.vout)] = view
+  }
+  return map
+}
+
+export function vtxoExitChildSnapshotMapEqual(
+  previous: VtxoExitChildSnapshotMap,
+  next: VtxoExitChildSnapshotMap,
+): boolean {
+  const previousKeys = Object.keys(previous)
+  const nextKeys = Object.keys(next)
+  if (previousKeys.length !== nextKeys.length) {
+    return false
+  }
+  return previousKeys.every((key) => {
+    const previousView = previous[key]
+    const nextView = next[key]
+    return (
+      previousView != null &&
+      nextView != null &&
+      previousView.phase === nextView.phase &&
+      previousView.machineState === nextView.machineState &&
+      previousView.childId === nextView.childId
+    )
+  })
+}
+
+export function subscribeVtxoExitChildren(listener: () => void): () => void {
+  const childSubscriptions = new Map<string, Subscription>()
+
+  function resyncChildSubscriptions(): void {
+    const children = actor.getSnapshot().children as Record<string, AnyActorRef | undefined>
+    const childIds = Object.keys(children).filter(isVtxoExitChildId)
+    for (const childId of [...childSubscriptions.keys()]) {
+      if (!childIds.includes(childId)) {
+        childSubscriptions.get(childId)?.unsubscribe()
+        childSubscriptions.delete(childId)
+      }
+    }
+    for (const childId of childIds) {
+      if (childSubscriptions.has(childId)) {
+        continue
+      }
+      const child = children[childId]
+      if (child == null) {
+        continue
+      }
+      childSubscriptions.set(
+        childId,
+        child.subscribe(() => {
+          listener()
+        }),
+      )
+    }
+  }
+
+  const parentSubscription = actor.subscribe(() => {
+    resyncChildSubscriptions()
+    listener()
+  })
+  resyncChildSubscriptions()
+
+  return () => {
+    parentSubscription.unsubscribe()
+    for (const subscription of childSubscriptions.values()) {
+      subscription.unsubscribe()
+    }
+    childSubscriptions.clear()
+  }
+}
+
+export async function hydrateVtxoExitChildrenFromWasm(): Promise<void> {
+  try {
+    const records = await getArkadeWorker().listVtxoExitRecords()
+    sendUnilateralExitEvent({ type: 'HYDRATE_VTXO_RECORDS', records })
+  } catch {
+    // Dump is best-effort; the next B-entry poll retries.
+  }
+}
+
 export function sendUnilateralExitEvent(event: UnilateralExitMachineEvent): void {
   actor.send(event)
 }
@@ -137,7 +239,7 @@ export function resetUnilateralExitForArkadeSessionTeardown(): void {
   resetPendingBatchIntentSessionTracking()
   const snapshot = getUnilateralExitActorSnapshot()
   const scope = snapshot.context.walletScope
-  sendUnilateralExitEvent({ type: 'WALLET_RESET' })
+  sendUnilateralExitEvent({ type: 'ARKADE_SESSION_RESET' })
   if (scope != null) {
     clearUnilateralExitFrontendMemoryForScope(scope)
   }
@@ -168,6 +270,7 @@ export async function configureUnilateralExitForLoadedWallet(
     !unilateralExitSnapshotIsInState(current, UNILATERAL_EXIT_MACHINE_STATE.notConfigured) &&
     arkadeWalletScopesEqual(current.context.walletScope, walletScope)
   ) {
+    await hydrateVtxoExitChildrenFromWasm()
     return
   }
 
@@ -179,6 +282,7 @@ export async function configureUnilateralExitForLoadedWallet(
     type: 'AUTOMATION_PREFS_CHANGED',
     automationEnabled: prefs.enabled,
   })
+  await hydrateVtxoExitChildrenFromWasm()
 }
 
 function actorAlreadyTrackingHydrateOutpoints(
@@ -203,9 +307,6 @@ function actorAlreadyTrackingHydrateOutpoints(
       UNILATERAL_EXIT_MACHINE_STATE.error,
     ])
   ) {
-    return true
-  }
-  if (unilateralExitSnapshotIsInState(snapshot, UNILATERAL_EXIT_MACHINE_STATE.complete)) {
     return true
   }
   return (
@@ -255,6 +356,7 @@ export async function hydrateUnilateralExitFromPersistence(params: {
 
   const persisted = getPersistedUnilateralExitJob(params.walletScope)
   if (!persistedUnilateralExitJobExists(persisted)) {
+    await hydrateVtxoExitChildrenFromWasm()
     return
   }
 
@@ -269,6 +371,7 @@ export async function hydrateUnilateralExitFromPersistence(params: {
       arkadeSyncPhase: syncSnapshot.syncPhase,
     })
   ) {
+    await hydrateVtxoExitChildrenFromWasm()
     return
   }
 
@@ -278,6 +381,7 @@ export async function hydrateUnilateralExitFromPersistence(params: {
     reconcileInProgressSats: params.unilateralExitInProgressSats,
     reconcileInProgressOutpoints: params.inProgressOutpoints,
   })
+  await hydrateVtxoExitChildrenFromWasm()
 }
 
 export function startManualUnilateralExit(
@@ -362,6 +466,7 @@ export async function abortUnilateralExitOrchestration(
     resolvedJobOutpoints: jobOutpoints,
   })
   await waitForUnilateralExitActorSettled()
+  await hydrateVtxoExitChildrenFromWasm()
 }
 
 export function enableAutomaticUnilateralExit(
@@ -435,7 +540,6 @@ export async function waitForUnilateralExitActorSettled(
 export function resetUnilateralExitActorForTests(): void {
   actor.stop()
   listeners.clear()
-  lastCompleteToastShown = false
   lastPausedReason = null
   useUnilateralExitControlStore.getState().reset()
   actor = createUnilateralExitActor()

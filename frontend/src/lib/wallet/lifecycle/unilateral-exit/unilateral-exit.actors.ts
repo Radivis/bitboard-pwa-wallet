@@ -145,6 +145,13 @@ async function loadProgressFromWorker(
   )
 }
 
+async function hydrateVtxoExitChildrenAfterBEntry(): Promise<void> {
+  const { hydrateVtxoExitChildrenFromWasm } = await import(
+    '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime'
+  )
+  await hydrateVtxoExitChildrenFromWasm()
+}
+
 export async function loadUnilateralExitProgressWithRetries(
   input: FetchProgressActorInput,
 ): Promise<ArkadeUnilateralExitProgress> {
@@ -153,6 +160,7 @@ export async function loadUnilateralExitProgressWithRetries(
   if (input.walletScope != null) {
     await writeUnilateralExitProgressQueryCache(input.walletScope, sortedOutpoints, progress)
   }
+  await hydrateVtxoExitChildrenAfterBEntry()
   return progress
 }
 
@@ -209,6 +217,7 @@ export const tagPlanActor = fromPromise<void, TagPlanActorInput>(async ({ input 
   }
 
   await invalidateUnilateralExitQueries(input.walletScope, sortedOutpoints)
+  await hydrateVtxoExitChildrenAfterBEntry()
 })
 
 export const proceedStepActor = fromPromise<

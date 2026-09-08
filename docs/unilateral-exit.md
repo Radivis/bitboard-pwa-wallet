@@ -1,6 +1,6 @@
 # Unilateral exit
 
-Developer handbook for Arkade unilateral exit in Bitboard. Lead with invariants that are easy to break; then the XState machine (single source of truth) and what one WASM proceed step actually does.
+Developer handbook for Arkade unilateral exit in Bitboard. Lead with invariants that are easy to break; then the XState family (job host plus VTXO children) and what one WASM proceed step actually does.
 
 Related:
 
@@ -16,7 +16,7 @@ Related:
 
 ## VTXO lifecycle (staged)
 
-Stage 3 records, watch fold, and `funding_lost` are **shipped** (`ARK-EXIT-12`, `ARK-EXIT-27`, `ARK-EXIT-30`, `ARK-EXIT-33`, `ARK-SYNC-03`, `ARK-REC-08`). Host-tx observations and unified B remain Stage 1. VTXO child machines (`ARK-EXIT-32`) are Stage 4. Freeze tables: [unilateral-exit-vtxo-lifecycle-refactor.md](future/unilateral-exit-vtxo-lifecycle-refactor.md#stage-0-freeze-agreed).
+Stage 4 VTXO child machines (`ARK-EXIT-32`) are **shipped**: the job actor is a session-scoped host plus unroll broadcaster; per-outpoint children hydrate from persisted records. Stage 3 records, watch fold, and `funding_lost` are **shipped** (`ARK-EXIT-12`, `ARK-EXIT-27`, `ARK-EXIT-30`, `ARK-EXIT-33`, `ARK-SYNC-03`, `ARK-REC-08`). Host-tx observations and unified B remain Stage 1. Freeze tables: [unilateral-exit-vtxo-lifecycle-refactor.md](future/unilateral-exit-vtxo-lifecycle-refactor.md#stage-0-freeze-agreed).
 
 **Two records** (WASM envelope is durable source of truth):
 
@@ -25,11 +25,11 @@ Stage 3 records, watch fold, and `funding_lost` are **shipped** (`ARK-EXIT-12`, 
 | VTXO exit | `(txid, vout)` | Pipeline membership, spend-lock, complete-ready, funding lost |
 | Host-tx observation | virtual `txid` | Broadcast attempted, relayed, confirmations, Esplora hot set |
 
-**Three parallel clocks** (do not merge): job DAG cursor (next unpublished step); host-tx confirmations (0 / relayed / 1-conf / 6-conf via WASM Esplora reconciler B); protocol timelock (`can_be_claimed_unilaterally_by_owner`). UI copy must distinguish waiting for confirmations from waiting for timelock.
+**Three parallel clocks** (do not merge): job DAG cursor (next unpublished step); host-tx confirmations (0 / relayed / 1-conf / 6-conf via WASM Esplora reconciler B); protocol timelock (`can_be_claimed_unilaterally_by_owner`). UI copy must distinguish waiting for host transaction broadcast, waiting for the first confirmation, waiting for 6 confirmations, and waiting for timelock.
 
 **B entry points** (no dedicated 6-conf poll actor): Arkade load including autonomous, operator sync, proceed, progress, `list_unilateral_exits_in_progress`, complete. Stamp every vout on a `tree`/`ark` host at 6 confs; skip `commitment`/`checkpoint`.
 
-The **job machine** stays the broadcaster (`waitingConfirm` remains 1-conf step advance). `START_*` invokes `taggingPlan` (WASM tag, then persist job). Abort untags only `tagged` rows with no host observation. VTXO child machines are a hydrated view of persisted records (Stage 4). After abort, Complete uses `complete_ready`, not in-progress membership and not a leftover frontend job.
+The **job machine** is the session-scoped host plus broadcaster (`waitingConfirm` remains 1-conf step advance). `START_*` invokes `taggingPlan` (WASM tag, then persist job). Abort untags only `tagged` rows with no host observation. VTXO children hydrate from persisted records after B-entry queries (`HYDRATE`). After abort or branch-complete, leftover coins stay on children; Complete uses `complete_ready`, not in-progress membership and not a leftover frontend job. A second unroll may start while earlier coins wait to be claimed.
 
 ## Protocol basics
 
@@ -140,7 +140,7 @@ Abort **stops frontend orchestration only**. It does **not** delete `unilateral_
 
 Abort and ASP `terminated` clear the frontend job bookmark. The failure banner comes from error persistence (`user_aborted` / terminal viability). Hydrate must not treat leftover WASM in-progress rows as crash recovery: a job is restored only when persisted outpoints are still present.
 
-After a successful unroll (`complete`), the frontend job is cleared. Remaining WASM in-progress / exiting VTXOs are waiting for **claim** (Complete unilateral exit), not a live unroll job. The control page must not show Abort, step progress, or a locked leaf selection for those leftover rows, and must not re-seed the control store from them. Lock/`WALLET_RESET` resets the in-memory control store.
+After a successful unroll (`complete`), the frontend job is cleared. Remaining WASM in-progress / exiting VTXOs are waiting for **claim** (Complete unilateral exit), not a live unroll job. The control page must not show Abort, step progress, or a locked leaf selection for those leftover rows, and must not re-seed the control store from them. Lock/`ARKADE_SESSION_RESET` resets the in-memory control store.
 
 ---
 
@@ -176,7 +176,7 @@ Machine: enter `waitingForParentData`, clear `lastErrorMessage` (not an error or
 - **Manual:** `checkingProgress` with a progress refresh only. If still on the same step, return to `waitingForParentData`. `PROCEED_MANUAL` skips the wait and retries broadcast.
 - **Automatic:** `checkingProgress` with proceed requested on the failed step, which typically retries `ensuringBroadcast`.
 
-`terminated` and `aborted` persist failure, clear the job, invalidate topology/progress/balance queries, then **always** return to `idle`. `WALLET_RESET` is a root transition to `notConfigured` from every state.
+`terminated` and `aborted` persist failure, clear the job, invalidate topology/progress/balance queries, then **always** return to `idle`. `ARKADE_SESSION_RESET` is a root transition to `notConfigured` from every state (lock, Arkade session teardown, or Arkade wallet-scope change).
 
 ```mermaid
 stateDiagram-v2
@@ -200,10 +200,28 @@ stateDiagram-v2
   waitingConfirm --> checkingProgress: after pollDelay OR POLL_TICK
   waitingForParentData --> checkingProgress: after 15s OR POLL_TICK OR PROCEED_MANUAL
   paused --> checkingProgress: RESUME OR PROCEED_MANUAL
-  complete --> idle: CLEAR_JOB
+  complete --> idle: always (release broadcaster)
   terminated --> idle
   aborted --> idle
   error --> checkingProgress: PROCEED_MANUAL OR RESUME
+```
+
+```mermaid
+flowchart TD
+  wasmRecords["WASM vtxo_exit_records"]
+  listRpc["list in-progress plus list records"]
+  parent["unilateralExit session host"]
+  children["vtxoExit:txid:vout children"]
+  completeUi["Complete dialog"]
+  controlUi["Control page node detail"]
+  wasmRecords --> listRpc
+  listRpc -->|"HYDRATE_VTXO_RECORDS"| parent
+  parent -->|"spawnChild / HYDRATE"| children
+  children --> completeUi
+  children --> controlUi
+  parent -->|"START / PROCEED / ABORT / 1-conf"| broadcast["current job bookmark only"]
+  broadcast -->|"branch complete"| idleHost["idle host; children unchanged"]
+  idleHost -->|"START other leaves"| broadcast
 ```
 
 ### Actors (WASM / policy, not UI)

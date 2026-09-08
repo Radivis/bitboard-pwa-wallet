@@ -17,6 +17,12 @@ import {
 } from '@/lib/arkade/unilateral-exit-topology'
 import { canSelectUnilateralExitLeafForUnroll } from '@/lib/arkade/unilateral-exit-job-reconcile'
 import { cn } from '@/lib/shared/utils'
+import {
+  formatVtxoExitPhaseCopy,
+  lookupVtxoExitChildPhase,
+  vtxoExitPhaseCopyFromPhase,
+} from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit-selectors'
+import type { VtxoExitChildSnapshotMap } from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit-machine-types'
 import type {
   ArkadeUnilateralExitNodeStatus,
   ArkadeUnilateralExitTopology,
@@ -32,6 +38,7 @@ interface UnilateralExitNodeDetailCardProps {
   onToggleLeafTxGroup: (outpoints: ArkadeVtxoOutpoint[]) => void
   startableOutpoints?: ArkadeVtxoOutpoint[]
   selectionLocked?: boolean
+  vtxoExitSnapshots?: VtxoExitChildSnapshotMap
 }
 
 function resolveNodeStatus(
@@ -55,6 +62,7 @@ export function UnilateralExitNodeDetailCard({
   onToggleLeafTxGroup,
   startableOutpoints,
   selectionLocked = false,
+  vtxoExitSnapshots = {},
 }: UnilateralExitNodeDetailCardProps) {
   const { txid } = parseUnilateralExitNodeId(focusedNodeId)
   const topologyNode = topology.nodes.find((node) => node.txid === txid)
@@ -65,11 +73,13 @@ export function UnilateralExitNodeDetailCard({
     hostOutpointsForTx.length > 0
       ? hostOutpointsForTx.map((hostOutpoint) => ({
           key: `${hostOutpoint.txid}:${hostOutpoint.vout}`,
+          txid: hostOutpoint.txid,
           vout: hostOutpoint.vout,
           amountLabel: `${hostOutpoint.amountSats} sats`,
         }))
       : exitStartLeafOutpoints.map((leafOutpoint) => ({
           key: `${leafOutpoint.txid}:${leafOutpoint.vout}`,
+          txid: leafOutpoint.txid,
           vout: leafOutpoint.vout,
           amountLabel: null as string | null,
         }))
@@ -138,17 +148,37 @@ export function UnilateralExitNodeDetailCard({
                   VTXO outpoints on this {isExitStartLeaf ? 'leaf' : 'node'}
                 </p>
                 <ul className="space-y-1">
-                  {vtxoRows.map((vtxoRow) => (
+                  {vtxoRows.map((vtxoRow) => {
+                    const childPhase = lookupVtxoExitChildPhase(
+                      vtxoExitSnapshots,
+                      vtxoRow.txid,
+                      vtxoRow.vout,
+                    )
+                    const phaseLabel = formatVtxoExitPhaseCopy(
+                      vtxoExitPhaseCopyFromPhase(childPhase),
+                    )
+                    return (
                       <li
                         key={vtxoRow.key}
                         className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-xs"
                       >
                         <span>Outpoint {vtxoRow.vout}</span>
-                        {vtxoRow.amountLabel != null ? (
-                          <span className="text-muted-foreground">{vtxoRow.amountLabel}</span>
-                        ) : null}
+                        <span className="text-right text-muted-foreground">
+                          {vtxoRow.amountLabel != null ? (
+                            <span className="block">{vtxoRow.amountLabel}</span>
+                          ) : null}
+                          {phaseLabel !== '' ? (
+                            <span
+                              className="block"
+                              data-testid="unilateral-exit-vtxo-phase"
+                            >
+                              {phaseLabel}
+                            </span>
+                          ) : null}
+                        </span>
                       </li>
-                    ))}
+                    )
+                  })}
                 </ul>
               </div>
               {isExitStartLeaf && (

@@ -300,6 +300,17 @@ pub struct UnilateralExitInProgressDto {
     pub phase: Option<crate::persistence::VtxoExitPhase>,
 }
 
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct VtxoExitRecordDto {
+    pub txid: String,
+    pub vout: u32,
+    pub amount_sats: u64,
+    pub phase: crate::persistence::VtxoExitPhase,
+    pub host_txid: String,
+    pub tagged_at: i64,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MissingBlocktimeCompletionInputDto {

@@ -32,6 +32,7 @@ import {
   useIsUnilateralExitJobActive,
   useUnilateralExitActorSnapshot,
   useUnilateralExitLifecycleSnapshot,
+  useVtxoExitSnapshots,
 } from '@/hooks/useUnilateralExitLifecycleSnapshot'
 import { useUnilateralExitAutomationSnapshot } from '@/hooks/useUnilateralExitAutomationSnapshot'
 import { useUnilateralExitStepWaitingClock } from '@/hooks/useUnilateralExitStepWaitingClock'
@@ -144,6 +145,7 @@ export function UnilateralExitControlPage() {
   const feePresetsQuery = useEsploraFeePresets(networkMode)
   const lifecycleSnapshot = useUnilateralExitLifecycleSnapshot()
   const actorSnapshot = useUnilateralExitActorSnapshot()
+  const vtxoExitSnapshots = useVtxoExitSnapshots()
   const automationSnapshot = useUnilateralExitAutomationSnapshot()
   const lifecycleJobActive = useIsUnilateralExitJobActive()
   const automationPrefsHydrated = useUnilateralExitLifecyclePersistenceStore((state) => {
@@ -507,9 +509,7 @@ export function UnilateralExitControlPage() {
     [exitCandidatesQuery.data],
   )
   const selectionLocked = shouldLockUnilateralExitLeafSelection({
-    lifecycleJobActive:
-      lifecycleJobActive ||
-      unilateralExitSnapshotIsInState(actorSnapshot, UNILATERAL_EXIT_MACHINE_STATE.complete),
+    lifecycleJobActive,
     persistedJobExists,
   })
   const selectedTotalSats = useMemo(
@@ -714,6 +714,7 @@ export function UnilateralExitControlPage() {
             onToggleLeafTxGroup={toggleLeafTxGroup}
             startableOutpoints={startableOutpoints}
             selectionLocked={selectionLocked}
+            vtxoExitSnapshots={vtxoExitSnapshots}
           />
         )}
 

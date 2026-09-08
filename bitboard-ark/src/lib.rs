@@ -512,6 +512,13 @@ pub async fn ark_list_unilateral_exits_in_progress() -> Result<JsValue, JsValue>
 }
 
 #[wasm_bindgen]
+pub fn ark_list_vtxo_exit_records() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.list_vtxo_exit_records())
+    }))
+}
+
+#[wasm_bindgen]
 pub async fn ark_get_onchain_bumper_info() -> Result<JsValue, JsValue> {
     map_js_async(async {
         export_session_json(|session| async move { session.onchain_bumper_info().await }).await

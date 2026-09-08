@@ -7,6 +7,7 @@ vi.mock('@/workers/arkade-factory', () => ({
   getArkadeWorker: () => ({
     getUnilateralExitProgress,
     evaluateUnilateralExitJobViability,
+    listVtxoExitRecords: vi.fn(async () => []),
   }),
 }))
 

@@ -31,7 +31,20 @@ import { invalidateUnilateralExitQueries } from '@/lib/wallet/lifecycle/unilater
 import type { ArkadeUnilateralExitProgress, ArkadeUnilateralExitJobViability } from '@/workers/arkade-api'
 import { arkadeVtxoOutpointListsEqual, sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
 import { userFacingLifecycleErrorMessage } from '@/lib/shared/utils'
-import { assertEvent, assign, fromPromise, setup, type PromiseActorLogic } from 'xstate'
+import { vtxoExitMachine } from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit.machine'
+import {
+  isVtxoExitChildId,
+  vtxoExitChildId,
+} from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit-machine-types'
+import { toast } from 'sonner'
+import {
+  assertEvent,
+  assign,
+  enqueueActions,
+  fromPromise,
+  setup,
+  type PromiseActorLogic,
+} from 'xstate'
 
 export type EnsureBroadcastActorInput = {
   walletScope: NonNullable<UnilateralExitMachineContext['walletScope']>
@@ -236,7 +249,8 @@ export const unilateralExitMachineSetup = setup({
     tagPlanActor: fromPromise<void, TagPlanActorInput>(async () => {
       throw new Error('tagPlanActor implementation missing')
     }),
-  } satisfies UnilateralExitSetupActors,
+    vtxoExit: vtxoExitMachine,
+  } satisfies UnilateralExitSetupActors & { vtxoExit: typeof vtxoExitMachine },
   guards: {
     isJobCompleteFromFetchEvent: ({ context, event }) => {
       const output = progressFromFetchEvent(event)
@@ -563,6 +577,40 @@ export const unilateralExitMachineSetup = setup({
       reconcileInProgressSats: 0,
       reconcileInProgressOutpoints: [],
     })),
+    notifyBranchComplete: () => {
+      toast.success('Unilateral exit branch complete.')
+    },
+    syncVtxoExitChildren: enqueueActions(({ enqueue, event, self }) => {
+      assertEvent(event, 'HYDRATE_VTXO_RECORDS')
+      const desiredRecords = event.records.filter((record) => record.phase !== 'exited')
+      const desiredIds = new Set(
+        desiredRecords.map((record) => vtxoExitChildId(record.txid, record.vout)),
+      )
+      const snapshot = self.getSnapshot()
+      const existingIds = Object.keys(snapshot.children).filter(isVtxoExitChildId)
+
+      for (const actorId of existingIds) {
+        if (!desiredIds.has(actorId)) {
+          enqueue.stopChild(actorId)
+        }
+      }
+
+      for (const record of desiredRecords) {
+        const actorId = vtxoExitChildId(record.txid, record.vout)
+        if (!existingIds.includes(actorId)) {
+          enqueue.spawnChild('vtxoExit', { id: actorId, input: record })
+        }
+        enqueue.sendTo(actorId, { type: 'HYDRATE', phase: record.phase })
+      }
+    }),
+    stopAllVtxoExitChildren: enqueueActions(({ enqueue, self }) => {
+      const snapshot = self.getSnapshot()
+      for (const actorId of Object.keys(snapshot.children)) {
+        if (isVtxoExitChildId(actorId)) {
+          enqueue.stopChild(actorId)
+        }
+      }
+    }),
     clearPersistedJob: ({ context }) => {
       if (context.walletScope != null) {
         clearPersistedUnilateralExitJob(context.walletScope)
@@ -713,6 +761,9 @@ export const unilateralExitMachineSetup = setup({
     clearTerminatedProceedRequested: assign({
       proceedRequested: false,
     }),
-    resetToNotConfigured: assign(() => createInitialUnilateralExitContext()),
+    resetToNotConfigured: enqueueActions(({ enqueue }) => {
+      enqueue('stopAllVtxoExitChildren')
+      enqueue.assign(() => createInitialUnilateralExitContext())
+    }),
   },
 })

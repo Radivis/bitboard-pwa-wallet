@@ -210,7 +210,7 @@ describe('selectUnilateralExitControlJobState', () => {
       }),
     ).toMatchObject({
       phase: 'complete',
-      jobActive: true,
+      jobActive: false,
     })
   })
 

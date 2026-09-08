@@ -14,15 +14,37 @@ import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import {
   formatMissingBlocktimeCompletionWarning,
   formatMissingBlocktimeCompletionWarningLine,
-  unilateralExitCompleteTimelockMessage,
+  formatUnilateralExitCompleteWaitingBanner,
 } from '@/lib/arkade/arkade-exit-utils'
 import { includesArkadeVtxoOutpoint } from '@/workers/arkade-api'
 import type { useArkadeExitFlow } from '@/hooks/useArkadeExitFlow'
+import { useVtxoExitSnapshots } from '@/hooks/useUnilateralExitLifecycleSnapshot'
+import {
+  formatVtxoExitPhaseCopy,
+  lookupVtxoExitChildPhase,
+  resolveVtxoExitPhaseForCopy,
+  vtxoExitPhaseCopyFromPhase,
+  type VtxoExitPhaseCopyKind,
+} from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit-selectors'
+import type { VtxoExitChildSnapshotMap } from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit-machine-types'
+import type { ArkadeVtxoExitPhase } from '@/workers/arkade-api'
 
 type ExitFlow = ReturnType<typeof useArkadeExitFlow>
 
 interface CompleteUnilateralExitDialogProps {
   exitFlow: ExitFlow
+}
+
+function completeRowPhaseSuffix(
+  row: { txid: string; vout: number; phase?: ArkadeVtxoExitPhase },
+  snapshots: VtxoExitChildSnapshotMap,
+): string {
+  const phase = resolveVtxoExitPhaseForCopy({
+    childPhase: lookupVtxoExitChildPhase(snapshots, row.txid, row.vout),
+    recordPhase: row.phase,
+  })
+  const copy = formatVtxoExitPhaseCopy(vtxoExitPhaseCopyFromPhase(phase))
+  return copy !== '' ? ` · ${copy}` : ''
 }
 
 function errorMessage(error: unknown): string {
@@ -64,9 +86,29 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
     selectAllReadyInProgress,
     handleCompleteExit,
   } = exitFlow
+  const vtxoExitSnapshots = useVtxoExitSnapshots()
 
   const readyCount = (inProgressQuery.data ?? []).filter((row) => row.canComplete).length
   const waitingRows = selectedInProgressRows.filter((row) => !row.canComplete)
+  const waitingCopyKinds = new Set<VtxoExitPhaseCopyKind>()
+  for (const row of waitingRows) {
+    const phase = resolveVtxoExitPhaseForCopy({
+      childPhase: lookupVtxoExitChildPhase(vtxoExitSnapshots, row.txid, row.vout),
+      recordPhase: row.phase,
+    })
+    const copyKind = vtxoExitPhaseCopyFromPhase(phase)
+    if (copyKind != null) {
+      waitingCopyKinds.add(copyKind)
+    }
+  }
+  const waitingBanner = formatUnilateralExitCompleteWaitingBanner({
+    waitingCopyKinds,
+    timelock: {
+      timelockBlocks: bumperInfoQuery.data?.unilateralExitTimelockBlocks,
+      timelockSeconds: bumperInfoQuery.data?.unilateralExitTimelockSeconds,
+    },
+    waitingTxidSnippets: waitingRows.map((row) => `${row.txid.slice(0, 8)}…`),
+  })
   const completionFeeEstimate = completionFeeQuery.data
   const missingBlocktimeWarning =
     completionFeeEstimate?.missingBlocktimeInputs != null &&
@@ -166,9 +208,12 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
                       <span className="block font-mono text-xs text-muted-foreground">
                         {row.txid}:{row.vout}
                       </span>
-                      <span className="text-xs text-muted-foreground">
+                      <span
+                        className="text-xs text-muted-foreground"
+                        data-testid="arkade-unilateral-complete-row-phase"
+                      >
                         {row.virtualStatusState}
-                        {row.canComplete ? ' · ready to complete' : ' · waiting for timelock'}
+                        {completeRowPhaseSuffix(row, vtxoExitSnapshots)}
                       </span>
                     </span>
                   </label>
@@ -178,16 +223,9 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
           </>
         )}
 
-        {waitingRows.length > 0 && (
+        {waitingBanner != null && waitingRows.length > 0 && (
           <p className="text-sm text-amber-700 dark:text-amber-300" data-testid="arkade-unilateral-complete-waiting">
-            {unilateralExitCompleteTimelockMessage(
-              {
-                timelockBlocks: bumperInfoQuery.data?.unilateralExitTimelockBlocks,
-                timelockSeconds: bumperInfoQuery.data?.unilateralExitTimelockSeconds,
-              },
-              false,
-            )}{' '}
-            Waiting: {waitingRows.map((row) => `${row.txid.slice(0, 8)}…`).join(', ')}
+            {waitingBanner}
           </p>
         )}
 

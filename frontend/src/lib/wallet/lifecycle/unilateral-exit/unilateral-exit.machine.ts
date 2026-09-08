@@ -20,7 +20,7 @@ const checkingProgressOnDone = [
   {
     guard: 'isJobCompleteFromFetchEvent',
     target: 'complete',
-    actions: ['assignProgressFromFetch', 'clearPersistedJob'],
+    actions: 'assignProgressFromFetch',
   },
   {
     guard: 'isUnconfirmedParentRetryProgressRefresh',
@@ -97,7 +97,7 @@ const ensuringBroadcastOnDone = [
   {
     guard: 'isJobCompleteFromEnsureBroadcastEvent',
     target: 'complete',
-    actions: ['assignProgressFromEnsureBroadcast', 'clearPersistedJob'],
+    actions: 'assignProgressFromEnsureBroadcast',
   },
   {
     guard: 'shouldWaitAfterEnsureBroadcast',
@@ -188,9 +188,12 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
   context: ({ input }) => createInitialUnilateralExitContext(input),
   initial: 'notConfigured',
   on: {
-    WALLET_RESET: {
+    ARKADE_SESSION_RESET: {
       target: '.notConfigured',
       actions: 'resetToNotConfigured',
+    },
+    HYDRATE_VTXO_RECORDS: {
+      actions: 'syncVtxoExitChildren',
     },
   },
   states: {
@@ -340,7 +343,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
           {
             guard: 'isJobCompleteFromProceedEvent',
             target: 'complete',
-            actions: ['assignProgressFromProceed', 'clearPersistedJob'],
+            actions: 'assignProgressFromProceed',
           },
           {
             target: 'ensuringBroadcast',
@@ -482,15 +485,14 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
       },
     },
     complete: {
-      entry: ['invalidateUnilateralExitQueriesOnTerminate'],
-      on: {
-        START_MANUAL: startManualTransition,
-        START_AUTOMATIC: startAutomaticTransition,
-        CLEAR_JOB: {
-          target: 'idle',
-          actions: ['clearPersistedJob', 'clearJobActorContext'],
-        },
-        HYDRATE_OR_START: hydrateOrStartTransition,
+      entry: [
+        'invalidateUnilateralExitQueriesOnTerminate',
+        'clearPersistedJob',
+        'notifyBranchComplete',
+      ],
+      always: {
+        target: 'idle',
+        actions: 'clearJobActorContext',
       },
     },
     terminated: {

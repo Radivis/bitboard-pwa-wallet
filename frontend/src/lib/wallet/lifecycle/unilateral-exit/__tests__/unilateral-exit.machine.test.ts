@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('sonner', () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
+}))
+
 vi.mock('@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence', () => ({
   persistActiveUnilateralExitJob: vi.fn(),
   ensurePersistedUnilateralExitJob: vi.fn(),
@@ -103,6 +107,17 @@ function progress(
 }
 
 const startedTestActors: Array<ReturnType<typeof createActor>> = []
+
+function branchCompleteReleasedToIdle(
+  state: { matches: (value: string) => boolean; context: { jobOutpoints: unknown[] } },
+  fetchProgress: { mock: { calls: unknown[] } },
+): boolean {
+  return (
+    state.matches('idle') &&
+    state.context.jobOutpoints.length === 0 &&
+    fetchProgress.mock.calls.length > 0
+  )
+}
 
 function createTestActor(params: {
   fetchProgress?: (input: FetchProgressActorInput) => Promise<ArkadeUnilateralExitProgress>
@@ -345,7 +360,9 @@ describe('unilateralExitMachine', () => {
       feeRateSatPerVb: 2,
     })
 
-    await waitFor(testActor, (state) => state.matches('complete'))
+    await waitFor(testActor, (state) =>
+      branchCompleteReleasedToIdle(state, fetchProgress),
+    )
     expect(proceedStep).not.toHaveBeenCalled()
     expect(clearPersistedUnilateralExitJob).toHaveBeenCalled()
     expect(updatePersistedUnilateralExitRelayWait).not.toHaveBeenCalled()
@@ -501,7 +518,9 @@ describe('unilateralExitMachine', () => {
       outpoints: [leaf],
       automationEnabled: true,
     })
-    await waitFor(testActor, (state) => state.matches('complete'))
+    await waitFor(testActor, (state) =>
+      branchCompleteReleasedToIdle(state, fetchProgress),
+    )
     expect(proceedStep).not.toHaveBeenCalled()
     expect(clearPersistedUnilateralExitJob).toHaveBeenCalled()
     expect(updatePersistedUnilateralExitRelayWait).not.toHaveBeenCalled()
@@ -961,6 +980,7 @@ describe('unilateralExitMachine', () => {
     const fetchProgress = vi.fn(async () =>
       progress({
         phase: 'complete',
+        currentStepTxRelayed: true,
         stepIndex: 2,
         totalSteps: 2,
         leafStatuses: [unrolledLeafStatus()],
@@ -974,8 +994,8 @@ describe('unilateralExitMachine', () => {
       outpoints: [leaf],
       feeRateSatPerVb: 20,
     })
-    await waitFor(testActor, (state) => state.matches('complete'))
-    expect(testActor.getSnapshot().context.feeRateSatPerVb).toBe(20)
+    await waitFor(testActor, (state) => branchCompleteReleasedToIdle(state, fetchProgress))
+    expect(testActor.getSnapshot().context.feeRateSatPerVb).toBeNull()
 
     testActor.send({
       type: 'START_AUTOMATIC',
@@ -1023,11 +1043,11 @@ describe('unilateralExitMachine', () => {
   it('lock reset returns to notConfigured', async () => {
     const { testActor } = createTestActor({})
     testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
-    testActor.send({ type: 'WALLET_RESET' })
+    testActor.send({ type: 'ARKADE_SESSION_RESET' })
     expect(testActor.getSnapshot().matches('notConfigured')).toBe(true)
   })
 
-  it('WALLET_RESET from waitingConfirm returns to notConfigured', async () => {
+  it('ARKADE_SESSION_RESET from waitingConfirm returns to notConfigured', async () => {
     const fetchProgress = vi.fn(async () => progress({ phase: 'idle' }))
     const { testActor } = createTestActor({ fetchProgress })
 
@@ -1040,13 +1060,13 @@ describe('unilateralExitMachine', () => {
     })
     await waitFor(testActor, (state) => state.matches('waitingConfirm'))
 
-    testActor.send({ type: 'WALLET_RESET' })
+    testActor.send({ type: 'ARKADE_SESSION_RESET' })
     expect(testActor.getSnapshot().matches('notConfigured')).toBe(true)
     expect(testActor.getSnapshot().context.jobOutpoints).toEqual([])
     expect(testActor.getSnapshot().context.walletScope).toBeNull()
   })
 
-  it('WALLET_RESET from paused returns to notConfigured', async () => {
+  it('ARKADE_SESSION_RESET from paused returns to notConfigured', async () => {
     const evaluatePolicy = vi.fn(async () => ({
       feeRateSatPerVb: 2,
       pausedReason: 'feeCapExceeded' as const,
@@ -1061,11 +1081,11 @@ describe('unilateralExitMachine', () => {
     })
     await waitFor(testActor, (state) => state.matches('paused'))
 
-    testActor.send({ type: 'WALLET_RESET' })
+    testActor.send({ type: 'ARKADE_SESSION_RESET' })
     expect(testActor.getSnapshot().matches('notConfigured')).toBe(true)
   })
 
-  it('WALLET_RESET from error returns to notConfigured', async () => {
+  it('ARKADE_SESSION_RESET from error returns to notConfigured', async () => {
     const fetchProgress = vi.fn(async () => {
       throw new Error('esplora unavailable')
     })
@@ -1080,11 +1100,11 @@ describe('unilateralExitMachine', () => {
     })
     await waitFor(testActor, (state) => state.matches('error'))
 
-    testActor.send({ type: 'WALLET_RESET' })
+    testActor.send({ type: 'ARKADE_SESSION_RESET' })
     expect(testActor.getSnapshot().matches('notConfigured')).toBe(true)
   })
 
-  it('WALLET_RESET from complete returns to notConfigured', async () => {
+  it('ARKADE_SESSION_RESET from complete returns to notConfigured', async () => {
     const fetchProgress = vi.fn(async () =>
       progress({
         phase: 'complete',
@@ -1107,13 +1127,15 @@ describe('unilateralExitMachine', () => {
       outpoints: [leaf],
       automationEnabled: false,
     })
-    await waitFor(testActor, (state) => state.matches('complete'))
+    await waitFor(testActor, (state) =>
+      branchCompleteReleasedToIdle(state, fetchProgress),
+    )
 
-    testActor.send({ type: 'WALLET_RESET' })
+    testActor.send({ type: 'ARKADE_SESSION_RESET' })
     expect(testActor.getSnapshot().matches('notConfigured')).toBe(true)
   })
 
-  it('WALLET_RESET from waitingForParentData returns to notConfigured', async () => {
+  it('ARKADE_SESSION_RESET from waitingForParentData returns to notConfigured', async () => {
     const fetchProgress = vi.fn(async () =>
       progress({ phase: 'idle', currentStepTxRelayed: false }),
     )
@@ -1131,7 +1153,7 @@ describe('unilateralExitMachine', () => {
     })
     await waitFor(testActor, (state) => state.matches('waitingForParentData'))
 
-    testActor.send({ type: 'WALLET_RESET' })
+    testActor.send({ type: 'ARKADE_SESSION_RESET' })
     expect(testActor.getSnapshot().matches('notConfigured')).toBe(true)
   })
 
@@ -1317,7 +1339,9 @@ describe('unilateralExitMachine', () => {
       reconcileInProgressOutpoints: [leaf],
     })
 
-    await waitFor(testActor, (state) => state.matches('complete'))
+    await waitFor(testActor, (state) =>
+      branchCompleteReleasedToIdle(state, fetchProgress),
+    )
     expect(clearPersistedUnilateralExitJob).toHaveBeenCalled()
   })
 

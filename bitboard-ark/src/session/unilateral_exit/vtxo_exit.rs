@@ -443,6 +443,32 @@ pub fn heal_vtxo_exit_records_from_legacy(
     }
 }
 
+/// Read-only DTO dump for frontend VTXO child hydrate (`ARK-EXIT-32`). No Esplora.
+pub fn vtxo_exit_record_dtos(
+    records: &BTreeMap<String, VtxoExitRecord>,
+) -> Vec<crate::api_types::VtxoExitRecordDto> {
+    let mut rows: Vec<crate::api_types::VtxoExitRecordDto> = records
+        .iter()
+        .filter_map(|(key, record)| {
+            let (txid, vout) = parse_vtxo_exit_record_key(key)?;
+            Some(crate::api_types::VtxoExitRecordDto {
+                txid,
+                vout,
+                amount_sats: record.amount_sats,
+                phase: record.phase,
+                host_txid: record.host_txid.clone(),
+                tagged_at: record.tagged_at,
+            })
+        })
+        .collect();
+    rows.sort_by(|left, right| {
+        left.txid
+            .cmp(&right.txid)
+            .then_with(|| left.vout.cmp(&right.vout))
+    });
+    rows
+}
+
 /// Unilateral-exit pipeline outpoints (`ARK-EXIT-02` / `ARK-REC-08`): `tagged`…`complete_ready`
 /// (not `exited`). Same set for in-progress / Complete membership and for coin-select / recover /
 /// renew exclusion (including unrolled).
@@ -775,6 +801,11 @@ impl crate::session::ArkSession {
     /// (`tagged`…`complete_ready`, not `exited`).
     pub(crate) fn pipeline_outpoints(&self) -> HashSet<UnilateralExitOutpointKey> {
         unilateral_exit_pipeline_outpoints(&self.wallet_db.vtxo_exit_records())
+    }
+
+    /// Used for dumping persisted VTXO exit records (no Esplora / B). Stage 4 child hydrate.
+    pub fn list_vtxo_exit_records(&self) -> Vec<crate::api_types::VtxoExitRecordDto> {
+        vtxo_exit_record_dtos(&self.wallet_db.vtxo_exit_records())
     }
 }
 
@@ -1522,5 +1553,39 @@ mod tests {
         .expect("autonomous mode skips snapshot is_swept without reading materials");
         assert!(!stamped);
         assert_eq!(record_phase(&records, &leaf, 0), VtxoExitPhase::Tagged);
+    }
+
+    #[test]
+    fn list_vtxo_exit_records_dto_round_trip() {
+        let (snapshot, tree, leaf, _) = snapshot_with_intermediate_tree_and_ark_leaf();
+        let mut records = BTreeMap::new();
+        tag_unilateral_exit_plan_in_records(
+            &snapshot,
+            &[VirtualOutPoint::new(leaf, 0)],
+            &mut records,
+            42,
+        )
+        .expect("tag");
+        records
+            .get_mut(&vtxo_exit_record_key(&tree.to_string(), 0))
+            .expect("tree")
+            .phase = VtxoExitPhase::Unrolled;
+        let rows = vtxo_exit_record_dtos(&records);
+        let tree_row = rows
+            .iter()
+            .find(|row| row.txid == tree.to_string() && row.vout == 0)
+            .expect("tree dto");
+        assert_eq!(tree_row.phase, VtxoExitPhase::Unrolled);
+        assert_eq!(tree_row.tagged_at, 42);
+        assert_eq!(tree_row.host_txid, tree.to_string());
+        let leaf_row = rows
+            .iter()
+            .find(|row| row.txid == leaf.to_string() && row.vout == 0)
+            .expect("leaf dto");
+        assert_eq!(leaf_row.phase, VtxoExitPhase::Tagged);
+        let encoded = serde_json::to_value(tree_row).expect("json");
+        assert_eq!(encoded["phase"], "unrolled");
+        assert_eq!(encoded["hostTxid"], tree.to_string());
+        assert_eq!(encoded["amountSats"], 2_000);
     }
 }

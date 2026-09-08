@@ -8,7 +8,10 @@ import { useUnilateralExitAutomationPrefsStore } from '@/lib/wallet/lifecycle/un
 import type { UnilateralExitLifecycleSnapshot } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
 import {
   getUnilateralExitActorSnapshot,
+  getVtxoExitChildSnapshotMap,
   subscribeUnilateralExitActor,
+  subscribeVtxoExitChildren,
+  vtxoExitChildSnapshotMapEqual,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime'
 import {
   selectIsUnilateralExitJobActive,
@@ -16,6 +19,7 @@ import {
   type UnilateralExitActorSnapshot,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-selectors'
 import { unilateralExitActorSnapshotEqual } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-snapshot'
+import type { VtxoExitChildSnapshotMap } from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit-machine-types'
 
 function readLifecycleSnapshot(): UnilateralExitLifecycleSnapshot {
   return selectUnilateralExitLifecycleSnapshot(getUnilateralExitActorSnapshot())
@@ -33,6 +37,12 @@ const getStableUnilateralExitActorSnapshot =
     unilateralExitActorSnapshotEqual,
   )
 
+const getStableVtxoExitChildSnapshotMap =
+  createStableSnapshotGetter<VtxoExitChildSnapshotMap>(
+    getVtxoExitChildSnapshotMap,
+    vtxoExitChildSnapshotMapEqual,
+  )
+
 export function useUnilateralExitLifecycleSnapshot(): UnilateralExitLifecycleSnapshot {
   return useSyncExternalStore(
     subscribeUnilateralExitActor,
@@ -46,6 +56,14 @@ export function useUnilateralExitActorSnapshot(): UnilateralExitActorSnapshot {
     subscribeUnilateralExitActor,
     getStableUnilateralExitActorSnapshot,
     getStableUnilateralExitActorSnapshot,
+  )
+}
+
+export function useVtxoExitSnapshots(): VtxoExitChildSnapshotMap {
+  return useSyncExternalStore(
+    subscribeVtxoExitChildren,
+    getStableVtxoExitChildSnapshotMap,
+    getStableVtxoExitChildSnapshotMap,
   )
 }
 

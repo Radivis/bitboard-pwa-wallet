@@ -109,7 +109,7 @@ Tag at **job start** for every exit-relevant outpoint on the plan (the set `exit
 
 An en-passant VTXO can be `unrolled` / `complete_ready` while the job is still broadcasting descendants.
 
-UI copy must distinguish “waiting for confirmations” from “waiting for timelock.”
+UI copy must distinguish “waiting for host transaction broadcast” from “waiting for first confirmation” from “waiting for 6 confirmations” from “waiting for timelock.”
 
 ### Host-tx observation (C)
 
@@ -184,7 +184,7 @@ unilateralExit (job)          — broadcaster; abort/terminate/automation
 
 - Parent `START_*` / `HYDRATE_OR_START` tags outpoints in WASM, then spawns missing children from the persisted record list (not only from job bookmark).
 - Parent abort: job → `aborted` → `idle`; children with phase ≥ `host_broadcast_attempted` **keep their actors** (or respawn on next load from WASM). Children still in `tagged` with no ancestor published may be stopped after WASM reverts them to `idle`.
-- `WALLET_RESET` / lock: stop all actors. Next unlock hydrates children from WASM records. Crash recovery is records, not “leftover in-progress DTO.”
+- `ARKADE_SESSION_RESET` / lock: stop all actors. Next unlock hydrates children from WASM records. Crash recovery is records, not “leftover in-progress DTO.”
 - Selectors read child snapshots; they must not re-run completion guards from raw progress DTOs (same rule as the job machine).
 
 ### What must not go in XState `after`
@@ -333,13 +333,15 @@ The original bug. Ship this even if later stages slip.
 
 ### Stage 4 — UI / XState family
 
+**Shipped** (`ARK-EXIT-32`). Per-VTXO child actors hydrate from persisted records. The job actor is a session-scoped host plus unroll broadcaster: branch-complete always continues to `idle`; leftover children stay so a second `START_*` can run while earlier coins wait to be claimed. `CLEAR_JOB` is not on-chain claim. Complete dialog and control-page node detail subscribe to child snapshots for waiting-for-host-transaction-broadcast vs waiting-for-first-confirmation vs waiting-for-6-confirmations vs waiting-for-timelock vs ready. They never infer can-complete from job state.
+
 - Spawn/stop VTXO child actors from WASM records on hydrate.
 - Control page and Complete dialog subscribe to child snapshots for phase copy.
 - Job machine is only the broadcaster for tagged VTXOs whose host is not yet `host_confirmed`.
 - Hydrate-from-job-bookmark can remain; recovery is records + Complete, not inventing a job from leftover WASM flags.
 - Update `.cursor/rules/unilateral-exit-xstate.mdc` for the two-machine family.
 
-**Exit:** UI never infers “can complete” from job state alone. Aborted unrolls show as waiting-for-confirmations / waiting-for-timelock / ready without restarting a job.
+**Exit:** UI never infers “can complete” from job state alone. Aborted unrolls show as waiting-for-host-transaction-broadcast / waiting-for-first-confirmation / waiting-for-6-confirmations / waiting-for-timelock / ready without restarting a job.
 
 ---
 

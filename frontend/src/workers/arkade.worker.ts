@@ -56,6 +56,7 @@ import type {
   ArkadeOperatorTrustStatus,
   ArkadeOperatorConfigDiffResult,
   ArkadeUnilateralExitInProgressDto,
+  ArkadeVtxoExitRecordDto,
   ArkadeAutonomousModeStatus,
   ArkadeVtxoListResult,
   ArkadeVtxoExpiryStatus,
@@ -737,6 +738,12 @@ const arkadeService: ArkadeService = {
     )
     await persistAfterUnilateralExitOperation()
     return rows
+  },
+
+  async listVtxoExitRecords(): Promise<ArkadeVtxoExitRecordDto[]> {
+    return invokeWasmArk(
+      (wasmModule) => wasmModule.ark_list_vtxo_exit_records() as ArkadeVtxoExitRecordDto[],
+    )
   },
 
   async getOnchainBumperInfo(): Promise<ArkadeOnchainBumperInfo> {

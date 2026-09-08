@@ -18,7 +18,7 @@ feature:
     - As a user, I want autonomous mode to persist per operator so an untrusted or hostile ASP is not contacted again after reload until I explicitly leave
     - As a user, after I abort an unroll that already broadcast, I still want those coins completable when they confirm and the timelock elapses, without restarting a job
     - As a user in autonomous mode, I want unrolled stamps from Esplora without operator sync so I can complete after a killed job
-    - As a user, I want waiting for confirmations distinguished from waiting for the unilateral-exit timelock
+    - As a user, I want waiting for host transaction broadcast distinguished from waiting for the first confirmation, waiting for 6 confirmations, and waiting for the unilateral-exit timelock
   requirements:
     - Arkade is gated by isArkadeEnabled (default off) and isMainnetAccessEnabled for mainnet
     - Arkade is available on mainnet, signet, and regtest (local arkd via arkade-regtest for dev/E2E); not on lab in v1
@@ -82,7 +82,7 @@ feature:
       - id: ARK-EXIT-01
         description: Start unilateral exit lists only VTXOs that can start unroll; unrolled, complete_ready, exited, and funding_lost records are excluded. Tagged leftovers that are not yet unrolled remain startable after abort (ARK-EXIT-26/30). Concurrent second job stays a frontend selection lock.
       - id: ARK-EXIT-02
-        description: Complete unilateral exit lists in-progress VTXOs from persisted VTXO exit records (tagged through complete_ready). Complete RPC does not require in-progress membership (ARK-EXIT-31); this ID remains the Complete list.
+        description: Complete unilateral exit lists in-progress VTXOs from persisted VTXO exit records (tagged through complete_ready). Per-row copy is VTXO child phase (ARK-EXIT-32): waiting for host transaction broadcast vs waiting for first confirmation vs waiting for 6 confirmations vs waiting for timelock vs ready to complete — not !canComplete as timelock. Complete RPC does not require in-progress membership (ARK-EXIT-31); this ID remains the Complete list.
       - id: ARK-EXIT-03
         description: Complete unilateral exit supports multi-select batch completion with explicit virtual outpoints (txid + vout) and fee estimate scaled to selected inputs
       - id: ARK-EXIT-04
@@ -104,7 +104,7 @@ feature:
       - id: ARK-EXIT-12
         description: Unrolled+ VTXO exit records survive full snapshot replace (Stage 3 fold of unilateral_exit_watches). Reinject missing snapshot rows from those records; never clear exiting state on full-list absence alone. Leftover v10 watches heal into records then are cleared. Cleared on completion, funding_lost, or reconcile evidence (operator spent or on-chain spent).
       - id: ARK-EXIT-13
-        description: Unilateral exit control page at /wallet/arkade/unilateral-exit with responsive VTXO tree graph (React Flow + d3-dag), multi-select leaves, and Management entry link (Start unilateral exit / Control unilateral exit). Unspent host VTXOs stay on the graph after unroll (host tx 6 conf); the overlay swaps Lucide Coins for HandCoins.
+        description: Unilateral exit control page at /wallet/arkade/unilateral-exit with responsive VTXO tree graph (React Flow + d3-dag), multi-select leaves, and Management entry link (Start unilateral exit / Control unilateral exit). Node detail shows per-outpoint VTXO exit phase from child actors (ARK-EXIT-32). Unspent host VTXOs stay on the graph after unroll (host tx 6 conf); the overlay swaps Lucide Coins for HandCoins. Leaf selection unlocks after branch-complete (idle host, leftover children stay).
       - id: ARK-EXIT-14
         description: ark_estimate_unilateral_exit_batch unions deduped virtual steps across selected VTXO leaves for batch fee estimate and bumper sufficiency gate
       - id: ARK-EXIT-15
@@ -201,14 +201,22 @@ feature:
           without a frontend job. funding_lost coins are not listed and not completable (ARK-EXIT-33).
       - id: ARK-EXIT-32
         description: >-
-          Job vs VTXO XState split (target; Stage 4). Job machine remains the
-          broadcaster: START_*, PROCEED_*, ABORT_ORCHESTRATION, automation, viability terminate;
-          waitingConfirm is 1-conf step advance only. VTXO children are a hydrated view keyed by
-          (txid, vout); spawn from persisted records not only the job bookmark. Frozen child events:
-          HYDRATE, HOST_REGISTERED, HOST_RELAYED, HOST_CONFIRMED, UNROLLED, COMPLETE_READY, COMPLETE,
-          EXITED, FUNDING_LOST, UNTAG. HYDRATE sets state from the WASM record (phase jumps allowed);
-          it does not replay intermediates. WALLET_RESET/lock stops all actors; next unlock hydrates
-          from WASM. No per-VTXO after delay until 6 confirmations (not D).
+          Job vs VTXO XState split (shipped). The job actor is a session-scoped host plus
+          broadcaster: START_*, PROCEED_*, ABORT_ORCHESTRATION, automation, viability terminate
+          (job bookmark only, never the child set); waitingConfirm is 1-conf step advance only.
+          Branch-complete always continues to idle with an empty bookmark; leftover VTXO children
+          stay so a second START_* on other startable leaves can run while earlier coins wait to
+          be claimed. CLEAR_JOB resets a broadcast bookmark only — not an on-chain Complete spend.
+          VTXO children are a hydrated view keyed by (txid, vout); spawn from persisted records
+          not only the job bookmark. Frozen child events: HYDRATE, HOST_REGISTERED, HOST_RELAYED,
+          HOST_CONFIRMED, UNROLLED, COMPLETE_READY, COMPLETE, EXITED, FUNDING_LOST, UNTAG.
+          Production advances via HYDRATE (sets state from the WASM record; phase jumps allowed);
+          it does not replay intermediates. ARKADE_SESSION_RESET (lock / session teardown) stops all
+          actors; next unlock hydrates from WASM. No per-VTXO after delay until 6 confirmations
+          (not D). Complete dialog and control-page node detail subscribe to child snapshots for
+          waiting-for-host-transaction-broadcast vs waiting-for-first-confirmation vs
+          waiting-for-6-confirmations vs waiting-for-timelock vs ready; they never infer
+          can-complete from job state.
       - id: ARK-EXIT-33
         description: >-
           Persist funding_lost on VTXO exit records (envelope v11). Viability/reconcile scans
@@ -313,7 +321,8 @@ feature:
         - expiring VTXO count when session open
         - operator batch round schedule when operator publishes scheduledSession
         - collaborative exit (on-chain destination, optional partial amount) with operator fee estimate from getInfo().fees
-        - Start unilateral exit (select VTXO, unroll) with bumper fee estimate; separate Complete unilateral exit for in-progress VTXOs after timelock, including leftover unrolled or aborted rows claimable without an active job (ARK-EXIT-31)
+        - Start unilateral exit (select VTXO, unroll) with bumper fee estimate; a second unroll may start on other startable leaves after branch-complete while leftover unrolled coins wait to be claimed (ARK-EXIT-32)
+        - separate Complete unilateral exit for in-progress VTXOs; per-row copy distinguishes waiting for host transaction broadcast, waiting for first confirmation, waiting for 6 confirmations, waiting for timelock, and ready to complete from VTXO child phase (not !canComplete); leftover unrolled or aborted rows claimable without an active job (ARK-EXIT-31)
         - batch complete multiple ready in-progress VTXOs in one on-chain transaction with dynamic completion fee estimate
         - pending_recovery_due_to_expired_signer_sats excludes VTXOs already in unilateral exit (no double-count with unilateral_exit_in_progress_sats)
         - signer migration banner when operator signing key rotated (migratable, due now, or expired regimes)

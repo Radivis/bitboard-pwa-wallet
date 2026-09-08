@@ -31,8 +31,6 @@ import {
   includesArkadeVtxoOutpoint,
 } from '@/workers/arkade-api'
 import { useWalletStore } from '@/stores/walletStore'
-import { clearUnilateralExitJob } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime'
-import { useUnilateralExitControlStore } from '@/stores/unilateralExitControlStore'
 
 function outpointFromInProgressRow(
   row: ArkadeUnilateralExitInProgressDto,
@@ -42,10 +40,6 @@ function outpointFromInProgressRow(
 
 export function useArkadeExitFlow() {
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
-  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
-  const activeArkadeAccountId = useWalletStore(
-    (walletState) => walletState.activeArkadeAccountId,
-  )
   const currentAddress = useWalletStore((walletState) => walletState.currentAddress)
   const signerMigrationHint = useWalletStore((walletState) => walletState.arkadeSignerMigrationHint)
   const balanceQuery = useArkadeBalanceQuery()
@@ -133,8 +127,10 @@ export function useArkadeExitFlow() {
 
   useEffect(() => {
     if (!completeUnilateralOpen) {
-      setSelectedInProgressOutpoints([])
-      setCompleteDestination('')
+      setSelectedInProgressOutpoints((previous) =>
+        previous.length === 0 ? previous : [],
+      )
+      setCompleteDestination((previous) => (previous === '' ? previous : ''))
       resetCompletionFeeSelection()
       return
     }
@@ -200,10 +196,6 @@ export function useArkadeExitFlow() {
       })
       .then(() => {
         setCompleteUnilateralOpen(false)
-        if (activeWalletId != null && activeArkadeAccountId != null) {
-          clearUnilateralExitJob()
-          useUnilateralExitControlStore.getState().reset()
-        }
       })
       .catch(() => {
         // Toast is handled by useArkadeCompleteUnilateralExitMutation.

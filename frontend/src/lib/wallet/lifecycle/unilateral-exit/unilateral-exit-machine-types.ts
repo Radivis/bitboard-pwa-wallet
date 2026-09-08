@@ -4,7 +4,7 @@ import {
   UNILATERAL_EXIT_AUTOMATION_WAIT_POLL_MS_REGTEST,
   UNILATERAL_EXIT_PARENT_DATA_WAIT_MS,
 } from '@/lib/arkade/arkade-query-timings'
-import type { ArkadeUnilateralExitProgress, ArkadeUnilateralExitJobViability, ArkadeVtxoOutpoint } from '@/workers/arkade-api'
+import type { ArkadeUnilateralExitProgress, ArkadeUnilateralExitJobViability, ArkadeVtxoOutpoint, ArkadeVtxoExitRecordDto } from '@/workers/arkade-api'
 import type { DoneActorEvent, ErrorActorEvent } from 'xstate'
 
 export type UnilateralExitMachineContext = {
@@ -98,8 +98,13 @@ export type UnilateralExitMachineUserEvent =
       type: 'ABORT_ORCHESTRATION'
       resolvedJobOutpoints: ArkadeVtxoOutpoint[]
     }
-  | { type: 'WALLET_RESET' }
+  /** Lock, Arkade session teardown, or Arkade wallet-scope change — not an on-chain wallet wipe. */
+  | { type: 'ARKADE_SESSION_RESET' }
   | { type: 'AUTOMATION_PREFS_CHANGED'; automationEnabled: boolean }
+  | {
+      type: 'HYDRATE_VTXO_RECORDS'
+      records: ArkadeVtxoExitRecordDto[]
+    }
 
 export type UnilateralExitMachineActorDoneEvent =
   | DoneActorEvent<ArkadeUnilateralExitProgress, 'fetchProgress'>
