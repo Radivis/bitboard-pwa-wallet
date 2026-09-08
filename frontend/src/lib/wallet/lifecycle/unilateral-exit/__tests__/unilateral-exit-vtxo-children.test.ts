@@ -293,6 +293,10 @@ describe('unilateralExitMachine VTXO children', () => {
             isUnrolled: true,
           },
         ],
+        nodeStatuses: [
+          { txid: 'step0', confirmations: 1, status: 'confirmed' },
+          { txid: 'step1', confirmations: 1, status: 'confirmed' },
+        ],
       }),
     )
     const { testActor } = createTestActor({ fetchProgress })
@@ -356,6 +360,10 @@ describe('unilateralExitMachine VTXO children', () => {
             confirmations: 6,
             isUnrolled: true,
           },
+        ],
+        nodeStatuses: [
+          { txid: 'step0', confirmations: 1, status: 'confirmed' },
+          { txid: 'step1', confirmations: 1, status: 'confirmed' },
         ],
       }),
     )

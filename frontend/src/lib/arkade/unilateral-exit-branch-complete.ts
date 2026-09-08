@@ -28,14 +28,11 @@ export function areAllJobLeavesUnrolled(
   )
 }
 
+/** Job bookmark release: the unroll DAG is 1-conf complete. Not 6-conf `is_unrolled`. */
 export function isUnilateralExitJobComplete(
   progress: ArkadeUnilateralExitProgress,
-  jobOutpoints: ArkadeVtxoOutpoint[],
 ): boolean {
-  if (progress.phase !== 'complete') {
-    return false
-  }
-  return areAllJobLeavesUnrolled(jobOutpoints, progress.leafStatuses)
+  return isUnilateralExitBranchComplete(progress)
 }
 
 export function mapWasmProgressToLifecyclePhase(

@@ -29,7 +29,7 @@ Stage 4 VTXO child machines (`ARK-EXIT-32`) are **shipped**: the job actor is a 
 
 **B entry points** (no dedicated 6-conf poll actor): Arkade load including autonomous, operator sync, proceed, progress, `list_unilateral_exits_in_progress`, complete. Stamp every vout on a `tree`/`ark` host at 6 confs; skip `commitment`/`checkpoint`.
 
-The **job machine** is the session-scoped host plus broadcaster (`waitingConfirm` remains 1-conf step advance). `START_*` invokes `taggingPlan` (WASM tag, then persist job). Abort untags only `tagged` rows with no host observation. VTXO children hydrate from persisted records after B-entry queries (`HYDRATE`). After abort or branch-complete, leftover coins stay on children; Complete uses `complete_ready`, not in-progress membership and not a leftover frontend job. A second unroll may start while earlier coins wait to be claimed.
+The **job machine** is the session-scoped host plus broadcaster (`waitingConfirm` remains 1-conf step advance). Job `complete` is DAG 1-conf (`isUnilateralExitBranchComplete`), not 6-conf `is_unrolled` — that stamp and the “waiting for 6 confirmations” copy live on VTXO children. `START_*` invokes `taggingPlan` (WASM tag, then persist job). Abort untags only `tagged` rows with no host observation. VTXO children hydrate from persisted records after B-entry queries (`HYDRATE`). After abort or branch-complete, leftover coins stay on children; Complete uses `complete_ready`, not in-progress membership and not a leftover frontend job. A second unroll may start while earlier coins wait to be claimed.
 
 ## Protocol basics
 

@@ -983,6 +983,10 @@ describe('unilateralExitMachine', () => {
         currentStepTxRelayed: true,
         stepIndex: 2,
         totalSteps: 2,
+        nodeStatuses: [
+          { txid: 'step0', confirmations: 1, status: 'confirmed' },
+          { txid: 'step1', confirmations: 1, status: 'confirmed' },
+        ],
         leafStatuses: [unrolledLeafStatus()],
       }),
     )
@@ -1249,7 +1253,7 @@ describe('unilateralExitMachine', () => {
     expect(ensureBroadcast).toHaveBeenCalledTimes(2)
   })
 
-  it('does not complete when selected leaves are not unrolled', async () => {
+  it('does not complete while a DAG node is still in progress', async () => {
     const fetchProgress = vi.fn(async () =>
       progress({
         phase: 'complete',
@@ -1282,7 +1286,7 @@ describe('unilateralExitMachine', () => {
     expect(clearPersistedUnilateralExitJob).not.toHaveBeenCalled()
   })
 
-  it('does not complete when WASM branch is complete but leaves are not unrolled', async () => {
+  it('releases_broadcaster_when_branch_complete_before_six_conf', async () => {
     const fetchProgress = vi.fn(async () =>
       progress({
         phase: 'complete',
@@ -1294,7 +1298,7 @@ describe('unilateralExitMachine', () => {
           { txid: 'step1', confirmations: 1, status: 'confirmed' },
         ],
         leafStatuses: [
-          { txid: leaf.txid, vout: leaf.vout, confirmations: 0, isUnrolled: false },
+          { txid: leaf.txid, vout: leaf.vout, confirmations: 1, isUnrolled: false },
         ],
       }),
     )
@@ -1302,15 +1306,20 @@ describe('unilateralExitMachine', () => {
 
     testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
     testActor.send({
-      type: 'START_MANUAL',
+      type: 'START_AUTOMATIC',
       walletScope,
       outpoints: [leaf],
-      feeRateSatPerVb: 2,
     })
 
-    await waitFor(testActor, (state) => state.matches('idle'))
-    expect(testActor.getSnapshot().matches('complete')).toBe(false)
-    expect(clearPersistedUnilateralExitJob).not.toHaveBeenCalled()
+    await waitFor(testActor, (state) =>
+      branchCompleteReleasedToIdle(state, fetchProgress),
+    )
+    expect(clearPersistedUnilateralExitJob).toHaveBeenCalled()
+    const fetchCountAfterRelease = fetchProgress.mock.calls.length
+    testActor.send({ type: 'POLL_TICK' })
+    expect(testActor.getSnapshot().matches('idle')).toBe(true)
+    expect(testActor.getSnapshot().context.jobOutpoints).toEqual([])
+    expect(fetchProgress).toHaveBeenCalledTimes(fetchCountAfterRelease)
   })
 
   it('completes when all leaves unrolled even if operator reports in-progress exits', async () => {

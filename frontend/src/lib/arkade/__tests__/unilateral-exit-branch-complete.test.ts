@@ -68,11 +68,7 @@ describe('unilateral-exit-branch-complete', () => {
     )
   })
 
-  it('isUnilateralExitJobComplete requires phase complete and unrolled leaves', () => {
-    const jobOutpoints = [
-      { txid: leafTxid, vout: 0 },
-      { txid: leafTxid, vout: 1 },
-    ]
+  it('isUnilateralExitJobComplete follows branch complete, not 6-conf is_unrolled', () => {
     expect(
       isUnilateralExitJobComplete(
         progress({
@@ -83,26 +79,10 @@ describe('unilateral-exit-branch-complete', () => {
             { txid: 'aa', confirmations: 1, status: 'confirmed' },
             { txid: 'bb', confirmations: 1, status: 'confirmed' },
           ],
-          leafStatuses: [{ txid: leafTxid, vout: 0, confirmations: 6, isUnrolled: true }],
+          leafStatuses: [{ txid: leafTxid, vout: 0, confirmations: 1, isUnrolled: false }],
         }),
-        jobOutpoints,
       ),
     ).toBe(true)
-    expect(
-      isUnilateralExitJobComplete(
-        progress({
-          phase: 'complete',
-          stepIndex: 2,
-          totalSteps: 2,
-          nodeStatuses: [
-            { txid: 'aa', confirmations: 1, status: 'confirmed' },
-            { txid: 'bb', confirmations: 1, status: 'confirmed' },
-          ],
-          leafStatuses: [{ txid: leafTxid, vout: 0, confirmations: 0, isUnrolled: false }],
-        }),
-        jobOutpoints,
-      ),
-    ).toBe(false)
     expect(
       isUnilateralExitJobComplete(
         progress({
@@ -117,7 +97,6 @@ describe('unilateral-exit-branch-complete', () => {
           ],
           leafStatuses: [{ txid: leafTxid, vout: 0, confirmations: 0, isUnrolled: true }],
         }),
-        jobOutpoints,
       ),
     ).toBe(false)
   })

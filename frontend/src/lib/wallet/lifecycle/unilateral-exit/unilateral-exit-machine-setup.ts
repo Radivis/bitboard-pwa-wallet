@@ -187,12 +187,11 @@ function syncPersistedRelayWait(
 
 function isJobCompleteFromProgress(
   progress: ArkadeUnilateralExitProgress | null,
-  context: UnilateralExitMachineContext,
 ): boolean {
   if (progress == null) {
     return false
   }
-  return isUnilateralExitJobComplete(progress, context.jobOutpoints)
+  return isUnilateralExitJobComplete(progress)
 }
 
 export const unilateralExitMachineSetup = setup({
@@ -254,15 +253,15 @@ export const unilateralExitMachineSetup = setup({
   guards: {
     isJobCompleteFromFetchEvent: ({ context, event }) => {
       const output = progressFromFetchEvent(event)
-      return isJobCompleteFromProgress(output, context)
+      return isJobCompleteFromProgress(output)
     },
     isJobCompleteFromProceedEvent: ({ context, event }) => {
       const output = progressFromProceedEvent(event)
-      return isJobCompleteFromProgress(output, context)
+      return isJobCompleteFromProgress(output)
     },
     isJobCompleteFromEnsureBroadcastEvent: ({ context, event }) => {
       const output = progressFromEnsureBroadcastEvent(event)
-      return isJobCompleteFromProgress(output, context)
+      return isJobCompleteFromProgress(output)
     },
     needsBroadcastFromFetchEvent: ({ context, event }) => {
       const output = progressFromFetchEvent(event)
@@ -312,7 +311,7 @@ export const unilateralExitMachineSetup = setup({
       context.pausedReason == null &&
       context.jobOutpoints.length > 0 &&
       context.progress != null &&
-      !isJobCompleteFromProgress(context.progress, context),
+      !isJobCompleteFromProgress(context.progress),
     shouldWaitAfterEnsureBroadcast: ({ context, event }) => {
       const output = progressFromEnsureBroadcastEvent(event)
       const waitingRelayed = isWaitingForRelayedStepConfirmation(output)
@@ -324,7 +323,7 @@ export const unilateralExitMachineSetup = setup({
         return false
       }
       const output = progressFromEnsureBroadcastEvent(event)
-      if (isJobCompleteFromProgress(output, context)) {
+      if (isJobCompleteFromProgress(output)) {
         return false
       }
       return !isWaitingForRelayedStepConfirmation(output)
