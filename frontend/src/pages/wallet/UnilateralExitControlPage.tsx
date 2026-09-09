@@ -54,6 +54,7 @@ import {
   formatUnilateralExitStepProgressDetail,
   isUnilateralExitProceedingAutomatically,
 } from '@/lib/arkade/unilateral-exit-control-phase'
+import { shouldShowUnilateralExitBranchCompleteStatus } from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit-selectors'
 import { resolveUnilateralExitTopologyOutpoints } from '@/lib/arkade/unilateral-exit-topology'
 import {
   shouldHydratePersistedUnilateralExitJob,
@@ -736,6 +737,18 @@ export function UnilateralExitControlPage() {
             })}
           </p>
         )}
+        {shouldShowUnilateralExitBranchCompleteStatus({
+          jobActive: lifecycleJobActive || machineProceeding || isProceeding,
+          hasPersistedFailure: persistedFailure != null,
+          vtxoExitSnapshots,
+        }) ? (
+          <p
+            className="text-sm text-muted-foreground"
+            data-testid="unilateral-exit-branch-complete"
+          >
+            Branch complete. Coins can be claimed via complete unilateral exit in Management.
+          </p>
+        ) : null}
         {unilateralExitSnapshotIsInState(actorSnapshot, UNILATERAL_EXIT_MACHINE_STATE.error) &&
         actorSnapshot.context.lastErrorMessage != null ? (
           <p

@@ -95,3 +95,34 @@ export function resolveVtxoExitPhaseForCopy(params: {
 }): ArkadeVtxoExitPhase | undefined {
   return params.childPhase ?? params.recordPhase
 }
+
+/**
+ * After the broadcast job releases to idle, leftover children in these phases mean the unroll DAG
+ * already reached 1-conf (or later). `tagged` is omitted so an aborted start does not look complete.
+ */
+const BRANCH_COMPLETE_LEFTOVER_CHILD_PHASES: ReadonlySet<ArkadeVtxoExitPhase> = new Set([
+  'host_broadcast_attempted',
+  'host_relayed',
+  'host_confirmed',
+  'unrolled',
+  'complete_ready',
+])
+
+export function hasLeftoverBranchCompleteVtxoChildren(
+  snapshots: VtxoExitChildSnapshotMap,
+): boolean {
+  return Object.values(snapshots).some((child) =>
+    BRANCH_COMPLETE_LEFTOVER_CHILD_PHASES.has(child.phase),
+  )
+}
+
+export function shouldShowUnilateralExitBranchCompleteStatus(params: {
+  jobActive: boolean
+  hasPersistedFailure: boolean
+  vtxoExitSnapshots: VtxoExitChildSnapshotMap
+}): boolean {
+  if (params.jobActive || params.hasPersistedFailure) {
+    return false
+  }
+  return hasLeftoverBranchCompleteVtxoChildren(params.vtxoExitSnapshots)
+}
