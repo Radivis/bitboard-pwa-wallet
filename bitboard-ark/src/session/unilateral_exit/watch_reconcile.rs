@@ -293,11 +293,13 @@ pub(crate) async fn reconcile_exiting_vtxo_watches(
         apply_reconcile_outcome(
             &mut snapshot,
             &mut warnings,
-            &txid,
-            vout,
-            exit_record.amount_sats,
-            record_has_confirmed_unroll(exit_record.phase),
-            prior_record,
+            ReconcileOutcomeApply {
+                txid: &txid,
+                vout,
+                amount_sats: exit_record.amount_sats,
+                has_confirmed_unroll: record_has_confirmed_unroll(exit_record.phase),
+                prior_record,
+            },
             outcome,
         );
     }
@@ -334,35 +336,51 @@ async fn reconcile_missing_survival(
     Ok(ExitingVtxoReconcileOutcome::KeepWarnMissingIndex)
 }
 
-fn apply_reconcile_outcome(
-    snapshot: &mut OffchainVtxoSnapshot,
-    warnings: &mut Vec<String>,
-    txid: &str,
+struct ReconcileOutcomeApply<'a> {
+    txid: &'a str,
     vout: u32,
     amount_sats: u64,
     has_confirmed_unroll: bool,
-    prior_record: Option<&VirtualTxOutPointRecord>,
+    prior_record: Option<&'a VirtualTxOutPointRecord>,
+}
+
+fn apply_reconcile_outcome(
+    snapshot: &mut OffchainVtxoSnapshot,
+    warnings: &mut Vec<String>,
+    target: ReconcileOutcomeApply<'_>,
     outcome: ExitingVtxoReconcileOutcome,
 ) {
     match outcome {
         ExitingVtxoReconcileOutcome::Ok => {
-            if snapshot_record(snapshot, txid, vout).is_none() && has_confirmed_unroll {
+            if snapshot_record(snapshot, target.txid, target.vout).is_none()
+                && target.has_confirmed_unroll
+            {
                 reinject_exiting_record(
                     snapshot,
-                    record_for_reinject(prior_record, txid, vout, amount_sats),
+                    record_for_reinject(
+                        target.prior_record,
+                        target.txid,
+                        target.vout,
+                        target.amount_sats,
+                    ),
                 );
             }
         }
         ExitingVtxoReconcileOutcome::ClearSpent
         | ExitingVtxoReconcileOutcome::ClearOnChainSpent => {
-            clear_exiting_record(snapshot, txid, vout);
+            clear_exiting_record(snapshot, target.txid, target.vout);
         }
         ExitingVtxoReconcileOutcome::KeepWarnAspMismatch
         | ExitingVtxoReconcileOutcome::KeepWarnIndexerLag
         | ExitingVtxoReconcileOutcome::KeepWarnMissingIndex => {
             reinject_exiting_record(
                 snapshot,
-                record_for_reinject(prior_record, txid, vout, amount_sats),
+                record_for_reinject(
+                    target.prior_record,
+                    target.txid,
+                    target.vout,
+                    target.amount_sats,
+                ),
             );
             if let Some(warning) = warning_for_outcome(outcome) {
                 warnings.push(warning.to_string());
@@ -437,11 +455,13 @@ mod tests {
         apply_reconcile_outcome(
             &mut snapshot,
             &mut warnings,
-            &txid,
-            0,
-            12_000,
-            true,
-            None,
+            ReconcileOutcomeApply {
+                txid: &txid,
+                vout: 0,
+                amount_sats: 12_000,
+                has_confirmed_unroll: true,
+                prior_record: None,
+            },
             ExitingVtxoReconcileOutcome::KeepWarnMissingIndex,
         );
 
@@ -481,11 +501,13 @@ mod tests {
         apply_reconcile_outcome(
             &mut snapshot,
             &mut warnings,
-            &txid,
-            0,
-            12_000,
-            true,
-            None,
+            ReconcileOutcomeApply {
+                txid: &txid,
+                vout: 0,
+                amount_sats: 12_000,
+                has_confirmed_unroll: true,
+                prior_record: None,
+            },
             ExitingVtxoReconcileOutcome::ClearSpent,
         );
 
@@ -552,11 +574,13 @@ mod tests {
         apply_reconcile_outcome(
             &mut snapshot,
             &mut warnings,
-            &txid,
-            0,
-            12_000,
-            true,
-            None,
+            ReconcileOutcomeApply {
+                txid: &txid,
+                vout: 0,
+                amount_sats: 12_000,
+                has_confirmed_unroll: true,
+                prior_record: None,
+            },
             ExitingVtxoReconcileOutcome::Ok,
         );
 

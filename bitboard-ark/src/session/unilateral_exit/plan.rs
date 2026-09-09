@@ -370,7 +370,6 @@ impl ArkSession {
         }
 
         let mut leaves = Vec::new();
-        let mut branch_lists = Vec::new();
         let mut tx_by_id = HashMap::new();
 
         for (leaf_txid, sibling_outpoints) in
@@ -400,7 +399,6 @@ impl ArkSession {
                         .await?,
                 );
             }
-            branch_lists.push(branch_txids.clone());
             leaves.push(LeafUnilateralContext {
                 leaf_txid,
                 sibling_outpoints,
@@ -411,6 +409,10 @@ impl ArkSession {
             });
         }
 
+        let branch_lists: Vec<Vec<Txid>> = leaves
+            .iter()
+            .map(|leaf| leaf.branch_txids.clone())
+            .collect();
         let ordered_step_txids = merge_exit_branch_txids(&branch_lists, &tx_by_id);
         Ok(UnilateralBatchPlan {
             leaves,

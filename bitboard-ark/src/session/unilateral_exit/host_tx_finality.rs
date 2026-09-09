@@ -358,7 +358,7 @@ mod tests {
     use super::*;
     use crate::persistence::{
         HostTxObservationRecord, UnilateralExitMaterialsRecord, VirtualTxOutPointRecord,
-        insert_host_tx_observation,
+        insert_host_tx_observation, vtxo_exit_record_key,
     };
     use crate::unilateral_exit_materials::{store_materials_for_leaf_tx, vtxo_chains_to_json};
     use ark_core::server::{ChainedTxType, VtxoChain, VtxoChains};
@@ -944,5 +944,110 @@ mod tests {
         )
         .expect("reconcile");
         assert!(!observations.contains_key(&tree.to_string()));
+    }
+
+    fn confirmed_host_observation(confirmations: u64) -> HostTxObservationRecord {
+        HostTxObservationRecord {
+            registered_at: 1,
+            relayed: true,
+            confirmations,
+            never_seen_probes: 0,
+            last_probed_at: 1,
+        }
+    }
+
+    fn host_confirmed_leaf_record(leaf: &Txid) -> VtxoExitRecord {
+        VtxoExitRecord {
+            phase: VtxoExitPhase::HostConfirmed,
+            tagged_at: 1,
+            host_txid: leaf.to_string(),
+            amount_sats: 1_000,
+        }
+    }
+
+    #[test]
+    fn reorg_five_conf_to_zero_still_seen_rewinds_to_host_relayed() {
+        let (mut snapshot, _, leaf, _) = snapshot_with_intermediate_tree_and_ark_leaf();
+        let mut observations = BTreeMap::new();
+        observations.insert(leaf.to_string(), confirmed_host_observation(5));
+        let mut vtxo_exit_records = BTreeMap::new();
+        vtxo_exit_records.insert(
+            vtxo_exit_record_key(&leaf.to_string(), 0),
+            host_confirmed_leaf_record(&leaf),
+        );
+        let pending = Vec::new();
+        let mut watches = Vec::new();
+
+        reconcile_host_tx_finality_state(
+            &mut snapshot,
+            &mut observations,
+            &pending,
+            &mut watches,
+            &mut vtxo_exit_records,
+            10,
+            |_| {
+                Some(HostTxProbe {
+                    seen: true,
+                    confirmations: 0,
+                })
+            },
+        )
+        .expect("reconcile");
+
+        let observation = observations
+            .get(&leaf.to_string())
+            .expect("observation kept");
+        assert!(observation.relayed);
+        assert_eq!(observation.confirmations, 0);
+        assert_eq!(
+            vtxo_exit_records
+                .get(&vtxo_exit_record_key(&leaf.to_string(), 0))
+                .expect("record")
+                .phase,
+            VtxoExitPhase::HostRelayed
+        );
+    }
+
+    #[test]
+    fn reorg_one_conf_to_zero_unseen_rewinds_to_host_broadcast_attempted() {
+        let (mut snapshot, _, leaf, _) = snapshot_with_intermediate_tree_and_ark_leaf();
+        let mut observations = BTreeMap::new();
+        observations.insert(leaf.to_string(), confirmed_host_observation(1));
+        let mut vtxo_exit_records = BTreeMap::new();
+        vtxo_exit_records.insert(
+            vtxo_exit_record_key(&leaf.to_string(), 0),
+            host_confirmed_leaf_record(&leaf),
+        );
+        let pending = Vec::new();
+        let mut watches = Vec::new();
+
+        reconcile_host_tx_finality_state(
+            &mut snapshot,
+            &mut observations,
+            &pending,
+            &mut watches,
+            &mut vtxo_exit_records,
+            10,
+            |_| {
+                Some(HostTxProbe {
+                    seen: false,
+                    confirmations: 0,
+                })
+            },
+        )
+        .expect("reconcile");
+
+        let observation = observations
+            .get(&leaf.to_string())
+            .expect("observation kept");
+        assert!(!observation.relayed);
+        assert_eq!(observation.confirmations, 0);
+        assert_eq!(
+            vtxo_exit_records
+                .get(&vtxo_exit_record_key(&leaf.to_string(), 0))
+                .expect("record")
+                .phase,
+            VtxoExitPhase::HostBroadcastAttempted
+        );
     }
 }

@@ -685,12 +685,11 @@ pub fn stamp_pre_unroll_records_funding_lost_for_asp_swept(
         else {
             continue;
         };
-        if !(row.is_swept && !row.is_unrolled) {
-            continue;
+        if row.is_swept && !row.is_unrolled {
+            keys_to_stamp.extend(pre_unroll_record_keys_on_same_branch(
+                snapshot, records, &txid, vout,
+            )?);
         }
-        keys_to_stamp.extend(pre_unroll_record_keys_on_same_branch(
-            snapshot, records, &txid, vout,
-        )?);
     }
     if keys_to_stamp.is_empty() {
         return Ok(false);
