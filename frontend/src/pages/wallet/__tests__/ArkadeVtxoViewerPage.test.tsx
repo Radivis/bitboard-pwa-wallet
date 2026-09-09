@@ -3,7 +3,11 @@ import { fireEvent, screen } from '@testing-library/react'
 import { ArkadeVtxoViewerPage } from '@/pages/wallet/ArkadeVtxoViewerPage'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { ARKADE_VTXO_VIEWER_PAGE_SIZE } from '@/lib/arkade/arkade-vtxo-viewer-display'
-import type { ArkadeVtxoListResult, ArkadeVtxoRowBase } from '@/workers/arkade-api'
+import type { VtxoExitChildSnapshotMap } from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit-machine-types'
+import type {
+  ArkadeVtxoListResult,
+  ArkadeVtxoRowBase,
+} from '@/workers/arkade-api'
 
 const walletStoreState = vi.hoisted(() => ({
   networkMode: 'signet' as const,
@@ -14,6 +18,10 @@ const vtxoListQueryMock = vi.hoisted(() =>
     data: undefined as ArkadeVtxoListResult | undefined,
     isLoading: false,
   })),
+)
+
+const vtxoExitSnapshotsMock = vi.hoisted(() =>
+  vi.fn((): VtxoExitChildSnapshotMap => ({})),
 )
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
@@ -65,6 +73,10 @@ vi.mock('@/hooks/useRailManualSyncMutations', () => ({
   useArkadeManualSyncMutation: () => ({ mutate: vi.fn(), isPending: false }),
 }))
 
+vi.mock('@/hooks/useUnilateralExitLifecycleSnapshot', () => ({
+  useVtxoExitSnapshots: () => vtxoExitSnapshotsMock(),
+}))
+
 function sampleRow(
   overrides: Partial<ArkadeVtxoRowBase> & Pick<ArkadeVtxoRowBase, 'id'>,
 ): ArkadeVtxoRowBase {
@@ -86,6 +98,7 @@ function sampleRow(
 describe('ArkadeVtxoViewerPage', () => {
   beforeEach(() => {
     walletStoreState.networkMode = 'signet'
+    vtxoExitSnapshotsMock.mockReturnValue({})
     vtxoListQueryMock.mockReturnValue({
       data: {
         rows: [
@@ -100,6 +113,24 @@ describe('ArkadeVtxoViewerPage', () => {
       },
       isLoading: false,
     })
+  })
+
+  it('ArkadeVtxoViewerPage_shows_unilateral_exit_phase_from_child_snapshot', () => {
+    vtxoExitSnapshotsMock.mockReturnValue({
+      'active:0': {
+        childId: 'vtxoExit:active:0',
+        txid: 'active',
+        vout: 0,
+        phase: 'unrolled',
+        machineState: 'unrolled',
+      },
+    })
+
+    renderWithProviders(<ArkadeVtxoViewerPage />)
+
+    expect(screen.getByTestId('arkade-vtxo-unilateral-exit-phase-active:0')).toHaveTextContent(
+      'Unilateral exit phase: waiting for timelock',
+    )
   })
 
   it('ArkadeVtxoViewerPage_hide_finalized_default', () => {

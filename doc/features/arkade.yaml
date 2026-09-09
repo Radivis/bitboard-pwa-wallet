@@ -213,10 +213,10 @@ feature:
           Production advances via HYDRATE (sets state from the WASM record; phase jumps allowed);
           it does not replay intermediates. ARKADE_SESSION_RESET (lock / session teardown) stops all
           actors; next unlock hydrates from WASM. No per-VTXO after delay until 6 confirmations
-          (not D). Complete dialog and control-page node detail subscribe to child snapshots for
-          waiting-for-host-transaction-broadcast vs waiting-for-first-confirmation vs
-          waiting-for-6-confirmations vs waiting-for-timelock vs ready; they never infer
-          can-complete from job state.
+          (not D). Complete dialog, control-page node detail, and the VTXO viewer card last line
+          subscribe to child snapshots for waiting-for-host-transaction-broadcast vs
+          waiting-for-first-confirmation vs waiting-for-6-confirmations vs waiting-for-timelock vs
+          ready; they never infer can-complete from job state.
       - id: ARK-EXIT-33
         description: >-
           Persist funding_lost on VTXO exit records (envelope v11). Viability/reconcile scans
@@ -297,7 +297,11 @@ feature:
       - id: ARK-VTX-01
         description: VTXO viewer page lists VTXO cards when session open and Arkade active
       - id: ARK-VTX-02
-        description: Each card shows id, amount, classification, true-only flag chips (including unilateral exit prepared with door-open icon when cached exit materials exist), created and expiry timestamps
+        description: >-
+          Each card shows id, amount, classification, true-only flag chips (including unilateral
+          exit prepared with door-open icon when cached exit materials exist), created and expiry
+          timestamps, and a last line Unilateral exit phase: {copy} from the VTXO child snapshot
+          when the coin is not idle (ARK-EXIT-32). Idle VTXOs omit that line.
       - id: ARK-ARK-MGMT-01
         description: Arkade management panel shows next operator batch window when getInfo scheduledSession is available, or an explicit not-published message when it is null
       - id: ARK-VTX-03
@@ -369,7 +373,7 @@ feature:
       - path: /wallet/arkade/vtxos
       - file: frontend/src/routes/wallet/arkade/vtxos.tsx
       - visible_elements:
-        - VTXO card grid (id, amount, classification, flag chips, created/expiry)
+        - VTXO card grid (id, amount, classification, flag chips, created/expiry, last-line unilateral exit phase copy when not idle)
         - search by id or sats amount
         - classification filter chips with counts
         - sort by amount, expiry, or created
