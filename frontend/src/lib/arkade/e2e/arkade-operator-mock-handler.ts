@@ -8,7 +8,6 @@ import {
   E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS,
   E2E_ARKADE_MOCK_INCOMING_TXID,
   E2E_ARKADE_MOCK_PARTITION_HEADER,
-  clearE2eArkadeOperatorMockDiscoveryState,
   getE2eArkadeOperatorMockState,
   readE2eArkadeMockPartitionIdFromRequestHeaders,
   resetE2eArkadeOperatorMockState,
@@ -305,14 +304,27 @@ export function buildMockVtxosForScripts(
   return vtxos
 }
 
+/**
+ * arkd indexer pages are 1-indexed. The WASM client keeps fetching while
+ * `current < total && next > current` (`IndexerPage::next_page_index`).
+ * A 0-based `{ current: 0, next: N, total: N }` page therefore loops forever
+ * during key discovery and wedges Arkade session open.
+ */
+function arkadeOperatorMockTerminalIndexerPage(hasItems: boolean): {
+  current: number
+  next: number
+  total: number
+} {
+  if (!hasItems) {
+    return { current: 0, next: 0, total: 0 }
+  }
+  return { current: 1, next: 1, total: 1 }
+}
+
 function emptyListVtxosResponse() {
   return {
     vtxos: [],
-    page: {
-      current: 0,
-      next: 0,
-      total: 0,
-    },
+    page: arkadeOperatorMockTerminalIndexerPage(false),
   }
 }
 
@@ -321,7 +333,7 @@ function isPendingOnlyVtxosRequest(requestUrl: string): boolean {
   return url.searchParams.get('pendingOnly') === 'true'
 }
 
-function buildListVtxosResponse(
+export function buildListVtxosResponse(
   mockState: E2eArkadeOperatorMockState,
   requestUrl: string,
 ) {
@@ -331,14 +343,9 @@ function buildListVtxosResponse(
 
   const scripts = parseScriptsFromRequestUrl(requestUrl)
   const vtxos = buildMockVtxosForScripts(mockState, scripts)
-  const total = vtxos.length
   return {
     vtxos,
-    page: {
-      current: 0,
-      next: total,
-      total,
-    },
+    page: arkadeOperatorMockTerminalIndexerPage(vtxos.length > 0),
   }
 }
 
@@ -368,8 +375,8 @@ export function handleE2eArkadeOperatorMockRequest(
   const upstreamPath = rawUrl.replace(/^\/api\/arkade\/operator\/signet/, '') || '/'
 
   if (upstreamPath.startsWith('/v1/info')) {
-    // Session open and sync refresh both hit /v1/info; reset indexed discovery only.
-    clearE2eArkadeOperatorMockDiscoveryState(mockState)
+    // Keep indexer payments across `/v1/info`. Sync always refreshes server info first;
+    // dashboard poll + rail-sync would otherwise drop already-applied incoming VTXOs.
     res.statusCode = 200
     res.setHeader('Content-Type', 'application/json')
     res.setHeader('Access-Control-Allow-Origin', '*')
