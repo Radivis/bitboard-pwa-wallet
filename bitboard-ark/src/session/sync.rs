@@ -118,7 +118,6 @@ impl ArkSession {
             )
             .await;
         self.wallet_db.set_offchain_vtxo_snapshot(snapshot.clone());
-        self.wallet_db.set_unilateral_exit_watches(Vec::new());
         let viability_warnings = self.reconcile_host_tx_finality().await?;
         let snapshot = self
             .wallet_db

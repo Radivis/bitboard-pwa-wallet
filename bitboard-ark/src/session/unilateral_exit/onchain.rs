@@ -6,9 +6,14 @@ use bitcoin::Txid;
 use crate::error::ArkResult;
 use crate::persistence::OffchainVtxoSnapshot;
 
-use super::watch::parse_branch_txids;
+fn parse_branch_txids(branch_txids: &[String]) -> Vec<Txid> {
+    branch_txids
+        .iter()
+        .filter_map(|txid| Txid::from_str(txid).ok())
+        .collect()
+}
 
-/// Record-derived Esplora probe inputs. Do not build leftover v10 watches for this path.
+/// Record-derived Esplora probe inputs.
 #[derive(Debug, Clone)]
 pub(crate) struct ExitOnChainProbe {
     pub vtxo_txid: String,

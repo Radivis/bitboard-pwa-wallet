@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use ark_client::Error;
@@ -15,6 +15,7 @@ use std::str::FromStr;
 ///
 /// Published 0.3.3 wallets used v3. [`BitboardArkPersistence::parse_import`] accepts versions
 /// 3–11: missing fields default. Leftover v4–v10 blobs deserialize as the current types.
+/// Extra `unilateral_exit_watches` keys are ignored (never published; not healed).
 pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 11;
 /// Oldest envelope version `parse_import` will load (published 0.3.3).
 pub const MIN_SUPPORTED_ARK_PERSISTENCE_IMPORT_VERSION: u32 = 3;
@@ -148,19 +149,6 @@ pub struct PendingExitDeductionRecord {
     /// amounts; Cancel and legacy waiting deductions omit this so spendable is restored.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub retain_until_spendable_drops: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct UnilateralExitWatchRecord {
-    pub vtxo_txid: String,
-    pub vout: u32,
-    pub amount_sats: u64,
-    pub registered_at: i64,
-    /// Tip txid from unroll (for Esplora branch checks).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub published_vtxo_txid: Option<String>,
-    #[serde(default)]
-    pub branch_txids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -413,9 +401,6 @@ pub struct WalletDbSnapshot {
     pub offchain_vtxo_snapshot: Option<OffchainVtxoSnapshot>,
     #[serde(default)]
     pub pending_exit_deductions: Vec<PendingExitDeductionRecord>,
-    /// Leftover v10 import only. Heal into `vtxo_exit_records` then clear; not a write path.
-    #[serde(default)]
-    pub unilateral_exit_watches: Vec<UnilateralExitWatchRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unilateral_exit_step_wait: Option<UnilateralExitStepWaitRecord>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -667,16 +652,6 @@ impl JsonPersistenceDb {
         });
     }
 
-    pub fn unilateral_exit_watches(&self) -> Vec<UnilateralExitWatchRecord> {
-        lock_persistence(&self.inner)
-            .unilateral_exit_watches
-            .clone()
-    }
-
-    pub fn set_unilateral_exit_watches(&self, watches: Vec<UnilateralExitWatchRecord>) {
-        lock_persistence(&self.inner).unilateral_exit_watches = watches;
-    }
-
     pub fn host_tx_observations(&self) -> BTreeMap<String, HostTxObservationRecord> {
         lock_persistence(&self.inner).host_tx_observations.clone()
     }
@@ -699,23 +674,6 @@ impl JsonPersistenceDb {
 
     pub fn set_vtxo_exit_records(&self, records: BTreeMap<String, VtxoExitRecord>) {
         lock_persistence(&self.inner).vtxo_exit_records = records;
-    }
-
-    pub fn remove_unilateral_exit_watches_for_outpoints(
-        &self,
-        outpoints: &HashSet<bitcoin::OutPoint>,
-    ) {
-        let mut inner = lock_persistence(&self.inner);
-        inner.unilateral_exit_watches.retain(|watch| {
-            let Ok(txid) = bitcoin::Txid::from_str(&watch.vtxo_txid) else {
-                return true;
-            };
-            let watch_outpoint = bitcoin::OutPoint {
-                txid,
-                vout: watch.vout,
-            };
-            !outpoints.contains(&watch_outpoint)
-        });
     }
 
     pub fn unilateral_exit_step_wait(&self) -> Option<UnilateralExitStepWaitRecord> {

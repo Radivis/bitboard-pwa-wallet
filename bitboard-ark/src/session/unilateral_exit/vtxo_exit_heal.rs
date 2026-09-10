@@ -1,10 +1,10 @@
-//! Import heal: leftover pending / v10 watches / snapshot flags → `vtxo_exit_records`.
+//! Import heal: leftover pending / snapshot flags → `vtxo_exit_records`.
 
 use std::collections::BTreeMap;
 
 use crate::persistence::{
     HostTxObservationRecord, OffchainVtxoSnapshot, PendingExitDeductionRecord, PendingExitKind,
-    UnilateralExitWatchRecord, VtxoExitPhase, VtxoExitRecord, vtxo_exit_record_key,
+    VtxoExitPhase, VtxoExitRecord, vtxo_exit_record_key,
 };
 use crate::session::unilateral_exit::progress::{leaf_reached_finality, step_reached_confirmation};
 
@@ -71,13 +71,13 @@ fn upsert_healed_record(
 
 /// Import heal for v9 and older blobs (empty `vtxo_exit_records`).
 ///
-/// Sources, in order of typical evidence: snapshot `is_unrolled && !is_spent`, exit watches, then
-/// leftover unilateral pending deductions. Phase comes from `is_unrolled` plus host observation
-/// when present; otherwise `tagged`. Existing rows are only raised, never replaced downward.
+/// Sources, in order of typical evidence: snapshot `is_unrolled && !is_spent`, then leftover
+/// unilateral pending deductions. Phase comes from `is_unrolled` plus host observation when
+/// present; otherwise `tagged`. Existing rows are only raised, never replaced downward.
+/// Leftover 0.3.4-dev `unilateral_exit_watches` JSON is ignored (never published).
 pub fn heal_vtxo_exit_records_from_legacy(
     snapshot: Option<&OffchainVtxoSnapshot>,
     pending: &[PendingExitDeductionRecord],
-    watches: &[UnilateralExitWatchRecord],
     observations: &BTreeMap<String, HostTxObservationRecord>,
     records: &mut BTreeMap<String, VtxoExitRecord>,
     now: i64,
@@ -97,31 +97,6 @@ pub fn heal_vtxo_exit_records_from_legacy(
                 );
             }
         }
-    }
-    for watch in watches {
-        let observation = observations.get(&watch.vtxo_txid);
-        let (is_unrolled, is_spent, amount_sats) = snapshot
-            .and_then(|snapshot| {
-                snapshot
-                    .virtual_tx_outpoints
-                    .iter()
-                    .find(|row| row.txid == watch.vtxo_txid && row.vout == watch.vout)
-                    .map(|row| (row.is_unrolled, row.is_spent, row.amount_sats))
-            })
-            .unwrap_or((false, false, watch.amount_sats));
-        if is_spent && !is_unrolled {
-            // Spent without unroll is a cooperative spend, not an exit — do not invent a record.
-            continue;
-        }
-        upsert_healed_record(
-            records,
-            &watch.vtxo_txid,
-            watch.vout,
-            &watch.vtxo_txid,
-            amount_sats,
-            phase_from_legacy(is_unrolled, is_spent, observation),
-            now,
-        );
     }
     for pending_record in pending {
         if pending_record.kind != PendingExitKind::Unilateral {

@@ -138,7 +138,7 @@ Bitboard keeps the **exit line amount stable** across steps 1→4. Net spendable
 
 Implementation touchpoints: `build_arkade_balance_dto` (WASM), `exit_balance_components` / `vtxo_exit_records` (persistence), `arkade-exit-balance-optimistic.ts` (React Query cache).
 
-**Spend-lock from `tagged` is current** (`ARK-EXIT-27`). Headline spendable drops at job start. Send / collab / renew / delegate refuse spend-locked outpoints (pipeline plus `funding_lost` while the coin is still in gross). Recover and signer-migrate are not spend-locked (`ARK-REC-08`): they exclude in-progress pipeline membership only, so a `funding_lost` coin remains recoverable or migratable if the operator still lists it. Unrolled+ records survive snapshot replace (`ARK-EXIT-12`); leftover v10 watches heal then are cleared.
+**Spend-lock from `tagged` is current** (`ARK-EXIT-27`). Headline spendable drops at job start. Send / collab / renew / delegate refuse spend-locked outpoints (pipeline plus `funding_lost` while the coin is still in gross). Recover and signer-migrate are not spend-locked (`ARK-REC-08`): they exclude in-progress pipeline membership only, so a `funding_lost` coin remains recoverable or migratable if the operator still lists it. Unrolled+ records survive snapshot replace (`ARK-EXIT-12`). Leftover 0.3.4-dev `unilateral_exit_watches` JSON is ignored.
 
 ### Post-unroll operator contract (ARK-EXIT-11)
 

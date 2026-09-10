@@ -3,7 +3,7 @@ use crate::constants::{UNILATERAL_EXIT_LEAF_CONFIRMATIONS, UNILATERAL_EXIT_STEP_
 use crate::exit_balance::is_unilateral_exit_in_progress_outpoint;
 use crate::persistence::{
     HostTxObservationRecord, PendingExitDeductionRecord, PendingExitKind,
-    UnilateralExitWatchRecord, insert_host_tx_observation,
+    insert_host_tx_observation,
 };
 use crate::session::unilateral_exit::test_fixtures::{
     snapshot_with_intermediate_tree_and_ark_leaf, txid,
@@ -22,7 +22,7 @@ fn record_phase(
 }
 
 #[test]
-fn heal_vtxo_exit_records_from_pending_watches_and_exiting() {
+fn heal_vtxo_exit_records_from_pending_and_exiting() {
     let (mut snapshot, tree, leaf, _) = snapshot_with_intermediate_tree_and_ark_leaf();
     snapshot.virtual_tx_outpoints[0].is_unrolled = true;
     let pending = vec![PendingExitDeductionRecord {
@@ -33,14 +33,6 @@ fn heal_vtxo_exit_records_from_pending_watches_and_exiting() {
         started_at: 1,
         baseline_offchain_spendable_sats: None,
         retain_until_spendable_drops: false,
-    }];
-    let watches = vec![UnilateralExitWatchRecord {
-        vtxo_txid: tree.to_string(),
-        vout: 1,
-        amount_sats: 3_000,
-        registered_at: 1,
-        published_vtxo_txid: None,
-        branch_txids: vec![],
     }];
     let mut observations = BTreeMap::new();
     observations.insert(
@@ -54,16 +46,14 @@ fn heal_vtxo_exit_records_from_pending_watches_and_exiting() {
         },
     );
     let mut records = BTreeMap::new();
-    heal_vtxo_exit_records_from_legacy(
-        Some(&snapshot),
-        &pending,
-        &watches,
-        &observations,
-        &mut records,
-        10,
-    );
+    heal_vtxo_exit_records_from_legacy(Some(&snapshot), &pending, &observations, &mut records, 10);
     assert_eq!(record_phase(&records, &tree, 0), VtxoExitPhase::Unrolled);
-    assert_eq!(record_phase(&records, &tree, 1), VtxoExitPhase::Tagged);
+    assert!(
+        records
+            .get(&vtxo_exit_record_key(&tree.to_string(), 1))
+            .is_none(),
+        "watch-only outpoints must not be healed into records"
+    );
     assert_eq!(record_phase(&records, &leaf, 0), VtxoExitPhase::HostRelayed);
 }
 
@@ -627,33 +617,6 @@ fn observation_deleted_when_all_vouts_exited_or_funding_lost() {
         &records,
         &leaf.to_string()
     ));
-}
-
-#[test]
-fn heal_v10_watches_into_records_then_clears_watches() {
-    let (mut snapshot, tree, leaf, _) = snapshot_with_intermediate_tree_and_ark_leaf();
-    snapshot.virtual_tx_outpoints[0].is_unrolled = true;
-    let watches = vec![UnilateralExitWatchRecord {
-        vtxo_txid: tree.to_string(),
-        vout: 0,
-        amount_sats: 2_000,
-        registered_at: 1,
-        published_vtxo_txid: Some(tree.to_string()),
-        branch_txids: vec![],
-    }];
-    let mut records = BTreeMap::new();
-    heal_vtxo_exit_records_from_legacy(
-        Some(&snapshot),
-        &[],
-        &watches,
-        &BTreeMap::new(),
-        &mut records,
-        10,
-    );
-    assert_eq!(record_phase(&records, &tree, 0), VtxoExitPhase::Unrolled);
-    // Heal reads leftover v10 watches into records; callers then clear watches so they
-    // cannot resurrect idle rows (`heal_vtxo_exit_records`).
-    let _ = leaf;
 }
 
 #[test]

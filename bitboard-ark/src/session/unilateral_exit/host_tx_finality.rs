@@ -305,12 +305,10 @@ impl ArkSession {
         };
         let mut observations = self.wallet_db.host_tx_observations();
         let pending = self.wallet_db.pending_exit_deductions();
-        let watches = self.wallet_db.unilateral_exit_watches();
         let mut vtxo_exit_records = self.wallet_db.vtxo_exit_records();
         crate::session::unilateral_exit::vtxo_exit::heal_vtxo_exit_records_from_legacy(
             Some(&snapshot),
             &pending,
-            &watches,
             &observations,
             &mut vtxo_exit_records,
             current_unix_timestamp(),
@@ -340,7 +338,6 @@ impl ArkSession {
         )?;
         self.wallet_db.set_offchain_vtxo_snapshot(snapshot);
         self.wallet_db.set_host_tx_observations(observations);
-        self.wallet_db.set_unilateral_exit_watches(Vec::new());
         self.wallet_db.set_vtxo_exit_records(vtxo_exit_records);
         self.reconcile_vtxo_exit_viability().await
     }

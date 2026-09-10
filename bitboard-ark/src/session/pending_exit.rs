@@ -5,8 +5,6 @@ use crate::error::{ArkResult, ArkWasmError};
 use crate::persistence::{JsonPersistenceDb, PendingExitDeductionRecord, PendingExitKind};
 
 use super::ArkSession;
-use super::unilateral_exit::watch::remove_unilateral_exit_watches_for_outpoints_in_wallet_db;
-
 use super::mappers::current_unix_timestamp;
 
 pub(crate) fn mark_vtxo_spent_in_snapshot(
@@ -130,7 +128,6 @@ impl ArkSession {
             !outpoint_set.contains(&record_outpoint)
         });
         self.wallet_db.set_pending_exit_deductions(pending);
-        remove_unilateral_exit_watches_for_outpoints_in_wallet_db(&self.wallet_db, &outpoint_set);
     }
 
     /// Local snapshot + pending cleanup after a successful on-chain completion broadcast.

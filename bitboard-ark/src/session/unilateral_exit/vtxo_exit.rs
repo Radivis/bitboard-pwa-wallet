@@ -531,23 +531,21 @@ pub fn pre_unroll_record_keys_on_same_branch(
 }
 
 impl crate::session::ArkSession {
-    /// Fill `vtxo_exit_records` from leftover pending / watches / exiting on open (v9 import).
+    /// Fill `vtxo_exit_records` from leftover pending / exiting on open (v9 import).
     pub fn heal_vtxo_exit_records(&self) {
         let wallet = self.wallet_db.snapshot();
         let mut records = wallet.vtxo_exit_records;
         heal_vtxo_exit_records_from_legacy(
             wallet.offchain_vtxo_snapshot.as_ref(),
             &wallet.pending_exit_deductions,
-            &wallet.unilateral_exit_watches,
             &wallet.host_tx_observations,
             &mut records,
             crate::session::mappers::current_unix_timestamp(),
         );
         self.wallet_db.set_vtxo_exit_records(records);
-        self.wallet_db.set_unilateral_exit_watches(Vec::new());
     }
 
-    /// Job start: tag the plan. Survival across snapshot replace is unrolled+ records, not watches.
+    /// Job start: tag the plan. Survival across snapshot replace is unrolled+ records.
     pub fn tag_unilateral_exit_plan(&self, selected_leaves: &[VirtualOutPoint]) -> ArkResult<()> {
         let snapshot = self
             .wallet_db
@@ -565,7 +563,7 @@ impl crate::session::ArkSession {
         Ok(())
     }
 
-    /// Abort: untag safe rows and drop watches for deleted keys so heal cannot resurrect them.
+    /// Abort: untag safe rows (tagged with no host observation).
     pub fn untag_unilateral_exit_plan_if_safe(
         &self,
         selected_leaves: &[VirtualOutPoint],
@@ -575,28 +573,13 @@ impl crate::session::ArkSession {
         };
         let mut records = self.wallet_db.vtxo_exit_records();
         let observations = self.wallet_db.host_tx_observations();
-        let keys_before: HashSet<String> = records.keys().cloned().collect();
         untag_unilateral_exit_plan_if_safe_in_records(
             &snapshot,
             selected_leaves,
             &mut records,
             &observations,
         )?;
-        let keys_after: HashSet<String> = records.keys().cloned().collect();
-        let removed: Vec<bitcoin::OutPoint> = keys_before
-            .difference(&keys_after)
-            .filter_map(|key| {
-                let (txid, vout) = parse_vtxo_exit_record_key(key)?;
-                exit_outpoint_key_from_str(&txid, vout)
-            })
-            .collect();
         self.wallet_db.set_vtxo_exit_records(records);
-        if !removed.is_empty() {
-            crate::session::unilateral_exit::watch::remove_unilateral_exit_watches_for_outpoints_in_wallet_db(
-                &self.wallet_db,
-                &removed.into_iter().collect(),
-            );
-        }
         Ok(())
     }
 

@@ -110,7 +110,7 @@ feature:
       - id: ARK-EXIT-11
         description: After each proceed step, WASM does not poll operator list_vtxos; local is_unrolled is stamped when Esplora reports 6 confirmations on the leaf or intermediate host virtual tx; sticky is_unrolled merge and unrolled+ record reconcile run during operator sync only. The unified stamper (ARK-EXIT-29) also runs on autonomous load, proceed, progress, list, and complete.
       - id: ARK-EXIT-12
-        description: Unrolled+ VTXO exit records survive full snapshot replace (Stage 3 fold of unilateral_exit_watches). Reinject missing snapshot rows from those records; never clear exiting state on full-list absence alone. Leftover v10 watches heal into records then are cleared. Cleared on completion, funding_lost, or reconcile evidence (operator spent or on-chain spent).
+        description: Unrolled+ VTXO exit records survive full snapshot replace. Reinject missing snapshot rows from those records; never clear exiting state on full-list absence alone. Leftover 0.3.4-dev `unilateral_exit_watches` JSON is ignored (never published; not healed into records). Cleared on completion, funding_lost, or reconcile evidence (operator spent or on-chain spent).
       - id: ARK-EXIT-13
         description: Unilateral exit control page at /wallet/arkade/unilateral-exit with responsive VTXO tree graph (React Flow + d3-dag), multi-select leaves, and Management entry link (Start unilateral exit / Control unilateral exit). Node detail shows per-outpoint VTXO exit phase from child actors (ARK-EXIT-32). Unspent host VTXOs stay on the graph after unroll (host tx 6 conf); the overlay swaps Lucide Coins for HandCoins. Leaf selection unlocks after branch-complete (idle host, leftover children stay). After the broadcast job releases, the page keeps a durable Branch complete status while leftover children wait to be claimed.
       - id: ARK-EXIT-14
@@ -190,7 +190,8 @@ feature:
           Unified Esplora 6-conf reconciler (B; shipped): any tree/ark virtual tx that hosts VTXOs
           (terminals included; commitment/checkpoint skipped) with ≥ UNILATERAL_EXIT_LEAF_CONFIRMATIONS
           stamps is_unrolled on every vout of that txid and advances VTXO exit records. Survival
-          across snapshot replace is those unrolled+ records (ARK-EXIT-12), not watches. Entry
+          across snapshot replace is those unrolled+ records (ARK-EXIT-12). Leftover
+          `unilateral_exit_watches` JSON is ignored, not imported. Entry
           points: Arkade load including autonomous, operator sync, proceed, progress,
           list_unilateral_exits_in_progress, complete. No dedicated 6-conf poll actor (not D).
           Materials heal: probe host txs of tagged VTXOs in materials even if the observation write

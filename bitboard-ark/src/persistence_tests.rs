@@ -782,6 +782,43 @@ fn parse_import_accepts_versions_3_through_11() {
 }
 
 #[test]
+fn parse_import_ignores_leftover_unilateral_exit_watches() {
+    let vtxo_txid = "aa".repeat(32);
+    let json = format!(
+        r#"{{
+            "version":10,
+            "engine":"ark-rs",
+            "ark_sdk_version":"0.9.3",
+            "operator_identity":{{"signer_pk_hex":"02abc","network":"signet"}},
+            "wallet_db":{{
+                "boarding_outputs":[],
+                "secret_keys_by_owner_pk_hex":{{}},
+                "unilateral_exit_watches":[{{
+                    "vtxo_txid":"{vtxo_txid}",
+                    "vout":0,
+                    "amount_sats":25000,
+                    "registered_at":1,
+                    "branch_txids":[]
+                }}]
+            }},
+            "swap_storage":{{}}
+        }}"#
+    );
+    let parsed = BitboardArkPersistence::parse_import(Some(&json));
+    assert_eq!(
+        parsed
+            .operator_identity
+            .as_ref()
+            .map(|identity| identity.signer_pk_hex.as_str()),
+        Some("02abc")
+    );
+    assert!(
+        parsed.wallet_db.vtxo_exit_records.is_empty(),
+        "leftover watches must not heal into vtxo_exit_records"
+    );
+}
+
+#[test]
 fn funding_lost_is_not_pipeline_and_is_start_list_excluded() {
     assert!(!VtxoExitPhase::FundingLost.is_pipeline());
     assert!(VtxoExitPhase::FundingLost.is_start_list_excluded());
