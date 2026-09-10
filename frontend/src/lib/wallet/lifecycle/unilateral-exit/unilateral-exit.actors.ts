@@ -48,6 +48,7 @@ import {
 } from '@/workers/arkade-api'
 import { fromPromise } from 'xstate'
 import { withEsploraFullScanRetries } from '@/lib/esplora/esplora-full-scan-retry'
+import { hydrateVtxoExitChildrenFromWasm } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-vtxo-hydrate'
 
 function assertCanRunUnilateralExit(scope: ArkadeWalletScope): void {
   if (!walletIsUnlockedOrSyncing(useWalletStore.getState().walletStatus)) {
@@ -138,18 +139,13 @@ async function listOrEmpty<T>(load: () => Promise<T[]>): Promise<T[]> {
 async function loadProgressFromWorker(
   sortedOutpoints: ArkadeVtxoOutpoint[],
 ): Promise<ArkadeUnilateralExitProgress> {
-  return withEsploraFullScanRetries(() =>
+  const progress = await withEsploraFullScanRetries(() =>
     getArkadeWorker().getUnilateralExitProgress({
       vtxoOutpoints: sortedOutpoints,
     }),
   )
-}
-
-async function hydrateVtxoExitChildrenAfterBEntry(): Promise<void> {
-  const { hydrateVtxoExitChildrenFromWasm } = await import(
-    '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime'
-  )
   await hydrateVtxoExitChildrenFromWasm()
+  return progress
 }
 
 export async function loadUnilateralExitProgressWithRetries(
@@ -160,7 +156,6 @@ export async function loadUnilateralExitProgressWithRetries(
   if (input.walletScope != null) {
     await writeUnilateralExitProgressQueryCache(input.walletScope, sortedOutpoints, progress)
   }
-  await hydrateVtxoExitChildrenAfterBEntry()
   return progress
 }
 
@@ -217,7 +212,7 @@ export const tagPlanActor = fromPromise<void, TagPlanActorInput>(async ({ input 
   }
 
   await invalidateUnilateralExitQueries(input.walletScope, sortedOutpoints)
-  await hydrateVtxoExitChildrenAfterBEntry()
+  await hydrateVtxoExitChildrenFromWasm()
 })
 
 export const proceedStepActor = fromPromise<

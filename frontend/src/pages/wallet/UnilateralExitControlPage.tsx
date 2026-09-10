@@ -69,10 +69,10 @@ import {
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-selectors'
 import { UNILATERAL_EXIT_MACHINE_STATE } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-types'
 import {
-  unilateralExitSnapshotIsInAnyState,
   unilateralExitSnapshotIsInState,
   unilateralExitSnapshotIsProceeding,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-snapshot'
+import { toastUnilateralExitSettleResult } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-settle'
 import { userFacingErrorMessage } from '@/lib/shared/utils'
 import { formatSatPerVbTwoDecimals } from '@/lib/esplora/esplora-fee-estimates'
 import {
@@ -80,7 +80,6 @@ import {
   disableAutomaticUnilateralExit,
   enableAutomaticUnilateralExit,
   hydrateUnilateralExitFromPersistence,
-  getUnilateralExitActorSnapshot,
   proceedManualUnilateralExitStep,
   setAutomaticUnilateralExitFeePreset,
   setAutomaticUnilateralExitMaxFeeRate,
@@ -94,32 +93,6 @@ import type { ArkadeVtxoOutpoint } from '@/workers/arkade-api'
 import { includesArkadeVtxoOutpoint } from '@/workers/arkade-api'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import { useUnilateralExitControlStore } from '@/stores/unilateralExitControlStore'
-
-function toastUnilateralExitSettleResult(
-  snapshot: ReturnType<typeof getUnilateralExitActorSnapshot>,
-  successMessage: string,
-): void {
-  if (unilateralExitSnapshotIsInState(snapshot, UNILATERAL_EXIT_MACHINE_STATE.error)) {
-    const message = userFacingErrorMessage(
-      snapshot.context.lastErrorMessage ?? 'Unroll step failed.',
-    )
-    toast.error(message)
-    return
-  }
-  if (unilateralExitSnapshotIsInState(snapshot, UNILATERAL_EXIT_MACHINE_STATE.terminated)) {
-    toast.error(snapshot.context.lastErrorMessage ?? 'Unilateral exit was terminated.')
-    return
-  }
-  if (
-    unilateralExitSnapshotIsInAnyState(snapshot, [
-      UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm,
-      UNILATERAL_EXIT_MACHINE_STATE.complete,
-      UNILATERAL_EXIT_MACHINE_STATE.paused,
-    ])
-  ) {
-    toast.success(successMessage)
-  }
-}
 
 const EMPTY_TOPOLOGY_OUTPOINTS: ArkadeVtxoOutpoint[] = []
 

@@ -40,16 +40,8 @@ export const vtxoExitMachineSetup = setup({
   },
   actions: {
     assignHydratePhase: assign({
-      phase: ({ event }) => {
-        if (event.type !== 'HYDRATE') {
-          return event.type === 'EXITED'
-            ? 'exited'
-            : event.type === 'FUNDING_LOST'
-              ? 'funding_lost'
-              : 'tagged'
-        }
-        return event.phase
-      },
+      phase: ({ context, event }) =>
+        event.type === 'HYDRATE' ? event.phase : context.phase,
     }),
     assignPhaseHostBroadcastAttempted: assign({
       phase: 'host_broadcast_attempted' as const,
@@ -60,7 +52,6 @@ export const vtxoExitMachineSetup = setup({
     assignPhaseCompleteReady: assign({ phase: 'complete_ready' as const }),
     assignPhaseExited: assign({ phase: 'exited' as const }),
     assignPhaseFundingLost: assign({ phase: 'funding_lost' as const }),
-    assignPhaseIdleUntag: assign({ phase: 'tagged' as const }),
   },
 })
 
@@ -124,7 +115,6 @@ export const vtxoExitMachine = vtxoExitMachineSetup.createMachine({
       on: {
         UNTAG: {
           target: 'idle',
-          actions: 'assignPhaseIdleUntag',
         },
       },
     },

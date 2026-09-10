@@ -399,6 +399,7 @@ export const unilateralExitMachineSetup = setup({
         feeRateSatPerVb: event.feeRateSatPerVb,
         pausedReason: null,
         lastErrorMessage: null,
+        lastSettleResult: null,
         progress: null,
       }
     }),
@@ -416,6 +417,7 @@ export const unilateralExitMachineSetup = setup({
         feeRateSatPerVb: null,
         pausedReason: null,
         lastErrorMessage: null,
+        lastSettleResult: null,
         progress: null,
       }
     }),
@@ -439,6 +441,7 @@ export const unilateralExitMachineSetup = setup({
         progress: keepExistingProgress ? context.progress : null,
         pausedReason: null,
         lastErrorMessage: null,
+        lastSettleResult: null,
         reconcileInProgressSats: event.reconcileInProgressSats ?? 0,
         reconcileInProgressOutpoints: event.reconcileInProgressOutpoints ?? [],
       }
@@ -471,6 +474,7 @@ export const unilateralExitMachineSetup = setup({
         feeRateSatPerVb: event.feeRateSatPerVb,
         pausedReason: null,
         lastErrorMessage: null,
+        lastSettleResult: null,
       }
     }),
     assignProgressFromFetch: assign(({ context, event }) => {
@@ -530,6 +534,7 @@ export const unilateralExitMachineSetup = setup({
     assignResume: assign({
       pausedReason: null,
       lastErrorMessage: null,
+      lastSettleResult: null,
       proceedRequested: ({ context }) => context.automationEnabled,
     }),
     resumeAutomationProceed: assign({
@@ -576,8 +581,32 @@ export const unilateralExitMachineSetup = setup({
       reconcileInProgressSats: 0,
       reconcileInProgressOutpoints: [],
     })),
+    assignSettleResultBranchComplete: assign({
+      lastSettleResult: 'branchComplete' as const,
+    }),
+    assignSettleResultWaitingConfirm: assign({
+      lastSettleResult: 'waitingConfirm' as const,
+    }),
+    assignSettleResultPaused: assign({ lastSettleResult: 'paused' as const }),
+    assignSettleResultError: assign({ lastSettleResult: 'error' as const }),
+    assignSettleResultTerminated: assign(({ event }) => {
+      assertEvent(event, 'xstate.done.actor.evaluateJobViability')
+      return {
+        lastSettleResult: 'terminated' as const,
+        lastErrorMessage:
+          event.output.detailMessage || 'Unilateral exit was terminated.',
+      }
+    }),
     notifyBranchComplete: () => {
       toast.success('Unilateral exit branch complete.')
+    },
+    notifyTerminated: ({ context }) => {
+      toast.error(
+        userFacingLifecycleErrorMessage(
+          context.lastErrorMessage,
+          'Unilateral exit was terminated.',
+        ),
+      )
     },
     syncVtxoExitChildren: enqueueActions(({ enqueue, event, self }) => {
       assertEvent(event, 'HYDRATE_VTXO_RECORDS')

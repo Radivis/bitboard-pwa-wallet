@@ -98,11 +98,10 @@ export function resolveVtxoExitPhaseForCopy(params: {
 
 /**
  * After the broadcast job releases to idle, leftover children in these phases mean the unroll DAG
- * already reached 1-conf (or later). `tagged` is omitted so an aborted start does not look complete.
+ * already reached 1-conf (or later). Pre–1-conf leftovers (`tagged`, `host_broadcast_attempted`,
+ * `host_relayed`) are omitted so abort-after-register does not look complete.
  */
 const BRANCH_COMPLETE_LEFTOVER_CHILD_PHASES: ReadonlySet<ArkadeVtxoExitPhase> = new Set([
-  'host_broadcast_attempted',
-  'host_relayed',
   'host_confirmed',
   'unrolled',
   'complete_ready',

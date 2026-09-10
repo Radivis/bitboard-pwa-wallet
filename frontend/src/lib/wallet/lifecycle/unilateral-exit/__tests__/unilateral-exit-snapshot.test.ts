@@ -15,6 +15,7 @@ function createSnapshot(
       automationEnabled: false,
       pausedReason: null,
       lastErrorMessage: null,
+      lastSettleResult: null,
       feeRateSatPerVb: null,
       proceedRequested: false,
       proceedTargetStepIndex: null,

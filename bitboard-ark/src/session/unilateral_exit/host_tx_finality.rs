@@ -125,11 +125,15 @@ fn never_seen_miss_is_eligible(record: &HostTxObservationRecord, now: i64) -> bo
     }
 }
 
+/// Count an Esplora miss toward the never-seen budget only when it is eligible.
+///
+/// `last_probed_at` is the last *eligible* miss, not every B poll. Frequent list/progress
+/// probes (15s UI) must not reset the 1-minute spacing (`ARK-EXIT-28`).
 fn apply_absent_probe(record: &mut HostTxObservationRecord, now: i64) -> bool {
     if never_seen_miss_is_eligible(record, now) {
         record.never_seen_probes = record.never_seen_probes.saturating_add(1);
+        record.last_probed_at = now;
     }
-    record.last_probed_at = now;
     record.never_seen_probes >= HOST_TX_NEVER_SEEN_MAX_ELIGIBLE_MISSES
 }
 
@@ -707,6 +711,67 @@ mod tests {
         .expect("reconcile");
         let row = observations.get(&leaf.to_string()).expect("kept");
         assert_eq!(row.never_seen_probes, 0);
+        assert_eq!(row.last_probed_at, 0);
+    }
+
+    #[test]
+    fn never_seen_sub_spacing_polls_do_not_reset_eligible_miss_clock() {
+        let (mut snapshot, _, leaf, _) = snapshot_with_intermediate_tree_and_ark_leaf();
+        let mut observations = BTreeMap::new();
+        observations.insert(
+            leaf.to_string(),
+            HostTxObservationRecord {
+                registered_at: 0,
+                relayed: false,
+                confirmations: 0,
+                never_seen_probes: 0,
+                last_probed_at: 0,
+            },
+        );
+        let pending = pending_for_leaf(&leaf);
+        let mut watches = Vec::new();
+        let first_miss_at = HOST_TX_NEVER_SEEN_FIRST_PROBE_AFTER_SECS;
+        reconcile_with_uniform_confs(
+            &mut snapshot,
+            &mut observations,
+            &pending,
+            &mut watches,
+            first_miss_at,
+            0,
+            false,
+        );
+        let row = observations.get(&leaf.to_string()).expect("kept");
+        assert_eq!(row.never_seen_probes, 1);
+        assert_eq!(row.last_probed_at, first_miss_at);
+
+        for offset in [15, 30, 45] {
+            reconcile_with_uniform_confs(
+                &mut snapshot,
+                &mut observations,
+                &pending,
+                &mut watches,
+                first_miss_at + offset,
+                0,
+                false,
+            );
+            let row = observations.get(&leaf.to_string()).expect("kept");
+            assert_eq!(row.never_seen_probes, 1);
+            assert_eq!(row.last_probed_at, first_miss_at);
+        }
+
+        let second_miss_at = first_miss_at + HOST_TX_NEVER_SEEN_PROBE_SPACING_SECS;
+        reconcile_with_uniform_confs(
+            &mut snapshot,
+            &mut observations,
+            &pending,
+            &mut watches,
+            second_miss_at,
+            0,
+            false,
+        );
+        let row = observations.get(&leaf.to_string()).expect("kept");
+        assert_eq!(row.never_seen_probes, 2);
+        assert_eq!(row.last_probed_at, second_miss_at);
     }
 
     #[test]

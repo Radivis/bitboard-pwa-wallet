@@ -2,12 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const getUnilateralExitProgress = vi.hoisted(() => vi.fn())
 const evaluateUnilateralExitJobViability = vi.hoisted(() => vi.fn())
+const listVtxoExitRecords = vi.hoisted(() => vi.fn(async () => []))
 
 vi.mock('@/workers/arkade-factory', () => ({
   getArkadeWorker: () => ({
     getUnilateralExitProgress,
     evaluateUnilateralExitJobViability,
-    listVtxoExitRecords: vi.fn(async () => []),
+    listVtxoExitRecords,
   }),
 }))
 
@@ -20,6 +21,10 @@ import {
   evaluateUnilateralExitJobViabilityWithRetries,
   loadUnilateralExitProgressWithRetries,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.actors'
+import {
+  registerVtxoExitHydrateSender,
+  resetVtxoExitHydrateSenderForTests,
+} from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-vtxo-hydrate'
 
 const walletScope = {
   walletId: 1,
@@ -53,10 +58,13 @@ describe('unilateral exit Esplora fetch retries', () => {
     vi.useFakeTimers()
     getUnilateralExitProgress.mockReset()
     evaluateUnilateralExitJobViability.mockReset()
+    listVtxoExitRecords.mockReset()
+    listVtxoExitRecords.mockResolvedValue([])
   })
 
   afterEach(() => {
     vi.useRealTimers()
+    resetVtxoExitHydrateSenderForTests()
   })
 
   it('loadUnilateralExitProgressWithRetries retries Failed to fetch then succeeds', async () => {
@@ -84,5 +92,31 @@ describe('unilateral exit Esplora fetch retries', () => {
     await vi.advanceTimersByTimeAsync(5000)
     await expect(resultPromise).resolves.toEqual(viabilityOk)
     expect(evaluateUnilateralExitJobViability).toHaveBeenCalledTimes(2)
+  })
+
+  it('progress fetch hydrates vtxo exit records after wasm write', async () => {
+    const send = vi.fn()
+    const records = [
+      {
+        txid: leaf.txid,
+        vout: leaf.vout,
+        amountSats: 1,
+        phase: 'tagged' as const,
+        hostTxid: leaf.txid,
+        taggedAt: 1,
+      },
+    ]
+    getUnilateralExitProgress.mockResolvedValue(idleProgress)
+    listVtxoExitRecords.mockResolvedValue(records)
+    registerVtxoExitHydrateSender(send)
+
+    await loadUnilateralExitProgressWithRetries({
+      walletScope,
+      outpoints: [leaf],
+    })
+
+    expect(getUnilateralExitProgress).toHaveBeenCalledTimes(1)
+    expect(listVtxoExitRecords).toHaveBeenCalledTimes(1)
+    expect(send).toHaveBeenCalledWith(records)
   })
 })

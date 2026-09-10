@@ -7,6 +7,13 @@ import {
 import type { ArkadeUnilateralExitProgress, ArkadeUnilateralExitJobViability, ArkadeVtxoOutpoint, ArkadeVtxoExitRecordDto } from '@/workers/arkade-api'
 import type { DoneActorEvent, ErrorActorEvent } from 'xstate'
 
+export type UnilateralExitSettleResult =
+  | 'branchComplete'
+  | 'waitingConfirm'
+  | 'paused'
+  | 'error'
+  | 'terminated'
+
 export type UnilateralExitMachineContext = {
   walletScope: ArkadeWalletScope | null
   jobOutpoints: ArkadeVtxoOutpoint[]
@@ -14,6 +21,7 @@ export type UnilateralExitMachineContext = {
   automationEnabled: boolean
   pausedReason: UnilateralExitAutomationPausedReason | null
   lastErrorMessage: string | null
+  lastSettleResult: UnilateralExitSettleResult | null
   feeRateSatPerVb: number | null
   proceedRequested: boolean
   proceedTargetStepIndex: number | null
@@ -143,6 +151,7 @@ export function createInitialUnilateralExitContext(
     automationEnabled: false,
     pausedReason: null,
     lastErrorMessage: null,
+    lastSettleResult: null,
     feeRateSatPerVb: null,
     proceedRequested: false,
     proceedTargetStepIndex: null,

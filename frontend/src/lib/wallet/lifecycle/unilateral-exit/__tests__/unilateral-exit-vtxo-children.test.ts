@@ -191,6 +191,24 @@ describe('unilateralExitMachine VTXO children', () => {
     expect(vtxoChildValue(testActor, leftoverLeaf)).toBe('unrolled')
   })
 
+  it('untag idle child is stopped when dump omits the record', () => {
+    const { testActor } = createTestActor()
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'HYDRATE_VTXO_RECORDS',
+      records: [record(leftoverLeaf, 'tagged')],
+    })
+    const childId = vtxoExitChildId(leftoverLeaf.txid, leftoverLeaf.vout)
+    const child = testActor.getSnapshot().children[childId]
+    expect(child).toBeDefined()
+    child.send({ type: 'UNTAG' })
+    expect(vtxoChildValue(testActor, leftoverLeaf)).toBe('idle')
+    expect(vtxoChildIds(testActor)).toContain(childId)
+
+    testActor.send({ type: 'HYDRATE_VTXO_RECORDS', records: [] })
+    expect(vtxoChildIds(testActor)).not.toContain(childId)
+  })
+
   it('abort_does_not_stop_host_broadcast_attempted_children', async () => {
     const { testActor } = createTestActor()
     testActor.send({ type: 'WALLET_CONFIGURED', walletScope })

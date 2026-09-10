@@ -97,6 +97,7 @@ export function unilateralExitActorSnapshotEqual(
     previousContext.automationEnabled === nextContext.automationEnabled &&
     previousContext.pausedReason === nextContext.pausedReason &&
     previousContext.lastErrorMessage === nextContext.lastErrorMessage &&
+    previousContext.lastSettleResult === nextContext.lastSettleResult &&
     previousContext.feeRateSatPerVb === nextContext.feeRateSatPerVb &&
     previousContext.proceedRequested === nextContext.proceedRequested &&
     previousContext.proceedTargetStepIndex === nextContext.proceedTargetStepIndex &&

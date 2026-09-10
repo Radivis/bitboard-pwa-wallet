@@ -38,7 +38,6 @@ import { shouldSkipRailLifecycleResetForLockPhase } from '@/lib/wallet/lifecycle
 import { UNILATERAL_EXIT_AUTOMATION_WAIT_POLL_MS_REGTEST } from '@/lib/arkade/arkade-query-timings'
 import type { ArkadeVtxoOutpoint } from '@/workers/arkade-api'
 import { arkadeVtxoOutpointListsEqual, sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
-import { getArkadeWorker } from '@/workers/arkade-factory'
 import { createActor, waitFor } from 'xstate'
 import type { AnyActorRef, Subscription } from 'xstate'
 import {
@@ -52,6 +51,16 @@ import {
   vtxoExitPhaseFromMachineState,
   vtxoExitSnapshotState,
 } from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit.machine'
+import {
+  hydrateVtxoExitChildrenFromWasm,
+  registerVtxoExitHydrateSender,
+} from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-vtxo-hydrate'
+import {
+  settleOutcomeFromSnapshot,
+  type UnilateralExitSettleOutcome,
+} from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-settle'
+
+export { hydrateVtxoExitChildrenFromWasm }
 
 type ActorListener = (snapshot: UnilateralExitActorSnapshot) => void
 
@@ -140,7 +149,7 @@ export function getVtxoExitChildSnapshotMap(): VtxoExitChildSnapshotMap {
     const childSnapshot = child.getSnapshot()
     const machineState = vtxoExitSnapshotState(childSnapshot.value)
     const context = childSnapshot.context as VtxoExitMachineContext
-    const phase = context.phase ?? vtxoExitPhaseFromMachineState(machineState)
+    const phase = vtxoExitPhaseFromMachineState(machineState)
     if (phase == null) {
       continue
     }
@@ -222,18 +231,17 @@ export function subscribeVtxoExitChildren(listener: () => void): () => void {
   }
 }
 
-export async function hydrateVtxoExitChildrenFromWasm(): Promise<void> {
-  try {
-    const records = await getArkadeWorker().listVtxoExitRecords()
-    sendUnilateralExitEvent({ type: 'HYDRATE_VTXO_RECORDS', records })
-  } catch {
-    // Dump is best-effort; the next B-entry poll retries.
-  }
-}
-
 export function sendUnilateralExitEvent(event: UnilateralExitMachineEvent): void {
   actor.send(event)
 }
+
+function bindVtxoExitHydrateSender(): void {
+  registerVtxoExitHydrateSender((records) => {
+    sendUnilateralExitEvent({ type: 'HYDRATE_VTXO_RECORDS', records })
+  })
+}
+
+bindVtxoExitHydrateSender()
 
 export function resetUnilateralExitForArkadeSessionTeardown(): void {
   resetPendingBatchIntentSessionTracking()
@@ -398,10 +406,9 @@ export function startManualUnilateralExit(
 
 export async function startManualUnilateralExitAsync(
   params: UnilateralExitStartParams,
-): Promise<UnilateralExitActorSnapshot> {
+): Promise<UnilateralExitSettleOutcome> {
   startManualUnilateralExit(params)
-  await waitForUnilateralExitActorSettled()
-  return getUnilateralExitActorSnapshot()
+  return waitForUnilateralExitActorSettled()
 }
 
 export function startAutomaticUnilateralExit(params: {
@@ -419,21 +426,19 @@ export function startAutomaticUnilateralExit(params: {
 export async function startAutomaticUnilateralExitAsync(params: {
   walletScope: ArkadeWalletScope
   outpoints: ArkadeVtxoOutpoint[]
-}): Promise<UnilateralExitActorSnapshot> {
+}): Promise<UnilateralExitSettleOutcome> {
   startAutomaticUnilateralExit(params)
-  await waitForUnilateralExitActorSettled()
-  return getUnilateralExitActorSnapshot()
+  return waitForUnilateralExitActorSettled()
 }
 
 export async function proceedManualUnilateralExitStep(
   params: UnilateralExitProceedStepParams,
-): Promise<UnilateralExitActorSnapshot> {
+): Promise<UnilateralExitSettleOutcome> {
   sendUnilateralExitEvent({
     type: 'PROCEED_MANUAL',
     feeRateSatPerVb: params.feeRateSatPerVb,
   })
-  await waitForUnilateralExitActorSettled()
-  return getUnilateralExitActorSnapshot()
+  return waitForUnilateralExitActorSettled()
 }
 
 export function clearUnilateralExitJob(): void {
@@ -524,7 +529,7 @@ const UNILATERAL_EXIT_ACTOR_SETTLE_TIMEOUT_MS = 120_000
 
 export async function waitForUnilateralExitActorSettled(
   timeoutMs = UNILATERAL_EXIT_ACTOR_SETTLE_TIMEOUT_MS,
-): Promise<void> {
+): Promise<UnilateralExitSettleOutcome> {
   try {
     await waitFor(
       actor,
@@ -535,6 +540,7 @@ export async function waitForUnilateralExitActorSettled(
   } catch {
     throw new Error('Unilateral exit actor did not settle in time')
   }
+  return settleOutcomeFromSnapshot(getUnilateralExitActorSnapshot())
 }
 
 export function resetUnilateralExitActorForTests(): void {
@@ -543,6 +549,7 @@ export function resetUnilateralExitActorForTests(): void {
   lastPausedReason = null
   useUnilateralExitControlStore.getState().reset()
   actor = createUnilateralExitActor()
+  bindVtxoExitHydrateSender()
   startActorSubscription()
 }
 

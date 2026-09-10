@@ -402,6 +402,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
       },
     },
     waitingConfirm: {
+      entry: 'assignSettleResultWaitingConfirm',
       after: {
         pollDelay: {
           target: 'checkingProgress',
@@ -457,6 +458,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
       },
     },
     paused: {
+      entry: 'assignSettleResultPaused',
       on: {
         ABORT_ORCHESTRATION: abortOrchestrationTransition,
         RESUME: {
@@ -488,6 +490,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
       entry: [
         'invalidateUnilateralExitQueriesOnTerminate',
         'clearPersistedJob',
+        'assignSettleResultBranchComplete',
         'notifyBranchComplete',
       ],
       always: {
@@ -500,11 +503,13 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
         'persistUnilateralExitFailureFromViability',
         'invalidateUnilateralExitQueriesOnTerminate',
         'clearPersistedJob',
-        'clearJobActorContext',
+        'assignSettleResultTerminated',
+        'notifyTerminated',
         'clearTerminatedProceedRequested',
       ],
       always: {
         target: 'idle',
+        actions: 'clearJobActorContext',
       },
     },
     aborted: {
@@ -535,6 +540,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
       },
     },
     error: {
+      entry: 'assignSettleResultError',
       on: {
         ABORT_ORCHESTRATION: abortOrchestrationTransition,
         CLEAR_JOB: {

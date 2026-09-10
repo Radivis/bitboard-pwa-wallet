@@ -53,7 +53,9 @@ describe('vtxoExitPhaseCopyFromPhase', () => {
     )
     expect(formatVtxoExitPhaseCopy(VTXO_EXIT_PHASE_COPY.ready)).toBe('ready to complete')
   })
+})
 
+describe('branch-complete leftover children', () => {
   it('shows durable branch-complete status for leftover children after the job goes idle', () => {
     expect(hasLeftoverBranchCompleteVtxoChildren({})).toBe(false)
     expect(
@@ -88,5 +90,26 @@ describe('vtxoExitPhaseCopyFromPhase', () => {
         vtxoExitSnapshots: { 'aa:0': leftoverChild('unrolled') },
       }),
     ).toBe(true)
+  })
+
+  it('pre_1conf leftover children are not branch-complete', () => {
+    const preOneConfPhases: ArkadeVtxoExitPhase[] = [
+      'host_broadcast_attempted',
+      'host_relayed',
+    ]
+    for (const phase of preOneConfPhases) {
+      expect(
+        hasLeftoverBranchCompleteVtxoChildren({
+          'aa:0': leftoverChild(phase),
+        }),
+      ).toBe(false)
+      expect(
+        shouldShowUnilateralExitBranchCompleteStatus({
+          jobActive: false,
+          hasPersistedFailure: false,
+          vtxoExitSnapshots: { 'aa:0': leftoverChild(phase) },
+        }),
+      ).toBe(false)
+    }
   })
 })

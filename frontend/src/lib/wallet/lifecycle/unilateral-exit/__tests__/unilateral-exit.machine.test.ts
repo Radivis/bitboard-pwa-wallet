@@ -241,6 +241,7 @@ describe('unilateralExitMachine', () => {
     expect(ensureBroadcast).toHaveBeenCalledTimes(1)
     expect(persistActiveUnilateralExitJob).toHaveBeenCalled()
     expect(testActor.getSnapshot().context.progress?.currentStepTxRelayed).toBe(true)
+    expect(testActor.getSnapshot().context.lastSettleResult).toBe('waitingConfirm')
   })
 
   it('manual proceed uses proceeding then ensuring broadcast when step is already relayed', async () => {
@@ -473,6 +474,7 @@ describe('unilateralExitMachine', () => {
     expect(testActor.getSnapshot().context.lastErrorMessage).toBe(
       'autonomous_exit_materials_missing',
     )
+    expect(testActor.getSnapshot().context.lastSettleResult).toBe('error')
   })
 
   it('tag plan Failed to fetch stores a short explorer-unreachable message', async () => {
@@ -916,6 +918,7 @@ describe('unilateralExitMachine', () => {
     })
     await waitFor(testActor, (state) => state.matches('paused'))
     expect(testActor.getSnapshot().context.pausedReason).toBe('feeCapExceeded')
+    expect(testActor.getSnapshot().context.lastSettleResult).toBe('paused')
   })
 
   it('automation bumper insufficient pauses', async () => {
@@ -1315,6 +1318,7 @@ describe('unilateralExitMachine', () => {
       branchCompleteReleasedToIdle(state, fetchProgress),
     )
     expect(clearPersistedUnilateralExitJob).toHaveBeenCalled()
+    expect(testActor.getSnapshot().context.lastSettleResult).toBe('branchComplete')
     const fetchCountAfterRelease = fetchProgress.mock.calls.length
     testActor.send({ type: 'POLL_TICK' })
     expect(testActor.getSnapshot().matches('idle')).toBe(true)
@@ -1378,6 +1382,7 @@ describe('unilateralExitMachine', () => {
     expect(persistUnilateralExitFailureRecord).toHaveBeenCalled()
     expect(clearPersistedUnilateralExitJob).toHaveBeenCalledWith(walletScope)
     expect(testActor.getSnapshot().context.jobOutpoints).toEqual([])
+    expect(testActor.getSnapshot().context.lastSettleResult).toBe('terminated')
   })
 
   it('terminates job immediately when viability reports branch funding lost', async () => {
