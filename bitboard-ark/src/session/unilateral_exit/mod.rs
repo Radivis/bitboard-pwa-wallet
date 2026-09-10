@@ -8,6 +8,8 @@ pub(crate) mod plan;
 pub(crate) mod proceed;
 pub(crate) mod progress;
 pub(crate) mod snapshot_ops;
+#[cfg(test)]
+pub(crate) mod test_fixtures;
 pub(crate) mod topology;
 pub(crate) mod viability;
 pub(crate) mod vtxo_exit;

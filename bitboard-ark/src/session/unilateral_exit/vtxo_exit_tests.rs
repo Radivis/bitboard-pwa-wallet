@@ -2,87 +2,13 @@ use super::*;
 use crate::constants::{UNILATERAL_EXIT_LEAF_CONFIRMATIONS, UNILATERAL_EXIT_STEP_CONFIRMATIONS};
 use crate::exit_balance::is_unilateral_exit_in_progress_outpoint;
 use crate::persistence::{
-    HostTxObservationRecord, OffchainVtxoSnapshot, PendingExitDeductionRecord, PendingExitKind,
-    UnilateralExitMaterialsRecord, UnilateralExitWatchRecord, VirtualTxOutPointRecord,
-    insert_host_tx_observation,
+    HostTxObservationRecord, PendingExitDeductionRecord, PendingExitKind,
+    UnilateralExitWatchRecord, insert_host_tx_observation,
 };
-use crate::unilateral_exit_materials::{store_materials_for_leaf_tx, vtxo_chains_to_json};
-use ark_core::server::{ChainedTxType, VtxoChain, VtxoChains};
-use bitcoin::hashes::Hash;
-
-fn txid(byte: u8) -> Txid {
-    Txid::from_byte_array([byte; 32])
-}
-
-fn chain(txid: Txid, tx_type: ChainedTxType, spends: Vec<Txid>) -> VtxoChain {
-    VtxoChain {
-        txid,
-        tx_type,
-        spends,
-        expires_at: 0,
-    }
-}
-
-fn vtxo_record(
-    host: &Txid,
-    vout: u32,
-    amount_sats: u64,
-    is_unrolled: bool,
-) -> VirtualTxOutPointRecord {
-    VirtualTxOutPointRecord {
-        txid: host.to_string(),
-        vout,
-        created_at: 1,
-        expires_at: 2,
-        amount_sats,
-        script_hex: String::new(),
-        is_preconfirmed: false,
-        is_swept: false,
-        is_unrolled,
-        is_spent: false,
-        spent_by: None,
-        commitment_txids: vec![],
-        settled_by: None,
-        ark_txid: None,
-        assets: vec![],
-        server_pk_hex: None,
-    }
-}
-
-fn snapshot_with_intermediate_tree_and_ark_leaf() -> (OffchainVtxoSnapshot, Txid, Txid, Txid) {
-    let commitment = txid(0x01);
-    let tree = txid(0x02);
-    let leaf = txid(0x03);
-    let chains = VtxoChains {
-        inner: vec![
-            chain(commitment, ChainedTxType::Commitment, vec![]),
-            chain(tree, ChainedTxType::Tree, vec![commitment]),
-            chain(leaf, ChainedTxType::Ark, vec![tree]),
-        ],
-    };
-    let chain_json = vtxo_chains_to_json(&chains).expect("encode");
-    let mut snapshot = OffchainVtxoSnapshot {
-        synced_at: 1,
-        dust_sats: 330,
-        virtual_tx_outpoints: vec![
-            vtxo_record(&tree, 0, 2_000, false),
-            vtxo_record(&tree, 1, 3_000, false),
-            vtxo_record(&leaf, 0, 1_000, false),
-            vtxo_record(&commitment, 0, 9_000, false),
-        ],
-        unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
-    };
-    store_materials_for_leaf_tx(
-        &mut snapshot,
-        &leaf.to_string(),
-        UnilateralExitMaterialsRecord {
-            cached_at: 1,
-            chain_json,
-            virtual_psbts: vec![],
-        },
-    );
-    (snapshot, tree, leaf, commitment)
-}
+use crate::session::unilateral_exit::test_fixtures::{
+    snapshot_with_intermediate_tree_and_ark_leaf, txid,
+};
+use bitcoin::Txid;
 
 fn record_phase(
     records: &BTreeMap<String, VtxoExitRecord>,

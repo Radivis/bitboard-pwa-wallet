@@ -16,8 +16,6 @@
 use std::collections::{BTreeMap, HashSet};
 
 use bitcoin::OutPoint;
-#[cfg(test)]
-use bitcoin::Txid;
 
 use crate::error::{ArkResult, ArkWasmError};
 use crate::exit_balance::{UnilateralExitOutpointKey, exit_outpoint_key_from_str};
