@@ -128,7 +128,7 @@ Optimistic UI (`arkade-exit-balance-optimistic.ts`) at START/tag bumps `unilater
 
 **Handoff between tagged spend-lock and exiting sub-bucket**
 
-1. Job start → `tag_unilateral_exit_plan` upserts records at `tagged`; spend-lock applies immediately (send / collab / recover / renew refuse those outpoints).
+1. Job start → `tag_unilateral_exit_plan` upserts records at `tagged`; spend-lock applies immediately (send / collab / renew / delegate refuse those outpoints). Recover and signer-migrate are not spend-locked; they still skip in-progress pipeline outpoints so they do not race an active unroll.
 2. Proceed registers a host-tx observation → records on that host advance to `host_broadcast_attempted`.
 3. Unified B advances `host_relayed` / `host_confirmed` / `unrolled` (`is_unrolled` at 6 confs). Gross spendable drops **before** operator sync realigns the snapshot.
 4. `exit_balance_components` keeps the pipeline line from records and subtracts from net spendable **only** the unilateral-exit-in-progress amounts still in gross. After step 3, do not subtract the line again.
@@ -138,7 +138,7 @@ Bitboard keeps the **exit line amount stable** across steps 1→4. Net spendable
 
 Implementation touchpoints: `build_arkade_balance_dto` (WASM), `exit_balance_components` / `vtxo_exit_records` (persistence), `arkade-exit-balance-optimistic.ts` (React Query cache).
 
-**Spend-lock from `tagged` is current** (`ARK-EXIT-27` / `ARK-REC-08`). Headline spendable drops at job start. Recover / renew / send / collab refuse tagged-or-later outpoints, including `funding_lost` while the coin is still in gross. Unrolled+ records survive snapshot replace (`ARK-EXIT-12`); leftover v10 watches heal then are cleared.
+**Spend-lock from `tagged` is current** (`ARK-EXIT-27`). Headline spendable drops at job start. Send / collab / renew / delegate refuse spend-locked outpoints (pipeline plus `funding_lost` while the coin is still in gross). Recover and signer-migrate are not spend-locked (`ARK-REC-08`): they exclude in-progress pipeline membership only, so a `funding_lost` coin remains recoverable or migratable if the operator still lists it. Unrolled+ records survive snapshot replace (`ARK-EXIT-12`); leftover v10 watches heal then are cleared.
 
 ### Post-unroll operator contract (ARK-EXIT-11)
 
@@ -153,15 +153,15 @@ Residual edge cases where ASP reports `is_swept` without `is_unrolled` during an
 
 Vendored **ark-core** classifies `is_unrolled && !is_spent` VTXOs into the **exiting** sub-bucket before recoverable (aligned with arkd `recoverable_only`, which excludes `Unrolled`). `is_recoverable()` also returns false when `is_unrolled`.
 
-During the **pre-unroll** window, tagged-or-later VTXO exit records exist while the VTXO is still in `confirmed`. Bitboard excludes those outpoints from recoverable and expiry UX via `ARK-REC-08`.
+During the **pre-unroll** window, tagged-or-later VTXO exit records exist while the VTXO is still in `confirmed`. Bitboard excludes **pipeline** outpoints from recover so recover does not race an active unroll. Expiry / renew use the **spend-lock** set (`ARK-REC-08` / `ARK-EXIT-27`).
 
-| Surface | Implementation |
-|---------|----------------|
-| Recoverable settleable / pending-operator-sweep counts and **Recover now** | `recoverable_vtxo_buckets_from_list` — tagged-or-later records |
-| Expiring-soon count and **Renew VTXOs now** | `expiring_outpoints` |
-| Earliest expiry indicator | `vtxo_expiry_status` (`earliest_expires_at` scan) |
+| Surface | Implementation | Exclude set |
+|---------|----------------|-------------|
+| Recoverable settleable / pending-operator-sweep counts, **Recover now**, signer-migrate, pending-recovery-due-to-expired-signer | `recoverable_vtxo_buckets_from_list` / `pipeline_outpoints()` | Pipeline (`tagged`…`complete_ready`) only — not `funding_lost` |
+| Expiring-soon count and **Renew VTXOs now** | `expiring_outpoints` | Spend-lock (pipeline ∪ `funding_lost`) |
+| Earliest expiry indicator | `vtxo_expiry_status` (`earliest_expires_at` scan) | Spend-lock (pipeline ∪ `funding_lost`) |
 
-Contract `ARK-REC-08`. Exclusion is spend-locked records: pipeline (`tagged`…`complete_ready`) plus `funding_lost` (`ARK-EXIT-27`). Not pipeline membership alone.
+Contract `ARK-REC-08`. Recover / migrate are not spend-locked. Renew / expiry / send / collab / delegate are.
 
 ### Unilateral exit completion coin-select (vendor fork)
 

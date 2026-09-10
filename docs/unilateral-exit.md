@@ -25,6 +25,8 @@ Stage 4 VTXO child machines (`ARK-EXIT-32`) are **shipped**: the job actor is a 
 | VTXO exit | `(txid, vout)` | Pipeline membership, spend-lock, complete-ready, funding lost |
 | Host-tx observation | virtual `txid` | Broadcast attempted, relayed, confirmations, Esplora hot set |
 
+Spend-lock (send / collab / renew / delegate) is pipeline ∪ `funding_lost`. Recover and signer-migrate are not spend-locked; they exclude in-progress pipeline membership only so they do not race an active unroll (`ARK-EXIT-27` / `ARK-REC-08`).
+
 **Three parallel clocks** (do not merge): job DAG cursor (next unpublished step); host-tx confirmations (0 / relayed / 1-conf / 6-conf via WASM Esplora reconciler B); protocol timelock (`can_be_claimed_unilaterally_by_owner`). UI copy must distinguish waiting for host transaction broadcast, waiting for the first confirmation, waiting for 6 confirmations, and waiting for timelock.
 
 **B entry points** (no dedicated 6-conf poll actor): Arkade load including autonomous, operator sync, proceed, progress, `list_unilateral_exits_in_progress`, complete. Stamp every vout on a `tree`/`ark` host at 6 confs; skip `commitment`/`checkpoint`.

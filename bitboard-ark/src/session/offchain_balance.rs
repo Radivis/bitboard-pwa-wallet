@@ -24,8 +24,8 @@ impl ArkSession {
 
         if let Ok(live) = self.client.offchain_balance().await {
             let mut buckets = OffchainBalanceBuckets::from_live(&live);
-            let spend_locked = self.spend_locked_outpoints();
-            if !spend_locked.is_empty()
+            let exclude_pipeline = self.pipeline_outpoints();
+            if !exclude_pipeline.is_empty()
                 && let Ok((vtxo_list, script_map)) = self.client.list_vtxos().await
                 && let Ok(server_info) = self.client.server_info()
             {
@@ -35,7 +35,7 @@ impl ArkSession {
                         &server_info,
                         current_unix_timestamp(),
                         |script| script_map.get(script).map(|vtxo| vtxo.server_pk()),
-                        &spend_locked,
+                        &exclude_pipeline,
                     );
             }
             return Ok(buckets);

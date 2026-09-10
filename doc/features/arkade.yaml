@@ -78,11 +78,14 @@ feature:
         description: VTXOs in unilateral exit do not contribute to pendingRecoveryDueToExpiredSignerSats even when they would otherwise qualify for pending recovery due to expired signer
       - id: ARK-REC-08
         description: >-
-          Spend-locked VTXO exit records (pipeline tagged through complete_ready, plus funding_lost)
-          do not contribute to recoverableSettleableVtxoCount, recoverablePendingOperatorSweepVtxoCount,
-          expiring-soon count, or earliest-expiry indicator; post-unroll exiting VTXOs are excluded by
-          vendored ark-core bucketing. Exclusion is record-derived (not pending-deduction-only) and uses
-          locks_collaborative_spend, not pipeline membership alone.
+          Pipeline VTXO exit records (tagged through complete_ready, not funding_lost) do not
+          contribute to recoverableSettleableVtxoCount, recoverablePendingOperatorSweepVtxoCount,
+          or pendingRecoveryDueToExpiredSignerSats (ARK-REC-07). Recover and signer-migrate use
+          that pipeline exclude set only — they are not spend-locked (ARK-EXIT-27); funding_lost
+          remains recoverable and migratable if the operator still lists the coin. Post-unroll
+          exiting VTXOs are excluded by vendored ark-core bucketing. Expiring-soon count,
+          earliest-expiry indicator, and Renew exclude spend-locked outpoints
+          (pipeline ∪ funding_lost). Exclusion is record-derived (not pending-deduction-only).
     unilateral_exit:
       - id: ARK-EXIT-01
         description: Start unilateral exit lists only VTXOs that can start unroll; unrolled, complete_ready, exited, and funding_lost records are excluded. Tagged leftovers that are not yet unrolled remain startable after abort (ARK-EXIT-26/30). Concurrent second job stays a frontend selection lock.
@@ -162,8 +165,9 @@ feature:
           persisted records are the durable source of truth. Spend-lock starts at tagged; subtract
           from net spendable only while the coin is still in gross spendable (not yet is_unrolled /
           exiting). funding_lost still locks collaborative spend while the coin remains in gross.
-          Send, collab, migrate, recover, renew, and delegate exclude spend-locked outpoints
-          (pipeline ∪ funding_lost), not pipeline membership alone (ARK-REC-08).
+          Send, collab, renew, and delegate exclude spend-locked outpoints (pipeline ∪ funding_lost).
+          Recover and signer-migrate are not spend-locked; they exclude in-progress pipeline
+          membership only so they do not race an active unroll (ARK-REC-08).
       - id: ARK-EXIT-28
         description: >-
           Host-tx observation registry (C; shipped, envelope v9): keyed by virtual txid; fields registered_at,

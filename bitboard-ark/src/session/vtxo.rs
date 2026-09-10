@@ -72,11 +72,12 @@ async fn sleep(duration: std::time::Duration) {
 impl ArkSession {
     /// Recoverable sub-buckets for balance, fee estimate, and batch recover.
     ///
-    /// Excludes spend-locked unilateral-exit records (`ARK-REC-08`), including `funding_lost`.
-    /// Post-unroll exiting VTXOs are kept out of recoverable by vendored ark-core bucketing.
+    /// Excludes in-progress pipeline records only (`ARK-REC-08`) so recover does not race an
+    /// active unroll. Recover is **not** spend-locked: `funding_lost` stays recoverable if
+    /// ark-core still classifies it. Post-unroll exiting VTXOs are kept out by vendored bucketing.
     pub(crate) async fn recoverable_vtxo_buckets(&self) -> ArkResult<RecoverableVtxoBuckets> {
         let dust = self.client.server_info()?.dust;
-        let exclude_spend_locked_outpoints = self.spend_locked_outpoints();
+        let exclude_pipeline_outpoints = self.pipeline_outpoints();
 
         if balance_vtxo_reads_use_operator_rpc(self.autonomous_mode())
             && let Ok((vtxo_list, _)) = self.client.list_vtxos().await
@@ -84,7 +85,7 @@ impl ArkSession {
             return Ok(recoverable_vtxo_buckets_from_list(
                 &vtxo_list,
                 dust,
-                &exclude_spend_locked_outpoints,
+                &exclude_pipeline_outpoints,
             ));
         }
 
@@ -93,7 +94,7 @@ impl ArkSession {
             return Ok(recoverable_vtxo_buckets_from_list(
                 &vtxo_list,
                 dust,
-                &exclude_spend_locked_outpoints,
+                &exclude_pipeline_outpoints,
             ));
         }
 
@@ -753,17 +754,18 @@ fn recoverable_vtxo_summary_from_filtered<'a>(
 /// operator's own clock/sweep state can still expect a forfeit — it then fails the round with
 /// `missing forfeit tx` and wedges subsequent rounds. Only swept or sub-dust VTXOs are actionable.
 ///
-/// `exclude_spend_locked_outpoints` drops VTXOs whose exit phase locks collaborative spend
-/// (`ARK-REC-08`): pipeline plus `funding_lost`, including tagged leftovers before `is_unrolled`
-/// is indexed locally.
+/// `exclude_pipeline_outpoints` drops VTXOs in an active unroll (`ARK-REC-08`): `tagged` through
+/// `complete_ready`, including tagged leftovers before `is_unrolled` is indexed locally. Callers
+/// must pass [`ArkSession::pipeline_outpoints`], not the spend-lock set — recover is not
+/// spend-locked (`ARK-EXIT-27`).
 pub(crate) fn recoverable_vtxo_buckets_from_list(
     vtxo_list: &ark_core::VtxoList,
     dust: Amount,
-    exclude_spend_locked_outpoints: &HashSet<UnilateralExitOutpointKey>,
+    exclude_pipeline_outpoints: &HashSet<UnilateralExitOutpointKey>,
 ) -> RecoverableVtxoBuckets {
     let all_recoverable: Vec<_> = vtxo_list
         .recoverable()
-        .filter(|vtxo| !exclude_spend_locked_outpoints.contains(&vtxo.outpoint))
+        .filter(|vtxo| !exclude_pipeline_outpoints.contains(&vtxo.outpoint))
         .collect();
     RecoverableVtxoBuckets {
         settleable: recoverable_vtxo_summary_from_filtered(
@@ -927,6 +929,26 @@ mod recoverable_vtxo_tests {
         let buckets = recoverable_vtxo_buckets_from_list(&vtxo_list, DUST, &exclude);
         assert_eq!(buckets.settleable.count, 0);
         assert_eq!(buckets.pending_operator_sweep.count, 0);
+    }
+
+    #[test]
+    fn recoverable_keeps_funding_lost_when_exclude_is_pipeline_only() {
+        let now = current_unix_timestamp();
+        let seized_but_listed = sample_vtp(3, 25_000, now - 1, true);
+        let vtxo_list = ark_core::VtxoList::new(DUST, vec![seized_but_listed.clone()]);
+        let pipeline_exclude = no_unilateral_exit_outpoints();
+        let spend_lock_exclude = HashSet::from([seized_but_listed.outpoint]);
+
+        let via_pipeline = recoverable_vtxo_buckets_from_list(&vtxo_list, DUST, &pipeline_exclude);
+        let via_spend_lock =
+            recoverable_vtxo_buckets_from_list(&vtxo_list, DUST, &spend_lock_exclude);
+
+        assert_eq!(via_pipeline.settleable.count, 1);
+        assert_eq!(via_pipeline.settleable.total_sats, 25_000);
+        assert_eq!(
+            via_spend_lock.settleable.count, 0,
+            "spend-lock must not be the recover exclude set"
+        );
     }
 
     #[test]

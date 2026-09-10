@@ -21,7 +21,7 @@ use crate::persistence::{
     HostTxObservationRecord, OffchainVtxoSnapshot, VirtualTxOutPointAssetRecord,
     VirtualTxOutPointRecord, VtxoExitPhase, VtxoExitRecord,
 };
-use crate::session::unilateral_exit::vtxo_exit::unilateral_exit_spend_locked_outpoints;
+use crate::session::unilateral_exit::vtxo_exit::unilateral_exit_pipeline_outpoints;
 
 /// Signer-aware offchain balance buckets in satoshis.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -61,18 +61,20 @@ pub fn vtxo_list_from_snapshot(snapshot: &OffchainVtxoSnapshot) -> ArkResult<Vtx
     Ok(VtxoList::new(dust, points))
 }
 
+/// Pending-recovery banner sats (`ARK-REC-07`). `exclude_pipeline_outpoints` is in-progress
+/// unroll membership only — not the spend-lock set — so `funding_lost` can still count.
 pub fn pending_recovery_due_to_expired_signer_sats_excluding_unilateral_exit(
     vtxo_list: &VtxoList,
     server_info: &Info,
     now: i64,
     script_to_server_pk: impl Fn(&ScriptBuf) -> Option<XOnlyPublicKey>,
-    exclude_outpoints: &HashSet<UnilateralExitOutpointKey>,
+    exclude_pipeline_outpoints: &HashSet<UnilateralExitOutpointKey>,
 ) -> u64 {
     vtxo_list
         .pending_recovery_due_to_signer_at(server_info, now, &script_to_server_pk)
         .filter(|virtual_tx_outpoint| {
             !is_unilateral_exit_in_progress_outpoint(
-                exclude_outpoints,
+                exclude_pipeline_outpoints,
                 &virtual_tx_outpoint.outpoint.txid.to_string(),
                 virtual_tx_outpoint.outpoint.vout,
             )
@@ -95,14 +97,15 @@ pub fn offchain_balance_buckets_from_snapshot(
     let balance = compute_offchain_balance(&vtxo_list, &script_lookup, server_info, now)
         .map_err(ArkWasmError::from)?;
     let mut buckets = OffchainBalanceBuckets::from_live(&balance);
-    let spend_locked = unilateral_exit_spend_locked_outpoints(vtxo_exit_records);
+    // Pipeline only (`ARK-REC-07`): pending-recovery UX follows recover, not spend-lock.
+    let exclude_pipeline = unilateral_exit_pipeline_outpoints(vtxo_exit_records);
     buckets.pending_recovery_due_to_expired_signer_sats =
         pending_recovery_due_to_expired_signer_sats_excluding_unilateral_exit(
             &vtxo_list,
             server_info,
             now,
             &script_lookup,
-            &spend_locked,
+            &exclude_pipeline,
         );
     Ok(buckets)
 }
@@ -1034,7 +1037,7 @@ mod tests {
     }
 
     #[test]
-    fn pending_recovery_due_to_expired_signer_excludes_spend_locked_outpoints() {
+    fn pending_recovery_due_to_expired_signer_excludes_pipeline_not_funding_lost() {
         use crate::persistence::{VtxoExitPhase, VtxoExitRecord, vtxo_exit_record_key};
 
         let script = ScriptBuf::from_bytes(vec![0x51]);
@@ -1081,7 +1084,10 @@ mod tests {
                 500_000,
             )],
         );
-        for phase in [VtxoExitPhase::Tagged, VtxoExitPhase::FundingLost] {
+        for (phase, expected_pending_sats) in [
+            (VtxoExitPhase::Tagged, 0_u64),
+            (VtxoExitPhase::FundingLost, 50_000_u64),
+        ] {
             let mut records = BTreeMap::new();
             records.insert(
                 vtxo_exit_record_key(&txid, 0),
@@ -1102,8 +1108,8 @@ mod tests {
             .expect("snapshot buckets");
 
             assert_eq!(
-                buckets.pending_recovery_due_to_expired_signer_sats, 0,
-                "{phase:?} must be spend-locked out of pending recovery"
+                buckets.pending_recovery_due_to_expired_signer_sats, expected_pending_sats,
+                "{phase:?} pending recovery must follow pipeline exclude, not spend-lock"
             );
         }
     }

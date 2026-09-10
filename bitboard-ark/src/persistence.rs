@@ -226,9 +226,9 @@ impl VtxoExitPhase {
         )
     }
 
-    /// Pipeline plus `funding_lost`. Send / collab / migrate / recover / renew / delegate exclude
-    /// these outpoints (`unilateral_exit_spend_locked_outpoints`). Complete-list membership uses
-    /// [`Self::is_pipeline`] instead so seized coins are not listed there.
+    /// Pipeline plus `funding_lost`. Send / collab / renew / delegate exclude these outpoints
+    /// (`unilateral_exit_spend_locked_outpoints`). Recover and signer-migrate do **not** use this
+    /// set. Complete-list membership uses [`Self::is_pipeline`] so seized coins are not listed there.
     pub fn locks_collaborative_spend(self) -> bool {
         self.is_pipeline() || matches!(self, Self::FundingLost)
     }

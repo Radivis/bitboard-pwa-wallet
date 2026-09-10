@@ -57,7 +57,7 @@ Flushed through the Arkade save lifecycle into `StoredArkadeAccount.sdkPersisten
 | `unilateral_exit_watches` | `WalletDbSnapshot` | Leftover v10 import only; heal into records then clear. Not a write path (`ARK-EXIT-12`) |
 | `unilateral_exit_step_wait` | `WalletDbSnapshot` | Current step txid, index, `started_at` for relay-wait UI |
 | `pending_exit_deductions` | `WalletDbSnapshot` | Collaborative retain records; unilateral rows are a derived mirror of tagged…host_confirmed (not an independent proceed write) |
-| `vtxo_exit_records` | `WalletDbSnapshot` | Per-outpoint exit pipeline (`ARK-EXIT-27`); spend-lock (pipeline ∪ `funding_lost`), lists, recover/renew exclusion |
+| `vtxo_exit_records` | `WalletDbSnapshot` | Per-outpoint exit pipeline (`ARK-EXIT-27`); spend-lock (pipeline ∪ `funding_lost`) for send/collab/renew/delegate; recover/migrate use pipeline membership only |
 | `host_tx_observations` | `WalletDbSnapshot` | Per virtual host txid: broadcast attempt, Esplora relay/confirmations, never-seen probe budget (`ARK-EXIT-28`) |
 | `cached_operator_info` | `WalletDbSnapshot` | Last `getInfo` snapshot for autonomous mode |
 | `autonomous_mode` | `BitboardArkPersistence` | Per-ASP trust posture; default false; session open skips operator RPC when true |
@@ -169,6 +169,6 @@ Do **not** treat `unilateral_exit_step_wait` as that evidence. It is the job cur
 
 Also delete when every VTXO on that host is `exited` or `funding_lost` (or every snapshot vout `is_spent`). Observation plus the unified 6-conf reconciler **feed** `is_unrolled` and record phase advances.
 
-Handbook (strategy): [unilateral-exit.md — Register before Esplora](../unilateral-exit.md#register-before-esplora-never_seen-is-the-cleanup). VTXO exit records (`ARK-EXIT-27`) are the list and spend-lock source of truth. Candidates, in-progress, complete-ready, and recover/renew exclusion are record-derived. Envelope version is **11**.
+Handbook (strategy): [unilateral-exit.md — Register before Esplora](../unilateral-exit.md#register-before-esplora-never_seen-is-the-cleanup). VTXO exit records (`ARK-EXIT-27`) are the list and spend-lock source of truth. Candidates, in-progress, complete-ready, recover pipeline exclusion, and renew spend-lock exclusion are record-derived. Envelope version is **11**.
 
 Freeze and abort matrix: [unilateral-exit-vtxo-lifecycle-refactor.md](../future/unilateral-exit-vtxo-lifecycle-refactor.md#stage-0-freeze-agreed).

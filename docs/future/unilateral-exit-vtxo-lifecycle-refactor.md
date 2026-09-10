@@ -155,7 +155,7 @@ Never drop a VTXO tag because Esplora was slow, a broadcast RPC failed, or the t
 
 Leaves whose host was never observed: if an **ancestor** was published, keep them `tagged` (collab spend would race the ASP). Surface “resume unroll or complete what is already unrolled.”
 
-**Spend-lock from `tagged` is a balance-model change.** Today, during unroll those VTXOs stay in gross spendable; pending deductions are informational until 6 confs. Target: `unilateral_exit_in_progress` includes `tagged` onward, and those sats are not collaboratively spendable. Recoverable / renew / send must refuse them. Stage 2 owns this; Stage 1 must not silently change dashboard math.
+**Spend-lock from `tagged` is a balance-model change.** Today, during unroll those VTXOs stay in gross spendable; pending deductions are informational until 6 confs. Target: `unilateral_exit_in_progress` includes `tagged` onward, and those sats are not collaboratively spendable. Renew / send / collab / delegate must refuse them. Recover and signer-migrate exclude in-progress pipeline only (not `funding_lost`). Stage 2 owns this; Stage 1 must not silently change dashboard math.
 
 **Complete gate:** snapshot `complete_ready` (unrolled + unspent + timelock/claimable). Remove `VtxoNotInUnilateralExit` / in-progress membership (E).
 
@@ -316,7 +316,7 @@ The original bug. Ship this even if later stages slip.
 
 **Out of scope:** deleting watches; per-VTXO `funding_lost` replacing job terminate.
 
-**Exit:** Starting a job immediately locks those VTXOs against send / collab / recover / renew. Complete and in-progress lists are record-derived. Abort before any broadcast unlocks; abort after host register does not.
+**Exit:** Starting a job immediately locks those VTXOs against send / collab / renew / delegate. Recover and signer-migrate skip in-progress pipeline outpoints only. Complete and in-progress lists are record-derived. Abort before any broadcast unlocks; abort after host register does not.
 
 ### Stage 3 — Absorb watches and viability
 

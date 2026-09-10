@@ -1,9 +1,10 @@
 //! Per-outpoint VTXO exit records (`ARK-EXIT-27` / `ARK-EXIT-30`).
 //!
-//! These records are the durable source of truth for pipeline membership, spend-lock, Start-list
-//! exclusion, and abort unlock. Idle is **no row**. Host-tx observations (broadcast / relay /
-//! confirmations) live in a separate map keyed by virtual txid and **feed** phase advances here;
-//! they are not themselves the spend-lock.
+//! These records are the durable source of truth for pipeline membership, spend-lock (send /
+//! collab / renew / delegate), recover/migrate pipeline exclusion, Start-list exclusion, and
+//! abort unlock. Idle is **no row**. Host-tx observations (broadcast / relay / confirmations)
+//! live in a separate map keyed by virtual txid and **feed** phase advances here; they are not
+//! themselves the spend-lock.
 //!
 //! Phase order (persisted): `tagged` → `host_broadcast_attempted` → `host_relayed` →
 //! `host_confirmed` → `unrolled` → `complete_ready` → `exited`. `funding_lost` is a terminal
@@ -342,18 +343,20 @@ fn record_outpoint_keys_where(
         .collect()
 }
 
-/// Unilateral-exit pipeline outpoints (`ARK-EXIT-02`): `tagged`…`complete_ready` (not `exited`,
-/// not `funding_lost`). In-progress / Complete **membership** only. Coin-select and recover/renew
-/// exclusion use [`unilateral_exit_spend_locked_outpoints`].
+/// Unilateral-exit pipeline outpoints (`ARK-EXIT-02` / `ARK-REC-08`): `tagged`…`complete_ready`
+/// (not `exited`, not `funding_lost`). In-progress / Complete membership, and the recover /
+/// signer-migrate exclude set. Collaborative spend-lock uses
+/// [`unilateral_exit_spend_locked_outpoints`].
 pub fn unilateral_exit_pipeline_outpoints(
     records: &BTreeMap<String, VtxoExitRecord>,
 ) -> HashSet<UnilateralExitOutpointKey> {
     record_outpoint_keys_where(records, VtxoExitPhase::is_pipeline)
 }
 
-/// Outpoints that must not be collaboratively spent (`ARK-REC-08` / `ARK-EXIT-27`): pipeline plus
-/// `funding_lost`. Do **not** fold `funding_lost` into [`unilateral_exit_pipeline_outpoints`] —
-/// seized coins are not Complete-list members.
+/// Outpoints that must not be sent, collaboratively exited, renewed, or delegated (`ARK-EXIT-27`):
+/// pipeline plus `funding_lost`. Recover and signer-migrate must **not** use this set. Do **not**
+/// fold `funding_lost` into [`unilateral_exit_pipeline_outpoints`] — seized coins are not
+/// Complete-list members.
 pub fn unilateral_exit_spend_locked_outpoints(
     records: &BTreeMap<String, VtxoExitRecord>,
 ) -> HashSet<UnilateralExitOutpointKey> {
@@ -602,13 +605,14 @@ impl crate::session::ArkSession {
         start_list_excluded_outpoints_from_records(&self.wallet_db.vtxo_exit_records())
     }
 
-    /// Pipeline outpoints: in-progress / Complete membership (`tagged`…`complete_ready`, not
-    /// `exited` / `funding_lost`).
+    /// Pipeline outpoints: in-progress / Complete membership and recover / signer-migrate
+    /// exclude set (`tagged`…`complete_ready`, not `exited` / `funding_lost`).
     pub(crate) fn pipeline_outpoints(&self) -> HashSet<UnilateralExitOutpointKey> {
         unilateral_exit_pipeline_outpoints(&self.wallet_db.vtxo_exit_records())
     }
 
-    /// Spend-lock exclude set (`ARK-REC-08`): pipeline plus `funding_lost`.
+    /// Spend-lock exclude set (`ARK-EXIT-27`): pipeline plus `funding_lost`. Send / collab /
+    /// renew / delegate only — not recover or signer-migrate.
     pub(crate) fn spend_locked_outpoints(&self) -> HashSet<UnilateralExitOutpointKey> {
         unilateral_exit_spend_locked_outpoints(&self.wallet_db.vtxo_exit_records())
     }
