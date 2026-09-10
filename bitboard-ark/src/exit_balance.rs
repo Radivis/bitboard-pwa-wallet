@@ -7,9 +7,11 @@ use bitcoin::{OutPoint, Txid};
 
 use crate::error::ArkWasmError;
 use crate::offchain_snapshot::vtxo_list_from_snapshot;
+#[cfg(test)]
+use crate::persistence::UnilateralExitWatchRecord;
 use crate::persistence::{
     OffchainVtxoSnapshot, PendingBatchIntentKind, PendingBatchIntentRecord,
-    PendingExitDeductionRecord, PendingExitKind, UnilateralExitWatchRecord,
+    PendingExitDeductionRecord, PendingExitKind,
 };
 
 /// Outpoint identifying a VTXO in unilateral exit (local snapshot or pending deduction).
@@ -25,6 +27,7 @@ pub fn exit_outpoint_key_from_str(txid: &str, vout: u32) -> Option<UnilateralExi
     Some(exit_outpoint_key(txid, vout))
 }
 
+#[cfg(test)]
 pub fn unilateral_exit_in_progress_outpoints_from_snapshot(
     snapshot: &OffchainVtxoSnapshot,
 ) -> crate::error::ArkResult<HashSet<UnilateralExitOutpointKey>> {
@@ -37,6 +40,7 @@ pub fn unilateral_exit_in_progress_outpoints_from_snapshot(
         .collect())
 }
 
+#[cfg(test)]
 pub fn unilateral_exit_in_progress_outpoints_from_pending(
     records: &[PendingExitDeductionRecord],
 ) -> HashSet<UnilateralExitOutpointKey> {
@@ -51,6 +55,7 @@ pub fn unilateral_exit_in_progress_outpoints_from_pending(
         .collect()
 }
 
+#[cfg(test)]
 pub fn unilateral_exit_in_progress_outpoints_from_watches(
     watches: &[UnilateralExitWatchRecord],
 ) -> HashSet<UnilateralExitOutpointKey> {
@@ -60,6 +65,7 @@ pub fn unilateral_exit_in_progress_outpoints_from_watches(
         .collect()
 }
 
+#[cfg(test)]
 pub fn unilateral_exit_in_progress_outpoints(
     snapshot: Option<&OffchainVtxoSnapshot>,
     pending: &[PendingExitDeductionRecord],

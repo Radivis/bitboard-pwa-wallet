@@ -8,7 +8,6 @@ export const VTXO_EXIT_MACHINE_STATE = {
   host_confirmed: 'host_confirmed',
   unrolled: 'unrolled',
   complete_ready: 'complete_ready',
-  completing: 'completing',
   exited: 'exited',
   funding_lost: 'funding_lost',
   idle: 'idle',
@@ -35,7 +34,6 @@ export type VtxoExitMachineEvent =
   | { type: 'HOST_CONFIRMED' }
   | { type: 'UNROLLED' }
   | { type: 'COMPLETE_READY' }
-  | { type: 'COMPLETE' }
   | { type: 'EXITED' }
   | { type: 'FUNDING_LOST' }
   | { type: 'UNTAG' }

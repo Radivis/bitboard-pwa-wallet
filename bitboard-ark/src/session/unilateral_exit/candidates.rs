@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use ark_client::Blockchain;
 use ark_core::server::VirtualTxOutPoint;
@@ -12,7 +11,7 @@ use crate::exit_balance::{
     UnilateralExitOutpointKey, exit_outpoint_key, exit_outpoint_key_from_str,
 };
 use crate::offchain_snapshot::virtual_tx_outpoint_from_record;
-use crate::persistence::VtxoExitPhase;
+use crate::persistence::{VtxoExitPhase, VtxoExitRecord};
 use crate::session::unilateral_exit::vtxo_exit::{
     mark_record_complete_ready, parse_vtxo_exit_record_key, unilateral_exit_pipeline_outpoints,
 };
@@ -73,6 +72,62 @@ fn snapshot_record_ready_for_completion(
     record: &crate::persistence::VirtualTxOutPointRecord,
 ) -> bool {
     record.is_unrolled && !record.is_spent
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ClaimabilityStatus {
+    can_complete: bool,
+    stamped_complete_ready: bool,
+}
+
+impl ClaimabilityStatus {
+    const ALREADY_COMPLETE_READY: Self = Self {
+        can_complete: true,
+        stamped_complete_ready: false,
+    };
+    const NOT_ELIGIBLE: Self = Self {
+        can_complete: false,
+        stamped_complete_ready: false,
+    };
+}
+
+fn stamp_complete_ready_when_claimable(
+    records: &mut BTreeMap<String, VtxoExitRecord>,
+    key: &str,
+    can_complete: bool,
+) -> ClaimabilityStatus {
+    if can_complete && let Some(record) = records.get_mut(key) {
+        mark_record_complete_ready(record);
+        return ClaimabilityStatus {
+            can_complete: true,
+            stamped_complete_ready: true,
+        };
+    }
+    ClaimabilityStatus {
+        can_complete,
+        stamped_complete_ready: false,
+    }
+}
+
+async fn overlay_complete_ready_if_claimable(
+    records: &mut BTreeMap<String, VtxoExitRecord>,
+    key: &str,
+    phase: VtxoExitPhase,
+    eligible_for_probe: bool,
+    claimable: impl std::future::Future<Output = ArkResult<bool>>,
+) -> ArkResult<ClaimabilityStatus> {
+    if phase == VtxoExitPhase::CompleteReady {
+        return Ok(ClaimabilityStatus::ALREADY_COMPLETE_READY);
+    }
+    if !eligible_for_probe {
+        return Ok(ClaimabilityStatus::NOT_ELIGIBLE);
+    }
+    let can_complete = claimable.await?;
+    Ok(stamp_complete_ready_when_claimable(
+        records,
+        key,
+        can_complete,
+    ))
 }
 
 impl ArkSession {
@@ -142,27 +197,27 @@ impl ArkSession {
             let phase = record.phase;
             if let Some(virtual_tx_outpoint) = operator_by_outpoint.get(&outpoint) {
                 let candidate = map_exit_candidate(virtual_tx_outpoint, dust);
-                let mut can_complete = phase == VtxoExitPhase::CompleteReady;
-                if !can_complete && (candidate.can_complete || phase == VtxoExitPhase::Unrolled) {
-                    can_complete = resolve_vtxo_completion_claimable(
+                let claimability = overlay_complete_ready_if_claimable(
+                    &mut records,
+                    &key,
+                    phase,
+                    candidate.can_complete || phase == VtxoExitPhase::Unrolled,
+                    resolve_vtxo_completion_claimable(
                         self,
                         virtual_tx_outpoint,
                         &script_pubkey_to_vtxo,
                         &offchain_script_map,
-                    )
-                    .await?;
-                    if can_complete && let Some(record) = records.get_mut(&key) {
-                        mark_record_complete_ready(record);
-                        stamped_complete_ready = true;
-                    }
-                }
+                    ),
+                )
+                .await?;
+                stamped_complete_ready |= claimability.stamped_complete_ready;
                 rows.push(UnilateralExitInProgressDto {
                     id: candidate.id,
                     txid: candidate.txid,
                     vout: candidate.vout,
                     amount_sats: candidate.amount_sats,
                     virtual_status_state: candidate.virtual_status_state,
-                    can_complete,
+                    can_complete: claimability.can_complete,
                     started_at: Some(record.tagged_at),
                     phase: Some(phase),
                 });
@@ -176,32 +231,35 @@ impl ArkSession {
                     snapshot_record.is_spent,
                     snapshot_record.is_unrolled,
                 );
-                let mut can_complete = phase == VtxoExitPhase::CompleteReady;
-                if !can_complete && snapshot_record_ready_for_completion(snapshot_record) {
-                    can_complete = match virtual_tx_outpoint_from_record(snapshot_record) {
-                        Ok(virtual_tx_outpoint) => {
-                            resolve_vtxo_completion_claimable(
-                                self,
-                                &virtual_tx_outpoint,
-                                &script_pubkey_to_vtxo,
-                                &offchain_script_map,
-                            )
-                            .await?
+                let claimability = overlay_complete_ready_if_claimable(
+                    &mut records,
+                    &key,
+                    phase,
+                    snapshot_record_ready_for_completion(snapshot_record),
+                    async {
+                        match virtual_tx_outpoint_from_record(snapshot_record) {
+                            Ok(virtual_tx_outpoint) => {
+                                resolve_vtxo_completion_claimable(
+                                    self,
+                                    &virtual_tx_outpoint,
+                                    &script_pubkey_to_vtxo,
+                                    &offchain_script_map,
+                                )
+                                .await
+                            }
+                            Err(_) => Ok(false),
                         }
-                        Err(_) => false,
-                    };
-                    if can_complete && let Some(record) = records.get_mut(&key) {
-                        mark_record_complete_ready(record);
-                        stamped_complete_ready = true;
-                    }
-                }
+                    },
+                )
+                .await?;
+                stamped_complete_ready |= claimability.stamped_complete_ready;
                 rows.push(UnilateralExitInProgressDto {
                     id: format!("{txid}:{vout}"),
                     txid,
                     vout,
                     amount_sats: snapshot_record.amount_sats,
                     virtual_status_state,
-                    can_complete,
+                    can_complete: claimability.can_complete,
                     started_at: Some(record.tagged_at),
                     phase: Some(phase),
                 });
@@ -232,5 +290,44 @@ impl ArkSession {
                 .then_with(|| left.vout.cmp(&right.vout))
         });
         Ok(rows)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::persistence::{VtxoExitRecord, vtxo_exit_record_key};
+
+    fn unrolled_record() -> VtxoExitRecord {
+        VtxoExitRecord {
+            phase: VtxoExitPhase::Unrolled,
+            tagged_at: 1,
+            host_txid: "aa".repeat(32),
+            amount_sats: 50_000,
+        }
+    }
+
+    #[test]
+    fn overlay_complete_ready_stamps_unrolled_when_claimable() {
+        let key = vtxo_exit_record_key(&"aa".repeat(32), 0);
+        let mut records = BTreeMap::from([(key.clone(), unrolled_record())]);
+
+        let claimability = stamp_complete_ready_when_claimable(&mut records, &key, true);
+
+        assert!(claimability.can_complete);
+        assert!(claimability.stamped_complete_ready);
+        assert_eq!(records[&key].phase, VtxoExitPhase::CompleteReady);
+    }
+
+    #[test]
+    fn overlay_complete_ready_leaves_unrolled_when_not_claimable() {
+        let key = vtxo_exit_record_key(&"aa".repeat(32), 0);
+        let mut records = BTreeMap::from([(key.clone(), unrolled_record())]);
+
+        let claimability = stamp_complete_ready_when_claimable(&mut records, &key, false);
+
+        assert!(!claimability.can_complete);
+        assert!(!claimability.stamped_complete_ready);
+        assert_eq!(records[&key].phase, VtxoExitPhase::Unrolled);
     }
 }

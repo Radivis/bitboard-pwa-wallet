@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { UNILATERAL_EXIT_LEAF_CONFIRMATIONS } from '@/lib/arkade/unilateral-exit-confirmations'
 import {
   formatVtxoExitPhaseCopy,
   hasLeftoverBranchCompleteVtxoChildren,
@@ -46,7 +47,7 @@ describe('vtxoExitPhaseCopyFromPhase', () => {
       'waiting for first confirmation',
     )
     expect(formatVtxoExitPhaseCopy(VTXO_EXIT_PHASE_COPY.waitingForSixConfirmations)).toBe(
-      'waiting for 6 confirmations',
+      `waiting for ${UNILATERAL_EXIT_LEAF_CONFIRMATIONS} confirmations`,
     )
     expect(formatVtxoExitPhaseCopy(VTXO_EXIT_PHASE_COPY.waitingForTimelock)).toBe(
       'waiting for timelock',

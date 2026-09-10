@@ -18,8 +18,8 @@ use crate::constants::UNILATERAL_EXIT_LEAF_CONFIRMATIONS;
 use crate::error::{ArkResult, ArkWasmError};
 use crate::exit_balance::{UnilateralExitOutpointKey, is_unilateral_exit_in_progress_outpoint};
 use crate::persistence::{
-    HostTxObservationRecord, OffchainVtxoSnapshot, PendingExitDeductionRecord,
-    VirtualTxOutPointAssetRecord, VirtualTxOutPointRecord, VtxoExitPhase, VtxoExitRecord,
+    HostTxObservationRecord, OffchainVtxoSnapshot, VirtualTxOutPointAssetRecord,
+    VirtualTxOutPointRecord, VtxoExitPhase, VtxoExitRecord,
 };
 use crate::session::unilateral_exit::vtxo_exit::unilateral_exit_pipeline_outpoints;
 
@@ -88,8 +88,6 @@ pub fn offchain_balance_buckets_from_snapshot(
     server_info: &Info,
     now: i64,
     legacy_signer_pk_fallback: Option<XOnlyPublicKey>,
-    pending_exit_deductions: &[PendingExitDeductionRecord],
-    unilateral_exit_watches: &[crate::persistence::UnilateralExitWatchRecord],
     vtxo_exit_records: &BTreeMap<String, VtxoExitRecord>,
 ) -> ArkResult<OffchainBalanceBuckets> {
     let vtxo_list = vtxo_list_from_snapshot(snapshot)?;
@@ -97,14 +95,7 @@ pub fn offchain_balance_buckets_from_snapshot(
     let balance = compute_offchain_balance(&vtxo_list, &script_lookup, server_info, now)
         .map_err(ArkWasmError::from)?;
     let mut buckets = OffchainBalanceBuckets::from_live(&balance);
-    let mut in_progress = unilateral_exit_pipeline_outpoints(vtxo_exit_records);
-    if in_progress.is_empty() {
-        in_progress = crate::exit_balance::unilateral_exit_in_progress_outpoints(
-            Some(snapshot),
-            pending_exit_deductions,
-            unilateral_exit_watches,
-        )?;
-    }
+    let in_progress = unilateral_exit_pipeline_outpoints(vtxo_exit_records);
     buckets.pending_recovery_due_to_expired_signer_sats =
         pending_recovery_due_to_expired_signer_sats_excluding_unilateral_exit(
             &vtxo_list,
@@ -1034,8 +1025,6 @@ mod tests {
             &server_info,
             1_000_000,
             None,
-            &[],
-            &[],
             &BTreeMap::new(),
         )
         .expect("snapshot buckets");
@@ -1046,7 +1035,7 @@ mod tests {
 
     #[test]
     fn pending_recovery_due_to_expired_signer_excludes_unilateral_exit_in_progress_outpoint() {
-        use crate::persistence::{PendingExitDeductionRecord, PendingExitKind};
+        use crate::persistence::{VtxoExitPhase, VtxoExitRecord, vtxo_exit_record_key};
 
         let script = ScriptBuf::from_bytes(vec![0x51]);
         let future_expiry = 2_000_000_000_i64;
@@ -1092,27 +1081,83 @@ mod tests {
                 500_000,
             )],
         );
-        let pending = vec![PendingExitDeductionRecord {
-            kind: PendingExitKind::Unilateral,
-            vtxo_txid: Some(txid),
-            vout: Some(0),
-            amount_sats: 50_000,
-            started_at: 1_000_000,
-            baseline_offchain_spendable_sats: None,
-            retain_until_spendable_drops: false,
-        }];
+        let mut records = BTreeMap::new();
+        records.insert(
+            vtxo_exit_record_key(&txid, 0),
+            VtxoExitRecord {
+                phase: VtxoExitPhase::Tagged,
+                tagged_at: 1_000_000,
+                host_txid: txid.clone(),
+                amount_sats: 50_000,
+            },
+        );
         let buckets = offchain_balance_buckets_from_snapshot(
             &snapshot,
             &server_info,
             1_000_000,
             None,
-            &pending,
-            &[],
-            &BTreeMap::new(),
+            &records,
         )
         .expect("snapshot buckets");
 
         assert_eq!(buckets.pending_recovery_due_to_expired_signer_sats, 0);
+    }
+
+    #[test]
+    fn empty_vtxo_exit_records_do_not_revive_pending_as_in_progress() {
+        let script = ScriptBuf::from_bytes(vec![0x51]);
+        let future_expiry = 2_000_000_000_i64;
+        let vtxo = VirtualTxOutPoint {
+            outpoint: OutPoint::new(Txid::from_byte_array([7; 32]), 0),
+            created_at: future_expiry - 86_400,
+            expires_at: future_expiry,
+            amount: Amount::from_sat(50_000),
+            script: script.clone(),
+            is_preconfirmed: false,
+            is_swept: false,
+            is_unrolled: false,
+            is_spent: false,
+            spent_by: None,
+            commitment_txids: vec![],
+            settled_by: None,
+            ark_txid: None,
+            assets: vec![],
+        };
+        let deprecated_pk = PublicKey::from_str(
+            "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+        )
+        .expect("valid key")
+        .x_only_public_key()
+        .0;
+        let snapshot = snapshot_from_virtual_tx_outpoints_with_script_lookup(
+            330,
+            1_000_000,
+            vec![vtxo],
+            |lookup_script| {
+                if lookup_script == &script {
+                    Some(deprecated_pk)
+                } else {
+                    None
+                }
+            },
+        );
+        let server_info = test_server_info_for_snapshot(
+            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            vec![(
+                "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+                500_000,
+            )],
+        );
+        let buckets = offchain_balance_buckets_from_snapshot(
+            &snapshot,
+            &server_info,
+            1_000_000,
+            None,
+            &BTreeMap::new(),
+        )
+        .expect("snapshot buckets");
+
+        assert_eq!(buckets.pending_recovery_due_to_expired_signer_sats, 50_000);
     }
 
     fn test_server_info_for_snapshot(current_hex: &str, deprecated: Vec<(&str, i64)>) -> Info {

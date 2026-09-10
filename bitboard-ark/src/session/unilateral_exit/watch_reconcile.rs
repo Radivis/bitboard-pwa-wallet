@@ -3,12 +3,10 @@ use std::collections::HashSet;
 use ark_core::server::VirtualTxOutPoint;
 
 use crate::error::ArkResult;
-use crate::persistence::{
-    OffchainVtxoSnapshot, UnilateralExitWatchRecord, VirtualTxOutPointRecord, VtxoExitPhase,
-};
+use crate::persistence::{OffchainVtxoSnapshot, VirtualTxOutPointRecord, VtxoExitPhase};
 
 use super::onchain::{
-    detect_exiting_vtxo_completion_on_esplora, exit_branch_spent_on_chain,
+    ExitOnChainProbe, detect_exiting_vtxo_completion_on_esplora, exit_branch_spent_on_chain,
     unroll_branch_visible_on_chain,
 };
 use crate::outpoint::VirtualOutPoint;
@@ -212,7 +210,7 @@ pub(crate) async fn reconcile_exiting_vtxos_spent_on_esplora(
     let mut healed_outpoints = Vec::new();
     for (leaf_txid, vout) in probe_targets {
         let Some(spend_txid) =
-            detect_exiting_vtxo_completion_on_esplora(blockchain, snapshot, None, &leaf_txid, vout)
+            detect_exiting_vtxo_completion_on_esplora(blockchain, snapshot, &leaf_txid, vout)
                 .await?
         else {
             continue;
@@ -243,11 +241,9 @@ pub(crate) async fn reconcile_exiting_vtxo_watches(
             continue;
         };
         let prior_record = prior_snapshot.and_then(|prior| snapshot_record(prior, &txid, vout));
-        let survival_watch = UnilateralExitWatchRecord {
+        let survival_probe = ExitOnChainProbe {
             vtxo_txid: txid.clone(),
             vout,
-            amount_sats: exit_record.amount_sats,
-            registered_at: exit_record.tagged_at,
             published_vtxo_txid: Some(exit_record.host_txid.clone()),
             branch_txids:
                 crate::session::unilateral_exit::vtxo_exit::materials_chain_txid_strings_for_host(
@@ -261,7 +257,7 @@ pub(crate) async fn reconcile_exiting_vtxo_watches(
                 if exit_branch_spent_on_chain(
                     session.client.blockchain(),
                     &snapshot,
-                    &survival_watch,
+                    &survival_probe,
                 )
                 .await?
                 {
@@ -287,7 +283,7 @@ pub(crate) async fn reconcile_exiting_vtxo_watches(
                 ExitingVtxoReconcileOutcome::Ok
             }
         } else {
-            reconcile_missing_survival(session, &snapshot, &survival_watch, prior_record).await?
+            reconcile_missing_survival(session, &snapshot, &survival_probe, prior_record).await?
         };
 
         apply_reconcile_outcome(
@@ -310,10 +306,10 @@ pub(crate) async fn reconcile_exiting_vtxo_watches(
 async fn reconcile_missing_survival(
     session: &ArkSession,
     snapshot: &OffchainVtxoSnapshot,
-    watch: &UnilateralExitWatchRecord,
+    probe: &ExitOnChainProbe,
     _prior_record: Option<&VirtualTxOutPointRecord>,
 ) -> ArkResult<ExitingVtxoReconcileOutcome> {
-    let outpoint = VirtualOutPoint::parse(&watch.vtxo_txid, watch.vout)?.to_bitcoin_outpoint();
+    let outpoint = VirtualOutPoint::parse(&probe.vtxo_txid, probe.vout)?.to_bitcoin_outpoint();
     if let Ok((vtxo_list, _)) = session
         .client
         .list_vtxos_for_outpoints(vec![outpoint])
@@ -327,10 +323,10 @@ async fn reconcile_missing_survival(
     }
 
     let blockchain = session.client.blockchain();
-    if exit_branch_spent_on_chain(blockchain, snapshot, watch).await? {
+    if exit_branch_spent_on_chain(blockchain, snapshot, probe).await? {
         return Ok(ExitingVtxoReconcileOutcome::ClearOnChainSpent);
     }
-    if unroll_branch_visible_on_chain(blockchain, watch).await? {
+    if unroll_branch_visible_on_chain(blockchain, probe).await? {
         return Ok(ExitingVtxoReconcileOutcome::KeepWarnIndexerLag);
     }
     Ok(ExitingVtxoReconcileOutcome::KeepWarnMissingIndex)

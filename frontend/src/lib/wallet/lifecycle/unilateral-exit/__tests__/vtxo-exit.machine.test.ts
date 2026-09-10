@@ -39,14 +39,15 @@ describe('vtxoExitMachine', () => {
     expect(actor.getSnapshot().context.phase).toBe('unrolled')
   })
 
-  it('complete_rejected_unless_complete_ready', () => {
+  it('hydrate_to_complete_ready_then_exited', () => {
     const actor = createVtxoActor()
-    actor.send({ type: 'COMPLETE' })
-    expect(actor.getSnapshot().value).toBe('tagged')
-
     actor.send({ type: 'HYDRATE', phase: 'complete_ready' })
-    actor.send({ type: 'COMPLETE' })
-    expect(actor.getSnapshot().value).toBe('completing')
+    expect(actor.getSnapshot().value).toBe('complete_ready')
+    expect(actor.getSnapshot().context.phase).toBe('complete_ready')
+
+    actor.send({ type: 'HYDRATE', phase: 'exited' })
+    expect(actor.getSnapshot().value).toBe('exited')
+    expect(actor.getSnapshot().context.phase).toBe('exited')
   })
 
   it('untag_only_from_tagged', () => {

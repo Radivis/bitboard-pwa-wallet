@@ -53,16 +53,12 @@ impl ArkSession {
             .client
             .server_info()
             .map_err(crate::error::ArkWasmError::from)?;
-        let pending = self.wallet_db.pending_exit_deductions();
-        let watches = self.wallet_db.unilateral_exit_watches();
         let records = self.wallet_db.vtxo_exit_records();
         offchain_balance_buckets_from_snapshot(
             snapshot,
             &server_info,
             current_unix_timestamp(),
             legacy_signer_pk_fallback(&self.persisted_operator_identity()),
-            &pending,
-            &watches,
             &records,
         )
     }
@@ -75,16 +71,12 @@ impl ArkSession {
             .client
             .server_info()
             .map_err(crate::error::ArkWasmError::from)?;
-        let pending = self.wallet_db.pending_exit_deductions();
-        let watches = self.wallet_db.unilateral_exit_watches();
         let records = self.wallet_db.vtxo_exit_records();
         let buckets = offchain_balance_buckets_from_snapshot(
             snapshot,
             &server_info,
             current_unix_timestamp(),
             legacy_signer_pk_fallback(&self.persisted_operator_identity()),
-            &pending,
-            &watches,
             &records,
         )?;
         Ok(buckets.gross_spendable_sats())

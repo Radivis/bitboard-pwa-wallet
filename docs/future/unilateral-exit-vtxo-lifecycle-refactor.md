@@ -2,7 +2,7 @@
 
 Target architecture for treating **each VTXO in a unilateral exit** as a first-class lifecycle, instead of inferring that lifecycle from a frontend job plus scattered WASM flags.
 
-This is the planning parent. Each stage gets its own implementation plan (and TDD protocol) later. Do not implement multiple stages in one PR.
+This is the planning parent. Each stage originally had its own implementation plan. **Waiver:** Stages 1–4 shipped together in the envelope **v8→v11** PR (`unilateral-exit-vtxo-lifecycle`) rather than one stage per PR. Future work should still keep new stages reviewable.
 
 Related:
 
@@ -171,7 +171,7 @@ XState is **not** the durability layer and **not** the Esplora watcher.
 |-------|------|----------------|
 | **WASM** | Persisted VTXO phase, host-tx observation, 6-conf stamp, watches, spend-heal | UI, `after` delays, job fee/automation policy |
 | **Job machine** (existing) | Broadcast the next unpublished host tx, 1-conf wait, bumper/fees, abort orchestration | Per-coin claim readiness, 6-conf stamp |
-| **VTXO machines** (new) | Hydrated view of one outpoint’s phase; user events (`COMPLETE`, resume); selectors for copy (“confirmations” vs “timelock”) | Submitting unroll packages; sleeping until 6 confs |
+| **VTXO machines** (new) | Hydrated view of one outpoint’s phase; selectors for copy (“confirmations” vs “timelock”) | Submitting unroll packages; sleeping until 6 confs |
 
 ### Topology
 
@@ -203,7 +203,6 @@ VTXO machine events (frozen):
 | `HOST_REGISTERED` | Proceed is about to broadcast this host |
 | `HOST_RELAYED` / `HOST_CONFIRMED` / `UNROLLED` | WASM observation |
 | `COMPLETE_READY` | WASM claimable check |
-| `COMPLETE` | User (Complete dialog) |
 | `EXITED` / `FUNDING_LOST` | WASM spend-heal / viability |
 | `UNTAG` | Abort while still `tagged` and safe |
 
@@ -271,7 +270,7 @@ Spec IDs: `ARK-EXIT-27`–`32` in [doc/features/arkade.yaml](../doc/features/ark
 1. **`never_seen` deletes the observation.** When the budget fires, delete the row so the txid leaves the hot set. VTXOs stay `tagged` (Stage 1 analogue: leave pending deductions). Rows kept as 6-conf evidence are still deleted when every VTXO on that host is `exited` or `funding_lost`. Re-proceed with the same deterministic txid **re-registers** and resets the probe window.
 2. **Probe budget is not collapsed across a time skip.** Evaluated only on B entry points (no 6-conf `after` actor). At most one probe increment per txid per B entry. First miss counts only after `registered_at + 10 minutes`; later misses need `last_probed_at + 1 minute`. Five eligible misses (1 + 4) **delete** the row. A single load after an hour counts as one miss. Independent of this, if Esplora shows ≥6 confs, B still stamps (materials heal).
 3. **Complete list vs complete gate.** The dialog still lists pipeline VTXOs (`list_unilateral_exits_in_progress` today; later record-derived) with `can_complete` (`ARK-EXIT-02`). The **RPC** gate is snapshot `complete_ready` (`is_unrolled && !is_spent` plus `can_be_claimed_unilaterally_by_owner`). No `VtxoNotInUnilateralExit` (`ARK-EXIT-31`).
-4. **XState event names** are frozen: `HYDRATE`, `HOST_REGISTERED`, `HOST_RELAYED`, `HOST_CONFIRMED`, `UNROLLED`, `COMPLETE_READY`, `COMPLETE`, `EXITED`, `FUNDING_LOST`, `UNTAG`. Hydrate **sets state from the WASM record** (phase jumps allowed); it does not replay intermediates (`ARK-EXIT-32`).
+4. **XState event names** are frozen: `HYDRATE`, `HOST_REGISTERED`, `HOST_RELAYED`, `HOST_CONFIRMED`, `UNROLLED`, `COMPLETE_READY`, `EXITED`, `FUNDING_LOST`, `UNTAG`. Hydrate **sets state from the WASM record** (phase jumps allowed); it does not replay intermediates (`ARK-EXIT-32`). Claim success is `EXITED` via hydrate, not a separate `COMPLETE` child event.
 
 #### Abort / en-passant / complete-after-abort
 
@@ -355,7 +354,7 @@ The original bug. Ship this even if later stages slip.
 - Untag VTXOs because a broadcast error or `never_seen` budget fired.
 - Stamp `commitment` or `checkpoint` as unrolled.
 - Let React or hooks own VTXO phase outside XState after Stage 4.
-- Implement Stages 1–3 in one envelope migration / one PR.
+- Re-split already-shipped Stages 1–4 into historical PRs. The v8→v11 envelope bundled them; the one-stage-per-PR rule applies to *future* stages.
 
 ---
 

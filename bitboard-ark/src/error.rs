@@ -74,9 +74,6 @@ pub enum ArkWasmError {
     #[error("vtxo_outpoints must not be empty")]
     EmptyVtxoOutpoints,
 
-    #[error("VTXO {txid}:{vout} is not in unilateral exit")]
-    VtxoNotInUnilateralExit { txid: String, vout: u32 },
-
     #[error("VTXO {txid}:{vout} timelock has not elapsed yet — complete is not available")]
     VtxoUnilateralExitNotReady { txid: String, vout: u32 },
 
@@ -156,7 +153,6 @@ impl ArkWasmError {
             | Self::InvalidSendAmount
             | Self::VtxoNotFound { .. }
             | Self::EmptyVtxoOutpoints
-            | Self::VtxoNotInUnilateralExit { .. }
             | Self::VtxoUnilateralExitNotReady { .. } => CODE_VALIDATION,
             Self::VtxoFundingLost { .. } => CODE_VTXO_FUNDING_LOST,
             Self::AutonomousExitMaterialsMissing => CODE_AUTONOMOUS_EXIT_MATERIALS_MISSING,

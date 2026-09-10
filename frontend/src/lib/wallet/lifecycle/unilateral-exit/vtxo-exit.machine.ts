@@ -122,12 +122,7 @@ export const vtxoExitMachine = vtxoExitMachineSetup.createMachine({
     host_relayed: {},
     host_confirmed: {},
     unrolled: {},
-    complete_ready: {
-      on: {
-        COMPLETE: { target: 'completing' },
-      },
-    },
-    completing: {},
+    complete_ready: {},
     exited: {},
     funding_lost: {},
     idle: {},
@@ -146,10 +141,7 @@ export function vtxoExitSnapshotState(
 export function vtxoExitPhaseFromMachineState(
   value: VtxoExitMachineStateId,
 ): ArkadeVtxoExitPhase | null {
-  if (value === 'routing' || value === 'completing' || value === 'idle') {
-    if (value === 'completing') {
-      return 'complete_ready'
-    }
+  if (value === 'routing' || value === 'idle') {
     return null
   }
   if (isVtxoExitPhase(value)) {

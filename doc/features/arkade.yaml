@@ -208,8 +208,8 @@ feature:
           stay so a second START_* on other startable leaves can run while earlier coins wait to
           be claimed. CLEAR_JOB resets a broadcast bookmark only — not an on-chain Complete spend.
           VTXO children are a hydrated view keyed by (txid, vout); spawn from persisted records
-          not only the job bookmark. Frozen child events: HYDRATE, HOST_REGISTERED, HOST_RELAYED,
-          HOST_CONFIRMED, UNROLLED, COMPLETE_READY, COMPLETE, EXITED, FUNDING_LOST, UNTAG.
+          not only the job bookmark.           Frozen child events: HYDRATE, HOST_REGISTERED, HOST_RELAYED,
+          HOST_CONFIRMED, UNROLLED, COMPLETE_READY, EXITED, FUNDING_LOST, UNTAG.
           Production advances via HYDRATE (sets state from the WASM record; phase jumps allowed);
           it does not replay intermediates. ARKADE_SESSION_RESET (lock / session teardown) stops all
           actors; next unlock hydrates from WASM. No per-VTXO after delay until 6 confirmations

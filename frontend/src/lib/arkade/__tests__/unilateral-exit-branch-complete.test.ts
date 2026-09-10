@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  areAllJobLeavesUnrolled,
   isUnilateralExitBranchComplete,
   isUnilateralExitJobComplete,
   mapWasmProgressToLifecyclePhase,
@@ -49,23 +48,6 @@ describe('unilateral-exit-branch-complete', () => {
         }),
       ),
     ).toBe(true)
-  })
-
-  it('areAllJobLeavesUnrolled requires every selected leaf txid unrolled', () => {
-    const jobOutpoints = [{ txid: leafTxid, vout: 0 }]
-    expect(
-      areAllJobLeavesUnrolled(jobOutpoints, [
-        { txid: leafTxid, vout: 0, confirmations: 6, isUnrolled: true },
-      ]),
-    ).toBe(true)
-    expect(
-      areAllJobLeavesUnrolled(jobOutpoints, [
-        { txid: leafTxid, vout: 0, confirmations: 0, isUnrolled: false },
-      ]),
-    ).toBe(false)
-    expect(areAllJobLeavesUnrolled([], [{ txid: leafTxid, vout: 0, confirmations: 6, isUnrolled: true }])).toBe(
-      false,
-    )
   })
 
   it('isUnilateralExitJobComplete follows branch complete, not 6-conf is_unrolled', () => {

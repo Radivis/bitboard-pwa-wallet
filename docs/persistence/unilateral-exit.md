@@ -43,6 +43,13 @@ Flushed through the Arkade save lifecycle into `StoredArkadeAccount.sdkPersisten
 
 **Envelope version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 11`. `parse_import` accepts 3–11. Published 0.3.3 wallets used v3; missing fields default (`unilateral_exit_frontend` is `None`, `host_tx_observations` is empty, `vtxo_exit_records` is empty, `autonomous_mode` is false). When `unilateral_exit_frontend` is `None`, a one-shot overlay reads leftover SQLite `settings` rows. On open / first B, empty `vtxo_exit_records` heal from leftover pending unilateral deductions, v10 watches, and snapshot `is_unrolled && !is_spent` rows; leftover watches are then cleared so they are not a second write path.
 
+| Version | What landed |
+|---------|-------------|
+| 8 | Last write before VTXO records. Import yields empty `host_tx_observations` and empty `vtxo_exit_records`. |
+| 9 | Records + observations fields exist on the type. A v9 blob with no those keys still loads empty maps (heal from leftover pending / snapshot flags). Never a published Bitboard write. |
+| 10 | Watches still present as a leftover write-era field. Heal-then-clear on open / first B (`ARK-EXIT-12`). |
+| 11 | Current write. Adds `funding_lost`. Records are the pipeline source of truth; watches are import-only. |
+
 | Field | Where | Role |
 |-------|-------|------|
 | `virtual_tx_outpoints` | `OffchainVtxoSnapshot` | VTXO list including sticky `is_unrolled` / `is_spent` / `is_swept` |
@@ -148,8 +155,10 @@ TanStack Query caches progress/topology/balance for display. During an active jo
 
 ## Host-tx observations (`HostTxObservationRecord`)
 
+Observations are a **map keyed by virtual host txid**. The record has no `txid` field — the map key is the txid:
+
 ```text
-txid, registered_at, relayed, confirmations, never_seen_probes, last_probed_at
+registered_at, relayed, confirmations, never_seen_probes, last_probed_at
 ```
 
 Registered immediately before broadcast of that proceed step (`ARK-EXIT-28`). After five eligible `never_seen` misses, **delete** the observation and rewind that host’s VTXO records to **`tagged`** (keep the rows). Also delete when every VTXO on that host is `exited` or `funding_lost` (or every snapshot vout `is_spent`). Observation plus the unified 6-conf reconciler **feed** `is_unrolled` and record phase advances.
