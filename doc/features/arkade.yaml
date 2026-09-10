@@ -82,7 +82,7 @@ feature:
       - id: ARK-EXIT-01
         description: Start unilateral exit lists only VTXOs that can start unroll; unrolled, complete_ready, exited, and funding_lost records are excluded. Tagged leftovers that are not yet unrolled remain startable after abort (ARK-EXIT-26/30). Concurrent second job stays a frontend selection lock.
       - id: ARK-EXIT-02
-        description: Complete unilateral exit lists in-progress VTXOs from persisted VTXO exit records (tagged through complete_ready). Per-row copy is VTXO child phase (ARK-EXIT-32): waiting for host transaction broadcast vs waiting for first confirmation vs waiting for 6 confirmations vs waiting for timelock vs ready to complete — not !canComplete as timelock. Complete RPC does not require in-progress membership (ARK-EXIT-31); this ID remains the Complete list.
+        description: Complete unilateral exit lists in-progress VTXOs from persisted VTXO exit records (tagged through complete_ready). Per-row copy is VTXO child phase (ARK-EXIT-32) when a child is spawned, otherwise the persisted record phase (same SoT HYDRATE reads): waiting for host transaction broadcast vs waiting for first confirmation vs waiting for 6 confirmations vs waiting for timelock vs ready to complete — not !canComplete as timelock. Complete RPC does not require in-progress membership (ARK-EXIT-31); this ID remains the Complete list. Complete-dialog errors use the same sanitized user-facing copy as the control page (ARK-EXIT-34).
       - id: ARK-EXIT-03
         description: Complete unilateral exit supports multi-select batch completion with explicit virtual outpoints (txid + vout) and fee estimate scaled to selected inputs
       - id: ARK-EXIT-04
@@ -137,10 +137,11 @@ feature:
         description: In-flight states other than waiting, ensuringBroadcast, and waitingForParentData show "figuring out what to do next" on step progress and a cog overlay (title/aria "Figuring out what to do next"); automatic mode still appends " (proceeding automatically)"
       - id: ARK-EXIT-34
         description: >-
-          Control page step-error copy never shows raw WASM/reqwest stack traces. Transient Esplora
-          GET failures (browser Failed to fetch, request timeout) are retried at the explorer client
-          and on progress/viability WASM calls; remaining failures show a short explorer-unreachable
-          message plus Click Proceed to retry this step.
+          Control page step-error copy and Complete unilateral exit errors never show raw
+          WASM/reqwest stack traces. Transient Esplora GET failures (browser Failed to fetch,
+          request timeout) are retried at the explorer client and on progress/viability WASM calls;
+          remaining failures show a short explorer-unreachable message plus Click Proceed to retry
+          this step.
       - id: ARK-EXIT-26
         description: >-
           After abort, leftover WASM in-progress leaves that are not yet unrolled remain selectable
@@ -216,7 +217,8 @@ feature:
           (not D). Complete dialog, control-page node detail, and the VTXO viewer card last line
           subscribe to child snapshots for waiting-for-host-transaction-broadcast vs
           waiting-for-first-confirmation vs waiting-for-6-confirmations vs waiting-for-timelock vs
-          ready; they never infer can-complete from job state.
+          ready; they never infer can-complete from job state. Complete dialog falls back to the
+          persisted record phase when no child is spawned yet.
       - id: ARK-EXIT-33
         description: >-
           Persist funding_lost on VTXO exit records (envelope v11). Viability/reconcile scans

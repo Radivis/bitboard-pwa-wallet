@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  ARKADE_TXID_DISPLAY_PREFIX_LENGTH,
+  formatArkadeTxidToastSnippet,
   formatIntentFeePrograms,
   formatMissingBlocktimeCompletionWarning,
   formatMissingBlocktimeCompletionWarningLine,
@@ -131,5 +133,14 @@ describe('missing blocktime completion warning', () => {
     expect(
       formatMissingBlocktimeCompletionWarningLine(warning.lines[1]),
     ).toContain('on-chain')
+  })
+})
+
+describe('formatArkadeTxidToastSnippet', () => {
+  it('uses the shared display prefix length', () => {
+    const txid = 'ab'.repeat(32)
+    expect(formatArkadeTxidToastSnippet(txid)).toBe(
+      `${txid.slice(0, ARKADE_TXID_DISPLAY_PREFIX_LENGTH)}…`,
+    )
   })
 })

@@ -178,10 +178,10 @@ export function formatMissingBlocktimeCompletionWarning(
 export function formatMissingBlocktimeCompletionWarningLine(
   line: MissingBlocktimeCompletionWarningLine,
 ): string {
-  const virtualSnippet = `${line.virtualTxid.slice(0, 12)}…`
+  const virtualSnippet = formatArkadeTxidToastSnippet(line.virtualTxid)
   if (!line.onChainDiffersFromVirtual) {
     return `${virtualSnippet} (${line.amountSats} sats)`
   }
-  const onChainSnippet = `${line.onChainTxid.slice(0, 12)}…:${line.onChainVout}`
+  const onChainSnippet = `${formatArkadeTxidToastSnippet(line.onChainTxid)}:${line.onChainVout}`
   return `${virtualSnippet} (${line.amountSats} sats, on-chain ${onChainSnippet})`
 }

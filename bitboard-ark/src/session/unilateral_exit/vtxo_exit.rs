@@ -61,9 +61,6 @@ fn upsert_tagged_record(
     let key = vtxo_exit_record_key(txid, vout);
     match records.get_mut(&key) {
         Some(existing) => {
-            if existing.phase < VtxoExitPhase::Tagged {
-                existing.phase = VtxoExitPhase::Tagged;
-            }
             existing.host_txid = host_txid.to_string();
             existing.amount_sats = amount_sats;
         }

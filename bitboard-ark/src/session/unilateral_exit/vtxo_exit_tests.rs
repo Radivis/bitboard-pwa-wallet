@@ -190,6 +190,18 @@ fn tag_is_idempotent_and_does_not_downgrade() {
         VtxoExitPhase::HostConfirmed
     );
     assert_eq!(record_phase(&records, &leaf, 0), VtxoExitPhase::Tagged);
+    records
+        .get_mut(&vtxo_exit_record_key(&leaf.to_string(), 0))
+        .expect("leaf")
+        .phase = VtxoExitPhase::FundingLost;
+    tag_unilateral_exit_plan_in_records(
+        &snapshot,
+        &[VirtualOutPoint::new(leaf, 0)],
+        &mut records,
+        9,
+    )
+    .expect("retag funding_lost");
+    assert_eq!(record_phase(&records, &leaf, 0), VtxoExitPhase::FundingLost);
 }
 
 #[test]

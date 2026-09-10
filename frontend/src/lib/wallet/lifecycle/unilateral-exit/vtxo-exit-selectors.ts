@@ -94,6 +94,8 @@ export function resolveVtxoExitPhaseForCopy(params: {
   childPhase?: ArkadeVtxoExitPhase
   recordPhase?: ArkadeVtxoExitPhase
 }): ArkadeVtxoExitPhase | undefined {
+  // Prefer the spawned child (control page). Complete dialog falls back to the WASM
+  // record when children are not hydrated yet — same SoT HYDRATE reads.
   return params.childPhase ?? params.recordPhase
 }
 

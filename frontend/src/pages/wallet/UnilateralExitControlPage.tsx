@@ -310,12 +310,8 @@ export function UnilateralExitControlPage() {
   const batchEstimate = batchEstimateQuery.data
   const bumperLow = batchEstimate != null && !batchEstimate.bumperSufficient
   const { phase, jobActive, showStepProgress, isProceeding } = useMemo(
-    () =>
-      selectUnilateralExitControlJobState(actorSnapshot, {
-        hasInProgressExits,
-        totalSteps,
-      }),
-    [actorSnapshot, hasInProgressExits, totalSteps],
+    () => selectUnilateralExitControlJobState(actorSnapshot, totalSteps),
+    [actorSnapshot, totalSteps],
   )
   const proceedButton = useMemo(
     () =>
@@ -326,7 +322,6 @@ export function UnilateralExitControlPage() {
         batchEstimateLoading: batchEstimateQuery.isLoading,
         prefsHydrated: automationPrefsHydrated,
         lifecycleJobActive,
-        hasInProgressExits,
         phase,
       }),
     [
@@ -335,7 +330,6 @@ export function UnilateralExitControlPage() {
       automationPrefsHydrated,
       batchEstimate,
       batchEstimateQuery.isLoading,
-      hasInProgressExits,
       jobOutpoints.length,
       lifecycleJobActive,
       phase,
@@ -347,11 +341,9 @@ export function UnilateralExitControlPage() {
         resolvedJobOutpointsCount: jobOutpoints.length,
         lifecycleJobActive,
         persistedJobExists,
-        hasInProgressExits,
       }),
     [
       actorSnapshot,
-      hasInProgressExits,
       jobOutpoints.length,
       lifecycleJobActive,
       persistedJobExists,

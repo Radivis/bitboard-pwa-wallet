@@ -3,8 +3,6 @@ import {
   createStableSnapshotGetter,
   shallowRecordEqual,
 } from '@/hooks/lifecycle-snapshot-subscription'
-import { defaultUnilateralExitAutomationPrefs } from '@/lib/wallet/lifecycle/unilateral-exit-automation-types'
-import { useUnilateralExitAutomationPrefsStore } from '@/lib/wallet/lifecycle/unilateral-exit-automation-prefs-persistence'
 import type { UnilateralExitLifecycleSnapshot } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
 import {
   getUnilateralExitActorSnapshot,
@@ -70,15 +68,4 @@ export function useVtxoExitSnapshots(): VtxoExitChildSnapshotMap {
 export function useIsUnilateralExitJobActive(): boolean {
   const actorSnapshot = useUnilateralExitActorSnapshot()
   return selectIsUnilateralExitJobActive(actorSnapshot)
-}
-
-export function useUnilateralExitAutomationPrefsForActor() {
-  const actorSnapshot = useUnilateralExitActorSnapshot()
-  const scope = actorSnapshot.context.walletScope
-  if (scope == null) {
-    return defaultUnilateralExitAutomationPrefs()
-  }
-  return useUnilateralExitAutomationPrefsStore
-    .getState()
-    .getPrefs(scope.walletId, scope.networkMode, scope.arkadeAccountId)
 }

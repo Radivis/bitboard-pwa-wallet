@@ -3,6 +3,7 @@ import { UNILATERAL_EXIT_LEAF_CONFIRMATIONS } from '@/lib/arkade/unilateral-exit
 import {
   formatVtxoExitPhaseCopy,
   hasLeftoverBranchCompleteVtxoChildren,
+  resolveVtxoExitPhaseForCopy,
   shouldShowUnilateralExitBranchCompleteStatus,
   vtxoExitPhaseCopyFromPhase,
   VTXO_EXIT_PHASE_COPY,
@@ -53,6 +54,20 @@ describe('vtxoExitPhaseCopyFromPhase', () => {
       'waiting for timelock',
     )
     expect(formatVtxoExitPhaseCopy(VTXO_EXIT_PHASE_COPY.ready)).toBe('ready to complete')
+  })
+
+  it('prefers child phase over WASM record phase', () => {
+    expect(
+      resolveVtxoExitPhaseForCopy({
+        childPhase: 'unrolled',
+        recordPhase: 'host_relayed',
+      }),
+    ).toBe('unrolled')
+    expect(
+      resolveVtxoExitPhaseForCopy({
+        recordPhase: 'complete_ready',
+      }),
+    ).toBe('complete_ready')
   })
 })
 

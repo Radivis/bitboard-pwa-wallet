@@ -12,11 +12,13 @@ import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSe
 import { formatSatPerVbTwoDecimals } from '@/lib/esplora/esplora-fee-estimates'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import {
+  formatArkadeTxidToastSnippet,
   formatMissingBlocktimeCompletionWarning,
   formatMissingBlocktimeCompletionWarningLine,
   formatUnilateralExitCompleteWaitingBanner,
 } from '@/lib/arkade/arkade-exit-utils'
-import { includesArkadeVtxoOutpoint } from '@/workers/arkade-api'
+import { userFacingErrorMessage } from '@/lib/shared/utils'
+import { includesArkadeVtxoOutpoint, type ArkadeVtxoExitPhase } from '@/workers/arkade-api'
 import type { useArkadeExitFlow } from '@/hooks/useArkadeExitFlow'
 import { useVtxoExitSnapshots } from '@/hooks/useUnilateralExitLifecycleSnapshot'
 import {
@@ -27,7 +29,6 @@ import {
   type VtxoExitPhaseCopyKind,
 } from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit-selectors'
 import type { VtxoExitChildSnapshotMap } from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit-machine-types'
-import type { ArkadeVtxoExitPhase } from '@/workers/arkade-api'
 
 type ExitFlow = ReturnType<typeof useArkadeExitFlow>
 
@@ -35,22 +36,22 @@ interface CompleteUnilateralExitDialogProps {
   exitFlow: ExitFlow
 }
 
+function completeRowPhase(
+  row: { txid: string; vout: number; phase?: ArkadeVtxoExitPhase },
+  snapshots: VtxoExitChildSnapshotMap,
+): ArkadeVtxoExitPhase | undefined {
+  return resolveVtxoExitPhaseForCopy({
+    childPhase: lookupVtxoExitChildPhase(snapshots, row.txid, row.vout),
+    recordPhase: row.phase,
+  })
+}
+
 function completeRowPhaseSuffix(
   row: { txid: string; vout: number; phase?: ArkadeVtxoExitPhase },
   snapshots: VtxoExitChildSnapshotMap,
 ): string {
-  const phase = resolveVtxoExitPhaseForCopy({
-    childPhase: lookupVtxoExitChildPhase(snapshots, row.txid, row.vout),
-    recordPhase: row.phase,
-  })
-  const copy = formatVtxoExitPhaseCopy(vtxoExitPhaseCopyFromPhase(phase))
+  const copy = formatVtxoExitPhaseCopy(vtxoExitPhaseCopyFromPhase(completeRowPhase(row, snapshots)))
   return copy !== '' ? ` · ${copy}` : ''
-}
-
-function errorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message
-  if (typeof error === 'string') return error
-  return 'Unknown error'
 }
 
 async function copyClipboardText(
@@ -92,10 +93,7 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
   const waitingRows = selectedInProgressRows.filter((row) => !row.canComplete)
   const waitingCopyKinds = new Set<VtxoExitPhaseCopyKind>()
   for (const row of waitingRows) {
-    const phase = resolveVtxoExitPhaseForCopy({
-      childPhase: lookupVtxoExitChildPhase(vtxoExitSnapshots, row.txid, row.vout),
-      recordPhase: row.phase,
-    })
+    const phase = completeRowPhase(row, vtxoExitSnapshots)
     const copyKind = vtxoExitPhaseCopyFromPhase(phase)
     if (copyKind != null) {
       waitingCopyKinds.add(copyKind)
@@ -107,7 +105,7 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
       timelockBlocks: bumperInfoQuery.data?.unilateralExitTimelockBlocks,
       timelockSeconds: bumperInfoQuery.data?.unilateralExitTimelockSeconds,
     },
-    waitingTxidSnippets: waitingRows.map((row) => `${row.txid.slice(0, 8)}…`),
+    waitingTxidSnippets: waitingRows.map((row) => formatArkadeTxidToastSnippet(row.txid)),
   })
   const completionFeeEstimate = completionFeeQuery.data
   const missingBlocktimeWarning =
@@ -326,7 +324,7 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
 
         {completeExitMutation.isError && (
           <p className="text-sm text-destructive" data-testid="arkade-complete-error">
-            Complete exit failed: {errorMessage(completeExitMutation.error)}
+            Complete exit failed: {userFacingErrorMessage(completeExitMutation.error) || 'Unknown error'}
           </p>
         )}
       </div>

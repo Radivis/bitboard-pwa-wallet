@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { CompleteUnilateralExitDialog } from '@/components/wallet/arkade-exit/CompleteUnilateralExitDialog'
+import { formatArkadeTxidToastSnippet } from '@/lib/arkade/arkade-exit-utils'
+import { BLOCKCHAIN_EXPLORER_UNREACHABLE_UI_MESSAGE } from '@/lib/shared/sanitize-error-for-ui'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import type { useArkadeExitFlow } from '@/hooks/useArkadeExitFlow'
 import type { ArkadeVtxoOutpoint } from '@/workers/arkade-api'
@@ -54,6 +56,74 @@ function outpoint(txid: string, vout = 0): ArkadeVtxoOutpoint {
 }
 
 describe('CompleteUnilateralExitDialog', () => {
+  it('complete_dialog_sanitizes_reqwest_error', () => {
+    renderWithProviders(
+      <CompleteUnilateralExitDialog
+        exitFlow={buildExitFlow({
+          completeExitMutation: {
+            mutate: vi.fn(),
+            isPending: false,
+            isError: true,
+            error: new Error(
+              'Blockchain error: Reqwest(reqwest::Error { kind: Request, source: "JsValue(TypeError: Failed to fetch\\n' +
+                'TypeError: Failed to fetch\\n at __wbg_fetch (http://localhost:3000/src/wasm-pkg/bitboard_ark/bitboard_ark_bg.js:1:1)" })',
+            ),
+          },
+        })}
+      />,
+    )
+
+    const error = screen.getByTestId('arkade-complete-error')
+    expect(error).toHaveTextContent(BLOCKCHAIN_EXPLORER_UNREACHABLE_UI_MESSAGE)
+    expect(error).not.toHaveTextContent('reqwest')
+    expect(error).not.toHaveTextContent('__wbg_fetch')
+    expect(error).not.toHaveTextContent('http://localhost:3000')
+  })
+
+  it('complete_dialog_strips_explorer_urls_from_error', () => {
+    renderWithProviders(
+      <CompleteUnilateralExitDialog
+        exitFlow={buildExitFlow({
+          completeExitMutation: {
+            mutate: vi.fn(),
+            isPending: false,
+            isError: true,
+            error: new Error('Blockchain error: failed https://mempool.space/api/block'),
+          },
+        })}
+      />,
+    )
+
+    const error = screen.getByTestId('arkade-complete-error')
+    expect(error).toHaveTextContent('Complete exit failed: Blockchain error: failed [url]')
+    expect(error).not.toHaveTextContent('mempool.space')
+  })
+
+  it('complete_waiting_banner_uses_shared_txid_prefix', () => {
+    const waitingTxid = 'aa'.repeat(32)
+    const row = {
+      id: `${waitingTxid}:0`,
+      txid: waitingTxid,
+      vout: 0,
+      amountSats: 100_000,
+      canComplete: false,
+      virtualStatusState: 'unrolled',
+      phase: 'unrolled' as const,
+    }
+    renderWithProviders(
+      <CompleteUnilateralExitDialog
+        exitFlow={buildExitFlow({
+          selectedInProgressOutpoints: [outpoint(waitingTxid)],
+          selectedInProgressRows: [row],
+        })}
+      />,
+    )
+
+    expect(screen.getByTestId('arkade-unilateral-complete-waiting')).toHaveTextContent(
+      formatArkadeTxidToastSnippet(waitingTxid),
+    )
+  })
+
   it('shows operator timelock duration for waiting rows', () => {
     const waitingTxid = 'aa'.repeat(32)
     renderWithProviders(

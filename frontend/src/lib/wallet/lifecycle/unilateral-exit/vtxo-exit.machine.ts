@@ -6,23 +6,12 @@ import {
   type VtxoExitMachineInput,
   type VtxoExitMachineStateId,
 } from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit-machine-types'
-import type { ArkadeVtxoExitPhase } from '@/workers/arkade-api'
+import {
+  ARKADE_VTXO_EXIT_PHASES,
+  isArkadeVtxoExitPhase,
+  type ArkadeVtxoExitPhase,
+} from '@/workers/arkade-api'
 import { assign, setup } from 'xstate'
-
-const PHASE_STATES: readonly ArkadeVtxoExitPhase[] = [
-  'tagged',
-  'host_broadcast_attempted',
-  'host_relayed',
-  'host_confirmed',
-  'unrolled',
-  'complete_ready',
-  'exited',
-  'funding_lost',
-]
-
-function isVtxoExitPhase(value: string): value is ArkadeVtxoExitPhase {
-  return (PHASE_STATES as readonly string[]).includes(value)
-}
 
 export const vtxoExitMachineSetup = setup({
   types: {
@@ -55,7 +44,7 @@ export const vtxoExitMachineSetup = setup({
   },
 })
 
-const hydrateTransitions = PHASE_STATES.map((phase) => ({
+const hydrateTransitions = ARKADE_VTXO_EXIT_PHASES.map((phase) => ({
   guard: {
     type: 'hydratePhaseIs' as const,
     params: { phase },
@@ -64,7 +53,7 @@ const hydrateTransitions = PHASE_STATES.map((phase) => ({
   actions: 'assignHydratePhase' as const,
 }))
 
-const routingAlways = PHASE_STATES.map((phase) => ({
+const routingAlways = ARKADE_VTXO_EXIT_PHASES.map((phase) => ({
   guard: {
     type: 'contextPhaseIs' as const,
     params: { phase },
@@ -144,7 +133,7 @@ export function vtxoExitPhaseFromMachineState(
   if (value === 'routing' || value === 'idle') {
     return null
   }
-  if (isVtxoExitPhase(value)) {
+  if (isArkadeVtxoExitPhase(value)) {
     return value
   }
   return null

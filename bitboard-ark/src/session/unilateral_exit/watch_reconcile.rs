@@ -192,7 +192,7 @@ pub(crate) async fn reconcile_exiting_vtxos_spent_on_esplora(
         .collect();
 
     for (key, record) in &records {
-        if !record_has_confirmed_unroll(record.phase) && record.phase != VtxoExitPhase::Unrolled {
+        if !record_has_confirmed_unroll(record.phase) {
             continue;
         }
         let Some((txid, vout)) = parse_vtxo_exit_record_key(key) else {

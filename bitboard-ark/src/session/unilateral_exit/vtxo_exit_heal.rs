@@ -35,6 +35,7 @@ fn phase_from_legacy(
 }
 
 /// Heal upsert: create the row or raise phase / fill a zero amount. Never downgrades.
+/// Uses [`VtxoExitPhase::can_heal_raise_to`] so `FundingLost` is not treated as after `Exited`.
 fn upsert_healed_record(
     records: &mut BTreeMap<String, VtxoExitRecord>,
     txid: &str,
@@ -47,7 +48,7 @@ fn upsert_healed_record(
     let key = vtxo_exit_record_key(txid, vout);
     match records.get_mut(&key) {
         Some(existing) => {
-            if phase > existing.phase {
+            if existing.phase.can_heal_raise_to(phase) {
                 existing.phase = phase;
             }
             if existing.amount_sats == 0 {

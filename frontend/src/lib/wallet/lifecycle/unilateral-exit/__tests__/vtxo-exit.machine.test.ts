@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { createActor } from 'xstate'
 import { vtxoExitMachine, vtxoExitPhaseFromMachineState } from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit.machine'
-import type { ArkadeVtxoExitRecordDto } from '@/workers/arkade-api'
+import { ARKADE_VTXO_EXIT_PHASES, type ArkadeVtxoExitRecordDto } from '@/workers/arkade-api'
 
 const leaf: ArkadeVtxoExitRecordDto = {
   txid: 'aa'.repeat(32),
@@ -61,6 +61,12 @@ describe('vtxoExitMachine', () => {
     expect(actor.getSnapshot().value).toBe('idle')
     expect(actor.getSnapshot().context.phase).toBe('tagged')
     expect(vtxoExitPhaseFromMachineState('idle')).toBeNull()
+  })
+
+  it('maps every ARKADE_VTXO_EXIT_PHASES value from machine state', () => {
+    for (const phase of ARKADE_VTXO_EXIT_PHASES) {
+      expect(vtxoExitPhaseFromMachineState(phase)).toBe(phase)
+    }
   })
 
   it('child_has_no_after_delays', () => {

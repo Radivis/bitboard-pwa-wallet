@@ -159,7 +159,6 @@ export function selectCanAbortUnilateralExitOrchestration(
     resolvedJobOutpointsCount: number
     lifecycleJobActive: boolean
     persistedJobExists: boolean
-    hasInProgressExits: boolean
   },
 ): boolean {
   if (params.resolvedJobOutpointsCount === 0) {
@@ -225,10 +224,7 @@ function controlDisplayPhaseFromMachine(
 
 export function selectUnilateralExitControlJobState(
   state: UnilateralExitActorSnapshot,
-  params: {
-    hasInProgressExits: boolean
-    totalSteps: number
-  },
+  totalSteps: number,
 ): {
   phase: UnilateralExitControlDisplayPhase
   exitJobInFlight: boolean
@@ -245,7 +241,7 @@ export function selectUnilateralExitControlJobState(
     phase,
     exitJobInFlight,
     jobActive,
-    showStepProgress: exitJobInFlight && params.totalSteps > 0,
+    showStepProgress: exitJobInFlight && totalSteps > 0,
     isProceeding,
   }
 }
@@ -330,7 +326,6 @@ export function selectUnilateralExitProceedButtonState(
     batchEstimateLoading: boolean
     prefsHydrated: boolean
     lifecycleJobActive: boolean
-    hasInProgressExits: boolean
     phase: UnilateralExitControlDisplayPhase
   },
 ): UnilateralExitProceedButtonState {
