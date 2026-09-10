@@ -42,7 +42,7 @@ impl ArkSession {
         let mut any_pass_rotated = false;
 
         for _ in 0..MAX_SIGNER_MIGRATION_PASSES {
-            let exclude_vtxos = self.pipeline_outpoints();
+            let exclude_vtxos = self.spend_locked_outpoints();
             let report = self
                 .with_batch_join(
                     crate::persistence::PendingBatchIntentKind::Migrate,

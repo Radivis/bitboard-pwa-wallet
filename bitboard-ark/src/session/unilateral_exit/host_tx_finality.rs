@@ -129,6 +129,11 @@ fn never_seen_miss_is_eligible(record: &HostTxObservationRecord, now: i64) -> bo
 ///
 /// `last_probed_at` is the last *eligible* miss, not every B poll. Frequent list/progress
 /// probes (15s UI) must not reset the 1-minute spacing (`ARK-EXIT-28`).
+///
+/// This budget is the delayed cleanup of proceed's pre-broadcast register: do not rewind on
+/// the first miss or because `step_wait` is unset. After five eligible misses, delete the
+/// observation and rewind to `tagged` (keep rows). See docs/unilateral-exit.md
+/// "Register before Esplora; never_seen is the cleanup".
 fn apply_absent_probe(record: &mut HostTxObservationRecord, now: i64) -> bool {
     if never_seen_miss_is_eligible(record, now) {
         record.never_seen_probes = record.never_seen_probes.saturating_add(1);

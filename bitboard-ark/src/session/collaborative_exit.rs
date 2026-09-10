@@ -73,7 +73,7 @@ impl ArkSession {
         let baseline_offchain_spendable_sats = self.net_cooperative_spendable_sats().await?;
         let exit_amount =
             resolve_cooperative_exit_amount(params.amount_sats, baseline_offchain_spendable_sats);
-        let exclude_vtxos = self.pipeline_outpoints();
+        let exclude_vtxos = self.spend_locked_outpoints();
         let mut rng = OsRng;
         let redeem = self
             .with_batch_join(
@@ -151,7 +151,7 @@ impl ArkSession {
         let net_cooperative_spendable_sats = self.net_cooperative_spendable_sats().await?;
         let to_amount =
             resolve_cooperative_exit_amount(amount_sats, net_cooperative_spendable_sats);
-        let exclude_vtxos = self.pipeline_outpoints();
+        let exclude_vtxos = self.spend_locked_outpoints();
 
         let mut rng = OsRng;
         match self

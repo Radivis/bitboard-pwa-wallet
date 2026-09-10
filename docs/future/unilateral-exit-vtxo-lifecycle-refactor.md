@@ -27,7 +27,7 @@ Letters from the design discussion. **Near-term lock is B + C + E. D is rejected
 
 **B — Unified Esplora finality reconciler.** One WASM pass: any `tree` / `ark` virtual tx that hosts VTXOs and has ≥6 Esplora confirmations stamps `is_unrolled` on every vout of that txid (terminal leaves included; `commitment` / `checkpoint` skipped). Same constant as today (`UNILATERAL_EXIT_LEAF_CONFIRMATIONS`). Runs on Arkade load (including autonomous), operator sync, proceed, progress, list-in-progress, and complete — not only while a frontend job is polling. Job proceed/progress may still call it for snappy in-job UI.
 
-**C — Host-tx observation registry.** Persist per virtual `txid`: `registered_at`, `relayed`, `confirmations`, `never_seen_probes`, `last_probed_at`. Register **immediately before** broadcast of that step so a false broadcast error cannot skip the row. Hot Esplora set is this table (plus a materials heal for tagged VTXOs if a write was missed). `never_seen` after a probe budget **deletes** the **tx** row; it does not untag VTXOs.
+**C — Host-tx observation registry.** Persist per virtual `txid`: `registered_at`, `relayed`, `confirmations`, `never_seen_probes`, `last_probed_at`. Register **immediately before** broadcast of that step so a false broadcast error cannot skip the row. Hot Esplora set is this table (plus a materials heal for tagged VTXOs if a write was missed). `never_seen` after a probe budget **deletes** the **tx** row; it does not untag VTXOs. Strategy (why early register, why not to trust first Esplora / `step_wait`, why ~14 min before cleanup): [unilateral-exit.md](unilateral-exit.md#register-before-esplora-never_seen-is-the-cleanup).
 
 **D — Always-on 6-conf poll actor.** A dedicated unlocked-session ticker (XState `after` or rail poller) that sleeps until 6 confirmations even when the user is idle on the dashboard. Rejected: load/sync/proceed/progress/list/complete already cover “closed the tab for an hour”; a background 6-conf waiter is extra machinery for this purpose.
 
@@ -119,19 +119,19 @@ Shape (Stage 1 can be this boring):
 txid, registered_at, relayed, confirmations, never_seen_probes, last_probed_at
 ```
 
-**Register** immediately before broadcast of that step, after the parent is built and the txid is known, **before** `broadcast_unilateral_exit_step_at_fee_rate`. Today proceed writes `unilateral_exit_step_wait` only after success; a false error after a real relay is the hole.
+**Register** immediately before broadcast of that step, after the parent is built and the txid is known, **before** `broadcast_unilateral_exit_step_at_fee_rate`. Do not wait for a first Esplora “seen”. `unilateral_exit_step_wait` is the job cursor after proceed considers submit satisfied — it is not chain proof and must not veto `never_seen`. The hole this closes: a false broadcast error after a real relay must not skip the observation.
 
 Do **not** register the whole remaining DAG at job start (Esplora-spam + timeout-on-never-broadcast).
 
 **Hot probe set:** observation rows that still exist and have `confirmations < 6`, plus (after 6 conf) VTXOs in `unrolled` / `complete_ready` that need output-status / timelock probes. A deleted `never_seen` row is gone from the hot set.
 
-**`never_seen` budget** (evaluated on B entry points, not a sleep loop; freeze in [Stage 0 freeze](#stage-0-freeze-agreed)): first eligible miss after `registered_at + 10 minutes`, then up to four more at `last_probed_at + 1 minute`. At most one probe increment per txid per B entry; do not collapse the budget across a time skip. If still absent:
+**`never_seen` budget** (evaluated on B entry points, not a sleep loop; freeze in [Stage 0 freeze](#stage-0-freeze-agreed)): first eligible miss after `registered_at + 10 minutes`, then up to four more at `last_probed_at + 1 minute`. At most one probe increment per txid per B entry; do not collapse the budget across a time skip; 15s polls must not reset `last_probed_at` except on an eligible miss. This long wait is the cleanup of the early register when Esplora still has nothing — not a reaction to the first miss. If still absent:
 
 - **Delete** this observation row (that is the cleanup; the txid leaves the hot set).
-- Move VTXOs **back to `tagged`**, not `idle`.
-- User may proceed again (deterministic txid → re-register, reset probe window).
+- Move VTXOs **back to `tagged`**, not `idle`. Spend-lock remains until abort.
+- User may proceed again (deterministic txid → re-register, reset probe window) or abort (now `tagged` + no observation → unlock).
 
-Never drop a VTXO tag because Esplora was slow or the tab was closed.
+Never drop a VTXO tag because Esplora was slow, a broadcast RPC failed, or the tab was closed. Handbook: [unilateral-exit.md](unilateral-exit.md#register-before-esplora-never_seen-is-the-cleanup).
 
 | Observation | Action |
 |-------------|--------|
@@ -267,7 +267,7 @@ Spec IDs: `ARK-EXIT-27`–`32` in [doc/features/arkade.yaml](../doc/features/ark
 
 #### Resolved “or”s
 
-1. **`never_seen` deletes the observation.** When the budget fires, delete the row so the txid leaves the hot set. VTXOs stay `tagged` (Stage 1 analogue: leave pending deductions). Rows kept as 6-conf evidence are still deleted when every VTXO on that host is `exited` or `funding_lost`. Re-proceed with the same deterministic txid **re-registers** and resets the probe window.
+1. **`never_seen` deletes the observation.** When the budget fires, delete the row so the txid leaves the hot set. VTXOs stay `tagged` (Stage 1 analogue: leave pending deductions). That rewind is the **delayed** cleanup of the pre-broadcast register after Esplora still has nothing (~14 minutes, five eligible misses) — not an immediate untag on broadcast error or first miss. Abort after that rewind may unlock. Rows kept as 6-conf evidence are still deleted when every VTXO on that host is `exited` or `funding_lost`. Re-proceed with the same deterministic txid **re-registers** and resets the probe window. `step_wait` does not veto this path.
 2. **Probe budget is not collapsed across a time skip.** Evaluated only on B entry points (no 6-conf `after` actor). At most one probe increment per txid per B entry. First miss counts only after `registered_at + 10 minutes`; later misses need `last_probed_at + 1 minute`. Five eligible misses (1 + 4) **delete** the row. A single load after an hour counts as one miss. Independent of this, if Esplora shows ≥6 confs, B still stamps (materials heal).
 3. **Complete list vs complete gate.** The dialog still lists pipeline VTXOs (`list_unilateral_exits_in_progress` today; later record-derived) with `can_complete` (`ARK-EXIT-02`). The **RPC** gate is snapshot `complete_ready` (`is_unrolled && !is_spent` plus `can_be_claimed_unilaterally_by_owner`). No `VtxoNotInUnilateralExit` (`ARK-EXIT-31`).
 4. **XState event names** are frozen: `HYDRATE`, `HOST_REGISTERED`, `HOST_RELAYED`, `HOST_CONFIRMED`, `UNROLLED`, `COMPLETE_READY`, `EXITED`, `FUNDING_LOST`, `UNTAG`. Hydrate **sets state from the WASM record** (phase jumps allowed); it does not replay intermediates (`ARK-EXIT-32`). Claim success is `EXITED` via hydrate, not a separate `COMPLETE` child event.
@@ -277,7 +277,8 @@ Spec IDs: `ARK-EXIT-27`–`32` in [doc/features/arkade.yaml](../doc/features/ark
 | Situation | VTXO after abort | Start unroll | Complete |
 |-----------|------------------|--------------|----------|
 | Job started, nothing registered | `tagged` → `idle` | Eligible again | N/A |
-| Host registered / relayed / any confs | Phase unchanged | Not a second concurrent job; leftover not-yet-unrolled leaves remain **startable** (`ARK-EXIT-26`) | When `complete_ready`, **no job required** |
+| Host registered / relayed / any confs (observation still present) | Phase unchanged | Not a second concurrent job; leftover not-yet-unrolled leaves remain **startable** (`ARK-EXIT-26`) | When `complete_ready`, **no job required** |
+| `never_seen` already deleted the observation (rewound to `tagged`) | Abort unlocks (`idle`), same as nothing registered | Eligible again | N/A unless an ancestor is already `unrolled` |
 | Intermediate host already 6-conf, leaves unpublished | Intermediates walk to `complete_ready`; leaves stay `tagged` | Leaves startable to resume unroll; unrolled hosts excluded (`ARK-EXIT-01`) | En-passant may be claimed while a job (or no job) still exists for descendants |
 | `funding_lost` | Terminal | No | No |
 
@@ -351,7 +352,7 @@ The original bug. Ship this even if later stages slip.
 - Poll 6-conf only while the job is in `waitingConfirm`.
 - Add a dedicated unlocked-session 6-conf poller (D).
 - Make complete work off pending deductions without `is_unrolled` / `unrolled` (0-conf / reorgable).
-- Untag VTXOs because a broadcast error or `never_seen` budget fired.
+- Untag VTXOs because a broadcast RPC failed or because a single Esplora miss occurred. After the full `never_seen` budget, rewind to `tagged` (keep rows); abort may then unlock.
 - Stamp `commitment` or `checkpoint` as unrolled.
 - Let React or hooks own VTXO phase outside XState after Stage 4.
 - Re-split already-shipped Stages 1–4 into historical PRs. The v8→v11 envelope bundled them; the one-stage-per-PR rule applies to *future* stages.

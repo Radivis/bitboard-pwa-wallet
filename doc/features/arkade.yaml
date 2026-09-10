@@ -77,7 +77,12 @@ feature:
       - id: ARK-REC-07
         description: VTXOs in unilateral exit do not contribute to pendingRecoveryDueToExpiredSignerSats even when they would otherwise qualify for pending recovery due to expired signer
       - id: ARK-REC-08
-        description: Tagged-or-later VTXO exit records do not contribute to recoverableSettleableVtxoCount, recoverablePendingOperatorSweepVtxoCount, expiring-soon count, or earliest-expiry indicator; post-unroll exiting VTXOs are excluded by vendored ark-core bucketing. Exclusion is record-derived (not pending-deduction-only).
+        description: >-
+          Spend-locked VTXO exit records (pipeline tagged through complete_ready, plus funding_lost)
+          do not contribute to recoverableSettleableVtxoCount, recoverablePendingOperatorSweepVtxoCount,
+          expiring-soon count, or earliest-expiry indicator; post-unroll exiting VTXOs are excluded by
+          vendored ark-core bucketing. Exclusion is record-derived (not pending-deduction-only) and uses
+          locks_collaborative_spend, not pipeline membership alone.
     unilateral_exit:
       - id: ARK-EXIT-01
         description: Start unilateral exit lists only VTXOs that can start unroll; unrolled, complete_ready, exited, and funding_lost records are excluded. Tagged leftovers that are not yet unrolled remain startable after abort (ARK-EXIT-26/30). Concurrent second job stays a frontend selection lock.
@@ -157,18 +162,25 @@ feature:
           persisted records are the durable source of truth. Spend-lock starts at tagged; subtract
           from net spendable only while the coin is still in gross spendable (not yet is_unrolled /
           exiting). funding_lost still locks collaborative spend while the coin remains in gross.
+          Send, collab, migrate, recover, renew, and delegate exclude spend-locked outpoints
+          (pipeline ∪ funding_lost), not pipeline membership alone (ARK-REC-08).
       - id: ARK-EXIT-28
         description: >-
           Host-tx observation registry (C; shipped, envelope v9): keyed by virtual txid; fields registered_at,
           relayed, confirmations, never_seen_probes, last_probed_at. Register immediately before
-          submitpackage of that step (not the whole DAG at job start). One row drives all vouts on
-          that txid. After five eligible misses (first after registered_at + 10 minutes, then four
-          more at last_probed_at + 1 minute, at most one increment per B entry; do not collapse
-          across a time skip), delete the observation; VTXOs stay tagged (Stage 1 analogue: leave
-          pending deductions). Re-proceed with the same deterministic txid re-registers and resets
-          the probe window. Also delete when every VTXO on that host is exited or funding_lost.
-          Reorg under 1 conf rewinds VTXOs to host_relayed / host_broadcast_attempted and does not
-          delete the row.
+          submitpackage of that step (not the whole DAG at job start) and advance matching VTXOs to
+          host_broadcast_attempted so a false broadcast error cannot skip the row and let abort unlock.
+          Do not wait for a first Esplora seen; do not treat unilateral_exit_step_wait as chain proof;
+          do not let a single Esplora miss rewind. One row drives all vouts on that txid. After five
+          eligible misses (first after registered_at + 10 minutes, then four more at last_probed_at +
+          1 minute, at most one increment per B entry; do not collapse across a time skip; 15s B polls
+          must not reset last_probed_at except on an eligible miss), delete the observation and rewind
+          pre-unroll VTXOs to tagged (keep rows; spend-lock remains). That budget is the cleanup of the
+          early register when the tx was truly never received. Re-proceed with the same deterministic
+          txid re-registers and resets the probe window. Abort after that rewind may unlock (tagged +
+          no observation). Also delete when every VTXO on that host is exited or funding_lost. Reorg
+          under 1 conf rewinds VTXOs to host_relayed / host_broadcast_attempted and does not delete
+          the row.
       - id: ARK-EXIT-29
         description: >-
           Unified Esplora 6-conf reconciler (B; shipped): any tree/ark virtual tx that hosts VTXOs
@@ -182,8 +194,10 @@ feature:
       - id: ARK-EXIT-30
         description: >-
           Abort, en-passant, and leftover-start (shipped). Abort is not a VTXO phase. Job started
-          with nothing registered: tagged reverts to idle (unlock). Host registered/relayed/any confs:
-          abort does not change VTXO phase. Tagged with a published ancestor: stay tagged.
+          with nothing registered: tagged reverts to idle (unlock). Host registered/relayed/any confs
+          (observation still present): abort does not change VTXO phase. After ARK-EXIT-28 never_seen
+          deletes the observation and rewinds to tagged, abort is again the nothing-registered case
+          (unlock). Tagged with a published ancestor: stay tagged.
           Intermediate host already 6-conf with unpublished leaves: intermediates walk to
           complete_ready; leaves stay tagged; leaves remain startable to resume unroll; unrolled
           hosts stay excluded from Start (ARK-EXIT-01). En-passant: tag every

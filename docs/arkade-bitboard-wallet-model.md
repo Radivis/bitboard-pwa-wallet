@@ -161,7 +161,7 @@ During the **pre-unroll** window, tagged-or-later VTXO exit records exist while 
 | Expiring-soon count and **Renew VTXOs now** | `expiring_outpoints` |
 | Earliest expiry indicator | `vtxo_expiry_status` (`earliest_expires_at` scan) |
 
-Contract `ARK-REC-08`. Exclusion is all `tagged`-or-later VTXO exit records (spend-lock; `ARK-EXIT-27`).
+Contract `ARK-REC-08`. Exclusion is spend-locked records: pipeline (`tagged`…`complete_ready`) plus `funding_lost` (`ARK-EXIT-27`). Not pipeline membership alone.
 
 ### Unilateral exit completion coin-select (vendor fork)
 

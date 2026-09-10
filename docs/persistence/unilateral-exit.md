@@ -57,7 +57,7 @@ Flushed through the Arkade save lifecycle into `StoredArkadeAccount.sdkPersisten
 | `unilateral_exit_watches` | `WalletDbSnapshot` | Leftover v10 import only; heal into records then clear. Not a write path (`ARK-EXIT-12`) |
 | `unilateral_exit_step_wait` | `WalletDbSnapshot` | Current step txid, index, `started_at` for relay-wait UI |
 | `pending_exit_deductions` | `WalletDbSnapshot` | Collaborative retain records; unilateral rows are a derived mirror of tagged…host_confirmed (not an independent proceed write) |
-| `vtxo_exit_records` | `WalletDbSnapshot` | Per-outpoint exit pipeline (`ARK-EXIT-27`); spend-lock, lists, recover/renew exclusion |
+| `vtxo_exit_records` | `WalletDbSnapshot` | Per-outpoint exit pipeline (`ARK-EXIT-27`); spend-lock (pipeline ∪ `funding_lost`), lists, recover/renew exclusion |
 | `host_tx_observations` | `WalletDbSnapshot` | Per virtual host txid: broadcast attempt, Esplora relay/confirmations, never-seen probe budget (`ARK-EXIT-28`) |
 | `cached_operator_info` | `WalletDbSnapshot` | Last `getInfo` snapshot for autonomous mode |
 | `autonomous_mode` | `BitboardArkPersistence` | Per-ASP trust posture; default false; session open skips operator RPC when true |
@@ -161,8 +161,14 @@ Observations are a **map keyed by virtual host txid**. The record has no `txid` 
 registered_at, relayed, confirmations, never_seen_probes, last_probed_at
 ```
 
-Registered immediately before broadcast of that proceed step (`ARK-EXIT-28`). After five eligible `never_seen` misses, **delete** the observation and rewind that host’s VTXO records to **`tagged`** (keep the rows). Also delete when every VTXO on that host is `exited` or `funding_lost` (or every snapshot vout `is_spent`). Observation plus the unified 6-conf reconciler **feed** `is_unrolled` and record phase advances.
+**Why register before broadcast (`ARK-EXIT-28`):** Esplora (and the broadcast RPC) can lie in either direction. Registering *after* a “success” check misses the case where submit actually relayed but the client saw an error — abort could then unlock. Registering *and* advancing VTXOs to `host_broadcast_attempted` *before* `broadcast_unilateral_exit_step_at_fee_rate` keeps those coins spend-locked until Esplora evidence arrives **or** the `never_seen` budget concludes the tx was never received.
 
-VTXO exit records (`ARK-EXIT-27`) are the list and spend-lock source of truth. Candidates, in-progress, complete-ready, and recover/renew exclusion are record-derived. Envelope version is **11**.
+Do **not** treat `unilateral_exit_step_wait` as that evidence. It is the job cursor after proceed considers submit satisfied; it is not a substitute for `/raw` or confirmations, and it does not veto `never_seen`.
+
+**`never_seen` (cleanup, not an immediate untag):** B counts an Esplora-absent miss only when eligible — first after `registered_at + 10 minutes`, then at `last_probed_at + 1 minute`, at most once per B entry, no time-skip collapse. Frequent list/progress polls (15s) must not refresh `last_probed_at` except on an eligible miss. After five eligible misses, **delete** the observation and rewind that host’s VTXO records to **`tagged`** (keep the rows, keep the spend-lock). Re-proceed with the same deterministic txid re-registers and resets the window. Abort after that rewind may unlock (`tagged` + no observation), same as abort before any register. A broadcast error or the first miss must not untag.
+
+Also delete when every VTXO on that host is `exited` or `funding_lost` (or every snapshot vout `is_spent`). Observation plus the unified 6-conf reconciler **feed** `is_unrolled` and record phase advances.
+
+Handbook (strategy): [unilateral-exit.md — Register before Esplora](../unilateral-exit.md#register-before-esplora-never_seen-is-the-cleanup). VTXO exit records (`ARK-EXIT-27`) are the list and spend-lock source of truth. Candidates, in-progress, complete-ready, and recover/renew exclusion are record-derived. Envelope version is **11**.
 
 Freeze and abort matrix: [unilateral-exit-vtxo-lifecycle-refactor.md](../future/unilateral-exit-vtxo-lifecycle-refactor.md#stage-0-freeze-agreed).

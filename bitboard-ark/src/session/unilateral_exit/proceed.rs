@@ -99,6 +99,10 @@ impl ArkSession {
 
         if !already_submitted_this_step {
             let step_txid_text = step_txid.to_string();
+            // Register *before* broadcast: a false RPC error must not skip the observation
+            // (abort would unlock while the tx may already be on the network). Esplora "not seen"
+            // is cleaned up only after the never_seen budget — see docs/unilateral-exit.md
+            // "Register before Esplora; never_seen is the cleanup".
             self.wallet_db
                 .register_host_tx_observation(&step_txid_text, current_unix_timestamp());
             let mut records = self.wallet_db.vtxo_exit_records();

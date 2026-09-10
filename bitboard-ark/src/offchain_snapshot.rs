@@ -21,7 +21,7 @@ use crate::persistence::{
     HostTxObservationRecord, OffchainVtxoSnapshot, VirtualTxOutPointAssetRecord,
     VirtualTxOutPointRecord, VtxoExitPhase, VtxoExitRecord,
 };
-use crate::session::unilateral_exit::vtxo_exit::unilateral_exit_pipeline_outpoints;
+use crate::session::unilateral_exit::vtxo_exit::unilateral_exit_spend_locked_outpoints;
 
 /// Signer-aware offchain balance buckets in satoshis.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -95,14 +95,14 @@ pub fn offchain_balance_buckets_from_snapshot(
     let balance = compute_offchain_balance(&vtxo_list, &script_lookup, server_info, now)
         .map_err(ArkWasmError::from)?;
     let mut buckets = OffchainBalanceBuckets::from_live(&balance);
-    let in_progress = unilateral_exit_pipeline_outpoints(vtxo_exit_records);
+    let spend_locked = unilateral_exit_spend_locked_outpoints(vtxo_exit_records);
     buckets.pending_recovery_due_to_expired_signer_sats =
         pending_recovery_due_to_expired_signer_sats_excluding_unilateral_exit(
             &vtxo_list,
             server_info,
             now,
             &script_lookup,
-            &in_progress,
+            &spend_locked,
         );
     Ok(buckets)
 }
@@ -1034,7 +1034,7 @@ mod tests {
     }
 
     #[test]
-    fn pending_recovery_due_to_expired_signer_excludes_unilateral_exit_in_progress_outpoint() {
+    fn pending_recovery_due_to_expired_signer_excludes_spend_locked_outpoints() {
         use crate::persistence::{VtxoExitPhase, VtxoExitRecord, vtxo_exit_record_key};
 
         let script = ScriptBuf::from_bytes(vec![0x51]);
@@ -1081,26 +1081,31 @@ mod tests {
                 500_000,
             )],
         );
-        let mut records = BTreeMap::new();
-        records.insert(
-            vtxo_exit_record_key(&txid, 0),
-            VtxoExitRecord {
-                phase: VtxoExitPhase::Tagged,
-                tagged_at: 1_000_000,
-                host_txid: txid.clone(),
-                amount_sats: 50_000,
-            },
-        );
-        let buckets = offchain_balance_buckets_from_snapshot(
-            &snapshot,
-            &server_info,
-            1_000_000,
-            None,
-            &records,
-        )
-        .expect("snapshot buckets");
+        for phase in [VtxoExitPhase::Tagged, VtxoExitPhase::FundingLost] {
+            let mut records = BTreeMap::new();
+            records.insert(
+                vtxo_exit_record_key(&txid, 0),
+                VtxoExitRecord {
+                    phase,
+                    tagged_at: 1_000_000,
+                    host_txid: txid.clone(),
+                    amount_sats: 50_000,
+                },
+            );
+            let buckets = offchain_balance_buckets_from_snapshot(
+                &snapshot,
+                &server_info,
+                1_000_000,
+                None,
+                &records,
+            )
+            .expect("snapshot buckets");
 
-        assert_eq!(buckets.pending_recovery_due_to_expired_signer_sats, 0);
+            assert_eq!(
+                buckets.pending_recovery_due_to_expired_signer_sats, 0,
+                "{phase:?} must be spend-locked out of pending recovery"
+            );
+        }
     }
 
     #[test]

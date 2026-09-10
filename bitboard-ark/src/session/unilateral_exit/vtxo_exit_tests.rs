@@ -8,7 +8,7 @@ use crate::persistence::{
 use crate::session::unilateral_exit::test_fixtures::{
     snapshot_with_intermediate_tree_and_ark_leaf, txid,
 };
-use bitcoin::Txid;
+use bitcoin::{OutPoint, Txid};
 
 fn record_phase(
     records: &BTreeMap<String, VtxoExitRecord>,
@@ -429,6 +429,78 @@ fn pipeline_outpoints_are_excluded_from_spendable_selection() {
     assert_eq!(filtered.len(), 1);
     assert_eq!(filtered[0].txid, txid(0x99));
     let _ = tree;
+}
+
+#[test]
+fn spend_locked_outpoints_include_funding_lost_and_not_exited() {
+    let (snapshot, tree, leaf, _) = snapshot_with_intermediate_tree_and_ark_leaf();
+    let mut records = BTreeMap::new();
+    tag_unilateral_exit_plan_in_records(
+        &snapshot,
+        &[VirtualOutPoint::new(leaf, 0)],
+        &mut records,
+        1,
+    )
+    .expect("tag");
+    records
+        .get_mut(&vtxo_exit_record_key(&leaf.to_string(), 0))
+        .expect("leaf")
+        .phase = VtxoExitPhase::FundingLost;
+    records
+        .get_mut(&vtxo_exit_record_key(&tree.to_string(), 0))
+        .expect("tree")
+        .phase = VtxoExitPhase::Exited;
+
+    let pipeline = unilateral_exit_pipeline_outpoints(&records);
+    let spend_locked = unilateral_exit_spend_locked_outpoints(&records);
+    let leaf_outpoint = OutPoint {
+        txid: leaf,
+        vout: 0,
+    };
+    let tree_outpoint = OutPoint {
+        txid: tree,
+        vout: 0,
+    };
+
+    assert!(!pipeline.contains(&leaf_outpoint));
+    assert!(!pipeline.contains(&tree_outpoint));
+    assert!(spend_locked.contains(&leaf_outpoint));
+    assert!(!spend_locked.contains(&tree_outpoint));
+}
+
+#[test]
+fn funding_lost_outpoint_is_excluded_from_spendable_selection() {
+    let (snapshot, _, leaf, _) = snapshot_with_intermediate_tree_and_ark_leaf();
+    let mut records = BTreeMap::new();
+    tag_unilateral_exit_plan_in_records(
+        &snapshot,
+        &[VirtualOutPoint::new(leaf, 0)],
+        &mut records,
+        1,
+    )
+    .expect("tag");
+    records
+        .get_mut(&vtxo_exit_record_key(&leaf.to_string(), 0))
+        .expect("leaf")
+        .phase = VtxoExitPhase::FundingLost;
+
+    let excluded = unilateral_exit_spend_locked_outpoints(&records);
+    let spendable = vec![
+        OutPoint {
+            txid: leaf,
+            vout: 0,
+        },
+        OutPoint {
+            txid: txid(0x99),
+            vout: 0,
+        },
+    ];
+    let filtered: Vec<_> = spendable
+        .into_iter()
+        .filter(|outpoint| !excluded.contains(outpoint))
+        .collect();
+    assert_eq!(filtered.len(), 1);
+    assert_eq!(filtered[0].txid, txid(0x99));
 }
 
 #[test]

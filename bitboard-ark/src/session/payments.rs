@@ -11,11 +11,14 @@ use super::ArkSession;
 use super::mappers::{current_unix_timestamp, map_history_row, validate_send_amount_sats};
 
 impl ArkSession {
-    async fn send_outpoints_excluding_tagged(&self, amount: Amount) -> ArkResult<Vec<OutPoint>> {
+    async fn send_outpoints_excluding_spend_locked(
+        &self,
+        amount: Amount,
+    ) -> ArkResult<Vec<OutPoint>> {
         let (vtxo_list, script_map) = self.client.list_vtxos().await?;
         let now = current_unix_timestamp();
         let server_info = self.client.server_info()?;
-        let exclude = self.pipeline_outpoints();
+        let exclude = self.spend_locked_outpoints();
         let spendable: Vec<CoinSelectVtxo> = vtxo_list
             .spendable_offchain_at(&server_info, now, |script| {
                 script_map.get(script).map(|vtxo| vtxo.server_pk())
@@ -38,7 +41,7 @@ impl ArkSession {
         validate_send_amount_sats(params.amount_sats)?;
         let address = ArkAddress::decode(&params.address)?;
         let amount = Amount::from_sat(params.amount_sats);
-        let selected = self.send_outpoints_excluding_tagged(amount).await?;
+        let selected = self.send_outpoints_excluding_spend_locked(amount).await?;
         let txid = self
             .client
             .send_selection(&selected, vec![SendReceiver::bitcoin(address, amount)])

@@ -153,8 +153,10 @@ pub fn plan_relevant_outpoint_keys(
 /// `host_txid` has **no** host-tx observation.
 ///
 /// After proceed has registered a host, abort must not unlock those VTXOs (phase stays
-/// `host_broadcast_attempted` or later). Rows for other plans are left untouched. Leftover
-/// not-yet-unrolled `tagged` VTXOs that we delete become Start-list eligible again.
+/// `host_broadcast_attempted` or later) **while the observation exists**. `never_seen` cleanup
+/// deletes the observation and rewinds to `tagged`; abort then matches the nothing-registered
+/// case. Rows for other plans are left untouched. Leftover not-yet-unrolled `tagged` VTXOs that
+/// we delete become Start-list eligible again.
 pub fn untag_unilateral_exit_plan_if_safe_in_records(
     snapshot: &OffchainVtxoSnapshot,
     selected_leaves: &[VirtualOutPoint],
@@ -195,9 +197,9 @@ pub fn advance_records_for_host_registered(
 
 /// Pull every VTXO on `host_txid` back to `phase`, except `unrolled` and later (those are on-chain).
 ///
-/// Callers: Esplora `never_seen` budget exhausted → `tagged` (keep the row; do not idle);
-/// reorg under 1 confirmation → `host_relayed` / `host_broadcast_attempted` (do not delete the
-/// observation).
+/// Callers: Esplora `never_seen` budget exhausted → `tagged` (keep the row; do not idle — abort
+/// may unlock only after this rewind deletes the observation); reorg under 1 confirmation →
+/// `host_relayed` / `host_broadcast_attempted` (do not delete the observation).
 pub(crate) fn rewind_records_on_host(
     records: &mut BTreeMap<String, VtxoExitRecord>,
     host_txid: &str,
@@ -326,15 +328,13 @@ pub fn vtxo_exit_record_dtos(
     rows
 }
 
-/// Unilateral-exit pipeline outpoints (`ARK-EXIT-02` / `ARK-REC-08`): `tagged`…`complete_ready`
-/// (not `exited`). Same set for in-progress / Complete membership and for coin-select / recover /
-/// renew exclusion (including unrolled).
-pub fn unilateral_exit_pipeline_outpoints(
+fn record_outpoint_keys_where(
     records: &BTreeMap<String, VtxoExitRecord>,
+    include_phase: impl Fn(VtxoExitPhase) -> bool,
 ) -> HashSet<UnilateralExitOutpointKey> {
     records
         .iter()
-        .filter(|(_, record)| record.phase.is_pipeline())
+        .filter(|(_, record)| include_phase(record.phase))
         .filter_map(|(key, _)| {
             let (txid, vout) = parse_vtxo_exit_record_key(key)?;
             exit_outpoint_key_from_str(&txid, vout)
@@ -342,20 +342,32 @@ pub fn unilateral_exit_pipeline_outpoints(
         .collect()
 }
 
+/// Unilateral-exit pipeline outpoints (`ARK-EXIT-02`): `tagged`…`complete_ready` (not `exited`,
+/// not `funding_lost`). In-progress / Complete **membership** only. Coin-select and recover/renew
+/// exclusion use [`unilateral_exit_spend_locked_outpoints`].
+pub fn unilateral_exit_pipeline_outpoints(
+    records: &BTreeMap<String, VtxoExitRecord>,
+) -> HashSet<UnilateralExitOutpointKey> {
+    record_outpoint_keys_where(records, VtxoExitPhase::is_pipeline)
+}
+
+/// Outpoints that must not be collaboratively spent (`ARK-REC-08` / `ARK-EXIT-27`): pipeline plus
+/// `funding_lost`. Do **not** fold `funding_lost` into [`unilateral_exit_pipeline_outpoints`] —
+/// seized coins are not Complete-list members.
+pub fn unilateral_exit_spend_locked_outpoints(
+    records: &BTreeMap<String, VtxoExitRecord>,
+) -> HashSet<UnilateralExitOutpointKey> {
+    record_outpoint_keys_where(records, VtxoExitPhase::locks_collaborative_spend)
+}
+
 /// Start-list exclusion (`ARK-EXIT-01` / `26` / `30`): hide `unrolled` / `complete_ready` /
-/// `exited`. Do **not** hide `tagged`…`host_confirmed` — leftover not-yet-unrolled leaves stay
-/// startable after abort. A second concurrent job is a frontend selection lock, not this set.
+/// `exited` / `funding_lost`. Do **not** hide `tagged`…`host_confirmed` — leftover not-yet-unrolled
+/// leaves stay startable after abort. A second concurrent job is a frontend selection lock, not
+/// this set.
 pub fn start_list_excluded_outpoints_from_records(
     records: &BTreeMap<String, VtxoExitRecord>,
 ) -> HashSet<UnilateralExitOutpointKey> {
-    records
-        .iter()
-        .filter(|(_, record)| record.phase.is_start_list_excluded())
-        .filter_map(|(key, _)| {
-            let (txid, vout) = parse_vtxo_exit_record_key(key)?;
-            exit_outpoint_key_from_str(&txid, vout)
-        })
-        .collect()
+    record_outpoint_keys_where(records, VtxoExitPhase::is_start_list_excluded)
 }
 
 /// Dashboard **unilateral_exit_in_progress** line: sum of pipeline record amounts. Stable across
@@ -590,10 +602,15 @@ impl crate::session::ArkSession {
         start_list_excluded_outpoints_from_records(&self.wallet_db.vtxo_exit_records())
     }
 
-    /// Pipeline outpoints: in-progress / Complete membership and ARK-REC-08 exclude set
-    /// (`tagged`…`complete_ready`, not `exited`).
+    /// Pipeline outpoints: in-progress / Complete membership (`tagged`…`complete_ready`, not
+    /// `exited` / `funding_lost`).
     pub(crate) fn pipeline_outpoints(&self) -> HashSet<UnilateralExitOutpointKey> {
         unilateral_exit_pipeline_outpoints(&self.wallet_db.vtxo_exit_records())
+    }
+
+    /// Spend-lock exclude set (`ARK-REC-08`): pipeline plus `funding_lost`.
+    pub(crate) fn spend_locked_outpoints(&self) -> HashSet<UnilateralExitOutpointKey> {
+        unilateral_exit_spend_locked_outpoints(&self.wallet_db.vtxo_exit_records())
     }
 
     /// Used for dumping persisted VTXO exit records (no Esplora / B). Stage 4 child hydrate.
