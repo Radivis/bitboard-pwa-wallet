@@ -18,6 +18,6 @@ export async function hydrateVtxoExitChildrenFromWasm(): Promise<void> {
     const records = await getArkadeWorker().listVtxoExitRecords()
     sendHydrateRecords?.(records)
   } catch {
-    // Dump is best-effort; the next B-entry poll retries.
+    // Dump is best-effort; the next load, sync, proceed, progress, list, or complete retries.
   }
 }
