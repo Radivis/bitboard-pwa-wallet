@@ -127,7 +127,7 @@ fn never_seen_miss_is_eligible(record: &HostTxObservationRecord, now: i64) -> bo
 
 /// Count an Esplora miss toward the never-seen budget only when it is eligible.
 ///
-/// `last_probed_at` is the last *eligible* miss, not every B poll. Frequent list/progress
+/// `last_probed_at` is the last *eligible* miss, not every Esplora reconcile. Frequent list/progress
 /// probes (15s UI) must not reset the 1-minute spacing (`ARK-EXIT-28`).
 ///
 /// This budget is the delayed cleanup of proceed's pre-broadcast register: do not rewind on

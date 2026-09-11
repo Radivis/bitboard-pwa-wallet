@@ -6,7 +6,7 @@ Related:
 
 - Persistence (WASM envelope + Zustand job/prefs/failure): [persistence/unilateral-exit.md](persistence/unilateral-exit.md)
 - Balance buckets and exit-line timing: [arkade-bitboard-wallet-model.md](arkade-bitboard-wallet-model.md)
-- VTXO exit lifecycle refactor (staged): [unilateral-exit-vtxo-lifecycle-refactor.md](future/unilateral-exit-vtxo-lifecycle-refactor.md)
+- Historical design notes (shipped): [unilateral-exit-vtxo-lifecycle-refactor.md](future/unilateral-exit-vtxo-lifecycle-refactor.md)
 - Agent ownership rules: [`.cursor/rules/unilateral-exit-xstate.mdc`](../.cursor/rules/unilateral-exit-xstate.mdc)
 - Historic Mutinynet false-confirmation investigation (resolved; methodology is not current): [archive/unilateral-exit-false-confirmation-rca.md](archive/unilateral-exit-false-confirmation-rca.md)
 - Test contracts: `ARK-EXIT-*` in [doc/features/arkade.yaml](../doc/features/arkade.yaml)
@@ -14,9 +14,9 @@ Related:
 
 ---
 
-## VTXO lifecycle (staged)
+## VTXO lifecycle
 
-Stage 4 VTXO child machines (`ARK-EXIT-32`) are **shipped**: the job actor is a session-scoped host plus unroll broadcaster; per-outpoint children hydrate from persisted records. Stage 3 records, watch fold, and `funding_lost` are **shipped** (`ARK-EXIT-12`, `ARK-EXIT-27`, `ARK-EXIT-30`, `ARK-EXIT-33`, `ARK-SYNC-03`, `ARK-REC-08`). Host-tx observations and unified B remain Stage 1. Freeze tables: [unilateral-exit-vtxo-lifecycle-refactor.md](future/unilateral-exit-vtxo-lifecycle-refactor.md#stage-0-freeze-agreed).
+The job actor is a session-scoped host plus unroll broadcaster; per-outpoint children hydrate from persisted VTXO exit records (`ARK-EXIT-32`). Host-tx observations, the Esplora 6-conf reconciler, watch fold into records, and `funding_lost` are current behavior (`ARK-EXIT-12`, `ARK-EXIT-27`–`33`, `ARK-SYNC-03`, `ARK-REC-08`).
 
 **Two records** (WASM envelope is durable source of truth):
 
@@ -27,11 +27,11 @@ Stage 4 VTXO child machines (`ARK-EXIT-32`) are **shipped**: the job actor is a 
 
 Spend-lock (send / collab / renew / delegate) is pipeline ∪ `funding_lost`. Recover and signer-migrate are not spend-locked; they exclude in-progress pipeline membership only so they do not race an active unroll (`ARK-EXIT-27` / `ARK-REC-08`).
 
-**Three parallel clocks** (do not merge): job DAG cursor (next unpublished step); host-tx confirmations (0 / relayed / 1-conf / 6-conf via WASM Esplora reconciler B); protocol timelock (`can_be_claimed_unilaterally_by_owner`). UI copy must distinguish waiting for host transaction broadcast, waiting for the first confirmation, waiting for 6 confirmations, and waiting for timelock.
+**Three parallel clocks** (do not merge): job DAG cursor (next unpublished step); host-tx confirmations (0 / relayed / 1-conf / 6-conf via the WASM Esplora reconciler); protocol timelock (`can_be_claimed_unilaterally_by_owner`). UI copy must distinguish waiting for host transaction broadcast, waiting for the first confirmation, waiting for 6 confirmations, and waiting for timelock.
 
-**B entry points** (no dedicated 6-conf poll actor): Arkade load including autonomous, operator sync, proceed, progress, `list_unilateral_exits_in_progress`, complete. Stamp every vout on a `tree`/`ark` host at 6 confs; skip `commitment`/`checkpoint`.
+**Esplora reconcile call sites** (no dedicated 6-conf poller): Arkade load including autonomous, operator sync, proceed, progress, `list_unilateral_exits_in_progress`, complete. Stamp every vout on a `tree`/`ark` host at 6 confs; skip `commitment`/`checkpoint`.
 
-The **job machine** is the session-scoped host plus broadcaster (`waitingConfirm` remains 1-conf step advance). Job `complete` is DAG 1-conf (`isUnilateralExitBranchComplete`), not 6-conf `is_unrolled` — that stamp and the “waiting for 6 confirmations” copy live on VTXO children. `START_*` invokes `taggingPlan` (WASM tag, then persist job). Abort untags only `tagged` rows with no host observation. VTXO children hydrate from persisted records after B-entry queries (`HYDRATE`). After abort or branch-complete, leftover coins stay on children; Complete uses `complete_ready`, not in-progress membership and not a leftover frontend job. A second unroll may start while earlier coins wait to be claimed.
+The **job machine** is the session-scoped host plus broadcaster (`waitingConfirm` remains 1-conf step advance). Job `complete` is DAG 1-conf (`isUnilateralExitBranchComplete`), not 6-conf `is_unrolled` — that stamp and the “waiting for 6 confirmations” copy live on VTXO children. `START_*` invokes `taggingPlan` (WASM tag, then persist job). Abort untags only `tagged` rows with no host observation. VTXO children hydrate from persisted records after those WASM queries return (`HYDRATE`). After abort or branch-complete, leftover coins stay on children; Complete uses `complete_ready`, not in-progress membership and not a leftover frontend job. A second unroll may start while earlier coins wait to be claimed.
 
 ## Protocol basics
 
@@ -106,7 +106,7 @@ Esplora is required for unroll and is **unreliable in the short term**: indexer 
 
 **`unilateral_exit_step_wait` is not chain proof.** It is the job cursor / relay-wait fallback after proceed considers the submit satisfied (RPC ok, redundant mempool reject, or `/raw` relayed). The same class of lie as a false error: RPC or `/raw` can look done while the indexer still has nothing. Do not use `step_wait` to veto `never_seen`.
 
-**`never_seen` budget (cleanup of that early proceed):** B entry points probe Esplora. A miss counts only when eligible — first after `registered_at + 10 minutes`, then further misses at `last_probed_at + 1 minute`, at most one increment per B call, no collapsing a time skip into five misses. Fifteen-second UI polls must not reset the 1-minute spacing. After **five** eligible misses (~14 minutes from register: 10 minutes until miss 1, then four one-minute gaps), the wallet treats the tx as **truly never received**:
+**`never_seen` budget (cleanup of that early proceed):** Esplora reconcile call sites probe Esplora. A miss counts only when eligible — first after `registered_at + 10 minutes`, then further misses at `last_probed_at + 1 minute`, at most one increment per reconcile call, no collapsing a time skip into five misses. Fifteen-second UI polls must not reset the 1-minute spacing. After **five** eligible misses (~14 minutes from register: 10 minutes until miss 1, then four one-minute gaps), the wallet treats the tx as **truly never received**:
 
 1. **Delete** the observation (txid leaves the hot set).
 2. **Rewind** pre-unroll VTXOs on that host to **`tagged`** — keep the rows, keep the spend-lock. Do **not** idle them from this path.

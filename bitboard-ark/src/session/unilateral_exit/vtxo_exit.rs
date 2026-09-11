@@ -217,7 +217,7 @@ pub(crate) fn rewind_records_on_host(
     }
 }
 
-/// Advance phases from unified B (Esplora `/raw` + confirmations) for one host tx.
+/// Advance phases from Esplora `/raw` + confirmation depth for one host tx.
 ///
 /// `unrolled` is 6-conf (`UNILATERAL_EXIT_LEAF_CONFIRMATIONS`); step confirmation is
 /// `host_confirmed` (`UNILATERAL_EXIT_STEP_CONFIRMATIONS`). `complete_ready` / `exited` are not moved from here — claimable
@@ -230,7 +230,7 @@ pub fn apply_host_observation_to_vtxo_exit_records(
     confirmations: u64,
     unrolled: bool,
 ) {
-    // Pre-unroll target from B. Six-conf (`unrolled`) is applied in the loop as a jump so we
+    // Pre-unroll target from Esplora. Six-conf (`unrolled`) is applied in the loop as a jump so we
     // never treat `Unrolled` as a monotonic "next" that could overwrite `complete_ready`.
     let next = if unrolled {
         VtxoExitPhase::Unrolled
@@ -282,8 +282,8 @@ pub fn validate_records_not_funding_lost(
     Ok(())
 }
 
-/// Complete success: mark the claimed outpoints `exited`. Missing keys are ignored (Stage 1 E:
-/// complete does not require in-progress membership).
+/// Complete success: mark the claimed outpoints `exited`. Missing keys are ignored because
+/// complete does not require in-progress membership.
 pub fn mark_records_exited_for_outpoints(
     records: &mut BTreeMap<String, VtxoExitRecord>,
     outpoints: &[OutPoint],
@@ -600,7 +600,7 @@ impl crate::session::ArkSession {
         unilateral_exit_spend_locked_outpoints(&self.wallet_db.vtxo_exit_records())
     }
 
-    /// Used for dumping persisted VTXO exit records (no Esplora / B). Stage 4 child hydrate.
+    /// Dump persisted VTXO exit records without probing Esplora. Frontend child actors hydrate from this.
     pub fn list_vtxo_exit_records(&self) -> Vec<crate::api_types::VtxoExitRecordDto> {
         vtxo_exit_record_dtos(&self.wallet_db.vtxo_exit_records())
     }

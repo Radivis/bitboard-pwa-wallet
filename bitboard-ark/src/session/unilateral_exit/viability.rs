@@ -45,7 +45,7 @@ pub(crate) fn first_unroll_step_funding_prevouts(
 }
 
 /// Same prevouts as [`first_unroll_step_funding_prevouts`], derived from snapshot materials
-/// (chain order + virtual PSBT unsigned inputs) for B-entry reconcile without a job plan.
+/// (chain order + virtual PSBT unsigned inputs) so Esplora reconcile can run without a job plan.
 pub(crate) fn first_unroll_step_funding_prevouts_from_snapshot(
     snapshot: &crate::persistence::OffchainVtxoSnapshot,
     seed_host_txid: &str,
@@ -394,7 +394,7 @@ impl ArkSession {
         Ok(())
     }
 
-    /// Record-scoped viability on B entry points (`ARK-EXIT-33`). Stamps `funding_lost` on
+    /// Record-scoped viability on Esplora reconcile call sites (`ARK-EXIT-33`). Stamps `funding_lost` on
     /// unpublished VTXOs of a seized branch, including aborted leftovers with no frontend job.
     pub(crate) async fn reconcile_vtxo_exit_viability(&self) -> ArkResult<Vec<String>> {
         let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot else {

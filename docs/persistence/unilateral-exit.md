@@ -2,7 +2,7 @@
 
 Durable state for unilateral exit lives in **encrypted `sdkPersistenceJson`**. Abort and `CLEAR_JOB` only clear the **frontend job** bundle. WASM materials, VTXO exit records, pending deductions, and on-chain broadcasts survive abort (`ARK-EXIT-23`).
 
-Protocol and orchestration: [unilateral-exit.md](../unilateral-exit.md). Staged VTXO lifecycle refactor: [unilateral-exit-vtxo-lifecycle-refactor.md](../unilateral-exit-vtxo-lifecycle-refactor.md). Arkade envelope overview: [arkade.md](arkade.md). Wallet-model balance timing: [arkade-bitboard-wallet-model.md](../arkade-bitboard-wallet-model.md).
+Protocol and orchestration: [unilateral-exit.md](../unilateral-exit.md). Arkade envelope overview: [arkade.md](arkade.md). Wallet-model balance timing: [arkade-bitboard-wallet-model.md](../arkade-bitboard-wallet-model.md).
 
 ```mermaid
 flowchart TB
@@ -155,10 +155,10 @@ registered_at, relayed, confirmations, never_seen_probes, last_probed_at
 
 Do **not** treat `unilateral_exit_step_wait` as that evidence. It is the job cursor after proceed considers submit satisfied; it is not a substitute for `/raw` or confirmations, and it does not veto `never_seen`.
 
-**`never_seen` (cleanup, not an immediate untag):** B counts an Esplora-absent miss only when eligible — first after `registered_at + 10 minutes`, then at `last_probed_at + 1 minute`, at most once per B entry, no time-skip collapse. Frequent list/progress polls (15s) must not refresh `last_probed_at` except on an eligible miss. After five eligible misses, **delete** the observation and rewind that host’s VTXO records to **`tagged`** (keep the rows, keep the spend-lock). Re-proceed with the same deterministic txid re-registers and resets the window. Abort after that rewind may unlock (`tagged` + no observation), same as abort before any register. A broadcast error or the first miss must not untag.
+**`never_seen` (cleanup, not an immediate untag):** The Esplora reconciler counts an absent miss only when eligible — first after `registered_at + 10 minutes`, then at `last_probed_at + 1 minute`, at most once per reconcile call, no time-skip collapse. Frequent list/progress polls (15s) must not refresh `last_probed_at` except on an eligible miss. After five eligible misses, **delete** the observation and rewind that host’s VTXO records to **`tagged`** (keep the rows, keep the spend-lock). Re-proceed with the same deterministic txid re-registers and resets the window. Abort after that rewind may unlock (`tagged` + no observation), same as abort before any register. A broadcast error or the first miss must not untag.
 
 Also delete when every VTXO on that host is `exited` or `funding_lost` (or every snapshot vout `is_spent`). Observation plus the unified 6-conf reconciler **feed** `is_unrolled` and record phase advances.
 
 Handbook (strategy): [unilateral-exit.md — Register before Esplora](../unilateral-exit.md#register-before-esplora-never_seen-is-the-cleanup). VTXO exit records (`ARK-EXIT-27`) are the list and spend-lock source of truth. Candidates, in-progress, complete-ready, recover pipeline exclusion, and renew spend-lock exclusion are record-derived. Envelope version is **11**.
 
-Freeze and abort matrix: [unilateral-exit-vtxo-lifecycle-refactor.md](../future/unilateral-exit-vtxo-lifecycle-refactor.md#stage-0-freeze-agreed).
+Abort rules: [unilateral-exit.md — Abort is an emergency](../unilateral-exit.md#abort-is-an-emergency).

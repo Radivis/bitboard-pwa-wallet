@@ -13,7 +13,7 @@ globs:
 Unilateral exit is a **two-machine family**:
 
 - **Job actor** (`unilateral-exit.machine.ts`) is a **session-scoped host** plus unroll broadcaster. One module-scope actor. It may `spawnChild` / `stopChild` / `sendTo` VTXO children. Job cursor (`jobOutpoints`, bookmark, proceed, viability) is **independent** of the child set.
-- **VTXO children** (`vtxo-exit.machine.ts`), id `vtxoExit:{txid}:{vout}`, are a hydrated view of persisted WASM records. Production advances via `HYDRATE` (set state from the record; **phase jumps allowed**). Do not replay intermediate events. Do not add per-VTXO `after` delays until 6 confirmations (not D).
+- **VTXO children** (`vtxo-exit.machine.ts`), id `vtxoExit:{txid}:{vout}`, are a hydrated view of persisted WASM records. Production advances via `HYDRATE` (set state from the record; **phase jumps allowed**). Do not replay intermediate events. Do not add per-VTXO `after` delays until 6 confirmations; confirmation depth advances in WASM on load, operator sync, proceed, progress, list-in-progress, and complete.
 
 Do not reintroduce hand-rolled orchestrators, `setTimeout` schedulers, a sibling VTXO actor registry, or React-owned phase tables.
 
@@ -32,7 +32,7 @@ Do not reintroduce hand-rolled orchestrators, `setTimeout` schedulers, a sibling
 ## Rules
 
 1. **Transitions only in the machines** — UI and hooks send events via `unilateral-exit-runtime.ts`; they do not mutate job or VTXO phase directly.
-2. **WASM only in actors (job path)** — React components and hooks must not call `getArkadeWorker()` for proceed/progress during an active job. Record dump hydrate (`listVtxoExitRecords` → `HYDRATE_VTXO_RECORDS`) runs in runtime after B-entry queries.
+2. **WASM only in actors (job path)** — React components and hooks must not call `getArkadeWorker()` for proceed/progress during an active job. Record dump hydrate (`listVtxoExitRecords` → `HYDRATE_VTXO_RECORDS`) runs in runtime after those WASM queries return.
 3. **No external schedulers** — automation polling uses machine `after` delays. `POLL_TICK` is the test/manual equivalent of those `after` delays. Production settle uses XState `waitFor`, not a `setTimeout` poll loop.
 4. **Authoritative progress** — during an active job, `actor.context.progress` wins; React Query is display cache only.
 5. **Single automation flag** — `context.automationEnabled` is the only job-level manual/automatic switch; prefs changes flow through `AUTOMATION_PREFS_CHANGED`.
@@ -46,7 +46,7 @@ Do not reintroduce hand-rolled orchestrators, `setTimeout` schedulers, a sibling
 
 Call sites import from `unilateral-exit-runtime.ts` (lifecycle sends, configure/hydrate, `hydrateVtxoExitChildrenFromWasm`, automation prefs helpers). Job hooks subscribe via `useSyncExternalStore` + job selectors. Child phase uses `useVtxoExitSnapshots()` so React re-renders on child transitions without making job selectors depend on child identity.
 
-## Invariants (PR #58 + Stage 4)
+## Invariants
 
 - Always enter `checkingProgress` before `proceeding` on hydrate, reload, automation tick, and manual start.
 - Resolve outpoints via `resolveUnilateralExitJobOutpoints`; never skip when lifecycle outpoints are empty but persistence has them.

@@ -97,7 +97,7 @@ Operator access from the browser uses **REST** (`ark-rest` + grpc API shim), not
 
 ## Exiting to on-chain
 
-Unilateral-exit protocol, gotchas, XState machine, and WASM proceed step: [unilateral-exit.md](unilateral-exit.md). Staged VTXO lifecycle refactor (Stages 1–4 shipped): [unilateral-exit-vtxo-lifecycle-refactor.md](future/unilateral-exit-vtxo-lifecycle-refactor.md). Persistence (materials, watches, records, job/prefs/failure): [persistence/unilateral-exit.md](persistence/unilateral-exit.md).
+Unilateral-exit protocol, gotchas, XState machine, and WASM proceed step: [unilateral-exit.md](unilateral-exit.md). Persistence (materials, watches, records, job/prefs/failure): [persistence/unilateral-exit.md](persistence/unilateral-exit.md).
 
 Management → Arkade offers two paths:
 
