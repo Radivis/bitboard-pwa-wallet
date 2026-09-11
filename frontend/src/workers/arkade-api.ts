@@ -404,6 +404,7 @@ export interface ArkadeUnilateralExitHostOutpoint {
   vout: number
   amountSats: number
   isUnrolled: boolean
+  expiresAt: number
 }
 
 export interface ArkadeUnilateralExitTopology {

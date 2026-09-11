@@ -143,6 +143,7 @@ pub(crate) fn topology_host_outpoints(
             vout: record.vout,
             amount_sats: record.amount_sats,
             is_unrolled: record.is_unrolled,
+            expires_at: record.expires_at,
         })
         .collect::<Vec<_>>();
     outpoints.sort_by(|left, right| left.txid.cmp(&right.txid).then(left.vout.cmp(&right.vout)));
@@ -546,5 +547,27 @@ mod tests {
             filter_exit_candidates_to_terminal_leaves(Some(&snapshot), rows).expect("filter");
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].txid, terminal.to_string());
+    }
+
+    #[test]
+    fn topology_host_outpoints_copies_expires_at() {
+        let ark = txid(3);
+        let nodes = vec![
+            UnilateralExitTopologyNodeDto {
+                txid: txid(1).to_string(),
+                tx_type: "commitment".to_string(),
+                spends: vec![],
+            },
+            UnilateralExitTopologyNodeDto {
+                txid: ark.to_string(),
+                tx_type: "ark".to_string(),
+                spends: vec![txid(1).to_string()],
+            },
+        ];
+        let mut record = vtxo_record(ark, 0, 25_000, false, false, false);
+        record.expires_at = 1_789_200_000;
+        let host_outpoints = topology_host_outpoints(&nodes, &[record]);
+        assert_eq!(host_outpoints.len(), 1);
+        assert_eq!(host_outpoints[0].expires_at, 1_789_200_000);
     }
 }

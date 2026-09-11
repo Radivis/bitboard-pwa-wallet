@@ -112,7 +112,7 @@ feature:
       - id: ARK-EXIT-12
         description: Unrolled+ VTXO exit records survive full snapshot replace. Reinject missing snapshot rows from those records; never clear exiting state on full-list absence alone. Leftover 0.3.4-dev `unilateral_exit_watches` JSON is ignored (never published; not healed into records). Cleared on completion, funding_lost, or reconcile evidence (operator spent or on-chain spent).
       - id: ARK-EXIT-13
-        description: Unilateral exit control page at /wallet/arkade/unilateral-exit with responsive VTXO tree graph (React Flow + d3-dag), multi-select leaves, and Management entry link (Start unilateral exit / Control unilateral exit). Node detail shows per-outpoint VTXO exit phase from child actors (ARK-EXIT-32). Unspent host VTXOs stay on the graph after unroll (host tx 6 conf); the overlay swaps Lucide Coins for HandCoins. Leaf selection unlocks after branch-complete (idle host, leftover children stay). After the broadcast job releases, the page keeps a durable Branch complete status while leftover children wait to be claimed.
+        description: Unilateral exit control page at /wallet/arkade/unilateral-exit with responsive VTXO tree graph (React Flow + d3-dag), multi-select leaves, and Management entry link (Start unilateral exit / Control unilateral exit). Node detail shows per-outpoint VTXO exit phase from child actors (ARK-EXIT-32) and remaining tree expiry (ARK-EXIT-35). Unspent host VTXOs stay on the graph after unroll (host tx 6 conf); the overlay swaps Lucide Coins for HandCoins. Host-tx graph fills follow ARK-EXIT-35. Leaf selection unlocks after branch-complete (idle host, leftover children stay). After the broadcast job releases, the page keeps a durable Branch complete status while leftover children wait to be claimed.
       - id: ARK-EXIT-14
         description: ark_estimate_unilateral_exit_batch unions deduped virtual steps across selected VTXO leaves for batch fee estimate and bumper sufficiency gate
       - id: ARK-EXIT-15
@@ -150,6 +150,17 @@ feature:
           request timeout) are retried at the explorer client and on progress/viability WASM calls;
           remaining failures show a short explorer-unreachable message plus Click Proceed to retry
           this step.
+      - id: ARK-EXIT-35
+        description: >-
+          Control-page node detail lists remaining VTXO tree expiry per hosted outpoint as
+          "expires in X days" (singular "expires in 1 day"; "expires in less than 1 day" when
+          remaining is under one day; "expired" when past). Omit the line when expiresAt is
+          missing or <= 0. A host tx (tree/ark node with hosted VTXOs) uses a dark red graph-node
+          fill if any hosted VTXO is already expired, or a dark yellow fill if none are expired
+          but any expires in less than 3 days (3 * 86400 seconds). Expired wins over the 3-day
+          warning. Warning/expired fill wins over the selected-leaf blue tint. Exit-path blue
+          border and focus ring stay. This is tree expiry (ASP still online), not the post-unroll
+          CSV timelock.
       - id: ARK-EXIT-26
         description: >-
           After abort, leftover WASM in-progress leaves that are not yet unrolled remain selectable
@@ -403,6 +414,20 @@ feature:
         - fromSnapshotSyncedAt subtitle when list served from local snapshot
       - requirements:
         - Contracts ARK-VTX-01 through ARK-VTX-07
+        - Shown only when isArkadeEnabled and current network supports Arkade
+    - UnilateralExitControl:
+      - description: "Unilateral exit control page"
+      - file: frontend/src/pages/wallet/UnilateralExitControlPage.tsx
+      - path: /wallet/arkade/unilateral-exit
+      - visible_elements:
+        - responsive VTXO tree graph (React Flow + d3-dag)
+        - node detail per-outpoint VTXO exit phase from child actors (ARK-EXIT-32)
+        - node detail per-outpoint remaining tree expiry copy (ARK-EXIT-35)
+        - host tx graph node dark-red fill when any hosted VTXO is expired; dark-yellow fill when any expires in less than 3 days (expired wins; ARK-EXIT-35)
+        - unspent host VTXO overlay (Coins / HandCoins after unroll)
+        - Start / Proceed / abort / Complete controls as specified by ARK-EXIT-13 and related IDs
+      - requirements:
+        - Contracts ARK-EXIT-13 and ARK-EXIT-35
         - Shown only when isArkadeEnabled and current network supports Arkade
     - DashboardArkadeBlock:
       - description: "Separate Arkade balance on dashboard"

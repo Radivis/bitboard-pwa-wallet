@@ -8,6 +8,10 @@ import {
 import type { Node } from '@xyflow/react'
 import { Position, getSmoothStepPath } from '@xyflow/react'
 import type { UnilateralExitInProgressOverlayKind } from '@/lib/arkade/unilateral-exit-control-phase'
+import {
+  hostTxVtxoExpiryUrgency,
+  type UnilateralExitVtxoExpiryUrgency,
+} from '@/lib/arkade/unilateral-exit-vtxo-expiry'
 import type {
   ArkadeUnilateralExitHostOutpoint,
   ArkadeUnilateralExitNodeStatus,
@@ -61,6 +65,7 @@ export type UnilateralExitTreeNodeData = {
   layoutDirection: UnilateralExitLayoutDirection
   exitableVtxoCount: number
   hostsUnrolled: boolean
+  vtxoExpiryUrgency: UnilateralExitVtxoExpiryUrgency
 }
 
 /** Rendered node diameter in px (`size-12`). */
@@ -337,6 +342,7 @@ export function layoutUnilateralExitGraph(params: {
   focusedNodeId?: string | null
   onReadyToProceed?: () => void
   readyToProceedDisabled?: boolean
+  nowSeconds?: number
 }): { nodes: Node<UnilateralExitTreeNodeData>[]; edgePaths: UnilateralExitGraphEdgePath[] } {
   const {
     topology,
@@ -348,6 +354,7 @@ export function layoutUnilateralExitGraph(params: {
     focusedNodeId,
     onReadyToProceed,
     readyToProceedDisabled,
+    nowSeconds = Math.floor(Date.now() / 1000),
   } = params
   const pathTxids = computeExitPathTxids(topology, selectedLeafOutpoints)
   const statusByTxid = mergeNodeStatuses(topology, nodeStatuses)
@@ -419,6 +426,7 @@ export function layoutUnilateralExitGraph(params: {
         isSelectedLeaf: allLeafOutpointsSelected(leafOutpoints, selectedLeafOutpoints),
         exitableVtxoCount: hostOutpoints.length,
         hostsUnrolled: hostOutpointsAreUnrolled(hostOutpoints),
+        vtxoExpiryUrgency: hostTxVtxoExpiryUrgency(hostOutpoints, nowSeconds),
         pathTxids,
         focusedNodeId,
         status,
@@ -450,6 +458,7 @@ function buildTreeNodeData(params: {
   isSelectedLeaf: boolean
   exitableVtxoCount: number
   hostsUnrolled: boolean
+  vtxoExpiryUrgency: UnilateralExitVtxoExpiryUrgency
   pathTxids: Set<string>
   focusedNodeId?: string | null
   status: ArkadeUnilateralExitNodeStatus | undefined
@@ -483,6 +492,7 @@ function buildTreeNodeData(params: {
     layoutDirection: params.layoutDirection,
     exitableVtxoCount: params.exitableVtxoCount,
     hostsUnrolled: params.hostsUnrolled,
+    vtxoExpiryUrgency: params.vtxoExpiryUrgency,
   }
 }
 

@@ -519,6 +519,7 @@ pub struct UnilateralExitHostOutpointDto {
     pub vout: u32,
     pub amount_sats: u64,
     pub is_unrolled: bool,
+    pub expires_at: i64,
 }
 
 #[derive(Debug, Serialize)]
