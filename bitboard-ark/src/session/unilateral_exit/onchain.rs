@@ -64,12 +64,12 @@ pub(crate) async fn exit_branch_spent_on_chain<B: Blockchain>(
 pub(crate) async fn detect_exiting_vtxo_completion_on_esplora<B: Blockchain>(
     blockchain: &B,
     _snapshot: &OffchainVtxoSnapshot,
-    leaf_txid: &str,
+    host_txid: &str,
     virtual_vout: u32,
 ) -> ArkResult<Option<Txid>> {
-    let leaf = Txid::from_str(leaf_txid)
+    let host = Txid::from_str(host_txid)
         .map_err(|error| crate::error::ArkWasmError::InvalidTxid(error.to_string()))?;
-    output_spent_on_chain(blockchain, &leaf, virtual_vout).await
+    output_spent_on_chain(blockchain, &host, virtual_vout).await
 }
 
 pub(crate) async fn output_spent_on_chain<B: Blockchain>(

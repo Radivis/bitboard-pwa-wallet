@@ -23,7 +23,7 @@ Related:
 | Always-on 6-conf poll actor | **Don't** |
 | Complete without an in-progress membership test | **Do** |
 
-**Unified Esplora 6-conf reconciler.** One WASM pass: any `tree` / `ark` virtual tx that hosts VTXOs and has ≥6 Esplora confirmations stamps `is_unrolled` on every vout of that txid (terminal leaves included; `commitment` / `checkpoint` skipped). Same constant as today (`UNILATERAL_EXIT_LEAF_CONFIRMATIONS`). Runs on Arkade load (including autonomous), operator sync, proceed, progress, list-in-progress, and complete — not only while a frontend job is polling. Job proceed/progress may still call it for snappy in-job UI.
+**Unified Esplora 6-conf reconciler.** One WASM pass: any `tree` / `ark` virtual tx that hosts VTXOs and has ≥6 Esplora confirmations stamps `is_unrolled` on every vout of that txid (terminal leaves included; `commitment` / `checkpoint` skipped). Same constant as today (`UNILATERAL_EXIT_HOST_TX_CONFIRMATIONS`). Runs on Arkade load (including autonomous), operator sync, proceed, progress, list-in-progress, and complete — not only while a frontend job is polling. Job proceed/progress may still call it for snappy in-job UI.
 
 **Host-tx observation registry.** Persist per virtual `txid`: `registered_at`, `relayed`, `confirmations`, `never_seen_probes`, `last_probed_at`. Register **immediately before** broadcast of that step so a false broadcast error cannot skip the row. Hot Esplora set is this table (plus a materials heal for tagged VTXOs if a write was missed). `never_seen` after a probe budget **deletes** the **tx** row; it does not untag VTXOs. Strategy (why early register, why not to trust first Esplora / `step_wait`, why ~14 min before cleanup): [unilateral-exit.md](../unilateral-exit.md#register-before-esplora-never_seen-is-the-cleanup).
 
@@ -90,7 +90,7 @@ idle
 | `host_broadcast_attempted` | About to publish **this** VTXO’s host tx (txid known). Written **immediately before** `submitpackage`. |
 | `host_relayed` | Esplora `/raw` (or the existing step-wait fallback) saw the tx. Sticky until reorg handling says otherwise. |
 | `host_confirmed` | ≥1 confirmation (`UNILATERAL_EXIT_STEP_CONFIRMATIONS`). Same meaning as today’s step cursor. Reorg under 1 conf rewinds here, not to `tagged`. |
-| `unrolled` | ≥6 confirmations (`UNILATERAL_EXIT_LEAF_CONFIRMATIONS`). Stamp **every vout** on that txid; register watches. Timelock may still be running. |
+| `unrolled` | ≥6 confirmations (`UNILATERAL_EXIT_HOST_TX_CONFIRMATIONS`). Stamp **every vout** on that txid; register watches. Timelock may still be running. |
 | `complete_ready` | Unrolled **and** owner can claim (`can_be_claimed_unilaterally_by_owner`). Complete uses this gate, not in-progress membership. |
 | `exited` | Our completion spend is visible on Esplora. Terminal. |
 | `funding_lost` | Terminal. Foreign spend of an exit-relevant outpoint, or checkpoint replacing the branch. **Per VTXO** — one leaf can be lost while a sibling stays `complete_ready`. |
@@ -187,7 +187,7 @@ unilateralExit (job)          — broadcaster; abort/terminate/automation
 
 ### What must not go in XState `after`
 
-Do not add a per-VTXO `after` delay until 6 confirmations. Confirmation depth advances in WASM on Esplora reconcile call sites. Children **rehydrate** when those RPCs return (load, sync, proceed, progress, list, complete). The job machine’s `waitingConfirm` / `pollDelay` stays for **1-conf step advance while broadcasting**, not for leaf finality.
+Do not add a per-VTXO `after` delay until 6 confirmations. Confirmation depth advances in WASM on Esplora reconcile call sites. Children **rehydrate** when those RPCs return (load, sync, proceed, progress, list, complete). The job machine’s `waitingConfirm` / `pollDelay` stays for **1-conf step advance while broadcasting**, not for host-tx 6-conf finality.
 
 ### Split of events (frozen in ARK-EXIT-32)
 
@@ -234,7 +234,7 @@ Shipped: VTXO exit table + host-tx observation table are authoritative. Do not d
 | Job-only 6-conf stamp | Esplora reconciler, driven by the observation hot set + materials heal |
 | Job `terminated` | `funding_lost` on affected VTXOs; job stops broadcasting |
 
-Materials (`unilateral_exit_materials_by_leaf_tx`) stay prefetch at operator sync. They are not the lifecycle.
+Materials (`unilateral_exit_materials_by_host_tx`) stay prefetch at operator sync. They are not the lifecycle.
 
 ---
 

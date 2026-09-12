@@ -11,12 +11,14 @@ use bitcoin::{Network, XOnlyPublicKey};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
-/// Current on-disk Arkade persistence format (v11).
+/// Current on-disk Arkade persistence format (v12).
 ///
 /// Published 0.3.3 wallets used v3. [`BitboardArkPersistence::parse_import`] accepts versions
-/// 3–11: missing fields default. Leftover v4–v10 blobs deserialize as the current types.
+/// 3–12: missing fields default. Leftover v4–v11 blobs deserialize as the current types.
 /// Extra `unilateral_exit_watches` keys are ignored (never published; not healed).
-pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 11;
+/// v12 renames `unilateral_exit_materials_by_leaf_tx` → `unilateral_exit_materials_by_host_tx`
+/// (serde alias keeps v11 keys readable).
+pub const BITBOARD_ARK_PERSISTENCE_VERSION: u32 = 12;
 /// Oldest envelope version `parse_import` will load (published 0.3.3).
 pub const MIN_SUPPORTED_ARK_PERSISTENCE_IMPORT_VERSION: u32 = 3;
 const PERSISTENCE_LOCK_POISONED: &str = "persistence lock poisoned";
@@ -122,8 +124,8 @@ pub struct OffchainVtxoSnapshot {
     pub synced_at: i64,
     pub dust_sats: u64,
     pub virtual_tx_outpoints: Vec<VirtualTxOutPointRecord>,
-    #[serde(default)]
-    pub unilateral_exit_materials_by_leaf_tx: BTreeMap<String, UnilateralExitMaterialsRecord>,
+    #[serde(default, alias = "unilateral_exit_materials_by_leaf_tx")]
+    pub unilateral_exit_materials_by_host_tx: BTreeMap<String, UnilateralExitMaterialsRecord>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

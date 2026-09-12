@@ -5,7 +5,7 @@ use bitcoin::Txid;
 
 use crate::constants::{
     HOST_TX_NEVER_SEEN_FIRST_PROBE_AFTER_SECS, HOST_TX_NEVER_SEEN_MAX_ELIGIBLE_MISSES,
-    HOST_TX_NEVER_SEEN_PROBE_SPACING_SECS, UNILATERAL_EXIT_LEAF_CONFIRMATIONS,
+    HOST_TX_NEVER_SEEN_PROBE_SPACING_SECS, UNILATERAL_EXIT_HOST_TX_CONFIRMATIONS,
 };
 use crate::error::ArkResult;
 use crate::esplora_blockchain::EsploraBlockchain;
@@ -18,14 +18,16 @@ use crate::persistence::{
 };
 use crate::session::ArkSession;
 use crate::session::mappers::current_unix_timestamp;
-use crate::session::unilateral_exit::progress::{leaf_reached_finality, step_reached_confirmation};
+use crate::session::unilateral_exit::progress::{
+    host_tx_reached_finality, step_reached_confirmation,
+};
 use crate::session::unilateral_exit::topology::virtual_tx_type_hosts_exit_outpoints;
 use crate::session::unilateral_exit::vtxo_exit::{
     apply_host_observation_to_vtxo_exit_records, host_txids_from_vtxo_exit_records,
     observation_all_records_terminal, rewind_records_on_host,
 };
 use crate::unilateral_exit_materials::{
-    chained_tx_type_label, snapshot_materials_for_leaf_tx, vtxo_chains_from_json,
+    chained_tx_type_label, snapshot_materials_for_host_tx, vtxo_chains_from_json,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,22 +39,22 @@ pub(crate) struct HostTxProbe {
 pub(crate) fn vtxo_host_txids_from_materials(
     snapshot: &OffchainVtxoSnapshot,
 ) -> ArkResult<Vec<String>> {
-    let material_leaf_txids: Vec<String> = snapshot
-        .unilateral_exit_materials_by_leaf_tx
+    let material_host_txids: Vec<String> = snapshot
+        .unilateral_exit_materials_by_host_tx
         .keys()
         .cloned()
         .collect();
-    host_txids_for_leaf_keys(snapshot, &material_leaf_txids)
+    host_txids_for_material_keys(snapshot, &material_host_txids)
 }
 
-fn host_txids_for_leaf_keys(
+fn host_txids_for_material_keys(
     snapshot: &OffchainVtxoSnapshot,
-    leaf_txids: &[String],
+    material_keys: &[String],
 ) -> ArkResult<Vec<String>> {
     let mut host_txids = Vec::new();
     let mut seen = HashSet::new();
-    for leaf_txid in leaf_txids {
-        let Some(materials) = snapshot_materials_for_leaf_tx(snapshot, leaf_txid) else {
+    for material_key in material_keys {
+        let Some(materials) = snapshot_materials_for_host_tx(snapshot, material_key) else {
             continue;
         };
         let Ok(chains) = vtxo_chains_from_json(&materials.chain_json) else {
@@ -72,8 +74,8 @@ fn host_txids_for_leaf_keys(
     Ok(host_txids)
 }
 
-fn pending_unilateral_leaf_txids(pending: &[PendingExitDeductionRecord]) -> Vec<String> {
-    let mut leaf_txids = Vec::new();
+fn pending_unilateral_host_txids(pending: &[PendingExitDeductionRecord]) -> Vec<String> {
+    let mut host_txids = Vec::new();
     let mut seen = HashSet::new();
     for record in pending {
         if record.kind != PendingExitKind::Unilateral {
@@ -83,10 +85,10 @@ fn pending_unilateral_leaf_txids(pending: &[PendingExitDeductionRecord]) -> Vec<
             continue;
         };
         if seen.insert(txid.clone()) {
-            leaf_txids.push(txid.clone());
+            host_txids.push(txid.clone());
         }
     }
-    leaf_txids
+    host_txids
 }
 
 pub(crate) fn host_txids_to_probe(
@@ -97,19 +99,19 @@ pub(crate) fn host_txids_to_probe(
 ) -> ArkResult<BTreeSet<String>> {
     let mut txids = BTreeSet::new();
     for (txid, record) in observations {
-        if record.confirmations < u64::from(UNILATERAL_EXIT_LEAF_CONFIRMATIONS) {
+        if record.confirmations < u64::from(UNILATERAL_EXIT_HOST_TX_CONFIRMATIONS) {
             txids.insert(txid.clone());
         }
     }
     for host_txid in host_txids_from_vtxo_exit_records(vtxo_exit_records) {
         if observations.get(&host_txid).is_none_or(|record| {
-            record.confirmations < u64::from(UNILATERAL_EXIT_LEAF_CONFIRMATIONS)
+            record.confirmations < u64::from(UNILATERAL_EXIT_HOST_TX_CONFIRMATIONS)
         }) {
             txids.insert(host_txid);
         }
     }
-    let pending_leaves = pending_unilateral_leaf_txids(pending);
-    for host_txid in host_txids_for_leaf_keys(snapshot, &pending_leaves)? {
+    let pending_host_txids = pending_unilateral_host_txids(pending);
+    for host_txid in host_txids_for_material_keys(snapshot, &pending_host_txids)? {
         if !observations.contains_key(&host_txid) {
             txids.insert(host_txid);
         }
@@ -147,7 +149,7 @@ fn stamp_host_if_final(
     host_txid: &str,
     confirmations: u64,
 ) -> bool {
-    if !leaf_reached_finality(confirmations) {
+    if !host_tx_reached_finality(confirmations) {
         clear_virtual_tx_vtxos_unrolled_in_snapshot(snapshot, host_txid);
         return false;
     }

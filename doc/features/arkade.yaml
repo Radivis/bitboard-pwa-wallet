@@ -108,7 +108,7 @@ feature:
       - id: ARK-EXIT-10
         description: While autonomous mode is active, collaborative exit, send, renew, recoverable settlement, signer migration, boarding settle, and operator sync (manual and background dashboard poll) are blocked in UI and WASM; an in-progress unilateral-exit job does not skip background operator sync
       - id: ARK-EXIT-11
-        description: After each proceed step, WASM does not poll operator list_vtxos; local is_unrolled is stamped when Esplora reports 6 confirmations on the leaf or intermediate host virtual tx; sticky is_unrolled merge and unrolled+ record reconcile run during operator sync only. The unified stamper (ARK-EXIT-29) also runs on autonomous load, proceed, progress, list, and complete.
+        description: After each proceed step, WASM does not poll operator list_vtxos; local is_unrolled is stamped when Esplora reports 6 confirmations on the host virtual tx; sticky is_unrolled merge and unrolled+ record reconcile run during operator sync only. The unified stamper (ARK-EXIT-29) also runs on autonomous load, proceed, progress, list, and complete.
       - id: ARK-EXIT-12
         description: Unrolled+ VTXO exit records survive full snapshot replace. Reinject missing snapshot rows from those records; never clear exiting state on full-list absence alone. Leftover 0.3.4-dev `unilateral_exit_watches` JSON is ignored (never published; not healed into records). Cleared on completion, funding_lost, or reconcile evidence (operator spent or on-chain spent).
       - id: ARK-EXIT-13
@@ -118,9 +118,9 @@ feature:
       - id: ARK-EXIT-15
         description: ark_proceed_unilateral_exit_step advances one virtual tx per call with caller feerate, returns without blocking on confirmation, persists current_step_waiting_since for progress UI, and skips already-on-chain branch txs; the XState machine polls until 1-conf
       - id: ARK-EXIT-16
-        description: Leaf and intermediate host virtual txs must reach 6 confirmations on Esplora before WASM marks is_unrolled. ARK-EXIT-29 applies the same 6-conf rule to every tree/ark host including terminals.
+        description: Host virtual txs (leaf or intermediate) must reach 6 confirmations on Esplora before WASM marks is_unrolled. ARK-EXIT-29 applies the same 6-conf rule to every tree/ark host including terminals.
       - id: ARK-EXIT-17
-        description: When leaf virtual tx reaches 6 conf, WASM marks is_unrolled for every VTXO outpoint on that txid; sticky merge promotes all vouts on the same txid; control page selects sibling leaf outpoints atomically; completion remains per outpoint. ARK-EXIT-29 extends all-vouts stamping to any tree/ark host, not only selected leaves.
+        description: When a host virtual tx reaches 6 conf, WASM marks is_unrolled for every VTXO outpoint on that txid; sticky merge promotes all vouts on the same txid; control page selects sibling leaf outpoints atomically; completion remains per outpoint. ARK-EXIT-29 extends all-vouts stamping to any tree/ark host, not only selected leaves.
       - id: ARK-EXIT-18
         description: Control page Proceed automatically switch with congestion warning and max fee rate input; automatic mode uses Low/Medium/High preset degree only (no custom fee)
       - id: ARK-EXIT-19
@@ -199,7 +199,7 @@ feature:
       - id: ARK-EXIT-29
         description: >-
           Unified Esplora 6-conf reconciler: any tree/ark virtual tx that hosts VTXOs
-          (terminals included; commitment/checkpoint skipped) with ≥ UNILATERAL_EXIT_LEAF_CONFIRMATIONS
+          (terminals included; commitment/checkpoint skipped) with ≥ UNILATERAL_EXIT_HOST_TX_CONFIRMATIONS
           stamps is_unrolled on every vout of that txid and advances VTXO exit records. Survival
           across snapshot replace is those unrolled+ records (ARK-EXIT-12). Leftover
           `unilateral_exit_watches` JSON is ignored, not imported. Esplora reconcile

@@ -380,7 +380,7 @@ impl ArkSession {
                 .snapshot()
                 .offchain_vtxo_snapshot
                 .ok_or_else(|| ArkWasmError::Snapshot("offchain snapshot missing".into()))?;
-            crate::unilateral_exit_materials::require_unilateral_exit_materials_for_leaf_tx(
+            crate::unilateral_exit_materials::require_unilateral_exit_materials_for_host_tx(
                 &snapshot,
                 &leaf_txid.to_string(),
             )?;
@@ -535,7 +535,7 @@ mod tests {
                 assets: vec![],
                 server_pk_hex: None,
             }],
-            unilateral_exit_materials_by_leaf_tx: std::collections::BTreeMap::new(),
+            unilateral_exit_materials_by_host_tx: std::collections::BTreeMap::new(),
         };
         // Swept records are not exit-eligible; do not invent an ASP fallback.
         assert!(

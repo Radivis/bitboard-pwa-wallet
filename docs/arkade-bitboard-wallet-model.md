@@ -109,7 +109,7 @@ Management → Arkade offers two paths:
 
 Collaborative exit and unilateral unroll are implemented in `bitboard-ark` (`collaborative_redeem`, `proceed_unilateral_exit_step`, etc.). **Autonomous mode** branches the same unilateral exit RPCs to snapshot-backed materials instead of ASP indexer/batch APIs. The on-chain bumper wallet shares the same BIP32-derived BDK wallet as boarding.
 
-**Unilateral exit control:** Management links to `/wallet/arkade/unilateral-exit`. The control page is a view of the XState actor: merged DAG (React Flow + d3-dag), multi-leaf selection, one virtual tx per `ark_proceed_unilateral_exit_step`. Proceed is non-blocking; the machine polls until the current step has **1 confirmation**. A virtual tx (leaf or intermediate host) is marked `is_unrolled` only after **6 confirmations**. Shared-leaf and automation details: [unilateral-exit.md](unilateral-exit.md).
+**Unilateral exit control:** Management links to `/wallet/arkade/unilateral-exit`. The control page is a view of the XState actor: merged DAG (React Flow + d3-dag), multi-leaf selection, one virtual tx per `ark_proceed_unilateral_exit_step`. Proceed is non-blocking; the machine polls until the current step has **1 confirmation**. A host virtual tx is marked `is_unrolled` only after **6 confirmations**. Shared-leaf and automation details: [unilateral-exit.md](unilateral-exit.md).
 
 ### Unilateral vs collaborative exit balance timing
 
@@ -142,7 +142,7 @@ Implementation touchpoints: `build_arkade_balance_dto` (WASM), `exit_balance_com
 
 ### Post-unroll operator contract (ARK-EXIT-11)
 
-Unroll and complete do **not** call the ASP. After each proceed-step broadcast, the XState machine waits until Esplora reports **1 confirmation** on the current virtual tx. WASM stamps local `is_unrolled` only when the leaf or intermediate host has **6 confirmations**. Operator indexer catch-up happens later, if at all, during a separate operator sync.
+Unroll and complete do **not** call the ASP. After each proceed-step broadcast, the XState machine waits until Esplora reports **1 confirmation** on the current virtual tx. WASM stamps local `is_unrolled` only when the host tx has **6 confirmations**. Operator indexer catch-up happens later, if at all, during a separate operator sync.
 
 - **Sticky merge:** `merge_sticky_unrolled_flags` preserves local `is_unrolled` for VTXOs still returned by the operator while ASP lags, and only when a host-tx observation has 6 confirmations or a VTXO exit record is `unrolled` / `complete_ready` (ARK-EXIT-12). Tag-time records must not keep the flag. Missing unrolled+ rows are reconciled from those records.
 - **Record reconcile:** After each operator sync, `reconcile_exiting_vtxo_watches` iterates unrolled+ VTXO exit records with targeted `list_vtxos_for_outpoints` and narrow Esplora probes per the truth table — never clears exiting state on full-list absence alone (ARK-SYNC-03).

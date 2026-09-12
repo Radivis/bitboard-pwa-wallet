@@ -1,5 +1,5 @@
 use super::*;
-use crate::constants::{UNILATERAL_EXIT_LEAF_CONFIRMATIONS, UNILATERAL_EXIT_STEP_CONFIRMATIONS};
+use crate::constants::{UNILATERAL_EXIT_HOST_TX_CONFIRMATIONS, UNILATERAL_EXIT_STEP_CONFIRMATIONS};
 use crate::exit_balance::is_unilateral_exit_in_progress_outpoint;
 use crate::persistence::{
     HostTxObservationRecord, PendingExitDeductionRecord, PendingExitKind,
@@ -123,7 +123,7 @@ fn tag_is_idempotent_and_does_not_downgrade() {
 #[test]
 fn tag_missing_materials_errors() {
     let (mut snapshot, _, leaf, _) = snapshot_with_intermediate_tree_and_ark_leaf();
-    snapshot.unilateral_exit_materials_by_leaf_tx.clear();
+    snapshot.unilateral_exit_materials_by_host_tx.clear();
     let mut records = BTreeMap::new();
     let error = tag_unilateral_exit_plan_in_records(
         &snapshot,
@@ -247,7 +247,7 @@ fn b_advances_relayed_confirmed_unrolled() {
         &mut records,
         &leaf.to_string(),
         true,
-        u64::from(UNILATERAL_EXIT_LEAF_CONFIRMATIONS),
+        u64::from(UNILATERAL_EXIT_HOST_TX_CONFIRMATIONS),
         true,
     );
     assert_eq!(record_phase(&records, &leaf, 0), VtxoExitPhase::Unrolled);
@@ -528,7 +528,7 @@ fn abort_keeps_host_broadcast_attempted_and_funding_lost() {
 #[test]
 fn host_txids_on_same_materials_branch_errors_when_materials_missing() {
     let (mut snapshot, tree, _, _) = snapshot_with_intermediate_tree_and_ark_leaf();
-    snapshot.unilateral_exit_materials_by_leaf_tx.clear();
+    snapshot.unilateral_exit_materials_by_host_tx.clear();
     let error = host_txids_on_same_materials_branch(&snapshot, &tree.to_string())
         .expect_err("missing exit materials must not invent a one-txid branch");
     assert!(matches!(
@@ -582,7 +582,7 @@ fn b_does_not_advance_or_rewind_funding_lost() {
         &mut records,
         &leaf.to_string(),
         true,
-        u64::from(UNILATERAL_EXIT_LEAF_CONFIRMATIONS),
+        u64::from(UNILATERAL_EXIT_HOST_TX_CONFIRMATIONS),
         true,
     );
     assert_eq!(record_phase(&records, &leaf, 0), VtxoExitPhase::FundingLost);

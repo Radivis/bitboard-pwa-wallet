@@ -6,7 +6,9 @@ use crate::persistence::{
     HostTxObservationRecord, OffchainVtxoSnapshot, PendingExitDeductionRecord, PendingExitKind,
     VtxoExitPhase, VtxoExitRecord, vtxo_exit_record_key,
 };
-use crate::session::unilateral_exit::progress::{leaf_reached_finality, step_reached_confirmation};
+use crate::session::unilateral_exit::progress::{
+    host_tx_reached_finality, step_reached_confirmation,
+};
 
 /// Map v9 leftover signals onto a phase. Does not invent `funding_lost`. No observation → `tagged`.
 fn phase_from_legacy(
@@ -23,7 +25,7 @@ fn phase_from_legacy(
     let Some(observation) = observation else {
         return VtxoExitPhase::Tagged;
     };
-    if leaf_reached_finality(observation.confirmations) {
+    if host_tx_reached_finality(observation.confirmations) {
         VtxoExitPhase::Unrolled
     } else if step_reached_confirmation(observation.confirmations) {
         VtxoExitPhase::HostConfirmed

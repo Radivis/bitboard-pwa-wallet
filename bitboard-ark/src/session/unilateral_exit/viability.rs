@@ -22,7 +22,7 @@ use super::vtxo_exit::{
 };
 use crate::persistence::vtxo_exit_record_key;
 use crate::unilateral_exit_materials::{
-    require_unilateral_exit_materials_for_leaf_tx, virtual_psbts_from_records,
+    require_unilateral_exit_materials_for_host_tx, virtual_psbts_from_records,
     vtxo_chains_from_json,
 };
 
@@ -50,7 +50,7 @@ pub(crate) fn first_unroll_step_funding_prevouts_from_snapshot(
     snapshot: &crate::persistence::OffchainVtxoSnapshot,
     seed_host_txid: &str,
 ) -> ArkResult<Vec<VirtualOutPoint>> {
-    let materials = require_unilateral_exit_materials_for_leaf_tx(snapshot, seed_host_txid)?;
+    let materials = require_unilateral_exit_materials_for_host_tx(snapshot, seed_host_txid)?;
     let chains = vtxo_chains_from_json(&materials.chain_json)?;
     let seed_txid =
         Txid::from_str(seed_host_txid).map_err(|_| ArkWasmError::AutonomousExitMaterialsMissing)?;
@@ -298,7 +298,7 @@ fn wallet_unroll_step_txids_from_snapshot_materials(
     snapshot: &crate::persistence::OffchainVtxoSnapshot,
 ) -> HashSet<Txid> {
     let mut txids = HashSet::new();
-    for materials in snapshot.unilateral_exit_materials_by_leaf_tx.values() {
+    for materials in snapshot.unilateral_exit_materials_by_host_tx.values() {
         let Ok(chains) =
             crate::unilateral_exit_materials::vtxo_chains_from_json(&materials.chain_json)
         else {

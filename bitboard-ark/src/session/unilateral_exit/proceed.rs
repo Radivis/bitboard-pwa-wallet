@@ -64,7 +64,7 @@ impl ArkSession {
 
         if current_step_index >= plan.ordered_step_txids.len() {
             self.wallet_db.clear_unilateral_exit_step_wait();
-            self.mark_unrolled_leaves_at_finality(&plan).await?;
+            self.mark_unrolled_hosts_at_finality(&plan).await?;
             return self
                 .build_proceed_result(
                     &plan,
@@ -143,7 +143,7 @@ impl ArkSession {
             self.wallet_db.clear_unilateral_exit_step_wait();
         }
 
-        self.mark_unrolled_leaves_at_finality(&plan).await?;
+        self.mark_unrolled_hosts_at_finality(&plan).await?;
 
         self.build_proceed_result(
             &plan,

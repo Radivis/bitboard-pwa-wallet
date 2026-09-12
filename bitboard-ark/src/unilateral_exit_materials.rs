@@ -111,15 +111,15 @@ pub fn materials_record_from_prefetch(
     })
 }
 
-pub fn snapshot_materials_for_leaf_tx<'a>(
+pub fn snapshot_materials_for_host_tx<'a>(
     snapshot: &'a OffchainVtxoSnapshot,
-    leaf_txid: &str,
+    host_txid: &str,
 ) -> Option<&'a UnilateralExitMaterialsRecord> {
-    snapshot.unilateral_exit_materials_by_leaf_tx.get(leaf_txid)
+    snapshot.unilateral_exit_materials_by_host_tx.get(host_txid)
 }
 
-fn materials_cover_leaf_tx(materials: &UnilateralExitMaterialsRecord, leaf_txid: &str) -> bool {
-    let Ok(wanted) = Txid::from_str(leaf_txid) else {
+fn materials_cover_host_tx(materials: &UnilateralExitMaterialsRecord, host_txid: &str) -> bool {
+    let Ok(wanted) = Txid::from_str(host_txid) else {
         return false;
     };
     let Ok(chains) = vtxo_chains_from_json(&materials.chain_json) else {
@@ -128,34 +128,34 @@ fn materials_cover_leaf_tx(materials: &UnilateralExitMaterialsRecord, leaf_txid:
     chains.inner.iter().any(|link| link.txid == wanted)
 }
 
-/// Prefetched materials keyed by this leaf, or another leaf whose cached chain includes it.
-pub fn materials_for_unroll_leaf_tx<'a>(
+/// Prefetched materials keyed by this host, or another host whose cached chain includes it.
+pub fn materials_for_unroll_host_tx<'a>(
     snapshot: &'a OffchainVtxoSnapshot,
-    leaf_txid: &str,
+    host_txid: &str,
 ) -> Option<&'a UnilateralExitMaterialsRecord> {
-    if let Some(materials) = snapshot_materials_for_leaf_tx(snapshot, leaf_txid) {
+    if let Some(materials) = snapshot_materials_for_host_tx(snapshot, host_txid) {
         return Some(materials);
     }
     snapshot
-        .unilateral_exit_materials_by_leaf_tx
+        .unilateral_exit_materials_by_host_tx
         .values()
-        .find(|materials| materials_cover_leaf_tx(materials, leaf_txid))
+        .find(|materials| materials_cover_host_tx(materials, host_txid))
 }
 
-/// Require prefetched materials for a leaf. Unroll/complete never live-prefetch from the ASP.
-pub fn require_unilateral_exit_materials_for_leaf_tx<'a>(
+/// Require prefetched materials for a host tx. Unroll/complete never live-prefetch from the ASP.
+pub fn require_unilateral_exit_materials_for_host_tx<'a>(
     snapshot: &'a OffchainVtxoSnapshot,
-    leaf_txid: &str,
+    host_txid: &str,
 ) -> ArkResult<&'a UnilateralExitMaterialsRecord> {
-    materials_for_unroll_leaf_tx(snapshot, leaf_txid)
+    materials_for_unroll_host_tx(snapshot, host_txid)
         .ok_or(ArkWasmError::AutonomousExitMaterialsMissing)
 }
 
 pub fn vtxo_chains_from_snapshot_materials(
     snapshot: &OffchainVtxoSnapshot,
-    leaf_txid: &str,
+    host_txid: &str,
 ) -> ArkResult<VtxoChains> {
-    let materials = require_unilateral_exit_materials_for_leaf_tx(snapshot, leaf_txid)?;
+    let materials = require_unilateral_exit_materials_for_host_tx(snapshot, host_txid)?;
     vtxo_chains_from_json(&materials.chain_json)
 }
 
@@ -173,14 +173,14 @@ pub fn vtxo_amount_sats_from_snapshot(
     })
 }
 
-pub fn store_materials_for_leaf_tx(
+pub fn store_materials_for_host_tx(
     snapshot: &mut OffchainVtxoSnapshot,
-    leaf_txid: &str,
+    host_txid: &str,
     materials: UnilateralExitMaterialsRecord,
 ) {
     snapshot
-        .unilateral_exit_materials_by_leaf_tx
-        .insert(leaf_txid.to_string(), materials);
+        .unilateral_exit_materials_by_host_tx
+        .insert(host_txid.to_string(), materials);
 }
 
 pub fn merge_unilateral_exit_materials_maps(
@@ -190,10 +190,10 @@ pub fn merge_unilateral_exit_materials_maps(
     let Some(prior_snapshot) = prior_snapshot else {
         return;
     };
-    for (leaf_txid, materials) in &prior_snapshot.unilateral_exit_materials_by_leaf_tx {
+    for (host_txid, materials) in &prior_snapshot.unilateral_exit_materials_by_host_tx {
         snapshot
-            .unilateral_exit_materials_by_leaf_tx
-            .entry(leaf_txid.clone())
+            .unilateral_exit_materials_by_host_tx
+            .entry(host_txid.clone())
             .or_insert_with(|| materials.clone());
     }
 }
@@ -224,7 +224,7 @@ pub fn reinject_pending_unilateral_exit_records(
     }
 }
 
-pub fn pending_unilateral_exit_leaf_txids(
+pub fn pending_unilateral_exit_host_txids(
     pending: &[PendingExitDeductionRecord],
 ) -> HashSet<String> {
     pending
@@ -236,16 +236,16 @@ pub fn pending_unilateral_exit_leaf_txids(
 
 pub fn prune_unilateral_exit_materials_map(
     snapshot: &mut OffchainVtxoSnapshot,
-    preserve_leaf_txids: &HashSet<String>,
+    preserve_host_txids: &HashSet<String>,
 ) {
     snapshot
-        .unilateral_exit_materials_by_leaf_tx
-        .retain(|leaf_txid, _| {
-            if preserve_leaf_txids.contains(leaf_txid) {
+        .unilateral_exit_materials_by_host_tx
+        .retain(|host_txid, _| {
+            if preserve_host_txids.contains(host_txid) {
                 return true;
             }
             snapshot.virtual_tx_outpoints.iter().any(|record| {
-                record.txid == *leaf_txid && record_should_retain_exit_materials(record)
+                record.txid == *host_txid && record_should_retain_exit_materials(record)
             })
         });
 }
@@ -283,7 +283,7 @@ pub fn virtual_tx_outpoint_has_unilateral_exit_prepared(
         return false;
     };
     let txid = virtual_tx_outpoint.outpoint.txid.to_string();
-    snapshot_materials_for_leaf_tx(snapshot, &txid).is_some()
+    snapshot_materials_for_host_tx(snapshot, &txid).is_some()
 }
 
 pub fn materials_status_from_snapshot(snapshot: Option<&OffchainVtxoSnapshot>) -> (u32, u32, u32) {
@@ -298,7 +298,7 @@ pub fn materials_status_from_snapshot(snapshot: Option<&OffchainVtxoSnapshot>) -
         }
         eligible += 1;
         if snapshot
-            .unilateral_exit_materials_by_leaf_tx
+            .unilateral_exit_materials_by_host_tx
             .contains_key(&record.txid)
         {
             ready += 1;
@@ -403,15 +403,15 @@ mod tests {
     }
 
     #[test]
-    fn require_unilateral_exit_materials_for_leaf_tx_errors_when_missing() {
+    fn require_unilateral_exit_materials_for_host_tx_errors_when_missing() {
         let txid = "aa".repeat(32);
         let snapshot = OffchainVtxoSnapshot {
             synced_at: 1,
             dust_sats: 330,
             virtual_tx_outpoints: vec![sibling_record(&txid, 0, false)],
-            unilateral_exit_materials_by_leaf_tx: empty_materials_map(),
+            unilateral_exit_materials_by_host_tx: empty_materials_map(),
         };
-        let error = require_unilateral_exit_materials_for_leaf_tx(&snapshot, &txid)
+        let error = require_unilateral_exit_materials_for_host_tx(&snapshot, &txid)
             .expect_err("missing materials");
         assert!(matches!(
             error,
@@ -420,17 +420,17 @@ mod tests {
     }
 
     #[test]
-    fn require_unilateral_exit_materials_for_leaf_tx_ok_when_present() {
+    fn require_unilateral_exit_materials_for_host_tx_ok_when_present() {
         let txid = "aa".repeat(32);
         let mut snapshot = OffchainVtxoSnapshot {
             synced_at: 1,
             dust_sats: 330,
             virtual_tx_outpoints: vec![sibling_record(&txid, 0, false)],
-            unilateral_exit_materials_by_leaf_tx: empty_materials_map(),
+            unilateral_exit_materials_by_host_tx: empty_materials_map(),
         };
-        store_materials_for_leaf_tx(&mut snapshot, &txid, sample_materials(7));
+        store_materials_for_host_tx(&mut snapshot, &txid, sample_materials(7));
         let materials =
-            require_unilateral_exit_materials_for_leaf_tx(&snapshot, &txid).expect("present");
+            require_unilateral_exit_materials_for_host_tx(&snapshot, &txid).expect("present");
         assert_eq!(materials.cached_at, 7);
     }
 
@@ -450,9 +450,9 @@ mod tests {
             synced_at: 1,
             dust_sats: 330,
             virtual_tx_outpoints: vec![sibling_record(&leaf_txid, 0, false)],
-            unilateral_exit_materials_by_leaf_tx: empty_materials_map(),
+            unilateral_exit_materials_by_host_tx: empty_materials_map(),
         };
-        store_materials_for_leaf_tx(
+        store_materials_for_host_tx(
             &mut snapshot,
             &leaf_txid,
             UnilateralExitMaterialsRecord {
@@ -474,7 +474,7 @@ mod tests {
             synced_at: 1,
             dust_sats: 330,
             virtual_tx_outpoints: vec![sibling_record(&txid, 0, false)],
-            unilateral_exit_materials_by_leaf_tx: empty_materials_map(),
+            unilateral_exit_materials_by_host_tx: empty_materials_map(),
         };
         assert_eq!(
             vtxo_amount_sats_from_snapshot(Some(&snapshot), &txid, 0),
@@ -488,7 +488,7 @@ mod tests {
     }
 
     #[test]
-    fn store_materials_for_leaf_tx_keeps_single_map_entry_for_siblings() {
+    fn store_materials_for_host_tx_keeps_single_map_entry_for_siblings() {
         let txid = "aa".repeat(32);
         let materials = sample_materials(42);
         let mut snapshot = OffchainVtxoSnapshot {
@@ -498,12 +498,12 @@ mod tests {
                 sibling_record(&txid, 0, false),
                 sibling_record(&txid, 1, false),
             ],
-            unilateral_exit_materials_by_leaf_tx: empty_materials_map(),
+            unilateral_exit_materials_by_host_tx: empty_materials_map(),
         };
-        store_materials_for_leaf_tx(&mut snapshot, &txid, materials);
+        store_materials_for_host_tx(&mut snapshot, &txid, materials);
         assert_eq!(
             snapshot
-                .unilateral_exit_materials_by_leaf_tx
+                .unilateral_exit_materials_by_host_tx
                 .get(&txid)
                 .map(|value| value.cached_at),
             Some(42)
@@ -518,7 +518,7 @@ mod tests {
             synced_at: 1,
             dust_sats: 330,
             virtual_tx_outpoints: vec![sibling_record(&txid, 0, false)],
-            unilateral_exit_materials_by_leaf_tx: {
+            unilateral_exit_materials_by_host_tx: {
                 let mut map = empty_materials_map();
                 map.insert(txid.clone(), materials);
                 map
@@ -528,11 +528,11 @@ mod tests {
             synced_at: 2,
             dust_sats: 330,
             virtual_tx_outpoints: vec![sibling_record(&txid, 0, false)],
-            unilateral_exit_materials_by_leaf_tx: empty_materials_map(),
+            unilateral_exit_materials_by_host_tx: empty_materials_map(),
         };
         merge_unilateral_exit_materials_maps(Some(&prior), &mut next);
         assert_eq!(
-            next.unilateral_exit_materials_by_leaf_tx
+            next.unilateral_exit_materials_by_host_tx
                 .get(&txid)
                 .map(|value| value.cached_at),
             Some(100)
@@ -571,7 +571,7 @@ mod tests {
                     server_pk_hex: None,
                 },
             ],
-            unilateral_exit_materials_by_leaf_tx: materials_map,
+            unilateral_exit_materials_by_host_tx: materials_map,
         };
         assert_eq!(materials_status_from_snapshot(Some(&snapshot)), (2, 1, 1));
     }
@@ -586,7 +586,7 @@ mod tests {
                 sibling_record(&txid, 0, true),
                 sibling_record(&txid, 1, false),
             ],
-            unilateral_exit_materials_by_leaf_tx: {
+            unilateral_exit_materials_by_host_tx: {
                 let mut map = empty_materials_map();
                 map.insert(txid.clone(), sample_materials(1));
                 map
@@ -595,7 +595,7 @@ mod tests {
         prune_unilateral_exit_materials_map(&mut snapshot, &HashSet::new());
         assert!(
             snapshot
-                .unilateral_exit_materials_by_leaf_tx
+                .unilateral_exit_materials_by_host_tx
                 .contains_key(&txid)
         );
 
@@ -654,13 +654,13 @@ mod tests {
         prune_unilateral_exit_materials_map(&mut snapshot, &HashSet::new());
         assert!(
             !snapshot
-                .unilateral_exit_materials_by_leaf_tx
+                .unilateral_exit_materials_by_host_tx
                 .contains_key(&txid)
         );
     }
 
     #[test]
-    fn prune_retains_materials_for_unrolled_unspent_leaf() {
+    fn prune_retains_materials_for_unrolled_unspent_host() {
         let txid = "aa".repeat(32);
         let mut snapshot = OffchainVtxoSnapshot {
             synced_at: 1,
@@ -683,7 +683,7 @@ mod tests {
                 assets: vec![],
                 server_pk_hex: None,
             }],
-            unilateral_exit_materials_by_leaf_tx: {
+            unilateral_exit_materials_by_host_tx: {
                 let mut map = empty_materials_map();
                 map.insert(txid.clone(), sample_materials(1));
                 map
@@ -692,22 +692,22 @@ mod tests {
         prune_unilateral_exit_materials_map(&mut snapshot, &HashSet::new());
         assert!(
             snapshot
-                .unilateral_exit_materials_by_leaf_tx
+                .unilateral_exit_materials_by_host_tx
                 .contains_key(&txid),
-            "unrolled-but-unspent leaves still need materials for topology/progress"
+            "unrolled-but-unspent hosts still need materials for topology/progress"
         );
 
         snapshot.virtual_tx_outpoints[0].is_spent = true;
         prune_unilateral_exit_materials_map(&mut snapshot, &HashSet::new());
         assert!(
             !snapshot
-                .unilateral_exit_materials_by_leaf_tx
+                .unilateral_exit_materials_by_host_tx
                 .contains_key(&txid)
         );
     }
 
     #[test]
-    fn require_materials_reuses_covering_chain_from_another_leaf() {
+    fn require_materials_reuses_covering_chain_from_another_host() {
         let ancestor = Txid::from_byte_array([0x11; 32]);
         let descendant = Txid::from_byte_array([0x22; 32]);
         let chains = VtxoChains {
@@ -730,9 +730,9 @@ mod tests {
             synced_at: 1,
             dust_sats: 330,
             virtual_tx_outpoints: vec![sibling_record(&ancestor.to_string(), 0, false)],
-            unilateral_exit_materials_by_leaf_tx: empty_materials_map(),
+            unilateral_exit_materials_by_host_tx: empty_materials_map(),
         };
-        store_materials_for_leaf_tx(
+        store_materials_for_host_tx(
             &mut snapshot,
             &descendant.to_string(),
             UnilateralExitMaterialsRecord {
@@ -741,8 +741,8 @@ mod tests {
                 virtual_psbts: vec![],
             },
         );
-        require_unilateral_exit_materials_for_leaf_tx(&snapshot, &ancestor.to_string())
-            .expect("covering chain from descendant leaf");
+        require_unilateral_exit_materials_for_host_tx(&snapshot, &ancestor.to_string())
+            .expect("covering chain from descendant host");
     }
 
     #[test]
@@ -773,7 +773,7 @@ mod tests {
                 assets: vec![],
                 server_pk_hex: None,
             }],
-            unilateral_exit_materials_by_leaf_tx: {
+            unilateral_exit_materials_by_host_tx: {
                 let mut map = empty_materials_map();
                 map.insert(txid_string, sample_materials(1));
                 map

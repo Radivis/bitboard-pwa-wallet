@@ -31,7 +31,7 @@ use crate::session::unilateral_exit::topology::{
     merge_topology_nodes_from_chains, virtual_tx_type_hosts_exit_outpoints,
 };
 use crate::unilateral_exit_materials::{
-    require_unilateral_exit_materials_for_leaf_tx, vtxo_amount_sats_from_snapshot,
+    require_unilateral_exit_materials_for_host_tx, vtxo_amount_sats_from_snapshot,
     vtxo_chains_from_snapshot_materials,
 };
 
@@ -100,7 +100,7 @@ pub fn tag_unilateral_exit_plan_in_records(
     let mut chain_sets = Vec::new();
     for leaf in selected_leaves {
         let leaf_txid = leaf.txid.to_string();
-        require_unilateral_exit_materials_for_leaf_tx(snapshot, &leaf_txid)?;
+        require_unilateral_exit_materials_for_host_tx(snapshot, &leaf_txid)?;
         chain_sets.push(vtxo_chains_from_snapshot_materials(snapshot, &leaf_txid)?);
     }
     let nodes = merge_topology_nodes_from_chains(chain_sets.iter());
@@ -219,7 +219,7 @@ pub(crate) fn rewind_records_on_host(
 
 /// Advance phases from Esplora `/raw` + confirmation depth for one host tx.
 ///
-/// `unrolled` is 6-conf (`UNILATERAL_EXIT_LEAF_CONFIRMATIONS`); step confirmation is
+/// `unrolled` is 6-conf (`UNILATERAL_EXIT_HOST_TX_CONFIRMATIONS`); step confirmation is
 /// `host_confirmed` (`UNILATERAL_EXIT_STEP_CONFIRMATIONS`). `complete_ready` / `exited` are not moved from here — claimable
 /// overlay and complete RPC own those. A premature `unrolled` phase (heal from a false snapshot
 /// stamp) is pulled back when Esplora is still below 6-conf.

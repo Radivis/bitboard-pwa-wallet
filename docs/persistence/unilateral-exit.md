@@ -7,7 +7,7 @@ Protocol and orchestration: [unilateral-exit.md](../unilateral-exit.md). Arkade 
 ```mermaid
 flowchart TB
   subgraph wasmLayer [Encrypted sdkPersistenceJson]
-    materials[unilateral_exit_materials_by_leaf_tx]
+    materials[unilateral_exit_materials_by_host_tx]
     vtxos[virtual_tx_outpoints is_unrolled]
     records[vtxo_exit_records]
     stepWait[unilateral_exit_step_wait]
@@ -40,19 +40,20 @@ Memory caches are keyed by `walletId:networkMode:arkadeAccountId` (`arkadeWallet
 
 Flushed through the Arkade save lifecycle into `StoredArkadeAccount.sdkPersistenceJson`. Types: [`bitboard-ark/src/persistence.rs`](../../bitboard-ark/src/persistence.rs). Materials encode/decode: [`unilateral_exit_materials.rs`](../../bitboard-ark/src/unilateral_exit_materials.rs). Frontend bundle I/O: [`unilateral-exit-frontend-sdk-persistence.ts`](../../frontend/src/lib/wallet/lifecycle/unilateral-exit-frontend-sdk-persistence.ts).
 
-**Envelope version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 11`. `parse_import` accepts 3–11. Published 0.3.3 wallets used v3; missing fields default (`unilateral_exit_frontend` is `None`, `host_tx_observations` is empty, `vtxo_exit_records` is empty, `autonomous_mode` is false). When `unilateral_exit_frontend` is `None`, a one-shot overlay reads leftover SQLite `settings` rows. On open / first B, empty `vtxo_exit_records` heal from leftover pending unilateral deductions and snapshot `is_unrolled && !is_spent` rows. Leftover 0.3.4-dev `unilateral_exit_watches` JSON keys are ignored (never published; not healed into records).
+**Envelope version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 12`. `parse_import` accepts 3–12. Published 0.3.3 wallets used v3; missing fields default (`unilateral_exit_frontend` is `None`, `host_tx_observations` is empty, `vtxo_exit_records` is empty, `autonomous_mode` is false). When `unilateral_exit_frontend` is `None`, a one-shot overlay reads leftover SQLite `settings` rows. On open / first B, empty `vtxo_exit_records` heal from leftover pending unilateral deductions and snapshot `is_unrolled && !is_spent` rows. Leftover 0.3.4-dev `unilateral_exit_watches` JSON keys are ignored (never published; not healed into records). v11 `unilateral_exit_materials_by_leaf_tx` keys still import via serde alias.
 
 | Version | What landed |
 |---------|-------------|
 | 8 | Last write before VTXO records. Import yields empty `host_tx_observations` and empty `vtxo_exit_records`. |
 | 9 | Records + observations fields exist on the type. A v9 blob with no those keys still loads empty maps (heal from leftover pending / snapshot flags). Never a published Bitboard write. |
 | 10 | 0.3.4-dev write era still had `unilateral_exit_watches`. That key is ignored on import (never published). |
-| 11 | Current write. Adds `funding_lost`. Records are the pipeline source of truth. Leftover `unilateral_exit_watches` JSON keys are ignored. |
+| 11 | Adds `funding_lost`. Records are the pipeline source of truth. Leftover `unilateral_exit_watches` JSON keys are ignored. |
+| 12 | Current write. Renames materials map to `unilateral_exit_materials_by_host_tx` (v11 `…_by_leaf_tx` still imports). |
 
 | Field | Where | Role |
 |-------|-------|------|
 | `virtual_tx_outpoints` | `OffchainVtxoSnapshot` | VTXO list including sticky `is_unrolled` / `is_spent` / `is_swept` |
-| `unilateral_exit_materials_by_leaf_tx` | `OffchainVtxoSnapshot` | Chain JSON + virtual PSBTs for autonomous unroll |
+| `unilateral_exit_materials_by_host_tx` | `OffchainVtxoSnapshot` | Chain JSON + virtual PSBTs for autonomous unroll |
 | `unilateral_exit_step_wait` | `WalletDbSnapshot` | Current step txid, index, `started_at` for relay-wait UI |
 | `pending_exit_deductions` | `WalletDbSnapshot` | Collaborative retain records; unilateral rows are a derived mirror of tagged…host_confirmed (not an independent proceed write) |
 | `vtxo_exit_records` | `WalletDbSnapshot` | Per-outpoint exit pipeline (`ARK-EXIT-27`); spend-lock (pipeline ∪ `funding_lost`) for send/collab/renew/delegate; recover/migrate use pipeline membership only |
@@ -67,7 +68,7 @@ Flushed through the Arkade save lifecycle into `StoredArkadeAccount.sdkPersisten
 cached_at, chain_json, virtual_psbts[]  { virtual_txid, psbt_hex }
 ```
 
-Filled on operator sync for exit-eligible VTXOs (`ARK-EXIT-07`). Fail fast with `autonomous_exit_materials_missing` when a selected leaf lacks a record or a seized-branch lookup cannot read `tree`/`ark` hosts from materials (`ARK-EXIT-08` / `ARK-EXIT-33`), including when autonomous mode is off. `merge_unilateral_exit_materials_maps` keeps prior leaf entries when a new snapshot omits them.
+Filled on operator sync for exit-eligible VTXOs (`ARK-EXIT-07`). Fail fast with `autonomous_exit_materials_missing` when a selected leaf lacks a record or a seized-branch lookup cannot read `tree`/`ark` hosts from materials (`ARK-EXIT-08` / `ARK-EXIT-33`), including when autonomous mode is off. `merge_unilateral_exit_materials_maps` keeps prior host entries when a new snapshot omits them.
 
 ### Sticky `is_unrolled`
 

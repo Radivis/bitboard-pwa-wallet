@@ -1349,7 +1349,7 @@ mod vtxo_row_classification_tests {
                 assets: vec![],
                 server_pk_hex: None,
             }],
-            unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
+            unilateral_exit_materials_by_host_tx: BTreeMap::new(),
         };
         let server_info = test_server_info(
             "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",

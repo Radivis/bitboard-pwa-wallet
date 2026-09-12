@@ -221,7 +221,7 @@ mod tests {
             synced_at: 1_700_000_000,
             dust_sats: 330,
             virtual_tx_outpoints: records,
-            unilateral_exit_materials_by_leaf_tx: std::collections::BTreeMap::new(),
+            unilateral_exit_materials_by_host_tx: std::collections::BTreeMap::new(),
         }
     }
 

@@ -8,7 +8,7 @@ use crate::api_types::{
 use crate::outpoint::VirtualOutPoint;
 use crate::persistence::{OffchainVtxoSnapshot, VirtualTxOutPointRecord};
 use crate::unilateral_exit_materials::{
-    chained_tx_type_label, snapshot_materials_for_leaf_tx, vtxo_chains_from_json,
+    chained_tx_type_label, snapshot_materials_for_host_tx, vtxo_chains_from_json,
 };
 
 /// Virtual tx types that may carry exit-eligible VTXO outpoints in indexer chains.
@@ -162,7 +162,7 @@ pub(crate) fn terminal_vtxo_host_txids_from_materials_snapshot(
 
     let mut chain_sets = Vec::new();
     for txid in &unique_txids {
-        let Some(materials) = snapshot_materials_for_leaf_tx(snapshot, txid) else {
+        let Some(materials) = snapshot_materials_for_host_tx(snapshot, txid) else {
             continue;
         };
         chain_sets.push(vtxo_chains_from_json(&materials.chain_json)?);
@@ -494,7 +494,7 @@ mod tests {
     fn filter_exit_candidates_to_terminal_leaves_drops_upstream_ark_vtxos() {
         use crate::persistence::OffchainVtxoSnapshot;
         use crate::unilateral_exit_materials::{
-            materials_record_from_prefetch, store_materials_for_leaf_tx,
+            materials_record_from_prefetch, store_materials_for_host_tx,
         };
 
         let intermediate = txid(4);
@@ -513,10 +513,10 @@ mod tests {
             synced_at: 1,
             dust_sats: 330,
             virtual_tx_outpoints: vec![],
-            unilateral_exit_materials_by_leaf_tx: Default::default(),
+            unilateral_exit_materials_by_host_tx: Default::default(),
         };
-        store_materials_for_leaf_tx(&mut snapshot, &intermediate.to_string(), materials.clone());
-        store_materials_for_leaf_tx(&mut snapshot, &terminal.to_string(), materials);
+        store_materials_for_host_tx(&mut snapshot, &intermediate.to_string(), materials.clone());
+        store_materials_for_host_tx(&mut snapshot, &terminal.to_string(), materials);
 
         let rows = vec![
             ExitCandidateDto {

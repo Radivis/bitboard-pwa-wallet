@@ -6,7 +6,7 @@ use crate::persistence::{
 use crate::session::unilateral_exit::test_fixtures::{
     chain, snapshot_with_intermediate_tree_and_ark_leaf, txid, vtxo_record,
 };
-use crate::unilateral_exit_materials::{store_materials_for_leaf_tx, vtxo_chains_to_json};
+use crate::unilateral_exit_materials::{store_materials_for_host_tx, vtxo_chains_to_json};
 use ark_core::server::{ChainedTxType, VtxoChains};
 
 fn record_is_unrolled(snapshot: &OffchainVtxoSnapshot, host: &Txid, vout: u32) -> bool {
@@ -161,9 +161,9 @@ fn unified_stamp_skips_checkpoint_and_commitment() {
             vtxo_record(&checkpoint, 0, 1_000, false),
             vtxo_record(&leaf, 0, 1_000, false),
         ],
-        unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
+        unilateral_exit_materials_by_host_tx: BTreeMap::new(),
     };
-    store_materials_for_leaf_tx(
+    store_materials_for_host_tx(
         &mut snapshot,
         &leaf.to_string(),
         UnilateralExitMaterialsRecord {

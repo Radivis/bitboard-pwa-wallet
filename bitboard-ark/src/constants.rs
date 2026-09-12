@@ -40,9 +40,8 @@ const UNILATERAL_EXIT_BUMP_CHILD_P2TR_OUTPUT_SERIALIZED_BYTES: u64 = 43;
 pub(crate) const UNILATERAL_EXIT_BUMP_CHILD_P2TR_OUTPUT_WEIGHT: u64 =
     UNILATERAL_EXIT_BUMP_CHILD_P2TR_OUTPUT_SERIALIZED_BYTES * BITCOIN_WITNESS_SCALE_FACTOR;
 
-/// Confirmations required before stamping `is_unrolled` on a published virtual tx
-/// (leaf or intermediate host).
-pub const UNILATERAL_EXIT_LEAF_CONFIRMATIONS: u32 = 6;
+/// Confirmations required before stamping `is_unrolled` on a published virtual host tx.
+pub const UNILATERAL_EXIT_HOST_TX_CONFIRMATIONS: u32 = 6;
 
 /// First `never_seen` miss is eligible this long after host-tx observation `registered_at`.
 /// Together with spacing and max misses this is ~14 minutes of Esplora-absent evidence before

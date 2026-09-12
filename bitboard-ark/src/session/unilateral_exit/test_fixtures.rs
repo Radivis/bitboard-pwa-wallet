@@ -9,7 +9,7 @@ use bitcoin::hashes::Hash;
 use crate::persistence::{
     OffchainVtxoSnapshot, UnilateralExitMaterialsRecord, VirtualTxOutPointRecord,
 };
-use crate::unilateral_exit_materials::{store_materials_for_leaf_tx, vtxo_chains_to_json};
+use crate::unilateral_exit_materials::{store_materials_for_host_tx, vtxo_chains_to_json};
 
 pub fn txid(byte: u8) -> Txid {
     Txid::from_byte_array([byte; 32])
@@ -72,9 +72,9 @@ pub fn snapshot_with_intermediate_tree_and_ark_leaf() -> (OffchainVtxoSnapshot, 
             vtxo_record(&leaf, 0, 1_000, false),
             vtxo_record(&commitment, 0, 9_000, false),
         ],
-        unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
+        unilateral_exit_materials_by_host_tx: BTreeMap::new(),
     };
-    store_materials_for_leaf_tx(
+    store_materials_for_host_tx(
         &mut snapshot,
         &leaf.to_string(),
         UnilateralExitMaterialsRecord {
@@ -99,7 +99,7 @@ mod tests {
         assert_eq!(snapshot.virtual_tx_outpoints.len(), 4);
         assert!(
             snapshot
-                .unilateral_exit_materials_by_leaf_tx
+                .unilateral_exit_materials_by_host_tx
                 .contains_key(&leaf.to_string())
         );
     }

@@ -4,9 +4,9 @@ use ark_core::VtxoList;
 
 use crate::persistence::OffchainVtxoSnapshot;
 use crate::unilateral_exit_materials::{
-    materials_record_from_prefetch, pending_unilateral_exit_leaf_txids,
-    prune_unilateral_exit_materials_map, snapshot_materials_for_leaf_tx,
-    store_materials_for_leaf_tx,
+    materials_record_from_prefetch, pending_unilateral_exit_host_txids,
+    prune_unilateral_exit_materials_map, snapshot_materials_for_host_tx,
+    store_materials_for_host_tx,
 };
 
 use crate::session::ArkSession;
@@ -19,12 +19,12 @@ pub(crate) async fn prefetch_unilateral_exit_materials_for_snapshot(
 ) -> Option<String> {
     let mut warnings = Vec::new();
     let synced_at = current_unix_timestamp();
-    let mut prefetched_leaf_txids = HashSet::new();
+    let mut prefetched_host_txids = HashSet::new();
 
     for virtual_tx_outpoint in vtxo_list.could_exit_unilaterally() {
         let txid = virtual_tx_outpoint.outpoint.txid.to_string();
-        if snapshot_materials_for_leaf_tx(snapshot, &txid).is_some()
-            || !prefetched_leaf_txids.insert(txid.clone())
+        if snapshot_materials_for_host_tx(snapshot, &txid).is_some()
+            || !prefetched_host_txids.insert(txid.clone())
         {
             continue;
         }
@@ -37,30 +37,30 @@ pub(crate) async fn prefetch_unilateral_exit_materials_for_snapshot(
             Ok((chains, psbts)) => {
                 match materials_record_from_prefetch(synced_at, &chains, &psbts) {
                     Ok(materials) => {
-                        store_materials_for_leaf_tx(snapshot, &txid, materials);
+                        store_materials_for_host_tx(snapshot, &txid, materials);
                     }
                     Err(error) => warnings.push(format!(
-                        "Could not store exit materials for leaf tx {txid}: {error}"
+                        "Could not store exit materials for host tx {txid}: {error}"
                     )),
                 }
             }
             Err(error) => warnings.push(format!(
-                "Could not prefetch exit materials for leaf tx {txid}: {error}"
+                "Could not prefetch exit materials for host tx {txid}: {error}"
             )),
         }
     }
 
-    let mut preserve_leaf_txids =
-        pending_unilateral_exit_leaf_txids(&session.wallet_db.pending_exit_deductions());
+    let mut preserve_host_txids =
+        pending_unilateral_exit_host_txids(&session.wallet_db.pending_exit_deductions());
     for (key, record) in session.wallet_db.vtxo_exit_records() {
-        preserve_leaf_txids.insert(record.host_txid);
+        preserve_host_txids.insert(record.host_txid);
         if let Some((txid, _)) =
             crate::session::unilateral_exit::vtxo_exit::parse_vtxo_exit_record_key(&key)
         {
-            preserve_leaf_txids.insert(txid);
+            preserve_host_txids.insert(txid);
         }
     }
-    prune_unilateral_exit_materials_map(snapshot, &preserve_leaf_txids);
+    prune_unilateral_exit_materials_map(snapshot, &preserve_host_txids);
     if warnings.is_empty() {
         None
     } else {

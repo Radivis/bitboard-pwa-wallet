@@ -14,7 +14,7 @@ use bitcoin::hex::DisplayHex;
 use bitcoin::hex::FromHex;
 use bitcoin::{Amount, OutPoint, ScriptBuf, Txid, XOnlyPublicKey};
 
-use crate::constants::UNILATERAL_EXIT_LEAF_CONFIRMATIONS;
+use crate::constants::UNILATERAL_EXIT_HOST_TX_CONFIRMATIONS;
 use crate::error::{ArkResult, ArkWasmError};
 use crate::exit_balance::{UnilateralExitOutpointKey, is_unilateral_exit_in_progress_outpoint};
 use crate::persistence::{
@@ -247,7 +247,7 @@ pub fn snapshot_from_virtual_tx_outpoints_with_script_lookup(
                 virtual_tx_outpoint_to_record(point, server_pk)
             })
             .collect(),
-        unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
+        unilateral_exit_materials_by_host_tx: BTreeMap::new(),
     }
 }
 
@@ -265,7 +265,7 @@ pub fn confirmed_unroll_sticky_host_txids(
 ) -> HashSet<String> {
     let mut txids = HashSet::new();
     for (txid, observation) in observations {
-        if observation.confirmations >= u64::from(UNILATERAL_EXIT_LEAF_CONFIRMATIONS) {
+        if observation.confirmations >= u64::from(UNILATERAL_EXIT_HOST_TX_CONFIRMATIONS) {
             txids.insert(txid.clone());
         }
     }
@@ -330,7 +330,7 @@ pub fn merge_sticky_spent_flags(
     }
 }
 
-/// Mark every VTXO outpoint on a virtual tx as unrolled (all vouts on the same leaf tx).
+/// Mark every VTXO outpoint on a virtual tx as unrolled (all vouts on the same host tx).
 pub(crate) fn mark_virtual_tx_vtxos_unrolled_in_snapshot(
     snapshot: &mut OffchainVtxoSnapshot,
     txid: &str,
@@ -582,7 +582,7 @@ mod tests {
                 sample_snapshot_record(&txid, 0, 50_000),
                 sample_snapshot_record(&txid, 1, 25_000),
             ],
-            unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
+            unilateral_exit_materials_by_host_tx: BTreeMap::new(),
         };
 
         mark_virtual_tx_vtxos_unrolled_in_snapshot(&mut snapshot, &txid);
@@ -619,7 +619,7 @@ mod tests {
                 assets: vec![],
                 server_pk_hex: None,
             }],
-            unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
+            unilateral_exit_materials_by_host_tx: BTreeMap::new(),
         };
         let mut incoming = snapshot_from_virtual_tx_outpoints(
             330,
@@ -687,7 +687,7 @@ mod tests {
                 assets: vec![],
                 server_pk_hex: None,
             }],
-            unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
+            unilateral_exit_materials_by_host_tx: BTreeMap::new(),
         };
         let mut incoming = snapshot_from_virtual_tx_outpoints(
             330,
@@ -715,7 +715,7 @@ mod tests {
     }
 
     #[test]
-    fn merge_sticky_unrolled_promotes_all_vouts_on_same_leaf_tx() {
+    fn merge_sticky_unrolled_promotes_all_vouts_on_same_host_tx() {
         let txid = Txid::from_byte_array([0x45; 32]).to_string();
         let prior = OffchainVtxoSnapshot {
             synced_at: 1,
@@ -738,7 +738,7 @@ mod tests {
                 assets: vec![],
                 server_pk_hex: None,
             }],
-            unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
+            unilateral_exit_materials_by_host_tx: BTreeMap::new(),
         };
         let mut incoming = snapshot_from_virtual_tx_outpoints(
             330,
@@ -812,7 +812,7 @@ mod tests {
                 assets: vec![],
                 server_pk_hex: None,
             }],
-            unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
+            unilateral_exit_materials_by_host_tx: BTreeMap::new(),
         };
         let mut incoming = snapshot_from_virtual_tx_outpoints(
             330,
@@ -864,7 +864,7 @@ mod tests {
                 assets: vec![],
                 server_pk_hex: None,
             }],
-            unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
+            unilateral_exit_materials_by_host_tx: BTreeMap::new(),
         };
         let mut incoming = snapshot_from_virtual_tx_outpoints(
             330,
@@ -1230,7 +1230,7 @@ mod tests {
                 assets: vec![],
                 server_pk_hex: None,
             }],
-            unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
+            unilateral_exit_materials_by_host_tx: BTreeMap::new(),
         };
 
         let error = vtxo_list_from_snapshot(&snapshot).expect_err("invalid txid");

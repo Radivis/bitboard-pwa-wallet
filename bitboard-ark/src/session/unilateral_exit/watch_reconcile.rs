@@ -208,16 +208,16 @@ pub(crate) async fn reconcile_exiting_vtxos_spent_on_esplora(
     }
 
     let mut healed_outpoints = Vec::new();
-    for (leaf_txid, vout) in probe_targets {
+    for (host_txid, vout) in probe_targets {
         let Some(spend_txid) =
-            detect_exiting_vtxo_completion_on_esplora(blockchain, snapshot, &leaf_txid, vout)
+            detect_exiting_vtxo_completion_on_esplora(blockchain, snapshot, &host_txid, vout)
                 .await?
         else {
             continue;
         };
 
-        mark_vtxo_spent_in_snapshot(snapshot, &leaf_txid, vout, &spend_txid.to_string());
-        if let Ok(txid) = Txid::from_str(&leaf_txid) {
+        mark_vtxo_spent_in_snapshot(snapshot, &host_txid, vout, &spend_txid.to_string());
+        if let Ok(txid) = Txid::from_str(&host_txid) {
             healed_outpoints.push(OutPoint { txid, vout });
         }
     }
@@ -444,7 +444,7 @@ mod tests {
             synced_at: 1,
             dust_sats: 330,
             virtual_tx_outpoints: vec![],
-            unilateral_exit_materials_by_leaf_tx: std::collections::BTreeMap::new(),
+            unilateral_exit_materials_by_host_tx: std::collections::BTreeMap::new(),
         };
         let mut warnings = Vec::new();
 
@@ -490,7 +490,7 @@ mod tests {
                 assets: vec![],
                 server_pk_hex: None,
             }],
-            unilateral_exit_materials_by_leaf_tx: std::collections::BTreeMap::new(),
+            unilateral_exit_materials_by_host_tx: std::collections::BTreeMap::new(),
         };
         let mut warnings = Vec::new();
 
@@ -538,7 +538,7 @@ mod tests {
             synced_at: 1,
             dust_sats: 330,
             virtual_tx_outpoints: vec![spendable_snapshot_record(&txid, 12_000)],
-            unilateral_exit_materials_by_leaf_tx: std::collections::BTreeMap::new(),
+            unilateral_exit_materials_by_host_tx: std::collections::BTreeMap::new(),
         };
 
         apply_record_unroll_stickiness_for_present_spendable(
@@ -563,7 +563,7 @@ mod tests {
             synced_at: 1,
             dust_sats: 330,
             virtual_tx_outpoints: vec![],
-            unilateral_exit_materials_by_leaf_tx: std::collections::BTreeMap::new(),
+            unilateral_exit_materials_by_host_tx: std::collections::BTreeMap::new(),
         };
         let mut warnings = Vec::new();
 
@@ -593,7 +593,7 @@ mod tests {
             synced_at: 1,
             dust_sats: 330,
             virtual_tx_outpoints: vec![spendable_snapshot_record(&txid, 12_000)],
-            unilateral_exit_materials_by_leaf_tx: std::collections::BTreeMap::new(),
+            unilateral_exit_materials_by_host_tx: std::collections::BTreeMap::new(),
         };
 
         apply_record_unroll_stickiness_for_present_spendable(

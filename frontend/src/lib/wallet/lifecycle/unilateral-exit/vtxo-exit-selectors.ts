@@ -1,5 +1,5 @@
 import type { ArkadeVtxoExitPhase } from '@/workers/arkade-api'
-import { UNILATERAL_EXIT_LEAF_CONFIRMATIONS } from '@/lib/arkade/unilateral-exit-confirmations'
+import { UNILATERAL_EXIT_HOST_TX_CONFIRMATIONS } from '@/lib/arkade/unilateral-exit-confirmations'
 import { vtxoExitPhaseFromMachineState } from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit.machine'
 import {
   vtxoExitOutpointKey,
@@ -68,7 +68,7 @@ export function formatVtxoExitPhaseCopy(kind: VtxoExitPhaseCopyKind | null): str
     case VTXO_EXIT_PHASE_COPY.waitingForFirstConfirmation:
       return 'waiting for first confirmation'
     case VTXO_EXIT_PHASE_COPY.waitingForSixConfirmations:
-      return `waiting for ${UNILATERAL_EXIT_LEAF_CONFIRMATIONS} confirmations`
+      return `waiting for ${UNILATERAL_EXIT_HOST_TX_CONFIRMATIONS} confirmations`
     case VTXO_EXIT_PHASE_COPY.waitingForTimelock:
       return 'waiting for timelock'
     case VTXO_EXIT_PHASE_COPY.ready:

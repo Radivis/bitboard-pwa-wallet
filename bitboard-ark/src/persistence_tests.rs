@@ -721,7 +721,7 @@ fn persistence_v10_round_trips_vtxo_exit_records() {
     );
 
     let json = serde_json::to_string(&envelope).expect("serialize");
-    assert!(json.contains("\"version\":11"));
+    assert!(json.contains("\"version\":12"));
     let parsed = BitboardArkPersistence::parse_import(Some(&json));
     let row = parsed
         .wallet_db
@@ -751,7 +751,7 @@ fn persistence_v11_round_trips_funding_lost() {
     );
 
     let json = serde_json::to_string(&envelope).expect("serialize");
-    assert!(json.contains("\"version\":11"));
+    assert!(json.contains("\"version\":12"));
     assert!(json.contains("funding_lost"));
     let parsed = BitboardArkPersistence::parse_import(Some(&json));
     let row = parsed
@@ -764,8 +764,8 @@ fn persistence_v11_round_trips_funding_lost() {
 }
 
 #[test]
-fn parse_import_accepts_versions_3_through_11() {
-    for version in 3_u32..=11 {
+fn parse_import_accepts_versions_3_through_12() {
+    for version in 3_u32..=12 {
         let json = format!(
             r#"{{"version":{version},"engine":"ark-rs","ark_sdk_version":"0.9.3","operator_identity":{{"signer_pk_hex":"02abc","network":"signet"}},"wallet_db":{{"boarding_outputs":[],"secret_keys_by_owner_pk_hex":{{}}}},"swap_storage":{{}}}}"#
         );
@@ -779,6 +779,43 @@ fn parse_import_accepts_versions_3_through_11() {
             "version {version} must import"
         );
     }
+}
+
+#[test]
+fn parse_import_v11_materials_by_leaf_tx_alias() {
+    let host_txid = "aa".repeat(32);
+    let json = format!(
+        r#"{{
+            "version":11,
+            "engine":"ark-rs",
+            "ark_sdk_version":"0.9.3",
+            "operator_identity":{{"signer_pk_hex":"02abc","network":"signet"}},
+            "wallet_db":{{
+                "boarding_outputs":[],
+                "secret_keys_by_owner_pk_hex":{{}},
+                "offchain_vtxo_snapshot":{{
+                    "synced_at":1,
+                    "dust_sats":330,
+                    "virtual_tx_outpoints":[],
+                    "unilateral_exit_materials_by_leaf_tx":{{
+                        "{host_txid}":{{
+                            "cached_at":7,
+                            "chain_json":"{{}}",
+                            "virtual_psbts":[]
+                        }}
+                    }}
+                }}
+            }},
+            "swap_storage":{{}}
+        }}"#
+    );
+    let parsed = BitboardArkPersistence::parse_import(Some(&json));
+    let snapshot = parsed.wallet_db.offchain_vtxo_snapshot.expect("snapshot");
+    let materials = snapshot
+        .unilateral_exit_materials_by_host_tx
+        .get(&host_txid)
+        .expect("materials from v11 leaf_tx key");
+    assert_eq!(materials.cached_at, 7);
 }
 
 #[test]

@@ -14,7 +14,7 @@ fn materials_chains_containing_host(
     seed_host_txid: &str,
 ) -> Vec<VtxoChains> {
     snapshot
-        .unilateral_exit_materials_by_leaf_tx
+        .unilateral_exit_materials_by_host_tx
         .values()
         .filter_map(|materials| {
             let chains = vtxo_chains_from_json(&materials.chain_json).ok()?;

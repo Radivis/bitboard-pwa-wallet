@@ -103,14 +103,14 @@ pub fn representative_vout_among_virtual_outpoints(outpoints: &[VirtualOutPoint]
         .unwrap_or(0)
 }
 
-fn representative_virtual_tx_outpoint_record_for_leaf_tx<'a>(
+fn representative_virtual_tx_outpoint_record_for_host_tx<'a>(
     snapshot: &'a OffchainVtxoSnapshot,
-    leaf_txid: &str,
+    host_txid: &str,
 ) -> ArkResult<&'a VirtualTxOutPointRecord> {
     if let Some(record) = snapshot
         .virtual_tx_outpoints
         .iter()
-        .filter(|record| record.txid == leaf_txid && record_is_exit_eligible(record))
+        .filter(|record| record.txid == host_txid && record_is_exit_eligible(record))
         .min_by_key(|record| record.vout)
     {
         return Ok(record);
@@ -119,22 +119,22 @@ fn representative_virtual_tx_outpoint_record_for_leaf_tx<'a>(
     snapshot
         .virtual_tx_outpoints
         .iter()
-        .filter(|record| record.txid == leaf_txid)
+        .filter(|record| record.txid == host_txid)
         .min_by_key(|record| record.vout)
         .ok_or_else(|| ArkWasmError::VtxoNotFound {
-            txid: leaf_txid.to_string(),
+            txid: host_txid.to_string(),
             vout: 0,
         })
 }
 
-/// Pick a deterministic [`VirtualTxOutPoint`] for ark-client calls on a leaf tx.
+/// Pick a deterministic [`VirtualTxOutPoint`] for ark-client calls on a host tx.
 ///
 /// Prefers the lowest-vout exit-eligible sibling; falls back to the lowest vout on the tx.
-pub fn representative_virtual_tx_outpoint_for_leaf_tx(
+pub fn representative_virtual_tx_outpoint_for_host_tx(
     snapshot: &OffchainVtxoSnapshot,
-    leaf_txid: &str,
+    host_txid: &str,
 ) -> ArkResult<VirtualTxOutPoint> {
-    let record = representative_virtual_tx_outpoint_record_for_leaf_tx(snapshot, leaf_txid)?;
+    let record = representative_virtual_tx_outpoint_record_for_host_tx(snapshot, host_txid)?;
     virtual_tx_outpoint_from_record(record)
 }
 
@@ -188,7 +188,7 @@ mod tests {
     }
 
     #[test]
-    fn representative_virtual_tx_outpoint_for_leaf_tx_prefers_exit_eligible_lowest_vout() {
+    fn representative_virtual_tx_outpoint_for_host_tx_prefers_exit_eligible_lowest_vout() {
         use crate::persistence::OffchainVtxoSnapshot;
         use std::collections::BTreeMap;
 
@@ -234,10 +234,10 @@ mod tests {
                     server_pk_hex: None,
                 },
             ],
-            unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
+            unilateral_exit_materials_by_host_tx: BTreeMap::new(),
         };
 
-        let representative = representative_virtual_tx_outpoint_for_leaf_tx(&snapshot, &txid)
+        let representative = representative_virtual_tx_outpoint_for_host_tx(&snapshot, &txid)
             .expect("representative");
         assert_eq!(representative.outpoint.vout, 1);
     }

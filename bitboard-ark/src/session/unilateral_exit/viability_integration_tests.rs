@@ -36,7 +36,7 @@ use crate::session::unilateral_exit::viability::{
     first_unroll_step_funding_prevouts_from_snapshot, viability_from_asp_swept, viability_ok,
 };
 use crate::unilateral_exit_materials::{
-    materials_record_from_prefetch, store_materials_for_leaf_tx,
+    materials_record_from_prefetch, store_materials_for_host_tx,
 };
 
 fn txid(byte: u8) -> Txid {
@@ -235,7 +235,7 @@ fn asp_swept_snapshot(leaf_outpoint: &VirtualOutPoint) -> OffchainVtxoSnapshot {
             assets: vec![],
             server_pk_hex: None,
         }],
-        unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
+        unilateral_exit_materials_by_host_tx: BTreeMap::new(),
     }
 }
 
@@ -435,7 +435,7 @@ fn seized_branch_lookup_errors_when_exit_materials_are_missing() {
         synced_at: 1,
         dust_sats: 330,
         virtual_tx_outpoints: vec![],
-        unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
+        unilateral_exit_materials_by_host_tx: BTreeMap::new(),
     };
     let mut records = BTreeMap::new();
     records.insert(
@@ -677,9 +677,9 @@ fn first_unroll_step_funding_prevouts_from_snapshot_matches_psbt_inputs() {
         synced_at: 1,
         dust_sats: 330,
         virtual_tx_outpoints: vec![],
-        unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
+        unilateral_exit_materials_by_host_tx: BTreeMap::new(),
     };
-    store_materials_for_leaf_tx(&mut snapshot, &leaf.to_string(), materials);
+    store_materials_for_host_tx(&mut snapshot, &leaf.to_string(), materials);
 
     let prevouts = first_unroll_step_funding_prevouts_from_snapshot(&snapshot, &leaf.to_string())
         .expect("derive first-step prevouts from snapshot materials");
