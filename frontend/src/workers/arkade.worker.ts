@@ -594,7 +594,7 @@ const arkadeService: ArkadeService = {
 
     const promise = (async () => {
       const txid = await invokeWasmArk((wasmModule) => wasmModule.ark_send_payment(params))
-      await persistAfterCriticalOperation()
+      await flushSdkPersistenceNowOrThrow()
       return txid
     })()
 

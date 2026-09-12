@@ -1,28 +1,32 @@
 use ark_core::ArkAddress;
+use ark_core::VtxoList;
 use ark_core::coin_select::{VirtualTxOutPoint as CoinSelectVtxo, select_vtxos};
 use ark_core::send::SendReceiver;
-use bitcoin::{Amount, OutPoint};
+use bitcoin::{Amount, OutPoint, ScriptBuf, XOnlyPublicKey};
 
 use crate::api_types::{DelegateInfoDto, PaymentRowDto, SendPaymentParams};
 use crate::error::{ArkResult, ArkWasmError};
-use crate::offchain_snapshot::offchain_history_from_snapshot;
+use crate::offchain_snapshot::{
+    offchain_history_from_snapshot, script_to_server_pk_lookup, vtxo_list_from_snapshot,
+};
+use crate::session::pending_exit::mark_vtxo_spent_in_wallet_db;
 
 use super::ArkSession;
 use super::mappers::{current_unix_timestamp, map_history_row, validate_send_amount_sats};
+use super::offchain_balance::legacy_signer_pk_fallback;
 
 impl ArkSession {
-    async fn send_outpoints_excluding_spend_locked(
+    fn select_send_outpoints_from_vtxo_list(
         &self,
+        vtxo_list: &VtxoList,
         amount: Amount,
+        server_pk_for_script: impl Fn(&ScriptBuf) -> Option<XOnlyPublicKey>,
     ) -> ArkResult<Vec<OutPoint>> {
-        let (vtxo_list, script_map) = self.client.list_vtxos().await?;
         let now = current_unix_timestamp();
         let server_info = self.client.server_info()?;
         let exclude = self.spend_locked_outpoints();
         let spendable: Vec<CoinSelectVtxo> = vtxo_list
-            .spendable_offchain_at(&server_info, now, |script| {
-                script_map.get(script).map(|vtxo| vtxo.server_pk())
-            })
+            .spendable_offchain_at(&server_info, now, server_pk_for_script)
             .filter(|vtxo| !exclude.contains(&vtxo.outpoint))
             .map(|vtxo| CoinSelectVtxo {
                 outpoint: vtxo.outpoint,
@@ -36,6 +40,33 @@ impl ArkSession {
         Ok(selected.into_iter().map(|vtxo| vtxo.outpoint).collect())
     }
 
+    fn try_send_outpoints_from_snapshot(&self, amount: Amount) -> Option<Vec<OutPoint>> {
+        let snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot?;
+        let vtxo_list = vtxo_list_from_snapshot(&snapshot).ok()?;
+        let script_lookup = script_to_server_pk_lookup(
+            &snapshot,
+            legacy_signer_pk_fallback(&self.persisted_operator_identity()),
+        )
+        .ok()?;
+        self.select_send_outpoints_from_vtxo_list(&vtxo_list, amount, |script| {
+            script_lookup(script)
+        })
+        .ok()
+    }
+
+    async fn send_outpoints_excluding_spend_locked(
+        &self,
+        amount: Amount,
+    ) -> ArkResult<Vec<OutPoint>> {
+        if let Some(selected) = self.try_send_outpoints_from_snapshot(amount) {
+            return Ok(selected);
+        }
+        let (vtxo_list, script_map) = self.client.list_spendable_vtxos().await?;
+        self.select_send_outpoints_from_vtxo_list(&vtxo_list, amount, |script| {
+            script_map.get(script).map(|vtxo| vtxo.server_pk())
+        })
+    }
+
     pub async fn send_payment(&self, params: SendPaymentParams) -> ArkResult<String> {
         self.ensure_operator_rpc_allowed()?;
         validate_send_amount_sats(params.amount_sats)?;
@@ -46,6 +77,14 @@ impl ArkSession {
             .client
             .send_selection(&selected, vec![SendReceiver::bitcoin(address, amount)])
             .await?;
+        for outpoint in &selected {
+            mark_vtxo_spent_in_wallet_db(
+                &self.wallet_db,
+                &outpoint.txid.to_string(),
+                outpoint.vout,
+                &txid.to_string(),
+            );
+        }
         Ok(txid.to_string())
     }
 

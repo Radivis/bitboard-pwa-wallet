@@ -577,14 +577,14 @@ export function useArkadeSendMutation() {
       )
     },
     retry: false,
-    onSuccess: async (txid) => {
+    onSuccess: (txid) => {
       toast.success(`Arkade payment sent (${formatArkadeTxidToastSnippet(txid)})`)
       if (
         activeWalletId != null &&
         activeArkadeAccountId != null &&
         isArkadeSupportedNetworkMode(networkMode)
       ) {
-        await invalidateArkadeWalletDataQueries(
+        void invalidateArkadeWalletDataQueries(
           queryClient,
           activeWalletId,
           networkMode,

@@ -416,7 +416,7 @@ pub fn unilateral_exit_spend_lock_sats(
         })
 }
 
-/// Host txs B should probe from records: not-yet-unrolled rows. Combined with the observation map
+/// Host txs Esplora should probe from records: not-yet-unrolled rows. Combined with the observation map
 /// so a missed register still gets Esplora lookups (materials heal).
 pub fn host_txids_from_vtxo_exit_records(
     records: &BTreeMap<String, VtxoExitRecord>,

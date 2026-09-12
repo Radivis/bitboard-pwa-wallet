@@ -235,25 +235,6 @@ impl ArkSession {
         let server_info = self.client.server_info()?;
         let now = current_unix_timestamp();
 
-        if !self.autonomous_mode()
-            && let Ok((vtxo_list, script_map)) = self.client.list_vtxos().await
-        {
-            let wallet_snapshot = self.wallet_db.snapshot();
-            let offchain_snapshot = wallet_snapshot.offchain_vtxo_snapshot.as_ref();
-            let rows = map_vtxo_rows_from_list(
-                &vtxo_list,
-                dust,
-                &server_info,
-                now,
-                |script| script_map.get(script).map(|vtxo| vtxo.server_pk()),
-                offchain_snapshot,
-            );
-            return Ok(VtxoListResultDto {
-                rows,
-                from_snapshot_synced_at: None,
-            });
-        }
-
         if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref() {
             let vtxo_list = vtxo_list_from_snapshot(snapshot)?;
             let script_lookup = script_to_server_pk_lookup(
@@ -271,6 +252,23 @@ impl ArkSession {
             return Ok(VtxoListResultDto {
                 rows,
                 from_snapshot_synced_at: Some(snapshot.synced_at),
+            });
+        }
+
+        if !self.autonomous_mode()
+            && let Ok((vtxo_list, script_map)) = self.client.list_vtxos().await
+        {
+            let rows = map_vtxo_rows_from_list(
+                &vtxo_list,
+                dust,
+                &server_info,
+                now,
+                |script| script_map.get(script).map(|vtxo| vtxo.server_pk()),
+                None,
+            );
+            return Ok(VtxoListResultDto {
+                rows,
+                from_snapshot_synced_at: None,
             });
         }
 

@@ -311,7 +311,10 @@ where
         let (to_address, _) = self.get_offchain_address()?;
 
         let (all_boarding_inputs, all_vtxo_inputs, _) = self
-            .fetch_commitment_transaction_inputs(crate::utils::unix_now()?)
+            .fetch_commitment_transaction_inputs_opt(
+                crate::utils::unix_now()?,
+                !vtxo_outpoints.is_empty(),
+            )
             .await?;
 
         // Filter boarding inputs to only those specified.
@@ -391,7 +394,10 @@ where
     {
         let (to_address, _) = self.get_offchain_address()?;
         let (all_boarding_inputs, all_vtxo_inputs, _) = self
-            .fetch_commitment_transaction_inputs(crate::utils::unix_now()?)
+            .fetch_commitment_transaction_inputs_opt(
+                crate::utils::unix_now()?,
+                !vtxo_outpoints.is_empty(),
+            )
             .await?;
 
         let boarding_inputs: Vec<_> = all_boarding_inputs
@@ -1108,6 +1114,14 @@ where
         &self,
         now: i64,
     ) -> Result<(Vec<batch::OnChainInput>, Vec<intent::Input>, Amount), Error> {
+        self.fetch_commitment_transaction_inputs_opt(now, true).await
+    }
+
+    async fn fetch_commitment_transaction_inputs_opt(
+        &self,
+        now: i64,
+        include_vtxos: bool,
+    ) -> Result<(Vec<batch::OnChainInput>, Vec<intent::Input>, Amount), Error> {
         let now = u64::try_from(now).map_err(|_| Error::ad_hoc("negative timestamp"))?;
 
         // Get all known boarding outputs.
@@ -1189,51 +1203,55 @@ where
             }
         }
 
-        let (vtxo_list, script_pubkey_to_vtxo_map) = self.list_vtxos().await?;
-        // Reuse the caller-supplied timestamp (not a fresh wall-clock) so the VTXO cutoff filter
-        // below is evaluated against the same instant as the boarding filter above, and so a
-        // test-injected `now` deterministically controls both.
-        let settleable_vtxos: Vec<_> = vtxo_list
-            .batch_settleable_at(&server_info, now as i64, |script| {
-                script_pubkey_to_vtxo_map
-                    .get(script)
-                    .map(|vtxo| vtxo.server_pk())
-            })
-            .collect();
+        let vtxo_inputs = if include_vtxos {
+            let (vtxo_list, script_pubkey_to_vtxo_map) = self.list_vtxos().await?;
+            // Reuse the caller-supplied timestamp (not a fresh wall-clock) so the VTXO cutoff filter
+            // below is evaluated against the same instant as the boarding filter above, and so a
+            // test-injected `now` deterministically controls both.
+            let settleable_vtxos: Vec<_> = vtxo_list
+                .batch_settleable_at(&server_info, now as i64, |script| {
+                    script_pubkey_to_vtxo_map
+                        .get(script)
+                        .map(|vtxo| vtxo.server_pk())
+                })
+                .collect();
 
-        total_amount += settleable_vtxos
-            .iter()
-            .fold(Amount::ZERO, |acc, vtxo| acc + vtxo.amount);
+            total_amount += settleable_vtxos
+                .iter()
+                .fold(Amount::ZERO, |acc, vtxo| acc + vtxo.amount);
 
-        let vtxo_inputs = settleable_vtxos
-            .into_iter()
-            .map(|virtual_tx_outpoint| {
-                let vtxo = script_pubkey_to_vtxo_map
-                    .get(&virtual_tx_outpoint.script)
-                    .ok_or_else(|| {
-                        ark_core::Error::ad_hoc(format!(
-                            "missing VTXO for script pubkey: {}",
-                            virtual_tx_outpoint.script
-                        ))
-                    })?;
-                let spend_info = vtxo.forfeit_spend_info()?;
+            settleable_vtxos
+                .into_iter()
+                .map(|virtual_tx_outpoint| {
+                    let vtxo = script_pubkey_to_vtxo_map
+                        .get(&virtual_tx_outpoint.script)
+                        .ok_or_else(|| {
+                            ark_core::Error::ad_hoc(format!(
+                                "missing VTXO for script pubkey: {}",
+                                virtual_tx_outpoint.script
+                            ))
+                        })?;
+                    let spend_info = vtxo.forfeit_spend_info()?;
 
-                Ok(intent::Input::new(
-                    virtual_tx_outpoint.outpoint,
-                    vtxo.exit_delay(),
-                    None,
-                    TxOut {
-                        value: virtual_tx_outpoint.amount,
-                        script_pubkey: vtxo.script_pubkey(),
-                    },
-                    vtxo.tapscripts(),
-                    spend_info,
-                    false,
-                    virtual_tx_outpoint.is_swept,
-                    virtual_tx_outpoint.assets.clone(),
-                ))
-            })
-            .collect::<Result<Vec<_>, ark_core::Error>>()?;
+                    Ok(intent::Input::new(
+                        virtual_tx_outpoint.outpoint,
+                        vtxo.exit_delay(),
+                        None,
+                        TxOut {
+                            value: virtual_tx_outpoint.amount,
+                            script_pubkey: vtxo.script_pubkey(),
+                        },
+                        vtxo.tapscripts(),
+                        spend_info,
+                        false,
+                        virtual_tx_outpoint.is_swept,
+                        virtual_tx_outpoint.assets.clone(),
+                    ))
+                })
+                .collect::<Result<Vec<_>, ark_core::Error>>()?
+        } else {
+            Vec::new()
+        };
 
         Ok((boarding_inputs, vtxo_inputs, total_amount))
     }
