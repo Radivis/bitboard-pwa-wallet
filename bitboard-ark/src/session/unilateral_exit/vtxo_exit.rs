@@ -316,7 +316,6 @@ pub fn vtxo_exit_record_dtos(
                 vout,
                 amount_sats: record.amount_sats,
                 phase: record.phase,
-                host_txid: record.host_txid.clone(),
                 tagged_at: record.tagged_at,
             })
         })

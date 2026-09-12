@@ -98,7 +98,6 @@ function record(
     vout: outpoint.vout,
     amountSats: 50_000,
     phase,
-    hostTxid: outpoint.txid,
     taggedAt: 1_700_000_000,
   }
 }

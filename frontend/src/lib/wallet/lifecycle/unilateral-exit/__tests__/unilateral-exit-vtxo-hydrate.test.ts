@@ -27,7 +27,6 @@ describe('unilateral-exit-vtxo-hydrate', () => {
         vout: 0,
         amountSats: 1,
         phase: 'tagged' as const,
-        hostTxid: 'aa'.repeat(32),
         taggedAt: 1,
       },
     ]

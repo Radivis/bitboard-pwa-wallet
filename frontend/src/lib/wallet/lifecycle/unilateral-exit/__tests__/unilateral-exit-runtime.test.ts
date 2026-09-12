@@ -546,7 +546,6 @@ describe('unilateral-exit-runtime hydration', () => {
         vout: leaf.vout,
         amountSats: 50_000,
         phase: 'unrolled',
-        hostTxid: leaf.txid,
         taggedAt: 1,
       },
     ])
@@ -572,7 +571,6 @@ describe('unilateral-exit-runtime hydration', () => {
         vout: leaf.vout,
         amountSats: 50_000,
         phase: 'host_confirmed',
-        hostTxid: leaf.txid,
         taggedAt: 1,
       },
     ])

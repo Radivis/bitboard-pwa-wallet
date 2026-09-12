@@ -307,7 +307,6 @@ pub struct VtxoExitRecordDto {
     pub vout: u32,
     pub amount_sats: u64,
     pub phase: crate::persistence::VtxoExitPhase,
-    pub host_txid: String,
     pub tagged_at: i64,
 }
 

@@ -102,7 +102,6 @@ describe('unilateral exit Esplora fetch retries', () => {
         vout: leaf.vout,
         amountSats: 1,
         phase: 'tagged' as const,
-        hostTxid: leaf.txid,
         taggedAt: 1,
       },
     ]

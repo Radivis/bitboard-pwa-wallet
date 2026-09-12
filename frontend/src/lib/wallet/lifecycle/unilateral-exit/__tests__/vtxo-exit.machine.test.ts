@@ -8,7 +8,6 @@ const leaf: ArkadeVtxoExitRecordDto = {
   vout: 0,
   amountSats: 50_000,
   phase: 'tagged',
-  hostTxid: 'bb'.repeat(32),
   taggedAt: 1_700_000_000,
 }
 

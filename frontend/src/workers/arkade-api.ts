@@ -255,7 +255,6 @@ export interface ArkadeVtxoExitRecordDto {
   vout: number
   amountSats: number
   phase: ArkadeVtxoExitPhase
-  hostTxid: string
   taggedAt: number
 }
 

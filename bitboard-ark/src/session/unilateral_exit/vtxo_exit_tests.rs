@@ -713,7 +713,6 @@ fn list_vtxo_exit_records_dto_round_trip() {
         .expect("tree dto");
     assert_eq!(tree_row.phase, VtxoExitPhase::Unrolled);
     assert_eq!(tree_row.tagged_at, 42);
-    assert_eq!(tree_row.host_txid, tree.to_string());
     let leaf_row = rows
         .iter()
         .find(|row| row.txid == leaf.to_string() && row.vout == 0)
@@ -721,6 +720,6 @@ fn list_vtxo_exit_records_dto_round_trip() {
     assert_eq!(leaf_row.phase, VtxoExitPhase::Tagged);
     let encoded = serde_json::to_value(tree_row).expect("json");
     assert_eq!(encoded["phase"], "unrolled");
-    assert_eq!(encoded["hostTxid"], tree.to_string());
     assert_eq!(encoded["amountSats"], 2_000);
+    assert!(encoded.get("hostTxid").is_none());
 }

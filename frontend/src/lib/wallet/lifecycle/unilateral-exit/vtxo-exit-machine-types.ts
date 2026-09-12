@@ -20,7 +20,6 @@ export type VtxoExitMachineContext = {
   txid: string
   vout: number
   amountSats: number
-  hostTxid: string
   taggedAt: number
   phase: ArkadeVtxoExitPhase
 }
@@ -69,7 +68,6 @@ export function createInitialVtxoExitContext(
     txid: input.txid,
     vout: input.vout,
     amountSats: input.amountSats,
-    hostTxid: input.hostTxid,
     taggedAt: input.taggedAt,
     phase: input.phase,
   }
