@@ -873,16 +873,6 @@ fn funding_lost_locks_collaborative_spend() {
 }
 
 #[test]
-fn heal_raise_does_not_treat_funding_lost_as_after_exited() {
-    assert!(VtxoExitPhase::Tagged.can_heal_raise_to(VtxoExitPhase::Unrolled));
-    assert!(!VtxoExitPhase::CompleteReady.can_heal_raise_to(VtxoExitPhase::Unrolled));
-    assert!(!VtxoExitPhase::Exited.can_heal_raise_to(VtxoExitPhase::FundingLost));
-    assert!(!VtxoExitPhase::FundingLost.can_heal_raise_to(VtxoExitPhase::Exited));
-    assert!(!VtxoExitPhase::Tagged.can_heal_raise_to(VtxoExitPhase::FundingLost));
-    assert!(!VtxoExitPhase::Exited.can_heal_raise_to(VtxoExitPhase::Unrolled));
-}
-
-#[test]
 fn persistence_v8_blob_loads_empty_host_tx_observations() {
     let json = r#"{
         "version":8,

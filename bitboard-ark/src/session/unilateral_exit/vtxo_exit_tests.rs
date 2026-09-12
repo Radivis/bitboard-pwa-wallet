@@ -1,10 +1,7 @@
 use super::*;
 use crate::constants::{UNILATERAL_EXIT_HOST_TX_CONFIRMATIONS, UNILATERAL_EXIT_STEP_CONFIRMATIONS};
 use crate::exit_balance::is_unilateral_exit_in_progress_outpoint;
-use crate::persistence::{
-    HostTxObservationRecord, PendingExitDeductionRecord, PendingExitKind,
-    insert_host_tx_observation,
-};
+use crate::persistence::{PendingExitDeductionRecord, PendingExitKind, insert_host_tx_observation};
 use crate::session::unilateral_exit::test_fixtures::{
     snapshot_with_intermediate_tree_and_ark_leaf, txid,
 };
@@ -25,36 +22,36 @@ fn record_phase(
 fn heal_vtxo_exit_records_from_pending_and_exiting() {
     let (mut snapshot, tree, leaf, _) = snapshot_with_intermediate_tree_and_ark_leaf();
     snapshot.virtual_tx_outpoints[0].is_unrolled = true;
-    let pending = vec![PendingExitDeductionRecord {
-        kind: PendingExitKind::Unilateral,
-        vtxo_txid: Some(leaf.to_string()),
-        vout: Some(0),
-        amount_sats: 1_000,
-        started_at: 1,
-        baseline_offchain_spendable_sats: None,
-        retain_until_spendable_drops: false,
-    }];
-    let mut observations = BTreeMap::new();
-    observations.insert(
-        leaf.to_string(),
-        HostTxObservationRecord {
-            registered_at: 1,
-            relayed: true,
-            confirmations: 0,
-            never_seen_probes: 0,
-            last_probed_at: 1,
+    let pending = vec![
+        PendingExitDeductionRecord {
+            kind: PendingExitKind::Unilateral,
+            vtxo_txid: Some(leaf.to_string()),
+            vout: Some(0),
+            amount_sats: 1_000,
+            started_at: 1,
+            baseline_offchain_spendable_sats: None,
+            retain_until_spendable_drops: false,
         },
-    );
+        PendingExitDeductionRecord {
+            kind: PendingExitKind::Unilateral,
+            vtxo_txid: Some(tree.to_string()),
+            vout: Some(0),
+            amount_sats: 1,
+            started_at: 1,
+            baseline_offchain_spendable_sats: None,
+            retain_until_spendable_drops: false,
+        },
+    ];
     let mut records = BTreeMap::new();
-    heal_vtxo_exit_records_from_legacy(Some(&snapshot), &pending, &observations, &mut records, 10);
+    heal_vtxo_exit_records_from_legacy(Some(&snapshot), &pending, &mut records, 10);
     assert_eq!(record_phase(&records, &tree, 0), VtxoExitPhase::Unrolled);
     assert!(
         records
             .get(&vtxo_exit_record_key(&tree.to_string(), 1))
             .is_none(),
-        "watch-only outpoints must not be healed into records"
+        "outpoints without snapshot unroll or pending must not be healed"
     );
-    assert_eq!(record_phase(&records, &leaf, 0), VtxoExitPhase::HostRelayed);
+    assert_eq!(record_phase(&records, &leaf, 0), VtxoExitPhase::Tagged);
 }
 
 #[test]

@@ -311,7 +311,6 @@ impl ArkSession {
         crate::session::unilateral_exit::vtxo_exit::heal_vtxo_exit_records_from_legacy(
             Some(&snapshot),
             &pending,
-            &observations,
             &mut vtxo_exit_records,
             current_unix_timestamp(),
         );

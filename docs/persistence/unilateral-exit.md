@@ -40,12 +40,12 @@ Memory caches are keyed by `walletId:networkMode:arkadeAccountId` (`arkadeWallet
 
 Flushed through the Arkade save lifecycle into `StoredArkadeAccount.sdkPersistenceJson`. Types: [`bitboard-ark/src/persistence.rs`](../../bitboard-ark/src/persistence.rs). Materials encode/decode: [`unilateral_exit_materials.rs`](../../bitboard-ark/src/unilateral_exit_materials.rs). Frontend bundle I/O: [`unilateral-exit-frontend-sdk-persistence.ts`](../../frontend/src/lib/wallet/lifecycle/unilateral-exit-frontend-sdk-persistence.ts).
 
-**Envelope version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 12`. `parse_import` accepts 3–12. Published 0.3.3 wallets used v3; missing fields default (`unilateral_exit_frontend` is `None`, `host_tx_observations` is empty, `vtxo_exit_records` is empty, `autonomous_mode` is false). When `unilateral_exit_frontend` is `None`, a one-shot overlay reads leftover SQLite `settings` rows. On open / first B, empty `vtxo_exit_records` heal from leftover pending unilateral deductions and snapshot `is_unrolled && !is_spent` rows. Leftover 0.3.4-dev `unilateral_exit_watches` JSON keys are ignored (never published; not healed into records). v11 `unilateral_exit_materials_by_leaf_tx` keys still import via serde alias.
+**Envelope version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 12`. `parse_import` accepts 3–12. Published 0.3.3 wallets used v3; missing fields default (`unilateral_exit_frontend` is `None`, `host_tx_observations` is empty, `vtxo_exit_records` is empty, `autonomous_mode` is false). When `unilateral_exit_frontend` is `None`, a one-shot overlay reads leftover SQLite `settings` rows. On open / first B, empty `vtxo_exit_records` heal from a published v3 blob: leftover pending unilateral deductions become `tagged`, snapshot `is_unrolled && !is_spent` rows become `unrolled`. Intermediate phases are not reconstructed (v3 had no host-tx observations). Leftover 0.3.4-dev `unilateral_exit_watches` JSON keys are ignored (never published; not healed into records). v11 `unilateral_exit_materials_by_leaf_tx` keys still import via serde alias.
 
 | Version | What landed |
 |---------|-------------|
 | 8 | Last write before VTXO records. Import yields empty `host_tx_observations` and empty `vtxo_exit_records`. |
-| 9 | Records + observations fields exist on the type. A v9 blob with no those keys still loads empty maps (heal from leftover pending / snapshot flags). Never a published Bitboard write. |
+| 9 | Records + observations fields exist on the type. Never a published Bitboard write. v3-style heal still applies if those maps are empty. |
 | 10 | 0.3.4-dev write era still had `unilateral_exit_watches`. That key is ignored on import (never published). |
 | 11 | Adds `funding_lost`. Records are the pipeline source of truth. Leftover `unilateral_exit_watches` JSON keys are ignored. |
 | 12 | Current write. Renames materials map to `unilateral_exit_materials_by_host_tx` (v11 `…_by_leaf_tx` still imports). |

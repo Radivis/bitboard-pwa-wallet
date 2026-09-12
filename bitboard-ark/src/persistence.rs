@@ -240,17 +240,6 @@ impl VtxoExitPhase {
     pub fn contributes_pending_mirror(self) -> bool {
         self.is_pre_unroll()
     }
-
-    /// Whether import heal may advance `self` to `incoming`.
-    ///
-    /// Terminals are sticky. `FundingLost` is a side-branch, not a later step after `Exited`,
-    /// so this must not use [`Ord`] across those two.
-    pub fn can_heal_raise_to(self, incoming: Self) -> bool {
-        if self.is_terminal() || incoming == Self::FundingLost {
-            return false;
-        }
-        incoming > self
-    }
 }
 
 /// Persisted VTXO exit record keyed by `"{txid}:{vout}"` on [`WalletDbSnapshot`].

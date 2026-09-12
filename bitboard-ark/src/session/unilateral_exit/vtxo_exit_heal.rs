@@ -1,100 +1,62 @@
-//! Import heal: leftover pending / snapshot flags → `vtxo_exit_records`.
+//! v3 → v12 import heal: leftover pending / snapshot flags → `vtxo_exit_records`.
+//!
+//! Published 0.3.3 envelopes have no records and no host-tx observations. Intermediate
+//! phases (`host_relayed`, …) are not reconstructed.
 
 use std::collections::BTreeMap;
 
 use crate::persistence::{
-    HostTxObservationRecord, OffchainVtxoSnapshot, PendingExitDeductionRecord, PendingExitKind,
-    VtxoExitPhase, VtxoExitRecord, vtxo_exit_record_key,
-};
-use crate::session::unilateral_exit::progress::{
-    host_tx_reached_finality, step_reached_confirmation,
+    OffchainVtxoSnapshot, PendingExitDeductionRecord, PendingExitKind, VtxoExitPhase,
+    VtxoExitRecord, vtxo_exit_record_key,
 };
 
-/// Map v9 leftover signals onto a phase. Does not invent `funding_lost`. No observation → `tagged`.
-fn phase_from_legacy(
-    is_unrolled: bool,
-    is_spent: bool,
-    observation: Option<&HostTxObservationRecord>,
-) -> VtxoExitPhase {
-    if is_spent && is_unrolled {
-        return VtxoExitPhase::Exited;
-    }
-    if is_unrolled {
-        return VtxoExitPhase::Unrolled;
-    }
-    let Some(observation) = observation else {
-        return VtxoExitPhase::Tagged;
-    };
-    if host_tx_reached_finality(observation.confirmations) {
-        VtxoExitPhase::Unrolled
-    } else if step_reached_confirmation(observation.confirmations) {
-        VtxoExitPhase::HostConfirmed
-    } else if observation.relayed {
-        VtxoExitPhase::HostRelayed
-    } else {
-        VtxoExitPhase::HostBroadcastAttempted
-    }
-}
-
-/// Heal upsert: create the row or raise phase / fill a zero amount. Never downgrades.
-/// Uses [`VtxoExitPhase::can_heal_raise_to`] so `FundingLost` is not treated as after `Exited`.
-fn upsert_healed_record(
+fn insert_if_absent(
     records: &mut BTreeMap<String, VtxoExitRecord>,
     txid: &str,
     vout: u32,
-    host_txid: &str,
     amount_sats: u64,
     phase: VtxoExitPhase,
     now: i64,
 ) {
-    let key = vtxo_exit_record_key(txid, vout);
-    match records.get_mut(&key) {
-        Some(existing) => {
-            if existing.phase.can_heal_raise_to(phase) {
-                existing.phase = phase;
-            }
-            if existing.amount_sats == 0 {
-                existing.amount_sats = amount_sats;
-            }
-        }
-        None => {
-            records.insert(
-                key,
-                VtxoExitRecord {
-                    phase,
-                    tagged_at: now,
-                    host_txid: host_txid.to_string(),
-                    amount_sats,
-                },
-            );
-        }
-    }
+    records
+        .entry(vtxo_exit_record_key(txid, vout))
+        .or_insert(VtxoExitRecord {
+            phase,
+            tagged_at: now,
+            host_txid: txid.to_string(),
+            amount_sats,
+        });
 }
 
-/// Import heal for v9 and older blobs (empty `vtxo_exit_records`).
+fn snapshot_row_is_spent(snapshot: Option<&OffchainVtxoSnapshot>, txid: &str, vout: u32) -> bool {
+    snapshot.is_some_and(|snapshot| {
+        snapshot
+            .virtual_tx_outpoints
+            .iter()
+            .any(|row| row.txid == txid && row.vout == vout && row.is_spent)
+    })
+}
+
+/// Fill empty-pipeline leftovers from a published v3 blob.
 ///
-/// Sources, in order of typical evidence: snapshot `is_unrolled && !is_spent`, then leftover
-/// unilateral pending deductions. Phase comes from `is_unrolled` plus host observation when
-/// present; otherwise `tagged`. Existing rows are only raised, never replaced downward.
-/// Leftover 0.3.4-dev `unilateral_exit_watches` JSON is ignored (never published).
+/// - Snapshot `is_unrolled && !is_spent` → `unrolled` (claimable after upgrade).
+/// - Unilateral pending deductions that are not already spent → `tagged` (spend-lock).
+/// Existing keys are left unchanged (snapshot first, so pending cannot overwrite `unrolled`).
 pub fn heal_vtxo_exit_records_from_legacy(
     snapshot: Option<&OffchainVtxoSnapshot>,
     pending: &[PendingExitDeductionRecord],
-    observations: &BTreeMap<String, HostTxObservationRecord>,
     records: &mut BTreeMap<String, VtxoExitRecord>,
     now: i64,
 ) {
     if let Some(snapshot) = snapshot {
         for vtxo in &snapshot.virtual_tx_outpoints {
             if vtxo.is_unrolled && !vtxo.is_spent {
-                let observation = observations.get(&vtxo.txid);
-                upsert_healed_record(
+                insert_if_absent(
                     records,
                     &vtxo.txid,
                     vtxo.vout,
-                    &vtxo.txid,
                     vtxo.amount_sats,
-                    phase_from_legacy(true, false, observation),
+                    VtxoExitPhase::Unrolled,
                     now,
                 );
             }
@@ -108,23 +70,15 @@ pub fn heal_vtxo_exit_records_from_legacy(
             continue;
         };
         let vout = pending_record.vout.unwrap_or(0);
-        let observation = observations.get(txid);
-        let (is_unrolled, is_spent) = snapshot
-            .and_then(|snapshot| {
-                snapshot
-                    .virtual_tx_outpoints
-                    .iter()
-                    .find(|row| row.txid == txid && row.vout == vout)
-                    .map(|row| (row.is_unrolled, row.is_spent))
-            })
-            .unwrap_or((false, false));
-        upsert_healed_record(
+        if snapshot_row_is_spent(snapshot, txid, vout) {
+            continue;
+        }
+        insert_if_absent(
             records,
             txid,
             vout,
-            txid,
             pending_record.amount_sats,
-            phase_from_legacy(is_unrolled, is_spent, observation),
+            VtxoExitPhase::Tagged,
             now,
         );
     }

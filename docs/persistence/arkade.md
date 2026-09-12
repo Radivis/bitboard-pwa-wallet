@@ -40,7 +40,7 @@ File: `bitboard-ark/src/persistence.rs`
 
 **Current version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 12`
 
-`BitboardArkPersistence::parse_import()` accepts versions 3–12. Published 0.3.3 wallets used v3; missing fields default. Leftover v4–v11 blobs deserialize as the current types (`vtxo_exit_records` empty until heal from pending unilateral deductions and snapshot `is_unrolled && !is_spent`). Extra `unilateral_exit_watches` keys are ignored (never published; not healed). v11 `unilateral_exit_materials_by_leaf_tx` still imports via serde alias. Unsupported or corrupt blobs start from an empty `wallet_db` on session open. `autonomous_mode` (default **false**) is a per-ASP trust posture on the envelope: when true, session open uses `cached_operator_info` and does not call the operator.
+`BitboardArkPersistence::parse_import()` accepts versions 3–12. Published 0.3.3 wallets used v3; missing fields default. Leftover v4–v11 blobs deserialize as the current types (`vtxo_exit_records` empty until v3-style heal: pending unilateral deductions → `tagged`, snapshot `is_unrolled && !is_spent` → `unrolled`). Extra `unilateral_exit_watches` keys are ignored (never published; not healed). v11 `unilateral_exit_materials_by_leaf_tx` still imports via serde alias. Unsupported or corrupt blobs start from an empty `wallet_db` on session open. `autonomous_mode` (default **false**) is a per-ASP trust posture on the envelope: when true, session open uses `cached_operator_info` and does not call the operator.
 
 ### Offchain receive cursor
 

@@ -531,14 +531,13 @@ pub fn pre_unroll_record_keys_on_same_branch(
 }
 
 impl crate::session::ArkSession {
-    /// Fill `vtxo_exit_records` from leftover pending / exiting on open (v9 import).
+    /// Fill `vtxo_exit_records` from leftover pending / exiting on open (v3 import).
     pub fn heal_vtxo_exit_records(&self) {
         let wallet = self.wallet_db.snapshot();
         let mut records = wallet.vtxo_exit_records;
         heal_vtxo_exit_records_from_legacy(
             wallet.offchain_vtxo_snapshot.as_ref(),
             &wallet.pending_exit_deductions,
-            &wallet.host_tx_observations,
             &mut records,
             crate::session::mappers::current_unix_timestamp(),
         );
