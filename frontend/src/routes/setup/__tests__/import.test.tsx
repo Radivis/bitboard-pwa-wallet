@@ -70,6 +70,12 @@ vi.mock('@/lib/wallet/wallet-secrets-session', () => ({
   isWalletSecretsSessionActive: () => mockIsWalletSecretsSessionActive(),
 }))
 
+const mockAbandonFirstRunAppPasswordChoiceIfNoWallets = vi.fn().mockResolvedValue(undefined)
+vi.mock('@/lib/wallet/abandon-first-run-app-password-choice', () => ({
+  abandonFirstRunAppPasswordChoiceIfNoWallets: (...args: unknown[]) =>
+    mockAbandonFirstRunAppPasswordChoiceIfNoWallets(...args),
+}))
+
 vi.mock('@/stores/sessionStore', () => ({
   startAutoLockTimer: vi.fn(),
 }))
@@ -124,6 +130,7 @@ describe('ImportWalletPage', () => {
     mockValidateMnemonic.mockResolvedValue(true)
     mockEnsureWalletSecretsSession.mockResolvedValue(undefined)
     mockIsWalletSecretsSessionActive.mockResolvedValue(true)
+    mockAbandonFirstRunAppPasswordChoiceIfNoWallets.mockResolvedValue(undefined)
   })
 
   afterEach(() => {
@@ -321,5 +328,18 @@ describe('ImportWalletPage', () => {
         changesetJson: '{}',
       },
     })
+  })
+
+  it('back arrow abandons first-run app password choice and returns to setup', async () => {
+    vi.useRealTimers()
+    const user = userEvent.setup()
+    renderWithProviders(<ImportWalletPage />)
+
+    await user.click(screen.getByRole('button', { name: 'Back to setup' }))
+
+    await waitFor(() => {
+      expect(mockAbandonFirstRunAppPasswordChoiceIfNoWallets).toHaveBeenCalledTimes(1)
+    })
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/setup' })
   })
 })

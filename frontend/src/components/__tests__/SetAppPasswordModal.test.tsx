@@ -22,6 +22,16 @@ vi.mock('@/lib/wallet/wallet-secrets-session', () => ({
   beginWalletSecretsSession: (password: string) => mockBeginWalletSecretsSession(password),
 }))
 
+const dbMocks = vi.hoisted(() => ({
+  generateAndPersistNearZeroSession: vi.fn().mockResolvedValue(undefined),
+}))
+vi.mock('@/db', () => ({
+  ensureMigrated: vi.fn().mockResolvedValue(undefined),
+  getDatabase: vi.fn().mockReturnValue({}),
+  generateAndPersistNearZeroSession: (...args: unknown[]) =>
+    dbMocks.generateAndPersistNearZeroSession(...args),
+}))
+
 vi.mock('@/components/PasswordStrengthIndicator', () => ({
   PasswordStrengthIndicator: () => <div data-testid="password-strength" />,
 }))
@@ -35,6 +45,8 @@ describe('SetAppPasswordModal', () => {
     vi.clearAllMocks()
     mockNavigate.mockClear()
     mockBeginWalletSecretsSession.mockClear()
+    dbMocks.generateAndPersistNearZeroSession.mockClear()
+    dbMocks.generateAndPersistNearZeroSession.mockResolvedValue(undefined)
   })
 
   it('offers near-zero security mode opt-in', () => {
@@ -111,6 +123,19 @@ describe('SetAppPasswordModal', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }))
 
     expect(await screen.findByText('Wallet secrets session is already active')).toBeInTheDocument()
+  })
+
+  it('near-zero opt-in notifies parent after the secrets session starts', async () => {
+    const user = userEvent.setup()
+    const onSessionStarted = vi.fn()
+    renderWithProviders(<SetAppPasswordModal open onSessionStarted={onSessionStarted} />)
+
+    await user.click(screen.getByRole('button', { name: 'Use near-zero security mode' }))
+
+    await waitFor(() => {
+      expect(dbMocks.generateAndPersistNearZeroSession).toHaveBeenCalledTimes(1)
+    })
+    expect(onSessionStarted).toHaveBeenCalledTimes(1)
   })
 
   it('prevents duplicate submit while session start is in flight', async () => {

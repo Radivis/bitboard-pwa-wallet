@@ -37,6 +37,7 @@ feature:
         - Use near-zero security mode: persist wrapped secret, enable near-zero mode, session holds random secret
       - click_event:
         - Continue: store password in session and dismiss modal so create/import can proceed
+        - Use near-zero security mode: persist wrapped secret, start secrets session, dismiss modal so create/import can proceed
     - CreateWallet:
       - description: "Multi-step flow to create a new wallet"
       - path: /setup/create
@@ -44,6 +45,10 @@ feature:
       - visible_elements:
         - If at least one wallet exists and session is locked: Unlock to continue dialog (WalletUnlock variant setup) before the form
         - If no wallets and no session password: SetAppPasswordModal only until Continue
+        - back arrow to setup welcome
+          - click_event:
+            - if no wallets exist yet: end secrets session and clear near-zero settings so the app-password / near-zero choice can be made again, then go to /setup
+            - if any wallet exists: go to /setup without clearing the session
         - step indicator showing current step out of total steps (three steps)
         - Step 1 - Generate:
           - word count selector (12 or 24 words)
@@ -69,6 +74,10 @@ feature:
       - visible_elements:
         - If at least one wallet exists and session is locked: Unlock to continue dialog before the form
         - If no wallets and no session password: SetAppPasswordModal only until Continue
+        - back arrow to setup welcome
+          - click_event:
+            - if no wallets exist yet: end secrets session and clear near-zero settings so the app-password / near-zero choice can be made again, then go to /setup
+            - if any wallet exists: go to /setup without clearing the session
         - mnemonic input (textarea or individual word inputs)
         - validation indicator showing whether mnemonic is valid
         - restore wallet button (disabled until mnemonic is valid; encryption uses session app password)
