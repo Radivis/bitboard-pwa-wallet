@@ -13,6 +13,10 @@ let walletDatabaseAccessBlockedForTeardown = false
 const WALLET_DATABASE_TEARDOWN_BLOCKED_MESSAGE =
   'Wallet database access blocked during teardown'
 
+export function isWalletDatabaseTeardownBlockedError(error: unknown): boolean {
+  return error instanceof Error && error.message === WALLET_DATABASE_TEARDOWN_BLOCKED_MESSAGE
+}
+
 export function blockWalletDatabaseAccessForTeardown(): void {
   walletDatabaseAccessBlockedForTeardown = true
 }

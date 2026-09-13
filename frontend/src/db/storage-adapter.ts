@@ -14,20 +14,37 @@ import {
 let sqliteStorageTeardownBlocked = false
 
 /**
- * Stops all persisted Zustand I/O through {@link sqliteStorage} before `destroyDatabase()`.
- * Prevents new statements from opening while Kysely tears down the wa-sqlite worker.
+ * Stops persisted Zustand I/O through {@link sqliteStorage} without blocking {@link getDatabase}.
+ * Use during factory reset so in-flight rail teardown can still finish durable writes.
  */
-export function blockSqliteStorageForTeardown(): void {
+export function blockSqliteStoragePersistForTeardown(): void {
   sqliteStorageTeardownBlocked = true
+}
+
+/** Prevents {@link getDatabase} / lab DB accessors from opening or reusing SQLite. */
+export function blockWalletAndLabDatabaseAccessForTeardown(): void {
   blockWalletDatabaseAccessForTeardown()
   blockLabDatabaseAccessForTeardown()
 }
 
-/** @internal Vitest only — clears all teardown guards set by {@link blockSqliteStorageForTeardown}. */
-export function resetSqliteStorageTeardownGuardForTests(): void {
+/**
+ * Stops persisted Zustand I/O and hard-blocks Kysely accessors (combined teardown).
+ */
+export function blockSqliteStorageForTeardown(): void {
+  blockSqliteStoragePersistForTeardown()
+  blockWalletAndLabDatabaseAccessForTeardown()
+}
+
+/** Clears persist and hard-block teardown guards. Safe only when destroy has not completed. */
+export function resetSqliteStorageTeardownGuard(): void {
   sqliteStorageTeardownBlocked = false
   resetWalletDatabaseAccessTeardownGuardForTests()
   resetLabDatabaseAccessTeardownGuardForTests()
+}
+
+/** @internal Vitest only — clears all teardown guards set by {@link blockSqliteStorageForTeardown}. */
+export function resetSqliteStorageTeardownGuardForTests(): void {
+  resetSqliteStorageTeardownGuard()
 }
 
 export const sqliteStorage: StateStorage = {

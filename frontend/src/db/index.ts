@@ -5,6 +5,7 @@ export {
   destroyDatabase,
   checkDatabaseHealth,
   getInitialDatabaseHealth,
+  isWalletDatabaseTeardownBlockedError,
 } from './database'
 export type { DatabaseHealthResult } from './database'
 export { sqliteStorage } from './storage-adapter'

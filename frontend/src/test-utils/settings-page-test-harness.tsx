@@ -281,6 +281,8 @@ vi.mock('@/stores/themeStore', () => ({
 vi.mock('@/db', () => ({
   getDatabase: vi.fn(),
   ensureMigrated: vi.fn().mockResolvedValue(undefined),
+  isWalletDatabaseTeardownBlockedError: (error: unknown) =>
+    error instanceof Error && error.message === 'Wallet database access blocked during teardown',
   loadWalletSecrets: vi.fn().mockRejectedValue(new Error('Wrong password')),
   loadWalletSecretsPayload: mockLoadWalletSecretsPayload,
   useWallets: () => ({ data: mockWalletsState.data }),
@@ -325,6 +327,7 @@ vi.mock('@/lib/wallet/descriptor-wallet-manager', async (importOriginal) => {
 
 vi.mock('@/lib/arkade/arkade-session-service', () => ({
   abortArkadeSessionForNetworkSwitch: mockCloseArkadeSession,
+  abortArkadeSessionForFactoryReset: mockCloseArkadeSession,
   closeArkadeSession: mockCloseArkadeSession,
   refreshArkadeSessionAfterNetworkSwitch: mockRefreshArkadeSessionAfterNetworkSwitch,
 }))

@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { Eraser } from 'lucide-react'
 import { toast } from 'sonner'
-import { getDatabase, ensureMigrated, useWallets } from '@/db'
+import { getDatabase, ensureMigrated, isWalletDatabaseTeardownBlockedError, useWallets } from '@/db'
 import { anyWalletHasNoMnemonicBackupFlag } from '@/db/wallet-no-mnemonic-backup'
 import { formatBTC, formatSats } from '@/lib/wallet/bitcoin-utils'
 import {
@@ -46,10 +46,17 @@ export function CompleteDataWipeCard() {
   }, [])
 
   const advanceToNoBackupOrWipe = useCallback(async () => {
-    await ensureMigrated()
-    if (await anyWalletHasNoMnemonicBackupFlag(getDatabase())) {
-      setNoBackupModalOpen(true)
-      return
+    try {
+      await ensureMigrated()
+      if (await anyWalletHasNoMnemonicBackupFlag(getDatabase())) {
+        setNoBackupModalOpen(true)
+        return
+      }
+    } catch (err) {
+      if (!isWalletDatabaseTeardownBlockedError(err)) {
+        toast.error(userFacingErrorMessage(err))
+        return
+      }
     }
     try {
       setWipeBusy(true)

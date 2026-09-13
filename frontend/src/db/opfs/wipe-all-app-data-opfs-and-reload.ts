@@ -1,7 +1,11 @@
 import { toast } from 'sonner'
 import { destroyDatabase } from '@/db/database'
 import { destroyLabDatabase } from '@/db/lab-database'
-import { blockSqliteStorageForTeardown } from '@/db/storage-adapter'
+import {
+  blockSqliteStoragePersistForTeardown,
+  blockWalletAndLabDatabaseAccessForTeardown,
+  resetSqliteStorageTeardownGuard,
+} from '@/db/storage-adapter'
 import { awaitInFlightWalletSecretsWrites } from '@/db/wallet-secrets-write-tracker'
 import { LAB_SQLITE_OPFS_BASENAME, WALLET_SQLITE_OPFS_BASENAME } from '@/db/opfs/opfs-sqlite-database-names'
 import { WALLET_MIGRATION_FAILURE_OPFS_FILENAME } from '@/db/migrations/wallet-migration-failure-report'
@@ -9,7 +13,7 @@ import { appQueryClient } from '@/lib/shared/app-query-client'
 import { awaitLabOperationQueueDrained } from '@/lib/lab/lab-coordinator'
 import { removeOpfsRootEntryIfExistsWithRetry } from '@/db/opfs/opfs-root-file'
 import { RELOAD_AFTER_OPFS_WRITE_MS } from '@/db/opfs/opfs-sqlite-replace-and-reload'
-import { closeArkadeSession } from '@/lib/arkade/arkade-session-service'
+import { abortArkadeSessionForFactoryReset } from '@/lib/arkade/arkade-session-service'
 import { terminateCryptoWorker } from '@/workers/crypto-factory'
 import { terminateLabWorker } from '@/workers/lab-factory'
 import { resetSecretsChannel } from '@/workers/secrets-channel'
@@ -52,10 +56,33 @@ async function removeOpfsSqliteBundle(bundleLabel: string, opfsBasename: string)
  * Call only after destroying in-memory Kysely usage is safe (same pattern as backup replace).
  */
 export async function wipeAllAppDataOpfsAndReload(): Promise<void> {
-  // First: stop Zustand persist and all Kysely access so re-renders cannot reopen OPFS SQLite
-  // while we tear down (clear() and modals still mounted can otherwise call getDatabase()).
-  wipeSyncStep('blockSqliteStorageForTeardown', () => {
-    blockSqliteStorageForTeardown()
+  let hardBlockApplied = false
+  let walletDestroyed = false
+  try {
+    await runFactoryResetTeardown({
+      onHardBlockApplied: () => {
+        hardBlockApplied = true
+      },
+      onWalletDestroyed: () => {
+        walletDestroyed = true
+      },
+    })
+  } catch (err) {
+    if (hardBlockApplied && !walletDestroyed) {
+      resetSqliteStorageTeardownGuard()
+    }
+    throw err
+  }
+}
+
+async function runFactoryResetTeardown(options: {
+  onHardBlockApplied: () => void
+  onWalletDestroyed: () => void
+}): Promise<void> {
+  // Stop Zustand persist first so re-renders cannot enqueue settings writes, but keep
+  // getDatabase() available until workers are aborted (Arkade flush is skipped on wipe).
+  wipeSyncStep('blockSqliteStoragePersistForTeardown', () => {
+    blockSqliteStoragePersistForTeardown()
   })
 
   // Let durable writes and chained lab persists finish before closing SQLite (avoids
@@ -66,7 +93,11 @@ export async function wipeAllAppDataOpfsAndReload(): Promise<void> {
   wipeSyncStep('appQueryClient.clear', () => {
     appQueryClient.clear()
   })
-  await wipeAsyncStep('closeArkadeSession', () => closeArkadeSession())
+  try {
+    await abortArkadeSessionForFactoryReset()
+  } catch (err) {
+    console.error(`${WIPE_LOG_PREFIX} abortArkadeSessionForFactoryReset failed (continuing)`, err)
+  }
   wipeSyncStep('resetSecretsChannel', () => {
     resetSecretsChannel()
   })
@@ -82,7 +113,12 @@ export async function wipeAllAppDataOpfsAndReload(): Promise<void> {
       window.setTimeout(resolve, 100)
     })
   })
+  wipeSyncStep('blockWalletAndLabDatabaseAccessForTeardown', () => {
+    blockWalletAndLabDatabaseAccessForTeardown()
+  })
+  options.onHardBlockApplied()
   await wipeAsyncStep('destroyDatabase (wallet Kysely)', () => destroyDatabase())
+  options.onWalletDestroyed()
   await wipeAsyncStep('destroyLabDatabase (lab Kysely)', () => destroyLabDatabase())
   await wipeAsyncStep(`postDestroySettle(${POST_DESTROY_SETTLE_MS}ms)`, () => {
     return new Promise<void>((resolve) => {
