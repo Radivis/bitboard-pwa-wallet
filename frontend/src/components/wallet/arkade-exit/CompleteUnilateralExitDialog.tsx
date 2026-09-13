@@ -12,12 +12,23 @@ import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSe
 import { formatSatPerVbTwoDecimals } from '@/lib/esplora/esplora-fee-estimates'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import {
+  formatArkadeTxidToastSnippet,
   formatMissingBlocktimeCompletionWarning,
   formatMissingBlocktimeCompletionWarningLine,
-  isOperatorIndexerCatchingUpError,
-  unilateralExitCompleteTimelockMessage,
+  formatUnilateralExitCompleteWaitingBanner,
 } from '@/lib/arkade/arkade-exit-utils'
+import { userFacingErrorMessage } from '@/lib/shared/utils'
+import { includesArkadeVtxoOutpoint, type ArkadeVtxoExitPhase } from '@/workers/arkade-api'
 import type { useArkadeExitFlow } from '@/hooks/useArkadeExitFlow'
+import { useVtxoExitSnapshots } from '@/hooks/useUnilateralExitLifecycleSnapshot'
+import {
+  formatVtxoExitPhaseCopy,
+  lookupVtxoExitChildPhase,
+  resolveVtxoExitPhaseForCopy,
+  vtxoExitPhaseCopyFromPhase,
+  type VtxoExitPhaseCopyKind,
+} from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit-selectors'
+import type { VtxoExitChildSnapshotMap } from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit-machine-types'
 
 type ExitFlow = ReturnType<typeof useArkadeExitFlow>
 
@@ -25,10 +36,22 @@ interface CompleteUnilateralExitDialogProps {
   exitFlow: ExitFlow
 }
 
-function errorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message
-  if (typeof error === 'string') return error
-  return 'Unknown error'
+function completeRowPhase(
+  row: { txid: string; vout: number; phase?: ArkadeVtxoExitPhase },
+  snapshots: VtxoExitChildSnapshotMap,
+): ArkadeVtxoExitPhase | undefined {
+  return resolveVtxoExitPhaseForCopy({
+    childPhase: lookupVtxoExitChildPhase(snapshots, row.txid, row.vout),
+    recordPhase: row.phase,
+  })
+}
+
+function completeRowPhaseSuffix(
+  row: { txid: string; vout: number; phase?: ArkadeVtxoExitPhase },
+  snapshots: VtxoExitChildSnapshotMap,
+): string {
+  const copy = formatVtxoExitPhaseCopy(vtxoExitPhaseCopyFromPhase(completeRowPhase(row, snapshots)))
+  return copy !== '' ? ` · ${copy}` : ''
 }
 
 async function copyClipboardText(
@@ -54,7 +77,7 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
     completionFeeQuery,
     completionFeeRateUi,
     completeExitMutation,
-    selectedInProgressTxids,
+    selectedInProgressOutpoints,
     selectedInProgressRows,
     selectedInProgressTotalSats,
     allSelectedCanComplete,
@@ -64,18 +87,32 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
     selectAllReadyInProgress,
     handleCompleteExit,
   } = exitFlow
+  const vtxoExitSnapshots = useVtxoExitSnapshots()
 
   const readyCount = (inProgressQuery.data ?? []).filter((row) => row.canComplete).length
   const waitingRows = selectedInProgressRows.filter((row) => !row.canComplete)
+  const waitingCopyKinds = new Set<VtxoExitPhaseCopyKind>()
+  for (const row of waitingRows) {
+    const phase = completeRowPhase(row, vtxoExitSnapshots)
+    const copyKind = vtxoExitPhaseCopyFromPhase(phase)
+    if (copyKind != null) {
+      waitingCopyKinds.add(copyKind)
+    }
+  }
+  const waitingBanner = formatUnilateralExitCompleteWaitingBanner({
+    waitingCopyKinds,
+    timelock: {
+      timelockBlocks: bumperInfoQuery.data?.unilateralExitTimelockBlocks,
+      timelockSeconds: bumperInfoQuery.data?.unilateralExitTimelockSeconds,
+    },
+    waitingTxidSnippets: waitingRows.map((row) => formatArkadeTxidToastSnippet(row.txid)),
+  })
   const completionFeeEstimate = completionFeeQuery.data
   const missingBlocktimeWarning =
     completionFeeEstimate?.missingBlocktimeInputs != null &&
     completionFeeEstimate.missingBlocktimeInputs.length > 0
       ? formatMissingBlocktimeCompletionWarning(completionFeeEstimate.missingBlocktimeInputs)
       : null
-  const indexerCatchingUp =
-    completeExitMutation.isError &&
-    isOperatorIndexerCatchingUpError(completeExitMutation.error)
 
   const footer = () => (
     <>
@@ -136,7 +173,7 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
           <>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm text-muted-foreground">
-                {selectedInProgressTxids.length} selected ·{' '}
+                {selectedInProgressOutpoints.length} selected ·{' '}
                 <BitcoinAmountDisplay amountSats={selectedInProgressTotalSats} size="sm" />
               </p>
               {readyCount > 0 && (
@@ -158,7 +195,10 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
                     <input
                       type="checkbox"
                       className="mt-1"
-                      checked={selectedInProgressTxids.includes(row.txid)}
+                      checked={includesArkadeVtxoOutpoint(selectedInProgressOutpoints, {
+                        txid: row.txid,
+                        vout: row.vout,
+                      })}
                       onChange={() => toggleInProgressSelection(row)}
                     />
                     <span className="flex-1 break-all">
@@ -166,9 +206,12 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
                       <span className="block font-mono text-xs text-muted-foreground">
                         {row.txid}:{row.vout}
                       </span>
-                      <span className="text-xs text-muted-foreground">
+                      <span
+                        className="text-xs text-muted-foreground"
+                        data-testid="arkade-unilateral-complete-row-phase"
+                      >
                         {row.virtualStatusState}
-                        {row.canComplete ? ' · ready to complete' : ' · waiting for timelock'}
+                        {completeRowPhaseSuffix(row, vtxoExitSnapshots)}
                       </span>
                     </span>
                   </label>
@@ -178,16 +221,9 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
           </>
         )}
 
-        {waitingRows.length > 0 && (
+        {waitingBanner != null && waitingRows.length > 0 && (
           <p className="text-sm text-amber-700 dark:text-amber-300" data-testid="arkade-unilateral-complete-waiting">
-            {unilateralExitCompleteTimelockMessage(
-              {
-                timelockBlocks: bumperInfoQuery.data?.unilateralExitTimelockBlocks,
-                timelockSeconds: bumperInfoQuery.data?.unilateralExitTimelockSeconds,
-              },
-              false,
-            )}{' '}
-            Waiting: {waitingRows.map((row) => `${row.txid.slice(0, 8)}…`).join(', ')}
+            {waitingBanner}
           </p>
         )}
 
@@ -221,7 +257,7 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
           </div>
         </div>
 
-        {selectedInProgressTxids.length > 0 && (
+        {selectedInProgressOutpoints.length > 0 && (
           <SendOnChainFeeSection
             feePresetSelection={completionFeeRateUi.feePresetSelection}
             presetSatPerVbByLabel={completionFeeRateUi.presetSatPerVbByLabel}
@@ -235,13 +271,13 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
           />
         )}
 
-        {selectedInProgressTxids.length > 0 && completionFeeQuery.isLoading && (
+        {selectedInProgressOutpoints.length > 0 && completionFeeQuery.isLoading && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
             Estimating completion fee…
           </div>
         )}
-        {completionFeeEstimate && selectedInProgressTxids.length > 0 && (
+        {completionFeeEstimate && selectedInProgressOutpoints.length > 0 && (
           <div
             className="rounded-md border bg-muted/40 p-2 text-xs space-y-1"
             data-testid="arkade-unilateral-completion-fee"
@@ -270,7 +306,7 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
           </div>
         )}
 
-        {missingBlocktimeWarning != null && selectedInProgressTxids.length > 0 && (
+        {missingBlocktimeWarning != null && selectedInProgressOutpoints.length > 0 && (
           <div
             className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-200"
             data-testid="arkade-complete-blocktime-warning"
@@ -286,19 +322,9 @@ export function CompleteUnilateralExitDialog({ exitFlow }: CompleteUnilateralExi
           </div>
         )}
 
-        {indexerCatchingUp && (
-          <p
-            className="text-sm text-amber-700 dark:text-amber-300"
-            data-testid="arkade-complete-indexer-catching-up"
-          >
-            Operator indexer is still catching up after your unroll. Wait a moment and try
-            Complete exit again.
-          </p>
-        )}
-
-        {completeExitMutation.isError && !indexerCatchingUp && (
+        {completeExitMutation.isError && (
           <p className="text-sm text-destructive" data-testid="arkade-complete-error">
-            Complete exit failed: {errorMessage(completeExitMutation.error)}
+            Complete exit failed: {userFacingErrorMessage(completeExitMutation.error) || 'Unknown error'}
           </p>
         )}
       </div>

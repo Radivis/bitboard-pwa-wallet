@@ -13,16 +13,16 @@ export function useArkadeSyncMetadataQuery() {
   const lastOperatorSyncTime = useWalletStore(
     (walletState) => walletState.lastOperatorSyncTime,
   )
-  const activeArkadeConnectionId = useWalletStore(
-    (walletState) => walletState.activeArkadeConnectionId,
+  const activeArkadeAccountId = useWalletStore(
+    (walletState) => walletState.activeArkadeAccountId,
   )
   const arkadeSessionReady = useIsArkadeSessionReady()
 
   return useQuery({
     queryKey:
-      activeArkadeConnectionId != null
+      activeArkadeAccountId != null
         ? [
-            ...arkadeOperatorSyncMetadataQueryKey(activeArkadeConnectionId),
+            ...arkadeOperatorSyncMetadataQueryKey(activeArkadeAccountId),
             lastOperatorSyncTime?.toISOString() ?? null,
           ]
         : ['arkade', 'dashboard', 'operator', 'inactive'],
@@ -31,7 +31,7 @@ export function useArkadeSyncMetadataQuery() {
       arkadeSessionReady &&
       isArkadeActiveForNetworkMode(networkMode) &&
       isArkadeSupportedNetworkMode(networkMode) &&
-      activeArkadeConnectionId != null,
+      activeArkadeAccountId != null,
     staleTime: 0,
     placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,

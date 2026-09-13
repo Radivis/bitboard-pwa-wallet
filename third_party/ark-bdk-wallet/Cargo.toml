@@ -50,7 +50,7 @@ version = "0.9.3"
 version = "0.3"
 
 [dependencies.bdk_wallet]
-version = "1.0.0"
+version = "2.3"
 
 [dependencies.bitcoin]
 version = "0.32.7"
@@ -63,7 +63,7 @@ version = "0.2.1"
 version = "0.1.37"
 
 [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies.bdk_esplora]
-version = "0.20.1"
+version = "0.22.2"
 features = [
     "std",
     "async-https",
@@ -71,7 +71,7 @@ features = [
 default-features = false
 
 [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies.esplora-client]
-version = "0.11.0"
+version = "0.12"
 default-features = false
 
 [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies.getrandom]
@@ -82,7 +82,7 @@ version = "0.3.0"
 features = ["futures"]
 
 [target.'cfg(not(all(target_arch = "wasm32", target_os = "unknown")))'.dependencies.bdk_esplora]
-version = "0.20.1"
+version = "0.22.2"
 features = [
     "async",
     "async-https",
@@ -91,7 +91,7 @@ features = [
 default-features = false
 
 [target.'cfg(not(all(target_arch = "wasm32", target_os = "unknown")))'.dependencies.esplora-client]
-version = "0.11.0"
+version = "0.12"
 default-features = false
 features = [
     "async",

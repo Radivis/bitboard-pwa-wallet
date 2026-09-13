@@ -1,4 +1,7 @@
-import { wasmArkErrorCode } from '@/lib/shared/wasm-ark-error'
+import {
+  VTXO_EXIT_PHASE_COPY,
+  type VtxoExitPhaseCopyKind,
+} from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit-selectors'
 
 export interface ArkadeIntentFeeConfigured {
   offchainInput: boolean
@@ -58,21 +61,6 @@ export function formatArkadeTxidToastSnippet(txid: string): string {
   return `${txid.slice(0, ARKADE_TXID_DISPLAY_PREFIX_LENGTH)}…`
 }
 
-export function formatUnilateralUnrollSuccessMessage(vtxoTxid: string): string {
-  return `Unroll complete (${formatArkadeTxidToastSnippet(vtxoTxid)}). Use Complete unilateral exit when the timelock elapses.`
-}
-
-/** Sonner toast id so in-progress unroll updates one notification per on-chain tx. */
-export function unilateralUnrollProgressToastId(
-  event: Pick<{ type: string; txid?: string }, 'type' | 'txid'>,
-): string {
-  return `arkade-unroll-${event.txid ?? event.type}`
-}
-
-export function shouldShowUnilateralUnrollProgressToast(event: { type: string }): boolean {
-  return event.type === 'unroll' || event.type === 'wait'
-}
-
 export type UnilateralExitTimelock = {
   timelockBlocks?: number | null
   timelockSeconds?: number | null
@@ -113,7 +101,46 @@ export function unilateralExitCompleteTimelockMessage(
   return `After unroll confirms on-chain, wait for ${duration} (operator CSV timelock) before completing.`
 }
 
-export const OPERATOR_INDEXER_CATCHING_UP_CODE = 'operator_indexer_catching_up'
+export const UNILATERAL_EXIT_COMPLETE_HOST_BROADCAST_MESSAGE =
+  'This VTXO is still waiting for the host transaction to broadcast, not the unilateral-exit timelock.'
+
+export const UNILATERAL_EXIT_COMPLETE_FIRST_CONFIRMATION_MESSAGE =
+  'This VTXO is still waiting for the first on-chain confirmation, not the unilateral-exit timelock.'
+
+export const UNILATERAL_EXIT_COMPLETE_SIX_CONFIRMATIONS_MESSAGE =
+  'This VTXO is still waiting for 6 on-chain confirmations, not the unilateral-exit timelock.'
+
+export function formatUnilateralExitCompleteWaitingBanner(params: {
+  waitingCopyKinds: ReadonlySet<VtxoExitPhaseCopyKind>
+  timelock: UnilateralExitTimelock
+  waitingTxidSnippets: string[]
+}): string | null {
+  if (params.waitingCopyKinds.size === 0 && params.waitingTxidSnippets.length === 0) {
+    return null
+  }
+  const parts: string[] = []
+  if (params.waitingCopyKinds.has(VTXO_EXIT_PHASE_COPY.waitingForHostTransactionBroadcast)) {
+    parts.push(UNILATERAL_EXIT_COMPLETE_HOST_BROADCAST_MESSAGE)
+  }
+  if (params.waitingCopyKinds.has(VTXO_EXIT_PHASE_COPY.waitingForFirstConfirmation)) {
+    parts.push(UNILATERAL_EXIT_COMPLETE_FIRST_CONFIRMATION_MESSAGE)
+  }
+  if (params.waitingCopyKinds.has(VTXO_EXIT_PHASE_COPY.waitingForSixConfirmations)) {
+    parts.push(UNILATERAL_EXIT_COMPLETE_SIX_CONFIRMATIONS_MESSAGE)
+  }
+  if (params.waitingCopyKinds.has(VTXO_EXIT_PHASE_COPY.waitingForTimelock)) {
+    parts.push(unilateralExitCompleteTimelockMessage(params.timelock, false))
+  }
+  if (parts.length === 0) {
+    return params.waitingTxidSnippets.length > 0
+      ? `Not ready to complete yet. Waiting: ${params.waitingTxidSnippets.join(', ')}`
+      : null
+  }
+  if (params.waitingTxidSnippets.length > 0) {
+    parts.push(`Waiting: ${params.waitingTxidSnippets.join(', ')}`)
+  }
+  return parts.join(' ')
+}
 
 /** Shown when completion coin-select used a permissive blocktime fallback (see wallet model doc). */
 export const MISSING_BLOCKTIME_COMPLETION_WARNING_SUMMARY =
@@ -151,14 +178,10 @@ export function formatMissingBlocktimeCompletionWarning(
 export function formatMissingBlocktimeCompletionWarningLine(
   line: MissingBlocktimeCompletionWarningLine,
 ): string {
-  const virtualSnippet = `${line.virtualTxid.slice(0, 12)}…`
+  const virtualSnippet = formatArkadeTxidToastSnippet(line.virtualTxid)
   if (!line.onChainDiffersFromVirtual) {
     return `${virtualSnippet} (${line.amountSats} sats)`
   }
-  const onChainSnippet = `${line.onChainTxid.slice(0, 12)}…:${line.onChainVout}`
+  const onChainSnippet = `${formatArkadeTxidToastSnippet(line.onChainTxid)}:${line.onChainVout}`
   return `${virtualSnippet} (${line.amountSats} sats, on-chain ${onChainSnippet})`
-}
-
-export function isOperatorIndexerCatchingUpError(error: unknown): boolean {
-  return wasmArkErrorCode(error) === OPERATOR_INDEXER_CATCHING_UP_CODE
 }

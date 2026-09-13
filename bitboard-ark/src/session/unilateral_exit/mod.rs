@@ -1,0 +1,18 @@
+pub(crate) mod candidates;
+pub(crate) mod complete;
+pub(crate) mod frontend;
+pub(crate) mod host_tx_finality;
+pub(crate) mod materials_prefetch;
+pub(crate) mod onchain;
+pub(crate) mod plan;
+pub(crate) mod proceed;
+pub(crate) mod progress;
+pub(crate) mod snapshot_ops;
+#[cfg(test)]
+pub(crate) mod test_fixtures;
+pub(crate) mod topology;
+pub(crate) mod viability;
+pub(crate) mod vtxo_exit;
+pub(crate) mod vtxo_exit_heal;
+pub(crate) mod vtxo_exit_materials;
+pub(crate) mod watch_reconcile;

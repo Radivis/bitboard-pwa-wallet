@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildListVtxosResponse,
   buildMockVtxosForScripts,
   parseScriptsFromRequestUrl,
 } from '@/lib/arkade/e2e/arkade-operator-mock-handler'
@@ -60,5 +61,52 @@ describe('arkade operator mock vtxo builder', () => {
     expect(vtxos[1].arkTxid).toBe(E2E_ARKADE_MOCK_RECEIVE_INCOMING_TXID)
     expect(vtxos[1].amount).toBe(String(E2E_ARKADE_MOCK_RECEIVE_INCOMING_SATS))
     expect(mockState.pendingIncomingPayment).toBeNull()
+  })
+
+  it('does not treat scripts[0] on later discovery batches as the default fixture', () => {
+    resetE2eArkadeOperatorMockState(PARTITION)
+    const mockState = getE2eArkadeOperatorMockState(PARTITION)
+
+    buildMockVtxosForScripts(mockState, ['script_a'])
+
+    const laterBatchVtxos = buildMockVtxosForScripts(mockState, ['script_z'])
+    expect(laterBatchVtxos).toHaveLength(0)
+    expect(mockState.paymentsByScript.has('script_z')).toBe(false)
+  })
+
+  it('listVtxos page cursor is a terminal 1-indexed arkd page so discovery does not loop', () => {
+    resetE2eArkadeOperatorMockState(PARTITION)
+    const mockState = getE2eArkadeOperatorMockState(PARTITION)
+    const response = buildListVtxosResponse(
+      mockState,
+      'http://localhost/api/arkade/operator/signet/v1/indexer/vtxos?scripts=5120abc',
+    )
+
+    expect(response.vtxos).toHaveLength(1)
+    // Mirrors ark_core::server::IndexerPage::next_page_index after the arkd pagination fix.
+    const wouldRequestNextPage =
+      response.page.current < response.page.total &&
+      response.page.next > response.page.current
+    expect(wouldRequestNextPage).toBe(false)
+  })
+
+  it('keeps an already-applied incoming payment on a later list (poll then rail-sync)', () => {
+    resetE2eArkadeOperatorMockState(PARTITION)
+    const mockState = getE2eArkadeOperatorMockState(PARTITION)
+
+    buildMockVtxosForScripts(mockState, ['script_a'])
+    mockState.pendingIncomingPayment = {
+      txid: E2E_ARKADE_MOCK_RECEIVE_INCOMING_TXID,
+      amountSats: E2E_ARKADE_MOCK_RECEIVE_INCOMING_SATS,
+      timestamp: 1_700_000_100,
+    }
+    buildMockVtxosForScripts(mockState, ['script_a', 'script_b'])
+    expect(mockState.pendingIncomingPayment).toBeNull()
+
+    const vtxos = buildMockVtxosForScripts(mockState, ['script_a', 'script_b'])
+    expect(vtxos).toHaveLength(2)
+    expect(vtxos[0].amount).toBe(String(E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS))
+    expect(vtxos[1].arkTxid).toBe(E2E_ARKADE_MOCK_RECEIVE_INCOMING_TXID)
+    expect(vtxos[1].amount).toBe(String(E2E_ARKADE_MOCK_RECEIVE_INCOMING_SATS))
   })
 })

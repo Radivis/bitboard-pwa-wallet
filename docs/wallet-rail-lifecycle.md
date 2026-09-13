@@ -150,7 +150,7 @@ When a rail becomes configured (gates satisfied — see per-rail sections), load
 5. **SaveLifecycle is internal-first for status text**, but sync is user-targetable: the **dashboard exposes a sync control per configured rail** (on-chain, Lightning when connected, Arkade when active) so users can trigger targeted sync without syncing everything. Save phases remain primarily for lock handoff and debugging; save UI is not required in v1.
 6. **Per-rail sync state** is aggregated via `useAnyRailSyncing()` / `isAnyRailSyncing()` — not a global `walletStatus: 'syncing'`.
 7. **One Lightning machine per rail** (v1). Sync and save aggregate across all NWC connections for the active Bitboard wallet.
-8. **One Arkade operator** per `(walletId, networkMode)` — no multi-connection aggregation on the Arkade rail.
+8. **One Arkade account** per `(walletId, networkMode)` — no multi-account aggregation on the Arkade rail.
 
 ## Route independence and wallet hydration
 
@@ -449,23 +449,23 @@ Lightning is optional — absence of connections is normal `not-configured`, not
 
 - `isArkadeEnabled` false, **or**
 - Network not in `{ mainnet, testnet, signet }`, **or**
-- No operator connection row for `(walletId, networkMode)` after first-time setup path
+- No Arkade account row for `(walletId, networkMode)` after first-time setup path
 
 ### LoadLifecycle (largest pipeline)
 
 **Work in `loading` → `loaded`:**
 
 1. `ensureSecretsChannel` / `ensureArkadeEncryptedSecretsHost`
-2. Read encrypted mnemonic + payload; resolve operator connection
+2. Read encrypted mnemonic + payload; resolve Arkade account
 3. `ark_open_session` in arkade worker (hydrate from `sdkPersistenceJson`)
-4. `ensureArkadeOperatorConnection` (DB metadata)
+4. `ensureArkadeAccount` (DB metadata)
 5. `refreshArkadeStoreFromLoadedWasm` — balance, payments, **receive address stable**
-6. Set `activeArkadeConnectionId` when **load completes** (not when sync completes)
+6. Set `activeArkadeAccountId` when **load completes** (not when sync completes)
 
 **Readiness contract:**
 
 - UI queries and Receive page gate on `ArkadeLoadLifecycle === 'loaded'`
-- `activeArkadeConnectionId` is set at load completion, not as a separate sync gate
+- `activeArkadeAccountId` is set at load completion, not as a separate sync gate
 
 **`load-error`:** WASM open failure, persistence corrupt, secrets read failure.
 

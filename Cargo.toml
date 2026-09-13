@@ -24,3 +24,4 @@ esplora-client = { path = "third_party/esplora-client" }
 ark-client = { path = "third_party/ark-client" }
 ark-rest = { path = "third_party/ark-rest" }
 ark-bdk-wallet = { path = "third_party/ark-bdk-wallet" }
+ark-core = { path = "third_party/ark-core" }

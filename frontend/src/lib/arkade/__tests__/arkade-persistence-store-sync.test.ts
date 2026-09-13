@@ -46,7 +46,7 @@ describe('refreshArkadeStoreFromLoadedWasm', () => {
     useWalletStore.setState({
       activeWalletId: 1,
       networkMode: 'signet',
-      activeArkadeConnectionId: 'conn-1',
+      activeArkadeAccountId: 'conn-1',
       arkadeBalance: null,
       arkadePayments: [],
       arkadeReceiveAddress: null,

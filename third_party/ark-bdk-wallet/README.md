@@ -12,6 +12,7 @@ This crate has **few behavioral patches** relative to `ark-client` and `ark-rest
 
 | Area | Change | Primary files |
 |------|--------|---------------|
+| **BDK stack** | `bdk_wallet` 2.3 + `bdk_esplora` 0.22 + `esplora-client` 0.12 (aligned with `bitboard-crypto`; drops transitive `rustls-pemfile`). Drop when upstream adopts this stack. | `Cargo.toml`, `src/lib.rs` |
 | **Patched Esplora client** | Uses workspace `esplora-client` directly (not only via `bdk_esplora` re-exports) so WASM gets per-request timeouts from our Esplora fork. | `src/lib.rs` |
 | **WASM sleep** | `WebSleeper` implements `esplora_client::Sleeper` with `gloo_timers` for async Esplora polling in the browser. | `src/lib.rs`, `src/utils.rs` |
 

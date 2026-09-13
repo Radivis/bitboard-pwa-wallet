@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
+  ARKADE_TXID_DISPLAY_PREFIX_LENGTH,
+  formatArkadeTxidToastSnippet,
   formatIntentFeePrograms,
   formatMissingBlocktimeCompletionWarning,
   formatMissingBlocktimeCompletionWarningLine,
+  formatUnilateralExitCompleteWaitingBanner,
   formatUnilateralExitTimelock,
-  formatUnilateralUnrollSuccessMessage,
-  isOperatorIndexerCatchingUpError,
   parseCollaborativeExitAmountSats,
-  shouldShowUnilateralUnrollProgressToast,
   unilateralExitCompleteTimelockMessage,
-  unilateralUnrollProgressToastId,
 } from '@/lib/arkade/arkade-exit-utils'
+import { VTXO_EXIT_PHASE_COPY } from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit-selectors'
 
 describe('formatIntentFeePrograms', () => {
   it('returns none configured when all flags are false', () => {
@@ -53,33 +53,6 @@ describe('parseCollaborativeExitAmountSats', () => {
   })
 })
 
-describe('unilateral unroll toast helpers', () => {
-  it('formats success message with short txid prefix', () => {
-    expect(
-      formatUnilateralUnrollSuccessMessage(
-        '587b597602803187e73cb30ca7791254a146755ee6435244d048c8d4072c72a5',
-      ),
-    ).toBe(
-      'Unroll complete (587b59760280…). Use Complete unilateral exit when the timelock elapses.',
-    )
-  })
-
-  it('shows info toasts for unroll and wait, not done', () => {
-    expect(shouldShowUnilateralUnrollProgressToast({ type: 'unroll' })).toBe(true)
-    expect(shouldShowUnilateralUnrollProgressToast({ type: 'wait' })).toBe(true)
-    expect(shouldShowUnilateralUnrollProgressToast({ type: 'done' })).toBe(false)
-  })
-
-  it('uses txid-scoped toast ids', () => {
-    expect(
-      unilateralUnrollProgressToastId({
-        type: 'unroll',
-        txid: '587b597602803187e73cb30ca7791254a146755ee6435244d048c8d4072c72a5',
-      }),
-    ).toBe('arkade-unroll-587b597602803187e73cb30ca7791254a146755ee6435244d048c8d4072c72a5')
-  })
-})
-
 describe('unilateral exit timelock display', () => {
   it('formats block-based operator delay', () => {
     expect(formatUnilateralExitTimelock({ timelockBlocks: 20 })).toBe('20 block confirmations')
@@ -96,9 +69,40 @@ describe('unilateral exit timelock display', () => {
   })
 
   it('notes when timelock is already satisfied', () => {
-    expect(unilateralExitCompleteTimelockMessage({ timelockBlocks: 144 }, true)).toContain(
-      'satisfied',
-    )
+    expect(
+      unilateralExitCompleteTimelockMessage({ timelockBlocks: 144 }, true),
+    ).toContain('satisfied')
+  })
+
+  it('formats waiting banner for confirmations vs timelock', () => {
+    expect(
+      formatUnilateralExitCompleteWaitingBanner({
+        waitingCopyKinds: new Set([VTXO_EXIT_PHASE_COPY.waitingForHostTransactionBroadcast]),
+        timelock: { timelockBlocks: 144 },
+        waitingTxidSnippets: ['aaaaaaaa…'],
+      }),
+    ).toContain('host transaction to broadcast')
+    expect(
+      formatUnilateralExitCompleteWaitingBanner({
+        waitingCopyKinds: new Set([VTXO_EXIT_PHASE_COPY.waitingForFirstConfirmation]),
+        timelock: { timelockBlocks: 144 },
+        waitingTxidSnippets: ['aaaaaaaa…'],
+      }),
+    ).toContain('first on-chain confirmation')
+    expect(
+      formatUnilateralExitCompleteWaitingBanner({
+        waitingCopyKinds: new Set([VTXO_EXIT_PHASE_COPY.waitingForSixConfirmations]),
+        timelock: { timelockBlocks: 144 },
+        waitingTxidSnippets: ['aaaaaaaa…'],
+      }),
+    ).toContain('6 on-chain confirmations')
+    expect(
+      formatUnilateralExitCompleteWaitingBanner({
+        waitingCopyKinds: new Set([VTXO_EXIT_PHASE_COPY.waitingForTimelock]),
+        timelock: { timelockBlocks: 144 },
+        waitingTxidSnippets: ['aaaaaaaa…'],
+      }),
+    ).toContain('144 block confirmations')
   })
 })
 
@@ -132,15 +136,11 @@ describe('missing blocktime completion warning', () => {
   })
 })
 
-describe('isOperatorIndexerCatchingUpError', () => {
-  it('detects structured wasm error code', () => {
-    const error = new Error(
-      JSON.stringify({
-        code: 'operator_indexer_catching_up',
-        message: 'Operator indexer is still catching up after unilateral unroll.',
-      }),
+describe('formatArkadeTxidToastSnippet', () => {
+  it('uses the shared display prefix length', () => {
+    const txid = 'ab'.repeat(32)
+    expect(formatArkadeTxidToastSnippet(txid)).toBe(
+      `${txid.slice(0, ARKADE_TXID_DISPLAY_PREFIX_LENGTH)}…`,
     )
-    expect(isOperatorIndexerCatchingUpError(error)).toBe(true)
-    expect(isOperatorIndexerCatchingUpError(new Error('other'))).toBe(false)
   })
 })

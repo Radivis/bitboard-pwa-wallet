@@ -63,8 +63,9 @@ export function ArkadeBalanceBreakdown({
   const unilateralExitSats = arkadeUnilateralExitInProgressSats(balance)
   const collaborativeExitSats = arkadeCollaborativeExitInProgressSats(balance)
   const showExitBreakdown = arkadeHasExitInProgress(balance)
-  const pendingRecoverySats = balance.pendingRecoverySats ?? 0
-  const showPendingRecovery = pendingRecoverySats > 0
+  const pendingRecoveryDueToExpiredSignerSats =
+    balance.pendingRecoveryDueToExpiredSignerSats ?? 0
+  const showPendingRecoveryDueToExpiredSigner = pendingRecoveryDueToExpiredSignerSats > 0
   const pendingOperatorSweepSats = arkadeRecoverablePendingOperatorSweepSats(balance)
   const pendingOperatorSweepCount = arkadeRecoverablePendingOperatorSweepVtxoCount(balance)
   const showPendingOperatorSweep = pendingOperatorSweepSats > 0
@@ -181,11 +182,11 @@ export function ArkadeBalanceBreakdown({
           )}
         </div>
       )}
-      {showPendingRecovery && (
-        <p className="text-xs text-muted-foreground" data-testid="arkade-balance-pending-recovery">
-          Pending recovery (deprecated signer):{' '}
+      {showPendingRecoveryDueToExpiredSigner && (
+        <p className="text-xs text-muted-foreground" data-testid="arkade-balance-pending-recovery-due-to-expired-signer">
+          Pending recovery (expired signer):{' '}
           <FiatBtcAmountDisplay
-            amountSats={pendingRecoverySats}
+            amountSats={pendingRecoveryDueToExpiredSignerSats}
             {...fiatAmountProps}
             isDetail
           />

@@ -14,6 +14,11 @@ feature:
     - As a user, I want to exit Arkade to an on-chain address collaboratively when the operator is available
     - As a user, I want to exit a specific VTXO unilaterally without operator cooperation when needed
     - As a user, I want the app to keep working when the Arkade operator rotates its signing key, with clear guidance on migrating or exiting funds
+    - As a user, I want to view individual VTXOs and their state (classification, flags, expiry) in a compact inventory
+    - As a user, I want autonomous mode to persist per operator so an untrusted or hostile ASP is not contacted again after reload until I explicitly leave
+    - As a user, after I abort an unroll that already broadcast, I still want those coins completable when they confirm and the timelock elapses, without restarting a job
+    - As a user in autonomous mode, I want unrolled stamps from Esplora without operator sync so I can complete after a killed job
+    - As a user, I want waiting for host transaction broadcast distinguished from waiting for the first confirmation, waiting for 6 confirmations, and waiting for the unilateral-exit timelock
   requirements:
     - Arkade is gated by isArkadeEnabled (default off) and isMainnetAccessEnabled for mainnet
     - Arkade is available on mainnet, signet, and regtest (local arkd via arkade-regtest for dev/E2E); not on lab in v1
@@ -22,9 +27,9 @@ feature:
     - Default delegator and operator URLs come from arkade-endpoints.ts (env overrides supported)
     - Network switch terminates and reopens the Arkade worker session for the new network
     - Lock wallet terminates arkade.worker and clears session state
-    - BitboardArkPersistence (engine ark-rs, wire version 3) in sdkPersistenceJson per operator connection inside encrypted wallet_secrets
+    - BitboardArkPersistence (engine ark-rs, wire version 11) in sdkPersistenceJson per Arkade account inside encrypted wallet_secrets; autonomous_mode defaults false and is keyed to that ASP
     - Offchain receive derivation cursor is a single scalar in walletDb (see docs/arkade-bitboard-wallet-model.md); no index arrays in sdkPersistenceJson
-    - Wallet reopen hydrates boarding outputs from sdkPersistenceJson; operator required for live balance sync and sends
+    - Wallet reopen hydrates boarding outputs from sdkPersistenceJson; operator required for live balance sync and sends unless persisted autonomous_mode is true
   contracts:
     receive_address:
       - id: ARK-RCV-01
@@ -68,27 +73,280 @@ feature:
       - id: ARK-REC-05
         description: When recoverablePendingOperatorSweepVtxoCount is greater than zero, balance breakdown shows expired waiting for operator sweep line without Recover now
       - id: ARK-REC-06
-        description: When pendingRecoverySats is greater than zero, Dashboard and Management show a pending-recovery banner linking to Start unilateral exit in Management
+        description: When pendingRecoveryDueToExpiredSignerSats is greater than zero, Dashboard and Management show a pending-recovery-due-to-expired-signer banner linking to Start unilateral exit in Management
       - id: ARK-REC-07
-        description: VTXOs in unilateral exit do not contribute to pendingRecoverySats even when they would otherwise qualify for pending recovery
+        description: VTXOs in unilateral exit do not contribute to pendingRecoveryDueToExpiredSignerSats even when they would otherwise qualify for pending recovery due to expired signer
       - id: ARK-REC-08
-        description: VTXOs in unilateral exit do not contribute to recoverableSettleableVtxoCount, recoverablePendingOperatorSweepVtxoCount, expiring-soon count, or earliest-expiry indicator — Recoverable now banner hidden when only exiting VTXOs would qualify
+        description: >-
+          Pipeline VTXO exit records (tagged through complete_ready, not funding_lost) do not
+          contribute to recoverableSettleableVtxoCount, recoverablePendingOperatorSweepVtxoCount,
+          or pendingRecoveryDueToExpiredSignerSats (ARK-REC-07). Recover and signer-migrate use
+          that pipeline exclude set only — they are not spend-locked (ARK-EXIT-27); funding_lost
+          remains recoverable and migratable if the operator still lists the coin. Post-unroll
+          exiting VTXOs are excluded by vendored ark-core bucketing. Expiring-soon count,
+          earliest-expiry indicator, and Renew exclude spend-locked outpoints
+          (pipeline ∪ funding_lost). Exclusion is record-derived (not pending-deduction-only).
     unilateral_exit:
       - id: ARK-EXIT-01
-        description: Start unilateral exit lists only VTXOs that can start unroll; in-progress and ready-to-complete VTXOs are excluded
+        description: Start unilateral exit lists only VTXOs that can start unroll; unrolled, complete_ready, exited, and funding_lost records are excluded. Tagged leftovers that are not yet unrolled remain startable after abort (ARK-EXIT-26/30). Concurrent second job stays a frontend selection lock.
       - id: ARK-EXIT-02
-        description: Complete unilateral exit lists in-progress VTXOs from local snapshot and pending deductions when operator indexing lags
+        description: Complete unilateral exit lists in-progress VTXOs from persisted VTXO exit records (tagged through complete_ready). Per-row copy is VTXO child phase (ARK-EXIT-32) when a child is spawned, otherwise the persisted record phase (same SoT HYDRATE reads): waiting for host transaction broadcast vs waiting for first confirmation vs waiting for 6 confirmations vs waiting for timelock vs ready to complete — not !canComplete as timelock. Complete RPC does not require in-progress membership (ARK-EXIT-31); this ID remains the Complete list. Complete-dialog errors use the same sanitized user-facing copy as the control page (ARK-EXIT-34).
       - id: ARK-EXIT-03
-        description: Complete unilateral exit supports multi-select batch completion with fee estimate scaled to selected inputs
+        description: Complete unilateral exit supports multi-select batch completion with explicit virtual outpoints (txid + vout) and fee estimate scaled to selected inputs
       - id: ARK-EXIT-04
-        description: Completion fee estimate includes missingBlocktimeInputs (virtual txid and on-chain outpoint per affected VTXO) when Esplora omits confirmation blocktime; UI shows a non-blocking list in Complete unilateral exit. Permissive completion coin-select (Duration::ZERO fallback) is intentional for regtest/thin Esplora in CI and local debugging; uncommon on production Esplora.
+        description: Completion fee estimate includes missingBlocktimeInputs (virtual outpoint and on-chain outpoint per affected VTXO) when Esplora omits confirmation blocktime; UI shows a non-blocking list in Complete unilateral exit. Permissive completion coin-select (Duration::ZERO fallback) is intentional for regtest/thin Esplora in CI and local debugging; uncommon on production Esplora.
       - id: ARK-EXIT-05
-        description: When complete exit times out waiting for operator indexer after unroll, UI shows a non-destructive indexer-catching-up state instead of a generic failure
+        description: Retired — complete unilateral exit no longer waits on the operator indexer; snapshot readiness plus Esplora only (ARK-EXIT-09). The complete-dialog indexer-catching-up state is unused.
+      - id: ARK-EXIT-06
+        description: Unilateral exit never calls ASP indexer or batch APIs for list, chain, virtual tx, or completion coin-select, regardless of autonomous mode; materials come from operator sync (ARK-EXIT-07)
+      - id: ARK-EXIT-07
+        description: Operator sync prefetches unilateral_exit_materials on exit-eligible VTXO snapshot records and persists cached_operator_info
+      - id: ARK-EXIT-08
+        description: Fail fast with autonomous_exit_materials_missing when exit materials are missing or cannot describe the VTXO or seized branch (start unroll/proceed, funding_lost stamping), regardless of autonomous mode
+      - id: ARK-EXIT-09
+        description: Complete uses snapshot readiness plus Esplora only; no operator indexer poll. Each proceed step is non-blocking; the XState machine waits until the current virtual tx has 1 confirmation, and WASM stamps is_unrolled only after 6 confirmations (ARK-EXIT-15/16). The unified stamper (ARK-EXIT-29) runs on autonomous load, operator sync, proceed, progress, list, and complete (terminals included).
+      - id: ARK-EXIT-10
+        description: While autonomous mode is active, collaborative exit, send, renew, recoverable settlement, signer migration, boarding settle, and operator sync (manual and background dashboard poll) are blocked in UI and WASM; an in-progress unilateral-exit job does not skip background operator sync
+      - id: ARK-EXIT-11
+        description: After each proceed step, WASM does not poll operator list_vtxos; local is_unrolled is stamped when Esplora reports 6 confirmations on the host virtual tx; sticky is_unrolled merge and unrolled+ record reconcile run during operator sync only. The unified stamper (ARK-EXIT-29) also runs on autonomous load, proceed, progress, list, and complete.
+      - id: ARK-EXIT-12
+        description: Unrolled+ VTXO exit records survive full snapshot replace. Reinject missing snapshot rows from those records; never clear exiting state on full-list absence alone. Leftover 0.3.4-dev `unilateral_exit_watches` JSON is ignored (never published; not healed into records). Cleared on completion, funding_lost, or reconcile evidence (operator spent or on-chain spent).
+      - id: ARK-EXIT-13
+        description: Unilateral exit control page at /wallet/arkade/unilateral-exit with responsive VTXO tree graph (React Flow + d3-dag), multi-select leaves, and Management entry link (Start unilateral exit / Control unilateral exit). Node detail shows per-outpoint VTXO exit phase from child actors (ARK-EXIT-32) and remaining tree expiry (ARK-EXIT-35). Unspent host VTXOs stay on the graph after unroll (host tx 6 conf); the overlay swaps Lucide Coins for HandCoins. Host-tx graph fills follow ARK-EXIT-35. Leaf selection unlocks after branch-complete (idle host, leftover children stay). After the broadcast job releases, the page keeps a durable Branch complete status while leftover children wait to be claimed.
+      - id: ARK-EXIT-14
+        description: ark_estimate_unilateral_exit_batch unions deduped virtual steps across selected VTXO leaves for batch fee estimate and bumper sufficiency gate
+      - id: ARK-EXIT-15
+        description: ark_proceed_unilateral_exit_step advances one virtual tx per call with caller feerate, returns without blocking on confirmation, persists current_step_waiting_since for progress UI, and skips already-on-chain branch txs; the XState machine polls until 1-conf
+      - id: ARK-EXIT-16
+        description: Host virtual txs (leaf or intermediate) must reach 6 confirmations on Esplora before WASM marks is_unrolled. ARK-EXIT-29 applies the same 6-conf rule to every tree/ark host including terminals.
+      - id: ARK-EXIT-17
+        description: When a host virtual tx reaches 6 conf, WASM marks is_unrolled for every VTXO outpoint on that txid; sticky merge promotes all vouts on the same txid; control page selects sibling leaf outpoints atomically; completion remains per outpoint. ARK-EXIT-29 extends all-vouts stamping to any tree/ark host, not only selected leaves.
+      - id: ARK-EXIT-18
+        description: Control page Proceed automatically switch with congestion warning and max fee rate input; automatic mode uses Low/Medium/High preset degree only (no custom fee)
+      - id: ARK-EXIT-19
+        description: Max fee default max(10 sat/vB, 2×High preset) when enabling auto; automation pauses when live preset for selected degree exceeds max cap
+      - id: ARK-EXIT-20
+        description: XState unilateral-exit actor continues proceed steps via machine after delays while app unlocked and same descriptor wallet selected; pauses on fee cap, bumper, or error; not delegator-based
+      - id: ARK-EXIT-21
+        description: Manual per-step Proceed remains on control page when Proceed automatically is off
+      - id: ARK-EXIT-22
+        description: Proceed automatically advances all unroll steps for multiple preconfirmed VTXOs (after chained self-send splits) until branch complete (E2E-ARK-REG-07)
+      - id: ARK-EXIT-23
+        description: >-
+          Control page offers abort when a frontend unilateral exit job is active; two-step
+          confirmation (info then red risk modal with required checkbox); abort ends orchestration
+          via aborted machine state without waiting on WASM list RPCs and without deleting
+          unilateral_exit_materials or other WASM persistence; user_aborted failure banner lists
+          VTXO ids with copy actions when id lookup succeeds; backend in-progress state remains
+          until completion or reconcile. VTXO phase after abort is ARK-EXIT-30.
+      - id: ARK-EXIT-24
+        description: Control page step progress and in-progress overlay use the same phase labels in automatic mode as in manual mode, with " (proceeding automatically)" appended while automation is advancing the job
+      - id: ARK-EXIT-25
+        description: In-flight states other than waiting, ensuringBroadcast, and waitingForParentData show "figuring out what to do next" on step progress and a cog overlay (title/aria "Figuring out what to do next"); automatic mode still appends " (proceeding automatically)"
+      - id: ARK-EXIT-34
+        description: >-
+          Control page step-error copy and Complete unilateral exit errors never show raw
+          WASM/reqwest stack traces. Transient Esplora GET failures (browser Failed to fetch,
+          request timeout) are retried at the explorer client and on progress/viability WASM calls;
+          remaining failures show a short explorer-unreachable message plus Click Proceed to retry
+          this step.
+      - id: ARK-EXIT-35
+        description: >-
+          Control-page node detail lists remaining VTXO tree expiry per hosted outpoint as
+          "expires in X days" (singular "expires in 1 day"; "expires in less than 1 day" when
+          remaining is under one day; "expired" when past). Omit the line when expiresAt is
+          missing or <= 0. A host tx (tree/ark node with hosted VTXOs) uses a dark red graph-node
+          fill if any hosted VTXO is already expired, or a dark yellow fill if none are expired
+          but any expires in less than 3 days (3 * 86400 seconds). Expired wins over the 3-day
+          warning. Warning/expired fill wins over the selected-leaf blue tint. Exit-path blue
+          border and focus ring stay. This is tree expiry (ASP still online), not the post-unroll
+          CSV timelock.
+      - id: ARK-EXIT-26
+        description: >-
+          After abort, leftover WASM in-progress leaves that are not yet unrolled remain selectable
+          so the user can start a new frontend job on the same leaf; fully unrolled leftover rows
+          stay unselectable (claim via Complete). VTXO phase after abort and en-passant leftovers
+          is ARK-EXIT-30.
+    unilateral_exit_vtxo_lifecycle:
+      - id: ARK-EXIT-27
+        description: >-
+          VTXO exit phases (shipped, envelope v11): idle (no row) → tagged → host_broadcast_attempted
+          → host_relayed → host_confirmed → unrolled → complete_ready → exited. funding_lost is a
+          terminal side-branch from tagged onward (ARK-EXIT-33). Abort is not a VTXO phase. WASM
+          persisted records are the durable source of truth. Spend-lock starts at tagged; subtract
+          from net spendable only while the coin is still in gross spendable (not yet is_unrolled /
+          exiting). funding_lost still locks collaborative spend while the coin remains in gross.
+          Send, collab, renew, and delegate exclude spend-locked outpoints (pipeline ∪ funding_lost).
+          Recover and signer-migrate are not spend-locked; they exclude in-progress pipeline
+          membership only so they do not race an active unroll (ARK-REC-08).
+      - id: ARK-EXIT-28
+        description: >-
+          Host-tx observation registry (envelope v9): keyed by virtual txid; fields registered_at,
+          relayed, confirmations, never_seen_probes, last_probed_at. Register immediately before
+          submitpackage of that step (not the whole DAG at job start) and advance matching VTXOs to
+          host_broadcast_attempted so a false broadcast error cannot skip the row and let abort unlock.
+          Do not wait for a first Esplora seen; do not treat unilateral_exit_step_wait as chain proof;
+          do not let a single Esplora miss rewind. One row drives all vouts on that txid. After five
+          eligible misses (first after registered_at + 10 minutes, then four more at last_probed_at +
+          1 minute, at most one increment per Esplora reconcile call; do not collapse across a time skip; 15s list/progress polls
+          must not reset last_probed_at except on an eligible miss), delete the observation and rewind
+          pre-unroll VTXOs to tagged (keep rows; spend-lock remains). That budget is the cleanup of the
+          early register when the tx was truly never received. Re-proceed with the same deterministic
+          txid re-registers and resets the probe window. Abort after that rewind may unlock (tagged +
+          no observation). Also delete when every VTXO on that host is exited or funding_lost. Reorg
+          under 1 conf rewinds VTXOs to host_relayed / host_broadcast_attempted and does not delete
+          the row.
+      - id: ARK-EXIT-29
+        description: >-
+          Unified Esplora 6-conf reconciler: any tree/ark virtual tx that hosts VTXOs
+          (terminals included; commitment/checkpoint skipped) with ≥ UNILATERAL_EXIT_HOST_TX_CONFIRMATIONS
+          stamps is_unrolled on every vout of that txid and advances VTXO exit records. Survival
+          across snapshot replace is those unrolled+ records (ARK-EXIT-12). Leftover
+          `unilateral_exit_watches` JSON is ignored, not imported. Esplora reconcile
+          call sites: Arkade load including autonomous, operator sync, proceed, progress,
+          list_unilateral_exits_in_progress, complete. No dedicated 6-conf poll actor.
+          Materials heal: probe host txs of tagged VTXOs in materials even if the observation write
+          was missed.
+      - id: ARK-EXIT-30
+        description: >-
+          Abort, en-passant, and leftover-start (shipped). Abort is not a VTXO phase. Job started
+          with nothing registered: tagged reverts to idle (unlock). Host registered/relayed/any confs
+          (observation still present): abort does not change VTXO phase. After ARK-EXIT-28 never_seen
+          deletes the observation and rewinds to tagged, abort is again the nothing-registered case
+          (unlock). Tagged with a published ancestor: stay tagged.
+          Intermediate host already 6-conf with unpublished leaves: intermediates walk to
+          complete_ready; leaves stay tagged; leaves remain startable to resume unroll; unrolled
+          hosts stay excluded from Start (ARK-EXIT-01). En-passant: tag every
+          exit_relevant_vtxo_outpoints_for_plan outpoint at job start; register host tx later on the
+          proceed step that publishes it; completing an en-passant VTXO does not stop the job for
+          remaining tagged leaves. funding_lost is terminal (not startable, not completable) and
+          is persisted (ARK-EXIT-33).
+      - id: ARK-EXIT-31
+        description: >-
+          Complete gate is complete_ready: complete_unilateral_exit must not require
+          membership in unilateral_exit_in_progress_outpoints (no VtxoNotInUnilateralExit). Gate is
+          validate_snapshot_completion_ready (is_unrolled && !is_spent) plus record phase must not
+          be funding_lost plus Esplora can_be_claimed_unilaterally_by_owner. Complete dialog still
+          lists pipeline VTXOs (ARK-EXIT-02) with can_complete; waiting-for-timelock rows remain
+          listed but not submittable. Aborted or failed jobs' unrolled VTXOs remain claimable
+          without a frontend job. funding_lost coins are not listed and not completable (ARK-EXIT-33).
+      - id: ARK-EXIT-32
+        description: >-
+          Job vs VTXO XState split (shipped). The job actor is a session-scoped host plus
+          broadcaster: START_*, PROCEED_*, ABORT_ORCHESTRATION, automation, viability terminate
+          (job bookmark only, never the child set); waitingConfirm is 1-conf step advance only.
+          Branch-complete always continues to idle with an empty bookmark; leftover VTXO children
+          stay so a second START_* on other startable leaves can run while earlier coins wait to
+          be claimed. CLEAR_JOB resets a broadcast bookmark only — not an on-chain Complete spend.
+          VTXO children are a hydrated view keyed by (txid, vout); spawn from persisted records
+          not only the job bookmark.           Frozen child events: HYDRATE, HOST_REGISTERED, HOST_RELAYED,
+          HOST_CONFIRMED, UNROLLED, COMPLETE_READY, EXITED, FUNDING_LOST, UNTAG.
+          Production advances via HYDRATE (sets state from the WASM record; phase jumps allowed);
+          it does not replay intermediates. ARKADE_SESSION_RESET (lock / session teardown) stops all
+          actors; next unlock hydrates from WASM. No per-VTXO after delay until 6 confirmations;
+          confirmation depth advances in WASM on load, operator sync, proceed, progress,
+          list-in-progress, and complete. Complete dialog, control-page node detail, and the VTXO viewer card last line
+          subscribe to child snapshots for waiting-for-host-transaction-broadcast vs
+          waiting-for-first-confirmation vs waiting-for-6-confirmations vs waiting-for-timelock vs
+          ready; they never infer can-complete from job state. Complete dialog falls back to the
+          persisted record phase when no child is spawned yet.
+      - id: ARK-EXIT-33
+        description: >-
+          Persist funding_lost on VTXO exit records (envelope v11). Viability/reconcile scans
+          pipeline records including aborted leftovers on Esplora reconcile call sites, not only the active job
+          leaf set. ASP seizure of an exit branch stamps every still-pre-unroll record on that
+          plan funding_lost; a sibling already unrolled or complete_ready stays claimable. If
+          exit materials cannot describe the seized branch, fail with
+          autonomous_exit_materials_missing (ARK-EXIT-08) instead of inventing a one-txid
+          branch. Job machine terminate guards are unchanged (aspSweptTargets / branchFundingLost
+          still terminate immediately). Autonomous mode does not stamp funding_lost from snapshot
+          asp_swept (ARK-AUTO-05); Esplora branch_funding_lost still stamps, including a foreign
+          spend of the first unroll step's prevout(s) (commitment funding). That prevout probe
+          repeats on each job viability check and Esplora reconcile while pre-unroll records exist
+          (reorgs); it does not stop after N confirmations.
+    autonomous_mode:
+      - id: ARK-AUTO-01
+        description: BitboardArkPersistence.autonomous_mode is persisted per ASP connection; missing or legacy blobs default false; opt-in is explicit via the Management switch (with confirm) or operator-trust review
+      - id: ARK-AUTO-02
+        description: Entering or leaving autonomous mode, including trust-review enter, flushes sdkPersistenceJson with the current autonomous_mode flag
+      - id: ARK-AUTO-03
+        description: Session open with autonomous_mode true uses cached_operator_info via connect_with_cached_info (no getInfo, no discover_keys); Esplora on-chain sync and optional delegator info stay allowed
+      - id: ARK-AUTO-04
+        description: Session open with autonomous_mode true but missing cached_operator_info fails with autonomous_operator_info_missing and must not fall through to live operator connect
+      - id: ARK-AUTO-05
+        description: While autonomous mode is active, unilateral-exit job viability ignores snapshot asp_swept_targets and does not stamp funding_lost from ASP sweep; branch_funding_lost from Esplora still stamps funding_lost and still terminates the job, including a foreign spend of the first unroll step's prevout(s)
+    batch_intent:
+      - id: ARK-BATCH-01
+        description: After RegisterIntent returns an intent_id, the wallet persists a pending batch-intent record with lifecycle_phase processing and flushes sdkPersistenceJson before treating the join as in-flight SSE or failed
+      - id: ARK-BATCH-02
+        description: Post-register batch timeout, abort, and duplicated input for those outpoints, stamp lifecycle_phase timed_out and return waiting_for_operator (not a hard error); do not call RegisterIntent again for overlapping outpoints while pending
+      - id: ARK-BATCH-03
+        description: One banner per open intent (kind, amount, lifecycle_phase); collaborative_exit also shows destination_address when present; Board, Recover, Renew, collaborative exit, and migrate buttons are disabled only when that action would register overlapping outpoints
+      - id: ARK-BATCH-04
+        description: While pending, poll the registered outputs; when they are spent, clear the record, operator-sync, and treat boarding/settle as finalized with a kind-specific success toast
+      - id: ARK-BATCH-05
+        description: Pending boarding intent whose UTXO leaves the cooperative window is cleared into the existing unilateral-exit-only boarding status (no second settle, no success toast)
+      - id: ARK-BATCH-06
+        description: Cancel spent-checks first; if outputs are spent, drop the local record without deleteIntent; if still open, deleteIntent then drop the record and do not re-register; Cancel is not offered for boarding-only intents (ARK-UP-01); Cancel of collaborative_exit also clears collaborative_exit_in_progress so spendable is restored while those VTXOs remain
+      - id: ARK-BATCH-07
+        description: Retry spent-checks first; if still open, deleteIntent then join_next_batch again for that kind and those outpoints with SSE (boarding-only skips deleteIntent per ARK-UP-01 and Retry is offered only in timed_out); if spent or the boarding cooperative window has closed, finalize locally and do not delete or re-register
+      - id: ARK-BATCH-08
+        description: Pending batch intents are a keyed collection; uniqueness is the sorted onchain plus VTXO outpoint set; disjoint intents coexist; upsert replaces only overlapping records
+      - id: ARK-BATCH-09
+        description: Intent UI has four typed lifecycle phases — submission (button spinner until intent_id), processing (banner spinner, persist processing), timed_out (banner without spinner), succeeded (banner gone, kind-specific success toast)
+      - id: ARK-BATCH-10
+        description: Processing banner allows Cancel and Retry for VTXO kinds (recover, renew, collaborative_exit, migrate); boarding processing banner has neither Cancel nor Retry
+      - id: ARK-BATCH-11
+        description: Timed-out banner allows Cancel and Retry for VTXO kinds and Retry for boarding; boarding Cancel remains unavailable
+      - id: ARK-BATCH-12
+        description: Submit-action spinner is Phase 1 only; after processing is persisted the originating button returns to idle (disabled if overlapping outpoints); collaborative-exit dialog closes when processing starts
+      - id: ARK-BATCH-13
+        description: Kind-specific success toasts — boarding settlement completed, recoverable VTXOs settled, VTXOs renewed, collaborative exit completed, signer migration batch completed; Cancel and boarding-window expiry do not toast success
+      - id: ARK-BATCH-14
+        description: On hydrate, a persisted processing record with no live join in this session is promoted to timed_out and flushed
+      - id: ARK-BATCH-15
+        description: collaborative_exit_in_progress_sats is the sum of open CollaborativeExit pending-intent amounts plus a retain-until-spendable-drops deduction only after join Completed; Cancel, abort, and legacy waiting deductions do not keep that line while VTXOs are still spendable
     operator_sync:
       - id: ARK-SYNC-01
         description: When discover_keys fails during operator sync but list_vtxos succeeds, sync lifecycle records a warningMessage and dashboard/management show a non-blocking sync warning banner
       - id: ARK-SYNC-02
         description: A later successful sync without key-discovery failure clears warningMessage
+      - id: ARK-SYNC-03
+        description: After operator sync, reconcile of unrolled+ VTXO exit records runs targeted lookups; non-blocking exitingVtxoWarning when indexer lag or ASP mismatch; never clear exiting state on full-list absence alone (ARK-EXIT-12)
+    operator_trust:
+      - id: ARK-TRUST-01
+        description: When operator digest differs from accepted cached_operator_info, sync does not persist offchain snapshot, VTXO exit records survival reconcile, materials prefetch, or accepted operator cache
+      - id: ARK-TRUST-02
+        description: Pending getInfo is persisted as pending_operator_info for offline diff review while operator_trust_pending
+      - id: ARK-TRUST-03
+        description: Blocking modal with exactly two choices; Review changes safely in autonomous mode is default focus
+      - id: ARK-TRUST-04
+        description: While operator_trust_pending, exit_autonomous_mode is blocked until accept_pending_operator_config
+      - id: ARK-TRUST-05
+        description: accept_pending_operator_config refreshes live getInfo, promotes pending only when pending.digest matches live digest, otherwise re-stages pending and keeps operator_trust_pending for modal review
+      - id: ARK-TRUST-06
+        description: Session open preserves accepted cached_operator_info while operator_trust_pending (no live getInfo overwrite); when persisted autonomous_mode is also true, restore the review banner (reviewingInAutonomous) instead of the blocking modal
+    vtxo_viewer:
+      - id: ARK-VTX-01
+        description: VTXO viewer page lists VTXO cards when session open and Arkade active
+      - id: ARK-VTX-02
+        description: >-
+          Each card shows id, amount, classification, true-only flag chips (including unilateral
+          exit prepared with door-open icon when cached exit materials exist), created and expiry
+          timestamps, and a last line Unilateral exit phase: {copy} from the VTXO child snapshot
+          when the coin is not idle (ARK-EXIT-32). Idle VTXOs omit that line.
+      - id: ARK-ARK-MGMT-01
+        description: Arkade management panel shows next operator batch window when getInfo scheduledSession is available, or an explicit not-published message when it is null
+      - id: ARK-VTX-03
+        description: Hide finalized defaults on; toggle shows finalized cards
+      - id: ARK-VTX-04
+        description: Search filters by partial id or sats amount
+      - id: ARK-VTX-05
+        description: Classification chips filter grid; counts reflect full list
+      - id: ARK-VTX-06
+        description: Pagination at 20 cards when filtered count exceeds page size
+      - id: ARK-VTX-07
+        description: Management panel links to VTXO viewer
   pages:
     - ArkadeManagement:
       - description: "Arkade status on Management page"
@@ -98,13 +356,18 @@ feature:
         - Arkade receive address with copy
         - delegator fee from getDelegateInfo when reachable
         - expiring VTXO count when session open
+        - operator batch round schedule when operator publishes scheduledSession
         - collaborative exit (on-chain destination, optional partial amount) with operator fee estimate from getInfo().fees
-        - Start unilateral exit (select VTXO, unroll) with bumper fee estimate; separate Complete unilateral exit for in-progress VTXOs after timelock
+        - Start unilateral exit (select VTXO, unroll) with bumper fee estimate; a second unroll may start on other startable leaves after branch-complete while leftover unrolled coins wait to be claimed (ARK-EXIT-32)
+        - separate Complete unilateral exit for in-progress VTXOs; per-row copy distinguishes waiting for host transaction broadcast, waiting for first confirmation, waiting for 6 confirmations, waiting for timelock, and ready to complete from VTXO child phase (not !canComplete); leftover unrolled or aborted rows claimable without an active job (ARK-EXIT-31)
         - batch complete multiple ready in-progress VTXOs in one on-chain transaction with dynamic completion fee estimate
-        - pending_recovery_sats excludes VTXOs already in unilateral exit (no double-count with unilateral_exit_in_progress_sats)
+        - pending_recovery_due_to_expired_signer_sats excludes VTXOs already in unilateral exit (no double-count with unilateral_exit_in_progress_sats)
         - signer migration banner when operator signing key rotated (migratable, due now, or expired regimes)
         - pending recovery banner when funds are locked past cooperative migration cutoff
         - recoverable VTXO banner when operator reports swept/expired/sub-dust VTXOs with Recover now action
+        - autonomous mode switch (persisted per ASP; confirm before enable)
+        - one pending batch-intent banner per open intent (processing spinner or timed-out Hourglass; Cancel/Retry per ARK-BATCH-10/11; collaborative-exit banner shows truncated on-chain destination when present); Recover now, Renew, collaborative exit, and migrate disabled only when that action would register overlapping outpoints
+        - View VTXOs link to /wallet/arkade/vtxos
       - requirements:
         - Shown only when isArkadeEnabled and current network supports Arkade
         - Collaborative exit and fee estimates via bitboard-ark WASM in arkade.worker
@@ -135,6 +398,38 @@ feature:
         - boarding address from SDK
         - amount to send from on-chain wallet
         - steps for confirm on-chain then onboard via Ramps
+        - one pending batch-intent banner per open intent (processing spinner or timed-out Hourglass; Cancel/Retry per ARK-BATCH-10/11; collaborative-exit banner shows truncated on-chain destination when present)
+        - Settle boarding UTXO shows a circular spinner only until intent_id; then disabled only while a pending intent covers overlapping boarding outpoints
+      - requirements:
+        - Contracts ARK-BATCH-01 through ARK-BATCH-14 apply to boarding settle
+    - ArkadeVtxoViewer:
+      - path: /wallet/arkade/vtxos
+      - file: frontend/src/routes/wallet/arkade/vtxos.tsx
+      - visible_elements:
+        - VTXO card grid (id, amount, classification, flag chips, created/expiry, last-line unilateral exit phase copy when not idle)
+        - search by id or sats amount
+        - classification filter chips with counts
+        - sort by amount, expiry, or created
+        - hide finalized toggle (default on)
+        - pagination at 20 cards per page
+        - fromSnapshotSyncedAt subtitle when list served from local snapshot
+      - requirements:
+        - Contracts ARK-VTX-01 through ARK-VTX-07
+        - Shown only when isArkadeEnabled and current network supports Arkade
+    - UnilateralExitControl:
+      - description: "Unilateral exit control page"
+      - file: frontend/src/pages/wallet/UnilateralExitControlPage.tsx
+      - path: /wallet/arkade/unilateral-exit
+      - visible_elements:
+        - responsive VTXO tree graph (React Flow + d3-dag)
+        - node detail per-outpoint VTXO exit phase from child actors (ARK-EXIT-32)
+        - node detail per-outpoint remaining tree expiry copy (ARK-EXIT-35)
+        - host tx graph node dark-red fill when any hosted VTXO is expired; dark-yellow fill when any expires in less than 3 days (expired wins; ARK-EXIT-35)
+        - unspent host VTXO overlay (Coins / HandCoins after unroll)
+        - Start / Proceed / abort / Complete controls as specified by ARK-EXIT-13 and related IDs
+      - requirements:
+        - Contracts ARK-EXIT-13 and ARK-EXIT-35
+        - Shown only when isArkadeEnabled and current network supports Arkade
     - DashboardArkadeBlock:
       - description: "Separate Arkade balance on dashboard"
       - file: frontend/src/components/wallet/ArkadeDashboardBalance.tsx
@@ -142,3 +437,4 @@ feature:
       - visible_elements:
         - Arkade balance label
         - confirmed and optional pending balance display
+        - one pending batch-intent banner per open intent (processing spinner or timed-out Hourglass; Cancel/Retry per ARK-BATCH-10/11; collaborative-exit banner shows truncated on-chain destination when present)

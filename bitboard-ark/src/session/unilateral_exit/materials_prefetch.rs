@@ -1,0 +1,75 @@
+use std::collections::HashSet;
+
+use ark_core::VtxoList;
+
+use crate::persistence::OffchainVtxoSnapshot;
+use crate::unilateral_exit_materials::{
+    materials_record_from_prefetch, pending_unilateral_exit_host_txids,
+    prune_unilateral_exit_materials_map, snapshot_materials_for_host_tx,
+    store_materials_for_host_tx,
+};
+
+use crate::session::ArkSession;
+use crate::session::mappers::current_unix_timestamp;
+
+pub(crate) async fn prefetch_unilateral_exit_materials_for_snapshot(
+    session: &ArkSession,
+    snapshot: &mut OffchainVtxoSnapshot,
+    vtxo_list: &VtxoList,
+) -> Option<String> {
+    let mut warnings = Vec::new();
+    let synced_at = current_unix_timestamp();
+    let mut prefetched_host_txids = HashSet::new();
+
+    for virtual_tx_outpoint in vtxo_list.could_exit_unilaterally() {
+        let txid = virtual_tx_outpoint.outpoint.txid.to_string();
+        if snapshot_materials_for_host_tx(snapshot, &txid).is_some()
+            || !prefetched_host_txids.insert(txid.clone())
+        {
+            continue;
+        }
+
+        match session
+            .client
+            .prefetch_unilateral_exit_materials(virtual_tx_outpoint.outpoint)
+            .await
+        {
+            Ok((chains, psbts)) => {
+                match materials_record_from_prefetch(synced_at, &chains, &psbts) {
+                    Ok(materials) => {
+                        store_materials_for_host_tx(snapshot, &txid, materials);
+                    }
+                    Err(error) => warnings.push(format!(
+                        "Could not store exit materials for host tx {txid}: {error}"
+                    )),
+                }
+            }
+            Err(error) => warnings.push(format!(
+                "Could not prefetch exit materials for host tx {txid}: {error}"
+            )),
+        }
+    }
+
+    let mut preserve_host_txids =
+        pending_unilateral_exit_host_txids(&session.wallet_db.pending_exit_deductions());
+    for (key, record) in session.wallet_db.vtxo_exit_records() {
+        preserve_host_txids.insert(record.host_txid);
+        if let Some((txid, _)) =
+            crate::session::unilateral_exit::vtxo_exit::parse_vtxo_exit_record_key(&key)
+        {
+            preserve_host_txids.insert(txid);
+        }
+    }
+    prune_unilateral_exit_materials_map(snapshot, &preserve_host_txids);
+    if warnings.is_empty() {
+        None
+    } else {
+        Some(warnings.join("\n"))
+    }
+}
+
+pub(crate) fn autonomous_exit_materials_status(
+    snapshot: Option<&OffchainVtxoSnapshot>,
+) -> (u32, u32, u32) {
+    crate::unilateral_exit_materials::materials_status_from_snapshot(snapshot)
+}

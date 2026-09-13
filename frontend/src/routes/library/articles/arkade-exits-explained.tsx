@@ -45,6 +45,30 @@ export const article: LibraryArticle = {
           <strong>When to use it:</strong> The operator is down, cooperative exit is unavailable, or
           you need to recover one specific VTXO.
         </p>
+        <p>
+          Unilateral exit carries real risks—fund seizure if you stall while the server is online,
+          and high fees when many users exit at once. Read{' '}
+          <ArticleLink slug="risks-of-arkade-unilateral-exits">
+            Risks of Arkade unilateral exit
+          </ArticleLink>{' '}
+          before starting.
+        </p>
+      </ArticleSection>
+
+      <ArticleSection title="Autonomous mode">
+        <p>
+          <strong>Autonomous mode</strong> (Management → Arkade panel) is an explicit, persistent
+          trust switch for this operator. Use it when the ASP is down <em>or</em> when you do not
+          want to contact it: the wallet reuses cached operator parameters and per-VTXO exit
+          materials from your last successful sync, and will not call the operator again until you
+          turn the switch off—including after unlock or reload.
+        </p>
+        <p>
+          While autonomous mode is on, only unilateral exit stays available—collaborative exit,
+          sends, renewals, recoverable settlement, and signer migration are blocked. Esplora is still
+          required for broadcast, UTXO lookup, and timelock checks. Sync with the operator while you
+          still trust it so exit materials are prefetched before you need autonomous mode.
+        </p>
       </ArticleSection>
 
       <ArticleSection title="Bumper wallet">
@@ -57,8 +81,12 @@ export const article: LibraryArticle = {
       <ArticleSection title="Related topics">
         <p>
           VTXOs must be renewed while offchain—see{' '}
-          <ArticleLink slug="arkade-vtxo-expiry">VTXO expiry and renewal</ArticleLink>. For Arkade
-          basics, read{' '}
+          <ArticleLink slug="arkade-vtxo-expiry">VTXO expiry and renewal</ArticleLink>. For unilateral
+          exit risks see{' '}
+          <ArticleLink slug="risks-of-arkade-unilateral-exits">
+            Risks of Arkade unilateral exit
+          </ArticleLink>
+          . For Arkade basics, read{' '}
           <ArticleLink slug="arkade-bitboard-wallet">Arkade in Bitboard Wallet</ArticleLink> and{' '}
           <ArticleLink slug="what-is-a-vtxo">What is a VTXO?</ArticleLink>.
         </p>

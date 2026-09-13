@@ -4,10 +4,10 @@
 //! `ARKADE_REGTEST_RUN=1 cargo test -p bitboard-ark --test signer_migration_session_regtest -- --ignored --nocapture --test-threads=1`
 //!
 //! Full migration with boarded funds (pick one):
-//! - **Native:** `cooperative_signer_migration_clears_pending_recovery_with_native_boarding`
+//! - **Native:** `cooperative_signer_migration_clears_pending_recovery_due_to_expired_signer_with_native_boarding`
 //!   — boards via Rust/tonic (`prepare_boarded_session`). Needs a healthy regtest stack
 //!   (`ARKD_VTXO_TREE_EXPIRY=200 npm run regtest:clean-start` from `frontend/` if boarding fails).
-//! - **Fixture:** `cooperative_signer_migration_clears_pending_recovery_with_boarded_fixture`
+//! - **Fixture:** `cooperative_signer_migration_clears_pending_recovery_due_to_expired_signer_with_boarded_fixture`
 //!   — loads E2E-exported persistence (`ARKADE_REGTEST_EXPORT_BOARDED_FIXTURE`); useful when you
 //!   already have `frontend/test-results/arkade-boarded-fixture.json` and want to skip boarding.
 
@@ -188,12 +188,13 @@ async fn cooperative_signer_migration_stamps_current_signer_after_complete() {
         .balance()
         .await
         .expect("balance after migrate");
-    assert_eq!(balance_after.pending_recovery_sats, 0);
+    assert_eq!(balance_after.pending_recovery_due_to_expired_signer_sats, 0);
 }
 
 #[tokio::test]
-#[ignore = "requires arkade-regtest stack (clean start recommended): ARKADE_REGTEST_RUN=1 cargo test cooperative_signer_migration_clears_pending_recovery_with_native_boarding --test signer_migration_session_regtest -- --ignored --test-threads=1"]
-async fn cooperative_signer_migration_clears_pending_recovery_with_native_boarding() {
+#[ignore = "requires arkade-regtest stack (clean start recommended): ARKADE_REGTEST_RUN=1 cargo test cooperative_signer_migration_clears_pending_recovery_due_to_expired_signer_with_native_boarding --test signer_migration_session_regtest -- --ignored --test-threads=1"]
+async fn cooperative_signer_migration_clears_pending_recovery_due_to_expired_signer_with_native_boarding()
+ {
     if !regtest_enabled() {
         return;
     }
@@ -241,12 +242,13 @@ async fn cooperative_signer_migration_clears_pending_recovery_with_native_boardi
         .await
         .expect("post-migrate sync");
     let balance_after = session.balance().await.expect("balance after migrate");
-    assert_eq!(balance_after.pending_recovery_sats, 0);
+    assert_eq!(balance_after.pending_recovery_due_to_expired_signer_sats, 0);
 }
 
 #[tokio::test]
-#[ignore = "requires boarded fixture from E2E: ARKADE_REGTEST_BOARDED_FIXTURE=/path/to/fixture.json ARKADE_REGTEST_RUN=1 cargo test cooperative_signer_migration_clears_pending_recovery -- --ignored"]
-async fn cooperative_signer_migration_clears_pending_recovery_with_boarded_fixture() {
+#[ignore = "requires boarded fixture from E2E: ARKADE_REGTEST_BOARDED_FIXTURE=/path/to/fixture.json ARKADE_REGTEST_RUN=1 cargo test cooperative_signer_migration_clears_pending_recovery_due_to_expired_signer -- --ignored"]
+async fn cooperative_signer_migration_clears_pending_recovery_due_to_expired_signer_with_boarded_fixture()
+ {
     if !regtest_enabled() {
         return;
     }
@@ -254,7 +256,7 @@ async fn cooperative_signer_migration_clears_pending_recovery_with_boarded_fixtu
         Ok(path) if !path.is_empty() => resolve_regtest_fixture_path(&path),
         _ => {
             eprintln!(
-                "SKIP cooperative_signer_migration_clears_pending_recovery_with_boarded_fixture: \
+                "SKIP cooperative_signer_migration_clears_pending_recovery_due_to_expired_signer_with_boarded_fixture: \
                  set ARKADE_REGTEST_BOARDED_FIXTURE to a JSON file exported after WASM boarding \
                  (E2E prepareSignerMigrationScenario with ARKADE_REGTEST_EXPORT_BOARDED_FIXTURE)"
             );
@@ -305,7 +307,7 @@ async fn cooperative_signer_migration_clears_pending_recovery_with_boarded_fixtu
         .balance()
         .await
         .expect("balance after migrate");
-    assert_eq!(balance_after.pending_recovery_sats, 0);
+    assert_eq!(balance_after.pending_recovery_due_to_expired_signer_sats, 0);
 }
 
 #[tokio::test]

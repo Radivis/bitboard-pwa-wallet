@@ -30,7 +30,7 @@ function emptyPayloadJson(): string {
   return JSON.stringify({
     descriptorWallets: [],
     lightningNwcConnections: [],
-    arkadeOperatorConnections: [
+    arkadeAccounts: [
       {
         id: CONNECTION_ID,
         label: 'signet',
@@ -40,7 +40,7 @@ function emptyPayloadJson(): string {
         createdAt: '2020-01-01T00:00:00.000Z',
       },
     ],
-    activeArkadeConnectionIdByNetwork: { signet: CONNECTION_ID },
+    activeArkadeAccountIdByNetwork: { signet: CONNECTION_ID },
   })
 }
 
@@ -86,7 +86,7 @@ describe('arkade receive persistence (encrypted worker path)', () => {
       { secretsProxy, encryptedHost },
       {
         walletId: WALLET_ID,
-        connectionId: CONNECTION_ID,
+        arkadeAccountId: CONNECTION_ID,
         sdkPersistenceJson: persistenceJsonWithReceiveIndex(2),
       },
     )
@@ -94,13 +94,13 @@ describe('arkade receive persistence (encrypted worker path)', () => {
       { secretsProxy, encryptedHost },
       {
         walletId: WALLET_ID,
-        connectionId: CONNECTION_ID,
+        arkadeAccountId: CONNECTION_ID,
         sdkPersistenceJson: persistenceJsonWithReceiveIndex(2),
       },
     )
 
     const payload = parseWalletPayloadJson(storedPayloadJson)
-    const sdkJson = payload.arkadeOperatorConnections[0]?.sdkPersistenceJson
+    const sdkJson = payload.arkadeAccounts[0]?.sdkPersistenceJson
 
     expect(readOffchainNextDerivationIndex(sdkJson)).toBe(2)
     expect(decryptDataMock).not.toHaveBeenCalled()
@@ -111,7 +111,7 @@ describe('arkade receive persistence (encrypted worker path)', () => {
       { secretsProxy, encryptedHost },
       {
         walletId: WALLET_ID,
-        connectionId: CONNECTION_ID,
+        arkadeAccountId: CONNECTION_ID,
         sdkPersistenceJson: persistenceJsonWithReceiveIndex(2),
       },
     )
@@ -120,14 +120,14 @@ describe('arkade receive persistence (encrypted worker path)', () => {
       { secretsProxy, encryptedHost },
       {
         walletId: WALLET_ID,
-        connectionId: CONNECTION_ID,
+        arkadeAccountId: CONNECTION_ID,
         sdkPersistenceJson: persistenceJsonWithReceiveIndex(1),
       },
     )
 
     const payload = parseWalletPayloadJson(storedPayloadJson)
     expect(
-      readOffchainNextDerivationIndex(payload.arkadeOperatorConnections[0]?.sdkPersistenceJson),
+      readOffchainNextDerivationIndex(payload.arkadeAccounts[0]?.sdkPersistenceJson),
     ).toBe(2)
   })
 })

@@ -18,7 +18,10 @@ import {
 } from '@/lib/wallet/lifecycle/lifecycle-in-flight-tracker'
 import { shouldSkipRailLifecycleResetForLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-phase'
 import { withWalletWriterLock } from '@/lib/shared/opfs-writer-lock'
-import { ARKADE_BACKGROUND_OPERATOR_SYNC_DEBOUNCE_MS } from '@/lib/arkade/arkade-sync-timings'
+import {
+  ARKADE_BACKGROUND_OPERATOR_SYNC_DEBOUNCE_MS,
+  ARKADE_BACKGROUND_OPERATOR_SYNC_MIN_INTERVAL_MS,
+} from '@/lib/arkade/arkade-sync-timings'
 import type {
   ArkadePostLoadSyncParams,
   ArkadeSyncLifecycleSnapshot,
@@ -26,7 +29,15 @@ import type {
   ArkadeSyncThenSaveParams,
 } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-types'
 import type { ArkadeSaveParams } from '@/lib/wallet/lifecycle/arkade-save-lifecycle-types'
-import type { ArkadeOperatorSyncResult, ArkadeSignerMigrationResult } from '@/workers/arkade-api'
+import type {
+  ArkadeOperatorSyncResult,
+  ArkadePendingBatchIntent,
+  ArkadeSignerMigrationResult,
+} from '@/workers/arkade-api'
+import {
+  arkadeOperatorConfigDiffQueryKey,
+  arkadeOperatorTrustStatusQueryKey,
+} from '@/lib/arkade/arkade-query-keys'
 import {
   LIFECYCLE_SYNC_ERROR_FALLBACK,
   userFacingLifecycleErrorMessage,
@@ -48,6 +59,8 @@ let snapshot: ArkadeSyncLifecycleSnapshot = {
 }
 
 let dashboardPollTimer: ReturnType<typeof setTimeout> | null = null
+let dashboardPollQueuedWhileSyncing = false
+let lastDashboardPollStartedAtMs = 0
 
 const listeners = new Set<(next: ArkadeSyncLifecycleSnapshot) => void>()
 const inFlightSyncTracker = createInFlightLifecycleTracker()
@@ -58,18 +71,18 @@ const signerMigrationResultByInFlightPromise = new WeakMap<
 >()
 
 function syncKey(
-  params: Pick<ArkadeSyncParams, 'walletId' | 'networkMode' | 'connectionId' | 'syncKind'>,
+  params: Pick<ArkadeSyncParams, 'walletId' | 'networkMode' | 'arkadeAccountId' | 'syncKind'>,
 ): string {
   return `${arkadeRailScopeKey(params)}:${params.syncKind}`
 }
 
 function railScopeFromParams(
-  params: Pick<ArkadeSyncParams, 'walletId' | 'networkMode' | 'connectionId'>,
+  params: Pick<ArkadeSyncParams, 'walletId' | 'networkMode' | 'arkadeAccountId'>,
 ): ArkadeRailScope {
   return {
     walletId: params.walletId,
     networkMode: params.networkMode,
-    connectionId: params.connectionId,
+    arkadeAccountId: params.arkadeAccountId,
   }
 }
 
@@ -104,13 +117,28 @@ function toSaveParams(params: ArkadeSyncParams): ArkadeSaveParams {
   return {
     walletId: params.walletId,
     networkMode: params.networkMode,
-    connectionId: params.connectionId,
+    arkadeAccountId: params.arkadeAccountId,
   }
 }
 
-async function runArkadeSignerMigrationBody(): Promise<ArkadeSignerMigrationResult> {
+async function runArkadeSignerMigrationBody(
+  onIntentRegistered?: (intent: ArkadePendingBatchIntent) => void,
+): Promise<ArkadeSignerMigrationResult> {
   const worker = getArkadeWorker()
-  return worker.migrateDeprecatedSignerVtxos()
+  return worker.migrateDeprecatedSignerVtxos(onIntentRegistered)
+}
+
+function mergeArkadeSyncWarningMessages(
+  syncResult: ArkadeOperatorSyncResult,
+): string | null {
+  const parts = [
+    syncResult.keyDiscoveryWarning,
+    syncResult.exitingVtxoWarning,
+  ].filter((part): part is string => part != null && part !== '')
+  if (parts.length === 0) {
+    return null
+  }
+  return parts.join('\n')
 }
 
 function applySuccessfulArkadeSyncSnapshot(
@@ -121,16 +149,38 @@ function applySuccessfulArkadeSyncSnapshot(
     syncPhase: 'not-syncing',
     railScope: scope,
     errorMessage: null,
-    warningMessage: syncResult.keyDiscoveryWarning ?? null,
+    warningMessage: mergeArkadeSyncWarningMessages(syncResult),
+  })
+}
+
+async function invalidateOperatorTrustQueriesForScope(scope: ArkadeRailScope): Promise<void> {
+  if (!isArkadeSupportedNetworkMode(scope.networkMode)) {
+    return
+  }
+  const { appQueryClient } = await import('@/lib/shared/app-query-client')
+  await appQueryClient.invalidateQueries({
+    queryKey: arkadeOperatorTrustStatusQueryKey(
+      scope.walletId,
+      scope.networkMode,
+      scope.arkadeAccountId,
+    ),
+  })
+  await appQueryClient.invalidateQueries({
+    queryKey: arkadeOperatorConfigDiffQueryKey(
+      scope.walletId,
+      scope.networkMode,
+      scope.arkadeAccountId,
+    ),
   })
 }
 
 async function runArkadeOperatorSyncBody(
-  connectionId: string,
+  scope: ArkadeRailScope,
 ): Promise<ArkadeOperatorSyncResult> {
   const worker = getArkadeWorker()
   const syncResult = await worker.syncWithOperator()
-  await refreshArkadeStoreFromLoadedWasm(connectionId)
+  await refreshArkadeStoreFromLoadedWasm(scope.arkadeAccountId)
+  await invalidateOperatorTrustQueriesForScope(scope)
   return syncResult
 }
 
@@ -147,20 +197,23 @@ export function subscribeArkadeSyncLifecycle(
   }
 }
 
-export async function awaitArkadeSyncQuiescence(): Promise<void> {
+function clearDashboardPollSchedule(): void {
   if (dashboardPollTimer != null) {
     clearTimeout(dashboardPollTimer)
     dashboardPollTimer = null
   }
+  dashboardPollQueuedWhileSyncing = false
+}
+
+export async function awaitArkadeSyncQuiescence(): Promise<void> {
+  clearDashboardPollSchedule()
   await inFlightSyncTracker.awaitQuiescence()
 }
 
 /** Clears sync lifecycle after session teardown (see {@link closeArkadeSession}). */
 export function forceResetArkadeSyncLifecycleForTeardown(): void {
-  if (dashboardPollTimer != null) {
-    clearTimeout(dashboardPollTimer)
-    dashboardPollTimer = null
-  }
+  clearDashboardPollSchedule()
+  lastDashboardPollStartedAtMs = 0
   inFlightSyncTracker.clearCurrent()
   setSnapshot({
     syncPhase: 'not-configured',
@@ -192,10 +245,8 @@ export function syncArkadeSyncLifecycleWithLockPhase(lockPhase: LockLifecyclePha
   ) {
     return
   }
-  if (dashboardPollTimer != null) {
-    clearTimeout(dashboardPollTimer)
-    dashboardPollTimer = null
-  }
+  clearDashboardPollSchedule()
+  lastDashboardPollStartedAtMs = 0
   setSnapshot({
     syncPhase: 'not-configured',
     railScope: null,
@@ -231,65 +282,71 @@ export async function orchestrateArkadeSyncThenSave(
   }
 
   const workPromise = inFlightSyncTracker.begin(key, async () => {
-    await withWalletWriterLock(async () => {
-      assertCanStartArkadeSync(params)
-      const scope = railScopeFromParams(params)
-      configureArkadeSyncForLoadedRail(scope)
+    try {
+      await withWalletWriterLock(async () => {
+        assertCanStartArkadeSync(params)
+        const scope = railScopeFromParams(params)
+        configureArkadeSyncForLoadedRail(scope)
 
-      setSnapshot({
-        syncPhase: 'syncing',
-        railScope: scope,
-        errorMessage: null,
-        warningMessage: null,
-      })
-
-      try {
-        if (params.syncKind === 'signerMigration') {
-          const migrationResult = await runArkadeSignerMigrationBody()
-          signerMigrationResultByInFlightPromise.set(workPromise, migrationResult)
-          if (migrationResult.migrationComplete) {
-            await orchestrateArkadeSave(toSaveParams(params))
-          }
-          try {
-            const syncResult = await runArkadeOperatorSyncBody(params.connectionId)
-            applySuccessfulArkadeSyncSnapshot(scope, syncResult)
-          } catch (syncError) {
-            setSnapshot({
-              syncPhase: 'sync-error',
-              railScope: scope,
-              errorMessage: userFacingLifecycleErrorMessage(
-                syncError,
-                LIFECYCLE_SYNC_ERROR_FALLBACK,
-              ),
-              warningMessage: null,
-            })
-            params.onSyncError?.(syncError)
-          }
-          return
-        }
-
-        const syncResult = await runArkadeOperatorSyncBody(params.connectionId)
-        applySuccessfulArkadeSyncSnapshot(scope, syncResult)
-        try {
-          await orchestrateArkadeSave(toSaveParams(params))
-        } catch (saveError) {
-          if (throwOnError) {
-            throw saveError
-          }
-        }
-      } catch (error) {
         setSnapshot({
-          syncPhase: 'sync-error',
+          syncPhase: 'syncing',
           railScope: scope,
-          errorMessage: userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK),
+          errorMessage: null,
           warningMessage: null,
         })
-        params.onSyncError?.(error)
-        if (throwOnError) {
-          throw error
+
+        try {
+          if (params.syncKind === 'signerMigration') {
+            const migrationResult = await runArkadeSignerMigrationBody(
+              params.onIntentRegistered,
+            )
+            signerMigrationResultByInFlightPromise.set(workPromise, migrationResult)
+            if (migrationResult.migrationComplete) {
+              await orchestrateArkadeSave(toSaveParams(params))
+            }
+            try {
+              const syncResult = await runArkadeOperatorSyncBody(scope)
+              applySuccessfulArkadeSyncSnapshot(scope, syncResult)
+            } catch (syncError) {
+              setSnapshot({
+                syncPhase: 'sync-error',
+                railScope: scope,
+                errorMessage: userFacingLifecycleErrorMessage(
+                  syncError,
+                  LIFECYCLE_SYNC_ERROR_FALLBACK,
+                ),
+                warningMessage: null,
+              })
+              params.onSyncError?.(syncError)
+            }
+            return
+          }
+
+          const syncResult = await runArkadeOperatorSyncBody(scope)
+          applySuccessfulArkadeSyncSnapshot(scope, syncResult)
+          try {
+            await orchestrateArkadeSave(toSaveParams(params))
+          } catch (saveError) {
+            if (throwOnError) {
+              throw saveError
+            }
+          }
+        } catch (error) {
+          setSnapshot({
+            syncPhase: 'sync-error',
+            railScope: scope,
+            errorMessage: userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK),
+            warningMessage: null,
+          })
+          params.onSyncError?.(error)
+          if (throwOnError) {
+            throw error
+          }
         }
-      }
-    })
+      })
+    } finally {
+      startQueuedDashboardPollAfterSync()
+    }
   })
 
   return awaitInFlightSyncWork(workPromise, params.syncKind)
@@ -302,7 +359,7 @@ export async function orchestrateArkadePostLoadSync(
   const work = orchestrateArkadeSyncThenSave({
     walletId: params.walletId,
     networkMode: params.networkMode,
-    connectionId: params.connectionId,
+    arkadeAccountId: params.arkadeAccountId,
     syncKind: 'postLoad',
     onSyncError: params.onSyncError,
     awaitCompletion,
@@ -315,9 +372,26 @@ export async function orchestrateArkadePostLoadSync(
   }
 }
 
+function dashboardPollDelayMs(): number {
+  if (lastDashboardPollStartedAtMs === 0) {
+    return ARKADE_BACKGROUND_OPERATOR_SYNC_DEBOUNCE_MS
+  }
+  const elapsedMs = Date.now() - lastDashboardPollStartedAtMs
+  const remainingMinIntervalMs = ARKADE_BACKGROUND_OPERATOR_SYNC_MIN_INTERVAL_MS - elapsedMs
+  return Math.max(ARKADE_BACKGROUND_OPERATOR_SYNC_DEBOUNCE_MS, remainingMinIntervalMs)
+}
+
+function startQueuedDashboardPollAfterSync(): void {
+  if (!dashboardPollQueuedWhileSyncing) {
+    return
+  }
+  dashboardPollQueuedWhileSyncing = false
+  scheduleBackgroundArkadeOperatorSync()
+}
+
 export function scheduleBackgroundArkadeOperatorSync(): void {
   if (dashboardPollTimer != null) {
-    clearTimeout(dashboardPollTimer)
+    return
   }
 
   dashboardPollTimer = setTimeout(() => {
@@ -327,26 +401,41 @@ export function scheduleBackgroundArkadeOperatorSync(): void {
     const networkMode = getCommittedNetworkMode()
     if (
       walletState.activeWalletId == null ||
-      walletState.activeArkadeConnectionId == null ||
+      walletState.activeArkadeAccountId == null ||
       !isArkadeSupportedNetworkMode(networkMode)
     ) {
       return
     }
 
     if (inFlightSyncTracker.getCurrent() != null) {
-      scheduleBackgroundArkadeOperatorSync()
+      dashboardPollQueuedWhileSyncing = true
       return
     }
 
-    void orchestrateArkadeSyncThenSave({
-      walletId: walletState.activeWalletId,
-      networkMode,
-      connectionId: walletState.activeArkadeConnectionId,
-      syncKind: 'dashboardPoll',
-      awaitCompletion: false,
-      throwOnError: false,
-    })
-  }, ARKADE_BACKGROUND_OPERATOR_SYNC_DEBOUNCE_MS)
+    const walletId = walletState.activeWalletId
+    const arkadeAccountId = walletState.activeArkadeAccountId
+    void (async () => {
+      try {
+        const status = await getArkadeWorker().getAutonomousModeStatus()
+        // Background dashboard poll talks to the ASP; skip it while autonomous mode is active.
+        if (status?.active) {
+          return
+        }
+      } catch {
+        // Status unknown: still attempt sync. WASM blocks operator RPC if autonomous.
+      }
+
+      lastDashboardPollStartedAtMs = Date.now()
+      void orchestrateArkadeSyncThenSave({
+        walletId,
+        networkMode,
+        arkadeAccountId,
+        syncKind: 'dashboardPoll',
+        awaitCompletion: false,
+        throwOnError: false,
+      })
+    })()
+  }, dashboardPollDelayMs())
 }
 
 /** @internal Test-only reset */
@@ -358,9 +447,7 @@ export function resetArkadeSyncLifecycleStateForTests(): void {
     warningMessage: null,
   }
   inFlightSyncTracker.clearCurrent()
-  if (dashboardPollTimer != null) {
-    clearTimeout(dashboardPollTimer)
-    dashboardPollTimer = null
-  }
+  clearDashboardPollSchedule()
+  lastDashboardPollStartedAtMs = 0
   listeners.clear()
 }

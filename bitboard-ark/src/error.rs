@@ -16,10 +16,17 @@ pub const CODE_SNAPSHOT: &str = "snapshot";
 pub const CODE_PERSISTENCE: &str = "persistence";
 pub const CODE_WALLET: &str = "wallet";
 pub const CODE_CLIENT: &str = "client";
-pub const CODE_OPERATOR_INDEXER_CATCHING_UP: &str = "operator_indexer_catching_up";
 pub const CODE_BLOCKCHAIN: &str = "blockchain";
 pub const CODE_MNEMONIC: &str = "mnemonic";
 pub const CODE_SERIALIZATION: &str = "serialization";
+pub const CODE_AUTONOMOUS_EXIT_MATERIALS_MISSING: &str = "autonomous_exit_materials_missing";
+pub const CODE_AUTONOMOUS_OPERATOR_INFO_MISSING: &str = "autonomous_operator_info_missing";
+pub const CODE_AUTONOMOUS_MODE_BLOCKS_OPERATOR_RPC: &str = "autonomous_mode_blocks_operator_rpc";
+pub const CODE_OPERATOR_TRUST_PENDING_BLOCKS_AUTONOMOUS_EXIT: &str =
+    "operator_trust_pending_blocks_autonomous_exit";
+pub const CODE_OPERATOR_TRUST_PENDING_DIGEST_CHANGED: &str =
+    "operator_trust_pending_digest_changed";
+pub const CODE_VTXO_FUNDING_LOST: &str = "funding_lost";
 
 pub const MSG_SEND_AMOUNT_MUST_BE_POSITIVE: &str = "send amount must be greater than zero";
 
@@ -64,19 +71,37 @@ pub enum ArkWasmError {
     #[error("delegator service is not configured")]
     DelegatorNotConfigured,
 
-    #[error("vtxo_txids must not be empty")]
-    EmptyVtxoTxids,
+    #[error("vtxo_outpoints must not be empty")]
+    EmptyVtxoOutpoints,
 
-    #[error("VTXO {txid} is not in unilateral exit")]
-    VtxoNotInUnilateralExit { txid: String },
+    #[error("VTXO {txid}:{vout} timelock has not elapsed yet — complete is not available")]
+    VtxoUnilateralExitNotReady { txid: String, vout: u32 },
 
-    #[error("VTXO {txid} timelock has not elapsed yet — complete is not available")]
-    VtxoUnilateralExitNotReady { txid: String },
+    #[error("VTXO {txid}:{vout} lost exit-branch funding and cannot be completed")]
+    VtxoFundingLost { txid: String, vout: u32 },
 
     #[error(
-        "Operator indexer is still catching up after unilateral unroll. Wait a moment and try Complete exit again."
+        "Exit materials were not prefetched for this VTXO — sync with the operator while reachable"
     )]
-    OperatorIndexerCatchingUp,
+    AutonomousExitMaterialsMissing,
+
+    #[error(
+        "Cached operator info is missing — sync with the operator before enabling autonomous mode"
+    )]
+    AutonomousOperatorInfoMissing,
+
+    #[error("This operation requires operator connectivity and is blocked in autonomous mode")]
+    AutonomousModeBlocksOperatorRpc,
+
+    #[error(
+        "Operator config changes are pending — accept the new ASP terms before leaving autonomous mode"
+    )]
+    OperatorTrustPendingBlocksAutonomousExit,
+
+    #[error(
+        "The operator published newer configuration while you were reviewing. Please review the updated changes before accepting."
+    )]
+    OperatorTrustPendingDigestChanged,
 
     #[error("{0}")]
     Boarding(String),
@@ -127,10 +152,16 @@ impl ArkWasmError {
             | Self::InvalidOnchainAddress(_)
             | Self::InvalidSendAmount
             | Self::VtxoNotFound { .. }
-            | Self::EmptyVtxoTxids
-            | Self::VtxoNotInUnilateralExit { .. }
+            | Self::EmptyVtxoOutpoints
             | Self::VtxoUnilateralExitNotReady { .. } => CODE_VALIDATION,
-            Self::OperatorIndexerCatchingUp => CODE_OPERATOR_INDEXER_CATCHING_UP,
+            Self::VtxoFundingLost { .. } => CODE_VTXO_FUNDING_LOST,
+            Self::AutonomousExitMaterialsMissing => CODE_AUTONOMOUS_EXIT_MATERIALS_MISSING,
+            Self::AutonomousOperatorInfoMissing => CODE_AUTONOMOUS_OPERATOR_INFO_MISSING,
+            Self::AutonomousModeBlocksOperatorRpc => CODE_AUTONOMOUS_MODE_BLOCKS_OPERATOR_RPC,
+            Self::OperatorTrustPendingBlocksAutonomousExit => {
+                CODE_OPERATOR_TRUST_PENDING_BLOCKS_AUTONOMOUS_EXIT
+            }
+            Self::OperatorTrustPendingDigestChanged => CODE_OPERATOR_TRUST_PENDING_DIGEST_CHANGED,
             Self::DelegatorNotConfigured | Self::Delegator(_) | Self::InvalidDelegatorFee(_) => {
                 CODE_DELEGATOR
             }
@@ -190,14 +221,30 @@ mod tests {
     }
 
     #[test]
-    fn operator_indexer_catching_up_has_stable_code() {
-        let error = ArkWasmError::OperatorIndexerCatchingUp;
-        assert_eq!(error.code(), CODE_OPERATOR_INDEXER_CATCHING_UP);
-        assert!(
-            error
-                .to_string()
-                .contains("Operator indexer is still catching up")
+    fn operator_trust_pending_blocks_autonomous_exit_error_code() {
+        let error = ArkWasmError::OperatorTrustPendingBlocksAutonomousExit;
+        assert_eq!(
+            error.code(),
+            CODE_OPERATOR_TRUST_PENDING_BLOCKS_AUTONOMOUS_EXIT
         );
+    }
+
+    #[test]
+    fn operator_trust_pending_digest_changed_error_code() {
+        let error = ArkWasmError::OperatorTrustPendingDigestChanged;
+        assert_eq!(error.code(), CODE_OPERATOR_TRUST_PENDING_DIGEST_CHANGED);
+        assert!(error.to_string().contains("newer configuration"));
+    }
+
+    #[test]
+    fn vtxo_funding_lost_has_stable_code_and_message() {
+        let error = ArkWasmError::VtxoFundingLost {
+            txid: "aa".into(),
+            vout: 1,
+        };
+        assert_eq!(error.code(), CODE_VTXO_FUNDING_LOST);
+        assert!(error.to_string().contains("lost exit-branch funding"));
+        assert!(error.to_string().contains("aa:1"));
     }
 
     #[test]
@@ -206,5 +253,33 @@ mod tests {
         let payload = error.to_wasm_payload();
         assert_eq!(payload.code, CODE_DELEGATOR);
         assert_eq!(payload.message, error.to_string());
+    }
+
+    #[test]
+    fn client_join_batch_event_stream_error_surfaces_status_in_wasm_payload() {
+        use ark_client::error::{ErrorContext, IntoError};
+
+        let event_stream_detail = "Event stream request failed with status 500 Internal Server Error: FUNCTION_INVOCATION_FAILED";
+        let enriched_chain = format!("batch event stream: request failed: {event_stream_detail}");
+
+        #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+        let server_error = ark_client::Error::from(ark_client::ark_grpc_wasm_shim::Error::request(
+            std::io::Error::new(std::io::ErrorKind::Other, enriched_chain.clone()),
+        ));
+        #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+        let server_error = enriched_chain.clone().into_error();
+
+        let client_error = server_error.context("Failed to join batch");
+        let wasm_error = ArkWasmError::Client(client_error);
+        let payload = wasm_error.to_wasm_payload();
+
+        assert_eq!(payload.code, CODE_CLIENT);
+        assert!(payload.message.contains("500"));
+        assert!(payload.message.contains("FUNCTION_INVOCATION"));
+        assert!(
+            !payload.message.ends_with("request failed"),
+            "unexpected bare chain: {}",
+            payload.message
+        );
     }
 }

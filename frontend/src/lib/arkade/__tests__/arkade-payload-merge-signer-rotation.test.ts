@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   assertOperatorSignerMatches,
   assertOperatorSignerMatchesOrMigration,
-  ensureArkadeOperatorConnectionInPayload,
+  ensureArkadeAccountInPayload,
   mergeSdkPersistenceIntoPayload,
 } from '@/lib/arkade/arkade-payload-merge'
 import type { ArkadeSignerMigrationHint } from '@/workers/arkade-api'
@@ -11,8 +11,8 @@ import type { WalletSecretsPayload } from '@/lib/wallet/wallet-domain-types'
 const basePayload = (): WalletSecretsPayload => ({
   descriptorWallets: [],
   lightningNwcConnections: [],
-  arkadeOperatorConnections: [],
-  activeArkadeConnectionIdByNetwork: {},
+  arkadeAccounts: [],
+  activeArkadeAccountIdByNetwork: {},
 })
 
 const migrationHint = (
@@ -23,7 +23,7 @@ const migrationHint = (
   cutoffUnix: 4_102_444_800,
 })
 
-const legacyConnection = {
+const legacyAccount = {
   id: 'conn-1',
   label: 'test',
   networkMode: 'signet' as const,
@@ -37,7 +37,7 @@ describe('assertOperatorSignerMatchesOrMigration', () => {
     'allows deprecated previous signer when migration hint matches (%s)',
     (deprecatedStatus) => {
       expect(() =>
-        assertOperatorSignerMatchesOrMigration(legacyConnection, '02newsigner', {
+        assertOperatorSignerMatchesOrMigration(legacyAccount, '02newsigner', {
           ...migrationHint(deprecatedStatus),
         }),
       ).not.toThrow()
@@ -45,24 +45,24 @@ describe('assertOperatorSignerMatchesOrMigration', () => {
   )
 
   it('rejects unrelated signer mismatch', () => {
-    const connection = {
-      ...legacyConnection,
+    const account = {
+      ...legacyAccount,
       operatorSignerPkHex: '02other',
     }
 
-    expect(() => assertOperatorSignerMatches(connection, '02newsigner')).toThrow(
+    expect(() => assertOperatorSignerMatches(account, '02newsigner')).toThrow(
       /signer public key mismatch/,
     )
   })
 })
 
-describe('ensureArkadeOperatorConnectionInPayload', () => {
-  it('updates operatorSignerPkHex on active-connection migration open', () => {
+describe('ensureArkadeAccountInPayload', () => {
+  it('updates operatorSignerPkHex on active-account migration open', () => {
     const payload = basePayload()
-    payload.arkadeOperatorConnections = [legacyConnection]
-    payload.activeArkadeConnectionIdByNetwork.signet = 'conn-1'
+    payload.arkadeAccounts = [legacyAccount]
+    payload.activeArkadeAccountIdByNetwork.signet = 'conn-1'
 
-    const { connection, payload: merged } = ensureArkadeOperatorConnectionInPayload(payload, {
+    const { account, payload: merged } = ensureArkadeAccountInPayload(payload, {
       networkMode: 'signet',
       operatorSignerPkHex: '02newsigner',
       operatorUrl: 'https://operator.example',
@@ -70,23 +70,23 @@ describe('ensureArkadeOperatorConnectionInPayload', () => {
       signerMigrationHint: migrationHint('migratable'),
     })
 
-    expect(connection.operatorSignerPkHex).toBe('02newsigner')
-    expect(connection.lastSessionOpenedAt).toMatch(/^\d{4}-/)
-    expect(merged.activeArkadeConnectionIdByNetwork.signet).toBe('conn-1')
+    expect(account.operatorSignerPkHex).toBe('02newsigner')
+    expect(account.lastSessionOpenedAt).toMatch(/^\d{4}-/)
+    expect(merged.activeArkadeAccountIdByNetwork.signet).toBe('conn-1')
   })
 
-  it('reactivates inactive matching connection on migration open', () => {
+  it('reactivates inactive matching account on migration open', () => {
     const existingSdkJson =
       '{"version":3,"wallet_db":{"offchain_next_derivation_index":2}}'
     const payload = basePayload()
-    payload.arkadeOperatorConnections = [
+    payload.arkadeAccounts = [
       {
-        ...legacyConnection,
+        ...legacyAccount,
         sdkPersistenceJson: existingSdkJson,
       },
     ]
 
-    const { connection, payload: merged } = ensureArkadeOperatorConnectionInPayload(payload, {
+    const { account, payload: merged } = ensureArkadeAccountInPayload(payload, {
       networkMode: 'signet',
       operatorSignerPkHex: '02newsigner',
       operatorUrl: 'https://operator.example',
@@ -94,11 +94,11 @@ describe('ensureArkadeOperatorConnectionInPayload', () => {
       signerMigrationHint: migrationHint('due_now'),
     })
 
-    expect(connection.id).toBe('conn-1')
-    expect(connection.operatorSignerPkHex).toBe('02newsigner')
-    expect(connection.sdkPersistenceJson).toBe(existingSdkJson)
-    expect(connection.lastSessionOpenedAt).toMatch(/^\d{4}-/)
-    expect(merged.activeArkadeConnectionIdByNetwork.signet).toBe('conn-1')
+    expect(account.id).toBe('conn-1')
+    expect(account.operatorSignerPkHex).toBe('02newsigner')
+    expect(account.sdkPersistenceJson).toBe(existingSdkJson)
+    expect(account.lastSessionOpenedAt).toMatch(/^\d{4}-/)
+    expect(merged.activeArkadeAccountIdByNetwork.signet).toBe('conn-1')
   })
 })
 
@@ -109,14 +109,14 @@ describe('post-migration persistence metadata', () => {
     const incomingSdkJson =
       '{"version":3,"wallet_db":{"offchain_next_derivation_index":3}}'
     const payload = basePayload()
-    payload.arkadeOperatorConnections = [
+    payload.arkadeAccounts = [
       {
-        ...legacyConnection,
+        ...legacyAccount,
         operatorSignerPkHex: '02newsigner',
         sdkPersistenceJson: existingSdkJson,
       },
     ]
-    payload.activeArkadeConnectionIdByNetwork.signet = 'conn-1'
+    payload.activeArkadeAccountIdByNetwork.signet = 'conn-1'
 
     const merged = mergeSdkPersistenceIntoPayload(
       payload,
@@ -125,9 +125,9 @@ describe('post-migration persistence metadata', () => {
       '2026-06-28T12:00:00.000Z',
     )
 
-    const connection = merged.arkadeOperatorConnections[0]
-    expect(connection?.operatorSignerPkHex).toBe('02newsigner')
-    expect(connection?.sdkPersistenceJson).toBe(incomingSdkJson)
-    expect(connection?.lastSuccessfulOperatorSyncAt).toBe('2026-06-28T12:00:00.000Z')
+    const account = merged.arkadeAccounts[0]
+    expect(account?.operatorSignerPkHex).toBe('02newsigner')
+    expect(account?.sdkPersistenceJson).toBe(incomingSdkJson)
+    expect(account?.lastSuccessfulOperatorSyncAt).toBe('2026-06-28T12:00:00.000Z')
   })
 })

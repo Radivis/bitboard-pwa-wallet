@@ -16,6 +16,6 @@ These yaml files contain:
 
 Other details can also be added, when clarification seems useful. Just don't go into excruciating detail - such details may be placed in comments within files, functions, or the OpenAPI documentation.
 
-For an instructive example, see doc/features/blog.yaml
+For an instructive example, see doc/features/wallet.yaml
 
 Tests should cover the visibility of specified visible elements and the behavior of the described actions. Defining the functionality covered by tests is the primary purpose of the specification files!

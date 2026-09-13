@@ -42,13 +42,13 @@ feature:
       - id: DASH-ARK-16
         description: When Arkade load succeeded but operator sync failed, sync error banner shows even if balance query has no data yet
       - id: DASH-ARK-17
-        description: When pendingRecoverySats is greater than zero, balance breakdown shows pending recovery (deprecated signer) line
+        description: When pendingRecoveryDueToExpiredSignerSats is greater than zero, balance breakdown shows pending recovery (expired signer) line
       - id: DASH-ARK-18
         description: When only on-chain bumper remains, headline offchain balance is zero and bumper line is shown separately
       - id: DASH-ARK-19
         description: When recoverableSettleableVtxoCount is greater than zero, dashboard Arkade card shows recoverable VTXO banner with Recover now
       - id: DASH-ARK-19b
-        description: When pendingRecoverySats is greater than zero, dashboard Arkade card shows pending-recovery banner with link to Management unilateral exit
+        description: When pendingRecoveryDueToExpiredSignerSats is greater than zero, dashboard Arkade card shows pending-recovery-due-to-expired-signer banner with link to Management unilateral exit
       - id: DASH-ARK-19a
         description: When recoverablePendingOperatorSweepVtxoCount is greater than zero, balance breakdown shows expired waiting for operator sweep line
     activity_feed:
@@ -98,17 +98,17 @@ feature:
         - Loading spinner while balance query loads
         - BitcoinAmountDisplay for confirmed balance
         - Optional recoverable total line
-        - Pending recovery line when pendingRecoverySats is greater than zero
+        - Pending recovery due to expired signer line when pendingRecoveryDueToExpiredSignerSats is greater than zero
         - Signer migration banner when operator signing key rotated (same as Management Arkade panel)
-        - Pending recovery banner when pendingRecoverySats is greater than zero
+        - Pending recovery due to expired signer banner when pendingRecoveryDueToExpiredSignerSats is greater than zero
         - Recoverable VTXO banner when recoverableSettleableVtxoCount is greater than zero
         - Expired waiting for operator sweep line when recoverablePendingOperatorSweepVtxoCount is greater than zero
         - Arkade operator sync error banner when post-load sync fails (including when balance data is absent)
       test_ids:
         - dashboard-arkade-balance-card
         - dashboard-arkade-balance-amount
-        - arkade-balance-pending-recovery
-        - arkade-pending-recovery-banner
+        - arkade-balance-pending-recovery-due-to-expired-signer
+        - arkade-pending-recovery-due-to-expired-signer-banner
         - arkade-balance-recoverable-pending-operator-sweep
         - arkade-recoverable-vtxo-banner
         - dashboard-arkade-session-loading

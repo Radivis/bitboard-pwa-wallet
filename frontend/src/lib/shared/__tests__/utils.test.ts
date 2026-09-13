@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { BLOCKCHAIN_EXPLORER_UNREACHABLE_UI_MESSAGE } from '@/lib/shared/sanitize-error-for-ui'
 import {
   LIFECYCLE_SYNC_ERROR_FALLBACK,
   errorMessage,
@@ -15,16 +16,38 @@ describe('userFacingErrorMessage', () => {
     )
   })
 
-  it('parses structured Ark WASM payload and collapses redundant request-failed chain', () => {
+  it('remaps WASM reqwest Failed to fetch dumps to a short explorer message', () => {
+    const err = new Error(
+      'Blockchain error: Reqwest(reqwest::Error { kind: Request, source: "JsValue(TypeError: Failed to fetch\\n' +
+        'TypeError: Failed to fetch\\n at __wbg_fetch (http://localhost:3000/src/wasm-pkg/bitboard_ark/bitboard_ark_bg.js:1:1)" })',
+    )
+    expect(userFacingErrorMessage(err)).toBe(BLOCKCHAIN_EXPLORER_UNREACHABLE_UI_MESSAGE)
+  })
+
+  it('parses structured Ark WASM payload and preserves operator HTTP detail', () => {
+    const err = new Error(
+      JSON.stringify({
+        code: 'client',
+        message:
+          'Ark client error: Failed to join batch: batch event stream: request failed: Event stream request failed with status 500: FUNCTION_INVOCATION_FAILED',
+      }),
+    )
+    expect(errorMessage(err)).toContain('500')
+    expect(errorMessage(err)).toContain('FUNCTION_INVOCATION_FAILED')
+    const facing = userFacingErrorMessage(err)
+    expect(facing).toContain('500')
+    expect(facing).toContain('FUNCTION_INVOCATION_FAILED')
+    expect(facing).toContain('Preview proxy failed during batch event stream')
+    expect(facing).not.toBe('Ark client error: Failed to join batch: request failed')
+  })
+
+  it('collapses redundant request-failed chain when no other detail is present', () => {
     const err = new Error(
       JSON.stringify({
         code: 'client',
         message:
           'Ark client error: failed to get VTXOs for addresses: request failed: request failed',
       }),
-    )
-    expect(errorMessage(err)).toBe(
-      'Ark client error: failed to get VTXOs for addresses: request failed: request failed',
     )
     expect(userFacingErrorMessage(err)).toBe(
       'Ark client error: failed to get VTXOs for addresses: request failed',

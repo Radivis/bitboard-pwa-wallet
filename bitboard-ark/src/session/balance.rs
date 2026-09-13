@@ -12,8 +12,11 @@ impl ArkSession {
 
         let offchain_buckets = self.resolve_offchain_balance_buckets().await?;
         let recoverable_buckets = self.recoverable_vtxo_buckets().await?;
-        let (unilateral_exit_in_progress_sats, collaborative_exit_in_progress_sats) =
-            self.exit_balance_components()?;
+        let (
+            unilateral_exit_in_progress_sats,
+            collaborative_exit_in_progress_sats,
+            unilateral_exit_spend_lock_sats,
+        ) = self.exit_balance_components()?;
         let onchain = self.client.onchain_wallet_balance()?;
         let boarding = self.boarding_status().await?;
         Ok(build_arkade_balance_dto(ArkadeBalanceInputs {
@@ -32,7 +35,10 @@ impl ArkSession {
             boarding_pending_sats: boarding.pending_sats,
             unilateral_exit_in_progress_sats,
             collaborative_exit_in_progress_sats,
-            pending_recovery_sats: offchain_buckets.pending_recovery_sats,
+            unilateral_exit_spend_lock_sats,
+            pending_recovery_due_to_expired_signer_sats: offchain_buckets
+                .pending_recovery_due_to_expired_signer_sats,
+            pending_batch_intents: boarding.pending_batch_intents.clone(),
         }))
     }
 }

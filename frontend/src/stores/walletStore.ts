@@ -73,7 +73,7 @@ interface TransientWalletState {
   currentAddress: string | null
   lastSyncTime: Date | null
   transactions: TransactionDetails[]
-  activeArkadeConnectionId: string | null
+  activeArkadeAccountId: string | null
   arkadeBalance: ArkadeBalanceInfo | null
   arkadePayments: ArkadePaymentRow[]
   arkadeReceiveAddress: string | null
@@ -99,7 +99,7 @@ interface WalletActions {
   setCurrentAddress: (address: string | null) => void
   setLastSyncTime: (lastSyncTime: Date | null) => void
   setTransactions: (transactions: TransactionDetails[]) => void
-  setActiveArkadeConnectionId: (connectionId: string | null) => void
+  setActiveArkadeAccountId: (arkadeAccountId: string | null) => void
   setArkadeDashboardState: (state: {
     balance: ArkadeBalanceInfo
     payments: ArkadePaymentRow[]
@@ -121,7 +121,7 @@ const TRANSIENT_DEFAULTS: TransientWalletState = {
   currentAddress: null,
   lastSyncTime: null,
   transactions: [],
-  activeArkadeConnectionId: null,
+  activeArkadeAccountId: null,
   arkadeBalance: null,
   arkadePayments: [],
   arkadeReceiveAddress: null,
@@ -157,8 +157,8 @@ export const useWalletStore = create<WalletState>()(
       setCurrentAddress: (address) => set({ currentAddress: address }),
       setLastSyncTime: (lastSyncTime) => set({ lastSyncTime }),
       setTransactions: (transactions) => set({ transactions }),
-      setActiveArkadeConnectionId: (connectionId) =>
-        set({ activeArkadeConnectionId: connectionId }),
+      setActiveArkadeAccountId: (arkadeAccountId) =>
+        set({ activeArkadeAccountId: arkadeAccountId }),
       setArkadeDashboardState: ({ balance, payments, receiveAddress }) =>
         set({
           arkadeBalance: balance,
@@ -167,7 +167,7 @@ export const useWalletStore = create<WalletState>()(
         }),
       clearArkadeDashboardState: () =>
         set({
-          activeArkadeConnectionId: null,
+          activeArkadeAccountId: null,
           arkadeBalance: null,
           arkadePayments: [],
           arkadeReceiveAddress: null,
@@ -185,7 +185,7 @@ export const useWalletStore = create<WalletState>()(
           ...TRANSIENT_DEFAULTS,
           walletStatus: 'locked',
           loadedDescriptorWallet: null,
-          activeArkadeConnectionId: null,
+          activeArkadeAccountId: null,
           arkadeBalance: null,
           arkadePayments: [],
           arkadeReceiveAddress: null,

@@ -1,7 +1,7 @@
 import { getArkadeWorker } from '@/workers/arkade-factory'
 import type { EncryptedBlobForDb } from '@/workers/crypto-api'
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
-import type { ArkadeOperatorConnectionSummary } from '@/lib/arkade/arkade-payload-merge'
+import type { ArkadeAccountSummary } from '@/lib/arkade/arkade-payload-merge'
 import {
   ensureArkadeEncryptedSecretsHost,
 } from '@/workers/arkade-persistence-channel'
@@ -13,38 +13,38 @@ async function ensureArkadeEncryptedPersistenceReady(): Promise<void> {
   await ensureArkadeWorkerSecretsChannel()
 }
 
-export async function findActiveArkadeConnectionSummary(params: {
+export async function findActiveArkadeAccountSummary(params: {
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
   encryptedPayload: EncryptedBlobForDb
-}): Promise<ArkadeOperatorConnectionSummary | undefined> {
+}): Promise<ArkadeAccountSummary | undefined> {
   await ensureArkadeEncryptedPersistenceReady()
-  return getArkadeWorker().findActiveConnectionSummary(params)
+  return getArkadeWorker().findActiveAccountSummary(params)
 }
 
-export async function listArkadeConnectionSummaries(params: {
+export async function listArkadeAccountSummaries(params: {
   walletId: number
-}): Promise<ArkadeOperatorConnectionSummary[]> {
+}): Promise<ArkadeAccountSummary[]> {
   await ensureArkadeEncryptedPersistenceReady()
-  return getArkadeWorker().listConnectionSummaries(params)
+  return getArkadeWorker().listAccountSummaries(params)
 }
 
-export async function ensureArkadeOperatorConnectionEncrypted(params: {
+export async function ensureArkadeAccountEncrypted(params: {
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
-  connectionId: string
+  arkadeAccountId: string
   operatorSignerPkHex: string
   operatorUrl: string
   delegatorUrl: string
   persistInitialSdkFromWasm?: boolean
-}): Promise<ArkadeOperatorConnectionSummary> {
+}): Promise<ArkadeAccountSummary> {
   await ensureArkadeEncryptedPersistenceReady()
-  return getArkadeWorker().ensureOperatorConnectionEncrypted(params)
+  return getArkadeWorker().ensureArkadeAccountEncrypted(params)
 }
 
 export async function saveLastSuccessfulOperatorSyncAtEncrypted(params: {
   walletId: number
-  connectionId: string
+  arkadeAccountId: string
   lastSuccessfulOperatorSyncAt: string
 }): Promise<void> {
   await ensureArkadeEncryptedPersistenceReady()

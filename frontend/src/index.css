@@ -248,6 +248,17 @@ body {
   width: var(--toast-close-button-size);
 }
 
+@keyframes unilateral-exit-edge-dash {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+
+.unilateral-exit-tree-edge-animated {
+  stroke-dasharray: 5;
+  animation: unilateral-exit-edge-dash 0.5s linear infinite;
+}
+
 [data-sonner-toast][data-styled='true'] [data-close-button] svg {
   height: var(--toast-close-icon-size);
   width: var(--toast-close-icon-size);

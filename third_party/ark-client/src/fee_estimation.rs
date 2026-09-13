@@ -23,6 +23,11 @@ where
 {
     /// Estimates the fee to collaboratively redeem VTXOs to an on-chain Bitcoin address.
     ///
+    /// Compatibility wrapper around [`Self::estimate_onchain_fees_excluding_vtxos`] with an
+    /// empty exclude set: omit nothing, so coin selection matches the original public API.
+    /// Spend-lock callers (tagged-or-later unilateral-exit VTXOs) must use the excluding
+    /// variant with a non-empty set.
+    ///
     /// This function calculates the expected fee for moving funds from the Ark protocol
     /// back to a standard on-chain Bitcoin address through a collaborative redemption process.
     /// The fee is estimated by creating a simulated intent and querying the Ark server.
@@ -53,11 +58,40 @@ where
     where
         R: Rng + CryptoRng + Clone,
     {
+        // Empty set: exclude nothing. Same inputs as this method before the excluding variant.
+        self.estimate_onchain_fees_excluding_vtxos(
+            rng,
+            to_address,
+            to_amount,
+            &std::collections::HashSet::new(),
+        )
+        .await
+    }
+
+    /// Like [`Self::estimate_onchain_fees`], omitting the given VTXO outpoints.
+    ///
+    /// An empty `exclude_vtxos` set is equivalent to [`Self::estimate_onchain_fees`].
+    pub async fn estimate_onchain_fees_excluding_vtxos<R>(
+        &self,
+        rng: &mut R,
+        to_address: Address,
+        to_amount: Amount,
+        exclude_vtxos: &std::collections::HashSet<OutPoint>,
+    ) -> Result<SignedAmount, Error>
+    where
+        R: Rng + CryptoRng + Clone,
+    {
         let (change_address, _) = self.get_offchain_address()?;
 
-        let (boarding_inputs, vtxo_inputs, total_amount) = self
+        let (boarding_inputs, mut vtxo_inputs, mut total_amount) = self
             .fetch_commitment_transaction_inputs(crate::utils::unix_now()?)
             .await?;
+        let excluded_amount = vtxo_inputs
+            .iter()
+            .filter(|input| exclude_vtxos.contains(&input.outpoint()))
+            .fold(Amount::ZERO, |acc, input| acc + input.amount());
+        vtxo_inputs.retain(|input| !exclude_vtxos.contains(&input.outpoint()));
+        total_amount = total_amount.checked_sub(excluded_amount).unwrap_or(Amount::ZERO);
 
         let change_amount = total_amount.checked_sub(to_amount).ok_or_else(|| {
             Error::coin_select(format!(

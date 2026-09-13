@@ -15,6 +15,11 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
     mutate: recoverMutateMock,
     isPending: false,
   }),
+  useArkadeAutonomousModeActive: () => false,
+  useHasPendingBatchIntent: () => false,
+  useHasPendingBatchIntentKind: () => false,
+  usePendingBatchIntent: () => null,
+  usePendingBatchIntents: () => [],
 }))
 
 describe('ArkadeRecoverableVtxoBanner', () => {
