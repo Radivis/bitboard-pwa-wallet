@@ -110,6 +110,7 @@ export function useWalletBackupImport() {
   const runVerifiedImport = useCallback(
     async (password: string) => {
       if (!pendingImport) return
+      let importStage = 'pre-verify'
       setImportBusy(true)
       setImportVerifyInlineMessage(null)
       try {
@@ -119,8 +120,13 @@ export function useWalletBackupImport() {
           password,
           pendingImport.manifestJson,
         )
+        importStage = 'post-verify'
         await applyWalletBackupReplace(pendingImport.sqliteBytes)
-      } catch {
+      } catch (error) {
+        if (importStage === 'post-verify') {
+          toast.error(error instanceof Error ? error.message : 'Import failed.')
+          return
+        }
         setImportVerificationFailureCount((prev) => {
           const next = prev + 1
           if (next >= WALLET_BACKUP_IMPORT_MAX_VERIFY_ATTEMPTS) {
