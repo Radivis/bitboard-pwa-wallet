@@ -1,13 +1,15 @@
 use std::collections::HashSet;
 use std::str::FromStr;
 
-use bitcoin::{Amount, OutPoint, Txid};
+#[cfg(test)]
+use bitcoin::Amount;
+use bitcoin::{OutPoint, Txid};
 
 use crate::error::ArkWasmError;
 use crate::offchain_snapshot::vtxo_list_from_snapshot;
 use crate::persistence::{
     OffchainVtxoSnapshot, PendingBatchIntentKind, PendingBatchIntentRecord,
-    PendingExitDeductionRecord, PendingExitKind, UnilateralExitWatchRecord,
+    PendingExitDeductionRecord, PendingExitKind,
 };
 
 /// Outpoint identifying a VTXO in unilateral exit (local snapshot or pending deduction).
@@ -23,6 +25,7 @@ pub fn exit_outpoint_key_from_str(txid: &str, vout: u32) -> Option<UnilateralExi
     Some(exit_outpoint_key(txid, vout))
 }
 
+#[cfg(test)]
 pub fn unilateral_exit_in_progress_outpoints_from_snapshot(
     snapshot: &OffchainVtxoSnapshot,
 ) -> crate::error::ArkResult<HashSet<UnilateralExitOutpointKey>> {
@@ -35,6 +38,7 @@ pub fn unilateral_exit_in_progress_outpoints_from_snapshot(
         .collect())
 }
 
+#[cfg(test)]
 pub fn unilateral_exit_in_progress_outpoints_from_pending(
     records: &[PendingExitDeductionRecord],
 ) -> HashSet<UnilateralExitOutpointKey> {
@@ -49,19 +53,10 @@ pub fn unilateral_exit_in_progress_outpoints_from_pending(
         .collect()
 }
 
-pub fn unilateral_exit_in_progress_outpoints_from_watches(
-    watches: &[UnilateralExitWatchRecord],
-) -> HashSet<UnilateralExitOutpointKey> {
-    watches
-        .iter()
-        .filter_map(|watch| exit_outpoint_key_from_str(&watch.vtxo_txid, watch.vout))
-        .collect()
-}
-
+#[cfg(test)]
 pub fn unilateral_exit_in_progress_outpoints(
     snapshot: Option<&OffchainVtxoSnapshot>,
     pending: &[PendingExitDeductionRecord],
-    watches: &[UnilateralExitWatchRecord],
 ) -> crate::error::ArkResult<HashSet<UnilateralExitOutpointKey>> {
     let mut keys = HashSet::new();
     if let Some(snapshot) = snapshot {
@@ -70,7 +65,6 @@ pub fn unilateral_exit_in_progress_outpoints(
         )?);
     }
     keys.extend(unilateral_exit_in_progress_outpoints_from_pending(pending));
-    keys.extend(unilateral_exit_in_progress_outpoints_from_watches(watches));
     Ok(keys)
 }
 
@@ -82,6 +76,7 @@ pub fn is_unilateral_exit_in_progress_outpoint(
     exit_outpoint_key_from_str(txid, vout).is_some_and(|outpoint| keys.contains(&outpoint))
 }
 
+#[cfg(test)]
 pub fn unilateral_exit_in_progress_sats_from_snapshot(
     snapshot: &OffchainVtxoSnapshot,
 ) -> crate::error::ArkResult<u64> {
@@ -92,6 +87,7 @@ pub fn unilateral_exit_in_progress_sats_from_snapshot(
         .to_sat())
 }
 
+#[cfg(test)]
 pub fn sum_pending_exit_sats_by_kind(
     records: &[PendingExitDeductionRecord],
     kind: PendingExitKind,
@@ -130,7 +126,7 @@ pub fn should_keep_pending_exit_deduction(
     match record.kind {
         PendingExitKind::Unilateral => {
             // During unroll, before is_unrolled is set locally: keep pending record while the VTXO
-            // is still spendable. After mark_leaf_virtual_tx_vtxos_unrolled_in_snapshot, this returns
+            // is still spendable. After reconcile_host_tx_finality stamps is_unrolled, this returns
             // false and the same sats are tracked from the exiting sub-bucket instead.
             let Some(txid) = record.vtxo_txid.as_deref() else {
                 return Ok(false);
@@ -225,7 +221,7 @@ mod tests {
             synced_at: 1_700_000_000,
             dust_sats: 330,
             virtual_tx_outpoints: records,
-            unilateral_exit_materials_by_leaf_tx: std::collections::BTreeMap::new(),
+            unilateral_exit_materials_by_host_tx: std::collections::BTreeMap::new(),
         }
     }
 
@@ -412,8 +408,7 @@ mod tests {
             baseline_offchain_spendable_sats: None,
             retain_until_spendable_drops: false,
         }];
-        let keys =
-            unilateral_exit_in_progress_outpoints(Some(&snapshot), &pending, &[]).expect("keys");
+        let keys = unilateral_exit_in_progress_outpoints(Some(&snapshot), &pending).expect("keys");
         assert_eq!(keys.len(), 2);
         assert!(is_unilateral_exit_in_progress_outpoint(
             &keys,
@@ -425,22 +420,6 @@ mod tests {
             &pending_txid,
             0
         ));
-    }
-
-    #[test]
-    fn in_progress_outpoints_include_watches_without_snapshot() {
-        let txid = "dd".repeat(32);
-        let watches = vec![UnilateralExitWatchRecord {
-            vtxo_txid: txid.clone(),
-            vout: 1,
-            amount_sats: 9_000,
-            registered_at: 1,
-            published_vtxo_txid: None,
-            branch_txids: vec![],
-        }];
-        let keys = unilateral_exit_in_progress_outpoints(None, &[], &watches).expect("keys");
-        assert_eq!(keys.len(), 1);
-        assert!(is_unilateral_exit_in_progress_outpoint(&keys, &txid, 1));
     }
 
     fn sample_collaborative_intent(amount_sats: u64) -> PendingBatchIntentRecord {

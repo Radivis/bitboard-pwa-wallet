@@ -10,6 +10,12 @@ vi.mock('@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime', () => 
     listener()
     return () => {}
   },
+  getVtxoExitChildSnapshotMap: () => ({}),
+  subscribeVtxoExitChildren: (listener: () => void) => {
+    listener()
+    return () => {}
+  },
+  vtxoExitChildSnapshotMapEqual: () => true,
 }))
 
 import { getUnilateralExitActorSnapshot } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime'

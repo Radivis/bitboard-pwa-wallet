@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('sonner', () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
+}))
+
 vi.mock('@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence', () => ({
   persistActiveUnilateralExitJob: vi.fn(),
   ensurePersistedUnilateralExitJob: vi.fn(),
@@ -59,11 +63,13 @@ import {
   type FetchProgressActorInput,
   type ProceedStepActorInput,
   type ResolveAbortVtxoIdsActorInput,
+  type TagPlanActorInput,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.machine'
 import type { UnilateralExitPolicyEvaluation } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-types'
 import {
   clearPersistedUnilateralExitJob,
   ensurePersistedUnilateralExitJob,
+  getPersistedUnilateralExitJob,
   persistActiveUnilateralExitJob,
   updatePersistedUnilateralExitRelayWait,
 } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence'
@@ -102,6 +108,17 @@ function progress(
 
 const startedTestActors: Array<ReturnType<typeof createActor>> = []
 
+function branchCompleteReleasedToIdle(
+  state: { matches: (value: string) => boolean; context: { jobOutpoints: unknown[] } },
+  fetchProgress: { mock: { calls: unknown[] } },
+): boolean {
+  return (
+    state.matches('idle') &&
+    state.context.jobOutpoints.length === 0 &&
+    fetchProgress.mock.calls.length > 0
+  )
+}
+
 function createTestActor(params: {
   fetchProgress?: (input: FetchProgressActorInput) => Promise<ArkadeUnilateralExitProgress>
   evaluateJobViability?: (
@@ -115,6 +132,7 @@ function createTestActor(params: {
   resolveAbortVtxoIds?: (
     input: ResolveAbortVtxoIdsActorInput,
   ) => Promise<{ vtxoIds: string[] }>
+  tagPlan?: (input: TagPlanActorInput) => Promise<void>
 }) {
   const fetchProgress =
     params.fetchProgress ?? vi.fn(async () => progress({ phase: 'idle' }))
@@ -151,6 +169,7 @@ function createTestActor(params: {
 
   const resolveAbortVtxoIds =
     params.resolveAbortVtxoIds ?? vi.fn(async () => ({ vtxoIds: [] as string[] }))
+  const tagPlan = params.tagPlan ?? vi.fn(async () => {})
 
   const testActor = createActor(
     unilateralExitMachine.provide({
@@ -161,6 +180,7 @@ function createTestActor(params: {
         ensureBroadcastActor: fromPromise(ensureBroadcast),
         evaluateAutomationPolicyActor: fromPromise(evaluatePolicy),
         resolveAbortVtxoIdsActor: fromPromise(resolveAbortVtxoIds),
+        tagPlanActor: fromPromise(tagPlan),
       },
     }),
     { input: { pollDelayMs: 60_000, parentDataWaitMs: 60_000 } },
@@ -175,12 +195,18 @@ function createTestActor(params: {
     ensureBroadcast,
     evaluatePolicy,
     resolveAbortVtxoIds,
+    tagPlan,
   }
 }
 
 describe('unilateralExitMachine', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(getPersistedUnilateralExitJob).mockReturnValue({
+      selectedLeafOutpoints: [],
+      currentStepRelayedSinceUnix: null,
+      jobStartedAtUnix: 1_700_000_000,
+    })
   })
 
   afterEach(() => {
@@ -215,6 +241,7 @@ describe('unilateralExitMachine', () => {
     expect(ensureBroadcast).toHaveBeenCalledTimes(1)
     expect(persistActiveUnilateralExitJob).toHaveBeenCalled()
     expect(testActor.getSnapshot().context.progress?.currentStepTxRelayed).toBe(true)
+    expect(testActor.getSnapshot().context.lastSettleResult).toBe('waitingConfirm')
   })
 
   it('manual proceed uses proceeding then ensuring broadcast when step is already relayed', async () => {
@@ -334,7 +361,9 @@ describe('unilateralExitMachine', () => {
       feeRateSatPerVb: 2,
     })
 
-    await waitFor(testActor, (state) => state.matches('complete'))
+    await waitFor(testActor, (state) =>
+      branchCompleteReleasedToIdle(state, fetchProgress),
+    )
     expect(proceedStep).not.toHaveBeenCalled()
     expect(clearPersistedUnilateralExitJob).toHaveBeenCalled()
     expect(updatePersistedUnilateralExitRelayWait).not.toHaveBeenCalled()
@@ -386,9 +415,15 @@ describe('unilateralExitMachine', () => {
     expect(clearPersistedUnilateralExitJob).toHaveBeenCalled()
   })
 
-  it('hydrate uses ensurePersistedUnilateralExitJob instead of persistActiveUnilateralExitJob', async () => {
+  it('hydrate tags the plan then ensures the existing job bookmark', async () => {
     const fetchProgress = vi.fn(async () => progress({ phase: 'idle' }))
-    const { testActor } = createTestActor({ fetchProgress })
+    const tagPlan = vi.fn(async () => {})
+    vi.mocked(getPersistedUnilateralExitJob).mockReturnValue({
+      selectedLeafOutpoints: [leaf],
+      currentStepRelayedSinceUnix: null,
+      jobStartedAtUnix: 1_700_000_000,
+    })
+    const { testActor } = createTestActor({ fetchProgress, tagPlan })
     testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
     persistActiveUnilateralExitJob.mockClear()
     ensurePersistedUnilateralExitJob.mockClear()
@@ -398,8 +433,68 @@ describe('unilateralExitMachine', () => {
       outpoints: [leaf],
     })
     await waitFor(testActor, (state) => state.matches('idle'))
+    expect(tagPlan).toHaveBeenCalled()
     expect(ensurePersistedUnilateralExitJob).toHaveBeenCalledWith(walletScope, [leaf])
     expect(persistActiveUnilateralExitJob).not.toHaveBeenCalled()
+  })
+
+  it('manual start tags the plan before persisting a new job bookmark', async () => {
+    const tagPlan = vi.fn(async () => {})
+    const { testActor } = createTestActor({ tagPlan })
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    persistActiveUnilateralExitJob.mockClear()
+    testActor.send({
+      type: 'START_MANUAL',
+      walletScope,
+      outpoints: [leaf],
+      feeRateSatPerVb: 2,
+    })
+    await waitFor(testActor, (state) => state.matches('waitingConfirm'))
+    expect(tagPlan).toHaveBeenCalled()
+    expect(persistActiveUnilateralExitJob).toHaveBeenCalledWith(walletScope, [leaf])
+  })
+
+  it('tag plan failure goes to error without persisting a job bookmark', async () => {
+    const tagPlan = vi.fn(async () => {
+      throw new Error('autonomous_exit_materials_missing')
+    })
+    const { testActor } = createTestActor({ tagPlan })
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    persistActiveUnilateralExitJob.mockClear()
+    ensurePersistedUnilateralExitJob.mockClear()
+    testActor.send({
+      type: 'START_MANUAL',
+      walletScope,
+      outpoints: [leaf],
+      feeRateSatPerVb: 2,
+    })
+    await waitFor(testActor, (state) => state.matches('error'))
+    expect(persistActiveUnilateralExitJob).not.toHaveBeenCalled()
+    expect(ensurePersistedUnilateralExitJob).not.toHaveBeenCalled()
+    expect(testActor.getSnapshot().context.lastErrorMessage).toBe(
+      'autonomous_exit_materials_missing',
+    )
+    expect(testActor.getSnapshot().context.lastSettleResult).toBe('error')
+  })
+
+  it('tag plan Failed to fetch stores a short explorer-unreachable message', async () => {
+    const tagPlan = vi.fn(async () => {
+      throw new Error(
+        'Blockchain error: Reqwest(reqwest::Error { kind: Request, source: "JsValue(TypeError: Failed to fetch\\nTypeError: Failed to fetch)" })',
+      )
+    })
+    const { testActor } = createTestActor({ tagPlan })
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'START_MANUAL',
+      walletScope,
+      outpoints: [leaf],
+      feeRateSatPerVb: 2,
+    })
+    await waitFor(testActor, (state) => state.matches('error'))
+    expect(testActor.getSnapshot().context.lastErrorMessage).toBe(
+      'Could not reach the Bitcoin explorer. This is usually temporary.',
+    )
   })
 
   it('hydrate completes when all selected leaves are unrolled', async () => {
@@ -425,7 +520,9 @@ describe('unilateralExitMachine', () => {
       outpoints: [leaf],
       automationEnabled: true,
     })
-    await waitFor(testActor, (state) => state.matches('complete'))
+    await waitFor(testActor, (state) =>
+      branchCompleteReleasedToIdle(state, fetchProgress),
+    )
     expect(proceedStep).not.toHaveBeenCalled()
     expect(clearPersistedUnilateralExitJob).toHaveBeenCalled()
     expect(updatePersistedUnilateralExitRelayWait).not.toHaveBeenCalled()
@@ -457,7 +554,7 @@ describe('unilateralExitMachine', () => {
     expect(testActor.getSnapshot().context.progress?.stepIndex).toBe(4)
   })
 
-  it('hydrate with resumeAutomation sets proceedRequested', () => {
+  it('hydrate with resumeAutomation sets proceedRequested', async () => {
     const fetchProgress = vi.fn(async () => progress({ phase: 'idle' }))
     const { testActor } = createTestActor({ fetchProgress })
     testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
@@ -468,7 +565,7 @@ describe('unilateralExitMachine', () => {
       automationEnabled: true,
       resumeAutomation: true,
     })
-    expect(testActor.getSnapshot().matches('checkingProgress')).toBe(true)
+    await waitFor(testActor, (state) => state.matches('checkingProgress'))
     expect(testActor.getSnapshot().context.proceedRequested).toBe(true)
     expect(testActor.getSnapshot().context.automationEnabled).toBe(true)
   })
@@ -821,6 +918,7 @@ describe('unilateralExitMachine', () => {
     })
     await waitFor(testActor, (state) => state.matches('paused'))
     expect(testActor.getSnapshot().context.pausedReason).toBe('feeCapExceeded')
+    expect(testActor.getSnapshot().context.lastSettleResult).toBe('paused')
   })
 
   it('automation bumper insufficient pauses', async () => {
@@ -885,8 +983,13 @@ describe('unilateralExitMachine', () => {
     const fetchProgress = vi.fn(async () =>
       progress({
         phase: 'complete',
+        currentStepTxRelayed: true,
         stepIndex: 2,
         totalSteps: 2,
+        nodeStatuses: [
+          { txid: 'step0', confirmations: 1, status: 'confirmed' },
+          { txid: 'step1', confirmations: 1, status: 'confirmed' },
+        ],
         leafStatuses: [unrolledLeafStatus()],
       }),
     )
@@ -898,8 +1001,8 @@ describe('unilateralExitMachine', () => {
       outpoints: [leaf],
       feeRateSatPerVb: 20,
     })
-    await waitFor(testActor, (state) => state.matches('complete'))
-    expect(testActor.getSnapshot().context.feeRateSatPerVb).toBe(20)
+    await waitFor(testActor, (state) => branchCompleteReleasedToIdle(state, fetchProgress))
+    expect(testActor.getSnapshot().context.feeRateSatPerVb).toBeNull()
 
     testActor.send({
       type: 'START_AUTOMATIC',
@@ -947,11 +1050,11 @@ describe('unilateralExitMachine', () => {
   it('lock reset returns to notConfigured', async () => {
     const { testActor } = createTestActor({})
     testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
-    testActor.send({ type: 'WALLET_RESET' })
+    testActor.send({ type: 'ARKADE_SESSION_RESET' })
     expect(testActor.getSnapshot().matches('notConfigured')).toBe(true)
   })
 
-  it('WALLET_RESET from waitingConfirm returns to notConfigured', async () => {
+  it('ARKADE_SESSION_RESET from waitingConfirm returns to notConfigured', async () => {
     const fetchProgress = vi.fn(async () => progress({ phase: 'idle' }))
     const { testActor } = createTestActor({ fetchProgress })
 
@@ -964,13 +1067,13 @@ describe('unilateralExitMachine', () => {
     })
     await waitFor(testActor, (state) => state.matches('waitingConfirm'))
 
-    testActor.send({ type: 'WALLET_RESET' })
+    testActor.send({ type: 'ARKADE_SESSION_RESET' })
     expect(testActor.getSnapshot().matches('notConfigured')).toBe(true)
     expect(testActor.getSnapshot().context.jobOutpoints).toEqual([])
     expect(testActor.getSnapshot().context.walletScope).toBeNull()
   })
 
-  it('WALLET_RESET from paused returns to notConfigured', async () => {
+  it('ARKADE_SESSION_RESET from paused returns to notConfigured', async () => {
     const evaluatePolicy = vi.fn(async () => ({
       feeRateSatPerVb: 2,
       pausedReason: 'feeCapExceeded' as const,
@@ -985,11 +1088,11 @@ describe('unilateralExitMachine', () => {
     })
     await waitFor(testActor, (state) => state.matches('paused'))
 
-    testActor.send({ type: 'WALLET_RESET' })
+    testActor.send({ type: 'ARKADE_SESSION_RESET' })
     expect(testActor.getSnapshot().matches('notConfigured')).toBe(true)
   })
 
-  it('WALLET_RESET from error returns to notConfigured', async () => {
+  it('ARKADE_SESSION_RESET from error returns to notConfigured', async () => {
     const fetchProgress = vi.fn(async () => {
       throw new Error('esplora unavailable')
     })
@@ -1004,11 +1107,11 @@ describe('unilateralExitMachine', () => {
     })
     await waitFor(testActor, (state) => state.matches('error'))
 
-    testActor.send({ type: 'WALLET_RESET' })
+    testActor.send({ type: 'ARKADE_SESSION_RESET' })
     expect(testActor.getSnapshot().matches('notConfigured')).toBe(true)
   })
 
-  it('WALLET_RESET from complete returns to notConfigured', async () => {
+  it('ARKADE_SESSION_RESET from complete returns to notConfigured', async () => {
     const fetchProgress = vi.fn(async () =>
       progress({
         phase: 'complete',
@@ -1031,13 +1134,15 @@ describe('unilateralExitMachine', () => {
       outpoints: [leaf],
       automationEnabled: false,
     })
-    await waitFor(testActor, (state) => state.matches('complete'))
+    await waitFor(testActor, (state) =>
+      branchCompleteReleasedToIdle(state, fetchProgress),
+    )
 
-    testActor.send({ type: 'WALLET_RESET' })
+    testActor.send({ type: 'ARKADE_SESSION_RESET' })
     expect(testActor.getSnapshot().matches('notConfigured')).toBe(true)
   })
 
-  it('WALLET_RESET from waitingForParentData returns to notConfigured', async () => {
+  it('ARKADE_SESSION_RESET from waitingForParentData returns to notConfigured', async () => {
     const fetchProgress = vi.fn(async () =>
       progress({ phase: 'idle', currentStepTxRelayed: false }),
     )
@@ -1055,7 +1160,7 @@ describe('unilateralExitMachine', () => {
     })
     await waitFor(testActor, (state) => state.matches('waitingForParentData'))
 
-    testActor.send({ type: 'WALLET_RESET' })
+    testActor.send({ type: 'ARKADE_SESSION_RESET' })
     expect(testActor.getSnapshot().matches('notConfigured')).toBe(true)
   })
 
@@ -1151,7 +1256,7 @@ describe('unilateralExitMachine', () => {
     expect(ensureBroadcast).toHaveBeenCalledTimes(2)
   })
 
-  it('does not complete when selected leaves are not unrolled', async () => {
+  it('does not complete while a DAG node is still in progress', async () => {
     const fetchProgress = vi.fn(async () =>
       progress({
         phase: 'complete',
@@ -1184,7 +1289,7 @@ describe('unilateralExitMachine', () => {
     expect(clearPersistedUnilateralExitJob).not.toHaveBeenCalled()
   })
 
-  it('does not complete when WASM branch is complete but leaves are not unrolled', async () => {
+  it('releases_broadcaster_when_branch_complete_before_six_conf', async () => {
     const fetchProgress = vi.fn(async () =>
       progress({
         phase: 'complete',
@@ -1196,7 +1301,7 @@ describe('unilateralExitMachine', () => {
           { txid: 'step1', confirmations: 1, status: 'confirmed' },
         ],
         leafStatuses: [
-          { txid: leaf.txid, vout: leaf.vout, confirmations: 0, isUnrolled: false },
+          { txid: leaf.txid, vout: leaf.vout, confirmations: 1, isUnrolled: false },
         ],
       }),
     )
@@ -1204,15 +1309,21 @@ describe('unilateralExitMachine', () => {
 
     testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
     testActor.send({
-      type: 'START_MANUAL',
+      type: 'START_AUTOMATIC',
       walletScope,
       outpoints: [leaf],
-      feeRateSatPerVb: 2,
     })
 
-    await waitFor(testActor, (state) => state.matches('idle'))
-    expect(testActor.getSnapshot().matches('complete')).toBe(false)
-    expect(clearPersistedUnilateralExitJob).not.toHaveBeenCalled()
+    await waitFor(testActor, (state) =>
+      branchCompleteReleasedToIdle(state, fetchProgress),
+    )
+    expect(clearPersistedUnilateralExitJob).toHaveBeenCalled()
+    expect(testActor.getSnapshot().context.lastSettleResult).toBe('branchComplete')
+    const fetchCountAfterRelease = fetchProgress.mock.calls.length
+    testActor.send({ type: 'POLL_TICK' })
+    expect(testActor.getSnapshot().matches('idle')).toBe(true)
+    expect(testActor.getSnapshot().context.jobOutpoints).toEqual([])
+    expect(fetchProgress).toHaveBeenCalledTimes(fetchCountAfterRelease)
   })
 
   it('completes when all leaves unrolled even if operator reports in-progress exits', async () => {
@@ -1241,7 +1352,9 @@ describe('unilateralExitMachine', () => {
       reconcileInProgressOutpoints: [leaf],
     })
 
-    await waitFor(testActor, (state) => state.matches('complete'))
+    await waitFor(testActor, (state) =>
+      branchCompleteReleasedToIdle(state, fetchProgress),
+    )
     expect(clearPersistedUnilateralExitJob).toHaveBeenCalled()
   })
 
@@ -1250,6 +1363,33 @@ describe('unilateralExitMachine', () => {
       status: 'aspSweptTargets' as const,
       reasonCode: 'asp_swept_targets',
       detailMessage: 'Operator swept target VTXO.',
+      offendingOutpoints: [leaf],
+    }))
+    const fetchProgress = vi.fn(async () => progress({ phase: 'idle' }))
+    const { testActor } = createTestActor({ evaluateJobViability, fetchProgress })
+
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'START_MANUAL',
+      walletScope,
+      outpoints: [leaf],
+      feeRateSatPerVb: 2,
+    })
+
+    await waitFor(testActor, (state) => state.matches('idle'))
+    expect(evaluateJobViability).toHaveBeenCalledTimes(1)
+    expect(fetchProgress).not.toHaveBeenCalled()
+    expect(persistUnilateralExitFailureRecord).toHaveBeenCalled()
+    expect(clearPersistedUnilateralExitJob).toHaveBeenCalledWith(walletScope)
+    expect(testActor.getSnapshot().context.jobOutpoints).toEqual([])
+    expect(testActor.getSnapshot().context.lastSettleResult).toBe('terminated')
+  })
+
+  it('terminates job immediately when viability reports branch funding lost', async () => {
+    const evaluateJobViability = vi.fn(async () => ({
+      status: 'branchFundingLost' as const,
+      reasonCode: 'branch_funding_lost',
+      detailMessage: 'Exit-relevant VTXO outpoint was spent outside the wallet unroll chain.',
       offendingOutpoints: [leaf],
     }))
     const fetchProgress = vi.fn(async () => progress({ phase: 'idle' }))

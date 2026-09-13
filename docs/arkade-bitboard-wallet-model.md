@@ -77,19 +77,19 @@ Replayed from the snapshot (same rules as live `ark-client::offchain_balance`):
 | **boarding_spendable** | Confirmed on-chain UTXOs on the boarding address, ready to settle into VTXOs |
 | **boarding_pending** | Unconfirmed boarding UTXOs |
 | **onchain_bumper** | Confirmed sats in the P2A bumper wallet (exit fees only — not Ark spendable balance) |
-| **unilateral_exit_in_progress** | Sum of **exiting** VTXOs (`is_unrolled && !is_spent`) plus pending unilateral records during unroll (informational; already excluded from gross spendable) |
+| **unilateral_exit_in_progress** | Sum of VTXO exit records in `tagged`…`complete_ready` (pipeline; not `exited`) |
 | **collaborative_exit_in_progress** | Open CollaborativeExit pending-intent amount, or a retain-until-spendable-drops deduction after join Completed while the snapshot still lists those VTXOs as spendable. Cancel restores spendable immediately. |
 
 #### Layer 4 — Dashboard fields
 
 | Field | Formula / rule |
 |-------|----------------|
-| **offchain_spendable_sats** | Gross spendable offchain minus **collaborative** exit in progress only |
-| **confirmed_sats** | `offchain_spendable_sats + onchain_bumper_sats` (same collaborative subtraction) |
-| **total_sats** | Gross offchain + recoverable sub-buckets + pending recovery + bumper + boarding pending, minus collaborative exit in progress |
+| **offchain_spendable_sats** | Gross spendable offchain minus **collaborative_exit_in_progress** and **unilateral_exit_in_progress** amounts still in that gross |
+| **confirmed_sats** | `offchain_spendable_sats + onchain_bumper_sats` (same collaborative + unilateral in-progress subtraction) |
+| **total_sats** | Gross offchain + recoverable sub-buckets + pending recovery + bumper + boarding pending, minus collaborative_exit_in_progress and unilateral_exit_in_progress amounts still in that gross |
 | **Dashboard headline** (UI) | `offchain_spendable_sats + boarding_spendable_sats` |
 
-**Unilateral exit in progress** is shown as an informational “−” line but is **not** subtracted again from spendable totals — those VTXOs are already out of gross spendable via the **exiting** sub-bucket once unroll completes. See [Unilateral vs collaborative exit balance timing](#unilateral-vs-collaborative-exit-balance-timing) for the phase handoff.
+**Unilateral exit in progress** is the pipeline line from VTXO records (`tagged` onward). Headline spendable drops at **job start** by subtracting that in-progress amount while it is still in gross spendable. After 6-conf unroll, ark-core already drops those VTXOs from gross — do not subtract the line again. See [Unilateral vs collaborative exit balance timing](#unilateral-vs-collaborative-exit-balance-timing) for the phase handoff.
 
 **Collaborative exit in progress** is still subtracted while the snapshot lists the exiting VTXOs as spendable; pending exit deduction records track that gap until operator sync updates the snapshot.
 
@@ -97,7 +97,7 @@ Operator access from the browser uses **REST** (`ark-rest` + grpc API shim), not
 
 ## Exiting to on-chain
 
-Unilateral-exit protocol, gotchas, XState machine, and WASM proceed step: [unilateral-exit.md](unilateral-exit.md). Staged VTXO lifecycle refactor (spend-lock from `tagged` is Stage 2): [unilateral-exit-vtxo-lifecycle-refactor.md](unilateral-exit-vtxo-lifecycle-refactor.md). Persistence (materials, watches, job/prefs/failure): [persistence/unilateral-exit.md](persistence/unilateral-exit.md).
+Unilateral-exit protocol, gotchas, XState machine, and WASM proceed step: [unilateral-exit.md](unilateral-exit.md). Persistence (materials, records, job/prefs/failure): [persistence/unilateral-exit.md](persistence/unilateral-exit.md).
 
 Management → Arkade offers two paths:
 
@@ -109,7 +109,7 @@ Management → Arkade offers two paths:
 
 Collaborative exit and unilateral unroll are implemented in `bitboard-ark` (`collaborative_redeem`, `proceed_unilateral_exit_step`, etc.). **Autonomous mode** branches the same unilateral exit RPCs to snapshot-backed materials instead of ASP indexer/batch APIs. The on-chain bumper wallet shares the same BIP32-derived BDK wallet as boarding.
 
-**Unilateral exit control:** Management links to `/wallet/arkade/unilateral-exit`. The control page is a view of the XState actor: merged DAG (React Flow + d3-dag), multi-leaf selection, one virtual tx per `ark_proceed_unilateral_exit_step`. Proceed is non-blocking; the machine polls until the current step has **1 confirmation**. A virtual tx (leaf or intermediate host) is marked `is_unrolled` only after **6 confirmations**. Shared-leaf and automation details: [unilateral-exit.md](unilateral-exit.md).
+**Unilateral exit control:** Management links to `/wallet/arkade/unilateral-exit`. The control page is a view of the XState actor: merged DAG (React Flow + d3-dag), multi-leaf selection, one virtual tx per `ark_proceed_unilateral_exit_step`. Proceed is non-blocking; the machine polls until the current step has **1 confirmation**. A host virtual tx is marked `is_unrolled` only after **6 confirmations**. Shared-leaf and automation details: [unilateral-exit.md](unilateral-exit.md).
 
 ### Unilateral vs collaborative exit balance timing
 
@@ -119,29 +119,33 @@ Unilateral exit is more subtle: the **same sats** are tracked in different snaps
 
 | Phase | Snapshot state | In gross spendable? | `unilateral_exit_in_progress` source | Subtract from net spendable? |
 |-------|----------------|---------------------|--------------------------------------|------------------------------|
-| Before unroll | `confirmed` | Yes | 0 | No |
-| During unroll (broadcast in flight) | still `confirmed` | Yes | `pending_exit_deductions` (unilateral) | No in WASM/UI steady-state rules* |
-| After unroll | **exiting** (`is_unrolled = true`, `is_spent = false`) | No — excluded by `VtxoList` | sum of **exiting** VTXOs | No — already excluded from gross |
+| Before job | `confirmed` | Yes | 0 | No |
+| Job start (`tagged`) | still `confirmed` | Yes | VTXO exit records `tagged`…`complete_ready` | Yes — unilateral exit in progress still in gross |
+| During unroll (`host_broadcast_attempted`…`host_confirmed`) | still `confirmed` | Yes | same records | Yes — still in gross |
+| After unroll (`unrolled` / `complete_ready`) | **exiting** (`is_unrolled = true`, `is_spent = false`) | No — excluded by `VtxoList` | same records | No — already excluded from gross |
 
-\*The brief “during unroll” window rarely affects the dashboard because the user stays on the unilateral exit control page until each step completes. Optimistic UI (`arkade-exit-balance-optimistic.ts`) only bumps `unilateralExitInProgressSats` for unilateral paths; it does **not** reduce `confirmedSats` / `offchainSpendableSats`, matching post-unroll WASM behaviour and avoiding double-subtraction once the VTXO moves to **exiting**.
+Optimistic UI (`arkade-exit-balance-optimistic.ts`) at START/tag bumps `unilateralExitInProgressSats` **and** reduces `confirmedSats` / `offchainSpendableSats` / `totalSats`, matching WASM spend-lock. After refetch, display uses WASM fields; do not subtract the in-progress line again.
 
-**Handoff between pending record and exiting sub-bucket**
+**Handoff between tagged spend-lock and exiting sub-bucket**
 
-1. First unroll broadcast → `record_pending_unilateral_exit` writes a pending deduction; the VTXO is still spendable in the snapshot.
-2. A virtual tx reaches **6 confirmations** → `mark_leaf_virtual_tx_vtxos_unrolled_in_snapshot` sets `is_unrolled = true` on every vout of that tx (gross spendable drops **before** operator sync realigns the snapshot).
-3. `reconcile_pending_exit_deductions` drops the pending unilateral record once the VTXO is no longer spendable.
-4. `exit_balance_components` counts the same amount from the **exiting** sub-bucket until on-chain completion (`is_spent`).
+1. Job start → `tag_unilateral_exit_plan` upserts records at `tagged`; spend-lock applies immediately (send / collab / renew / delegate refuse those outpoints). Recover and signer-migrate are not spend-locked; they still skip in-progress pipeline outpoints so they do not race an active unroll.
+2. Proceed registers a host-tx observation → records on that host advance to `host_broadcast_attempted`.
+3. Esplora probing advances `host_relayed` / `host_confirmed` / `unrolled` (`is_unrolled` at 6 confs). Gross spendable drops **before** operator sync realigns the snapshot.
+4. `exit_balance_components` keeps the pipeline line from records and subtracts from net spendable **only** the unilateral-exit-in-progress amounts still in gross. After step 3, do not subtract the line again.
+5. Complete success → `exited`; claimable unrolled rows can complete without in-progress membership (`ARK-EXIT-31`).
 
-Bitboard keeps the **exit line amount stable** across steps 1→4. Net spendable must not subtract `unilateral_exit_in_progress_sats` after step 2 — doing so double-counted the exit against unrelated VTXOs (e.g. a fresh boarding credit). Collaborative exit has no unroll handoff: the in-progress line comes from the open CollaborativeExit intent, then a Completed retain deduction until snapshot spendable drops; Cancel must not leave that line in place.
+Bitboard keeps the **exit line amount stable** across steps 1→4. Net spendable must not subtract `unilateral_exit_in_progress_sats` after step 3 — doing so double-counted the exit against unrelated VTXOs (e.g. a fresh boarding credit). Collaborative exit has no unroll handoff: the in-progress line comes from the open CollaborativeExit intent, then a Completed retain deduction until snapshot spendable drops; Cancel must not leave that line in place.
 
-Implementation touchpoints: `build_arkade_balance_dto` (WASM), `exit_balance_components` / `reconcile_pending_exit_deductions` (persistence), `arkade-exit-balance-optimistic.ts` (React Query cache).
+Implementation touchpoints: `build_arkade_balance_dto` (WASM), `exit_balance_components` / `vtxo_exit_records` (persistence), `arkade-exit-balance-optimistic.ts` (React Query cache).
+
+**Spend-lock from `tagged` is current** (`ARK-EXIT-27`). Headline spendable drops at job start. Send / collab / renew / delegate refuse spend-locked outpoints (pipeline plus `funding_lost` while the coin is still in gross). Recover and signer-migrate are not spend-locked (`ARK-REC-08`): they exclude in-progress pipeline membership only, so a `funding_lost` coin remains recoverable or migratable if the operator still lists it. Unrolled+ records survive snapshot replace (`ARK-EXIT-12`). Leftover 0.3.4-dev `unilateral_exit_watches` JSON is ignored.
 
 ### Post-unroll operator contract (ARK-EXIT-11)
 
-Unroll and complete do **not** call the ASP. After each proceed-step broadcast, the XState machine waits until Esplora reports **1 confirmation** on the current virtual tx. WASM stamps local `is_unrolled` only when the leaf or intermediate host has **6 confirmations**. Operator indexer catch-up happens later, if at all, during a separate operator sync.
+Unroll and complete do **not** call the ASP. After each proceed-step broadcast, the XState machine waits until Esplora reports **1 confirmation** on the current virtual tx. WASM stamps local `is_unrolled` only when the host tx has **6 confirmations**. Operator indexer catch-up happens later, if at all, during a separate operator sync.
 
-- **Sticky merge:** `merge_sticky_unrolled_flags` preserves local `is_unrolled` for VTXOs still returned by the operator while ASP lags on the `is_unrolled` flag; missing or divergent watches are reconciled via `unilateral_exit_watches` (ARK-EXIT-12).
-- **Watch reconcile:** After each operator sync, `reconcile_exiting_vtxo_watches` runs targeted `list_vtxos_for_outpoints` and narrow Esplora probes per the truth table — never clears exiting state on full-list absence alone (ARK-SYNC-03).
+- **Sticky merge:** `merge_sticky_unrolled_flags` preserves local `is_unrolled` for VTXOs still returned by the operator while ASP lags, and only when a host-tx observation has 6 confirmations or a VTXO exit record is `unrolled` / `complete_ready` (ARK-EXIT-12). Tag-time records must not keep the flag. Missing unrolled+ rows are reconciled from those records.
+- **Record reconcile:** After each operator sync, `reconcile_exiting_vtxo_watches` iterates unrolled+ VTXO exit records with targeted `list_vtxos_for_outpoints` and narrow Esplora probes per the truth table — never clears exiting state on full-list absence alone (ARK-SYNC-03).
 
 Residual edge cases where ASP reports `is_swept` without `is_unrolled` during an abandoned unilateral exit (cooperative recover override) remain documented in deferred Operation Labyrinth Step 3 work; recover + SSE fixes addressed the common stuck-wallet path.
 
@@ -149,15 +153,15 @@ Residual edge cases where ASP reports `is_swept` without `is_unrolled` during an
 
 Vendored **ark-core** classifies `is_unrolled && !is_spent` VTXOs into the **exiting** sub-bucket before recoverable (aligned with arkd `recoverable_only`, which excludes `Unrolled`). `is_recoverable()` also returns false when `is_unrolled`.
 
-During the brief **pre-unroll** window, a pending unilateral record may exist while the VTXO is still in `confirmed`. Bitboard excludes those pending outpoints from recoverable and expiry UX via `ARK-REC-08`.
+During the **pre-unroll** window, tagged-or-later VTXO exit records exist while the VTXO is still in `confirmed`. Bitboard excludes **pipeline** outpoints from recover so recover does not race an active unroll. Expiry / renew use the **spend-lock** set (`ARK-REC-08` / `ARK-EXIT-27`).
 
-| Surface | Implementation |
-|---------|----------------|
-| Recoverable settleable / pending-operator-sweep counts and **Recover now** | `recoverable_vtxo_buckets_from_list` — pending outpoints only |
-| Expiring-soon count and **Renew VTXOs now** | `expiring_outpoints` |
-| Earliest expiry indicator | `vtxo_expiry_status` (`earliest_expires_at` scan) |
+| Surface | Implementation | Exclude set |
+|---------|----------------|-------------|
+| Recoverable settleable / pending-operator-sweep counts, **Recover now**, signer-migrate, pending-recovery-due-to-expired-signer | `recoverable_vtxo_buckets_from_list` / `pipeline_outpoints()` | Pipeline (`tagged`…`complete_ready`) only — not `funding_lost` |
+| Expiring-soon count and **Renew VTXOs now** | `expiring_outpoints` | Spend-lock (pipeline ∪ `funding_lost`) |
+| Earliest expiry indicator | `vtxo_expiry_status` (`earliest_expires_at` scan) | Spend-lock (pipeline ∪ `funding_lost`) |
 
-Contract `ARK-REC-08`.
+Contract `ARK-REC-08`. Recover / migrate are not spend-locked. Renew / expiry / send / collab / delegate are.
 
 ### Unilateral exit completion coin-select (vendor fork)
 

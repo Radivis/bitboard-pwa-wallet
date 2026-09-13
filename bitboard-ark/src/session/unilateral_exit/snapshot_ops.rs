@@ -8,11 +8,11 @@ use crate::api_types::ExitCandidateDto;
 use crate::error::{ArkResult, ArkWasmError};
 use crate::exit_balance::{UnilateralExitOutpointKey, is_unilateral_exit_in_progress_outpoint};
 use crate::offchain_snapshot::virtual_tx_outpoint_from_record;
-use crate::outpoint::{VirtualOutPoint, representative_virtual_tx_outpoint_for_leaf_tx};
+use crate::outpoint::{VirtualOutPoint, representative_virtual_tx_outpoint_for_host_tx};
 use crate::persistence::OffchainVtxoSnapshot;
 use crate::session::mappers::map_exit_candidate;
 use crate::unilateral_exit_materials::{
-    materials_for_unroll_leaf_tx, record_is_exit_eligible, virtual_psbts_from_records,
+    materials_for_unroll_host_tx, record_is_exit_eligible, virtual_psbts_from_records,
     vtxo_chains_from_json,
 };
 
@@ -79,7 +79,7 @@ pub(crate) fn exit_candidates_from_snapshot(
     for record in &snapshot.virtual_tx_outpoints {
         if !record_is_exit_eligible(record)
             || !snapshot
-                .unilateral_exit_materials_by_leaf_tx
+                .unilateral_exit_materials_by_host_tx
                 .contains_key(&record.txid)
         {
             continue;
@@ -118,9 +118,9 @@ pub(crate) async fn autonomous_build_unilateral_branch_for_leaf_tx(
         .offchain_vtxo_snapshot
         .ok_or_else(|| ArkWasmError::Snapshot("offchain snapshot missing".into()))?;
     let txid = leaf_txid.to_string();
-    let materials = materials_for_unroll_leaf_tx(&snapshot, &txid)
+    let materials = materials_for_unroll_host_tx(&snapshot, &txid)
         .ok_or(ArkWasmError::AutonomousExitMaterialsMissing)?;
-    let virtual_tx_outpoint = representative_virtual_tx_outpoint_for_leaf_tx(&snapshot, &txid)?;
+    let virtual_tx_outpoint = representative_virtual_tx_outpoint_for_host_tx(&snapshot, &txid)?;
     let target = bitcoin::OutPoint {
         txid: leaf_txid,
         vout: virtual_tx_outpoint.outpoint.vout,
@@ -196,7 +196,11 @@ pub(crate) fn autonomous_validate_completion_ready(
         .snapshot()
         .offchain_vtxo_snapshot
         .ok_or_else(|| ArkWasmError::Snapshot("offchain snapshot missing".into()))?;
-    validate_snapshot_completion_ready(&snapshot, vtxo_outpoints)
+    validate_snapshot_completion_ready(&snapshot, vtxo_outpoints)?;
+    crate::session::unilateral_exit::vtxo_exit::validate_records_not_funding_lost(
+        &session.wallet_db.vtxo_exit_records(),
+        vtxo_outpoints,
+    )
 }
 
 #[cfg(test)]
@@ -245,7 +249,7 @@ mod tests {
             synced_at: 1,
             dust_sats: 330,
             virtual_tx_outpoints: records,
-            unilateral_exit_materials_by_leaf_tx: std::collections::BTreeMap::new(),
+            unilateral_exit_materials_by_host_tx: std::collections::BTreeMap::new(),
         }
     }
 
@@ -261,6 +265,28 @@ mod tests {
         assert_eq!(parsed.len(), 2);
         assert_eq!(parsed[0].vout, 0);
         assert_eq!(parsed[1].vout, 1);
+    }
+
+    #[test]
+    fn complete_gate_accepts_unrolled_outpoint_without_in_progress_membership() {
+        let txid = Txid::from_byte_array([0x55; 32]);
+        let snapshot = sample_snapshot(vec![snapshot_record(0x55, 0, true, false)]);
+        let outpoints = vec![VirtualOutPoint { txid, vout: 0 }];
+        validate_snapshot_completion_ready(&snapshot, &outpoints)
+            .expect("unrolled unspent outpoint is completable without in-progress membership");
+    }
+
+    #[test]
+    fn complete_gate_rejects_when_not_unrolled() {
+        let txid = Txid::from_byte_array([0x77; 32]);
+        let snapshot = sample_snapshot(vec![snapshot_record(0x77, 0, false, false)]);
+        let outpoints = vec![VirtualOutPoint { txid, vout: 0 }];
+        let error =
+            validate_snapshot_completion_ready(&snapshot, &outpoints).expect_err("not unrolled");
+        assert!(matches!(
+            error,
+            ArkWasmError::VtxoUnilateralExitNotReady { vout: 0, .. }
+        ));
     }
 
     #[test]
@@ -302,7 +328,7 @@ mod tests {
         let leaf_txid = Txid::from_byte_array([0x22; 32]).to_string();
         let mut snapshot = sample_snapshot(vec![snapshot_record(0x22, 0, false, false)]);
         snapshot
-            .unilateral_exit_materials_by_leaf_tx
+            .unilateral_exit_materials_by_host_tx
             .insert(leaf_txid, sample_materials());
         let rows = exit_candidates_from_snapshot(&snapshot, &HashSet::new()).expect("candidates");
         assert_eq!(rows.len(), 1);

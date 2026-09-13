@@ -5,7 +5,6 @@ use crate::api_types::{
 use crate::constants::MIN_FEE_RATE_SAT_PER_VB;
 use crate::error::{ArkResult, ArkWasmError};
 use crate::outpoint::OnchainOutPoint;
-use crate::persistence::{JsonPersistenceDb, OffchainVtxoSnapshot};
 
 use super::snapshot_ops::{
     autonomous_build_unilateral_branch_for_leaf_tx, autonomous_complete_unilateral_exit,
@@ -14,30 +13,6 @@ use super::snapshot_ops::{
 use crate::session::ArkSession;
 use crate::session::mappers::parse_onchain_address;
 use crate::session::open::sync_onchain_wallet_with_retries;
-
-fn set_leaf_virtual_tx_vtxos_unrolled_flag_in_snapshot(
-    snapshot: &mut OffchainVtxoSnapshot,
-    txid: &str,
-    is_unrolled: bool,
-) {
-    for record in &mut snapshot.virtual_tx_outpoints {
-        if record.txid == txid {
-            record.is_unrolled = is_unrolled;
-        }
-    }
-}
-
-fn set_leaf_virtual_tx_vtxos_unrolled_flag_in_wallet_db(
-    wallet_db: &JsonPersistenceDb,
-    txid: &str,
-    is_unrolled: bool,
-) {
-    let Some(mut snapshot) = wallet_db.snapshot().offchain_vtxo_snapshot.clone() else {
-        return;
-    };
-    set_leaf_virtual_tx_vtxos_unrolled_flag_in_snapshot(&mut snapshot, txid, is_unrolled);
-    wallet_db.set_offchain_vtxo_snapshot(snapshot);
-}
 
 fn resolve_completion_fee_rate_sat_per_vb(override_rate_sat_per_vb: Option<f64>) -> f64 {
     override_rate_sat_per_vb
@@ -84,14 +59,6 @@ impl ArkSession {
         })
     }
 
-    pub(crate) fn mark_leaf_virtual_tx_vtxos_unrolled_in_snapshot(
-        &self,
-        txid: &str,
-    ) -> ArkResult<()> {
-        set_leaf_virtual_tx_vtxos_unrolled_flag_in_wallet_db(&self.wallet_db, txid, true);
-        Ok(())
-    }
-
     pub async fn complete_unilateral_exit(
         &self,
         params: CompleteUnilateralExitParams,
@@ -102,16 +69,7 @@ impl ArkSession {
 
         let deduped_vtxo_outpoints = dedup_virtual_outpoints(params.vtxo_outpoints);
 
-        let in_progress = self.unilateral_exit_in_progress_outpoints()?;
-        for outpoint in &deduped_vtxo_outpoints {
-            let parsed_outpoint = outpoint.to_bitcoin_outpoint();
-            if !in_progress.contains(&parsed_outpoint) {
-                return Err(ArkWasmError::VtxoNotInUnilateralExit {
-                    txid: outpoint.txid.to_string(),
-                    vout: outpoint.vout,
-                });
-            }
-        }
+        self.reconcile_host_tx_finality().await?;
 
         let destination = parse_onchain_address(&params.destination_address, self.network())?;
         let fee_rate_sat_per_vb =
@@ -221,80 +179,5 @@ mod completion_helper_tests {
         assert_eq!(mapped[0].on_chain_txid, on_chain_txid.to_string());
         assert_eq!(mapped[0].on_chain_vout, 2);
         assert_eq!(mapped[0].amount_sats, 150_000);
-    }
-}
-
-#[cfg(test)]
-mod leaf_virtual_tx_co_mark_tests {
-    use super::set_leaf_virtual_tx_vtxos_unrolled_flag_in_wallet_db;
-    use crate::persistence::{JsonPersistenceDb, OffchainVtxoSnapshot, VirtualTxOutPointRecord};
-    use bitcoin::Txid;
-    use bitcoin::hashes::Hash;
-
-    fn sibling_snapshot(txid_byte: u8) -> OffchainVtxoSnapshot {
-        let txid = Txid::from_byte_array([txid_byte; 32]).to_string();
-        OffchainVtxoSnapshot {
-            synced_at: 1,
-            dust_sats: 330,
-            virtual_tx_outpoints: vec![
-                VirtualTxOutPointRecord {
-                    txid: txid.clone(),
-                    vout: 0,
-                    created_at: 0,
-                    expires_at: 9_999_999_999,
-                    amount_sats: 50_000,
-                    script_hex: String::new(),
-                    is_preconfirmed: false,
-                    is_swept: false,
-                    is_unrolled: false,
-                    is_spent: false,
-                    spent_by: None,
-                    commitment_txids: vec![],
-                    settled_by: None,
-                    ark_txid: None,
-                    assets: vec![],
-                    server_pk_hex: None,
-                },
-                VirtualTxOutPointRecord {
-                    txid,
-                    vout: 1,
-                    created_at: 0,
-                    expires_at: 9_999_999_999,
-                    amount_sats: 25_000,
-                    script_hex: String::new(),
-                    is_preconfirmed: false,
-                    is_swept: false,
-                    is_unrolled: false,
-                    is_spent: false,
-                    spent_by: None,
-                    commitment_txids: vec![],
-                    settled_by: None,
-                    ark_txid: None,
-                    assets: vec![],
-                    server_pk_hex: None,
-                },
-            ],
-            unilateral_exit_materials_by_leaf_tx: std::collections::BTreeMap::new(),
-        }
-    }
-
-    #[test]
-    fn mark_leaf_virtual_tx_co_marks_all_vouts_on_tx() {
-        let wallet_db = JsonPersistenceDb::default();
-        let txid = Txid::from_byte_array([0x88; 32]).to_string();
-        wallet_db.set_offchain_vtxo_snapshot(sibling_snapshot(0x88));
-
-        set_leaf_virtual_tx_vtxos_unrolled_flag_in_wallet_db(&wallet_db, &txid, true);
-
-        let snapshot = wallet_db
-            .snapshot()
-            .offchain_vtxo_snapshot
-            .expect("snapshot after co-mark");
-        assert!(
-            snapshot
-                .virtual_tx_outpoints
-                .iter()
-                .all(|record| record.is_unrolled)
-        );
     }
 }

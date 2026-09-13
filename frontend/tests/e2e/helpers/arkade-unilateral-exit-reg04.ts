@@ -1,6 +1,7 @@
 import { expect, type Page } from '@playwright/test'
 import { mineRegtestBlocks } from './arkade-regtest'
 import { confirmStartUnilateralExitIfShown } from './arkade-unilateral-exit-start-confirm'
+import { isUnilateralExitBranchCompleteInPage } from './arkade-unilateral-exit-branch-complete'
 
 const MANUAL_UNROLL_DEADLINE_MS = 900_000
 const MAX_PROCEED_CLICKS = 24
@@ -9,7 +10,7 @@ const MAX_MINES_WITHOUT_PROGRESS = 30
 const PROCEED_STEP_TIMEOUT_MS = 180_000
 
 async function isBranchComplete(page: Page): Promise<boolean> {
-  return page.getByTestId('unilateral-exit-step-progress').getByText(/branch complete/i).isVisible()
+  return isUnilateralExitBranchCompleteInPage(page)
 }
 
 async function ensureManualUnilateralExitMode(page: Page): Promise<void> {
@@ -53,6 +54,10 @@ async function clickProceedAndWaitForStep(page: Page): Promise<void> {
   const deadlineMs = Date.now() + PROCEED_STEP_TIMEOUT_MS
   while (Date.now() < deadlineMs) {
     await assertNoUnilateralExitErrorToast(page)
+
+    if (await isBranchComplete(page)) {
+      return
+    }
 
     if (await page.getByText('Unroll step submitted.').isVisible()) {
       return
@@ -121,9 +126,15 @@ export async function runManualUnilateralUnrollUntilBranchComplete(page: Page): 
       }
       await clickProceedAndWaitForStep(page)
       proceedClicks += 1
+      if (await isBranchComplete(page)) {
+        return
+      }
       lastProgressText = await readStepProgressText(page)
       minesWithoutProgress = 0
       await mineRegtestBlocks(2)
+      if (await isBranchComplete(page)) {
+        return
+      }
       continue
     }
 

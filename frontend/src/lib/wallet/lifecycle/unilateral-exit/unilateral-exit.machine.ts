@@ -13,13 +13,14 @@ export type {
   FetchProgressActorInput,
   ProceedStepActorInput,
   ResolveAbortVtxoIdsActorInput,
+  TagPlanActorInput,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-machine-setup'
 
 const checkingProgressOnDone = [
   {
     guard: 'isJobCompleteFromFetchEvent',
     target: 'complete',
-    actions: ['assignProgressFromFetch', 'clearPersistedJob'],
+    actions: 'assignProgressFromFetch',
   },
   {
     guard: 'isUnconfirmedParentRetryProgressRefresh',
@@ -96,7 +97,7 @@ const ensuringBroadcastOnDone = [
   {
     guard: 'isJobCompleteFromEnsureBroadcastEvent',
     target: 'complete',
-    actions: ['assignProgressFromEnsureBroadcast', 'clearPersistedJob'],
+    actions: 'assignProgressFromEnsureBroadcast',
   },
   {
     guard: 'shouldWaitAfterEnsureBroadcast',
@@ -168,18 +169,18 @@ const inFlightAbortPrefsAndProceed = {
 } as const
 
 const startManualTransition = {
-  target: 'checkingProgress',
-  actions: ['assignStartManual', 'persistActiveJobFromContext'],
+  target: 'taggingPlan',
+  actions: ['assignStartManual'],
 } as const
 
 const startAutomaticTransition = {
-  target: 'checkingProgress',
-  actions: ['assignStartAutomatic', 'persistActiveJobFromContext'],
+  target: 'taggingPlan',
+  actions: ['assignStartAutomatic'],
 } as const
 
 const hydrateOrStartTransition = {
-  target: 'checkingProgress',
-  actions: ['assignHydrate', 'ensurePersistedJobFromContext'],
+  target: 'taggingPlan',
+  actions: ['assignHydrate'],
 } as const
 
 export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
@@ -187,9 +188,12 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
   context: ({ input }) => createInitialUnilateralExitContext(input),
   initial: 'notConfigured',
   on: {
-    WALLET_RESET: {
+    ARKADE_SESSION_RESET: {
       target: '.notConfigured',
       actions: 'resetToNotConfigured',
+    },
+    HYDRATE_VTXO_RECORDS: {
+      actions: 'syncVtxoExitChildren',
     },
   },
   states: {
@@ -229,6 +233,32 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
             actions: 'assignAutomationPrefs',
           },
         ],
+      },
+    },
+    taggingPlan: {
+      on: inFlightAbortAndPrefs,
+      invoke: {
+        id: 'tagPlan',
+        src: 'tagPlanActor',
+        input: ({ context }) => ({
+          walletScope: requireUnilateralExitWalletScope(context.walletScope),
+          outpoints: context.jobOutpoints,
+        }),
+        onDone: [
+          {
+            guard: 'persistedJobMatchesContextOutpoints',
+            target: 'checkingProgress',
+            actions: ['ensurePersistedJobFromContext'],
+          },
+          {
+            target: 'checkingProgress',
+            actions: ['persistActiveJobFromContext'],
+          },
+        ],
+        onError: {
+          target: 'error',
+          actions: 'assignErrorFromTagPlan',
+        },
       },
     },
     checkingProgress: {
@@ -313,7 +343,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
           {
             guard: 'isJobCompleteFromProceedEvent',
             target: 'complete',
-            actions: ['assignProgressFromProceed', 'clearPersistedJob'],
+            actions: 'assignProgressFromProceed',
           },
           {
             target: 'ensuringBroadcast',
@@ -372,6 +402,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
       },
     },
     waitingConfirm: {
+      entry: 'assignSettleResultWaitingConfirm',
       after: {
         pollDelay: {
           target: 'checkingProgress',
@@ -427,6 +458,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
       },
     },
     paused: {
+      entry: 'assignSettleResultPaused',
       on: {
         ABORT_ORCHESTRATION: abortOrchestrationTransition,
         RESUME: {
@@ -455,15 +487,15 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
       },
     },
     complete: {
-      entry: ['invalidateUnilateralExitQueriesOnTerminate'],
-      on: {
-        START_MANUAL: startManualTransition,
-        START_AUTOMATIC: startAutomaticTransition,
-        CLEAR_JOB: {
-          target: 'idle',
-          actions: ['clearPersistedJob', 'clearJobActorContext'],
-        },
-        HYDRATE_OR_START: hydrateOrStartTransition,
+      entry: [
+        'invalidateUnilateralExitQueriesOnTerminate',
+        'clearPersistedJob',
+        'assignSettleResultBranchComplete',
+        'notifyBranchComplete',
+      ],
+      always: {
+        target: 'idle',
+        actions: 'clearJobActorContext',
       },
     },
     terminated: {
@@ -471,11 +503,13 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
         'persistUnilateralExitFailureFromViability',
         'invalidateUnilateralExitQueriesOnTerminate',
         'clearPersistedJob',
-        'clearJobActorContext',
+        'assignSettleResultTerminated',
+        'notifyTerminated',
         'clearTerminatedProceedRequested',
       ],
       always: {
         target: 'idle',
+        actions: 'clearJobActorContext',
       },
     },
     aborted: {
@@ -506,6 +540,7 @@ export const unilateralExitMachine = unilateralExitMachineSetup.createMachine({
       },
     },
     error: {
+      entry: 'assignSettleResultError',
       on: {
         ABORT_ORCHESTRATION: abortOrchestrationTransition,
         CLEAR_JOB: {

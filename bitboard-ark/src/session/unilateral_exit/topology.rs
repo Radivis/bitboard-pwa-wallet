@@ -8,7 +8,7 @@ use crate::api_types::{
 use crate::outpoint::VirtualOutPoint;
 use crate::persistence::{OffchainVtxoSnapshot, VirtualTxOutPointRecord};
 use crate::unilateral_exit_materials::{
-    chained_tx_type_label, snapshot_materials_for_leaf_tx, vtxo_chains_from_json,
+    chained_tx_type_label, snapshot_materials_for_host_tx, vtxo_chains_from_json,
 };
 
 /// Virtual tx types that may carry exit-eligible VTXO outpoints in indexer chains.
@@ -143,6 +143,7 @@ pub(crate) fn topology_host_outpoints(
             vout: record.vout,
             amount_sats: record.amount_sats,
             is_unrolled: record.is_unrolled,
+            expires_at: record.expires_at,
         })
         .collect::<Vec<_>>();
     outpoints.sort_by(|left, right| left.txid.cmp(&right.txid).then(left.vout.cmp(&right.vout)));
@@ -161,7 +162,7 @@ pub(crate) fn terminal_vtxo_host_txids_from_materials_snapshot(
 
     let mut chain_sets = Vec::new();
     for txid in &unique_txids {
-        let Some(materials) = snapshot_materials_for_leaf_tx(snapshot, txid) else {
+        let Some(materials) = snapshot_materials_for_host_tx(snapshot, txid) else {
             continue;
         };
         chain_sets.push(vtxo_chains_from_json(&materials.chain_json)?);
@@ -493,7 +494,7 @@ mod tests {
     fn filter_exit_candidates_to_terminal_leaves_drops_upstream_ark_vtxos() {
         use crate::persistence::OffchainVtxoSnapshot;
         use crate::unilateral_exit_materials::{
-            materials_record_from_prefetch, store_materials_for_leaf_tx,
+            materials_record_from_prefetch, store_materials_for_host_tx,
         };
 
         let intermediate = txid(4);
@@ -512,10 +513,10 @@ mod tests {
             synced_at: 1,
             dust_sats: 330,
             virtual_tx_outpoints: vec![],
-            unilateral_exit_materials_by_leaf_tx: Default::default(),
+            unilateral_exit_materials_by_host_tx: Default::default(),
         };
-        store_materials_for_leaf_tx(&mut snapshot, &intermediate.to_string(), materials.clone());
-        store_materials_for_leaf_tx(&mut snapshot, &terminal.to_string(), materials);
+        store_materials_for_host_tx(&mut snapshot, &intermediate.to_string(), materials.clone());
+        store_materials_for_host_tx(&mut snapshot, &terminal.to_string(), materials);
 
         let rows = vec![
             ExitCandidateDto {
@@ -546,5 +547,27 @@ mod tests {
             filter_exit_candidates_to_terminal_leaves(Some(&snapshot), rows).expect("filter");
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].txid, terminal.to_string());
+    }
+
+    #[test]
+    fn topology_host_outpoints_copies_expires_at() {
+        let ark = txid(3);
+        let nodes = vec![
+            UnilateralExitTopologyNodeDto {
+                txid: txid(1).to_string(),
+                tx_type: "commitment".to_string(),
+                spends: vec![],
+            },
+            UnilateralExitTopologyNodeDto {
+                txid: ark.to_string(),
+                tx_type: "ark".to_string(),
+                spends: vec![txid(1).to_string()],
+            },
+        ];
+        let mut record = vtxo_record(ark, 0, 25_000, false, false, false);
+        record.expires_at = 1_789_200_000;
+        let host_outpoints = topology_host_outpoints(&nodes, &[record]);
+        assert_eq!(host_outpoints.len(), 1);
+        assert_eq!(host_outpoints[0].expires_at, 1_789_200_000);
     }
 }

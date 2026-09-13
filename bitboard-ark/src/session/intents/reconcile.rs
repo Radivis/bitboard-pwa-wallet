@@ -378,7 +378,7 @@ mod tests {
                 assets: Vec::new(),
                 server_pk_hex: None,
             }],
-            unilateral_exit_materials_by_leaf_tx: Default::default(),
+            unilateral_exit_materials_by_host_tx: Default::default(),
         };
         match resolve_vtxo_pending_intent(&record, Some(&snapshot)) {
             PendingBatchIntentResolution::Spent { spend_txid } => {

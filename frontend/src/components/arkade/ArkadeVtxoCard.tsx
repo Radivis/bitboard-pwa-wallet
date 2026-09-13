@@ -6,17 +6,19 @@ import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { ArkadeVtxoClassificationIcon } from '@/components/arkade/ArkadeVtxoClassificationIcon'
 import {
   formatArkadeVtxoDateTime,
+  formatArkadeVtxoUnilateralExitPhaseLine,
   getArkadeVtxoClassificationLabel,
   getArkadeVtxoFlagChipLabel,
   getArkadeVtxoFlagChips,
   type ArkadeVtxoFlagChip,
 } from '@/lib/arkade/arkade-vtxo-viewer-display'
 import { truncateAddress } from '@/lib/wallet/bitcoin-utils'
-import type { ArkadeVtxoRowBase } from '@/workers/arkade-api'
+import type { ArkadeVtxoExitPhase, ArkadeVtxoRowBase } from '@/workers/arkade-api'
 import { toast } from 'sonner'
 
 interface ArkadeVtxoCardProps {
   row: ArkadeVtxoRowBase
+  unilateralExitPhase?: ArkadeVtxoExitPhase
 }
 
 function ArkadeVtxoFlagChipBadge({ chip }: { chip: ArkadeVtxoFlagChip }) {
@@ -36,9 +38,10 @@ function ArkadeVtxoFlagChipBadge({ chip }: { chip: ArkadeVtxoFlagChip }) {
   )
 }
 
-export function ArkadeVtxoCard({ row }: ArkadeVtxoCardProps) {
+export function ArkadeVtxoCard({ row, unilateralExitPhase }: ArkadeVtxoCardProps) {
   const [copied, setCopied] = useState(false)
   const flagChips = getArkadeVtxoFlagChips(row)
+  const unilateralExitPhaseLine = formatArkadeVtxoUnilateralExitPhaseLine(unilateralExitPhase)
 
   const handleCopyId = async () => {
     await navigator.clipboard.writeText(row.id)
@@ -84,6 +87,14 @@ export function ArkadeVtxoCard({ row }: ArkadeVtxoCardProps) {
           <span className="mx-2">·</span>
           <span>Expires: {formatArkadeVtxoDateTime(row.expiresAt)}</span>
         </div>
+        {unilateralExitPhaseLine != null ? (
+          <div
+            className="text-xs text-muted-foreground"
+            data-testid={`arkade-vtxo-unilateral-exit-phase-${row.id}`}
+          >
+            {unilateralExitPhaseLine}
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   )

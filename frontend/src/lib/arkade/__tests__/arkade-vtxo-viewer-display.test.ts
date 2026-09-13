@@ -2,12 +2,20 @@ import { describe, expect, it } from 'vitest'
 import {
   ARKADE_VTXO_VIEWER_PAGE_SIZE,
   filterArkadeVtxoRows,
+  formatArkadeVtxoUnilateralExitPhaseLine,
   getArkadeVtxoFlagChips,
   paginateArkadeVtxoRows,
   sortArkadeVtxoRows,
   vtxoRowMatchesSearch,
 } from '@/lib/arkade/arkade-vtxo-viewer-display'
-import type { ArkadeVtxoRowBase } from '@/workers/arkade-api'
+import {
+  formatVtxoExitPhaseCopy,
+  vtxoExitPhaseCopyFromPhase,
+} from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit-selectors'
+import {
+  ARKADE_VTXO_EXIT_PHASES,
+  type ArkadeVtxoRowBase,
+} from '@/workers/arkade-api'
 
 function sampleRow(
   overrides: Partial<ArkadeVtxoRowBase> & Pick<ArkadeVtxoRowBase, 'id'>,
@@ -28,6 +36,20 @@ function sampleRow(
 }
 
 describe('arkade-vtxo-viewer-display', () => {
+  it('formatArkadeVtxoUnilateralExitPhaseLine_returns_null_when_idle', () => {
+    expect(formatArkadeVtxoUnilateralExitPhaseLine(undefined)).toBeNull()
+    expect(formatArkadeVtxoUnilateralExitPhaseLine(null)).toBeNull()
+  })
+
+  it('formatArkadeVtxoUnilateralExitPhaseLine_covers_copy_kinds', () => {
+    for (const phase of ARKADE_VTXO_EXIT_PHASES) {
+      const copy = formatVtxoExitPhaseCopy(vtxoExitPhaseCopyFromPhase(phase))
+      expect(formatArkadeVtxoUnilateralExitPhaseLine(phase)).toBe(
+        `Unilateral exit phase: ${copy}`,
+      )
+    }
+  })
+
   it('getArkadeVtxoFlagChips_includes_unilateral_exit_prepared_when_set', () => {
     const chips = getArkadeVtxoFlagChips(
       sampleRow({ id: 'prepared:0', isUnilateralExitPrepared: true }),

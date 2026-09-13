@@ -261,17 +261,17 @@ impl ArkSession {
 
         super::intents::install_intent_registered_hook(Arc::clone(&wallet_db));
 
-        Ok((
-            Self {
-                client,
-                wallet_db,
-                delegator,
-                network_mode,
-                operator_identity,
-                autonomous_mode: Cell::new(autonomous_mode),
-            },
-            migration_hint,
-        ))
+        let session = Self {
+            client,
+            wallet_db,
+            delegator,
+            network_mode,
+            operator_identity,
+            autonomous_mode: Cell::new(autonomous_mode),
+        };
+        session.heal_vtxo_exit_records();
+        session.reconcile_host_tx_finality_best_effort().await;
+        Ok((session, migration_hint))
     }
 
     pub fn export_persistence(&self) -> ArkResult<String> {

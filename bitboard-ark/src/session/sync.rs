@@ -12,7 +12,6 @@ use crate::offchain_snapshot::{
 
 use super::ArkSession;
 use super::mappers::{current_unix_timestamp, warn_offchain_key_discovery_failed};
-use super::unilateral_exit::onchain::reconcile_intermediate_ark_virtual_txs_unrolled_on_esplora;
 use super::unilateral_exit::watch_reconcile::{
     merge_exiting_vtxo_sync_warnings, reconcile_exiting_vtxo_watches,
     reconcile_exiting_vtxos_spent_on_esplora,
@@ -100,16 +99,15 @@ impl ArkSession {
             prior_snapshot.as_ref(),
             &mut snapshot,
         );
-        merge_sticky_unrolled_flags(prior_snapshot.as_ref(), &mut snapshot);
+        let sticky_unroll_hosts = crate::offchain_snapshot::confirmed_unroll_sticky_host_txids(
+            &self.wallet_db.host_tx_observations(),
+            &self.wallet_db.vtxo_exit_records(),
+        );
+        merge_sticky_unrolled_flags(prior_snapshot.as_ref(), &mut snapshot, &sticky_unroll_hosts);
         merge_sticky_spent_flags(prior_snapshot.as_ref(), &mut snapshot);
         let reconcile =
             reconcile_exiting_vtxo_watches(self, snapshot, prior_snapshot.as_ref()).await?;
         snapshot = reconcile.snapshot;
-        reconcile_intermediate_ark_virtual_txs_unrolled_on_esplora(
-            self.client.blockchain(),
-            &mut snapshot,
-        )
-        .await?;
         let esplora_healed_outpoints =
             reconcile_exiting_vtxos_spent_on_esplora(self, &mut snapshot).await?;
         let materials_warning =
@@ -120,18 +118,24 @@ impl ArkSession {
             )
             .await;
         self.wallet_db.set_offchain_vtxo_snapshot(snapshot.clone());
-        self.wallet_db
-            .set_unilateral_exit_watches(reconcile.watches.clone());
+        let viability_warnings = self.reconcile_host_tx_finality().await?;
+        let snapshot = self
+            .wallet_db
+            .snapshot()
+            .offchain_vtxo_snapshot
+            .unwrap_or(snapshot);
         if !esplora_healed_outpoints.is_empty() {
             self.clear_pending_unilateral_exits_for_outpoints(&esplora_healed_outpoints);
         }
         self.reconcile_pending_exit_deductions_with_snapshot(&snapshot)?;
         self.reconcile_pending_batch_intents().await?;
         self.persist_cached_operator_info_from_client()?;
+        let mut sync_warnings = reconcile.warnings;
+        sync_warnings.extend(viability_warnings);
         let sync_result = OperatorSyncResultDto {
             key_discovery_warning: combine_operator_sync_warning_messages(
                 key_discovery_warning,
-                merge_exiting_vtxo_sync_warnings(reconcile.warnings),
+                merge_exiting_vtxo_sync_warnings(sync_warnings),
             )
             .or(materials_warning),
             exiting_vtxo_warning: None,

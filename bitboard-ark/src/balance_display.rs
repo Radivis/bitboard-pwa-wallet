@@ -15,6 +15,7 @@ pub struct ArkadeBalanceInputs {
     pub boarding_pending_sats: u64,
     pub unilateral_exit_in_progress_sats: u64,
     pub collaborative_exit_in_progress_sats: u64,
+    pub unilateral_exit_spend_lock_sats: u64,
     pub pending_recovery_due_to_expired_signer_sats: u64,
     pub pending_batch_intents: Vec<PendingBatchIntentDto>,
 }
@@ -34,10 +35,10 @@ pub struct ArkadeBalanceInputs {
 /// sweep, confirmed on-chain bumper sats, and unconfirmed boarding UTXOs (`boarding_pending_sats`).
 /// Unconfirmed bumper-wallet UTXOs are omitted from `total_sats` (only `onchain.confirmed` counts).
 ///
-/// `unilateral_exit_in_progress_sats` is informational only: after unroll, unrolled VTXOs live in
-/// the **exiting** sub-bucket (under `unspendable`) and are already excluded from spendable offchain
-/// totals. Do not subtract this
-/// field from net spendable — see `docs/arkade-bitboard-wallet-model.md` (unilateral exit timing).
+/// `unilateral_exit_in_progress_sats` is the pipeline line (`tagged`…`complete_ready`). Subtract
+/// `unilateral_exit_spend_lock_sats` from net spendable while those VTXOs are still in gross
+/// spendable (not yet `is_unrolled`). After 6-conf stamp, ark-core already drops them from gross —
+/// spend-lock is 0 so the line is informational only.
 ///
 /// `collaborative_exit_in_progress_sats` is subtracted from net fields while the operator snapshot
 /// still lists those VTXOs as cooperatively spendable (pending exit deduction records).
@@ -51,12 +52,12 @@ pub fn build_arkade_balance_dto(inputs: ArkadeBalanceInputs) -> BalanceDto {
         .saturating_add(inputs.pending_recovery_due_to_expired_signer_sats);
     let gross_confirmed_sats =
         spendable_offchain_sats.saturating_add(inputs.onchain_confirmed_sats);
-    // Only collaborative exit is subtracted here; unilateral amounts are already out of gross
-    // spendable via the exiting sub-bucket (see wallet model doc).
-    let collaborative_exit_in_progress_sats = inputs.collaborative_exit_in_progress_sats;
-    let confirmed_sats = gross_confirmed_sats.saturating_sub(collaborative_exit_in_progress_sats);
-    let offchain_spendable_sats = spendable_offchain_sats
-        .saturating_sub(collaborative_exit_in_progress_sats.min(spendable_offchain_sats));
+    let spend_lock_sats = inputs
+        .collaborative_exit_in_progress_sats
+        .saturating_add(inputs.unilateral_exit_spend_lock_sats);
+    let confirmed_sats = gross_confirmed_sats.saturating_sub(spend_lock_sats);
+    let offchain_spendable_sats =
+        spendable_offchain_sats.saturating_sub(spend_lock_sats.min(spendable_offchain_sats));
     BalanceDto {
         confirmed_sats,
         offchain_spendable_sats,
@@ -64,7 +65,7 @@ pub fn build_arkade_balance_dto(inputs: ArkadeBalanceInputs) -> BalanceDto {
         total_sats: total_offchain_sats
             .saturating_add(inputs.onchain_confirmed_sats)
             .saturating_add(inputs.boarding_pending_sats)
-            .saturating_sub(collaborative_exit_in_progress_sats),
+            .saturating_sub(spend_lock_sats),
         boarding_spendable_sats: inputs.boarding_spendable_sats,
         boarding_pending_sats: inputs.boarding_pending_sats,
         unilateral_exit_in_progress_sats: inputs.unilateral_exit_in_progress_sats,
@@ -174,8 +175,7 @@ mod tests {
     }
 
     #[test]
-    // Post-unroll: unilateral_exit_in_progress is informational; gross spendable already excludes
-    // the unrolled VTXO via the exiting sub-bucket — must not subtract again.
+    // Post-unroll: pipeline line is informational; spend-lock is 0 so gross is not subtracted again.
     fn unilateral_exit_in_progress_does_not_reduce_spendable_totals() {
         let balance = build_arkade_balance_dto(ArkadeBalanceInputs {
             pre_confirmed_sats: 200_000,
@@ -186,6 +186,20 @@ mod tests {
         assert_eq!(balance.confirmed_sats, 200_000);
         assert_eq!(balance.offchain_spendable_sats, 200_000);
         assert_eq!(balance.total_sats, 200_000);
+    }
+
+    #[test]
+    fn tagged_unilateral_spend_lock_reduces_net_spendable() {
+        let balance = build_arkade_balance_dto(ArkadeBalanceInputs {
+            pre_confirmed_sats: 200_000,
+            unilateral_exit_in_progress_sats: 180_603,
+            unilateral_exit_spend_lock_sats: 180_603,
+            ..Default::default()
+        });
+        assert_eq!(balance.unilateral_exit_in_progress_sats, 180_603);
+        assert_eq!(balance.confirmed_sats, 19_397);
+        assert_eq!(balance.offchain_spendable_sats, 19_397);
+        assert_eq!(balance.total_sats, 19_397);
     }
 
     #[test]
@@ -229,7 +243,7 @@ mod tests {
     }
 
     #[test]
-    // Only collaborative subtracts from net spendable; unilateral is informational only.
+    // Pipeline line without spend-lock does not subtract; collaborative still does.
     fn only_collaborative_exit_in_progress_reduces_net_confirmed() {
         let balance = build_arkade_balance_dto(ArkadeBalanceInputs {
             pre_confirmed_sats: 300_000,

@@ -311,7 +311,10 @@ where
         let (to_address, _) = self.get_offchain_address()?;
 
         let (all_boarding_inputs, all_vtxo_inputs, _) = self
-            .fetch_commitment_transaction_inputs(crate::utils::unix_now()?)
+            .fetch_commitment_transaction_inputs_opt(
+                crate::utils::unix_now()?,
+                !vtxo_outpoints.is_empty(),
+            )
             .await?;
 
         // Filter boarding inputs to only those specified.
@@ -391,7 +394,10 @@ where
     {
         let (to_address, _) = self.get_offchain_address()?;
         let (all_boarding_inputs, all_vtxo_inputs, _) = self
-            .fetch_commitment_transaction_inputs(crate::utils::unix_now()?)
+            .fetch_commitment_transaction_inputs_opt(
+                crate::utils::unix_now()?,
+                !vtxo_outpoints.is_empty(),
+            )
             .await?;
 
         let boarding_inputs: Vec<_> = all_boarding_inputs
@@ -437,6 +443,10 @@ where
 
     /// Settle _some_ prior VTXOs and boarding outputs into the next batch, generating UTXOs as
     /// outputs to a new commitment transaction.
+    ///
+    /// Compatibility wrapper around [`Self::collaborative_redeem_excluding_vtxos`] with an empty
+    /// exclude set (omit nothing — original public API). Spend-lock callers must pass tagged-or-later
+    /// VTXOs to the excluding variant.
     pub async fn collaborative_redeem<R>(
         &self,
         rng: &mut R,
@@ -446,11 +456,36 @@ where
     where
         R: Rng + CryptoRng + Clone,
     {
+        // Empty set: exclude nothing. Same inputs as this method before the excluding variant.
+        self.collaborative_redeem_excluding_vtxos(rng, to_address, to_amount, &HashSet::new())
+            .await
+    }
+
+    /// Like [`Self::collaborative_redeem`], omitting the given VTXO outpoints from the input set.
+    ///
+    /// An empty `exclude_vtxos` set is equivalent to [`Self::collaborative_redeem`].
+    pub async fn collaborative_redeem_excluding_vtxos<R>(
+        &self,
+        rng: &mut R,
+        to_address: Address,
+        to_amount: Amount,
+        exclude_vtxos: &HashSet<OutPoint>,
+    ) -> Result<JoinBatchOutcome, Error>
+    where
+        R: Rng + CryptoRng + Clone,
+    {
         let (change_address, _) = self.get_offchain_address()?;
 
-        let (boarding_inputs, vtxo_inputs, total_amount) = self
+        let (boarding_inputs, mut vtxo_inputs, mut total_amount) = self
             .fetch_commitment_transaction_inputs(crate::utils::unix_now()?)
             .await?;
+
+        let excluded_amount = vtxo_inputs
+            .iter()
+            .filter(|input| exclude_vtxos.contains(&input.outpoint()))
+            .fold(Amount::ZERO, |acc, input| acc + input.amount());
+        vtxo_inputs.retain(|input| !exclude_vtxos.contains(&input.outpoint()));
+        total_amount = total_amount.checked_sub(excluded_amount).unwrap_or(Amount::ZERO);
 
         // The intent fee depends on the input/output set rather than on amounts, so estimate it
         // against the gross (pre-fee) change and then deduct it to obtain the real change amount.
@@ -665,17 +700,35 @@ where
     /// # Returns
     ///
     /// A [`Delegate`] struct containing all the pre-signed data needed for settlement.
+    ///
+    /// Compatibility wrapper around [`Self::generate_delegate_excluding_vtxos`] with an empty
+    /// exclude set (omit nothing — original public API). Spend-lock callers must pass tagged-or-later
+    /// VTXOs to the excluding variant.
     pub async fn generate_delegate(
         &self,
         delegate_cosigner_pk: PublicKey,
+    ) -> Result<Delegate, Error> {
+        // Empty set: exclude nothing. Same inputs as this method before the excluding variant.
+        self.generate_delegate_excluding_vtxos(delegate_cosigner_pk, &HashSet::new())
+            .await
+    }
+
+    /// Like [`Self::generate_delegate`], omitting the given VTXO outpoints.
+    ///
+    /// An empty `exclude_vtxos` set is equivalent to [`Self::generate_delegate`].
+    pub async fn generate_delegate_excluding_vtxos(
+        &self,
+        delegate_cosigner_pk: PublicKey,
+        exclude_vtxos: &HashSet<OutPoint>,
     ) -> Result<Delegate, Error> {
         // Get off-chain address and send all funds to this address.
         let (to_address, _) = self.get_offchain_address()?;
 
         // Simply collect all VTXOs that can be settled.
-        let (_, vtxo_inputs, _) = self
+        let (_, mut vtxo_inputs, _) = self
             .fetch_commitment_transaction_inputs(crate::utils::unix_now()?)
             .await?;
+        vtxo_inputs.retain(|input| !exclude_vtxos.contains(&input.outpoint()));
 
         let total_amount = vtxo_inputs
             .iter()
@@ -1061,6 +1114,14 @@ where
         &self,
         now: i64,
     ) -> Result<(Vec<batch::OnChainInput>, Vec<intent::Input>, Amount), Error> {
+        self.fetch_commitment_transaction_inputs_opt(now, true).await
+    }
+
+    async fn fetch_commitment_transaction_inputs_opt(
+        &self,
+        now: i64,
+        include_vtxos: bool,
+    ) -> Result<(Vec<batch::OnChainInput>, Vec<intent::Input>, Amount), Error> {
         let now = u64::try_from(now).map_err(|_| Error::ad_hoc("negative timestamp"))?;
 
         // Get all known boarding outputs.
@@ -1142,51 +1203,55 @@ where
             }
         }
 
-        let (vtxo_list, script_pubkey_to_vtxo_map) = self.list_vtxos().await?;
-        // Reuse the caller-supplied timestamp (not a fresh wall-clock) so the VTXO cutoff filter
-        // below is evaluated against the same instant as the boarding filter above, and so a
-        // test-injected `now` deterministically controls both.
-        let settleable_vtxos: Vec<_> = vtxo_list
-            .batch_settleable_at(&server_info, now as i64, |script| {
-                script_pubkey_to_vtxo_map
-                    .get(script)
-                    .map(|vtxo| vtxo.server_pk())
-            })
-            .collect();
+        let vtxo_inputs = if include_vtxos {
+            let (vtxo_list, script_pubkey_to_vtxo_map) = self.list_vtxos().await?;
+            // Reuse the caller-supplied timestamp (not a fresh wall-clock) so the VTXO cutoff filter
+            // below is evaluated against the same instant as the boarding filter above, and so a
+            // test-injected `now` deterministically controls both.
+            let settleable_vtxos: Vec<_> = vtxo_list
+                .batch_settleable_at(&server_info, now as i64, |script| {
+                    script_pubkey_to_vtxo_map
+                        .get(script)
+                        .map(|vtxo| vtxo.server_pk())
+                })
+                .collect();
 
-        total_amount += settleable_vtxos
-            .iter()
-            .fold(Amount::ZERO, |acc, vtxo| acc + vtxo.amount);
+            total_amount += settleable_vtxos
+                .iter()
+                .fold(Amount::ZERO, |acc, vtxo| acc + vtxo.amount);
 
-        let vtxo_inputs = settleable_vtxos
-            .into_iter()
-            .map(|virtual_tx_outpoint| {
-                let vtxo = script_pubkey_to_vtxo_map
-                    .get(&virtual_tx_outpoint.script)
-                    .ok_or_else(|| {
-                        ark_core::Error::ad_hoc(format!(
-                            "missing VTXO for script pubkey: {}",
-                            virtual_tx_outpoint.script
-                        ))
-                    })?;
-                let spend_info = vtxo.forfeit_spend_info()?;
+            settleable_vtxos
+                .into_iter()
+                .map(|virtual_tx_outpoint| {
+                    let vtxo = script_pubkey_to_vtxo_map
+                        .get(&virtual_tx_outpoint.script)
+                        .ok_or_else(|| {
+                            ark_core::Error::ad_hoc(format!(
+                                "missing VTXO for script pubkey: {}",
+                                virtual_tx_outpoint.script
+                            ))
+                        })?;
+                    let spend_info = vtxo.forfeit_spend_info()?;
 
-                Ok(intent::Input::new(
-                    virtual_tx_outpoint.outpoint,
-                    vtxo.exit_delay(),
-                    None,
-                    TxOut {
-                        value: virtual_tx_outpoint.amount,
-                        script_pubkey: vtxo.script_pubkey(),
-                    },
-                    vtxo.tapscripts(),
-                    spend_info,
-                    false,
-                    virtual_tx_outpoint.is_swept,
-                    virtual_tx_outpoint.assets.clone(),
-                ))
-            })
-            .collect::<Result<Vec<_>, ark_core::Error>>()?;
+                    Ok(intent::Input::new(
+                        virtual_tx_outpoint.outpoint,
+                        vtxo.exit_delay(),
+                        None,
+                        TxOut {
+                            value: virtual_tx_outpoint.amount,
+                            script_pubkey: vtxo.script_pubkey(),
+                        },
+                        vtxo.tapscripts(),
+                        spend_info,
+                        false,
+                        virtual_tx_outpoint.is_swept,
+                        virtual_tx_outpoint.assets.clone(),
+                    ))
+                })
+                .collect::<Result<Vec<_>, ark_core::Error>>()?
+        } else {
+            Vec::new()
+        };
 
         Ok((boarding_inputs, vtxo_inputs, total_amount))
     }

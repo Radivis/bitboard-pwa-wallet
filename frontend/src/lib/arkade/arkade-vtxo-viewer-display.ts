@@ -1,6 +1,11 @@
 import { format } from 'date-fns'
+import {
+  formatVtxoExitPhaseCopy,
+  vtxoExitPhaseCopyFromPhase,
+} from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit-selectors'
 import type {
   ArkadeVtxoClassification,
+  ArkadeVtxoExitPhase,
   ArkadeVtxoRowBase,
 } from '@/workers/arkade-api'
 
@@ -45,6 +50,18 @@ export function formatArkadeVtxoDateTime(unixSeconds: number): string {
     return '—'
   }
   return format(new Date(unixSeconds * 1000), 'yyyy-MM-dd HH:mm')
+}
+
+const ARKADE_VTXO_UNILATERAL_EXIT_PHASE_LINE_PREFIX = 'Unilateral exit phase: '
+
+export function formatArkadeVtxoUnilateralExitPhaseLine(
+  phase: ArkadeVtxoExitPhase | null | undefined,
+): string | null {
+  const copy = formatVtxoExitPhaseCopy(vtxoExitPhaseCopyFromPhase(phase))
+  if (copy === '') {
+    return null
+  }
+  return `${ARKADE_VTXO_UNILATERAL_EXIT_PHASE_LINE_PREFIX}${copy}`
 }
 
 export type ArkadeVtxoFlagChip =

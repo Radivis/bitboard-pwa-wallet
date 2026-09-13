@@ -26,6 +26,7 @@ pub const CODE_OPERATOR_TRUST_PENDING_BLOCKS_AUTONOMOUS_EXIT: &str =
     "operator_trust_pending_blocks_autonomous_exit";
 pub const CODE_OPERATOR_TRUST_PENDING_DIGEST_CHANGED: &str =
     "operator_trust_pending_digest_changed";
+pub const CODE_VTXO_FUNDING_LOST: &str = "funding_lost";
 
 pub const MSG_SEND_AMOUNT_MUST_BE_POSITIVE: &str = "send amount must be greater than zero";
 
@@ -73,11 +74,11 @@ pub enum ArkWasmError {
     #[error("vtxo_outpoints must not be empty")]
     EmptyVtxoOutpoints,
 
-    #[error("VTXO {txid}:{vout} is not in unilateral exit")]
-    VtxoNotInUnilateralExit { txid: String, vout: u32 },
-
     #[error("VTXO {txid}:{vout} timelock has not elapsed yet — complete is not available")]
     VtxoUnilateralExitNotReady { txid: String, vout: u32 },
+
+    #[error("VTXO {txid}:{vout} lost exit-branch funding and cannot be completed")]
+    VtxoFundingLost { txid: String, vout: u32 },
 
     #[error(
         "Exit materials were not prefetched for this VTXO — sync with the operator while reachable"
@@ -152,8 +153,8 @@ impl ArkWasmError {
             | Self::InvalidSendAmount
             | Self::VtxoNotFound { .. }
             | Self::EmptyVtxoOutpoints
-            | Self::VtxoNotInUnilateralExit { .. }
             | Self::VtxoUnilateralExitNotReady { .. } => CODE_VALIDATION,
+            Self::VtxoFundingLost { .. } => CODE_VTXO_FUNDING_LOST,
             Self::AutonomousExitMaterialsMissing => CODE_AUTONOMOUS_EXIT_MATERIALS_MISSING,
             Self::AutonomousOperatorInfoMissing => CODE_AUTONOMOUS_OPERATOR_INFO_MISSING,
             Self::AutonomousModeBlocksOperatorRpc => CODE_AUTONOMOUS_MODE_BLOCKS_OPERATOR_RPC,
@@ -233,6 +234,17 @@ mod tests {
         let error = ArkWasmError::OperatorTrustPendingDigestChanged;
         assert_eq!(error.code(), CODE_OPERATOR_TRUST_PENDING_DIGEST_CHANGED);
         assert!(error.to_string().contains("newer configuration"));
+    }
+
+    #[test]
+    fn vtxo_funding_lost_has_stable_code_and_message() {
+        let error = ArkWasmError::VtxoFundingLost {
+            txid: "aa".into(),
+            vout: 1,
+        };
+        assert_eq!(error.code(), CODE_VTXO_FUNDING_LOST);
+        assert!(error.to_string().contains("lost exit-branch funding"));
+        assert!(error.to_string().contains("aa:1"));
     }
 
     #[test]

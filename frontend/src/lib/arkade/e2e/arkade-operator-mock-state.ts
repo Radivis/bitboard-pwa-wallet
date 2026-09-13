@@ -35,8 +35,8 @@ export type E2eArkadeOperatorMockState = {
   /** Script hex → indexer VTXO payment (supports multiple receive addresses per partition). */
   paymentsByScript: Map<string, E2eArkadeMockIncomingPayment>
   /**
-   * First receive script that received the default fixture balance. Re-seeded after `/v1/info`
-   * discovery reset — never `scripts[0]` on every batch (that would stall key discovery).
+   * First receive script that received the default fixture balance. Never `scripts[0]` on
+   * every discovery batch (that would stall key discovery).
    */
   defaultFixtureScript: string | null
   /** Queued by `addIncomingPayment` control action; applied on next unfunded script in a vtxos query. */
@@ -54,14 +54,6 @@ function createDefaultMockState(): E2eArkadeOperatorMockState {
     pendingIncomingPayment: null,
     serverInfoJson: null,
   }
-}
-
-export function clearE2eArkadeOperatorMockDiscoveryState(
-  mockState: E2eArkadeOperatorMockState,
-): void {
-  // Indexed VTXO discovery is rebuilt on each operator sync; queued control payments must
-  // survive `/v1/info` refresh (sync calls refresh_server_info before list_vtxos).
-  mockState.paymentsByScript.clear()
 }
 
 const mockStateByPartition = new Map<string, E2eArkadeOperatorMockState>()

@@ -2,16 +2,9 @@ use std::collections::HashSet;
 use std::str::FromStr;
 
 use crate::error::{ArkResult, ArkWasmError};
-use crate::exit_balance::{
-    sum_pending_exit_sats_by_kind, unilateral_exit_in_progress_sats_from_snapshot,
-};
 use crate::persistence::{JsonPersistenceDb, PendingExitDeductionRecord, PendingExitKind};
 
 use super::ArkSession;
-use super::unilateral_exit::watch::{
-    register_unilateral_exit_watch, remove_unilateral_exit_watches_for_outpoints_in_wallet_db,
-};
-
 use super::mappers::current_unix_timestamp;
 
 pub(crate) fn mark_vtxo_spent_in_snapshot(
@@ -44,25 +37,23 @@ pub(crate) fn mark_vtxo_spent_in_wallet_db(
 impl ArkSession {
     /// Stable exit-pipeline totals for the balance DTO.
     ///
-    /// Unilateral: sums [`ark_core::VtxoList::exiting`] VTXOs plus any in-flight pending
-    /// unilateral records during unroll. This amount is informational in
-    /// [`build_arkade_balance_dto`] — do not subtract it from gross spendable after unroll.
+    /// Unilateral: sums VTXO exit records in `tagged`…`complete_ready`. Spend-lock of tagged
+    /// amounts still in gross spendable is applied in [`build_arkade_balance_dto`].
     /// Collaborative: open CollaborativeExit pending-intent amounts, plus a retain deduction
     /// after join Completed until snapshot spendable drops. Cancel must not leave that line.
-    pub(crate) fn exit_balance_components(&self) -> ArkResult<(u64, u64)> {
+    pub(crate) fn exit_balance_components(&self) -> ArkResult<(u64, u64, u64)> {
         let pending = self.wallet_db.pending_exit_deductions();
-        let snapshot_unilateral_sats = self
-            .wallet_db
-            .snapshot()
-            .offchain_vtxo_snapshot
-            .as_ref()
-            .map(unilateral_exit_in_progress_sats_from_snapshot)
-            .transpose()?
-            .unwrap_or(0);
-        let pending_unilateral_sats =
-            sum_pending_exit_sats_by_kind(&pending, PendingExitKind::Unilateral);
+        let records = self.wallet_db.vtxo_exit_records();
+        let snapshot = self.wallet_db.snapshot();
         let unilateral_exit_in_progress_sats =
-            snapshot_unilateral_sats.saturating_add(pending_unilateral_sats);
+            crate::session::unilateral_exit::vtxo_exit::unilateral_exit_in_progress_sats_from_records(
+                &records,
+            );
+        let unilateral_exit_spend_lock_sats =
+            crate::session::unilateral_exit::vtxo_exit::unilateral_exit_spend_lock_sats(
+                &records,
+                snapshot.offchain_vtxo_snapshot.as_ref(),
+            );
         let collaborative_exit_in_progress_sats =
             crate::exit_balance::collaborative_exit_in_progress_sats(
                 &self.wallet_db.pending_batch_intents(),
@@ -71,6 +62,7 @@ impl ArkSession {
         Ok((
             unilateral_exit_in_progress_sats,
             collaborative_exit_in_progress_sats,
+            unilateral_exit_spend_lock_sats,
         ))
     }
 
@@ -91,20 +83,6 @@ impl ArkSession {
             txid: txid.to_string(),
             vout,
         })
-    }
-
-    pub(crate) fn record_pending_unilateral_exit(&self, txid: &str, vout: u32, amount_sats: u64) {
-        self.wallet_db
-            .upsert_pending_exit_deduction(PendingExitDeductionRecord {
-                kind: PendingExitKind::Unilateral,
-                vtxo_txid: Some(txid.to_string()),
-                vout: Some(vout),
-                amount_sats,
-                started_at: current_unix_timestamp(),
-                baseline_offchain_spendable_sats: None,
-                retain_until_spendable_drops: false,
-            });
-        register_unilateral_exit_watch(&self.wallet_db, txid, vout, amount_sats);
     }
 
     pub(crate) fn record_pending_collaborative_exit(&self, amount_sats: u64, baseline_sats: u64) {
@@ -150,7 +128,6 @@ impl ArkSession {
             !outpoint_set.contains(&record_outpoint)
         });
         self.wallet_db.set_pending_exit_deductions(pending);
-        remove_unilateral_exit_watches_for_outpoints_in_wallet_db(&self.wallet_db, &outpoint_set);
     }
 
     /// Local snapshot + pending cleanup after a successful on-chain completion broadcast.
@@ -168,5 +145,11 @@ impl ArkSession {
             );
         }
         self.clear_pending_unilateral_exits_for_outpoints(vtxo_outpoints);
+        let mut records = self.wallet_db.vtxo_exit_records();
+        crate::session::unilateral_exit::vtxo_exit::mark_records_exited_for_outpoints(
+            &mut records,
+            vtxo_outpoints,
+        );
+        self.wallet_db.set_vtxo_exit_records(records);
     }
 }

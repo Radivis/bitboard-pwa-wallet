@@ -4,8 +4,15 @@ import {
   UNILATERAL_EXIT_AUTOMATION_WAIT_POLL_MS_REGTEST,
   UNILATERAL_EXIT_PARENT_DATA_WAIT_MS,
 } from '@/lib/arkade/arkade-query-timings'
-import type { ArkadeUnilateralExitProgress, ArkadeUnilateralExitJobViability, ArkadeVtxoOutpoint } from '@/workers/arkade-api'
+import type { ArkadeUnilateralExitProgress, ArkadeUnilateralExitJobViability, ArkadeVtxoOutpoint, ArkadeVtxoExitRecordDto } from '@/workers/arkade-api'
 import type { DoneActorEvent, ErrorActorEvent } from 'xstate'
+
+export type UnilateralExitSettleResult =
+  | 'branchComplete'
+  | 'waitingConfirm'
+  | 'paused'
+  | 'error'
+  | 'terminated'
 
 export type UnilateralExitMachineContext = {
   walletScope: ArkadeWalletScope | null
@@ -14,6 +21,7 @@ export type UnilateralExitMachineContext = {
   automationEnabled: boolean
   pausedReason: UnilateralExitAutomationPausedReason | null
   lastErrorMessage: string | null
+  lastSettleResult: UnilateralExitSettleResult | null
   feeRateSatPerVb: number | null
   proceedRequested: boolean
   proceedTargetStepIndex: number | null
@@ -36,6 +44,7 @@ export type UnilateralExitMachineInput = {
 export const UNILATERAL_EXIT_MACHINE_STATE = {
   notConfigured: 'notConfigured',
   idle: 'idle',
+  taggingPlan: 'taggingPlan',
   checkingProgress: 'checkingProgress',
   loadingProgress: 'loadingProgress',
   evaluatingPolicy: 'evaluatingPolicy',
@@ -97,8 +106,13 @@ export type UnilateralExitMachineUserEvent =
       type: 'ABORT_ORCHESTRATION'
       resolvedJobOutpoints: ArkadeVtxoOutpoint[]
     }
-  | { type: 'WALLET_RESET' }
+  /** Lock, Arkade session teardown, or Arkade wallet-scope change — not an on-chain wallet wipe. */
+  | { type: 'ARKADE_SESSION_RESET' }
   | { type: 'AUTOMATION_PREFS_CHANGED'; automationEnabled: boolean }
+  | {
+      type: 'HYDRATE_VTXO_RECORDS'
+      records: ArkadeVtxoExitRecordDto[]
+    }
 
 export type UnilateralExitMachineActorDoneEvent =
   | DoneActorEvent<ArkadeUnilateralExitProgress, 'fetchProgress'>
@@ -107,6 +121,7 @@ export type UnilateralExitMachineActorDoneEvent =
   | DoneActorEvent<UnilateralExitPolicyEvaluation, 'evaluateAutomationPolicy'>
   | DoneActorEvent<ArkadeUnilateralExitJobViability, 'evaluateJobViability'>
   | DoneActorEvent<{ vtxoIds: string[] }, 'resolveAbortVtxoIds'>
+  | DoneActorEvent<void, 'tagPlan'>
 
 export type UnilateralExitMachineActorErrorEvent =
   | ErrorActorEvent<unknown, 'fetchProgress'>
@@ -115,6 +130,7 @@ export type UnilateralExitMachineActorErrorEvent =
   | ErrorActorEvent<unknown, 'evaluateAutomationPolicy'>
   | ErrorActorEvent<unknown, 'evaluateJobViability'>
   | ErrorActorEvent<unknown, 'resolveAbortVtxoIds'>
+  | ErrorActorEvent<unknown, 'tagPlan'>
 
 /** Public events that callers may send. Actor done/error events are internal. */
 export type UnilateralExitMachineEvent = UnilateralExitMachineUserEvent
@@ -135,6 +151,7 @@ export function createInitialUnilateralExitContext(
     automationEnabled: false,
     pausedReason: null,
     lastErrorMessage: null,
+    lastSettleResult: null,
     feeRateSatPerVb: null,
     proceedRequested: false,
     proceedTargetStepIndex: null,

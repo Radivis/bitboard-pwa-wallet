@@ -14,6 +14,7 @@ use super::plan::UnilateralBatchPlan;
 use super::progress::{step_reached_confirmation, tx_confirmations};
 use super::snapshot_ops::dedup_virtual_outpoints;
 use crate::session::ArkSession;
+use crate::session::mappers::current_unix_timestamp;
 use crate::session::open::sync_onchain_wallet_with_retries;
 
 fn empty_witness_input_summaries(parent: &Transaction) -> Vec<String> {
@@ -52,15 +53,6 @@ impl ArkSession {
         let fee_rate_sat_per_vb = params.fee_rate_sat_per_vb.max(MIN_FEE_RATE_SAT_PER_VB);
 
         let virtual_outpoints = dedup_virtual_outpoints(params.vtxo_outpoints);
-        for outpoint in &virtual_outpoints {
-            let vtxo_txid = outpoint.txid.to_string();
-            if !self.virtual_tx_is_marked_unrolled(&vtxo_txid)? {
-                let amount_sats = self
-                    .vtxo_amount_sats_for_outpoint(&vtxo_txid, outpoint.vout)
-                    .await?;
-                self.record_pending_unilateral_exit(&vtxo_txid, outpoint.vout, amount_sats);
-            }
-        }
 
         let plan = self.build_unilateral_batch_plan(&virtual_outpoints).await?;
         let blockchain = self.client.blockchain();
@@ -72,7 +64,7 @@ impl ArkSession {
 
         if current_step_index >= plan.ordered_step_txids.len() {
             self.wallet_db.clear_unilateral_exit_step_wait();
-            self.mark_unrolled_leaves_at_finality(&plan).await?;
+            self.mark_unrolled_hosts_at_finality(&plan).await?;
             return self
                 .build_proceed_result(
                     &plan,
@@ -106,6 +98,19 @@ impl ArkSession {
             .is_some_and(|record| record.step_txid == step_txid.to_string());
 
         if !already_submitted_this_step {
+            let step_txid_text = step_txid.to_string();
+            // Register *before* broadcast: a false RPC error must not skip the observation
+            // (abort would unlock while the tx may already be on the network). Esplora "not seen"
+            // is cleaned up only after the never_seen budget — see docs/unilateral-exit.md
+            // "Register before Esplora; never_seen is the cleanup".
+            self.wallet_db
+                .register_host_tx_observation(&step_txid_text, current_unix_timestamp());
+            let mut records = self.wallet_db.vtxo_exit_records();
+            crate::session::unilateral_exit::vtxo_exit::advance_records_for_host_registered(
+                &mut records,
+                &step_txid_text,
+            );
+            self.wallet_db.set_vtxo_exit_records(records);
             sync_onchain_wallet_with_retries(&self.client).await?;
             if let Err(error) = self
                 .client
@@ -138,7 +143,7 @@ impl ArkSession {
             self.wallet_db.clear_unilateral_exit_step_wait();
         }
 
-        self.mark_unrolled_leaves_at_finality(&plan).await?;
+        self.mark_unrolled_hosts_at_finality(&plan).await?;
 
         self.build_proceed_result(
             &plan,

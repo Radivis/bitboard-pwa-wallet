@@ -20,6 +20,7 @@ use backon::ExponentialBuilder;
 use backon::Retryable;
 use bitcoin::key::Secp256k1;
 use bitcoin::psbt;
+use ark_core::server::IndexerPage;
 use ark_core::server::VirtualTxOutPoint;
 use ark_core::server::VtxoChains;
 use ark_core::Vtxo;
@@ -275,9 +276,14 @@ where
 
             virtual_txs.extend(response.txs);
 
-            match response.page {
-                Some(page) if page.next < page.total => page_index = page.next,
-                _ => break,
+            // Same 1-based indexer pages as `Client::get_vtxo_chain`.
+            match response
+                .page
+                .as_ref()
+                .and_then(IndexerPage::next_page_index)
+            {
+                Some(index) => page_index = index,
+                None => break,
             }
         }
 

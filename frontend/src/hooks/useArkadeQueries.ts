@@ -577,14 +577,14 @@ export function useArkadeSendMutation() {
       )
     },
     retry: false,
-    onSuccess: async (txid) => {
+    onSuccess: (txid) => {
       toast.success(`Arkade payment sent (${formatArkadeTxidToastSnippet(txid)})`)
       if (
         activeWalletId != null &&
         activeArkadeAccountId != null &&
         isArkadeSupportedNetworkMode(networkMode)
       ) {
-        await invalidateArkadeWalletDataQueries(
+        void invalidateArkadeWalletDataQueries(
           queryClient,
           activeWalletId,
           networkMode,
@@ -1139,6 +1139,9 @@ export function useArkadeUnilateralExitsInProgressQuery(enabled: boolean) {
       const rows = await withReadyArkadeWorker(() =>
         getArkadeWorker().listUnilateralExitsInProgress(),
       )
+      void import('@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime').then(
+        (runtime) => runtime.hydrateVtxoExitChildrenFromWasm(),
+      )
       return sortArkadeVtxoOutpoints(rows)
     },
     refetchInterval: enabled ? ARKADE_EXIT_CANDIDATES_POLL_MS : false,
@@ -1294,6 +1297,9 @@ export function useArkadeCompleteUnilateralExitMutation() {
     },
     onSuccess: async (txid) => {
       toast.success(`Exit completed on-chain (${formatArkadeTxidToastSnippet(txid)})`)
+      await import('@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime').then(
+        (runtime) => runtime.hydrateVtxoExitChildrenFromWasm(),
+      )
       if (activeWalletId != null && activeArkadeAccountId != null) {
         await invalidateArkadeWalletDataQueries(
           queryClient,

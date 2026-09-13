@@ -11,7 +11,9 @@ use crate::constants::{
 use crate::error::{ArkResult, ArkWasmError};
 use crate::outpoint::OnchainOutPoint;
 
-const ESPLORA_HTTP_TIMEOUT_SECS: u64 = 5;
+/// Per-request timeout. WASM `Failed to fetch` is often a hung Mutinynet Esplora GET;
+/// 5s was too tight for 70-step confirmation walks (one slow `/tx/status` aborted the scan).
+const ESPLORA_HTTP_TIMEOUT_SECS: u64 = 15;
 
 /// Mempool's `/txs/package` handler calls `parseFloat(req.query.maxfeerate)` and forwards the
 /// value to bitcoind. When query params are omitted that becomes `NaN`, which makes

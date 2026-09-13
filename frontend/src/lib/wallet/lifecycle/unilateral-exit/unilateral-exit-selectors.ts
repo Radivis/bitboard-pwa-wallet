@@ -69,6 +69,7 @@ function lifecyclePhaseFromMachineState(
   }
   if (
     unilateralExitSnapshotIsInAnyState(state, [
+      UNILATERAL_EXIT_MACHINE_STATE.taggingPlan,
       UNILATERAL_EXIT_MACHINE_STATE.checkingProgress,
       UNILATERAL_EXIT_MACHINE_STATE.loadingProgress,
       UNILATERAL_EXIT_MACHINE_STATE.evaluatingPolicy,
@@ -115,6 +116,7 @@ export function selectUnilateralExitAutomationSnapshot(
     unilateralExitSnapshotIsInAnyState(state, [
       UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm,
       UNILATERAL_EXIT_MACHINE_STATE.waitingForParentData,
+      UNILATERAL_EXIT_MACHINE_STATE.taggingPlan,
       UNILATERAL_EXIT_MACHINE_STATE.checkingProgress,
       UNILATERAL_EXIT_MACHINE_STATE.evaluatingPolicy,
       UNILATERAL_EXIT_MACHINE_STATE.proceeding,
@@ -157,7 +159,6 @@ export function selectCanAbortUnilateralExitOrchestration(
     resolvedJobOutpointsCount: number
     lifecycleJobActive: boolean
     persistedJobExists: boolean
-    hasInProgressExits: boolean
   },
 ): boolean {
   if (params.resolvedJobOutpointsCount === 0) {
@@ -209,6 +210,7 @@ function controlDisplayPhaseFromMachine(
   }
   if (
     unilateralExitSnapshotIsInAnyState(state, [
+      UNILATERAL_EXIT_MACHINE_STATE.taggingPlan,
       UNILATERAL_EXIT_MACHINE_STATE.proceeding,
       UNILATERAL_EXIT_MACHINE_STATE.checkingProgress,
       UNILATERAL_EXIT_MACHINE_STATE.loadingProgress,
@@ -222,10 +224,7 @@ function controlDisplayPhaseFromMachine(
 
 export function selectUnilateralExitControlJobState(
   state: UnilateralExitActorSnapshot,
-  params: {
-    hasInProgressExits: boolean
-    totalSteps: number
-  },
+  totalSteps: number,
 ): {
   phase: UnilateralExitControlDisplayPhase
   exitJobInFlight: boolean
@@ -233,23 +232,16 @@ export function selectUnilateralExitControlJobState(
   showStepProgress: boolean
   isProceeding: boolean
 } {
-  const machineComplete = unilateralExitSnapshotIsInState(
-    state,
-    UNILATERAL_EXIT_MACHINE_STATE.complete,
-  )
   const isProceeding = unilateralExitSnapshotIsProceeding(state)
-  const exitJobInFlight =
-    selectIsUnilateralExitJobActive(state) ||
-    isProceeding ||
-    machineComplete
+  const exitJobInFlight = selectIsUnilateralExitJobActive(state) || isProceeding
   const phase = controlDisplayPhaseFromMachine(state)
-  const jobActive = selectIsUnilateralExitJobActive(state) || machineComplete
+  const jobActive = selectIsUnilateralExitJobActive(state)
 
   return {
     phase,
     exitJobInFlight,
     jobActive,
-    showStepProgress: exitJobInFlight && params.totalSteps > 0,
+    showStepProgress: exitJobInFlight && totalSteps > 0,
     isProceeding,
   }
 }
@@ -288,6 +280,7 @@ export function selectUnilateralExitInProgressOverlay(
   }
   if (
     unilateralExitSnapshotIsInAnyState(state, [
+      UNILATERAL_EXIT_MACHINE_STATE.taggingPlan,
       UNILATERAL_EXIT_MACHINE_STATE.proceeding,
       UNILATERAL_EXIT_MACHINE_STATE.checkingProgress,
       UNILATERAL_EXIT_MACHINE_STATE.loadingProgress,
@@ -333,7 +326,6 @@ export function selectUnilateralExitProceedButtonState(
     batchEstimateLoading: boolean
     prefsHydrated: boolean
     lifecycleJobActive: boolean
-    hasInProgressExits: boolean
     phase: UnilateralExitControlDisplayPhase
   },
 ): UnilateralExitProceedButtonState {
@@ -341,10 +333,6 @@ export function selectUnilateralExitProceedButtonState(
   const machineWaiting = unilateralExitSnapshotIsInState(
     state,
     UNILATERAL_EXIT_MACHINE_STATE.waitingConfirm,
-  )
-  const machineComplete = unilateralExitSnapshotIsInState(
-    state,
-    UNILATERAL_EXIT_MACHINE_STATE.complete,
   )
   const automationRunning =
     params.automationEnabled &&

@@ -296,6 +296,18 @@ pub struct UnilateralExitInProgressDto {
     pub can_complete: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub started_at: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub phase: Option<crate::persistence::VtxoExitPhase>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct VtxoExitRecordDto {
+    pub txid: String,
+    pub vout: u32,
+    pub amount_sats: u64,
+    pub phase: crate::persistence::VtxoExitPhase,
+    pub tagged_at: i64,
 }
 
 #[derive(Debug, Serialize)]
@@ -506,6 +518,7 @@ pub struct UnilateralExitHostOutpointDto {
     pub vout: u32,
     pub amount_sats: u64,
     pub is_unrolled: bool,
+    pub expires_at: i64,
 }
 
 #[derive(Debug, Serialize)]

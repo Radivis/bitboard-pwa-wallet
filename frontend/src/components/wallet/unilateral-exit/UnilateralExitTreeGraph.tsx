@@ -33,6 +33,7 @@ import {
   resolveUnilateralExitNodeIconKind,
   unilateralExitNodeIconComponent,
 } from '@/lib/arkade/unilateral-exit-node-icons'
+import { unilateralExitTreeNodeExpiryFillClass } from '@/lib/arkade/unilateral-exit-vtxo-expiry'
 import type {
   ArkadeUnilateralExitNodeStatus,
   ArkadeUnilateralExitTopology,
@@ -177,19 +178,22 @@ function UnilateralExitTreeNode({
   const nodeTestId = data.isLeaf
     ? `unilateral-exit-leaf-node-${data.txid.slice(0, 8)}`
     : `unilateral-exit-node-${data.txid.slice(0, 8)}`
+  const expiryFillClass = unilateralExitTreeNodeExpiryFillClass(data.vtxoExpiryUrgency)
 
   return (
     <div
       className={cn(
-        'relative flex size-12 items-center justify-center rounded-full border-2 bg-background shadow-sm',
+        'relative flex size-12 items-center justify-center rounded-full border-2 shadow-sm',
+        expiryFillClass ?? 'bg-background text-foreground',
         data.isOnExitPath ? 'border-blue-500' : 'border-muted-foreground/25',
         data.isFocused && 'ring-2 ring-blue-300 ring-offset-2 ring-offset-background',
-        data.isSelectedLeaf && 'bg-blue-50 dark:bg-blue-950/30',
+        expiryFillClass == null && data.isSelectedLeaf && 'bg-blue-50 dark:bg-blue-950/30',
       )}
       data-testid={nodeTestId}
+      data-expiry-urgency={data.vtxoExpiryUrgency ?? undefined}
       aria-label={`${data.txType} node`}
     >
-      <Icon className="size-5 text-foreground" aria-hidden />
+      <Icon className="size-5" aria-hidden />
       <UnilateralExitHostVtxoBadge
         txid={data.txid}
         count={data.exitableVtxoCount}

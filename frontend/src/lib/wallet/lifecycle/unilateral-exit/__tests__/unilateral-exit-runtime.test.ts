@@ -8,6 +8,7 @@ const workerListMocks = vi.hoisted(() => ({
     { id: 'vtxo-resolved-1', txid: 'aa'.repeat(32), vout: 0, amountSats: 50_000 },
   ]),
   listUnilateralExitsInProgress: vi.fn(async () => []),
+  listVtxoExitRecords: vi.fn(async () => []),
 }))
 const actorProgressMocks = vi.hoisted(() => {
   const idleUnrelayed = {
@@ -85,6 +86,9 @@ vi.mock('@/workers/arkade-factory', () => ({
   getArkadeWorker: () => ({
     listExitCandidates: workerListMocks.listExitCandidates,
     listUnilateralExitsInProgress: workerListMocks.listUnilateralExitsInProgress,
+    listVtxoExitRecords: workerListMocks.listVtxoExitRecords,
+    tagUnilateralExitPlan: vi.fn(async () => {}),
+    untagUnilateralExitPlanIfSafe: vi.fn(async () => {}),
   }),
 }))
 
@@ -130,6 +134,7 @@ vi.mock('@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.actors', () => {
         currentStepWaitingSince: 1_700_000_000,
       })),
       resolveAbortVtxoIdsActor: fromPromise(async () => ({ vtxoIds: [] as string[] })),
+      tagPlanActor: fromPromise(async () => {}),
     },
   }
 })
@@ -139,9 +144,11 @@ import {
   configureUnilateralExitForLoadedWallet,
   abortUnilateralExitOrchestration,
   hydrateUnilateralExitFromPersistence,
+  hydrateVtxoExitChildrenFromWasm,
   resetUnilateralExitActorForTests,
   sendUnilateralExitEvent,
   getUnilateralExitActorSnapshot,
+  getVtxoExitChildSnapshotMap,
   resetUnilateralExitForArkadeSessionTeardown,
   syncUnilateralExitWithLockPhase,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime'
@@ -181,6 +188,7 @@ describe('unilateral-exit-runtime hydration', () => {
       currentStepRelayedSinceUnix: null,
       jobStartedAtUnix: 1_700_000_000,
     })
+    workerListMocks.listVtxoExitRecords.mockResolvedValue([])
     vi.mocked(getArkadeSyncLifecycleSnapshot).mockReturnValue({
       syncPhase: 'not-syncing',
       networkMode: 'regtest',
@@ -523,5 +531,54 @@ describe('unilateral-exit-runtime hydration', () => {
     markPendingBatchIntentCancelled(intent)
     syncUnilateralExitWithLockPhase('locked')
     expect(consumePendingBatchIntentCancelled(pendingBatchIntentKey(intent))).toBe(false)
+  })
+
+  it('spawns leftover children when the job bookmark is empty', async () => {
+    sdkHydrated = true
+    mockGetJob.mockReturnValue({
+      selectedLeafOutpoints: [],
+      currentStepRelayedSinceUnix: null,
+      jobStartedAtUnix: 1_700_000_000,
+    })
+    workerListMocks.listVtxoExitRecords.mockResolvedValue([
+      {
+        txid: leaf.txid,
+        vout: leaf.vout,
+        amountSats: 50_000,
+        phase: 'unrolled',
+        taggedAt: 1,
+      },
+    ])
+
+    await configureUnilateralExitForLoadedWallet(walletScope)
+    await hydrateUnilateralExitFromPersistence({
+      walletScope,
+      inProgressOutpoints: [],
+      unilateralExitInProgressSats: 0,
+    })
+
+    const children = getVtxoExitChildSnapshotMap()
+    expect(children[`${leaf.txid}:${leaf.vout}`]?.phase).toBe('unrolled')
+    expect(getUnilateralExitActorSnapshot().context.jobOutpoints).toEqual([])
+  })
+
+  it('hydrateVtxoExitChildrenFromWasm sends records to the host', async () => {
+    sdkHydrated = true
+    await configureUnilateralExitForLoadedWallet(walletScope)
+    workerListMocks.listVtxoExitRecords.mockResolvedValue([
+      {
+        txid: leaf.txid,
+        vout: leaf.vout,
+        amountSats: 50_000,
+        phase: 'host_confirmed',
+        taggedAt: 1,
+      },
+    ])
+
+    await hydrateVtxoExitChildrenFromWasm()
+
+    expect(getVtxoExitChildSnapshotMap()[`${leaf.txid}:${leaf.vout}`]?.phase).toBe(
+      'host_confirmed',
+    )
   })
 })

@@ -230,6 +230,34 @@ export interface ArkadeExitCandidateDto {
   canComplete: boolean
 }
 
+export const ARKADE_VTXO_EXIT_PHASES = [
+  'tagged',
+  'host_broadcast_attempted',
+  'host_relayed',
+  'host_confirmed',
+  'unrolled',
+  'complete_ready',
+  'exited',
+  'funding_lost',
+] as const
+
+export type ArkadeVtxoExitPhase = (typeof ARKADE_VTXO_EXIT_PHASES)[number]
+
+export function isArkadeVtxoExitPhase(value: string | undefined): value is ArkadeVtxoExitPhase {
+  if (value == null) {
+    return false
+  }
+  return (ARKADE_VTXO_EXIT_PHASES as readonly string[]).includes(value)
+}
+
+export interface ArkadeVtxoExitRecordDto {
+  txid: string
+  vout: number
+  amountSats: number
+  phase: ArkadeVtxoExitPhase
+  taggedAt: number
+}
+
 export interface ArkadeUnilateralExitInProgressDto {
   id: string
   txid: string
@@ -238,6 +266,7 @@ export interface ArkadeUnilateralExitInProgressDto {
   virtualStatusState: ArkadeVirtualStatusState
   canComplete: boolean
   startedAt?: number
+  phase?: ArkadeVtxoExitPhase
 }
 
 export interface ArkadeMissingBlocktimeCompletionInput {
@@ -374,6 +403,7 @@ export interface ArkadeUnilateralExitHostOutpoint {
   vout: number
   amountSats: number
   isUnrolled: boolean
+  expiresAt: number
 }
 
 export interface ArkadeUnilateralExitTopology {
@@ -595,6 +625,7 @@ export interface ArkadeService {
   listExitCandidates(): Promise<ArkadeExitCandidateDto[]>
   listVtxos(): Promise<ArkadeVtxoListResult>
   listUnilateralExitsInProgress(): Promise<ArkadeUnilateralExitInProgressDto[]>
+  listVtxoExitRecords(): Promise<ArkadeVtxoExitRecordDto[]>
   getOnchainBumperInfo(): Promise<ArkadeOnchainBumperInfo>
   collaborativeExit(
     params: ArkadeCollaborativeExitParams,
@@ -619,6 +650,8 @@ export interface ArkadeService {
   getUnilateralExitProgress(
     params: ArkadeUnilateralExitProgressParams,
   ): Promise<ArkadeUnilateralExitProgress>
+  tagUnilateralExitPlan(params: ArkadeUnilateralExitProgressParams): Promise<void>
+  untagUnilateralExitPlanIfSafe(params: ArkadeUnilateralExitProgressParams): Promise<void>
   evaluateUnilateralExitJobViability(
     params: ArkadeUnilateralExitProgressParams,
   ): Promise<ArkadeUnilateralExitJobViability>

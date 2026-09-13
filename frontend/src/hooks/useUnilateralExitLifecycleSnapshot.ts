@@ -3,12 +3,13 @@ import {
   createStableSnapshotGetter,
   shallowRecordEqual,
 } from '@/hooks/lifecycle-snapshot-subscription'
-import { defaultUnilateralExitAutomationPrefs } from '@/lib/wallet/lifecycle/unilateral-exit-automation-types'
-import { useUnilateralExitAutomationPrefsStore } from '@/lib/wallet/lifecycle/unilateral-exit-automation-prefs-persistence'
 import type { UnilateralExitLifecycleSnapshot } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-types'
 import {
   getUnilateralExitActorSnapshot,
+  getVtxoExitChildSnapshotMap,
   subscribeUnilateralExitActor,
+  subscribeVtxoExitChildren,
+  vtxoExitChildSnapshotMapEqual,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime'
 import {
   selectIsUnilateralExitJobActive,
@@ -16,6 +17,7 @@ import {
   type UnilateralExitActorSnapshot,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-selectors'
 import { unilateralExitActorSnapshotEqual } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-snapshot'
+import type { VtxoExitChildSnapshotMap } from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit-machine-types'
 
 function readLifecycleSnapshot(): UnilateralExitLifecycleSnapshot {
   return selectUnilateralExitLifecycleSnapshot(getUnilateralExitActorSnapshot())
@@ -31,6 +33,12 @@ const getStableUnilateralExitActorSnapshot =
   createStableSnapshotGetter<UnilateralExitActorSnapshot>(
     getUnilateralExitActorSnapshot,
     unilateralExitActorSnapshotEqual,
+  )
+
+const getStableVtxoExitChildSnapshotMap =
+  createStableSnapshotGetter<VtxoExitChildSnapshotMap>(
+    getVtxoExitChildSnapshotMap,
+    vtxoExitChildSnapshotMapEqual,
   )
 
 export function useUnilateralExitLifecycleSnapshot(): UnilateralExitLifecycleSnapshot {
@@ -49,18 +57,15 @@ export function useUnilateralExitActorSnapshot(): UnilateralExitActorSnapshot {
   )
 }
 
+export function useVtxoExitSnapshots(): VtxoExitChildSnapshotMap {
+  return useSyncExternalStore(
+    subscribeVtxoExitChildren,
+    getStableVtxoExitChildSnapshotMap,
+    getStableVtxoExitChildSnapshotMap,
+  )
+}
+
 export function useIsUnilateralExitJobActive(): boolean {
   const actorSnapshot = useUnilateralExitActorSnapshot()
   return selectIsUnilateralExitJobActive(actorSnapshot)
-}
-
-export function useUnilateralExitAutomationPrefsForActor() {
-  const actorSnapshot = useUnilateralExitActorSnapshot()
-  const scope = actorSnapshot.context.walletScope
-  if (scope == null) {
-    return defaultUnilateralExitAutomationPrefs()
-  }
-  return useUnilateralExitAutomationPrefsStore
-    .getState()
-    .getPrefs(scope.walletId, scope.networkMode, scope.arkadeAccountId)
 }

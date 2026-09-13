@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
+import {
+  BLOCKCHAIN_EXPLORER_UNREACHABLE_UI_MESSAGE,
+  replaceRawBlockchainFetchErrorMessage,
+  sanitizeErrorMessageForUi,
+} from '@/lib/shared/sanitize-error-for-ui'
 
 describe('sanitizeErrorMessageForUi', () => {
   it('passes through short benign messages', () => {
@@ -21,11 +25,6 @@ describe('sanitizeErrorMessageForUi', () => {
 
   it('replaces http and https URLs', () => {
     expect(
-      sanitizeErrorMessageForUi(
-        'Failed to fetch https://mempool.space/api/tx/abc / timeout',
-      ),
-    ).toBe('Failed to fetch [url] / timeout')
-    expect(
       sanitizeErrorMessageForUi('GET http://127.0.0.1:3002/blocks/tip/height'),
     ).toBe('GET [url]')
   })
@@ -34,9 +33,28 @@ describe('sanitizeErrorMessageForUi', () => {
     const raw =
       'reqwest::Error { kind: Request, source: "JsValue(TypeError: Failed to fetch\\n' +
       'TypeError: Failed to fetch\\n at Re(https://example.com/assets/bitboard_crypto-abc.js:1:15629)" }'
-    const out = sanitizeErrorMessageForUi(raw)
-    expect(out).not.toMatch(/https?:\/\//)
-    expect(out).toContain('[url]')
+    expect(sanitizeErrorMessageForUi(raw)).toBe(BLOCKCHAIN_EXPLORER_UNREACHABLE_UI_MESSAGE)
+  })
+
+  it('replaces Mutinynet WASM Blockchain Failed to fetch dumps', () => {
+    const raw =
+      'Blockchain error: Reqwest(reqwest::Error { kind: Request, source: "JsValue(TypeError: Failed to fetch\\n' +
+      'TypeError: Failed to fetch\\n at __wbg_fetch_9dad4fe911207b37 (http://localhost:3000/src/wasm-pkg/bitboard_ark/bitboard_ark_bg.js:925:14)" })'
+    expect(replaceRawBlockchainFetchErrorMessage(raw)).toBe(
+      BLOCKCHAIN_EXPLORER_UNREACHABLE_UI_MESSAGE,
+    )
+    expect(sanitizeErrorMessageForUi(raw)).toBe(BLOCKCHAIN_EXPLORER_UNREACHABLE_UI_MESSAGE)
+  })
+
+  it('leaves unrelated errors unchanged', () => {
+    expect(replaceRawBlockchainFetchErrorMessage('autonomous_exit_materials_missing')).toBe(
+      'autonomous_exit_materials_missing',
+    )
+  })
+
+  it('leaves a plain Failed to fetch string unchanged', () => {
+    expect(replaceRawBlockchainFetchErrorMessage('Failed to fetch')).toBe('Failed to fetch')
+    expect(sanitizeErrorMessageForUi('Failed to fetch')).toBe('Failed to fetch')
   })
 
   it('replaces Windows paths', () => {

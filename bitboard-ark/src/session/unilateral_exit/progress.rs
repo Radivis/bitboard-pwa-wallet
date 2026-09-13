@@ -1,12 +1,10 @@
-use std::collections::HashSet;
-
 use bitcoin::Txid;
 
 use crate::api_types::{
     UnilateralExitLeafStatusDto, UnilateralExitNodeStatusDto, UnilateralExitNodeStatusKind,
     UnilateralExitPhase, UnilateralExitProgressDto, UnilateralExitProgressParams,
 };
-use crate::constants::{UNILATERAL_EXIT_LEAF_CONFIRMATIONS, UNILATERAL_EXIT_STEP_CONFIRMATIONS};
+use crate::constants::{UNILATERAL_EXIT_HOST_TX_CONFIRMATIONS, UNILATERAL_EXIT_STEP_CONFIRMATIONS};
 use crate::error::{ArkResult, ArkWasmError};
 use crate::esplora_blockchain::EsploraBlockchain;
 use crate::outpoint::representative_vout_among_virtual_outpoints;
@@ -14,11 +12,10 @@ use crate::outpoint::representative_vout_among_virtual_outpoints;
 use super::plan::UnilateralBatchPlan;
 use super::proceed::unilateral_exit_step_broadcast_satisfied;
 use super::snapshot_ops::dedup_virtual_outpoints;
-use super::watch::enrich_unilateral_exit_watches_for_leaf_tx_after_unroll;
 use crate::session::ArkSession;
 
-pub(crate) fn leaf_reached_finality(confirmations: u64) -> bool {
-    confirmations >= u64::from(UNILATERAL_EXIT_LEAF_CONFIRMATIONS)
+pub(crate) fn host_tx_reached_finality(confirmations: u64) -> bool {
+    confirmations >= u64::from(UNILATERAL_EXIT_HOST_TX_CONFIRMATIONS)
 }
 
 pub(crate) fn step_reached_confirmation(confirmations: u64) -> bool {
@@ -109,7 +106,7 @@ impl ArkSession {
         let plan = self.build_unilateral_batch_plan(&virtual_outpoints).await?;
         let blockchain = self.client.blockchain();
         blockchain.prepare_confirmation_scan().await;
-        self.mark_unrolled_leaves_at_finality(&plan).await?;
+        self.mark_unrolled_hosts_at_finality(&plan).await?;
         let current_step_index = self
             .first_incomplete_step_index(blockchain, &plan.ordered_step_txids)
             .await?;
@@ -170,35 +167,12 @@ impl ArkSession {
         Ok(ordered_step_txids.len())
     }
 
-    /// Marks leaves unrolled in the local snapshot when chain depth is reached.
-    /// Does not block on operator indexer polling — that runs during operator sync.
-    pub(super) async fn mark_unrolled_leaves_at_finality(
+    /// Unified 6-conf stamper for host txs (leaf and intermediate).
+    pub(super) async fn mark_unrolled_hosts_at_finality(
         &self,
-        plan: &UnilateralBatchPlan,
+        _plan: &UnilateralBatchPlan,
     ) -> ArkResult<()> {
-        let blockchain = self.client.blockchain();
-        let mut processed_leaf_txids = HashSet::new();
-
-        for leaf in &plan.leaves {
-            let leaf_virtual_txid = leaf.leaf_txid.to_string();
-            let leaf_txid = leaf.leaf_txid;
-            if !processed_leaf_txids.insert(leaf_txid) {
-                continue;
-            }
-            if self.virtual_tx_is_marked_unrolled(&leaf_virtual_txid)? {
-                continue;
-            }
-            if !leaf_reached_finality(tx_confirmations(blockchain, &leaf_txid).await?) {
-                continue;
-            }
-            self.mark_leaf_virtual_tx_vtxos_unrolled_in_snapshot(&leaf_virtual_txid)?;
-            enrich_unilateral_exit_watches_for_leaf_tx_after_unroll(
-                &self.wallet_db,
-                &leaf_virtual_txid,
-                &leaf_txid.to_string(),
-                &leaf.branch_txids,
-            );
-        }
+        self.reconcile_host_tx_finality().await?;
         Ok(())
     }
 
@@ -328,10 +302,10 @@ mod tests {
     use crate::api_types::UnilateralExitNodeStatusKind;
 
     #[test]
-    fn leaf_finality_requires_six_confirmations() {
-        assert!(!leaf_reached_finality(5));
-        assert!(leaf_reached_finality(6));
-        assert!(leaf_reached_finality(10));
+    fn host_tx_finality_requires_six_confirmations() {
+        assert!(!host_tx_reached_finality(5));
+        assert!(host_tx_reached_finality(6));
+        assert!(host_tx_reached_finality(10));
     }
     #[test]
     fn wait_cap_does_not_skip_sibling_checkpoint_after_last_broadcast() {

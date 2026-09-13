@@ -30,7 +30,21 @@ import {
 import { invalidateUnilateralExitQueries } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-query-cache'
 import type { ArkadeUnilateralExitProgress, ArkadeUnilateralExitJobViability } from '@/workers/arkade-api'
 import { arkadeVtxoOutpointListsEqual, sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
-import { assertEvent, assign, fromPromise, setup, type PromiseActorLogic } from 'xstate'
+import { userFacingLifecycleErrorMessage } from '@/lib/shared/utils'
+import { vtxoExitMachine } from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit.machine'
+import {
+  isVtxoExitChildId,
+  vtxoExitChildId,
+} from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit-machine-types'
+import { toast } from 'sonner'
+import {
+  assertEvent,
+  assign,
+  enqueueActions,
+  fromPromise,
+  setup,
+  type PromiseActorLogic,
+} from 'xstate'
 
 export type EnsureBroadcastActorInput = {
   walletScope: NonNullable<UnilateralExitMachineContext['walletScope']>
@@ -63,6 +77,11 @@ export type ResolveAbortVtxoIdsActorInput = {
   outpoints: UnilateralExitMachineContext['jobOutpoints']
 }
 
+export type TagPlanActorInput = {
+  walletScope: NonNullable<UnilateralExitMachineContext['walletScope']>
+  outpoints: UnilateralExitMachineContext['jobOutpoints']
+}
+
 type UnilateralExitSetupActors = {
   evaluateJobViabilityActor: PromiseActorLogic<
     ArkadeUnilateralExitJobViability,
@@ -76,6 +95,7 @@ type UnilateralExitSetupActors = {
   proceedStepActor: PromiseActorLogic<ArkadeUnilateralExitProgress, ProceedStepActorInput>
   ensureBroadcastActor: PromiseActorLogic<ArkadeUnilateralExitProgress, EnsureBroadcastActorInput>
   resolveAbortVtxoIdsActor: PromiseActorLogic<{ vtxoIds: string[] }, ResolveAbortVtxoIdsActorInput>
+  tagPlanActor: PromiseActorLogic<void, TagPlanActorInput>
 }
 
 export function requireUnilateralExitWalletScope(
@@ -95,7 +115,7 @@ export function requireUnilateralExitFeeRateSatPerVb(feeRateSatPerVb: number | n
 }
 
 function actorErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback
+  return userFacingLifecycleErrorMessage(error, fallback)
 }
 
 function isTerminalViabilityStatus(
@@ -167,12 +187,11 @@ function syncPersistedRelayWait(
 
 function isJobCompleteFromProgress(
   progress: ArkadeUnilateralExitProgress | null,
-  context: UnilateralExitMachineContext,
 ): boolean {
   if (progress == null) {
     return false
   }
-  return isUnilateralExitJobComplete(progress, context.jobOutpoints)
+  return isUnilateralExitJobComplete(progress)
 }
 
 export const unilateralExitMachineSetup = setup({
@@ -187,6 +206,7 @@ export const unilateralExitMachineSetup = setup({
       proceedStep: 'proceedStepActor'
       ensureBroadcast: 'ensureBroadcastActor'
       resolveAbortVtxoIds: 'resolveAbortVtxoIdsActor'
+      tagPlan: 'tagPlanActor'
     },
   },
   delays: {
@@ -225,19 +245,23 @@ export const unilateralExitMachineSetup = setup({
         throw new Error('resolveAbortVtxoIdsActor implementation missing')
       },
     ),
-  } satisfies UnilateralExitSetupActors,
+    tagPlanActor: fromPromise<void, TagPlanActorInput>(async () => {
+      throw new Error('tagPlanActor implementation missing')
+    }),
+    vtxoExit: vtxoExitMachine,
+  } satisfies UnilateralExitSetupActors & { vtxoExit: typeof vtxoExitMachine },
   guards: {
     isJobCompleteFromFetchEvent: ({ context, event }) => {
       const output = progressFromFetchEvent(event)
-      return isJobCompleteFromProgress(output, context)
+      return isJobCompleteFromProgress(output)
     },
     isJobCompleteFromProceedEvent: ({ context, event }) => {
       const output = progressFromProceedEvent(event)
-      return isJobCompleteFromProgress(output, context)
+      return isJobCompleteFromProgress(output)
     },
     isJobCompleteFromEnsureBroadcastEvent: ({ context, event }) => {
       const output = progressFromEnsureBroadcastEvent(event)
-      return isJobCompleteFromProgress(output, context)
+      return isJobCompleteFromProgress(output)
     },
     needsBroadcastFromFetchEvent: ({ context, event }) => {
       const output = progressFromFetchEvent(event)
@@ -287,7 +311,7 @@ export const unilateralExitMachineSetup = setup({
       context.pausedReason == null &&
       context.jobOutpoints.length > 0 &&
       context.progress != null &&
-      !isJobCompleteFromProgress(context.progress, context),
+      !isJobCompleteFromProgress(context.progress),
     shouldWaitAfterEnsureBroadcast: ({ context, event }) => {
       const output = progressFromEnsureBroadcastEvent(event)
       const waitingRelayed = isWaitingForRelayedStepConfirmation(output)
@@ -299,7 +323,7 @@ export const unilateralExitMachineSetup = setup({
         return false
       }
       const output = progressFromEnsureBroadcastEvent(event)
-      if (isJobCompleteFromProgress(output, context)) {
+      if (isJobCompleteFromProgress(output)) {
         return false
       }
       return !isWaitingForRelayedStepConfirmation(output)
@@ -346,6 +370,13 @@ export const unilateralExitMachineSetup = setup({
       assertEvent(event, 'AUTOMATION_PREFS_CHANGED')
       return event.automationEnabled && context.jobOutpoints.length > 0
     },
+    persistedJobMatchesContextOutpoints: ({ context }) => {
+      if (context.walletScope == null || context.jobOutpoints.length === 0) {
+        return false
+      }
+      const existing = getPersistedUnilateralExitJob(context.walletScope)
+      return arkadeVtxoOutpointListsEqual(existing.selectedLeafOutpoints, context.jobOutpoints)
+    },
   },
   actions: {
     assignWalletScope: assign(({ event }) => {
@@ -368,6 +399,7 @@ export const unilateralExitMachineSetup = setup({
         feeRateSatPerVb: event.feeRateSatPerVb,
         pausedReason: null,
         lastErrorMessage: null,
+        lastSettleResult: null,
         progress: null,
       }
     }),
@@ -385,6 +417,7 @@ export const unilateralExitMachineSetup = setup({
         feeRateSatPerVb: null,
         pausedReason: null,
         lastErrorMessage: null,
+        lastSettleResult: null,
         progress: null,
       }
     }),
@@ -408,6 +441,7 @@ export const unilateralExitMachineSetup = setup({
         progress: keepExistingProgress ? context.progress : null,
         pausedReason: null,
         lastErrorMessage: null,
+        lastSettleResult: null,
         reconcileInProgressSats: event.reconcileInProgressSats ?? 0,
         reconcileInProgressOutpoints: event.reconcileInProgressOutpoints ?? [],
       }
@@ -418,6 +452,13 @@ export const unilateralExitMachineSetup = setup({
       }
       persistActiveUnilateralExitJob(context.walletScope, context.jobOutpoints)
     },
+    assignErrorFromTagPlan: assign({
+      lastErrorMessage: ({ event }) => {
+        assertEvent(event, 'xstate.error.actor.tagPlan')
+        return actorErrorMessage(event.error, 'Failed to lock VTXOs for unilateral exit.')
+      },
+      proceedRequested: false,
+    }),
     ensurePersistedJobFromContext: ({ context }) => {
       if (context.walletScope == null) {
         return
@@ -433,6 +474,7 @@ export const unilateralExitMachineSetup = setup({
         feeRateSatPerVb: event.feeRateSatPerVb,
         pausedReason: null,
         lastErrorMessage: null,
+        lastSettleResult: null,
       }
     }),
     assignProgressFromFetch: assign(({ context, event }) => {
@@ -492,6 +534,7 @@ export const unilateralExitMachineSetup = setup({
     assignResume: assign({
       pausedReason: null,
       lastErrorMessage: null,
+      lastSettleResult: null,
       proceedRequested: ({ context }) => context.automationEnabled,
     }),
     resumeAutomationProceed: assign({
@@ -538,6 +581,64 @@ export const unilateralExitMachineSetup = setup({
       reconcileInProgressSats: 0,
       reconcileInProgressOutpoints: [],
     })),
+    assignSettleResultBranchComplete: assign({
+      lastSettleResult: 'branchComplete' as const,
+    }),
+    assignSettleResultWaitingConfirm: assign({
+      lastSettleResult: 'waitingConfirm' as const,
+    }),
+    assignSettleResultPaused: assign({ lastSettleResult: 'paused' as const }),
+    assignSettleResultError: assign({ lastSettleResult: 'error' as const }),
+    assignSettleResultTerminated: assign(({ event }) => {
+      assertEvent(event, 'xstate.done.actor.evaluateJobViability')
+      return {
+        lastSettleResult: 'terminated' as const,
+        lastErrorMessage:
+          event.output.detailMessage || 'Unilateral exit was terminated.',
+      }
+    }),
+    notifyBranchComplete: () => {
+      toast.success('Unilateral exit branch complete.')
+    },
+    notifyTerminated: ({ context }) => {
+      toast.error(
+        userFacingLifecycleErrorMessage(
+          context.lastErrorMessage,
+          'Unilateral exit was terminated.',
+        ),
+      )
+    },
+    syncVtxoExitChildren: enqueueActions(({ enqueue, event, self }) => {
+      assertEvent(event, 'HYDRATE_VTXO_RECORDS')
+      const desiredRecords = event.records.filter((record) => record.phase !== 'exited')
+      const desiredIds = new Set(
+        desiredRecords.map((record) => vtxoExitChildId(record.txid, record.vout)),
+      )
+      const snapshot = self.getSnapshot()
+      const existingIds = Object.keys(snapshot.children).filter(isVtxoExitChildId)
+
+      for (const actorId of existingIds) {
+        if (!desiredIds.has(actorId)) {
+          enqueue.stopChild(actorId)
+        }
+      }
+
+      for (const record of desiredRecords) {
+        const actorId = vtxoExitChildId(record.txid, record.vout)
+        if (!existingIds.includes(actorId)) {
+          enqueue.spawnChild('vtxoExit', { id: actorId, input: record })
+        }
+        enqueue.sendTo(actorId, { type: 'HYDRATE', phase: record.phase })
+      }
+    }),
+    stopAllVtxoExitChildren: enqueueActions(({ enqueue, self }) => {
+      const snapshot = self.getSnapshot()
+      for (const actorId of Object.keys(snapshot.children)) {
+        if (isVtxoExitChildId(actorId)) {
+          enqueue.stopChild(actorId)
+        }
+      }
+    }),
     clearPersistedJob: ({ context }) => {
       if (context.walletScope != null) {
         clearPersistedUnilateralExitJob(context.walletScope)
@@ -688,6 +789,9 @@ export const unilateralExitMachineSetup = setup({
     clearTerminatedProceedRequested: assign({
       proceedRequested: false,
     }),
-    resetToNotConfigured: assign(() => createInitialUnilateralExitContext()),
+    resetToNotConfigured: enqueueActions(({ enqueue }) => {
+      enqueue('stopAllVtxoExitChildren')
+      enqueue.assign(() => createInitialUnilateralExitContext())
+    }),
   },
 })

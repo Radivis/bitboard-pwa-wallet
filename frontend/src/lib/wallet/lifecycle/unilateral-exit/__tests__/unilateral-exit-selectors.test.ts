@@ -61,10 +61,7 @@ describe('selectUnilateralExitControlJobState', () => {
   it('returns idle when no in-progress exits and no job in flight', () => {
     const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.idle, { jobOutpoints: [] })
     expect(
-      selectUnilateralExitControlJobState(snapshot, {
-        hasInProgressExits: false,
-        totalSteps: 0,
-      }),
+      selectUnilateralExitControlJobState(snapshot, 0),
     ).toMatchObject({
       phase: 'idle',
       exitJobInFlight: false,
@@ -84,10 +81,7 @@ describe('selectUnilateralExitControlJobState', () => {
       }),
     })
     expect(
-      selectUnilateralExitControlJobState(snapshot, {
-        hasInProgressExits: false,
-        totalSteps: 2,
-      }),
+      selectUnilateralExitControlJobState(snapshot, 2),
     ).toMatchObject({
       phase: 'waiting',
       exitJobInFlight: true,
@@ -105,10 +99,7 @@ describe('selectUnilateralExitControlJobState', () => {
       }),
     })
     expect(
-      selectUnilateralExitControlJobState(snapshot, {
-        hasInProgressExits: false,
-        totalSteps: 2,
-      }),
+      selectUnilateralExitControlJobState(snapshot, 2),
     ).toMatchObject({
       phase: 'waitingForParentData',
       exitJobInFlight: true,
@@ -123,10 +114,7 @@ describe('selectUnilateralExitControlJobState', () => {
       progress: null,
     })
     expect(
-      selectUnilateralExitControlJobState(snapshot, {
-        hasInProgressExits: false,
-        totalSteps: 2,
-      }),
+      selectUnilateralExitControlJobState(snapshot, 2),
     ).toMatchObject({
       phase: 'advancing',
       exitJobInFlight: true,
@@ -144,10 +132,7 @@ describe('selectUnilateralExitControlJobState', () => {
       }),
     })
     expect(
-      selectUnilateralExitControlJobState(snapshot, {
-        hasInProgressExits: false,
-        totalSteps: 2,
-      }),
+      selectUnilateralExitControlJobState(snapshot, 2),
     ).toMatchObject({
       phase: 'ensuringBroadcast',
       exitJobInFlight: true,
@@ -167,10 +152,7 @@ describe('selectUnilateralExitControlJobState', () => {
       }),
     })
     expect(
-      selectUnilateralExitControlJobState(snapshot, {
-        hasInProgressExits: false,
-        totalSteps: 5,
-      }).phase,
+      selectUnilateralExitControlJobState(snapshot, 5).phase,
     ).toBe('complete')
   })
 
@@ -185,10 +167,7 @@ describe('selectUnilateralExitControlJobState', () => {
       }),
     })
     expect(
-      selectUnilateralExitControlJobState(waitingSnapshot, {
-        hasInProgressExits: false,
-        totalSteps: 2,
-      }).phase,
+      selectUnilateralExitControlJobState(waitingSnapshot, 2).phase,
     ).not.toBe('complete')
 
     const completeSnapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.complete, {
@@ -204,13 +183,10 @@ describe('selectUnilateralExitControlJobState', () => {
       }),
     })
     expect(
-      selectUnilateralExitControlJobState(completeSnapshot, {
-        hasInProgressExits: true,
-        totalSteps: 2,
-      }),
+      selectUnilateralExitControlJobState(completeSnapshot, 2),
     ).toMatchObject({
       phase: 'complete',
-      jobActive: true,
+      jobActive: false,
     })
   })
 
@@ -239,7 +215,6 @@ describe('selectUnilateralExitControlJobState', () => {
       batchEstimateLoading: false,
       prefsHydrated: true,
       lifecycleJobActive: true,
-      hasInProgressExits: true,
       phase: 'waiting',
     })
     expect(button.disabled).toBe(true)
@@ -258,7 +233,6 @@ describe('selectUnilateralExitControlJobState', () => {
       batchEstimateLoading: false,
       prefsHydrated: true,
       lifecycleJobActive: true,
-      hasInProgressExits: true,
       phase: 'advancing',
     })
     expect(button.disabled).toBe(true)
@@ -279,7 +253,6 @@ describe('selectUnilateralExitControlJobState', () => {
         batchEstimateLoading: false,
         prefsHydrated: true,
         lifecycleJobActive: true,
-        hasInProgressExits: false,
         phase: 'idle',
       }).label,
     ).toBe('Proceed')
@@ -291,10 +264,7 @@ describe('selectUnilateralExitControlJobState', () => {
       progress: null,
     })
     expect(
-      selectUnilateralExitControlJobState(snapshot, {
-        hasInProgressExits: true,
-        totalSteps: 17,
-      }),
+      selectUnilateralExitControlJobState(snapshot, 17),
     ).toMatchObject({
       phase: 'idle',
       exitJobInFlight: false,
@@ -315,7 +285,7 @@ describe('selectUnilateralExitControlJobState', () => {
           jobOutpoints: [leaf],
           progress: waitingProgress,
         }),
-        { hasInProgressExits: false, totalSteps: 2 },
+        2,
       ).phase,
     ).toBe('idle')
     expect(
@@ -325,7 +295,7 @@ describe('selectUnilateralExitControlJobState', () => {
           lastErrorMessage: 'broadcast failed',
           progress: waitingProgress,
         }),
-        { hasInProgressExits: false, totalSteps: 2 },
+        2,
       ).phase,
     ).toBe('idle')
   })
@@ -338,7 +308,7 @@ describe('selectUnilateralExitControlJobState', () => {
           pausedReason: 'feeCapExceeded',
           progress: progress({ phase: 'waiting', currentStepTxRelayed: true }),
         }),
-        { hasInProgressExits: false, totalSteps: 2 },
+        2,
       ).phase,
     ).toBe('idle')
     expect(
@@ -346,7 +316,7 @@ describe('selectUnilateralExitControlJobState', () => {
         resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.aborted, {
           jobOutpoints: [leaf],
         }),
-        { hasInProgressExits: false, totalSteps: 2 },
+        2,
       ).phase,
     ).toBe('idle')
     expect(
@@ -354,7 +324,7 @@ describe('selectUnilateralExitControlJobState', () => {
         resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.terminated, {
           jobOutpoints: [leaf],
         }),
-        { hasInProgressExits: false, totalSteps: 2 },
+        2,
       ).phase,
     ).toBe('idle')
   })
@@ -366,7 +336,7 @@ describe('selectUnilateralExitControlJobState', () => {
           jobOutpoints: [leaf],
           progress: progress({ phase: 'idle' }),
         }),
-        { hasInProgressExits: false, totalSteps: 2 },
+        2,
       ).phase,
     ).toBe('advancing')
   })
@@ -380,7 +350,7 @@ describe('selectUnilateralExitControlJobState', () => {
           unconfirmedParentRetry: { stepIndex: 14, parentConfirmationsAtFail: 3 },
           progress: progress({ phase: 'idle', stepIndex: 14, totalSteps: 27 }),
         }),
-        { hasInProgressExits: false, totalSteps: 27 },
+        27,
       ).phase,
     ).toBe('waitingForParentData')
   })
@@ -454,10 +424,20 @@ describe('selectUnilateralExitInProgressOverlay', () => {
     })
     expect(selectUnilateralExitInProgressOverlay(snapshot)).toBe('figuringOut')
     expect(
-      selectUnilateralExitControlJobState(snapshot, {
-        hasInProgressExits: false,
-        totalSteps: 2,
-      }).phase,
+      selectUnilateralExitControlJobState(snapshot, 2).phase,
+    ).toBe('advancing')
+    expect(selectUnilateralExitLifecycleSnapshot(snapshot).phase).toBe(
+      UnilateralExitLifecyclePhase.Advancing,
+    )
+  })
+
+  it('returns figuringOut overlay while tagging the plan', () => {
+    const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.taggingPlan, {
+      jobOutpoints: [leaf],
+    })
+    expect(selectUnilateralExitInProgressOverlay(snapshot)).toBe('figuringOut')
+    expect(
+      selectUnilateralExitControlJobState(snapshot, 0).phase,
     ).toBe('advancing')
     expect(selectUnilateralExitLifecycleSnapshot(snapshot).phase).toBe(
       UnilateralExitLifecyclePhase.Advancing,
@@ -549,10 +529,7 @@ describe('selectUnilateralExitInProgressOverlay', () => {
     })
     expect(selectUnilateralExitInProgressOverlay(snapshot)).toBe('readyToProceed')
     expect(
-      selectUnilateralExitControlJobState(snapshot, {
-        hasInProgressExits: false,
-        totalSteps: 23,
-      }),
+      selectUnilateralExitControlJobState(snapshot, 23),
     ).toMatchObject({
       phase: 'idle',
       isProceeding: false,
@@ -565,7 +542,6 @@ describe('selectCanAbortUnilateralExitOrchestration', () => {
     resolvedJobOutpointsCount: 1,
     lifecycleJobActive: false,
     persistedJobExists: false,
-    hasInProgressExits: false,
   }
 
   it('is true when actor holds job outpoints outside complete', () => {
@@ -579,12 +555,7 @@ describe('selectCanAbortUnilateralExitOrchestration', () => {
     const snapshot = resolvedSnapshot(UNILATERAL_EXIT_MACHINE_STATE.idle, {
       jobOutpoints: [],
     })
-    expect(
-      selectCanAbortUnilateralExitOrchestration(snapshot, {
-        ...abortParams,
-        hasInProgressExits: true,
-      }),
-    ).toBe(false)
+    expect(selectCanAbortUnilateralExitOrchestration(snapshot, abortParams)).toBe(false)
   })
 
   it('is true when a persisted frontend job exists without WASM in-progress', () => {

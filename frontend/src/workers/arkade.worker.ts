@@ -13,6 +13,7 @@ import {
   extractSdkPersistenceJsonForAccount,
   findActiveAccountSummary,
   listAccountSummaries,
+  loadArkadeAccountSdkPersistence,
   persistSdkJsonToEncryptedPayload,
   updateOperatorSyncAtEncrypted,
   type ArkadeEncryptedPayloadDeps,
@@ -55,6 +56,7 @@ import type {
   ArkadeOperatorTrustStatus,
   ArkadeOperatorConfigDiffResult,
   ArkadeUnilateralExitInProgressDto,
+  ArkadeVtxoExitRecordDto,
   ArkadeAutonomousModeStatus,
   ArkadeVtxoListResult,
   ArkadeVtxoExpiryStatus,
@@ -334,7 +336,7 @@ async function openSessionImpl(
   deleteLegacyArkadeIndexedDb(params.walletId, params.networkMode)
 
   const encryptedPayloadMessage = encryptedBlobForDbToMessage(params.encryptedPayload)
-  const sdkPersistenceJson = await extractSdkPersistenceJsonForAccount(
+  const { accountFound, sdkPersistenceJson } = await loadArkadeAccountSdkPersistence(
     getEncryptedPayloadDeps(),
     {
       encryptedPayload: encryptedPayloadMessage,
@@ -362,6 +364,9 @@ async function openSessionImpl(
     )
 
     activeSessionKey = key
+    if (accountFound) {
+      await persistAfterUnilateralExitOperation()
+    }
     return {
       arkadeAddress: openResult.arkadeAddress as string,
       operatorSignerPkHex: openResult.operatorSignerPkHex as string,
@@ -589,7 +594,7 @@ const arkadeService: ArkadeService = {
 
     const promise = (async () => {
       const txid = await invokeWasmArk((wasmModule) => wasmModule.ark_send_payment(params))
-      await persistAfterCriticalOperation()
+      await flushSdkPersistenceNowOrThrow()
       return txid
     })()
 
@@ -725,11 +730,19 @@ const arkadeService: ArkadeService = {
   },
 
   async listUnilateralExitsInProgress(): Promise<ArkadeUnilateralExitInProgressDto[]> {
-    return invokeWasmArk(
+    const rows = await invokeWasmArk(
       (wasmModule) =>
         wasmModule.ark_list_unilateral_exits_in_progress() as Promise<
           ArkadeUnilateralExitInProgressDto[]
         >,
+    )
+    await persistAfterUnilateralExitOperation()
+    return rows
+  },
+
+  async listVtxoExitRecords(): Promise<ArkadeVtxoExitRecordDto[]> {
+    return invokeWasmArk(
+      (wasmModule) => wasmModule.ark_list_vtxo_exit_records() as ArkadeVtxoExitRecordDto[],
     )
   },
 
@@ -822,12 +835,30 @@ const arkadeService: ArkadeService = {
   async getUnilateralExitProgress(
     params: ArkadeUnilateralExitProgressParams,
   ): Promise<ArkadeUnilateralExitProgress> {
-    return invokeWasmArk(
+    const progress = await invokeWasmArk(
       (wasmModule) =>
         wasmModule.ark_get_unilateral_exit_progress(
           params,
         ) as Promise<ArkadeUnilateralExitProgress>,
     )
+    await persistAfterUnilateralExitOperation()
+    return progress
+  },
+
+  async tagUnilateralExitPlan(
+    params: ArkadeUnilateralExitProgressParams,
+  ): Promise<void> {
+    await invokeWasmArk((wasmModule) => wasmModule.ark_tag_unilateral_exit_plan(params))
+    await persistAfterUnilateralExitOperation()
+  },
+
+  async untagUnilateralExitPlanIfSafe(
+    params: ArkadeUnilateralExitProgressParams,
+  ): Promise<void> {
+    await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_untag_unilateral_exit_plan_if_safe(params),
+    )
+    await persistAfterUnilateralExitOperation()
   },
 
   async evaluateUnilateralExitJobViability(

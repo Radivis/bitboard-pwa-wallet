@@ -1,16 +1,23 @@
 //! Native integration tests for unilateral exit job viability terminal failure paths.
 //!
 //! **Branch funding probe model** (`evaluate_branch_funding_interference`):
-//! 1. Collect exit-relevant VTXO outpoints: job leaf siblings + snapshot/operator records on
+//! 1. Probe **first unroll step prevouts** (`ordered_step_txids[0]` inputs / commitment funding)
+//!    on every pass. Never skip for local `is_unrolled`. Unspent, our spend, or Esplora 404/500
+//!    are not interference; a foreign spend is `BranchFundingLost` (covers ASP batch sweep
+//!    before any virtual tx is on chain; re-probed for reorgs).
+//! 2. Collect exit-relevant VTXO outpoints: job leaf siblings + snapshot/operator records on
 //!    `tree`/`ark` hosts in the unroll topology (not checkpoint/commitment nodes).
-//! 2. For each outpoint not yet marked locally unrolled, ask Esplora: was `(virtual_txid, vout)`
-//!    spent on-chain? (`GET /tx/{virtual_txid}/outspends[vout]`).
-//! 3. If spent by a txid **not** in the wallet's `ordered_step_txids` (pre-built unroll branch),
+//! 3. For each VTXO outpoint not yet marked locally unrolled, ask Esplora: was
+//!    `(virtual_txid, vout)` spent on-chain? (`GET /tx/{virtual_txid}/outspends[vout]`).
+//! 4. If spent by a txid **not** in the wallet's `ordered_step_txids` (pre-built unroll branch),
 //!    report `BranchFundingLost` — ASP (or anyone) moved/seized funding outside the wallet chain.
 //!
-//! This only fires once the hosting virtual tx is probeable on Esplora. Pure off-chain VTXOs
-//! (pre-unroll boarded leaves) return outspend 404/500 and are skipped — no false positive, but
-//! also no on-chain detection until branch material exists.
+//! VTXO probes only fire once the hosting virtual tx is probeable on Esplora. Pure off-chain
+//! VTXOs (pre-unroll boarded leaves) return outspend 404/500 and are skipped — no false
+//! positive. The first-step prevout is already on-chain (the commitment) and closes that hole.
+//!
+//! **Autonomous mode (`ARK-AUTO-05`):** snapshot `is_swept` is ignored. Job viability still
+//! runs the first-step prevout Esplora probe and still reports `branch_funding_lost`.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -19,13 +26,17 @@ use ark_core::server::{ChainedTxType, VtxoChain, VtxoChains};
 use bitcoin::hashes::Hash;
 use bitcoin::{Address, Transaction, Txid};
 
-use crate::api_types::UnilateralExitJobViabilityKind;
+use crate::api_types::{UnilateralExitJobViabilityDto, UnilateralExitJobViabilityKind};
 use crate::outpoint::VirtualOutPoint;
 use crate::persistence::{OffchainVtxoSnapshot, VirtualTxOutPointRecord};
 use crate::session::unilateral_exit::plan::{LeafUnilateralContext, UnilateralBatchPlan};
 use crate::session::unilateral_exit::viability::{
     asp_swept_viability_outpoint, detect_asp_swept_from_snapshot,
-    evaluate_branch_funding_interference,
+    evaluate_branch_funding_interference, first_unroll_step_funding_prevouts,
+    first_unroll_step_funding_prevouts_from_snapshot, viability_from_asp_swept, viability_ok,
+};
+use crate::unilateral_exit_materials::{
+    materials_record_from_prefetch, store_materials_for_host_tx,
 };
 
 fn txid(byte: u8) -> Txid {
@@ -40,6 +51,8 @@ const WALLET_UNROLL_BRANCH_TX_BYTE: u8 = 0x16;
 const ASP_SEIZURE_TX_BYTE: u8 = 0x17;
 /// Upstream `ark` host on the path (sibling funding), not the terminal leaf tx.
 const UPSTREAM_ARK_HOST_TX_BYTE: u8 = 0x18;
+/// On-chain commitment / batch output spent by the first unroll step.
+const COMMITMENT_TX_BYTE: u8 = 0x01;
 
 struct MockBlockchain {
     output_spends: HashMap<(Txid, u32), Txid>,
@@ -118,6 +131,27 @@ impl Blockchain for MockBlockchain {
     }
 }
 
+fn dummy_tx_spending(parents: &[Txid]) -> Transaction {
+    let inputs = parents
+        .iter()
+        .map(|parent| bitcoin::TxIn {
+            previous_output: bitcoin::OutPoint {
+                txid: *parent,
+                vout: 0,
+            },
+            script_sig: bitcoin::ScriptBuf::new(),
+            sequence: bitcoin::Sequence::MAX,
+            witness: bitcoin::Witness::new(),
+        })
+        .collect();
+    Transaction {
+        version: bitcoin::transaction::Version::TWO,
+        lock_time: bitcoin::absolute::LockTime::ZERO,
+        input: inputs,
+        output: vec![],
+    }
+}
+
 fn sample_plan(leaf_outpoint: VirtualOutPoint, step_txid: Txid) -> UnilateralBatchPlan {
     let leaf_txid = leaf_outpoint.txid;
     UnilateralBatchPlan {
@@ -139,6 +173,44 @@ fn sample_plan(leaf_outpoint: VirtualOutPoint, step_txid: Txid) -> UnilateralBat
         ordered_step_txids: vec![step_txid],
         tx_by_id: HashMap::new(),
     }
+}
+
+fn sample_plan_with_first_step_prevout() -> (UnilateralBatchPlan, VirtualOutPoint, Txid) {
+    let commitment = txid(COMMITMENT_TX_BYTE);
+    let first_step_tx = dummy_tx_spending(&[commitment]);
+    let first_step_txid = first_step_tx.compute_txid();
+    let leaf_outpoint = VirtualOutPoint::new(txid(LEAF_VIRTUAL_TX_BYTE), 0);
+    let mut plan = sample_plan(leaf_outpoint, first_step_txid);
+    plan.tx_by_id.insert(first_step_txid, first_step_tx);
+    let commitment_prevout = VirtualOutPoint::new(commitment, 0);
+    (plan, commitment_prevout, first_step_txid)
+}
+
+fn plan_job_leaf(plan: &UnilateralBatchPlan) -> VirtualOutPoint {
+    plan.leaves[0].sibling_outpoints[0].clone()
+}
+
+/// Same oracle order as job viability: snapshot `is_swept` first (skipped while autonomous),
+/// then Esplora first-step prevout / VTXO probes.
+async fn evaluate_job_viability_oracles(
+    autonomous_mode: bool,
+    job_leaf_outpoints: &[VirtualOutPoint],
+    snapshot: &OffchainVtxoSnapshot,
+    blockchain: &MockBlockchain,
+    plan: &UnilateralBatchPlan,
+) -> UnilateralExitJobViabilityDto {
+    if let Some(outpoint) = asp_swept_viability_outpoint(
+        autonomous_mode,
+        job_leaf_outpoints,
+        Some(snapshot),
+        |_txid| false,
+    ) {
+        return viability_from_asp_swept(&outpoint);
+    }
+    evaluate_branch_funding_interference(blockchain, plan, &[], |_outpoint| false)
+        .await
+        .expect("evaluate branch funding interference")
+        .unwrap_or_else(viability_ok)
 }
 
 fn asp_swept_snapshot(leaf_outpoint: &VirtualOutPoint) -> OffchainVtxoSnapshot {
@@ -163,7 +235,7 @@ fn asp_swept_snapshot(leaf_outpoint: &VirtualOutPoint) -> OffchainVtxoSnapshot {
             assets: vec![],
             server_pk_hex: None,
         }],
-        unilateral_exit_materials_by_leaf_tx: BTreeMap::new(),
+        unilateral_exit_materials_by_host_tx: BTreeMap::new(),
     }
 }
 
@@ -350,4 +422,266 @@ async fn branch_funding_interference_none_when_esplora_returns_transaction_not_f
             .expect("evaluate branch funding interference when tx is not on chain yet");
 
     assert!(viability.is_none());
+}
+
+#[test]
+fn seized_branch_lookup_errors_when_exit_materials_are_missing() {
+    use crate::error::ArkWasmError;
+    use crate::persistence::{VtxoExitPhase, VtxoExitRecord, vtxo_exit_record_key};
+    use crate::session::unilateral_exit::vtxo_exit::pre_unroll_record_keys_on_same_branch;
+
+    let host = txid(0x21).to_string();
+    let snapshot = OffchainVtxoSnapshot {
+        synced_at: 1,
+        dust_sats: 330,
+        virtual_tx_outpoints: vec![],
+        unilateral_exit_materials_by_host_tx: BTreeMap::new(),
+    };
+    let mut records = BTreeMap::new();
+    records.insert(
+        vtxo_exit_record_key(&host, 0),
+        VtxoExitRecord {
+            phase: VtxoExitPhase::Tagged,
+            tagged_at: 1,
+            host_txid: host.clone(),
+            amount_sats: 1_000,
+        },
+    );
+    let error = pre_unroll_record_keys_on_same_branch(&snapshot, &records, &host, 0)
+        .expect_err("missing exit materials must not invent a one-txid branch");
+    assert!(matches!(
+        error,
+        ArkWasmError::AutonomousExitMaterialsMissing
+    ));
+    assert_eq!(
+        records
+            .get(&vtxo_exit_record_key(&host, 0))
+            .map(|record| record.phase),
+        Some(VtxoExitPhase::Tagged)
+    );
+}
+
+#[test]
+fn first_unroll_step_funding_prevouts_returns_commitment_prevout() {
+    let (plan, commitment_prevout, _first_step_txid) = sample_plan_with_first_step_prevout();
+    let prevouts = first_unroll_step_funding_prevouts(&plan);
+    assert_eq!(prevouts, vec![commitment_prevout]);
+}
+
+#[tokio::test]
+async fn branch_funding_lost_when_first_step_prevout_spent_by_asp_sweep() {
+    let (plan, commitment_prevout, _first_step_txid) = sample_plan_with_first_step_prevout();
+    let asp_sweep_tx = txid(ASP_SEIZURE_TX_BYTE);
+    let blockchain = MockBlockchain::with_foreign_spend(commitment_prevout.clone(), asp_sweep_tx);
+
+    let viability =
+        evaluate_branch_funding_interference(&blockchain, &plan, &[], |_outpoint| false)
+            .await
+            .expect("evaluate branch funding interference");
+
+    let viability = viability.expect("expected BranchFundingLost for commitment prevout");
+    assert_eq!(
+        viability.status,
+        UnilateralExitJobViabilityKind::BranchFundingLost
+    );
+    assert_eq!(viability.reason_code, "branch_funding_lost");
+    assert_eq!(viability.offending_outpoints, vec![commitment_prevout]);
+}
+
+#[tokio::test]
+async fn branch_funding_ok_when_first_step_prevout_spent_by_wallet_first_step() {
+    let (plan, commitment_prevout, first_step_txid) = sample_plan_with_first_step_prevout();
+    let blockchain = MockBlockchain::with_foreign_spend(commitment_prevout, first_step_txid);
+
+    let viability =
+        evaluate_branch_funding_interference(&blockchain, &plan, &[], |_outpoint| false)
+            .await
+            .expect("evaluate branch funding interference");
+
+    assert!(
+        viability.is_none(),
+        "spend by first unroll step {first_step_txid:?} must not be ASP interference"
+    );
+}
+
+#[tokio::test]
+async fn branch_funding_none_when_first_step_prevout_unspent() {
+    let (plan, _commitment_prevout, _first_step_txid) = sample_plan_with_first_step_prevout();
+    let blockchain = MockBlockchain {
+        output_spends: HashMap::new(),
+        outspend_probe_error: false,
+        transaction_not_found: false,
+    };
+
+    let viability =
+        evaluate_branch_funding_interference(&blockchain, &plan, &[], |_outpoint| false)
+            .await
+            .expect("evaluate branch funding interference");
+
+    assert!(viability.is_none());
+}
+
+#[tokio::test]
+async fn branch_funding_none_when_first_step_prevout_outspend_unavailable() {
+    let (plan, _commitment_prevout, _first_step_txid) = sample_plan_with_first_step_prevout();
+    let blockchain = MockBlockchain::with_unprobeable_outspends();
+
+    let viability =
+        evaluate_branch_funding_interference(&blockchain, &plan, &[], |_outpoint| false)
+            .await
+            .expect("evaluate when first-step prevout outspends fail");
+
+    assert!(viability.is_none());
+}
+
+#[tokio::test]
+async fn branch_funding_none_when_first_step_prevout_tx_not_found() {
+    let (plan, _commitment_prevout, _first_step_txid) = sample_plan_with_first_step_prevout();
+    let blockchain = MockBlockchain::with_transaction_not_found();
+
+    let viability =
+        evaluate_branch_funding_interference(&blockchain, &plan, &[], |_outpoint| false)
+            .await
+            .expect("evaluate when first-step prevout is not on Esplora");
+
+    assert!(viability.is_none());
+}
+
+#[tokio::test]
+async fn first_step_prevout_probe_not_skipped_when_leaf_marked_unrolled() {
+    let (plan, commitment_prevout, _first_step_txid) = sample_plan_with_first_step_prevout();
+    let asp_sweep_tx = txid(ASP_SEIZURE_TX_BYTE);
+    let blockchain = MockBlockchain::with_foreign_spend(commitment_prevout.clone(), asp_sweep_tx);
+
+    let viability = evaluate_branch_funding_interference(&blockchain, &plan, &[], |_outpoint| true)
+        .await
+        .expect("evaluate with all VTXO outpoints skipped as unrolled");
+
+    let viability = viability.expect("commitment prevout must not use the VTXO unroll skip");
+    assert_eq!(
+        viability.status,
+        UnilateralExitJobViabilityKind::BranchFundingLost
+    );
+    assert_eq!(viability.offending_outpoints, vec![commitment_prevout]);
+}
+
+#[tokio::test]
+async fn autonomous_mode_reports_branch_funding_lost_from_first_step_prevout_despite_snapshot_swept()
+ {
+    let (plan, commitment_prevout, _first_step_txid) = sample_plan_with_first_step_prevout();
+    let leaf = plan_job_leaf(&plan);
+    let snapshot = asp_swept_snapshot(&leaf);
+    let blockchain =
+        MockBlockchain::with_foreign_spend(commitment_prevout.clone(), txid(ASP_SEIZURE_TX_BYTE));
+
+    let viability = evaluate_job_viability_oracles(
+        true,
+        std::slice::from_ref(&leaf),
+        &snapshot,
+        &blockchain,
+        &plan,
+    )
+    .await;
+
+    assert_eq!(
+        viability.status,
+        UnilateralExitJobViabilityKind::BranchFundingLost
+    );
+    assert_eq!(viability.reason_code, "branch_funding_lost");
+    assert_eq!(viability.offending_outpoints, vec![commitment_prevout]);
+}
+
+#[tokio::test]
+async fn autonomous_mode_ignores_snapshot_swept_when_first_step_prevout_unspent() {
+    let (plan, _commitment_prevout, _first_step_txid) = sample_plan_with_first_step_prevout();
+    let leaf = plan_job_leaf(&plan);
+    let snapshot = asp_swept_snapshot(&leaf);
+    let blockchain = MockBlockchain {
+        output_spends: HashMap::new(),
+        outspend_probe_error: false,
+        transaction_not_found: false,
+    };
+
+    let viability = evaluate_job_viability_oracles(
+        true,
+        std::slice::from_ref(&leaf),
+        &snapshot,
+        &blockchain,
+        &plan,
+    )
+    .await;
+
+    assert_eq!(viability.status, UnilateralExitJobViabilityKind::Ok);
+    assert_eq!(viability.reason_code, "ok");
+    assert!(viability.offending_outpoints.is_empty());
+}
+
+#[tokio::test]
+async fn trusted_asp_short_circuits_to_asp_swept_before_first_step_prevout_probe() {
+    let (plan, commitment_prevout, _first_step_txid) = sample_plan_with_first_step_prevout();
+    let leaf = plan_job_leaf(&plan);
+    let snapshot = asp_swept_snapshot(&leaf);
+    let blockchain =
+        MockBlockchain::with_foreign_spend(commitment_prevout, txid(ASP_SEIZURE_TX_BYTE));
+
+    let viability = evaluate_job_viability_oracles(
+        false,
+        std::slice::from_ref(&leaf),
+        &snapshot,
+        &blockchain,
+        &plan,
+    )
+    .await;
+
+    assert_eq!(
+        viability.status,
+        UnilateralExitJobViabilityKind::AspSweptTargets
+    );
+    assert_eq!(viability.reason_code, "asp_swept_targets");
+    assert_eq!(viability.offending_outpoints, vec![leaf]);
+}
+
+#[test]
+fn first_unroll_step_funding_prevouts_from_snapshot_matches_psbt_inputs() {
+    let commitment = txid(COMMITMENT_TX_BYTE);
+    let first_step_tx = dummy_tx_spending(&[commitment]);
+    let first_step_txid = first_step_tx.compute_txid();
+    let leaf = txid(LEAF_VIRTUAL_TX_BYTE);
+    let chains = VtxoChains {
+        inner: vec![
+            VtxoChain {
+                txid: commitment,
+                tx_type: ChainedTxType::Commitment,
+                spends: vec![],
+                expires_at: 0,
+            },
+            VtxoChain {
+                txid: first_step_txid,
+                tx_type: ChainedTxType::Tree,
+                spends: vec![commitment],
+                expires_at: 0,
+            },
+            VtxoChain {
+                txid: leaf,
+                tx_type: ChainedTxType::Ark,
+                spends: vec![first_step_txid],
+                expires_at: 0,
+            },
+        ],
+    };
+    let first_step_psbt =
+        bitcoin::Psbt::from_unsigned_tx(first_step_tx).expect("unsigned first-step psbt");
+    let materials =
+        materials_record_from_prefetch(1, &chains, &[first_step_psbt]).expect("materials");
+    let mut snapshot = OffchainVtxoSnapshot {
+        synced_at: 1,
+        dust_sats: 330,
+        virtual_tx_outpoints: vec![],
+        unilateral_exit_materials_by_host_tx: BTreeMap::new(),
+    };
+    store_materials_for_host_tx(&mut snapshot, &leaf.to_string(), materials);
+
+    let prevouts = first_unroll_step_funding_prevouts_from_snapshot(&snapshot, &leaf.to_string())
+        .expect("derive first-step prevouts from snapshot materials");
+    assert_eq!(prevouts, vec![VirtualOutPoint::new(commitment, 0)]);
 }

@@ -19,15 +19,25 @@ describe('arkade-balance-display', () => {
   })
 
   it('uses offchain spendable from wasm for dashboard headline when unilateral exit is in progress', () => {
-    // unilateral_exit_in_progress is informational; must not reduce headline spendable.
-    const balance = {
-      confirmedSats: 200_000,
-      offchainSpendableSats: 200_000,
-      totalSats: 200_000,
+    // Spend-lock is already in WASM offchainSpendableSats (tagged or post-unroll).
+    // The in-progress line must not subtract from the headline again.
+    const tagged = {
+      confirmedSats: 19_397,
+      offchainSpendableSats: 19_397,
+      totalSats: 19_397,
       unilateralExitInProgressSats: 180_603,
       collaborativeExitInProgressSats: 0,
     }
-    expect(arkadeDashboardSpendableSats(balance)).toBe(200_000)
+    expect(arkadeDashboardSpendableSats(tagged)).toBe(19_397)
+
+    const postUnroll = {
+      confirmedSats: 19_397,
+      offchainSpendableSats: 19_397,
+      totalSats: 19_397,
+      unilateralExitInProgressSats: 180_603,
+      collaborativeExitInProgressSats: 0,
+    }
+    expect(arkadeDashboardSpendableSats(postUnroll)).toBe(19_397)
   })
 
   it('exposes pending recovery due to expired signer sats from wasm balance payload', () => {

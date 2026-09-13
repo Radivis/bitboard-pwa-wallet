@@ -1,45 +1,58 @@
 ---
-description: Unilateral exit lifecycle is owned by the XState actor in unilateral-exit/
+description: Unilateral exit lifecycle is owned by the XState family in unilateral-exit/
 globs:
   - frontend/src/lib/wallet/lifecycle/unilateral-exit/**
   - frontend/src/pages/wallet/UnilateralExitControlPage.tsx
   - frontend/src/hooks/useUnilateralExit*.ts
+  - frontend/src/components/wallet/arkade-exit/CompleteUnilateralExitDialog.tsx
+  - frontend/src/components/wallet/unilateral-exit/UnilateralExitNodeDetailCard.tsx
 ---
 
 # Unilateral exit XState ownership
 
-The unilateral exit job lifecycle is coordinated by **one** XState v5 actor (`unilateral-exit.machine.ts`). Do not reintroduce hand-rolled orchestrators, `setTimeout` schedulers, or duplicate state outside the machine.
+Unilateral exit is a **two-machine family**:
+
+- **Job actor** (`unilateral-exit.machine.ts`) is a **session-scoped host** plus unroll broadcaster. One module-scope actor. It may `spawnChild` / `stopChild` / `sendTo` VTXO children. Job cursor (`jobOutpoints`, bookmark, proceed, viability) is **independent** of the child set.
+- **VTXO children** (`vtxo-exit.machine.ts`), id `vtxoExit:{txid}:{vout}`, are a hydrated view of persisted WASM records. Production advances via `HYDRATE` (set state from the record; **phase jumps allowed**). Do not replay intermediate events. Do not add per-VTXO `after` delays until 6 confirmations; confirmation depth advances in WASM on load, operator sync, proceed, progress, list-in-progress, and complete.
+
+Do not reintroduce hand-rolled orchestrators, `setTimeout` schedulers, a sibling VTXO actor registry, or React-owned phase tables.
 
 ## Where code belongs
 
 | Concern | File |
 |--------|------|
-| States, guards, transitions | `unilateral-exit.machine.ts` |
+| Job states, guards, transitions | `unilateral-exit.machine.ts` |
+| VTXO child states / frozen events | `vtxo-exit.machine.ts` |
 | WASM / TanStack side effects (`fromPromise` actors) | `unilateral-exit.actors.ts` |
 | React Query cache writes / invalidation | `unilateral-exit-query-cache.ts` |
-| Module singleton, public send/subscribe API | `unilateral-exit-runtime.ts` |
-| Snapshot → UI/lifecycle/automation views | `unilateral-exit-selectors.ts` |
+| Module singleton, public send/subscribe API, child hydrate | `unilateral-exit-runtime.ts` |
+| Job snapshot → UI/lifecycle/automation views | `unilateral-exit-selectors.ts` |
+| Child phase → host broadcast / first confirmation / 6 confirmations / timelock / ready copy | `vtxo-exit-selectors.ts` |
 
 ## Rules
 
-1. **Transitions only in the machine** — UI and hooks send events via `unilateral-exit-runtime.ts`; they do not mutate job phase directly.
-2. **WASM only in actors** — React components and hooks must not call `getArkadeWorker()` for proceed/progress during an active job.
+1. **Transitions only in the machines** — UI and hooks send events via `unilateral-exit-runtime.ts`; they do not mutate job or VTXO phase directly.
+2. **WASM only in actors (job path)** — React components and hooks must not call `getArkadeWorker()` for proceed/progress during an active job. Record dump hydrate (`listVtxoExitRecords` → `HYDRATE_VTXO_RECORDS`) runs in runtime after those WASM queries return.
 3. **No external schedulers** — automation polling uses machine `after` delays. `POLL_TICK` is the test/manual equivalent of those `after` delays. Production settle uses XState `waitFor`, not a `setTimeout` poll loop.
 4. **Authoritative progress** — during an active job, `actor.context.progress` wins; React Query is display cache only.
 5. **Single automation flag** — `context.automationEnabled` is the only job-level manual/automatic switch; prefs changes flow through `AUTOMATION_PREFS_CHANGED`.
 6. **Typed snapshots** — selectors/runtime use `UnilateralExitActorSnapshot` + `UNILATERAL_EXIT_MACHINE_STATE`; do not call untyped `snapshot.matches()` outside tests.
-7. **Machine state is authoritative for UI** — selectors map `snapshot.value` to display; they never re-run completion guards or override `complete` / in-flight states from raw progress DTOs.
+7. **Job state is authoritative for the broadcast job** — selectors map `snapshot.value` to job display; they never re-run completion guards from raw progress DTOs. **VTXO phase copy must not be inferred from job state.** Complete dialog and node detail subscribe to children (`useVtxoExitSnapshots`). `canComplete` stays WASM `complete_ready`.
 8. **`assign` is pure** — persistence and query invalidation are separate fire-and-forget actions, never inside `assign`.
+9. **Job cursor ≠ child set** — proceed and `evaluateJobViability` use the current bookmark only. Starting job 2 adds children; job 1 leftovers stay. Do not block Start because children exist. Do not wait on children to enter job `complete`.
+10. **`HYDRATE` is the production child path** — live `HOST_*` events are optional and must not be required for crash recovery.
 
 ## Public API
 
-Call sites import from `unilateral-exit-runtime.ts` (lifecycle sends, configure/hydrate, automation prefs helpers). Hooks subscribe via `useSyncExternalStore` + selectors.
+Call sites import from `unilateral-exit-runtime.ts` (lifecycle sends, configure/hydrate, `hydrateVtxoExitChildrenFromWasm`, automation prefs helpers). Job hooks subscribe via `useSyncExternalStore` + job selectors. Child phase uses `useVtxoExitSnapshots()` so React re-renders on child transitions without making job selectors depend on child identity.
 
-## Invariants (PR #58)
+## Invariants
 
 - Always enter `checkingProgress` before `proceeding` on hydrate, reload, automation tick, and manual start.
 - Resolve outpoints via `resolveUnilateralExitJobOutpoints`; never skip when lifecycle outpoints are empty but persistence has them.
-- Branch complete → `complete` state, clear persisted job, invalidate queries.
-- **`waitingConfirm` requires relay** — enter `ensuringBroadcast` first; only transition to `waitingConfirm` when `isCurrentStepRelayed()` is true (WASM `currentStepTxRelayed`, or `currentStepWaitingSince` after proceed on regtest where `/raw` stays 404 in mempool). Use helpers in `unilateral-exit-broadcast.ts`.
+- **Branch complete releases the broadcaster** — `complete` always continues to `idle` with an empty bookmark when the unroll DAG is 1-conf complete (`isUnilateralExitBranchComplete`). Do not wait for 6-conf `is_unrolled` to clear the job. Leftover `unrolled` / `complete_ready` / `funding_lost` children stay. Leaf selection unlocks when there is no active broadcast job and no persisted bookmark — not because `value === complete` and not because children exist.
+- **`CLEAR_JOB` is a broadcast-job reset**, not on-chain claim. Do not send `CLEAR_JOB` after Complete spend success. Claiming hydrates those children to `exited` and stops them only.
+- **Job-cursor reset is not child teardown.** `clearJobActorContext` (abort, terminate, branch-complete, `CLEAR_JOB`) must not `stopChild`. Stop **all** VTXO children only on `ARKADE_SESSION_RESET` (lock, Arkade session teardown, or Arkade wallet-scope change). Stop **individual** children when `HYDRATE_VTXO_RECORDS` no longer lists them (`exited`, untagged/`idle`, or missing from the dump).
+- **`waitingConfirm` requires relay** — enter `ensuringBroadcast` first; only transition to `waitingConfirm` when `isCurrentStepRelayed()` is true (WASM `currentStepTxRelayed`, or `currentStepWaitingSince` after proceed on regtest where `/raw` stays 404 in mempool). Use helpers in `unilateral-exit-broadcast.ts`. `waitingConfirm` is 1-conf **broadcast**, not host-tx 6-conf finality.
 - **`waitingForParentData` is only for `package-not-child-with-unconfirmed-parents`** — do not reuse `waitingConfirm` / pickaxe. After `parentDataWait` (15s) or `POLL_TICK` / `PROCEED_MANUAL`, return to `ensuringBroadcast`.
-- **ASP interference → `terminated`** — every `checkingProgress` entry runs `evaluateJobViabilityActor` before `fetchProgress`; `aspSweptTargets` / `branchFundingLost` persist failure, clear job, invalidate topology queries — never `complete`.
+- **ASP interference → `terminated`** — every `checkingProgress` entry runs `evaluateJobViabilityActor` before `fetchProgress`; `aspSweptTargets` / `branchFundingLost` persist failure, clear job, invalidate topology queries — never `complete`. Viability stays **job bookmark only**.

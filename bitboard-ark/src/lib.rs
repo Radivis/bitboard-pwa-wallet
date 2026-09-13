@@ -512,6 +512,13 @@ pub async fn ark_list_unilateral_exits_in_progress() -> Result<JsValue, JsValue>
 }
 
 #[wasm_bindgen]
+pub fn ark_list_vtxo_exit_records() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.list_vtxo_exit_records())
+    }))
+}
+
+#[wasm_bindgen]
 pub async fn ark_get_onchain_bumper_info() -> Result<JsValue, JsValue> {
     map_js_async(async {
         export_session_json(|session| async move { session.onchain_bumper_info().await }).await
@@ -651,6 +658,26 @@ pub fn ark_set_unilateral_exit_frontend(params: JsValue) -> Result<(), JsValue> 
         let dto: crate::api_types::UnilateralExitFrontendPersistenceDto =
             serde_wasm_bindgen::from_value(params)?;
         session.set_unilateral_exit_frontend(dto);
+        Ok(())
+    }))
+}
+
+#[wasm_bindgen]
+pub fn ark_tag_unilateral_exit_plan(params: JsValue) -> Result<(), JsValue> {
+    map_js_error(with_session(|session| {
+        let params: crate::api_types::UnilateralExitProgressParams =
+            serde_wasm_bindgen::from_value(params)?;
+        session.tag_unilateral_exit_plan(&params.vtxo_outpoints)?;
+        Ok(())
+    }))
+}
+
+#[wasm_bindgen]
+pub fn ark_untag_unilateral_exit_plan_if_safe(params: JsValue) -> Result<(), JsValue> {
+    map_js_error(with_session(|session| {
+        let params: crate::api_types::UnilateralExitProgressParams =
+            serde_wasm_bindgen::from_value(params)?;
+        session.untag_unilateral_exit_plan_if_safe(&params.vtxo_outpoints)?;
         Ok(())
     }))
 }

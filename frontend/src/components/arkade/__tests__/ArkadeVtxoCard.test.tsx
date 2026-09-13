@@ -45,6 +45,25 @@ describe('ArkadeVtxoCard', () => {
     expect(screen.queryByText('unilateral exit prepared')).not.toBeInTheDocument()
   })
 
+  it('ArkadeVtxoCard_hides_unilateral_exit_phase_when_idle', () => {
+    renderWithProviders(<ArkadeVtxoCard row={sampleRow} />)
+
+    expect(
+      screen.queryByTestId(`arkade-vtxo-unilateral-exit-phase-${sampleRow.id}`),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/Unilateral exit phase:/)).not.toBeInTheDocument()
+  })
+
+  it('ArkadeVtxoCard_shows_unilateral_exit_phase_on_last_line', () => {
+    renderWithProviders(
+      <ArkadeVtxoCard row={sampleRow} unilateralExitPhase="unrolled" />,
+    )
+
+    expect(
+      screen.getByTestId(`arkade-vtxo-unilateral-exit-phase-${sampleRow.id}`),
+    ).toHaveTextContent('Unilateral exit phase: waiting for timelock')
+  })
+
   it('ArkadeVtxoCard_shows_unilateral_exit_prepared_chip_with_icon', () => {
     renderWithProviders(
       <ArkadeVtxoCard

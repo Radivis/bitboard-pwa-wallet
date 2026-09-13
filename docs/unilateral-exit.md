@@ -1,18 +1,37 @@
 # Unilateral exit
 
-Developer handbook for Arkade unilateral exit in Bitboard. Lead with invariants that are easy to break; then the XState machine (single source of truth) and what one WASM proceed step actually does.
+Developer handbook for Arkade unilateral exit in Bitboard. Lead with invariants that are easy to break; then the XState family (job host plus VTXO children) and what one WASM proceed step actually does.
 
 Related:
 
 - Persistence (WASM envelope + Zustand job/prefs/failure): [persistence/unilateral-exit.md](persistence/unilateral-exit.md)
 - Balance buckets and exit-line timing: [arkade-bitboard-wallet-model.md](arkade-bitboard-wallet-model.md)
-- VTXO exit lifecycle refactor (staged): [unilateral-exit-vtxo-lifecycle-refactor.md](unilateral-exit-vtxo-lifecycle-refactor.md)
+- Historical design notes (shipped): [unilateral-exit-vtxo-lifecycle-refactor.md](archive/unilateral-exit-vtxo-lifecycle-refactor.md)
 - Agent ownership rules: [`.cursor/rules/unilateral-exit-xstate.mdc`](../.cursor/rules/unilateral-exit-xstate.mdc)
 - Historic Mutinynet false-confirmation investigation (resolved; methodology is not current): [archive/unilateral-exit-false-confirmation-rca.md](archive/unilateral-exit-false-confirmation-rca.md)
 - Test contracts: `ARK-EXIT-*` in [doc/features/arkade.yaml](../doc/features/arkade.yaml)
 - User-facing risk primer (in-app Library): `risks-of-arkade-unilateral-exits`
 
 ---
+
+## VTXO lifecycle
+
+The job actor is a session-scoped host plus unroll broadcaster; per-outpoint children hydrate from persisted VTXO exit records (`ARK-EXIT-32`). Host-tx observations, the Esplora 6-conf reconciler, watch fold into records, and `funding_lost` are current behavior (`ARK-EXIT-12`, `ARK-EXIT-27`–`33`, `ARK-SYNC-03`, `ARK-REC-08`).
+
+**Two records** (WASM envelope is durable source of truth):
+
+| Record | Key | Answers |
+|--------|-----|---------|
+| VTXO exit | `(txid, vout)` | Pipeline membership, spend-lock, complete-ready, funding lost |
+| Host-tx observation | virtual `txid` | Broadcast attempted, relayed, confirmations, Esplora hot set |
+
+Spend-lock (send / collab / renew / delegate) is pipeline ∪ `funding_lost`. Recover and signer-migrate are not spend-locked; they exclude in-progress pipeline membership only so they do not race an active unroll (`ARK-EXIT-27` / `ARK-REC-08`).
+
+**Three parallel clocks** (do not merge): job DAG cursor (next unpublished step); host-tx confirmations (0 / relayed / 1-conf / 6-conf via the WASM Esplora reconciler); protocol timelock (`can_be_claimed_unilaterally_by_owner`). UI copy must distinguish waiting for host transaction broadcast, waiting for the first confirmation, waiting for 6 confirmations, and waiting for timelock.
+
+**Esplora reconcile call sites** (no dedicated 6-conf poller): Arkade load including autonomous, operator sync, proceed, progress, `list_unilateral_exits_in_progress`, complete. Stamp every vout on a `tree`/`ark` host at 6 confs; skip `commitment`/`checkpoint`.
+
+The **job machine** is the session-scoped host plus broadcaster (`waitingConfirm` remains 1-conf step advance). Job `complete` is DAG 1-conf (`isUnilateralExitBranchComplete`), not 6-conf `is_unrolled` — that stamp and the “waiting for 6 confirmations” copy live on VTXO children. `START_*` invokes `taggingPlan` (WASM tag, then persist job). Abort untags only `tagged` rows with no host observation. VTXO children hydrate from persisted records after those WASM queries return (`HYDRATE`). After abort or branch-complete, leftover coins stay on children; Complete uses `complete_ready`, not in-progress membership and not a leftover frontend job. A second unroll may start while earlier coins wait to be claimed.
 
 ## Protocol basics
 
@@ -29,7 +48,7 @@ The bumper wallet is the same BIP32-derived BDK wallet used for boarding.
 
 Unroll can run while the Ark Service Provider (ASP) is reachable **or** while it is down.
 
-- **Prefetch (sync time, not unroll time).** Operator sync stores per-leaf-tx materials in `unilateral_exit_materials_by_leaf_tx` (`ARK-EXIT-07`): VTXO chain topology plus virtual PSBTs. Unroll and complete build from that snapshot plus Esplora — never from live ASP indexer/batch APIs (`ARK-EXIT-06`).
+- **Prefetch (sync time, not unroll time).** Operator sync stores per-host-tx materials in `unilateral_exit_materials_by_host_tx` (`ARK-EXIT-07`): VTXO chain topology plus virtual PSBTs. Unroll and complete build from that snapshot plus Esplora — never from live ASP indexer/batch APIs (`ARK-EXIT-06`).
 - **Esplora is always required.** Broadcast, confirmation depth, and reorg detection go through Esplora. There is no “ASP-only” unroll path.
 - **Autonomous mode** is a persisted per-ASP trust posture (`ARK-AUTO-01`): do not contact or ingest this operator until the user explicitly leaves. It reuses `cached_operator_info` and blocks non-exit Arkade RPCs (`ARK-EXIT-10`). Session open with the flag set uses `connect_with_cached_info` (no `getInfo`). Unilateral exit itself is still snapshot + Esplora in both modes. Implementation: [`bitboard-ark/src/session/autonomous.rs`](../bitboard-ark/src/session/autonomous.rs). Snapshot unroll/complete helpers live in [`snapshot_ops.rs`](../bitboard-ark/src/session/unilateral_exit/snapshot_ops.rs).
 - **Background operator sync stays on during an exit job.** Unroll can take a long time and must not freeze boarding, collab, or other dashboard work. Users may also test exits while the ASP is still online. Dashboard poll skips ASP contact only while autonomous mode is active. Proceed/complete themselves still flush-only (no post-op operator sync).
@@ -47,7 +66,7 @@ Partial unroll while the operator is reachable lets the ASP broadcast **checkpoi
 The XState machine treats ASP interference as **`terminated`**, never `complete`:
 
 - `aspSweptTargets` — operator indexer reports job leaves swept that were not locally unrolled (ignored while autonomous; `ARK-AUTO-05`)
-- `branchFundingLost` — an exit-relevant outpoint was spent by a tx **outside** the wallet unroll chain (Esplora; still terminates in autonomous mode)
+- `branchFundingLost` — Esplora reports a spend **outside** the wallet unroll chain: the first unroll step’s prevout(s) (commitment funding; covers an ASP batch sweep before any virtual tx is on chain), or an already-on-chain tree/ark VTXO outpoint. Still terminates in autonomous mode. The first-step prevout is re-probed on every viability/reconcile pass while pre-unroll records exist (reorgs).
 
 Every `checkingProgress` entry runs `evaluateJobViabilityActor` **before** `fetchProgress`. User-facing explanation: Library article `risks-of-arkade-unilateral-exits`.
 
@@ -61,13 +80,13 @@ These are the invariants that break wallets when ignored.
 
 A virtual tx can carry several VTXO outpoints (payment + change on the same leaf). Broadcast cannot target a single vout toward Bitcoin or the ASP — the chain only sees the published tx.
 
-At leaf finality (**6 confirmations**), WASM sets `is_unrolled` on **every** outpoint with that leaf txid (`ARK-EXIT-17`; `mark_leaf_virtual_tx_vtxos_unrolled_in_snapshot` in [`bitboard-ark/src/session/unilateral_exit/complete.rs`](../bitboard-ark/src/session/unilateral_exit/complete.rs)). Sticky merge on sync promotes the same flags. The control page shows **one graph node per leaf tx** and selects sibling outpoints atomically ([`unilateralExitControlStore.ts`](../frontend/src/stores/unilateralExitControlStore.ts)). Completion to on-chain remains **per outpoint**.
+At host-tx finality (**6 confirmations**), WASM sets `is_unrolled` on **every** outpoint with that host txid (`ARK-EXIT-17`; `mark_virtual_tx_vtxos_unrolled_in_snapshot` via `reconcile_host_tx_finality` in [`bitboard-ark/src/session/unilateral_exit/host_tx_finality.rs`](../bitboard-ark/src/session/unilateral_exit/host_tx_finality.rs)). Sticky merge on sync promotes the same flags. The control page shows **one graph node per virtual tx** and selects sibling leaf outpoints atomically ([`unilateralExitControlStore.ts`](../frontend/src/stores/unilateralExitControlStore.ts)). Completion to on-chain remains **per outpoint**.
 
 ### Intermediary (en-passant) VTXOs
 
 An exit branch can host exit-eligible VTXOs on upstream `tree` / `ark` virtual txs, not only on the selected leaves. After those txs reach **6 confirmations** on Esplora, those VTXOs must be marked unrolled so the user cannot start a **second** unilateral exit for funds already on the published branch.
 
-Implemented in `reconcile_intermediate_ark_virtual_txs_unrolled_on_esplora` ([`bitboard-ark/src/session/unilateral_exit/onchain.rs`](../bitboard-ark/src/session/unilateral_exit/onchain.rs)), which runs during operator sync. It uses the same 6-conf rule as leaves (`get_tx_confirmations` + `leaf_reached_finality`), not mere tx presence.
+Implemented in `reconcile_host_tx_finality` ([`bitboard-ark/src/session/unilateral_exit/host_tx_finality.rs`](../bitboard-ark/src/session/unilateral_exit/host_tx_finality.rs)), which runs on session open (including autonomous), operator sync, proceed, progress, list, and complete (`ARK-EXIT-29`). It uses the same 6-conf rule for every host (`UNILATERAL_EXIT_HOST_TX_CONFIRMATIONS`), not mere tx presence.
 
 Frontend job reconcile must **not** treat a persisted job as stale when WASM reports no in-progress exits (pre-broadcast crash recovery). Non-overlapping in-progress outpoints are also not stale; intermediate VTXOs can differ from the original job leaves ([`unilateral-exit-job-reconcile.ts`](../frontend/src/lib/arkade/unilateral-exit-job-reconcile.ts)).
 
@@ -77,7 +96,26 @@ Unroll progress is **not** a monotonic counter. `first_incomplete_step_index` in
 
 The cursor also **does not skip** a later step this wallet has not yet broadcast (`wait_cap_holds_unbroadcast_successor`), even if Esplora already reports it confirmed (for example an ASP-published checkpoint). Skipping those used to produce `package-not-child-with-unconfirmed-parents` when submitting the next child. That skip is fixed; the same RPC can still fire for indexer/submit split, a reorg, or an unconfirmed CPFP bumper — see [`waitingForParentData`](#waitingforparentdata-submitpackage-parent-not-spendable). Historic skip write-up: [archive/unilateral-exit-false-confirmation-rca.md](archive/unilateral-exit-false-confirmation-rca.md).
 
-Leaf and intermediate-host `is_unrolled` wait for **6** confs (`UNILATERAL_EXIT_LEAF_CONFIRMATIONS` in [`bitboard-ark/src/constants.rs`](../bitboard-ark/src/constants.rs)) so shallow reorgs do not stamp unroll. Do not persist “step N done” independently of Esplora confirmation depth.
+Host-tx `is_unrolled` waits for **6** confs (`UNILATERAL_EXIT_HOST_TX_CONFIRMATIONS` in [`bitboard-ark/src/constants.rs`](../bitboard-ark/src/constants.rs)) so shallow reorgs do not stamp unroll. Do not persist “step N done” independently of Esplora confirmation depth.
+
+### Register before Esplora; `never_seen` is the cleanup
+
+Esplora is required for unroll and is **unreliable in the short term**: indexer vs write node, mempool `/raw` 404 (especially regtest), transient GET failures, and false broadcast RPC errors after a package actually relayed. Bitboard therefore does **not** wait for a first Esplora “seen” before treating a proceed step as attempted, and it does **not** treat a single Esplora “not seen” (or a local `step_wait` stamp) as proof the tx never existed.
+
+**Early proceed (defensive, `ARK-EXIT-28`):** as soon as the parent is built and the step txid is known, WASM **registers** a host-tx observation and advances matching VTXOs to `host_broadcast_attempted`, **then** calls `broadcast_unilateral_exit_step_at_fee_rate`. That closes the hole where a false broadcast error would skip the observation and let abort unlock while the tx is already on the network. Abort cannot untag those rows **while the observation exists** (`ARK-EXIT-30`).
+
+**`unilateral_exit_step_wait` is not chain proof.** It is the job cursor / relay-wait fallback after proceed considers the submit satisfied (RPC ok, redundant mempool reject, or `/raw` relayed). The same class of lie as a false error: RPC or `/raw` can look done while the indexer still has nothing. Do not use `step_wait` to veto `never_seen`.
+
+**`never_seen` budget (cleanup of that early proceed):** Esplora reconcile call sites probe Esplora. A miss counts only when eligible — first after `registered_at + 10 minutes`, then further misses at `last_probed_at + 1 minute`, at most one increment per reconcile call, no collapsing a time skip into five misses. Fifteen-second UI polls must not reset the 1-minute spacing. After **five** eligible misses (~14 minutes from register: 10 minutes until miss 1, then four one-minute gaps), the wallet treats the tx as **truly never received**:
+
+1. **Delete** the observation (txid leaves the hot set).
+2. **Rewind** pre-unroll VTXOs on that host to **`tagged`** — keep the rows, keep the spend-lock. Do **not** idle them from this path.
+3. User may **re-proceed** (same deterministic txid re-registers and resets the window) — preferred if they still want the unroll.
+4. User may **abort**; abort now sees `tagged` + no observation and **unlocks**, same as abort before any register. That is intentional only **after** the budget. A broadcast error or the first Esplora miss must not untag.
+
+Constants: `HOST_TX_NEVER_SEEN_FIRST_PROBE_AFTER_SECS`, `HOST_TX_NEVER_SEEN_PROBE_SPACING_SECS`, `HOST_TX_NEVER_SEEN_MAX_ELIGIBLE_MISSES` in [`constants.rs`](../bitboard-ark/src/constants.rs). Implementation: [`host_tx_finality.rs`](../bitboard-ark/src/session/unilateral_exit/host_tx_finality.rs), register in [`proceed.rs`](../bitboard-ark/src/session/unilateral_exit/proceed.rs). Persistence: [persistence/unilateral-exit.md](persistence/unilateral-exit.md#host-tx-observations-hosttxobservationrecord).
+
+Residual risk: a tx that actually landed but that Esplora still omits for the whole budget can be abort-unlocked. The alternative is permanent spend-lock after a false-positive local submit, which is the failure this budget exists to recover from.
 
 ### Merged DAG, not one tree per leaf
 
@@ -109,7 +147,7 @@ Automation pauses on:
 
 - `feeCapExceeded` — live preset for the selected degree exceeds max
 - `bumperInsufficient` — bumper cannot cover remaining package fees
-- `error` — proceed / broadcast / policy failure
+- `error` — proceed / broadcast / policy / progress failure after retries; explorer `Failed to fetch` is retried then shown as a short unreachable message (`ARK-EXIT-34`)
 
 This is **not** delegator-based. Closing the tab stops automation.
 
@@ -117,13 +155,13 @@ This is **not** delegator-based. Closing the tab stops automation.
 
 Two-step confirmation (info modal, then red risk modal with required checkbox). `ABORT_ORCHESTRATION` → transient `aborted` → persist `user_aborted` failure banner with copyable VTXO ids (`ARK-EXIT-23`).
 
-Abort **stops frontend orchestration only**. It does **not** delete `unilateral_exit_materials`, watches, pending deductions, or on-chain broadcasts. Backend in-progress state remains until completion or reconcile. If the ASP is online, an unfinished on-chain unroll can still be seized.
+Abort **stops frontend orchestration only**. It does **not** delete `unilateral_exit_materials`, pending deductions, or on-chain broadcasts. It untags only `tagged` rows whose host has **no** observation. After a host is registered, abort leaves VTXO phase unchanged. If the `never_seen` budget has already deleted that observation and rewound the host to `tagged`, abort **can** unlock — that is the delayed cleanup of a proceed whose broadcast was never seen, not an immediate reaction to a broadcast RPC error. See [Register before Esplora](#register-before-esplora-never_seen-is-the-cleanup). If the ASP is online, an unfinished on-chain unroll can still be seized.
 
 `ABORT_ORCHESTRATION` is sent immediately (VTXO id list RPCs must not block it). Copyable ids on the `user_aborted` banner are filled best-effort afterward.
 
 Abort and ASP `terminated` clear the frontend job bookmark. The failure banner comes from error persistence (`user_aborted` / terminal viability). Hydrate must not treat leftover WASM in-progress rows as crash recovery: a job is restored only when persisted outpoints are still present.
 
-After a successful unroll (`complete`), the frontend job is cleared. Remaining WASM in-progress / exiting VTXOs are waiting for **claim** (Complete unilateral exit), not a live unroll job. The control page must not show Abort, step progress, or a locked leaf selection for those leftover rows, and must not re-seed the control store from them. Lock/`WALLET_RESET` resets the in-memory control store.
+After a successful unroll (`complete`), the frontend job is cleared. Remaining WASM in-progress / exiting VTXOs are waiting for **claim** (Complete unilateral exit), not a live unroll job. The control page must not show Abort, step progress, or a locked leaf selection for those leftover rows, and must not re-seed the control store from them. Lock/`ARKADE_SESSION_RESET` resets the in-memory control store.
 
 ---
 
@@ -159,7 +197,7 @@ Machine: enter `waitingForParentData`, clear `lastErrorMessage` (not an error or
 - **Manual:** `checkingProgress` with a progress refresh only. If still on the same step, return to `waitingForParentData`. `PROCEED_MANUAL` skips the wait and retries broadcast.
 - **Automatic:** `checkingProgress` with proceed requested on the failed step, which typically retries `ensuringBroadcast`.
 
-`terminated` and `aborted` persist failure, clear the job, invalidate topology/progress/balance queries, then **always** return to `idle`. `WALLET_RESET` is a root transition to `notConfigured` from every state.
+`terminated` and `aborted` persist failure, clear the job, invalidate topology/progress/balance queries, then **always** return to `idle`. `ARKADE_SESSION_RESET` is a root transition to `notConfigured` from every state (lock, Arkade session teardown, or Arkade wallet-scope change).
 
 ```mermaid
 stateDiagram-v2
@@ -183,10 +221,28 @@ stateDiagram-v2
   waitingConfirm --> checkingProgress: after pollDelay OR POLL_TICK
   waitingForParentData --> checkingProgress: after 15s OR POLL_TICK OR PROCEED_MANUAL
   paused --> checkingProgress: RESUME OR PROCEED_MANUAL
-  complete --> idle: CLEAR_JOB
+  complete --> idle: always (release broadcaster)
   terminated --> idle
   aborted --> idle
   error --> checkingProgress: PROCEED_MANUAL OR RESUME
+```
+
+```mermaid
+flowchart TD
+  wasmRecords["WASM vtxo_exit_records"]
+  listRpc["list in-progress plus list records"]
+  parent["unilateralExit session host"]
+  children["vtxoExit:txid:vout children"]
+  completeUi["Complete dialog"]
+  controlUi["Control page node detail"]
+  wasmRecords --> listRpc
+  listRpc -->|"HYDRATE_VTXO_RECORDS"| parent
+  parent -->|"spawnChild / HYDRATE"| children
+  children --> completeUi
+  children --> controlUi
+  parent -->|"START / PROCEED / ABORT / 1-conf"| broadcast["current job bookmark only"]
+  broadcast -->|"branch complete"| idleHost["idle host; children unchanged"]
+  idleHost -->|"START other leaves"| broadcast
 ```
 
 ### Actors (WASM / policy, not UI)
@@ -216,7 +272,7 @@ Sibling RPCs the machine also calls:
 | RPC | Role |
 |-----|------|
 | `get_unilateral_exit_progress` | Confirmation-based phase, node/leaf statuses, relay flags |
-| `evaluate_unilateral_exit_job_viability` | ASP sweep / foreign spend → terminate |
+| `evaluate_unilateral_exit_job_viability` | ASP sweep / foreign spend of first-step prevout or tree/ark VTXO → terminate |
 | `estimate_unilateral_exit_batch` | Remaining steps + bumper sufficiency |
 | `get_unilateral_exit_topology` | Merged DAG for the control graph |
 
@@ -228,24 +284,30 @@ flowchart TD
   start --> pending[record pending_exit_deductions for unmarked leaves]
   pending --> plan[build_unilateral_batch_plan merged ordered_step_txids]
   plan --> idx[first_incomplete_step_index via Esplora confs plus wait-cap]
-  idx -->|"all steps at 1-conf"| markLeaf[mark_unrolled_leaves_at_finality 6 conf all vouts]
-  markLeaf --> done[phase Complete]
+  idx -->|"all steps at 1-conf"| reconcile[reconcile_host_tx_finality 6 conf all vouts]
+  reconcile --> done[phase Complete]
   idx -->|"current step under 1-conf"| relay{already relayed or step_wait?}
-  relay -->|no| bump[broadcast_unilateral_exit_step_at_fee_rate CPFP]
+  relay -->|no| register[register observation plus host_broadcast_attempted]
+  register --> bump[broadcast_unilateral_exit_step_at_fee_rate CPFP]
   relay -->|yes| waitRec[ensure_unilateral_exit_step_wait]
   bump --> waitRec
-  waitRec --> markLeaf2[mark_unrolled_leaves_at_finality]
-  markLeaf2 --> waiting[phase Waiting plus node and leaf statuses]
+  waitRec --> reconcile2[reconcile_host_tx_finality]
+  reconcile2 --> waiting[phase Waiting plus node and leaf statuses]
 ```
 
-Confirmation constants ([`bitboard-ark/src/constants.rs`](../bitboard-ark/src/constants.rs)):
+Register **before** broadcast on purpose. `step_wait` after a satisfied submit is the job cursor, not Esplora finality. Absent probes use the `never_seen` budget — see [Register before Esplora](#register-before-esplora-never_seen-is-the-cleanup).
+
+Confirmation and never-seen constants ([`bitboard-ark/src/constants.rs`](../bitboard-ark/src/constants.rs)):
 
 | Constant | Value | Meaning |
 |----------|-------|---------|
 | `UNILATERAL_EXIT_STEP_CONFIRMATIONS` | 1 | Advance to the next virtual tx |
-| `UNILATERAL_EXIT_LEAF_CONFIRMATIONS` | 6 | Stamp `is_unrolled` on every vout of that virtual tx (leaf or intermediate host) |
+| `UNILATERAL_EXIT_HOST_TX_CONFIRMATIONS` | 6 | Stamp `is_unrolled` on every vout of that host tx |
+| `HOST_TX_NEVER_SEEN_FIRST_PROBE_AFTER_SECS` | 600 | First eligible Esplora-absent miss (`registered_at` + 10 min) |
+| `HOST_TX_NEVER_SEEN_PROBE_SPACING_SECS` | 60 | Minimum gap between later eligible misses |
+| `HOST_TX_NEVER_SEEN_MAX_ELIGIBLE_MISSES` | 5 | Delete observation and rewind that host to `tagged` |
 
-`mark_unrolled_leaves_at_finality` does **not** block on operator indexer polling. Sticky merge and watch reconcile run during operator sync (`ARK-EXIT-11`).
+`reconcile_host_tx_finality` does **not** block on operator indexer polling. Sticky merge and unrolled+ record reconcile run during operator sync (`ARK-EXIT-11`). The same stamper also runs on session open (including autonomous), list, progress, and complete (`ARK-EXIT-29`).
 
 Redundant mempool rejects (`-25` / `-26`) are ignored when the parent is already visible on the network.
 
@@ -258,7 +320,7 @@ Redundant mempool rejects (`-25` / `-26`) are ignored when the parent is already
 | Machine | `unilateral-exit.machine.ts` (states/transitions), `unilateral-exit-machine-setup.ts` (guards/actions/actors), `unilateral-exit.actors.ts` |
 | Persistence (frontend) | `unilateral-exit-lifecycle-persistence.ts`, `unilateral-exit-automation-prefs-persistence.ts`, `unilateral-exit-failure-persistence.ts`, `unilateral-exit-frontend-sdk-persistence.ts` |
 | Control page / DAG | `UnilateralExitControlPage.tsx`, `UnilateralExitTreeGraph.tsx`, `unilateral-exit-topology.ts` |
-| WASM plan / proceed / progress | `bitboard-ark/src/session/unilateral_exit/{plan,proceed,progress}.rs` |
+| WASM plan / proceed / progress / probe | `bitboard-ark/src/session/unilateral_exit/{plan,proceed,progress,host_tx_finality}.rs` |
 | Topology merge | `bitboard-ark/src/session/unilateral_exit/topology.rs` |
 | Viability | `bitboard-ark/src/session/unilateral_exit/viability.rs` |
 | Materials | `bitboard-ark/src/unilateral_exit_materials.rs` |

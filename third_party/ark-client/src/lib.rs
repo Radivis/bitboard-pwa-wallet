@@ -15,6 +15,7 @@ use ark_core::history::sort_transactions_by_created_at;
 use ark_core::history::OutgoingTransaction;
 use ark_core::server;
 use ark_core::server::GetVtxosRequest;
+use ark_core::server::IndexerPage;
 use ark_core::server::SubscriptionResponse;
 use ark_core::server::VirtualTxOutPoint;
 use ark_core::ArkAddress;
@@ -1146,7 +1147,9 @@ where
             server_info.network,
         )?;
 
-        let mut start_index = 0u32;
+        // Incremental sync: already-cached receive indices are warmed from persistence.
+        // Re-probing 0..next on every operator sync re-lists hundreds of historical scripts.
+        let mut start_index = self.inner.key_provider.peek_next_derivation_index()?.unwrap_or(0);
         let mut discovered_count = 0u32;
 
         tracing::info!(gap_limit, "Starting key discovery");
@@ -1321,11 +1324,39 @@ where
         &self,
         addresses: impl Iterator<Item = ArkAddress>,
     ) -> Result<Vec<VirtualTxOutPoint>, Error> {
+        self.get_virtual_tx_outpoints_filtered(addresses, false)
+            .await
+    }
+
+    async fn get_virtual_tx_outpoints_filtered(
+        &self,
+        addresses: impl Iterator<Item = ArkAddress>,
+        spendable_only: bool,
+    ) -> Result<Vec<VirtualTxOutPoint>, Error> {
         let request = GetVtxosRequest::new_for_addresses(addresses);
+        let request = if spendable_only {
+            request
+                .spendable_only()
+                .map_err(|error| Error::ad_hoc(error.to_string()))?
+        } else {
+            request
+        };
         self.fetch_all_vtxos(request).await
     }
 
     pub async fn list_vtxos(&self) -> Result<(VtxoList, HashMap<ScriptBuf, Vtxo>), Error> {
+        self.list_vtxos_filtered(false).await
+    }
+
+    /// Indexer `spendable` filter: omits historical spent VTXOs from the response body.
+    pub async fn list_spendable_vtxos(&self) -> Result<(VtxoList, HashMap<ScriptBuf, Vtxo>), Error> {
+        self.list_vtxos_filtered(true).await
+    }
+
+    async fn list_vtxos_filtered(
+        &self,
+        spendable_only: bool,
+    ) -> Result<(VtxoList, HashMap<ScriptBuf, Vtxo>), Error> {
         let ark_addresses = self.get_offchain_addresses()?;
 
         let script_pubkey_to_vtxo_map = ark_addresses
@@ -1335,7 +1366,11 @@ where
 
         let addresses = ark_addresses.iter().map(|(a, _)| a).copied();
 
-        let vtxo_list = self.list_vtxos_for_addresses(addresses).await?;
+        let virtual_tx_outpoints = self
+            .get_virtual_tx_outpoints_filtered(addresses, spendable_only)
+            .await
+            .context("failed to get VTXOs for addresses")?;
+        let vtxo_list = VtxoList::new(self.server_info()?.dust, virtual_tx_outpoints);
 
         Ok((vtxo_list, script_pubkey_to_vtxo_map))
     }
@@ -1345,7 +1380,7 @@ where
         addresses: impl Iterator<Item = ArkAddress>,
     ) -> Result<VtxoList, Error> {
         let virtual_tx_outpoints = self
-            .get_virtual_tx_outpoints(addresses)
+            .get_virtual_tx_outpoints_filtered(addresses, false)
             .await
             .context("failed to get VTXOs for addresses")?;
 
@@ -1390,7 +1425,7 @@ where
     ///
     /// arkd's indexer rejects a request without an explicit, positive `page.size`
     /// (`InvalidArgument: invalid page size`), so we always send a real page size and walk the
-    /// cursor until every page is collected.
+    /// cursor until every page is collected. Pages are 1-indexed (`IndexerPage::next_page_index`).
     pub async fn get_vtxo_chain(
         &self,
         out_point: OutPoint,
@@ -1409,10 +1444,13 @@ where
             .await
             .context("Failed to fetch VTXO chain")??;
 
-            let next_page_index = match &response.page {
-                Some(page) if page.next < page.total => Some(page.next),
-                _ => None,
-            };
+            // arkd is 1-indexed: page 1 of 2 is current=1, next=2, total=2.
+            // `next < total` is false there and dropped the commitment ancestors of
+            // long self-send chains (Mutinynet VTXO-chain prefetch).
+            let next_page_index = response
+                .page
+                .as_ref()
+                .and_then(IndexerPage::next_page_index);
 
             match accumulated.as_mut() {
                 Some(acc) => acc.chains.inner.extend(response.chains.inner),
@@ -1591,11 +1629,13 @@ where
             return Ok(Vec::new());
         }
 
-        let mut all_vtxos = Vec::new();
-        for chunk in request.split_references(MAX_GET_VTXOS_REFS_PER_REQUEST) {
-            all_vtxos.extend(self.fetch_paged_vtxos(chunk).await?);
-        }
-        Ok(all_vtxos)
+        let chunk_requests = request.split_references(MAX_GET_VTXOS_REFS_PER_REQUEST);
+        let chunk_results =
+            futures::future::try_join_all(chunk_requests.into_iter().map(|chunk| async move {
+                self.fetch_paged_vtxos(chunk).await
+            }))
+            .await?;
+        Ok(chunk_results.into_iter().flatten().collect())
     }
 
     async fn fetch_paged_vtxos(
@@ -1617,12 +1657,13 @@ where
 
             all_vtxos.extend(response.vtxos);
 
-            // Use server-provided cursor for next page; next == total means end
-            match response.page {
-                Some(page) if page.next < page.total => {
-                    cursor = page.next;
-                }
-                _ => break,
+            match response
+                .page
+                .as_ref()
+                .and_then(IndexerPage::next_page_index)
+            {
+                Some(index) => cursor = index,
+                None => break,
             }
         }
 

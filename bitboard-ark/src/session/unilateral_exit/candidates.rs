@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use ark_client::Blockchain;
 use ark_core::server::VirtualTxOutPoint;
@@ -10,11 +9,12 @@ use crate::api_types::{ExitCandidateDto, UnilateralExitInProgressDto, VirtualSta
 use crate::error::ArkResult;
 use crate::exit_balance::{
     UnilateralExitOutpointKey, exit_outpoint_key, exit_outpoint_key_from_str,
-    unilateral_exit_in_progress_outpoints,
 };
 use crate::offchain_snapshot::virtual_tx_outpoint_from_record;
-use crate::persistence::PendingExitDeductionRecord;
-use crate::persistence::PendingExitKind;
+use crate::persistence::{VirtualTxOutPointRecord, VtxoExitPhase, VtxoExitRecord};
+use crate::session::unilateral_exit::vtxo_exit::{
+    mark_record_complete_ready, parse_vtxo_exit_record_key, unilateral_exit_pipeline_outpoints,
+};
 
 use super::snapshot_ops::{
     autonomous_exit_candidates_from_snapshot, autonomous_vtxo_list_and_script_map,
@@ -74,67 +74,215 @@ fn snapshot_record_ready_for_completion(
     record.is_unrolled && !record.is_spent
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ClaimabilityStatus {
+    can_complete: bool,
+    stamped_complete_ready: bool,
+}
+
+impl ClaimabilityStatus {
+    const ALREADY_COMPLETE_READY: Self = Self {
+        can_complete: true,
+        stamped_complete_ready: false,
+    };
+    const NOT_ELIGIBLE: Self = Self {
+        can_complete: false,
+        stamped_complete_ready: false,
+    };
+}
+
+fn stamp_complete_ready_when_claimable(
+    records: &mut BTreeMap<String, VtxoExitRecord>,
+    key: &str,
+    can_complete: bool,
+) -> ClaimabilityStatus {
+    if can_complete && let Some(record) = records.get_mut(key) {
+        mark_record_complete_ready(record);
+        return ClaimabilityStatus {
+            can_complete: true,
+            stamped_complete_ready: true,
+        };
+    }
+    ClaimabilityStatus {
+        can_complete,
+        stamped_complete_ready: false,
+    }
+}
+
+async fn overlay_complete_ready_if_claimable(
+    records: &mut BTreeMap<String, VtxoExitRecord>,
+    key: &str,
+    phase: VtxoExitPhase,
+    eligible_for_probe: bool,
+    claimable: impl std::future::Future<Output = ArkResult<bool>>,
+) -> ArkResult<ClaimabilityStatus> {
+    if phase == VtxoExitPhase::CompleteReady {
+        return Ok(ClaimabilityStatus::ALREADY_COMPLETE_READY);
+    }
+    if !eligible_for_probe {
+        return Ok(ClaimabilityStatus::NOT_ELIGIBLE);
+    }
+    let can_complete = claimable.await?;
+    Ok(stamp_complete_ready_when_claimable(
+        records,
+        key,
+        can_complete,
+    ))
+}
+
+fn pipeline_in_progress_row(
+    txid: String,
+    vout: u32,
+    amount_sats: u64,
+    virtual_status_state: VirtualStatusState,
+    can_complete: bool,
+    tagged_at: i64,
+    phase: VtxoExitPhase,
+) -> UnilateralExitInProgressDto {
+    UnilateralExitInProgressDto {
+        id: format!("{txid}:{vout}"),
+        txid,
+        vout,
+        amount_sats,
+        virtual_status_state,
+        can_complete,
+        started_at: Some(tagged_at),
+        phase: Some(phase),
+    }
+}
+
+struct InProgressRowLookups<'a> {
+    session: &'a ArkSession,
+    operator_by_outpoint: &'a HashMap<UnilateralExitOutpointKey, &'a VirtualTxOutPoint>,
+    snapshot_records: &'a [VirtualTxOutPointRecord],
+    operator_script_map: &'a HashMap<ScriptBuf, Vtxo>,
+    offchain_script_map: &'a HashMap<ScriptBuf, Vtxo>,
+    dust: bitcoin::Amount,
+}
+
+async fn overlay_in_progress_row_for_record(
+    records: &mut BTreeMap<String, VtxoExitRecord>,
+    key: &str,
+    record: &VtxoExitRecord,
+    lookups: &InProgressRowLookups<'_>,
+) -> ArkResult<Option<(UnilateralExitInProgressDto, bool)>> {
+    let Some((txid, vout)) = parse_vtxo_exit_record_key(key) else {
+        return Ok(None);
+    };
+    let Some(outpoint) = exit_outpoint_key_from_str(&txid, vout) else {
+        return Ok(None);
+    };
+    let phase = record.phase;
+    if let Some(virtual_tx_outpoint) = lookups.operator_by_outpoint.get(&outpoint) {
+        let candidate = map_exit_candidate(virtual_tx_outpoint, lookups.dust);
+        let claimability = overlay_complete_ready_if_claimable(
+            records,
+            key,
+            phase,
+            candidate.can_complete || phase == VtxoExitPhase::Unrolled,
+            resolve_vtxo_completion_claimable(
+                lookups.session,
+                virtual_tx_outpoint,
+                lookups.operator_script_map,
+                lookups.offchain_script_map,
+            ),
+        )
+        .await?;
+        return Ok(Some((
+            pipeline_in_progress_row(
+                candidate.txid,
+                candidate.vout,
+                candidate.amount_sats,
+                candidate.virtual_status_state,
+                claimability.can_complete,
+                record.tagged_at,
+                phase,
+            ),
+            claimability.stamped_complete_ready,
+        )));
+    }
+
+    if let Some(snapshot_record) = lookups
+        .snapshot_records
+        .iter()
+        .find(|snapshot_record| snapshot_record.txid == txid && snapshot_record.vout == vout)
+    {
+        let virtual_status_state = VirtualStatusState::from_spent_and_unrolled(
+            snapshot_record.is_spent,
+            snapshot_record.is_unrolled,
+        );
+        let claimability = overlay_complete_ready_if_claimable(
+            records,
+            key,
+            phase,
+            snapshot_record_ready_for_completion(snapshot_record),
+            async {
+                match virtual_tx_outpoint_from_record(snapshot_record) {
+                    Ok(virtual_tx_outpoint) => {
+                        resolve_vtxo_completion_claimable(
+                            lookups.session,
+                            &virtual_tx_outpoint,
+                            lookups.operator_script_map,
+                            lookups.offchain_script_map,
+                        )
+                        .await
+                    }
+                    Err(_) => Ok(false),
+                }
+            },
+        )
+        .await?;
+        return Ok(Some((
+            pipeline_in_progress_row(
+                txid,
+                vout,
+                snapshot_record.amount_sats,
+                virtual_status_state,
+                claimability.can_complete,
+                record.tagged_at,
+                phase,
+            ),
+            claimability.stamped_complete_ready,
+        )));
+    }
+
+    Ok(Some((
+        pipeline_in_progress_row(
+            txid,
+            vout,
+            record.amount_sats,
+            VirtualStatusState::Unrolled,
+            phase == VtxoExitPhase::CompleteReady,
+            record.tagged_at,
+            phase,
+        ),
+        false,
+    )))
+}
+
 impl ArkSession {
     pub(crate) fn unilateral_exit_in_progress_outpoints(
         &self,
     ) -> ArkResult<HashSet<UnilateralExitOutpointKey>> {
-        let wallet_snapshot = self.wallet_db.snapshot();
-        let snapshot = wallet_snapshot.offchain_vtxo_snapshot.as_ref();
-        let pending = self.wallet_db.pending_exit_deductions();
-        let watches = self.wallet_db.unilateral_exit_watches();
-        unilateral_exit_in_progress_outpoints(snapshot, &pending, &watches)
-    }
-
-    fn pending_unilateral_started_at_by_outpoint(
-        pending: &[PendingExitDeductionRecord],
-    ) -> HashMap<UnilateralExitOutpointKey, i64> {
-        pending
-            .iter()
-            .filter(|record| record.kind == PendingExitKind::Unilateral)
-            .filter_map(|record| {
-                let txid = record.vtxo_txid.as_deref()?;
-                let vout = record.vout?;
-                let outpoint = exit_outpoint_key_from_str(txid, vout)?;
-                Some((outpoint, record.started_at))
-            })
-            .collect()
-    }
-
-    fn pending_unilateral_amount_sats(
-        pending: &[PendingExitDeductionRecord],
-        outpoint: &UnilateralExitOutpointKey,
-    ) -> u64 {
-        pending
-            .iter()
-            .find(|record| {
-                record.kind == PendingExitKind::Unilateral
-                    && record
-                        .vtxo_txid
-                        .as_deref()
-                        .and_then(|txid| exit_outpoint_key_from_str(txid, record.vout?))
-                        == Some(*outpoint)
-            })
-            .map(|record| record.amount_sats)
-            .unwrap_or(0)
+        Ok(self.pipeline_outpoints())
     }
 
     pub async fn list_exit_candidates(&self) -> ArkResult<Vec<ExitCandidateDto>> {
-        let in_progress = self.unilateral_exit_in_progress_outpoints()?;
+        let start_excluded = self.start_list_excluded_outpoints();
         let snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot;
-        let rows = autonomous_exit_candidates_from_snapshot(self, &in_progress)?;
+        let rows = autonomous_exit_candidates_from_snapshot(self, &start_excluded)?;
         filter_exit_candidates_to_terminal_leaves(snapshot.as_ref(), rows)
     }
 
     pub async fn list_unilateral_exits_in_progress(
         &self,
     ) -> ArkResult<Vec<UnilateralExitInProgressDto>> {
-        let in_progress = self.unilateral_exit_in_progress_outpoints()?;
+        self.reconcile_host_tx_finality().await?;
+        let mut records = self.wallet_db.vtxo_exit_records();
+        let in_progress = unilateral_exit_pipeline_outpoints(&records);
         if in_progress.is_empty() {
             return Ok(Vec::new());
         }
-
-        let pending = self.wallet_db.pending_exit_deductions();
-        let started_at_by_outpoint = Self::pending_unilateral_started_at_by_outpoint(&pending);
 
         let (vtxo_list, script_pubkey_to_vtxo) = autonomous_vtxo_list_and_script_map(self)?;
         let offchain_script_map = self.offchain_script_map().unwrap_or_default();
@@ -158,86 +306,37 @@ impl ArkSession {
             .as_ref()
             .map(|snapshot| snapshot.virtual_tx_outpoints.as_slice())
             .unwrap_or(&[]);
-        let watches = wallet_snapshot.unilateral_exit_watches;
 
+        let lookups = InProgressRowLookups {
+            session: self,
+            operator_by_outpoint: &operator_by_outpoint,
+            snapshot_records,
+            operator_script_map: &script_pubkey_to_vtxo,
+            offchain_script_map: &offchain_script_map,
+            dust,
+        };
         let mut rows = Vec::with_capacity(in_progress.len());
-        for outpoint in in_progress {
-            let txid = outpoint.txid.to_string();
-            let vout = outpoint.vout;
-            if let Some(virtual_tx_outpoint) = operator_by_outpoint.get(&outpoint) {
-                let candidate = map_exit_candidate(virtual_tx_outpoint, dust);
-                let can_complete = if candidate.can_complete {
-                    resolve_vtxo_completion_claimable(
-                        self,
-                        virtual_tx_outpoint,
-                        &script_pubkey_to_vtxo,
-                        &offchain_script_map,
-                    )
-                    .await?
-                } else {
-                    false
-                };
-                rows.push(UnilateralExitInProgressDto {
-                    id: candidate.id,
-                    txid: candidate.txid,
-                    vout: candidate.vout,
-                    amount_sats: candidate.amount_sats,
-                    virtual_status_state: candidate.virtual_status_state,
-                    can_complete,
-                    started_at: started_at_by_outpoint.get(&outpoint).copied(),
-                });
+        let mut stamped_complete_ready = false;
+        let pipeline_keys: Vec<String> = records
+            .iter()
+            .filter(|(_, record)| record.phase.is_pipeline())
+            .map(|(key, _)| key.clone())
+            .collect();
+        for key in pipeline_keys {
+            let Some(record) = records.get(&key).cloned() else {
                 continue;
-            }
-
-            if let Some(record) = snapshot_records
-                .iter()
-                .find(|record| record.txid == txid && record.vout == vout)
-            {
-                let virtual_status_state = VirtualStatusState::from_spent_and_unrolled(
-                    record.is_spent,
-                    record.is_unrolled,
-                );
-                let can_complete = if snapshot_record_ready_for_completion(record) {
-                    match virtual_tx_outpoint_from_record(record) {
-                        Ok(virtual_tx_outpoint) => {
-                            resolve_vtxo_completion_claimable(
-                                self,
-                                &virtual_tx_outpoint,
-                                &script_pubkey_to_vtxo,
-                                &offchain_script_map,
-                            )
-                            .await?
-                        }
-                        Err(_) => false,
-                    }
-                } else {
-                    false
-                };
-                rows.push(UnilateralExitInProgressDto {
-                    id: format!("{txid}:{vout}"),
-                    txid,
-                    vout,
-                    amount_sats: record.amount_sats,
-                    virtual_status_state,
-                    can_complete,
-                    started_at: started_at_by_outpoint.get(&outpoint).copied(),
-                });
+            };
+            let Some((row, stamped)) =
+                overlay_in_progress_row_for_record(&mut records, &key, &record, &lookups).await?
+            else {
                 continue;
-            }
+            };
+            stamped_complete_ready |= stamped;
+            rows.push(row);
+        }
 
-            rows.push(UnilateralExitInProgressDto {
-                id: format!("{txid}:{vout}"),
-                txid: txid.clone(),
-                vout,
-                amount_sats: watches
-                    .iter()
-                    .find(|watch| watch.vtxo_txid == txid && watch.vout == vout)
-                    .map(|watch| watch.amount_sats)
-                    .unwrap_or_else(|| Self::pending_unilateral_amount_sats(&pending, &outpoint)),
-                virtual_status_state: VirtualStatusState::Unrolled,
-                can_complete: false,
-                started_at: started_at_by_outpoint.get(&outpoint).copied(),
-            });
+        if stamped_complete_ready {
+            self.wallet_db.set_vtxo_exit_records(records);
         }
 
         rows.sort_by(|left, right| {
@@ -248,5 +347,62 @@ impl ArkSession {
                 .then_with(|| left.vout.cmp(&right.vout))
         });
         Ok(rows)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::persistence::{VtxoExitRecord, vtxo_exit_record_key};
+
+    fn unrolled_record() -> VtxoExitRecord {
+        VtxoExitRecord {
+            phase: VtxoExitPhase::Unrolled,
+            tagged_at: 1,
+            host_txid: "aa".repeat(32),
+            amount_sats: 50_000,
+        }
+    }
+
+    #[test]
+    fn overlay_complete_ready_stamps_unrolled_when_claimable() {
+        let key = vtxo_exit_record_key(&"aa".repeat(32), 0);
+        let mut records = BTreeMap::from([(key.clone(), unrolled_record())]);
+
+        let claimability = stamp_complete_ready_when_claimable(&mut records, &key, true);
+
+        assert!(claimability.can_complete);
+        assert!(claimability.stamped_complete_ready);
+        assert_eq!(records[&key].phase, VtxoExitPhase::CompleteReady);
+    }
+
+    #[test]
+    fn overlay_complete_ready_leaves_unrolled_when_not_claimable() {
+        let key = vtxo_exit_record_key(&"aa".repeat(32), 0);
+        let mut records = BTreeMap::from([(key.clone(), unrolled_record())]);
+
+        let claimability = stamp_complete_ready_when_claimable(&mut records, &key, false);
+
+        assert!(!claimability.can_complete);
+        assert!(!claimability.stamped_complete_ready);
+        assert_eq!(records[&key].phase, VtxoExitPhase::Unrolled);
+    }
+
+    #[test]
+    fn pipeline_in_progress_row_uses_outpoint_id() {
+        let row = pipeline_in_progress_row(
+            "aa".repeat(32),
+            1,
+            50_000,
+            VirtualStatusState::Unrolled,
+            true,
+            42,
+            VtxoExitPhase::CompleteReady,
+        );
+        assert_eq!(row.id, format!("{}:1", "aa".repeat(32)));
+        assert_eq!(row.vout, 1);
+        assert!(row.can_complete);
+        assert_eq!(row.started_at, Some(42));
+        assert_eq!(row.phase, Some(VtxoExitPhase::CompleteReady));
     }
 }

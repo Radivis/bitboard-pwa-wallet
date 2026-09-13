@@ -50,7 +50,7 @@ Use **confirmation depth** from `get_tx_status` / `tx_confirmations`:
 - `first_incomplete_step_index`
 - `current_step_waiting_since`
 - `node_statuses_for_plan` / `node_status_label`
-- leaf finality (`leaf_reached_finality`)
+- host-tx finality (`host_tx_reached_finality`)
 
 **Do not** require `is_tx_relayed_on_network` for step completion. Mined steps are confirmed via `/status` / merkle proof even if `/raw` was never polled during the mempool phase.
 
@@ -77,7 +77,7 @@ Separate from step progress: detecting that the **final exit sweep** spent a VTX
 
 **Pitfall:** each unroll CPFP step spends the previous branch tx at **`vout 0`**. Treating “anything spent `vout 0` of the branch tip” as exit completion causes false `is_spent` / “Finalized” UI without a completion tx.
 
-**Rule:** completion probes must target the **actual virtual VTXO outpoint** `(leaf_txid, virtual_vout)`, not arbitrary branch-tip spends. See `detect_exiting_vtxo_completion_on_esplora` in `bitboard-ark/src/session/unilateral_exit/onchain.rs`.
+**Rule:** completion probes must target the **actual virtual VTXO outpoint** `(host_txid, virtual_vout)`, not arbitrary branch-tip spends. See `detect_exiting_vtxo_completion_on_esplora` in `bitboard-ark/src/session/unilateral_exit/onchain.rs`.
 
 ---
 

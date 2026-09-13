@@ -10,6 +10,10 @@ import {
 } from '@/lib/arkade/unilateral-exit-topology'
 import type { ArkadeUnilateralExitTopology } from '@/workers/arkade-api'
 
+const FAR_FUTURE_EXPIRES_AT = 2_000_000_000
+const NOW_SECONDS = 1_789_200_000
+const DAY_SECONDS = 86_400
+
 const sampleTopology: ArkadeUnilateralExitTopology = {
   nodes: [
     { txid: 'aa', txType: 'commitment', spends: [] },
@@ -17,7 +21,9 @@ const sampleTopology: ArkadeUnilateralExitTopology = {
     { txid: 'cc', txType: 'ark', spends: ['bb'] },
   ],
   leafOutpoints: [{ txid: 'cc', vout: 0 }],
-  hostOutpoints: [{ txid: 'cc', vout: 0, amountSats: 25_000, isUnrolled: false }],
+  hostOutpoints: [
+    { txid: 'cc', vout: 0, amountSats: 25_000, isUnrolled: false, expiresAt: FAR_FUTURE_EXPIRES_AT },
+  ],
   exitBranchTxids: ['bb', 'cc'],
   commitmentTxids: ['aa'],
 }
@@ -32,7 +38,9 @@ const mergedCheckpointParentsTopology: ArkadeUnilateralExitTopology = {
     { txid: 'ark', txType: 'ark', spends: ['left_cp', 'right_cp'] },
   ],
   leafOutpoints: [{ txid: 'ark', vout: 0 }],
-  hostOutpoints: [{ txid: 'ark', vout: 0, amountSats: 25_000, isUnrolled: false }],
+  hostOutpoints: [
+    { txid: 'ark', vout: 0, amountSats: 25_000, isUnrolled: false, expiresAt: FAR_FUTURE_EXPIRES_AT },
+  ],
   exitBranchTxids: ['tree_left', 'left_cp', 'tree_right', 'right_cp', 'ark'],
   commitmentTxids: ['commitment'],
 }
@@ -91,13 +99,13 @@ describe('unilateral-exit-topology helpers', () => {
     const topology: ArkadeUnilateralExitTopology = {
       ...sampleTopology,
       hostOutpoints: [
-        { txid: 'cc', vout: 1, amountSats: 100_000, isUnrolled: false },
-        { txid: 'cc', vout: 0, amountSats: 25_000, isUnrolled: false },
+        { txid: 'cc', vout: 1, amountSats: 100_000, isUnrolled: false, expiresAt: FAR_FUTURE_EXPIRES_AT },
+        { txid: 'cc', vout: 0, amountSats: 25_000, isUnrolled: false, expiresAt: FAR_FUTURE_EXPIRES_AT },
       ],
     }
     expect(hostOutpointsForTxid(topology, 'cc')).toEqual([
-      { txid: 'cc', vout: 0, amountSats: 25_000, isUnrolled: false },
-      { txid: 'cc', vout: 1, amountSats: 100_000, isUnrolled: false },
+      { txid: 'cc', vout: 0, amountSats: 25_000, isUnrolled: false, expiresAt: FAR_FUTURE_EXPIRES_AT },
+      { txid: 'cc', vout: 1, amountSats: 100_000, isUnrolled: false, expiresAt: FAR_FUTURE_EXPIRES_AT },
     ])
   })
 
@@ -161,8 +169,8 @@ describe('unilateral-exit-topology helpers', () => {
         { txid: 'cc', vout: 0 },
       ],
       hostOutpoints: [
-        { txid: 'cc', vout: 0, amountSats: 25_000, isUnrolled: false },
-        { txid: 'cc', vout: 1, amountSats: 100_000, isUnrolled: false },
+        { txid: 'cc', vout: 0, amountSats: 25_000, isUnrolled: false, expiresAt: FAR_FUTURE_EXPIRES_AT },
+        { txid: 'cc', vout: 1, amountSats: 100_000, isUnrolled: false, expiresAt: FAR_FUTURE_EXPIRES_AT },
       ],
     }
     const { nodes, edgePaths } = layoutUnilateralExitGraph({
@@ -194,9 +202,9 @@ describe('unilateral-exit-topology helpers', () => {
         { txid: 'leaf', vout: 1 },
       ],
       hostOutpoints: [
-        { txid: 'mid', vout: 0, amountSats: 125_000, isUnrolled: false },
-        { txid: 'leaf', vout: 0, amountSats: 25_000, isUnrolled: false },
-        { txid: 'leaf', vout: 1, amountSats: 10_000, isUnrolled: false },
+        { txid: 'mid', vout: 0, amountSats: 125_000, isUnrolled: false, expiresAt: FAR_FUTURE_EXPIRES_AT },
+        { txid: 'leaf', vout: 0, amountSats: 25_000, isUnrolled: false, expiresAt: FAR_FUTURE_EXPIRES_AT },
+        { txid: 'leaf', vout: 1, amountSats: 10_000, isUnrolled: false, expiresAt: FAR_FUTURE_EXPIRES_AT },
       ],
       exitBranchTxids: ['bb', 'mid', 'cp', 'leaf'],
       commitmentTxids: ['aa'],
@@ -221,8 +229,8 @@ describe('unilateral-exit-topology helpers', () => {
     const topology: ArkadeUnilateralExitTopology = {
       ...sampleTopology,
       hostOutpoints: [
-        { txid: 'cc', vout: 0, amountSats: 25_000, isUnrolled: true },
-        { txid: 'cc', vout: 1, amountSats: 10_000, isUnrolled: true },
+        { txid: 'cc', vout: 0, amountSats: 25_000, isUnrolled: true, expiresAt: FAR_FUTURE_EXPIRES_AT },
+        { txid: 'cc', vout: 1, amountSats: 10_000, isUnrolled: true, expiresAt: FAR_FUTURE_EXPIRES_AT },
       ],
     }
     const { nodes } = layoutUnilateralExitGraph({
@@ -282,6 +290,66 @@ describe('unilateral-exit-topology helpers', () => {
     expect(nodes.find((node) => node.id === 'bb')?.data.onReadyToProceed).toBe(onReadyToProceed)
     expect(nodes.find((node) => node.id === 'bb')?.data.readyToProceedDisabled).toBe(false)
     expect(nodes.find((node) => node.id === 'cc')?.data.onReadyToProceed).toBeUndefined()
+  })
+
+  it('layoutUnilateralExitGraph_stamps_expired_urgency_on_host_nodes_only', () => {
+    const topology: ArkadeUnilateralExitTopology = {
+      nodes: [
+        { txid: 'aa', txType: 'commitment', spends: [] },
+        { txid: 'bb', txType: 'tree', spends: ['aa'] },
+        { txid: 'cp', txType: 'checkpoint', spends: ['bb'] },
+        { txid: 'cc', txType: 'ark', spends: ['cp'] },
+      ],
+      leafOutpoints: [{ txid: 'cc', vout: 0 }],
+      hostOutpoints: [
+        { txid: 'bb', vout: 0, amountSats: 50_000, isUnrolled: false, expiresAt: NOW_SECONDS - 1 },
+        { txid: 'cc', vout: 0, amountSats: 25_000, isUnrolled: false, expiresAt: NOW_SECONDS - 1 },
+      ],
+      exitBranchTxids: ['bb', 'cp', 'cc'],
+      commitmentTxids: ['aa'],
+    }
+
+    const { nodes } = layoutUnilateralExitGraph({
+      topology,
+      selectedLeafOutpoints: [],
+      nodeStatuses: [],
+      inProgressOverlay: null,
+      layoutDirection: 'TB',
+      nowSeconds: NOW_SECONDS,
+    })
+
+    expect(nodes.find((node) => node.id === 'aa')?.data.vtxoExpiryUrgency).toBeNull()
+    expect(nodes.find((node) => node.id === 'cp')?.data.vtxoExpiryUrgency).toBeNull()
+    expect(nodes.find((node) => node.id === 'bb')?.data.vtxoExpiryUrgency).toBe('expired')
+    expect(nodes.find((node) => node.id === 'cc')?.data.vtxoExpiryUrgency).toBe('expired')
+  })
+
+  it('layoutUnilateralExitGraph_stamps_warning_urgency_on_host_nodes', () => {
+    const topology: ArkadeUnilateralExitTopology = {
+      ...sampleTopology,
+      hostOutpoints: [
+        {
+          txid: 'cc',
+          vout: 0,
+          amountSats: 25_000,
+          isUnrolled: false,
+          expiresAt: NOW_SECONDS + DAY_SECONDS * 2,
+        },
+      ],
+    }
+
+    const { nodes } = layoutUnilateralExitGraph({
+      topology,
+      selectedLeafOutpoints: [],
+      nodeStatuses: [],
+      inProgressOverlay: null,
+      layoutDirection: 'TB',
+      nowSeconds: NOW_SECONDS,
+    })
+
+    expect(nodes.find((node) => node.id === 'aa')?.data.vtxoExpiryUrgency).toBeNull()
+    expect(nodes.find((node) => node.id === 'bb')?.data.vtxoExpiryUrgency).toBeNull()
+    expect(nodes.find((node) => node.id === 'cc')?.data.vtxoExpiryUrgency).toBe('warning')
   })
 
   it('resolveUnilateralExitTopologyOutpoints prefers authoritative job over in-progress inference', () => {

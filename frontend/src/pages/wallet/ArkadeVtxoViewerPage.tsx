@@ -19,6 +19,7 @@ import {
 } from '@/hooks/useArkadeLifecycleSnapshots'
 import { useArkadeManualSyncMutation } from '@/hooks/useRailManualSyncMutations'
 import { useArkadeVtxoListQuery } from '@/hooks/useArkadeQueries'
+import { useVtxoExitSnapshots } from '@/hooks/useUnilateralExitLifecycleSnapshot'
 import {
   ARKADE_VTXO_CLASSIFICATIONS,
   ARKADE_VTXO_VIEWER_PAGE_SIZE,
@@ -36,6 +37,7 @@ import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore
 export function ArkadeVtxoViewerPage() {
   const networkMode = useWalletStore(selectCommittedNetworkMode)
   const vtxoListQuery = useArkadeVtxoListQuery()
+  const vtxoExitSnapshots = useVtxoExitSnapshots()
   const arkadeRail = useArkadeRailSnapshot()
   const arkadeLoadSnapshot = useArkadeLoadLifecycleSnapshot()
   const arkadeSyncSnapshot = useArkadeSyncLifecycleSnapshot()
@@ -197,7 +199,11 @@ export function ArkadeVtxoViewerPage() {
         >
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {pageRows.map((row) => (
-              <ArkadeVtxoCard key={row.id} row={row} />
+              <ArkadeVtxoCard
+                key={row.id}
+                row={row}
+                unilateralExitPhase={vtxoExitSnapshots[row.id]?.phase}
+              />
             ))}
           </div>
         </CardPagination>

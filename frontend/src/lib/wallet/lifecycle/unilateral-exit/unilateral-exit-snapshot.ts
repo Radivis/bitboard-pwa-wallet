@@ -46,6 +46,7 @@ export function unilateralExitSnapshotIsInAnyState(
 }
 
 const UNILATERAL_EXIT_PROCEEDING_MACHINE_STATES = [
+  UNILATERAL_EXIT_MACHINE_STATE.taggingPlan,
   UNILATERAL_EXIT_MACHINE_STATE.proceeding,
   UNILATERAL_EXIT_MACHINE_STATE.checkingProgress,
   UNILATERAL_EXIT_MACHINE_STATE.loadingProgress,
@@ -96,6 +97,7 @@ export function unilateralExitActorSnapshotEqual(
     previousContext.automationEnabled === nextContext.automationEnabled &&
     previousContext.pausedReason === nextContext.pausedReason &&
     previousContext.lastErrorMessage === nextContext.lastErrorMessage &&
+    previousContext.lastSettleResult === nextContext.lastSettleResult &&
     previousContext.feeRateSatPerVb === nextContext.feeRateSatPerVb &&
     previousContext.proceedRequested === nextContext.proceedRequested &&
     previousContext.proceedTargetStepIndex === nextContext.proceedTargetStepIndex &&

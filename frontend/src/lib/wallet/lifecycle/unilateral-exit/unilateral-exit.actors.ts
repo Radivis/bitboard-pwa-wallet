@@ -4,6 +4,7 @@ import {
 } from '@/hooks/useEsploraFeePresets'
 import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
+import { applyOptimisticExitBalanceDeduction } from '@/lib/arkade/arkade-exit-balance-optimistic'
 import {
   isCurrentStepRelayed,
   isInsufficientConfirmedBumperFundsError,
@@ -16,6 +17,7 @@ import { isUnilateralExitBranchComplete } from '@/lib/arkade/unilateral-exit-bra
 import { proceedUnilateralExitStepWithGuards } from '@/lib/arkade/proceed-unilateral-exit-step'
 import { resolveAutomatedStepFeeRateSatPerVb } from '@/lib/arkade/unilateral-exit-automation-fees'
 import { getArkadeLoadLifecycleSnapshot } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
+import { getPersistedUnilateralExitJob } from '@/lib/wallet/lifecycle/unilateral-exit-lifecycle-persistence'
 import { useUnilateralExitAutomationPrefsStore } from '@/lib/wallet/lifecycle/unilateral-exit-automation-prefs-persistence'
 import { resolveVtxoIdsForOutpoints } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-vtxo-ids'
 import type {
@@ -25,6 +27,7 @@ import type {
   FetchProgressActorInput,
   ProceedStepActorInput,
   ResolveAbortVtxoIdsActorInput,
+  TagPlanActorInput,
 } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.machine'
 import {
   invalidateUnilateralExitQueries,
@@ -35,9 +38,17 @@ import type { ArkadeWalletScope } from '@/lib/arkade/arkade-session-scope'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { useWalletStore } from '@/stores/walletStore'
 import { getArkadeWorker } from '@/workers/arkade-factory'
-import { sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
-import type { ArkadeUnilateralExitProgress, ArkadeUnilateralExitJobViability } from '@/workers/arkade-api'
+import {
+  arkadeVtxoOutpointListsEqual,
+  sortArkadeVtxoOutpoints,
+  type ArkadeExitCandidateDto,
+  type ArkadeUnilateralExitProgress,
+  type ArkadeUnilateralExitJobViability,
+  type ArkadeVtxoOutpoint,
+} from '@/workers/arkade-api'
 import { fromPromise } from 'xstate'
+import { withEsploraFullScanRetries } from '@/lib/esplora/esplora-full-scan-retry'
+import { hydrateVtxoExitChildrenFromWasm } from '@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-vtxo-hydrate'
 
 function assertCanRunUnilateralExit(scope: ArkadeWalletScope): void {
   if (!walletIsUnlockedOrSyncing(useWalletStore.getState().walletStatus)) {
@@ -103,29 +114,105 @@ export async function evaluateUnilateralExitAutomationPolicy(
   }
 }
 
-export const fetchProgressActor = fromPromise<
-  ArkadeUnilateralExitProgress,
-  FetchProgressActorInput
->(async ({ input }) => {
-  const worker = getArkadeWorker()
+function sumSelectedCandidateSats(
+  outpoints: ArkadeVtxoOutpoint[],
+  candidates: ArkadeExitCandidateDto[],
+): number {
+  const selectedKeys = new Set(outpoints.map((outpoint) => `${outpoint.txid}:${outpoint.vout}`))
+  let deductedSats = 0
+  for (const candidate of candidates) {
+    if (selectedKeys.has(`${candidate.txid}:${candidate.vout}`)) {
+      deductedSats += candidate.amountSats
+    }
+  }
+  return deductedSats
+}
+
+async function listOrEmpty<T>(load: () => Promise<T[]>): Promise<T[]> {
+  try {
+    return await load()
+  } catch {
+    return []
+  }
+}
+
+async function loadProgressFromWorker(
+  sortedOutpoints: ArkadeVtxoOutpoint[],
+): Promise<ArkadeUnilateralExitProgress> {
+  const progress = await withEsploraFullScanRetries(() =>
+    getArkadeWorker().getUnilateralExitProgress({
+      vtxoOutpoints: sortedOutpoints,
+    }),
+  )
+  await hydrateVtxoExitChildrenFromWasm()
+  return progress
+}
+
+export async function loadUnilateralExitProgressWithRetries(
+  input: FetchProgressActorInput,
+): Promise<ArkadeUnilateralExitProgress> {
   const sortedOutpoints = sortArkadeVtxoOutpoints(input.outpoints)
-  const progress = await worker.getUnilateralExitProgress({
-    vtxoOutpoints: sortedOutpoints,
-  })
+  const progress = await loadProgressFromWorker(sortedOutpoints)
   if (input.walletScope != null) {
     await writeUnilateralExitProgressQueryCache(input.walletScope, sortedOutpoints, progress)
   }
   return progress
-})
+}
+
+export async function evaluateUnilateralExitJobViabilityWithRetries(
+  input: EvaluateJobViabilityActorInput,
+): Promise<ArkadeUnilateralExitJobViability> {
+  const worker = getArkadeWorker()
+  return withEsploraFullScanRetries(() =>
+    worker.evaluateUnilateralExitJobViability({
+      vtxoOutpoints: sortArkadeVtxoOutpoints(input.outpoints),
+    }),
+  )
+}
+
+export const fetchProgressActor = fromPromise<
+  ArkadeUnilateralExitProgress,
+  FetchProgressActorInput
+>(async ({ input }) => loadUnilateralExitProgressWithRetries(input))
 
 export const evaluateJobViabilityActor = fromPromise<
   ArkadeUnilateralExitJobViability,
   EvaluateJobViabilityActorInput
->(async ({ input }) => {
+>(async ({ input }) => evaluateUnilateralExitJobViabilityWithRetries(input))
+
+export const tagPlanActor = fromPromise<void, TagPlanActorInput>(async ({ input }) => {
+  assertCanRunUnilateralExit(input.walletScope)
+  if (input.outpoints.length === 0) {
+    throw new Error('Select at least one exit-eligible VTXO leaf.')
+  }
+  const sortedOutpoints = sortArkadeVtxoOutpoints(input.outpoints)
   const worker = getArkadeWorker()
-  return worker.evaluateUnilateralExitJobViability({
-    vtxoOutpoints: sortArkadeVtxoOutpoints(input.outpoints),
-  })
+  const existingJob = getPersistedUnilateralExitJob(input.walletScope)
+  const hydrateExistingJob = arkadeVtxoOutpointListsEqual(
+    existingJob.selectedLeafOutpoints,
+    sortedOutpoints,
+  )
+
+  await worker.tagUnilateralExitPlan({ vtxoOutpoints: sortedOutpoints })
+
+  if (!hydrateExistingJob && isArkadeSupportedNetworkMode(input.walletScope.networkMode)) {
+    const candidates = await listOrEmpty(() => worker.listExitCandidates())
+    const deductedSats = sumSelectedCandidateSats(sortedOutpoints, candidates)
+    if (deductedSats > 0) {
+      const { appQueryClient } = await import('@/lib/shared/app-query-client')
+      applyOptimisticExitBalanceDeduction(
+        appQueryClient,
+        input.walletScope.walletId,
+        input.walletScope.networkMode,
+        input.walletScope.arkadeAccountId,
+        deductedSats,
+        'unilateralExitInProgressSats',
+      )
+    }
+  }
+
+  await invalidateUnilateralExitQueries(input.walletScope, sortedOutpoints)
+  await hydrateVtxoExitChildrenFromWasm()
 })
 
 export const proceedStepActor = fromPromise<
@@ -142,9 +229,7 @@ export const proceedStepActor = fromPromise<
     vtxoOutpoints: sortedOutpoints,
     feeRateSatPerVb: input.feeRateSatPerVb,
   })
-  const progress = await getArkadeWorker().getUnilateralExitProgress({
-    vtxoOutpoints: sortedOutpoints,
-  })
+  const progress = await loadProgressFromWorker(sortedOutpoints)
   await invalidateUnilateralExitQueries(input.walletScope, sortedOutpoints, progress)
   return progress
 })
@@ -164,10 +249,7 @@ export const ensureBroadcastActor = fromPromise<
   }
 
   const sortedOutpoints = sortArkadeVtxoOutpoints(input.outpoints)
-  const worker = getArkadeWorker()
-  let progress = await worker.getUnilateralExitProgress({
-    vtxoOutpoints: sortedOutpoints,
-  })
+  let progress = await loadProgressFromWorker(sortedOutpoints)
   const alreadyRelayed = isCurrentStepRelayed(progress)
 
   if (isUnilateralExitBranchComplete(progress) || alreadyRelayed) {
@@ -204,9 +286,7 @@ export const ensureBroadcastActor = fromPromise<
       isPackageNotChildWithUnconfirmedParentsError(error) ||
       isInsufficientConfirmedBumperFundsError(error)
     if (packageNotChild) {
-      const rewound = await worker.getUnilateralExitProgress({
-        vtxoOutpoints: sortedOutpoints,
-      })
+      const rewound = await loadProgressFromWorker(sortedOutpoints)
       await invalidateUnilateralExitQueries(input.walletScope, sortedOutpoints, rewound)
       const wrapped = new Error(
         UNCONFIRMED_PARENT_PACKAGE_RETRY_MESSAGE,
@@ -219,9 +299,7 @@ export const ensureBroadcastActor = fromPromise<
   }
 
   const progressBeforeBroadcast = progress
-  progress = await worker.getUnilateralExitProgress({
-    vtxoOutpoints: sortedOutpoints,
-  })
+  progress = await loadProgressFromWorker(sortedOutpoints)
 
   const visible = broadcastedStepIsVisibleOnNetwork(progressBeforeBroadcast, progress)
   if (!visible) {
@@ -235,14 +313,6 @@ export const ensureBroadcastActor = fromPromise<
 })
 
 const ABORT_VTXO_ID_RESOLVE_TIMEOUT_MS = 3_000
-
-async function listOrEmpty<T>(load: () => Promise<T[]>): Promise<T[]> {
-  try {
-    return await load()
-  } catch {
-    return []
-  }
-}
 
 function withTimeoutFallback<T>(
   promise: Promise<T>,
@@ -282,17 +352,29 @@ export async function resolveAbortVtxoIdsBestEffort(
 export const resolveAbortVtxoIdsActor = fromPromise<
   { vtxoIds: string[] },
   ResolveAbortVtxoIdsActorInput
->(async ({ input }) => ({
-  vtxoIds: await withTimeoutFallback(
-    resolveAbortVtxoIdsBestEffort(input.outpoints),
-    ABORT_VTXO_ID_RESOLVE_TIMEOUT_MS,
-    [],
-  ),
-}))
+>(async ({ input }) => {
+  if (input.outpoints.length > 0) {
+    try {
+      await getArkadeWorker().untagUnilateralExitPlanIfSafe({
+        vtxoOutpoints: sortArkadeVtxoOutpoints(input.outpoints),
+      })
+    } catch {
+      // Abort still clears the frontend job; leftover tags stay spend-locked.
+    }
+  }
+  return {
+    vtxoIds: await withTimeoutFallback(
+      resolveAbortVtxoIdsBestEffort(input.outpoints),
+      ABORT_VTXO_ID_RESOLVE_TIMEOUT_MS,
+      [],
+    ),
+  }
+})
 
 export const unilateralExitMachineActors = {
   fetchProgressActor,
   evaluateJobViabilityActor,
+  tagPlanActor,
   proceedStepActor,
   evaluateAutomationPolicyActor,
   ensureBroadcastActor,

@@ -28,11 +28,14 @@ fn collaborative_exit_estimate_error_fields(
     (error.to_string(), estimate_error_code)
 }
 
-/// Explicit exit amount, or cooperatively spendable offchain balance for a full exit.
-fn resolve_cooperative_exit_amount(amount_sats: Option<u64>, gross_spendable_sats: u64) -> Amount {
+/// Explicit exit amount, or net cooperative offchain spendable for a full exit.
+fn resolve_cooperative_exit_amount(
+    amount_sats: Option<u64>,
+    net_cooperative_spendable_sats: u64,
+) -> Amount {
     amount_sats
         .map(Amount::from_sat)
-        .unwrap_or_else(|| Amount::from_sat(gross_spendable_sats))
+        .unwrap_or_else(|| Amount::from_sat(net_cooperative_spendable_sats))
 }
 
 impl ArkSession {
@@ -67,10 +70,10 @@ impl ArkSession {
             return Ok(waiting);
         }
         let destination = parse_onchain_address(&params.destination_address, self.network())?;
-        let buckets = self.resolve_offchain_balance_buckets().await?;
-        let baseline_offchain_spendable_sats = buckets.gross_spendable_sats();
+        let baseline_offchain_spendable_sats = self.net_cooperative_spendable_sats().await?;
         let exit_amount =
             resolve_cooperative_exit_amount(params.amount_sats, baseline_offchain_spendable_sats);
+        let exclude_vtxos = self.spend_locked_outpoints();
         let mut rng = OsRng;
         let redeem = self
             .with_batch_join(
@@ -79,7 +82,12 @@ impl ArkSession {
                 Some(params.destination_address.clone()),
                 || async {
                     self.client
-                        .collaborative_redeem(&mut rng, destination, exit_amount)
+                        .collaborative_redeem_excluding_vtxos(
+                            &mut rng,
+                            destination,
+                            exit_amount,
+                            &exclude_vtxos,
+                        )
                         .await
                 },
             )
@@ -140,16 +148,15 @@ impl ArkSession {
             }
         };
 
-        let gross_spendable_sats = self
-            .resolve_offchain_balance_buckets()
-            .await?
-            .gross_spendable_sats();
-        let to_amount = resolve_cooperative_exit_amount(amount_sats, gross_spendable_sats);
+        let net_cooperative_spendable_sats = self.net_cooperative_spendable_sats().await?;
+        let to_amount =
+            resolve_cooperative_exit_amount(amount_sats, net_cooperative_spendable_sats);
+        let exclude_vtxos = self.spend_locked_outpoints();
 
         let mut rng = OsRng;
         match self
             .client
-            .estimate_onchain_fees(&mut rng, destination, to_amount)
+            .estimate_onchain_fees_excluding_vtxos(&mut rng, destination, to_amount, &exclude_vtxos)
             .await
         {
             Ok(estimate) => {
@@ -208,7 +215,7 @@ mod collaborative_exit_estimate_tests {
     }
 
     #[test]
-    fn resolve_cooperative_exit_amount_defaults_to_gross_spendable_for_full_exit() {
+    fn resolve_cooperative_exit_amount_defaults_to_net_cooperative_spendable_for_full_exit() {
         assert_eq!(
             resolve_cooperative_exit_amount(None, 42_000).to_sat(),
             42_000

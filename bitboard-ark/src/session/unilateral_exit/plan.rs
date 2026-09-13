@@ -370,7 +370,6 @@ impl ArkSession {
         }
 
         let mut leaves = Vec::new();
-        let mut branch_lists = Vec::new();
         let mut tx_by_id = HashMap::new();
 
         for (leaf_txid, sibling_outpoints) in
@@ -381,7 +380,7 @@ impl ArkSession {
                 .snapshot()
                 .offchain_vtxo_snapshot
                 .ok_or_else(|| ArkWasmError::Snapshot("offchain snapshot missing".into()))?;
-            crate::unilateral_exit_materials::require_unilateral_exit_materials_for_leaf_tx(
+            crate::unilateral_exit_materials::require_unilateral_exit_materials_for_host_tx(
                 &snapshot,
                 &leaf_txid.to_string(),
             )?;
@@ -400,7 +399,6 @@ impl ArkSession {
                         .await?,
                 );
             }
-            branch_lists.push(branch_txids.clone());
             leaves.push(LeafUnilateralContext {
                 leaf_txid,
                 sibling_outpoints,
@@ -411,6 +409,10 @@ impl ArkSession {
             });
         }
 
+        let branch_lists: Vec<Vec<Txid>> = leaves
+            .iter()
+            .map(|leaf| leaf.branch_txids.clone())
+            .collect();
         let ordered_step_txids = merge_exit_branch_txids(&branch_lists, &tx_by_id);
         Ok(UnilateralBatchPlan {
             leaves,
@@ -533,7 +535,7 @@ mod tests {
                 assets: vec![],
                 server_pk_hex: None,
             }],
-            unilateral_exit_materials_by_leaf_tx: std::collections::BTreeMap::new(),
+            unilateral_exit_materials_by_host_tx: std::collections::BTreeMap::new(),
         };
         // Swept records are not exit-eligible; do not invent an ASP fallback.
         assert!(

@@ -13,7 +13,7 @@ mod pending_exit;
 mod receive;
 mod signer_migration;
 mod sync;
-mod unilateral_exit;
+pub(crate) mod unilateral_exit;
 mod vtxo;
 
 use std::cell::Cell;

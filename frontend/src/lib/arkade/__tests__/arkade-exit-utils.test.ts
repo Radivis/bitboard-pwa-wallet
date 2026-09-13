@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
+  ARKADE_TXID_DISPLAY_PREFIX_LENGTH,
+  formatArkadeTxidToastSnippet,
   formatIntentFeePrograms,
   formatMissingBlocktimeCompletionWarning,
   formatMissingBlocktimeCompletionWarningLine,
+  formatUnilateralExitCompleteWaitingBanner,
   formatUnilateralExitTimelock,
   parseCollaborativeExitAmountSats,
   unilateralExitCompleteTimelockMessage,
 } from '@/lib/arkade/arkade-exit-utils'
+import { VTXO_EXIT_PHASE_COPY } from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit-selectors'
 
 describe('formatIntentFeePrograms', () => {
   it('returns none configured when all flags are false', () => {
@@ -65,9 +69,40 @@ describe('unilateral exit timelock display', () => {
   })
 
   it('notes when timelock is already satisfied', () => {
-    expect(unilateralExitCompleteTimelockMessage({ timelockBlocks: 144 }, true)).toContain(
-      'satisfied',
-    )
+    expect(
+      unilateralExitCompleteTimelockMessage({ timelockBlocks: 144 }, true),
+    ).toContain('satisfied')
+  })
+
+  it('formats waiting banner for confirmations vs timelock', () => {
+    expect(
+      formatUnilateralExitCompleteWaitingBanner({
+        waitingCopyKinds: new Set([VTXO_EXIT_PHASE_COPY.waitingForHostTransactionBroadcast]),
+        timelock: { timelockBlocks: 144 },
+        waitingTxidSnippets: ['aaaaaaaa…'],
+      }),
+    ).toContain('host transaction to broadcast')
+    expect(
+      formatUnilateralExitCompleteWaitingBanner({
+        waitingCopyKinds: new Set([VTXO_EXIT_PHASE_COPY.waitingForFirstConfirmation]),
+        timelock: { timelockBlocks: 144 },
+        waitingTxidSnippets: ['aaaaaaaa…'],
+      }),
+    ).toContain('first on-chain confirmation')
+    expect(
+      formatUnilateralExitCompleteWaitingBanner({
+        waitingCopyKinds: new Set([VTXO_EXIT_PHASE_COPY.waitingForSixConfirmations]),
+        timelock: { timelockBlocks: 144 },
+        waitingTxidSnippets: ['aaaaaaaa…'],
+      }),
+    ).toContain('6 on-chain confirmations')
+    expect(
+      formatUnilateralExitCompleteWaitingBanner({
+        waitingCopyKinds: new Set([VTXO_EXIT_PHASE_COPY.waitingForTimelock]),
+        timelock: { timelockBlocks: 144 },
+        waitingTxidSnippets: ['aaaaaaaa…'],
+      }),
+    ).toContain('144 block confirmations')
   })
 })
 
@@ -98,5 +133,14 @@ describe('missing blocktime completion warning', () => {
     expect(
       formatMissingBlocktimeCompletionWarningLine(warning.lines[1]),
     ).toContain('on-chain')
+  })
+})
+
+describe('formatArkadeTxidToastSnippet', () => {
+  it('uses the shared display prefix length', () => {
+    const txid = 'ab'.repeat(32)
+    expect(formatArkadeTxidToastSnippet(txid)).toBe(
+      `${txid.slice(0, ARKADE_TXID_DISPLAY_PREFIX_LENGTH)}…`,
+    )
   })
 })

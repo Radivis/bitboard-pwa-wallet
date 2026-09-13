@@ -3,6 +3,7 @@ import { ensureOnChainBumperFunds } from './arkade-management'
 import { formatUnilateralExitFailure } from './esplora-unilateral-exit-diagnostics'
 import { mineRegtestBlocks } from './arkade-regtest'
 import { confirmStartUnilateralExitIfShown } from './arkade-unilateral-exit-start-confirm'
+import { isUnilateralExitBranchCompleteInPage } from './arkade-unilateral-exit-branch-complete'
 
 /** Inner loop budget; must stay below the Playwright per-test timeout. */
 const AUTOMATIC_UNROLL_DEADLINE_MS = 240_000
@@ -39,10 +40,7 @@ async function failUnilateralExit(page: Page, message: string): Promise<never> {
 }
 
 async function isBranchComplete(page: Page): Promise<boolean> {
-  if (await page.getByTestId('unilateral-exit-step-progress').getByText(/branch complete/i).isVisible()) {
-    return true
-  }
-  return page.getByText('Unilateral exit branch complete.').isVisible()
+  return isUnilateralExitBranchCompleteInPage(page)
 }
 
 async function readStepProgressText(page: Page): Promise<string> {
