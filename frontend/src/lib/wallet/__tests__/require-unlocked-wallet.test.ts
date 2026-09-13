@@ -58,6 +58,7 @@ describe('require-unlocked-wallet', () => {
   })
 
   it('ensureWalletUnlockedForAction throws when password unlock is required', async () => {
+    tryLoadNearZeroSessionIntoMemory.mockResolvedValue(false)
     await expect(ensureWalletUnlockedForAction()).rejects.toBeInstanceOf(
       WalletUnlockRequiredError,
     )
@@ -65,6 +66,19 @@ describe('require-unlocked-wallet', () => {
 
   it('ensureWalletUnlockedForAction restores near-zero session and bootstraps', async () => {
     useNearZeroSecurityStore.setState({ active: true })
+    walletSecretsSessionActive.mockResolvedValue(true)
+    orchestrateBootstrapUnlock.mockImplementation(async () => {
+      useWalletStore.setState({ walletStatus: 'unlocked' })
+    })
+
+    await ensureWalletUnlockedForAction()
+
+    expect(tryLoadNearZeroSessionIntoMemory).toHaveBeenCalledTimes(1)
+    expect(orchestrateBootstrapUnlock).toHaveBeenCalledTimes(1)
+  })
+
+  it('ensureWalletUnlockedForAction restores near-zero from the database when the in-memory flag is stale', async () => {
+    useNearZeroSecurityStore.setState({ active: false })
     walletSecretsSessionActive.mockResolvedValue(true)
     orchestrateBootstrapUnlock.mockImplementation(async () => {
       useWalletStore.setState({ walletStatus: 'unlocked' })

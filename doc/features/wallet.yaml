@@ -195,10 +195,12 @@ feature:
           - address type selector (Taproot / SegWit)
             - click_event:
               - change address derivation type (requires wallet re-creation warning)
-        - Backup section:
+        - Backup section (file: frontend/src/components/wallet/SeedPhraseBackup.tsx on /wallet/management):
           - show seed phrase button
             - click_event:
-              - prompt for Bitboard app password confirmation
+              - decide whether near-zero security is configured from SQLite settings (not only the in-memory store flag)
+              - when near-zero is configured: restore or reuse the secrets session and display the mnemonic — do not prompt for an app password
+              - otherwise: prompt for Bitboard app password confirmation
               - on success: display mnemonic words in a secure modal
           - warning text about seed phrase security
         - Wallet management section:

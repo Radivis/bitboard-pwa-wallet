@@ -1,6 +1,5 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react'
 import { WalletUnlock } from '@/components/WalletUnlock'
-import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
 import {
   ensureWalletUnlockedForAction,
   isWalletReadyForSecretsAccess,
@@ -13,7 +12,6 @@ export function useRequireUnlockedWallet(): {
   runWhenUnlocked: (action: PendingUnlockAction) => void
   unlockDialog: ReactNode
 } {
-  const nearZeroActive = useNearZeroSecurityStore((nearZeroSecurityState) => nearZeroSecurityState.active)
   const [showUnlockDialog, setShowUnlockDialog] = useState(false)
   const pendingActionRef = useRef<PendingUnlockAction | null>(null)
 
@@ -32,24 +30,18 @@ export function useRequireUnlockedWallet(): {
         return
       }
 
-      if (nearZeroActive) {
-        void ensureWalletUnlockedForAction()
-          .then(() => action())
-          .catch((error) => {
-            if (error instanceof WalletUnlockRequiredError) {
-              pendingActionRef.current = action
-              setShowUnlockDialog(true)
-              return
-            }
-            throw error
-          })
-        return
-      }
-
-      pendingActionRef.current = action
-      setShowUnlockDialog(true)
+      void ensureWalletUnlockedForAction()
+        .then(() => action())
+        .catch((error) => {
+          if (error instanceof WalletUnlockRequiredError) {
+            pendingActionRef.current = action
+            setShowUnlockDialog(true)
+            return
+          }
+          throw error
+        })
     },
-    [nearZeroActive],
+    [],
   )
 
   const unlockDialog = showUnlockDialog ? (

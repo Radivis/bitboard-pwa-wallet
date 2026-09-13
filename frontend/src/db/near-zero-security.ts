@@ -7,7 +7,11 @@ import {
   reencryptAllWalletSecretsWithNewPassword,
 } from './wallet-persistence'
 import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
-import { beginWalletSecretsSession } from '@/lib/wallet/wallet-secrets-session'
+import {
+  beginWalletSecretsSession,
+  endWalletSecretsSession,
+  isWalletSecretsSessionActive,
+} from '@/lib/wallet/wallet-secrets-session'
 
 /**
  * Public, fixed passphrase used only to wrap the random session secret in SQLite.
@@ -133,6 +137,13 @@ export async function tryLoadNearZeroSessionIntoMemory(
     return false
   }
 
+  // After first-run opt-in the session is already live. A second begin throws
+  // "already active" and must not clear the in-memory near-zero flag.
+  if (await isWalletSecretsSessionActive()) {
+    useNearZeroSecurityStore.getState().setNearZeroSecurityActive(true)
+    return true
+  }
+
   try {
     const blob = deserializeEncryptedBlobFromSettings(wrappedRow.value)
     const decryptedSessionSecret = await decryptDataWithPassword(
@@ -198,6 +209,9 @@ export async function upgradeNearZeroToUserPassword(params: {
       oldPassword: nearZeroSessionSecret,
       newPassword,
     })
+  }
+  if (await isWalletSecretsSessionActive()) {
+    await endWalletSecretsSession()
   }
   await beginWalletSecretsSession(newPassword)
   await clearNearZeroSecuritySettings(walletDb)

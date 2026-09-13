@@ -1,5 +1,4 @@
 import { getDatabase, tryLoadNearZeroSessionIntoMemory } from '@/db'
-import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { orchestrateBootstrapUnlock } from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
@@ -17,10 +16,10 @@ export function isWalletReadyForSecretsAccess(): boolean {
   return walletIsUnlockedOrSyncing(useWalletStore.getState().walletStatus)
 }
 
-async function ensureNearZeroWalletUnlockedForAction(): Promise<void> {
+async function restoreNearZeroSessionAndBootstrapIfNeeded(): Promise<void> {
   const restored = await tryLoadNearZeroSessionIntoMemory(getDatabase())
   if (!restored || !(await isWalletSecretsSessionActive())) {
-    throw new WalletUnlockRequiredError('Near-zero session could not be restored')
+    throw new WalletUnlockRequiredError()
   }
 
   const {
@@ -54,19 +53,15 @@ async function ensureNearZeroWalletUnlockedForAction(): Promise<void> {
 
 /**
  * Ensures the wallet is unlocked before imperative work on non-wallet routes.
- * Throws {@link WalletUnlockRequiredError} when the UI must prompt for a password.
+ * Tries near-zero restore from SQLite when locked; throws
+ * {@link WalletUnlockRequiredError} when the UI must prompt for a password.
  */
 export async function ensureWalletUnlockedForAction(): Promise<void> {
   if (isWalletReadyForSecretsAccess()) {
     return
   }
 
-  if (useNearZeroSecurityStore.getState().active) {
-    await ensureNearZeroWalletUnlockedForAction()
-    return
-  }
-
-  throw new WalletUnlockRequiredError()
+  await restoreNearZeroSessionAndBootstrapIfNeeded()
 }
 
 /** Runs `action` after {@link ensureWalletUnlockedForAction} succeeds. */

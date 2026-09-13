@@ -7,7 +7,6 @@ import { decryptDataWithPassword } from '../encryption'
 import { saveWalletSecrets, loadWalletSecrets } from '../wallet-persistence'
 import { TEST_MNEMONIC_12 } from '@/test-utils/test-providers'
 import {
-  beginWalletSecretsSession,
   endWalletSecretsSession,
   isWalletSecretsSessionActive,
 } from '@/lib/wallet/wallet-secrets-session'
@@ -95,6 +94,17 @@ describe('near-zero security', () => {
     expect(await isWalletSecretsSessionActive()).toBe(false)
   })
 
+  it('tryLoadNearZeroSessionIntoMemory keeps mode active when a secrets session is already live', async () => {
+    await generateAndPersistNearZeroSession(walletDb)
+    expect(await isWalletSecretsSessionActive()).toBe(true)
+    useNearZeroSecurityStore.setState({ active: false })
+
+    const ok = await tryLoadNearZeroSessionIntoMemory(walletDb)
+    expect(ok).toBe(true)
+    expect(await isWalletSecretsSessionActive()).toBe(true)
+    expect(useNearZeroSecurityStore.getState().active).toBe(true)
+  })
+
   it('upgradeNearZeroToUserPassword with no wallets sets user password and clears near-zero settings', async () => {
     await generateAndPersistNearZeroSession(walletDb)
     await upgradeNearZeroToUserPassword({
@@ -135,7 +145,6 @@ describe('near-zero security', () => {
       newPassword: 'new-user-password-xx',
     })
 
-    await beginWalletSecretsSession('new-user-password-xx')
     const loaded = await loadWalletSecrets(walletDb, walletId)
     expect(loaded.mnemonic).toBe(TEST_MNEMONIC_12)
   })
