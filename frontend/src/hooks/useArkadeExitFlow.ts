@@ -127,10 +127,8 @@ export function useArkadeExitFlow() {
 
   useEffect(() => {
     if (!completeUnilateralOpen) {
-      setSelectedInProgressOutpoints((previous) =>
-        previous.length === 0 ? previous : [],
-      )
-      setCompleteDestination((previous) => (previous === '' ? previous : ''))
+      setSelectedInProgressOutpoints([])
+      setCompleteDestination('')
       resetCompletionFeeSelection()
       return
     }

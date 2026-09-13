@@ -114,7 +114,7 @@ export async function evaluateUnilateralExitAutomationPolicy(
   }
 }
 
-function selectedLeafOptimisticSats(
+function sumSelectedCandidateSats(
   outpoints: ArkadeVtxoOutpoint[],
   candidates: ArkadeExitCandidateDto[],
 ): number {
@@ -197,7 +197,7 @@ export const tagPlanActor = fromPromise<void, TagPlanActorInput>(async ({ input 
 
   if (!hydrateExistingJob && isArkadeSupportedNetworkMode(input.walletScope.networkMode)) {
     const candidates = await listOrEmpty(() => worker.listExitCandidates())
-    const deductedSats = selectedLeafOptimisticSats(sortedOutpoints, candidates)
+    const deductedSats = sumSelectedCandidateSats(sortedOutpoints, candidates)
     if (deductedSats > 0) {
       const { appQueryClient } = await import('@/lib/shared/app-query-client')
       applyOptimisticExitBalanceDeduction(

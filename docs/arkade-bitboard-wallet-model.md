@@ -97,7 +97,7 @@ Operator access from the browser uses **REST** (`ark-rest` + grpc API shim), not
 
 ## Exiting to on-chain
 
-Unilateral-exit protocol, gotchas, XState machine, and WASM proceed step: [unilateral-exit.md](unilateral-exit.md). Persistence (materials, watches, records, job/prefs/failure): [persistence/unilateral-exit.md](persistence/unilateral-exit.md).
+Unilateral-exit protocol, gotchas, XState machine, and WASM proceed step: [unilateral-exit.md](unilateral-exit.md). Persistence (materials, records, job/prefs/failure): [persistence/unilateral-exit.md](persistence/unilateral-exit.md).
 
 Management → Arkade offers two paths:
 
@@ -130,7 +130,7 @@ Optimistic UI (`arkade-exit-balance-optimistic.ts`) at START/tag bumps `unilater
 
 1. Job start → `tag_unilateral_exit_plan` upserts records at `tagged`; spend-lock applies immediately (send / collab / renew / delegate refuse those outpoints). Recover and signer-migrate are not spend-locked; they still skip in-progress pipeline outpoints so they do not race an active unroll.
 2. Proceed registers a host-tx observation → records on that host advance to `host_broadcast_attempted`.
-3. Unified B advances `host_relayed` / `host_confirmed` / `unrolled` (`is_unrolled` at 6 confs). Gross spendable drops **before** operator sync realigns the snapshot.
+3. Esplora probing advances `host_relayed` / `host_confirmed` / `unrolled` (`is_unrolled` at 6 confs). Gross spendable drops **before** operator sync realigns the snapshot.
 4. `exit_balance_components` keeps the pipeline line from records and subtracts from net spendable **only** the unilateral-exit-in-progress amounts still in gross. After step 3, do not subtract the line again.
 5. Complete success → `exited`; claimable unrolled rows can complete without in-progress membership (`ARK-EXIT-31`).
 

@@ -6,7 +6,7 @@ Related:
 
 - Persistence (WASM envelope + Zustand job/prefs/failure): [persistence/unilateral-exit.md](persistence/unilateral-exit.md)
 - Balance buckets and exit-line timing: [arkade-bitboard-wallet-model.md](arkade-bitboard-wallet-model.md)
-- Historical design notes (shipped): [unilateral-exit-vtxo-lifecycle-refactor.md](future/unilateral-exit-vtxo-lifecycle-refactor.md)
+- Historical design notes (shipped): [unilateral-exit-vtxo-lifecycle-refactor.md](archive/unilateral-exit-vtxo-lifecycle-refactor.md)
 - Agent ownership rules: [`.cursor/rules/unilateral-exit-xstate.mdc`](../.cursor/rules/unilateral-exit-xstate.mdc)
 - Historic Mutinynet false-confirmation investigation (resolved; methodology is not current): [archive/unilateral-exit-false-confirmation-rca.md](archive/unilateral-exit-false-confirmation-rca.md)
 - Test contracts: `ARK-EXIT-*` in [doc/features/arkade.yaml](../doc/features/arkade.yaml)
@@ -320,7 +320,7 @@ Redundant mempool rejects (`-25` / `-26`) are ignored when the parent is already
 | Machine | `unilateral-exit.machine.ts` (states/transitions), `unilateral-exit-machine-setup.ts` (guards/actions/actors), `unilateral-exit.actors.ts` |
 | Persistence (frontend) | `unilateral-exit-lifecycle-persistence.ts`, `unilateral-exit-automation-prefs-persistence.ts`, `unilateral-exit-failure-persistence.ts`, `unilateral-exit-frontend-sdk-persistence.ts` |
 | Control page / DAG | `UnilateralExitControlPage.tsx`, `UnilateralExitTreeGraph.tsx`, `unilateral-exit-topology.ts` |
-| WASM plan / proceed / progress / host-tx B | `bitboard-ark/src/session/unilateral_exit/{plan,proceed,progress,host_tx_finality}.rs` |
+| WASM plan / proceed / progress / probe | `bitboard-ark/src/session/unilateral_exit/{plan,proceed,progress,host_tx_finality}.rs` |
 | Topology merge | `bitboard-ark/src/session/unilateral_exit/topology.rs` |
 | Viability | `bitboard-ark/src/session/unilateral_exit/viability.rs` |
 | Materials | `bitboard-ark/src/unilateral_exit_materials.rs` |
