@@ -151,37 +151,44 @@ fn pipeline_in_progress_row(
     }
 }
 
+struct InProgressRowLookups<'a> {
+    session: &'a ArkSession,
+    operator_by_outpoint: &'a HashMap<UnilateralExitOutpointKey, &'a VirtualTxOutPoint>,
+    snapshot_records: &'a [VirtualTxOutPointRecord],
+    operator_script_map: &'a HashMap<ScriptBuf, Vtxo>,
+    offchain_script_map: &'a HashMap<ScriptBuf, Vtxo>,
+    dust: bitcoin::Amount,
+}
+
 async fn overlay_in_progress_row_for_record(
-    session: &ArkSession,
     records: &mut BTreeMap<String, VtxoExitRecord>,
     key: &str,
     record: &VtxoExitRecord,
-    txid: String,
-    vout: u32,
-    outpoint: UnilateralExitOutpointKey,
-    operator_by_outpoint: &HashMap<UnilateralExitOutpointKey, &VirtualTxOutPoint>,
-    snapshot_records: &[VirtualTxOutPointRecord],
-    operator_script_map: &HashMap<ScriptBuf, Vtxo>,
-    offchain_script_map: &HashMap<ScriptBuf, Vtxo>,
-    dust: bitcoin::Amount,
-) -> ArkResult<(UnilateralExitInProgressDto, bool)> {
+    lookups: &InProgressRowLookups<'_>,
+) -> ArkResult<Option<(UnilateralExitInProgressDto, bool)>> {
+    let Some((txid, vout)) = parse_vtxo_exit_record_key(key) else {
+        return Ok(None);
+    };
+    let Some(outpoint) = exit_outpoint_key_from_str(&txid, vout) else {
+        return Ok(None);
+    };
     let phase = record.phase;
-    if let Some(virtual_tx_outpoint) = operator_by_outpoint.get(&outpoint) {
-        let candidate = map_exit_candidate(virtual_tx_outpoint, dust);
+    if let Some(virtual_tx_outpoint) = lookups.operator_by_outpoint.get(&outpoint) {
+        let candidate = map_exit_candidate(virtual_tx_outpoint, lookups.dust);
         let claimability = overlay_complete_ready_if_claimable(
             records,
             key,
             phase,
             candidate.can_complete || phase == VtxoExitPhase::Unrolled,
             resolve_vtxo_completion_claimable(
-                session,
+                lookups.session,
                 virtual_tx_outpoint,
-                operator_script_map,
-                offchain_script_map,
+                lookups.operator_script_map,
+                lookups.offchain_script_map,
             ),
         )
         .await?;
-        return Ok((
+        return Ok(Some((
             pipeline_in_progress_row(
                 candidate.txid,
                 candidate.vout,
@@ -192,10 +199,11 @@ async fn overlay_in_progress_row_for_record(
                 phase,
             ),
             claimability.stamped_complete_ready,
-        ));
+        )));
     }
 
-    if let Some(snapshot_record) = snapshot_records
+    if let Some(snapshot_record) = lookups
+        .snapshot_records
         .iter()
         .find(|snapshot_record| snapshot_record.txid == txid && snapshot_record.vout == vout)
     {
@@ -212,10 +220,10 @@ async fn overlay_in_progress_row_for_record(
                 match virtual_tx_outpoint_from_record(snapshot_record) {
                     Ok(virtual_tx_outpoint) => {
                         resolve_vtxo_completion_claimable(
-                            session,
+                            lookups.session,
                             &virtual_tx_outpoint,
-                            operator_script_map,
-                            offchain_script_map,
+                            lookups.operator_script_map,
+                            lookups.offchain_script_map,
                         )
                         .await
                     }
@@ -224,7 +232,7 @@ async fn overlay_in_progress_row_for_record(
             },
         )
         .await?;
-        return Ok((
+        return Ok(Some((
             pipeline_in_progress_row(
                 txid,
                 vout,
@@ -235,10 +243,10 @@ async fn overlay_in_progress_row_for_record(
                 phase,
             ),
             claimability.stamped_complete_ready,
-        ));
+        )));
     }
 
-    Ok((
+    Ok(Some((
         pipeline_in_progress_row(
             txid,
             vout,
@@ -249,7 +257,7 @@ async fn overlay_in_progress_row_for_record(
             phase,
         ),
         false,
-    ))
+    )))
 }
 
 impl ArkSession {
@@ -299,6 +307,14 @@ impl ArkSession {
             .map(|snapshot| snapshot.virtual_tx_outpoints.as_slice())
             .unwrap_or(&[]);
 
+        let lookups = InProgressRowLookups {
+            session: self,
+            operator_by_outpoint: &operator_by_outpoint,
+            snapshot_records,
+            operator_script_map: &script_pubkey_to_vtxo,
+            offchain_script_map: &offchain_script_map,
+            dust,
+        };
         let mut rows = Vec::with_capacity(in_progress.len());
         let mut stamped_complete_ready = false;
         let pipeline_keys: Vec<String> = records
@@ -310,27 +326,11 @@ impl ArkSession {
             let Some(record) = records.get(&key).cloned() else {
                 continue;
             };
-            let Some((txid, vout)) = parse_vtxo_exit_record_key(&key) else {
+            let Some((row, stamped)) =
+                overlay_in_progress_row_for_record(&mut records, &key, &record, &lookups).await?
+            else {
                 continue;
             };
-            let Some(outpoint) = exit_outpoint_key_from_str(&txid, vout) else {
-                continue;
-            };
-            let (row, stamped) = overlay_in_progress_row_for_record(
-                self,
-                &mut records,
-                &key,
-                &record,
-                txid,
-                vout,
-                outpoint,
-                &operator_by_outpoint,
-                snapshot_records,
-                &script_pubkey_to_vtxo,
-                &offchain_script_map,
-                dust,
-            )
-            .await?;
             stamped_complete_ready |= stamped;
             rows.push(row);
         }

@@ -41,6 +41,7 @@ fn snapshot_row_is_spent(snapshot: Option<&OffchainVtxoSnapshot>, txid: &str, vo
 ///
 /// - Snapshot `is_unrolled && !is_spent` → `unrolled` (claimable after upgrade).
 /// - Unilateral pending deductions that are not already spent → `tagged` (spend-lock).
+///
 /// Existing keys are left unchanged (snapshot first, so pending cannot overwrite `unrolled`).
 pub fn heal_vtxo_exit_records_from_legacy(
     snapshot: Option<&OffchainVtxoSnapshot>,

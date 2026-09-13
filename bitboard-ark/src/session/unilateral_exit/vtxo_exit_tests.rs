@@ -46,9 +46,7 @@ fn heal_vtxo_exit_records_from_pending_and_exiting() {
     heal_vtxo_exit_records_from_legacy(Some(&snapshot), &pending, &mut records, 10);
     assert_eq!(record_phase(&records, &tree, 0), VtxoExitPhase::Unrolled);
     assert!(
-        records
-            .get(&vtxo_exit_record_key(&tree.to_string(), 1))
-            .is_none(),
+        !records.contains_key(&vtxo_exit_record_key(&tree.to_string(), 1)),
         "outpoints without snapshot unroll or pending must not be healed"
     );
     assert_eq!(record_phase(&records, &leaf, 0), VtxoExitPhase::Tagged);
