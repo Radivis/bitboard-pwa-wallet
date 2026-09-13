@@ -179,6 +179,8 @@ feature:
       - description: "Wallet configuration and management"
       - path: /settings
       - file: frontend/src/routes/settings.tsx
+      - path: /settings?section=data-backups
+        opens: Settings → Security, scrolled to Data Backups
       - visible_elements:
         - Network section:
           - network selector buttons (lab, regtest, signet, testnet, mainnet)
