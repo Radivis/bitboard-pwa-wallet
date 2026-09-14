@@ -1,3 +1,5 @@
+import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
+
 const AUTO_LOCK_TIMEOUT_MS = 15 * 60 * 1000
 
 /** Legacy compatibility shim; intentionally does nothing. */
@@ -13,6 +15,12 @@ export function startAutoLockTimer(onLock: () => void | Promise<void>) {
 }
 
 export function resetAutoLockTimer(onLock: () => void | Promise<void>) {
+  // Near-zero restore re-opens the session without a user password, so idle
+  // auto-lock only adds churn. Manual lock remains available.
+  if (useNearZeroSecurityStore.getState().active) {
+    clearAutoLockTimer()
+    return
+  }
   lastAutoLockHandler = onLock
   if (autoLockTimer) {
     clearTimeout(autoLockTimer)

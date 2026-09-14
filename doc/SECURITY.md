@@ -47,7 +47,7 @@ For **reporting vulnerabilities** in Bitboard Wallet, see the repository root [S
 **Clearing and lock**
 
 - **Session:** `sessionStore.clear()` sets `password: null`. It does **not** overwrite the previous string in memory (see limitations below).
-- **Lock:** From Settings, “Lock Wallet” calls `lockWallet()`, terminates the crypto worker, resets the secrets channel, clears the session, and clears the auto-lock timer. No password or mnemonic is stored in URL, `localStorage`, or `sessionStorage`.
+- **Lock:** From Settings, “Lock Wallet” calls `lockWallet()`, terminates the crypto worker, resets the secrets channel, clears the session, and clears the auto-lock timer. Idle auto-lock is not started while near-zero security mode is active (manual lock still works); it is armed after the user sets a real password. No password or mnemonic is stored in URL, `localStorage`, or `sessionStorage`.
 
 ### 2.2 Storage and persistence
 
