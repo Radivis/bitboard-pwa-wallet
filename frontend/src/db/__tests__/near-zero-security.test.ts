@@ -26,6 +26,7 @@ import {
   tryLoadNearZeroSessionIntoMemory,
   clearNearZeroSecuritySettings,
   upgradeNearZeroToUserPassword,
+  syncNearZeroSecurityActiveFlagFromDb,
   serializeEncryptedBlobForSettings,
   deserializeEncryptedBlobFromSettings,
 } from '../near-zero-security'
@@ -147,6 +148,25 @@ describe('near-zero security', () => {
 
     const loaded = await loadWalletSecrets(walletDb, walletId)
     expect(loaded.mnemonic).toBe(TEST_MNEMONIC_12)
+  })
+
+  it('syncNearZeroSecurityActiveFlagFromDb sets the store from settings without starting a session', async () => {
+    await generateAndPersistNearZeroSession(walletDb)
+    await endWalletSecretsSession()
+    useNearZeroSecurityStore.setState({ active: false })
+
+    await syncNearZeroSecurityActiveFlagFromDb(walletDb)
+
+    expect(useNearZeroSecurityStore.getState().active).toBe(true)
+    expect(await isWalletSecretsSessionActive()).toBe(false)
+  })
+
+  it('syncNearZeroSecurityActiveFlagFromDb clears the store when not configured', async () => {
+    useNearZeroSecurityStore.setState({ active: true })
+
+    await syncNearZeroSecurityActiveFlagFromDb(walletDb)
+
+    expect(useNearZeroSecurityStore.getState().active).toBe(false)
   })
 
   it('clearNearZeroSecuritySettings removes keys', async () => {

@@ -220,7 +220,8 @@ feature:
               - on submit: decrypt all `wallet_secrets` with current password, re-encrypt with new password, persist all rows in a single database transaction, then update session password
               - UI: spinner with “Encrypting secrets with new password…” while running; success screen with checkmark and Done
         - Near-zero banner (below app header, not on /setup): red alert when near-zero mode is active; Set up password now opens upgrade modal; small “Set up a password later” dismisses until the browser tab session ends (sessionStorage)
-        - Idle auto-lock timer is not started while near-zero security mode is active (file: frontend/src/stores/sessionStore.ts; lock still available manually); after Set a real password succeeds, auto-lock is armed (file: frontend/src/components/UpgradeFromNearZeroPasswordModal.tsx)
+        - Idle auto-lock is suppressed while near-zero security is configured (file: frontend/src/stores/sessionStore.ts): the timer is not started, an already-armed timer is cleared when near-zero becomes active, and a due timer does not lock. Manual lock still redirects to Library. After Set a real password succeeds, auto-lock is armed (file: frontend/src/components/UpgradeFromNearZeroPasswordModal.tsx)
+        - On database ready, sync the near-zero active flag from SQLite on every route without restoring the secrets session on non-wallet routes (file: frontend/src/components/DatabaseReadyGate.tsx)
       - requirements:
         - Wallet must exist for backup and lock sections to appear
         - Network and address type settings are available even without a wallet

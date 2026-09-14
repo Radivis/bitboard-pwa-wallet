@@ -22,10 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vercel Ark operator proxy streams Server-Sent Events (batch events, script subscriptions) instead of buffering long-lived responses; `maxDuration` raised to 300s
 - Renamed "pending_recovery" to "pending_recovery_due_to_expired_signer" for maximum clarity
 - Treating Arkade operator info changes like ToS changes that need to be explicity accepted by user
+- Near-zero-security mode now suppresses the inactivity-related auto-lock timer
 
 ### Fixed
 - Expired VTXOs undergoing unilateral exit are now classified as unspendable instead of recoverable,
 - Ark operator and preview-proxy failures now surface HTTP status and response body snippets in WASM error messages
+- Session-related error blocking wallet creation on first setup is gone
 
 ### Security
 

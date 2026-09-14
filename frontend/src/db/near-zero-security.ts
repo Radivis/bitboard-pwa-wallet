@@ -188,6 +188,14 @@ export async function isNearZeroSecurityConfiguredInDb(
   return activeRow?.value === '1'
 }
 
+/** Syncs the in-memory near-zero flag from SQLite without restoring the secrets session. */
+export async function syncNearZeroSecurityActiveFlagFromDb(
+  walletDb: Kysely<Database>,
+): Promise<void> {
+  const configured = await isNearZeroSecurityConfiguredInDb(walletDb)
+  useNearZeroSecurityStore.getState().setNearZeroSecurityActive(configured)
+}
+
 /**
  * Re-encrypts all wallet secrets with the user-chosen password (when present), updates session,
  * and removes near-zero settings. Safe when there are no wallets yet (only session + flags change).

@@ -76,6 +76,7 @@ export {
   tryLoadNearZeroSessionIntoMemory,
   clearNearZeroSecuritySettings,
   isNearZeroSecurityConfiguredInDb,
+  syncNearZeroSecurityActiveFlagFromDb,
   upgradeNearZeroToUserPassword,
 } from './near-zero-security'
 export type {

@@ -211,4 +211,16 @@ describe('auto-lock security purge', () => {
     await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
     expect(onLock).toHaveBeenCalledTimes(1)
   })
+
+  it('armed auto-lock is disarmed when near-zero security becomes active', async () => {
+    const onLock = vi.fn()
+    startAutoLockTimer(onLock)
+
+    useNearZeroSecurityStore.setState({ active: true })
+
+    await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
+
+    expect(onLock).not.toHaveBeenCalled()
+    expect(useWalletStore.getState().walletStatus).toBe('unlocked')
+  })
 })

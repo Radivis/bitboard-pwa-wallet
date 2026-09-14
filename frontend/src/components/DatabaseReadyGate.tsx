@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useState } from 'react'
 import { useLocation } from '@tanstack/react-router'
-import { getInitialDatabaseHealth } from '@/db'
+import { getInitialDatabaseHealth, getDatabase, syncNearZeroSecurityActiveFlagFromDb } from '@/db'
 import { appQueryClient } from '@/lib/shared/app-query-client'
 import { hydrateNearZeroSessionForWalletRoute } from '@/lib/wallet/near-zero-wallet-hydration'
 import { WALLET_MIGRATION_FAILURE_OPFS_FILENAME } from '@/db/migrations/wallet-migration-failure-report'
@@ -10,9 +10,30 @@ import { MigrationFailureReportModal } from '@/components/MigrationFailureReport
 import { pathnameIsWalletRoute } from '@/lib/shared/pathname-is-wallet-route'
 import { assessOpfsLikelyUnsupported } from '@/db/opfs/opfs-capability'
 import { useSecureStorageAvailabilityStore } from '@/stores/secureStorageAvailabilityStore'
+import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
+import { clearAutoLockTimer } from '@/stores/sessionStore'
 
 interface DatabaseReadyGateProps {
   children: ReactNode
+}
+
+async function syncNearZeroSecurityAfterDatabaseReady(
+  pathOnColdStart: string,
+): Promise<void> {
+  try {
+    await syncNearZeroSecurityActiveFlagFromDb(getDatabase())
+  } catch (syncError) {
+    console.error('Near-zero security flag sync failed:', syncError)
+  }
+  if (useNearZeroSecurityStore.getState().active) {
+    clearAutoLockTimer()
+  }
+  if (!pathnameIsWalletRoute(pathOnColdStart)) return
+  try {
+    await hydrateNearZeroSessionForWalletRoute(appQueryClient)
+  } catch (hydrateError) {
+    console.error('Near-zero session restore failed:', hydrateError)
+  }
 }
 
 /**
@@ -48,12 +69,8 @@ export function DatabaseReadyGate({ children }: DatabaseReadyGateProps) {
           setMigrationFailureReportText(reportText)
           setMigrationFailureReportOpen(true)
         }
-      } else if (pathnameIsWalletRoute(pathOnColdStart)) {
-        try {
-          await hydrateNearZeroSessionForWalletRoute(appQueryClient)
-        } catch (err) {
-          console.error('Near-zero session restore failed:', err)
-        }
+      } else {
+        await syncNearZeroSecurityAfterDatabaseReady(pathOnColdStart)
       }
 
       if (!cancelled) setIsReady(true)

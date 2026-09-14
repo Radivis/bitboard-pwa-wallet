@@ -10,6 +10,10 @@ export function clearLegacySessionState(): void {
 let autoLockTimer: ReturnType<typeof setTimeout> | null = null
 let lastAutoLockHandler: (() => void | Promise<void>) | null = null
 
+function idleAutoLockIsSuppressedByNearZero(): boolean {
+  return useNearZeroSecurityStore.getState().active
+}
+
 export function startAutoLockTimer(onLock: () => void | Promise<void>) {
   resetAutoLockTimer(onLock)
 }
@@ -17,7 +21,7 @@ export function startAutoLockTimer(onLock: () => void | Promise<void>) {
 export function resetAutoLockTimer(onLock: () => void | Promise<void>) {
   // Near-zero restore re-opens the session without a user password, so idle
   // auto-lock only adds churn. Manual lock remains available.
-  if (useNearZeroSecurityStore.getState().active) {
+  if (idleAutoLockIsSuppressedByNearZero()) {
     clearAutoLockTimer()
     return
   }
@@ -26,6 +30,10 @@ export function resetAutoLockTimer(onLock: () => void | Promise<void>) {
     clearTimeout(autoLockTimer)
   }
   autoLockTimer = setTimeout(() => {
+    if (idleAutoLockIsSuppressedByNearZero()) {
+      clearAutoLockTimer()
+      return
+    }
     void (async () => {
       try {
         await Promise.resolve(onLock())
@@ -51,3 +59,9 @@ export function clearAutoLockTimer() {
     autoLockTimer = null
   }
 }
+
+useNearZeroSecurityStore.subscribe((nearZeroSecurityState) => {
+  if (nearZeroSecurityState.active) {
+    clearAutoLockTimer()
+  }
+})
