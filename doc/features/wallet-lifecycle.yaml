@@ -7,6 +7,7 @@ feature:
     - LockLifecycle gates all rails; no load/sync/save when phase is no-lock or locking
     - Per-rail load, sync, and save proceed independently of the current URL; navigation must not cancel in-flight lifecycle work
     - Wallet hydration (near-zero session restore and bootstrap unlock load) may start only when the user visits a wallet route (/wallet/*); non-wallet routes must not start hydration
+    - Visiting /wallet while locked in near-zero mode must restore the session, refresh hydration queries, and finish bootstrap; the Unlocking wallet spinner must not remain after WASM load succeeds
     - Features on Settings, Lab, or other non-wallet routes that need an unlocked wallet must use requireUnlockedWallet at action time, not pathname-based hydration
     - Post-lock redirect from wallet routes to Library is retained for privacy
     - Sync and save orchestrators must not read pathname or route stores
@@ -214,6 +215,15 @@ feature:
       - id: LIFE-ROUTE-03
         description: Post-lock redirect from wallet routes to Library remains for privacy
         implemented_by: frontend/src/lib/shared/app-router.ts
+      - id: LIFE-ROUTE-04
+        description: Near-zero visit to a locked /wallet route restores the session, refreshes hydration queries, and finishes bootstrap instead of remaining on Unlocking wallet
+        implemented_by:
+          - frontend/src/lib/wallet/near-zero-wallet-hydration.ts
+          - frontend/src/lib/wallet/__tests__/near-zero-wallet-hydration.test.ts
+          - frontend/src/components/WalletUnlockOrNearZeroLoading.tsx
+          - frontend/src/components/__tests__/WalletUnlockOrNearZeroLoading.near-zero.test.tsx
+          - frontend/src/hooks/useActiveWalletDescriptorWalletBootstrap.ts
+          - frontend/src/hooks/__tests__/useActiveWalletDescriptorWalletBootstrap.test.tsx
     invariants:
       - id: LIFE-INV-01
         description: not-configured applies to all three lifecycles on a rail simultaneously

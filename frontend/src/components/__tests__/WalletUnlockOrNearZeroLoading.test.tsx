@@ -31,6 +31,10 @@ vi.mock('@/db', () => ({
   useWallets: () => ({ data: [{ walletId: 1, name: 'Test Wallet', createdAt: '' }] }),
 }))
 
+vi.mock('@/lib/wallet/near-zero-wallet-hydration', () => ({
+  hydrateNearZeroSessionForWalletRoute: vi.fn().mockResolvedValue(false),
+}))
+
 function WalletDashboardGateHarness() {
   return <WalletRouteSecretsGate />
 }

@@ -1,6 +1,8 @@
 import { type ReactNode, useEffect, useState } from 'react'
 import { useLocation } from '@tanstack/react-router'
-import { getDatabase, getInitialDatabaseHealth, tryLoadNearZeroSessionIntoMemory } from '@/db'
+import { getInitialDatabaseHealth } from '@/db'
+import { appQueryClient } from '@/lib/shared/app-query-client'
+import { hydrateNearZeroSessionForWalletRoute } from '@/lib/wallet/near-zero-wallet-hydration'
 import { WALLET_MIGRATION_FAILURE_OPFS_FILENAME } from '@/db/migrations/wallet-migration-failure-report'
 import { readTextFileFromOpfsRootIfExists } from '@/db/opfs/opfs-root-file'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
@@ -48,7 +50,7 @@ export function DatabaseReadyGate({ children }: DatabaseReadyGateProps) {
         }
       } else if (pathnameIsWalletRoute(pathOnColdStart)) {
         try {
-          await tryLoadNearZeroSessionIntoMemory(getDatabase())
+          await hydrateNearZeroSessionForWalletRoute(appQueryClient)
         } catch (err) {
           console.error('Near-zero session restore failed:', err)
         }

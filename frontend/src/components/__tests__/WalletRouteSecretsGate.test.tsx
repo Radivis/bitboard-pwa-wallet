@@ -18,6 +18,10 @@ vi.mock('@/components/WalletUnlock', () => ({
   WalletUnlock: () => <div data-testid="wallet-unlock">Unlock</div>,
 }))
 
+vi.mock('@/lib/wallet/near-zero-wallet-hydration', () => ({
+  hydrateNearZeroSessionForWalletRoute: vi.fn().mockResolvedValue(false),
+}))
+
 describe('WalletRouteSecretsGate', () => {
   beforeEach(() => {
     resetLockLifecycleStateForTests()

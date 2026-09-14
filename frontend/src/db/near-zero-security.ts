@@ -139,7 +139,15 @@ export async function tryLoadNearZeroSessionIntoMemory(
 
   // After first-run opt-in the session is already live. A second begin throws
   // "already active" and must not clear the in-memory near-zero flag.
-  if (await isWalletSecretsSessionActive()) {
+  // After lock the encryption worker may still be restarting; treat probe errors
+  // as "not active" so unwrap + begin can run.
+  let secretsSessionAlreadyActive = false
+  try {
+    secretsSessionAlreadyActive = await isWalletSecretsSessionActive()
+  } catch {
+    secretsSessionAlreadyActive = false
+  }
+  if (secretsSessionAlreadyActive) {
     useNearZeroSecurityStore.getState().setNearZeroSecurityActive(true)
     return true
   }

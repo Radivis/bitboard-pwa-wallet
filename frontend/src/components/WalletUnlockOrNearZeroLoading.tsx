@@ -1,3 +1,5 @@
+import { useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { WalletUnlock } from '@/components/WalletUnlock'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { Button } from '@/components/ui/button'
@@ -5,6 +7,7 @@ import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { useActiveWalletLoadQuery } from '@/hooks/useActiveWalletLoadQuery'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
+import { hydrateNearZeroSessionForWalletRoute } from '@/lib/wallet/near-zero-wallet-hydration'
 
 type WalletUnlockOrNearZeroLoadingProps = {
   walletName?: string
@@ -21,11 +24,19 @@ type WalletUnlockOrNearZeroLoadingProps = {
 export function WalletUnlockOrNearZeroLoading(
   props: WalletUnlockOrNearZeroLoadingProps,
 ) {
+  const queryClient = useQueryClient()
   const nearZeroActive = useNearZeroSecurityStore((nearZeroSecurityState) => nearZeroSecurityState.active)
   const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const { isError, isFetching, isPending, refetch } = useActiveWalletLoadQuery()
 
   const walletStillGated = !walletIsUnlockedOrSyncing(walletStatus)
+
+  useEffect(() => {
+    if (!walletStillGated) return
+    void hydrateNearZeroSessionForWalletRoute(queryClient).catch((hydrateError) => {
+      console.error('Near-zero wallet hydration failed:', hydrateError)
+    })
+  }, [walletStillGated, queryClient])
 
   /**
    * Near-zero mode uses an auto-restored session, not a user-typed password. Never show

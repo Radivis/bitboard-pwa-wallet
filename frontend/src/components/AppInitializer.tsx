@@ -2,12 +2,9 @@ import { type ReactNode, useEffect, useLayoutEffect, useRef } from 'react'
 import { useNavigate, useLocation } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { useWalletStore } from '@/stores/walletStore'
-import {
-  useWallets,
-  getDatabase,
-  tryLoadNearZeroSessionIntoMemory,
-} from '@/db'
+import { useWallets } from '@/db'
 import { appQueryClient } from '@/lib/shared/app-query-client'
+import { hydrateNearZeroSessionForWalletRoute } from '@/lib/wallet/near-zero-wallet-hydration'
 import { prefetchLabChainState } from '@/hooks/useLabChainStateQuery'
 import { ActiveWalletBootstrap } from '@/components/ActiveWalletBootstrap'
 import { pathnameIsWalletRoute } from '@/lib/shared/pathname-is-wallet-route'
@@ -132,7 +129,7 @@ export function AppInitializer({ children }: AppInitializerProps) {
     if (!enteredWalletRoute) return
     if (walletIsUnlockedOrSyncing(walletStatus)) return
     if (!useSecureStorageAvailabilityStore.getState().isAvailable) return
-    void tryLoadNearZeroSessionIntoMemory(getDatabase())
+    void hydrateNearZeroSessionForWalletRoute(appQueryClient)
   }, [walletStatus, location.pathname])
 
   return (
