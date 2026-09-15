@@ -2,7 +2,10 @@ import { getDatabase, tryLoadNearZeroSessionIntoMemory } from '@/db'
 import { useWalletStore } from '@/stores/walletStore'
 import { orchestrateBootstrapUnlock } from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
-import { isWalletSecretsSessionActive } from '@/lib/wallet/wallet-secrets-session'
+import {
+  endWalletSecretsSession,
+  isWalletSecretsSessionActive,
+} from '@/lib/wallet/wallet-secrets-session'
 import { reportWalletSyncError } from '@/lib/wallet/wallet-sync-error-toast'
 
 export class WalletUnlockRequiredError extends Error {
@@ -14,6 +17,14 @@ export class WalletUnlockRequiredError extends Error {
 
 export function isWalletReadyForSecretsAccess(): boolean {
   return walletIsUnlockedOrSyncing(useWalletStore.getState().walletStatus)
+}
+
+async function endSecretsSessionAfterFailedAutomaticUnlock(logContext: string): Promise<void> {
+  try {
+    await endWalletSecretsSession()
+  } catch (endSessionError) {
+    console.error(logContext, endSessionError)
+  }
 }
 
 async function restoreNearZeroSessionAndBootstrapIfNeeded(): Promise<void> {
@@ -35,18 +46,29 @@ async function restoreNearZeroSessionAndBootstrapIfNeeded(): Promise<void> {
   }
 
   if (!walletIsUnlockedOrSyncing(walletStatus)) {
-    await orchestrateBootstrapUnlock({
-      walletId: activeWalletId,
-      networkMode,
-      addressType,
-      accountId,
-      onSyncError: (err) => {
-        reportWalletSyncError('require-unlocked-wallet', err)
-      },
-    })
+    try {
+      await orchestrateBootstrapUnlock({
+        walletId: activeWalletId,
+        networkMode,
+        addressType,
+        accountId,
+        onSyncError: (err) => {
+          reportWalletSyncError('require-unlocked-wallet', err)
+        },
+      })
+    } catch (bootstrapError) {
+      console.error('Automatic wallet bootstrap failed:', bootstrapError)
+      await endSecretsSessionAfterFailedAutomaticUnlock(
+        'Failed to end secrets session after bootstrap unlock failure:',
+      )
+      throw new WalletUnlockRequiredError()
+    }
   }
 
   if (!walletIsUnlockedOrSyncing(useWalletStore.getState().walletStatus)) {
+    await endSecretsSessionAfterFailedAutomaticUnlock(
+      'Failed to end secrets session after bootstrap unlock left the wallet gated:',
+    )
     throw new WalletUnlockRequiredError('Wallet could not be unlocked automatically')
   }
 }

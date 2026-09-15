@@ -201,7 +201,7 @@ feature:
           - show seed phrase button
             - click_event:
               - decide whether near-zero security is configured from SQLite settings (not only the in-memory store flag)
-              - when near-zero is configured: restore or reuse the secrets session and display the mnemonic — do not prompt for an app password
+              - when near-zero is configured: restore or reuse the secrets session and display the mnemonic — do not prompt for an app password — only when that live session is the near-zero wrap secret (leftover near-zero settings plus a user-password session still prompt)
               - otherwise: prompt for Bitboard app password confirmation
               - on success: display mnemonic words in a secure modal
           - warning text about seed phrase security
@@ -223,6 +223,9 @@ feature:
         - Idle auto-lock is suppressed while near-zero security is configured (file: frontend/src/stores/sessionStore.ts): the timer is not started, an already-armed timer is cleared when near-zero becomes active, and a due timer does not lock. Manual lock still redirects to Library. After Set a real password succeeds, auto-lock is armed (file: frontend/src/components/UpgradeFromNearZeroPasswordModal.tsx)
         - On database ready, sync the near-zero active flag from SQLite on every route without restoring the secrets session (file: frontend/src/components/DatabaseReadyGate.tsx)
         - Near-zero secrets-session restore for a locked wallet route is owned by WalletUnlockOrNearZeroLoading (file: frontend/src/components/WalletUnlockOrNearZeroLoading.tsx)
+        - When the unwrapped near-zero secret cannot decrypt existing wallet_secrets (for example a partial password upgrade), end the secrets session, clear the in-memory near-zero flag, and show the app-password unlock dialog (file: frontend/src/db/near-zero-security.ts)
+        - When leftover near-zero settings remain but the live secrets session is a user-chosen password (wrap cannot decrypt wallet_secrets), do not treat the session as near-zero: keep the live session, clear the in-memory near-zero flag, and still prompt for the app password on seed reveal
+        - When near-zero unwrap itself fails, keep the in-memory near-zero flag so idle auto-lock stays off; show Try again plus recovery copy to clear this site's browser data (which deletes local wallets); do not offer in-app factory wipe from that screen
       - requirements:
         - Wallet must exist for backup and lock sections to appear
         - Network and address type settings are available even without a wallet

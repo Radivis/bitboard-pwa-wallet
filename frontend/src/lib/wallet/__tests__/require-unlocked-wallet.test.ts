@@ -11,6 +11,7 @@ import {
 const tryLoadNearZeroSessionIntoMemory = vi.fn()
 const orchestrateBootstrapUnlock = vi.fn()
 const walletSecretsSessionActive = vi.fn()
+const endWalletSecretsSession = vi.fn()
 
 vi.mock('@/db', () => ({
   getDatabase: () => ({}),
@@ -20,6 +21,7 @@ vi.mock('@/db', () => ({
 
 vi.mock('@/lib/wallet/wallet-secrets-session', () => ({
   isWalletSecretsSessionActive: () => walletSecretsSessionActive(),
+  endWalletSecretsSession: (...args: unknown[]) => endWalletSecretsSession(...args),
 }))
 
 vi.mock('@/lib/wallet/lifecycle/lock-lifecycle-orchestrator', () => ({
@@ -44,6 +46,7 @@ describe('require-unlocked-wallet', () => {
     tryLoadNearZeroSessionIntoMemory.mockResolvedValue(true)
     orchestrateBootstrapUnlock.mockResolvedValue(undefined)
     walletSecretsSessionActive.mockResolvedValue(false)
+    endWalletSecretsSession.mockResolvedValue(undefined)
   })
 
   it('isWalletReadyForSecretsAccess is true when unlocked', () => {
@@ -88,6 +91,16 @@ describe('require-unlocked-wallet', () => {
 
     expect(tryLoadNearZeroSessionIntoMemory).toHaveBeenCalledTimes(1)
     expect(orchestrateBootstrapUnlock).toHaveBeenCalledTimes(1)
+  })
+
+  it('ensureWalletUnlockedForAction ends the secrets session when bootstrap throws after restore', async () => {
+    walletSecretsSessionActive.mockResolvedValue(true)
+    orchestrateBootstrapUnlock.mockRejectedValue(new Error('descriptor wallet decrypt failed'))
+
+    await expect(ensureWalletUnlockedForAction()).rejects.toBeInstanceOf(
+      WalletUnlockRequiredError,
+    )
+    expect(endWalletSecretsSession).toHaveBeenCalledTimes(1)
   })
 
   it('runWhenWalletUnlocked runs action when already unlocked', async () => {

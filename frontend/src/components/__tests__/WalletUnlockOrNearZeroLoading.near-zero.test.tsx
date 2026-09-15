@@ -89,4 +89,19 @@ describe('WalletUnlockOrNearZeroLoading near-zero hydration', () => {
     })
     expect(screen.queryByText('Unlocking wallet…')).not.toBeInTheDocument()
   })
+
+  it('shows clear-site-data recovery when near-zero hydrate does not restore a session', async () => {
+    hydrateNearZeroSessionForWalletRoute.mockResolvedValue(false)
+    walletSecretsSessionState.active = false
+
+    renderWithProviders(<WalletRouteSecretsGate />)
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/clear this site's data in your browser settings/i),
+      ).toBeInTheDocument()
+    })
+    expect(screen.queryByRole('dialog', { name: 'Unlock Wallet' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Unlocking wallet…')).not.toBeInTheDocument()
+  })
 })

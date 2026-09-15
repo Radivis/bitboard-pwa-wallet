@@ -22,12 +22,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vercel Ark operator proxy streams Server-Sent Events (batch events, script subscriptions) instead of buffering long-lived responses; `maxDuration` raised to 300s
 - Renamed "pending_recovery" to "pending_recovery_due_to_expired_signer" for maximum clarity
 - Treating Arkade operator info changes like ToS changes that need to be explicity accepted by user
-- Near-zero-security mode now suppresses the inactivity-related auto-lock timer
+- Near-zero-security mode suppresses idle auto-lock, and does not ask for an app password when showing the seed phrase
 
 ### Fixed
 - Expired VTXOs undergoing unilateral exit are now classified as unspendable instead of recoverable,
 - Ark operator and preview-proxy failures now surface HTTP status and response body snippets in WASM error messages
-- Session-related error blocking wallet creation on first setup is gone
+- First-run wallet create/import no longer hits a blocking secrets-session error; going back to welcome without a wallet reverts the app-password / near-zero choice
+- Factory reset no longer waits for an Arkade persistence flush making them more reliable with an active Arkade session
+- Wallet backup import retries OPFS file removal after a successful manifest verify so a locked WAL/SHM file is less likely to fail the replace
+- `throw redirect()` is no longer used in routing (it could blank the shell); `/lab` opens the blocks view and Settings data-backups uses in-tree navigation
 
 ### Security
 

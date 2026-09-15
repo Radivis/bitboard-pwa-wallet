@@ -1,8 +1,9 @@
 import type { Kysely } from 'kysely'
 import type { Database } from './schema'
 import type { EncryptedBlob } from '@/lib/shared/encrypted-blob-types'
-import { encryptDataWithPassword, decryptDataWithPassword } from './encryption'
+import { encryptDataWithPassword, decryptDataWithPassword, decryptData } from './encryption'
 import {
+  getWalletSecretsEncrypted,
   listWalletIdsWithSecrets,
   reencryptAllWalletSecretsWithNewPassword,
 } from './wallet-persistence'
@@ -10,6 +11,7 @@ import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
 import {
   beginWalletSecretsSession,
   endWalletSecretsSession,
+  endWalletSecretsSessionReliably,
   isWalletSecretsSessionActive,
 } from '@/lib/wallet/wallet-secrets-session'
 
@@ -108,6 +110,79 @@ export async function generateAndPersistNearZeroSession(
   useNearZeroSecurityStore.getState().setNearZeroSecurityActive(true)
 }
 
+async function firstWalletSecretsPayloadBlob(
+  walletDb: Kysely<Database>,
+): Promise<EncryptedBlob | null> {
+  const walletIds = await listWalletIdsWithSecrets(walletDb)
+  const firstWalletId = walletIds[0]
+  if (firstWalletId == null) return null
+  const encrypted = await getWalletSecretsEncrypted(walletDb, firstWalletId)
+  return {
+    ciphertext: encrypted.payload.ciphertext,
+    iv: encrypted.payload.iv,
+    salt: encrypted.payload.salt,
+    kdfPhc: encrypted.payload.kdfPhc,
+  }
+}
+
+async function firstWalletSecretsPayloadDecryptsWith(
+  walletDb: Kysely<Database>,
+  decryptPayload: (payloadBlob: EncryptedBlob) => Promise<string>,
+): Promise<boolean> {
+  const payloadBlob = await firstWalletSecretsPayloadBlob(walletDb)
+  if (payloadBlob == null) return true
+  try {
+    await decryptPayload(payloadBlob)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function passwordDecryptsFirstWalletSecretsPayload(
+  walletDb: Kysely<Database>,
+  password: string,
+): Promise<boolean> {
+  return firstWalletSecretsPayloadDecryptsWith(walletDb, (payloadBlob) =>
+    decryptDataWithPassword(password, payloadBlob),
+  )
+}
+
+async function activeSessionDecryptsFirstWalletSecretsPayload(
+  walletDb: Kysely<Database>,
+): Promise<boolean> {
+  return firstWalletSecretsPayloadDecryptsWith(walletDb, decryptData)
+}
+
+async function wrappedSecretOpensExistingWalletSecrets(
+  walletDb: Kysely<Database>,
+  wrappedSettingsJson: string,
+): Promise<boolean> {
+  try {
+    const blob = deserializeEncryptedBlobFromSettings(wrappedSettingsJson)
+    const nearZeroSessionSecret = await decryptDataWithPassword(
+      NEAR_ZERO_WRAPPER_PASSWORD,
+      blob,
+    )
+    return passwordDecryptsFirstWalletSecretsPayload(walletDb, nearZeroSessionSecret)
+  } catch {
+    return false
+  }
+}
+
+async function endSecretsSessionAfterNearZeroMismatch(): Promise<void> {
+  try {
+    if (await isWalletSecretsSessionActive()) {
+      await endWalletSecretsSessionReliably()
+    }
+  } catch (endSessionError) {
+    console.error(
+      'Failed to end secrets session after near-zero wrap/wallet mismatch:',
+      endSessionError,
+    )
+  }
+}
+
 /**
  * If near-zero mode is stored in the DB, unwraps the session secret and puts it in the session store.
  * @returns true if a session password was loaded from near-zero settings
@@ -147,9 +222,22 @@ export async function tryLoadNearZeroSessionIntoMemory(
   } catch {
     secretsSessionAlreadyActive = false
   }
+
+  let endedSessionBecauseWalletSecretsMismatch = false
   if (secretsSessionAlreadyActive) {
-    useNearZeroSecurityStore.getState().setNearZeroSecurityActive(true)
-    return true
+    if (await activeSessionDecryptsFirstWalletSecretsPayload(walletDb)) {
+      // Reuse the live session only when it is the near-zero wrap secret.
+      // A user-password session that still opens wallets while leftover
+      // near-zero rows exist must not skip the seed-phrase password prompt.
+      if (await wrappedSecretOpensExistingWalletSecrets(walletDb, wrappedRow.value)) {
+        useNearZeroSecurityStore.getState().setNearZeroSecurityActive(true)
+        return true
+      }
+      useNearZeroSecurityStore.getState().setNearZeroSecurityActive(false)
+      return false
+    }
+    await endSecretsSessionAfterNearZeroMismatch()
+    endedSessionBecauseWalletSecretsMismatch = true
   }
 
   try {
@@ -158,6 +246,11 @@ export async function tryLoadNearZeroSessionIntoMemory(
       NEAR_ZERO_WRAPPER_PASSWORD,
       blob,
     )
+    if (!(await passwordDecryptsFirstWalletSecretsPayload(walletDb, decryptedSessionSecret))) {
+      await endSecretsSessionAfterNearZeroMismatch()
+      useNearZeroSecurityStore.getState().setNearZeroSecurityActive(false)
+      return false
+    }
     await beginWalletSecretsSession(decryptedSessionSecret)
     useNearZeroSecurityStore.getState().setNearZeroSecurityActive(true)
     return true
@@ -165,7 +258,9 @@ export async function tryLoadNearZeroSessionIntoMemory(
     // Settings still say near-zero is on. Clearing the flag would re-arm idle auto-lock
     // and show the password dialog until the next successful restore.
     console.error('Near-zero session restore failed:', restoreError)
-    useNearZeroSecurityStore.getState().setNearZeroSecurityActive(true)
+    useNearZeroSecurityStore.getState().setNearZeroSecurityActive(
+      !endedSessionBecauseWalletSecretsMismatch,
+    )
     return false
   }
 }

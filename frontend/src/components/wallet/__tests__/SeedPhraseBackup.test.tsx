@@ -77,6 +77,23 @@ describe('SeedPhraseBackup', () => {
     expect(dbMocks.loadWalletSecrets).not.toHaveBeenCalled()
   })
 
+  it('still prompts for a password when tryLoad returns false even if the in-memory near-zero flag is on', async () => {
+    useNearZeroSecurityStore.setState({ active: true })
+    dbMocks.tryLoadNearZeroSessionIntoMemory.mockResolvedValue(false)
+    const user = userEvent.setup()
+    renderWithProviders(<SeedPhraseBackup />)
+
+    await user.click(screen.getByRole('button', { name: 'Show Seed Phrase' }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: 'Enter Bitboard app password' }),
+      ).toBeInTheDocument()
+    })
+    expect(screen.queryByText('Your Seed Phrase')).not.toBeInTheDocument()
+    expect(dbMocks.loadWalletSecrets).not.toHaveBeenCalled()
+  })
+
   it('infomode copy does not assume an app password when near-zero is active', async () => {
     useNearZeroSecurityStore.setState({ active: true })
     useInfomodeStore.setState({ isActive: true })
