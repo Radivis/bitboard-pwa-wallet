@@ -161,8 +161,11 @@ export async function tryLoadNearZeroSessionIntoMemory(
     await beginWalletSecretsSession(decryptedSessionSecret)
     useNearZeroSecurityStore.getState().setNearZeroSecurityActive(true)
     return true
-  } catch {
-    useNearZeroSecurityStore.getState().setNearZeroSecurityActive(false)
+  } catch (restoreError) {
+    // Settings still say near-zero is on. Clearing the flag would re-arm idle auto-lock
+    // and show the password dialog until the next successful restore.
+    console.error('Near-zero session restore failed:', restoreError)
+    useNearZeroSecurityStore.getState().setNearZeroSecurityActive(true)
     return false
   }
 }

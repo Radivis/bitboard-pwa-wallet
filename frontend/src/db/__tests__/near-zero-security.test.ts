@@ -3,6 +3,7 @@ import type { Kysely } from 'kysely'
 import type { Database } from '../schema'
 import { createTestDatabase } from '../test-helpers'
 import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
+import { clearAutoLockTimer, startAutoLockTimer } from '@/stores/sessionStore'
 import { decryptDataWithPassword } from '../encryption'
 import { saveWalletSecrets, loadWalletSecrets } from '../wallet-persistence'
 import { TEST_MNEMONIC_12 } from '@/test-utils/test-providers'
@@ -93,6 +94,44 @@ describe('near-zero security', () => {
     const ok = await tryLoadNearZeroSessionIntoMemory(walletDb)
     expect(ok).toBe(false)
     expect(await isWalletSecretsSessionActive()).toBe(false)
+    expect(useNearZeroSecurityStore.getState().active).toBe(false)
+  })
+
+  it('tryLoadNearZeroSessionIntoMemory keeps the in-memory flag when restore fails but settings are configured', async () => {
+    await generateAndPersistNearZeroSession(walletDb)
+    await endWalletSecretsSession()
+    await walletDb
+      .updateTable('settings')
+      .set({ value: 'not-a-valid-wrapped-blob' })
+      .where('key', '=', NEAR_ZERO_SETTINGS_KEY_WRAPPED)
+      .execute()
+
+    const restored = await tryLoadNearZeroSessionIntoMemory(walletDb)
+
+    expect(restored).toBe(false)
+    expect(useNearZeroSecurityStore.getState().active).toBe(true)
+  })
+
+  it('failed near-zero restore does not arm idle auto-lock', async () => {
+    await generateAndPersistNearZeroSession(walletDb)
+    await endWalletSecretsSession()
+    await walletDb
+      .updateTable('settings')
+      .set({ value: 'not-a-valid-wrapped-blob' })
+      .where('key', '=', NEAR_ZERO_SETTINGS_KEY_WRAPPED)
+      .execute()
+    await tryLoadNearZeroSessionIntoMemory(walletDb)
+
+    vi.useFakeTimers()
+    try {
+      const onLock = vi.fn()
+      startAutoLockTimer(onLock)
+      await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
+      expect(onLock).not.toHaveBeenCalled()
+    } finally {
+      clearAutoLockTimer()
+      vi.useRealTimers()
+    }
   })
 
   it('tryLoadNearZeroSessionIntoMemory keeps mode active when a secrets session is already live', async () => {

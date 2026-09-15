@@ -21,8 +21,8 @@ export function blockWalletDatabaseAccessForTeardown(): void {
   walletDatabaseAccessBlockedForTeardown = true
 }
 
-/** @internal Vitest only — clears module teardown guard between tests. */
-export function resetWalletDatabaseAccessTeardownGuardForTests(): void {
+/** Clears the hard-block so {@link getDatabase} / {@link ensureMigrated} may open SQLite again. */
+export function resetWalletDatabaseAccessTeardownGuard(): void {
   walletDatabaseAccessBlockedForTeardown = false
 }
 

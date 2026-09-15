@@ -33,6 +33,8 @@ export function WalletUnlockOrNearZeroLoading(
 
   useEffect(() => {
     if (!walletStillGated) return
+    // SQLite is the source of truth. A stale in-memory flag must not skip restore
+    // or leave idle auto-lock armed in near-zero mode.
     void hydrateNearZeroSessionForWalletRoute(queryClient).catch((hydrateError) => {
       console.error('Near-zero wallet hydration failed:', hydrateError)
     })

@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { useLocation } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
 
 type RouterSafeErrorBoundaryProps = {
@@ -58,4 +59,23 @@ export class RouterSafeErrorBoundary extends Component<
       </div>
     )
   }
+}
+
+type RouterOutletErrorBoundaryProps = {
+  children: ReactNode
+}
+
+/**
+ * Remounts {@link RouterSafeErrorBoundary} when the path changes so a thrown
+ * child cannot trap later routes behind “Try again”.
+ */
+export function RouterOutletErrorBoundary({
+  children,
+}: RouterOutletErrorBoundaryProps) {
+  const { pathname } = useLocation()
+  return (
+    <RouterSafeErrorBoundary key={pathname}>
+      {children}
+    </RouterSafeErrorBoundary>
+  )
 }

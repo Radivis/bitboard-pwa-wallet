@@ -3,11 +3,11 @@ import {
   blockWalletDatabaseAccessForTeardown,
   getDatabase,
   ensureMigrated,
-  resetWalletDatabaseAccessTeardownGuardForTests,
+  resetWalletDatabaseAccessTeardownGuard,
 } from './database'
 import {
   blockLabDatabaseAccessForTeardown,
-  resetLabDatabaseAccessTeardownGuardForTests,
+  resetLabDatabaseAccessTeardownGuard,
 } from './lab-database'
 
 /** When true, {@link sqliteStorage} must not touch SQLite (factory reset is closing the DB). */
@@ -38,13 +38,8 @@ export function blockSqliteStorageForTeardown(): void {
 /** Clears persist and hard-block teardown guards. Safe only when destroy has not completed. */
 export function resetSqliteStorageTeardownGuard(): void {
   sqliteStorageTeardownBlocked = false
-  resetWalletDatabaseAccessTeardownGuardForTests()
-  resetLabDatabaseAccessTeardownGuardForTests()
-}
-
-/** @internal Vitest only — clears all teardown guards set by {@link blockSqliteStorageForTeardown}. */
-export function resetSqliteStorageTeardownGuardForTests(): void {
-  resetSqliteStorageTeardownGuard()
+  resetWalletDatabaseAccessTeardownGuard()
+  resetLabDatabaseAccessTeardownGuard()
 }
 
 export const sqliteStorage: StateStorage = {

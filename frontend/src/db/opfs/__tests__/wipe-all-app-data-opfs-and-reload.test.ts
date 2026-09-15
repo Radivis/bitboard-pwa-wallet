@@ -86,7 +86,7 @@ vi.mock('sonner', () => ({
 }))
 
 import { getDatabase } from '@/db/database'
-import { resetSqliteStorageTeardownGuardForTests } from '@/db/storage-adapter'
+import { resetSqliteStorageTeardownGuard } from '@/db/storage-adapter'
 import { wipeAllAppDataOpfsAndReload } from '@/db/opfs/wipe-all-app-data-opfs-and-reload'
 
 async function runWipeWithFakeTimers(): Promise<void> {
@@ -113,11 +113,11 @@ describe('wipeAllAppDataOpfsAndReload', () => {
     toastSuccessMock.mockReset()
     persistSoftBlockMock.mockReset()
     hardBlockMock.mockReset()
-    resetSqliteStorageTeardownGuardForTests()
+    resetSqliteStorageTeardownGuard()
   })
 
   afterEach(() => {
-    resetSqliteStorageTeardownGuardForTests()
+    resetSqliteStorageTeardownGuard()
     vi.useRealTimers()
     vi.unstubAllGlobals()
   })

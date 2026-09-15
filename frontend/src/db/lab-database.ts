@@ -17,8 +17,8 @@ export function blockLabDatabaseAccessForTeardown(): void {
   labDatabaseAccessBlockedForTeardown = true
 }
 
-/** @internal Vitest only — clears module teardown guard between tests. */
-export function resetLabDatabaseAccessTeardownGuardForTests(): void {
+/** Clears the hard-block so lab database accessors may open SQLite again. */
+export function resetLabDatabaseAccessTeardownGuard(): void {
   labDatabaseAccessBlockedForTeardown = false
 }
 

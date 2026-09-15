@@ -1,13 +1,9 @@
 import { type ReactNode, useEffect, useState } from 'react'
-import { useLocation } from '@tanstack/react-router'
 import { getInitialDatabaseHealth, getDatabase, syncNearZeroSecurityActiveFlagFromDb } from '@/db'
-import { appQueryClient } from '@/lib/shared/app-query-client'
-import { hydrateNearZeroSessionForWalletRoute } from '@/lib/wallet/near-zero-wallet-hydration'
 import { WALLET_MIGRATION_FAILURE_OPFS_FILENAME } from '@/db/migrations/wallet-migration-failure-report'
 import { readTextFileFromOpfsRootIfExists } from '@/db/opfs/opfs-root-file'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { MigrationFailureReportModal } from '@/components/MigrationFailureReportModal'
-import { pathnameIsWalletRoute } from '@/lib/shared/pathname-is-wallet-route'
 import { assessOpfsLikelyUnsupported } from '@/db/opfs/opfs-capability'
 import { useSecureStorageAvailabilityStore } from '@/stores/secureStorageAvailabilityStore'
 import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
@@ -17,9 +13,7 @@ interface DatabaseReadyGateProps {
   children: ReactNode
 }
 
-async function syncNearZeroSecurityAfterDatabaseReady(
-  pathOnColdStart: string,
-): Promise<void> {
+async function syncNearZeroSecurityAfterDatabaseReady(): Promise<void> {
   try {
     await syncNearZeroSecurityActiveFlagFromDb(getDatabase())
   } catch (syncError) {
@@ -27,12 +21,6 @@ async function syncNearZeroSecurityAfterDatabaseReady(
   }
   if (useNearZeroSecurityStore.getState().active) {
     clearAutoLockTimer()
-  }
-  if (!pathnameIsWalletRoute(pathOnColdStart)) return
-  try {
-    await hydrateNearZeroSessionForWalletRoute(appQueryClient)
-  } catch (hydrateError) {
-    console.error('Near-zero session restore failed:', hydrateError)
   }
 }
 
@@ -43,13 +31,11 @@ async function syncNearZeroSecurityAfterDatabaseReady(
  * so subsequent store hydration and queries succeed.
  */
 export function DatabaseReadyGate({ children }: DatabaseReadyGateProps) {
-  const location = useLocation()
   const [isReady, setIsReady] = useState(false)
   const [migrationFailureReportOpen, setMigrationFailureReportOpen] = useState(false)
   const [migrationFailureReportText, setMigrationFailureReportText] = useState<string | null>(null)
 
   useEffect(() => {
-    const pathOnColdStart = location.pathname
     let cancelled = false
 
     void (async () => {
@@ -70,7 +56,7 @@ export function DatabaseReadyGate({ children }: DatabaseReadyGateProps) {
           setMigrationFailureReportOpen(true)
         }
       } else {
-        await syncNearZeroSecurityAfterDatabaseReady(pathOnColdStart)
+        await syncNearZeroSecurityAfterDatabaseReady()
       }
 
       if (!cancelled) setIsReady(true)

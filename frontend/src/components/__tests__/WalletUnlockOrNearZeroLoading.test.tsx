@@ -31,8 +31,13 @@ vi.mock('@/db', () => ({
   useWallets: () => ({ data: [{ walletId: 1, name: 'Test Wallet', createdAt: '' }] }),
 }))
 
+const hydrateNearZeroSessionForWalletRoute = vi.hoisted(() =>
+  vi.fn().mockResolvedValue(false),
+)
+
 vi.mock('@/lib/wallet/near-zero-wallet-hydration', () => ({
-  hydrateNearZeroSessionForWalletRoute: vi.fn().mockResolvedValue(false),
+  hydrateNearZeroSessionForWalletRoute: (...args: unknown[]) =>
+    hydrateNearZeroSessionForWalletRoute(...args),
 }))
 
 function WalletDashboardGateHarness() {
@@ -54,6 +59,13 @@ describe('WalletRouteSecretsGate unlock flow', () => {
     orchestrateManualUnlock.mockImplementation(async () => {
       useWalletStore.setState({ walletStatus: 'unlocked' })
     })
+  })
+
+  it('probes SQLite while gated even when the in-memory near-zero flag is off', () => {
+    renderWithProviders(<WalletDashboardGateHarness />)
+
+    expect(screen.getByRole('dialog', { name: 'Unlock Wallet' })).toBeInTheDocument()
+    expect(hydrateNearZeroSessionForWalletRoute).toHaveBeenCalled()
   })
 
   it('dismisses unlock dialog after successful password unlock', async () => {

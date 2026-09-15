@@ -207,7 +207,7 @@ feature:
           - frontend/src/lib/shared/pathname-is-wallet-route.ts
           - frontend/src/hooks/useActiveWalletLoadQuery.ts
           - frontend/src/components/AppInitializer.tsx
-          - frontend/src/components/DatabaseReadyGate.tsx
+          - frontend/src/components/WalletUnlockOrNearZeroLoading.tsx
       - id: LIFE-ROUTE-02
         description: requireUnlockedWallet gates actions that need WASM/secrets on non-wallet routes; does not hydrate on route entry
         implemented_by:
@@ -217,7 +217,7 @@ feature:
         description: Post-lock redirect from wallet routes to Library remains for privacy
         implemented_by: frontend/src/lib/shared/app-router.ts
       - id: LIFE-ROUTE-04
-        description: Near-zero visit to a locked /wallet route restores the session, refreshes hydration queries, and finishes bootstrap instead of remaining on Unlocking wallet
+        description: Near-zero visit to a locked /wallet route restores the session from SQLite even if the in-memory flag is stale, refreshes hydration queries, and finishes bootstrap instead of remaining on Unlocking wallet; a failed restore must not clear the in-memory near-zero flag or re-arm idle auto-lock
         implemented_by:
           - frontend/src/lib/wallet/near-zero-wallet-hydration.ts
           - frontend/src/lib/wallet/__tests__/near-zero-wallet-hydration.test.ts

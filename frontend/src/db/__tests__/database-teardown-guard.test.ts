@@ -9,13 +9,19 @@ import {
   blockSqliteStorageForTeardown,
   blockSqliteStoragePersistForTeardown,
   blockWalletAndLabDatabaseAccessForTeardown,
-  resetSqliteStorageTeardownGuardForTests,
+  resetSqliteStorageTeardownGuard,
   sqliteStorage,
 } from '@/db/storage-adapter'
 
+const storageAdapterSourceByPath = import.meta.glob('../storage-adapter.ts', {
+  query: '?raw',
+  eager: true,
+  import: 'default',
+}) as Record<string, string>
+
 describe('wallet database teardown guard', () => {
   afterEach(async () => {
-    resetSqliteStorageTeardownGuardForTests()
+    resetSqliteStorageTeardownGuard()
     await destroyDatabase().catch(() => undefined)
   })
 
@@ -42,6 +48,28 @@ describe('wallet database teardown guard', () => {
     blockWalletAndLabDatabaseAccessForTeardown()
     expect(() => getDatabase()).toThrow(/blocked during teardown/i)
     await expect(ensureMigrated()).rejects.toThrow(/blocked during teardown/i)
+  })
+
+  it('resetSqliteStorageTeardownGuard unblocks getDatabase after hard-block', () => {
+    blockWalletAndLabDatabaseAccessForTeardown()
+    expect(() => getDatabase()).toThrow(/blocked during teardown/i)
+    resetSqliteStorageTeardownGuard()
+    expect(() => getDatabase()).not.toThrow()
+  })
+
+  it('production teardown reset uses un-suffixed wallet and lab guard helpers', () => {
+    const storageAdapterSource = Object.values(storageAdapterSourceByPath)[0]
+    expect(storageAdapterSource).toContain('resetWalletDatabaseAccessTeardownGuard()')
+    expect(storageAdapterSource).toContain('resetLabDatabaseAccessTeardownGuard()')
+    expect(storageAdapterSource).not.toMatch(
+      /resetWalletDatabaseAccessTeardownGuardForTests\s*\(/,
+    )
+    expect(storageAdapterSource).not.toMatch(
+      /resetLabDatabaseAccessTeardownGuardForTests\s*\(/,
+    )
+    expect(storageAdapterSource).not.toMatch(
+      /resetSqliteStorageTeardownGuardForTests/,
+    )
   })
 
   it('isWalletDatabaseTeardownBlockedError matches the teardown message', () => {
