@@ -2,13 +2,18 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Eye, EyeOff } from 'lucide-react'
 import { useWalletStore } from '@/stores/walletStore'
+import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
 import {
   getDatabase,
   ensureMigrated,
   clearWalletNoMnemonicBackupFlag,
   useWalletNoMnemonicBackupFlag,
+  tryLoadNearZeroSessionIntoMemory,
 } from '@/db'
-import { loadWalletSecretsWithPassword } from '@/db/wallet-persistence'
+import {
+  loadWalletSecrets,
+  loadWalletSecretsWithPassword,
+} from '@/db/wallet-persistence'
 import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet/wallet-query-cache-sync'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { AppModal } from '@/components/AppModal'
@@ -20,9 +25,18 @@ import { cn } from '@/lib/shared/utils'
 import { DialogDescription } from '@/components/ui/dialog'
 import { MnemonicGrid } from '@/components/MnemonicGrid'
 
+const SEED_PHRASE_BACKUP_INFO_TEXT_WITH_APP_PASSWORD =
+  'This section lets you reveal your recovery words again after typing your Bitboard app password. Use it only in a private place—anyone who sees the words can control your funds. It is for checking a paper backup or writing the phrase down if you have not already.'
+
+const SEED_PHRASE_BACKUP_INFO_TEXT_NEAR_ZERO =
+  'This section lets you reveal your recovery words. In near-zero security mode you are not asked for a Bitboard app password. Use it only in a private place—anyone who sees the words can control your funds. It is for checking a paper backup or writing the phrase down if you have not already.'
+
 export function SeedPhraseBackup() {
   const queryClient = useQueryClient()
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+  const nearZeroActive = useNearZeroSecurityStore(
+    (nearZeroSecurityState) => nearZeroSecurityState.active,
+  )
   const { data: noMnemonicBackupFlag = false } =
     useWalletNoMnemonicBackupFlag(activeWalletId)
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false)
@@ -50,28 +64,53 @@ export function SeedPhraseBackup() {
     [activeWalletId, queryClient],
   )
 
-  const handleShowSeedPhrase = useCallback(async (password: string) => {
-    if (!activeWalletId) return
-    try {
-      setLoading(true)
-      setError(null)
-      await ensureMigrated()
+  const revealMnemonicWords = useCallback((mnemonic: string) => {
+    setMnemonicWords(mnemonic.split(' '))
+    setShowPasswordPrompt(false)
+    setBackupConfirmed(false)
+    setShowMnemonic(true)
+  }, [])
+
+  const withSeedPhraseLoad = useCallback(
+    async (load: (walletId: number) => Promise<void>, fallbackError: string) => {
+      if (!activeWalletId) return
+      try {
+        setLoading(true)
+        setError(null)
+        await ensureMigrated()
+        await load(activeWalletId)
+      } catch {
+        setError(fallbackError)
+      } finally {
+        setLoading(false)
+      }
+    },
+    [activeWalletId],
+  )
+
+  const handleShowSeedPhraseClick = useCallback(async () => {
+    await withSeedPhraseLoad(async (walletId) => {
       const walletDb = getDatabase()
+      const nearZeroReady = await tryLoadNearZeroSessionIntoMemory(walletDb)
+      if (nearZeroReady) {
+        const secrets = await loadWalletSecrets(walletDb, walletId)
+        revealMnemonicWords(secrets.mnemonic)
+        return
+      }
+      setShowPasswordPrompt(true)
+    }, 'Could not load seed phrase')
+  }, [revealMnemonicWords, withSeedPhraseLoad])
+
+  const handleShowSeedPhrase = useCallback(async (password: string) => {
+    await withSeedPhraseLoad(async (walletId) => {
       const secrets = await loadWalletSecretsWithPassword(
-        walletDb,
+        getDatabase(),
         password,
-        activeWalletId,
+        walletId,
       )
-      setMnemonicWords(secrets.mnemonic.split(' '))
-      setShowPasswordPrompt(false)
-      setBackupConfirmed(false)
-      setShowMnemonic(true)
-    } catch {
-      setError('Wrong password')
-    } finally {
-      setLoading(false)
-    }
-  }, [activeWalletId])
+      revealMnemonicWords(secrets.mnemonic)
+    }, 'Wrong password')
+  }, [revealMnemonicWords, withSeedPhraseLoad])
 
   if (!activeWalletId) return null
 
@@ -80,7 +119,11 @@ export function SeedPhraseBackup() {
       <InfomodeWrapper
         infoId="management-seed-phrase-backup-card"
         infoTitle="Seed phrase backup"
-        infoText="This section lets you reveal your recovery words again after typing your Bitboard app password. Use it only in a private place—anyone who sees the words can control your funds. It is for checking a paper backup or writing the phrase down if you have not already."
+        infoText={
+          nearZeroActive
+            ? SEED_PHRASE_BACKUP_INFO_TEXT_NEAR_ZERO
+            : SEED_PHRASE_BACKUP_INFO_TEXT_WITH_APP_PASSWORD
+        }
         className="rounded-xl"
       >
         <Card
@@ -102,17 +145,24 @@ export function SeedPhraseBackup() {
               </p>
             )}
             <CardDescription>
-              View your seed phrase to back up your wallet. You will need to
-              confirm your Bitboard app password.
+              {nearZeroActive
+                ? 'View your seed phrase to back up your wallet.'
+                : 'View your seed phrase to back up your wallet. You will need to confirm your Bitboard app password.'}
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
             <Button
               variant="outline"
-              onClick={() => setShowPasswordPrompt(true)}
+              onClick={() => {
+                void handleShowSeedPhraseClick()
+              }}
+              disabled={loading}
             >
-              Show Seed Phrase
+              {loading ? 'Decrypting...' : 'Show Seed Phrase'}
             </Button>
+            {error && !showPasswordPrompt ? (
+              <p className="text-sm text-destructive">{error}</p>
+            ) : null}
           </CardContent>
         </Card>
       </InfomodeWrapper>

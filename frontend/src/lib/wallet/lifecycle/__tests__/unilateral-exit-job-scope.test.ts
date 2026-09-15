@@ -4,12 +4,6 @@ import {
   resolveUnilateralExitJobOutpoints,
 } from '@/lib/wallet/lifecycle/unilateral-exit-job-scope'
 
-const walletScope = {
-  walletId: 1,
-  networkMode: 'regtest' as const,
-  arkadeAccountId: 'conn-1',
-}
-
 describe('unilateral-exit-job-scope', () => {
   it('buildArkadeWalletScope rejects unsupported networks', () => {
     expect(buildArkadeWalletScope(1, 'mainnet', 'conn-1')).not.toBeNull()

@@ -126,7 +126,7 @@ export function SetAppPasswordModal({ open, onSessionStarted }: SetAppPasswordMo
           </Button>
         </form>
 
-        <NearZeroSecurityOptIn />
+        <NearZeroSecurityOptIn onSessionStarted={onSessionStarted} />
       </div>
     </AppModal>
   )

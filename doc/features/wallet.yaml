@@ -37,6 +37,7 @@ feature:
         - Use near-zero security mode: persist wrapped secret, enable near-zero mode, session holds random secret
       - click_event:
         - Continue: store password in session and dismiss modal so create/import can proceed
+        - Use near-zero security mode: persist wrapped secret, start secrets session, dismiss modal so create/import can proceed
     - CreateWallet:
       - description: "Multi-step flow to create a new wallet"
       - path: /setup/create
@@ -44,6 +45,10 @@ feature:
       - visible_elements:
         - If at least one wallet exists and session is locked: Unlock to continue dialog (WalletUnlock variant setup) before the form
         - If no wallets and no session password: SetAppPasswordModal only until Continue
+        - back arrow to setup welcome
+          - click_event:
+            - if no wallets exist yet: end secrets session and clear near-zero settings so the app-password / near-zero choice can be made again, then go to /setup
+            - if any wallet exists: go to /setup without clearing the session
         - step indicator showing current step out of total steps (three steps)
         - Step 1 - Generate:
           - word count selector (12 or 24 words)
@@ -69,6 +74,10 @@ feature:
       - visible_elements:
         - If at least one wallet exists and session is locked: Unlock to continue dialog before the form
         - If no wallets and no session password: SetAppPasswordModal only until Continue
+        - back arrow to setup welcome
+          - click_event:
+            - if no wallets exist yet: end secrets session and clear near-zero settings so the app-password / near-zero choice can be made again, then go to /setup
+            - if any wallet exists: go to /setup without clearing the session
         - mnemonic input (textarea or individual word inputs)
         - validation indicator showing whether mnemonic is valid
         - restore wallet button (disabled until mnemonic is valid; encryption uses session app password)
@@ -170,6 +179,8 @@ feature:
       - description: "Wallet configuration and management"
       - path: /settings
       - file: frontend/src/routes/settings.tsx
+      - path: /settings?section=data-backups
+        opens: Settings → Security, scrolled to Data Backups
       - visible_elements:
         - Network section:
           - network selector buttons (lab, regtest, signet, testnet, mainnet)
@@ -186,10 +197,12 @@ feature:
           - address type selector (Taproot / SegWit)
             - click_event:
               - change address derivation type (requires wallet re-creation warning)
-        - Backup section:
+        - Backup section (file: frontend/src/components/wallet/SeedPhraseBackup.tsx on /wallet/management):
           - show seed phrase button
             - click_event:
-              - prompt for Bitboard app password confirmation
+              - decide whether near-zero security is configured from SQLite settings (not only the in-memory store flag)
+              - when near-zero is configured: restore or reuse the secrets session and display the mnemonic — do not prompt for an app password — only when that live session is the near-zero wrap secret (leftover near-zero settings plus a user-password session still prompt)
+              - otherwise: prompt for Bitboard app password confirmation
               - on success: display mnemonic words in a secure modal
           - warning text about seed phrase security
         - Wallet management section:
@@ -207,6 +220,12 @@ feature:
               - on submit: decrypt all `wallet_secrets` with current password, re-encrypt with new password, persist all rows in a single database transaction, then update session password
               - UI: spinner with “Encrypting secrets with new password…” while running; success screen with checkmark and Done
         - Near-zero banner (below app header, not on /setup): red alert when near-zero mode is active; Set up password now opens upgrade modal; small “Set up a password later” dismisses until the browser tab session ends (sessionStorage)
+        - Idle auto-lock is suppressed while near-zero security is configured (file: frontend/src/stores/sessionStore.ts): the timer is not started, an already-armed timer is cleared when near-zero becomes active, and a due timer does not lock. Manual lock still redirects to Library. After Set a real password succeeds, auto-lock is armed (file: frontend/src/components/UpgradeFromNearZeroPasswordModal.tsx)
+        - On database ready, sync the near-zero active flag from SQLite on every route without restoring the secrets session (file: frontend/src/components/DatabaseReadyGate.tsx)
+        - Near-zero secrets-session restore for a locked wallet route is owned by WalletUnlockOrNearZeroLoading (file: frontend/src/components/WalletUnlockOrNearZeroLoading.tsx)
+        - When the unwrapped near-zero secret cannot decrypt existing wallet_secrets (for example a partial password upgrade), end the secrets session, clear the in-memory near-zero flag, and show the app-password unlock dialog (file: frontend/src/db/near-zero-security.ts)
+        - When leftover near-zero settings remain but the live secrets session is a user-chosen password (wrap cannot decrypt wallet_secrets), do not treat the session as near-zero: keep the live session, clear the in-memory near-zero flag, and still prompt for the app password on seed reveal
+        - When near-zero unwrap itself fails, keep the in-memory near-zero flag so idle auto-lock stays off; show Try again plus recovery copy to clear this site's browser data (which deletes local wallets); do not offer in-app factory wipe from that screen
       - requirements:
         - Wallet must exist for backup and lock sections to appear
         - Network and address type settings are available even without a wallet

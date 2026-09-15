@@ -5,6 +5,8 @@ export {
   destroyDatabase,
   checkDatabaseHealth,
   getInitialDatabaseHealth,
+  isWalletDatabaseTeardownBlockedError,
+  WalletDatabaseTeardownBlockedError,
 } from './database'
 export type { DatabaseHealthResult } from './database'
 export { sqliteStorage } from './storage-adapter'
@@ -75,6 +77,7 @@ export {
   tryLoadNearZeroSessionIntoMemory,
   clearNearZeroSecuritySettings,
   isNearZeroSecurityConfiguredInDb,
+  syncNearZeroSecurityActiveFlagFromDb,
   upgradeNearZeroToUserPassword,
 } from './near-zero-security'
 export type {
@@ -89,5 +92,7 @@ export {
   getLabDatabase,
   ensureLabMigrated,
   destroyLabDatabase,
+  LabDatabaseTeardownBlockedError,
+  isLabDatabaseTeardownBlockedError,
 } from './lab-database'
 export type { Block, Utxo, LabAddress } from './lab-schema'

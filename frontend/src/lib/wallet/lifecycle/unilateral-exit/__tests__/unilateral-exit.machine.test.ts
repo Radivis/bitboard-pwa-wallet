@@ -255,7 +255,7 @@ describe('unilateralExitMachine', () => {
         currentStepWaitingSince: 1_700_000_000,
       }),
     )
-    const ensureBroadcast = vi.fn(async (input) =>
+    const ensureBroadcast = vi.fn(async (_input) =>
       progress({
         phase: 'waiting',
         currentStepTxRelayed: true,
@@ -1252,7 +1252,7 @@ describe('unilateralExitMachine', () => {
     expect(proceedStep).not.toHaveBeenCalled()
 
     testActor.send({ type: 'PROCEED_MANUAL', feeRateSatPerVb: 2 })
-    await waitFor(testActor, (state) => ensureCount >= 2)
+    await waitFor(testActor, (_state) => ensureCount >= 2)
     expect(ensureBroadcast).toHaveBeenCalledTimes(2)
   })
 

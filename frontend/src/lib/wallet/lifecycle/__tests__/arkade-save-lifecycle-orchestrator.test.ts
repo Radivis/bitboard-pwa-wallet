@@ -41,6 +41,7 @@ describe('arkade-save-lifecycle-orchestrator', () => {
   beforeEach(() => {
     resetArkadeSaveLifecycleStateForTests()
     vi.clearAllMocks()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     saveLastSuccessfulOperatorSyncAtEncrypted.mockResolvedValue(undefined)
   })
 

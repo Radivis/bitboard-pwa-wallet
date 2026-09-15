@@ -124,6 +124,10 @@ jobs:
 
       - name: Unit tests
         working-directory: frontend
+        env:
+          # Per-process V8 ceiling (inherited by Vitest forks). Not reserved RAM;
+          # vite.config.ts sets CI maxWorkers to 4 independently.
+          NODE_OPTIONS: '--max-old-space-size=4096'
         run: npm run test:unit
 
   e2e:

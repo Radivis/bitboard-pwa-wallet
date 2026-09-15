@@ -160,7 +160,7 @@ The **only** deliberate coupling between routing and wallet crypto is **when to 
 
 | Concept | Meaning |
 |---------|---------|
-| **Hydration** | Near-zero session restore (`tryLoadNearZeroSessionIntoMemory`) plus bootstrap unlock (`orchestrateBootstrapUnlock` → per-rail **load**). Distinct from background **sync** and **save**, which follow load and are not route-gated. |
+| **Hydration** | Near-zero session restore (`hydrateNearZeroSessionForWalletRoute` from `WalletUnlockOrNearZeroLoading` / `tryLoadNearZeroSessionIntoMemory`) plus bootstrap unlock (`orchestrateBootstrapUnlock` → per-rail **load**). Restore must invalidate the secrets-session probe and drop a stale successful bootstrap cache while the wallet is still gated. Distinct from background **sync** and **save**, which follow load and are not route-gated. |
 | **Wallet route** | Any path under `/wallet` (dashboard, send, receive, management, wallets picker, etc.). Legacy `/` redirects to `/wallet`. |
 | **Non-wallet route** | Settings, setup, lab, library, privacy, and any other path that is not a wallet route. |
 
@@ -609,8 +609,9 @@ Audit of the codebase against [Route independence and wallet hydration](#route-i
 |----------|------------|
 | `pathname-requires-wallet-crypto-session.ts` | **Removed.** Replaced by [`pathname-is-wallet-route.ts`](../frontend/src/lib/shared/pathname-is-wallet-route.ts). |
 | [`useActiveWalletLoadQuery.ts`](../frontend/src/hooks/useActiveWalletLoadQuery.ts) | Bootstrap gated on `pathnameIsWalletRoute` + `lockUnlockInProgress`. |
-| [`AppInitializer.tsx`](../frontend/src/components/AppInitializer.tsx) | Near-zero restore on wallet-route **entry** edge only. |
-| [`DatabaseReadyGate.tsx`](../frontend/src/components/DatabaseReadyGate.tsx) | Cold-start restore only on wallet-route URLs. |
+| [`AppInitializer.tsx`](../frontend/src/components/AppInitializer.tsx) | Updates the wallet-route pathname gate store used by bootstrap; does not restore the near-zero secrets session. |
+| [`DatabaseReadyGate.tsx`](../frontend/src/components/DatabaseReadyGate.tsx) | Syncs the near-zero in-memory flag from SQLite without restoring the secrets session. |
+| [`WalletUnlockOrNearZeroLoading.tsx`](../frontend/src/components/WalletUnlockOrNearZeroLoading.tsx) | Canonical near-zero session restore while a locked wallet route is gated. |
 
 ### Navigation interferes with in-flight hydration (fixed)
 

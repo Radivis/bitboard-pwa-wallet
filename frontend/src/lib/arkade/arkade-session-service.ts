@@ -37,6 +37,14 @@ export async function abortArkadeSessionForNetworkSwitch(): Promise<void> {
   tearDownArkadeWorkerAndClientState()
 }
 
+/**
+ * Terminate Arkade workers and client state without waiting for load/sync/save or flushing
+ * SDK persistence. Factory reset discards the databases, so persist must not be a precondition.
+ */
+export async function abortArkadeSessionForFactoryReset(): Promise<void> {
+  tearDownArkadeWorkerAndClientState()
+}
+
 export async function closeArkadeSession(): Promise<void> {
   await awaitArkadeLoadQuiescence()
   await awaitArkadeSyncQuiescence()

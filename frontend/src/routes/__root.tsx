@@ -5,6 +5,7 @@ import { lazy, Suspense } from 'react'
 import { Toaster } from '@/components/ui/sonner'
 import { ThemeSynchronizer } from '@/stores/themeStore'
 import { WalletLayout } from '@/components/WalletLayout'
+import { RouterOutletErrorBoundary } from '@/components/RouterSafeErrorBoundary'
 import { AppInitializer } from '@/components/AppInitializer'
 import { DatabaseReadyGate } from '@/components/DatabaseReadyGate'
 import { InfomodeHintToast } from '@/components/InfomodeHintToast'
@@ -40,7 +41,9 @@ function RootComponent() {
           <ThemeSynchronizer />
           <AppInitializer>
             <WalletLayout>
-              <Outlet />
+              <RouterOutletErrorBoundary>
+                <Outlet />
+              </RouterOutletErrorBoundary>
             </WalletLayout>
           </AppInitializer>
         </DatabaseReadyGate>

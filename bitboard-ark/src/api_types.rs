@@ -237,6 +237,7 @@ pub enum VirtualStatusState {
 }
 
 impl VirtualStatusState {
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Spent => "spent",
@@ -568,7 +569,6 @@ pub struct UnilateralExitProgressParams {
 #[serde(rename_all = "camelCase")]
 pub enum UnilateralExitPhase {
     Idle,
-    Broadcasting,
     Waiting,
     Complete,
 }

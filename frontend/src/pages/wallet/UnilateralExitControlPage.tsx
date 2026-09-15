@@ -90,6 +90,7 @@ import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore
 import { useUnilateralExitControlStore } from '@/stores/unilateralExitControlStore'
 
 const EMPTY_TOPOLOGY_OUTPOINTS: ArkadeVtxoOutpoint[] = []
+const EMPTY_EXIT_CANDIDATES: { txid: string; vout: number; amountSats: number }[] = []
 
 function totalSelectedSats(
   selected: ArkadeVtxoOutpoint[],
@@ -365,7 +366,6 @@ export function UnilateralExitControlPage() {
     currentStepRelayedSinceUnix,
   )
 
-  const candidates = exitCandidatesQuery.data ?? []
   const startableOutpoints = useMemo(
     () =>
       (exitCandidatesQuery.data ?? [])
@@ -378,8 +378,8 @@ export function UnilateralExitControlPage() {
     persistedJobExists,
   })
   const selectedTotalSats = useMemo(
-    () => totalSelectedSats(jobOutpoints, candidates),
-    [jobOutpoints, candidates],
+    () => totalSelectedSats(jobOutpoints, exitCandidatesQuery.data ?? EMPTY_EXIT_CANDIDATES),
+    [jobOutpoints, exitCandidatesQuery.data],
   )
   const stepPackageFeeSats = useMemo(() => {
     if (batchEstimate == null || totalSteps === 0) return null

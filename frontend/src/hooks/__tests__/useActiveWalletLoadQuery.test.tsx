@@ -178,4 +178,40 @@ describe('useActiveWalletLoadQuery', () => {
 
     resolveBootstrap?.()
   })
+
+  it('starts bootstrap after a false session probe is invalidated', async () => {
+    useWalletStore.setState({
+      activeWalletId: 1,
+      walletStatus: 'locked',
+    })
+    syncLockLifecycleWithActiveWallet(1)
+    walletSecretsSessionState.active = false
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    function Wrapper({ children }: { children: ReactNode }) {
+      useLayoutEffect(() => {
+        useWalletCryptoSessionPathGateStore.getState().setPathname('/wallet')
+      }, [])
+      return (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      )
+    }
+
+    renderHook(() => useActiveWalletLoadQuery(), { wrapper: Wrapper })
+
+    await new Promise((r) => setTimeout(r, 80))
+    expect(orchestrateBootstrapUnlock).not.toHaveBeenCalled()
+
+    walletSecretsSessionState.active = true
+    await queryClient.invalidateQueries({
+      queryKey: ['wallet_db', 'wallet-secrets-session-active-probe'],
+    })
+
+    await waitFor(() => {
+      expect(orchestrateBootstrapUnlock).toHaveBeenCalledTimes(1)
+    })
+  })
 })

@@ -3,6 +3,12 @@ import { renderHook, act, waitFor } from '@testing-library/react'
 import { toast } from 'sonner'
 import { useWalletBackupImport } from '@/components/settings/use-wallet-backup-import'
 import { WALLET_BACKUP_IMPORT_MAX_VERIFY_ATTEMPTS } from '@/lib/wallet/wallet-backup-constants'
+
+const backupImportHookSourceByPath = import.meta.glob('../use-wallet-backup-import.ts', {
+  query: '?raw',
+  eager: true,
+  import: 'default',
+}) as Record<string, string>
 import { WALLET_SQLITE_OPFS_BASENAME } from '@/db/opfs/opfs-sqlite-database-names'
 import { WalletBackupZipInvalidError } from '@/lib/shared/backup-zip-invalid-error'
 
@@ -292,5 +298,33 @@ describe('useWalletBackupImport', () => {
     await waitFor(() => {
       expect(result.current.importBusy).toBe(false)
     })
+  })
+
+  it('runVerifiedImport toasts replace failures without counting a verify attempt', async () => {
+    mockReplaceOpfsSqliteAfterDestroy.mockRejectedValueOnce(new Error('OPFS locked'))
+    const file = new File(['zip'], 'backup.zip', { type: 'application/zip' })
+    const { result } = renderHook(() => useWalletBackupImport())
+
+    await act(async () => {
+      await result.current.onImportFilePick(createZipChangeEvent(file))
+    })
+    act(() => {
+      result.current.confirmWipeImport()
+    })
+
+    await act(async () => {
+      await result.current.runVerifiedImport('correct-password')
+    })
+
+    expect(toast.error).toHaveBeenCalledWith('OPFS locked')
+    expect(result.current.importVerifyInlineMessage).toBeNull()
+    expect(result.current.importBypassModalOpen).toBe(false)
+  })
+
+  it('verified import uses WALLET_BACKUP_IMPORT_STAGE constants', () => {
+    const backupImportHookSource = Object.values(backupImportHookSourceByPath)[0]
+    expect(backupImportHookSource).toContain('WALLET_BACKUP_IMPORT_STAGE.PRE_VERIFY')
+    expect(backupImportHookSource).toContain('WALLET_BACKUP_IMPORT_STAGE.POST_VERIFY')
+    expect(backupImportHookSource).not.toMatch(/let importStage = ['"]pre-verify['"]/)
   })
 })

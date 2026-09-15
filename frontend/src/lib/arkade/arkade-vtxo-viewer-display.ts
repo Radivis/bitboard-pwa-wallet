@@ -10,6 +10,7 @@ import type {
 } from '@/workers/arkade-api'
 
 export const ARKADE_VTXO_VIEWER_PAGE_SIZE = 20
+export const EMPTY_ARKADE_VTXO_ROWS: ArkadeVtxoRowBase[] = []
 
 export type ArkadeVtxoSortKey =
   | 'amount_desc'
@@ -29,20 +30,25 @@ export const ARKADE_VTXO_CLASSIFICATIONS: ArkadeVtxoClassification[] = [
   'finalized',
 ]
 
-const CLASSIFICATION_LABELS: Record<ArkadeVtxoClassification, string> = {
-  pre_confirmed: 'Pre-confirmed',
-  confirmed: 'Confirmed',
-  recoverable_settleable: 'Recoverable (ready)',
-  recoverable_pending_operator_sweep: 'Recoverable (awaiting sweep)',
-  pending_recovery_due_to_expired_signer: 'Pending recovery (expired signer)',
-  exiting: 'Unilateral exit',
-  finalized: 'Finalized',
-}
-
 export function getArkadeVtxoClassificationLabel(
   classification: ArkadeVtxoClassification,
 ): string {
-  return CLASSIFICATION_LABELS[classification]
+  switch (classification) {
+    case 'pre_confirmed':
+      return 'Pre-confirmed'
+    case 'confirmed':
+      return 'Confirmed'
+    case 'recoverable_settleable':
+      return 'Recoverable (ready)'
+    case 'recoverable_pending_operator_sweep':
+      return 'Recoverable (awaiting sweep)'
+    case 'pending_recovery_due_to_expired_signer':
+      return 'Pending recovery (expired signer)'
+    case 'exiting':
+      return 'Unilateral exit'
+    case 'finalized':
+      return 'Finalized'
+  }
 }
 
 export function formatArkadeVtxoDateTime(unixSeconds: number): string {

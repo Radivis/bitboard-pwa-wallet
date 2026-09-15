@@ -31,25 +31,31 @@ export async function runLabRouteBeforeLoad(): Promise<LabRouteContext> {
     duration: Infinity,
   })
 
-  const { walletStatus, addressType, accountId } = useWalletStore.getState()
-  const labNetworkSwitchSucceeded = await switchToLabNetwork({
-    previousNetworkMode,
-    walletStatus,
-    addressType,
-    accountId,
-  })
+  try {
+    const { walletStatus, addressType, accountId } = useWalletStore.getState()
+    const labNetworkSwitchSucceeded = await switchToLabNetwork({
+      previousNetworkMode,
+      walletStatus,
+      addressType,
+      accountId,
+    })
 
-  toast.dismiss(LAB_SWITCH_LOADING_TOAST_ID)
+    if (!labNetworkSwitchSucceeded) {
+      return { labAutoSwitchFailed: true }
+    }
 
-  if (!labNetworkSwitchSucceeded) {
+    toast.info('Network set to Lab', {
+      id: LAB_SWITCH_DONE_TOAST_ID,
+      description:
+        'Use Settings and choose another network when you want mainnet, testnet, or another live chain again.',
+    })
+
+    return { labAutoSwitchFailed: false }
+  } catch {
+    // A rejected `undefined` becomes match.error === undefined; TanStack then
+    // `throw match.error` and the default CatchBoundary crashes on `.message`.
     return { labAutoSwitchFailed: true }
+  } finally {
+    toast.dismiss(LAB_SWITCH_LOADING_TOAST_ID)
   }
-
-  toast.info('Network set to Lab', {
-    id: LAB_SWITCH_DONE_TOAST_ID,
-    description:
-      'Use Settings and choose another network when you want mainnet, testnet, or another live chain again.',
-  })
-
-  return { labAutoSwitchFailed: false }
 }

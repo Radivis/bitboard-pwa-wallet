@@ -1,9 +1,11 @@
 import { getDatabase, tryLoadNearZeroSessionIntoMemory } from '@/db'
-import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { orchestrateBootstrapUnlock } from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
-import { isWalletSecretsSessionActive } from '@/lib/wallet/wallet-secrets-session'
+import {
+  endWalletSecretsSession,
+  isWalletSecretsSessionActive,
+} from '@/lib/wallet/wallet-secrets-session'
 import { reportWalletSyncError } from '@/lib/wallet/wallet-sync-error-toast'
 
 export class WalletUnlockRequiredError extends Error {
@@ -17,10 +19,18 @@ export function isWalletReadyForSecretsAccess(): boolean {
   return walletIsUnlockedOrSyncing(useWalletStore.getState().walletStatus)
 }
 
-async function ensureNearZeroWalletUnlockedForAction(): Promise<void> {
+async function endSecretsSessionAfterFailedAutomaticUnlock(logContext: string): Promise<void> {
+  try {
+    await endWalletSecretsSession()
+  } catch (endSessionError) {
+    console.error(logContext, endSessionError)
+  }
+}
+
+async function restoreNearZeroSessionAndBootstrapIfNeeded(): Promise<void> {
   const restored = await tryLoadNearZeroSessionIntoMemory(getDatabase())
   if (!restored || !(await isWalletSecretsSessionActive())) {
-    throw new WalletUnlockRequiredError('Near-zero session could not be restored')
+    throw new WalletUnlockRequiredError()
   }
 
   const {
@@ -36,37 +46,44 @@ async function ensureNearZeroWalletUnlockedForAction(): Promise<void> {
   }
 
   if (!walletIsUnlockedOrSyncing(walletStatus)) {
-    await orchestrateBootstrapUnlock({
-      walletId: activeWalletId,
-      networkMode,
-      addressType,
-      accountId,
-      onSyncError: (err) => {
-        reportWalletSyncError('require-unlocked-wallet', err)
-      },
-    })
+    try {
+      await orchestrateBootstrapUnlock({
+        walletId: activeWalletId,
+        networkMode,
+        addressType,
+        accountId,
+        onSyncError: (err) => {
+          reportWalletSyncError('require-unlocked-wallet', err)
+        },
+      })
+    } catch (bootstrapError) {
+      console.error('Automatic wallet bootstrap failed:', bootstrapError)
+      await endSecretsSessionAfterFailedAutomaticUnlock(
+        'Failed to end secrets session after bootstrap unlock failure:',
+      )
+      throw new WalletUnlockRequiredError()
+    }
   }
 
   if (!walletIsUnlockedOrSyncing(useWalletStore.getState().walletStatus)) {
+    await endSecretsSessionAfterFailedAutomaticUnlock(
+      'Failed to end secrets session after bootstrap unlock left the wallet gated:',
+    )
     throw new WalletUnlockRequiredError('Wallet could not be unlocked automatically')
   }
 }
 
 /**
  * Ensures the wallet is unlocked before imperative work on non-wallet routes.
- * Throws {@link WalletUnlockRequiredError} when the UI must prompt for a password.
+ * Tries near-zero restore from SQLite when locked; throws
+ * {@link WalletUnlockRequiredError} when the UI must prompt for a password.
  */
 export async function ensureWalletUnlockedForAction(): Promise<void> {
   if (isWalletReadyForSecretsAccess()) {
     return
   }
 
-  if (useNearZeroSecurityStore.getState().active) {
-    await ensureNearZeroWalletUnlockedForAction()
-    return
-  }
-
-  throw new WalletUnlockRequiredError()
+  await restoreNearZeroSessionAndBootstrapIfNeeded()
 }
 
 /** Runs `action` after {@link ensureWalletUnlockedForAction} succeeds. */

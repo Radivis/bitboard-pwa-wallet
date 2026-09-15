@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { appQueryClient } from '@/lib/shared/app-query-client'
 import {
-  removeOpfsRootEntryIfExists,
+  removeOpfsRootEntryIfExistsWithRetry,
   writeArrayBufferToOpfsRoot,
 } from '@/db/opfs/opfs-root-file'
 
@@ -29,12 +29,12 @@ export async function replaceOpfsSqliteAfterDestroy(options: {
   await appQueryClient.cancelQueries()
 
   await destroyDatabase()
-  await removeOpfsRootEntryIfExists(`${opfsBasename}-wal`)
-  await removeOpfsRootEntryIfExists(`${opfsBasename}-shm`)
+  await removeOpfsRootEntryIfExistsWithRetry(`${opfsBasename}-wal`)
+  await removeOpfsRootEntryIfExistsWithRetry(`${opfsBasename}-shm`)
   // Remove the main DB file before writing. Otherwise another task can open a new SQLite
   // connection to the old file between destroy() and writeArrayBufferToOpfsRoot(), causing
   // intermittent locks or failed imports (especially on "Proceed anyway" when the UI yields).
-  await removeOpfsRootEntryIfExists(opfsBasename)
+  await removeOpfsRootEntryIfExistsWithRetry(opfsBasename)
   const sqliteArrayBuffer = sqliteBytes.buffer.slice(
     sqliteBytes.byteOffset,
     sqliteBytes.byteOffset + sqliteBytes.byteLength,

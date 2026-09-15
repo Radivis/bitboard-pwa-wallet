@@ -47,7 +47,7 @@ For **reporting vulnerabilities** in Bitboard Wallet, see the repository root [S
 **Clearing and lock**
 
 - **Session:** `sessionStore.clear()` sets `password: null`. It does **not** overwrite the previous string in memory (see limitations below).
-- **Lock:** From Settings, “Lock Wallet” calls `lockWallet()`, terminates the crypto worker, resets the secrets channel, clears the session, and clears the auto-lock timer. No password or mnemonic is stored in URL, `localStorage`, or `sessionStorage`.
+- **Lock:** From Settings, “Lock Wallet” calls `lockWallet()`, terminates the crypto worker, resets the secrets channel, clears the session, and clears the auto-lock timer. Idle auto-lock is suppressed while near-zero security is configured (not started, disarmed if the flag appears later, skipped if a due timer fires); it is armed after the user sets a real password. Manual lock still works. No password or mnemonic is stored in URL, `localStorage`, or `sessionStorage`.
 
 ### 2.2 Storage and persistence
 
@@ -96,6 +96,21 @@ Settings let users export the two SQLite databases as ZIP files on their device 
 
 - **Wallet database export** — The archive includes the wallet SQLite file plus a manifest that **cryptographically signs** a digest of that file using ML-DSA; the signing key is derived from the user’s app password with Argon2id using **fixed backup-signing PHC profiles** (production and CI variants). Import verifies the manifest; verification only accepts those **known backup `kdf_phc` strings**, so manifests cannot smuggle arbitrary Argon2 cost parameters.
 - **Lab database export** — The archive contains only the lab SQLite file. There is **no signature and no authenticity guarantee**: integrity depends entirely on trusting the source of the ZIP. Importing a lab backup **replaces local lab state** (simulation / test data on this device). It does **not** by itself compromise main-wallet keys, but a malicious file could spoof lab balances or owners in the UI until the user notices.
+
+### 2.8 Near-zero security mode
+
+Optional first-run path. A random session secret is wrapped with a **fixed passphrase in source** (`NEAR_ZERO_WRAPPER_PASSWORD`) and stored in SQLite settings. Anyone with local OPFS / device access can unwrap it. That is the intended trade-off, not a lock-screen.
+
+While near-zero is configured:
+
+- Idle auto-lock is suppressed (manual lock still works).
+- Visiting `/wallet/*` restores the secrets session from SQLite without a user-chosen password.
+- Seed phrase reveal does not prompt for an app password when restore succeeds. If leftover near-zero settings remain while the live session is a user-chosen password, reveal still asks for that password.
+
+**Recovery**
+
+- If the wrapped secret **decrypts** but **does not open** `wallet_secrets` (for example a “set a real password” upgrade that re-encrypted wallets and then failed before clearing near-zero settings), Bitboard **ends** that secrets session and shows the normal app-password unlock dialog. Enter the password you chose if you have one.
+- If the wrap itself cannot be read (corrupt settings), Bitboard does **not** factory-wipe from the failed-unlock screen: wipe still requires an unlocked wallet when wallets exist. Use the browser’s **clear this site’s data** (or equivalent). That deletes local wallets. Recover from a seed phrase or a signed wallet backup.
 
 ---
 

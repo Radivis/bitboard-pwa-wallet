@@ -144,6 +144,7 @@ vi.mock('@/workers/arkade-persistence-channel', () => ({
 }))
 
 import {
+  abortArkadeSessionForFactoryReset,
   abortArkadeSessionForNetworkSwitch,
   closeArkadeSession,
   openArkadeSessionForWallet,
@@ -475,6 +476,27 @@ describe('openArkadeSessionForWallet (integration)', () => {
 
     expect(workerMocks.flushSdkPersistence).not.toHaveBeenCalled()
     expect(workerMocks.closeSession).not.toHaveBeenCalled()
+    expect(getArkadeLoadLifecycleSnapshot()).toEqual({
+      loadPhase: 'not-configured',
+      networkMode: null,
+      errorMessage: null,
+    })
+  })
+
+  it('abortArkadeSessionForFactoryReset does not flush when session is loaded', async () => {
+    await openArkadeSessionForWallet({
+      walletId: 7,
+      networkMode: 'signet',
+    })
+    workerMocks.flushSdkPersistence.mockClear()
+    workerMocks.closeSession.mockClear()
+    terminateArkadeWorkerMock.mockClear()
+
+    await abortArkadeSessionForFactoryReset()
+
+    expect(workerMocks.flushSdkPersistence).not.toHaveBeenCalled()
+    expect(workerMocks.closeSession).not.toHaveBeenCalled()
+    expect(terminateArkadeWorkerMock).toHaveBeenCalledTimes(1)
     expect(getArkadeLoadLifecycleSnapshot()).toEqual({
       loadPhase: 'not-configured',
       networkMode: null,
