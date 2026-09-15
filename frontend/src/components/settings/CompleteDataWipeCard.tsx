@@ -45,6 +45,17 @@ export function CompleteDataWipeCard() {
     setRiskUnderstood(false)
   }, [])
 
+  const runFactoryResetWipeFromCard = useCallback(async (logContext: string) => {
+    try {
+      setWipeBusy(true)
+      await wipeAllAppDataOpfsAndReload()
+    } catch (err) {
+      console.error(`[CompleteDataWipeCard] wipeAllAppDataOpfsAndReload failed (${logContext})`, err)
+      toast.error(userFacingErrorMessage(err))
+      setWipeBusy(false)
+    }
+  }, [])
+
   const advanceToNoBackupOrWipe = useCallback(async () => {
     try {
       await ensureMigrated()
@@ -53,20 +64,14 @@ export function CompleteDataWipeCard() {
         return
       }
     } catch (err) {
-      if (!isWalletDatabaseTeardownBlockedError(err)) {
+      const skipBackupCheckBecauseTeardownBlocked = isWalletDatabaseTeardownBlockedError(err)
+      if (!skipBackupCheckBecauseTeardownBlocked) {
         toast.error(userFacingErrorMessage(err))
         return
       }
     }
-    try {
-      setWipeBusy(true)
-      await wipeAllAppDataOpfsAndReload()
-    } catch (err) {
-      console.error('[CompleteDataWipeCard] wipeAllAppDataOpfsAndReload failed (advanceToNoBackupOrWipe)', err)
-      toast.error(userFacingErrorMessage(err))
-      setWipeBusy(false)
-    }
-  }, [])
+    await runFactoryResetWipeFromCard('advanceToNoBackupOrWipe')
+  }, [runFactoryResetWipeFromCard])
 
   const onRiskModalContinue = useCallback(async () => {
     if (!riskUnderstood) return
@@ -137,15 +142,8 @@ export function CompleteDataWipeCard() {
 
   const onNoBackupProceedAnyway = useCallback(async () => {
     setNoBackupModalOpen(false)
-    try {
-      setWipeBusy(true)
-      await wipeAllAppDataOpfsAndReload()
-    } catch (err) {
-      console.error('[CompleteDataWipeCard] wipeAllAppDataOpfsAndReload failed (onNoBackupProceedAnyway)', err)
-      toast.error(userFacingErrorMessage(err))
-      setWipeBusy(false)
-    }
-  }, [])
+    await runFactoryResetWipeFromCard('onNoBackupProceedAnyway')
+  }, [runFactoryResetWipeFromCard])
 
   return (
     <>

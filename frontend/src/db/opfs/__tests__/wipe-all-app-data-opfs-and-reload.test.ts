@@ -89,6 +89,12 @@ import { getDatabase } from '@/db/database'
 import { resetSqliteStorageTeardownGuard } from '@/db/storage-adapter'
 import { wipeAllAppDataOpfsAndReload } from '@/db/opfs/wipe-all-app-data-opfs-and-reload'
 
+const wipeSourceByPath = import.meta.glob('../wipe-all-app-data-opfs-and-reload.ts', {
+  query: '?raw',
+  eager: true,
+  import: 'default',
+}) as Record<string, string>
+
 async function runWipeWithFakeTimers(): Promise<void> {
   const wipePromise = wipeAllAppDataOpfsAndReload()
   wipePromise.catch(() => undefined)
@@ -171,5 +177,13 @@ describe('wipeAllAppDataOpfsAndReload', () => {
     await expect(runWipeWithFakeTimers()).rejects.toThrow('opfs locked')
 
     expect(() => getDatabase()).toThrow(/blocked during teardown/i)
+  })
+
+  it('pre-destroy delay uses PRE_DESTROY_SETTLE_MS', () => {
+    const wipeSource = Object.values(wipeSourceByPath)[0]
+    expect(wipeSource).toMatch(/const PRE_DESTROY_SETTLE_MS = 100/)
+    expect(wipeSource).toContain('preDestroyDelay(${PRE_DESTROY_SETTLE_MS}ms)')
+    expect(wipeSource).toContain('waitMs(PRE_DESTROY_SETTLE_MS)')
+    expect(wipeSource).not.toMatch(/setTimeout\(resolve,\s*100\)/)
   })
 })

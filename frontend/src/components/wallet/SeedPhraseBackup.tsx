@@ -25,6 +25,12 @@ import { cn } from '@/lib/shared/utils'
 import { DialogDescription } from '@/components/ui/dialog'
 import { MnemonicGrid } from '@/components/MnemonicGrid'
 
+const SEED_PHRASE_BACKUP_INFO_TEXT_WITH_APP_PASSWORD =
+  'This section lets you reveal your recovery words again after typing your Bitboard app password. Use it only in a private place—anyone who sees the words can control your funds. It is for checking a paper backup or writing the phrase down if you have not already.'
+
+const SEED_PHRASE_BACKUP_INFO_TEXT_NEAR_ZERO =
+  'This section lets you reveal your recovery words. In near-zero security mode you are not asked for a Bitboard app password. Use it only in a private place—anyone who sees the words can control your funds. It is for checking a paper backup or writing the phrase down if you have not already.'
+
 export function SeedPhraseBackup() {
   const queryClient = useQueryClient()
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
@@ -113,7 +119,11 @@ export function SeedPhraseBackup() {
       <InfomodeWrapper
         infoId="management-seed-phrase-backup-card"
         infoTitle="Seed phrase backup"
-        infoText="This section lets you reveal your recovery words again after typing your Bitboard app password. Use it only in a private place—anyone who sees the words can control your funds. It is for checking a paper backup or writing the phrase down if you have not already."
+        infoText={
+          nearZeroActive
+            ? SEED_PHRASE_BACKUP_INFO_TEXT_NEAR_ZERO
+            : SEED_PHRASE_BACKUP_INFO_TEXT_WITH_APP_PASSWORD
+        }
         className="rounded-xl"
       >
         <Card

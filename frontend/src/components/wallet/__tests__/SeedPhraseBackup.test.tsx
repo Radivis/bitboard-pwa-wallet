@@ -1,9 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders, TEST_MNEMONIC_12 } from '@/test-utils/test-providers'
 import { useWalletStore } from '@/stores/walletStore'
 import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
+import { useInfomodeStore } from '@/stores/infomodeStore'
 
 const dbMocks = vi.hoisted(() => ({
   tryLoadNearZeroSessionIntoMemory: vi.fn(),
@@ -32,10 +33,15 @@ describe('SeedPhraseBackup', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     useNearZeroSecurityStore.setState({ active: false })
+    useInfomodeStore.setState({ isActive: false, lightbulbSuppressionCue: 0 })
     useWalletStore.setState({ activeWalletId: 1 })
     dbMocks.tryLoadNearZeroSessionIntoMemory.mockResolvedValue(false)
     dbMocks.loadWalletSecrets.mockResolvedValue({ mnemonic: TEST_MNEMONIC_12 })
     dbMocks.loadWalletSecretsWithPassword.mockResolvedValue({ mnemonic: TEST_MNEMONIC_12 })
+  })
+
+  afterEach(() => {
+    useInfomodeStore.setState({ isActive: false, lightbulbSuppressionCue: 0 })
   })
 
   it('reveals the mnemonic without a password prompt when near-zero is configured in the database', async () => {
@@ -69,5 +75,29 @@ describe('SeedPhraseBackup', () => {
     })
     expect(screen.queryByText('Your Seed Phrase')).not.toBeInTheDocument()
     expect(dbMocks.loadWalletSecrets).not.toHaveBeenCalled()
+  })
+
+  it('infomode copy does not assume an app password when near-zero is active', async () => {
+    useNearZeroSecurityStore.setState({ active: true })
+    useInfomodeStore.setState({ isActive: true })
+    const user = userEvent.setup()
+    renderWithProviders(<SeedPhraseBackup />)
+
+    await user.click(screen.getByText('Seed Phrase Backup'))
+
+    const explanation = await screen.findByRole('dialog', { name: 'Infomode explanation' })
+    expect(explanation).not.toHaveTextContent('after typing your Bitboard app password')
+    expect(explanation).toHaveTextContent('near-zero')
+  })
+
+  it('infomode copy still mentions the app password when near-zero is off', async () => {
+    useInfomodeStore.setState({ isActive: true })
+    const user = userEvent.setup()
+    renderWithProviders(<SeedPhraseBackup />)
+
+    await user.click(screen.getByText('Seed Phrase Backup'))
+
+    const explanation = await screen.findByRole('dialog', { name: 'Infomode explanation' })
+    expect(explanation).toHaveTextContent('after typing your Bitboard app password')
   })
 })

@@ -4,14 +4,17 @@ import type { LabDatabase } from './lab-schema'
 import { runLabMigrations } from './migrations/run-lab-migrations'
 import { LAB_SQLITE_OPFS_BASENAME } from './opfs/opfs-sqlite-database-names'
 import { isBenignSqliteWorkerCloseFailure } from './sqlite-worker-close-error'
+import { LabDatabaseTeardownBlockedError } from './database-teardown-blocked-error'
+
+export {
+  LabDatabaseTeardownBlockedError,
+  isLabDatabaseTeardownBlockedError,
+} from './database-teardown-blocked-error'
 
 let labInstance: Kysely<LabDatabase> | null = null
 let labMigrated = false
 let labMigrationPromise: Promise<void> | null = null
 let labDatabaseAccessBlockedForTeardown = false
-
-const LAB_DATABASE_TEARDOWN_BLOCKED_MESSAGE =
-  'Lab database access blocked during teardown'
 
 export function blockLabDatabaseAccessForTeardown(): void {
   labDatabaseAccessBlockedForTeardown = true
@@ -24,7 +27,7 @@ export function resetLabDatabaseAccessTeardownGuard(): void {
 
 function assertLabDatabaseAccessAllowed(): void {
   if (labDatabaseAccessBlockedForTeardown) {
-    throw new Error(LAB_DATABASE_TEARDOWN_BLOCKED_MESSAGE)
+    throw new LabDatabaseTeardownBlockedError()
   }
 }
 

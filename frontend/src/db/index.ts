@@ -6,6 +6,7 @@ export {
   checkDatabaseHealth,
   getInitialDatabaseHealth,
   isWalletDatabaseTeardownBlockedError,
+  WalletDatabaseTeardownBlockedError,
 } from './database'
 export type { DatabaseHealthResult } from './database'
 export { sqliteStorage } from './storage-adapter'
@@ -91,5 +92,7 @@ export {
   getLabDatabase,
   ensureLabMigrated,
   destroyLabDatabase,
+  LabDatabaseTeardownBlockedError,
+  isLabDatabaseTeardownBlockedError,
 } from './lab-database'
 export type { Block, Utxo, LabAddress } from './lab-schema'

@@ -4,18 +4,17 @@ import type { Database } from './schema'
 import { runWalletMigrations } from './migrations/run-wallet-migrations'
 import { WALLET_SQLITE_OPFS_BASENAME } from './opfs/opfs-sqlite-database-names'
 import { isBenignSqliteWorkerCloseFailure } from './sqlite-worker-close-error'
+import { WalletDatabaseTeardownBlockedError } from './database-teardown-blocked-error'
+
+export {
+  WalletDatabaseTeardownBlockedError,
+  isWalletDatabaseTeardownBlockedError,
+} from './database-teardown-blocked-error'
 
 let instance: Kysely<Database> | null = null
 let migrated = false
 let migrationPromise: Promise<void> | null = null
 let walletDatabaseAccessBlockedForTeardown = false
-
-const WALLET_DATABASE_TEARDOWN_BLOCKED_MESSAGE =
-  'Wallet database access blocked during teardown'
-
-export function isWalletDatabaseTeardownBlockedError(error: unknown): boolean {
-  return error instanceof Error && error.message === WALLET_DATABASE_TEARDOWN_BLOCKED_MESSAGE
-}
 
 export function blockWalletDatabaseAccessForTeardown(): void {
   walletDatabaseAccessBlockedForTeardown = true
@@ -28,7 +27,7 @@ export function resetWalletDatabaseAccessTeardownGuard(): void {
 
 function assertWalletDatabaseAccessAllowed(): void {
   if (walletDatabaseAccessBlockedForTeardown) {
-    throw new Error(WALLET_DATABASE_TEARDOWN_BLOCKED_MESSAGE)
+    throw new WalletDatabaseTeardownBlockedError()
   }
 }
 

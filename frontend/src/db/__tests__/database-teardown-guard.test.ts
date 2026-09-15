@@ -4,7 +4,12 @@ import {
   ensureMigrated,
   getDatabase,
   isWalletDatabaseTeardownBlockedError,
+  WalletDatabaseTeardownBlockedError,
 } from '@/db/database'
+import {
+  getLabDatabase,
+  LabDatabaseTeardownBlockedError,
+} from '@/db/lab-database'
 import {
   blockSqliteStorageForTeardown,
   blockSqliteStoragePersistForTeardown,
@@ -72,12 +77,25 @@ describe('wallet database teardown guard', () => {
     )
   })
 
-  it('isWalletDatabaseTeardownBlockedError matches the teardown message', () => {
+  it('isWalletDatabaseTeardownBlockedError is instanceof, not message match', () => {
+    expect(isWalletDatabaseTeardownBlockedError(new WalletDatabaseTeardownBlockedError())).toBe(
+      true,
+    )
     expect(
       isWalletDatabaseTeardownBlockedError(
         new Error('Wallet database access blocked during teardown'),
       ),
-    ).toBe(true)
+    ).toBe(false)
     expect(isWalletDatabaseTeardownBlockedError(new Error('other'))).toBe(false)
+  })
+
+  it('hard-block throws WalletDatabaseTeardownBlockedError from getDatabase', () => {
+    blockWalletAndLabDatabaseAccessForTeardown()
+    expect(() => getDatabase()).toThrow(WalletDatabaseTeardownBlockedError)
+  })
+
+  it('hard-block throws LabDatabaseTeardownBlockedError from getLabDatabase', () => {
+    blockWalletAndLabDatabaseAccessForTeardown()
+    expect(() => getLabDatabase()).toThrow(LabDatabaseTeardownBlockedError)
   })
 })

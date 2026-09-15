@@ -20,8 +20,17 @@ import { resetSecretsChannel } from '@/workers/secrets-channel'
 
 const WIPE_LOG_PREFIX = '[wipe-all-app-data]'
 
+/** Yield so cancelled queries and worker threads can finish closing handles before sqlite3_close. */
+const PRE_DESTROY_SETTLE_MS = 100
+
 /** Yield after worker/database teardown so wa-sqlite can release OPFS handles. */
 const POST_DESTROY_SETTLE_MS = 250
+
+function waitMs(delayMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, delayMs)
+  })
+}
 
 /** Logs and rethrows — use around each teardown step to see which one fails in the console. */
 async function wipeAsyncStep<T>(stepLabel: string, fn: () => Promise<T>): Promise<T> {
@@ -108,11 +117,9 @@ async function runFactoryResetTeardown(options: {
     terminateCryptoWorker()
   })
   // Yield so cancelled queries and worker threads can finish closing handles before sqlite3_close.
-  await wipeAsyncStep('preDestroyDelay(100ms)', () => {
-    return new Promise<void>((resolve) => {
-      window.setTimeout(resolve, 100)
-    })
-  })
+  await wipeAsyncStep(`preDestroyDelay(${PRE_DESTROY_SETTLE_MS}ms)`, () =>
+    waitMs(PRE_DESTROY_SETTLE_MS),
+  )
   wipeSyncStep('blockWalletAndLabDatabaseAccessForTeardown', () => {
     blockWalletAndLabDatabaseAccessForTeardown()
   })
@@ -120,11 +127,9 @@ async function runFactoryResetTeardown(options: {
   await wipeAsyncStep('destroyDatabase (wallet Kysely)', () => destroyDatabase())
   options.onWalletDestroyed()
   await wipeAsyncStep('destroyLabDatabase (lab Kysely)', () => destroyLabDatabase())
-  await wipeAsyncStep(`postDestroySettle(${POST_DESTROY_SETTLE_MS}ms)`, () => {
-    return new Promise<void>((resolve) => {
-      window.setTimeout(resolve, POST_DESTROY_SETTLE_MS)
-    })
-  })
+  await wipeAsyncStep(`postDestroySettle(${POST_DESTROY_SETTLE_MS}ms)`, () =>
+    waitMs(POST_DESTROY_SETTLE_MS),
+  )
   await removeOpfsSqliteBundle('wallet', WALLET_SQLITE_OPFS_BASENAME)
   await removeOpfsSqliteBundle('lab', LAB_SQLITE_OPFS_BASENAME)
   await wipeAsyncStep(`removeOpfsRootEntry (migration report ${WALLET_MIGRATION_FAILURE_OPFS_FILENAME})`, () =>
