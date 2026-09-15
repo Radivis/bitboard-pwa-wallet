@@ -435,7 +435,7 @@ export async function runAutomaticUnilateralUnrollUntilBranchComplete(page: Page
   let lastProgressText = await readStepProgressSignature(page)
   let minesWithoutProgress = 0
   let waitConfirmationMines = 0
-  let bumperTopUps = { count: 0 }
+  const bumperTopUps = { count: 0 }
   let advancingStuckCycles = 0
 
   while (Date.now() < deadlineMs) {

@@ -100,6 +100,7 @@ export const vtxoExitMachine = vtxoExitMachineSetup.createMachine({
     routing: {
       always: routingAlways,
     },
+    ...Object.fromEntries(ARKADE_VTXO_EXIT_PHASES.map((phase) => [phase, {}])),
     tagged: {
       on: {
         UNTAG: {
@@ -107,13 +108,6 @@ export const vtxoExitMachine = vtxoExitMachineSetup.createMachine({
         },
       },
     },
-    host_broadcast_attempted: {},
-    host_relayed: {},
-    host_confirmed: {},
-    unrolled: {},
-    complete_ready: {},
-    exited: {},
-    funding_lost: {},
     idle: {},
   },
 })

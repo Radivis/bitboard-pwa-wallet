@@ -1,17 +1,23 @@
-import type { ArkadeVtxoExitPhase, ArkadeVtxoExitRecordDto } from '@/workers/arkade-api'
+import {
+  ARKADE_VTXO_EXIT_PHASES,
+  type ArkadeVtxoExitPhase,
+  type ArkadeVtxoExitRecordDto,
+} from '@/workers/arkade-api'
 
-export const VTXO_EXIT_MACHINE_STATE = {
+const VTXO_EXIT_MACHINE_LOCAL_STATE = {
   routing: 'routing',
   tagged: 'tagged',
-  host_broadcast_attempted: 'host_broadcast_attempted',
-  host_relayed: 'host_relayed',
-  host_confirmed: 'host_confirmed',
-  unrolled: 'unrolled',
-  complete_ready: 'complete_ready',
-  exited: 'exited',
-  funding_lost: 'funding_lost',
   idle: 'idle',
 } as const
+
+type VtxoExitPhaseStateMap = { [Phase in ArkadeVtxoExitPhase]: Phase }
+
+export const VTXO_EXIT_MACHINE_STATE = {
+  ...VTXO_EXIT_MACHINE_LOCAL_STATE,
+  ...(Object.fromEntries(
+    ARKADE_VTXO_EXIT_PHASES.map((phase) => [phase, phase]),
+  ) as VtxoExitPhaseStateMap),
+}
 
 export type VtxoExitMachineStateId =
   (typeof VTXO_EXIT_MACHINE_STATE)[keyof typeof VTXO_EXIT_MACHINE_STATE]

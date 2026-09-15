@@ -216,7 +216,7 @@ export async function tryLoadNearZeroSessionIntoMemory(
   // "already active" and must not clear the in-memory near-zero flag.
   // After lock the encryption worker may still be restarting; treat probe errors
   // as "not active" so unwrap + begin can run.
-  let secretsSessionAlreadyActive = false
+  let secretsSessionAlreadyActive: boolean
   try {
     secretsSessionAlreadyActive = await isWalletSecretsSessionActive()
   } catch {

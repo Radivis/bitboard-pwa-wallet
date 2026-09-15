@@ -66,7 +66,6 @@ export function DatabaseReadyGate({ children }: DatabaseReadyGateProps) {
       cancelled = true
     }
     // Intentionally once per app mount: re-running would replay DB init on every navigation.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- cold-start path only
   }, [])
 
   if (!isReady) {

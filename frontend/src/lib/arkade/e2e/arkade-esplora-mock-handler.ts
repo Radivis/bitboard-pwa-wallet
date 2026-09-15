@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/naming-convention -- Esplora REST JSON field names */
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
 /**

@@ -23,7 +23,6 @@ const rootSourceByPath = import.meta.glob('../../routes/__root.tsx', {
 }) as Record<string, string>
 
 function ThrowUndefined(): never {
-  // eslint-disable-next-line @typescript-eslint/only-throw-error -- reproduces TanStack redirected-match throw
   throw undefined
 }
 
