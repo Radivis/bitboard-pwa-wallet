@@ -27,8 +27,13 @@ vi.mock('@tanstack/react-router', () => ({
 
 const nearZeroState = vi.hoisted(() => ({ active: true }))
 vi.mock('@/stores/nearZeroSecurityStore', () => ({
-  useNearZeroSecurityStore: (selector: (s: typeof nearZeroState) => unknown) =>
-    selector(nearZeroState),
+  useNearZeroSecurityStore: Object.assign(
+    (selector: (s: typeof nearZeroState) => unknown) => selector(nearZeroState),
+    {
+      getState: () => nearZeroState,
+      subscribe: () => () => {},
+    },
+  ),
 }))
 
 const walletMocks = vi.hoisted(() => ({

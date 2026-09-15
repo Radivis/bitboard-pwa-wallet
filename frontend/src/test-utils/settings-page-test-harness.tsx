@@ -141,6 +141,7 @@ export const mockResolveDescriptorWallet = vi.fn().mockResolvedValue({
 export const mockUpdateDescriptorWalletChangeset = vi.fn().mockResolvedValue(undefined)
 export const mockCloseArkadeSession = vi.fn().mockResolvedValue(undefined)
 export const mockRefreshArkadeSessionAfterNetworkSwitch = vi.fn().mockResolvedValue(undefined)
+export const mockTryLoadNearZeroSessionIntoMemory = vi.fn().mockResolvedValue(false)
 
 /** Mocked sonner toast — import this in settings tests instead of `sonner` directly. */
 export const toast = {
@@ -250,8 +251,14 @@ vi.mock('@/stores/sessionStore', () => ({
 }))
 
 vi.mock('@/stores/nearZeroSecurityStore', () => ({
-  useNearZeroSecurityStore: (selector: (s: typeof nearZeroSecurityState) => unknown) =>
-    selector(nearZeroSecurityState),
+  useNearZeroSecurityStore: Object.assign(
+    (selector: (s: typeof nearZeroSecurityState) => unknown) =>
+      selector(nearZeroSecurityState),
+    {
+      getState: () => nearZeroSecurityState,
+      subscribe: () => () => {},
+    },
+  ),
 }))
 
 vi.mock('@/db/opfs/opfs-root-file', () => ({
@@ -285,6 +292,8 @@ vi.mock('@/db', () => ({
     error instanceof Error && error.message === 'Wallet database access blocked during teardown',
   loadWalletSecrets: vi.fn().mockRejectedValue(new Error('Wrong password')),
   loadWalletSecretsPayload: mockLoadWalletSecretsPayload,
+  tryLoadNearZeroSessionIntoMemory: (...args: unknown[]) =>
+    mockTryLoadNearZeroSessionIntoMemory(...args),
   useWallets: () => ({ data: mockWalletsState.data }),
 }))
 
@@ -468,6 +477,7 @@ export function resetSettingsPageTestState(): void {
   mockRefreshArkadeSessionAfterNetworkSwitch.mockResolvedValue(undefined)
   mockLoadDescriptorWalletAndSync.mockResolvedValue(undefined)
   mockLoadDescriptorWalletWithoutSync.mockResolvedValue(undefined)
+  mockTryLoadNearZeroSessionIntoMemory.mockResolvedValue(false)
   featureStoreState.isLightningEnabled = false
   featureStoreState.isMainnetAccessEnabled = false
   featureStoreState.isRegtestModeEnabled = false

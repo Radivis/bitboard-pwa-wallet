@@ -102,7 +102,9 @@ describe('Settings routes', () => {
 
       await user.click(screen.getByRole('button', { name: 'Testnet' }))
 
-      expect(screen.getByRole('dialog')).toBeInTheDocument()
+      await waitFor(() => {
+        expect(screen.getByRole('dialog')).toBeInTheDocument()
+      })
       expect(screen.getByRole('heading', { name: 'Unlock Wallet' })).toBeInTheDocument()
       expect(mockSetNetworkMode).not.toHaveBeenCalled()
     })
@@ -114,7 +116,9 @@ describe('Settings routes', () => {
 
       await user.click(screen.getByRole('button', { name: 'Testnet' }))
 
-      expect(screen.getByRole('dialog')).toBeInTheDocument()
+      await waitFor(() => {
+        expect(screen.getByRole('dialog')).toBeInTheDocument()
+      })
       expect(mockSetNetworkMode).not.toHaveBeenCalled()
     })
 
