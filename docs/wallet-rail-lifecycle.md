@@ -160,13 +160,13 @@ The **only** deliberate coupling between routing and wallet crypto is **when to 
 
 | Concept | Meaning |
 |---------|---------|
-| **Hydration** | Near-zero session restore (`hydrateNearZeroSessionForWalletRoute` from `WalletUnlockOrNearZeroLoading` / `tryLoadNearZeroSessionIntoMemory`) plus bootstrap unlock (`orchestrateBootstrapUnlock` → per-rail **load**). Restore must invalidate the secrets-session probe and drop a stale successful bootstrap cache while the wallet is still gated. Distinct from background **sync** and **save**, which follow load and are not route-gated. |
+| **Hydration** | Near-zero session restore (`restoreNearZeroSecretsSessionForOperation` from the wallet-route gate, action-gated unlock, or seed-phrase reveal) plus bootstrap unlock (`orchestrateBootstrapUnlock` → per-rail **load**) when WASM is required. Restore must invalidate the secrets-session probe and drop a stale successful bootstrap cache while the wallet is still gated. Distinct from background **sync** and **save**, which follow load and are not route-gated. |
 | **Wallet route** | Any path under `/wallet` (dashboard, send, receive, management, wallets picker, etc.). Legacy `/` redirects to `/wallet`. |
 | **Non-wallet route** | Settings, setup, lab, library, privacy, and any other path that is not a wallet route. |
 
 ### Rules
 
-1. **Start hydration on wallet entry only.** When the user **visits a wallet route** and prerequisites are met (active wallet, secrets session or restorable near-zero session, wallet not already loaded), the app may start hydration. Visiting Settings, Lab, Library, or setup must **not** start hydration by itself.
+1. **Start hydration only for operations that need a secrets session.** The `/wallet/*` secrets gate may restore a near-zero session and bootstrap when the wallet UI is gated. Settings, Lab, Library, or setup must **not** start hydration by themselves; those screens use `ensureWalletUnlockedForAction` / `useRequireUnlockedWallet` at action time (and seed-phrase reveal restores or reuses the session without a password prompt when the wrap is live).
 2. **Lifecycle is route-agnostic.** In-flight load, sync, and save continue regardless of navigation. Do not cancel debounced sync timers, disable bootstrap queries mid-flight, or skip save because the user left `/wallet`.
 3. **Lock and explicit user actions are exceptions.** Lock teardown, manual unlock, and network switch are intentional lifecycle drivers — not “navigation interference” in the sense above.
 4. **Privacy redirect after lock** (wallet route → Library via `navigateToLibraryIfOnWalletRoute`) stays in place. It is privacy-enhancing: the user leaves wallet UI after locking. It does not tear down in-flight lifecycle work; it only defers **the next** hydration until the user opens a wallet route again.
@@ -611,7 +611,8 @@ Audit of the codebase against [Route independence and wallet hydration](#route-i
 | [`useActiveWalletLoadQuery.ts`](../frontend/src/hooks/useActiveWalletLoadQuery.ts) | Bootstrap gated on `pathnameIsWalletRoute` + `lockUnlockInProgress`. |
 | [`AppInitializer.tsx`](../frontend/src/components/AppInitializer.tsx) | Updates the wallet-route pathname gate store used by bootstrap; does not restore the near-zero secrets session. |
 | [`DatabaseReadyGate.tsx`](../frontend/src/components/DatabaseReadyGate.tsx) | Syncs the near-zero in-memory flag from SQLite without restoring the secrets session. |
-| [`WalletUnlockOrNearZeroLoading.tsx`](../frontend/src/components/WalletUnlockOrNearZeroLoading.tsx) | Canonical near-zero session restore while a locked wallet route is gated. |
+| [`restore-near-zero-secrets-session.ts`](../frontend/src/lib/wallet/restore-near-zero-secrets-session.ts) | Shared near-zero unwrap for operations that need a secrets session. |
+| [`WalletUnlockOrNearZeroLoading.tsx`](../frontend/src/components/WalletUnlockOrNearZeroLoading.tsx) | Wallet-UI operation: near-zero session restore while a locked wallet route is gated. |
 
 ### Navigation interferes with in-flight hydration (fixed)
 

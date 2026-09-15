@@ -1,5 +1,5 @@
-import { getDatabase, tryLoadNearZeroSessionIntoMemory } from '@/db'
 import { useWalletStore } from '@/stores/walletStore'
+import { restoreNearZeroSecretsSessionForOperation } from '@/lib/wallet/restore-near-zero-secrets-session'
 import { orchestrateBootstrapUnlock } from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import {
@@ -28,7 +28,7 @@ async function endSecretsSessionAfterFailedAutomaticUnlock(logContext: string): 
 }
 
 async function restoreNearZeroSessionAndBootstrapIfNeeded(): Promise<void> {
-  const restored = await tryLoadNearZeroSessionIntoMemory(getDatabase())
+  const restored = await restoreNearZeroSecretsSessionForOperation()
   if (!restored || !(await isWalletSecretsSessionActive())) {
     throw new WalletUnlockRequiredError()
   }
@@ -74,9 +74,11 @@ async function restoreNearZeroSessionAndBootstrapIfNeeded(): Promise<void> {
 }
 
 /**
- * Ensures the wallet is unlocked before imperative work on non-wallet routes.
- * Tries near-zero restore from SQLite when locked; throws
- * {@link WalletUnlockRequiredError} when the UI must prompt for a password.
+ * Action-gated operation: unlock before work that needs WASM or wallet secrets
+ * on Settings, Lab, and similar non-wallet screens. Tries near-zero restore from
+ * SQLite when locked; throws {@link WalletUnlockRequiredError} when the UI must
+ * prompt for a password. Does not restore a session merely because those routes
+ * are open.
  */
 export async function ensureWalletUnlockedForAction(): Promise<void> {
   if (isWalletReadyForSecretsAccess()) {

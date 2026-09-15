@@ -104,8 +104,11 @@ Optional first-run path. A random session secret is wrapped with a **fixed passp
 While near-zero is configured:
 
 - Idle auto-lock is suppressed (manual lock still works).
-- Visiting `/wallet/*` restores the secrets session from SQLite without a user-chosen password.
-- Seed phrase reveal does not prompt for an app password when restore succeeds. If leftover near-zero settings remain while the live session is a user-chosen password, reveal still asks for that password.
+- Opening the app, Library, Lab (browse), or Settings (browse) does **not** restore the secrets session.
+- A secrets session is required only for **operations** that decrypt `wallet_secrets` or load WASM from those secrets. Those operations unwrap the stored session secret instead of asking for an app password (`restoreNearZeroSecretsSessionForOperation`):
+  - **Wallet UI** (`WalletRouteSecretsGate` on `/wallet/*`): restore while the route is gated (`hydrateNearZeroSessionForWalletRoute`).
+  - **Action-gated unlock** on Settings and Lab (`ensureWalletUnlockedForAction` / `useRequireUnlockedWallet`): descriptor reveal, network or address-type switch, mine-to-wallet, and similar.
+  - **Seed phrase reveal** (`SeedPhraseBackup`): restore or reuse the session; skip the password prompt only when that live session is the near-zero wrap. If leftover near-zero settings remain while the live session is a user-chosen password, reveal still asks for that password.
 
 **Recovery**
 

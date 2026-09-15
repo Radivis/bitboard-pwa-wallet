@@ -8,13 +8,13 @@ import {
   ensureMigrated,
   clearWalletNoMnemonicBackupFlag,
   useWalletNoMnemonicBackupFlag,
-  tryLoadNearZeroSessionIntoMemory,
 } from '@/db'
 import {
   loadWalletSecrets,
   loadWalletSecretsWithPassword,
 } from '@/db/wallet-persistence'
 import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet/wallet-query-cache-sync'
+import { restoreNearZeroSecretsSessionForOperation } from '@/lib/wallet/restore-near-zero-secrets-session'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { AppModal } from '@/components/AppModal'
 import { EnterAppPasswordModal } from '@/components/EnterAppPasswordModal'
@@ -91,7 +91,7 @@ export function SeedPhraseBackup() {
   const handleShowSeedPhraseClick = useCallback(async () => {
     await withSeedPhraseLoad(async (walletId) => {
       const walletDb = getDatabase()
-      const nearZeroReady = await tryLoadNearZeroSessionIntoMemory(walletDb)
+      const nearZeroReady = await restoreNearZeroSecretsSessionForOperation()
       if (nearZeroReady) {
         const secrets = await loadWalletSecrets(walletDb, walletId)
         revealMnemonicWords(secrets.mnemonic)

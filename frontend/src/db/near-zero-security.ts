@@ -184,7 +184,9 @@ async function endSecretsSessionAfterNearZeroMismatch(): Promise<void> {
 }
 
 /**
- * If near-zero mode is stored in the DB, unwraps the session secret and puts it in the session store.
+ * If near-zero mode is stored in the DB, unwraps the session secret and puts it in the
+ * encryption worker. UI and wallet operations must call
+ * `restoreNearZeroSecretsSessionForOperation` instead of this primitive.
  * @returns true if a session password was loaded from near-zero settings
  */
 export async function tryLoadNearZeroSessionIntoMemory(

@@ -1,6 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query'
-import { getDatabase, tryLoadNearZeroSessionIntoMemory } from '@/db'
 import { useWalletStore } from '@/stores/walletStore'
+import { restoreNearZeroSecretsSessionForOperation } from '@/lib/wallet/restore-near-zero-secrets-session'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import {
   activeWalletLoadQueryKeyPrefix,
@@ -8,7 +8,7 @@ import {
 } from '@/lib/wallet/wallet-load-query-keys'
 
 /**
- * Restores a near-zero secrets session and refreshes wallet-route hydration queries.
+ * Wallet-UI operation: restore a near-zero secrets session and refresh hydration queries.
  * The session probe can cache `false` before restore finishes; bootstrap can also keep a
  * successful result with infinite staleTime after WASM was purged. Both leave the wallet
  * gate stuck on “Unlocking wallet…”.
@@ -16,7 +16,7 @@ import {
 export async function hydrateNearZeroSessionForWalletRoute(
   queryClient: QueryClient,
 ): Promise<boolean> {
-  const restored = await tryLoadNearZeroSessionIntoMemory(getDatabase())
+  const restored = await restoreNearZeroSecretsSessionForOperation()
   if (!restored) {
     return false
   }
