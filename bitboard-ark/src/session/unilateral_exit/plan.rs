@@ -150,7 +150,7 @@ pub(crate) fn group_virtual_outpoints_by_leaf_txid(
         siblings.sort_by_key(|outpoint| outpoint.vout);
         grouped.push((leaf_txid, siblings));
     }
-    grouped.sort_by(|(left, _), (right, _)| left.cmp(right));
+    grouped.sort_by_key(|(left, _)| *left);
     grouped
 }
 
