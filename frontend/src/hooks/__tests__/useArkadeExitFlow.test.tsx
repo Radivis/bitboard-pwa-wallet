@@ -1,39 +1,32 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
 import type { ArkadeUnilateralExitInProgressDto } from '@/workers/arkade-api'
+import { useWalletStore } from '@/stores/walletStore'
 
 const mutateAsync = vi.hoisted(() => vi.fn(async () => 'txid'))
 const clearUnilateralExitJob = vi.hoisted(() => vi.fn())
-const readyTxid = 'bb'.repeat(32)
-const readyRow: ArkadeUnilateralExitInProgressDto = {
-  id: `${readyTxid}:0`,
-  txid: readyTxid,
-  vout: 0,
-  amountSats: 50_000,
-  canComplete: true,
-  virtualStatusState: 'unrolled',
-  phase: 'complete_ready',
-}
+const resetFeeSelection = vi.hoisted(() => vi.fn())
+const readyRow = vi.hoisted((): ArkadeUnilateralExitInProgressDto => {
+  const readyTxid = 'bb'.repeat(32)
+  return {
+    id: `${readyTxid}:0`,
+    txid: readyTxid,
+    vout: 0,
+    amountSats: 50_000,
+    canComplete: true,
+    virtualStatusState: 'unrolled',
+    phase: 'complete_ready',
+  }
+})
 
 vi.mock('@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime', () => ({
   clearUnilateralExitJob,
 }))
 
-vi.mock('@/stores/walletStore', () => {
-  const walletState = {
-    networkMode: 'regtest',
-    currentAddress: 'bcrt1qtest',
-    arkadeSignerMigrationHint: null,
-  }
-  return {
-    useWalletStore: (selector: (state: typeof walletState) => unknown) => selector(walletState),
-  }
-})
-
 vi.mock('@/hooks/useOnchainFeeRateSelection', () => ({
   useOnchainFeeRateSelection: () => ({
     effectiveFeeRate: 2,
-    resetFeeSelection: vi.fn(),
+    resetFeeSelection,
     feePresetSelection: 'Medium',
     presetSatPerVbByLabel: { Low: 0.5, Medium: 2, High: 10 },
     feeEstimatesRefreshing: false,
@@ -43,6 +36,10 @@ vi.mock('@/hooks/useOnchainFeeRateSelection', () => ({
     setCustomFeeRate: vi.fn(),
     useCustomFee: false,
   }),
+}))
+
+vi.mock('@/workers/arkade-factory', () => ({
+  getArkadeWorker: () => ({ getAddress: vi.fn() }),
 }))
 
 vi.mock('@/hooks/useArkadeQueries', () => ({
@@ -71,6 +68,11 @@ describe('useArkadeExitFlow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mutateAsync.mockResolvedValue('txid')
+    useWalletStore.setState({
+      networkMode: 'regtest',
+      currentAddress: 'bcrt1qtest',
+      arkadeSignerMigrationHint: null,
+    })
   })
 
   it('complete_spend_does_not_dispatch_clear_job', async () => {
@@ -90,6 +92,13 @@ describe('useArkadeExitFlow', () => {
     })
 
     expect(mutateAsync).toHaveBeenCalled()
+    expect(mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        vtxoOutpoints: [{ txid: readyRow.txid, vout: readyRow.vout }],
+        destinationAddress: 'bcrt1qtest',
+        feeRateSatPerVb: 2,
+      }),
+    )
     expect(clearUnilateralExitJob).not.toHaveBeenCalled()
   })
 })

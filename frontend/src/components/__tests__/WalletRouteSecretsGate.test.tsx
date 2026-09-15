@@ -41,10 +41,10 @@ describe('WalletRouteSecretsGate', () => {
     expect(screen.queryByTestId('wallet-unlock')).not.toBeInTheDocument()
   })
 
-  it('shows unlock UI when wallet is locked', () => {
+  it('shows unlock UI when wallet is locked', async () => {
     useWalletStore.setState({ walletStatus: 'locked' })
     renderWithProviders(<WalletRouteSecretsGate />)
-    expect(screen.getByTestId('wallet-unlock')).toBeInTheDocument()
+    expect(await screen.findByTestId('wallet-unlock')).toBeInTheDocument()
     expect(screen.queryByTestId('wallet-route-outlet')).not.toBeInTheDocument()
   })
 
