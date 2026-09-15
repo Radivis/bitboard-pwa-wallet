@@ -122,9 +122,9 @@ Only when step 2 finds at least one **Esplora-confirmed** tx that BDK still trea
 
 1. **Find candidate txids** — unconfirmed canonical txs and unconfirmed UTXOs; when `untrusted_pending > 0`, also scan `list_output()`.
 2. **Re-fetch `/tx/{txid}`** (with retries) and build anchor updates from complete status.
-3. **Extend/repair local chain** so every anchor block height has the **same hash as the anchor**, and fill gaps from anchor height through Esplora tip (`/blocks`, `/blocks/tip/*`, `/block-height/{n}` fallbacks).
+3. **Extend/repair local chain** so every anchor block height has the **same hash as the `/tx` anchor**. Gaps through Esplora tip are filled from `/blocks` / `/block-height/{n}`, but those sources **must not overwrite** an anchor height — a stale `/blocks` hash at the funding height makes BDK treat the anchor as off-chain (`is_block_in_chain` = `Some(false)`), which is the untrusted-pending failure mode.
 4. **`apply_update`** with both `tx_update.anchors` and `chain: Some(...)` — anchor-only updates are not applied without chain extension.
-5. **Up to two passes**; if unconfirmed UTXOs remain whose Esplora `/tx` status already has a **full confirmed anchor**, sync **fails** with an explicit error (surfaces sync-error instead of silent pending). Genuine **mempool-only** receives (Esplora still unconfirmed) are left pending and sync **succeeds**.
+5. **Up to two passes.** A pass that finds no complete `/tx` anchors yet still continues if Esplora later reports those txs confirmed (so we do not skip the second pass). If unconfirmed UTXOs remain whose Esplora `/tx` status already has a **full confirmed anchor**, sync **fails** with an explicit error (surfaces sync-error instead of silent pending). Genuine **mempool-only** receives (Esplora still unconfirmed) are left pending and sync **succeeds**.
 
 Entry point: `sync_wallet` → `apply_esplora_anchor_reconcile_passes` in [`crypto/src/lib.rs`](../crypto/src/lib.rs).
 
@@ -180,7 +180,7 @@ It is not required for normal post-funding dashboard sync once reconcile is work
 
 | Location | Role |
 |----------|------|
-| [`crypto/tests/esplora_tx_anchor_reconcile_tests.rs`](../crypto/tests/esplora_tx_anchor_reconcile_tests.rs) | Rust integration tests (seen_at → confirmed, chain repair, wrong hash at anchor height, empty `/blocks` fallback) |
+| [`crypto/tests/esplora_tx_anchor_reconcile_tests.rs`](../crypto/tests/esplora_tx_anchor_reconcile_tests.rs) | Rust integration tests (seen_at → confirmed, chain repair, wrong hash at anchor height, `/blocks` vs `/tx` disagreement, empty `/blocks` fallback) |
 | [`frontend/tests/e2e/helpers/regtest-onchain-balance-diagnostics.ts`](../frontend/tests/e2e/helpers/regtest-onchain-balance-diagnostics.ts) | CI failure report: Esplora vs dashboard, `pending_incoming_only`, `/tx` anchor readiness |
 | [`frontend/tests/e2e/send.spec.ts`](../frontend/tests/e2e/send.spec.ts) `@regtest` | Strict e2e contract that exposed this bug in CI |
 

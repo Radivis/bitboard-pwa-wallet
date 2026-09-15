@@ -164,11 +164,15 @@ where
 {
     tip = insert_anchor_blocks_into_chain(tip, anchors);
 
-    let min_anchor_height = anchors
+    // `/tx` anchors are the source of truth for those heights. `/blocks` can lag or
+    // disagree at the same height; overwriting would leave BDK `is_block_in_chain`
+    // as Some(false) and the receive stuck in untrusted pending.
+    let locked_anchor_heights: BTreeSet<u32> = anchors
         .iter()
         .map(|(anchor, _txid)| anchor.block_id.height)
-        .min()
-        .unwrap_or(0);
+        .collect();
+
+    let min_anchor_height = locked_anchor_heights.iter().copied().min().unwrap_or(0);
     let max_height = latest_blocks
         .keys()
         .max()
@@ -177,6 +181,10 @@ where
         .max(tip.height());
 
     for height in min_anchor_height..=max_height {
+        if locked_anchor_heights.contains(&height) {
+            continue;
+        }
+
         let Some(esplora_hash) =
             fetch_block_hash_at_height(esplora_async_client, latest_blocks, height).await?
         else {
@@ -192,6 +200,9 @@ where
     }
 
     for (&height, &block_hash) in latest_blocks.iter() {
+        if locked_anchor_heights.contains(&height) {
+            continue;
+        }
         if checkpoint_hash_at_height(&tip, height) != Some(block_hash) {
             tip = tip.insert(BlockId {
                 height,
