@@ -15,8 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-## [0.3.4] - 2026-09-16
-
+## [0.3.4] - 2026-09-18
 
 ### Added
 - **Improved unilateral exit control page with exit graph visualization**
@@ -29,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Arkade intents are persisted until they resolve; on banners for the respective waiting intent the user can cancel and retry them - the intent is properly deleted before retying
 
 ### Changed
-- Renamed "spent" bucket internally to "unspendable" for more clarity
+- Renamed "spent" bucket internally to "unspendable" for more clarity (the original *spent()* and *.is_spent* were not the same, which caused a lot of confusion) - the unspendable bucket also covers swept and unrolled VTXOs
 - Vercel Ark operator proxy streams Server-Sent Events (batch events, script subscriptions) instead of buffering long-lived responses; `maxDuration` raised to 300s
 - Renamed "pending_recovery" to "pending_recovery_due_to_expired_signer" for maximum clarity
 - Treating Arkade operator info changes like ToS changes that need to be explicity accepted by user
@@ -37,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Imports are now possible in near-zero-security mode, exports are still disabled
 
 ### Fixed
-- Expired VTXOs undergoing unilateral exit are now classified as unspendable instead of recoverable,
+- Expired VTXOs undergoing unilateral exit that are unrolled are now classified as unspendable instead of recoverable, so that the coin recovery banner is not displayed inappropriately for those VTXOs
 - Ark operator and preview-proxy failures now surface HTTP status and response body snippets in WASM error messages
 - First-run wallet create/import no longer hits a blocking secrets-session error; going back to welcome without a wallet reverts the app-password / near-zero choice
 - Factory reset no longer waits for an Arkade persistence flush making them more reliable with an active Arkade session
@@ -125,10 +124,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved variable naming in very many files
 - Renamed "sub wallet" terminology to "descriptor wallet" for consistency
 - Some other various refactoring
-
-### Fixed
-
-### Security
 
 ## [0.1.8] - 2026-05-23
 ### Added
