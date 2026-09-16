@@ -227,6 +227,10 @@ export async function tryLoadNearZeroSessionIntoMemory(
 
   let endedSessionBecauseWalletSecretsMismatch = false
   if (secretsSessionAlreadyActive) {
+    // This decrypt check is reliable because:
+    // 1. After an app password is chosen, reverting to near-zero is impossible.
+    // 2. Whole-wallet export is only possible with an app password, so a backup
+    //    cannot carry wrap-encrypted wallet_secrets into another install.
     if (await activeSessionDecryptsFirstWalletSecretsPayload(walletDb)) {
       // Reuse the live session only when it is the near-zero wrap secret.
       // A user-password session that still opens wallets while leftover

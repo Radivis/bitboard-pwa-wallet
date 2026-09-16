@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Renamed "pending_recovery" to "pending_recovery_due_to_expired_signer" for maximum clarity
 - Treating Arkade operator info changes like ToS changes that need to be explicity accepted by user
 - Near-zero-security mode suppresses idle auto-lock, and does not ask for an app password when showing the seed phrase
+- Imports are now possible in near-zero-security mode, exports are still disabled
 
 ### Fixed
 - Expired VTXOs undergoing unilateral exit are now classified as unspendable instead of recoverable,

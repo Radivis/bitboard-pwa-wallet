@@ -21,6 +21,7 @@ import {
 import { GITHUB_CHANGELOG_URL } from '@common/public-links'
 import { SettingsMainPage } from '@/pages/settings/SettingsMainPage'
 import { SettingsSecurityPage } from '@/pages/settings/SettingsSecurityPage'
+import { WALLET_EXPORT_REQUIRES_APP_PASSWORD_NOTE, WALLET_EXPORT_REQUIRES_APP_PASSWORD_NOTE_ID } from '@/components/settings/DataBackupsCard'
 import { SettingsFeaturesPage } from '@/pages/settings/SettingsFeaturesPage'
 import { SettingsAboutPage } from '@/pages/settings/SettingsAboutPage'
 
@@ -223,14 +224,27 @@ describe('Settings routes', () => {
   })
 
   describe('SettingsSecurityPage', () => {
-    it('disables wallet backup export/import in near-zero security mode with hint', () => {
+    it('shows that wallet exports require an app password next to export when near-zero is active', () => {
       nearZeroSecurityState.active = true
       renderWithProviders(<SettingsSecurityPage />)
-      expect(screen.getByRole('button', { name: 'Export wallet data' })).toBeDisabled()
-      expect(screen.getByRole('button', { name: 'Import wallet backup' })).toBeDisabled()
+      const exportButton = screen.getByRole('button', { name: 'Export wallet data' })
+      expect(exportButton).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Import wallet backup' })).toBeEnabled()
       expect(
-        screen.getByText(/Wallet export and import are not available in near-zero security mode/i),
+        screen.getByText(WALLET_EXPORT_REQUIRES_APP_PASSWORD_NOTE),
       ).toBeInTheDocument()
+      expect(exportButton).toHaveAttribute(
+        'aria-describedby',
+        WALLET_EXPORT_REQUIRES_APP_PASSWORD_NOTE_ID,
+      )
+    })
+
+    it('does not show the wallet-export password note when near-zero is inactive', () => {
+      nearZeroSecurityState.active = false
+      renderWithProviders(<SettingsSecurityPage />)
+      expect(
+        screen.queryByText(WALLET_EXPORT_REQUIRES_APP_PASSWORD_NOTE),
+      ).not.toBeInTheDocument()
     })
 
     it('disables Change app password when there are no wallets', () => {
@@ -282,6 +296,7 @@ describe('Settings routes', () => {
       renderWithProviders(<SettingsSecurityPage />)
       expect(screen.getByRole('button', { name: 'Delete all app data' })).toBeEnabled()
       expect(screen.getByRole('button', { name: 'Export wallet data' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Import wallet backup' })).toBeEnabled()
     })
 
     it('disables Delete all app data when wallets exist but the wallet is locked', () => {

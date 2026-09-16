@@ -59,7 +59,7 @@ Stores without `persist` hold session-only UI state (e.g. `unilateralExitControl
 | `near_zero_security_active` | `'1'` when mode is on |
 | `near_zero_wrapped_session_secret` | Random session secret wrapped with fixed passphrase `!Near 0 Security!` |
 
-The in-memory flag lives in `nearZeroSecurityStore` (not persisted itself). Documented as offering no meaningful security — convenience for local development or quick app tests only.
+The in-memory flag lives in `nearZeroSecurityStore` (not persisted itself). Documented as offering no meaningful security — convenience for local development or quick app tests only. After an app password is chosen, reverting to near-zero is impossible. Whole-wallet export is only possible with an app password (disabled in near-zero, with a note next to the export button). Wallet import remains available in near-zero (replace SQLite and reload).
 
 ## Library persistence
 

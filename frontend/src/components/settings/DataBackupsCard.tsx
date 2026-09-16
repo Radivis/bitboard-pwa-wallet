@@ -13,6 +13,12 @@ import { WalletBackupImportBypassModal } from '@/components/settings/WalletBacku
 import { WalletBackupImportPasswordModal } from '@/components/settings/WalletBackupImportPasswordModal'
 import { useDataBackupsCard } from '@/components/settings/use-data-backups-card'
 
+export const WALLET_EXPORT_REQUIRES_APP_PASSWORD_NOTE =
+  'Wallet exports require an app password.'
+
+export const WALLET_EXPORT_REQUIRES_APP_PASSWORD_NOTE_ID =
+  'wallet-export-requires-app-password-note'
+
 export function DataBackupsCard() {
   const {
     nearZeroActive,
@@ -122,26 +128,31 @@ export function DataBackupsCard() {
             disabled={nearZeroActive || exportBusy !== null}
             onClick={() => exportWallet()}
             className="w-full sm:w-auto"
+            aria-describedby={
+              nearZeroActive ? WALLET_EXPORT_REQUIRES_APP_PASSWORD_NOTE_ID : undefined
+            }
           >
             <Database className="size-4" aria-hidden />
             Export wallet data
           </Button>
+          {nearZeroActive ? (
+            <p
+              id={WALLET_EXPORT_REQUIRES_APP_PASSWORD_NOTE_ID}
+              className="text-sm text-muted-foreground sm:max-w-md"
+            >
+              {WALLET_EXPORT_REQUIRES_APP_PASSWORD_NOTE}
+            </p>
+          ) : null}
           <Button
             type="button"
             variant="outline"
-            disabled={nearZeroActive || exportBusy !== null || anyImportBusy}
+            disabled={exportBusy !== null || anyImportBusy}
             onClick={() => importFileInputRef.current?.click()}
             className="w-full sm:w-auto"
           >
             <Upload className="size-4" aria-hidden />
             Import wallet backup
           </Button>
-          {nearZeroActive ? (
-            <p className="text-sm text-muted-foreground sm:max-w-md">
-              Wallet export and import are not available in near-zero security mode. Set a real app
-              password in Security first.
-            </p>
-          ) : null}
         </div>
 
         <div className="flex flex-col gap-2">

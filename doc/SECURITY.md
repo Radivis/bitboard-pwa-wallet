@@ -104,6 +104,8 @@ Optional first-run path. A random session secret is wrapped with a **fixed passp
 While near-zero is configured:
 
 - Idle auto-lock is suppressed (manual lock still works).
+- You cannot revert to near-zero after setting an app password.
+- Whole-wallet export is only possible with an app password (the control is disabled in near-zero). Settings → Security → Data Backups shows a note next to **Export wallet data** that exports require an app password. Wallet **import** stays available: it replaces the local SQLite file and reloads, so leftover wrap-vs-payload checks still apply to the imported file. A signed backup from this app cannot be wrap-encrypted.
 - Opening the app, Library, Lab (browse), or Settings (browse) does **not** restore the secrets session.
 - A secrets session is required only for **operations** that decrypt `wallet_secrets` or load WASM from those secrets. Those operations unwrap the stored session secret instead of asking for an app password (`restoreNearZeroSecretsSessionForOperation`):
   - **Wallet UI** (`WalletRouteSecretsGate` on `/wallet/*`): restore while the route is gated (`hydrateNearZeroSessionForWalletRoute`).
