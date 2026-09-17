@@ -9,6 +9,7 @@ use crate::persistence::{
     pending_batch_record_overlaps_outpoints, persisted_operator_identity_for_open,
     validate_operator_identity, vtxo_exit_record_key,
 };
+use crate::session::unilateral_exit::vtxo_exit::heal_vtxo_exit_records_from_legacy;
 use ark_core::server::{DeprecatedSigner, Info};
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::secp256k1::PublicKey;
@@ -1061,4 +1062,135 @@ fn upsert_pending_collaborative_replaces_existing_collaborative_record() {
     assert_eq!(pending.len(), 1);
     assert_eq!(pending[0].amount_sats, 100_000);
     assert_eq!(pending[0].baseline_offchain_spendable_sats, Some(180_000));
+}
+
+const PUBLISHED_V3_KITCHEN_SINK_JSON: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/fixtures/v0_3_3/published_kitchen_sink.json"
+));
+
+const V3_SPENDABLE_TXID: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const V3_UNROLLED_TXID: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+const V3_SPENT_TXID: &str = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+const V3_PENDING_LIVE_TXID: &str =
+    "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+const V3_OWNER_PK_HEX: &str = "1111111111111111111111111111111111111111111111111111111111111111";
+const V3_SECRET_HEX: &str = "2222222222222222222222222222222222222222222222222222222222222222";
+const V3_SIGNER_PK_HEX: &str = "3333333333333333333333333333333333333333333333333333333333333333";
+
+/// Published 0.3.3 write schema is git `b6bc57f` (`BITBOARD_ARK_PERSISTENCE_VERSION = 3`).
+#[test]
+fn published_v3_kitchen_sink_imports_heals_and_reexports_v12() {
+    let mut parsed = BitboardArkPersistence::parse_import(Some(PUBLISHED_V3_KITCHEN_SINK_JSON));
+    let identity = parsed
+        .operator_identity
+        .clone()
+        .expect("v3 identity must not be wiped on parse failure");
+    assert_eq!(identity.signer_pk_hex, V3_SIGNER_PK_HEX);
+    assert_eq!(identity.network, "signet");
+    assert_eq!(parsed.wallet_db.offchain_next_derivation_index, 7);
+    assert_eq!(parsed.wallet_db.boarding_outputs.len(), 1);
+    assert_eq!(
+        parsed.wallet_db.boarding_outputs[0].owner_pk_hex,
+        V3_OWNER_PK_HEX
+    );
+    assert_eq!(
+        parsed
+            .wallet_db
+            .secret_keys_by_owner_pk_hex
+            .get(V3_OWNER_PK_HEX),
+        Some(&V3_SECRET_HEX.to_string())
+    );
+    let snapshot = parsed
+        .wallet_db
+        .offchain_vtxo_snapshot
+        .as_ref()
+        .expect("v3 snapshot must survive parse");
+    assert_eq!(snapshot.virtual_tx_outpoints.len(), 3);
+    assert!(snapshot.unilateral_exit_materials_by_host_tx.is_empty());
+    assert_eq!(parsed.wallet_db.pending_exit_deductions.len(), 4);
+    assert!(parsed.wallet_db.vtxo_exit_records.is_empty());
+    assert!(parsed.wallet_db.host_tx_observations.is_empty());
+    assert!(parsed.wallet_db.unilateral_exit_frontend.is_none());
+    assert!(!parsed.autonomous_mode);
+
+    heal_vtxo_exit_records_from_legacy(
+        parsed.wallet_db.offchain_vtxo_snapshot.as_ref(),
+        &parsed.wallet_db.pending_exit_deductions,
+        &mut parsed.wallet_db.vtxo_exit_records,
+        1_700_000_500,
+    );
+
+    let unrolled = parsed
+        .wallet_db
+        .vtxo_exit_records
+        .get(&vtxo_exit_record_key(V3_UNROLLED_TXID, 0))
+        .expect("unrolled snapshot row heals to unrolled");
+    assert_eq!(unrolled.phase, VtxoExitPhase::Unrolled);
+    assert_eq!(unrolled.amount_sats, 25_000);
+    let tagged = parsed
+        .wallet_db
+        .vtxo_exit_records
+        .get(&vtxo_exit_record_key(V3_PENDING_LIVE_TXID, 0))
+        .expect("unilateral pending on a live outpoint heals to tagged");
+    assert_eq!(tagged.phase, VtxoExitPhase::Tagged);
+    assert_eq!(tagged.amount_sats, 8_000);
+    assert!(
+        !parsed
+            .wallet_db
+            .vtxo_exit_records
+            .contains_key(&vtxo_exit_record_key(V3_SPENDABLE_TXID, 0)),
+        "spendable VTXO without pending must not gain an exit record"
+    );
+    assert!(
+        !parsed
+            .wallet_db
+            .vtxo_exit_records
+            .contains_key(&vtxo_exit_record_key(V3_SPENT_TXID, 0)),
+        "spent VTXO must not heal from leftover unilateral pending"
+    );
+    assert_eq!(parsed.wallet_db.vtxo_exit_records.len(), 2);
+
+    let mut envelope = BitboardArkPersistence::empty(identity);
+    envelope.wallet_db = parsed.wallet_db.clone();
+    envelope.autonomous_mode = parsed.autonomous_mode;
+    let exported = serde_json::to_value(&envelope).expect("re-export");
+    assert_eq!(
+        exported["version"], BITBOARD_ARK_PERSISTENCE_VERSION,
+        "re-export must stamp the current envelope version"
+    );
+    assert!(exported.get("swap_storage").is_none());
+    assert!(exported.get("_legacy_ignored").is_none());
+    assert!(
+        exported
+            .get("autonomous_mode")
+            .is_none_or(|value| value == false)
+    );
+
+    let snapshot = envelope
+        .wallet_db
+        .offchain_vtxo_snapshot
+        .as_ref()
+        .expect("snapshot after re-export");
+    assert_eq!(snapshot.virtual_tx_outpoints.len(), 3);
+    assert_eq!(snapshot.virtual_tx_outpoints[0].txid, V3_SPENDABLE_TXID);
+    assert!(!snapshot.virtual_tx_outpoints[0].is_unrolled);
+    assert!(!snapshot.virtual_tx_outpoints[0].is_spent);
+    assert_eq!(snapshot.virtual_tx_outpoints[1].txid, V3_UNROLLED_TXID);
+    assert!(snapshot.virtual_tx_outpoints[1].is_unrolled);
+    assert!(!snapshot.virtual_tx_outpoints[1].is_spent);
+    assert_eq!(snapshot.virtual_tx_outpoints[2].txid, V3_SPENT_TXID);
+    assert!(snapshot.virtual_tx_outpoints[2].is_spent);
+    assert!(snapshot.unilateral_exit_materials_by_host_tx.is_empty());
+    assert_eq!(envelope.wallet_db.offchain_next_derivation_index, 7);
+    assert_eq!(
+        envelope
+            .wallet_db
+            .secret_keys_by_owner_pk_hex
+            .get(V3_OWNER_PK_HEX),
+        Some(&V3_SECRET_HEX.to_string())
+    );
+    assert!(envelope.wallet_db.host_tx_observations.is_empty());
+    assert!(envelope.wallet_db.unilateral_exit_frontend.is_none());
+    assert!(!envelope.autonomous_mode);
 }

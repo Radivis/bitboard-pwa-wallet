@@ -491,6 +491,7 @@ impl ArkSession {
     }
 
     /// Test-only hook for native integration tests that need to simulate ASP snapshot interference.
+    #[cfg(not(target_arch = "wasm32"))]
     #[doc(hidden)]
     pub fn set_offchain_vtxo_snapshot_for_tests(
         &self,
@@ -500,6 +501,7 @@ impl ArkSession {
     }
 
     /// Marks a job leaf VTXO as ASP-swept (not unrolled) in the persisted offchain snapshot.
+    #[cfg(not(target_arch = "wasm32"))]
     #[doc(hidden)]
     pub fn mark_job_target_asp_swept_in_offchain_snapshot_for_tests(
         &self,

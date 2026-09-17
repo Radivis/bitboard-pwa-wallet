@@ -23,6 +23,7 @@ import { useVtxoExitSnapshots } from '@/hooks/useUnilateralExitLifecycleSnapshot
 import {
   ARKADE_VTXO_CLASSIFICATIONS,
   ARKADE_VTXO_VIEWER_PAGE_SIZE,
+  EMPTY_ARKADE_VTXO_ROWS,
   countArkadeVtxoClassifications,
   filterArkadeVtxoRows,
   getArkadeVtxoClassificationLabel,
@@ -54,7 +55,7 @@ export function ArkadeVtxoViewerPage() {
     setPageIndex(0)
   }, [searchQuery, classificationFilter, hideFinalized, sortKey])
 
-  const allRows = vtxoListQuery.data?.rows ?? []
+  const allRows = vtxoListQuery.data?.rows ?? EMPTY_ARKADE_VTXO_ROWS
   const classificationCounts = useMemo(
     () => countArkadeVtxoClassifications(allRows),
     [allRows],

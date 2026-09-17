@@ -434,7 +434,6 @@ export interface ArkadeUnilateralExitBatchEstimateParams {
 
 export type ArkadeUnilateralExitPhaseKind =
   | 'idle'
-  | 'broadcasting'
   | 'waiting'
   | 'complete'
 

@@ -11,14 +11,23 @@ import {
 import { cn } from '@/lib/shared/utils'
 import type { ArkadeVtxoClassification } from '@/workers/arkade-api'
 
-const CLASSIFICATION_ICONS: Record<ArkadeVtxoClassification, LucideIcon> = {
-  pre_confirmed: BanknoteArrowUp,
-  confirmed: Coins,
-  recoverable_settleable: Forklift,
-  recoverable_pending_operator_sweep: BrushCleaning,
-  pending_recovery_due_to_expired_signer: PencilSparkles,
-  exiting: SquareArrowRightExit,
-  finalized: Trash2,
+function classificationIcon(classification: ArkadeVtxoClassification): LucideIcon {
+  switch (classification) {
+    case 'pre_confirmed':
+      return BanknoteArrowUp
+    case 'confirmed':
+      return Coins
+    case 'recoverable_settleable':
+      return Forklift
+    case 'recoverable_pending_operator_sweep':
+      return BrushCleaning
+    case 'pending_recovery_due_to_expired_signer':
+      return PencilSparkles
+    case 'exiting':
+      return SquareArrowRightExit
+    case 'finalized':
+      return Trash2
+  }
 }
 
 interface ArkadeVtxoClassificationIconProps {
@@ -30,6 +39,6 @@ export function ArkadeVtxoClassificationIcon({
   classification,
   className,
 }: ArkadeVtxoClassificationIconProps) {
-  const Icon = CLASSIFICATION_ICONS[classification]
+  const Icon = classificationIcon(classification)
   return <Icon aria-hidden className={cn('shrink-0', className)} />
 }

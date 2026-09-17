@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { Eraser } from 'lucide-react'
 import { toast } from 'sonner'
-import { getDatabase, ensureMigrated, useWallets } from '@/db'
+import { getDatabase, ensureMigrated, isWalletDatabaseTeardownBlockedError, useWallets } from '@/db'
 import { anyWalletHasNoMnemonicBackupFlag } from '@/db/wallet-no-mnemonic-backup'
 import { formatBTC, formatSats } from '@/lib/wallet/bitcoin-utils'
 import {
@@ -45,21 +45,33 @@ export function CompleteDataWipeCard() {
     setRiskUnderstood(false)
   }, [])
 
-  const advanceToNoBackupOrWipe = useCallback(async () => {
-    await ensureMigrated()
-    if (await anyWalletHasNoMnemonicBackupFlag(getDatabase())) {
-      setNoBackupModalOpen(true)
-      return
-    }
+  const runFactoryResetWipeFromCard = useCallback(async (logContext: string) => {
     try {
       setWipeBusy(true)
       await wipeAllAppDataOpfsAndReload()
     } catch (err) {
-      console.error('[CompleteDataWipeCard] wipeAllAppDataOpfsAndReload failed (advanceToNoBackupOrWipe)', err)
+      console.error(`[CompleteDataWipeCard] wipeAllAppDataOpfsAndReload failed (${logContext})`, err)
       toast.error(userFacingErrorMessage(err))
       setWipeBusy(false)
     }
   }, [])
+
+  const advanceToNoBackupOrWipe = useCallback(async () => {
+    try {
+      await ensureMigrated()
+      if (await anyWalletHasNoMnemonicBackupFlag(getDatabase())) {
+        setNoBackupModalOpen(true)
+        return
+      }
+    } catch (err) {
+      const skipBackupCheckBecauseTeardownBlocked = isWalletDatabaseTeardownBlockedError(err)
+      if (!skipBackupCheckBecauseTeardownBlocked) {
+        toast.error(userFacingErrorMessage(err))
+        return
+      }
+    }
+    await runFactoryResetWipeFromCard('advanceToNoBackupOrWipe')
+  }, [runFactoryResetWipeFromCard])
 
   const onRiskModalContinue = useCallback(async () => {
     if (!riskUnderstood) return
@@ -130,15 +142,8 @@ export function CompleteDataWipeCard() {
 
   const onNoBackupProceedAnyway = useCallback(async () => {
     setNoBackupModalOpen(false)
-    try {
-      setWipeBusy(true)
-      await wipeAllAppDataOpfsAndReload()
-    } catch (err) {
-      console.error('[CompleteDataWipeCard] wipeAllAppDataOpfsAndReload failed (onNoBackupProceedAnyway)', err)
-      toast.error(userFacingErrorMessage(err))
-      setWipeBusy(false)
-    }
-  }, [])
+    await runFactoryResetWipeFromCard('onNoBackupProceedAnyway')
+  }, [runFactoryResetWipeFromCard])
 
   return (
     <>

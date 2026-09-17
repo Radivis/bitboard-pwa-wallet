@@ -5,6 +5,7 @@
 import { pbkdf2Sync } from 'node:crypto'
 import type { EncryptedBlob } from '@/lib/shared/encrypted-blob-types'
 import { ARGON2_KDF_PHC_PRODUCTION } from '@/lib/shared/kdf-phc-constants'
+import { MSG_SECRETS_SESSION_ALREADY_ACTIVE } from '@/workers/encryption-secrets-session'
 
 const SALT_LENGTH_BYTES = 16
 const IV_LENGTH_BYTES = 12
@@ -68,6 +69,9 @@ export function getMockEncryptionWorker() {
     setSecretsPort: async (_port: MessagePort): Promise<void> => {},
 
     async beginSecretsSession(password: string): Promise<void> {
+      if (sessionPassword != null) {
+        throw new Error(MSG_SECRETS_SESSION_ALREADY_ACTIVE)
+      }
       sessionPassword = password
     },
 

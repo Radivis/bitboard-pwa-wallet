@@ -6,8 +6,10 @@ feature:
   requirements:
     - LockLifecycle gates all rails; no load/sync/save when phase is no-lock or locking
     - Per-rail load, sync, and save proceed independently of the current URL; navigation must not cancel in-flight lifecycle work
-    - Wallet hydration (near-zero session restore and bootstrap unlock load) may start only when the user visits a wallet route (/wallet/*); non-wallet routes must not start hydration
-    - Features on Settings, Lab, or other non-wallet routes that need an unlocked wallet must use requireUnlockedWallet at action time, not pathname-based hydration
+    - Wallet hydration (near-zero session restore and bootstrap unlock load) may start only for operations that need a secrets session: the /wallet/* secrets gate, or action-gated unlock; browsing Library, Lab, or Settings must not restore the session
+    - The near-zero in-memory active flag may be synced from SQLite on database ready for any route; that flag sync must not restore the secrets session or start bootstrap load
+    - Visiting /wallet while locked in near-zero mode must restore the session, refresh hydration queries, and finish bootstrap; the Unlocking wallet spinner must not remain after WASM load succeeds
+    - Features on Settings, Lab, or other non-wallet routes that need an unlocked wallet must use ensureWalletUnlockedForAction / useRequireUnlockedWallet at action time, not pathname-based hydration
     - Post-lock redirect from wallet routes to Library is retained for privacy
     - Sync and save orchestrators must not read pathname or route stores
     - Each rail exposes independent LoadLifecyclePhase, SyncLifecyclePhase, SaveLifecyclePhase
@@ -200,20 +202,39 @@ feature:
           - frontend/src/components/wallet/RailSyncControl.tsx
     route_hydration:
       - id: LIFE-ROUTE-01
-        description: Wallet hydration starts only on wallet route entry (/wallet/*), not on Settings or Lab navigation
+        description: Wallet hydration starts only for operations that need a secrets session (wallet-route gate or action-gated unlock), not on Settings or Lab navigation
         implemented_by:
           - frontend/src/lib/shared/pathname-is-wallet-route.ts
           - frontend/src/hooks/useActiveWalletLoadQuery.ts
           - frontend/src/components/AppInitializer.tsx
-          - frontend/src/components/DatabaseReadyGate.tsx
+          - frontend/src/components/WalletUnlockOrNearZeroLoading.tsx
+          - frontend/src/lib/wallet/restore-near-zero-secrets-session.ts
       - id: LIFE-ROUTE-02
-        description: requireUnlockedWallet gates actions that need WASM/secrets on non-wallet routes; does not hydrate on route entry
+        description: ensureWalletUnlockedForAction / useRequireUnlockedWallet gates actions that need WASM/secrets on non-wallet routes; does not hydrate on route entry
         implemented_by:
           - frontend/src/lib/wallet/require-unlocked-wallet.ts
           - frontend/src/hooks/useRequireUnlockedWallet.tsx
+          - frontend/src/lib/wallet/restore-near-zero-secrets-session.ts
       - id: LIFE-ROUTE-03
         description: Post-lock redirect from wallet routes to Library remains for privacy
         implemented_by: frontend/src/lib/shared/app-router.ts
+      - id: LIFE-ROUTE-04
+        description: Near-zero visit to a locked /wallet route restores the session from SQLite even if the in-memory flag is stale, refreshes hydration queries, and finishes bootstrap instead of remaining on Unlocking wallet; a failed restore must not clear the in-memory near-zero flag or re-arm idle auto-lock
+        implemented_by:
+          - frontend/src/lib/wallet/near-zero-wallet-hydration.ts
+          - frontend/src/lib/wallet/__tests__/near-zero-wallet-hydration.test.ts
+          - frontend/src/components/WalletUnlockOrNearZeroLoading.tsx
+          - frontend/src/components/__tests__/WalletUnlockOrNearZeroLoading.near-zero.test.tsx
+          - frontend/src/hooks/useActiveWalletDescriptorWalletBootstrap.ts
+          - frontend/src/hooks/__tests__/useActiveWalletDescriptorWalletBootstrap.test.tsx
+      - id: LIFE-ROUTE-05
+        description: Near-zero active flag is synced from SQLite on database ready for any route without restoring the secrets session; idle auto-lock stays disarmed while that flag is on
+        implemented_by:
+          - frontend/src/db/near-zero-security.ts
+          - frontend/src/db/__tests__/near-zero-security.test.ts
+          - frontend/src/components/DatabaseReadyGate.tsx
+          - frontend/src/stores/sessionStore.ts
+          - frontend/src/stores/__tests__/auto-lock-security.test.ts
     invariants:
       - id: LIFE-INV-01
         description: not-configured applies to all three lifecycles on a rail simultaneously

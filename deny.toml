@@ -9,3 +9,6 @@ ignore = [
     # ark-fees adopts cel 0.13+ (pastey) on crates.io.
     { id = "RUSTSEC-2024-0436", reason = "transitive paste via ark-fees/cel; bitboard-ark only; unmaintained INFO advisory" },
 ]
+# Remaining warn-only: secp256k1 0.32.0-beta.2 is yanked. ark-core/ark-client 0.9.3
+# pin it for MuSig2; every 0.32 beta is yanked and 0.33 needs ark-sdk 0.11. Revisit
+# when rebasing the vendored ark crates.

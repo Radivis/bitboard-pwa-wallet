@@ -363,6 +363,9 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test-utils/setup.ts'],
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    // Local runs keep Vitest's default worker count. CI caps parallelism so
+    // four jsdom forks stay within GitHub-hosted RAM (see Frontend quality).
+    ...(process.env.CI ? { maxWorkers: 4 } : {}),
     coverage: {
       provider: 'v8',
       // Only 'lcov' for HTML (writes coverage/lcov-report/). Avoid 'html' to prevent duplicate coverage/ and coverage/lcov-report/.

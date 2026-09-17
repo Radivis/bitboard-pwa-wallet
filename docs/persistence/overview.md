@@ -92,7 +92,7 @@ Plaintext secrets never cross the main thread: workers communicate with `encrypt
 | Web Locks API | `bitboard-lab-writer` | Lab SQLite snapshot writes |
 | CAS | `wallet_secrets.revision` | Concurrent encrypted payload updates |
 
-Factory reset (`wipe-all-app-data-opfs-and-reload.ts`) tears down workers, blocks storage adapters, and removes OPFS files.
+Factory reset (`wipe-all-app-data-opfs-and-reload.ts`) soft-blocks Zustand persist, aborts Arkade without flushing, hard-blocks `getDatabase()`, then removes OPFS files.
 
 ## TanStack Query vs persistence
 

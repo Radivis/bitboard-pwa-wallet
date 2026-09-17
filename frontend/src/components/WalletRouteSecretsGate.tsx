@@ -4,8 +4,10 @@ import { useWalletStore } from '@/stores/walletStore'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 
 /**
- * Blocks every `/wallet/*` route until the active wallet session is unlocked or bootstrapping.
- * Settings and other non-wallet routes use {@link useRequireUnlockedWallet} for inline unlock.
+ * Wallet-UI operation: blocks `/wallet/*` until the active wallet is unlocked or
+ * bootstrapping. That is one secrets-session requirement, not a blanket restore
+ * for the whole app. Settings and Lab use {@link useRequireUnlockedWallet} for
+ * other operations that need WASM or secrets.
  */
 export function WalletRouteSecretsGate() {
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)

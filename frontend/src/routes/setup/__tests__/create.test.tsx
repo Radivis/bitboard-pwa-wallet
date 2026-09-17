@@ -68,6 +68,12 @@ vi.mock('@/lib/wallet/wallet-secrets-session', () => ({
   isWalletSecretsSessionActive: () => mockIsWalletSecretsSessionActive(),
 }))
 
+const mockAbandonFirstRunAppPasswordChoiceIfNoWallets = vi.fn().mockResolvedValue(undefined)
+vi.mock('@/lib/wallet/abandon-first-run-app-password-choice', () => ({
+  abandonFirstRunAppPasswordChoiceIfNoWallets: (...args: unknown[]) =>
+    mockAbandonFirstRunAppPasswordChoiceIfNoWallets(...args),
+}))
+
 const dbMocks = vi.hoisted(() => ({
   mockMutateAsync: vi.fn().mockResolvedValue(1),
   mockPersistNewWalletWithSecrets: vi.fn().mockResolvedValue(1),
@@ -142,6 +148,7 @@ describe('CreateWalletPage', () => {
     vi.clearAllMocks()
     mockEnsureWalletSecretsSession.mockResolvedValue(undefined)
     mockIsWalletSecretsSessionActive.mockResolvedValue(true)
+    mockAbandonFirstRunAppPasswordChoiceIfNoWallets.mockResolvedValue(undefined)
     dbMocks.mockMutateAsync.mockResolvedValue(1)
     dbMocks.mockPersistNewWalletWithSecrets.mockResolvedValue(1)
     dbMocks.mockSetWalletNoMnemonicBackupFlag.mockResolvedValue(undefined)
@@ -339,5 +346,17 @@ describe('CreateWalletPage', () => {
     expect(dbMocks.mockSetWalletNoMnemonicBackupFlag).toHaveBeenCalled()
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/wallet' })
     expect(screen.queryByText('Step 2 of 3')).not.toBeInTheDocument()
+  })
+
+  it('back arrow abandons first-run app password choice and returns to setup', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<CreateWalletPage />)
+
+    await user.click(screen.getByRole('button', { name: 'Back to setup' }))
+
+    await waitFor(() => {
+      expect(mockAbandonFirstRunAppPasswordChoiceIfNoWallets).toHaveBeenCalledTimes(1)
+    })
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/setup' })
   })
 })

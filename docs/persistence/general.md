@@ -59,7 +59,7 @@ Stores without `persist` hold session-only UI state (e.g. `unilateralExitControl
 | `near_zero_security_active` | `'1'` when mode is on |
 | `near_zero_wrapped_session_secret` | Random session secret wrapped with fixed passphrase `!Near 0 Security!` |
 
-The in-memory flag lives in `nearZeroSecurityStore` (not persisted itself). Documented as offering no meaningful security — convenience for local development or quick app tests only.
+The in-memory flag lives in `nearZeroSecurityStore` (not persisted itself). Documented as offering no meaningful security — convenience for local development or quick app tests only. After an app password is chosen, reverting to near-zero is impossible. Whole-wallet export is only possible with an app password (disabled in near-zero, with a note next to the export button). Wallet import remains available in near-zero (replace SQLite and reload).
 
 ## Library persistence
 
@@ -87,6 +87,7 @@ Minimal use only — never for secrets.
 | Lab | Unsigned ZIP | Replace-only |
 
 Factory reset: `wipe-all-app-data-opfs-and-reload.ts` removes both OPFS databases and reloads.
+Wipe aborts rails **without flushing** (state is discarded). Zustand persist is soft-blocked first; `getDatabase()` is hard-blocked only immediately before Kysely destroy + OPFS remove. If destroy has not completed, a wipe error clears the teardown guards so retry can proceed.
 
 ## Concurrency
 
@@ -96,7 +97,7 @@ Factory reset: `wipe-all-app-data-opfs-and-reload.ts` removes both OPFS database
 | Web Lock | `bitboard-lab-writer` | Lab DB writes |
 | CAS | `wallet_secrets.revision` | Encrypted payload updates (max 8 retries) |
 
-`blockSqliteStorageForTeardown()` stops Zustand I/O before database destruction during factory reset.
+`blockSqliteStoragePersistForTeardown()` stops Zustand I/O early during factory reset. `blockWalletAndLabDatabaseAccessForTeardown()` hard-blocks `getDatabase()` immediately before destroy so OPFS files are not reopened.
 
 ## Related documentation
 

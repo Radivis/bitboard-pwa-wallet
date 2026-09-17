@@ -1,0 +1,105 @@
+{
+  "version": 3,
+  "engine": "ark-rs",
+  "ark_sdk_version": "0.9.3",
+  "operator_identity": {
+    "signer_pk_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+    "network": "signet"
+  },
+  "wallet_db": {
+    "boarding_outputs": [
+      {
+        "owner_pk_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "exit_delay_consensus": 144,
+        "address": "tb1qboardlegacyv3"
+      }
+    ],
+    "secret_keys_by_owner_pk_hex": {
+      "1111111111111111111111111111111111111111111111111111111111111111": "2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "offchain_next_derivation_index": 7,
+    "offchain_vtxo_snapshot": {
+      "synced_at": 1700000000,
+      "dust_sats": 330,
+      "virtual_tx_outpoints": [
+        {
+          "txid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "vout": 0,
+          "created_at": 1700000000,
+          "expires_at": 1800000000,
+          "amount_sats": 50000,
+          "script_hex": "5120aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "is_preconfirmed": false,
+          "is_swept": false,
+          "is_unrolled": false,
+          "is_spent": false,
+          "commitment_txids": [
+            "0101010101010101010101010101010101010101010101010101010101010101"
+          ]
+        },
+        {
+          "txid": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "vout": 0,
+          "created_at": 1700000100,
+          "expires_at": 1800000100,
+          "amount_sats": 25000,
+          "script_hex": "5120bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "is_preconfirmed": false,
+          "is_swept": false,
+          "is_unrolled": true,
+          "is_spent": false,
+          "commitment_txids": [
+            "0101010101010101010101010101010101010101010101010101010101010101"
+          ]
+        },
+        {
+          "txid": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "vout": 0,
+          "created_at": 1700000200,
+          "expires_at": 1800000200,
+          "amount_sats": 12000,
+          "script_hex": "5120cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "is_preconfirmed": false,
+          "is_swept": false,
+          "is_unrolled": false,
+          "is_spent": true,
+          "spent_by": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "commitment_txids": [
+            "0101010101010101010101010101010101010101010101010101010101010101"
+          ]
+        }
+      ]
+    },
+    "pending_exit_deductions": [
+      {
+        "kind": "unilateral",
+        "vtxo_txid": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "vout": 0,
+        "amount_sats": 8000,
+        "started_at": 1700000300
+      },
+      {
+        "kind": "unilateral",
+        "vtxo_txid": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "vout": 0,
+        "amount_sats": 12000,
+        "started_at": 1700000210
+      },
+      {
+        "kind": "unilateral",
+        "vtxo_txid": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "vout": 0,
+        "amount_sats": 25000,
+        "started_at": 1700000110
+      },
+      {
+        "kind": "collaborative",
+        "amount_sats": 40000,
+        "started_at": 1700000400,
+        "baseline_offchain_spendable_sats": 75000
+      }
+    ]
+  },
+  "swap_storage": {},
+  "_legacy_ignored": true
+}

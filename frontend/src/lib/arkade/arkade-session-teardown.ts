@@ -10,9 +10,10 @@ import { terminateArkadeWorker } from '@/workers/arkade-factory'
 /**
  * Full Arkade session teardown after optional flush/close work.
  *
- * Callers: `closeArkadeSession`, `abortArkadeSessionForNetworkSwitch` in
- * `arkade-session-service.ts`. Load failures that should surface `load-error` only
- * terminate the worker and clear the dashboard store — they must not call this helper.
+ * Callers: `closeArkadeSession`, `abortArkadeSessionForNetworkSwitch`,
+ * `abortArkadeSessionForFactoryReset` in `arkade-session-service.ts`. Load failures that should
+ * surface `load-error` only terminate the worker and clear the dashboard store — they must not
+ * call this helper.
  */
 export function tearDownArkadeWorkerAndClientState(): void {
   resetUnilateralExitForArkadeSessionTeardown()

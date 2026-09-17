@@ -128,15 +128,13 @@ export async function fetchEsploraTxDiagnosticReport(
       ? parseEsploraTxStatusFromTxEndpointBody(txid, txJsonProbe.body)
       : null
 
-  let inferredConfirmations = 0
-  if (merkleBlockHeight != null && tipHeight != null) {
-    inferredConfirmations = Math.max(0, tipHeight - merkleBlockHeight + 1)
-  } else {
-    inferredConfirmations = Math.max(
-      confirmationsFromStatus(statusSnapshot, tipHeight),
-      confirmationsFromStatus(txJsonStatus, tipHeight),
-    )
-  }
+  const inferredConfirmations =
+    merkleBlockHeight != null && tipHeight != null
+      ? Math.max(0, tipHeight - merkleBlockHeight + 1)
+      : Math.max(
+          confirmationsFromStatus(statusSnapshot, tipHeight),
+          confirmationsFromStatus(txJsonStatus, tipHeight),
+        )
 
   return {
     txid,

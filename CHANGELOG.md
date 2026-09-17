@@ -8,26 +8,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Autonomous mode persists per operator as a trust posture: the wallet does not contact that ASP until the user explicitly leaves (including after unlock/reload)
+
+### Changed
+
+### Fixed
+
+### Security
+
+## [0.3.4] - 2026-09-18
+
+### Added
+- **Improved unilateral exit control page with exit graph visualization**
+- The new autonomous mode persists per operator as a trust posture: the wallet does not contact that ASP until the user explicitly leaves that mode (including after unlock/reload)
 - VTXO viewer for Arkade in wallet management
 - Persist materials needed for unilateral exit in case Arkade operator actually goes down
 - Actually check Arkade operator view when unolloing via post-unroll operator indexer poll with graceful timeout warning when on-chain unroll is confirmed but ASP `is_unrolled` lags; sticky `is_unrolled` merge during operator sync for in-list rows
 - Explicit `unilateral_exit_watches` registry with post-sync reconcile; targeted operator lookups and Esplora probes per truth table; non-blocking `exitingVtxoWarning` on sync
-- **Improved unilateral exit control page with exit graph visualization**
 - The app now checks for changes in the Arkade server info digest and displays a modal with the changes
 - Arkade intents are persisted until they resolve; on banners for the respective waiting intent the user can cancel and retry them - the intent is properly deleted before retying
 
 ### Changed
-- Renamed "spent" bucket internally to "unspendable" for more clarity
+- Renamed "spent" bucket internally to "unspendable" for more clarity (the original *spent()* and *.is_spent* were not the same, which caused a lot of confusion) - the unspendable bucket also covers swept and unrolled VTXOs
 - Vercel Ark operator proxy streams Server-Sent Events (batch events, script subscriptions) instead of buffering long-lived responses; `maxDuration` raised to 300s
 - Renamed "pending_recovery" to "pending_recovery_due_to_expired_signer" for maximum clarity
 - Treating Arkade operator info changes like ToS changes that need to be explicity accepted by user
+- Near-zero-security mode suppresses idle auto-lock
+- Imports are now possible in near-zero-security mode, exports are still disabled
 
 ### Fixed
-- Expired VTXOs undergoing unilateral exit are now classified as unspendable instead of recoverable,
+- Expired VTXOs undergoing unilateral exit that are unrolled are now classified as unspendable instead of recoverable, so that the coin recovery banner is not displayed inappropriately for those VTXOs
 - Ark operator and preview-proxy failures now surface HTTP status and response body snippets in WASM error messages
+- First-run wallet create/import no longer hits a blocking secrets-session error; going back to welcome without a wallet reverts the app-password / near-zero choice
+- Factory reset no longer waits for an Arkade persistence flush making them more reliable with an active Arkade session
+- Wallet backup import retries OPFS file removal after a successful manifest verify so a locked WAL/SHM file is less likely to fail the replace
+- `throw redirect()` is no longer used in routing (it could blank the shell); `/lab` opens the blocks view and Settings data-backups uses in-tree navigation
+- Near-zero-security mode does not ask for an app password when showing the seed phrase
 
-### Security
 
 ## [0.3.3] - 2026-07-09
 
@@ -108,10 +124,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved variable naming in very many files
 - Renamed "sub wallet" terminology to "descriptor wallet" for consistency
 - Some other various refactoring
-
-### Fixed
-
-### Security
 
 ## [0.1.8] - 2026-05-23
 ### Added

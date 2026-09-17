@@ -1,9 +1,8 @@
 import { useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useWalletStore } from '@/stores/walletStore'
 import { activeWalletLoadQueryKeyPrefix } from '@/lib/wallet/wallet-load-query-keys'
-import { appQueryClient } from '@/lib/shared/app-query-client'
 import { useActiveWalletLoadQuery } from '@/hooks/useActiveWalletLoadQuery'
-import { isWalletSecretsSessionActive } from '@/lib/wallet/wallet-secrets-session'
 
 /**
  * Loads the active descriptor wallet into WASM when a session exists but the wallet is
@@ -11,14 +10,16 @@ import { isWalletSecretsSessionActive } from '@/lib/wallet/wallet-secrets-sessio
  * the previous imperative auto-unlock effect in AppInitializer.
  */
 export function useActiveWalletDescriptorWalletBootstrap(): void {
+  const queryClient = useQueryClient()
   const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   useActiveWalletLoadQuery()
 
   useEffect(() => {
     if (walletStatus !== 'locked') return
-    void (async () => {
-      if (await isWalletSecretsSessionActive()) return
-      appQueryClient.removeQueries({ queryKey: [...activeWalletLoadQueryKeyPrefix] })
-    })()
-  }, [walletStatus])
+    const hasSuccessfulBootstrap = queryClient
+      .getQueriesData({ queryKey: [...activeWalletLoadQueryKeyPrefix] })
+      .some(([, bootstrapData]) => bootstrapData != null)
+    if (!hasSuccessfulBootstrap) return
+    queryClient.removeQueries({ queryKey: [...activeWalletLoadQueryKeyPrefix] })
+  }, [walletStatus, queryClient])
 }

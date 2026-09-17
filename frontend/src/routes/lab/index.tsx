@@ -1,15 +1,12 @@
-import { createFileRoute, redirect } from '@tanstack/react-router'
+import { createFileRoute, Navigate } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/lab/')({
-  // TanStack Router needs a route module for `/lab/`; we send users straight to `/lab/blocks` so
-  // the lab area has one canonical landing (blocks) without a duplicate index UI or two URLs.
-  beforeLoad: () => {
-    throw redirect({ to: '/lab/blocks' })
-  },
+  // Do not `throw redirect()` here. After a slow `/lab` beforeLoad (unlocked
+  // wallet switching into Lab), TanStack can render status `redirected` without
+  // a load promise and `throw undefined`, which blanks the app.
   component: LabIndexRedirect,
 })
 
-/** Never rendered: `beforeLoad` always redirects to `/lab/blocks`. */
 function LabIndexRedirect() {
-  return null
+  return <Navigate to="/lab/blocks" replace />
 }

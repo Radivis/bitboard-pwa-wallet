@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
-import { useNavigate, Link } from '@tanstack/react-router'
+import { useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
+import { CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { EnterAppPasswordModal } from '@/components/EnterAppPasswordModal'
 import { SetAppPasswordModal } from '@/components/SetAppPasswordModal'
+import { SetupBackToWelcomeButton } from '@/components/SetupBackToWelcomeButton'
 import { WalletUnlock } from '@/components/WalletUnlock'
 import { orchestrateLock } from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
 import { useCryptoStore } from '@/stores/cryptoStore'
@@ -215,11 +216,7 @@ export function ImportWalletPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <Link to="/setup">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </Link>
+        <SetupBackToWelcomeButton />
         <h2 className="text-xl font-bold">Import Wallet</h2>
       </div>
 

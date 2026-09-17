@@ -56,7 +56,7 @@ const PRIMARY_NAV_ITEMS: PrimaryNavItem[] = [
     isActive: (pathname) => isWalletSectionPath(pathname),
   },
   {
-    to: '/lab',
+    to: '/lab/blocks',
     label: 'Lab',
     icon: FlaskConical,
     isActive: (pathname) => pathname.startsWith('/lab'),

@@ -251,15 +251,15 @@ export const unilateralExitMachineSetup = setup({
     vtxoExit: vtxoExitMachine,
   } satisfies UnilateralExitSetupActors & { vtxoExit: typeof vtxoExitMachine },
   guards: {
-    isJobCompleteFromFetchEvent: ({ context, event }) => {
+    isJobCompleteFromFetchEvent: ({ event }) => {
       const output = progressFromFetchEvent(event)
       return isJobCompleteFromProgress(output)
     },
-    isJobCompleteFromProceedEvent: ({ context, event }) => {
+    isJobCompleteFromProceedEvent: ({ event }) => {
       const output = progressFromProceedEvent(event)
       return isJobCompleteFromProgress(output)
     },
-    isJobCompleteFromEnsureBroadcastEvent: ({ context, event }) => {
+    isJobCompleteFromEnsureBroadcastEvent: ({ event }) => {
       const output = progressFromEnsureBroadcastEvent(event)
       return isJobCompleteFromProgress(output)
     },

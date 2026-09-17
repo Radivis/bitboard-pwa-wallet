@@ -10,6 +10,14 @@ import { parseWalletBackupZipFile } from '@/lib/wallet/wallet-backup-import'
 import { WALLET_BACKUP_IMPORT_MAX_VERIFY_ATTEMPTS } from '@/lib/wallet/wallet-backup-constants'
 import { getEncryptionWorker } from '@/workers/encryption-factory'
 
+const WALLET_BACKUP_IMPORT_STAGE = {
+  PRE_VERIFY: 'pre-verify',
+  POST_VERIFY: 'post-verify',
+} as const
+
+type WalletBackupImportStage =
+  (typeof WALLET_BACKUP_IMPORT_STAGE)[keyof typeof WALLET_BACKUP_IMPORT_STAGE]
+
 function walletBackupImportVerifyAttemptsRemaining(failureCount: number): number {
   return WALLET_BACKUP_IMPORT_MAX_VERIFY_ATTEMPTS - failureCount
 }
@@ -110,6 +118,7 @@ export function useWalletBackupImport() {
   const runVerifiedImport = useCallback(
     async (password: string) => {
       if (!pendingImport) return
+      let importStage: WalletBackupImportStage = WALLET_BACKUP_IMPORT_STAGE.PRE_VERIFY
       setImportBusy(true)
       setImportVerifyInlineMessage(null)
       try {
@@ -119,8 +128,13 @@ export function useWalletBackupImport() {
           password,
           pendingImport.manifestJson,
         )
+        importStage = WALLET_BACKUP_IMPORT_STAGE.POST_VERIFY
         await applyWalletBackupReplace(pendingImport.sqliteBytes)
-      } catch {
+      } catch (error) {
+        if (importStage === WALLET_BACKUP_IMPORT_STAGE.POST_VERIFY) {
+          toast.error(error instanceof Error ? error.message : 'Import failed.')
+          return
+        }
         setImportVerificationFailureCount((prev) => {
           const next = prev + 1
           if (next >= WALLET_BACKUP_IMPORT_MAX_VERIFY_ATTEMPTS) {
