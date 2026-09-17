@@ -121,6 +121,68 @@ describe('arkade-boarding-settle-optimistic', () => {
     })
   })
 
+  it('revert_waiting_preserves_registered_pending_intents', () => {
+    const queryClient = new QueryClient()
+    const boardingStatusKey = arkadeBoardingStatusQueryKey(walletId, networkMode, arkadeAccountId)
+    const balanceKey = arkadeBalanceQueryKey(walletId, networkMode, arkadeAccountId)
+    const previousStatus = {
+      boardingAddress: 'tb1boarding',
+      trackedAddresses: ['tb1boarding'],
+      spendableSats: 200_000,
+      pendingSats: 0,
+      expiredSats: 0,
+      pendingBatchIntents: [] as Array<{
+        kind: string
+        amountSats: number
+        registeredAt: number
+        onchainOutpoints: Array<{ txid: string; vout: number }>
+        vtxoOutpoints: Array<{ txid: string; vout: number }>
+      }>,
+    }
+    const previousBalance = {
+      confirmedSats: 30_603,
+      totalSats: 30_603,
+      boardingSpendableSats: 200_000,
+      boardingPendingSats: 0,
+      pendingBatchIntents: [] as typeof previousStatus.pendingBatchIntents,
+    }
+    const registeredIntent = {
+      kind: 'board',
+      amountSats: 200_000,
+      registeredAt: 1_700_000_000,
+      onchainOutpoints: [{ txid: 'aa', vout: 1 }],
+      vtxoOutpoints: [],
+    }
+
+    queryClient.setQueryData(boardingStatusKey, previousStatus)
+    queryClient.setQueryData(balanceKey, previousBalance)
+    applyOptimisticBoardingSettle(queryClient, walletId, networkMode, arkadeAccountId, 200_000)
+    queryClient.setQueryData(boardingStatusKey, {
+      ...queryClient.getQueryData(boardingStatusKey),
+      pendingBatchIntents: [registeredIntent],
+    })
+    queryClient.setQueryData(balanceKey, {
+      ...queryClient.getQueryData(balanceKey),
+      pendingBatchIntents: [registeredIntent],
+    })
+    revertOptimisticBoardingSettle(queryClient, {
+      boardingStatusKey,
+      balanceKey,
+      previousStatus,
+      previousBalance,
+      settledSats: 200_000,
+    })
+
+    expect(queryClient.getQueryData(boardingStatusKey)).toMatchObject({
+      spendableSats: 200_000,
+      pendingBatchIntents: [registeredIntent],
+    })
+    expect(queryClient.getQueryData(balanceKey)).toMatchObject({
+      boardingSpendableSats: 200_000,
+      pendingBatchIntents: [registeredIntent],
+    })
+  })
+
   it('clears stale boarding status when Esplora still lists the settled UTXO', () => {
     const reconciled = reconcileBoardingStatusAfterSettle(
       {

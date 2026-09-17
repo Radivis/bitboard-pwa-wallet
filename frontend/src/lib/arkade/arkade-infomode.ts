@@ -90,7 +90,7 @@ export const ARKADE_PENDING_BATCH_INTENT_PROCESSING_INFOMODE = {
 
 export const ARKADE_PENDING_BATCH_INTENT_TIMED_OUT_INFOMODE = {
   title: 'Waiting for Arkade operator',
-  text: 'Your intent is still registered, but the batch round timed out before it completed. Bitboard will not register those same coins again while that registration is live. Cancel withdraws VTXO intents when the operator supports it. Boarding has no Cancel because the operator cannot match boarding inputs to deleteIntent. Retry is available for VTXOs immediately, and for boarding after the register cooldown.',
+  text: 'Your intent is still registered, but the batch round timed out before it completed. Bitboard will not register those same coins again while that registration is live. Cancel withdraws VTXO intents when the operator supports it. Boarding has no Cancel because the operator cannot match boarding inputs to deleteIntent. Retry is shown immediately; boarding Retry stays disabled until the operator registration expires (~2 minutes).',
 } as const
 
 export const ARKADE_PENDING_BATCH_INTENT_BANNER_INFOMODE =

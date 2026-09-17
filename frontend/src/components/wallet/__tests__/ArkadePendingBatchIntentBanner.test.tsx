@@ -29,6 +29,8 @@ const boardingStatusQueryRef = vi.hoisted(() => ({
   boardingAddress: 'tb1qboarding' as string | undefined,
   isPending: false,
   isFetching: false,
+  expiredSats: 0,
+  finalizedCommitmentTxid: undefined as string | undefined,
 }))
 const toastSuccess = vi.hoisted(() => vi.fn())
 const toastMessage = vi.hoisted(() => vi.fn())
@@ -125,7 +127,8 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
       trackedAddresses: ['tb1qboarding'],
       spendableSats: 50_000,
       pendingSats: 0,
-      expiredSats: 0,
+      expiredSats: boardingStatusQueryRef.expiredSats,
+      finalizedCommitmentTxid: boardingStatusQueryRef.finalizedCommitmentTxid,
       pendingBatchIntents: pendingIntentsRef.current,
     },
   }),
@@ -265,6 +268,8 @@ describe('ArkadePendingBatchIntentBanner', () => {
     boardingStatusQueryRef.boardingAddress = 'tb1qboarding'
     boardingStatusQueryRef.isPending = false
     boardingStatusQueryRef.isFetching = false
+    boardingStatusQueryRef.expiredSats = 0
+    boardingStatusQueryRef.finalizedCommitmentTxid = undefined
     toastSuccess.mockClear()
     toastMessage.mockClear()
     resetPendingBatchIntentSessionTracking()
@@ -361,13 +366,39 @@ describe('ArkadePendingBatchIntentBanner', () => {
     expect(screen.queryByRole('button', { name: 'Recovering…' })).not.toBeInTheDocument()
   })
 
+  it('timed_out_boarding_shows_disabled_retry_during_cooldown', () => {
+    pendingIntentsRef.current = [
+      {
+        ...samplePendingIntent,
+        registeredAt: Math.floor(Date.now() / 1000),
+      },
+    ]
+    renderWithProviders(<ArkadePendingBatchIntentBanner />)
+    const retryButton = screen.getByRole('button', { name: /Retry in / })
+    expect(retryButton).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
+  })
+
   it('toasts_kind_specific_success_when_pending_record_clears', () => {
     pendingIntentsRef.current = [processingRecoverIntent]
+    boardingStatusQueryRef.finalizedCommitmentTxid = 'commitment-txid'
     const { rerender } = renderWithProviders(<ArkadePendingBatchIntentBanner />)
     pendingIntentsRef.current = []
     rerender(<ArkadePendingBatchIntentBanner />)
     expect(toastSuccess).toHaveBeenCalledWith('Recoverable VTXOs settled')
     expect(toastMessage).not.toHaveBeenCalled()
+  })
+
+  it('does_not_toast_success_when_pending_intents_flash_empty', () => {
+    pendingIntentsRef.current = [samplePendingIntent]
+    const { rerender } = renderWithProviders(<ArkadePendingBatchIntentBanner />)
+    pendingIntentsRef.current = []
+    rerender(<ArkadePendingBatchIntentBanner />)
+    expect(toastSuccess).not.toHaveBeenCalled()
+    pendingIntentsRef.current = [samplePendingIntent]
+    rerender(<ArkadePendingBatchIntentBanner />)
+    expect(screen.getByTestId('arkade-pending-batch-intent-banner')).toBeInTheDocument()
+    expect(toastSuccess).not.toHaveBeenCalled()
   })
 
   it('cancel_does_not_toast_success', () => {

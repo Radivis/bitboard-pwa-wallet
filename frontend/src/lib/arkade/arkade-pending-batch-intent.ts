@@ -141,6 +141,37 @@ export function pendingIntentAllowsCancel(intent: ArkadePendingBatchIntent): boo
   return !isBoardingOnlyPendingIntent(intent)
 }
 
+export function pendingIntentShowsRetry(intent: ArkadePendingBatchIntent): boolean {
+  if (!isBoardingOnlyPendingIntent(intent)) {
+    return true
+  }
+  return pendingIntentBannerPhase(intent) === ARKADE_INTENT_LIFECYCLE_PHASES.timedOut
+}
+
+export function boardingRetryCooldownRemainingSeconds(
+  intent: ArkadePendingBatchIntent,
+  nowUnixSeconds: number = Math.floor(Date.now() / 1000),
+): number {
+  if (!isBoardingOnlyPendingIntent(intent) || intent.intentId == null) {
+    return 0
+  }
+  const elapsed = nowUnixSeconds - intent.registeredAt
+  return Math.max(0, BOARDING_REGISTER_INTENT_TTL_SECS - elapsed)
+}
+
+export function pendingIntentRetryButtonLabel(
+  intent: ArkadePendingBatchIntent,
+  nowUnixSeconds: number = Math.floor(Date.now() / 1000),
+): string {
+  const remainingSeconds = boardingRetryCooldownRemainingSeconds(intent, nowUnixSeconds)
+  if (remainingSeconds <= 0) {
+    return 'Retry'
+  }
+  const minutes = Math.floor(remainingSeconds / 60)
+  const seconds = remainingSeconds % 60
+  return `Retry in ${minutes}:${seconds.toString().padStart(2, '0')}`
+}
+
 export function pendingIntentAllowsRetry(
   intent: ArkadePendingBatchIntent,
   nowUnixSeconds: number = Math.floor(Date.now() / 1000),
@@ -151,10 +182,7 @@ export function pendingIntentAllowsRetry(
   if (pendingIntentBannerPhase(intent) !== ARKADE_INTENT_LIFECYCLE_PHASES.timedOut) {
     return false
   }
-  if (intent.intentId == null) {
-    return true
-  }
-  return nowUnixSeconds - intent.registeredAt >= BOARDING_REGISTER_INTENT_TTL_SECS
+  return boardingRetryCooldownRemainingSeconds(intent, nowUnixSeconds) === 0
 }
 
 export function pendingBatchIntentProcessingMessage(kind: string): string {
@@ -270,6 +298,7 @@ export function classifyPendingIntentDisappearance(options: {
   cancelled: boolean
   settledByMutation: boolean
   boardingExpiredSats: number
+  operatorFinalized: boolean
 }): PendingIntentDisappearanceToast {
   if (options.cancelled) {
     return { type: 'cancelled' }
@@ -278,6 +307,9 @@ export function classifyPendingIntentDisappearance(options: {
     return { type: 'silent' }
   }
   if (options.previousIntent.kind === 'board' && options.boardingExpiredSats > 0) {
+    return { type: 'silent' }
+  }
+  if (!options.operatorFinalized) {
     return { type: 'silent' }
   }
   return { type: 'succeeded', kind: options.previousIntent.kind }

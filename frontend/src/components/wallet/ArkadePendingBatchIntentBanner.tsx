@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Hourglass, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
@@ -23,6 +23,8 @@ import {
   pendingIntentAllowsCancel,
   pendingIntentAllowsRetry,
   pendingIntentBannerPhase,
+  pendingIntentRetryButtonLabel,
+  pendingIntentShowsRetry,
 } from '@/lib/arkade/arkade-pending-batch-intent'
 import { truncateAddress } from '@/lib/wallet/bitcoin-utils'
 import {
@@ -57,16 +59,35 @@ function PendingBatchIntentDestinationLine({
   )
 }
 
+function useUnixSecondsTick(enabled: boolean): number {
+  const [nowUnixSeconds, setNowUnixSeconds] = useState(() => Math.floor(Date.now() / 1000))
+  useEffect(() => {
+    if (!enabled) {
+      return
+    }
+    const intervalId = window.setInterval(() => {
+      setNowUnixSeconds(Math.floor(Date.now() / 1000))
+    }, 1000)
+    return () => window.clearInterval(intervalId)
+  }, [enabled])
+  return nowUnixSeconds
+}
+
 export function ArkadePendingBatchIntentBanner() {
   const pendingIntents = usePendingBatchIntents()
   const boardingStatusQuery = useArkadeBoardingStatusQuery()
   const previousPendingIntentsRef = useRef<ArkadePendingBatchIntent[] | undefined>(undefined)
   const cancelIntentMutation = useArkadeCancelPendingBatchIntentMutation()
   const retryIntentMutation = useArkadeRetryPendingBatchIntentMutation()
+  const retryCooldownActive = pendingIntents.some(
+    (intent) => pendingIntentShowsRetry(intent) && !pendingIntentAllowsRetry(intent),
+  )
+  const nowUnixSeconds = useUnixSecondsTick(retryCooldownActive)
 
   useEffect(() => {
     if (previousPendingIntentsRef.current !== undefined) {
       const boardingExpiredSats = boardingStatusQuery.data?.expiredSats ?? 0
+      const operatorFinalized = Boolean(boardingStatusQuery.data?.finalizedCommitmentTxid)
       for (const previousIntent of clearedPendingBatchIntents(
         previousPendingIntentsRef.current,
         pendingIntents,
@@ -77,6 +98,7 @@ export function ArkadePendingBatchIntentBanner() {
           cancelled: consumePendingBatchIntentCancelled(intentKey),
           settledByMutation: consumePendingBatchIntentSettledByMutation(intentKey),
           boardingExpiredSats,
+          operatorFinalized,
         })
         if (disappearance.type === 'cancelled') {
           toast.message(pendingBatchIntentCancelledMessage())
@@ -88,7 +110,11 @@ export function ArkadePendingBatchIntentBanner() {
       }
     }
     previousPendingIntentsRef.current = pendingIntents
-  }, [pendingIntents, boardingStatusQuery.data?.expiredSats])
+  }, [
+    pendingIntents,
+    boardingStatusQuery.data?.expiredSats,
+    boardingStatusQuery.data?.finalizedCommitmentTxid,
+  ])
 
   if (pendingIntents.length === 0) {
     return null
@@ -107,7 +133,9 @@ export function ArkadePendingBatchIntentBanner() {
           (retryIntentMutation.isPending &&
             pendingBatchIntentKey(retryIntentMutation.variables ?? pendingIntent) === rowKey)
         const showCancel = pendingIntentAllowsCancel(pendingIntent)
-        const showRetry = pendingIntentAllowsRetry(pendingIntent)
+        const showRetry = pendingIntentShowsRetry(pendingIntent)
+        const retryEnabled = pendingIntentAllowsRetry(pendingIntent, nowUnixSeconds)
+        const retryLabel = pendingIntentRetryButtonLabel(pendingIntent, nowUnixSeconds)
         const destinationAddress = pendingBatchIntentDestinationAddress(pendingIntent)
         return (
           <div
@@ -166,10 +194,10 @@ export function ArkadePendingBatchIntentBanner() {
                         type="button"
                         size="sm"
                         variant="secondary"
-                        disabled={mutationInFlightForRow}
+                        disabled={mutationInFlightForRow || !retryEnabled}
                         onClick={() => retryIntentMutation.mutate(pendingIntent)}
                       >
-                        Retry
+                        {retryLabel}
                       </Button>
                     ) : null}
                   </div>

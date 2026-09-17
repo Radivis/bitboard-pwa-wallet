@@ -62,15 +62,34 @@ export function applyOptimisticBoardingSettle(
   })
 }
 
+function withPreservedPendingBatchIntents<
+  T extends { pendingBatchIntents?: ArkadeBoardingStatus['pendingBatchIntents'] },
+>(snapshot: T, current: T | undefined): T {
+  return {
+    ...snapshot,
+    pendingBatchIntents: current?.pendingBatchIntents ?? snapshot.pendingBatchIntents,
+  }
+}
+
 export function revertOptimisticBoardingSettle(
   queryClient: QueryClient,
   context: BoardingSettleOptimisticContext,
 ): void {
   if (context.previousStatus != null) {
-    queryClient.setQueryData(context.boardingStatusKey, context.previousStatus)
+    const currentStatus = queryClient.getQueryData<ArkadeBoardingStatus>(
+      context.boardingStatusKey,
+    )
+    queryClient.setQueryData(
+      context.boardingStatusKey,
+      withPreservedPendingBatchIntents(context.previousStatus, currentStatus),
+    )
   }
   if (context.previousBalance != null) {
-    queryClient.setQueryData(context.balanceKey, context.previousBalance)
+    const currentBalance = queryClient.getQueryData<ArkadeBalanceInfo>(context.balanceKey)
+    queryClient.setQueryData(
+      context.balanceKey,
+      withPreservedPendingBatchIntents(context.previousBalance, currentBalance),
+    )
   }
 }
 

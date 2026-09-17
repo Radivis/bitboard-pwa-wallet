@@ -18,6 +18,8 @@ import {
   pendingIntentAllowsCancel,
   pendingIntentAllowsRetry,
   pendingIntentBannerPhase,
+  pendingIntentRetryButtonLabel,
+  pendingIntentShowsRetry,
   resetPendingBatchIntentSessionTracking,
 } from '@/lib/arkade/arkade-pending-batch-intent'
 import { ARKADE_PENDING_BATCH_INTENT_POLL_MS } from '@/lib/arkade/arkade-query-timings'
@@ -186,7 +188,21 @@ describe('arkade-pending-batch-intent', () => {
     ).toBe(true)
   })
 
-  it('pending_intent_allows_retry_refuses_boarding_within_ttl', () => {
+  it('pending_intent_shows_retry_for_timed_out_boarding_within_ttl', () => {
+    const recentBoard = {
+      ...sampleIntent,
+      intentId: 'intent-1',
+      onchainOutpoints: [{ txid: 'aa', vout: 1 }],
+      lifecyclePhase: 'timed_out' as const,
+      registeredAt: 1_000,
+    }
+    expect(pendingIntentShowsRetry(recentBoard)).toBe(true)
+    expect(
+      pendingIntentAllowsRetry(recentBoard, 1_000 + BOARDING_REGISTER_INTENT_TTL_SECS - 1),
+    ).toBe(false)
+  })
+
+  it('pending_intent_retry_label_includes_cooldown', () => {
     const recentBoard = {
       ...sampleIntent,
       intentId: 'intent-1',
@@ -195,8 +211,14 @@ describe('arkade-pending-batch-intent', () => {
       registeredAt: 1_000,
     }
     expect(
-      pendingIntentAllowsRetry(recentBoard, 1_000 + BOARDING_REGISTER_INTENT_TTL_SECS - 1),
-    ).toBe(false)
+      pendingIntentRetryButtonLabel(recentBoard, 1_000 + 25),
+    ).toBe('Retry in 1:35')
+    expect(
+      pendingIntentRetryButtonLabel(
+        recentBoard,
+        1_000 + BOARDING_REGISTER_INTENT_TTL_SECS,
+      ),
+    ).toBe('Retry')
   })
 
   it('pending_intent_allows_retry_allows_boarding_after_ttl', () => {
@@ -232,6 +254,7 @@ describe('arkade-pending-batch-intent', () => {
         cancelled: true,
         settledByMutation: false,
         boardingExpiredSats: 0,
+        operatorFinalized: false,
       }),
     ).toEqual({ type: 'cancelled' })
     expect(
@@ -240,6 +263,7 @@ describe('arkade-pending-batch-intent', () => {
         cancelled: false,
         settledByMutation: true,
         boardingExpiredSats: 0,
+        operatorFinalized: false,
       }),
     ).toEqual({ type: 'silent' })
     expect(
@@ -248,6 +272,7 @@ describe('arkade-pending-batch-intent', () => {
         cancelled: false,
         settledByMutation: false,
         boardingExpiredSats: 1,
+        operatorFinalized: false,
       }),
     ).toEqual({ type: 'silent' })
     expect(
@@ -256,6 +281,16 @@ describe('arkade-pending-batch-intent', () => {
         cancelled: false,
         settledByMutation: false,
         boardingExpiredSats: 0,
+        operatorFinalized: false,
+      }),
+    ).toEqual({ type: 'silent' })
+    expect(
+      classifyPendingIntentDisappearance({
+        previousIntent: { ...sampleIntent, kind: 'renew' },
+        cancelled: false,
+        settledByMutation: false,
+        boardingExpiredSats: 0,
+        operatorFinalized: true,
       }),
     ).toEqual({ type: 'succeeded', kind: 'renew' })
   })

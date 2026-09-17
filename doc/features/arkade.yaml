@@ -299,11 +299,11 @@ feature:
       - id: ARK-BATCH-10
         description: Processing banner allows Cancel and Retry for VTXO kinds (recover, renew, collaborative_exit, migrate); boarding processing banner has neither Cancel nor Retry
       - id: ARK-BATCH-11
-        description: Timed-out banner allows Cancel and Retry for VTXO kinds and Retry for boarding; boarding Cancel remains unavailable
+        description: Timed-out banner allows Cancel and Retry for VTXO kinds and Retry for boarding; boarding Cancel remains unavailable. Boarding Retry is visible immediately in timed_out and stays disabled until BOARDING_REGISTER_INTENT_TTL_SECS after registeredAt (ARK-UP-01/03).
       - id: ARK-BATCH-12
         description: Submit-action spinner is Phase 1 only; after processing is persisted the originating button returns to idle (disabled if overlapping outpoints); collaborative-exit dialog closes when processing starts
       - id: ARK-BATCH-13
-        description: Kind-specific success toasts — boarding settlement completed, recoverable VTXOs settled, VTXOs renewed, collaborative exit completed, signer migration batch completed; Cancel and boarding-window expiry do not toast success
+        description: Kind-specific success toasts — boarding settlement completed, recoverable VTXOs settled, VTXOs renewed, collaborative exit completed, signer migration batch completed; Cancel, boarding-window expiry, and a pending-intent query flash without operator finalize (finalizedCommitmentTxid) do not toast success
       - id: ARK-BATCH-14
         description: On hydrate, a persisted processing record with no live join in this session is promoted to timed_out and flushed
       - id: ARK-BATCH-15
