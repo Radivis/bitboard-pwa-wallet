@@ -308,6 +308,13 @@ feature:
         description: On hydrate, a persisted processing record with no live join in this session is promoted to timed_out and flushed
       - id: ARK-BATCH-15
         description: collaborative_exit_in_progress_sats is the sum of open CollaborativeExit pending-intent amounts plus a retain-until-spendable-drops deduction only after join Completed; Cancel, abort, and legacy waiting deductions do not keep that line while VTXOs are still spendable
+    boarding:
+      - id: ARK-BOARD-01
+        description: >-
+          Loading or copying the boarding address persists the boarding-output row
+          without awaiting a full operator list_vtxos / discover_keys. Dashboard
+          operator sync remains the source of offchain balance; boarding settle
+          still full-syncs after a completed join.
     operator_sync:
       - id: ARK-SYNC-01
         description: When discover_keys fails during operator sync but list_vtxos succeeds, sync lifecycle records a warningMessage and dashboard/management show a non-blocking sync warning banner
@@ -403,7 +410,7 @@ feature:
         - one pending batch-intent banner per open intent (processing spinner or timed-out Hourglass; Cancel/Retry per ARK-BATCH-10/11; collaborative-exit banner shows truncated on-chain destination when present)
         - Settle boarding UTXO shows a circular spinner only until intent_id; then disabled only while a pending intent covers overlapping boarding outpoints
       - requirements:
-        - Contracts ARK-BATCH-01 through ARK-BATCH-14 apply to boarding settle
+        - Contracts ARK-BOARD-01 and ARK-BATCH-01 through ARK-BATCH-14 apply to boarding
     - ArkadeVtxoViewer:
       - path: /wallet/arkade/vtxos
       - file: frontend/src/routes/wallet/arkade/vtxos.tsx

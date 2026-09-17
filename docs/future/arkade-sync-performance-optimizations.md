@@ -44,7 +44,8 @@ These stay. They removed the worst user-visible stalls but **do not** change the
 
 | Change | Effect |
 |--------|--------|
-| Parallel indexer chunks (`try_join_all` in `fetch_all_vtxos`) | Sequential ~8s list → ~2.5–4s |
+| Parallel indexer chunks (`try_join_all` in `fetch_all_vtxos`) capped at 4 in-flight, with retries on browser `Failed to fetch` | Sequential ~8s list → ~2.5–4s; overlapping lists no longer starve the 6-connection host pool |
+| Boarding address fetch flushes persistence only (no `persistAfterCriticalOperation` full list) | Opening Board no longer starts a second 10-GET indexer scan |
 | Incremental `discover_keys` from `peek_next_derivation_index()` | 11 gap-20 batches / ~7s → 1 batch / ~0.2s when the cache is warm |
 | Boarding-only settle skips VTXO list (`fetch_commitment_transaction_inputs_opt`) | Board input fetch ~7.6s → ~2.2s when `settleableVtxos=0` |
 | `ArkSession::list_vtxos` reads the snapshot when present | VTXO list UI ~8.6s → tens of ms |

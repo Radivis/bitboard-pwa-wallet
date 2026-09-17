@@ -91,7 +91,9 @@ where
             .filter(|input| exclude_vtxos.contains(&input.outpoint()))
             .fold(Amount::ZERO, |acc, input| acc + input.amount());
         vtxo_inputs.retain(|input| !exclude_vtxos.contains(&input.outpoint()));
-        total_amount = total_amount.checked_sub(excluded_amount).unwrap_or(Amount::ZERO);
+        total_amount = total_amount
+            .checked_sub(excluded_amount)
+            .unwrap_or(Amount::ZERO);
 
         let change_amount = total_amount.checked_sub(to_amount).ok_or_else(|| {
             Error::coin_select(format!(

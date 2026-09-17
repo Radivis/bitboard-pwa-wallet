@@ -12,19 +12,19 @@ use crate::Blockchain;
 use crate::Client;
 use ark_core::build_unilateral_exit_tree_txids;
 use ark_core::script::extract_checksig_pubkeys;
+use ark_core::server::IndexerPage;
+use ark_core::server::VirtualTxOutPoint;
+use ark_core::server::VtxoChains;
 use ark_core::unilateral_exit;
 use ark_core::unilateral_exit::create_unilateral_exit_transaction;
 use ark_core::unilateral_exit::finalize_unilateral_exit_tree;
 use ark_core::unilateral_exit::UnilateralExitTree;
+use ark_core::Vtxo;
+use ark_core::VtxoList;
 use backon::ExponentialBuilder;
 use backon::Retryable;
 use bitcoin::key::Secp256k1;
 use bitcoin::psbt;
-use ark_core::server::IndexerPage;
-use ark_core::server::VirtualTxOutPoint;
-use ark_core::server::VtxoChains;
-use ark_core::Vtxo;
-use ark_core::VtxoList;
 use bitcoin::Address;
 use bitcoin::Amount;
 use bitcoin::OutPoint;
@@ -111,10 +111,8 @@ where
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        let unilateral_exit_tree = UnilateralExitTree::new(
-            virtual_tx_outpoint.commitment_txids.clone(),
-            paths,
-        );
+        let unilateral_exit_tree =
+            UnilateralExitTree::new(virtual_tx_outpoint.commitment_txids.clone(), paths);
 
         let branches = self
             .finalize_unilateral_exit_tree_on_chain(&unilateral_exit_tree)
@@ -492,8 +490,7 @@ where
         fee_rate_sat_per_vb: Option<f64>,
     ) -> Result<Txid, Error> {
         let vtxo_outpoint_filter: HashSet<OutPoint> = vtxo_outpoints.iter().copied().collect();
-        let selection =
-            coin_select_vtxo_outpoints_for_onchain(self, &vtxo_outpoint_filter).await?;
+        let selection = coin_select_vtxo_outpoints_for_onchain(self, &vtxo_outpoint_filter).await?;
         let vtxo_inputs = selection.vtxo_inputs;
         let selected_amount = selection.selected_amount;
 
@@ -538,7 +535,15 @@ where
         vtxo_list: &VtxoList,
         script_pubkey_to_vtxo: &HashMap<ScriptBuf, Vtxo>,
         fee_rate_sat_per_vb: Option<f64>,
-    ) -> Result<(Amount, Amount, Amount, Vec<crate::coin_select::MissingBlocktimeCompletionInput>), Error> {
+    ) -> Result<
+        (
+            Amount,
+            Amount,
+            Amount,
+            Vec<crate::coin_select::MissingBlocktimeCompletionInput>,
+        ),
+        Error,
+    > {
         let vtxo_outpoint_filter: HashSet<OutPoint> = vtxo_outpoints.iter().copied().collect();
         let selection = coin_select_vtxo_outpoints_for_onchain_with_vtxo_list(
             self,
@@ -568,10 +573,17 @@ where
         to_address: Address,
         vtxo_outpoints: &[OutPoint],
         fee_rate_sat_per_vb: Option<f64>,
-    ) -> Result<(Amount, Amount, Amount, Vec<crate::coin_select::MissingBlocktimeCompletionInput>), Error> {
+    ) -> Result<
+        (
+            Amount,
+            Amount,
+            Amount,
+            Vec<crate::coin_select::MissingBlocktimeCompletionInput>,
+        ),
+        Error,
+    > {
         let vtxo_outpoint_filter: HashSet<OutPoint> = vtxo_outpoints.iter().copied().collect();
-        let selection =
-            coin_select_vtxo_outpoints_for_onchain(self, &vtxo_outpoint_filter).await?;
+        let selection = coin_select_vtxo_outpoints_for_onchain(self, &vtxo_outpoint_filter).await?;
         let vtxo_inputs = selection.vtxo_inputs;
         let selected_amount = selection.selected_amount;
         let missing_blocktime_inputs = selection.missing_blocktime_inputs;
@@ -674,9 +686,7 @@ where
 
         let dust = self.server_info()?.dust;
         let mut fee = Amount::from_sat(UNILATERAL_COMPLETION_FEE_INITIAL_SAT);
-        let mut to_amount = selected_amount
-            .checked_sub(fee)
-            .unwrap_or(Amount::ZERO);
+        let mut to_amount = selected_amount.checked_sub(fee).unwrap_or(Amount::ZERO);
 
         for _ in 0..UNILATERAL_COMPLETION_FEE_MAX_ITERATIONS {
             if selected_amount <= fee {
@@ -708,9 +718,7 @@ where
             }
 
             fee = next_fee;
-            to_amount = selected_amount
-                .checked_sub(fee)
-                .unwrap_or(Amount::ZERO);
+            to_amount = selected_amount.checked_sub(fee).unwrap_or(Amount::ZERO);
         }
 
         Err(Error::ad_hoc(

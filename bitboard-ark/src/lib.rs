@@ -17,6 +17,8 @@ mod unilateral_exit_materials;
 mod wasm_sleep;
 
 #[cfg(test)]
+mod indexer_fetch_tests;
+#[cfg(test)]
 mod persistence_tests;
 #[cfg(test)]
 mod receive_address_tests;

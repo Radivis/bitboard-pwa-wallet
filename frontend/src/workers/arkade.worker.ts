@@ -562,13 +562,11 @@ const arkadeService: ArkadeService = {
   async getBoardingAddress(): Promise<string> {
     const address = await invokeWasmArk((wasmModule) => wasmModule.ark_get_boarding_address())
     try {
-      await persistAfterCriticalOperation()
+      // Persist the boarding-output row only. A full operator list here races the
+      // dashboard indexer scan and saturates the browser connection pool (Failed to fetch).
+      await flushSdkPersistenceNowOrThrow()
     } catch {
-      try {
-        await flushSdkPersistenceNowOrThrow()
-      } catch {
-        // Keep returning the address so funding is not blocked if save/sync fails.
-      }
+      // Keep returning the address so funding is not blocked if save fails.
     }
     return address
   },

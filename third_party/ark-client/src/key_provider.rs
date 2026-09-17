@@ -369,7 +369,11 @@ impl KeyProvider for Bip32KeyProvider {
                     let lowest_unused_cache_entry = cache
                         .values()
                         .filter(|KeyCacheValue { used, .. }| !used)
-                        .min_by_key(|KeyCacheValue { derivation_index, .. }| *derivation_index);
+                        .min_by_key(
+                            |KeyCacheValue {
+                                 derivation_index, ..
+                             }| *derivation_index,
+                        );
 
                     if let Some(KeyCacheValue { keypair, .. }) = lowest_unused_cache_entry {
                         return Ok(*keypair);
@@ -597,10 +601,11 @@ impl KeyProvider for Bip32KeyProvider {
                 .key_cache
                 .read()
                 .map_err(|e| Error::ad_hoc(format!("Failed to lock key_cache: {e}")))?;
-            if let Some(KeyCacheValue { keypair, .. }) = cache
-                .values()
-                .find(|KeyCacheValue { derivation_index, .. }| *derivation_index == index)
-            {
+            if let Some(KeyCacheValue { keypair, .. }) = cache.values().find(
+                |KeyCacheValue {
+                     derivation_index, ..
+                 }| *derivation_index == index,
+            ) {
                 return Ok(*keypair);
             }
         }
@@ -612,13 +617,11 @@ impl KeyProvider for Bip32KeyProvider {
                 .key_cache
                 .write()
                 .map_err(|e| Error::ad_hoc(format!("Failed to lock key_cache: {e}")))?;
-            cache
-                .entry(x_only_public_key)
-                .or_insert(KeyCacheValue {
-                    derivation_index: index,
-                    keypair,
-                    used: false,
-                });
+            cache.entry(x_only_public_key).or_insert(KeyCacheValue {
+                derivation_index: index,
+                keypair,
+                used: false,
+            });
         }
         Ok(keypair)
     }

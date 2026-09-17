@@ -7,17 +7,17 @@ use crate::Client;
 use crate::Error;
 use ark_core::unilateral_exit;
 use ark_core::ExplorerUtxo;
+use ark_core::Vtxo;
 use ark_core::VtxoList;
 use bitcoin::Amount;
 use bitcoin::OutPoint;
 use bitcoin::ScriptBuf;
 use bitcoin::TxOut;
 use bitcoin::Txid;
-use ark_core::Vtxo;
 use jiff::Timestamp;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::time::Duration;
-use std::collections::HashMap;
 
 /// Completion input selected without Esplora `confirmation_blocktime` (timelock estimated with zero).
 ///
@@ -374,11 +374,16 @@ where
 
 #[cfg(test)]
 mod completion_vtxo_list_tests {
-    use ark_core::VtxoList;
     use ark_core::server::VirtualTxOutPoint;
+    use ark_core::VtxoList;
     use bitcoin::{Amount, OutPoint, ScriptBuf, Txid};
 
-    fn virtual_vtxo(txid_byte: u8, vout: u32, is_spent: bool, is_unrolled: bool) -> VirtualTxOutPoint {
+    fn virtual_vtxo(
+        txid_byte: u8,
+        vout: u32,
+        is_spent: bool,
+        is_unrolled: bool,
+    ) -> VirtualTxOutPoint {
         VirtualTxOutPoint {
             outpoint: OutPoint {
                 txid: Txid::from_byte_array([txid_byte; 32]),
