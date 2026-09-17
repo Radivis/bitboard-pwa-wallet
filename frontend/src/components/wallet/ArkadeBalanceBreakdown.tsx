@@ -7,7 +7,6 @@ import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore
 import {
   ARKADE_BALANCE_BOARDING_INFOMODE,
   ARKADE_BALANCE_BOARDING_PENDING_INFOMODE,
-  ARKADE_BALANCE_BUMPER_INFOMODE,
   ARKADE_BALANCE_EXIT_PROGRESS_INFOMODE,
   ARKADE_BALANCE_RECOVERABLE_INFOMODE,
   ARKADE_BALANCE_RECOVERABLE_PENDING_OPERATOR_SWEEP_INFOMODE,
@@ -216,8 +215,6 @@ export function ArkadeBalanceBreakdown({
       {showBumperBreakdown && (
         <InfomodeWrapper
           infoId={ARKADE_INFOMODE_IDS.bumperWallet}
-          infoTitle={ARKADE_BALANCE_BUMPER_INFOMODE.title}
-          infoText={ARKADE_BALANCE_BUMPER_INFOMODE.text}
           infoComponent={ArkadeBumperWalletInfomodeContent}
           as="span"
         >

@@ -57,6 +57,7 @@ describe('ArkadeBalanceBreakdown', () => {
 
     expect(screen.getByTestId('arkade-balance-amount')).toHaveTextContent('0.00000000')
     expect(screen.getByTestId('arkade-balance-bumper')).toHaveTextContent('Bumper wallet (exit fees)')
+    expect(screen.getByTestId('arkade-balance-bumper').closest('[data-infomode-id="arkade-bumper-wallet"]')).not.toBeNull()
     expect(screen.queryByText('Total (incl. recoverable):')).not.toBeInTheDocument()
   })
 
