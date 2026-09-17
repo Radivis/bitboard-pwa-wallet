@@ -279,23 +279,22 @@ impl ArkSession {
     }
 
     pub async fn vtxo_expiry_status(&self) -> ArkResult<VtxoExpiryStatusDto> {
-        let (vtxo_list, _) = if self.autonomous_mode() {
-            self.snapshot_vtxo_list_and_script_map()?
-        } else {
-            self.client.list_vtxos().await?
-        };
+        let vtxo_list = self.vtxo_list_for_renew_selection().await?;
         let exclude_spend_locked_outpoints = self.spend_locked_outpoints();
         let now = current_unix_timestamp();
         let earliest_expires_at = vtxo_list
-            .all_unspent()
+            .spendable_offchain()
             .filter(|virtual_tx_outpoint| {
                 !exclude_spend_locked_outpoints.contains(&virtual_tx_outpoint.outpoint)
+                    && !virtual_tx_outpoint.is_unrolled
                     && virtual_tx_outpoint.created_at > 0
                     && virtual_tx_outpoint.expires_at > now
             })
             .map(|virtual_tx_outpoint| virtual_tx_outpoint.expires_at)
             .min();
-        let expiring_soon_count = self.expiring_vtxo_count().await?;
+        let expiring_soon_count =
+            expiring_renew_outpoints_from_list(&vtxo_list, &exclude_spend_locked_outpoints, now)
+                .len() as u32;
         Ok(VtxoExpiryStatusDto {
             earliest_expires_at,
             expiring_soon_count,
@@ -556,34 +555,64 @@ impl ArkSession {
         Ok(spend_status.spend_txid.is_some())
     }
     /// VTXOs in the renewal window for manual renew — excludes spend-locked unilateral-exit
-    /// outpoints (`ARK-REC-08`), including `funding_lost`.
+    /// outpoints (`ARK-REC-08`), including `funding_lost`, and already-unrolled / exiting coins.
     async fn expiring_outpoints(&self) -> ArkResult<Vec<OutPoint>> {
-        let (vtxo_list, _) = if self.autonomous_mode() {
-            self.snapshot_vtxo_list_and_script_map()?
-        } else {
-            self.client.list_vtxos().await?
-        };
+        let vtxo_list = self.vtxo_list_for_renew_selection().await?;
         let exclude_spend_locked_outpoints = self.spend_locked_outpoints();
-        let now = current_unix_timestamp();
-        Ok(vtxo_list
-            .all_unspent()
-            .filter(|virtual_tx_outpoint| {
-                if exclude_spend_locked_outpoints.contains(&virtual_tx_outpoint.outpoint) {
-                    return false;
-                }
-                if virtual_tx_outpoint.expires_at <= 0 || virtual_tx_outpoint.created_at <= 0 {
-                    return false;
-                }
-                let total_lifetime =
-                    virtual_tx_outpoint.expires_at - virtual_tx_outpoint.created_at;
-                let remaining = virtual_tx_outpoint.expires_at - now;
-                remaining > 0
-                    && (remaining as f64)
-                        < (total_lifetime as f64 * VTXO_SELF_RENEW_REMAINING_FRACTION)
-            })
-            .map(|virtual_tx_outpoint| virtual_tx_outpoint.outpoint)
-            .collect())
+        Ok(expiring_renew_outpoints_from_list(
+            &vtxo_list,
+            &exclude_spend_locked_outpoints,
+            current_unix_timestamp(),
+        ))
     }
+
+    /// Prefer the persisted snapshot (sticky `is_unrolled` after a local unroll) so renew does not
+    /// scan every receive script on the indexer. Fall back to a spendable-only live list when
+    /// operator RPC is allowed. Autonomous mode never talks to the ASP here: a missing snapshot
+    /// means there is nothing to renew or show as expiring.
+    async fn vtxo_list_for_renew_selection(&self) -> ArkResult<VtxoList> {
+        if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref() {
+            return vtxo_list_from_snapshot(snapshot);
+        }
+        if !balance_vtxo_reads_use_operator_rpc(self.autonomous_mode()) {
+            return Ok(VtxoList::new(self.client.server_info()?.dust, Vec::new()));
+        }
+        let (vtxo_list, _) = self.client.list_spendable_vtxos().await?;
+        Ok(vtxo_list)
+    }
+}
+
+fn vtxo_is_in_self_renew_window(virtual_tx_outpoint: &VirtualTxOutPoint, now: i64) -> bool {
+    if virtual_tx_outpoint.expires_at <= 0 || virtual_tx_outpoint.created_at <= 0 {
+        return false;
+    }
+    let total_lifetime = virtual_tx_outpoint.expires_at - virtual_tx_outpoint.created_at;
+    let remaining = virtual_tx_outpoint.expires_at - now;
+    remaining > 0
+        && (remaining as f64) < (total_lifetime as f64 * VTXO_SELF_RENEW_REMAINING_FRACTION)
+}
+
+/// Cooperative renew inputs: offchain-spendable VTXOs in the self-renew window, minus spend-locked
+/// and unrolled coins. `all_unspent` is the wrong bucket — it still includes recoverable dust and
+/// relies on the indexer `is_unrolled` flag, which lags after a local unroll.
+pub(crate) fn expiring_renew_outpoints_from_list(
+    vtxo_list: &VtxoList,
+    exclude_spend_locked_outpoints: &HashSet<UnilateralExitOutpointKey>,
+    now: i64,
+) -> Vec<OutPoint> {
+    vtxo_list
+        .spendable_offchain()
+        .filter(|virtual_tx_outpoint| {
+            if exclude_spend_locked_outpoints.contains(&virtual_tx_outpoint.outpoint) {
+                return false;
+            }
+            if virtual_tx_outpoint.is_unrolled {
+                return false;
+            }
+            vtxo_is_in_self_renew_window(virtual_tx_outpoint, now)
+        })
+        .map(|virtual_tx_outpoint| virtual_tx_outpoint.outpoint)
+        .collect()
 }
 
 pub(crate) fn classify_vtxo<F>(
@@ -970,6 +999,92 @@ mod recoverable_vtxo_tests {
         let swept = sample_vtp(1, 25_000, now - 1, true);
         assert!(is_settleable_recoverable_vtxo(&swept, DUST));
         assert!(!is_pending_operator_sweep_recoverable_vtxo(&swept, DUST));
+    }
+}
+
+#[cfg(test)]
+mod expiring_renew_outpoints_tests {
+    use std::collections::HashSet;
+
+    use ark_core::server::VirtualTxOutPoint;
+    use bitcoin::hashes::Hash;
+    use bitcoin::{Amount, OutPoint, ScriptBuf, Txid};
+
+    use super::expiring_renew_outpoints_from_list;
+    use crate::session::mappers::current_unix_timestamp;
+
+    const DUST: Amount = Amount::from_sat(330);
+    const LIFETIME_SECS: i64 = 86_400;
+    /// Remaining lifetime inside the 10% self-renew window for a 1-day VTXO.
+    const IN_WINDOW_REMAINING_SECS: i64 = 3_600;
+    const OUTSIDE_WINDOW_REMAINING_SECS: i64 = 43_200;
+
+    fn sample_vtp(
+        vout: u32,
+        remaining_secs: i64,
+        is_preconfirmed: bool,
+        is_unrolled: bool,
+    ) -> VirtualTxOutPoint {
+        let expires_at = current_unix_timestamp() + remaining_secs;
+        VirtualTxOutPoint {
+            outpoint: OutPoint::new(Txid::from_byte_array([vout as u8; 32]), vout),
+            created_at: expires_at - LIFETIME_SECS,
+            expires_at,
+            amount: Amount::from_sat(25_000),
+            script: ScriptBuf::new(),
+            is_preconfirmed,
+            is_swept: false,
+            is_unrolled,
+            is_spent: false,
+            spent_by: None,
+            commitment_txids: vec![],
+            settled_by: None,
+            ark_txid: None,
+            assets: vec![],
+        }
+    }
+
+    fn outpoints(vtxo_list: &ark_core::VtxoList, exclude: HashSet<OutPoint>) -> Vec<OutPoint> {
+        expiring_renew_outpoints_from_list(vtxo_list, &exclude, current_unix_timestamp())
+    }
+
+    #[test]
+    fn renew_selects_spendable_vtxo_in_self_renew_window() {
+        let spendable = sample_vtp(0, IN_WINDOW_REMAINING_SECS, true, false);
+        let expected = spendable.outpoint;
+        let vtxo_list = ark_core::VtxoList::new(DUST, vec![spendable]);
+        assert_eq!(outpoints(&vtxo_list, HashSet::new()), vec![expected]);
+    }
+
+    #[test]
+    fn renew_excludes_unrolled_vtxo_even_without_spend_lock() {
+        let unrolled = sample_vtp(0, IN_WINDOW_REMAINING_SECS, true, true);
+        let vtxo_list = ark_core::VtxoList::new(DUST, vec![unrolled]);
+        assert!(outpoints(&vtxo_list, HashSet::new()).is_empty());
+    }
+
+    #[test]
+    fn renew_excludes_spend_locked_vtxo_when_indexer_still_lists_it_spendable() {
+        let spendable = sample_vtp(0, IN_WINDOW_REMAINING_SECS, true, false);
+        let locked = spendable.outpoint;
+        let vtxo_list = ark_core::VtxoList::new(DUST, vec![spendable]);
+        assert!(outpoints(&vtxo_list, HashSet::from([locked])).is_empty());
+    }
+
+    #[test]
+    fn renew_keeps_other_expiring_vtxos_when_unrolled_coins_are_present() {
+        let unrolled = sample_vtp(0, IN_WINDOW_REMAINING_SECS, true, true);
+        let spendable = sample_vtp(1, IN_WINDOW_REMAINING_SECS, true, false);
+        let expected = spendable.outpoint;
+        let vtxo_list = ark_core::VtxoList::new(DUST, vec![unrolled, spendable]);
+        assert_eq!(outpoints(&vtxo_list, HashSet::new()), vec![expected]);
+    }
+
+    #[test]
+    fn renew_excludes_vtxo_outside_self_renew_window() {
+        let healthy = sample_vtp(0, OUTSIDE_WINDOW_REMAINING_SECS, true, false);
+        let vtxo_list = ark_core::VtxoList::new(DUST, vec![healthy]);
+        assert!(outpoints(&vtxo_list, HashSet::new()).is_empty());
     }
 }
 

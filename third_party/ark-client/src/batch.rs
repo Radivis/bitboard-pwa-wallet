@@ -37,13 +37,14 @@ use bitcoin::Address;
 use bitcoin::Amount;
 use bitcoin::OutPoint;
 use bitcoin::Psbt;
+use bitcoin::ScriptBuf;
 use bitcoin::TxOut;
 use bitcoin::Txid;
 use bitcoin::XOnlyPublicKey;
 use futures::StreamExt;
 use rand::CryptoRng;
 use rand::Rng;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 #[path = "batch_vtxo_tree_signing.rs"]
@@ -109,6 +110,35 @@ fn is_past_arkd_cooperative_boarding_window(
         bitcoin::relative::LockTime::Time(time) => time.value() as u64 * BIP68_TIME_GRANULARITY,
     };
     now > confirmation_blocktime.saturating_add(cooperative_window_secs)
+}
+
+fn vtxo_intent_input(
+    virtual_tx_outpoint: &ark_core::server::VirtualTxOutPoint,
+    script_pubkey_to_vtxo_map: &HashMap<ScriptBuf, ark_core::Vtxo>,
+) -> Result<intent::Input, Error> {
+    let vtxo = script_pubkey_to_vtxo_map
+        .get(&virtual_tx_outpoint.script)
+        .ok_or_else(|| {
+            ark_core::Error::ad_hoc(format!(
+                "missing VTXO for script pubkey: {}",
+                virtual_tx_outpoint.script
+            ))
+        })?;
+    let spend_info = vtxo.forfeit_spend_info()?;
+    Ok(intent::Input::new(
+        virtual_tx_outpoint.outpoint,
+        vtxo.exit_delay(),
+        None,
+        TxOut {
+            value: virtual_tx_outpoint.amount,
+            script_pubkey: vtxo.script_pubkey(),
+        },
+        vtxo.tapscripts(),
+        spend_info,
+        false,
+        virtual_tx_outpoint.is_swept,
+        virtual_tx_outpoint.assets.clone(),
+    ))
 }
 
 impl<B, W, S, K> Client<B, W, S, K>
@@ -309,25 +339,26 @@ where
     {
         // Get off-chain address and send all funds to this address, no change output.
         let (to_address, _) = self.get_offchain_address()?;
+        let now = crate::utils::unix_now()?;
 
-        let (all_boarding_inputs, all_vtxo_inputs, _) = self
-            .fetch_commitment_transaction_inputs_opt(
-                crate::utils::unix_now()?,
-                !vtxo_outpoints.is_empty(),
-            )
-            .await?;
+        let boarding_inputs = if boarding_outpoints.is_empty() {
+            Vec::new()
+        } else {
+            let (all_boarding_inputs, _, _) = self
+                .fetch_commitment_transaction_inputs_opt(now, false)
+                .await?;
+            all_boarding_inputs
+                .into_iter()
+                .filter(|input| boarding_outpoints.contains(&input.outpoint()))
+                .collect()
+        };
 
-        // Filter boarding inputs to only those specified.
-        let boarding_inputs: Vec<_> = all_boarding_inputs
-            .into_iter()
-            .filter(|input| boarding_outpoints.contains(&input.outpoint()))
-            .collect();
-
-        // Filter VTXO inputs to only those specified.
-        let vtxo_inputs: Vec<_> = all_vtxo_inputs
-            .into_iter()
-            .filter(|input| vtxo_outpoints.contains(&input.outpoint()))
-            .collect();
+        let vtxo_inputs = if vtxo_outpoints.is_empty() {
+            Vec::new()
+        } else {
+            self.vtxo_intent_inputs_for_outpoints(vtxo_outpoints)
+                .await?
+        };
 
         // Recalculate total amount from filtered inputs.
         let total_amount = boarding_inputs
@@ -485,12 +516,16 @@ where
             .filter(|input| exclude_vtxos.contains(&input.outpoint()))
             .fold(Amount::ZERO, |acc, input| acc + input.amount());
         vtxo_inputs.retain(|input| !exclude_vtxos.contains(&input.outpoint()));
-        total_amount = total_amount.checked_sub(excluded_amount).unwrap_or(Amount::ZERO);
+        total_amount = total_amount
+            .checked_sub(excluded_amount)
+            .unwrap_or(Amount::ZERO);
 
         // The intent fee depends on the input/output set rather than on amounts, so estimate it
         // against the gross (pre-fee) change and then deduct it to obtain the real change amount.
         let gross_change = total_amount.checked_sub(to_amount).ok_or_else(|| {
-            Error::coin_select(format!("insufficient balance: {total_amount} < {to_amount} (send)"))
+            Error::coin_select(format!(
+                "insufficient balance: {total_amount} < {to_amount} (send)"
+            ))
         })?;
         let intent_fee = self.eval_offboard_intent_fee(
             &boarding_inputs,
@@ -626,15 +661,20 @@ where
         input_vtxos: impl IntoIterator<Item = OutPoint>,
     ) -> Result<Vec<intent::Input>, Error> {
         let requested: HashSet<OutPoint> = input_vtxos.into_iter().collect();
+        if requested.is_empty() {
+            return Ok(Vec::new());
+        }
 
-        let (vtxo_list, script_pubkey_to_vtxo_map) =
-            self.list_vtxos().await.context("failed to get VTXO list")?;
+        let (vtxo_list, script_pubkey_to_vtxo_map) = self
+            .list_vtxos_for_outpoints(requested.iter().copied().collect())
+            .await
+            .context("failed to get VTXO list")?;
         let server_info = self.server_info()?;
         let now = crate::utils::unix_now()?;
 
         let matching_unspent = vtxo_list
             .all_unspent()
-            .filter(|v| requested.contains(&v.outpoint))
+            .filter(|v| requested.contains(&v.outpoint) && !v.is_unrolled)
             .collect::<Vec<_>>();
 
         let settleable_outpoints = vtxo_list
@@ -643,7 +683,7 @@ where
                     .get(script)
                     .map(|vtxo| vtxo.server_pk())
             })
-            .filter(|v| requested.contains(&v.outpoint))
+            .filter(|v| requested.contains(&v.outpoint) && !v.is_unrolled)
             .map(|v| v.outpoint)
             .collect::<HashSet<_>>();
 
@@ -662,29 +702,42 @@ where
         matching_unspent
             .into_iter()
             .filter(|v| settleable_outpoints.contains(&v.outpoint))
-            .map(|v| {
-                let vtxo = script_pubkey_to_vtxo_map.get(&v.script).ok_or_else(|| {
-                    ark_core::Error::ad_hoc(format!("missing VTXO for script pubkey: {}", v.script))
-                })?;
-                let spend_info = vtxo.forfeit_spend_info()?;
-
-                Ok(intent::Input::new(
-                    v.outpoint,
-                    vtxo.exit_delay(),
-                    // NOTE: This only works with default VTXOs (single-sig).
-                    None,
-                    TxOut {
-                        value: v.amount,
-                        script_pubkey: vtxo.script_pubkey(),
-                    },
-                    vtxo.tapscripts(),
-                    spend_info,
-                    false,
-                    v.is_swept,
-                    v.assets.clone(),
-                ))
-            })
+            .map(|v| vtxo_intent_input(v, &script_pubkey_to_vtxo_map))
             .collect::<Result<Vec<_>, Error>>()
+    }
+
+    /// Intent inputs for a known outpoint set. Looks those coins up by outpoint (not every
+    /// receive script) so renew/recover after a unilateral unroll does not download full VTXO
+    /// history. Unrolled / non-settleable coins are omitted.
+    async fn vtxo_intent_inputs_for_outpoints(
+        &self,
+        vtxo_outpoints: &[OutPoint],
+    ) -> Result<Vec<intent::Input>, Error> {
+        if vtxo_outpoints.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let (vtxo_list, script_pubkey_to_vtxo_map) = self
+            .list_vtxos_for_outpoints(vtxo_outpoints.to_vec())
+            .await?;
+        let server_info = self.server_info()?;
+        let now = crate::utils::unix_now()?;
+        let requested: HashSet<OutPoint> = vtxo_outpoints.iter().copied().collect();
+
+        vtxo_list
+            .batch_settleable_at(&server_info, now, |script| {
+                script_pubkey_to_vtxo_map
+                    .get(script)
+                    .map(|vtxo| vtxo.server_pk())
+            })
+            .filter(|virtual_tx_outpoint| {
+                requested.contains(&virtual_tx_outpoint.outpoint)
+                    && !virtual_tx_outpoint.is_unrolled
+            })
+            .map(|virtual_tx_outpoint| {
+                vtxo_intent_input(virtual_tx_outpoint, &script_pubkey_to_vtxo_map)
+            })
+            .collect()
     }
 
     /// Generate a delegate for settling VTXOs on behalf of the owner.
@@ -1114,7 +1167,8 @@ where
         &self,
         now: i64,
     ) -> Result<(Vec<batch::OnChainInput>, Vec<intent::Input>, Amount), Error> {
-        self.fetch_commitment_transaction_inputs_opt(now, true).await
+        self.fetch_commitment_transaction_inputs_opt(now, true)
+            .await
     }
 
     async fn fetch_commitment_transaction_inputs_opt(
@@ -1905,7 +1959,8 @@ where
         to_address: &ArkAddress,
     ) -> Result<Amount, Error> {
         let dust = self.server_info()?.dust;
-        let intent_fee = self.eval_board_intent_fee(boarding_inputs, vtxo_inputs, total_amount, to_address)?;
+        let intent_fee =
+            self.eval_board_intent_fee(boarding_inputs, vtxo_inputs, total_amount, to_address)?;
         let to_amount = total_amount.checked_sub(intent_fee).ok_or_else(|| {
             Error::ad_hoc(format!(
                 "insufficient balance for boarding intent fee: {total_amount} < {intent_fee}"
@@ -1951,12 +2006,9 @@ where
 
         let fee = self
             .with_server_state(|state| {
-                state.fee_estimator.eval(
-                    &offchain_inputs,
-                    &onchain_inputs,
-                    &offchain_outputs,
-                    &[],
-                )
+                state
+                    .fee_estimator
+                    .eval(&offchain_inputs, &onchain_inputs, &offchain_outputs, &[])
             })?
             .map_err(|error| Error::ad_hoc(error.to_string()))?;
 
@@ -2071,7 +2123,10 @@ mod batch_failure_match_tests {
 
     #[test]
     fn ignores_batch_failed_before_we_join_a_round() {
-        assert!(!Client::batch_failure_matches_our_round(&None, "any-failed-id"));
+        assert!(!Client::batch_failure_matches_our_round(
+            &None,
+            "any-failed-id"
+        ));
     }
 
     #[test]

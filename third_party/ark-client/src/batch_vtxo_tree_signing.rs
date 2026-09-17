@@ -2,6 +2,8 @@
 //!
 //! Shared by [`super::Client::join_next_batch`] and [`super::Client::settle_delegate`].
 
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+use crate::ark_grpc_wasm_shim::Client as NetworkClient;
 use crate::error::ErrorContext as _;
 use crate::wallet::BoardingWallet;
 use crate::wallet::OnchainWallet;
@@ -9,10 +11,6 @@ use crate::Blockchain;
 use crate::Client;
 use crate::Error;
 use crate::SwapStorage;
-#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
-use ark_grpc::Client as NetworkClient;
-#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-use crate::ark_grpc_wasm_shim::Client as NetworkClient;
 use ark_core::batch::aggregate_nonces;
 use ark_core::batch::generate_nonce_tree;
 use ark_core::batch::sign_batch_tree_tx;
@@ -22,14 +20,16 @@ use ark_core::server::TreeNoncesAggregatedEvent;
 use ark_core::server::TreeNoncesEvent;
 use ark_core::server::TreeSigningStartedEvent;
 use ark_core::TxGraph;
-use musig::musig::AggregatedNonce;
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+use ark_grpc::Client as NetworkClient;
 use bitcoin::key::Keypair;
-use bitcoin::Sequence;
-use bitcoin::taproot::Signature as TaprootSignature;
 use bitcoin::secp256k1::PublicKey;
+use bitcoin::taproot::Signature as TaprootSignature;
 use bitcoin::Psbt;
+use bitcoin::Sequence;
 use bitcoin::Txid;
 use bitcoin::XOnlyPublicKey;
+use musig::musig::AggregatedNonce;
 use rand::CryptoRng;
 use rand::Rng;
 use std::collections::HashMap;
@@ -145,9 +145,12 @@ where
                         "missing VTXO batch-tree graph chunks during late chunk handling",
                     )
                 })?;
-                let commitment = state.unsigned_commitment_tx.as_ref().ok_or(
-                    Error::ark_server("missing commitment TX during late chunk handling"),
-                )?;
+                let commitment = state
+                    .unsigned_commitment_tx
+                    .as_ref()
+                    .ok_or(Error::ark_server(
+                        "missing commitment TX during late chunk handling",
+                    ))?;
                 let batch_id = batch_id.as_deref().ok_or_else(|| {
                     Error::ark_server("missing batch ID during late chunk handling")
                 })?;
@@ -370,8 +373,8 @@ where
         tracing::debug!(batch_id = event.id, "Batch combined nonces generated");
 
         for (txid_str, _) in event.tree_nonces.encode() {
-            let txid = Txid::from_str(&txid_str)
-                .map_err(|error| Error::ad_hoc(error.to_string()))?;
+            let txid =
+                Txid::from_str(&txid_str).map_err(|error| Error::ad_hoc(error.to_string()))?;
             let pub_nonce = event.tree_nonces.get(&txid).ok_or_else(|| {
                 Error::ark_server(format!("missing aggregated tree nonce for TX {txid}"))
             })?;
@@ -465,14 +468,15 @@ where
             return Ok(());
         }
 
-        let our_nonce_trees = state
-            .our_nonce_trees
-            .as_mut()
-            .ok_or(Error::ark_server("missing nonce trees during batch protocol"))?;
+        let our_nonce_trees = state.our_nonce_trees.as_mut().ok_or(Error::ark_server(
+            "missing nonce trees during batch protocol",
+        ))?;
 
         let our_nonce_tree = our_nonce_trees
             .get_mut(cosigner_kp)
-            .ok_or(Error::ark_server("missing nonce tree during batch protocol"))?;
+            .ok_or(Error::ark_server(
+                "missing nonce tree during batch protocol",
+            ))?;
 
         let unsigned_commitment_tx = state
             .unsigned_commitment_tx
@@ -547,11 +551,7 @@ where
             );
 
             network_client
-                .submit_tree_nonces(
-                    batch_id,
-                    own_cosigner_pk,
-                    nonce_tree.to_nonce_pks(),
-                )
+                .submit_tree_nonces(batch_id, own_cosigner_pk, nonce_tree.to_nonce_pks())
                 .await
                 .map_err(Error::ark_server)
                 .context("failed to submit VTXO nonce tree")?;
@@ -644,13 +644,7 @@ where
         }
 
         let (graph, nonce_map, commitment) = self
-            .begin_vtxo_batch_tree_signing(
-                rng,
-                signing,
-                chunks,
-                own_cosigner_kps,
-                own_cosigner_pks,
-            )
+            .begin_vtxo_batch_tree_signing(rng, signing, chunks, own_cosigner_kps, own_cosigner_pks)
             .await?;
 
         *submitted_vtxo_batch_tree_txids = Some(Self::vtxo_batch_tree_txids(&graph));

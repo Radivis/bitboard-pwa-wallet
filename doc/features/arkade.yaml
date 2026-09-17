@@ -85,7 +85,9 @@ feature:
           remains recoverable and migratable if the operator still lists the coin. Post-unroll
           exiting VTXOs are excluded by vendored ark-core bucketing. Expiring-soon count,
           earliest-expiry indicator, and Renew exclude spend-locked outpoints
-          (pipeline ∪ funding_lost). Exclusion is record-derived (not pending-deduction-only).
+          (pipeline ∪ funding_lost) and already-unrolled / exiting VTXOs. Renew selects from the
+          offchain snapshot (sticky is_unrolled after a local unroll) instead of scanning every
+          receive script on the indexer. Exclusion is record-derived (not pending-deduction-only).
     unilateral_exit:
       - id: ARK-EXIT-01
         description: Start unilateral exit lists only VTXOs that can start unroll; unrolled, complete_ready, exited, and funding_lost records are excluded. Tagged leftovers that are not yet unrolled remain startable after abort (ARK-EXIT-26/30). Concurrent second job stays a frontend selection lock.
