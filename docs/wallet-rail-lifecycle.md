@@ -150,7 +150,7 @@ When a rail becomes configured (gates satisfied — see per-rail sections), load
 5. **SaveLifecycle is internal-first for status text**, but sync is user-targetable: the **dashboard exposes a sync control per configured rail** (on-chain, Lightning when connected, Arkade when active) so users can trigger targeted sync without syncing everything. Save phases remain primarily for lock handoff and debugging; save UI is not required in v1.
 6. **Per-rail sync state** is aggregated via `useAnyRailSyncing()` / `isAnyRailSyncing()` — not a global `walletStatus: 'syncing'`.
 7. **One Lightning machine per rail** (v1). Sync and save aggregate across all NWC connections for the active Bitboard wallet.
-8. **One Arkade operator** per `(walletId, networkMode)` — no multi-connection aggregation on the Arkade rail.
+8. **One Arkade account** per `(walletId, networkMode)` — no multi-account aggregation on the Arkade rail.
 
 ## Route independence and wallet hydration
 
@@ -160,13 +160,13 @@ The **only** deliberate coupling between routing and wallet crypto is **when to 
 
 | Concept | Meaning |
 |---------|---------|
-| **Hydration** | Near-zero session restore (`tryLoadNearZeroSessionIntoMemory`) plus bootstrap unlock (`orchestrateBootstrapUnlock` → per-rail **load**). Distinct from background **sync** and **save**, which follow load and are not route-gated. |
+| **Hydration** | Near-zero session restore (`restoreNearZeroSecretsSessionForOperation` from the wallet-route gate, action-gated unlock, or seed-phrase reveal) plus bootstrap unlock (`orchestrateBootstrapUnlock` → per-rail **load**) when WASM is required. Restore must invalidate the secrets-session probe and drop a stale successful bootstrap cache while the wallet is still gated. Distinct from background **sync** and **save**, which follow load and are not route-gated. |
 | **Wallet route** | Any path under `/wallet` (dashboard, send, receive, management, wallets picker, etc.). Legacy `/` redirects to `/wallet`. |
 | **Non-wallet route** | Settings, setup, lab, library, privacy, and any other path that is not a wallet route. |
 
 ### Rules
 
-1. **Start hydration on wallet entry only.** When the user **visits a wallet route** and prerequisites are met (active wallet, secrets session or restorable near-zero session, wallet not already loaded), the app may start hydration. Visiting Settings, Lab, Library, or setup must **not** start hydration by itself.
+1. **Start hydration only for operations that need a secrets session.** The `/wallet/*` secrets gate may restore a near-zero session and bootstrap when the wallet UI is gated. Settings, Lab, Library, or setup must **not** start hydration by themselves; those screens use `ensureWalletUnlockedForAction` / `useRequireUnlockedWallet` at action time (and seed-phrase reveal restores or reuses the session without a password prompt when the wrap is live).
 2. **Lifecycle is route-agnostic.** In-flight load, sync, and save continue regardless of navigation. Do not cancel debounced sync timers, disable bootstrap queries mid-flight, or skip save because the user left `/wallet`.
 3. **Lock and explicit user actions are exceptions.** Lock teardown, manual unlock, and network switch are intentional lifecycle drivers — not “navigation interference” in the sense above.
 4. **Privacy redirect after lock** (wallet route → Library via `navigateToLibraryIfOnWalletRoute`) stays in place. It is privacy-enhancing: the user leaves wallet UI after locking. It does not tear down in-flight lifecycle work; it only defers **the next** hydration until the user opens a wallet route again.
@@ -449,23 +449,23 @@ Lightning is optional — absence of connections is normal `not-configured`, not
 
 - `isArkadeEnabled` false, **or**
 - Network not in `{ mainnet, testnet, signet }`, **or**
-- No operator connection row for `(walletId, networkMode)` after first-time setup path
+- No Arkade account row for `(walletId, networkMode)` after first-time setup path
 
 ### LoadLifecycle (largest pipeline)
 
 **Work in `loading` → `loaded`:**
 
 1. `ensureSecretsChannel` / `ensureArkadeEncryptedSecretsHost`
-2. Read encrypted mnemonic + payload; resolve operator connection
+2. Read encrypted mnemonic + payload; resolve Arkade account
 3. `ark_open_session` in arkade worker (hydrate from `sdkPersistenceJson`)
-4. `ensureArkadeOperatorConnection` (DB metadata)
+4. `ensureArkadeAccount` (DB metadata)
 5. `refreshArkadeStoreFromLoadedWasm` — balance, payments, **receive address stable**
-6. Set `activeArkadeConnectionId` when **load completes** (not when sync completes)
+6. Set `activeArkadeAccountId` when **load completes** (not when sync completes)
 
 **Readiness contract:**
 
 - UI queries and Receive page gate on `ArkadeLoadLifecycle === 'loaded'`
-- `activeArkadeConnectionId` is set at load completion, not as a separate sync gate
+- `activeArkadeAccountId` is set at load completion, not as a separate sync gate
 
 **`load-error`:** WASM open failure, persistence corrupt, secrets read failure.
 
@@ -609,8 +609,10 @@ Audit of the codebase against [Route independence and wallet hydration](#route-i
 |----------|------------|
 | `pathname-requires-wallet-crypto-session.ts` | **Removed.** Replaced by [`pathname-is-wallet-route.ts`](../frontend/src/lib/shared/pathname-is-wallet-route.ts). |
 | [`useActiveWalletLoadQuery.ts`](../frontend/src/hooks/useActiveWalletLoadQuery.ts) | Bootstrap gated on `pathnameIsWalletRoute` + `lockUnlockInProgress`. |
-| [`AppInitializer.tsx`](../frontend/src/components/AppInitializer.tsx) | Near-zero restore on wallet-route **entry** edge only. |
-| [`DatabaseReadyGate.tsx`](../frontend/src/components/DatabaseReadyGate.tsx) | Cold-start restore only on wallet-route URLs. |
+| [`AppInitializer.tsx`](../frontend/src/components/AppInitializer.tsx) | Updates the wallet-route pathname gate store used by bootstrap; does not restore the near-zero secrets session. |
+| [`DatabaseReadyGate.tsx`](../frontend/src/components/DatabaseReadyGate.tsx) | Syncs the near-zero in-memory flag from SQLite without restoring the secrets session. |
+| [`restore-near-zero-secrets-session.ts`](../frontend/src/lib/wallet/restore-near-zero-secrets-session.ts) | Shared near-zero unwrap for operations that need a secrets session. |
+| [`WalletUnlockOrNearZeroLoading.tsx`](../frontend/src/components/WalletUnlockOrNearZeroLoading.tsx) | Wallet-UI operation: near-zero session restore while a locked wallet route is gated. |
 
 ### Navigation interferes with in-flight hydration (fixed)
 

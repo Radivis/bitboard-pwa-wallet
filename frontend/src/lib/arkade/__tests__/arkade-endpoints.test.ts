@@ -45,7 +45,9 @@ describe('arkade-endpoints', () => {
     expect(signet.esploraUrl).toBe(
       `${window.location.origin}/api/esplora/default/signet`,
     )
-    expect(regtest.esploraUrl).toBe('http://localhost:7030/api')
+    expect(regtest.esploraUrl).toBe(
+      `${window.location.origin}/api/esplora/default/regtest`,
+    )
   })
 
   it('reports delegator as disabled when URL is empty', () => {

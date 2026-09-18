@@ -18,6 +18,16 @@ export const activeWalletLoadQueryKeyPrefix = [
   ACTIVE_WALLET_LOAD_QUERY_SEGMENT,
 ] as const
 
+/** Segment after `wallet_db` for the secrets-session probe that gates bootstrap. */
+export const WALLET_SECRETS_SESSION_PROBE_QUERY_SEGMENT =
+  'wallet-secrets-session-active-probe' as const
+
+/** Prefix for invalidating the secrets-session probe after near-zero restore. */
+export const walletSecretsSessionProbeQueryKeyPrefix = [
+  ...WALLET_DB_QUERY_KEY_ROOT,
+  WALLET_SECRETS_SESSION_PROBE_QUERY_SEGMENT,
+] as const
+
 /**
  * TanStack Query key for bootstrapping WASM from session + persisted descriptor wallet triple.
  */

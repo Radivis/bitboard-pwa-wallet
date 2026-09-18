@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   terminateCryptoWorkerMock,
@@ -88,6 +88,7 @@ import {
   clearAutoLockTimer,
   startAutoLockTimer,
 } from '../sessionStore'
+import { useNearZeroSecurityStore } from '../nearZeroSecurityStore'
 import { useWalletStore } from '../walletStore'
 
 describe('auto-lock security purge', () => {
@@ -95,6 +96,7 @@ describe('auto-lock security purge', () => {
     vi.clearAllMocks()
     vi.useFakeTimers()
     clearAutoLockTimer()
+    useNearZeroSecurityStore.setState({ active: false })
     useWalletStore.setState({
       walletStatus: 'unlocked',
       balance: null,
@@ -104,6 +106,11 @@ describe('auto-lock security purge', () => {
     })
     const { terminateWorker } = useCryptoStore.getState()
     terminateWorker()
+  })
+
+  afterEach(() => {
+    clearAutoLockTimer()
+    vi.useRealTimers()
   })
 
   it('auto-lock callback purges worker, secrets channel, and encryption session', async () => {
@@ -170,5 +177,50 @@ describe('auto-lock security purge', () => {
     expect(endWalletSecretsSessionReliablyMock).toHaveBeenCalledTimes(1)
     expect(resetSecretsChannelMock).toHaveBeenCalledTimes(1)
     expect(terminateCryptoWorkerMock).toHaveBeenCalled()
+  })
+
+  it('startAutoLockTimer does not fire while near-zero security is active', async () => {
+    useNearZeroSecurityStore.setState({ active: true })
+    const onLock = vi.fn()
+    startAutoLockTimer(onLock)
+
+    await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
+
+    expect(onLock).not.toHaveBeenCalled()
+    expect(useWalletStore.getState().walletStatus).toBe('unlocked')
+  })
+
+  it('startAutoLockTimer still fires when near-zero security is inactive', async () => {
+    const onLock = vi.fn()
+    startAutoLockTimer(onLock)
+
+    await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
+
+    expect(onLock).toHaveBeenCalledTimes(1)
+  })
+
+  it('startAutoLockTimer can arm after near-zero is turned off', async () => {
+    useNearZeroSecurityStore.setState({ active: true })
+    const onLock = vi.fn()
+    startAutoLockTimer(onLock)
+    await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
+    expect(onLock).not.toHaveBeenCalled()
+
+    useNearZeroSecurityStore.setState({ active: false })
+    startAutoLockTimer(onLock)
+    await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
+    expect(onLock).toHaveBeenCalledTimes(1)
+  })
+
+  it('armed auto-lock is disarmed when near-zero security becomes active', async () => {
+    const onLock = vi.fn()
+    startAutoLockTimer(onLock)
+
+    useNearZeroSecurityStore.setState({ active: true })
+
+    await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
+
+    expect(onLock).not.toHaveBeenCalled()
+    expect(useWalletStore.getState().walletStatus).toBe('unlocked')
   })
 })

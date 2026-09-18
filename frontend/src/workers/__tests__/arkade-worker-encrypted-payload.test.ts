@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
-  ensureOperatorConnectionEncrypted,
+  ensureArkadeAccountEncrypted,
   persistSdkJsonToEncryptedPayload,
   updateOperatorSyncAtEncrypted,
 } from '@/workers/arkade-worker-encrypted-payload'
@@ -10,8 +10,8 @@ function emptyPayloadJson(): string {
   return JSON.stringify({
     descriptorWallets: [],
     lightningNwcConnections: [],
-    arkadeOperatorConnections: [],
-    activeArkadeConnectionIdByNetwork: {},
+    arkadeAccounts: [],
+    activeArkadeAccountIdByNetwork: {},
   })
 }
 
@@ -51,13 +51,13 @@ describe('arkade-worker-encrypted-payload', () => {
     encryptedRoundTripJson = storedPayloadJson
   })
 
-  it('upserts operator connection and sets active id for network', async () => {
-    const summary = await ensureOperatorConnectionEncrypted(
+  it('upserts Arkade account and sets active id for network', async () => {
+    const summary = await ensureArkadeAccountEncrypted(
       deps,
       {
         walletId: 1,
         networkMode: 'signet',
-        connectionId: 'conn-1',
+        arkadeAccountId: 'conn-1',
         operatorSignerPkHex: '02abc',
         operatorUrl: 'https://signet.arkade.example/v1',
         delegatorUrl: 'https://delegator.example',
@@ -67,15 +67,15 @@ describe('arkade-worker-encrypted-payload', () => {
 
     expect(summary.id).toBe('conn-1')
     const payload = parseWalletPayloadJson(storedPayloadJson)
-    expect(payload.activeArkadeConnectionIdByNetwork.signet).toBe('conn-1')
-    expect(payload.arkadeOperatorConnections[0]?.sdkPersistenceJson).toBe('{"version":3}')
+    expect(payload.activeArkadeAccountIdByNetwork.signet).toBe('conn-1')
+    expect(payload.arkadeAccounts[0]?.sdkPersistenceJson).toBe('{"version":3}')
   })
 
   it('updates operator sync timestamp without changing sdk blob', async () => {
-    await ensureOperatorConnectionEncrypted(deps, {
+    await ensureArkadeAccountEncrypted(deps, {
       walletId: 1,
       networkMode: 'signet',
-      connectionId: 'conn-1',
+      arkadeAccountId: 'conn-1',
       operatorSignerPkHex: '02abc',
       operatorUrl: 'https://signet.arkade.example/v1',
       delegatorUrl: 'https://delegator.example',
@@ -84,24 +84,24 @@ describe('arkade-worker-encrypted-payload', () => {
 
     await updateOperatorSyncAtEncrypted(deps, {
       walletId: 1,
-      connectionId: 'conn-1',
+      arkadeAccountId: 'conn-1',
       lastSuccessfulOperatorSyncAt: '2020-01-03T00:00:00.000Z',
     })
 
     const payload = parseWalletPayloadJson(storedPayloadJson)
-    expect(payload.arkadeOperatorConnections[0]?.lastSuccessfulOperatorSyncAt).toBe(
+    expect(payload.arkadeAccounts[0]?.lastSuccessfulOperatorSyncAt).toBe(
       '2020-01-03T00:00:00.000Z',
     )
-    expect(payload.arkadeOperatorConnections[0]?.sdkPersistenceJson).toContain(
+    expect(payload.arkadeAccounts[0]?.sdkPersistenceJson).toContain(
       'offchain_next_derivation_index',
     )
   })
 
   it('persistSdkJsonToEncryptedPayload merges monotonic receive cursor', async () => {
-    await ensureOperatorConnectionEncrypted(deps, {
+    await ensureArkadeAccountEncrypted(deps, {
       walletId: 1,
       networkMode: 'signet',
-      connectionId: 'conn-1',
+      arkadeAccountId: 'conn-1',
       operatorSignerPkHex: '02abc',
       operatorUrl: 'https://signet.arkade.example/v1',
       delegatorUrl: 'https://delegator.example',
@@ -111,13 +111,13 @@ describe('arkade-worker-encrypted-payload', () => {
 
     await persistSdkJsonToEncryptedPayload(deps, {
       walletId: 1,
-      connectionId: 'conn-1',
+      arkadeAccountId: 'conn-1',
       sdkPersistenceJson:
         '{"version":3,"wallet_db":{"offchain_next_derivation_index":1}}',
     })
 
     const payload = parseWalletPayloadJson(storedPayloadJson)
-    const sdkJson = payload.arkadeOperatorConnections[0]?.sdkPersistenceJson ?? '{}'
+    const sdkJson = payload.arkadeAccounts[0]?.sdkPersistenceJson ?? '{}'
     expect(JSON.parse(sdkJson).wallet_db.offchain_next_derivation_index).toBe(2)
   })
 })

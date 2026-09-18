@@ -25,7 +25,7 @@ export type E2eArkadeReceiveDebugSnapshot = {
 }
 
 export type E2eArkadePersistedReceiveDebugSnapshot = {
-  connectionId: string
+  arkadeAccountId: string
   offchainNextDerivationIndex: number
 }
 
@@ -98,7 +98,7 @@ export function ensureE2eArkadeMockControl(): void {
     },
     readPersistedReceiveDebugSnapshot: async () => {
       const { getDatabase, getWalletSecretsEncrypted } = await import('@/db')
-      const { findActiveArkadeConnectionSummary } = await import(
+      const { findActiveArkadeAccountSummary } = await import(
         '@/lib/arkade/arkade-encrypted-persistence-manager'
       )
       const { readOffchainNextDerivationIndex } = await import(
@@ -129,21 +129,21 @@ export function ensureE2eArkadeMockControl(): void {
       getArkadeWorker()
 
       const encrypted = await getWalletSecretsEncrypted(getDatabase(), walletId)
-      const connection = await findActiveArkadeConnectionSummary({
+      const connection = await findActiveArkadeAccountSummary({
         walletId,
         networkMode,
         encryptedPayload: encrypted.payload,
       })
       if (connection == null) {
-        throw new Error('No active Arkade operator connection in wallet secrets')
+        throw new Error('No active Arkade account in wallet secrets')
       }
 
       const sdkPersistenceJson = await getArkadeWorker().readPersistedSdkPersistenceJsonForE2e({
         walletId,
-        connectionId: connection.id,
+        arkadeAccountId: connection.id,
       })
       return {
-        connectionId: connection.id,
+        arkadeAccountId: connection.id,
         offchainNextDerivationIndex: readOffchainNextDerivationIndex(sdkPersistenceJson),
       }
     },

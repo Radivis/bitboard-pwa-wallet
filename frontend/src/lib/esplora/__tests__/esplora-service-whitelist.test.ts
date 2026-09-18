@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   customEsploraMatchesWhitelistedBase,
   ESPLORA_PROVIDER_BASES,
+  esploraViteProxyEntries,
   getUpstreamBaseForEsploraProxy,
   isKnownEsploraProviderId,
   isWhitelistedEsploraBaseUrl,
   normalizeEsploraBaseUrl,
+  REGTEST_ESPLORA_PROXY_LOCAL_PREFIX,
+  REGTEST_ESPLORA_UPSTREAM_BASE,
   shouldWarnEsploraNotWhitelisted,
 } from '@/lib/esplora/esplora-service-whitelist'
 
@@ -147,5 +150,19 @@ describe('shouldWarnEsploraNotWhitelisted', () => {
 describe('isWhitelistedEsploraBaseUrl', () => {
   it('is true for lab (not proxy networks)', () => {
     expect(isWhitelistedEsploraBaseUrl('https://anything', 'lab')).toBe(true)
+  })
+})
+
+describe('esploraViteProxyEntries', () => {
+  it('includes a Vite-only regtest entry targeting the local gateway', () => {
+    const regtestEntry = esploraViteProxyEntries().find(
+      (entry) => entry.localPrefix === REGTEST_ESPLORA_PROXY_LOCAL_PREFIX,
+    )
+    expect(regtestEntry).toEqual({
+      localPrefix: '/api/esplora/default/regtest',
+      targetOrigin: 'http://127.0.0.1:7030',
+      upstreamPathPrefix: '/api',
+    })
+    expect(REGTEST_ESPLORA_UPSTREAM_BASE).toBe('http://127.0.0.1:7030/api')
   })
 })

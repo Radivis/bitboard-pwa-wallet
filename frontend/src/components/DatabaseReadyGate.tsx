@@ -1,16 +1,27 @@
 import { type ReactNode, useEffect, useState } from 'react'
-import { useLocation } from '@tanstack/react-router'
-import { getDatabase, getInitialDatabaseHealth, tryLoadNearZeroSessionIntoMemory } from '@/db'
+import { getInitialDatabaseHealth, getDatabase, syncNearZeroSecurityActiveFlagFromDb } from '@/db'
 import { WALLET_MIGRATION_FAILURE_OPFS_FILENAME } from '@/db/migrations/wallet-migration-failure-report'
 import { readTextFileFromOpfsRootIfExists } from '@/db/opfs/opfs-root-file'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { MigrationFailureReportModal } from '@/components/MigrationFailureReportModal'
-import { pathnameIsWalletRoute } from '@/lib/shared/pathname-is-wallet-route'
 import { assessOpfsLikelyUnsupported } from '@/db/opfs/opfs-capability'
 import { useSecureStorageAvailabilityStore } from '@/stores/secureStorageAvailabilityStore'
+import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
+import { clearAutoLockTimer } from '@/stores/sessionStore'
 
 interface DatabaseReadyGateProps {
   children: ReactNode
+}
+
+async function syncNearZeroSecurityAfterDatabaseReady(): Promise<void> {
+  try {
+    await syncNearZeroSecurityActiveFlagFromDb(getDatabase())
+  } catch (syncError) {
+    console.error('Near-zero security flag sync failed:', syncError)
+  }
+  if (useNearZeroSecurityStore.getState().active) {
+    clearAutoLockTimer()
+  }
 }
 
 /**
@@ -20,13 +31,11 @@ interface DatabaseReadyGateProps {
  * so subsequent store hydration and queries succeed.
  */
 export function DatabaseReadyGate({ children }: DatabaseReadyGateProps) {
-  const location = useLocation()
   const [isReady, setIsReady] = useState(false)
   const [migrationFailureReportOpen, setMigrationFailureReportOpen] = useState(false)
   const [migrationFailureReportText, setMigrationFailureReportText] = useState<string | null>(null)
 
   useEffect(() => {
-    const pathOnColdStart = location.pathname
     let cancelled = false
 
     void (async () => {
@@ -46,12 +55,8 @@ export function DatabaseReadyGate({ children }: DatabaseReadyGateProps) {
           setMigrationFailureReportText(reportText)
           setMigrationFailureReportOpen(true)
         }
-      } else if (pathnameIsWalletRoute(pathOnColdStart)) {
-        try {
-          await tryLoadNearZeroSessionIntoMemory(getDatabase())
-        } catch (err) {
-          console.error('Near-zero session restore failed:', err)
-        }
+      } else {
+        await syncNearZeroSecurityAfterDatabaseReady()
       }
 
       if (!cancelled) setIsReady(true)
@@ -61,7 +66,6 @@ export function DatabaseReadyGate({ children }: DatabaseReadyGateProps) {
       cancelled = true
     }
     // Intentionally once per app mount: re-running would replay DB init on every navigation.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- cold-start path only
   }, [])
 
   if (!isReady) {

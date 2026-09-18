@@ -115,11 +115,16 @@ where
     }
 
     async fn sync(&self) -> Result<(), Error> {
+        let now: std::time::Duration = Timestamp::now()
+            .as_duration()
+            .try_into()
+            .map_err(Error::wallet)?;
+
         let request = self
             .inner
             .read()
             .map_err(|e| Error::consumer(format!("failed to get read lock: {e}")))?
-            .start_full_scan()
+            .start_full_scan_at(now.as_secs())
             .inspect({
                 let mut stdout = std::io::stdout();
                 let mut once = BTreeSet::<KeychainKind>::new();
@@ -132,11 +137,6 @@ where
                 }
             });
 
-        let now: std::time::Duration = Timestamp::now()
-            .as_duration()
-            .try_into()
-            .map_err(Error::wallet)?;
-
         // TODO: Use smarter constants or make it configurable.
         let update = self
             .client
@@ -148,7 +148,7 @@ where
         self.inner
             .write()
             .expect("write lock")
-            .apply_update_at(update, now.as_secs())
+            .apply_update(update)
             .map_err(Error::wallet)?;
 
         Ok(())
@@ -189,6 +189,7 @@ where
         Ok(psbt)
     }
 
+    #[allow(deprecated)] // SignOptions deprecated in BDK 2.x; required until bitcoin::psbt migration.
     fn sign(&self, psbt: &mut Psbt) -> Result<bool, Error> {
         let options = SignOptions {
             trust_witness_utxo: true,
@@ -211,19 +212,24 @@ where
             .read()
             .map_err(|e| Error::consumer(format!("failed to get read lock: {e}")))?;
 
-        // Get all unspent UTXOs
+        // CPFP bumpers go into submitpackage with the unroll parent. An unconfirmed
+        // fee-coin parent is not in that package, so bitcoind returns
+        // package-not-child-with-unconfirmed-parents. Only spend confirmed UTXOs.
         let utxos = wallet.list_unspent();
 
-        // Simple coin selection: pick UTXOs until we reach the target amount
         let mut selected_utxos = Vec::new();
         let mut total_selected = Amount::ZERO;
+        let mut skipped_unconfirmed = 0u32;
 
         for utxo in utxos {
             if total_selected >= target_amount {
                 break;
             }
+            if !utxo.chain_position.is_confirmed() {
+                skipped_unconfirmed += 1;
+                continue;
+            }
 
-            // Get the address for this UTXO
             let address = wallet
                 .peek_address(utxo.keychain, utxo.derivation_index)
                 .address;
@@ -239,7 +245,8 @@ where
 
         if total_selected < target_amount {
             return Err(Error::wallet(format!(
-                "Insufficient funds: need {target_amount}, have {total_selected}"
+                "Insufficient confirmed funds: need {target_amount}, have {total_selected} \
+                 (skipped {skipped_unconfirmed} unconfirmed UTXOs)"
             )));
         }
 

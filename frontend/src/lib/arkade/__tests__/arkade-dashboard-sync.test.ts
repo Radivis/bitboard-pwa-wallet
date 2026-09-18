@@ -8,7 +8,7 @@ vi.mock('@/db/storage-adapter', () => ({
   },
 }))
 
-const loadActiveArkadeConnectionForNetworkMock = vi.fn()
+const loadActiveArkadeAccountForNetworkMock = vi.fn()
 const removeQueriesMock = vi.hoisted(() => vi.fn())
 const arkadeSyncPhaseRef = vi.hoisted(() => ({ syncPhase: 'not-syncing' as const }))
 const arkadeSavePhaseRef = vi.hoisted(() => ({ savePhase: 'not-saving' as const }))
@@ -20,9 +20,9 @@ vi.mock('@/lib/shared/app-query-client', () => ({
   },
 }))
 
-vi.mock('@/lib/arkade/arkade-operator-connections', () => ({
-  loadActiveArkadeConnectionForNetwork: (...args: unknown[]) =>
-    loadActiveArkadeConnectionForNetworkMock(...args),
+vi.mock('@/lib/arkade/arkade-accounts', () => ({
+  loadActiveArkadeAccountForNetwork: (...args: unknown[]) =>
+    loadActiveArkadeAccountForNetworkMock(...args),
 }))
 
 vi.mock('@/db/database', () => ({
@@ -53,7 +53,7 @@ describe('resolveArkadeOperatorSyncMetadata', () => {
       networkMode: 'signet',
       activeWalletId: 1,
       walletStatus: 'unlocked',
-      activeArkadeConnectionId: 'conn-1',
+      activeArkadeAccountId: 'conn-1',
       lastOperatorSyncTime: null,
       arkadeBalance: { confirmedSats: 1000, totalSats: 1000 },
       arkadePayments: [],
@@ -63,7 +63,7 @@ describe('resolveArkadeOperatorSyncMetadata', () => {
 
   it('returns not stale when lastOperatorSyncTime is set this session', async () => {
     const isoTimestamp = '2020-01-02T00:00:00.000Z'
-    loadActiveArkadeConnectionForNetworkMock.mockResolvedValue({
+    loadActiveArkadeAccountForNetworkMock.mockResolvedValue({
       id: 'conn-1',
       lastSuccessfulOperatorSyncAt: isoTimestamp,
     })
@@ -71,12 +71,12 @@ describe('resolveArkadeOperatorSyncMetadata', () => {
     const result = await resolveArkadeOperatorSyncMetadata()
     expect(result.isStaleArkade).toBe(false)
     expect(result.lastSuccessfulOperatorSyncAt).toBe(isoTimestamp)
-    expect(loadActiveArkadeConnectionForNetworkMock).toHaveBeenCalled()
+    expect(loadActiveArkadeAccountForNetworkMock).toHaveBeenCalled()
   })
 
-  it('returns stale when persisted operator sync timestamp exists on connection', async () => {
+  it('returns stale when persisted operator sync timestamp exists on account', async () => {
     const isoTimestamp = '2020-01-02T00:00:00.000Z'
-    loadActiveArkadeConnectionForNetworkMock.mockResolvedValue({
+    loadActiveArkadeAccountForNetworkMock.mockResolvedValue({
       id: 'conn-1',
       lastSuccessfulOperatorSyncAt: isoTimestamp,
     })
@@ -85,8 +85,8 @@ describe('resolveArkadeOperatorSyncMetadata', () => {
     expect(result.lastSuccessfulOperatorSyncAt).toBe(isoTimestamp)
   })
 
-  it('returns not stale when connection has no prior operator sync', async () => {
-    loadActiveArkadeConnectionForNetworkMock.mockResolvedValue({ id: 'conn-1' })
+  it('returns not stale when account has no prior operator sync', async () => {
+    loadActiveArkadeAccountForNetworkMock.mockResolvedValue({ id: 'conn-1' })
     const result = await resolveArkadeOperatorSyncMetadata()
     expect(result.isStaleArkade).toBe(false)
   })
@@ -94,7 +94,7 @@ describe('resolveArkadeOperatorSyncMetadata', () => {
   it('returns persisted last sync timestamp while operator sync is in progress', async () => {
     const isoTimestamp = '2020-01-02T00:00:00.000Z'
     arkadeSyncPhaseRef.syncPhase = 'syncing'
-    loadActiveArkadeConnectionForNetworkMock.mockResolvedValue({
+    loadActiveArkadeAccountForNetworkMock.mockResolvedValue({
       id: 'conn-1',
       lastSuccessfulOperatorSyncAt: isoTimestamp,
     })
@@ -103,13 +103,13 @@ describe('resolveArkadeOperatorSyncMetadata', () => {
 
     expect(result.isStaleArkade).toBe(false)
     expect(result.lastSuccessfulOperatorSyncAt).toBe(isoTimestamp)
-    expect(loadActiveArkadeConnectionForNetworkMock).toHaveBeenCalled()
+    expect(loadActiveArkadeAccountForNetworkMock).toHaveBeenCalled()
   })
 
   it('returns persisted last sync timestamp while operator save is in progress', async () => {
     const isoTimestamp = '2020-01-02T00:00:00.000Z'
     arkadeSavePhaseRef.savePhase = 'saving'
-    loadActiveArkadeConnectionForNetworkMock.mockResolvedValue({
+    loadActiveArkadeAccountForNetworkMock.mockResolvedValue({
       id: 'conn-1',
       lastSuccessfulOperatorSyncAt: isoTimestamp,
     })

@@ -4,27 +4,30 @@ import type { Database } from './schema'
 import { runWalletMigrations } from './migrations/run-wallet-migrations'
 import { WALLET_SQLITE_OPFS_BASENAME } from './opfs/opfs-sqlite-database-names'
 import { isBenignSqliteWorkerCloseFailure } from './sqlite-worker-close-error'
+import { WalletDatabaseTeardownBlockedError } from './database-teardown-blocked-error'
+
+export {
+  WalletDatabaseTeardownBlockedError,
+  isWalletDatabaseTeardownBlockedError,
+} from './database-teardown-blocked-error'
 
 let instance: Kysely<Database> | null = null
 let migrated = false
 let migrationPromise: Promise<void> | null = null
 let walletDatabaseAccessBlockedForTeardown = false
 
-const WALLET_DATABASE_TEARDOWN_BLOCKED_MESSAGE =
-  'Wallet database access blocked during teardown'
-
 export function blockWalletDatabaseAccessForTeardown(): void {
   walletDatabaseAccessBlockedForTeardown = true
 }
 
-/** @internal Vitest only — clears module teardown guard between tests. */
-export function resetWalletDatabaseAccessTeardownGuardForTests(): void {
+/** Clears the hard-block so {@link getDatabase} / {@link ensureMigrated} may open SQLite again. */
+export function resetWalletDatabaseAccessTeardownGuard(): void {
   walletDatabaseAccessBlockedForTeardown = false
 }
 
 function assertWalletDatabaseAccessAllowed(): void {
   if (walletDatabaseAccessBlockedForTeardown) {
-    throw new Error(WALLET_DATABASE_TEARDOWN_BLOCKED_MESSAGE)
+    throw new WalletDatabaseTeardownBlockedError()
   }
 }
 

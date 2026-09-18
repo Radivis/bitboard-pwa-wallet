@@ -340,7 +340,16 @@ async fn apply_esplora_anchor_reconcile_passes(
             .await
             .map_err(JsValue::from)?
         else {
-            break;
+            // `/tx` may still be incomplete on this pass while a later fetch (or the
+            // stuck check) already sees a full confirmed anchor. Keep remaining passes
+            // so we can apply once Esplora returns complete metadata.
+            if stuck_esplora_confirmed_untrusted_receives(esplora_client)
+                .await?
+                .is_empty()
+            {
+                return Ok(());
+            }
+            continue;
         };
 
         with_wallet_mut(|wallet| {

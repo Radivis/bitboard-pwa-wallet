@@ -135,6 +135,28 @@ export type EsploraViteProxyEntry = {
 }
 
 /**
+ * Local arkade-regtest Esplora (esplora_gateway). Vite-only — not a hosted Vercel upstream.
+ * Use 127.0.0.1 so the Node proxy matches Playwright's IPv4-only E2E origin (not ::1 localhost).
+ */
+export const REGTEST_ESPLORA_UPSTREAM_BASE = 'http://127.0.0.1:7030/api'
+
+/** Same-origin path the browser WASM client uses for regtest Esplora. */
+export const REGTEST_ESPLORA_PROXY_LOCAL_PREFIX = `${ESPLORA_SAME_ORIGIN_PROXY_PREFIX}/default/regtest`
+
+function viteProxyEntryFromBaseUrl(
+  localPrefix: string,
+  baseUrl: string,
+): EsploraViteProxyEntry {
+  const parsedBaseUrl = new URL(baseUrl)
+  const upstreamPathPrefix = parsedBaseUrl.pathname.replace(/\/$/, '') || '/'
+  return {
+    localPrefix,
+    targetOrigin: `${parsedBaseUrl.protocol}//${parsedBaseUrl.host}`,
+    upstreamPathPrefix,
+  }
+}
+
+/**
  * Builds Vite `server.proxy` entries: each local prefix is forwarded to `targetOrigin + upstreamPathPrefix + rest`.
  */
 export function esploraViteProxyEntries(): EsploraViteProxyEntry[] {
@@ -144,14 +166,19 @@ export function esploraViteProxyEntries(): EsploraViteProxyEntry[] {
     for (const network of Object.keys(bases) as EsploraProxyNetwork[]) {
       const baseUrl = bases[network]
       if (baseUrl == null) continue
-      const parsedBaseUrl = new URL(baseUrl)
-      const upstreamPathPrefix = parsedBaseUrl.pathname.replace(/\/$/, '') || '/'
-      entries.push({
-        localPrefix: `${ESPLORA_SAME_ORIGIN_PROXY_PREFIX}/${providerId}/${network}`,
-        targetOrigin: `${parsedBaseUrl.protocol}//${parsedBaseUrl.host}`,
-        upstreamPathPrefix,
-      })
+      entries.push(
+        viteProxyEntryFromBaseUrl(
+          `${ESPLORA_SAME_ORIGIN_PROXY_PREFIX}/${providerId}/${network}`,
+          baseUrl,
+        ),
+      )
     }
   }
+  entries.push(
+    viteProxyEntryFromBaseUrl(
+      REGTEST_ESPLORA_PROXY_LOCAL_PREFIX,
+      REGTEST_ESPLORA_UPSTREAM_BASE,
+    ),
+  )
   return entries
 }

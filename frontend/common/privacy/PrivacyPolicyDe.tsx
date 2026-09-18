@@ -387,9 +387,10 @@ export function PrivacyPolicyDe() {
         weitergeben (z. B. an den Betreiber).
       </p>
       <p>
-        Im <strong>Near-Zero-Security-Modus</strong> sind Wallet-Export und -Import aus
-        Sicherheitsgründen gesperrt; setzen Sie zunächst ein App-Passwort, um diese Funktionen zu
-        nutzen. Lab-Exporte und der Migrations-Fehlerbericht sind davon nicht betroffen.
+        Im <strong>Near-Zero-Security-Modus</strong> bleibt der Wallet-Export gesperrt, bis Sie ein
+        App-Passwort setzen. Der Wallet-Import bleibt verfügbar. Neben der Schaltfläche für den
+        Wallet-Export steht, dass Exporte ein App-Passwort erfordern. Lab-Exporte und der
+        Migrations-Fehlerbericht sind davon nicht betroffen.
       </p>
 
       <h2>10. Rechtsgrundlagen (Art. 6 DSGVO)</h2>

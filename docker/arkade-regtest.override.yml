@@ -20,6 +20,25 @@ services:
     container_name: bitboard-regtest-mempool-api
   mempool_web:
     container_name: bitboard-regtest-mempool-web
+    ports: !reset []
+
+  esplora_gateway:
+    build:
+      context: ../../docker/esplora-gateway
+    container_name: bitboard-regtest-esplora-gateway
+    profiles: ["base"]
+    restart: on-failure
+    depends_on:
+      - bitcoin
+      - mempool_web
+    environment:
+      BITCOIN_RPC_HOST: bitcoin
+      BITCOIN_RPC_PORT: "18443"
+      BITCOIN_RPC_USER: admin1
+      BITCOIN_RPC_PASSWORD: "123"
+      UPSTREAM_ESPLORA: http://mempool_web
+    ports:
+      - "${MEMPOOL_WEB_PORT:-7030}:8080"
   lnd:
     container_name: bitboard-regtest-lnd
   arkd-wallet:

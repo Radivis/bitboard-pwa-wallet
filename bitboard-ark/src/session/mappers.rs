@@ -5,14 +5,13 @@ use ark_core::BoardingOutput;
 use ark_core::ExplorerUtxo;
 use ark_core::history::Transaction;
 use ark_core::server::VirtualTxOutPoint;
-use bitcoin::{Address, Network, OutPoint, PublicKey, Txid};
+use bitcoin::{Address, Network, PublicKey};
 
-use crate::api_types::ExitCandidateRow;
-use crate::api_types::{IntentFeeConfiguredDto, PaymentRowDto};
+use crate::api_types::{
+    ExitCandidateDto, IntentFeeConfiguredDto, PaymentRowDto, VirtualStatusState,
+};
 use crate::constants::{
     DEFAULT_TX_FEE_RATE, PAYMENT_DIRECTION_INCOMING, PAYMENT_DIRECTION_OUTGOING,
-    VTXO_STATUS_PRECONFIRMED, VTXO_STATUS_RECOVERABLE, VTXO_STATUS_SETTLED, VTXO_STATUS_SPENT,
-    VTXO_STATUS_UNROLLED,
 };
 use crate::error::{ArkResult, ArkWasmError};
 
@@ -35,12 +34,6 @@ pub(crate) fn parse_onchain_address(value: &str, network: Network) -> ArkResult<
         .map_err(|error| ArkWasmError::InvalidOnchainAddress(error.to_string()))?
         .require_network(network)
         .map_err(|error| ArkWasmError::InvalidOnchainAddress(error.to_string()))
-}
-
-pub(crate) fn parse_outpoint(txid: &str, vout: u32) -> ArkResult<OutPoint> {
-    let txid =
-        Txid::from_str(txid).map_err(|error| ArkWasmError::InvalidTxid(error.to_string()))?;
-    Ok(OutPoint { txid, vout })
 }
 
 pub(crate) fn payment_direction_and_amount_sats(signed_amount_sats: i64) -> (&'static str, u64) {
@@ -133,22 +126,16 @@ pub(crate) fn map_history_row(transaction: Transaction) -> Option<PaymentRowDto>
 pub(crate) fn map_exit_candidate(
     virtual_tx_outpoint: &VirtualTxOutPoint,
     dust: bitcoin::Amount,
-) -> ExitCandidateRow {
+) -> ExitCandidateDto {
     let recoverable = virtual_tx_outpoint.is_recoverable(dust);
-    let state = if virtual_tx_outpoint.is_spent {
-        VTXO_STATUS_SPENT
-    } else if virtual_tx_outpoint.is_unrolled {
-        VTXO_STATUS_UNROLLED
-    } else if virtual_tx_outpoint.is_preconfirmed {
-        VTXO_STATUS_PRECONFIRMED
-    } else if recoverable {
-        VTXO_STATUS_RECOVERABLE
-    } else {
-        VTXO_STATUS_SETTLED
-    }
-    .to_string();
+    let virtual_status_state = VirtualStatusState::from_flags(
+        virtual_tx_outpoint.is_spent,
+        virtual_tx_outpoint.is_unrolled,
+        virtual_tx_outpoint.is_preconfirmed,
+        recoverable,
+    );
 
-    ExitCandidateRow {
+    ExitCandidateDto {
         id: format!(
             "{}:{}",
             virtual_tx_outpoint.outpoint.txid, virtual_tx_outpoint.outpoint.vout
@@ -156,7 +143,7 @@ pub(crate) fn map_exit_candidate(
         txid: virtual_tx_outpoint.outpoint.txid.to_string(),
         vout: virtual_tx_outpoint.outpoint.vout,
         amount_sats: virtual_tx_outpoint.amount.to_sat(),
-        virtual_status_state: state,
+        virtual_status_state,
         is_recoverable: recoverable,
         is_unrolled: virtual_tx_outpoint.is_unrolled,
         can_start_unroll: !recoverable
@@ -170,6 +157,7 @@ pub(crate) fn map_exit_candidate(
 pub(crate) fn empty_fee_info() -> ark_core::server::FeeInfo {
     ark_core::server::FeeInfo {
         intent_fee: ark_core::server::IntentFeeInfo::default(),
+        // Operator tx_fee_rate is not used by ark-client fee estimation; placeholder only.
         tx_fee_rate: DEFAULT_TX_FEE_RATE.to_string(),
     }
 }

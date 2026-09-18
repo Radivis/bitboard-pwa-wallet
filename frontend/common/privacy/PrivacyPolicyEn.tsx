@@ -355,9 +355,10 @@ export function PrivacyPolicyEn() {
         whom you share this report for troubleshooting (for example, with the operator).
       </p>
       <p>
-        In <strong>near-zero security mode</strong>, wallet export and import are disabled for
-        safety; set a real app password first to use those features. Lab exports and the migration
-        error report are not affected by this restriction.
+        In <strong>near-zero security mode</strong>, wallet export stays disabled until you set a
+        real app password. Wallet import remains available. A note next to the wallet export
+        button states that exports require an app password. Lab exports and the migration error
+        report are not affected by this restriction.
       </p>
 
       <h2>10. Legal bases (Art. 6 GDPR)</h2>

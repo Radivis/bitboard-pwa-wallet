@@ -20,6 +20,8 @@ import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet/w
 import { errorMessage } from '@/lib/shared/utils'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { useWalletStore } from '@/stores/walletStore'
+import { startAutoLockTimer } from '@/stores/sessionStore'
+import { orchestrateLock } from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
 
 const UPGRADE_FIELDS_CONFIG = {
   ids: {
@@ -75,6 +77,7 @@ export function UpgradeFromNearZeroPasswordModal({
     },
     onSuccess: () => {
       invalidateWalletRelatedQueriesAndNotifyOtherTabs(queryClient)
+      startAutoLockTimer(() => void orchestrateLock())
       setPhase('success')
     },
     onError: (err) => {

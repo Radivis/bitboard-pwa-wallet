@@ -1,19 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const refreshArkadeStoreFromLoadedWasmMock = vi.hoisted(() => vi.fn())
-const setActiveArkadeConnectionIdMock = vi.hoisted(() => vi.fn())
+const setActiveArkadeAccountIdMock = vi.hoisted(() => vi.fn())
 const setLastOperatorSyncTimeMock = vi.hoisted(() => vi.fn())
 const setArkadeSignerMigrationHintMock = vi.hoisted(() => vi.fn())
 const getArkadeWorkerIfExistsMock = vi.hoisted(() => vi.fn())
 const workerMocks = vi.hoisted(() => ({
   hasOpenSession: vi.fn(),
-  reconcileActiveConnectionId: vi.fn(),
+  reconcileActiveAccountId: vi.fn(),
 }))
 
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: {
     getState: () => ({
-      setActiveArkadeConnectionId: setActiveArkadeConnectionIdMock,
+      setActiveArkadeAccountId: setActiveArkadeAccountIdMock,
       setLastOperatorSyncTime: setLastOperatorSyncTimeMock,
       setArkadeSignerMigrationHint: setArkadeSignerMigrationHintMock,
     }),
@@ -35,7 +35,7 @@ import {
   type ArkadeSessionReuseState,
 } from '@/lib/wallet/lifecycle/arkade-session-open-helpers'
 
-const TEST_CONNECTION = {
+const TEST_ACCOUNT = {
   id: 'conn-helper-test',
   label: 'signet',
   networkMode: 'signet' as const,
@@ -61,34 +61,34 @@ describe('arkade-session-open-helpers', () => {
     vi.clearAllMocks()
     refreshArkadeStoreFromLoadedWasmMock.mockResolvedValue(undefined)
     workerMocks.hasOpenSession.mockResolvedValue(true)
-    workerMocks.reconcileActiveConnectionId.mockResolvedValue(undefined)
+    workerMocks.reconcileActiveAccountId.mockResolvedValue(undefined)
     getArkadeWorkerIfExistsMock.mockReturnValue(workerMocks)
   })
 
-  it('tryReuseExistingArkadeSession returns connection id when session is already open', async () => {
+  it('tryReuseExistingArkadeSession returns account id when session is already open', async () => {
     const sessionReuseState = createSessionReuseState('7:signet:conn-helper-test')
 
-    const connectionId = await tryReuseExistingArkadeSession({
+    const arkadeAccountId = await tryReuseExistingArkadeSession({
       walletId: 7,
       networkMode: 'signet',
-      connection: TEST_CONNECTION,
+      account: TEST_ACCOUNT,
       sessionReuseState,
     })
 
-    expect(connectionId).toBe(TEST_CONNECTION.id)
-    expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalledWith(TEST_CONNECTION.id)
-    expect(setActiveArkadeConnectionIdMock).toHaveBeenCalledWith(TEST_CONNECTION.id)
+    expect(arkadeAccountId).toBe(TEST_ACCOUNT.id)
+    expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalledWith(TEST_ACCOUNT.id)
+    expect(setActiveArkadeAccountIdMock).toHaveBeenCalledWith(TEST_ACCOUNT.id)
   })
 
   it('tryReuseExistingArkadeSession returns null when session key does not match', async () => {
-    const connectionId = await tryReuseExistingArkadeSession({
+    const arkadeAccountId = await tryReuseExistingArkadeSession({
       walletId: 7,
       networkMode: 'signet',
-      connection: TEST_CONNECTION,
+      account: TEST_ACCOUNT,
       sessionReuseState: createSessionReuseState('other-key'),
     })
 
-    expect(connectionId).toBeNull()
+    expect(arkadeAccountId).toBeNull()
     expect(workerMocks.hasOpenSession).not.toHaveBeenCalled()
   })
 
@@ -100,7 +100,7 @@ describe('arkade-session-open-helpers', () => {
       worker: workerMocks,
       walletId: 7,
       networkMode: 'signet',
-      connectionId: TEST_CONNECTION.id,
+      arkadeAccountId: TEST_ACCOUNT.id,
       signerMigrationHint: {
         previousSignerPkHex: '02deadbeef',
         deprecatedStatus: 'deprecated',
@@ -115,8 +115,8 @@ describe('arkade-session-open-helpers', () => {
       deprecatedStatus: 'deprecated',
       cutoffUnix: 1_700_000_000,
     })
-    expect(workerMocks.reconcileActiveConnectionId).toHaveBeenCalledWith(TEST_CONNECTION.id)
-    expect(setActiveArkadeConnectionIdMock).toHaveBeenCalledWith(TEST_CONNECTION.id)
+    expect(workerMocks.reconcileActiveAccountId).toHaveBeenCalledWith(TEST_ACCOUNT.id)
+    expect(setActiveArkadeAccountIdMock).toHaveBeenCalledWith(TEST_ACCOUNT.id)
     expect(sessionReuseState.lastOpenedSessionKey).toBe('7:signet:conn-helper-test')
     expect(runPostOpenMaintenance).toHaveBeenCalledWith(workerMocks, 'signet')
   })

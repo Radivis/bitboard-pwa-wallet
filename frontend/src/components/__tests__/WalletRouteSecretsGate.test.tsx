@@ -18,6 +18,10 @@ vi.mock('@/components/WalletUnlock', () => ({
   WalletUnlock: () => <div data-testid="wallet-unlock">Unlock</div>,
 }))
 
+vi.mock('@/lib/wallet/near-zero-wallet-hydration', () => ({
+  hydrateNearZeroSessionForWalletRoute: vi.fn().mockResolvedValue(false),
+}))
+
 describe('WalletRouteSecretsGate', () => {
   beforeEach(() => {
     resetLockLifecycleStateForTests()
@@ -37,10 +41,10 @@ describe('WalletRouteSecretsGate', () => {
     expect(screen.queryByTestId('wallet-unlock')).not.toBeInTheDocument()
   })
 
-  it('shows unlock UI when wallet is locked', () => {
+  it('shows unlock UI when wallet is locked', async () => {
     useWalletStore.setState({ walletStatus: 'locked' })
     renderWithProviders(<WalletRouteSecretsGate />)
-    expect(screen.getByTestId('wallet-unlock')).toBeInTheDocument()
+    expect(await screen.findByTestId('wallet-unlock')).toBeInTheDocument()
     expect(screen.queryByTestId('wallet-route-outlet')).not.toBeInTheDocument()
   })
 

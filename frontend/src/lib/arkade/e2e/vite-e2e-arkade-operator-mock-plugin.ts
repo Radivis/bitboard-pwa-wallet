@@ -1,4 +1,5 @@
 import type { Plugin } from 'vite'
+import { handleE2eArkadeEsploraMockRequest } from './arkade-esplora-mock-handler'
 import {
   handleE2eArkadeOperatorMockControlRequest,
   handleE2eArkadeOperatorMockRequest,
@@ -16,6 +17,9 @@ export function e2eArkadeOperatorMockPlugin(): Plugin {
         const url = req.url ?? ''
         void handleE2eArkadeOperatorMockControlRequest(req, res, url).then((handledControl) => {
           if (handledControl) {
+            return
+          }
+          if (handleE2eArkadeEsploraMockRequest(req, res, url)) {
             return
           }
           if (handleE2eArkadeOperatorMockRequest(req, res, url)) {

@@ -1,12 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { useWalletStore } from '@/stores/walletStore'
-import { activeWalletLoadQueryKey } from '@/lib/wallet/wallet-load-query-keys'
+import { activeWalletLoadQueryKey, walletSecretsSessionProbeQueryKeyPrefix } from '@/lib/wallet/wallet-load-query-keys'
 import { pathnameIsWalletRoute } from '@/lib/shared/pathname-is-wallet-route'
 import { useWalletCryptoSessionPathGateStore } from '@/stores/walletCryptoSessionPathGateStore'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { isWalletSecretsSessionActive } from '@/lib/wallet/wallet-secrets-session'
 import { reportWalletSyncError } from '@/lib/wallet/wallet-sync-error-toast'
-import { WALLET_DB_QUERY_KEY_ROOT } from '@/lib/wallet/wallet-query-key-root'
 import { useLockLifecycleSnapshot } from '@/hooks/useLockLifecycleSnapshot'
 import {
   canStartBootstrapUnlock,
@@ -38,8 +37,7 @@ export function useActiveWalletLoadQuery() {
 
   const secretsSessionQuery = useQuery({
     queryKey: [
-      ...WALLET_DB_QUERY_KEY_ROOT,
-      'wallet-secrets-session-active-probe',
+      ...walletSecretsSessionProbeQueryKeyPrefix,
       activeWalletId,
       walletStatus,
       manualUnlockInProgress,

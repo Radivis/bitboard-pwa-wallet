@@ -81,6 +81,8 @@ pub struct MigrationLegReport {
     /// The settlement error, if this leg's `settle_vtxos` call failed. Set independently of the
     /// other leg — a failure here does not prevent the other leg from running.
     pub error: Option<String>,
+    /// Intent registered with the operator; wait for the round instead of retrying RegisterIntent.
+    pub waiting_intent: Option<crate::RegisteredBatchIntent>,
 }
 
 impl MigrationLegReport {
@@ -93,6 +95,7 @@ impl MigrationLegReport {
             oversized: Vec::new(),
             skipped: Some(reason),
             error: None,
+            waiting_intent: None,
         }
     }
 
@@ -349,9 +352,30 @@ where
     ///
     /// When the server advertises no deprecated signers, returns an empty
     /// [`MigrationSkipReason::NothingMigratable`] report without touching the wallet.
+    ///
+    /// Compatibility wrapper around [`Self::migrate_deprecated_signer_vtxos_excluding`] with an
+    /// empty exclude set (omit nothing — original public API). Spend-lock callers must pass
+    /// tagged-or-later VTXOs to the excluding variant.
     pub async fn migrate_deprecated_signer_vtxos<R>(
         &self,
         rng: &mut R,
+    ) -> Result<DeprecatedSignerMigrationReport, Error>
+    where
+        R: rand::Rng + rand::CryptoRng + Clone,
+    {
+        // Empty set: exclude nothing. Same inputs as this method before the excluding variant.
+        self.migrate_deprecated_signer_vtxos_excluding(rng, &HashSet::new())
+            .await
+    }
+
+    /// Like [`Self::migrate_deprecated_signer_vtxos`], omitting tagged VTXO outpoints.
+    ///
+    /// An empty `exclude_vtxo_outpoints` set is equivalent to
+    /// [`Self::migrate_deprecated_signer_vtxos`].
+    pub async fn migrate_deprecated_signer_vtxos_excluding<R>(
+        &self,
+        rng: &mut R,
+        exclude_vtxo_outpoints: &HashSet<OutPoint>,
     ) -> Result<DeprecatedSignerMigrationReport, Error>
     where
         R: rand::Rng + rand::CryptoRng + Clone,
@@ -395,6 +419,9 @@ where
         // Build the candidate (outpoint, amount, signer, cutoff) list for the VTXO leg.
         let mut vtxo_candidates: Vec<MigrationVtxoRef> = Vec::new();
         for input in &vtxo_inputs {
+            if exclude_vtxo_outpoints.contains(&input.outpoint()) {
+                continue;
+            }
             let Some(vtxo) = script_map.get(input.script_pubkey()) else {
                 tracing::debug!(
                     outpoint = %input.outpoint(),
@@ -654,6 +681,7 @@ where
                 oversized,
                 skipped: Some(reason),
                 error: None,
+                waiting_intent: None,
             });
         }
 
@@ -667,13 +695,53 @@ where
         // Capture (rather than propagate) the settle error so the caller can still run the other
         // leg — a failure in one leg must not suppress the other.
         Ok(match settle_result {
-            Ok(settle_txid) => MigrationLegReport {
-                settle_txid,
+            Ok(Some(crate::JoinBatchOutcome::Completed(settle_txid))) => MigrationLegReport {
+                settle_txid: Some(settle_txid),
                 migrated: selected,
                 deferred,
                 oversized,
                 skipped: None,
                 error: None,
+                waiting_intent: None,
+            },
+            Ok(Some(crate::JoinBatchOutcome::Waiting(intent))) => MigrationLegReport {
+                settle_txid: None,
+                migrated: Vec::new(),
+                deferred: selected.into_iter().chain(deferred).collect(),
+                oversized,
+                skipped: None,
+                error: None,
+                waiting_intent: Some(intent),
+            },
+            Ok(None) => MigrationLegReport {
+                settle_txid: None,
+                migrated: Vec::new(),
+                deferred: selected.into_iter().chain(deferred).collect(),
+                oversized,
+                skipped: None,
+                error: Some("settle returned no matching inputs".to_string()),
+                waiting_intent: None,
+            },
+            Err(e) if e.is_duplicated_input() => MigrationLegReport {
+                settle_txid: None,
+                migrated: Vec::new(),
+                deferred: selected.into_iter().chain(deferred).collect(),
+                oversized,
+                skipped: None,
+                error: None,
+                waiting_intent: Some(crate::RegisteredBatchIntent {
+                    intent_id: String::new(),
+                    onchain_outpoints: if is_vtxo_leg {
+                        Vec::new()
+                    } else {
+                        selected_outpoints.clone()
+                    },
+                    vtxo_outpoints: if is_vtxo_leg {
+                        selected_outpoints.clone()
+                    } else {
+                        Vec::new()
+                    },
+                }),
             },
             Err(e) => {
                 tracing::warn!(error = %e, "Deprecated-signer migration leg failed to settle");
@@ -686,6 +754,7 @@ where
                     oversized,
                     skipped: None,
                     error: Some(e.to_string()),
+                    waiting_intent: None,
                 }
             }
         })
@@ -922,6 +991,7 @@ mod migration_tests {
                 oversized: Vec::new(),
                 skipped: None,
                 error: Some("settle failed".to_owned()),
+                waiting_intent: None,
             },
             boarding: MigrationLegReport::skipped(MigrationSkipReason::NothingMigratable),
         };

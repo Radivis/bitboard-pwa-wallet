@@ -5,14 +5,22 @@ import { Button } from '@/components/ui/button'
 import { ensureMigrated, getDatabase, generateAndPersistNearZeroSession } from '@/db'
 import { errorMessage } from '@/lib/shared/utils'
 
+interface NearZeroSecurityOptInProps {
+  /** Called after the near-zero secrets session has been started successfully. */
+  onSessionStarted?: () => void
+}
+
 /**
  * First-run optional path: "quick start" with cryptographically weak storage.
  */
-export function NearZeroSecurityOptIn() {
+export function NearZeroSecurityOptIn({ onSessionStarted }: NearZeroSecurityOptInProps) {
   const mutation = useMutation({
     mutationFn: async () => {
       await ensureMigrated()
       await generateAndPersistNearZeroSession(getDatabase())
+    },
+    onSuccess: () => {
+      onSessionStarted?.()
     },
     onError: (err) => {
       toast.error(

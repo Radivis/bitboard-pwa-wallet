@@ -989,8 +989,14 @@ where
         .settle_vtxos(&mut rng, &expiring_outpoints, &[])
         .await
     {
-        Ok(Some(txid)) => {
+        Ok(Some(crate::JoinBatchOutcome::Completed(txid))) => {
             tracing::info!(%txid, "Self-renewed expiring VTXOs");
+        }
+        Ok(Some(crate::JoinBatchOutcome::Waiting(intent))) => {
+            tracing::info!(
+                intent_id = %intent.intent_id,
+                "Self-renew intent registered; waiting for operator batch"
+            );
         }
         Ok(None) => {}
         Err(e) => {

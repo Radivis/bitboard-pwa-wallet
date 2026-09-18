@@ -1,0 +1,80 @@
+import {
+  ARKADE_VTXO_EXIT_PHASES,
+  type ArkadeVtxoExitPhase,
+  type ArkadeVtxoExitRecordDto,
+} from '@/workers/arkade-api'
+
+const VTXO_EXIT_MACHINE_LOCAL_STATE = {
+  routing: 'routing',
+  tagged: 'tagged',
+  idle: 'idle',
+} as const
+
+type VtxoExitPhaseStateMap = { [Phase in ArkadeVtxoExitPhase]: Phase }
+
+export const VTXO_EXIT_MACHINE_STATE = {
+  ...VTXO_EXIT_MACHINE_LOCAL_STATE,
+  ...(Object.fromEntries(
+    ARKADE_VTXO_EXIT_PHASES.map((phase) => [phase, phase]),
+  ) as VtxoExitPhaseStateMap),
+}
+
+export type VtxoExitMachineStateId =
+  (typeof VTXO_EXIT_MACHINE_STATE)[keyof typeof VTXO_EXIT_MACHINE_STATE]
+
+export type VtxoExitMachineContext = {
+  txid: string
+  vout: number
+  amountSats: number
+  taggedAt: number
+  phase: ArkadeVtxoExitPhase
+}
+
+export type VtxoExitMachineInput = ArkadeVtxoExitRecordDto
+
+export type VtxoExitMachineEvent =
+  | { type: 'HYDRATE'; phase: ArkadeVtxoExitPhase }
+  | { type: 'HOST_REGISTERED' }
+  | { type: 'HOST_RELAYED' }
+  | { type: 'HOST_CONFIRMED' }
+  | { type: 'UNROLLED' }
+  | { type: 'COMPLETE_READY' }
+  | { type: 'EXITED' }
+  | { type: 'FUNDING_LOST' }
+  | { type: 'UNTAG' }
+
+export const VTXO_EXIT_CHILD_ID_PREFIX = 'vtxoExit:'
+
+export function vtxoExitOutpointKey(txid: string, vout: number): string {
+  return `${txid}:${vout}`
+}
+
+export function vtxoExitChildId(txid: string, vout: number): string {
+  return `${VTXO_EXIT_CHILD_ID_PREFIX}${vtxoExitOutpointKey(txid, vout)}`
+}
+
+export function isVtxoExitChildId(actorId: string): boolean {
+  return actorId.startsWith(VTXO_EXIT_CHILD_ID_PREFIX)
+}
+
+export type VtxoExitChildView = {
+  childId: string
+  txid: string
+  vout: number
+  phase: ArkadeVtxoExitPhase
+  machineState: VtxoExitMachineStateId
+}
+
+export type VtxoExitChildSnapshotMap = Record<string, VtxoExitChildView>
+
+export function createInitialVtxoExitContext(
+  input: VtxoExitMachineInput,
+): VtxoExitMachineContext {
+  return {
+    txid: input.txid,
+    vout: input.vout,
+    amountSats: input.amountSats,
+    taggedAt: input.taggedAt,
+    phase: input.phase,
+  }
+}

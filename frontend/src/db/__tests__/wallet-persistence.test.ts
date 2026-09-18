@@ -61,8 +61,8 @@ describe('Wallet Persistence with Encryption', () => {
       },
     ],
     lightningNwcConnections: [],
-    arkadeOperatorConnections: [],
-    activeArkadeConnectionIdByNetwork: {},
+    arkadeAccounts: [],
+    activeArkadeAccountIdByNetwork: {},
   }
 
   beforeEach(async () => {
@@ -284,6 +284,7 @@ describe('Wallet Persistence with Encryption', () => {
       const secretsA = { ...sampleSecrets, mnemonic: 'aaa first mnemonic unique' }
       const secretsB = { ...sampleSecrets, mnemonic: 'bbb second mnemonic unique' }
 
+      await endWalletSecretsSession()
       await beginWalletSecretsSession(oldPass)
       await saveWalletSecrets({
         walletDb,
@@ -305,6 +306,7 @@ describe('Wallet Persistence with Encryption', () => {
         newPassword: newPass,
       })
 
+      await endWalletSecretsSession()
       await beginWalletSecretsSession(newPass)
       const loaded1 = await loadWalletSecrets(walletDb, walletId)
       const loaded2 = await loadWalletSecrets(walletDb, walletId2)
@@ -316,6 +318,7 @@ describe('Wallet Persistence with Encryption', () => {
     })
 
     it('throws when current password is wrong (no partial writes)', async () => {
+      await endWalletSecretsSession()
       await beginWalletSecretsSession(oldPass)
       await saveWalletSecrets({
         walletDb,
@@ -331,7 +334,6 @@ describe('Wallet Persistence with Encryption', () => {
         }),
       ).rejects.toThrow()
 
-      await beginWalletSecretsSession(oldPass)
       const loaded = await loadWalletSecrets(walletDb, walletId)
       expect(loaded).toEqual(sampleSecrets)
     })

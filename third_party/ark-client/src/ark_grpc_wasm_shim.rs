@@ -6,15 +6,15 @@ use std::sync::Arc;
 use ark_core::asset::AssetId;
 use ark_core::intent;
 use ark_core::server::{
-    self, ChainedTxType, FinalizeOffchainTxResponse, GetVtxosRequest, IndexerPage,
-    PendingTx, StreamEvent, SubmitOffchainTxResponse, SubscriptionResponse,
+    self, indexer_spend_txid, ChainedTxType, FinalizeOffchainTxResponse, GetVtxosRequest,
+    IndexerPage, PendingTx, StreamEvent, SubmitOffchainTxResponse, SubscriptionResponse,
     VirtualTxsResponse, VtxoChain, VtxoChains,
 };
 use ark_rest::apis::ark_service_api::{
     ark_service_estimate_intent_fee, ark_service_get_pending_tx,
 };
-use ark_rest::apis::indexer_service_api::indexer_service_get_vtxo_chain;
 use ark_rest::apis::indexer_service_api::indexer_service_get_asset;
+use ark_rest::apis::indexer_service_api::indexer_service_get_vtxo_chain;
 use ark_rest::models::{EstimateIntentFeeRequest, GetPendingTxRequest, IndexerChainedTxType};
 use bitcoin::hex::FromHex;
 use bitcoin::secp256k1::PublicKey;
@@ -50,10 +50,7 @@ enum Kind {
 impl Error {
     fn new(kind: Kind) -> Self {
         Self {
-            inner: ErrorImpl {
-                kind,
-                source: None,
-            },
+            inner: ErrorImpl { kind, source: None },
         }
     }
 
@@ -121,19 +118,33 @@ impl fmt::Debug for Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let description = match &self.inner.kind {
-            Kind::Connect => "failed to connect to Ark server",
-            Kind::NotConnected => "no connection to Ark server",
-            Kind::Request => "request failed",
-            Kind::Conversion => "failed to convert between types",
-            Kind::EventStreamDisconnect => "got disconnected from event stream",
-            Kind::EventStream => "error via event stream",
-        };
-        write!(f, "{description}")?;
-        if let Some(source) = &self.inner.source {
-            write!(f, ": {source}")?;
+        match &self.inner.kind {
+            Kind::Request => {
+                if let Some(source) = &self.inner.source {
+                    if let Some(rest_error) = source.downcast_ref::<ark_rest::Error>() {
+                        return f.write_str(&format_rest_request_error(rest_error));
+                    }
+                    write!(f, "request failed: {source}")
+                } else {
+                    f.write_str("request failed")
+                }
+            }
+            kind => {
+                let description = match kind {
+                    Kind::Connect => "failed to connect to Ark server",
+                    Kind::NotConnected => "no connection to Ark server",
+                    Kind::Conversion => "failed to convert between types",
+                    Kind::EventStreamDisconnect => "got disconnected from event stream",
+                    Kind::EventStream => "error via event stream",
+                    Kind::Request => unreachable!("handled above"),
+                };
+                write!(f, "{description}")?;
+                if let Some(source) = &self.inner.source {
+                    write!(f, ": {source}")?;
+                }
+                Ok(())
+            }
         }
-        Ok(())
     }
 }
 
@@ -146,6 +157,15 @@ impl std::error::Error for Error {
     }
 }
 
+fn format_rest_request_error(rest_error: &ark_rest::Error) -> String {
+    let chain = rest_error.display_chain();
+    if chain.contains("Event stream") || chain.contains("batch/events") {
+        format!("batch event stream: {chain}")
+    } else {
+        chain
+    }
+}
+
 fn map_rest_error(error: ark_rest::Error) -> Error {
     Error::request(error)
 }
@@ -153,7 +173,7 @@ fn map_rest_error(error: ark_rest::Error) -> Error {
 fn map_apis_error<E: fmt::Debug>(error: ark_rest::apis::Error<E>) -> Error {
     Error::request(std::io::Error::new(
         std::io::ErrorKind::Other,
-        format!("{error:?}"),
+        error.to_string(),
     ))
 }
 
@@ -171,9 +191,7 @@ impl fmt::Debug for Client {
 impl Client {
     pub fn new(url: String) -> Self {
         Self {
-            inner: Arc::new(
-                ark_rest::Client::new(url).expect("failed to create ark REST client"),
-            ),
+            inner: Arc::new(ark_rest::Client::new(url).expect("failed to create ark REST client")),
         }
     }
 
@@ -189,10 +207,7 @@ impl Client {
         self.inner.get_info().await.map_err(map_rest_error)
     }
 
-    pub async fn list_vtxos(
-        &self,
-        request: GetVtxosRequest,
-    ) -> Result<ListVtxosResponse, Error> {
+    pub async fn list_vtxos(&self, request: GetVtxosRequest) -> Result<ListVtxosResponse, Error> {
         self.inner.list_vtxos(request).await.map_err(map_rest_error)
     }
 
@@ -200,10 +215,22 @@ impl Client {
         let message_json = intent
             .serialize_message()
             .map_err(Error::conversion_message)?;
-        let message: intent::IntentMessage = serde_json::from_str(&message_json)
-            .map_err(Error::conversion_message)?;
+        let message: intent::IntentMessage =
+            serde_json::from_str(&message_json).map_err(Error::conversion_message)?;
         self.inner
             .register_intent(&message, &intent.proof)
+            .await
+            .map_err(map_rest_error)
+    }
+
+    pub async fn delete_intent(&self, intent: intent::Intent) -> Result<(), Error> {
+        let message_json = intent
+            .serialize_message()
+            .map_err(Error::conversion_message)?;
+        let message: intent::IntentMessage =
+            serde_json::from_str(&message_json).map_err(Error::conversion_message)?;
+        self.inner
+            .delete_intent(&message, &intent.proof)
             .await
             .map_err(map_rest_error)
     }
@@ -433,9 +460,7 @@ impl Client {
         .await
         .map_err(map_apis_error)?;
         let fee = match response.fee {
-            Some(fee) => fee
-                .parse::<i64>()
-                .map_err(Error::conversion_message)?,
+            Some(fee) => fee.parse::<i64>().map_err(Error::conversion_message)?,
             None => 0,
         };
         Ok(SignedAmount::from_sat(fee))
@@ -443,12 +468,9 @@ impl Client {
 
     pub async fn get_asset(&self, asset_id: AssetId) -> Result<server::AssetInfo, Error> {
         let configuration = self.inner.configuration().map_err(map_rest_error)?;
-        let response = indexer_service_get_asset(
-            &configuration,
-            &asset_id.to_string(),
-        )
-        .await
-        .map_err(map_apis_error)?;
+        let response = indexer_service_get_asset(&configuration, &asset_id.to_string())
+            .await
+            .map_err(map_apis_error)?;
 
         let supply = response
             .supply
@@ -461,11 +483,9 @@ impl Client {
             .parse()
             .map_err(Error::conversion_message)?;
         let control_asset_id = match response.control_asset {
-            Some(control_asset) if !control_asset.is_empty() => Some(
-                control_asset
-                    .parse()
-                    .map_err(Error::conversion_message)?,
-            ),
+            Some(control_asset) if !control_asset.is_empty() => {
+                Some(control_asset.parse().map_err(Error::conversion_message)?)
+            }
             _ => None,
         };
 
@@ -494,13 +514,11 @@ impl TryFrom<ark_rest::models::GetVtxoChainResponse> for VtxoChainResponse {
             .map(indexer_chain_to_vtxo_chain)
             .collect::<Result<Vec<_>, Error>>()?;
 
-        let page = value
-            .page
-            .map(|page| IndexerPage {
-                current: page.current.unwrap_or_default(),
-                next: page.next.unwrap_or_default(),
-                total: page.total.unwrap_or_default(),
-            });
+        let page = value.page.map(|page| IndexerPage {
+            current: page.current.unwrap_or_default(),
+            next: page.next.unwrap_or_default(),
+            total: page.total.unwrap_or_default(),
+        });
 
         Ok(VtxoChainResponse {
             chains: VtxoChains { inner: chains },
@@ -510,55 +528,46 @@ impl TryFrom<ark_rest::models::GetVtxoChainResponse> for VtxoChainResponse {
 }
 
 fn indexer_chain_to_vtxo_chain(value: &ark_rest::models::IndexerChain) -> Result<VtxoChain, Error> {
-        let spends = value
-            .spends
-            .clone()
-            .unwrap_or_default()
-            .iter()
-            .map(|txid| {
-                let txid_str = if txid.len() == 66 { &txid[..64] } else { txid.as_str() };
-                txid_str
-                    .parse()
-                    .map_err(|error: bitcoin::hex::HexToArrayError| Error::conversion_message(error))
-            })
-            .collect::<Result<Vec<_>, Error>>()?;
+    let spends = value
+        .spends
+        .clone()
+        .unwrap_or_default()
+        .iter()
+        .map(|spend| indexer_spend_txid(spend).map_err(Error::conversion))
+        .collect::<Result<Vec<_>, Error>>()?;
 
-        let tx_type = match value.r#type {
-            Some(IndexerChainedTxType::IndexerChainedTxTypeUnspecified) | None => {
-                ChainedTxType::Unspecified
-            }
-            Some(IndexerChainedTxType::IndexerChainedTxTypeCommitment) => {
-                ChainedTxType::Commitment
-            }
-            Some(IndexerChainedTxType::IndexerChainedTxTypeArk) => ChainedTxType::Ark,
-            Some(IndexerChainedTxType::IndexerChainedTxTypeTree) => ChainedTxType::Tree,
-            Some(IndexerChainedTxType::IndexerChainedTxTypeCheckpoint) => {
-                ChainedTxType::Checkpoint
-            }
-        };
+    let tx_type = match value.r#type {
+        Some(IndexerChainedTxType::IndexerChainedTxTypeUnspecified) | None => {
+            ChainedTxType::Unspecified
+        }
+        Some(IndexerChainedTxType::IndexerChainedTxTypeCommitment) => ChainedTxType::Commitment,
+        Some(IndexerChainedTxType::IndexerChainedTxTypeArk) => ChainedTxType::Ark,
+        Some(IndexerChainedTxType::IndexerChainedTxTypeTree) => ChainedTxType::Tree,
+        Some(IndexerChainedTxType::IndexerChainedTxTypeCheckpoint) => ChainedTxType::Checkpoint,
+    };
 
-        let txid = value
-            .txid
+    let txid = value
+        .txid
+        .as_ref()
+        .ok_or_else(|| Error::conversion_message("missing txid"))?
+        .parse()
+        .map_err(|error: bitcoin::hex::HexToArrayError| Error::conversion_message(error))?;
+
+    Ok(VtxoChain {
+        txid,
+        tx_type,
+        spends,
+        expires_at: value
+            .expires_at
             .as_ref()
-            .ok_or_else(|| Error::conversion_message("missing txid"))?
-            .parse()
-            .map_err(|error: bitcoin::hex::HexToArrayError| Error::conversion_message(error))?;
-
-        Ok(VtxoChain {
-            txid,
-            tx_type,
-            spends,
-            expires_at: value
-                .expires_at
-                .as_ref()
-                .map(|value| {
-                    value
-                        .parse::<i64>()
-                        .map_err(|error| Error::conversion_message(error))
-                })
-                .transpose()?
-                .unwrap_or_default(),
-        })
+            .map(|value| {
+                value
+                    .parse::<i64>()
+                    .map_err(|error| Error::conversion_message(error))
+            })
+            .transpose()?
+            .unwrap_or_default(),
+    })
 }
 
 fn decode_psbt_field(encoded: String) -> Result<Psbt, Error> {
@@ -570,8 +579,6 @@ fn decode_psbt_field(encoded: String) -> Result<Psbt, Error> {
     if let Ok(bytes) = Vec::from_hex(&encoded) {
         return Psbt::deserialize(&bytes).map_err(Error::conversion_message);
     }
-    let bytes = base64
-        .decode(encoded)
-        .map_err(Error::conversion_message)?;
+    let bytes = base64.decode(encoded).map_err(Error::conversion_message)?;
     Psbt::deserialize(&bytes).map_err(Error::conversion_message)
 }
