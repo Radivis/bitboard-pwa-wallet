@@ -40,6 +40,8 @@ pub use tx_graph::TxGraph;
 pub use tx_graph::TxGraphChunk;
 pub use unilateral_exit::build_anchor_tx;
 pub use unilateral_exit::build_unilateral_exit_tree_txids;
+pub use unilateral_exit::commitment_txids_for_unilateral_exit_tree;
+pub use unilateral_exit::commitment_txids_from_vtxo_chains;
 pub use unilateral_exit::SelectedUtxo;
 pub use unilateral_exit::UtxoCoinSelection;
 pub use vtxo::Vtxo;

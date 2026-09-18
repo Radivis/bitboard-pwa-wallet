@@ -173,9 +173,7 @@ impl VtxoList {
     /// Upstream ark-core named this bucket `spent()`, which is misleading — it is **not** the
     /// `is_spent` flag alone. Prefer this method over [`Self::spent`].
     pub fn unspendable(&self) -> impl Iterator<Item = &VirtualTxOutPoint> {
-        self.exiting
-            .iter()
-            .chain(self.finalized_unspendable.iter())
+        self.exiting.iter().chain(self.finalized_unspendable.iter())
     }
 
     /// VTXOs that are already on-chain and can be spent unilaterally (the exit path is active).

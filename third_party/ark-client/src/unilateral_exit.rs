@@ -111,8 +111,17 @@ where
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        let unilateral_exit_tree =
-            UnilateralExitTree::new(virtual_tx_outpoint.commitment_txids.clone(), paths);
+        // Bitboard vendor patch: VTXO `commitment_txids` can omit a parent that `chain_json`
+        // still lists as `type=commitment`. Finalize looks up witness UTXOs from Esplora using
+        // this list; without the chain union, tree PSBTs that spend that parent fail with
+        // `no witness UTXO found`.
+        let unilateral_exit_tree = UnilateralExitTree::new(
+            unilateral_exit::commitment_txids_for_unilateral_exit_tree(
+                &virtual_tx_outpoint.commitment_txids,
+                &vtxo_chains,
+            ),
+            paths,
+        );
 
         let branches = self
             .finalize_unilateral_exit_tree_on_chain(&unilateral_exit_tree)

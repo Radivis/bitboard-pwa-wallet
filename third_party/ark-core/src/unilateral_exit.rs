@@ -369,6 +369,35 @@ pub fn build_unilateral_exit_tree_txids(
     Ok(vec![sorted])
 }
 
+/// Commitment txids listed as `ChainedTxType::Commitment` in indexer `chain_json`.
+pub fn commitment_txids_from_vtxo_chains(chains: &server::VtxoChains) -> Vec<Txid> {
+    chains
+        .inner
+        .iter()
+        .filter(|link| matches!(link.tx_type, server::ChainedTxType::Commitment))
+        .map(|link| link.txid)
+        .collect()
+}
+
+/// Esplora fetch list for unroll: VTXO `commitment_txids` union chain_json commitment links.
+pub fn commitment_txids_for_unilateral_exit_tree(
+    vtxo_commitment_txids: &[Txid],
+    chains: &server::VtxoChains,
+) -> Vec<Txid> {
+    let mut seen = HashSet::new();
+    let mut txids = Vec::new();
+    for txid in vtxo_commitment_txids
+        .iter()
+        .copied()
+        .chain(commitment_txids_from_vtxo_chains(chains))
+    {
+        if seen.insert(txid) {
+            txids.push(txid);
+        }
+    }
+    txids
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -395,6 +424,65 @@ mod tests {
             .expect("valid unilateral exit branch")
             .pop()
             .expect("one topological branch")
+    }
+
+    #[test]
+    fn commitment_txids_from_vtxo_chains_collects_commitment_links() {
+        let chains = server::VtxoChains {
+            inner: vec![
+                chain(txid(1), server::ChainedTxType::Commitment, []),
+                chain(txid(2), server::ChainedTxType::Tree, [txid(1)]),
+                chain(txid(3), server::ChainedTxType::Commitment, []),
+                chain(txid(4), server::ChainedTxType::Ark, [txid(2)]),
+            ],
+        };
+        assert_eq!(
+            commitment_txids_from_vtxo_chains(&chains),
+            vec![txid(1), txid(3)]
+        );
+    }
+
+    #[test]
+    fn commitment_txids_for_unilateral_exit_tree_includes_chain_ids_omitted_from_vtxo() {
+        let chains = server::VtxoChains {
+            inner: vec![
+                chain(txid(1), server::ChainedTxType::Commitment, []),
+                chain(txid(2), server::ChainedTxType::Tree, [txid(1)]),
+                chain(txid(4), server::ChainedTxType::Ark, [txid(2)]),
+            ],
+        };
+        assert_eq!(
+            commitment_txids_for_unilateral_exit_tree(&[], &chains),
+            vec![txid(1)]
+        );
+    }
+
+    #[test]
+    fn commitment_txids_for_unilateral_exit_tree_keeps_vtxo_ids_absent_from_chain() {
+        let chains = server::VtxoChains {
+            inner: vec![
+                chain(txid(2), server::ChainedTxType::Tree, [txid(1)]),
+                chain(txid(4), server::ChainedTxType::Ark, [txid(2)]),
+            ],
+        };
+        assert_eq!(
+            commitment_txids_for_unilateral_exit_tree(&[txid(9)], &chains),
+            vec![txid(9)]
+        );
+    }
+
+    #[test]
+    fn commitment_txids_for_unilateral_exit_tree_does_not_duplicate() {
+        let chains = server::VtxoChains {
+            inner: vec![
+                chain(txid(1), server::ChainedTxType::Commitment, []),
+                chain(txid(2), server::ChainedTxType::Tree, [txid(1)]),
+            ],
+        };
+        assert_eq!(
+            commitment_txids_for_unilateral_exit_tree(&[txid(1)], &chains),
+            vec![txid(1)]
+        );
     }
 
     #[test]
@@ -527,8 +615,8 @@ mod tests {
 
     fn dummy_tap_key_sig() -> taproot::Signature {
         let secp = Secp256k1::new();
-        let keypair = bitcoin::key::Keypair::from_seckey_slice(&secp, &[1u8; 32])
-            .expect("secret key");
+        let keypair =
+            bitcoin::key::Keypair::from_seckey_slice(&secp, &[1u8; 32]).expect("secret key");
         let message = secp256k1::Message::from_digest([2u8; 32]);
         taproot::Signature {
             signature: secp.sign_schnorr(&message, &keypair),

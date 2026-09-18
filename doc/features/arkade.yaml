@@ -105,6 +105,12 @@ feature:
         description: Operator sync prefetches unilateral_exit_materials on exit-eligible VTXO snapshot records and persists cached_operator_info
       - id: ARK-EXIT-08
         description: Fail fast with autonomous_exit_materials_missing when exit materials are missing or cannot describe the VTXO or seized branch (start unroll/proceed, funding_lost stamping), regardless of autonomous mode
+      - id: ARK-EXIT-36
+        description: >-
+          Building an unroll branch from prefetched materials fetches commitment transactions from
+          Esplora using the union of the VTXO record's commitment_txids and commitment links in that
+          host's chain_json. Topology already displayed chain commitments; finalize must not omit
+          a chain_json commitment parent that the tree PSBT spends (witness UTXO lookup).
       - id: ARK-EXIT-09
         description: Complete uses snapshot readiness plus Esplora only; no operator indexer poll. Each proceed step is non-blocking; the XState machine waits until the current virtual tx has 1 confirmation, and WASM stamps is_unrolled only after 6 confirmations (ARK-EXIT-15/16). The unified stamper (ARK-EXIT-29) runs on autonomous load, operator sync, proceed, progress, list, and complete (terminals included).
       - id: ARK-EXIT-10

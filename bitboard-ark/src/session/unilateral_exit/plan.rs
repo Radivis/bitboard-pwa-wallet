@@ -2,6 +2,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 
 use ark_core::build_unilateral_exit_tree_txids;
 use ark_core::server::VtxoChains;
+use ark_core::unilateral_exit::commitment_txids_from_vtxo_chains;
 use bitcoin::{Transaction, Txid};
 
 use crate::api_types::{
@@ -16,7 +17,7 @@ use crate::constants::{
 use crate::error::{ArkResult, ArkWasmError};
 use crate::outpoint::VirtualOutPoint;
 use crate::persistence::VirtualTxOutPointRecord;
-use crate::unilateral_exit_materials::{chained_tx_type_label, record_is_exit_eligible};
+use crate::unilateral_exit_materials::record_is_exit_eligible;
 
 use super::snapshot_ops::dedup_virtual_outpoints;
 use super::topology::{
@@ -160,12 +161,7 @@ pub(crate) fn branch_txids_for_leaf(chains: &VtxoChains, leaf_txid: Txid) -> Ark
     Ok(paths.into_iter().flatten().collect())
 }
 fn commitment_txids_from_chains(chains: &VtxoChains) -> Vec<Txid> {
-    chains
-        .inner
-        .iter()
-        .filter(|link| chained_tx_type_label(&link.tx_type) == "commitment")
-        .map(|link| link.txid)
-        .collect()
+    commitment_txids_from_vtxo_chains(chains)
 }
 
 pub(crate) fn exit_eligible_records_for_topology_hosts_from_snapshot(
