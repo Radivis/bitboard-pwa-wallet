@@ -369,6 +369,31 @@ pub fn build_unilateral_exit_tree_txids(
     Ok(vec![sorted])
 }
 
+/// Restrict the Esplora commitment fetch list to txids actually spent by virtual unroll txs.
+///
+/// The union in [`commitment_txids_for_unilateral_exit_tree`] can include historical commitment
+/// links that no tree PSBT spends. Polling those on Esplora stalls proceed (20 × 500ms each)
+/// when they are missing.
+pub fn filter_commitment_txids_spent_by_virtual_txs<'a>(
+    candidates: &[Txid],
+    virtual_txs: impl IntoIterator<Item = &'a Transaction>,
+) -> Vec<Txid> {
+    let spent_parent_txids: HashSet<Txid> = virtual_txs
+        .into_iter()
+        .flat_map(|transaction| {
+            transaction
+                .input
+                .iter()
+                .map(|input| input.previous_output.txid)
+        })
+        .collect();
+    candidates
+        .iter()
+        .copied()
+        .filter(|txid| spent_parent_txids.contains(txid))
+        .collect()
+}
+
 /// Commitment txids listed as `ChainedTxType::Commitment` in indexer `chain_json`.
 pub fn commitment_txids_from_vtxo_chains(chains: &server::VtxoChains) -> Vec<Txid> {
     chains
@@ -482,6 +507,43 @@ mod tests {
         assert_eq!(
             commitment_txids_for_unilateral_exit_tree(&[txid(1)], &chains),
             vec![txid(1)]
+        );
+    }
+
+    fn virtual_tx_spending(parents: &[Txid]) -> Transaction {
+        Transaction {
+            version: transaction::Version::TWO,
+            lock_time: LockTime::ZERO,
+            input: parents
+                .iter()
+                .map(|parent| TxIn {
+                    previous_output: OutPoint {
+                        txid: *parent,
+                        vout: 0,
+                    },
+                    script_sig: ScriptBuf::new(),
+                    sequence: Sequence::MAX,
+                    witness: Witness::new(),
+                })
+                .collect(),
+            output: vec![],
+        }
+    }
+
+    #[test]
+    fn filter_commitment_txids_spent_by_virtual_txs_keeps_prevouts() {
+        let tree = virtual_tx_spending(&[txid(1)]);
+        assert_eq!(
+            filter_commitment_txids_spent_by_virtual_txs(&[txid(1), txid(3)], [&tree]),
+            vec![txid(1)]
+        );
+    }
+
+    #[test]
+    fn filter_commitment_txids_spent_by_virtual_txs_drops_unspent_candidates() {
+        let tree = virtual_tx_spending(&[txid(1)]);
+        assert!(
+            filter_commitment_txids_spent_by_virtual_txs(&[txid(3), txid(9)], [&tree]).is_empty()
         );
     }
 

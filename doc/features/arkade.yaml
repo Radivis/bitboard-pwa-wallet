@@ -109,8 +109,10 @@ feature:
         description: >-
           Building an unroll branch from prefetched materials fetches commitment transactions from
           Esplora using the union of the VTXO record's commitment_txids and commitment links in that
-          host's chain_json. Topology already displayed chain commitments; finalize must not omit
-          a chain_json commitment parent that the tree PSBT spends (witness UTXO lookup).
+          host's chain_json, restricted to txids a virtual unroll tx actually spends. Topology
+          already displayed chain commitments; finalize must not omit a chain_json commitment parent
+          that the tree PSBT spends (witness UTXO lookup). Unspent historical commitment links are
+          not fetched (those polls stall proceed when Esplora has no `/raw`).
       - id: ARK-EXIT-09
         description: Complete uses snapshot readiness plus Esplora only; no operator indexer poll. Each proceed step is non-blocking; the XState machine waits until the current virtual tx has 1 confirmation, and WASM stamps is_unrolled only after 6 confirmations (ARK-EXIT-15/16). The unified stamper (ARK-EXIT-29) runs on autonomous load, operator sync, proceed, progress, list, and complete (terminals included).
       - id: ARK-EXIT-10
@@ -124,7 +126,7 @@ feature:
       - id: ARK-EXIT-14
         description: ark_estimate_unilateral_exit_batch unions deduped virtual steps across selected VTXO leaves for batch fee estimate and bumper sufficiency gate
       - id: ARK-EXIT-15
-        description: ark_proceed_unilateral_exit_step advances one virtual tx per call with caller feerate, returns without blocking on confirmation, persists current_step_waiting_since for progress UI, and skips already-on-chain branch txs; the XState machine polls until 1-conf
+        description: ark_proceed_unilateral_exit_step advances one virtual tx per call with caller feerate, returns without blocking on confirmation, persists current_step_waiting_since for progress UI, and skips already-on-chain branch txs. Already-on-chain requires Esplora `/tx/{txid}/raw` (mempool or chain) in addition to `/status.confirmed` so indexer/virtual-tree JSON stubs cannot skip an unpublished step (false 1-conf rewinds to step 2 after lock and REG-04 mines forever). The XState machine polls until 1-conf
       - id: ARK-EXIT-16
         description: Host virtual txs (leaf or intermediate) must reach 6 confirmations on Esplora before WASM marks is_unrolled. ARK-EXIT-29 applies the same 6-conf rule to every tree/ark host including terminals.
       - id: ARK-EXIT-17

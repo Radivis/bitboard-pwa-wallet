@@ -33,7 +33,7 @@ The operator indexer can expose virtual unroll branch txs via JSON `/tx/{txid}` 
 - proof the tx has confirmations, or
 - proof a unilateral-exit step is complete.
 
-`map_tx_confirmations` handles this on the **404 or unconfirmed `/status`** path: require `/raw` before consulting JSON `/tx/{txid}` for confirmation depth, and prefer **merkle proof** when the tx is in a block. The happy path uses `/status` with `confirmed: true` directly.
+`map_tx_confirmations` handles this on the **404 or unconfirmed `/status`** path: require `/raw` before consulting JSON `/tx/{txid}` for confirmation depth. The `/status.confirmed` path also requires `/raw` so proxied mempool stubs cannot mint 1-conf.
 
 **Pitfall:** `/status` may return **200 OK** with `confirmed: false` for a virtual-tree stub (not only 404). Treating that as final `0` confirmations without checking merkle proof or relayed `/raw` + JSON status breaks step progress after mining.
 
@@ -41,18 +41,29 @@ The operator indexer can expose virtual unroll branch txs via JSON `/tx/{txid}` 
 
 ## Correct use of relay vs confirmation in wallet code
 
-These rules are intentional; violating them has caused full-day regressions (REG-04 / REG-07 stuck at “Step 1 of N”).
+These rules are intentional; violating them has caused full-day regressions (REG-04 / REG-07 stuck at “Step 1 of N”, or lock/unlock rewinding to “Step 2 of N”).
 
 ### Step completion (unilateral unroll progress)
 
-Use **confirmation depth** from `get_tx_status` / `tx_confirmations`:
+Use **confirmation depth** from `get_tx_confirmations` / `map_tx_confirmations`:
 
 - `first_incomplete_step_index`
 - `current_step_waiting_since`
 - `node_statuses_for_plan` / `node_status_label`
 - host-tx finality (`host_tx_reached_finality`)
 
-**Do not** require `is_tx_relayed_on_network` for step completion. Mined steps are confirmed via `/status` / merkle proof even if `/raw` was never polled during the mempool phase.
+**Positive confirmations require `/raw`.** `GET /tx/{txid}/status` with `confirmed: true` is not enough on its own.
+
+`esplora_gateway` answers `/status` from bitcoind only when the tx is **confirmed on chain**. Otherwise it **proxies to mempool**, which can serve virtual-tree JSON stubs with `confirmed: true` while `/raw` is 404. Skipping that unpublished first virtual tx as complete:
+
+1. puts the cursor on **step 2**,
+2. after lock (WASM confirmation cache gone) **starts at step 2 again**,
+3. `submitpackage` of the child fails with `package-not-child-with-unconfirmed-parents`,
+4. REG-04 mines forever while the UI says waiting for confirmation.
+
+`map_tx_confirmations` therefore requires `GET /tx/{txid}/raw` (mempool or chain) before trusting `/status.confirmed`. When `/status` is missing or still `confirmed: false`, `confirmations_for_relayed_tx` already required `/raw` before consulting JSON `/tx/{txid}`.
+
+`esplora_gateway` serves `/raw` from bitcoind for mempool **or** chain, so a mined unroll step is visible on `/raw`. Do not treat indexer JSON presence as 1-conf.
 
 ### Broadcast gating (unilateral `proceed`)
 
@@ -98,9 +109,9 @@ Separate from step progress: detecting that the **final exit sweep** spent a VTX
 
 ## Anti-patterns (do not reintroduce)
 
-1. **Relay-gated step completion** — `unroll_step_is_complete_on_network`-style helpers that require `/raw` before advancing `step_index`. Breaks regtest after mining.
-2. **JSON-only presence as confirmed** — using `/tx/{txid}` JSON alone (without `/status` or relay guard on the 404 path) for confirmation counts on virtual-tree txs.
-3. **Stale `/status` unconfirmed** — returning `0` confirmations when `/status` is `200` with `confirmed: false` but the tx is in a block (use merkle proof or relayed JSON status).
+1. **`/status.confirmed` without `/raw`** — treating indexer/virtual-tree JSON stubs as 1-conf. Skips the first unpublished virtual tx (UI step 2); lock/unlock rewinds; REG-04 mines forever on `package-not-child-with-unconfirmed-parents`.
+2. **JSON-only presence as confirmed** — using `/tx/{txid}` JSON alone (without `/raw`) for confirmation counts on virtual-tree txs.
+3. **Stale `/status` unconfirmed** — returning `0` confirmations when `/status` is `200` with `confirmed: false` but the tx is in a block (use relayed `/raw` + JSON status).
 4. **Blocking `proceed` in WASM** — removed in favor of non-blocking proceed + frontend/automation polling; if changing this, keep confirmation-based progress detection and retry broadcast when a step stays at 0 confirmations.
 5. **E2E timeout inflation** — regtest failures from (1)–(3) look like “needs more mines / longer timeout”; fix Esplora semantics first (project rule: no E2E wait tinkering without explicit approval).
 
@@ -108,7 +119,7 @@ Separate from step progress: detecting that the **final exit sweep** spent a VTX
 
 ## Regression reference
 
-When REG-04 / REG-07 stuck at “Step 1 of N” despite mining, compare orchestrator + `map_tx_confirmations` against commit `1792a24` (“Made E2E-ARK-REG-07 work”): confirmations on the primary path, relay gate only on broadcast decisions and the `/status` 404 fallback.
+When REG-04 / REG-07 stuck at “Step 1 of N” despite mining, or lock/unlock rewinds to “Step 2 of N”, compare `map_tx_confirmations` against the `/raw` gate on `/status.confirmed` and `esplora_gateway` `/status`+`/raw` from bitcoind.
 
 ---
 

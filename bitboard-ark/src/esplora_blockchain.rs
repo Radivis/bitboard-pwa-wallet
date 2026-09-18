@@ -481,6 +481,28 @@ fn mined_tx_confirmations(block_height: Option<u32>, chain_tip_height: Option<u3
     }
 }
 
+/// `/status.confirmed` is not 1-conf by itself. arkade-regtest proxies `/status` to mempool when
+/// bitcoind has not confirmed the tx; those virtual-tree stubs can claim `confirmed: true` while
+/// `GET /tx/{txid}/raw` is 404. Skipping an unpublished unroll step as complete rewinds to
+/// "step 2" after lock (WASM confirmation cache gone) and makes the next `submitpackage` fail
+/// with `package-not-child-with-unconfirmed-parents`.
+///
+/// `None` means `/status` did not report confirmed — caller may consult relay + JSON.
+fn confirmations_if_status_confirmed_on_network(
+    status_confirmed: bool,
+    block_height: Option<u32>,
+    chain_tip_height: Option<u32>,
+    raw_relayed: bool,
+) -> Option<u64> {
+    if !status_confirmed {
+        return None;
+    }
+    if !raw_relayed {
+        return Some(0);
+    }
+    Some(mined_tx_confirmations(block_height, chain_tip_height))
+}
+
 #[cfg(test)]
 fn is_missing_tx_esplora_error(error: &esplora_client::Error) -> bool {
     match error {
@@ -535,16 +557,25 @@ async fn map_tx_confirmations(
     txid: &Txid,
     chain_tip_height: Option<u32>,
 ) -> Result<u64, ark_client::Error> {
-    match client.get_tx_status(txid).await {
-        Ok(status) if status.confirmed => {
-            return Ok(confirmations_from_esplora_tx_status(
-                &status,
-                chain_tip_height,
-            ));
-        }
-        Ok(_) => {}
-        Err(esplora_client::Error::HttpResponse { status: 404, .. }) => {}
+    let status = match client.get_tx_status(txid).await {
+        Ok(status) => Some(status),
+        Err(esplora_client::Error::HttpResponse { status: 404, .. }) => None,
         Err(error) => return Err(EsploraBlockchain::map_esplora_error(error)),
+    };
+
+    if let Some(status) = status.filter(|status| status.confirmed) {
+        let raw_relayed = client
+            .get_tx(txid)
+            .await
+            .map_err(EsploraBlockchain::map_esplora_error)?
+            .is_some();
+        return Ok(confirmations_if_status_confirmed_on_network(
+            true,
+            status.block_height,
+            chain_tip_height,
+            raw_relayed,
+        )
+        .unwrap_or(0));
     }
 
     confirmations_for_relayed_tx(client, txid, chain_tip_height).await
@@ -724,6 +755,7 @@ mod tests {
     use esplora_client::{SubmitPackageResult, TxResult};
     use std::collections::HashMap;
 
+    use super::confirmations_if_status_confirmed_on_network;
     use super::is_mempool_submitpackage_rpc_error;
     use super::is_missing_tx_esplora_error;
     use super::is_package_not_child_with_unconfirmed_parents_message;
@@ -860,5 +892,33 @@ mod tests {
         assert!(!is_package_not_child_with_unconfirmed_parents_message(
             "min relay fee not met"
         ));
+    }
+
+    #[test]
+    fn status_confirmed_without_raw_is_not_treated_as_mined() {
+        assert_eq!(
+            confirmations_if_status_confirmed_on_network(true, Some(100), Some(100), false),
+            Some(0)
+        );
+        assert_eq!(
+            confirmations_if_status_confirmed_on_network(false, Some(100), Some(100), true),
+            None
+        );
+    }
+
+    #[test]
+    fn status_confirmed_with_raw_uses_chain_tip_depth() {
+        assert_eq!(
+            confirmations_if_status_confirmed_on_network(true, Some(100), Some(100), true),
+            Some(1)
+        );
+        assert_eq!(
+            confirmations_if_status_confirmed_on_network(true, Some(90), Some(100), true),
+            Some(11)
+        );
+        assert_eq!(
+            confirmations_if_status_confirmed_on_network(true, Some(101), Some(100), true),
+            Some(0)
+        );
     }
 }

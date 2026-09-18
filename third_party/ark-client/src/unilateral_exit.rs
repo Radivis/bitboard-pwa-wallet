@@ -114,14 +114,18 @@ where
         // Bitboard vendor patch: VTXO `commitment_txids` can omit a parent that `chain_json`
         // still lists as `type=commitment`. Finalize looks up witness UTXOs from Esplora using
         // this list; without the chain union, tree PSBTs that spend that parent fail with
-        // `no witness UTXO found`.
-        let unilateral_exit_tree = UnilateralExitTree::new(
-            unilateral_exit::commitment_txids_for_unilateral_exit_tree(
-                &virtual_tx_outpoint.commitment_txids,
-                &vtxo_chains,
-            ),
-            paths,
+        // `no witness UTXO found`. Only fetch candidates that a virtual tx actually spends so
+        // historical chain commitments do not stall proceed on 10s Esplora polls.
+        let candidate_commitment_txids = unilateral_exit::commitment_txids_for_unilateral_exit_tree(
+            &virtual_tx_outpoint.commitment_txids,
+            &vtxo_chains,
         );
+        let virtual_txs = paths.iter().flatten().map(|psbt| &psbt.unsigned_tx);
+        let commitment_txids = unilateral_exit::filter_commitment_txids_spent_by_virtual_txs(
+            &candidate_commitment_txids,
+            virtual_txs,
+        );
+        let unilateral_exit_tree = UnilateralExitTree::new(commitment_txids, paths);
 
         let branches = self
             .finalize_unilateral_exit_tree_on_chain(&unilateral_exit_tree)
