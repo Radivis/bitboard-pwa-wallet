@@ -234,7 +234,8 @@ impl ArkSession {
         let server_info = client.server_info()?;
         let server_signer: XOnlyPublicKey = server_info.signer_pk.into();
         wallet_db.set_load_context(network, server_signer);
-        sync_onchain_wallet_for_session_open(&client).await;
+        // LIFE-ARK-LOAD-04 / UNLOCK-ARK-05: do not await or start bumper Esplora.
+        // First onchain_bumper_info / proceed still uses sync_onchain_wallet_with_retries.
 
         let migration_hint = match connect_mode {
             SessionOpenConnectMode::CachedOperatorInfo => None,
@@ -268,10 +269,21 @@ impl ArkSession {
             network_mode,
             operator_identity,
             autonomous_mode: Cell::new(autonomous_mode),
+            onchain_wallet_sync_phase: Cell::new(
+                super::bumper_sync_policy::BumperWalletSyncPhase::NotStarted,
+            ),
         };
         session.heal_vtxo_exit_records();
         session.reconcile_host_tx_finality_best_effort().await;
         Ok((session, migration_hint))
+    }
+
+    pub async fn sync_onchain_wallet_best_effort(&self) {
+        self.onchain_wallet_sync_phase
+            .set(super::bumper_sync_policy::BumperWalletSyncPhase::Running);
+        sync_onchain_wallet_for_session_open(&self.client).await;
+        self.onchain_wallet_sync_phase
+            .set(super::bumper_sync_policy::BumperWalletSyncPhase::Done);
     }
 
     pub fn export_persistence(&self) -> ArkResult<String> {

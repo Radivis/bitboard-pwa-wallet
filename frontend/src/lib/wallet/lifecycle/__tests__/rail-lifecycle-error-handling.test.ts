@@ -12,6 +12,7 @@ const workerMocks = vi.hoisted(() => ({
   reconcileActiveAccountId: vi.fn(),
   finalizePendingTransactions: vi.fn(),
   delegateSpendableVtxos: vi.fn(),
+  syncOnchainBumperWallet: vi.fn(),
   getUnilateralExitFrontendPersistence: vi.fn(async () => ({
     job: {
       selectedLeafOutpoints: [],
@@ -154,6 +155,7 @@ describe('rail-lifecycle-error-handling', () => {
     workerMocks.closeSession.mockResolvedValue(undefined)
     workerMocks.finalizePendingTransactions.mockResolvedValue({ finalized: 0, pending: 0 })
     workerMocks.delegateSpendableVtxos.mockResolvedValue({ delegated: 0, failed: 0 })
+    workerMocks.syncOnchainBumperWallet.mockResolvedValue(undefined)
     findActiveArkadeAccountSummaryMock.mockResolvedValue(undefined)
     ensureArkadeAccountMock.mockResolvedValue({
       id: TEST_ACCOUNT_ID,

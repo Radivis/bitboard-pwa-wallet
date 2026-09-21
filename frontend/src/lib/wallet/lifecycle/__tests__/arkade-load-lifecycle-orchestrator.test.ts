@@ -14,6 +14,7 @@ const workerMocks = vi.hoisted(() => ({
   reconcileActiveAccountId: vi.fn(),
   finalizePendingTransactions: vi.fn(),
   delegateSpendableVtxos: vi.fn(),
+  syncOnchainBumperWallet: vi.fn(),
   getUnilateralExitFrontendPersistence: vi.fn(async () => ({
     job: {
       selectedLeafOutpoints: [],
@@ -147,6 +148,7 @@ describe('arkade-load-lifecycle-orchestrator', () => {
     workerMocks.reconcileActiveAccountId.mockResolvedValue(undefined)
     workerMocks.finalizePendingTransactions.mockResolvedValue({ finalized: 0, pending: 0 })
     workerMocks.delegateSpendableVtxos.mockResolvedValue({ delegated: 0, failed: 0 })
+    workerMocks.syncOnchainBumperWallet.mockResolvedValue(undefined)
     getArkadeWorkerIfExistsMock.mockReturnValue(null)
     findActiveArkadeAccountSummaryMock.mockResolvedValue(undefined)
     ensureArkadeAccountMock.mockResolvedValue({
@@ -205,6 +207,14 @@ describe('arkade-load-lifecycle-orchestrator', () => {
     await orchestrateArkadeLoad({ walletId: 1, networkMode: 'signet' })
 
     expect(order.indexOf('setActive')).toBeLessThan(order.indexOf('postLoadSync'))
+  })
+
+  it('LIFE-ARK-LOAD-04 reaches loaded without starting bumper Esplora', async () => {
+    await orchestrateArkadeLoad({ walletId: 1, networkMode: 'signet' })
+
+    expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loaded')
+    expect(workerMocks.syncOnchainBumperWallet).not.toHaveBeenCalled()
+    expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalled()
   })
 
   it('load failure sets load-error and tears down worker without leaving loading', async () => {

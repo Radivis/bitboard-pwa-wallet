@@ -546,6 +546,8 @@ export interface ArkadeService {
   setSecretsPort(port: MessagePort): Promise<void>
   setEncryptedWalletSecretsHost(host: EncryptedWalletSecretsHost): Promise<void>
   openSession(params: OpenArkadeSessionParams): Promise<OpenArkadeSessionResult>
+  /** Best-effort bumper BDK Esplora sync; does not belong on session-open critical path. */
+  syncOnchainBumperWallet(): Promise<void>
   syncWithOperator(): Promise<ArkadeOperatorSyncResult>
   getOperatorTrustStatus(): Promise<ArkadeOperatorTrustStatus>
   getOperatorConfigDiff(): Promise<ArkadeOperatorConfigDiffResult>

@@ -4,7 +4,6 @@ use crate::api_types::AutonomousModeStatusDto;
 use crate::cached_operator_info::CachedOperatorInfoRecord;
 use crate::error::{ArkResult, ArkWasmError};
 use crate::offchain_snapshot::vtxo_list_from_snapshot;
-use crate::session::open::sync_onchain_wallet_for_session_open;
 
 use super::ArkSession;
 use super::unilateral_exit::materials_prefetch::autonomous_exit_materials_status;
@@ -38,7 +37,8 @@ impl ArkSession {
             .ok_or(ArkWasmError::AutonomousOperatorInfoMissing)?;
         let server_info = cached.to_server_info()?;
         self.client.install_cached_server_info(server_info)?;
-        sync_onchain_wallet_for_session_open(&self.client).await;
+        // LIFE-ARK-LOAD-04: do not start bumper Esplora on autonomous-mode enter.
+        // First onchain_bumper_info / proceed still syncs when exit needs funds.
         self.set_autonomous_mode(true);
         Ok(())
     }

@@ -1,5 +1,5 @@
 import { getDatabase, getWalletSecretsEncrypted } from '@/db'
-import { clearArkadeDashboardStore } from '@/lib/arkade/arkade-persistence-store-sync'
+import { clearArkadeDashboardStore, refreshArkadeStoreFromLoadedWasm } from '@/lib/arkade/arkade-persistence-store-sync'
 import {
   findActiveArkadeAccountSummary,
 } from '@/lib/arkade/arkade-accounts'
@@ -112,7 +112,7 @@ async function runPostOpenArkadeMaintenance(
 async function runArkadeSessionOpenBody(params: {
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
-}): Promise<string> {
+}): Promise<{ arkadeAccountId: string }> {
   const { walletId, networkMode } = params
 
   await ensureSecretsChannel()
@@ -134,7 +134,7 @@ async function runArkadeSessionOpenBody(params: {
       sessionReuseState: arkadeSessionReuseState,
     })
     if (reusedAccountId != null) {
-      return reusedAccountId
+      return { arkadeAccountId: reusedAccountId }
     }
   }
 
@@ -157,7 +157,7 @@ async function runArkadeSessionOpenBody(params: {
     runPostOpenMaintenance: runPostOpenArkadeMaintenance,
   })
 
-  return activeAccount.id
+  return { arkadeAccountId: activeAccount.id }
 }
 
 export function getArkadeLoadLifecycleSnapshot(): ArkadeLoadLifecycleSnapshot {
@@ -244,7 +244,7 @@ export async function orchestrateArkadeLoad(params: ArkadeLoadParams): Promise<v
   return inFlightLoadTracker.begin(key, async () => {
     setSnapshot({ loadPhase: 'loading', networkMode, errorMessage: null })
     try {
-      const arkadeAccountId = await runArkadeSessionOpenBody({
+      const { arkadeAccountId } = await runArkadeSessionOpenBody({
         walletId,
         networkMode,
       })

@@ -11,8 +11,13 @@ use super::snapshot_ops::{
     autonomous_estimate_unilateral_exit_completion, dedup_virtual_outpoints,
 };
 use crate::session::ArkSession;
+use crate::session::bumper_sync_policy::{
+    BumperWalletSyncPhase, bumper_confirmed_balance_sats, bumper_info_should_full_sync_wallet,
+    tip_address_confirmed_sats,
+};
 use crate::session::mappers::parse_onchain_address;
 use crate::session::open::sync_onchain_wallet_with_retries;
+use ark_client::Blockchain;
 
 fn resolve_completion_fee_rate_sat_per_vb(override_rate_sat_per_vb: Option<f64>) -> f64 {
     override_rate_sat_per_vb
@@ -38,14 +43,30 @@ fn map_missing_blocktime_completion_inputs(
 }
 
 impl ArkSession {
+    async fn ensure_bumper_wallet_synced_once(&self) -> ArkResult<()> {
+        if !bumper_info_should_full_sync_wallet(self.onchain_wallet_sync_phase.get()) {
+            return Ok(());
+        }
+        self.onchain_wallet_sync_phase
+            .set(BumperWalletSyncPhase::Running);
+        let sync_result = sync_onchain_wallet_with_retries(&self.client).await;
+        self.onchain_wallet_sync_phase
+            .set(BumperWalletSyncPhase::Done);
+        sync_result
+    }
+
     pub async fn onchain_bumper_info(&self) -> ArkResult<OnchainBumperInfoDto> {
-        // The on-chain (bumper) wallet is only synced once at session open, so without a refresh
-        // here the unilateral-exit dialog would report a stale session-open balance and ignore any
-        // funds the user added afterwards. Re-sync before reading so both the displayed balance and
-        // the `bumper_sufficient` gate (which goes through this) reflect current on-chain funds.
-        sync_onchain_wallet_with_retries(&self.client).await?;
+        // LIFE-ARK-BUMP-01: one wallet-wide Esplora scan per session. Later polls probe
+        // the displayed unused address via /utxo so a 4s underfunded refetch cannot
+        // restart a scripthash /txs HD walk.
+        self.ensure_bumper_wallet_synced_once().await?;
         let address = self.client.onchain_wallet_address()?;
-        let balance = self.client.onchain_wallet_balance()?;
+        let wallet_confirmed_sats = self.client.onchain_wallet_balance()?.confirmed.to_sat();
+        let tip_utxos = self.client.blockchain().find_outpoints(&address).await?;
+        let balance_sats = bumper_confirmed_balance_sats(
+            wallet_confirmed_sats,
+            tip_address_confirmed_sats(&tip_utxos),
+        );
         let server_info = self.client.server_info()?;
         let (unilateral_exit_timelock_blocks, unilateral_exit_timelock_seconds) =
             crate::session::mappers::unilateral_exit_timelock_parts(
@@ -53,7 +74,7 @@ impl ArkSession {
             );
         Ok(OnchainBumperInfoDto {
             address: address.to_string(),
-            balance_sats: balance.confirmed.to_sat(),
+            balance_sats,
             unilateral_exit_timelock_blocks,
             unilateral_exit_timelock_seconds,
         })

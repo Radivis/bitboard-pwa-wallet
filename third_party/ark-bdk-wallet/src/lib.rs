@@ -26,8 +26,8 @@ use bitcoin::Network;
 use bitcoin::Psbt;
 use bitcoin::XOnlyPublicKey;
 use jiff::Timestamp;
-use std::collections::BTreeSet;
-use std::io::Write;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::RwLock;
 
@@ -46,6 +46,7 @@ where
     #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
     client: esplora_client::AsyncClient<WebSleeper>,
     db: DB,
+    completed_full_scan: AtomicBool,
 }
 
 impl<DB> Wallet<DB>
@@ -96,7 +97,58 @@ where
             inner: Arc::new(RwLock::new(wallet)),
             client,
             db,
+            completed_full_scan: AtomicBool::new(false),
         })
+    }
+
+    fn scan_unix_secs() -> Result<u64, Error> {
+        let now: std::time::Duration = Timestamp::now()
+            .as_duration()
+            .try_into()
+            .map_err(Error::wallet)?;
+        Ok(now.as_secs())
+    }
+
+    async fn incremental_esplora_update(&self, now_secs: u64) -> Result<bdk_wallet::Update, Error> {
+        let request = self
+            .inner
+            .read()
+            .map_err(|e| Error::consumer(format!("failed to get read lock: {e}")))?
+            .start_sync_with_revealed_spks_at(now_secs);
+        self.client
+            .sync(request, BUMPER_ESPLORA_PARALLEL_REQUESTS)
+            .await
+            .map_err(Error::wallet)
+            .context("Failed syncing wallet")
+            .map(Into::into)
+    }
+
+    async fn full_esplora_update(&self, now_secs: u64) -> Result<bdk_wallet::Update, Error> {
+        let request = self
+            .inner
+            .read()
+            .map_err(|e| Error::consumer(format!("failed to get read lock: {e}")))?
+            .start_full_scan_at(now_secs);
+        self.client
+            .full_scan(
+                request,
+                BUMPER_FULL_SCAN_STOP_GAP,
+                BUMPER_ESPLORA_PARALLEL_REQUESTS,
+            )
+            .await
+            .map_err(Error::wallet)
+            .context("Failed syncing wallet")
+            .map(Into::into)
+    }
+
+    async fn fetch_esplora_update(&self) -> Result<(bdk_wallet::Update, bool), Error> {
+        let now_secs = Self::scan_unix_secs()?;
+        match onchain_wallet_scan_kind(self.completed_full_scan.load(Ordering::Acquire)) {
+            OnchainWalletScanKind::Incremental => {
+                Ok((self.incremental_esplora_update(now_secs).await?, false))
+            }
+            OnchainWalletScanKind::Full => Ok((self.full_esplora_update(now_secs).await?, true)),
+        }
     }
 }
 
@@ -115,42 +167,15 @@ where
     }
 
     async fn sync(&self) -> Result<(), Error> {
-        let now: std::time::Duration = Timestamp::now()
-            .as_duration()
-            .try_into()
-            .map_err(Error::wallet)?;
-
-        let request = self
-            .inner
-            .read()
-            .map_err(|e| Error::consumer(format!("failed to get read lock: {e}")))?
-            .start_full_scan_at(now.as_secs())
-            .inspect({
-                let mut stdout = std::io::stdout();
-                let mut once = BTreeSet::<KeychainKind>::new();
-                move |keychain, spk_i, _| {
-                    if once.insert(keychain) {
-                        tracing::trace!(?keychain, "Scanning keychain");
-                    }
-                    tracing::trace!(" {:<3}", spk_i);
-                    stdout.flush().expect("must flush")
-                }
-            });
-
-        // TODO: Use smarter constants or make it configurable.
-        let update = self
-            .client
-            .full_scan(request, 5, 5)
-            .await
-            .map_err(Error::wallet)
-            .context("Failed syncing wallet")?;
-
+        let (update, mark_full_scan_done) = self.fetch_esplora_update().await?;
         self.inner
             .write()
             .expect("write lock")
             .apply_update(update)
             .map_err(Error::wallet)?;
-
+        if mark_full_scan_done {
+            self.completed_full_scan.store(true, Ordering::Release);
+        }
         Ok(())
     }
 
@@ -311,5 +336,38 @@ impl esplora_client::Sleeper for WebSleeper {
 
     fn sleep(dur: std::time::Duration) -> Self::Sleep {
         utils::SendWrapper(gloo_timers::future::sleep(dur))
+    }
+}
+
+const BUMPER_FULL_SCAN_STOP_GAP: usize = 5;
+const BUMPER_ESPLORA_PARALLEL_REQUESTS: usize = 5;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum OnchainWalletScanKind {
+    Full,
+    Incremental,
+}
+
+/// After the first successful full scan in this process, later `sync()` calls must not
+/// walk unused HD gap via `/scripthash/.../txs`.
+pub(crate) fn onchain_wallet_scan_kind(completed_full_scan: bool) -> OnchainWalletScanKind {
+    if completed_full_scan {
+        OnchainWalletScanKind::Incremental
+    } else {
+        OnchainWalletScanKind::Full
+    }
+}
+
+#[cfg(test)]
+mod onchain_wallet_scan_kind_tests {
+    use super::{onchain_wallet_scan_kind, OnchainWalletScanKind};
+
+    #[test]
+    fn onchain_wallet_scan_kind_is_full_before_first_scan_and_incremental_after() {
+        assert_eq!(onchain_wallet_scan_kind(false), OnchainWalletScanKind::Full);
+        assert_eq!(
+            onchain_wallet_scan_kind(true),
+            OnchainWalletScanKind::Incremental
+        );
     }
 }

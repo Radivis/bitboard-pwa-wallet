@@ -58,6 +58,16 @@ feature:
       - id: LIFE-ONC-SYNC-01
         description: Esplora sync runs only when OnchainLoadLifecycle is loaded
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/onchain-sync-lifecycle-orchestrator.test.ts
+      - id: LIFE-ONC-SYNC-02
+        description: >
+          postUnlock Esplora is incremental when the loaded descriptor has fullScanDone
+          and load did not use empty-chain fallback; full scan only if !fullScanDone or
+          usedEmptyChainFallback. Does not copy live-network-switch full-scan from
+          descriptor switch.
+        implemented_by:
+          - frontend/src/lib/wallet/lifecycle/__tests__/onchain-post-unlock-scan-policy.test.ts
+          - frontend/src/lib/wallet/lifecycle/__tests__/onchain-load-lifecycle-orchestrator.test.ts
+          - frontend/src/lib/wallet/lifecycle/__tests__/onchain-sync-lifecycle-orchestrator.test.ts
       - id: LIFE-ONC-SAVE-01
         description: Changeset persist runs in OnchainSaveLifecycle after successful sync
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/onchain-save-lifecycle-orchestrator.test.ts
@@ -122,6 +132,22 @@ feature:
       - id: LIFE-ARK-LOAD-03
         description: Receive address is stable when ArkadeLoadLifecycle is loaded (replaces connection-id ordering patch)
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-load-lifecycle-orchestrator.test.ts
+      - id: LIFE-ARK-LOAD-04
+        description: >
+          Arkade loadPhase loaded (and Establishing Arkade session) must not wait
+          on bumper Esplora and must not start a bumper BDK full_scan. Operator
+          connect, persistence hydrate, and refreshArkadeStoreFromLoadedWasm stay
+          on the load path. Bumper Esplora starts on first onchain_bumper_info
+          or exit proceed/complete, not after loaded.
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-load-lifecycle-orchestrator.test.ts
+      - id: LIFE-ARK-BUMP-01
+        description: >
+          onchain_bumper_info full-syncs the bumper BDK wallet at most once per
+          session. Later bumper-info and underfunded-exit polls use the cached
+          BDK confirmed balance plus a tip-address /utxo probe, not another HD
+          /scripthash/txs walk. proceed/complete still call
+          sync_onchain_wallet_with_retries.
+        implemented_by: bitboard-ark/src/session/bumper_sync_policy.rs
       - id: LIFE-ARK-SYNC-01
         description: ArkadeSyncLifecycle syncing covers operator sync only, not session open
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-sync-lifecycle-orchestrator.test.ts

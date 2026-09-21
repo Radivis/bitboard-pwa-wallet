@@ -1,6 +1,7 @@
 mod autonomous;
 mod balance;
 mod boarding;
+pub(crate) mod bumper_sync_policy;
 mod collaborative_exit;
 pub(crate) mod intents;
 pub(crate) mod mappers;
@@ -19,6 +20,8 @@ mod vtxo;
 use std::cell::Cell;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+
+use bumper_sync_policy::BumperWalletSyncPhase;
 
 use ark_bdk_wallet::Wallet as ArkBdkWallet;
 use ark_client::{Bip32KeyProvider, Client, InMemorySwapStorage};
@@ -43,6 +46,7 @@ pub struct ArkSession {
     network_mode: NetworkMode,
     operator_identity: Mutex<OperatorIdentity>,
     autonomous_mode: Cell<bool>,
+    onchain_wallet_sync_phase: Cell<BumperWalletSyncPhase>,
 }
 
 impl ArkSession {

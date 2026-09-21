@@ -11,6 +11,7 @@ feature:
     - Polling uses React Query refetchInterval while the tab is visible and the rail is loaded
     - On-chain lab network never periodic-syncs Esplora
     - Hydration (postUnlock/postLoad) and manual sync are unchanged
+    - The on-chain periodic query must not run its first fetch when periodic sync is off; refetchInterval false only disables later polls
   contracts:
   settings:
     - id: PER-SYNC-01
@@ -23,6 +24,14 @@ feature:
     - id: PER-SYNC-10
       description: resolvePeriodicSyncRefetchIntervalMs returns false when feature or rail disabled
       implemented_by: frontend/src/lib/wallet/periodic-sync/__tests__/resolve-periodic-sync-refetch-interval.test.ts
-    - id: PER-SYNC-11
-      description: resolvePeriodicSyncRefetchIntervalMs returns interval ms when active and visible
-      implemented_by: frontend/src/lib/wallet/periodic-sync/__tests__/resolve-periodic-sync-refetch-interval.test.ts
+      - id: PER-SYNC-11
+        description: resolvePeriodicSyncRefetchIntervalMs returns interval ms when active and visible
+        implemented_by: frontend/src/lib/wallet/periodic-sync/__tests__/resolve-periodic-sync-refetch-interval.test.ts
+  onchain_query:
+    - id: PER-SYNC-20
+      description: >
+        useOnchainPeriodicSyncQuery does not run queryFn unless
+        resolvePeriodicSyncRefetchIntervalMs returns a number (feature on, on-chain
+        rail on, tab visible, not lab). refetchInterval false must not still trigger
+        the first incremental Esplora sync.
+      implemented_by: frontend/src/hooks/__tests__/useOnchainPeriodicSyncQuery.test.tsx

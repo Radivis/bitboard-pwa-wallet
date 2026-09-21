@@ -462,6 +462,8 @@ Lightning is optional — absence of connections is normal `not-configured`, not
 5. `refreshArkadeStoreFromLoadedWasm` — balance, payments, **receive address stable**
 6. Set `activeArkadeAccountId` when **load completes** (not when sync completes)
 
+Bumper BDK Esplora is **not** started on load (LIFE-ARK-LOAD-04). The first `onchain_bumper_info` or exit proceed/complete syncs the bumper wallet; later bumper-info polls use cached confirmed balance plus a tip-address `/utxo` probe (LIFE-ARK-BUMP-01).
+
 **Readiness contract:**
 
 - UI queries and Receive page gate on `ArkadeLoadLifecycle === 'loaded'`
@@ -643,7 +645,7 @@ Audit of the codebase against [Route independence and wallet hydration](#route-i
 | Settings/Lab browsable while locked | Sensitive ops use `requireUnlockedWallet`; route-wide hydration is not required. |
 | Dashboard Arkade queries → `scheduleBackgroundArkadeOperatorSync` | Operator sync debounced from query fetches when balance/history/VTxO queries run (hydration, manual invalidation, or opt-in periodic `refetchInterval`). Timer may complete after navigation. **Correct** under route-independent lifecycle — do not cancel on route change. |
 | Lightning dashboard NWC fetch | Periodic background polling is **React Query `refetchInterval` only** (gated by `isPeriodicSyncEnabled` and per-rail settings). No orchestrator scheduler. |
-| On-chain Esplora incremental sync | Default: hydration (`postUnlock`) and manual dashboard sync only. Opt-in periodic sync uses `useOnchainPeriodicSyncQuery` when the feature and per-rail switch are on. |
+| On-chain Esplora incremental sync | Default: hydration (`postUnlock`) is incremental when the loaded descriptor has `fullScanDone` and load did not use empty-chain fallback; otherwise a full scan. Manual dashboard sync is incremental. Opt-in periodic sync uses `useOnchainPeriodicSyncQuery` when the feature and per-rail switch are on (query `enabled` requires a numeric `refetchInterval`, not merely rail loaded). Arkade bumper HD `/txs` walks are not started after unlock; they run on first bumper-info/exit need only. |
 | Per-rail sync/save orchestrators under `frontend/src/lib/wallet/lifecycle/` | No pathname imports — aligned with route-independent lifecycle. |
 
 ### Related symptom (dashboard → Settings)

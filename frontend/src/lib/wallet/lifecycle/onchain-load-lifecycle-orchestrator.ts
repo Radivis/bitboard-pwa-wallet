@@ -6,11 +6,11 @@ import { withPersistedChainMismatchRetry } from '@/lib/wallet/persisted-chain-mi
 import { refreshWalletStoreFromLoadedBdk } from '@/lib/wallet/onchain-bdk-store-sync'
 import { invalidateOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboard-sync'
 import { waitForCryptoWorkerHealthy } from '@/workers/crypto-factory'
-import type { LoadWalletParams } from '@/workers/crypto-api'
 import type {
   OnchainLoadLifecycleSnapshot,
   OnchainLoadParams,
 } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-types'
+import type { OnchainLoadHydration } from '@/lib/wallet/lifecycle/onchain-post-unlock-scan-policy'
 import type { LockLifecyclePhase } from '@/lib/wallet/lifecycle/lock-lifecycle-types'
 import {
   awaitDifferentInFlightWork,
@@ -25,6 +25,14 @@ import {
 } from '@/lib/shared/utils'
 
 export type { OnchainLoadLifecycleSnapshot, OnchainLoadParams } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-types'
+export type { OnchainLoadHydration }
+
+let lastOnchainLoadHydration: OnchainLoadHydration | null = null
+
+/** Captured during WASM load for LIFE-ONC-SYNC-02 postUnlock scan policy. */
+export function getOnchainLoadHydrationForPostUnlock(): OnchainLoadHydration | null {
+  return lastOnchainLoadHydration
+}
 
 /**
  * OnchainLoadLifecycle — WASM descriptor load into crypto worker and wallet store hydration.
@@ -64,13 +72,6 @@ function setSnapshot(next: OnchainLoadLifecycleSnapshot): void {
   notifyListeners()
 }
 
-async function loadWalletHandlingPersistedChainMismatch(
-  loadWallet: (params: LoadWalletParams) => Promise<boolean>,
-  params: LoadWalletParams,
-): Promise<void> {
-  await withPersistedChainMismatchRetry(loadWallet, params)
-}
-
 async function runWasmLoad(params: OnchainLoadParams): Promise<void> {
   const { walletId, networkMode, addressType, accountId } = params
   const clearLastSyncTime = params.clearLastSyncTime ?? false
@@ -101,13 +102,17 @@ async function runWasmLoad(params: OnchainLoadParams): Promise<void> {
     setLastSyncTime(null)
   }
 
-  await loadWalletHandlingPersistedChainMismatch(loadWallet, {
+  const { usedEmptyChainFallback } = await withPersistedChainMismatchRetry(loadWallet, {
     externalDescriptor: descriptorWallet.externalDescriptor,
     internalDescriptor: descriptorWallet.internalDescriptor,
     network,
     changesetJson: descriptorWallet.changeSet,
     useEmptyChain: false,
   })
+  lastOnchainLoadHydration = {
+    fullScanDone: descriptorWallet.fullScanDone,
+    usedEmptyChainFallback,
+  }
 
   const address = await getCurrentAddress()
   setCurrentAddress(address)
@@ -162,6 +167,7 @@ export function syncOnchainLoadLifecycleWithLockPhase(lockPhase: LockLifecyclePh
     return
   }
   setSnapshot({ loadPhase: 'not-configured', networkMode: null, errorMessage: null })
+  lastOnchainLoadHydration = null
 }
 
 export async function awaitOnchainLoadQuiescence(): Promise<void> {
@@ -259,5 +265,6 @@ export function resetOnchainLoadLifecycleStateForTests(): void {
   snapshot = { loadPhase: 'not-configured', networkMode: null, errorMessage: null }
   inFlightLoadTracker.clearCurrent()
   lastLoadParams = null
+  lastOnchainLoadHydration = null
   listeners.clear()
 }

@@ -173,10 +173,10 @@ Uses the full live `switchDescriptorWallet` path (save/load/sync/Esplora), then 
 
 ## Related: unlock (not Settings switch)
 
-First load after password entry uses [`loadDescriptorWalletAndSync`](../frontend/src/lib/wallet/wallet-utils.ts) from `WalletUnlock` / `useActiveWalletLoadQuery`. It mirrors the live switch **load + BDK hydrate + background Esplora** pattern but is a separate entry point (always full scan on unlock for non-lab). Documented here because it shares helpers with switching:
+First load after password entry uses [`orchestrateBootstrapUnlock` / `orchestrateManualUnlock`](../frontend/src/lib/wallet/lifecycle/lock-lifecycle-orchestrator.ts) (`runUnlockLoad`). It mirrors the live switch **load + BDK hydrate + background Esplora** pattern but is a separate entry point. Post-unlock Esplora is **incremental** when the hydrated descriptor has `fullScanDone` and load did not fall back to an empty chain; it full-scans only when `!fullScanDone` or `usedEmptyChainFallback`. Unlike Settings live↔live switch, unlock does **not** force a full scan merely because the network is live. Documented here because it shares helpers with switching:
 
 - `resolveDescriptorWallet`
-- `loadWalletHandlingPersistedChainMismatch`
+- `loadWalletHandlingPersistedChainMismatch` / `withPersistedChainMismatchRetry`
 - `refreshWalletStoreFromLoadedBdk`
 - `syncActiveWalletAndUpdateState` / changeset persist
 

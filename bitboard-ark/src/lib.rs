@@ -208,6 +208,20 @@ pub async fn ark_enter_autonomous_mode() -> Result<(), JsValue> {
     .await
 }
 
+/// Best-effort bumper BDK Esplora sync. Session open and unlock must not start this
+/// (LIFE-ARK-LOAD-04). Exit proceed/complete and the first onchain_bumper_info may call it.
+#[wasm_bindgen]
+pub async fn ark_sync_onchain_wallet() -> Result<(), JsValue> {
+    map_js_async(async {
+        with_session_async(|session| async move {
+            session.sync_onchain_wallet_best_effort().await;
+            Ok(())
+        })
+        .await
+    })
+    .await
+}
+
 #[wasm_bindgen]
 pub async fn ark_exit_autonomous_mode() -> Result<(), JsValue> {
     map_js_async(async {
