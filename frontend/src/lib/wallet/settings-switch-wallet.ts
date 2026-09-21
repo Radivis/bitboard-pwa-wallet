@@ -163,7 +163,6 @@ export async function switchDescriptorWallet(params: {
     if (targetNetworkMode !== 'lab') {
       onPhase?.(syncingTargetNetworkMessage(targetNetworkMode))
       const fullScanNeeded =
-        isLiveNetworkSwitch ||
         !descriptorWallet.fullScanDone ||
         usedEmptyChainFallback
       await syncLoadedDescriptorWalletWithEsplora({

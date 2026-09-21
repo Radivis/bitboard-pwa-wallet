@@ -70,7 +70,6 @@ Meanwhile load **already** hydrates the persisted BDK changeset:
 
 ```165:168:frontend/src/lib/wallet/settings-switch-wallet.ts
       const fullScanNeeded =
-        isLiveNetworkSwitch ||
         !descriptorWallet.fullScanDone ||
         usedEmptyChainFallback
 ```
