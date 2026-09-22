@@ -2,6 +2,8 @@
 
 Bitboard stores many **descriptor wallets** per Bitboard wallet (`wallet_id`): one row per `(network, addressType, accountId)` triple in the encrypted `wallet_secrets` payload. At runtime **one** BDK wallet is loaded in the crypto WASM worker at a time.
 
+The Arkade bumper is BIP84 account 0 — the same HD account as the SegWit-0 row. Arkade hydrates that row on session open. When SegWit-0 is the loaded crypto wallet, crypto is the only writer of that changeset. When Taproot (or any other triple) is loaded, Arkade may persist SegWit-0 after a bumper wallet-wide sync (`createDescriptorWalletRowIfMissing` / `create_wallet_without_activating` so the crypto slot is not replaced). Dual in-memory BDKs remain until [crypto-owned descriptor spends](future/crypto-owned-descriptor-spends.md).
+
 Switching network or address type in Settings means: persist the outgoing descriptor wallet’s BDK **changeset**, load the target descriptor wallet into WASM, update session/UI state, and (on live networks) refresh the dashboard from BDK and sync with Esplora.
 
 For how on-chain balance/history and stale indicators work after a switch, see [`onchain-bitboard-wallet-model.md`](onchain-bitboard-wallet-model.md).

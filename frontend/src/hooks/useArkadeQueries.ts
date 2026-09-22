@@ -1115,7 +1115,21 @@ export function useArkadeBumperInfoQuery(
       'bumper',
     ),
     enabled: enabled && sessionReady,
-    queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().getOnchainBumperInfo()),
+    queryFn: async () => {
+      const info = await withReadyArkadeWorker(() => getArkadeWorker().getOnchainBumperInfo())
+      if (info.didWalletWideSync && activeWalletId != null) {
+        const { persistBumperSidecarAfterWalletSync } = await import(
+          '@/lib/wallet/persist-bumper-sidecar-after-sync'
+        )
+        void persistBumperSidecarAfterWalletSync({
+          walletId: activeWalletId,
+          networkMode,
+        }).catch((error: unknown) => {
+          console.warn('Arkade sidecar SegWit-0 persist after bumper sync failed', error)
+        })
+      }
+      return info
+    },
     staleTime: ARKADE_SESSION_POLL_STALE_MS,
     // Poll only while an active exit flow is waiting for a bumper top-up to confirm.
     refetchInterval: pollWhileUnderfunded ? ARKADE_BUMPER_FUNDING_POLL_MS : false,
@@ -1293,7 +1307,19 @@ export function useArkadeCompleteUnilateralExitMutation() {
       feeRateSatPerVb: number
     }) => {
       assertArkadeSessionUnlocked(activeWalletId)
-      return withReadyArkadeWorker(() => getArkadeWorker().completeUnilateralExit(params))
+      const txid = await withReadyArkadeWorker(() =>
+        getArkadeWorker().completeUnilateralExit(params),
+      )
+      const { persistBumperSidecarAfterWalletSync } = await import(
+        '@/lib/wallet/persist-bumper-sidecar-after-sync'
+      )
+      await persistBumperSidecarAfterWalletSync({
+        walletId: activeWalletId,
+        networkMode,
+      }).catch((error: unknown) => {
+        console.warn('Arkade sidecar SegWit-0 persist after complete failed', error)
+      })
+      return txid
     },
     onSuccess: async (txid) => {
       toast.success(`Exit completed on-chain (${formatArkadeTxidToastSnippet(txid)})`)

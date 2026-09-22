@@ -342,6 +342,7 @@ pub struct OnchainBumperInfoDto {
     pub unilateral_exit_timelock_blocks: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unilateral_exit_timelock_seconds: Option<u64>,
+    pub did_wallet_wide_sync: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -455,6 +456,10 @@ pub struct OpenSessionParams {
     pub esplora_url: String,
     #[serde(default)]
     pub sdk_persistence_json: Option<String>,
+    #[serde(default)]
+    pub bumper_changeset_json: Option<String>,
+    #[serde(default)]
+    pub bumper_full_scan_done: bool,
 }
 
 #[derive(Debug, Deserialize)]

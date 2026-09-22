@@ -188,6 +188,8 @@ export interface OpenArkadeSessionParams {
   arkServerUrl: string
   delegatorUrl: string
   esploraUrl: string
+  bumperChangesetJson?: string
+  bumperFullScanDone?: boolean
 }
 
 export interface OpenArkadeSessionResult {
@@ -340,6 +342,7 @@ export interface ArkadeOnchainBumperInfo {
   balanceSats: number
   unilateralExitTimelockBlocks?: number
   unilateralExitTimelockSeconds?: number
+  didWalletWideSync?: boolean
 }
 
 export interface ArkadeCollaborativeExitParams {
@@ -548,6 +551,8 @@ export interface ArkadeService {
   openSession(params: OpenArkadeSessionParams): Promise<OpenArkadeSessionResult>
   /** Best-effort bumper BDK Esplora sync; does not belong on session-open critical path. */
   syncOnchainBumperWallet(): Promise<void>
+  exportOnchainWalletChangeset(): Promise<string>
+  onchainWalletFullScanDone(): Promise<boolean>
   syncWithOperator(): Promise<ArkadeOperatorSyncResult>
   getOperatorTrustStatus(): Promise<ArkadeOperatorTrustStatus>
   getOperatorConfigDiff(): Promise<ArkadeOperatorConfigDiffResult>

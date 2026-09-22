@@ -17,6 +17,10 @@ vi.mock('@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator', () => ({
   awaitArkadeLoadQuiescence: vi.fn(async () => {}),
 }))
 
+vi.mock('@/lib/wallet/persist-bumper-sidecar-after-sync', () => ({
+  persistBumperSidecarAfterWalletSync: vi.fn(async () => false),
+}))
+
 import { proceedUnilateralExitStepWithGuards } from '@/lib/arkade/proceed-unilateral-exit-step'
 
 const walletScope = {

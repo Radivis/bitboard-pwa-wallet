@@ -259,6 +259,8 @@ pub async fn open_session(
         String::new(),
         endpoints.esplora_url.clone(),
         persistence_json,
+        None,
+        false,
     )
     .await
     .expect("open session")

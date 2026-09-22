@@ -9,6 +9,8 @@ use ark_core::BoardingOutput;
 use ark_core::SelectedUtxo;
 use ark_core::UtxoCoinSelection;
 use bdk_esplora::EsploraAsyncExt;
+use bdk_wallet::chain::Merge;
+use bdk_wallet::ChangeSet;
 use bdk_wallet::KeychainKind;
 use bdk_wallet::SignOptions;
 use bdk_wallet::TxOrdering;
@@ -47,6 +49,7 @@ where
     client: esplora_client::AsyncClient<WebSleeper>,
     db: DB,
     completed_full_scan: AtomicBool,
+    accumulated_changeset: RwLock<ChangeSet>,
 }
 
 impl<DB> Wallet<DB>
@@ -77,12 +80,28 @@ where
         esplora_url: &str,
         db: DB,
     ) -> Result<Self> {
+        Self::new_from_xpriv_hydrated(xprv, secp, network, esplora_url, db, None, false)
+    }
+
+    /// Create or hydrate a BIP84 bumper wallet from a persisted SegWit-0 changeset.
+    pub fn new_from_xpriv_hydrated(
+        xprv: Xpriv,
+        secp: Secp256k1<All>,
+        network: Network,
+        esplora_url: &str,
+        db: DB,
+        changeset_json: Option<&str>,
+        full_scan_done: bool,
+    ) -> Result<Self> {
         let kp = xprv.to_keypair(&secp);
-        let external = bdk_wallet::template::Bip84(xprv, KeychainKind::External);
-        let change = bdk_wallet::template::Bip84(xprv, KeychainKind::Internal);
-        let wallet = BdkWallet::create(external, change)
-            .network(network)
-            .create_wallet_no_persist()?;
+        let (mut wallet, used_empty) = create_or_load_bip84_wallet(xprv, network, changeset_json)?;
+        let accumulated = if used_empty {
+            wallet.take_staged().unwrap_or_default()
+        } else {
+            changeset_json
+                .and_then(|json| serde_json::from_str(json).ok())
+                .unwrap_or_else(|| wallet.take_staged().unwrap_or_default())
+        };
 
         #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
         let client = esplora_client::Builder::new(esplora_url).build_async_with_sleeper()?;
@@ -97,8 +116,32 @@ where
             inner: Arc::new(RwLock::new(wallet)),
             client,
             db,
-            completed_full_scan: AtomicBool::new(false),
+            completed_full_scan: AtomicBool::new(completed_full_scan_from_hydrate(
+                full_scan_done,
+                used_empty,
+            )),
+            accumulated_changeset: RwLock::new(accumulated),
         })
+    }
+
+    pub fn export_changeset_json(&self) -> Result<String, Error> {
+        let mut wallet = self
+            .inner
+            .write()
+            .map_err(|e| Error::consumer(format!("failed to get write lock: {e}")))?;
+        let mut accumulated = self
+            .accumulated_changeset
+            .write()
+            .map_err(|e| Error::consumer(format!("failed to get changeset write lock: {e}")))?;
+        if let Some(staged) = wallet.take_staged() {
+            accumulated.merge(staged);
+        }
+        serde_json::to_string(&*accumulated)
+            .map_err(|e| Error::wallet(format!("serialize bumper changeset: {e}")))
+    }
+
+    pub fn completed_full_scan(&self) -> bool {
+        self.completed_full_scan.load(Ordering::Acquire)
     }
 
     fn scan_unix_secs() -> Result<u64, Error> {
@@ -358,9 +401,72 @@ pub(crate) fn onchain_wallet_scan_kind(completed_full_scan: bool) -> OnchainWall
     }
 }
 
+/// Treat the bumper as already full-scanned only when hydrate loaded a changeset
+/// and that row's `fullScanDone` is set. An empty fallback must full-scan.
+pub(crate) fn completed_full_scan_from_hydrate(full_scan_done: bool, used_empty: bool) -> bool {
+    full_scan_done && !used_empty
+}
+
+/// Align bumper BDK chain with crypto (`Testnet` → Testnet4).
+pub(crate) fn bumper_bdk_network(network: Network) -> Network {
+    match network {
+        Network::Testnet => Network::Testnet4,
+        other => other,
+    }
+}
+
+fn try_load_bip84_from_changeset(
+    xprv: Xpriv,
+    bdk_network: Network,
+    changeset_json: &str,
+) -> Option<BdkWallet> {
+    let changeset: ChangeSet = serde_json::from_str(changeset_json).ok()?;
+    let external = bdk_wallet::template::Bip84(xprv, KeychainKind::External);
+    let change = bdk_wallet::template::Bip84(xprv, KeychainKind::Internal);
+    BdkWallet::load()
+        .descriptor(KeychainKind::External, Some(external))
+        .descriptor(KeychainKind::Internal, Some(change))
+        .extract_keys()
+        .check_network(bdk_network)
+        .load_wallet_no_persist(changeset)
+        .ok()
+        .flatten()
+}
+
+/// Load a BIP84 wallet from changeset JSON, or create empty when missing/unusable.
+/// Second value is `true` when the wallet was created empty (not loaded).
+pub(crate) fn create_or_load_bip84_wallet(
+    xprv: Xpriv,
+    network: Network,
+    changeset_json: Option<&str>,
+) -> Result<(BdkWallet, bool)> {
+    let bdk_network = bumper_bdk_network(network);
+    if let Some(json) = changeset_json {
+        if let Some(loaded) = try_load_bip84_from_changeset(xprv, bdk_network, json) {
+            return Ok((loaded, false));
+        }
+    }
+    let external = bdk_wallet::template::Bip84(xprv, KeychainKind::External);
+    let change = bdk_wallet::template::Bip84(xprv, KeychainKind::Internal);
+    let wallet = BdkWallet::create(external, change)
+        .network(bdk_network)
+        .create_wallet_no_persist()?;
+    Ok((wallet, true))
+}
+
 #[cfg(test)]
 mod onchain_wallet_scan_kind_tests {
-    use super::{onchain_wallet_scan_kind, OnchainWalletScanKind};
+    use super::{
+        bumper_bdk_network, completed_full_scan_from_hydrate, create_or_load_bip84_wallet,
+        onchain_wallet_scan_kind, OnchainWalletScanKind,
+    };
+    use bdk_wallet::KeychainKind;
+    use bitcoin::bip32::Xpriv;
+    use bitcoin::Network;
+
+    fn test_xprv(network: Network) -> Xpriv {
+        Xpriv::new_master(network, &[7u8; 32]).expect("xprv")
+    }
 
     #[test]
     fn onchain_wallet_scan_kind_is_full_before_first_scan_and_incremental_after() {
@@ -369,5 +475,55 @@ mod onchain_wallet_scan_kind_tests {
             onchain_wallet_scan_kind(true),
             OnchainWalletScanKind::Incremental
         );
+    }
+
+    #[test]
+    fn onchain_wallet_scan_kind_is_incremental_when_hydrated_with_full_scan_done() {
+        assert_eq!(
+            onchain_wallet_scan_kind(completed_full_scan_from_hydrate(true, false)),
+            OnchainWalletScanKind::Incremental
+        );
+        assert_eq!(
+            onchain_wallet_scan_kind(completed_full_scan_from_hydrate(false, false)),
+            OnchainWalletScanKind::Full
+        );
+        assert_eq!(
+            onchain_wallet_scan_kind(completed_full_scan_from_hydrate(true, true)),
+            OnchainWalletScanKind::Full
+        );
+    }
+
+    #[test]
+    fn load_bip84_changeset_roundtrip_or_empty_on_invalid() {
+        let xprv = test_xprv(Network::Signet);
+        let (mut created, used_empty) =
+            create_or_load_bip84_wallet(xprv, Network::Signet, None).expect("create");
+        assert!(used_empty);
+        let revealed = created.next_unused_address(KeychainKind::External).address;
+        let changeset = created.take_staged().expect("staged after reveal");
+        let changeset_json = serde_json::to_string(&changeset).expect("serialize");
+
+        let (loaded, loaded_empty) =
+            create_or_load_bip84_wallet(xprv, Network::Signet, Some(&changeset_json))
+                .expect("load");
+        assert!(!loaded_empty);
+        assert_eq!(
+            loaded.peek_address(KeychainKind::External, 0).address,
+            revealed
+        );
+
+        for unusable in [Some(""), Some("{}"), Some("not-json")] {
+            let (_, empty) =
+                create_or_load_bip84_wallet(xprv, Network::Signet, unusable).expect("fallback");
+            assert!(empty, "expected empty wallet for {unusable:?}");
+        }
+    }
+
+    #[test]
+    fn bumper_bdk_network_maps_testnet_to_testnet4() {
+        assert_eq!(bumper_bdk_network(Network::Testnet), Network::Testnet4);
+        assert_eq!(bumper_bdk_network(Network::Signet), Network::Signet);
+        assert_eq!(bumper_bdk_network(Network::Bitcoin), Network::Bitcoin);
+        assert_eq!(bumper_bdk_network(Network::Regtest), Network::Regtest);
     }
 }

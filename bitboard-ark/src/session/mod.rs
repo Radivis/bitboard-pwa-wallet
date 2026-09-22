@@ -41,6 +41,7 @@ pub type ArkClient = Client<EsploraBlockchain, ArkWallet, InMemorySwapStorage, B
 
 pub struct ArkSession {
     client: ArkClient,
+    onchain_wallet: Arc<ArkWallet>,
     wallet_db: Arc<JsonPersistenceDb>,
     delegator: Option<DelegatorClient>,
     network_mode: NetworkMode,

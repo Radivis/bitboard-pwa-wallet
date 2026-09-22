@@ -142,12 +142,35 @@ feature:
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-load-lifecycle-orchestrator.test.ts
       - id: LIFE-ARK-BUMP-01
         description: >
-          onchain_bumper_info full-syncs the bumper BDK wallet at most once per
-          session. Later bumper-info and underfunded-exit polls use the cached
-          BDK confirmed balance plus a tip-address /utxo probe, not another HD
+          onchain_bumper_info runs at most one wallet-wide bumper Esplora scan
+          per session. That scan is incremental when the bumper BDK was hydrated
+          from a SegWit-0 changeset with fullScanDone; otherwise it is a full
+          scan. Later bumper-info and underfunded-exit polls use the cached BDK
+          confirmed balance plus a tip-address /utxo probe, not another HD
           /scripthash/txs walk. proceed/complete still call
           sync_onchain_wallet_with_retries.
-        implemented_by: bitboard-ark/src/session/bumper_sync_policy.rs
+        implemented_by:
+          - bitboard-ark/src/session/bumper_sync_policy.rs
+          - third_party/ark-bdk-wallet/src/lib.rs
+      - id: LIFE-ARK-BUMP-02
+        description: >
+          Bumper BDK hydrate uses the SegWit-0 descriptor-wallet changeset, or a
+          live crypto export when that triple is the loaded on-chain wallet.
+          An empty bumper wallet is used only when no usable changeset exists.
+          Hydrate is not Esplora (LIFE-ARK-LOAD-04 unchanged).
+        implemented_by:
+          - frontend/src/lib/wallet/__tests__/bumper-segwit0-policy.test.ts
+          - frontend/src/lib/wallet/lifecycle/__tests__/arkade-session-open-helpers.test.ts
+          - third_party/ark-bdk-wallet/src/lib.rs
+      - id: LIFE-ARK-BUMP-03
+        description: >
+          After a bumper wallet-wide sync, persist the SegWit-0 descriptor row
+          only when the loaded crypto triple is not SegWit-0. Arkade must not
+          write that row while SegWit-0 is the crypto slot.
+        implemented_by:
+          - frontend/src/lib/wallet/__tests__/bumper-segwit0-policy.test.ts
+          - frontend/src/lib/wallet/__tests__/persist-bumper-segwit0-sidecar.test.ts
+          - bitboard-ark/src/session/bumper_sync_policy.rs
       - id: LIFE-ARK-SYNC-01
         description: ArkadeSyncLifecycle syncing covers operator sync only, not session open
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-sync-lifecycle-orchestrator.test.ts

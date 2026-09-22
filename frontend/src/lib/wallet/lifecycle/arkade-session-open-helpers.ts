@@ -13,6 +13,7 @@ import { arkadeSessionKey } from '@/lib/arkade/arkade-session-key'
 import { ensureArkadeWorkerSecretsChannel } from '@/workers/secrets-channel'
 import { getArkadeWorker, getArkadeWorkerIfExists } from '@/workers/arkade-factory'
 import type { OpenArkadeSessionResult } from '@/workers/arkade-api'
+import { resolveBumperHydrateForSessionOpen } from '@/lib/wallet/resolve-bumper-hydrate'
 import { useWalletStore } from '@/stores/walletStore'
 
 type ArkadeWorker = Awaited<ReturnType<typeof getArkadeWorker>>
@@ -87,6 +88,10 @@ export async function openFreshArkadeWorkerSession(params: {
 
   const worker = getArkadeWorker()
   await ensureArkadeWorkerSecretsChannel()
+  const bumperHydrate = await resolveBumperHydrateForSessionOpen({
+    walletId: params.walletId,
+    networkMode: params.networkMode,
+  })
   const openResult = await worker.openSession({
     encryptedMnemonic: params.encrypted.mnemonic,
     encryptedPayload: params.encrypted.payload,
@@ -96,6 +101,8 @@ export async function openFreshArkadeWorkerSession(params: {
     arkServerUrl: endpoints.arkServerUrl,
     delegatorUrl: endpoints.delegatorUrl,
     esploraUrl: endpoints.esploraUrl,
+    bumperChangesetJson: bumperHydrate.bumperChangesetJson,
+    bumperFullScanDone: bumperHydrate.bumperFullScanDone,
   })
 
   const account = await ensureArkadeAccount({

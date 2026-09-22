@@ -56,6 +56,9 @@ version = "2.3"
 version = "0.32.7"
 features = ["rand"]
 
+[dependencies.serde_json]
+version = "1"
+
 [dependencies.jiff]
 version = "0.2.1"
 

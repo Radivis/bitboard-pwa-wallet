@@ -380,6 +380,8 @@ async function openSessionImpl(
         delegatorUrl: params.delegatorUrl,
         esploraUrl: params.esploraUrl,
         sdkPersistenceJson,
+        bumperChangesetJson: params.bumperChangesetJson,
+        bumperFullScanDone: params.bumperFullScanDone ?? false,
       }),
     )
 
@@ -421,6 +423,14 @@ const arkadeService: ArkadeService = {
 
   async syncOnchainBumperWallet(): Promise<void> {
     await syncOnchainBumperWalletImpl()
+  },
+
+  async exportOnchainWalletChangeset(): Promise<string> {
+    return invokeWasmArk((wasmModule) => wasmModule.ark_export_onchain_wallet_changeset())
+  },
+
+  async onchainWalletFullScanDone(): Promise<boolean> {
+    return invokeWasmArk((wasmModule) => wasmModule.ark_onchain_wallet_full_scan_done())
   },
 
   async hasOpenSession(params: {

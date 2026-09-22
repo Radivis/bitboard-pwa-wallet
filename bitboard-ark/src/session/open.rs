@@ -156,6 +156,8 @@ impl ArkSession {
         delegator_url: String,
         esplora_url: String,
         sdk_persistence_json: Option<&str>,
+        bumper_changeset_json: Option<&str>,
+        bumper_full_scan_done: bool,
     ) -> ArkResult<(Self, Option<OperatorSignerMigrationHint>)> {
         let parsed = BitboardArkPersistence::parse_import(sdk_persistence_json);
         let autonomous_mode = parsed.autonomous_mode;
@@ -184,12 +186,14 @@ impl ArkSession {
 
         let blockchain = Arc::new(EsploraBlockchain::new(&esplora_url)?);
         let wallet = Arc::new(
-            ArkBdkWallet::new_from_xpriv(
+            ArkBdkWallet::new_from_xpriv_hydrated(
                 xpriv,
                 secp,
                 network,
                 &esplora_url,
                 SharedPersistenceDb(Arc::clone(&wallet_db)),
+                bumper_changeset_json,
+                bumper_full_scan_done,
             )
             .map_err(|error| ArkWasmError::Wallet(error.to_string()))?,
         );
@@ -207,7 +211,7 @@ impl ArkSession {
             None,
             offchain_next_derivation_index,
             blockchain,
-            wallet,
+            Arc::clone(&wallet),
             ark_server_url,
             Arc::new(InMemorySwapStorage::new()),
             BOLTZ_URL.to_string(),
@@ -264,6 +268,7 @@ impl ArkSession {
 
         let session = Self {
             client,
+            onchain_wallet: wallet,
             wallet_db,
             delegator,
             network_mode,
@@ -296,6 +301,16 @@ impl ArkSession {
         envelope.wallet_db = wallet_db;
         envelope.autonomous_mode = self.autonomous_mode();
         Ok(serde_json::to_string(&envelope)?)
+    }
+
+    pub fn export_onchain_wallet_changeset(&self) -> ArkResult<String> {
+        self.onchain_wallet
+            .export_changeset_json()
+            .map_err(|error| ArkWasmError::Wallet(error.to_string()))
+    }
+
+    pub fn onchain_wallet_full_scan_done(&self) -> bool {
+        self.onchain_wallet.completed_full_scan()
     }
 
     pub fn operator_signer_pk_hex(&self) -> String {

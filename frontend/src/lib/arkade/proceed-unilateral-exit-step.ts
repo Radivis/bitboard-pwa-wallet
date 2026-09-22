@@ -21,9 +21,21 @@ export async function proceedUnilateralExitStepWithGuards(params: {
 }) {
   assertArkadeSessionUnlocked(params.walletScope.walletId)
   await awaitArkadeLoadQuiescence()
-  return getArkadeWorker().proceedUnilateralExitStep({
-    walletScope: params.walletScope,
-    vtxoOutpoints: sortArkadeVtxoOutpoints(params.vtxoOutpoints),
-    feeRateSatPerVb: params.feeRateSatPerVb,
-  })
+  try {
+    return await getArkadeWorker().proceedUnilateralExitStep({
+      walletScope: params.walletScope,
+      vtxoOutpoints: sortArkadeVtxoOutpoints(params.vtxoOutpoints),
+      feeRateSatPerVb: params.feeRateSatPerVb,
+    })
+  } finally {
+    const { persistBumperSidecarAfterWalletSync } = await import(
+      '@/lib/wallet/persist-bumper-sidecar-after-sync'
+    )
+    void persistBumperSidecarAfterWalletSync({
+      walletId: params.walletScope.walletId,
+      networkMode: params.walletScope.networkMode,
+    }).catch((error: unknown) => {
+      console.warn('Arkade sidecar SegWit-0 persist after proceed failed', error)
+    })
+  }
 }

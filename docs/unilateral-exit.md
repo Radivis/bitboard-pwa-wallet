@@ -42,7 +42,7 @@ Unilateral exit recovers VTXO funds to on-chain Bitcoin **without operator coope
 | **Unroll** | Publish the virtual-tree branch on Bitcoin, one virtual tx at a time | Bumper wallet (CPFP / child txs) |
 | **Complete** | After the unilateral-exit timelock, spend the unrolled output to a `bc1` destination | Same on-chain wallet |
 
-The bumper wallet is the same BIP32-derived BDK wallet used for boarding.
+The bumper wallet is BIP84 account 0 from the same mnemonic (`wpkh(xprv/84'/{coin}'/0'/{0|1}/*)`), persisted as the SegWit-0 descriptor-wallet row. Boarding uses the master keypair, not that BIP84 path.
 
 ### Online vs offline ASP
 

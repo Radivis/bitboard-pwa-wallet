@@ -143,17 +143,12 @@ pub fn derive_descriptors(
 // Wallet wrappers
 // ---------------------------------------------------------------------------
 
-/// Create a new wallet from a mnemonic, network, address type, and account index.
-///
-/// Derives descriptors internally, creates the BDK wallet, stores it in
-/// thread-local state, and returns a `CreateWalletResult` as JsValue.
-#[wasm_bindgen]
-pub fn create_wallet(
+fn build_create_wallet_result(
     mnemonic_str: &str,
     network: &str,
     address_type: &str,
     account_id: u32,
-) -> Result<JsValue, JsValue> {
+) -> Result<(types::CreateWalletResult, BdkWallet, ChangeSet), JsValue> {
     let bitcoin_network = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
     let address_type_enum = types::AddressType::try_from(address_type).map_err(JsValue::from)?;
 
@@ -178,22 +173,51 @@ pub fn create_wallet(
 
     let changeset_json = wallet::serialize_changeset(&initial_changeset).map_err(JsValue::from)?;
 
-    ACTIVE_WALLET.with(|wallet_cell| wallet_cell.replace(Some(bdk_wallet)));
-    ACCUMULATED_CHANGESET.with(|changeset_cell| *changeset_cell.borrow_mut() = initial_changeset);
-    EXTERNAL_DESCRIPTOR_FOR_LAB.with(|descriptor_cell| {
-        *descriptor_cell.borrow_mut() = descriptor_pair.external_descriptor.clone()
-    });
-    INTERNAL_DESCRIPTOR_FOR_LAB.with(|descriptor_cell| {
-        *descriptor_cell.borrow_mut() = descriptor_pair.internal_descriptor.clone()
-    });
-
     let create_wallet_result = types::CreateWalletResult {
         external_descriptor: descriptor_pair.external_descriptor,
         internal_descriptor: descriptor_pair.internal_descriptor,
         first_address,
         changeset_json,
     };
+    Ok((create_wallet_result, bdk_wallet, initial_changeset))
+}
 
+/// Create a new wallet from a mnemonic, network, address type, and account index.
+///
+/// Derives descriptors internally, creates the BDK wallet, stores it in
+/// thread-local state, and returns a `CreateWalletResult` as JsValue.
+#[wasm_bindgen]
+pub fn create_wallet(
+    mnemonic_str: &str,
+    network: &str,
+    address_type: &str,
+    account_id: u32,
+) -> Result<JsValue, JsValue> {
+    let (create_wallet_result, bdk_wallet, initial_changeset) =
+        build_create_wallet_result(mnemonic_str, network, address_type, account_id)?;
+
+    ACTIVE_WALLET.with(|wallet_cell| wallet_cell.replace(Some(bdk_wallet)));
+    ACCUMULATED_CHANGESET.with(|changeset_cell| *changeset_cell.borrow_mut() = initial_changeset);
+    EXTERNAL_DESCRIPTOR_FOR_LAB.with(|descriptor_cell| {
+        *descriptor_cell.borrow_mut() = create_wallet_result.external_descriptor.clone()
+    });
+    INTERNAL_DESCRIPTOR_FOR_LAB.with(|descriptor_cell| {
+        *descriptor_cell.borrow_mut() = create_wallet_result.internal_descriptor.clone()
+    });
+
+    serde_wasm_bindgen::to_value(&create_wallet_result).map_display_err_to_js()
+}
+
+/// Create a descriptor-wallet changeset without replacing `ACTIVE_WALLET`.
+#[wasm_bindgen]
+pub fn create_wallet_without_activating(
+    mnemonic_str: &str,
+    network: &str,
+    address_type: &str,
+    account_id: u32,
+) -> Result<JsValue, JsValue> {
+    let (create_wallet_result, _bdk_wallet, _initial_changeset) =
+        build_create_wallet_result(mnemonic_str, network, address_type, account_id)?;
     serde_wasm_bindgen::to_value(&create_wallet_result).map_display_err_to_js()
 }
 

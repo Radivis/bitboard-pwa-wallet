@@ -76,6 +76,8 @@ async fn prepare_deprecated_signer_fixture(
             String::new(),
             endpoints.esplora_url.clone(),
             Some(&fixture.persistence_before_rotate),
+            None,
+            false,
         )
         .await
         .expect("reopen after rotate from boarded fixture");
@@ -104,6 +106,8 @@ async fn prepare_deprecated_signer_fixture(
         String::new(),
         endpoints.esplora_url.clone(),
         Some(&persistence_before_rotate),
+        None,
+        false,
     )
     .await
     .expect("reopen after rotate");
@@ -138,6 +142,8 @@ async fn prepare_deprecated_signer_session_without_boarding(
         String::new(),
         endpoints.esplora_url.clone(),
         Some(&persistence_before_rotate),
+        None,
+        false,
     )
     .await
     .expect("reopen after rotate");
@@ -216,6 +222,8 @@ async fn cooperative_signer_migration_clears_pending_recovery_due_to_expired_sig
         String::new(),
         endpoints.esplora_url.clone(),
         Some(&persistence_before_rotate),
+        None,
+        false,
     )
     .await
     .expect("reopen after rotate");

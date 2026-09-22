@@ -14,7 +14,7 @@ Related:
 
 ## Immediate work (not this document)
 
-Bumper BIP84 account 0 is the same HD account as the SegWit-0 descriptor row. Persist and hydrate that row so there is one changeset; do **not** freeze the whole SegWit wallet during automatic proceed. Details belong in that follow-up, not here.
+**Done:** bumper BIP84 hydrates from / persists to the SegWit-0 descriptor-wallet row (LIFE-ARK-BUMP-02/03). Crypto remains the persist writer when that triple is the loaded slot. No wallet-wide write lock.
 
 This note is the step **after** that: one spender for descriptor-wallet UTXOs.
 

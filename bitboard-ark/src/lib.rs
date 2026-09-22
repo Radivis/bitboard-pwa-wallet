@@ -167,6 +167,8 @@ pub async fn ark_open_session(params: JsValue) -> Result<JsValue, JsValue> {
             params.delegator_url,
             params.esplora_url,
             params.sdk_persistence_json.as_deref(),
+            params.bumper_changeset_json.as_deref(),
+            params.bumper_full_scan_done,
         )
         .await?;
 
@@ -220,6 +222,20 @@ pub async fn ark_sync_onchain_wallet() -> Result<(), JsValue> {
         .await
     })
     .await
+}
+
+#[wasm_bindgen]
+pub fn ark_export_onchain_wallet_changeset() -> Result<String, JsValue> {
+    map_js_error(with_session(|session| {
+        session.export_onchain_wallet_changeset()
+    }))
+}
+
+#[wasm_bindgen]
+pub fn ark_onchain_wallet_full_scan_done() -> Result<bool, JsValue> {
+    map_js_error(with_session(|session| {
+        Ok(session.onchain_wallet_full_scan_done())
+    }))
 }
 
 #[wasm_bindgen]

@@ -59,6 +59,8 @@ impl ArkSession {
         // LIFE-ARK-BUMP-01: one wallet-wide Esplora scan per session. Later polls probe
         // the displayed unused address via /utxo so a 4s underfunded refetch cannot
         // restart a scripthash /txs HD walk.
+        let did_wallet_wide_sync =
+            bumper_info_should_full_sync_wallet(self.onchain_wallet_sync_phase.get());
         self.ensure_bumper_wallet_synced_once().await?;
         let address = self.client.onchain_wallet_address()?;
         let wallet_confirmed_sats = self.client.onchain_wallet_balance()?.confirmed.to_sat();
@@ -77,6 +79,7 @@ impl ArkSession {
             balance_sats,
             unilateral_exit_timelock_blocks,
             unilateral_exit_timelock_seconds,
+            did_wallet_wide_sync,
         })
     }
 
