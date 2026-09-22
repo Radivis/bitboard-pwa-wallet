@@ -40,15 +40,16 @@ pub use network::NetworkMode;
 #[cfg(not(target_arch = "wasm32"))]
 pub use outpoint::{OnchainOutPoint, VirtualOutPoint};
 #[cfg(not(target_arch = "wasm32"))]
-pub use session::ArkSession;
+pub use session::{ArkSession, OpenArkSessionParams};
+
+#[cfg(target_arch = "wasm32")]
+use crate::session::{ArkSession, OpenArkSessionParams};
 
 #[cfg(target_arch = "wasm32")]
 use crate::api_types::CompleteUnilateralExitParams;
 
 #[cfg(target_arch = "wasm32")]
 use crate::network::NetworkMode;
-#[cfg(target_arch = "wasm32")]
-use crate::session::ArkSession;
 
 use std::cell::RefCell;
 use std::future::Future;
@@ -160,16 +161,16 @@ pub async fn ark_open_session(params: JsValue) -> Result<JsValue, JsValue> {
         let network_mode = NetworkMode::parse(&params.network_mode)
             .ok_or_else(|| ArkWasmError::UnsupportedNetworkMode(params.network_mode.clone()))?;
 
-        let (session, migration_hint) = ArkSession::open(
-            &params.mnemonic,
+        let (session, migration_hint) = ArkSession::open(OpenArkSessionParams {
+            mnemonic_words: &params.mnemonic,
             network_mode,
-            params.ark_server_url,
-            params.delegator_url,
-            params.esplora_url,
-            params.sdk_persistence_json.as_deref(),
-            params.bumper_changeset_json.as_deref(),
-            params.bumper_full_scan_done,
-        )
+            ark_server_url: params.ark_server_url,
+            delegator_url: params.delegator_url,
+            esplora_url: params.esplora_url,
+            sdk_persistence_json: params.sdk_persistence_json.as_deref(),
+            bumper_changeset_json: params.bumper_changeset_json.as_deref(),
+            bumper_full_scan_done: params.bumper_full_scan_done,
+        })
         .await?;
 
         let arkade_address = session.peek_offchain_address()?;

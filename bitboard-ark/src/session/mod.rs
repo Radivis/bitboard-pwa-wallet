@@ -17,6 +17,8 @@ mod sync;
 pub(crate) mod unilateral_exit;
 mod vtxo;
 
+pub use open::OpenArkSessionParams;
+
 use std::cell::Cell;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;

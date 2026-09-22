@@ -411,7 +411,7 @@ pub(crate) fn completed_full_scan_from_hydrate(full_scan_done: bool, used_empty:
 pub(crate) fn bumper_bdk_network(network: Network) -> Network {
     match network {
         Network::Testnet => Network::Testnet4,
-        other => other,
+        Network::Bitcoin | Network::Testnet4 | Network::Signet | Network::Regtest => network,
     }
 }
 
@@ -522,6 +522,7 @@ mod onchain_wallet_scan_kind_tests {
     #[test]
     fn bumper_bdk_network_maps_testnet_to_testnet4() {
         assert_eq!(bumper_bdk_network(Network::Testnet), Network::Testnet4);
+        assert_eq!(bumper_bdk_network(Network::Testnet4), Network::Testnet4);
         assert_eq!(bumper_bdk_network(Network::Signet), Network::Signet);
         assert_eq!(bumper_bdk_network(Network::Bitcoin), Network::Bitcoin);
         assert_eq!(bumper_bdk_network(Network::Regtest), Network::Regtest);

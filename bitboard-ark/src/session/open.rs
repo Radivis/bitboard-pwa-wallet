@@ -148,17 +148,31 @@ fn apply_live_operator_digest_on_open(
     }
 }
 
+pub struct OpenArkSessionParams<'a> {
+    pub mnemonic_words: &'a str,
+    pub network_mode: NetworkMode,
+    pub ark_server_url: String,
+    pub delegator_url: String,
+    pub esplora_url: String,
+    pub sdk_persistence_json: Option<&'a str>,
+    pub bumper_changeset_json: Option<&'a str>,
+    pub bumper_full_scan_done: bool,
+}
+
 impl ArkSession {
     pub async fn open(
-        mnemonic_words: &str,
-        network_mode: NetworkMode,
-        ark_server_url: String,
-        delegator_url: String,
-        esplora_url: String,
-        sdk_persistence_json: Option<&str>,
-        bumper_changeset_json: Option<&str>,
-        bumper_full_scan_done: bool,
+        params: OpenArkSessionParams<'_>,
     ) -> ArkResult<(Self, Option<OperatorSignerMigrationHint>)> {
+        let OpenArkSessionParams {
+            mnemonic_words,
+            network_mode,
+            ark_server_url,
+            delegator_url,
+            esplora_url,
+            sdk_persistence_json,
+            bumper_changeset_json,
+            bumper_full_scan_done,
+        } = params;
         let parsed = BitboardArkPersistence::parse_import(sdk_persistence_json);
         let autonomous_mode = parsed.autonomous_mode;
         let cached_operator_info = parsed.wallet_db.cached_operator_info.clone();
