@@ -1,15 +1,13 @@
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
 import {
+  bumperFullScanDoneForHydrate,
   bumperHydrateSource,
   isLoadedSegwit0Triple,
   persistedChangesetIsUsable,
 } from '@/lib/wallet/bumper-segwit0-policy'
 import { ensureSegwit0DescriptorRow } from '@/lib/wallet/ensure-segwit0-descriptor-row'
-import {
-  getOnchainLoadHydrationForPostUnlock,
-  getOnchainLoadLifecycleSnapshot,
-} from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
+import { getOnchainLoadLifecycleSnapshot } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useWalletStore } from '@/stores/walletStore'
 
@@ -35,22 +33,25 @@ export async function resolveBumperHydrateForSessionOpen(params: {
     persistedChangesetUsable: persistedChangesetIsUsable(row.changeSet),
   })
 
+  const bumperFullScanDone = bumperFullScanDoneForHydrate({
+    source,
+    rowFullScanDone: row.fullScanDone,
+  })
+
   if (source === 'live-export') {
     const changesetJson = await useCryptoStore.getState().exportChangeset()
-    const fullScanDone =
-      getOnchainLoadHydrationForPostUnlock()?.fullScanDone ?? row.fullScanDone
     return {
       bumperChangesetJson: changesetJson,
-      bumperFullScanDone: fullScanDone,
+      bumperFullScanDone,
     }
   }
 
   if (source === 'persisted-row') {
     return {
       bumperChangesetJson: row.changeSet,
-      bumperFullScanDone: row.fullScanDone,
+      bumperFullScanDone,
     }
   }
 
-  return { bumperFullScanDone: false }
+  return { bumperFullScanDone }
 }

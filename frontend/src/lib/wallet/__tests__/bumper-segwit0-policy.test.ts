@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { AddressType } from '@/lib/wallet/wallet-domain-types'
 import {
+  bumperFullScanDoneForHydrate,
   bumperHydrateSource,
   isLoadedSegwit0Triple,
   persistedChangesetIsUsable,
@@ -53,6 +54,44 @@ describe('LIFE-ARK-BUMP-02 bumperHydrateSource', () => {
     ).toBe(true)
     expect(
       isLoadedSegwit0Triple({ addressType: AddressType.Taproot, accountId: 0 }),
+    ).toBe(false)
+  })
+})
+
+describe('CQ-02 bumperFullScanDoneForHydrate', () => {
+  it('empty is false even when row flag is true', () => {
+    expect(
+      bumperFullScanDoneForHydrate({
+        source: 'empty',
+        rowFullScanDone: true,
+      }),
+    ).toBe(false)
+  })
+
+  it('uses row flag for live-export and persisted-row', () => {
+    expect(
+      bumperFullScanDoneForHydrate({
+        source: 'live-export',
+        rowFullScanDone: false,
+      }),
+    ).toBe(false)
+    expect(
+      bumperFullScanDoneForHydrate({
+        source: 'live-export',
+        rowFullScanDone: true,
+      }),
+    ).toBe(true)
+    expect(
+      bumperFullScanDoneForHydrate({
+        source: 'persisted-row',
+        rowFullScanDone: true,
+      }),
+    ).toBe(true)
+    expect(
+      bumperFullScanDoneForHydrate({
+        source: 'persisted-row',
+        rowFullScanDone: false,
+      }),
     ).toBe(false)
   })
 })

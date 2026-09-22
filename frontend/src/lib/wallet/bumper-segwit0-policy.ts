@@ -32,6 +32,16 @@ export function persistedChangesetIsUsable(
   }
 }
 
+export function bumperFullScanDoneForHydrate(input: {
+  source: BumperHydrateSource
+  rowFullScanDone: boolean
+}): boolean {
+  if (input.source === 'empty') {
+    return false
+  }
+  return input.rowFullScanDone
+}
+
 export function bumperHydrateSource(input: {
   loadedIsSegwit0: boolean
   onchainLoadPhaseLoaded: boolean

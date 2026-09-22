@@ -109,11 +109,16 @@ pub(crate) async fn sync_onchain_wallet_with_retries(client: &ArkClient) -> ArkR
 
 /// Esplora full scan during open can fail transiently on hosted proxies; retry, then continue
 /// with a stale on-chain view so session open and network switching are not blocked.
-pub(crate) async fn sync_onchain_wallet_for_session_open(client: &ArkClient) {
-    if let Err(error) = sync_onchain_wallet_with_retries(client).await {
-        warn_onchain_sync_during_open(&format!(
-            "On-chain wallet sync failed during session open; continuing with stale on-chain view: {error}"
-        ));
+/// Returns whether the wallet-wide scan succeeded.
+pub(crate) async fn sync_onchain_wallet_for_session_open(client: &ArkClient) -> bool {
+    match sync_onchain_wallet_with_retries(client).await {
+        Ok(()) => true,
+        Err(error) => {
+            warn_onchain_sync_during_open(&format!(
+                "On-chain wallet sync failed during session open; continuing with stale on-chain view: {error}"
+            ));
+            false
+        }
     }
 }
 
@@ -300,9 +305,9 @@ impl ArkSession {
     pub async fn sync_onchain_wallet_best_effort(&self) {
         self.onchain_wallet_sync_phase
             .set(super::bumper_sync_policy::BumperWalletSyncPhase::Running);
-        sync_onchain_wallet_for_session_open(&self.client).await;
+        let scan_succeeded = sync_onchain_wallet_for_session_open(&self.client).await;
         self.onchain_wallet_sync_phase
-            .set(super::bumper_sync_policy::BumperWalletSyncPhase::Done);
+            .set(super::bumper_sync_policy::bumper_sync_phase_after_wallet_scan(scan_succeeded));
     }
 
     pub fn export_persistence(&self) -> ArkResult<String> {

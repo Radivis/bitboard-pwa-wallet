@@ -5,12 +5,27 @@ use ark_core::ExplorerUtxo;
 pub(crate) enum BumperWalletSyncPhase {
     NotStarted,
     Running,
+    Failed,
     Done,
 }
 
-/// LIFE-ARK-BUMP-01: only the first bumper-info call may start a wallet-wide Esplora scan.
+/// LIFE-ARK-BUMP-01: start a wallet-wide Esplora scan when none has succeeded yet.
+/// `Failed` is retryable; `Running` and `Done` are not.
 pub(crate) fn bumper_info_should_full_sync_wallet(phase: BumperWalletSyncPhase) -> bool {
-    phase == BumperWalletSyncPhase::NotStarted
+    matches!(
+        phase,
+        BumperWalletSyncPhase::NotStarted | BumperWalletSyncPhase::Failed
+    )
+}
+
+/// After a wallet-wide bumper scan attempt, keep `Done` only on success so a
+/// later bumper-info poll can retry from `Failed`.
+pub(crate) fn bumper_sync_phase_after_wallet_scan(success: bool) -> BumperWalletSyncPhase {
+    if success {
+        BumperWalletSyncPhase::Done
+    } else {
+        BumperWalletSyncPhase::Failed
+    }
 }
 
 /// Confirmed unspent sats on the displayed next-unused bumper address (`/utxo`, not `/txs`).
@@ -70,9 +85,12 @@ mod tests {
     }
 
     #[test]
-    fn bumper_info_should_full_sync_wallet_is_true_only_when_not_started() {
+    fn bumper_info_should_full_sync_wallet_is_true_when_not_started_or_failed() {
         assert!(bumper_info_should_full_sync_wallet(
             BumperWalletSyncPhase::NotStarted
+        ));
+        assert!(bumper_info_should_full_sync_wallet(
+            BumperWalletSyncPhase::Failed
         ));
         assert!(!bumper_info_should_full_sync_wallet(
             BumperWalletSyncPhase::Running
@@ -95,6 +113,28 @@ mod tests {
     #[test]
     fn bumper_confirmed_balance_sats_adds_wallet_plus_tip() {
         assert_eq!(bumper_confirmed_balance_sats(25_000, 8_000), 33_000);
+    }
+
+    #[test]
+    fn bumper_sync_phase_after_wallet_scan_is_done_on_success() {
+        assert_eq!(
+            bumper_sync_phase_after_wallet_scan(true),
+            BumperWalletSyncPhase::Done
+        );
+    }
+
+    #[test]
+    fn bumper_sync_phase_after_wallet_scan_is_failed_on_failure() {
+        assert_eq!(
+            bumper_sync_phase_after_wallet_scan(false),
+            BumperWalletSyncPhase::Failed
+        );
+    }
+
+    #[test]
+    fn bumper_info_should_full_sync_wallet_after_failed_scan() {
+        let phase = bumper_sync_phase_after_wallet_scan(false);
+        assert!(bumper_info_should_full_sync_wallet(phase));
     }
 
     #[test]

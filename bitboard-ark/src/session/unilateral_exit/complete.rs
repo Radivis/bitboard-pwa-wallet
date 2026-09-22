@@ -13,7 +13,7 @@ use super::snapshot_ops::{
 use crate::session::ArkSession;
 use crate::session::bumper_sync_policy::{
     BumperWalletSyncPhase, bumper_confirmed_balance_sats, bumper_info_should_full_sync_wallet,
-    tip_address_confirmed_sats,
+    bumper_sync_phase_after_wallet_scan, tip_address_confirmed_sats,
 };
 use crate::session::mappers::parse_onchain_address;
 use crate::session::open::sync_onchain_wallet_with_retries;
@@ -51,7 +51,7 @@ impl ArkSession {
             .set(BumperWalletSyncPhase::Running);
         let sync_result = sync_onchain_wallet_with_retries(&self.client).await;
         self.onchain_wallet_sync_phase
-            .set(BumperWalletSyncPhase::Done);
+            .set(bumper_sync_phase_after_wallet_scan(sync_result.is_ok()));
         sync_result
     }
 
