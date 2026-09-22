@@ -28,4 +28,8 @@ describe('onchainPostUnlockNeedsFullScan LIFE-ONC-SYNC-02', () => {
       }),
     ).toBe(true)
   })
+
+  it('onchainPostUnlockNeedsFullScan_is_true_when_hydration_is_null', () => {
+    expect(onchainPostUnlockNeedsFullScan(null)).toBe(true)
+  })
 })

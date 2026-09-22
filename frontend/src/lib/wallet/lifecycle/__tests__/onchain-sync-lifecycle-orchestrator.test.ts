@@ -8,7 +8,10 @@ const refreshWalletStoreFromLoadedBdk = vi.fn()
 const invalidateOnchainDashboardQueries = vi.fn()
 
 const loadSnapshot = { loadPhase: 'loaded' as const, networkMode: 'testnet' as const }
-const loadHydration = {
+let loadHydration: {
+  fullScanDone: boolean
+  usedEmptyChainFallback: boolean
+} | null = {
   fullScanDone: true,
   usedEmptyChainFallback: false,
 }
@@ -76,8 +79,10 @@ describe('onchain-sync-lifecycle-orchestrator', () => {
     vi.clearAllMocks()
     loadSnapshot.loadPhase = 'loaded'
     loadSnapshot.networkMode = 'testnet'
-    loadHydration.fullScanDone = true
-    loadHydration.usedEmptyChainFallback = false
+    loadHydration = {
+      fullScanDone: true,
+      usedEmptyChainFallback: false,
+    }
     walletStoreState.walletStatus = 'unlocked'
     syncActiveWalletAndUpdateState.mockResolvedValue(undefined)
     orchestrateOnchainSave.mockResolvedValue(undefined)
@@ -172,7 +177,10 @@ describe('onchain-sync-lifecycle-orchestrator', () => {
     })
 
     it('full-scans when fullScanDone is false', async () => {
-      loadHydration.fullScanDone = false
+      loadHydration = {
+        fullScanDone: false,
+        usedEmptyChainFallback: false,
+      }
 
       await orchestrateOnchainPostUnlockSync(postUnlockParams)
 
@@ -185,7 +193,23 @@ describe('onchain-sync-lifecycle-orchestrator', () => {
     })
 
     it('full-scans when empty-chain fallback was used', async () => {
-      loadHydration.usedEmptyChainFallback = true
+      loadHydration = {
+        fullScanDone: true,
+        usedEmptyChainFallback: true,
+      }
+
+      await orchestrateOnchainPostUnlockSync(postUnlockParams)
+
+      expect(syncActiveWalletAndUpdateState).toHaveBeenCalledWith('testnet', {
+        useFullScan: true,
+      })
+      expect(orchestrateOnchainSave).toHaveBeenCalledWith(
+        expect.objectContaining({ markFullScanDone: true }),
+      )
+    })
+
+    it('postUnlock_full_scans_when_hydration_is_missing', async () => {
+      loadHydration = null
 
       await orchestrateOnchainPostUnlockSync(postUnlockParams)
 

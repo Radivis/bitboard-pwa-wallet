@@ -46,7 +46,7 @@ export type OnchainPostUnlockSyncParams = {
   accountId: number
   onSyncError?: (err: unknown) => void
   awaitCompletion?: boolean
-  /** When omitted, derived from last on-chain load hydration (LIFE-ONC-SYNC-02). */
+  /** When omitted, derived from last on-chain load hydration (LIFE-ONC-SYNC-02). Missing hydration full-scans. */
   useFullScan?: boolean
 }
 

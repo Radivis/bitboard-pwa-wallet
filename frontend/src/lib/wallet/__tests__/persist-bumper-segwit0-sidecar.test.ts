@@ -2,10 +2,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AddressType } from '@/lib/wallet/wallet-domain-types'
 
 const mockUpdateDescriptorWalletChangeset = vi.hoisted(() => vi.fn())
+const mockFindDescriptorWallet = vi.hoisted(() => vi.fn())
+const mockLoadWalletSecretsPayload = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/wallet/descriptor-wallet-manager', () => ({
   updateDescriptorWalletChangeset: (...args: unknown[]) =>
     mockUpdateDescriptorWalletChangeset(...args),
+  findDescriptorWallet: (...args: unknown[]) => mockFindDescriptorWallet(...args),
+}))
+
+vi.mock('@/db', () => ({
+  ensureMigrated: vi.fn().mockResolvedValue(undefined),
+  getDatabase: vi.fn(() => ({})),
+  loadWalletSecretsPayload: (...args: unknown[]) =>
+    mockLoadWalletSecretsPayload(...args),
 }))
 
 import { persistBumperSegwit0SidecarIfAllowed } from '@/lib/wallet/persist-bumper-segwit0-sidecar'
@@ -14,6 +24,8 @@ describe('LIFE-ARK-BUMP-03 persistBumperSegwit0SidecarIfAllowed', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockUpdateDescriptorWalletChangeset.mockResolvedValue(undefined)
+    mockLoadWalletSecretsPayload.mockResolvedValue({ descriptorWallets: [] })
+    mockFindDescriptorWallet.mockReturnValue(undefined)
   })
 
   it('does not persist when SegWit-0 is the crypto slot', async () => {
@@ -53,5 +65,25 @@ describe('LIFE-ARK-BUMP-03 persistBumperSegwit0SidecarIfAllowed', () => {
         lastSuccessfulEsploraSyncAt: '2026-01-01T00:00:00.000Z',
       }),
     )
+  })
+
+  it('persistBumperSegwit0SidecarIfAllowed_skips_stale_export', async () => {
+    mockFindDescriptorWallet.mockReturnValue({
+      changeSet: '{"local":{"row":true}}',
+      lastSuccessfulEsploraSyncAt: '2026-09-22T12:00:00.000Z',
+    })
+
+    const persisted = await persistBumperSegwit0SidecarIfAllowed({
+      walletId: 3,
+      network: 'signet',
+      changesetJson: '{"local":{"stale":true}}',
+      markFullScanDone: true,
+      lastSuccessfulEsploraSyncAt: '2026-09-22T11:00:00.000Z',
+      loadedAddressType: AddressType.Taproot,
+      loadedAccountId: 0,
+    })
+
+    expect(persisted).toBe(false)
+    expect(mockUpdateDescriptorWalletChangeset).not.toHaveBeenCalled()
   })
 })

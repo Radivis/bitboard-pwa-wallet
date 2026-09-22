@@ -217,8 +217,7 @@ export async function orchestrateOnchainPostUnlockSync(
   const awaitCompletion = params.awaitCompletion ?? false
   const hydration = getOnchainLoadHydrationForPostUnlock()
   const useFullScan =
-    params.useFullScan ??
-    (hydration != null ? onchainPostUnlockNeedsFullScan(hydration) : false)
+    params.useFullScan ?? onchainPostUnlockNeedsFullScan(hydration)
   const work = orchestrateOnchainSyncThenSave({
     walletId: params.walletId,
     networkMode: params.networkMode,

@@ -5,6 +5,7 @@ import {
   BUMPER_ADDRESS_TYPE,
   bumperFullScanDoneForHydrate,
   bumperHydrateSource,
+  bumperSidecarExportIsNewerThanRow,
   isLoadedSegwit0Triple,
   persistedChangesetIsUsable,
   shouldPersistBumperSegwit0Sidecar,
@@ -134,5 +135,93 @@ describe('LIFE-ARK-BUMP-03 shouldPersistBumperSegwit0Sidecar', () => {
         loadedAccountId: null,
       }),
     ).toBe(true)
+  })
+})
+
+describe('SE-03 bumperSidecarExportIsNewerThanRow', () => {
+  const newer = '2026-09-22T12:00:00.000Z'
+  const older = '2026-09-22T11:00:00.000Z'
+  const exportChangeset = '{"local":{"export":true}}'
+  const rowChangeset = '{"local":{"row":true}}'
+
+  it('bumperSidecarExportIsNewerThanRow_bootstraps_empty_row', () => {
+    expect(
+      bumperSidecarExportIsNewerThanRow({
+        exportSyncedAt: newer,
+        exportChangesetJson: exportChangeset,
+        rowLastSuccessfulEsploraSyncAt: newer,
+        rowChangesetJson: '',
+      }),
+    ).toBe(true)
+    expect(
+      bumperSidecarExportIsNewerThanRow({
+        exportSyncedAt: newer,
+        exportChangesetJson: exportChangeset,
+        rowChangesetJson: undefined,
+      }),
+    ).toBe(true)
+  })
+
+  it('bumperSidecarExportIsNewerThanRow_skips_older_export', () => {
+    expect(
+      bumperSidecarExportIsNewerThanRow({
+        exportSyncedAt: older,
+        exportChangesetJson: exportChangeset,
+        rowLastSuccessfulEsploraSyncAt: newer,
+        rowChangesetJson: rowChangeset,
+      }),
+    ).toBe(false)
+  })
+
+  it('bumperSidecarExportIsNewerThanRow_accepts_newer_export', () => {
+    expect(
+      bumperSidecarExportIsNewerThanRow({
+        exportSyncedAt: newer,
+        exportChangesetJson: exportChangeset,
+        rowLastSuccessfulEsploraSyncAt: older,
+        rowChangesetJson: rowChangeset,
+      }),
+    ).toBe(true)
+  })
+
+  it('bumperSidecarExportIsNewerThanRow_skips_equal_timestamp', () => {
+    expect(
+      bumperSidecarExportIsNewerThanRow({
+        exportSyncedAt: newer,
+        exportChangesetJson: exportChangeset,
+        rowLastSuccessfulEsploraSyncAt: newer,
+        rowChangesetJson: rowChangeset,
+      }),
+    ).toBe(false)
+  })
+
+  it('bumperSidecarExportIsNewerThanRow_skips_identical_changeset', () => {
+    expect(
+      bumperSidecarExportIsNewerThanRow({
+        exportSyncedAt: newer,
+        exportChangesetJson: exportChangeset,
+        rowLastSuccessfulEsploraSyncAt: older,
+        rowChangesetJson: `  ${exportChangeset}  `,
+      }),
+    ).toBe(false)
+  })
+
+  it('bumperSidecarExportIsNewerThanRow_skips_invalid_export_timestamp', () => {
+    expect(
+      bumperSidecarExportIsNewerThanRow({
+        exportSyncedAt: 'not-a-timestamp',
+        exportChangesetJson: exportChangeset,
+        rowLastSuccessfulEsploraSyncAt: older,
+        rowChangesetJson: rowChangeset,
+      }),
+    ).toBe(false)
+    expect(
+      bumperSidecarExportIsNewerThanRow({
+        exportSyncedAt: undefined,
+        exportChangesetJson: exportChangeset,
+        rowLastSuccessfulEsploraSyncAt: older,
+        rowChangesetJson: rowChangeset,
+      }),
+    ).toBe(false)
   })
 })

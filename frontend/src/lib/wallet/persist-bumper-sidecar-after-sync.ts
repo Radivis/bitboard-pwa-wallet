@@ -1,14 +1,45 @@
+import {
+  isArkadeSupportedNetworkMode,
+  type ArkadeSupportedNetworkMode,
+} from '@/lib/arkade/arkade-endpoints'
 import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
 import { persistBumperSegwit0SidecarIfAllowed } from '@/lib/wallet/persist-bumper-segwit0-sidecar'
 import type { NetworkMode } from '@/stores/walletStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { getArkadeWorker } from '@/workers/arkade-factory'
 
+async function arkadeSessionMatchesPersistTarget(params: {
+  walletId: number
+  networkMode: ArkadeSupportedNetworkMode
+}): Promise<boolean> {
+  const arkadeAccountId = useWalletStore.getState().activeArkadeAccountId
+  if (arkadeAccountId == null) {
+    return false
+  }
+  return getArkadeWorker().hasOpenSession({
+    walletId: params.walletId,
+    networkMode: params.networkMode,
+    arkadeAccountId,
+  })
+}
+
 export async function persistBumperSidecarAfterWalletSync(params: {
   walletId: number
   networkMode: NetworkMode
 }): Promise<boolean> {
+  if (!isArkadeSupportedNetworkMode(params.networkMode)) {
+    return false
+  }
+  if (
+    !(await arkadeSessionMatchesPersistTarget({
+      walletId: params.walletId,
+      networkMode: params.networkMode,
+    }))
+  ) {
+    return false
+  }
   const worker = getArkadeWorker()
+  const exportSyncedAt = new Date().toISOString()
   const changesetJson = await worker.exportOnchainWalletChangeset()
   const fullScanDone = await worker.onchainWalletFullScanDone()
   const walletState = useWalletStore.getState()
@@ -18,7 +49,7 @@ export async function persistBumperSidecarAfterWalletSync(params: {
     network: toBitcoinNetwork(params.networkMode),
     changesetJson,
     markFullScanDone: fullScanDone,
-    lastSuccessfulEsploraSyncAt: new Date().toISOString(),
+    lastSuccessfulEsploraSyncAt: exportSyncedAt,
     loadedAddressType: loaded?.addressType ?? walletState.addressType,
     loadedAccountId: loaded?.accountId ?? walletState.accountId,
   })

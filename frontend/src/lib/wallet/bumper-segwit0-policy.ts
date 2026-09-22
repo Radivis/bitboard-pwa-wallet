@@ -70,3 +70,47 @@ export function shouldPersistBumperSegwit0Sidecar(input: {
     accountId: input.loadedAccountId,
   })
 }
+
+function parseIsoTimestampMs(value: string | undefined): number | null {
+  if (value == null || value.trim() === '') {
+    return null
+  }
+  const parsedMs = Date.parse(value)
+  return Number.isFinite(parsedMs) ? parsedMs : null
+}
+
+function changesetJsonForCompare(changesetJson: string | undefined | null): string | null {
+  if (changesetJson == null || !persistedChangesetIsUsable(changesetJson)) {
+    return null
+  }
+  return changesetJson.trim()
+}
+
+/** SE-03: persist a sidecar export only when it is strictly newer than the row. */
+export function bumperSidecarExportIsNewerThanRow(input: {
+  exportSyncedAt: string | undefined
+  exportChangesetJson: string
+  rowLastSuccessfulEsploraSyncAt?: string
+  rowChangesetJson?: string | null
+}): boolean {
+  const exportChangeset = changesetJsonForCompare(input.exportChangesetJson)
+  if (exportChangeset == null) {
+    return false
+  }
+  const rowChangeset = changesetJsonForCompare(input.rowChangesetJson)
+  if (rowChangeset == null) {
+    return true
+  }
+  if (exportChangeset === rowChangeset) {
+    return false
+  }
+  const exportSyncedAtMs = parseIsoTimestampMs(input.exportSyncedAt)
+  if (exportSyncedAtMs == null) {
+    return false
+  }
+  const rowSyncedAtMs = parseIsoTimestampMs(input.rowLastSuccessfulEsploraSyncAt)
+  if (rowSyncedAtMs == null) {
+    return true
+  }
+  return exportSyncedAtMs > rowSyncedAtMs
+}
