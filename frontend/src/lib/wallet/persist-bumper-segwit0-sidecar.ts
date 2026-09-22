@@ -1,6 +1,9 @@
 import { updateDescriptorWalletChangeset } from '@/lib/wallet/descriptor-wallet-manager'
-import { shouldPersistBumperSegwit0Sidecar } from '@/lib/wallet/bumper-segwit0-policy'
-import { AddressType } from '@/lib/wallet/wallet-domain-types'
+import {
+  BUMPER_ACCOUNT_ID,
+  BUMPER_ADDRESS_TYPE,
+  shouldPersistBumperSegwit0Sidecar,
+} from '@/lib/wallet/bumper-segwit0-policy'
 import type { BitcoinNetwork } from '@/lib/wallet/wallet-domain-types'
 
 export async function persistBumperSegwit0SidecarIfAllowed(params: {
@@ -23,8 +26,8 @@ export async function persistBumperSegwit0SidecarIfAllowed(params: {
   await updateDescriptorWalletChangeset({
     walletId: params.walletId,
     network: params.network,
-    addressType: AddressType.SegWit,
-    accountId: 0,
+    addressType: BUMPER_ADDRESS_TYPE,
+    accountId: BUMPER_ACCOUNT_ID,
     changesetJson: params.changesetJson,
     markFullScanDone: params.markFullScanDone,
     lastSuccessfulEsploraSyncAt: params.lastSuccessfulEsploraSyncAt,

@@ -7,7 +7,6 @@ import {
   persistedChangesetIsUsable,
 } from '@/lib/wallet/bumper-segwit0-policy'
 import { ensureSegwit0DescriptorRow } from '@/lib/wallet/ensure-segwit0-descriptor-row'
-import { getOnchainLoadLifecycleSnapshot } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useWalletStore } from '@/stores/walletStore'
 
@@ -28,8 +27,6 @@ export async function resolveBumperHydrateForSessionOpen(params: {
   const loaded = useWalletStore.getState().loadedDescriptorWallet
   const source = bumperHydrateSource({
     loadedIsSegwit0: isLoadedSegwit0Triple(loaded),
-    onchainLoadPhaseLoaded:
-      getOnchainLoadLifecycleSnapshot().loadPhase === 'loaded',
     persistedChangesetUsable: persistedChangesetIsUsable(row.changeSet),
   })
 

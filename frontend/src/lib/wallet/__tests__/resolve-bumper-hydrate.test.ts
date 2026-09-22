@@ -3,24 +3,21 @@ import { AddressType } from '@/lib/wallet/wallet-domain-types'
 
 const ensureSegwit0DescriptorRow = vi.hoisted(() => vi.fn())
 const exportChangeset = vi.hoisted(() => vi.fn())
-const getOnchainLoadHydrationForPostUnlock = vi.hoisted(() => vi.fn())
-const getOnchainLoadLifecycleSnapshot = vi.hoisted(() => vi.fn())
 const loadedDescriptorWallet = vi.hoisted(() => ({
   current: {
     networkMode: 'signet' as const,
     addressType: 'segwit' as const,
     accountId: 0,
-  },
+  } as {
+    networkMode: 'signet'
+    addressType: 'segwit' | 'taproot'
+    accountId: number
+  } | null,
 }))
 
 vi.mock('@/lib/wallet/ensure-segwit0-descriptor-row', () => ({
   ensureSegwit0DescriptorRow: (...args: unknown[]) =>
     ensureSegwit0DescriptorRow(...args),
-}))
-
-vi.mock('@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator', () => ({
-  getOnchainLoadHydrationForPostUnlock: () => getOnchainLoadHydrationForPostUnlock(),
-  getOnchainLoadLifecycleSnapshot: () => getOnchainLoadLifecycleSnapshot(),
 }))
 
 vi.mock('@/stores/cryptoStore', () => ({
@@ -49,15 +46,6 @@ describe('CQ-02 resolveBumperHydrateForSessionOpen', () => {
       addressType: AddressType.SegWit,
       accountId: 0,
     }
-    getOnchainLoadLifecycleSnapshot.mockReturnValue({
-      loadPhase: 'loaded',
-      networkMode: 'signet',
-      errorMessage: null,
-    })
-    getOnchainLoadHydrationForPostUnlock.mockReturnValue({
-      fullScanDone: true,
-      usedEmptyChainFallback: false,
-    })
     ensureSegwit0DescriptorRow.mockResolvedValue({
       network: 'signet',
       addressType: AddressType.SegWit,
@@ -79,6 +67,35 @@ describe('CQ-02 resolveBumperHydrateForSessionOpen', () => {
     expect(exportChangeset).toHaveBeenCalled()
     expect(hydrate).toEqual({
       bumperChangesetJson: '{"local":{"live":true}}',
+      bumperFullScanDone: false,
+    })
+  })
+
+  it('live-export does not import onchain-load snapshot', async () => {
+    const hydrate = await resolveBumperHydrateForSessionOpen({
+      walletId: 1,
+      networkMode: 'signet',
+    })
+
+    expect(exportChangeset).toHaveBeenCalled()
+    expect(hydrate.bumperChangesetJson).toBe('{"local":{"live":true}}')
+  })
+
+  it('uses persisted row when the loaded triple is not SegWit-0', async () => {
+    loadedDescriptorWallet.current = {
+      networkMode: 'signet',
+      addressType: AddressType.Taproot,
+      accountId: 0,
+    }
+
+    const hydrate = await resolveBumperHydrateForSessionOpen({
+      walletId: 1,
+      networkMode: 'signet',
+    })
+
+    expect(exportChangeset).not.toHaveBeenCalled()
+    expect(hydrate).toEqual({
+      bumperChangesetJson: '{"local":{"row":true}}',
       bumperFullScanDone: false,
     })
   })

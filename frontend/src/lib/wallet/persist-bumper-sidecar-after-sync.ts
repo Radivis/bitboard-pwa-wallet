@@ -23,3 +23,28 @@ export async function persistBumperSidecarAfterWalletSync(params: {
     loadedAccountId: loaded?.accountId ?? walletState.accountId,
   })
 }
+
+export async function persistBumperSidecarBestEffort(
+  params: { walletId: number; networkMode: NetworkMode },
+  context: string,
+): Promise<void> {
+  try {
+    await persistBumperSidecarAfterWalletSync(params)
+  } catch (error: unknown) {
+    console.warn(`Arkade sidecar SegWit-0 persist ${context} failed`, error)
+  }
+}
+
+export async function persistBumperSidecarAfterWalletWideSyncIfNeeded(params: {
+  walletId: number
+  networkMode: NetworkMode
+  didWalletWideSync: boolean
+}): Promise<void> {
+  if (!params.didWalletWideSync) {
+    return
+  }
+  await persistBumperSidecarBestEffort(
+    { walletId: params.walletId, networkMode: params.networkMode },
+    'after bumper sync',
+  )
+}

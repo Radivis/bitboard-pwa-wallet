@@ -170,7 +170,7 @@ feature:
         implemented_by:
           - frontend/src/lib/wallet/__tests__/bumper-segwit0-policy.test.ts
           - frontend/src/lib/wallet/__tests__/persist-bumper-segwit0-sidecar.test.ts
-          - bitboard-ark/src/session/bumper_sync_policy.rs
+          - frontend/src/lib/wallet/__tests__/persist-bumper-sidecar-after-sync.test.ts
       - id: LIFE-ARK-SYNC-01
         description: ArkadeSyncLifecycle syncing covers operator sync only, not session open
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-sync-lifecycle-orchestrator.test.ts

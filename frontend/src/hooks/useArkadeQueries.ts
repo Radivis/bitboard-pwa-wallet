@@ -117,6 +117,10 @@ import {
 import {
   assertArkadeSessionUnlocked,
 } from '@/lib/arkade/proceed-unilateral-exit-step'
+import {
+  persistBumperSidecarAfterWalletWideSyncIfNeeded,
+  persistBumperSidecarBestEffort,
+} from '@/lib/wallet/persist-bumper-sidecar-after-sync'
 import { isUnilateralExitBranchComplete } from '@/lib/arkade/unilateral-exit-branch-complete'
 import {
   isUnilateralExitProgressWaitingForConfirmation,
@@ -1117,15 +1121,11 @@ export function useArkadeBumperInfoQuery(
     enabled: enabled && sessionReady,
     queryFn: async () => {
       const info = await withReadyArkadeWorker(() => getArkadeWorker().getOnchainBumperInfo())
-      if (info.didWalletWideSync && activeWalletId != null) {
-        const { persistBumperSidecarAfterWalletSync } = await import(
-          '@/lib/wallet/persist-bumper-sidecar-after-sync'
-        )
-        void persistBumperSidecarAfterWalletSync({
+      if (activeWalletId != null) {
+        await persistBumperSidecarAfterWalletWideSyncIfNeeded({
           walletId: activeWalletId,
           networkMode,
-        }).catch((error: unknown) => {
-          console.warn('Arkade sidecar SegWit-0 persist after bumper sync failed', error)
+          didWalletWideSync: info.didWalletWideSync,
         })
       }
       return info
@@ -1310,15 +1310,13 @@ export function useArkadeCompleteUnilateralExitMutation() {
       const txid = await withReadyArkadeWorker(() =>
         getArkadeWorker().completeUnilateralExit(params),
       )
-      const { persistBumperSidecarAfterWalletSync } = await import(
-        '@/lib/wallet/persist-bumper-sidecar-after-sync'
+      await persistBumperSidecarBestEffort(
+        {
+          walletId: activeWalletId,
+          networkMode,
+        },
+        'after complete',
       )
-      await persistBumperSidecarAfterWalletSync({
-        walletId: activeWalletId,
-        networkMode,
-      }).catch((error: unknown) => {
-        console.warn('Arkade sidecar SegWit-0 persist after complete failed', error)
-      })
       return txid
     },
     onSuccess: async (txid) => {

@@ -126,4 +126,46 @@ describe('LIFE-ARK-BUMP-02 ensureSegwit0DescriptorRow', () => {
       }),
     )
   })
+
+  it('CAS transform re-applies SegWit-0 insert against the current payload blob', async () => {
+    const currentPayloadBlob = {
+      ciphertext: new Uint8Array([9]),
+      iv: new Uint8Array([8]),
+      salt: new Uint8Array([7]),
+      kdfPhc: 'current-revision',
+    }
+    mockFindDescriptorWallet.mockReturnValue(undefined)
+    mockUpdatePayload.mockImplementation(async ({ transform }: { transform: (p: unknown) => unknown }) => {
+      await transform(currentPayloadBlob)
+    })
+    mockCreateDescriptorWalletRowIfMissing.mockResolvedValue({
+      descriptorWalletData: {
+        network: 'signet' as const,
+        addressType: AddressType.SegWit,
+        accountId: 0,
+        externalDescriptor: 'wpkh(cas)',
+        internalDescriptor: 'wpkh(cas-int)',
+        changeSet: '{"local":{"cas":true}}',
+        fullScanDone: false,
+      },
+      encryptedPayloadToStore: {
+        ciphertext: new Uint8Array([1]),
+        iv: new Uint8Array([2]),
+        salt: new Uint8Array([3]),
+        kdfPhc: 'x',
+      },
+      encryptedMnemonicToStore: null,
+    })
+
+    await ensureSegwit0DescriptorRow({
+      walletId: 1,
+      network: 'signet',
+    })
+
+    expect(mockCreateDescriptorWalletRowIfMissing).toHaveBeenCalledWith(
+      expect.objectContaining({
+        encryptedPayload: currentPayloadBlob,
+      }),
+    )
+  })
 })

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { AddressType } from '@/lib/wallet/wallet-domain-types'
 import {
+  BUMPER_ACCOUNT_ID,
+  BUMPER_ADDRESS_TYPE,
   bumperFullScanDoneForHydrate,
   bumperHydrateSource,
   isLoadedSegwit0Triple,
@@ -13,28 +15,24 @@ describe('LIFE-ARK-BUMP-02 bumperHydrateSource', () => {
     expect(
       bumperHydrateSource({
         loadedIsSegwit0: true,
-        onchainLoadPhaseLoaded: true,
         persistedChangesetUsable: true,
       }),
     ).toBe('live-export')
     expect(
       bumperHydrateSource({
         loadedIsSegwit0: true,
-        onchainLoadPhaseLoaded: false,
+        persistedChangesetUsable: false,
+      }),
+    ).toBe('live-export')
+    expect(
+      bumperHydrateSource({
+        loadedIsSegwit0: false,
         persistedChangesetUsable: true,
       }),
     ).toBe('persisted-row')
     expect(
       bumperHydrateSource({
         loadedIsSegwit0: false,
-        onchainLoadPhaseLoaded: true,
-        persistedChangesetUsable: true,
-      }),
-    ).toBe('persisted-row')
-    expect(
-      bumperHydrateSource({
-        loadedIsSegwit0: false,
-        onchainLoadPhaseLoaded: false,
         persistedChangesetUsable: false,
       }),
     ).toBe('empty')
@@ -50,7 +48,10 @@ describe('LIFE-ARK-BUMP-02 bumperHydrateSource', () => {
 
   it('detects loaded SegWit-0', () => {
     expect(
-      isLoadedSegwit0Triple({ addressType: AddressType.SegWit, accountId: 0 }),
+      isLoadedSegwit0Triple({
+        addressType: BUMPER_ADDRESS_TYPE,
+        accountId: BUMPER_ACCOUNT_ID,
+      }),
     ).toBe(true)
     expect(
       isLoadedSegwit0Triple({ addressType: AddressType.Taproot, accountId: 0 }),
@@ -100,10 +101,21 @@ describe('LIFE-ARK-BUMP-03 shouldPersistBumperSegwit0Sidecar', () => {
   it('is false only for loaded SegWit-0', () => {
     expect(
       shouldPersistBumperSegwit0Sidecar({
-        loadedAddressType: AddressType.SegWit,
-        loadedAccountId: 0,
+        loadedAddressType: BUMPER_ADDRESS_TYPE,
+        loadedAccountId: BUMPER_ACCOUNT_ID,
       }),
     ).toBe(false)
+    expect(
+      shouldPersistBumperSegwit0Sidecar({
+        loadedAddressType: BUMPER_ADDRESS_TYPE,
+        loadedAccountId: BUMPER_ACCOUNT_ID,
+      }),
+    ).toBe(
+      !isLoadedSegwit0Triple({
+        addressType: BUMPER_ADDRESS_TYPE,
+        accountId: BUMPER_ACCOUNT_ID,
+      }),
+    )
     expect(
       shouldPersistBumperSegwit0Sidecar({
         loadedAddressType: AddressType.Taproot,

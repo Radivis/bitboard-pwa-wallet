@@ -176,7 +176,7 @@ where
             .full_scan(
                 request,
                 BUMPER_FULL_SCAN_STOP_GAP,
-                BUMPER_ESPLORA_PARALLEL_REQUESTS,
+                BUMPER_FULL_SCAN_PARALLEL_REQUESTS,
             )
             .await
             .map_err(Error::wallet)
@@ -384,6 +384,8 @@ impl esplora_client::Sleeper for WebSleeper {
 
 const BUMPER_FULL_SCAN_STOP_GAP: usize = 5;
 const BUMPER_ESPLORA_PARALLEL_REQUESTS: usize = 5;
+/// Full scan is bursty; match crypto (`FULL_SCAN_PARALLEL_REQUESTS = 2`) to reduce 429s.
+const BUMPER_FULL_SCAN_PARALLEL_REQUESTS: usize = 2;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum OnchainWalletScanKind {
@@ -419,8 +421,9 @@ fn try_load_bip84_from_changeset(
     xprv: Xpriv,
     bdk_network: Network,
     changeset_json: &str,
-) -> Option<BdkWallet> {
-    let changeset: ChangeSet = serde_json::from_str(changeset_json).ok()?;
+) -> Result<Option<BdkWallet>, String> {
+    let changeset: ChangeSet = serde_json::from_str(changeset_json)
+        .map_err(|e| format!("parse bumper changeset JSON: {e}"))?;
     let external = bdk_wallet::template::Bip84(xprv, KeychainKind::External);
     let change = bdk_wallet::template::Bip84(xprv, KeychainKind::Internal);
     BdkWallet::load()
@@ -429,8 +432,7 @@ fn try_load_bip84_from_changeset(
         .extract_keys()
         .check_network(bdk_network)
         .load_wallet_no_persist(changeset)
-        .ok()
-        .flatten()
+        .map_err(|e| format!("load bumper BIP84 changeset: {e}"))
 }
 
 /// Load a BIP84 wallet from changeset JSON, or create empty when missing/unusable.
@@ -442,8 +444,19 @@ pub(crate) fn create_or_load_bip84_wallet(
 ) -> Result<(BdkWallet, bool)> {
     let bdk_network = bumper_bdk_network(network);
     if let Some(json) = changeset_json {
-        if let Some(loaded) = try_load_bip84_from_changeset(xprv, bdk_network, json) {
-            return Ok((loaded, false));
+        match try_load_bip84_from_changeset(xprv, bdk_network, json) {
+            Ok(Some(loaded)) => return Ok((loaded, false)),
+            Ok(None) => {
+                tracing::warn!(
+                    "bumper BIP84 changeset hydrated to no wallet; creating empty wallet"
+                );
+            }
+            Err(reason) => {
+                tracing::warn!(
+                    reason,
+                    "bumper BIP84 changeset hydrate failed; creating empty wallet"
+                );
+            }
         }
     }
     let external = bdk_wallet::template::Bip84(xprv, KeychainKind::External);
@@ -526,5 +539,44 @@ mod onchain_wallet_scan_kind_tests {
         assert_eq!(bumper_bdk_network(Network::Signet), Network::Signet);
         assert_eq!(bumper_bdk_network(Network::Bitcoin), Network::Bitcoin);
         assert_eq!(bumper_bdk_network(Network::Regtest), Network::Regtest);
+    }
+
+    fn crypto_style_bip84_descriptor_strings(xprv: Xpriv) -> (String, String) {
+        (
+            format!("wpkh({xprv}/84'/1'/0'/0/*)"),
+            format!("wpkh({xprv}/84'/1'/0'/1/*)"),
+        )
+    }
+
+    #[test]
+    fn crypto_style_wpkh_descriptor_changeset_loads_in_ark_bdk() {
+        let xprv = test_xprv(Network::Signet);
+        let (external, internal) = crypto_style_bip84_descriptor_strings(xprv);
+        let mut crypto_wallet = bdk_wallet::Wallet::create(external, internal)
+            .network(Network::Signet)
+            .create_wallet_no_persist()
+            .expect("crypto-style create");
+        let revealed = crypto_wallet
+            .next_unused_address(KeychainKind::External)
+            .address;
+        let changeset = crypto_wallet.take_staged().expect("staged");
+        let changeset_json = serde_json::to_string(&changeset).expect("serialize");
+
+        let (loaded, used_empty) =
+            create_or_load_bip84_wallet(xprv, Network::Signet, Some(&changeset_json))
+                .expect("load crypto-style changeset");
+        assert!(
+            !used_empty,
+            "crypto-style wpkh(xprv/84'/…) changeset must load, not fall back to empty"
+        );
+        assert_eq!(
+            loaded.peek_address(KeychainKind::External, 0).address,
+            revealed
+        );
+    }
+
+    #[test]
+    fn bumper_full_scan_parallel_requests_matches_crypto() {
+        assert_eq!(super::BUMPER_FULL_SCAN_PARALLEL_REQUESTS, 2);
     }
 }

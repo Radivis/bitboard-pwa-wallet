@@ -5,8 +5,11 @@ import {
   loadWalletSecretsPayload,
   updateWalletSecretsEncryptedPayloadWithRetry,
 } from '@/db'
+import {
+  BUMPER_ACCOUNT_ID,
+  BUMPER_ADDRESS_TYPE,
+} from '@/lib/wallet/bumper-segwit0-policy'
 import { findDescriptorWallet } from '@/lib/wallet/descriptor-wallet-manager'
-import { AddressType } from '@/lib/wallet/wallet-domain-types'
 import type { BitcoinNetwork, DescriptorWalletData } from '@/lib/wallet/wallet-domain-types'
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
 import type { EncryptedBlobForDb } from '@/workers/crypto-api'
@@ -34,8 +37,8 @@ export async function ensureSegwit0DescriptorRow(params: {
   const existing = findDescriptorWallet({
     secretsPayload,
     network,
-    addressType: AddressType.SegWit,
-    accountId: 0,
+    addressType: BUMPER_ADDRESS_TYPE,
+    accountId: BUMPER_ACCOUNT_ID,
   })
   if (existing) {
     return existing
@@ -43,25 +46,32 @@ export async function ensureSegwit0DescriptorRow(params: {
 
   const encryptedBlobs = await getWalletSecretsEncrypted(walletDb, walletId)
   const { createDescriptorWalletRowIfMissing } = useCryptoStore.getState()
-  const createRowResponse = await createDescriptorWalletRowIfMissing({
-    encryptedPayload: encryptedBlobs.payload,
-    encryptedMnemonic: encryptedBlobs.mnemonic,
-    targetNetwork: network,
-    targetAddressType: AddressType.SegWit,
-    targetAccountId: 0,
+  let ensuredRow: DescriptorWalletData | null = null
+  await updateWalletSecretsEncryptedPayloadWithRetry({
+    walletDb,
+    walletId,
+    transform: async (currentPayload) => {
+      const createRowResponse = await createDescriptorWalletRowIfMissing({
+        encryptedPayload: currentPayload,
+        encryptedMnemonic: encryptedBlobs.mnemonic,
+        targetNetwork: network,
+        targetAddressType: BUMPER_ADDRESS_TYPE,
+        targetAccountId: BUMPER_ACCOUNT_ID,
+      })
+      if (createRowResponse.encryptedMnemonicToStore !== null) {
+        throw new Error(
+          'createDescriptorWalletRowIfMissing returned mnemonic update, which is unsupported in payload-only CAS writes',
+        )
+      }
+      ensuredRow = createRowResponse.descriptorWalletData
+      if (createRowResponse.encryptedPayloadToStore !== null) {
+        return workerBlobToPersistence(createRowResponse.encryptedPayloadToStore)
+      }
+      return currentPayload
+    },
   })
-  if (createRowResponse.encryptedMnemonicToStore !== null) {
-    throw new Error(
-      'createDescriptorWalletRowIfMissing returned mnemonic update, which is unsupported in payload-only CAS writes',
-    )
+  if (ensuredRow == null) {
+    throw new Error('ensureSegwit0DescriptorRow CAS completed without a SegWit-0 row')
   }
-  const encryptedPayloadToStore = createRowResponse.encryptedPayloadToStore
-  if (encryptedPayloadToStore !== null) {
-    await updateWalletSecretsEncryptedPayloadWithRetry({
-      walletDb,
-      walletId,
-      transform: async () => workerBlobToPersistence(encryptedPayloadToStore),
-    })
-  }
-  return createRowResponse.descriptorWalletData
+  return ensuredRow
 }

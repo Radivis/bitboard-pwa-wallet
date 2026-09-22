@@ -1,12 +1,18 @@
 import { AddressType } from '@/lib/wallet/wallet-domain-types'
 
+export const BUMPER_ADDRESS_TYPE = AddressType.SegWit
+export const BUMPER_ACCOUNT_ID = 0
+
 export type BumperHydrateSource = 'live-export' | 'persisted-row' | 'empty'
 
 export function isLoadedSegwit0Triple(loaded: {
   addressType: AddressType | string | null
   accountId: number | null
 } | null): boolean {
-  return loaded?.addressType === AddressType.SegWit && loaded.accountId === 0
+  return (
+    loaded?.addressType === BUMPER_ADDRESS_TYPE &&
+    loaded.accountId === BUMPER_ACCOUNT_ID
+  )
 }
 
 export function persistedChangesetIsUsable(
@@ -44,10 +50,9 @@ export function bumperFullScanDoneForHydrate(input: {
 
 export function bumperHydrateSource(input: {
   loadedIsSegwit0: boolean
-  onchainLoadPhaseLoaded: boolean
   persistedChangesetUsable: boolean
 }): BumperHydrateSource {
-  if (input.loadedIsSegwit0 && input.onchainLoadPhaseLoaded) {
+  if (input.loadedIsSegwit0) {
     return 'live-export'
   }
   if (input.persistedChangesetUsable) {
@@ -60,7 +65,8 @@ export function shouldPersistBumperSegwit0Sidecar(input: {
   loadedAddressType: AddressType | string | null
   loadedAccountId: number | null
 }): boolean {
-  return !(
-    input.loadedAddressType === AddressType.SegWit && input.loadedAccountId === 0
-  )
+  return !isLoadedSegwit0Triple({
+    addressType: input.loadedAddressType,
+    accountId: input.loadedAccountId,
+  })
 }

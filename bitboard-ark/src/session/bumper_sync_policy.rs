@@ -45,15 +45,6 @@ pub(crate) fn bumper_confirmed_balance_sats(
     synced_wallet_confirmed_sats.saturating_add(tip_address_confirmed_sats)
 }
 
-/// LIFE-ARK-BUMP-03: Arkade may persist SegWit-0 only when it is not the crypto slot.
-#[cfg_attr(not(test), allow(dead_code))]
-pub(crate) fn arkade_should_persist_segwit0_sidecar(
-    loaded_address_type: Option<&str>,
-    loaded_account_id: Option<i32>,
-) -> bool {
-    !(loaded_address_type == Some("segwit") && loaded_account_id == Some(0))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -135,22 +126,5 @@ mod tests {
     fn bumper_info_should_full_sync_wallet_after_failed_scan() {
         let phase = bumper_sync_phase_after_wallet_scan(false);
         assert!(bumper_info_should_full_sync_wallet(phase));
-    }
-
-    #[test]
-    fn arkade_should_persist_segwit0_sidecar_is_false_only_for_loaded_segwit0() {
-        assert!(!arkade_should_persist_segwit0_sidecar(
-            Some("segwit"),
-            Some(0)
-        ));
-        assert!(arkade_should_persist_segwit0_sidecar(
-            Some("taproot"),
-            Some(0)
-        ));
-        assert!(arkade_should_persist_segwit0_sidecar(
-            Some("segwit"),
-            Some(1)
-        ));
-        assert!(arkade_should_persist_segwit0_sidecar(None, None));
     }
 }
