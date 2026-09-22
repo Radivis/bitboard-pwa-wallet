@@ -10,8 +10,9 @@ pub(crate) enum BumperWalletSyncPhase {
 }
 
 /// LIFE-ARK-BUMP-01: start a wallet-wide Esplora scan when none has succeeded yet.
+/// The scan may be incremental when the bumper already completed a full scan.
 /// `Failed` is retryable; `Running` and `Done` are not.
-pub(crate) fn bumper_info_should_full_sync_wallet(phase: BumperWalletSyncPhase) -> bool {
+pub(crate) fn bumper_info_should_start_wallet_scan(phase: BumperWalletSyncPhase) -> bool {
     matches!(
         phase,
         BumperWalletSyncPhase::NotStarted | BumperWalletSyncPhase::Failed
@@ -76,17 +77,17 @@ mod tests {
     }
 
     #[test]
-    fn bumper_info_should_full_sync_wallet_is_true_when_not_started_or_failed() {
-        assert!(bumper_info_should_full_sync_wallet(
+    fn bumper_info_should_start_wallet_scan_is_true_when_not_started_or_failed() {
+        assert!(bumper_info_should_start_wallet_scan(
             BumperWalletSyncPhase::NotStarted
         ));
-        assert!(bumper_info_should_full_sync_wallet(
+        assert!(bumper_info_should_start_wallet_scan(
             BumperWalletSyncPhase::Failed
         ));
-        assert!(!bumper_info_should_full_sync_wallet(
+        assert!(!bumper_info_should_start_wallet_scan(
             BumperWalletSyncPhase::Running
         ));
-        assert!(!bumper_info_should_full_sync_wallet(
+        assert!(!bumper_info_should_start_wallet_scan(
             BumperWalletSyncPhase::Done
         ));
     }
@@ -123,8 +124,16 @@ mod tests {
     }
 
     #[test]
-    fn bumper_info_should_full_sync_wallet_after_failed_scan() {
+    fn bumper_info_should_start_wallet_scan_after_failed_scan() {
         let phase = bumper_sync_phase_after_wallet_scan(false);
-        assert!(bumper_info_should_full_sync_wallet(phase));
+        assert!(bumper_info_should_start_wallet_scan(phase));
+    }
+
+    #[test]
+    fn bumper_info_should_start_wallet_scan_retries_after_failed_then_stops_after_success() {
+        let after_failed_scan = bumper_sync_phase_after_wallet_scan(false);
+        assert!(bumper_info_should_start_wallet_scan(after_failed_scan));
+        let after_retry_success = bumper_sync_phase_after_wallet_scan(true);
+        assert!(!bumper_info_should_start_wallet_scan(after_retry_success));
     }
 }

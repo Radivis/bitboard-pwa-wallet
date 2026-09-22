@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- The data for the Arkade boarding wallet is now peristed next to the already existing onchain wallet data enabling incremental syncs
+- The data for the Arkade boarding wallet is now persisted next to the already existing onchain wallet data enabling incremental syncs
 
 ### Changed
 
@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- The onchain wallet now does a regular sync on unlock or network change, not a full scan
+- The onchain wallet now does an incremental Esplora sync on unlock or network change, not a full scan
 - Removed extra onchain wallet sync stemming from periodic sync firing once, even when deactivated
 
 ### Security

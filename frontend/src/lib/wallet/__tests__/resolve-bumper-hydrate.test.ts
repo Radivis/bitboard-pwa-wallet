@@ -81,6 +81,38 @@ describe('CQ-02 resolveBumperHydrateForSessionOpen', () => {
     expect(hydrate.bumperChangesetJson).toBe('{"local":{"live":true}}')
   })
 
+  it('network-switch live-export uses the target SegWit-0 row fullScanDone', async () => {
+    loadedDescriptorWallet.current = {
+      networkMode: 'testnet',
+      addressType: AddressType.SegWit,
+      accountId: 0,
+    }
+    ensureSegwit0DescriptorRow.mockResolvedValue({
+      network: 'testnet',
+      addressType: AddressType.SegWit,
+      accountId: 0,
+      externalDescriptor: 'wpkh(xprv-testnet)',
+      internalDescriptor: 'wpkh(xprv-testnet-int)',
+      changeSet: '{"local":{"testnet":true}}',
+      fullScanDone: false,
+    })
+
+    const hydrate = await resolveBumperHydrateForSessionOpen({
+      walletId: 1,
+      networkMode: 'testnet',
+    })
+
+    expect(ensureSegwit0DescriptorRow).toHaveBeenCalledWith({
+      walletId: 1,
+      network: 'testnet',
+    })
+    expect(exportChangeset).toHaveBeenCalled()
+    expect(hydrate).toEqual({
+      bumperChangesetJson: '{"local":{"live":true}}',
+      bumperFullScanDone: false,
+    })
+  })
+
   it('uses persisted row when the loaded triple is not SegWit-0', async () => {
     loadedDescriptorWallet.current = {
       networkMode: 'signet',

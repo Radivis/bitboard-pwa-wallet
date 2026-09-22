@@ -12,7 +12,7 @@ use super::snapshot_ops::{
 };
 use crate::session::ArkSession;
 use crate::session::bumper_sync_policy::{
-    BumperWalletSyncPhase, bumper_confirmed_balance_sats, bumper_info_should_full_sync_wallet,
+    BumperWalletSyncPhase, bumper_confirmed_balance_sats, bumper_info_should_start_wallet_scan,
     bumper_sync_phase_after_wallet_scan, tip_address_confirmed_sats,
 };
 use crate::session::mappers::parse_onchain_address;
@@ -44,7 +44,7 @@ fn map_missing_blocktime_completion_inputs(
 
 impl ArkSession {
     async fn ensure_bumper_wallet_synced_once(&self) -> ArkResult<()> {
-        if !bumper_info_should_full_sync_wallet(self.onchain_wallet_sync_phase.get()) {
+        if !bumper_info_should_start_wallet_scan(self.onchain_wallet_sync_phase.get()) {
             return Ok(());
         }
         self.onchain_wallet_sync_phase
@@ -60,7 +60,7 @@ impl ArkSession {
         // the displayed unused address via /utxo so a 4s underfunded refetch cannot
         // restart a scripthash /txs HD walk.
         let did_wallet_wide_sync =
-            bumper_info_should_full_sync_wallet(self.onchain_wallet_sync_phase.get());
+            bumper_info_should_start_wallet_scan(self.onchain_wallet_sync_phase.get());
         self.ensure_bumper_wallet_synced_once().await?;
         let address = self.client.onchain_wallet_address()?;
         let wallet_confirmed_sats = self.client.onchain_wallet_balance()?.confirmed.to_sat();

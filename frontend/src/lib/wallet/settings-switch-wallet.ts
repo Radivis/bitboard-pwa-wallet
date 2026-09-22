@@ -146,33 +146,34 @@ export async function switchDescriptorWallet(params: {
         accountId: targetAccountId,
       })
 
-    if (targetNetworkMode !== 'lab') {
-      await refreshWalletStoreFromLoadedBdk()
-      // Stale-banner query caches per descriptor wallet persisted `lastSuccessfulEsploraSyncAt`.
-      // After switch we cleared lastSyncTime and repopulated balance/txs from BDK; invalidate
-      // so the dashboard refetches metadata for the new descriptor wallet before Esplora sync runs.
-      invalidateOnchainDashboardQueries()
-    }
+      if (targetNetworkMode !== 'lab') {
+        await refreshWalletStoreFromLoadedBdk()
+        // Stale-banner query caches per descriptor wallet persisted `lastSuccessfulEsploraSyncAt`.
+        // After switch we cleared lastSyncTime and repopulated balance/txs from BDK; invalidate
+        // so the dashboard refetches metadata for the new descriptor wallet before Esplora sync runs.
+        invalidateOnchainDashboardQueries()
+      }
 
-    if (targetNetworkMode !== 'lab') {
-      onPhase?.(syncingTargetNetworkMessage(targetNetworkMode))
-      const fullScanNeeded =
-        !descriptorWallet.fullScanDone ||
-        usedEmptyChainFallback
-      await syncLoadedDescriptorWalletWithEsplora({
-        networkMode: targetNetworkMode,
-        activeWalletId,
-        targetNetwork,
-        targetAddressType,
-        targetAccountId,
-        fullScanNeeded,
-      })
-      // Always return to `unlocked` so dashboard Sync/UX is usable. On `syncFailed`,
-      // an error toast was shown; chain data in WASM may still be stale.
-    } else {
-      setWalletStatus('unlocked')
-    }
-  })} catch (err) {
+      if (targetNetworkMode !== 'lab') {
+        onPhase?.(syncingTargetNetworkMessage(targetNetworkMode))
+        const fullScanNeeded =
+          !descriptorWallet.fullScanDone ||
+          usedEmptyChainFallback
+        await syncLoadedDescriptorWalletWithEsplora({
+          networkMode: targetNetworkMode,
+          activeWalletId,
+          targetNetwork,
+          targetAddressType,
+          targetAccountId,
+          fullScanNeeded,
+        })
+        // Always return to `unlocked` so dashboard Sync/UX is usable. On `syncFailed`,
+        // an error toast was shown; chain data in WASM may still be stale.
+      } else {
+        setWalletStatus('unlocked')
+      }
+    })
+  } catch (err) {
     const message = toUserFriendlySwitchError(err)
     const detail = errorMessage(err)
     toast.error(

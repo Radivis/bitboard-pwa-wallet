@@ -213,7 +213,7 @@ where
         let (update, mark_full_scan_done) = self.fetch_esplora_update().await?;
         self.inner
             .write()
-            .expect("write lock")
+            .map_err(|e| Error::consumer(format!("failed to get write lock: {e}")))?
             .apply_update(update)
             .map_err(Error::wallet)?;
         if mark_full_scan_done {
