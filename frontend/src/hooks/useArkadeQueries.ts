@@ -1125,7 +1125,7 @@ export function useArkadeBumperInfoQuery(
         await persistBumperSidecarAfterWalletWideSyncIfNeeded({
           walletId: activeWalletId,
           networkMode,
-          didWalletWideSync: info.didWalletWideSync,
+          needsBumperWalletSync: info.needsBumperWalletSync === true,
         })
       }
       return info

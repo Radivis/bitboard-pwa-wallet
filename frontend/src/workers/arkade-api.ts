@@ -342,7 +342,7 @@ export interface ArkadeOnchainBumperInfo {
   balanceSats: number
   unilateralExitTimelockBlocks?: number
   unilateralExitTimelockSeconds?: number
-  didWalletWideSync?: boolean
+  needsBumperWalletSync?: boolean
 }
 
 export interface ArkadeCollaborativeExitParams {

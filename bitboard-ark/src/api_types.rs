@@ -342,7 +342,8 @@ pub struct OnchainBumperInfoDto {
     pub unilateral_exit_timelock_blocks: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unilateral_exit_timelock_seconds: Option<u64>,
-    pub did_wallet_wide_sync: bool,
+    /// True when this `onchain_bumper_info` call will start a wallet-wide bumper scan.
+    pub needs_bumper_wallet_sync: bool,
 }
 
 #[derive(Debug, Serialize)]

@@ -69,9 +69,9 @@ export async function persistBumperSidecarBestEffort(
 export async function persistBumperSidecarAfterWalletWideSyncIfNeeded(params: {
   walletId: number
   networkMode: NetworkMode
-  didWalletWideSync: boolean
+  needsBumperWalletSync: boolean
 }): Promise<void> {
-  if (!params.didWalletWideSync) {
+  if (!params.needsBumperWalletSync) {
     return
   }
   await persistBumperSidecarBestEffort(

@@ -83,7 +83,7 @@ describe('persistBumperSidecarAfterWalletWideSyncIfNeeded', () => {
     await persistBumperSidecarAfterWalletWideSyncIfNeeded({
       walletId: 4,
       networkMode: 'signet',
-      didWalletWideSync: false,
+      needsBumperWalletSync: false,
     })
 
     expect(exportOnchainWalletChangeset).not.toHaveBeenCalled()
@@ -94,7 +94,7 @@ describe('persistBumperSidecarAfterWalletWideSyncIfNeeded', () => {
     await persistBumperSidecarAfterWalletWideSyncIfNeeded({
       walletId: 4,
       networkMode: 'signet',
-      didWalletWideSync: true,
+      needsBumperWalletSync: true,
     })
 
     expect(persistBumperSegwit0SidecarIfAllowed).toHaveBeenCalled()
