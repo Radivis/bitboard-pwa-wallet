@@ -81,12 +81,6 @@ export async function switchDescriptorWallet(params: {
     setLastSyncTime,
   } = useWalletStore.getState()
 
-  const isLiveNetworkSwitch =
-    phaseContext === 'network' &&
-    currentNetworkMode !== targetNetworkMode &&
-    currentNetworkMode !== 'lab' &&
-    targetNetworkMode !== 'lab'
-
   try {
     await awaitOnchainQuiescenceBeforeDescriptorMutation()
 

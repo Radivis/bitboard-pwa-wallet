@@ -195,7 +195,7 @@ describe('switchDescriptorWallet', () => {
       targetNetwork: 'testnet',
       targetAddressType: 'taproot',
       targetAccountId: 0,
-      fullScanNeeded: true,
+      fullScanNeeded: false,
     })
     expect(mockCommitLoadedDescriptorWallet).toHaveBeenCalledWith({
       networkMode: 'testnet',
@@ -231,12 +231,32 @@ describe('switchDescriptorWallet', () => {
     )
   })
 
-  it('forces full scan when switching between live networks even if fullScanDone is set', async () => {
+  it('uses incremental Esplora when target fullScanDone is set, including live network switches', async () => {
     await switchDescriptorWallet({
       targetNetworkMode: 'mainnet',
       targetAddressType: 'taproot',
       targetAccountId: 0,
       currentNetworkMode: 'testnet',
+      currentAddressType: 'taproot',
+      currentAccountId: 0,
+    })
+
+    expect(mockSyncLoadedDescriptorWalletWithEsplora).toHaveBeenCalledWith(
+      expect.objectContaining({ fullScanNeeded: false }),
+    )
+  })
+
+  it('full-scans when the target descriptor wallet has not completed a full scan', async () => {
+    vi.mocked(resolveDescriptorWallet).mockResolvedValue({
+      ...descriptorWallet,
+      fullScanDone: false,
+    })
+
+    await switchDescriptorWallet({
+      targetNetworkMode: 'testnet',
+      targetAddressType: 'taproot',
+      targetAccountId: 0,
+      currentNetworkMode: 'signet',
       currentAddressType: 'taproot',
       currentAccountId: 0,
     })

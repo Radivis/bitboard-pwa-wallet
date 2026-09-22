@@ -108,9 +108,10 @@ flowchart TB
 
 `fullScanNeeded` is true if any of:
 
-- Switch between two **live** networks (network card only; not address-type switch). This always forces a full scan today to avoid pathological sync states when moving between chains (e.g. stale incremental sync anchoring); a more selective incremental-vs-full policy may replace it later.
 - Target descriptor wallet has `fullScanDone === false`.
 - Persisted changeset could not be loaded and an empty chain was used (`usedEmptyChainFallback`).
+
+Live ↔ live network switches use incremental Esplora when the target row already has `fullScanDone`.
 
 Defined in `switchDescriptorWallet`; executed inside `syncLoadedDescriptorWalletWithEsplora`.
 
