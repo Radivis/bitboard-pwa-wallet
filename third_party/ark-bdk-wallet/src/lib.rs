@@ -152,6 +152,34 @@ where
         Ok(now.as_secs())
     }
 
+    /// Esplora-sync unused revealed scripts (displayed tip + unused change) and apply into BDK.
+    pub async fn sync_unused_spks(&self) -> Result<(), Error> {
+        let now_secs = Self::scan_unix_secs()?;
+        let update = self.unused_spk_esplora_update(now_secs).await?;
+        self.inner
+            .write()
+            .map_err(|e| Error::consumer(format!("failed to get write lock: {e}")))?
+            .apply_update(update)
+            .map_err(Error::wallet)?;
+        Ok(())
+    }
+
+    async fn unused_spk_esplora_update(&self, now_secs: u64) -> Result<bdk_wallet::Update, Error> {
+        let request = {
+            let wallet = self
+                .inner
+                .read()
+                .map_err(|e| Error::consumer(format!("failed to get read lock: {e}")))?;
+            unused_spk_sync_request(&wallet, now_secs)
+        };
+        self.client
+            .sync(request, BUMPER_ESPLORA_PARALLEL_REQUESTS)
+            .await
+            .map_err(Error::wallet)
+            .context("Failed syncing unused bumper scripts")
+            .map(Into::into)
+    }
+
     async fn incremental_esplora_update(&self, now_secs: u64) -> Result<bdk_wallet::Update, Error> {
         let request = self
             .inner
@@ -393,6 +421,19 @@ pub(crate) enum OnchainWalletScanKind {
     Incremental,
 }
 
+/// Incremental sync of unused revealed SPKs (the displayed tip plus unused change).
+pub(crate) fn unused_spk_sync_request(
+    wallet: &BdkWallet,
+    start_time: u64,
+) -> bdk_wallet::chain::spk_client::SyncRequest<(KeychainKind, u32)> {
+    use bdk_wallet::chain::keychain_txout::SyncRequestBuilderExt;
+    use bdk_wallet::chain::spk_client::SyncRequest;
+    SyncRequest::builder_at(start_time)
+        .chain_tip(wallet.latest_checkpoint())
+        .unused_spks_from_indexer(wallet.spk_index())
+        .build()
+}
+
 /// After the first successful full scan in this process, later `sync()` calls must not
 /// walk unused HD gap via `/scripthash/.../txs`.
 pub(crate) fn onchain_wallet_scan_kind(completed_full_scan: bool) -> OnchainWalletScanKind {
@@ -578,5 +619,27 @@ mod onchain_wallet_scan_kind_tests {
     #[test]
     fn bumper_full_scan_parallel_requests_matches_crypto() {
         assert_eq!(super::BUMPER_FULL_SCAN_PARALLEL_REQUESTS, 2);
+    }
+
+    #[test]
+    fn unused_spk_sync_request_includes_next_unused_external() {
+        let xprv = test_xprv(Network::Signet);
+        let (mut wallet, _) =
+            create_or_load_bip84_wallet(xprv, Network::Signet, None).expect("create");
+        let unused = wallet.next_unused_address(KeychainKind::External).address;
+        let mut request = super::unused_spk_sync_request(&wallet, 1);
+        let scripts: Vec<_> = request
+            .iter_spks_with_expected_txids()
+            .map(|item| item.spk)
+            .collect();
+        assert!(
+            scripts.contains(&unused.script_pubkey()),
+            "unused-SPK sync must include the displayed next-unused address"
+        );
+        assert!(
+            scripts.len() <= 2,
+            "unused-SPK sync must not walk the full revealed HD set, got {}",
+            scripts.len()
+        );
     }
 }

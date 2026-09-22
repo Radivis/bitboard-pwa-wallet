@@ -462,7 +462,7 @@ Lightning is optional — absence of connections is normal `not-configured`, not
 5. `refreshArkadeStoreFromLoadedWasm` — balance, payments, **receive address stable**
 6. Set `activeArkadeAccountId` when **load completes** (not when sync completes)
 
-Bumper BDK Esplora is **not** started on load (LIFE-ARK-LOAD-04). Session open hydrates the bumper from the `(network, segwit, 0)` descriptor row (or a live crypto export when that triple is loaded). The first `onchain_bumper_info` or exit proceed/complete then syncs; that scan is incremental when `fullScanDone` was hydrated (LIFE-ARK-BUMP-01/02). Later bumper-info polls use cached BDK confirmed balance plus a tip-address `/utxo` probe. After a wallet-wide bumper sync, Arkade persists that SegWit-0 row only when it is **not** the crypto slot (LIFE-ARK-BUMP-03).
+Bumper BDK Esplora is **not** started on load (LIFE-ARK-LOAD-04). Session open hydrates the bumper from the `(network, segwit, 0)` descriptor row (or a live crypto export when that triple is loaded). The first `onchain_bumper_info` or exit proceed/complete then syncs; that scan is incremental when `fullScanDone` was hydrated (LIFE-ARK-BUMP-01/02). Later bumper-info polls incremental-sync unused revealed SPKs into BDK and report confirmed only. After a wallet-wide bumper sync, Arkade persists that SegWit-0 row only when it is **not** the crypto slot (LIFE-ARK-BUMP-03).
 
 **Readiness contract:**
 

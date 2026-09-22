@@ -1,6 +1,6 @@
 # Unlock Esplora: full scan instead of incremental sync
 
-Implemented: unlock uses incremental Esplora when `fullScanDone`; periodic query is gated on `refetchInterval`; Arkade session open does not await or start bumper `full_scan`. Bumper Esplora is lazy (first `onchain_bumper_info` / exit proceed); later bumper polls use tip-address `/utxo`, not another HD `/txs` walk. See the original diagnosis below.
+Implemented: unlock uses incremental Esplora when `fullScanDone`; periodic query is gated on `refetchInterval`; Arkade session open does not await or start bumper `full_scan`. Bumper Esplora is lazy (first `onchain_bumper_info` / exit proceed); later bumper polls incremental-sync unused revealed SPKs into BDK, not another HD `/txs` walk. See the original diagnosis below.
 
 Handoff for an implementing agent. Branch: `fix-full-sync-instead-of-sync`.
 

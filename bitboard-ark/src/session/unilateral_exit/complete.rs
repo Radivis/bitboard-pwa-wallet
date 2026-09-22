@@ -12,13 +12,12 @@ use super::snapshot_ops::{
 };
 use crate::session::ArkSession;
 use crate::session::bumper_sync_policy::{
-    BumperWalletSyncPhase, bumper_confirmed_balance_sats, bumper_info_should_start_wallet_scan,
+    BumperWalletSyncPhase, bumper_info_balance_sats, bumper_info_should_start_wallet_scan,
     bumper_sync_phase_after_wallet_scan, completion_estimate_should_sync_bumper_wallet,
-    completion_spend_should_sync_bumper_wallet, tip_address_confirmed_sats,
+    completion_spend_should_sync_bumper_wallet,
 };
 use crate::session::mappers::parse_onchain_address;
 use crate::session::open::sync_onchain_wallet_with_retries;
-use ark_client::Blockchain;
 
 fn resolve_completion_fee_rate_sat_per_vb(override_rate_sat_per_vb: Option<f64>) -> f64 {
     override_rate_sat_per_vb
@@ -82,19 +81,19 @@ impl ArkSession {
     }
 
     pub async fn onchain_bumper_info(&self) -> ArkResult<OnchainBumperInfoDto> {
-        // LIFE-ARK-BUMP-01: one wallet-wide Esplora scan per session. Later polls probe
-        // the displayed unused address via /utxo so a 4s underfunded refetch cannot
-        // restart a scripthash /txs HD walk.
+        // LIFE-ARK-BUMP-01: one wallet-wide Esplora scan per session. Later polls
+        // incremental-sync unused revealed SPKs (the displayed tip) into BDK, then
+        // report confirmed only — so a 4s underfunded refetch cannot restart an HD walk.
         let needs_bumper_wallet_sync =
             bumper_info_should_start_wallet_scan(self.bumper_wallet_sync_phase.get());
         self.ensure_bumper_wallet_synced_once().await?;
         let address = self.client.onchain_wallet_address()?;
-        let wallet_confirmed_sats = self.client.onchain_wallet_balance()?.confirmed.to_sat();
-        let tip_utxos = self.client.blockchain().find_outpoints(&address).await?;
-        let balance_sats = bumper_confirmed_balance_sats(
-            wallet_confirmed_sats,
-            tip_address_confirmed_sats(&tip_utxos),
-        );
+        self.onchain_wallet
+            .sync_unused_spks()
+            .await
+            .map_err(|error| ArkWasmError::Wallet(error.to_string()))?;
+        let balance_sats =
+            bumper_info_balance_sats(self.client.onchain_wallet_balance()?.confirmed.to_sat());
         let server_info = self.client.server_info()?;
         let (unilateral_exit_timelock_blocks, unilateral_exit_timelock_seconds) =
             crate::session::mappers::unilateral_exit_timelock_parts(

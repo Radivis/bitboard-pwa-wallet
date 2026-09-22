@@ -145,9 +145,10 @@ feature:
           onchain_bumper_info runs at most one wallet-wide bumper Esplora scan
           per session. That scan is incremental when the bumper BDK was hydrated
           from a SegWit-0 changeset with fullScanDone; otherwise it is a full
-          scan. Later bumper-info and underfunded-exit polls use the cached BDK
-          confirmed balance plus a tip-address /utxo probe, not another HD
-          /scripthash/txs walk. proceed and complete always call
+          scan. Later bumper-info and underfunded-exit polls incremental-sync
+          unused revealed SPKs (the displayed tip) into BDK and report
+          confirmed only — not another HD /scripthash/txs walk and not a
+          tip-address /utxo overlay. proceed and complete always call
           sync_onchain_wallet_with_retries before broadcast or completion spend.
           Completion fee estimate uses the same once-per-session scan as
           onchain_bumper_info (not another HD walk on destination / fee-rate refetch).
