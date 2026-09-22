@@ -49,7 +49,7 @@ pub struct ArkSession {
     network_mode: NetworkMode,
     operator_identity: Mutex<OperatorIdentity>,
     autonomous_mode: Cell<bool>,
-    onchain_wallet_sync_phase: Cell<BumperWalletSyncPhase>,
+    bumper_wallet_sync_phase: Cell<BumperWalletSyncPhase>,
 }
 
 impl ArkSession {

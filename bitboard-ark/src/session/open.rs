@@ -293,7 +293,7 @@ impl ArkSession {
             network_mode,
             operator_identity,
             autonomous_mode: Cell::new(autonomous_mode),
-            onchain_wallet_sync_phase: Cell::new(
+            bumper_wallet_sync_phase: Cell::new(
                 super::bumper_sync_policy::BumperWalletSyncPhase::NotStarted,
             ),
         };
@@ -303,10 +303,10 @@ impl ArkSession {
     }
 
     pub async fn sync_onchain_wallet_best_effort(&self) {
-        self.onchain_wallet_sync_phase
+        self.bumper_wallet_sync_phase
             .set(super::bumper_sync_policy::BumperWalletSyncPhase::Running);
         let scan_succeeded = sync_onchain_wallet_for_session_open(&self.client).await;
-        self.onchain_wallet_sync_phase
+        self.bumper_wallet_sync_phase
             .set(super::bumper_sync_policy::bumper_sync_phase_after_wallet_scan(scan_succeeded));
     }
 

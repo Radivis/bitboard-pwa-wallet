@@ -59,10 +59,10 @@ fn map_missing_blocktime_completion_inputs(
 
 impl ArkSession {
     async fn sync_bumper_wallet_and_record_phase(&self) -> ArkResult<()> {
-        self.onchain_wallet_sync_phase
+        self.bumper_wallet_sync_phase
             .set(BumperWalletSyncPhase::Running);
         let sync_result = sync_onchain_wallet_with_retries(&self.client).await;
-        self.onchain_wallet_sync_phase
+        self.bumper_wallet_sync_phase
             .set(bumper_sync_phase_after_wallet_scan(sync_result.is_ok()));
         sync_result
     }
@@ -76,7 +76,7 @@ impl ArkSession {
 
     async fn ensure_bumper_wallet_synced_once(&self) -> ArkResult<()> {
         self.sync_bumper_wallet_when(bumper_info_should_start_wallet_scan(
-            self.onchain_wallet_sync_phase.get(),
+            self.bumper_wallet_sync_phase.get(),
         ))
         .await
     }
@@ -86,7 +86,7 @@ impl ArkSession {
         // the displayed unused address via /utxo so a 4s underfunded refetch cannot
         // restart a scripthash /txs HD walk.
         let did_wallet_wide_sync =
-            bumper_info_should_start_wallet_scan(self.onchain_wallet_sync_phase.get());
+            bumper_info_should_start_wallet_scan(self.bumper_wallet_sync_phase.get());
         self.ensure_bumper_wallet_synced_once().await?;
         let address = self.client.onchain_wallet_address()?;
         let wallet_confirmed_sats = self.client.onchain_wallet_balance()?.confirmed.to_sat();
@@ -124,10 +124,10 @@ impl ArkSession {
         let destination = parse_onchain_address(&params.destination_address, self.network())?;
         let fee_rate_sat_per_vb =
             resolve_completion_fee_rate_sat_per_vb(params.fee_rate_sat_per_vb);
-        // LIFE-ARK-BUMP-01 / SE-04: session open no longer syncs the bumper.
+        // LIFE-ARK-BUMP-01: session open no longer syncs the bumper.
         // Complete always Esplora-syncs before selecting coins, like proceed.
         self.sync_bumper_wallet_when(completion_spend_should_sync_bumper_wallet(
-            self.onchain_wallet_sync_phase.get(),
+            self.bumper_wallet_sync_phase.get(),
         ))
         .await?;
         autonomous_complete_unilateral_exit(
@@ -164,7 +164,7 @@ impl ArkSession {
         // Once-per-session scan so fee-rate / destination refetches do not restart an HD walk.
         if let Err(error) = self
             .sync_bumper_wallet_when(completion_estimate_should_sync_bumper_wallet(
-                self.onchain_wallet_sync_phase.get(),
+                self.bumper_wallet_sync_phase.get(),
             ))
             .await
         {
