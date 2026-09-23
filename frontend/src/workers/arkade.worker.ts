@@ -331,7 +331,7 @@ async function closeSessionImpl(): Promise<void> {
 
   activeSessionKey = null
   activeSessionParams = null
-  onchainBumperWalletSyncInFlight = null
+  bumperWalletSyncInFlight = null
   sendPaymentInFlight = null
 }
 
