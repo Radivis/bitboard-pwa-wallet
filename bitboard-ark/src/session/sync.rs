@@ -14,8 +14,9 @@ use crate::incremental_vtxo_sync::{
     user_facing_operator_sync_uses_light_fetch,
 };
 use crate::offchain_snapshot::{
-    dedupe_virtual_tx_outpoints, live_snapshot_outpoints, merge_incremental_vtxo_snapshot,
-    merge_sticky_spent_flags, merge_sticky_unrolled_flags, overlay_changed_vtxo_rows,
+    clear_indexer_unrolled_without_local_finality, dedupe_virtual_tx_outpoints,
+    live_snapshot_outpoints, merge_incremental_vtxo_snapshot, merge_sticky_spent_flags,
+    merge_sticky_unrolled_flags, overlay_changed_vtxo_rows,
     snapshot_from_virtual_tx_outpoints_with_script_lookup, vtxo_list_from_snapshot,
 };
 use crate::persistence::OffchainVtxoSnapshot;
@@ -360,6 +361,7 @@ impl ArkSession {
             &self.wallet_db.vtxo_exit_records(),
         );
         merge_sticky_unrolled_flags(prior_snapshot, &mut snapshot, &sticky_unroll_hosts);
+        clear_indexer_unrolled_without_local_finality(&mut snapshot, &sticky_unroll_hosts);
         merge_sticky_spent_flags(prior_snapshot, &mut snapshot);
         let reconcile = reconcile_exiting_vtxo_records(self, snapshot, prior_snapshot).await?;
         snapshot = reconcile.snapshot;

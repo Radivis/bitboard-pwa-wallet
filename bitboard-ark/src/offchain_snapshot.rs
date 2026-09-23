@@ -459,6 +459,26 @@ pub fn merge_sticky_unrolled_flags(
     }
 }
 
+/// Drop indexer `is_unrolled` unless this wallet has already finalized that virtual tx.
+///
+/// arkd sets the flag when its scanner first sees the outpoint on chain. A settled boarding
+/// output is not an unroll, and a real unroll is not `is_unrolled` here until 6 confirmations.
+/// Call after [`merge_sticky_unrolled_flags`], which restores the flag for hosts in
+/// `confirmed_unroll_host_txids`.
+pub fn clear_indexer_unrolled_without_local_finality(
+    incoming: &mut OffchainVtxoSnapshot,
+    confirmed_unroll_host_txids: &HashSet<String>,
+) {
+    for record in &mut incoming.virtual_tx_outpoints {
+        if record.is_spent || !record.is_unrolled {
+            continue;
+        }
+        if !confirmed_unroll_host_txids.contains(&record.txid) {
+            record.is_unrolled = false;
+        }
+    }
+}
+
 /// Preserve local `is_spent` when ASP indexer lags after on-chain completion.
 pub fn merge_sticky_spent_flags(
     prior: Option<&OffchainVtxoSnapshot>,
@@ -659,8 +679,9 @@ fn generate_outgoing_vtxo_transaction_history(
 #[cfg(test)]
 mod tests {
     use super::{
-        live_snapshot_outpoints, mark_virtual_tx_vtxos_unrolled_in_snapshot,
-        merge_incremental_vtxo_snapshot, merge_sticky_spent_flags, merge_sticky_unrolled_flags,
+        clear_indexer_unrolled_without_local_finality, live_snapshot_outpoints,
+        mark_virtual_tx_vtxos_unrolled_in_snapshot, merge_incremental_vtxo_snapshot,
+        merge_sticky_spent_flags, merge_sticky_unrolled_flags,
         offchain_balance_buckets_from_snapshot, offchain_balance_sats_from_snapshot,
         snapshot_from_virtual_tx_outpoints, snapshot_from_virtual_tx_outpoints_with_script_lookup,
         vtxo_list_from_snapshot,
@@ -1128,6 +1149,65 @@ mod tests {
 
         merge_sticky_unrolled_flags(Some(&prior), &mut incoming, &HashSet::from([txid.clone()]));
         assert!(!incoming.virtual_tx_outpoints[0].is_unrolled);
+    }
+
+    #[test]
+    fn fresh_board_drops_indexer_unrolled_without_local_finality() {
+        let boarded_txid = Txid::from_byte_array([0x71; 32]).to_string();
+        let mut incoming = snapshot_from_virtual_tx_outpoints(
+            330,
+            2,
+            vec![VirtualTxOutPoint {
+                outpoint: OutPoint::new(Txid::from_str(&boarded_txid).expect("txid"), 0),
+                created_at: 0,
+                expires_at: 9_999_999_999,
+                amount: Amount::from_sat(50_000),
+                script: ScriptBuf::new(),
+                is_preconfirmed: false,
+                is_swept: false,
+                is_unrolled: true,
+                is_spent: false,
+                spent_by: None,
+                commitment_txids: vec![],
+                settled_by: None,
+                ark_txid: None,
+                assets: vec![],
+            }],
+        );
+
+        clear_indexer_unrolled_without_local_finality(&mut incoming, &HashSet::new());
+        assert!(!incoming.virtual_tx_outpoints[0].is_unrolled);
+    }
+
+    #[test]
+    fn indexer_unrolled_stays_when_host_already_reached_local_finality() {
+        let txid = Txid::from_byte_array([0x72; 32]).to_string();
+        let mut incoming = snapshot_from_virtual_tx_outpoints(
+            330,
+            2,
+            vec![VirtualTxOutPoint {
+                outpoint: OutPoint::new(Txid::from_str(&txid).expect("txid"), 0),
+                created_at: 0,
+                expires_at: 9_999_999_999,
+                amount: Amount::from_sat(50_000),
+                script: ScriptBuf::new(),
+                is_preconfirmed: false,
+                is_swept: false,
+                is_unrolled: true,
+                is_spent: false,
+                spent_by: None,
+                commitment_txids: vec![],
+                settled_by: None,
+                ark_txid: None,
+                assets: vec![],
+            }],
+        );
+
+        clear_indexer_unrolled_without_local_finality(
+            &mut incoming,
+            &HashSet::from([txid.clone()]),
+        );
+        assert!(incoming.virtual_tx_outpoints[0].is_unrolled);
     }
 
     #[test]
