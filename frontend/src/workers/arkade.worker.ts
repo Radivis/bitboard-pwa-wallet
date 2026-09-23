@@ -147,6 +147,25 @@ async function invokeWasmArk<T>(
   }
 }
 
+let bumperWalletSyncInFlight: Promise<void> | null = null
+
+async function syncBumperWalletImpl(): Promise<void> {
+  if (bumperWalletSyncInFlight != null) {
+    return bumperWalletSyncInFlight
+  }
+  const work = (async () => {
+    await invokeWasmArk((wasmModule) => wasmModule.ark_sync_bumper_wallet())
+  })()
+  bumperWalletSyncInFlight = work
+  try {
+    await work
+  } finally {
+    if (bumperWalletSyncInFlight === work) {
+      bumperWalletSyncInFlight = null
+    }
+  }
+}
+
 async function initWasm() {
   try {
     arkWasmModule = await loadBitboardArkWasm()
@@ -312,6 +331,7 @@ async function closeSessionImpl(): Promise<void> {
 
   activeSessionKey = null
   activeSessionParams = null
+  bumperWalletSyncInFlight = null
   sendPaymentInFlight = null
 }
 
@@ -360,6 +380,8 @@ async function openSessionImpl(
         delegatorUrl: params.delegatorUrl,
         esploraUrl: params.esploraUrl,
         sdkPersistenceJson,
+        bumperChangesetJson: params.bumperChangesetJson,
+        bumperFullScanDone: params.bumperFullScanDone ?? false,
       }),
     )
 
@@ -397,6 +419,18 @@ const arkadeService: ArkadeService = {
 
   async openSession(params: OpenArkadeSessionParams) {
     return openSessionImpl(params)
+  },
+
+  async syncBumperWallet(): Promise<void> {
+    await syncBumperWalletImpl()
+  },
+
+  async exportBumperWalletChangeset(): Promise<string> {
+    return invokeWasmArk((wasmModule) => wasmModule.ark_export_bumper_wallet_changeset())
+  },
+
+  async bumperWalletFullScanDone(): Promise<boolean> {
+    return invokeWasmArk((wasmModule) => wasmModule.ark_bumper_wallet_full_scan_done())
   },
 
   async hasOpenSession(params: {

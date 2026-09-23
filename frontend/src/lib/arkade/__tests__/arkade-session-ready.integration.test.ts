@@ -74,6 +74,13 @@ vi.mock('@/db', () => ({
   awaitInFlightWalletSecretsWrites: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock('@/lib/wallet/resolve-bumper-hydrate', () => ({
+  resolveBumperHydrateForSessionOpen: vi.fn(async () => ({
+    bumperChangesetJson: undefined,
+    bumperFullScanDone: false,
+  })),
+}))
+
 vi.mock('@/db/storage-adapter', () => ({
   sqliteStorage: {
     getItem: vi.fn(async () => null),

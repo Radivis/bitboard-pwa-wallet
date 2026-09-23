@@ -107,7 +107,7 @@ Management → Arkade offers two paths:
 | **Unilateral exit** | No (after unroll) | Operator down or you need trustless exit; per-VTXO; multiple on-chain txs |
 | **Autonomous mode** | No (explicit, persisted switch) | Do not contact this ASP (down or untrusted); reuses `cached_operator_info` + per-VTXO `unilateral_exit_materials`; only unilateral exit allowed; Esplora still required; survives reload |
 
-Collaborative exit and unilateral unroll are implemented in `bitboard-ark` (`collaborative_redeem`, `proceed_unilateral_exit_step`, etc.). **Autonomous mode** branches the same unilateral exit RPCs to snapshot-backed materials instead of ASP indexer/batch APIs. The on-chain bumper wallet shares the same BIP32-derived BDK wallet as boarding.
+Collaborative exit and unilateral unroll are implemented in `bitboard-ark` (`collaborative_redeem`, `proceed_unilateral_exit_step`, etc.). **Autonomous mode** branches the same unilateral exit RPCs to snapshot-backed materials instead of ASP indexer/batch APIs. The on-chain **bumper** is BIP84 account 0 (same HD account as the SegWit-0 descriptor row). **Boarding** uses the mnemonic master key as a single keypair, not that BIP84 account.
 
 **Unilateral exit control:** Management links to `/wallet/arkade/unilateral-exit`. The control page is a view of the XState actor: merged DAG (React Flow + d3-dag), multi-leaf selection, one virtual tx per `ark_proceed_unilateral_exit_step`. Proceed is non-blocking; the machine polls until the current step has **1 confirmation**. A host virtual tx is marked `is_unrolled` only after **6 confirmations**. Shared-leaf and automation details: [unilateral-exit.md](unilateral-exit.md).
 

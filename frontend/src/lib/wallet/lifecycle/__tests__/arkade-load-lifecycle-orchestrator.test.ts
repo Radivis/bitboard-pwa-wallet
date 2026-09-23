@@ -14,6 +14,7 @@ const workerMocks = vi.hoisted(() => ({
   reconcileActiveAccountId: vi.fn(),
   finalizePendingTransactions: vi.fn(),
   delegateSpendableVtxos: vi.fn(),
+  syncBumperWallet: vi.fn(),
   getUnilateralExitFrontendPersistence: vi.fn(async () => ({
     job: {
       selectedLeafOutpoints: [],
@@ -72,6 +73,13 @@ vi.mock('@/db', () => ({
   getWalletSecretsEncrypted: vi.fn(async () => ({
     mnemonic: { ciphertext: new Uint8Array(), iv: new Uint8Array(), salt: new Uint8Array(), kdfPhc: 'x' },
     payload: { ciphertext: new Uint8Array(), iv: new Uint8Array(), salt: new Uint8Array(), kdfPhc: 'x' },
+  })),
+}))
+
+vi.mock('@/lib/wallet/resolve-bumper-hydrate', () => ({
+  resolveBumperHydrateForSessionOpen: vi.fn(async () => ({
+    bumperChangesetJson: undefined,
+    bumperFullScanDone: false,
   })),
 }))
 
@@ -147,6 +155,7 @@ describe('arkade-load-lifecycle-orchestrator', () => {
     workerMocks.reconcileActiveAccountId.mockResolvedValue(undefined)
     workerMocks.finalizePendingTransactions.mockResolvedValue({ finalized: 0, pending: 0 })
     workerMocks.delegateSpendableVtxos.mockResolvedValue({ delegated: 0, failed: 0 })
+    workerMocks.syncBumperWallet.mockResolvedValue(undefined)
     getArkadeWorkerIfExistsMock.mockReturnValue(null)
     findActiveArkadeAccountSummaryMock.mockResolvedValue(undefined)
     ensureArkadeAccountMock.mockResolvedValue({
@@ -205,6 +214,14 @@ describe('arkade-load-lifecycle-orchestrator', () => {
     await orchestrateArkadeLoad({ walletId: 1, networkMode: 'signet' })
 
     expect(order.indexOf('setActive')).toBeLessThan(order.indexOf('postLoadSync'))
+  })
+
+  it('LIFE-ARK-LOAD-04 reaches loaded without starting bumper Esplora', async () => {
+    await orchestrateArkadeLoad({ walletId: 1, networkMode: 'signet' })
+
+    expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loaded')
+    expect(workerMocks.syncBumperWallet).not.toHaveBeenCalled()
+    expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalled()
   })
 
   it('load failure sets load-error and tears down worker without leaving loading', async () => {

@@ -188,6 +188,8 @@ export interface OpenArkadeSessionParams {
   arkServerUrl: string
   delegatorUrl: string
   esploraUrl: string
+  bumperChangesetJson?: string
+  bumperFullScanDone?: boolean
 }
 
 export interface OpenArkadeSessionResult {
@@ -340,6 +342,7 @@ export interface ArkadeOnchainBumperInfo {
   balanceSats: number
   unilateralExitTimelockBlocks?: number
   unilateralExitTimelockSeconds?: number
+  needsBumperWalletSync?: boolean
 }
 
 export interface ArkadeCollaborativeExitParams {
@@ -546,6 +549,10 @@ export interface ArkadeService {
   setSecretsPort(port: MessagePort): Promise<void>
   setEncryptedWalletSecretsHost(host: EncryptedWalletSecretsHost): Promise<void>
   openSession(params: OpenArkadeSessionParams): Promise<OpenArkadeSessionResult>
+  /** Best-effort bumper BDK Esplora sync; does not belong on session-open critical path. */
+  syncBumperWallet(): Promise<void>
+  exportBumperWalletChangeset(): Promise<string>
+  bumperWalletFullScanDone(): Promise<boolean>
   syncWithOperator(): Promise<ArkadeOperatorSyncResult>
   getOperatorTrustStatus(): Promise<ArkadeOperatorTrustStatus>
   getOperatorConfigDiff(): Promise<ArkadeOperatorConfigDiffResult>

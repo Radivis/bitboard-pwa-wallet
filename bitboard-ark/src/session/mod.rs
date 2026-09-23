@@ -1,6 +1,7 @@
 mod autonomous;
 mod balance;
 mod boarding;
+pub(crate) mod bumper_sync_policy;
 mod collaborative_exit;
 pub(crate) mod intents;
 pub(crate) mod mappers;
@@ -16,9 +17,13 @@ mod sync;
 pub(crate) mod unilateral_exit;
 mod vtxo;
 
+pub use open::OpenArkSessionParams;
+
 use std::cell::Cell;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+
+use bumper_sync_policy::BumperWalletSyncPhase;
 
 use ark_bdk_wallet::Wallet as ArkBdkWallet;
 use ark_client::{Bip32KeyProvider, Client, InMemorySwapStorage};
@@ -33,16 +38,18 @@ pub(crate) const CLIENT_NAME: &str = "bitboard-pwa-wallet";
 pub(crate) const BOLTZ_URL: &str = "https://api.boltz.exchange";
 pub(crate) const CLIENT_TIMEOUT: Duration = Duration::from_secs(30);
 
-pub type ArkWallet = ArkBdkWallet<SharedPersistenceDb>;
-pub type ArkClient = Client<EsploraBlockchain, ArkWallet, InMemorySwapStorage, Bip32KeyProvider>;
+pub type BumperWallet = ArkBdkWallet<SharedPersistenceDb>;
+pub type ArkClient = Client<EsploraBlockchain, BumperWallet, InMemorySwapStorage, Bip32KeyProvider>;
 
 pub struct ArkSession {
     client: ArkClient,
+    bumper_wallet: Arc<BumperWallet>,
     wallet_db: Arc<JsonPersistenceDb>,
     delegator: Option<DelegatorClient>,
     network_mode: NetworkMode,
     operator_identity: Mutex<OperatorIdentity>,
     autonomous_mode: Cell<bool>,
+    bumper_wallet_sync_phase: Cell<BumperWalletSyncPhase>,
 }
 
 impl ArkSession {

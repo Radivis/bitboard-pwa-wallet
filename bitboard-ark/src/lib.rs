@@ -40,15 +40,16 @@ pub use network::NetworkMode;
 #[cfg(not(target_arch = "wasm32"))]
 pub use outpoint::{OnchainOutPoint, VirtualOutPoint};
 #[cfg(not(target_arch = "wasm32"))]
-pub use session::ArkSession;
+pub use session::{ArkSession, OpenArkSessionParams};
+
+#[cfg(target_arch = "wasm32")]
+use crate::session::{ArkSession, OpenArkSessionParams};
 
 #[cfg(target_arch = "wasm32")]
 use crate::api_types::CompleteUnilateralExitParams;
 
 #[cfg(target_arch = "wasm32")]
 use crate::network::NetworkMode;
-#[cfg(target_arch = "wasm32")]
-use crate::session::ArkSession;
 
 use std::cell::RefCell;
 use std::future::Future;
@@ -160,14 +161,16 @@ pub async fn ark_open_session(params: JsValue) -> Result<JsValue, JsValue> {
         let network_mode = NetworkMode::parse(&params.network_mode)
             .ok_or_else(|| ArkWasmError::UnsupportedNetworkMode(params.network_mode.clone()))?;
 
-        let (session, migration_hint) = ArkSession::open(
-            &params.mnemonic,
+        let (session, migration_hint) = ArkSession::open(OpenArkSessionParams {
+            mnemonic_words: &params.mnemonic,
             network_mode,
-            params.ark_server_url,
-            params.delegator_url,
-            params.esplora_url,
-            params.sdk_persistence_json.as_deref(),
-        )
+            ark_server_url: params.ark_server_url,
+            delegator_url: params.delegator_url,
+            esplora_url: params.esplora_url,
+            sdk_persistence_json: params.sdk_persistence_json.as_deref(),
+            bumper_changeset_json: params.bumper_changeset_json.as_deref(),
+            bumper_full_scan_done: params.bumper_full_scan_done,
+        })
         .await?;
 
         let arkade_address = session.peek_offchain_address()?;
@@ -206,6 +209,34 @@ pub async fn ark_enter_autonomous_mode() -> Result<(), JsValue> {
         with_session_async(|session| async move { session.enter_autonomous_mode().await }).await
     })
     .await
+}
+
+/// Best-effort bumper BDK Esplora sync. Session open and unlock must not start this
+/// (LIFE-ARK-LOAD-04). Exit proceed/complete and the first onchain_bumper_info may call it.
+#[wasm_bindgen]
+pub async fn ark_sync_bumper_wallet() -> Result<(), JsValue> {
+    map_js_async(async {
+        with_session_async(|session| async move {
+            session.sync_bumper_wallet_best_effort().await;
+            Ok(())
+        })
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub fn ark_export_bumper_wallet_changeset() -> Result<String, JsValue> {
+    map_js_error(with_session(|session| {
+        session.export_bumper_wallet_changeset()
+    }))
+}
+
+#[wasm_bindgen]
+pub fn ark_bumper_wallet_full_scan_done() -> Result<bool, JsValue> {
+    map_js_error(with_session(|session| {
+        Ok(session.bumper_wallet_full_scan_done())
+    }))
 }
 
 #[wasm_bindgen]

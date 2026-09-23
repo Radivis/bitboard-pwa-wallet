@@ -58,6 +58,16 @@ feature:
       - id: LIFE-ONC-SYNC-01
         description: Esplora sync runs only when OnchainLoadLifecycle is loaded
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/onchain-sync-lifecycle-orchestrator.test.ts
+      - id: LIFE-ONC-SYNC-02
+        description: >
+          postUnlock Esplora is incremental when the loaded descriptor has fullScanDone
+          and load did not use empty-chain fallback; full scan if !fullScanDone,
+          usedEmptyChainFallback, or load hydration is missing (SE-01 fail-closed).
+          Does not copy live-network-switch full-scan from descriptor switch.
+        implemented_by:
+          - frontend/src/lib/wallet/lifecycle/__tests__/onchain-post-unlock-scan-policy.test.ts
+          - frontend/src/lib/wallet/lifecycle/__tests__/onchain-load-lifecycle-orchestrator.test.ts
+          - frontend/src/lib/wallet/lifecycle/__tests__/onchain-sync-lifecycle-orchestrator.test.ts
       - id: LIFE-ONC-SAVE-01
         description: Changeset persist runs in OnchainSaveLifecycle after successful sync
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/onchain-save-lifecycle-orchestrator.test.ts
@@ -122,6 +132,52 @@ feature:
       - id: LIFE-ARK-LOAD-03
         description: Receive address is stable when ArkadeLoadLifecycle is loaded (replaces connection-id ordering patch)
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-load-lifecycle-orchestrator.test.ts
+      - id: LIFE-ARK-LOAD-04
+        description: >
+          Arkade loadPhase loaded (and Establishing Arkade session) must not wait
+          on bumper Esplora and must not start a bumper BDK full_scan. Operator
+          connect, persistence hydrate, and refreshArkadeStoreFromLoadedWasm stay
+          on the load path. Bumper Esplora starts on first onchain_bumper_info
+          or exit proceed/complete, not after loaded.
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-load-lifecycle-orchestrator.test.ts
+      - id: LIFE-ARK-BUMP-01
+        description: >
+          onchain_bumper_info runs at most one wallet-wide bumper Esplora scan
+          per session. That scan is incremental when the bumper BDK was hydrated
+          from a SegWit-0 changeset with fullScanDone; otherwise it is a full
+          scan. Later bumper-info and underfunded-exit polls incremental-sync
+          unused revealed SPKs (the displayed tip) into BDK and report
+          confirmed only — not another HD /scripthash/txs walk and not a
+          tip-address /utxo overlay. proceed and complete always call
+          sync_bumper_wallet_with_retries before broadcast or completion spend.
+          Completion fee estimate uses the same once-per-session scan as
+          onchain_bumper_info (not another HD walk on destination / fee-rate refetch).
+        implemented_by:
+          - bitboard-ark/src/session/bumper_sync_policy.rs
+          - bitboard-ark/src/session/unilateral_exit/complete.rs
+          - third_party/ark-bdk-wallet/src/lib.rs
+      - id: LIFE-ARK-BUMP-02
+        description: >
+          Bumper BDK hydrate uses the SegWit-0 descriptor-wallet changeset, or a
+          live crypto export when that triple is the loaded on-chain wallet.
+          An empty bumper wallet is used only when no usable changeset exists.
+          Hydrate is not Esplora (LIFE-ARK-LOAD-04 unchanged).
+        implemented_by:
+          - frontend/src/lib/wallet/__tests__/bumper-segwit0-policy.test.ts
+          - frontend/src/lib/wallet/lifecycle/__tests__/arkade-session-open-helpers.test.ts
+          - third_party/ark-bdk-wallet/src/lib.rs
+      - id: LIFE-ARK-BUMP-03
+        description: >
+          After a bumper wallet-wide sync, persist the SegWit-0 descriptor row
+          only when the loaded crypto triple is not SegWit-0. Arkade must not
+          write that row while SegWit-0 is the crypto slot. Persist only when
+          the open Arkade session matches the target wallet/network/account
+          (SE-07) and the export is strictly newer than the row's
+          lastSuccessfulEsploraSyncAt (SE-03).
+        implemented_by:
+          - frontend/src/lib/wallet/__tests__/bumper-segwit0-policy.test.ts
+          - frontend/src/lib/wallet/__tests__/persist-bumper-segwit0-sidecar.test.ts
+          - frontend/src/lib/wallet/__tests__/persist-bumper-sidecar-after-sync.test.ts
       - id: LIFE-ARK-SYNC-01
         description: ArkadeSyncLifecycle syncing covers operator sync only, not session open
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-sync-lifecycle-orchestrator.test.ts

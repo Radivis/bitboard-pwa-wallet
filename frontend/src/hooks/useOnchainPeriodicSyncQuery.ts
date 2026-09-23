@@ -29,7 +29,10 @@ export function useOnchainPeriodicSyncQuery(): void {
   const refetchInterval = usePeriodicSyncRefetchInterval('onchain')
 
   const enabled =
-    networkMode !== 'lab' && descriptorWalletKey != null && onchainRailLoaded
+    networkMode !== 'lab' &&
+    descriptorWalletKey != null &&
+    onchainRailLoaded &&
+    refetchInterval !== false
 
   useQuery({
     queryKey:

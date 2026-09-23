@@ -77,6 +77,14 @@ feature:
         description: >-
           Arkade session open failure must not reject unlock; reportArkadeSessionOpenError
           shows an Arkade-specific toast instead of generic password/corruption copy on WalletUnlock
+      - id: UNLOCK-ARK-05
+        description: >-
+          Session-ready (loadPhase loaded) is not bumper-scan-ready. WASM open and
+          Arkade load must not await or schedule bumper BDK full_scan. First
+          onchain_bumper_info may sync once; later polls must not restart an HD
+          /txs walk. Unilateral-exit proceed and complete always use
+          sync_bumper_wallet_with_retries before broadcast or completion spend.
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-load-lifecycle-orchestrator.test.ts
     e2e_mocked_asp:
       - id: E2E-ARK-MOCK-01
         description: With VITE_E2E_ARKADE_MOCK, Signet + Arkade enabled, dashboard shows balance card with fixture balance

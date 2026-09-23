@@ -2,6 +2,8 @@
 
 Planning note for accelerating **ASP / indexer sync** on wallets with a large VTXO history. Nothing here is implemented yet except the mitigations listed under [Already shipped](#already-shipped).
 
+Unlock feeling like a full Esplora rescan (`/blocks`, scripthash `/txs`, 429s, double “Wallet synced”) is a **different** problem: [unlock-esplora-full-scan-instead-of-sync.md](./unlock-esplora-full-scan-instead-of-sync.md).
+
 Related:
 
 - Sync entry: `ArkSession::sync_with_operator` / `sync_with_operator_and_vtxo_list` in `bitboard-ark/src/session/sync.rs`

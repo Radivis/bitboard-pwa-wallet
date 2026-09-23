@@ -117,6 +117,10 @@ import {
 import {
   assertArkadeSessionUnlocked,
 } from '@/lib/arkade/proceed-unilateral-exit-step'
+import {
+  persistBumperSidecarAfterWalletWideSyncIfNeeded,
+  persistBumperSidecarBestEffort,
+} from '@/lib/wallet/persist-bumper-sidecar-after-sync'
 import { isUnilateralExitBranchComplete } from '@/lib/arkade/unilateral-exit-branch-complete'
 import {
   isUnilateralExitProgressWaitingForConfirmation,
@@ -1115,7 +1119,17 @@ export function useArkadeBumperInfoQuery(
       'bumper',
     ),
     enabled: enabled && sessionReady,
-    queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().getOnchainBumperInfo()),
+    queryFn: async () => {
+      const info = await withReadyArkadeWorker(() => getArkadeWorker().getOnchainBumperInfo())
+      if (activeWalletId != null) {
+        await persistBumperSidecarAfterWalletWideSyncIfNeeded({
+          walletId: activeWalletId,
+          networkMode,
+          needsBumperWalletSync: info.needsBumperWalletSync === true,
+        })
+      }
+      return info
+    },
     staleTime: ARKADE_SESSION_POLL_STALE_MS,
     // Poll only while an active exit flow is waiting for a bumper top-up to confirm.
     refetchInterval: pollWhileUnderfunded ? ARKADE_BUMPER_FUNDING_POLL_MS : false,
@@ -1293,7 +1307,17 @@ export function useArkadeCompleteUnilateralExitMutation() {
       feeRateSatPerVb: number
     }) => {
       assertArkadeSessionUnlocked(activeWalletId)
-      return withReadyArkadeWorker(() => getArkadeWorker().completeUnilateralExit(params))
+      const txid = await withReadyArkadeWorker(() =>
+        getArkadeWorker().completeUnilateralExit(params),
+      )
+      await persistBumperSidecarBestEffort(
+        {
+          walletId: activeWalletId,
+          networkMode,
+        },
+        'after complete',
+      )
+      return txid
     },
     onSuccess: async (txid) => {
       toast.success(`Exit completed on-chain (${formatArkadeTxidToastSnippet(txid)})`)

@@ -87,6 +87,7 @@ vi.mock('@/lib/wallet/lifecycle/onchain-save-lifecycle-orchestrator', () => ({
 }))
 
 import {
+  getOnchainLoadHydrationForPostUnlock,
   getOnchainLoadLifecycleSnapshot,
   markOnchainRailLoadedAfterExternalHydration,
   orchestrateOnchainLoad,
@@ -177,12 +178,18 @@ describe('onchain-load-lifecycle-orchestrator', () => {
     withPersistedChainMismatchRetry.mockRejectedValueOnce(new Error('wasm load failed'))
     await expect(orchestrateOnchainLoad(loadParams)).rejects.toThrow('wasm load failed')
 
-    withPersistedChainMismatchRetry.mockResolvedValue(undefined)
+    withPersistedChainMismatchRetry.mockResolvedValue({
+      result: true,
+      usedEmptyChainFallback: false,
+    })
     await orchestrateOnchainLoad(loadParams)
     expect(withPersistedChainMismatchRetry).toHaveBeenCalledTimes(1)
 
     withPersistedChainMismatchRetry.mockClear()
-    withPersistedChainMismatchRetry.mockResolvedValue(undefined)
+    withPersistedChainMismatchRetry.mockResolvedValue({
+      result: true,
+      usedEmptyChainFallback: false,
+    })
     await orchestrateOnchainLoad({ ...loadParams, allowRetryFromError: true })
     expect(withPersistedChainMismatchRetry).toHaveBeenCalledTimes(1)
     expect(getOnchainLoadLifecycleSnapshot().loadPhase).toBe('loaded')
@@ -193,7 +200,10 @@ describe('onchain-load-lifecycle-orchestrator', () => {
     const loadGate = new Promise<void>((resolve) => {
       resolveLoad = resolve
     })
-    withPersistedChainMismatchRetry.mockImplementation(() => loadGate)
+    withPersistedChainMismatchRetry.mockImplementation(async () => {
+      await loadGate
+      return { result: true, usedEmptyChainFallback: false }
+    })
 
     const first = orchestrateOnchainLoad(loadParams)
     const second = orchestrateOnchainLoad(loadParams)
@@ -259,6 +269,26 @@ describe('onchain-load-lifecycle-orchestrator', () => {
     markOnchainRailLoadedAfterExternalHydration(loadParams)
 
     expect(configureOnchainSyncForLoadedRail).not.toHaveBeenCalled()
+  })
+
+  it('LIFE-ONC-SYNC-02 stores fullScanDone and empty-chain fallback for postUnlock', async () => {
+    resolveDescriptorWallet.mockResolvedValue({
+      externalDescriptor: 'ext',
+      internalDescriptor: 'int',
+      changeSet: '{}',
+      fullScanDone: true,
+    })
+    withPersistedChainMismatchRetry.mockImplementation(async (operation, params) => {
+      await operation(params)
+      return { result: true, usedEmptyChainFallback: true }
+    })
+
+    await orchestrateOnchainLoad(loadParams)
+
+    expect(getOnchainLoadHydrationForPostUnlock()).toEqual({
+      fullScanDone: true,
+      usedEmptyChainFallback: true,
+    })
   })
 
   it('markOnchainRailLoadedAfterExternalHydration skips sync configuration on lab', () => {

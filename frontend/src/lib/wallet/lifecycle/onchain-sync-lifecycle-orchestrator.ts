@@ -3,7 +3,11 @@ import { refreshWalletStoreFromLoadedBdk } from '@/lib/wallet/onchain-bdk-store-
 import { invalidateOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboard-sync'
 import { syncActiveWalletAndUpdateState } from '@/lib/wallet/wallet-utils'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
-import { getOnchainLoadLifecycleSnapshot } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
+import {
+  getOnchainLoadHydrationForPostUnlock,
+  getOnchainLoadLifecycleSnapshot,
+} from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
+import { onchainPostUnlockNeedsFullScan } from '@/lib/wallet/lifecycle/onchain-post-unlock-scan-policy'
 import {
   configureOnchainSaveForLoadedRail,
   orchestrateOnchainSave,
@@ -211,14 +215,17 @@ export async function orchestrateOnchainPostUnlockSync(
   params: OnchainPostUnlockSyncParams,
 ): Promise<void> {
   const awaitCompletion = params.awaitCompletion ?? false
+  const hydration = getOnchainLoadHydrationForPostUnlock()
+  const useFullScan =
+    params.useFullScan ?? onchainPostUnlockNeedsFullScan(hydration)
   const work = orchestrateOnchainSyncThenSave({
     walletId: params.walletId,
     networkMode: params.networkMode,
     addressType: params.addressType,
     accountId: params.accountId,
     syncKind: 'postUnlock',
-    useFullScan: true,
-    markFullScanDone: true,
+    useFullScan,
+    markFullScanDone: useFullScan,
     onSyncError: params.onSyncError,
     awaitCompletion,
     throwOnError: awaitCompletion,

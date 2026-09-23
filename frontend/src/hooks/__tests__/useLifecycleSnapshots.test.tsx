@@ -51,6 +51,7 @@ vi.mock('@/workers/arkade-factory', () => ({
     setUnilateralExitJob: vi.fn(async () => {}),
     setUnilateralExitAutomationPrefs: vi.fn(async () => {}),
     setUnilateralExitFailure: vi.fn(async () => {}),
+    syncBumperWallet: vi.fn(async () => {}),
   }),
   getArkadeWorkerIfExists: vi.fn(() => null),
   terminateArkadeWorker: vi.fn(),
