@@ -12,7 +12,9 @@ use super::onchain::{
 use crate::outpoint::VirtualOutPoint;
 use crate::session::ArkSession;
 use crate::session::pending_exit::mark_vtxo_spent_in_snapshot;
-use crate::session::unilateral_exit::vtxo_exit::parse_vtxo_exit_record_key;
+use crate::session::unilateral_exit::vtxo_exit::{
+    mark_records_exited_for_outpoints, parse_vtxo_exit_record_key,
+};
 use bitcoin::{OutPoint, Txid};
 use std::str::FromStr;
 
@@ -283,6 +285,12 @@ pub(crate) async fn reconcile_exiting_vtxos_spent_on_esplora(
         ) {
             spent_outpoints.push(outpoint);
         }
+    }
+
+    if !spent_outpoints.is_empty() {
+        let mut records = session.wallet_db.vtxo_exit_records();
+        mark_records_exited_for_outpoints(&mut records, &spent_outpoints);
+        session.wallet_db.set_vtxo_exit_records(records);
     }
 
     Ok(ExitingVtxoEsploraReconcile {
