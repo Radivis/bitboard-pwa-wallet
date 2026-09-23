@@ -361,12 +361,15 @@ impl ArkSession {
             &self.wallet_db.vtxo_exit_records(),
         );
         merge_sticky_unrolled_flags(prior_snapshot, &mut snapshot, &sticky_unroll_hosts);
-        clear_indexer_unrolled_without_local_finality(&mut snapshot, &sticky_unroll_hosts);
         merge_sticky_spent_flags(prior_snapshot, &mut snapshot);
+        let esplora_reconcile =
+            reconcile_exiting_vtxos_spent_on_esplora(self, &mut snapshot).await?;
+        let mut unroll_hosts_to_keep = sticky_unroll_hosts;
+        unroll_hosts_to_keep.extend(esplora_reconcile.chain_visible_unrolled_hosts);
+        clear_indexer_unrolled_without_local_finality(&mut snapshot, &unroll_hosts_to_keep);
         let reconcile = reconcile_exiting_vtxo_records(self, snapshot, prior_snapshot).await?;
         snapshot = reconcile.snapshot;
-        let esplora_healed_outpoints =
-            reconcile_exiting_vtxos_spent_on_esplora(self, &mut snapshot).await?;
+        let esplora_healed_outpoints = esplora_reconcile.spent_outpoints;
         let prefetch_list = vtxo_list_from_snapshot(&snapshot)?;
         let materials_warning = super::unilateral_exit::materials_prefetch::prefetch_unilateral_exit_materials_for_snapshot(
             self,
