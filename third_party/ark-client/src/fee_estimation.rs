@@ -1,11 +1,11 @@
-use crate::batch;
-use crate::batch::BatchOutputType;
-use crate::wallet::BoardingWallet;
-use crate::wallet::OnchainWallet;
 use crate::Client;
 use crate::Error;
 use crate::KeyProvider;
 use crate::SwapStorage;
+use crate::batch;
+use crate::batch::BatchOutputType;
+use crate::wallet::BoardingWallet;
+use crate::wallet::OnchainWallet;
 use ark_core::ArkAddress;
 use bitcoin::Address;
 use bitcoin::Amount;

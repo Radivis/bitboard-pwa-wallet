@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const syncWithOperator = vi.fn()
+const scheduleBackgroundFullVtxoReconcile = vi.fn()
+const setOnBackgroundFullReconcileFinished = vi.fn()
 const migrateDeprecatedSignerVtxos = vi.fn()
 const getAutonomousModeStatus = vi.fn()
 const refreshArkadeStoreFromLoadedWasm = vi.fn()
@@ -10,6 +12,8 @@ const loadPhaseRef = vi.hoisted(() => ({ phase: 'loaded' as string }))
 vi.mock('@/workers/arkade-factory', () => ({
   getArkadeWorker: () => ({
     syncWithOperator,
+    scheduleBackgroundFullVtxoReconcile,
+    setOnBackgroundFullReconcileFinished,
     migrateDeprecatedSignerVtxos,
     getAutonomousModeStatus,
     setUnilateralExitJob: vi.fn(async () => {}),
@@ -441,5 +445,78 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
 
     expect(orchestrateArkadeSave).not.toHaveBeenCalled()
     expect(syncWithOperator).not.toHaveBeenCalled()
+  })
+
+  it('manual_and_signer_migration_schedule_background_full', async () => {
+    syncWithOperator.mockResolvedValue({ fullReconcileDue: true })
+    const rail = {
+      walletId: 1,
+      networkMode: 'signet' as const,
+      arkadeAccountId: 'conn-1',
+    }
+
+    await orchestrateArkadeSyncThenSave(syncParams)
+    expect(syncWithOperator).toHaveBeenCalledWith(true)
+    expect(scheduleBackgroundFullVtxoReconcile).toHaveBeenCalledTimes(1)
+
+    resetArkadeSyncLifecycleStateForTests()
+    configureArkadeSyncForLoadedRail(rail)
+    syncWithOperator.mockClear()
+    scheduleBackgroundFullVtxoReconcile.mockClear()
+    await orchestrateArkadeSyncThenSave({ ...syncParams, syncKind: 'signerMigration' })
+    expect(syncWithOperator).toHaveBeenCalledWith(true)
+    expect(scheduleBackgroundFullVtxoReconcile).toHaveBeenCalledTimes(1)
+
+    resetArkadeSyncLifecycleStateForTests()
+    configureArkadeSyncForLoadedRail(rail)
+    syncWithOperator.mockClear()
+    scheduleBackgroundFullVtxoReconcile.mockClear()
+    syncWithOperator.mockResolvedValue({ fullReconcileDue: false })
+    await orchestrateArkadeSyncThenSave({ ...syncParams, syncKind: 'dashboardPoll' })
+    expect(syncWithOperator).toHaveBeenCalledWith(false)
+    expect(scheduleBackgroundFullVtxoReconcile).not.toHaveBeenCalled()
+
+    resetArkadeSyncLifecycleStateForTests()
+    configureArkadeSyncForLoadedRail(rail)
+    syncWithOperator.mockClear()
+    scheduleBackgroundFullVtxoReconcile.mockClear()
+    await orchestrateArkadeSyncThenSave({ ...syncParams, syncKind: 'postLoad' })
+    expect(syncWithOperator).toHaveBeenCalledWith(false)
+    expect(scheduleBackgroundFullVtxoReconcile).not.toHaveBeenCalled()
+  })
+
+  it('dashboard_poll_does_not_await_background_full_reconcile', async () => {
+    syncWithOperator.mockResolvedValue({ fullReconcileDue: true })
+    let backgroundResolved = false
+    scheduleBackgroundFullVtxoReconcile.mockImplementation(
+      () =>
+        new Promise<void>(() => {
+          backgroundResolved = false
+        }).then(() => {
+          backgroundResolved = true
+        }),
+    )
+
+    await orchestrateArkadeSyncThenSave({
+      ...syncParams,
+      syncKind: 'dashboardPoll',
+    })
+
+    expect(scheduleBackgroundFullVtxoReconcile).toHaveBeenCalledTimes(1)
+    expect(getArkadeSyncLifecycleSnapshot().syncPhase).toBe('not-syncing')
+    expect(backgroundResolved).toBe(false)
+    expect(orchestrateArkadeSave).toHaveBeenCalledTimes(1)
+  })
+
+  it('await_arkade_sync_quiescence_does_not_wait_for_background_full', async () => {
+    syncWithOperator.mockResolvedValue({ fullReconcileDue: true })
+    scheduleBackgroundFullVtxoReconcile.mockReturnValue(new Promise(() => {}))
+
+    await orchestrateArkadeSyncThenSave({
+      ...syncParams,
+      syncKind: 'dashboardPoll',
+    })
+
+    await expect(awaitArkadeSyncQuiescence()).resolves.toBeUndefined()
   })
 })

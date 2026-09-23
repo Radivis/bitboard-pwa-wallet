@@ -145,7 +145,7 @@ Implementation touchpoints: `build_arkade_balance_dto` (WASM), `exit_balance_com
 Unroll and complete do **not** call the ASP. After each proceed-step broadcast, the XState machine waits until Esplora reports **1 confirmation** on the current virtual tx. WASM stamps local `is_unrolled` only when the host tx has **6 confirmations**. Operator indexer catch-up happens later, if at all, during a separate operator sync.
 
 - **Sticky merge:** `merge_sticky_unrolled_flags` preserves local `is_unrolled` for VTXOs still returned by the operator while ASP lags, and only when a host-tx observation has 6 confirmations or a VTXO exit record is `unrolled` / `complete_ready` (ARK-EXIT-12). Tag-time records must not keep the flag. Missing unrolled+ rows are reconciled from those records.
-- **Record reconcile:** After each operator sync, `reconcile_exiting_vtxo_watches` iterates unrolled+ VTXO exit records with targeted `list_vtxos_for_outpoints` and narrow Esplora probes per the truth table — never clears exiting state on full-list absence alone (ARK-SYNC-03).
+- **Record reconcile:** After each operator sync, `reconcile_exiting_vtxo_records` iterates unrolled+ VTXO exit records with targeted `list_vtxos_for_outpoints` and narrow Esplora probes per the truth table — never clears exiting state on full-list absence alone (ARK-SYNC-03).
 
 Residual edge cases where ASP reports `is_swept` without `is_unrolled` during an abandoned unilateral exit (cooperative recover override) remain documented in deferred Operation Labyrinth Step 3 work; recover + SSE fixes addressed the common stuck-wallet path.
 

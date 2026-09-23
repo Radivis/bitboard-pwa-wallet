@@ -50,6 +50,8 @@ pub struct ArkSession {
     operator_identity: Mutex<OperatorIdentity>,
     autonomous_mode: Cell<bool>,
     bumper_wallet_sync_phase: Cell<BumperWalletSyncPhase>,
+    /// Serializes offchain snapshot merge and persist. HTTP stays outside this lock.
+    vtxo_snapshot_apply: Mutex<()>,
 }
 
 impl ArkSession {

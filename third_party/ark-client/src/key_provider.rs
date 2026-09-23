@@ -7,11 +7,7 @@ use std::sync::Arc;
 
 /// Maps `Bip32KeyProvider::next_index` to the index shown for receive (mirrors BDK `last_reveal`).
 pub fn display_receive_derivation_index(next_index: u32) -> u32 {
-    if next_index > 0 {
-        next_index - 1
-    } else {
-        0
-    }
+    if next_index > 0 { next_index - 1 } else { 0 }
 }
 
 pub enum KeypairIndex {

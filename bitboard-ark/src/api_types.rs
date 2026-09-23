@@ -96,6 +96,9 @@ pub struct OperatorSyncResultDto {
     pub exiting_vtxo_warning: Option<String>,
     #[serde(default)]
     pub operator_config_trust_pending: bool,
+    /// Host should run a background full VTXO list. User-facing sync already returned.
+    #[serde(default)]
+    pub full_reconcile_due: bool,
 }
 
 #[derive(Debug, Serialize)]

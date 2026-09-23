@@ -248,7 +248,160 @@ pub fn snapshot_from_virtual_tx_outpoints_with_script_lookup(
             })
             .collect(),
         unilateral_exit_materials_by_host_tx: BTreeMap::new(),
+        full_listed_at: 0,
     }
+}
+
+/// Deduplicate indexer rows by outpoint; later rows win (recent-script fetch after outpoints).
+pub fn dedupe_virtual_tx_outpoints(
+    points: impl IntoIterator<Item = VirtualTxOutPoint>,
+) -> Vec<VirtualTxOutPoint> {
+    let mut by_outpoint: HashMap<OutPoint, VirtualTxOutPoint> = HashMap::new();
+    for point in points {
+        by_outpoint.insert(point.outpoint, point);
+    }
+    by_outpoint.into_values().collect()
+}
+
+/// Upsert indexer rows into a persisted snapshot without dropping historical spent VTXOs (ARK-SYNC-04/06).
+///
+/// `requested_live_outpoints` are snapshot-live outpoints sent to `list_vtxos_for_outpoints`.
+/// A requested live outpoint missing from `fetched` keeps the prior row (not marked spent).
+pub fn merge_incremental_vtxo_snapshot(
+    prior: &OffchainVtxoSnapshot,
+    fetched: impl IntoIterator<Item = VirtualTxOutPoint>,
+    requested_live_outpoints: &HashSet<OutPoint>,
+    synced_at: i64,
+    script_to_server_pk: impl Fn(&ScriptBuf) -> Option<XOnlyPublicKey>,
+) -> OffchainVtxoSnapshot {
+    let mut records_by_outpoint: HashMap<(String, u32), VirtualTxOutPointRecord> = prior
+        .virtual_tx_outpoints
+        .iter()
+        .cloned()
+        .map(|record| ((record.txid.clone(), record.vout), record))
+        .collect();
+
+    let mut fetched_outpoints = HashSet::new();
+    for point in fetched {
+        let outpoint = point.outpoint;
+        fetched_outpoints.insert(outpoint);
+        let outpoint_key = (outpoint.txid.to_string(), outpoint.vout);
+        let prior_server_pk = records_by_outpoint
+            .get(&outpoint_key)
+            .and_then(|record| record.server_pk_hex.clone());
+        let looked_up_pk = script_to_server_pk(&point.script);
+        let server_pk = looked_up_pk.or_else(|| {
+            prior_server_pk
+                .as_deref()
+                .and_then(|hex| XOnlyPublicKey::from_str(hex).ok())
+        });
+        let mut record = virtual_tx_outpoint_to_record(point, server_pk);
+        if record.server_pk_hex.is_none() {
+            record.server_pk_hex = prior_server_pk;
+        }
+        records_by_outpoint.insert(outpoint_key, record);
+    }
+
+    for outpoint in requested_live_outpoints {
+        if fetched_outpoints.contains(outpoint) {
+            continue;
+        }
+        let outpoint_key = (outpoint.txid.to_string(), outpoint.vout);
+        let Some(prior_record) = prior
+            .virtual_tx_outpoints
+            .iter()
+            .find(|record| record.txid == outpoint_key.0 && record.vout == outpoint_key.1)
+        else {
+            continue;
+        };
+        records_by_outpoint.insert(outpoint_key, prior_record.clone());
+    }
+
+    let mut virtual_tx_outpoints: Vec<VirtualTxOutPointRecord> =
+        records_by_outpoint.into_values().collect();
+    virtual_tx_outpoints
+        .sort_by(|left, right| left.txid.cmp(&right.txid).then(left.vout.cmp(&right.vout)));
+
+    OffchainVtxoSnapshot {
+        synced_at,
+        dust_sats: prior.dust_sats,
+        virtual_tx_outpoints,
+        unilateral_exit_materials_by_host_tx: prior.unilateral_exit_materials_by_host_tx.clone(),
+        full_listed_at: prior.full_listed_at,
+    }
+}
+
+/// Apply rows and materials that changed between `base` and `finalized` onto `latest`.
+///
+/// Unchanged historical rows stay on `latest`, so a concurrent full replace is not overwritten
+/// by a light finalize that started from an older snapshot.
+pub fn overlay_changed_vtxo_rows(
+    latest: &OffchainVtxoSnapshot,
+    base: &OffchainVtxoSnapshot,
+    finalized: &OffchainVtxoSnapshot,
+) -> OffchainVtxoSnapshot {
+    let mut records_by_outpoint: HashMap<(String, u32), VirtualTxOutPointRecord> = latest
+        .virtual_tx_outpoints
+        .iter()
+        .cloned()
+        .map(|record| ((record.txid.clone(), record.vout), record))
+        .collect();
+    let base_by_outpoint: HashMap<(String, u32), &VirtualTxOutPointRecord> = base
+        .virtual_tx_outpoints
+        .iter()
+        .map(|record| ((record.txid.clone(), record.vout), record))
+        .collect();
+
+    for record in &finalized.virtual_tx_outpoints {
+        let key = (record.txid.clone(), record.vout);
+        let changed = match base_by_outpoint.get(&key) {
+            Some(base_record) => *base_record != record,
+            None => true,
+        };
+        if changed {
+            records_by_outpoint.insert(key, record.clone());
+        }
+    }
+
+    let mut virtual_tx_outpoints: Vec<VirtualTxOutPointRecord> =
+        records_by_outpoint.into_values().collect();
+    virtual_tx_outpoints
+        .sort_by(|left, right| left.txid.cmp(&right.txid).then(left.vout.cmp(&right.vout)));
+
+    let mut materials = latest.unilateral_exit_materials_by_host_tx.clone();
+    for (host_txid, materials_record) in &finalized.unilateral_exit_materials_by_host_tx {
+        if base
+            .unilateral_exit_materials_by_host_tx
+            .get(host_txid)
+            .is_none_or(|base_record| base_record != materials_record)
+        {
+            materials.insert(host_txid.clone(), materials_record.clone());
+        }
+    }
+
+    OffchainVtxoSnapshot {
+        synced_at: finalized.synced_at,
+        dust_sats: finalized.dust_sats,
+        virtual_tx_outpoints,
+        unilateral_exit_materials_by_host_tx: materials,
+        full_listed_at: latest.full_listed_at.max(finalized.full_listed_at),
+    }
+}
+
+/// Snapshot rows that still need an outpoint refresh (not yet spent).
+pub fn live_snapshot_outpoints(snapshot: &OffchainVtxoSnapshot) -> Vec<OutPoint> {
+    snapshot
+        .virtual_tx_outpoints
+        .iter()
+        .filter(|record| !record.is_spent)
+        .filter_map(|record| {
+            let txid = Txid::from_str(&record.txid).ok()?;
+            Some(OutPoint {
+                txid,
+                vout: record.vout,
+            })
+        })
+        .collect()
 }
 
 /// Preserve local `is_unrolled` when ASP indexer lags after unilateral unroll.
@@ -258,7 +411,7 @@ pub fn snapshot_from_virtual_tx_outpoints_with_script_lookup(
 /// premature local stamp.
 ///
 /// Only applies to VTXOs still present in the incoming operator list. Missing unrolled+ records
-/// are handled by [`crate::session::unilateral_exit::watch_reconcile::reconcile_exiting_vtxo_watches`].
+/// are handled by [`crate::session::unilateral_exit::watch_reconcile::reconcile_exiting_vtxo_records`].
 pub fn confirmed_unroll_sticky_host_txids(
     observations: &BTreeMap<String, HostTxObservationRecord>,
     vtxo_exit_records: &BTreeMap<String, VtxoExitRecord>,
@@ -506,10 +659,11 @@ fn generate_outgoing_vtxo_transaction_history(
 #[cfg(test)]
 mod tests {
     use super::{
-        mark_virtual_tx_vtxos_unrolled_in_snapshot, merge_sticky_spent_flags,
-        merge_sticky_unrolled_flags, offchain_balance_buckets_from_snapshot,
-        offchain_balance_sats_from_snapshot, snapshot_from_virtual_tx_outpoints,
-        snapshot_from_virtual_tx_outpoints_with_script_lookup, vtxo_list_from_snapshot,
+        live_snapshot_outpoints, mark_virtual_tx_vtxos_unrolled_in_snapshot,
+        merge_incremental_vtxo_snapshot, merge_sticky_spent_flags, merge_sticky_unrolled_flags,
+        offchain_balance_buckets_from_snapshot, offchain_balance_sats_from_snapshot,
+        snapshot_from_virtual_tx_outpoints, snapshot_from_virtual_tx_outpoints_with_script_lookup,
+        vtxo_list_from_snapshot,
     };
     use crate::error::ArkWasmError;
     use crate::persistence::{OffchainVtxoSnapshot, VirtualTxOutPointRecord};
@@ -572,6 +726,138 @@ mod tests {
         }
     }
 
+    fn snapshot_from_records(records: Vec<VirtualTxOutPointRecord>) -> OffchainVtxoSnapshot {
+        OffchainVtxoSnapshot {
+            synced_at: 1_700_000_000,
+            dust_sats: 330,
+            virtual_tx_outpoints: records,
+            unilateral_exit_materials_by_host_tx: BTreeMap::new(),
+            full_listed_at: 100,
+        }
+    }
+
+    #[test]
+    fn upsert_keeps_prior_spent_history_and_adds_spendable() {
+        let spent_txid = Txid::from_byte_array([0x11; 32]).to_string();
+        let mut spent = sample_snapshot_record(&spent_txid, 0, 1_000);
+        spent.is_spent = true;
+        let prior = snapshot_from_records(vec![spent]);
+        let incoming = sample_vtp(0x22, 25_000, false, 9_999_999_999);
+        let merged = merge_incremental_vtxo_snapshot(
+            &prior,
+            vec![incoming.clone()],
+            &HashSet::new(),
+            50,
+            |_| None,
+        );
+        assert_eq!(merged.synced_at, 50);
+        assert_eq!(merged.full_listed_at, 100);
+        assert_eq!(merged.virtual_tx_outpoints.len(), 2);
+        assert!(
+            merged
+                .virtual_tx_outpoints
+                .iter()
+                .any(|record| record.txid == spent_txid && record.is_spent)
+        );
+        assert!(merged.virtual_tx_outpoints.iter().any(|record| {
+            record.txid == incoming.outpoint.txid.to_string()
+                && !record.is_spent
+                && record.amount_sats == 25_000
+        }));
+    }
+
+    #[test]
+    fn merge_marks_live_row_spent_from_outpoint_fetch() {
+        let txid = Txid::from_byte_array([0x33; 32]);
+        let live = sample_snapshot_record(&txid.to_string(), 0, 40_000);
+        let prior = snapshot_from_records(vec![live]);
+        let mut fetched = sample_vtp(0x33, 40_000, false, 9_999_999_999);
+        fetched.is_spent = true;
+        fetched.spent_by = Some(Txid::from_byte_array([0x44; 32]));
+        let requested = HashSet::from([OutPoint::new(txid, 0)]);
+        let merged =
+            merge_incremental_vtxo_snapshot(&prior, vec![fetched], &requested, 51, |_| None);
+        assert_eq!(merged.virtual_tx_outpoints.len(), 1);
+        assert!(merged.virtual_tx_outpoints[0].is_spent);
+        let spent_by = Txid::from_byte_array([0x44; 32]).to_string();
+        assert_eq!(
+            merged.virtual_tx_outpoints[0].spent_by.as_deref(),
+            Some(spent_by.as_str())
+        );
+    }
+
+    #[test]
+    fn merge_keeps_prior_row_when_requested_live_outpoint_absent_from_nonempty_fetch() {
+        let kept_txid = Txid::from_byte_array([0x55; 32]);
+        let live = sample_snapshot_record(&kept_txid.to_string(), 0, 12_000);
+        let prior = snapshot_from_records(vec![live]);
+        let other = sample_vtp(0x56, 3_000, false, 9_999_999_999);
+        let requested = HashSet::from([OutPoint::new(kept_txid, 0)]);
+        let merged = merge_incremental_vtxo_snapshot(&prior, vec![other], &requested, 52, |_| None);
+        assert_eq!(merged.virtual_tx_outpoints.len(), 2);
+        let kept = merged
+            .virtual_tx_outpoints
+            .iter()
+            .find(|record| record.txid == kept_txid.to_string())
+            .expect("requested live outpoint");
+        assert!(!kept.is_spent);
+        assert_eq!(kept.amount_sats, 12_000);
+    }
+
+    #[test]
+    fn merge_preserves_swept_and_preconfirmed_from_outpoint_refresh() {
+        let txid = Txid::from_byte_array([0x66; 32]);
+        let live = sample_snapshot_record(&txid.to_string(), 0, 8_000);
+        let prior = snapshot_from_records(vec![live]);
+        let mut fetched = sample_vtp(0x66, 8_000, true, 9_999_999_999);
+        fetched.is_swept = true;
+        let requested = HashSet::from([OutPoint::new(txid, 0)]);
+        let merged =
+            merge_incremental_vtxo_snapshot(&prior, vec![fetched], &requested, 53, |_| None);
+        assert!(merged.virtual_tx_outpoints[0].is_preconfirmed);
+        assert!(merged.virtual_tx_outpoints[0].is_swept);
+        assert!(!merged.virtual_tx_outpoints[0].is_spent);
+    }
+
+    #[test]
+    fn catch_up_merge_after_full_replace_keeps_live_row_absent_from_full_list() {
+        let historical_txid = Txid::from_byte_array([0x77; 32]).to_string();
+        let mut historical = sample_snapshot_record(&historical_txid, 0, 1_000);
+        historical.is_spent = true;
+        let boarded = sample_vtp(0x88, 50_000, true, 9_999_999_999);
+        let replaced = snapshot_from_records(vec![historical]);
+        let merged = merge_incremental_vtxo_snapshot(
+            &replaced,
+            vec![boarded.clone()],
+            &HashSet::new(),
+            54,
+            |_| None,
+        );
+        assert!(
+            merged
+                .virtual_tx_outpoints
+                .iter()
+                .any(|record| record.txid == historical_txid && record.is_spent)
+        );
+        assert!(merged.virtual_tx_outpoints.iter().any(|record| {
+            record.txid == boarded.outpoint.txid.to_string() && record.amount_sats == 50_000
+        }));
+    }
+
+    #[test]
+    fn live_snapshot_outpoints_skips_spent_rows() {
+        let live_txid = Txid::from_byte_array([0x99; 32]);
+        let spent_txid = Txid::from_byte_array([0xaa; 32]).to_string();
+        let mut spent = sample_snapshot_record(&spent_txid, 0, 1_000);
+        spent.is_spent = true;
+        let snapshot = snapshot_from_records(vec![
+            sample_snapshot_record(&live_txid.to_string(), 1, 2_000),
+            spent,
+        ]);
+        let live = live_snapshot_outpoints(&snapshot);
+        assert_eq!(live, vec![OutPoint::new(live_txid, 1)]);
+    }
+
     #[test]
     fn mark_virtual_tx_vtxos_unrolled_co_marks_all_vouts_on_tx() {
         let txid = Txid::from_byte_array([0x88; 32]).to_string();
@@ -583,6 +869,7 @@ mod tests {
                 sample_snapshot_record(&txid, 1, 25_000),
             ],
             unilateral_exit_materials_by_host_tx: BTreeMap::new(),
+            full_listed_at: 0,
         };
 
         mark_virtual_tx_vtxos_unrolled_in_snapshot(&mut snapshot, &txid);
@@ -620,6 +907,7 @@ mod tests {
                 server_pk_hex: None,
             }],
             unilateral_exit_materials_by_host_tx: BTreeMap::new(),
+            full_listed_at: 0,
         };
         let mut incoming = snapshot_from_virtual_tx_outpoints(
             330,
@@ -688,6 +976,7 @@ mod tests {
                 server_pk_hex: None,
             }],
             unilateral_exit_materials_by_host_tx: BTreeMap::new(),
+            full_listed_at: 0,
         };
         let mut incoming = snapshot_from_virtual_tx_outpoints(
             330,
@@ -739,6 +1028,7 @@ mod tests {
                 server_pk_hex: None,
             }],
             unilateral_exit_materials_by_host_tx: BTreeMap::new(),
+            full_listed_at: 0,
         };
         let mut incoming = snapshot_from_virtual_tx_outpoints(
             330,
@@ -813,6 +1103,7 @@ mod tests {
                 server_pk_hex: None,
             }],
             unilateral_exit_materials_by_host_tx: BTreeMap::new(),
+            full_listed_at: 0,
         };
         let mut incoming = snapshot_from_virtual_tx_outpoints(
             330,
@@ -865,6 +1156,7 @@ mod tests {
                 server_pk_hex: None,
             }],
             unilateral_exit_materials_by_host_tx: BTreeMap::new(),
+            full_listed_at: 0,
         };
         let mut incoming = snapshot_from_virtual_tx_outpoints(
             330,
@@ -1231,6 +1523,7 @@ mod tests {
                 server_pk_hex: None,
             }],
             unilateral_exit_materials_by_host_tx: BTreeMap::new(),
+            full_listed_at: 0,
         };
 
         let error = vtxo_list_from_snapshot(&snapshot).expect_err("invalid txid");

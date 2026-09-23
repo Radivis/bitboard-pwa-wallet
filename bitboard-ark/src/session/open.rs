@@ -296,6 +296,7 @@ impl ArkSession {
             bumper_wallet_sync_phase: Cell::new(
                 super::bumper_sync_policy::BumperWalletSyncPhase::NotStarted,
             ),
+            vtxo_snapshot_apply: Mutex::new(()),
         };
         session.heal_vtxo_exit_records();
         session.reconcile_host_tx_finality_best_effort().await;

@@ -1,9 +1,9 @@
 use super::SwapStorage;
+use crate::Error;
 use crate::boltz::ChainSwapData;
 use crate::boltz::ReverseSwapData;
 use crate::boltz::SubmarineSwapData;
 use crate::boltz::SwapStatus;
-use crate::Error;
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;

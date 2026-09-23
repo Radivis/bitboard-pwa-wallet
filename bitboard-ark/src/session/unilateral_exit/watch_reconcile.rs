@@ -225,7 +225,7 @@ pub(crate) async fn reconcile_exiting_vtxos_spent_on_esplora(
     Ok(healed_outpoints)
 }
 
-pub(crate) async fn reconcile_exiting_vtxo_watches(
+pub(crate) async fn reconcile_exiting_vtxo_records(
     session: &ArkSession,
     mut snapshot: OffchainVtxoSnapshot,
     prior_snapshot: Option<&OffchainVtxoSnapshot>,
@@ -445,6 +445,7 @@ mod tests {
             dust_sats: 330,
             virtual_tx_outpoints: vec![],
             unilateral_exit_materials_by_host_tx: std::collections::BTreeMap::new(),
+            full_listed_at: 0,
         };
         let mut warnings = Vec::new();
 
@@ -491,6 +492,7 @@ mod tests {
                 server_pk_hex: None,
             }],
             unilateral_exit_materials_by_host_tx: std::collections::BTreeMap::new(),
+            full_listed_at: 0,
         };
         let mut warnings = Vec::new();
 
@@ -539,6 +541,7 @@ mod tests {
             dust_sats: 330,
             virtual_tx_outpoints: vec![spendable_snapshot_record(&txid, 12_000)],
             unilateral_exit_materials_by_host_tx: std::collections::BTreeMap::new(),
+            full_listed_at: 0,
         };
 
         apply_record_unroll_stickiness_for_present_spendable(
@@ -564,6 +567,7 @@ mod tests {
             dust_sats: 330,
             virtual_tx_outpoints: vec![],
             unilateral_exit_materials_by_host_tx: std::collections::BTreeMap::new(),
+            full_listed_at: 0,
         };
         let mut warnings = Vec::new();
 
@@ -594,6 +598,7 @@ mod tests {
             dust_sats: 330,
             virtual_tx_outpoints: vec![spendable_snapshot_record(&txid, 12_000)],
             unilateral_exit_materials_by_host_tx: std::collections::BTreeMap::new(),
+            full_listed_at: 0,
         };
 
         apply_record_unroll_stickiness_for_present_spendable(

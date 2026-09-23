@@ -29,10 +29,12 @@ import type {
   ArkadeSyncThenSaveParams,
 } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-types'
 import type { ArkadeSaveParams } from '@/lib/wallet/lifecycle/arkade-save-lifecycle-types'
+import { operatorSyncSchedulesBackgroundFull, shouldScheduleBackgroundFullVtxoReconcile } from '@/lib/arkade/arkade-operator-sync-policy'
 import type {
   ArkadeOperatorSyncResult,
   ArkadePendingBatchIntent,
   ArkadeSignerMigrationResult,
+  BackgroundFullVtxoReconcileOutcome,
 } from '@/workers/arkade-api'
 import {
   arkadeOperatorConfigDiffQueryKey,
@@ -174,13 +176,64 @@ async function invalidateOperatorTrustQueriesForScope(scope: ArkadeRailScope): P
   })
 }
 
+function recordBackgroundReconcileWarning(warningMessage: string): void {
+  const current = getArkadeSyncLifecycleSnapshot()
+  const existing = current.warningMessage
+  const warning =
+    existing != null && existing !== ''
+      ? `${existing}\n${warningMessage}`
+      : warningMessage
+  setSnapshot({
+    ...current,
+    warningMessage: warning,
+  })
+}
+
+async function handleBackgroundFullVtxoReconcileFinished(
+  outcome: BackgroundFullVtxoReconcileOutcome,
+): Promise<void> {
+  if (!outcome.ok) {
+    recordBackgroundReconcileWarning(
+      outcome.warningMessage ?? 'Full VTXO reconcile failed',
+    )
+    return
+  }
+  const scope = getArkadeSyncLifecycleSnapshot().railScope
+  if (scope == null) {
+    return
+  }
+  try {
+    await refreshArkadeStoreFromLoadedWasm(scope.arkadeAccountId)
+    await orchestrateArkadeSave({
+      walletId: scope.walletId,
+      networkMode: scope.networkMode,
+      arkadeAccountId: scope.arkadeAccountId,
+    })
+  } catch (error) {
+    recordBackgroundReconcileWarning(
+      userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK),
+    )
+  }
+}
+
+function ensureBackgroundFullReconcileFollowUp(): void {
+  getArkadeWorker().setOnBackgroundFullReconcileFinished((outcome) =>
+    handleBackgroundFullVtxoReconcileFinished(outcome),
+  )
+}
+
 async function runArkadeOperatorSyncBody(
   scope: ArkadeRailScope,
+  scheduleBackgroundFull: boolean,
 ): Promise<ArkadeOperatorSyncResult> {
+  ensureBackgroundFullReconcileFollowUp()
   const worker = getArkadeWorker()
-  const syncResult = await worker.syncWithOperator()
+  const syncResult = await worker.syncWithOperator(scheduleBackgroundFull)
   await refreshArkadeStoreFromLoadedWasm(scope.arkadeAccountId)
   await invalidateOperatorTrustQueriesForScope(scope)
+  if (shouldScheduleBackgroundFullVtxoReconcile(syncResult.fullReconcileDue)) {
+    worker.scheduleBackgroundFullVtxoReconcile()
+  }
   return syncResult
 }
 
@@ -205,6 +258,7 @@ function clearDashboardPollSchedule(): void {
   dashboardPollQueuedWhileSyncing = false
 }
 
+/** Waits for user-facing operator sync only. Background full VTXO reconcile has its own single-flight. */
 export async function awaitArkadeSyncQuiescence(): Promise<void> {
   clearDashboardPollSchedule()
   await inFlightSyncTracker.awaitQuiescence()
@@ -305,7 +359,10 @@ export async function orchestrateArkadeSyncThenSave(
               await orchestrateArkadeSave(toSaveParams(params))
             }
             try {
-              const syncResult = await runArkadeOperatorSyncBody(scope)
+              const syncResult = await runArkadeOperatorSyncBody(
+                scope,
+                operatorSyncSchedulesBackgroundFull('signerMigration'),
+              )
               applySuccessfulArkadeSyncSnapshot(scope, syncResult)
             } catch (syncError) {
               setSnapshot({
@@ -322,7 +379,10 @@ export async function orchestrateArkadeSyncThenSave(
             return
           }
 
-          const syncResult = await runArkadeOperatorSyncBody(scope)
+          const syncResult = await runArkadeOperatorSyncBody(
+            scope,
+            operatorSyncSchedulesBackgroundFull(params.syncKind),
+          )
           applySuccessfulArkadeSyncSnapshot(scope, syncResult)
           try {
             await orchestrateArkadeSave(toSaveParams(params))

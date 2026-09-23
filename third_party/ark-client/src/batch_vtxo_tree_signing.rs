@@ -2,33 +2,33 @@
 //!
 //! Shared by [`super::Client::join_next_batch`] and [`super::Client::settle_delegate`].
 
+use crate::Blockchain;
+use crate::Client;
+use crate::Error;
+use crate::SwapStorage;
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 use crate::ark_grpc_wasm_shim::Client as NetworkClient;
 use crate::error::ErrorContext as _;
 use crate::wallet::BoardingWallet;
 use crate::wallet::OnchainWallet;
-use crate::Blockchain;
-use crate::Client;
-use crate::Error;
-use crate::SwapStorage;
+use ark_core::TxGraph;
+use ark_core::batch::NonceKps;
 use ark_core::batch::aggregate_nonces;
 use ark_core::batch::generate_nonce_tree;
 use ark_core::batch::sign_batch_tree_tx;
-use ark_core::batch::NonceKps;
 use ark_core::server::PartialSigTree;
 use ark_core::server::TreeNoncesAggregatedEvent;
 use ark_core::server::TreeNoncesEvent;
 use ark_core::server::TreeSigningStartedEvent;
-use ark_core::TxGraph;
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 use ark_grpc::Client as NetworkClient;
-use bitcoin::key::Keypair;
-use bitcoin::secp256k1::PublicKey;
-use bitcoin::taproot::Signature as TaprootSignature;
 use bitcoin::Psbt;
 use bitcoin::Sequence;
 use bitcoin::Txid;
 use bitcoin::XOnlyPublicKey;
+use bitcoin::key::Keypair;
+use bitcoin::secp256k1::PublicKey;
+use bitcoin::taproot::Signature as TaprootSignature;
 use musig::musig::AggregatedNonce;
 use rand::CryptoRng;
 use rand::Rng;

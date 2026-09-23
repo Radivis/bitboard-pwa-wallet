@@ -36,8 +36,8 @@ pub(crate) async fn timeout_op<F, O>(timeout: Duration, operation: F) -> Result<
 where
     F: futures_util::future::Future<Output = O>,
 {
-    use futures_util::future::select;
     use futures_util::future::Either;
+    use futures_util::future::select;
     use gloo_timers::future::TimeoutFuture;
 
     let ms = timeout.as_millis().min(u128::from(u32::MAX)) as u32;
