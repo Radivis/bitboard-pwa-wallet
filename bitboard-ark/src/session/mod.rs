@@ -38,12 +38,12 @@ pub(crate) const CLIENT_NAME: &str = "bitboard-pwa-wallet";
 pub(crate) const BOLTZ_URL: &str = "https://api.boltz.exchange";
 pub(crate) const CLIENT_TIMEOUT: Duration = Duration::from_secs(30);
 
-pub type ArkWallet = ArkBdkWallet<SharedPersistenceDb>;
-pub type ArkClient = Client<EsploraBlockchain, ArkWallet, InMemorySwapStorage, Bip32KeyProvider>;
+pub type BumperWallet = ArkBdkWallet<SharedPersistenceDb>;
+pub type ArkClient = Client<EsploraBlockchain, BumperWallet, InMemorySwapStorage, Bip32KeyProvider>;
 
 pub struct ArkSession {
     client: ArkClient,
-    onchain_wallet: Arc<ArkWallet>,
+    bumper_wallet: Arc<BumperWallet>,
     wallet_db: Arc<JsonPersistenceDb>,
     delegator: Option<DelegatorClient>,
     network_mode: NetworkMode,

@@ -550,9 +550,9 @@ export interface ArkadeService {
   setEncryptedWalletSecretsHost(host: EncryptedWalletSecretsHost): Promise<void>
   openSession(params: OpenArkadeSessionParams): Promise<OpenArkadeSessionResult>
   /** Best-effort bumper BDK Esplora sync; does not belong on session-open critical path. */
-  syncOnchainBumperWallet(): Promise<void>
-  exportOnchainWalletChangeset(): Promise<string>
-  onchainWalletFullScanDone(): Promise<boolean>
+  syncBumperWallet(): Promise<void>
+  exportBumperWalletChangeset(): Promise<string>
+  bumperWalletFullScanDone(): Promise<boolean>
   syncWithOperator(): Promise<ArkadeOperatorSyncResult>
   getOperatorTrustStatus(): Promise<ArkadeOperatorTrustStatus>
   getOperatorConfigDiff(): Promise<ArkadeOperatorConfigDiffResult>

@@ -214,11 +214,11 @@ where
 
     async fn fetch_esplora_update(&self) -> Result<(bdk_wallet::Update, bool), Error> {
         let now_secs = Self::scan_unix_secs()?;
-        match onchain_wallet_scan_kind(self.completed_full_scan.load(Ordering::Acquire)) {
-            OnchainWalletScanKind::Incremental => {
+        match bumper_wallet_scan_kind(self.completed_full_scan.load(Ordering::Acquire)) {
+            BumperWalletScanKind::Incremental => {
                 Ok((self.incremental_esplora_update(now_secs).await?, false))
             }
-            OnchainWalletScanKind::Full => Ok((self.full_esplora_update(now_secs).await?, true)),
+            BumperWalletScanKind::Full => Ok((self.full_esplora_update(now_secs).await?, true)),
         }
     }
 }
@@ -416,7 +416,7 @@ const BUMPER_ESPLORA_PARALLEL_REQUESTS: usize = 5;
 const BUMPER_FULL_SCAN_PARALLEL_REQUESTS: usize = 2;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum OnchainWalletScanKind {
+pub(crate) enum BumperWalletScanKind {
     Full,
     Incremental,
 }
@@ -436,11 +436,11 @@ pub(crate) fn unused_spk_sync_request(
 
 /// After the first successful full scan in this process, later `sync()` calls must not
 /// walk unused HD gap via `/scripthash/.../txs`.
-pub(crate) fn onchain_wallet_scan_kind(completed_full_scan: bool) -> OnchainWalletScanKind {
+pub(crate) fn bumper_wallet_scan_kind(completed_full_scan: bool) -> BumperWalletScanKind {
     if completed_full_scan {
-        OnchainWalletScanKind::Incremental
+        BumperWalletScanKind::Incremental
     } else {
-        OnchainWalletScanKind::Full
+        BumperWalletScanKind::Full
     }
 }
 
@@ -509,10 +509,10 @@ pub(crate) fn create_or_load_bip84_wallet(
 }
 
 #[cfg(test)]
-mod onchain_wallet_scan_kind_tests {
+mod bumper_wallet_scan_kind_tests {
     use super::{
-        bumper_bdk_network, completed_full_scan_from_hydrate, create_or_load_bip84_wallet,
-        onchain_wallet_scan_kind, OnchainWalletScanKind,
+        bumper_bdk_network, bumper_wallet_scan_kind, completed_full_scan_from_hydrate,
+        create_or_load_bip84_wallet, BumperWalletScanKind,
     };
     use bdk_wallet::KeychainKind;
     use bitcoin::bip32::Xpriv;
@@ -523,27 +523,27 @@ mod onchain_wallet_scan_kind_tests {
     }
 
     #[test]
-    fn onchain_wallet_scan_kind_is_full_before_first_scan_and_incremental_after() {
-        assert_eq!(onchain_wallet_scan_kind(false), OnchainWalletScanKind::Full);
+    fn bumper_wallet_scan_kind_is_full_before_first_scan_and_incremental_after() {
+        assert_eq!(bumper_wallet_scan_kind(false), BumperWalletScanKind::Full);
         assert_eq!(
-            onchain_wallet_scan_kind(true),
-            OnchainWalletScanKind::Incremental
+            bumper_wallet_scan_kind(true),
+            BumperWalletScanKind::Incremental
         );
     }
 
     #[test]
-    fn onchain_wallet_scan_kind_is_incremental_when_hydrated_with_full_scan_done() {
+    fn bumper_wallet_scan_kind_is_incremental_when_hydrated_with_full_scan_done() {
         assert_eq!(
-            onchain_wallet_scan_kind(completed_full_scan_from_hydrate(true, false)),
-            OnchainWalletScanKind::Incremental
+            bumper_wallet_scan_kind(completed_full_scan_from_hydrate(true, false)),
+            BumperWalletScanKind::Incremental
         );
         assert_eq!(
-            onchain_wallet_scan_kind(completed_full_scan_from_hydrate(false, false)),
-            OnchainWalletScanKind::Full
+            bumper_wallet_scan_kind(completed_full_scan_from_hydrate(false, false)),
+            BumperWalletScanKind::Full
         );
         assert_eq!(
-            onchain_wallet_scan_kind(completed_full_scan_from_hydrate(true, true)),
-            OnchainWalletScanKind::Full
+            bumper_wallet_scan_kind(completed_full_scan_from_hydrate(true, true)),
+            BumperWalletScanKind::Full
         );
     }
 

@@ -17,7 +17,7 @@ use crate::session::bumper_sync_policy::{
     completion_spend_should_sync_bumper_wallet,
 };
 use crate::session::mappers::parse_onchain_address;
-use crate::session::open::sync_onchain_wallet_with_retries;
+use crate::session::open::sync_bumper_wallet_with_retries;
 
 fn resolve_completion_fee_rate_sat_per_vb(override_rate_sat_per_vb: Option<f64>) -> f64 {
     override_rate_sat_per_vb
@@ -60,7 +60,7 @@ impl ArkSession {
     async fn sync_bumper_wallet_and_record_phase(&self) -> ArkResult<()> {
         self.bumper_wallet_sync_phase
             .set(BumperWalletSyncPhase::Running);
-        let sync_result = sync_onchain_wallet_with_retries(&self.client).await;
+        let sync_result = sync_bumper_wallet_with_retries(&self.client).await;
         self.bumper_wallet_sync_phase
             .set(bumper_sync_phase_after_wallet_scan(sync_result.is_ok()));
         sync_result
@@ -88,7 +88,7 @@ impl ArkSession {
             bumper_info_should_start_wallet_scan(self.bumper_wallet_sync_phase.get());
         self.ensure_bumper_wallet_synced_once().await?;
         let address = self.client.onchain_wallet_address()?;
-        self.onchain_wallet
+        self.bumper_wallet
             .sync_unused_spks()
             .await
             .map_err(|error| ArkWasmError::Wallet(error.to_string()))?;

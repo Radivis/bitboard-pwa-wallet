@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const persistBumperSegwit0SidecarIfAllowed = vi.hoisted(() => vi.fn())
-const exportOnchainWalletChangeset = vi.hoisted(() => vi.fn())
-const onchainWalletFullScanDone = vi.hoisted(() => vi.fn())
+const exportBumperWalletChangeset = vi.hoisted(() => vi.fn())
+const bumperWalletFullScanDone = vi.hoisted(() => vi.fn())
 const hasOpenSession = vi.hoisted(() => vi.fn())
 const walletStoreState = vi.hoisted(() => ({
   loadedDescriptorWallet: {
@@ -21,10 +21,10 @@ vi.mock('@/lib/wallet/persist-bumper-segwit0-sidecar', () => ({
 
 vi.mock('@/workers/arkade-factory', () => ({
   getArkadeWorker: () => ({
-    exportOnchainWalletChangeset: (...args: unknown[]) =>
-      exportOnchainWalletChangeset(...args),
-    onchainWalletFullScanDone: (...args: unknown[]) =>
-      onchainWalletFullScanDone(...args),
+    exportBumperWalletChangeset: (...args: unknown[]) =>
+      exportBumperWalletChangeset(...args),
+    bumperWalletFullScanDone: (...args: unknown[]) =>
+      bumperWalletFullScanDone(...args),
     hasOpenSession: (...args: unknown[]) => hasOpenSession(...args),
   }),
 }))
@@ -49,8 +49,8 @@ function resetPersistMocks() {
     accountId: 0,
   }
   hasOpenSession.mockResolvedValue(true)
-  exportOnchainWalletChangeset.mockResolvedValue('{"local":{}}')
-  onchainWalletFullScanDone.mockResolvedValue(true)
+  exportBumperWalletChangeset.mockResolvedValue('{"local":{}}')
+  bumperWalletFullScanDone.mockResolvedValue(true)
   persistBumperSegwit0SidecarIfAllowed.mockResolvedValue(true)
 }
 
@@ -59,7 +59,7 @@ describe('persistBumperSidecarBestEffort', () => {
 
   it('swallows persist errors', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    exportOnchainWalletChangeset.mockRejectedValue(new Error('export failed'))
+    exportBumperWalletChangeset.mockRejectedValue(new Error('export failed'))
 
     await expect(
       persistBumperSidecarBestEffort(
@@ -86,7 +86,7 @@ describe('persistBumperSidecarAfterWalletWideSyncIfNeeded', () => {
       needsBumperWalletSync: false,
     })
 
-    expect(exportOnchainWalletChangeset).not.toHaveBeenCalled()
+    expect(exportBumperWalletChangeset).not.toHaveBeenCalled()
     expect(persistBumperSegwit0SidecarIfAllowed).not.toHaveBeenCalled()
   })
 
@@ -118,7 +118,7 @@ describe('SE-07 persistBumperSidecarAfterWalletSync session bind', () => {
       networkMode: 'signet',
       arkadeAccountId: 'acct-1',
     })
-    expect(exportOnchainWalletChangeset).not.toHaveBeenCalled()
+    expect(exportBumperWalletChangeset).not.toHaveBeenCalled()
     expect(persistBumperSegwit0SidecarIfAllowed).not.toHaveBeenCalled()
   })
 
@@ -132,7 +132,7 @@ describe('SE-07 persistBumperSidecarAfterWalletSync session bind', () => {
 
     expect(persisted).toBe(false)
     expect(hasOpenSession).not.toHaveBeenCalled()
-    expect(exportOnchainWalletChangeset).not.toHaveBeenCalled()
+    expect(exportBumperWalletChangeset).not.toHaveBeenCalled()
     expect(persistBumperSegwit0SidecarIfAllowed).not.toHaveBeenCalled()
   })
 
@@ -148,7 +148,7 @@ describe('SE-07 persistBumperSidecarAfterWalletSync session bind', () => {
       networkMode: 'signet',
       arkadeAccountId: 'acct-1',
     })
-    expect(exportOnchainWalletChangeset).toHaveBeenCalled()
+    expect(exportBumperWalletChangeset).toHaveBeenCalled()
     expect(persistBumperSegwit0SidecarIfAllowed).toHaveBeenCalledWith(
       expect.objectContaining({
         walletId: 4,

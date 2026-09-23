@@ -40,8 +40,8 @@ export async function persistBumperSidecarAfterWalletSync(params: {
   }
   const worker = getArkadeWorker()
   const exportSyncedAt = new Date().toISOString()
-  const changesetJson = await worker.exportOnchainWalletChangeset()
-  const fullScanDone = await worker.onchainWalletFullScanDone()
+  const changesetJson = await worker.exportBumperWalletChangeset()
+  const fullScanDone = await worker.bumperWalletFullScanDone()
   const walletState = useWalletStore.getState()
   const loaded = walletState.loadedDescriptorWallet
   return persistBumperSegwit0SidecarIfAllowed({

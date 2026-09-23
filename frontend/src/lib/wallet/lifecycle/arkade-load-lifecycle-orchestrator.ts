@@ -1,5 +1,5 @@
 import { getDatabase, getWalletSecretsEncrypted } from '@/db'
-import { clearArkadeDashboardStore, refreshArkadeStoreFromLoadedWasm } from '@/lib/arkade/arkade-persistence-store-sync'
+import { clearArkadeDashboardStore } from '@/lib/arkade/arkade-persistence-store-sync'
 import {
   findActiveArkadeAccountSummary,
 } from '@/lib/arkade/arkade-accounts'
