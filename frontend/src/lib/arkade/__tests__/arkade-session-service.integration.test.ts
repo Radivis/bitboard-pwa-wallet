@@ -27,6 +27,8 @@ const workerMocks = vi.hoisted(() => ({
   getTransactionHistory: vi.fn(),
   getAddress: vi.fn(),
   syncWithOperator: vi.fn(),
+  setOnBackgroundFullReconcileFinished: vi.fn(),
+  scheduleBackgroundFullVtxoReconcile: vi.fn(),
   reconcileActiveAccountId: vi.fn(),
   getUnilateralExitFrontendPersistence: vi.fn(),
   setUnilateralExitFrontendPersistence: vi.fn(),

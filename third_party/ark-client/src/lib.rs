@@ -1,30 +1,30 @@
 use crate::error::ErrorContext;
-use crate::key_provider::KeypairIndex;
 use crate::key_provider::display_receive_derivation_index;
+use crate::key_provider::KeypairIndex;
 use crate::utils::sleep;
 use crate::utils::timeout_op;
 use crate::utils::unix_now;
 use crate::wallet::BoardingWallet;
 use crate::wallet::OnchainWallet;
-use ark_core::ArkAddress;
-use ark_core::BoardingOutput;
-use ark_core::DEFAULT_DERIVATION_PATH;
-use ark_core::ExplorerUtxo;
-use ark_core::UtxoCoinSelection;
-use ark_core::Vtxo;
-use ark_core::VtxoList;
 use ark_core::asset::AssetId;
 use ark_core::build_anchor_tx;
 use ark_core::history;
-use ark_core::history::OutgoingTransaction;
 use ark_core::history::generate_incoming_vtxo_transaction_history;
 use ark_core::history::generate_outgoing_vtxo_transaction_history;
 use ark_core::history::sort_transactions_by_created_at;
+use ark_core::history::OutgoingTransaction;
 use ark_core::server;
 use ark_core::server::GetVtxosRequest;
 use ark_core::server::IndexerPage;
 use ark_core::server::SubscriptionResponse;
 use ark_core::server::VirtualTxOutPoint;
+use ark_core::ArkAddress;
+use ark_core::BoardingOutput;
+use ark_core::ExplorerUtxo;
+use ark_core::UtxoCoinSelection;
+use ark_core::Vtxo;
+use ark_core::VtxoList;
+use ark_core::DEFAULT_DERIVATION_PATH;
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 mod ark_grpc_wasm_shim;
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
@@ -33,6 +33,11 @@ use ark_grpc::VtxoChainResponse;
 use ark_grpc::VtxoChainResponse;
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 use ark_grpc_wasm_shim as ark_grpc;
+use bitcoin::bip32::DerivationPath;
+use bitcoin::bip32::Xpriv;
+use bitcoin::key::Keypair;
+use bitcoin::key::Secp256k1;
+use bitcoin::secp256k1::All;
 use bitcoin::Address;
 use bitcoin::Amount;
 use bitcoin::OutPoint;
@@ -40,11 +45,6 @@ use bitcoin::ScriptBuf;
 use bitcoin::Transaction;
 use bitcoin::Txid;
 use bitcoin::XOnlyPublicKey;
-use bitcoin::bip32::DerivationPath;
-use bitcoin::bip32::Xpriv;
-use bitcoin::key::Keypair;
-use bitcoin::key::Secp256k1;
-use bitcoin::secp256k1::All;
 use futures::Future;
 use futures::Stream;
 use std::collections::HashMap;
@@ -74,8 +74,8 @@ mod utils;
 
 pub use crate::batch::{JoinBatchOutcome, RegisteredBatchIntent};
 pub use crate::batch_join_hooks::{
-    BATCH_JOIN_ABORTED_MESSAGE, OnIntentRegisteredHook, is_batch_join_in_flight,
-    set_batch_join_abort, set_on_intent_registered,
+    is_batch_join_in_flight, set_batch_join_abort, set_on_intent_registered,
+    OnIntentRegisteredHook, BATCH_JOIN_ABORTED_MESSAGE,
 };
 pub use ark_core::server::DeprecatedSignerStatus;
 pub use asset::IssueAssetResult;
@@ -100,10 +100,10 @@ pub use key_provider::StaticKeyProvider;
 pub use lightning_invoice;
 pub use migration::DeprecatedSignerMigrationReport;
 pub use migration::DeprecatedSignerReport;
-pub use migration::MAX_VTXOS_PER_SETTLEMENT;
 pub use migration::MigrationLegReport;
 pub use migration::MigrationSkipReason;
 pub use migration::MigrationVtxoRef;
+pub use migration::MAX_VTXOS_PER_SETTLEMENT;
 pub use swap_storage::InMemorySwapStorage;
 #[cfg(feature = "sqlite")]
 pub use swap_storage::SqliteSwapStorage;
@@ -1904,9 +1904,9 @@ where
 mod digest_guard_tests {
     use super::*;
     use ark_grpc::test_utils;
-    use bitcoin::Address;
     use bitcoin::key::Secp256k1;
     use bitcoin::secp256k1::SecretKey;
+    use bitcoin::Address;
     use std::convert::Infallible;
     use std::future::Future;
     use std::pin::Pin;
@@ -1916,8 +1916,8 @@ mod digest_guard_tests {
     use std::task::Poll;
     use tokio::net::TcpListener;
     use tonic::body::Body;
-    use tonic::codegen::Service;
     use tonic::codegen::http;
+    use tonic::codegen::Service;
     use tonic::server::NamedService;
     use tonic::server::UnaryService;
 

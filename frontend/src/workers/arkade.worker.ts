@@ -67,7 +67,10 @@ import type {
   OpenArkadeSessionResult,
 } from '@/workers/arkade-api'
 
-import { persistAfterCriticalWithLightOperatorSync } from '@/lib/arkade/arkade-operator-sync-policy'
+import {
+  persistAfterCriticalWithLightOperatorSync,
+  shouldScheduleBackgroundFullVtxoReconcile,
+} from '@/lib/arkade/arkade-operator-sync-policy'
 import { createSingleFlightScheduler } from '@/lib/arkade/background-full-vtxo-reconcile'
 import { loadBitboardArkWasm } from '@/lib/arkade/load-bitboard-ark-wasm'
 
@@ -264,7 +267,7 @@ const scheduleBackgroundFullVtxoReconcileSingleFlight = createSingleFlightSchedu
 })
 
 function scheduleBackgroundFullFromSyncResult(result: ArkadeOperatorSyncResult): void {
-  if (result.fullReconcileDue) {
+  if (shouldScheduleBackgroundFullVtxoReconcile(result.fullReconcileDue)) {
     scheduleBackgroundFullVtxoReconcileSingleFlight()
   }
 }

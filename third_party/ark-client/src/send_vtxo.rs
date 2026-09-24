@@ -1,34 +1,34 @@
-use crate::Blockchain;
-use crate::Client;
-use crate::Error;
 use crate::error::ErrorContext;
 use crate::swap_storage::SwapStorage;
 use crate::utils::timeout_op;
 use crate::wallet::BoardingWallet;
 use crate::wallet::OnchainWallet;
+use crate::Blockchain;
+use crate::Client;
+use crate::Error;
 use ark_core::asset::AssetId;
-use ark_core::coin_select::VirtualTxOutPoint;
 use ark_core::coin_select::select_vtxos;
 use ark_core::coin_select::select_vtxos_for_asset;
+use ark_core::coin_select::VirtualTxOutPoint;
 use ark_core::intent;
 use ark_core::script::extract_checksig_pubkeys;
-use ark_core::send::OffchainTransactions;
-use ark_core::send::SendReceiver;
-use ark_core::send::VtxoInput;
 use ark_core::send::build_asset_send_transactions;
 use ark_core::send::sign_ark_transaction;
 use ark_core::send::sign_checkpoint_transaction;
+use ark_core::send::OffchainTransactions;
+use ark_core::send::SendReceiver;
+use ark_core::send::VtxoInput;
 use ark_core::server;
 use ark_core::server::PendingTx;
+use bitcoin::key::Secp256k1;
+use bitcoin::psbt;
+use bitcoin::secp256k1;
+use bitcoin::secp256k1::schnorr;
 use bitcoin::Amount;
 use bitcoin::OutPoint;
 use bitcoin::TxOut;
 use bitcoin::Txid;
 use bitcoin::XOnlyPublicKey;
-use bitcoin::key::Secp256k1;
-use bitcoin::psbt;
-use bitcoin::secp256k1;
-use bitcoin::secp256k1::schnorr;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::time::Duration;
@@ -214,7 +214,7 @@ where
         &mut psbt::Input,
         secp256k1::Message,
     ) -> Result<Vec<(schnorr::Signature, XOnlyPublicKey)>, ark_core::Error>
-    + '_ {
+           + '_ {
         |input, msg| {
             let script = input
                 .witness_script

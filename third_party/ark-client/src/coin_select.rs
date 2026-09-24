@@ -1,14 +1,14 @@
-use crate::Blockchain;
-use crate::Client;
-use crate::Error;
 use crate::error::ErrorContext;
 use crate::swap_storage::SwapStorage;
 use crate::wallet::BoardingWallet;
 use crate::wallet::OnchainWallet;
+use crate::Blockchain;
+use crate::Client;
+use crate::Error;
+use ark_core::unilateral_exit;
 use ark_core::ExplorerUtxo;
 use ark_core::Vtxo;
 use ark_core::VtxoList;
-use ark_core::unilateral_exit;
 use bitcoin::Amount;
 use bitcoin::OutPoint;
 use bitcoin::ScriptBuf;
@@ -374,8 +374,8 @@ where
 
 #[cfg(test)]
 mod completion_vtxo_list_tests {
-    use ark_core::VtxoList;
     use ark_core::server::VirtualTxOutPoint;
+    use ark_core::VtxoList;
     use bitcoin::{Amount, OutPoint, ScriptBuf, Txid};
 
     fn virtual_vtxo(

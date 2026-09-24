@@ -265,12 +265,11 @@ pub fn dedupe_virtual_tx_outpoints(
 
 /// Upsert indexer rows into a persisted snapshot without dropping historical spent VTXOs (ARK-SYNC-04/06).
 ///
-/// `requested_live_outpoints` are snapshot-live outpoints sent to `list_vtxos_for_outpoints`.
-/// A requested live outpoint missing from `fetched` keeps the prior row (not marked spent).
+/// The map starts from every prior row, so a live outpoint the indexer omits stays as stored
+/// and is not marked spent.
 pub fn merge_incremental_vtxo_snapshot(
     prior: &OffchainVtxoSnapshot,
     fetched: impl IntoIterator<Item = VirtualTxOutPoint>,
-    requested_live_outpoints: &HashSet<OutPoint>,
     synced_at: i64,
     script_to_server_pk: impl Fn(&ScriptBuf) -> Option<XOnlyPublicKey>,
 ) -> OffchainVtxoSnapshot {
@@ -281,10 +280,8 @@ pub fn merge_incremental_vtxo_snapshot(
         .map(|record| ((record.txid.clone(), record.vout), record))
         .collect();
 
-    let mut fetched_outpoints = HashSet::new();
     for point in fetched {
         let outpoint = point.outpoint;
-        fetched_outpoints.insert(outpoint);
         let outpoint_key = (outpoint.txid.to_string(), outpoint.vout);
         let prior_server_pk = records_by_outpoint
             .get(&outpoint_key)
@@ -300,21 +297,6 @@ pub fn merge_incremental_vtxo_snapshot(
             record.server_pk_hex = prior_server_pk;
         }
         records_by_outpoint.insert(outpoint_key, record);
-    }
-
-    for outpoint in requested_live_outpoints {
-        if fetched_outpoints.contains(outpoint) {
-            continue;
-        }
-        let outpoint_key = (outpoint.txid.to_string(), outpoint.vout);
-        let Some(prior_record) = prior
-            .virtual_tx_outpoints
-            .iter()
-            .find(|record| record.txid == outpoint_key.0 && record.vout == outpoint_key.1)
-        else {
-            continue;
-        };
-        records_by_outpoint.insert(outpoint_key, prior_record.clone());
     }
 
     let mut virtual_tx_outpoints: Vec<VirtualTxOutPointRecord> =
@@ -785,13 +767,7 @@ mod tests {
         spent.is_spent = true;
         let prior = snapshot_from_records(vec![spent]);
         let incoming = sample_vtp(0x22, 25_000, false, 9_999_999_999);
-        let merged = merge_incremental_vtxo_snapshot(
-            &prior,
-            vec![incoming.clone()],
-            &HashSet::new(),
-            50,
-            |_| None,
-        );
+        let merged = merge_incremental_vtxo_snapshot(&prior, vec![incoming.clone()], 50, |_| None);
         assert_eq!(merged.synced_at, 50);
         assert_eq!(merged.full_listed_at, 100);
         assert_eq!(merged.virtual_tx_outpoints.len(), 2);
@@ -816,9 +792,7 @@ mod tests {
         let mut fetched = sample_vtp(0x33, 40_000, false, 9_999_999_999);
         fetched.is_spent = true;
         fetched.spent_by = Some(Txid::from_byte_array([0x44; 32]));
-        let requested = HashSet::from([OutPoint::new(txid, 0)]);
-        let merged =
-            merge_incremental_vtxo_snapshot(&prior, vec![fetched], &requested, 51, |_| None);
+        let merged = merge_incremental_vtxo_snapshot(&prior, vec![fetched], 51, |_| None);
         assert_eq!(merged.virtual_tx_outpoints.len(), 1);
         assert!(merged.virtual_tx_outpoints[0].is_spent);
         let spent_by = Txid::from_byte_array([0x44; 32]).to_string();
@@ -834,8 +808,7 @@ mod tests {
         let live = sample_snapshot_record(&kept_txid.to_string(), 0, 12_000);
         let prior = snapshot_from_records(vec![live]);
         let other = sample_vtp(0x56, 3_000, false, 9_999_999_999);
-        let requested = HashSet::from([OutPoint::new(kept_txid, 0)]);
-        let merged = merge_incremental_vtxo_snapshot(&prior, vec![other], &requested, 52, |_| None);
+        let merged = merge_incremental_vtxo_snapshot(&prior, vec![other], 52, |_| None);
         assert_eq!(merged.virtual_tx_outpoints.len(), 2);
         let kept = merged
             .virtual_tx_outpoints
@@ -853,9 +826,7 @@ mod tests {
         let prior = snapshot_from_records(vec![live]);
         let mut fetched = sample_vtp(0x66, 8_000, true, 9_999_999_999);
         fetched.is_swept = true;
-        let requested = HashSet::from([OutPoint::new(txid, 0)]);
-        let merged =
-            merge_incremental_vtxo_snapshot(&prior, vec![fetched], &requested, 53, |_| None);
+        let merged = merge_incremental_vtxo_snapshot(&prior, vec![fetched], 53, |_| None);
         assert!(merged.virtual_tx_outpoints[0].is_preconfirmed);
         assert!(merged.virtual_tx_outpoints[0].is_swept);
         assert!(!merged.virtual_tx_outpoints[0].is_spent);
@@ -868,13 +839,8 @@ mod tests {
         historical.is_spent = true;
         let boarded = sample_vtp(0x88, 50_000, true, 9_999_999_999);
         let replaced = snapshot_from_records(vec![historical]);
-        let merged = merge_incremental_vtxo_snapshot(
-            &replaced,
-            vec![boarded.clone()],
-            &HashSet::new(),
-            54,
-            |_| None,
-        );
+        let merged =
+            merge_incremental_vtxo_snapshot(&replaced, vec![boarded.clone()], 54, |_| None);
         assert!(
             merged
                 .virtual_tx_outpoints
@@ -994,6 +960,25 @@ mod tests {
 
         assert!(!overlaid.virtual_tx_outpoints[0].is_unrolled);
         assert_eq!(overlaid.synced_at, 60);
+    }
+
+    #[test]
+    fn overlay_applies_spent_flag_and_keeps_newer_full_listed_at() {
+        let txid = Txid::from_byte_array([0xb5; 32]).to_string();
+        let base_record = sample_snapshot_record(&txid, 0, 40_000);
+        let mut base = snapshot_from_records(vec![base_record.clone()]);
+        base.full_listed_at = 10;
+        let mut latest = base.clone();
+        latest.full_listed_at = 80;
+        let mut spent = base_record;
+        spent.is_spent = true;
+        let mut finalized = snapshot_from_records(vec![spent]);
+        finalized.full_listed_at = 40;
+
+        let overlaid = overlay_changed_vtxo_rows(&latest, &base, &finalized);
+
+        assert!(overlaid.virtual_tx_outpoints[0].is_spent);
+        assert_eq!(overlaid.full_listed_at, 80);
     }
 
     #[test]

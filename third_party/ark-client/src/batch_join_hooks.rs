@@ -3,8 +3,8 @@ use std::cell::RefCell;
 use std::future::Future;
 use std::pin::Pin;
 
-use crate::Error;
 use crate::batch::RegisteredBatchIntent;
+use crate::Error;
 
 pub const BATCH_JOIN_ABORTED_MESSAGE: &str = "batch join aborted by wallet";
 

@@ -6,9 +6,9 @@ use std::sync::Arc;
 use ark_core::asset::AssetId;
 use ark_core::intent;
 use ark_core::server::{
-    self, ChainedTxType, FinalizeOffchainTxResponse, GetVtxosRequest, IndexerPage, PendingTx,
-    StreamEvent, SubmitOffchainTxResponse, SubscriptionResponse, VirtualTxsResponse, VtxoChain,
-    VtxoChains, indexer_spend_txid,
+    self, indexer_spend_txid, ChainedTxType, FinalizeOffchainTxResponse, GetVtxosRequest,
+    IndexerPage, PendingTx, StreamEvent, SubmitOffchainTxResponse, SubscriptionResponse,
+    VirtualTxsResponse, VtxoChain, VtxoChains,
 };
 use ark_rest::apis::ark_service_api::{
     ark_service_estimate_intent_fee, ark_service_get_pending_tx,
@@ -16,12 +16,12 @@ use ark_rest::apis::ark_service_api::{
 use ark_rest::apis::indexer_service_api::indexer_service_get_asset;
 use ark_rest::apis::indexer_service_api::indexer_service_get_vtxo_chain;
 use ark_rest::models::{EstimateIntentFeeRequest, GetPendingTxRequest, IndexerChainedTxType};
+use bitcoin::hex::FromHex;
+use bitcoin::secp256k1::PublicKey;
 use bitcoin::OutPoint;
 use bitcoin::Psbt;
 use bitcoin::SignedAmount;
 use bitcoin::Txid;
-use bitcoin::hex::FromHex;
-use bitcoin::secp256k1::PublicKey;
 use futures::Stream;
 use futures::StreamExt;
 
@@ -260,9 +260,9 @@ impl Client {
     pub fn set_info_refresh_hook(
         &mut self,
         hook: impl Fn(server::Info) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>
-        + Send
-        + Sync
-        + 'static,
+            + Send
+            + Sync
+            + 'static,
     ) {
         if let Some(inner) = Arc::get_mut(&mut self.inner) {
             inner.set_info_refresh_hook(hook);

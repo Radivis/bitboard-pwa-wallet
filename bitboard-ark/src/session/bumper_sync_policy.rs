@@ -1,3 +1,5 @@
+use std::cell::Cell;
+
 /// Whether this session has already started or finished a bumper BDK wallet scan.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum BumperWalletSyncPhase {
@@ -45,6 +47,39 @@ pub(crate) fn exit_broadcast_bumper_sync(phase: BumperWalletSyncPhase) -> ExitBr
         ExitBroadcastBumperSync::WalletWide
     } else {
         ExitBroadcastBumperSync::SpendableScripts
+    }
+}
+
+/// Persist the bumper sidecar when this call starts a wallet-wide scan, or when
+/// it waited out another task's scan that reached `Done`.
+pub(crate) fn bumper_info_needs_wallet_sync_persist(
+    phase_before_wait: BumperWalletSyncPhase,
+    phase_after_settle: BumperWalletSyncPhase,
+) -> bool {
+    bumper_info_should_start_wallet_scan(phase_before_wait)
+        || (phase_before_wait == BumperWalletSyncPhase::Running
+            && phase_after_settle == BumperWalletSyncPhase::Done)
+}
+
+/// Sets `Running` for a wallet-wide bumper scan. If that future is dropped
+/// before it records `Done` or `Failed`, the phase becomes `Failed` so waiters
+/// are not stuck on `Running`.
+pub(crate) struct BumperWalletScanGuard<'a> {
+    phase: &'a Cell<BumperWalletSyncPhase>,
+}
+
+impl<'a> BumperWalletScanGuard<'a> {
+    pub(crate) fn begin(phase: &'a Cell<BumperWalletSyncPhase>) -> Self {
+        phase.set(BumperWalletSyncPhase::Running);
+        Self { phase }
+    }
+}
+
+impl Drop for BumperWalletScanGuard<'_> {
+    fn drop(&mut self) {
+        if self.phase.get() == BumperWalletSyncPhase::Running {
+            self.phase.set(BumperWalletSyncPhase::Failed);
+        }
     }
 }
 
@@ -131,6 +166,41 @@ mod tests {
                 "complete must Esplora-sync bumper before spend even if bumper_info already scanned ({phase:?})"
             );
         }
+    }
+
+    #[test]
+    fn dropped_bumper_scan_marks_running_failed_and_finished_scan_keeps_done() {
+        let phase = Cell::new(BumperWalletSyncPhase::NotStarted);
+        let guard = BumperWalletScanGuard::begin(&phase);
+        assert_eq!(phase.get(), BumperWalletSyncPhase::Running);
+        drop(guard);
+        assert_eq!(phase.get(), BumperWalletSyncPhase::Failed);
+
+        let phase = Cell::new(BumperWalletSyncPhase::NotStarted);
+        let guard = BumperWalletScanGuard::begin(&phase);
+        phase.set(BumperWalletSyncPhase::Done);
+        drop(guard);
+        assert_eq!(phase.get(), BumperWalletSyncPhase::Done);
+    }
+
+    #[test]
+    fn bumper_info_persist_includes_a_scan_this_call_waited_out() {
+        assert!(bumper_info_needs_wallet_sync_persist(
+            BumperWalletSyncPhase::NotStarted,
+            BumperWalletSyncPhase::Done,
+        ));
+        assert!(bumper_info_needs_wallet_sync_persist(
+            BumperWalletSyncPhase::Running,
+            BumperWalletSyncPhase::Done,
+        ));
+        assert!(!bumper_info_needs_wallet_sync_persist(
+            BumperWalletSyncPhase::Running,
+            BumperWalletSyncPhase::Failed,
+        ));
+        assert!(!bumper_info_needs_wallet_sync_persist(
+            BumperWalletSyncPhase::Done,
+            BumperWalletSyncPhase::Done,
+        ));
     }
 
     #[test]

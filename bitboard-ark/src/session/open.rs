@@ -24,6 +24,12 @@ use super::{ArkClient, ArkSession, BOLTZ_URL, BumperWallet, CLIENT_NAME, CLIENT_
 
 const BUMPER_WALLET_SYNC_MAX_ATTEMPTS: u32 = 3;
 const BUMPER_WALLET_SYNC_BASE_BACKOFF_MS: u64 = 1_000;
+const BUMPER_SCAN_SETTLE_POLL: std::time::Duration = std::time::Duration::from_millis(50);
+/// One client timeout per bumper retry. A scan left in `Running` must not block
+/// bumper info and exit broadcast until the session is reopened.
+const BUMPER_SCAN_SETTLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(
+    CLIENT_TIMEOUT.as_secs() * (BUMPER_WALLET_SYNC_MAX_ATTEMPTS as u64),
+);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SessionOpenConnectMode {
@@ -304,11 +310,16 @@ impl ArkSession {
     }
 
     pub(crate) async fn wait_until_bumper_wallet_scan_settled(&self) {
-        const SETTLED_POLL_MS: u64 = 50;
+        let started = std::time::Instant::now();
         while self.bumper_wallet_sync_phase.get()
             == super::bumper_sync_policy::BumperWalletSyncPhase::Running
         {
-            sleep_for_backoff(std::time::Duration::from_millis(SETTLED_POLL_MS)).await;
+            if started.elapsed() >= BUMPER_SCAN_SETTLE_TIMEOUT {
+                self.bumper_wallet_sync_phase
+                    .set(super::bumper_sync_policy::BumperWalletSyncPhase::Failed);
+                return;
+            }
+            sleep_for_backoff(BUMPER_SCAN_SETTLE_POLL).await;
         }
     }
 
@@ -319,8 +330,8 @@ impl ArkSession {
         ) {
             return;
         }
-        self.bumper_wallet_sync_phase
-            .set(super::bumper_sync_policy::BumperWalletSyncPhase::Running);
+        let _scan_guard =
+            super::bumper_sync_policy::BumperWalletScanGuard::begin(&self.bumper_wallet_sync_phase);
         let scan_succeeded = sync_bumper_wallet_allowing_stale(&self.client).await;
         self.bumper_wallet_sync_phase
             .set(super::bumper_sync_policy::bumper_sync_phase_after_wallet_scan(scan_succeeded));

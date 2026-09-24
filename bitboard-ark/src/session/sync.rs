@@ -67,7 +67,6 @@ pub(crate) fn operator_sync_result_idle() -> OperatorSyncResultDto {
 struct LightVtxoFetch {
     points: Vec<VirtualTxOutPoint>,
     script_map: HashMap<ScriptBuf, Vtxo>,
-    requested_live_outpoints: HashSet<OutPoint>,
 }
 
 enum SnapshotCommit {
@@ -121,19 +120,16 @@ impl ArkSession {
         let full_reconcile_due =
             full_vtxo_list_reconcile_due(prior_snapshot.as_ref(), now, schedule_background_full);
 
-        if user_facing_operator_sync_uses_light_fetch(prior_snapshot.as_ref()) {
-            let Some(prior) = prior_snapshot else {
-                return self
-                    .sync_offchain_vtxos_blocking_full_list(key_discovery_warning, now)
-                    .await;
-            };
-            return self
-                .sync_offchain_vtxos_light(prior, key_discovery_warning, full_reconcile_due)
-                .await;
+        match prior_snapshot {
+            Some(prior) if user_facing_operator_sync_uses_light_fetch(Some(&prior)) => {
+                self.sync_offchain_vtxos_light(prior, key_discovery_warning, full_reconcile_due)
+                    .await
+            }
+            _ => {
+                self.sync_offchain_vtxos_blocking_full_list(key_discovery_warning, now)
+                    .await
+            }
         }
-
-        self.sync_offchain_vtxos_blocking_full_list(key_discovery_warning, now)
-            .await
     }
 
     /// Background full unfiltered list, then a catch-up light fetch so a board or intent during the long fetch is kept.
@@ -168,7 +164,6 @@ impl ArkSession {
         self.finalize_operator_sync_snapshot(
             snapshot,
             prior_snapshot.as_ref(),
-            &vtxo_list,
             None,
             false,
             SnapshotCommit::Replace,
@@ -178,20 +173,7 @@ impl ArkSession {
         let Some(listed) = self.wallet_db.snapshot().offchain_vtxo_snapshot.clone() else {
             return Ok(());
         };
-        let catch_up = self.fetch_light_vtxo_delta(&listed).await?;
-        let (merged, merge_base) = self.stage_light_vtxo_merge(listed, &catch_up);
-        let catch_up_list = vtxo_list_from_snapshot(&merged)?;
-        self.finalize_operator_sync_snapshot(
-            merged,
-            Some(&merge_base),
-            &catch_up_list,
-            None,
-            false,
-            SnapshotCommit::OverlayOnto {
-                base: merge_base.clone(),
-            },
-        )
-        .await?;
+        self.sync_offchain_vtxos_light(listed, None, false).await?;
         self.stamp_full_listed_at(current_unix_timestamp());
         Ok(())
     }
@@ -204,11 +186,9 @@ impl ArkSession {
     ) -> ArkResult<(VtxoList, OperatorSyncResultDto)> {
         let fetch = self.fetch_light_vtxo_delta(&prior).await?;
         let (merged, merge_base) = self.stage_light_vtxo_merge(prior, &fetch);
-        let vtxo_list = vtxo_list_from_snapshot(&merged)?;
         self.finalize_operator_sync_snapshot(
             merged,
             Some(&merge_base),
-            &vtxo_list,
             key_discovery_warning,
             full_reconcile_due,
             SnapshotCommit::OverlayOnto {
@@ -237,7 +217,6 @@ impl ArkSession {
         self.finalize_operator_sync_snapshot(
             snapshot,
             prior_snapshot.as_ref(),
-            &vtxo_list,
             key_discovery_warning,
             false,
             SnapshotCommit::Replace,
@@ -271,7 +250,6 @@ impl ArkSession {
         Ok(LightVtxoFetch {
             points: dedupe_virtual_tx_outpoints(points),
             script_map,
-            requested_live_outpoints,
         })
     }
 
@@ -296,12 +274,10 @@ impl ArkSession {
         &self,
         mut snapshot: OffchainVtxoSnapshot,
         prior_snapshot: Option<&OffchainVtxoSnapshot>,
-        vtxo_list: &VtxoList,
         key_discovery_warning: Option<String>,
         full_reconcile_due: bool,
         commit: SnapshotCommit,
     ) -> ArkResult<(VtxoList, OperatorSyncResultDto)> {
-        let _ = vtxo_list;
         let pending_unilateral_outpoints: Vec<(String, u32)> = self
             .wallet_db
             .pending_exit_deductions()
@@ -391,7 +367,6 @@ impl ArkSession {
         let merged = merge_incremental_vtxo_snapshot(
             &merge_base,
             fetch.points.iter().cloned(),
-            &fetch.requested_live_outpoints,
             current_unix_timestamp(),
             |script| fetch.script_map.get(script).map(|vtxo| vtxo.server_pk()),
         );

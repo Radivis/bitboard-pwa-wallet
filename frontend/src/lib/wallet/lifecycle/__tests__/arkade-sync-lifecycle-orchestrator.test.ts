@@ -519,4 +519,29 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
 
     await expect(awaitArkadeSyncQuiescence()).resolves.toBeUndefined()
   })
+
+  it('background reconcile warning is replaced and cleared only when it is still current', async () => {
+    await orchestrateArkadeSyncThenSave(syncParams)
+    const onFinished = setOnBackgroundFullReconcileFinished.mock.lastCall?.[0] as
+      | ((outcome: { ok: boolean; warningMessage?: string }) => Promise<void>)
+      | undefined
+    expect(onFinished).toEqual(expect.any(Function))
+
+    await onFinished?.({ ok: false, warningMessage: 'first reconcile failure' })
+    await onFinished?.({ ok: false, warningMessage: 'second reconcile failure' })
+    expect(getArkadeSyncLifecycleSnapshot().warningMessage).toBe(
+      'second reconcile failure',
+    )
+
+    await onFinished?.({ ok: true })
+    expect(getArkadeSyncLifecycleSnapshot().warningMessage).toBeNull()
+
+    await onFinished?.({ ok: false, warningMessage: 'reconcile failed' })
+    syncWithOperator.mockResolvedValueOnce({
+      keyDiscoveryWarning: 'keys still stale',
+    })
+    await orchestrateArkadeSyncThenSave(syncParams)
+    await onFinished?.({ ok: true })
+    expect(getArkadeSyncLifecycleSnapshot().warningMessage).toBe('keys still stale')
+  })
 })

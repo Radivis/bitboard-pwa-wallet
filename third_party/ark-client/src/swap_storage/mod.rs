@@ -8,11 +8,11 @@
 //! - [`InMemorySwapStorage`] - Default in-memory implementation for development and testing
 //! - [`SqliteSwapStorage`] - SQLite-based persistent implementation for production use (requires
 //!   the `sqlite` feature)
-use crate::Error;
 use crate::boltz::ChainSwapData;
 use crate::boltz::ReverseSwapData;
 use crate::boltz::SubmarineSwapData;
 use crate::boltz::SwapStatus;
+use crate::Error;
 use async_trait::async_trait;
 
 mod memory;

@@ -561,7 +561,7 @@ export interface ArkadeService {
   exportBumperWalletChangeset(): Promise<string>
   bumperWalletFullScanDone(): Promise<boolean>
   syncWithOperator(scheduleBackgroundFull?: boolean): Promise<ArkadeOperatorSyncResult>
-  /** Fire-and-forget. A second call while one reconcile is in flight does not start another. */
+  /** Fire-and-forget. A call during an in-flight reconcile queues one follow-up. */
   scheduleBackgroundFullVtxoReconcile(): void
   setOnBackgroundFullReconcileFinished(
     onFinished: (outcome: BackgroundFullVtxoReconcileOutcome) => void | Promise<void>,

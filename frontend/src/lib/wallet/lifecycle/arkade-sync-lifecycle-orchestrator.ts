@@ -176,16 +176,27 @@ async function invalidateOperatorTrustQueriesForScope(scope: ArkadeRailScope): P
   })
 }
 
+let lastBackgroundReconcileWarning: string | null = null
+
 function recordBackgroundReconcileWarning(warningMessage: string): void {
+  lastBackgroundReconcileWarning = warningMessage
   const current = getArkadeSyncLifecycleSnapshot()
-  const existing = current.warningMessage
-  const warning =
-    existing != null && existing !== ''
-      ? `${existing}\n${warningMessage}`
-      : warningMessage
   setSnapshot({
     ...current,
-    warningMessage: warning,
+    warningMessage,
+  })
+}
+
+function clearBackgroundReconcileWarningIfCurrent(): void {
+  const current = getArkadeSyncLifecycleSnapshot()
+  const staleWarning = lastBackgroundReconcileWarning
+  lastBackgroundReconcileWarning = null
+  if (staleWarning == null || current.warningMessage !== staleWarning) {
+    return
+  }
+  setSnapshot({
+    ...current,
+    warningMessage: null,
   })
 }
 
@@ -198,6 +209,7 @@ async function handleBackgroundFullVtxoReconcileFinished(
     )
     return
   }
+  clearBackgroundReconcileWarningIfCurrent()
   const scope = getArkadeSyncLifecycleSnapshot().railScope
   if (scope == null) {
     return
@@ -266,6 +278,7 @@ export async function awaitArkadeSyncQuiescence(): Promise<void> {
 
 /** Clears sync lifecycle after session teardown (see {@link closeArkadeSession}). */
 export function forceResetArkadeSyncLifecycleForTeardown(): void {
+  lastBackgroundReconcileWarning = null
   clearDashboardPollSchedule()
   lastDashboardPollStartedAtMs = 0
   inFlightSyncTracker.clearCurrent()
@@ -509,5 +522,6 @@ export function resetArkadeSyncLifecycleStateForTests(): void {
   inFlightSyncTracker.clearCurrent()
   clearDashboardPollSchedule()
   lastDashboardPollStartedAtMs = 0
+  lastBackgroundReconcileWarning = null
   listeners.clear()
 }

@@ -16,4 +16,30 @@ describe('background full vtxo reconcile single-flight', () => {
 
     expect(started).toBe(1)
   })
+
+  it('queues one follow-up after the in-flight run settles', async () => {
+    let started = 0
+    let releaseCurrent: (() => void) | null = null
+    const schedule = createSingleFlightScheduler(
+      () =>
+        new Promise<void>((resolve) => {
+          started += 1
+          releaseCurrent = resolve
+        }),
+    )
+
+    schedule()
+    schedule()
+    schedule()
+    expect(started).toBe(1)
+
+    const releaseFirst = releaseCurrent
+    releaseFirst?.()
+    await Promise.resolve()
+    expect(started).toBe(2)
+
+    releaseCurrent?.()
+    await Promise.resolve()
+    expect(started).toBe(2)
+  })
 })
