@@ -12,7 +12,7 @@ export function shouldScheduleBackgroundFullVtxoReconcile(
   return fullReconcileDue === true
 }
 
-/** Persist-after-board/intent: light operator sync only; never await the 15-minute full list. */
+/** Persist-after-board/intent: light operator sync only; never await the background full list. */
 export async function persistAfterCriticalWithLightOperatorSync(params: {
   awaitUserFacingQuiescence: () => Promise<void>
   autonomousActive: boolean

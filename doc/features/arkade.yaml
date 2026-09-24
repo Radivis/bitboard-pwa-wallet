@@ -334,13 +334,13 @@ feature:
       - id: ARK-SYNC-04
         description: With a snapshot, operator sync upserts live outpoints plus the recent/gap scripts and does not replace history from a full unfiltered list on the user-facing path
       - id: ARK-SYNC-05
-        description: Blocking full list only when there is no snapshot. A full unfiltered list also runs in the background when full_listed_at is older than 15 minutes (including upgrade default 0) and after manual or migration sync. It must not block dashboard poll, persist-after-board/intent, or the manual-sync spinner beyond the light fetch
+        description: Blocking full list only when there is no snapshot. A full unfiltered list also runs in the background when full_listed_at is older than 10 minutes (including upgrade default 0) and after manual or migration sync. Ten minutes leaves room before the 15-minute idle auto-lock discards an in-flight scan. It must not block dashboard poll, persist-after-board/intent, or the manual-sync spinner beyond the light fetch
       - id: ARK-SYNC-06
         description: A missing indexer row for a previously live outpoint does not mark it spent
       - id: ARK-SYNC-07
         description: >-
           Balance and recoverable amounts read the offchain snapshot between full reconciles.
-          They can lag a full operator history by 15 minutes (FULL_VTXO_LIST_RECONCILE_INTERVAL_SECS)
+          They can lag a full operator history by 10 minutes (FULL_VTXO_LIST_RECONCILE_INTERVAL_SECS)
           plus the dashboard poll interval, including HD indices outside the recent light-sync window.
           While a full reconcile is due, send skips snapshot coin selection and asks the operator
           for spendable VTXOs.

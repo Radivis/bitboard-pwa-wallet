@@ -2,11 +2,14 @@ use crate::persistence::OffchainVtxoSnapshot;
 
 /// How often a background full unfiltered VTXO list may run after a snapshot exists.
 ///
+/// Ten minutes, not the 15-minute idle auto-lock. A scan that becomes due at the lock
+/// boundary can still be in flight when the session is torn down, and that discards the work.
+///
 /// Balance and recoverable amounts read the offchain snapshot between those reconciles
 /// (ARK-SYNC-07). They can lag a full operator history by this interval plus the dashboard
 /// poll interval. HD indices outside the recent light-sync window stay unchanged until the
 /// background full list commits.
-pub const FULL_VTXO_LIST_RECONCILE_INTERVAL_SECS: i64 = 15 * 60;
+pub const FULL_VTXO_LIST_RECONCILE_INTERVAL_SECS: i64 = 10 * 60;
 
 /// User-facing operator sync uses the light fetch whenever a snapshot already exists (ARK-SYNC-04).
 pub fn user_facing_operator_sync_uses_light_fetch(snapshot: Option<&OffchainVtxoSnapshot>) -> bool {

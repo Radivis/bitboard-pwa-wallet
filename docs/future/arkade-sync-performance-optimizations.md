@@ -36,7 +36,7 @@ The cost is **script-count × HTTP RTT**, not local CPU over VTXO rows. Paginati
 
 `spendable_only` shrinks the **response body** (2 vs 345 rows) but **not** the chunk count. A spendable-only scan of all 370 scripts is still ~10 GETs / ~3s.
 
-User-facing `sync_with_operator` uses a light fetch when an offchain snapshot already exists (live outpoints plus the recent HD window) and upserts into that snapshot. A full unfiltered `list_vtxos()` runs only for bootstrap (no snapshot) and in the background when `full_listed_at` is older than 15 minutes, or after manual / signer-migration sync. Dashboard poll, board/intent persist, and the manual-sync return do not wait on that full list. Intent “slowness” after register is mostly the Mutinynet **batch round** (~50–60s) and is **out of scope** here.
+User-facing `sync_with_operator` uses a light fetch when an offchain snapshot already exists (live outpoints plus the recent HD window) and upserts into that snapshot. A full unfiltered `list_vtxos()` runs only for bootstrap (no snapshot) and in the background when `full_listed_at` is older than 10 minutes, or after manual / signer-migration sync. Dashboard poll, board/intent persist, and the manual-sync return do not wait on that full list. Intent “slowness” after register is mostly the Mutinynet **batch round** (~50–60s) and is **out of scope** here.
 
 ---
 
@@ -79,7 +79,7 @@ Treat the persisted snapshot as source of truth for **spent history**. Each user
 
 **Expected idle list:** ~0.3–0.8s vs ~3s.
 
-**Full reconcile:** blocking only when there is no snapshot. Otherwise a background full list when `full_listed_at` is older than 15 minutes (upgrade default `0` counts as stale) and after manual or signer-migration sync, followed by a catch-up light merge. The UI does not wait for it.
+**Full reconcile:** blocking only when there is no snapshot. Otherwise a background full list when `full_listed_at` is older than 10 minutes (upgrade default `0` counts as stale) and after manual or signer-migration sync, followed by a catch-up light merge. The UI does not wait for it.
 
 `with_after` is an indexer last-update cursor, not a created-at or spend cursor. It is not the delta by itself; outpoint refresh covers spends of older VTXOs. Querying `after=` on all ~370 scripts would still be about 10 GETs, so v1 does not do that.
 
@@ -100,7 +100,7 @@ None of these beat incremental merge once spent history is local.
 ### 4. Stop full-listing on every dashboard poll (implemented with option 1)
 
 - Dashboard: **light sync** (option 1).
-- **Full history list** only on first open (no snapshot) and as a background reconcile (15 minutes, manual refresh, signer migration).
+- **Full history list** only on first open (no snapshot) and as a background reconcile (10 minutes, manual refresh, signer migration).
 - After board / intent: `persistAfterCriticalOperation` runs the light sync and does not wait for the background full list. Send already skips a post-send full sync.
 
 Does not lower the cost of *one* full list; stops paying it several times a minute.
