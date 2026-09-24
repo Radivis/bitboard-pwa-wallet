@@ -12,9 +12,10 @@ use super::snapshot_ops::{
 };
 use crate::session::ArkSession;
 use crate::session::bumper_sync_policy::{
-    BumperWalletSyncPhase, bumper_info_balance_sats, bumper_info_should_start_wallet_scan,
+    BumperWalletScanGuard, ExitBroadcastBumperSync, bumper_info_balance_sats,
+    bumper_info_needs_wallet_sync_persist, bumper_info_should_start_wallet_scan,
     bumper_sync_phase_after_wallet_scan, completion_estimate_should_sync_bumper_wallet,
-    completion_spend_should_sync_bumper_wallet,
+    completion_spend_should_sync_bumper_wallet, exit_broadcast_bumper_sync,
 };
 use crate::session::mappers::parse_onchain_address;
 use crate::session::open::sync_bumper_wallet_with_retries;
@@ -58,8 +59,7 @@ fn map_missing_blocktime_completion_inputs(
 
 impl ArkSession {
     async fn sync_bumper_wallet_and_record_phase(&self) -> ArkResult<()> {
-        self.bumper_wallet_sync_phase
-            .set(BumperWalletSyncPhase::Running);
+        let _scan_guard = BumperWalletScanGuard::begin(&self.bumper_wallet_sync_phase);
         let sync_result = sync_bumper_wallet_with_retries(&self.client).await;
         self.bumper_wallet_sync_phase
             .set(bumper_sync_phase_after_wallet_scan(sync_result.is_ok()));
@@ -74,19 +74,43 @@ impl ArkSession {
     }
 
     async fn ensure_bumper_wallet_synced_once(&self) -> ArkResult<()> {
-        self.sync_bumper_wallet_when(bumper_info_should_start_wallet_scan(
-            self.bumper_wallet_sync_phase.get(),
-        ))
-        .await
+        self.wait_until_bumper_wallet_scan_settled().await;
+        if !bumper_info_should_start_wallet_scan(self.bumper_wallet_sync_phase.get()) {
+            return Ok(());
+        }
+        self.sync_bumper_wallet_and_record_phase().await
+    }
+
+    /// One wallet-wide bumper scan per session. A later unroll step only refreshes
+    /// scripts that can still fund the CPFP child.
+    pub(crate) async fn sync_bumper_for_exit_broadcast(&self) -> ArkResult<()> {
+        self.wait_until_bumper_wallet_scan_settled().await;
+        let scanned_now = match exit_broadcast_bumper_sync(self.bumper_wallet_sync_phase.get()) {
+            ExitBroadcastBumperSync::WalletWide => {
+                self.sync_bumper_wallet_and_record_phase().await?;
+                true
+            }
+            ExitBroadcastBumperSync::SpendableScripts => false,
+        };
+        if scanned_now {
+            return Ok(());
+        }
+        self.bumper_wallet
+            .sync_spendable_scripts()
+            .await
+            .map_err(ArkWasmError::Client)
     }
 
     pub async fn onchain_bumper_info(&self) -> ArkResult<OnchainBumperInfoDto> {
         // LIFE-ARK-BUMP-01: one wallet-wide Esplora scan per session. Later polls
         // incremental-sync unused revealed SPKs (the displayed tip) into BDK, then
         // report confirmed only — so a 4s underfunded refetch cannot restart an HD walk.
-        let needs_bumper_wallet_sync =
-            bumper_info_should_start_wallet_scan(self.bumper_wallet_sync_phase.get());
+        let phase_before_wait = self.bumper_wallet_sync_phase.get();
         self.ensure_bumper_wallet_synced_once().await?;
+        let needs_bumper_wallet_sync = bumper_info_needs_wallet_sync_persist(
+            phase_before_wait,
+            self.bumper_wallet_sync_phase.get(),
+        );
         let address = self.client.onchain_wallet_address()?;
         self.bumper_wallet
             .sync_unused_spks()

@@ -10,6 +10,15 @@ export interface ArkadeOperatorSyncResult {
   keyDiscoveryWarning?: string
   exitingVtxoWarning?: string
   operatorConfigTrustPending?: boolean
+  /** When true, the host should run a background full VTXO list without blocking this sync. */
+  fullReconcileDue?: boolean
+}
+
+export interface BackgroundFullVtxoReconcileOutcome {
+  ok: boolean
+  warningMessage?: string
+  /** Operator trust is pending, so this run did not complete a full list. */
+  operatorTrustPending?: boolean
 }
 
 export interface ArkadeAutonomousModeStatus {
@@ -553,7 +562,12 @@ export interface ArkadeService {
   syncBumperWallet(): Promise<void>
   exportBumperWalletChangeset(): Promise<string>
   bumperWalletFullScanDone(): Promise<boolean>
-  syncWithOperator(): Promise<ArkadeOperatorSyncResult>
+  syncWithOperator(scheduleBackgroundFull?: boolean): Promise<ArkadeOperatorSyncResult>
+  /** Fire-and-forget. A call during an in-flight reconcile queues one follow-up. */
+  scheduleBackgroundFullVtxoReconcile(): void
+  setOnBackgroundFullReconcileFinished(
+    onFinished: (outcome: BackgroundFullVtxoReconcileOutcome) => void | Promise<void>,
+  ): void
   getOperatorTrustStatus(): Promise<ArkadeOperatorTrustStatus>
   getOperatorConfigDiff(): Promise<ArkadeOperatorConfigDiffResult>
   acceptPendingOperatorConfig(): Promise<void>

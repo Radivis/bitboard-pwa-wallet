@@ -58,6 +58,7 @@ import type {
   ArkadeUnilateralExitInProgressDto,
   ArkadeVtxoExitRecordDto,
   ArkadeAutonomousModeStatus,
+  BackgroundFullVtxoReconcileOutcome,
   ArkadeVtxoListResult,
   ArkadeVtxoExpiryStatus,
   ArkadePendingBatchIntent,
@@ -66,6 +67,14 @@ import type {
   OpenArkadeSessionResult,
 } from '@/workers/arkade-api'
 
+import {
+  persistAfterCriticalWithLightOperatorSync,
+  shouldScheduleBackgroundFullVtxoReconcile,
+} from '@/lib/arkade/arkade-operator-sync-policy'
+import {
+  backgroundFullReconcileFinishedOutcome,
+  createSingleFlightScheduler,
+} from '@/lib/arkade/background-full-vtxo-reconcile'
 import { loadBitboardArkWasm } from '@/lib/arkade/load-bitboard-ark-wasm'
 
 type BitboardArkWasm = Awaited<ReturnType<typeof loadBitboardArkWasm>>
@@ -244,9 +253,39 @@ async function getAutonomousModeActive(): Promise<boolean> {
   }
 }
 
+let onBackgroundFullReconcileFinished:
+  | ((outcome: BackgroundFullVtxoReconcileOutcome) => void | Promise<void>)
+  | null = null
+
+const scheduleBackgroundFullVtxoReconcileSingleFlight = createSingleFlightScheduler(async () => {
+  try {
+    const reconcileResult: unknown = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_reconcile_full_offchain_vtxo_list() as Promise<unknown>,
+    )
+    await flushSdkPersistenceNowOrThrow()
+    await onBackgroundFullReconcileFinished?.(
+      backgroundFullReconcileFinishedOutcome(reconcileResult),
+    )
+  } catch (error) {
+    const warningMessage =
+      error instanceof Error ? error.message : 'Full VTXO reconcile failed'
+    await onBackgroundFullReconcileFinished?.({ ok: false, warningMessage })
+  }
+})
+
+function scheduleBackgroundFullFromSyncResult(result: ArkadeOperatorSyncResult): void {
+  if (shouldScheduleBackgroundFullVtxoReconcile(result.fullReconcileDue)) {
+    scheduleBackgroundFullVtxoReconcileSingleFlight()
+  }
+}
+
 /** WASM operator sync + SDK flush only — store refresh runs on the main thread. */
-async function syncWithOperatorCore(): Promise<ArkadeOperatorSyncResult> {
-  const result = await invokeWasmArk((wasmModule) => wasmModule.ark_sync_with_operator())
+async function syncWithOperatorCore(
+  scheduleBackgroundFull = false,
+): Promise<ArkadeOperatorSyncResult> {
+  const result = await invokeWasmArk((wasmModule) =>
+    wasmModule.ark_sync_with_operator(scheduleBackgroundFull),
+  )
   await flushSdkPersistenceNowOrThrow()
   return (result ?? {}) as ArkadeOperatorSyncResult
 }
@@ -264,15 +303,15 @@ async function persistAfterCriticalOperation(): Promise<void> {
   const { awaitArkadeSyncQuiescence } = await import(
     '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
   )
-  await awaitArkadeSyncQuiescence()
-  if (activeSessionParams != null) {
-    const autonomousActive = await getAutonomousModeActive()
-    if (!autonomousActive) {
-      await syncWithOperatorCore()
-      return
-    }
-  }
-  await flushSdkPersistenceNowOrThrow()
+  const autonomousActive =
+    activeSessionParams != null ? await getAutonomousModeActive() : true
+  await persistAfterCriticalWithLightOperatorSync({
+    awaitUserFacingQuiescence: awaitArkadeSyncQuiescence,
+    autonomousActive,
+    runLightOperatorSync: () => syncWithOperatorCore(false),
+    scheduleBackgroundFullReconcile: scheduleBackgroundFullVtxoReconcileSingleFlight,
+    flushPersistence: flushSdkPersistenceNowOrThrow,
+  })
 }
 
 function createOnRegisteredWasmCallback(
@@ -460,12 +499,24 @@ const arkadeService: ArkadeService = {
     )
   },
 
-  async syncWithOperator(): Promise<ArkadeOperatorSyncResult> {
+  async syncWithOperator(
+    scheduleBackgroundFull = false,
+  ): Promise<ArkadeOperatorSyncResult> {
     const { awaitArkadeSyncQuiescence } = await import(
       '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
     )
     await awaitArkadeSyncQuiescence()
-    return syncWithOperatorCore()
+    return syncWithOperatorCore(scheduleBackgroundFull)
+  },
+
+  scheduleBackgroundFullVtxoReconcile(): void {
+    scheduleBackgroundFullVtxoReconcileSingleFlight()
+  },
+
+  setOnBackgroundFullReconcileFinished(
+    onFinished: (outcome: BackgroundFullVtxoReconcileOutcome) => void | Promise<void>,
+  ): void {
+    onBackgroundFullReconcileFinished = onFinished
   },
 
   async enterAutonomousMode(): Promise<void> {
@@ -474,8 +525,11 @@ const arkadeService: ArkadeService = {
   },
 
   async exitAutonomousMode(): Promise<void> {
-    await invokeWasmArk((wasmModule) => wasmModule.ark_exit_autonomous_mode())
+    const result = (await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_exit_autonomous_mode(),
+    )) as ArkadeOperatorSyncResult
     await flushSdkPersistenceNowOrThrow()
+    scheduleBackgroundFullFromSyncResult(result ?? {})
   },
 
   async getAutonomousModeStatus(): Promise<ArkadeAutonomousModeStatus> {
@@ -498,8 +552,11 @@ const arkadeService: ArkadeService = {
   },
 
   async acceptPendingOperatorConfig(): Promise<void> {
-    await invokeWasmArk((wasmModule) => wasmModule.ark_accept_pending_operator_config())
+    const result = (await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_accept_pending_operator_config(),
+    )) as ArkadeOperatorSyncResult
     await flushSdkPersistenceNowOrThrow()
+    scheduleBackgroundFullFromSyncResult(result ?? {})
   },
 
   async reviewOperatorConfigInAutonomousMode(): Promise<void> {

@@ -5,6 +5,7 @@ mod constants;
 mod error;
 mod esplora_blockchain;
 mod exit_balance;
+mod incremental_vtxo_sync;
 mod network;
 mod offchain_snapshot;
 mod operator_config_diff;
@@ -240,9 +241,12 @@ pub fn ark_bumper_wallet_full_scan_done() -> Result<bool, JsValue> {
 }
 
 #[wasm_bindgen]
-pub async fn ark_exit_autonomous_mode() -> Result<(), JsValue> {
+pub async fn ark_exit_autonomous_mode() -> Result<JsValue, JsValue> {
     map_js_async(async {
-        with_session_async(|session| async move { session.exit_autonomous_mode().await }).await
+        let result =
+            with_session_async(|session| async move { session.exit_autonomous_mode().await })
+                .await?;
+        to_js_value(result)
     })
     .await
 }
@@ -255,10 +259,26 @@ pub fn ark_autonomous_mode_status() -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub async fn ark_sync_with_operator() -> Result<JsValue, JsValue> {
+pub async fn ark_sync_with_operator(schedule_background_full: bool) -> Result<JsValue, JsValue> {
+    map_js_async(async move {
+        let result = with_session_async(move |session| async move {
+            session
+                .sync_with_operator_scheduling(schedule_background_full)
+                .await
+        })
+        .await?;
+        to_js_value(result)
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_reconcile_full_offchain_vtxo_list() -> Result<JsValue, JsValue> {
     map_js_async(async {
-        let result =
-            with_session_async(|session| async move { session.sync_with_operator().await }).await?;
+        let result = with_session_async(|session| async move {
+            session.reconcile_full_offchain_vtxo_list().await
+        })
+        .await?;
         to_js_value(result)
     })
     .await
@@ -279,10 +299,14 @@ pub fn ark_operator_config_diff() -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub async fn ark_accept_pending_operator_config() -> Result<(), JsValue> {
+pub async fn ark_accept_pending_operator_config() -> Result<JsValue, JsValue> {
     map_js_async(async {
-        with_session_async(|session| async move { session.accept_pending_operator_config().await })
-            .await
+        let result =
+            with_session_async(
+                |session| async move { session.accept_pending_operator_config().await },
+            )
+            .await?;
+        to_js_value(result)
     })
     .await
 }

@@ -21,6 +21,8 @@ const workerMocks = vi.hoisted(() => ({
   getAddress: vi.fn().mockResolvedValue('tark1qtest'),
   reconcileActiveAccountId: vi.fn().mockResolvedValue(undefined),
   syncWithOperator: vi.fn().mockResolvedValue({}),
+  setOnBackgroundFullReconcileFinished: vi.fn(),
+  scheduleBackgroundFullVtxoReconcile: vi.fn(),
   getUnilateralExitFrontendPersistence: vi.fn().mockResolvedValue({
     job: {
       selectedLeafOutpoints: [],

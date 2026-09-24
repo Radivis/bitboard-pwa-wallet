@@ -1,6 +1,6 @@
 # Arkade operator sync: performance options
 
-Planning note for accelerating **ASP / indexer sync** on wallets with a large VTXO history. Nothing here is implemented yet except the mitigations listed under [Already shipped](#already-shipped).
+Planning note for accelerating **ASP / indexer sync** on wallets with a large VTXO history. Option 1 (incremental merge plus a background full reconcile) is implemented. The mitigations under [Already shipped](#already-shipped) stay in place. Bumper-wallet sync and unlock full-scan policy are a separate problem and are already shipped on this branch.
 
 Unlock feeling like a full Esplora rescan (`/blocks`, scripthash `/txs`, 429s, double “Wallet synced”) is a **different** problem: [unlock-esplora-full-scan-instead-of-sync.md](./unlock-esplora-full-scan-instead-of-sync.md).
 
@@ -36,7 +36,7 @@ The cost is **script-count × HTTP RTT**, not local CPU over VTXO rows. Paginati
 
 `spendable_only` shrinks the **response body** (2 vs 345 rows) but **not** the chunk count. A spendable-only scan of all 370 scripts is still ~10 GETs / ~3s.
 
-`sync_with_operator` always calls `client.list_vtxos()` (unfiltered), then rebuilds `offchain_vtxo_snapshot` from that list. Dashboard polls do this at least every 15s while the tab is visible. Board / intent still await `persistAfterCriticalOperation` → another full sync. Intent “slowness” after register is mostly the Mutinynet **batch round** (~50–60s) and is **out of scope** here.
+User-facing `sync_with_operator` uses a light fetch when an offchain snapshot already exists (live outpoints plus the recent HD window) and upserts into that snapshot. A full unfiltered `list_vtxos()` runs only for bootstrap (no snapshot) and in the background when `full_listed_at` is older than 10 minutes, or after manual / signer-migration sync. Dashboard poll, board/intent persist, and the manual-sync return do not wait on that full list. Intent “slowness” after register is mostly the Mutinynet **batch round** (~50–60s) and is **out of scope** here.
 
 ---
 
@@ -66,23 +66,22 @@ A single idle sync will stay ~3s for as long as every sync enumerates **all ~370
 
 ## Options
 
-### 1. Incremental merge (highest leverage, no ASP change)
+### 1. Incremental merge (implemented)
 
-Treat the persisted snapshot as source of truth for **spent history**. Each sync only asks the ASP what can change:
+Treat the persisted snapshot as source of truth for **spent history**. Each user-facing sync only asks the ASP what can change:
 
 | Query | Purpose | Size on the measured wallet |
 |-------|---------|-----------------------------|
-| `list_vtxos_for_outpoints` on snapshot **unspent** | Detect spends / flag changes | ~2–4 refs → **1 GET** |
-| `spendable_only` on **unused gap + recent receive scripts** | Detect incoming VTXOs | ~40 scripts → **1 GET** |
-| Optional `recoverable_only` / `pending_only` on the same refs | Recovery / preconfirmed | still 1–2 GETs |
+| `list_vtxos_for_outpoints` on snapshot **unspent** (unfiltered) | Detect spends / flag changes, including swept and preconfirmed | ~2–4 refs → **1 GET** |
+| Unfiltered `list_vtxos_for_addresses` on the recent HD window (`next - gap` through the frontier) | Detect incoming and recoverable/pending on those scripts | ~40 scripts → **1 GET** |
 
-**Merge:** upsert live spendable; mark snapshot-unspent missing from spendable as spent; **do not re-download** the ~340 spent rows.
+**Merge:** start from prior rows, upsert fetched outpoints, keep a requested live outpoint when the indexer omits it. Do **not** re-download spent history, and do **not** treat absence as spent.
 
 **Expected idle list:** ~0.3–0.8s vs ~3s.
 
-**Risks:** treating “not in spendable” as spent can miss recoverable / swept / preconfirmed. First open (empty snapshot) must still full-list. Keep a **periodic full reconcile** (interval, manual refresh, or after errors).
+**Full reconcile:** blocking only when there is no snapshot. Otherwise a background full list when `full_listed_at` is older than 10 minutes (upgrade default `0` counts as stale) and after manual or signer-migration sync, followed by a catch-up light merge. The UI does not wait for it.
 
-Indexer already supports `spendable_only`, `spent_only`, `recoverable_only`, `pending_only`, `with_after` / `with_before`, and outpoint references.
+`with_after` is an indexer last-update cursor, not a created-at or spend cursor. It is not the delta by itself; outpoint refresh covers spends of older VTXOs. Querying `after=` on all ~370 scripts would still be about 10 GETs, so v1 does not do that.
 
 ### 2. Do not use `after=` as the only delta
 
@@ -98,11 +97,11 @@ Indexer already supports `spendable_only`, `spent_only`, `recoverable_only`, `pe
 
 None of these beat incremental merge once spent history is local.
 
-### 4. Stop full-listing on every dashboard poll (product, cheap)
+### 4. Stop full-listing on every dashboard poll (implemented with option 1)
 
-- Dashboard: **light sync** (option 1) or skip if the last sync is fresh.
-- **Full history list** only on first open, manual refresh, and a rare reconcile.
-- After board / intent: persist the **operation result** into the snapshot; do not re-pull hundreds of spent rows. Send already skips this.
+- Dashboard: **light sync** (option 1).
+- **Full history list** only on first open (no snapshot) and as a background reconcile (10 minutes, manual refresh, signer migration).
+- After board / intent: `persistAfterCriticalOperation` runs the light sync and does not wait for the background full list. Send already skips a post-send full sync.
 
 Does not lower the cost of *one* full list; stops paying it several times a minute.
 
@@ -130,15 +129,13 @@ If the VTXO viewer / `offchain_history_from_snapshot` can drop old spent rows, a
 
 | Priority | Change | Idle sync on the measured wallet |
 |----------|--------|----------------------------------|
-| **Do** | Incremental merge (outpoints + gap spendable) + rare full reconcile | **~0.5s** vs **~3s** |
-| **Do** | Light sync on the 15s poll; full list only on open / manual / interval | Fewer **3s** hits |
-| **Do** | Skip full list in `persistAfterCriticalOperation` after board / intent | Same after those ops |
+| **Done** | Incremental merge (outpoints + recent window) + background full reconcile | **~0.5s** vs **~3s** |
+| **Done** | Light sync on the 15s poll; full list on bootstrap and in the background | Fewer **3s** hits on the UI path |
+| **Done** | `persistAfterCriticalOperation` after board / intent uses the light sync | Same after those ops |
 | **Measure** | Unused address variant + larger chunk size | Maybe **~1.5s** if still full-scanning |
 | **Later** | Script subscription | Near-zero steady-state list |
 | **Skip as sole fix** | `spendable_only` on all 370 scripts | Still **~10 GETs / ~3s** |
 
-Implementation notes when this is picked up:
+The TypeScript SDK `doSyncVtxos` is the algorithm reference (local history, delta, upsert, rare full reconcile). Bitboard keeps the merge in `bitboard-ark` rather than importing a TS wallet repository. Rust `ark-client` has no equivalent sync API.
 
-- First sync without a snapshot stays a full unfiltered list.
-- Merge must preserve recoverable / pending / swept flags; do not equate “absent from spendable” with “spent” without an outpoint or recoverable check.
-- WASM crates: rebuild with `npm run build:wasm` (or the `bitboard-ark` `wasm-pack` line) before browser verification; `npm run dev` does not rebuild WASM.
+WASM: `npm run dev` does not rebuild WASM. After Rust changes, `cd frontend && npm run build:wasm` (or the `bitboard-ark` `wasm-pack` line) and hard-refresh.

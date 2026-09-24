@@ -321,8 +321,9 @@ feature:
         description: >-
           Loading or copying the boarding address persists the boarding-output row
           without awaiting a full operator list_vtxos / discover_keys. Dashboard
-          operator sync remains the source of offchain balance; boarding settle
-          still full-syncs after a completed join.
+          operator sync remains the source of offchain balance. After a completed
+          join, boarding settle persists with incremental operator sync, not a
+          full history list.
     operator_sync:
       - id: ARK-SYNC-01
         description: When discover_keys fails during operator sync but list_vtxos succeeds, sync lifecycle records a warningMessage and dashboard/management show a non-blocking sync warning banner
@@ -330,6 +331,19 @@ feature:
         description: A later successful sync without key-discovery failure clears warningMessage
       - id: ARK-SYNC-03
         description: After operator sync, reconcile of unrolled+ VTXO exit records runs targeted lookups; non-blocking exitingVtxoWarning when indexer lag or ASP mismatch; never clear exiting state on full-list absence alone (ARK-EXIT-12)
+      - id: ARK-SYNC-04
+        description: With a snapshot, operator sync upserts live outpoints plus the recent/gap scripts and does not replace history from a full unfiltered list on the user-facing path
+      - id: ARK-SYNC-05
+        description: Blocking full list only when there is no snapshot. A full unfiltered list also runs in the background when full_listed_at is older than 10 minutes (including upgrade default 0) and after manual or migration sync. Ten minutes leaves room before the 15-minute idle auto-lock discards an in-flight scan. It must not block dashboard poll, persist-after-board/intent, or the manual-sync spinner beyond the light fetch
+      - id: ARK-SYNC-06
+        description: A missing indexer row for a previously live outpoint does not mark it spent
+      - id: ARK-SYNC-07
+        description: >-
+          Balance and recoverable amounts read the offchain snapshot between full reconciles.
+          They can lag a full operator history by 10 minutes (FULL_VTXO_LIST_RECONCILE_INTERVAL_SECS)
+          plus the dashboard poll interval, including HD indices outside the recent light-sync window.
+          While a full reconcile is due, send skips snapshot coin selection and asks the operator
+          for spendable VTXOs.
     operator_trust:
       - id: ARK-TRUST-01
         description: When operator digest differs from accepted cached_operator_info, sync does not persist offchain snapshot, VTXO exit records survival reconcile, materials prefetch, or accepted operator cache
@@ -343,6 +357,12 @@ feature:
         description: accept_pending_operator_config refreshes live getInfo, promotes pending only when pending.digest matches live digest, otherwise re-stages pending and keeps operator_trust_pending for modal review
       - id: ARK-TRUST-06
         description: Session open preserves accepted cached_operator_info while operator_trust_pending (no live getInfo overwrite); when persisted autonomous_mode is also true, restore the review banner (reviewingInAutonomous) instead of the blocking modal
+      - id: ARK-TRUST-07
+        description: >-
+          Operator sync refreshes getInfo immediately before committing an offchain snapshot.
+          When that digest must not be persisted, the snapshot and accepted operator cache are not
+          written and pending trust is staged. Background full reconcile reports operatorTrustPending
+          instead of success, and the host keeps any existing reconcile warning.
     vtxo_viewer:
       - id: ARK-VTX-01
         description: VTXO viewer page lists VTXO cards when session open and Arkade active

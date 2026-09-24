@@ -514,6 +514,7 @@ mod tests {
             dust_sats: 330,
             virtual_tx_outpoints: vec![],
             unilateral_exit_materials_by_host_tx: Default::default(),
+            full_listed_at: 0,
         };
         store_materials_for_host_tx(&mut snapshot, &intermediate.to_string(), materials.clone());
         store_materials_for_host_tx(&mut snapshot, &terminal.to_string(), materials);
