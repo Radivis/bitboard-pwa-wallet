@@ -5,6 +5,10 @@ import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
 import {
+  ArkadeSessionLoadError,
+  isArkadeSessionLoadFailed,
+} from '@/components/arkade/ArkadeSessionLoadError'
+import {
   ArkadeSessionLoading,
   isArkadeSessionStillLoading,
 } from '@/components/arkade/ArkadeSessionLoading'
@@ -501,6 +505,10 @@ export function UnilateralExitControlPage() {
 
   if (isArkadeSessionStillLoading(arkadeLoadSnapshot.loadPhase)) {
     return <ArkadeSessionLoading />
+  }
+
+  if (isArkadeSessionLoadFailed(arkadeLoadSnapshot.loadPhase)) {
+    return <ArkadeSessionLoadError errorMessage={arkadeLoadSnapshot.errorMessage} />
   }
 
   return (

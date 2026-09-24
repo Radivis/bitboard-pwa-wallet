@@ -3,6 +3,10 @@ import { Link } from '@tanstack/react-router'
 import { Copy, ExternalLink, Loader2 } from 'lucide-react'
 import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
 import {
+  ArkadeSessionLoadError,
+  isArkadeSessionLoadFailed,
+} from '@/components/arkade/ArkadeSessionLoadError'
+import {
   ArkadeSessionLoading,
   isArkadeSessionStillLoading,
 } from '@/components/arkade/ArkadeSessionLoading'
@@ -25,11 +29,9 @@ import {
 } from '@/hooks/useArkadeQueries'
 import { useArkadeLoadLifecycleSnapshot } from '@/hooks/useArkadeLifecycleSnapshots'
 import { ArkadePendingBatchIntentBanner } from '@/components/wallet/ArkadePendingBatchIntentBanner'
-import { RailLoadErrorBanner } from '@/components/wallet/RailLoadErrorBanner'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { isIntentSubmitPhase } from '@/lib/arkade/arkade-pending-batch-intent'
 import { formatSats } from '@/lib/wallet/bitcoin-utils'
-import { orchestrateArkadeRetryLoad } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
 import { errorMessage } from '@/lib/shared/utils'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import { toast } from 'sonner'
@@ -71,6 +73,10 @@ export function ArkadeBoardPage() {
 
   if (isArkadeSessionStillLoading(arkadeLoadSnapshot.loadPhase)) {
     return <ArkadeSessionLoading />
+  }
+
+  if (isArkadeSessionLoadFailed(arkadeLoadSnapshot.loadPhase)) {
+    return <ArkadeSessionLoadError errorMessage={arkadeLoadSnapshot.errorMessage} />
   }
 
   const boardingAddress =
@@ -122,17 +128,6 @@ export function ArkadeBoardPage() {
             </li>
             <li>Settle the boarding UTXO into Arkade (creates VTXOs).</li>
           </ol>
-
-          {arkadeLoadSnapshot.loadPhase === 'load-error' ? (
-            <RailLoadErrorBanner
-              rail="arkade"
-              loadPhase={arkadeLoadSnapshot.loadPhase}
-              errorMessage={arkadeLoadSnapshot.errorMessage}
-              onRetry={() => {
-                void orchestrateArkadeRetryLoad()
-              }}
-            />
-          ) : null}
 
           {boardingAddressLoading ? (
             <p className="text-muted-foreground">Loading boarding address…</p>
