@@ -1,6 +1,11 @@
 use crate::persistence::OffchainVtxoSnapshot;
 
 /// How often a background full unfiltered VTXO list may run after a snapshot exists.
+///
+/// Balance and recoverable amounts read the offchain snapshot between those reconciles
+/// (ARK-SYNC-07). They can lag a full operator history by this interval plus the dashboard
+/// poll interval. HD indices outside the recent light-sync window stay unchanged until the
+/// background full list commits.
 pub const FULL_VTXO_LIST_RECONCILE_INTERVAL_SECS: i64 = 15 * 60;
 
 /// User-facing operator sync uses the light fetch whenever a snapshot already exists (ARK-SYNC-04).
@@ -26,6 +31,17 @@ pub fn full_vtxo_list_reconcile_due(
     now.saturating_sub(snapshot.full_listed_at) > FULL_VTXO_LIST_RECONCILE_INTERVAL_SECS
 }
 
+/// Snapshot coin selection is current only while a full reconcile is not due (ARK-SYNC-07).
+///
+/// A due reconcile means the snapshot can still list VTXOs the operator has already spent
+/// outside the recent light-sync window. Send then asks `list_spendable_vtxos` instead.
+pub fn send_coin_selection_may_use_offchain_snapshot(
+    snapshot: Option<&OffchainVtxoSnapshot>,
+    now: i64,
+) -> bool {
+    !full_vtxo_list_reconcile_due(snapshot, now, false)
+}
+
 /// Inclusive lower bound of HD indices included in the recent-script light fetch.
 pub fn recent_offchain_derivation_index_floor(next_index: u32, gap_limit: u32) -> u32 {
     next_index.saturating_sub(gap_limit)
@@ -44,7 +60,7 @@ mod tests {
     use super::{
         FULL_VTXO_LIST_RECONCILE_INTERVAL_SECS, derivation_index_is_in_recent_sync_window,
         full_vtxo_list_reconcile_due, recent_offchain_derivation_index_floor,
-        user_facing_operator_sync_uses_light_fetch,
+        send_coin_selection_may_use_offchain_snapshot, user_facing_operator_sync_uses_light_fetch,
     };
     use crate::persistence::OffchainVtxoSnapshot;
     use std::collections::BTreeMap;
@@ -108,5 +124,21 @@ mod tests {
             now,
             false
         ));
+    }
+
+    #[test]
+    fn send_skips_snapshot_coin_selection_when_full_reconcile_is_due() {
+        let now = 1_700_000_000;
+        let fresh = snapshot_with_full_listed_at(now);
+        assert!(send_coin_selection_may_use_offchain_snapshot(
+            Some(&fresh),
+            now
+        ));
+        let stale = snapshot_with_full_listed_at(now - FULL_VTXO_LIST_RECONCILE_INTERVAL_SECS - 1);
+        assert!(!send_coin_selection_may_use_offchain_snapshot(
+            Some(&stale),
+            now
+        ));
+        assert!(send_coin_selection_may_use_offchain_snapshot(None, now));
     }
 }

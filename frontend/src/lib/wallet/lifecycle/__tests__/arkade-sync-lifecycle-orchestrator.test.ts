@@ -544,4 +544,27 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     await onFinished?.({ ok: true })
     expect(getArkadeSyncLifecycleSnapshot().warningMessage).toBe('keys still stale')
   })
+
+  it('operator-trust-pending background reconcile keeps the reconcile warning and still saves', async () => {
+    await orchestrateArkadeSyncThenSave(syncParams)
+    const onFinished = setOnBackgroundFullReconcileFinished.mock.lastCall?.[0] as
+      | ((
+          outcome: {
+            ok: boolean
+            warningMessage?: string
+            operatorTrustPending?: boolean
+          },
+        ) => Promise<void>)
+      | undefined
+
+    await onFinished?.({ ok: false, warningMessage: 'reconcile failed' })
+    refreshArkadeStoreFromLoadedWasm.mockClear()
+    orchestrateArkadeSave.mockClear()
+
+    await onFinished?.({ ok: true, operatorTrustPending: true })
+
+    expect(getArkadeSyncLifecycleSnapshot().warningMessage).toBe('reconcile failed')
+    expect(refreshArkadeStoreFromLoadedWasm).toHaveBeenCalledWith('conn-1')
+    expect(orchestrateArkadeSave).toHaveBeenCalled()
+  })
 })

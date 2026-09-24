@@ -71,7 +71,10 @@ import {
   persistAfterCriticalWithLightOperatorSync,
   shouldScheduleBackgroundFullVtxoReconcile,
 } from '@/lib/arkade/arkade-operator-sync-policy'
-import { createSingleFlightScheduler } from '@/lib/arkade/background-full-vtxo-reconcile'
+import {
+  backgroundFullReconcileFinishedOutcome,
+  createSingleFlightScheduler,
+} from '@/lib/arkade/background-full-vtxo-reconcile'
 import { loadBitboardArkWasm } from '@/lib/arkade/load-bitboard-ark-wasm'
 
 type BitboardArkWasm = Awaited<ReturnType<typeof loadBitboardArkWasm>>
@@ -256,9 +259,13 @@ let onBackgroundFullReconcileFinished:
 
 const scheduleBackgroundFullVtxoReconcileSingleFlight = createSingleFlightScheduler(async () => {
   try {
-    await invokeWasmArk((wasmModule) => wasmModule.ark_reconcile_full_offchain_vtxo_list())
+    const reconcileResult: unknown = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_reconcile_full_offchain_vtxo_list() as Promise<unknown>,
+    )
     await flushSdkPersistenceNowOrThrow()
-    await onBackgroundFullReconcileFinished?.({ ok: true })
+    await onBackgroundFullReconcileFinished?.(
+      backgroundFullReconcileFinishedOutcome(reconcileResult),
+    )
   } catch (error) {
     const warningMessage =
       error instanceof Error ? error.message : 'Full VTXO reconcile failed'

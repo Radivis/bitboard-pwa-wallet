@@ -101,6 +101,27 @@ pub struct OperatorSyncResultDto {
     pub full_reconcile_due: bool,
 }
 
+/// Result of a background full VTXO list. `operator_trust_pending` is not a completed reconcile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FullVtxoListReconcileResultDto {
+    pub operator_trust_pending: bool,
+}
+
+impl FullVtxoListReconcileResultDto {
+    pub(crate) fn completed() -> Self {
+        Self {
+            operator_trust_pending: false,
+        }
+    }
+
+    pub(crate) fn operator_trust_pending() -> Self {
+        Self {
+            operator_trust_pending: true,
+        }
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OperatorTrustStatusDto {

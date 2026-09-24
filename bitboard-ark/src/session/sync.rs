@@ -6,7 +6,7 @@ use ark_core::server::VirtualTxOutPoint;
 use ark_core::{ArkAddress, Vtxo, VtxoList};
 use bitcoin::{OutPoint, ScriptBuf};
 
-use crate::api_types::OperatorSyncResultDto;
+use crate::api_types::{FullVtxoListReconcileResultDto, OperatorSyncResultDto};
 use crate::error::{ArkResult, ArkWasmError};
 use crate::exit_balance::reconcile_pending_exit_deductions;
 use crate::incremental_vtxo_sync::{
@@ -135,7 +135,10 @@ impl ArkSession {
     /// Background full unfiltered list, then a catch-up light fetch so a board or intent during the long fetch is kept.
     ///
     /// `full_listed_at` is stamped only after catch-up succeeds, so a failed reconcile stays due.
-    pub async fn reconcile_full_offchain_vtxo_list(&self) -> ArkResult<()> {
+    /// `operator_trust_pending` is not a completed reconcile (ARK-TRUST-07).
+    pub async fn reconcile_full_offchain_vtxo_list(
+        &self,
+    ) -> ArkResult<FullVtxoListReconcileResultDto> {
         self.ensure_operator_rpc_allowed()?;
         self.client
             .refresh_server_info()
@@ -143,7 +146,8 @@ impl ArkSession {
             .map_err(ArkWasmError::Client)?;
         let server_info = self.client.server_info()?;
         if self.should_block_sync_persist_for_operator_trust(&server_info.digest) {
-            return Ok(());
+            self.stage_operator_trust_from_server_info(&server_info);
+            return Ok(FullVtxoListReconcileResultDto::operator_trust_pending());
         }
 
         let now = current_unix_timestamp();
@@ -161,21 +165,35 @@ impl ArkSession {
             |script| script_map.get(script).map(|vtxo| vtxo.server_pk()),
         );
         snapshot.full_listed_at = previous_full_listed_at;
-        self.finalize_operator_sync_snapshot(
-            snapshot,
-            prior_snapshot.as_ref(),
-            None,
-            false,
-            SnapshotCommit::Replace,
-        )
-        .await?;
+        let (_, full_list_result) = self
+            .finalize_operator_sync_snapshot(
+                snapshot,
+                prior_snapshot.as_ref(),
+                None,
+                false,
+                SnapshotCommit::Replace,
+            )
+            .await?;
+        if full_list_result.operator_config_trust_pending {
+            return Ok(FullVtxoListReconcileResultDto::operator_trust_pending());
+        }
 
         let Some(listed) = self.wallet_db.snapshot().offchain_vtxo_snapshot.clone() else {
-            return Ok(());
+            return Ok(FullVtxoListReconcileResultDto::completed());
         };
-        self.sync_offchain_vtxos_light(listed, None, false).await?;
+        let (_, catch_up_result) = self.sync_offchain_vtxos_light(listed, None, false).await?;
+        if catch_up_result.operator_config_trust_pending {
+            return Ok(FullVtxoListReconcileResultDto::operator_trust_pending());
+        }
+        if self
+            .refreshed_sync_result_when_operator_trust_blocks_persist()
+            .await?
+            .is_some()
+        {
+            return Ok(FullVtxoListReconcileResultDto::operator_trust_pending());
+        }
         self.stamp_full_listed_at(current_unix_timestamp());
-        Ok(())
+        Ok(FullVtxoListReconcileResultDto::completed())
     }
 
     async fn sync_offchain_vtxos_light(
@@ -319,6 +337,13 @@ impl ArkSession {
             &prefetch_list,
         )
         .await;
+        // ARK-TRUST-07: digest can change during list_vtxos or the Esplora heal above.
+        if let Some(blocked) = self
+            .refreshed_sync_result_when_operator_trust_blocks_persist()
+            .await?
+        {
+            return Ok(blocked);
+        }
         self.commit_operator_snapshot(snapshot.clone(), commit);
         let viability_warnings = self.reconcile_host_tx_finality().await?;
         let snapshot = self
@@ -418,6 +443,26 @@ impl ArkSession {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
+    /// Refresh getInfo and, when the digest must not be persisted, stage pending trust.
+    ///
+    /// `Some` means the caller must not write the offchain snapshot or the accepted operator cache.
+    async fn refreshed_sync_result_when_operator_trust_blocks_persist(
+        &self,
+    ) -> ArkResult<Option<(VtxoList, OperatorSyncResultDto)>> {
+        self.client
+            .refresh_server_info()
+            .await
+            .map_err(ArkWasmError::Client)?;
+        let server_info = self.client.server_info()?;
+        if !self.should_block_sync_persist_for_operator_trust(&server_info.digest) {
+            return Ok(None);
+        }
+        let blocked = self
+            .sync_with_operator_trust_pending_staging(&server_info)
+            .await?;
+        Ok(Some(blocked))
+    }
+
     async fn sync_with_operator_trust_pending_staging(
         &self,
         server_info: &ark_core::server::Info,
@@ -459,6 +504,7 @@ impl ArkSession {
 #[cfg(test)]
 mod tests {
     use super::{combine_operator_sync_warning_messages, operator_sync_key_discovery_warning};
+    use crate::api_types::FullVtxoListReconcileResultDto;
 
     #[test]
     fn operator_sync_key_discovery_warning_includes_error_detail() {
@@ -481,5 +527,16 @@ mod tests {
     #[test]
     fn combine_operator_sync_warning_messages_returns_none_when_empty() {
         assert!(combine_operator_sync_warning_messages(None, None).is_none());
+    }
+
+    #[test]
+    fn full_reconcile_operator_trust_pending_serializes_distinct_from_completed() {
+        let pending =
+            serde_json::to_value(FullVtxoListReconcileResultDto::operator_trust_pending())
+                .expect("serialize pending");
+        let completed = serde_json::to_value(FullVtxoListReconcileResultDto::completed())
+            .expect("serialize completed");
+        assert_eq!(pending["operatorTrustPending"], true);
+        assert_eq!(completed["operatorTrustPending"], false);
     }
 }

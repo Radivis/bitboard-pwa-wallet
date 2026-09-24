@@ -17,6 +17,8 @@ export interface ArkadeOperatorSyncResult {
 export interface BackgroundFullVtxoReconcileOutcome {
   ok: boolean
   warningMessage?: string
+  /** Operator trust is pending, so this run did not complete a full list. */
+  operatorTrustPending?: boolean
 }
 
 export interface ArkadeAutonomousModeStatus {

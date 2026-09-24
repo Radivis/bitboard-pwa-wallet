@@ -209,13 +209,18 @@ async function handleBackgroundFullVtxoReconcileFinished(
     )
     return
   }
-  clearBackgroundReconcileWarningIfCurrent()
+  if (!outcome.operatorTrustPending) {
+    clearBackgroundReconcileWarningIfCurrent()
+  }
   const scope = getArkadeSyncLifecycleSnapshot().railScope
   if (scope == null) {
     return
   }
   try {
     await refreshArkadeStoreFromLoadedWasm(scope.arkadeAccountId)
+    if (outcome.operatorTrustPending) {
+      await invalidateOperatorTrustQueriesForScope(scope)
+    }
     await orchestrateArkadeSave({
       walletId: scope.walletId,
       networkMode: scope.networkMode,

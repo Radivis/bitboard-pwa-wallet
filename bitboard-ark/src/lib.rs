@@ -273,12 +273,13 @@ pub async fn ark_sync_with_operator(schedule_background_full: bool) -> Result<Js
 }
 
 #[wasm_bindgen]
-pub async fn ark_reconcile_full_offchain_vtxo_list() -> Result<(), JsValue> {
+pub async fn ark_reconcile_full_offchain_vtxo_list() -> Result<JsValue, JsValue> {
     map_js_async(async {
-        with_session_async(
-            |session| async move { session.reconcile_full_offchain_vtxo_list().await },
-        )
-        .await
+        let result = with_session_async(|session| async move {
+            session.reconcile_full_offchain_vtxo_list().await
+        })
+        .await?;
+        to_js_value(result)
     })
     .await
 }
