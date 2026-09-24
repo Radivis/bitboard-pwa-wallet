@@ -42,7 +42,11 @@ jobs:
           target: wasm32-unknown-unknown
 
       - name: Install wasm-pack
+        # "latest" falls back to wasm-pack 0.9.1 when the releases API has no tag.
+        # That release's wasm-opt (wasm-opt-4d7a65327e9363b7) segfaults on current rustc output.
         uses: jetli/wasm-pack-action@v0.4.0
+        with:
+          version: v0.14.0
 
       # `vercel build` runs the project Build Command (`npm run build`), which includes
       # `build:wasm` + `tsc` + `vite build`. Rust + wasm-pack must be on PATH first.
