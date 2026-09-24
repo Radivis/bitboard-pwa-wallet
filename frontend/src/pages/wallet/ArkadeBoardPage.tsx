@@ -2,6 +2,10 @@ import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { Copy, ExternalLink, Loader2 } from 'lucide-react'
 import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
+import {
+  ArkadeSessionLoading,
+  isArkadeSessionStillLoading,
+} from '@/components/arkade/ArkadeSessionLoading'
 import { ArkadeBoardingInfomodeContent } from '@/components/arkade/infomode/ArkadeBoardingInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { PageHeader } from '@/components/PageHeader'
@@ -63,6 +67,10 @@ export function ArkadeBoardPage() {
         </Button>
       </div>
     )
+  }
+
+  if (isArkadeSessionStillLoading(arkadeLoadSnapshot.loadPhase)) {
+    return <ArkadeSessionLoading />
   }
 
   const boardingAddress =

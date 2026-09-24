@@ -3,6 +3,10 @@ import { Link } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
+import {
+  ArkadeSessionLoading,
+  isArkadeSessionStillLoading,
+} from '@/components/arkade/ArkadeSessionLoading'
 import { ArkadeVtxoCard } from '@/components/arkade/ArkadeVtxoCard'
 import { ArkadeVtxoClassificationIcon } from '@/components/arkade/ArkadeVtxoClassificationIcon'
 import { CardPagination } from '@/components/CardPagination'
@@ -90,6 +94,10 @@ export function ArkadeVtxoViewerPage() {
         </Button>
       </div>
     )
+  }
+
+  if (isArkadeSessionStillLoading(arkadeLoadSnapshot.loadPhase)) {
+    return <ArkadeSessionLoading />
   }
 
   const fromSnapshotSyncedAt = vtxoListQuery.data?.fromSnapshotSyncedAt ?? null

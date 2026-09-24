@@ -4,6 +4,10 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
+import {
+  ArkadeSessionLoading,
+  isArkadeSessionStillLoading,
+} from '@/components/arkade/ArkadeSessionLoading'
 import { ArkadeBumperWalletInfomodeContent } from '@/components/arkade/infomode/ArkadeBumperWalletInfomodeContent'
 import { ArkadeUnilateralExitInfomodeContent } from '@/components/arkade/infomode/ArkadeUnilateralExitInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
@@ -26,6 +30,7 @@ import {
   useArkadeUnilateralExitTopologyQuery,
   useArkadeUnilateralExitsInProgressQuery,
 } from '@/hooks/useArkadeQueries'
+import { useArkadeLoadLifecycleSnapshot } from '@/hooks/useArkadeLifecycleSnapshots'
 import { useEsploraFeePresets } from '@/hooks/useEsploraFeePresets'
 import { useOnchainFeeRateSelection } from '@/hooks/useOnchainFeeRateSelection'
 import {
@@ -107,6 +112,7 @@ function totalSelectedSats(
 export function UnilateralExitControlPage() {
   const queryClient = useQueryClient()
   const networkMode = useWalletStore(selectCommittedNetworkMode)
+  const arkadeLoadSnapshot = useArkadeLoadLifecycleSnapshot()
   const activeWalletId = useWalletStore((state) => state.activeWalletId)
   const activeArkadeAccountId = useWalletStore((state) => state.activeArkadeAccountId)
   const balanceQuery = useArkadeBalanceQuery()
@@ -491,6 +497,10 @@ export function UnilateralExitControlPage() {
         </Button>
       </div>
     )
+  }
+
+  if (isArkadeSessionStillLoading(arkadeLoadSnapshot.loadPhase)) {
+    return <ArkadeSessionLoading />
   }
 
   return (
