@@ -12,9 +12,10 @@ use super::snapshot_ops::{
 };
 use crate::session::ArkSession;
 use crate::session::bumper_sync_policy::{
-    BumperWalletSyncPhase, bumper_info_balance_sats, bumper_info_should_start_wallet_scan,
-    bumper_sync_phase_after_wallet_scan, completion_estimate_should_sync_bumper_wallet,
-    completion_spend_should_sync_bumper_wallet,
+    BumperWalletSyncPhase, ExitBroadcastBumperSync, bumper_info_balance_sats,
+    bumper_info_should_start_wallet_scan, bumper_sync_phase_after_wallet_scan,
+    completion_estimate_should_sync_bumper_wallet, completion_spend_should_sync_bumper_wallet,
+    exit_broadcast_bumper_sync,
 };
 use crate::session::mappers::parse_onchain_address;
 use crate::session::open::sync_bumper_wallet_with_retries;
@@ -74,10 +75,31 @@ impl ArkSession {
     }
 
     async fn ensure_bumper_wallet_synced_once(&self) -> ArkResult<()> {
-        self.sync_bumper_wallet_when(bumper_info_should_start_wallet_scan(
-            self.bumper_wallet_sync_phase.get(),
-        ))
-        .await
+        self.wait_until_bumper_wallet_scan_settled().await;
+        if !bumper_info_should_start_wallet_scan(self.bumper_wallet_sync_phase.get()) {
+            return Ok(());
+        }
+        self.sync_bumper_wallet_and_record_phase().await
+    }
+
+    /// One wallet-wide bumper scan per session. A later unroll step only refreshes
+    /// scripts that can still fund the CPFP child.
+    pub(crate) async fn sync_bumper_for_exit_broadcast(&self) -> ArkResult<()> {
+        self.wait_until_bumper_wallet_scan_settled().await;
+        let scanned_now = match exit_broadcast_bumper_sync(self.bumper_wallet_sync_phase.get()) {
+            ExitBroadcastBumperSync::WalletWide => {
+                self.sync_bumper_wallet_and_record_phase().await?;
+                true
+            }
+            ExitBroadcastBumperSync::SpendableScripts => false,
+        };
+        if scanned_now {
+            return Ok(());
+        }
+        self.bumper_wallet
+            .sync_spendable_scripts()
+            .await
+            .map_err(ArkWasmError::Client)
     }
 
     pub async fn onchain_bumper_info(&self) -> ArkResult<OnchainBumperInfoDto> {

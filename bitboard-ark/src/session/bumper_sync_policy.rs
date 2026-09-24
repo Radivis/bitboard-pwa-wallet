@@ -29,6 +29,25 @@ pub(crate) fn completion_estimate_should_sync_bumper_wallet(phase: BumperWalletS
     bumper_info_should_start_wallet_scan(phase)
 }
 
+/// How an unroll-step broadcast refreshes bumper coins.
+///
+/// The exit page already runs one wallet-wide scan. Proceed must not start a second
+/// walk of every revealed script (`start_sync_with_revealed_spks`), which 429s on
+/// Mutinynet after a long bumper history.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ExitBroadcastBumperSync {
+    WalletWide,
+    SpendableScripts,
+}
+
+pub(crate) fn exit_broadcast_bumper_sync(phase: BumperWalletSyncPhase) -> ExitBroadcastBumperSync {
+    if bumper_info_should_start_wallet_scan(phase) {
+        ExitBroadcastBumperSync::WalletWide
+    } else {
+        ExitBroadcastBumperSync::SpendableScripts
+    }
+}
+
 /// After a wallet-wide bumper scan attempt, keep `Done` only on success so a
 /// later bumper-info poll can retry from `Failed`.
 pub(crate) fn bumper_sync_phase_after_wallet_scan(success: bool) -> BumperWalletSyncPhase {
@@ -112,6 +131,26 @@ mod tests {
                 "complete must Esplora-sync bumper before spend even if bumper_info already scanned ({phase:?})"
             );
         }
+    }
+
+    #[test]
+    fn exit_broadcast_bumper_sync_is_wallet_wide_only_before_a_successful_scan() {
+        assert_eq!(
+            exit_broadcast_bumper_sync(BumperWalletSyncPhase::NotStarted),
+            ExitBroadcastBumperSync::WalletWide
+        );
+        assert_eq!(
+            exit_broadcast_bumper_sync(BumperWalletSyncPhase::Failed),
+            ExitBroadcastBumperSync::WalletWide
+        );
+        assert_eq!(
+            exit_broadcast_bumper_sync(BumperWalletSyncPhase::Running),
+            ExitBroadcastBumperSync::SpendableScripts
+        );
+        assert_eq!(
+            exit_broadcast_bumper_sync(BumperWalletSyncPhase::Done),
+            ExitBroadcastBumperSync::SpendableScripts
+        );
     }
 
     #[test]

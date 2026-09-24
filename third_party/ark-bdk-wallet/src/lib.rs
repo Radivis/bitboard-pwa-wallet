@@ -180,6 +180,38 @@ where
             .map(Into::into)
     }
 
+    /// Refresh scripts that can still fund a CPFP: current unspent outputs and unused change.
+    /// Does not walk every historically revealed bumper script.
+    pub async fn sync_spendable_scripts(&self) -> Result<(), Error> {
+        let now_secs = Self::scan_unix_secs()?;
+        let update = self.spendable_spk_esplora_update(now_secs).await?;
+        self.inner
+            .write()
+            .map_err(|e| Error::consumer(format!("failed to get write lock: {e}")))?
+            .apply_update(update)
+            .map_err(Error::wallet)?;
+        Ok(())
+    }
+
+    async fn spendable_spk_esplora_update(
+        &self,
+        now_secs: u64,
+    ) -> Result<bdk_wallet::Update, Error> {
+        let request = {
+            let wallet = self
+                .inner
+                .read()
+                .map_err(|e| Error::consumer(format!("failed to get read lock: {e}")))?;
+            spendable_spk_sync_request(&wallet, now_secs)
+        };
+        self.client
+            .sync(request, BUMPER_FULL_SCAN_PARALLEL_REQUESTS)
+            .await
+            .map_err(Error::wallet)
+            .context("Failed syncing wallet")
+            .map(Into::into)
+    }
+
     async fn incremental_esplora_update(&self, now_secs: u64) -> Result<bdk_wallet::Update, Error> {
         let request = self
             .inner
@@ -434,6 +466,26 @@ pub(crate) fn unused_spk_sync_request(
         .build()
 }
 
+/// Scripts that can still fund a CPFP child: unspent wallet outputs, plus unused change.
+/// Used bumper addresses with no remaining output are omitted.
+pub(crate) fn spendable_spk_sync_request(
+    wallet: &BdkWallet,
+    start_time: u64,
+) -> bdk_wallet::chain::spk_client::SyncRequest<(KeychainKind, u32)> {
+    use bdk_wallet::chain::keychain_txout::SyncRequestBuilderExt;
+    use bdk_wallet::chain::spk_client::SyncRequest;
+    let indexer = wallet.spk_index();
+    let unspent_spks = wallet.list_unspent().filter_map(|utxo| {
+        let script = indexer.spk_at_index(utxo.keychain, utxo.derivation_index)?;
+        Some(((utxo.keychain, utxo.derivation_index), script))
+    });
+    SyncRequest::builder_at(start_time)
+        .chain_tip(wallet.latest_checkpoint())
+        .unused_spks_from_indexer(indexer)
+        .spks_with_indexes(unspent_spks)
+        .build()
+}
+
 /// After the first successful full scan in this process, later `sync()` calls must not
 /// walk unused HD gap via `/scripthash/.../txs`.
 pub(crate) fn bumper_wallet_scan_kind(completed_full_scan: bool) -> BumperWalletScanKind {
@@ -639,6 +691,35 @@ mod bumper_wallet_scan_kind_tests {
         assert!(
             scripts.len() <= 2,
             "unused-SPK sync must not walk the full revealed HD set, got {}",
+            scripts.len()
+        );
+    }
+
+    #[test]
+    fn spendable_spk_sync_request_omits_used_scripts_without_utxos() {
+        let xprv = test_xprv(Network::Signet);
+        let (mut wallet, _) =
+            create_or_load_bip84_wallet(xprv, Network::Signet, None).expect("create");
+        for _ in 0..30 {
+            let revealed = wallet.next_unused_address(KeychainKind::External);
+            wallet.mark_used(KeychainKind::External, revealed.index);
+        }
+        let used_script = wallet
+            .peek_address(KeychainKind::External, 0)
+            .address
+            .script_pubkey();
+        let mut request = super::spendable_spk_sync_request(&wallet, 1);
+        let scripts: Vec<_> = request
+            .iter_spks_with_expected_txids()
+            .map(|item| item.spk)
+            .collect();
+        assert!(
+            !scripts.contains(&used_script),
+            "spendable sync must not rescan emptied bumper history"
+        );
+        assert!(
+            scripts.len() < 30,
+            "spendable sync walked too many scripts: {}",
             scripts.len()
         );
     }

@@ -303,7 +303,22 @@ impl ArkSession {
         Ok((session, migration_hint))
     }
 
+    pub(crate) async fn wait_until_bumper_wallet_scan_settled(&self) {
+        const SETTLED_POLL_MS: u64 = 50;
+        while self.bumper_wallet_sync_phase.get()
+            == super::bumper_sync_policy::BumperWalletSyncPhase::Running
+        {
+            sleep_for_backoff(std::time::Duration::from_millis(SETTLED_POLL_MS)).await;
+        }
+    }
+
     pub async fn sync_bumper_wallet_best_effort(&self) {
+        self.wait_until_bumper_wallet_scan_settled().await;
+        if !super::bumper_sync_policy::bumper_info_should_start_wallet_scan(
+            self.bumper_wallet_sync_phase.get(),
+        ) {
+            return;
+        }
         self.bumper_wallet_sync_phase
             .set(super::bumper_sync_policy::BumperWalletSyncPhase::Running);
         let scan_succeeded = sync_bumper_wallet_allowing_stale(&self.client).await;
