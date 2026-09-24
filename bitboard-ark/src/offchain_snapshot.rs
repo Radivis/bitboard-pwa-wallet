@@ -18,8 +18,8 @@ use crate::constants::UNILATERAL_EXIT_HOST_TX_CONFIRMATIONS;
 use crate::error::{ArkResult, ArkWasmError};
 use crate::exit_balance::{UnilateralExitOutpointKey, is_unilateral_exit_in_progress_outpoint};
 use crate::persistence::{
-    HostTxObservationRecord, OffchainVtxoSnapshot, VirtualTxOutPointAssetRecord,
-    VirtualTxOutPointRecord, VtxoExitPhase, VtxoExitRecord,
+    HostTxObservationRecord, OffchainVtxoSnapshot, UnilateralExitMaterialsRecord,
+    VirtualTxOutPointAssetRecord, VirtualTxOutPointRecord, VtxoExitPhase, VtxoExitRecord,
 };
 use crate::session::unilateral_exit::vtxo_exit::unilateral_exit_pipeline_outpoints;
 
@@ -333,8 +333,10 @@ pub fn merge_incremental_vtxo_snapshot(
 
 /// Apply rows and materials that changed between `base` and `finalized` onto `latest`.
 ///
-/// Unchanged historical rows stay on `latest`, so a concurrent full replace is not overwritten
-/// by a light finalize that started from an older snapshot.
+/// Unchanged historical VTXO rows stay on `latest`, so a concurrent full replace is not
+/// overwritten by a light finalize that started from an older snapshot. Exit-material keys
+/// removed between `base` and `finalized` are removed from `latest` too. Keys that only
+/// `latest` has stay.
 pub fn overlay_changed_vtxo_rows(
     latest: &OffchainVtxoSnapshot,
     base: &OffchainVtxoSnapshot,
@@ -368,16 +370,11 @@ pub fn overlay_changed_vtxo_rows(
     virtual_tx_outpoints
         .sort_by(|left, right| left.txid.cmp(&right.txid).then(left.vout.cmp(&right.vout)));
 
-    let mut materials = latest.unilateral_exit_materials_by_host_tx.clone();
-    for (host_txid, materials_record) in &finalized.unilateral_exit_materials_by_host_tx {
-        if base
-            .unilateral_exit_materials_by_host_tx
-            .get(host_txid)
-            .is_none_or(|base_record| base_record != materials_record)
-        {
-            materials.insert(host_txid.clone(), materials_record.clone());
-        }
-    }
+    let materials = overlay_changed_exit_materials(
+        &latest.unilateral_exit_materials_by_host_tx,
+        &base.unilateral_exit_materials_by_host_tx,
+        &finalized.unilateral_exit_materials_by_host_tx,
+    );
 
     OffchainVtxoSnapshot {
         synced_at: finalized.synced_at,
@@ -386,6 +383,28 @@ pub fn overlay_changed_vtxo_rows(
         unilateral_exit_materials_by_host_tx: materials,
         full_listed_at: latest.full_listed_at.max(finalized.full_listed_at),
     }
+}
+
+fn overlay_changed_exit_materials(
+    latest: &BTreeMap<String, UnilateralExitMaterialsRecord>,
+    base: &BTreeMap<String, UnilateralExitMaterialsRecord>,
+    finalized: &BTreeMap<String, UnilateralExitMaterialsRecord>,
+) -> BTreeMap<String, UnilateralExitMaterialsRecord> {
+    let mut materials = latest.clone();
+    for (host_txid, materials_record) in finalized {
+        if base
+            .get(host_txid)
+            .is_none_or(|base_record| base_record != materials_record)
+        {
+            materials.insert(host_txid.clone(), materials_record.clone());
+        }
+    }
+    for host_txid in base.keys() {
+        if !finalized.contains_key(host_txid) {
+            materials.remove(host_txid);
+        }
+    }
+    materials
 }
 
 /// Snapshot rows that still need an outpoint refresh (not yet spent).
@@ -683,11 +702,13 @@ mod tests {
         mark_virtual_tx_vtxos_unrolled_in_snapshot, merge_incremental_vtxo_snapshot,
         merge_sticky_spent_flags, merge_sticky_unrolled_flags,
         offchain_balance_buckets_from_snapshot, offchain_balance_sats_from_snapshot,
-        snapshot_from_virtual_tx_outpoints, snapshot_from_virtual_tx_outpoints_with_script_lookup,
-        vtxo_list_from_snapshot,
+        overlay_changed_vtxo_rows, snapshot_from_virtual_tx_outpoints,
+        snapshot_from_virtual_tx_outpoints_with_script_lookup, vtxo_list_from_snapshot,
     };
     use crate::error::ArkWasmError;
-    use crate::persistence::{OffchainVtxoSnapshot, VirtualTxOutPointRecord};
+    use crate::persistence::{
+        OffchainVtxoSnapshot, UnilateralExitMaterialsRecord, VirtualTxOutPointRecord,
+    };
     use ark_core::server::VirtualTxOutPoint;
     use ark_core::server::{DeprecatedSigner, Info};
     use bitcoin::Amount;
@@ -877,6 +898,102 @@ mod tests {
         ]);
         let live = live_snapshot_outpoints(&snapshot);
         assert_eq!(live, vec![OutPoint::new(live_txid, 1)]);
+    }
+
+    fn sample_exit_materials(cached_at: i64) -> UnilateralExitMaterialsRecord {
+        UnilateralExitMaterialsRecord {
+            cached_at,
+            chain_json: "{}".to_string(),
+            virtual_psbts: vec![],
+        }
+    }
+
+    fn snapshot_with_exit_materials(
+        records: Vec<VirtualTxOutPointRecord>,
+        host_txid: &str,
+        materials: UnilateralExitMaterialsRecord,
+    ) -> OffchainVtxoSnapshot {
+        let mut snapshot = snapshot_from_records(records);
+        snapshot
+            .unilateral_exit_materials_by_host_tx
+            .insert(host_txid.to_string(), materials);
+        snapshot
+    }
+
+    #[test]
+    fn overlay_drops_exit_materials_pruned_between_base_and_finalized() {
+        let host_txid = Txid::from_byte_array([0xb1; 32]).to_string();
+        let record = sample_snapshot_record(&host_txid, 0, 40_000);
+        let base = snapshot_with_exit_materials(
+            vec![record.clone()],
+            &host_txid,
+            sample_exit_materials(1),
+        );
+        let latest = snapshot_with_exit_materials(
+            vec![record.clone()],
+            &host_txid,
+            sample_exit_materials(2),
+        );
+        let finalized = snapshot_from_records(vec![record]);
+
+        let overlaid = overlay_changed_vtxo_rows(&latest, &base, &finalized);
+
+        assert!(
+            !overlaid
+                .unilateral_exit_materials_by_host_tx
+                .contains_key(&host_txid),
+            "prune between base and finalized must drop exit materials on latest"
+        );
+    }
+
+    #[test]
+    fn overlay_keeps_exit_materials_latest_added_outside_this_sync() {
+        let concurrent_host = Txid::from_byte_array([0xb2; 32]).to_string();
+        let base = snapshot_from_records(vec![]);
+        let mut latest = snapshot_from_records(vec![]);
+        latest
+            .unilateral_exit_materials_by_host_tx
+            .insert(concurrent_host.clone(), sample_exit_materials(3));
+        let finalized = snapshot_from_records(vec![]);
+
+        let overlaid = overlay_changed_vtxo_rows(&latest, &base, &finalized);
+
+        assert_eq!(
+            overlaid
+                .unilateral_exit_materials_by_host_tx
+                .get(&concurrent_host)
+                .map(|materials| materials.cached_at),
+            Some(3)
+        );
+    }
+
+    #[test]
+    fn overlay_keeps_historical_vtxo_row_missing_from_finalized() {
+        let historical_txid = Txid::from_byte_array([0xb3; 32]).to_string();
+        let mut historical = sample_snapshot_record(&historical_txid, 0, 1_000);
+        historical.is_spent = true;
+        let base = snapshot_from_records(vec![]);
+        let latest = snapshot_from_records(vec![historical.clone()]);
+        let finalized = snapshot_from_records(vec![]);
+
+        let overlaid = overlay_changed_vtxo_rows(&latest, &base, &finalized);
+
+        assert_eq!(overlaid.virtual_tx_outpoints, vec![historical]);
+    }
+
+    #[test]
+    fn overlay_leaves_row_unchanged_when_finalize_matches_base() {
+        let txid = Txid::from_byte_array([0xb4; 32]).to_string();
+        let settled = sample_snapshot_record(&txid, 0, 50_000);
+        let base = snapshot_from_records(vec![settled.clone()]);
+        let latest = base.clone();
+        let mut finalized = base.clone();
+        finalized.synced_at = 60;
+
+        let overlaid = overlay_changed_vtxo_rows(&latest, &base, &finalized);
+
+        assert!(!overlaid.virtual_tx_outpoints[0].is_unrolled);
+        assert_eq!(overlaid.synced_at, 60);
     }
 
     #[test]

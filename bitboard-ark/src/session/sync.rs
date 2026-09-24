@@ -179,24 +179,7 @@ impl ArkSession {
             return Ok(());
         };
         let catch_up = self.fetch_light_vtxo_delta(&listed).await?;
-        let (merged, merge_base) = {
-            let _apply = self.lock_vtxo_snapshot_apply();
-            let latest = self
-                .wallet_db
-                .snapshot()
-                .offchain_vtxo_snapshot
-                .clone()
-                .unwrap_or(listed);
-            let merged = merge_incremental_vtxo_snapshot(
-                &latest,
-                catch_up.points,
-                &catch_up.requested_live_outpoints,
-                current_unix_timestamp(),
-                |script| catch_up.script_map.get(script).map(|vtxo| vtxo.server_pk()),
-            );
-            self.wallet_db.set_offchain_vtxo_snapshot(merged.clone());
-            (merged, latest)
-        };
+        let (merged, merge_base) = self.stage_light_vtxo_merge(listed, &catch_up);
         let catch_up_list = vtxo_list_from_snapshot(&merged)?;
         self.finalize_operator_sync_snapshot(
             merged,
@@ -220,24 +203,7 @@ impl ArkSession {
         full_reconcile_due: bool,
     ) -> ArkResult<(VtxoList, OperatorSyncResultDto)> {
         let fetch = self.fetch_light_vtxo_delta(&prior).await?;
-        let (merged, merge_base) = {
-            let _apply = self.lock_vtxo_snapshot_apply();
-            let latest = self
-                .wallet_db
-                .snapshot()
-                .offchain_vtxo_snapshot
-                .clone()
-                .unwrap_or(prior);
-            let merged = merge_incremental_vtxo_snapshot(
-                &latest,
-                fetch.points,
-                &fetch.requested_live_outpoints,
-                current_unix_timestamp(),
-                |script| fetch.script_map.get(script).map(|vtxo| vtxo.server_pk()),
-            );
-            self.wallet_db.set_offchain_vtxo_snapshot(merged.clone());
-            (merged, latest)
-        };
+        let (merged, merge_base) = self.stage_light_vtxo_merge(prior, &fetch);
         let vtxo_list = vtxo_list_from_snapshot(&merged)?;
         self.finalize_operator_sync_snapshot(
             merged,
@@ -403,6 +369,33 @@ impl ArkSession {
             full_reconcile_due,
         };
         Ok((prefetch_list, sync_result))
+    }
+
+    /// Merge `fetch` into the current snapshot without writing it.
+    ///
+    /// Finalize may restore a row to this base — indexer `is_unrolled` cleared back to the
+    /// stored value, or exit materials pruned. Overlay skips a row that matches the base.
+    /// Persisting the merge first would keep the indexer flag, including when finalize fails.
+    fn stage_light_vtxo_merge(
+        &self,
+        fallback: OffchainVtxoSnapshot,
+        fetch: &LightVtxoFetch,
+    ) -> (OffchainVtxoSnapshot, OffchainVtxoSnapshot) {
+        let _apply = self.lock_vtxo_snapshot_apply();
+        let merge_base = self
+            .wallet_db
+            .snapshot()
+            .offchain_vtxo_snapshot
+            .clone()
+            .unwrap_or(fallback);
+        let merged = merge_incremental_vtxo_snapshot(
+            &merge_base,
+            fetch.points.iter().cloned(),
+            &fetch.requested_live_outpoints,
+            current_unix_timestamp(),
+            |script| fetch.script_map.get(script).map(|vtxo| vtxo.server_pk()),
+        );
+        (merged, merge_base)
     }
 
     fn commit_operator_snapshot(&self, snapshot: OffchainVtxoSnapshot, commit: SnapshotCommit) {
