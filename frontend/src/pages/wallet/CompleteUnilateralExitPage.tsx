@@ -2,14 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { Copy, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
-import {
-  ArkadeSessionLoadError,
-  isArkadeSessionLoadFailed,
-} from '@/components/arkade/ArkadeSessionLoadError'
-import {
-  ArkadeSessionLoading,
-  isArkadeSessionStillLoading,
-} from '@/components/arkade/ArkadeSessionLoading'
+import { ArkadeSessionGate } from '@/components/arkade/ArkadeSessionGate'
 import { ArkadeUnilateralExitInfomodeContent } from '@/components/arkade/infomode/ArkadeUnilateralExitInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { PageHeader } from '@/components/PageHeader'
@@ -28,7 +21,12 @@ import {
   formatUnilateralExitCompleteWaitingBanner,
 } from '@/lib/arkade/arkade-exit-utils'
 import { userFacingErrorMessage } from '@/lib/shared/utils'
-import { includesArkadeVtxoOutpoint, type ArkadeVtxoExitPhase } from '@/workers/arkade-api'
+import {
+  includesArkadeVtxoOutpoint,
+  type ArkadeUnilateralExitInProgressDto,
+  type ArkadeVtxoExitPhase,
+  type ArkadeVtxoOutpoint,
+} from '@/workers/arkade-api'
 import { useArkadeLoadLifecycleSnapshot } from '@/hooks/useArkadeLifecycleSnapshots'
 import { useCompleteUnilateralExitFlow } from '@/hooks/useCompleteUnilateralExitFlow'
 import { useVtxoExitSnapshots } from '@/hooks/useUnilateralExitLifecycleSnapshot'
@@ -80,6 +78,207 @@ async function copyClipboardText(
   }
 }
 
+function selectedRowsWaitingBanner(params: {
+  selectedRows: ArkadeUnilateralExitInProgressDto[]
+  snapshots: VtxoExitChildSnapshotMap
+  timelockBlocks: number | undefined
+  timelockSeconds: number | undefined
+}): string | null {
+  const waitingRows = params.selectedRows.filter((row) => !row.canComplete)
+  if (waitingRows.length === 0) {
+    return null
+  }
+  const waitingCopyKinds = new Set<VtxoExitPhaseCopyKind>()
+  for (const row of waitingRows) {
+    const copyKind = vtxoExitPhaseCopyFromPhase(completeRowPhase(row, params.snapshots))
+    if (copyKind != null) {
+      waitingCopyKinds.add(copyKind)
+    }
+  }
+  return formatUnilateralExitCompleteWaitingBanner({
+    waitingCopyKinds,
+    timelock: {
+      timelockBlocks: params.timelockBlocks,
+      timelockSeconds: params.timelockSeconds,
+    },
+    waitingTxidSnippets: waitingRows.map((row) => formatArkadeTxidToastSnippet(row.txid)),
+  })
+}
+
+function CompleteUnilateralExitInProgressList({
+  rows,
+  isLoading,
+  selectedOutpoints,
+  selectedTotalSats,
+  snapshots,
+  onToggleRow,
+  onSelectAllReady,
+}: {
+  rows: ArkadeUnilateralExitInProgressDto[] | undefined
+  isLoading: boolean
+  selectedOutpoints: ArkadeVtxoOutpoint[]
+  selectedTotalSats: number
+  snapshots: VtxoExitChildSnapshotMap
+  onToggleRow: (row: ArkadeUnilateralExitInProgressDto) => void
+  onSelectAllReady: () => void
+}) {
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+        Loading exits in progress…
+      </div>
+    )
+  }
+  if (rows?.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground" data-testid="arkade-unilateral-complete-empty">
+        No unilateral exits in progress. Start an exit first, then return here after unroll.
+      </p>
+    )
+  }
+
+  const readyCount = (rows ?? []).filter((row) => row.canComplete).length
+  return (
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-muted-foreground">
+          {selectedOutpoints.length} selected ·{' '}
+          <BitcoinAmountDisplay amountSats={selectedTotalSats} size="sm" />
+        </p>
+        {readyCount > 0 && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            data-testid="arkade-unilateral-select-all-ready"
+            onClick={onSelectAllReady}
+          >
+            Select all ready ({readyCount})
+          </Button>
+        )}
+      </div>
+      <ul className="max-h-96 space-y-2 overflow-y-auto rounded-md border p-2">
+        {rows?.map((row) => (
+          <li key={row.id}>
+            <label className="flex cursor-pointer items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={includesArkadeVtxoOutpoint(selectedOutpoints, {
+                  txid: row.txid,
+                  vout: row.vout,
+                })}
+                onChange={() => onToggleRow(row)}
+              />
+              <span className="flex-1 break-all">
+                <BitcoinAmountDisplay amountSats={row.amountSats} size="sm" />
+                <span className="block font-mono text-xs text-muted-foreground">
+                  {row.txid}:{row.vout}
+                </span>
+                <span
+                  className="text-xs text-muted-foreground"
+                  data-testid="arkade-unilateral-complete-row-phase"
+                >
+                  {row.virtualStatusState}
+                  {completeRowPhaseSuffix(row, snapshots)}
+                </span>
+              </span>
+            </label>
+          </li>
+        ))}
+      </ul>
+    </>
+  )
+}
+
+function CompleteUnilateralExitFeeDetails({
+  selectedOutpointCount,
+  completionFeeRateUi,
+  completionFeeQuery,
+  isPending,
+}: {
+  selectedOutpointCount: number
+  completionFeeRateUi: CompleteUnilateralExitFlow['completionFeeRateUi']
+  completionFeeQuery: CompleteUnilateralExitFlow['completionFeeQuery']
+  isPending: boolean
+}) {
+  if (selectedOutpointCount === 0) {
+    return null
+  }
+  const completionFeeEstimate = completionFeeQuery.data
+  const missingBlocktimeWarning =
+    completionFeeEstimate?.missingBlocktimeInputs != null &&
+    completionFeeEstimate.missingBlocktimeInputs.length > 0
+      ? formatMissingBlocktimeCompletionWarning(completionFeeEstimate.missingBlocktimeInputs)
+      : null
+
+  return (
+    <>
+      <SendOnChainFeeSection
+        feePresetSelection={completionFeeRateUi.feePresetSelection}
+        presetSatPerVbByLabel={completionFeeRateUi.presetSatPerVbByLabel}
+        feeEstimatesRefreshing={completionFeeRateUi.feeEstimatesRefreshing}
+        customFeeRate={completionFeeRateUi.customFeeRate}
+        useCustomFee={completionFeeRateUi.useCustomFee}
+        isPending={isPending}
+        onSelectPreset={completionFeeRateUi.handleSelectFeePreset}
+        setCustomFeeRate={completionFeeRateUi.setCustomFeeRate}
+        onSelectCustomMode={completionFeeRateUi.handleSelectCustomMode}
+      />
+      {completionFeeQuery.isLoading && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          Estimating completion fee…
+        </div>
+      )}
+      {completionFeeEstimate && (
+        <div
+          className="space-y-1 rounded-md border bg-muted/40 p-2 text-xs"
+          data-testid="arkade-unilateral-completion-fee"
+        >
+          <p>
+            Selected total:{' '}
+            <BitcoinAmountDisplay amountSats={completionFeeEstimate.selectedTotalSats} size="sm" />
+          </p>
+          <p>
+            Estimated miner fee ({formatSatPerVbTwoDecimals(completionFeeEstimate.feeRateSatPerVb)}{' '}
+            sat/vB):{' '}
+            <BitcoinAmountDisplay amountSats={completionFeeEstimate.estimatedFeeSats} size="sm" />
+          </p>
+          <p>
+            Estimated receive at destination:{' '}
+            <BitcoinAmountDisplay
+              amountSats={completionFeeEstimate.estimatedReceiveSats}
+              size="sm"
+            />
+          </p>
+          {completionFeeEstimate.estimateError && (
+            <p className="text-amber-700 dark:text-amber-300">
+              {completionFeeEstimate.estimateError}
+            </p>
+          )}
+        </div>
+      )}
+      {missingBlocktimeWarning != null && (
+        <div
+          className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-200"
+          data-testid="arkade-complete-blocktime-warning"
+        >
+          <p>{missingBlocktimeWarning.summary}</p>
+          <ul className="mt-1 list-inside list-disc space-y-0.5">
+            {missingBlocktimeWarning.lines.map((line) => (
+              <li key={`${line.virtualTxid}:${line.onChainTxid}:${line.onChainVout}`}>
+                {formatMissingBlocktimeCompletionWarningLine(line)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </>
+  )
+}
+
 export function CompleteUnilateralExitContent({ exitFlow }: CompleteUnilateralExitContentProps) {
   const {
     inProgressQuery,
@@ -98,31 +297,12 @@ export function CompleteUnilateralExitContent({ exitFlow }: CompleteUnilateralEx
     handleCompleteExit,
   } = exitFlow
   const vtxoExitSnapshots = useVtxoExitSnapshots()
-
-  const readyCount = (inProgressQuery.data ?? []).filter((row) => row.canComplete).length
-  const waitingRows = selectedInProgressRows.filter((row) => !row.canComplete)
-  const waitingCopyKinds = new Set<VtxoExitPhaseCopyKind>()
-  for (const row of waitingRows) {
-    const phase = completeRowPhase(row, vtxoExitSnapshots)
-    const copyKind = vtxoExitPhaseCopyFromPhase(phase)
-    if (copyKind != null) {
-      waitingCopyKinds.add(copyKind)
-    }
-  }
-  const waitingBanner = formatUnilateralExitCompleteWaitingBanner({
-    waitingCopyKinds,
-    timelock: {
-      timelockBlocks: bumperInfoQuery.data?.unilateralExitTimelockBlocks,
-      timelockSeconds: bumperInfoQuery.data?.unilateralExitTimelockSeconds,
-    },
-    waitingTxidSnippets: waitingRows.map((row) => formatArkadeTxidToastSnippet(row.txid)),
+  const waitingBanner = selectedRowsWaitingBanner({
+    selectedRows: selectedInProgressRows,
+    snapshots: vtxoExitSnapshots,
+    timelockBlocks: bumperInfoQuery.data?.unilateralExitTimelockBlocks,
+    timelockSeconds: bumperInfoQuery.data?.unilateralExitTimelockSeconds,
   })
-  const completionFeeEstimate = completionFeeQuery.data
-  const missingBlocktimeWarning =
-    completionFeeEstimate?.missingBlocktimeInputs != null &&
-    completionFeeEstimate.missingBlocktimeInputs.length > 0
-      ? formatMissingBlocktimeCompletionWarning(completionFeeEstimate.missingBlocktimeInputs)
-      : null
 
   return (
     <div className="space-y-4">
@@ -137,68 +317,17 @@ export function CompleteUnilateralExitContent({ exitFlow }: CompleteUnilateralEx
         </InfomodeWrapper>
       </p>
 
-      {inProgressQuery.isLoading ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          Loading exits in progress…
-        </div>
-      ) : inProgressQuery.data?.length === 0 ? (
-        <p className="text-sm text-muted-foreground" data-testid="arkade-unilateral-complete-empty">
-          No unilateral exits in progress. Start an exit first, then return here after unroll.
-        </p>
-      ) : (
-        <>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm text-muted-foreground">
-              {selectedInProgressOutpoints.length} selected ·{' '}
-              <BitcoinAmountDisplay amountSats={selectedInProgressTotalSats} size="sm" />
-            </p>
-            {readyCount > 0 && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                data-testid="arkade-unilateral-select-all-ready"
-                onClick={selectAllReadyInProgress}
-              >
-                Select all ready ({readyCount})
-              </Button>
-            )}
-          </div>
-          <ul className="max-h-96 space-y-2 overflow-y-auto rounded-md border p-2">
-            {inProgressQuery.data?.map((row) => (
-              <li key={row.id}>
-                <label className="flex cursor-pointer items-start gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={includesArkadeVtxoOutpoint(selectedInProgressOutpoints, {
-                      txid: row.txid,
-                      vout: row.vout,
-                    })}
-                    onChange={() => toggleInProgressSelection(row)}
-                  />
-                  <span className="flex-1 break-all">
-                    <BitcoinAmountDisplay amountSats={row.amountSats} size="sm" />
-                    <span className="block font-mono text-xs text-muted-foreground">
-                      {row.txid}:{row.vout}
-                    </span>
-                    <span
-                      className="text-xs text-muted-foreground"
-                      data-testid="arkade-unilateral-complete-row-phase"
-                    >
-                      {row.virtualStatusState}
-                      {completeRowPhaseSuffix(row, vtxoExitSnapshots)}
-                    </span>
-                  </span>
-                </label>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+      <CompleteUnilateralExitInProgressList
+        rows={inProgressQuery.data}
+        isLoading={inProgressQuery.isLoading}
+        selectedOutpoints={selectedInProgressOutpoints}
+        selectedTotalSats={selectedInProgressTotalSats}
+        snapshots={vtxoExitSnapshots}
+        onToggleRow={toggleInProgressSelection}
+        onSelectAllReady={selectAllReadyInProgress}
+      />
 
-      {waitingBanner != null && waitingRows.length > 0 && (
+      {waitingBanner != null && (
         <p
           className="text-sm text-amber-700 dark:text-amber-300"
           data-testid="arkade-unilateral-complete-waiting"
@@ -237,74 +366,17 @@ export function CompleteUnilateralExitContent({ exitFlow }: CompleteUnilateralEx
         </div>
       </div>
 
-      {selectedInProgressOutpoints.length > 0 && (
-        <SendOnChainFeeSection
-          feePresetSelection={completionFeeRateUi.feePresetSelection}
-          presetSatPerVbByLabel={completionFeeRateUi.presetSatPerVbByLabel}
-          feeEstimatesRefreshing={completionFeeRateUi.feeEstimatesRefreshing}
-          customFeeRate={completionFeeRateUi.customFeeRate}
-          useCustomFee={completionFeeRateUi.useCustomFee}
-          isPending={completeExitMutation.isPending}
-          onSelectPreset={completionFeeRateUi.handleSelectFeePreset}
-          setCustomFeeRate={completionFeeRateUi.setCustomFeeRate}
-          onSelectCustomMode={completionFeeRateUi.handleSelectCustomMode}
-        />
-      )}
-
-      {selectedInProgressOutpoints.length > 0 && completionFeeQuery.isLoading && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          Estimating completion fee…
-        </div>
-      )}
-      {completionFeeEstimate && selectedInProgressOutpoints.length > 0 && (
-        <div
-          className="space-y-1 rounded-md border bg-muted/40 p-2 text-xs"
-          data-testid="arkade-unilateral-completion-fee"
-        >
-          <p>
-            Selected total:{' '}
-            <BitcoinAmountDisplay amountSats={completionFeeEstimate.selectedTotalSats} size="sm" />
-          </p>
-          <p>
-            Estimated miner fee ({formatSatPerVbTwoDecimals(completionFeeEstimate.feeRateSatPerVb)}{' '}
-            sat/vB):{' '}
-            <BitcoinAmountDisplay amountSats={completionFeeEstimate.estimatedFeeSats} size="sm" />
-          </p>
-          <p>
-            Estimated receive at destination:{' '}
-            <BitcoinAmountDisplay
-              amountSats={completionFeeEstimate.estimatedReceiveSats}
-              size="sm"
-            />
-          </p>
-          {completionFeeEstimate.estimateError && (
-            <p className="text-amber-700 dark:text-amber-300">
-              {completionFeeEstimate.estimateError}
-            </p>
-          )}
-        </div>
-      )}
-
-      {missingBlocktimeWarning != null && selectedInProgressOutpoints.length > 0 && (
-        <div
-          className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-200"
-          data-testid="arkade-complete-blocktime-warning"
-        >
-          <p>{missingBlocktimeWarning.summary}</p>
-          <ul className="mt-1 list-inside list-disc space-y-0.5">
-            {missingBlocktimeWarning.lines.map((line) => (
-              <li key={`${line.virtualTxid}:${line.onChainTxid}:${line.onChainVout}`}>
-                {formatMissingBlocktimeCompletionWarningLine(line)}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <CompleteUnilateralExitFeeDetails
+        selectedOutpointCount={selectedInProgressOutpoints.length}
+        completionFeeRateUi={completionFeeRateUi}
+        completionFeeQuery={completionFeeQuery}
+        isPending={completeExitMutation.isPending}
+      />
 
       {completeExitMutation.isError && (
         <p className="text-sm text-destructive" data-testid="arkade-complete-error">
-          Complete exit failed: {userFacingErrorMessage(completeExitMutation.error) || 'Unknown error'}
+          Complete exit failed:{' '}
+          {userFacingErrorMessage(completeExitMutation.error) || 'Unknown error'}
         </p>
       )}
 
@@ -328,10 +400,20 @@ export function CompleteUnilateralExitContent({ exitFlow }: CompleteUnilateralEx
   )
 }
 
+function CompleteUnilateralExitReady() {
+  const exitFlow = useCompleteUnilateralExitFlow()
+
+  return (
+    <div className="flex flex-col gap-6">
+      <PageHeader title="Complete unilateral exit" icon={ArkadeIcon} />
+      <CompleteUnilateralExitContent exitFlow={exitFlow} />
+    </div>
+  )
+}
+
 export function CompleteUnilateralExitPage() {
   const networkMode = useWalletStore(selectCommittedNetworkMode)
   const arkadeLoadSnapshot = useArkadeLoadLifecycleSnapshot()
-  const exitFlow = useCompleteUnilateralExitFlow()
 
   if (!isArkadeActiveForNetworkMode(networkMode)) {
     return (
@@ -345,18 +427,12 @@ export function CompleteUnilateralExitPage() {
     )
   }
 
-  if (isArkadeSessionStillLoading(arkadeLoadSnapshot.loadPhase)) {
-    return <ArkadeSessionLoading />
-  }
-
-  if (isArkadeSessionLoadFailed(arkadeLoadSnapshot.loadPhase)) {
-    return <ArkadeSessionLoadError errorMessage={arkadeLoadSnapshot.errorMessage} />
-  }
-
   return (
-    <div className="flex flex-col gap-6">
-      <PageHeader title="Complete unilateral exit" icon={ArkadeIcon} />
-      <CompleteUnilateralExitContent exitFlow={exitFlow} />
-    </div>
+    <ArkadeSessionGate
+      loadPhase={arkadeLoadSnapshot.loadPhase}
+      errorMessage={arkadeLoadSnapshot.errorMessage}
+    >
+      <CompleteUnilateralExitReady />
+    </ArkadeSessionGate>
   )
 }

@@ -2,14 +2,7 @@ import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { Copy, ExternalLink, Loader2 } from 'lucide-react'
 import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
-import {
-  ArkadeSessionLoadError,
-  isArkadeSessionLoadFailed,
-} from '@/components/arkade/ArkadeSessionLoadError'
-import {
-  ArkadeSessionLoading,
-  isArkadeSessionStillLoading,
-} from '@/components/arkade/ArkadeSessionLoading'
+import { arkadeSessionBlockingScreen } from '@/components/arkade/arkade-session-blocking-screen'
 import { ArkadeBoardingInfomodeContent } from '@/components/arkade/infomode/ArkadeBoardingInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { PageHeader } from '@/components/PageHeader'
@@ -71,26 +64,20 @@ export function ArkadeBoardPage() {
     )
   }
 
-  if (isArkadeSessionStillLoading(arkadeLoadSnapshot.loadPhase)) {
-    return <ArkadeSessionLoading />
-  }
-
-  if (isArkadeSessionLoadFailed(arkadeLoadSnapshot.loadPhase)) {
-    return <ArkadeSessionLoadError errorMessage={arkadeLoadSnapshot.errorMessage} />
+  const sessionBlockingScreen = arkadeSessionBlockingScreen(
+    arkadeLoadSnapshot.loadPhase,
+    arkadeLoadSnapshot.errorMessage,
+  )
+  if (sessionBlockingScreen) {
+    return sessionBlockingScreen
   }
 
   const boardingAddress =
     boardingQuery.data || boardingStatusQuery.data?.boardingAddress || ''
   const boardingStatus = boardingStatusQuery.data
   const boardingAddressLoading =
-    boardingAddress.length === 0 &&
-    arkadeLoadSnapshot.loadPhase !== 'load-error' &&
-    (boardingQuery.isPending ||
-      boardingQuery.isFetching ||
-      arkadeLoadSnapshot.loadPhase === 'loading')
-  const boardingAddressError =
-    boardingAddress.length === 0 &&
-    (arkadeLoadSnapshot.loadPhase === 'load-error' || boardingQuery.isError)
+    boardingAddress.length === 0 && (boardingQuery.isPending || boardingQuery.isFetching)
+  const boardingAddressError = boardingAddress.length === 0 && boardingQuery.isError
 
   const handleCopy = async () => {
     if (!boardingAddress) return

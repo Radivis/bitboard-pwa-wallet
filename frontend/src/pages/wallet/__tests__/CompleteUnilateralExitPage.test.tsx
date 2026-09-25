@@ -62,7 +62,7 @@ function outpoint(txid: string, vout = 0): ArkadeVtxoOutpoint {
 }
 
 describe('CompleteUnilateralExitPage', () => {
-  it('complete_dialog_sanitizes_reqwest_error', () => {
+  it('complete_page_sanitizes_reqwest_error', () => {
     renderWithProviders(
       <CompleteUnilateralExitContent
         exitFlow={buildExitFlow({
@@ -86,7 +86,7 @@ describe('CompleteUnilateralExitPage', () => {
     expect(error).not.toHaveTextContent('http://localhost:3000')
   })
 
-  it('complete_dialog_strips_explorer_urls_from_error', () => {
+  it('complete_page_strips_explorer_urls_from_error', () => {
     renderWithProviders(
       <CompleteUnilateralExitContent
         exitFlow={buildExitFlow({
@@ -252,7 +252,7 @@ describe('CompleteUnilateralExitPage', () => {
     expect(warning).toHaveTextContent(virtualTxid.slice(0, 12))
   })
 
-  it('complete_dialog_aborted_host_confirmed_shows_confirmations_copy', () => {
+  it('complete_page_aborted_host_confirmed_shows_confirmations_copy', () => {
     const waitingTxid = 'aa'.repeat(32)
     const row = {
       id: `${waitingTxid}:0`,
@@ -289,7 +289,7 @@ describe('CompleteUnilateralExitPage', () => {
     expect(screen.getByRole('button', { name: 'Complete exit' })).toBeDisabled()
   })
 
-  it('complete_dialog_host_relayed_shows_first_confirmation_copy', () => {
+  it('complete_page_host_relayed_shows_first_confirmation_copy', () => {
     const waitingTxid = 'aa'.repeat(32)
     const row = {
       id: `${waitingTxid}:0`,
@@ -326,7 +326,7 @@ describe('CompleteUnilateralExitPage', () => {
     expect(screen.getByRole('button', { name: 'Complete exit' })).toBeDisabled()
   })
 
-  it('complete_dialog_host_broadcast_attempted_shows_host_broadcast_copy', () => {
+  it('complete_page_host_broadcast_attempted_shows_host_broadcast_copy', () => {
     const waitingTxid = 'aa'.repeat(32)
     const row = {
       id: `${waitingTxid}:0`,
@@ -360,7 +360,7 @@ describe('CompleteUnilateralExitPage', () => {
     expect(screen.getByRole('button', { name: 'Complete exit' })).toBeDisabled()
   })
 
-  it('complete_dialog_unrolled_shows_timelock_copy', () => {
+  it('complete_page_unrolled_shows_timelock_copy', () => {
     const waitingTxid = 'aa'.repeat(32)
     const row = {
       id: `${waitingTxid}:0`,
@@ -386,7 +386,7 @@ describe('CompleteUnilateralExitPage', () => {
     )
   })
 
-  it('complete_dialog_complete_ready_shows_ready', () => {
+  it('complete_page_complete_ready_shows_ready', () => {
     const readyTxid = 'bb'.repeat(32)
     const row = {
       id: `${readyTxid}:0`,

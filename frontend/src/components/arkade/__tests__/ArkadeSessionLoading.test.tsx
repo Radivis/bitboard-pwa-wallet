@@ -3,9 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ARKADE_SESSION_LOADING_COMMENT_ROTATION_MS,
   ARKADE_SESSION_LOADING_COMMENTS,
-  ArkadeSessionLoading,
   nextArkadeSessionLoadingCommentIndex,
-} from '@/components/arkade/ArkadeSessionLoading'
+} from '@/components/arkade/arkade-session-loading-comments'
+import { ARKADE_SESSION_LOADING_SPIN_DURATION_CLASS } from '@/components/arkade/arkade-session-status-layout'
+import { ArkadeSessionLoading } from '@/components/arkade/ArkadeSessionLoading'
 
 describe('ArkadeSessionLoading', () => {
   afterEach(() => {
@@ -21,7 +22,7 @@ describe('ArkadeSessionLoading', () => {
 
     const icon = screen.getByTestId('arkade-session-loading').querySelector('[aria-hidden="true"]')
     expect(icon).toHaveClass('animate-spin')
-    expect(icon).toHaveClass('[animation-duration:2s]')
+    expect(icon).toHaveClass(ARKADE_SESSION_LOADING_SPIN_DURATION_CLASS)
   })
 
   it('rotates to a different comment every 10 seconds', () => {

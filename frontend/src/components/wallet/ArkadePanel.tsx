@@ -1,14 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
-import {
-  ArkadeSessionLoadError,
-  isArkadeSessionLoadFailed,
-} from '@/components/arkade/ArkadeSessionLoadError'
-import {
-  ArkadeSessionLoading,
-  isArkadeSessionStillLoading,
-} from '@/components/arkade/ArkadeSessionLoading'
+import { ArkadeSessionGate } from '@/components/arkade/ArkadeSessionGate'
 import { ArkadeBoardingInfomodeContent } from '@/components/arkade/infomode/ArkadeBoardingInfomodeContent'
 import { ArkadeOverviewInfomodeContent } from '@/components/arkade/infomode/ArkadeOverviewInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
@@ -130,14 +123,11 @@ export function ArkadePanel() {
             : ' Use “Renew VTXOs now” while the app is open, or enable a delegator via deployment config.'}
         </p>
 
-        {isArkadeSessionStillLoading(arkadeLoadSnapshot.loadPhase) ? (
-          <ArkadeSessionLoading embedded />
-        ) : isArkadeSessionLoadFailed(arkadeLoadSnapshot.loadPhase) ? (
-          <ArkadeSessionLoadError
-            embedded
-            errorMessage={arkadeLoadSnapshot.errorMessage}
-          />
-        ) : (
+        <ArkadeSessionGate
+          loadPhase={arkadeLoadSnapshot.loadPhase}
+          errorMessage={arkadeLoadSnapshot.errorMessage}
+          embedded
+        >
           <>
             {balanceQuery.isLoading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -159,7 +149,7 @@ export function ArkadePanel() {
               </div>
             )}
           </>
-        )}
+        </ArkadeSessionGate>
 
         {delegateFee != null && (
           <InfomodeWrapper

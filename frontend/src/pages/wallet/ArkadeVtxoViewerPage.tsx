@@ -3,14 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
-import {
-  ArkadeSessionLoadError,
-  isArkadeSessionLoadFailed,
-} from '@/components/arkade/ArkadeSessionLoadError'
-import {
-  ArkadeSessionLoading,
-  isArkadeSessionStillLoading,
-} from '@/components/arkade/ArkadeSessionLoading'
+import { arkadeSessionBlockingScreen } from '@/components/arkade/arkade-session-blocking-screen'
 import { ArkadeVtxoCard } from '@/components/arkade/ArkadeVtxoCard'
 import { ArkadeVtxoClassificationIcon } from '@/components/arkade/ArkadeVtxoClassificationIcon'
 import { CardPagination } from '@/components/CardPagination'
@@ -100,12 +93,12 @@ export function ArkadeVtxoViewerPage() {
     )
   }
 
-  if (isArkadeSessionStillLoading(arkadeLoadSnapshot.loadPhase)) {
-    return <ArkadeSessionLoading />
-  }
-
-  if (isArkadeSessionLoadFailed(arkadeLoadSnapshot.loadPhase)) {
-    return <ArkadeSessionLoadError errorMessage={arkadeLoadSnapshot.errorMessage} />
+  const sessionBlockingScreen = arkadeSessionBlockingScreen(
+    arkadeLoadSnapshot.loadPhase,
+    arkadeLoadSnapshot.errorMessage,
+  )
+  if (sessionBlockingScreen) {
+    return sessionBlockingScreen
   }
 
   const fromSnapshotSyncedAt = vtxoListQuery.data?.fromSnapshotSyncedAt ?? null

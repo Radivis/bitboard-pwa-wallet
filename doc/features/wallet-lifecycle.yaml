@@ -191,9 +191,9 @@ feature:
         description: Arkade sync-error serves loaded WASM/local dashboard data
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-sync-lifecycle-orchestrator.test.ts
       - id: LIFE-ARK-ERR-02
-        description: Arkade load-error replaces balance card body with retry banner
+        description: Arkade load-error replaces the dashboard balance card body with the embedded Arkade session error screen and its retry action
         implemented_by:
-          - frontend/src/components/wallet/RailLoadErrorBanner.tsx
+          - frontend/src/components/arkade/ArkadeSessionLoadError.tsx
           - frontend/src/components/wallet/ArkadeDashboardBalance.tsx
       - id: LIFE-ARK-ERR-03
         description: Arkade sync-error banner driven by syncPhase; operator-stale copy hidden when sync-error

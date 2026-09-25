@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { ARKADE_SESSION_LOAD_ERROR_TILT_CLASS } from '@/components/arkade/arkade-session-status-layout'
 import { ArkadeSessionLoadError } from '@/components/arkade/ArkadeSessionLoadError'
 
 const retryLoad = vi.hoisted(() => vi.fn())
@@ -22,7 +23,7 @@ describe('ArkadeSessionLoadError', () => {
     )
 
     const icon = screen.getByTestId('arkade-session-load-error').querySelector('[aria-hidden="true"]')
-    expect(icon).toHaveClass('rotate-[160deg]')
+    expect(icon).toHaveClass(ARKADE_SESSION_LOAD_ERROR_TILT_CLASS)
     expect(icon).toHaveClass('text-red-600')
     expect(icon).not.toHaveClass('animate-spin')
   })

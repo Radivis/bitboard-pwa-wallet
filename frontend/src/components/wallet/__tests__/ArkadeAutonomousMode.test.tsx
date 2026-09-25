@@ -91,8 +91,8 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
   }
 })
 
-vi.mock('@/hooks/useArkadeExitFlow', () => ({
-  useArkadeExitFlow: () => ({
+vi.mock('@/hooks/useHasUnilateralExitInProgress', () => ({
+  useHasUnilateralExitInProgress: () => ({
     hasUnilateralExitInProgress: false,
   }),
 }))

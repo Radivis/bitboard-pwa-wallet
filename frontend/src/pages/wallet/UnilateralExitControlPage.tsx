@@ -4,14 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
-import {
-  ArkadeSessionLoadError,
-  isArkadeSessionLoadFailed,
-} from '@/components/arkade/ArkadeSessionLoadError'
-import {
-  ArkadeSessionLoading,
-  isArkadeSessionStillLoading,
-} from '@/components/arkade/ArkadeSessionLoading'
+import { arkadeSessionBlockingScreen } from '@/components/arkade/arkade-session-blocking-screen'
 import { ArkadeBumperWalletInfomodeContent } from '@/components/arkade/infomode/ArkadeBumperWalletInfomodeContent'
 import { ArkadeUnilateralExitInfomodeContent } from '@/components/arkade/infomode/ArkadeUnilateralExitInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
@@ -503,12 +496,12 @@ export function UnilateralExitControlPage() {
     )
   }
 
-  if (isArkadeSessionStillLoading(arkadeLoadSnapshot.loadPhase)) {
-    return <ArkadeSessionLoading />
-  }
-
-  if (isArkadeSessionLoadFailed(arkadeLoadSnapshot.loadPhase)) {
-    return <ArkadeSessionLoadError errorMessage={arkadeLoadSnapshot.errorMessage} />
+  const sessionBlockingScreen = arkadeSessionBlockingScreen(
+    arkadeLoadSnapshot.loadPhase,
+    arkadeLoadSnapshot.errorMessage,
+  )
+  if (sessionBlockingScreen) {
+    return sessionBlockingScreen
   }
 
   return (
