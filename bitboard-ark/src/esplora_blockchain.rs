@@ -26,6 +26,14 @@ struct ConfirmationCache {
     scan_prepared: bool,
     tip_height: Option<u32>,
     confirmed_at_tip: HashMap<Txid, u64>,
+    /// When an absent tx was last proven to have 0 confirmations.
+    absent_fetched_at_ms: HashMap<Txid, u64>,
+    /// `/raw` presence. `true` lasts until the tip changes; `false` uses the absent TTL.
+    relayed_on_network: HashMap<Txid, bool>,
+}
+
+fn absent_tx_probe_still_fresh(fetched_at_ms: u64, now_ms: u64) -> bool {
+    now_ms.saturating_sub(fetched_at_ms) < UNSPENT_OUTSPEND_CACHE_TTL_MS
 }
 
 struct CachedOutspends {
@@ -139,15 +147,17 @@ impl EsploraBlockchain {
         if !self.confirmation_scan_is_prepared() {
             self.prepare_confirmation_scan().await;
         }
-        if let Some(confirmations) = self.cached_confirmed_at_tip(txid) {
+        if let Some(confirmations) = self.cached_confirmations(txid) {
             return Ok(confirmations);
         }
         let client = Arc::clone(&self.client);
         let txid = *txid;
         let tip_height = self.cached_tip_height();
-        let confirmations = map_tx_confirmations(&client, &txid, tip_height)
+        let relay_status = map_tx_confirmations(&client, &txid, tip_height)
             .await
             .map_err(|error| ArkWasmError::Blockchain(error.to_string()))?;
+        let confirmations = relay_status.confirmations;
+        self.store_tx_probe(txid, relay_status);
         Ok(confirmations)
     }
 
@@ -161,6 +171,8 @@ impl EsploraBlockchain {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         if cache.tip_height != tip_height {
             cache.confirmed_at_tip.clear();
+            cache.absent_fetched_at_ms.clear();
+            cache.relayed_on_network.clear();
             cache.tip_height = tip_height;
         }
         cache.scan_prepared = true;
@@ -180,21 +192,84 @@ impl EsploraBlockchain {
             .scan_prepared
     }
 
-    fn cached_confirmed_at_tip(&self, txid: &Txid) -> Option<u64> {
-        self.confirmation_cache
+    fn cached_confirmations(&self, txid: &Txid) -> Option<u64> {
+        let cache = self
+            .confirmation_cache
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .confirmed_at_tip
-            .get(txid)
-            .copied()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(confirmations) = cache.confirmed_at_tip.get(txid).copied() {
+            return Some(confirmations);
+        }
+        let fetched_at_ms = cache.absent_fetched_at_ms.get(txid).copied()?;
+        if absent_tx_probe_still_fresh(fetched_at_ms, now_ms()) {
+            Some(0)
+        } else {
+            None
+        }
+    }
+
+    fn cached_relayed(&self, txid: &Txid) -> Option<bool> {
+        let cache = self
+            .confirmation_cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        match cache.relayed_on_network.get(txid).copied() {
+            Some(true) => Some(true),
+            Some(false) => {
+                let fetched_at_ms = cache.absent_fetched_at_ms.get(txid).copied()?;
+                if absent_tx_probe_still_fresh(fetched_at_ms, now_ms()) {
+                    Some(false)
+                } else {
+                    None
+                }
+            }
+            None => None,
+        }
+    }
+
+    fn store_tx_probe(&self, txid: Txid, relay_status: TxRelayStatus) {
+        let mut cache = self
+            .confirmation_cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        cache
+            .relayed_on_network
+            .insert(txid, relay_status.relayed_on_network);
+        if relay_status.confirmations > 0 {
+            cache
+                .confirmed_at_tip
+                .insert(txid, relay_status.confirmations);
+            cache.absent_fetched_at_ms.remove(&txid);
+        } else {
+            cache.confirmed_at_tip.remove(&txid);
+            cache.absent_fetched_at_ms.insert(txid, now_ms());
+        }
+    }
+
+    /// Drop a cached absent/relay result so the post-broadcast visibility check hits Esplora once.
+    pub(crate) fn forget_tx_probe(&self, txid: &Txid) {
+        let mut cache = self
+            .confirmation_cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        cache.confirmed_at_tip.remove(txid);
+        cache.absent_fetched_at_ms.remove(txid);
+        cache.relayed_on_network.remove(txid);
     }
 
     pub(crate) fn store_confirmed_at_tip(&self, txid: Txid, confirmations: u64) {
-        self.confirmation_cache
+        let mut cache = self
+            .confirmation_cache
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .confirmed_at_tip
-            .insert(txid, confirmations);
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if confirmations > 0 {
+            cache.confirmed_at_tip.insert(txid, confirmations);
+            cache.absent_fetched_at_ms.remove(&txid);
+            cache.relayed_on_network.insert(txid, true);
+        } else {
+            cache.confirmed_at_tip.remove(&txid);
+            cache.absent_fetched_at_ms.insert(txid, now_ms());
+        }
     }
 
     /// True when `/tx/{txid}/raw` returns a transaction (mempool or chain).
@@ -204,13 +279,32 @@ impl EsploraBlockchain {
     ///
     /// See `docs/arkade-regtest-esplora-quirks.md` — use for **broadcast gating only**, not step completion.
     pub async fn is_tx_relayed_on_network(&self, txid: &Txid) -> ArkResult<bool> {
+        if let Some(relayed) = self.cached_relayed(txid) {
+            return Ok(relayed);
+        }
         let client = Arc::clone(&self.client);
         let txid = *txid;
-        Ok(client
+        let relayed = client
             .get_tx(&txid)
             .await
             .map_err(EsploraBlockchain::map_esplora_error)?
-            .is_some())
+            .is_some();
+        if relayed {
+            let mut cache = self
+                .confirmation_cache
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            cache.relayed_on_network.insert(txid, true);
+        } else {
+            self.store_tx_probe(
+                txid,
+                TxRelayStatus {
+                    confirmations: 0,
+                    relayed_on_network: false,
+                },
+            );
+        }
+        Ok(relayed)
     }
 
     async fn get_output_status_at(
@@ -514,32 +608,51 @@ fn is_missing_tx_esplora_error(error: &esplora_client::Error) -> bool {
     }
 }
 
+/// Confirmation depth together with whether Esplora served the raw transaction.
+///
+/// `relayed_on_network` is whether `GET /tx/{txid}/raw` returned the transaction, in the
+/// mempool or in a block. It is `false` when `/raw` is absent, including HTTP 404.
+/// A transaction present on `/raw` with no JSON status has `confirmations == 0` and
+/// `relayed_on_network == true`: it is on the network, and its confirmation depth is
+/// still unknown.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct TxRelayStatus {
+    confirmations: u64,
+    relayed_on_network: bool,
+}
+
 /// When `/status` is missing or still reports unconfirmed, consult relay + JSON status.
 /// Virtual-tree indexes can serve `confirmed: false` from `/status` even after a mined broadcast.
 async fn confirmations_for_relayed_tx(
     client: &EsploraAsyncClient,
     txid: &Txid,
     chain_tip_height: Option<u32>,
-) -> Result<u64, ark_client::Error> {
-    let relayed = client
+) -> Result<TxRelayStatus, ark_client::Error> {
+    let relayed_on_network = client
         .get_tx(txid)
         .await
         .map_err(EsploraBlockchain::map_esplora_error)?
         .is_some();
-    if !relayed {
-        return Ok(0);
+    if !relayed_on_network {
+        return Ok(TxRelayStatus {
+            confirmations: 0,
+            relayed_on_network: false,
+        });
     }
     let Some(tx_info) = client
         .get_tx_info(txid)
         .await
         .map_err(EsploraBlockchain::map_esplora_error)?
     else {
-        return Ok(0);
+        return Ok(TxRelayStatus {
+            confirmations: 0,
+            relayed_on_network: true,
+        });
     };
-    Ok(confirmations_from_esplora_tx_status(
-        &tx_info.status,
-        chain_tip_height,
-    ))
+    Ok(TxRelayStatus {
+        confirmations: confirmations_from_esplora_tx_status(&tx_info.status, chain_tip_height),
+        relayed_on_network: true,
+    })
 }
 
 async fn map_tx_status(
@@ -552,11 +665,12 @@ async fn map_tx_status(
     })
 }
 
+/// Confirmation depth and [`TxRelayStatus::relayed_on_network`] for one transaction.
 async fn map_tx_confirmations(
     client: &EsploraAsyncClient,
     txid: &Txid,
     chain_tip_height: Option<u32>,
-) -> Result<u64, ark_client::Error> {
+) -> Result<TxRelayStatus, ark_client::Error> {
     let status = match client.get_tx_status(txid).await {
         Ok(status) => Some(status),
         Err(esplora_client::Error::HttpResponse { status: 404, .. }) => None,
@@ -569,13 +683,16 @@ async fn map_tx_confirmations(
             .await
             .map_err(EsploraBlockchain::map_esplora_error)?
             .is_some();
-        return Ok(confirmations_if_status_confirmed_on_network(
-            true,
-            status.block_height,
-            chain_tip_height,
-            raw_relayed,
-        )
-        .unwrap_or(0));
+        return Ok(TxRelayStatus {
+            confirmations: confirmations_if_status_confirmed_on_network(
+                true,
+                status.block_height,
+                chain_tip_height,
+                raw_relayed,
+            )
+            .unwrap_or(0),
+            relayed_on_network: raw_relayed,
+        });
     }
 
     confirmations_for_relayed_tx(client, txid, chain_tip_height).await
@@ -755,6 +872,7 @@ mod tests {
     use esplora_client::{SubmitPackageResult, TxResult};
     use std::collections::HashMap;
 
+    use super::absent_tx_probe_still_fresh;
     use super::confirmations_if_status_confirmed_on_network;
     use super::is_mempool_submitpackage_rpc_error;
     use super::is_missing_tx_esplora_error;
@@ -763,6 +881,20 @@ mod tests {
     use super::mined_tx_confirmations;
     use super::utxo_confirmations;
     use super::validate_submit_package_result;
+    use crate::constants::UNSPENT_OUTSPEND_CACHE_TTL_MS;
+
+    #[test]
+    fn absent_tx_probe_stays_fresh_inside_the_outspend_ttl() {
+        assert!(absent_tx_probe_still_fresh(1_000, 1_000));
+        assert!(absent_tx_probe_still_fresh(
+            1_000,
+            1_000 + UNSPENT_OUTSPEND_CACHE_TTL_MS - 1
+        ));
+        assert!(!absent_tx_probe_still_fresh(
+            1_000,
+            1_000 + UNSPENT_OUTSPEND_CACHE_TTL_MS
+        ));
+    }
 
     #[test]
     fn mempool_submitpackage_rpc_error_is_detected() {

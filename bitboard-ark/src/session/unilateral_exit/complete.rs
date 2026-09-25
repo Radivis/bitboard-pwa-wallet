@@ -74,6 +74,15 @@ impl ArkSession {
     }
 
     async fn ensure_bumper_wallet_synced_once(&self) -> ArkResult<()> {
+        if self.bumper_wallet.completed_full_scan() {
+            if self.bumper_wallet_sync_phase.get()
+                == crate::session::bumper_sync_policy::BumperWalletSyncPhase::NotStarted
+            {
+                self.bumper_wallet_sync_phase
+                    .set(crate::session::bumper_sync_policy::BumperWalletSyncPhase::Done);
+            }
+            return Ok(());
+        }
         self.wait_until_bumper_wallet_scan_settled().await;
         if !bumper_info_should_start_wallet_scan(self.bumper_wallet_sync_phase.get()) {
             return Ok(());
@@ -84,8 +93,13 @@ impl ArkSession {
     /// One wallet-wide bumper scan per session. A later unroll step only refreshes
     /// scripts that can still fund the CPFP child.
     pub(crate) async fn sync_bumper_for_exit_broadcast(&self) -> ArkResult<()> {
-        self.wait_until_bumper_wallet_scan_settled().await;
-        let scanned_now = match exit_broadcast_bumper_sync(self.bumper_wallet_sync_phase.get()) {
+        let hydrated_full_scan = self.bumper_wallet.completed_full_scan();
+        if !hydrated_full_scan {
+            self.wait_until_bumper_wallet_scan_settled().await;
+        }
+        let phase = self.bumper_wallet_sync_phase.get();
+        let scanned_now = match exit_broadcast_bumper_sync(phase) {
+            ExitBroadcastBumperSync::WalletWide if hydrated_full_scan => false,
             ExitBroadcastBumperSync::WalletWide => {
                 self.sync_bumper_wallet_and_record_phase().await?;
                 true

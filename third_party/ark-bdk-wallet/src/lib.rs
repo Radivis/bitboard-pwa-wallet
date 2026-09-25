@@ -104,11 +104,14 @@ where
         };
 
         #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
-        let client = esplora_client::Builder::new(esplora_url).build_async_with_sleeper()?;
+        let client = esplora_client::Builder::new(esplora_url)
+            .timeout(BUMPER_ESPLORA_HTTP_TIMEOUT_SECS)
+            .build_async_with_sleeper()?;
 
         #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-        let client =
-            esplora_client::Builder::new(esplora_url).build_async_with_sleeper::<WebSleeper>()?;
+        let client = esplora_client::Builder::new(esplora_url)
+            .timeout(BUMPER_ESPLORA_HTTP_TIMEOUT_SECS)
+            .build_async_with_sleeper::<WebSleeper>()?;
 
         Ok(Self {
             kp,
@@ -441,6 +444,9 @@ impl esplora_client::Sleeper for WebSleeper {
         utils::SendWrapper(gloo_timers::future::sleep(dur))
     }
 }
+
+/// Same bound as `EsploraBlockchain` so one stuck Mutinynet request cannot hold a scan open.
+const BUMPER_ESPLORA_HTTP_TIMEOUT_SECS: u64 = 15;
 
 const BUMPER_FULL_SCAN_STOP_GAP: usize = 5;
 const BUMPER_ESPLORA_PARALLEL_REQUESTS: usize = 5;

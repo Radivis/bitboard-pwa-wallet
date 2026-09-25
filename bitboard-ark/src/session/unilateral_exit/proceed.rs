@@ -111,11 +111,14 @@ impl ArkSession {
             );
             self.wallet_db.set_vtxo_exit_records(records);
             self.sync_bumper_for_exit_broadcast().await?;
-            if let Err(error) = self
+            let broadcast_result = self
                 .client
                 .broadcast_unilateral_exit_step_at_fee_rate(&parent_tx, fee_rate_sat_per_vb)
-                .await
-            {
+                .await;
+            // Pre-broadcast probes cached this tx as absent. Drop that so the visibility
+            // check observes the broadcast instead of replaying the 404.
+            blockchain.forget_tx_probe(&step_txid);
+            if let Err(error) = broadcast_result {
                 if is_package_not_child_with_unconfirmed_parents_error(&error) {
                     // submitpackage rejected a parent the indexer may already paint confirmed
                     // (indexer vs write node, reorg, or unconfirmed CPFP bumper). Do not stamp
