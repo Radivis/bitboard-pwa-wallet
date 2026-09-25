@@ -148,13 +148,16 @@ feature:
           scan. Later bumper-info and underfunded-exit polls incremental-sync
           unused revealed SPKs (the displayed tip) into BDK and report
           confirmed only — not another HD /scripthash/txs walk and not a
-          tip-address /utxo overlay. proceed and complete always call
-          sync_bumper_wallet_with_retries before broadcast or completion spend.
-          Completion fee estimate uses the same once-per-session scan as
-          onchain_bumper_info (not another HD walk on destination / fee-rate refetch).
+          tip-address /utxo overlay. proceed calls
+          sync_bumper_wallet_with_retries before broadcast. Completing a
+          unilateral exit does not wait on that scan: the complete page starts
+          it in the background and persists the SegWit-0 sidecar when it
+          finishes. Completion fee estimate does not start a wallet-wide scan.
         implemented_by:
           - bitboard-ark/src/session/bumper_sync_policy.rs
           - bitboard-ark/src/session/unilateral_exit/complete.rs
+          - frontend/src/lib/arkade/__tests__/background-bumper-wallet-sync.test.ts
+          - frontend/src/hooks/__tests__/useCompleteUnilateralExitFlow.test.tsx
           - third_party/ark-bdk-wallet/src/lib.rs
       - id: LIFE-ARK-BUMP-02
         description: >
@@ -191,9 +194,9 @@ feature:
         description: Arkade sync-error serves loaded WASM/local dashboard data
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-sync-lifecycle-orchestrator.test.ts
       - id: LIFE-ARK-ERR-02
-        description: Arkade load-error replaces balance card body with retry banner
+        description: Arkade load-error replaces the dashboard balance card body with the embedded Arkade session error screen and its retry action
         implemented_by:
-          - frontend/src/components/wallet/RailLoadErrorBanner.tsx
+          - frontend/src/components/arkade/ArkadeSessionLoadError.tsx
           - frontend/src/components/wallet/ArkadeDashboardBalance.tsx
       - id: LIFE-ARK-ERR-03
         description: Arkade sync-error banner driven by syncPhase; operator-stale copy hidden when sync-error

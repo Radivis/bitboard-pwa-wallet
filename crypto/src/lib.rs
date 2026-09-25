@@ -312,13 +312,18 @@ fn to_js<T: serde::Serialize>(value: &T) -> Result<JsValue, JsValue> {
 
 /// Sync the active wallet against an Esplora server (incremental).
 ///
+/// Reveals external index 0 first when the receive UI would already show that
+/// peeked address. Incremental sync only queries revealed scripts, so a funded
+/// peek of index 0 would otherwise stay at a zero balance.
+///
 /// Returns a `SyncResult` with updated balance and changeset JSON.
 #[wasm_bindgen]
 pub async fn sync_wallet(esplora_url: &str) -> Result<JsValue, JsValue> {
     let esplora_client = esplora::EsploraClient::for_sync(esplora_url).map_err(JsValue::from)?;
 
-    let sync_request =
-        with_wallet(|wallet| wallet.start_sync_with_revealed_spks_at(current_unix_time()))?;
+    let sync_request = with_wallet_mut(|wallet| {
+        wallet::start_incremental_sync_request(wallet, current_unix_time())
+    })?;
 
     use bdk_esplora::EsploraAsyncExt;
     let update: bdk_wallet::Update = esplora_client

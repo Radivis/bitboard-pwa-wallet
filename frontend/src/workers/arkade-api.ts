@@ -346,6 +346,11 @@ export interface ArkadeUnilateralExitCompletionFeeEstimateParams {
   feeRateSatPerVb?: number
 }
 
+export interface ArkadeUnilateralExitTimelock {
+  unilateralExitTimelockBlocks?: number
+  unilateralExitTimelockSeconds?: number
+}
+
 export interface ArkadeOnchainBumperInfo {
   address: string
   balanceSats: number
@@ -647,6 +652,10 @@ export interface ArkadeService {
   listUnilateralExitsInProgress(): Promise<ArkadeUnilateralExitInProgressDto[]>
   listVtxoExitRecords(): Promise<ArkadeVtxoExitRecordDto[]>
   getOnchainBumperInfo(): Promise<ArkadeOnchainBumperInfo>
+  /** Cached operator CSV delay. Does not Esplora-scan. */
+  unilateralExitTimelock(): Promise<ArkadeUnilateralExitTimelock>
+  /** Local next-unused bumper address. Does not Esplora-scan. */
+  peekOnchainBumperAddress(): Promise<string>
   collaborativeExit(
     params: ArkadeCollaborativeExitParams,
     onRegistered?: (intent: ArkadePendingBatchIntent) => void,

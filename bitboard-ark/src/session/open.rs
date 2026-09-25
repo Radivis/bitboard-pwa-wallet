@@ -57,6 +57,21 @@ async fn sleep_for_backoff(duration: std::time::Duration) {
     bitboard_wasm_sleep::sleep_for(duration).await;
 }
 
+/// Wall clock in unix milliseconds. `Instant` is unavailable on wasm32-unknown-unknown.
+fn wall_clock_unix_ms() -> u64 {
+    #[cfg(target_arch = "wasm32")]
+    {
+        js_sys::Date::now() as u64
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_millis() as u64)
+            .unwrap_or(0)
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 async fn sleep_for_backoff(duration: std::time::Duration) {
     tokio::time::sleep(duration).await;
@@ -310,11 +325,13 @@ impl ArkSession {
     }
 
     pub(crate) async fn wait_until_bumper_wallet_scan_settled(&self) {
-        let started = std::time::Instant::now();
+        // `std::time::Instant` panics on wasm32-unknown-unknown and aborts the worker.
+        let started_ms = wall_clock_unix_ms();
+        let timeout_ms = u64::try_from(BUMPER_SCAN_SETTLE_TIMEOUT.as_millis()).unwrap_or(u64::MAX);
         while self.bumper_wallet_sync_phase.get()
             == super::bumper_sync_policy::BumperWalletSyncPhase::Running
         {
-            if started.elapsed() >= BUMPER_SCAN_SETTLE_TIMEOUT {
+            if wall_clock_unix_ms().saturating_sub(started_ms) >= timeout_ms {
                 self.bumper_wallet_sync_phase
                     .set(super::bumper_sync_policy::BumperWalletSyncPhase::Failed);
                 return;

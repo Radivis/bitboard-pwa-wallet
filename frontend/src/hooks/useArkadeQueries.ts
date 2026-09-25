@@ -7,6 +7,7 @@ import {
   arkadeBalanceQueryKey,
   arkadeBoardingAddressQueryKey,
   arkadeBoardingStatusQueryKey,
+  arkadeBumperAddressQueryKey,
   arkadeBumperInfoQueryKey,
   arkadeCollaborativeExitFeeQueryKey,
   arkadeDisabledQueryKey,
@@ -22,6 +23,7 @@ import {
   arkadeRecoverableVtxoFeeQueryKey,
   arkadeSignerMigrationPartialResultQueryKey,
   arkadeUnilateralExitCompletionFeeQueryKey,
+  arkadeUnilateralExitTimelockQueryKey,
   arkadeUnilateralExitsInProgressQueryKey,
   arkadeUnilateralExitTopologyQueryKey,
   arkadeUnilateralExitBatchEstimateQueryKey,
@@ -117,10 +119,7 @@ import {
 import {
   assertArkadeSessionUnlocked,
 } from '@/lib/arkade/proceed-unilateral-exit-step'
-import {
-  persistBumperSidecarAfterWalletWideSyncIfNeeded,
-  persistBumperSidecarBestEffort,
-} from '@/lib/wallet/persist-bumper-sidecar-after-sync'
+import { persistBumperSidecarAfterWalletWideSyncIfNeeded } from '@/lib/wallet/persist-bumper-sidecar-after-sync'
 import { isUnilateralExitBranchComplete } from '@/lib/arkade/unilateral-exit-branch-complete'
 import {
   isUnilateralExitProgressWaitingForConfirmation,
@@ -1103,6 +1102,46 @@ export function useArkadeExitCandidatesQuery(enabled: boolean) {
   })
 }
 
+/** Operator CSV delay for the complete page. Does not Esplora-scan the bumper wallet. */
+export function useArkadeUnilateralExitTimelockQuery(enabled: boolean) {
+  const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
+    useArkadeQueryBase()
+
+  return useQuery({
+    queryKey: walletScopedQueryKey(
+      activeWalletId,
+      networkMode,
+      activeArkadeAccountId,
+      arkadeUnilateralExitTimelockQueryKey,
+      'unilateral-exit-timelock',
+    ),
+    enabled: enabled && sessionReady,
+    queryFn: () =>
+      withReadyArkadeWorker(() => getArkadeWorker().unilateralExitTimelock()),
+    staleTime: ARKADE_SESSION_POLL_STALE_MS,
+  })
+}
+
+/** Next unused bumper address without an Esplora scan. */
+export function useArkadeBumperAddressQuery(enabled: boolean) {
+  const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
+    useArkadeQueryBase()
+
+  return useQuery({
+    queryKey: walletScopedQueryKey(
+      activeWalletId,
+      networkMode,
+      activeArkadeAccountId,
+      arkadeBumperAddressQueryKey,
+      'bumper-address',
+    ),
+    enabled: enabled && sessionReady,
+    queryFn: () =>
+      withReadyArkadeWorker(() => getArkadeWorker().peekOnchainBumperAddress()),
+    staleTime: ARKADE_SESSION_POLL_STALE_MS,
+  })
+}
+
 export function useArkadeBumperInfoQuery(
   enabled: boolean,
   pollWhileUnderfunded = false,
@@ -1309,13 +1348,6 @@ export function useArkadeCompleteUnilateralExitMutation() {
       assertArkadeSessionUnlocked(activeWalletId)
       const txid = await withReadyArkadeWorker(() =>
         getArkadeWorker().completeUnilateralExit(params),
-      )
-      await persistBumperSidecarBestEffort(
-        {
-          walletId: activeWalletId,
-          networkMode,
-        },
-        'after complete',
       )
       return txid
     },

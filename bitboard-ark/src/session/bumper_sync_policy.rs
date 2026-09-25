@@ -19,16 +19,17 @@ pub(crate) fn bumper_info_should_start_wallet_scan(phase: BumperWalletSyncPhase)
     )
 }
 
-/// LIFE-ARK-BUMP-01: complete must Esplora-sync the bumper wallet before spend,
-/// even when `onchain_bumper_info` already scanned this session.
+/// LIFE-ARK-BUMP-01: completing an exit must not wait on a wallet-wide bumper scan.
+/// The complete page starts that scan in the background. Coin selection uses unrolled
+/// VTXO outputs, not bumper UTXOs.
 pub(crate) fn completion_spend_should_sync_bumper_wallet(_phase: BumperWalletSyncPhase) -> bool {
-    true
+    false
 }
 
-/// LIFE-ARK-BUMP-01: fee estimate uses the same once-per-session scan as bumper-info
-/// so destination / fee-rate refetches do not restart an HD walk.
-pub(crate) fn completion_estimate_should_sync_bumper_wallet(phase: BumperWalletSyncPhase) -> bool {
-    bumper_info_should_start_wallet_scan(phase)
+/// LIFE-ARK-BUMP-01: the completion fee estimate must not start a wallet-wide scan.
+/// Destination and fee-rate refetches stay on the snapshot plus Esplora address lookup.
+pub(crate) fn completion_estimate_should_sync_bumper_wallet(_phase: BumperWalletSyncPhase) -> bool {
+    false
 }
 
 /// How an unroll-step broadcast refreshes bumper coins.
@@ -154,7 +155,7 @@ mod tests {
     }
 
     #[test]
-    fn completion_spend_should_sync_bumper_wallet_for_every_phase() {
+    fn completion_spend_does_not_wait_on_bumper_wallet_scan() {
         for phase in [
             BumperWalletSyncPhase::NotStarted,
             BumperWalletSyncPhase::Running,
@@ -162,8 +163,8 @@ mod tests {
             BumperWalletSyncPhase::Done,
         ] {
             assert!(
-                completion_spend_should_sync_bumper_wallet(phase),
-                "complete must Esplora-sync bumper before spend even if bumper_info already scanned ({phase:?})"
+                !completion_spend_should_sync_bumper_wallet(phase),
+                "complete must not block on a bumper scan ({phase:?})"
             );
         }
     }
@@ -224,18 +225,17 @@ mod tests {
     }
 
     #[test]
-    fn completion_estimate_should_sync_bumper_wallet_when_scan_not_succeeded() {
-        assert!(completion_estimate_should_sync_bumper_wallet(
-            BumperWalletSyncPhase::NotStarted
-        ));
-        assert!(completion_estimate_should_sync_bumper_wallet(
-            BumperWalletSyncPhase::Failed
-        ));
-        assert!(!completion_estimate_should_sync_bumper_wallet(
-            BumperWalletSyncPhase::Running
-        ));
-        assert!(!completion_estimate_should_sync_bumper_wallet(
-            BumperWalletSyncPhase::Done
-        ));
+    fn completion_estimate_does_not_start_bumper_wallet_scan() {
+        for phase in [
+            BumperWalletSyncPhase::NotStarted,
+            BumperWalletSyncPhase::Running,
+            BumperWalletSyncPhase::Failed,
+            BumperWalletSyncPhase::Done,
+        ] {
+            assert!(
+                !completion_estimate_should_sync_bumper_wallet(phase),
+                "fee estimate must not start a bumper scan ({phase:?})"
+            );
+        }
     }
 }

@@ -4,7 +4,7 @@ globs:
   - frontend/src/lib/wallet/lifecycle/unilateral-exit/**
   - frontend/src/pages/wallet/UnilateralExitControlPage.tsx
   - frontend/src/hooks/useUnilateralExit*.ts
-  - frontend/src/components/wallet/arkade-exit/CompleteUnilateralExitDialog.tsx
+  - frontend/src/pages/wallet/CompleteUnilateralExitPage.tsx
   - frontend/src/components/wallet/unilateral-exit/UnilateralExitNodeDetailCard.tsx
 ---
 
@@ -37,7 +37,7 @@ Do not reintroduce hand-rolled orchestrators, `setTimeout` schedulers, a sibling
 4. **Authoritative progress** — during an active job, `actor.context.progress` wins; React Query is display cache only.
 5. **Single automation flag** — `context.automationEnabled` is the only job-level manual/automatic switch; prefs changes flow through `AUTOMATION_PREFS_CHANGED`.
 6. **Typed snapshots** — selectors/runtime use `UnilateralExitActorSnapshot` + `UNILATERAL_EXIT_MACHINE_STATE`; do not call untyped `snapshot.matches()` outside tests.
-7. **Job state is authoritative for the broadcast job** — selectors map `snapshot.value` to job display; they never re-run completion guards from raw progress DTOs. **VTXO phase copy must not be inferred from job state.** Complete dialog and node detail subscribe to children (`useVtxoExitSnapshots`). `canComplete` stays WASM `complete_ready`.
+7. **Job state is authoritative for the broadcast job** — selectors map `snapshot.value` to job display; they never re-run completion guards from raw progress DTOs. **VTXO phase copy must not be inferred from job state.** Complete unilateral exit page and node detail subscribe to children (`useVtxoExitSnapshots`). `canComplete` stays WASM `complete_ready`.
 8. **`assign` is pure** — persistence and query invalidation are separate fire-and-forget actions, never inside `assign`.
 9. **Job cursor ≠ child set** — proceed and `evaluateJobViability` use the current bookmark only. Starting job 2 adds children; job 1 leftovers stay. Do not block Start because children exist. Do not wait on children to enter job `complete`.
 10. **`HYDRATE` is the production child path** — live `HOST_*` events are optional and must not be required for crash recovery.

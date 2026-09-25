@@ -23,8 +23,8 @@ feature:
     balance_card:
       - id: DASH-ARK-09
         description: >-
-          While Arkade loadPhase is loading and no balance data is available, show spinner text
-          "Establishing Arkade session…"
+          While Arkade loadPhase is loading and no balance data is available, show the embedded
+          Arkade session loading screen (heading "Establishing Arkade session")
       - id: DASH-ARK-10
         description: While balance query is loading, show spinner text "Loading…"
       - id: DASH-ARK-11
@@ -102,7 +102,7 @@ feature:
       file: frontend/src/components/wallet/ArkadeDashboardBalance.tsx
       visible_elements:
         - Arkade balance card title
-        - Establishing Arkade session spinner while load lifecycle is loading
+        - Embedded Arkade session loading screen while load lifecycle is loading and balance is absent
         - Loading spinner while balance query loads
         - BitcoinAmountDisplay for confirmed balance
         - Optional recoverable total line
@@ -119,7 +119,7 @@ feature:
         - arkade-pending-recovery-due-to-expired-signer-banner
         - arkade-balance-recoverable-pending-operator-sweep
         - arkade-recoverable-vtxo-banner
-        - dashboard-arkade-session-loading
+        - arkade-session-loading
     - DashboardActivity:
       path: /wallet
       file: frontend/src/pages/wallet/DashboardPage.tsx

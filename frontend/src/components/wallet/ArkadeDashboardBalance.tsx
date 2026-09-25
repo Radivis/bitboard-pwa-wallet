@@ -1,5 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
+import { ArkadeSessionLoadError } from '@/components/arkade/ArkadeSessionLoadError'
+import { ArkadeSessionLoading } from '@/components/arkade/ArkadeSessionLoading'
 import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
 import { ArkadeOverviewInfomodeContent } from '@/components/arkade/infomode/ArkadeOverviewInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
@@ -9,7 +11,6 @@ import { ArkadePendingBatchIntentBanner } from '@/components/wallet/ArkadePendin
 import { ArkadeSignerMigrationBanner } from '@/components/wallet/ArkadeSignerMigrationBanner'
 import { ArkadePendingRecoveryDueToExpiredSignerBanner } from '@/components/wallet/ArkadePendingRecoveryDueToExpiredSignerBanner'
 import { ArkadeRecoverableVtxoBanner } from '@/components/wallet/ArkadeRecoverableVtxoBanner'
-import { RailLoadErrorBanner } from '@/components/wallet/RailLoadErrorBanner'
 import { RailSyncControl } from '@/components/wallet/RailSyncControl'
 import { RailSyncErrorBanner } from '@/components/wallet/RailSyncErrorBanner'
 import { RailSyncWarningBanner } from '@/components/wallet/RailSyncWarningBanner'
@@ -26,7 +27,6 @@ import {
 import { useArkadeManualSyncMutation } from '@/hooks/useRailManualSyncMutations'
 import { useArkadeBalanceQuery } from '@/hooks/useArkadeQueries'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
-import { orchestrateArkadeRetryLoad } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 
 export function ArkadeDashboardBalance() {
@@ -91,22 +91,9 @@ export function ArkadeDashboardBalance() {
         <ArkadePendingRecoveryDueToExpiredSignerBanner />
         <ArkadeRecoverableVtxoBanner />
         {arkadeLoadSnapshot.loadPhase === 'load-error' ? (
-          <RailLoadErrorBanner
-            rail="arkade"
-            loadPhase={arkadeLoadSnapshot.loadPhase}
-            errorMessage={arkadeLoadSnapshot.errorMessage}
-            onRetry={() => {
-              void orchestrateArkadeRetryLoad()
-            }}
-          />
+          <ArkadeSessionLoadError embedded errorMessage={arkadeLoadSnapshot.errorMessage} />
         ) : arkadeLoadSnapshot.loadPhase === 'loading' && balance == null ? (
-          <div
-            className="flex items-center gap-2 text-sm text-muted-foreground"
-            data-testid="dashboard-arkade-session-loading"
-          >
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-            Establishing Arkade session…
-          </div>
+          <ArkadeSessionLoading embedded />
         ) : isLoading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />

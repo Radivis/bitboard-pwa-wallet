@@ -1,18 +1,25 @@
 import { describe, expect, it, vi } from 'vitest'
 import { screen } from '@testing-library/react'
-import { CollaborativeExitDialog } from '@/components/wallet/arkade-exit/CollaborativeExitDialog'
+import { CollaborativeExitContent } from '@/pages/wallet/CollaborativeExitPage'
+import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import { renderWithProviders } from '@/test-utils/test-providers'
-import type { useArkadeExitFlow } from '@/hooks/useArkadeExitFlow'
+import type { useCollaborativeExitFlow } from '@/hooks/useCollaborativeExitFlow'
 
-type ExitFlow = ReturnType<typeof useArkadeExitFlow>
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-router')>()
+  return {
+    ...actual,
+    Link: ({ children }: { children: React.ReactNode }) => <a href="#">{children}</a>,
+  }
+})
+
+type ExitFlow = ReturnType<typeof useCollaborativeExitFlow>
 
 function buildExitFlow(overrides: Partial<ExitFlow>): ExitFlow {
   return {
     networkMode: 'signet',
     currentAddress: 'tb1qexample',
     balanceQuery: { data: { confirmedSats: 280_603, totalSats: 280_603 } },
-    collaborativeOpen: true,
-    setCollaborativeOpen: vi.fn(),
     collabDestination: 'tb1pa5gq79tt8mnhe9hqus3rhnw3cr4gt4spy86cv0x92ck',
     setCollabDestination: vi.fn(),
     collabAmountSats: '',
@@ -40,10 +47,17 @@ function buildExitFlow(overrides: Partial<ExitFlow>): ExitFlow {
   } as unknown as ExitFlow
 }
 
-describe('CollaborativeExitDialog', () => {
-  it('renders Infomode toggle in the modal header', () => {
-    renderWithProviders(<CollaborativeExitDialog exitFlow={buildExitFlow({})} />)
-    expect(screen.getByRole('button', { name: 'Turn on infomode' })).toBeInTheDocument()
+describe('CollaborativeExitPage', () => {
+  it('renders infomode targets and operator fee estimate', () => {
+    const { container } = renderWithProviders(<CollaborativeExitContent exitFlow={buildExitFlow({})} />)
+    expect(
+      container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.collaborativeExit}"]`),
+    ).not.toBeNull()
+    expect(
+      container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.exitOperatorFees}"]`),
+    ).not.toBeNull()
+    expect(screen.getByText('Operator fees (estimate)')).toBeInTheDocument()
+    expect(screen.getByText(/Estimated operator fee/i)).toBeInTheDocument()
   })
 
   it('enables Confirm exit when fee estimate returns non-funds estimateError', () => {
@@ -64,7 +78,7 @@ describe('CollaborativeExitDialog', () => {
       },
     })
 
-    renderWithProviders(<CollaborativeExitDialog exitFlow={exitFlow} />)
+    renderWithProviders(<CollaborativeExitContent exitFlow={exitFlow} />)
 
     expect(screen.getByRole('button', { name: 'Confirm exit' })).toBeEnabled()
   })
@@ -97,7 +111,7 @@ describe('CollaborativeExitDialog', () => {
       collaborativeExitBlockedByFunds: true,
     })
 
-    renderWithProviders(<CollaborativeExitDialog exitFlow={exitFlow} />)
+    renderWithProviders(<CollaborativeExitContent exitFlow={exitFlow} />)
 
     expect(screen.getByRole('button', { name: 'Confirm exit' })).toBeDisabled()
     expect(
@@ -120,7 +134,7 @@ describe('CollaborativeExitDialog', () => {
       canCollaborativeExit: false,
     })
 
-    renderWithProviders(<CollaborativeExitDialog exitFlow={exitFlow} />)
+    renderWithProviders(<CollaborativeExitContent exitFlow={exitFlow} />)
 
     expect(screen.getByTestId('arkade-collab-exit-rotation-blocked')).toBeInTheDocument()
     expect(screen.getByTestId('arkade-collab-exit-pending-recovery-due-to-expired-signer')).toBeInTheDocument()
@@ -134,7 +148,7 @@ describe('CollaborativeExitDialog', () => {
       canCollaborativeExit: false,
     })
 
-    renderWithProviders(<CollaborativeExitDialog exitFlow={exitFlow} />)
+    renderWithProviders(<CollaborativeExitContent exitFlow={exitFlow} />)
 
     expect(screen.getByRole('button', { name: 'Confirm exit' })).toBeDisabled()
     expect(
@@ -144,7 +158,7 @@ describe('CollaborativeExitDialog', () => {
 
   it('shows submit-phase spinner on Confirm exit', () => {
     renderWithProviders(
-      <CollaborativeExitDialog
+      <CollaborativeExitContent
         exitFlow={buildExitFlow({
           collaborativeExitSubmitPhase: true,
           collaborativeExitMutation: { mutate: vi.fn(), isPending: true },
@@ -152,18 +166,5 @@ describe('CollaborativeExitDialog', () => {
       />,
     )
     expect(screen.getByRole('button', { name: 'Exiting…' })).toBeInTheDocument()
-  })
-
-  it('closes when processing starts', () => {
-    const setCollaborativeOpen = vi.fn()
-    renderWithProviders(
-      <CollaborativeExitDialog
-        exitFlow={buildExitFlow({
-          setCollaborativeOpen,
-          hasProcessingCollaborativeExit: true,
-        })}
-      />,
-    )
-    expect(setCollaborativeOpen).toHaveBeenCalledWith(false)
   })
 })

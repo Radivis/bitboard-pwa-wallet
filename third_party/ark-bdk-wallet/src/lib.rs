@@ -104,11 +104,14 @@ where
         };
 
         #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
-        let client = esplora_client::Builder::new(esplora_url).build_async_with_sleeper()?;
+        let client = esplora_client::Builder::new(esplora_url)
+            .timeout(BUMPER_ESPLORA_HTTP_TIMEOUT_SECS)
+            .build_async_with_sleeper()?;
 
         #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-        let client =
-            esplora_client::Builder::new(esplora_url).build_async_with_sleeper::<WebSleeper>()?;
+        let client = esplora_client::Builder::new(esplora_url)
+            .timeout(BUMPER_ESPLORA_HTTP_TIMEOUT_SECS)
+            .build_async_with_sleeper::<WebSleeper>()?;
 
         Ok(Self {
             kp,
@@ -213,11 +216,16 @@ where
     }
 
     async fn incremental_esplora_update(&self, now_secs: u64) -> Result<bdk_wallet::Update, Error> {
-        let request = self
-            .inner
-            .read()
-            .map_err(|e| Error::consumer(format!("failed to get read lock: {e}")))?
-            .start_sync_with_revealed_spks_at(now_secs);
+        // Drop the wallet lock before awaiting Esplora. A guard kept alive across the
+        // await deadlocks the single-threaded WASM worker when another call needs the
+        // lock (address peek, apply_update, changeset export).
+        let request = {
+            let wallet = self
+                .inner
+                .read()
+                .map_err(|e| Error::consumer(format!("failed to get read lock: {e}")))?;
+            wallet.start_sync_with_revealed_spks_at(now_secs)
+        };
         self.client
             .sync(request, BUMPER_ESPLORA_PARALLEL_REQUESTS)
             .await
@@ -227,11 +235,13 @@ where
     }
 
     async fn full_esplora_update(&self, now_secs: u64) -> Result<bdk_wallet::Update, Error> {
-        let request = self
-            .inner
-            .read()
-            .map_err(|e| Error::consumer(format!("failed to get read lock: {e}")))?
-            .start_full_scan_at(now_secs);
+        let request = {
+            let wallet = self
+                .inner
+                .read()
+                .map_err(|e| Error::consumer(format!("failed to get read lock: {e}")))?;
+            wallet.start_full_scan_at(now_secs)
+        };
         self.client
             .full_scan(
                 request,
@@ -441,6 +451,9 @@ impl esplora_client::Sleeper for WebSleeper {
         utils::SendWrapper(gloo_timers::future::sleep(dur))
     }
 }
+
+/// Same bound as `EsploraBlockchain` so one stuck Mutinynet request cannot hold a scan open.
+const BUMPER_ESPLORA_HTTP_TIMEOUT_SECS: u64 = 15;
 
 const BUMPER_FULL_SCAN_STOP_GAP: usize = 5;
 const BUMPER_ESPLORA_PARALLEL_REQUESTS: usize = 5;

@@ -1,23 +1,29 @@
 import { describe, expect, it, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { CompleteUnilateralExitDialog } from '@/components/wallet/arkade-exit/CompleteUnilateralExitDialog'
+import { CompleteUnilateralExitContent } from '@/pages/wallet/CompleteUnilateralExitPage'
 import { formatArkadeTxidToastSnippet } from '@/lib/arkade/arkade-exit-utils'
 import { BLOCKCHAIN_EXPLORER_UNREACHABLE_UI_MESSAGE } from '@/lib/shared/sanitize-error-for-ui'
 import { renderWithProviders } from '@/test-utils/test-providers'
-import type { useArkadeExitFlow } from '@/hooks/useArkadeExitFlow'
+import type { useCompleteUnilateralExitFlow } from '@/hooks/useCompleteUnilateralExitFlow'
 import type { ArkadeVtxoOutpoint } from '@/workers/arkade-api'
+
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-router')>()
+  return {
+    ...actual,
+    Link: ({ children }: { children: React.ReactNode }) => <a href="#">{children}</a>,
+  }
+})
 
 vi.mock('@/hooks/useUnilateralExitLifecycleSnapshot', () => ({
   useVtxoExitSnapshots: () => ({}),
 }))
 
-type ExitFlow = ReturnType<typeof useArkadeExitFlow>
+type ExitFlow = ReturnType<typeof useCompleteUnilateralExitFlow>
 
 function buildExitFlow(overrides: Partial<ExitFlow>): ExitFlow {
   return {
-    completeUnilateralOpen: true,
-    setCompleteUnilateralOpen: vi.fn(),
     inProgressQuery: { isLoading: false, data: [] },
     bumperInfoQuery: {
       data: {
@@ -55,10 +61,10 @@ function outpoint(txid: string, vout = 0): ArkadeVtxoOutpoint {
   return { txid, vout }
 }
 
-describe('CompleteUnilateralExitDialog', () => {
-  it('complete_dialog_sanitizes_reqwest_error', () => {
+describe('CompleteUnilateralExitPage', () => {
+  it('complete_page_sanitizes_reqwest_error', () => {
     renderWithProviders(
-      <CompleteUnilateralExitDialog
+      <CompleteUnilateralExitContent
         exitFlow={buildExitFlow({
           completeExitMutation: {
             mutate: vi.fn(),
@@ -80,9 +86,9 @@ describe('CompleteUnilateralExitDialog', () => {
     expect(error).not.toHaveTextContent('http://localhost:3000')
   })
 
-  it('complete_dialog_strips_explorer_urls_from_error', () => {
+  it('complete_page_strips_explorer_urls_from_error', () => {
     renderWithProviders(
-      <CompleteUnilateralExitDialog
+      <CompleteUnilateralExitContent
         exitFlow={buildExitFlow({
           completeExitMutation: {
             mutate: vi.fn(),
@@ -111,7 +117,7 @@ describe('CompleteUnilateralExitDialog', () => {
       phase: 'unrolled' as const,
     }
     renderWithProviders(
-      <CompleteUnilateralExitDialog
+      <CompleteUnilateralExitContent
         exitFlow={buildExitFlow({
           selectedInProgressOutpoints: [outpoint(waitingTxid)],
           selectedInProgressRows: [row],
@@ -127,7 +133,7 @@ describe('CompleteUnilateralExitDialog', () => {
   it('shows operator timelock duration for waiting rows', () => {
     const waitingTxid = 'aa'.repeat(32)
     renderWithProviders(
-      <CompleteUnilateralExitDialog
+      <CompleteUnilateralExitContent
         exitFlow={buildExitFlow({
           selectedInProgressOutpoints: [outpoint(waitingTxid)],
           selectedInProgressRows: [
@@ -157,7 +163,7 @@ describe('CompleteUnilateralExitDialog', () => {
     const waitingTxid = 'cc'.repeat(32)
 
     renderWithProviders(
-      <CompleteUnilateralExitDialog
+      <CompleteUnilateralExitContent
         exitFlow={buildExitFlow({
           inProgressQuery: {
             isLoading: false,
@@ -192,7 +198,7 @@ describe('CompleteUnilateralExitDialog', () => {
   it('shows completion fee preview when selection and estimate are available', () => {
     const virtualTxid = 'aa'.repeat(32)
     renderWithProviders(
-      <CompleteUnilateralExitDialog
+      <CompleteUnilateralExitContent
         exitFlow={buildExitFlow({
           selectedInProgressOutpoints: [outpoint(virtualTxid, 2)],
           completionFeeQuery: {
@@ -217,7 +223,7 @@ describe('CompleteUnilateralExitDialog', () => {
   it('shows blocktime warning list when estimate includes missingBlocktimeInputs', () => {
     const virtualTxid = 'dd'.repeat(32)
     renderWithProviders(
-      <CompleteUnilateralExitDialog
+      <CompleteUnilateralExitContent
         exitFlow={buildExitFlow({
           selectedInProgressOutpoints: [outpoint(virtualTxid, 0)],
           completionFeeQuery: {
@@ -246,7 +252,7 @@ describe('CompleteUnilateralExitDialog', () => {
     expect(warning).toHaveTextContent(virtualTxid.slice(0, 12))
   })
 
-  it('complete_dialog_aborted_host_confirmed_shows_confirmations_copy', () => {
+  it('complete_page_aborted_host_confirmed_shows_confirmations_copy', () => {
     const waitingTxid = 'aa'.repeat(32)
     const row = {
       id: `${waitingTxid}:0`,
@@ -258,7 +264,7 @@ describe('CompleteUnilateralExitDialog', () => {
       phase: 'host_confirmed' as const,
     }
     renderWithProviders(
-      <CompleteUnilateralExitDialog
+      <CompleteUnilateralExitContent
         exitFlow={buildExitFlow({
           inProgressQuery: { isLoading: false, data: [row] },
           selectedInProgressOutpoints: [outpoint(waitingTxid)],
@@ -283,7 +289,7 @@ describe('CompleteUnilateralExitDialog', () => {
     expect(screen.getByRole('button', { name: 'Complete exit' })).toBeDisabled()
   })
 
-  it('complete_dialog_host_relayed_shows_first_confirmation_copy', () => {
+  it('complete_page_host_relayed_shows_first_confirmation_copy', () => {
     const waitingTxid = 'aa'.repeat(32)
     const row = {
       id: `${waitingTxid}:0`,
@@ -295,7 +301,7 @@ describe('CompleteUnilateralExitDialog', () => {
       phase: 'host_relayed' as const,
     }
     renderWithProviders(
-      <CompleteUnilateralExitDialog
+      <CompleteUnilateralExitContent
         exitFlow={buildExitFlow({
           inProgressQuery: { isLoading: false, data: [row] },
           selectedInProgressOutpoints: [outpoint(waitingTxid)],
@@ -320,7 +326,7 @@ describe('CompleteUnilateralExitDialog', () => {
     expect(screen.getByRole('button', { name: 'Complete exit' })).toBeDisabled()
   })
 
-  it('complete_dialog_host_broadcast_attempted_shows_host_broadcast_copy', () => {
+  it('complete_page_host_broadcast_attempted_shows_host_broadcast_copy', () => {
     const waitingTxid = 'aa'.repeat(32)
     const row = {
       id: `${waitingTxid}:0`,
@@ -332,7 +338,7 @@ describe('CompleteUnilateralExitDialog', () => {
       phase: 'host_broadcast_attempted' as const,
     }
     renderWithProviders(
-      <CompleteUnilateralExitDialog
+      <CompleteUnilateralExitContent
         exitFlow={buildExitFlow({
           inProgressQuery: { isLoading: false, data: [row] },
           selectedInProgressOutpoints: [outpoint(waitingTxid)],
@@ -354,7 +360,7 @@ describe('CompleteUnilateralExitDialog', () => {
     expect(screen.getByRole('button', { name: 'Complete exit' })).toBeDisabled()
   })
 
-  it('complete_dialog_unrolled_shows_timelock_copy', () => {
+  it('complete_page_unrolled_shows_timelock_copy', () => {
     const waitingTxid = 'aa'.repeat(32)
     const row = {
       id: `${waitingTxid}:0`,
@@ -366,7 +372,7 @@ describe('CompleteUnilateralExitDialog', () => {
       phase: 'unrolled' as const,
     }
     renderWithProviders(
-      <CompleteUnilateralExitDialog
+      <CompleteUnilateralExitContent
         exitFlow={buildExitFlow({
           inProgressQuery: { isLoading: false, data: [row] },
           selectedInProgressOutpoints: [outpoint(waitingTxid)],
@@ -380,7 +386,7 @@ describe('CompleteUnilateralExitDialog', () => {
     )
   })
 
-  it('complete_dialog_complete_ready_shows_ready', () => {
+  it('complete_page_complete_ready_shows_ready', () => {
     const readyTxid = 'bb'.repeat(32)
     const row = {
       id: `${readyTxid}:0`,
@@ -392,7 +398,7 @@ describe('CompleteUnilateralExitDialog', () => {
       phase: 'complete_ready' as const,
     }
     renderWithProviders(
-      <CompleteUnilateralExitDialog
+      <CompleteUnilateralExitContent
         exitFlow={buildExitFlow({
           inProgressQuery: { isLoading: false, data: [row] },
           selectedInProgressOutpoints: [outpoint(readyTxid)],
@@ -413,7 +419,7 @@ describe('CompleteUnilateralExitDialog', () => {
   it('lists rows when the job snapshot is empty', () => {
     const leftoverTxid = 'cc'.repeat(32)
     renderWithProviders(
-      <CompleteUnilateralExitDialog
+      <CompleteUnilateralExitContent
         exitFlow={buildExitFlow({
           inProgressQuery: {
             isLoading: false,

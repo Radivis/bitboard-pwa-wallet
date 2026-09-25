@@ -213,7 +213,8 @@ pub async fn ark_enter_autonomous_mode() -> Result<(), JsValue> {
 }
 
 /// Best-effort bumper BDK Esplora sync. Session open and unlock must not start this
-/// (LIFE-ARK-LOAD-04). Exit proceed/complete and the first onchain_bumper_info may call it.
+/// (LIFE-ARK-LOAD-04). Exit proceed and the first onchain_bumper_info may await it.
+/// Completing a unilateral exit schedules it in the background and does not wait.
 #[wasm_bindgen]
 pub async fn ark_sync_bumper_wallet() -> Result<(), JsValue> {
     map_js_async(async {
@@ -572,6 +573,18 @@ pub async fn ark_list_unilateral_exits_in_progress() -> Result<JsValue, JsValue>
 pub fn ark_list_vtxo_exit_records() -> Result<JsValue, JsValue> {
     map_js_error(with_session(|session| {
         to_js_value(session.list_vtxo_exit_records())
+    }))
+}
+
+#[wasm_bindgen]
+pub fn ark_peek_onchain_bumper_address() -> Result<String, JsValue> {
+    map_js_error(with_session(|session| session.onchain_bumper_address()))
+}
+
+#[wasm_bindgen]
+pub fn ark_unilateral_exit_timelock() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.unilateral_exit_timelock()?)
     }))
 }
 

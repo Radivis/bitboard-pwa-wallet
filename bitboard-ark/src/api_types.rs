@@ -357,6 +357,16 @@ pub struct UnilateralExitCompletionFeeEstimateDto {
     pub missing_blocktime_inputs: Vec<MissingBlocktimeCompletionInputDto>,
 }
 
+/// Operator CSV delay for the complete-page waiting banner. Does not Esplora-scan.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitTimelockDto {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unilateral_exit_timelock_blocks: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unilateral_exit_timelock_seconds: Option<u64>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OnchainBumperInfoDto {
