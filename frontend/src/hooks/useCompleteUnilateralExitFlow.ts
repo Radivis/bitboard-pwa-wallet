@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
+import { scheduleBackgroundBumperWalletSync } from '@/lib/arkade/background-bumper-wallet-sync'
+import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import {
-  useArkadeBumperInfoQuery,
   useArkadeCompleteUnilateralExitMutation,
   useArkadeUnilateralExitCompletionFeeQuery,
+  useArkadeUnilateralExitTimelockQuery,
   useArkadeUnilateralExitsInProgressQuery,
 } from '@/hooks/useArkadeQueries'
 import { useOnchainFeeRateSelection } from '@/hooks/useOnchainFeeRateSelection'
@@ -26,6 +28,7 @@ function outpointFromInProgressRow(
 export function useCompleteUnilateralExitFlow() {
   const navigate = useNavigate()
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const currentAddress = useWalletStore((walletState) => walletState.currentAddress)
 
   const [selectedInProgressOutpoints, setSelectedInProgressOutpoints] = useState<
@@ -38,7 +41,19 @@ export function useCompleteUnilateralExitFlow() {
     completionFeeSelection
 
   const inProgressQuery = useArkadeUnilateralExitsInProgressQuery(true)
-  const bumperInfoQuery = useArkadeBumperInfoQuery(true)
+  const timelockQuery = useArkadeUnilateralExitTimelockQuery(true)
+  const bumperInfoQuery = { data: timelockQuery.data }
+
+  useEffect(() => {
+    if (activeWalletId == null || !isArkadeSupportedNetworkMode(networkMode)) {
+      return
+    }
+    scheduleBackgroundBumperWalletSync({
+      walletId: activeWalletId,
+      networkMode,
+    })
+  }, [activeWalletId, networkMode])
+
   const completionFeeQuery = useArkadeUnilateralExitCompletionFeeQuery({
     enabled: true,
     vtxoOutpoints: selectedInProgressOutpoints,

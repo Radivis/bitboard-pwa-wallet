@@ -4,6 +4,7 @@ import type { ArkadeUnilateralExitInProgressDto } from '@/workers/arkade-api'
 import { useWalletStore } from '@/stores/walletStore'
 
 const mutateAsync = vi.hoisted(() => vi.fn(async () => 'txid'))
+const scheduleBackgroundBumperWalletSync = vi.hoisted(() => vi.fn())
 const clearUnilateralExitJob = vi.hoisted(() => vi.fn())
 const navigate = vi.hoisted(() => vi.fn())
 const readyRow = vi.hoisted((): ArkadeUnilateralExitInProgressDto => {
@@ -46,8 +47,14 @@ vi.mock('@/workers/arkade-factory', () => ({
   getArkadeWorker: () => ({ getAddress: vi.fn() }),
 }))
 
+vi.mock('@/lib/arkade/background-bumper-wallet-sync', () => ({
+  scheduleBackgroundBumperWalletSync,
+}))
+
 vi.mock('@/hooks/useArkadeQueries', () => ({
-  useArkadeBumperInfoQuery: () => ({ data: undefined }),
+  useArkadeUnilateralExitTimelockQuery: () => ({
+    data: { unilateralExitTimelockBlocks: 144 },
+  }),
   useArkadeCompleteUnilateralExitMutation: () => ({
     mutateAsync,
     isPending: false,
@@ -68,6 +75,7 @@ describe('useCompleteUnilateralExitFlow', () => {
     mutateAsync.mockResolvedValue('txid')
     useWalletStore.setState({
       networkMode: 'regtest',
+      activeWalletId: 7,
       currentAddress: 'bcrt1qtest',
       arkadeSignerMigrationHint: null,
     })
@@ -96,5 +104,14 @@ describe('useCompleteUnilateralExitFlow', () => {
     )
     expect(clearUnilateralExitJob).not.toHaveBeenCalled()
     expect(navigate).toHaveBeenCalledWith({ to: '/wallet/management' })
+  })
+
+  it('schedules the bumper scan in the background', () => {
+    renderHook(() => useCompleteUnilateralExitFlow())
+
+    expect(scheduleBackgroundBumperWalletSync).toHaveBeenCalledWith({
+      walletId: 7,
+      networkMode: 'regtest',
+    })
   })
 })

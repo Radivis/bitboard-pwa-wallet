@@ -37,6 +37,7 @@ import type {
   ArkadeService,
   ArkadeSignerMigrationResult,
   ArkadeUnilateralExitCompletionFeeEstimate,
+  ArkadeUnilateralExitTimelock,
   ArkadeUnilateralExitCompletionFeeEstimateParams,
   ArkadeUnilateralExitTopology,
   ArkadeUnilateralExitTopologyParams,
@@ -839,6 +840,13 @@ const arkadeService: ArkadeService = {
     return invokeWasmArk(
       (wasmModule) =>
         wasmModule.ark_get_onchain_bumper_info() as Promise<ArkadeOnchainBumperInfo>,
+    )
+  },
+
+  async unilateralExitTimelock(): Promise<ArkadeUnilateralExitTimelock> {
+    return invokeWasmArk(
+      (wasmModule) =>
+        wasmModule.ark_unilateral_exit_timelock() as ArkadeUnilateralExitTimelock,
     )
   },
 

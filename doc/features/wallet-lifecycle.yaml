@@ -148,13 +148,16 @@ feature:
           scan. Later bumper-info and underfunded-exit polls incremental-sync
           unused revealed SPKs (the displayed tip) into BDK and report
           confirmed only — not another HD /scripthash/txs walk and not a
-          tip-address /utxo overlay. proceed and complete always call
-          sync_bumper_wallet_with_retries before broadcast or completion spend.
-          Completion fee estimate uses the same once-per-session scan as
-          onchain_bumper_info (not another HD walk on destination / fee-rate refetch).
+          tip-address /utxo overlay. proceed calls
+          sync_bumper_wallet_with_retries before broadcast. Completing a
+          unilateral exit does not wait on that scan: the complete page starts
+          it in the background and persists the SegWit-0 sidecar when it
+          finishes. Completion fee estimate does not start a wallet-wide scan.
         implemented_by:
           - bitboard-ark/src/session/bumper_sync_policy.rs
           - bitboard-ark/src/session/unilateral_exit/complete.rs
+          - frontend/src/lib/arkade/__tests__/background-bumper-wallet-sync.test.ts
+          - frontend/src/hooks/__tests__/useCompleteUnilateralExitFlow.test.tsx
           - third_party/ark-bdk-wallet/src/lib.rs
       - id: LIFE-ARK-BUMP-02
         description: >

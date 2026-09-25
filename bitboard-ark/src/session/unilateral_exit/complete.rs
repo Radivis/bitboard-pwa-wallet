@@ -1,6 +1,7 @@
 use crate::api_types::{
     CompleteUnilateralExitParams, MissingBlocktimeCompletionInputDto, OnchainBumperInfoDto,
     UnilateralExitCompletionFeeEstimateDto, UnilateralExitCompletionFeeEstimateParams,
+    UnilateralExitTimelockDto,
 };
 use crate::constants::MIN_FEE_RATE_SAT_PER_VB;
 use crate::error::{ArkResult, ArkWasmError};
@@ -115,6 +116,19 @@ impl ArkSession {
             .map_err(ArkWasmError::Client)
     }
 
+    /// Operator unilateral-exit CSV delay from cached server info. Does not Esplora-scan.
+    pub fn unilateral_exit_timelock(&self) -> ArkResult<UnilateralExitTimelockDto> {
+        let server_info = self.client.server_info()?;
+        let (unilateral_exit_timelock_blocks, unilateral_exit_timelock_seconds) =
+            crate::session::mappers::unilateral_exit_timelock_parts(
+                server_info.unilateral_exit_delay,
+            );
+        Ok(UnilateralExitTimelockDto {
+            unilateral_exit_timelock_blocks,
+            unilateral_exit_timelock_seconds,
+        })
+    }
+
     /// Next unused bumper receive address. Does not Esplora-scan.
     ///
     /// The control page shows this immediately. `onchain_bumper_info` still scans before
@@ -169,8 +183,8 @@ impl ArkSession {
         let destination = parse_onchain_address(&params.destination_address, self.network())?;
         let fee_rate_sat_per_vb =
             resolve_completion_fee_rate_sat_per_vb(params.fee_rate_sat_per_vb);
-        // LIFE-ARK-BUMP-01: session open no longer syncs the bumper.
-        // Complete always Esplora-syncs before selecting coins, like proceed.
+        // LIFE-ARK-BUMP-01: do not wait on a wallet-wide bumper scan. The complete
+        // page runs that scan in the background. Completion spends unrolled VTXOs.
         self.sync_bumper_wallet_when(completion_spend_should_sync_bumper_wallet(
             self.bumper_wallet_sync_phase.get(),
         ))
@@ -206,7 +220,7 @@ impl ArkSession {
         let fee_rate_sat_per_vb =
             resolve_completion_fee_rate_sat_per_vb(params.fee_rate_sat_per_vb);
 
-        // Once-per-session scan so fee-rate / destination refetches do not restart an HD walk.
+        // LIFE-ARK-BUMP-01: fee estimate does not start the wallet-wide scan.
         if let Err(error) = self
             .sync_bumper_wallet_when(completion_estimate_should_sync_bumper_wallet(
                 self.bumper_wallet_sync_phase.get(),
