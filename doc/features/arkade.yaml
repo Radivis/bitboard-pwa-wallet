@@ -394,7 +394,7 @@ feature:
         - delegator fee from getDelegateInfo when reachable
         - expiring VTXO count when session open
         - operator batch round schedule when operator publishes scheduledSession
-        - collaborative exit (on-chain destination, optional partial amount) with operator fee estimate from getInfo().fees
+        - Collaborative exit link to /wallet/arkade/collaborative-exit when cooperative exit is available; disabled while signer rotation, autonomous mode, or a pending collaborative intent blocks it
         - Start unilateral exit (select VTXO, unroll) with bumper fee estimate; a second unroll may start on other startable leaves after branch-complete while leftover unrolled coins wait to be claimed (ARK-EXIT-32)
         - Complete unilateral exit link to /wallet/arkade/complete-unilateral-exit when an exit is in progress
         - batch complete multiple ready in-progress VTXOs in one on-chain transaction with dynamic completion fee estimate
@@ -467,6 +467,21 @@ feature:
       - requirements:
         - Contracts ARK-EXIT-13 and ARK-EXIT-35
         - Shown only when isArkadeEnabled and current network supports Arkade
+    - CollaborativeExit:
+      - description: "Collaborative exit page"
+      - file: frontend/src/pages/wallet/CollaborativeExitPage.tsx
+      - path: /wallet/arkade/collaborative-exit
+      - visible_elements:
+        - on-chain destination with use-current-receive-address
+        - optional partial amount and cooperatively spendable balance
+        - operator fee estimate
+        - Confirm exit action
+        - Back to Management
+      - requirements:
+        - Collaborative exit and fee estimates via bitboard-ark WASM in arkade.worker
+        - Shown only when isArkadeEnabled and current network supports Arkade
+        - Session load uses the full-page Arkade loading and error screens
+        - Successful submit, or an already-processing collaborative intent, returns to /wallet/management
     - CompleteUnilateralExit:
       - description: "Complete unilateral exit page"
       - file: frontend/src/pages/wallet/CompleteUnilateralExitPage.tsx
@@ -483,6 +498,7 @@ feature:
       - requirements:
         - Contracts ARK-EXIT-02, ARK-EXIT-03, ARK-EXIT-04, ARK-EXIT-31, and ARK-EXIT-34
         - Shown only when isArkadeEnabled and current network supports Arkade
+        - Session load uses the full-page Arkade loading and error screens
         - Successful claim returns to /wallet/management and does not clear the broadcast job
     - DashboardArkadeBlock:
       - description: "Separate Arkade balance on dashboard"

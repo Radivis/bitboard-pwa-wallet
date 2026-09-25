@@ -42,7 +42,7 @@ test.describe('Arkade exit flows regtest @arkade-exit-regtest', () => {
 
   test('E2E-ARK-REG-03 collaborative exit', async ({ page }) => {
     await prepareCollaborativeExitScenario(page)
-    await page.getByRole('button', { name: 'Collaborative exit' }).click()
+    await page.getByRole('link', { name: 'Collaborative exit' }).click()
     await expect(page.getByRole('heading', { name: 'Collaborative exit' })).toBeVisible()
     await page.getByRole('button', { name: 'Use current receive address' }).click()
     await page.getByLabel('Amount (sats, optional)').fill('50000')

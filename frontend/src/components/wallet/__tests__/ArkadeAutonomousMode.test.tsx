@@ -91,13 +91,8 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
   }
 })
 
-vi.mock('@/components/wallet/arkade-exit/CollaborativeExitDialog', () => ({
-  CollaborativeExitDialog: () => null,
-}))
-
 vi.mock('@/hooks/useArkadeExitFlow', () => ({
   useArkadeExitFlow: () => ({
-    setCollaborativeOpen: vi.fn(),
     hasUnilateralExitInProgress: false,
   }),
 }))

@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { screen } from '@testing-library/react'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import { ArkadeExitSection } from '@/components/wallet/ArkadeExitSection'
@@ -95,7 +94,7 @@ vi.mock('@/workers/arkade-factory', () => ({
 describe('ArkadeExitSection', () => {
   it('shows collaborative and unilateral exit actions', () => {
     const { container } = renderWithProviders(<ArkadeExitSection />)
-    expect(screen.getByRole('button', { name: 'Collaborative exit' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Collaborative exit' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Start unilateral exit' })).toBeInTheDocument()
     expect(
       container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.collaborativeExit}"]`),
@@ -106,15 +105,5 @@ describe('ArkadeExitSection', () => {
     expect(
       container.querySelector(`[data-infomode-id="${ARKADE_INFOMODE_IDS.learnAboutExits}"]`),
     ).not.toBeNull()
-  })
-
-  it('shows collaborative fee estimate in the exit dialog', async () => {
-    const user = userEvent.setup()
-    renderWithProviders(<ArkadeExitSection />)
-    await user.click(screen.getByRole('button', { name: 'Collaborative exit' }))
-    await waitFor(() => {
-      expect(screen.getByText('Operator fees (estimate)')).toBeInTheDocument()
-    })
-    expect(screen.getByText(/Estimated operator fee/i)).toBeInTheDocument()
   })
 })

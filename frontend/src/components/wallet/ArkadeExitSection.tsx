@@ -5,15 +5,13 @@ import { ArkadeUnilateralExitInfomodeContent } from '@/components/arkade/infomod
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
-import { CollaborativeExitDialog } from '@/components/wallet/arkade-exit/CollaborativeExitDialog'
 import { useArkadeAutonomousModeActive, useHasPendingBatchIntentKind } from '@/hooks/useArkadeQueries'
 import { useArkadeExitFlow } from '@/hooks/useArkadeExitFlow'
 import { isSignerRotationCooperativeExitBlocked } from '@/lib/arkade/arkade-cooperative-exit'
 import { useWalletStore } from '@/stores/walletStore'
 
 export function ArkadeExitSection() {
-  const exitFlow = useArkadeExitFlow()
-  const { setCollaborativeOpen, hasUnilateralExitInProgress } = exitFlow
+  const { hasUnilateralExitInProgress } = useArkadeExitFlow()
   const signerMigrationHint = useWalletStore((state) => state.arkadeSignerMigrationHint)
   const collaborativeExitBlockedByRotation =
     isSignerRotationCooperativeExitBlocked(signerMigrationHint)
@@ -53,19 +51,17 @@ export function ArkadeExitSection() {
           infoComponent={ArkadeCollaborativeExitInfomodeContent}
           as="span"
         >
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={
-              collaborativeExitBlockedByRotation ||
-              autonomousModeActive ||
-              hasPendingCollaborativeIntent
-            }
-            onClick={() => setCollaborativeOpen(true)}
-          >
-            Collaborative exit
-          </Button>
+          {collaborativeExitBlockedByRotation ||
+          autonomousModeActive ||
+          hasPendingCollaborativeIntent ? (
+            <Button type="button" variant="outline" size="sm" disabled>
+              Collaborative exit
+            </Button>
+          ) : (
+            <Button type="button" variant="outline" size="sm" asChild>
+              <Link to="/wallet/arkade/collaborative-exit">Collaborative exit</Link>
+            </Button>
+          )}
         </InfomodeWrapper>
         <InfomodeWrapper
           infoId={ARKADE_INFOMODE_IDS.unilateralExit}
@@ -106,7 +102,6 @@ export function ArkadeExitSection() {
         </p>
       )}
 
-      <CollaborativeExitDialog exitFlow={exitFlow} />
     </div>
   )
 }
