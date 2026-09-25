@@ -5,7 +5,7 @@ import { useWalletStore } from '@/stores/walletStore'
 
 const mutateAsync = vi.hoisted(() => vi.fn(async () => 'txid'))
 const clearUnilateralExitJob = vi.hoisted(() => vi.fn())
-const resetFeeSelection = vi.hoisted(() => vi.fn())
+const navigate = vi.hoisted(() => vi.fn())
 const readyRow = vi.hoisted((): ArkadeUnilateralExitInProgressDto => {
   const readyTxid = 'bb'.repeat(32)
   return {
@@ -19,6 +19,10 @@ const readyRow = vi.hoisted((): ArkadeUnilateralExitInProgressDto => {
   }
 })
 
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => navigate,
+}))
+
 vi.mock('@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime', () => ({
   clearUnilateralExitJob,
 }))
@@ -26,7 +30,7 @@ vi.mock('@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime', () => 
 vi.mock('@/hooks/useOnchainFeeRateSelection', () => ({
   useOnchainFeeRateSelection: () => ({
     effectiveFeeRate: 2,
-    resetFeeSelection,
+    resetFeeSelection: vi.fn(),
     feePresetSelection: 'Medium',
     presetSatPerVbByLabel: { Low: 0.5, Medium: 2, High: 10 },
     feeEstimatesRefreshing: false,
@@ -43,10 +47,7 @@ vi.mock('@/workers/arkade-factory', () => ({
 }))
 
 vi.mock('@/hooks/useArkadeQueries', () => ({
-  useArkadeBalanceQuery: () => ({ data: { unilateralExitInProgressSats: 0 } }),
   useArkadeBumperInfoQuery: () => ({ data: undefined }),
-  useArkadeCollaborativeExitFeeQuery: () => ({ data: undefined }),
-  useArkadeCollaborativeExitMutation: () => ({ mutate: vi.fn(), isPending: false }),
   useArkadeCompleteUnilateralExitMutation: () => ({
     mutateAsync,
     isPending: false,
@@ -57,14 +58,11 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
     isLoading: false,
     data: [readyRow],
   }),
-  useHasPendingBatchIntent: () => false,
-  useHasPendingBatchIntentKind: () => false,
-  usePendingBatchIntents: () => [],
 }))
 
-import { useArkadeExitFlow } from '@/hooks/useArkadeExitFlow'
+import { useCompleteUnilateralExitFlow } from '@/hooks/useCompleteUnilateralExitFlow'
 
-describe('useArkadeExitFlow', () => {
+describe('useCompleteUnilateralExitFlow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mutateAsync.mockResolvedValue('txid')
@@ -76,11 +74,8 @@ describe('useArkadeExitFlow', () => {
   })
 
   it('complete_spend_does_not_dispatch_clear_job', async () => {
-    const { result } = renderHook(() => useArkadeExitFlow())
+    const { result } = renderHook(() => useCompleteUnilateralExitFlow())
 
-    act(() => {
-      result.current.setCompleteUnilateralOpen(true)
-    })
     act(() => {
       result.current.toggleInProgressSelection(readyRow)
     })
@@ -100,5 +95,6 @@ describe('useArkadeExitFlow', () => {
       }),
     )
     expect(clearUnilateralExitJob).not.toHaveBeenCalled()
+    expect(navigate).toHaveBeenCalledWith({ to: '/wallet/management' })
   })
 })

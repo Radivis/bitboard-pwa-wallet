@@ -39,6 +39,7 @@ import { Route as LabControlRouteImport } from './routes/lab/control'
 import { Route as LabBlocksRouteImport } from './routes/lab/blocks'
 import { Route as WalletArkadeVtxosRouteImport } from './routes/wallet/arkade/vtxos'
 import { Route as WalletArkadeUnilateralExitRouteImport } from './routes/wallet/arkade/unilateral-exit'
+import { Route as WalletArkadeCompleteUnilateralExitRouteImport } from './routes/wallet/arkade/complete-unilateral-exit'
 import { Route as WalletArkadeBoardRouteImport } from './routes/wallet/arkade/board'
 import { Route as LibraryArticlesSlugRouteImport } from './routes/library/articles.$slug'
 import { Route as LabTxTxidRouteImport } from './routes/lab/tx.$txid'
@@ -196,6 +197,12 @@ const WalletArkadeUnilateralExitRoute =
     path: '/arkade/unilateral-exit',
     getParentRoute: () => WalletRoute,
   } as any)
+const WalletArkadeCompleteUnilateralExitRoute =
+  WalletArkadeCompleteUnilateralExitRouteImport.update({
+    id: '/arkade/complete-unilateral-exit',
+    path: '/arkade/complete-unilateral-exit',
+    getParentRoute: () => WalletRoute,
+  } as any)
 const WalletArkadeBoardRoute = WalletArkadeBoardRouteImport.update({
   id: '/arkade/board',
   path: '/arkade/board',
@@ -256,6 +263,7 @@ export interface FileRoutesByFullPath {
   '/lab/tx/$txid': typeof LabTxTxidRoute
   '/library/articles/$slug': typeof LibraryArticlesSlugRoute
   '/wallet/arkade/board': typeof WalletArkadeBoardRoute
+  '/wallet/arkade/complete-unilateral-exit': typeof WalletArkadeCompleteUnilateralExitRoute
   '/wallet/arkade/unilateral-exit': typeof WalletArkadeUnilateralExitRoute
   '/wallet/arkade/vtxos': typeof WalletArkadeVtxosRoute
 }
@@ -288,6 +296,7 @@ export interface FileRoutesByTo {
   '/lab/tx/$txid': typeof LabTxTxidRoute
   '/library/articles/$slug': typeof LibraryArticlesSlugRoute
   '/wallet/arkade/board': typeof WalletArkadeBoardRoute
+  '/wallet/arkade/complete-unilateral-exit': typeof WalletArkadeCompleteUnilateralExitRoute
   '/wallet/arkade/unilateral-exit': typeof WalletArkadeUnilateralExitRoute
   '/wallet/arkade/vtxos': typeof WalletArkadeVtxosRoute
 }
@@ -326,6 +335,7 @@ export interface FileRoutesById {
   '/lab/tx/$txid': typeof LabTxTxidRoute
   '/library/articles/$slug': typeof LibraryArticlesSlugRoute
   '/wallet/arkade/board': typeof WalletArkadeBoardRoute
+  '/wallet/arkade/complete-unilateral-exit': typeof WalletArkadeCompleteUnilateralExitRoute
   '/wallet/arkade/unilateral-exit': typeof WalletArkadeUnilateralExitRoute
   '/wallet/arkade/vtxos': typeof WalletArkadeVtxosRoute
 }
@@ -365,6 +375,7 @@ export interface FileRouteTypes {
     | '/lab/tx/$txid'
     | '/library/articles/$slug'
     | '/wallet/arkade/board'
+    | '/wallet/arkade/complete-unilateral-exit'
     | '/wallet/arkade/unilateral-exit'
     | '/wallet/arkade/vtxos'
   fileRoutesByTo: FileRoutesByTo
@@ -397,6 +408,7 @@ export interface FileRouteTypes {
     | '/lab/tx/$txid'
     | '/library/articles/$slug'
     | '/wallet/arkade/board'
+    | '/wallet/arkade/complete-unilateral-exit'
     | '/wallet/arkade/unilateral-exit'
     | '/wallet/arkade/vtxos'
   id:
@@ -434,6 +446,7 @@ export interface FileRouteTypes {
     | '/lab/tx/$txid'
     | '/library/articles/$slug'
     | '/wallet/arkade/board'
+    | '/wallet/arkade/complete-unilateral-exit'
     | '/wallet/arkade/unilateral-exit'
     | '/wallet/arkade/vtxos'
   fileRoutesById: FileRoutesById
@@ -660,6 +673,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WalletArkadeUnilateralExitRouteImport
       parentRoute: typeof WalletRoute
     }
+    '/wallet/arkade/complete-unilateral-exit': {
+      id: '/wallet/arkade/complete-unilateral-exit'
+      path: '/arkade/complete-unilateral-exit'
+      fullPath: '/wallet/arkade/complete-unilateral-exit'
+      preLoaderRoute: typeof WalletArkadeCompleteUnilateralExitRouteImport
+      parentRoute: typeof WalletRoute
+    }
     '/wallet/arkade/board': {
       id: '/wallet/arkade/board'
       path: '/arkade/board'
@@ -780,6 +800,7 @@ interface WalletRouteChildren {
   WalletWalletsRoute: typeof WalletWalletsRoute
   WalletIndexRoute: typeof WalletIndexRoute
   WalletArkadeBoardRoute: typeof WalletArkadeBoardRoute
+  WalletArkadeCompleteUnilateralExitRoute: typeof WalletArkadeCompleteUnilateralExitRoute
   WalletArkadeUnilateralExitRoute: typeof WalletArkadeUnilateralExitRoute
   WalletArkadeVtxosRoute: typeof WalletArkadeVtxosRoute
 }
@@ -791,6 +812,8 @@ const WalletRouteChildren: WalletRouteChildren = {
   WalletWalletsRoute: WalletWalletsRoute,
   WalletIndexRoute: WalletIndexRoute,
   WalletArkadeBoardRoute: WalletArkadeBoardRoute,
+  WalletArkadeCompleteUnilateralExitRoute:
+    WalletArkadeCompleteUnilateralExitRoute,
   WalletArkadeUnilateralExitRoute: WalletArkadeUnilateralExitRoute,
   WalletArkadeVtxosRoute: WalletArkadeVtxosRoute,
 }

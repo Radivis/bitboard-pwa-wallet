@@ -6,7 +6,6 @@ import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import { CollaborativeExitDialog } from '@/components/wallet/arkade-exit/CollaborativeExitDialog'
-import { CompleteUnilateralExitDialog } from '@/components/wallet/arkade-exit/CompleteUnilateralExitDialog'
 import { useArkadeAutonomousModeActive, useHasPendingBatchIntentKind } from '@/hooks/useArkadeQueries'
 import { useArkadeExitFlow } from '@/hooks/useArkadeExitFlow'
 import { isSignerRotationCooperativeExitBlocked } from '@/lib/arkade/arkade-cooperative-exit'
@@ -14,8 +13,7 @@ import { useWalletStore } from '@/stores/walletStore'
 
 export function ArkadeExitSection() {
   const exitFlow = useArkadeExitFlow()
-  const { setCollaborativeOpen, setCompleteUnilateralOpen, hasUnilateralExitInProgress } =
-    exitFlow
+  const { setCollaborativeOpen, hasUnilateralExitInProgress } = exitFlow
   const signerMigrationHint = useWalletStore((state) => state.arkadeSignerMigrationHint)
   const collaborativeExitBlockedByRotation =
     isSignerRotationCooperativeExitBlocked(signerMigrationHint)
@@ -86,14 +84,13 @@ export function ArkadeExitSection() {
           </Button>
         </InfomodeWrapper>
         {hasUnilateralExitInProgress && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            data-testid="arkade-complete-unilateral-exit"
-            onClick={() => setCompleteUnilateralOpen(true)}
-          >
-            Complete unilateral exit
+          <Button type="button" variant="outline" size="sm" asChild>
+            <Link
+              to="/wallet/arkade/complete-unilateral-exit"
+              data-testid="arkade-complete-unilateral-exit"
+            >
+              Complete unilateral exit
+            </Link>
           </Button>
         )}
       </div>
@@ -110,7 +107,6 @@ export function ArkadeExitSection() {
       )}
 
       <CollaborativeExitDialog exitFlow={exitFlow} />
-      <CompleteUnilateralExitDialog exitFlow={exitFlow} />
     </div>
   )
 }

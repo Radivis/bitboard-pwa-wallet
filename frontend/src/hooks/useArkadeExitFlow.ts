@@ -1,17 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   useArkadeBalanceQuery,
-  useArkadeBumperInfoQuery,
   useArkadeCollaborativeExitFeeQuery,
   useArkadeCollaborativeExitMutation,
-  useArkadeCompleteUnilateralExitMutation,
-  useArkadeUnilateralExitCompletionFeeQuery,
   useArkadeUnilateralExitsInProgressQuery,
   useHasPendingBatchIntent,
   useHasPendingBatchIntentKind,
   usePendingBatchIntents,
 } from '@/hooks/useArkadeQueries'
-import { useOnchainFeeRateSelection } from '@/hooks/useOnchainFeeRateSelection'
 import { parseCollaborativeExitAmountSats } from '@/lib/arkade/arkade-exit-utils'
 import {
   ARKADE_INTENT_LIFECYCLE_PHASES,
@@ -22,21 +18,7 @@ import {
   isCollaborativeExitInsufficientFundsError,
   isSignerRotationCooperativeExitBlocked,
 } from '@/lib/arkade/arkade-cooperative-exit'
-import type {
-  ArkadeUnilateralExitInProgressDto,
-  ArkadeVtxoOutpoint,
-} from '@/workers/arkade-api'
-import {
-  arkadeVtxoOutpointsEqual,
-  includesArkadeVtxoOutpoint,
-} from '@/workers/arkade-api'
 import { useWalletStore } from '@/stores/walletStore'
-
-function outpointFromInProgressRow(
-  row: ArkadeUnilateralExitInProgressDto,
-): ArkadeVtxoOutpoint {
-  return { txid: row.txid, vout: row.vout }
-}
 
 export function useArkadeExitFlow() {
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
@@ -45,22 +27,9 @@ export function useArkadeExitFlow() {
   const balanceQuery = useArkadeBalanceQuery()
 
   const [collaborativeOpen, setCollaborativeOpen] = useState(false)
-  const [completeUnilateralOpen, setCompleteUnilateralOpen] = useState(false)
 
   const [collabDestination, setCollabDestination] = useState('')
   const [collabAmountSats, setCollabAmountSats] = useState('')
-
-  const [selectedInProgressOutpoints, setSelectedInProgressOutpoints] = useState<
-    ArkadeVtxoOutpoint[]
-  >([])
-  const [completeDestination, setCompleteDestination] = useState('')
-
-  const completionFeeSelection = useOnchainFeeRateSelection(networkMode)
-  const {
-    effectiveFeeRate: completionFeeRateSatPerVb,
-    resetFeeSelection: resetCompletionFeeSelection,
-    ...completionFeeRateUi
-  } = completionFeeSelection
 
   const collabAmountParse = parseCollaborativeExitAmountSats(collabAmountSats)
   const collabAmountValid = collabAmountParse.ok
@@ -68,23 +37,13 @@ export function useArkadeExitFlow() {
   const collabAmountError = collabAmountParse.ok ? null : collabAmountParse.message
 
   const unilateralExitInProgressSats = balanceQuery.data?.unilateralExitInProgressSats ?? 0
-  const inProgressQuery = useArkadeUnilateralExitsInProgressQuery(
-    completeUnilateralOpen || unilateralExitInProgressSats > 0,
-  )
-  const bumperInfoQuery = useArkadeBumperInfoQuery(completeUnilateralOpen)
+  const inProgressQuery = useArkadeUnilateralExitsInProgressQuery(unilateralExitInProgressSats > 0)
   const collaborativeFeeQuery = useArkadeCollaborativeExitFeeQuery({
     enabled: collaborativeOpen,
     destinationAddress: collabDestination,
     amountSats: collabAmount,
   })
-  const completionFeeQuery = useArkadeUnilateralExitCompletionFeeQuery({
-    enabled: completeUnilateralOpen,
-    vtxoOutpoints: selectedInProgressOutpoints,
-    destinationAddress: completeDestination,
-    feeRateSatPerVb: completionFeeRateSatPerVb,
-  })
   const collaborativeExitMutation = useArkadeCollaborativeExitMutation()
-  const completeExitMutation = useArkadeCompleteUnilateralExitMutation()
   const pendingBatchIntents = usePendingBatchIntents()
   const hasPendingBatchIntent = useHasPendingBatchIntent()
   const hasPendingCollaborativeExit = useHasPendingBatchIntentKind('collaborative_exit')
@@ -98,44 +57,11 @@ export function useArkadeExitFlow() {
     pendingForAction: hasPendingCollaborativeExit,
   })
 
-  const selectedInProgressRows = useMemo(
-    () =>
-      selectedInProgressOutpoints
-        .map((outpoint) =>
-          inProgressQuery.data?.find((row) =>
-            arkadeVtxoOutpointsEqual(outpointFromInProgressRow(row), outpoint),
-          ),
-        )
-        .filter((row): row is ArkadeUnilateralExitInProgressDto => row != null),
-    [inProgressQuery.data, selectedInProgressOutpoints],
-  )
-
-  const selectedInProgressTotalSats = useMemo(
-    () => selectedInProgressRows.reduce((total, row) => total + row.amountSats, 0),
-    [selectedInProgressRows],
-  )
-
-  const allSelectedCanComplete =
-    selectedInProgressRows.length > 0 &&
-    selectedInProgressRows.every((row) => row.canComplete)
-
   useEffect(() => {
     if (collaborativeOpen && currentAddress) {
       setCollabDestination(currentAddress)
     }
   }, [collaborativeOpen, currentAddress])
-
-  useEffect(() => {
-    if (!completeUnilateralOpen) {
-      setSelectedInProgressOutpoints([])
-      setCompleteDestination('')
-      resetCompletionFeeSelection()
-      return
-    }
-    if (currentAddress) {
-      setCompleteDestination(currentAddress)
-    }
-  }, [completeUnilateralOpen, currentAddress, resetCompletionFeeSelection])
 
   const collaborativeExitBlockedByRotation =
     isSignerRotationCooperativeExitBlocked(signerMigrationHint)
@@ -168,38 +94,6 @@ export function useArkadeExitFlow() {
     )
   }
 
-  const toggleInProgressSelection = (row: ArkadeUnilateralExitInProgressDto) => {
-    const outpoint = outpointFromInProgressRow(row)
-    setSelectedInProgressOutpoints((previous) =>
-      includesArkadeVtxoOutpoint(previous, outpoint)
-        ? previous.filter((selected) => !arkadeVtxoOutpointsEqual(selected, outpoint))
-        : [...previous, outpoint],
-    )
-  }
-
-  const selectAllReadyInProgress = () => {
-    const readyOutpoints = (inProgressQuery.data ?? [])
-      .filter((row) => row.canComplete)
-      .map(outpointFromInProgressRow)
-    setSelectedInProgressOutpoints(readyOutpoints)
-  }
-
-  const handleCompleteExit = () => {
-    if (!allSelectedCanComplete || completeDestination.trim().length === 0) return
-    void completeExitMutation
-      .mutateAsync({
-        vtxoOutpoints: selectedInProgressOutpoints,
-        destinationAddress: completeDestination.trim(),
-        feeRateSatPerVb: completionFeeRateSatPerVb,
-      })
-      .then(() => {
-        setCompleteUnilateralOpen(false)
-      })
-      .catch(() => {
-        // Toast is handled by useArkadeCompleteUnilateralExitMutation.
-      })
-  }
-
   return {
     networkMode,
     currentAddress,
@@ -207,38 +101,22 @@ export function useArkadeExitFlow() {
     balanceQuery,
     collaborativeOpen,
     setCollaborativeOpen,
-    completeUnilateralOpen,
-    setCompleteUnilateralOpen,
     collabDestination,
     setCollabDestination,
     collabAmountSats,
     setCollabAmountSats,
     collabAmount,
     collabAmountError,
-    selectedInProgressOutpoints,
-    selectedInProgressRows,
-    selectedInProgressTotalSats,
-    allSelectedCanComplete,
-    completeDestination,
-    setCompleteDestination,
     inProgressQuery,
-    bumperInfoQuery,
     collaborativeFeeQuery,
-    completionFeeQuery,
-    completionFeeRateUi,
-    completionFeeRateSatPerVb,
     collaborativeExitMutation,
     collaborativeExitSubmitPhase,
     hasProcessingCollaborativeExit,
-    completeExitMutation,
     canCollaborativeExit,
     collaborativeExitBlockedByRotation,
     collaborativeExitBlockedByFunds,
     unilateralExitInProgressSats,
     hasUnilateralExitInProgress,
     handleCollaborativeExit,
-    handleCompleteExit,
-    toggleInProgressSelection,
-    selectAllReadyInProgress,
   }
 }

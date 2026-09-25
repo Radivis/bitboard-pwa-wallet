@@ -235,7 +235,7 @@ flowchart TD
   listRpc["list in-progress plus list records"]
   parent["unilateralExit session host"]
   children["vtxoExit:txid:vout children"]
-  completeUi["Complete dialog"]
+  completeUi["Complete unilateral exit page"]
   controlUi["Control page node detail"]
   wasmRecords --> listRpc
   listRpc -->|"HYDRATE_VTXO_RECORDS"| parent

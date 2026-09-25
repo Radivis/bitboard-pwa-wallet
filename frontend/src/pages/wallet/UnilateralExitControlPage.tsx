@@ -628,7 +628,14 @@ export function UnilateralExitControlPage() {
             className="text-sm text-muted-foreground"
             data-testid="unilateral-exit-branch-complete"
           >
-            Branch complete. Coins can be claimed via complete unilateral exit in Management.
+            Branch complete. Coins can be claimed via{' '}
+            <Link
+              to="/wallet/arkade/complete-unilateral-exit"
+              className="text-primary underline-offset-4 hover:underline"
+            >
+              complete unilateral exit
+            </Link>
+            .
           </p>
         ) : null}
         {unilateralExitSnapshotIsInState(actorSnapshot, UNILATERAL_EXIT_MACHINE_STATE.error) &&
