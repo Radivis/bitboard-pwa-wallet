@@ -576,6 +576,11 @@ pub fn ark_list_vtxo_exit_records() -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
+pub fn ark_peek_onchain_bumper_address() -> Result<String, JsValue> {
+    map_js_error(with_session(|session| session.onchain_bumper_address()))
+}
+
+#[wasm_bindgen]
 pub async fn ark_get_onchain_bumper_info() -> Result<JsValue, JsValue> {
     map_js_async(async {
         export_session_json(|session| async move { session.onchain_bumper_info().await }).await

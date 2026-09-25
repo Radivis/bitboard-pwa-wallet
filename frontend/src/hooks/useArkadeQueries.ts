@@ -7,6 +7,7 @@ import {
   arkadeBalanceQueryKey,
   arkadeBoardingAddressQueryKey,
   arkadeBoardingStatusQueryKey,
+  arkadeBumperAddressQueryKey,
   arkadeBumperInfoQueryKey,
   arkadeCollaborativeExitFeeQueryKey,
   arkadeDisabledQueryKey,
@@ -1099,6 +1100,26 @@ export function useArkadeExitCandidatesQuery(enabled: boolean) {
     // Keep the candidate list fresh while the dialog is open so swept/expired VTXOs drop out
     // instead of lingering as startable rows.
     refetchInterval: enabled ? ARKADE_EXIT_CANDIDATES_POLL_MS : false,
+    staleTime: ARKADE_SESSION_POLL_STALE_MS,
+  })
+}
+
+/** Next unused bumper address without an Esplora scan. */
+export function useArkadeBumperAddressQuery(enabled: boolean) {
+  const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
+    useArkadeQueryBase()
+
+  return useQuery({
+    queryKey: walletScopedQueryKey(
+      activeWalletId,
+      networkMode,
+      activeArkadeAccountId,
+      arkadeBumperAddressQueryKey,
+      'bumper-address',
+    ),
+    enabled: enabled && sessionReady,
+    queryFn: () =>
+      withReadyArkadeWorker(() => getArkadeWorker().peekOnchainBumperAddress()),
     staleTime: ARKADE_SESSION_POLL_STALE_MS,
   })
 }

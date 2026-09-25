@@ -115,6 +115,14 @@ impl ArkSession {
             .map_err(ArkWasmError::Client)
     }
 
+    /// Next unused bumper receive address. Does not Esplora-scan.
+    ///
+    /// The control page shows this immediately. `onchain_bumper_info` still scans before
+    /// it can report a confirmed balance, and that scan must not hide the address.
+    pub fn onchain_bumper_address(&self) -> ArkResult<String> {
+        Ok(self.client.onchain_wallet_address()?.to_string())
+    }
+
     pub async fn onchain_bumper_info(&self) -> ArkResult<OnchainBumperInfoDto> {
         // LIFE-ARK-BUMP-01: one wallet-wide Esplora scan per session. Later polls
         // incremental-sync unused revealed SPKs (the displayed tip) into BDK, then

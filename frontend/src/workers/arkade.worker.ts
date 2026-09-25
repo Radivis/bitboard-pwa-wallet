@@ -842,6 +842,12 @@ const arkadeService: ArkadeService = {
     )
   },
 
+  async peekOnchainBumperAddress(): Promise<string> {
+    return invokeWasmArk(
+      (wasmModule) => wasmModule.ark_peek_onchain_bumper_address() as string,
+    )
+  },
+
   async collaborativeExit(
     params: ArkadeCollaborativeExitParams,
     onRegistered?: (intent: ArkadePendingBatchIntent) => void,

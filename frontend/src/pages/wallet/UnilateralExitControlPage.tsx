@@ -21,6 +21,7 @@ import { UnilateralExitTreeGraph } from '@/components/wallet/unilateral-exit/Uni
 import { UnilateralExitNodeDetailCard } from '@/components/wallet/unilateral-exit/UnilateralExitNodeDetailCard'
 import {
   useArkadeBalanceQuery,
+  useArkadeBumperAddressQuery,
   useArkadeBumperInfoQuery,
   useArkadeExitCandidatesQuery,
   useArkadeUnilateralExitBatchEstimateQuery,
@@ -273,6 +274,8 @@ export function UnilateralExitControlPage() {
     batchEstimateQuery.data != null &&
     !batchEstimateQuery.data.bumperSufficient
   const bumperInfoQuery = useArkadeBumperInfoQuery(true, pollBumperBalanceWhileUnderfunded)
+  const bumperAddressQuery = useArkadeBumperAddressQuery(true)
+  const bumperAddress = bumperInfoQuery.data?.address ?? bumperAddressQuery.data ?? null
 
   const machineProceeding = unilateralExitSnapshotIsProceeding(actorSnapshot)
 
@@ -680,9 +683,9 @@ export function UnilateralExitControlPage() {
           <p className="text-sm" data-testid="unilateral-exit-bumper-balance">
             <BitcoinAmountDisplay amountSats={bumperInfoQuery.data?.balanceSats ?? 0} />
           </p>
-          {bumperInfoQuery.data?.address != null && (
+          {bumperAddress != null && (
             <p className="font-mono text-xs break-all text-muted-foreground" data-testid="arkade-bumper-address">
-              {bumperInfoQuery.data.address}
+              {bumperAddress}
             </p>
           )}
           {bumperLow && (

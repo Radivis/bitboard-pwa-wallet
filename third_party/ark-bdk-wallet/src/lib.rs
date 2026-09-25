@@ -216,11 +216,16 @@ where
     }
 
     async fn incremental_esplora_update(&self, now_secs: u64) -> Result<bdk_wallet::Update, Error> {
-        let request = self
-            .inner
-            .read()
-            .map_err(|e| Error::consumer(format!("failed to get read lock: {e}")))?
-            .start_sync_with_revealed_spks_at(now_secs);
+        // Drop the wallet lock before awaiting Esplora. A guard kept alive across the
+        // await deadlocks the single-threaded WASM worker when another call needs the
+        // lock (address peek, apply_update, changeset export).
+        let request = {
+            let wallet = self
+                .inner
+                .read()
+                .map_err(|e| Error::consumer(format!("failed to get read lock: {e}")))?;
+            wallet.start_sync_with_revealed_spks_at(now_secs)
+        };
         self.client
             .sync(request, BUMPER_ESPLORA_PARALLEL_REQUESTS)
             .await
@@ -230,11 +235,13 @@ where
     }
 
     async fn full_esplora_update(&self, now_secs: u64) -> Result<bdk_wallet::Update, Error> {
-        let request = self
-            .inner
-            .read()
-            .map_err(|e| Error::consumer(format!("failed to get read lock: {e}")))?
-            .start_full_scan_at(now_secs);
+        let request = {
+            let wallet = self
+                .inner
+                .read()
+                .map_err(|e| Error::consumer(format!("failed to get read lock: {e}")))?;
+            wallet.start_full_scan_at(now_secs)
+        };
         self.client
             .full_scan(
                 request,

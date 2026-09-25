@@ -647,6 +647,8 @@ export interface ArkadeService {
   listUnilateralExitsInProgress(): Promise<ArkadeUnilateralExitInProgressDto[]>
   listVtxoExitRecords(): Promise<ArkadeVtxoExitRecordDto[]>
   getOnchainBumperInfo(): Promise<ArkadeOnchainBumperInfo>
+  /** Local next-unused bumper address. Does not Esplora-scan. */
+  peekOnchainBumperAddress(): Promise<string>
   collaborativeExit(
     params: ArkadeCollaborativeExitParams,
     onRegistered?: (intent: ArkadePendingBatchIntent) => void,
