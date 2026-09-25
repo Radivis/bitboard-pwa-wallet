@@ -1,4 +1,5 @@
 use bdk_wallet::chain::ChainPosition;
+use bdk_wallet::chain::spk_client::SyncRequest;
 use bdk_wallet::{ChangeSet, KeychainKind, Wallet};
 use bitcoin::Network as BdkNetwork;
 
@@ -110,12 +111,34 @@ pub fn get_new_address(wallet: &mut Wallet) -> String {
 
 /// Return the last revealed external address without incrementing the index.
 /// Use this when switching descriptor wallets to avoid burning address indices.
+///
+/// When nothing has been revealed yet, this peeks index 0. That script is not
+/// watched by incremental sync until [`ensure_current_external_address`].
 pub fn get_current_address(wallet: &Wallet) -> String {
     let index = wallet.derivation_index(KeychainKind::External).unwrap_or(0);
     wallet
         .peek_address(KeychainKind::External, index)
         .address
         .to_string()
+}
+
+/// Reveal external index 0 when the UI would already show it via [`get_current_address`].
+///
+/// Later calls return the last revealed address and do not advance the index.
+pub fn ensure_current_external_address(wallet: &mut Wallet) -> String {
+    if wallet.derivation_index(KeychainKind::External).is_none() {
+        return get_new_address(wallet);
+    }
+    get_current_address(wallet)
+}
+
+/// Incremental Esplora sync request that includes the address [`get_current_address`] shows.
+pub fn start_incremental_sync_request(
+    wallet: &mut Wallet,
+    now: u64,
+) -> SyncRequest<(KeychainKind, u32)> {
+    ensure_current_external_address(wallet);
+    wallet.start_sync_with_revealed_spks_at(now).build()
 }
 
 /// Return the current wallet balance broken down by confirmation status.
