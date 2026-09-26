@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Security
+
+## [0.3.5] - 2026-09-27
+
+### Added
+
 - The data for the Arkade boarding wallet is now persisted next to the already existing onchain wallet data enabling incremental syncs
 - There are now dedicated loading and error components for Arkade that are displayed as long as the Arkade session is loading, or failed loading respectively
 
@@ -18,14 +28,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The visible syncing with the Arkade operator is incremental by default now - full syncs happen in the background if the last full sync was more than 10 minutes ago
 - Collaborative exists and the completion of unilateral exits now have dedicated pages instead of being displayed as modals
 - Finishing a unilateral exit doesn't wait for a sync now
-- New wallet naming scheme: The default wallet is called "Main Wallet" and additional wallets get a random name of the form "{adjective} {animal} Wallet" 
+- New wallet naming scheme: The default wallet is called "Main Wallet" and additional wallets get a random name of the form "{adjective} {animal} Wallet"
+- Creating and importing new wallets now doesn't wait for initial scan before switchting to the dashboard page
 
 ### Fixed
 
 - The onchain wallet now does an incremental Esplora sync on unlock or network change, not a full scan
 - Removed extra onchain wallet sync stemming from periodic sync firing once, even when deactivated
+- Fixed some issues that followed immediately after adding or deleting a wallet
 
-### Security
 
 ## [0.3.4] - 2026-09-18
 
