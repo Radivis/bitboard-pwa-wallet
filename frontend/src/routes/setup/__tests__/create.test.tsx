@@ -34,25 +34,28 @@ const mockSetTransactions = vi.fn()
 const mockSetLastSyncTime = vi.fn()
 const mockCommitLoadedDescriptorWallet = vi.fn()
 const mockSetImportInitialSyncErrorMessage = vi.fn()
+const walletStoreState = {
+  networkMode: 'signet',
+  walletStatus: 'unlocked',
+  addressType: 'taproot',
+  accountId: 0,
+  setActiveWallet: mockSetActiveWallet,
+  setWalletStatus: mockSetWalletStatus,
+  setCurrentAddress: mockSetCurrentAddress,
+  setBalance: mockSetBalance,
+  setTransactions: mockSetTransactions,
+  setLastSyncTime: mockSetLastSyncTime,
+  commitLoadedDescriptorWallet: mockCommitLoadedDescriptorWallet,
+  setImportInitialSyncErrorMessage: mockSetImportInitialSyncErrorMessage,
+  lockWallet: vi.fn(),
+}
+
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: Object.assign(
-    (selector: (s: Record<string, unknown>) => unknown) =>
-      selector({
-        networkMode: 'signet',
-        walletStatus: 'unlocked',
-        addressType: 'taproot',
-        accountId: 0,
-        setActiveWallet: mockSetActiveWallet,
-        setWalletStatus: mockSetWalletStatus,
-        setCurrentAddress: mockSetCurrentAddress,
-        setBalance: mockSetBalance,
-        setTransactions: mockSetTransactions,
-        setLastSyncTime: mockSetLastSyncTime,
-        commitLoadedDescriptorWallet: mockCommitLoadedDescriptorWallet,
-        setImportInitialSyncErrorMessage: mockSetImportInitialSyncErrorMessage,
-      }),
+    (selector: (storeState: typeof walletStoreState) => unknown) =>
+      selector(walletStoreState),
     {
-      getState: () => ({ lockWallet: vi.fn() }),
+      getState: () => walletStoreState,
     },
   ),
 }))

@@ -9,36 +9,16 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { EnterAppPasswordModal } from '@/components/EnterAppPasswordModal'
-import { SetAppPasswordModal } from '@/components/SetAppPasswordModal'
 import { SetupBackToWelcomeButton } from '@/components/SetupBackToWelcomeButton'
-import { WalletUnlock } from '@/components/WalletUnlock'
-import { orchestrateLock } from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
+import { SetupNewWalletGate } from '@/components/setup/SetupNewWalletGate'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { useWalletStore } from '@/stores/walletStore'
-import { startAutoLockTimer } from '@/stores/sessionStore'
+import { useAddWallet, useWallets } from '@/db'
 import {
-  useAddWallet,
-  getDatabase,
-  ensureMigrated,
-  persistNewWalletWithSecrets,
-  useWallets,
-} from '@/db'
-import { ensureSecretsChannel } from '@/workers/secrets-channel'
-import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
-import {
-  retryImportInitialEsploraSyncWithWalletStatus,
-} from '@/lib/wallet/wallet-utils'
-import { orchestrateOnchainSetupAfterPersist } from '@/lib/wallet/lifecycle/onchain-setup-lifecycle'
-import { showImportInitialSyncFailureToast } from '@/lib/wallet/wallet-sync-error-toast'
-import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
-import { errorMessage } from '@/lib/shared/utils'
-import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet/wallet-query-cache-sync'
-import { useSetupAppPasswordGateReady } from '@/hooks/useSetupAppPasswordGateReady'
-import { suggestDefaultWalletName } from '@/lib/wallet/default-wallet-name'
-import {
-  ensureWalletSecretsSession,
-  isWalletSecretsSessionActive,
-} from '@/lib/wallet/wallet-secrets-session'
+  persistAndActivateNewWallet,
+  prepareNewWalletEncryption,
+} from '@/lib/wallet/new-wallet'
+import { isWalletSecretsSessionActive } from '@/lib/wallet/wallet-secrets-session'
 
 export function ImportWalletPage() {
   const navigate = useNavigate()
@@ -47,23 +27,13 @@ export function ImportWalletPage() {
   const [isValid, setIsValid] = useState<boolean | null>(null)
   const [confirmPasswordOpen, setConfirmPasswordOpen] = useState(false)
 
-  const { data: wallets, isLoading: walletsLoading } = useWallets()
-  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
-  const { appPasswordReady, walletUnlockedOrSyncing, onAppPasswordSessionStarted } =
-    useSetupAppPasswordGateReady(walletStatus)
+  const { data: wallets } = useWallets()
 
   const validateMnemonic = useCryptoStore((cryptoState) => cryptoState.validateMnemonic)
   const importWalletAndEncryptSecrets = useCryptoStore((cryptoState) => cryptoState.importWalletAndEncryptSecrets)
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const addressType = useWalletStore((walletState) => walletState.addressType)
   const accountId = useWalletStore((walletState) => walletState.accountId)
-  const setActiveWallet = useWalletStore((walletState) => walletState.setActiveWallet)
-  const setWalletStatus = useWalletStore((walletState) => walletState.setWalletStatus)
-  const setCurrentAddress = useWalletStore((walletState) => walletState.setCurrentAddress)
-  const commitLoadedDescriptorWallet = useWalletStore((walletState) => walletState.commitLoadedDescriptorWallet)
-  const setImportInitialSyncErrorMessage = useWalletStore(
-    (walletState) => walletState.setImportInitialSyncErrorMessage,
-  )
   const addWallet = useAddWallet()
   const queryClient = useQueryClient()
 
@@ -106,10 +76,7 @@ export function ImportWalletPage() {
     mutationFn: async (appPassword?: string) => {
       if (!canRestore) throw new Error('Invalid input')
 
-      await ensureWalletSecretsSession(appPassword)
-
-      await ensureSecretsChannel()
-      const network = toBitcoinNetwork(networkMode)
+      const network = await prepareNewWalletEncryption(appPassword, networkMode)
       const { encryptedPayload, encryptedMnemonic, walletResult } =
         await importWalletAndEncryptSecrets({
           mnemonic,
@@ -120,57 +87,21 @@ export function ImportWalletPage() {
 
       setMnemonicInput('')
 
-      await ensureMigrated()
-      const walletDb = getDatabase()
-
-      let walletId: number
-      try {
-        walletId = await persistNewWalletWithSecrets({
-          walletDb,
-          insertWalletRow: () =>
-            addWallet.mutateAsync({
-              name: suggestDefaultWalletName((wallets ?? []).map((wallet) => wallet.name)),
-              created_at: new Date().toISOString(),
-            }),
-          encryptedBlobs: {
-            payload: encryptedPayload,
-            mnemonic: encryptedMnemonic,
-          },
-        })
-      } catch (secretsErr) {
-        invalidateWalletRelatedQueriesAndNotifyOtherTabs(queryClient)
-        throw secretsErr
-      }
-
-      setActiveWallet(walletId)
-      setCurrentAddress(walletResult.firstAddress)
-      commitLoadedDescriptorWallet({
-        networkMode,
-        addressType,
-        accountId,
+      await persistAndActivateNewWallet({
+        encryptedBlobs: {
+          payload: encryptedPayload,
+          mnemonic: encryptedMnemonic,
+        },
+        firstAddress: walletResult.firstAddress,
+        markNoMnemonicBackup: false,
+        existingWalletNames: (wallets ?? []).map((wallet) => wallet.name),
+        insertWalletRow: (walletRow) =>
+          addWallet.mutateAsync({
+            name: walletRow.name,
+            created_at: walletRow.createdAt,
+          }),
+        queryClient,
       })
-      // Sync phase is tracked by on-chain lifecycle orchestrator.
-      setWalletStatus('unlocked')
-
-      startAutoLockTimer(() => void orchestrateLock())
-
-      try {
-        await orchestrateOnchainSetupAfterPersist({
-          walletId,
-          networkMode,
-          addressType,
-          accountId,
-        })
-        setImportInitialSyncErrorMessage(null)
-      } catch (err: unknown) {
-        const syncErrorMessage =
-          sanitizeErrorMessageForUi(errorMessage(err) ?? String(err)) ||
-          'Initial sync failed'
-        setImportInitialSyncErrorMessage(syncErrorMessage)
-        showImportInitialSyncFailureToast(err, () => {
-          void retryImportInitialEsploraSyncWithWalletStatus()
-        })
-      }
     },
     onSuccess: () => {
       setMnemonicInput('')
@@ -184,28 +115,6 @@ export function ImportWalletPage() {
     },
   })
 
-  if (walletsLoading) {
-    return (
-      <div className="flex justify-center py-12">
-        <LoadingSpinner text="Loading…" />
-      </div>
-    )
-  }
-
-  const hasWallets = (wallets?.length ?? 0) > 0
-  if (hasWallets && !walletUnlockedOrSyncing) {
-    return <WalletUnlock variant="setup" />
-  }
-
-  if (!hasWallets && !appPasswordReady) {
-    return (
-      <SetAppPasswordModal
-        open
-        onSessionStarted={onAppPasswordSessionStarted}
-      />
-    )
-  }
-
   const startRestore = async () => {
     if (!(await isWalletSecretsSessionActive())) {
       setConfirmPasswordOpen(true)
@@ -215,93 +124,95 @@ export function ImportWalletPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <SetupBackToWelcomeButton />
-        <h2 className="text-xl font-bold">Import Wallet</h2>
-      </div>
+    <SetupNewWalletGate>
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <SetupBackToWelcomeButton />
+          <h2 className="text-xl font-bold">Import Wallet</h2>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Enter Seed Phrase</CardTitle>
-          <CardDescription>
-            Enter your 12 or 24-word seed phrase to restore your wallet.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form
-            className="space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault()
-              void startRestore()
-            }}
-          >
-            <div className="space-y-2">
-              <Label htmlFor="mnemonic-input">Seed Phrase</Label>
-              <Textarea
-                id="mnemonic-input"
-                value={mnemonicInput}
-                onChange={(e) => setMnemonicInput(e.target.value)}
-                placeholder="Enter your seed words separated by spaces..."
-                rows={4}
-                className="font-mono"
-                disabled={restoreMutation.isPending}
-              />
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-muted-foreground">
-                  {wordCount} / {wordCount > 12 ? 24 : 12} words
-                </span>
-                {validating && (
-                  <span className="flex items-center gap-1 text-muted-foreground">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    Validating...
+        <Card>
+          <CardHeader>
+            <CardTitle>Enter Seed Phrase</CardTitle>
+            <CardDescription>
+              Enter your 12 or 24-word seed phrase to restore your wallet.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form
+              className="space-y-4"
+              onSubmit={(e) => {
+                e.preventDefault()
+                void startRestore()
+              }}
+            >
+              <div className="space-y-2">
+                <Label htmlFor="mnemonic-input">Seed Phrase</Label>
+                <Textarea
+                  id="mnemonic-input"
+                  value={mnemonicInput}
+                  onChange={(e) => setMnemonicInput(e.target.value)}
+                  placeholder="Enter your seed words separated by spaces..."
+                  rows={4}
+                  className="font-mono"
+                  disabled={restoreMutation.isPending}
+                />
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-muted-foreground">
+                    {wordCount} / {wordCount > 12 ? 24 : 12} words
                   </span>
-                )}
-                {isValid === true && !validating && (
-                  <span className="flex items-center gap-1 text-green-600">
-                    <CheckCircle2 className="h-3 w-3" />
-                    Valid mnemonic
-                  </span>
-                )}
-                {isValid === false && !validating && (
-                  <span className="flex items-center gap-1 text-destructive">
-                    <XCircle className="h-3 w-3" />
-                    Invalid mnemonic
-                  </span>
-                )}
+                  {validating && (
+                    <span className="flex items-center gap-1 text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Validating...
+                    </span>
+                  )}
+                  {isValid === true && !validating && (
+                    <span className="flex items-center gap-1 text-green-600">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Valid mnemonic
+                    </span>
+                  )}
+                  {isValid === false && !validating && (
+                    <span className="flex items-center gap-1 text-destructive">
+                      <XCircle className="h-3 w-3" />
+                      Invalid mnemonic
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
 
-            {restoreMutation.isPending ? (
-              <LoadingSpinner text="Restoring wallet..." />
-            ) : (
-              <Button
-                type="submit"
-                className="w-full"
-                size="lg"
-                disabled={!canRestore}
-              >
-                Restore Wallet
-              </Button>
-            )}
-          </form>
-        </CardContent>
-      </Card>
+              {restoreMutation.isPending ? (
+                <LoadingSpinner text="Restoring wallet..." />
+              ) : (
+                <Button
+                  type="submit"
+                  className="w-full"
+                  size="lg"
+                  disabled={!canRestore}
+                >
+                  Restore Wallet
+                </Button>
+              )}
+            </form>
+          </CardContent>
+        </Card>
 
-      <EnterAppPasswordModal
-        open={confirmPasswordOpen}
-        onOpenChange={setConfirmPasswordOpen}
-        onCancel={() => setConfirmPasswordOpen(false)}
-        onConfirm={(appPassword: string | undefined) => {
-          setConfirmPasswordOpen(false)
-          restoreMutation.mutate(appPassword)
-        }}
-        isBusy={restoreMutation.isPending}
-        title="Enter app password"
-        description="Enter your Bitboard app password to encrypt your imported wallet."
-        submitLabel="Restore wallet"
-        loadingText="Restoring wallet..."
-      />
-    </div>
+        <EnterAppPasswordModal
+          open={confirmPasswordOpen}
+          onOpenChange={setConfirmPasswordOpen}
+          onCancel={() => setConfirmPasswordOpen(false)}
+          onConfirm={(appPassword: string | undefined) => {
+            setConfirmPasswordOpen(false)
+            restoreMutation.mutate(appPassword)
+          }}
+          isBusy={restoreMutation.isPending}
+          title="Enter app password"
+          description="Enter your Bitboard app password to encrypt your imported wallet."
+          submitLabel="Restore wallet"
+          loadingText="Restoring wallet..."
+        />
+      </div>
+    </SetupNewWalletGate>
   )
 }
