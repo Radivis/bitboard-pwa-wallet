@@ -63,7 +63,14 @@ describe('LIFE-ONC-SETUP-01 orchestrateOnchainSetupAfterPersist', () => {
     getTransactionList.mockResolvedValue([])
   })
 
-  it('runs load then a single orchestrated setupInitial full scan', async () => {
+  it('runs load then starts one setupInitial full scan without waiting for it', async () => {
+    let resolveSync: (() => void) | undefined
+    orchestrateOnchainSyncThenSave.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveSync = resolve
+      }),
+    )
+
     await orchestrateOnchainSetupAfterPersist(setupParams)
 
     expect(orchestrateOnchainLoad).toHaveBeenCalledWith({
@@ -82,9 +89,11 @@ describe('LIFE-ONC-SETUP-01 orchestrateOnchainSetupAfterPersist', () => {
       syncKind: 'setupInitial',
       useFullScan: true,
       markFullScanDone: true,
-      awaitCompletion: true,
-      throwOnError: true,
+      awaitCompletion: false,
+      throwOnError: false,
+      onSyncError: undefined,
     })
+    resolveSync?.()
   })
 
   it('refreshes WASM balance/tx only when no Esplora URL (lab)', async () => {

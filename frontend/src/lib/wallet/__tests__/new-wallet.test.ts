@@ -155,6 +155,7 @@ describe('new wallet helpers', () => {
       networkMode: 'signet',
       addressType: 'taproot',
       accountId: 0,
+      onSyncError: expect.any(Function),
     })
     expect(setImportInitialSyncErrorMessage).toHaveBeenCalledWith(null)
   })
@@ -176,9 +177,13 @@ describe('new wallet helpers', () => {
     expect(mockInvalidateWalletQueries).toHaveBeenCalledWith(queryClient)
   })
 
-  it('records initial sync failure without rejecting', async () => {
+  it('records background sync failure without rejecting', async () => {
     const syncError = new Error('esplora down')
-    mockOrchestrateOnchainSetupAfterPersist.mockRejectedValue(syncError)
+    mockOrchestrateOnchainSetupAfterPersist.mockImplementation(async (params: {
+      onSyncError?: (err: unknown) => void
+    }) => {
+      params.onSyncError?.(syncError)
+    })
     const insertWalletRow = vi.fn().mockResolvedValue(3)
     const queryClient = new QueryClient()
 

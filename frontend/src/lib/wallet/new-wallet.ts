@@ -68,32 +68,37 @@ function activateNewWallet(walletId: number, firstAddress: string): void {
   startAutoLockTimer(() => void orchestrateLock())
 }
 
+function recordInitialSyncFailure(setupError: unknown): void {
+  const syncErrorMessage =
+    sanitizeErrorMessageForUi(errorMessage(setupError) ?? String(setupError)) ||
+    'Initial sync failed'
+  useWalletStore.getState().setImportInitialSyncErrorMessage(syncErrorMessage)
+  showImportInitialSyncFailureToast(setupError, () => {
+    void retryImportInitialEsploraSyncWithWalletStatus()
+  })
+}
+
 async function runInitialOnchainSetup(walletId: number): Promise<void> {
   const walletState = useWalletStore.getState()
   const { networkMode, addressType, accountId } = walletState
+  useWalletStore.getState().setImportInitialSyncErrorMessage(null)
   try {
     await orchestrateOnchainSetupAfterPersist({
       walletId,
       networkMode,
       addressType,
       accountId,
+      onSyncError: recordInitialSyncFailure,
     })
-    useWalletStore.getState().setImportInitialSyncErrorMessage(null)
   } catch (setupError: unknown) {
-    const syncErrorMessage =
-      sanitizeErrorMessageForUi(errorMessage(setupError) ?? String(setupError)) ||
-      'Initial sync failed'
-    useWalletStore.getState().setImportInitialSyncErrorMessage(syncErrorMessage)
-    showImportInitialSyncFailureToast(setupError, () => {
-      void retryImportInitialEsploraSyncWithWalletStatus()
-    })
+    recordInitialSyncFailure(setupError)
   }
 }
 
 /**
- * Inserts a wallet row and encrypted secrets, activates it, and runs the
- * initial on-chain setup. Sync failure is recorded and toasted; it does not
- * reject, matching create and import.
+ * Inserts a wallet row and encrypted secrets, activates it, and loads it.
+ * The first Esplora scan starts in the background and does not delay navigation.
+ * Sync failure is recorded and toasted; it does not reject.
  */
 export async function persistAndActivateNewWallet(
   params: PersistAndActivateNewWalletParams,

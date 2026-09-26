@@ -11,16 +11,18 @@ export type OnchainSetupAfterPersistParams = {
   networkMode: NetworkMode
   addressType: AddressType
   accountId: number
+  onSyncError?: (err: unknown) => void
 }
 
 /**
- * Post-create/import gate: reload from persisted secrets, then run a single
- * orchestrated full scan + save before setup navigates away.
+ * Post-create/import gate: reload from persisted secrets, then start one
+ * setupInitial full scan. The scan does not block navigation; failures are
+ * reported through onSyncError and the sync lifecycle.
  */
 export async function orchestrateOnchainSetupAfterPersist(
   params: OnchainSetupAfterPersistParams,
 ): Promise<void> {
-  const { walletId, networkMode, addressType, accountId } = params
+  const { walletId, networkMode, addressType, accountId, onSyncError } = params
 
   await orchestrateOnchainLoad({
     walletId,
@@ -43,7 +45,7 @@ export async function orchestrateOnchainSetupAfterPersist(
     return
   }
 
-  await orchestrateOnchainSyncThenSave({
+  void orchestrateOnchainSyncThenSave({
     walletId,
     networkMode,
     addressType,
@@ -51,7 +53,8 @@ export async function orchestrateOnchainSetupAfterPersist(
     syncKind: 'setupInitial',
     useFullScan: true,
     markFullScanDone: true,
-    awaitCompletion: true,
-    throwOnError: true,
+    awaitCompletion: false,
+    throwOnError: false,
+    onSyncError,
   })
 }

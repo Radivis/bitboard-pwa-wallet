@@ -21,7 +21,7 @@ feature:
     - load-error is rare persistence/decrypt failure; rail data must not be shown
     - sync-error serves last loaded local data with stale/error indication
     - While on-chain syncPhase is sync-error, exportChangesetForPersistence is blocked; network/address switch may proceed but skips outgoing changeset save
-    - Create/import setup awaits orchestrateOnchainSetupAfterPersist (load + setupInitial full scan) before navigating to dashboard
+    - Create/import setup awaits wallet load, then navigates while the setupInitial full scan continues in the background
     - save-error must block or explicitly warn on lock until persist quiesces
     - walletStatus syncing removed; per-rail sync aggregation via isAnyRailSyncing / useAnyRailSyncing (L5)
   phase_types:
@@ -86,7 +86,7 @@ feature:
           - frontend/src/components/wallet/RailSyncErrorBanner.tsx
           - frontend/src/pages/wallet/DashboardPage.tsx
       - id: LIFE-ONC-SETUP-01
-        description: Setup orchestrator runs load + single orchestrated setupInitial full scan before dashboard navigation
+        description: Setup orchestrator awaits load, then starts one setupInitial full scan without blocking dashboard navigation
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/onchain-setup-lifecycle.test.ts
       - id: LIFE-ONC-GUARD-01
         description: exportChangesetForPersistence blocked while on-chain load/sync/save in flight
