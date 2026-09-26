@@ -6,11 +6,11 @@ import { withPersistedChainMismatchRetry } from '@/lib/wallet/persisted-chain-mi
 import { refreshWalletStoreFromLoadedBdk } from '@/lib/wallet/onchain-bdk-store-sync'
 import { invalidateOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboard-sync'
 import { waitForCryptoWorkerHealthy } from '@/workers/crypto-factory'
-import type { LoadWalletParams } from '@/workers/crypto-api'
 import type {
   OnchainLoadLifecycleSnapshot,
   OnchainLoadParams,
 } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-types'
+import type { OnchainLoadHydration } from '@/lib/wallet/lifecycle/onchain-post-unlock-scan-policy'
 import type { LockLifecyclePhase } from '@/lib/wallet/lifecycle/lock-lifecycle-types'
 import {
   awaitDifferentInFlightWork,
@@ -25,6 +25,14 @@ import {
 } from '@/lib/shared/utils'
 
 export type { OnchainLoadLifecycleSnapshot, OnchainLoadParams } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-types'
+export type { OnchainLoadHydration }
+
+let lastOnchainLoadHydration: OnchainLoadHydration | null = null
+
+/** Captured during WASM load for LIFE-ONC-SYNC-02 postUnlock scan policy. */
+export function getOnchainLoadHydrationForPostUnlock(): OnchainLoadHydration | null {
+  return lastOnchainLoadHydration
+}
 
 /**
  * OnchainLoadLifecycle — WASM descriptor load into crypto worker and wallet store hydration.
@@ -42,6 +50,28 @@ const listeners = new Set<(next: OnchainLoadLifecycleSnapshot) => void>()
 
 const inFlightLoadTracker = createInFlightLifecycleTracker()
 let lastLoadParams: OnchainLoadParams | null = null
+
+function onchainLoadTargetsActiveWallet(walletId: number): boolean {
+  return useWalletStore.getState().activeWalletId === walletId
+}
+
+function resetOnchainLoadSnapshot(): void {
+  setSnapshot({
+    loadPhase: 'not-configured',
+    networkMode: null,
+    errorMessage: null,
+  })
+}
+
+function abandonOnchainLoadIfActiveWalletChanged(walletId: number): boolean {
+  if (onchainLoadTargetsActiveWallet(walletId)) {
+    return false
+  }
+  if (snapshot.loadPhase === 'loading' && lastLoadParams?.walletId === walletId) {
+    resetOnchainLoadSnapshot()
+  }
+  return true
+}
 
 function isOnchainLoadFailedForNetwork(networkMode: OnchainLoadParams['networkMode']): boolean {
   const current = getOnchainLoadLifecycleSnapshot()
@@ -64,18 +94,14 @@ function setSnapshot(next: OnchainLoadLifecycleSnapshot): void {
   notifyListeners()
 }
 
-async function loadWalletHandlingPersistedChainMismatch(
-  loadWallet: (params: LoadWalletParams) => Promise<boolean>,
-  params: LoadWalletParams,
-): Promise<void> {
-  await withPersistedChainMismatchRetry(loadWallet, params)
-}
-
 async function runWasmLoad(params: OnchainLoadParams): Promise<void> {
   const { walletId, networkMode, addressType, accountId } = params
   const clearLastSyncTime = params.clearLastSyncTime ?? false
 
   await waitForCryptoWorkerHealthy()
+  if (!onchainLoadTargetsActiveWallet(walletId)) {
+    return
+  }
   const network = toBitcoinNetwork(networkMode)
   const descriptorWallet = await resolveDescriptorWallet({
     walletId,
@@ -83,43 +109,52 @@ async function runWasmLoad(params: OnchainLoadParams): Promise<void> {
     targetAddressType: addressType,
     targetAccountId: accountId,
   })
-
-  const { loadWallet, getCurrentAddress } = useCryptoStore.getState()
-  const {
-    setWalletStatus,
-    setBalance,
-    setTransactions,
-    setCurrentAddress,
-    setLastSyncTime,
-    commitLoadedDescriptorWallet,
-  } = useWalletStore.getState()
-
-  setCurrentAddress(null)
-  setBalance(null)
-  setTransactions([])
-  if (clearLastSyncTime) {
-    setLastSyncTime(null)
+  if (!onchainLoadTargetsActiveWallet(walletId)) {
+    return
   }
 
-  await loadWalletHandlingPersistedChainMismatch(loadWallet, {
+  const { loadWallet, getCurrentAddress } = useCryptoStore.getState()
+  const walletStateBeforeLoad = useWalletStore.getState()
+  walletStateBeforeLoad.setCurrentAddress(null)
+  walletStateBeforeLoad.setBalance(null)
+  walletStateBeforeLoad.setTransactions([])
+  if (clearLastSyncTime) {
+    walletStateBeforeLoad.setLastSyncTime(null)
+  }
+
+  const { usedEmptyChainFallback } = await withPersistedChainMismatchRetry(loadWallet, {
     externalDescriptor: descriptorWallet.externalDescriptor,
     internalDescriptor: descriptorWallet.internalDescriptor,
     network,
     changesetJson: descriptorWallet.changeSet,
     useEmptyChain: false,
   })
+  if (!onchainLoadTargetsActiveWallet(walletId)) {
+    return
+  }
+  lastOnchainLoadHydration = {
+    fullScanDone: descriptorWallet.fullScanDone,
+    usedEmptyChainFallback,
+  }
 
   const address = await getCurrentAddress()
-  setCurrentAddress(address)
-  commitLoadedDescriptorWallet({
+  if (!onchainLoadTargetsActiveWallet(walletId)) {
+    return
+  }
+  const loadedWalletState = useWalletStore.getState()
+  loadedWalletState.setCurrentAddress(address)
+  loadedWalletState.commitLoadedDescriptorWallet({
     networkMode,
     addressType,
     accountId,
   })
-  setWalletStatus('unlocked')
+  loadedWalletState.setWalletStatus('unlocked')
 
   if (networkMode !== 'lab') {
-    await refreshWalletStoreFromLoadedBdk()
+    await refreshWalletStoreFromLoadedBdk(walletId)
+    if (!onchainLoadTargetsActiveWallet(walletId)) {
+      return
+    }
     invalidateOnchainDashboardQueries()
   }
 
@@ -162,6 +197,19 @@ export function syncOnchainLoadLifecycleWithLockPhase(lockPhase: LockLifecyclePh
     return
   }
   setSnapshot({ loadPhase: 'not-configured', networkMode: null, errorMessage: null })
+  lastOnchainLoadHydration = null
+}
+
+/** Drop a load snapshot that still describes a wallet the user has left. */
+export function detachOnchainLoadSnapshotIfDifferentWallet(nextWalletId: number): void {
+  if (snapshot.loadPhase === 'not-configured') {
+    return
+  }
+  if (lastLoadParams?.walletId === nextWalletId) {
+    return
+  }
+  lastOnchainLoadHydration = null
+  resetOnchainLoadSnapshot()
 }
 
 export async function awaitOnchainLoadQuiescence(): Promise<void> {
@@ -223,6 +271,9 @@ export async function orchestrateOnchainLoad(params: OnchainLoadParams): Promise
     })
     try {
       await runWasmLoad(params)
+      if (abandonOnchainLoadIfActiveWalletChanged(params.walletId)) {
+        return
+      }
       setSnapshot({
         loadPhase: 'loaded',
         networkMode: params.networkMode,
@@ -237,6 +288,9 @@ export async function orchestrateOnchainLoad(params: OnchainLoadParams): Promise
         })
       }
     } catch (error) {
+      if (abandonOnchainLoadIfActiveWalletChanged(params.walletId)) {
+        throw error
+      }
       setSnapshot({
         loadPhase: 'load-error',
         networkMode: params.networkMode,
@@ -259,5 +313,6 @@ export function resetOnchainLoadLifecycleStateForTests(): void {
   snapshot = { loadPhase: 'not-configured', networkMode: null, errorMessage: null }
   inFlightLoadTracker.clearCurrent()
   lastLoadParams = null
+  lastOnchainLoadHydration = null
   listeners.clear()
 }

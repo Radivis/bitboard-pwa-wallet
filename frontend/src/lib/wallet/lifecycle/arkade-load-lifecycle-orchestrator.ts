@@ -20,7 +20,7 @@ import {
   tryReuseExistingArkadeSession,
   type ArkadeSessionReuseState,
 } from '@/lib/wallet/lifecycle/arkade-session-open-helpers'
-import type { NetworkMode } from '@/stores/walletStore'
+import { useWalletStore, type NetworkMode } from '@/stores/walletStore'
 import {
   configureArkadeSyncForLoadedRail,
   orchestrateArkadePostLoadSync,
@@ -112,7 +112,7 @@ async function runPostOpenArkadeMaintenance(
 async function runArkadeSessionOpenBody(params: {
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
-}): Promise<string> {
+}): Promise<{ arkadeAccountId: string }> {
   const { walletId, networkMode } = params
 
   await ensureSecretsChannel()
@@ -126,6 +126,10 @@ async function runArkadeSessionOpenBody(params: {
   })
   const hadPersistedAccount = account != null
 
+  if (useWalletStore.getState().activeWalletId !== walletId) {
+    return { arkadeAccountId: account?.id ?? '' }
+  }
+
   if (account != null) {
     const reusedAccountId = await tryReuseExistingArkadeSession({
       walletId,
@@ -134,7 +138,7 @@ async function runArkadeSessionOpenBody(params: {
       sessionReuseState: arkadeSessionReuseState,
     })
     if (reusedAccountId != null) {
-      return reusedAccountId
+      return { arkadeAccountId: reusedAccountId }
     }
   }
 
@@ -153,11 +157,43 @@ async function runArkadeSessionOpenBody(params: {
     networkMode,
     arkadeAccountId: activeAccount.id,
     signerMigrationHint: openResult.signerMigrationHint,
+    bumperHydrateFellBackToEmpty: openResult.bumperHydrateFellBackToEmpty === true,
     sessionReuseState: arkadeSessionReuseState,
     runPostOpenMaintenance: runPostOpenArkadeMaintenance,
   })
 
-  return activeAccount.id
+  return { arkadeAccountId: activeAccount.id }
+}
+
+/** True when the loaded Arkade rail belongs to this wallet, not a previous session. */
+export function arkadeLoadedSessionMatchesWallet(walletId: number): boolean {
+  return snapshot.loadPhase === 'loaded' && lastLoadParams?.walletId === walletId
+}
+
+/**
+ * Forget a loaded Arkade snapshot that belongs to another wallet.
+ * In-flight load work is left running so it can notice the wallet change and stop.
+ */
+export function detachArkadeLoadSnapshotIfDifferentWallet(nextWalletId: number): void {
+  if (snapshot.loadPhase === 'not-configured') {
+    return
+  }
+  if (lastLoadParams?.walletId === nextWalletId) {
+    return
+  }
+  lastOpenedSessionKey = null
+  lastLoadedAccountId = null
+  setSnapshot({ loadPhase: 'not-configured', networkMode: null, errorMessage: null })
+}
+
+function abandonArkadeLoadIfActiveWalletChanged(walletId: number): boolean {
+  if (useWalletStore.getState().activeWalletId === walletId) {
+    return false
+  }
+  if (snapshot.loadPhase === 'loading' && lastLoadParams?.walletId === walletId) {
+    setSnapshot({ loadPhase: 'not-configured', networkMode: null, errorMessage: null })
+  }
+  return true
 }
 
 export function getArkadeLoadLifecycleSnapshot(): ArkadeLoadLifecycleSnapshot {
@@ -229,7 +265,6 @@ export async function orchestrateArkadeLoad(params: ArkadeLoadParams): Promise<v
 
   const { allowRetryFromError, ...persistedParams } = params
   void allowRetryFromError
-  lastLoadParams = persistedParams
 
   const key = loadKey(params)
   const coalesced = getCoalescedInFlightPromise(inFlightLoadTracker, key)
@@ -240,14 +275,22 @@ export async function orchestrateArkadeLoad(params: ArkadeLoadParams): Promise<v
   if (afterDifferentWork != null) {
     return afterDifferentWork
   }
+  if (abandonArkadeLoadIfActiveWalletChanged(walletId)) {
+    return
+  }
+
+  lastLoadParams = persistedParams
+  setSnapshot({ loadPhase: 'loading', networkMode, errorMessage: null })
 
   return inFlightLoadTracker.begin(key, async () => {
-    setSnapshot({ loadPhase: 'loading', networkMode, errorMessage: null })
     try {
-      const arkadeAccountId = await runArkadeSessionOpenBody({
+      const { arkadeAccountId } = await runArkadeSessionOpenBody({
         walletId,
         networkMode,
       })
+      if (abandonArkadeLoadIfActiveWalletChanged(walletId)) {
+        return
+      }
       lastLoadedAccountId = arkadeAccountId
       setSnapshot({ loadPhase: 'loaded', networkMode, errorMessage: null })
       configureArkadeSyncForLoadedRail({
@@ -266,7 +309,11 @@ export async function orchestrateArkadeLoad(params: ArkadeLoadParams): Promise<v
         arkadeAccountId,
       })
     } catch (error) {
+      const activeWalletChanged = abandonArkadeLoadIfActiveWalletChanged(walletId)
       terminateArkadeWorker()
+      if (activeWalletChanged) {
+        throw error
+      }
       clearArkadeDashboardStore()
       setSnapshot({
         loadPhase: 'load-error',

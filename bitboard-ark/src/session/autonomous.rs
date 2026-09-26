@@ -4,7 +4,6 @@ use crate::api_types::AutonomousModeStatusDto;
 use crate::cached_operator_info::CachedOperatorInfoRecord;
 use crate::error::{ArkResult, ArkWasmError};
 use crate::offchain_snapshot::vtxo_list_from_snapshot;
-use crate::session::open::sync_onchain_wallet_for_session_open;
 
 use super::ArkSession;
 use super::unilateral_exit::materials_prefetch::autonomous_exit_materials_status;
@@ -38,28 +37,30 @@ impl ArkSession {
             .ok_or(ArkWasmError::AutonomousOperatorInfoMissing)?;
         let server_info = cached.to_server_info()?;
         self.client.install_cached_server_info(server_info)?;
-        sync_onchain_wallet_for_session_open(&self.client).await;
+        // LIFE-ARK-LOAD-04: do not start bumper Esplora on autonomous-mode enter.
+        // First onchain_bumper_info / proceed still syncs when exit needs funds.
         self.set_autonomous_mode(true);
         Ok(())
     }
 
-    pub async fn exit_autonomous_mode(&self) -> ArkResult<()> {
+    pub async fn exit_autonomous_mode(&self) -> ArkResult<crate::api_types::OperatorSyncResultDto> {
         if !self.autonomous_mode() {
-            return Ok(());
+            return Ok(super::sync::operator_sync_result_idle());
         }
         if self.wallet_db.operator_trust_pending() {
             return Err(ArkWasmError::OperatorTrustPendingBlocksAutonomousExit);
         }
         self.set_autonomous_mode(false);
-        self.refresh_operator_info_after_leaving_autonomous(true)
-            .await
+        self.refresh_operator_info_after_leaving_autonomous(false)
+            .await?;
+        self.sync_with_operator().await
     }
 
     /// Reconnect to live operator `getInfo` after autonomous mode ends. Sync is optional because
-    /// trust-accept runs its own full `sync_with_operator` immediately afterward.
+    /// trust-accept and [`Self::exit_autonomous_mode`] run operator sync themselves.
     pub(crate) async fn refresh_operator_info_after_leaving_autonomous(
         &self,
-        run_full_sync: bool,
+        run_operator_sync: bool,
     ) -> ArkResult<()> {
         if let Err(error) = self.client.refresh_server_info().await {
             #[cfg(target_arch = "wasm32")]
@@ -70,8 +71,8 @@ impl ArkSession {
             #[cfg(not(target_arch = "wasm32"))]
             let _ = error;
         }
-        if run_full_sync {
-            let _ = self.sync_with_operator().await;
+        if run_operator_sync {
+            self.sync_with_operator().await?;
         }
         Ok(())
     }

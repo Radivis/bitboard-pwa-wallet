@@ -192,7 +192,7 @@ async function requireUnlockedWallet(action: () => void | Promise<void>): Promis
 | **Settings — receiving descriptor** | Settings main page renders without hydrating WASM. Show copy such as “Unlock your wallet to view the receiving descriptor” when locked (`NetworkCardCommittedDescriptor` today). | Reveal, copy, or export descriptor → `requireUnlockedWallet` then load descriptor from encrypted secrets / WASM as needed. |
 | **Settings — network / address type switch** | Network cards render; locked state is visible. | Applying a switch that loads a different descriptor → `requireUnlockedWallet` (today partially inlined via `WalletUnlock` on network selector). |
 | **Lab** | Lab has **its own** chain DB, entities, and simulated wallets. Browsing blocks, lab entities, and lab-only mining do not require Bitboard wallet hydration. | Operations that credit **your** Bitboard wallet (e.g. mine block reward to “Wallet”, lab sends that use the live receive address) → `requireUnlockedWallet` before proceeding. Lab may still switch **network mode** to `lab` on entry (`runLabRouteBeforeLoad`); that is network UX, not a substitute for unlock on wallet-backed actions. |
-| **Setup** | Create/import flows manage their own password/session steps. | After persist, **await** `orchestrateOnchainSetupAfterPersist` (load from secrets + `setupInitial` full scan) before navigating to dashboard — not background post-nav sync. |
+| **Setup** | Create/import flows manage their own password/session steps. | After persist, await load inside `orchestrateOnchainSetupAfterPersist`, then navigate. The `setupInitial` full scan continues in the background and must not block that navigation. |
 
 **Anti-pattern:** Treating `/settings` or `/lab` like `/wallet` for route-wide hydration so bootstrap runs on navigation.
 
@@ -457,10 +457,12 @@ Lightning is optional — absence of connections is normal `not-configured`, not
 
 1. `ensureSecretsChannel` / `ensureArkadeEncryptedSecretsHost`
 2. Read encrypted mnemonic + payload; resolve Arkade account
-3. `ark_open_session` in arkade worker (hydrate from `sdkPersistenceJson`)
+3. `ark_open_session` in arkade worker (hydrate Arkade SDK from `sdkPersistenceJson`, and the bumper BDK from the SegWit-0 descriptor-wallet changeset when one exists — not Esplora)
 4. `ensureArkadeAccount` (DB metadata)
 5. `refreshArkadeStoreFromLoadedWasm` — balance, payments, **receive address stable**
 6. Set `activeArkadeAccountId` when **load completes** (not when sync completes)
+
+Bumper BDK Esplora is **not** started on load (LIFE-ARK-LOAD-04). Session open hydrates the bumper from the `(network, segwit, 0)` descriptor row (or a live crypto export when that triple is loaded). The first `onchain_bumper_info` or exit proceed then syncs; that scan is incremental when `fullScanDone` was hydrated (LIFE-ARK-BUMP-01/02). Completing a unilateral exit does not wait for that scan: the complete page starts it in the background. Later bumper-info polls incremental-sync unused revealed SPKs into BDK and report confirmed only. After a wallet-wide bumper sync, Arkade persists that SegWit-0 row only when it is **not** the crypto slot (LIFE-ARK-BUMP-03).
 
 **Readiness contract:**
 
@@ -643,7 +645,8 @@ Audit of the codebase against [Route independence and wallet hydration](#route-i
 | Settings/Lab browsable while locked | Sensitive ops use `requireUnlockedWallet`; route-wide hydration is not required. |
 | Dashboard Arkade queries → `scheduleBackgroundArkadeOperatorSync` | Operator sync debounced from query fetches when balance/history/VTxO queries run (hydration, manual invalidation, or opt-in periodic `refetchInterval`). Timer may complete after navigation. **Correct** under route-independent lifecycle — do not cancel on route change. |
 | Lightning dashboard NWC fetch | Periodic background polling is **React Query `refetchInterval` only** (gated by `isPeriodicSyncEnabled` and per-rail settings). No orchestrator scheduler. |
-| On-chain Esplora incremental sync | Default: hydration (`postUnlock`) and manual dashboard sync only. Opt-in periodic sync uses `useOnchainPeriodicSyncQuery` when the feature and per-rail switch are on. |
+| On-chain wallet Esplora sync | The crypto-worker descriptor wallet (not the Arkade bumper). Default: hydration (`postUnlock`) is incremental when the loaded descriptor has `fullScanDone` and load did not use empty-chain fallback; otherwise a full scan. Manual dashboard sync is incremental. Opt-in periodic sync uses `useOnchainPeriodicSyncQuery` when the feature and per-rail switch are on (query `enabled` requires a numeric `refetchInterval`, not merely rail loaded). |
+| Arkade bumper wallet Esplora sync | The BIP84 SegWit-0 bumper BDK used for exit CPFP (not the on-chain wallet above). HD `/txs` walks are not started after unlock; they run on first bumper-info / exit proceed/complete only, incremental when the SegWit-0 changeset was hydrated with `fullScanDone`. Later bumper-info polls incremental-sync unused revealed SPKs into BDK and report confirmed only. |
 | Per-rail sync/save orchestrators under `frontend/src/lib/wallet/lifecycle/` | No pathname imports — aligned with route-independent lifecycle. |
 
 ### Related symptom (dashboard → Settings)

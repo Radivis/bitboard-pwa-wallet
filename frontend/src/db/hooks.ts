@@ -87,6 +87,12 @@ export function useDeleteWallet() {
       if (id !== activeWalletId) {
         throw new Error('Only the active wallet can be deleted')
       }
+      // Dynamic import avoids a module cycle: this hook is re-exported from `@/db`,
+      // which Arkade session code imports.
+      const { discardArkadeSessionForWalletDeletion } = await import(
+        '@/lib/arkade/arkade-session-service'
+      )
+      await discardArkadeSessionForWalletDeletion()
       await ensureMigrated()
       await deleteWalletCompletely(getDatabase(), id)
     },

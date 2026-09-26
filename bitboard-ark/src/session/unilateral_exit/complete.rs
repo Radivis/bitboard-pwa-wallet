@@ -1,6 +1,7 @@
 use crate::api_types::{
     CompleteUnilateralExitParams, MissingBlocktimeCompletionInputDto, OnchainBumperInfoDto,
     UnilateralExitCompletionFeeEstimateDto, UnilateralExitCompletionFeeEstimateParams,
+    UnilateralExitTimelockDto,
 };
 use crate::constants::MIN_FEE_RATE_SAT_PER_VB;
 use crate::error::{ArkResult, ArkWasmError};
@@ -11,13 +12,33 @@ use super::snapshot_ops::{
     autonomous_estimate_unilateral_exit_completion, dedup_virtual_outpoints,
 };
 use crate::session::ArkSession;
+use crate::session::bumper_sync_policy::{
+    BumperWalletScanGuard, ExitBroadcastBumperSync, bumper_info_balance_sats,
+    bumper_info_needs_wallet_sync_persist, bumper_info_should_start_wallet_scan,
+    bumper_sync_phase_after_wallet_scan, completion_estimate_should_sync_bumper_wallet,
+    completion_spend_should_sync_bumper_wallet, exit_broadcast_bumper_sync,
+};
 use crate::session::mappers::parse_onchain_address;
-use crate::session::open::sync_onchain_wallet_with_retries;
+use crate::session::open::sync_bumper_wallet_with_retries;
 
 fn resolve_completion_fee_rate_sat_per_vb(override_rate_sat_per_vb: Option<f64>) -> f64 {
     override_rate_sat_per_vb
         .unwrap_or(MIN_FEE_RATE_SAT_PER_VB)
         .max(MIN_FEE_RATE_SAT_PER_VB)
+}
+
+fn completion_estimate_error_dto(
+    fee_rate_sat_per_vb: f64,
+    estimate_error: impl ToString,
+) -> UnilateralExitCompletionFeeEstimateDto {
+    UnilateralExitCompletionFeeEstimateDto {
+        selected_total_sats: 0,
+        estimated_fee_sats: 0,
+        estimated_receive_sats: 0,
+        fee_rate_sat_per_vb,
+        estimate_error: Some(estimate_error.to_string()),
+        missing_blocktime_inputs: Vec::new(),
+    }
 }
 
 fn map_missing_blocktime_completion_inputs(
@@ -38,14 +59,101 @@ fn map_missing_blocktime_completion_inputs(
 }
 
 impl ArkSession {
+    async fn sync_bumper_wallet_and_record_phase(&self) -> ArkResult<()> {
+        let _scan_guard = BumperWalletScanGuard::begin(&self.bumper_wallet_sync_phase);
+        let sync_result = sync_bumper_wallet_with_retries(&self.client).await;
+        self.bumper_wallet_sync_phase
+            .set(bumper_sync_phase_after_wallet_scan(sync_result.is_ok()));
+        sync_result
+    }
+
+    async fn sync_bumper_wallet_when(&self, should_sync: bool) -> ArkResult<()> {
+        if !should_sync {
+            return Ok(());
+        }
+        self.sync_bumper_wallet_and_record_phase().await
+    }
+
+    async fn ensure_bumper_wallet_synced_once(&self) -> ArkResult<()> {
+        if self.bumper_wallet.completed_full_scan() {
+            if self.bumper_wallet_sync_phase.get()
+                == crate::session::bumper_sync_policy::BumperWalletSyncPhase::NotStarted
+            {
+                self.bumper_wallet_sync_phase
+                    .set(crate::session::bumper_sync_policy::BumperWalletSyncPhase::Done);
+            }
+            return Ok(());
+        }
+        self.wait_until_bumper_wallet_scan_settled().await;
+        if !bumper_info_should_start_wallet_scan(self.bumper_wallet_sync_phase.get()) {
+            return Ok(());
+        }
+        self.sync_bumper_wallet_and_record_phase().await
+    }
+
+    /// One wallet-wide bumper scan per session. A later unroll step only refreshes
+    /// scripts that can still fund the CPFP child.
+    pub(crate) async fn sync_bumper_for_exit_broadcast(&self) -> ArkResult<()> {
+        let hydrated_full_scan = self.bumper_wallet.completed_full_scan();
+        if !hydrated_full_scan {
+            self.wait_until_bumper_wallet_scan_settled().await;
+        }
+        let phase = self.bumper_wallet_sync_phase.get();
+        let scanned_now = match exit_broadcast_bumper_sync(phase) {
+            ExitBroadcastBumperSync::WalletWide if hydrated_full_scan => false,
+            ExitBroadcastBumperSync::WalletWide => {
+                self.sync_bumper_wallet_and_record_phase().await?;
+                true
+            }
+            ExitBroadcastBumperSync::SpendableScripts => false,
+        };
+        if scanned_now {
+            return Ok(());
+        }
+        self.bumper_wallet
+            .sync_spendable_scripts()
+            .await
+            .map_err(ArkWasmError::Client)
+    }
+
+    /// Operator unilateral-exit CSV delay from cached server info. Does not Esplora-scan.
+    pub fn unilateral_exit_timelock(&self) -> ArkResult<UnilateralExitTimelockDto> {
+        let server_info = self.client.server_info()?;
+        let (unilateral_exit_timelock_blocks, unilateral_exit_timelock_seconds) =
+            crate::session::mappers::unilateral_exit_timelock_parts(
+                server_info.unilateral_exit_delay,
+            );
+        Ok(UnilateralExitTimelockDto {
+            unilateral_exit_timelock_blocks,
+            unilateral_exit_timelock_seconds,
+        })
+    }
+
+    /// Next unused bumper receive address. Does not Esplora-scan.
+    ///
+    /// The control page shows this immediately. `onchain_bumper_info` still scans before
+    /// it can report a confirmed balance, and that scan must not hide the address.
+    pub fn onchain_bumper_address(&self) -> ArkResult<String> {
+        Ok(self.client.onchain_wallet_address()?.to_string())
+    }
+
     pub async fn onchain_bumper_info(&self) -> ArkResult<OnchainBumperInfoDto> {
-        // The on-chain (bumper) wallet is only synced once at session open, so without a refresh
-        // here the unilateral-exit dialog would report a stale session-open balance and ignore any
-        // funds the user added afterwards. Re-sync before reading so both the displayed balance and
-        // the `bumper_sufficient` gate (which goes through this) reflect current on-chain funds.
-        sync_onchain_wallet_with_retries(&self.client).await?;
+        // LIFE-ARK-BUMP-01: one wallet-wide Esplora scan per session. Later polls
+        // incremental-sync unused revealed SPKs (the displayed tip) into BDK, then
+        // report confirmed only — so a 4s underfunded refetch cannot restart an HD walk.
+        let phase_before_wait = self.bumper_wallet_sync_phase.get();
+        self.ensure_bumper_wallet_synced_once().await?;
+        let needs_bumper_wallet_sync = bumper_info_needs_wallet_sync_persist(
+            phase_before_wait,
+            self.bumper_wallet_sync_phase.get(),
+        );
         let address = self.client.onchain_wallet_address()?;
-        let balance = self.client.onchain_wallet_balance()?;
+        self.bumper_wallet
+            .sync_unused_spks()
+            .await
+            .map_err(|error| ArkWasmError::Wallet(error.to_string()))?;
+        let balance_sats =
+            bumper_info_balance_sats(self.client.onchain_wallet_balance()?.confirmed.to_sat());
         let server_info = self.client.server_info()?;
         let (unilateral_exit_timelock_blocks, unilateral_exit_timelock_seconds) =
             crate::session::mappers::unilateral_exit_timelock_parts(
@@ -53,9 +161,10 @@ impl ArkSession {
             );
         Ok(OnchainBumperInfoDto {
             address: address.to_string(),
-            balance_sats: balance.confirmed.to_sat(),
+            balance_sats,
             unilateral_exit_timelock_blocks,
             unilateral_exit_timelock_seconds,
+            needs_bumper_wallet_sync,
         })
     }
 
@@ -74,6 +183,12 @@ impl ArkSession {
         let destination = parse_onchain_address(&params.destination_address, self.network())?;
         let fee_rate_sat_per_vb =
             resolve_completion_fee_rate_sat_per_vb(params.fee_rate_sat_per_vb);
+        // LIFE-ARK-BUMP-01: do not wait on a wallet-wide bumper scan. The complete
+        // page runs that scan in the background. Completion spends unrolled VTXOs.
+        self.sync_bumper_wallet_when(completion_spend_should_sync_bumper_wallet(
+            self.bumper_wallet_sync_phase.get(),
+        ))
+        .await?;
         autonomous_complete_unilateral_exit(
             self,
             &deduped_vtxo_outpoints,
@@ -94,20 +209,26 @@ impl ArkSession {
         let destination = match parse_onchain_address(&params.destination_address, self.network()) {
             Ok(address) => address,
             Err(error) => {
-                return Ok(UnilateralExitCompletionFeeEstimateDto {
-                    selected_total_sats: 0,
-                    estimated_fee_sats: 0,
-                    estimated_receive_sats: 0,
-                    fee_rate_sat_per_vb: MIN_FEE_RATE_SAT_PER_VB,
-                    estimate_error: Some(error.to_string()),
-                    missing_blocktime_inputs: Vec::new(),
-                });
+                return Ok(completion_estimate_error_dto(
+                    MIN_FEE_RATE_SAT_PER_VB,
+                    error,
+                ));
             }
         };
 
         let deduped_vtxo_outpoints = dedup_virtual_outpoints(params.vtxo_outpoints);
         let fee_rate_sat_per_vb =
             resolve_completion_fee_rate_sat_per_vb(params.fee_rate_sat_per_vb);
+
+        // LIFE-ARK-BUMP-01: fee estimate does not start the wallet-wide scan.
+        if let Err(error) = self
+            .sync_bumper_wallet_when(completion_estimate_should_sync_bumper_wallet(
+                self.bumper_wallet_sync_phase.get(),
+            ))
+            .await
+        {
+            return Ok(completion_estimate_error_dto(fee_rate_sat_per_vb, error));
+        }
 
         match autonomous_estimate_unilateral_exit_completion(
             self,
@@ -129,14 +250,7 @@ impl ArkSession {
                     ),
                 })
             }
-            Err(error) => Ok(UnilateralExitCompletionFeeEstimateDto {
-                selected_total_sats: 0,
-                estimated_fee_sats: 0,
-                estimated_receive_sats: 0,
-                fee_rate_sat_per_vb,
-                estimate_error: Some(error.to_string()),
-                missing_blocktime_inputs: Vec::new(),
-            }),
+            Err(error) => Ok(completion_estimate_error_dto(fee_rate_sat_per_vb, error)),
         }
     }
 
@@ -150,10 +264,24 @@ impl ArkSession {
 
 #[cfg(test)]
 mod completion_helper_tests {
-    use super::{map_missing_blocktime_completion_inputs, resolve_completion_fee_rate_sat_per_vb};
+    use super::{
+        completion_estimate_error_dto, map_missing_blocktime_completion_inputs,
+        resolve_completion_fee_rate_sat_per_vb,
+    };
     use ark_client::MissingBlocktimeCompletionInput;
     use bitcoin::hashes::Hash;
     use bitcoin::{OutPoint, Txid};
+
+    #[test]
+    fn completion_estimate_error_dto_zeros_amounts_and_keeps_fee_rate() {
+        let dto = completion_estimate_error_dto(2.5, "bumper sync failed");
+        assert_eq!(dto.selected_total_sats, 0);
+        assert_eq!(dto.estimated_fee_sats, 0);
+        assert_eq!(dto.estimated_receive_sats, 0);
+        assert_eq!(dto.fee_rate_sat_per_vb, 2.5);
+        assert_eq!(dto.estimate_error.as_deref(), Some("bumper sync failed"));
+        assert!(dto.missing_blocktime_inputs.is_empty());
+    }
 
     #[test]
     fn completion_fee_rate_prefers_override_and_enforces_minimum() {

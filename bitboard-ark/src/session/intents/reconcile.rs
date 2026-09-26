@@ -379,6 +379,7 @@ mod tests {
                 server_pk_hex: None,
             }],
             unilateral_exit_materials_by_host_tx: Default::default(),
+            full_listed_at: 0,
         };
         match resolve_vtxo_pending_intent(&record, Some(&snapshot)) {
             PendingBatchIntentResolution::Spent { spend_txid } => {

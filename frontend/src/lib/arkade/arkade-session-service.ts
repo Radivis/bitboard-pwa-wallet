@@ -45,6 +45,25 @@ export async function abortArkadeSessionForFactoryReset(): Promise<void> {
   tearDownArkadeWorkerAndClientState()
 }
 
+/**
+ * Drop the in-memory Arkade session before a wallet is removed from this device.
+ * In-flight load/sync/save may finish first so a persist that already started can
+ * complete while the secrets row still exists. This does not flush SDK persistence:
+ * `closeArkadeSession` writes the payload after the row is gone and fails with
+ * "Wallet secrets for wallet N not found", which aborts deletion.
+ */
+export async function discardArkadeSessionForWalletDeletion(): Promise<void> {
+  try {
+    await awaitArkadeLoadQuiescence()
+    await awaitArkadeSyncQuiescence()
+    await awaitArkadeSaveQuiescence()
+  } catch {
+    // A failed persist must not block removing the wallet from this device.
+  }
+  tearDownArkadeWorkerAndClientState()
+  await awaitInFlightWalletSecretsWrites()
+}
+
 export async function closeArkadeSession(): Promise<void> {
   await awaitArkadeLoadQuiescence()
   await awaitArkadeSyncQuiescence()

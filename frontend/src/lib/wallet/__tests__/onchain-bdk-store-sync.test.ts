@@ -14,9 +14,14 @@ vi.mock('@/stores/cryptoStore', () => ({
   },
 }))
 
+const walletState = {
+  activeWalletId: 1 as number | null,
+}
+
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: {
     getState: () => ({
+      activeWalletId: walletState.activeWalletId,
       setBalance,
       setTransactions,
     }),
@@ -28,6 +33,7 @@ import { refreshWalletStoreFromLoadedBdk } from '@/lib/wallet/onchain-bdk-store-
 describe('refreshWalletStoreFromLoadedBdk', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    walletState.activeWalletId = 1
     getBalance.mockResolvedValue({
       confirmedSats: 100,
       trustedPendingSats: 0,
@@ -57,5 +63,14 @@ describe('refreshWalletStoreFromLoadedBdk', () => {
     expect(setTransactions).toHaveBeenCalledWith(
       expect.arrayContaining([expect.objectContaining({ txid: 'abc' })]),
     )
+  })
+
+  it('does not write the store when the active wallet changed during the read', async () => {
+    walletState.activeWalletId = 2
+
+    await refreshWalletStoreFromLoadedBdk(1)
+
+    expect(setBalance).not.toHaveBeenCalled()
+    expect(setTransactions).not.toHaveBeenCalled()
   })
 })

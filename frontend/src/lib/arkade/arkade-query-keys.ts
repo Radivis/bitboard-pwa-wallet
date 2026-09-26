@@ -159,6 +159,34 @@ export const arkadeBumperInfoQueryKey = (
     'bumper',
   ] as const
 
+export const arkadeUnilateralExitTimelockQueryKey = (
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+  arkadeAccountId: string,
+) =>
+  [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletId,
+    networkMode,
+    arkadeAccountId,
+    'unilateral-exit-timelock',
+  ] as const
+
+export const arkadeBumperAddressQueryKey = (
+  walletId: number,
+  networkMode: ArkadeSupportedNetworkMode,
+  arkadeAccountId: string,
+) =>
+  [
+    ...WALLET_DB_QUERY_KEY_ROOT,
+    'arkade',
+    walletId,
+    networkMode,
+    arkadeAccountId,
+    'bumper-address',
+  ] as const
+
 export const arkadeRecoverableVtxoFeeQueryKey = (
   walletId: number,
   networkMode: ArkadeSupportedNetworkMode,

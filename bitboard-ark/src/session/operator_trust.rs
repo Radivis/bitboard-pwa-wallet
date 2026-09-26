@@ -1,4 +1,6 @@
-use crate::api_types::{OperatorConfigDiffResultDto, OperatorTrustStatusDto};
+use crate::api_types::{
+    OperatorConfigDiffResultDto, OperatorSyncResultDto, OperatorTrustStatusDto,
+};
 use crate::cached_operator_info::CachedOperatorInfoRecord;
 use crate::error::{ArkResult, ArkWasmError};
 use crate::operator_config_diff::operator_config_diff;
@@ -36,7 +38,7 @@ impl ArkSession {
         })
     }
 
-    pub async fn accept_pending_operator_config(&self) -> ArkResult<()> {
+    pub async fn accept_pending_operator_config(&self) -> ArkResult<OperatorSyncResultDto> {
         if !self.wallet_db.operator_trust_pending() {
             return Err(ArkWasmError::Snapshot(
                 "no pending operator config to accept".into(),
@@ -59,8 +61,7 @@ impl ArkSession {
         }
         self.wallet_db.set_cached_operator_info(pending);
         self.wallet_db.clear_operator_trust_state();
-        self.sync_with_operator().await?;
-        Ok(())
+        self.sync_with_operator().await
     }
 
     pub async fn review_operator_config_in_autonomous_mode(&self) -> ArkResult<()> {

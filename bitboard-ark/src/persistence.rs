@@ -126,6 +126,9 @@ pub struct OffchainVtxoSnapshot {
     pub virtual_tx_outpoints: Vec<VirtualTxOutPointRecord>,
     #[serde(default, alias = "unilateral_exit_materials_by_leaf_tx")]
     pub unilateral_exit_materials_by_host_tx: BTreeMap<String, UnilateralExitMaterialsRecord>,
+    /// Unix seconds of the last full unfiltered VTXO list. `0` means never (upgrade or not yet reconciled).
+    #[serde(default)]
+    pub full_listed_at: i64,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

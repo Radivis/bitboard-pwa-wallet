@@ -12,6 +12,7 @@ const workerMocks = vi.hoisted(() => ({
   reconcileActiveAccountId: vi.fn(),
   finalizePendingTransactions: vi.fn(),
   delegateSpendableVtxos: vi.fn(),
+  syncBumperWallet: vi.fn(),
   getUnilateralExitFrontendPersistence: vi.fn(async () => ({
     job: {
       selectedLeafOutpoints: [],
@@ -45,6 +46,7 @@ vi.mock('@/stores/featureStore', () => ({
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: {
     getState: () => ({
+      activeWalletId: 1,
       setActiveArkadeAccountId: vi.fn(),
       setLastOperatorSyncTime: vi.fn(),
       setArkadeSignerMigrationHint: vi.fn(),
@@ -63,6 +65,13 @@ vi.mock('@/db', () => ({
   getWalletSecretsEncrypted: vi.fn(async () => ({
     mnemonic: { ciphertext: new Uint8Array(), iv: new Uint8Array(), salt: new Uint8Array(), kdfPhc: 'x' },
     payload: { ciphertext: new Uint8Array(), iv: new Uint8Array(), salt: new Uint8Array(), kdfPhc: 'x' },
+  })),
+}))
+
+vi.mock('@/lib/wallet/resolve-bumper-hydrate', () => ({
+  resolveBumperHydrateForSessionOpen: vi.fn(async () => ({
+    bumperChangesetJson: undefined,
+    bumperFullScanDone: false,
   })),
 }))
 
@@ -154,6 +163,7 @@ describe('rail-lifecycle-error-handling', () => {
     workerMocks.closeSession.mockResolvedValue(undefined)
     workerMocks.finalizePendingTransactions.mockResolvedValue({ finalized: 0, pending: 0 })
     workerMocks.delegateSpendableVtxos.mockResolvedValue({ delegated: 0, failed: 0 })
+    workerMocks.syncBumperWallet.mockResolvedValue(undefined)
     findActiveArkadeAccountSummaryMock.mockResolvedValue(undefined)
     ensureArkadeAccountMock.mockResolvedValue({
       id: TEST_ACCOUNT_ID,
@@ -167,7 +177,7 @@ describe('rail-lifecycle-error-handling', () => {
     saveLastSuccessfulOperatorSyncAtEncrypted.mockResolvedValue(undefined)
   })
 
-  it('prior arkade load failure + different key wait propagates and preserves load-error', async () => {
+  it('prior arkade load failure stays on that load when a different wallet waits', async () => {
     let rejectFirstLoad!: (error: Error) => void
     workerMocks.openSession.mockImplementationOnce(
       () =>
@@ -185,7 +195,7 @@ describe('rail-lifecycle-error-handling', () => {
 
     rejectFirstLoad(new Error('first load failed'))
     await expect(firstLoad).rejects.toThrow('first load failed')
-    await expect(secondLoad).rejects.toThrow('first load failed')
+    await expect(secondLoad).resolves.toBeUndefined()
 
     expect(getArkadeLoadLifecycleSnapshot()).toEqual({
       loadPhase: 'load-error',

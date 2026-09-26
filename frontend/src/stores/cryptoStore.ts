@@ -105,6 +105,10 @@ interface CryptoState {
     params: ResolveDescriptorWalletParams,
   ) => Promise<ResolveDescriptorWalletResult>;
 
+  createDescriptorWalletRowIfMissing: (
+    params: ResolveDescriptorWalletParams,
+  ) => Promise<ResolveDescriptorWalletResult>;
+
   updateDescriptorWalletChangeset: (
     params: UpdateDescriptorWalletChangesetParams,
   ) => Promise<EncryptedBlobForDb>;
@@ -255,6 +259,9 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
 
     resolveDescriptorWallet: (params) =>
       withErrorHandling((worker) => worker.resolveDescriptorWallet(params)),
+
+    createDescriptorWalletRowIfMissing: (params) =>
+      withErrorHandling((worker) => worker.createDescriptorWalletRowIfMissing(params)),
 
     updateDescriptorWalletChangeset: (params) =>
       withErrorHandling((worker) => worker.updateDescriptorWalletChangeset(params)),

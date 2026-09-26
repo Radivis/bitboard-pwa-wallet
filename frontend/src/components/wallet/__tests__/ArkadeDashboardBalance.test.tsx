@@ -219,9 +219,8 @@ describe('ArkadeDashboardBalance', () => {
     }
     balanceQueryMock.mockReturnValue({ isLoading: false, isError: false, data: undefined })
     renderWithProviders(<ArkadeDashboardBalance />)
-    expect(screen.getByTestId('dashboard-arkade-session-loading')).toHaveTextContent(
-      'Establishing Arkade session…',
-    )
+    expect(screen.getByTestId('arkade-session-loading')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Establishing Arkade session' })).toBeInTheDocument()
   })
 
   it('DASH-ARK-14 shows error copy when balance query fails', () => {

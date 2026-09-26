@@ -78,10 +78,10 @@ impl ArkSession {
     pub(crate) async fn recoverable_vtxo_buckets(&self) -> ArkResult<RecoverableVtxoBuckets> {
         let dust = self.client.server_info()?.dust;
         let exclude_pipeline_outpoints = self.pipeline_outpoints();
+        let persisted_snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot;
 
-        if balance_vtxo_reads_use_operator_rpc(self.autonomous_mode())
-            && let Ok((vtxo_list, _)) = self.client.list_vtxos().await
-        {
+        if let Some(snapshot) = persisted_snapshot.as_ref() {
+            let vtxo_list = vtxo_list_from_snapshot(snapshot)?;
             return Ok(recoverable_vtxo_buckets_from_list(
                 &vtxo_list,
                 dust,
@@ -89,8 +89,9 @@ impl ArkSession {
             ));
         }
 
-        if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref() {
-            let vtxo_list = vtxo_list_from_snapshot(snapshot)?;
+        if balance_vtxo_reads_use_operator_rpc(self.autonomous_mode())
+            && let Ok((vtxo_list, _)) = self.client.list_vtxos().await
+        {
             return Ok(recoverable_vtxo_buckets_from_list(
                 &vtxo_list,
                 dust,
@@ -1463,6 +1464,7 @@ mod vtxo_row_classification_tests {
                 server_pk_hex: None,
             }],
             unilateral_exit_materials_by_host_tx: BTreeMap::new(),
+            full_listed_at: 0,
         };
         let server_info = test_server_info(
             "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",

@@ -191,6 +191,73 @@ function findDescriptorWalletInPayload({
   );
 }
 
+async function findOrCreateDescriptorWalletRow(
+  params: {
+    encryptedPayload: EncryptedBlobMessage;
+    encryptedMnemonic: EncryptedBlobMessage;
+    targetNetwork: BitcoinNetwork;
+    targetAddressType: AddressType;
+    targetAccountId: number;
+  },
+  createWalletExport: 'create_wallet' | 'create_wallet_without_activating',
+) {
+  const {
+    encryptedPayload,
+    encryptedMnemonic,
+    targetNetwork,
+    targetAddressType,
+    targetAccountId,
+  } = params;
+  const payloadPlain = await requestDecrypt(encryptedPayload);
+  const payload = parseWalletPayloadJson(payloadPlain);
+  const existing = findDescriptorWalletInPayload({
+    payload,
+    network: targetNetwork,
+    addressType: targetAddressType,
+    accountId: targetAccountId,
+  });
+  if (existing) {
+    return {
+      descriptorWalletData: existing,
+      encryptedPayloadToStore: null,
+      encryptedMnemonicToStore: null,
+    };
+  }
+
+  let mnemonicPlain = await requestDecrypt(encryptedMnemonic);
+  try {
+    const walletResultWire = await invokeWasmCrypto((wasmModule) =>
+      wasmModule[createWalletExport](
+        mnemonicPlain,
+        targetNetwork,
+        targetAddressType,
+        targetAccountId,
+      ),
+    );
+    const walletResult = mapWireCreateWalletResultToDomain(
+      walletResultWire as WireCreateWalletResult,
+    );
+    const descriptorWallet: DescriptorWalletData = {
+      network: targetNetwork,
+      addressType: targetAddressType,
+      accountId: targetAccountId,
+      externalDescriptor: walletResult.externalDescriptor,
+      internalDescriptor: walletResult.internalDescriptor,
+      changeSet: walletResult.changesetJson,
+      fullScanDone: false,
+    };
+    payload.descriptorWallets.push(descriptorWallet);
+    const payloadEnc = await encryptPlaintextToStoreFields(JSON.stringify(payload));
+    return {
+      descriptorWalletData: descriptorWallet,
+      encryptedPayloadToStore: payloadEnc,
+      encryptedMnemonicToStore: null,
+    };
+  } finally {
+    mnemonicPlain = '';
+  }
+}
+
 const cryptoService = {
   async setSecretsPort(port: MessagePort): Promise<void> {
     secretsProxy = wrap<SecretsChannelService>(port);
@@ -514,62 +581,17 @@ const cryptoService = {
     targetAddressType: AddressType;
     targetAccountId: number;
   }) {
-    const {
-      encryptedPayload,
-      encryptedMnemonic,
-      targetNetwork,
-      targetAddressType,
-      targetAccountId,
-    } = params;
-    const payloadPlain = await requestDecrypt(encryptedPayload);
-    const payload = parseWalletPayloadJson(payloadPlain);
-    const existing = findDescriptorWalletInPayload({
-      payload,
-      network: targetNetwork,
-      addressType: targetAddressType,
-      accountId: targetAccountId,
-    });
-    if (existing) {
-      return {
-        descriptorWalletData: existing,
-        encryptedPayloadToStore: null,
-        encryptedMnemonicToStore: null,
-      };
-    }
+    return findOrCreateDescriptorWalletRow(params, 'create_wallet')
+  },
 
-    let mnemonicPlain = await requestDecrypt(encryptedMnemonic);
-    try {
-      const walletResultWire = await invokeWasmCrypto((wasmModule) =>
-        wasmModule.create_wallet(
-          mnemonicPlain,
-          targetNetwork,
-          targetAddressType,
-          targetAccountId,
-        ),
-      );
-      const walletResult = mapWireCreateWalletResultToDomain(
-        walletResultWire as WireCreateWalletResult,
-      );
-      const descriptorWallet: DescriptorWalletData = {
-        network: targetNetwork,
-        addressType: targetAddressType,
-        accountId: targetAccountId,
-        externalDescriptor: walletResult.externalDescriptor,
-        internalDescriptor: walletResult.internalDescriptor,
-        changeSet: walletResult.changesetJson,
-        fullScanDone: false,
-      };
-      payload.descriptorWallets.push(descriptorWallet);
-      const payloadEnc = await encryptPlaintextToStoreFields(JSON.stringify(payload));
-      return {
-        descriptorWalletData: descriptorWallet,
-        encryptedPayloadToStore: payloadEnc,
-        encryptedMnemonicToStore: null,
-      };
-    } finally {
-      // Best-effort wipe; value is not read afterward by design.
-      mnemonicPlain = '';
-    }
+  async createDescriptorWalletRowIfMissing(params: {
+    encryptedPayload: EncryptedBlobMessage;
+    encryptedMnemonic: EncryptedBlobMessage;
+    targetNetwork: BitcoinNetwork;
+    targetAddressType: AddressType;
+    targetAccountId: number;
+  }) {
+    return findOrCreateDescriptorWalletRow(params, 'create_wallet_without_activating')
   },
 
   async updateDescriptorWalletChangeset(params: {

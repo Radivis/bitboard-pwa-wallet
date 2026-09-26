@@ -13,6 +13,8 @@ import { arkadeSessionKey } from '@/lib/arkade/arkade-session-key'
 import { ensureArkadeWorkerSecretsChannel } from '@/workers/secrets-channel'
 import { getArkadeWorker, getArkadeWorkerIfExists } from '@/workers/arkade-factory'
 import type { OpenArkadeSessionResult } from '@/workers/arkade-api'
+import { resolveBumperHydrateForSessionOpen } from '@/lib/wallet/resolve-bumper-hydrate'
+import { reportBumperHydrateFallbackWarning } from '@/lib/wallet/bumper-hydrate-warning'
 import { useWalletStore } from '@/stores/walletStore'
 
 type ArkadeWorker = Awaited<ReturnType<typeof getArkadeWorker>>
@@ -58,7 +60,13 @@ export async function tryReuseExistingArkadeSession(params: {
       return null
     }
 
-    await refreshArkadeStoreFromLoadedWasm(params.account.id)
+    if (useWalletStore.getState().activeWalletId !== params.walletId) {
+      return null
+    }
+    await refreshArkadeStoreFromLoadedWasm(params.account.id, params.walletId)
+    if (useWalletStore.getState().activeWalletId !== params.walletId) {
+      return null
+    }
     useWalletStore.getState().setActiveArkadeAccountId(params.account.id)
     useWalletStore.getState().setLastOperatorSyncTime(null)
     return params.account.id
@@ -87,6 +95,10 @@ export async function openFreshArkadeWorkerSession(params: {
 
   const worker = getArkadeWorker()
   await ensureArkadeWorkerSecretsChannel()
+  const bumperHydrate = await resolveBumperHydrateForSessionOpen({
+    walletId: params.walletId,
+    networkMode: params.networkMode,
+  })
   const openResult = await worker.openSession({
     encryptedMnemonic: params.encrypted.mnemonic,
     encryptedPayload: params.encrypted.payload,
@@ -96,6 +108,8 @@ export async function openFreshArkadeWorkerSession(params: {
     arkServerUrl: endpoints.arkServerUrl,
     delegatorUrl: endpoints.delegatorUrl,
     esploraUrl: endpoints.esploraUrl,
+    bumperChangesetJson: bumperHydrate.bumperChangesetJson,
+    bumperFullScanDone: bumperHydrate.bumperFullScanDone,
   })
 
   const account = await ensureArkadeAccount({
@@ -118,21 +132,33 @@ export async function hydrateArkadeDashboardAfterSessionOpen(params: {
   networkMode: ArkadeSupportedNetworkMode
   arkadeAccountId: string
   signerMigrationHint: OpenArkadeSessionResult['signerMigrationHint']
+  bumperHydrateFellBackToEmpty: boolean
   sessionReuseState: ArkadeSessionReuseState
   runPostOpenMaintenance: (
     worker: ArkadeWorker,
     networkMode: ArkadeSupportedNetworkMode,
   ) => Promise<void>
 }): Promise<void> {
+  if (useWalletStore.getState().activeWalletId !== params.walletId) {
+    return
+  }
+  if (params.bumperHydrateFellBackToEmpty) {
+    reportBumperHydrateFallbackWarning()
+  }
+  await params.worker.reconcileActiveAccountId(params.arkadeAccountId)
+  if (useWalletStore.getState().activeWalletId !== params.walletId) {
+    return
+  }
+  useWalletStore.getState().setLastOperatorSyncTime(null)
+  await refreshArkadeStoreFromLoadedWasm(params.arkadeAccountId, params.walletId)
+  if (useWalletStore.getState().activeWalletId !== params.walletId) {
+    return
+  }
   if (params.signerMigrationHint != null) {
     useWalletStore.getState().setArkadeSignerMigrationHint(params.signerMigrationHint)
   } else {
     useWalletStore.getState().setArkadeSignerMigrationHint(null)
   }
-
-  await params.worker.reconcileActiveAccountId(params.arkadeAccountId)
-  useWalletStore.getState().setLastOperatorSyncTime(null)
-  await refreshArkadeStoreFromLoadedWasm(params.arkadeAccountId)
   useWalletStore.getState().setActiveArkadeAccountId(params.arkadeAccountId)
   params.sessionReuseState.setLastOpenedSessionKey(
     arkadeSessionKey(params.walletId, params.networkMode, params.arkadeAccountId),

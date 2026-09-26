@@ -39,26 +39,31 @@ const mockSetWalletStatus = vi.fn()
 const mockSetCurrentAddress = vi.fn()
 const mockSetBalance = vi.fn()
 const mockSetTransactions = vi.fn()
+const mockSetLastSyncTime = vi.fn()
 const mockCommitLoadedDescriptorWallet = vi.fn()
 const mockSetImportInitialSyncErrorMessage = vi.fn()
+const walletStoreState = {
+  networkMode: 'signet',
+  walletStatus: 'unlocked',
+  addressType: 'taproot',
+  accountId: 0,
+  setActiveWallet: mockSetActiveWallet,
+  setWalletStatus: mockSetWalletStatus,
+  setCurrentAddress: mockSetCurrentAddress,
+  setBalance: mockSetBalance,
+  setTransactions: mockSetTransactions,
+  setLastSyncTime: mockSetLastSyncTime,
+  commitLoadedDescriptorWallet: mockCommitLoadedDescriptorWallet,
+  setInitialSyncErrorMessage: mockSetImportInitialSyncErrorMessage,
+  clearArkadeDashboardState: vi.fn(),
+  lockWallet: vi.fn(),
+}
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: Object.assign(
-    (selector: (s: Record<string, unknown>) => unknown) =>
-      selector({
-        networkMode: 'signet',
-        walletStatus: 'unlocked',
-        addressType: 'taproot',
-        accountId: 0,
-        setActiveWallet: mockSetActiveWallet,
-        setWalletStatus: mockSetWalletStatus,
-        setCurrentAddress: mockSetCurrentAddress,
-        setBalance: mockSetBalance,
-        setTransactions: mockSetTransactions,
-        commitLoadedDescriptorWallet: mockCommitLoadedDescriptorWallet,
-        setImportInitialSyncErrorMessage: mockSetImportInitialSyncErrorMessage,
-      }),
+    (selector: (storeState: typeof walletStoreState) => unknown) =>
+      selector(walletStoreState),
     {
-      getState: () => ({ lockWallet: vi.fn() }),
+      getState: () => walletStoreState,
     },
   ),
 }))
@@ -87,6 +92,7 @@ vi.mock('@/db', () => ({
   getDatabase: vi.fn(),
   ensureMigrated: vi.fn().mockResolvedValue(undefined),
   persistNewWalletWithSecrets: vi.fn().mockResolvedValue(1),
+  setWalletNoMnemonicBackupFlag: vi.fn().mockResolvedValue(undefined),
   walletKeys: { all: ['wallet_db', 'wallets'] as const },
 }))
 
@@ -110,11 +116,11 @@ vi.mock('@/lib/wallet/lifecycle/onchain-setup-lifecycle', () => ({
 }))
 
 vi.mock('@/lib/wallet/wallet-utils', () => ({
-  retryImportInitialEsploraSyncWithWalletStatus: mockRetryImportInitialSync,
+  retryInitialEsploraSyncWithWalletStatus: mockRetryImportInitialSync,
 }))
 
 vi.mock('@/lib/wallet/wallet-sync-error-toast', () => ({
-  showImportInitialSyncFailureToast: vi.fn(),
+  showInitialSyncFailureToast: vi.fn(),
 }))
 
 vi.mock('@/lib/wallet/wallet-query-cache-sync', () => ({

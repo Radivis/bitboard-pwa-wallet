@@ -5,22 +5,33 @@ import { ArkadeUnilateralExitInfomodeContent } from '@/components/arkade/infomod
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
-import { CollaborativeExitDialog } from '@/components/wallet/arkade-exit/CollaborativeExitDialog'
-import { CompleteUnilateralExitDialog } from '@/components/wallet/arkade-exit/CompleteUnilateralExitDialog'
 import { useArkadeAutonomousModeActive, useHasPendingBatchIntentKind } from '@/hooks/useArkadeQueries'
-import { useArkadeExitFlow } from '@/hooks/useArkadeExitFlow'
+import { useHasUnilateralExitInProgress } from '@/hooks/useHasUnilateralExitInProgress'
 import { isSignerRotationCooperativeExitBlocked } from '@/lib/arkade/arkade-cooperative-exit'
 import { useWalletStore } from '@/stores/walletStore'
 
+function collaborativeExitUnavailableReason(params: {
+  hasPendingCollaborativeIntent: boolean
+  autonomousModeActive: boolean
+}): string {
+  if (params.hasPendingCollaborativeIntent) {
+    return 'Collaborative exit is unavailable while a batch intent is waiting for the operator.'
+  }
+  if (params.autonomousModeActive) {
+    return 'Collaborative exit is unavailable in autonomous mode. Use unilateral exit or disable autonomous mode.'
+  }
+  return 'Cooperative exit is unavailable after signer rotation cutoff. Migrate to a new signer or use unilateral exit.'
+}
+
 export function ArkadeExitSection() {
-  const exitFlow = useArkadeExitFlow()
-  const { setCollaborativeOpen, setCompleteUnilateralOpen, hasUnilateralExitInProgress } =
-    exitFlow
+  const { hasUnilateralExitInProgress } = useHasUnilateralExitInProgress()
   const signerMigrationHint = useWalletStore((state) => state.arkadeSignerMigrationHint)
   const collaborativeExitBlockedByRotation =
     isSignerRotationCooperativeExitBlocked(signerMigrationHint)
   const autonomousModeActive = useArkadeAutonomousModeActive()
   const hasPendingCollaborativeIntent = useHasPendingBatchIntentKind('collaborative_exit')
+  const collaborativeExitUnavailable =
+    collaborativeExitBlockedByRotation || autonomousModeActive || hasPendingCollaborativeIntent
 
   return (
     <div className="space-y-2 border-t pt-4">
@@ -55,19 +66,15 @@ export function ArkadeExitSection() {
           infoComponent={ArkadeCollaborativeExitInfomodeContent}
           as="span"
         >
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={
-              collaborativeExitBlockedByRotation ||
-              autonomousModeActive ||
-              hasPendingCollaborativeIntent
-            }
-            onClick={() => setCollaborativeOpen(true)}
-          >
-            Collaborative exit
-          </Button>
+          {collaborativeExitUnavailable ? (
+            <Button type="button" variant="outline" size="sm" disabled>
+              Collaborative exit
+            </Button>
+          ) : (
+            <Button type="button" variant="outline" size="sm" asChild>
+              <Link to="/wallet/arkade/collaborative-exit">Collaborative exit</Link>
+            </Button>
+          )}
         </InfomodeWrapper>
         <InfomodeWrapper
           infoId={ARKADE_INFOMODE_IDS.unilateralExit}
@@ -86,31 +93,25 @@ export function ArkadeExitSection() {
           </Button>
         </InfomodeWrapper>
         {hasUnilateralExitInProgress && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            data-testid="arkade-complete-unilateral-exit"
-            onClick={() => setCompleteUnilateralOpen(true)}
-          >
-            Complete unilateral exit
+          <Button type="button" variant="outline" size="sm" asChild>
+            <Link
+              to="/wallet/arkade/complete-unilateral-exit"
+              data-testid="arkade-complete-unilateral-exit"
+            >
+              Complete unilateral exit
+            </Link>
           </Button>
         )}
       </div>
-      {(collaborativeExitBlockedByRotation ||
-        autonomousModeActive ||
-        hasPendingCollaborativeIntent) && (
+      {collaborativeExitUnavailable && (
         <p className="text-xs text-muted-foreground" data-testid="arkade-exit-collab-unavailable">
-          {hasPendingCollaborativeIntent
-            ? 'Collaborative exit is unavailable while a batch intent is waiting for the operator.'
-            : autonomousModeActive
-            ? 'Collaborative exit is unavailable in autonomous mode. Use unilateral exit.'
-            : 'Cooperative exit is unavailable after signer rotation cutoff. Use unilateral exit.'}
+          {collaborativeExitUnavailableReason({
+            hasPendingCollaborativeIntent,
+            autonomousModeActive,
+          })}
         </p>
       )}
 
-      <CollaborativeExitDialog exitFlow={exitFlow} />
-      <CompleteUnilateralExitDialog exitFlow={exitFlow} />
     </div>
   )
 }

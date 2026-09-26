@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
+import { ArkadeSessionGate } from '@/components/arkade/ArkadeSessionGate'
 import { ArkadeBoardingInfomodeContent } from '@/components/arkade/infomode/ArkadeBoardingInfomodeContent'
 import { ArkadeOverviewInfomodeContent } from '@/components/arkade/infomode/ArkadeOverviewInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
@@ -122,25 +123,33 @@ export function ArkadePanel() {
             : ' Use “Renew VTXOs now” while the app is open, or enable a delegator via deployment config.'}
         </p>
 
-        {balanceQuery.isLoading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-            Loading Arkade balance…
-          </div>
-        ) : balance ? (
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">Balance</p>
-            <ArkadeBalanceBreakdown balance={balance} />
-            <ArkadeOperatorBatchWindowIndicator />
-            <ArkadeVtxoExpiryIndicator />
-          </div>
-        ) : null}
+        <ArkadeSessionGate
+          loadPhase={arkadeLoadSnapshot.loadPhase}
+          errorMessage={arkadeLoadSnapshot.errorMessage}
+          embedded
+        >
+          <>
+            {balanceQuery.isLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                Loading Arkade balance…
+              </div>
+            ) : balance ? (
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Balance</p>
+                <ArkadeBalanceBreakdown balance={balance} />
+                <ArkadeOperatorBatchWindowIndicator />
+                <ArkadeVtxoExpiryIndicator />
+              </div>
+            ) : null}
 
-        {(storeReceiveAddress ?? addressQuery.data) && (
-          <div className="break-all rounded-md border bg-muted/40 p-2 font-mono text-xs">
-            {storeReceiveAddress ?? addressQuery.data}
-          </div>
-        )}
+            {(storeReceiveAddress ?? addressQuery.data) && (
+              <div className="break-all rounded-md border bg-muted/40 p-2 font-mono text-xs">
+                {storeReceiveAddress ?? addressQuery.data}
+              </div>
+            )}
+          </>
+        </ArkadeSessionGate>
 
         {delegateFee != null && (
           <InfomodeWrapper

@@ -10,6 +10,15 @@ export interface ArkadeOperatorSyncResult {
   keyDiscoveryWarning?: string
   exitingVtxoWarning?: string
   operatorConfigTrustPending?: boolean
+  /** When true, the host should run a background full VTXO list without blocking this sync. */
+  fullReconcileDue?: boolean
+}
+
+export interface BackgroundFullVtxoReconcileOutcome {
+  ok: boolean
+  warningMessage?: string
+  /** Operator trust is pending, so this run did not complete a full list. */
+  operatorTrustPending?: boolean
 }
 
 export interface ArkadeAutonomousModeStatus {
@@ -188,12 +197,15 @@ export interface OpenArkadeSessionParams {
   arkServerUrl: string
   delegatorUrl: string
   esploraUrl: string
+  bumperChangesetJson?: string
+  bumperFullScanDone?: boolean
 }
 
 export interface OpenArkadeSessionResult {
   arkadeAddress: string
   operatorSignerPkHex: string
   signerMigrationHint?: ArkadeSignerMigrationHint
+  bumperHydrateFellBackToEmpty?: boolean
 }
 
 export interface ArkadeSendParams {
@@ -335,11 +347,17 @@ export interface ArkadeUnilateralExitCompletionFeeEstimateParams {
   feeRateSatPerVb?: number
 }
 
+export interface ArkadeUnilateralExitTimelock {
+  unilateralExitTimelockBlocks?: number
+  unilateralExitTimelockSeconds?: number
+}
+
 export interface ArkadeOnchainBumperInfo {
   address: string
   balanceSats: number
   unilateralExitTimelockBlocks?: number
   unilateralExitTimelockSeconds?: number
+  needsBumperWalletSync?: boolean
 }
 
 export interface ArkadeCollaborativeExitParams {
@@ -546,7 +564,16 @@ export interface ArkadeService {
   setSecretsPort(port: MessagePort): Promise<void>
   setEncryptedWalletSecretsHost(host: EncryptedWalletSecretsHost): Promise<void>
   openSession(params: OpenArkadeSessionParams): Promise<OpenArkadeSessionResult>
-  syncWithOperator(): Promise<ArkadeOperatorSyncResult>
+  /** Best-effort bumper BDK Esplora sync; does not belong on session-open critical path. */
+  syncBumperWallet(): Promise<void>
+  exportBumperWalletChangeset(): Promise<string>
+  bumperWalletFullScanDone(): Promise<boolean>
+  syncWithOperator(scheduleBackgroundFull?: boolean): Promise<ArkadeOperatorSyncResult>
+  /** Fire-and-forget. A call during an in-flight reconcile queues one follow-up. */
+  scheduleBackgroundFullVtxoReconcile(): void
+  setOnBackgroundFullReconcileFinished(
+    onFinished: (outcome: BackgroundFullVtxoReconcileOutcome) => void | Promise<void>,
+  ): void
   getOperatorTrustStatus(): Promise<ArkadeOperatorTrustStatus>
   getOperatorConfigDiff(): Promise<ArkadeOperatorConfigDiffResult>
   acceptPendingOperatorConfig(): Promise<void>
@@ -626,6 +653,10 @@ export interface ArkadeService {
   listUnilateralExitsInProgress(): Promise<ArkadeUnilateralExitInProgressDto[]>
   listVtxoExitRecords(): Promise<ArkadeVtxoExitRecordDto[]>
   getOnchainBumperInfo(): Promise<ArkadeOnchainBumperInfo>
+  /** Cached operator CSV delay. Does not Esplora-scan. */
+  unilateralExitTimelock(): Promise<ArkadeUnilateralExitTimelock>
+  /** Local next-unused bumper address. Does not Esplora-scan. */
+  peekOnchainBumperAddress(): Promise<string>
   collaborativeExit(
     params: ArkadeCollaborativeExitParams,
     onRegistered?: (intent: ArkadePendingBatchIntent) => void,

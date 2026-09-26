@@ -305,6 +305,7 @@ impl ArkSession {
         let Some(mut snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.clone() else {
             return Ok(Vec::new());
         };
+        let snapshot_before_probes = snapshot.clone();
         let mut observations = self.wallet_db.host_tx_observations();
         let pending = self.wallet_db.pending_exit_deductions();
         let mut vtxo_exit_records = self.wallet_db.vtxo_exit_records();
@@ -337,7 +338,7 @@ impl ArkSession {
             now,
             |txid| probes.get(txid).copied(),
         )?;
-        self.wallet_db.set_offchain_vtxo_snapshot(snapshot);
+        self.commit_overlaid_snapshot(&snapshot_before_probes, snapshot);
         self.wallet_db.set_host_tx_observations(observations);
         self.wallet_db.set_vtxo_exit_records(vtxo_exit_records);
         self.reconcile_vtxo_exit_viability().await

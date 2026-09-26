@@ -7,7 +7,7 @@ import { useCryptoStore } from '@/stores/cryptoStore'
 import { asBadLocalChainStateError } from '@/lib/shared/bad-local-chain-state-error'
 import { withEsploraFullScanRetries } from '@/lib/esplora/esplora-full-scan-retry'
 import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
-import { showImportInitialSyncFailureToast } from '@/lib/wallet/wallet-sync-error-toast'
+import { showInitialSyncFailureToast } from '@/lib/wallet/wallet-sync-error-toast'
 import {
   getEsploraUrl,
   toBitcoinNetwork,
@@ -159,7 +159,7 @@ function invalidateDashboardQueriesAfterOnchainUpdate(): void {
  */
 export async function syncActiveWalletAndUpdateState(
   networkMode: NetworkMode,
-  options?: { useFullScan?: boolean },
+  options?: { useFullScan?: boolean; walletId?: number },
 ): Promise<void> {
   const customUrl = await loadCustomEsploraUrl(networkMode)
   const esploraUrl = getEsploraUrl(networkMode, customUrl)
@@ -171,20 +171,22 @@ export async function syncActiveWalletAndUpdateState(
   if (!esploraUrl) {
     const balance = await getBalance()
     const transactionList = await getTransactionList()
-    setBalance(balance)
-    setTransactions(transactionList)
+    if (onchainSyncStillTargetsActiveWallet(options?.walletId)) {
+      setBalance(balance)
+      setTransactions(transactionList)
+    }
     return
   }
 
+  let fullScanToastId: string | number | undefined
   if (options?.useFullScan) {
-    const toastId = toast.loading('Scanning blockchain…')
+    fullScanToastId = toast.loading('Scanning blockchain…')
     try {
       await withEsploraFullScanRetries(() =>
         fullScanWallet(esploraUrl, FULL_SCAN_STOP_GAP),
       )
-      toast.success('Wallet synced', { id: toastId })
     } catch (err) {
-      toast.dismiss(toastId)
+      toast.dismiss(fullScanToastId)
       throw err
     }
   } else {
@@ -200,8 +202,21 @@ export async function syncActiveWalletAndUpdateState(
 
   const balance = await getBalance()
   const transactionList = await getTransactionList()
+  if (!onchainSyncStillTargetsActiveWallet(options?.walletId)) {
+    if (fullScanToastId != null) {
+      toast.dismiss(fullScanToastId)
+    }
+    return
+  }
+  if (fullScanToastId != null) {
+    toast.success('Wallet synced', { id: fullScanToastId })
+  }
   setBalance(balance)
   setTransactions(transactionList)
+}
+
+function onchainSyncStillTargetsActiveWallet(walletId: number | undefined): boolean {
+  return walletId == null || useWalletStore.getState().activeWalletId === walletId
 }
 
 export type DescriptorWalletEsploraSyncResult = 'completed' | 'syncFailed'
@@ -387,13 +402,13 @@ export async function runFullScanDashboardWalletSync(options: {
  * Retry handler for setup initial sync (toast action, dashboard banner): re-runs
  * orchestrated full scan + save for the active wallet.
  */
-export async function runImportInitialEsploraSync(): Promise<void> {
+export async function runInitialEsploraSync(): Promise<void> {
   const { networkMode, activeWalletId, addressType, accountId } =
     useWalletStore.getState()
-  const { setImportInitialSyncErrorMessage } = useWalletStore.getState()
+  const { setInitialSyncErrorMessage } = useWalletStore.getState()
 
   if (activeWalletId == null) {
-    setImportInitialSyncErrorMessage(null)
+    setInitialSyncErrorMessage(null)
     return
   }
 
@@ -407,7 +422,7 @@ export async function runImportInitialEsploraSync(): Promise<void> {
     const transactionList = await getTransactionList()
     setBalance(balance)
     setTransactions(transactionList)
-    setImportInitialSyncErrorMessage(null)
+    setInitialSyncErrorMessage(null)
     return
   }
 
@@ -422,25 +437,25 @@ export async function runImportInitialEsploraSync(): Promise<void> {
     awaitCompletion: true,
     throwOnError: true,
   })
-  setImportInitialSyncErrorMessage(null)
+  setInitialSyncErrorMessage(null)
 }
 
 /**
- * Retry handler for import initial sync (toast action, dashboard banner): runs
- * {@link runImportInitialEsploraSync}, shows toasts, repopulates error state on failure.
+ * Retry handler for the create or import initial sync (toast action, dashboard banner): runs
+ * {@link runInitialEsploraSync}, shows toasts, and records the error again on failure.
  */
-export async function retryImportInitialEsploraSyncWithWalletStatus(): Promise<void> {
-  const { setImportInitialSyncErrorMessage } = useWalletStore.getState()
+export async function retryInitialEsploraSyncWithWalletStatus(): Promise<void> {
+  const { setInitialSyncErrorMessage } = useWalletStore.getState()
   try {
-    setImportInitialSyncErrorMessage(null)
-    await runImportInitialEsploraSync()
+    setInitialSyncErrorMessage(null)
+    await runInitialEsploraSync()
     toast.success('Initial sync complete')
   } catch (err) {
-    setImportInitialSyncErrorMessage(
+    setInitialSyncErrorMessage(
       userFacingLifecycleErrorMessage(err, 'Initial sync failed'),
     )
-    showImportInitialSyncFailureToast(err, () => {
-      void retryImportInitialEsploraSyncWithWalletStatus()
+    showInitialSyncFailureToast(err, () => {
+      void retryInitialEsploraSyncWithWalletStatus()
     })
   }
 }

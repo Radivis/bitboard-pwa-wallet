@@ -59,7 +59,7 @@ describe('useActiveWalletDescriptorWalletBootstrap', () => {
       lastSyncTime: null,
       transactions: [],
       loadedDescriptorWallet: null,
-      importInitialSyncErrorMessage: null,
+      initialSyncErrorMessage: null,
     })
     syncLockLifecycleWithActiveWallet(1)
   })

@@ -21,7 +21,7 @@ feature:
     - load-error is rare persistence/decrypt failure; rail data must not be shown
     - sync-error serves last loaded local data with stale/error indication
     - While on-chain syncPhase is sync-error, exportChangesetForPersistence is blocked; network/address switch may proceed but skips outgoing changeset save
-    - Create/import setup awaits orchestrateOnchainSetupAfterPersist (load + setupInitial full scan) before navigating to dashboard
+    - Create/import setup awaits wallet load, then navigates while the setupInitial full scan continues in the background
     - save-error must block or explicitly warn on lock until persist quiesces
     - walletStatus syncing removed; per-rail sync aggregation via isAnyRailSyncing / useAnyRailSyncing (L5)
   phase_types:
@@ -58,6 +58,16 @@ feature:
       - id: LIFE-ONC-SYNC-01
         description: Esplora sync runs only when OnchainLoadLifecycle is loaded
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/onchain-sync-lifecycle-orchestrator.test.ts
+      - id: LIFE-ONC-SYNC-02
+        description: >
+          postUnlock Esplora is incremental when the loaded descriptor has fullScanDone
+          and load did not use empty-chain fallback; full scan if !fullScanDone,
+          usedEmptyChainFallback, or load hydration is missing (SE-01 fail-closed).
+          Does not copy live-network-switch full-scan from descriptor switch.
+        implemented_by:
+          - frontend/src/lib/wallet/lifecycle/__tests__/onchain-post-unlock-scan-policy.test.ts
+          - frontend/src/lib/wallet/lifecycle/__tests__/onchain-load-lifecycle-orchestrator.test.ts
+          - frontend/src/lib/wallet/lifecycle/__tests__/onchain-sync-lifecycle-orchestrator.test.ts
       - id: LIFE-ONC-SAVE-01
         description: Changeset persist runs in OnchainSaveLifecycle after successful sync
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/onchain-save-lifecycle-orchestrator.test.ts
@@ -76,7 +86,7 @@ feature:
           - frontend/src/components/wallet/RailSyncErrorBanner.tsx
           - frontend/src/pages/wallet/DashboardPage.tsx
       - id: LIFE-ONC-SETUP-01
-        description: Setup orchestrator runs load + single orchestrated setupInitial full scan before dashboard navigation
+        description: Setup orchestrator awaits load, then starts one setupInitial full scan without blocking dashboard navigation
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/onchain-setup-lifecycle.test.ts
       - id: LIFE-ONC-GUARD-01
         description: exportChangesetForPersistence blocked while on-chain load/sync/save in flight
@@ -122,6 +132,55 @@ feature:
       - id: LIFE-ARK-LOAD-03
         description: Receive address is stable when ArkadeLoadLifecycle is loaded (replaces connection-id ordering patch)
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-load-lifecycle-orchestrator.test.ts
+      - id: LIFE-ARK-LOAD-04
+        description: >
+          Arkade loadPhase loaded (and Establishing Arkade session) must not wait
+          on bumper Esplora and must not start a bumper BDK full_scan. Operator
+          connect, persistence hydrate, and refreshArkadeStoreFromLoadedWasm stay
+          on the load path. Bumper Esplora starts on first onchain_bumper_info
+          or exit proceed/complete, not after loaded.
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-load-lifecycle-orchestrator.test.ts
+      - id: LIFE-ARK-BUMP-01
+        description: >
+          onchain_bumper_info runs at most one wallet-wide bumper Esplora scan
+          per session. That scan is incremental when the bumper BDK was hydrated
+          from a SegWit-0 changeset with fullScanDone; otherwise it is a full
+          scan. Later bumper-info and underfunded-exit polls incremental-sync
+          unused revealed SPKs (the displayed tip) into BDK and report
+          confirmed only — not another HD /scripthash/txs walk and not a
+          tip-address /utxo overlay. proceed calls
+          sync_bumper_wallet_with_retries before broadcast. Completing a
+          unilateral exit does not wait on that scan: the complete page starts
+          it in the background and persists the SegWit-0 sidecar when it
+          finishes. Completion fee estimate does not start a wallet-wide scan.
+        implemented_by:
+          - bitboard-ark/src/session/bumper_sync_policy.rs
+          - bitboard-ark/src/session/unilateral_exit/complete.rs
+          - frontend/src/lib/arkade/__tests__/background-bumper-wallet-sync.test.ts
+          - frontend/src/hooks/__tests__/useCompleteUnilateralExitFlow.test.tsx
+          - third_party/ark-bdk-wallet/src/lib.rs
+      - id: LIFE-ARK-BUMP-02
+        description: >
+          Bumper BDK hydrate uses the SegWit-0 descriptor-wallet changeset, or a
+          live crypto export when that triple is the loaded on-chain wallet.
+          An empty bumper wallet is used only when no usable changeset exists.
+          Hydrate is not Esplora (LIFE-ARK-LOAD-04 unchanged).
+        implemented_by:
+          - frontend/src/lib/wallet/__tests__/bumper-segwit0-policy.test.ts
+          - frontend/src/lib/wallet/lifecycle/__tests__/arkade-session-open-helpers.test.ts
+          - third_party/ark-bdk-wallet/src/lib.rs
+      - id: LIFE-ARK-BUMP-03
+        description: >
+          After a bumper wallet-wide sync, persist the SegWit-0 descriptor row
+          only when the loaded crypto triple is not SegWit-0. Arkade must not
+          write that row while SegWit-0 is the crypto slot. Persist only when
+          the open Arkade session matches the target wallet/network/account
+          (SE-07) and the export is strictly newer than the row's
+          lastSuccessfulEsploraSyncAt (SE-03).
+        implemented_by:
+          - frontend/src/lib/wallet/__tests__/bumper-segwit0-policy.test.ts
+          - frontend/src/lib/wallet/__tests__/persist-bumper-segwit0-sidecar.test.ts
+          - frontend/src/lib/wallet/__tests__/persist-bumper-sidecar-after-sync.test.ts
       - id: LIFE-ARK-SYNC-01
         description: ArkadeSyncLifecycle syncing covers operator sync only, not session open
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-sync-lifecycle-orchestrator.test.ts
@@ -135,9 +194,9 @@ feature:
         description: Arkade sync-error serves loaded WASM/local dashboard data
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-sync-lifecycle-orchestrator.test.ts
       - id: LIFE-ARK-ERR-02
-        description: Arkade load-error replaces balance card body with retry banner
+        description: Arkade load-error replaces the dashboard balance card body with the embedded Arkade session error screen and its retry action
         implemented_by:
-          - frontend/src/components/wallet/RailLoadErrorBanner.tsx
+          - frontend/src/components/arkade/ArkadeSessionLoadError.tsx
           - frontend/src/components/wallet/ArkadeDashboardBalance.tsx
       - id: LIFE-ARK-ERR-03
         description: Arkade sync-error banner driven by syncPhase; operator-stale copy hidden when sync-error

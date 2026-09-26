@@ -3,7 +3,11 @@ import { refreshWalletStoreFromLoadedBdk } from '@/lib/wallet/onchain-bdk-store-
 import { invalidateOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboard-sync'
 import { syncActiveWalletAndUpdateState } from '@/lib/wallet/wallet-utils'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
-import { getOnchainLoadLifecycleSnapshot } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
+import {
+  getOnchainLoadHydrationForPostUnlock,
+  getOnchainLoadLifecycleSnapshot,
+} from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
+import { onchainPostUnlockNeedsFullScan } from '@/lib/wallet/lifecycle/onchain-post-unlock-scan-policy'
 import {
   configureOnchainSaveForLoadedRail,
   orchestrateOnchainSave,
@@ -97,9 +101,25 @@ function toSaveParams(params: OnchainSyncParams): OnchainSaveParams {
   }
 }
 
+function onchainSyncTargetsActiveWallet(walletId: number): boolean {
+  return useWalletStore.getState().activeWalletId === walletId
+}
+
+function clearOnchainSyncSnapshotIfItBelongsToWallet(walletId: number): void {
+  if (snapshot.descriptorScope?.walletId !== walletId) {
+    return
+  }
+  setSnapshot({
+    syncPhase: 'not-configured',
+    descriptorScope: null,
+    errorMessage: null,
+  })
+}
+
 async function runEsploraSyncBody(params: OnchainSyncParams): Promise<void> {
   await syncActiveWalletAndUpdateState(params.networkMode, {
     useFullScan: params.useFullScan,
+    walletId: params.walletId,
   })
 }
 
@@ -120,11 +140,27 @@ export async function awaitOnchainSyncQuiescence(): Promise<void> {
   await inFlightSyncTracker.awaitQuiescence()
 }
 
-export function configureOnchainSyncForLoadedRail(scope: OnchainRailDescriptorScope): void {
-  if (snapshot.syncPhase !== 'not-configured') {
+/** Drop a sync snapshot that still describes a wallet the user has left. */
+export function detachOnchainSyncSnapshotIfDifferentWallet(nextWalletId: number): void {
+  const scopeWalletId = snapshot.descriptorScope?.walletId
+  if (scopeWalletId == null || scopeWalletId === nextWalletId) {
     return
   }
+  setSnapshot({
+    syncPhase: 'not-configured',
+    descriptorScope: null,
+    errorMessage: null,
+  })
+}
+
+export function configureOnchainSyncForLoadedRail(scope: OnchainRailDescriptorScope): void {
   if (scope.networkMode === 'lab') {
+    return
+  }
+  const configuredForThisWallet =
+    snapshot.syncPhase !== 'not-configured' &&
+    snapshot.descriptorScope?.walletId === scope.walletId
+  if (configuredForThisWallet) {
     return
   }
   setSnapshot({
@@ -167,7 +203,14 @@ export async function orchestrateOnchainSyncThenSave(
   }
 
   return inFlightSyncTracker.begin(key, async () => {
+    if (!onchainSyncTargetsActiveWallet(params.walletId)) {
+      return
+    }
     await withWalletWriterLock(async () => {
+      if (!onchainSyncTargetsActiveWallet(params.walletId)) {
+        clearOnchainSyncSnapshotIfItBelongsToWallet(params.walletId)
+        return
+      }
       assertCanStartOnchainSync(params)
       const scope = descriptorScopeFromParams(params)
       configureOnchainSyncForLoadedRail(scope)
@@ -176,6 +219,10 @@ export async function orchestrateOnchainSyncThenSave(
 
       try {
         await runEsploraSyncBody(params)
+        if (!onchainSyncTargetsActiveWallet(params.walletId)) {
+          clearOnchainSyncSnapshotIfItBelongsToWallet(params.walletId)
+          return
+        }
         setSnapshot({ syncPhase: 'not-syncing', descriptorScope: scope, errorMessage: null })
         try {
           await orchestrateOnchainSave(toSaveParams(params))
@@ -185,6 +232,10 @@ export async function orchestrateOnchainSyncThenSave(
           }
         }
       } catch (error) {
+        if (!onchainSyncTargetsActiveWallet(params.walletId)) {
+          clearOnchainSyncSnapshotIfItBelongsToWallet(params.walletId)
+          return
+        }
         setSnapshot({
           syncPhase: 'sync-error',
           descriptorScope: scope,
@@ -192,7 +243,7 @@ export async function orchestrateOnchainSyncThenSave(
         })
         if (params.networkMode !== 'lab') {
           try {
-            await refreshWalletStoreFromLoadedBdk()
+            await refreshWalletStoreFromLoadedBdk(params.walletId)
             invalidateOnchainDashboardQueries()
           } catch {
             // Keep prior BDK-local store state when refresh fails.
@@ -211,14 +262,17 @@ export async function orchestrateOnchainPostUnlockSync(
   params: OnchainPostUnlockSyncParams,
 ): Promise<void> {
   const awaitCompletion = params.awaitCompletion ?? false
+  const hydration = getOnchainLoadHydrationForPostUnlock()
+  const useFullScan =
+    params.useFullScan ?? onchainPostUnlockNeedsFullScan(hydration)
   const work = orchestrateOnchainSyncThenSave({
     walletId: params.walletId,
     networkMode: params.networkMode,
     addressType: params.addressType,
     accountId: params.accountId,
     syncKind: 'postUnlock',
-    useFullScan: true,
-    markFullScanDone: true,
+    useFullScan,
+    markFullScanDone: useFullScan,
     onSyncError: params.onSyncError,
     awaitCompletion,
     throwOnError: awaitCompletion,
