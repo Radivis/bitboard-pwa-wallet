@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The visible syncing with the Arkade operator is incremental by default now - full syncs happen in the background if the last full sync was more than 10 minutes ago
 - Collaborative exists and the completion of unilateral exits now have dedicated pages instead of being displayed as modals
 - Finishing a unilateral exit doesn't wait for a sync now
+- New wallet naming scheme: The default wallet is called "Main Wallet" and additional wallets get a random name of the form "{adjective} {animal} Wallet" 
 
 ### Fixed
 

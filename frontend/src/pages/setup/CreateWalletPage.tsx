@@ -40,6 +40,7 @@ import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
 import { errorMessage } from '@/lib/shared/utils'
 import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet/wallet-query-cache-sync'
 import { useSetupAppPasswordGateReady } from '@/hooks/useSetupAppPasswordGateReady'
+import { suggestDefaultWalletName } from '@/lib/wallet/default-wallet-name'
 import {
   ensureWalletSecretsSession,
   isWalletSecretsSessionActive,
@@ -130,7 +131,7 @@ export function CreateWalletPage() {
           walletDb,
           insertWalletRow: () =>
             addWallet.mutateAsync({
-              name: `Wallet ${Date.now()}`,
+              name: suggestDefaultWalletName((wallets ?? []).map((wallet) => wallet.name)),
               created_at: new Date().toISOString(),
             }),
           encryptedBlobs,
@@ -192,6 +193,7 @@ export function CreateWalletPage() {
       setLastSyncTime,
       setTransactions,
       setWalletStatus,
+      wallets,
     ],
   )
 

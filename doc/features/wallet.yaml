@@ -23,6 +23,7 @@ feature:
     - Crypto operations run off-main-thread in a Web Worker
     - Default address type is Taproot (BIP86)
     - Default network is Signet
+    - The first wallet on this device is named "Main Wallet". Each later wallet gets an unused "{Adjective} {Animal} Wallet" name chosen at random from a fixed list of 21 adjectives and 21 animals. When every combination is already taken, the next name is "Hacking Dragon {n}" with the smallest positive integer n that is free. Existing wallet names are left unchanged.
   pages:
     - SetAppPasswordModal:
       - description: "Blocking first-run dialog before create/import when no wallets exist and no session password"

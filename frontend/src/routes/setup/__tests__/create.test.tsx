@@ -332,6 +332,12 @@ describe('CreateWalletPage', () => {
   it('Understood! Proceed! creates wallet with no-mnemonic-backup flag and navigates', async () => {
     const user = userEvent.setup()
     mockCreateWalletAndEncryptSecrets.mockResolvedValueOnce(createWalletCryptoResult())
+    dbMocks.mockPersistNewWalletWithSecrets.mockImplementation(
+      async (params: { insertWalletRow: () => Promise<number> }) => {
+        await params.insertWalletRow()
+        return 1
+      },
+    )
     renderWithProviders(<CreateWalletPage />)
 
     await user.click(screen.getByRole('button', { name: 'Generate but skip backup' }))
@@ -340,6 +346,10 @@ describe('CreateWalletPage', () => {
     await waitFor(() => {
       expect(dbMocks.mockPersistNewWalletWithSecrets).toHaveBeenCalled()
     })
+    expect(dbMocks.mockMutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Main Wallet' }),
+    )
+    expect(dbMocks.mockMutateAsync.mock.calls[0]?.[0]?.name).not.toMatch(/Wallet \d+/)
     expect(mockSetBalance).toHaveBeenCalledWith(null)
     expect(mockSetTransactions).toHaveBeenCalledWith([])
     expect(mockSetLastSyncTime).toHaveBeenCalledWith(null)
