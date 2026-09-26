@@ -177,7 +177,7 @@ describe('rail-lifecycle-error-handling', () => {
     saveLastSuccessfulOperatorSyncAtEncrypted.mockResolvedValue(undefined)
   })
 
-  it('prior arkade load failure + different key wait propagates and preserves load-error', async () => {
+  it('prior arkade load failure stays on that load when a different wallet waits', async () => {
     let rejectFirstLoad!: (error: Error) => void
     workerMocks.openSession.mockImplementationOnce(
       () =>
@@ -195,7 +195,7 @@ describe('rail-lifecycle-error-handling', () => {
 
     rejectFirstLoad(new Error('first load failed'))
     await expect(firstLoad).rejects.toThrow('first load failed')
-    await expect(secondLoad).rejects.toThrow('first load failed')
+    await expect(secondLoad).resolves.toBeUndefined()
 
     expect(getArkadeLoadLifecycleSnapshot()).toEqual({
       loadPhase: 'load-error',
