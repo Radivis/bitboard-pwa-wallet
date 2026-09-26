@@ -37,3 +37,21 @@ export function assertArkadeOpenSessionMatchesScope(
     throw new Error(ARKADE_SESSION_SCOPE_MISMATCH_ERROR)
   }
 }
+
+/**
+ * Persistence must target the wallet that owns the open session.
+ * A newly activated wallet can still see the previous account id; writing that
+ * account into the new wallet throws "Unknown Arkade account".
+ */
+export function arkadeOpenSessionMatchesSaveTarget(
+  activeSession: Pick<ArkadeWalletScope, 'walletId' | 'arkadeAccountId'> | null,
+  target: Pick<ArkadeWalletScope, 'walletId' | 'arkadeAccountId'>,
+): boolean {
+  if (activeSession == null) {
+    return false
+  }
+  return (
+    activeSession.walletId === target.walletId &&
+    activeSession.arkadeAccountId === target.arkadeAccountId
+  )
+}

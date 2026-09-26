@@ -84,6 +84,7 @@ describe('new wallet helpers', () => {
   const setActiveWallet = vi.fn()
   const commitLoadedDescriptorWallet = vi.fn()
   const setWalletStatus = vi.fn()
+  const clearArkadeDashboardState = vi.fn()
   const setImportInitialSyncErrorMessage = vi.fn()
 
   beforeEach(() => {
@@ -108,6 +109,7 @@ describe('new wallet helpers', () => {
       setActiveWallet,
       commitLoadedDescriptorWallet,
       setWalletStatus,
+      clearArkadeDashboardState,
       setImportInitialSyncErrorMessage,
     } as unknown as ReturnType<typeof useWalletStore.getState>)
   })
@@ -143,6 +145,7 @@ describe('new wallet helpers', () => {
     expect(setLastSyncTime).toHaveBeenCalledWith(null)
     expect(setCurrentAddress.mock.calls).toEqual([[null], ['tb1new']])
     expect(setActiveWallet).toHaveBeenCalledWith(4)
+    expect(clearArkadeDashboardState).toHaveBeenCalled()
     expect(setWalletStatus).toHaveBeenCalledWith('unlocked')
     expect(commitLoadedDescriptorWallet).toHaveBeenCalledWith({
       networkMode: 'signet',

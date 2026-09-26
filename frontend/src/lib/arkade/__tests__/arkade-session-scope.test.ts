@@ -3,6 +3,7 @@ import {
   ARKADE_SESSION_NOT_OPEN_ERROR,
   ARKADE_SESSION_SCOPE_MISMATCH_ERROR,
   arkadeWalletScopesEqual,
+  arkadeOpenSessionMatchesSaveTarget,
   assertArkadeOpenSessionMatchesScope,
 } from '@/lib/arkade/arkade-session-scope'
 
@@ -72,5 +73,34 @@ describe('assertArkadeOpenSessionMatchesScope', () => {
     expect(() =>
       assertArkadeOpenSessionMatchesScope(openSession, { ...openSession }),
     ).not.toThrow()
+  })
+})
+
+describe('arkadeOpenSessionMatchesSaveTarget', () => {
+  it('rejects a save aimed at a different wallet than the open session', () => {
+    expect(
+      arkadeOpenSessionMatchesSaveTarget(openSession, {
+        walletId: 2,
+        arkadeAccountId: openSession.arkadeAccountId,
+      }),
+    ).toBe(false)
+  })
+
+  it('rejects a save when no session is open', () => {
+    expect(
+      arkadeOpenSessionMatchesSaveTarget(null, {
+        walletId: openSession.walletId,
+        arkadeAccountId: openSession.arkadeAccountId,
+      }),
+    ).toBe(false)
+  })
+
+  it('accepts a save for the open session wallet and account', () => {
+    expect(
+      arkadeOpenSessionMatchesSaveTarget(openSession, {
+        walletId: openSession.walletId,
+        arkadeAccountId: openSession.arkadeAccountId,
+      }),
+    ).toBe(true)
   })
 })

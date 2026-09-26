@@ -47,6 +47,7 @@ const walletStoreState = {
   setLastSyncTime: mockSetLastSyncTime,
   commitLoadedDescriptorWallet: mockCommitLoadedDescriptorWallet,
   setImportInitialSyncErrorMessage: mockSetImportInitialSyncErrorMessage,
+  clearArkadeDashboardState: vi.fn(),
   lockWallet: vi.fn(),
 }
 

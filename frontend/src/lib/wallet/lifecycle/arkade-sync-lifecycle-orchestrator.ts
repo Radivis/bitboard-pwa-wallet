@@ -354,6 +354,17 @@ export async function orchestrateArkadeSyncThenSave(
   }
 
   const workPromise = inFlightSyncTracker.begin(key, async () => {
+    if (isArkadeSupportedNetworkMode(params.networkMode)) {
+      const sessionMatchesWallet = await getArkadeWorker().hasOpenSession({
+        walletId: params.walletId,
+        networkMode: params.networkMode,
+        arkadeAccountId: params.arkadeAccountId,
+      })
+      if (!sessionMatchesWallet) {
+        return
+      }
+    }
+
     try {
       await withWalletWriterLock(async () => {
         assertCanStartArkadeSync(params)

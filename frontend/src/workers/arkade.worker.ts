@@ -5,7 +5,10 @@ import type {
 } from '@/workers/secrets-channel-types'
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import { arkadeSessionKey } from '@/lib/arkade/arkade-session-key'
-import { assertArkadeOpenSessionMatchesScope } from '@/lib/arkade/arkade-session-scope'
+import {
+  arkadeOpenSessionMatchesSaveTarget,
+  assertArkadeOpenSessionMatchesScope,
+} from '@/lib/arkade/arkade-session-scope'
 import { rethrowWasmArkErrorForComlink } from '@/lib/shared/wasm-ark-error'
 import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
 import {
@@ -626,6 +629,9 @@ const arkadeService: ArkadeService = {
   },
 
   async updateOperatorSyncAtEncrypted(params) {
+    if (!arkadeOpenSessionMatchesSaveTarget(activeSessionParams, params)) {
+      return
+    }
     return updateOperatorSyncAtEncrypted(getEncryptedPayloadDeps(), params)
   },
 

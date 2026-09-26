@@ -57,6 +57,7 @@ function clearStaleDashboardState(): void {
 
 function activateNewWallet(walletId: number, firstAddress: string): void {
   const walletState = useWalletStore.getState()
+  walletState.clearArkadeDashboardState()
   walletState.setActiveWallet(walletId)
   walletState.setCurrentAddress(firstAddress)
   walletState.commitLoadedDescriptorWallet({

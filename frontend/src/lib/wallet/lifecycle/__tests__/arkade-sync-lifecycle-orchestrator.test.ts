@@ -5,6 +5,7 @@ const scheduleBackgroundFullVtxoReconcile = vi.fn()
 const setOnBackgroundFullReconcileFinished = vi.fn()
 const migrateDeprecatedSignerVtxos = vi.fn()
 const getAutonomousModeStatus = vi.fn()
+const hasOpenSession = vi.fn()
 const refreshArkadeStoreFromLoadedWasm = vi.fn()
 const orchestrateArkadeSave = vi.fn()
 const loadPhaseRef = vi.hoisted(() => ({ phase: 'loaded' as string }))
@@ -16,6 +17,7 @@ vi.mock('@/workers/arkade-factory', () => ({
     setOnBackgroundFullReconcileFinished,
     migrateDeprecatedSignerVtxos,
     getAutonomousModeStatus,
+    hasOpenSession,
     setUnilateralExitJob: vi.fn(async () => {}),
     setUnilateralExitAutomationPrefs: vi.fn(async () => {}),
     setUnilateralExitFailure: vi.fn(async () => {}),
@@ -123,7 +125,18 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
       arkadeAccountId: 'conn-1',
     })
     getAutonomousModeStatus.mockResolvedValue({ active: false })
+    hasOpenSession.mockResolvedValue(true)
     useUnilateralExitLifecyclePersistenceStore.setState({ jobsByKey: {} })
+  })
+
+  it('skips sync and save when the open session belongs to another wallet', async () => {
+    hasOpenSession.mockResolvedValue(false)
+
+    await orchestrateArkadeSyncThenSave(syncParams)
+
+    expect(syncWithOperator).not.toHaveBeenCalled()
+    expect(orchestrateArkadeSave).not.toHaveBeenCalled()
+    expect(getArkadeSyncLifecycleSnapshot().syncPhase).not.toBe('sync-error')
   })
 
   it('sync rejected while loadPhase loading', async () => {
