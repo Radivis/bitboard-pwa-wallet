@@ -124,7 +124,7 @@ async function runWasmLoad(params: OnchainLoadParams): Promise<void> {
   setWalletStatus('unlocked')
 
   if (networkMode !== 'lab') {
-    await refreshWalletStoreFromLoadedBdk()
+    await refreshWalletStoreFromLoadedBdk(walletId)
     invalidateOnchainDashboardQueries()
   }
 

@@ -65,11 +65,12 @@ export function getActiveDescriptorWalletKey(): string | null {
     return null
   }
   const network = toBitcoinNetwork(walletState.networkMode)
-  return descriptorWalletKey({
+  const descriptorKey = descriptorWalletKey({
     network,
     addressType: selectCommittedAddressType(walletState),
     accountId: selectCommittedAccountId(walletState),
   })
+  return `${walletState.activeWalletId}:${descriptorKey}`
 }
 
 export async function resolveOnchainEsploraSyncMetadata(): Promise<

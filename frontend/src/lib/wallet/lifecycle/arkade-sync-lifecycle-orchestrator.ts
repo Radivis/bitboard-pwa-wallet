@@ -217,7 +217,7 @@ async function handleBackgroundFullVtxoReconcileFinished(
     return
   }
   try {
-    await refreshArkadeStoreFromLoadedWasm(scope.arkadeAccountId)
+    await refreshArkadeStoreFromLoadedWasm(scope.arkadeAccountId, scope.walletId)
     if (outcome.operatorTrustPending) {
       await invalidateOperatorTrustQueriesForScope(scope)
     }
@@ -246,7 +246,7 @@ async function runArkadeOperatorSyncBody(
   ensureBackgroundFullReconcileFollowUp()
   const worker = getArkadeWorker()
   const syncResult = await worker.syncWithOperator(scheduleBackgroundFull)
-  await refreshArkadeStoreFromLoadedWasm(scope.arkadeAccountId)
+  await refreshArkadeStoreFromLoadedWasm(scope.arkadeAccountId, scope.walletId)
   await invalidateOperatorTrustQueriesForScope(scope)
   if (shouldScheduleBackgroundFullVtxoReconcile(syncResult.fullReconcileDue)) {
     worker.scheduleBackgroundFullVtxoReconcile()
@@ -295,8 +295,40 @@ export function forceResetArkadeSyncLifecycleForTeardown(): void {
   })
 }
 
+export function detachArkadeSyncSnapshotIfDifferentWallet(nextWalletId: number): void {
+  const scopeWalletId = snapshot.railScope?.walletId
+  if (scopeWalletId == null || scopeWalletId === nextWalletId) {
+    return
+  }
+  setSnapshot({
+    syncPhase: 'not-configured',
+    railScope: null,
+    errorMessage: null,
+    warningMessage: null,
+  })
+}
+
+function arkadeSyncTargetsActiveWallet(walletId: number): boolean {
+  return useWalletStore.getState().activeWalletId === walletId
+}
+
+function clearArkadeSyncSnapshotIfItBelongsToWallet(walletId: number): void {
+  if (snapshot.railScope?.walletId !== walletId) {
+    return
+  }
+  setSnapshot({
+    syncPhase: 'not-configured',
+    railScope: null,
+    errorMessage: null,
+    warningMessage: null,
+  })
+}
+
 export function configureArkadeSyncForLoadedRail(scope: ArkadeRailScope): void {
-  if (snapshot.syncPhase !== 'not-configured') {
+  const configuredForThisWallet =
+    snapshot.syncPhase !== 'not-configured' &&
+    snapshot.railScope?.walletId === scope.walletId
+  if (configuredForThisWallet) {
     return
   }
   setSnapshot({
@@ -412,6 +444,10 @@ export async function orchestrateArkadeSyncThenSave(
             scope,
             operatorSyncSchedulesBackgroundFull(params.syncKind),
           )
+          if (!arkadeSyncTargetsActiveWallet(params.walletId)) {
+            clearArkadeSyncSnapshotIfItBelongsToWallet(params.walletId)
+            return
+          }
           applySuccessfulArkadeSyncSnapshot(scope, syncResult)
           try {
             await orchestrateArkadeSave(toSaveParams(params))
@@ -421,6 +457,10 @@ export async function orchestrateArkadeSyncThenSave(
             }
           }
         } catch (error) {
+          if (!arkadeSyncTargetsActiveWallet(params.walletId)) {
+            clearArkadeSyncSnapshotIfItBelongsToWallet(params.walletId)
+            return
+          }
           setSnapshot({
             syncPhase: 'sync-error',
             railScope: scope,

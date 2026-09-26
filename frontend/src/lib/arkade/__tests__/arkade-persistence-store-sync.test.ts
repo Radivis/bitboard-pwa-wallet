@@ -74,4 +74,15 @@ describe('refreshArkadeStoreFromLoadedWasm', () => {
       'tark1qreceive',
     )
   })
+
+  it('does not write the previous session when the active wallet changed', async () => {
+    useWalletStore.setState({ activeWalletId: 2 })
+
+    await refreshArkadeStoreFromLoadedWasm('conn-1', 1)
+
+    const state = useWalletStore.getState()
+    expect(state.arkadeBalance).toBeNull()
+    expect(state.arkadePayments).toEqual([])
+    expect(setQueryDataMock).not.toHaveBeenCalled()
+  })
 })

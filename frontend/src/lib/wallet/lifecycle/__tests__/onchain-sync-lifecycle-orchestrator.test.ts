@@ -43,6 +43,7 @@ vi.mock('@/lib/wallet/onchain-dashboard-sync', () => ({
 
 const walletStoreState = {
   walletStatus: 'unlocked' as 'unlocked' | 'locked',
+  activeWalletId: 1 as number | null,
   setWalletStatus: vi.fn(),
 }
 
@@ -84,9 +85,30 @@ describe('onchain-sync-lifecycle-orchestrator', () => {
       usedEmptyChainFallback: false,
     }
     walletStoreState.walletStatus = 'unlocked'
+    walletStoreState.activeWalletId = 1
     syncActiveWalletAndUpdateState.mockResolvedValue(undefined)
     orchestrateOnchainSave.mockResolvedValue(undefined)
     refreshWalletStoreFromLoadedBdk.mockResolvedValue(undefined)
+  })
+
+  it('skips sync and save when the active wallet is different', async () => {
+    walletStoreState.activeWalletId = 2
+
+    await orchestrateOnchainSyncThenSave(syncParams)
+
+    expect(syncActiveWalletAndUpdateState).not.toHaveBeenCalled()
+    expect(orchestrateOnchainSave).not.toHaveBeenCalled()
+  })
+
+  it('does not save when the active wallet changes during sync', async () => {
+    syncActiveWalletAndUpdateState.mockImplementation(async () => {
+      walletStoreState.activeWalletId = 2
+    })
+
+    await orchestrateOnchainSyncThenSave(syncParams)
+
+    expect(orchestrateOnchainSave).not.toHaveBeenCalled()
+    expect(getOnchainSyncLifecycleSnapshot().syncPhase).toBe('not-configured')
   })
 
   it('sync rejected when load not loaded', async () => {
@@ -170,6 +192,7 @@ describe('onchain-sync-lifecycle-orchestrator', () => {
 
       expect(syncActiveWalletAndUpdateState).toHaveBeenCalledWith('testnet', {
         useFullScan: false,
+        walletId: 1,
       })
       expect(orchestrateOnchainSave).toHaveBeenCalledWith(
         expect.objectContaining({ markFullScanDone: false }),
@@ -186,6 +209,7 @@ describe('onchain-sync-lifecycle-orchestrator', () => {
 
       expect(syncActiveWalletAndUpdateState).toHaveBeenCalledWith('testnet', {
         useFullScan: true,
+        walletId: 1,
       })
       expect(orchestrateOnchainSave).toHaveBeenCalledWith(
         expect.objectContaining({ markFullScanDone: true }),
@@ -202,6 +226,7 @@ describe('onchain-sync-lifecycle-orchestrator', () => {
 
       expect(syncActiveWalletAndUpdateState).toHaveBeenCalledWith('testnet', {
         useFullScan: true,
+        walletId: 1,
       })
       expect(orchestrateOnchainSave).toHaveBeenCalledWith(
         expect.objectContaining({ markFullScanDone: true }),
@@ -215,6 +240,7 @@ describe('onchain-sync-lifecycle-orchestrator', () => {
 
       expect(syncActiveWalletAndUpdateState).toHaveBeenCalledWith('testnet', {
         useFullScan: true,
+        walletId: 1,
       })
       expect(orchestrateOnchainSave).toHaveBeenCalledWith(
         expect.objectContaining({ markFullScanDone: true }),

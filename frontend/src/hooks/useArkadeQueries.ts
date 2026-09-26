@@ -42,6 +42,7 @@ import type {
 import { sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import {
+  arkadeLoadedSessionMatchesWallet,
   awaitArkadeLoadQuiescence,
   getArkadeLoadLifecycleSnapshot,
   isArkadeLoadFailedForNetwork,
@@ -138,7 +139,8 @@ function useArkadeQueryBase() {
     activeWalletId != null &&
     isArkadeActiveForNetworkMode(networkMode) &&
     isArkadeSupportedNetworkMode(networkMode) &&
-    arkadeSessionReady
+    arkadeSessionReady &&
+    arkadeLoadedSessionMatchesWallet(activeWalletId)
 
   return { networkMode, activeWalletId, activeArkadeAccountId, sessionReady }
 }
@@ -177,7 +179,10 @@ async function ensureArkadeSessionOpenForActiveWallet(): Promise<void> {
     await awaitArkadeLoadQuiescence()
     return
   }
-  if (getArkadeLoadLifecycleSnapshot().loadPhase === 'loaded') {
+  if (
+    getArkadeLoadLifecycleSnapshot().loadPhase === 'loaded' &&
+    arkadeLoadedSessionMatchesWallet(activeWalletId)
+  ) {
     return
   }
   if (isArkadeLoadFailedForNetwork(networkMode)) {
@@ -1572,7 +1577,7 @@ export function useAcceptOperatorConfigMutation() {
           activeArkadeAccountId != null &&
           isArkadeSupportedNetworkMode(networkMode)
         ) {
-          await refreshArkadeStoreFromLoadedWasm(activeArkadeAccountId)
+          await refreshArkadeStoreFromLoadedWasm(activeArkadeAccountId, activeWalletId)
           await orchestrateArkadeSave({
             walletId: activeWalletId,
             networkMode,
@@ -1599,7 +1604,7 @@ export function useAcceptOperatorConfigMutation() {
         activeArkadeAccountId != null &&
         isArkadeSupportedNetworkMode(networkMode)
       ) {
-        await refreshArkadeStoreFromLoadedWasm(activeArkadeAccountId)
+        await refreshArkadeStoreFromLoadedWasm(activeArkadeAccountId, activeWalletId)
         await orchestrateArkadeSave({
           walletId: activeWalletId,
           networkMode,

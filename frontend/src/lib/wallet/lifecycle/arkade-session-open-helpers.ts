@@ -59,7 +59,13 @@ export async function tryReuseExistingArkadeSession(params: {
       return null
     }
 
-    await refreshArkadeStoreFromLoadedWasm(params.account.id)
+    if (useWalletStore.getState().activeWalletId !== params.walletId) {
+      return null
+    }
+    await refreshArkadeStoreFromLoadedWasm(params.account.id, params.walletId)
+    if (useWalletStore.getState().activeWalletId !== params.walletId) {
+      return null
+    }
     useWalletStore.getState().setActiveArkadeAccountId(params.account.id)
     useWalletStore.getState().setLastOperatorSyncTime(null)
     return params.account.id
@@ -137,9 +143,18 @@ export async function hydrateArkadeDashboardAfterSessionOpen(params: {
     useWalletStore.getState().setArkadeSignerMigrationHint(null)
   }
 
+  if (useWalletStore.getState().activeWalletId !== params.walletId) {
+    return
+  }
   await params.worker.reconcileActiveAccountId(params.arkadeAccountId)
+  if (useWalletStore.getState().activeWalletId !== params.walletId) {
+    return
+  }
   useWalletStore.getState().setLastOperatorSyncTime(null)
-  await refreshArkadeStoreFromLoadedWasm(params.arkadeAccountId)
+  await refreshArkadeStoreFromLoadedWasm(params.arkadeAccountId, params.walletId)
+  if (useWalletStore.getState().activeWalletId !== params.walletId) {
+    return
+  }
   useWalletStore.getState().setActiveArkadeAccountId(params.arkadeAccountId)
   params.sessionReuseState.setLastOpenedSessionKey(
     arkadeSessionKey(params.walletId, params.networkMode, params.arkadeAccountId),

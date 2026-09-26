@@ -19,6 +19,10 @@ import { errorMessage } from '@/lib/shared/utils'
 import { startAutoLockTimer } from '@/stores/sessionStore'
 import { useWalletStore, type NetworkMode } from '@/stores/walletStore'
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
+import {
+  releasePreviousWalletDashboardSession,
+  startArkadeSessionForNewWallet,
+} from '@/lib/wallet/new-wallet-dashboard-session'
 
 export type NewWalletRowInsert = {
   name: string
@@ -76,6 +80,7 @@ function clearStaleDashboardState(): void {
 
 function activateNewWallet(walletId: number, firstAddress: string): void {
   const walletState = useWalletStore.getState()
+  releasePreviousWalletDashboardSession(walletId)
   walletState.clearArkadeDashboardState()
   walletState.setActiveWallet(walletId)
   walletState.setCurrentAddress(firstAddress)
@@ -85,6 +90,7 @@ function activateNewWallet(walletId: number, firstAddress: string): void {
     accountId: walletState.accountId,
   })
   walletState.setWalletStatus('unlocked')
+  startArkadeSessionForNewWallet(walletId, walletState.networkMode)
   startAutoLockTimer(() => void orchestrateLock())
 }
 

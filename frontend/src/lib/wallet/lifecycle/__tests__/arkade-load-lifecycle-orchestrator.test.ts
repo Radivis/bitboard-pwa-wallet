@@ -34,6 +34,9 @@ const workerMocks = vi.hoisted(() => ({
   setUnilateralExitFailure: vi.fn(async () => {}),
 }))
 
+const walletState = vi.hoisted(() => ({
+  activeWalletId: 1 as number | null,
+}))
 const setActiveArkadeAccountIdMock = vi.hoisted(() => vi.fn())
 const setLastOperatorSyncTimeMock = vi.hoisted(() => vi.fn())
 const setArkadeSignerMigrationHintMock = vi.hoisted(() => vi.fn())
@@ -55,6 +58,7 @@ vi.mock('@/stores/featureStore', () => ({
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: {
     getState: () => ({
+      activeWalletId: walletState.activeWalletId,
       setActiveArkadeAccountId: setActiveArkadeAccountIdMock,
       setLastOperatorSyncTime: setLastOperatorSyncTimeMock,
       setArkadeSignerMigrationHint: setArkadeSignerMigrationHintMock,
@@ -146,6 +150,7 @@ describe('arkade-load-lifecycle-orchestrator', () => {
     resetArkadeLoadLifecycleStateForTests()
     vi.clearAllMocks()
     featureState.isArkadeEnabled = true
+    walletState.activeWalletId = 1
     workerMocks.openSession.mockResolvedValue({
       arkadeAddress: 'tark1qtest',
       operatorSignerPkHex: '02deadbeef',
@@ -222,6 +227,16 @@ describe('arkade-load-lifecycle-orchestrator', () => {
     expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loaded')
     expect(workerMocks.syncBumperWallet).not.toHaveBeenCalled()
     expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalled()
+  })
+
+  it('does not mark the rail loaded when the active wallet changed', async () => {
+    walletState.activeWalletId = 2
+
+    await orchestrateArkadeLoad({ walletId: 1, networkMode: 'signet' })
+
+    expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('not-configured')
+    expect(workerMocks.openSession).not.toHaveBeenCalled()
+    expect(refreshArkadeStoreFromLoadedWasmMock).not.toHaveBeenCalled()
   })
 
   it('load failure sets load-error and tears down worker without leaving loading', async () => {

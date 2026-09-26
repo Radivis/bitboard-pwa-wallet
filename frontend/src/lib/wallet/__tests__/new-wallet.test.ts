@@ -13,6 +13,8 @@ const mockShowImportInitialSyncFailureToast = vi.hoisted(() => vi.fn())
 const mockStartAutoLockTimer = vi.hoisted(() => vi.fn())
 const mockEnsureWalletSecretsSession = vi.hoisted(() => vi.fn())
 const mockEnsureSecretsChannel = vi.hoisted(() => vi.fn())
+const mockReleasePreviousWalletDashboardSession = vi.hoisted(() => vi.fn())
+const mockStartArkadeSessionForNewWallet = vi.hoisted(() => vi.fn())
 
 vi.mock('@/db', () => ({
   ensureMigrated: mockEnsureMigrated,
@@ -51,6 +53,13 @@ vi.mock('@/lib/wallet/wallet-secrets-session', () => ({
 
 vi.mock('@/workers/secrets-channel', () => ({
   ensureSecretsChannel: mockEnsureSecretsChannel,
+}))
+
+vi.mock('@/lib/wallet/new-wallet-dashboard-session', () => ({
+  releasePreviousWalletDashboardSession: (...args: unknown[]) =>
+    mockReleasePreviousWalletDashboardSession(...args),
+  startArkadeSessionForNewWallet: (...args: unknown[]) =>
+    mockStartArkadeSessionForNewWallet(...args),
 }))
 
 vi.mock('@/stores/walletStore', () => ({
@@ -159,7 +168,9 @@ describe('new wallet helpers', () => {
     expect(setTransactions).toHaveBeenCalledWith([])
     expect(setLastSyncTime).toHaveBeenCalledWith(null)
     expect(setCurrentAddress.mock.calls).toEqual([[null], ['tb1new']])
+    expect(mockReleasePreviousWalletDashboardSession).toHaveBeenCalledWith(4)
     expect(setActiveWallet).toHaveBeenCalledWith(4)
+    expect(mockStartArkadeSessionForNewWallet).toHaveBeenCalledWith(4, 'signet')
     expect(clearArkadeDashboardState).toHaveBeenCalled()
     expect(setWalletStatus).toHaveBeenCalledWith('unlocked')
     expect(commitLoadedDescriptorWallet).toHaveBeenCalledWith({

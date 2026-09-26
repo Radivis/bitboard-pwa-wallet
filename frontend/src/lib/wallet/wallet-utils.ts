@@ -159,7 +159,7 @@ function invalidateDashboardQueriesAfterOnchainUpdate(): void {
  */
 export async function syncActiveWalletAndUpdateState(
   networkMode: NetworkMode,
-  options?: { useFullScan?: boolean },
+  options?: { useFullScan?: boolean; walletId?: number },
 ): Promise<void> {
   const customUrl = await loadCustomEsploraUrl(networkMode)
   const esploraUrl = getEsploraUrl(networkMode, customUrl)
@@ -171,8 +171,10 @@ export async function syncActiveWalletAndUpdateState(
   if (!esploraUrl) {
     const balance = await getBalance()
     const transactionList = await getTransactionList()
-    setBalance(balance)
-    setTransactions(transactionList)
+    if (onchainSyncStillTargetsActiveWallet(options?.walletId)) {
+      setBalance(balance)
+      setTransactions(transactionList)
+    }
     return
   }
 
@@ -200,8 +202,15 @@ export async function syncActiveWalletAndUpdateState(
 
   const balance = await getBalance()
   const transactionList = await getTransactionList()
+  if (!onchainSyncStillTargetsActiveWallet(options?.walletId)) {
+    return
+  }
   setBalance(balance)
   setTransactions(transactionList)
+}
+
+function onchainSyncStillTargetsActiveWallet(walletId: number | undefined): boolean {
+  return walletId == null || useWalletStore.getState().activeWalletId === walletId
 }
 
 export type DescriptorWalletEsploraSyncResult = 'completed' | 'syncFailed'

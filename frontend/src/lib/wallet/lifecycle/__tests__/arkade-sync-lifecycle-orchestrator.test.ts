@@ -126,6 +126,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     })
     getAutonomousModeStatus.mockResolvedValue({ active: false })
     hasOpenSession.mockResolvedValue(true)
+    useWalletStore.setState({ activeWalletId: 1 })
     useUnilateralExitLifecyclePersistenceStore.setState({ jobsByKey: {} })
   })
 
@@ -365,7 +366,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     })
 
     expect(callOrder).toEqual(['migrate', 'save', 'sync'])
-    expect(refreshArkadeStoreFromLoadedWasm).toHaveBeenCalledWith('conn-1')
+    expect(refreshArkadeStoreFromLoadedWasm).toHaveBeenCalledWith('conn-1', 1)
   })
 
   it('coalesced signerMigration returns migration result to all callers', async () => {
@@ -577,7 +578,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     await onFinished?.({ ok: true, operatorTrustPending: true })
 
     expect(getArkadeSyncLifecycleSnapshot().warningMessage).toBe('reconcile failed')
-    expect(refreshArkadeStoreFromLoadedWasm).toHaveBeenCalledWith('conn-1')
+    expect(refreshArkadeStoreFromLoadedWasm).toHaveBeenCalledWith('conn-1', 1)
     expect(orchestrateArkadeSave).toHaveBeenCalled()
   })
 })

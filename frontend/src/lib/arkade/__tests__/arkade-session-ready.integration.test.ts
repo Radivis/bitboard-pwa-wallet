@@ -138,6 +138,7 @@ vi.mock('@/lib/arkade/arkade-utils', () => ({
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: {
     getState: () => ({
+      activeWalletId: 1,
       setActiveArkadeAccountId: vi.fn(),
       setLastOperatorSyncTime: vi.fn(),
       setArkadeSignerMigrationHint: vi.fn(),

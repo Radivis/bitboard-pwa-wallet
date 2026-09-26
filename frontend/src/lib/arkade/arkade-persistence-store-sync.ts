@@ -40,9 +40,14 @@ function syncArkadeDashboardQueryCaches(params: {
   }
 }
 
-/** Caller must ensure the Arkade WASM session is already open. */
+/**
+ * Caller must ensure the Arkade WASM session is already open.
+ * When `expectedWalletId` is set, skip the write if the active wallet changed
+ * while the WASM read was in flight.
+ */
 export async function refreshArkadeStoreFromLoadedWasm(
   arkadeAccountIdForQueryCache?: string,
+  expectedWalletId?: number,
 ): Promise<void> {
   const worker = getArkadeWorker()
   const [balance, payments, receiveAddress] = await Promise.all([
@@ -50,7 +55,14 @@ export async function refreshArkadeStoreFromLoadedWasm(
     worker.getTransactionHistory(),
     worker.getAddress(),
   ])
-  useWalletStore.getState().setArkadeDashboardState({
+  const walletStateBeforeWrite = useWalletStore.getState()
+  if (
+    expectedWalletId != null &&
+    walletStateBeforeWrite.activeWalletId !== expectedWalletId
+  ) {
+    return
+  }
+  walletStateBeforeWrite.setArkadeDashboardState({
     balance,
     payments,
     receiveAddress,

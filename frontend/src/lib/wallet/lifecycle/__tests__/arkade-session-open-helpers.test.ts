@@ -17,6 +17,7 @@ const workerMocks = vi.hoisted(() => ({
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: {
     getState: () => ({
+      activeWalletId: 7,
       setActiveArkadeAccountId: setActiveArkadeAccountIdMock,
       setLastOperatorSyncTime: setLastOperatorSyncTimeMock,
       setArkadeSignerMigrationHint: setArkadeSignerMigrationHintMock,
@@ -122,7 +123,7 @@ describe('arkade-session-open-helpers', () => {
     })
 
     expect(arkadeAccountId).toBe(TEST_ACCOUNT.id)
-    expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalledWith(TEST_ACCOUNT.id)
+    expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalledWith(TEST_ACCOUNT.id, 7)
     expect(setActiveArkadeAccountIdMock).toHaveBeenCalledWith(TEST_ACCOUNT.id)
   })
 
