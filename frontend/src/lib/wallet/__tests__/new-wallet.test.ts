@@ -60,6 +60,7 @@ vi.mock('@/stores/walletStore', () => ({
 }))
 
 import {
+  newWalletPersistFieldsFromEncryptResult,
   persistAndActivateNewWallet,
   prepareNewWalletEncryption,
 } from '@/lib/wallet/new-wallet'
@@ -77,6 +78,20 @@ function encryptedBlobs(): SplitWalletSecretsEncryptedBlobs {
 }
 
 describe('new wallet helpers', () => {
+  it('maps encrypt results into persist fields', () => {
+    const blobs = encryptedBlobs()
+    expect(
+      newWalletPersistFieldsFromEncryptResult({
+        encryptedPayload: blobs.payload,
+        encryptedMnemonic: blobs.mnemonic,
+        walletResult: { firstAddress: 'tb1map' },
+      }),
+    ).toEqual({
+      encryptedBlobs: blobs,
+      firstAddress: 'tb1map',
+    })
+  })
+
   const setBalance = vi.fn()
   const setTransactions = vi.fn()
   const setLastSyncTime = vi.fn()

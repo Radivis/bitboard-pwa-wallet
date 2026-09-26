@@ -1,8 +1,7 @@
 import { useState, useMemo, useCallback } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { RefreshCw } from 'lucide-react'
-import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,20 +12,19 @@ import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { MnemonicGrid } from '@/components/MnemonicGrid'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { EnterAppPasswordModal } from '@/components/EnterAppPasswordModal'
-import { SetupBackToWelcomeButton } from '@/components/SetupBackToWelcomeButton'
+import { SetupFlowHeading } from '@/components/setup/SetupFlowHeading'
 import { SetupNewWalletGate } from '@/components/setup/SetupNewWalletGate'
 import { useCryptoStore } from '@/stores/cryptoStore'
-import { useWalletStore } from '@/stores/walletStore'
 import {
-  useAddWallet,
-  useWallets,
-  type SplitWalletSecretsEncryptedBlobs,
-} from '@/db'
-import {
-  persistAndActivateNewWallet,
-  prepareNewWalletEncryption,
+  newWalletPersistFieldsFromEncryptResult,
 } from '@/lib/wallet/new-wallet'
 import { isWalletSecretsSessionActive } from '@/lib/wallet/wallet-secrets-session'
+import {
+  completeNewWalletSetup,
+  toastNewWalletFlowError,
+  usePersistAndActivateNewWallet,
+  usePrepareNewWalletEncryption,
+} from '@/pages/setup/use-new-wallet-setup'
 
 type Step = 1 | 2 | 3
 
@@ -34,10 +32,7 @@ type Step = 1 | 2 | 3
 const SEED_VERIFICATION_WORD_COUNT = 3
 
 /** Stored after createWalletAndEncryptSecrets so we can persist in step 3 without keeping mnemonic. */
-interface CreateWalletPending {
-  encryptedBlobs: SplitWalletSecretsEncryptedBlobs
-  walletResult: { firstAddress: string }
-}
+type CreateWalletPending = ReturnType<typeof newWalletPersistFieldsFromEncryptResult>
 
 export function CreateWalletPage() {
   const navigate = useNavigate()
@@ -51,13 +46,9 @@ export function CreateWalletPage() {
     'generate' | 'quickCreate' | null
   >(null)
 
-  const { data: wallets } = useWallets()
-
   const createWalletAndEncryptSecrets = useCryptoStore((cryptoState) => cryptoState.createWalletAndEncryptSecrets)
-  const networkMode = useWalletStore((walletState) => walletState.networkMode)
-  const addressType = useWalletStore((walletState) => walletState.addressType)
-  const accountId = useWalletStore((walletState) => walletState.accountId)
-  const addWallet = useAddWallet()
+  const prepareNewWalletEncryptionCall = usePrepareNewWalletEncryption()
+  const persistNewWallet = usePersistAndActivateNewWallet()
 
   const words = useMemo(() => (mnemonicForBackup ? mnemonicForBackup.split(' ') : []), [mnemonicForBackup])
 
@@ -80,46 +71,15 @@ export function CreateWalletPage() {
     )
   }, [verificationIndices, verificationWords, words])
 
-  const queryClient = useQueryClient()
-
-  const persistCreatedWallet = useCallback(
-    ({
-      encryptedBlobs,
-      firstAddress,
-      markNoMnemonicBackup,
-    }: {
-      encryptedBlobs: SplitWalletSecretsEncryptedBlobs
-      firstAddress: string
-      markNoMnemonicBackup: boolean
-    }) =>
-      persistAndActivateNewWallet({
-        encryptedBlobs,
-        firstAddress,
-        markNoMnemonicBackup,
-        existingWalletNames: (wallets ?? []).map((wallet) => wallet.name),
-        insertWalletRow: (walletRow) =>
-          addWallet.mutateAsync({
-            name: walletRow.name,
-            created_at: walletRow.createdAt,
-          }),
-        queryClient,
-      }),
-    [addWallet, queryClient, wallets],
-  )
-
   const runCreateWalletAndEncryptSecrets = useCallback(async (appPassword?: string) => {
-    const network = await prepareNewWalletEncryption(appPassword, networkMode)
+    const encryptionTarget = await prepareNewWalletEncryptionCall(appPassword)
     return createWalletAndEncryptSecrets({
-      network,
-      addressType,
-      accountId,
+      ...encryptionTarget,
       wordCount,
     })
   }, [
-    accountId,
-    addressType,
     createWalletAndEncryptSecrets,
-    networkMode,
+    prepareNewWalletEncryptionCall,
     wordCount,
   ])
 
@@ -127,19 +87,11 @@ export function CreateWalletPage() {
     mutationFn: runCreateWalletAndEncryptSecrets,
     onSuccess: (createWalletOutcome) => {
       setMnemonicForBackup(createWalletOutcome.mnemonicForBackup)
-      setPendingCreate({
-        encryptedBlobs: {
-          payload: createWalletOutcome.encryptedPayload,
-          mnemonic: createWalletOutcome.encryptedMnemonic,
-        },
-        walletResult: { firstAddress: createWalletOutcome.walletResult.firstAddress },
-      })
+      setPendingCreate(newWalletPersistFieldsFromEncryptResult(createWalletOutcome))
       setStep(2)
     },
     onError: (err) => {
-      toast.error(
-        err instanceof Error ? err.message : 'Failed to create wallet',
-      )
+      toastNewWalletFlowError(err, 'Failed to create wallet')
     },
   })
 
@@ -148,24 +100,17 @@ export function CreateWalletPage() {
   const quickCreateWalletMutation = useMutation({
     mutationFn: async (appPassword?: string) => {
       const createWalletOutcome = await runCreateWalletAndEncryptSecrets(appPassword)
-      await persistCreatedWallet({
-        encryptedBlobs: {
-          payload: createWalletOutcome.encryptedPayload,
-          mnemonic: createWalletOutcome.encryptedMnemonic,
-        },
-        firstAddress: createWalletOutcome.walletResult.firstAddress,
+      await persistNewWallet({
+        ...newWalletPersistFieldsFromEncryptResult(createWalletOutcome),
         markNoMnemonicBackup: true,
       })
     },
     onSuccess: () => {
       setSkipBackupWarningOpen(false)
-      toast.success('Wallet created successfully!')
-      navigate({ to: '/wallet' })
+      completeNewWalletSetup(navigate, 'Wallet created successfully!')
     },
     onError: (err) => {
-      toast.error(
-        err instanceof Error ? err.message : 'Failed to create wallet',
-      )
+      toastNewWalletFlowError(err, 'Failed to create wallet')
     },
   })
 
@@ -188,23 +133,18 @@ export function CreateWalletPage() {
   const finishCreateMutation = useMutation({
     mutationFn: async () => {
       if (!pendingCreate) throw new Error('No pending create')
-      const firstAddress = pendingCreate.walletResult.firstAddress
       setMnemonicForBackup('')
-      await persistCreatedWallet({
-        encryptedBlobs: pendingCreate.encryptedBlobs,
-        firstAddress,
+      await persistNewWallet({
+        ...pendingCreate,
         markNoMnemonicBackup: false,
       })
       setPendingCreate(null)
     },
     onSuccess: () => {
-      toast.success('Wallet created successfully!')
-      navigate({ to: '/wallet' })
+      completeNewWalletSetup(navigate, 'Wallet created successfully!')
     },
     onError: (err) => {
-      toast.error(
-        err instanceof Error ? err.message : 'Failed to save wallet',
-      )
+      toastNewWalletFlowError(err, 'Failed to save wallet')
     },
   })
 
@@ -222,13 +162,14 @@ export function CreateWalletPage() {
   return (
     <SetupNewWalletGate>
       <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <SetupBackToWelcomeButton />
-          <h2 className="text-xl font-bold">Create Wallet</h2>
-          <div className="ml-auto text-sm text-muted-foreground">
-            Step {step} of 3
-          </div>
-        </div>
+        <SetupFlowHeading
+          title="Create Wallet"
+          trailing={
+            <div className="ml-auto text-sm text-muted-foreground">
+              Step {step} of 3
+            </div>
+          }
+        />
 
         {step === 1 && (
           <>

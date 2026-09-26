@@ -1,24 +1,24 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react'
-import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { EnterAppPasswordModal } from '@/components/EnterAppPasswordModal'
-import { SetupBackToWelcomeButton } from '@/components/SetupBackToWelcomeButton'
+import { SetupFlowHeading } from '@/components/setup/SetupFlowHeading'
 import { SetupNewWalletGate } from '@/components/setup/SetupNewWalletGate'
 import { useCryptoStore } from '@/stores/cryptoStore'
-import { useWalletStore } from '@/stores/walletStore'
-import { useAddWallet, useWallets } from '@/db'
-import {
-  persistAndActivateNewWallet,
-  prepareNewWalletEncryption,
-} from '@/lib/wallet/new-wallet'
+import { newWalletPersistFieldsFromEncryptResult } from '@/lib/wallet/new-wallet'
 import { isWalletSecretsSessionActive } from '@/lib/wallet/wallet-secrets-session'
+import {
+  completeNewWalletSetup,
+  toastNewWalletFlowError,
+  usePersistAndActivateNewWallet,
+  usePrepareNewWalletEncryption,
+} from '@/pages/setup/use-new-wallet-setup'
 
 export function ImportWalletPage() {
   const navigate = useNavigate()
@@ -27,15 +27,10 @@ export function ImportWalletPage() {
   const [isValid, setIsValid] = useState<boolean | null>(null)
   const [confirmPasswordOpen, setConfirmPasswordOpen] = useState(false)
 
-  const { data: wallets } = useWallets()
-
   const validateMnemonic = useCryptoStore((cryptoState) => cryptoState.validateMnemonic)
   const importWalletAndEncryptSecrets = useCryptoStore((cryptoState) => cryptoState.importWalletAndEncryptSecrets)
-  const networkMode = useWalletStore((walletState) => walletState.networkMode)
-  const addressType = useWalletStore((walletState) => walletState.addressType)
-  const accountId = useWalletStore((walletState) => walletState.accountId)
-  const addWallet = useAddWallet()
-  const queryClient = useQueryClient()
+  const prepareNewWalletEncryptionCall = usePrepareNewWalletEncryption()
+  const persistNewWallet = usePersistAndActivateNewWallet()
 
   const mnemonic = useMemo(
     () =>
@@ -76,42 +71,25 @@ export function ImportWalletPage() {
     mutationFn: async (appPassword?: string) => {
       if (!canRestore) throw new Error('Invalid input')
 
-      const network = await prepareNewWalletEncryption(appPassword, networkMode)
-      const { encryptedPayload, encryptedMnemonic, walletResult } =
-        await importWalletAndEncryptSecrets({
-          mnemonic,
-          network,
-          addressType,
-          accountId,
-        })
+      const encryptionTarget = await prepareNewWalletEncryptionCall(appPassword)
+      const importWalletOutcome = await importWalletAndEncryptSecrets({
+        mnemonic,
+        ...encryptionTarget,
+      })
 
       setMnemonicInput('')
 
-      await persistAndActivateNewWallet({
-        encryptedBlobs: {
-          payload: encryptedPayload,
-          mnemonic: encryptedMnemonic,
-        },
-        firstAddress: walletResult.firstAddress,
+      await persistNewWallet({
+        ...newWalletPersistFieldsFromEncryptResult(importWalletOutcome),
         markNoMnemonicBackup: false,
-        existingWalletNames: (wallets ?? []).map((wallet) => wallet.name),
-        insertWalletRow: (walletRow) =>
-          addWallet.mutateAsync({
-            name: walletRow.name,
-            created_at: walletRow.createdAt,
-          }),
-        queryClient,
       })
     },
     onSuccess: () => {
       setMnemonicInput('')
-      toast.success('Wallet imported successfully!')
-      navigate({ to: '/wallet' })
+      completeNewWalletSetup(navigate, 'Wallet imported successfully!')
     },
     onError: (err) => {
-      toast.error(
-        err instanceof Error ? err.message : 'Failed to import wallet',
-      )
+      toastNewWalletFlowError(err, 'Failed to import wallet')
     },
   })
 
@@ -126,10 +104,7 @@ export function ImportWalletPage() {
   return (
     <SetupNewWalletGate>
       <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <SetupBackToWelcomeButton />
-          <h2 className="text-xl font-bold">Import Wallet</h2>
-        </div>
+        <SetupFlowHeading title="Import Wallet" />
 
         <Card>
           <CardHeader>

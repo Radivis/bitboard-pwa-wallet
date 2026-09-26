@@ -34,6 +34,25 @@ export type PersistAndActivateNewWalletParams = {
   queryClient: QueryClient
 }
 
+export type EncryptedNewWalletResult = {
+  encryptedPayload: SplitWalletSecretsEncryptedBlobs['payload']
+  encryptedMnemonic: SplitWalletSecretsEncryptedBlobs['mnemonic']
+  walletResult: { firstAddress: string }
+}
+
+/** Shared shape of createWalletAndEncryptSecrets and importWalletAndEncryptSecrets. */
+export function newWalletPersistFieldsFromEncryptResult(
+  encryptResult: EncryptedNewWalletResult,
+): Pick<PersistAndActivateNewWalletParams, 'encryptedBlobs' | 'firstAddress'> {
+  return {
+    encryptedBlobs: {
+      payload: encryptResult.encryptedPayload,
+      mnemonic: encryptResult.encryptedMnemonic,
+    },
+    firstAddress: encryptResult.walletResult.firstAddress,
+  }
+}
+
 /**
  * Opens the secrets session and worker channel, then maps the active network
  * for create/import encryption calls.

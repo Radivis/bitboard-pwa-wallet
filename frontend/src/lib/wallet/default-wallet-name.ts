@@ -23,7 +23,7 @@ export const WALLET_NAME_ADJECTIVES = [
   'Proud',
   'Steady',
   'Smart',
-  'Warm',
+  'Vigilant',
   'Jolly',
 ] as const
 
