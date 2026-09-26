@@ -205,6 +205,7 @@ export interface OpenArkadeSessionResult {
   arkadeAddress: string
   operatorSignerPkHex: string
   signerMigrationHint?: ArkadeSignerMigrationHint
+  bumperHydrateFellBackToEmpty?: boolean
 }
 
 export interface ArkadeSendParams {

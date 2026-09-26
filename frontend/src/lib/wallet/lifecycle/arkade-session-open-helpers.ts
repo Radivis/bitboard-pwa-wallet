@@ -14,6 +14,7 @@ import { ensureArkadeWorkerSecretsChannel } from '@/workers/secrets-channel'
 import { getArkadeWorker, getArkadeWorkerIfExists } from '@/workers/arkade-factory'
 import type { OpenArkadeSessionResult } from '@/workers/arkade-api'
 import { resolveBumperHydrateForSessionOpen } from '@/lib/wallet/resolve-bumper-hydrate'
+import { reportBumperHydrateFallbackWarning } from '@/lib/wallet/bumper-hydrate-warning'
 import { useWalletStore } from '@/stores/walletStore'
 
 type ArkadeWorker = Awaited<ReturnType<typeof getArkadeWorker>>
@@ -131,6 +132,7 @@ export async function hydrateArkadeDashboardAfterSessionOpen(params: {
   networkMode: ArkadeSupportedNetworkMode
   arkadeAccountId: string
   signerMigrationHint: OpenArkadeSessionResult['signerMigrationHint']
+  bumperHydrateFellBackToEmpty: boolean
   sessionReuseState: ArkadeSessionReuseState
   runPostOpenMaintenance: (
     worker: ArkadeWorker,
@@ -139,6 +141,9 @@ export async function hydrateArkadeDashboardAfterSessionOpen(params: {
 }): Promise<void> {
   if (useWalletStore.getState().activeWalletId !== params.walletId) {
     return
+  }
+  if (params.bumperHydrateFellBackToEmpty) {
+    reportBumperHydrateFallbackWarning()
   }
   await params.worker.reconcileActiveAccountId(params.arkadeAccountId)
   if (useWalletStore.getState().activeWalletId !== params.walletId) {

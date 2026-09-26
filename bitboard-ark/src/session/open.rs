@@ -314,6 +314,7 @@ impl ArkSession {
             network_mode,
             operator_identity,
             autonomous_mode: Cell::new(autonomous_mode),
+            offchain_key_discovery_failed: Cell::new(false),
             bumper_wallet_sync_phase: Cell::new(
                 super::bumper_sync_policy::BumperWalletSyncPhase::NotStarted,
             ),
@@ -374,6 +375,10 @@ impl ArkSession {
 
     pub fn bumper_wallet_full_scan_done(&self) -> bool {
         self.bumper_wallet.completed_full_scan()
+    }
+
+    pub fn bumper_hydrate_fell_back_to_empty(&self) -> bool {
+        self.bumper_wallet.bumper_hydrate_fell_back_to_empty()
     }
 
     pub fn operator_signer_pk_hex(&self) -> String {

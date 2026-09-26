@@ -34,14 +34,20 @@ pub fn full_vtxo_list_reconcile_due(
     now.saturating_sub(snapshot.full_listed_at) > FULL_VTXO_LIST_RECONCILE_INTERVAL_SECS
 }
 
-/// Snapshot coin selection is current only while a full reconcile is not due (ARK-SYNC-07).
+/// Snapshot coin selection is current only while a full reconcile is not due and the latest
+/// offchain key discovery succeeded (ARK-SYNC-07).
 ///
 /// A due reconcile means the snapshot can still list VTXOs the operator has already spent
-/// outside the recent light-sync window. Send then asks `list_spendable_vtxos` instead.
+/// outside the recent light-sync window. A failed key discovery means new receive scripts
+/// may be missing from that snapshot. Send then asks `list_spendable_vtxos` instead.
 pub fn send_coin_selection_may_use_offchain_snapshot(
     snapshot: Option<&OffchainVtxoSnapshot>,
     now: i64,
+    offchain_key_discovery_failed: bool,
 ) -> bool {
+    if offchain_key_discovery_failed {
+        return false;
+    }
     !full_vtxo_list_reconcile_due(snapshot, now, false)
 }
 
@@ -135,13 +141,28 @@ mod tests {
         let fresh = snapshot_with_full_listed_at(now);
         assert!(send_coin_selection_may_use_offchain_snapshot(
             Some(&fresh),
-            now
+            now,
+            false
         ));
         let stale = snapshot_with_full_listed_at(now - FULL_VTXO_LIST_RECONCILE_INTERVAL_SECS - 1);
         assert!(!send_coin_selection_may_use_offchain_snapshot(
             Some(&stale),
-            now
+            now,
+            false
         ));
-        assert!(send_coin_selection_may_use_offchain_snapshot(None, now));
+        assert!(send_coin_selection_may_use_offchain_snapshot(
+            None, now, false
+        ));
+    }
+
+    #[test]
+    fn send_skips_snapshot_coin_selection_when_key_discovery_failed() {
+        let now = 1_700_000_000;
+        let fresh = snapshot_with_full_listed_at(now);
+        assert!(!send_coin_selection_may_use_offchain_snapshot(
+            Some(&fresh),
+            now,
+            true
+        ));
     }
 }

@@ -17,6 +17,8 @@ pub struct OpenSessionResult {
     pub operator_signer_pk_hex: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signer_migration_hint: Option<OperatorSignerMigrationHintDto>,
+    /// Persisted bumper changeset was present but could not be loaded.
+    pub bumper_hydrate_fell_back_to_empty: bool,
 }
 
 #[derive(Debug, Serialize)]

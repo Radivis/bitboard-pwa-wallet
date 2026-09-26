@@ -5,6 +5,7 @@ import {
   arkadeWalletScopesEqual,
   arkadeOpenSessionMatchesSaveTarget,
   assertArkadeOpenSessionMatchesScope,
+  stampedPersistScopeStillMatchesOpenSession,
 } from '@/lib/arkade/arkade-session-scope'
 
 const openSession = {
@@ -102,5 +103,29 @@ describe('arkadeOpenSessionMatchesSaveTarget', () => {
         arkadeAccountId: openSession.arkadeAccountId,
       }),
     ).toBe(true)
+  })
+})
+
+describe('stampedPersistScopeStillMatchesOpenSession', () => {
+  const scopeAtStart = {
+    walletId: openSession.walletId,
+    arkadeAccountId: openSession.arkadeAccountId,
+  }
+
+  it('refuses a flush that started with no session', () => {
+    expect(stampedPersistScopeStillMatchesOpenSession(null, openSession)).toBe(false)
+  })
+
+  it('refuses a flush after the open session wallet changes', () => {
+    expect(
+      stampedPersistScopeStillMatchesOpenSession(scopeAtStart, {
+        ...openSession,
+        walletId: 2,
+      }),
+    ).toBe(false)
+  })
+
+  it('allows a flush while the stamped wallet and account are still open', () => {
+    expect(stampedPersistScopeStillMatchesOpenSession(scopeAtStart, openSession)).toBe(true)
   })
 })

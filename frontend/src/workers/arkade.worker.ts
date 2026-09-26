@@ -6,8 +6,10 @@ import type {
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import { arkadeSessionKey } from '@/lib/arkade/arkade-session-key'
 import {
+  ARKADE_PERSIST_SCOPE_CHANGED_ERROR,
   arkadeOpenSessionMatchesSaveTarget,
   assertArkadeOpenSessionMatchesScope,
+  stampedPersistScopeStillMatchesOpenSession,
 } from '@/lib/arkade/arkade-session-scope'
 import { rethrowWasmArkErrorForComlink } from '@/lib/shared/wasm-ark-error'
 import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
@@ -217,21 +219,51 @@ function deleteLegacyArkadeIndexedDb(
   }
 }
 
-async function flushSdkPersistenceNowOrThrow(): Promise<void> {
+type ArkadePersistScope = {
+  walletId: number
+  arkadeAccountId: string
+}
+
+function captureOpenPersistScope(): ArkadePersistScope | null {
   if (activeSessionParams == null) {
-    throw new Error('Arkade SDK persistence flush was skipped (no active session)')
+    return null
+  }
+  return {
+    walletId: activeSessionParams.walletId,
+    arkadeAccountId: activeSessionParams.arkadeAccountId,
+  }
+}
+
+async function flushSdkPersistenceNowOrThrow(
+  scopeAtStart?: ArkadePersistScope | null,
+): Promise<void> {
+  const stampedScope = scopeAtStart === undefined ? captureOpenPersistScope() : scopeAtStart
+  if (
+    stampedScope == null ||
+    !stampedPersistScopeStillMatchesOpenSession(stampedScope, activeSessionParams)
+  ) {
+    if (stampedScope == null && activeSessionParams == null) {
+      throw new Error('Arkade SDK persistence flush was skipped (no active session)')
+    }
+    throw new Error(ARKADE_PERSIST_SCOPE_CHANGED_ERROR)
   }
 
   if (inFlightPersist != null) {
     await inFlightPersist
-    return flushSdkPersistenceNowOrThrow()
+    return flushSdkPersistenceNowOrThrow(stampedScope)
   }
 
-  const sessionParams = activeSessionParams
+  const sessionParams = stampedScope
   inFlightPersist = (async () => {
+    if (!stampedPersistScopeStillMatchesOpenSession(sessionParams, activeSessionParams)) {
+      throw new Error(ARKADE_PERSIST_SCOPE_CHANGED_ERROR)
+    }
     const sdkPersistenceJson = await invokeWasmArk((wasmModule) =>
       wasmModule.ark_export_persistence_json(),
     )
+    if (!stampedPersistScopeStillMatchesOpenSession(sessionParams, activeSessionParams)) {
+      throw new Error(ARKADE_PERSIST_SCOPE_CHANGED_ERROR)
+    }
     await persistSdkJsonToEncryptedPayload(getEncryptedPayloadDeps(), {
       walletId: sessionParams.walletId,
       arkadeAccountId: sessionParams.arkadeAccountId,
@@ -262,11 +294,20 @@ let onBackgroundFullReconcileFinished:
   | null = null
 
 const scheduleBackgroundFullVtxoReconcileSingleFlight = createSingleFlightScheduler(async () => {
+  const reconcileScope = captureOpenPersistScope()
   try {
     const reconcileResult: unknown = await invokeWasmArk((wasmModule) =>
       wasmModule.ark_reconcile_full_offchain_vtxo_list() as Promise<unknown>,
     )
-    await flushSdkPersistenceNowOrThrow()
+    if (!stampedPersistScopeStillMatchesOpenSession(reconcileScope, activeSessionParams)) {
+      await onBackgroundFullReconcileFinished?.({
+        ok: false,
+        warningMessage:
+          'Full VTXO reconcile was discarded because the wallet session changed',
+      })
+      return
+    }
+    await flushSdkPersistenceNowOrThrow(reconcileScope)
     await onBackgroundFullReconcileFinished?.(
       backgroundFullReconcileFinishedOutcome(reconcileResult),
     )
@@ -438,6 +479,7 @@ async function openSessionImpl(
       signerMigrationHint: openResult.signerMigrationHint as
         | OpenArkadeSessionResult['signerMigrationHint']
         | undefined,
+      bumperHydrateFellBackToEmpty: openResult.bumperHydrateFellBackToEmpty === true,
     }
   } catch (error) {
     activeSessionKey = null

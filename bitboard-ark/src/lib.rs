@@ -176,6 +176,7 @@ pub async fn ark_open_session(params: JsValue) -> Result<JsValue, JsValue> {
 
         let arkade_address = session.peek_offchain_address()?;
         let operator_signer_pk_hex = session.operator_signer_pk_hex();
+        let bumper_hydrate_fell_back_to_empty = session.bumper_hydrate_fell_back_to_empty();
         let signer_migration_hint =
             migration_hint.map(|hint| crate::api_types::OperatorSignerMigrationHintDto {
                 previous_signer_pk_hex: hint.previous_signer_pk_hex,
@@ -194,6 +195,7 @@ pub async fn ark_open_session(params: JsValue) -> Result<JsValue, JsValue> {
             arkade_address,
             operator_signer_pk_hex,
             signer_migration_hint,
+            bumper_hydrate_fell_back_to_empty,
         })
     })
     .await

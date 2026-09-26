@@ -157,6 +157,7 @@ async function runArkadeSessionOpenBody(params: {
     networkMode,
     arkadeAccountId: activeAccount.id,
     signerMigrationHint: openResult.signerMigrationHint,
+    bumperHydrateFellBackToEmpty: openResult.bumperHydrateFellBackToEmpty === true,
     sessionReuseState: arkadeSessionReuseState,
     runPostOpenMaintenance: runPostOpenArkadeMaintenance,
   })

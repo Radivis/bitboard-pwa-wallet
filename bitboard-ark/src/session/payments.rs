@@ -57,7 +57,11 @@ impl ArkSession {
 
     fn send_may_select_outpoints_from_snapshot(&self) -> bool {
         let snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot;
-        send_coin_selection_may_use_offchain_snapshot(snapshot.as_ref(), current_unix_timestamp())
+        send_coin_selection_may_use_offchain_snapshot(
+            snapshot.as_ref(),
+            current_unix_timestamp(),
+            self.offchain_key_discovery_failed.get(),
+        )
     }
 
     async fn send_outpoints_excluding_spend_locked(

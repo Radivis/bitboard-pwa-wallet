@@ -49,6 +49,9 @@ pub struct ArkSession {
     network_mode: NetworkMode,
     operator_identity: Mutex<OperatorIdentity>,
     autonomous_mode: Cell<bool>,
+    /// Set when the latest `discover_keys` failed. Cleared on the next success.
+    /// Sends then use a live spendable list instead of the offchain snapshot.
+    offchain_key_discovery_failed: Cell<bool>,
     bumper_wallet_sync_phase: Cell<BumperWalletSyncPhase>,
     /// Serializes offchain snapshot merge and persist. HTTP stays outside this lock.
     vtxo_snapshot_apply: Mutex<()>,

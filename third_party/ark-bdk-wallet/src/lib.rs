@@ -50,6 +50,7 @@ where
     db: DB,
     completed_full_scan: AtomicBool,
     accumulated_changeset: RwLock<ChangeSet>,
+    bumper_hydrate_fell_back_to_empty: bool,
 }
 
 impl<DB> Wallet<DB>
@@ -95,6 +96,8 @@ where
     ) -> Result<Self> {
         let kp = xprv.to_keypair(&secp);
         let (mut wallet, used_empty) = create_or_load_bip84_wallet(xprv, network, changeset_json)?;
+        let bumper_hydrate_fell_back_to_empty =
+            bumper_changeset_hydrate_fell_back_to_empty(changeset_json, used_empty);
         let accumulated = if used_empty {
             wallet.take_staged().unwrap_or_default()
         } else {
@@ -124,7 +127,13 @@ where
                 used_empty,
             )),
             accumulated_changeset: RwLock::new(accumulated),
+            bumper_hydrate_fell_back_to_empty,
         })
+    }
+
+    /// True when a persisted changeset was supplied and hydrate created an empty wallet instead.
+    pub fn bumper_hydrate_fell_back_to_empty(&self) -> bool {
+        self.bumper_hydrate_fell_back_to_empty
     }
 
     pub fn export_changeset_json(&self) -> Result<String, Error> {
@@ -515,6 +524,14 @@ pub(crate) fn completed_full_scan_from_hydrate(full_scan_done: bool, used_empty:
     full_scan_done && !used_empty
 }
 
+/// A supplied changeset that did not load is a fallback, not a brand-new empty wallet.
+pub(crate) fn bumper_changeset_hydrate_fell_back_to_empty(
+    changeset_json: Option<&str>,
+    used_empty: bool,
+) -> bool {
+    changeset_json.is_some() && used_empty
+}
+
 /// Align bumper BDK chain with crypto (`Testnet` → Testnet4).
 pub(crate) fn bumper_bdk_network(network: Network) -> Network {
     match network {
@@ -576,8 +593,8 @@ pub(crate) fn create_or_load_bip84_wallet(
 #[cfg(test)]
 mod bumper_wallet_scan_kind_tests {
     use super::{
-        bumper_bdk_network, bumper_wallet_scan_kind, completed_full_scan_from_hydrate,
-        create_or_load_bip84_wallet, BumperWalletScanKind,
+        bumper_bdk_network, bumper_changeset_hydrate_fell_back_to_empty, bumper_wallet_scan_kind,
+        completed_full_scan_from_hydrate, create_or_load_bip84_wallet, BumperWalletScanKind,
     };
     use bdk_wallet::KeychainKind;
     use bitcoin::bip32::Xpriv;
@@ -610,6 +627,19 @@ mod bumper_wallet_scan_kind_tests {
             bumper_wallet_scan_kind(completed_full_scan_from_hydrate(true, true)),
             BumperWalletScanKind::Full
         );
+    }
+
+    #[test]
+    fn unusable_changeset_is_a_hydrate_fallback_and_missing_changeset_is_not() {
+        assert!(!bumper_changeset_hydrate_fell_back_to_empty(None, true));
+        assert!(!bumper_changeset_hydrate_fell_back_to_empty(
+            Some("{}"),
+            false
+        ));
+        assert!(bumper_changeset_hydrate_fell_back_to_empty(
+            Some("not-json"),
+            true
+        ));
     }
 
     #[test]
