@@ -186,7 +186,7 @@ vi.mock('@/hooks/useMainnetFiatRatesQuery', () => ({
 vi.mock('@/lib/wallet/wallet-utils', () => ({
   runIncrementalDashboardWalletSync: vi.fn(),
   runFullScanDashboardWalletSync: vi.fn(),
-  retryImportInitialEsploraSyncWithWalletStatus: vi.fn(),
+  retryInitialEsploraSyncWithWalletStatus: vi.fn(),
 }))
 
 vi.mock('@/components/WalletUnlock', () => ({
@@ -227,7 +227,7 @@ describe('DashboardPage Arkade contracts', () => {
       currentAddress: 'tb1qtest',
       lastSyncTime: null,
       transactions: [],
-      importInitialSyncErrorMessage: null,
+      initialSyncErrorMessage: null,
     }
     arkadeBalanceMock.mockReturnValue({
       isLoading: false,

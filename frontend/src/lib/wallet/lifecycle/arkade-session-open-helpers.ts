@@ -137,12 +137,6 @@ export async function hydrateArkadeDashboardAfterSessionOpen(params: {
     networkMode: ArkadeSupportedNetworkMode,
   ) => Promise<void>
 }): Promise<void> {
-  if (params.signerMigrationHint != null) {
-    useWalletStore.getState().setArkadeSignerMigrationHint(params.signerMigrationHint)
-  } else {
-    useWalletStore.getState().setArkadeSignerMigrationHint(null)
-  }
-
   if (useWalletStore.getState().activeWalletId !== params.walletId) {
     return
   }
@@ -154,6 +148,11 @@ export async function hydrateArkadeDashboardAfterSessionOpen(params: {
   await refreshArkadeStoreFromLoadedWasm(params.arkadeAccountId, params.walletId)
   if (useWalletStore.getState().activeWalletId !== params.walletId) {
     return
+  }
+  if (params.signerMigrationHint != null) {
+    useWalletStore.getState().setArkadeSignerMigrationHint(params.signerMigrationHint)
+  } else {
+    useWalletStore.getState().setArkadeSignerMigrationHint(null)
   }
   useWalletStore.getState().setActiveArkadeAccountId(params.arkadeAccountId)
   params.sessionReuseState.setLastOpenedSessionKey(

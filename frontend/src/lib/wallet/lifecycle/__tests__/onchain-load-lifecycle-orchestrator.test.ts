@@ -16,6 +16,9 @@ const setTransactions = vi.fn()
 const setCurrentAddress = vi.fn()
 const setLastSyncTime = vi.fn()
 const commitLoadedDescriptorWallet = vi.fn()
+const walletState = {
+  activeWalletId: 1 as number | null,
+}
 
 vi.mock('@/workers/crypto-factory', () => ({
   waitForCryptoWorkerHealthy: (...args: unknown[]) => waitForCryptoWorkerHealthy(...args),
@@ -59,6 +62,7 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
     ...actual,
     useWalletStore: {
       getState: () => ({
+        activeWalletId: walletState.activeWalletId,
         setWalletStatus,
         setBalance,
         setTransactions,
@@ -87,6 +91,7 @@ vi.mock('@/lib/wallet/lifecycle/onchain-save-lifecycle-orchestrator', () => ({
 }))
 
 import {
+  detachOnchainLoadSnapshotIfDifferentWallet,
   getOnchainLoadHydrationForPostUnlock,
   getOnchainLoadLifecycleSnapshot,
   markOnchainRailLoadedAfterExternalHydration,
@@ -123,6 +128,7 @@ describe('onchain-load-lifecycle-orchestrator', () => {
     getCurrentAddress.mockResolvedValue('tb1qtest')
     refreshWalletStoreFromLoadedBdk.mockResolvedValue(undefined)
     startAutoLockTimer.mockReturnValue(undefined)
+    walletState.activeWalletId = 1
   })
 
   it('initial snapshot is all not-configured', () => {
@@ -165,6 +171,86 @@ describe('onchain-load-lifecycle-orchestrator', () => {
     expect(setWalletStatus).toHaveBeenCalledWith('unlocked')
     expect(setLastSyncTime).toHaveBeenCalledWith(null)
     expect(startAutoLockTimer).toHaveBeenCalled()
+  })
+
+  it('loads the new wallet after the previous on-chain load fails in flight', async () => {
+    let rejectPreviousLoad: (error: Error) => void = () => {}
+    let markPreviousLoadStarted: () => void = () => {}
+    const previousLoadStarted = new Promise<void>((resolve) => {
+      markPreviousLoadStarted = resolve
+    })
+    let loadAttempt = 0
+    withPersistedChainMismatchRetry.mockImplementation(async () => {
+      loadAttempt += 1
+      if (loadAttempt === 1) {
+        markPreviousLoadStarted()
+        await new Promise<never>((_resolve, reject) => {
+          rejectPreviousLoad = reject
+        })
+      }
+      return { result: true, usedEmptyChainFallback: false }
+    })
+
+    const previousLoad = orchestrateOnchainLoad(loadParams)
+    await previousLoadStarted
+
+    walletState.activeWalletId = 2
+    const nextLoad = orchestrateOnchainLoad({ ...loadParams, walletId: 2 })
+    rejectPreviousLoad(new Error('wasm load failed'))
+
+    await expect(previousLoad).rejects.toThrow('wasm load failed')
+    await nextLoad
+
+    expect(getOnchainLoadLifecycleSnapshot().loadPhase).toBe('loaded')
+    expect(withPersistedChainMismatchRetry).toHaveBeenCalledTimes(2)
+    expect(commitLoadedDescriptorWallet).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not publish address or descriptor when the active wallet changed during load', async () => {
+    resolveDescriptorWallet.mockImplementation(async () => {
+      walletState.activeWalletId = 2
+      return {
+        externalDescriptor: 'ext',
+        internalDescriptor: 'int',
+        changeSet: '{}',
+      }
+    })
+
+    await orchestrateOnchainLoad(loadParams)
+
+    expect(setCurrentAddress).not.toHaveBeenCalled()
+    expect(setBalance).not.toHaveBeenCalled()
+    expect(commitLoadedDescriptorWallet).not.toHaveBeenCalled()
+    expect(refreshWalletStoreFromLoadedBdk).not.toHaveBeenCalled()
+    expect(invalidateOnchainDashboardQueries).not.toHaveBeenCalled()
+  })
+
+  it('skips dashboard invalidation when the wallet changed during the balance refresh', async () => {
+    refreshWalletStoreFromLoadedBdk.mockImplementation(async () => {
+      walletState.activeWalletId = 2
+    })
+
+    await orchestrateOnchainLoad(loadParams)
+
+    expect(commitLoadedDescriptorWallet).toHaveBeenCalled()
+    expect(invalidateOnchainDashboardQueries).not.toHaveBeenCalled()
+  })
+
+  it('clears another wallet load-error so the new wallet can load', async () => {
+    withPersistedChainMismatchRetry.mockRejectedValueOnce(new Error('wasm load failed'))
+    await expect(orchestrateOnchainLoad(loadParams)).rejects.toThrow('wasm load failed')
+
+    detachOnchainLoadSnapshotIfDifferentWallet(2)
+    expect(getOnchainLoadLifecycleSnapshot().loadPhase).toBe('not-configured')
+
+    withPersistedChainMismatchRetry.mockResolvedValue({
+      result: true,
+      usedEmptyChainFallback: false,
+    })
+    walletState.activeWalletId = 2
+    await orchestrateOnchainLoad({ ...loadParams, walletId: 2 })
+
+    expect(getOnchainLoadLifecycleSnapshot().loadPhase).toBe('loaded')
   })
 
   it('load failure sets load-error and rethrows', async () => {

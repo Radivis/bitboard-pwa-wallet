@@ -239,6 +239,44 @@ describe('arkade-load-lifecycle-orchestrator', () => {
     expect(refreshArkadeStoreFromLoadedWasmMock).not.toHaveBeenCalled()
   })
 
+  it('opens the new wallet session when the previous Arkade load fails in flight', async () => {
+    let rejectPreviousOpen: (error: Error) => void = () => {}
+    let markPreviousOpenStarted: () => void = () => {}
+    const previousOpenStarted = new Promise<void>((resolve) => {
+      markPreviousOpenStarted = resolve
+    })
+
+    workerMocks.openSession.mockImplementation(async (params: { walletId: number }) => {
+      if (params.walletId === 1) {
+        markPreviousOpenStarted()
+        await new Promise<never>((_resolve, reject) => {
+          rejectPreviousOpen = reject
+        })
+      }
+      return {
+        arkadeAddress: 'tark1qnew',
+        operatorSignerPkHex: '02deadbeef',
+      }
+    })
+
+    const previousLoad = orchestrateArkadeLoad({ walletId: 1, networkMode: 'signet' })
+    await previousOpenStarted
+
+    walletState.activeWalletId = 2
+    const nextLoad = orchestrateArkadeLoad({ walletId: 2, networkMode: 'signet' })
+    rejectPreviousOpen(new Error('operator unreachable'))
+
+    await expect(previousLoad).rejects.toThrow('operator unreachable')
+    await nextLoad
+
+    expect(workerMocks.openSession).toHaveBeenCalledWith(
+      expect.objectContaining({ walletId: 2 }),
+    )
+    expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loaded')
+    expect(clearArkadeDashboardStoreMock).not.toHaveBeenCalled()
+    expect(terminateArkadeWorkerMock).toHaveBeenCalled()
+  })
+
   it('load failure sets load-error and tears down worker without leaving loading', async () => {
     getArkadeWorkerIfExistsMock.mockReturnValue(workerMocks)
     workerMocks.openSession.mockRejectedValueOnce(

@@ -8,6 +8,10 @@ const getArkadeWorkerIfExistsMock = vi.hoisted(() => vi.fn())
 const getArkadeWorkerMock = vi.hoisted(() => vi.fn())
 const ensureArkadeAccountMock = vi.hoisted(() => vi.fn())
 const resolveBumperHydrateMock = vi.hoisted(() => vi.fn())
+const walletState = vi.hoisted(() => ({
+  activeWalletId: 7 as number | null,
+}))
+
 const workerMocks = vi.hoisted(() => ({
   hasOpenSession: vi.fn(),
   reconcileActiveAccountId: vi.fn(),
@@ -17,7 +21,7 @@ const workerMocks = vi.hoisted(() => ({
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: {
     getState: () => ({
-      activeWalletId: 7,
+      activeWalletId: walletState.activeWalletId,
       setActiveArkadeAccountId: setActiveArkadeAccountIdMock,
       setLastOperatorSyncTime: setLastOperatorSyncTimeMock,
       setArkadeSignerMigrationHint: setArkadeSignerMigrationHintMock,
@@ -96,6 +100,7 @@ function createSessionReuseState(initialKey: string | null = null): ArkadeSessio
 describe('arkade-session-open-helpers', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    walletState.activeWalletId = 7
     refreshArkadeStoreFromLoadedWasmMock.mockResolvedValue(undefined)
     workerMocks.hasOpenSession.mockResolvedValue(true)
     workerMocks.reconcileActiveAccountId.mockResolvedValue(undefined)
@@ -166,6 +171,28 @@ describe('arkade-session-open-helpers', () => {
     expect(setActiveArkadeAccountIdMock).toHaveBeenCalledWith(TEST_ACCOUNT.id)
     expect(sessionReuseState.lastOpenedSessionKey).toBe('7:signet:conn-helper-test')
     expect(runPostOpenMaintenance).toHaveBeenCalledWith(workerMocks, 'signet')
+  })
+
+  it('does not write the signer migration hint when the active wallet changed', async () => {
+    walletState.activeWalletId = 8
+
+    await hydrateArkadeDashboardAfterSessionOpen({
+      worker: workerMocks,
+      walletId: 7,
+      networkMode: 'signet',
+      arkadeAccountId: TEST_ACCOUNT.id,
+      signerMigrationHint: {
+        previousSignerPkHex: '02deadbeef',
+        deprecatedStatus: 'deprecated',
+        cutoffUnix: 1_700_000_000,
+      },
+      sessionReuseState: createSessionReuseState(),
+      runPostOpenMaintenance: vi.fn().mockResolvedValue(undefined),
+    })
+
+    expect(setArkadeSignerMigrationHintMock).not.toHaveBeenCalled()
+    expect(workerMocks.reconcileActiveAccountId).not.toHaveBeenCalled()
+    expect(setActiveArkadeAccountIdMock).not.toHaveBeenCalled()
   })
 
   it('LIFE-ARK-BUMP-02 openFreshArkadeWorkerSession passes SegWit-0 changeset and fullScanDone', async () => {

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { BadLocalChainStateError } from '@/lib/shared/bad-local-chain-state-error'
 import {
   reportWalletSyncError,
-  showImportInitialSyncFailureToast,
+  showInitialSyncFailureToast,
 } from '../wallet-sync-error-toast'
 
 const toastError = vi.fn()
@@ -19,9 +19,9 @@ describe('reportWalletSyncError', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
-  it('shows title + description with sanitized detail for initial-import', () => {
+  it('shows title + description with sanitized detail for initial-sync', () => {
     reportWalletSyncError(
-      'initial-import',
+      'initial-sync',
       new Error('Esplora request failed: HTTP 502'),
     )
 
@@ -31,8 +31,8 @@ describe('reportWalletSyncError', () => {
     })
   })
 
-  it('shows single-line toast when initial-import has no message detail', () => {
-    reportWalletSyncError('initial-import', new Error(''))
+  it('shows single-line toast when initial-sync has no message detail', () => {
+    reportWalletSyncError('initial-sync', new Error(''))
 
     expect(toastError).toHaveBeenCalledWith(
       'Initial sync failed — you can sync later from the dashboard.',
@@ -61,9 +61,9 @@ describe('reportWalletSyncError', () => {
     })
   })
 
-  it('shows repair hint for initial-import when error indicates bad local chain', () => {
+  it('shows repair hint for initial-sync when error indicates bad local chain', () => {
     reportWalletSyncError(
-      'initial-import',
+      'initial-sync',
       new Error('Blockchain error: HeaderHeightNotFound(1)'),
     )
 
@@ -73,7 +73,7 @@ describe('reportWalletSyncError', () => {
   })
 })
 
-describe('showImportInitialSyncFailureToast', () => {
+describe('showInitialSyncFailureToast', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -81,7 +81,7 @@ describe('showImportInitialSyncFailureToast', () => {
 
   it('shows error with Retry action', () => {
     const onRetry = vi.fn()
-    showImportInitialSyncFailureToast(
+    showInitialSyncFailureToast(
       new Error('HTTP 503'),
       onRetry,
     )
@@ -99,7 +99,7 @@ describe('showImportInitialSyncFailureToast', () => {
 
   it('shows Full rescan hint for bad local chain', () => {
     const onRetry = vi.fn()
-    showImportInitialSyncFailureToast(
+    showInitialSyncFailureToast(
       new BadLocalChainStateError(),
       onRetry,
     )

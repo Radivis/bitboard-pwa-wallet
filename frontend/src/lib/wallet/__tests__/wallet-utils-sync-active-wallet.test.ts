@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const syncWallet = vi.fn()
+const fullScanWallet = vi.fn()
 const getBalance = vi.fn()
 const getTransactionList = vi.fn()
 const setBalance = vi.fn()
 const setTransactions = vi.fn()
+const walletState = {
+  activeWalletId: 1 as number | null,
+}
 
 vi.mock('sonner', () => ({
   toast: {
@@ -18,7 +22,7 @@ vi.mock('@/stores/cryptoStore', () => ({
   useCryptoStore: {
     getState: () => ({
       syncWallet,
-      fullScanWallet: vi.fn(),
+      fullScanWallet,
       getBalance,
       getTransactionList,
     }),
@@ -28,6 +32,7 @@ vi.mock('@/stores/cryptoStore', () => ({
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: {
     getState: () => ({
+      activeWalletId: walletState.activeWalletId,
       setBalance,
       setTransactions,
     }),
@@ -47,6 +52,7 @@ vi.mock('@/db/database', () => ({
   })),
 }))
 
+import { toast } from 'sonner'
 import { syncActiveWalletAndUpdateState } from '@/lib/wallet/wallet-utils'
 
 const settledBalance = {
@@ -61,6 +67,9 @@ describe('syncActiveWalletAndUpdateState incremental follow-up', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getTransactionList.mockResolvedValue([])
+    walletState.activeWalletId = 1
+    fullScanWallet.mockResolvedValue(undefined)
+    vi.mocked(toast.loading).mockReturnValue('scan-toast' as unknown as string & number)
   })
 
   it('runs one follow-up sync when first pass leaves only untrusted pending', async () => {
@@ -87,5 +96,18 @@ describe('syncActiveWalletAndUpdateState incremental follow-up', () => {
     await syncActiveWalletAndUpdateState('regtest')
 
     expect(syncWallet).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not toast Wallet synced when the active wallet changed during a full scan', async () => {
+    fullScanWallet.mockImplementation(async () => {
+      walletState.activeWalletId = 2
+    })
+    getBalance.mockResolvedValue(settledBalance)
+
+    await syncActiveWalletAndUpdateState('regtest', { useFullScan: true, walletId: 1 })
+
+    expect(toast.success).not.toHaveBeenCalled()
+    expect(toast.dismiss).toHaveBeenCalledWith('scan-toast')
+    expect(setBalance).not.toHaveBeenCalled()
   })
 })

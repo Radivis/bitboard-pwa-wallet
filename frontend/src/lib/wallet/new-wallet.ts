@@ -10,8 +10,8 @@ import { suggestDefaultWalletName } from '@/lib/wallet/default-wallet-name'
 import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
 import { orchestrateOnchainSetupAfterPersist } from '@/lib/wallet/lifecycle/onchain-setup-lifecycle'
 import { orchestrateLock } from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
-import { retryImportInitialEsploraSyncWithWalletStatus } from '@/lib/wallet/wallet-utils'
-import { showImportInitialSyncFailureToast } from '@/lib/wallet/wallet-sync-error-toast'
+import { retryInitialEsploraSyncWithWalletStatus } from '@/lib/wallet/wallet-utils'
+import { showInitialSyncFailureToast } from '@/lib/wallet/wallet-sync-error-toast'
 import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet/wallet-query-cache-sync'
 import { ensureWalletSecretsSession } from '@/lib/wallet/wallet-secrets-session'
 import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
@@ -98,16 +98,16 @@ function recordInitialSyncFailure(setupError: unknown): void {
   const syncErrorMessage =
     sanitizeErrorMessageForUi(errorMessage(setupError) ?? String(setupError)) ||
     'Initial sync failed'
-  useWalletStore.getState().setImportInitialSyncErrorMessage(syncErrorMessage)
-  showImportInitialSyncFailureToast(setupError, () => {
-    void retryImportInitialEsploraSyncWithWalletStatus()
+  useWalletStore.getState().setInitialSyncErrorMessage(syncErrorMessage)
+  showInitialSyncFailureToast(setupError, () => {
+    void retryInitialEsploraSyncWithWalletStatus()
   })
 }
 
 async function runInitialOnchainSetup(walletId: number): Promise<void> {
   const walletState = useWalletStore.getState()
   const { networkMode, addressType, accountId } = walletState
-  useWalletStore.getState().setImportInitialSyncErrorMessage(null)
+  useWalletStore.getState().setInitialSyncErrorMessage(null)
   try {
     await orchestrateOnchainSetupAfterPersist({
       walletId,

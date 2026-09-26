@@ -54,7 +54,7 @@ const walletStoreState = {
   setTransactions: mockSetTransactions,
   setLastSyncTime: mockSetLastSyncTime,
   commitLoadedDescriptorWallet: mockCommitLoadedDescriptorWallet,
-  setImportInitialSyncErrorMessage: mockSetImportInitialSyncErrorMessage,
+  setInitialSyncErrorMessage: mockSetImportInitialSyncErrorMessage,
   clearArkadeDashboardState: vi.fn(),
   lockWallet: vi.fn(),
 }
@@ -116,11 +116,11 @@ vi.mock('@/lib/wallet/lifecycle/onchain-setup-lifecycle', () => ({
 }))
 
 vi.mock('@/lib/wallet/wallet-utils', () => ({
-  retryImportInitialEsploraSyncWithWalletStatus: mockRetryImportInitialSync,
+  retryInitialEsploraSyncWithWalletStatus: mockRetryImportInitialSync,
 }))
 
 vi.mock('@/lib/wallet/wallet-sync-error-toast', () => ({
-  showImportInitialSyncFailureToast: vi.fn(),
+  showInitialSyncFailureToast: vi.fn(),
 }))
 
 vi.mock('@/lib/wallet/wallet-query-cache-sync', () => ({

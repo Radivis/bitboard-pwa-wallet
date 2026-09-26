@@ -4,6 +4,7 @@ import { reportArkadeSessionOpenError } from '@/lib/arkade/arkade-session-open-e
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { detachArkadeLoadSnapshotIfDifferentWallet, orchestrateArkadeLoad } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
 import { detachArkadeSyncSnapshotIfDifferentWallet } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
+import { detachOnchainLoadSnapshotIfDifferentWallet } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
 import { detachOnchainSyncSnapshotIfDifferentWallet } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
 import { removeOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboard-sync'
 import type { NetworkMode } from '@/stores/walletStore'
@@ -15,6 +16,7 @@ import type { NetworkMode } from '@/stores/walletStore'
 export function releasePreviousWalletDashboardSession(nextWalletId: number): void {
   detachArkadeLoadSnapshotIfDifferentWallet(nextWalletId)
   detachArkadeSyncSnapshotIfDifferentWallet(nextWalletId)
+  detachOnchainLoadSnapshotIfDifferentWallet(nextWalletId)
   detachOnchainSyncSnapshotIfDifferentWallet(nextWalletId)
   removeArkadeDashboardQueries()
   removeArkadeDashboardSyncQueries()

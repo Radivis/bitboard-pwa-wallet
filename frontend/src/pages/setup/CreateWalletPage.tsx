@@ -41,7 +41,7 @@ export function CreateWalletPage() {
   const [mnemonicForBackup, setMnemonicForBackup] = useState('')
   const [pendingCreate, setPendingCreate] = useState<CreateWalletPending | null>(null)
   const [verificationWords, setVerificationWords] = useState<Record<number, string>>({})
-  const [confirmPasswordOpen, setEnterPasswordOpen] = useState(false)
+  const [confirmPasswordOpen, setConfirmPasswordOpen] = useState(false)
   const [pendingCreateAction, setPendingCreateAction] = useState<
     'generate' | 'quickCreate' | null
   >(null)
@@ -125,7 +125,7 @@ export function CreateWalletPage() {
         return
       }
       setPendingCreateAction(action)
-      setEnterPasswordOpen(true)
+      setConfirmPasswordOpen(true)
     },
     [createWalletMutation, quickCreateWalletMutation],
   )
@@ -149,7 +149,7 @@ export function CreateWalletPage() {
   })
 
   const handleEnterAppPassword = (appPassword: string) => {
-    setEnterPasswordOpen(false)
+    setConfirmPasswordOpen(false)
     const action = pendingCreateAction
     setPendingCreateAction(null)
     if (action === 'quickCreate') {
@@ -232,9 +232,9 @@ export function CreateWalletPage() {
 
         <EnterAppPasswordModal
           open={confirmPasswordOpen}
-          onOpenChange={setEnterPasswordOpen}
+          onOpenChange={setConfirmPasswordOpen}
           onCancel={() => {
-            setEnterPasswordOpen(false)
+            setConfirmPasswordOpen(false)
             setPendingCreateAction(null)
           }}
           onConfirm={handleEnterAppPassword}

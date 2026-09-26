@@ -308,7 +308,11 @@ export async function orchestrateArkadeLoad(params: ArkadeLoadParams): Promise<v
         arkadeAccountId,
       })
     } catch (error) {
+      const activeWalletChanged = abandonArkadeLoadIfActiveWalletChanged(walletId)
       terminateArkadeWorker()
+      if (activeWalletChanged) {
+        throw error
+      }
       clearArkadeDashboardStore()
       setSnapshot({
         loadPhase: 'load-error',

@@ -82,7 +82,7 @@ describe('useActiveWalletLoadQuery lock lifecycle reactivity', () => {
       lastSyncTime: null,
       transactions: [],
       loadedDescriptorWallet: null,
-      importInitialSyncErrorMessage: null,
+      initialSyncErrorMessage: null,
     })
     syncLockLifecycleWithActiveWallet(1)
   })

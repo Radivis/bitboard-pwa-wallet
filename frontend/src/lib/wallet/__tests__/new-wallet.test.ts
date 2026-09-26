@@ -36,11 +36,11 @@ vi.mock('@/lib/wallet/lifecycle/lock-lifecycle-orchestrator', () => ({
 }))
 
 vi.mock('@/lib/wallet/wallet-sync-error-toast', () => ({
-  showImportInitialSyncFailureToast: mockShowImportInitialSyncFailureToast,
+  showInitialSyncFailureToast: mockShowImportInitialSyncFailureToast,
 }))
 
 vi.mock('@/lib/wallet/wallet-utils', () => ({
-  retryImportInitialEsploraSyncWithWalletStatus: vi.fn(),
+  retryInitialEsploraSyncWithWalletStatus: vi.fn(),
 }))
 
 vi.mock('@/stores/sessionStore', () => ({
@@ -109,7 +109,7 @@ describe('new wallet helpers', () => {
   const commitLoadedDescriptorWallet = vi.fn()
   const setWalletStatus = vi.fn()
   const clearArkadeDashboardState = vi.fn()
-  const setImportInitialSyncErrorMessage = vi.fn()
+  const setInitialSyncErrorMessage = vi.fn()
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -134,7 +134,7 @@ describe('new wallet helpers', () => {
       commitLoadedDescriptorWallet,
       setWalletStatus,
       clearArkadeDashboardState,
-      setImportInitialSyncErrorMessage,
+      setInitialSyncErrorMessage,
     } as unknown as ReturnType<typeof useWalletStore.getState>)
   })
 
@@ -186,7 +186,7 @@ describe('new wallet helpers', () => {
       accountId: 0,
       onSyncError: expect.any(Function),
     })
-    expect(setImportInitialSyncErrorMessage).toHaveBeenCalledWith(null)
+    expect(setInitialSyncErrorMessage).toHaveBeenCalledWith(null)
   })
 
   it('sets the no-mnemonic-backup flag only when requested', async () => {
@@ -227,7 +227,7 @@ describe('new wallet helpers', () => {
       }),
     ).resolves.toBe(3)
 
-    expect(setImportInitialSyncErrorMessage).toHaveBeenCalledWith('esplora down')
+    expect(setInitialSyncErrorMessage).toHaveBeenCalledWith('esplora down')
     expect(mockShowImportInitialSyncFailureToast).toHaveBeenCalledWith(
       syncError,
       expect.any(Function),

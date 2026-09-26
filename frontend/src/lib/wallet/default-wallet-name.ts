@@ -55,7 +55,7 @@ export function adjectiveAnimalWalletName(adjective: string, animal: string): st
   return `${adjective} ${animal} Wallet`
 }
 
-/** Every adjective–animal label, including duplicates when an animal is listed twice. */
+/** Every adjective–animal wallet name from the two lists. */
 export function adjectiveAnimalWalletNames(): string[] {
   const names: string[] = []
   for (const adjective of WALLET_NAME_ADJECTIVES) {

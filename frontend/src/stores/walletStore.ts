@@ -81,10 +81,10 @@ interface TransientWalletState {
   lastOperatorSyncTime: Date | null
   loadedDescriptorWallet: LoadedDescriptorWallet | null
   /**
-   * Set when post-import Esplora full scan fails; in-memory only (not persisted).
+   * Set when the create or import Esplora full scan fails; in-memory only (not persisted).
    * Cleared on successful retry, lock, or dismiss.
    */
-  importInitialSyncErrorMessage: string | null
+  initialSyncErrorMessage: string | null
 }
 
 interface WalletActions {
@@ -108,7 +108,7 @@ interface WalletActions {
   clearArkadeDashboardState: () => void
   setArkadeSignerMigrationHint: (hint: ArkadeSignerMigrationHint | null) => void
   setLastOperatorSyncTime: (lastOperatorSyncTime: Date | null) => void
-  setImportInitialSyncErrorMessage: (message: string | null) => void
+  setInitialSyncErrorMessage: (message: string | null) => void
   lockWallet: () => void
   resetWallet: () => void
 }
@@ -128,7 +128,7 @@ const TRANSIENT_DEFAULTS: TransientWalletState = {
   arkadeSignerMigrationHint: null,
   lastOperatorSyncTime: null,
   loadedDescriptorWallet: null,
-  importInitialSyncErrorMessage: null,
+  initialSyncErrorMessage: null,
 }
 
 export const useWalletStore = create<WalletState>()(
@@ -177,8 +177,8 @@ export const useWalletStore = create<WalletState>()(
       setArkadeSignerMigrationHint: (arkadeSignerMigrationHint) =>
         set({ arkadeSignerMigrationHint }),
       setLastOperatorSyncTime: (lastOperatorSyncTime) => set({ lastOperatorSyncTime }),
-      setImportInitialSyncErrorMessage: (message) =>
-        set({ importInitialSyncErrorMessage: message }),
+      setInitialSyncErrorMessage: (message) =>
+        set({ initialSyncErrorMessage: message }),
 
       lockWallet: () =>
         set({

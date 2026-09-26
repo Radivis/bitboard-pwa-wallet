@@ -5,15 +5,14 @@ import { useLightningStore } from '@/stores/lightningStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { clearAutoLockTimer, clearLegacySessionState } from '@/stores/sessionStore'
-import { discardArkadeSessionForWalletDeletion } from '@/lib/arkade/arkade-session-service'
 import { resetSecretsChannel } from '@/workers/secrets-channel'
 
 /**
  * After a wallet row and secrets are removed from SQLite: drop Lightning UI state for
- * that id. If it was the active wallet, lock/switch like a wallet change and tear down
- * the crypto worker and Arkade session so no deleted material stays in memory.
- * Arkade is discarded without flushing SDK persistence, because the secrets row is
- * already gone.
+ * that id. If it was the active wallet, lock or switch like a wallet change and tear down
+ * the crypto worker so no deleted material stays in memory.
+ * The delete mutation already discarded the Arkade session while the secrets row still
+ * existed. Do not discard or flush again here.
  */
 export async function finalizeWalletDeletion(params: {
   deletedWalletId: number
@@ -41,7 +40,6 @@ export async function finalizeWalletDeletion(params: {
     useWalletStore.getState().setActiveWallet(nextActiveWalletId)
   }
 
-  await discardArkadeSessionForWalletDeletion()
   useCryptoStore.getState().terminateWorker()
   resetSecretsChannel()
   clearLegacySessionState()

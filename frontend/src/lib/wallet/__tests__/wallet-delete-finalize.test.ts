@@ -45,14 +45,14 @@ describe('finalizeWalletDeletion', () => {
     useWalletStore.getState().setActiveWallet(2)
   })
 
-  it('discards the Arkade session without flushing after the active wallet is deleted', async () => {
+  it('tears down the crypto worker without discarding Arkade again', async () => {
     await finalizeWalletDeletion({
       deletedWalletId: 2,
       wasActiveWallet: true,
       nextActiveWalletId: 1,
     })
 
-    expect(discardArkadeSessionForWalletDeletion).toHaveBeenCalledTimes(1)
+    expect(discardArkadeSessionForWalletDeletion).not.toHaveBeenCalled()
     expect(closeArkadeSession).not.toHaveBeenCalled()
     expect(useWalletStore.getState().activeWalletId).toBe(1)
     expect(useWalletStore.getState().walletStatus).toBe('locked')

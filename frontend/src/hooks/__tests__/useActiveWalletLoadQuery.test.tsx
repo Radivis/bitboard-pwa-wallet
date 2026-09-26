@@ -66,7 +66,7 @@ describe('useActiveWalletLoadQuery', () => {
       lastSyncTime: null,
       transactions: [],
       loadedDescriptorWallet: null,
-      importInitialSyncErrorMessage: null,
+      initialSyncErrorMessage: null,
     })
   })
 

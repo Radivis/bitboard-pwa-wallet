@@ -1,6 +1,5 @@
-import { useWalletStore } from '@/stores/walletStore'
-import { useCryptoStore } from '@/stores/cryptoStore'
 import { getEsploraUrl } from '@/lib/wallet/bitcoin-utils'
+import { refreshWalletStoreFromLoadedBdk } from '@/lib/wallet/onchain-bdk-store-sync'
 import { loadCustomEsploraUrl } from '@/lib/wallet/wallet-utils'
 import { orchestrateOnchainLoad } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
 import { orchestrateOnchainSyncThenSave } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
@@ -36,12 +35,7 @@ export async function orchestrateOnchainSetupAfterPersist(
   const esploraUrl = getEsploraUrl(networkMode, customUrl)
 
   if (!esploraUrl || networkMode === 'lab') {
-    const { getBalance, getTransactionList } = useCryptoStore.getState()
-    const { setBalance, setTransactions } = useWalletStore.getState()
-    const balance = await getBalance()
-    const transactionList = await getTransactionList()
-    setBalance(balance)
-    setTransactions(transactionList)
+    await refreshWalletStoreFromLoadedBdk(walletId)
     return
   }
 
