@@ -9,9 +9,16 @@ import React from 'react'
 
 let testDb: Kysely<Database>
 
+const discardArkadeSessionForWalletDeletionMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../database', () => ({
   getDatabase: () => testDb,
   ensureMigrated: async () => {},
+}))
+
+vi.mock('@/lib/arkade/arkade-session-service', () => ({
+  discardArkadeSessionForWalletDeletion: (...args: unknown[]) =>
+    discardArkadeSessionForWalletDeletionMock(...args),
 }))
 
 import { useWalletStore } from '@/stores/walletStore'
@@ -48,6 +55,8 @@ function createWalletValues(overrides: Partial<{ name: string; created_at: strin
 
 describe('TanStack Query hooks', () => {
   beforeEach(async () => {
+    discardArkadeSessionForWalletDeletionMock.mockReset()
+    discardArkadeSessionForWalletDeletionMock.mockResolvedValue(undefined)
     testDb = await createTestDatabase()
   })
 
@@ -203,11 +212,21 @@ describe('TanStack Query hooks', () => {
       const { wrapper } = createQueryClientWrapper()
       const { result: deleteResult } = renderHook(() => useDeleteWallet(), { wrapper })
 
+      discardArkadeSessionForWalletDeletionMock.mockImplementation(async () => {
+        const secretsBeforeDelete = await testDb
+          .selectFrom('wallet_secrets')
+          .select('wallet_id')
+          .where('wallet_id', '=', walletId)
+          .executeTakeFirst()
+        expect(secretsBeforeDelete).toBeDefined()
+      })
+
       await act(async () => {
         useWalletStore.getState().setActiveWallet(walletId)
         await deleteResult.current.mutateAsync(walletId)
       })
 
+      expect(discardArkadeSessionForWalletDeletionMock).toHaveBeenCalledTimes(1)
       const secretRow = await testDb
         .selectFrom('wallet_secrets')
         .selectAll()

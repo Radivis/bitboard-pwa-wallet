@@ -156,6 +156,7 @@ import {
   abortArkadeSessionForFactoryReset,
   abortArkadeSessionForNetworkSwitch,
   closeArkadeSession,
+  discardArkadeSessionForWalletDeletion,
   openArkadeSessionForWallet,
   refreshArkadeSessionAfterNetworkSwitch,
 } from '@/lib/arkade/arkade-session-service'
@@ -485,6 +486,26 @@ describe('openArkadeSessionForWallet (integration)', () => {
 
     expect(workerMocks.flushSdkPersistence).not.toHaveBeenCalled()
     expect(workerMocks.closeSession).not.toHaveBeenCalled()
+    expect(getArkadeLoadLifecycleSnapshot()).toEqual({
+      loadPhase: 'not-configured',
+      networkMode: null,
+      errorMessage: null,
+    })
+  })
+
+  it('discardArkadeSessionForWalletDeletion does not flush a loaded session', async () => {
+    await openArkadeSessionForWallet({
+      walletId: 2,
+      networkMode: 'signet',
+    })
+    workerMocks.flushSdkPersistence.mockClear()
+    terminateArkadeWorkerMock.mockClear()
+
+    await discardArkadeSessionForWalletDeletion()
+
+    expect(workerMocks.flushSdkPersistence).not.toHaveBeenCalled()
+    expect(workerMocks.closeSession).not.toHaveBeenCalled()
+    expect(terminateArkadeWorkerMock).toHaveBeenCalledTimes(1)
     expect(getArkadeLoadLifecycleSnapshot()).toEqual({
       loadPhase: 'not-configured',
       networkMode: null,
