@@ -235,6 +235,7 @@ mod tests {
                 },
             ],
             unilateral_exit_materials_by_host_tx: BTreeMap::new(),
+            full_listed_at: 0,
         };
 
         let representative = representative_virtual_tx_outpoint_for_host_tx(&snapshot, &txid)

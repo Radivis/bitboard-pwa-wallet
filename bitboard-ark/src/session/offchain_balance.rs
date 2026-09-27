@@ -18,7 +18,8 @@ impl ArkSession {
     pub(crate) async fn resolve_offchain_balance_buckets(
         &self,
     ) -> ArkResult<OffchainBalanceBuckets> {
-        if !balance_vtxo_reads_use_operator_rpc(self.autonomous_mode()) {
+        let snapshot_present = self.wallet_db.snapshot().offchain_vtxo_snapshot.is_some();
+        if snapshot_present || !balance_vtxo_reads_use_operator_rpc(self.autonomous_mode()) {
             return self.resolve_offchain_balance_buckets_from_snapshot();
         }
 

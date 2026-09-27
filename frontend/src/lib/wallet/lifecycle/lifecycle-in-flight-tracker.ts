@@ -77,6 +77,8 @@ export function getCoalescedInFlightPromise(
 /**
  * Waits for a different in-flight operation to finish, then returns a coalesced
  * promise if the requested key started while waiting.
+ * The other operation's failure belongs to that operation. This wait still
+ * completes so the caller can start its own work.
  */
 export async function awaitDifferentInFlightWork(
   tracker: InFlightLifecycleTracker,
@@ -86,6 +88,6 @@ export async function awaitDifferentInFlightWork(
   if (current == null || current.key === key) {
     return null
   }
-  await current.promise
+  await current.promise.catch(() => undefined)
   return getCoalescedInFlightPromise(tracker, key)
 }

@@ -56,8 +56,16 @@ version = "2.3"
 version = "0.32.7"
 features = ["rand"]
 
+[dependencies.serde_json]
+version = "1"
+
 [dependencies.jiff]
 version = "0.2.1"
+
+# `Timestamp::now()` uses `std::time::SystemTime`, which panics on wasm32-unknown-unknown.
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies.jiff]
+version = "0.2.1"
+features = ["js"]
 
 [dependencies.tracing]
 version = "0.1.37"

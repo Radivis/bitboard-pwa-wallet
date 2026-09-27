@@ -27,7 +27,7 @@ import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominat
 import { FiatBtcAmountDisplay } from '@/components/FiatBtcAmountDisplay'
 import { OnchainSaveErrorBanner } from '@/pages/wallet/OnchainSaveErrorBanner'
 import { balanceInfoToOnChainDisplay } from '@/lib/wallet/onchain-balance-display'
-import { retryImportInitialEsploraSyncWithWalletStatus } from '@/lib/wallet/wallet-utils'
+import { retryInitialEsploraSyncWithWalletStatus } from '@/lib/wallet/wallet-utils'
 import { labTransactionsForWallet, sumLabWalletUtxoSats } from '@/lib/lab/lab-utils'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import {
@@ -76,11 +76,11 @@ import {
   walletOnChainSectionLabel,
 } from '@/lib/wallet/wallet-lab-ui-copy'
 
-function ImportInitialSyncErrorBanner() {
+function InitialSyncErrorBanner() {
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
-  const message = useWalletStore((walletState) => walletState.importInitialSyncErrorMessage)
-  const setImportInitialSyncErrorMessage = useWalletStore(
-    (walletState) => walletState.setImportInitialSyncErrorMessage,
+  const message = useWalletStore((walletState) => walletState.initialSyncErrorMessage)
+  const setInitialSyncErrorMessage = useWalletStore(
+    (walletState) => walletState.setInitialSyncErrorMessage,
   )
   const onchainSyncPhase = useOnchainSyncLifecycleSnapshot().syncPhase
   const isOnchainSyncing = onchainSyncPhase === 'syncing'
@@ -115,7 +115,7 @@ function ImportInitialSyncErrorBanner() {
           size="sm"
           disabled={isOnchainSyncing}
           onClick={() => {
-            void retryImportInitialEsploraSyncWithWalletStatus()
+            void retryInitialEsploraSyncWithWalletStatus()
           }}
         >
           {isOnchainSyncing ? 'Syncing...' : 'Retry'}
@@ -126,7 +126,7 @@ function ImportInitialSyncErrorBanner() {
           size="sm"
           className="text-muted-foreground"
           disabled={isOnchainSyncing}
-          onClick={() => setImportInitialSyncErrorMessage(null)}
+          onClick={() => setInitialSyncErrorMessage(null)}
         >
           Dismiss
         </Button>
@@ -792,7 +792,7 @@ export function DashboardPage() {
     <div className="space-y-6">
       <PageHeader title={walletDashboardTitle(networkMode)} icon={Home} />
 
-      <ImportInitialSyncErrorBanner />
+      <InitialSyncErrorBanner />
       <OnchainSaveErrorBanner />
 
       <BalanceCard />

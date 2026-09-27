@@ -8,6 +8,13 @@ const refreshWalletStoreFromLoadedBdk = vi.fn()
 const invalidateOnchainDashboardQueries = vi.fn()
 
 const loadSnapshot = { loadPhase: 'loaded' as const, networkMode: 'testnet' as const }
+let loadHydration: {
+  fullScanDone: boolean
+  usedEmptyChainFallback: boolean
+} | null = {
+  fullScanDone: true,
+  usedEmptyChainFallback: false,
+}
 
 vi.mock('@/lib/wallet/wallet-utils', () => ({
   syncActiveWalletAndUpdateState: (...args: unknown[]) =>
@@ -16,6 +23,7 @@ vi.mock('@/lib/wallet/wallet-utils', () => ({
 
 vi.mock('@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator', () => ({
   getOnchainLoadLifecycleSnapshot: () => loadSnapshot,
+  getOnchainLoadHydrationForPostUnlock: () => loadHydration,
 }))
 
 vi.mock('@/lib/wallet/lifecycle/onchain-save-lifecycle-orchestrator', () => ({
@@ -35,6 +43,7 @@ vi.mock('@/lib/wallet/onchain-dashboard-sync', () => ({
 
 const walletStoreState = {
   walletStatus: 'unlocked' as 'unlocked' | 'locked',
+  activeWalletId: 1 as number | null,
   setWalletStatus: vi.fn(),
 }
 
@@ -50,6 +59,7 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
 
 import {
   getOnchainSyncLifecycleSnapshot,
+  orchestrateOnchainPostUnlockSync,
   orchestrateOnchainSyncThenSave,
   resetOnchainSyncLifecycleStateForTests,
 } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
@@ -70,10 +80,35 @@ describe('onchain-sync-lifecycle-orchestrator', () => {
     vi.clearAllMocks()
     loadSnapshot.loadPhase = 'loaded'
     loadSnapshot.networkMode = 'testnet'
+    loadHydration = {
+      fullScanDone: true,
+      usedEmptyChainFallback: false,
+    }
     walletStoreState.walletStatus = 'unlocked'
+    walletStoreState.activeWalletId = 1
     syncActiveWalletAndUpdateState.mockResolvedValue(undefined)
     orchestrateOnchainSave.mockResolvedValue(undefined)
     refreshWalletStoreFromLoadedBdk.mockResolvedValue(undefined)
+  })
+
+  it('skips sync and save when the active wallet is different', async () => {
+    walletStoreState.activeWalletId = 2
+
+    await orchestrateOnchainSyncThenSave(syncParams)
+
+    expect(syncActiveWalletAndUpdateState).not.toHaveBeenCalled()
+    expect(orchestrateOnchainSave).not.toHaveBeenCalled()
+  })
+
+  it('does not save when the active wallet changes during sync', async () => {
+    syncActiveWalletAndUpdateState.mockImplementation(async () => {
+      walletStoreState.activeWalletId = 2
+    })
+
+    await orchestrateOnchainSyncThenSave(syncParams)
+
+    expect(orchestrateOnchainSave).not.toHaveBeenCalled()
+    expect(getOnchainSyncLifecycleSnapshot().syncPhase).toBe('not-configured')
   })
 
   it('sync rejected when load not loaded', async () => {
@@ -141,6 +176,76 @@ describe('onchain-sync-lifecycle-orchestrator', () => {
         networkMode: 'lab',
       }),
     ).rejects.toThrow('On-chain sync is not configured on lab network')
+  })
+
+  describe('LIFE-ONC-SYNC-02 postUnlock scan policy', () => {
+    const postUnlockParams = {
+      walletId: 1,
+      networkMode: 'testnet' as const,
+      addressType: AddressType.Taproot,
+      accountId: 0,
+      awaitCompletion: true,
+    }
+
+    it('is incremental when fullScanDone and no empty-chain fallback', async () => {
+      await orchestrateOnchainPostUnlockSync(postUnlockParams)
+
+      expect(syncActiveWalletAndUpdateState).toHaveBeenCalledWith('testnet', {
+        useFullScan: false,
+        walletId: 1,
+      })
+      expect(orchestrateOnchainSave).toHaveBeenCalledWith(
+        expect.objectContaining({ markFullScanDone: false }),
+      )
+    })
+
+    it('full-scans when fullScanDone is false', async () => {
+      loadHydration = {
+        fullScanDone: false,
+        usedEmptyChainFallback: false,
+      }
+
+      await orchestrateOnchainPostUnlockSync(postUnlockParams)
+
+      expect(syncActiveWalletAndUpdateState).toHaveBeenCalledWith('testnet', {
+        useFullScan: true,
+        walletId: 1,
+      })
+      expect(orchestrateOnchainSave).toHaveBeenCalledWith(
+        expect.objectContaining({ markFullScanDone: true }),
+      )
+    })
+
+    it('full-scans when empty-chain fallback was used', async () => {
+      loadHydration = {
+        fullScanDone: true,
+        usedEmptyChainFallback: true,
+      }
+
+      await orchestrateOnchainPostUnlockSync(postUnlockParams)
+
+      expect(syncActiveWalletAndUpdateState).toHaveBeenCalledWith('testnet', {
+        useFullScan: true,
+        walletId: 1,
+      })
+      expect(orchestrateOnchainSave).toHaveBeenCalledWith(
+        expect.objectContaining({ markFullScanDone: true }),
+      )
+    })
+
+    it('postUnlock_full_scans_when_hydration_is_missing', async () => {
+      loadHydration = null
+
+      await orchestrateOnchainPostUnlockSync(postUnlockParams)
+
+      expect(syncActiveWalletAndUpdateState).toHaveBeenCalledWith('testnet', {
+        useFullScan: true,
+        walletId: 1,
+      })
+      expect(orchestrateOnchainSave).toHaveBeenCalledWith(
+        expect.objectContaining({ markFullScanDone: true }),
+      )
+    })
   })
 
   describe('LIFE-ONC-GUARD-03 BadLocalChainStateError', () => {

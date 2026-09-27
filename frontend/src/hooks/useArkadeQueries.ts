@@ -7,6 +7,7 @@ import {
   arkadeBalanceQueryKey,
   arkadeBoardingAddressQueryKey,
   arkadeBoardingStatusQueryKey,
+  arkadeBumperAddressQueryKey,
   arkadeBumperInfoQueryKey,
   arkadeCollaborativeExitFeeQueryKey,
   arkadeDisabledQueryKey,
@@ -22,6 +23,7 @@ import {
   arkadeRecoverableVtxoFeeQueryKey,
   arkadeSignerMigrationPartialResultQueryKey,
   arkadeUnilateralExitCompletionFeeQueryKey,
+  arkadeUnilateralExitTimelockQueryKey,
   arkadeUnilateralExitsInProgressQueryKey,
   arkadeUnilateralExitTopologyQueryKey,
   arkadeUnilateralExitBatchEstimateQueryKey,
@@ -40,6 +42,7 @@ import type {
 import { sortArkadeVtxoOutpoints } from '@/workers/arkade-api'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import {
+  arkadeLoadedSessionMatchesWallet,
   awaitArkadeLoadQuiescence,
   getArkadeLoadLifecycleSnapshot,
   isArkadeLoadFailedForNetwork,
@@ -117,6 +120,7 @@ import {
 import {
   assertArkadeSessionUnlocked,
 } from '@/lib/arkade/proceed-unilateral-exit-step'
+import { persistBumperSidecarAfterWalletWideSyncIfNeeded } from '@/lib/wallet/persist-bumper-sidecar-after-sync'
 import { isUnilateralExitBranchComplete } from '@/lib/arkade/unilateral-exit-branch-complete'
 import {
   isUnilateralExitProgressWaitingForConfirmation,
@@ -135,7 +139,8 @@ function useArkadeQueryBase() {
     activeWalletId != null &&
     isArkadeActiveForNetworkMode(networkMode) &&
     isArkadeSupportedNetworkMode(networkMode) &&
-    arkadeSessionReady
+    arkadeSessionReady &&
+    arkadeLoadedSessionMatchesWallet(activeWalletId)
 
   return { networkMode, activeWalletId, activeArkadeAccountId, sessionReady }
 }
@@ -174,7 +179,10 @@ async function ensureArkadeSessionOpenForActiveWallet(): Promise<void> {
     await awaitArkadeLoadQuiescence()
     return
   }
-  if (getArkadeLoadLifecycleSnapshot().loadPhase === 'loaded') {
+  if (
+    getArkadeLoadLifecycleSnapshot().loadPhase === 'loaded' &&
+    arkadeLoadedSessionMatchesWallet(activeWalletId)
+  ) {
     return
   }
   if (isArkadeLoadFailedForNetwork(networkMode)) {
@@ -1099,6 +1107,46 @@ export function useArkadeExitCandidatesQuery(enabled: boolean) {
   })
 }
 
+/** Operator CSV delay for the complete page. Does not Esplora-scan the bumper wallet. */
+export function useArkadeUnilateralExitTimelockQuery(enabled: boolean) {
+  const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
+    useArkadeQueryBase()
+
+  return useQuery({
+    queryKey: walletScopedQueryKey(
+      activeWalletId,
+      networkMode,
+      activeArkadeAccountId,
+      arkadeUnilateralExitTimelockQueryKey,
+      'unilateral-exit-timelock',
+    ),
+    enabled: enabled && sessionReady,
+    queryFn: () =>
+      withReadyArkadeWorker(() => getArkadeWorker().unilateralExitTimelock()),
+    staleTime: ARKADE_SESSION_POLL_STALE_MS,
+  })
+}
+
+/** Next unused bumper address without an Esplora scan. */
+export function useArkadeBumperAddressQuery(enabled: boolean) {
+  const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
+    useArkadeQueryBase()
+
+  return useQuery({
+    queryKey: walletScopedQueryKey(
+      activeWalletId,
+      networkMode,
+      activeArkadeAccountId,
+      arkadeBumperAddressQueryKey,
+      'bumper-address',
+    ),
+    enabled: enabled && sessionReady,
+    queryFn: () =>
+      withReadyArkadeWorker(() => getArkadeWorker().peekOnchainBumperAddress()),
+    staleTime: ARKADE_SESSION_POLL_STALE_MS,
+  })
+}
+
 export function useArkadeBumperInfoQuery(
   enabled: boolean,
   pollWhileUnderfunded = false,
@@ -1115,7 +1163,17 @@ export function useArkadeBumperInfoQuery(
       'bumper',
     ),
     enabled: enabled && sessionReady,
-    queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().getOnchainBumperInfo()),
+    queryFn: async () => {
+      const info = await withReadyArkadeWorker(() => getArkadeWorker().getOnchainBumperInfo())
+      if (activeWalletId != null) {
+        await persistBumperSidecarAfterWalletWideSyncIfNeeded({
+          walletId: activeWalletId,
+          networkMode,
+          needsBumperWalletSync: info.needsBumperWalletSync === true,
+        })
+      }
+      return info
+    },
     staleTime: ARKADE_SESSION_POLL_STALE_MS,
     // Poll only while an active exit flow is waiting for a bumper top-up to confirm.
     refetchInterval: pollWhileUnderfunded ? ARKADE_BUMPER_FUNDING_POLL_MS : false,
@@ -1293,7 +1351,10 @@ export function useArkadeCompleteUnilateralExitMutation() {
       feeRateSatPerVb: number
     }) => {
       assertArkadeSessionUnlocked(activeWalletId)
-      return withReadyArkadeWorker(() => getArkadeWorker().completeUnilateralExit(params))
+      const txid = await withReadyArkadeWorker(() =>
+        getArkadeWorker().completeUnilateralExit(params),
+      )
+      return txid
     },
     onSuccess: async (txid) => {
       toast.success(`Exit completed on-chain (${formatArkadeTxidToastSnippet(txid)})`)
@@ -1516,7 +1577,7 @@ export function useAcceptOperatorConfigMutation() {
           activeArkadeAccountId != null &&
           isArkadeSupportedNetworkMode(networkMode)
         ) {
-          await refreshArkadeStoreFromLoadedWasm(activeArkadeAccountId)
+          await refreshArkadeStoreFromLoadedWasm(activeArkadeAccountId, activeWalletId)
           await orchestrateArkadeSave({
             walletId: activeWalletId,
             networkMode,
@@ -1543,7 +1604,7 @@ export function useAcceptOperatorConfigMutation() {
         activeArkadeAccountId != null &&
         isArkadeSupportedNetworkMode(networkMode)
       ) {
-        await refreshArkadeStoreFromLoadedWasm(activeArkadeAccountId)
+        await refreshArkadeStoreFromLoadedWasm(activeArkadeAccountId, activeWalletId)
         await orchestrateArkadeSave({
           walletId: activeWalletId,
           networkMode,

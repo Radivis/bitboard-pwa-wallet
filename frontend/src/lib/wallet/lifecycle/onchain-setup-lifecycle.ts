@@ -1,6 +1,5 @@
-import { useWalletStore } from '@/stores/walletStore'
-import { useCryptoStore } from '@/stores/cryptoStore'
 import { getEsploraUrl } from '@/lib/wallet/bitcoin-utils'
+import { refreshWalletStoreFromLoadedBdk } from '@/lib/wallet/onchain-bdk-store-sync'
 import { loadCustomEsploraUrl } from '@/lib/wallet/wallet-utils'
 import { orchestrateOnchainLoad } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
 import { orchestrateOnchainSyncThenSave } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
@@ -11,16 +10,18 @@ export type OnchainSetupAfterPersistParams = {
   networkMode: NetworkMode
   addressType: AddressType
   accountId: number
+  onSyncError?: (err: unknown) => void
 }
 
 /**
- * Post-create/import gate: reload from persisted secrets, then run a single
- * orchestrated full scan + save before setup navigates away.
+ * Post-create/import gate: reload from persisted secrets, then start one
+ * setupInitial full scan. The scan does not block navigation; failures are
+ * reported through onSyncError and the sync lifecycle.
  */
 export async function orchestrateOnchainSetupAfterPersist(
   params: OnchainSetupAfterPersistParams,
 ): Promise<void> {
-  const { walletId, networkMode, addressType, accountId } = params
+  const { walletId, networkMode, addressType, accountId, onSyncError } = params
 
   await orchestrateOnchainLoad({
     walletId,
@@ -34,16 +35,11 @@ export async function orchestrateOnchainSetupAfterPersist(
   const esploraUrl = getEsploraUrl(networkMode, customUrl)
 
   if (!esploraUrl || networkMode === 'lab') {
-    const { getBalance, getTransactionList } = useCryptoStore.getState()
-    const { setBalance, setTransactions } = useWalletStore.getState()
-    const balance = await getBalance()
-    const transactionList = await getTransactionList()
-    setBalance(balance)
-    setTransactions(transactionList)
+    await refreshWalletStoreFromLoadedBdk(walletId)
     return
   }
 
-  await orchestrateOnchainSyncThenSave({
+  void orchestrateOnchainSyncThenSave({
     walletId,
     networkMode,
     addressType,
@@ -51,7 +47,8 @@ export async function orchestrateOnchainSetupAfterPersist(
     syncKind: 'setupInitial',
     useFullScan: true,
     markFullScanDone: true,
-    awaitCompletion: true,
-    throwOnError: true,
+    awaitCompletion: false,
+    throwOnError: false,
+    onSyncError,
   })
 }

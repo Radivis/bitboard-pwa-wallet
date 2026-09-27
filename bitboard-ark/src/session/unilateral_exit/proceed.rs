@@ -15,7 +15,6 @@ use super::progress::{step_reached_confirmation, tx_confirmations};
 use super::snapshot_ops::dedup_virtual_outpoints;
 use crate::session::ArkSession;
 use crate::session::mappers::current_unix_timestamp;
-use crate::session::open::sync_onchain_wallet_with_retries;
 
 fn empty_witness_input_summaries(parent: &Transaction) -> Vec<String> {
     parent
@@ -111,12 +110,15 @@ impl ArkSession {
                 &step_txid_text,
             );
             self.wallet_db.set_vtxo_exit_records(records);
-            sync_onchain_wallet_with_retries(&self.client).await?;
-            if let Err(error) = self
+            self.sync_bumper_for_exit_broadcast().await?;
+            let broadcast_result = self
                 .client
                 .broadcast_unilateral_exit_step_at_fee_rate(&parent_tx, fee_rate_sat_per_vb)
-                .await
-            {
+                .await;
+            // Pre-broadcast probes cached this tx as absent. Drop that so the visibility
+            // check observes the broadcast instead of replaying the 404.
+            blockchain.forget_tx_probe(&step_txid);
+            if let Err(error) = broadcast_result {
                 if is_package_not_child_with_unconfirmed_parents_error(&error) {
                     // submitpackage rejected a parent the indexer may already paint confirmed
                     // (indexer vs write node, reorg, or unconfirmed CPFP bumper). Do not stamp

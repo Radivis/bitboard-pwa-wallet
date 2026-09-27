@@ -24,8 +24,8 @@ export const article: LibraryArticle = {
         <p>
           You ask the Arkade operator to batch your virtual balance units (VTXOs) into one on-chain
           withdrawal to your destination. You need network access to the operator. Fees include the
-          operator&apos;s settlement policy and normal on-chain miner costs—the Management dialog
-          shows estimates before you confirm.
+          operator&apos;s settlement policy and normal on-chain miner costs. The collaborative exit
+          page shows estimates before you confirm.
         </p>
         <p>
           <strong>When to use it:</strong> You want the fastest, simplest way to cash out to on-chain

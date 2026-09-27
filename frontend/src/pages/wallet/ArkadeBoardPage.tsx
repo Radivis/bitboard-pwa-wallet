@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { Copy, ExternalLink, Loader2 } from 'lucide-react'
 import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
+import { arkadeSessionBlockingScreen } from '@/components/arkade/arkade-session-blocking-screen'
 import { ArkadeBoardingInfomodeContent } from '@/components/arkade/infomode/ArkadeBoardingInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { PageHeader } from '@/components/PageHeader'
@@ -21,11 +22,9 @@ import {
 } from '@/hooks/useArkadeQueries'
 import { useArkadeLoadLifecycleSnapshot } from '@/hooks/useArkadeLifecycleSnapshots'
 import { ArkadePendingBatchIntentBanner } from '@/components/wallet/ArkadePendingBatchIntentBanner'
-import { RailLoadErrorBanner } from '@/components/wallet/RailLoadErrorBanner'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { isIntentSubmitPhase } from '@/lib/arkade/arkade-pending-batch-intent'
 import { formatSats } from '@/lib/wallet/bitcoin-utils'
-import { orchestrateArkadeRetryLoad } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
 import { errorMessage } from '@/lib/shared/utils'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import { toast } from 'sonner'
@@ -65,18 +64,20 @@ export function ArkadeBoardPage() {
     )
   }
 
+  const sessionBlockingScreen = arkadeSessionBlockingScreen(
+    arkadeLoadSnapshot.loadPhase,
+    arkadeLoadSnapshot.errorMessage,
+  )
+  if (sessionBlockingScreen) {
+    return sessionBlockingScreen
+  }
+
   const boardingAddress =
     boardingQuery.data || boardingStatusQuery.data?.boardingAddress || ''
   const boardingStatus = boardingStatusQuery.data
   const boardingAddressLoading =
-    boardingAddress.length === 0 &&
-    arkadeLoadSnapshot.loadPhase !== 'load-error' &&
-    (boardingQuery.isPending ||
-      boardingQuery.isFetching ||
-      arkadeLoadSnapshot.loadPhase === 'loading')
-  const boardingAddressError =
-    boardingAddress.length === 0 &&
-    (arkadeLoadSnapshot.loadPhase === 'load-error' || boardingQuery.isError)
+    boardingAddress.length === 0 && (boardingQuery.isPending || boardingQuery.isFetching)
+  const boardingAddressError = boardingAddress.length === 0 && boardingQuery.isError
 
   const handleCopy = async () => {
     if (!boardingAddress) return
@@ -114,17 +115,6 @@ export function ArkadeBoardPage() {
             </li>
             <li>Settle the boarding UTXO into Arkade (creates VTXOs).</li>
           </ol>
-
-          {arkadeLoadSnapshot.loadPhase === 'load-error' ? (
-            <RailLoadErrorBanner
-              rail="arkade"
-              loadPhase={arkadeLoadSnapshot.loadPhase}
-              errorMessage={arkadeLoadSnapshot.errorMessage}
-              onRetry={() => {
-                void orchestrateArkadeRetryLoad()
-              }}
-            />
-          ) : null}
 
           {boardingAddressLoading ? (
             <p className="text-muted-foreground">Loading boarding address…</p>

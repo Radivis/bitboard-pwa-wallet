@@ -51,6 +51,8 @@ vi.mock('@/workers/arkade-factory', () => ({
     setUnilateralExitJob: vi.fn(async () => {}),
     setUnilateralExitAutomationPrefs: vi.fn(async () => {}),
     setUnilateralExitFailure: vi.fn(async () => {}),
+    syncBumperWallet: vi.fn(async () => {}),
+    hasOpenSession: vi.fn(async () => false),
   }),
   getArkadeWorkerIfExists: vi.fn(() => null),
   terminateArkadeWorker: vi.fn(),
@@ -149,6 +151,7 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
     ...actual,
     useWalletStore: {
       getState: () => ({
+        activeWalletId: 1,
         walletStatus: 'unlocked' as const,
         clearArkadeDashboardState: vi.fn(),
         setActiveArkadeAccountId: vi.fn(),

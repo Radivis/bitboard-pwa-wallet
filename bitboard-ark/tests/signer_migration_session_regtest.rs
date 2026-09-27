@@ -13,7 +13,7 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use bitboard_ark::{ArkSession, NetworkMode};
+use bitboard_ark::{ArkSession, NetworkMode, OpenArkSessionParams};
 use serde_json::Value;
 
 mod support;
@@ -69,14 +69,16 @@ async fn prepare_deprecated_signer_fixture(
             parse_persistence_operator_signer(&fixture.persistence_before_rotate);
         rotate_signer_with_future_cutoff();
         restart_arkd_operator(endpoints).await;
-        let (session, migration_hint) = ArkSession::open(
-            &fixture.mnemonic,
-            NetworkMode::Regtest,
-            endpoints.arkd_url.clone(),
-            String::new(),
-            endpoints.esplora_url.clone(),
-            Some(&fixture.persistence_before_rotate),
-        )
+        let (session, migration_hint) = ArkSession::open(OpenArkSessionParams {
+            mnemonic_words: &fixture.mnemonic,
+            network_mode: NetworkMode::Regtest,
+            ark_server_url: endpoints.arkd_url.clone(),
+            delegator_url: String::new(),
+            esplora_url: endpoints.esplora_url.clone(),
+            sdk_persistence_json: Some(&fixture.persistence_before_rotate),
+            bumper_changeset_json: None,
+            bumper_full_scan_done: false,
+        })
         .await
         .expect("reopen after rotate from boarded fixture");
         assert!(
@@ -97,14 +99,16 @@ async fn prepare_deprecated_signer_fixture(
     rotate_signer_with_future_cutoff();
     restart_arkd_operator(endpoints).await;
 
-    let (session, migration_hint) = ArkSession::open(
-        &mnemonic,
-        NetworkMode::Regtest,
-        endpoints.arkd_url.clone(),
-        String::new(),
-        endpoints.esplora_url.clone(),
-        Some(&persistence_before_rotate),
-    )
+    let (session, migration_hint) = ArkSession::open(OpenArkSessionParams {
+        mnemonic_words: &mnemonic,
+        network_mode: NetworkMode::Regtest,
+        ark_server_url: endpoints.arkd_url.clone(),
+        delegator_url: String::new(),
+        esplora_url: endpoints.esplora_url.clone(),
+        sdk_persistence_json: Some(&persistence_before_rotate),
+        bumper_changeset_json: None,
+        bumper_full_scan_done: false,
+    })
     .await
     .expect("reopen after rotate");
     assert!(
@@ -131,14 +135,16 @@ async fn prepare_deprecated_signer_session_without_boarding(
     rotate_signer_with_future_cutoff();
     restart_arkd_operator(endpoints).await;
 
-    let (session, migration_hint) = ArkSession::open(
-        &mnemonic,
-        NetworkMode::Regtest,
-        endpoints.arkd_url.clone(),
-        String::new(),
-        endpoints.esplora_url.clone(),
-        Some(&persistence_before_rotate),
-    )
+    let (session, migration_hint) = ArkSession::open(OpenArkSessionParams {
+        mnemonic_words: &mnemonic,
+        network_mode: NetworkMode::Regtest,
+        ark_server_url: endpoints.arkd_url.clone(),
+        delegator_url: String::new(),
+        esplora_url: endpoints.esplora_url.clone(),
+        sdk_persistence_json: Some(&persistence_before_rotate),
+        bumper_changeset_json: None,
+        bumper_full_scan_done: false,
+    })
     .await
     .expect("reopen after rotate");
     assert!(
@@ -209,14 +215,16 @@ async fn cooperative_signer_migration_clears_pending_recovery_due_to_expired_sig
     rotate_signer_with_future_cutoff();
     restart_arkd_operator(&endpoints).await;
 
-    let (session, migration_hint) = ArkSession::open(
-        &mnemonic,
-        NetworkMode::Regtest,
-        endpoints.arkd_url.clone(),
-        String::new(),
-        endpoints.esplora_url.clone(),
-        Some(&persistence_before_rotate),
-    )
+    let (session, migration_hint) = ArkSession::open(OpenArkSessionParams {
+        mnemonic_words: &mnemonic,
+        network_mode: NetworkMode::Regtest,
+        ark_server_url: endpoints.arkd_url.clone(),
+        delegator_url: String::new(),
+        esplora_url: endpoints.esplora_url.clone(),
+        sdk_persistence_json: Some(&persistence_before_rotate),
+        bumper_changeset_json: None,
+        bumper_full_scan_done: false,
+    })
     .await
     .expect("reopen after rotate");
     assert!(

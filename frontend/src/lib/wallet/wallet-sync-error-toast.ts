@@ -9,7 +9,7 @@ import { errorMessage } from '@/lib/shared/utils'
 const BAD_CHAIN_SYNC_HINT = `Try ${BAD_LOCAL_CHAIN_FULL_RESCAN_ACTION} — it can repair saved chain data.`
 
 type WalletSyncErrorContext =
-  | 'initial-import'
+  | 'initial-sync'
   | 'bootstrap-load'
   | 'unlock-background-sync'
   | 'require-unlocked-wallet'
@@ -23,8 +23,8 @@ export function reportWalletSyncError(
   err: unknown,
 ): void {
   const logLabel =
-    context === 'initial-import'
-      ? 'Post-import initial sync failed'
+    context === 'initial-sync'
+      ? 'Initial sync failed'
       : context === 'unlock-background-sync' || context === 'require-unlocked-wallet'
         ? 'Background sync failed after unlock'
         : 'Wallet bootstrap sync failed'
@@ -33,7 +33,7 @@ export function reportWalletSyncError(
   const badChain = asBadLocalChainStateError(err)
   const detail = sanitizeErrorMessageForUi(errorMessage(err))
 
-  if (context === 'initial-import') {
+  if (context === 'initial-sync') {
     if (badChain) {
       toast.error('Initial sync failed', {
         description: `${badChain.message} ${BAD_CHAIN_SYNC_HINT}`,
@@ -69,13 +69,13 @@ export function reportWalletSyncError(
 }
 
 /**
- * Import-time initial Esplora full scan failed; offer the same retry as the dashboard banner.
+ * Create or import initial Esplora full scan failed; offer the same retry as the dashboard banner.
  */
-export function showImportInitialSyncFailureToast(
+export function showInitialSyncFailureToast(
   err: unknown,
   onRetry: () => void | Promise<void>,
 ): void {
-  console.error('Post-import initial sync failed', err)
+  console.error('Initial sync failed', err)
 
   const badChain = asBadLocalChainStateError(err)
   const detail = sanitizeErrorMessageForUi(errorMessage(err))

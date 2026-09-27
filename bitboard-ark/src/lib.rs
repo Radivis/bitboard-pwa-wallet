@@ -5,6 +5,7 @@ mod constants;
 mod error;
 mod esplora_blockchain;
 mod exit_balance;
+mod incremental_vtxo_sync;
 mod network;
 mod offchain_snapshot;
 mod operator_config_diff;
@@ -40,15 +41,16 @@ pub use network::NetworkMode;
 #[cfg(not(target_arch = "wasm32"))]
 pub use outpoint::{OnchainOutPoint, VirtualOutPoint};
 #[cfg(not(target_arch = "wasm32"))]
-pub use session::ArkSession;
+pub use session::{ArkSession, OpenArkSessionParams};
+
+#[cfg(target_arch = "wasm32")]
+use crate::session::{ArkSession, OpenArkSessionParams};
 
 #[cfg(target_arch = "wasm32")]
 use crate::api_types::CompleteUnilateralExitParams;
 
 #[cfg(target_arch = "wasm32")]
 use crate::network::NetworkMode;
-#[cfg(target_arch = "wasm32")]
-use crate::session::ArkSession;
 
 use std::cell::RefCell;
 use std::future::Future;
@@ -160,18 +162,21 @@ pub async fn ark_open_session(params: JsValue) -> Result<JsValue, JsValue> {
         let network_mode = NetworkMode::parse(&params.network_mode)
             .ok_or_else(|| ArkWasmError::UnsupportedNetworkMode(params.network_mode.clone()))?;
 
-        let (session, migration_hint) = ArkSession::open(
-            &params.mnemonic,
+        let (session, migration_hint) = ArkSession::open(OpenArkSessionParams {
+            mnemonic_words: &params.mnemonic,
             network_mode,
-            params.ark_server_url,
-            params.delegator_url,
-            params.esplora_url,
-            params.sdk_persistence_json.as_deref(),
-        )
+            ark_server_url: params.ark_server_url,
+            delegator_url: params.delegator_url,
+            esplora_url: params.esplora_url,
+            sdk_persistence_json: params.sdk_persistence_json.as_deref(),
+            bumper_changeset_json: params.bumper_changeset_json.as_deref(),
+            bumper_full_scan_done: params.bumper_full_scan_done,
+        })
         .await?;
 
         let arkade_address = session.peek_offchain_address()?;
         let operator_signer_pk_hex = session.operator_signer_pk_hex();
+        let bumper_hydrate_fell_back_to_empty = session.bumper_hydrate_fell_back_to_empty();
         let signer_migration_hint =
             migration_hint.map(|hint| crate::api_types::OperatorSignerMigrationHintDto {
                 previous_signer_pk_hex: hint.previous_signer_pk_hex,
@@ -190,6 +195,7 @@ pub async fn ark_open_session(params: JsValue) -> Result<JsValue, JsValue> {
             arkade_address,
             operator_signer_pk_hex,
             signer_migration_hint,
+            bumper_hydrate_fell_back_to_empty,
         })
     })
     .await
@@ -208,10 +214,42 @@ pub async fn ark_enter_autonomous_mode() -> Result<(), JsValue> {
     .await
 }
 
+/// Best-effort bumper BDK Esplora sync. Session open and unlock must not start this
+/// (LIFE-ARK-LOAD-04). Exit proceed and the first onchain_bumper_info may await it.
+/// Completing a unilateral exit schedules it in the background and does not wait.
 #[wasm_bindgen]
-pub async fn ark_exit_autonomous_mode() -> Result<(), JsValue> {
+pub async fn ark_sync_bumper_wallet() -> Result<(), JsValue> {
     map_js_async(async {
-        with_session_async(|session| async move { session.exit_autonomous_mode().await }).await
+        with_session_async(|session| async move {
+            session.sync_bumper_wallet_best_effort().await;
+            Ok(())
+        })
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub fn ark_export_bumper_wallet_changeset() -> Result<String, JsValue> {
+    map_js_error(with_session(|session| {
+        session.export_bumper_wallet_changeset()
+    }))
+}
+
+#[wasm_bindgen]
+pub fn ark_bumper_wallet_full_scan_done() -> Result<bool, JsValue> {
+    map_js_error(with_session(|session| {
+        Ok(session.bumper_wallet_full_scan_done())
+    }))
+}
+
+#[wasm_bindgen]
+pub async fn ark_exit_autonomous_mode() -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let result =
+            with_session_async(|session| async move { session.exit_autonomous_mode().await })
+                .await?;
+        to_js_value(result)
     })
     .await
 }
@@ -224,10 +262,26 @@ pub fn ark_autonomous_mode_status() -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub async fn ark_sync_with_operator() -> Result<JsValue, JsValue> {
+pub async fn ark_sync_with_operator(schedule_background_full: bool) -> Result<JsValue, JsValue> {
+    map_js_async(async move {
+        let result = with_session_async(move |session| async move {
+            session
+                .sync_with_operator_scheduling(schedule_background_full)
+                .await
+        })
+        .await?;
+        to_js_value(result)
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn ark_reconcile_full_offchain_vtxo_list() -> Result<JsValue, JsValue> {
     map_js_async(async {
-        let result =
-            with_session_async(|session| async move { session.sync_with_operator().await }).await?;
+        let result = with_session_async(|session| async move {
+            session.reconcile_full_offchain_vtxo_list().await
+        })
+        .await?;
         to_js_value(result)
     })
     .await
@@ -248,10 +302,14 @@ pub fn ark_operator_config_diff() -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub async fn ark_accept_pending_operator_config() -> Result<(), JsValue> {
+pub async fn ark_accept_pending_operator_config() -> Result<JsValue, JsValue> {
     map_js_async(async {
-        with_session_async(|session| async move { session.accept_pending_operator_config().await })
-            .await
+        let result =
+            with_session_async(
+                |session| async move { session.accept_pending_operator_config().await },
+            )
+            .await?;
+        to_js_value(result)
     })
     .await
 }
@@ -517,6 +575,18 @@ pub async fn ark_list_unilateral_exits_in_progress() -> Result<JsValue, JsValue>
 pub fn ark_list_vtxo_exit_records() -> Result<JsValue, JsValue> {
     map_js_error(with_session(|session| {
         to_js_value(session.list_vtxo_exit_records())
+    }))
+}
+
+#[wasm_bindgen]
+pub fn ark_peek_onchain_bumper_address() -> Result<String, JsValue> {
+    map_js_error(with_session(|session| session.onchain_bumper_address()))
+}
+
+#[wasm_bindgen]
+pub fn ark_unilateral_exit_timelock() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.unilateral_exit_timelock()?)
     }))
 }
 

@@ -250,6 +250,7 @@ mod tests {
             dust_sats: 330,
             virtual_tx_outpoints: records,
             unilateral_exit_materials_by_host_tx: std::collections::BTreeMap::new(),
+            full_listed_at: 0,
         }
     }
 

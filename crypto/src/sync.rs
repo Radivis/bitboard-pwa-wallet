@@ -24,6 +24,8 @@ pub async fn sync_wallet(
     parallel_requests: usize,
 ) -> Result<(), CryptoError> {
     let now = crate::current_unix_time();
+    // Peeked receive index 0 is not in `start_sync_with_revealed_spks` until revealed.
+    crate::wallet::ensure_current_external_address(wallet);
     let update = client.sync(wallet, now, parallel_requests).await?;
     apply_update(wallet, update)?;
     Ok(())

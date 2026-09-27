@@ -7,7 +7,7 @@ use std::process::Command;
 use std::time::Duration;
 
 use bip39::{Language, Mnemonic};
-use bitboard_ark::{ArkSession, NetworkMode};
+use bitboard_ark::{ArkSession, NetworkMode, OpenArkSessionParams};
 use serde::Deserialize;
 
 pub const DEFAULT_ARKD_URL: &str = "http://localhost:7070";
@@ -252,14 +252,16 @@ pub async fn open_session(
     mnemonic: &str,
     persistence_json: Option<&str>,
 ) -> ArkSession {
-    ArkSession::open(
-        mnemonic,
-        NetworkMode::Regtest,
-        endpoints.arkd_url.clone(),
-        String::new(),
-        endpoints.esplora_url.clone(),
-        persistence_json,
-    )
+    ArkSession::open(OpenArkSessionParams {
+        mnemonic_words: mnemonic,
+        network_mode: NetworkMode::Regtest,
+        ark_server_url: endpoints.arkd_url.clone(),
+        delegator_url: String::new(),
+        esplora_url: endpoints.esplora_url.clone(),
+        sdk_persistence_json: persistence_json,
+        bumper_changeset_json: None,
+        bumper_full_scan_done: false,
+    })
     .await
     .expect("open session")
     .0

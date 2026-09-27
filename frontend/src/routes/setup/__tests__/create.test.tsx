@@ -34,25 +34,29 @@ const mockSetTransactions = vi.fn()
 const mockSetLastSyncTime = vi.fn()
 const mockCommitLoadedDescriptorWallet = vi.fn()
 const mockSetImportInitialSyncErrorMessage = vi.fn()
+const walletStoreState = {
+  networkMode: 'signet',
+  walletStatus: 'unlocked',
+  addressType: 'taproot',
+  accountId: 0,
+  setActiveWallet: mockSetActiveWallet,
+  setWalletStatus: mockSetWalletStatus,
+  setCurrentAddress: mockSetCurrentAddress,
+  setBalance: mockSetBalance,
+  setTransactions: mockSetTransactions,
+  setLastSyncTime: mockSetLastSyncTime,
+  commitLoadedDescriptorWallet: mockCommitLoadedDescriptorWallet,
+  setInitialSyncErrorMessage: mockSetImportInitialSyncErrorMessage,
+  clearArkadeDashboardState: vi.fn(),
+  lockWallet: vi.fn(),
+}
+
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: Object.assign(
-    (selector: (s: Record<string, unknown>) => unknown) =>
-      selector({
-        networkMode: 'signet',
-        walletStatus: 'unlocked',
-        addressType: 'taproot',
-        accountId: 0,
-        setActiveWallet: mockSetActiveWallet,
-        setWalletStatus: mockSetWalletStatus,
-        setCurrentAddress: mockSetCurrentAddress,
-        setBalance: mockSetBalance,
-        setTransactions: mockSetTransactions,
-        setLastSyncTime: mockSetLastSyncTime,
-        commitLoadedDescriptorWallet: mockCommitLoadedDescriptorWallet,
-        setImportInitialSyncErrorMessage: mockSetImportInitialSyncErrorMessage,
-      }),
+    (selector: (storeState: typeof walletStoreState) => unknown) =>
+      selector(walletStoreState),
     {
-      getState: () => ({ lockWallet: vi.fn() }),
+      getState: () => walletStoreState,
     },
   ),
 }))
@@ -332,6 +336,12 @@ describe('CreateWalletPage', () => {
   it('Understood! Proceed! creates wallet with no-mnemonic-backup flag and navigates', async () => {
     const user = userEvent.setup()
     mockCreateWalletAndEncryptSecrets.mockResolvedValueOnce(createWalletCryptoResult())
+    dbMocks.mockPersistNewWalletWithSecrets.mockImplementation(
+      async (params: { insertWalletRow: () => Promise<number> }) => {
+        await params.insertWalletRow()
+        return 1
+      },
+    )
     renderWithProviders(<CreateWalletPage />)
 
     await user.click(screen.getByRole('button', { name: 'Generate but skip backup' }))
@@ -340,6 +350,10 @@ describe('CreateWalletPage', () => {
     await waitFor(() => {
       expect(dbMocks.mockPersistNewWalletWithSecrets).toHaveBeenCalled()
     })
+    expect(dbMocks.mockMutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Main Wallet' }),
+    )
+    expect(dbMocks.mockMutateAsync.mock.calls[0]?.[0]?.name).not.toMatch(/Wallet \d+/)
     expect(mockSetBalance).toHaveBeenCalledWith(null)
     expect(mockSetTransactions).toHaveBeenCalledWith([])
     expect(mockSetLastSyncTime).toHaveBeenCalledWith(null)

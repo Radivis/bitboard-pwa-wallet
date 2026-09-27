@@ -21,6 +21,8 @@ const workerMocks = vi.hoisted(() => ({
   getAddress: vi.fn().mockResolvedValue('tark1qtest'),
   reconcileActiveAccountId: vi.fn().mockResolvedValue(undefined),
   syncWithOperator: vi.fn().mockResolvedValue({}),
+  setOnBackgroundFullReconcileFinished: vi.fn(),
+  scheduleBackgroundFullVtxoReconcile: vi.fn(),
   getUnilateralExitFrontendPersistence: vi.fn().mockResolvedValue({
     job: {
       selectedLeafOutpoints: [],
@@ -72,6 +74,13 @@ vi.mock('@/db', () => ({
     payload: encryptedPayload,
   }),
   awaitInFlightWalletSecretsWrites: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('@/lib/wallet/resolve-bumper-hydrate', () => ({
+  resolveBumperHydrateForSessionOpen: vi.fn(async () => ({
+    bumperChangesetJson: undefined,
+    bumperFullScanDone: false,
+  })),
 }))
 
 vi.mock('@/db/storage-adapter', () => ({
@@ -129,6 +138,7 @@ vi.mock('@/lib/arkade/arkade-utils', () => ({
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: {
     getState: () => ({
+      activeWalletId: 1,
       setActiveArkadeAccountId: vi.fn(),
       setLastOperatorSyncTime: vi.fn(),
       setArkadeSignerMigrationHint: vi.fn(),

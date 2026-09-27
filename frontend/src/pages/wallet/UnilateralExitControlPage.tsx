@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
+import { arkadeSessionBlockingScreen } from '@/components/arkade/arkade-session-blocking-screen'
 import { ArkadeBumperWalletInfomodeContent } from '@/components/arkade/infomode/ArkadeBumperWalletInfomodeContent'
 import { ArkadeUnilateralExitInfomodeContent } from '@/components/arkade/infomode/ArkadeUnilateralExitInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
@@ -20,12 +21,14 @@ import { UnilateralExitTreeGraph } from '@/components/wallet/unilateral-exit/Uni
 import { UnilateralExitNodeDetailCard } from '@/components/wallet/unilateral-exit/UnilateralExitNodeDetailCard'
 import {
   useArkadeBalanceQuery,
+  useArkadeBumperAddressQuery,
   useArkadeBumperInfoQuery,
   useArkadeExitCandidatesQuery,
   useArkadeUnilateralExitBatchEstimateQuery,
   useArkadeUnilateralExitTopologyQuery,
   useArkadeUnilateralExitsInProgressQuery,
 } from '@/hooks/useArkadeQueries'
+import { useArkadeLoadLifecycleSnapshot } from '@/hooks/useArkadeLifecycleSnapshots'
 import { useEsploraFeePresets } from '@/hooks/useEsploraFeePresets'
 import { useOnchainFeeRateSelection } from '@/hooks/useOnchainFeeRateSelection'
 import {
@@ -107,6 +110,7 @@ function totalSelectedSats(
 export function UnilateralExitControlPage() {
   const queryClient = useQueryClient()
   const networkMode = useWalletStore(selectCommittedNetworkMode)
+  const arkadeLoadSnapshot = useArkadeLoadLifecycleSnapshot()
   const activeWalletId = useWalletStore((state) => state.activeWalletId)
   const activeArkadeAccountId = useWalletStore((state) => state.activeArkadeAccountId)
   const balanceQuery = useArkadeBalanceQuery()
@@ -270,6 +274,8 @@ export function UnilateralExitControlPage() {
     batchEstimateQuery.data != null &&
     !batchEstimateQuery.data.bumperSufficient
   const bumperInfoQuery = useArkadeBumperInfoQuery(true, pollBumperBalanceWhileUnderfunded)
+  const bumperAddressQuery = useArkadeBumperAddressQuery(true)
+  const bumperAddress = bumperInfoQuery.data?.address ?? bumperAddressQuery.data ?? null
 
   const machineProceeding = unilateralExitSnapshotIsProceeding(actorSnapshot)
 
@@ -493,6 +499,14 @@ export function UnilateralExitControlPage() {
     )
   }
 
+  const sessionBlockingScreen = arkadeSessionBlockingScreen(
+    arkadeLoadSnapshot.loadPhase,
+    arkadeLoadSnapshot.errorMessage,
+  )
+  if (sessionBlockingScreen) {
+    return sessionBlockingScreen
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <StartUnilateralExitConfirmModal
@@ -610,7 +624,14 @@ export function UnilateralExitControlPage() {
             className="text-sm text-muted-foreground"
             data-testid="unilateral-exit-branch-complete"
           >
-            Branch complete. Coins can be claimed via complete unilateral exit in Management.
+            Branch complete. Coins can be claimed via{' '}
+            <Link
+              to="/wallet/arkade/complete-unilateral-exit"
+              className="text-primary underline-offset-4 hover:underline"
+            >
+              complete unilateral exit
+            </Link>
+            .
           </p>
         ) : null}
         {unilateralExitSnapshotIsInState(actorSnapshot, UNILATERAL_EXIT_MACHINE_STATE.error) &&
@@ -662,9 +683,9 @@ export function UnilateralExitControlPage() {
           <p className="text-sm" data-testid="unilateral-exit-bumper-balance">
             <BitcoinAmountDisplay amountSats={bumperInfoQuery.data?.balanceSats ?? 0} />
           </p>
-          {bumperInfoQuery.data?.address != null && (
+          {bumperAddress != null && (
             <p className="font-mono text-xs break-all text-muted-foreground" data-testid="arkade-bumper-address">
-              {bumperInfoQuery.data.address}
+              {bumperAddress}
             </p>
           )}
           {bumperLow && (

@@ -73,6 +73,7 @@ pub fn snapshot_with_intermediate_tree_and_ark_leaf() -> (OffchainVtxoSnapshot, 
             vtxo_record(&commitment, 0, 9_000, false),
         ],
         unilateral_exit_materials_by_host_tx: BTreeMap::new(),
+        full_listed_at: 0,
     };
     store_materials_for_host_tx(
         &mut snapshot,

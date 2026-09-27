@@ -410,6 +410,7 @@ mod tests {
             dust_sats: 330,
             virtual_tx_outpoints: vec![sibling_record(&txid, 0, false)],
             unilateral_exit_materials_by_host_tx: empty_materials_map(),
+            full_listed_at: 0,
         };
         let error = require_unilateral_exit_materials_for_host_tx(&snapshot, &txid)
             .expect_err("missing materials");
@@ -427,6 +428,7 @@ mod tests {
             dust_sats: 330,
             virtual_tx_outpoints: vec![sibling_record(&txid, 0, false)],
             unilateral_exit_materials_by_host_tx: empty_materials_map(),
+            full_listed_at: 0,
         };
         store_materials_for_host_tx(&mut snapshot, &txid, sample_materials(7));
         let materials =
@@ -451,6 +453,7 @@ mod tests {
             dust_sats: 330,
             virtual_tx_outpoints: vec![sibling_record(&leaf_txid, 0, false)],
             unilateral_exit_materials_by_host_tx: empty_materials_map(),
+            full_listed_at: 0,
         };
         store_materials_for_host_tx(
             &mut snapshot,
@@ -475,6 +478,7 @@ mod tests {
             dust_sats: 330,
             virtual_tx_outpoints: vec![sibling_record(&txid, 0, false)],
             unilateral_exit_materials_by_host_tx: empty_materials_map(),
+            full_listed_at: 0,
         };
         assert_eq!(
             vtxo_amount_sats_from_snapshot(Some(&snapshot), &txid, 0),
@@ -499,6 +503,7 @@ mod tests {
                 sibling_record(&txid, 1, false),
             ],
             unilateral_exit_materials_by_host_tx: empty_materials_map(),
+            full_listed_at: 0,
         };
         store_materials_for_host_tx(&mut snapshot, &txid, materials);
         assert_eq!(
@@ -523,12 +528,14 @@ mod tests {
                 map.insert(txid.clone(), materials);
                 map
             },
+            full_listed_at: 0,
         };
         let mut next = OffchainVtxoSnapshot {
             synced_at: 2,
             dust_sats: 330,
             virtual_tx_outpoints: vec![sibling_record(&txid, 0, false)],
             unilateral_exit_materials_by_host_tx: empty_materials_map(),
+            full_listed_at: 0,
         };
         merge_unilateral_exit_materials_maps(Some(&prior), &mut next);
         assert_eq!(
@@ -572,6 +579,7 @@ mod tests {
                 },
             ],
             unilateral_exit_materials_by_host_tx: materials_map,
+            full_listed_at: 0,
         };
         assert_eq!(materials_status_from_snapshot(Some(&snapshot)), (2, 1, 1));
     }
@@ -591,6 +599,7 @@ mod tests {
                 map.insert(txid.clone(), sample_materials(1));
                 map
             },
+            full_listed_at: 0,
         };
         prune_unilateral_exit_materials_map(&mut snapshot, &HashSet::new());
         assert!(
@@ -688,6 +697,7 @@ mod tests {
                 map.insert(txid.clone(), sample_materials(1));
                 map
             },
+            full_listed_at: 0,
         };
         prune_unilateral_exit_materials_map(&mut snapshot, &HashSet::new());
         assert!(
@@ -731,6 +741,7 @@ mod tests {
             dust_sats: 330,
             virtual_tx_outpoints: vec![sibling_record(&ancestor.to_string(), 0, false)],
             unilateral_exit_materials_by_host_tx: empty_materials_map(),
+            full_listed_at: 0,
         };
         store_materials_for_host_tx(
             &mut snapshot,
@@ -778,6 +789,7 @@ mod tests {
                 map.insert(txid_string, sample_materials(1));
                 map
             },
+            full_listed_at: 0,
         };
         let eligible_vtxo = VirtualTxOutPoint {
             outpoint: OutPoint { txid, vout: 0 },

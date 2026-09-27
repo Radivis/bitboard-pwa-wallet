@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { ArkadePanel } from '@/components/wallet/ArkadePanel'
@@ -36,12 +36,14 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
   }
 })
 
+const arkadeLoadSnapshot = vi.hoisted(() => ({
+  loadPhase: 'loaded' as 'loaded' | 'loading' | 'load-error' | 'not-configured',
+  networkMode: 'signet' as const,
+  errorMessage: null as string | null,
+}))
+
 vi.mock('@/hooks/useArkadeLifecycleSnapshots', () => ({
-  useArkadeLoadLifecycleSnapshot: () => ({
-    loadPhase: 'loaded',
-    networkMode: 'signet',
-    errorMessage: null,
-  }),
+  useArkadeLoadLifecycleSnapshot: () => arkadeLoadSnapshot,
   useArkadeSyncLifecycleSnapshot: () => ({
     syncPhase: 'not-syncing',
     railScope: null,
@@ -114,10 +116,40 @@ vi.mock('@/components/wallet/ArkadeExitSection', () => ({
 }))
 
 describe('ArkadePanel', () => {
+  beforeEach(() => {
+    arkadeLoadSnapshot.loadPhase = 'loaded'
+    arkadeLoadSnapshot.errorMessage = null
+  })
+
   it('does not link to separate arkade send or receive routes', () => {
     renderWithProviders(<ArkadePanel />)
     expect(screen.queryByRole('link', { name: 'Receive' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Send' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Board from on-chain' })).toBeInTheDocument()
+  })
+
+  it('replaces balance and address with the session loading view', () => {
+    arkadeLoadSnapshot.loadPhase = 'loading'
+    renderWithProviders(<ArkadePanel />)
+
+    expect(screen.getByTestId('arkade-session-loading')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Establishing Arkade session' })).toBeInTheDocument()
+    expect(screen.queryByText('tark1qtest')).not.toBeInTheDocument()
+    expect(screen.queryByText('Balance')).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'View VTXOs' })).toBeInTheDocument()
+  })
+
+  it('replaces balance and address with the session error view', () => {
+    arkadeLoadSnapshot.loadPhase = 'load-error'
+    arkadeLoadSnapshot.errorMessage = 'operator unreachable'
+    renderWithProviders(<ArkadePanel />)
+
+    expect(screen.getByTestId('arkade-session-load-error')).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Arkade session could not be established' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('operator unreachable')).toBeInTheDocument()
+    expect(screen.queryByText('tark1qtest')).not.toBeInTheDocument()
+    expect(screen.getByTestId('exit-section')).toBeInTheDocument()
   })
 })

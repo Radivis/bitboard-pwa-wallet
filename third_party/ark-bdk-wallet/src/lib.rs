@@ -9,6 +9,8 @@ use ark_core::BoardingOutput;
 use ark_core::SelectedUtxo;
 use ark_core::UtxoCoinSelection;
 use bdk_esplora::EsploraAsyncExt;
+use bdk_wallet::chain::Merge;
+use bdk_wallet::ChangeSet;
 use bdk_wallet::KeychainKind;
 use bdk_wallet::SignOptions;
 use bdk_wallet::TxOrdering;
@@ -26,8 +28,8 @@ use bitcoin::Network;
 use bitcoin::Psbt;
 use bitcoin::XOnlyPublicKey;
 use jiff::Timestamp;
-use std::collections::BTreeSet;
-use std::io::Write;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::RwLock;
 
@@ -46,6 +48,9 @@ where
     #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
     client: esplora_client::AsyncClient<WebSleeper>,
     db: DB,
+    completed_full_scan: AtomicBool,
+    accumulated_changeset: RwLock<ChangeSet>,
+    bumper_hydrate_fell_back_to_empty: bool,
 }
 
 impl<DB> Wallet<DB>
@@ -76,19 +81,40 @@ where
         esplora_url: &str,
         db: DB,
     ) -> Result<Self> {
+        Self::new_from_xpriv_hydrated(xprv, secp, network, esplora_url, db, None, false)
+    }
+
+    /// Create or hydrate a BIP84 bumper wallet from a persisted SegWit-0 changeset.
+    pub fn new_from_xpriv_hydrated(
+        xprv: Xpriv,
+        secp: Secp256k1<All>,
+        network: Network,
+        esplora_url: &str,
+        db: DB,
+        changeset_json: Option<&str>,
+        full_scan_done: bool,
+    ) -> Result<Self> {
         let kp = xprv.to_keypair(&secp);
-        let external = bdk_wallet::template::Bip84(xprv, KeychainKind::External);
-        let change = bdk_wallet::template::Bip84(xprv, KeychainKind::Internal);
-        let wallet = BdkWallet::create(external, change)
-            .network(network)
-            .create_wallet_no_persist()?;
+        let (mut wallet, used_empty) = create_or_load_bip84_wallet(xprv, network, changeset_json)?;
+        let bumper_hydrate_fell_back_to_empty =
+            bumper_changeset_hydrate_fell_back_to_empty(changeset_json, used_empty);
+        let accumulated = if used_empty {
+            wallet.take_staged().unwrap_or_default()
+        } else {
+            changeset_json
+                .and_then(|json| serde_json::from_str(json).ok())
+                .unwrap_or_else(|| wallet.take_staged().unwrap_or_default())
+        };
 
         #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
-        let client = esplora_client::Builder::new(esplora_url).build_async_with_sleeper()?;
+        let client = esplora_client::Builder::new(esplora_url)
+            .timeout(BUMPER_ESPLORA_HTTP_TIMEOUT_SECS)
+            .build_async_with_sleeper()?;
 
         #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-        let client =
-            esplora_client::Builder::new(esplora_url).build_async_with_sleeper::<WebSleeper>()?;
+        let client = esplora_client::Builder::new(esplora_url)
+            .timeout(BUMPER_ESPLORA_HTTP_TIMEOUT_SECS)
+            .build_async_with_sleeper::<WebSleeper>()?;
 
         Ok(Self {
             kp,
@@ -96,7 +122,155 @@ where
             inner: Arc::new(RwLock::new(wallet)),
             client,
             db,
+            completed_full_scan: AtomicBool::new(completed_full_scan_from_hydrate(
+                full_scan_done,
+                used_empty,
+            )),
+            accumulated_changeset: RwLock::new(accumulated),
+            bumper_hydrate_fell_back_to_empty,
         })
+    }
+
+    /// True when a persisted changeset was supplied and hydrate created an empty wallet instead.
+    pub fn bumper_hydrate_fell_back_to_empty(&self) -> bool {
+        self.bumper_hydrate_fell_back_to_empty
+    }
+
+    pub fn export_changeset_json(&self) -> Result<String, Error> {
+        let mut wallet = self
+            .inner
+            .write()
+            .map_err(|e| Error::consumer(format!("failed to get write lock: {e}")))?;
+        let mut accumulated = self
+            .accumulated_changeset
+            .write()
+            .map_err(|e| Error::consumer(format!("failed to get changeset write lock: {e}")))?;
+        if let Some(staged) = wallet.take_staged() {
+            accumulated.merge(staged);
+        }
+        serde_json::to_string(&*accumulated)
+            .map_err(|e| Error::wallet(format!("serialize bumper changeset: {e}")))
+    }
+
+    pub fn completed_full_scan(&self) -> bool {
+        self.completed_full_scan.load(Ordering::Acquire)
+    }
+
+    fn scan_unix_secs() -> Result<u64, Error> {
+        let now: std::time::Duration = Timestamp::now()
+            .as_duration()
+            .try_into()
+            .map_err(Error::wallet)?;
+        Ok(now.as_secs())
+    }
+
+    /// Esplora-sync unused revealed scripts (displayed tip + unused change) and apply into BDK.
+    pub async fn sync_unused_spks(&self) -> Result<(), Error> {
+        let now_secs = Self::scan_unix_secs()?;
+        let update = self.unused_spk_esplora_update(now_secs).await?;
+        self.inner
+            .write()
+            .map_err(|e| Error::consumer(format!("failed to get write lock: {e}")))?
+            .apply_update(update)
+            .map_err(Error::wallet)?;
+        Ok(())
+    }
+
+    async fn unused_spk_esplora_update(&self, now_secs: u64) -> Result<bdk_wallet::Update, Error> {
+        let request = {
+            let wallet = self
+                .inner
+                .read()
+                .map_err(|e| Error::consumer(format!("failed to get read lock: {e}")))?;
+            unused_spk_sync_request(&wallet, now_secs)
+        };
+        self.client
+            .sync(request, BUMPER_ESPLORA_PARALLEL_REQUESTS)
+            .await
+            .map_err(Error::wallet)
+            .context("Failed syncing unused bumper scripts")
+            .map(Into::into)
+    }
+
+    /// Refresh scripts that can still fund a CPFP: current unspent outputs and unused change.
+    /// Does not walk every historically revealed bumper script.
+    pub async fn sync_spendable_scripts(&self) -> Result<(), Error> {
+        let now_secs = Self::scan_unix_secs()?;
+        let update = self.spendable_spk_esplora_update(now_secs).await?;
+        self.inner
+            .write()
+            .map_err(|e| Error::consumer(format!("failed to get write lock: {e}")))?
+            .apply_update(update)
+            .map_err(Error::wallet)?;
+        Ok(())
+    }
+
+    async fn spendable_spk_esplora_update(
+        &self,
+        now_secs: u64,
+    ) -> Result<bdk_wallet::Update, Error> {
+        let request = {
+            let wallet = self
+                .inner
+                .read()
+                .map_err(|e| Error::consumer(format!("failed to get read lock: {e}")))?;
+            spendable_spk_sync_request(&wallet, now_secs)
+        };
+        self.client
+            .sync(request, BUMPER_FULL_SCAN_PARALLEL_REQUESTS)
+            .await
+            .map_err(Error::wallet)
+            .context("Failed syncing wallet")
+            .map(Into::into)
+    }
+
+    async fn incremental_esplora_update(&self, now_secs: u64) -> Result<bdk_wallet::Update, Error> {
+        // Drop the wallet lock before awaiting Esplora. A guard kept alive across the
+        // await deadlocks the single-threaded WASM worker when another call needs the
+        // lock (address peek, apply_update, changeset export).
+        let request = {
+            let wallet = self
+                .inner
+                .read()
+                .map_err(|e| Error::consumer(format!("failed to get read lock: {e}")))?;
+            wallet.start_sync_with_revealed_spks_at(now_secs)
+        };
+        self.client
+            .sync(request, BUMPER_ESPLORA_PARALLEL_REQUESTS)
+            .await
+            .map_err(Error::wallet)
+            .context("Failed syncing wallet")
+            .map(Into::into)
+    }
+
+    async fn full_esplora_update(&self, now_secs: u64) -> Result<bdk_wallet::Update, Error> {
+        let request = {
+            let wallet = self
+                .inner
+                .read()
+                .map_err(|e| Error::consumer(format!("failed to get read lock: {e}")))?;
+            wallet.start_full_scan_at(now_secs)
+        };
+        self.client
+            .full_scan(
+                request,
+                BUMPER_FULL_SCAN_STOP_GAP,
+                BUMPER_FULL_SCAN_PARALLEL_REQUESTS,
+            )
+            .await
+            .map_err(Error::wallet)
+            .context("Failed syncing wallet")
+            .map(Into::into)
+    }
+
+    async fn fetch_esplora_update(&self) -> Result<(bdk_wallet::Update, bool), Error> {
+        let now_secs = Self::scan_unix_secs()?;
+        match bumper_wallet_scan_kind(self.completed_full_scan.load(Ordering::Acquire)) {
+            BumperWalletScanKind::Incremental => {
+                Ok((self.incremental_esplora_update(now_secs).await?, false))
+            }
+            BumperWalletScanKind::Full => Ok((self.full_esplora_update(now_secs).await?, true)),
+        }
     }
 }
 
@@ -115,42 +289,15 @@ where
     }
 
     async fn sync(&self) -> Result<(), Error> {
-        let now: std::time::Duration = Timestamp::now()
-            .as_duration()
-            .try_into()
-            .map_err(Error::wallet)?;
-
-        let request = self
-            .inner
-            .read()
-            .map_err(|e| Error::consumer(format!("failed to get read lock: {e}")))?
-            .start_full_scan_at(now.as_secs())
-            .inspect({
-                let mut stdout = std::io::stdout();
-                let mut once = BTreeSet::<KeychainKind>::new();
-                move |keychain, spk_i, _| {
-                    if once.insert(keychain) {
-                        tracing::trace!(?keychain, "Scanning keychain");
-                    }
-                    tracing::trace!(" {:<3}", spk_i);
-                    stdout.flush().expect("must flush")
-                }
-            });
-
-        // TODO: Use smarter constants or make it configurable.
-        let update = self
-            .client
-            .full_scan(request, 5, 5)
-            .await
-            .map_err(Error::wallet)
-            .context("Failed syncing wallet")?;
-
+        let (update, mark_full_scan_done) = self.fetch_esplora_update().await?;
         self.inner
             .write()
-            .expect("write lock")
+            .map_err(|e| Error::consumer(format!("failed to get write lock: {e}")))?
             .apply_update(update)
             .map_err(Error::wallet)?;
-
+        if mark_full_scan_done {
+            self.completed_full_scan.store(true, Ordering::Release);
+        }
         Ok(())
     }
 
@@ -311,5 +458,312 @@ impl esplora_client::Sleeper for WebSleeper {
 
     fn sleep(dur: std::time::Duration) -> Self::Sleep {
         utils::SendWrapper(gloo_timers::future::sleep(dur))
+    }
+}
+
+/// Same bound as `EsploraBlockchain` so one stuck Mutinynet request cannot hold a scan open.
+const BUMPER_ESPLORA_HTTP_TIMEOUT_SECS: u64 = 15;
+
+const BUMPER_FULL_SCAN_STOP_GAP: usize = 5;
+const BUMPER_ESPLORA_PARALLEL_REQUESTS: usize = 5;
+/// Full scan is bursty; match crypto (`FULL_SCAN_PARALLEL_REQUESTS = 2`) to reduce 429s.
+const BUMPER_FULL_SCAN_PARALLEL_REQUESTS: usize = 2;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum BumperWalletScanKind {
+    Full,
+    Incremental,
+}
+
+/// Incremental sync of unused revealed SPKs (the displayed tip plus unused change).
+pub(crate) fn unused_spk_sync_request(
+    wallet: &BdkWallet,
+    start_time: u64,
+) -> bdk_wallet::chain::spk_client::SyncRequest<(KeychainKind, u32)> {
+    use bdk_wallet::chain::keychain_txout::SyncRequestBuilderExt;
+    use bdk_wallet::chain::spk_client::SyncRequest;
+    SyncRequest::builder_at(start_time)
+        .chain_tip(wallet.latest_checkpoint())
+        .unused_spks_from_indexer(wallet.spk_index())
+        .build()
+}
+
+/// Scripts that can still fund a CPFP child: unspent wallet outputs, plus unused change.
+/// Used bumper addresses with no remaining output are omitted.
+pub(crate) fn spendable_spk_sync_request(
+    wallet: &BdkWallet,
+    start_time: u64,
+) -> bdk_wallet::chain::spk_client::SyncRequest<(KeychainKind, u32)> {
+    use bdk_wallet::chain::keychain_txout::SyncRequestBuilderExt;
+    use bdk_wallet::chain::spk_client::SyncRequest;
+    let indexer = wallet.spk_index();
+    let unspent_spks = wallet.list_unspent().filter_map(|utxo| {
+        let script = indexer.spk_at_index(utxo.keychain, utxo.derivation_index)?;
+        Some(((utxo.keychain, utxo.derivation_index), script))
+    });
+    SyncRequest::builder_at(start_time)
+        .chain_tip(wallet.latest_checkpoint())
+        .unused_spks_from_indexer(indexer)
+        .spks_with_indexes(unspent_spks)
+        .build()
+}
+
+/// After the first successful full scan in this process, later `sync()` calls must not
+/// walk unused HD gap via `/scripthash/.../txs`.
+pub(crate) fn bumper_wallet_scan_kind(completed_full_scan: bool) -> BumperWalletScanKind {
+    if completed_full_scan {
+        BumperWalletScanKind::Incremental
+    } else {
+        BumperWalletScanKind::Full
+    }
+}
+
+/// Treat the bumper as already full-scanned only when hydrate loaded a changeset
+/// and that row's `fullScanDone` is set. An empty fallback must full-scan.
+pub(crate) fn completed_full_scan_from_hydrate(full_scan_done: bool, used_empty: bool) -> bool {
+    full_scan_done && !used_empty
+}
+
+/// A supplied changeset that did not load is a fallback, not a brand-new empty wallet.
+pub(crate) fn bumper_changeset_hydrate_fell_back_to_empty(
+    changeset_json: Option<&str>,
+    used_empty: bool,
+) -> bool {
+    changeset_json.is_some() && used_empty
+}
+
+/// Align bumper BDK chain with crypto (`Testnet` → Testnet4).
+pub(crate) fn bumper_bdk_network(network: Network) -> Network {
+    match network {
+        Network::Testnet => Network::Testnet4,
+        Network::Bitcoin | Network::Testnet4 | Network::Signet | Network::Regtest => network,
+    }
+}
+
+fn try_load_bip84_from_changeset(
+    xprv: Xpriv,
+    bdk_network: Network,
+    changeset_json: &str,
+) -> Result<Option<BdkWallet>, String> {
+    let changeset: ChangeSet = serde_json::from_str(changeset_json)
+        .map_err(|e| format!("parse bumper changeset JSON: {e}"))?;
+    let external = bdk_wallet::template::Bip84(xprv, KeychainKind::External);
+    let change = bdk_wallet::template::Bip84(xprv, KeychainKind::Internal);
+    BdkWallet::load()
+        .descriptor(KeychainKind::External, Some(external))
+        .descriptor(KeychainKind::Internal, Some(change))
+        .extract_keys()
+        .check_network(bdk_network)
+        .load_wallet_no_persist(changeset)
+        .map_err(|e| format!("load bumper BIP84 changeset: {e}"))
+}
+
+/// Load a BIP84 wallet from changeset JSON, or create empty when missing/unusable.
+/// Second value is `true` when the wallet was created empty (not loaded).
+pub(crate) fn create_or_load_bip84_wallet(
+    xprv: Xpriv,
+    network: Network,
+    changeset_json: Option<&str>,
+) -> Result<(BdkWallet, bool)> {
+    let bdk_network = bumper_bdk_network(network);
+    if let Some(json) = changeset_json {
+        match try_load_bip84_from_changeset(xprv, bdk_network, json) {
+            Ok(Some(loaded)) => return Ok((loaded, false)),
+            Ok(None) => {
+                tracing::warn!(
+                    "bumper BIP84 changeset hydrated to no wallet; creating empty wallet"
+                );
+            }
+            Err(reason) => {
+                tracing::warn!(
+                    reason,
+                    "bumper BIP84 changeset hydrate failed; creating empty wallet"
+                );
+            }
+        }
+    }
+    let external = bdk_wallet::template::Bip84(xprv, KeychainKind::External);
+    let change = bdk_wallet::template::Bip84(xprv, KeychainKind::Internal);
+    let wallet = BdkWallet::create(external, change)
+        .network(bdk_network)
+        .create_wallet_no_persist()?;
+    Ok((wallet, true))
+}
+
+#[cfg(test)]
+mod bumper_wallet_scan_kind_tests {
+    use super::{
+        bumper_bdk_network, bumper_changeset_hydrate_fell_back_to_empty, bumper_wallet_scan_kind,
+        completed_full_scan_from_hydrate, create_or_load_bip84_wallet, BumperWalletScanKind,
+    };
+    use bdk_wallet::KeychainKind;
+    use bitcoin::bip32::Xpriv;
+    use bitcoin::Network;
+
+    fn test_xprv(network: Network) -> Xpriv {
+        Xpriv::new_master(network, &[7u8; 32]).expect("xprv")
+    }
+
+    #[test]
+    fn bumper_wallet_scan_kind_is_full_before_first_scan_and_incremental_after() {
+        assert_eq!(bumper_wallet_scan_kind(false), BumperWalletScanKind::Full);
+        assert_eq!(
+            bumper_wallet_scan_kind(true),
+            BumperWalletScanKind::Incremental
+        );
+    }
+
+    #[test]
+    fn bumper_wallet_scan_kind_is_incremental_when_hydrated_with_full_scan_done() {
+        assert_eq!(
+            bumper_wallet_scan_kind(completed_full_scan_from_hydrate(true, false)),
+            BumperWalletScanKind::Incremental
+        );
+        assert_eq!(
+            bumper_wallet_scan_kind(completed_full_scan_from_hydrate(false, false)),
+            BumperWalletScanKind::Full
+        );
+        assert_eq!(
+            bumper_wallet_scan_kind(completed_full_scan_from_hydrate(true, true)),
+            BumperWalletScanKind::Full
+        );
+    }
+
+    #[test]
+    fn unusable_changeset_is_a_hydrate_fallback_and_missing_changeset_is_not() {
+        assert!(!bumper_changeset_hydrate_fell_back_to_empty(None, true));
+        assert!(!bumper_changeset_hydrate_fell_back_to_empty(
+            Some("{}"),
+            false
+        ));
+        assert!(bumper_changeset_hydrate_fell_back_to_empty(
+            Some("not-json"),
+            true
+        ));
+    }
+
+    #[test]
+    fn load_bip84_changeset_roundtrip_or_empty_on_invalid() {
+        let xprv = test_xprv(Network::Signet);
+        let (mut created, used_empty) =
+            create_or_load_bip84_wallet(xprv, Network::Signet, None).expect("create");
+        assert!(used_empty);
+        let revealed = created.next_unused_address(KeychainKind::External).address;
+        let changeset = created.take_staged().expect("staged after reveal");
+        let changeset_json = serde_json::to_string(&changeset).expect("serialize");
+
+        let (loaded, loaded_empty) =
+            create_or_load_bip84_wallet(xprv, Network::Signet, Some(&changeset_json))
+                .expect("load");
+        assert!(!loaded_empty);
+        assert_eq!(
+            loaded.peek_address(KeychainKind::External, 0).address,
+            revealed
+        );
+
+        for unusable in [Some(""), Some("{}"), Some("not-json")] {
+            let (_, empty) =
+                create_or_load_bip84_wallet(xprv, Network::Signet, unusable).expect("fallback");
+            assert!(empty, "expected empty wallet for {unusable:?}");
+        }
+    }
+
+    #[test]
+    fn bumper_bdk_network_maps_testnet_to_testnet4() {
+        assert_eq!(bumper_bdk_network(Network::Testnet), Network::Testnet4);
+        assert_eq!(bumper_bdk_network(Network::Testnet4), Network::Testnet4);
+        assert_eq!(bumper_bdk_network(Network::Signet), Network::Signet);
+        assert_eq!(bumper_bdk_network(Network::Bitcoin), Network::Bitcoin);
+        assert_eq!(bumper_bdk_network(Network::Regtest), Network::Regtest);
+    }
+
+    fn crypto_style_bip84_descriptor_strings(xprv: Xpriv) -> (String, String) {
+        (
+            format!("wpkh({xprv}/84'/1'/0'/0/*)"),
+            format!("wpkh({xprv}/84'/1'/0'/1/*)"),
+        )
+    }
+
+    #[test]
+    fn crypto_style_wpkh_descriptor_changeset_loads_in_ark_bdk() {
+        let xprv = test_xprv(Network::Signet);
+        let (external, internal) = crypto_style_bip84_descriptor_strings(xprv);
+        let mut crypto_wallet = bdk_wallet::Wallet::create(external, internal)
+            .network(Network::Signet)
+            .create_wallet_no_persist()
+            .expect("crypto-style create");
+        let revealed = crypto_wallet
+            .next_unused_address(KeychainKind::External)
+            .address;
+        let changeset = crypto_wallet.take_staged().expect("staged");
+        let changeset_json = serde_json::to_string(&changeset).expect("serialize");
+
+        let (loaded, used_empty) =
+            create_or_load_bip84_wallet(xprv, Network::Signet, Some(&changeset_json))
+                .expect("load crypto-style changeset");
+        assert!(
+            !used_empty,
+            "crypto-style wpkh(xprv/84'/…) changeset must load, not fall back to empty"
+        );
+        assert_eq!(
+            loaded.peek_address(KeychainKind::External, 0).address,
+            revealed
+        );
+    }
+
+    #[test]
+    fn bumper_full_scan_parallel_requests_matches_crypto() {
+        assert_eq!(super::BUMPER_FULL_SCAN_PARALLEL_REQUESTS, 2);
+    }
+
+    #[test]
+    fn unused_spk_sync_request_includes_next_unused_external() {
+        let xprv = test_xprv(Network::Signet);
+        let (mut wallet, _) =
+            create_or_load_bip84_wallet(xprv, Network::Signet, None).expect("create");
+        let unused = wallet.next_unused_address(KeychainKind::External).address;
+        let mut request = super::unused_spk_sync_request(&wallet, 1);
+        let scripts: Vec<_> = request
+            .iter_spks_with_expected_txids()
+            .map(|item| item.spk)
+            .collect();
+        assert!(
+            scripts.contains(&unused.script_pubkey()),
+            "unused-SPK sync must include the displayed next-unused address"
+        );
+        assert!(
+            scripts.len() <= 2,
+            "unused-SPK sync must not walk the full revealed HD set, got {}",
+            scripts.len()
+        );
+    }
+
+    #[test]
+    fn spendable_spk_sync_request_omits_used_scripts_without_utxos() {
+        let xprv = test_xprv(Network::Signet);
+        let (mut wallet, _) =
+            create_or_load_bip84_wallet(xprv, Network::Signet, None).expect("create");
+        for _ in 0..30 {
+            let revealed = wallet.next_unused_address(KeychainKind::External);
+            wallet.mark_used(KeychainKind::External, revealed.index);
+        }
+        let used_script = wallet
+            .peek_address(KeychainKind::External, 0)
+            .address
+            .script_pubkey();
+        let mut request = super::spendable_spk_sync_request(&wallet, 1);
+        let scripts: Vec<_> = request
+            .iter_spks_with_expected_txids()
+            .map(|item| item.spk)
+            .collect();
+        assert!(
+            !scripts.contains(&used_script),
+            "spendable sync must not rescan emptied bumper history"
+        );
+        assert!(
+            scripts.len() < 30,
+            "spendable sync walked too many scripts: {}",
+            scripts.len()
+        );
     }
 }

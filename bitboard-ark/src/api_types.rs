@@ -17,6 +17,8 @@ pub struct OpenSessionResult {
     pub operator_signer_pk_hex: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signer_migration_hint: Option<OperatorSignerMigrationHintDto>,
+    /// Persisted bumper changeset was present but could not be loaded.
+    pub bumper_hydrate_fell_back_to_empty: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -96,6 +98,30 @@ pub struct OperatorSyncResultDto {
     pub exiting_vtxo_warning: Option<String>,
     #[serde(default)]
     pub operator_config_trust_pending: bool,
+    /// Host should run a background full VTXO list. User-facing sync already returned.
+    #[serde(default)]
+    pub full_reconcile_due: bool,
+}
+
+/// Result of a background full VTXO list. `operator_trust_pending` is not a completed reconcile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FullVtxoListReconcileResultDto {
+    pub operator_trust_pending: bool,
+}
+
+impl FullVtxoListReconcileResultDto {
+    pub(crate) fn completed() -> Self {
+        Self {
+            operator_trust_pending: false,
+        }
+    }
+
+    pub(crate) fn operator_trust_pending() -> Self {
+        Self {
+            operator_trust_pending: true,
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -333,6 +359,16 @@ pub struct UnilateralExitCompletionFeeEstimateDto {
     pub missing_blocktime_inputs: Vec<MissingBlocktimeCompletionInputDto>,
 }
 
+/// Operator CSV delay for the complete-page waiting banner. Does not Esplora-scan.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnilateralExitTimelockDto {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unilateral_exit_timelock_blocks: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unilateral_exit_timelock_seconds: Option<u64>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OnchainBumperInfoDto {
@@ -342,6 +378,8 @@ pub struct OnchainBumperInfoDto {
     pub unilateral_exit_timelock_blocks: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unilateral_exit_timelock_seconds: Option<u64>,
+    /// True when this `onchain_bumper_info` call will start a wallet-wide bumper scan.
+    pub needs_bumper_wallet_sync: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -455,6 +493,10 @@ pub struct OpenSessionParams {
     pub esplora_url: String,
     #[serde(default)]
     pub sdk_persistence_json: Option<String>,
+    #[serde(default)]
+    pub bumper_changeset_json: Option<String>,
+    #[serde(default)]
+    pub bumper_full_scan_done: bool,
 }
 
 #[derive(Debug, Deserialize)]
