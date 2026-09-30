@@ -22,7 +22,7 @@ export const ARKADE_REGTEST_UNILATERAL_EXIT_DELAY_BLOCKS = 20
  */
 export const ARKADE_REGTEST_COMMITMENT_CONFIRM_BLOCKS = 1
 
-export { mineRegtestBlocks, fundRegtestAddress, ESPLORA_URL } from './regtest'
+export { mineRegtestBlocks, reorgExcludingMempool, fundRegtestAddress, ESPLORA_URL } from './regtest'
 
 /**
  * Default path for WASM-exported boarded wallet JSON (under `frontend/` when E2E runs from there).

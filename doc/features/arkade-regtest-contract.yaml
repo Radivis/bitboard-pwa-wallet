@@ -14,7 +14,7 @@ contracts:
     description: Collaborative exit withdraws part of Arkade balance to on-chain receive address
     tags: ["@arkade-regtest"]
   - id: E2E-ARK-REG-04
-    description: Full unilateral unroll — select VTXO, per-step Proceed with mining, branch complete, mine timelock blocks, complete exit on-chain
+    description: Full unilateral unroll — select VTXO, per-step Proceed with mining, orphan the first confirmation without re-mining the package and require that step to leave the confirmed state, finish the branch, mine timelock blocks, complete exit on-chain
     tags: ["@arkade-regtest"]
   - id: E2E-ARK-REG-07
     description: Chained self-sends (40% + 30%) — intermediate virtual txs show exitable outpoints but are not leaf-selectable; Proceed automatically on all terminal preconfirmed leaf siblings until branch complete
