@@ -17,7 +17,7 @@ contracts:
     description: Full unilateral unroll — select VTXO, per-step Proceed with mining, orphan the first confirmation without re-mining the package and require that step to leave the confirmed state, finish the branch, mine timelock blocks, complete exit on-chain
     tags: ["@arkade-regtest"]
   - id: E2E-ARK-REG-07
-    description: Chained self-sends (40% + 30%) — intermediate virtual txs show exitable outpoints but are not leaf-selectable; Proceed automatically on all terminal preconfirmed leaf siblings until branch complete
+    description: Chained self-sends (40% + 30%) — intermediate virtual txs show exitable outpoints but are not leaf-selectable; Proceed automatically on all terminal preconfirmed leaf siblings, orphan the first two-block confirmation without re-mining the package and require that step to wait again, until branch complete
     tags: ["@arkade-reg07"]
     rust_regtest:
       test: bitboard-ark/tests/preconfirmed_unilateral_exit_proceed_regtest.rs
