@@ -5,8 +5,10 @@ mempool/backend v3.3.1 in electrum mode serves `GET /api/tx/:txId/hex` but not `
 This gateway:
 
 - **`GET /api/tx/:txid/raw`** — bitcoind mempool or confirmed chain only (404 for wallet-only / virtual stubs)
-- **`GET /api/tx/:txid/status`** — bitcoind status when the tx is **confirmed** (overrides stale electrum `confirmed: false`)
-- **All other paths** — proxied to `mempool_web` unchanged (broadcast, package submit, JSON `/tx`, etc.)
+- **`GET /api/tx/:txid/status`** — bitcoind status when the tx is **confirmed**; `{ "confirmed": false }` when bitcoind has it in the mempool (does not proxy a stale Fulcrum confirmation). Proxy only when bitcoind does not have the tx.
+- **`GET /api/tx/:txid`** — when bitcoind has the tx, `status.confirmed` and block fields are overwritten from that view. Virtual-tree stubs bitcoind lacks stay proxied.
+- **`GET /api/blocks/tip/height`** — bitcoind `getblockcount`, so a reorg changes the height the wallet uses to drop its confirmation cache
+- **All other paths** — proxied to `mempool_web` unchanged (broadcast, package submit, etc.)
 
 Wired via [`../arkade-regtest.override.yml`](../arkade-regtest.override.yml); host port `MEMPOOL_WEB_PORT` (default 7030) binds here instead of `mempool_web`.
 
@@ -21,7 +23,7 @@ curl -sf -o /dev/null -w "hex=%{http_code}\n" http://localhost:7030/api/tx/$TXID
 curl -sf -o /dev/null -w "%{http_code}\n" \
   http://localhost:7030/api/tx/0000000000000000000000000000000000000000000000000000000000000000/raw
 
-# Tip height (proxied)
+# Tip height (bitcoind getblockcount)
 curl -sf http://localhost:7030/api/blocks/tip/height
 
 # CORS on /raw (required for browser WASM from Vite dev server)

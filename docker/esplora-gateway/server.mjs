@@ -6,7 +6,11 @@
  *
  * This service serves from bitcoind when authoritative:
  * - GET /api/tx/:txid/raw — mempool or confirmed chain only (not wallet-only stubs)
- * - GET /api/tx/:txid/status — confirmed txs (mempool electrum often stays confirmed:false)
+ * - GET /api/tx/:txid/status — confirmed body from bitcoind, or confirmed:false when
+ *   bitcoind has the tx only in the mempool (reorg). Proxy only if bitcoind lacks the tx.
+ * - GET /api/tx/:txid — when bitcoind has the tx, status.confirmed (and block fields)
+ *   are overwritten from that view so a stale Fulcrum confirmation cannot survive a reorg
+ * - GET /api/blocks/tip/height — bitcoind getblockcount
  *
  * All other paths are proxied to mempool_web unchanged.
  */
@@ -22,7 +26,9 @@ const UPSTREAM_ESPLORA = process.env.UPSTREAM_ESPLORA || 'http://mempool_web';
 
 const TXID_RAW_PATH = /^\/api\/tx\/([0-9a-f]{64})\/raw$/i;
 const TXID_STATUS_PATH = /^\/api\/tx\/([0-9a-f]{64})\/status$/i;
+const TXID_JSON_PATH = /^\/api\/tx\/([0-9a-f]{64})$/i;
 const TXID_MERKLE_PROOF_PATH = /^\/api\/tx\/([0-9a-f]{64})\/merkle-proof$/i;
+const TIP_HEIGHT_PATH = '/api/blocks/tip/height';
 
 /** Match mempool_web CORS so browser WASM can fetch from the Vite dev origin. */
 const CORS_HEADERS = {
@@ -141,15 +147,22 @@ async function bitcoinGetRawTransactionHexOnNetwork(txid) {
   }
 }
 
-async function bitcoinConfirmedTxStatus(txid) {
+/**
+ * Bitcoind's view of a tx the node actually has.
+ * `null` when the tx is absent (virtual-tree stub, wallet-only, unknown).
+ * Mempool and 0-conf chain txs are `{ confirmed: false }`.
+ */
+async function bitcoinAuthoritativeStatus(txid) {
   const verbose = await bitcoinGetRawTransactionVerbose(txid);
+  if (verbose == null) {
+    return null;
+  }
   if (
-    verbose == null ||
     typeof verbose.confirmations !== 'number' ||
     verbose.confirmations <= 0 ||
     verbose.blockhash == null
   ) {
-    return null;
+    return { confirmed: false };
   }
 
   let blockHeight = verbose.blockheight;
@@ -164,6 +177,49 @@ async function bitcoinConfirmedTxStatus(txid) {
     block_hash: verbose.blockhash,
     block_time: verbose.blocktime ?? verbose.time ?? null,
   };
+}
+
+function sendJson(req, res, statusCode, payload) {
+  const body = JSON.stringify(payload);
+  const headers = withCorsHeaders({
+    'Content-Type': 'application/json',
+    'Content-Length': String(Buffer.byteLength(body)),
+  });
+  if (req.method === 'HEAD') {
+    res.writeHead(statusCode, headers);
+    res.end();
+    return;
+  }
+  res.writeHead(statusCode, headers);
+  res.end(body);
+}
+
+function sendText(req, res, statusCode, body, contentType) {
+  const headers = withCorsHeaders({
+    'Content-Type': contentType,
+    'Content-Length': String(Buffer.byteLength(body)),
+  });
+  if (req.method === 'HEAD') {
+    res.writeHead(statusCode, headers);
+    res.end();
+    return;
+  }
+  res.writeHead(statusCode, headers);
+  res.end(body);
+}
+
+async function readUpstream(req) {
+  const upstreamBase = new URL(UPSTREAM_ESPLORA);
+  const requestUrl = new URL(req.url || '/', upstreamBase);
+  const headers = { ...req.headers };
+  headers.host = upstreamBase.host;
+  delete headers.connection;
+  delete headers['proxy-connection'];
+  delete headers['content-length'];
+
+  const response = await fetch(requestUrl, { method: req.method, headers });
+  const body = Buffer.from(await response.arrayBuffer());
+  return { statusCode: response.status, body };
 }
 
 function proxyToUpstream(req, res) {
@@ -261,28 +317,9 @@ async function handleTxStatus(req, res, txid) {
   }
 
   try {
-    const status = await bitcoinConfirmedTxStatus(txid);
+    const status = await bitcoinAuthoritativeStatus(txid);
     if (status != null) {
-      const body = JSON.stringify(status);
-      if (req.method === 'HEAD') {
-        res.writeHead(
-          200,
-          withCorsHeaders({
-            'Content-Type': 'application/json',
-            'Content-Length': String(Buffer.byteLength(body)),
-          }),
-        );
-        res.end();
-        return;
-      }
-      res.writeHead(
-        200,
-        withCorsHeaders({
-          'Content-Type': 'application/json',
-          'Content-Length': String(Buffer.byteLength(body)),
-        }),
-      );
-      res.end(body);
+      sendJson(req, res, 200, status);
       return;
     }
   } catch (error) {
@@ -337,8 +374,97 @@ async function handleTxMerkleProof(req, res, txid) {
   res.end(body);
 }
 
+/**
+ * When bitcoind has the tx, overwrite JSON `status` so Fulcrum cannot keep
+ * `confirmed: true` after invalidateblock. Virtual stubs bitcoind lacks stay proxied.
+ */
+async function handleTxJson(req, res, txid) {
+  if (req.method === 'OPTIONS') {
+    sendOptionsPreflight(res);
+    return;
+  }
+
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.writeHead(405, withCorsHeaders({ 'Content-Type': 'text/plain; charset=utf-8' }));
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  let upstream;
+  try {
+    upstream = await readUpstream(req);
+  } catch (error) {
+    console.error(`GET /api/tx/${txid} upstream error:`, error.message);
+    res.writeHead(502, withCorsHeaders({ 'Content-Type': 'text/plain; charset=utf-8' }));
+    res.end('Bad Gateway');
+    return;
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(upstream.body.toString('utf8'));
+  } catch {
+    sendText(
+      req,
+      res,
+      upstream.statusCode,
+      upstream.body.toString('utf8'),
+      'application/json',
+    );
+    return;
+  }
+
+  if (payload == null || typeof payload !== 'object' || Array.isArray(payload)) {
+    sendText(req, res, upstream.statusCode, upstream.body.toString('utf8'), 'application/json');
+    return;
+  }
+
+  try {
+    const status = await bitcoinAuthoritativeStatus(txid);
+    if (status != null && upstream.statusCode === 200) {
+      payload.status = status;
+      sendJson(req, res, 200, payload);
+      return;
+    }
+  } catch (error) {
+    console.error(`GET /api/tx/${txid} bitcoind error:`, error.message);
+    res.writeHead(500, withCorsHeaders({ 'Content-Type': 'text/plain; charset=utf-8' }));
+    res.end('Failed to get transaction');
+    return;
+  }
+
+  sendText(req, res, upstream.statusCode, upstream.body.toString('utf8'), 'application/json');
+}
+
+async function handleTipHeight(req, res) {
+  if (req.method === 'OPTIONS') {
+    sendOptionsPreflight(res);
+    return;
+  }
+
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.writeHead(405, withCorsHeaders({ 'Content-Type': 'text/plain; charset=utf-8' }));
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  try {
+    const height = await bitcoinRpc('getblockcount');
+    sendText(req, res, 200, String(height), 'text/plain; charset=utf-8');
+  } catch (error) {
+    console.error('GET /api/blocks/tip/height bitcoind error:', error.message);
+    res.writeHead(500, withCorsHeaders({ 'Content-Type': 'text/plain; charset=utf-8' }));
+    res.end('Failed to get block count');
+  }
+}
+
 const server = http.createServer((req, res) => {
   const pathname = new URL(req.url || '/', 'http://localhost').pathname;
+  if (pathname === TIP_HEIGHT_PATH) {
+    void handleTipHeight(req, res);
+    return;
+  }
+
   const rawMatch = TXID_RAW_PATH.exec(pathname);
   if (rawMatch) {
     void handleRawTransaction(req, res, rawMatch[1].toLowerCase());
@@ -348,6 +474,12 @@ const server = http.createServer((req, res) => {
   const statusMatch = TXID_STATUS_PATH.exec(pathname);
   if (statusMatch) {
     void handleTxStatus(req, res, statusMatch[1].toLowerCase());
+    return;
+  }
+
+  const jsonMatch = TXID_JSON_PATH.exec(pathname);
+  if (jsonMatch) {
+    void handleTxJson(req, res, jsonMatch[1].toLowerCase());
     return;
   }
 
