@@ -1,5 +1,5 @@
 import { expect, type Page } from '@playwright/test'
-import { mineRegtestBlocks } from './arkade-regtest'
+import { mineRegtestBlocks, reorgExcludingMempool } from './arkade-regtest'
 import { confirmStartUnilateralExitIfShown } from './arkade-unilateral-exit-start-confirm'
 import { isUnilateralExitBranchCompleteInPage } from './arkade-unilateral-exit-branch-complete'
 
@@ -10,6 +10,8 @@ const MAX_MINES_WITHOUT_PROGRESS = 30
 /** Fail fast when confirmation wait does not advance the step index (duration labels tick). */
 const MAX_MINES_WAITING_FOR_CONFIRMATION = 30
 const PROCEED_STEP_TIMEOUT_MS = 180_000
+/** Cover the 2s job poll and the 5s in-progress reconcile after the orphan. */
+const FIRST_STEP_REORG_UI_TIMEOUT_MS = 45_000
 
 async function isBranchComplete(page: Page): Promise<boolean> {
   return isUnilateralExitBranchCompleteInPage(page)
@@ -107,6 +109,108 @@ function proceedButtonLocator(page: Page) {
   return page.getByTestId('unilateral-exit-proceed')
 }
 
+async function readDisplayedStepIndex(page: Page): Promise<number | null> {
+  const progress = page.getByTestId('unilateral-exit-step-progress')
+  if (!(await progress.isVisible())) {
+    return null
+  }
+  const raw = await progress.getAttribute('data-step-index')
+  if (raw == null || raw === '') {
+    return null
+  }
+  const parsed = Number(raw)
+  return Number.isInteger(parsed) ? parsed : null
+}
+
+async function isWaitingForConfirmation(page: Page): Promise<boolean> {
+  return page
+    .getByTestId('unilateral-exit-step-progress')
+    .getByText(/waiting for confirmation/i)
+    .isVisible()
+}
+
+async function firstStepRecovered(page: Page, stepIndexBeforeMine: number): Promise<boolean> {
+  const stepIndex = await readDisplayedStepIndex(page)
+  const waiting = await isWaitingForConfirmation(page)
+  const proceedButton = proceedButtonLocator(page)
+  const proceedEnabled = (await proceedButton.isVisible()) && (await proceedButton.isEnabled())
+  if (stepIndex === stepIndexBeforeMine && (waiting || proceedEnabled)) {
+    return true
+  }
+  return stepIndex == null && proceedEnabled
+}
+
+/** A completed one-step job clears the selection once the VTXO is no longer startable. */
+async function selectFirstLeafIfUnchecked(page: Page): Promise<void> {
+  const leaf = page.locator('[data-testid^="unilateral-exit-leaf-node-"]').first()
+  if (!(await leaf.isVisible())) {
+    return
+  }
+  await leaf.click()
+  const leafSwitch = page.getByTestId('unilateral-exit-leaf-select-switch')
+  if ((await leafSwitch.isVisible()) && !(await leafSwitch.isChecked())) {
+    await leafSwitch.click()
+    await expect(leafSwitch).toBeChecked()
+  }
+}
+
+/**
+ * Mine one confirmation of the step just broadcast, orphan that block without putting the
+ * package back in a block, and wait until the page is no longer treating that step as confirmed.
+ *
+ * A longer branch keeps the job and shows the same step waiting again. A one-step branch
+ * releases the job at 1-conf; the in-progress poll then drops the branch-complete banner
+ * once the host is back at 0-conf.
+ */
+async function confirmThenOrphanFirstStep(page: Page): Promise<void> {
+  const stepIndexBeforeMine = await readDisplayedStepIndex(page)
+  if (stepIndexBeforeMine == null) {
+    throw new Error(
+      `expected step progress before the first-step reorg, saw "${(await readStepProgressSignature(page)) || '(empty)'}"`,
+    )
+  }
+
+  await mineRegtestBlocks(1)
+  await expect(async () => {
+    if (await isBranchComplete(page)) {
+      return
+    }
+    const stepIndex = await readDisplayedStepIndex(page)
+    if (stepIndex != null && stepIndex > stepIndexBeforeMine) {
+      return
+    }
+    throw new Error(
+      `first step still at ${stepIndex ?? 'hidden'} after one confirmation (was ${stepIndexBeforeMine})`,
+    )
+  }).toPass({ timeout: FIRST_STEP_REORG_UI_TIMEOUT_MS })
+
+  await reorgExcludingMempool(1)
+
+  await expect(async () => {
+    await assertNoUnilateralExitErrorToast(page)
+    if (await isBranchComplete(page)) {
+      throw new Error('branch still complete after orphaning the first confirmation')
+    }
+  }).toPass({ timeout: FIRST_STEP_REORG_UI_TIMEOUT_MS })
+
+  if (!(await firstStepRecovered(page, stepIndexBeforeMine))) {
+    await selectFirstLeafIfUnchecked(page)
+  }
+
+  await expect(async () => {
+    await assertNoUnilateralExitErrorToast(page)
+    if (await isBranchComplete(page)) {
+      throw new Error('branch complete returned after the reorg')
+    }
+    if (!(await firstStepRecovered(page, stepIndexBeforeMine))) {
+      const stepIndex = await readDisplayedStepIndex(page)
+      throw new Error(
+        `first step did not rewind after the reorg (index=${stepIndex ?? 'hidden'}, was ${stepIndexBeforeMine}, progress="${(await readStepProgressSignature(page)) || '(empty)'}")`,
+      )
+    }
+  }).toPass({ timeout: FIRST_STEP_REORG_UI_TIMEOUT_MS })
+}
+
 async function refreshBatchEstimateAfterBumperFunding(page: Page): Promise<void> {
   const mediumFeeButton = page.getByRole('button', { name: /Medium/i })
   await mediumFeeButton.click()
@@ -116,7 +220,8 @@ async function refreshBatchEstimateAfterBumperFunding(page: Page): Promise<void>
 
 /**
  * Step-based unilateral unroll: click Proceed for each virtual-tree step, mine while WASM waits
- * for 1-conf, repeat until branch complete.
+ * for 1-conf, repeat until branch complete. The first confirmation is orphaned once so the page
+ * has to leave that confirmed step before mining continues.
  */
 export async function runManualUnilateralUnrollUntilBranchComplete(page: Page): Promise<void> {
   await ensureManualUnilateralExitMode(page)
@@ -149,6 +254,9 @@ export async function runManualUnilateralUnrollUntilBranchComplete(page: Page): 
       proceedClicks += 1
       if (await isBranchComplete(page)) {
         return
+      }
+      if (proceedClicks === 1) {
+        await confirmThenOrphanFirstStep(page)
       }
       lastProgressSignature = await readStepProgressSignature(page)
       minesWithoutProgress = 0

@@ -41,6 +41,8 @@ pub use network::NetworkMode;
 #[cfg(not(target_arch = "wasm32"))]
 pub use outpoint::{OnchainOutPoint, VirtualOutPoint};
 #[cfg(not(target_arch = "wasm32"))]
+pub use persistence::VtxoExitPhase;
+#[cfg(not(target_arch = "wasm32"))]
 pub use session::{ArkSession, OpenArkSessionParams};
 
 #[cfg(target_arch = "wasm32")]

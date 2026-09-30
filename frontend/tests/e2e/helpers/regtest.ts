@@ -217,6 +217,56 @@ export async function mineRegtestBlocks(count: number = 1): Promise<void> {
   )
 }
 
+function parseTrailingBlockCount(output: string): number {
+  const lines = output
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    if (/^\d+$/.test(lines[index])) {
+      return Number(lines[index])
+    }
+  }
+  return Number.NaN
+}
+
+/**
+ * Orphan `depth` blocks and replace them with coinbase-only blocks.
+ *
+ * Net height is previous + 1 (`depth` blocks drop, `depth + 1` empty blocks are mined).
+ * Mempool transactions from the orphaned blocks stay at 0 confirmations.
+ */
+export async function reorgExcludingMempool(depth: number = 1): Promise<void> {
+  if (!Number.isInteger(depth) || depth < 1) {
+    throw new Error(`reorg-excluding-mempool depth must be >= 1, got ${depth}`)
+  }
+  const heightBefore = await getEsploraBlockHeight()
+  await runRegtestCli(['reorg-excluding-mempool', String(depth)])
+
+  const minimumHeight = heightBefore + 1
+  const deadline = Date.now() + ESPLORA_INDEX_WAIT_MS
+  let lastSnapshot = ''
+  while (Date.now() < deadline) {
+    const esploraHeight = await getEsploraBlockHeight()
+    const bitcoindHeight = parseTrailingBlockCount(
+      await runRegtestCli(['rpc', 'getblockcount'], { capture: true }),
+    )
+    lastSnapshot = `bitcoind=${bitcoindHeight} esplora=${esploraHeight} before=${heightBefore}`
+    if (
+      Number.isFinite(bitcoindHeight) &&
+      esploraHeight === bitcoindHeight &&
+      esploraHeight >= minimumHeight
+    ) {
+      return
+    }
+    await sleep(200)
+  }
+
+  throw new Error(
+    `Esplora tip did not follow the mempool-excluding reorg within ${ESPLORA_INDEX_WAIT_MS / 1000}s (${lastSnapshot})`,
+  )
+}
+
 /**
  * arkd container name (compose project `bitboard-regtest`). Overridable for non-default setups.
  */

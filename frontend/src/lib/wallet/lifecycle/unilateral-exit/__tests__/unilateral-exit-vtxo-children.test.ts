@@ -405,4 +405,24 @@ describe('unilateralExitMachine VTXO children', () => {
       }),
     ).toBe(false)
   })
+
+  it('hydrate rewinds host_confirmed to host_relayed on the same child', () => {
+    const { testActor } = createTestActor()
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'HYDRATE_VTXO_RECORDS',
+      records: [record(leftoverLeaf, 'host_confirmed')],
+    })
+    const childId = vtxoExitChildId(leftoverLeaf.txid, leftoverLeaf.vout)
+    expect(vtxoChildIds(testActor)).toContain(childId)
+    expect(vtxoChildValue(testActor, leftoverLeaf)).toBe('host_confirmed')
+
+    testActor.send({
+      type: 'HYDRATE_VTXO_RECORDS',
+      records: [record(leftoverLeaf, 'host_relayed')],
+    })
+
+    expect(vtxoChildIds(testActor)).toEqual([childId])
+    expect(vtxoChildValue(testActor, leftoverLeaf)).toBe('host_relayed')
+  })
 })
