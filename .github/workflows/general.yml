@@ -66,7 +66,9 @@ jobs:
         with:
           components: rustfmt
       - name: Enforce formatting
-        run: cargo fmt --check
+        run: |
+          cargo fmt --check
+          cargo fmt --manifest-path bitboard-bark/Cargo.toml --check
 
   clippy:
     name: Clippy
@@ -79,7 +81,9 @@ jobs:
         with:
           components: clippy
       - name: Linting
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: |
+          cargo clippy --workspace --all-targets -- -D warnings
+          cargo clippy --manifest-path bitboard-bark/Cargo.toml --all-targets -- -D warnings
 
   frontend-quality:
     name: Frontend quality
@@ -96,12 +100,16 @@ jobs:
       - name: Install wasm-pack
         uses: jetli/wasm-pack-action@v0.4.0
 
+      - name: Install protobuf compiler
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
       - name: Build WASM
         run: |
           cd crypto && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg
           cd ../bitboard-encryption && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_encryption
           cd ../bitboard-lightning && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_lightning
           cd ../bitboard-ark && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_ark
+          cd ../bitboard-bark && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_bark
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -147,12 +155,16 @@ jobs:
       - name: Install wasm-pack
         uses: jetli/wasm-pack-action@v0.4.0
 
+      - name: Install protobuf compiler
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
       - name: Build WASM
         run: |
           cd crypto && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg
           cd ../bitboard-encryption && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_encryption
           cd ../bitboard-lightning && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_lightning
           cd ../bitboard-ark && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_ark
+          cd ../bitboard-bark && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_bark
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

@@ -1,0 +1,33 @@
+# Own workspace: the parent Cargo.lock unifies bitcoin-units to 0.1.2, and wasm-pack then fails
+# inside bark-wallet 0.7.1 with error[E0599]: no function or associated item named
+# `from_sat_per_vb_u32` found for struct `FeeRate` (src/config.rs). bitcoin-units 0.1.2 does not
+# have that constructor. This workspace resolves bitcoin-units on its own. Do not vendor bark-wallet.
+
+[package]
+name = "bitboard-bark"
+version = "0.3.4"
+edition = "2024"
+
+[workspace]
+resolver = "2"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+bark-wallet = { version = "0.7.1", default-features = false, features = ["wasm-web", "indexed-db"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+tokio = { version = "1", features = ["macros", "rt"] }
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-Oz", "--enable-bulk-memory", "--enable-nontrapping-float-to-int", "--enable-sign-ext"]

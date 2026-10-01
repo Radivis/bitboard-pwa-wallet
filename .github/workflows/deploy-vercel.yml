@@ -44,6 +44,9 @@ jobs:
       - name: Install wasm-pack
         uses: jetli/wasm-pack-action@v0.4.0
 
+      - name: Install protobuf compiler
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
       # `vercel build` runs the project Build Command (`npm run build`), which includes
       # `build:wasm` + `tsc` + `vite build`. Rust + wasm-pack must be on PATH first.
 
