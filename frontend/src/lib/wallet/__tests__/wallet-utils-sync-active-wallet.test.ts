@@ -34,6 +34,10 @@ vi.mock('@/stores/walletStore', () => ({
   },
 }))
 
+vi.mock('@/lib/wallet/live-network-split-migration', () => ({
+  ensureLiveNetworkSplitMigrated: vi.fn().mockResolvedValue('mutinynet'),
+}))
+
 vi.mock('@/db/database', () => ({
   ensureMigrated: vi.fn().mockResolvedValue(undefined),
   getDatabase: vi.fn(() => ({

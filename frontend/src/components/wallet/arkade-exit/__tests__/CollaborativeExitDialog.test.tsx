@@ -8,7 +8,7 @@ type ExitFlow = ReturnType<typeof useArkadeExitFlow>
 
 function buildExitFlow(overrides: Partial<ExitFlow>): ExitFlow {
   return {
-    networkMode: 'signet',
+    networkMode: 'mutinynet',
     currentAddress: 'tb1qexample',
     balanceQuery: { data: { confirmedSats: 280_603, totalSats: 280_603 } },
     collaborativeOpen: true,

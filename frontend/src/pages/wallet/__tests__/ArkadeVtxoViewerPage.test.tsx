@@ -10,7 +10,7 @@ import type {
 } from '@/workers/arkade-api'
 
 const walletStoreState = vi.hoisted(() => ({
-  networkMode: 'signet' as const,
+  networkMode: 'mutinynet' as const,
 }))
 
 const vtxoListQueryMock = vi.hoisted(() =>
@@ -97,7 +97,7 @@ function sampleRow(
 
 describe('ArkadeVtxoViewerPage', () => {
   beforeEach(() => {
-    walletStoreState.networkMode = 'signet'
+    walletStoreState.networkMode = 'mutinynet'
     vtxoExitSnapshotsMock.mockReturnValue({})
     vtxoListQueryMock.mockReturnValue({
       data: {

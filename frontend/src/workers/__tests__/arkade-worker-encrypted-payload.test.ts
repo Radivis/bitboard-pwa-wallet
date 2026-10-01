@@ -56,7 +56,7 @@ describe('arkade-worker-encrypted-payload', () => {
       deps,
       {
         walletId: 1,
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
         arkadeAccountId: 'conn-1',
         operatorSignerPkHex: '02abc',
         operatorUrl: 'https://signet.arkade.example/v1',
@@ -67,14 +67,14 @@ describe('arkade-worker-encrypted-payload', () => {
 
     expect(summary.id).toBe('conn-1')
     const payload = parseWalletPayloadJson(storedPayloadJson)
-    expect(payload.activeArkadeAccountIdByNetwork.signet).toBe('conn-1')
+    expect(payload.activeArkadeAccountIdByNetwork.mutinynet).toBe('conn-1')
     expect(payload.arkadeAccounts[0]?.sdkPersistenceJson).toBe('{"version":3}')
   })
 
   it('updates operator sync timestamp without changing sdk blob', async () => {
     await ensureArkadeAccountEncrypted(deps, {
       walletId: 1,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       arkadeAccountId: 'conn-1',
       operatorSignerPkHex: '02abc',
       operatorUrl: 'https://signet.arkade.example/v1',
@@ -100,7 +100,7 @@ describe('arkade-worker-encrypted-payload', () => {
   it('persistSdkJsonToEncryptedPayload merges monotonic receive cursor', async () => {
     await ensureArkadeAccountEncrypted(deps, {
       walletId: 1,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       arkadeAccountId: 'conn-1',
       operatorSignerPkHex: '02abc',
       operatorUrl: 'https://signet.arkade.example/v1',

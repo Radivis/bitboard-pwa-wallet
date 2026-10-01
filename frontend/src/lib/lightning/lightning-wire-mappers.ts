@@ -79,11 +79,11 @@ export function mapWireNwcWalletInfoToTestConnectionResult(
     return {
       ok: false,
       error:
-        'This wallet reports regtest. Bitboard Lightning supports mainnet, testnet, and signet only.',
+        'This wallet reports regtest. Bitboard Lightning supports mainnet, testnet, signet, and mutinynet only.',
     }
   }
   return {
     ok: false,
-    error: `This wallet reported network "${String(rawNetwork).trim()}", which Bitboard does not support for Lightning. Use mainnet, testnet, or signet.`,
+    error: `This wallet reported network "${String(rawNetwork).trim()}", which Bitboard does not support for Lightning. Use mainnet, testnet, signet, or mutinynet.`,
   }
 }

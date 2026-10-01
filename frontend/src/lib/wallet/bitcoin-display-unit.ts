@@ -1,12 +1,12 @@
 import { formatSats, MAX_SAFE_SATS, SATS_PER_BTC } from '@/lib/wallet/bitcoin-utils'
 import type { NetworkMode } from '@/stores/walletStore'
 
-export type LiveTestNetworkMode = 'testnet' | 'signet' | 'regtest'
+export type LiveTestNetworkMode = 'testnet' | 'signet' | 'mutinynet' | 'regtest'
 
 export type NetworkUnitIndicator = 'test' | 'lab' | null
 
 export function isLiveTestNetwork(mode: NetworkMode): mode is LiveTestNetworkMode {
-  return mode === 'testnet' || mode === 'signet' || mode === 'regtest'
+  return mode === 'testnet' || mode === 'signet' || mode === 'mutinynet' || mode === 'regtest'
 }
 
 export function getNetworkUnitIndicator(mode: NetworkMode): NetworkUnitIndicator {

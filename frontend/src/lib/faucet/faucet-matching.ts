@@ -34,10 +34,10 @@ function isMutinynetHost(urlString: string): boolean {
   return parsed != null && parsed.hostname === 'mutinynet.com'
 }
 
-/** Same-origin proxy using the `default` provider (mempool testnet4 / mutinynet signet). */
+/** Same-origin proxy using the `default` provider (mempool testnet4 / mutinynet). */
 function isDefaultApiEsploraProxyForNetwork(
   urlString: string,
-  network: 'testnet' | 'signet',
+  network: 'testnet' | 'mutinynet',
 ): boolean {
   const parsed = parseUrlHostPath(urlString)
   if (parsed == null) return false
@@ -68,9 +68,9 @@ export function resolveFaucetStack(
     return null
   }
 
-  if (networkMode === 'signet') {
+  if (networkMode === 'mutinynet') {
     if (customEsploraUrl === null) {
-      if (isDefaultApiEsploraProxyForNetwork(resolvedEsploraUrl, 'signet')) {
+      if (isDefaultApiEsploraProxyForNetwork(resolvedEsploraUrl, 'mutinynet')) {
         return 'mutinynet_signet'
       }
       if (isMutinynetHost(resolvedEsploraUrl)) {

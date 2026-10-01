@@ -1,4 +1,5 @@
 import { wrap, type Remote } from 'comlink';
+import { configureWorkerHistoricalSignetOnchainChain } from '@/lib/wallet/live-network-split-migration';
 import type { CryptoService } from './crypto-api';
 
 export type WorkerHealthStatus = 'initializing' | 'healthy' | 'error' | 'crashed';
@@ -61,6 +62,9 @@ function stopHealthPolling() {
 async function verifyWorkerHealth(proxy: Remote<CryptoService>): Promise<void> {
   try {
     await proxy.ping();
+    await configureWorkerHistoricalSignetOnchainChain((chain) =>
+      proxy.configureHistoricalSignetOnchainChain(chain),
+    );
     setStatus('healthy');
     console.info('[crypto-factory] Worker health check passed');
   } catch (err) {

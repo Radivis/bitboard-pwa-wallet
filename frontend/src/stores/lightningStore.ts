@@ -18,6 +18,13 @@ import { orchestrateLightningSaveConnections } from '@/lib/wallet/lifecycle/ligh
 import { reloadLightningRailAfterConnectionsChanged } from '@/lib/wallet/lifecycle/lightning-load-lifecycle-orchestrator'
 import { useWalletStore } from '@/stores/walletStore'
 import type { NetworkMode } from '@/stores/walletStore'
+import {
+  getConfiguredHistoricalSignetOnchainChain,
+  historicalSignetOnchainWasMutinynet,
+  LIGHTNING_PERSIST_STORAGE_KEY,
+  renameSignetMapKeyToMutinynet,
+  type HistoricalSignetOnchainChain,
+} from '@/lib/wallet/historical-signet-onchain-chain'
 import { MAX_LIGHTNING_WALLET_LABEL_LENGTH } from '@/lib/lightning/lightning-input-limits'
 import {
   isReservedDefaultNwcConnectionLabel,
@@ -122,6 +129,38 @@ interface LightningState {
     networkMode: NetworkMode
   }) => Promise<LightningInvoice>
   clearInvoices: () => void
+}
+
+/**
+ * Persisted Lightning `signet` selections were Mutinynet only when the
+ * pre-split Esplora chain was Mutinynet. Other chains keep the signet key.
+ */
+export function migrateLightningPersistedState(
+  persistedState: unknown,
+  version: number,
+  historicalSignetChain: HistoricalSignetOnchainChain | null = getConfiguredHistoricalSignetOnchainChain(),
+): unknown {
+  if (version >= 1 || persistedState == null || typeof persistedState !== 'object') {
+    return persistedState
+  }
+  if (!historicalSignetOnchainWasMutinynet(historicalSignetChain)) {
+    return persistedState
+  }
+  const state = persistedState as {
+    activeConnectionIds?: Record<string, Record<string, string> | undefined>
+  }
+  const activeConnectionIds = state.activeConnectionIds
+  if (activeConnectionIds == null || typeof activeConnectionIds !== 'object') {
+    return persistedState
+  }
+  const nextIds: Record<string, Record<string, string>> = {}
+  for (const [walletId, perNetwork] of Object.entries(activeConnectionIds)) {
+    if (perNetwork == null || typeof perNetwork !== 'object') continue
+    const renamed = { ...perNetwork }
+    renameSignetMapKeyToMutinynet(renamed)
+    nextIds[walletId] = renamed as Record<string, string>
+  }
+  return { ...state, activeConnectionIds: nextIds }
 }
 
 export const useLightningStore = create<LightningState>()(
@@ -398,8 +437,10 @@ export const useLightningStore = create<LightningState>()(
       clearInvoices: () => set({ invoices: [] }),
     }),
     {
-      name: 'lightning-storage',
+      name: LIGHTNING_PERSIST_STORAGE_KEY,
       storage: createJSONStorage(() => sqliteStorage),
+      version: 1,
+      migrate: migrateLightningPersistedState,
       partialize: (state) => ({
         activeConnectionIds: state.activeConnectionIds,
         invoices: state.invoices,

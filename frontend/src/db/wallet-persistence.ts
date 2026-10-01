@@ -14,6 +14,7 @@ import {
 import {
   assembleWalletSecrets,
   parseWalletPayloadJson,
+  walletSecretsPayloadFromSecrets,
   type DescriptorWalletData,
   type WalletSecrets,
   type WalletSecretsPayload,
@@ -390,13 +391,7 @@ export async function saveWalletSecrets(params: {
     const { walletDb, walletId, secrets } = params
     await assertWalletExists(walletDb, walletId)
 
-    const payload: WalletSecretsPayload = {
-      descriptorWallets: secrets.descriptorWallets,
-      lightningNwcConnections: secrets.lightningNwcConnections,
-      arkadeAccounts: secrets.arkadeAccounts ?? [],
-      activeArkadeAccountIdByNetwork: secrets.activeArkadeAccountIdByNetwork ?? {},
-      ...(secrets.barkRail != null ? { barkRail: secrets.barkRail } : {}),
-    }
+    const payload = walletSecretsPayloadFromSecrets(secrets)
     const payloadEnc = await encryptData(JSON.stringify(payload))
     const mnemonicEnc = await encryptData(secrets.mnemonic)
 
@@ -607,13 +602,7 @@ export async function reencryptAllWalletSecretsWithNewPassword(params: {
     mnemonic: EncryptedWalletSecretsBlob
   }[] = []
   for (const { walletId, secrets } of decrypted) {
-    const payload: WalletSecretsPayload = {
-      descriptorWallets: secrets.descriptorWallets,
-      lightningNwcConnections: secrets.lightningNwcConnections,
-      arkadeAccounts: secrets.arkadeAccounts ?? [],
-      activeArkadeAccountIdByNetwork: secrets.activeArkadeAccountIdByNetwork ?? {},
-      ...(secrets.barkRail != null ? { barkRail: secrets.barkRail } : {}),
-    }
+    const payload = walletSecretsPayloadFromSecrets(secrets)
     const payloadEnc = await encryptDataWithPassword(newPassword, JSON.stringify(payload))
     const mnemonicEnc = await encryptDataWithPassword(newPassword, secrets.mnemonic)
     blobs.push({

@@ -12,7 +12,7 @@ import {
 } from '@/lib/arkade/arkade-query-keys'
 
 const walletId = 1
-const networkMode = 'signet' as const
+const networkMode = 'mutinynet' as const
 const arkadeAccountId = 'conn-boarding-test'
 
 describe('arkade-boarding-settle-optimistic', () => {

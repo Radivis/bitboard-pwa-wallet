@@ -26,7 +26,7 @@ describe('arkadeWalletScopesEqual', () => {
   it('returns false when any field differs', () => {
     expect(arkadeWalletScopesEqual(openSession, { ...openSession, walletId: 2 })).toBe(false)
     expect(
-      arkadeWalletScopesEqual(openSession, { ...openSession, networkMode: 'signet' }),
+      arkadeWalletScopesEqual(openSession, { ...openSession, networkMode: 'mutinynet' }),
     ).toBe(false)
     expect(
       arkadeWalletScopesEqual(openSession, { ...openSession, arkadeAccountId: 'conn-2' }),
@@ -54,7 +54,7 @@ describe('assertArkadeOpenSessionMatchesScope', () => {
     expect(() =>
       assertArkadeOpenSessionMatchesScope(openSession, {
         ...openSession,
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
       }),
     ).toThrow(ARKADE_SESSION_SCOPE_MISMATCH_ERROR)
   })

@@ -114,7 +114,7 @@ vi.mock('@/lib/arkade/arkade-dashboard-sync', () => ({
 
 vi.mock('@/lib/arkade/arkade-endpoints', () => ({
   getArkadeEndpoints: vi.fn(() => ({
-    arkServerUrl: 'http://localhost/api/arkade/operator/signet',
+    arkServerUrl: 'http://localhost/api/arkade/operator/mutinynet',
     delegatorUrl: '',
     esploraUrl: 'http://localhost/api/esplora/signet',
   })),
@@ -149,7 +149,7 @@ describe('awaitArkadeLoadQuiescence (UNLOCK-ARK-03)', () => {
     findActiveArkadeAccountSummaryMock.mockResolvedValue(undefined)
     ensureArkadeAccountMock.mockResolvedValue({
       id: TEST_ACCOUNT_ID,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       operatorSignerPkHex: '02deadbeef',
     })
     refreshArkadeStoreFromLoadedWasmMock.mockResolvedValue(undefined)
@@ -172,7 +172,7 @@ describe('awaitArkadeLoadQuiescence (UNLOCK-ARK-03)', () => {
 
     const openPromise = openArkadeSessionForWallet({
       walletId: 1,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
     })
 
     await vi.waitFor(() => expect(workerMocks.openSession).toHaveBeenCalled())

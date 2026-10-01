@@ -31,8 +31,11 @@ import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore
 import { toast } from 'sonner'
 
 function boardingExplorerUrl(networkMode: string, address: string): string {
-  if (networkMode === 'signet') {
+  if (networkMode === 'mutinynet') {
     return `https://mutinynet.com/address/${address}`
+  }
+  if (networkMode === 'signet') {
+    return `https://mempool.space/signet/address/${address}`
   }
   if (networkMode === 'mainnet') {
     return `https://mempool.space/address/${address}`

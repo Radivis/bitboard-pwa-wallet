@@ -10,8 +10,10 @@ import type { BitcoinNetwork, TransactionDetails } from '@/workers/crypto-types'
 export const DEFAULT_ESPLORA_URLS: Record<NetworkMode, string> = {
   lab: '', // In-app chain; no Esplora
   regtest: 'http://localhost:7030/api',
-  /** Mutinynet — preferred for Lightning testing (fast blocks, shared infra). */
-  signet: 'https://mutinynet.com/api',
+  /** Public Bitcoin Signet (default signet challenge). */
+  signet: 'https://mempool.space/signet/api',
+  /** Mutinynet — fast custom signet used for Lightning and Arkade testing. */
+  mutinynet: 'https://mutinynet.com/api',
   testnet: 'https://mempool.space/testnet4/api',
   mainnet: 'https://mempool.space/api',
 }
@@ -52,6 +54,7 @@ const NETWORK_MODE_TO_BITCOIN: Record<NetworkMode, BitcoinNetwork> = {
   mainnet: 'bitcoin',
   testnet: 'testnet',
   signet: 'signet',
+  mutinynet: 'mutinynet',
   regtest: 'regtest',
 }
 
@@ -130,6 +133,7 @@ const ADDRESS_PREFIXES: Record<NetworkMode, string[]> = {
   mainnet: ['bc1p', 'bc1q', '1', '3'],
   testnet: ['tb1p', 'tb1q', 'm', 'n', '2'],
   signet: ['tb1p', 'tb1q'],
+  mutinynet: ['tb1p', 'tb1q'],
   regtest: ['bcrt1p', 'bcrt1q'],
   lab: ['bcrt1q', 'bcrt1p'],
 }
@@ -187,7 +191,8 @@ export function getEsploraUrl(
   if (
     network === 'mainnet' ||
     network === 'testnet' ||
-    network === 'signet'
+    network === 'signet' ||
+    network === 'mutinynet'
   ) {
     if (customUrl) {
       const match = customEsploraMatchesWhitelistedBase(customUrl, network)

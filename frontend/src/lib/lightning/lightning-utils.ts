@@ -1,7 +1,7 @@
 import { decodeInvoice } from '@getalby/lightning-tools/bolt11'
 import type { NetworkMode } from '@/stores/walletStore'
 
-export const LIGHTNING_NETWORK_MODES = ['mainnet', 'testnet', 'signet'] as const
+export const LIGHTNING_NETWORK_MODES = ['mainnet', 'testnet', 'signet', 'mutinynet'] as const
 
 export type LightningNetworkMode = (typeof LIGHTNING_NETWORK_MODES)[number]
 
@@ -25,6 +25,9 @@ export function defaultLightningNetworkForAppMode(
 /**
  * Maps NIP-47 `get_info.network` to a Bitboard Lightning mode.
  * Returns null for regtest, empty values, or strings Bitboard does not support.
+ * NIP-47 reports both public Signet and Mutinynet as `signet`. That string stays
+ * `signet` here. Block-height comparison against Esplora is what distinguishes
+ * the two chains after the wallet is connected.
  */
 export function lightningNetworkModeFromNip47Network(
   raw: string | undefined,
@@ -35,6 +38,7 @@ export function lightningNetworkModeFromNip47Network(
   if (normalizedNetwork === 'mainnet' || normalizedNetwork === 'bitcoin') return 'mainnet'
   if (normalizedNetwork === 'testnet') return 'testnet'
   if (normalizedNetwork === 'signet') return 'signet'
+  if (normalizedNetwork === 'mutinynet') return 'mutinynet'
   return null
 }
 
@@ -58,6 +62,32 @@ export function bolt11NetworkModeFromPrefix(
   if (lower.startsWith('lntbs')) return 'signet'
   if (lower.startsWith('lntb')) return 'testnet'
   return null
+}
+
+/**
+ * BOLT11 `lntbs` is the signet-family prefix. Mutinynet invoices use it too,
+ * so a prefix match is not proof the invoice belongs to the current mode.
+ */
+export function bolt11InvoiceMatchesAppNetwork(
+  invoiceNetworkMode: LightningNetworkMode,
+  appNetworkMode: NetworkMode,
+): boolean {
+  return invoiceNetworkMode === appNetworkMode
+}
+
+export function bolt11SignetFamilyNeedsConfirmation(
+  invoiceNetworkMode: LightningNetworkMode,
+  appNetworkMode: NetworkMode,
+): boolean {
+  return (
+    invoiceNetworkMode === 'signet' &&
+    (appNetworkMode === 'signet' || appNetworkMode === 'mutinynet')
+  )
+}
+
+export function bolt11SignetFamilyConfirmationText(appNetworkMode: NetworkMode): string {
+  const networkLabel = appNetworkMode === 'mutinynet' ? 'Mutinynet' : 'Signet'
+  return `Signet and Mutinynet invoices share a BOLT11 prefix, so Bitboard cannot tell them apart. Continue only if this invoice was created for ${networkLabel}.`
 }
 
 /** Decode a BOLT11 payment request; returns null if invalid or undecodable. */

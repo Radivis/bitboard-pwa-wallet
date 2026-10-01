@@ -12,6 +12,8 @@ use crate::types::{BalanceInfo, BitcoinNetwork, TransactionDetails};
 pub(crate) fn bdk_network_for_app(network: BitcoinNetwork) -> BdkNetwork {
     match network {
         BitcoinNetwork::Testnet => BdkNetwork::Testnet4,
+        // Mutinynet shares Signet address encoding; BDK has no Mutinynet variant.
+        BitcoinNetwork::Mutinynet => BdkNetwork::Signet,
         _ => network.into(),
     }
 }
@@ -64,7 +66,7 @@ pub fn load_wallet(
 
     let networks_to_try: Vec<BdkNetwork> = match network {
         BitcoinNetwork::Testnet => vec![bdk_network_for_app(network), BdkNetwork::Testnet],
-        _ => vec![network.into()],
+        _ => vec![bdk_network_for_app(network)],
     };
 
     let mut last_err: Option<CryptoError> = None;

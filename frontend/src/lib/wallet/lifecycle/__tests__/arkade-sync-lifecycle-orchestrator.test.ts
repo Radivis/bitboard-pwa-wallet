@@ -38,7 +38,7 @@ vi.mock('@/lib/arkade/arkade-endpoints', async (importOriginal) => {
 })
 
 vi.mock('@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator', () => ({
-  getArkadeLoadLifecycleSnapshot: () => ({ loadPhase: loadPhaseRef.phase, networkMode: 'signet', errorMessage: null }),
+  getArkadeLoadLifecycleSnapshot: () => ({ loadPhase: loadPhaseRef.phase, networkMode: 'mutinynet', errorMessage: null }),
 }))
 
 vi.mock('@/lib/wallet/lifecycle/arkade-save-lifecycle-orchestrator', async (importOriginal) => {
@@ -98,7 +98,7 @@ function completeMigrationResult(): ArkadeSignerMigrationResult {
 
 const syncParams = {
   walletId: 1,
-  networkMode: 'signet' as const,
+  networkMode: 'mutinynet' as const,
   arkadeAccountId: 'conn-1',
   syncKind: 'manual' as const,
 }
@@ -115,7 +115,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     orchestrateArkadeSave.mockResolvedValue(undefined)
     configureArkadeSyncForLoadedRail({
       walletId: 1,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       arkadeAccountId: 'conn-1',
     })
     getAutonomousModeStatus.mockResolvedValue({ active: false })
@@ -180,7 +180,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
       useWalletStore.setState({
         activeWalletId: 1,
         activeArkadeAccountId: 'conn-1',
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
       })
 
       let resolveSync!: () => void
@@ -218,7 +218,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
       useWalletStore.setState({
         activeWalletId: 1,
         activeArkadeAccountId: 'conn-1',
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
       })
       getAutonomousModeStatus.mockResolvedValue({ active: true })
 
@@ -237,11 +237,11 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
       useWalletStore.setState({
         activeWalletId: 1,
         activeArkadeAccountId: 'conn-1',
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
       })
       getAutonomousModeStatus.mockResolvedValue({ active: false })
       persistActiveUnilateralExitJob(
-        { walletId: 1, networkMode: 'signet', arkadeAccountId: 'conn-1' },
+        { walletId: 1, networkMode: 'mutinynet', arkadeAccountId: 'conn-1' },
         [{ txid: 'aa'.repeat(32), vout: 0 }],
       )
 
@@ -275,7 +275,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
       syncPhase: 'sync-error',
       railScope: {
         walletId: 1,
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
         arkadeAccountId: 'conn-1',
       },
       errorMessage: 'operator down',
@@ -295,7 +295,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
       syncPhase: 'not-syncing',
       railScope: {
         walletId: 1,
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
         arkadeAccountId: 'conn-1',
       },
       errorMessage: null,
@@ -418,7 +418,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
       syncPhase: 'sync-error',
       railScope: {
         walletId: 1,
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
         arkadeAccountId: 'conn-1',
       },
       errorMessage: 'operator vtxos down',

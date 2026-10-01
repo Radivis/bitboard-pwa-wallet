@@ -158,7 +158,7 @@ describe('rail-lifecycle-error-handling', () => {
     ensureArkadeAccountMock.mockResolvedValue({
       id: TEST_ACCOUNT_ID,
       label: 'signet',
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       operatorUrl: 'https://asp.example',
       operatorSignerPkHex: '02deadbeef',
       createdAt: '2020-01-01T00:00:00.000Z',
@@ -176,12 +176,12 @@ describe('rail-lifecycle-error-handling', () => {
         }),
     )
 
-    const firstLoad = orchestrateArkadeLoad({ walletId: 1, networkMode: 'signet' })
+    const firstLoad = orchestrateArkadeLoad({ walletId: 1, networkMode: 'mutinynet' })
     await vi.waitFor(() =>
       expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loading'),
     )
 
-    const secondLoad = orchestrateArkadeLoad({ walletId: 2, networkMode: 'signet' })
+    const secondLoad = orchestrateArkadeLoad({ walletId: 2, networkMode: 'mutinynet' })
 
     rejectFirstLoad(new Error('first load failed'))
     await expect(firstLoad).rejects.toThrow('first load failed')
@@ -189,7 +189,7 @@ describe('rail-lifecycle-error-handling', () => {
 
     expect(getArkadeLoadLifecycleSnapshot()).toEqual({
       loadPhase: 'load-error',
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       errorMessage: 'first load failed',
     })
     expect(workerMocks.openSession).toHaveBeenCalledTimes(1)
@@ -206,7 +206,7 @@ describe('rail-lifecycle-error-handling', () => {
 
     const savePromise = orchestrateArkadeSave({
       walletId: 1,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       arkadeAccountId: TEST_ACCOUNT_ID,
     })
     await vi.waitFor(() =>
@@ -227,7 +227,7 @@ describe('rail-lifecycle-error-handling', () => {
     )
 
     await expect(
-      orchestrateArkadeLoad({ walletId: 1, networkMode: 'signet' }),
+      orchestrateArkadeLoad({ walletId: 1, networkMode: 'mutinynet' }),
     ).rejects.toThrow()
 
     expect(getArkadeLoadLifecycleSnapshot().errorMessage).toBe('[url] failed')
@@ -242,7 +242,7 @@ describe('rail-lifecycle-error-handling', () => {
         }),
     )
 
-    const loadPromise = orchestrateArkadeLoad({ walletId: 1, networkMode: 'signet' })
+    const loadPromise = orchestrateArkadeLoad({ walletId: 1, networkMode: 'mutinynet' })
     await vi.waitFor(() =>
       expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loading'),
     )
