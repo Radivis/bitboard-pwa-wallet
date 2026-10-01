@@ -1,5 +1,10 @@
 import { expose, wrap, type Remote } from 'comlink'
 import { readBarkSpendableSats } from '@/lib/bark/bark-balance'
+import {
+  barkArkoorSendDepsFromWasm,
+  performBarkArkoorSend,
+  type BarkArkoorWasm,
+} from '@/lib/bark/perform-bark-arkoor-send'
 import { listVtxosFromWasm } from '@/lib/bark/bark-vtxo-list'
 import {
   boardPsbtFromWasm,
@@ -28,6 +33,8 @@ import {
 } from '@/lib/wallet/historical-signet-onchain-chain'
 import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
 import type {
+  BarkArkoorSendParams,
+  BarkArkoorSendResult,
   BarkBoardAccepted,
   BarkBoardFeeEstimate,
   BarkExitFeeEstimate,
@@ -288,6 +295,21 @@ async function offboardAllImpl(address: string): Promise<string> {
   return offboardAllFromWasm(exitWasm(await getBarkWasm()), address)
 }
 
+async function sendArkoorPaymentImpl(
+  params: BarkArkoorSendParams,
+): Promise<BarkArkoorSendResult> {
+  requireOpenSession()
+  const wasmModule = await getBarkWasm()
+  return performBarkArkoorSend(
+    barkArkoorSendDepsFromWasm(
+      wasmModule as unknown as BarkArkoorWasm,
+      () => readSpendableBalanceImpl(),
+      () => syncImpl(),
+    ),
+    params,
+  )
+}
+
 const barkService: BarkService = {
   async setSecretsPort(port: MessagePort): Promise<void> {
     secretsProxy = wrap<SecretsChannelService>(port)
@@ -415,6 +437,14 @@ const barkService: BarkService = {
   async offboardAll(address: string): Promise<string> {
     try {
       return await offboardAllImpl(address)
+    } catch (err) {
+      rethrowBarkError(err)
+    }
+  },
+
+  async sendArkoorPayment(params: BarkArkoorSendParams): Promise<BarkArkoorSendResult> {
+    try {
+      return await sendArkoorPaymentImpl(params)
     } catch (err) {
       rethrowBarkError(err)
     }

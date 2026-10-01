@@ -15,6 +15,7 @@ feature:
     - As a user with Bark enabled on signet, I want to exit a chosen amount, or my whole spendable Bark balance, to my current on-chain receive address
     - As a user, I want a failed or parked Bark exit to leave the page without a success message
     - As a user with Bark enabled on signet, I want to open a VTXO list from wallet management and see each coin's Bark state
+    - As a user with Bark enabled on signet, I want to send to a Bark Ark address from the send form
   requirements:
     - The card is visible only when isBarkEnabled and the app network is signet
     - Spendable sats are read only after a successful Bark sync in this session
@@ -40,6 +41,10 @@ feature:
     - Spent and Exited VTXOs stay hidden until the user shows them. Locked VTXOs stay visible
     - A VTXO card shows id, amount, state, lock holder when the coin is locked, expiry height, and Registered only when the coin is registered
     - Search, state chips, sort, and pagination filter the loaded list and do not call the worker again
+    - A Signet Bark policy address (tark1p) is a valid send recipient when isBarkEnabled and the network is signet
+    - An Arkade address is not a Bark destination, and a Bark policy address is not an Arkade destination
+    - A successful Arkoor send syncs and replaces the shown Bark spendable amount
+    - A failed Arkoor send leaves the shown Bark spendable amount unchanged
   contracts:
     dashboard:
       - id: DASH-BARK-01
@@ -180,6 +185,13 @@ feature:
       - id: BARK-VTX-07
         description: Pagination shows 20 cards per page
         implemented_by: frontend/src/pages/wallet/__tests__/BarkVtxoViewerPage.test.tsx
+    send:
+      - id: BARK-SEND-01
+        description: A peeked Signet Bark receive address is a Bark send destination and is not an Arkade address
+        implemented_by: frontend/src/lib/bark/__tests__/send-flow-validation.test.ts
+      - id: BARK-SEND-02
+        description: A Bark send validates, estimates, sends, then syncs and reads the new spendable balance
+        implemented_by: frontend/src/lib/bark/__tests__/perform-bark-arkoor-send.test.ts
   pages:
     - BarkManagement:
         description: Bark entry on the Management page

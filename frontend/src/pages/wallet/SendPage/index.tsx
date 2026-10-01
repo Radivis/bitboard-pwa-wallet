@@ -58,6 +58,7 @@ import {
 import { useSendFlowFees } from './fees'
 import { useSendFlowLightning } from './lightning'
 import { useSendFlowArkade } from './arkade'
+import { useSendFlowBark } from './bark'
 import { SendFlowDustModals } from './modals'
 
 export function SendPage() {
@@ -277,7 +278,22 @@ export function SendFlow() {
     lightningAvailable,
   })
 
-  const recipientFormatValidForUi = arkadeRecipientFormatValid
+  const {
+    barkAvailable,
+    isBarkSendMode,
+    recipientFormatValid: recipientFormatValidForUi,
+    canBuildBark,
+    submitBarkPayment,
+    barkSpendableSats,
+    barkBalanceLoading,
+    barkSendMutation,
+  } = useSendFlowBark({
+    networkMode,
+    normalizedRecipient,
+    amountSats,
+    lightningAvailable,
+    recipientFormatValidWithoutBark: arkadeRecipientFormatValid,
+  })
 
   const deadLabRecipientInfo = useMemo(() => {
     if (networkMode !== 'lab' || !labChainReady) return null
@@ -301,6 +317,7 @@ export function SendFlow() {
   const canBuildOnChain = canBuildOnChainSend({
     isLightningSendMode,
     isArkadeSendMode,
+    isBarkSendMode,
     normalizedRecipient,
     networkMode,
     amountSats,
@@ -320,8 +337,10 @@ export function SendFlow() {
 
   const canBuild = canProceedToSendReview({
     isLightningSendMode,
+    isBarkSendMode,
     isArkadeSendMode,
     canBuildLightning,
+    canBuildBark,
     canBuildArkade,
     canBuildOnChain,
     fiatRateOk,
@@ -528,6 +547,15 @@ export function SendFlow() {
       return
     }
 
+    if (isBarkSendMode) {
+      try {
+        await submitBarkPayment()
+      } catch {
+        /* mutation toasts */
+      }
+      return
+    }
+
     if (isArkadeSendMode) {
       try {
         await submitArkadePayment()
@@ -614,7 +642,9 @@ export function SendFlow() {
   }, [
     canBuild,
     isLightningSendMode,
+    isBarkSendMode,
     isArkadeSendMode,
+    submitBarkPayment,
     submitArkadePayment,
     normalizedRecipient,
     networkMode,
@@ -719,6 +749,7 @@ export function SendFlow() {
     broadcastMutation.isPending ||
     labSendMutation.isPending ||
     lightningPayMutation.isPending ||
+    barkSendMutation.isPending ||
     arkadeSendMutation.isPending ||
     isResolvingLightningPayee
 
@@ -767,19 +798,25 @@ export function SendFlow() {
 
   const pageTitle = isLightningSendMode
     ? 'Send Lightning'
-    : isArkadeSendMode
-      ? 'Send on Arkade'
-      : walletSendPageTitle(networkMode)
+    : isBarkSendMode
+      ? 'Send on Bark'
+      : isArkadeSendMode
+        ? 'Send on Arkade'
+        : walletSendPageTitle(networkMode)
   const cardTitle = isLightningSendMode
     ? 'Pay with Lightning'
-    : isArkadeSendMode
-      ? 'Arkade payment'
-      : 'Send Transaction'
+    : isBarkSendMode
+      ? 'Bark payment'
+      : isArkadeSendMode
+        ? 'Arkade payment'
+        : 'Send Transaction'
   const submitLabel = isLightningSendMode
     ? 'Pay with Lightning'
-    : isArkadeSendMode
-      ? 'Send on Arkade'
-      : 'Review Transaction'
+    : isBarkSendMode
+      ? 'Send on Bark'
+      : isArkadeSendMode
+        ? 'Send on Arkade'
+        : 'Review Transaction'
 
   return (
     <div className="space-y-6">
@@ -788,7 +825,11 @@ export function SendFlow() {
         cardTitle={cardTitle}
         submitLabel={submitLabel}
         isLightningSendMode={isLightningSendMode}
+        isBarkSendMode={isBarkSendMode}
         isArkadeSendMode={isArkadeSendMode}
+        barkAvailable={barkAvailable}
+        barkSpendableSats={barkSpendableSats}
+        barkBalanceLoading={barkBalanceLoading}
         arkadeAvailable={arkadeAvailable}
         arkadeBalanceSats={arkadeBalanceSats}
         arkadeBalanceLoading={arkadeBalanceLoading}

@@ -36,6 +36,17 @@ export type BarkBoardFeeEstimate = {
 /** Same shape as a board fee estimate. `netAmountSats` is what arrives on-chain. */
 export type BarkExitFeeEstimate = BarkBoardFeeEstimate
 
+export type BarkArkoorSendParams = {
+  address: string
+  amountSats: number
+}
+
+export type BarkArkoorSendResult = {
+  feeSats: number
+  spendableSats: number
+  lastSuccessfulSyncAt: string
+}
+
 export type BarkBoardAccepted = {
   fundingTxid: string
   vtxoAmountSats: number
@@ -96,4 +107,5 @@ export interface BarkService {
   sendOnchain(address: string, amountSats: number): Promise<string>
   estimateOffboardAll(address: string): Promise<BarkExitFeeEstimate>
   offboardAll(address: string): Promise<string>
+  sendArkoorPayment(params: BarkArkoorSendParams): Promise<BarkArkoorSendResult>
 }

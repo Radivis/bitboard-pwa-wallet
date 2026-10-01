@@ -195,6 +195,34 @@ export function orchestrateBarkPostLoadSync(params: {
   })
 }
 
+/** Replaces the shown spendable amount after a send that already synced. */
+export function recordBarkSpendableAfterSend(result: {
+  spendableSats: number
+  lastSuccessfulSyncAt: string
+}): void {
+  const current = getBarkSyncLifecycleSnapshot()
+  setSnapshot({
+    syncPhase: 'not-syncing',
+    networkMode: current.networkMode,
+    errorMessage: null,
+    spendableSats: result.spendableSats,
+    lastSuccessfulSyncAt: result.lastSuccessfulSyncAt,
+  })
+}
+
+/**
+ * Records the post-send balance only after `send` resolves.
+ * A rejection leaves the shown spendable amount unchanged.
+ */
+export async function commitBarkArkoorSend<T extends {
+  spendableSats: number
+  lastSuccessfulSyncAt: string
+}>(send: () => Promise<T>): Promise<T> {
+  const result = await send()
+  recordBarkSpendableAfterSend(result)
+  return result
+}
+
 /** @internal Test-only reset */
 export function resetBarkSyncLifecycleStateForTests(): void {
   snapshot = idleBarkSyncSnapshot()
