@@ -1,3 +1,4 @@
+import type { AnchorHTMLAttributes, ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 import { renderWithProviders } from '@/test-utils/test-providers'
@@ -59,6 +60,22 @@ vi.mock('@/hooks/useBarkSyncLifecycleSnapshot', () => ({
   useBarkSyncLifecycleSnapshot: () => syncSnapshot.current,
 }))
 
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-router')>()
+  return {
+    ...actual,
+    Link: ({
+      children,
+      to,
+      ...props
+    }: { children: ReactNode; to: string } & AnchorHTMLAttributes<HTMLAnchorElement>) => (
+      <a href={to} {...props}>
+        {children}
+      </a>
+    ),
+  }
+})
+
 vi.mock('@/hooks/useRailManualSyncMutations', () => ({
   useBarkManualSyncMutation: () => ({
     mutate: vi.fn(),
@@ -92,10 +109,19 @@ describe('BarkDashboardBalance', () => {
     expect(screen.getByText('Bark balance')).toBeInTheDocument()
   })
 
+  it('BARK-BOARD-01 links to Board from on-chain when Bark is enabled on signet', () => {
+    renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.getByTestId('dashboard-bark-board-link')).toHaveAttribute(
+      'href',
+      '/wallet/bark/board',
+    )
+  })
+
   it('DASH-BARK-02 hides the card when Bark is disabled or the network is not signet', () => {
     featureState.isBarkEnabled = false
     const disabled = renderWithProviders(<BarkDashboardBalance />)
     expect(disabled.container).toBeEmptyDOMElement()
+    expect(disabled.queryByTestId('dashboard-bark-board-link')).not.toBeInTheDocument()
     disabled.unmount()
 
     featureState.isBarkEnabled = true
@@ -103,6 +129,20 @@ describe('BarkDashboardBalance', () => {
     walletStoreState.loadedDescriptorWallet = { networkMode: 'testnet' }
     const otherNetwork = renderWithProviders(<BarkDashboardBalance />)
     expect(otherNetwork.container).toBeEmptyDOMElement()
+    expect(otherNetwork.queryByTestId('dashboard-bark-board-link')).not.toBeInTheDocument()
+  })
+
+  it('BARK-BOARD-02 omits the board link when Bark is disabled or the network is not signet', () => {
+    featureState.isBarkEnabled = false
+    const disabled = renderWithProviders(<BarkDashboardBalance />)
+    expect(disabled.queryByRole('link', { name: 'Board from on-chain' })).not.toBeInTheDocument()
+    disabled.unmount()
+
+    featureState.isBarkEnabled = true
+    walletStoreState.networkMode = 'mutinynet'
+    walletStoreState.loadedDescriptorWallet = { networkMode: 'mutinynet' }
+    const mutinynet = renderWithProviders(<BarkDashboardBalance />)
+    expect(mutinynet.queryByRole('link', { name: 'Board from on-chain' })).not.toBeInTheDocument()
   })
 
   it('DASH-BARK-03 shows spendable sats after a successful sync', () => {

@@ -1,0 +1,26 @@
+import { describe, expect, it } from 'vitest'
+import { screen } from '@testing-library/react'
+import { BarkMovementItem } from '@/components/BarkMovementItem'
+import { renderWithProviders } from '@/test-utils/test-providers'
+import type { BarkMovementRow } from '@/workers/bark-api'
+
+const failedBoard: BarkMovementRow = {
+  id: 7,
+  status: 'failed',
+  subsystemName: 'bark.board',
+  subsystemKind: 'board',
+  effectiveBalanceSats: -50_000,
+  offchainFeeSats: 100,
+  createdAtUnixSeconds: 1_700_000_000,
+}
+
+describe('BarkMovementItem', () => {
+  it('BARK-HIST-04 shows status and the signed effective amount for a failed movement', () => {
+    renderWithProviders(<BarkMovementItem movement={failedBoard} />)
+    const row = screen.getByTestId('bark-movement-7')
+    expect(row).toHaveTextContent('Failed')
+    expect(row).toHaveTextContent('Bark boarding')
+    expect(screen.getByTestId('bark-movement-amount-7')).toHaveTextContent('-')
+    expect(screen.getByTestId('bark-movement-amount-7')).toHaveTextContent('0.00050000')
+  })
+})

@@ -384,6 +384,8 @@ dependencies = [
  "bip39",
  "bitcoin",
  "reqwest",
+ "serde",
+ "serde_json",
  "tokio",
  "wasm-bindgen",
  "wasm-bindgen-futures",

@@ -22,6 +22,35 @@ export type BarkRevealedReceiveAddress = {
   index: number
 }
 
+export type BarkPreparedBoardFunding = {
+  fundingAddress: string
+  expiryHeight: number
+}
+
+export type BarkBoardFeeEstimate = {
+  grossAmountSats: number
+  feeSats: number
+  netAmountSats: number
+}
+
+export type BarkBoardAccepted = {
+  fundingTxid: string
+  vtxoAmountSats: number
+  movementId: number
+}
+
+export type BarkMovementStatus = 'pending' | 'successful' | 'failed' | 'canceled'
+
+export type BarkMovementRow = {
+  id: number
+  status: BarkMovementStatus
+  subsystemName: string
+  subsystemKind: string
+  effectiveBalanceSats: number
+  offchainFeeSats: number
+  createdAtUnixSeconds: number
+}
+
 export interface BarkService {
   configureHistoricalSignetOnchainChain(
     chain: HistoricalSignetOnchainChain | null,
@@ -35,4 +64,8 @@ export interface BarkService {
   revealNextReceiveAddress(): Promise<BarkRevealedReceiveAddress>
   sync(): Promise<BarkSyncResult>
   readSpendableBalance(): Promise<number>
+  estimateBoardOffchainFee(amountSats: number): Promise<BarkBoardFeeEstimate>
+  prepareBoardFunding(): Promise<BarkPreparedBoardFunding>
+  boardPsbt(psbtBase64: string): Promise<BarkBoardAccepted>
+  history(): Promise<BarkMovementRow[]>
 }

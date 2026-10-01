@@ -1,5 +1,7 @@
+import { Link } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 import { FiatBtcAmountDisplay } from '@/components/FiatBtcAmountDisplay'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { RailLoadErrorBanner } from '@/components/wallet/RailLoadErrorBanner'
 import { RailSyncControl } from '@/components/wallet/RailSyncControl'
@@ -105,6 +107,11 @@ export function BarkDashboardBalance() {
             data-testid="dashboard-bark-balance-amount"
           />
         ) : null}
+        <Button type="button" variant="outline" size="sm" asChild>
+          <Link to="/wallet/bark/board" data-testid="dashboard-bark-board-link">
+            Board from on-chain
+          </Link>
+        </Button>
       </CardContent>
     </Card>
   )

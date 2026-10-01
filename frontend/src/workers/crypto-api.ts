@@ -148,6 +148,12 @@ export interface PrepareOnchainSendParams extends BuildTransactionParams {
 }
 
 /** `prepare_onchain_send_transaction` (mapped from WASM in the worker). */
+export interface SignedFundingPsbt {
+  psbtBase64: string;
+  rawTxHex: string;
+  txid: string;
+}
+
 export interface PrepareOnchainSendResult {
   psbtBase64: string;
   finalAmountSats: number;
@@ -279,6 +285,15 @@ export interface CryptoService {
   listWalletUtxos(): Promise<WalletUtxoRow[]>;
 
   signAndExtractTransaction(psbtBase64: string): Promise<string>;
+
+  /** Signs a PSBT without broadcasting or inserting it into the wallet. */
+  signFundingPsbt(psbtBase64: string): Promise<SignedFundingPsbt>;
+
+  /** Marks a Bark funding transaction unconfirmed after Bark has accepted the board. */
+  applyUnconfirmedFundingTx(
+    rawTxHex: string,
+    lastSeenUnixSeconds: number,
+  ): Promise<void>;
 
   broadcastTransaction(
     rawTxHex: string,

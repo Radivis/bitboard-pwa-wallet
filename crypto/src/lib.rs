@@ -530,6 +530,33 @@ pub fn build_transaction(
     Ok(outcome.psbt_base64)
 }
 
+/// Sign a PSBT and return the finalized PSBT plus the raw transaction.
+/// Does not broadcast and does not insert the transaction into the wallet.
+#[wasm_bindgen]
+pub fn sign_funding_psbt(psbt_base64: &str) -> Result<JsValue, JsValue> {
+    let signed = with_wallet(|wallet| transaction::sign_funding_psbt(wallet, psbt_base64))?
+        .map_err(JsValue::from)?;
+    serde_wasm_bindgen::to_value(&signed).map_display_err_to_js()
+}
+
+/// Mark a funding transaction as unconfirmed in the on-chain wallet after Bark accepted it.
+#[wasm_bindgen]
+pub fn apply_unconfirmed_funding_transaction(
+    raw_tx_hex: &str,
+    last_seen_unix_seconds: u64,
+) -> Result<(), JsValue> {
+    with_wallet_mut(|wallet| {
+        transaction::apply_unconfirmed_funding_transaction(
+            wallet,
+            raw_tx_hex,
+            last_seen_unix_seconds,
+        )
+    })?
+    .map_err(JsValue::from)?;
+    accumulate_staged_changes();
+    Ok(())
+}
+
 /// Sign a PSBT and extract the finalized transaction.
 ///
 /// Takes a PSBT as base64 string, returns the signed raw transaction as hex.

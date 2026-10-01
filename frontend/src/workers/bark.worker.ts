@@ -1,6 +1,13 @@
 import { expose, wrap, type Remote } from 'comlink'
 import { readBarkSpendableSats } from '@/lib/bark/bark-balance'
 import {
+  boardPsbtFromWasm,
+  estimateBoardOffchainFeeFromWasm,
+  historyFromWasm,
+  prepareBoardFundingFromWasm,
+  type BarkBoardWasm,
+} from '@/lib/bark/bark-board-session'
+import {
   readBarkLastRevealedKeyIndex,
   readBarkRevealedReceiveAddress,
   receiveKeyIndexForSessionOpen,
@@ -13,6 +20,10 @@ import {
 } from '@/lib/wallet/historical-signet-onchain-chain'
 import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
 import type {
+  BarkBoardAccepted,
+  BarkBoardFeeEstimate,
+  BarkMovementRow,
+  BarkPreparedBoardFunding,
   BarkRevealedReceiveAddress,
   BarkService,
   BarkSyncResult,
@@ -198,6 +209,38 @@ async function readSpendableBalanceImpl(): Promise<number> {
   return readBarkSpendableSats(await wasmModule.bark_balance())
 }
 
+function boardWasm(wasmModule: BitboardBarkWasm): BarkBoardWasm {
+  return wasmModule as unknown as BarkBoardWasm
+}
+
+async function estimateBoardOffchainFeeImpl(amountSats: number): Promise<BarkBoardFeeEstimate> {
+  if (openWalletId == null) {
+    throw new Error('Bark session is not open')
+  }
+  return estimateBoardOffchainFeeFromWasm(boardWasm(await getBarkWasm()), amountSats)
+}
+
+async function prepareBoardFundingImpl(): Promise<BarkPreparedBoardFunding> {
+  if (openWalletId == null) {
+    throw new Error('Bark session is not open')
+  }
+  return prepareBoardFundingFromWasm(boardWasm(await getBarkWasm()))
+}
+
+async function boardPsbtImpl(psbtBase64: string): Promise<BarkBoardAccepted> {
+  if (openWalletId == null) {
+    throw new Error('Bark session is not open')
+  }
+  return boardPsbtFromWasm(boardWasm(await getBarkWasm()), psbtBase64)
+}
+
+async function historyImpl(): Promise<BarkMovementRow[]> {
+  if (openWalletId == null) {
+    throw new Error('Bark session is not open')
+  }
+  return historyFromWasm(boardWasm(await getBarkWasm()))
+}
+
 const barkService: BarkService = {
   async setSecretsPort(port: MessagePort): Promise<void> {
     secretsProxy = wrap<SecretsChannelService>(port)
@@ -253,6 +296,38 @@ const barkService: BarkService = {
   async readSpendableBalance(): Promise<number> {
     try {
       return await readSpendableBalanceImpl()
+    } catch (err) {
+      rethrowBarkError(err)
+    }
+  },
+
+  async estimateBoardOffchainFee(amountSats: number): Promise<BarkBoardFeeEstimate> {
+    try {
+      return await estimateBoardOffchainFeeImpl(amountSats)
+    } catch (err) {
+      rethrowBarkError(err)
+    }
+  },
+
+  async prepareBoardFunding(): Promise<BarkPreparedBoardFunding> {
+    try {
+      return await prepareBoardFundingImpl()
+    } catch (err) {
+      rethrowBarkError(err)
+    }
+  },
+
+  async boardPsbt(psbtBase64: string): Promise<BarkBoardAccepted> {
+    try {
+      return await boardPsbtImpl(psbtBase64)
+    } catch (err) {
+      rethrowBarkError(err)
+    }
+  },
+
+  async history(): Promise<BarkMovementRow[]> {
+    try {
+      return await historyImpl()
     } catch (err) {
       rethrowBarkError(err)
     }

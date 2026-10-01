@@ -43,6 +43,7 @@ import { mergeAndSortDashboardActivity } from '@/lib/lightning/lightning-dashboa
 import { useDashboardActivityPageSize } from '@/hooks/useDashboardActivityPageSize'
 import { LightningPaymentItem } from '@/components/LightningPaymentItem'
 import { ArkadePaymentItem } from '@/components/ArkadePaymentItem'
+import { BarkMovementItem } from '@/components/BarkMovementItem'
 import { ArkadeDashboardBalance } from '@/components/wallet/ArkadeDashboardBalance'
 import { BarkDashboardBalance } from '@/components/wallet/BarkDashboardBalance'
 import { RailLoadErrorBanner } from '@/components/wallet/RailLoadErrorBanner'
@@ -67,6 +68,7 @@ import {
 } from '@/hooks/useRailManualSyncMutations'
 import { useLightningSyncMetadataQuery } from '@/hooks/useLightningDashboardQueries'
 import { useArkadeHistoryQuery } from '@/hooks/useArkadeQueries'
+import { useBarkHistoryQuery } from '@/hooks/useBarkHistoryQuery'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useMainnetFiatRatesQuery } from '@/hooks/useMainnetFiatRatesQuery'
@@ -570,6 +572,7 @@ function RecentTransactions() {
   const transactions = useWalletStore((walletState) => walletState.transactions)
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const isLightningEnabled = useFeatureStore((featureState) => featureState.isLightningEnabled)
+  const isBarkEnabled = useFeatureStore((featureState) => featureState.isBarkEnabled)
   const connectedLightningWallets = useLightningStore((lightningState) => lightningState.connectedWallets)
   const hasLnWalletForNetwork = useMemo(
     () =>
@@ -583,6 +586,7 @@ function RecentTransactions() {
   const lightningHistoryQuery = useLightningHistoryQuery()
   const arkadeActive = isArkadeActiveForNetworkMode(networkMode)
   const arkadeHistoryQuery = useArkadeHistoryQuery()
+  const barkHistoryQuery = useBarkHistoryQuery()
   const { data: labState, isPending: labChainPending } = useLabChainStateQuery()
   const labTransactions = labState?.transactions ?? []
   const labTxDetails = labState?.txDetails ?? []
@@ -608,6 +612,11 @@ function RecentTransactions() {
     () => (arkadeActive ? arkadeHistoryQuery.data ?? [] : []),
     [arkadeActive, arkadeHistoryQuery.data],
   )
+  const barkActive = isBarkEnabled && networkMode === 'signet'
+  const barkMovements = useMemo(
+    () => (barkActive ? barkHistoryQuery.data ?? [] : []),
+    [barkActive, barkHistoryQuery.data],
+  )
   const stalePaymentsAsOf = lightningHistoryQuery.data?.stalePaymentsAsOf
 
   const mergedActivity = useMemo(() => {
@@ -621,7 +630,12 @@ function RecentTransactions() {
       hasLnWalletForNetwork
         ? lightningPayments
         : []
-    return mergeAndSortDashboardActivity(transactions, lightningForMerge, arkadePayments)
+    return mergeAndSortDashboardActivity(
+      transactions,
+      lightningForMerge,
+      arkadePayments,
+      barkMovements,
+    )
   }, [
     networkMode,
     isLightningEnabled,
@@ -630,6 +644,7 @@ function RecentTransactions() {
     transactions,
     lightningPayments,
     arkadePayments,
+    barkMovements,
   ])
 
   const activityTotalCount =
@@ -700,6 +715,12 @@ function RecentTransactions() {
             Loading Arkade activity…
           </p>
         )}
+        {networkMode !== 'lab' && barkActive && barkHistoryQuery.isLoading && (
+          <p className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading Bark activity…
+          </p>
+        )}
         {networkMode !== 'lab' &&
           isLightningEnabled &&
           hasLnWalletForNetwork &&
@@ -722,7 +743,8 @@ function RecentTransactions() {
             <p className="text-sm text-muted-foreground">
               No activity yet. On-chain transactions appear after you sync;
               Arkade payments appear when your Arkade session is open;
-              Lightning payments appear when your NWC wallet reports them.
+              Lightning payments appear when your NWC wallet reports them
+              {barkActive ? '; Bark movements appear after Bark history loads' : ''}.
             </p>
           </div>
         ) : networkMode === 'lab' && displayTransactions.length === 0 ? (
@@ -762,6 +784,14 @@ function RecentTransactions() {
                         <LightningPaymentItem
                           key={`${activityItem.payment.connectionId}-${activityItem.payment.paymentHash}`}
                           payment={activityItem.payment}
+                        />
+                      )
+                    }
+                    if (activityItem.kind === 'bark') {
+                      return (
+                        <BarkMovementItem
+                          key={`bark-${activityItem.movement.id}`}
+                          movement={activityItem.movement}
                         />
                       )
                     }

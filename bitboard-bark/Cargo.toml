@@ -28,6 +28,8 @@ bark-wallet = { version = "0.7.1", default-features = false, features = ["wasm-w
 # Public type of Wallet::open / WalletSeed::new_from_mnemonic. Already in the bark graph.
 bitcoin = "0.32.7"
 bip39 = "2.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }

@@ -95,6 +95,13 @@ interface CryptoState {
 
   signAndExtractTransaction: (psbtBase64: string) => Promise<string>;
 
+  signFundingPsbt: (psbtBase64: string) => Promise<import('@/workers/crypto-api').SignedFundingPsbt>;
+
+  applyUnconfirmedFundingTx: (
+    rawTxHex: string,
+    lastSeenUnixSeconds: number,
+  ) => Promise<void>;
+
   broadcastTransaction: (
     rawTxHex: string,
     esploraUrl: string
@@ -251,6 +258,14 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
 
     signAndExtractTransaction: (psbtBase64) =>
       withErrorHandling((worker) => worker.signAndExtractTransaction(psbtBase64)),
+
+    signFundingPsbt: (psbtBase64) =>
+      withErrorHandling((worker) => worker.signFundingPsbt(psbtBase64)),
+
+    applyUnconfirmedFundingTx: (rawTxHex, lastSeenUnixSeconds) =>
+      withErrorHandling((worker) =>
+        worker.applyUnconfirmedFundingTx(rawTxHex, lastSeenUnixSeconds),
+      ),
 
     broadcastTransaction: (rawTxHex, esploraUrl) =>
       withErrorHandling((worker) => worker.broadcastTransaction(rawTxHex, esploraUrl)),
