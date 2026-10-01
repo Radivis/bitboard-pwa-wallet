@@ -28,6 +28,7 @@ import {
   progressEmergencyExitsFromWasm,
   provideEmergencyExitCpfpFromWasm,
   startEmergencyExitFromWasm,
+  exitTopologyFromWasm,
   type BarkEmergencyExitWasm,
 } from '@/lib/bark/bark-emergency-exit-session'
 import {
@@ -52,6 +53,7 @@ import type {
   BarkEmergencyExitProgress,
   BarkEmergencyExitRow,
   BarkExitFeeEstimate,
+  BarkExitGraph,
   BarkMovementRow,
   BarkVtxoRow,
   BarkPreparedBoardFunding,
@@ -350,6 +352,11 @@ async function listEmergencyExitsImpl(): Promise<BarkEmergencyExitRow[]> {
   return listEmergencyExitsFromWasm(emergencyExitWasm(await getBarkWasm()))
 }
 
+async function exitTopologyImpl(vtxoIds: string[]): Promise<BarkExitGraph> {
+  requireOpenSession()
+  return exitTopologyFromWasm(emergencyExitWasm(await getBarkWasm()), vtxoIds)
+}
+
 async function progressEmergencyExitsImpl(): Promise<BarkEmergencyExitProgress> {
   requireOpenSession()
   return progressEmergencyExitsFromWasm(emergencyExitWasm(await getBarkWasm()))
@@ -546,6 +553,14 @@ const barkService: BarkService = {
   async listEmergencyExits(): Promise<BarkEmergencyExitRow[]> {
     try {
       return await listEmergencyExitsImpl()
+    } catch (err) {
+      rethrowBarkError(err)
+    }
+  },
+
+  async exitTopology(vtxoIds: string[]): Promise<BarkExitGraph> {
+    try {
+      return await exitTopologyImpl(vtxoIds)
     } catch (err) {
       rethrowBarkError(err)
     }

@@ -19,6 +19,7 @@ feature:
     - As a user with Bark enabled on signet, I want to send to a Bark Ark address from the send form
     - As a user with Bark enabled on signet, I want an emergency-exit control page where I can exit selected spendable VTXOs or the whole wallet, watch each coin's exit state, progress it, cancel while Bark still allows it, and claim claimable coins to my current on-chain receive address
     - As a user, I want a failed emergency-exit step to leave the page without a success message
+    - As a user on the emergency-exit page, I want to see the exit transaction tree for the VTXOs I selected and for exits already in progress
   requirements:
     - The card is visible only when isBarkEnabled and the app network is signet
     - Spendable sats are read only after a successful Bark sync in this session
@@ -57,6 +58,12 @@ feature:
     - Cancel is offered only while that exit is still cancelable
     - Claim sends every claimable exit to the current on-chain receive address, broadcasts that signed transaction through the existing Esplora client, and does not reveal a new address
     - A bark.exit movement is labeled as a Bark emergency exit, distinct from collaborative bark.offboard
+    - The exit tree is shown on the Signet emergency-exit page when Bark is enabled. It loads the checked spendable VTXOs, or every spendable VTXO when the whole wallet is checked, plus every live exit
+    - After Start clears the checkboxes, live exits keep the exit tree on screen
+    - The exit tree has one node per exit transaction. A txid shared by two VTXOs is one node. An input that spends a transaction outside the tree is not a node
+    - A node is pending, in progress, or confirmed. Needs a child appears only while that transaction is waiting for a Pay-to-Anchor child. That child is not a node
+    - Focusing a node shows its transaction id and the VTXO ids whose exit leaf is that transaction
+    - Rendering the exit tree does not start, progress, cancel, or claim
   contracts:
     dashboard:
       - id: DASH-BARK-01
@@ -232,6 +239,21 @@ feature:
       - id: BARK-EMG-09
         description: A bark.exit movement is labeled Bark emergency exit
         implemented_by: frontend/src/lib/bark/__tests__/bark-history.test.ts
+      - id: BARK-EMG-10
+        description: The exit tree loads the checked spendable VTXOs, or every spendable VTXO when the whole wallet is checked, plus every live exit, and stays after Start clears the checkboxes
+        implemented_by: frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
+      - id: BARK-EMG-11
+        description: One node per exit transaction. A shared txid is one node. An input outside the chain is not a node
+        implemented_by: bitboard-bark/src/emergency_exit.rs
+      - id: BARK-EMG-12
+        description: A node is pending, in progress, or confirmed. Needs a child appears only for AwaitingCpfpBroadcast, and that child is not a node
+        implemented_by: bitboard-bark/src/emergency_exit.rs
+      - id: BARK-EMG-13
+        description: Focusing a node shows its txid and the VTXO ids whose exit leaf is that transaction
+        implemented_by: frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
+      - id: BARK-EMG-14
+        description: Rendering the exit tree does not start, progress, cancel, or claim
+        implemented_by: frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
   pages:
     - BarkManagement:
         description: Bark entry on the Management page
@@ -266,6 +288,8 @@ feature:
         path: /wallet/bark/emergency-exit
         file: frontend/src/routes/wallet/bark/emergency-exit.tsx
         visible_elements:
+          - Exit tree for the checked spendable VTXOs, or every spendable VTXO when the whole wallet is checked, plus every live exit
+          - Focused exit-tree node shows its transaction id and the VTXO ids that end on it
           - Spendable VTXO checkboxes
           - Review of broadcast fee, claim fee, and transaction count
           - Start for the selection or the whole wallet
@@ -275,5 +299,6 @@ feature:
           - Back to management
         requirements:
           - Contracts BARK-EMG-02 through BARK-EMG-08
+          - Contracts BARK-EMG-10 through BARK-EMG-14
           - Shown only when isBarkEnabled and the network is signet
           - Progress is a button, not unlock or periodic sync

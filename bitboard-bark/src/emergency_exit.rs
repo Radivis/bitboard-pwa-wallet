@@ -58,7 +58,9 @@ const MAX_FEE_RATE_SAT_PER_VB: f64 = 1_000_000.0;
 
 /// The app's Signet fee preset, in sat/vB. Bark's own fast rate is not used.
 pub fn fee_rate_from_sat_per_vb(rate_sat_per_vb: f64) -> Result<bitcoin::FeeRate, String> {
-    if !rate_sat_per_vb.is_finite() || rate_sat_per_vb <= 0.0 || rate_sat_per_vb > MAX_FEE_RATE_SAT_PER_VB
+    if !rate_sat_per_vb.is_finite()
+        || rate_sat_per_vb <= 0.0
+        || rate_sat_per_vb > MAX_FEE_RATE_SAT_PER_VB
     {
         return Err(
             "bark_exit_fee_rate: Fee rate must be a positive number of satoshis per virtual byte"
@@ -135,24 +137,260 @@ fn zero_estimate_json(fee_rate_sat_per_vb: f64) -> Result<String, String> {
     })
 }
 
+const EXIT_GRAPH_RANK_PENDING: u8 = 0;
+const EXIT_GRAPH_RANK_NEEDS_CHILD: u8 = 1;
+const EXIT_GRAPH_RANK_IN_PROGRESS: u8 = 2;
+const EXIT_GRAPH_RANK_CONFIRMED: u8 = 3;
+
+/// One exit transaction, before spends are limited to other nodes in the graph.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ExitGraphTransaction {
+    pub txid: String,
+    pub input_txids: Vec<String>,
+}
+
+/// How far one VTXO's exit has moved. The transaction list is the genesis chain.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ExitGraphChain {
+    pub vtxo_id: String,
+    pub transactions: Vec<ExitGraphTransaction>,
+    pub status: ExitGraphChainStatus,
+}
+
+/// Status for every transaction on a chain, or one mark per exit transaction.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ExitGraphChainStatus {
+    Pending,
+    Confirmed,
+    Transactions(Vec<ExitGraphTransactionStatus>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ExitGraphTransactionStatus {
+    pub txid: String,
+    pub kind: ExitGraphTransactionKind,
+    pub waiting_on_txids: Vec<String>,
+}
+
+/// Bark's per-transaction exit status, without the Pay-to-Anchor child.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExitGraphTransactionKind {
+    Pending,
+    WaitingOnInputs,
+    NeedsChild,
+    InProgress,
+    Confirmed,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ExitGraphDraft {
+    input_txids: Vec<String>,
+    leaf_vtxo_ids: Vec<String>,
+    rank: u8,
+    waiting_on_txids: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ExitGraphNodeJson {
+    txid: String,
+    spends: Vec<String>,
+    leaf_vtxo_ids: Vec<String>,
+    status: &'static str,
+    needs_child: bool,
+    waiting_on_txids: Vec<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ExitGraphJson {
+    nodes: Vec<ExitGraphNodeJson>,
+}
+
+pub(crate) fn exit_graph_transaction_from_bitcoin(
+    tx: &bitcoin::Transaction,
+) -> ExitGraphTransaction {
+    ExitGraphTransaction {
+        txid: tx.compute_txid().to_string(),
+        input_txids: tx
+            .input
+            .iter()
+            .map(|input| input.previous_output.txid.to_string())
+            .collect(),
+    }
+}
+
+/// Merges exit chains into one graph. The last transaction of a chain is that coin's leaf.
+/// An input txid that is not itself a node stays off the graph.
+pub(crate) fn merge_exit_graph(chains: &[ExitGraphChain]) -> Vec<ExitGraphNodeJson> {
+    let mut drafts: std::collections::BTreeMap<String, ExitGraphDraft> =
+        std::collections::BTreeMap::new();
+    for chain in chains {
+        let leaf_txid = chain
+            .transactions
+            .last()
+            .map(|transaction| transaction.txid.clone());
+        for transaction in &chain.transactions {
+            let draft = drafts
+                .entry(transaction.txid.clone())
+                .or_insert_with(|| ExitGraphDraft {
+                    input_txids: transaction.input_txids.clone(),
+                    leaf_vtxo_ids: Vec::new(),
+                    rank: EXIT_GRAPH_RANK_PENDING,
+                    waiting_on_txids: Vec::new(),
+                });
+            if leaf_txid.as_ref() == Some(&transaction.txid) {
+                push_unique(&mut draft.leaf_vtxo_ids, chain.vtxo_id.clone());
+            }
+        }
+        apply_chain_status(&mut drafts, chain);
+    }
+
+    let node_txids: std::collections::BTreeSet<String> = drafts.keys().cloned().collect();
+    drafts
+        .into_iter()
+        .map(|(txid, draft)| {
+            let mut spends: Vec<String> = draft
+                .input_txids
+                .into_iter()
+                .filter(|input_txid| node_txids.contains(input_txid))
+                .collect();
+            spends = sorted_unique(spends);
+            let mut leaf_vtxo_ids = draft.leaf_vtxo_ids;
+            leaf_vtxo_ids.sort();
+            let waiting_on_txids = if draft.rank == EXIT_GRAPH_RANK_PENDING {
+                sorted_unique(draft.waiting_on_txids)
+            } else {
+                Vec::new()
+            };
+            ExitGraphNodeJson {
+                txid,
+                spends,
+                leaf_vtxo_ids,
+                status: exit_graph_status_label(draft.rank),
+                needs_child: draft.rank == EXIT_GRAPH_RANK_NEEDS_CHILD,
+                waiting_on_txids,
+            }
+        })
+        .collect()
+}
+
+fn apply_chain_status(
+    drafts: &mut std::collections::BTreeMap<String, ExitGraphDraft>,
+    chain: &ExitGraphChain,
+) {
+    match &chain.status {
+        ExitGraphChainStatus::Pending => {
+            for transaction in &chain.transactions {
+                note_transaction_status(
+                    drafts,
+                    &ExitGraphTransactionStatus {
+                        txid: transaction.txid.clone(),
+                        kind: ExitGraphTransactionKind::Pending,
+                        waiting_on_txids: Vec::new(),
+                    },
+                );
+            }
+        }
+        ExitGraphChainStatus::Confirmed => {
+            for transaction in &chain.transactions {
+                note_transaction_status(
+                    drafts,
+                    &ExitGraphTransactionStatus {
+                        txid: transaction.txid.clone(),
+                        kind: ExitGraphTransactionKind::Confirmed,
+                        waiting_on_txids: Vec::new(),
+                    },
+                );
+            }
+        }
+        ExitGraphChainStatus::Transactions(marks) => {
+            for mark in marks {
+                note_transaction_status(drafts, mark);
+            }
+        }
+    }
+}
+
+fn note_transaction_status(
+    drafts: &mut std::collections::BTreeMap<String, ExitGraphDraft>,
+    mark: &ExitGraphTransactionStatus,
+) {
+    let Some(draft) = drafts.get_mut(&mark.txid) else {
+        return;
+    };
+    let incoming_rank = exit_graph_rank(mark.kind);
+    if incoming_rank > draft.rank {
+        draft.rank = incoming_rank;
+        draft.waiting_on_txids = if mark.kind == ExitGraphTransactionKind::WaitingOnInputs {
+            mark.waiting_on_txids.clone()
+        } else {
+            Vec::new()
+        };
+        return;
+    }
+    if incoming_rank == draft.rank && mark.kind == ExitGraphTransactionKind::WaitingOnInputs {
+        draft.waiting_on_txids.extend(mark.waiting_on_txids.clone());
+    }
+}
+
+fn exit_graph_rank(kind: ExitGraphTransactionKind) -> u8 {
+    match kind {
+        ExitGraphTransactionKind::Pending | ExitGraphTransactionKind::WaitingOnInputs => {
+            EXIT_GRAPH_RANK_PENDING
+        }
+        ExitGraphTransactionKind::NeedsChild => EXIT_GRAPH_RANK_NEEDS_CHILD,
+        ExitGraphTransactionKind::InProgress => EXIT_GRAPH_RANK_IN_PROGRESS,
+        ExitGraphTransactionKind::Confirmed => EXIT_GRAPH_RANK_CONFIRMED,
+    }
+}
+
+fn exit_graph_status_label(rank: u8) -> &'static str {
+    if rank == EXIT_GRAPH_RANK_CONFIRMED {
+        "confirmed"
+    } else if rank == EXIT_GRAPH_RANK_NEEDS_CHILD || rank == EXIT_GRAPH_RANK_IN_PROGRESS {
+        "inProgress"
+    } else {
+        "pending"
+    }
+}
+
+fn push_unique(values: &mut Vec<String>, value: String) {
+    if !values.contains(&value) {
+        values.push(value);
+    }
+}
+
+fn sorted_unique(mut values: Vec<String>) -> Vec<String> {
+    values.sort();
+    values.dedup();
+    values
+}
+
+fn exit_graph_json(nodes: Vec<ExitGraphNodeJson>) -> Result<String, String> {
+    json_string(&ExitGraphJson { nodes })
+}
+
 #[cfg(target_arch = "wasm32")]
 mod wasm {
     use std::collections::HashSet;
 
-    use bitcoin::consensus::encode::serialize_hex;
     use bitcoin::Transaction;
     use bitcoin::Txid;
+    use bitcoin::consensus::encode::serialize_hex;
     use wasm_bindgen::prelude::*;
 
     use super::{
-        encode_hex, fee_rate_from_sat_per_vb, fee_rate_sat_per_vb, format_bark_exit_error, json_string,
-        zero_estimate_json,
-        BarkEmergencyExitStateKind, EmergencyExitCpfpRequestJson, EmergencyExitDrainJson,
-        EmergencyExitEstimateJson, EmergencyExitProgressJson, EmergencyExitRowJson,
         BARK_EXIT_ALREADY_EXITED, BARK_EXIT_ALREADY_SPENT, BARK_EXIT_DUST, BARK_EXIT_UNKNOWN_VTXO,
+        BarkEmergencyExitStateKind, EmergencyExitCpfpRequestJson, EmergencyExitDrainJson,
+        EmergencyExitEstimateJson, EmergencyExitProgressJson, EmergencyExitRowJson, encode_hex,
+        fee_rate_from_sat_per_vb, fee_rate_sat_per_vb, format_bark_exit_error, json_string,
+        zero_estimate_json,
     };
     use crate::exit_address::parse_signet_receive_address;
-    use crate::session::{bark_error, finish_wallet_operation, require_session_synced, take_active_wallet};
+    use crate::session::{
+        bark_error, finish_wallet_operation, require_session_synced, take_active_wallet,
+    };
 
     fn format_exit_error(err: &bark::exit::ExitError) -> String {
         let code = match err {
@@ -188,9 +426,9 @@ mod wasm {
         raw_ids
             .into_iter()
             .map(|raw_id| {
-                raw_id.parse::<bark::ark::VtxoId>().map_err(|_| {
-                    format_bark_exit_error(BARK_EXIT_UNKNOWN_VTXO, raw_id.trim())
-                })
+                raw_id
+                    .parse::<bark::ark::VtxoId>()
+                    .map_err(|_| format_bark_exit_error(BARK_EXIT_UNKNOWN_VTXO, raw_id.trim()))
             })
             .collect()
     }
@@ -311,7 +549,10 @@ mod wasm {
                 .iter()
                 .map(|status| row_from_state(status.vtxo_id.to_string(), &status.state))
                 .collect::<Vec<_>>();
-            let seen = rows.iter().map(|row| row.vtxo_id.clone()).collect::<HashSet<_>>();
+            let seen = rows
+                .iter()
+                .map(|row| row.vtxo_id.clone())
+                .collect::<HashSet<_>>();
             for claimable in wallet.exit_mgr().list_claimable().await {
                 let vtxo_id = claimable.id().to_string();
                 if seen.contains(&vtxo_id) {
@@ -369,8 +610,10 @@ mod wasm {
             let parent_txid = exit_txid
                 .parse::<Txid>()
                 .map_err(|_| "Bark emergency exit transaction id is invalid".to_owned())?;
-            let child_tx = bitcoin::consensus::encode::deserialize_hex::<Transaction>(&child_tx_hex)
-                .map_err(|err| format!("Bark emergency exit child transaction is invalid: {err}"))?;
+            let child_tx = bitcoin::consensus::encode::deserialize_hex::<Transaction>(
+                &child_tx_hex,
+            )
+            .map_err(|err| format!("Bark emergency exit child transaction is invalid: {err}"))?;
             map_exit_error(
                 wallet
                     .exit_mgr()
@@ -384,9 +627,9 @@ mod wasm {
     #[wasm_bindgen]
     pub async fn bark_cancel_emergency_exit(vtxo_id: String) -> Result<(), JsValue> {
         run_with_synced_wallet(async |wallet| {
-            let parsed_id = vtxo_id.parse::<bark::ark::VtxoId>().map_err(|_| {
-                format_bark_exit_error(BARK_EXIT_UNKNOWN_VTXO, vtxo_id.trim())
-            })?;
+            let parsed_id = vtxo_id
+                .parse::<bark::ark::VtxoId>()
+                .map_err(|_| format_bark_exit_error(BARK_EXIT_UNKNOWN_VTXO, vtxo_id.trim()))?;
             map_exit_error(wallet.exit_mgr().cancel_exit(parsed_id).await)
         })
         .await
@@ -419,14 +662,111 @@ mod wasm {
         })
         .await
     }
+
+    /// Exit-transaction graph for the given VTXO ids. An empty list returns no nodes.
+    /// Does not progress exits and does not require a fresh sync.
+    #[wasm_bindgen]
+    pub async fn bark_exit_topology(vtxo_ids_json: String) -> Result<String, JsValue> {
+        let requested = parse_vtxo_ids(&vtxo_ids_json).map_err(|err| JsValue::from_str(&err))?;
+        if requested.is_empty() {
+            return super::exit_graph_json(Vec::new()).map_err(|err| JsValue::from_str(&err));
+        }
+        let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
+        let operation_result = async {
+            let mut chains = Vec::with_capacity(requested.len());
+            for vtxo_id in requested {
+                let full_vtxo = match wallet.get_full_vtxo(vtxo_id).await {
+                    Ok(vtxo) => vtxo,
+                    Err(_) => {
+                        return Err(format_bark_exit_error(
+                            BARK_EXIT_UNKNOWN_VTXO,
+                            &vtxo_id.to_string(),
+                        ));
+                    }
+                };
+                let transactions = full_vtxo
+                    .transactions()
+                    .map(|item| super::exit_graph_transaction_from_bitcoin(&item.tx))
+                    .collect();
+                let exit_status = map_anyhow_exit(
+                    wallet
+                        .exit_mgr()
+                        .get_exit_status(vtxo_id, false, false)
+                        .await,
+                )?;
+                let status = match exit_status {
+                    Some(status) => chain_status_from_exit_state(&status.state),
+                    None => super::ExitGraphChainStatus::Pending,
+                };
+                chains.push(super::ExitGraphChain {
+                    vtxo_id: vtxo_id.to_string(),
+                    transactions,
+                    status,
+                });
+            }
+            super::exit_graph_json(super::merge_exit_graph(&chains))
+        }
+        .await;
+        finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
+    }
+
+    fn chain_status_from_exit_state(state: &bark::exit::ExitState) -> super::ExitGraphChainStatus {
+        if state.warrants_exited_vtxo() {
+            return super::ExitGraphChainStatus::Confirmed;
+        }
+        match state {
+            bark::exit::ExitState::Processing(processing) => {
+                super::ExitGraphChainStatus::Transactions(
+                    processing
+                        .transactions
+                        .iter()
+                        .map(|exit_tx| {
+                            let (kind, waiting_on_txids) =
+                                kind_from_exit_tx_status(&exit_tx.status);
+                            super::ExitGraphTransactionStatus {
+                                txid: exit_tx.txid.to_string(),
+                                kind,
+                                waiting_on_txids,
+                            }
+                        })
+                        .collect(),
+                )
+            }
+            _ => super::ExitGraphChainStatus::Pending,
+        }
+    }
+
+    fn kind_from_exit_tx_status(
+        status: &bark::exit::ExitTxStatus,
+    ) -> (super::ExitGraphTransactionKind, Vec<String>) {
+        match status {
+            bark::exit::ExitTxStatus::VerifyInputs => {
+                (super::ExitGraphTransactionKind::Pending, Vec::new())
+            }
+            bark::exit::ExitTxStatus::AwaitingInputConfirmation { txids } => (
+                super::ExitGraphTransactionKind::WaitingOnInputs,
+                txids.iter().map(|txid| txid.to_string()).collect(),
+            ),
+            bark::exit::ExitTxStatus::AwaitingCpfpBroadcast => {
+                (super::ExitGraphTransactionKind::NeedsChild, Vec::new())
+            }
+            bark::exit::ExitTxStatus::AwaitingConfirmation { .. } => {
+                (super::ExitGraphTransactionKind::InProgress, Vec::new())
+            }
+            bark::exit::ExitTxStatus::Confirmed { .. } => {
+                (super::ExitGraphTransactionKind::Confirmed, Vec::new())
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        emergency_exit_state_json, fee_rate_from_sat_per_vb, fee_rate_sat_per_vb,
-        BarkEmergencyExitStateKind, BARK_EXIT_ALREADY_EXITED, BARK_EXIT_ALREADY_SPENT,
-        BARK_EXIT_DUST, BARK_EXIT_UNKNOWN_VTXO,
+        BARK_EXIT_ALREADY_EXITED, BARK_EXIT_ALREADY_SPENT, BARK_EXIT_DUST, BARK_EXIT_UNKNOWN_VTXO,
+        BarkEmergencyExitStateKind, ExitGraphChain, ExitGraphChainStatus, ExitGraphTransactionKind,
+        ExitGraphTransactionStatus, emergency_exit_state_json, exit_graph_transaction_from_bitcoin,
+        fee_rate_from_sat_per_vb, fee_rate_sat_per_vb, merge_exit_graph,
     };
     use crate::exit_address::parse_signet_receive_address;
 
@@ -470,5 +810,153 @@ mod tests {
     fn emergency_drain_rejects_a_non_signet_address() {
         let error = parse_signet_receive_address(MAINNET_ADDRESS).expect_err("mainnet");
         assert_eq!(error, "Bark exit address is not a Signet address");
+    }
+
+    fn outside_txid(byte: u8) -> bitcoin::Txid {
+        use bitcoin::hashes::Hash;
+        bitcoin::Txid::from_byte_array([byte; 32])
+    }
+
+    fn transaction_spending(previous_txids: &[bitcoin::Txid]) -> bitcoin::Transaction {
+        bitcoin::Transaction {
+            version: bitcoin::transaction::Version::TWO,
+            lock_time: bitcoin::absolute::LockTime::ZERO,
+            input: previous_txids
+                .iter()
+                .map(|txid| bitcoin::TxIn {
+                    previous_output: bitcoin::OutPoint {
+                        txid: *txid,
+                        vout: 0,
+                    },
+                    script_sig: bitcoin::ScriptBuf::new(),
+                    sequence: bitcoin::Sequence::MAX,
+                    witness: bitcoin::Witness::new(),
+                })
+                .collect(),
+            output: vec![bitcoin::TxOut {
+                value: bitcoin::Amount::from_sat(10_000),
+                script_pubkey: bitcoin::ScriptBuf::new(),
+            }],
+        }
+    }
+
+    fn chain_from_transactions(
+        vtxo_id: &str,
+        transactions: &[bitcoin::Transaction],
+        status: ExitGraphChainStatus,
+    ) -> ExitGraphChain {
+        ExitGraphChain {
+            vtxo_id: vtxo_id.to_owned(),
+            transactions: transactions
+                .iter()
+                .map(exit_graph_transaction_from_bitcoin)
+                .collect(),
+            status,
+        }
+    }
+
+    #[test]
+    fn exit_graph_drops_an_input_outside_the_chain_and_keeps_the_leaf() {
+        let outside = outside_txid(9);
+        let parent = transaction_spending(&[outside]);
+        let leaf = transaction_spending(&[parent.compute_txid()]);
+        let nodes = merge_exit_graph(&[chain_from_transactions(
+            "vtxo-a",
+            &[parent.clone(), leaf.clone()],
+            ExitGraphChainStatus::Pending,
+        )]);
+
+        assert_eq!(nodes.len(), 2);
+        assert!(nodes.iter().all(|node| node.txid != outside.to_string()));
+        let parent_node = nodes
+            .iter()
+            .find(|node| node.txid == parent.compute_txid().to_string())
+            .expect("parent");
+        let leaf_node = nodes
+            .iter()
+            .find(|node| node.txid == leaf.compute_txid().to_string())
+            .expect("leaf");
+        assert!(parent_node.spends.is_empty());
+        assert_eq!(parent_node.leaf_vtxo_ids, Vec::<String>::new());
+        assert_eq!(leaf_node.spends, vec![parent.compute_txid().to_string()]);
+        assert_eq!(leaf_node.leaf_vtxo_ids, vec!["vtxo-a".to_owned()]);
+    }
+
+    #[test]
+    fn exit_graph_merges_a_shared_ancestor_into_one_node() {
+        let outside = outside_txid(8);
+        let parent = transaction_spending(&[outside]);
+        let leaf_a = transaction_spending(&[parent.compute_txid()]);
+        let mut leaf_b_tx = transaction_spending(&[parent.compute_txid()]);
+        leaf_b_tx.output[0].value = bitcoin::Amount::from_sat(20_000);
+        let nodes = merge_exit_graph(&[
+            chain_from_transactions(
+                "vtxo-a",
+                &[parent.clone(), leaf_a.clone()],
+                ExitGraphChainStatus::Pending,
+            ),
+            chain_from_transactions(
+                "vtxo-b",
+                &[parent.clone(), leaf_b_tx.clone()],
+                ExitGraphChainStatus::Pending,
+            ),
+        ]);
+
+        let parent_nodes: Vec<_> = nodes
+            .iter()
+            .filter(|node| node.txid == parent.compute_txid().to_string())
+            .collect();
+        assert_eq!(parent_nodes.len(), 1);
+        assert_eq!(nodes.len(), 3);
+    }
+
+    #[test]
+    fn exit_graph_needs_child_does_not_add_a_child_node() {
+        let outside = outside_txid(7);
+        let exit_tx = transaction_spending(&[outside]);
+        let exit_txid = exit_tx.compute_txid().to_string();
+        let nodes = merge_exit_graph(&[chain_from_transactions(
+            "vtxo-a",
+            &[exit_tx],
+            ExitGraphChainStatus::Transactions(vec![ExitGraphTransactionStatus {
+                txid: exit_txid.clone(),
+                kind: ExitGraphTransactionKind::NeedsChild,
+                waiting_on_txids: Vec::new(),
+            }]),
+        )]);
+
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].txid, exit_txid);
+        assert!(nodes[0].needs_child);
+        assert_eq!(nodes[0].status, "inProgress");
+        assert!(nodes[0].spends.is_empty());
+    }
+
+    #[test]
+    fn exit_graph_confirmed_rank_beats_pending_on_a_shared_txid() {
+        let outside = outside_txid(6);
+        let shared = transaction_spending(&[outside]);
+        let shared_txid = shared.compute_txid().to_string();
+        let nodes = merge_exit_graph(&[
+            chain_from_transactions("vtxo-a", &[shared.clone()], ExitGraphChainStatus::Pending),
+            chain_from_transactions(
+                "vtxo-b",
+                &[shared],
+                ExitGraphChainStatus::Transactions(vec![ExitGraphTransactionStatus {
+                    txid: shared_txid.clone(),
+                    kind: ExitGraphTransactionKind::Confirmed,
+                    waiting_on_txids: Vec::new(),
+                }]),
+            ),
+        ]);
+
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].status, "confirmed");
+        assert!(!nodes[0].needs_child);
+        assert!(nodes[0].waiting_on_txids.is_empty());
+        assert_eq!(
+            nodes[0].leaf_vtxo_ids,
+            vec!["vtxo-a".to_owned(), "vtxo-b".to_owned()]
+        );
     }
 }

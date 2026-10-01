@@ -1,5 +1,9 @@
 import {
   BARK_EMERGENCY_EXIT_STATES,
+  BARK_EXIT_GRAPH_NODE_STATUSES,
+  type BarkExitGraph,
+  type BarkExitGraphNode,
+  type BarkExitGraphNodeStatus,
   type BarkEmergencyCpfpRequest,
   type BarkEmergencyExitDrain,
   type BarkEmergencyExitEstimate,
@@ -138,6 +142,56 @@ function readCount(value: unknown): number {
 function readOptionalCount(value: unknown, label: string): number | null {
   if (value == null) return null
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`Bark emergency exit ${label} is invalid`)
+  }
+  return value
+}
+
+export function barkExitTopologyVtxoIds(params: {
+  wholeWallet: boolean
+  selectedIds: string[]
+  spendableIds: string[]
+  liveExitIds: string[]
+}): string[] {
+  const selectedIds = params.wholeWallet ? params.spendableIds : params.selectedIds
+  return [...new Set([...selectedIds, ...params.liveExitIds])].sort()
+}
+
+export function readBarkExitGraph(value: unknown): BarkExitGraph {
+  const row = readObject(parseJson(value, 'Bark exit tree'), 'Bark exit tree')
+  if (!Array.isArray(row.nodes)) {
+    throw new Error('Bark exit tree nodes were not a list')
+  }
+  return { nodes: row.nodes.map(readExitGraphNode) }
+}
+
+function readExitGraphNode(value: unknown): BarkExitGraphNode {
+  const row = readObject(value, 'Bark exit tree node')
+  if (!isExitGraphNodeStatus(row.status)) {
+    throw new Error('Bark exit tree node has an unknown status')
+  }
+  if (typeof row.needsChild !== 'boolean') {
+    throw new Error('Bark exit tree node has no needs-child flag')
+  }
+  return {
+    txid: readText(row.txid, 'exit tree transaction id'),
+    spends: readTextList(row.spends, 'exit tree spends'),
+    leafVtxoIds: readTextList(row.leafVtxoIds, 'exit tree leaf VTXO ids'),
+    status: row.status,
+    needsChild: row.needsChild,
+    waitingOnTxids: readTextList(row.waitingOnTxids, 'exit tree waiting transactions'),
+  }
+}
+
+function isExitGraphNodeStatus(value: unknown): value is BarkExitGraphNodeStatus {
+  return (
+    typeof value === 'string' &&
+    (BARK_EXIT_GRAPH_NODE_STATUSES as readonly string[]).includes(value)
+  )
+}
+
+function readTextList(value: unknown, label: string): string[] {
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string' || entry.length === 0)) {
     throw new Error(`Bark emergency exit ${label} is invalid`)
   }
   return value

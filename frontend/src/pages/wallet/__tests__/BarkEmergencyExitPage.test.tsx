@@ -5,7 +5,15 @@ import { toast } from 'sonner'
 import { BarkEmergencyExitPage } from '@/pages/wallet/BarkEmergencyExitPage'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import type { NetworkMode } from '@/stores/walletStore'
-import type { BarkEmergencyExitRow, BarkVtxoRow } from '@/workers/bark-api'
+import type { BarkEmergencyExitRow, BarkExitGraph, BarkVtxoRow } from '@/workers/bark-api'
+
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+globalThis.ResizeObserver = ResizeObserverStub
 
 const walletStoreState = vi.hoisted(() => ({
   networkMode: 'signet' as NetworkMode,
@@ -35,6 +43,7 @@ const syncSnapshot = vi.hoisted(() => ({
 const barkWorker = vi.hoisted(() => ({
   listVtxos: vi.fn(),
   listEmergencyExits: vi.fn(),
+  exitTopology: vi.fn(),
   estimateEmergencyExit: vi.fn(),
   startEmergencyExit: vi.fn(),
   progressEmergencyExits: vi.fn(),
@@ -137,6 +146,7 @@ describe('BarkEmergencyExitPage', () => {
     loadSnapshot.loadPhase = 'loaded'
     barkWorker.listVtxos.mockResolvedValue([spendableVtxo])
     barkWorker.listEmergencyExits.mockResolvedValue([])
+    barkWorker.exitTopology.mockResolvedValue({ nodes: [] })
     barkWorker.estimateEmergencyExit.mockResolvedValue({
       exitBroadcastFeeSats: 1_500,
       claimFeeSats: 800,
@@ -149,6 +159,10 @@ describe('BarkEmergencyExitPage', () => {
     barkWorker.drainEmergencyExits.mockResolvedValue({ psbtHex: 'psbt', rawTxHex: 'raw' })
     cryptoWorker.broadcastTransaction.mockResolvedValue('claim-txid')
     barkWorker.startEmergencyExit.mockClear()
+    barkWorker.progressEmergencyExits.mockClear()
+    barkWorker.cancelEmergencyExit.mockClear()
+    barkWorker.drainEmergencyExits.mockClear()
+    barkWorker.exitTopology.mockClear()
     barkWorker.offboardAll.mockClear()
     barkWorker.sendOnchain.mockClear()
     barkWorker.estimateEmergencyExit.mockClear()
@@ -264,5 +278,92 @@ describe('BarkEmergencyExitPage', () => {
     })
     expect(toast.success).not.toHaveBeenCalled()
     expect(cryptoWorker.getNewAddress).not.toHaveBeenCalled()
+  })
+
+  const exitTree: BarkExitGraph = {
+    nodes: [
+      {
+        txid: 'parent-txid',
+        spends: [],
+        leafVtxoIds: [],
+        status: 'pending',
+        needsChild: false,
+        waitingOnTxids: [],
+      },
+      {
+        txid: 'leaf-txid',
+        spends: ['parent-txid'],
+        leafVtxoIds: ['vtxo-1'],
+        status: 'inProgress',
+        needsChild: true,
+        waitingOnTxids: [],
+      },
+    ],
+  }
+
+  it('shows the empty exit tree until a VTXO or a live exit is chosen', async () => {
+    renderWithProviders(<BarkEmergencyExitPage />)
+    expect(await screen.findByTestId('bark-exit-tree-empty')).toHaveTextContent(
+      'Select spendable VTXOs to see their exit tree.',
+    )
+    expect(barkWorker.exitTopology).not.toHaveBeenCalled()
+  })
+
+  it('BARK-EMG-10 draws the tree for the selection and keeps it after Start clears the checkboxes', async () => {
+    barkWorker.exitTopology.mockResolvedValue(exitTree)
+    renderWithProviders(<BarkEmergencyExitPage />)
+    fireEvent.click(await screen.findByTestId('bark-emergency-exit-vtxo-vtxo-1'))
+    expect(await screen.findByTestId('bark-exit-tree-graph')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(barkWorker.exitTopology).toHaveBeenCalledWith(['vtxo-1'])
+    })
+
+    barkWorker.listEmergencyExits.mockResolvedValue([
+      exitRow({ vtxoId: 'vtxo-1', state: 'start', cancelable: true }),
+    ])
+    fireEvent.click(screen.getByTestId('bark-emergency-exit-review'))
+    fireEvent.click(await screen.findByTestId('bark-emergency-exit-start'))
+    await waitFor(() => {
+      expect(barkWorker.startEmergencyExit).toHaveBeenCalledWith(['vtxo-1'])
+    })
+    expect(screen.getByTestId('bark-emergency-exit-vtxo-vtxo-1')).not.toBeChecked()
+    await waitFor(() => {
+      expect(barkWorker.exitTopology).toHaveBeenLastCalledWith(['vtxo-1'])
+    })
+    expect(screen.getByTestId('bark-exit-tree-graph')).toBeInTheDocument()
+  })
+
+  it('BARK-EMG-12 shows the needs-child badge and not a child node', async () => {
+    barkWorker.exitTopology.mockResolvedValue(exitTree)
+    barkWorker.listEmergencyExits.mockResolvedValue([
+      exitRow({ vtxoId: 'vtxo-1', state: 'processing', cancelable: true }),
+    ])
+    renderWithProviders(<BarkEmergencyExitPage />)
+    expect(await screen.findByTestId('bark-exit-tree-needs-child-leaf-txid')).toBeInTheDocument()
+    expect(screen.queryByTestId('bark-exit-tree-node-child-txid')).not.toBeInTheDocument()
+  })
+
+  it('BARK-EMG-13 shows the focused transaction id and the leaf VTXO id', async () => {
+    barkWorker.exitTopology.mockResolvedValue(exitTree)
+    barkWorker.listEmergencyExits.mockResolvedValue([
+      exitRow({ vtxoId: 'vtxo-1', state: 'processing', cancelable: false }),
+    ])
+    renderWithProviders(<BarkEmergencyExitPage />)
+    fireEvent.click(await screen.findByTestId('bark-exit-tree-node-leaf-txid'))
+    expect(screen.getByTestId('bark-exit-tree-detail-txid')).toHaveTextContent('leaf-txid')
+    expect(screen.getByTestId('bark-exit-tree-detail-vtxo-vtxo-1')).toHaveTextContent('vtxo-1')
+  })
+
+  it('BARK-EMG-14 does not start, progress, cancel, or claim when the tree renders', async () => {
+    barkWorker.exitTopology.mockResolvedValue(exitTree)
+    barkWorker.listEmergencyExits.mockResolvedValue([
+      exitRow({ vtxoId: 'vtxo-1', state: 'processing', cancelable: true }),
+    ])
+    renderWithProviders(<BarkEmergencyExitPage />)
+    expect(await screen.findByTestId('bark-exit-tree-graph')).toBeInTheDocument()
+    expect(barkWorker.startEmergencyExit).not.toHaveBeenCalled()
+    expect(barkWorker.progressEmergencyExits).not.toHaveBeenCalled()
+    expect(barkWorker.cancelEmergencyExit).not.toHaveBeenCalled()
+    expect(barkWorker.drainEmergencyExits).not.toHaveBeenCalled()
   })
 })

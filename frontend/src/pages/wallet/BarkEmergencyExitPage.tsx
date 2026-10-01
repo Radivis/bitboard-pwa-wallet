@@ -1,18 +1,21 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/PageHeader'
+import { BarkExitTreeGraph } from '@/components/bark/BarkExitTreeGraph'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { barkEmergencyExitQueryKey, useBarkEmergencyExitQuery } from '@/hooks/useBarkEmergencyExitQuery'
+import { barkExitTopologyQueryKey, useBarkExitTopologyQuery } from '@/hooks/useBarkExitTopologyQuery'
 import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
 import { useEsploraFeePresets } from '@/hooks/useEsploraFeePresets'
 import { barkVtxoListQueryKey, useBarkVtxoListQuery } from '@/hooks/useBarkVtxoListQuery'
 import { useBarkSyncLifecycleSnapshot } from '@/hooks/useBarkSyncLifecycleSnapshot'
 import {
   barkEmergencyExitStateLabel,
+  barkExitTopologyVtxoIds,
   emergencyExitStartBlocked,
 } from '@/lib/bark/bark-emergency-exit'
 import {
@@ -66,6 +69,19 @@ export function BarkEmergencyExitPage() {
   const [wholeWallet, setWholeWallet] = useState(false)
   const [review, setReview] = useState<EmergencyExitReview | null>(null)
   const [busyAction, setBusyAction] = useState<string | null>(null)
+  const topologyVtxoIds = useMemo(
+    () =>
+      barkExitTopologyVtxoIds({
+        wholeWallet,
+        selectedIds,
+        spendableIds: (vtxoListQuery.data ?? [])
+          .filter((row) => row.state === 'spendable')
+          .map((row) => row.id),
+        liveExitIds: (exitQuery.data ?? []).map((row) => row.vtxoId),
+      }),
+    [wholeWallet, selectedIds, vtxoListQuery.data, exitQuery.data],
+  )
+  const topologyQuery = useBarkExitTopologyQuery(topologyVtxoIds)
 
   if (!isBarkEnabled || networkMode !== 'signet') {
     return (
@@ -86,6 +102,9 @@ export function BarkEmergencyExitPage() {
   const destinationAddress = currentAddress?.trim() ?? ''
   const startBlocked =
     review != null && emergencyExitStartBlocked(confirmedSats, review.estimate.exitBroadcastFeeSats)
+  const exitTreeError = topologyQuery.isError
+    ? errorMessage(topologyQuery.error) || 'Failed to load exit tree.'
+    : null
 
   function clearReview() {
     setReview(null)
@@ -108,6 +127,14 @@ export function BarkEmergencyExitPage() {
         queryKey: barkVtxoListQueryKey(
           activeWalletId,
           networkMode,
+          syncSnapshot.lastSuccessfulSyncAt,
+        ),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: barkExitTopologyQueryKey(
+          activeWalletId,
+          networkMode,
+          topologyVtxoIds,
           syncSnapshot.lastSuccessfulSyncAt,
         ),
       }),
@@ -211,6 +238,19 @@ export function BarkEmergencyExitPage() {
 
       {sessionReady ? (
         <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Exit tree</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <BarkExitTreeGraph
+                nodes={topologyVtxoIds.length === 0 ? [] : topologyQuery.data?.nodes}
+                emptySelection={topologyVtxoIds.length === 0}
+                errorMessage={exitTreeError}
+                vtxoRows={vtxoListQuery.data ?? []}
+              />
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader>
               <CardTitle>Start an exit</CardTitle>

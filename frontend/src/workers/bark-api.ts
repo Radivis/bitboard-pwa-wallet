@@ -128,6 +128,23 @@ export type BarkEmergencyExitDrain = {
   rawTxHex: string
 }
 
+export const BARK_EXIT_GRAPH_NODE_STATUSES = ['pending', 'inProgress', 'confirmed'] as const
+
+export type BarkExitGraphNodeStatus = (typeof BARK_EXIT_GRAPH_NODE_STATUSES)[number]
+
+export type BarkExitGraphNode = {
+  txid: string
+  spends: string[]
+  leafVtxoIds: string[]
+  status: BarkExitGraphNodeStatus
+  needsChild: boolean
+  waitingOnTxids: string[]
+}
+
+export type BarkExitGraph = {
+  nodes: BarkExitGraphNode[]
+}
+
 export interface BarkService {
   configureHistoricalSignetOnchainChain(
     chain: HistoricalSignetOnchainChain | null,
@@ -157,6 +174,7 @@ export interface BarkService {
   ): Promise<BarkEmergencyExitEstimate>
   startEmergencyExit(vtxoIds: string[]): Promise<void>
   listEmergencyExits(): Promise<BarkEmergencyExitRow[]>
+  exitTopology(vtxoIds: string[]): Promise<BarkExitGraph>
   progressEmergencyExits(): Promise<BarkEmergencyExitProgress>
   provideEmergencyExitCpfp(exitTxid: string, childTxHex: string): Promise<void>
   cancelEmergencyExit(vtxoId: string): Promise<void>

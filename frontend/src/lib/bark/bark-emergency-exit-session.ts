@@ -3,12 +3,14 @@ import {
   readBarkEmergencyExitEstimate,
   readBarkEmergencyExitProgress,
   readBarkEmergencyExitRows,
+  readBarkExitGraph,
 } from '@/lib/bark/bark-emergency-exit'
 import type {
   BarkEmergencyExitDrain,
   BarkEmergencyExitEstimate,
   BarkEmergencyExitProgress,
   BarkEmergencyExitRow,
+  BarkExitGraph,
 } from '@/workers/bark-api'
 
 export type BarkEmergencyExitWasm = {
@@ -19,6 +21,7 @@ export type BarkEmergencyExitWasm = {
   bark_provide_emergency_exit_cpfp(exitTxid: string, childTxHex: string): Promise<void>
   bark_cancel_emergency_exit(vtxoId: string): Promise<void>
   bark_drain_emergency_exits(address: string, feeRateSatPerVb: number): Promise<string>
+  bark_exit_topology(vtxoIdsJson: string): Promise<string>
 }
 
 function vtxoIdsJson(vtxoIds: string[]): string {
@@ -77,4 +80,11 @@ export async function drainEmergencyExitsFromWasm(
   return readBarkEmergencyExitDrain(
     await wasm.bark_drain_emergency_exits(address, feeRateSatPerVb),
   )
+}
+
+export async function exitTopologyFromWasm(
+  wasm: BarkEmergencyExitWasm,
+  vtxoIds: string[],
+): Promise<BarkExitGraph> {
+  return readBarkExitGraph(await wasm.bark_exit_topology(vtxoIdsJson(vtxoIds)))
 }
