@@ -64,7 +64,10 @@ describe('bark-load-lifecycle-orchestrator', () => {
     resetBarkLoadLifecycleStateForTests()
     vi.clearAllMocks()
     featureState.isBarkEnabled = true
-    workerMocks.openSession.mockResolvedValue({ fingerprint: 'abcdef01' })
+    workerMocks.openSession.mockResolvedValue({
+      fingerprint: 'abcdef01',
+      receiveKeyIndex: 0,
+    })
     workerMocks.closeSession.mockResolvedValue(undefined)
     closeBarkSessionMock.mockResolvedValue(undefined)
   })
@@ -73,6 +76,7 @@ describe('bark-load-lifecycle-orchestrator', () => {
     await orchestrateBarkLoad({ walletId: 1, networkMode: 'signet' })
 
     expect(getBarkLoadLifecycleSnapshot().loadPhase).toBe('loaded')
+    expect(getBarkLoadLifecycleSnapshot().receiveKeyIndex).toBe(0)
     expect(workerMocks.openSession).toHaveBeenCalledWith({
       walletId: 1,
       encryptedMnemonic: expect.objectContaining({ kdfPhc: 'x' }),

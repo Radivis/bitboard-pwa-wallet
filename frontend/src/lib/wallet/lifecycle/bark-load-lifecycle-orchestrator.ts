@@ -1,5 +1,6 @@
 import { getDatabase, getWalletSecretsEncrypted } from '@/db'
 import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
+import { isBarkReceiveKeyIndex } from '@/lib/wallet/wallet-domain-types'
 import { ensureBarkEncryptedSecretsHost } from '@/workers/bark-persistence-channel'
 import { getBarkWorker, terminateBarkWorker } from '@/workers/bark-factory'
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
@@ -22,11 +23,16 @@ import {
 
 export type { BarkLoadLifecycleSnapshot, BarkLoadParams } from '@/lib/wallet/lifecycle/bark-load-lifecycle-types'
 
-let snapshot: BarkLoadLifecycleSnapshot = {
-  loadPhase: 'not-configured',
-  networkMode: null,
-  errorMessage: null,
+function idleBarkLoadSnapshot(): BarkLoadLifecycleSnapshot {
+  return {
+    loadPhase: 'not-configured',
+    networkMode: null,
+    errorMessage: null,
+    receiveKeyIndex: null,
+  }
 }
+
+let snapshot: BarkLoadLifecycleSnapshot = idleBarkLoadSnapshot()
 
 let sessionGeneration = 0
 
@@ -79,7 +85,7 @@ export function isBarkLoadFailedForNetwork(networkMode: NetworkMode): boolean {
 export function forceResetBarkLoadLifecycleForTeardown(): void {
   bumpSessionGeneration()
   inFlightLoadTracker.clearCurrent()
-  setSnapshot({ loadPhase: 'not-configured', networkMode: null, errorMessage: null })
+  setSnapshot(idleBarkLoadSnapshot())
 }
 
 export function syncBarkLoadLifecycleWithLockPhase(lockPhase: LockLifecyclePhase): void {
@@ -91,18 +97,34 @@ export function syncBarkLoadLifecycleWithLockPhase(lockPhase: LockLifecyclePhase
   ) {
     return
   }
-  setSnapshot({ loadPhase: 'not-configured', networkMode: null, errorMessage: null })
+  setSnapshot(idleBarkLoadSnapshot())
 }
 
-async function openBarkWorkerSession(walletId: number): Promise<void> {
+/** After Generate new address persists a cursor, keep the in-memory index aligned. */
+export function rememberBarkReceiveKeyIndex(receiveKeyIndex: number): void {
+  if (!isBarkReceiveKeyIndex(receiveKeyIndex)) {
+    throw new Error('Bark receive key index is invalid')
+  }
+  const current = getBarkLoadLifecycleSnapshot()
+  if (current.loadPhase !== 'loaded') {
+    throw new Error('Bark session is not open')
+  }
+  setSnapshot({ ...current, receiveKeyIndex })
+}
+
+async function openBarkWorkerSession(walletId: number): Promise<number> {
   const worker = getBarkWorker()
   await ensureSecretsChannel()
   await ensureBarkEncryptedSecretsHost()
   const encrypted = await getWalletSecretsEncrypted(getDatabase(), walletId)
-  await worker.openSession({
+  const opened = await worker.openSession({
     walletId,
     encryptedMnemonic: encrypted.mnemonic,
   })
+  if (!isBarkReceiveKeyIndex(opened.receiveKeyIndex)) {
+    throw new Error('Bark session opened without a receive key index')
+  }
+  return opened.receiveKeyIndex
 }
 
 export async function orchestrateBarkLoad(params: BarkLoadParams): Promise<void> {
@@ -111,7 +133,7 @@ export async function orchestrateBarkLoad(params: BarkLoadParams): Promise<void>
   if (!isBarkActiveForNetworkMode(networkMode)) {
     const { closeBarkSession } = await import('@/lib/bark/bark-session-service')
     await closeBarkSession()
-    setSnapshot({ loadPhase: 'not-configured', networkMode: null, errorMessage: null })
+    setSnapshot(idleBarkLoadSnapshot())
     return
   }
 
@@ -131,13 +153,23 @@ export async function orchestrateBarkLoad(params: BarkLoadParams): Promise<void>
 
   return inFlightLoadTracker.begin(key, async () => {
     const generation = sessionGeneration
-    setSnapshot({ loadPhase: 'loading', networkMode, errorMessage: null })
+    setSnapshot({
+      loadPhase: 'loading',
+      networkMode,
+      errorMessage: null,
+      receiveKeyIndex: null,
+    })
     try {
-      await openBarkWorkerSession(walletId)
+      const receiveKeyIndex = await openBarkWorkerSession(walletId)
       if (generation !== sessionGeneration) {
         return
       }
-      setSnapshot({ loadPhase: 'loaded', networkMode, errorMessage: null })
+      setSnapshot({
+        loadPhase: 'loaded',
+        networkMode,
+        errorMessage: null,
+        receiveKeyIndex,
+      })
     } catch (error) {
       if (generation !== sessionGeneration) {
         return
@@ -147,6 +179,7 @@ export async function orchestrateBarkLoad(params: BarkLoadParams): Promise<void>
         loadPhase: 'load-error',
         networkMode,
         errorMessage: userFacingLifecycleErrorMessage(error, LIFECYCLE_LOAD_ERROR_FALLBACK),
+        receiveKeyIndex: null,
       })
       throw error
     }
@@ -155,8 +188,15 @@ export async function orchestrateBarkLoad(params: BarkLoadParams): Promise<void>
 
 /** @internal Test-only reset */
 export function resetBarkLoadLifecycleStateForTests(): void {
-  snapshot = { loadPhase: 'not-configured', networkMode: null, errorMessage: null }
+  snapshot = idleBarkLoadSnapshot()
   sessionGeneration = 0
   inFlightLoadTracker.clearCurrent()
   listeners.clear()
+}
+
+/** @internal Test-only snapshot replacement */
+export function replaceBarkLoadLifecycleSnapshotForTests(
+  next: BarkLoadLifecycleSnapshot,
+): void {
+  setSnapshot(next)
 }

@@ -94,6 +94,18 @@ export interface StoredNwcLightningConnection {
 /** Second's public Signet Ark server. Bark protocol state is not stored here. */
 export const BARK_SIGNET_SERVER_URL = 'https://ark.signet.2nd.dev'
 
+const MAX_BARK_RECEIVE_KEY_INDEX = 0xffff_ffff
+
+/** True for a Bark VTXO key index in `0..=u32::MAX`. */
+export function isBarkReceiveKeyIndex(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= MAX_BARK_RECEIVE_KEY_INDEX
+  )
+}
+
 /**
  * Small Bark rail record inside encrypted wallet secrets.
  * The VTXO database stays in Bark's IndexedDB.
@@ -104,6 +116,11 @@ export interface StoredBarkRail {
   fingerprint: string
   /** Set by a later sync stage. Open must preserve it and must not invent one. */
   lastSuccessfulSyncAt?: string
+  /**
+   * Last Bark receive key revealed for this rail.
+   * Absent until the first reveal. Not Bark's last VTXO key: change keys share that sequence.
+   */
+  receiveKeyIndex?: number
 }
 
 /**
@@ -173,6 +190,9 @@ export function isStoredBarkRail(value: unknown): value is StoredBarkRail {
     return false
   }
   if (value.lastSuccessfulSyncAt !== undefined && !isIso8601Timestamp(value.lastSuccessfulSyncAt)) {
+    return false
+  }
+  if (value.receiveKeyIndex !== undefined && !isBarkReceiveKeyIndex(value.receiveKeyIndex)) {
     return false
   }
   return true

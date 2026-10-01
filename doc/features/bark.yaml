@@ -1,32 +1,42 @@
 feature:
-  name: Bark Signet rail
-  description: "Second Bark wallet on public Signet, opened beside Arkade. Stage 1 is session open and close only."
+  name: Bark
+  description: "Second's Bark Ark rail on public Signet, beside Arkade. Protocol state stays in Bark's IndexedDB."
   user_stories:
-    - As a user, I want to enable Bark under Settings → Features so a Signet wallet can open a Bark session
-    - As a user, I want Bark to stay off until I turn it on
-    - As a user, I want lock to drop the Bark session without deleting Bark's browser database
+    - As a user, I want to receive on a Bark Ark address when Bark is enabled and the wallet is on signet
+    - As a user, I want that address to stay the same across reload, lock, and opening Receive again until I generate a new one
   requirements:
-    - Bark is gated by isBarkEnabled (default off)
-    - A session opens only when the flag is on and the app network mode is signet
-    - Mainnet, testnet, regtest, and lab do not open Bark
-    - The mnemonic is decrypted on the secrets channel and never sits on the main thread
-    - The session uses Second's public Signet server https://ark.signet.2nd.dev and Esplora https://esplora.signet.2nd.dev
-    - Bark protocol state stays in Bark's IndexedDB, keyed by wallet fingerprint
-    - Encrypted wallet_secrets gains only barkRail metadata (network, serverUrl, fingerprint, and an optional lastSuccessfulSyncAt that this stage does not write)
-    - Opening must not copy the VTXO database into wallet_secrets
-    - A stored fingerprint that does not match the opened wallet refuses the metadata write and closes the session
-    - Lock closes the session and terminates bark.worker without deleting IndexedDB
-    - Leaving signet or turning the session gate off terminates the worker
-    - No receive address, balance, sync, or send UI in this stage
+    - Bark receive is shown only when isBarkEnabled is on and the network mode is signet
+    - The mnemonic stays on the secrets channel. Receive calls peek or reveal on bark.worker
+    - peek_address uses the receiveKeyIndex stored on the encrypted barkRail. That index is not Bark's last VTXO key, because change keys share that sequence
+    - new_address runs on the first session open when Bark has no VTXO key yet, and when the user generates a new address
+    - A session open that finds a VTXO key but no stored index persists that key's index and does not reveal another
+    - Render, reopen, and unlock do not reveal when an index or an existing key is already there
+    - The receive screen does not poll balance, show a faucet, or list history
   contracts:
-    session:
-      - id: BARK-SES-01
-        description: Unlock with the flag on and network signet opens a Signet Bark session and returns a fingerprint
-      - id: BARK-SES-02
-        description: Unlock with the flag off, or on any network other than signet, does not open a session
-      - id: BARK-SES-03
-        description: Reload reopens the same IndexedDB via the same fingerprint
-      - id: BARK-SES-04
-        description: Lock drops the worker and leaves the IndexedDB database in place
-      - id: BARK-SES-05
-        description: barkRail metadata round-trips in the encrypted payload and does not change Arkade sdkPersistenceJson
+    receive_address:
+      - id: BARK-RCV-01
+        description: Receive shows the address for the stored receiveKeyIndex. Rendering Receive calls peek and does not call reveal
+      - id: BARK-RCV-02
+        description: Leaving Receive and opening it again does not call reveal
+      - id: BARK-RCV-03
+        description: Unlock when a receiveKeyIndex is stored, or when a VTXO key exists and the index is missing, does not call reveal
+      - id: BARK-RCV-04
+        description: The first session open when Bark has no VTXO key calls reveal once and persists that index
+      - id: BARK-RCV-05
+        description: Generate new address is the only Receive control that calls reveal, and the new address replaces the previous one
+      - id: BARK-RCV-06
+        description: The Bark segment is absent when the flag is off or the network is not signet. Bitcoin and Arkade receive are unchanged
+  pages:
+    - WalletReceiveBarkMode:
+      - description: "Bark receive on the main Receive page"
+      - file: frontend/src/pages/wallet/ReceivePage.tsx
+      - path: /wallet/receive
+      - visible_elements:
+        - Receive mode toggle includes Bark when isBarkEnabled and the network mode is signet
+        - QR code of the raw Bark address (tark1…, not a bitcoin: URI)
+        - Bark receiving address text with copy
+        - Generate new address button
+      - requirements:
+        - Contracts BARK-RCV-01 through BARK-RCV-06
+        - Default receive mode stays Bitcoin
+        - Copy explains this is Second's public Signet Ark address, separate from the on-chain address and from Arkade

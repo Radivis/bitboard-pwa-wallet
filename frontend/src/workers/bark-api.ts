@@ -8,6 +8,12 @@ export type OpenBarkSessionParams = {
 
 export type OpenBarkSessionResult = {
   fingerprint: string
+  receiveKeyIndex: number
+}
+
+export type BarkRevealedReceiveAddress = {
+  address: string
+  index: number
 }
 
 export interface BarkService {
@@ -16,4 +22,6 @@ export interface BarkService {
   ping(): Promise<boolean>
   openSession(params: OpenBarkSessionParams): Promise<OpenBarkSessionResult>
   closeSession(): Promise<void>
+  peekReceiveAddress(index: number): Promise<string>
+  revealNextReceiveAddress(): Promise<BarkRevealedReceiveAddress>
 }

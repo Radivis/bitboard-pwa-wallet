@@ -5,6 +5,8 @@ export type BarkLoadLifecycleSnapshot = {
   loadPhase: LoadLifecyclePhase
   networkMode: NetworkMode | null
   errorMessage: string | null
+  /** Set once open has a receive cursor. Null until then, including while loading. */
+  receiveKeyIndex: number | null
 }
 
 export type BarkLoadParams = {
