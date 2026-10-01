@@ -333,6 +333,42 @@ describe('BarkEmergencyExitPage', () => {
     expect(screen.getByTestId('bark-exit-tree-graph')).toBeInTheDocument()
   })
 
+  it('shows a leaf icon and coin badge, a tree icon on the ancestor, and the unrolled coin when confirmed', async () => {
+    barkWorker.exitTopology.mockResolvedValue({
+      nodes: [
+        ...exitTree.nodes,
+        {
+          txid: 'confirmed-leaf',
+          spends: ['parent-txid'],
+          leafVtxoIds: ['vtxo-1', 'vtxo-2'],
+          status: 'confirmed',
+          needsChild: false,
+          waitingOnTxids: [],
+        },
+      ],
+    })
+    barkWorker.listEmergencyExits.mockResolvedValue([
+      exitRow({ vtxoId: 'vtxo-1', state: 'processing', cancelable: false }),
+    ])
+    renderWithProviders(<BarkEmergencyExitPage />)
+    const leaf = await screen.findByTestId('bark-exit-tree-node-leaf-txid')
+    expect(leaf).toHaveAttribute('data-icon', 'leaf')
+    expect(screen.getByTestId('bark-exit-tree-vtxo-count-leaf-txid')).toBeInTheDocument()
+    expect(screen.queryByTestId('bark-exit-tree-unrolled-vtxo-count-leaf-txid')).not.toBeInTheDocument()
+
+    const parent = screen.getByTestId('bark-exit-tree-node-parent-txid')
+    expect(parent).toHaveAttribute('data-icon', 'tree')
+    expect(screen.queryByTestId('bark-exit-tree-vtxo-count-parent-txid')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('bark-exit-tree-unrolled-vtxo-count-parent-txid')).not.toBeInTheDocument()
+
+    const confirmed = screen.getByTestId('bark-exit-tree-node-confirmed-leaf')
+    expect(confirmed).toHaveAttribute('data-icon', 'leaf')
+    expect(screen.getByTestId('bark-exit-tree-unrolled-vtxo-count-confirmed-leaf')).toHaveTextContent(
+      '2×',
+    )
+    expect(screen.queryByTestId('bark-exit-tree-vtxo-count-confirmed-leaf')).not.toBeInTheDocument()
+  })
+
   it('BARK-EMG-12 shows the needs-child badge and not a child node', async () => {
     barkWorker.exitTopology.mockResolvedValue(exitTree)
     barkWorker.listEmergencyExits.mockResolvedValue([

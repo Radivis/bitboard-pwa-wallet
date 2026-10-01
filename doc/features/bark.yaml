@@ -289,6 +289,7 @@ feature:
         file: frontend/src/routes/wallet/bark/emergency-exit.tsx
         visible_elements:
           - Exit tree for the checked spendable VTXOs, or every spendable VTXO when the whole wallet is checked, plus every live exit
+          - A leaf node shows the leaf icon and a coin badge. A shared ancestor shows the tree icon and no coin badge. A confirmed leaf uses the unrolled coin icon
           - Focused exit-tree node shows its transaction id and the VTXO ids that end on it
           - Spendable VTXO checkboxes
           - Review of broadcast fee, claim fee, and transaction count

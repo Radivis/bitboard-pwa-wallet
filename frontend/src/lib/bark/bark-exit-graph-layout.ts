@@ -38,6 +38,7 @@ export type BarkExitTreeNodeData = {
   needsChild: boolean
   isOnExitPath: boolean
   isLeaf: boolean
+  leafVtxoCount: number
   isFocused: boolean
   layoutDirection: UnilateralExitLayoutDirection
 }
@@ -121,6 +122,7 @@ export function layoutBarkExitGraph(params: {
         needsChild: graphNode.needsChild,
         isOnExitPath: pathTxids.has(txid),
         isLeaf: graphNode.leafVtxoIds.length > 0,
+        leafVtxoCount: graphNode.leafVtxoIds.length,
         isFocused: focusedNodeId === txid,
         layoutDirection,
       },

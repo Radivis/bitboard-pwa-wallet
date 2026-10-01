@@ -8,9 +8,14 @@ import {
   type NodeProps,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { Check, Loader2 } from 'lucide-react'
+import { Check, Coins, HandCoins, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { BarkExitTreeEdgesOverlay } from '@/components/bark/BarkExitTreeEdgesOverlay'
+import {
+  formatUnilateralExitTxTypeLabel,
+  resolveUnilateralExitNodeIconKind,
+  unilateralExitNodeIconComponent,
+} from '@/lib/arkade/unilateral-exit-node-icons'
 import {
   layoutBarkExitGraph,
   resolveLayoutDirection,
@@ -47,7 +52,46 @@ function statusLabel(status: BarkExitGraphNodeStatus): string {
   }
 }
 
+const BARK_EXIT_NODE_TX_TYPE = 'tree'
+
+function BarkExitCoinBadge({
+  txid,
+  count,
+  confirmed,
+}: {
+  txid: string
+  count: number
+  confirmed: boolean
+}) {
+  if (count <= 0) return null
+  const OverlayIcon = confirmed ? HandCoins : Coins
+  const vtxoNoun = count === 1 ? 'VTXO' : 'VTXOs'
+  const overlayLabel = confirmed
+    ? `${count} exited ${vtxoNoun}`
+    : `${count} exiting ${vtxoNoun}`
+  return (
+    <div
+      className="absolute left-1/2 top-[calc(50%+10px)] flex -translate-x-1/2 items-center gap-0.5 rounded-full bg-background px-0.5 text-amber-600 shadow-sm"
+      aria-label={overlayLabel}
+      data-testid={
+        confirmed
+          ? `bark-exit-tree-unrolled-vtxo-count-${txid}`
+          : `bark-exit-tree-vtxo-count-${txid}`
+      }
+    >
+      {count > 1 ? <span className="text-[10px] font-semibold leading-none">{count}×</span> : null}
+      <OverlayIcon className="size-3" aria-hidden />
+    </div>
+  )
+}
+
 function BarkExitTreeNode({ data }: NodeProps<Node<BarkExitTreeNodeData>>) {
+  const iconKind = resolveUnilateralExitNodeIconKind({
+    txType: BARK_EXIT_NODE_TX_TYPE,
+    isLeaf: data.isLeaf,
+  })
+  const Icon = unilateralExitNodeIconComponent(iconKind)
+  const typeLabel = formatUnilateralExitTxTypeLabel(BARK_EXIT_NODE_TX_TYPE, data.isLeaf)
   return (
     <div
       className={cn(
@@ -57,9 +101,15 @@ function BarkExitTreeNode({ data }: NodeProps<Node<BarkExitTreeNodeData>>) {
       )}
       data-testid={`bark-exit-tree-node-${data.txid}`}
       data-status={data.status}
-      aria-label={`${shortTxid(data.txid)}, ${statusLabel(data.status)}`}
+      data-icon={iconKind}
+      aria-label={`${shortTxid(data.txid)}, ${statusLabel(data.status)}, ${typeLabel}`}
     >
-      <span className="font-mono text-[10px] leading-none">{shortTxid(data.txid).slice(0, 4)}</span>
+      <Icon className="size-5" aria-hidden />
+      <BarkExitCoinBadge
+        txid={data.txid}
+        count={data.leafVtxoCount}
+        confirmed={data.status === 'confirmed'}
+      />
       {data.status === 'confirmed' && (
         <Check
           className="absolute -right-1 -top-1 size-4 rounded-full bg-background text-green-600"
@@ -154,7 +204,11 @@ function BarkExitTreeDetail({
       >
         {node.txid}
       </button>
-      <p data-testid="bark-exit-tree-detail-status">{statusLabel(node.status)}</p>
+      <p data-testid="bark-exit-tree-detail-status">
+        {formatUnilateralExitTxTypeLabel(BARK_EXIT_NODE_TX_TYPE, node.leafVtxoIds.length > 0)}
+        {' · '}
+        {statusLabel(node.status)}
+      </p>
       {node.needsChild ? (
         <p data-testid="bark-exit-tree-detail-needs-child">Needs a Pay-to-Anchor child</p>
       ) : null}
