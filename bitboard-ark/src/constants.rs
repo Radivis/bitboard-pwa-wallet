@@ -66,6 +66,7 @@ pub const UNSPENT_OUTSPEND_CACHE_TTL_MS: u64 = 8_000;
 pub const NETWORK_MODE_MAINNET: &str = "mainnet";
 pub const NETWORK_MODE_TESTNET: &str = "testnet";
 pub const NETWORK_MODE_SIGNET: &str = "signet";
+pub const NETWORK_MODE_MUTINYNET: &str = "mutinynet";
 pub const NETWORK_MODE_REGTEST: &str = "regtest";
 
 /// Matches ark-client `prepare_intent` Register `expire_at = now + 2 * 60` (ARK-UP-03).

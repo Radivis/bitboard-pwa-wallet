@@ -3,9 +3,9 @@ import type { NetworkMode } from '@/stores/walletStore'
 import { getArkOperatorUrl } from '@/lib/arkade/arkade-operator-proxy'
 
 /**
- * Networks with an Arkade operator in v1 (live mainnet/signet, local regtest for dev/E2E).
+ * Networks with an Arkade operator in v1 (live mainnet/mutinynet, local regtest for dev/E2E).
  */
-export type ArkadeSupportedNetworkMode = 'mainnet' | 'signet' | 'regtest'
+export type ArkadeSupportedNetworkMode = 'mainnet' | 'mutinynet' | 'regtest'
 
 export interface ArkadeEndpoints {
   arkServerUrl: string
@@ -17,21 +17,21 @@ const REGTEST_OPERATOR_DEFAULT = 'http://localhost:7070'
 
 const OPERATOR_ENV_OVERRIDES: Record<ArkadeSupportedNetworkMode, string | undefined> = {
   mainnet: import.meta.env.VITE_ARKADE_OPERATOR_MAINNET,
-  signet: import.meta.env.VITE_ARKADE_OPERATOR_SIGNET,
+  mutinynet: import.meta.env.VITE_ARKADE_OPERATOR_MUTINYNET,
   regtest: import.meta.env.VITE_ARKADE_OPERATOR_REGTEST,
 }
 
 /** Empty unless set via VITE_ARKADE_DELEGATOR_* (Bitboard Fulmine delegator is opt-in). */
 const DEFAULT_DELEGATORS: Record<ArkadeSupportedNetworkMode, string> = {
   mainnet: import.meta.env.VITE_ARKADE_DELEGATOR_MAINNET ?? '',
-  signet: import.meta.env.VITE_ARKADE_DELEGATOR_SIGNET ?? '',
+  mutinynet: import.meta.env.VITE_ARKADE_DELEGATOR_MUTINYNET ?? '',
   regtest: import.meta.env.VITE_ARKADE_DELEGATOR_REGTEST ?? '',
 }
 
 export function isArkadeSupportedNetworkMode(
   mode: NetworkMode,
 ): mode is ArkadeSupportedNetworkMode {
-  return mode === 'mainnet' || mode === 'signet' || mode === 'regtest'
+  return mode === 'mainnet' || mode === 'mutinynet' || mode === 'regtest'
 }
 
 export function networkModeToArkadeIsMainnet(

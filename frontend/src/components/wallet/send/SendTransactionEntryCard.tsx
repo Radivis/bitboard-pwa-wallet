@@ -19,7 +19,10 @@ import { NETWORK_LABELS, type NetworkMode } from '@/stores/walletStore'
 import { MAX_BOLT11_PAYMENT_REQUEST_LENGTH } from '@/lib/lightning/lightning-input-limits'
 import { isLightningPayloadLengthOk } from '@/lib/lightning/send-flow-validation'
 import { amountInputPlaceholderForUnit } from '@/lib/wallet/bitcoin-display-unit'
-import { isValidBolt11Invoice } from '@/lib/lightning/lightning-utils'
+import {
+  bolt11SignetFamilyConfirmationText,
+  isValidBolt11Invoice,
+} from '@/lib/lightning/lightning-utils'
 import type { SendAmountUnit } from '@/stores/sendStore'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { BitcoinUnitSelect } from '@/components/BitcoinUnitSelect'
@@ -59,6 +62,9 @@ export function SendTransactionEntryCard({
   lightningRecipientOk,
   normalizedRecipient,
   bolt11NetworkMismatch,
+  signetFamilyNeedsConfirmation,
+  signetFamilyInvoiceConfirmed,
+  onSignetFamilyInvoiceConfirmedChange,
   bolt11DecodeOk,
   matchingLightningConnections,
   balanceQueries,
@@ -112,6 +118,9 @@ export function SendTransactionEntryCard({
   lightningRecipientOk: boolean
   normalizedRecipient: string
   bolt11NetworkMismatch: boolean
+  signetFamilyNeedsConfirmation: boolean
+  signetFamilyInvoiceConfirmed: boolean
+  onSignetFamilyInvoiceConfirmedChange: (confirmed: boolean) => void
   bolt11DecodeOk: boolean
   matchingLightningConnections: LightningWalletPickerProps['connectedLightningWallets']
   balanceQueries: LightningWalletPickerProps['balanceQueries']
@@ -320,6 +329,27 @@ export function SendTransactionEntryCard({
                   )}
                 </p>
               )}
+              {isLightningSendMode &&
+                signetFamilyNeedsConfirmation &&
+                !bolt11NetworkMismatch && (
+                  <div className="flex gap-3 rounded-md border border-border p-3">
+                    <input
+                      id="bolt11-signet-family-confirm"
+                      type="checkbox"
+                      className="mt-1 size-4 shrink-0 rounded border-input accent-primary"
+                      checked={signetFamilyInvoiceConfirmed}
+                      onChange={(event) =>
+                        onSignetFamilyInvoiceConfirmedChange(event.target.checked)
+                      }
+                    />
+                    <Label
+                      htmlFor="bolt11-signet-family-confirm"
+                      className="cursor-pointer text-xs font-normal"
+                    >
+                      {bolt11SignetFamilyConfirmationText(networkMode)}
+                    </Label>
+                  </div>
+                )}
               {isLightningSendMode &&
                 isValidBolt11Invoice(normalizedRecipient) &&
                 bolt11NetworkMismatch && (

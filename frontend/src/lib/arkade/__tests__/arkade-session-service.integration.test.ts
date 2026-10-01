@@ -220,8 +220,8 @@ describe('openArkadeSessionForWallet (integration)', () => {
     ensureArkadeAccountMock.mockResolvedValue({
       id: TEST_ACCOUNT_ID,
       label: 'signet',
-      networkMode: 'signet',
-      operatorUrl: getArkadeEndpoints('signet').arkServerUrl,
+      networkMode: 'mutinynet',
+      operatorUrl: getArkadeEndpoints('mutinynet').arkServerUrl,
       operatorSignerPkHex: '02deadbeef',
       createdAt: '2020-01-01T00:00:00.000Z',
     })
@@ -231,11 +231,11 @@ describe('openArkadeSessionForWallet (integration)', () => {
   })
 
   it('opens worker session with network endpoints after unlock prerequisites', async () => {
-    const endpoints = getArkadeEndpoints('signet')
+    const endpoints = getArkadeEndpoints('mutinynet')
 
     await openArkadeSessionForWallet({
       walletId: 7,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
     })
 
     expect(ensureSecretsChannelMock).toHaveBeenCalledTimes(1)
@@ -246,7 +246,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
         encryptedMnemonic,
         encryptedPayload,
         walletId: 7,
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
         arkadeAccountId: expect.any(String),
         arkServerUrl: endpoints.arkServerUrl,
         delegatorUrl: endpoints.delegatorUrl,
@@ -271,8 +271,8 @@ describe('openArkadeSessionForWallet (integration)', () => {
     const persistedAccount = {
       id: TEST_ACCOUNT_ID,
       label: 'signet',
-      networkMode: 'signet' as const,
-      operatorUrl: getArkadeEndpoints('signet').arkServerUrl,
+      networkMode: 'mutinynet' as const,
+      operatorUrl: getArkadeEndpoints('mutinynet').arkServerUrl,
       operatorSignerPkHex: '02deadbeef',
       createdAt: '2020-01-01T00:00:00.000Z',
       lastSuccessfulOperatorSyncAt: '2020-01-02T00:00:00.000Z',
@@ -291,7 +291,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
 
     await openArkadeSessionForWallet({
       walletId: 7,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
     })
 
     await vi.waitFor(() => expect(workerMocks.syncWithOperator).toHaveBeenCalled())
@@ -313,7 +313,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
 
     await openArkadeSessionForWallet({
       walletId: 7,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
     })
 
     expect(workerMocks.openSession).not.toHaveBeenCalled()
@@ -339,7 +339,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
 
     await openArkadeSessionForWallet({
       walletId: 7,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
     })
     await closeArkadeSession()
 
@@ -363,7 +363,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
 
     const openPromise = openArkadeSessionForWallet({
       walletId: 7,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
     })
     await vi.waitFor(() => expect(workerMocks.openSession).toHaveBeenCalled())
 
@@ -386,7 +386,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
     await expect(
       openArkadeSessionForWallet({
         walletId: 7,
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
       }),
     ).resolves.toBeUndefined()
 
@@ -396,14 +396,14 @@ describe('openArkadeSessionForWallet (integration)', () => {
   it('reopens when session key matches but the worker was terminated', async () => {
     await openArkadeSessionForWallet({
       walletId: 7,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
     })
     expect(workerMocks.openSession).toHaveBeenCalledTimes(1)
 
     getArkadeWorkerIfExistsMock.mockReturnValue(null)
     await openArkadeSessionForWallet({
       walletId: 7,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
     })
 
     expect(workerMocks.openSession).toHaveBeenCalledTimes(2)
@@ -412,23 +412,23 @@ describe('openArkadeSessionForWallet (integration)', () => {
   it('reopens when worker exists but WASM session is not active', async () => {
     findActiveArkadeAccountSummaryMock.mockResolvedValue({
       id: TEST_ACCOUNT_ID,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       operatorSignerPkHex: '02deadbeef',
       label: 'signet',
-      operatorUrl: getArkadeEndpoints('signet').arkServerUrl,
+      operatorUrl: getArkadeEndpoints('mutinynet').arkServerUrl,
       createdAt: '2020-01-01T00:00:00.000Z',
     })
 
     await openArkadeSessionForWallet({
       walletId: 7,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
     })
     expect(workerMocks.openSession).toHaveBeenCalledTimes(1)
 
     workerMocks.hasOpenSession.mockResolvedValueOnce(false)
     await openArkadeSessionForWallet({
       walletId: 7,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
     })
 
     expect(workerMocks.openSession).toHaveBeenCalledTimes(2)
@@ -438,8 +438,8 @@ describe('openArkadeSessionForWallet (integration)', () => {
     const activeAccount = {
       id: TEST_ACCOUNT_ID,
       label: 'signet',
-      networkMode: 'signet' as const,
-      operatorUrl: getArkadeEndpoints('signet').arkServerUrl,
+      networkMode: 'mutinynet' as const,
+      operatorUrl: getArkadeEndpoints('mutinynet').arkServerUrl,
       operatorSignerPkHex: '02deadbeef',
       createdAt: '2020-01-01T00:00:00.000Z',
     }
@@ -447,17 +447,17 @@ describe('openArkadeSessionForWallet (integration)', () => {
 
     await openArkadeSessionForWallet({
       walletId: 7,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
     })
     await openArkadeSessionForWallet({
       walletId: 7,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
     })
 
     expect(workerMocks.openSession).toHaveBeenCalledTimes(1)
     expect(workerMocks.hasOpenSession).toHaveBeenCalledWith({
       walletId: 7,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       arkadeAccountId: TEST_ACCOUNT_ID,
     })
   })
@@ -465,7 +465,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
   it('closeArkadeSession rejects when flushSdkPersistence fails for a loaded session', async () => {
     await openArkadeSessionForWallet({
       walletId: 7,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
     })
     workerMocks.flushSdkPersistence.mockRejectedValueOnce(new Error('flush failed'))
 
@@ -480,7 +480,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
     await expect(
       openArkadeSessionForWallet({
         walletId: 7,
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
       }),
     ).rejects.toThrow('persistence mismatch')
 
@@ -521,7 +521,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
   it('abortArkadeSessionForFactoryReset does not flush when session is loaded', async () => {
     await openArkadeSessionForWallet({
       walletId: 7,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
     })
     workerMocks.flushSdkPersistence.mockClear()
     workerMocks.closeSession.mockClear()
@@ -545,7 +545,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
 
     void openArkadeSessionForWallet({
       walletId: 7,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
     })
 
     await vi.waitFor(() =>
@@ -571,7 +571,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
 
     await refreshArkadeSessionAfterNetworkSwitch({
       walletId: 7,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
     })
 
     expect(reportSpy).toHaveBeenCalled()

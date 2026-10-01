@@ -45,7 +45,7 @@ describe('refreshArkadeStoreFromLoadedWasm', () => {
     vi.clearAllMocks()
     useWalletStore.setState({
       activeWalletId: 1,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       activeArkadeAccountId: 'conn-1',
       arkadeBalance: null,
       arkadePayments: [],
@@ -62,15 +62,15 @@ describe('refreshArkadeStoreFromLoadedWasm', () => {
     expect(state.arkadeReceiveAddress).toBe('tark1qreceive')
 
     expect(setQueryDataMock).toHaveBeenCalledWith(
-      arkadeBalanceQueryKey(1, 'signet', 'conn-1'),
+      arkadeBalanceQueryKey(1, 'mutinynet', 'conn-1'),
       { confirmedSats: 47_000, totalSats: 47_000 },
     )
     expect(setQueryDataMock).toHaveBeenCalledWith(
-      arkadeHistoryQueryKey(1, 'signet', 'conn-1'),
+      arkadeHistoryQueryKey(1, 'mutinynet', 'conn-1'),
       state.arkadePayments,
     )
     expect(setQueryDataMock).toHaveBeenCalledWith(
-      arkadeAddressQueryKey(1, 'signet', 'conn-1'),
+      arkadeAddressQueryKey(1, 'mutinynet', 'conn-1'),
       'tark1qreceive',
     )
   })

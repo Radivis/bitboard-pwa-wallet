@@ -50,7 +50,7 @@ describe('resolveArkadeOperatorSyncMetadata', () => {
     arkadeSyncPhaseRef.syncPhase = 'not-syncing'
     arkadeSavePhaseRef.savePhase = 'not-saving'
     useWalletStore.setState({
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       activeWalletId: 1,
       walletStatus: 'unlocked',
       activeArkadeAccountId: 'conn-1',

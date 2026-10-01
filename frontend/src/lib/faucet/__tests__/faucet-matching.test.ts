@@ -39,7 +39,7 @@ describe('resolveFaucetStack', () => {
   it('returns mutinynet_signet for mutinynet.com Esplora', () => {
     expect(
       resolveFaucetStack(
-        'signet',
+        'mutinynet',
         null,
         'https://mutinynet.com/api',
       ),
@@ -49,17 +49,27 @@ describe('resolveFaucetStack', () => {
   it('returns mutinynet_signet when custom Esplora is mutinynet', () => {
     expect(
       resolveFaucetStack(
-        'signet',
+        'mutinynet',
         'https://mutinynet.com/api',
         'https://mutinynet.com/api',
       ),
     ).toBe('mutinynet_signet')
   })
 
-  it('returns null for signet when Esplora is not mutinynet', () => {
+  it('returns null for public signet', () => {
     expect(
       resolveFaucetStack(
         'signet',
+        null,
+        'https://mempool.space/signet/api',
+      ),
+    ).toBeNull()
+  })
+
+  it('returns null for mutinynet when Esplora is public signet', () => {
+    expect(
+      resolveFaucetStack(
+        'mutinynet',
         null,
         'https://mempool.space/signet/api',
       ),
@@ -84,12 +94,12 @@ describe('resolveFaucetStack same-origin Esplora proxy', () => {
     ).toBe('mempool_testnet4')
   })
 
-  it('maps localhost default API proxy signet to mutinynet_signet', () => {
+  it('maps localhost default API proxy mutinynet to mutinynet_signet', () => {
     expect(
       resolveFaucetStack(
-        'signet',
+        'mutinynet',
         null,
-        'http://localhost:3000/api/esplora/default/signet',
+        'http://localhost:3000/api/esplora/default/mutinynet',
       ),
     ).toBe('mutinynet_signet')
   })

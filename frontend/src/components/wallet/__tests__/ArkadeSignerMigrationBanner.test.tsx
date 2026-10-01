@@ -31,7 +31,7 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
 
 const walletStoreState = vi.hoisted(() => ({
   arkadeSignerMigrationHint: null as ArkadeSignerMigrationHint | null,
-  networkMode: 'signet' as NetworkMode,
+  networkMode: 'mutinynet' as NetworkMode,
   activeWalletId: 1 as number | null,
   activeArkadeAccountId: 'conn-1' as string | null,
   setArkadeSignerMigrationHint: vi.fn(),

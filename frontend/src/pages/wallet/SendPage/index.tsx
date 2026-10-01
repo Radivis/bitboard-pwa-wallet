@@ -243,6 +243,9 @@ export function SendFlow() {
     selectedLnBalanceSats,
     decodedBolt11,
     bolt11NetworkMismatch,
+    signetFamilyNeedsConfirmation,
+    signetFamilyInvoiceConfirmed,
+    setSignetFamilyInvoiceConfirmed,
     bolt11DecodeOk,
     needsUserLightningAmount,
     lightningPayAmountSats,
@@ -798,6 +801,9 @@ export function SendFlow() {
         lightningRecipientOk={lightningRecipientOk}
         normalizedRecipient={normalizedRecipient}
         bolt11NetworkMismatch={bolt11NetworkMismatch}
+        signetFamilyNeedsConfirmation={signetFamilyNeedsConfirmation}
+        signetFamilyInvoiceConfirmed={signetFamilyInvoiceConfirmed}
+        onSignetFamilyInvoiceConfirmedChange={setSignetFamilyInvoiceConfirmed}
         bolt11DecodeOk={bolt11DecodeOk}
         matchingLightningConnections={matchingLightningConnections}
         balanceQueries={balanceQueries}

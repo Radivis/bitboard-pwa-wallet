@@ -18,6 +18,7 @@ const NETWORK_OPTIONS: NetworkMode[] = [
   'mainnet',
   'testnet',
   'signet',
+  'mutinynet',
   'regtest',
   'lab',
 ]
@@ -33,7 +34,11 @@ const NETWORK_INFOMODE: Record<NetworkMode, { title: string; text: string }> = {
   },
   signet: {
     title: 'Signet',
-    text: 'Default Esplora uses Mutinynet (a fast custom signet widely used for Lightning testing). Coins are not real money. Point Esplora at another Signet if your on-chain wallet should follow a different signet.',
+    text: 'Public Bitcoin Signet. Coins are not real money. Default Esplora is mempool.space signet. Bark uses this network.',
+  },
+  mutinynet: {
+    title: 'Mutinynet',
+    text: 'A fast custom signet widely used for Lightning and Arkade testing. Coins are not real money and do not exist on public Signet.',
   },
   regtest: {
     title: 'Regtest',

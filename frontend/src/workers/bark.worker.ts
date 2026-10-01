@@ -7,6 +7,10 @@ import {
 } from '@/lib/bark/bark-receive-cursor'
 import { loadBitboardBarkWasm } from '@/lib/bark/load-bitboard-bark-wasm'
 import { isBarkReceiveKeyIndex } from '@/lib/wallet/wallet-domain-types'
+import {
+  setConfiguredHistoricalSignetOnchainChain,
+  type HistoricalSignetOnchainChain,
+} from '@/lib/wallet/historical-signet-onchain-chain'
 import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
 import type {
   BarkRevealedReceiveAddress,
@@ -206,6 +210,12 @@ const barkService: BarkService = {
   async ping(): Promise<boolean> {
     await getBarkWasm()
     return true
+  },
+
+  async configureHistoricalSignetOnchainChain(
+    chain: HistoricalSignetOnchainChain | null,
+  ): Promise<void> {
+    setConfiguredHistoricalSignetOnchainChain(chain)
   },
 
   async openSession(params: OpenBarkSessionParams): Promise<OpenBarkSessionResult> {
