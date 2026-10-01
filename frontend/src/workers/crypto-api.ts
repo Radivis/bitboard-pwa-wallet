@@ -1,4 +1,5 @@
 import type { EncryptedBlob } from '@/lib/shared/encrypted-blob-types';
+import type { HistoricalSignetOnchainChain } from '@/lib/wallet/historical-signet-onchain-chain';
 import type {
   AddressType,
   BitcoinNetwork,
@@ -222,6 +223,14 @@ export interface CryptoService {
 
   /** Lightweight health check -- resolves `true` if WASM is loaded. */
   ping(): Promise<boolean>;
+
+  /**
+   * Tells payload parsing whether pre-split `signet` descriptors were Mutinynet.
+   * Null leaves those rows unchanged until a later call.
+   */
+  configureHistoricalSignetOnchainChain(
+    chain: HistoricalSignetOnchainChain | null,
+  ): Promise<void>;
 
   generateMnemonic(wordCount: 12 | 24): Promise<string>;
   validateMnemonic(mnemonic: string): Promise<boolean>;

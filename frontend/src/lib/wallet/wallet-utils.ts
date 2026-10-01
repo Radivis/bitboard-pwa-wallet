@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 
-import { getDatabase, ensureMigrated } from '@/db/database'
+import { getDatabase } from '@/db/database'
 import type { NetworkMode } from '@/stores/walletStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
@@ -31,70 +31,15 @@ import { orchestrateArkadeLoad } from '@/lib/wallet/lifecycle/arkade-load-lifecy
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { startBarkLoadAfterUnlock } from '@/lib/bark/bark-session-service'
 import type { OnchainSyncThenSaveParams } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-types'
-
-const CUSTOM_ESPLORA_URL_KEY_PREFIX = 'custom_esplora_url_'
-const SIGNET_ESPLORA_SETTINGS_KEY = `${CUSTOM_ESPLORA_URL_KEY_PREFIX}signet`
-const MUTINYNET_ESPLORA_SETTINGS_KEY = `${CUSTOM_ESPLORA_URL_KEY_PREFIX}mutinynet`
-const LIVE_NETWORK_SPLIT_ESPLORA_MIGRATED_KEY = 'live_network_split_esplora_migrated'
-
-let esploraSignetMigrationPromise: Promise<void> | null = null
+import { CUSTOM_ESPLORA_URL_KEY_PREFIX } from '@/lib/wallet/historical-signet-onchain-chain'
+import { ensureLiveNetworkSplitMigrated } from '@/lib/wallet/live-network-split-migration'
 
 /**
- * Moves a pre-split `custom_esplora_url_signet` row onto Mutinynet.
- * Runs once per database. Later public-Signet custom URLs stay on the signet key.
+ * Classifies the pre-split Signet Esplora row once.
+ * Mutinynet URLs move to the mutinynet key. Public Signet URLs stay on signet.
  */
 export async function migrateCustomEsploraUrlSignetToMutinynet(): Promise<void> {
-  if (esploraSignetMigrationPromise) {
-    await esploraSignetMigrationPromise
-    return
-  }
-  esploraSignetMigrationPromise = migrateCustomEsploraUrlSignetToMutinynetOnce()
-  try {
-    await esploraSignetMigrationPromise
-  } catch (migrationError) {
-    esploraSignetMigrationPromise = null
-    throw migrationError
-  }
-}
-
-async function migrateCustomEsploraUrlSignetToMutinynetOnce(): Promise<void> {
-  await ensureMigrated()
-  const walletDb = getDatabase()
-  const migrationFlag = await walletDb
-    .selectFrom('settings')
-    .select('key')
-    .where('key', '=', LIVE_NETWORK_SPLIT_ESPLORA_MIGRATED_KEY)
-    .executeTakeFirst()
-  if (migrationFlag) return
-
-  const legacySignetUrl = await walletDb
-    .selectFrom('settings')
-    .select('value')
-    .where('key', '=', SIGNET_ESPLORA_SETTINGS_KEY)
-    .executeTakeFirst()
-
-  if (legacySignetUrl) {
-    const mutinynetUrl = await walletDb
-      .selectFrom('settings')
-      .select('key')
-      .where('key', '=', MUTINYNET_ESPLORA_SETTINGS_KEY)
-      .executeTakeFirst()
-    if (!mutinynetUrl) {
-      await walletDb
-        .insertInto('settings')
-        .values({ key: MUTINYNET_ESPLORA_SETTINGS_KEY, value: legacySignetUrl.value })
-        .execute()
-    }
-    await walletDb
-      .deleteFrom('settings')
-      .where('key', '=', SIGNET_ESPLORA_SETTINGS_KEY)
-      .execute()
-  }
-
-  await walletDb
-    .insertInto('settings')
-    .values({ key: LIVE_NETWORK_SPLIT_ESPLORA_MIGRATED_KEY, value: '1' })
-    .execute()
+  await ensureLiveNetworkSplitMigrated()
 }
 
 async function orchestrateOnchainSyncThenSaveFromWalletUtils(
@@ -155,7 +100,7 @@ export async function saveCustomEsploraUrl(
   url: string,
 ): Promise<void> {
   validateEsploraUrl(url, network)
-  await migrateCustomEsploraUrlSignetToMutinynet()
+  await ensureLiveNetworkSplitMigrated()
   const walletDb = getDatabase()
   const settingsKey = `${CUSTOM_ESPLORA_URL_KEY_PREFIX}${network}`
 
@@ -182,7 +127,7 @@ export async function saveCustomEsploraUrl(
 export async function deleteCustomEsploraUrl(
   network: NetworkMode,
 ): Promise<void> {
-  await migrateCustomEsploraUrlSignetToMutinynet()
+  await ensureLiveNetworkSplitMigrated()
   const walletDb = getDatabase()
   await walletDb
     .deleteFrom('settings')
@@ -193,7 +138,7 @@ export async function deleteCustomEsploraUrl(
 export async function loadCustomEsploraUrl(
   network: NetworkMode,
 ): Promise<string | null> {
-  await migrateCustomEsploraUrlSignetToMutinynet()
+  await ensureLiveNetworkSplitMigrated()
   const walletDb = getDatabase()
   const settingsRow = await walletDb
     .selectFrom('settings')

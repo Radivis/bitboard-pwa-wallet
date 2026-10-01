@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { LightningAddress } from '@getalby/lightning-tools/lnurl'
 import { isValidSendAmountSats } from '@/lib/wallet/send/send-amount-validation'
@@ -9,6 +9,9 @@ import {
   isValidBolt11Invoice,
   isLightningAddress,
   isLnurlPayDestination,
+  bolt11NetworkModeFromPrefix,
+  bolt11SignetFamilyConfirmationText,
+  bolt11SignetFamilyNeedsConfirmation,
 } from '@/lib/lightning/lightning-utils'
 import { LnurlUnsupportedTagError } from '@/lib/lightning/lnurl-pay-errors'
 import { resolveLnurlPayInvoice } from '@/lib/lightning/resolve-lnurl-pay-invoice'
@@ -17,6 +20,7 @@ import {
   getDecodedBolt11ForSend,
   isBolt11DecodeOk,
   isBolt11NetworkMismatch,
+  bolt11SignetFamilyNeedsConfirmationForRecipient,
   isLightningSendMode as computeLightningSendMode,
   needsUserLightningAmount as computeNeedsUserLightningAmount,
   resolveLightningPayAmountSats,
@@ -25,6 +29,16 @@ import {
 import { msatsAmountNumberFromSatsExact, MAX_SATS_MSAT_AMOUNT_NUMBER } from '@/lib/wallet/bitcoin-utils'
 import type { ConnectedLightningWallet } from '@/lib/lightning/lightning-backend-service'
 import type { NetworkMode } from '@/stores/walletStore'
+
+function confirmResolvedSignetFamilyInvoice(
+  bolt11PaymentRequest: string,
+  networkMode: NetworkMode,
+): boolean {
+  const invoiceNetworkMode = bolt11NetworkModeFromPrefix(bolt11PaymentRequest)
+  if (invoiceNetworkMode == null) return true
+  if (!bolt11SignetFamilyNeedsConfirmation(invoiceNetworkMode, networkMode)) return true
+  return window.confirm(bolt11SignetFamilyConfirmationText(networkMode))
+}
 
 export function useSendFlowLightning({
   isLightningEnabled,
@@ -68,6 +82,11 @@ export function useSendFlowLightning({
   })
 
   const lightningPayMutation = useLightningPayMutation()
+  const [signetFamilyInvoiceConfirmed, setSignetFamilyInvoiceConfirmed] = useState(false)
+
+  useEffect(() => {
+    setSignetFamilyInvoiceConfirmed(false)
+  }, [normalizedRecipient, networkMode])
 
   const decodedBolt11 = useMemo(
     () => getDecodedBolt11ForSend(normalizedRecipient),
@@ -76,6 +95,11 @@ export function useSendFlowLightning({
 
   const bolt11NetworkMismatch = useMemo(
     () => isBolt11NetworkMismatch(normalizedRecipient, networkMode),
+    [normalizedRecipient, networkMode],
+  )
+
+  const signetFamilyNeedsConfirmation = useMemo(
+    () => bolt11SignetFamilyNeedsConfirmationForRecipient(normalizedRecipient, networkMode),
     [normalizedRecipient, networkMode],
   )
 
@@ -126,6 +150,8 @@ export function useSendFlowLightning({
     matchingLightningConnectionsCount: matchingLightningConnections.length,
     hasLightningWalletSelected,
     bolt11NetworkMismatch,
+    signetFamilyNeedsConfirmation,
+    signetFamilyInvoiceConfirmed,
     bolt11DecodeOk,
     needsUserLightningAmount,
     lightningPayAmountSats,
@@ -150,6 +176,7 @@ export function useSendFlowLightning({
         )
         return
       }
+      if (!confirmResolvedSignetFamilyInvoice(bolt11PaymentRequest, networkMode)) return
       lightningPayMutation.mutate({
         bolt11: bolt11PaymentRequest,
         config: selectedLightningWallet.config,
@@ -183,6 +210,7 @@ export function useSendFlowLightning({
         )
         return
       }
+      if (!confirmResolvedSignetFamilyInvoice(bolt11PaymentRequest, networkMode)) return
       lightningPayMutation.mutate({
         bolt11: bolt11PaymentRequest,
         config: selectedLightningWallet.config,
@@ -263,6 +291,9 @@ export function useSendFlowLightning({
     hasLightningWalletSelected,
     decodedBolt11,
     bolt11NetworkMismatch,
+    signetFamilyNeedsConfirmation,
+    signetFamilyInvoiceConfirmed,
+    setSignetFamilyInvoiceConfirmed,
     bolt11DecodeOk,
     needsUserLightningAmount,
     lightningPayAmountSats,

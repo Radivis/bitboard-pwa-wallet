@@ -5,7 +5,6 @@ import type {
   NwcTestConnectionResult,
 } from '@/lib/lightning/lightning-backend-service'
 import { lightningNetworkModeFromNip47Network } from '@/lib/lightning/lightning-utils'
-import type { NetworkMode } from '@/stores/walletStore'
 import type {
   WireNwcBalanceResponse,
   WireNwcMakeInvoiceResult,
@@ -57,7 +56,6 @@ export function mapWireNwcWalletInfoBlockHeight(wire: WireNwcWalletInfo): number
  */
 export function mapWireNwcWalletInfoToTestConnectionResult(
   wire: WireNwcWalletInfo,
-  appNetworkMode?: NetworkMode,
 ): NwcTestConnectionResult {
   const rawNetwork = wire.network
   if (rawNetwork == null || String(rawNetwork).trim() === '') {
@@ -68,7 +66,7 @@ export function mapWireNwcWalletInfoToTestConnectionResult(
     }
   }
   const lower = String(rawNetwork).trim().toLowerCase()
-  const mode = lightningNetworkModeFromNip47Network(rawNetwork, appNetworkMode)
+  const mode = lightningNetworkModeFromNip47Network(rawNetwork)
   if (mode != null) {
     return {
       ok: true,

@@ -57,10 +57,14 @@ export function DatabaseReadyGate({ children }: DatabaseReadyGateProps) {
         }
       } else {
         await syncNearZeroSecurityAfterDatabaseReady()
-        const { migrateCustomEsploraUrlSignetToMutinynet } = await import(
-          '@/lib/wallet/wallet-utils'
-        )
-        await migrateCustomEsploraUrlSignetToMutinynet()
+        try {
+          const { migrateCustomEsploraUrlSignetToMutinynet } = await import(
+            '@/lib/wallet/wallet-utils'
+          )
+          await migrateCustomEsploraUrlSignetToMutinynet()
+        } catch (migrationError) {
+          console.error('Signet/Mutinynet split migration failed:', migrationError)
+        }
       }
 
       if (!cancelled) setIsReady(true)

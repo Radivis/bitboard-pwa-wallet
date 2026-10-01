@@ -68,7 +68,7 @@ describe('isBolt11NetworkMismatch', () => {
     expect(isBolt11NetworkMismatch(lnInvoice, 'signet')).toBe(false)
   })
 
-  it('accepts a signet-prefix invoice on mutinynet', () => {
+  it('does not hard-reject a signet-prefix invoice on mutinynet', () => {
     expect(isBolt11NetworkMismatch(lnInvoice, 'mutinynet')).toBe(false)
   })
 })
@@ -191,6 +191,23 @@ describe('canBuildLightningSend', () => {
     expect(
       canBuildLightningSend({ ...base, bolt11NetworkMismatch: true }),
     ).toBe(false)
+  })
+
+  it('requires confirmation before paying a signet-family invoice', () => {
+    expect(
+      canBuildLightningSend({
+        ...base,
+        signetFamilyNeedsConfirmation: true,
+        signetFamilyInvoiceConfirmed: false,
+      }),
+    ).toBe(false)
+    expect(
+      canBuildLightningSend({
+        ...base,
+        signetFamilyNeedsConfirmation: true,
+        signetFamilyInvoiceConfirmed: true,
+      }),
+    ).toBe(true)
   })
 
   it('allows LNURL-pay when amount and balance are valid', () => {

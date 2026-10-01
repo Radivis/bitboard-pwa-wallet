@@ -22,7 +22,6 @@ const ESPLORA_PROVIDER_BASES: Record<EsploraProviderId, ProviderBases> = {
   },
   legacy: {
     testnet: 'https://blockstream.info/testnet/api',
-    signet: 'https://mempool.space/signet/api',
   },
 }
 

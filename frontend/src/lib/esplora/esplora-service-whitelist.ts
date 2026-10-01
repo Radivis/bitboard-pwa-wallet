@@ -22,14 +22,11 @@ export const ESPLORA_PROVIDER_BASES: Record<EsploraProviderId, ProviderBases> = 
     signet: 'https://blockstream.info/signet/api',
   },
   /**
-   * Bitcoin testnet **3** (not testnet4) and an alternate public-signet base.
-   * Signet uses mempool.space so it does not share the same base URL as `blockstream.signet`.
-   * The default signet provider is the same mempool signet URL; this row keeps older
-   * custom URLs on the legacy proxy path.
+   * Bitcoin testnet **3** (not testnet4). Public Signet is the default provider,
+   * so this row does not repeat that URL.
    */
   legacy: {
     testnet: 'https://blockstream.info/testnet/api',
-    signet: 'https://mempool.space/signet/api',
   },
 }
 

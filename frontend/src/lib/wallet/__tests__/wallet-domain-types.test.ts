@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { setConfiguredHistoricalSignetOnchainChain } from '@/lib/wallet/historical-signet-onchain-chain'
 import {
   assertIso8601LastSuccessfulEsploraSyncAt,
   parseWalletPayloadJson,
@@ -6,6 +7,10 @@ import {
 } from '../wallet-domain-types'
 
 describe('parseWalletPayloadJson', () => {
+  beforeEach(() => {
+    setConfiguredHistoricalSignetOnchainChain(null)
+  })
+
   it('assertIso8601LastSuccessfulEsploraSyncAt rejects invalid timestamps', () => {
     expect(() =>
       assertIso8601LastSuccessfulEsploraSyncAt('not-a-valid-timestamp'),
@@ -186,6 +191,7 @@ describe('parseWalletPayloadJson', () => {
   })
 
   it('rewrites historical signet rows to mutinynet once and leaves Bark on public signet', () => {
+    setConfiguredHistoricalSignetOnchainChain('mutinynet')
     const json = JSON.stringify({
       descriptorWallets: [
         {
@@ -233,6 +239,70 @@ describe('parseWalletPayloadJson', () => {
     )
     expect(kept.descriptorWallets[0].network).toBe('signet')
     expect(kept.liveNetworkSplitApplied).toBe(true)
+  })
+
+  it('keeps public-signet descriptors and lightning on signet and still moves Arkade', () => {
+    setConfiguredHistoricalSignetOnchainChain('public-signet')
+    const parsed = parseWalletPayloadJson(
+      JSON.stringify({
+        descriptorWallets: [
+          {
+            network: 'signet',
+            addressType: 'taproot',
+            accountId: 0,
+            externalDescriptor: 'tr(xpub.../0/*)',
+            internalDescriptor: 'tr(xpub.../1/*)',
+            changeSet: '{}',
+            fullScanDone: false,
+          },
+        ],
+        lightningNwcConnections: [
+          {
+            id: 'conn-1',
+            label: 'LN',
+            networkMode: 'signet',
+            connectionString: 'nostr+walletconnect://abc?relay=wss%3A%2F%2Fx&secret=y',
+            createdAt: '2020-01-01T00:00:00.000Z',
+          },
+        ],
+        arkadeAccounts: [validSignetAccount],
+        activeArkadeAccountIdByNetwork: { signet: 'acct-good' },
+        barkRail: {
+          network: 'signet',
+          serverUrl: 'https://ark.signet.2nd.dev',
+          fingerprint: 'abcdef01',
+        },
+      }),
+    )
+    expect(parsed.liveNetworkSplitApplied).toBe(true)
+    expect(parsed.descriptorWallets[0].network).toBe('signet')
+    expect(parsed.lightningNwcConnections[0].networkMode).toBe('signet')
+    expect(parsed.arkadeAccounts[0].networkMode).toBe('mutinynet')
+    expect(parsed.activeArkadeAccountIdByNetwork).toEqual({ mutinynet: 'acct-good' })
+    expect(parsed.barkRail?.network).toBe('signet')
+  })
+
+  it('does not freeze the split flag before the historical chain is known', () => {
+    const parsed = parseWalletPayloadJson(
+      JSON.stringify({
+        descriptorWallets: [
+          {
+            network: 'signet',
+            addressType: 'taproot',
+            accountId: 0,
+            externalDescriptor: 'tr(xpub.../0/*)',
+            internalDescriptor: 'tr(xpub.../1/*)',
+            changeSet: '{}',
+            fullScanDone: false,
+          },
+        ],
+        lightningNwcConnections: [],
+        arkadeAccounts: [validSignetAccount],
+      }),
+    )
+    expect(parsed.liveNetworkSplitApplied).toBeUndefined()
+    expect(parsed.descriptorWallets[0].network).toBe('signet')
+    expect(parsed.arkadeAccounts[0].networkMode).toBe('mutinynet')
   })
 
   it('accepts regtest arkadeAccounts for arkade-regtest E2E', () => {

@@ -112,9 +112,9 @@ describe('getEsploraUrl', () => {
     )
   })
 
-  it('maps legacy standard signet base to legacy proxy', () => {
+  it('maps public signet base to the default proxy', () => {
     expect(getEsploraUrl('signet', 'https://mempool.space/signet/api')).toBe(
-      `${window.location.origin}/api/esplora/legacy/signet`,
+      `${window.location.origin}/api/esplora/default/signet`,
     )
   })
 

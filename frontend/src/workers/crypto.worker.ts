@@ -37,6 +37,10 @@ import type {
 } from './crypto-wire-types';
 import type { EncryptedBlobMessage, SecretsChannelService } from './secrets-channel-types';
 import {
+  setConfiguredHistoricalSignetOnchainChain,
+  type HistoricalSignetOnchainChain,
+} from '@/lib/wallet/historical-signet-onchain-chain';
+import {
   assertIso8601LastSuccessfulEsploraSyncAt,
   parseWalletPayloadJson,
   type WalletSecretsPayload,
@@ -200,6 +204,12 @@ const cryptoService = {
   async ping(): Promise<boolean> {
     await getWasm();
     return true;
+  },
+
+  async configureHistoricalSignetOnchainChain(
+    chain: HistoricalSignetOnchainChain | null,
+  ): Promise<void> {
+    setConfiguredHistoricalSignetOnchainChain(chain);
   },
 
   async generateMnemonic(wordCount: 12 | 24): Promise<string> {

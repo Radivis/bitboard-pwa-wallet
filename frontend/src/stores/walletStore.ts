@@ -2,6 +2,12 @@ import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { sqliteStorage } from '@/db/storage-adapter'
 import { AddressType } from '@/lib/wallet/wallet-domain-types'
+import {
+  getConfiguredHistoricalSignetOnchainChain,
+  historicalSignetOnchainWasMutinynet,
+  WALLET_PERSIST_STORAGE_KEY,
+  type HistoricalSignetOnchainChain,
+} from '@/lib/wallet/historical-signet-onchain-chain'
 import type { BalanceInfo, TransactionDetails } from '@/workers/crypto-types'
 import type { ArkadeBalanceInfo, ArkadePaymentRow, ArkadeSignerMigrationHint } from '@/workers/arkade-api'
 
@@ -116,16 +122,23 @@ interface WalletActions {
 
 type WalletState = PersistedWalletState & TransientWalletState & WalletActions
 
-/** Persisted `signet` was Mutinynet. Public Signet is a new mode. */
+/**
+ * Persisted `signet` was Mutinynet only when the pre-split Esplora chain was
+ * Mutinynet. Public Signet and other custom hosts stay `signet`.
+ */
 export function migrateWalletPersistedState(
   persistedState: unknown,
   version: number,
+  historicalSignetChain: HistoricalSignetOnchainChain | null = getConfiguredHistoricalSignetOnchainChain(),
 ): unknown {
   if (version >= 1 || persistedState == null || typeof persistedState !== 'object') {
     return persistedState
   }
   const state = persistedState as PersistedWalletState
-  if (state.networkMode === 'signet') {
+  if (
+    state.networkMode === 'signet' &&
+    historicalSignetOnchainWasMutinynet(historicalSignetChain)
+  ) {
     return { ...state, networkMode: 'mutinynet' }
   }
   return persistedState
@@ -215,7 +228,7 @@ export const useWalletStore = create<WalletState>()(
         }),
     }),
     {
-      name: 'wallet-storage',
+      name: WALLET_PERSIST_STORAGE_KEY,
       storage: createJSONStorage(() => sqliteStorage),
       version: 1,
       migrate: migrateWalletPersistedState,

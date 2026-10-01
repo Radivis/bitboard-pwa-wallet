@@ -1,4 +1,5 @@
 import { wrap, type Remote } from 'comlink'
+import { configureWorkerHistoricalSignetOnchainChain } from '@/lib/wallet/live-network-split-migration'
 import { resetBarkPersistenceChannel } from '@/workers/bark-persistence-channel'
 import { resetBarkWorkerSecretsChannel } from '@/workers/secrets-channel'
 import type { BarkService } from '@/workers/bark-api'
@@ -63,6 +64,9 @@ function stopHealthPolling() {
 async function verifyWorkerHealth(proxy: Remote<BarkService>): Promise<void> {
   try {
     await proxy.ping()
+    await configureWorkerHistoricalSignetOnchainChain((chain) =>
+      proxy.configureHistoricalSignetOnchainChain(chain),
+    )
     setStatus('healthy')
     console.info('[bark-factory] Worker health check passed')
   } catch (err) {

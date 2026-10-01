@@ -237,4 +237,4 @@ feature:
           - mutinynet: "https://mutinynet.com/api"
           - testnet: "https://mempool.space/testnet4/api"
           - mainnet: "https://mempool.space/api"
-        - Legacy whitelisted Esplora provider (`legacy`): testnet3 via Blockstream `/testnet/api`, public signet via mempool.space `/signet/api`; proxy path `/api/esplora/legacy/...`
+        - Legacy whitelisted Esplora provider (`legacy`): testnet3 via Blockstream `/testnet/api`. Public signet uses the default provider (`https://mempool.space/signet/api`), not a second legacy row.
