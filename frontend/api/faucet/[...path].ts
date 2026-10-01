@@ -16,6 +16,10 @@ const FAUCET_ENTRIES: FaucetEntry[] = [
   { id: 'coinfaucet-eu', url: 'https://coinfaucet.eu/en/btc-testnet4/' },
   { id: 'testnet4-info', url: 'https://testnet4.info/' },
   { id: 'eternitybits', url: 'https://eternitybits.com/faucet/' },
+  { id: 'bitcoin-signet-faucet', url: 'https://bitcoinsignetfaucet.com/' },
+  { id: 'alt-signet-faucet', url: 'https://alt.signetfaucet.com/' },
+  { id: 'signet-dcorral', url: 'https://signet.dcorral.com/' },
+  { id: 'coinbin-signet', url: 'https://faucet.coinbin.org/' },
   { id: 'mutinynet', url: 'https://faucet.mutinynet.com/' },
 ]
 

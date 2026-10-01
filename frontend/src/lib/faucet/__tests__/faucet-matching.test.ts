@@ -56,12 +56,42 @@ describe('resolveFaucetStack', () => {
     ).toBe('mutinynet_signet')
   })
 
-  it('returns null for public signet', () => {
+  it('returns public_signet for default mempool signet Esplora URL', () => {
     expect(
       resolveFaucetStack(
         'signet',
         null,
         'https://mempool.space/signet/api',
+      ),
+    ).toBe('public_signet')
+  })
+
+  it('returns public_signet when custom Esplora points at mempool signet', () => {
+    expect(
+      resolveFaucetStack(
+        'signet',
+        'https://mempool.space/signet/api',
+        'https://mempool.space/signet/api',
+      ),
+    ).toBe('public_signet')
+  })
+
+  it('returns public_signet when custom Esplora points at blockstream signet', () => {
+    expect(
+      resolveFaucetStack(
+        'signet',
+        'https://blockstream.info/signet/api',
+        'https://blockstream.info/signet/api',
+      ),
+    ).toBe('public_signet')
+  })
+
+  it('returns null for signet when Esplora host does not match the public signet stack', () => {
+    expect(
+      resolveFaucetStack(
+        'signet',
+        'https://example.invalid/signet/api',
+        'https://example.invalid/signet/api',
       ),
     ).toBeNull()
   })
@@ -104,14 +134,24 @@ describe('resolveFaucetStack same-origin Esplora proxy', () => {
     ).toBe('mutinynet_signet')
   })
 
-  it('does not map blockstream signet proxy path to mutinynet faucet', () => {
+  it('maps localhost default API proxy signet to public_signet', () => {
+    expect(
+      resolveFaucetStack(
+        'signet',
+        null,
+        'http://localhost:3000/api/esplora/default/signet',
+      ),
+    ).toBe('public_signet')
+  })
+
+  it('maps blockstream signet proxy path to public_signet', () => {
     expect(
       resolveFaucetStack(
         'signet',
         null,
         'http://localhost:3000/api/esplora/blockstream/signet',
       ),
-    ).toBeNull()
+    ).toBe('public_signet')
   })
 })
 
@@ -120,6 +160,17 @@ describe('faucetsForStack', () => {
     const list = faucetsForStack('mutinynet_signet')
     expect(list.every((f) => f.stackId === 'mutinynet_signet')).toBe(true)
     expect(list.some((f) => f.id === 'mutinynet')).toBe(true)
+  })
+
+  it('returns the curated public signet faucets and not mutinynet', () => {
+    const list = faucetsForStack('public_signet')
+    expect(list.map((faucetEntry) => faucetEntry.id)).toEqual([
+      'bitcoin-signet-faucet',
+      'alt-signet-faucet',
+      'signet-dcorral',
+      'coinbin-signet',
+    ])
+    expect(list.some((faucetEntry) => faucetEntry.id === 'mutinynet')).toBe(false)
   })
 })
 

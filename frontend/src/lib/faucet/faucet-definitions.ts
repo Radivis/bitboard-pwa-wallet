@@ -1,7 +1,8 @@
 /**
- * Curated third-party faucets aligned with default Esplora stacks (Testnet4 / Mutinynet).
+ * Curated third-party faucets aligned with default Esplora stacks
+ * (Testnet4 / public Signet / Mutinynet).
  */
-export type FaucetStackId = 'mempool_testnet4' | 'mutinynet_signet'
+export type FaucetStackId = 'mempool_testnet4' | 'public_signet' | 'mutinynet_signet'
 
 export type FaucetEntry = {
   id: string
@@ -40,6 +41,30 @@ export const FAUCET_ENTRIES: FaucetEntry[] = [
     label: 'Eternity Bits',
     url: 'https://eternitybits.com/faucet/',
     stackId: 'mempool_testnet4',
+  },
+  {
+    id: 'bitcoin-signet-faucet',
+    label: 'Bitcoin Signet Faucet',
+    url: 'https://bitcoinsignetfaucet.com/',
+    stackId: 'public_signet',
+  },
+  {
+    id: 'alt-signet-faucet',
+    label: 'Alt Signet Faucet',
+    url: 'https://alt.signetfaucet.com/',
+    stackId: 'public_signet',
+  },
+  {
+    id: 'signet-dcorral',
+    label: 'Signet (dcorral)',
+    url: 'https://signet.dcorral.com/',
+    stackId: 'public_signet',
+  },
+  {
+    id: 'coinbin-signet',
+    label: 'Coinbin',
+    url: 'https://faucet.coinbin.org/',
+    stackId: 'public_signet',
   },
   {
     id: 'mutinynet',

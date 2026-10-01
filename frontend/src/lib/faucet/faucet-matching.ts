@@ -29,19 +29,52 @@ function isMempoolSpaceTestnet4(urlString: string): boolean {
   )
 }
 
+function isMempoolSpaceSignet(urlString: string): boolean {
+  const parsed = parseUrlHostPath(urlString)
+  return (
+    parsed != null &&
+    parsed.hostname === 'mempool.space' &&
+    parsed.pathname.includes('/signet/')
+  )
+}
+
+function isBlockstreamSignet(urlString: string): boolean {
+  const parsed = parseUrlHostPath(urlString)
+  return (
+    parsed != null &&
+    parsed.hostname === 'blockstream.info' &&
+    parsed.pathname.includes('/signet/')
+  )
+}
+
 function isMutinynetHost(urlString: string): boolean {
   const parsed = parseUrlHostPath(urlString)
   return parsed != null && parsed.hostname === 'mutinynet.com'
 }
 
-/** Same-origin proxy using the `default` provider (mempool testnet4 / mutinynet). */
+/** Same-origin proxy using the `default` provider (mempool testnet4 / public signet / mutinynet). */
 function isDefaultApiEsploraProxyForNetwork(
   urlString: string,
-  network: 'testnet' | 'mutinynet',
+  network: 'testnet' | 'signet' | 'mutinynet',
 ): boolean {
   const parsed = parseUrlHostPath(urlString)
   if (parsed == null) return false
   return parsed.pathname.includes(`/api/esplora/default/${network}`)
+}
+
+function isBlockstreamApiEsploraProxyForSignet(urlString: string): boolean {
+  const parsed = parseUrlHostPath(urlString)
+  if (parsed == null) return false
+  return parsed.pathname.includes('/api/esplora/blockstream/signet')
+}
+
+function isPublicSignetEsplora(urlString: string): boolean {
+  return (
+    isMempoolSpaceSignet(urlString) ||
+    isBlockstreamSignet(urlString) ||
+    isDefaultApiEsploraProxyForNetwork(urlString, 'signet') ||
+    isBlockstreamApiEsploraProxyForSignet(urlString)
+  )
 }
 
 /**
@@ -64,6 +97,22 @@ export function resolveFaucetStack(
     }
     if (isMempoolSpaceTestnet4(customEsploraUrl)) {
       return 'mempool_testnet4'
+    }
+    return null
+  }
+
+  if (networkMode === 'signet') {
+    if (customEsploraUrl === null) {
+      if (isPublicSignetEsplora(resolvedEsploraUrl)) {
+        return 'public_signet'
+      }
+      return null
+    }
+    if (
+      isMempoolSpaceSignet(customEsploraUrl) ||
+      isBlockstreamSignet(customEsploraUrl)
+    ) {
+      return 'public_signet'
     }
     return null
   }
