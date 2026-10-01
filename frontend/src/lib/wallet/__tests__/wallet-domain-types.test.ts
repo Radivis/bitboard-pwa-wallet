@@ -227,7 +227,10 @@ describe('parseWalletPayloadJson', () => {
     expect(migrated.lightningNwcConnections[0].networkMode).toBe('mutinynet')
     expect(migrated.arkadeAccounts[0].networkMode).toBe('mutinynet')
     expect(migrated.activeArkadeAccountIdByNetwork).toEqual({ mutinynet: 'acct-good' })
-    expect(migrated.barkRail?.network).toBe('signet')
+    expect(migrated.barkRails?.signet).toEqual({
+      serverUrl: 'https://ark.signet.2nd.dev',
+      fingerprint: 'abcdef01',
+    })
 
     const kept = parseWalletPayloadJson(
       JSON.stringify({
@@ -279,7 +282,10 @@ describe('parseWalletPayloadJson', () => {
     expect(parsed.lightningNwcConnections[0].networkMode).toBe('signet')
     expect(parsed.arkadeAccounts[0].networkMode).toBe('mutinynet')
     expect(parsed.activeArkadeAccountIdByNetwork).toEqual({ mutinynet: 'acct-good' })
-    expect(parsed.barkRail?.network).toBe('signet')
+    expect(parsed.barkRails?.signet).toEqual({
+      serverUrl: 'https://ark.signet.2nd.dev',
+      fingerprint: 'abcdef01',
+    })
   })
 
   it('does not freeze the split flag before the historical chain is known', () => {

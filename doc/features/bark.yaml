@@ -25,7 +25,7 @@ feature:
     - Spendable sats are read only after a successful Bark sync in this session
     - A failed sync does not replace the last shown spendable amount
     - The first failed sync of a session shows the error banner and no amount
-    - lastSuccessfulSyncAt is stamped in encrypted barkRail metadata only after Wallet sync succeeds
+    - lastSuccessfulSyncAt is stamped in encrypted barkRails.signet only after Wallet sync succeeds
     - Periodic sync for Bark follows the master toggle, the per-rail switch, signet, and tab visibility
     - Board from on-chain is offered only when isBarkEnabled and the network is signet
     - Confirm signs the reviewed PSBT and submits it to Bark. It does not broadcast through the on-chain Esplora client

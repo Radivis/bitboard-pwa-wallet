@@ -5,6 +5,7 @@ import type { EncryptedBlobMessage } from '@/workers/secrets-channel-types'
 export type OpenBarkSessionParams = {
   walletId: number
   encryptedMnemonic: EncryptedBlobMessage
+  networkMode: 'signet' | 'mainnet'
 }
 
 export type OpenBarkSessionResult = {

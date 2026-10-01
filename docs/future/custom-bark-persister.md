@@ -1,6 +1,6 @@
 # Encrypted Bark persister
 
-Planning note. Nothing here is implemented. Bark protocol state still lives in Bark's IndexedDB via `bark::persist::platform_default`.
+Implemented. The living description is [Bark persistence](../persistence/bark.md). The notes below are the design that implementation followed. An open session does not use `platform_default` IndexedDB. The `indexed-db` feature stays compiled so a Signet wallet can copy that database once into `barkRails.signet`.
 
 Related:
 

@@ -120,4 +120,48 @@ describe('arkade-worker-encrypted-payload', () => {
     const sdkJson = payload.arkadeAccounts[0]?.sdkPersistenceJson ?? '{}'
     expect(JSON.parse(sdkJson).wallet_db.offchain_next_derivation_index).toBe(2)
   })
+
+  it('persistSdkJsonToEncryptedPayload leaves bark rail dumps unchanged', async () => {
+    const signetDump = 'c2lnbmV0'
+    const mainnetDump = 'bWFpbg'
+    storedPayloadJson = JSON.stringify({
+      descriptorWallets: [],
+      lightningNwcConnections: [],
+      arkadeAccounts: [
+        {
+          id: 'conn-1',
+          label: 'asp',
+          networkMode: 'mutinynet',
+          operatorUrl: 'https://signet.arkade.example/v1',
+          operatorSignerPkHex: '02abc',
+          createdAt: '2020-01-01T00:00:00.000Z',
+          sdkPersistenceJson: '{"version":3}',
+        },
+      ],
+      activeArkadeAccountIdByNetwork: { mutinynet: 'conn-1' },
+      barkRails: {
+        signet: {
+          serverUrl: 'https://ark.signet.2nd.dev',
+          fingerprint: 'abcdef01',
+          recordDump: signetDump,
+        },
+        mainnet: {
+          serverUrl: 'https://ark.example',
+          fingerprint: 'abcdef01',
+          recordDump: mainnetDump,
+        },
+      },
+    })
+
+    await persistSdkJsonToEncryptedPayload(deps, {
+      walletId: 1,
+      arkadeAccountId: 'conn-1',
+      sdkPersistenceJson: '{"version":3,"wallet_db":{}}',
+    })
+
+    const payload = parseWalletPayloadJson(storedPayloadJson)
+    expect(payload.barkRails?.signet?.recordDump).toBe(signetDump)
+    expect(payload.barkRails?.mainnet?.recordDump).toBe(mainnetDump)
+    expect(payload.arkadeAccounts[0]?.sdkPersistenceJson).toBe('{"version":3,"wallet_db":{}}')
+  })
 })

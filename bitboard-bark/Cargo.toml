@@ -36,12 +36,25 @@ bark-wallet = { version = "0.7.1", default-features = false, features = ["wasm-w
 bip39 = "2.0"
 # Input selection's fee callback returns anyhow::Result. Already in the bark graph.
 anyhow = "1"
+async-trait = "0.1"
+# Compact Record dump stored on each encrypted bark rail.
+postcard = { version = "1", features = ["use-std"] }
+base64 = "0.22"
+# One-time reader for the fingerprint IndexedDB Bark used before the encrypted dump.
+indexed-db = "0.4.2"
+js-sys = "0.3"
 # Offboard action ids. The js feature is required for wasm32.
 getrandom = { version = "0.2.17", features = ["js"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 tokio = { version = "1", features = ["macros", "rt"] }
+# Record-store tests only. The session stays wasm32. No indexed-db.
+bark-wallet = { version = "0.7.1", default-features = false }
+anyhow = "1"
+async-trait = "0.1"
+postcard = { version = "1", features = ["use-std"] }
+base64 = "0.22"
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = ["-Oz", "--enable-bulk-memory", "--enable-nontrapping-float-to-int", "--enable-sign-ext"]

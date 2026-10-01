@@ -96,8 +96,13 @@ export interface StoredNwcLightningConnection {
   nwcSnapshot?: NwcConnectionSnapshot
 }
 
-/** Second's public Signet Ark server. Bark protocol state is not stored here. */
+/** Second's public Signet Ark server. */
 export const BARK_SIGNET_SERVER_URL = 'https://ark.signet.2nd.dev'
+
+/** UTF-8 cap for one network's Bark record dump. Same size as an Arkade SDK blob. */
+export const BARK_RECORD_DUMP_MAX_BYTES = 10 * 1024 * 1024
+
+export type BarkRailNetwork = 'signet' | 'mainnet'
 
 const MAX_BARK_RECEIVE_KEY_INDEX = 0xffff_ffff
 
@@ -112,11 +117,10 @@ export function isBarkReceiveKeyIndex(value: unknown): value is number {
 }
 
 /**
- * Small Bark rail record inside encrypted wallet secrets.
- * The VTXO database stays in Bark's IndexedDB.
+ * One Bark network inside encrypted wallet secrets.
+ * The map key is the network. Protocol records live in `recordDump`.
  */
 export interface StoredBarkRail {
-  network: 'signet'
   serverUrl: string
   fingerprint: string
   /** ISO-8601 time of the last successful Bark sync. Open must preserve it and must not invent one. */
@@ -126,7 +130,15 @@ export interface StoredBarkRail {
    * Absent until the first reveal. Not Bark's last VTXO key: change keys share that sequence.
    */
   receiveKeyIndex?: number
+  /**
+   * Versioned Bark `Record` bytes for this network, standard base64.
+   * Absent until the first successful open flush. An over-cap dump is kept:
+   * dropping it would open an empty wallet and lose the exit chain.
+   */
+  recordDump?: string
 }
+
+export type StoredBarkRails = Partial<Record<BarkRailNetwork, StoredBarkRail>>
 
 /**
  * Encrypted wallet payload without the mnemonic (descriptor state + Lightning).
@@ -142,8 +154,8 @@ export interface WalletSecretsPayload {
   activeArkadeAccountIdByNetwork: Partial<
     Record<ArkadeSupportedNetworkMode, string>
   >
-  /** Present after a successful Bark session open. Absent on older payloads. */
-  barkRail?: StoredBarkRail
+  /** Present after a successful Bark session open. One dump per network. */
+  barkRails?: StoredBarkRails
   /**
    * Set once the historical `signet` rows (Mutinynet infrastructure) have been
    * rewritten to `mutinynet`. Absent means the rewrite still needs to run.
@@ -194,29 +206,115 @@ export function assertIso8601LastSuccessfulEsploraSyncAt(value: string): void {
 
 const BARK_FINGERPRINT_PATTERN = /^[0-9a-f]{8}$/i
 
-export function isStoredBarkRail(value: unknown): value is StoredBarkRail {
-  if (!isRecord(value)) return false
-  if (value.network !== 'signet') return false
-  if (value.serverUrl !== BARK_SIGNET_SERVER_URL) return false
-  if (typeof value.fingerprint !== 'string' || !BARK_FINGERPRINT_PATTERN.test(value.fingerprint)) {
-    return false
-  }
+function isBarkFingerprint(value: unknown): value is string {
+  return typeof value === 'string' && BARK_FINGERPRINT_PATTERN.test(value)
+}
+
+function optionalBarkRailFieldsMatch(value: Record<string, unknown>): boolean {
   if (value.lastSuccessfulSyncAt !== undefined && !isIso8601Timestamp(value.lastSuccessfulSyncAt)) {
     return false
   }
   if (value.receiveKeyIndex !== undefined && !isBarkReceiveKeyIndex(value.receiveKeyIndex)) {
     return false
   }
+  if (value.recordDump !== undefined && typeof value.recordDump !== 'string') {
+    return false
+  }
   return true
 }
 
-function sanitizeBarkRail(value: unknown): StoredBarkRail | undefined {
-  if (value == null) return undefined
-  if (isStoredBarkRail(value)) return value
-  if (import.meta.env.DEV) {
-    console.warn('[wallet-secrets] Dropping invalid barkRail')
+function copyOptionalBarkRailFields(
+  source: StoredBarkRail,
+  rail: StoredBarkRail,
+): StoredBarkRail {
+  if (source.lastSuccessfulSyncAt != null) {
+    rail.lastSuccessfulSyncAt = source.lastSuccessfulSyncAt
   }
-  return undefined
+  if (source.receiveKeyIndex != null) {
+    rail.receiveKeyIndex = source.receiveKeyIndex
+  }
+  if (source.recordDump != null && source.recordDump.length > 0) {
+    rail.recordDump = source.recordDump
+  }
+  return rail
+}
+
+/** Signet rail after parse. `network` is not a field; the map key carries it. */
+export function isStoredSignetBarkRail(value: unknown): value is StoredBarkRail {
+  if (!isRecord(value)) return false
+  if (value.serverUrl !== BARK_SIGNET_SERVER_URL) return false
+  if (!isBarkFingerprint(value.fingerprint)) return false
+  return optionalBarkRailFieldsMatch(value)
+}
+
+function isStoredMainnetBarkRail(value: unknown): value is StoredBarkRail {
+  if (!isRecord(value)) return false
+  if (!isNonEmptyString(value.serverUrl)) return false
+  if (!isBarkFingerprint(value.fingerprint)) return false
+  return optionalBarkRailFieldsMatch(value)
+}
+
+function canonicalSignetBarkRail(value: unknown): StoredBarkRail | undefined {
+  if (!isStoredSignetBarkRail(value)) return undefined
+  const rail: StoredBarkRail = {
+    serverUrl: BARK_SIGNET_SERVER_URL,
+    fingerprint: value.fingerprint,
+  }
+  return copyOptionalBarkRailFields(value, rail)
+}
+
+function canonicalMainnetBarkRail(value: unknown): StoredBarkRail | undefined {
+  if (!isStoredMainnetBarkRail(value)) return undefined
+  const rail: StoredBarkRail = {
+    serverUrl: value.serverUrl,
+    fingerprint: value.fingerprint,
+  }
+  return copyOptionalBarkRailFields(value, rail)
+}
+
+function legacySignetBarkRail(value: unknown): StoredBarkRail | undefined {
+  if (!isRecord(value) || value.network !== 'signet') return undefined
+  return canonicalSignetBarkRail(value)
+}
+
+export function isStoredBarkRails(value: unknown): value is StoredBarkRails {
+  if (!isRecord(value) || Array.isArray(value)) return false
+  for (const key of Object.keys(value)) {
+    if (key !== 'signet' && key !== 'mainnet') return false
+  }
+  if (value.signet !== undefined && !isStoredSignetBarkRail(value.signet)) return false
+  if (value.mainnet !== undefined && !isStoredMainnetBarkRail(value.mainnet)) return false
+  return value.signet !== undefined || value.mainnet !== undefined
+}
+
+function sanitizeBarkRails(
+  railsValue: unknown,
+  legacyRail: unknown,
+): StoredBarkRails | undefined {
+  const railsRecord = isRecord(railsValue) ? railsValue : {}
+  const signet = canonicalSignetBarkRail(railsRecord.signet) ?? legacySignetBarkRail(legacyRail)
+  const mainnet = canonicalMainnetBarkRail(railsRecord.mainnet)
+  if (signet == null && mainnet == null) {
+    if (legacyRail != null && import.meta.env.DEV && legacySignetBarkRail(legacyRail) == null) {
+      console.warn('[wallet-secrets] Dropping invalid barkRail')
+    }
+    if (railsValue != null && signet == null && railsRecord.signet != null && import.meta.env.DEV) {
+      console.warn('[wallet-secrets] Dropping invalid barkRails.signet')
+    }
+    return undefined
+  }
+  return {
+    ...(signet != null ? { signet } : {}),
+    ...(mainnet != null ? { mainnet } : {}),
+  }
+}
+
+/** Throws when a dump is larger than [`BARK_RECORD_DUMP_MAX_BYTES`]. Does not modify the dump. */
+export function assertBarkRecordDumpWithinSizeLimit(recordDump: string): void {
+  const byteLength = new TextEncoder().encode(recordDump).byteLength
+  if (byteLength > BARK_RECORD_DUMP_MAX_BYTES) {
+    throw new Error(`Bark record dump exceeds ${BARK_RECORD_DUMP_MAX_BYTES} bytes`)
+  }
 }
 
 function isLightningNetworkMode(value: unknown): value is LightningNetworkMode {
@@ -346,7 +444,7 @@ export function isWalletSecretsPayload(value: unknown): value is WalletSecretsPa
   ) {
     return false
   }
-  if (value.barkRail !== undefined && !isStoredBarkRail(value.barkRail)) {
+  if (value.barkRails !== undefined && !isStoredBarkRails(value.barkRails)) {
     return false
   }
   return true
@@ -385,7 +483,7 @@ export function isWalletSecrets(value: unknown): value is WalletSecrets {
   ) {
     return false
   }
-  if (value.barkRail !== undefined && !isStoredBarkRail(value.barkRail)) {
+  if (value.barkRails !== undefined && !isStoredBarkRails(value.barkRails)) {
     return false
   }
   return true
@@ -399,7 +497,7 @@ export function walletSecretsPayloadFromSecrets(
     lightningNwcConnections: secrets.lightningNwcConnections,
     arkadeAccounts: secrets.arkadeAccounts ?? [],
     activeArkadeAccountIdByNetwork: secrets.activeArkadeAccountIdByNetwork ?? {},
-    ...(secrets.barkRail != null ? { barkRail: secrets.barkRail } : {}),
+    ...(secrets.barkRails != null ? { barkRails: secrets.barkRails } : {}),
     ...(secrets.liveNetworkSplitApplied === true
       ? { liveNetworkSplitApplied: true as const }
       : {}),
@@ -524,7 +622,7 @@ function rewriteSignetNetworkField(
  * Historical Arkade `signet` rows were the Mutinynet operator.
  * On-chain descriptors and Lightning connections move to Mutinynet only when
  * the configured pre-split Esplora chain was Mutinynet. Bark stays on public
- * Signet (`barkRail.network` is left untouched).
+ * Signet (`barkRails.signet` is left untouched).
  *
  * Until that chain is configured, Arkade is rewritten but the flag stays unset
  * so a later parse can still classify descriptors.
@@ -571,8 +669,9 @@ function normalizeWalletSecretsPayload(raw: unknown): unknown {
   delete withoutLegacyKeys.arkadeAccounts
   delete withoutLegacyKeys.activeArkadeAccountIdByNetwork
 
-  const barkRail = sanitizeBarkRail(withoutLegacyKeys.barkRail)
+  const barkRails = sanitizeBarkRails(withoutLegacyKeys.barkRails, withoutLegacyKeys.barkRail)
   delete withoutLegacyKeys.barkRail
+  delete withoutLegacyKeys.barkRails
 
   return {
     ...withoutLegacyKeys,
@@ -584,7 +683,7 @@ function normalizeWalletSecretsPayload(raw: unknown): unknown {
       pickActiveArkadeAccountIdByNetworkField(raw),
       validAccountIds,
     ),
-    ...(barkRail != null ? { barkRail } : {}),
+    ...(barkRails != null ? { barkRails } : {}),
   }
 }
 
@@ -625,8 +724,8 @@ function describeWalletSecretsPayloadValidationIssues(value: unknown): string[] 
   ) {
     issues.push('activeArkadeAccountIdByNetwork must be an object')
   }
-  if (value.barkRail !== undefined && !isStoredBarkRail(value.barkRail)) {
-    issues.push('barkRail is invalid')
+  if (value.barkRails !== undefined && !isStoredBarkRails(value.barkRails)) {
+    issues.push('barkRails is invalid')
   }
   return issues
 }

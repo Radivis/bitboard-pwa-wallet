@@ -129,6 +129,7 @@ async function openBarkWorkerSession(walletId: number): Promise<{
   const opened = await worker.openSession({
     walletId,
     encryptedMnemonic: encrypted.mnemonic,
+    networkMode: 'signet',
   })
   if (!isBarkReceiveKeyIndex(opened.receiveKeyIndex)) {
     throw new Error('Bark session opened without a receive key index')

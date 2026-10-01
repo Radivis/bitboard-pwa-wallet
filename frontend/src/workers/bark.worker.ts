@@ -37,7 +37,10 @@ import {
   receiveKeyIndexForSessionOpen,
 } from '@/lib/bark/bark-receive-cursor'
 import { loadBitboardBarkWasm } from '@/lib/bark/load-bitboard-bark-wasm'
-import { isBarkReceiveKeyIndex } from '@/lib/wallet/wallet-domain-types'
+import {
+  assertBarkRecordDumpWithinSizeLimit,
+  isBarkReceiveKeyIndex,
+} from '@/lib/wallet/wallet-domain-types'
 import {
   setConfiguredHistoricalSignetOnchainChain,
   type HistoricalSignetOnchainChain,
@@ -64,9 +67,9 @@ import type {
   OpenBarkSessionResult,
 } from '@/workers/bark-api'
 import {
-  persistBarkReceiveKeyIndex,
-  persistBarkSuccessfulSync,
+  persistBarkProtocolState,
   persistOpenedBarkRail,
+  readSignetRecordDumpForOpen,
   readStoredBarkReceiveKeyIndex,
 } from '@/workers/bark-worker-metadata'
 import type { SecretsChannelService } from '@/workers/secrets-channel-types'
@@ -140,6 +143,116 @@ function encryptedPayloadDeps() {
   }
 }
 
+function barkErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message
+  return String(err)
+}
+
+function readOpenedSession(opened: {
+  fingerprint?: unknown
+  legacy_indexed_db_name?: unknown
+  free?: () => void
+}): { fingerprint: string; legacyIndexedDbName?: string } {
+  try {
+    if (typeof opened.fingerprint !== 'string' || opened.fingerprint.length === 0) {
+      throw new Error('Bark open did not return a fingerprint')
+    }
+    const legacyName = opened.legacy_indexed_db_name
+    return {
+      fingerprint: opened.fingerprint,
+      legacyIndexedDbName:
+        typeof legacyName === 'string' && legacyName.length > 0 ? legacyName : undefined,
+    }
+  } finally {
+    opened.free?.()
+  }
+}
+
+async function exportRecordDump(): Promise<string> {
+  const wasmModule = await getBarkWasm()
+  const recordDump = wasmModule.bark_export_record_dump()
+  if (typeof recordDump !== 'string' || recordDump.length === 0) {
+    throw new Error('Bark record dump is empty')
+  }
+  assertBarkRecordDumpWithinSizeLimit(recordDump)
+  return recordDump
+}
+
+async function flushBarkProtocolState(
+  walletId: number,
+  update: { receiveKeyIndex?: number; lastSuccessfulSyncAt?: string } = {},
+): Promise<void> {
+  const recordDump = await exportRecordDump()
+  await persistBarkProtocolState(encryptedPayloadDeps(), walletId, {
+    recordDump,
+    receiveKeyIndex: update.receiveKeyIndex,
+    lastSuccessfulSyncAt: update.lastSuccessfulSyncAt,
+  })
+}
+
+type BarkRailFlushMetadata = {
+  receiveKeyIndex?: number
+  lastSuccessfulSyncAt?: string
+}
+
+async function mutateBark<T>(
+  walletId: number,
+  operation: () => Promise<T>,
+  metadata: (result: T) => BarkRailFlushMetadata,
+): Promise<T> {
+  let operationError: unknown
+  let result: T | undefined
+  try {
+    result = await operation()
+  } catch (err) {
+    operationError = err
+  }
+
+  let flushError: unknown
+  if (openWalletId != null) {
+    try {
+      const flushMetadata =
+        operationError == null && result !== undefined ? metadata(result) : {}
+      await flushBarkProtocolState(walletId, flushMetadata)
+    } catch (err) {
+      flushError = err
+    }
+  }
+
+  if (operationError != null && flushError != null) {
+    throw new Error(
+      `${barkErrorMessage(operationError)} (Bark record dump was not saved: ${barkErrorMessage(flushError)})`,
+    )
+  }
+  if (flushError != null) {
+    throw flushError
+  }
+  if (operationError != null) {
+    throw operationError
+  }
+  return result as T
+}
+
+function deleteLegacyBarkIndexedDb(name: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.deleteDatabase(name)
+    request.onsuccess = () => resolve()
+    request.onerror = () => {
+      reject(request.error ?? new Error('Failed to delete legacy Bark IndexedDB'))
+    }
+    request.onblocked = () => {
+      reject(new Error('Legacy Bark IndexedDB delete is blocked'))
+    }
+  })
+}
+
+function requireOpenWalletId(): number {
+  if (openWalletId == null) {
+    throw new Error('Bark session is not open')
+  }
+  return openWalletId
+}
+
 async function closeSessionImpl(): Promise<void> {
   openWalletId = null
   try {
@@ -153,13 +266,24 @@ async function closeSessionImpl(): Promise<void> {
 async function openSessionImpl(
   params: OpenBarkSessionParams,
 ): Promise<OpenBarkSessionResult> {
+  if (params.networkMode !== 'signet') {
+    throw new Error(
+      params.networkMode === 'mainnet'
+        ? 'Bark mainnet is not open yet'
+        : 'Bark network is not supported',
+    )
+  }
   const mnemonic = await requireSecretsProxy().decrypt(params.encryptedMnemonic)
+  const deps = encryptedPayloadDeps()
+  const recordDump = await readSignetRecordDumpForOpen(deps, params.walletId)
   let sessionOpened = false
   try {
     const wasmModule = await getBarkWasm()
-    const fingerprint = await wasmModule.bark_open_session(mnemonic)
+    const opened = readOpenedSession(
+      await wasmModule.bark_open_session(mnemonic, 'signet', recordDump),
+    )
     sessionOpened = true
-    const deps = encryptedPayloadDeps()
+    openWalletId = params.walletId
     const storedReceiveKeyIndex = await readStoredBarkReceiveKeyIndex(
       deps,
       params.walletId,
@@ -171,15 +295,23 @@ async function openSessionImpl(
       revealNextReceiveAddress: async () =>
         readBarkRevealedReceiveAddress(await wasmModule.bark_reveal_next_address()),
     })
+    const exportedDump = await exportRecordDump()
     const barkRail = await persistOpenedBarkRail(
       deps,
       params.walletId,
-      fingerprint,
+      opened.fingerprint,
       receiveKeyIndex,
+      exportedDump,
     )
-    openWalletId = params.walletId
+    if (opened.legacyIndexedDbName != null) {
+      try {
+        await deleteLegacyBarkIndexedDb(opened.legacyIndexedDbName)
+      } catch (err) {
+        console.warn('[bark.worker] Legacy IndexedDB was copied but not deleted', err)
+      }
+    }
     return {
-      fingerprint,
+      fingerprint: opened.fingerprint,
       receiveKeyIndex,
       lastSuccessfulSyncAt: barkRail.lastSuccessfulSyncAt,
     }
@@ -208,30 +340,28 @@ async function peekReceiveAddressImpl(index: number): Promise<string> {
 }
 
 async function revealNextReceiveAddressImpl(): Promise<BarkRevealedReceiveAddress> {
-  const walletId = openWalletId
-  if (walletId == null) {
-    throw new Error('Bark session is not open')
-  }
-  const wasmModule = await getBarkWasm()
-  const revealed = readBarkRevealedReceiveAddress(
-    await wasmModule.bark_reveal_next_address(),
+  const walletId = requireOpenWalletId()
+  return mutateBark(
+    walletId,
+    async () => {
+      const wasmModule = await getBarkWasm()
+      return readBarkRevealedReceiveAddress(await wasmModule.bark_reveal_next_address())
+    },
+    (revealed) => ({ receiveKeyIndex: revealed.index }),
   )
-  // The new key is already in IndexedDB. If this write fails, the stored cursor
-  // stays on the previous index and the next open keeps peeking that index.
-  await persistBarkReceiveKeyIndex(encryptedPayloadDeps(), walletId, revealed.index)
-  return revealed
 }
 
 async function syncImpl(): Promise<BarkSyncResult> {
-  const walletId = openWalletId
-  if (walletId == null) {
-    throw new Error('Bark session is not open')
-  }
-  const wasmModule = await getBarkWasm()
-  await wasmModule.bark_sync()
-  const lastSuccessfulSyncAt = new Date().toISOString()
-  await persistBarkSuccessfulSync(encryptedPayloadDeps(), walletId, lastSuccessfulSyncAt)
-  return { lastSuccessfulSyncAt }
+  const walletId = requireOpenWalletId()
+  return mutateBark(
+    walletId,
+    async () => {
+      const wasmModule = await getBarkWasm()
+      await wasmModule.bark_sync()
+      return { lastSuccessfulSyncAt: new Date().toISOString() }
+    },
+    (result) => ({ lastSuccessfulSyncAt: result.lastSuccessfulSyncAt }),
+  )
 }
 
 async function readSpendableBalanceImpl(): Promise<number> {
@@ -268,17 +398,21 @@ async function estimateBoardOffchainFeeImpl(amountSats: number): Promise<BarkBoa
 }
 
 async function prepareBoardFundingImpl(): Promise<BarkPreparedBoardFunding> {
-  if (openWalletId == null) {
-    throw new Error('Bark session is not open')
-  }
-  return prepareBoardFundingFromWasm(boardWasm(await getBarkWasm()))
+  const walletId = requireOpenWalletId()
+  return mutateBark(
+    walletId,
+    async () => prepareBoardFundingFromWasm(boardWasm(await getBarkWasm())),
+    () => ({}),
+  )
 }
 
 async function boardPsbtImpl(psbtBase64: string): Promise<BarkBoardAccepted> {
-  if (openWalletId == null) {
-    throw new Error('Bark session is not open')
-  }
-  return boardPsbtFromWasm(boardWasm(await getBarkWasm()), psbtBase64)
+  const walletId = requireOpenWalletId()
+  return mutateBark(
+    walletId,
+    async () => boardPsbtFromWasm(boardWasm(await getBarkWasm()), psbtBase64),
+    () => ({}),
+  )
 }
 
 async function historyImpl(): Promise<BarkMovementRow[]> {
@@ -311,8 +445,13 @@ async function sendOnchainImpl(
   amountSats: number,
   feeRateSatPerVb: number,
 ): Promise<string> {
-  requireOpenSession()
-  return sendOnchainFromWasm(exitWasm(await getBarkWasm()), address, amountSats, feeRateSatPerVb)
+  const walletId = requireOpenWalletId()
+  return mutateBark(
+    walletId,
+    async () =>
+      sendOnchainFromWasm(exitWasm(await getBarkWasm()), address, amountSats, feeRateSatPerVb),
+    () => ({}),
+  )
 }
 
 async function estimateOffboardAllImpl(
@@ -324,22 +463,32 @@ async function estimateOffboardAllImpl(
 }
 
 async function offboardAllImpl(address: string, feeRateSatPerVb: number): Promise<string> {
-  requireOpenSession()
-  return offboardAllFromWasm(exitWasm(await getBarkWasm()), address, feeRateSatPerVb)
+  const walletId = requireOpenWalletId()
+  return mutateBark(
+    walletId,
+    async () => offboardAllFromWasm(exitWasm(await getBarkWasm()), address, feeRateSatPerVb),
+    () => ({}),
+  )
 }
 
 async function sendArkoorPaymentImpl(
   params: BarkArkoorSendParams,
 ): Promise<BarkArkoorSendResult> {
-  requireOpenSession()
-  const wasmModule = await getBarkWasm()
-  return performBarkArkoorSend(
-    barkArkoorSendDepsFromWasm(
-      wasmModule as unknown as BarkArkoorWasm,
-      () => readSpendableBalanceImpl(),
-      () => syncImpl(),
-    ),
-    params,
+  const walletId = requireOpenWalletId()
+  return mutateBark(
+    walletId,
+    async () => {
+      const wasmModule = await getBarkWasm()
+      return performBarkArkoorSend(
+        barkArkoorSendDepsFromWasm(
+          wasmModule as unknown as BarkArkoorWasm,
+          () => readSpendableBalanceImpl(),
+          () => syncImpl(),
+        ),
+        params,
+      )
+    },
+    () => ({}),
   )
 }
 
@@ -356,8 +505,12 @@ async function estimateEmergencyExitImpl(
 }
 
 async function startEmergencyExitImpl(vtxoIds: string[]): Promise<void> {
-  requireOpenSession()
-  await startEmergencyExitFromWasm(emergencyExitWasm(await getBarkWasm()), vtxoIds)
+  const walletId = requireOpenWalletId()
+  await mutateBark(
+    walletId,
+    async () => startEmergencyExitFromWasm(emergencyExitWasm(await getBarkWasm()), vtxoIds),
+    () => ({}),
+  )
 }
 
 async function listEmergencyExitsImpl(): Promise<BarkEmergencyExitRow[]> {
@@ -371,36 +524,54 @@ async function exitTopologyImpl(vtxoIds: string[]): Promise<BarkExitGraph> {
 }
 
 async function progressEmergencyExitsImpl(): Promise<BarkEmergencyExitProgress> {
-  requireOpenSession()
-  return progressEmergencyExitsFromWasm(emergencyExitWasm(await getBarkWasm()))
+  const walletId = requireOpenWalletId()
+  return mutateBark(
+    walletId,
+    async () => progressEmergencyExitsFromWasm(emergencyExitWasm(await getBarkWasm())),
+    () => ({}),
+  )
 }
 
 async function provideEmergencyExitCpfpImpl(
   exitTxid: string,
   childTxHex: string,
 ): Promise<void> {
-  requireOpenSession()
-  await provideEmergencyExitCpfpFromWasm(
-    emergencyExitWasm(await getBarkWasm()),
-    exitTxid,
-    childTxHex,
+  const walletId = requireOpenWalletId()
+  await mutateBark(
+    walletId,
+    async () =>
+      provideEmergencyExitCpfpFromWasm(
+        emergencyExitWasm(await getBarkWasm()),
+        exitTxid,
+        childTxHex,
+      ),
+    () => ({}),
   )
 }
 
 async function cancelEmergencyExitImpl(vtxoId: string): Promise<void> {
-  requireOpenSession()
-  await cancelEmergencyExitFromWasm(emergencyExitWasm(await getBarkWasm()), vtxoId)
+  const walletId = requireOpenWalletId()
+  await mutateBark(
+    walletId,
+    async () => cancelEmergencyExitFromWasm(emergencyExitWasm(await getBarkWasm()), vtxoId),
+    () => ({}),
+  )
 }
 
 async function drainEmergencyExitsImpl(
   address: string,
   feeRateSatPerVb: number,
 ): Promise<BarkEmergencyExitDrain> {
-  requireOpenSession()
-  return drainEmergencyExitsFromWasm(
-    emergencyExitWasm(await getBarkWasm()),
-    address,
-    feeRateSatPerVb,
+  const walletId = requireOpenWalletId()
+  return mutateBark(
+    walletId,
+    async () =>
+      drainEmergencyExitsFromWasm(
+        emergencyExitWasm(await getBarkWasm()),
+        address,
+        feeRateSatPerVb,
+      ),
+    () => ({}),
   )
 }
 

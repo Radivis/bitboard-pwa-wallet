@@ -95,6 +95,7 @@ describe('bark-load-lifecycle-orchestrator', () => {
     expect(workerMocks.openSession).toHaveBeenCalledWith({
       walletId: 1,
       encryptedMnemonic: expect.objectContaining({ kdfPhc: 'x' }),
+      networkMode: 'signet',
     })
     expect(closeBarkSessionMock).not.toHaveBeenCalled()
     expect(orchestrateBarkPostLoadSyncMock).toHaveBeenCalledWith({

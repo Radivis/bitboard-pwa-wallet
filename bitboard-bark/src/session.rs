@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use bip39::Mnemonic;
 use bitcoin::Network;
@@ -10,12 +11,15 @@ use crate::collaborative_exit;
 use crate::emergency_exit::fee_rate_from_sat_per_vb;
 use crate::exit_address::{classify_offboard_failure, parse_signet_receive_address};
 use crate::history::movements_to_json;
+use crate::legacy_indexed_db::copy_legacy_indexed_db_if_present;
+use crate::record_store::SharedRecordStore;
 use crate::sync_gate::BarkSessionSyncGate;
 use crate::vtxo_list::{listed_bark_vtxo_from_wallet, listed_vtxos_to_json};
 use crate::{BARK_SIGNET_ESPLORA_URL, BARK_SIGNET_SERVER_URL};
 
 thread_local! {
     static ACTIVE_WALLET: RefCell<Option<bark::Wallet>> = const { RefCell::new(None) };
+    static ACTIVE_RECORD_STORE: RefCell<Option<SharedRecordStore>> = const { RefCell::new(None) };
     static SESSION_SYNC_GATE: RefCell<BarkSessionSyncGate> =
         const { RefCell::new(BarkSessionSyncGate::new()) };
     static PREPARED_BOARD_FUNDING: RefCell<Option<PreparedBoardFunding>> =
@@ -66,15 +70,78 @@ fn store_wallet(wallet: bark::Wallet) -> Result<(), String> {
     })
 }
 
-async fn open_signet_session(mnemonic_plaintext: String) -> Result<String, String> {
+fn require_signet_network(network: &str) -> Result<(), String> {
+    if network == "signet" {
+        return Ok(());
+    }
+    if network == "mainnet" {
+        return Err("Bark mainnet is not open yet".to_owned());
+    }
+    Err(format!("Bark network {network} is not supported"))
+}
+
+fn install_record_store(store: SharedRecordStore) -> Result<(), String> {
+    ACTIVE_RECORD_STORE.with(|slot| {
+        let mut current = slot
+            .try_borrow_mut()
+            .map_err(|_| "Bark record store is already borrowed".to_owned())?;
+        current.take();
+        *current = Some(store);
+        Ok(())
+    })
+}
+
+fn clear_record_store() {
+    ACTIVE_RECORD_STORE.with(|slot| {
+        if let Ok(mut current) = slot.try_borrow_mut() {
+            current.take();
+        }
+    });
+}
+
+fn export_active_record_dump() -> Result<String, String> {
+    ACTIVE_RECORD_STORE.with(|slot| {
+        let current = slot
+            .try_borrow()
+            .map_err(|_| "Bark record store is already borrowed".to_owned())?;
+        let store = current
+            .as_ref()
+            .ok_or_else(|| "Bark session is not open".to_owned())?;
+        store.export_encoded_dump()
+    })
+}
+
+struct OpenedSignetSession {
+    fingerprint: String,
+    legacy_indexed_db_name: Option<String>,
+}
+
+async fn open_signet_session(
+    mnemonic_plaintext: String,
+    record_dump: String,
+) -> Result<OpenedSignetSession, String> {
     let seed = {
         let mnemonic_guard = MnemonicPlaintext(mnemonic_plaintext);
         let parsed_mnemonic =
             Mnemonic::parse(mnemonic_guard.0.as_str()).map_err(|err| err.to_string())?;
         bark::WalletSeed::new_from_mnemonic(Network::Signet, &parsed_mnemonic)
     };
+    let seed_fingerprint = seed.fingerprint().to_string();
 
-    let wallet = bark::Wallet::open(
+    let mut store = if record_dump.is_empty() {
+        SharedRecordStore::empty()
+    } else {
+        SharedRecordStore::from_encoded_dump(&record_dump)?
+    };
+    let copied_legacy = if record_dump.is_empty() {
+        copy_legacy_indexed_db_if_present(&seed_fingerprint, &mut store).await?
+    } else {
+        false
+    };
+
+    install_record_store(store.clone())?;
+    let persister = Arc::new(bark::persist::adaptor::StorageAdaptorWrapper::new(store));
+    let opened = bark::Wallet::open(
         Network::Signet,
         seed,
         signet_config(),
@@ -82,16 +149,37 @@ async fn open_signet_session(mnemonic_plaintext: String) -> Result<String, Strin
             run_daemon: false,
             onchain: None,
             create_if_not_exists: true,
+            persister: Some(persister),
+            lock_manager: Some(Box::new(
+                bark::lock_manager::memory::MemoryLockManager::new(),
+            )),
             ..bark::OpenWalletArgs::default()
         },
     )
-    .await
-    .map_err(|err| format!("{err:#}"))?;
+    .await;
+    let wallet = match opened {
+        Ok(wallet) => wallet,
+        Err(err) => {
+            clear_record_store();
+            return Err(format!("{err:#}"));
+        }
+    };
 
     let fingerprint = wallet.fingerprint().to_string();
-    store_wallet(wallet)?;
+    if let Err(err) = store_wallet(wallet) {
+        clear_record_store();
+        return Err(err);
+    }
     clear_session_sync_gate();
-    Ok(fingerprint)
+    let legacy_indexed_db_name = if copied_legacy {
+        Some(seed_fingerprint)
+    } else {
+        None
+    };
+    Ok(OpenedSignetSession {
+        fingerprint,
+        legacy_indexed_db_name,
+    })
 }
 
 fn clear_session_sync_gate() {
@@ -144,20 +232,60 @@ fn drop_active_wallet() -> Result<(), String> {
         slot.take();
         Ok(())
     })?;
+    clear_record_store();
     clear_session_sync_gate();
     clear_prepared_board_funding();
     Ok(())
 }
 
-/// Opens or creates a public-Signet Bark wallet. Protocol state stays in IndexedDB.
+/// Fingerprint of the opened Signet wallet, and the legacy IndexedDB name when a copy ran.
 #[wasm_bindgen]
-pub async fn bark_open_session(mnemonic: String) -> Result<String, JsValue> {
-    open_signet_session(mnemonic)
-        .await
-        .map_err(|err| JsValue::from_str(&err))
+pub struct BarkOpenedSession {
+    fingerprint: String,
+    legacy_indexed_db_name: Option<String>,
 }
 
-/// Drops the thread-local wallet so the IndexedDB connection closes. Does not delete the database.
+#[wasm_bindgen]
+impl BarkOpenedSession {
+    #[wasm_bindgen(getter)]
+    pub fn fingerprint(&self) -> String {
+        self.fingerprint.clone()
+    }
+
+    /// Set when the fingerprint IndexedDB was copied. Delete it only after the encrypted dump is stored.
+    #[wasm_bindgen(getter)]
+    pub fn legacy_indexed_db_name(&self) -> Option<String> {
+        self.legacy_indexed_db_name.clone()
+    }
+}
+
+/// Opens or creates a public-Signet Bark wallet on the in-memory record store.
+///
+/// `record_dump` is empty when this network has no encrypted dump yet.
+/// Mainnet is rejected. `datadir` is left unset so Bark does not open IndexedDB.
+#[wasm_bindgen]
+pub async fn bark_open_session(
+    mnemonic: String,
+    network: String,
+    record_dump: String,
+) -> Result<BarkOpenedSession, JsValue> {
+    require_signet_network(&network).map_err(|err| JsValue::from_str(&err))?;
+    let opened = open_signet_session(mnemonic, record_dump)
+        .await
+        .map_err(|err| JsValue::from_str(&err))?;
+    Ok(BarkOpenedSession {
+        fingerprint: opened.fingerprint,
+        legacy_indexed_db_name: opened.legacy_indexed_db_name,
+    })
+}
+
+/// Exports the open network's record dump. Plaintext stays in this worker.
+#[wasm_bindgen]
+pub fn bark_export_record_dump() -> Result<String, JsValue> {
+    export_active_record_dump().map_err(|err| JsValue::from_str(&err))
+}
+
+/// Drops the in-memory wallet and record store. Does not delete a legacy IndexedDB database.
 #[wasm_bindgen]
 pub fn bark_close_session() -> Result<(), JsValue> {
     drop_active_wallet().map_err(|err| JsValue::from_str(&err))
@@ -388,7 +516,7 @@ pub async fn bark_estimate_board_offchain_fee(
 }
 
 /// Stores the next VTXO key and returns the board funding address.
-/// A second call replaces the in-memory key. The previous key stays unused in IndexedDB.
+/// A second call replaces the in-memory key. The previous key stays unused in the record store.
 #[wasm_bindgen]
 pub async fn bark_prepare_board_funding() -> Result<BarkPreparedBoardFunding, JsValue> {
     let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
