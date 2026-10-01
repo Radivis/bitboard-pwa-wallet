@@ -51,6 +51,7 @@ feature:
     - The emergency-exit link and page exist only when isBarkEnabled and the network is signet
     - Emergency exit does not call send_onchain or offboard_all
     - Review, before start, shows the broadcast fee, the later claim fee, and how many transactions must be broadcast
+    - Emergency exit broadcast, Pay-to-Anchor children, and the claim use the app Signet High fee preset from the on-chain Esplora, not Bark's own fast rate
     - Start stays disabled when the on-chain confirmed balance is below the broadcast fee
     - Progress is a button. It is not part of unlock sync or the periodic Bark sync
     - Cancel is offered only while that exit is still cancelable

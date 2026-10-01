@@ -50,7 +50,26 @@ pub fn format_bark_exit_error(code: &str, detail: &str) -> String {
 
 /// Satoshis per virtual byte. Bark's `FeeRate` counts satoshis per 1,000 weight units.
 pub fn fee_rate_sat_per_vb(fee_rate: bitcoin::FeeRate) -> f64 {
-    fee_rate.to_sat_per_kwu() as f64 / 250.0
+    fee_rate.to_sat_per_kwu() as f64 / SAT_PER_KWU_PER_SAT_VB
+}
+
+const SAT_PER_KWU_PER_SAT_VB: f64 = 250.0;
+const MAX_FEE_RATE_SAT_PER_VB: f64 = 1_000_000.0;
+
+/// The app's Signet fee preset, in sat/vB. Bark's own fast rate is not used.
+pub fn fee_rate_from_sat_per_vb(rate_sat_per_vb: f64) -> Result<bitcoin::FeeRate, String> {
+    if !rate_sat_per_vb.is_finite() || rate_sat_per_vb <= 0.0 || rate_sat_per_vb > MAX_FEE_RATE_SAT_PER_VB
+    {
+        return Err(
+            "bark_exit_fee_rate: Fee rate must be a positive number of satoshis per virtual byte"
+                .to_owned(),
+        );
+    }
+    let sat_per_kwu = (rate_sat_per_vb * SAT_PER_KWU_PER_SAT_VB).round();
+    if sat_per_kwu <= 0.0 || sat_per_kwu > u64::MAX as f64 {
+        return Err("bark_exit_fee_rate: Fee rate is out of range".to_owned());
+    }
+    Ok(bitcoin::FeeRate::from_sat_per_kwu(sat_per_kwu as u64))
 }
 
 fn encode_hex(bytes: &[u8]) -> String {
@@ -93,7 +112,6 @@ struct EmergencyExitCpfpRequestJson {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct EmergencyExitProgressJson {
-    fee_rate_sat_per_vb: f64,
     requests: Vec<EmergencyExitCpfpRequestJson>,
 }
 
@@ -108,11 +126,11 @@ fn json_string(value: &impl Serialize) -> Result<String, String> {
     serde_json::to_string(value).map_err(|err| err.to_string())
 }
 
-fn zero_estimate_json() -> Result<String, String> {
+fn zero_estimate_json(fee_rate_sat_per_vb: f64) -> Result<String, String> {
     json_string(&EmergencyExitEstimateJson {
         exit_broadcast_fee_sats: 0,
         claim_fee_sats: 0,
-        fee_rate_sat_per_vb: 0.0,
+        fee_rate_sat_per_vb,
         txs_to_broadcast: 0,
     })
 }
@@ -127,7 +145,8 @@ mod wasm {
     use wasm_bindgen::prelude::*;
 
     use super::{
-        encode_hex, fee_rate_sat_per_vb, format_bark_exit_error, json_string, zero_estimate_json,
+        encode_hex, fee_rate_from_sat_per_vb, fee_rate_sat_per_vb, format_bark_exit_error, json_string,
+        zero_estimate_json,
         BarkEmergencyExitStateKind, EmergencyExitCpfpRequestJson, EmergencyExitDrainJson,
         EmergencyExitEstimateJson, EmergencyExitProgressJson, EmergencyExitRowJson,
         BARK_EXIT_ALREADY_EXITED, BARK_EXIT_ALREADY_SPENT, BARK_EXIT_DUST, BARK_EXIT_UNKNOWN_VTXO,
@@ -219,9 +238,14 @@ mod wasm {
 
     /// Broadcast fee, later claim fee, and how many exit transactions still need a child.
     /// An empty id list estimates every unspent VTXO. `fundable` is ignored.
+    /// `fee_rate_sat_per_vb` prices both the broadcast and the claim.
     #[wasm_bindgen]
-    pub async fn bark_estimate_emergency_exit(vtxo_ids_json: String) -> Result<String, JsValue> {
+    pub async fn bark_estimate_emergency_exit(
+        vtxo_ids_json: String,
+        requested_fee_rate_sat_per_vb: f64,
+    ) -> Result<String, JsValue> {
         run_with_synced_wallet(async |wallet| {
+            let fee_rate = fee_rate_from_sat_per_vb(requested_fee_rate_sat_per_vb)?;
             let requested = parse_vtxo_ids(&vtxo_ids_json)?;
             let vtxo_ids = if requested.is_empty() {
                 unspent_vtxo_ids(wallet).await?
@@ -229,12 +253,12 @@ mod wasm {
                 requested
             };
             if vtxo_ids.is_empty() {
-                return zero_estimate_json();
+                return zero_estimate_json(fee_rate_sat_per_vb(fee_rate));
             }
             let estimate = map_exit_error(
                 wallet
                     .exit_mgr()
-                    .estimate_emergency_exit_fee(&vtxo_ids, wallet, None, None)
+                    .estimate_emergency_exit_fee(&vtxo_ids, wallet, Some(fee_rate), None)
                     .await,
             )?;
             json_string(&EmergencyExitEstimateJson {
@@ -307,7 +331,6 @@ mod wasm {
     pub async fn bark_progress_emergency_exits() -> Result<String, JsValue> {
         run_with_synced_wallet(async |wallet| {
             map_anyhow_exit(wallet.exit_mgr().progress_exits(wallet).await)?;
-            let fee_rate = wallet.exit_mgr().default_exit_fee_rate().await;
             let mut seen_txids = HashSet::new();
             let mut requests = Vec::new();
             for request in wallet.exit_mgr().exits_needing_cpfp().await {
@@ -331,10 +354,7 @@ mod wasm {
                     current_package_fee_sats,
                 });
             }
-            json_string(&EmergencyExitProgressJson {
-                fee_rate_sat_per_vb: fee_rate_sat_per_vb(fee_rate),
-                requests,
-            })
+            json_string(&EmergencyExitProgressJson { requests })
         })
         .await
     }
@@ -373,15 +393,20 @@ mod wasm {
     }
 
     /// Signed claim PSBT and the extracted transaction. The worker does not broadcast it.
+    /// `fee_rate_sat_per_vb` is the claim fee override.
     #[wasm_bindgen]
-    pub async fn bark_drain_emergency_exits(address: String) -> Result<String, JsValue> {
+    pub async fn bark_drain_emergency_exits(
+        address: String,
+        requested_fee_rate_sat_per_vb: f64,
+    ) -> Result<String, JsValue> {
         run_with_synced_wallet(async |wallet| {
+            let fee_rate = fee_rate_from_sat_per_vb(requested_fee_rate_sat_per_vb)?;
             let destination = parse_signet_receive_address(&address)?;
             let claimable = wallet.exit_mgr().list_claimable().await;
             let psbt = map_exit_error(
                 wallet
                     .exit_mgr()
-                    .drain_exits(&claimable, wallet, destination, None)
+                    .drain_exits(&claimable, wallet, destination, Some(fee_rate))
                     .await,
             )?;
             let raw_tx = psbt.clone().extract_tx().map_err(|err| {
@@ -399,8 +424,9 @@ mod wasm {
 #[cfg(test)]
 mod tests {
     use super::{
-        emergency_exit_state_json, BarkEmergencyExitStateKind, BARK_EXIT_ALREADY_EXITED,
-        BARK_EXIT_ALREADY_SPENT, BARK_EXIT_DUST, BARK_EXIT_UNKNOWN_VTXO,
+        emergency_exit_state_json, fee_rate_from_sat_per_vb, fee_rate_sat_per_vb,
+        BarkEmergencyExitStateKind, BARK_EXIT_ALREADY_EXITED, BARK_EXIT_ALREADY_SPENT,
+        BARK_EXIT_DUST, BARK_EXIT_UNKNOWN_VTXO,
     };
     use crate::exit_address::parse_signet_receive_address;
 
@@ -430,6 +456,14 @@ mod tests {
         assert_eq!(BARK_EXIT_DUST, "bark_exit_dust");
         assert_eq!(BARK_EXIT_ALREADY_EXITED, "bark_exit_already_exited");
         assert_eq!(BARK_EXIT_ALREADY_SPENT, "bark_exit_already_spent");
+    }
+
+    #[test]
+    fn emergency_exit_fee_rate_round_trips_one_sat_per_vb() {
+        let fee_rate = fee_rate_from_sat_per_vb(1.0).expect("1 sat/vB");
+        assert_eq!(fee_rate_sat_per_vb(fee_rate), 1.0);
+        assert!(fee_rate_from_sat_per_vb(0.0).is_err());
+        assert!(fee_rate_from_sat_per_vb(f64::NAN).is_err());
     }
 
     #[test]

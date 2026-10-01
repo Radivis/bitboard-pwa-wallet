@@ -12,13 +12,13 @@ import type {
 } from '@/workers/bark-api'
 
 export type BarkEmergencyExitWasm = {
-  bark_estimate_emergency_exit(vtxoIdsJson: string): Promise<string>
+  bark_estimate_emergency_exit(vtxoIdsJson: string, feeRateSatPerVb: number): Promise<string>
   bark_start_emergency_exit(vtxoIdsJson: string): Promise<void>
   bark_list_emergency_exits(): Promise<string>
   bark_progress_emergency_exits(): Promise<string>
   bark_provide_emergency_exit_cpfp(exitTxid: string, childTxHex: string): Promise<void>
   bark_cancel_emergency_exit(vtxoId: string): Promise<void>
-  bark_drain_emergency_exits(address: string): Promise<string>
+  bark_drain_emergency_exits(address: string, feeRateSatPerVb: number): Promise<string>
 }
 
 function vtxoIdsJson(vtxoIds: string[]): string {
@@ -28,9 +28,10 @@ function vtxoIdsJson(vtxoIds: string[]): string {
 export async function estimateEmergencyExitFromWasm(
   wasm: BarkEmergencyExitWasm,
   vtxoIds: string[],
+  feeRateSatPerVb: number,
 ): Promise<BarkEmergencyExitEstimate> {
   return readBarkEmergencyExitEstimate(
-    await wasm.bark_estimate_emergency_exit(vtxoIdsJson(vtxoIds)),
+    await wasm.bark_estimate_emergency_exit(vtxoIdsJson(vtxoIds), feeRateSatPerVb),
   )
 }
 
@@ -71,6 +72,9 @@ export async function cancelEmergencyExitFromWasm(
 export async function drainEmergencyExitsFromWasm(
   wasm: BarkEmergencyExitWasm,
   address: string,
+  feeRateSatPerVb: number,
 ): Promise<BarkEmergencyExitDrain> {
-  return readBarkEmergencyExitDrain(await wasm.bark_drain_emergency_exits(address))
+  return readBarkEmergencyExitDrain(
+    await wasm.bark_drain_emergency_exits(address, feeRateSatPerVb),
+  )
 }

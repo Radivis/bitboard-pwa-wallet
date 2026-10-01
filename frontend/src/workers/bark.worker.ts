@@ -330,9 +330,14 @@ async function sendArkoorPaymentImpl(
 
 async function estimateEmergencyExitImpl(
   vtxoIds: string[],
+  feeRateSatPerVb: number,
 ): Promise<BarkEmergencyExitEstimate> {
   requireOpenSession()
-  return estimateEmergencyExitFromWasm(emergencyExitWasm(await getBarkWasm()), vtxoIds)
+  return estimateEmergencyExitFromWasm(
+    emergencyExitWasm(await getBarkWasm()),
+    vtxoIds,
+    feeRateSatPerVb,
+  )
 }
 
 async function startEmergencyExitImpl(vtxoIds: string[]): Promise<void> {
@@ -367,9 +372,16 @@ async function cancelEmergencyExitImpl(vtxoId: string): Promise<void> {
   await cancelEmergencyExitFromWasm(emergencyExitWasm(await getBarkWasm()), vtxoId)
 }
 
-async function drainEmergencyExitsImpl(address: string): Promise<BarkEmergencyExitDrain> {
+async function drainEmergencyExitsImpl(
+  address: string,
+  feeRateSatPerVb: number,
+): Promise<BarkEmergencyExitDrain> {
   requireOpenSession()
-  return drainEmergencyExitsFromWasm(emergencyExitWasm(await getBarkWasm()), address)
+  return drainEmergencyExitsFromWasm(
+    emergencyExitWasm(await getBarkWasm()),
+    address,
+    feeRateSatPerVb,
+  )
 }
 
 const barkService: BarkService = {
@@ -512,9 +524,12 @@ const barkService: BarkService = {
     }
   },
 
-  async estimateEmergencyExit(vtxoIds: string[]): Promise<BarkEmergencyExitEstimate> {
+  async estimateEmergencyExit(
+    vtxoIds: string[],
+    feeRateSatPerVb: number,
+  ): Promise<BarkEmergencyExitEstimate> {
     try {
-      return await estimateEmergencyExitImpl(vtxoIds)
+      return await estimateEmergencyExitImpl(vtxoIds, feeRateSatPerVb)
     } catch (err) {
       rethrowBarkError(err)
     }
@@ -560,9 +575,12 @@ const barkService: BarkService = {
     }
   },
 
-  async drainEmergencyExits(address: string): Promise<BarkEmergencyExitDrain> {
+  async drainEmergencyExits(
+    address: string,
+    feeRateSatPerVb: number,
+  ): Promise<BarkEmergencyExitDrain> {
     try {
-      return await drainEmergencyExitsImpl(address)
+      return await drainEmergencyExitsImpl(address, feeRateSatPerVb)
     } catch (err) {
       rethrowBarkError(err)
     }

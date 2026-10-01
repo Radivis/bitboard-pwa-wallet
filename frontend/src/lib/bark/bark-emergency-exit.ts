@@ -60,7 +60,6 @@ export function readBarkEmergencyExitProgress(value: unknown): BarkEmergencyExit
     throw new Error('Bark emergency exit progress requests were not a list')
   }
   return {
-    feeRateSatPerVb: readFeeRate(row.feeRateSatPerVb),
     requests: row.requests.map(readCpfpRequest),
   }
 }

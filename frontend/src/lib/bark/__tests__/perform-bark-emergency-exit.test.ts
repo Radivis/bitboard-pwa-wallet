@@ -42,9 +42,9 @@ describe('progressBarkEmergencyExits', () => {
     const progress = vi.fn(async () => {
       calls.push('progress')
       if (progress.mock.calls.length === 1) {
-        return { feeRateSatPerVb: 2, requests: [requestA, requestB] }
+        return { requests: [requestA, requestB] }
       }
-      return { feeRateSatPerVb: 2, requests: [] }
+      return { requests: [] }
     })
     const signChild = vi.fn(async (request: BarkEmergencyCpfpRequest) => {
       calls.push(`sign:${request.parentTxid}`)
@@ -57,12 +57,15 @@ describe('progressBarkEmergencyExits', () => {
       calls.push(`remember:${childTxHex}`)
     })
 
-    await progressBarkEmergencyExits({
-      progress,
-      signChild,
-      provideChild,
-      rememberUnconfirmedChild,
-    })
+    await progressBarkEmergencyExits(
+      {
+        progress,
+        signChild,
+        provideChild,
+        rememberUnconfirmedChild,
+      },
+      1,
+    )
 
     expect(calls).toEqual([
       'progress',
@@ -74,22 +77,25 @@ describe('progressBarkEmergencyExits', () => {
       'remember:child-parent-b',
       'progress',
     ])
-    expect(signChild).toHaveBeenCalledWith(requestA, 2)
-    expect(signChild).toHaveBeenCalledWith(requestB, 2)
+    expect(signChild).toHaveBeenCalledWith(requestA, 1)
+    expect(signChild).toHaveBeenCalledWith(requestB, 1)
   })
 
   it('stops without a success path when signing a child fails', async () => {
     const provideChild = vi.fn()
-    const progress = vi.fn(async () => ({ feeRateSatPerVb: 1, requests: [requestA] }))
+    const progress = vi.fn(async () => ({ requests: [requestA] }))
     await expect(
-      progressBarkEmergencyExits({
-        progress,
-        signChild: async () => {
-          throw new Error('bark_cpfp_insufficient_funds: short')
+      progressBarkEmergencyExits(
+        {
+          progress,
+          signChild: async () => {
+            throw new Error('bark_cpfp_insufficient_funds: short')
+          },
+          provideChild,
+          rememberUnconfirmedChild: vi.fn(),
         },
-        provideChild,
-        rememberUnconfirmedChild: vi.fn(),
-      }),
+        1,
+      ),
     ).rejects.toThrow(/bark_cpfp_insufficient_funds/)
     expect(provideChild).not.toHaveBeenCalled()
     expect(progress).toHaveBeenCalledTimes(1)
@@ -106,9 +112,10 @@ describe('claimBarkEmergencyExits', () => {
     const claimed = await claimBarkEmergencyExits(
       { drain, broadcast, syncBark, startOnchainBackgroundSync },
       'tb1qcurrent',
+      1,
     )
 
-    expect(drain).toHaveBeenCalledWith('tb1qcurrent')
+    expect(drain).toHaveBeenCalledWith('tb1qcurrent', 1)
     expect(broadcast).toHaveBeenCalledWith('raw-claim')
     expect(claimed.txid).toBe('claim-txid')
     expect(syncBark).toHaveBeenCalledOnce()
@@ -128,6 +135,7 @@ describe('claimBarkEmergencyExits', () => {
           startOnchainBackgroundSync,
         },
         'tb1qcurrent',
+        1,
       ),
     ).rejects.toThrow(/broadcast rejected/)
     expect(startOnchainBackgroundSync).not.toHaveBeenCalled()

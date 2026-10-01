@@ -9,12 +9,13 @@ import { getCryptoWorker } from '@/workers/crypto-factory'
 import type { BarkEmergencyExitEstimate } from '@/workers/bark-api'
 
 export type ReviewBarkEmergencyExitDeps = {
-  estimate: (vtxoIds: string[]) => Promise<BarkEmergencyExitEstimate>
+  estimate: (vtxoIds: string[], feeRateSatPerVb: number) => Promise<BarkEmergencyExitEstimate>
 }
 
 export function barkEmergencyExitReviewDeps(): ReviewBarkEmergencyExitDeps {
   return {
-    estimate: (vtxoIds) => getBarkWorker().estimateEmergencyExit(vtxoIds),
+    estimate: (vtxoIds, feeRateSatPerVb) =>
+      getBarkWorker().estimateEmergencyExit(vtxoIds, feeRateSatPerVb),
   }
 }
 
@@ -46,7 +47,8 @@ export function barkEmergencyExitProgressDeps(): ProgressBarkEmergencyExitDeps {
 
 export function barkEmergencyExitClaimDeps(): ClaimBarkEmergencyExitDeps {
   return {
-    drain: (address) => getBarkWorker().drainEmergencyExits(address),
+    drain: (address, feeRateSatPerVb) =>
+      getBarkWorker().drainEmergencyExits(address, feeRateSatPerVb),
     broadcast: (rawTxHex) => {
       const { networkMode } = useWalletStore.getState()
       return getCryptoWorker().broadcastTransaction(rawTxHex, getEsploraUrl(networkMode))

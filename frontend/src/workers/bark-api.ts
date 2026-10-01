@@ -120,7 +120,6 @@ export type BarkEmergencyCpfpRequest = {
 }
 
 export type BarkEmergencyExitProgress = {
-  feeRateSatPerVb: number
   requests: BarkEmergencyCpfpRequest[]
 }
 
@@ -152,11 +151,14 @@ export interface BarkService {
   estimateOffboardAll(address: string): Promise<BarkExitFeeEstimate>
   offboardAll(address: string): Promise<string>
   sendArkoorPayment(params: BarkArkoorSendParams): Promise<BarkArkoorSendResult>
-  estimateEmergencyExit(vtxoIds: string[]): Promise<BarkEmergencyExitEstimate>
+  estimateEmergencyExit(
+    vtxoIds: string[],
+    feeRateSatPerVb: number,
+  ): Promise<BarkEmergencyExitEstimate>
   startEmergencyExit(vtxoIds: string[]): Promise<void>
   listEmergencyExits(): Promise<BarkEmergencyExitRow[]>
   progressEmergencyExits(): Promise<BarkEmergencyExitProgress>
   provideEmergencyExitCpfp(exitTxid: string, childTxHex: string): Promise<void>
   cancelEmergencyExit(vtxoId: string): Promise<void>
-  drainEmergencyExits(address: string): Promise<BarkEmergencyExitDrain>
+  drainEmergencyExits(address: string, feeRateSatPerVb: number): Promise<BarkEmergencyExitDrain>
 }

@@ -99,6 +99,10 @@ vi.mock('@/hooks/useBarkSyncLifecycleSnapshot', () => ({
   useBarkSyncLifecycleSnapshot: () => syncSnapshot,
 }))
 
+vi.mock('@/hooks/useEsploraFeePresets', () => ({
+  useEsploraFeePresets: () => ({ data: { Low: 0.5, Medium: 2, High: 1 } }),
+}))
+
 vi.mock('@/workers/bark-factory', () => ({
   getBarkWorker: () => barkWorker,
 }))
@@ -140,7 +144,7 @@ describe('BarkEmergencyExitPage', () => {
       txsToBroadcast: 4,
     })
     barkWorker.startEmergencyExit.mockResolvedValue(undefined)
-    barkWorker.progressEmergencyExits.mockResolvedValue({ feeRateSatPerVb: 1, requests: [] })
+    barkWorker.progressEmergencyExits.mockResolvedValue({ requests: [] })
     barkWorker.cancelEmergencyExit.mockResolvedValue(undefined)
     barkWorker.drainEmergencyExits.mockResolvedValue({ psbtHex: 'psbt', rawTxHex: 'raw' })
     cryptoWorker.broadcastTransaction.mockResolvedValue('claim-txid')
@@ -184,7 +188,8 @@ describe('BarkEmergencyExitPage', () => {
     expect(await screen.findByTestId('bark-emergency-exit-broadcast-fee')).toHaveTextContent('1500')
     expect(screen.getByTestId('bark-emergency-exit-claim-fee')).toHaveTextContent('800')
     expect(screen.getByTestId('bark-emergency-exit-tx-count')).toHaveTextContent('4')
-    expect(barkWorker.estimateEmergencyExit).toHaveBeenCalledWith(['vtxo-1'])
+    expect(barkWorker.estimateEmergencyExit).toHaveBeenCalledWith(['vtxo-1'], 1)
+    expect(screen.getByTestId('bark-emergency-exit-fee-rate')).toHaveTextContent('1.50 sat/vB')
     expect(barkWorker.startEmergencyExit).not.toHaveBeenCalled()
   })
 
@@ -205,6 +210,7 @@ describe('BarkEmergencyExitPage', () => {
     await waitFor(() => {
       expect(barkWorker.startEmergencyExit).toHaveBeenLastCalledWith([])
     })
+    expect(barkWorker.estimateEmergencyExit).toHaveBeenLastCalledWith([], 1)
     expect(barkWorker.offboardAll).not.toHaveBeenCalled()
     expect(barkWorker.sendOnchain).not.toHaveBeenCalled()
   })

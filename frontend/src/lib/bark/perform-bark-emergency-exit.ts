@@ -19,7 +19,7 @@ export type ProgressBarkEmergencyExitDeps = {
 }
 
 export type ClaimBarkEmergencyExitDeps = {
-  drain: (address: string) => Promise<BarkEmergencyExitDrain>
+  drain: (address: string, feeRateSatPerVb: number) => Promise<BarkEmergencyExitDrain>
   broadcast: (rawTxHex: string) => Promise<string>
   syncBark: () => Promise<void>
   startOnchainBackgroundSync: () => void
@@ -48,12 +48,13 @@ export async function startBarkEmergencyExit(
  */
 export async function progressBarkEmergencyExits(
   deps: ProgressBarkEmergencyExitDeps,
+  feeRateSatPerVb: number,
 ): Promise<void> {
   const first = await deps.progress()
   let providedChildren = 0
   try {
     for (const request of first.requests) {
-      const childTxHex = await deps.signChild(request, first.feeRateSatPerVb)
+      const childTxHex = await deps.signChild(request, feeRateSatPerVb)
       await deps.provideChild(request.parentTxid, childTxHex)
       providedChildren += 1
       await deps.rememberUnconfirmedChild(childTxHex)
@@ -76,8 +77,9 @@ export async function progressBarkEmergencyExits(
 export async function claimBarkEmergencyExits(
   deps: ClaimBarkEmergencyExitDeps,
   destinationAddress: string,
+  feeRateSatPerVb: number,
 ): Promise<ClaimedBarkEmergencyExit> {
-  const drained = await deps.drain(destinationAddress)
+  const drained = await deps.drain(destinationAddress, feeRateSatPerVb)
   const txid = await deps.broadcast(drained.rawTxHex)
   let syncWarning: string | null = null
   try {

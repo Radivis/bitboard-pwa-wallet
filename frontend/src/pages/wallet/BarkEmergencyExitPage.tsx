@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { barkEmergencyExitQueryKey, useBarkEmergencyExitQuery } from '@/hooks/useBarkEmergencyExitQuery'
 import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
+import { useEsploraFeePresets } from '@/hooks/useEsploraFeePresets'
 import { barkVtxoListQueryKey, useBarkVtxoListQuery } from '@/hooks/useBarkVtxoListQuery'
 import { useBarkSyncLifecycleSnapshot } from '@/hooks/useBarkSyncLifecycleSnapshot'
 import {
@@ -25,6 +26,10 @@ import {
   progressBarkEmergencyExits,
   startBarkEmergencyExit,
 } from '@/lib/bark/perform-bark-emergency-exit'
+import {
+  formatSatPerVbTwoDecimals,
+  NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB,
+} from '@/lib/esplora/esplora-fee-estimates'
 import { errorMessage } from '@/lib/shared/utils'
 import { formatSats } from '@/lib/wallet/bitcoin-utils'
 import { useFeatureStore } from '@/stores/featureStore'
@@ -48,6 +53,9 @@ export function BarkEmergencyExitPage() {
   const currentAddress = useWalletStore((walletState) => walletState.currentAddress)
   const confirmedSats = useWalletStore((walletState) => walletState.balance?.confirmedSats ?? 0)
   const isBarkEnabled = useFeatureStore((featureState) => featureState.isBarkEnabled)
+  const feePresetsQuery = useEsploraFeePresets(networkMode)
+  const feeRateSatPerVb =
+    feePresetsQuery.data?.High ?? NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB.High
   const loadSnapshot = useBarkLoadLifecycleSnapshot()
   const syncSnapshot = useBarkSyncLifecycleSnapshot()
   const vtxoListQuery = useBarkVtxoListQuery()
@@ -114,7 +122,7 @@ export function BarkEmergencyExitPage() {
     }
     setBusyAction('review')
     try {
-      const estimate = await barkEmergencyExitReviewDeps().estimate(vtxoIds)
+      const estimate = await barkEmergencyExitReviewDeps().estimate(vtxoIds, feeRateSatPerVb)
       setReview({ vtxoIds, estimate })
     } catch (err) {
       setReview(null)
@@ -144,7 +152,7 @@ export function BarkEmergencyExitPage() {
   async function onProgress() {
     setBusyAction('progress')
     try {
-      await progressBarkEmergencyExits(barkEmergencyExitProgressDeps())
+      await progressBarkEmergencyExits(barkEmergencyExitProgressDeps(), feeRateSatPerVb)
       toast.success('Emergency exit progressed.')
       await reloadLists()
     } catch (err) {
@@ -177,6 +185,7 @@ export function BarkEmergencyExitPage() {
       const claimed = await claimBarkEmergencyExits(
         barkEmergencyExitClaimDeps(),
         destinationAddress,
+        feeRateSatPerVb,
       )
       const claimedMessage = `Claim broadcast ${claimed.txid}. ${CLAIM_NOTE}`
       toast.success(
@@ -242,6 +251,9 @@ export function BarkEmergencyExitPage() {
               </Button>
               {review != null ? (
                 <div className="space-y-1 text-sm" data-testid="bark-emergency-exit-fee-review">
+                  <p data-testid="bark-emergency-exit-fee-rate">
+                    Fee rate {formatSatPerVbTwoDecimals(review.estimate.feeRateSatPerVb)} sat/vB
+                  </p>
                   <p data-testid="bark-emergency-exit-broadcast-fee">
                     Broadcast fee {formatSats(review.estimate.exitBroadcastFeeSats)}
                   </p>
