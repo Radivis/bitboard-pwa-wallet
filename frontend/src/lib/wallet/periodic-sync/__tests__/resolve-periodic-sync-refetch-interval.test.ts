@@ -10,6 +10,7 @@ function defaultRails(): PeriodicSyncRailState {
     onchain: { isEnabled: true, intervalSeconds: DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS },
     lightning: { isEnabled: true, intervalSeconds: DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS },
     arkade: { isEnabled: true, intervalSeconds: DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS },
+    bark: { isEnabled: true, intervalSeconds: DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS },
   }
 }
 
@@ -21,6 +22,7 @@ describe('resolvePeriodicSyncRefetchIntervalMs', () => {
         isPeriodicSyncEnabled: false,
         isLightningEnabled: true,
         isArkadeEnabled: true,
+        isBarkEnabled: false,
         networkMode: 'signet',
         rails: defaultRails(),
         documentVisibilityState: 'visible',
@@ -38,6 +40,7 @@ describe('resolvePeriodicSyncRefetchIntervalMs', () => {
         isPeriodicSyncEnabled: true,
         isLightningEnabled: true,
         isArkadeEnabled: false,
+        isBarkEnabled: false,
         networkMode: 'signet',
         rails,
         documentVisibilityState: 'visible',
@@ -52,6 +55,7 @@ describe('resolvePeriodicSyncRefetchIntervalMs', () => {
         isPeriodicSyncEnabled: true,
         isLightningEnabled: false,
         isArkadeEnabled: false,
+        isBarkEnabled: false,
         networkMode: 'lab',
         rails: defaultRails(),
         documentVisibilityState: 'visible',
@@ -66,6 +70,7 @@ describe('resolvePeriodicSyncRefetchIntervalMs', () => {
         isPeriodicSyncEnabled: true,
         isLightningEnabled: false,
         isArkadeEnabled: true,
+        isBarkEnabled: false,
         networkMode: 'signet',
         rails: defaultRails(),
         documentVisibilityState: 'hidden',
@@ -83,6 +88,7 @@ describe('resolvePeriodicSyncRefetchIntervalMs', () => {
         isPeriodicSyncEnabled: true,
         isLightningEnabled: false,
         isArkadeEnabled: false,
+        isBarkEnabled: false,
         networkMode: 'signet',
         rails,
         documentVisibilityState: 'visible',
@@ -97,10 +103,57 @@ describe('resolvePeriodicSyncRefetchIntervalMs', () => {
         isPeriodicSyncEnabled: true,
         isLightningEnabled: false,
         isArkadeEnabled: false,
+        isBarkEnabled: false,
         networkMode: 'signet',
         rails: defaultRails(),
         documentVisibilityState: 'visible',
       }),
     ).toBe(false)
+  })
+
+  it('returns false for Bark when the feature is off or the network is not signet', () => {
+    expect(
+      resolvePeriodicSyncRefetchIntervalMs({
+        rail: 'bark',
+        isPeriodicSyncEnabled: true,
+        isLightningEnabled: false,
+        isArkadeEnabled: false,
+        isBarkEnabled: false,
+        networkMode: 'signet',
+        rails: defaultRails(),
+        documentVisibilityState: 'visible',
+      }),
+    ).toBe(false)
+
+    expect(
+      resolvePeriodicSyncRefetchIntervalMs({
+        rail: 'bark',
+        isPeriodicSyncEnabled: true,
+        isLightningEnabled: false,
+        isArkadeEnabled: false,
+        isBarkEnabled: true,
+        networkMode: 'testnet',
+        rails: defaultRails(),
+        documentVisibilityState: 'visible',
+      }),
+    ).toBe(false)
+  })
+
+  it('returns the Bark interval when the feature is on, the network is signet, and the tab is visible', () => {
+    const rails = defaultRails()
+    rails.bark.intervalSeconds = 90
+
+    expect(
+      resolvePeriodicSyncRefetchIntervalMs({
+        rail: 'bark',
+        isPeriodicSyncEnabled: true,
+        isLightningEnabled: false,
+        isArkadeEnabled: false,
+        isBarkEnabled: true,
+        networkMode: 'signet',
+        rails,
+        documentVisibilityState: 'visible',
+      }),
+    ).toBe(90_000)
   })
 })

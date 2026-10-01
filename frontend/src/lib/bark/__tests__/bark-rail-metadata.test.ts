@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyOpenedBarkRail,
+  applySuccessfulBarkSync,
   BarkFingerprintMismatchError,
 } from '@/lib/bark/bark-rail-metadata'
 import {
@@ -122,6 +123,50 @@ describe('barkRail metadata', () => {
     })
     expect(revealed.barkRail?.receiveKeyIndex).toBe(2)
     expect(revealed.arkadeAccounts[0]?.sdkPersistenceJson).toBe(sdkPersistenceJson)
+  })
+
+  it('stamps lastSuccessfulSyncAt and keeps the fingerprint, receive index, and Arkade payload', () => {
+    const payload = payloadWithArkadeSdk()
+    payload.barkRail = {
+      network: 'signet',
+      serverUrl: BARK_SIGNET_SERVER_URL,
+      fingerprint: 'abcdef01',
+      receiveKeyIndex: 2,
+    }
+
+    const stamped = applySuccessfulBarkSync({
+      payload,
+      syncedAt: '2024-03-01T12:00:00.000Z',
+    })
+
+    expect(stamped.barkRail).toEqual({
+      network: 'signet',
+      serverUrl: BARK_SIGNET_SERVER_URL,
+      fingerprint: 'abcdef01',
+      receiveKeyIndex: 2,
+      lastSuccessfulSyncAt: '2024-03-01T12:00:00.000Z',
+    })
+    expect(stamped.arkadeAccounts[0]?.sdkPersistenceJson).toBe(sdkPersistenceJson)
+    expect(payload.barkRail.lastSuccessfulSyncAt).toBeUndefined()
+  })
+
+  it('refuses to stamp when the rail is missing or the timestamp is not ISO-8601', () => {
+    const payload = payloadWithArkadeSdk()
+    expect(() =>
+      applySuccessfulBarkSync({ payload, syncedAt: '2024-03-01T12:00:00.000Z' }),
+    ).toThrow('Bark rail is missing')
+
+    payload.barkRail = {
+      network: 'signet',
+      serverUrl: BARK_SIGNET_SERVER_URL,
+      fingerprint: 'abcdef01',
+      receiveKeyIndex: 0,
+      lastSuccessfulSyncAt: '2020-06-01T00:00:00.000Z',
+    }
+    expect(() =>
+      applySuccessfulBarkSync({ payload, syncedAt: 'not-a-timestamp' }),
+    ).toThrow('Bark sync timestamp must be a parseable ISO-8601 string')
+    expect(payload.barkRail.lastSuccessfulSyncAt).toBe('2020-06-01T00:00:00.000Z')
   })
 
   it('drops a rail whose receiveKeyIndex is not a u32', () => {

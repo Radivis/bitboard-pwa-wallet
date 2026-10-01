@@ -114,7 +114,7 @@ export interface StoredBarkRail {
   network: 'signet'
   serverUrl: string
   fingerprint: string
-  /** Set by a later sync stage. Open must preserve it and must not invent one. */
+  /** ISO-8601 time of the last successful Bark sync. Open must preserve it and must not invent one. */
   lastSuccessfulSyncAt?: string
   /**
    * Last Bark receive key revealed for this rail.

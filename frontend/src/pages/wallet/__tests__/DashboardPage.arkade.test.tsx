@@ -103,6 +103,7 @@ vi.mock('@/hooks/useRailManualSyncMutations', () => ({
   useOnchainFullRescanSyncMutation: () => ({ mutate: vi.fn(), isPending: false }),
   useLightningManualSyncMutation: () => ({ mutate: vi.fn(), isPending: false }),
   useArkadeManualSyncMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  useBarkManualSyncMutation: () => ({ mutate: vi.fn(), isPending: false }),
 }))
 
 vi.mock('@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator', () => ({

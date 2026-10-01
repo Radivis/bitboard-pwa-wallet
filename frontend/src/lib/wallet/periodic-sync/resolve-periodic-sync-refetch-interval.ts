@@ -7,6 +7,7 @@ export type PeriodicSyncResolverInput = {
   isPeriodicSyncEnabled: boolean
   isLightningEnabled: boolean
   isArkadeEnabled: boolean
+  isBarkEnabled: boolean
   networkMode: NetworkMode
   rails: PeriodicSyncRailState
   documentVisibilityState?: DocumentVisibilityState
@@ -33,6 +34,10 @@ export function resolvePeriodicSyncRefetchIntervalMs(
   }
 
   if (input.rail === 'arkade' && !input.isArkadeEnabled) {
+    return false
+  }
+
+  if (input.rail === 'bark' && (!input.isBarkEnabled || input.networkMode !== 'signet')) {
     return false
   }
 

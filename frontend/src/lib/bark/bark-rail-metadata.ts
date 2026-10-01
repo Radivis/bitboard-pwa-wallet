@@ -55,3 +55,27 @@ export function applyOpenedBarkRail(params: {
     barkRail,
   }
 }
+
+/**
+ * Stamps `lastSuccessfulSyncAt` after `Wallet::sync` succeeds.
+ * Leaves the fingerprint, receive index, and Arkade account objects unchanged.
+ */
+export function applySuccessfulBarkSync(params: {
+  payload: WalletSecretsPayload
+  syncedAt: string
+}): WalletSecretsPayload {
+  if (!Number.isFinite(Date.parse(params.syncedAt))) {
+    throw new Error('Bark sync timestamp must be a parseable ISO-8601 string')
+  }
+  const existingRail = params.payload.barkRail
+  if (existingRail == null) {
+    throw new Error('Bark rail is missing')
+  }
+  return {
+    ...params.payload,
+    barkRail: {
+      ...existingRail,
+      lastSuccessfulSyncAt: params.syncedAt,
+    },
+  }
+}

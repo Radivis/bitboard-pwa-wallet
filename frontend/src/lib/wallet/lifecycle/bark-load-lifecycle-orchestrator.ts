@@ -1,6 +1,12 @@
 import { getDatabase, getWalletSecretsEncrypted } from '@/db'
 import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
 import { isBarkReceiveKeyIndex } from '@/lib/wallet/wallet-domain-types'
+import {
+  forceResetBarkSyncLifecycleForTeardown,
+  orchestrateBarkPostLoadSync,
+  prepareBarkSyncForSessionOpen,
+  rememberBarkPersistedSyncTime,
+} from '@/lib/wallet/lifecycle/bark-sync-lifecycle-orchestrator'
 import { ensureBarkEncryptedSecretsHost } from '@/workers/bark-persistence-channel'
 import { getBarkWorker, terminateBarkWorker } from '@/workers/bark-factory'
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
@@ -112,7 +118,10 @@ export function rememberBarkReceiveKeyIndex(receiveKeyIndex: number): void {
   setSnapshot({ ...current, receiveKeyIndex })
 }
 
-async function openBarkWorkerSession(walletId: number): Promise<number> {
+async function openBarkWorkerSession(walletId: number): Promise<{
+  receiveKeyIndex: number
+  lastSuccessfulSyncAt?: string
+}> {
   const worker = getBarkWorker()
   await ensureSecretsChannel()
   await ensureBarkEncryptedSecretsHost()
@@ -124,7 +133,10 @@ async function openBarkWorkerSession(walletId: number): Promise<number> {
   if (!isBarkReceiveKeyIndex(opened.receiveKeyIndex)) {
     throw new Error('Bark session opened without a receive key index')
   }
-  return opened.receiveKeyIndex
+  return {
+    receiveKeyIndex: opened.receiveKeyIndex,
+    lastSuccessfulSyncAt: opened.lastSuccessfulSyncAt,
+  }
 }
 
 export async function orchestrateBarkLoad(params: BarkLoadParams): Promise<void> {
@@ -132,6 +144,7 @@ export async function orchestrateBarkLoad(params: BarkLoadParams): Promise<void>
 
   if (!isBarkActiveForNetworkMode(networkMode)) {
     const { closeBarkSession } = await import('@/lib/bark/bark-session-service')
+    forceResetBarkSyncLifecycleForTeardown()
     await closeBarkSession()
     setSnapshot(idleBarkLoadSnapshot())
     return
@@ -153,6 +166,7 @@ export async function orchestrateBarkLoad(params: BarkLoadParams): Promise<void>
 
   return inFlightLoadTracker.begin(key, async () => {
     const generation = sessionGeneration
+    prepareBarkSyncForSessionOpen(networkMode)
     setSnapshot({
       loadPhase: 'loading',
       networkMode,
@@ -160,7 +174,7 @@ export async function orchestrateBarkLoad(params: BarkLoadParams): Promise<void>
       receiveKeyIndex: null,
     })
     try {
-      const receiveKeyIndex = await openBarkWorkerSession(walletId)
+      const opened = await openBarkWorkerSession(walletId)
       if (generation !== sessionGeneration) {
         return
       }
@@ -168,13 +182,16 @@ export async function orchestrateBarkLoad(params: BarkLoadParams): Promise<void>
         loadPhase: 'loaded',
         networkMode,
         errorMessage: null,
-        receiveKeyIndex,
+        receiveKeyIndex: opened.receiveKeyIndex,
       })
+      rememberBarkPersistedSyncTime(opened.lastSuccessfulSyncAt ?? null)
+      orchestrateBarkPostLoadSync({ walletId, networkMode })
     } catch (error) {
       if (generation !== sessionGeneration) {
         return
       }
       terminateBarkWorker()
+      forceResetBarkSyncLifecycleForTeardown()
       setSnapshot({
         loadPhase: 'load-error',
         networkMode,

@@ -6,7 +6,7 @@ feature:
   requirements:
     - Periodic sync is gated by isPeriodicSyncEnabled (default off) under Settings → Features
     - When enabled, Settings → Main shows a Periodic sync card with per-rail controls
-    - Per-rail rows appear for on-chain always; Lightning when isLightningEnabled; Arkade when isArkadeEnabled
+    - Per-rail rows appear for on-chain always; Lightning when isLightningEnabled; Arkade when isArkadeEnabled; Bark when isBarkEnabled
     - Each row has an interval field (30–86400 seconds, default 300) and a "periodic sync enabled" switch (default on)
     - Polling uses React Query refetchInterval while the tab is visible and the rail is loaded
     - On-chain lab network never periodic-syncs Esplora

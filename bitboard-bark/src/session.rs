@@ -4,10 +4,13 @@ use bip39::Mnemonic;
 use bitcoin::Network;
 use wasm_bindgen::prelude::*;
 
+use crate::sync_gate::BarkSessionSyncGate;
 use crate::{BARK_SIGNET_ESPLORA_URL, BARK_SIGNET_SERVER_URL};
 
 thread_local! {
     static ACTIVE_WALLET: RefCell<Option<bark::Wallet>> = const { RefCell::new(None) };
+    static SESSION_SYNC_GATE: RefCell<BarkSessionSyncGate> =
+        const { RefCell::new(BarkSessionSyncGate::new()) };
 }
 
 /// Zeros the mnemonic phrase once the seed has been derived.
@@ -70,17 +73,32 @@ async fn open_signet_session(mnemonic_plaintext: String) -> Result<String, Strin
 
     let fingerprint = wallet.fingerprint().to_string();
     store_wallet(wallet)?;
+    clear_session_sync_gate();
     Ok(fingerprint)
 }
 
+fn clear_session_sync_gate() {
+    SESSION_SYNC_GATE.with(|gate| gate.borrow_mut().clear());
+}
+
+fn mark_session_synced() {
+    SESSION_SYNC_GATE.with(|gate| gate.borrow_mut().mark_synced());
+}
+
+fn require_session_synced() -> Result<(), String> {
+    SESSION_SYNC_GATE.with(|gate| gate.borrow().require_synced().map_err(str::to_owned))
+}
+
 fn drop_active_wallet() -> Result<(), String> {
-    ACTIVE_WALLET.with(|wallet_cell| {
+    ACTIVE_WALLET.with(|wallet_cell| -> Result<(), String> {
         let mut slot = wallet_cell
             .try_borrow_mut()
             .map_err(|_| "Bark session is already borrowed".to_owned())?;
         slot.take();
         Ok(())
-    })
+    })?;
+    clear_session_sync_gate();
+    Ok(())
 }
 
 /// Opens or creates a public-Signet Bark wallet. Protocol state stays in IndexedDB.
@@ -189,4 +207,38 @@ pub async fn bark_last_revealed_key_index() -> Result<JsValue, JsValue> {
         Ok(None) => Ok(JsValue::NULL),
         Err(err) => Err(JsValue::from_str(&err)),
     }
+}
+
+/// Heartbeats the Signet server, then runs `Wallet::sync`.
+/// `Wallet::sync` returns `()` and only logs sub-step failures, so a dead server
+/// is reported by `refresh_server` and does not mark this session as synced.
+#[wasm_bindgen]
+pub async fn bark_sync() -> Result<(), JsValue> {
+    let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
+    let operation_result = async {
+        wallet.refresh_server().await.map_err(bark_error)?;
+        wallet.sync().await;
+        Ok(())
+    }
+    .await;
+    finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))?;
+    mark_session_synced();
+    Ok(())
+}
+
+fn spendable_sats(balance: &bark::Balance) -> u64 {
+    balance.spendable.to_sat()
+}
+
+/// Spendable satoshis. Refused until `bark_sync` has succeeded in this session.
+#[wasm_bindgen]
+pub async fn bark_balance() -> Result<u64, JsValue> {
+    require_session_synced().map_err(|err| JsValue::from_str(&err))?;
+    let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
+    let operation_result = async {
+        let balance = wallet.balance().await.map_err(bark_error)?;
+        Ok(spendable_sats(&balance))
+    }
+    .await;
+    finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
 }

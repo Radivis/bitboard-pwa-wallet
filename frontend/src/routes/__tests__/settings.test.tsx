@@ -68,6 +68,7 @@ describe('Settings routes', () => {
       expect(screen.getByTestId('periodic-sync-row-onchain')).toBeInTheDocument()
       expect(screen.queryByTestId('periodic-sync-row-lightning')).not.toBeInTheDocument()
       expect(screen.queryByTestId('periodic-sync-row-arkade')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('periodic-sync-row-bark')).not.toBeInTheDocument()
     })
 
     it('shows Lightning and Arkade periodic sync rows when those features are enabled', () => {
@@ -78,6 +79,14 @@ describe('Settings routes', () => {
       expect(screen.getByTestId('periodic-sync-row-onchain')).toBeInTheDocument()
       expect(screen.getByTestId('periodic-sync-row-lightning')).toBeInTheDocument()
       expect(screen.getByTestId('periodic-sync-row-arkade')).toBeInTheDocument()
+      expect(screen.queryByTestId('periodic-sync-row-bark')).not.toBeInTheDocument()
+    })
+
+    it('shows a Bark periodic sync row when Bark is enabled', () => {
+      featureStoreState.isPeriodicSyncEnabled = true
+      featureStoreState.isBarkEnabled = true
+      renderWithProviders(<SettingsMainPage />)
+      expect(screen.getByTestId('periodic-sync-row-bark')).toBeInTheDocument()
     })
 
     it('network selector commits loaded descriptor wallet after switch completes', async () => {

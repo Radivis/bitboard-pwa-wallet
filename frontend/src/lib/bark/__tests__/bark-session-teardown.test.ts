@@ -23,6 +23,14 @@ vi.mock('@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator', () => ({
   orchestrateBarkLoad: vi.fn(),
 }))
 
+const awaitBarkSyncQuiescence = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+const forceResetBarkSyncLifecycleForTeardown = vi.hoisted(() => vi.fn())
+
+vi.mock('@/lib/wallet/lifecycle/bark-sync-lifecycle-orchestrator', () => ({
+  awaitBarkSyncQuiescence: () => awaitBarkSyncQuiescence(),
+  forceResetBarkSyncLifecycleForTeardown: () => forceResetBarkSyncLifecycleForTeardown(),
+}))
+
 import { closeBarkSession } from '@/lib/bark/bark-session-service'
 
 describe('closeBarkSession', () => {
@@ -38,5 +46,7 @@ describe('closeBarkSession', () => {
 
     expect(callOrder).toEqual(['close', 'terminate'])
     expect(indexedDB.deleteDatabase).not.toHaveBeenCalled()
+    expect(awaitBarkSyncQuiescence).toHaveBeenCalled()
+    expect(forceResetBarkSyncLifecycleForTeardown).toHaveBeenCalled()
   })
 })

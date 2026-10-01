@@ -1,4 +1,5 @@
 import { expose, wrap, type Remote } from 'comlink'
+import { readBarkSpendableSats } from '@/lib/bark/bark-balance'
 import {
   readBarkLastRevealedKeyIndex,
   readBarkRevealedReceiveAddress,
@@ -10,11 +11,13 @@ import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-s
 import type {
   BarkRevealedReceiveAddress,
   BarkService,
+  BarkSyncResult,
   OpenBarkSessionParams,
   OpenBarkSessionResult,
 } from '@/workers/bark-api'
 import {
   persistBarkReceiveKeyIndex,
+  persistBarkSuccessfulSync,
   persistOpenedBarkRail,
   readStoredBarkReceiveKeyIndex,
 } from '@/workers/bark-worker-metadata'
@@ -120,9 +123,18 @@ async function openSessionImpl(
       revealNextReceiveAddress: async () =>
         readBarkRevealedReceiveAddress(await wasmModule.bark_reveal_next_address()),
     })
-    await persistOpenedBarkRail(deps, params.walletId, fingerprint, receiveKeyIndex)
+    const barkRail = await persistOpenedBarkRail(
+      deps,
+      params.walletId,
+      fingerprint,
+      receiveKeyIndex,
+    )
     openWalletId = params.walletId
-    return { fingerprint, receiveKeyIndex }
+    return {
+      fingerprint,
+      receiveKeyIndex,
+      lastSuccessfulSyncAt: barkRail.lastSuccessfulSyncAt,
+    }
   } catch (err) {
     if (sessionOpened) {
       try {
@@ -162,6 +174,26 @@ async function revealNextReceiveAddressImpl(): Promise<BarkRevealedReceiveAddres
   return revealed
 }
 
+async function syncImpl(): Promise<BarkSyncResult> {
+  const walletId = openWalletId
+  if (walletId == null) {
+    throw new Error('Bark session is not open')
+  }
+  const wasmModule = await getBarkWasm()
+  await wasmModule.bark_sync()
+  const lastSuccessfulSyncAt = new Date().toISOString()
+  await persistBarkSuccessfulSync(encryptedPayloadDeps(), walletId, lastSuccessfulSyncAt)
+  return { lastSuccessfulSyncAt }
+}
+
+async function readSpendableBalanceImpl(): Promise<number> {
+  if (openWalletId == null) {
+    throw new Error('Bark session is not open')
+  }
+  const wasmModule = await getBarkWasm()
+  return readBarkSpendableSats(await wasmModule.bark_balance())
+}
+
 const barkService: BarkService = {
   async setSecretsPort(port: MessagePort): Promise<void> {
     secretsProxy = wrap<SecretsChannelService>(port)
@@ -195,6 +227,22 @@ const barkService: BarkService = {
   async revealNextReceiveAddress(): Promise<BarkRevealedReceiveAddress> {
     try {
       return await revealNextReceiveAddressImpl()
+    } catch (err) {
+      rethrowBarkError(err)
+    }
+  },
+
+  async sync(): Promise<BarkSyncResult> {
+    try {
+      return await syncImpl()
+    } catch (err) {
+      rethrowBarkError(err)
+    }
+  },
+
+  async readSpendableBalance(): Promise<number> {
+    try {
+      return await readSpendableBalanceImpl()
     } catch (err) {
       rethrowBarkError(err)
     }

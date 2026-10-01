@@ -44,6 +44,7 @@ import { useDashboardActivityPageSize } from '@/hooks/useDashboardActivityPageSi
 import { LightningPaymentItem } from '@/components/LightningPaymentItem'
 import { ArkadePaymentItem } from '@/components/ArkadePaymentItem'
 import { ArkadeDashboardBalance } from '@/components/wallet/ArkadeDashboardBalance'
+import { BarkDashboardBalance } from '@/components/wallet/BarkDashboardBalance'
 import { RailLoadErrorBanner } from '@/components/wallet/RailLoadErrorBanner'
 import { RailSyncControl } from '@/components/wallet/RailSyncControl'
 import { RailSyncErrorBanner } from '@/components/wallet/RailSyncErrorBanner'
@@ -432,6 +433,8 @@ function BalanceCard() {
           </div>
 
           <ArkadeDashboardBalance />
+
+          <BarkDashboardBalance />
 
           {isLightningBalancesSectionLoading && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">

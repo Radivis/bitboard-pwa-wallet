@@ -12,6 +12,21 @@ const workerMocks = vi.hoisted(() => ({
 const terminateBarkWorkerMock = vi.hoisted(() => vi.fn())
 const closeBarkSessionMock = vi.hoisted(() => vi.fn())
 
+const orchestrateBarkPostLoadSyncMock = vi.hoisted(() => vi.fn())
+const forceResetBarkSyncLifecycleForTeardownMock = vi.hoisted(() => vi.fn())
+const prepareBarkSyncForSessionOpenMock = vi.hoisted(() => vi.fn())
+const rememberBarkPersistedSyncTimeMock = vi.hoisted(() => vi.fn())
+
+vi.mock('@/lib/wallet/lifecycle/bark-sync-lifecycle-orchestrator', () => ({
+  orchestrateBarkPostLoadSync: (...args: unknown[]) => orchestrateBarkPostLoadSyncMock(...args),
+  forceResetBarkSyncLifecycleForTeardown: (...args: unknown[]) =>
+    forceResetBarkSyncLifecycleForTeardownMock(...args),
+  prepareBarkSyncForSessionOpen: (...args: unknown[]) =>
+    prepareBarkSyncForSessionOpenMock(...args),
+  rememberBarkPersistedSyncTime: (...args: unknown[]) =>
+    rememberBarkPersistedSyncTimeMock(...args),
+}))
+
 vi.mock('@/stores/featureStore', () => ({
   useFeatureStore: {
     getState: () => featureState,
@@ -82,6 +97,30 @@ describe('bark-load-lifecycle-orchestrator', () => {
       encryptedMnemonic: expect.objectContaining({ kdfPhc: 'x' }),
     })
     expect(closeBarkSessionMock).not.toHaveBeenCalled()
+    expect(orchestrateBarkPostLoadSyncMock).toHaveBeenCalledWith({
+      walletId: 1,
+      networkMode: 'signet',
+    })
+    expect(rememberBarkPersistedSyncTimeMock).toHaveBeenCalledWith(null)
+  })
+
+  it('remembers a persisted sync time without blocking on the post-load sync', async () => {
+    workerMocks.openSession.mockResolvedValue({
+      fingerprint: 'abcdef01',
+      receiveKeyIndex: 4,
+      lastSuccessfulSyncAt: '2024-03-01T12:00:00.000Z',
+    })
+
+    await orchestrateBarkLoad({ walletId: 1, networkMode: 'signet' })
+
+    expect(getBarkLoadLifecycleSnapshot().receiveKeyIndex).toBe(4)
+    expect(rememberBarkPersistedSyncTimeMock).toHaveBeenCalledWith(
+      '2024-03-01T12:00:00.000Z',
+    )
+    expect(orchestrateBarkPostLoadSyncMock).toHaveBeenCalledWith({
+      walletId: 1,
+      networkMode: 'signet',
+    })
   })
 
   it('closes without opening when the flag is off', async () => {
@@ -92,6 +131,8 @@ describe('bark-load-lifecycle-orchestrator', () => {
     expect(getBarkLoadLifecycleSnapshot().loadPhase).toBe('not-configured')
     expect(workerMocks.openSession).not.toHaveBeenCalled()
     expect(closeBarkSessionMock).toHaveBeenCalled()
+    expect(orchestrateBarkPostLoadSyncMock).not.toHaveBeenCalled()
+    expect(forceResetBarkSyncLifecycleForTeardownMock).toHaveBeenCalled()
   })
 
   it('closes without opening when the network is not signet', async () => {
@@ -100,6 +141,7 @@ describe('bark-load-lifecycle-orchestrator', () => {
     expect(getBarkLoadLifecycleSnapshot().loadPhase).toBe('not-configured')
     expect(workerMocks.openSession).not.toHaveBeenCalled()
     expect(closeBarkSessionMock).toHaveBeenCalled()
+    expect(orchestrateBarkPostLoadSyncMock).not.toHaveBeenCalled()
   })
 
   it('terminates the worker when open fails', async () => {
@@ -111,5 +153,7 @@ describe('bark-load-lifecycle-orchestrator', () => {
 
     expect(getBarkLoadLifecycleSnapshot().loadPhase).toBe('load-error')
     expect(terminateBarkWorkerMock).toHaveBeenCalled()
+    expect(orchestrateBarkPostLoadSyncMock).not.toHaveBeenCalled()
+    expect(forceResetBarkSyncLifecycleForTeardownMock).toHaveBeenCalled()
   })
 })

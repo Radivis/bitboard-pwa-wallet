@@ -4,6 +4,10 @@ import {
   forceResetBarkLoadLifecycleForTeardown,
   orchestrateBarkLoad,
 } from '@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator'
+import {
+  awaitBarkSyncQuiescence,
+  forceResetBarkSyncLifecycleForTeardown,
+} from '@/lib/wallet/lifecycle/bark-sync-lifecycle-orchestrator'
 import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
 import { reportBarkSessionOpenError } from '@/lib/bark/bark-session-open-error-toast'
 import type { NetworkMode } from '@/stores/walletStore'
@@ -13,6 +17,7 @@ import type { NetworkMode } from '@/stores/walletStore'
  * handshake cannot block the network switch.
  */
 export function abortBarkSessionForNetworkSwitch(): void {
+  forceResetBarkSyncLifecycleForTeardown()
   terminateBarkWorker()
   forceResetBarkLoadLifecycleForTeardown()
 }
@@ -22,6 +27,7 @@ export function abortBarkSessionForNetworkSwitch(): void {
  */
 export async function closeBarkSession(): Promise<void> {
   await awaitBarkLoadQuiescence()
+  await awaitBarkSyncQuiescence()
   const barkWorker = getBarkWorkerIfExists()
   if (barkWorker != null) {
     try {
@@ -31,6 +37,7 @@ export async function closeBarkSession(): Promise<void> {
     }
   }
   terminateBarkWorker()
+  forceResetBarkSyncLifecycleForTeardown()
   forceResetBarkLoadLifecycleForTeardown()
 }
 

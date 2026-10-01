@@ -3,7 +3,7 @@ import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { SyncLifecyclePhase } from '@/lib/wallet/lifecycle/rail-lifecycle-types'
 
-export type DashboardRailId = 'onchain' | 'lightning' | 'arkade'
+export type DashboardRailId = 'onchain' | 'lightning' | 'arkade' | 'bark'
 
 const RAIL_SYNC_ERROR_CAPTION_DEFERRED = 'Sync failed — see details below'
 const RAIL_SYNC_WARNING_CAPTION_DEFERRED = 'Synced with warnings — see details below'
