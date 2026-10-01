@@ -7,7 +7,7 @@ export const config = {
 // Inlined from src/lib/arkade/arkade-operator-proxy.ts
 const ARKADE_OPERATOR_UPSTREAM_BASES: Record<string, string> = {
   mainnet: 'https://arkade.computer',
-  signet: 'https://mutinynet.arkade.sh',
+  mutinynet: 'https://mutinynet.arkade.sh',
 }
 
 function getUpstreamArkOperatorBase(network: string): string | null {

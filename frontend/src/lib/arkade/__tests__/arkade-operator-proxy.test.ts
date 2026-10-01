@@ -9,8 +9,8 @@ describe('arkade-operator-proxy', () => {
     expect(getArkOperatorUrl('mainnet')).toBe(
       `${window.location.origin}/api/arkade/operator/mainnet`,
     )
-    expect(getArkOperatorUrl('signet')).toBe(
-      `${window.location.origin}/api/arkade/operator/signet`,
+    expect(getArkOperatorUrl('mutinynet')).toBe(
+      `${window.location.origin}/api/arkade/operator/mutinynet`,
     )
   })
 
@@ -18,11 +18,11 @@ describe('arkade-operator-proxy', () => {
     expect(
       customArkOperatorMatchesWhitelistedBase(
         'https://mutinynet.arkade.sh',
-        'signet',
+        'mutinynet',
       ),
     ).toBe(true)
-    expect(getArkOperatorUrl('signet', 'https://mutinynet.arkade.sh')).toBe(
-      `${window.location.origin}/api/arkade/operator/signet`,
+    expect(getArkOperatorUrl('mutinynet', 'https://mutinynet.arkade.sh')).toBe(
+      `${window.location.origin}/api/arkade/operator/mutinynet`,
     )
   })
 

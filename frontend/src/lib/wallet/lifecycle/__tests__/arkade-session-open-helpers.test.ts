@@ -38,7 +38,7 @@ import {
 const TEST_ACCOUNT = {
   id: 'conn-helper-test',
   label: 'signet',
-  networkMode: 'signet' as const,
+  networkMode: 'mutinynet' as const,
   operatorUrl: 'https://asp.example',
   operatorSignerPkHex: '02deadbeef',
   createdAt: '2020-01-01T00:00:00.000Z',
@@ -66,11 +66,11 @@ describe('arkade-session-open-helpers', () => {
   })
 
   it('tryReuseExistingArkadeSession returns account id when session is already open', async () => {
-    const sessionReuseState = createSessionReuseState('7:signet:conn-helper-test')
+    const sessionReuseState = createSessionReuseState('7:mutinynet:conn-helper-test')
 
     const arkadeAccountId = await tryReuseExistingArkadeSession({
       walletId: 7,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       account: TEST_ACCOUNT,
       sessionReuseState,
     })
@@ -83,7 +83,7 @@ describe('arkade-session-open-helpers', () => {
   it('tryReuseExistingArkadeSession returns null when session key does not match', async () => {
     const arkadeAccountId = await tryReuseExistingArkadeSession({
       walletId: 7,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       account: TEST_ACCOUNT,
       sessionReuseState: createSessionReuseState('other-key'),
     })
@@ -99,7 +99,7 @@ describe('arkade-session-open-helpers', () => {
     await hydrateArkadeDashboardAfterSessionOpen({
       worker: workerMocks,
       walletId: 7,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       arkadeAccountId: TEST_ACCOUNT.id,
       signerMigrationHint: {
         previousSignerPkHex: '02deadbeef',
@@ -117,7 +117,7 @@ describe('arkade-session-open-helpers', () => {
     })
     expect(workerMocks.reconcileActiveAccountId).toHaveBeenCalledWith(TEST_ACCOUNT.id)
     expect(setActiveArkadeAccountIdMock).toHaveBeenCalledWith(TEST_ACCOUNT.id)
-    expect(sessionReuseState.lastOpenedSessionKey).toBe('7:signet:conn-helper-test')
-    expect(runPostOpenMaintenance).toHaveBeenCalledWith(workerMocks, 'signet')
+    expect(sessionReuseState.lastOpenedSessionKey).toBe('7:mutinynet:conn-helper-test')
+    expect(runPostOpenMaintenance).toHaveBeenCalledWith(workerMocks, 'mutinynet')
   })
 })

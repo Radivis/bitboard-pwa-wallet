@@ -10,7 +10,7 @@ import type { NetworkMode } from '@/stores/walletStore'
 const balanceQueryMock = vi.hoisted(() => vi.fn())
 const addressQueryMock = vi.hoisted(() => vi.fn())
 const walletStoreState = vi.hoisted(() => ({
-  networkMode: 'signet' as NetworkMode,
+  networkMode: 'mutinynet' as NetworkMode,
   arkadeReceiveAddress: 'tark1qqexample' as string | null,
   arkadeBalance: null as { confirmedSats: number; totalSats: number } | null,
 }))
@@ -100,7 +100,7 @@ vi.mock('@/hooks/useArkadeDashboardQueries', () => ({
 vi.mock('@/hooks/useArkadeLifecycleSnapshots', () => ({
   useArkadeLoadLifecycleSnapshot: () => ({
     loadPhase: 'loaded',
-    networkMode: 'signet',
+    networkMode: 'mutinynet',
     errorMessage: null,
   }),
   useArkadeSyncLifecycleSnapshot: () => ({
@@ -150,7 +150,7 @@ vi.mock('@/components/wallet/ArkadeExitSection', () => ({
 describe('Arkade Infomode zones', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    walletStoreState.networkMode = 'signet'
+    walletStoreState.networkMode = 'mutinynet'
     walletStoreState.arkadeReceiveAddress = 'tark1qqexample'
     balanceQueryMock.mockReturnValue({
       isLoading: false,

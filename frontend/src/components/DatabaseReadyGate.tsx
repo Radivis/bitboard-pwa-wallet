@@ -57,6 +57,10 @@ export function DatabaseReadyGate({ children }: DatabaseReadyGateProps) {
         }
       } else {
         await syncNearZeroSecurityAfterDatabaseReady()
+        const { migrateCustomEsploraUrlSignetToMutinynet } = await import(
+          '@/lib/wallet/wallet-utils'
+        )
+        await migrateCustomEsploraUrlSignetToMutinynet()
       }
 
       if (!cancelled) setIsReady(true)

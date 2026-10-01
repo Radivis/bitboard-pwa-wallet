@@ -115,7 +115,7 @@ vi.mock('@/lib/arkade/arkade-accounts', async (importOriginal) => {
     ...actual,
     findActiveArkadeAccountSummary: vi.fn().mockResolvedValue({
       id: 'conn-hook-test',
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
     }),
   }
 })
@@ -210,7 +210,7 @@ describe('lifecycle snapshot hooks', () => {
     expect(result.current).toBe(false)
 
     await act(async () => {
-      await orchestrateArkadeLoad({ walletId: 1, networkMode: 'signet' })
+      await orchestrateArkadeLoad({ walletId: 1, networkMode: 'mutinynet' })
     })
 
     expect(result.current).toBe(true)

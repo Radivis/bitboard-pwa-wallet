@@ -26,7 +26,7 @@ const migrationHint = (
 const legacyAccount = {
   id: 'conn-1',
   label: 'test',
-  networkMode: 'signet' as const,
+  networkMode: 'mutinynet' as const,
   operatorUrl: 'https://operator.example',
   operatorSignerPkHex: '02oldsigner',
   createdAt: '2026-01-01T00:00:00.000Z',
@@ -60,10 +60,10 @@ describe('ensureArkadeAccountInPayload', () => {
   it('updates operatorSignerPkHex on active-account migration open', () => {
     const payload = basePayload()
     payload.arkadeAccounts = [legacyAccount]
-    payload.activeArkadeAccountIdByNetwork.signet = 'conn-1'
+    payload.activeArkadeAccountIdByNetwork.mutinynet = 'conn-1'
 
     const { account, payload: merged } = ensureArkadeAccountInPayload(payload, {
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       operatorSignerPkHex: '02newsigner',
       operatorUrl: 'https://operator.example',
       delegatorUrl: '',
@@ -72,7 +72,7 @@ describe('ensureArkadeAccountInPayload', () => {
 
     expect(account.operatorSignerPkHex).toBe('02newsigner')
     expect(account.lastSessionOpenedAt).toMatch(/^\d{4}-/)
-    expect(merged.activeArkadeAccountIdByNetwork.signet).toBe('conn-1')
+    expect(merged.activeArkadeAccountIdByNetwork.mutinynet).toBe('conn-1')
   })
 
   it('reactivates inactive matching account on migration open', () => {
@@ -87,7 +87,7 @@ describe('ensureArkadeAccountInPayload', () => {
     ]
 
     const { account, payload: merged } = ensureArkadeAccountInPayload(payload, {
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       operatorSignerPkHex: '02newsigner',
       operatorUrl: 'https://operator.example',
       delegatorUrl: '',
@@ -98,7 +98,7 @@ describe('ensureArkadeAccountInPayload', () => {
     expect(account.operatorSignerPkHex).toBe('02newsigner')
     expect(account.sdkPersistenceJson).toBe(existingSdkJson)
     expect(account.lastSessionOpenedAt).toMatch(/^\d{4}-/)
-    expect(merged.activeArkadeAccountIdByNetwork.signet).toBe('conn-1')
+    expect(merged.activeArkadeAccountIdByNetwork.mutinynet).toBe('conn-1')
   })
 })
 
@@ -116,7 +116,7 @@ describe('post-migration persistence metadata', () => {
         sdkPersistenceJson: existingSdkJson,
       },
     ]
-    payload.activeArkadeAccountIdByNetwork.signet = 'conn-1'
+    payload.activeArkadeAccountIdByNetwork.mutinynet = 'conn-1'
 
     const merged = mergeSdkPersistenceIntoPayload(
       payload,

@@ -31,6 +31,8 @@ pub enum BitcoinNetwork {
     Bitcoin,
     Testnet,
     Signet,
+    /// Mutinynet is a custom signet. Address encoding matches public Signet.
+    Mutinynet,
     Regtest,
 }
 
@@ -39,7 +41,7 @@ impl From<BitcoinNetwork> for Network {
         match network {
             BitcoinNetwork::Bitcoin => Network::Bitcoin,
             BitcoinNetwork::Testnet => Network::Testnet,
-            BitcoinNetwork::Signet => Network::Signet,
+            BitcoinNetwork::Signet | BitcoinNetwork::Mutinynet => Network::Signet,
             BitcoinNetwork::Regtest => Network::Regtest,
         }
     }
@@ -66,6 +68,7 @@ impl TryFrom<&str> for BitcoinNetwork {
             "bitcoin" => Ok(BitcoinNetwork::Bitcoin),
             "testnet" => Ok(BitcoinNetwork::Testnet),
             "signet" => Ok(BitcoinNetwork::Signet),
+            "mutinynet" => Ok(BitcoinNetwork::Mutinynet),
             "regtest" => Ok(BitcoinNetwork::Regtest),
             _ => Err(CryptoError::Descriptor(format!(
                 "Unknown network: {}",

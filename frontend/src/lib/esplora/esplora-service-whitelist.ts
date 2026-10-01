@@ -1,5 +1,5 @@
 /** Networks that use the same-origin Esplora proxy on hosted builds. */
-export type EsploraProxyNetwork = 'mainnet' | 'testnet' | 'signet'
+export type EsploraProxyNetwork = 'mainnet' | 'testnet' | 'signet' | 'mutinynet'
 
 export type EsploraProviderId = 'default' | 'blockstream' | 'legacy'
 
@@ -13,7 +13,8 @@ export const ESPLORA_PROVIDER_BASES: Record<EsploraProviderId, ProviderBases> = 
   default: {
     mainnet: 'https://mempool.space/api',
     testnet: 'https://mempool.space/testnet4/api',
-    signet: 'https://mutinynet.com/api',
+    signet: 'https://mempool.space/signet/api',
+    mutinynet: 'https://mutinynet.com/api',
   },
   /** Public Blockstream Esplora mirrors (no testnet4 row — chain differs from app testnet). */
   blockstream: {
@@ -21,8 +22,10 @@ export const ESPLORA_PROVIDER_BASES: Record<EsploraProviderId, ProviderBases> = 
     signet: 'https://blockstream.info/signet/api',
   },
   /**
-   * Bitcoin testnet **3** (not testnet4) and **standard signet** (not Mutinynet).
+   * Bitcoin testnet **3** (not testnet4) and an alternate public-signet base.
    * Signet uses mempool.space so it does not share the same base URL as `blockstream.signet`.
+   * The default signet provider is the same mempool signet URL; this row keeps older
+   * custom URLs on the legacy proxy path.
    */
   legacy: {
     testnet: 'https://blockstream.info/testnet/api',
@@ -40,7 +43,12 @@ export const ESPLORA_SAME_ORIGIN_PROXY_PREFIX = '/api/esplora'
 export function isEsploraProxyNetwork(
   mode: string,
 ): mode is EsploraProxyNetwork {
-  return mode === 'mainnet' || mode === 'testnet' || mode === 'signet'
+  return (
+    mode === 'mainnet' ||
+    mode === 'testnet' ||
+    mode === 'signet' ||
+    mode === 'mutinynet'
+  )
 }
 
 /**

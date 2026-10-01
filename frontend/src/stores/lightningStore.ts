@@ -124,6 +124,34 @@ interface LightningState {
   clearInvoices: () => void
 }
 
+/** Persisted Lightning `signet` connections were Mutinynet. */
+export function migrateLightningPersistedState(
+  persistedState: unknown,
+  version: number,
+): unknown {
+  if (version >= 1 || persistedState == null || typeof persistedState !== 'object') {
+    return persistedState
+  }
+  const state = persistedState as {
+    activeConnectionIds?: Record<string, Record<string, string> | undefined>
+  }
+  const activeConnectionIds = state.activeConnectionIds
+  if (activeConnectionIds == null || typeof activeConnectionIds !== 'object') {
+    return persistedState
+  }
+  const nextIds: Record<string, Record<string, string>> = {}
+  for (const [walletId, perNetwork] of Object.entries(activeConnectionIds)) {
+    if (perNetwork == null || typeof perNetwork !== 'object') continue
+    const renamed = { ...perNetwork }
+    if (typeof renamed.signet === 'string' && renamed.mutinynet === undefined) {
+      renamed.mutinynet = renamed.signet
+    }
+    delete renamed.signet
+    nextIds[walletId] = renamed
+  }
+  return { ...state, activeConnectionIds: nextIds }
+}
+
 export const useLightningStore = create<LightningState>()(
   persist(
     (set, get) => ({
@@ -400,6 +428,8 @@ export const useLightningStore = create<LightningState>()(
     {
       name: 'lightning-storage',
       storage: createJSONStorage(() => sqliteStorage),
+      version: 1,
+      migrate: migrateLightningPersistedState,
       partialize: (state) => ({
         activeConnectionIds: state.activeConnectionIds,
         invoices: state.invoices,

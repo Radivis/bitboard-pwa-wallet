@@ -15,7 +15,7 @@ export enum AddressType {
   Taproot = 'taproot',
 }
 
-export type BitcoinNetwork = 'bitcoin' | 'testnet' | 'signet' | 'regtest'
+export type BitcoinNetwork = 'bitcoin' | 'testnet' | 'signet' | 'mutinynet' | 'regtest'
 
 /** Domain wallet summary; map from SQLite via `mapDbWalletToDomain()` at the DB hook boundary. */
 export interface WalletSummary {
@@ -139,6 +139,12 @@ export interface WalletSecretsPayload {
   >
   /** Present after a successful Bark session open. Absent on older payloads. */
   barkRail?: StoredBarkRail
+  /**
+   * Set once the historical `signet` rows (Mutinynet infrastructure) have been
+   * rewritten to `mutinynet`. Absent means the rewrite still needs to run.
+   * New wallets set this immediately so public Signet rows stay `signet`.
+   */
+  liveNetworkSplitApplied?: true
 }
 
 /** Sensitive wallet data stored encrypted. Shared with db layer and workers. */
@@ -150,6 +156,7 @@ const SUPPORTED_BITCOIN_NETWORKS: readonly BitcoinNetwork[] = [
   'bitcoin',
   'testnet',
   'signet',
+  'mutinynet',
   'regtest',
 ]
 
@@ -390,6 +397,9 @@ export function assembleWalletSecrets(
     arkadeAccounts: payload.arkadeAccounts,
     activeArkadeAccountIdByNetwork: payload.activeArkadeAccountIdByNetwork,
     ...(payload.barkRail != null ? { barkRail: payload.barkRail } : {}),
+    ...(payload.liveNetworkSplitApplied === true
+      ? { liveNetworkSplitApplied: true as const }
+      : {}),
   }
 }
 
@@ -485,8 +495,46 @@ function pickActiveArkadeAccountIdByNetworkField(raw: Record<string, unknown>): 
   return raw.activeArkadeConnectionIdByNetwork
 }
 
+function rewriteSignetNetworkField(
+  value: unknown,
+  field: 'network' | 'networkMode',
+): void {
+  if (!Array.isArray(value)) return
+  for (const row of value) {
+    if (isRecord(row) && row[field] === 'signet') {
+      row[field] = 'mutinynet'
+    }
+  }
+}
+
+function renameSignetMapKeyToMutinynet(value: unknown): void {
+  if (!isRecord(value) || Array.isArray(value)) return
+  if (typeof value.signet === 'string' && value.mutinynet === undefined) {
+    value.mutinynet = value.signet
+  }
+  delete value.signet
+}
+
+/**
+ * Historical `signet` rows were Mutinynet infrastructure. Rewrite them once.
+ * Bark stays on public Signet (`barkRail.network` is left untouched).
+ */
+function applyLiveNetworkSplit(raw: Record<string, unknown>): void {
+  if (raw.liveNetworkSplitApplied === true) return
+
+  rewriteSignetNetworkField(raw.descriptorWallets, 'network')
+  rewriteSignetNetworkField(raw.arkadeAccounts, 'networkMode')
+  rewriteSignetNetworkField(raw.arkadeOperatorConnections, 'networkMode')
+  rewriteSignetNetworkField(raw.lightningNwcConnections, 'networkMode')
+  renameSignetMapKeyToMutinynet(raw.activeArkadeAccountIdByNetwork)
+  renameSignetMapKeyToMutinynet(raw.activeArkadeConnectionIdByNetwork)
+  raw.liveNetworkSplitApplied = true
+}
+
 function normalizeWalletSecretsPayload(raw: unknown): unknown {
   if (!isRecord(raw)) return raw
+
+  applyLiveNetworkSplit(raw)
 
   const withoutLegacyKeys = { ...raw }
   delete withoutLegacyKeys.arkadeWallets

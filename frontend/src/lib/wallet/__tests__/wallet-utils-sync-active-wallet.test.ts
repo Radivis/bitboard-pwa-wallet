@@ -40,7 +40,9 @@ vi.mock('@/db/database', () => ({
     selectFrom: vi.fn(() => ({
       select: vi.fn(() => ({
         where: vi.fn(() => ({
-          executeTakeFirst: vi.fn().mockResolvedValue(undefined),
+        executeTakeFirst: vi.fn().mockResolvedValue({
+          key: 'live_network_split_esplora_migrated',
+        }),
         })),
       })),
     })),

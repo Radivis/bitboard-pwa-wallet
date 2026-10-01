@@ -144,9 +144,9 @@ describe('validateEsploraUrl', () => {
     ).not.toThrow()
   })
 
-  it('accepts Mutinynet default Esplora URL for signet', () => {
+  it('accepts Mutinynet Esplora URL for mutinynet', () => {
     expect(() =>
-      validateEsploraUrl('https://mutinynet.com/api', 'signet'),
+      validateEsploraUrl('https://mutinynet.com/api', 'mutinynet'),
     ).not.toThrow()
   })
 

@@ -67,6 +67,10 @@ describe('isBolt11NetworkMismatch', () => {
   it('is false when networks match', () => {
     expect(isBolt11NetworkMismatch(lnInvoice, 'signet')).toBe(false)
   })
+
+  it('accepts a signet-prefix invoice on mutinynet', () => {
+    expect(isBolt11NetworkMismatch(lnInvoice, 'mutinynet')).toBe(false)
+  })
 })
 
 describe('needsUserLightningAmount', () => {

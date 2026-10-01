@@ -9,7 +9,6 @@ import {
   isValidBolt11Invoice,
   isLightningAddress,
   isLnurlPayDestination,
-  bolt11NetworkModeFromPrefix,
 } from '@/lib/lightning/lightning-utils'
 import { LnurlUnsupportedTagError } from '@/lib/lightning/lnurl-pay-errors'
 import { resolveLnurlPayInvoice } from '@/lib/lightning/resolve-lnurl-pay-invoice'
@@ -145,8 +144,7 @@ export function useSendFlowLightning({
         satoshi: amountSats,
       })
       const bolt11PaymentRequest = lud16Invoice.paymentRequest
-      const invoiceNetworkMode = bolt11NetworkModeFromPrefix(bolt11PaymentRequest)
-      if (invoiceNetworkMode !== networkMode) {
+      if (isBolt11NetworkMismatch(bolt11PaymentRequest, networkMode)) {
         toast.error(
           'This invoice is for a different network. Switch network in Settings.',
         )
@@ -179,8 +177,7 @@ export function useSendFlowLightning({
         recipient: normalizedRecipient,
         amountSats,
       })
-      const invoiceNetworkMode = bolt11NetworkModeFromPrefix(bolt11PaymentRequest)
-      if (invoiceNetworkMode !== networkMode) {
+      if (isBolt11NetworkMismatch(bolt11PaymentRequest, networkMode)) {
         toast.error(
           'This invoice is for a different network. Switch network in Settings.',
         )

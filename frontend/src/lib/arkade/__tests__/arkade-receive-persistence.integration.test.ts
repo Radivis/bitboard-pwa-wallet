@@ -34,7 +34,7 @@ function emptyPayloadJson(): string {
       {
         id: CONNECTION_ID,
         label: 'signet',
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
         operatorUrl: 'https://signet.arkade.example/v1',
         operatorSignerPkHex: '02abc',
         createdAt: '2020-01-01T00:00:00.000Z',

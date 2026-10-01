@@ -154,6 +154,7 @@ function buildInitialWalletSecretsPayload({
     lightningNwcConnections: [],
     arkadeAccounts: [],
     activeArkadeAccountIdByNetwork: {},
+    liveNetworkSplitApplied: true,
   };
 }
 

@@ -1,7 +1,7 @@
 import { decodeInvoice } from '@getalby/lightning-tools/bolt11'
 import type { NetworkMode } from '@/stores/walletStore'
 
-export const LIGHTNING_NETWORK_MODES = ['mainnet', 'testnet', 'signet'] as const
+export const LIGHTNING_NETWORK_MODES = ['mainnet', 'testnet', 'signet', 'mutinynet'] as const
 
 export type LightningNetworkMode = (typeof LIGHTNING_NETWORK_MODES)[number]
 
@@ -25,16 +25,24 @@ export function defaultLightningNetworkForAppMode(
 /**
  * Maps NIP-47 `get_info.network` to a Bitboard Lightning mode.
  * Returns null for regtest, empty values, or strings Bitboard does not support.
+ * NIP-47 reports both public Signet and Mutinynet as `signet`. When the app is
+ * on one of those modes, the connection is stored for that mode.
  */
 export function lightningNetworkModeFromNip47Network(
   raw: string | undefined,
+  appNetworkMode?: NetworkMode,
 ): LightningNetworkMode | null {
   if (raw == null) return null
   const normalizedNetwork = raw.trim().toLowerCase()
   if (normalizedNetwork === '') return null
   if (normalizedNetwork === 'mainnet' || normalizedNetwork === 'bitcoin') return 'mainnet'
   if (normalizedNetwork === 'testnet') return 'testnet'
-  if (normalizedNetwork === 'signet') return 'signet'
+  if (normalizedNetwork === 'signet' || normalizedNetwork === 'mutinynet') {
+    if (appNetworkMode === 'signet' || appNetworkMode === 'mutinynet') {
+      return appNetworkMode
+    }
+    return normalizedNetwork === 'mutinynet' ? 'mutinynet' : 'signet'
+  }
   return null
 }
 
@@ -58,6 +66,23 @@ export function bolt11NetworkModeFromPrefix(
   if (lower.startsWith('lntbs')) return 'signet'
   if (lower.startsWith('lntb')) return 'testnet'
   return null
+}
+
+/**
+ * BOLT11 `lntbs` is the signet family prefix. Mutinynet invoices use it too,
+ * so a signet-prefix invoice matches both Signet and Mutinynet app modes.
+ */
+export function bolt11InvoiceMatchesAppNetwork(
+  invoiceNetworkMode: LightningNetworkMode,
+  appNetworkMode: NetworkMode,
+): boolean {
+  if (
+    invoiceNetworkMode === 'signet' &&
+    (appNetworkMode === 'signet' || appNetworkMode === 'mutinynet')
+  ) {
+    return true
+  }
+  return invoiceNetworkMode === appNetworkMode
 }
 
 /** Decode a BOLT11 payment request; returns null if invalid or undecodable. */

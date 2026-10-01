@@ -95,7 +95,7 @@ describe('parseWalletPayloadJson', () => {
     expect(parsed).not.toHaveProperty('activeArkadeConnectionIdByNetwork')
     expect(parsed.arkadeAccounts).toHaveLength(1)
     expect(parsed.arkadeAccounts[0].id).toBe('acct-good')
-    expect(parsed.activeArkadeAccountIdByNetwork).toEqual({ signet: 'acct-good' })
+    expect(parsed.activeArkadeAccountIdByNetwork).toEqual({ mutinynet: 'acct-good' })
   })
 
   it('keeps arkadeAccounts when only the new keys are present', () => {
@@ -112,7 +112,7 @@ describe('parseWalletPayloadJson', () => {
     })
     const parsed = parseWalletPayloadJson(json)
     expect(parsed.arkadeAccounts).toHaveLength(1)
-    expect(parsed.activeArkadeAccountIdByNetwork.signet).toBe('acct-good')
+    expect(parsed.activeArkadeAccountIdByNetwork.mutinynet).toBe('acct-good')
     expect(parsed).not.toHaveProperty('arkadeOperatorConnections')
   })
 
@@ -132,7 +132,7 @@ describe('parseWalletPayloadJson', () => {
     expect(parsed).not.toHaveProperty('activeArkadeConnectionIdByNetwork')
     expect(parsed.arkadeAccounts).toHaveLength(1)
     expect(parsed.arkadeAccounts[0].id).toBe('acct-good')
-    expect(parsed.activeArkadeAccountIdByNetwork).toEqual({ signet: 'acct-good' })
+    expect(parsed.activeArkadeAccountIdByNetwork).toEqual({ mutinynet: 'acct-good' })
   })
 
   it('drops invalid arkadeAccounts instead of rejecting the wallet', () => {
@@ -154,7 +154,7 @@ describe('parseWalletPayloadJson', () => {
     const parsed = parseWalletPayloadJson(json)
     expect(parsed.arkadeAccounts).toHaveLength(1)
     expect(parsed.arkadeAccounts[0].id).toBe('acct-good')
-    expect(parsed.activeArkadeAccountIdByNetwork).toEqual({ signet: 'acct-good' })
+    expect(parsed.activeArkadeAccountIdByNetwork).toEqual({ mutinynet: 'acct-good' })
   })
 
   it('normalizes null arkadeAccounts to empty array', () => {
@@ -181,7 +181,58 @@ describe('parseWalletPayloadJson', () => {
     })
     const parsed = parseWalletPayloadJson(json)
     expect(parsed.arkadeAccounts).toHaveLength(1)
-    expect(parsed.activeArkadeAccountIdByNetwork.signet).toBe('acct-good')
+    expect(parsed.arkadeAccounts[0].networkMode).toBe('mutinynet')
+    expect(parsed.activeArkadeAccountIdByNetwork.mutinynet).toBe('acct-good')
+  })
+
+  it('rewrites historical signet rows to mutinynet once and leaves Bark on public signet', () => {
+    const json = JSON.stringify({
+      descriptorWallets: [
+        {
+          network: 'signet',
+          addressType: 'taproot',
+          accountId: 0,
+          externalDescriptor: 'tr(xpub.../0/*)',
+          internalDescriptor: 'tr(xpub.../1/*)',
+          changeSet: '{}',
+          fullScanDone: false,
+        },
+      ],
+      lightningNwcConnections: [
+        {
+          id: 'conn-1',
+          label: 'LN',
+          networkMode: 'signet',
+          connectionString: 'nostr+walletconnect://abc?relay=wss%3A%2F%2Fx&secret=y',
+          createdAt: '2020-01-01T00:00:00.000Z',
+        },
+      ],
+      arkadeAccounts: [validSignetAccount],
+      activeArkadeAccountIdByNetwork: { signet: 'acct-good' },
+      barkRail: {
+        network: 'signet',
+        serverUrl: 'https://ark.signet.2nd.dev',
+        fingerprint: 'abcdef01',
+      },
+    })
+    const migrated = parseWalletPayloadJson(json)
+    expect(migrated.liveNetworkSplitApplied).toBe(true)
+    expect(migrated.descriptorWallets[0].network).toBe('mutinynet')
+    expect(migrated.lightningNwcConnections[0].networkMode).toBe('mutinynet')
+    expect(migrated.arkadeAccounts[0].networkMode).toBe('mutinynet')
+    expect(migrated.activeArkadeAccountIdByNetwork).toEqual({ mutinynet: 'acct-good' })
+    expect(migrated.barkRail?.network).toBe('signet')
+
+    const kept = parseWalletPayloadJson(
+      JSON.stringify({
+        ...migrated,
+        descriptorWallets: [
+          { ...migrated.descriptorWallets[0], network: 'signet' },
+        ],
+      }),
+    )
+    expect(kept.descriptorWallets[0].network).toBe('signet')
+    expect(kept.liveNetworkSplitApplied).toBe(true)
   })
 
   it('accepts regtest arkadeAccounts for arkade-regtest E2E', () => {

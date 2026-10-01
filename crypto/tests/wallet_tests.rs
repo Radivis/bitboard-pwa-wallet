@@ -50,6 +50,7 @@ fn create_wallet_generates_valid_first_address(
 #[case(BitcoinNetwork::Bitcoin, "bc1p")]
 #[case(BitcoinNetwork::Testnet, "tb1p")]
 #[case(BitcoinNetwork::Signet, "tb1p")]
+#[case(BitcoinNetwork::Mutinynet, "tb1p")]
 #[case(BitcoinNetwork::Regtest, "bcrt1p")]
 fn wallet_creation_works_for_all_networks(
     #[case] network: BitcoinNetwork,

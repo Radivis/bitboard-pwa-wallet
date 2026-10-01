@@ -11,6 +11,7 @@ import {
 } from '@/lib/lightning/lightning-wire-mappers'
 import type { WireNwcMakeInvoiceResult } from '@/lib/lightning/lightning-wire-types'
 import type { LightningNetworkMode } from '@/lib/lightning/lightning-utils'
+import { getCommittedNetworkMode } from '@/stores/walletStore'
 
 /** NWC `get_info` chain tip — used to compare against Esplora for the same network. */
 export async function fetchNwcChainTipBlockHeight(
@@ -308,7 +309,10 @@ function createNwcBackendService(
     async testConnection(): Promise<NwcTestConnectionResult> {
       try {
         const nwcWalletInfo = await client.getInfo()
-        return mapWireNwcWalletInfoToTestConnectionResult(nwcWalletInfo)
+        return mapWireNwcWalletInfoToTestConnectionResult(
+          nwcWalletInfo,
+          getCommittedNetworkMode(),
+        )
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Unknown error'

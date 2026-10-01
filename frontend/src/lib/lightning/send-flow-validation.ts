@@ -5,6 +5,7 @@ import {
 } from '@/lib/lightning/lightning-input-limits'
 import {
   bolt11NetworkModeFromPrefix,
+  bolt11InvoiceMatchesAppNetwork,
   isLightningAddress,
   isLnurlPayDestination,
   isValidBolt11Invoice,
@@ -36,7 +37,7 @@ export function isBolt11NetworkMismatch(
   if (!isValidBolt11Invoice(normalizedRecipient)) return false
   const invoiceNetwork = bolt11NetworkModeFromPrefix(normalizedRecipient)
   if (invoiceNetwork == null) return false
-  return invoiceNetwork !== networkMode
+  return !bolt11InvoiceMatchesAppNetwork(invoiceNetwork, networkMode)
 }
 
 export type NeedsUserLightningAmountInput = {

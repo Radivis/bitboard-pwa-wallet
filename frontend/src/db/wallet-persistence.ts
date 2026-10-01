@@ -396,6 +396,9 @@ export async function saveWalletSecrets(params: {
       arkadeAccounts: secrets.arkadeAccounts ?? [],
       activeArkadeAccountIdByNetwork: secrets.activeArkadeAccountIdByNetwork ?? {},
       ...(secrets.barkRail != null ? { barkRail: secrets.barkRail } : {}),
+      ...(secrets.liveNetworkSplitApplied === true
+        ? { liveNetworkSplitApplied: true as const }
+        : {}),
     }
     const payloadEnc = await encryptData(JSON.stringify(payload))
     const mnemonicEnc = await encryptData(secrets.mnemonic)
@@ -613,6 +616,9 @@ export async function reencryptAllWalletSecretsWithNewPassword(params: {
       arkadeAccounts: secrets.arkadeAccounts ?? [],
       activeArkadeAccountIdByNetwork: secrets.activeArkadeAccountIdByNetwork ?? {},
       ...(secrets.barkRail != null ? { barkRail: secrets.barkRail } : {}),
+      ...(secrets.liveNetworkSplitApplied === true
+        ? { liveNetworkSplitApplied: true as const }
+        : {}),
     }
     const payloadEnc = await encryptDataWithPassword(newPassword, JSON.stringify(payload))
     const mnemonicEnc = await encryptDataWithPassword(newPassword, secrets.mnemonic)

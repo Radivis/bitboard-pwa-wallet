@@ -5,7 +5,7 @@ import { AddressType } from '@/lib/wallet/wallet-domain-types'
 import type { BalanceInfo, TransactionDetails } from '@/workers/crypto-types'
 import type { ArkadeBalanceInfo, ArkadePaymentRow, ArkadeSignerMigrationHint } from '@/workers/arkade-api'
 
-export type NetworkMode = 'lab' | 'regtest' | 'signet' | 'testnet' | 'mainnet'
+export type NetworkMode = 'lab' | 'regtest' | 'signet' | 'mutinynet' | 'testnet' | 'mainnet'
 
 export type WalletStatus = 'none' | 'locked' | 'unlocked'
 
@@ -15,6 +15,7 @@ export const NETWORK_LABELS: Record<NetworkMode, string> = {
   lab: 'Lab',
   regtest: 'Regtest',
   signet: 'Signet',
+  mutinynet: 'Mutinynet',
   testnet: 'Testnet',
   mainnet: 'Mainnet',
 }
@@ -115,6 +116,21 @@ interface WalletActions {
 
 type WalletState = PersistedWalletState & TransientWalletState & WalletActions
 
+/** Persisted `signet` was Mutinynet. Public Signet is a new mode. */
+export function migrateWalletPersistedState(
+  persistedState: unknown,
+  version: number,
+): unknown {
+  if (version >= 1 || persistedState == null || typeof persistedState !== 'object') {
+    return persistedState
+  }
+  const state = persistedState as PersistedWalletState
+  if (state.networkMode === 'signet') {
+    return { ...state, networkMode: 'mutinynet' }
+  }
+  return persistedState
+}
+
 const TRANSIENT_DEFAULTS: TransientWalletState = {
   walletStatus: 'none',
   balance: null,
@@ -201,6 +217,8 @@ export const useWalletStore = create<WalletState>()(
     {
       name: 'wallet-storage',
       storage: createJSONStorage(() => sqliteStorage),
+      version: 1,
+      migrate: migrateWalletPersistedState,
       partialize: (state) => ({
         networkMode: state.networkMode,
         addressType: state.addressType,

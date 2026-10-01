@@ -33,6 +33,69 @@ import { startBarkLoadAfterUnlock } from '@/lib/bark/bark-session-service'
 import type { OnchainSyncThenSaveParams } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-types'
 
 const CUSTOM_ESPLORA_URL_KEY_PREFIX = 'custom_esplora_url_'
+const SIGNET_ESPLORA_SETTINGS_KEY = `${CUSTOM_ESPLORA_URL_KEY_PREFIX}signet`
+const MUTINYNET_ESPLORA_SETTINGS_KEY = `${CUSTOM_ESPLORA_URL_KEY_PREFIX}mutinynet`
+const LIVE_NETWORK_SPLIT_ESPLORA_MIGRATED_KEY = 'live_network_split_esplora_migrated'
+
+let esploraSignetMigrationPromise: Promise<void> | null = null
+
+/**
+ * Moves a pre-split `custom_esplora_url_signet` row onto Mutinynet.
+ * Runs once per database. Later public-Signet custom URLs stay on the signet key.
+ */
+export async function migrateCustomEsploraUrlSignetToMutinynet(): Promise<void> {
+  if (esploraSignetMigrationPromise) {
+    await esploraSignetMigrationPromise
+    return
+  }
+  esploraSignetMigrationPromise = migrateCustomEsploraUrlSignetToMutinynetOnce()
+  try {
+    await esploraSignetMigrationPromise
+  } catch (migrationError) {
+    esploraSignetMigrationPromise = null
+    throw migrationError
+  }
+}
+
+async function migrateCustomEsploraUrlSignetToMutinynetOnce(): Promise<void> {
+  await ensureMigrated()
+  const walletDb = getDatabase()
+  const migrationFlag = await walletDb
+    .selectFrom('settings')
+    .select('key')
+    .where('key', '=', LIVE_NETWORK_SPLIT_ESPLORA_MIGRATED_KEY)
+    .executeTakeFirst()
+  if (migrationFlag) return
+
+  const legacySignetUrl = await walletDb
+    .selectFrom('settings')
+    .select('value')
+    .where('key', '=', SIGNET_ESPLORA_SETTINGS_KEY)
+    .executeTakeFirst()
+
+  if (legacySignetUrl) {
+    const mutinynetUrl = await walletDb
+      .selectFrom('settings')
+      .select('key')
+      .where('key', '=', MUTINYNET_ESPLORA_SETTINGS_KEY)
+      .executeTakeFirst()
+    if (!mutinynetUrl) {
+      await walletDb
+        .insertInto('settings')
+        .values({ key: MUTINYNET_ESPLORA_SETTINGS_KEY, value: legacySignetUrl.value })
+        .execute()
+    }
+    await walletDb
+      .deleteFrom('settings')
+      .where('key', '=', SIGNET_ESPLORA_SETTINGS_KEY)
+      .execute()
+  }
+
+  await walletDb
+    .insertInto('settings')
+    .values({ key: LIVE_NETWORK_SPLIT_ESPLORA_MIGRATED_KEY, value: '1' })
+    .execute()
+}
 
 async function orchestrateOnchainSyncThenSaveFromWalletUtils(
   params: OnchainSyncThenSaveParams,
@@ -92,7 +155,7 @@ export async function saveCustomEsploraUrl(
   url: string,
 ): Promise<void> {
   validateEsploraUrl(url, network)
-  await ensureMigrated()
+  await migrateCustomEsploraUrlSignetToMutinynet()
   const walletDb = getDatabase()
   const settingsKey = `${CUSTOM_ESPLORA_URL_KEY_PREFIX}${network}`
 
@@ -119,7 +182,7 @@ export async function saveCustomEsploraUrl(
 export async function deleteCustomEsploraUrl(
   network: NetworkMode,
 ): Promise<void> {
-  await ensureMigrated()
+  await migrateCustomEsploraUrlSignetToMutinynet()
   const walletDb = getDatabase()
   await walletDb
     .deleteFrom('settings')
@@ -130,7 +193,7 @@ export async function deleteCustomEsploraUrl(
 export async function loadCustomEsploraUrl(
   network: NetworkMode,
 ): Promise<string | null> {
-  await ensureMigrated()
+  await migrateCustomEsploraUrlSignetToMutinynet()
   const walletDb = getDatabase()
   const settingsRow = await walletDb
     .selectFrom('settings')

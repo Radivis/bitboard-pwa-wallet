@@ -22,6 +22,7 @@ describe('isBarkActiveForNetworkMode', () => {
 
     featureState.isBarkEnabled = true
     expect(isBarkActiveForNetworkMode('signet')).toBe(true)
+    expect(isBarkActiveForNetworkMode('mutinynet')).toBe(false)
     expect(isBarkActiveForNetworkMode('mainnet')).toBe(false)
     expect(isBarkActiveForNetworkMode('testnet')).toBe(false)
     expect(isBarkActiveForNetworkMode('regtest')).toBe(false)

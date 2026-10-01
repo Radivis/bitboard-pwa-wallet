@@ -210,11 +210,11 @@ describe('DashboardPage Arkade contracts', () => {
     walletStoreState = {
       activeWalletId: 1,
       walletStatus: 'unlocked',
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       addressType: 'taproot',
       accountId: 0,
       loadedDescriptorWallet: {
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
         addressType: 'taproot',
         accountId: 0,
       },

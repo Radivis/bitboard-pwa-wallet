@@ -17,6 +17,12 @@ describe('lightningNetworkModeFromNip47Network', () => {
     expect(lightningNetworkModeFromNip47Network('signet')).toBe('signet')
   })
 
+  it('maps nip47 signet to the current signet-family app mode', () => {
+    expect(lightningNetworkModeFromNip47Network('signet', 'mutinynet')).toBe('mutinynet')
+    expect(lightningNetworkModeFromNip47Network('signet', 'signet')).toBe('signet')
+    expect(lightningNetworkModeFromNip47Network('signet', 'mainnet')).toBe('signet')
+  })
+
   it('returns null for regtest', () => {
     expect(lightningNetworkModeFromNip47Network('regtest')).toBe(null)
   })

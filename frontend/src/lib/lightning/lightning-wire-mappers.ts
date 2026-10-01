@@ -5,6 +5,7 @@ import type {
   NwcTestConnectionResult,
 } from '@/lib/lightning/lightning-backend-service'
 import { lightningNetworkModeFromNip47Network } from '@/lib/lightning/lightning-utils'
+import type { NetworkMode } from '@/stores/walletStore'
 import type {
   WireNwcBalanceResponse,
   WireNwcMakeInvoiceResult,
@@ -56,6 +57,7 @@ export function mapWireNwcWalletInfoBlockHeight(wire: WireNwcWalletInfo): number
  */
 export function mapWireNwcWalletInfoToTestConnectionResult(
   wire: WireNwcWalletInfo,
+  appNetworkMode?: NetworkMode,
 ): NwcTestConnectionResult {
   const rawNetwork = wire.network
   if (rawNetwork == null || String(rawNetwork).trim() === '') {
@@ -66,7 +68,7 @@ export function mapWireNwcWalletInfoToTestConnectionResult(
     }
   }
   const lower = String(rawNetwork).trim().toLowerCase()
-  const mode = lightningNetworkModeFromNip47Network(rawNetwork)
+  const mode = lightningNetworkModeFromNip47Network(rawNetwork, appNetworkMode)
   if (mode != null) {
     return {
       ok: true,
@@ -79,11 +81,11 @@ export function mapWireNwcWalletInfoToTestConnectionResult(
     return {
       ok: false,
       error:
-        'This wallet reports regtest. Bitboard Lightning supports mainnet, testnet, and signet only.',
+        'This wallet reports regtest. Bitboard Lightning supports mainnet, testnet, signet, and mutinynet only.',
     }
   }
   return {
     ok: false,
-    error: `This wallet reported network "${String(rawNetwork).trim()}", which Bitboard does not support for Lightning. Use mainnet, testnet, or signet.`,
+    error: `This wallet reported network "${String(rawNetwork).trim()}", which Bitboard does not support for Lightning. Use mainnet, testnet, signet, or mutinynet.`,
   }
 }
