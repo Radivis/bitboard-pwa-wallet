@@ -13,6 +13,10 @@ import {
   refreshArkadeSessionAfterNetworkSwitch,
 } from '@/lib/arkade/arkade-session-service'
 import { reportArkadeSessionOpenError } from '@/lib/arkade/arkade-session-open-error-toast'
+import {
+  abortBarkSessionForNetworkSwitch,
+  refreshBarkSessionAfterNetworkSwitch,
+} from '@/lib/bark/bark-session-service'
 import { switchToLabNetwork } from '@/lib/lab/switch-to-lab-network'
 import type { NetworkSwitchPhaseReporter } from '@/lib/settings/network-switch-status-messages'
 
@@ -133,6 +137,7 @@ export async function executeSettingsNetworkSwitch(
   // Tear down before descriptor switch commits networkMode — do not await stuck Esplora scans.
   if (targetNetwork !== 'lab' || previousNetworkMode !== 'lab') {
     await abortArkadeSessionForNetworkSwitch()
+    abortBarkSessionForNetworkSwitch()
   }
 
   if (targetNetwork === 'lab') {
@@ -172,4 +177,8 @@ export async function executeSettingsNetworkSwitch(
     walletId: activeWalletId,
     networkMode: targetNetwork,
   }).catch(reportArkadeSessionOpenError)
+  void refreshBarkSessionAfterNetworkSwitch({
+    walletId: activeWalletId,
+    networkMode: targetNetwork,
+  })
 }

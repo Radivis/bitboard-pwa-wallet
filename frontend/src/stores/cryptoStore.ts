@@ -12,6 +12,7 @@ import { useLightningStore } from '@/stores/lightningStore';
 import { clearAutoLockTimer, clearLegacySessionState } from '@/stores/sessionStore';
 import { awaitArkadeSyncQuiescence } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator';
 import { closeArkadeSession } from '@/lib/arkade/arkade-session-service';
+import { closeBarkSession } from '@/lib/bark/bark-session-service';
 import { endWalletSecretsSessionReliably } from '@/lib/wallet/wallet-secrets-session';
 import { getArkadeWorkerIfExists } from '@/workers/arkade-factory';
 import { resetSecretsChannel } from '@/workers/secrets-channel';
@@ -294,6 +295,11 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
       try {
         await closeArkadeSession();
       } finally {
+        try {
+          await closeBarkSession();
+        } catch {
+          // Bark close is best-effort; lock must still drop the crypto worker.
+        }
         terminateCryptoWorker();
         await endWalletSecretsSessionReliably();
         resetSecretsChannel();

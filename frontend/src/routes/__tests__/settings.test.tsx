@@ -366,6 +366,18 @@ describe('Settings routes', () => {
       expect(featureStoreState.setIsPeriodicSyncEnabled).toHaveBeenCalledWith(true)
     })
 
+    it('enables Bark when the feature toggle is switched on', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<SettingsFeaturesPage />)
+
+      const barkSwitch = screen.getByRole('switch', { name: 'Enable Bark Signet rail' })
+      expect(barkSwitch).not.toBeChecked()
+
+      await user.click(barkSwitch)
+
+      expect(featureStoreState.setIsBarkEnabled).toHaveBeenCalledWith(true)
+    })
+
     it('enables Arkade after acknowledging the new-feature warning', async () => {
       const user = userEvent.setup()
       renderWithProviders(<SettingsFeaturesPage />)

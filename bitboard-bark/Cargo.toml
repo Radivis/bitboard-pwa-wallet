@@ -23,7 +23,11 @@ crate-type = ["cdylib", "rlib"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
 bark-wallet = { version = "0.7.1", default-features = false, features = ["wasm-web", "indexed-db"] }
+# Public type of Wallet::open / WalletSeed::new_from_mnemonic. Already in the bark graph.
+bitcoin = "0.32.7"
+bip39 = "2.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }

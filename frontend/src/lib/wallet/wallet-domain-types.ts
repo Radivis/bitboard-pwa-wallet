@@ -91,6 +91,21 @@ export interface StoredNwcLightningConnection {
   nwcSnapshot?: NwcConnectionSnapshot
 }
 
+/** Second's public Signet Ark server. Bark protocol state is not stored here. */
+export const BARK_SIGNET_SERVER_URL = 'https://ark.signet.2nd.dev'
+
+/**
+ * Small Bark rail record inside encrypted wallet secrets.
+ * The VTXO database stays in Bark's IndexedDB.
+ */
+export interface StoredBarkRail {
+  network: 'signet'
+  serverUrl: string
+  fingerprint: string
+  /** Set by a later sync stage. Open must preserve it and must not invent one. */
+  lastSuccessfulSyncAt?: string
+}
+
 /**
  * Encrypted wallet payload without the mnemonic (descriptor state + Lightning).
  * Stored in the main `encrypted_data` column after split migration.
@@ -105,6 +120,8 @@ export interface WalletSecretsPayload {
   activeArkadeAccountIdByNetwork: Partial<
     Record<ArkadeSupportedNetworkMode, string>
   >
+  /** Present after a successful Bark session open. Absent on older payloads. */
+  barkRail?: StoredBarkRail
 }
 
 /** Sensitive wallet data stored encrypted. Shared with db layer and workers. */
@@ -144,6 +161,30 @@ export function assertIso8601LastSuccessfulEsploraSyncAt(value: string): void {
       'Invalid lastSuccessfulEsploraSyncAt: expected parseable ISO-8601 timestamp',
     )
   }
+}
+
+const BARK_FINGERPRINT_PATTERN = /^[0-9a-f]{8}$/i
+
+export function isStoredBarkRail(value: unknown): value is StoredBarkRail {
+  if (!isRecord(value)) return false
+  if (value.network !== 'signet') return false
+  if (value.serverUrl !== BARK_SIGNET_SERVER_URL) return false
+  if (typeof value.fingerprint !== 'string' || !BARK_FINGERPRINT_PATTERN.test(value.fingerprint)) {
+    return false
+  }
+  if (value.lastSuccessfulSyncAt !== undefined && !isIso8601Timestamp(value.lastSuccessfulSyncAt)) {
+    return false
+  }
+  return true
+}
+
+function sanitizeBarkRail(value: unknown): StoredBarkRail | undefined {
+  if (value == null) return undefined
+  if (isStoredBarkRail(value)) return value
+  if (import.meta.env.DEV) {
+    console.warn('[wallet-secrets] Dropping invalid barkRail')
+  }
+  return undefined
 }
 
 function isLightningNetworkMode(value: unknown): value is LightningNetworkMode {
@@ -273,6 +314,9 @@ export function isWalletSecretsPayload(value: unknown): value is WalletSecretsPa
   ) {
     return false
   }
+  if (value.barkRail !== undefined && !isStoredBarkRail(value.barkRail)) {
+    return false
+  }
   return true
 }
 
@@ -309,6 +353,9 @@ export function isWalletSecrets(value: unknown): value is WalletSecrets {
   ) {
     return false
   }
+  if (value.barkRail !== undefined && !isStoredBarkRail(value.barkRail)) {
+    return false
+  }
   return true
 }
 
@@ -322,6 +369,7 @@ export function assembleWalletSecrets(
     lightningNwcConnections: payload.lightningNwcConnections,
     arkadeAccounts: payload.arkadeAccounts,
     activeArkadeAccountIdByNetwork: payload.activeArkadeAccountIdByNetwork,
+    ...(payload.barkRail != null ? { barkRail: payload.barkRail } : {}),
   }
 }
 
@@ -439,6 +487,9 @@ function normalizeWalletSecretsPayload(raw: unknown): unknown {
   delete withoutLegacyKeys.arkadeAccounts
   delete withoutLegacyKeys.activeArkadeAccountIdByNetwork
 
+  const barkRail = sanitizeBarkRail(withoutLegacyKeys.barkRail)
+  delete withoutLegacyKeys.barkRail
+
   return {
     ...withoutLegacyKeys,
     lightningNwcConnections: coalesceNullishArrayField(
@@ -449,6 +500,7 @@ function normalizeWalletSecretsPayload(raw: unknown): unknown {
       pickActiveArkadeAccountIdByNetworkField(raw),
       validAccountIds,
     ),
+    ...(barkRail != null ? { barkRail } : {}),
   }
 }
 
@@ -488,6 +540,9 @@ function describeWalletSecretsPayloadValidationIssues(value: unknown): string[] 
     !isRecord(value.activeArkadeAccountIdByNetwork)
   ) {
     issues.push('activeArkadeAccountIdByNetwork must be an object')
+  }
+  if (value.barkRail !== undefined && !isStoredBarkRail(value.barkRail)) {
+    issues.push('barkRail is invalid')
   }
   return issues
 }

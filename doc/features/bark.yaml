@@ -1,0 +1,32 @@
+feature:
+  name: Bark Signet rail
+  description: "Second Bark wallet on public Signet, opened beside Arkade. Stage 1 is session open and close only."
+  user_stories:
+    - As a user, I want to enable Bark under Settings → Features so a Signet wallet can open a Bark session
+    - As a user, I want Bark to stay off until I turn it on
+    - As a user, I want lock to drop the Bark session without deleting Bark's browser database
+  requirements:
+    - Bark is gated by isBarkEnabled (default off)
+    - A session opens only when the flag is on and the app network mode is signet
+    - Mainnet, testnet, regtest, and lab do not open Bark
+    - The mnemonic is decrypted on the secrets channel and never sits on the main thread
+    - The session uses Second's public Signet server https://ark.signet.2nd.dev and Esplora https://esplora.signet.2nd.dev
+    - Bark protocol state stays in Bark's IndexedDB, keyed by wallet fingerprint
+    - Encrypted wallet_secrets gains only barkRail metadata (network, serverUrl, fingerprint, and an optional lastSuccessfulSyncAt that this stage does not write)
+    - Opening must not copy the VTXO database into wallet_secrets
+    - A stored fingerprint that does not match the opened wallet refuses the metadata write and closes the session
+    - Lock closes the session and terminates bark.worker without deleting IndexedDB
+    - Leaving signet or turning the session gate off terminates the worker
+    - No receive address, balance, sync, or send UI in this stage
+  contracts:
+    session:
+      - id: BARK-SES-01
+        description: Unlock with the flag on and network signet opens a Signet Bark session and returns a fingerprint
+      - id: BARK-SES-02
+        description: Unlock with the flag off, or on any network other than signet, does not open a session
+      - id: BARK-SES-03
+        description: Reload reopens the same IndexedDB via the same fingerprint
+      - id: BARK-SES-04
+        description: Lock drops the worker and leaves the IndexedDB database in place
+      - id: BARK-SES-05
+        description: barkRail metadata round-trips in the encrypted payload and does not change Arkade sdkPersistenceJson

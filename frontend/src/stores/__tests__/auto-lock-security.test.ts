@@ -31,6 +31,7 @@ vi.mock('@/workers/crypto-factory', () => {
 vi.mock('@/workers/secrets-channel', () => ({
   resetSecretsChannel: resetSecretsChannelMock,
   resetArkadeWorkerSecretsChannel: vi.fn(),
+  resetBarkWorkerSecretsChannel: vi.fn(),
 }))
 
 vi.mock('@/lib/wallet/wallet-secrets-session', () => ({

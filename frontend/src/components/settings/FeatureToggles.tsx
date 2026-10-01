@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { AlertTriangle, Coins, FlaskConical, Layers, RefreshCw, Zap } from 'lucide-react'
+import { AlertTriangle, Coins, FlaskConical, Layers, RefreshCw, Waypoints, Zap } from 'lucide-react'
 import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
 import { useFeatureStore } from '@/stores/featureStore'
 import {
@@ -31,6 +31,8 @@ export function FeatureToggles() {
   const setIsUtxoSelectionEnabled = useFeatureStore((featureState) => featureState.setIsUtxoSelectionEnabled)
   const isArkadeEnabled = useFeatureStore((featureState) => featureState.isArkadeEnabled)
   const setIsArkadeEnabled = useFeatureStore((featureState) => featureState.setIsArkadeEnabled)
+  const isBarkEnabled = useFeatureStore((featureState) => featureState.isBarkEnabled)
+  const setIsBarkEnabled = useFeatureStore((featureState) => featureState.setIsBarkEnabled)
   const isPeriodicSyncEnabled = useFeatureStore((featureState) => featureState.isPeriodicSyncEnabled)
   const setIsPeriodicSyncEnabled = useFeatureStore((featureState) => featureState.setIsPeriodicSyncEnabled)
 
@@ -231,6 +233,27 @@ export function FeatureToggles() {
               }
             }}
             aria-label="Enable Arkade offchain layer"
+          />
+        </div>
+      </InfomodeWrapper>
+
+      <InfomodeWrapper
+        infoId="settings-feature-bark"
+        infoTitle="Bark"
+        infoText="Bark is Second's Ark wallet on public Signet (ark.signet.2nd.dev). Off by default. Turning it on opens a Bark session when this wallet is unlocked on Signet. Protocol state stays in this browser's IndexedDB and is not added to the on-chain or Arkade totals."
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Waypoints className="h-4 w-4" />
+            <Label htmlFor="bark-toggle" className="cursor-pointer">
+              Bark
+            </Label>
+          </div>
+          <Switch
+            id="bark-toggle"
+            checked={isBarkEnabled}
+            onCheckedChange={setIsBarkEnabled}
+            aria-label="Enable Bark Signet rail"
           />
         </div>
       </InfomodeWrapper>

@@ -59,6 +59,10 @@ vi.mock('@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator', () => ({
   },
 }))
 
+vi.mock('@/lib/bark/bark-session-service', () => ({
+  startBarkLoadAfterUnlock: vi.fn(),
+}))
+
 vi.mock('@/lib/arkade/arkade-utils', () => ({
   isArkadeActiveForNetworkMode: () => true,
 }))

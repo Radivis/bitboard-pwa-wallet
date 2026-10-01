@@ -102,10 +102,13 @@ Export `bark_send_arkoor` as `Wallet::send_arkoor_payment`. The send form accept
 Add capabilities in this order, each as exports plus UI on the session from stage 1:
 
 1. `Wallet::history` on the activity list.
-2. Lightning receive (`bolt11_invoice`) and send (`pay_lightning_invoice`). This is the user-visible difference from Arkade.
-3. Boarding from the existing on-chain wallet via `board_funding_address` and `board_psbt`. Still no `onchain-bdk`.
-4. Delegated refresh for VTXOs near expiry.
-5. Emergency exit, using Bark's exit manager rather than the Arkade unroll UI.
-6. Backup of the IndexedDB store into the encrypted wallet backup.
+2. Boarding from the existing on-chain wallet via `board_funding_address` and `board_psbt`. Still no `onchain-bdk`.
+3. Emergency exit, using Bark's exit manager rather than the Arkade unroll UI.
 
 Mutinynet waits until `ark.mutinynet.2nd.dev` is confirmed up. It is a different `BarkNetwork` and a different chain source (`https://mutinynet.com/api`), not a flag on the Signet session.
+
+## Potential later features
+
+1. Backup of the IndexedDB store into the encrypted wallet backup.
+2. Lightning receive (`bolt11_invoice`) and send (`pay_lightning_invoice`). This is the user-visible difference from Arkade.
+3. Delegated refresh for VTXOs near expiry.

@@ -25,6 +25,7 @@ export const featureStoreState = {
   isSegwitAddressesEnabled: false,
   isUtxoSelectionEnabled: false,
   isArkadeEnabled: false,
+  isBarkEnabled: false,
   isPeriodicSyncEnabled: false,
   setIsLightningEnabled: vi.fn(),
   setIsMainnetAccessEnabled: vi.fn(),
@@ -32,6 +33,7 @@ export const featureStoreState = {
   setIsSegwitAddressesEnabled: vi.fn(),
   setIsUtxoSelectionEnabled: vi.fn(),
   setIsArkadeEnabled: vi.fn(),
+  setIsBarkEnabled: vi.fn(),
   setIsPeriodicSyncEnabled: vi.fn(),
 }
 
@@ -403,6 +405,9 @@ function wireFeatureStoreMockImplementations(): void {
   featureStoreState.setIsArkadeEnabled.mockImplementation((enabled: boolean) => {
     featureStoreState.isArkadeEnabled = enabled
   })
+  featureStoreState.setIsBarkEnabled.mockImplementation((enabled: boolean) => {
+    featureStoreState.isBarkEnabled = enabled
+  })
   featureStoreState.setIsPeriodicSyncEnabled.mockImplementation((enabled: boolean) => {
     featureStoreState.isPeriodicSyncEnabled = enabled
   })
@@ -484,6 +489,7 @@ export function resetSettingsPageTestState(): void {
   featureStoreState.isSegwitAddressesEnabled = false
   featureStoreState.isUtxoSelectionEnabled = false
   featureStoreState.isArkadeEnabled = false
+  featureStoreState.isBarkEnabled = false
   featureStoreState.isPeriodicSyncEnabled = false
   periodicSyncStoreState.rails = {
     onchain: { isEnabled: true, intervalSeconds: DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS },

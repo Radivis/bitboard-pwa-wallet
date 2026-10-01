@@ -29,6 +29,7 @@ import {
 } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
 import { orchestrateArkadeLoad } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
+import { startBarkLoadAfterUnlock } from '@/lib/bark/bark-session-service'
 import type { OnchainSyncThenSaveParams } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-types'
 
 const CUSTOM_ESPLORA_URL_KEY_PREFIX = 'custom_esplora_url_'
@@ -491,6 +492,7 @@ export async function loadDescriptorWalletWithoutSync(params: {
       )
     })
   }
+  startBarkLoadAfterUnlock({ walletId, networkMode })
 }
 
 /**
@@ -534,6 +536,7 @@ export async function loadDescriptorWalletAndSync(params: {
       )
     })
   }
+  startBarkLoadAfterUnlock({ walletId, networkMode })
 
   const { orchestrateOnchainPostUnlockSync } = await import(
     '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'

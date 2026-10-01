@@ -381,9 +381,12 @@ name = "bitboard-bark"
 version = "0.3.4"
 dependencies = [
  "bark-wallet",
+ "bip39",
+ "bitcoin",
  "reqwest",
  "tokio",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]

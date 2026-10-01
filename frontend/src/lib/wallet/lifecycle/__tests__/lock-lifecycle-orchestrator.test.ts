@@ -21,6 +21,9 @@ const syncArkadeSyncLifecycleWithLockPhase = vi.fn()
 const syncArkadeSaveLifecycleWithLockPhase = vi.fn()
 const orchestrateLightningLoad = vi.fn()
 const awaitLightningLoadQuiescence = vi.fn()
+const startBarkLoadAfterUnlock = vi.fn()
+const awaitBarkLoadQuiescence = vi.fn()
+const syncBarkLoadLifecycleWithLockPhase = vi.fn()
 const awaitLightningSyncQuiescence = vi.fn()
 const awaitLightningSaveQuiescence = vi.fn()
 const isLightningSaveBlockingLock = vi.fn()
@@ -99,6 +102,16 @@ vi.mock('@/lib/wallet/lifecycle/lightning-load-lifecycle-orchestrator', () => ({
   awaitLightningLoadQuiescence: (...args: unknown[]) => awaitLightningLoadQuiescence(...args),
   syncLightningLoadLifecycleWithLockPhase: (...args: unknown[]) =>
     syncLightningLoadLifecycleWithLockPhase(...args),
+}))
+
+vi.mock('@/lib/bark/bark-session-service', () => ({
+  startBarkLoadAfterUnlock: (...args: unknown[]) => startBarkLoadAfterUnlock(...args),
+}))
+
+vi.mock('@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator', () => ({
+  awaitBarkLoadQuiescence: (...args: unknown[]) => awaitBarkLoadQuiescence(...args),
+  syncBarkLoadLifecycleWithLockPhase: (...args: unknown[]) =>
+    syncBarkLoadLifecycleWithLockPhase(...args),
 }))
 
 vi.mock('@/lib/wallet/lifecycle/lightning-sync-lifecycle-orchestrator', () => ({
@@ -192,6 +205,7 @@ describe('lock-lifecycle-orchestrator', () => {
     orchestrateOnchainPostUnlockSync.mockResolvedValue(undefined)
     awaitOnchainLoadQuiescence.mockResolvedValue(undefined)
     awaitArkadeLoadQuiescence.mockResolvedValue(undefined)
+    awaitBarkLoadQuiescence.mockResolvedValue(undefined)
     awaitLightningLoadQuiescence.mockResolvedValue(undefined)
     awaitOnchainSyncQuiescence.mockResolvedValue(undefined)
     awaitOnchainSaveQuiescence.mockResolvedValue(undefined)
@@ -405,6 +419,10 @@ describe('lock-lifecycle-orchestrator', () => {
       walletId: 1,
       networkMode: 'testnet',
       allowRetryFromError: true,
+    })
+    expect(startBarkLoadAfterUnlock).toHaveBeenCalledWith({
+      walletId: 1,
+      networkMode: 'testnet',
     })
     expect(orchestrateLightningLoad).toHaveBeenCalledWith({
       walletId: 1,
