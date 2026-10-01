@@ -104,9 +104,13 @@ Add capabilities in this order, each as exports plus UI on the session from stag
 1. Boarding from the existing on-chain wallet via `board_funding_address` and `board_psbt`. Still no `onchain-bdk`.
 2. `Wallet::history` on the activity list.
 
-## Stage 6 — Eemergency exit
+## Stage 6 - Collaborative exit
 
-3. Emergency exit, using Bark's exit manager rather than the Arkade unroll UI.
+Do a collaborative exit of Bark funds into the regular onchain wallet
+
+## Stage 7 — Emergency exit
+
+Emergency exit, using Bark's exit manager rather than the Arkade unroll UI.
 
 Mutinynet waits until `ark.mutinynet.2nd.dev` is confirmed up. It is a different `BarkNetwork` and a different chain source (`https://mutinynet.com/api`), not a flag on the Signet session.
 
