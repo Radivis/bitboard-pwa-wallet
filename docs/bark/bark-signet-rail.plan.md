@@ -97,17 +97,20 @@ Export `bark_send_arkoor` as `Wallet::send_arkoor_payment`. The send form accept
 
 **Done when** a payment from this wallet to a second Bark Signet wallet reduces the sender's spendable balance and, after sync, increases the recipient's.
 
-## After stage 4
+## Stage 5 — Boarding and history
 
 Add capabilities in this order, each as exports plus UI on the session from stage 1:
 
-1. `Wallet::history` on the activity list.
-2. Boarding from the existing on-chain wallet via `board_funding_address` and `board_psbt`. Still no `onchain-bdk`.
+1. Boarding from the existing on-chain wallet via `board_funding_address` and `board_psbt`. Still no `onchain-bdk`.
+2. `Wallet::history` on the activity list.
+
+## Stage 6 — Eemergency exit
+
 3. Emergency exit, using Bark's exit manager rather than the Arkade unroll UI.
 
 Mutinynet waits until `ark.mutinynet.2nd.dev` is confirmed up. It is a different `BarkNetwork` and a different chain source (`https://mutinynet.com/api`), not a flag on the Signet session.
 
-## Potential later features
+## Potential features after stage 6
 
 1. Backup of the IndexedDB store into the encrypted wallet backup.
 2. Lightning receive (`bolt11_invoice`) and send (`pay_lightning_invoice`). This is the user-visible difference from Arkade.
