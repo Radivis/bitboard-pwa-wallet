@@ -8,6 +8,8 @@ mod sync_gate;
 mod vtxo_list;
 
 #[cfg(target_arch = "wasm32")]
+mod collaborative_exit;
+#[cfg(target_arch = "wasm32")]
 mod history;
 #[cfg(target_arch = "wasm32")]
 mod session;

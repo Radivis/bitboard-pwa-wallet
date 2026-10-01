@@ -14,7 +14,9 @@ pub struct ListedBarkVtxo {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ListedBarkVtxoState {
     Spendable,
-    Locked { holder: Option<ListedBarkVtxoLockHolder> },
+    Locked {
+        holder: Option<ListedBarkVtxoLockHolder>,
+    },
     Spent,
     Exited,
 }
@@ -111,9 +113,9 @@ fn listed_holder(holder: &bark::vtxo::VtxoLockHolder) -> ListedBarkVtxoLockHolde
         bark::vtxo::VtxoLockHolder::Action { id } => {
             ListedBarkVtxoLockHolder::Action { id: id.clone() }
         }
-        bark::vtxo::VtxoLockHolder::Movement { id } => ListedBarkVtxoLockHolder::Movement {
-            id: id.to_string(),
-        },
+        bark::vtxo::VtxoLockHolder::Movement { id } => {
+            ListedBarkVtxoLockHolder::Movement { id: id.to_string() }
+        }
     }
 }
 
@@ -143,9 +145,7 @@ mod tests {
                 3_000,
                 120,
                 ListedBarkVtxoState::Locked {
-                    holder: Some(ListedBarkVtxoLockHolder::Movement {
-                        id: "4".to_owned(),
-                    }),
+                    holder: Some(ListedBarkVtxoLockHolder::Movement { id: "4".to_owned() }),
                 },
                 false,
             ),

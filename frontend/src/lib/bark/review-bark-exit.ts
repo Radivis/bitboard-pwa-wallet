@@ -7,14 +7,19 @@ export type BarkExitReview = {
   mode: BarkExitMode
   destinationAddress: string
   amountSats: number | null
+  feeRateSatPerVb: number
   feeSats: number
   onchainAmountSats: number
   grossAmountSats: number
 }
 
 export type ReviewBarkExitDeps = {
-  estimateSendOnchain: (address: string, amountSats: number) => Promise<BarkExitFeeEstimate>
-  estimateOffboardAll: (address: string) => Promise<BarkExitFeeEstimate>
+  estimateSendOnchain: (
+    address: string,
+    amountSats: number,
+    feeRateSatPerVb: number,
+  ) => Promise<BarkExitFeeEstimate>
+  estimateOffboardAll: (address: string, feeRateSatPerVb: number) => Promise<BarkExitFeeEstimate>
 }
 
 export { parseBarkBoardAmountSats as parseBarkExitAmountSats }
@@ -31,34 +36,46 @@ function reviewFromEstimate(
   mode: BarkExitMode,
   destinationAddress: string,
   amountSats: number | null,
+  feeRateSatPerVb: number,
   estimate: BarkExitFeeEstimate,
 ): BarkExitReview {
   return {
     mode,
     destinationAddress,
     amountSats,
+    feeRateSatPerVb,
     feeSats: estimate.feeSats,
     onchainAmountSats: estimate.netAmountSats,
     grossAmountSats: estimate.grossAmountSats,
   }
 }
 
-/** Estimates a chosen on-chain amount. Does not send or reveal an address. */
+/** Estimates a chosen on-chain amount at the app fee rate. Does not send or reveal an address. */
 export async function reviewBarkExitAmount(
   deps: ReviewBarkExitDeps,
-  input: { destinationAddress: string; amountSats: number },
+  input: { destinationAddress: string; amountSats: number; feeRateSatPerVb: number },
 ): Promise<BarkExitReview> {
   const destinationAddress = requireDestination(input.destinationAddress)
-  const estimate = await deps.estimateSendOnchain(destinationAddress, input.amountSats)
-  return reviewFromEstimate('amount', destinationAddress, input.amountSats, estimate)
+  const estimate = await deps.estimateSendOnchain(
+    destinationAddress,
+    input.amountSats,
+    input.feeRateSatPerVb,
+  )
+  return reviewFromEstimate(
+    'amount',
+    destinationAddress,
+    input.amountSats,
+    input.feeRateSatPerVb,
+    estimate,
+  )
 }
 
-/** Estimates offboarding every spendable VTXO. Fees come out of that pile. */
+/** Estimates offboarding every spendable VTXO at the app fee rate. Fees come out of that pile. */
 export async function reviewBarkExitAll(
   deps: ReviewBarkExitDeps,
-  input: { destinationAddress: string },
+  input: { destinationAddress: string; feeRateSatPerVb: number },
 ): Promise<BarkExitReview> {
   const destinationAddress = requireDestination(input.destinationAddress)
-  const estimate = await deps.estimateOffboardAll(destinationAddress)
-  return reviewFromEstimate('all', destinationAddress, null, estimate)
+  const estimate = await deps.estimateOffboardAll(destinationAddress, input.feeRateSatPerVb)
+  return reviewFromEstimate('all', destinationAddress, null, input.feeRateSatPerVb, estimate)
 }

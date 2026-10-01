@@ -380,9 +380,11 @@ dependencies = [
 name = "bitboard-bark"
 version = "0.3.4"
 dependencies = [
+ "anyhow",
  "bark-wallet",
  "bip39",
  "bitcoin",
+ "getrandom 0.2.17",
  "reqwest",
  "serde",
  "serde_json",

@@ -9,10 +9,14 @@ type WasmFeeEstimate = {
 }
 
 export type BarkExitWasm = {
-  bark_estimate_send_onchain(address: string, amountSats: bigint): Promise<WasmFeeEstimate>
-  bark_send_onchain(address: string, amountSats: bigint): Promise<string>
-  bark_estimate_offboard_all(address: string): Promise<WasmFeeEstimate>
-  bark_offboard_all(address: string): Promise<string>
+  bark_estimate_send_onchain(
+    address: string,
+    amountSats: bigint,
+    feeRateSatPerVb: number,
+  ): Promise<WasmFeeEstimate>
+  bark_send_onchain(address: string, amountSats: bigint, feeRateSatPerVb: number): Promise<string>
+  bark_estimate_offboard_all(address: string, feeRateSatPerVb: number): Promise<WasmFeeEstimate>
+  bark_offboard_all(address: string, feeRateSatPerVb: number): Promise<string>
 }
 
 function requireExitAmount(amountSats: number): void {
@@ -29,6 +33,13 @@ function requireExitAddress(address: string): string {
   return trimmed
 }
 
+function requireFeeRate(feeRateSatPerVb: number): number {
+  if (!Number.isFinite(feeRateSatPerVb) || feeRateSatPerVb <= 0) {
+    throw new Error('Bark exit fee rate is invalid')
+  }
+  return feeRateSatPerVb
+}
+
 function requireTxid(txid: string): string {
   if (typeof txid !== 'string' || txid.length === 0) {
     throw new Error('Bark exit did not return a txid')
@@ -40,10 +51,15 @@ export async function estimateSendOnchainFromWasm(
   wasm: BarkExitWasm,
   address: string,
   amountSats: number,
+  feeRateSatPerVb: number,
 ): Promise<BarkExitFeeEstimate> {
   requireExitAmount(amountSats)
   return readBarkBoardFeeEstimate(
-    await wasm.bark_estimate_send_onchain(requireExitAddress(address), BigInt(amountSats)),
+    await wasm.bark_estimate_send_onchain(
+      requireExitAddress(address),
+      BigInt(amountSats),
+      requireFeeRate(feeRateSatPerVb),
+    ),
   )
 }
 
@@ -51,25 +67,34 @@ export async function sendOnchainFromWasm(
   wasm: BarkExitWasm,
   address: string,
   amountSats: number,
+  feeRateSatPerVb: number,
 ): Promise<string> {
   requireExitAmount(amountSats)
   return requireTxid(
-    await wasm.bark_send_onchain(requireExitAddress(address), BigInt(amountSats)),
+    await wasm.bark_send_onchain(
+      requireExitAddress(address),
+      BigInt(amountSats),
+      requireFeeRate(feeRateSatPerVb),
+    ),
   )
 }
 
 export async function estimateOffboardAllFromWasm(
   wasm: BarkExitWasm,
   address: string,
+  feeRateSatPerVb: number,
 ): Promise<BarkExitFeeEstimate> {
   return readBarkBoardFeeEstimate(
-    await wasm.bark_estimate_offboard_all(requireExitAddress(address)),
+    await wasm.bark_estimate_offboard_all(requireExitAddress(address), requireFeeRate(feeRateSatPerVb)),
   )
 }
 
 export async function offboardAllFromWasm(
   wasm: BarkExitWasm,
   address: string,
+  feeRateSatPerVb: number,
 ): Promise<string> {
-  return requireTxid(await wasm.bark_offboard_all(requireExitAddress(address)))
+  return requireTxid(
+    await wasm.bark_offboard_all(requireExitAddress(address), requireFeeRate(feeRateSatPerVb)),
+  )
 }

@@ -295,24 +295,37 @@ async function listVtxosImpl(): Promise<BarkVtxoRow[]> {
 async function estimateSendOnchainImpl(
   address: string,
   amountSats: number,
+  feeRateSatPerVb: number,
 ): Promise<BarkExitFeeEstimate> {
   requireOpenSession()
-  return estimateSendOnchainFromWasm(exitWasm(await getBarkWasm()), address, amountSats)
+  return estimateSendOnchainFromWasm(
+    exitWasm(await getBarkWasm()),
+    address,
+    amountSats,
+    feeRateSatPerVb,
+  )
 }
 
-async function sendOnchainImpl(address: string, amountSats: number): Promise<string> {
+async function sendOnchainImpl(
+  address: string,
+  amountSats: number,
+  feeRateSatPerVb: number,
+): Promise<string> {
   requireOpenSession()
-  return sendOnchainFromWasm(exitWasm(await getBarkWasm()), address, amountSats)
+  return sendOnchainFromWasm(exitWasm(await getBarkWasm()), address, amountSats, feeRateSatPerVb)
 }
 
-async function estimateOffboardAllImpl(address: string): Promise<BarkExitFeeEstimate> {
+async function estimateOffboardAllImpl(
+  address: string,
+  feeRateSatPerVb: number,
+): Promise<BarkExitFeeEstimate> {
   requireOpenSession()
-  return estimateOffboardAllFromWasm(exitWasm(await getBarkWasm()), address)
+  return estimateOffboardAllFromWasm(exitWasm(await getBarkWasm()), address, feeRateSatPerVb)
 }
 
-async function offboardAllImpl(address: string): Promise<string> {
+async function offboardAllImpl(address: string, feeRateSatPerVb: number): Promise<string> {
   requireOpenSession()
-  return offboardAllFromWasm(exitWasm(await getBarkWasm()), address)
+  return offboardAllFromWasm(exitWasm(await getBarkWasm()), address, feeRateSatPerVb)
 }
 
 async function sendArkoorPaymentImpl(
@@ -491,33 +504,44 @@ const barkService: BarkService = {
     }
   },
 
-  async estimateSendOnchain(address: string, amountSats: number): Promise<BarkExitFeeEstimate> {
+  async estimateSendOnchain(
+    address: string,
+    amountSats: number,
+    feeRateSatPerVb: number,
+  ): Promise<BarkExitFeeEstimate> {
     try {
-      return await estimateSendOnchainImpl(address, amountSats)
+      return await estimateSendOnchainImpl(address, amountSats, feeRateSatPerVb)
     } catch (err) {
       rethrowBarkError(err)
     }
   },
 
-  async sendOnchain(address: string, amountSats: number): Promise<string> {
+  async sendOnchain(
+    address: string,
+    amountSats: number,
+    feeRateSatPerVb: number,
+  ): Promise<string> {
     try {
-      return await sendOnchainImpl(address, amountSats)
+      return await sendOnchainImpl(address, amountSats, feeRateSatPerVb)
     } catch (err) {
       rethrowBarkError(err)
     }
   },
 
-  async estimateOffboardAll(address: string): Promise<BarkExitFeeEstimate> {
+  async estimateOffboardAll(
+    address: string,
+    feeRateSatPerVb: number,
+  ): Promise<BarkExitFeeEstimate> {
     try {
-      return await estimateOffboardAllImpl(address)
+      return await estimateOffboardAllImpl(address, feeRateSatPerVb)
     } catch (err) {
       rethrowBarkError(err)
     }
   },
 
-  async offboardAll(address: string): Promise<string> {
+  async offboardAll(address: string, feeRateSatPerVb: number): Promise<string> {
     try {
-      return await offboardAllImpl(address)
+      return await offboardAllImpl(address, feeRateSatPerVb)
     } catch (err) {
       rethrowBarkError(err)
     }

@@ -6,6 +6,8 @@ use bitcoin::Network;
 use bitcoin::key::Keypair;
 use wasm_bindgen::prelude::*;
 
+use crate::collaborative_exit;
+use crate::emergency_exit::fee_rate_from_sat_per_vb;
 use crate::exit_address::{classify_offboard_failure, parse_signet_receive_address};
 use crate::history::movements_to_json;
 use crate::sync_gate::BarkSessionSyncGate;
@@ -485,12 +487,18 @@ fn require_exit_amount(amount_sats: u64) -> Result<(), JsValue> {
     }
 }
 
-fn fee_estimate_from_bark(estimate: bark::FeeEstimate) -> BarkBoardFeeEstimate {
+fn fee_estimate_from_collaborative(
+    estimate: collaborative_exit::CollaborativeExitEstimate,
+) -> BarkBoardFeeEstimate {
     BarkBoardFeeEstimate {
-        gross_amount_sats: estimate.gross_amount.to_sat(),
-        fee_sats: estimate.fee.to_sat(),
-        net_amount_sats: estimate.net_amount.to_sat(),
+        gross_amount_sats: estimate.gross_amount_sats,
+        fee_sats: estimate.fee_sats,
+        net_amount_sats: estimate.net_amount_sats,
     }
+}
+
+fn exit_fee_rate(fee_rate_sat_per_vb: f64) -> Result<bitcoin::FeeRate, JsValue> {
+    fee_rate_from_sat_per_vb(fee_rate_sat_per_vb).map_err(|err| JsValue::from_str(&err))
 }
 
 async fn pending_offboard_ids(wallet: &bark::Wallet) -> Result<HashSet<String>, String> {
@@ -513,68 +521,90 @@ async fn offboard_txid_or_parked<E: std::fmt::Display>(
     }
 }
 
-/// Server fee for paying `amount_sats` on-chain. `net_amount_sats` is what arrives.
+/// Fee for paying `amount_sats` on-chain at the app's sat/vB rate. `net_amount_sats` is what arrives.
 #[wasm_bindgen]
 pub async fn bark_estimate_send_onchain(
     address: String,
     amount_sats: u64,
+    fee_rate_sat_per_vb: f64,
 ) -> Result<BarkBoardFeeEstimate, JsValue> {
     require_exit_amount(amount_sats)?;
     let destination = exit_destination(&address)?;
+    let fee_rate = exit_fee_rate(fee_rate_sat_per_vb)?;
     let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
     let operation_result = async {
-        let estimate = wallet
-            .estimate_send_onchain(&destination, bitcoin::Amount::from_sat(amount_sats))
-            .await
-            .map_err(bark_error)?;
-        Ok(fee_estimate_from_bark(estimate))
+        let estimate = collaborative_exit::estimate_send_onchain(
+            &wallet,
+            &destination,
+            bitcoin::Amount::from_sat(amount_sats),
+            fee_rate,
+        )
+        .await?;
+        Ok(fee_estimate_from_collaborative(estimate))
     }
     .await;
     finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
 }
 
-/// Pays `amount_sats` to a Signet address. Returns the offboard txid once broadcast.
+/// Pays `amount_sats` to a Signet address at the app's sat/vB rate.
+/// Returns the offboard txid once broadcast.
 /// A park before broadcast is `bark_offboard_parked` when this attempt created a checkpoint.
 #[wasm_bindgen]
-pub async fn bark_send_onchain(address: String, amount_sats: u64) -> Result<String, JsValue> {
+pub async fn bark_send_onchain(
+    address: String,
+    amount_sats: u64,
+    fee_rate_sat_per_vb: f64,
+) -> Result<String, JsValue> {
     require_exit_amount(amount_sats)?;
     let destination = exit_destination(&address)?;
+    let fee_rate = exit_fee_rate(fee_rate_sat_per_vb)?;
     let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
     let operation_result = async {
         let ids_before = pending_offboard_ids(&wallet).await?;
-        let result = wallet
-            .send_onchain(destination, bitcoin::Amount::from_sat(amount_sats))
-            .await;
+        let result = collaborative_exit::send_onchain(
+            &wallet,
+            destination,
+            bitcoin::Amount::from_sat(amount_sats),
+            fee_rate,
+        )
+        .await;
         offboard_txid_or_parked(&wallet, ids_before, result).await
     }
     .await;
     finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
 }
 
-/// Server fee for offboarding every spendable VTXO. `net_amount_sats` is what arrives.
+/// Fee for offboarding every spendable VTXO at the app's sat/vB rate. `net_amount_sats` is what arrives.
 #[wasm_bindgen]
-pub async fn bark_estimate_offboard_all(address: String) -> Result<BarkBoardFeeEstimate, JsValue> {
+pub async fn bark_estimate_offboard_all(
+    address: String,
+    fee_rate_sat_per_vb: f64,
+) -> Result<BarkBoardFeeEstimate, JsValue> {
     let destination = exit_destination(&address)?;
+    let fee_rate = exit_fee_rate(fee_rate_sat_per_vb)?;
     let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
     let operation_result = async {
-        let estimate = wallet
-            .estimate_offboard_all(&destination)
-            .await
-            .map_err(bark_error)?;
-        Ok(fee_estimate_from_bark(estimate))
+        let estimate =
+            collaborative_exit::estimate_offboard_all(&wallet, &destination, fee_rate).await?;
+        Ok(fee_estimate_from_collaborative(estimate))
     }
     .await;
     finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
 }
 
-/// Offboards every spendable VTXO to a Signet address. Returns the offboard txid once broadcast.
+/// Offboards every spendable VTXO to a Signet address at the app's sat/vB rate.
+/// Returns the offboard txid once broadcast.
 #[wasm_bindgen]
-pub async fn bark_offboard_all(address: String) -> Result<String, JsValue> {
+pub async fn bark_offboard_all(
+    address: String,
+    fee_rate_sat_per_vb: f64,
+) -> Result<String, JsValue> {
     let destination = exit_destination(&address)?;
+    let fee_rate = exit_fee_rate(fee_rate_sat_per_vb)?;
     let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
     let operation_result = async {
         let ids_before = pending_offboard_ids(&wallet).await?;
-        let result = wallet.offboard_all(destination).await;
+        let result = collaborative_exit::offboard_all(&wallet, destination, fee_rate).await;
         offboard_txid_or_parked(&wallet, ids_before, result).await
     }
     .await;

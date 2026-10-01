@@ -6,16 +6,19 @@ import { getBarkWorker } from '@/workers/bark-factory'
 
 export function barkExitReviewDeps(): ReviewBarkExitDeps {
   return {
-    estimateSendOnchain: (address, amountSats) =>
-      getBarkWorker().estimateSendOnchain(address, amountSats),
-    estimateOffboardAll: (address) => getBarkWorker().estimateOffboardAll(address),
+    estimateSendOnchain: (address, amountSats, feeRateSatPerVb) =>
+      getBarkWorker().estimateSendOnchain(address, amountSats, feeRateSatPerVb),
+    estimateOffboardAll: (address, feeRateSatPerVb) =>
+      getBarkWorker().estimateOffboardAll(address, feeRateSatPerVb),
   }
 }
 
 export function barkExitPerformDeps(): PerformBarkExitDeps {
   return {
-    sendOnchain: (address, amountSats) => getBarkWorker().sendOnchain(address, amountSats),
-    offboardAll: (address) => getBarkWorker().offboardAll(address),
+    sendOnchain: (address, amountSats, feeRateSatPerVb) =>
+      getBarkWorker().sendOnchain(address, amountSats, feeRateSatPerVb),
+    offboardAll: (address, feeRateSatPerVb) =>
+      getBarkWorker().offboardAll(address, feeRateSatPerVb),
     syncBark: async () => {
       const { activeWalletId, networkMode } = useWalletStore.getState()
       if (activeWalletId == null) return

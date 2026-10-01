@@ -10,6 +10,7 @@ const amountReview: BarkExitReview = {
   mode: 'amount',
   destinationAddress: 'tb1qcurrent',
   amountSats: 10_000,
+  feeRateSatPerVb: 1,
   feeSats: 250,
   onchainAmountSats: 10_000,
   grossAmountSats: 10_250,
@@ -19,6 +20,7 @@ const allReview: BarkExitReview = {
   mode: 'all',
   destinationAddress: 'tb1qcurrent',
   amountSats: null,
+  feeRateSatPerVb: 1,
   feeSats: 400,
   onchainAmountSats: 49_600,
   grossAmountSats: 50_000,
@@ -42,7 +44,7 @@ describe('performBarkExit', () => {
 
     const result = await performBarkExit(exitDeps, amountReview)
 
-    expect(exitDeps.sendOnchain).toHaveBeenCalledWith('tb1qcurrent', 10_000)
+    expect(exitDeps.sendOnchain).toHaveBeenCalledWith('tb1qcurrent', 10_000, 1)
     expect(exitDeps.offboardAll).not.toHaveBeenCalled()
     expect(exitDeps.syncBark).toHaveBeenCalled()
     expect(exitDeps.startOnchainBackgroundSync).toHaveBeenCalled()
@@ -57,7 +59,7 @@ describe('performBarkExit', () => {
 
     const result = await performBarkExit(exitDeps, allReview)
 
-    expect(exitDeps.offboardAll).toHaveBeenCalledWith('tb1qcurrent')
+    expect(exitDeps.offboardAll).toHaveBeenCalledWith('tb1qcurrent', 1)
     expect(exitDeps.sendOnchain).not.toHaveBeenCalled()
     expect(result.txid).toBe('dd')
   })
