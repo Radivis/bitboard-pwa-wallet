@@ -131,7 +131,7 @@ const {
 vi.mock('@/lib/wallet/wallet-utils', () => ({
   runIncrementalDashboardWalletSync: mockRunIncrementalDashboardWalletSync,
   runFullScanDashboardWalletSync: mockRunFullScanDashboardWalletSync,
-  retryImportInitialEsploraSyncWithWalletStatus:
+  retryInitialEsploraSyncWithWalletStatus:
     mockRetryImportInitialEsploraSyncWithWalletStatus,
 }))
 
@@ -225,8 +225,8 @@ describe('DashboardPage', () => {
       setBalance: vi.fn(),
       setTransactions: vi.fn(),
       setLastSyncTime: vi.fn(),
-      importInitialSyncErrorMessage: null as string | null,
-      setImportInitialSyncErrorMessage: vi.fn(),
+      initialSyncErrorMessage: null as string | null,
+      setInitialSyncErrorMessage: vi.fn(),
     }
   })
 
@@ -332,7 +332,7 @@ describe('DashboardPage', () => {
   })
 
   it('shows import initial sync error banner when message is set', () => {
-    walletStoreState.importInitialSyncErrorMessage = 'HTTP 429'
+    walletStoreState.initialSyncErrorMessage = 'HTTP 429'
     renderWithProviders(<DashboardPage />)
     expect(screen.getByRole('alert')).toBeInTheDocument()
     expect(screen.getByText('Initial sync did not finish')).toBeInTheDocument()
@@ -344,7 +344,7 @@ describe('DashboardPage', () => {
 
   it('does not show import sync error banner on lab', () => {
     walletStoreState.networkMode = 'lab'
-    walletStoreState.importInitialSyncErrorMessage = 'failed'
+    walletStoreState.initialSyncErrorMessage = 'failed'
     renderWithProviders(<DashboardPage />)
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })

@@ -20,10 +20,16 @@ use crate::persistence::{
 };
 
 use super::mappers::{current_unix_timestamp, parse_delegator_public_key};
-use super::{ArkClient, ArkSession, ArkWallet, BOLTZ_URL, CLIENT_NAME, CLIENT_TIMEOUT};
+use super::{ArkClient, ArkSession, BOLTZ_URL, BumperWallet, CLIENT_NAME, CLIENT_TIMEOUT};
 
-const ONCHAIN_SYNC_MAX_ATTEMPTS: u32 = 3;
-const ONCHAIN_SYNC_BASE_BACKOFF_MS: u64 = 1_000;
+const BUMPER_WALLET_SYNC_MAX_ATTEMPTS: u32 = 3;
+const BUMPER_WALLET_SYNC_BASE_BACKOFF_MS: u64 = 1_000;
+const BUMPER_SCAN_SETTLE_POLL: std::time::Duration = std::time::Duration::from_millis(50);
+/// One client timeout per bumper retry. A scan left in `Running` must not block
+/// bumper info and exit broadcast until the session is reopened.
+const BUMPER_SCAN_SETTLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(
+    CLIENT_TIMEOUT.as_secs() * (BUMPER_WALLET_SYNC_MAX_ATTEMPTS as u64),
+);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SessionOpenConnectMode {
@@ -51,12 +57,27 @@ async fn sleep_for_backoff(duration: std::time::Duration) {
     bitboard_wasm_sleep::sleep_for(duration).await;
 }
 
+/// Wall clock in unix milliseconds. `Instant` is unavailable on wasm32-unknown-unknown.
+fn wall_clock_unix_ms() -> u64 {
+    #[cfg(target_arch = "wasm32")]
+    {
+        js_sys::Date::now() as u64
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_millis() as u64)
+            .unwrap_or(0)
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 async fn sleep_for_backoff(duration: std::time::Duration) {
     tokio::time::sleep(duration).await;
 }
 
-fn is_retryable_onchain_sync_error(error: &ark_client::Error) -> bool {
+fn is_retryable_bumper_wallet_sync_error(error: &ark_client::Error) -> bool {
     let message = error.to_string().to_lowercase();
     const RETRYABLE_PATTERNS: &[&str] = &[
         "429",
@@ -78,7 +99,7 @@ fn is_retryable_onchain_sync_error(error: &ark_client::Error) -> bool {
         .any(|pattern| message.contains(pattern))
 }
 
-fn warn_onchain_sync_during_open(message: &str) {
+fn warn_bumper_wallet_sync(message: &str) {
     #[cfg(target_arch = "wasm32")]
     web_sys::console::warn_1(&message.into());
     #[cfg(not(target_arch = "wasm32"))]
@@ -86,19 +107,19 @@ fn warn_onchain_sync_during_open(message: &str) {
 }
 
 /// Esplora full scan can fail transiently on hosted proxies; retry with backoff before giving up.
-pub(crate) async fn sync_onchain_wallet_with_retries(client: &ArkClient) -> ArkResult<()> {
-    for attempt in 0..ONCHAIN_SYNC_MAX_ATTEMPTS {
+pub(crate) async fn sync_bumper_wallet_with_retries(client: &ArkClient) -> ArkResult<()> {
+    for attempt in 0..BUMPER_WALLET_SYNC_MAX_ATTEMPTS {
         match client.sync_onchain_wallet().await {
             Ok(()) => return Ok(()),
             Err(error)
-                if attempt + 1 < ONCHAIN_SYNC_MAX_ATTEMPTS
-                    && is_retryable_onchain_sync_error(&error) =>
+                if attempt + 1 < BUMPER_WALLET_SYNC_MAX_ATTEMPTS
+                    && is_retryable_bumper_wallet_sync_error(&error) =>
             {
-                warn_onchain_sync_during_open(&format!(
-                    "On-chain wallet sync failed (attempt {}); retrying: {error}",
+                warn_bumper_wallet_sync(&format!(
+                    "Bumper wallet sync failed (attempt {}); retrying: {error}",
                     attempt + 1
                 ));
-                let backoff_ms = ONCHAIN_SYNC_BASE_BACKOFF_MS.saturating_mul(1 << attempt);
+                let backoff_ms = BUMPER_WALLET_SYNC_BASE_BACKOFF_MS.saturating_mul(1 << attempt);
                 sleep_for_backoff(std::time::Duration::from_millis(backoff_ms)).await;
             }
             Err(error) => return Err(ArkWasmError::Client(error)),
@@ -109,11 +130,16 @@ pub(crate) async fn sync_onchain_wallet_with_retries(client: &ArkClient) -> ArkR
 
 /// Esplora full scan during open can fail transiently on hosted proxies; retry, then continue
 /// with a stale on-chain view so session open and network switching are not blocked.
-pub(crate) async fn sync_onchain_wallet_for_session_open(client: &ArkClient) {
-    if let Err(error) = sync_onchain_wallet_with_retries(client).await {
-        warn_onchain_sync_during_open(&format!(
-            "On-chain wallet sync failed during session open; continuing with stale on-chain view: {error}"
-        ));
+/// Returns whether the wallet-wide scan succeeded.
+pub(crate) async fn sync_bumper_wallet_allowing_stale(client: &ArkClient) -> bool {
+    match sync_bumper_wallet_with_retries(client).await {
+        Ok(()) => true,
+        Err(error) => {
+            warn_bumper_wallet_sync(&format!(
+                "Bumper wallet sync failed; continuing with stale bumper view: {error}"
+            ));
+            false
+        }
     }
 }
 
@@ -148,15 +174,31 @@ fn apply_live_operator_digest_on_open(
     }
 }
 
+pub struct OpenArkSessionParams<'a> {
+    pub mnemonic_words: &'a str,
+    pub network_mode: NetworkMode,
+    pub ark_server_url: String,
+    pub delegator_url: String,
+    pub esplora_url: String,
+    pub sdk_persistence_json: Option<&'a str>,
+    pub bumper_changeset_json: Option<&'a str>,
+    pub bumper_full_scan_done: bool,
+}
+
 impl ArkSession {
     pub async fn open(
-        mnemonic_words: &str,
-        network_mode: NetworkMode,
-        ark_server_url: String,
-        delegator_url: String,
-        esplora_url: String,
-        sdk_persistence_json: Option<&str>,
+        params: OpenArkSessionParams<'_>,
     ) -> ArkResult<(Self, Option<OperatorSignerMigrationHint>)> {
+        let OpenArkSessionParams {
+            mnemonic_words,
+            network_mode,
+            ark_server_url,
+            delegator_url,
+            esplora_url,
+            sdk_persistence_json,
+            bumper_changeset_json,
+            bumper_full_scan_done,
+        } = params;
         let parsed = BitboardArkPersistence::parse_import(sdk_persistence_json);
         let autonomous_mode = parsed.autonomous_mode;
         let cached_operator_info = parsed.wallet_db.cached_operator_info.clone();
@@ -184,12 +226,14 @@ impl ArkSession {
 
         let blockchain = Arc::new(EsploraBlockchain::new(&esplora_url)?);
         let wallet = Arc::new(
-            ArkBdkWallet::new_from_xpriv(
+            ArkBdkWallet::new_from_xpriv_hydrated(
                 xpriv,
                 secp,
                 network,
                 &esplora_url,
                 SharedPersistenceDb(Arc::clone(&wallet_db)),
+                bumper_changeset_json,
+                bumper_full_scan_done,
             )
             .map_err(|error| ArkWasmError::Wallet(error.to_string()))?,
         );
@@ -198,7 +242,7 @@ impl ArkSession {
         // receive peek/reveal paths use the indexed branch, not the static fallback.
         let offline = OfflineClient::<
             EsploraBlockchain,
-            ArkWallet,
+            BumperWallet,
             InMemorySwapStorage,
             Bip32KeyProvider,
         >::new_with_bip32_at_index(
@@ -207,7 +251,7 @@ impl ArkSession {
             None,
             offchain_next_derivation_index,
             blockchain,
-            wallet,
+            Arc::clone(&wallet),
             ark_server_url,
             Arc::new(InMemorySwapStorage::new()),
             BOLTZ_URL.to_string(),
@@ -234,7 +278,8 @@ impl ArkSession {
         let server_info = client.server_info()?;
         let server_signer: XOnlyPublicKey = server_info.signer_pk.into();
         wallet_db.set_load_context(network, server_signer);
-        sync_onchain_wallet_for_session_open(&client).await;
+        // LIFE-ARK-LOAD-04 / UNLOCK-ARK-05: do not await or start bumper Esplora.
+        // First onchain_bumper_info / proceed still uses sync_bumper_wallet_with_retries.
 
         let migration_hint = match connect_mode {
             SessionOpenConnectMode::CachedOperatorInfo => None,
@@ -263,15 +308,51 @@ impl ArkSession {
 
         let session = Self {
             client,
+            bumper_wallet: wallet,
             wallet_db,
             delegator,
             network_mode,
             operator_identity,
             autonomous_mode: Cell::new(autonomous_mode),
+            offchain_key_discovery_failed: Cell::new(false),
+            bumper_wallet_sync_phase: Cell::new(
+                super::bumper_sync_policy::BumperWalletSyncPhase::NotStarted,
+            ),
+            vtxo_snapshot_apply: Mutex::new(()),
         };
         session.heal_vtxo_exit_records();
         session.reconcile_host_tx_finality_best_effort().await;
         Ok((session, migration_hint))
+    }
+
+    pub(crate) async fn wait_until_bumper_wallet_scan_settled(&self) {
+        // `std::time::Instant` panics on wasm32-unknown-unknown and aborts the worker.
+        let started_ms = wall_clock_unix_ms();
+        let timeout_ms = u64::try_from(BUMPER_SCAN_SETTLE_TIMEOUT.as_millis()).unwrap_or(u64::MAX);
+        while self.bumper_wallet_sync_phase.get()
+            == super::bumper_sync_policy::BumperWalletSyncPhase::Running
+        {
+            if wall_clock_unix_ms().saturating_sub(started_ms) >= timeout_ms {
+                self.bumper_wallet_sync_phase
+                    .set(super::bumper_sync_policy::BumperWalletSyncPhase::Failed);
+                return;
+            }
+            sleep_for_backoff(BUMPER_SCAN_SETTLE_POLL).await;
+        }
+    }
+
+    pub async fn sync_bumper_wallet_best_effort(&self) {
+        self.wait_until_bumper_wallet_scan_settled().await;
+        if !super::bumper_sync_policy::bumper_info_should_start_wallet_scan(
+            self.bumper_wallet_sync_phase.get(),
+        ) {
+            return;
+        }
+        let _scan_guard =
+            super::bumper_sync_policy::BumperWalletScanGuard::begin(&self.bumper_wallet_sync_phase);
+        let scan_succeeded = sync_bumper_wallet_allowing_stale(&self.client).await;
+        self.bumper_wallet_sync_phase
+            .set(super::bumper_sync_policy::bumper_sync_phase_after_wallet_scan(scan_succeeded));
     }
 
     pub fn export_persistence(&self) -> ArkResult<String> {
@@ -286,6 +367,20 @@ impl ArkSession {
         Ok(serde_json::to_string(&envelope)?)
     }
 
+    pub fn export_bumper_wallet_changeset(&self) -> ArkResult<String> {
+        self.bumper_wallet
+            .export_changeset_json()
+            .map_err(|error| ArkWasmError::Wallet(error.to_string()))
+    }
+
+    pub fn bumper_wallet_full_scan_done(&self) -> bool {
+        self.bumper_wallet.completed_full_scan()
+    }
+
+    pub fn bumper_hydrate_fell_back_to_empty(&self) -> bool {
+        self.bumper_wallet.bumper_hydrate_fell_back_to_empty()
+    }
+
     pub fn operator_signer_pk_hex(&self) -> String {
         self.client
             .server_info()
@@ -297,22 +392,22 @@ impl ArkSession {
 #[cfg(test)]
 mod tests {
     use super::{
-        SessionOpenConnectMode, is_retryable_onchain_sync_error, session_open_connect_mode,
+        SessionOpenConnectMode, is_retryable_bumper_wallet_sync_error, session_open_connect_mode,
     };
     use crate::error::ArkWasmError;
 
     #[test]
-    fn retryable_onchain_sync_error_detects_proxy_timeouts() {
+    fn retryable_bumper_wallet_sync_error_detects_proxy_timeouts() {
         let error = ark_client::Error::wallet(
             "HttpResponse { status: 504, message: \"FUNCTION_INVOCATION_TIMEOUT\" }",
         );
-        assert!(is_retryable_onchain_sync_error(&error));
+        assert!(is_retryable_bumper_wallet_sync_error(&error));
     }
 
     #[test]
-    fn retryable_onchain_sync_error_ignores_permanent_wallet_errors() {
+    fn retryable_bumper_wallet_sync_error_ignores_permanent_wallet_errors() {
         let error = ark_client::Error::wallet("Insufficient funds: need 1000 sats, have 0 sats");
-        assert!(!is_retryable_onchain_sync_error(&error));
+        assert!(!is_retryable_bumper_wallet_sync_error(&error));
     }
 
     #[test]

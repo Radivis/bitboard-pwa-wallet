@@ -23,8 +23,8 @@ feature:
     balance_card:
       - id: DASH-ARK-09
         description: >-
-          While Arkade loadPhase is loading and no balance data is available, show spinner text
-          "Establishing Arkade session…"
+          While Arkade loadPhase is loading and no balance data is available, show the embedded
+          Arkade session loading screen (heading "Establishing Arkade session")
       - id: DASH-ARK-10
         description: While balance query is loading, show spinner text "Loading…"
       - id: DASH-ARK-11
@@ -77,6 +77,14 @@ feature:
         description: >-
           Arkade session open failure must not reject unlock; reportArkadeSessionOpenError
           shows an Arkade-specific toast instead of generic password/corruption copy on WalletUnlock
+      - id: UNLOCK-ARK-05
+        description: >-
+          Session-ready (loadPhase loaded) is not bumper-scan-ready. WASM open and
+          Arkade load must not await or schedule bumper BDK full_scan. First
+          onchain_bumper_info may sync once; later polls must not restart an HD
+          /txs walk. Unilateral-exit proceed and complete always use
+          sync_bumper_wallet_with_retries before broadcast or completion spend.
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-load-lifecycle-orchestrator.test.ts
     e2e_mocked_asp:
       - id: E2E-ARK-MOCK-01
         description: With VITE_E2E_ARKADE_MOCK, Signet + Arkade enabled, dashboard shows balance card with fixture balance
@@ -94,7 +102,7 @@ feature:
       file: frontend/src/components/wallet/ArkadeDashboardBalance.tsx
       visible_elements:
         - Arkade balance card title
-        - Establishing Arkade session spinner while load lifecycle is loading
+        - Embedded Arkade session loading screen while load lifecycle is loading and balance is absent
         - Loading spinner while balance query loads
         - BitcoinAmountDisplay for confirmed balance
         - Optional recoverable total line
@@ -111,7 +119,7 @@ feature:
         - arkade-pending-recovery-due-to-expired-signer-banner
         - arkade-balance-recoverable-pending-operator-sweep
         - arkade-recoverable-vtxo-banner
-        - dashboard-arkade-session-loading
+        - arkade-session-loading
     - DashboardActivity:
       path: /wallet
       file: frontend/src/pages/wallet/DashboardPage.tsx

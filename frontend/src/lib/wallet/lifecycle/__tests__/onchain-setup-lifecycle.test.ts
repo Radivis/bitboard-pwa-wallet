@@ -7,6 +7,9 @@ const getBalance = vi.fn()
 const getTransactionList = vi.fn()
 const setBalance = vi.fn()
 const setTransactions = vi.fn()
+const walletState = {
+  activeWalletId: 1 as number | null,
+}
 
 vi.mock('@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator', () => ({
   orchestrateOnchainLoad: (...args: unknown[]) => orchestrateOnchainLoad(...args),
@@ -38,6 +41,7 @@ vi.mock('@/stores/cryptoStore', () => ({
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: {
     getState: () => ({
+      activeWalletId: walletState.activeWalletId,
       setBalance,
       setTransactions,
     }),
@@ -61,9 +65,17 @@ describe('LIFE-ONC-SETUP-01 orchestrateOnchainSetupAfterPersist', () => {
     loadCustomEsploraUrl.mockResolvedValue(null)
     getBalance.mockResolvedValue({ totalSats: 0 })
     getTransactionList.mockResolvedValue([])
+    walletState.activeWalletId = 1
   })
 
-  it('runs load then a single orchestrated setupInitial full scan', async () => {
+  it('runs load then starts one setupInitial full scan without waiting for it', async () => {
+    let resolveSync: (() => void) | undefined
+    orchestrateOnchainSyncThenSave.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveSync = resolve
+      }),
+    )
+
     await orchestrateOnchainSetupAfterPersist(setupParams)
 
     expect(orchestrateOnchainLoad).toHaveBeenCalledWith({
@@ -82,9 +94,11 @@ describe('LIFE-ONC-SETUP-01 orchestrateOnchainSetupAfterPersist', () => {
       syncKind: 'setupInitial',
       useFullScan: true,
       markFullScanDone: true,
-      awaitCompletion: true,
-      throwOnError: true,
+      awaitCompletion: false,
+      throwOnError: false,
+      onSyncError: undefined,
     })
+    resolveSync?.()
   })
 
   it('refreshes WASM balance/tx only when no Esplora URL (lab)', async () => {
@@ -99,5 +113,17 @@ describe('LIFE-ONC-SETUP-01 orchestrateOnchainSetupAfterPersist', () => {
     expect(getTransactionList).toHaveBeenCalled()
     expect(setBalance).toHaveBeenCalled()
     expect(setTransactions).toHaveBeenCalled()
+  })
+
+  it('does not write lab balance when the active wallet changed', async () => {
+    walletState.activeWalletId = 2
+
+    await orchestrateOnchainSetupAfterPersist({
+      ...setupParams,
+      networkMode: 'lab',
+    })
+
+    expect(setBalance).not.toHaveBeenCalled()
+    expect(setTransactions).not.toHaveBeenCalled()
   })
 })

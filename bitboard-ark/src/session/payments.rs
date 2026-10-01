@@ -6,6 +6,7 @@ use bitcoin::{Amount, OutPoint, ScriptBuf, XOnlyPublicKey};
 
 use crate::api_types::{DelegateInfoDto, PaymentRowDto, SendPaymentParams};
 use crate::error::{ArkResult, ArkWasmError};
+use crate::incremental_vtxo_sync::send_coin_selection_may_use_offchain_snapshot;
 use crate::offchain_snapshot::{
     offchain_history_from_snapshot, script_to_server_pk_lookup, vtxo_list_from_snapshot,
 };
@@ -54,11 +55,22 @@ impl ArkSession {
         .ok()
     }
 
+    fn send_may_select_outpoints_from_snapshot(&self) -> bool {
+        let snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot;
+        send_coin_selection_may_use_offchain_snapshot(
+            snapshot.as_ref(),
+            current_unix_timestamp(),
+            self.offchain_key_discovery_failed.get(),
+        )
+    }
+
     async fn send_outpoints_excluding_spend_locked(
         &self,
         amount: Amount,
     ) -> ArkResult<Vec<OutPoint>> {
-        if let Some(selected) = self.try_send_outpoints_from_snapshot(amount) {
+        if self.send_may_select_outpoints_from_snapshot()
+            && let Some(selected) = self.try_send_outpoints_from_snapshot(amount)
+        {
             return Ok(selected);
         }
         let (vtxo_list, script_map) = self.client.list_spendable_vtxos().await?;

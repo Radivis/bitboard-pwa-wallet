@@ -27,6 +27,8 @@ const workerMocks = vi.hoisted(() => ({
   getTransactionHistory: vi.fn(),
   getAddress: vi.fn(),
   syncWithOperator: vi.fn(),
+  setOnBackgroundFullReconcileFinished: vi.fn(),
+  scheduleBackgroundFullVtxoReconcile: vi.fn(),
   reconcileActiveAccountId: vi.fn(),
   getUnilateralExitFrontendPersistence: vi.fn(),
   setUnilateralExitFrontendPersistence: vi.fn(),
@@ -63,9 +65,12 @@ vi.mock('@/stores/featureStore', () => ({
   },
 }))
 
+const walletState = vi.hoisted(() => ({ activeWalletId: 7 }))
+
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: {
     getState: () => ({
+      activeWalletId: walletState.activeWalletId,
       setActiveArkadeAccountId: setActiveArkadeAccountIdMock,
       setLastOperatorSyncTime: setLastOperatorSyncTimeMock,
       setArkadeSignerMigrationHint: setArkadeSignerMigrationHintMock,
@@ -87,6 +92,13 @@ vi.mock('@/db', () => ({
   })),
   awaitInFlightWalletSecretsWrites: (...args: unknown[]) =>
     awaitInFlightWalletSecretsWritesMock(...args),
+}))
+
+vi.mock('@/lib/wallet/resolve-bumper-hydrate', () => ({
+  resolveBumperHydrateForSessionOpen: vi.fn(async () => ({
+    bumperChangesetJson: undefined,
+    bumperFullScanDone: false,
+  })),
 }))
 
 vi.mock('@/db/storage-adapter', () => ({
@@ -147,6 +159,7 @@ import {
   abortArkadeSessionForFactoryReset,
   abortArkadeSessionForNetworkSwitch,
   closeArkadeSession,
+  discardArkadeSessionForWalletDeletion,
   openArkadeSessionForWallet,
   refreshArkadeSessionAfterNetworkSwitch,
 } from '@/lib/arkade/arkade-session-service'
@@ -156,6 +169,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
   beforeEach(async () => {
     featureState.isArkadeEnabled = true
     featureState.isMainnetAccessEnabled = false
+    walletState.activeWalletId = 7
     await closeArkadeSession()
     vi.clearAllMocks()
 
@@ -245,7 +259,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
         persistInitialSdkFromWasm: true,
       }),
     )
-    expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalledWith(TEST_ACCOUNT_ID)
+    expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalledWith(TEST_ACCOUNT_ID, 7)
     expect(setActiveArkadeAccountIdMock).toHaveBeenCalledWith(TEST_ACCOUNT_ID)
     await vi.waitFor(() => expect(workerMocks.syncWithOperator).toHaveBeenCalled())
     expect(workerMocks.finalizePendingTransactions).toHaveBeenCalledTimes(1)
@@ -286,7 +300,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
     expect(hydrationOrder.indexOf('syncWithOperator')).toBeGreaterThan(
       hydrationOrder.indexOf('setActiveArkadeAccountId'),
     )
-    expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalledWith(TEST_ACCOUNT_ID)
+    expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalledWith(TEST_ACCOUNT_ID, 7)
     expect(ensureArkadeAccountMock).toHaveBeenCalledWith(
       expect.objectContaining({
         persistInitialSdkFromWasm: false,
@@ -476,6 +490,27 @@ describe('openArkadeSessionForWallet (integration)', () => {
 
     expect(workerMocks.flushSdkPersistence).not.toHaveBeenCalled()
     expect(workerMocks.closeSession).not.toHaveBeenCalled()
+    expect(getArkadeLoadLifecycleSnapshot()).toEqual({
+      loadPhase: 'not-configured',
+      networkMode: null,
+      errorMessage: null,
+    })
+  })
+
+  it('discardArkadeSessionForWalletDeletion does not flush a loaded session', async () => {
+    walletState.activeWalletId = 2
+    await openArkadeSessionForWallet({
+      walletId: 2,
+      networkMode: 'signet',
+    })
+    workerMocks.flushSdkPersistence.mockClear()
+    terminateArkadeWorkerMock.mockClear()
+
+    await discardArkadeSessionForWalletDeletion()
+
+    expect(workerMocks.flushSdkPersistence).not.toHaveBeenCalled()
+    expect(workerMocks.closeSession).not.toHaveBeenCalled()
+    expect(terminateArkadeWorkerMock).toHaveBeenCalledTimes(1)
     expect(getArkadeLoadLifecycleSnapshot()).toEqual({
       loadPhase: 'not-configured',
       networkMode: null,

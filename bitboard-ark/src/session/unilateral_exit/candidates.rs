@@ -74,6 +74,43 @@ fn snapshot_record_ready_for_completion(
     record.is_unrolled && !record.is_spent
 }
 
+/// A claimed exit is `is_spent` on the snapshot but the exit record can still be `unrolled`.
+/// Those rows are not waiting to be completed.
+fn outpoint_is_spent_for_completion(
+    operator_vtxo: Option<&VirtualTxOutPoint>,
+    snapshot_record: Option<&VirtualTxOutPointRecord>,
+) -> bool {
+    operator_vtxo.is_some_and(|virtual_tx_outpoint| virtual_tx_outpoint.is_spent)
+        || snapshot_record.is_some_and(|record| record.is_spent)
+}
+
+/// Move pipeline records to `exited` when the snapshot already shows the outpoint spent.
+///
+/// Returns whether any record changed, so the caller can persist.
+pub(crate) fn note_spent_pipeline_records_exited(
+    records: &mut BTreeMap<String, VtxoExitRecord>,
+    snapshot_records: &[VirtualTxOutPointRecord],
+) -> bool {
+    let mut changed = false;
+    for (key, record) in records.iter_mut() {
+        if !record.phase.is_pipeline() {
+            continue;
+        }
+        let Some((txid, vout)) = parse_vtxo_exit_record_key(key) else {
+            continue;
+        };
+        let spent = snapshot_records.iter().any(|snapshot_record| {
+            snapshot_record.txid == txid && snapshot_record.vout == vout && snapshot_record.is_spent
+        });
+        if !spent {
+            continue;
+        }
+        record.phase = VtxoExitPhase::Exited;
+        changed = true;
+    }
+    changed
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct ClaimabilityStatus {
     can_complete: bool,
@@ -173,7 +210,15 @@ async fn overlay_in_progress_row_for_record(
         return Ok(None);
     };
     let phase = record.phase;
-    if let Some(virtual_tx_outpoint) = lookups.operator_by_outpoint.get(&outpoint) {
+    let operator_vtxo = lookups.operator_by_outpoint.get(&outpoint).copied();
+    let snapshot_record = lookups
+        .snapshot_records
+        .iter()
+        .find(|snapshot_record| snapshot_record.txid == txid && snapshot_record.vout == vout);
+    if outpoint_is_spent_for_completion(operator_vtxo, snapshot_record) {
+        return Ok(None);
+    }
+    if let Some(virtual_tx_outpoint) = operator_vtxo {
         let candidate = map_exit_candidate(virtual_tx_outpoint, lookups.dust);
         let claimability = overlay_complete_ready_if_claimable(
             records,
@@ -202,11 +247,7 @@ async fn overlay_in_progress_row_for_record(
         )));
     }
 
-    if let Some(snapshot_record) = lookups
-        .snapshot_records
-        .iter()
-        .find(|snapshot_record| snapshot_record.txid == txid && snapshot_record.vout == vout)
-    {
+    if let Some(snapshot_record) = snapshot_record {
         let virtual_status_state = VirtualStatusState::from_spent_and_unrolled(
             snapshot_record.is_spent,
             snapshot_record.is_unrolled,
@@ -306,6 +347,9 @@ impl ArkSession {
             .as_ref()
             .map(|snapshot| snapshot.virtual_tx_outpoints.as_slice())
             .unwrap_or(&[]);
+        if note_spent_pipeline_records_exited(&mut records, snapshot_records) {
+            self.wallet_db.set_vtxo_exit_records(records.clone());
+        }
 
         let lookups = InProgressRowLookups {
             session: self,
@@ -353,7 +397,7 @@ impl ArkSession {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::persistence::{VtxoExitRecord, vtxo_exit_record_key};
+    use crate::persistence::{VirtualTxOutPointRecord, VtxoExitRecord, vtxo_exit_record_key};
 
     fn unrolled_record() -> VtxoExitRecord {
         VtxoExitRecord {
@@ -362,6 +406,65 @@ mod tests {
             host_txid: "aa".repeat(32),
             amount_sats: 50_000,
         }
+    }
+
+    fn spent_snapshot_record(txid: &str, vout: u32) -> VirtualTxOutPointRecord {
+        VirtualTxOutPointRecord {
+            txid: txid.to_string(),
+            vout,
+            created_at: 0,
+            expires_at: 9_999_999_999,
+            amount_sats: 50_000,
+            script_hex: String::new(),
+            is_preconfirmed: false,
+            is_swept: false,
+            is_unrolled: true,
+            is_spent: true,
+            spent_by: Some("bb".repeat(32)),
+            commitment_txids: vec![],
+            settled_by: None,
+            ark_txid: None,
+            assets: vec![],
+            server_pk_hex: None,
+        }
+    }
+
+    #[test]
+    fn spent_pipeline_record_becomes_exited_and_leaves_the_complete_list() {
+        let txid = "aa".repeat(32);
+        let key = vtxo_exit_record_key(&txid, 0);
+        let mut records = BTreeMap::from([(key.clone(), unrolled_record())]);
+
+        assert!(note_spent_pipeline_records_exited(
+            &mut records,
+            &[spent_snapshot_record(&txid, 0)],
+        ));
+        assert_eq!(records[&key].phase, VtxoExitPhase::Exited);
+        assert!(!records[&key].phase.is_pipeline());
+        assert!(outpoint_is_spent_for_completion(
+            None,
+            Some(&spent_snapshot_record(&txid, 0)),
+        ));
+    }
+
+    #[test]
+    fn unspent_unrolled_record_stays_on_the_complete_list() {
+        let txid = "aa".repeat(32);
+        let key = vtxo_exit_record_key(&txid, 0);
+        let mut records = BTreeMap::from([(key.clone(), unrolled_record())]);
+        let mut snapshot_record = spent_snapshot_record(&txid, 0);
+        snapshot_record.is_spent = false;
+        snapshot_record.spent_by = None;
+
+        assert!(!note_spent_pipeline_records_exited(
+            &mut records,
+            &[snapshot_record.clone()],
+        ));
+        assert_eq!(records[&key].phase, VtxoExitPhase::Unrolled);
+        assert!(!outpoint_is_spent_for_completion(
+            None,
+            Some(&snapshot_record),
+        ));
     }
 
     #[test]

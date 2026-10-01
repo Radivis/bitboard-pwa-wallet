@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use ark_core::server::VirtualTxOutPoint;
 
@@ -12,7 +12,9 @@ use super::onchain::{
 use crate::outpoint::VirtualOutPoint;
 use crate::session::ArkSession;
 use crate::session::pending_exit::mark_vtxo_spent_in_snapshot;
-use crate::session::unilateral_exit::vtxo_exit::parse_vtxo_exit_record_key;
+use crate::session::unilateral_exit::vtxo_exit::{
+    mark_records_exited_for_outpoints, parse_vtxo_exit_record_key,
+};
 use bitcoin::{OutPoint, Txid};
 use std::str::FromStr;
 
@@ -175,12 +177,61 @@ fn clear_exiting_record(snapshot: &mut OffchainVtxoSnapshot, txid: &str, vout: u
     }
 }
 
-/// Mark locally completed unilateral exits when Esplora shows the on-chain spend, even if the
-/// operator indexer still treats them as exiting.
+/// arkd does not set `is_spent` when a unilateral exit is claimed on chain.
+///
+/// `is_spent` / `spent_by` means an off-chain spend. The scanner sets `is_unrolled` when it sees
+/// the virtual outpoint and leaves `is_spent` false after the owner sweeps it. A wiped wallet has
+/// no local exit record, so Esplora is the only way to learn that claim.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum VirtualOutpointChainFact {
+    Spent(Txid),
+    /// Raw virtual tx is on the network and this output is still unspent.
+    RelayedUnspent,
+    /// No raw tx. An indexer `is_unrolled` here is not an exit (for example a settled board).
+    Absent,
+}
+
+/// Apply one Esplora observation for an indexer-unrolled output.
+///
+/// A spent output is marked `is_spent`. A relayed-but-unspent output is recorded so sync can keep
+/// `is_unrolled` without a local exit record. An absent virtual tx is left for
+/// [`crate::offchain_snapshot::clear_indexer_unrolled_without_local_finality`].
+pub(crate) fn apply_virtual_outpoint_chain_fact(
+    snapshot: &mut OffchainVtxoSnapshot,
+    host_txid: &str,
+    vout: u32,
+    fact: VirtualOutpointChainFact,
+    chain_visible_unrolled_hosts: &mut HashSet<String>,
+) -> Option<OutPoint> {
+    match fact {
+        VirtualOutpointChainFact::Spent(spend_txid) => {
+            mark_vtxo_spent_in_snapshot(snapshot, host_txid, vout, &spend_txid.to_string());
+            Txid::from_str(host_txid)
+                .ok()
+                .map(|txid| OutPoint { txid, vout })
+        }
+        VirtualOutpointChainFact::RelayedUnspent => {
+            chain_visible_unrolled_hosts.insert(host_txid.to_string());
+            None
+        }
+        VirtualOutpointChainFact::Absent => None,
+    }
+}
+
+pub(crate) struct ExitingVtxoEsploraReconcile {
+    pub spent_outpoints: Vec<OutPoint>,
+    pub chain_visible_unrolled_hosts: HashSet<String>,
+}
+
+/// Mark completed unilateral exits when Esplora shows the on-chain spend, even if the operator
+/// indexer still reports `is_unrolled` and not `is_spent`.
+///
+/// Also returns virtual txids that are actually relayed with the output still unspent, so a fresh
+/// device can keep a real in-progress unroll after the indexer flag is otherwise ignored.
 pub(crate) async fn reconcile_exiting_vtxos_spent_on_esplora(
     session: &ArkSession,
     snapshot: &mut OffchainVtxoSnapshot,
-) -> ArkResult<Vec<OutPoint>> {
+) -> ArkResult<ExitingVtxoEsploraReconcile> {
     let blockchain = session.client.blockchain();
     let records = session.wallet_db.vtxo_exit_records();
 
@@ -207,25 +258,65 @@ pub(crate) async fn reconcile_exiting_vtxos_spent_on_esplora(
         }
     }
 
-    let mut healed_outpoints = Vec::new();
+    let mut spent_outpoints = Vec::new();
+    let mut chain_visible_unrolled_hosts = HashSet::new();
+    let mut relayed_by_txid: HashMap<String, bool> = HashMap::new();
     for (host_txid, vout) in probe_targets {
-        let Some(spend_txid) =
+        let spend_txid =
             detect_exiting_vtxo_completion_on_esplora(blockchain, snapshot, &host_txid, vout)
-                .await?
-        else {
-            continue;
+                .await?;
+        let fact = if let Some(spend_txid) = spend_txid {
+            VirtualOutpointChainFact::Spent(spend_txid)
+        } else {
+            let relayed =
+                virtual_tx_is_relayed(blockchain, &mut relayed_by_txid, &host_txid).await?;
+            if relayed {
+                VirtualOutpointChainFact::RelayedUnspent
+            } else {
+                VirtualOutpointChainFact::Absent
+            }
         };
-
-        mark_vtxo_spent_in_snapshot(snapshot, &host_txid, vout, &spend_txid.to_string());
-        if let Ok(txid) = Txid::from_str(&host_txid) {
-            healed_outpoints.push(OutPoint { txid, vout });
+        if let Some(outpoint) = apply_virtual_outpoint_chain_fact(
+            snapshot,
+            &host_txid,
+            vout,
+            fact,
+            &mut chain_visible_unrolled_hosts,
+        ) {
+            spent_outpoints.push(outpoint);
         }
     }
 
-    Ok(healed_outpoints)
+    if !spent_outpoints.is_empty() {
+        let mut records = session.wallet_db.vtxo_exit_records();
+        mark_records_exited_for_outpoints(&mut records, &spent_outpoints);
+        session.wallet_db.set_vtxo_exit_records(records);
+    }
+
+    Ok(ExitingVtxoEsploraReconcile {
+        spent_outpoints,
+        chain_visible_unrolled_hosts,
+    })
 }
 
-pub(crate) async fn reconcile_exiting_vtxo_watches(
+async fn virtual_tx_is_relayed(
+    blockchain: &crate::esplora_blockchain::EsploraBlockchain,
+    relayed_by_txid: &mut HashMap<String, bool>,
+    host_txid: &str,
+) -> ArkResult<bool> {
+    if let Some(relayed) = relayed_by_txid.get(host_txid) {
+        return Ok(*relayed);
+    }
+    let Ok(txid) = Txid::from_str(host_txid) else {
+        relayed_by_txid.insert(host_txid.to_string(), false);
+        return Ok(false);
+    };
+    let relayed = blockchain.is_tx_relayed_on_network(&txid).await?;
+    relayed_by_txid.insert(host_txid.to_string(), relayed);
+    Ok(relayed)
+}
+
+pub(crate) async fn reconcile_exiting_vtxo_records(
     session: &ArkSession,
     mut snapshot: OffchainVtxoSnapshot,
     prior_snapshot: Option<&OffchainVtxoSnapshot>,
@@ -445,6 +536,7 @@ mod tests {
             dust_sats: 330,
             virtual_tx_outpoints: vec![],
             unilateral_exit_materials_by_host_tx: std::collections::BTreeMap::new(),
+            full_listed_at: 0,
         };
         let mut warnings = Vec::new();
 
@@ -491,6 +583,7 @@ mod tests {
                 server_pk_hex: None,
             }],
             unilateral_exit_materials_by_host_tx: std::collections::BTreeMap::new(),
+            full_listed_at: 0,
         };
         let mut warnings = Vec::new();
 
@@ -531,6 +624,92 @@ mod tests {
         }
     }
 
+    fn indexer_unrolled_snapshot(txid: &str) -> OffchainVtxoSnapshot {
+        let mut record = spendable_snapshot_record(txid, 50_000);
+        record.is_unrolled = true;
+        OffchainVtxoSnapshot {
+            synced_at: 1,
+            dust_sats: 330,
+            virtual_tx_outpoints: vec![record],
+            unilateral_exit_materials_by_host_tx: std::collections::BTreeMap::new(),
+            full_listed_at: 0,
+        }
+    }
+
+    #[test]
+    fn completed_exit_without_local_record_is_marked_spent() {
+        let txid = Txid::from_byte_array([0x81; 32]);
+        let mut snapshot = indexer_unrolled_snapshot(&txid.to_string());
+        let mut chain_visible = HashSet::new();
+        let spend_txid = Txid::from_byte_array([0x82; 32]);
+
+        let healed = apply_virtual_outpoint_chain_fact(
+            &mut snapshot,
+            &txid.to_string(),
+            0,
+            VirtualOutpointChainFact::Spent(spend_txid),
+            &mut chain_visible,
+        );
+
+        assert_eq!(healed, Some(OutPoint { txid, vout: 0 }));
+        assert!(snapshot.virtual_tx_outpoints[0].is_spent);
+        assert_eq!(
+            snapshot.virtual_tx_outpoints[0].spent_by.as_deref(),
+            Some(spend_txid.to_string().as_str())
+        );
+        assert!(chain_visible.is_empty());
+    }
+
+    #[test]
+    fn relayed_unspent_unroll_stays_unrolled_without_local_record() {
+        let txid = Txid::from_byte_array([0x83; 32]).to_string();
+        let mut snapshot = indexer_unrolled_snapshot(&txid);
+        let mut chain_visible = HashSet::new();
+
+        assert!(
+            apply_virtual_outpoint_chain_fact(
+                &mut snapshot,
+                &txid,
+                0,
+                VirtualOutpointChainFact::RelayedUnspent,
+                &mut chain_visible,
+            )
+            .is_none()
+        );
+        crate::offchain_snapshot::clear_indexer_unrolled_without_local_finality(
+            &mut snapshot,
+            &chain_visible,
+        );
+
+        assert!(snapshot.virtual_tx_outpoints[0].is_unrolled);
+        assert!(!snapshot.virtual_tx_outpoints[0].is_spent);
+    }
+
+    #[test]
+    fn indexer_unrolled_absent_from_chain_is_cleared() {
+        let txid = Txid::from_byte_array([0x84; 32]).to_string();
+        let mut snapshot = indexer_unrolled_snapshot(&txid);
+        let mut chain_visible = HashSet::new();
+
+        assert!(
+            apply_virtual_outpoint_chain_fact(
+                &mut snapshot,
+                &txid,
+                0,
+                VirtualOutpointChainFact::Absent,
+                &mut chain_visible,
+            )
+            .is_none()
+        );
+        crate::offchain_snapshot::clear_indexer_unrolled_without_local_finality(
+            &mut snapshot,
+            &chain_visible,
+        );
+
+        assert!(!snapshot.virtual_tx_outpoints[0].is_unrolled);
+        assert!(!snapshot.virtual_tx_outpoints[0].is_spent);
+    }
+
     #[test]
     fn tagged_record_does_not_stamp_unrolled_on_spendable_snapshot() {
         let txid = Txid::from_byte_array([0x44; 32]).to_string();
@@ -539,6 +718,7 @@ mod tests {
             dust_sats: 330,
             virtual_tx_outpoints: vec![spendable_snapshot_record(&txid, 12_000)],
             unilateral_exit_materials_by_host_tx: std::collections::BTreeMap::new(),
+            full_listed_at: 0,
         };
 
         apply_record_unroll_stickiness_for_present_spendable(
@@ -564,6 +744,7 @@ mod tests {
             dust_sats: 330,
             virtual_tx_outpoints: vec![],
             unilateral_exit_materials_by_host_tx: std::collections::BTreeMap::new(),
+            full_listed_at: 0,
         };
         let mut warnings = Vec::new();
 
@@ -594,6 +775,7 @@ mod tests {
             dust_sats: 330,
             virtual_tx_outpoints: vec![spendable_snapshot_record(&txid, 12_000)],
             unilateral_exit_materials_by_host_tx: std::collections::BTreeMap::new(),
+            full_listed_at: 0,
         };
 
         apply_record_unroll_stickiness_for_present_spendable(

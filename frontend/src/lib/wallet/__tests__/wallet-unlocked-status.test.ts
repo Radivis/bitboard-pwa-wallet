@@ -25,7 +25,10 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
   return {
     ...actual,
     useWalletStore: {
-      getState: () => ({ walletStatus: 'unlocked' as const }),
+      getState: () => ({
+        walletStatus: 'unlocked' as const,
+        activeWalletId: 1,
+      }),
     },
   }
 })

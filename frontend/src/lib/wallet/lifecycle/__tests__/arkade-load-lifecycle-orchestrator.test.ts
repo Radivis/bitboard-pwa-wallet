@@ -14,6 +14,7 @@ const workerMocks = vi.hoisted(() => ({
   reconcileActiveAccountId: vi.fn(),
   finalizePendingTransactions: vi.fn(),
   delegateSpendableVtxos: vi.fn(),
+  syncBumperWallet: vi.fn(),
   getUnilateralExitFrontendPersistence: vi.fn(async () => ({
     job: {
       selectedLeafOutpoints: [],
@@ -33,6 +34,9 @@ const workerMocks = vi.hoisted(() => ({
   setUnilateralExitFailure: vi.fn(async () => {}),
 }))
 
+const walletState = vi.hoisted(() => ({
+  activeWalletId: 1 as number | null,
+}))
 const setActiveArkadeAccountIdMock = vi.hoisted(() => vi.fn())
 const setLastOperatorSyncTimeMock = vi.hoisted(() => vi.fn())
 const setArkadeSignerMigrationHintMock = vi.hoisted(() => vi.fn())
@@ -54,6 +58,7 @@ vi.mock('@/stores/featureStore', () => ({
 vi.mock('@/stores/walletStore', () => ({
   useWalletStore: {
     getState: () => ({
+      activeWalletId: walletState.activeWalletId,
       setActiveArkadeAccountId: setActiveArkadeAccountIdMock,
       setLastOperatorSyncTime: setLastOperatorSyncTimeMock,
       setArkadeSignerMigrationHint: setArkadeSignerMigrationHintMock,
@@ -72,6 +77,13 @@ vi.mock('@/db', () => ({
   getWalletSecretsEncrypted: vi.fn(async () => ({
     mnemonic: { ciphertext: new Uint8Array(), iv: new Uint8Array(), salt: new Uint8Array(), kdfPhc: 'x' },
     payload: { ciphertext: new Uint8Array(), iv: new Uint8Array(), salt: new Uint8Array(), kdfPhc: 'x' },
+  })),
+}))
+
+vi.mock('@/lib/wallet/resolve-bumper-hydrate', () => ({
+  resolveBumperHydrateForSessionOpen: vi.fn(async () => ({
+    bumperChangesetJson: undefined,
+    bumperFullScanDone: false,
   })),
 }))
 
@@ -138,6 +150,7 @@ describe('arkade-load-lifecycle-orchestrator', () => {
     resetArkadeLoadLifecycleStateForTests()
     vi.clearAllMocks()
     featureState.isArkadeEnabled = true
+    walletState.activeWalletId = 1
     workerMocks.openSession.mockResolvedValue({
       arkadeAddress: 'tark1qtest',
       operatorSignerPkHex: '02deadbeef',
@@ -147,6 +160,7 @@ describe('arkade-load-lifecycle-orchestrator', () => {
     workerMocks.reconcileActiveAccountId.mockResolvedValue(undefined)
     workerMocks.finalizePendingTransactions.mockResolvedValue({ finalized: 0, pending: 0 })
     workerMocks.delegateSpendableVtxos.mockResolvedValue({ delegated: 0, failed: 0 })
+    workerMocks.syncBumperWallet.mockResolvedValue(undefined)
     getArkadeWorkerIfExistsMock.mockReturnValue(null)
     findActiveArkadeAccountSummaryMock.mockResolvedValue(undefined)
     ensureArkadeAccountMock.mockResolvedValue({
@@ -205,6 +219,62 @@ describe('arkade-load-lifecycle-orchestrator', () => {
     await orchestrateArkadeLoad({ walletId: 1, networkMode: 'signet' })
 
     expect(order.indexOf('setActive')).toBeLessThan(order.indexOf('postLoadSync'))
+  })
+
+  it('LIFE-ARK-LOAD-04 reaches loaded without starting bumper Esplora', async () => {
+    await orchestrateArkadeLoad({ walletId: 1, networkMode: 'signet' })
+
+    expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loaded')
+    expect(workerMocks.syncBumperWallet).not.toHaveBeenCalled()
+    expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalled()
+  })
+
+  it('does not mark the rail loaded when the active wallet changed', async () => {
+    walletState.activeWalletId = 2
+
+    await orchestrateArkadeLoad({ walletId: 1, networkMode: 'signet' })
+
+    expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('not-configured')
+    expect(workerMocks.openSession).not.toHaveBeenCalled()
+    expect(refreshArkadeStoreFromLoadedWasmMock).not.toHaveBeenCalled()
+  })
+
+  it('opens the new wallet session when the previous Arkade load fails in flight', async () => {
+    let rejectPreviousOpen: (error: Error) => void = () => {}
+    let markPreviousOpenStarted: () => void = () => {}
+    const previousOpenStarted = new Promise<void>((resolve) => {
+      markPreviousOpenStarted = resolve
+    })
+
+    workerMocks.openSession.mockImplementation(async (params: { walletId: number }) => {
+      if (params.walletId === 1) {
+        markPreviousOpenStarted()
+        await new Promise<never>((_resolve, reject) => {
+          rejectPreviousOpen = reject
+        })
+      }
+      return {
+        arkadeAddress: 'tark1qnew',
+        operatorSignerPkHex: '02deadbeef',
+      }
+    })
+
+    const previousLoad = orchestrateArkadeLoad({ walletId: 1, networkMode: 'signet' })
+    await previousOpenStarted
+
+    walletState.activeWalletId = 2
+    const nextLoad = orchestrateArkadeLoad({ walletId: 2, networkMode: 'signet' })
+    rejectPreviousOpen(new Error('operator unreachable'))
+
+    await expect(previousLoad).rejects.toThrow('operator unreachable')
+    await nextLoad
+
+    expect(workerMocks.openSession).toHaveBeenCalledWith(
+      expect.objectContaining({ walletId: 2 }),
+    )
+    expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loaded')
+    expect(clearArkadeDashboardStoreMock).not.toHaveBeenCalled()
+    expect(terminateArkadeWorkerMock).toHaveBeenCalled()
   })
 
   it('load failure sets load-error and tears down worker without leaving loading', async () => {

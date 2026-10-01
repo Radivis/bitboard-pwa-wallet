@@ -21,8 +21,8 @@ export const ARKADE_FEE_ESTIMATE_STALE_MS = 30_000
 /**
  * While the unilateral-exit dialog is open and the bumper wallet is still underfunded, re-poll the
  * bumper balance and fee estimate so the "Start unroll" gate clears automatically once the user's
- * on-chain top-up lands. Kept short because the regtest/esplora scripthash index that the bumper
- * wallet syncs against only lags the address index by a few seconds.
+ * on-chain top-up lands. After the first session scan, polls incremental-sync unused
+ * revealed bumper scripts into BDK; they must not restart a scripthash `/txs` HD walk.
  */
 export const ARKADE_BUMPER_FUNDING_POLL_MS = 4_000
 

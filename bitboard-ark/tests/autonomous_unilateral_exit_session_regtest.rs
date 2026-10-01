@@ -134,7 +134,7 @@ async fn autonomous_unroll_and_complete_without_operator_sync() {
 
     assert!(!completion_txid.is_empty(), "expected completion txid");
 
-    session
+    let _leave_sync = session
         .exit_autonomous_mode()
         .await
         .expect("leave autonomous mode");

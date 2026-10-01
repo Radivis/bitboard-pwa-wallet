@@ -2,6 +2,8 @@
 
 Bitboard stores many **descriptor wallets** per Bitboard wallet (`wallet_id`): one row per `(network, addressType, accountId)` triple in the encrypted `wallet_secrets` payload. At runtime **one** BDK wallet is loaded in the crypto WASM worker at a time.
 
+The Arkade bumper is BIP84 account 0 — the same HD account as the SegWit-0 row. Arkade hydrates that row on session open. When SegWit-0 is the loaded crypto wallet, crypto is the only writer of that changeset. When Taproot (or any other triple) is loaded, Arkade may persist SegWit-0 after a bumper wallet-wide sync (`createDescriptorWalletRowIfMissing` / `create_wallet_without_activating` so the crypto slot is not replaced). Dual in-memory BDKs remain until [crypto-owned descriptor spends](future/crypto-owned-descriptor-spends.md).
+
 Switching network or address type in Settings means: persist the outgoing descriptor wallet’s BDK **changeset**, load the target descriptor wallet into WASM, update session/UI state, and (on live networks) refresh the dashboard from BDK and sync with Esplora.
 
 For how on-chain balance/history and stale indicators work after a switch, see [`onchain-bitboard-wallet-model.md`](onchain-bitboard-wallet-model.md).
@@ -106,9 +108,10 @@ flowchart TB
 
 `fullScanNeeded` is true if any of:
 
-- Switch between two **live** networks (network card only; not address-type switch). This always forces a full scan today to avoid pathological sync states when moving between chains (e.g. stale incremental sync anchoring); a more selective incremental-vs-full policy may replace it later.
 - Target descriptor wallet has `fullScanDone === false`.
 - Persisted changeset could not be loaded and an empty chain was used (`usedEmptyChainFallback`).
+
+Live ↔ live network switches use incremental Esplora when the target row already has `fullScanDone`.
 
 Defined in `switchDescriptorWallet`; executed inside `syncLoadedDescriptorWalletWithEsplora`.
 
@@ -173,10 +176,10 @@ Uses the full live `switchDescriptorWallet` path (save/load/sync/Esplora), then 
 
 ## Related: unlock (not Settings switch)
 
-First load after password entry uses [`loadDescriptorWalletAndSync`](../frontend/src/lib/wallet/wallet-utils.ts) from `WalletUnlock` / `useActiveWalletLoadQuery`. It mirrors the live switch **load + BDK hydrate + background Esplora** pattern but is a separate entry point (always full scan on unlock for non-lab). Documented here because it shares helpers with switching:
+First load after password entry uses [`orchestrateBootstrapUnlock` / `orchestrateManualUnlock`](../frontend/src/lib/wallet/lifecycle/lock-lifecycle-orchestrator.ts) (`runUnlockLoad`). It mirrors the live switch **load + BDK hydrate + background Esplora** pattern but is a separate entry point. Post-unlock Esplora is **incremental** when the hydrated descriptor has `fullScanDone` and load did not fall back to an empty chain; it full-scans only when `!fullScanDone` or `usedEmptyChainFallback`. Unlike Settings live↔live switch, unlock does **not** force a full scan merely because the network is live. Documented here because it shares helpers with switching:
 
 - `resolveDescriptorWallet`
-- `loadWalletHandlingPersistedChainMismatch`
+- `loadWalletHandlingPersistedChainMismatch` / `withPersistedChainMismatchRetry`
 - `refreshWalletStoreFromLoadedBdk`
 - `syncActiveWalletAndUpdateState` / changeset persist
 

@@ -236,6 +236,7 @@ fn asp_swept_snapshot(leaf_outpoint: &VirtualOutPoint) -> OffchainVtxoSnapshot {
             server_pk_hex: None,
         }],
         unilateral_exit_materials_by_host_tx: BTreeMap::new(),
+        full_listed_at: 0,
     }
 }
 
@@ -436,6 +437,7 @@ fn seized_branch_lookup_errors_when_exit_materials_are_missing() {
         dust_sats: 330,
         virtual_tx_outpoints: vec![],
         unilateral_exit_materials_by_host_tx: BTreeMap::new(),
+        full_listed_at: 0,
     };
     let mut records = BTreeMap::new();
     records.insert(
@@ -678,6 +680,7 @@ fn first_unroll_step_funding_prevouts_from_snapshot_matches_psbt_inputs() {
         dust_sats: 330,
         virtual_tx_outpoints: vec![],
         unilateral_exit_materials_by_host_tx: BTreeMap::new(),
+        full_listed_at: 0,
     };
     store_materials_for_host_tx(&mut snapshot, &leaf.to_string(), materials);
 

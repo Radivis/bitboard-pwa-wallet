@@ -532,6 +532,7 @@ mod tests {
                 server_pk_hex: None,
             }],
             unilateral_exit_materials_by_host_tx: std::collections::BTreeMap::new(),
+            full_listed_at: 0,
         };
         // Swept records are not exit-eligible; do not invent an ASP fallback.
         assert!(

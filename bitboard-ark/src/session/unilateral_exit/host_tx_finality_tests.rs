@@ -162,6 +162,7 @@ fn unified_stamp_skips_checkpoint_and_commitment() {
             vtxo_record(&leaf, 0, 1_000, false),
         ],
         unilateral_exit_materials_by_host_tx: BTreeMap::new(),
+        full_listed_at: 0,
     };
     store_materials_for_host_tx(
         &mut snapshot,

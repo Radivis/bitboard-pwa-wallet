@@ -80,6 +80,56 @@ fn get_new_address_increments_index() {
 }
 
 #[test]
+fn incremental_sync_request_includes_peeked_address_before_any_reveal() {
+    let mut wallet = create_test_wallet(BitcoinNetwork::Regtest, AddressType::Segwit);
+    let displayed = wallet::get_current_address(&wallet);
+    assert_eq!(
+        wallet.derivation_index(KeychainKind::External),
+        None,
+        "a fresh wallet has not revealed an external address"
+    );
+
+    let peeked_script = wallet
+        .peek_address(KeychainKind::External, 0)
+        .address
+        .script_pubkey();
+    let mut unrevealed_request = wallet.start_sync_with_revealed_spks().build();
+    let unrevealed_scripts: Vec<_> = unrevealed_request
+        .iter_spks_with_expected_txids()
+        .map(|item| item.spk)
+        .collect();
+    assert!(
+        !unrevealed_scripts.contains(&peeked_script),
+        "revealed-only sync does not watch a peeked index 0"
+    );
+
+    let mut request = wallet::start_incremental_sync_request(&mut wallet, 1_700_000_000);
+    let scripts: Vec<_> = request
+        .iter_spks_with_expected_txids()
+        .map(|item| item.spk)
+        .collect();
+    assert!(
+        scripts.contains(&peeked_script),
+        "incremental sync must watch the address the receive screen already shows"
+    );
+    assert_eq!(
+        wallet
+            .peek_address(KeychainKind::External, 0)
+            .address
+            .to_string(),
+        displayed
+    );
+    assert_eq!(wallet.derivation_index(KeychainKind::External), Some(0));
+
+    let _second = wallet::start_incremental_sync_request(&mut wallet, 1_700_000_001);
+    assert_eq!(
+        wallet.derivation_index(KeychainKind::External),
+        Some(0),
+        "a later incremental sync must not burn the next address"
+    );
+}
+
+#[test]
 fn get_current_address_returns_last_revealed_without_incrementing() {
     let mut wallet = create_test_wallet(DEFAULT_NETWORK, DEFAULT_ADDRESS_TYPE);
     let addr1 = wallet::get_new_address(&mut wallet);

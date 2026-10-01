@@ -1734,7 +1734,8 @@ where
         self.inner.key_provider.get_keypair_for_pk(pk)
     }
 
-    fn derivation_index_for_pk(&self, pk: &XOnlyPublicKey) -> Option<u32> {
+    /// HD index for a cached offchain owner key. Used to limit incremental VTXO sync to the recent window.
+    pub fn derivation_index_for_pk(&self, pk: &XOnlyPublicKey) -> Option<u32> {
         self.inner.key_provider.get_derivation_index_for_pk(pk)
     }
 

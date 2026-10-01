@@ -5,7 +5,12 @@ import type {
 } from '@/workers/secrets-channel-types'
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import { arkadeSessionKey } from '@/lib/arkade/arkade-session-key'
-import { assertArkadeOpenSessionMatchesScope } from '@/lib/arkade/arkade-session-scope'
+import {
+  ARKADE_PERSIST_SCOPE_CHANGED_ERROR,
+  arkadeOpenSessionMatchesSaveTarget,
+  assertArkadeOpenSessionMatchesScope,
+  stampedPersistScopeStillMatchesOpenSession,
+} from '@/lib/arkade/arkade-session-scope'
 import { rethrowWasmArkErrorForComlink } from '@/lib/shared/wasm-ark-error'
 import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
 import {
@@ -37,6 +42,7 @@ import type {
   ArkadeService,
   ArkadeSignerMigrationResult,
   ArkadeUnilateralExitCompletionFeeEstimate,
+  ArkadeUnilateralExitTimelock,
   ArkadeUnilateralExitCompletionFeeEstimateParams,
   ArkadeUnilateralExitTopology,
   ArkadeUnilateralExitTopologyParams,
@@ -58,6 +64,7 @@ import type {
   ArkadeUnilateralExitInProgressDto,
   ArkadeVtxoExitRecordDto,
   ArkadeAutonomousModeStatus,
+  BackgroundFullVtxoReconcileOutcome,
   ArkadeVtxoListResult,
   ArkadeVtxoExpiryStatus,
   ArkadePendingBatchIntent,
@@ -66,6 +73,14 @@ import type {
   OpenArkadeSessionResult,
 } from '@/workers/arkade-api'
 
+import {
+  persistAfterCriticalWithLightOperatorSync,
+  shouldScheduleBackgroundFullVtxoReconcile,
+} from '@/lib/arkade/arkade-operator-sync-policy'
+import {
+  backgroundFullReconcileFinishedOutcome,
+  createSingleFlightScheduler,
+} from '@/lib/arkade/background-full-vtxo-reconcile'
 import { loadBitboardArkWasm } from '@/lib/arkade/load-bitboard-ark-wasm'
 
 type BitboardArkWasm = Awaited<ReturnType<typeof loadBitboardArkWasm>>
@@ -147,6 +162,25 @@ async function invokeWasmArk<T>(
   }
 }
 
+let bumperWalletSyncInFlight: Promise<void> | null = null
+
+async function syncBumperWalletImpl(): Promise<void> {
+  if (bumperWalletSyncInFlight != null) {
+    return bumperWalletSyncInFlight
+  }
+  const work = (async () => {
+    await invokeWasmArk((wasmModule) => wasmModule.ark_sync_bumper_wallet())
+  })()
+  bumperWalletSyncInFlight = work
+  try {
+    await work
+  } finally {
+    if (bumperWalletSyncInFlight === work) {
+      bumperWalletSyncInFlight = null
+    }
+  }
+}
+
 async function initWasm() {
   try {
     arkWasmModule = await loadBitboardArkWasm()
@@ -185,21 +219,51 @@ function deleteLegacyArkadeIndexedDb(
   }
 }
 
-async function flushSdkPersistenceNowOrThrow(): Promise<void> {
+type ArkadePersistScope = {
+  walletId: number
+  arkadeAccountId: string
+}
+
+function captureOpenPersistScope(): ArkadePersistScope | null {
   if (activeSessionParams == null) {
-    throw new Error('Arkade SDK persistence flush was skipped (no active session)')
+    return null
+  }
+  return {
+    walletId: activeSessionParams.walletId,
+    arkadeAccountId: activeSessionParams.arkadeAccountId,
+  }
+}
+
+async function flushSdkPersistenceNowOrThrow(
+  scopeAtStart?: ArkadePersistScope | null,
+): Promise<void> {
+  const stampedScope = scopeAtStart === undefined ? captureOpenPersistScope() : scopeAtStart
+  if (
+    stampedScope == null ||
+    !stampedPersistScopeStillMatchesOpenSession(stampedScope, activeSessionParams)
+  ) {
+    if (stampedScope == null && activeSessionParams == null) {
+      throw new Error('Arkade SDK persistence flush was skipped (no active session)')
+    }
+    throw new Error(ARKADE_PERSIST_SCOPE_CHANGED_ERROR)
   }
 
   if (inFlightPersist != null) {
     await inFlightPersist
-    return flushSdkPersistenceNowOrThrow()
+    return flushSdkPersistenceNowOrThrow(stampedScope)
   }
 
-  const sessionParams = activeSessionParams
+  const sessionParams = stampedScope
   inFlightPersist = (async () => {
+    if (!stampedPersistScopeStillMatchesOpenSession(sessionParams, activeSessionParams)) {
+      throw new Error(ARKADE_PERSIST_SCOPE_CHANGED_ERROR)
+    }
     const sdkPersistenceJson = await invokeWasmArk((wasmModule) =>
       wasmModule.ark_export_persistence_json(),
     )
+    if (!stampedPersistScopeStillMatchesOpenSession(sessionParams, activeSessionParams)) {
+      throw new Error(ARKADE_PERSIST_SCOPE_CHANGED_ERROR)
+    }
     await persistSdkJsonToEncryptedPayload(getEncryptedPayloadDeps(), {
       walletId: sessionParams.walletId,
       arkadeAccountId: sessionParams.arkadeAccountId,
@@ -225,9 +289,48 @@ async function getAutonomousModeActive(): Promise<boolean> {
   }
 }
 
+let onBackgroundFullReconcileFinished:
+  | ((outcome: BackgroundFullVtxoReconcileOutcome) => void | Promise<void>)
+  | null = null
+
+const scheduleBackgroundFullVtxoReconcileSingleFlight = createSingleFlightScheduler(async () => {
+  const reconcileScope = captureOpenPersistScope()
+  try {
+    const reconcileResult: unknown = await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_reconcile_full_offchain_vtxo_list() as Promise<unknown>,
+    )
+    if (!stampedPersistScopeStillMatchesOpenSession(reconcileScope, activeSessionParams)) {
+      await onBackgroundFullReconcileFinished?.({
+        ok: false,
+        warningMessage:
+          'Full VTXO reconcile was discarded because the wallet session changed',
+      })
+      return
+    }
+    await flushSdkPersistenceNowOrThrow(reconcileScope)
+    await onBackgroundFullReconcileFinished?.(
+      backgroundFullReconcileFinishedOutcome(reconcileResult),
+    )
+  } catch (error) {
+    const warningMessage =
+      error instanceof Error ? error.message : 'Full VTXO reconcile failed'
+    await onBackgroundFullReconcileFinished?.({ ok: false, warningMessage })
+  }
+})
+
+function scheduleBackgroundFullFromSyncResult(result: ArkadeOperatorSyncResult): void {
+  if (shouldScheduleBackgroundFullVtxoReconcile(result.fullReconcileDue)) {
+    scheduleBackgroundFullVtxoReconcileSingleFlight()
+  }
+}
+
 /** WASM operator sync + SDK flush only — store refresh runs on the main thread. */
-async function syncWithOperatorCore(): Promise<ArkadeOperatorSyncResult> {
-  const result = await invokeWasmArk((wasmModule) => wasmModule.ark_sync_with_operator())
+async function syncWithOperatorCore(
+  scheduleBackgroundFull = false,
+): Promise<ArkadeOperatorSyncResult> {
+  const result = await invokeWasmArk((wasmModule) =>
+    wasmModule.ark_sync_with_operator(scheduleBackgroundFull),
+  )
   await flushSdkPersistenceNowOrThrow()
   return (result ?? {}) as ArkadeOperatorSyncResult
 }
@@ -245,15 +348,15 @@ async function persistAfterCriticalOperation(): Promise<void> {
   const { awaitArkadeSyncQuiescence } = await import(
     '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
   )
-  await awaitArkadeSyncQuiescence()
-  if (activeSessionParams != null) {
-    const autonomousActive = await getAutonomousModeActive()
-    if (!autonomousActive) {
-      await syncWithOperatorCore()
-      return
-    }
-  }
-  await flushSdkPersistenceNowOrThrow()
+  const autonomousActive =
+    activeSessionParams != null ? await getAutonomousModeActive() : true
+  await persistAfterCriticalWithLightOperatorSync({
+    awaitUserFacingQuiescence: awaitArkadeSyncQuiescence,
+    autonomousActive,
+    runLightOperatorSync: () => syncWithOperatorCore(false),
+    scheduleBackgroundFullReconcile: scheduleBackgroundFullVtxoReconcileSingleFlight,
+    flushPersistence: flushSdkPersistenceNowOrThrow,
+  })
 }
 
 function createOnRegisteredWasmCallback(
@@ -312,6 +415,7 @@ async function closeSessionImpl(): Promise<void> {
 
   activeSessionKey = null
   activeSessionParams = null
+  bumperWalletSyncInFlight = null
   sendPaymentInFlight = null
 }
 
@@ -360,6 +464,8 @@ async function openSessionImpl(
         delegatorUrl: params.delegatorUrl,
         esploraUrl: params.esploraUrl,
         sdkPersistenceJson,
+        bumperChangesetJson: params.bumperChangesetJson,
+        bumperFullScanDone: params.bumperFullScanDone ?? false,
       }),
     )
 
@@ -373,6 +479,7 @@ async function openSessionImpl(
       signerMigrationHint: openResult.signerMigrationHint as
         | OpenArkadeSessionResult['signerMigrationHint']
         | undefined,
+      bumperHydrateFellBackToEmpty: openResult.bumperHydrateFellBackToEmpty === true,
     }
   } catch (error) {
     activeSessionKey = null
@@ -397,6 +504,18 @@ const arkadeService: ArkadeService = {
 
   async openSession(params: OpenArkadeSessionParams) {
     return openSessionImpl(params)
+  },
+
+  async syncBumperWallet(): Promise<void> {
+    await syncBumperWalletImpl()
+  },
+
+  async exportBumperWalletChangeset(): Promise<string> {
+    return invokeWasmArk((wasmModule) => wasmModule.ark_export_bumper_wallet_changeset())
+  },
+
+  async bumperWalletFullScanDone(): Promise<boolean> {
+    return invokeWasmArk((wasmModule) => wasmModule.ark_bumper_wallet_full_scan_done())
   },
 
   async hasOpenSession(params: {
@@ -426,12 +545,24 @@ const arkadeService: ArkadeService = {
     )
   },
 
-  async syncWithOperator(): Promise<ArkadeOperatorSyncResult> {
+  async syncWithOperator(
+    scheduleBackgroundFull = false,
+  ): Promise<ArkadeOperatorSyncResult> {
     const { awaitArkadeSyncQuiescence } = await import(
       '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
     )
     await awaitArkadeSyncQuiescence()
-    return syncWithOperatorCore()
+    return syncWithOperatorCore(scheduleBackgroundFull)
+  },
+
+  scheduleBackgroundFullVtxoReconcile(): void {
+    scheduleBackgroundFullVtxoReconcileSingleFlight()
+  },
+
+  setOnBackgroundFullReconcileFinished(
+    onFinished: (outcome: BackgroundFullVtxoReconcileOutcome) => void | Promise<void>,
+  ): void {
+    onBackgroundFullReconcileFinished = onFinished
   },
 
   async enterAutonomousMode(): Promise<void> {
@@ -440,8 +571,11 @@ const arkadeService: ArkadeService = {
   },
 
   async exitAutonomousMode(): Promise<void> {
-    await invokeWasmArk((wasmModule) => wasmModule.ark_exit_autonomous_mode())
+    const result = (await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_exit_autonomous_mode(),
+    )) as ArkadeOperatorSyncResult
     await flushSdkPersistenceNowOrThrow()
+    scheduleBackgroundFullFromSyncResult(result ?? {})
   },
 
   async getAutonomousModeStatus(): Promise<ArkadeAutonomousModeStatus> {
@@ -464,8 +598,11 @@ const arkadeService: ArkadeService = {
   },
 
   async acceptPendingOperatorConfig(): Promise<void> {
-    await invokeWasmArk((wasmModule) => wasmModule.ark_accept_pending_operator_config())
+    const result = (await invokeWasmArk((wasmModule) =>
+      wasmModule.ark_accept_pending_operator_config(),
+    )) as ArkadeOperatorSyncResult
     await flushSdkPersistenceNowOrThrow()
+    scheduleBackgroundFullFromSyncResult(result ?? {})
   },
 
   async reviewOperatorConfigInAutonomousMode(): Promise<void> {
@@ -534,6 +671,9 @@ const arkadeService: ArkadeService = {
   },
 
   async updateOperatorSyncAtEncrypted(params) {
+    if (!arkadeOpenSessionMatchesSaveTarget(activeSessionParams, params)) {
+      return
+    }
     return updateOperatorSyncAtEncrypted(getEncryptedPayloadDeps(), params)
   },
 
@@ -748,6 +888,19 @@ const arkadeService: ArkadeService = {
     return invokeWasmArk(
       (wasmModule) =>
         wasmModule.ark_get_onchain_bumper_info() as Promise<ArkadeOnchainBumperInfo>,
+    )
+  },
+
+  async unilateralExitTimelock(): Promise<ArkadeUnilateralExitTimelock> {
+    return invokeWasmArk(
+      (wasmModule) =>
+        wasmModule.ark_unilateral_exit_timelock() as ArkadeUnilateralExitTimelock,
+    )
+  },
+
+  async peekOnchainBumperAddress(): Promise<string> {
+    return invokeWasmArk(
+      (wasmModule) => wasmModule.ark_peek_onchain_bumper_address() as string,
     )
   },
 

@@ -1,8 +1,7 @@
 import { useState, useMemo, useCallback } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { RefreshCw } from 'lucide-react'
-import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,37 +12,19 @@ import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { MnemonicGrid } from '@/components/MnemonicGrid'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { EnterAppPasswordModal } from '@/components/EnterAppPasswordModal'
-import { SetAppPasswordModal } from '@/components/SetAppPasswordModal'
-import { SetupBackToWelcomeButton } from '@/components/SetupBackToWelcomeButton'
-import { WalletUnlock } from '@/components/WalletUnlock'
-import { orchestrateLock } from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
+import { SetupFlowHeading } from '@/components/setup/SetupFlowHeading'
+import { SetupNewWalletGate } from '@/components/setup/SetupNewWalletGate'
 import { useCryptoStore } from '@/stores/cryptoStore'
-import { useWalletStore } from '@/stores/walletStore'
-import { startAutoLockTimer } from '@/stores/sessionStore'
 import {
-  useAddWallet,
-  getDatabase,
-  ensureMigrated,
-  persistNewWalletWithSecrets,
-  setWalletNoMnemonicBackupFlag,
-  useWallets,
-  type SplitWalletSecretsEncryptedBlobs,
-} from '@/db'
-import { ensureSecretsChannel } from '@/workers/secrets-channel'
-import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
-import { orchestrateOnchainSetupAfterPersist } from '@/lib/wallet/lifecycle/onchain-setup-lifecycle'
+  newWalletPersistFieldsFromEncryptResult,
+} from '@/lib/wallet/new-wallet'
+import { isWalletSecretsSessionActive } from '@/lib/wallet/wallet-secrets-session'
 import {
-  retryImportInitialEsploraSyncWithWalletStatus,
-} from '@/lib/wallet/wallet-utils'
-import { showImportInitialSyncFailureToast } from '@/lib/wallet/wallet-sync-error-toast'
-import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
-import { errorMessage } from '@/lib/shared/utils'
-import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet/wallet-query-cache-sync'
-import { useSetupAppPasswordGateReady } from '@/hooks/useSetupAppPasswordGateReady'
-import {
-  ensureWalletSecretsSession,
-  isWalletSecretsSessionActive,
-} from '@/lib/wallet/wallet-secrets-session'
+  completeNewWalletSetup,
+  toastNewWalletFlowError,
+  usePersistAndActivateNewWallet,
+  usePrepareNewWalletEncryption,
+} from '@/pages/setup/use-new-wallet-setup'
 
 type Step = 1 | 2 | 3
 
@@ -51,10 +32,7 @@ type Step = 1 | 2 | 3
 const SEED_VERIFICATION_WORD_COUNT = 3
 
 /** Stored after createWalletAndEncryptSecrets so we can persist in step 3 without keeping mnemonic. */
-interface CreateWalletPending {
-  encryptedBlobs: SplitWalletSecretsEncryptedBlobs
-  walletResult: { firstAddress: string }
-}
+type CreateWalletPending = ReturnType<typeof newWalletPersistFieldsFromEncryptResult>
 
 export function CreateWalletPage() {
   const navigate = useNavigate()
@@ -63,29 +41,14 @@ export function CreateWalletPage() {
   const [mnemonicForBackup, setMnemonicForBackup] = useState('')
   const [pendingCreate, setPendingCreate] = useState<CreateWalletPending | null>(null)
   const [verificationWords, setVerificationWords] = useState<Record<number, string>>({})
-  const [confirmPasswordOpen, setEnterPasswordOpen] = useState(false)
+  const [confirmPasswordOpen, setConfirmPasswordOpen] = useState(false)
   const [pendingCreateAction, setPendingCreateAction] = useState<
     'generate' | 'quickCreate' | null
   >(null)
 
-  const { data: wallets, isLoading: walletsLoading } = useWallets()
-  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
-
   const createWalletAndEncryptSecrets = useCryptoStore((cryptoState) => cryptoState.createWalletAndEncryptSecrets)
-  const networkMode = useWalletStore((walletState) => walletState.networkMode)
-  const addressType = useWalletStore((walletState) => walletState.addressType)
-  const accountId = useWalletStore((walletState) => walletState.accountId)
-  const setActiveWallet = useWalletStore((walletState) => walletState.setActiveWallet)
-  const setWalletStatus = useWalletStore((walletState) => walletState.setWalletStatus)
-  const setCurrentAddress = useWalletStore((walletState) => walletState.setCurrentAddress)
-  const setBalance = useWalletStore((walletState) => walletState.setBalance)
-  const setTransactions = useWalletStore((walletState) => walletState.setTransactions)
-  const setLastSyncTime = useWalletStore((walletState) => walletState.setLastSyncTime)
-  const commitLoadedDescriptorWallet = useWalletStore((walletState) => walletState.commitLoadedDescriptorWallet)
-  const setImportInitialSyncErrorMessage = useWalletStore(
-    (walletState) => walletState.setImportInitialSyncErrorMessage,
-  )
-  const addWallet = useAddWallet()
+  const prepareNewWalletEncryptionCall = usePrepareNewWalletEncryption()
+  const persistNewWallet = usePersistAndActivateNewWallet()
 
   const words = useMemo(() => (mnemonicForBackup ? mnemonicForBackup.split(' ') : []), [mnemonicForBackup])
 
@@ -108,108 +71,15 @@ export function CreateWalletPage() {
     )
   }, [verificationIndices, verificationWords, words])
 
-  const queryClient = useQueryClient()
-  const { appPasswordReady, walletUnlockedOrSyncing, onAppPasswordSessionStarted } =
-    useSetupAppPasswordGateReady(walletStatus)
-
-  const persistAndActivateNewWallet = useCallback(
-    async ({
-      encryptedBlobs,
-      firstAddress,
-      markNoMnemonicBackup,
-    }: {
-      encryptedBlobs: SplitWalletSecretsEncryptedBlobs
-      firstAddress: string
-      markNoMnemonicBackup: boolean
-    }) => {
-      await ensureMigrated()
-      const walletDb = getDatabase()
-      let walletId: number
-      try {
-        walletId = await persistNewWalletWithSecrets({
-          walletDb,
-          insertWalletRow: () =>
-            addWallet.mutateAsync({
-              name: `Wallet ${Date.now()}`,
-              created_at: new Date().toISOString(),
-            }),
-          encryptedBlobs,
-        })
-      } catch (secretsErr) {
-        invalidateWalletRelatedQueriesAndNotifyOtherTabs(queryClient)
-        throw secretsErr
-      }
-      if (markNoMnemonicBackup) {
-        await setWalletNoMnemonicBackupFlag(walletDb, walletId)
-        invalidateWalletRelatedQueriesAndNotifyOtherTabs(queryClient)
-      }
-      // Drop previous wallet's on-chain / sync UI so the dashboard never shows stale data.
-      setBalance(null)
-      setTransactions([])
-      setLastSyncTime(null)
-      setCurrentAddress(null)
-      setActiveWallet(walletId)
-      setCurrentAddress(firstAddress)
-      commitLoadedDescriptorWallet({
-        networkMode,
-        addressType,
-        accountId,
-      })
-      setWalletStatus('unlocked')
-      startAutoLockTimer(() => void orchestrateLock())
-
-      try {
-        await orchestrateOnchainSetupAfterPersist({
-          walletId,
-          networkMode,
-          addressType,
-          accountId,
-        })
-        setImportInitialSyncErrorMessage(null)
-      } catch (err: unknown) {
-        const syncErrorMessage =
-          sanitizeErrorMessageForUi(errorMessage(err) ?? String(err)) ||
-          'Initial sync failed'
-        setImportInitialSyncErrorMessage(syncErrorMessage)
-        showImportInitialSyncFailureToast(err, () => {
-          void retryImportInitialEsploraSyncWithWalletStatus()
-        })
-      }
-
-      return walletId
-    },
-    [
-      accountId,
-      addWallet,
-      addressType,
-      commitLoadedDescriptorWallet,
-      networkMode,
-      queryClient,
-      setActiveWallet,
-      setBalance,
-      setCurrentAddress,
-      setImportInitialSyncErrorMessage,
-      setLastSyncTime,
-      setTransactions,
-      setWalletStatus,
-    ],
-  )
-
   const runCreateWalletAndEncryptSecrets = useCallback(async (appPassword?: string) => {
-    await ensureWalletSecretsSession(appPassword)
-    await ensureSecretsChannel()
-    const network = toBitcoinNetwork(networkMode)
+    const encryptionTarget = await prepareNewWalletEncryptionCall(appPassword)
     return createWalletAndEncryptSecrets({
-      network,
-      addressType,
-      accountId,
+      ...encryptionTarget,
       wordCount,
     })
   }, [
-    accountId,
-    addressType,
     createWalletAndEncryptSecrets,
-    networkMode,
+    prepareNewWalletEncryptionCall,
     wordCount,
   ])
 
@@ -217,19 +87,11 @@ export function CreateWalletPage() {
     mutationFn: runCreateWalletAndEncryptSecrets,
     onSuccess: (createWalletOutcome) => {
       setMnemonicForBackup(createWalletOutcome.mnemonicForBackup)
-      setPendingCreate({
-        encryptedBlobs: {
-          payload: createWalletOutcome.encryptedPayload,
-          mnemonic: createWalletOutcome.encryptedMnemonic,
-        },
-        walletResult: { firstAddress: createWalletOutcome.walletResult.firstAddress },
-      })
+      setPendingCreate(newWalletPersistFieldsFromEncryptResult(createWalletOutcome))
       setStep(2)
     },
     onError: (err) => {
-      toast.error(
-        err instanceof Error ? err.message : 'Failed to create wallet',
-      )
+      toastNewWalletFlowError(err, 'Failed to create wallet')
     },
   })
 
@@ -238,24 +100,17 @@ export function CreateWalletPage() {
   const quickCreateWalletMutation = useMutation({
     mutationFn: async (appPassword?: string) => {
       const createWalletOutcome = await runCreateWalletAndEncryptSecrets(appPassword)
-      await persistAndActivateNewWallet({
-        encryptedBlobs: {
-          payload: createWalletOutcome.encryptedPayload,
-          mnemonic: createWalletOutcome.encryptedMnemonic,
-        },
-        firstAddress: createWalletOutcome.walletResult.firstAddress,
+      await persistNewWallet({
+        ...newWalletPersistFieldsFromEncryptResult(createWalletOutcome),
         markNoMnemonicBackup: true,
       })
     },
     onSuccess: () => {
       setSkipBackupWarningOpen(false)
-      toast.success('Wallet created successfully!')
-      navigate({ to: '/wallet' })
+      completeNewWalletSetup(navigate, 'Wallet created successfully!')
     },
     onError: (err) => {
-      toast.error(
-        err instanceof Error ? err.message : 'Failed to create wallet',
-      )
+      toastNewWalletFlowError(err, 'Failed to create wallet')
     },
   })
 
@@ -270,7 +125,7 @@ export function CreateWalletPage() {
         return
       }
       setPendingCreateAction(action)
-      setEnterPasswordOpen(true)
+      setConfirmPasswordOpen(true)
     },
     [createWalletMutation, quickCreateWalletMutation],
   )
@@ -278,51 +133,23 @@ export function CreateWalletPage() {
   const finishCreateMutation = useMutation({
     mutationFn: async () => {
       if (!pendingCreate) throw new Error('No pending create')
-      const firstAddress = pendingCreate.walletResult.firstAddress
       setMnemonicForBackup('')
-      await persistAndActivateNewWallet({
-        encryptedBlobs: pendingCreate.encryptedBlobs,
-        firstAddress,
+      await persistNewWallet({
+        ...pendingCreate,
         markNoMnemonicBackup: false,
       })
       setPendingCreate(null)
     },
     onSuccess: () => {
-      toast.success('Wallet created successfully!')
-      navigate({ to: '/wallet' })
+      completeNewWalletSetup(navigate, 'Wallet created successfully!')
     },
     onError: (err) => {
-      toast.error(
-        err instanceof Error ? err.message : 'Failed to save wallet',
-      )
+      toastNewWalletFlowError(err, 'Failed to save wallet')
     },
   })
 
-  if (walletsLoading) {
-    return (
-      <div className="flex justify-center py-12">
-        <LoadingSpinner text="Loading…" />
-      </div>
-    )
-  }
-
-  const hasWallets = (wallets?.length ?? 0) > 0
-
-  if (hasWallets && !walletUnlockedOrSyncing) {
-    return <WalletUnlock variant="setup" />
-  }
-
-  if (!hasWallets && !appPasswordReady) {
-    return (
-      <SetAppPasswordModal
-        open
-        onSessionStarted={onAppPasswordSessionStarted}
-      />
-    )
-  }
-
   const handleEnterAppPassword = (appPassword: string) => {
-    setEnterPasswordOpen(false)
+    setConfirmPasswordOpen(false)
     const action = pendingCreateAction
     setPendingCreateAction(null)
     if (action === 'quickCreate') {
@@ -333,100 +160,103 @@ export function CreateWalletPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <SetupBackToWelcomeButton />
-        <h2 className="text-xl font-bold">Create Wallet</h2>
-        <div className="ml-auto text-sm text-muted-foreground">
-          Step {step} of 3
-        </div>
-      </div>
-
-      {step === 1 && (
-        <>
-          <StepWordCountGenerate
-            wordCount={wordCount}
-            setWordCount={setWordCount}
-            loading={
-              createWalletMutation.isPending || quickCreateWalletMutation.isPending
-            }
-            onSubmit={() => void requestAppPasswordForCreate('generate')}
-            onOpenSkipBackupWarning={() => setSkipBackupWarningOpen(true)}
-          />
-          <AppModal
-            isOpen={skipBackupWarningOpen}
-            onOpenChange={setSkipBackupWarningOpen}
-            onCancel={() => {}}
-            title="Quick start without viewing backup"
-            contentClassName="sm:max-w-lg"
-            footer={(requestClose) => (
-              <>
-                <Button type="button" variant="outline" onClick={requestClose}>
-                  Abort
-                </Button>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  disabled={quickCreateWalletMutation.isPending}
-                  onClick={() => void requestAppPasswordForCreate('quickCreate')}
-                >
-                  Understood! Proceed!
-                </Button>
-              </>
-            )}
-          >
-            <DialogDescription asChild>
-              <div className="space-y-3 text-left text-sm text-foreground">
-                <p>
-                  This quick start option still creates a seed phrase and stores it encrypted on this
-                  device, but it will not be shown here. You can view it and back it up later from{' '}
-                  <strong>Wallet → Management</strong> — doing so is strongly recommended.
-                </p>
-                <p>
-                  It is <strong>much safer</strong> to make a backup of the seed phrase immediately
-                  using &quot;Generate &amp; Continue&quot; instead.
-                </p>
-                <p className="font-semibold text-destructive">
-                  If you skip writing down your seed phrase, permanent loss of funds is highly likely
-                  if you lose this device, damage your data, or forget your Bitboard app password —
-                  treat total loss as the expected outcome.
-                </p>
-              </div>
-            </DialogDescription>
-          </AppModal>
-        </>
-      )}
-
-      {step === 2 && (
-        <StepBackup words={words} onContinue={() => setStep(3)} />
-      )}
-
-      <EnterAppPasswordModal
-        open={confirmPasswordOpen}
-        onOpenChange={setEnterPasswordOpen}
-        onCancel={() => {
-          setEnterPasswordOpen(false)
-          setPendingCreateAction(null)
-        }}
-        onConfirm={handleEnterAppPassword}
-        isBusy={createWalletMutation.isPending || quickCreateWalletMutation.isPending}
-        title="Enter app password"
-        description="Enter your Bitboard app password to encrypt your new wallet."
-        submitLabel={pendingCreateAction === 'quickCreate' ? 'Create wallet' : 'Generate wallet'}
-        loadingText="Generating wallet..."
-      />
-
-      {step === 3 && (
-        <StepVerify
-          verificationIndices={verificationIndices}
-          verificationWords={verificationWords}
-          setVerificationWords={setVerificationWords}
-          isCorrect={verificationCorrect}
-          loading={finishCreateMutation.isPending}
-          onConfirm={() => finishCreateMutation.mutate()}
+    <SetupNewWalletGate>
+      <div className="space-y-4">
+        <SetupFlowHeading
+          title="Create Wallet"
+          trailing={
+            <div className="ml-auto text-sm text-muted-foreground">
+              Step {step} of 3
+            </div>
+          }
         />
-      )}
-    </div>
+
+        {step === 1 && (
+          <>
+            <StepWordCountGenerate
+              wordCount={wordCount}
+              setWordCount={setWordCount}
+              loading={
+                createWalletMutation.isPending || quickCreateWalletMutation.isPending
+              }
+              onSubmit={() => void requestAppPasswordForCreate('generate')}
+              onOpenSkipBackupWarning={() => setSkipBackupWarningOpen(true)}
+            />
+            <AppModal
+              isOpen={skipBackupWarningOpen}
+              onOpenChange={setSkipBackupWarningOpen}
+              onCancel={() => {}}
+              title="Quick start without viewing backup"
+              contentClassName="sm:max-w-lg"
+              footer={(requestClose) => (
+                <>
+                  <Button type="button" variant="outline" onClick={requestClose}>
+                    Abort
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    disabled={quickCreateWalletMutation.isPending}
+                    onClick={() => void requestAppPasswordForCreate('quickCreate')}
+                  >
+                    Understood! Proceed!
+                  </Button>
+                </>
+              )}
+            >
+              <DialogDescription asChild>
+                <div className="space-y-3 text-left text-sm text-foreground">
+                  <p>
+                    This quick start option still creates a seed phrase and stores it encrypted on this
+                    device, but it will not be shown here. You can view it and back it up later from{' '}
+                    <strong>Wallet → Management</strong> — doing so is strongly recommended.
+                  </p>
+                  <p>
+                    It is <strong>much safer</strong> to make a backup of the seed phrase immediately
+                    using &quot;Generate &amp; Continue&quot; instead.
+                  </p>
+                  <p className="font-semibold text-destructive">
+                    If you skip writing down your seed phrase, permanent loss of funds is highly likely
+                    if you lose this device, damage your data, or forget your Bitboard app password —
+                    treat total loss as the expected outcome.
+                  </p>
+                </div>
+              </DialogDescription>
+            </AppModal>
+          </>
+        )}
+
+        {step === 2 && (
+          <StepBackup words={words} onContinue={() => setStep(3)} />
+        )}
+
+        <EnterAppPasswordModal
+          open={confirmPasswordOpen}
+          onOpenChange={setConfirmPasswordOpen}
+          onCancel={() => {
+            setConfirmPasswordOpen(false)
+            setPendingCreateAction(null)
+          }}
+          onConfirm={handleEnterAppPassword}
+          isBusy={createWalletMutation.isPending || quickCreateWalletMutation.isPending}
+          title="Enter app password"
+          description="Enter your Bitboard app password to encrypt your new wallet."
+          submitLabel={pendingCreateAction === 'quickCreate' ? 'Create wallet' : 'Generate wallet'}
+          loadingText="Generating wallet..."
+        />
+
+        {step === 3 && (
+          <StepVerify
+            verificationIndices={verificationIndices}
+            verificationWords={verificationWords}
+            setVerificationWords={setVerificationWords}
+            isCorrect={verificationCorrect}
+            loading={finishCreateMutation.isPending}
+            onConfirm={() => finishCreateMutation.mutate()}
+          />
+        )}
+      </div>
+    </SetupNewWalletGate>
   )
 }
 

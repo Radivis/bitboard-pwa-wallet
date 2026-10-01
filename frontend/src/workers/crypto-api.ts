@@ -287,6 +287,14 @@ export interface CryptoService {
   ): Promise<ResolveDescriptorWalletResult>;
 
   /**
+   * Create a missing descriptor-wallet row without replacing ACTIVE_WALLET.
+   * Same result shape as resolveDescriptorWallet.
+   */
+  createDescriptorWalletRowIfMissing(
+    params: ResolveDescriptorWalletParams,
+  ): Promise<ResolveDescriptorWalletResult>;
+
+  /**
    * Update the changeset for one descriptor wallet in encrypted secrets.
    * Returns the new encrypted blob to store.
    * When markFullScanDone is true, sets that descriptor wallet's fullScanDone flag.
