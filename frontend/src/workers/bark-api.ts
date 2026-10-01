@@ -54,6 +54,26 @@ export type BarkMovementRow = {
   createdAtUnixSeconds: number
 }
 
+export const BARK_VTXO_STATES = ['spendable', 'locked', 'spent', 'exited'] as const
+
+export type BarkVtxoState = (typeof BARK_VTXO_STATES)[number]
+
+export type BarkVtxoLockHolderKind = 'action' | 'movement'
+
+export type BarkVtxoLockHolder = {
+  kind: BarkVtxoLockHolderKind
+  id: string
+}
+
+export type BarkVtxoRow = {
+  id: string
+  amountSats: number
+  expiryHeight: number
+  state: BarkVtxoState
+  lockHolder: BarkVtxoLockHolder | null
+  registered: boolean
+}
+
 export interface BarkService {
   configureHistoricalSignetOnchainChain(
     chain: HistoricalSignetOnchainChain | null,
@@ -71,6 +91,7 @@ export interface BarkService {
   prepareBoardFunding(): Promise<BarkPreparedBoardFunding>
   boardPsbt(psbtBase64: string): Promise<BarkBoardAccepted>
   history(): Promise<BarkMovementRow[]>
+  listVtxos(): Promise<BarkVtxoRow[]>
   estimateSendOnchain(address: string, amountSats: number): Promise<BarkExitFeeEstimate>
   sendOnchain(address: string, amountSats: number): Promise<string>
   estimateOffboardAll(address: string): Promise<BarkExitFeeEstimate>

@@ -1,5 +1,6 @@
 import { expose, wrap, type Remote } from 'comlink'
 import { readBarkSpendableSats } from '@/lib/bark/bark-balance'
+import { listVtxosFromWasm } from '@/lib/bark/bark-vtxo-list'
 import {
   boardPsbtFromWasm,
   estimateBoardOffchainFeeFromWasm,
@@ -31,6 +32,7 @@ import type {
   BarkBoardFeeEstimate,
   BarkExitFeeEstimate,
   BarkMovementRow,
+  BarkVtxoRow,
   BarkPreparedBoardFunding,
   BarkRevealedReceiveAddress,
   BarkService,
@@ -257,6 +259,12 @@ async function historyImpl(): Promise<BarkMovementRow[]> {
   return historyFromWasm(boardWasm(await getBarkWasm()))
 }
 
+async function listVtxosImpl(): Promise<BarkVtxoRow[]> {
+  requireOpenSession()
+  const wasmModule = await getBarkWasm()
+  return listVtxosFromWasm(wasmModule as unknown as { bark_list_vtxos(): Promise<string> })
+}
+
 async function estimateSendOnchainImpl(
   address: string,
   amountSats: number,
@@ -367,6 +375,14 @@ const barkService: BarkService = {
   async history(): Promise<BarkMovementRow[]> {
     try {
       return await historyImpl()
+    } catch (err) {
+      rethrowBarkError(err)
+    }
+  },
+
+  async listVtxos(): Promise<BarkVtxoRow[]> {
+    try {
+      return await listVtxosImpl()
     } catch (err) {
       rethrowBarkError(err)
     }

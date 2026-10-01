@@ -2,9 +2,9 @@ feature:
   name: Bark Signet rail
   description: >
     Public-Signet Bark receive, sync, spendable balance, boarding from the
-    on-chain wallet, collaborative exit back to that wallet, and fund-movement
-    history. Bark sats are their own figure. They are not added to the on-chain
-    total or the Arkade total.
+    on-chain wallet, collaborative exit back to that wallet, fund-movement
+    history, and a VTXO list. Bark sats are their own figure. They are not
+    added to the on-chain total or the Arkade total.
   user_stories:
     - As a user with Bark enabled on signet, I want the dashboard to show my Bark spendable balance on its own card
     - As a user, I want a failed Bark sync to keep the last shown spendable amount and show the rail sync error
@@ -14,6 +14,7 @@ feature:
     - As a user, I want Bark fund movements on the activity list, including failed movements that still changed funds
     - As a user with Bark enabled on signet, I want to exit a chosen amount, or my whole spendable Bark balance, to my current on-chain receive address
     - As a user, I want a failed or parked Bark exit to leave the page without a success message
+    - As a user with Bark enabled on signet, I want to open a VTXO list from wallet management and see each coin's Bark state
   requirements:
     - The card is visible only when isBarkEnabled and the app network is signet
     - Spendable sats are read only after a successful Bark sync in this session
@@ -34,6 +35,11 @@ feature:
     - Confirm submits the exit to Bark. It does not broadcast through the on-chain Esplora client
     - A parked exit stays pending and continues on the next Bark sync
     - A bark.offboard movement is labeled as a Bark exit
+    - The VTXO list link and page exist only when isBarkEnabled and the network is signet
+    - The VTXO list is the local Bark database. It is not an operator snapshot
+    - Spent and Exited VTXOs stay hidden until the user shows them. Locked VTXOs stay visible
+    - A VTXO card shows id, amount, state, lock holder when the coin is locked, expiry height, and Registered only when the coin is registered
+    - Search, state chips, sort, and pagination filter the loaded list and do not call the worker again
   contracts:
     dashboard:
       - id: DASH-BARK-01
@@ -152,3 +158,52 @@ feature:
       - id: BARK-EXIT-11
         description: A new pending offboard checkpoint is reported as parked; an older checkpoint is not
         implemented_by: bitboard-bark/src/exit_address.rs
+    vtxo_list:
+      - id: BARK-VTX-01
+        description: Management shows List VTXOs only when Bark is on and the network is signet
+        implemented_by: frontend/src/components/wallet/__tests__/BarkPanel.test.tsx
+      - id: BARK-VTX-02
+        description: The VTXO page is not the inventory unless Bark is enabled on signet
+        implemented_by: frontend/src/pages/wallet/__tests__/BarkVtxoViewerPage.test.tsx
+      - id: BARK-VTX-03
+        description: A card shows id, amount, state, expiry height, a lock-holder line when locked, and Registered only when true
+        implemented_by: frontend/src/components/bark/__tests__/BarkVtxoCard.test.tsx
+      - id: BARK-VTX-04
+        description: Hide spent and exited defaults on, and the toggle shows those cards
+        implemented_by: frontend/src/pages/wallet/__tests__/BarkVtxoViewerPage.test.tsx
+      - id: BARK-VTX-05
+        description: Search matches a partial id or a sats amount
+        implemented_by: frontend/src/lib/bark/__tests__/bark-vtxo-viewer-display.test.ts
+      - id: BARK-VTX-06
+        description: State chips filter the grid, and counts come from the full list
+        implemented_by: frontend/src/pages/wallet/__tests__/BarkVtxoViewerPage.test.tsx
+      - id: BARK-VTX-07
+        description: Pagination shows 20 cards per page
+        implemented_by: frontend/src/pages/wallet/__tests__/BarkVtxoViewerPage.test.tsx
+  pages:
+    - BarkManagement:
+        description: Bark entry on the Management page
+        file: frontend/src/components/wallet/BarkPanel.tsx
+        visible_elements:
+          - List VTXOs link to /wallet/bark/vtxos
+        requirements:
+          - Contract BARK-VTX-01
+          - Shown only when isBarkEnabled and the network is signet
+    - BarkVtxoViewer:
+        description: Bark VTXO inventory
+        path: /wallet/bark/vtxos
+        file: frontend/src/routes/wallet/bark/vtxos.tsx
+        visible_elements:
+          - VTXO card grid with id, amount, Bark state, expiry height, lock-holder line when locked, and Registered when registered
+          - search by id or sats amount
+          - state filter chips with counts from the full list
+          - sort by amount or expiry height
+          - hide spent and exited toggle, default on
+          - pagination at 20 cards per page
+          - last successful sync subtitle when a sync time is known
+          - Bark sync error banner
+          - Back to management
+        requirements:
+          - Contracts BARK-VTX-02 through BARK-VTX-07
+          - Shown only when isBarkEnabled and the network is signet
+          - The list is the local Bark database

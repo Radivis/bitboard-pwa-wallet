@@ -9,6 +9,7 @@ use wasm_bindgen::prelude::*;
 use crate::exit_address::{classify_offboard_failure, parse_signet_receive_address};
 use crate::history::movements_to_json;
 use crate::sync_gate::BarkSessionSyncGate;
+use crate::vtxo_list::{listed_bark_vtxo_from_wallet, listed_vtxos_to_json};
 use crate::{BARK_SIGNET_ESPLORA_URL, BARK_SIGNET_SERVER_URL};
 
 thread_local! {
@@ -441,6 +442,22 @@ pub async fn bark_board_psbt(psbt_base64: String) -> Result<BarkBoardAccepted, J
         finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))?;
     clear_prepared_board_funding();
     Ok(accepted)
+}
+
+/// Local VTXOs, including spent and exited. Does not require a sync in this session.
+#[wasm_bindgen]
+pub async fn bark_list_vtxos() -> Result<String, JsValue> {
+    let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
+    let operation_result = async {
+        let vtxos = wallet.all_vtxos().await.map_err(bark_error)?;
+        let listed = vtxos
+            .iter()
+            .map(listed_bark_vtxo_from_wallet)
+            .collect::<Vec<_>>();
+        listed_vtxos_to_json(&listed)
+    }
+    .await;
+    finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
 }
 
 /// Local fund movements, newest first. Does not require a sync in this session.
