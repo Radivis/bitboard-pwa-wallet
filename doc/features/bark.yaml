@@ -2,8 +2,9 @@ feature:
   name: Bark Signet rail
   description: >
     Public-Signet Bark receive, sync, spendable balance, boarding from the
-    on-chain wallet, and fund-movement history. Bark sats are their own figure.
-    They are not added to the on-chain total or the Arkade total.
+    on-chain wallet, collaborative exit back to that wallet, and fund-movement
+    history. Bark sats are their own figure. They are not added to the on-chain
+    total or the Arkade total.
   user_stories:
     - As a user with Bark enabled on signet, I want the dashboard to show my Bark spendable balance on its own card
     - As a user, I want a failed Bark sync to keep the last shown spendable amount and show the rail sync error
@@ -11,6 +12,8 @@ feature:
     - As a user with Bark enabled on signet, I want to board an amount from my on-chain wallet into Bark
     - As a user, I want a failed board to leave my on-chain wallet unspent
     - As a user, I want Bark fund movements on the activity list, including failed movements that still changed funds
+    - As a user with Bark enabled on signet, I want to exit a chosen amount, or my whole spendable Bark balance, to my current on-chain receive address
+    - As a user, I want a failed or parked Bark exit to leave the page without a success message
   requirements:
     - The card is visible only when isBarkEnabled and the app network is signet
     - Spendable sats are read only after a successful Bark sync in this session
@@ -25,6 +28,12 @@ feature:
     - Spendable Bark balance updates after confirmations and a later Bark sync
     - Activity includes Bark movements only when isBarkEnabled and the network is signet
     - A movement row shows its status and its signed effective balance
+    - Collaborative exit is offered only when isBarkEnabled and the network is signet
+    - The destination is the current on-chain receive address. The page does not accept a pasted address and does not reveal a new one
+    - Review shows the server fee and the on-chain amount before confirm
+    - Confirm submits the exit to Bark. It does not broadcast through the on-chain Esplora client
+    - A parked exit stays pending and continues on the next Bark sync
+    - A bark.offboard movement is labeled as a Bark exit
   contracts:
     dashboard:
       - id: DASH-BARK-01
@@ -109,3 +118,37 @@ feature:
       - id: BARK-HIST-04
         description: A movement row shows status and the signed effective amount, including failures
         implemented_by: frontend/src/components/__tests__/BarkMovementItem.test.tsx
+    exit:
+      - id: BARK-EXIT-01
+        description: The Bark balance card links to Exit to on-chain when Bark is enabled on signet
+        implemented_by: frontend/src/components/wallet/__tests__/BarkDashboardBalance.test.tsx
+      - id: BARK-EXIT-02
+        description: The exit link is absent when Bark is disabled or the network is not signet
+        implemented_by: frontend/src/components/wallet/__tests__/BarkDashboardBalance.test.tsx
+      - id: BARK-EXIT-03
+        description: The exit page is not a form unless Bark is enabled on signet
+        implemented_by: frontend/src/pages/wallet/__tests__/BarkExitPage.test.tsx
+      - id: BARK-EXIT-04
+        description: Review shows the server fee and the on-chain amount before confirm
+        implemented_by: frontend/src/pages/wallet/__tests__/BarkExitPage.test.tsx
+      - id: BARK-EXIT-05
+        description: Confirm sends the reviewed amount to the current receive address and does not reveal a new address or broadcast via Esplora
+        implemented_by: frontend/src/lib/bark/__tests__/perform-bark-exit.test.ts
+      - id: BARK-EXIT-06
+        description: Exit entire balance offboards every spendable VTXO to the current receive address
+        implemented_by: frontend/src/lib/bark/__tests__/perform-bark-exit.test.ts
+      - id: BARK-EXIT-07
+        description: A failed exit does not sync Bark or start an on-chain sync and does not toast success
+        implemented_by: frontend/src/lib/bark/__tests__/perform-bark-exit.test.ts
+      - id: BARK-EXIT-08
+        description: A parked exit does not toast success and tells the user to sync Bark
+        implemented_by: frontend/src/pages/wallet/__tests__/BarkExitPage.test.tsx
+      - id: BARK-EXIT-09
+        description: A bark.offboard movement is labeled Bark exit
+        implemented_by: frontend/src/lib/bark/__tests__/bark-history.test.ts
+      - id: BARK-EXIT-10
+        description: A non-Signet address is rejected before an offboard starts
+        implemented_by: bitboard-bark/src/exit_address.rs
+      - id: BARK-EXIT-11
+        description: A new pending offboard checkpoint is reported as parked; an older checkpoint is not
+        implemented_by: bitboard-bark/src/exit_address.rs

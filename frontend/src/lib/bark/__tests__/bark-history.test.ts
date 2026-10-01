@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { readBarkHistoryJson } from '@/lib/bark/bark-history'
+import { barkMovementActivityLabel, readBarkHistoryJson } from '@/lib/bark/bark-history'
 import { prepareBoardFundingFromWasm } from '@/lib/bark/bark-board-session'
+
+describe('barkMovementActivityLabel', () => {
+  it('BARK-EXIT-09 labels a bark.offboard movement as Bark exit', () => {
+    expect(barkMovementActivityLabel('bark.offboard')).toBe('Bark exit')
+    expect(barkMovementActivityLabel('bark.board')).toBe('Bark boarding')
+  })
+})
 
 describe('readBarkHistoryJson', () => {
   it('BARK-HIST-01 maps a history payload to status and signed balance', () => {

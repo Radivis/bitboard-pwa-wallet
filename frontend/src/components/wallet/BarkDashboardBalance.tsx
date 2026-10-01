@@ -107,11 +107,18 @@ export function BarkDashboardBalance() {
             data-testid="dashboard-bark-balance-amount"
           />
         ) : null}
-        <Button type="button" variant="outline" size="sm" asChild>
-          <Link to="/wallet/bark/board" data-testid="dashboard-bark-board-link">
-            Board from on-chain
-          </Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" size="sm" asChild>
+            <Link to="/wallet/bark/board" data-testid="dashboard-bark-board-link">
+              Board from on-chain
+            </Link>
+          </Button>
+          <Button type="button" variant="outline" size="sm" asChild>
+            <Link to="/wallet/bark/exit" data-testid="dashboard-bark-exit-link">
+              Exit to on-chain
+            </Link>
+          </Button>
+        </div>
       </CardContent>
     </Card>
   )

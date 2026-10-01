@@ -23,4 +23,18 @@ describe('BarkMovementItem', () => {
     expect(screen.getByTestId('bark-movement-amount-7')).toHaveTextContent('-')
     expect(screen.getByTestId('bark-movement-amount-7')).toHaveTextContent('0.00050000')
   })
+
+  it('BARK-EXIT-09 shows a bark.offboard movement as Bark exit', () => {
+    renderWithProviders(
+      <BarkMovementItem
+        movement={{
+          ...failedBoard,
+          id: 8,
+          subsystemName: 'bark.offboard',
+          subsystemKind: 'send_onchain',
+        }}
+      />,
+    )
+    expect(screen.getByTestId('bark-movement-8')).toHaveTextContent('Bark exit')
+  })
 })

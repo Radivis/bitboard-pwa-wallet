@@ -117,6 +117,14 @@ describe('BarkDashboardBalance', () => {
     )
   })
 
+  it('BARK-EXIT-01 links to Exit to on-chain when Bark is enabled on signet', () => {
+    renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.getByTestId('dashboard-bark-exit-link')).toHaveAttribute(
+      'href',
+      '/wallet/bark/exit',
+    )
+  })
+
   it('DASH-BARK-02 hides the card when Bark is disabled or the network is not signet', () => {
     featureState.isBarkEnabled = false
     const disabled = renderWithProviders(<BarkDashboardBalance />)
@@ -130,6 +138,19 @@ describe('BarkDashboardBalance', () => {
     const otherNetwork = renderWithProviders(<BarkDashboardBalance />)
     expect(otherNetwork.container).toBeEmptyDOMElement()
     expect(otherNetwork.queryByTestId('dashboard-bark-board-link')).not.toBeInTheDocument()
+  })
+
+  it('BARK-EXIT-02 omits the exit link when Bark is disabled or the network is not signet', () => {
+    featureState.isBarkEnabled = false
+    const disabled = renderWithProviders(<BarkDashboardBalance />)
+    expect(disabled.queryByRole('link', { name: 'Exit to on-chain' })).not.toBeInTheDocument()
+    disabled.unmount()
+
+    featureState.isBarkEnabled = true
+    walletStoreState.networkMode = 'mutinynet'
+    walletStoreState.loadedDescriptorWallet = { networkMode: 'mutinynet' }
+    const mutinynet = renderWithProviders(<BarkDashboardBalance />)
+    expect(mutinynet.queryByRole('link', { name: 'Exit to on-chain' })).not.toBeInTheDocument()
   })
 
   it('BARK-BOARD-02 omits the board link when Bark is disabled or the network is not signet', () => {

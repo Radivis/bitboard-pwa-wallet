@@ -1,10 +1,12 @@
 use std::cell::RefCell;
+use std::collections::HashSet;
 
 use bip39::Mnemonic;
 use bitcoin::Network;
 use bitcoin::key::Keypair;
 use wasm_bindgen::prelude::*;
 
+use crate::exit_address::{classify_offboard_failure, parse_signet_receive_address};
 use crate::history::movements_to_json;
 use crate::sync_gate::BarkSessionSyncGate;
 use crate::{BARK_SIGNET_ESPLORA_URL, BARK_SIGNET_SERVER_URL};
@@ -448,6 +450,115 @@ pub async fn bark_history() -> Result<String, JsValue> {
     let operation_result = async {
         let movements = wallet.history().await.map_err(bark_error)?;
         movements_to_json(&movements)
+    }
+    .await;
+    finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
+}
+
+fn exit_destination(address: &str) -> Result<bitcoin::Address, JsValue> {
+    require_session_synced().map_err(|err| JsValue::from_str(&err))?;
+    parse_signet_receive_address(address).map_err(|err| JsValue::from_str(&err))
+}
+
+fn require_exit_amount(amount_sats: u64) -> Result<(), JsValue> {
+    if amount_sats == 0 {
+        Err(JsValue::from_str("Bark exit amount is invalid"))
+    } else {
+        Ok(())
+    }
+}
+
+fn fee_estimate_from_bark(estimate: bark::FeeEstimate) -> BarkBoardFeeEstimate {
+    BarkBoardFeeEstimate {
+        gross_amount_sats: estimate.gross_amount.to_sat(),
+        fee_sats: estimate.fee.to_sat(),
+        net_amount_sats: estimate.net_amount.to_sat(),
+    }
+}
+
+async fn pending_offboard_ids(wallet: &bark::Wallet) -> Result<HashSet<String>, String> {
+    let pending = wallet.pending_offboards().await.map_err(bark_error)?;
+    Ok(pending.into_iter().map(|offboard| offboard.id()).collect())
+}
+
+async fn offboard_txid_or_parked<E: std::fmt::Display>(
+    wallet: &bark::Wallet,
+    ids_before: HashSet<String>,
+    result: Result<bitcoin::Txid, E>,
+) -> Result<String, String> {
+    match result {
+        Ok(txid) => Ok(txid.to_string()),
+        Err(err) => {
+            let message = bark_error(&err);
+            let ids_after = pending_offboard_ids(wallet).await.unwrap_or_default();
+            Err(classify_offboard_failure(&ids_before, &ids_after, &message))
+        }
+    }
+}
+
+/// Server fee for paying `amount_sats` on-chain. `net_amount_sats` is what arrives.
+#[wasm_bindgen]
+pub async fn bark_estimate_send_onchain(
+    address: String,
+    amount_sats: u64,
+) -> Result<BarkBoardFeeEstimate, JsValue> {
+    require_exit_amount(amount_sats)?;
+    let destination = exit_destination(&address)?;
+    let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
+    let operation_result = async {
+        let estimate = wallet
+            .estimate_send_onchain(&destination, bitcoin::Amount::from_sat(amount_sats))
+            .await
+            .map_err(bark_error)?;
+        Ok(fee_estimate_from_bark(estimate))
+    }
+    .await;
+    finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
+}
+
+/// Pays `amount_sats` to a Signet address. Returns the offboard txid once broadcast.
+/// A park before broadcast is `bark_offboard_parked` when this attempt created a checkpoint.
+#[wasm_bindgen]
+pub async fn bark_send_onchain(address: String, amount_sats: u64) -> Result<String, JsValue> {
+    require_exit_amount(amount_sats)?;
+    let destination = exit_destination(&address)?;
+    let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
+    let operation_result = async {
+        let ids_before = pending_offboard_ids(&wallet).await?;
+        let result = wallet
+            .send_onchain(destination, bitcoin::Amount::from_sat(amount_sats))
+            .await;
+        offboard_txid_or_parked(&wallet, ids_before, result).await
+    }
+    .await;
+    finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
+}
+
+/// Server fee for offboarding every spendable VTXO. `net_amount_sats` is what arrives.
+#[wasm_bindgen]
+pub async fn bark_estimate_offboard_all(address: String) -> Result<BarkBoardFeeEstimate, JsValue> {
+    let destination = exit_destination(&address)?;
+    let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
+    let operation_result = async {
+        let estimate = wallet
+            .estimate_offboard_all(&destination)
+            .await
+            .map_err(bark_error)?;
+        Ok(fee_estimate_from_bark(estimate))
+    }
+    .await;
+    finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
+}
+
+/// Offboards every spendable VTXO to a Signet address. Returns the offboard txid once broadcast.
+#[wasm_bindgen]
+pub async fn bark_offboard_all(address: String) -> Result<String, JsValue> {
+    let destination = exit_destination(&address)?;
+    let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
+    let operation_result = async {
+        let ids_before = pending_offboard_ids(&wallet).await?;
+        let result = wallet.offboard_all(destination).await;
+        offboard_txid_or_parked(&wallet, ids_before, result).await
     }
     .await;
     finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))

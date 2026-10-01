@@ -8,6 +8,13 @@ import {
   type BarkBoardWasm,
 } from '@/lib/bark/bark-board-session'
 import {
+  estimateOffboardAllFromWasm,
+  estimateSendOnchainFromWasm,
+  offboardAllFromWasm,
+  sendOnchainFromWasm,
+  type BarkExitWasm,
+} from '@/lib/bark/bark-exit-session'
+import {
   readBarkLastRevealedKeyIndex,
   readBarkRevealedReceiveAddress,
   receiveKeyIndexForSessionOpen,
@@ -22,6 +29,7 @@ import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-s
 import type {
   BarkBoardAccepted,
   BarkBoardFeeEstimate,
+  BarkExitFeeEstimate,
   BarkMovementRow,
   BarkPreparedBoardFunding,
   BarkRevealedReceiveAddress,
@@ -213,6 +221,16 @@ function boardWasm(wasmModule: BitboardBarkWasm): BarkBoardWasm {
   return wasmModule as unknown as BarkBoardWasm
 }
 
+function exitWasm(wasmModule: BitboardBarkWasm): BarkExitWasm {
+  return wasmModule as unknown as BarkExitWasm
+}
+
+function requireOpenSession(): void {
+  if (openWalletId == null) {
+    throw new Error('Bark session is not open')
+  }
+}
+
 async function estimateBoardOffchainFeeImpl(amountSats: number): Promise<BarkBoardFeeEstimate> {
   if (openWalletId == null) {
     throw new Error('Bark session is not open')
@@ -235,10 +253,31 @@ async function boardPsbtImpl(psbtBase64: string): Promise<BarkBoardAccepted> {
 }
 
 async function historyImpl(): Promise<BarkMovementRow[]> {
-  if (openWalletId == null) {
-    throw new Error('Bark session is not open')
-  }
+  requireOpenSession()
   return historyFromWasm(boardWasm(await getBarkWasm()))
+}
+
+async function estimateSendOnchainImpl(
+  address: string,
+  amountSats: number,
+): Promise<BarkExitFeeEstimate> {
+  requireOpenSession()
+  return estimateSendOnchainFromWasm(exitWasm(await getBarkWasm()), address, amountSats)
+}
+
+async function sendOnchainImpl(address: string, amountSats: number): Promise<string> {
+  requireOpenSession()
+  return sendOnchainFromWasm(exitWasm(await getBarkWasm()), address, amountSats)
+}
+
+async function estimateOffboardAllImpl(address: string): Promise<BarkExitFeeEstimate> {
+  requireOpenSession()
+  return estimateOffboardAllFromWasm(exitWasm(await getBarkWasm()), address)
+}
+
+async function offboardAllImpl(address: string): Promise<string> {
+  requireOpenSession()
+  return offboardAllFromWasm(exitWasm(await getBarkWasm()), address)
 }
 
 const barkService: BarkService = {
@@ -328,6 +367,38 @@ const barkService: BarkService = {
   async history(): Promise<BarkMovementRow[]> {
     try {
       return await historyImpl()
+    } catch (err) {
+      rethrowBarkError(err)
+    }
+  },
+
+  async estimateSendOnchain(address: string, amountSats: number): Promise<BarkExitFeeEstimate> {
+    try {
+      return await estimateSendOnchainImpl(address, amountSats)
+    } catch (err) {
+      rethrowBarkError(err)
+    }
+  },
+
+  async sendOnchain(address: string, amountSats: number): Promise<string> {
+    try {
+      return await sendOnchainImpl(address, amountSats)
+    } catch (err) {
+      rethrowBarkError(err)
+    }
+  },
+
+  async estimateOffboardAll(address: string): Promise<BarkExitFeeEstimate> {
+    try {
+      return await estimateOffboardAllImpl(address)
+    } catch (err) {
+      rethrowBarkError(err)
+    }
+  },
+
+  async offboardAll(address: string): Promise<string> {
+    try {
+      return await offboardAllImpl(address)
     } catch (err) {
       rethrowBarkError(err)
     }

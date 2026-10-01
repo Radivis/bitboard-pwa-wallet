@@ -9,6 +9,7 @@ const BARK_MOVEMENT_STATUSES: readonly BarkMovementStatus[] = [
 
 export function barkMovementActivityLabel(subsystemName: string): string {
   if (subsystemName === 'bark.board') return 'Bark boarding'
+  if (subsystemName === 'bark.offboard') return 'Bark exit'
   return 'Bark'
 }
 

@@ -108,13 +108,17 @@ Add capabilities in this order, each as exports plus UI on the session from stag
 
 Do a collaborative exit of Bark funds into the regular onchain wallet
 
-## Stage 7 — Emergency exit
+## Stage 7 - VTXO list page for Bark
 
-Emergency exit, using Bark's exit manager rather than the Arkade unroll UI.
+Create a "List VTXOs" page in wallet management similar to the Arkade List VTXOs page, but with the distinct VTXO states supported by the Bark SDK.
+
+## Stage 8 — Emergency exit
+
+Create a dedicated emergency exit control page for Bark that operates similarly to the unilateral exit control page for Arkade, but which uses the Bark SDK exit manager, rather than a custom XState machine like in the case of Arkade.
 
 Mutinynet waits until `ark.mutinynet.2nd.dev` is confirmed up. It is a different `BarkNetwork` and a different chain source (`https://mutinynet.com/api`), not a flag on the Signet session.
 
-## Potential features after stage 6
+## Potential features after stage 8
 
 1. Backup of the IndexedDB store into the encrypted wallet backup.
 2. Lightning receive (`bolt11_invoice`) and send (`pay_lightning_invoice`). This is the user-visible difference from Arkade.
