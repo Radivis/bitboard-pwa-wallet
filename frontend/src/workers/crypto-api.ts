@@ -148,6 +148,13 @@ export interface PrepareOnchainSendParams extends BuildTransactionParams {
 }
 
 /** `prepare_onchain_send_transaction` (mapped from WASM in the worker). */
+export type SignP2aCpfpChildParams = {
+  parentTxHex: string
+  effectiveFeeRateSatPerVb: number
+  rbfMinFeeRateSatPerKwu: number | null
+  currentPackageFeeSats: number | null
+}
+
 export interface SignedFundingPsbt {
   psbtBase64: string;
   rawTxHex: string;
@@ -285,6 +292,9 @@ export interface CryptoService {
   listWalletUtxos(): Promise<WalletUtxoRow[]>;
 
   signAndExtractTransaction(psbtBase64: string): Promise<string>;
+
+  /** Signs a BIP-431 Pay-to-Anchor child from confirmed on-chain coins. Does not broadcast it. */
+  signP2aCpfpChild(params: SignP2aCpfpChildParams): Promise<string>;
 
   /** Signs a PSBT without broadcasting or inserting it into the wallet. */
   signFundingPsbt(psbtBase64: string): Promise<SignedFundingPsbt>;

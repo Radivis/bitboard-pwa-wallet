@@ -85,6 +85,50 @@ export type BarkVtxoRow = {
   registered: boolean
 }
 
+export const BARK_EMERGENCY_EXIT_STATES = [
+  'start',
+  'processing',
+  'awaitingDelta',
+  'claimable',
+  'claimInProgress',
+  'claimed',
+  'vtxoAlreadySpent',
+  'canceled',
+] as const
+
+export type BarkEmergencyExitState = (typeof BARK_EMERGENCY_EXIT_STATES)[number]
+
+export type BarkEmergencyExitEstimate = {
+  exitBroadcastFeeSats: number
+  claimFeeSats: number
+  feeRateSatPerVb: number
+  txsToBroadcast: number
+}
+
+export type BarkEmergencyExitRow = {
+  vtxoId: string
+  state: BarkEmergencyExitState
+  cancelable: boolean
+}
+
+export type BarkEmergencyCpfpRequest = {
+  vtxoId: string
+  parentTxid: string
+  parentTxHex: string
+  rbfMinFeeRateSatPerKwu: number | null
+  currentPackageFeeSats: number | null
+}
+
+export type BarkEmergencyExitProgress = {
+  feeRateSatPerVb: number
+  requests: BarkEmergencyCpfpRequest[]
+}
+
+export type BarkEmergencyExitDrain = {
+  psbtHex: string
+  rawTxHex: string
+}
+
 export interface BarkService {
   configureHistoricalSignetOnchainChain(
     chain: HistoricalSignetOnchainChain | null,
@@ -108,4 +152,11 @@ export interface BarkService {
   estimateOffboardAll(address: string): Promise<BarkExitFeeEstimate>
   offboardAll(address: string): Promise<string>
   sendArkoorPayment(params: BarkArkoorSendParams): Promise<BarkArkoorSendResult>
+  estimateEmergencyExit(vtxoIds: string[]): Promise<BarkEmergencyExitEstimate>
+  startEmergencyExit(vtxoIds: string[]): Promise<void>
+  listEmergencyExits(): Promise<BarkEmergencyExitRow[]>
+  progressEmergencyExits(): Promise<BarkEmergencyExitProgress>
+  provideEmergencyExitCpfp(exitTxid: string, childTxHex: string): Promise<void>
+  cancelEmergencyExit(vtxoId: string): Promise<void>
+  drainEmergencyExits(address: string): Promise<BarkEmergencyExitDrain>
 }

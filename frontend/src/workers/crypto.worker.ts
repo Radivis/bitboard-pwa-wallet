@@ -96,6 +96,23 @@ function fundingPsbtWasm(wasmModule: BitboardCryptoModule): FundingPsbtWasm {
   return wasmModule as unknown as FundingPsbtWasm;
 }
 
+type P2aCpfpWasm = {
+  sign_p2a_cpfp_child(
+    parentTxHex: string,
+    effectiveFeeRateSatPerVb: number,
+    rbfMinFeeRateSatPerKwu: bigint | undefined,
+    currentPackageFeeSats: bigint | undefined,
+  ): Promise<string>;
+};
+
+function p2aCpfpWasm(wasmModule: BitboardCryptoModule): P2aCpfpWasm {
+  return wasmModule as unknown as P2aCpfpWasm;
+}
+
+function optionalFeeCount(value: number | null): bigint | undefined {
+  return value == null ? undefined : BigInt(value);
+}
+
 async function initWasm() {
   try {
     cryptoWasmModule = await import('@/wasm-pkg/bitboard_crypto');
@@ -578,6 +595,19 @@ const cryptoService = {
   async signAndExtractTransaction(psbtBase64: string): Promise<string> {
     return invokeWasmCrypto((wasmModule) =>
       wasmModule.sign_and_extract_transaction(psbtBase64),
+    );
+  },
+
+  async signP2aCpfpChild(
+    params: import('./crypto-api').SignP2aCpfpChildParams,
+  ): Promise<string> {
+    return invokeWasmCrypto((wasmModule) =>
+      p2aCpfpWasm(wasmModule).sign_p2a_cpfp_child(
+        params.parentTxHex,
+        params.effectiveFeeRateSatPerVb,
+        optionalFeeCount(params.rbfMinFeeRateSatPerKwu),
+        optionalFeeCount(params.currentPackageFeeSats),
+      ),
     );
   },
 

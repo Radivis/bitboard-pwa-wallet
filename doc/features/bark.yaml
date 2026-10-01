@@ -2,9 +2,10 @@ feature:
   name: Bark Signet rail
   description: >
     Public-Signet Bark receive, sync, spendable balance, boarding from the
-    on-chain wallet, collaborative exit back to that wallet, fund-movement
-    history, and a VTXO list. Bark sats are their own figure. They are not
-    added to the on-chain total or the Arkade total.
+    on-chain wallet, collaborative exit back to that wallet, emergency exit
+    through Bark's exit manager, fund-movement history, and a VTXO list. Bark
+    sats are their own figure. They are not added to the on-chain total or the
+    Arkade total.
   user_stories:
     - As a user with Bark enabled on signet, I want the dashboard to show my Bark spendable balance on its own card
     - As a user, I want a failed Bark sync to keep the last shown spendable amount and show the rail sync error
@@ -16,6 +17,8 @@ feature:
     - As a user, I want a failed or parked Bark exit to leave the page without a success message
     - As a user with Bark enabled on signet, I want to open a VTXO list from wallet management and see each coin's Bark state
     - As a user with Bark enabled on signet, I want to send to a Bark Ark address from the send form
+    - As a user with Bark enabled on signet, I want an emergency-exit control page where I can exit selected spendable VTXOs or the whole wallet, watch each coin's exit state, progress it, cancel while Bark still allows it, and claim claimable coins to my current on-chain receive address
+    - As a user, I want a failed emergency-exit step to leave the page without a success message
   requirements:
     - The card is visible only when isBarkEnabled and the app network is signet
     - Spendable sats are read only after a successful Bark sync in this session
@@ -45,6 +48,14 @@ feature:
     - An Arkade address is not a Bark destination, and a Bark policy address is not an Arkade destination
     - A successful Arkoor send syncs and replaces the shown Bark spendable amount
     - A failed Arkoor send leaves the shown Bark spendable amount unchanged
+    - The emergency-exit link and page exist only when isBarkEnabled and the network is signet
+    - Emergency exit does not call send_onchain or offboard_all
+    - Review, before start, shows the broadcast fee, the later claim fee, and how many transactions must be broadcast
+    - Start stays disabled when the on-chain confirmed balance is below the broadcast fee
+    - Progress is a button. It is not part of unlock sync or the periodic Bark sync
+    - Cancel is offered only while that exit is still cancelable
+    - Claim sends every claimable exit to the current on-chain receive address, broadcasts that signed transaction through the existing Esplora client, and does not reveal a new address
+    - A bark.exit movement is labeled as a Bark emergency exit, distinct from collaborative bark.offboard
   contracts:
     dashboard:
       - id: DASH-BARK-01
@@ -192,14 +203,44 @@ feature:
       - id: BARK-SEND-02
         description: A Bark send validates, estimates, sends, then syncs and reads the new spendable balance
         implemented_by: frontend/src/lib/bark/__tests__/perform-bark-arkoor-send.test.ts
+    emergency_exit:
+      - id: BARK-EMG-01
+        description: Management shows Emergency exit only when Bark is on and the network is signet
+        implemented_by: frontend/src/components/wallet/__tests__/BarkPanel.test.tsx
+      - id: BARK-EMG-02
+        description: The emergency-exit page is not the control surface unless Bark is enabled on signet
+        implemented_by: frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
+      - id: BARK-EMG-03
+        description: Review shows the broadcast fee, the claim fee, and the transaction count before start
+        implemented_by: frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
+      - id: BARK-EMG-04
+        description: Start marks the selected VTXOs, or the whole wallet, and does not offboard
+        implemented_by: frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
+      - id: BARK-EMG-05
+        description: Progress calls Exit progress, then submits a signed child for each CPFP request
+        implemented_by: frontend/src/lib/bark/__tests__/perform-bark-emergency-exit.test.ts
+      - id: BARK-EMG-06
+        description: Cancel is absent unless that exit is cancelable
+        implemented_by: frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
+      - id: BARK-EMG-07
+        description: Claim drains to the current receive address and broadcasts the signed transaction
+        implemented_by: frontend/src/lib/bark/__tests__/perform-bark-emergency-exit.test.ts
+      - id: BARK-EMG-08
+        description: A failed start, progress, CPFP, or claim does not toast success
+        implemented_by: frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
+      - id: BARK-EMG-09
+        description: A bark.exit movement is labeled Bark emergency exit
+        implemented_by: frontend/src/lib/bark/__tests__/bark-history.test.ts
   pages:
     - BarkManagement:
         description: Bark entry on the Management page
         file: frontend/src/components/wallet/BarkPanel.tsx
         visible_elements:
           - List VTXOs link to /wallet/bark/vtxos
+          - Emergency exit link to /wallet/bark/emergency-exit
         requirements:
           - Contract BARK-VTX-01
+          - Contract BARK-EMG-01
           - Shown only when isBarkEnabled and the network is signet
     - BarkVtxoViewer:
         description: Bark VTXO inventory
@@ -219,3 +260,19 @@ feature:
           - Contracts BARK-VTX-02 through BARK-VTX-07
           - Shown only when isBarkEnabled and the network is signet
           - The list is the local Bark database
+    - BarkEmergencyExit:
+        description: Bark emergency exit control
+        path: /wallet/bark/emergency-exit
+        file: frontend/src/routes/wallet/bark/emergency-exit.tsx
+        visible_elements:
+          - Spendable VTXO checkboxes
+          - Review of broadcast fee, claim fee, and transaction count
+          - Start for the selection or the whole wallet
+          - Live exit rows with state and Cancel when cancelable
+          - Progress button
+          - Claim section to the current on-chain receive address
+          - Back to management
+        requirements:
+          - Contracts BARK-EMG-02 through BARK-EMG-08
+          - Shown only when isBarkEnabled and the network is signet
+          - Progress is a button, not unlock or periodic sync

@@ -14,11 +14,18 @@ export function BarkPanel() {
         <CardTitle>Bark</CardTitle>
       </CardHeader>
       <CardContent>
-        <Button type="button" variant="outline" size="sm" asChild>
-          <Link to="/wallet/bark/vtxos" data-testid="bark-list-vtxos-link">
-            List VTXOs
-          </Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" size="sm" asChild>
+            <Link to="/wallet/bark/vtxos" data-testid="bark-list-vtxos-link">
+              List VTXOs
+            </Link>
+          </Button>
+          <Button type="button" variant="outline" size="sm" asChild>
+            <Link to="/wallet/bark/emergency-exit" data-testid="bark-emergency-exit-link">
+              Emergency exit
+            </Link>
+          </Button>
+        </div>
       </CardContent>
     </Card>
   )

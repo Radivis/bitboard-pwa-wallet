@@ -21,6 +21,16 @@ import {
   type BarkExitWasm,
 } from '@/lib/bark/bark-exit-session'
 import {
+  cancelEmergencyExitFromWasm,
+  drainEmergencyExitsFromWasm,
+  estimateEmergencyExitFromWasm,
+  listEmergencyExitsFromWasm,
+  progressEmergencyExitsFromWasm,
+  provideEmergencyExitCpfpFromWasm,
+  startEmergencyExitFromWasm,
+  type BarkEmergencyExitWasm,
+} from '@/lib/bark/bark-emergency-exit-session'
+import {
   readBarkLastRevealedKeyIndex,
   readBarkRevealedReceiveAddress,
   receiveKeyIndexForSessionOpen,
@@ -37,6 +47,10 @@ import type {
   BarkArkoorSendResult,
   BarkBoardAccepted,
   BarkBoardFeeEstimate,
+  BarkEmergencyExitDrain,
+  BarkEmergencyExitEstimate,
+  BarkEmergencyExitProgress,
+  BarkEmergencyExitRow,
   BarkExitFeeEstimate,
   BarkMovementRow,
   BarkVtxoRow,
@@ -234,6 +248,10 @@ function exitWasm(wasmModule: BitboardBarkWasm): BarkExitWasm {
   return wasmModule as unknown as BarkExitWasm
 }
 
+function emergencyExitWasm(wasmModule: BitboardBarkWasm): BarkEmergencyExitWasm {
+  return wasmModule as unknown as BarkEmergencyExitWasm
+}
+
 function requireOpenSession(): void {
   if (openWalletId == null) {
     throw new Error('Bark session is not open')
@@ -308,6 +326,50 @@ async function sendArkoorPaymentImpl(
     ),
     params,
   )
+}
+
+async function estimateEmergencyExitImpl(
+  vtxoIds: string[],
+): Promise<BarkEmergencyExitEstimate> {
+  requireOpenSession()
+  return estimateEmergencyExitFromWasm(emergencyExitWasm(await getBarkWasm()), vtxoIds)
+}
+
+async function startEmergencyExitImpl(vtxoIds: string[]): Promise<void> {
+  requireOpenSession()
+  await startEmergencyExitFromWasm(emergencyExitWasm(await getBarkWasm()), vtxoIds)
+}
+
+async function listEmergencyExitsImpl(): Promise<BarkEmergencyExitRow[]> {
+  requireOpenSession()
+  return listEmergencyExitsFromWasm(emergencyExitWasm(await getBarkWasm()))
+}
+
+async function progressEmergencyExitsImpl(): Promise<BarkEmergencyExitProgress> {
+  requireOpenSession()
+  return progressEmergencyExitsFromWasm(emergencyExitWasm(await getBarkWasm()))
+}
+
+async function provideEmergencyExitCpfpImpl(
+  exitTxid: string,
+  childTxHex: string,
+): Promise<void> {
+  requireOpenSession()
+  await provideEmergencyExitCpfpFromWasm(
+    emergencyExitWasm(await getBarkWasm()),
+    exitTxid,
+    childTxHex,
+  )
+}
+
+async function cancelEmergencyExitImpl(vtxoId: string): Promise<void> {
+  requireOpenSession()
+  await cancelEmergencyExitFromWasm(emergencyExitWasm(await getBarkWasm()), vtxoId)
+}
+
+async function drainEmergencyExitsImpl(address: string): Promise<BarkEmergencyExitDrain> {
+  requireOpenSession()
+  return drainEmergencyExitsFromWasm(emergencyExitWasm(await getBarkWasm()), address)
 }
 
 const barkService: BarkService = {
@@ -445,6 +507,62 @@ const barkService: BarkService = {
   async sendArkoorPayment(params: BarkArkoorSendParams): Promise<BarkArkoorSendResult> {
     try {
       return await sendArkoorPaymentImpl(params)
+    } catch (err) {
+      rethrowBarkError(err)
+    }
+  },
+
+  async estimateEmergencyExit(vtxoIds: string[]): Promise<BarkEmergencyExitEstimate> {
+    try {
+      return await estimateEmergencyExitImpl(vtxoIds)
+    } catch (err) {
+      rethrowBarkError(err)
+    }
+  },
+
+  async startEmergencyExit(vtxoIds: string[]): Promise<void> {
+    try {
+      await startEmergencyExitImpl(vtxoIds)
+    } catch (err) {
+      rethrowBarkError(err)
+    }
+  },
+
+  async listEmergencyExits(): Promise<BarkEmergencyExitRow[]> {
+    try {
+      return await listEmergencyExitsImpl()
+    } catch (err) {
+      rethrowBarkError(err)
+    }
+  },
+
+  async progressEmergencyExits(): Promise<BarkEmergencyExitProgress> {
+    try {
+      return await progressEmergencyExitsImpl()
+    } catch (err) {
+      rethrowBarkError(err)
+    }
+  },
+
+  async provideEmergencyExitCpfp(exitTxid: string, childTxHex: string): Promise<void> {
+    try {
+      await provideEmergencyExitCpfpImpl(exitTxid, childTxHex)
+    } catch (err) {
+      rethrowBarkError(err)
+    }
+  },
+
+  async cancelEmergencyExit(vtxoId: string): Promise<void> {
+    try {
+      await cancelEmergencyExitImpl(vtxoId)
+    } catch (err) {
+      rethrowBarkError(err)
+    }
+  },
+
+  async drainEmergencyExits(address: string): Promise<BarkEmergencyExitDrain> {
+    try {
+      return await drainEmergencyExitsImpl(address)
     } catch (err) {
       rethrowBarkError(err)
     }

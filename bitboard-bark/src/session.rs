@@ -100,7 +100,7 @@ fn mark_session_synced() {
     SESSION_SYNC_GATE.with(|gate| gate.borrow_mut().mark_synced());
 }
 
-fn require_session_synced() -> Result<(), String> {
+pub(crate) fn require_session_synced() -> Result<(), String> {
     SESSION_SYNC_GATE.with(|gate| gate.borrow().require_synced().map_err(str::to_owned))
 }
 
@@ -161,7 +161,7 @@ pub fn bark_close_session() -> Result<(), JsValue> {
     drop_active_wallet().map_err(|err| JsValue::from_str(&err))
 }
 
-fn take_active_wallet() -> Result<bark::Wallet, String> {
+pub(crate) fn take_active_wallet() -> Result<bark::Wallet, String> {
     ACTIVE_WALLET.with(|wallet_cell| {
         let mut slot = wallet_cell
             .try_borrow_mut()
@@ -171,7 +171,7 @@ fn take_active_wallet() -> Result<bark::Wallet, String> {
     })
 }
 
-fn finish_wallet_operation<T>(
+pub(crate) fn finish_wallet_operation<T>(
     wallet: bark::Wallet,
     operation_result: Result<T, String>,
 ) -> Result<T, String> {
@@ -183,7 +183,7 @@ fn finish_wallet_operation<T>(
     }
 }
 
-fn bark_error(err: impl std::fmt::Display) -> String {
+pub(crate) fn bark_error(err: impl std::fmt::Display) -> String {
     format!("{err:#}")
 }
 

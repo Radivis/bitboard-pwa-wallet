@@ -7,6 +7,11 @@ describe('barkMovementActivityLabel', () => {
     expect(barkMovementActivityLabel('bark.offboard')).toBe('Bark exit')
     expect(barkMovementActivityLabel('bark.board')).toBe('Bark boarding')
   })
+
+  it('BARK-EMG-09 labels a bark.exit movement as Bark emergency exit', () => {
+    expect(barkMovementActivityLabel('bark.exit')).toBe('Bark emergency exit')
+    expect(barkMovementActivityLabel('bark.offboard')).toBe('Bark exit')
+  })
 })
 
 describe('readBarkHistoryJson', () => {
