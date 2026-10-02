@@ -15,6 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [0.3.6] - TBD
+
+### Added
+
+- Bark is now also a supported layer 2 rail that can be unlocked as feature
+
+### Changed
+
+- The networks Signet and Mutinynet are now properly separated rather than Signet pointing towards Mutinynet silently
+
 ## [0.3.5] - 2026-09-27
 
 ### Added
