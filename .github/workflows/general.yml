@@ -88,7 +88,8 @@ jobs:
   frontend-quality:
     name: Frontend quality
     needs: version
-    runs-on: ubuntu-latest
+    # Noble package pin in install-protobuf-compiler; ubuntu-latest may leave 24.04.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -105,7 +106,7 @@ jobs:
           version: v0.14.0
 
       - name: Install protobuf compiler
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+        uses: ./.github/actions/install-protobuf-compiler
 
       - name: Build WASM
         run: |
@@ -145,7 +146,8 @@ jobs:
   e2e:
     name: E2E Tests
     needs: version
-    runs-on: ubuntu-latest
+    # Noble package pin in install-protobuf-compiler; ubuntu-latest may leave 24.04.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -164,7 +166,7 @@ jobs:
           version: v0.14.0
 
       - name: Install protobuf compiler
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+        uses: ./.github/actions/install-protobuf-compiler
 
       - name: Build WASM
         run: |

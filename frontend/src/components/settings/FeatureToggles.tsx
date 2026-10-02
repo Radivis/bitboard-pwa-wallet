@@ -14,6 +14,7 @@ import { ArkadeFeatureInfomodeContent } from '@/components/arkade/infomode/Arkad
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import { ArkadeEnableConfirmModal } from '@/components/settings/ArkadeEnableConfirmModal'
+import { BarkEnableConfirmModal } from '@/components/settings/BarkEnableConfirmModal'
 import { MainnetAccessConfirmModal } from '@/components/settings/MainnetAccessConfirmModal'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
@@ -38,6 +39,7 @@ export function FeatureToggles() {
 
   const [mainnetConfirmOpen, setMainnetConfirmOpen] = useState(false)
   const [arkadeConfirmOpen, setArkadeConfirmOpen] = useState(false)
+  const [barkConfirmOpen, setBarkConfirmOpen] = useState(false)
   const [mainnetAccessSwitchBusy, setMainnetAccessSwitchBusy] = useState(false)
   const [regtestModeSwitchBusy, setRegtestModeSwitchBusy] = useState(false)
   const [segwitAddressesSwitchBusy, setSegwitAddressesSwitchBusy] = useState(false)
@@ -252,7 +254,13 @@ export function FeatureToggles() {
           <Switch
             id="bark-toggle"
             checked={isBarkEnabled}
-            onCheckedChange={setIsBarkEnabled}
+            onCheckedChange={(checked) => {
+              if (checked) {
+                setBarkConfirmOpen(true)
+              } else {
+                setIsBarkEnabled(false)
+              }
+            }}
             aria-label="Enable Bark rail"
           />
         </div>
@@ -289,6 +297,12 @@ export function FeatureToggles() {
         open={arkadeConfirmOpen}
         onOpenChange={setArkadeConfirmOpen}
         onConfirm={() => setIsArkadeEnabled(true)}
+      />
+
+      <BarkEnableConfirmModal
+        open={barkConfirmOpen}
+        onOpenChange={setBarkConfirmOpen}
+        onConfirm={() => setIsBarkEnabled(true)}
       />
     </div>
   )

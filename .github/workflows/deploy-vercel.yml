@@ -18,7 +18,8 @@ concurrency:
 jobs:
   deploy:
     name: Build and deploy prebuilt
-    runs-on: ubuntu-latest
+    # Noble package pin in install-protobuf-compiler; ubuntu-latest may leave 24.04.
+    runs-on: ubuntu-24.04
     # Pull/build: `vercel … --cwd frontend` from repo root + strip `settings.rootDirectory` in
     # `.vercel/project.json` (avoids install cwd bugs — vercel/community#2793).
     # Deploy: `vercel deploy --prebuilt` still validates a filesystem path derived from Root
@@ -49,7 +50,7 @@ jobs:
           version: v0.14.0
 
       - name: Install protobuf compiler
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+        uses: ./.github/actions/install-protobuf-compiler
 
       # `vercel build` runs the project Build Command (`npm run build`), which includes
       # `build:wasm` + `tsc` + `vite build`. Rust + wasm-pack must be on PATH first.

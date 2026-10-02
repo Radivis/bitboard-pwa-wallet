@@ -1,0 +1,16 @@
+name: Install pinned protobuf compiler
+description: >
+  Installs Ubuntu 24.04 protobuf-compiler 3.21.12-8.2ubuntu0.3 so prost/tonic
+  builds do not follow whatever apt currently serves. Jobs that use this action
+  must run on ubuntu-24.04.
+
+runs:
+  using: composite
+  steps:
+    - name: Install protobuf-compiler 3.21.12
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo apt-get update
+        sudo apt-get install -y --allow-downgrades protobuf-compiler=3.21.12-8.2ubuntu0.3
+        protoc --version | grep -q 'libprotoc 3.21.12'

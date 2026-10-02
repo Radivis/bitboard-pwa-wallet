@@ -375,7 +375,7 @@ describe('Settings routes', () => {
       expect(featureStoreState.setIsPeriodicSyncEnabled).toHaveBeenCalledWith(true)
     })
 
-    it('enables Bark when the feature toggle is switched on', async () => {
+    it('opens Bark confirmation modal when enabling the toggle', async () => {
       const user = userEvent.setup()
       renderWithProviders(<SettingsFeaturesPage />)
 
@@ -383,6 +383,28 @@ describe('Settings routes', () => {
       expect(barkSwitch).not.toBeChecked()
 
       await user.click(barkSwitch)
+
+      expect(screen.getByRole('heading', { name: 'Enable Bark', level: 2 })).toBeInTheDocument()
+      expect(screen.getByText(/Bark support is brand new/i)).toBeInTheDocument()
+      expect(screen.getByText(/Signet is strongly advised/i)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Enable Bark' })).toBeDisabled()
+      expect(featureStoreState.setIsBarkEnabled).not.toHaveBeenCalled()
+    })
+
+    it('enables Bark after acknowledging the new-feature warning', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<SettingsFeaturesPage />)
+
+      await user.click(screen.getByRole('switch', { name: 'Enable Bark rail' }))
+      await user.click(
+        screen.getByRole('checkbox', {
+          name: /I understand Bark is new/i,
+        }),
+      )
+
+      const enableBark = screen.getByRole('button', { name: 'Enable Bark' })
+      await expect(enableBark).toBeEnabled()
+      await user.click(enableBark)
 
       expect(featureStoreState.setIsBarkEnabled).toHaveBeenCalledWith(true)
     })
