@@ -39,6 +39,13 @@ pub fn sum_spendable_and_locked_sats(vtxos: &[(BarkVtxoBalanceClass, u64)]) -> (
     (spendable_sats, locked_sats)
 }
 
+/// A confirmation wait can park with no error. Every earlier stage that
+/// returns without an error was a skipped drive: Bark still holds the action
+/// lock from `Wallet::sync`, and `drive_action` reports that skip as `Ok`.
+pub fn offboard_stage_waits_without_an_error(stage: &str) -> bool {
+    stage == "confirm"
+}
+
 /// Names the checkpoint step. A drive error replaces the “sync continues it” line,
 /// because `Wallet::sync` only logs that failure.
 pub fn offboard_status_text(
@@ -238,6 +245,93 @@ mod wasm_export {
         OFFBOARD_DRIVE_ERRORS.with(|errors| errors.borrow().get(id).cloned())
     }
 
+    /// `Wallet::sync` holds the browser action lock while it drives, then drops
+    /// the error. A follow-up `drive_action` then returns `Ok` because the lock
+    /// is still taken. Yield and try again until the rejection is visible.
+    async fn drive_offboard_until_its_result_is_visible(
+        wallet: &bark::Wallet,
+        mut action: bark::actions::offboard::Offboard,
+    ) {
+        const ATTEMPTS_WHEN_THE_ACTION_LOCK_IS_BUSY: u32 = 4;
+        let id = action.id();
+        for attempt in 0..ATTEMPTS_WHEN_THE_ACTION_LOCK_IS_BUSY {
+            match wallet
+                .drive_action(action.clone(), bark::actions::DriveMode::UntilParkOrDone)
+                .await
+            {
+                Err(err) => {
+                    remember_or_retire_offboard_drive_error(wallet, id, bark_error(&err)).await;
+                    return;
+                }
+                Ok(()) => {
+                    let checkpoint = match wallet.offboard_checkpoint(&id).await {
+                        Ok(checkpoint) => checkpoint,
+                        Err(_) => {
+                            yield_once_so_the_action_lock_can_release().await;
+                            continue;
+                        }
+                    };
+                    let waiting = match checkpoint.as_ref() {
+                        None => true,
+                        Some(offboard) => super::offboard_stage_waits_without_an_error(
+                            offboard_stage(&offboard.progress),
+                        ),
+                    };
+                    if waiting {
+                        forget_offboard_drive_error(&id);
+                        return;
+                    }
+                    if attempt + 1 == ATTEMPTS_WHEN_THE_ACTION_LOCK_IS_BUSY {
+                        return;
+                    }
+                    yield_once_so_the_action_lock_can_release().await;
+                    if let Some(fresh) = checkpoint {
+                        action = fresh;
+                    }
+                }
+            }
+        }
+    }
+
+    async fn remember_or_retire_offboard_drive_error(
+        wallet: &bark::Wallet,
+        id: String,
+        message: String,
+    ) {
+        match crate::collaborative_exit::retire_offboard_if_server_spent_an_input(wallet, &message)
+            .await
+        {
+            Ok(true) => forget_offboard_drive_error(&id),
+            Ok(false) => remember_offboard_drive_error(id, message),
+            Err(retire_error) => {
+                remember_offboard_drive_error(id, format!("{message} ({retire_error})"))
+            }
+        }
+    }
+
+    async fn yield_once_so_the_action_lock_can_release() {
+        struct YieldOnce {
+            yielded: bool,
+        }
+        impl std::future::Future for YieldOnce {
+            type Output = ();
+
+            fn poll(
+                mut self: std::pin::Pin<&mut Self>,
+                context: &mut std::task::Context<'_>,
+            ) -> std::task::Poll<()> {
+                if self.yielded {
+                    std::task::Poll::Ready(())
+                } else {
+                    self.yielded = true;
+                    context.waker().wake_by_ref();
+                    std::task::Poll::Pending
+                }
+            }
+        }
+        YieldOnce { yielded: false }.await;
+    }
+
     /// `Wallet::sync` drives pending offboards and only logs a failure.
     /// Drive them again here so the banner can show the step that stopped.
     pub async fn continue_pending_offboards(wallet: &bark::Wallet) {
@@ -257,26 +351,7 @@ mod wasm_export {
                 forget_offboard_drive_error(&id);
                 continue;
             }
-            match wallet
-                .drive_action(action, bark::actions::DriveMode::UntilParkOrDone)
-                .await
-            {
-                Ok(()) => forget_offboard_drive_error(&id),
-                Err(err) => {
-                    let message = bark_error(&err);
-                    match crate::collaborative_exit::retire_offboard_if_server_spent_an_input(
-                        wallet, &message,
-                    )
-                    .await
-                    {
-                        Ok(true) => forget_offboard_drive_error(&id),
-                        Ok(false) => remember_offboard_drive_error(id, message),
-                        Err(retire_error) => {
-                            remember_offboard_drive_error(id, format!("{message} ({retire_error})"))
-                        }
-                    }
-                }
-            }
+            drive_offboard_until_its_result_is_visible(wallet, action).await;
         }
         OFFBOARD_DRIVE_ERRORS.with(|errors| {
             errors
@@ -389,8 +464,8 @@ pub use wasm_export::{continue_pending_offboards, read_session_balance_json};
 mod tests {
     use super::{
         BARK_EXIT_AWAITING_CONFIRMATION_STATUS, BARK_EXIT_PARKED_STATUS, BarkVtxoBalanceClass,
-        PendingBarkAction, bark_balance_json, pending_actions_to_json,
-        sum_spendable_and_locked_sats,
+        PendingBarkAction, bark_balance_json, offboard_stage_waits_without_an_error,
+        pending_actions_to_json, sum_spendable_and_locked_sats,
     };
 
     #[test]
@@ -409,6 +484,14 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(&json).expect("parse");
         assert_eq!(value["spendableSats"], 1_000);
         assert_eq!(value["lockedSats"], 450);
+    }
+
+    #[test]
+    fn only_a_confirmation_wait_parks_without_an_error() {
+        assert!(offboard_stage_waits_without_an_error("confirm"));
+        assert!(!offboard_stage_waits_without_an_error("split"));
+        assert!(!offboard_stage_waits_without_an_error("start"));
+        assert!(!offboard_stage_waits_without_an_error("broadcast"));
     }
 
     #[test]

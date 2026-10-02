@@ -346,8 +346,10 @@ pub async fn bark_sync() -> Result<String, JsValue> {
     let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
     let operation_result = async {
         wallet.refresh_server().await.map_err(bark_error)?;
+        // Drive before `Wallet::sync` so this call sees a rejection. Sync drives
+        // the same checkpoint again and only logs the failure.
+        crate::pending_actions::continue_pending_offboards(&wallet).await;
         wallet.sync().await;
-        // `Wallet::sync` drives offboards inside a parallel join and drops the error.
         crate::pending_actions::continue_pending_offboards(&wallet).await;
         wallet.sync_pending_boards().await.map_err(bark_error)?;
         Ok(delegated_refresh_status(&wallet).await)
