@@ -41,6 +41,7 @@ function readBarkPendingAction(value: unknown): BarkPendingAction {
     feeSats: readOptionalSats(row.feeSats, 'Bark pending action fee'),
     destination: readOptionalString(row.destination),
     txid: readOptionalString(row.txid),
+    error: readOptionalString(row.error),
   }
 }
 

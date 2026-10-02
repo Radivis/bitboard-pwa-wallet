@@ -208,6 +208,7 @@ describe('BarkExitPage', () => {
         feeSats: 50_815,
         destination: 'tb1qcurrent',
         txid: null,
+        error: null,
       },
     ]
     reviewBarkExitAmount.mockResolvedValue(amountReview)

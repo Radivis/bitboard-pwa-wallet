@@ -347,6 +347,8 @@ pub async fn bark_sync() -> Result<String, JsValue> {
     let operation_result = async {
         wallet.refresh_server().await.map_err(bark_error)?;
         wallet.sync().await;
+        // `Wallet::sync` drives offboards inside a parallel join and drops the error.
+        crate::pending_actions::continue_pending_offboards(&wallet).await;
         wallet.sync_pending_boards().await.map_err(bark_error)?;
         Ok(delegated_refresh_status(&wallet).await)
     }

@@ -1,4 +1,4 @@
-import { Loader2 } from 'lucide-react'
+import { CircleAlert, Loader2 } from 'lucide-react'
 import { useBarkPendingActionsQuery } from '@/hooks/useBarkPendingActionsQuery'
 import { formatSats, truncateAddress } from '@/lib/wallet/bitcoin-utils'
 import type { BarkPendingAction } from '@/workers/bark-api'
@@ -18,20 +18,33 @@ export function BarkPendingActionBanner() {
 }
 
 function BarkPendingActionRow({ action }: { action: BarkPendingAction }) {
+  const failed = action.error != null
   return (
     <div
-      className="rounded-md border border-sky-500/40 bg-sky-500/10 p-3 text-sm"
-      role="status"
+      className={
+        failed
+          ? 'rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm'
+          : 'rounded-md border border-sky-500/40 bg-sky-500/10 p-3 text-sm'
+      }
+      role={failed ? 'alert' : 'status'}
       data-testid="bark-pending-action-banner"
+      data-state={failed ? 'error' : 'pending'}
     >
       <div className="flex items-start gap-2">
-        <Loader2
-          className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-sky-700 dark:text-sky-300"
-          aria-hidden
-        />
+        {failed ? (
+          <CircleAlert
+            className="mt-0.5 h-4 w-4 shrink-0 text-red-700 dark:text-red-300"
+            aria-hidden
+          />
+        ) : (
+          <Loader2
+            className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-sky-700 dark:text-sky-300"
+            aria-hidden
+          />
+        )}
         <div className="space-y-1">
           <p className="font-medium">{action.title}</p>
-          <p className="text-muted-foreground">{action.status}</p>
+          <p className="break-words text-muted-foreground">{action.status}</p>
           <p data-testid="bark-pending-action-amount">{formatSats(action.amountSats)} sats</p>
           {action.destination != null ? (
             <p className="text-xs text-muted-foreground" title={action.destination}>

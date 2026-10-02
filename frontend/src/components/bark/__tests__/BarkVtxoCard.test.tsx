@@ -66,6 +66,7 @@ describe('BarkVtxoCard', () => {
       feeSats: 50_815,
       destination: 'tb1qcurrentaddressxxxxxxxx',
       txid: 'aa'.repeat(32),
+      error: null,
     }
     renderWithProviders(
       <BarkVtxoCard

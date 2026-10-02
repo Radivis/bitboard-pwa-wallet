@@ -104,6 +104,7 @@ function pendingOffboard(): BarkPendingAction {
     feeSats: 50_815,
     destination: 'tb1qcurrentaddressxxxxxxxx',
     txid: null,
+    error: null,
   }
 }
 
@@ -224,6 +225,23 @@ describe('BarkDashboardBalance', () => {
     expect(banner).toHaveTextContent('tb1qcurr...xxxxxxxx')
     expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
+    expect(banner).toHaveAttribute('data-state', 'pending')
+  })
+
+  it('DASH-BARK-10 turns the banner red when the pending exit stopped with an error', () => {
+    pendingActions.current = [
+      {
+        ...pendingOffboard(),
+        status:
+          'Splitting coins for the on-chain amount failed: vtxo is not spendable (state: spent). Sync Bark to retry it.',
+        error: 'vtxo is not spendable (state: spent)',
+      },
+    ]
+    renderWithProviders(<BarkDashboardBalance />)
+    const banner = screen.getByTestId('bark-pending-action-banner')
+    expect(banner).toHaveAttribute('data-state', 'error')
+    expect(banner).toHaveClass('border-red-500/40')
+    expect(banner).toHaveTextContent('vtxo is not spendable (state: spent)')
   })
 
   it('DASH-BARK-04 does not render on-chain or Arkade balance amounts', () => {

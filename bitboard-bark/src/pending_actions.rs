@@ -39,12 +39,28 @@ pub fn sum_spendable_and_locked_sats(vtxos: &[(BarkVtxoBalanceClass, u64)]) -> (
     (spendable_sats, locked_sats)
 }
 
-/// Before a txid exists, sync still has to drive the exit. After broadcast, it waits.
-pub fn offboard_progress_status(confirmation_txid: Option<&str>) -> &'static str {
+/// Names the checkpoint step. A drive error replaces the “sync continues it” line,
+/// because `Wallet::sync` only logs that failure.
+pub fn offboard_status_text(
+    stage: &str,
+    confirmation_txid: Option<&str>,
+    drive_error: Option<&str>,
+) -> String {
     if confirmation_txid.is_some() {
-        BARK_EXIT_AWAITING_CONFIRMATION_STATUS
-    } else {
-        BARK_EXIT_PARKED_STATUS
+        return BARK_EXIT_AWAITING_CONFIRMATION_STATUS.to_owned();
+    }
+    let step = match stage {
+        "start" => "Locking coins for this exit",
+        "split" => "Splitting coins for the on-chain amount",
+        "register" => "Registering the split with the Bark server",
+        "prepare" => "Asking the server to build the exit transaction",
+        "sign" => "Signing the exit with the server",
+        "broadcast" => "Broadcasting the exit transaction",
+        _ => "Continuing this exit",
+    };
+    match drive_error.map(str::trim).filter(|error| !error.is_empty()) {
+        Some(error) => format!("{step} failed: {error}. Sync Bark to retry it."),
+        None => format!("{step}. {BARK_EXIT_PARKED_STATUS}"),
     }
 }
 
@@ -53,11 +69,13 @@ pub struct PendingBarkAction {
     pub id: String,
     pub kind: &'static str,
     pub title: &'static str,
-    pub status: &'static str,
+    pub status: String,
     pub amount_sats: u64,
     pub fee_sats: Option<u64>,
     pub destination: Option<String>,
     pub txid: Option<String>,
+    /// Set when the last sync drive stopped. The banner turns red from this field.
+    pub error: Option<String>,
 }
 
 impl PendingBarkAction {
@@ -67,17 +85,24 @@ impl PendingBarkAction {
         onchain_amount_sats: u64,
         fee_sats: u64,
         confirmation_txid: Option<String>,
+        stage: &str,
+        drive_error: Option<&str>,
     ) -> Self {
         let txid = confirmation_txid.filter(|value| !value.is_empty());
+        let error = drive_error
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned);
         Self {
             id: id.into(),
             kind: "offboard",
             title: "Bark exit",
-            status: offboard_progress_status(txid.as_deref()),
+            status: offboard_status_text(stage, txid.as_deref(), drive_error),
             amount_sats: onchain_amount_sats,
             fee_sats: Some(fee_sats),
             destination: Some(destination.into()),
             txid,
+            error,
         }
     }
 
@@ -90,11 +115,12 @@ impl PendingBarkAction {
             id: id.into(),
             kind: "arkoor",
             title: "Bark send",
-            status: ARKOOR_IN_PROGRESS_STATUS,
+            status: ARKOOR_IN_PROGRESS_STATUS.to_owned(),
             amount_sats,
             fee_sats: None,
             destination: Some(destination.into()),
             txid: None,
+            error: None,
         }
     }
 
@@ -107,11 +133,12 @@ impl PendingBarkAction {
             id: id.into(),
             kind: "lightning",
             title: "Bark Lightning send",
-            status: LIGHTNING_IN_PROGRESS_STATUS,
+            status: LIGHTNING_IN_PROGRESS_STATUS.to_owned(),
             amount_sats,
             fee_sats: None,
             destination: Some(destination.into()),
             txid: None,
+            error: None,
         }
     }
 
@@ -120,11 +147,12 @@ impl PendingBarkAction {
             id: id.into(),
             kind: "board",
             title: "Bark boarding",
-            status: BOARD_IN_PROGRESS_STATUS,
+            status: BOARD_IN_PROGRESS_STATUS.to_owned(),
             amount_sats,
             fee_sats: None,
             destination: None,
             txid: None,
+            error: None,
         }
     }
 }
@@ -140,6 +168,7 @@ struct PendingBarkActionJson<'a> {
     fee_sats: Option<u64>,
     destination: Option<&'a str>,
     txid: Option<&'a str>,
+    error: Option<&'a str>,
 }
 
 #[derive(Serialize)]
@@ -164,11 +193,12 @@ pub fn pending_actions_to_json(actions: &[PendingBarkAction]) -> Result<String, 
             id: &action.id,
             kind: action.kind,
             title: action.title,
-            status: action.status,
+            status: &action.status,
             amount_sats: action.amount_sats,
             fee_sats: action.fee_sats,
             destination: action.destination.as_deref(),
             txid: action.txid.as_deref(),
+            error: action.error.as_deref(),
         })
         .collect::<Vec<_>>();
     serde_json::to_string(&rows).map_err(|err| err.to_string())
@@ -176,6 +206,9 @@ pub fn pending_actions_to_json(actions: &[PendingBarkAction]) -> Result<String, 
 
 #[cfg(target_arch = "wasm32")]
 mod wasm_export {
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+
     use wasm_bindgen::prelude::*;
 
     use super::{
@@ -183,6 +216,52 @@ mod wasm_export {
         sum_spendable_and_locked_sats,
     };
     use crate::session::{bark_error, finish_wallet_operation, take_active_wallet};
+
+    thread_local! {
+        static OFFBOARD_DRIVE_ERRORS: RefCell<HashMap<String, String>> =
+            RefCell::new(HashMap::new());
+    }
+
+    fn remember_offboard_drive_error(id: String, error: String) {
+        OFFBOARD_DRIVE_ERRORS.with(|errors| {
+            errors.borrow_mut().insert(id, error);
+        });
+    }
+
+    fn forget_offboard_drive_error(id: &str) {
+        OFFBOARD_DRIVE_ERRORS.with(|errors| {
+            errors.borrow_mut().remove(id);
+        });
+    }
+
+    fn offboard_drive_error(id: &str) -> Option<String> {
+        OFFBOARD_DRIVE_ERRORS.with(|errors| errors.borrow().get(id).cloned())
+    }
+
+    /// `Wallet::sync` drives pending offboards and only logs a failure.
+    /// Drive them again here so the banner can show the step that stopped.
+    pub async fn continue_pending_offboards(wallet: &bark::Wallet) {
+        let Ok(pending) = wallet.pending_offboards().await else {
+            return;
+        };
+        let mut live_ids = Vec::with_capacity(pending.len());
+        for action in pending {
+            let id = action.id();
+            live_ids.push(id.clone());
+            match wallet
+                .drive_action(action, bark::actions::DriveMode::UntilParkOrDone)
+                .await
+            {
+                Ok(()) => forget_offboard_drive_error(&id),
+                Err(err) => remember_offboard_drive_error(id, bark_error(&err)),
+            }
+        }
+        OFFBOARD_DRIVE_ERRORS.with(|errors| {
+            errors
+                .borrow_mut()
+                .retain(|id, _| live_ids.iter().any(|live_id| live_id == id));
+        });
+    }
 
     pub async fn read_session_balance_json(wallet: &bark::Wallet) -> Result<String, String> {
         let vtxos = wallet.all_vtxos().await.map_err(bark_error)?;
@@ -209,7 +288,21 @@ mod wasm_export {
             offboard.onchain_output_amount.to_sat(),
             offboard.committed_fee.to_sat(),
             offboard_confirmation_txid(&offboard.progress),
+            offboard_stage(&offboard.progress),
+            offboard_drive_error(&offboard.id).as_deref(),
         )
+    }
+
+    fn offboard_stage(progress: &bark::actions::offboard::Progress) -> &'static str {
+        match progress {
+            bark::actions::offboard::Progress::Start => "start",
+            bark::actions::offboard::Progress::SplitWithArkoor => "split",
+            bark::actions::offboard::Progress::ArkoorRegistrationRequired { .. } => "register",
+            bark::actions::offboard::Progress::ReadyForOffboard { .. } => "prepare",
+            bark::actions::offboard::Progress::OffboardTxPrepared { .. } => "sign",
+            bark::actions::offboard::Progress::ReadyForBroadcast { .. } => "broadcast",
+            bark::actions::offboard::Progress::AwaitingConfirmations { .. } => "confirm",
+        }
     }
 
     fn offboard_confirmation_txid(progress: &bark::actions::offboard::Progress) -> Option<String> {
@@ -268,7 +361,7 @@ mod wasm_export {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub use wasm_export::read_session_balance_json;
+pub use wasm_export::{continue_pending_offboards, read_session_balance_json};
 
 #[cfg(test)]
 mod tests {
@@ -305,6 +398,8 @@ mod tests {
                 10_000,
                 50_815,
                 None,
+                "prepare",
+                None,
             ),
             PendingBarkAction::offboard(
                 "aabbccddeeff00112233445566778899",
@@ -312,6 +407,8 @@ mod tests {
                 20_000,
                 100,
                 Some("deadbeef".to_owned()),
+                "confirm",
+                None,
             ),
         ];
 
@@ -323,13 +420,39 @@ mod tests {
         assert_eq!(value[0]["destination"], "tb1qcurrent");
         assert_eq!(value[0]["amountSats"], 10_000);
         assert_eq!(value[0]["feeSats"], 50_815);
-        assert_eq!(value[0]["status"], BARK_EXIT_PARKED_STATUS);
+        assert_eq!(
+            value[0]["status"],
+            format!("Asking the server to build the exit transaction. {BARK_EXIT_PARKED_STATUS}"),
+        );
         assert!(value[0]["txid"].is_null());
+        assert!(value[0]["error"].is_null());
 
         assert_eq!(value[1]["destination"], "tb1qconfirmed");
         assert_eq!(value[1]["amountSats"], 20_000);
         assert_eq!(value[1]["status"], BARK_EXIT_AWAITING_CONFIRMATION_STATUS);
         assert_eq!(value[1]["txid"], "deadbeef");
+    }
+
+    #[test]
+    fn a_failed_offboard_drive_is_named_instead_of_asking_for_another_sync() {
+        let action = PendingBarkAction::offboard(
+            "exit-1",
+            "tb1qcurrent",
+            10_000,
+            100,
+            None,
+            "broadcast",
+            Some("esplora rejected the transaction"),
+        );
+        assert_eq!(
+            action.status,
+            "Broadcasting the exit transaction failed: esplora rejected the transaction. Sync Bark to retry it.",
+        );
+        assert!(!action.status.contains(BARK_EXIT_PARKED_STATUS));
+        assert_eq!(
+            action.error.as_deref(),
+            Some("esplora rejected the transaction"),
+        );
     }
 
     #[test]

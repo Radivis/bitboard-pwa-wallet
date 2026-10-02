@@ -73,6 +73,8 @@ export type BarkPendingAction = {
   feeSats: number | null
   destination: string | null
   txid: string | null
+  /** Set when the last sync could not move this action. The banner turns red. */
+  error: string | null
 }
 
 export type BarkBalanceParts = {

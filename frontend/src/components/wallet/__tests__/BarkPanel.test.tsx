@@ -67,6 +67,7 @@ function pendingOffboard(): BarkPendingAction {
     feeSats: 50_815,
     destination: 'tb1qcurrentaddressxxxxxxxx',
     txid: 'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899',
+    error: null,
   }
 }
 
