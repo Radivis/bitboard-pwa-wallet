@@ -100,6 +100,7 @@ vi.mock('@/db', () => ({
 
 vi.mock('@/workers/secrets-channel', () => ({
   ensureSecretsChannel: vi.fn().mockResolvedValue(undefined),
+  resetBarkWorkerSecretsChannel: vi.fn(),
 }))
 
 vi.mock('@/lib/wallet/bitcoin-utils', () => ({
