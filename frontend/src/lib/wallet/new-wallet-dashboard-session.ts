@@ -1,3 +1,4 @@
+import { startBarkLoadAfterUnlock } from '@/lib/bark/bark-session-service'
 import { removeArkadeDashboardSyncQueries } from '@/lib/arkade/arkade-dashboard-sync'
 import { removeArkadeDashboardQueries } from '@/lib/arkade/arkade-query-keys'
 import { reportArkadeSessionOpenError } from '@/lib/arkade/arkade-session-open-error-toast'
@@ -21,6 +22,14 @@ export function releasePreviousWalletDashboardSession(nextWalletId: number): voi
   removeArkadeDashboardQueries()
   removeArkadeDashboardSyncQueries()
   removeOnchainDashboardQueries()
+}
+
+/** Open a Bark session for the wallet that was just activated. */
+export function startBarkSessionForNewWallet(
+  walletId: number,
+  networkMode: NetworkMode,
+): void {
+  startBarkLoadAfterUnlock({ walletId, networkMode })
 }
 
 /** Open an Arkade session for the wallet that was just activated. */

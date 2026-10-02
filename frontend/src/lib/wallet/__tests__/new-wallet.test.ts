@@ -15,6 +15,8 @@ const mockEnsureWalletSecretsSession = vi.hoisted(() => vi.fn())
 const mockEnsureSecretsChannel = vi.hoisted(() => vi.fn())
 const mockReleasePreviousWalletDashboardSession = vi.hoisted(() => vi.fn())
 const mockStartArkadeSessionForNewWallet = vi.hoisted(() => vi.fn())
+const mockStartBarkSessionForNewWallet = vi.hoisted(() => vi.fn())
+const mockCloseBarkSessionForWalletChange = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 
 vi.mock('@/db', () => ({
   ensureMigrated: mockEnsureMigrated,
@@ -60,6 +62,13 @@ vi.mock('@/lib/wallet/new-wallet-dashboard-session', () => ({
     mockReleasePreviousWalletDashboardSession(...args),
   startArkadeSessionForNewWallet: (...args: unknown[]) =>
     mockStartArkadeSessionForNewWallet(...args),
+  startBarkSessionForNewWallet: (...args: unknown[]) =>
+    mockStartBarkSessionForNewWallet(...args),
+}))
+
+vi.mock('@/lib/bark/bark-session-service', () => ({
+  closeBarkSessionForWalletChange: (...args: unknown[]) =>
+    mockCloseBarkSessionForWalletChange(...args),
 }))
 
 vi.mock('@/stores/walletStore', () => ({
@@ -170,7 +179,9 @@ describe('new wallet helpers', () => {
     expect(setCurrentAddress.mock.calls).toEqual([[null], ['tb1new']])
     expect(mockReleasePreviousWalletDashboardSession).toHaveBeenCalledWith(4)
     expect(setActiveWallet).toHaveBeenCalledWith(4)
+    expect(mockCloseBarkSessionForWalletChange).toHaveBeenCalledOnce()
     expect(mockStartArkadeSessionForNewWallet).toHaveBeenCalledWith(4, 'signet')
+    expect(mockStartBarkSessionForNewWallet).toHaveBeenCalledWith(4, 'signet')
     expect(clearArkadeDashboardState).toHaveBeenCalled()
     expect(setWalletStatus).toHaveBeenCalledWith('unlocked')
     expect(commitLoadedDescriptorWallet).toHaveBeenCalledWith({

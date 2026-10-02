@@ -28,6 +28,72 @@ pub fn parse_signet_receive_address(address: &str) -> Result<Address, String> {
     parse_receive_address(address, Network::Signet)
 }
 
+/// Local state that decides whether a new exit may select a VTXO.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExitInputState {
+    Spendable,
+    Locked,
+    Spent,
+    Exited,
+}
+
+/// A new exit selects spendable coins only. Spent and exited coins stay out.
+/// Bark applies the same cut through `spendable_vtxos` when an exit starts.
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+pub fn selectable_exit_vtxo_ids<'a>(
+    vtxos: impl IntoIterator<Item = (&'a str, ExitInputState)>,
+) -> Vec<&'a str> {
+    vtxos
+        .into_iter()
+        .filter_map(|(id, state)| match state {
+            ExitInputState::Spendable => Some(id),
+            ExitInputState::Locked | ExitInputState::Spent | ExitInputState::Exited => None,
+        })
+        .collect()
+}
+
+const SPENT_VTXO_REJECTION_TAILS: &[&str] =
+    &[" is not spendable (state: spent)", " is already spent"];
+const VTXO_REJECTION_MARK: &str = "vtxo ";
+
+/// VTXO ids the server named as already spent. Repeated sentences count once.
+pub fn spent_vtxo_ids_named_by_server(message: &str) -> Vec<String> {
+    let mut ids = Vec::new();
+    let mut rest = message;
+    while let Some(mark_at) = rest.find(VTXO_REJECTION_MARK) {
+        let after_mark = &rest[mark_at + VTXO_REJECTION_MARK.len()..];
+        let id_end = after_mark
+            .find(char::is_whitespace)
+            .unwrap_or(after_mark.len());
+        let id = after_mark[..id_end].trim();
+        let after_id = &after_mark[id_end..];
+        if is_vtxo_id(id)
+            && spent_rejection_follows(after_id)
+            && !ids.iter().any(|existing| existing == id)
+        {
+            ids.push(id.to_owned());
+        }
+        rest = after_id;
+    }
+    ids
+}
+
+fn spent_rejection_follows(after_id: &str) -> bool {
+    SPENT_VTXO_REJECTION_TAILS
+        .iter()
+        .any(|tail| after_id.starts_with(tail))
+}
+
+fn is_vtxo_id(id: &str) -> bool {
+    let Some((txid, vout)) = id.split_once(':') else {
+        return false;
+    };
+    txid.len() == 64
+        && txid.bytes().all(|byte| byte.is_ascii_hexdigit())
+        && !vout.is_empty()
+        && vout.bytes().all(|byte| byte.is_ascii_digit())
+}
+
 /// A checkpoint created by this attempt is parked. Checkpoints that already existed are not.
 pub fn classify_offboard_failure(
     ids_before: &HashSet<String>,
@@ -49,8 +115,9 @@ mod tests {
     use bitcoin::Network;
 
     use super::{
-        BARK_OFFBOARD_PARKED_PREFIX, classify_offboard_failure, parse_receive_address,
-        parse_signet_receive_address,
+        BARK_OFFBOARD_PARKED_PREFIX, ExitInputState, classify_offboard_failure,
+        parse_receive_address, parse_signet_receive_address, selectable_exit_vtxo_ids,
+        spent_vtxo_ids_named_by_server,
     };
 
     const SIGNET_ADDRESS: &str = "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx";
@@ -98,5 +165,56 @@ mod tests {
 
         let same = classify_offboard_failure(&older, &older, "insufficient funds");
         assert_eq!(same, "insufficient funds");
+    }
+
+    #[test]
+    fn a_new_exit_selects_spendable_vtxos_and_leaves_spent_ones_out() {
+        let selected = selectable_exit_vtxo_ids([
+            ("spend:0", ExitInputState::Spendable),
+            (
+                "33e7166f18ea847b5c2a20130d6eeb0504fd690bbe7c1015cdd08fa41db45e25:0",
+                ExitInputState::Spent,
+            ),
+            ("locked:1", ExitInputState::Locked),
+            ("exited:2", ExitInputState::Exited),
+        ]);
+
+        assert_eq!(selected, ["spend:0"]);
+    }
+
+    #[test]
+    fn a_spent_server_rejection_names_each_vtxo_once() {
+        let message = "error preparing offboard vtxos with arkoor: server failed to cosign arkoor: \
+            code: 'Client specified an invalid argument', message: \"bad user input: vtxo \
+            33e7166f18ea847b5c2a20130d6eeb0504fd690bbe7c1015cdd08fa41db45e25:0 is not spendable \
+            (state: spent)\": code: 'Client specified an invalid argument', message: \"bad user \
+            input: vtxo 33e7166f18ea847b5c2a20130d6eeb0504fd690bbe7c1015cdd08fa41db45e25:0 is not \
+            spendable (state: spent)\"";
+
+        let ids = spent_vtxo_ids_named_by_server(message);
+
+        assert_eq!(
+            ids,
+            ["33e7166f18ea847b5c2a20130d6eeb0504fd690bbe7c1015cdd08fa41db45e25:0"]
+        );
+        assert!(spent_vtxo_ids_named_by_server("fee rate too low").is_empty());
+    }
+
+    #[test]
+    fn an_already_spent_server_rejection_names_the_vtxo_once() {
+        let message = "Splitting coins for the on-chain amount failed: An error occurred while \
+            processing the action: error preparing offboard vtxos with arkoor: error preparing \
+            offboard vtxos with arkoor: server failed to cosign arkoor: code: 'Internal error', \
+            message: \"tx body error: vtxo \
+            e2b5b75b048f731a2075301fc827db929917eb16dff134a180db276b435b7a8f:0 is already spent\": \
+            code: 'Internal error', message: \"tx body error: vtxo \
+            e2b5b75b048f731a2075301fc827db929917eb16dff134a180db276b435b7a8f:0 is already spent\"";
+
+        let ids = spent_vtxo_ids_named_by_server(message);
+
+        assert_eq!(
+            ids,
+            ["e2b5b75b048f731a2075301fc827db929917eb16dff134a180db276b435b7a8f:0"]
+        );
     }
 }

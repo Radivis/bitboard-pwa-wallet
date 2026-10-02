@@ -33,9 +33,11 @@ vi.mock('@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator', () => ({
 }))
 
 import {
+  discardShownBarkBalanceForSessionChange,
   getBarkSyncLifecycleSnapshot,
   orchestrateBarkSync,
   resetBarkSyncLifecycleStateForTests,
+  syncBarkSyncLifecycleWithLockPhase,
 } from '@/lib/wallet/lifecycle/bark-sync-lifecycle-orchestrator'
 
 describe('bark-sync-lifecycle-orchestrator', () => {
@@ -130,5 +132,49 @@ describe('bark-sync-lifecycle-orchestrator', () => {
       errorMessage: null,
       refreshStatus: 'warning',
     })
+  })
+
+  it('drops the shown balance when the rail locks', async () => {
+    await orchestrateBarkSync({ walletId: 1, networkMode: 'signet' })
+
+    syncBarkSyncLifecycleWithLockPhase('locked')
+
+    expect(getBarkSyncLifecycleSnapshot()).toMatchObject({
+      syncPhase: 'not-configured',
+      spendableSats: null,
+      lockedSats: null,
+      lastSuccessfulSyncAt: null,
+    })
+  })
+
+  it('does not republish a balance after the shown snapshot was discarded', async () => {
+    let releaseSync: (() => void) | undefined
+    workerMocks.sync.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releaseSync = () =>
+            resolve({
+              lastSuccessfulSyncAt: '2024-03-01T12:00:00.000Z',
+              refreshStatus: 'idle',
+            })
+        }),
+    )
+
+    const syncing = orchestrateBarkSync({ walletId: 1, networkMode: 'signet' })
+    await vi.waitFor(() => {
+      expect(getBarkSyncLifecycleSnapshot().syncPhase).toBe('syncing')
+    })
+
+    discardShownBarkBalanceForSessionChange()
+    releaseSync?.()
+    await syncing
+
+    expect(getBarkSyncLifecycleSnapshot()).toMatchObject({
+      syncPhase: 'not-configured',
+      spendableSats: null,
+      lockedSats: null,
+      lastSuccessfulSyncAt: null,
+    })
+    expect(workerMocks.readSpendableBalance).not.toHaveBeenCalled()
   })
 })

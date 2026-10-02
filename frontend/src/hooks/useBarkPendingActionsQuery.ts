@@ -1,6 +1,7 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
 import { useBarkSyncLifecycleSnapshot } from '@/hooks/useBarkSyncLifecycleSnapshot'
+import { keepBarkQueryDataForSameWallet } from '@/lib/bark/bark-wallet-queries'
 import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
 import { useFeatureStore } from '@/stores/featureStore'
 import { useWalletStore, type NetworkMode } from '@/stores/walletStore'
@@ -35,7 +36,13 @@ export function useBarkPendingActionsQuery() {
       syncSnapshot.lastSuccessfulSyncAt,
     ),
     enabled: sessionReady && walletFreeForList,
-    placeholderData: keepPreviousData,
+    placeholderData: (previousData, previousQuery) =>
+      keepBarkQueryDataForSameWallet(
+        previousData,
+        previousQuery?.queryKey,
+        activeWalletId,
+        networkMode,
+      ),
     retry: false,
     queryFn: () => getBarkWorker().listPendingActions(),
   })

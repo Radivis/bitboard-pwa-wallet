@@ -248,12 +248,34 @@ mod wasm_export {
         for action in pending {
             let id = action.id();
             live_ids.push(id.clone());
+            if crate::collaborative_exit::stop_offboard_whose_inputs_are_already_consumed(
+                wallet, &action,
+            )
+            .await
+            .unwrap_or(false)
+            {
+                forget_offboard_drive_error(&id);
+                continue;
+            }
             match wallet
                 .drive_action(action, bark::actions::DriveMode::UntilParkOrDone)
                 .await
             {
                 Ok(()) => forget_offboard_drive_error(&id),
-                Err(err) => remember_offboard_drive_error(id, bark_error(&err)),
+                Err(err) => {
+                    let message = bark_error(&err);
+                    match crate::collaborative_exit::retire_offboard_if_server_spent_an_input(
+                        wallet, &message,
+                    )
+                    .await
+                    {
+                        Ok(true) => forget_offboard_drive_error(&id),
+                        Ok(false) => remember_offboard_drive_error(id, message),
+                        Err(retire_error) => {
+                            remember_offboard_drive_error(id, format!("{message} ({retire_error})"))
+                        }
+                    }
+                }
             }
         }
         OFFBOARD_DRIVE_ERRORS.with(|errors| {

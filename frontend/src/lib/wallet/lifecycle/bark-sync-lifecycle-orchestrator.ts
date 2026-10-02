@@ -3,7 +3,9 @@ import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
 import type { BarkRefreshStatus } from '@/lib/bark/bark-refresh-status'
 import type { NetworkMode } from '@/stores/walletStore'
 import { getBarkLoadLifecycleSnapshot } from '@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator'
+import type { LockLifecyclePhase } from '@/lib/wallet/lifecycle/lock-lifecycle-types'
 import type { SyncLifecyclePhase } from '@/lib/wallet/lifecycle/rail-lifecycle-types'
+import { shouldSkipRailLifecycleResetForLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-phase'
 import { createInFlightLifecycleTracker } from '@/lib/wallet/lifecycle/lifecycle-in-flight-tracker'
 import {
   LIFECYCLE_SYNC_ERROR_FALLBACK,
@@ -86,6 +88,28 @@ export function forceResetBarkSyncLifecycleForTeardown(): void {
   setSnapshot(idleBarkSyncSnapshot())
 }
 
+/**
+ * Hides the previous wallet's balance immediately.
+ * In-flight sync still finishes, but a generation change stops it from publishing.
+ */
+export function discardShownBarkBalanceForSessionChange(): void {
+  bumpSessionGeneration()
+  setSnapshot(idleBarkSyncSnapshot())
+}
+
+/** Drops a previous wallet's Bark balance when the app locks or switches wallets. */
+export function syncBarkSyncLifecycleWithLockPhase(lockPhase: LockLifecyclePhase): void {
+  if (
+    shouldSkipRailLifecycleResetForLockPhase(
+      lockPhase,
+      inFlightSyncTracker.getCurrent() != null,
+    )
+  ) {
+    return
+  }
+  forceResetBarkSyncLifecycleForTeardown()
+}
+
 /** Drops any spendable figure from a previous session before the new open finishes. */
 export function prepareBarkSyncForSessionOpen(networkMode: NetworkMode): void {
   bumpSessionGeneration()
@@ -161,6 +185,9 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
     try {
       const worker = getBarkWorker()
       const synced = await worker.sync()
+      if (generation !== sessionGeneration) {
+        return
+      }
       const balance = await worker.readSpendableBalance()
       if (generation !== sessionGeneration) {
         return

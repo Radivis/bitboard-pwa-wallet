@@ -1,6 +1,7 @@
 import type { LockLifecyclePhase } from '@/lib/wallet/lifecycle/lock-lifecycle-types'
 import { syncArkadeLoadLifecycleWithLockPhase } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
 import { syncBarkLoadLifecycleWithLockPhase } from '@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator'
+import { syncBarkSyncLifecycleWithLockPhase } from '@/lib/wallet/lifecycle/bark-sync-lifecycle-orchestrator'
 import { syncArkadeSaveLifecycleWithLockPhase } from '@/lib/wallet/lifecycle/arkade-save-lifecycle-orchestrator'
 import { syncArkadeSyncLifecycleWithLockPhase } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
 import { syncLightningLoadLifecycleWithLockPhase } from '@/lib/wallet/lifecycle/lightning-load-lifecycle-orchestrator'
@@ -18,6 +19,7 @@ export function syncAllRailLifecyclesWithLockPhase(lockPhase: LockLifecyclePhase
   syncOnchainSaveLifecycleWithLockPhase(lockPhase)
   syncArkadeLoadLifecycleWithLockPhase(lockPhase)
   syncBarkLoadLifecycleWithLockPhase(lockPhase)
+  syncBarkSyncLifecycleWithLockPhase(lockPhase)
   syncArkadeSyncLifecycleWithLockPhase(lockPhase)
   syncArkadeSaveLifecycleWithLockPhase(lockPhase)
   syncLightningLoadLifecycleWithLockPhase(lockPhase)

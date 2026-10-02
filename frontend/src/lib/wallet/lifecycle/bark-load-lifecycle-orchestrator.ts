@@ -94,6 +94,15 @@ export function forceResetBarkLoadLifecycleForTeardown(): void {
   setSnapshot(idleBarkLoadSnapshot())
 }
 
+/**
+ * Hides the previous wallet's loaded session immediately.
+ * In-flight open still finishes, but a generation change stops it from publishing.
+ */
+export function discardShownBarkLoadForSessionChange(): void {
+  bumpSessionGeneration()
+  setSnapshot(idleBarkLoadSnapshot())
+}
+
 export function syncBarkLoadLifecycleWithLockPhase(lockPhase: LockLifecyclePhase): void {
   if (
     shouldSkipRailLifecycleResetForLockPhase(

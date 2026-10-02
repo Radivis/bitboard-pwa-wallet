@@ -8,6 +8,7 @@ feature:
     total or the Arkade total. Each network keeps its own encrypted record dump.
   user_stories:
     - As a user with Bark enabled on signet or mainnet, I want the dashboard to show my Bark balance, including locked coins, on its own card
+    - As a user, I want a newly activated wallet to show that wallet's Bark balance, not the previous wallet's balance or parked exit
     - As a user, I want a failed Bark sync to keep the last shown spendable and locked amounts and show the rail sync error
     - As a user with Bark enabled on signet or mainnet, I want a sync to schedule a delegated refresh when coins are due, and to see whether that refresh was scheduled, is still pending, or could not be scheduled, without losing the spendable amount
     - As a user, I want Bark to sync after unlock, from the Sync control, and on the same periodic interval policy as the other rails
@@ -24,6 +25,7 @@ feature:
   requirements:
     - The card is visible only when isBarkEnabled and the app network is signet
     - Spendable and locked sats are read only after a successful Bark sync in this session
+    - Activating or switching to another wallet clears the previous wallet's Bark balance, sync time, and pending-action placeholder before that wallet's own Bark session is shown
     - A failed sync does not replace the last shown spendable or locked amount
     - When locked sats are above zero, the dashboard headline is spendable plus locked and shows those two sub-lines
     - The first failed sync of a session shows the error banner and no amount
@@ -41,6 +43,7 @@ feature:
     - Review shows the server fee and the on-chain amount before confirm
     - Confirm submits the exit to Bark. It does not broadcast through the on-chain Esplora client
     - A parked exit stays pending, continues on the next Bark sync, and is shown as a banner rather than a toast
+    - When the server rejects an exit input as already spent, that VTXO is recorded as spent and the offboard checkpoint is dropped, so a later exit cannot select it
     - A bark.offboard movement is labeled as a Bark exit
     - A bark.round movement whose kind is refresh is labeled Bark refresh, including a failed row
     - After Wallet sync succeeds, a delegated refresh is scheduled only when no round is already pending and Bark's selector finds coins that must refresh
@@ -105,6 +108,9 @@ feature:
       - id: DASH-BARK-10
         description: A pending offboard is a status banner on the dashboard, without cancel or retry
         implemented_by: frontend/src/components/wallet/__tests__/BarkDashboardBalance.test.tsx
+      - id: DASH-BARK-11
+        description: Switching to another wallet, including one just created, drops the previous Bark balance before that wallet's own session is shown
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/bark-sync-lifecycle-orchestrator.test.ts
     sync:
       - id: BARK-SYNC-01
         description: bark_balance is refused until this session has completed a successful sync
@@ -212,6 +218,9 @@ feature:
         implemented_by: bitboard-bark/src/exit_address.rs
       - id: BARK-EXIT-11
         description: A new pending offboard checkpoint is reported as parked; an older checkpoint is not
+        implemented_by: bitboard-bark/src/exit_address.rs
+      - id: BARK-EXIT-12
+        description: A new exit selects spendable VTXOs only, and a server rejection that names a spent VTXO records that id once
         implemented_by: bitboard-bark/src/exit_address.rs
     vtxo_list:
       - id: BARK-VTX-01

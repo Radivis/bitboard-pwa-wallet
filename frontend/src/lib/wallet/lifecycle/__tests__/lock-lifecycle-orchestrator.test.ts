@@ -24,6 +24,7 @@ const awaitLightningLoadQuiescence = vi.fn()
 const startBarkLoadAfterUnlock = vi.fn()
 const awaitBarkLoadQuiescence = vi.fn()
 const syncBarkLoadLifecycleWithLockPhase = vi.fn()
+const syncBarkSyncLifecycleWithLockPhase = vi.fn()
 const awaitLightningSyncQuiescence = vi.fn()
 const awaitLightningSaveQuiescence = vi.fn()
 const isLightningSaveBlockingLock = vi.fn()
@@ -112,6 +113,11 @@ vi.mock('@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator', () => ({
   awaitBarkLoadQuiescence: (...args: unknown[]) => awaitBarkLoadQuiescence(...args),
   syncBarkLoadLifecycleWithLockPhase: (...args: unknown[]) =>
     syncBarkLoadLifecycleWithLockPhase(...args),
+}))
+
+vi.mock('@/lib/wallet/lifecycle/bark-sync-lifecycle-orchestrator', () => ({
+  syncBarkSyncLifecycleWithLockPhase: (...args: unknown[]) =>
+    syncBarkSyncLifecycleWithLockPhase(...args),
 }))
 
 vi.mock('@/lib/wallet/lifecycle/lightning-sync-lifecycle-orchestrator', () => ({
@@ -346,6 +352,7 @@ describe('lock-lifecycle-orchestrator', () => {
     expect(syncOnchainSyncLifecycleWithLockPhase).toHaveBeenCalledWith('locked')
     expect(syncOnchainSaveLifecycleWithLockPhase).toHaveBeenCalledWith('locked')
     expect(syncArkadeLoadLifecycleWithLockPhase).toHaveBeenCalledWith('locked')
+    expect(syncBarkSyncLifecycleWithLockPhase).toHaveBeenCalledWith('locked')
     expect(syncArkadeSyncLifecycleWithLockPhase).toHaveBeenCalledWith('locked')
     expect(syncArkadeSaveLifecycleWithLockPhase).toHaveBeenCalledWith('locked')
   })

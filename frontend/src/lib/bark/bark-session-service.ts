@@ -1,11 +1,14 @@
+import { removeBarkWalletQueries } from '@/lib/bark/bark-wallet-queries'
 import { getBarkWorkerIfExists, terminateBarkWorker } from '@/workers/bark-factory'
 import {
   awaitBarkLoadQuiescence,
+  discardShownBarkLoadForSessionChange,
   forceResetBarkLoadLifecycleForTeardown,
   orchestrateBarkLoad,
 } from '@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator'
 import {
   awaitBarkSyncQuiescence,
+  discardShownBarkBalanceForSessionChange,
   forceResetBarkSyncLifecycleForTeardown,
 } from '@/lib/wallet/lifecycle/bark-sync-lifecycle-orchestrator'
 import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
@@ -20,12 +23,16 @@ export function abortBarkSessionForNetworkSwitch(): void {
   forceResetBarkSyncLifecycleForTeardown()
   terminateBarkWorker()
   forceResetBarkLoadLifecycleForTeardown()
+  removeBarkWalletQueries()
 }
 
 /**
  * Close the WASM session, then terminate the worker.
+ * The shown balance is cleared before quiescence so a finishing sync cannot republish it.
  */
 export async function closeBarkSession(): Promise<void> {
+  discardShownBarkBalanceForSessionChange()
+  discardShownBarkLoadForSessionChange()
   await awaitBarkLoadQuiescence()
   await awaitBarkSyncQuiescence()
   const barkWorker = getBarkWorkerIfExists()
@@ -39,6 +46,19 @@ export async function closeBarkSession(): Promise<void> {
   terminateBarkWorker()
   forceResetBarkSyncLifecycleForTeardown()
   forceResetBarkLoadLifecycleForTeardown()
+  removeBarkWalletQueries()
+}
+
+/**
+ * Drop the previous wallet's Bark worker even when quiescence fails,
+ * so the next wallet cannot observe that session.
+ */
+export async function closeBarkSessionForWalletChange(): Promise<void> {
+  try {
+    await closeBarkSession()
+  } catch {
+    abortBarkSessionForNetworkSwitch()
+  }
 }
 
 export function startBarkLoadAfterUnlock(params: {

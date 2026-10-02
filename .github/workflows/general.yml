@@ -73,13 +73,17 @@ jobs:
   clippy:
     name: Clippy
     needs: version
-    runs-on: ubuntu-latest
+    # Noble package pin in install-protobuf-compiler; ubuntu-latest may leave 24.04.
+    # bitboard-bark pulls bark-server-rpc, whose build script compiles protos with protoc.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Install the Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           components: clippy
+      - name: Install protobuf compiler
+        uses: ./.github/actions/install-protobuf-compiler
       - name: Linting
         run: |
           cargo clippy --workspace --all-targets -- -D warnings

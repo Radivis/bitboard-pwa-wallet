@@ -10,7 +10,10 @@ use std::collections::HashSet;
 use wasm_bindgen::prelude::*;
 
 use crate::board::BarkBoardFeeEstimate;
-use crate::exit_address::{classify_offboard_failure, parse_receive_address};
+use crate::exit_address::{
+    ExitInputState, classify_offboard_failure, parse_receive_address,
+    spent_vtxo_ids_named_by_server,
+};
 use crate::session::{
     bark_error, finish_wallet_operation, require_session_synced, session_bitcoin_network,
     take_active_wallet,
@@ -52,6 +55,11 @@ async fn offboard_txid_or_parked<E: std::fmt::Display>(
         Ok(txid) => Ok(txid.to_string()),
         Err(err) => {
             let message = bark_error(&err);
+            if let Err(retire_error) =
+                retire_offboard_if_server_spent_an_input(wallet, &message).await
+            {
+                return Err(format!("{message} ({retire_error})"));
+            }
             let ids_after = pending_offboard_ids(wallet).await.unwrap_or_default();
             Err(classify_offboard_failure(&ids_before, &ids_after, &message))
         }
@@ -126,4 +134,108 @@ pub async fn bark_offboard_all(address: String) -> Result<String, JsValue> {
     }
     .await;
     finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
+}
+
+fn exit_input_is_already_consumed(vtxo: &bark::WalletVtxo) -> bool {
+    matches!(
+        exit_input_state(vtxo),
+        ExitInputState::Spent | ExitInputState::Exited
+    )
+}
+
+fn exit_input_state(vtxo: &bark::WalletVtxo) -> ExitInputState {
+    match vtxo.state.kind() {
+        bark::vtxo::VtxoStateKind::Spendable => ExitInputState::Spendable,
+        bark::vtxo::VtxoStateKind::Locked => ExitInputState::Locked,
+        bark::vtxo::VtxoStateKind::Spent => ExitInputState::Spent,
+        bark::vtxo::VtxoStateKind::Exited => ExitInputState::Exited,
+    }
+}
+
+fn offboard_input_ids(offboard: &bark::actions::offboard::Offboard) -> Vec<String> {
+    let ids = match &offboard.kind {
+        bark::actions::offboard::OffboardKind::OffboardWhole { input_vtxo_ids }
+        | bark::actions::offboard::OffboardKind::SendOnchain { input_vtxo_ids, .. } => {
+            input_vtxo_ids
+        }
+    };
+    ids.iter().map(ToString::to_string).collect()
+}
+
+/// The server already spent this input. Record that locally and drop the checkpoint
+/// so the next exit's spendable selection cannot submit it again.
+pub(crate) async fn retire_offboard_if_server_spent_an_input(
+    wallet: &bark::Wallet,
+    error_message: &str,
+) -> Result<bool, String> {
+    let spent_ids = spent_vtxo_ids_named_by_server(error_message);
+    if spent_ids.is_empty() {
+        return Ok(false);
+    }
+    record_named_vtxos_as_spent(wallet, &spent_ids).await?;
+    stop_offboards_that_name(wallet, &spent_ids).await?;
+    Ok(true)
+}
+
+/// A checkpoint whose input is already spent or exited must not be driven again.
+pub(crate) async fn stop_offboard_whose_inputs_are_already_consumed(
+    wallet: &bark::Wallet,
+    offboard: &bark::actions::offboard::Offboard,
+) -> Result<bool, String> {
+    let input_ids = offboard_input_ids(offboard);
+    let vtxos = wallet.all_vtxos().await.map_err(bark_error)?;
+    let consumed = input_ids.iter().any(|input_id| {
+        vtxos
+            .iter()
+            .any(|vtxo| vtxo.id().to_string() == *input_id && exit_input_is_already_consumed(vtxo))
+    });
+    if !consumed {
+        return Ok(false);
+    }
+    wallet
+        .stop_wallet_action(&offboard.id)
+        .await
+        .map_err(bark_error)?;
+    Ok(true)
+}
+
+async fn record_named_vtxos_as_spent(
+    wallet: &bark::Wallet,
+    spent_ids: &[String],
+) -> Result<(), String> {
+    let vtxos = wallet.all_vtxos().await.map_err(bark_error)?;
+    let matched = vtxos
+        .into_iter()
+        .filter(|vtxo| {
+            spent_ids
+                .iter()
+                .any(|spent_id| spent_id == &vtxo.id().to_string())
+        })
+        .collect::<Vec<_>>();
+    if matched.is_empty() {
+        return Ok(());
+    }
+    wallet
+        .mark_vtxos_as_spent(&matched)
+        .await
+        .map_err(bark_error)
+}
+
+async fn stop_offboards_that_name(
+    wallet: &bark::Wallet,
+    spent_ids: &[String],
+) -> Result<(), String> {
+    let pending = wallet.pending_offboards().await.map_err(bark_error)?;
+    for offboard in pending {
+        let names_spent_input = offboard_input_ids(&offboard)
+            .iter()
+            .any(|input_id| spent_ids.iter().any(|spent_id| spent_id == input_id));
+        if names_spent_input {
+            wallet
+                .stop_wallet_action(&offboard.id)
+                .await
+                .map_err(bark_error)?;
+        }
+    }
+    Ok(())
 }

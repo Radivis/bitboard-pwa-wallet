@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
 import { useBarkSyncLifecycleSnapshot } from '@/hooks/useBarkSyncLifecycleSnapshot'
+import { keepBarkQueryDataForSameWallet } from '@/lib/bark/bark-wallet-queries'
 import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
 import { useFeatureStore } from '@/stores/featureStore'
 import { useWalletStore, type NetworkMode } from '@/stores/walletStore'
@@ -39,7 +40,13 @@ export function useBarkExitTopologyQuery(vtxoIds: string[]) {
       syncSnapshot.lastSuccessfulSyncAt,
     ),
     enabled: sessionReady && walletFreeForList && sortedVtxoIds.length > 0,
-    placeholderData: keepPreviousData,
+    placeholderData: (previousData, previousQuery) =>
+      keepBarkQueryDataForSameWallet(
+        previousData,
+        previousQuery?.queryKey,
+        activeWalletId,
+        networkMode,
+      ),
     retry: false,
     queryFn: () => getBarkWorker().exitTopology(sortedVtxoIds),
   })
