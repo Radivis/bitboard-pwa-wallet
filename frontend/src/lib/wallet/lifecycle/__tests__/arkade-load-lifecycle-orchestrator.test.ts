@@ -222,7 +222,7 @@ describe('arkade-load-lifecycle-orchestrator', () => {
   })
 
   it('LIFE-ARK-LOAD-04 reaches loaded without starting bumper Esplora', async () => {
-    await orchestrateArkadeLoad({ walletId: 1, networkMode: 'signet' })
+    await orchestrateArkadeLoad({ walletId: 1, networkMode: 'mutinynet' })
 
     expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loaded')
     expect(workerMocks.syncBumperWallet).not.toHaveBeenCalled()
@@ -232,7 +232,7 @@ describe('arkade-load-lifecycle-orchestrator', () => {
   it('does not mark the rail loaded when the active wallet changed', async () => {
     walletState.activeWalletId = 2
 
-    await orchestrateArkadeLoad({ walletId: 1, networkMode: 'signet' })
+    await orchestrateArkadeLoad({ walletId: 1, networkMode: 'mutinynet' })
 
     expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('not-configured')
     expect(workerMocks.openSession).not.toHaveBeenCalled()
@@ -259,11 +259,11 @@ describe('arkade-load-lifecycle-orchestrator', () => {
       }
     })
 
-    const previousLoad = orchestrateArkadeLoad({ walletId: 1, networkMode: 'signet' })
+    const previousLoad = orchestrateArkadeLoad({ walletId: 1, networkMode: 'mutinynet' })
     await previousOpenStarted
 
     walletState.activeWalletId = 2
-    const nextLoad = orchestrateArkadeLoad({ walletId: 2, networkMode: 'signet' })
+    const nextLoad = orchestrateArkadeLoad({ walletId: 2, networkMode: 'mutinynet' })
     rejectPreviousOpen(new Error('operator unreachable'))
 
     await expect(previousLoad).rejects.toThrow('operator unreachable')
