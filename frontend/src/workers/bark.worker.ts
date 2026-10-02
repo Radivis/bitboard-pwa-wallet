@@ -148,26 +148,6 @@ function barkErrorMessage(err: unknown): string {
   return String(err)
 }
 
-function readOpenedSession(opened: {
-  fingerprint?: unknown
-  legacy_indexed_db_name?: unknown
-  free?: () => void
-}): { fingerprint: string; legacyIndexedDbName?: string } {
-  try {
-    if (typeof opened.fingerprint !== 'string' || opened.fingerprint.length === 0) {
-      throw new Error('Bark open did not return a fingerprint')
-    }
-    const legacyName = opened.legacy_indexed_db_name
-    return {
-      fingerprint: opened.fingerprint,
-      legacyIndexedDbName:
-        typeof legacyName === 'string' && legacyName.length > 0 ? legacyName : undefined,
-    }
-  } finally {
-    opened.free?.()
-  }
-}
-
 async function exportRecordDump(): Promise<string> {
   const wasmModule = await getBarkWasm()
   const recordDump = wasmModule.bark_export_record_dump()
@@ -233,19 +213,6 @@ async function mutateBark<T>(
   return result as T
 }
 
-function deleteLegacyBarkIndexedDb(name: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.deleteDatabase(name)
-    request.onsuccess = () => resolve()
-    request.onerror = () => {
-      reject(request.error ?? new Error('Failed to delete legacy Bark IndexedDB'))
-    }
-    request.onblocked = () => {
-      reject(new Error('Legacy Bark IndexedDB delete is blocked'))
-    }
-  })
-}
-
 function requireOpenWalletId(): number {
   if (openWalletId == null) {
     throw new Error('Bark session is not open')
@@ -279,9 +246,10 @@ async function openSessionImpl(
   let sessionOpened = false
   try {
     const wasmModule = await getBarkWasm()
-    const opened = readOpenedSession(
-      await wasmModule.bark_open_session(mnemonic, 'signet', recordDump),
-    )
+    const fingerprint = await wasmModule.bark_open_session(mnemonic, 'signet', recordDump)
+    if (typeof fingerprint !== 'string' || fingerprint.length === 0) {
+      throw new Error('Bark open did not return a fingerprint')
+    }
     sessionOpened = true
     openWalletId = params.walletId
     const storedReceiveKeyIndex = await readStoredBarkReceiveKeyIndex(
@@ -299,19 +267,12 @@ async function openSessionImpl(
     const barkRail = await persistOpenedBarkRail(
       deps,
       params.walletId,
-      opened.fingerprint,
+      fingerprint,
       receiveKeyIndex,
       exportedDump,
     )
-    if (opened.legacyIndexedDbName != null) {
-      try {
-        await deleteLegacyBarkIndexedDb(opened.legacyIndexedDbName)
-      } catch (err) {
-        console.warn('[bark.worker] Legacy IndexedDB was copied but not deleted', err)
-      }
-    }
     return {
-      fingerprint: opened.fingerprint,
+      fingerprint,
       receiveKeyIndex,
       lastSuccessfulSyncAt: barkRail.lastSuccessfulSyncAt,
     }

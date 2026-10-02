@@ -49,7 +49,7 @@ flowchart TB
 
 There is **no IndexedDB fallback**. If OPFS or SQLite is unavailable, the app shows `SecureStorageUnavailableBanner` and does not silently degrade.
 
-**Legacy:** Arkade previously used per-wallet IndexedDB databases (`bitboard-arkade-{walletId}-{networkMode}`). These are deleted on session open; Arkade state now lives in `sdkPersistenceJson` inside encrypted wallet secrets. Bark previously used one IndexedDB database named with the wallet fingerprint. On the first Signet open that has no record dump, that database is copied into `barkRails.signet` and deleted after the encrypted write succeeds.
+**Legacy:** Arkade previously used per-wallet IndexedDB databases (`bitboard-arkade-{walletId}-{networkMode}`). These are deleted on session open; Arkade state now lives in `sdkPersistenceJson` inside encrypted wallet secrets. Bark protocol state lives only in `barkRails`.
 
 ## Two persistence layers
 

@@ -72,7 +72,6 @@ Key modules:
 | `frontend/src/workers/bark-persistence-channel.ts` | Worker ↔ encryption channel |
 | `frontend/src/workers/bark-worker-metadata.ts` | CAS write of `barkRails.signet` only |
 | `frontend/src/lib/bark/bark-rail-metadata.ts` | Merge helpers that leave the other network and Arkade untouched |
-| `bitboard-bark/src/legacy_indexed_db.rs` | One-time fingerprint IndexedDB copy |
 
 Main thread code handles **ciphertext only**. Plaintext records stay in the Bark worker.
 
@@ -80,8 +79,4 @@ A flush replaces `barkRails.signet.recordDump` and leaves `barkRails.mainnet.rec
 
 Flush runs after open, reveal, sync, board prepare, board submit, Arkoor, on-chain send, offboard, and emergency-exit start, progress, CPFP, cancel, and drain. A failed call still flushes when the session is open, so a checkpoint written before the error is not dropped. Peek, balance, history, VTXO list, estimates, exit list, and exit topology do not flush.
 
-## Legacy IndexedDB
-
-Older Signet wallets stored protocol state in an IndexedDB database named with the Bark fingerprint (`bark.v1.{partition}` object stores). On Signet open, when `recordDump` is absent and that database exists, its existing partitions are copied into the in-memory adaptor. The database is deleted only after the encrypted dump is CAS-written. A dump that is already present is not replaced by IndexedDB.
-
-The `indexed-db` feature on `bark-wallet` stays enabled for that reader. `Wallet::open` does not call `platform_default`.
+`Wallet::open` receives the in-memory persister. Bark does not open IndexedDB. An empty `recordDump` starts a new in-memory store.

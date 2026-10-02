@@ -11,7 +11,6 @@ use crate::collaborative_exit;
 use crate::emergency_exit::fee_rate_from_sat_per_vb;
 use crate::exit_address::{classify_offboard_failure, parse_signet_receive_address};
 use crate::history::movements_to_json;
-use crate::legacy_indexed_db::copy_legacy_indexed_db_if_present;
 use crate::record_store::SharedRecordStore;
 use crate::sync_gate::BarkSessionSyncGate;
 use crate::vtxo_list::{listed_bark_vtxo_from_wallet, listed_vtxos_to_json};
@@ -111,32 +110,21 @@ fn export_active_record_dump() -> Result<String, String> {
     })
 }
 
-struct OpenedSignetSession {
-    fingerprint: String,
-    legacy_indexed_db_name: Option<String>,
-}
-
 async fn open_signet_session(
     mnemonic_plaintext: String,
     record_dump: String,
-) -> Result<OpenedSignetSession, String> {
+) -> Result<String, String> {
     let seed = {
         let mnemonic_guard = MnemonicPlaintext(mnemonic_plaintext);
         let parsed_mnemonic =
             Mnemonic::parse(mnemonic_guard.0.as_str()).map_err(|err| err.to_string())?;
         bark::WalletSeed::new_from_mnemonic(Network::Signet, &parsed_mnemonic)
     };
-    let seed_fingerprint = seed.fingerprint().to_string();
 
-    let mut store = if record_dump.is_empty() {
+    let store = if record_dump.is_empty() {
         SharedRecordStore::empty()
     } else {
         SharedRecordStore::from_encoded_dump(&record_dump)?
-    };
-    let copied_legacy = if record_dump.is_empty() {
-        copy_legacy_indexed_db_if_present(&seed_fingerprint, &mut store).await?
-    } else {
-        false
     };
 
     install_record_store(store.clone())?;
@@ -171,15 +159,7 @@ async fn open_signet_session(
         return Err(err);
     }
     clear_session_sync_gate();
-    let legacy_indexed_db_name = if copied_legacy {
-        Some(seed_fingerprint)
-    } else {
-        None
-    };
-    Ok(OpenedSignetSession {
-        fingerprint,
-        legacy_indexed_db_name,
-    })
+    Ok(fingerprint)
 }
 
 fn clear_session_sync_gate() {
@@ -238,45 +218,20 @@ fn drop_active_wallet() -> Result<(), String> {
     Ok(())
 }
 
-/// Fingerprint of the opened Signet wallet, and the legacy IndexedDB name when a copy ran.
-#[wasm_bindgen]
-pub struct BarkOpenedSession {
-    fingerprint: String,
-    legacy_indexed_db_name: Option<String>,
-}
-
-#[wasm_bindgen]
-impl BarkOpenedSession {
-    #[wasm_bindgen(getter)]
-    pub fn fingerprint(&self) -> String {
-        self.fingerprint.clone()
-    }
-
-    /// Set when the fingerprint IndexedDB was copied. Delete it only after the encrypted dump is stored.
-    #[wasm_bindgen(getter)]
-    pub fn legacy_indexed_db_name(&self) -> Option<String> {
-        self.legacy_indexed_db_name.clone()
-    }
-}
-
 /// Opens or creates a public-Signet Bark wallet on the in-memory record store.
 ///
 /// `record_dump` is empty when this network has no encrypted dump yet.
-/// Mainnet is rejected. `datadir` is left unset so Bark does not open IndexedDB.
+/// Mainnet is rejected. The custom persister is set, so Bark does not open IndexedDB.
 #[wasm_bindgen]
 pub async fn bark_open_session(
     mnemonic: String,
     network: String,
     record_dump: String,
-) -> Result<BarkOpenedSession, JsValue> {
+) -> Result<String, JsValue> {
     require_signet_network(&network).map_err(|err| JsValue::from_str(&err))?;
-    let opened = open_signet_session(mnemonic, record_dump)
+    open_signet_session(mnemonic, record_dump)
         .await
-        .map_err(|err| JsValue::from_str(&err))?;
-    Ok(BarkOpenedSession {
-        fingerprint: opened.fingerprint,
-        legacy_indexed_db_name: opened.legacy_indexed_db_name,
-    })
+        .map_err(|err| JsValue::from_str(&err))
 }
 
 /// Exports the open network's record dump. Plaintext stays in this worker.
@@ -285,7 +240,7 @@ pub fn bark_export_record_dump() -> Result<String, JsValue> {
     export_active_record_dump().map_err(|err| JsValue::from_str(&err))
 }
 
-/// Drops the in-memory wallet and record store. Does not delete a legacy IndexedDB database.
+/// Drops the in-memory wallet and record store.
 #[wasm_bindgen]
 pub fn bark_close_session() -> Result<(), JsValue> {
     drop_active_wallet().map_err(|err| JsValue::from_str(&err))

@@ -15,8 +15,6 @@ mod collaborative_exit;
 #[cfg(target_arch = "wasm32")]
 mod history;
 #[cfg(target_arch = "wasm32")]
-mod legacy_indexed_db;
-#[cfg(target_arch = "wasm32")]
 mod session;
 #[cfg(target_arch = "wasm32")]
 mod wasm_link;

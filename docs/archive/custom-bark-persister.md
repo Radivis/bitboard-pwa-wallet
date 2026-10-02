@@ -1,6 +1,6 @@
 # Encrypted Bark persister
 
-Implemented. The living description is [Bark persistence](../persistence/bark.md). The notes below are the design that implementation followed. An open session does not use `platform_default` IndexedDB. The `indexed-db` feature stays compiled so a Signet wallet can copy that database once into `barkRails.signet`.
+Implemented. The living description is [Bark persistence](../persistence/bark.md). The notes below are the design that implementation followed. The temporary IndexedDB copy and the `indexed-db` feature were removed afterward. An open session uses only the encrypted record dump.
 
 Related:
 

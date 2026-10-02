@@ -135,7 +135,7 @@ export function getBarkWorker(): Remote<BarkService> {
   return state.proxy
 }
 
-/** Stops the worker. Does not delete Bark's IndexedDB database. */
+/** Stops the worker. */
 export function terminateBarkWorker(): void {
   if (state) {
     stopHealthPolling()

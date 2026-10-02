@@ -23,7 +23,7 @@ export function abortBarkSessionForNetworkSwitch(): void {
 }
 
 /**
- * Close the WASM session, then terminate the worker. Does not delete IndexedDB.
+ * Close the WASM session, then terminate the worker.
  */
 export async function closeBarkSession(): Promise<void> {
   await awaitBarkLoadQuiescence()

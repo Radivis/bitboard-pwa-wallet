@@ -38,14 +38,12 @@ describe('closeBarkSession', () => {
     callOrder.length = 0
     closeSession.mockResolvedValue(undefined)
     terminateBarkWorker.mockReset()
-    vi.stubGlobal('indexedDB', { deleteDatabase: vi.fn() })
   })
 
-  it('closes the session then terminates the worker without deleting IndexedDB', async () => {
+  it('closes the session then terminates the worker', async () => {
     await closeBarkSession()
 
     expect(callOrder).toEqual(['close', 'terminate'])
-    expect(indexedDB.deleteDatabase).not.toHaveBeenCalled()
     expect(awaitBarkSyncQuiescence).toHaveBeenCalled()
     expect(forceResetBarkSyncLifecycleForTeardown).toHaveBeenCalled()
   })
