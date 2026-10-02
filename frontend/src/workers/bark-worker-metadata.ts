@@ -1,11 +1,12 @@
 import {
   applyBarkRecordDump,
   applyOpenedBarkRail,
-  signetRecordDumpForOpen,
+  recordDumpForOpen,
 } from '@/lib/bark/bark-rail-metadata'
 import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
 import {
   parseWalletPayloadJson,
+  type BarkRailNetwork,
   type StoredBarkRail,
   type WalletSecretsPayload,
 } from '@/lib/wallet/wallet-domain-types'
@@ -45,31 +46,34 @@ async function writeDecryptedWalletPayload(
   })
 }
 
-/** Stored receive cursor, if the encrypted Signet rail has one. Does not reveal. */
+/** Stored receive cursor for one network, if that rail has one. Does not reveal. */
 export async function readStoredBarkReceiveKeyIndex(
   deps: BarkEncryptedPayloadDeps,
   walletId: number,
+  network: BarkRailNetwork,
 ): Promise<number | undefined> {
   const payload = await readDecryptedWalletPayload(deps, walletId)
-  return payload.barkRails?.signet?.receiveKeyIndex
+  return payload.barkRails?.[network]?.receiveKeyIndex
 }
 
-/** Signet dump to pass into `bark_open_session`. Empty when this rail has no dump yet. */
-export async function readSignetRecordDumpForOpen(
+/** Dump to pass into `bark_open_session`. Empty when this rail has no dump yet. */
+export async function readRecordDumpForOpen(
   deps: BarkEncryptedPayloadDeps,
   walletId: number,
+  network: BarkRailNetwork,
 ): Promise<string> {
   const payload = await readDecryptedWalletPayload(deps, walletId)
-  return signetRecordDumpForOpen(payload)
+  return recordDumpForOpen(payload, network)
 }
 
 /**
- * Writes `barkRails.signet` after open. Replaces that network's dump only.
- * Does not rewrite Mainnet or `sdkPersistenceJson`.
+ * Writes `barkRails[network]` after open. Replaces that network's dump only.
+ * Does not rewrite the other network or `sdkPersistenceJson`.
  */
 export async function persistOpenedBarkRail(
   deps: BarkEncryptedPayloadDeps,
   walletId: number,
+  network: BarkRailNetwork,
   fingerprint: string,
   receiveKeyIndex: number,
   recordDump: string,
@@ -77,22 +81,24 @@ export async function persistOpenedBarkRail(
   const payload = await readDecryptedWalletPayload(deps, walletId)
   const nextPayload = applyOpenedBarkRail({
     payload,
+    network,
     fingerprint,
     receiveKeyIndex,
     recordDump,
   })
   await writeDecryptedWalletPayload(deps, walletId, nextPayload)
-  const signet = nextPayload.barkRails?.signet
-  if (signet == null) {
+  const rail = nextPayload.barkRails?.[network]
+  if (rail == null) {
     throw new Error('Bark rail is missing')
   }
-  return signet
+  return rail
 }
 
-/** Replaces the Signet dump, and optional cursor or sync time, after a protocol write. */
+/** Replaces one network's dump, and optional cursor or sync time, after a protocol write. */
 export async function persistBarkProtocolState(
   deps: BarkEncryptedPayloadDeps,
   walletId: number,
+  network: BarkRailNetwork,
   update: {
     recordDump: string
     receiveKeyIndex?: number
@@ -102,6 +108,7 @@ export async function persistBarkProtocolState(
   const payload = await readDecryptedWalletPayload(deps, walletId)
   const nextPayload = applyBarkRecordDump({
     payload,
+    network,
     recordDump: update.recordDump,
     receiveKeyIndex: update.receiveKeyIndex,
     lastSuccessfulSyncAt: update.lastSuccessfulSyncAt,

@@ -6,6 +6,7 @@ import {
   isBarkSendMode,
   isSendRecipientFormatValidWithBark,
 } from '@/lib/bark/send-flow-validation'
+import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
 import { useFeatureStore } from '@/stores/featureStore'
 import type { NetworkMode } from '@/stores/walletStore'
 
@@ -26,10 +27,10 @@ export function useSendFlowBark({
   recipientFormatValidWithoutBark: boolean
 }) {
   const isBarkEnabled = useFeatureStore((featureState) => featureState.isBarkEnabled)
-  const barkAvailable = isBarkEnabled && networkMode === 'signet'
+  const barkAvailable = isBarkEnabled && isBarkNetworkMode(networkMode)
   const barkSendMode = useMemo(
-    () => isBarkSendMode(barkAvailable, normalizedRecipient, lightningAvailable),
-    [barkAvailable, normalizedRecipient, lightningAvailable],
+    () => isBarkSendMode(barkAvailable, normalizedRecipient, lightningAvailable, networkMode),
+    [barkAvailable, normalizedRecipient, lightningAvailable, networkMode],
   )
   const syncSnapshot = useBarkSyncLifecycleSnapshot()
   const barkSendMutation = useBarkSendMutation()
@@ -41,8 +42,9 @@ export function useSendFlowBark({
         recipientFormatValidWithoutBark,
         barkAvailable,
         normalizedRecipient,
+        networkMode,
       }),
-    [recipientFormatValidWithoutBark, barkAvailable, normalizedRecipient],
+    [recipientFormatValidWithoutBark, barkAvailable, normalizedRecipient, networkMode],
   )
 
   const canBuildBark = canBuildBarkSend({
@@ -51,6 +53,7 @@ export function useSendFlowBark({
     amountSats,
     barkSpendableSats,
     barkFeeSats: BARK_SEND_FORM_FEE_SATS,
+    networkMode,
   })
 
   const submitBarkPayment = useCallback(async () => {

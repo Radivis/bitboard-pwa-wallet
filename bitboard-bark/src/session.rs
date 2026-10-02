@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -9,12 +9,15 @@ use wasm_bindgen::prelude::*;
 
 use crate::collaborative_exit;
 use crate::emergency_exit::fee_rate_from_sat_per_vb;
-use crate::exit_address::{classify_offboard_failure, parse_signet_receive_address};
+use crate::exit_address::{classify_offboard_failure, parse_receive_address};
 use crate::history::movements_to_json;
 use crate::record_store::SharedRecordStore;
 use crate::sync_gate::BarkSessionSyncGate;
 use crate::vtxo_list::{listed_bark_vtxo_from_wallet, listed_vtxos_to_json};
-use crate::{BARK_SIGNET_ESPLORA_URL, BARK_SIGNET_SERVER_URL};
+use crate::{
+    BARK_MAINNET_ESPLORA_URL, BARK_MAINNET_SERVER_URL, BARK_SIGNET_ESPLORA_URL,
+    BARK_SIGNET_SERVER_URL,
+};
 
 thread_local! {
     static ACTIVE_WALLET: RefCell<Option<bark::Wallet>> = const { RefCell::new(None) };
@@ -23,6 +26,7 @@ thread_local! {
         const { RefCell::new(BarkSessionSyncGate::new()) };
     static PREPARED_BOARD_FUNDING: RefCell<Option<PreparedBoardFunding>> =
         const { RefCell::new(None) };
+    static ACTIVE_BITCOIN_NETWORK: Cell<Option<Network>> = const { Cell::new(None) };
 }
 
 /// VTXO key for one in-flight board. Never returned to JavaScript.
@@ -48,14 +52,46 @@ fn bark_user_agent() -> String {
     format!("bitboard/{}", env!("CARGO_PKG_VERSION"))
 }
 
-fn signet_config() -> bark::Config {
-    #[allow(deprecated)]
-    bark::Config {
-        server_address: BARK_SIGNET_SERVER_URL.to_owned(),
-        esplora_address: Some(BARK_SIGNET_ESPLORA_URL.to_owned()),
-        user_agent: Some(bark_user_agent()),
-        ..bark::Config::network_default(Network::Signet)
+fn parse_open_network(network: &str) -> Result<Network, String> {
+    match network {
+        "signet" => Ok(Network::Signet),
+        "mainnet" => Ok(Network::Bitcoin),
+        other => Err(format!("Bark network {other} is not supported")),
     }
+}
+
+fn session_endpoints(network: Network) -> Result<(&'static str, &'static str), String> {
+    match network {
+        Network::Signet => Ok((BARK_SIGNET_SERVER_URL, BARK_SIGNET_ESPLORA_URL)),
+        Network::Bitcoin => Ok((BARK_MAINNET_SERVER_URL, BARK_MAINNET_ESPLORA_URL)),
+        _ => Err(format!("Bark network {network:?} is not supported")),
+    }
+}
+
+fn config_for_network(network: Network) -> Result<bark::Config, String> {
+    let (server_address, esplora_address) = session_endpoints(network)?;
+    #[allow(deprecated)]
+    Ok(bark::Config {
+        server_address: server_address.to_owned(),
+        esplora_address: Some(esplora_address.to_owned()),
+        user_agent: Some(bark_user_agent()),
+        ..bark::Config::network_default(network)
+    })
+}
+
+fn remember_session_network(network: Network) {
+    ACTIVE_BITCOIN_NETWORK.with(|slot| slot.set(Some(network)));
+}
+
+fn clear_session_network() {
+    ACTIVE_BITCOIN_NETWORK.with(|slot| slot.set(None));
+}
+
+pub(crate) fn session_bitcoin_network() -> Result<Network, String> {
+    ACTIVE_BITCOIN_NETWORK.with(|slot| {
+        slot.get()
+            .ok_or_else(|| "Bark session is not open".to_owned())
+    })
 }
 
 fn store_wallet(wallet: bark::Wallet) -> Result<(), String> {
@@ -67,16 +103,6 @@ fn store_wallet(wallet: bark::Wallet) -> Result<(), String> {
         *slot = Some(wallet);
         Ok(())
     })
-}
-
-fn require_signet_network(network: &str) -> Result<(), String> {
-    if network == "signet" {
-        return Ok(());
-    }
-    if network == "mainnet" {
-        return Err("Bark mainnet is not open yet".to_owned());
-    }
-    Err(format!("Bark network {network} is not supported"))
 }
 
 fn install_record_store(store: SharedRecordStore) -> Result<(), String> {
@@ -110,16 +136,18 @@ fn export_active_record_dump() -> Result<String, String> {
     })
 }
 
-async fn open_signet_session(
+async fn open_network_session(
     mnemonic_plaintext: String,
+    network: Network,
     record_dump: String,
 ) -> Result<String, String> {
     let seed = {
         let mnemonic_guard = MnemonicPlaintext(mnemonic_plaintext);
         let parsed_mnemonic =
             Mnemonic::parse(mnemonic_guard.0.as_str()).map_err(|err| err.to_string())?;
-        bark::WalletSeed::new_from_mnemonic(Network::Signet, &parsed_mnemonic)
+        bark::WalletSeed::new_from_mnemonic(network, &parsed_mnemonic)
     };
+    let config = config_for_network(network)?;
 
     let store = if record_dump.is_empty() {
         SharedRecordStore::empty()
@@ -130,9 +158,9 @@ async fn open_signet_session(
     install_record_store(store.clone())?;
     let persister = Arc::new(bark::persist::adaptor::StorageAdaptorWrapper::new(store));
     let opened = bark::Wallet::open(
-        Network::Signet,
+        network,
         seed,
-        signet_config(),
+        config,
         bark::OpenWalletArgs {
             run_daemon: false,
             onchain: None,
@@ -149,6 +177,7 @@ async fn open_signet_session(
         Ok(wallet) => wallet,
         Err(err) => {
             clear_record_store();
+            clear_session_network();
             return Err(format!("{err:#}"));
         }
     };
@@ -156,8 +185,10 @@ async fn open_signet_session(
     let fingerprint = wallet.fingerprint().to_string();
     if let Err(err) = store_wallet(wallet) {
         clear_record_store();
+        clear_session_network();
         return Err(err);
     }
+    remember_session_network(network);
     clear_session_sync_gate();
     Ok(fingerprint)
 }
@@ -213,23 +244,24 @@ fn drop_active_wallet() -> Result<(), String> {
         Ok(())
     })?;
     clear_record_store();
+    clear_session_network();
     clear_session_sync_gate();
     clear_prepared_board_funding();
     Ok(())
 }
 
-/// Opens or creates a public-Signet Bark wallet on the in-memory record store.
+/// Opens or creates a Bark wallet for `signet` or `mainnet` on the in-memory record store.
 ///
 /// `record_dump` is empty when this network has no encrypted dump yet.
-/// Mainnet is rejected. The custom persister is set, so Bark does not open IndexedDB.
+/// The custom persister is set, so Bark does not open IndexedDB.
 #[wasm_bindgen]
 pub async fn bark_open_session(
     mnemonic: String,
     network: String,
     record_dump: String,
 ) -> Result<String, JsValue> {
-    require_signet_network(&network).map_err(|err| JsValue::from_str(&err))?;
-    open_signet_session(mnemonic, record_dump)
+    let bitcoin_network = parse_open_network(&network).map_err(|err| JsValue::from_str(&err))?;
+    open_network_session(mnemonic, bitcoin_network, record_dump)
         .await
         .map_err(|err| JsValue::from_str(&err))
 }
@@ -559,7 +591,8 @@ pub async fn bark_history() -> Result<String, JsValue> {
 
 fn exit_destination(address: &str) -> Result<bitcoin::Address, JsValue> {
     require_session_synced().map_err(|err| JsValue::from_str(&err))?;
-    parse_signet_receive_address(address).map_err(|err| JsValue::from_str(&err))
+    let network = session_bitcoin_network().map_err(|err| JsValue::from_str(&err))?;
+    parse_receive_address(address, network).map_err(|err| JsValue::from_str(&err))
 }
 
 fn require_exit_amount(amount_sats: u64) -> Result<(), JsValue> {

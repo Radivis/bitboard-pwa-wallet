@@ -387,7 +387,8 @@ mod wasm {
         fee_rate_from_sat_per_vb, fee_rate_sat_per_vb, format_bark_exit_error, json_string,
         zero_estimate_json,
     };
-    use crate::exit_address::parse_signet_receive_address;
+    use crate::exit_address::parse_receive_address;
+    use crate::session::session_bitcoin_network;
     use crate::session::{
         bark_error, finish_wallet_operation, require_session_synced, take_active_wallet,
     };
@@ -644,7 +645,8 @@ mod wasm {
     ) -> Result<String, JsValue> {
         run_with_synced_wallet(async |wallet| {
             let fee_rate = fee_rate_from_sat_per_vb(requested_fee_rate_sat_per_vb)?;
-            let destination = parse_signet_receive_address(&address)?;
+            let network = session_bitcoin_network()?;
+            let destination = parse_receive_address(&address, network)?;
             let claimable = wallet.exit_mgr().list_claimable().await;
             let psbt = map_exit_error(
                 wallet

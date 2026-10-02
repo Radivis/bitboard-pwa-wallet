@@ -29,6 +29,7 @@ import {
 } from '@/lib/bark/bark-vtxo-viewer-display'
 import { errorMessage } from '@/lib/shared/utils'
 import { orchestrateBarkLoad } from '@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator'
+import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
 import { useFeatureStore } from '@/stores/featureStore'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import { BARK_VTXO_STATES, type BarkVtxoRow, type BarkVtxoState } from '@/workers/bark-api'
@@ -52,12 +53,12 @@ export function BarkVtxoViewerPage() {
     setPageIndex(0)
   }, [searchQuery, stateFilter, hideFinished, sortKey])
 
-  if (!isBarkEnabled || networkMode !== 'signet') {
+  if (!isBarkEnabled || !isBarkNetworkMode(networkMode)) {
     return (
       <div className="space-y-4">
         <PageHeader title="Bark VTXOs" />
         <p className="text-muted-foreground">
-          Bark VTXOs are available on public Signet when Bark is enabled.
+          Bark VTXOs are available on Signet and Mainnet when Bark is enabled.
         </p>
         <Button type="button" variant="outline" asChild>
           <Link to="/wallet/management">Back to management</Link>

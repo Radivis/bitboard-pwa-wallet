@@ -1,3 +1,4 @@
+import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
 import type { DashboardRailId } from '@/components/wallet/RailSyncControl'
 import type { NetworkMode } from '@/stores/walletStore'
 import type { PeriodicSyncRailState } from '@/stores/periodicSyncStore'
@@ -37,7 +38,7 @@ export function resolvePeriodicSyncRefetchIntervalMs(
     return false
   }
 
-  if (input.rail === 'bark' && (!input.isBarkEnabled || input.networkMode !== 'signet')) {
+  if (input.rail === 'bark' && (!input.isBarkEnabled || !isBarkNetworkMode(input.networkMode))) {
     return false
   }
 

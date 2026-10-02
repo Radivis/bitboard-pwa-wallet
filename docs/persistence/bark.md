@@ -22,7 +22,7 @@ interface StoredBarkRail {
 barkRails?: Partial<Record<BarkRailNetwork, StoredBarkRail>>
 ```
 
-The map key is the network. The rail record does not repeat it. Signet `serverUrl` is `https://ark.signet.2nd.dev`. This build opens Signet only. A mainnet entry, if present, is preserved and is not rewritten by a Signet flush.
+The map key is the network. The rail record does not repeat it. Signet `serverUrl` is `https://ark.signet.2nd.dev`. Mainnet `serverUrl` is `https://ark.second.tech`. A flush rewrites only the open network's dump.
 
 A legacy singular `barkRail` with `network: 'signet'` is read once into `barkRails.signet` (metadata only, no dump).
 
@@ -52,13 +52,13 @@ sequenceDiagram
   participant EW as encryption.worker
   participant DB as wallet_secrets
 
-  Main->>BW: openSession for signet
-  BW->>EW: decrypt barkRails.signet.recordDump
-  BW->>BW: load StorageAdaptor, Wallet.open Signet
+  Main->>BW: openSession for signet or mainnet
+  BW->>EW: decrypt that network's recordDump
+  BW->>BW: load StorageAdaptor, Wallet.open for that network
 
   Note over BW: sync send board exit mutate the map
 
-  BW->>BW: export Record bytes for signet
+  BW->>BW: export Record bytes for the open network
   BW->>EW: encrypt payload
   BW->>Main: ciphertext only
   Main->>DB: CAS write
@@ -70,12 +70,12 @@ Key modules:
 |--------|------|
 | `frontend/src/workers/bark.worker.ts` | Session, export, flush after mutating calls |
 | `frontend/src/workers/bark-persistence-channel.ts` | Worker ↔ encryption channel |
-| `frontend/src/workers/bark-worker-metadata.ts` | CAS write of `barkRails.signet` only |
+| `frontend/src/workers/bark-worker-metadata.ts` | CAS write of the open network's rail only |
 | `frontend/src/lib/bark/bark-rail-metadata.ts` | Merge helpers that leave the other network and Arkade untouched |
 
 Main thread code handles **ciphertext only**. Plaintext records stay in the Bark worker.
 
-A flush replaces `barkRails.signet.recordDump` and leaves `barkRails.mainnet.recordDump` and every `sdkPersistenceJson` as they were read. An Arkade flush leaves both Bark dumps as they were read. The `wallet_secrets` row is still one ciphertext, so the row is re-encrypted either way.
+A flush replaces the open network's `recordDump` and leaves the other network's dump and every `sdkPersistenceJson` as they were read. An Arkade flush leaves both Bark dumps as they were read. The `wallet_secrets` row is still one ciphertext, so the row is re-encrypted either way.
 
 Flush runs after open, reveal, sync, board prepare, board submit, Arkoor, on-chain send, offboard, and emergency-exit start, progress, CPFP, cancel, and drain. A failed call still flushes when the session is open, so a checkpoint written before the error is not dropped. Peek, balance, history, VTXO list, estimates, exit list, and exit topology do not flush.
 

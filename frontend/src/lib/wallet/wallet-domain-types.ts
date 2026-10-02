@@ -99,6 +99,9 @@ export interface StoredNwcLightningConnection {
 /** Second's public Signet Ark server. */
 export const BARK_SIGNET_SERVER_URL = 'https://ark.signet.2nd.dev'
 
+/** Second's public Mainnet Ark server. */
+export const BARK_MAINNET_SERVER_URL = 'https://ark.second.tech'
+
 /** UTF-8 cap for one network's Bark record dump. Same size as an Arkade SDK blob. */
 export const BARK_RECORD_DUMP_MAX_BYTES = 10 * 1024 * 1024
 
@@ -249,7 +252,7 @@ export function isStoredSignetBarkRail(value: unknown): value is StoredBarkRail 
 
 function isStoredMainnetBarkRail(value: unknown): value is StoredBarkRail {
   if (!isRecord(value)) return false
-  if (!isNonEmptyString(value.serverUrl)) return false
+  if (value.serverUrl !== BARK_MAINNET_SERVER_URL) return false
   if (!isBarkFingerprint(value.fingerprint)) return false
   return optionalBarkRailFieldsMatch(value)
 }
@@ -266,7 +269,7 @@ function canonicalSignetBarkRail(value: unknown): StoredBarkRail | undefined {
 function canonicalMainnetBarkRail(value: unknown): StoredBarkRail | undefined {
   if (!isStoredMainnetBarkRail(value)) return undefined
   const rail: StoredBarkRail = {
-    serverUrl: value.serverUrl,
+    serverUrl: BARK_MAINNET_SERVER_URL,
     fingerprint: value.fingerprint,
   }
   return copyOptionalBarkRailFields(value, rail)

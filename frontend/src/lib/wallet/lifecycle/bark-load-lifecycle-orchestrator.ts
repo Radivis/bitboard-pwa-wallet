@@ -118,7 +118,10 @@ export function rememberBarkReceiveKeyIndex(receiveKeyIndex: number): void {
   setSnapshot({ ...current, receiveKeyIndex })
 }
 
-async function openBarkWorkerSession(walletId: number): Promise<{
+async function openBarkWorkerSession(
+  walletId: number,
+  networkMode: 'signet' | 'mainnet',
+): Promise<{
   receiveKeyIndex: number
   lastSuccessfulSyncAt?: string
 }> {
@@ -129,7 +132,7 @@ async function openBarkWorkerSession(walletId: number): Promise<{
   const opened = await worker.openSession({
     walletId,
     encryptedMnemonic: encrypted.mnemonic,
-    networkMode: 'signet',
+    networkMode,
   })
   if (!isBarkReceiveKeyIndex(opened.receiveKeyIndex)) {
     throw new Error('Bark session opened without a receive key index')
@@ -175,7 +178,10 @@ export async function orchestrateBarkLoad(params: BarkLoadParams): Promise<void>
       receiveKeyIndex: null,
     })
     try {
-      const opened = await openBarkWorkerSession(walletId)
+      if (networkMode !== 'signet' && networkMode !== 'mainnet') {
+        throw new Error('Bark network is not supported')
+      }
+      const opened = await openBarkWorkerSession(walletId, networkMode)
       if (generation !== sessionGeneration) {
         return
       }

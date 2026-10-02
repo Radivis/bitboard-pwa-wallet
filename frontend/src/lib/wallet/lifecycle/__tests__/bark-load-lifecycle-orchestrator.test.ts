@@ -136,7 +136,18 @@ describe('bark-load-lifecycle-orchestrator', () => {
     expect(forceResetBarkSyncLifecycleForTeardownMock).toHaveBeenCalled()
   })
 
-  it('closes without opening when the network is not signet', async () => {
+  it('opens a session when the flag is on and the network is mainnet', async () => {
+    await orchestrateBarkLoad({ walletId: 1, networkMode: 'mainnet' })
+
+    expect(getBarkLoadLifecycleSnapshot().loadPhase).toBe('loaded')
+    expect(workerMocks.openSession).toHaveBeenCalledWith({
+      walletId: 1,
+      encryptedMnemonic: expect.objectContaining({ kdfPhc: 'x' }),
+      networkMode: 'mainnet',
+    })
+  })
+
+  it('closes without opening when the network is not signet or mainnet', async () => {
     await orchestrateBarkLoad({ walletId: 1, networkMode: 'testnet' })
 
     expect(getBarkLoadLifecycleSnapshot().loadPhase).toBe('not-configured')

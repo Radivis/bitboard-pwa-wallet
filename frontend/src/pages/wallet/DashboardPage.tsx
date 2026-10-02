@@ -37,6 +37,7 @@ import {
 import {
   useOnchainEsploraSyncMetadataQuery,
 } from '@/hooks/useOnchainDashboardQueries'
+import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
 import { useFeatureStore } from '@/stores/featureStore'
 import { isLightningSupported } from '@/lib/lightning/lightning-utils'
 import { mergeAndSortDashboardActivity } from '@/lib/lightning/lightning-dashboard-sync'
@@ -612,7 +613,7 @@ function RecentTransactions() {
     () => (arkadeActive ? arkadeHistoryQuery.data ?? [] : []),
     [arkadeActive, arkadeHistoryQuery.data],
   )
-  const barkActive = isBarkEnabled && networkMode === 'signet'
+  const barkActive = isBarkEnabled && isBarkNetworkMode(networkMode)
   const barkMovements = useMemo(
     () => (barkActive ? barkHistoryQuery.data ?? [] : []),
     [barkActive, barkHistoryQuery.data],

@@ -306,6 +306,7 @@ export function SendTransactionEntryCard({
                   lightningAvailable,
                   arkadeAvailable,
                   barkAvailable,
+                  networkMode,
                 })}
                 disabled={isPending}
               />

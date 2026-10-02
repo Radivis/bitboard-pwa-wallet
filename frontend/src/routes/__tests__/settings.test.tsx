@@ -379,7 +379,7 @@ describe('Settings routes', () => {
       const user = userEvent.setup()
       renderWithProviders(<SettingsFeaturesPage />)
 
-      const barkSwitch = screen.getByRole('switch', { name: 'Enable Bark Signet rail' })
+      const barkSwitch = screen.getByRole('switch', { name: 'Enable Bark rail' })
       expect(barkSwitch).not.toBeChecked()
 
       await user.click(barkSwitch)

@@ -10,6 +10,7 @@ import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapsh
 import { useBarkSyncLifecycleSnapshot } from '@/hooks/useBarkSyncLifecycleSnapshot'
 import { useBarkManualSyncMutation } from '@/hooks/useRailManualSyncMutations'
 import { orchestrateBarkLoad } from '@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator'
+import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
@@ -25,7 +26,7 @@ export function BarkDashboardBalance() {
     (fiatDenominationState) => fiatDenominationState.defaultFiatCurrency,
   )
 
-  const show = isBarkEnabled && networkMode === 'signet'
+  const show = isBarkEnabled && isBarkNetworkMode(networkMode)
   if (!show) return null
 
   const spendableSats = syncSnapshot.spendableSats

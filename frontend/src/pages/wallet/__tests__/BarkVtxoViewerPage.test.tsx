@@ -132,7 +132,7 @@ describe('BarkVtxoViewerPage', () => {
   it('BARK-VTX-02 is not the inventory unless Bark is enabled on signet', () => {
     featureState.isBarkEnabled = false
     const disabled = renderWithProviders(<BarkVtxoViewerPage />)
-    expect(screen.getByText(/available on public Signet when Bark is enabled/)).toBeInTheDocument()
+    expect(screen.getByText(/available on Signet and Mainnet when Bark is enabled/)).toBeInTheDocument()
     expect(screen.queryByLabelText('Search')).not.toBeInTheDocument()
     disabled.unmount()
 

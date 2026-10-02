@@ -66,10 +66,11 @@ import type {
   OpenBarkSessionParams,
   OpenBarkSessionResult,
 } from '@/workers/bark-api'
+import type { BarkRailNetwork } from '@/lib/wallet/wallet-domain-types'
 import {
   persistBarkProtocolState,
   persistOpenedBarkRail,
-  readSignetRecordDumpForOpen,
+  readRecordDumpForOpen,
   readStoredBarkReceiveKeyIndex,
 } from '@/workers/bark-worker-metadata'
 import type { SecretsChannelService } from '@/workers/secrets-channel-types'
@@ -84,6 +85,7 @@ let encryptedWalletSecretsHost:
   | EncryptedWalletSecretsHost
   | null = null
 let openWalletId: number | null = null
+let openNetwork: BarkRailNetwork | null = null
 
 function rethrowBarkError(err: unknown): never {
   if (err instanceof Error) {
@@ -163,7 +165,11 @@ async function flushBarkProtocolState(
   update: { receiveKeyIndex?: number; lastSuccessfulSyncAt?: string } = {},
 ): Promise<void> {
   const recordDump = await exportRecordDump()
-  await persistBarkProtocolState(encryptedPayloadDeps(), walletId, {
+  const network = openNetwork
+  if (network == null) {
+    throw new Error('Bark session is not open')
+  }
+  await persistBarkProtocolState(encryptedPayloadDeps(), walletId, network, {
     recordDump,
     receiveKeyIndex: update.receiveKeyIndex,
     lastSuccessfulSyncAt: update.lastSuccessfulSyncAt,
@@ -222,6 +228,7 @@ function requireOpenWalletId(): number {
 
 async function closeSessionImpl(): Promise<void> {
   openWalletId = null
+  openNetwork = null
   try {
     const wasmModule = await getBarkWasm()
     wasmModule.bark_close_session()
@@ -233,28 +240,24 @@ async function closeSessionImpl(): Promise<void> {
 async function openSessionImpl(
   params: OpenBarkSessionParams,
 ): Promise<OpenBarkSessionResult> {
-  if (params.networkMode !== 'signet') {
-    throw new Error(
-      params.networkMode === 'mainnet'
-        ? 'Bark mainnet is not open yet'
-        : 'Bark network is not supported',
-    )
-  }
+  const network = params.networkMode
   const mnemonic = await requireSecretsProxy().decrypt(params.encryptedMnemonic)
   const deps = encryptedPayloadDeps()
-  const recordDump = await readSignetRecordDumpForOpen(deps, params.walletId)
+  const recordDump = await readRecordDumpForOpen(deps, params.walletId, network)
   let sessionOpened = false
   try {
     const wasmModule = await getBarkWasm()
-    const fingerprint = await wasmModule.bark_open_session(mnemonic, 'signet', recordDump)
+    const fingerprint = await wasmModule.bark_open_session(mnemonic, network, recordDump)
     if (typeof fingerprint !== 'string' || fingerprint.length === 0) {
       throw new Error('Bark open did not return a fingerprint')
     }
     sessionOpened = true
     openWalletId = params.walletId
+    openNetwork = network
     const storedReceiveKeyIndex = await readStoredBarkReceiveKeyIndex(
       deps,
       params.walletId,
+      network,
     )
     const receiveKeyIndex = await receiveKeyIndexForSessionOpen({
       storedReceiveKeyIndex,
@@ -267,6 +270,7 @@ async function openSessionImpl(
     const barkRail = await persistOpenedBarkRail(
       deps,
       params.walletId,
+      network,
       fingerprint,
       receiveKeyIndex,
       exportedDump,

@@ -1,7 +1,9 @@
 import {
   assertBarkRecordDumpWithinSizeLimit,
+  BARK_MAINNET_SERVER_URL,
   BARK_SIGNET_SERVER_URL,
   isBarkReceiveKeyIndex,
+  type BarkRailNetwork,
   type StoredBarkRail,
   type WalletSecretsPayload,
 } from '@/lib/wallet/wallet-domain-types'
@@ -13,14 +15,19 @@ export class BarkFingerprintMismatchError extends Error {
   }
 }
 
-function signetRailWithPreservedFields(
+export function barkServerUrl(network: BarkRailNetwork): string {
+  return network === 'signet' ? BARK_SIGNET_SERVER_URL : BARK_MAINNET_SERVER_URL
+}
+
+function railWithPreservedFields(
+  network: BarkRailNetwork,
   existingRail: StoredBarkRail | undefined,
   fingerprint: string,
   receiveKeyIndex: number | undefined,
   recordDump: string | undefined,
 ): StoredBarkRail {
   const barkRail: StoredBarkRail = {
-    serverUrl: BARK_SIGNET_SERVER_URL,
+    serverUrl: barkServerUrl(network),
     fingerprint,
   }
   if (existingRail?.lastSuccessfulSyncAt != null) {
@@ -37,21 +44,22 @@ function signetRailWithPreservedFields(
   return barkRail
 }
 
-function payloadWithSignetRail(
+function payloadWithRail(
   payload: WalletSecretsPayload,
-  signet: StoredBarkRail,
+  network: BarkRailNetwork,
+  rail: StoredBarkRail,
 ): WalletSecretsPayload {
   return {
     ...payload,
     barkRails: {
       ...payload.barkRails,
-      signet,
+      [network]: rail,
     },
   }
 }
 
-function requireSignetRail(payload: WalletSecretsPayload): StoredBarkRail {
-  const existingRail = payload.barkRails?.signet
+function requireRail(payload: WalletSecretsPayload, network: BarkRailNetwork): StoredBarkRail {
+  const existingRail = payload.barkRails?.[network]
   if (existingRail == null) {
     throw new Error('Bark rail is missing')
   }
@@ -59,23 +67,32 @@ function requireSignetRail(payload: WalletSecretsPayload): StoredBarkRail {
 }
 
 /**
- * Dump to load on Signet open.
+ * Dump to load when opening one network.
  * An over-cap dump is refused here and left on the payload by parse.
  */
-export function signetRecordDumpForOpen(payload: WalletSecretsPayload): string {
-  const recordDump = payload.barkRails?.signet?.recordDump
+export function recordDumpForOpen(
+  payload: WalletSecretsPayload,
+  network: BarkRailNetwork,
+): string {
+  const recordDump = payload.barkRails?.[network]?.recordDump
   if (recordDump == null || recordDump.length === 0) return ''
   assertBarkRecordDumpWithinSizeLimit(recordDump)
   return recordDump
 }
 
+/** Signet dump. Prefer [`recordDumpForOpen`] when the network is a parameter. */
+export function signetRecordDumpForOpen(payload: WalletSecretsPayload): string {
+  return recordDumpForOpen(payload, 'signet')
+}
+
 /**
- * Records a successful Signet open. Keeps an existing sync timestamp and the
- * other network's dump. Pass `receiveKeyIndex` after a reveal or a recovered key.
+ * Records a successful open for one network. Keeps an existing sync timestamp
+ * and the other network's dump. Pass `receiveKeyIndex` after a reveal or a recovered key.
  * Pass `recordDump` to replace this network's protocol records.
  */
 export function applyOpenedBarkRail(params: {
   payload: WalletSecretsPayload
+  network: BarkRailNetwork
   fingerprint: string
   receiveKeyIndex?: number
   recordDump?: string
@@ -93,7 +110,7 @@ export function applyOpenedBarkRail(params: {
     assertBarkRecordDumpWithinSizeLimit(params.recordDump)
   }
 
-  const existingRail = params.payload.barkRails?.signet
+  const existingRail = params.payload.barkRails?.[params.network]
   if (
     existingRail != null &&
     existingRail.fingerprint.toLowerCase() !== params.fingerprint.toLowerCase()
@@ -101,9 +118,11 @@ export function applyOpenedBarkRail(params: {
     throw new BarkFingerprintMismatchError()
   }
 
-  return payloadWithSignetRail(
+  return payloadWithRail(
     params.payload,
-    signetRailWithPreservedFields(
+    params.network,
+    railWithPreservedFields(
+      params.network,
       existingRail,
       params.fingerprint,
       params.receiveKeyIndex,
@@ -118,6 +137,7 @@ export function applyOpenedBarkRail(params: {
  */
 export function applySuccessfulBarkSync(params: {
   payload: WalletSecretsPayload
+  network: BarkRailNetwork
   syncedAt: string
   recordDump?: string
 }): WalletSecretsPayload {
@@ -130,23 +150,25 @@ export function applySuccessfulBarkSync(params: {
     }
     assertBarkRecordDumpWithinSizeLimit(params.recordDump)
   }
-  const existingRail = requireSignetRail(params.payload)
-  const signet = signetRailWithPreservedFields(
+  const existingRail = requireRail(params.payload, params.network)
+  const rail = railWithPreservedFields(
+    params.network,
     existingRail,
     existingRail.fingerprint,
     undefined,
     params.recordDump,
   )
-  signet.lastSuccessfulSyncAt = params.syncedAt
-  return payloadWithSignetRail(params.payload, signet)
+  rail.lastSuccessfulSyncAt = params.syncedAt
+  return payloadWithRail(params.payload, params.network, rail)
 }
 
 /**
- * Replaces the Signet record dump after a protocol write.
- * Leaves the Mainnet dump and Arkade account objects unchanged.
+ * Replaces one network's record dump after a protocol write.
+ * Leaves the other network's dump and Arkade account objects unchanged.
  */
 export function applyBarkRecordDump(params: {
   payload: WalletSecretsPayload
+  network: BarkRailNetwork
   recordDump: string
   receiveKeyIndex?: number
   lastSuccessfulSyncAt?: string
@@ -167,15 +189,16 @@ export function applyBarkRecordDump(params: {
   ) {
     throw new Error('Bark sync timestamp must be a parseable ISO-8601 string')
   }
-  const existingRail = requireSignetRail(params.payload)
-  const signet = signetRailWithPreservedFields(
+  const existingRail = requireRail(params.payload, params.network)
+  const rail = railWithPreservedFields(
+    params.network,
     existingRail,
     existingRail.fingerprint,
     params.receiveKeyIndex,
     params.recordDump,
   )
   if (params.lastSuccessfulSyncAt !== undefined) {
-    signet.lastSuccessfulSyncAt = params.lastSuccessfulSyncAt
+    rail.lastSuccessfulSyncAt = params.lastSuccessfulSyncAt
   }
-  return payloadWithSignetRail(params.payload, signet)
+  return payloadWithRail(params.payload, params.network, rail)
 }

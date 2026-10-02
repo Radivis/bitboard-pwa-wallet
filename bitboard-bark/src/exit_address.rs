@@ -7,15 +7,25 @@ use bitcoin::address::NetworkUnchecked;
 /// Prefix the UI matches when an offboard parked before broadcast.
 pub const BARK_OFFBOARD_PARKED_PREFIX: &str = "bark_offboard_parked";
 
-/// Signet receive address for a collaborative exit. Mainnet and other networks are refused.
-pub fn parse_signet_receive_address(address: &str) -> Result<Address, String> {
+/// On-chain receive address for a collaborative or emergency exit on the open network.
+pub fn parse_receive_address(address: &str, network: Network) -> Result<Address, String> {
     let unchecked = address
         .trim()
         .parse::<Address<NetworkUnchecked>>()
         .map_err(|_| "Bark exit address is invalid".to_owned())?;
     unchecked
-        .require_network(Network::Signet)
-        .map_err(|_| "Bark exit address is not a Signet address".to_owned())
+        .require_network(network)
+        .map_err(|_| match network {
+            Network::Signet => "Bark exit address is not a Signet address".to_owned(),
+            Network::Bitcoin => "Bark exit address is not a Mainnet address".to_owned(),
+            _ => "Bark exit address is not for this network".to_owned(),
+        })
+}
+
+/// Signet receive address for a collaborative exit.
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+pub fn parse_signet_receive_address(address: &str) -> Result<Address, String> {
+    parse_receive_address(address, Network::Signet)
 }
 
 /// A checkpoint created by this attempt is parked. Checkpoints that already existed are not.
@@ -36,8 +46,11 @@ pub fn classify_offboard_failure(
 mod tests {
     use std::collections::HashSet;
 
+    use bitcoin::Network;
+
     use super::{
-        BARK_OFFBOARD_PARKED_PREFIX, classify_offboard_failure, parse_signet_receive_address,
+        BARK_OFFBOARD_PARKED_PREFIX, classify_offboard_failure, parse_receive_address,
+        parse_signet_receive_address,
     };
 
     const SIGNET_ADDRESS: &str = "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx";
@@ -51,9 +64,22 @@ mod tests {
     }
 
     #[test]
-    fn mainnet_address_is_rejected() {
+    fn mainnet_address_is_rejected_on_signet() {
         let error = parse_signet_receive_address(MAINNET_ADDRESS).expect_err("mainnet");
         assert_eq!(error, "Bark exit address is not a Signet address");
+    }
+
+    #[test]
+    fn mainnet_address_is_accepted_on_mainnet() {
+        let address = parse_receive_address(MAINNET_ADDRESS, Network::Bitcoin).expect("mainnet");
+        assert_eq!(address.to_string(), MAINNET_ADDRESS);
+    }
+
+    #[test]
+    fn signet_address_is_rejected_on_mainnet() {
+        let error =
+            parse_receive_address(SIGNET_ADDRESS, Network::Bitcoin).expect_err("signet on mainnet");
+        assert_eq!(error, "Bark exit address is not a Mainnet address");
     }
 
     #[test]

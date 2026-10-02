@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { isValidArkadeAddress } from '@/lib/arkade/arkade-address'
 import {
+  isBarkMainnetPolicyAddress,
   isBarkSendMode,
   isBarkSignetPolicyAddress,
   isSendRecipientFormatValidWithBark,
@@ -15,23 +16,34 @@ describe('Bark receive addresses on the send form', () => {
   it('accepts the reported Signet Bark receive address when Bark is available', () => {
     expect(isBarkSignetPolicyAddress(reportedBarkReceiveAddress)).toBe(true)
     expect(isValidArkadeAddress(reportedBarkReceiveAddress)).toBe(false)
-    expect(isBarkSendMode(true, reportedBarkReceiveAddress, false)).toBe(true)
+    expect(isBarkSendMode(true, reportedBarkReceiveAddress, false, 'signet')).toBe(true)
+    expect(isBarkSendMode(true, reportedBarkReceiveAddress, false, 'mainnet')).toBe(false)
     expect(
       isSendRecipientFormatValidWithBark({
         recipientFormatValidWithoutBark: false,
         barkAvailable: true,
         normalizedRecipient: reportedBarkReceiveAddress,
+        networkMode: 'signet',
       }),
     ).toBe(true)
   })
 
+  it('accepts an ark1p address on mainnet and refuses it on signet', () => {
+    const mainnetAddress = reportedBarkReceiveAddress.replace(/^tark1p/, 'ark1p')
+    expect(isBarkMainnetPolicyAddress(mainnetAddress)).toBe(true)
+    expect(isBarkSignetPolicyAddress(mainnetAddress)).toBe(false)
+    expect(isBarkSendMode(true, mainnetAddress, false, 'mainnet')).toBe(true)
+    expect(isBarkSendMode(true, mainnetAddress, false, 'signet')).toBe(false)
+  })
+
   it('does not treat that address as valid when Bark is off', () => {
-    expect(isBarkSendMode(false, reportedBarkReceiveAddress, false)).toBe(false)
+    expect(isBarkSendMode(false, reportedBarkReceiveAddress, false, 'signet')).toBe(false)
     expect(
       isSendRecipientFormatValidWithBark({
         recipientFormatValidWithoutBark: false,
         barkAvailable: false,
         normalizedRecipient: reportedBarkReceiveAddress,
+        networkMode: 'signet',
       }),
     ).toBe(false)
   })

@@ -17,13 +17,14 @@ describe('isBarkActiveForNetworkMode', () => {
     featureState.isBarkEnabled = false
   })
 
-  it('is true only for signet when the flag is on', () => {
+  it('is true for signet and mainnet when the flag is on', () => {
     expect(isBarkActiveForNetworkMode('signet')).toBe(false)
+    expect(isBarkActiveForNetworkMode('mainnet')).toBe(false)
 
     featureState.isBarkEnabled = true
     expect(isBarkActiveForNetworkMode('signet')).toBe(true)
+    expect(isBarkActiveForNetworkMode('mainnet')).toBe(true)
     expect(isBarkActiveForNetworkMode('mutinynet')).toBe(false)
-    expect(isBarkActiveForNetworkMode('mainnet')).toBe(false)
     expect(isBarkActiveForNetworkMode('testnet')).toBe(false)
     expect(isBarkActiveForNetworkMode('regtest')).toBe(false)
     expect(isBarkActiveForNetworkMode('lab')).toBe(false)

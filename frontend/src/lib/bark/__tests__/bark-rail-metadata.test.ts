@@ -7,6 +7,7 @@ import {
   signetRecordDumpForOpen,
 } from '@/lib/bark/bark-rail-metadata'
 import {
+  BARK_MAINNET_SERVER_URL,
   BARK_RECORD_DUMP_MAX_BYTES,
   BARK_SIGNET_SERVER_URL,
   parseWalletPayloadJson,
@@ -44,7 +45,7 @@ function payloadWithArkadeSdk(): WalletSecretsPayload {
     activeArkadeAccountIdByNetwork: { signet: 'acct-1' },
     barkRails: {
       mainnet: {
-        serverUrl: 'https://ark.example',
+        serverUrl: BARK_MAINNET_SERVER_URL,
         fingerprint: 'abcdef01',
         recordDump: mainnetDump,
       },
@@ -127,7 +128,7 @@ describe('barkRails metadata', () => {
       }),
     }
 
-    const next = applyOpenedBarkRail({ payload, fingerprint: 'abcdef01' })
+    const next = applyOpenedBarkRail({ network: 'signet', payload, fingerprint: 'abcdef01' })
 
     expect(next.arkadeAccounts[0]?.sdkPersistenceJson).toBe(sdkPersistenceJson)
     expect(next.barkRails?.mainnet?.recordDump).toBe(mainnetDump)
@@ -140,7 +141,7 @@ describe('barkRails metadata', () => {
     )
 
     expect(() =>
-      applyOpenedBarkRail({ payload, fingerprint: '00112233' }),
+      applyOpenedBarkRail({ network: 'signet', payload, fingerprint: '00112233' }),
     ).toThrow(BarkFingerprintMismatchError)
     expect(payload.barkRails?.signet?.fingerprint).toBe('abcdef01')
   })
@@ -152,12 +153,13 @@ describe('barkRails metadata', () => {
       signet: signetRail({ receiveKeyIndex: 0, recordDump: signetDump }),
     }
 
-    const opened = applyOpenedBarkRail({ payload, fingerprint: 'abcdef01' })
+    const opened = applyOpenedBarkRail({ network: 'signet', payload, fingerprint: 'abcdef01' })
     expect(opened.barkRails?.signet?.receiveKeyIndex).toBe(0)
     expect(opened.arkadeAccounts[0]?.sdkPersistenceJson).toBe(sdkPersistenceJson)
     expect(opened.barkRails?.mainnet?.recordDump).toBe(mainnetDump)
 
     const revealed = applyOpenedBarkRail({
+      network: 'signet',
       payload: opened,
       fingerprint: 'abcdef01',
       receiveKeyIndex: 2,
@@ -175,6 +177,7 @@ describe('barkRails metadata', () => {
     }
 
     const stamped = applySuccessfulBarkSync({
+      network: 'signet',
       payload,
       syncedAt: '2024-03-01T12:00:00.000Z',
     })
@@ -191,6 +194,31 @@ describe('barkRails metadata', () => {
     expect(payload.barkRails?.signet?.lastSuccessfulSyncAt).toBeUndefined()
   })
 
+  it('writes a mainnet open onto barkRails.mainnet and leaves the signet dump', () => {
+    const payload = payloadWithArkadeSdk()
+    payload.barkRails = {
+      ...payload.barkRails,
+      signet: signetRail({ recordDump: signetDump, receiveKeyIndex: 1 }),
+    }
+
+    const opened = applyOpenedBarkRail({
+      network: 'mainnet',
+      payload,
+      fingerprint: 'abcdef01',
+      receiveKeyIndex: 0,
+      recordDump: 'bWFpbm5ldC1vcGVu',
+    })
+
+    expect(opened.barkRails?.mainnet).toEqual({
+      serverUrl: BARK_MAINNET_SERVER_URL,
+      fingerprint: 'abcdef01',
+      receiveKeyIndex: 0,
+      recordDump: 'bWFpbm5ldC1vcGVu',
+    })
+    expect(opened.barkRails?.signet?.recordDump).toBe(signetDump)
+    expect(opened.arkadeAccounts[0]?.sdkPersistenceJson).toBe(sdkPersistenceJson)
+  })
+
   it('replaces only the signet dump on a protocol flush', () => {
     const payload = payloadWithArkadeSdk()
     payload.barkRails = {
@@ -200,6 +228,7 @@ describe('barkRails metadata', () => {
     const nextDump = 'bmV4dC1kdW1w'
 
     const flushed = applyBarkRecordDump({
+      network: 'signet',
       payload,
       recordDump: nextDump,
       receiveKeyIndex: 3,
@@ -215,7 +244,11 @@ describe('barkRails metadata', () => {
   it('refuses to stamp when the rail is missing or the timestamp is not ISO-8601', () => {
     const payload = payloadWithArkadeSdk()
     expect(() =>
-      applySuccessfulBarkSync({ payload, syncedAt: '2024-03-01T12:00:00.000Z' }),
+      applySuccessfulBarkSync({
+        network: 'signet',
+        payload,
+        syncedAt: '2024-03-01T12:00:00.000Z',
+      }),
     ).toThrow('Bark rail is missing')
 
     payload.barkRails = {
@@ -226,7 +259,11 @@ describe('barkRails metadata', () => {
       }),
     }
     expect(() =>
-      applySuccessfulBarkSync({ payload, syncedAt: 'not-a-timestamp' }),
+      applySuccessfulBarkSync({
+        network: 'signet',
+        payload,
+        syncedAt: 'not-a-timestamp',
+      }),
     ).toThrow('Bark sync timestamp must be a parseable ISO-8601 string')
     expect(payload.barkRails?.signet?.lastSuccessfulSyncAt).toBe('2020-06-01T00:00:00.000Z')
   })

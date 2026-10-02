@@ -133,7 +133,7 @@ describe('BarkExitPage', () => {
   it('BARK-EXIT-03 is not a form unless Bark is enabled on signet', () => {
     featureState.isBarkEnabled = false
     const disabled = renderWithProviders(<BarkExitPage />)
-    expect(screen.getByText(/available on public Signet when Bark is enabled/)).toBeInTheDocument()
+    expect(screen.getByText(/available on Signet and Mainnet when Bark is enabled/)).toBeInTheDocument()
     expect(screen.queryByTestId('bark-exit-amount')).not.toBeInTheDocument()
     disabled.unmount()
 

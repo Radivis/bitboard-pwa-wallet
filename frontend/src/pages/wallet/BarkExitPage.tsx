@@ -22,6 +22,7 @@ import {
 } from '@/lib/esplora/esplora-fee-estimates'
 import { errorMessage } from '@/lib/shared/utils'
 import { formatSats } from '@/lib/wallet/bitcoin-utils'
+import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
 import { useFeatureStore } from '@/stores/featureStore'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 
@@ -43,12 +44,12 @@ export function BarkExitPage() {
   const [isReviewing, setIsReviewing] = useState(false)
   const [isConfirming, setIsConfirming] = useState(false)
 
-  if (!isBarkEnabled || networkMode !== 'signet') {
+  if (!isBarkEnabled || !isBarkNetworkMode(networkMode)) {
     return (
       <div className="space-y-4">
         <PageHeader title="Exit Bark to on-chain" />
         <p className="text-muted-foreground">
-          Bark exit is available on public Signet when Bark is enabled.
+          Bark exit is available on Signet and Mainnet when Bark is enabled.
         </p>
         <Button type="button" variant="outline" asChild>
           <Link to="/wallet">Back</Link>

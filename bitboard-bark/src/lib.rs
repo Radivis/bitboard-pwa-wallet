@@ -1,5 +1,7 @@
 pub const BARK_SIGNET_SERVER_URL: &str = "https://ark.signet.2nd.dev";
 pub const BARK_SIGNET_ESPLORA_URL: &str = "https://esplora.signet.2nd.dev";
+pub const BARK_MAINNET_SERVER_URL: &str = "https://ark.second.tech";
+pub const BARK_MAINNET_ESPLORA_URL: &str = "https://mempool.second.tech/api";
 
 #[allow(dead_code)]
 mod emergency_exit;

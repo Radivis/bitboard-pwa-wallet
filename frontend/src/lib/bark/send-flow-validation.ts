@@ -1,35 +1,55 @@
 import { isLightningSendMode } from '@/lib/lightning/send-flow-validation'
 import { isValidSendAmountSats } from '@/lib/wallet/send/send-amount-validation'
+import type { NetworkMode } from '@/stores/walletStore'
 
-/** Signet Bark policy addresses use HRP `tark` and version `p`. `ark1p` is mainnet. */
+/** Signet Bark policy addresses use HRP `tark` and version `p`. */
 const BARK_SIGNET_POLICY_ADDRESS = /^tark1p[a-z0-9]+$/i
+
+/** Mainnet Bark policy addresses use HRP `ark` and version `p`. */
+const BARK_MAINNET_POLICY_ADDRESS = /^ark1p[a-z0-9]+$/i
 
 export function isBarkSignetPolicyAddress(address: string): boolean {
   return BARK_SIGNET_POLICY_ADDRESS.test(address.trim())
+}
+
+export function isBarkMainnetPolicyAddress(address: string): boolean {
+  return BARK_MAINNET_POLICY_ADDRESS.test(address.trim())
+}
+
+export function isBarkPolicyAddressForNetwork(
+  address: string,
+  networkMode: NetworkMode,
+): boolean {
+  if (networkMode === 'mainnet') return isBarkMainnetPolicyAddress(address)
+  if (networkMode === 'signet') return isBarkSignetPolicyAddress(address)
+  return false
 }
 
 export function isBarkSendMode(
   barkAvailable: boolean,
   normalizedRecipient: string,
   lightningAvailable: boolean,
+  networkMode: NetworkMode,
 ): boolean {
   if (!barkAvailable) return false
   if (isLightningSendMode(lightningAvailable, normalizedRecipient)) return false
-  return isBarkSignetPolicyAddress(normalizedRecipient)
+  return isBarkPolicyAddressForNetwork(normalizedRecipient, networkMode)
 }
 
 export function isSendRecipientFormatValidWithBark({
   recipientFormatValidWithoutBark,
   barkAvailable,
   normalizedRecipient,
+  networkMode,
 }: {
   recipientFormatValidWithoutBark: boolean
   barkAvailable: boolean
   normalizedRecipient: string
+  networkMode: NetworkMode
 }): boolean {
   return (
     recipientFormatValidWithoutBark ||
-    (barkAvailable && isBarkSignetPolicyAddress(normalizedRecipient))
+    (barkAvailable && isBarkPolicyAddressForNetwork(normalizedRecipient, networkMode))
   )
 }
 
@@ -39,16 +59,18 @@ export function canBuildBarkSend({
   amountSats,
   barkSpendableSats,
   barkFeeSats,
+  networkMode,
 }: {
   isBarkSendMode: boolean
   normalizedRecipient: string
   amountSats: number
   barkSpendableSats: number | null
   barkFeeSats: number
+  networkMode: NetworkMode
 }): boolean {
   if (!barkMode) return false
   if (barkSpendableSats == null) return false
-  if (!isBarkSignetPolicyAddress(normalizedRecipient)) return false
+  if (!isBarkPolicyAddressForNetwork(normalizedRecipient, networkMode)) return false
   if (!isValidSendAmountSats(amountSats)) return false
   if (!Number.isSafeInteger(barkFeeSats) || barkFeeSats < 0) return false
   return amountSats + barkFeeSats <= barkSpendableSats
@@ -75,32 +97,35 @@ export function sendRecipientPlaceholder({
   lightningAvailable,
   arkadeAvailable,
   barkAvailable,
+  networkMode,
 }: {
   isBarkSendMode: boolean
   isArkadeSendMode: boolean
   lightningAvailable: boolean
   arkadeAvailable: boolean
   barkAvailable: boolean
+  networkMode: NetworkMode
 }): string {
-  if (barkMode) return 'tark1p…'
+  const barkHint = networkMode === 'mainnet' ? 'ark1p…' : 'tark1p…'
+  if (barkMode) return barkHint
   if (arkadeMode) return 'ark1… or tark1…'
   if (lightningAvailable && arkadeAvailable && barkAvailable) {
-    return 'bc1q…, tark1p…, ark1…, BOLT11, Lightning address, or LNURL'
+    return `bc1q…, ${barkHint}, ark1…, BOLT11, Lightning address, or LNURL`
   }
   if (lightningAvailable && arkadeAvailable) {
     return 'bc1q…, ark1…, BOLT11, Lightning address, or LNURL'
   }
   if (lightningAvailable && barkAvailable) {
-    return 'bc1q…, tark1p…, BOLT11, Lightning address, or LNURL'
+    return `bc1q…, ${barkHint}, BOLT11, Lightning address, or LNURL`
   }
   if (lightningAvailable) {
     return 'bc1q…, BOLT11, Lightning address, or LNURL'
   }
   if (arkadeAvailable && barkAvailable) {
-    return 'bc1q…, tark1p…, or ark1… / tark1…'
+    return `bc1q…, ${barkHint}, or ark1… / tark1…`
   }
   if (arkadeAvailable) return 'bc1q… or ark1… / tark1…'
-  if (barkAvailable) return 'bc1q… or tark1p…'
+  if (barkAvailable) return `bc1q… or ${barkHint}`
   return 'bc1q…'
 }
 

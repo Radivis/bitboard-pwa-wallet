@@ -111,7 +111,7 @@ describe('resolvePeriodicSyncRefetchIntervalMs', () => {
     ).toBe(false)
   })
 
-  it('returns false for Bark when the feature is off or the network is not signet', () => {
+  it('returns false for Bark when the feature is off or the network is not signet or mainnet', () => {
     expect(
       resolvePeriodicSyncRefetchIntervalMs({
         rail: 'bark',
@@ -139,7 +139,7 @@ describe('resolvePeriodicSyncRefetchIntervalMs', () => {
     ).toBe(false)
   })
 
-  it('returns the Bark interval when the feature is on, the network is signet, and the tab is visible', () => {
+  it('returns the Bark interval when the feature is on, the network is signet or mainnet, and the tab is visible', () => {
     const rails = defaultRails()
     rails.bark.intervalSeconds = 90
 
@@ -151,6 +151,19 @@ describe('resolvePeriodicSyncRefetchIntervalMs', () => {
         isArkadeEnabled: false,
         isBarkEnabled: true,
         networkMode: 'signet',
+        rails,
+        documentVisibilityState: 'visible',
+      }),
+    ).toBe(90_000)
+
+    expect(
+      resolvePeriodicSyncRefetchIntervalMs({
+        rail: 'bark',
+        isPeriodicSyncEnabled: true,
+        isLightningEnabled: false,
+        isArkadeEnabled: false,
+        isBarkEnabled: true,
+        networkMode: 'mainnet',
         rails,
         documentVisibilityState: 'visible',
       }),

@@ -240,7 +240,7 @@ export function FeatureToggles() {
       <InfomodeWrapper
         infoId="settings-feature-bark"
         infoTitle="Bark"
-        infoText="Bark is Second's Ark wallet on public Signet (ark.signet.2nd.dev). Off by default. Turning it on opens a Bark session when this wallet is unlocked on Signet. Protocol state is encrypted with this wallet and is not added to the on-chain or Arkade totals."
+        infoText="Bark is Second's Ark wallet on Signet (ark.signet.2nd.dev) and Mainnet (ark.second.tech). Off by default. Turning it on opens a Bark session when this wallet is unlocked on Signet or Mainnet. Each network keeps its own encrypted protocol state, separate from the on-chain and Arkade totals."
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -253,7 +253,7 @@ export function FeatureToggles() {
             id="bark-toggle"
             checked={isBarkEnabled}
             onCheckedChange={setIsBarkEnabled}
-            aria-label="Enable Bark Signet rail"
+            aria-label="Enable Bark rail"
           />
         </div>
       </InfomodeWrapper>

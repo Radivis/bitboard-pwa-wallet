@@ -146,7 +146,7 @@ describe('arkade-worker-encrypted-payload', () => {
           recordDump: signetDump,
         },
         mainnet: {
-          serverUrl: 'https://ark.example',
+          serverUrl: 'https://ark.second.tech',
           fingerprint: 'abcdef01',
           recordDump: mainnetDump,
         },
