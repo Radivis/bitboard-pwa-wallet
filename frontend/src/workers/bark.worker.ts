@@ -55,7 +55,7 @@ import type {
   BarkExitFeeEstimate,
   BarkExitGraph,
   BarkMovementRow,
-  BarkVtxoRow,
+  BarkVtxoList,
   BarkPreparedBoardFunding,
   BarkRevealedReceiveAddress,
   BarkService,
@@ -375,7 +375,7 @@ async function historyImpl(): Promise<BarkMovementRow[]> {
   return historyFromWasm(await getBarkWasm())
 }
 
-async function listVtxosImpl(): Promise<BarkVtxoRow[]> {
+async function listVtxosImpl(): Promise<BarkVtxoList> {
   requireOpenSession()
   return listVtxosFromWasm(await getBarkWasm())
 }
@@ -589,7 +589,7 @@ const barkService: BarkService = {
     return callBark(() => historyImpl())
   },
 
-  listVtxos(): Promise<BarkVtxoRow[]> {
+  listVtxos(): Promise<BarkVtxoList> {
     return callBark(() => listVtxosImpl())
   },
 

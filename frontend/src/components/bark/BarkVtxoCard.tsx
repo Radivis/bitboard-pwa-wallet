@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import { formatBarkVtxoExpiry, type BarkBitcoinNetwork } from '@/lib/bark/bark-vtxo-expiry'
 import {
   formatBarkVtxoLockHolderLine,
   getBarkVtxoStateLabel,
@@ -12,11 +13,25 @@ import type { BarkVtxoRow } from '@/workers/bark-api'
 
 interface BarkVtxoCardProps {
   row: BarkVtxoRow
+  tipHeight: number | null
+  networkMode: BarkBitcoinNetwork
+  now?: Date
 }
 
-export function BarkVtxoCard({ row }: BarkVtxoCardProps) {
+export function BarkVtxoCard({
+  row,
+  tipHeight,
+  networkMode,
+  now = new Date(),
+}: BarkVtxoCardProps) {
   const [copied, setCopied] = useState(false)
   const lockHolderLine = formatBarkVtxoLockHolderLine(row)
+  const expiry = formatBarkVtxoExpiry({
+    expiryHeight: row.expiryHeight,
+    tipHeight,
+    networkMode,
+    now,
+  })
 
   const handleCopyId = async () => {
     await navigator.clipboard.writeText(row.id)
@@ -57,8 +72,9 @@ export function BarkVtxoCard({ row }: BarkVtxoCardProps) {
           ) : null}
         </div>
 
-        <div className="text-xs text-muted-foreground">
-          Expiry height: {row.expiryHeight}
+        <div className="text-xs text-muted-foreground" data-testid={`bark-vtxo-expiry-${row.id}`}>
+          <div>{expiry.blocksLabel}</div>
+          {expiry.dateLabel != null ? <div>{expiry.dateLabel}</div> : null}
         </div>
         {lockHolderLine != null ? (
           <div

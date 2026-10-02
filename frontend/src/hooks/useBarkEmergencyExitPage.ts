@@ -60,14 +60,14 @@ export function useBarkEmergencyExitPage() {
   const [wholeWallet, setWholeWallet] = useState(false)
   const [review, setReview] = useState<BarkEmergencyExitReview | null>(null)
   const [busyAction, setBusyAction] = useState<string | null>(null)
-  const vtxoRows = vtxoListQuery.data ?? []
+  const vtxoRows = vtxoListQuery.data?.rows ?? []
   const spendableVtxos = vtxoRows.filter((row) => row.state === 'spendable')
   const topologyVtxoIds = useMemo(
     () =>
       barkExitTopologyVtxoIds({
         wholeWallet,
         selectedIds,
-        spendableIds: (vtxoListQuery.data ?? [])
+        spendableIds: (vtxoListQuery.data?.rows ?? [])
           .filter((row) => row.state === 'spendable')
           .map((row) => row.id),
         liveExitIds: (exitQuery.data ?? []).map((row) => row.vtxoId),

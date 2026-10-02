@@ -1,10 +1,10 @@
 import type { BitboardBarkWasm } from '@/lib/bark/load-bitboard-bark-wasm'
-import type { BarkVtxoLockHolder, BarkVtxoRow, BarkVtxoState } from '@/workers/bark-api'
+import type { BarkVtxoList, BarkVtxoLockHolder, BarkVtxoRow, BarkVtxoState } from '@/workers/bark-api'
 import { BARK_VTXO_STATES } from '@/workers/bark-api'
 
 const BARK_VTXO_LOCK_HOLDER_KINDS = ['action', 'movement'] as const
 
-export function readBarkVtxoListJson(value: unknown): BarkVtxoRow[] {
+export function readBarkVtxoListJson(value: unknown): BarkVtxoList {
   let parsed: unknown = value
   if (typeof value === 'string') {
     try {
@@ -13,16 +13,28 @@ export function readBarkVtxoListJson(value: unknown): BarkVtxoRow[] {
       throw new Error('Bark VTXO list was not JSON')
     }
   }
-  if (!Array.isArray(parsed)) {
+  if (parsed == null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Bark VTXO list was not an object')
+  }
+  const payload = parsed as Record<string, unknown>
+  if (!Array.isArray(payload.vtxos)) {
     throw new Error('Bark VTXO list was not a list')
   }
-  return parsed.map(readBarkVtxoRow)
+  return {
+    tipHeight: readTipHeight(payload.tipHeight),
+    rows: payload.vtxos.map(readBarkVtxoRow),
+  }
 }
 
 export async function listVtxosFromWasm(
   wasm: Pick<BitboardBarkWasm, 'bark_list_vtxos'>,
-): Promise<BarkVtxoRow[]> {
+): Promise<BarkVtxoList> {
   return readBarkVtxoListJson(await wasm.bark_list_vtxos())
+}
+
+function readTipHeight(value: unknown): number | null {
+  if (value == null) return null
+  return readSafeInteger(value, 'Bark chain tip height')
 }
 
 function readBarkVtxoRow(value: unknown): BarkVtxoRow {

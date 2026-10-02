@@ -90,6 +90,11 @@ export type BarkVtxoRow = {
   registered: boolean
 }
 
+export type BarkVtxoList = {
+  tipHeight: number | null
+  rows: BarkVtxoRow[]
+}
+
 export const BARK_EMERGENCY_EXIT_STATES = [
   'start',
   'processing',
@@ -167,7 +172,7 @@ export interface BarkService {
   prepareBoardFunding(): Promise<BarkPreparedBoardFunding>
   boardPsbt(psbtBase64: string): Promise<BarkBoardAccepted>
   history(): Promise<BarkMovementRow[]>
-  listVtxos(): Promise<BarkVtxoRow[]>
+  listVtxos(): Promise<BarkVtxoList>
   estimateSendOnchain(
     address: string,
     amountSats: number,

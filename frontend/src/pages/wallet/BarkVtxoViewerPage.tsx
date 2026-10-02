@@ -33,7 +33,7 @@ import { orchestrateBarkLoad } from '@/lib/wallet/lifecycle/bark-load-lifecycle-
 import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
 import { useFeatureStore } from '@/stores/featureStore'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
-import { BARK_VTXO_STATES, type BarkVtxoRow, type BarkVtxoState } from '@/workers/bark-api'
+import { BARK_VTXO_STATES, type BarkVtxoList, type BarkVtxoRow, type BarkVtxoState } from '@/workers/bark-api'
 
 export function BarkVtxoViewerPage() {
   const networkMode = useWalletStore(selectCommittedNetworkMode)
@@ -43,6 +43,8 @@ export function BarkVtxoViewerPage() {
   const syncSnapshot = useBarkSyncLifecycleSnapshot()
   const barkManualSync = useBarkManualSyncMutation()
   const vtxoListQuery = useBarkVtxoListQuery()
+  const vtxoList: BarkVtxoList | undefined = vtxoListQuery.data
+  const vtxoRows = vtxoList?.rows ?? EMPTY_BARK_VTXO_ROWS
 
   const [searchQuery, setSearchQuery] = useState('')
   const [stateFilter, setStateFilter] = useState<BarkVtxoState | null>(null)
@@ -106,7 +108,9 @@ export function BarkVtxoViewerPage() {
 
       {sessionReady ? (
         <BarkVtxoInventory
-          rows={vtxoListQuery.data ?? EMPTY_BARK_VTXO_ROWS}
+          rows={vtxoRows}
+          tipHeight={vtxoList?.tipHeight ?? null}
+          networkMode={networkMode}
           presentation={listPresentation}
           errorMessage={vtxoListQuery.isError ? errorMessage(vtxoListQuery.error) : null}
           searchQuery={searchQuery}
@@ -139,6 +143,8 @@ export function BarkVtxoViewerPage() {
 
 interface BarkVtxoInventoryProps {
   rows: BarkVtxoRow[]
+  tipHeight: number | null
+  networkMode: 'signet' | 'mainnet'
   presentation: BarkVtxoListPresentation
   errorMessage: string | null
   searchQuery: string
@@ -155,6 +161,8 @@ interface BarkVtxoInventoryProps {
 
 function BarkVtxoInventory({
   rows,
+  tipHeight,
+  networkMode,
   presentation,
   errorMessage,
   searchQuery,
@@ -267,7 +275,12 @@ function BarkVtxoInventory({
         >
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {pageRows.map((row) => (
-              <BarkVtxoCard key={row.id} row={row} />
+              <BarkVtxoCard
+                key={row.id}
+                row={row}
+                tipHeight={tipHeight}
+                networkMode={networkMode}
+              />
             ))}
           </div>
         </CardPagination>

@@ -144,7 +144,7 @@ describe('BarkEmergencyExitPage', () => {
     walletStoreState.currentAddress = 'tb1qcurrent'
     walletStoreState.balance.confirmedSats = 50_000
     loadSnapshot.loadPhase = 'loaded'
-    barkWorker.listVtxos.mockResolvedValue([spendableVtxo])
+    barkWorker.listVtxos.mockResolvedValue({ tipHeight: 90, rows: [spendableVtxo] })
     barkWorker.listEmergencyExits.mockResolvedValue([])
     barkWorker.exitTopology.mockResolvedValue({ nodes: [] })
     barkWorker.estimateEmergencyExit.mockResolvedValue({

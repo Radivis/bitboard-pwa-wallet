@@ -48,7 +48,7 @@ feature:
     - The VTXO list link and page exist only when isBarkEnabled and the network is signet or mainnet
     - The VTXO list is the local Bark database. It is not an operator snapshot
     - Spent and Exited VTXOs stay hidden until the user shows them. Locked VTXOs stay visible
-    - A VTXO card shows id, amount, state, lock holder when the coin is locked, expiry height, and Registered only when the coin is registered
+    - A VTXO card shows id, amount, state, lock holder when the coin is locked, expiry as blocks remaining plus an approximate date, and Registered only when the coin is registered
     - Search, state chips, sort, and pagination filter the loaded list and do not call the worker again
     - A Signet Bark policy address (tark1p) is a valid send recipient when isBarkEnabled and the network is signet
     - A Mainnet Bark policy address (ark1p) is a valid send recipient when isBarkEnabled and the network is mainnet
@@ -214,7 +214,7 @@ feature:
         description: The VTXO page is not the inventory unless Bark is enabled on signet or mainnet
         implemented_by: frontend/src/pages/wallet/__tests__/BarkVtxoViewerPage.test.tsx
       - id: BARK-VTX-03
-        description: A card shows id, amount, state, expiry height, a lock-holder line when locked, and Registered only when true
+        description: A card shows id, amount, state, blocks until expiry with an approximate date, a lock-holder line when locked, and Registered only when true
         implemented_by: frontend/src/components/bark/__tests__/BarkVtxoCard.test.tsx
       - id: BARK-VTX-04
         description: Hide spent and exited defaults on, and the toggle shows those cards
@@ -294,7 +294,7 @@ feature:
         path: /wallet/bark/vtxos
         file: frontend/src/routes/wallet/bark/vtxos.tsx
         visible_elements:
-          - VTXO card grid with id, amount, Bark state, expiry height, lock-holder line when locked, and Registered when registered
+          - VTXO card grid with id, amount, Bark state, blocks until expiry and an approximate date, lock-holder line when locked, and Registered when registered
           - search by id or sats amount
           - state filter chips with counts from the full list
           - sort by amount or expiry height

@@ -5,7 +5,7 @@ import { BarkVtxoViewerPage } from '@/pages/wallet/BarkVtxoViewerPage'
 import { BARK_VTXO_VIEWER_PAGE_SIZE } from '@/lib/bark/bark-vtxo-viewer-display'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import type { NetworkMode } from '@/stores/walletStore'
-import type { BarkVtxoRow } from '@/workers/bark-api'
+import type { BarkVtxoList, BarkVtxoRow } from '@/workers/bark-api'
 
 const walletStoreState = vi.hoisted(() => ({
   networkMode: 'signet' as NetworkMode,
@@ -38,7 +38,7 @@ const syncSnapshot = vi.hoisted(() => ({
 
   const vtxoListQuery = vi.hoisted(() =>
   vi.fn(() => ({
-    data: [] as BarkVtxoRow[] | undefined,
+    data: { tipHeight: null, rows: [] } as BarkVtxoList | undefined,
     isLoading: false,
     isError: false,
     error: null as unknown,
@@ -87,6 +87,10 @@ vi.mock('@/hooks/useRailManualSyncMutations', () => ({
   useBarkManualSyncMutation: () => ({ mutate: vi.fn(), isPending: false }),
 }))
 
+function vtxoList(rows: BarkVtxoRow[]): BarkVtxoList {
+  return { tipHeight: 50, rows }
+}
+
 function sampleRow(overrides: Partial<BarkVtxoRow> & Pick<BarkVtxoRow, 'id'>): BarkVtxoRow {
   return {
     amountSats: 10_000,
@@ -117,12 +121,12 @@ describe('BarkVtxoViewerPage', () => {
       lastSuccessfulSyncAt: '2024-03-01T12:00:00.000Z',
     }
     vtxoListQuery.mockReturnValue({
-      data: [
+      data: vtxoList([
         sampleRow({ id: 'spend:0', state: 'spendable', expiryHeight: 100 }),
         sampleRow({ id: 'lock:1', state: 'locked', expiryHeight: 90 }),
         sampleRow({ id: 'spent:2', state: 'spent', expiryHeight: 80 }),
         sampleRow({ id: 'exit:3', state: 'exited', expiryHeight: 70 }),
-      ],
+      ]),
       isLoading: false,
       isError: false,
       error: null,
@@ -215,7 +219,7 @@ describe('BarkVtxoViewerPage', () => {
     const rows = Array.from({ length: BARK_VTXO_VIEWER_PAGE_SIZE + 2 }, (_, index) =>
       sampleRow({ id: `row:${index}`, expiryHeight: index }),
     )
-    vtxoListQuery.mockReturnValue({ data: rows, isLoading: false, isError: false, error: null })
+    vtxoListQuery.mockReturnValue({ data: vtxoList(rows), isLoading: false, isError: false, error: null })
 
     renderWithProviders(<BarkVtxoViewerPage />)
 

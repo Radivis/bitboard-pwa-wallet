@@ -45,9 +45,29 @@ struct BarkVtxoRowJson {
     registered: bool,
 }
 
+#[cfg(test)]
 pub fn listed_vtxos_to_json(vtxos: &[ListedBarkVtxo]) -> Result<String, String> {
     let rows = vtxos.iter().map(row_json).collect::<Vec<_>>();
     serde_json::to_string(&rows).map_err(|err| err.to_string())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BarkVtxoListJson {
+    tip_height: Option<u32>,
+    vtxos: Vec<BarkVtxoRowJson>,
+}
+
+/// Rows plus the chain tip used to turn an expiry height into blocks remaining.
+pub fn vtxo_list_response_json(
+    tip_height: Option<u32>,
+    vtxos: &[ListedBarkVtxo],
+) -> Result<String, String> {
+    let payload = BarkVtxoListJson {
+        tip_height,
+        vtxos: vtxos.iter().map(row_json).collect(),
+    };
+    serde_json::to_string(&payload).map_err(|err| err.to_string())
 }
 
 fn row_json(vtxo: &ListedBarkVtxo) -> BarkVtxoRowJson {
@@ -123,6 +143,7 @@ fn listed_holder(holder: &bark::vtxo::VtxoLockHolder) -> ListedBarkVtxoLockHolde
 mod tests {
     use super::{
         ListedBarkVtxo, ListedBarkVtxoLockHolder, ListedBarkVtxoState, listed_vtxos_to_json,
+        vtxo_list_response_json,
     };
 
     #[test]
@@ -190,6 +211,34 @@ mod tests {
         assert!(value[5]["lockHolder"].is_null());
     }
 
+    #[test]
+    fn vtxo_list_response_includes_the_chain_tip() {
+        let json = vtxo_list_response_json(
+            Some(80),
+            &[listed(
+                "spend:0",
+                1_000,
+                100,
+                ListedBarkVtxoState::Spendable,
+                false,
+            )],
+        )
+        .expect("json");
+        let value: serde_json::Value = serde_json::from_str(&json).expect("parse");
+
+        assert_eq!(value["tipHeight"], 80);
+        assert_eq!(value["vtxos"][0]["expiryHeight"], 100);
+    }
+
+    #[test]
+    fn vtxo_list_response_keeps_rows_when_the_tip_is_unknown() {
+        let json = vtxo_list_response_json(None, &[]).expect("json");
+        let value: serde_json::Value = serde_json::from_str(&json).expect("parse");
+
+        assert!(value["tipHeight"].is_null());
+        assert!(value["vtxos"].as_array().expect("rows").is_empty());
+    }
+
     fn listed(
         id: &str,
         amount_sats: u64,
@@ -211,7 +260,7 @@ mod tests {
 mod wasm_export {
     use wasm_bindgen::prelude::*;
 
-    use super::{listed_bark_vtxo_from_wallet, listed_vtxos_to_json};
+    use super::{listed_bark_vtxo_from_wallet, vtxo_list_response_json};
     use crate::session::{bark_error, finish_wallet_operation, take_active_wallet};
 
     /// Local VTXOs, including spent and exited. Does not require a sync in this session.
@@ -224,7 +273,8 @@ mod wasm_export {
                 .iter()
                 .map(listed_bark_vtxo_from_wallet)
                 .collect::<Vec<_>>();
-            listed_vtxos_to_json(&listed)
+            let tip_height = wallet.chain().tip().await.ok();
+            vtxo_list_response_json(tip_height, &listed)
         }
         .await;
         finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
