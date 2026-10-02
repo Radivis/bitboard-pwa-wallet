@@ -6,6 +6,7 @@ const LOAD_ERROR_TITLES: Record<DashboardRailId, string> = {
   onchain: "Couldn't load on-chain wallet",
   lightning: "Couldn't load Lightning connections",
   arkade: "Couldn't open Arkade session",
+  bark: "Couldn't open Bark session",
 }
 
 export type RailLoadErrorBannerProps = {

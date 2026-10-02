@@ -24,7 +24,9 @@ import { isLightningSupported } from '@/lib/lightning/lightning-utils'
 import { ReceiveModeToggle, type ReceiveMode } from '@/components/receive/ReceiveModeToggle'
 import { LightningReceive } from '@/components/receive/LightningReceive'
 import { ArkadeReceive } from '@/components/receive/ArkadeReceive'
+import { BarkReceive } from '@/components/receive/BarkReceive'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
+import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
 import { ReceiveMainnetDemoWarningModal } from '@/components/receive/ReceiveMainnetDemoWarningModal'
 import { FaucetLinker } from '@/components/receive/FaucetLinker'
 import { walletReceivePageTitle } from '@/lib/wallet/wallet-lab-ui-copy'
@@ -47,7 +49,8 @@ export function ReceivePage() {
   const search = useSearch({ from: '/wallet/receive' })
   const showLightningToggle = isLightningEnabled && isLightningSupported(networkMode)
   const showArkadeToggle = isArkadeActiveForNetworkMode(networkMode)
-  const showModeToggle = showLightningToggle || showArkadeToggle
+  const showBarkToggle = isBarkActiveForNetworkMode(networkMode)
+  const showModeToggle = showLightningToggle || showArkadeToggle || showBarkToggle
   const [receiveMode, setReceiveMode] = useState<ReceiveMode>(() =>
     search.mode === 'arkade' && isArkadeActiveForNetworkMode(networkMode) ? 'arkade' : 'bitcoin',
   )
@@ -135,6 +138,7 @@ export function ReceivePage() {
       onModeChange={setReceiveMode}
       showLightning={showLightningToggle}
       showArkade={showArkadeToggle}
+      showBark={showBarkToggle}
     />
   ) : null
 
@@ -159,6 +163,19 @@ export function ReceivePage() {
           <PageHeader title="Receive on Arkade" icon={ArrowDownLeft} />
           {modeToggle}
           <ArkadeReceive />
+        </div>
+      </>
+    )
+  }
+
+  if (showBarkToggle && receiveMode === 'bark') {
+    return (
+      <>
+        {mainnetDemoModal}
+        <div className="space-y-6">
+          <PageHeader title="Receive on Bark" icon={ArrowDownLeft} />
+          {modeToggle}
+          <BarkReceive />
         </div>
       </>
     )

@@ -42,7 +42,9 @@ function reachabilityLabel(
 export function FaucetLinker() {
   const committedNetworkMode = useWalletStore(selectCommittedNetworkMode)
   const enabled =
-    committedNetworkMode === 'testnet' || committedNetworkMode === 'signet'
+    committedNetworkMode === 'testnet' ||
+    committedNetworkMode === 'signet' ||
+    committedNetworkMode === 'mutinynet'
 
   const { data: customEsploraUrl, isSuccess: customUrlLoaded } = useQuery({
     queryKey: customEsploraUrlQueryKey(committedNetworkMode),

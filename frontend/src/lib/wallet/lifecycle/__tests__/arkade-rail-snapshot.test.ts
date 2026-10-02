@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator', () => ({
-  getArkadeLoadLifecycleSnapshot: vi.fn(() => ({ loadPhase: 'loaded', networkMode: 'signet' })),
+  getArkadeLoadLifecycleSnapshot: vi.fn(() => ({ loadPhase: 'loaded', networkMode: 'mutinynet' })),
 }))
 
 vi.mock('@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator', () => ({
@@ -26,18 +26,18 @@ describe('arkade-rail-snapshot', () => {
   beforeEach(() => {
     vi.mocked(getArkadeLoadLifecycleSnapshot).mockReturnValue({
       loadPhase: 'loaded',
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
     })
     vi.mocked(getArkadeSyncLifecycleSnapshot).mockReturnValue({
       syncPhase: 'syncing',
-      railScope: { walletId: 1, networkMode: 'signet', arkadeAccountId: 'c1' },
+      railScope: { walletId: 1, networkMode: 'mutinynet', arkadeAccountId: 'c1' },
       errorMessage: null,
       warningMessage: null,
     })
     vi.mocked(getArkadeSaveLifecycleSnapshot).mockReturnValue({
       savePhase: 'not-saving',
       errorMessage: null,
-      railScope: { walletId: 1, networkMode: 'signet', arkadeAccountId: 'c1' },
+      railScope: { walletId: 1, networkMode: 'mutinynet', arkadeAccountId: 'c1' },
     })
   })
 

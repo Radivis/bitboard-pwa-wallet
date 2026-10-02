@@ -6,14 +6,19 @@
  *
  * Call ensureArkadeWorkerSecretsChannel() before Arkade openSession (or use getArkadeWorker after
  * ensureSecretsChannel) so the arkade worker decrypts via the same encryption worker path.
+ *
+ * Call ensureBarkWorkerSecretsChannel() before Bark openSession so the bark worker decrypts
+ * the mnemonic on this channel.
  */
 
 import { transfer } from 'comlink'
 
 let cryptoSecretsChannelReady = false
 let arkadeSecretsChannelReady = false
+let barkSecretsChannelReady = false
 let cryptoChannelPromise: Promise<void> | null = null
 let arkadeChannelPromise: Promise<void> | null = null
+let barkChannelPromise: Promise<void> | null = null
 
 /**
  * Reset channel state so the next ensureSecretsChannel() will re-establish
@@ -23,14 +28,22 @@ let arkadeChannelPromise: Promise<void> | null = null
 export function resetSecretsChannel(): void {
   cryptoSecretsChannelReady = false
   arkadeSecretsChannelReady = false
+  barkSecretsChannelReady = false
   cryptoChannelPromise = null
   arkadeChannelPromise = null
+  barkChannelPromise = null
 }
 
 /** Reset only the arkade worker secrets port (e.g. when terminating the arkade worker). */
 export function resetArkadeWorkerSecretsChannel(): void {
   arkadeSecretsChannelReady = false
   arkadeChannelPromise = null
+}
+
+/** Reset only the bark worker secrets port (e.g. when terminating the bark worker). */
+export function resetBarkWorkerSecretsChannel(): void {
+  barkSecretsChannelReady = false
+  barkChannelPromise = null
 }
 
 async function ensureCryptoSecretsChannel(): Promise<void> {
@@ -102,7 +115,47 @@ export async function ensureArkadeWorkerSecretsChannel(): Promise<void> {
   await arkadeChannelPromise
 }
 
+/**
+ * Connect the bark worker to the encryption worker for decrypt/encrypt RPC.
+ * Requires the crypto secrets channel to be established first.
+ */
+export async function ensureBarkWorkerSecretsChannel(): Promise<void> {
+  await ensureCryptoSecretsChannel()
+  if (barkSecretsChannelReady) return
+  if (barkChannelPromise) {
+    await barkChannelPromise
+    return
+  }
+  const setupPromise = (async () => {
+    const { getBarkWorkerIfExists } = await import('./bark-factory')
+    const barkWorker = getBarkWorkerIfExists()
+    if (barkWorker == null) {
+      return
+    }
+    try {
+      const { port1, port2 } = new MessageChannel()
+      const { getEncryptionWorker } = await import('./encryption-factory')
+      await Promise.all([
+        getEncryptionWorker().setSecretsPort(transfer(port1, [port1])),
+        barkWorker.setSecretsPort(transfer(port2, [port2])),
+      ])
+      barkSecretsChannelReady = true
+    } catch (error) {
+      barkSecretsChannelReady = false
+      const detail = error instanceof Error ? error.message : String(error)
+      throw new Error(`Failed to establish bark secrets channel: ${detail}`, {
+        cause: error,
+      })
+    }
+  })()
+  barkChannelPromise = setupPromise.finally(() => {
+    barkChannelPromise = null
+  })
+  await barkChannelPromise
+}
+
 export async function ensureSecretsChannel(): Promise<void> {
   await ensureCryptoSecretsChannel()
   await ensureArkadeWorkerSecretsChannel()
+  await ensureBarkWorkerSecretsChannel()
 }

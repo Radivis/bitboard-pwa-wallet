@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { AlertTriangle, Coins, FlaskConical, Layers, RefreshCw, Zap } from 'lucide-react'
+import { AlertTriangle, Coins, FlaskConical, Layers, RefreshCw, Waypoints, Zap } from 'lucide-react'
 import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
 import { useFeatureStore } from '@/stores/featureStore'
 import {
@@ -14,6 +14,7 @@ import { ArkadeFeatureInfomodeContent } from '@/components/arkade/infomode/Arkad
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import { ArkadeEnableConfirmModal } from '@/components/settings/ArkadeEnableConfirmModal'
+import { BarkEnableConfirmModal } from '@/components/settings/BarkEnableConfirmModal'
 import { MainnetAccessConfirmModal } from '@/components/settings/MainnetAccessConfirmModal'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
@@ -31,11 +32,14 @@ export function FeatureToggles() {
   const setIsUtxoSelectionEnabled = useFeatureStore((featureState) => featureState.setIsUtxoSelectionEnabled)
   const isArkadeEnabled = useFeatureStore((featureState) => featureState.isArkadeEnabled)
   const setIsArkadeEnabled = useFeatureStore((featureState) => featureState.setIsArkadeEnabled)
+  const isBarkEnabled = useFeatureStore((featureState) => featureState.isBarkEnabled)
+  const setIsBarkEnabled = useFeatureStore((featureState) => featureState.setIsBarkEnabled)
   const isPeriodicSyncEnabled = useFeatureStore((featureState) => featureState.isPeriodicSyncEnabled)
   const setIsPeriodicSyncEnabled = useFeatureStore((featureState) => featureState.setIsPeriodicSyncEnabled)
 
   const [mainnetConfirmOpen, setMainnetConfirmOpen] = useState(false)
   const [arkadeConfirmOpen, setArkadeConfirmOpen] = useState(false)
+  const [barkConfirmOpen, setBarkConfirmOpen] = useState(false)
   const [mainnetAccessSwitchBusy, setMainnetAccessSwitchBusy] = useState(false)
   const [regtestModeSwitchBusy, setRegtestModeSwitchBusy] = useState(false)
   const [segwitAddressesSwitchBusy, setSegwitAddressesSwitchBusy] = useState(false)
@@ -236,6 +240,33 @@ export function FeatureToggles() {
       </InfomodeWrapper>
 
       <InfomodeWrapper
+        infoId="settings-feature-bark"
+        infoTitle="Bark"
+        infoText="Bark is Second's Ark wallet on Signet (ark.signet.2nd.dev) and Mainnet (ark.second.tech). Off by default. Turning it on opens a Bark session when this wallet is unlocked on Signet or Mainnet. Each network keeps its own encrypted protocol state, separate from the on-chain and Arkade totals."
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Waypoints className="h-4 w-4" />
+            <Label htmlFor="bark-toggle" className="cursor-pointer">
+              Bark
+            </Label>
+          </div>
+          <Switch
+            id="bark-toggle"
+            checked={isBarkEnabled}
+            onCheckedChange={(checked) => {
+              if (checked) {
+                setBarkConfirmOpen(true)
+              } else {
+                setIsBarkEnabled(false)
+              }
+            }}
+            aria-label="Enable Bark rail"
+          />
+        </div>
+      </InfomodeWrapper>
+
+      <InfomodeWrapper
         infoId="settings-feature-lightning"
         infoTitle="Lightning Network"
         infoText="The Lightning Network is a layer-2 payment protocol on top of Bitcoin. It enables fast, low-cost transactions by creating payment channels between nodes. Turn this on to enable Lightning-capable screens and flows in the app. Actual Lightning send, receive, and channel management are available when your wallet is on Mainnet, Testnet, or Signet—not on Lab or Regtest."
@@ -266,6 +297,12 @@ export function FeatureToggles() {
         open={arkadeConfirmOpen}
         onOpenChange={setArkadeConfirmOpen}
         onConfirm={() => setIsArkadeEnabled(true)}
+      />
+
+      <BarkEnableConfirmModal
+        open={barkConfirmOpen}
+        onOpenChange={setBarkConfirmOpen}
+        onConfirm={() => setIsBarkEnabled(true)}
       />
     </div>
   )

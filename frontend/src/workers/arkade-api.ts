@@ -2,6 +2,7 @@ import type { EncryptedBlobForDb } from '@/workers/crypto-api'
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import type { ArkadeAccountSummary } from '@/lib/arkade/arkade-payload-merge'
 import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
+import type { HistoricalSignetOnchainChain } from '@/lib/wallet/historical-signet-onchain-chain'
 import type { ArkadeWalletScope } from '@/lib/arkade/arkade-session-scope'
 
 export type { ArkadeAccountSummary, ArkadeWalletScope }
@@ -561,6 +562,9 @@ export interface EnsureArkadeAccountEncryptedParams {
 
 export interface ArkadeService {
   ping(): Promise<boolean>
+  configureHistoricalSignetOnchainChain(
+    chain: HistoricalSignetOnchainChain | null,
+  ): Promise<void>
   setSecretsPort(port: MessagePort): Promise<void>
   setEncryptedWalletSecretsHost(host: EncryptedWalletSecretsHost): Promise<void>
   openSession(params: OpenArkadeSessionParams): Promise<OpenArkadeSessionResult>

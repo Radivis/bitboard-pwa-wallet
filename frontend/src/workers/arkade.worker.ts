@@ -14,6 +14,10 @@ import {
 import { rethrowWasmArkErrorForComlink } from '@/lib/shared/wasm-ark-error'
 import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
 import {
+  setConfiguredHistoricalSignetOnchainChain,
+  type HistoricalSignetOnchainChain,
+} from '@/lib/wallet/historical-signet-onchain-chain'
+import {
   ensureArkadeAccountEncrypted,
   extractSdkPersistenceJsonForAccount,
   findActiveAccountSummary,
@@ -500,6 +504,12 @@ const arkadeService: ArkadeService = {
   async ping(): Promise<boolean> {
     await getArkWasm()
     return true
+  },
+
+  async configureHistoricalSignetOnchainChain(
+    chain: HistoricalSignetOnchainChain | null,
+  ): Promise<void> {
+    setConfiguredHistoricalSignetOnchainChain(chain)
   },
 
   async openSession(params: OpenArkadeSessionParams) {

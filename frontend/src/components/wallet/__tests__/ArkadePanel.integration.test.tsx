@@ -23,9 +23,9 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/stores/walletStore')>()
   const state = {
     ...actual.useWalletStore.getState(),
-    networkMode: 'signet' as const,
+    networkMode: 'mutinynet' as const,
     activeWalletId: 1,
-    committedNetworkMode: 'signet' as const,
+    committedNetworkMode: 'mutinynet' as const,
   }
   return {
     ...actual,
@@ -38,7 +38,7 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
 
 const arkadeLoadSnapshot = vi.hoisted(() => ({
   loadPhase: 'loaded' as 'loaded' | 'loading' | 'load-error' | 'not-configured',
-  networkMode: 'signet' as const,
+  networkMode: 'mutinynet' as const,
   errorMessage: null as string | null,
 }))
 

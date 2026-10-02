@@ -1,5 +1,6 @@
 import { closeArkadeSession } from '@/lib/arkade/arkade-session-service'
 import { tearDownArkadeWorkerAndClientState } from '@/lib/arkade/arkade-session-teardown'
+import { closeBarkSessionForWalletChange } from '@/lib/bark/bark-session-service'
 import { awaitInFlightWalletSecretsWrites } from '@/db/wallet-secrets-write-tracker'
 import { removeLightningConnectionsHydrationQueries } from '@/lib/lightning/lightning-connections-hydration'
 import { syncAllRailLifecyclesWithLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-handoff'
@@ -21,7 +22,7 @@ async function closeArkadeSessionForWalletSwitch(): Promise<void> {
 }
 
 /**
- * Tear down the previous wallet's Arkade session, clear dashboard snapshots, lock,
+ * Tear down the previous wallet's Arkade and Bark sessions, clear dashboard snapshots, lock,
  * and set the active wallet id.
  *
  * Call before navigating to wallet UI after the user picks a different wallet.
@@ -31,6 +32,7 @@ async function closeArkadeSessionForWalletSwitch(): Promise<void> {
 export async function prepareActiveWalletSwitch(walletId: number): Promise<void> {
   await awaitInFlightWalletSecretsWrites()
   await closeArkadeSessionForWalletSwitch()
+  await closeBarkSessionForWalletChange()
   releasePreviousWalletDashboardSession(walletId)
   useLightningStore.getState().purgeLightningConnectionsFromMemory()
   removeLightningConnectionsHydrationQueries()

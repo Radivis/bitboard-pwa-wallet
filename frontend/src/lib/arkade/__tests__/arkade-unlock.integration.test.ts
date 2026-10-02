@@ -30,12 +30,12 @@ const walletStoreState = vi.hoisted(() => ({
   setCurrentAddress: vi.fn(),
   setLastSyncTime: vi.fn(),
   commitLoadedDescriptorWallet: vi.fn(),
-  networkMode: 'signet' as const,
+  networkMode: 'mutinynet' as const,
   addressType: 2,
   accountId: 0,
   activeWalletId: 3,
   loadedDescriptorWallet: null as {
-    networkMode: 'signet'
+    networkMode: 'mutinynet'
     addressType: number
     accountId: number
   } | null,
@@ -57,6 +57,10 @@ vi.mock('@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator', () => ({
     unlockCallOrder.push('orchestrateArkadeLoad')
     return orchestrateArkadeLoadMock(...args)
   },
+}))
+
+vi.mock('@/lib/bark/bark-session-service', () => ({
+  startBarkLoadAfterUnlock: vi.fn(),
 }))
 
 vi.mock('@/lib/arkade/arkade-utils', () => ({
@@ -161,7 +165,7 @@ describe('orchestrateArkadeLoad after unlock (integration)', () => {
 
     await loadDescriptorWalletWithoutSync({
       walletId: 3,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       addressType: AddressType.Taproot,
       accountId: 0,
     })
@@ -169,7 +173,7 @@ describe('orchestrateArkadeLoad after unlock (integration)', () => {
     expect(waitForCryptoWorkerHealthyMock).toHaveBeenCalled()
     expect(orchestrateArkadeLoadMock).toHaveBeenCalledWith({
       walletId: 3,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
     })
     expect(resolveLoad).toBeDefined()
     resolveLoad!()
@@ -186,7 +190,7 @@ describe('orchestrateArkadeLoad after unlock (integration)', () => {
 
     await loadDescriptorWalletAndSync({
       walletId: 3,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       addressType: AddressType.Taproot,
       accountId: 0,
       awaitSync: false,
@@ -195,7 +199,7 @@ describe('orchestrateArkadeLoad after unlock (integration)', () => {
     expect(waitForCryptoWorkerHealthyMock).toHaveBeenCalled()
     expect(orchestrateArkadeLoadMock).toHaveBeenCalledWith({
       walletId: 3,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
     })
     expect(resolveLoad).toBeDefined()
     resolveLoad!()
@@ -204,7 +208,7 @@ describe('orchestrateArkadeLoad after unlock (integration)', () => {
   it('UNLOCK-ARK-02 starts Arkade load in parallel with on-chain load and still marks wallet unlocked', async () => {
     await loadDescriptorWalletAndSync({
       walletId: 3,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       addressType: AddressType.Taproot,
       accountId: 0,
       awaitSync: false,
@@ -225,7 +229,7 @@ describe('orchestrateArkadeLoad after unlock (integration)', () => {
     await expect(
       loadDescriptorWalletAndSync({
         walletId: 3,
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
         addressType: AddressType.Taproot,
         accountId: 0,
         awaitSync: true,

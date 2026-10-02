@@ -34,6 +34,7 @@ pub mod lab;
 pub mod lab_entity_wallet;
 pub mod lab_psbt;
 pub mod mnemonic;
+pub mod p2a_cpfp;
 pub mod sync;
 pub mod transaction;
 pub mod types;
@@ -528,6 +529,56 @@ pub fn build_transaction(
 
     accumulate_staged_changes();
     Ok(outcome.psbt_base64)
+}
+
+/// Sign a PSBT and return the finalized PSBT plus the raw transaction.
+/// Does not broadcast and does not insert the transaction into the wallet.
+#[wasm_bindgen]
+pub fn sign_funding_psbt(psbt_base64: &str) -> Result<JsValue, JsValue> {
+    let signed = with_wallet(|wallet| transaction::sign_funding_psbt(wallet, psbt_base64))?
+        .map_err(JsValue::from)?;
+    serde_wasm_bindgen::to_value(&signed).map_display_err_to_js()
+}
+
+/// Mark a funding transaction as unconfirmed in the on-chain wallet after Bark accepted it.
+#[wasm_bindgen]
+pub fn apply_unconfirmed_funding_transaction(
+    raw_tx_hex: &str,
+    last_seen_unix_seconds: u64,
+) -> Result<(), JsValue> {
+    with_wallet_mut(|wallet| {
+        transaction::apply_unconfirmed_funding_transaction(
+            wallet,
+            raw_tx_hex,
+            last_seen_unix_seconds,
+        )
+    })?
+    .map_err(JsValue::from)?;
+    accumulate_staged_changes();
+    Ok(())
+}
+
+/// Sign a BIP-431 Pay-to-Anchor child for a Bark emergency-exit parent.
+///
+/// Returns the signed raw transaction hex. Does not insert it into the wallet.
+#[wasm_bindgen]
+pub fn sign_p2a_cpfp_child(
+    parent_tx_hex: &str,
+    effective_fee_rate_sat_per_vb: f64,
+    rbf_min_fee_rate_sat_per_kwu: Option<u64>,
+    current_package_fee_sats: Option<u64>,
+) -> Result<String, JsValue> {
+    let signed = with_wallet_mut(|wallet| {
+        p2a_cpfp::sign_p2a_cpfp_child(
+            wallet,
+            parent_tx_hex,
+            effective_fee_rate_sat_per_vb,
+            rbf_min_fee_rate_sat_per_kwu,
+            current_package_fee_sats,
+        )
+    })?;
+    accumulate_staged_changes();
+    signed.map_err(JsValue::from)
 }
 
 /// Sign a PSBT and extract the finalized transaction.

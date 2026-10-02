@@ -3,7 +3,7 @@ feature:
   description: "Educational Arkade (VTXO) layer with Bitboard-hosted Fulmine delegator"
   user_stories:
     - As a user, I want to enable Arkade under Settings → Features so I can use an offchain Bitcoin layer without a Lightning wallet
-    - As a user, I want my Arkade wallet to use the correct operator and delegator for the network I selected (mainnet, testnet, signet/Mutinynet)
+    - As a user, I want my Arkade wallet to use the correct operator and delegator for the network I selected (mainnet, mutinynet)
     - As a user, I want to see my Arkade balance separately from my on-chain balance
     - As a user, I want to receive funds on an Arkade address (ark1/tark1) with a QR code
     - As a user, I want to send Arkade payments to an Arkade address
@@ -21,7 +21,7 @@ feature:
     - As a user, I want waiting for host transaction broadcast distinguished from waiting for the first confirmation, waiting for 6 confirmations, and waiting for the unilateral-exit timelock
   requirements:
     - Arkade is gated by isArkadeEnabled (default off) and isMainnetAccessEnabled for mainnet
-    - Arkade is available on mainnet, signet, and regtest (local arkd via arkade-regtest for dev/E2E); not on lab in v1
+    - Arkade is available on mainnet, mutinynet, and regtest (local arkd via arkade-regtest for dev/E2E); not on lab or public signet in v1
     - delegatorProvider must be configured at first Wallet.create per (wallet_id, networkMode)
     - Mnemonic decryption runs only in workers (secrets channel); never on the main thread
     - Default delegator and operator URLs come from arkade-endpoints.ts (env overrides supported)

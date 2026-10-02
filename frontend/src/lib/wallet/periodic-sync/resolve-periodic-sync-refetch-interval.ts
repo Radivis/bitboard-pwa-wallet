@@ -1,3 +1,4 @@
+import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
 import type { DashboardRailId } from '@/components/wallet/RailSyncControl'
 import type { NetworkMode } from '@/stores/walletStore'
 import type { PeriodicSyncRailState } from '@/stores/periodicSyncStore'
@@ -7,6 +8,7 @@ export type PeriodicSyncResolverInput = {
   isPeriodicSyncEnabled: boolean
   isLightningEnabled: boolean
   isArkadeEnabled: boolean
+  isBarkEnabled: boolean
   networkMode: NetworkMode
   rails: PeriodicSyncRailState
   documentVisibilityState?: DocumentVisibilityState
@@ -33,6 +35,10 @@ export function resolvePeriodicSyncRefetchIntervalMs(
   }
 
   if (input.rail === 'arkade' && !input.isArkadeEnabled) {
+    return false
+  }
+
+  if (input.rail === 'bark' && (!input.isBarkEnabled || !isBarkNetworkMode(input.networkMode))) {
     return false
   }
 

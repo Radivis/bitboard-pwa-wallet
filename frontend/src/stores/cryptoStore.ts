@@ -12,6 +12,7 @@ import { useLightningStore } from '@/stores/lightningStore';
 import { clearAutoLockTimer, clearLegacySessionState } from '@/stores/sessionStore';
 import { awaitArkadeSyncQuiescence } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator';
 import { closeArkadeSession } from '@/lib/arkade/arkade-session-service';
+import { closeBarkSession } from '@/lib/bark/bark-session-service';
 import { endWalletSecretsSessionReliably } from '@/lib/wallet/wallet-secrets-session';
 import { getArkadeWorkerIfExists } from '@/workers/arkade-factory';
 import { resetSecretsChannel } from '@/workers/secrets-channel';
@@ -93,6 +94,13 @@ interface CryptoState {
   buildTransaction: (params: BuildTransactionParams) => Promise<string>;
 
   signAndExtractTransaction: (psbtBase64: string) => Promise<string>;
+
+  signFundingPsbt: (psbtBase64: string) => Promise<import('@/workers/crypto-api').SignedFundingPsbt>;
+
+  applyUnconfirmedFundingTx: (
+    rawTxHex: string,
+    lastSeenUnixSeconds: number,
+  ) => Promise<void>;
 
   broadcastTransaction: (
     rawTxHex: string,
@@ -251,6 +259,14 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
     signAndExtractTransaction: (psbtBase64) =>
       withErrorHandling((worker) => worker.signAndExtractTransaction(psbtBase64)),
 
+    signFundingPsbt: (psbtBase64) =>
+      withErrorHandling((worker) => worker.signFundingPsbt(psbtBase64)),
+
+    applyUnconfirmedFundingTx: (rawTxHex, lastSeenUnixSeconds) =>
+      withErrorHandling((worker) =>
+        worker.applyUnconfirmedFundingTx(rawTxHex, lastSeenUnixSeconds),
+      ),
+
     broadcastTransaction: (rawTxHex, esploraUrl) =>
       withErrorHandling((worker) => worker.broadcastTransaction(rawTxHex, esploraUrl)),
 
@@ -301,6 +317,11 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
       try {
         await closeArkadeSession();
       } finally {
+        try {
+          await closeBarkSession();
+        } catch {
+          // Bark close is best-effort; lock must still drop the crypto worker.
+        }
         terminateCryptoWorker();
         await endWalletSecretsSessionReliably();
         resetSecretsChannel();

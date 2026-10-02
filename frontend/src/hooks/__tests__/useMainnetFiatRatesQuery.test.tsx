@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider, type ReactNode } from '@tanstack/react-query'
 import { useMainnetFiatRatesQuery } from '@/hooks/useMainnetFiatRatesQuery'
+import { replaceBarkSyncLifecycleSnapshotForTests, resetBarkSyncLifecycleStateForTests } from '@/lib/wallet/lifecycle/bark-sync-lifecycle-orchestrator'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useWalletStore } from '@/stores/walletStore'
 
@@ -32,6 +33,7 @@ function createWrapper() {
 
 describe('useMainnetFiatRatesQuery', () => {
   beforeEach(() => {
+    resetBarkSyncLifecycleStateForTests()
     lightningBalancesQueryMock.mockReturnValue({ data: { totalSats: 0 } })
     useWalletStore.setState({
       networkMode: 'mainnet',
@@ -70,5 +72,25 @@ describe('useMainnetFiatRatesQuery', () => {
 
     expect(result.current.fetchStatus).toBe('idle')
     expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('starts fetching when only the Bark spendable balance is positive', async () => {
+    replaceBarkSyncLifecycleSnapshotForTests({
+      syncPhase: 'not-syncing',
+      networkMode: 'signet',
+      errorMessage: null,
+      spendableSats: 25_000,
+      lockedSats: 0,
+      lastSuccessfulSyncAt: '2024-03-01T12:00:00.000Z',
+      refreshStatus: 'idle',
+    })
+
+    const { result } = renderHook(() => useMainnetFiatRatesQuery(), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => {
+      expect(result.current.fetchStatus).toBe('fetching')
+    })
   })
 })

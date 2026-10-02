@@ -6,6 +6,7 @@ import {
   setWalletNoMnemonicBackupFlag,
   type SplitWalletSecretsEncryptedBlobs,
 } from '@/db'
+import { closeBarkSessionForWalletChange } from '@/lib/bark/bark-session-service'
 import { suggestDefaultWalletName } from '@/lib/wallet/default-wallet-name'
 import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
 import { orchestrateOnchainSetupAfterPersist } from '@/lib/wallet/lifecycle/onchain-setup-lifecycle'
@@ -22,6 +23,7 @@ import { ensureSecretsChannel } from '@/workers/secrets-channel'
 import {
   releasePreviousWalletDashboardSession,
   startArkadeSessionForNewWallet,
+  startBarkSessionForNewWallet,
 } from '@/lib/wallet/new-wallet-dashboard-session'
 
 export type NewWalletRowInsert = {
@@ -91,6 +93,7 @@ function activateNewWallet(walletId: number, firstAddress: string): void {
   })
   walletState.setWalletStatus('unlocked')
   startArkadeSessionForNewWallet(walletId, walletState.networkMode)
+  startBarkSessionForNewWallet(walletId, walletState.networkMode)
   startAutoLockTimer(() => void orchestrateLock())
 }
 
@@ -161,6 +164,7 @@ export async function persistAndActivateNewWallet(
     invalidateWalletRelatedQueriesAndNotifyOtherTabs(queryClient)
   }
 
+  await closeBarkSessionForWalletChange()
   clearStaleDashboardState()
   activateNewWallet(walletId, firstAddress)
   await runInitialOnchainSetup(walletId)

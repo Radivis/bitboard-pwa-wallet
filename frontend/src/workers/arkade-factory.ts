@@ -1,4 +1,5 @@
 import { wrap, type Remote } from 'comlink'
+import { configureWorkerHistoricalSignetOnchainChain } from '@/lib/wallet/live-network-split-migration'
 import type { ArkadeService } from '@/workers/arkade-api'
 import { resetArkadePersistenceChannel } from '@/workers/arkade-persistence-channel'
 import { resetArkadeWorkerSecretsChannel } from '@/workers/secrets-channel'
@@ -63,6 +64,9 @@ function stopHealthPolling() {
 async function verifyWorkerHealth(proxy: Remote<ArkadeService>): Promise<void> {
   try {
     await proxy.ping()
+    await configureWorkerHistoricalSignetOnchainChain((chain) =>
+      proxy.configureHistoricalSignetOnchainChain(chain),
+    )
     setStatus('healthy')
     console.info('[arkade-factory] Worker health check passed')
   } catch (err) {

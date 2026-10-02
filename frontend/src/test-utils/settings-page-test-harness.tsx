@@ -25,6 +25,7 @@ export const featureStoreState = {
   isSegwitAddressesEnabled: false,
   isUtxoSelectionEnabled: false,
   isArkadeEnabled: false,
+  isBarkEnabled: false,
   isPeriodicSyncEnabled: false,
   setIsLightningEnabled: vi.fn(),
   setIsMainnetAccessEnabled: vi.fn(),
@@ -32,6 +33,7 @@ export const featureStoreState = {
   setIsSegwitAddressesEnabled: vi.fn(),
   setIsUtxoSelectionEnabled: vi.fn(),
   setIsArkadeEnabled: vi.fn(),
+  setIsBarkEnabled: vi.fn(),
   setIsPeriodicSyncEnabled: vi.fn(),
 }
 
@@ -39,6 +41,7 @@ const defaultPeriodicSyncRails = {
   onchain: { isEnabled: true, intervalSeconds: DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS },
   lightning: { isEnabled: true, intervalSeconds: DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS },
   arkade: { isEnabled: true, intervalSeconds: DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS },
+  bark: { isEnabled: true, intervalSeconds: DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS },
 }
 
 /** Mutable periodic sync settings for settings page tests. */
@@ -218,6 +221,7 @@ vi.mock('@/stores/walletStore', async () => {
       lab: 'Lab',
       regtest: 'Regtest',
       signet: 'Signet',
+      mutinynet: 'Mutinynet',
       testnet: 'Testnet',
       mainnet: 'Mainnet',
     },
@@ -403,6 +407,9 @@ function wireFeatureStoreMockImplementations(): void {
   featureStoreState.setIsArkadeEnabled.mockImplementation((enabled: boolean) => {
     featureStoreState.isArkadeEnabled = enabled
   })
+  featureStoreState.setIsBarkEnabled.mockImplementation((enabled: boolean) => {
+    featureStoreState.isBarkEnabled = enabled
+  })
   featureStoreState.setIsPeriodicSyncEnabled.mockImplementation((enabled: boolean) => {
     featureStoreState.isPeriodicSyncEnabled = enabled
   })
@@ -484,11 +491,13 @@ export function resetSettingsPageTestState(): void {
   featureStoreState.isSegwitAddressesEnabled = false
   featureStoreState.isUtxoSelectionEnabled = false
   featureStoreState.isArkadeEnabled = false
+  featureStoreState.isBarkEnabled = false
   featureStoreState.isPeriodicSyncEnabled = false
   periodicSyncStoreState.rails = {
     onchain: { isEnabled: true, intervalSeconds: DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS },
     lightning: { isEnabled: true, intervalSeconds: DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS },
     arkade: { isEnabled: true, intervalSeconds: DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS },
+    bark: { isEnabled: true, intervalSeconds: DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS },
   }
   nearZeroSecurityState.active = false
   mockWalletsState.data = []
