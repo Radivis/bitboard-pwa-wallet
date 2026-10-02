@@ -5,6 +5,7 @@ import {
   readBarkEmergencyExitRows,
   readBarkExitGraph,
 } from '@/lib/bark/bark-emergency-exit'
+import type { BitboardBarkWasm } from '@/lib/bark/load-bitboard-bark-wasm'
 import type {
   BarkEmergencyExitDrain,
   BarkEmergencyExitEstimate,
@@ -13,16 +14,17 @@ import type {
   BarkExitGraph,
 } from '@/workers/bark-api'
 
-export type BarkEmergencyExitWasm = {
-  bark_estimate_emergency_exit(vtxoIdsJson: string, feeRateSatPerVb: number): Promise<string>
-  bark_start_emergency_exit(vtxoIdsJson: string): Promise<void>
-  bark_list_emergency_exits(): Promise<string>
-  bark_progress_emergency_exits(): Promise<string>
-  bark_provide_emergency_exit_cpfp(exitTxid: string, childTxHex: string): Promise<void>
-  bark_cancel_emergency_exit(vtxoId: string): Promise<void>
-  bark_drain_emergency_exits(address: string, feeRateSatPerVb: number): Promise<string>
-  bark_exit_topology(vtxoIdsJson: string): Promise<string>
-}
+export type BarkEmergencyExitWasm = Pick<
+  BitboardBarkWasm,
+  | 'bark_estimate_emergency_exit'
+  | 'bark_start_emergency_exit'
+  | 'bark_list_emergency_exits'
+  | 'bark_progress_emergency_exits'
+  | 'bark_provide_emergency_exit_cpfp'
+  | 'bark_cancel_emergency_exit'
+  | 'bark_drain_emergency_exits'
+  | 'bark_exit_topology'
+>
 
 function vtxoIdsJson(vtxoIds: string[]): string {
   return JSON.stringify(vtxoIds)

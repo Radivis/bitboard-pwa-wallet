@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 import { format } from 'date-fns'
+import { BarkRailUnavailable } from '@/components/bark/BarkRailUnavailable'
 import { BarkVtxoCard } from '@/components/bark/BarkVtxoCard'
 import { CardPagination } from '@/components/CardPagination'
 import { PageHeader } from '@/components/PageHeader'
@@ -55,15 +56,12 @@ export function BarkVtxoViewerPage() {
 
   if (!isBarkEnabled || !isBarkNetworkMode(networkMode)) {
     return (
-      <div className="space-y-4">
-        <PageHeader title="Bark VTXOs" />
-        <p className="text-muted-foreground">
-          Bark VTXOs are available on Signet and Mainnet when Bark is enabled.
-        </p>
-        <Button type="button" variant="outline" asChild>
-          <Link to="/wallet/management">Back to management</Link>
-        </Button>
-      </div>
+      <BarkRailUnavailable
+        title="Bark VTXOs"
+        message="Bark VTXOs are available on Signet and Mainnet when Bark is enabled."
+        backTo="/wallet/management"
+        backLabel="Back to management"
+      />
     )
   }
 

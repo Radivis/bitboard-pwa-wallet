@@ -1,3 +1,4 @@
+import type { BitboardBarkWasm } from '@/lib/bark/load-bitboard-bark-wasm'
 import type { BarkVtxoLockHolder, BarkVtxoRow, BarkVtxoState } from '@/workers/bark-api'
 import { BARK_VTXO_STATES } from '@/workers/bark-api'
 
@@ -18,9 +19,9 @@ export function readBarkVtxoListJson(value: unknown): BarkVtxoRow[] {
   return parsed.map(readBarkVtxoRow)
 }
 
-export async function listVtxosFromWasm(wasm: {
-  bark_list_vtxos(): Promise<string>
-}): Promise<BarkVtxoRow[]> {
+export async function listVtxosFromWasm(
+  wasm: Pick<BitboardBarkWasm, 'bark_list_vtxos'>,
+): Promise<BarkVtxoRow[]> {
   return readBarkVtxoListJson(await wasm.bark_list_vtxos())
 }
 

@@ -3,7 +3,6 @@ import { readBarkSpendableSats } from '@/lib/bark/bark-balance'
 import {
   barkArkoorSendDepsFromWasm,
   performBarkArkoorSend,
-  type BarkArkoorWasm,
 } from '@/lib/bark/perform-bark-arkoor-send'
 import { listVtxosFromWasm } from '@/lib/bark/bark-vtxo-list'
 import {
@@ -11,14 +10,12 @@ import {
   estimateBoardOffchainFeeFromWasm,
   historyFromWasm,
   prepareBoardFundingFromWasm,
-  type BarkBoardWasm,
 } from '@/lib/bark/bark-board-session'
 import {
   estimateOffboardAllFromWasm,
   estimateSendOnchainFromWasm,
   offboardAllFromWasm,
   sendOnchainFromWasm,
-  type BarkExitWasm,
 } from '@/lib/bark/bark-exit-session'
 import {
   cancelEmergencyExitFromWasm,
@@ -29,14 +26,13 @@ import {
   provideEmergencyExitCpfpFromWasm,
   startEmergencyExitFromWasm,
   exitTopologyFromWasm,
-  type BarkEmergencyExitWasm,
 } from '@/lib/bark/bark-emergency-exit-session'
 import {
   readBarkLastRevealedKeyIndex,
   readBarkRevealedReceiveAddress,
   receiveKeyIndexForSessionOpen,
 } from '@/lib/bark/bark-receive-cursor'
-import { loadBitboardBarkWasm } from '@/lib/bark/load-bitboard-bark-wasm'
+import { loadBitboardBarkWasm, type BitboardBarkWasm } from '@/lib/bark/load-bitboard-bark-wasm'
 import {
   assertBarkRecordDumpWithinSizeLimit,
   isBarkReceiveKeyIndex,
@@ -75,8 +71,6 @@ import {
 } from '@/workers/bark-worker-metadata'
 import type { SecretsChannelService } from '@/workers/secrets-channel-types'
 
-type BitboardBarkWasm = Awaited<ReturnType<typeof loadBitboardBarkWasm>>
-
 let barkWasmModule: BitboardBarkWasm | null = null
 let wasmInitError: string | null = null
 let secretsProxy: Remote<SecretsChannelService> | null = null
@@ -86,6 +80,10 @@ let encryptedWalletSecretsHost:
   | null = null
 let openWalletId: number | null = null
 let openNetwork: BarkRailNetwork | null = null
+
+function callBark<T>(operation: () => Promise<T>): Promise<T> {
+  return operation().catch((err: unknown) => rethrowBarkError(err))
+}
 
 function rethrowBarkError(err: unknown): never {
   if (err instanceof Error) {
@@ -337,18 +335,6 @@ async function readSpendableBalanceImpl(): Promise<number> {
   return readBarkSpendableSats(await wasmModule.bark_balance())
 }
 
-function boardWasm(wasmModule: BitboardBarkWasm): BarkBoardWasm {
-  return wasmModule as unknown as BarkBoardWasm
-}
-
-function exitWasm(wasmModule: BitboardBarkWasm): BarkExitWasm {
-  return wasmModule as unknown as BarkExitWasm
-}
-
-function emergencyExitWasm(wasmModule: BitboardBarkWasm): BarkEmergencyExitWasm {
-  return wasmModule as unknown as BarkEmergencyExitWasm
-}
-
 function requireOpenSession(): void {
   if (openWalletId == null) {
     throw new Error('Bark session is not open')
@@ -359,14 +345,14 @@ async function estimateBoardOffchainFeeImpl(amountSats: number): Promise<BarkBoa
   if (openWalletId == null) {
     throw new Error('Bark session is not open')
   }
-  return estimateBoardOffchainFeeFromWasm(boardWasm(await getBarkWasm()), amountSats)
+  return estimateBoardOffchainFeeFromWasm(await getBarkWasm(), amountSats)
 }
 
 async function prepareBoardFundingImpl(): Promise<BarkPreparedBoardFunding> {
   const walletId = requireOpenWalletId()
   return mutateBark(
     walletId,
-    async () => prepareBoardFundingFromWasm(boardWasm(await getBarkWasm())),
+    async () => prepareBoardFundingFromWasm(await getBarkWasm()),
     () => ({}),
   )
 }
@@ -375,20 +361,19 @@ async function boardPsbtImpl(psbtBase64: string): Promise<BarkBoardAccepted> {
   const walletId = requireOpenWalletId()
   return mutateBark(
     walletId,
-    async () => boardPsbtFromWasm(boardWasm(await getBarkWasm()), psbtBase64),
+    async () => boardPsbtFromWasm(await getBarkWasm(), psbtBase64),
     () => ({}),
   )
 }
 
 async function historyImpl(): Promise<BarkMovementRow[]> {
   requireOpenSession()
-  return historyFromWasm(boardWasm(await getBarkWasm()))
+  return historyFromWasm(await getBarkWasm())
 }
 
 async function listVtxosImpl(): Promise<BarkVtxoRow[]> {
   requireOpenSession()
-  const wasmModule = await getBarkWasm()
-  return listVtxosFromWasm(wasmModule as unknown as { bark_list_vtxos(): Promise<string> })
+  return listVtxosFromWasm(await getBarkWasm())
 }
 
 async function estimateSendOnchainImpl(
@@ -398,7 +383,7 @@ async function estimateSendOnchainImpl(
 ): Promise<BarkExitFeeEstimate> {
   requireOpenSession()
   return estimateSendOnchainFromWasm(
-    exitWasm(await getBarkWasm()),
+    await getBarkWasm(),
     address,
     amountSats,
     feeRateSatPerVb,
@@ -414,7 +399,7 @@ async function sendOnchainImpl(
   return mutateBark(
     walletId,
     async () =>
-      sendOnchainFromWasm(exitWasm(await getBarkWasm()), address, amountSats, feeRateSatPerVb),
+      sendOnchainFromWasm(await getBarkWasm(), address, amountSats, feeRateSatPerVb),
     () => ({}),
   )
 }
@@ -424,14 +409,14 @@ async function estimateOffboardAllImpl(
   feeRateSatPerVb: number,
 ): Promise<BarkExitFeeEstimate> {
   requireOpenSession()
-  return estimateOffboardAllFromWasm(exitWasm(await getBarkWasm()), address, feeRateSatPerVb)
+  return estimateOffboardAllFromWasm(await getBarkWasm(), address, feeRateSatPerVb)
 }
 
 async function offboardAllImpl(address: string, feeRateSatPerVb: number): Promise<string> {
   const walletId = requireOpenWalletId()
   return mutateBark(
     walletId,
-    async () => offboardAllFromWasm(exitWasm(await getBarkWasm()), address, feeRateSatPerVb),
+    async () => offboardAllFromWasm(await getBarkWasm(), address, feeRateSatPerVb),
     () => ({}),
   )
 }
@@ -446,7 +431,7 @@ async function sendArkoorPaymentImpl(
       const wasmModule = await getBarkWasm()
       return performBarkArkoorSend(
         barkArkoorSendDepsFromWasm(
-          wasmModule as unknown as BarkArkoorWasm,
+          wasmModule,
           () => readSpendableBalanceImpl(),
           () => syncImpl(),
         ),
@@ -463,7 +448,7 @@ async function estimateEmergencyExitImpl(
 ): Promise<BarkEmergencyExitEstimate> {
   requireOpenSession()
   return estimateEmergencyExitFromWasm(
-    emergencyExitWasm(await getBarkWasm()),
+    await getBarkWasm(),
     vtxoIds,
     feeRateSatPerVb,
   )
@@ -473,26 +458,26 @@ async function startEmergencyExitImpl(vtxoIds: string[]): Promise<void> {
   const walletId = requireOpenWalletId()
   await mutateBark(
     walletId,
-    async () => startEmergencyExitFromWasm(emergencyExitWasm(await getBarkWasm()), vtxoIds),
+    async () => startEmergencyExitFromWasm(await getBarkWasm(), vtxoIds),
     () => ({}),
   )
 }
 
 async function listEmergencyExitsImpl(): Promise<BarkEmergencyExitRow[]> {
   requireOpenSession()
-  return listEmergencyExitsFromWasm(emergencyExitWasm(await getBarkWasm()))
+  return listEmergencyExitsFromWasm(await getBarkWasm())
 }
 
 async function exitTopologyImpl(vtxoIds: string[]): Promise<BarkExitGraph> {
   requireOpenSession()
-  return exitTopologyFromWasm(emergencyExitWasm(await getBarkWasm()), vtxoIds)
+  return exitTopologyFromWasm(await getBarkWasm(), vtxoIds)
 }
 
 async function progressEmergencyExitsImpl(): Promise<BarkEmergencyExitProgress> {
   const walletId = requireOpenWalletId()
   return mutateBark(
     walletId,
-    async () => progressEmergencyExitsFromWasm(emergencyExitWasm(await getBarkWasm())),
+    async () => progressEmergencyExitsFromWasm(await getBarkWasm()),
     () => ({}),
   )
 }
@@ -506,7 +491,7 @@ async function provideEmergencyExitCpfpImpl(
     walletId,
     async () =>
       provideEmergencyExitCpfpFromWasm(
-        emergencyExitWasm(await getBarkWasm()),
+        await getBarkWasm(),
         exitTxid,
         childTxHex,
       ),
@@ -518,7 +503,7 @@ async function cancelEmergencyExitImpl(vtxoId: string): Promise<void> {
   const walletId = requireOpenWalletId()
   await mutateBark(
     walletId,
-    async () => cancelEmergencyExitFromWasm(emergencyExitWasm(await getBarkWasm()), vtxoId),
+    async () => cancelEmergencyExitFromWasm(await getBarkWasm(), vtxoId),
     () => ({}),
   )
 }
@@ -532,7 +517,7 @@ async function drainEmergencyExitsImpl(
     walletId,
     async () =>
       drainEmergencyExitsFromWasm(
-        emergencyExitWasm(await getBarkWasm()),
+        await getBarkWasm(),
         address,
         feeRateSatPerVb,
       ),
@@ -568,197 +553,103 @@ const barkService: BarkService = {
     await closeSessionImpl()
   },
 
-  async peekReceiveAddress(index: number): Promise<string> {
-    try {
-      return await peekReceiveAddressImpl(index)
-    } catch (err) {
-      rethrowBarkError(err)
-    }
+  peekReceiveAddress(index: number): Promise<string> {
+    return callBark(() => peekReceiveAddressImpl(index))
   },
 
-  async revealNextReceiveAddress(): Promise<BarkRevealedReceiveAddress> {
-    try {
-      return await revealNextReceiveAddressImpl()
-    } catch (err) {
-      rethrowBarkError(err)
-    }
+  revealNextReceiveAddress(): Promise<BarkRevealedReceiveAddress> {
+    return callBark(() => revealNextReceiveAddressImpl())
   },
 
-  async sync(): Promise<BarkSyncResult> {
-    try {
-      return await syncImpl()
-    } catch (err) {
-      rethrowBarkError(err)
-    }
+  sync(): Promise<BarkSyncResult> {
+    return callBark(() => syncImpl())
   },
 
-  async readSpendableBalance(): Promise<number> {
-    try {
-      return await readSpendableBalanceImpl()
-    } catch (err) {
-      rethrowBarkError(err)
-    }
+  readSpendableBalance(): Promise<number> {
+    return callBark(() => readSpendableBalanceImpl())
   },
 
-  async estimateBoardOffchainFee(amountSats: number): Promise<BarkBoardFeeEstimate> {
-    try {
-      return await estimateBoardOffchainFeeImpl(amountSats)
-    } catch (err) {
-      rethrowBarkError(err)
-    }
+  estimateBoardOffchainFee(amountSats: number): Promise<BarkBoardFeeEstimate> {
+    return callBark(() => estimateBoardOffchainFeeImpl(amountSats))
   },
 
-  async prepareBoardFunding(): Promise<BarkPreparedBoardFunding> {
-    try {
-      return await prepareBoardFundingImpl()
-    } catch (err) {
-      rethrowBarkError(err)
-    }
+  prepareBoardFunding(): Promise<BarkPreparedBoardFunding> {
+    return callBark(() => prepareBoardFundingImpl())
   },
 
-  async boardPsbt(psbtBase64: string): Promise<BarkBoardAccepted> {
-    try {
-      return await boardPsbtImpl(psbtBase64)
-    } catch (err) {
-      rethrowBarkError(err)
-    }
+  boardPsbt(psbtBase64: string): Promise<BarkBoardAccepted> {
+    return callBark(() => boardPsbtImpl(psbtBase64))
   },
 
-  async history(): Promise<BarkMovementRow[]> {
-    try {
-      return await historyImpl()
-    } catch (err) {
-      rethrowBarkError(err)
-    }
+  history(): Promise<BarkMovementRow[]> {
+    return callBark(() => historyImpl())
   },
 
-  async listVtxos(): Promise<BarkVtxoRow[]> {
-    try {
-      return await listVtxosImpl()
-    } catch (err) {
-      rethrowBarkError(err)
-    }
+  listVtxos(): Promise<BarkVtxoRow[]> {
+    return callBark(() => listVtxosImpl())
   },
 
-  async estimateSendOnchain(
+  estimateSendOnchain(
     address: string,
     amountSats: number,
     feeRateSatPerVb: number,
   ): Promise<BarkExitFeeEstimate> {
-    try {
-      return await estimateSendOnchainImpl(address, amountSats, feeRateSatPerVb)
-    } catch (err) {
-      rethrowBarkError(err)
-    }
+    return callBark(() => estimateSendOnchainImpl(address, amountSats, feeRateSatPerVb))
   },
 
-  async sendOnchain(
+  sendOnchain(
     address: string,
     amountSats: number,
     feeRateSatPerVb: number,
   ): Promise<string> {
-    try {
-      return await sendOnchainImpl(address, amountSats, feeRateSatPerVb)
-    } catch (err) {
-      rethrowBarkError(err)
-    }
+    return callBark(() => sendOnchainImpl(address, amountSats, feeRateSatPerVb))
   },
 
-  async estimateOffboardAll(
-    address: string,
-    feeRateSatPerVb: number,
-  ): Promise<BarkExitFeeEstimate> {
-    try {
-      return await estimateOffboardAllImpl(address, feeRateSatPerVb)
-    } catch (err) {
-      rethrowBarkError(err)
-    }
+  estimateOffboardAll(address: string, feeRateSatPerVb: number): Promise<BarkExitFeeEstimate> {
+    return callBark(() => estimateOffboardAllImpl(address, feeRateSatPerVb))
   },
 
-  async offboardAll(address: string, feeRateSatPerVb: number): Promise<string> {
-    try {
-      return await offboardAllImpl(address, feeRateSatPerVb)
-    } catch (err) {
-      rethrowBarkError(err)
-    }
+  offboardAll(address: string, feeRateSatPerVb: number): Promise<string> {
+    return callBark(() => offboardAllImpl(address, feeRateSatPerVb))
   },
 
-  async sendArkoorPayment(params: BarkArkoorSendParams): Promise<BarkArkoorSendResult> {
-    try {
-      return await sendArkoorPaymentImpl(params)
-    } catch (err) {
-      rethrowBarkError(err)
-    }
+  sendArkoorPayment(params: BarkArkoorSendParams): Promise<BarkArkoorSendResult> {
+    return callBark(() => sendArkoorPaymentImpl(params))
   },
 
-  async estimateEmergencyExit(
+  estimateEmergencyExit(
     vtxoIds: string[],
     feeRateSatPerVb: number,
   ): Promise<BarkEmergencyExitEstimate> {
-    try {
-      return await estimateEmergencyExitImpl(vtxoIds, feeRateSatPerVb)
-    } catch (err) {
-      rethrowBarkError(err)
-    }
+    return callBark(() => estimateEmergencyExitImpl(vtxoIds, feeRateSatPerVb))
   },
 
-  async startEmergencyExit(vtxoIds: string[]): Promise<void> {
-    try {
-      await startEmergencyExitImpl(vtxoIds)
-    } catch (err) {
-      rethrowBarkError(err)
-    }
+  startEmergencyExit(vtxoIds: string[]): Promise<void> {
+    return callBark(() => startEmergencyExitImpl(vtxoIds))
   },
 
-  async listEmergencyExits(): Promise<BarkEmergencyExitRow[]> {
-    try {
-      return await listEmergencyExitsImpl()
-    } catch (err) {
-      rethrowBarkError(err)
-    }
+  listEmergencyExits(): Promise<BarkEmergencyExitRow[]> {
+    return callBark(() => listEmergencyExitsImpl())
   },
 
-  async exitTopology(vtxoIds: string[]): Promise<BarkExitGraph> {
-    try {
-      return await exitTopologyImpl(vtxoIds)
-    } catch (err) {
-      rethrowBarkError(err)
-    }
+  exitTopology(vtxoIds: string[]): Promise<BarkExitGraph> {
+    return callBark(() => exitTopologyImpl(vtxoIds))
   },
 
-  async progressEmergencyExits(): Promise<BarkEmergencyExitProgress> {
-    try {
-      return await progressEmergencyExitsImpl()
-    } catch (err) {
-      rethrowBarkError(err)
-    }
+  progressEmergencyExits(): Promise<BarkEmergencyExitProgress> {
+    return callBark(() => progressEmergencyExitsImpl())
   },
 
-  async provideEmergencyExitCpfp(exitTxid: string, childTxHex: string): Promise<void> {
-    try {
-      await provideEmergencyExitCpfpImpl(exitTxid, childTxHex)
-    } catch (err) {
-      rethrowBarkError(err)
-    }
+  provideEmergencyExitCpfp(exitTxid: string, childTxHex: string): Promise<void> {
+    return callBark(() => provideEmergencyExitCpfpImpl(exitTxid, childTxHex))
   },
 
-  async cancelEmergencyExit(vtxoId: string): Promise<void> {
-    try {
-      await cancelEmergencyExitImpl(vtxoId)
-    } catch (err) {
-      rethrowBarkError(err)
-    }
+  cancelEmergencyExit(vtxoId: string): Promise<void> {
+    return callBark(() => cancelEmergencyExitImpl(vtxoId))
   },
 
-  async drainEmergencyExits(
-    address: string,
-    feeRateSatPerVb: number,
-  ): Promise<BarkEmergencyExitDrain> {
-    try {
-      return await drainEmergencyExitsImpl(address, feeRateSatPerVb)
-    } catch (err) {
-      rethrowBarkError(err)
-    }
+  drainEmergencyExits(address: string, feeRateSatPerVb: number): Promise<BarkEmergencyExitDrain> {
+    return callBark(() => drainEmergencyExitsImpl(address, feeRateSatPerVb))
   },
 }
 

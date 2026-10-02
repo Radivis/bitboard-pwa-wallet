@@ -1,4 +1,7 @@
 use serde::Serialize;
+use wasm_bindgen::prelude::*;
+
+use crate::session::{bark_error, finish_wallet_operation, take_active_wallet};
 
 /// One `Wallet::history` row for the activity list.
 #[derive(Debug, Serialize)]
@@ -31,4 +34,16 @@ fn movement_row(movement: &bark::movement::Movement) -> BarkMovementRow {
         offchain_fee_sats: movement.offchain_fee.to_sat(),
         created_at_unix_seconds: movement.time.created_at.timestamp(),
     }
+}
+
+/// Local fund movements, newest first. Does not require a sync in this session.
+#[wasm_bindgen]
+pub async fn bark_history() -> Result<String, JsValue> {
+    let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
+    let operation_result = async {
+        let movements = wallet.history().await.map_err(bark_error)?;
+        movements_to_json(&movements)
+    }
+    .await;
+    finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
 }

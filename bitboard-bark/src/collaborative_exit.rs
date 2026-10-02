@@ -10,6 +10,15 @@ use std::collections::HashSet;
 use anyhow::anyhow;
 use bitcoin::Amount;
 use bitcoin::hex::DisplayHex;
+use wasm_bindgen::prelude::*;
+
+use crate::board::BarkBoardFeeEstimate;
+use crate::emergency_exit::fee_rate_from_sat_per_vb;
+use crate::exit_address::{classify_offboard_failure, parse_receive_address};
+use crate::session::{
+    bark_error, finish_wallet_operation, require_session_synced, session_bitcoin_network,
+    take_active_wallet,
+};
 
 use bark::WalletVtxo;
 use bark::actions::offboard::{Offboard, OffboardKind, Progress};
@@ -274,4 +283,139 @@ pub async fn offboard_all(
         progress: Progress::Start,
     };
     drive_offboard(wallet, action).await
+}
+
+fn exit_destination(address: &str) -> Result<bitcoin::Address, JsValue> {
+    require_session_synced().map_err(|err| JsValue::from_str(&err))?;
+    let network = session_bitcoin_network().map_err(|err| JsValue::from_str(&err))?;
+    parse_receive_address(address, network).map_err(|err| JsValue::from_str(&err))
+}
+
+fn require_exit_amount(amount_sats: u64) -> Result<(), JsValue> {
+    if amount_sats == 0 {
+        Err(JsValue::from_str("Bark exit amount is invalid"))
+    } else {
+        Ok(())
+    }
+}
+
+fn fee_estimate_from_collaborative(estimate: CollaborativeExitEstimate) -> BarkBoardFeeEstimate {
+    BarkBoardFeeEstimate::from_parts(
+        estimate.gross_amount_sats,
+        estimate.fee_sats,
+        estimate.net_amount_sats,
+    )
+}
+
+fn exit_fee_rate(fee_rate_sat_per_vb: f64) -> Result<bitcoin::FeeRate, JsValue> {
+    fee_rate_from_sat_per_vb(fee_rate_sat_per_vb).map_err(|err| JsValue::from_str(&err))
+}
+
+async fn pending_offboard_ids(wallet: &bark::Wallet) -> Result<HashSet<String>, String> {
+    let pending = wallet.pending_offboards().await.map_err(bark_error)?;
+    Ok(pending.into_iter().map(|offboard| offboard.id()).collect())
+}
+
+async fn offboard_txid_or_parked<E: std::fmt::Display>(
+    wallet: &bark::Wallet,
+    ids_before: HashSet<String>,
+    result: Result<bitcoin::Txid, E>,
+) -> Result<String, String> {
+    match result {
+        Ok(txid) => Ok(txid.to_string()),
+        Err(err) => {
+            let message = bark_error(&err);
+            let ids_after = pending_offboard_ids(wallet).await.unwrap_or_default();
+            Err(classify_offboard_failure(&ids_before, &ids_after, &message))
+        }
+    }
+}
+
+/// Fee for paying `amount_sats` on-chain at the app's sat/vB rate. `net_amount_sats` is what arrives.
+#[wasm_bindgen]
+pub async fn bark_estimate_send_onchain(
+    address: String,
+    amount_sats: u64,
+    fee_rate_sat_per_vb: f64,
+) -> Result<BarkBoardFeeEstimate, JsValue> {
+    require_exit_amount(amount_sats)?;
+    let destination = exit_destination(&address)?;
+    let fee_rate = exit_fee_rate(fee_rate_sat_per_vb)?;
+    let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
+    let operation_result = async {
+        let estimate = estimate_send_onchain(
+            &wallet,
+            &destination,
+            bitcoin::Amount::from_sat(amount_sats),
+            fee_rate,
+        )
+        .await?;
+        Ok(fee_estimate_from_collaborative(estimate))
+    }
+    .await;
+    finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
+}
+
+/// Pays `amount_sats` to an address on the open network at the app's sat/vB rate.
+/// Returns the offboard txid once broadcast.
+/// A park before broadcast is `bark_offboard_parked` when this attempt created a checkpoint.
+#[wasm_bindgen]
+pub async fn bark_send_onchain(
+    address: String,
+    amount_sats: u64,
+    fee_rate_sat_per_vb: f64,
+) -> Result<String, JsValue> {
+    require_exit_amount(amount_sats)?;
+    let destination = exit_destination(&address)?;
+    let fee_rate = exit_fee_rate(fee_rate_sat_per_vb)?;
+    let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
+    let operation_result = async {
+        let ids_before = pending_offboard_ids(&wallet).await?;
+        let result = send_onchain(
+            &wallet,
+            destination,
+            bitcoin::Amount::from_sat(amount_sats),
+            fee_rate,
+        )
+        .await;
+        offboard_txid_or_parked(&wallet, ids_before, result).await
+    }
+    .await;
+    finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
+}
+
+/// Fee for offboarding every spendable VTXO at the app's sat/vB rate. `net_amount_sats` is what arrives.
+#[wasm_bindgen]
+pub async fn bark_estimate_offboard_all(
+    address: String,
+    fee_rate_sat_per_vb: f64,
+) -> Result<BarkBoardFeeEstimate, JsValue> {
+    let destination = exit_destination(&address)?;
+    let fee_rate = exit_fee_rate(fee_rate_sat_per_vb)?;
+    let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
+    let operation_result = async {
+        let estimate = estimate_offboard_all(&wallet, &destination, fee_rate).await?;
+        Ok(fee_estimate_from_collaborative(estimate))
+    }
+    .await;
+    finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
+}
+
+/// Offboards every spendable VTXO to an address on the open network at the app's sat/vB rate.
+/// Returns the offboard txid once broadcast.
+#[wasm_bindgen]
+pub async fn bark_offboard_all(
+    address: String,
+    fee_rate_sat_per_vb: f64,
+) -> Result<String, JsValue> {
+    let destination = exit_destination(&address)?;
+    let fee_rate = exit_fee_rate(fee_rate_sat_per_vb)?;
+    let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
+    let operation_result = async {
+        let ids_before = pending_offboard_ids(&wallet).await?;
+        let result = offboard_all(&wallet, destination, fee_rate).await;
+        offboard_txid_or_parked(&wallet, ids_before, result).await
+    }
+    .await;
+    finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
 }

@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { Link, useNavigate } from '@tanstack/react-router'
+import { useNavigate } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { BarkRailUnavailable } from '@/components/bark/BarkRailUnavailable'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -46,15 +47,12 @@ export function BarkExitPage() {
 
   if (!isBarkEnabled || !isBarkNetworkMode(networkMode)) {
     return (
-      <div className="space-y-4">
-        <PageHeader title="Exit Bark to on-chain" />
-        <p className="text-muted-foreground">
-          Bark exit is available on Signet and Mainnet when Bark is enabled.
-        </p>
-        <Button type="button" variant="outline" asChild>
-          <Link to="/wallet">Back</Link>
-        </Button>
-      </div>
+      <BarkRailUnavailable
+        title="Exit Bark to on-chain"
+        message="Bark exit is available on Signet and Mainnet when Bark is enabled."
+        backTo="/wallet"
+        backLabel="Back"
+      />
     )
   }
 

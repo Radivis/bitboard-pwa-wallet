@@ -96,11 +96,22 @@ export interface StoredNwcLightningConnection {
   nwcSnapshot?: NwcConnectionSnapshot
 }
 
-/** Second's public Signet Ark server. */
+/**
+ * Second's public Signet Ark server.
+ * Keep in sync with `BARK_SIGNET_SERVER_URL` in `bitboard-bark/src/lib.rs`.
+ */
 export const BARK_SIGNET_SERVER_URL = 'https://ark.signet.2nd.dev'
 
-/** Second's public Mainnet Ark server. */
+/**
+ * Second's public Mainnet Ark server.
+ * Keep in sync with `BARK_MAINNET_SERVER_URL` in `bitboard-bark/src/lib.rs`.
+ */
 export const BARK_MAINNET_SERVER_URL = 'https://ark.second.tech'
+
+const BARK_RAIL_SERVER_URL: Record<BarkRailNetwork, string> = {
+  signet: BARK_SIGNET_SERVER_URL,
+  mainnet: BARK_MAINNET_SERVER_URL,
+}
 
 /** UTF-8 cap for one network's Bark record dump. Same size as an Arkade SDK blob. */
 export const BARK_RECORD_DUMP_MAX_BYTES = 10 * 1024 * 1024
@@ -242,37 +253,43 @@ function copyOptionalBarkRailFields(
   return rail
 }
 
-/** Signet rail after parse. `network` is not a field; the map key carries it. */
-export function isStoredSignetBarkRail(value: unknown): value is StoredBarkRail {
+function isStoredBarkRailForNetwork(
+  value: unknown,
+  network: BarkRailNetwork,
+): value is StoredBarkRail {
   if (!isRecord(value)) return false
-  if (value.serverUrl !== BARK_SIGNET_SERVER_URL) return false
+  if (value.serverUrl !== BARK_RAIL_SERVER_URL[network]) return false
   if (!isBarkFingerprint(value.fingerprint)) return false
   return optionalBarkRailFieldsMatch(value)
+}
+
+/** Signet rail after parse. `network` is not a field; the map key carries it. */
+export function isStoredSignetBarkRail(value: unknown): value is StoredBarkRail {
+  return isStoredBarkRailForNetwork(value, 'signet')
 }
 
 function isStoredMainnetBarkRail(value: unknown): value is StoredBarkRail {
-  if (!isRecord(value)) return false
-  if (value.serverUrl !== BARK_MAINNET_SERVER_URL) return false
-  if (!isBarkFingerprint(value.fingerprint)) return false
-  return optionalBarkRailFieldsMatch(value)
+  return isStoredBarkRailForNetwork(value, 'mainnet')
+}
+
+function canonicalBarkRail(
+  value: unknown,
+  network: BarkRailNetwork,
+): StoredBarkRail | undefined {
+  if (!isStoredBarkRailForNetwork(value, network)) return undefined
+  const rail: StoredBarkRail = {
+    serverUrl: BARK_RAIL_SERVER_URL[network],
+    fingerprint: value.fingerprint,
+  }
+  return copyOptionalBarkRailFields(value, rail)
 }
 
 function canonicalSignetBarkRail(value: unknown): StoredBarkRail | undefined {
-  if (!isStoredSignetBarkRail(value)) return undefined
-  const rail: StoredBarkRail = {
-    serverUrl: BARK_SIGNET_SERVER_URL,
-    fingerprint: value.fingerprint,
-  }
-  return copyOptionalBarkRailFields(value, rail)
+  return canonicalBarkRail(value, 'signet')
 }
 
 function canonicalMainnetBarkRail(value: unknown): StoredBarkRail | undefined {
-  if (!isStoredMainnetBarkRail(value)) return undefined
-  const rail: StoredBarkRail = {
-    serverUrl: BARK_MAINNET_SERVER_URL,
-    fingerprint: value.fingerprint,
-  }
-  return copyOptionalBarkRailFields(value, rail)
+  return canonicalBarkRail(value, 'mainnet')
 }
 
 function legacySignetBarkRail(value: unknown): StoredBarkRail | undefined {

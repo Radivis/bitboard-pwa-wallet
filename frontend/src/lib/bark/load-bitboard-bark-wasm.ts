@@ -1,4 +1,4 @@
-type BitboardBarkWasm = typeof import('@/wasm-pkg/bitboard_bark/bitboard_bark')
+export type BitboardBarkWasm = typeof import('@/wasm-pkg/bitboard_bark/bitboard_bark')
 
 let cachedBitboardBarkWasm: BitboardBarkWasm | null = null
 
@@ -11,11 +11,15 @@ let cachedBitboardBarkWasm: BitboardBarkWasm | null = null
 export async function loadBitboardBarkWasm(): Promise<BitboardBarkWasm> {
   if (!cachedBitboardBarkWasm) {
     const wasmModule = await import('@/wasm-pkg/bitboard_bark/bitboard_bark')
-    const init = (wasmModule as unknown as { default?: () => Promise<unknown> }).default
-    if (init != null) {
-      await init()
-    }
+    await initLegacyWasmDefault(wasmModule)
     cachedBitboardBarkWasm = wasmModule
   }
   return cachedBitboardBarkWasm
+}
+
+async function initLegacyWasmDefault(wasmModule: object): Promise<void> {
+  if (!('default' in wasmModule)) return
+  const init = wasmModule.default
+  if (typeof init !== 'function') return
+  await init()
 }

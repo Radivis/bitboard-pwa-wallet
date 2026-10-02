@@ -6,23 +6,27 @@ import {
   sugiyama,
 } from 'd3-dag'
 import type { Node } from '@xyflow/react'
-import { Position, getSmoothStepPath } from '@xyflow/react'
+import { getSmoothStepPath } from '@xyflow/react'
 import {
+  connectionPointFromNodeCenter,
+  EXIT_GRAPH_DEFAULT_EDGE_COLOR,
+  EXIT_GRAPH_DEFAULT_STROKE_WIDTH,
+  EXIT_GRAPH_PATH_EDGE_COLOR,
+  EXIT_GRAPH_PATH_STROKE_WIDTH,
   resolveLayoutDirection,
   resolveNodeConnectionPositions,
   shortTxid,
+  UNILATERAL_EXIT_NODE_DIAMETER_PX,
   type UnilateralExitLayoutDirection,
 } from '@/lib/arkade/unilateral-exit-topology'
 import type { BarkExitGraphNode, BarkExitGraphNodeStatus } from '@/workers/bark-api'
 
 export { resolveLayoutDirection, shortTxid }
 
-/** Rendered node diameter in px (`size-12`). */
-export const BARK_EXIT_NODE_DIAMETER_PX = 48
+/** Rendered node diameter in px (`size-12`). Same size as a unilateral-exit node. */
+export const BARK_EXIT_NODE_DIAMETER_PX = UNILATERAL_EXIT_NODE_DIAMETER_PX
 
 const BARK_EXIT_LAYOUT_NODE_SIZE_PX = BARK_EXIT_NODE_DIAMETER_PX * 2
-const EXIT_PATH_EDGE_COLOR = '#3b82f6'
-const DEFAULT_EDGE_COLOR = '#94a3b8'
 
 export type BarkExitGraphEdgePath = {
   id: string
@@ -133,8 +137,8 @@ export function layoutBarkExitGraph(params: {
     const sourceCenter = nodePositionById.get(source)
     const targetCenter = nodePositionById.get(target)
     if (sourceCenter == null || targetCenter == null) return []
-    const sourcePoint = connectionPoint(sourceCenter, sourcePosition)
-    const targetPoint = connectionPoint(targetCenter, targetPosition)
+    const sourcePoint = connectionPointFromNodeCenter(sourceCenter, sourcePosition)
+    const targetPoint = connectionPointFromNodeCenter(targetCenter, targetPosition)
     const [path] = getSmoothStepPath({
       sourceX: sourcePoint.x,
       sourceY: sourcePoint.y,
@@ -149,8 +153,8 @@ export function layoutBarkExitGraph(params: {
         id: `${source}->${target}`,
         path,
         animated: onPath,
-        stroke: onPath ? EXIT_PATH_EDGE_COLOR : DEFAULT_EDGE_COLOR,
-        strokeWidth: onPath ? 2.5 : 1.5,
+        stroke: onPath ? EXIT_GRAPH_PATH_EDGE_COLOR : EXIT_GRAPH_DEFAULT_EDGE_COLOR,
+        strokeWidth: onPath ? EXIT_GRAPH_PATH_STROKE_WIDTH : EXIT_GRAPH_DEFAULT_STROKE_WIDTH,
       },
     ]
   })
@@ -169,10 +173,3 @@ function layoutPosition(
   return { x: layoutX, y: layoutY }
 }
 
-function connectionPoint(center: { x: number; y: number }, side: Position): { x: number; y: number } {
-  const radius = BARK_EXIT_NODE_DIAMETER_PX / 2
-  if (side === Position.Top) return { x: center.x, y: center.y - radius }
-  if (side === Position.Bottom) return { x: center.x, y: center.y + radius }
-  if (side === Position.Left) return { x: center.x - radius, y: center.y }
-  return { x: center.x + radius, y: center.y }
-}

@@ -206,3 +206,27 @@ mod tests {
         }
     }
 }
+
+#[cfg(target_arch = "wasm32")]
+mod wasm_export {
+    use wasm_bindgen::prelude::*;
+
+    use super::{listed_bark_vtxo_from_wallet, listed_vtxos_to_json};
+    use crate::session::{bark_error, finish_wallet_operation, take_active_wallet};
+
+    /// Local VTXOs, including spent and exited. Does not require a sync in this session.
+    #[wasm_bindgen]
+    pub async fn bark_list_vtxos() -> Result<String, JsValue> {
+        let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
+        let operation_result = async {
+            let vtxos = wallet.all_vtxos().await.map_err(bark_error)?;
+            let listed = vtxos
+                .iter()
+                .map(listed_bark_vtxo_from_wallet)
+                .collect::<Vec<_>>();
+            listed_vtxos_to_json(&listed)
+        }
+        .await;
+        finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
+    }
+}

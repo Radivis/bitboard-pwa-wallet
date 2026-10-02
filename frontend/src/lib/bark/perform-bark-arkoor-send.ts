@@ -1,11 +1,11 @@
 import { readBarkSpendableSats } from '@/lib/bark/bark-balance'
+import type { BitboardBarkWasm } from '@/lib/bark/load-bitboard-bark-wasm'
 import type { BarkArkoorSendResult, BarkSyncResult } from '@/workers/bark-api'
 
-export type BarkArkoorWasm = {
-  bark_validate_arkoor_address(address: string): Promise<void>
-  bark_estimate_arkoor_payment_fee(amountSats: bigint): Promise<bigint>
-  bark_send_arkoor(address: string, amountSats: bigint): Promise<void>
-}
+export type BarkArkoorWasm = Pick<
+  BitboardBarkWasm,
+  'bark_validate_arkoor_address' | 'bark_estimate_arkoor_payment_fee' | 'bark_send_arkoor'
+>
 
 export type BarkArkoorSendDeps = {
   validateArkoorAddress: (address: string) => Promise<void>

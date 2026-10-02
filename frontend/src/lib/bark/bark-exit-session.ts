@@ -1,23 +1,14 @@
 import { readBarkBoardFeeEstimate } from '@/lib/bark/bark-board-wasm'
+import type { BitboardBarkWasm } from '@/lib/bark/load-bitboard-bark-wasm'
 import type { BarkExitFeeEstimate } from '@/workers/bark-api'
 
-type WasmFeeEstimate = {
-  gross_amount_sats?: unknown
-  fee_sats?: unknown
-  net_amount_sats?: unknown
-  free?: () => void
-}
-
-export type BarkExitWasm = {
-  bark_estimate_send_onchain(
-    address: string,
-    amountSats: bigint,
-    feeRateSatPerVb: number,
-  ): Promise<WasmFeeEstimate>
-  bark_send_onchain(address: string, amountSats: bigint, feeRateSatPerVb: number): Promise<string>
-  bark_estimate_offboard_all(address: string, feeRateSatPerVb: number): Promise<WasmFeeEstimate>
-  bark_offboard_all(address: string, feeRateSatPerVb: number): Promise<string>
-}
+export type BarkExitWasm = Pick<
+  BitboardBarkWasm,
+  | 'bark_estimate_send_onchain'
+  | 'bark_send_onchain'
+  | 'bark_estimate_offboard_all'
+  | 'bark_offboard_all'
+>
 
 function requireExitAmount(amountSats: number): void {
   if (!Number.isSafeInteger(amountSats) || amountSats <= 0) {

@@ -15,6 +15,9 @@ use crate::validation::fee_rate_from_sat_per_vb_float;
 
 pub const BARK_CPFP_INSUFFICIENT_FUNDS: &str = "bark_cpfp_insufficient_funds";
 
+/// Satisfaction weight BDK adds for the foreign anchor input.
+/// A Pay-to-Anchor spend has an empty witness. That encodes as one byte
+/// (witness stack length 0), and witness bytes count as one weight unit each.
 const FEE_ANCHOR_SPEND_WEIGHT: Weight = Weight::from_wu(1);
 const MAX_FEE_ITERATIONS: usize = 100;
 

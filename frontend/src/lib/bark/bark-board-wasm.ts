@@ -1,23 +1,16 @@
 import type {
+  BarkBoardAccepted as WasmBarkBoardAccepted,
+  BarkBoardFeeEstimate as WasmBarkBoardFeeEstimate,
+  BarkPreparedBoardFunding as WasmBarkPreparedBoardFunding,
+} from '@/wasm-pkg/bitboard_bark/bitboard_bark'
+import type {
   BarkBoardAccepted,
   BarkBoardFeeEstimate,
   BarkPreparedBoardFunding,
 } from '@/workers/bark-api'
 
-type WasmBoardObject = {
-  funding_address?: unknown
-  expiry_height?: unknown
-  gross_amount_sats?: unknown
-  fee_sats?: unknown
-  net_amount_sats?: unknown
-  funding_txid?: unknown
-  vtxo_amount_sats?: unknown
-  movement_id?: unknown
-  free?: () => void
-}
-
 export function readBarkPreparedBoardFunding(
-  value: WasmBoardObject,
+  value: WasmBarkPreparedBoardFunding,
 ): BarkPreparedBoardFunding {
   try {
     return {
@@ -25,11 +18,11 @@ export function readBarkPreparedBoardFunding(
       expiryHeight: readNonNegativeInteger(value.expiry_height, 'Bark board expiry height'),
     }
   } finally {
-    value.free?.()
+    value.free()
   }
 }
 
-export function readBarkBoardFeeEstimate(value: WasmBoardObject): BarkBoardFeeEstimate {
+export function readBarkBoardFeeEstimate(value: WasmBarkBoardFeeEstimate): BarkBoardFeeEstimate {
   try {
     return {
       grossAmountSats: readNonNegativeInteger(value.gross_amount_sats, 'Bark board gross amount'),
@@ -37,11 +30,11 @@ export function readBarkBoardFeeEstimate(value: WasmBoardObject): BarkBoardFeeEs
       netAmountSats: readNonNegativeInteger(value.net_amount_sats, 'Bark board net amount'),
     }
   } finally {
-    value.free?.()
+    value.free()
   }
 }
 
-export function readBarkBoardAccepted(value: WasmBoardObject): BarkBoardAccepted {
+export function readBarkBoardAccepted(value: WasmBarkBoardAccepted): BarkBoardAccepted {
   try {
     return {
       fundingTxid: readNonEmptyString(value.funding_txid, 'Bark board funding txid'),
@@ -49,7 +42,7 @@ export function readBarkBoardAccepted(value: WasmBoardObject): BarkBoardAccepted
       movementId: readNonNegativeInteger(value.movement_id, 'Bark board movement id'),
     }
   } finally {
-    value.free?.()
+    value.free()
   }
 }
 

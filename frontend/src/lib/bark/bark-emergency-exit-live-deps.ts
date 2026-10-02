@@ -55,11 +55,13 @@ export function barkEmergencyExitClaimDeps(): ClaimBarkEmergencyExitDeps {
     },
     syncBark: async () => {
       const { activeWalletId, networkMode } = useWalletStore.getState()
-      if (activeWalletId == null) return
+      if (activeWalletId == null) {
+        throw new Error('Bark session is not open')
+      }
       await orchestrateBarkSync({
         walletId: activeWalletId,
         networkMode,
-        throwOnError: false,
+        throwOnError: true,
       })
     },
     startOnchainBackgroundSync: () => {

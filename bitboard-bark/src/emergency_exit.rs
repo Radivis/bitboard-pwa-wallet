@@ -18,6 +18,7 @@ pub enum BarkEmergencyExitStateKind {
     Canceled,
 }
 
+#[cfg(test)]
 impl BarkEmergencyExitStateKind {
     pub const ALL: [BarkEmergencyExitStateKind; 8] = [
         BarkEmergencyExitStateKind::Start,
@@ -44,6 +45,7 @@ pub fn emergency_exit_state_json(kind: BarkEmergencyExitStateKind) -> &'static s
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 pub fn format_bark_exit_error(code: &str, detail: &str) -> String {
     format!("{code}: {detail}")
 }
@@ -53,6 +55,9 @@ pub fn fee_rate_sat_per_vb(fee_rate: bitcoin::FeeRate) -> f64 {
     fee_rate.to_sat_per_kwu() as f64 / SAT_PER_KWU_PER_SAT_VB
 }
 
+/// Same sat/vB conversion as `fee_rate_from_sat_per_vb_float` in `crypto/src/validation.rs`
+/// and `MAX_FEE_RATE_SAT_PER_VB` in `frontend/src/lib/esplora/esplora-fee-estimates.ts`.
+/// This crate is a separate workspace, so the numbers are copied.
 const SAT_PER_KWU_PER_SAT_VB: f64 = 250.0;
 const MAX_FEE_RATE_SAT_PER_VB: f64 = 1_000_000.0;
 
@@ -74,6 +79,7 @@ pub fn fee_rate_from_sat_per_vb(rate_sat_per_vb: f64) -> Result<bitcoin::FeeRate
     Ok(bitcoin::FeeRate::from_sat_per_kwu(sat_per_kwu as u64))
 }
 
+#[cfg(target_arch = "wasm32")]
 fn encode_hex(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut encoded = String::with_capacity(bytes.len() * 2);
@@ -84,6 +90,7 @@ fn encode_hex(bytes: &[u8]) -> String {
     encoded
 }
 
+#[cfg(target_arch = "wasm32")]
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct EmergencyExitEstimateJson {
@@ -93,6 +100,7 @@ struct EmergencyExitEstimateJson {
     txs_to_broadcast: u64,
 }
 
+#[cfg(target_arch = "wasm32")]
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct EmergencyExitRowJson {
@@ -101,6 +109,7 @@ struct EmergencyExitRowJson {
     cancelable: bool,
 }
 
+#[cfg(target_arch = "wasm32")]
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct EmergencyExitCpfpRequestJson {
@@ -111,12 +120,14 @@ struct EmergencyExitCpfpRequestJson {
     current_package_fee_sats: Option<u64>,
 }
 
+#[cfg(target_arch = "wasm32")]
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct EmergencyExitProgressJson {
     requests: Vec<EmergencyExitCpfpRequestJson>,
 }
 
+#[cfg(target_arch = "wasm32")]
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct EmergencyExitDrainJson {
@@ -124,10 +135,12 @@ struct EmergencyExitDrainJson {
     raw_tx_hex: String,
 }
 
+#[cfg(target_arch = "wasm32")]
 fn json_string(value: &impl Serialize) -> Result<String, String> {
     serde_json::to_string(value).map_err(|err| err.to_string())
 }
 
+#[cfg(target_arch = "wasm32")]
 fn zero_estimate_json(fee_rate_sat_per_vb: f64) -> Result<String, String> {
     json_string(&EmergencyExitEstimateJson {
         exit_broadcast_fee_sats: 0,
@@ -161,6 +174,8 @@ pub struct ExitGraphChain {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ExitGraphChainStatus {
     Pending,
+    /// Set from a live exit state. Native tests construct the other variants.
+    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
     Confirmed,
     Transactions(Vec<ExitGraphTransactionStatus>),
 }
@@ -178,6 +193,8 @@ pub enum ExitGraphTransactionKind {
     Pending,
     WaitingOnInputs,
     NeedsChild,
+    /// Set from a live exit transaction status. Native tests construct the other variants.
+    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
     InProgress,
     Confirmed,
 }
@@ -201,6 +218,7 @@ pub(crate) struct ExitGraphNodeJson {
     waiting_on_txids: Vec<String>,
 }
 
+#[cfg(target_arch = "wasm32")]
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ExitGraphJson {
@@ -367,6 +385,7 @@ fn sorted_unique(mut values: Vec<String>) -> Vec<String> {
     values
 }
 
+#[cfg(target_arch = "wasm32")]
 fn exit_graph_json(nodes: Vec<ExitGraphNodeJson>) -> Result<String, String> {
     json_string(&ExitGraphJson { nodes })
 }
@@ -959,7 +978,11 @@ mod tests {
         let shared = transaction_spending(&[outside]);
         let shared_txid = shared.compute_txid().to_string();
         let nodes = merge_exit_graph(&[
-            chain_from_transactions("vtxo-a", &[shared.clone()], ExitGraphChainStatus::Pending),
+            chain_from_transactions(
+                "vtxo-a",
+                std::slice::from_ref(&shared),
+                ExitGraphChainStatus::Pending,
+            ),
             chain_from_transactions(
                 "vtxo-b",
                 &[shared],

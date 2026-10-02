@@ -4,6 +4,7 @@ import {
   readBarkPreparedBoardFunding,
 } from '@/lib/bark/bark-board-wasm'
 import { readBarkHistoryJson } from '@/lib/bark/bark-history'
+import type { BitboardBarkWasm } from '@/lib/bark/load-bitboard-bark-wasm'
 import type {
   BarkBoardAccepted,
   BarkBoardFeeEstimate,
@@ -11,26 +12,13 @@ import type {
   BarkPreparedBoardFunding,
 } from '@/workers/bark-api'
 
-export type BarkBoardWasm = {
-  bark_estimate_board_offchain_fee(amountSats: bigint): Promise<{
-    gross_amount_sats?: unknown
-    fee_sats?: unknown
-    net_amount_sats?: unknown
-    free?: () => void
-  }>
-  bark_prepare_board_funding(): Promise<{
-    funding_address?: unknown
-    expiry_height?: unknown
-    free?: () => void
-  }>
-  bark_board_psbt(psbtBase64: string): Promise<{
-    funding_txid?: unknown
-    vtxo_amount_sats?: unknown
-    movement_id?: unknown
-    free?: () => void
-  }>
-  bark_history(): Promise<string>
-}
+export type BarkBoardWasm = Pick<
+  BitboardBarkWasm,
+  | 'bark_estimate_board_offchain_fee'
+  | 'bark_prepare_board_funding'
+  | 'bark_board_psbt'
+  | 'bark_history'
+>
 
 /** Fee estimate only. Does not derive a VTXO key or touch the receive cursor. */
 export async function estimateBoardOffchainFeeFromWasm(
