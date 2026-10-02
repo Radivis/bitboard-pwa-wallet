@@ -7,6 +7,10 @@ use wasm_bindgen::prelude::*;
 
 use crate::board::clear_prepared_board_funding;
 use crate::record_store::SharedRecordStore;
+use crate::refresh::{
+    BARK_REFRESH_PENDING, BARK_REFRESH_WARNING, refresh_status_after_schedule,
+    should_schedule_delegated_refresh,
+};
 use crate::sync_gate::BarkSessionSyncGate;
 use crate::{
     BARK_MAINNET_ESPLORA_URL, BARK_MAINNET_SERVER_URL, BARK_SIGNET_ESPLORA_URL,
@@ -329,23 +333,45 @@ pub async fn bark_last_revealed_key_index() -> Result<JsValue, JsValue> {
     }
 }
 
-/// Heartbeats the Signet server, then runs `Wallet::sync` and drives pending boards.
+/// Heartbeats the server, then runs `Wallet::sync` and drives pending boards.
 /// `Wallet::sync` returns `()` and only logs sub-step failures, so a dead server
 /// is reported by `refresh_server` and does not mark this session as synced.
 /// `sync_pending_boards` parks a board while it waits for confirmations.
+///
+/// After that sync, schedules one delegated VTXO refresh when none is pending.
+/// A scheduling failure still marks this session synced and returns `warning`.
+/// The status is `idle`, `scheduled`, `pending`, or `warning`.
 #[wasm_bindgen]
-pub async fn bark_sync() -> Result<(), JsValue> {
+pub async fn bark_sync() -> Result<String, JsValue> {
     let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
     let operation_result = async {
         wallet.refresh_server().await.map_err(bark_error)?;
         wallet.sync().await;
         wallet.sync_pending_boards().await.map_err(bark_error)?;
-        Ok(())
+        Ok(delegated_refresh_status(&wallet).await)
     }
     .await;
-    finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))?;
+    let refresh_status =
+        finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))?;
     mark_session_synced();
-    Ok(())
+    Ok(refresh_status)
+}
+
+/// `Wallet::sync` already resumes a stored delegated round. Submit another
+/// only when that list is empty. Selector misses and schedule errors stay
+/// inside this status so the caller can still treat the sync as successful.
+async fn delegated_refresh_status(wallet: &bark::Wallet) -> String {
+    let pending_round_count = match wallet.pending_round_states().await {
+        Ok(states) => states.len(),
+        Err(_) => return BARK_REFRESH_WARNING.to_owned(),
+    };
+    if !should_schedule_delegated_refresh(pending_round_count) {
+        return BARK_REFRESH_PENDING.to_owned();
+    }
+    match wallet.maybe_schedule_maintenance_refresh_delegated().await {
+        Ok(scheduled) => refresh_status_after_schedule(scheduled.is_some()).to_owned(),
+        Err(_) => BARK_REFRESH_WARNING.to_owned(),
+    }
 }
 
 fn spendable_sats(balance: &bark::Balance) -> u64 {

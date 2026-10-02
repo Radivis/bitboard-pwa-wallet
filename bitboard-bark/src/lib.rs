@@ -20,6 +20,8 @@ mod vtxo_list;
 
 #[cfg(any(test, target_arch = "wasm32"))]
 mod record_store;
+#[cfg(any(test, target_arch = "wasm32"))]
+mod refresh;
 
 #[cfg(target_arch = "wasm32")]
 mod arkoor;

@@ -81,6 +81,7 @@ describe('useMainnetFiatRatesQuery', () => {
       errorMessage: null,
       spendableSats: 25_000,
       lastSuccessfulSyncAt: '2024-03-01T12:00:00.000Z',
+      refreshStatus: 'idle',
     })
 
     const { result } = renderHook(() => useMainnetFiatRatesQuery(), {

@@ -1,5 +1,6 @@
 import { getBarkWorker } from '@/workers/bark-factory'
 import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
+import type { BarkRefreshStatus } from '@/lib/bark/bark-refresh-status'
 import type { NetworkMode } from '@/stores/walletStore'
 import { getBarkLoadLifecycleSnapshot } from '@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator'
 import type { SyncLifecyclePhase } from '@/lib/wallet/lifecycle/rail-lifecycle-types'
@@ -16,6 +17,7 @@ export type BarkSyncLifecycleSnapshot = {
   /** Spendable sats from the last successful sync in this unlocked session. */
   spendableSats: number | null
   lastSuccessfulSyncAt: string | null
+  refreshStatus: BarkRefreshStatus
 }
 
 export type BarkSyncParams = {
@@ -32,6 +34,7 @@ function idleBarkSyncSnapshot(): BarkSyncLifecycleSnapshot {
     errorMessage: null,
     spendableSats: null,
     lastSuccessfulSyncAt: null,
+    refreshStatus: 'idle',
   }
 }
 
@@ -90,6 +93,7 @@ export function prepareBarkSyncForSessionOpen(networkMode: NetworkMode): void {
     errorMessage: null,
     spendableSats: null,
     lastSuccessfulSyncAt: null,
+    refreshStatus: 'idle',
   })
 }
 
@@ -147,6 +151,7 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
       errorMessage: null,
       spendableSats: previous.spendableSats,
       lastSuccessfulSyncAt: previous.lastSuccessfulSyncAt,
+      refreshStatus: previous.refreshStatus,
     })
     try {
       const worker = getBarkWorker()
@@ -161,6 +166,7 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
         errorMessage: null,
         spendableSats,
         lastSuccessfulSyncAt: synced.lastSuccessfulSyncAt,
+        refreshStatus: synced.refreshStatus ?? 'idle',
       })
     } catch (error) {
       if (generation !== sessionGeneration) {
@@ -173,6 +179,7 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
         errorMessage: userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK),
         spendableSats: kept.spendableSats,
         lastSuccessfulSyncAt: kept.lastSuccessfulSyncAt,
+        refreshStatus: kept.refreshStatus,
       })
       if (throwOnError) {
         throw error
@@ -207,6 +214,7 @@ export function recordBarkSpendableAfterSend(result: {
     errorMessage: null,
     spendableSats: result.spendableSats,
     lastSuccessfulSyncAt: result.lastSuccessfulSyncAt,
+    refreshStatus: current.refreshStatus,
   })
 }
 

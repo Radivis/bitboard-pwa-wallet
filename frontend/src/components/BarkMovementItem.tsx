@@ -53,7 +53,9 @@ export function BarkMovementItem({ movement }: BarkMovementItemProps) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-medium">{STATUS_LABEL[movement.status]}</p>
-            <DashboardActivityRailBadge label={barkMovementActivityLabel(movement.subsystemName)} />
+            <DashboardActivityRailBadge
+              label={barkMovementActivityLabel(movement.subsystemName, movement.subsystemKind)}
+            />
           </div>
           {timestamp != null && (
             <button

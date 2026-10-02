@@ -1,6 +1,9 @@
 import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
 import type { HistoricalSignetOnchainChain } from '@/lib/wallet/historical-signet-onchain-chain'
 import type { EncryptedBlobMessage } from '@/workers/secrets-channel-types'
+import type { BarkRefreshStatus } from '@/lib/bark/bark-refresh-status'
+
+export type { BarkRefreshStatus }
 
 export type OpenBarkSessionParams = {
   walletId: number
@@ -16,6 +19,7 @@ export type OpenBarkSessionResult = {
 
 export type BarkSyncResult = {
   lastSuccessfulSyncAt: string
+  refreshStatus: BarkRefreshStatus
 }
 
 export type BarkRevealedReceiveAddress = {

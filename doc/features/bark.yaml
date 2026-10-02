@@ -9,6 +9,7 @@ feature:
   user_stories:
     - As a user with Bark enabled on signet or mainnet, I want the dashboard to show my Bark spendable balance on its own card
     - As a user, I want a failed Bark sync to keep the last shown spendable amount and show the rail sync error
+    - As a user with Bark enabled on signet or mainnet, I want a sync to schedule a delegated refresh when coins are due, and to see whether that refresh was scheduled, is still pending, or could not be scheduled, without losing the spendable amount
     - As a user, I want Bark to sync after unlock, from the Sync control, and on the same periodic interval policy as the other rails
     - As a user with Bark enabled on signet or mainnet, I want to board an amount from my on-chain wallet into Bark
     - As a user, I want a failed board to leave my on-chain wallet unspent
@@ -40,6 +41,10 @@ feature:
     - Confirm submits the exit to Bark. It does not broadcast through the on-chain Esplora client
     - A parked exit stays pending and continues on the next Bark sync
     - A bark.offboard movement is labeled as a Bark exit
+    - A bark.round movement whose kind is refresh is labeled Bark refresh, including a failed row
+    - After Wallet sync succeeds, a delegated refresh is scheduled only when no round is already pending and Bark's selector finds coins that must refresh
+    - A scheduling failure keeps the last shown spendable amount and does not use the rail sync error banner
+    - The Bark card shows a notice when a refresh was scheduled or is still pending, and a distinct warning when scheduling failed
     - The VTXO list link and page exist only when isBarkEnabled and the network is signet or mainnet
     - The VTXO list is the local Bark database. It is not an operator snapshot
     - Spent and Exited VTXOs stay hidden until the user shows them. Locked VTXOs stay visible
@@ -87,6 +92,12 @@ feature:
       - id: DASH-BARK-06
         description: The first sync error of a session shows the banner and no spendable amount
         implemented_by: frontend/src/components/wallet/__tests__/BarkDashboardBalance.test.tsx
+      - id: DASH-BARK-07
+        description: A scheduled or pending refresh shows a notice and does not show the rail sync error banner
+        implemented_by: frontend/src/components/wallet/__tests__/BarkDashboardBalance.test.tsx
+      - id: DASH-BARK-08
+        description: A refresh warning keeps the spendable amount and is not the rail sync error banner
+        implemented_by: frontend/src/components/wallet/__tests__/BarkDashboardBalance.test.tsx
     sync:
       - id: BARK-SYNC-01
         description: bark_balance is refused until this session has completed a successful sync
@@ -102,6 +113,13 @@ feature:
           Periodic Bark sync stays off unless the master toggle, the Bark rail, the Bark feature,
           signet or mainnet, and a visible tab all apply
         implemented_by: frontend/src/lib/wallet/periodic-sync/__tests__/resolve-periodic-sync-refetch-interval.test.ts
+      - id: BARK-SYNC-05
+        description: >
+          A refresh warning after a successful sync keeps the spendable amount and does not set the rail sync error
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/bark-sync-lifecycle-orchestrator.test.ts
+      - id: BARK-SYNC-06
+        description: Pending rounds skip scheduling another delegated refresh
+        implemented_by: bitboard-bark/src/refresh.rs
     metadata:
       - id: BARK-META-01
         description: A successful sync stamp keeps the fingerprint and receive index and writes an ISO timestamp
@@ -150,6 +168,9 @@ feature:
         implemented_by: frontend/src/pages/wallet/__tests__/DashboardPage.arkade.test.tsx
       - id: BARK-HIST-04
         description: A movement row shows status and the signed effective amount, including failures
+        implemented_by: frontend/src/components/__tests__/BarkMovementItem.test.tsx
+      - id: BARK-HIST-05
+        description: A bark.round refresh movement is labeled Bark refresh, including a failed row
         implemented_by: frontend/src/components/__tests__/BarkMovementItem.test.tsx
     exit:
       - id: BARK-EXIT-01

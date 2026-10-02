@@ -31,6 +31,7 @@ const syncSnapshot = vi.hoisted(() => ({
     errorMessage: null as string | null,
     spendableSats: null as number | null,
     lastSuccessfulSyncAt: null as string | null,
+    refreshStatus: 'idle' as 'idle' | 'scheduled' | 'pending' | 'warning',
   },
 }))
 
@@ -100,6 +101,7 @@ describe('BarkDashboardBalance', () => {
       errorMessage: null,
       spendableSats: null,
       lastSuccessfulSyncAt: null,
+      refreshStatus: 'idle',
     }
   })
 
@@ -186,6 +188,7 @@ describe('BarkDashboardBalance', () => {
       errorMessage: 'Bark server unreachable',
       spendableSats: 50_000,
       lastSuccessfulSyncAt: '2024-03-01T12:00:00.000Z',
+      refreshStatus: 'idle',
     }
     renderWithProviders(<BarkDashboardBalance />)
     expect(screen.getByTestId('wallet-sync-error-banner-bark')).toBeInTheDocument()
@@ -200,9 +203,57 @@ describe('BarkDashboardBalance', () => {
       errorMessage: 'Bark server unreachable',
       spendableSats: null,
       lastSuccessfulSyncAt: null,
+      refreshStatus: 'idle',
     }
     renderWithProviders(<BarkDashboardBalance />)
     expect(screen.getByTestId('wallet-sync-error-banner-bark')).toBeInTheDocument()
     expect(screen.queryByTestId('dashboard-bark-balance-amount')).not.toBeInTheDocument()
+  })
+
+  it('DASH-BARK-07 shows a refresh notice and not the sync error banner', () => {
+    syncSnapshot.current = {
+      syncPhase: 'not-syncing',
+      networkMode: 'signet',
+      errorMessage: null,
+      spendableSats: 50_000,
+      lastSuccessfulSyncAt: '2024-03-01T12:00:00.000Z',
+      refreshStatus: 'scheduled',
+    }
+    const scheduled = renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.getByTestId('dashboard-bark-refresh-notice')).toHaveTextContent(
+      'Bark refresh scheduled',
+    )
+    expect(screen.queryByTestId('wallet-sync-error-banner-bark')).not.toBeInTheDocument()
+    expect(screen.getByTestId('dashboard-bark-balance-amount')).toHaveTextContent('0.00050000')
+    scheduled.unmount()
+
+    syncSnapshot.current = {
+      ...syncSnapshot.current,
+      refreshStatus: 'pending',
+    }
+    renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.getByTestId('dashboard-bark-refresh-notice')).toHaveTextContent(
+      'still in progress',
+    )
+    expect(screen.queryByTestId('dashboard-bark-refresh-warning')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('wallet-sync-error-banner-bark')).not.toBeInTheDocument()
+  })
+
+  it('DASH-BARK-08 keeps the amount and shows a refresh warning instead of the sync error banner', () => {
+    syncSnapshot.current = {
+      syncPhase: 'not-syncing',
+      networkMode: 'signet',
+      errorMessage: null,
+      spendableSats: 50_000,
+      lastSuccessfulSyncAt: '2024-03-01T12:00:00.000Z',
+      refreshStatus: 'warning',
+    }
+    renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.getByTestId('dashboard-bark-refresh-warning')).toHaveTextContent(
+      'could not schedule a refresh',
+    )
+    expect(screen.queryByTestId('wallet-sync-error-banner-bark')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('dashboard-bark-refresh-notice')).not.toBeInTheDocument()
+    expect(screen.getByTestId('dashboard-bark-balance-amount')).toHaveTextContent('0.00050000')
   })
 })

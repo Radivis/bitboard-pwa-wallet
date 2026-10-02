@@ -23,7 +23,10 @@ function sendDeps() {
     }),
     sync: vi.fn(async () => {
       calls.push('sync')
-      return { lastSuccessfulSyncAt: '2026-10-01T12:00:00.000Z' }
+      return {
+        lastSuccessfulSyncAt: '2026-10-01T12:00:00.000Z',
+        refreshStatus: 'idle' as const,
+      }
     }),
   }
   return { calls, deps }

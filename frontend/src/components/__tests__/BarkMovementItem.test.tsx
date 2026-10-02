@@ -37,4 +37,20 @@ describe('BarkMovementItem', () => {
     )
     expect(screen.getByTestId('bark-movement-8')).toHaveTextContent('Bark exit')
   })
+
+  it('BARK-HIST-05 shows a failed bark.round refresh as Bark refresh', () => {
+    renderWithProviders(
+      <BarkMovementItem
+        movement={{
+          ...failedBoard,
+          id: 9,
+          subsystemName: 'bark.round',
+          subsystemKind: 'refresh',
+        }}
+      />,
+    )
+    const row = screen.getByTestId('bark-movement-9')
+    expect(row).toHaveTextContent('Failed')
+    expect(row).toHaveTextContent('Bark refresh')
+  })
 })

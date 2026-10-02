@@ -11,6 +11,11 @@ import { useBarkSyncLifecycleSnapshot } from '@/hooks/useBarkSyncLifecycleSnapsh
 import { useBarkManualSyncMutation } from '@/hooks/useRailManualSyncMutations'
 import { orchestrateBarkLoad } from '@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator'
 import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
+import {
+  barkRefreshNoticeText,
+  barkRefreshWarningText,
+  type BarkRefreshStatus,
+} from '@/lib/bark/bark-refresh-status'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
@@ -108,6 +113,7 @@ export function BarkDashboardBalance() {
             data-testid="dashboard-bark-balance-amount"
           />
         ) : null}
+        <BarkRefreshStatusLine status={syncSnapshot.refreshStatus} />
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" size="sm" asChild>
             <Link to="/wallet/bark/board" data-testid="dashboard-bark-board-link">
@@ -122,5 +128,23 @@ export function BarkDashboardBalance() {
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+function BarkRefreshStatusLine({ status }: { status: BarkRefreshStatus | undefined }) {
+  const notice = status == null ? null : barkRefreshNoticeText(status)
+  if (notice != null) {
+    return (
+      <p className="text-sm text-muted-foreground" data-testid="dashboard-bark-refresh-notice">
+        {notice}
+      </p>
+    )
+  }
+  const warning = status == null ? null : barkRefreshWarningText(status)
+  if (warning == null) return null
+  return (
+    <p className="text-sm text-destructive" data-testid="dashboard-bark-refresh-warning">
+      {warning}
+    </p>
   )
 }

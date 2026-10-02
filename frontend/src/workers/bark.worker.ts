@@ -1,5 +1,6 @@
 import { expose, wrap, type Remote } from 'comlink'
 import { readBarkSpendableSats } from '@/lib/bark/bark-balance'
+import { readBarkRefreshStatus } from '@/lib/bark/bark-refresh-status'
 import {
   barkArkoorSendDepsFromWasm,
   performBarkArkoorSend,
@@ -320,8 +321,11 @@ async function syncImpl(): Promise<BarkSyncResult> {
     walletId,
     async () => {
       const wasmModule = await getBarkWasm()
-      await wasmModule.bark_sync()
-      return { lastSuccessfulSyncAt: new Date().toISOString() }
+      const refreshStatus = readBarkRefreshStatus(await wasmModule.bark_sync())
+      return {
+        lastSuccessfulSyncAt: new Date().toISOString(),
+        refreshStatus,
+      }
     },
     (result) => ({ lastSuccessfulSyncAt: result.lastSuccessfulSyncAt }),
   )

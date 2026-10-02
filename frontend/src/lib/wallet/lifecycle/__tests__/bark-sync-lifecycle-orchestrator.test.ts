@@ -102,4 +102,23 @@ describe('bark-sync-lifecycle-orchestrator', () => {
       errorMessage: 'Bark server unreachable',
     })
   })
+
+  it('BARK-SYNC-05 keeps the spendable amount when refresh scheduling warns', async () => {
+    await orchestrateBarkSync({ walletId: 1, networkMode: 'signet' })
+    workerMocks.sync.mockResolvedValueOnce({
+      lastSuccessfulSyncAt: '2024-03-02T12:00:00.000Z',
+      refreshStatus: 'warning',
+    })
+    workerMocks.readSpendableBalance.mockResolvedValueOnce(50_000)
+
+    await orchestrateBarkSync({ walletId: 1, networkMode: 'signet' })
+
+    expect(getBarkSyncLifecycleSnapshot()).toMatchObject({
+      syncPhase: 'not-syncing',
+      spendableSats: 50_000,
+      lastSuccessfulSyncAt: '2024-03-02T12:00:00.000Z',
+      errorMessage: null,
+      refreshStatus: 'warning',
+    })
+  })
 })

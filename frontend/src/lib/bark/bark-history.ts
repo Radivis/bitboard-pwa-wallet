@@ -7,7 +7,11 @@ const BARK_MOVEMENT_STATUSES: readonly BarkMovementStatus[] = [
   'canceled',
 ]
 
-export function barkMovementActivityLabel(subsystemName: string): string {
+export function barkMovementActivityLabel(
+  subsystemName: string,
+  subsystemKind = '',
+): string {
+  if (subsystemName === 'bark.round' && subsystemKind === 'refresh') return 'Bark refresh'
   if (subsystemName === 'bark.board') return 'Bark boarding'
   if (subsystemName === 'bark.offboard') return 'Bark exit'
   if (subsystemName === 'bark.exit') return 'Bark emergency exit'

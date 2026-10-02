@@ -12,6 +12,11 @@ describe('barkMovementActivityLabel', () => {
     expect(barkMovementActivityLabel('bark.exit')).toBe('Bark emergency exit')
     expect(barkMovementActivityLabel('bark.offboard')).toBe('Bark exit')
   })
+
+  it('BARK-HIST-05 labels a bark.round refresh as Bark refresh', () => {
+    expect(barkMovementActivityLabel('bark.round', 'refresh')).toBe('Bark refresh')
+    expect(barkMovementActivityLabel('bark.round', 'other')).toBe('Bark')
+  })
 })
 
 describe('readBarkHistoryJson', () => {
