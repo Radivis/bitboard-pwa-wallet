@@ -173,14 +173,10 @@ export interface BarkService {
   boardPsbt(psbtBase64: string): Promise<BarkBoardAccepted>
   history(): Promise<BarkMovementRow[]>
   listVtxos(): Promise<BarkVtxoList>
-  estimateSendOnchain(
-    address: string,
-    amountSats: number,
-    feeRateSatPerVb: number,
-  ): Promise<BarkExitFeeEstimate>
-  sendOnchain(address: string, amountSats: number, feeRateSatPerVb: number): Promise<string>
-  estimateOffboardAll(address: string, feeRateSatPerVb: number): Promise<BarkExitFeeEstimate>
-  offboardAll(address: string, feeRateSatPerVb: number): Promise<string>
+  estimateSendOnchain(address: string, amountSats: number): Promise<BarkExitFeeEstimate>
+  sendOnchain(address: string, amountSats: number): Promise<string>
+  estimateOffboardAll(address: string): Promise<BarkExitFeeEstimate>
+  offboardAll(address: string): Promise<string>
   sendArkoorPayment(params: BarkArkoorSendParams): Promise<BarkArkoorSendResult>
   estimateEmergencyExit(
     vtxoIds: string[],

@@ -22,12 +22,6 @@ const syncSnapshot = vi.hoisted(() => ({
   current: { spendableSats: 50_000 as number | null },
 }))
 
-const feePresets = vi.hoisted(() => ({
-  data: { Low: 0.5, Medium: 2, High: 1 } as
-    | { Low: number; Medium: number; High: number }
-    | undefined,
-}))
-
 const reviewBarkExitAmount = vi.hoisted(() => vi.fn())
 const reviewBarkExitAll = vi.hoisted(() => vi.fn())
 const performBarkExit = vi.hoisted(() => vi.fn())
@@ -75,10 +69,6 @@ vi.mock('@/hooks/useBarkSyncLifecycleSnapshot', () => ({
   useBarkSyncLifecycleSnapshot: () => syncSnapshot.current,
 }))
 
-vi.mock('@/hooks/useEsploraFeePresets', () => ({
-  useEsploraFeePresets: () => ({ data: feePresets.data }),
-}))
-
 vi.mock('@/lib/bark/review-bark-exit', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/bark/review-bark-exit')>()
   return { ...actual, reviewBarkExitAmount, reviewBarkExitAll }
@@ -106,7 +96,6 @@ const amountReview = {
   mode: 'amount' as const,
   destinationAddress: 'tb1qcurrent',
   amountSats: 10_000,
-  feeRateSatPerVb: 1,
   feeSats: 250,
   onchainAmountSats: 10_000,
   grossAmountSats: 10_250,
@@ -119,7 +108,6 @@ describe('BarkExitPage', () => {
     walletStoreState.currentAddress = 'tb1qcurrent'
     walletStoreState.loadedDescriptorWallet = { networkMode: 'signet' }
     syncSnapshot.current = { spendableSats: 50_000 }
-    feePresets.data = { Low: 0.5, Medium: 2, High: 1 }
     reviewBarkExitAmount.mockReset()
     reviewBarkExitAll.mockReset()
     performBarkExit.mockReset()
@@ -155,29 +143,12 @@ describe('BarkExitPage', () => {
       expect.objectContaining({
         destinationAddress: 'tb1qcurrent',
         amountSats: 10_000,
-        feeRateSatPerVb: 1,
       }),
     )
-    expect(await screen.findByTestId('bark-exit-fee-rate')).toHaveTextContent('1')
-    expect(screen.getByTestId('bark-exit-fee')).toHaveTextContent('250')
+    expect(await screen.findByTestId('bark-exit-fee')).toHaveTextContent('250')
     expect(screen.getByTestId('bark-exit-onchain-amount')).toHaveTextContent('10000')
     expect(screen.getByTestId('bark-exit-destination')).toHaveTextContent('tb1qcurrent')
     expect(screen.queryByTestId('bark-exit-confirm')).toBeInTheDocument()
-  })
-
-  it('uses the high fee fallback when Esplora presets are missing', async () => {
-    feePresets.data = undefined
-    reviewBarkExitAmount.mockResolvedValue({ ...amountReview, feeRateSatPerVb: 10 })
-    renderWithProviders(<BarkExitPage />)
-    fireEvent.change(screen.getByTestId('bark-exit-amount'), { target: { value: '10000' } })
-    fireEvent.click(screen.getByTestId('bark-exit-review-amount'))
-
-    await waitFor(() => {
-      expect(reviewBarkExitAmount).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({ feeRateSatPerVb: 10 }),
-      )
-    })
   })
 
   it('confirm uses the current address and does not reveal a new one', async () => {

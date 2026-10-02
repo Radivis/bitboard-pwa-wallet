@@ -183,10 +183,10 @@ feature:
         description: The exit page is not a form unless Bark is enabled on signet or mainnet
         implemented_by: frontend/src/pages/wallet/__tests__/BarkExitPage.test.tsx
       - id: BARK-EXIT-04
-        description: Review prices the exit at the app Esplora high fee rate and shows that fee and the on-chain amount before confirm
+        description: Review prices the exit at the server offboard fee rate and shows that fee and the on-chain amount before confirm
         implemented_by: frontend/src/pages/wallet/__tests__/BarkExitPage.test.tsx
       - id: BARK-EXIT-05
-        description: Confirm sends the reviewed amount to the current receive address at the reviewed fee rate and does not reveal a new address or broadcast via Esplora
+        description: Confirm sends the reviewed amount to the current receive address at the server offboard fee rate and does not reveal a new address or broadcast via Esplora
         implemented_by: frontend/src/lib/bark/__tests__/perform-bark-exit.test.ts
       - id: BARK-EXIT-06
         description: Exit entire balance offboards every spendable VTXO to the current receive address

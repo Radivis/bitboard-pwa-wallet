@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { useBarkSyncLifecycleSnapshot } from '@/hooks/useBarkSyncLifecycleSnapshot'
-import { useEsploraFeePresets } from '@/hooks/useEsploraFeePresets'
 import { barkExitPerformDeps, barkExitReviewDeps } from '@/lib/bark/bark-exit-live-deps'
 import { BarkOffboardParkedError, performBarkExit } from '@/lib/bark/perform-bark-exit'
 import {
@@ -17,10 +16,6 @@ import {
   reviewBarkExitAmount,
   type BarkExitReview,
 } from '@/lib/bark/review-bark-exit'
-import {
-  formatSatPerVbTwoDecimals,
-  NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB,
-} from '@/lib/esplora/esplora-fee-estimates'
 import { errorMessage } from '@/lib/shared/utils'
 import { formatSats } from '@/lib/wallet/bitcoin-utils'
 import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
@@ -35,9 +30,6 @@ export function BarkExitPage() {
   const currentAddress = useWalletStore((walletState) => walletState.currentAddress)
   const isBarkEnabled = useFeatureStore((featureState) => featureState.isBarkEnabled)
   const spendableSats = useBarkSyncLifecycleSnapshot().spendableSats
-  const feePresetsQuery = useEsploraFeePresets(networkMode)
-  const feeRateSatPerVb =
-    feePresetsQuery.data?.High ?? NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB.High
   const navigate = useNavigate()
   const [amountRaw, setAmountRaw] = useState('')
   const [review, setReview] = useState<BarkExitReview | null>(null)
@@ -73,7 +65,6 @@ export function BarkExitPage() {
         await reviewBarkExitAmount(barkExitReviewDeps(), {
           destinationAddress,
           amountSats,
-          feeRateSatPerVb,
         }),
       )
     } catch (err) {
@@ -89,7 +80,7 @@ export function BarkExitPage() {
     setReviewError(null)
     try {
       setReview(
-        await reviewBarkExitAll(barkExitReviewDeps(), { destinationAddress, feeRateSatPerVb }),
+        await reviewBarkExitAll(barkExitReviewDeps(), { destinationAddress }),
       )
     } catch (err) {
       setReview(null)
@@ -197,10 +188,7 @@ export function BarkExitPage() {
                 <CardTitle className="text-base">Review</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
-                <p data-testid="bark-exit-fee-rate">
-                  Fee rate: {formatSatPerVbTwoDecimals(review.feeRateSatPerVb)} sat/vB
-                </p>
-                <p data-testid="bark-exit-fee">Fee: {formatSats(review.feeSats)}</p>
+                <p data-testid="bark-exit-fee">Server fee: {formatSats(review.feeSats)}</p>
                 <p data-testid="bark-exit-onchain-amount">
                   On-chain amount: {formatSats(review.onchainAmountSats)}
                 </p>

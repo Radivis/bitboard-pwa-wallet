@@ -827,25 +827,6 @@ mod tests {
         assert!(fee_rate_from_sat_per_vb(f64::NAN).is_err());
     }
 
-    /// 255 vB is about the weight behind a 50_815 sat quote at Second's ~199 sat/vB.
-    #[test]
-    fn one_sat_per_vb_offboard_weight_is_far_below_second_esplora() {
-        let virtual_bytes = 255;
-        let app_rate = fee_rate_from_sat_per_vb(1.0).expect("1 sat/vB");
-        let second_rate = fee_rate_from_sat_per_vb(199.196).expect("Second Esplora");
-        let app_fee = weight_fee_sats(virtual_bytes, app_rate).expect("app fee");
-        let second_fee = weight_fee_sats(virtual_bytes, second_rate).expect("Second fee");
-        assert_eq!(app_fee, 255);
-        assert!(second_fee > 50_000);
-    }
-
-    fn weight_fee_sats(virtual_bytes: u64, fee_rate: bitcoin::FeeRate) -> Option<u64> {
-        let weight = bitcoin::Weight::from_vb(virtual_bytes)?;
-        fee_rate
-            .checked_mul_by_weight(weight)
-            .map(|amount| amount.to_sat())
-    }
-
     #[test]
     fn emergency_drain_rejects_a_non_signet_address() {
         let error = parse_signet_receive_address(MAINNET_ADDRESS).expect_err("mainnet");

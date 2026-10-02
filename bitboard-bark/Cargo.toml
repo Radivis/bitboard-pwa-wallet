@@ -34,14 +34,12 @@ wasm-bindgen-futures = "0.4"
 bark-wallet = { version = "0.7.1", default-features = false, features = ["wasm-web"] }
 # Public type of Wallet::open / WalletSeed::new_from_mnemonic. Already in the bark graph.
 bip39 = "2.0"
-# Input selection's fee callback returns anyhow::Result. Already in the bark graph.
+# Record store methods return anyhow::Result. Already in the bark graph.
 anyhow = "1"
 async-trait = "0.1"
 # Compact Record dump stored on each encrypted bark rail.
 postcard = { version = "1", features = ["use-std"] }
 base64 = "0.22"
-# Offboard action ids. The js feature is required for wasm32.
-getrandom = { version = "0.2.17", features = ["js"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }

@@ -8,8 +8,8 @@ export class BarkOffboardParkedError extends Error {
 }
 
 export type PerformBarkExitDeps = {
-  sendOnchain: (address: string, amountSats: number, feeRateSatPerVb: number) => Promise<string>
-  offboardAll: (address: string, feeRateSatPerVb: number) => Promise<string>
+  sendOnchain: (address: string, amountSats: number) => Promise<string>
+  offboardAll: (address: string) => Promise<string>
   syncBark: () => Promise<void>
   startOnchainBackgroundSync: () => void
 }
@@ -34,13 +34,9 @@ async function submitExit(
       if (review.amountSats == null) {
         throw new Error('Bark exit amount is missing')
       }
-      return await deps.sendOnchain(
-        review.destinationAddress,
-        review.amountSats,
-        review.feeRateSatPerVb,
-      )
+      return await deps.sendOnchain(review.destinationAddress, review.amountSats)
     }
-    return await deps.offboardAll(review.destinationAddress, review.feeRateSatPerVb)
+    return await deps.offboardAll(review.destinationAddress)
   } catch (err) {
     if (errorText(err).includes(PARKED_MARKER)) {
       throw new BarkOffboardParkedError()

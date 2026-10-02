@@ -383,44 +383,30 @@ async function listVtxosImpl(): Promise<BarkVtxoList> {
 async function estimateSendOnchainImpl(
   address: string,
   amountSats: number,
-  feeRateSatPerVb: number,
 ): Promise<BarkExitFeeEstimate> {
   requireOpenSession()
-  return estimateSendOnchainFromWasm(
-    await getBarkWasm(),
-    address,
-    amountSats,
-    feeRateSatPerVb,
-  )
+  return estimateSendOnchainFromWasm(await getBarkWasm(), address, amountSats)
 }
 
-async function sendOnchainImpl(
-  address: string,
-  amountSats: number,
-  feeRateSatPerVb: number,
-): Promise<string> {
+async function sendOnchainImpl(address: string, amountSats: number): Promise<string> {
   const walletId = requireOpenWalletId()
   return mutateBark(
     walletId,
-    async () =>
-      sendOnchainFromWasm(await getBarkWasm(), address, amountSats, feeRateSatPerVb),
+    async () => sendOnchainFromWasm(await getBarkWasm(), address, amountSats),
     () => ({}),
   )
 }
 
-async function estimateOffboardAllImpl(
-  address: string,
-  feeRateSatPerVb: number,
-): Promise<BarkExitFeeEstimate> {
+async function estimateOffboardAllImpl(address: string): Promise<BarkExitFeeEstimate> {
   requireOpenSession()
-  return estimateOffboardAllFromWasm(await getBarkWasm(), address, feeRateSatPerVb)
+  return estimateOffboardAllFromWasm(await getBarkWasm(), address)
 }
 
-async function offboardAllImpl(address: string, feeRateSatPerVb: number): Promise<string> {
+async function offboardAllImpl(address: string): Promise<string> {
   const walletId = requireOpenWalletId()
   return mutateBark(
     walletId,
-    async () => offboardAllFromWasm(await getBarkWasm(), address, feeRateSatPerVb),
+    async () => offboardAllFromWasm(await getBarkWasm(), address),
     () => ({}),
   )
 }
@@ -593,28 +579,20 @@ const barkService: BarkService = {
     return callBark(() => listVtxosImpl())
   },
 
-  estimateSendOnchain(
-    address: string,
-    amountSats: number,
-    feeRateSatPerVb: number,
-  ): Promise<BarkExitFeeEstimate> {
-    return callBark(() => estimateSendOnchainImpl(address, amountSats, feeRateSatPerVb))
+  estimateSendOnchain(address: string, amountSats: number): Promise<BarkExitFeeEstimate> {
+    return callBark(() => estimateSendOnchainImpl(address, amountSats))
   },
 
-  sendOnchain(
-    address: string,
-    amountSats: number,
-    feeRateSatPerVb: number,
-  ): Promise<string> {
-    return callBark(() => sendOnchainImpl(address, amountSats, feeRateSatPerVb))
+  sendOnchain(address: string, amountSats: number): Promise<string> {
+    return callBark(() => sendOnchainImpl(address, amountSats))
   },
 
-  estimateOffboardAll(address: string, feeRateSatPerVb: number): Promise<BarkExitFeeEstimate> {
-    return callBark(() => estimateOffboardAllImpl(address, feeRateSatPerVb))
+  estimateOffboardAll(address: string): Promise<BarkExitFeeEstimate> {
+    return callBark(() => estimateOffboardAllImpl(address))
   },
 
-  offboardAll(address: string, feeRateSatPerVb: number): Promise<string> {
-    return callBark(() => offboardAllImpl(address, feeRateSatPerVb))
+  offboardAll(address: string): Promise<string> {
+    return callBark(() => offboardAllImpl(address))
   },
 
   sendArkoorPayment(params: BarkArkoorSendParams): Promise<BarkArkoorSendResult> {
