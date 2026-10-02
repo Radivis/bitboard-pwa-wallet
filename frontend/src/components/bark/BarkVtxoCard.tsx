@@ -9,12 +9,14 @@ import {
   getBarkVtxoStateLabel,
 } from '@/lib/bark/bark-vtxo-viewer-display'
 import { truncateAddress } from '@/lib/wallet/bitcoin-utils'
-import type { BarkVtxoRow } from '@/workers/bark-api'
+import type { BarkMovementRow, BarkPendingAction, BarkVtxoRow } from '@/workers/bark-api'
 
 interface BarkVtxoCardProps {
   row: BarkVtxoRow
   tipHeight: number | null
   networkMode: BarkBitcoinNetwork
+  pendingActions?: readonly BarkPendingAction[]
+  movements?: readonly BarkMovementRow[]
   now?: Date
 }
 
@@ -22,10 +24,12 @@ export function BarkVtxoCard({
   row,
   tipHeight,
   networkMode,
+  pendingActions = [],
+  movements = [],
   now = new Date(),
 }: BarkVtxoCardProps) {
   const [copied, setCopied] = useState(false)
-  const lockHolderLine = formatBarkVtxoLockHolderLine(row)
+  const lockHolderLine = formatBarkVtxoLockHolderLine(row, pendingActions, movements)
   const expiry = formatBarkVtxoExpiry({
     expiryHeight: row.expiryHeight,
     tipHeight,

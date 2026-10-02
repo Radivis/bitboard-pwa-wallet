@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react'
 import { FiatBtcAmountDisplay } from '@/components/FiatBtcAmountDisplay'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { BarkPendingActionBanner } from '@/components/wallet/BarkPendingActionBanner'
 import { RailLoadErrorBanner } from '@/components/wallet/RailLoadErrorBanner'
 import { RailSyncControl } from '@/components/wallet/RailSyncControl'
 import { RailSyncErrorBanner } from '@/components/wallet/RailSyncErrorBanner'
@@ -35,6 +36,8 @@ export function BarkDashboardBalance() {
   if (!show) return null
 
   const spendableSats = syncSnapshot.spendableSats
+  const lockedSats = syncSnapshot.lockedSats ?? 0
+  const totalSats = spendableSats == null ? null : spendableSats + lockedSats
   const isSyncing = syncSnapshot.syncPhase === 'syncing' || barkManualSync.isPending
   const showEstablishingSession =
     loadSnapshot.loadPhase === 'loading' && spendableSats == null
@@ -104,15 +107,43 @@ export function BarkDashboardBalance() {
           onRetry={() => barkManualSync.mutate()}
           isRetrying={isSyncing}
         />
-        {spendableSats != null ? (
+        {totalSats != null && spendableSats != null ? (
           <FiatBtcAmountDisplay
-            amountSats={spendableSats}
+            amountSats={totalSats}
             showFiatLayout={false}
             btcPriceInFiat={null}
             currency={defaultFiatCurrency}
             data-testid="dashboard-bark-balance-amount"
           />
         ) : null}
+        {spendableSats != null && lockedSats > 0 ? (
+          <div
+            className="space-y-1 text-sm text-muted-foreground"
+            data-testid="dashboard-bark-balance-subbalances"
+          >
+            <div className="flex flex-wrap items-baseline gap-2">
+              <span>Spendable</span>
+              <FiatBtcAmountDisplay
+                amountSats={spendableSats}
+                showFiatLayout={false}
+                btcPriceInFiat={null}
+                currency={defaultFiatCurrency}
+                data-testid="dashboard-bark-balance-spendable"
+              />
+            </div>
+            <div className="flex flex-wrap items-baseline gap-2">
+              <span>Locked</span>
+              <FiatBtcAmountDisplay
+                amountSats={lockedSats}
+                showFiatLayout={false}
+                btcPriceInFiat={null}
+                currency={defaultFiatCurrency}
+                data-testid="dashboard-bark-balance-locked"
+              />
+            </div>
+          </div>
+        ) : null}
+        <BarkPendingActionBanner />
         <BarkRefreshStatusLine status={syncSnapshot.refreshStatus} />
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" size="sm" asChild>

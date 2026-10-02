@@ -374,19 +374,11 @@ async fn delegated_refresh_status(wallet: &bark::Wallet) -> String {
     }
 }
 
-fn spendable_sats(balance: &bark::Balance) -> u64 {
-    balance.spendable.to_sat()
-}
-
-/// Spendable satoshis. Refused until `bark_sync` has succeeded in this session.
+/// Spendable and locked satoshis. Refused until `bark_sync` has succeeded in this session.
 #[wasm_bindgen]
-pub async fn bark_balance() -> Result<u64, JsValue> {
+pub async fn bark_balance() -> Result<String, JsValue> {
     require_session_synced().map_err(|err| JsValue::from_str(&err))?;
     let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
-    let operation_result = async {
-        let balance = wallet.balance().await.map_err(bark_error)?;
-        Ok(spendable_sats(&balance))
-    }
-    .await;
+    let operation_result = crate::pending_actions::read_session_balance_json(&wallet).await;
     finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
 }

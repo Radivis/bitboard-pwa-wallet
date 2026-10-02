@@ -5,10 +5,11 @@ import {
   barkVtxoRowMatchesSearch,
   countBarkVtxoStates,
   filterBarkVtxoRows,
+  formatBarkVtxoLockHolderLine,
   paginateBarkVtxoRows,
   sortBarkVtxoRows,
 } from '@/lib/bark/bark-vtxo-viewer-display'
-import type { BarkVtxoRow } from '@/workers/bark-api'
+import type { BarkMovementRow, BarkVtxoRow } from '@/workers/bark-api'
 
 function sampleRow(overrides: Partial<BarkVtxoRow> & Pick<BarkVtxoRow, 'id'>): BarkVtxoRow {
   return {
@@ -119,5 +120,23 @@ describe('bark-vtxo-viewer-display', () => {
     expect(paginateBarkVtxoRows(rows, 1, BARK_VTXO_VIEWER_PAGE_SIZE).map((row) => row.id)).toEqual([
       `row:${BARK_VTXO_VIEWER_PAGE_SIZE}`,
     ])
+  })
+
+  it('names a movement lock from the history label', () => {
+    const movement: BarkMovementRow = {
+      id: 4,
+      status: 'pending',
+      subsystemName: 'bark.offboard',
+      subsystemKind: 'send',
+      effectiveBalanceSats: -10_000,
+      offchainFeeSats: 100,
+      createdAtUnixSeconds: 0,
+    }
+    const row = sampleRow({
+      id: 'locked:4',
+      state: 'locked',
+      lockHolder: { kind: 'movement', id: '4' },
+    })
+    expect(formatBarkVtxoLockHolderLine(row, [], [movement])).toBe('Locked for Bark exit')
   })
 })

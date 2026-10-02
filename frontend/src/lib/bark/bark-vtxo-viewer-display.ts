@@ -1,5 +1,12 @@
+import { barkMovementActivityLabel } from '@/lib/bark/bark-history'
 import type { SyncLifecyclePhase } from '@/lib/wallet/lifecycle/rail-lifecycle-types'
-import type { BarkVtxoRow, BarkVtxoState } from '@/workers/bark-api'
+import { formatSats, truncateAddress } from '@/lib/wallet/bitcoin-utils'
+import type {
+  BarkMovementRow,
+  BarkPendingAction,
+  BarkVtxoRow,
+  BarkVtxoState,
+} from '@/workers/bark-api'
 import { BARK_VTXO_STATES } from '@/workers/bark-api'
 
 export type BarkVtxoListPresentation = 'waiting-for-sync' | 'loading' | 'error' | 'ready'
@@ -40,13 +47,33 @@ export function isFinishedBarkVtxoState(state: BarkVtxoState): boolean {
   return state === 'spent' || state === 'exited'
 }
 
-export function formatBarkVtxoLockHolderLine(row: BarkVtxoRow): string | null {
+export function formatBarkVtxoLockHolderLine(
+  row: BarkVtxoRow,
+  pendingActions: readonly BarkPendingAction[] = [],
+  movements: readonly BarkMovementRow[] = [],
+): string | null {
   if (row.state !== 'locked') return null
   if (row.lockHolder == null) return 'Locked'
   if (row.lockHolder.kind === 'action') {
-    return `Locked by action ${row.lockHolder.id}`
+    const action = pendingActions.find((candidate) => candidate.id === row.lockHolder?.id)
+    if (action == null) return 'Locked'
+    return lockLineForPendingAction(action)
   }
-  return `Locked by movement ${row.lockHolder.id}`
+  const movement = movements.find((candidate) => String(candidate.id) === row.lockHolder?.id)
+  if (movement == null) return 'Locked'
+  return `Locked for ${barkMovementActivityLabel(movement.subsystemName, movement.subsystemKind)}`
+}
+
+function lockLineForPendingAction(action: BarkPendingAction): string {
+  const destination =
+    action.destination == null ? '' : ` to ${truncateAddress(action.destination)}`
+  if (action.kind === 'offboard') {
+    if (action.txid != null) {
+      return `Locked for Bark exit${destination}, waiting for confirmation`
+    }
+    return `Locked for Bark exit${destination}. ${action.status}`
+  }
+  return `Locked for ${action.title} of ${formatSats(action.amountSats)} sats${destination}`
 }
 
 export function countBarkVtxoStates(rows: BarkVtxoRow[]): Record<BarkVtxoState, number> {

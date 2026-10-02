@@ -83,6 +83,14 @@ vi.mock('@/hooks/useBarkVtxoListQuery', () => ({
   useBarkVtxoListQuery: () => vtxoListQuery(),
 }))
 
+vi.mock('@/hooks/useBarkPendingActionsQuery', () => ({
+  useBarkPendingActionsQuery: () => ({ data: [] }),
+}))
+
+vi.mock('@/hooks/useBarkHistoryQuery', () => ({
+  useBarkHistoryQuery: () => ({ data: [] }),
+}))
+
 vi.mock('@/hooks/useRailManualSyncMutations', () => ({
   useBarkManualSyncMutation: () => ({ mutate: vi.fn(), isPending: false }),
 }))

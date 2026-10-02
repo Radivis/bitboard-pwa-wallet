@@ -14,6 +14,8 @@ import { RailLoadErrorBanner } from '@/components/wallet/RailLoadErrorBanner'
 import { RailSyncErrorBanner } from '@/components/wallet/RailSyncErrorBanner'
 import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
 import { useBarkSyncLifecycleSnapshot } from '@/hooks/useBarkSyncLifecycleSnapshot'
+import { useBarkHistoryQuery } from '@/hooks/useBarkHistoryQuery'
+import { useBarkPendingActionsQuery } from '@/hooks/useBarkPendingActionsQuery'
 import { useBarkVtxoListQuery } from '@/hooks/useBarkVtxoListQuery'
 import { useBarkManualSyncMutation } from '@/hooks/useRailManualSyncMutations'
 import {
@@ -33,7 +35,14 @@ import { orchestrateBarkLoad } from '@/lib/wallet/lifecycle/bark-load-lifecycle-
 import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
 import { useFeatureStore } from '@/stores/featureStore'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
-import { BARK_VTXO_STATES, type BarkVtxoList, type BarkVtxoRow, type BarkVtxoState } from '@/workers/bark-api'
+import {
+  BARK_VTXO_STATES,
+  type BarkMovementRow,
+  type BarkPendingAction,
+  type BarkVtxoList,
+  type BarkVtxoRow,
+  type BarkVtxoState,
+} from '@/workers/bark-api'
 
 export function BarkVtxoViewerPage() {
   const networkMode = useWalletStore(selectCommittedNetworkMode)
@@ -43,6 +52,10 @@ export function BarkVtxoViewerPage() {
   const syncSnapshot = useBarkSyncLifecycleSnapshot()
   const barkManualSync = useBarkManualSyncMutation()
   const vtxoListQuery = useBarkVtxoListQuery()
+  const pendingActionsQuery = useBarkPendingActionsQuery()
+  const historyQuery = useBarkHistoryQuery()
+  const pendingActions = pendingActionsQuery.data ?? []
+  const movements = historyQuery.data ?? []
   const vtxoList: BarkVtxoList | undefined = vtxoListQuery.data
   const vtxoRows = vtxoList?.rows ?? EMPTY_BARK_VTXO_ROWS
 
@@ -123,6 +136,8 @@ export function BarkVtxoViewerPage() {
           onSortKeyChange={setSortKey}
           pageIndex={pageIndex}
           onPageIndexChange={setPageIndex}
+          pendingActions={pendingActions}
+          movements={movements}
         />
       ) : loadSnapshot.loadPhase === 'load-error' ? null : (
         <div
@@ -157,6 +172,8 @@ interface BarkVtxoInventoryProps {
   onSortKeyChange: (sortKey: BarkVtxoSortKey) => void
   pageIndex: number
   onPageIndexChange: (pageIndex: number) => void
+  pendingActions: readonly BarkPendingAction[]
+  movements: readonly BarkMovementRow[]
 }
 
 function BarkVtxoInventory({
@@ -175,6 +192,8 @@ function BarkVtxoInventory({
   onSortKeyChange,
   pageIndex,
   onPageIndexChange,
+  pendingActions,
+  movements,
 }: BarkVtxoInventoryProps) {
   const stateCounts = useMemo(() => countBarkVtxoStates(rows), [rows])
   const filteredRows = useMemo(
@@ -280,6 +299,8 @@ function BarkVtxoInventory({
                 row={row}
                 tipHeight={tipHeight}
                 networkMode={networkMode}
+                pendingActions={pendingActions}
+                movements={movements}
               />
             ))}
           </div>

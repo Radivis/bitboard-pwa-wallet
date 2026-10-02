@@ -4,6 +4,7 @@ import { screen } from '@testing-library/react'
 import { BarkPanel } from '@/components/wallet/BarkPanel'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import type { NetworkMode } from '@/stores/walletStore'
+import type { BarkPendingAction } from '@/workers/bark-api'
 
 const walletStoreState = vi.hoisted(() => ({
   networkMode: 'signet' as NetworkMode,
@@ -12,6 +13,10 @@ const walletStoreState = vi.hoisted(() => ({
 
 const featureState = vi.hoisted(() => ({
   isBarkEnabled: true,
+}))
+
+const pendingActions = vi.hoisted(() => ({
+  current: [] as BarkPendingAction[],
 }))
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
@@ -37,6 +42,10 @@ vi.mock('@/stores/featureStore', () => ({
   ),
 }))
 
+vi.mock('@/hooks/useBarkPendingActionsQuery', () => ({
+  useBarkPendingActionsQuery: () => ({ data: pendingActions.current }),
+}))
+
 vi.mock('@/stores/walletStore', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/stores/walletStore')>()
   return {
@@ -48,11 +57,35 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
   }
 })
 
+function pendingOffboard(): BarkPendingAction {
+  return {
+    id: '20fb503685add1f2fe5af4056979dc98',
+    kind: 'offboard',
+    title: 'Bark exit',
+    status: 'Waiting for the exit transaction to confirm.',
+    amountSats: 10_000,
+    feeSats: 50_815,
+    destination: 'tb1qcurrentaddressxxxxxxxx',
+    txid: 'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899',
+  }
+}
+
 describe('BarkPanel', () => {
   beforeEach(() => {
+    pendingActions.current = []
     featureState.isBarkEnabled = true
     walletStoreState.networkMode = 'signet'
     walletStoreState.loadedDescriptorWallet = { networkMode: 'signet' }
+  })
+
+  it('BARK-VTX-08 shows a pending offboard on the management panel', () => {
+    pendingActions.current = [pendingOffboard()]
+    renderWithProviders(<BarkPanel />)
+    const banner = screen.getByTestId('bark-pending-action-banner')
+    expect(banner).toHaveTextContent('Bark exit')
+    expect(banner).toHaveTextContent('Waiting for the exit transaction to confirm.')
+    expect(banner).toHaveTextContent('10000 sats')
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
   })
 
   it('BARK-VTX-01 shows List VTXOs when Bark is on and the network is signet', () => {

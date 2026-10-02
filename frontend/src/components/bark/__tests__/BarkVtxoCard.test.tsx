@@ -4,7 +4,7 @@ import { BITCOIN_MAINNET_AVERAGE_BLOCK_SECONDS } from '@/lib/bark/bark-vtxo-expi
 import { screen } from '@testing-library/react'
 import { BarkVtxoCard } from '@/components/bark/BarkVtxoCard'
 import { renderWithProviders } from '@/test-utils/test-providers'
-import type { BarkVtxoRow } from '@/workers/bark-api'
+import type { BarkPendingAction, BarkVtxoRow } from '@/workers/bark-api'
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn() },
@@ -49,20 +49,54 @@ describe('BarkVtxoCard', () => {
     expect(screen.queryByTestId(`bark-vtxo-registered-${row.id}`)).not.toBeInTheDocument()
   })
 
-  it('BARK-VTX-03 shows the lock-holder line only when locked, and Registered only when true', () => {
+  it('BARK-VTX-03 names a locked exit instead of the action id', () => {
+    const actionId = '20fb503685add1f2fe5af4056979dc98'
     const locked = sampleRow({
       id: 'locked:1',
       state: 'locked',
-      lockHolder: { kind: 'action', id: 'pay-1' },
+      lockHolder: { kind: 'action', id: actionId },
       registered: true,
+    })
+    const pendingExit: BarkPendingAction = {
+      id: actionId,
+      kind: 'offboard',
+      title: 'Bark exit',
+      status: 'Waiting for the exit transaction to confirm.',
+      amountSats: 10_000,
+      feeSats: 50_815,
+      destination: 'tb1qcurrentaddressxxxxxxxx',
+      txid: 'aa'.repeat(32),
+    }
+    renderWithProviders(
+      <BarkVtxoCard
+        row={locked}
+        tipHeight={tipHeight}
+        networkMode="signet"
+        now={now}
+        pendingActions={[pendingExit]}
+      />,
+    )
+
+    const lockLine = screen.getByTestId('bark-vtxo-lock-holder-locked:1')
+    expect(lockLine).toHaveTextContent(
+      'Locked for Bark exit to tb1qcurr...xxxxxxxx, waiting for confirmation',
+    )
+    expect(lockLine).not.toHaveTextContent(actionId)
+    expect(screen.getByTestId('bark-vtxo-registered-locked:1')).toHaveTextContent('Registered')
+  })
+
+  it('BARK-VTX-03 says Locked when the holder id does not match an action or movement', () => {
+    const locked = sampleRow({
+      id: 'locked:2',
+      state: 'locked',
+      lockHolder: { kind: 'action', id: 'unknown-action' },
     })
     renderWithProviders(
       <BarkVtxoCard row={locked} tipHeight={tipHeight} networkMode="signet" now={now} />,
     )
 
-    expect(screen.getByTestId('bark-vtxo-lock-holder-locked:1')).toHaveTextContent(
-      'Locked by action pay-1',
-    )
-    expect(screen.getByTestId('bark-vtxo-registered-locked:1')).toHaveTextContent('Registered')
+    const lockLine = screen.getByTestId('bark-vtxo-lock-holder-locked:2')
+    expect(lockLine).toHaveTextContent('Locked')
+    expect(lockLine).not.toHaveTextContent('unknown-action')
   })
 })

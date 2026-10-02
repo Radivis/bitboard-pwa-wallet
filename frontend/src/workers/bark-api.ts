@@ -60,6 +60,26 @@ export type BarkBoardAccepted = {
 
 export type BarkMovementStatus = 'pending' | 'successful' | 'failed' | 'canceled'
 
+export const BARK_PENDING_ACTION_KINDS = ['offboard', 'arkoor', 'lightning', 'board'] as const
+
+export type BarkPendingActionKind = (typeof BARK_PENDING_ACTION_KINDS)[number]
+
+export type BarkPendingAction = {
+  id: string
+  kind: BarkPendingActionKind
+  title: string
+  status: string
+  amountSats: number
+  feeSats: number | null
+  destination: string | null
+  txid: string | null
+}
+
+export type BarkBalanceParts = {
+  spendableSats: number
+  lockedSats: number
+}
+
 export type BarkMovementRow = {
   id: number
   status: BarkMovementStatus
@@ -167,7 +187,8 @@ export interface BarkService {
   peekReceiveAddress(index: number): Promise<string>
   revealNextReceiveAddress(): Promise<BarkRevealedReceiveAddress>
   sync(): Promise<BarkSyncResult>
-  readSpendableBalance(): Promise<number>
+  readSpendableBalance(): Promise<BarkBalanceParts>
+  listPendingActions(): Promise<BarkPendingAction[]>
   estimateBoardOffchainFee(amountSats: number): Promise<BarkBoardFeeEstimate>
   prepareBoardFunding(): Promise<BarkPreparedBoardFunding>
   boardPsbt(psbtBase64: string): Promise<BarkBoardAccepted>

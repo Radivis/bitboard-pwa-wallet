@@ -4,6 +4,7 @@ import { screen } from '@testing-library/react'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { BarkDashboardBalance } from '@/components/wallet/BarkDashboardBalance'
 import type { NetworkMode } from '@/stores/walletStore'
+import type { BarkPendingAction } from '@/workers/bark-api'
 
 const walletStoreState = vi.hoisted(() => ({
   networkMode: 'signet' as NetworkMode,
@@ -24,12 +25,17 @@ const loadSnapshot = vi.hoisted(() => ({
   },
 }))
 
+const pendingActions = vi.hoisted(() => ({
+  current: [] as BarkPendingAction[],
+}))
+
 const syncSnapshot = vi.hoisted(() => ({
   current: {
     syncPhase: 'not-syncing' as 'not-syncing' | 'syncing' | 'sync-error' | 'not-configured',
     networkMode: 'signet' as NetworkMode | null,
     errorMessage: null as string | null,
     spendableSats: null as number | null,
+    lockedSats: null as number | null,
     lastSuccessfulSyncAt: null as string | null,
     refreshStatus: 'idle' as 'idle' | 'scheduled' | 'pending' | 'warning',
   },
@@ -61,6 +67,10 @@ vi.mock('@/hooks/useBarkSyncLifecycleSnapshot', () => ({
   useBarkSyncLifecycleSnapshot: () => syncSnapshot.current,
 }))
 
+vi.mock('@/hooks/useBarkPendingActionsQuery', () => ({
+  useBarkPendingActionsQuery: () => ({ data: pendingActions.current }),
+}))
+
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
   return {
@@ -84,8 +94,22 @@ vi.mock('@/hooks/useRailManualSyncMutations', () => ({
   }),
 }))
 
+function pendingOffboard(): BarkPendingAction {
+  return {
+    id: '20fb503685add1f2fe5af4056979dc98',
+    kind: 'offboard',
+    title: 'Bark exit',
+    status: 'This exit is still in progress. Sync Bark to continue it.',
+    amountSats: 10_000,
+    feeSats: 50_815,
+    destination: 'tb1qcurrentaddressxxxxxxxx',
+    txid: null,
+  }
+}
+
 describe('BarkDashboardBalance', () => {
   beforeEach(() => {
+    pendingActions.current = []
     featureState.isBarkEnabled = true
     walletStoreState.networkMode = 'signet'
     walletStoreState.loadedDescriptorWallet = { networkMode: 'signet' }
@@ -100,6 +124,7 @@ describe('BarkDashboardBalance', () => {
       networkMode: 'signet',
       errorMessage: null,
       spendableSats: null,
+      lockedSats: null,
       lastSuccessfulSyncAt: null,
       refreshStatus: 'idle',
     }
@@ -170,8 +195,35 @@ describe('BarkDashboardBalance', () => {
 
   it('DASH-BARK-03 shows spendable sats after a successful sync', () => {
     syncSnapshot.current.spendableSats = 50_000
+    syncSnapshot.current.lockedSats = 0
     renderWithProviders(<BarkDashboardBalance />)
     expect(screen.getByTestId('dashboard-bark-balance-amount')).toHaveTextContent('0.00050000')
+    expect(screen.queryByTestId('dashboard-bark-balance-subbalances')).not.toBeInTheDocument()
+  })
+
+  it('DASH-BARK-09 shows spendable and locked sub-lines when locked sats are positive', () => {
+    syncSnapshot.current.spendableSats = 40_000
+    syncSnapshot.current.lockedSats = 10_000
+    renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.getByTestId('dashboard-bark-balance-amount')).toHaveTextContent('0.00050000')
+    expect(screen.getByTestId('dashboard-bark-balance-subbalances')).toHaveTextContent('Spendable')
+    expect(screen.getByTestId('dashboard-bark-balance-spendable')).toHaveTextContent('0.00040000')
+    expect(screen.getByTestId('dashboard-bark-balance-subbalances')).toHaveTextContent('Locked')
+    expect(screen.getByTestId('dashboard-bark-balance-locked')).toHaveTextContent('0.00010000')
+  })
+
+  it('DASH-BARK-10 shows a pending offboard banner without cancel or retry', () => {
+    pendingActions.current = [pendingOffboard()]
+    renderWithProviders(<BarkDashboardBalance />)
+    const banner = screen.getByTestId('bark-pending-action-banner')
+    expect(banner).toHaveTextContent('Bark exit')
+    expect(banner).toHaveTextContent(
+      'This exit is still in progress. Sync Bark to continue it.',
+    )
+    expect(banner).toHaveTextContent('10000 sats')
+    expect(banner).toHaveTextContent('tb1qcurr...xxxxxxxx')
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
   })
 
   it('DASH-BARK-04 does not render on-chain or Arkade balance amounts', () => {

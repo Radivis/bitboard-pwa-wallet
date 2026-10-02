@@ -6,6 +6,7 @@ import { BarkExitPage } from '@/pages/wallet/BarkExitPage'
 import { BarkOffboardParkedError } from '@/lib/bark/perform-bark-exit'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import type { NetworkMode } from '@/stores/walletStore'
+import type { BarkPendingAction } from '@/workers/bark-api'
 
 const walletStoreState = vi.hoisted(() => ({
   networkMode: 'signet' as NetworkMode,
@@ -20,6 +21,10 @@ const featureState = vi.hoisted(() => ({
 
 const syncSnapshot = vi.hoisted(() => ({
   current: { spendableSats: 50_000 as number | null },
+}))
+
+const pendingActions = vi.hoisted(() => ({
+  current: [] as BarkPendingAction[],
 }))
 
 const reviewBarkExitAmount = vi.hoisted(() => vi.fn())
@@ -69,6 +74,10 @@ vi.mock('@/hooks/useBarkSyncLifecycleSnapshot', () => ({
   useBarkSyncLifecycleSnapshot: () => syncSnapshot.current,
 }))
 
+vi.mock('@/hooks/useBarkPendingActionsQuery', () => ({
+  useBarkPendingActionsQuery: () => ({ data: pendingActions.current }),
+}))
+
 vi.mock('@/lib/bark/review-bark-exit', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/bark/review-bark-exit')>()
   return { ...actual, reviewBarkExitAmount, reviewBarkExitAll }
@@ -103,6 +112,7 @@ const amountReview = {
 
 describe('BarkExitPage', () => {
   beforeEach(() => {
+    pendingActions.current = []
     featureState.isBarkEnabled = true
     walletStoreState.networkMode = 'signet'
     walletStoreState.currentAddress = 'tb1qcurrent'
@@ -187,7 +197,19 @@ describe('BarkExitPage', () => {
     expect(toast.success).not.toHaveBeenCalled()
   })
 
-  it('BARK-EXIT-08 tells the user to sync when the exit is parked', async () => {
+  it('BARK-EXIT-08 keeps a parked exit on the page as a banner instead of a toast', async () => {
+    pendingActions.current = [
+      {
+        id: '20fb503685add1f2fe5af4056979dc98',
+        kind: 'offboard',
+        title: 'Bark exit',
+        status: 'This exit is still in progress. Sync Bark to continue it.',
+        amountSats: 10_000,
+        feeSats: 50_815,
+        destination: 'tb1qcurrent',
+        txid: null,
+      },
+    ]
     reviewBarkExitAmount.mockResolvedValue(amountReview)
     performBarkExit.mockRejectedValue(new BarkOffboardParkedError())
     renderWithProviders(<BarkExitPage />)
@@ -196,10 +218,12 @@ describe('BarkExitPage', () => {
     fireEvent.click(await screen.findByTestId('bark-exit-confirm'))
 
     await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith(
+      expect(screen.getByTestId('bark-pending-action-banner')).toHaveTextContent(
         'This exit is still in progress. Sync Bark to continue it.',
       )
     })
+    expect(toast.error).not.toHaveBeenCalled()
     expect(toast.success).not.toHaveBeenCalled()
+    expect(navigate).not.toHaveBeenCalled()
   })
 })

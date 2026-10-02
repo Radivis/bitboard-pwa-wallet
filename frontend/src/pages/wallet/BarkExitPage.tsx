@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { BarkRailUnavailable } from '@/components/bark/BarkRailUnavailable'
+import { BarkPendingActionBanner } from '@/components/wallet/BarkPendingActionBanner'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -31,6 +33,7 @@ export function BarkExitPage() {
   const isBarkEnabled = useFeatureStore((featureState) => featureState.isBarkEnabled)
   const spendableSats = useBarkSyncLifecycleSnapshot().spendableSats
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [amountRaw, setAmountRaw] = useState('')
   const [review, setReview] = useState<BarkExitReview | null>(null)
   const [reviewError, setReviewError] = useState<string | null>(null)
@@ -104,7 +107,7 @@ export function BarkExitPage() {
       navigate({ to: '/wallet' })
     } catch (err) {
       if (err instanceof BarkOffboardParkedError) {
-        toast.error(err.message)
+        await queryClient.invalidateQueries({ queryKey: ['bark', 'pending-actions'] })
       } else {
         toast.error(errorMessage(err) || 'Exit failed')
       }
@@ -116,6 +119,7 @@ export function BarkExitPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="Exit Bark to on-chain" />
+      <BarkPendingActionBanner />
       <p className="text-sm text-muted-foreground" data-testid="bark-exit-confirmation-note">
         This sends Bark funds to your on-chain Signet address. Bark broadcasts the exit.{' '}
         {CONFIRMATION_NOTE}

@@ -14,6 +14,8 @@ mod emergency_exit;
 #[cfg(any(test, target_arch = "wasm32"))]
 mod exit_address;
 #[cfg(any(test, target_arch = "wasm32"))]
+mod pending_actions;
+#[cfg(any(test, target_arch = "wasm32"))]
 mod sync_gate;
 #[cfg(any(test, target_arch = "wasm32"))]
 mod vtxo_list;

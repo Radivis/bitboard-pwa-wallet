@@ -80,6 +80,7 @@ describe('useMainnetFiatRatesQuery', () => {
       networkMode: 'signet',
       errorMessage: null,
       spendableSats: 25_000,
+      lockedSats: 0,
       lastSuccessfulSyncAt: '2024-03-01T12:00:00.000Z',
       refreshStatus: 'idle',
     })

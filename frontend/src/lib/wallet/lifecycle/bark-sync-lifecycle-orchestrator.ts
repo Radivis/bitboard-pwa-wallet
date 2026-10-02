@@ -16,6 +16,8 @@ export type BarkSyncLifecycleSnapshot = {
   errorMessage: string | null
   /** Spendable sats from the last successful sync in this unlocked session. */
   spendableSats: number | null
+  /** Locked sats from that same balance read. Failed syncs keep the last figure. */
+  lockedSats: number | null
   lastSuccessfulSyncAt: string | null
   refreshStatus: BarkRefreshStatus
 }
@@ -33,6 +35,7 @@ function idleBarkSyncSnapshot(): BarkSyncLifecycleSnapshot {
     networkMode: null,
     errorMessage: null,
     spendableSats: null,
+    lockedSats: null,
     lastSuccessfulSyncAt: null,
     refreshStatus: 'idle',
   }
@@ -92,6 +95,7 @@ export function prepareBarkSyncForSessionOpen(networkMode: NetworkMode): void {
     networkMode,
     errorMessage: null,
     spendableSats: null,
+    lockedSats: null,
     lastSuccessfulSyncAt: null,
     refreshStatus: 'idle',
   })
@@ -150,13 +154,14 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
       networkMode: params.networkMode,
       errorMessage: null,
       spendableSats: previous.spendableSats,
+      lockedSats: previous.lockedSats,
       lastSuccessfulSyncAt: previous.lastSuccessfulSyncAt,
       refreshStatus: previous.refreshStatus,
     })
     try {
       const worker = getBarkWorker()
       const synced = await worker.sync()
-      const spendableSats = await worker.readSpendableBalance()
+      const balance = await worker.readSpendableBalance()
       if (generation !== sessionGeneration) {
         return
       }
@@ -164,7 +169,8 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
         syncPhase: 'not-syncing',
         networkMode: params.networkMode,
         errorMessage: null,
-        spendableSats,
+        spendableSats: balance.spendableSats,
+        lockedSats: balance.lockedSats,
         lastSuccessfulSyncAt: synced.lastSuccessfulSyncAt,
         refreshStatus: synced.refreshStatus ?? 'idle',
       })
@@ -178,6 +184,7 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
         networkMode: params.networkMode,
         errorMessage: userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK),
         spendableSats: kept.spendableSats,
+        lockedSats: kept.lockedSats,
         lastSuccessfulSyncAt: kept.lastSuccessfulSyncAt,
         refreshStatus: kept.refreshStatus,
       })
@@ -213,6 +220,7 @@ export function recordBarkSpendableAfterSend(result: {
     networkMode: current.networkMode,
     errorMessage: null,
     spendableSats: result.spendableSats,
+    lockedSats: current.lockedSats,
     lastSuccessfulSyncAt: result.lastSuccessfulSyncAt,
     refreshStatus: current.refreshStatus,
   })

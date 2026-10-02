@@ -52,7 +52,10 @@ describe('bark-sync-lifecycle-orchestrator', () => {
     workerMocks.sync.mockResolvedValue({
       lastSuccessfulSyncAt: '2024-03-01T12:00:00.000Z',
     })
-    workerMocks.readSpendableBalance.mockResolvedValue(50_000)
+    workerMocks.readSpendableBalance.mockResolvedValue({
+      spendableSats: 50_000,
+      lockedSats: 12_000,
+    })
   })
 
   it('stores spendable sats after a successful sync', async () => {
@@ -63,6 +66,7 @@ describe('bark-sync-lifecycle-orchestrator', () => {
     expect(getBarkSyncLifecycleSnapshot()).toMatchObject({
       syncPhase: 'not-syncing',
       spendableSats: 50_000,
+      lockedSats: 12_000,
       lastSuccessfulSyncAt: '2024-03-01T12:00:00.000Z',
       errorMessage: null,
     })
@@ -80,6 +84,7 @@ describe('bark-sync-lifecycle-orchestrator', () => {
     expect(getBarkSyncLifecycleSnapshot()).toMatchObject({
       syncPhase: 'sync-error',
       spendableSats: 50_000,
+      lockedSats: 12_000,
       lastSuccessfulSyncAt: '2024-03-01T12:00:00.000Z',
       errorMessage: 'Bark server unreachable',
     })
@@ -98,6 +103,7 @@ describe('bark-sync-lifecycle-orchestrator', () => {
     expect(getBarkSyncLifecycleSnapshot()).toMatchObject({
       syncPhase: 'sync-error',
       spendableSats: null,
+      lockedSats: null,
       lastSuccessfulSyncAt: null,
       errorMessage: 'Bark server unreachable',
     })
@@ -109,13 +115,17 @@ describe('bark-sync-lifecycle-orchestrator', () => {
       lastSuccessfulSyncAt: '2024-03-02T12:00:00.000Z',
       refreshStatus: 'warning',
     })
-    workerMocks.readSpendableBalance.mockResolvedValueOnce(50_000)
+    workerMocks.readSpendableBalance.mockResolvedValueOnce({
+      spendableSats: 50_000,
+      lockedSats: 12_000,
+    })
 
     await orchestrateBarkSync({ walletId: 1, networkMode: 'signet' })
 
     expect(getBarkSyncLifecycleSnapshot()).toMatchObject({
       syncPhase: 'not-syncing',
       spendableSats: 50_000,
+      lockedSats: 12_000,
       lastSuccessfulSyncAt: '2024-03-02T12:00:00.000Z',
       errorMessage: null,
       refreshStatus: 'warning',

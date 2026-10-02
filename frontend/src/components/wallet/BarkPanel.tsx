@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { BarkPendingActionBanner } from '@/components/wallet/BarkPendingActionBanner'
 import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 
@@ -13,7 +14,8 @@ export function BarkPanel() {
       <CardHeader>
         <CardTitle>Bark</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-3">
+        <BarkPendingActionBanner />
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" size="sm" asChild>
             <Link to="/wallet/bark/vtxos" data-testid="bark-list-vtxos-link">

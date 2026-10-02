@@ -1,5 +1,6 @@
 import { expose, wrap, type Remote } from 'comlink'
-import { readBarkSpendableSats } from '@/lib/bark/bark-balance'
+import { readBarkBalance } from '@/lib/bark/bark-balance'
+import { pendingActionsFromWasm } from '@/lib/bark/bark-pending-actions'
 import { readBarkRefreshStatus } from '@/lib/bark/bark-refresh-status'
 import {
   barkArkoorSendDepsFromWasm,
@@ -46,6 +47,7 @@ import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-s
 import type {
   BarkArkoorSendParams,
   BarkArkoorSendResult,
+  BarkBalanceParts,
   BarkBoardAccepted,
   BarkBoardFeeEstimate,
   BarkEmergencyExitDrain,
@@ -55,6 +57,7 @@ import type {
   BarkExitFeeEstimate,
   BarkExitGraph,
   BarkMovementRow,
+  BarkPendingAction,
   BarkVtxoList,
   BarkPreparedBoardFunding,
   BarkRevealedReceiveAddress,
@@ -331,12 +334,12 @@ async function syncImpl(): Promise<BarkSyncResult> {
   )
 }
 
-async function readSpendableBalanceImpl(): Promise<number> {
+async function readSpendableBalanceImpl(): Promise<BarkBalanceParts> {
   if (openWalletId == null) {
     throw new Error('Bark session is not open')
   }
   const wasmModule = await getBarkWasm()
-  return readBarkSpendableSats(await wasmModule.bark_balance())
+  return readBarkBalance(await wasmModule.bark_balance())
 }
 
 function requireOpenSession(): void {
@@ -378,6 +381,11 @@ async function historyImpl(): Promise<BarkMovementRow[]> {
 async function listVtxosImpl(): Promise<BarkVtxoList> {
   requireOpenSession()
   return listVtxosFromWasm(await getBarkWasm())
+}
+
+async function listPendingActionsImpl(): Promise<BarkPendingAction[]> {
+  requireOpenSession()
+  return pendingActionsFromWasm(await getBarkWasm())
 }
 
 async function estimateSendOnchainImpl(
@@ -422,7 +430,7 @@ async function sendArkoorPaymentImpl(
       return performBarkArkoorSend(
         barkArkoorSendDepsFromWasm(
           wasmModule,
-          () => readSpendableBalanceImpl(),
+          async () => (await readSpendableBalanceImpl()).spendableSats,
           () => syncImpl(),
         ),
         params,
@@ -555,8 +563,12 @@ const barkService: BarkService = {
     return callBark(() => syncImpl())
   },
 
-  readSpendableBalance(): Promise<number> {
+  readSpendableBalance(): Promise<BarkBalanceParts> {
     return callBark(() => readSpendableBalanceImpl())
+  },
+
+  listPendingActions(): Promise<BarkPendingAction[]> {
+    return callBark(() => listPendingActionsImpl())
   },
 
   estimateBoardOffchainFee(amountSats: number): Promise<BarkBoardFeeEstimate> {
