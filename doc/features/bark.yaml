@@ -135,6 +135,11 @@ feature:
       - id: BARK-SYNC-06
         description: Pending rounds skip scheduling another delegated refresh
         implemented_by: bitboard-bark/src/refresh.rs
+      - id: BARK-SYNC-07
+        description: >
+          A mailbox, pending-Arkoor, pending-round, or board error fails bark_sync,
+          does not mark the session synced, and does not refresh the shown spendable amount
+        implemented_by: bitboard-bark/src/required_sync.rs
     metadata:
       - id: BARK-META-01
         description: A successful sync stamp keeps the fingerprint and receive index and writes an ISO timestamp

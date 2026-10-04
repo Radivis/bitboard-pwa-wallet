@@ -333,12 +333,17 @@ pub async fn bark_last_revealed_key_index() -> Result<JsValue, JsValue> {
     }
 }
 
-/// Heartbeats the server, then runs `Wallet::sync` and drives pending boards.
+/// Heartbeats the server, then runs `Wallet::sync`.
 /// `Wallet::sync` returns `()` and only logs sub-step failures, so a dead server
 /// is reported by `refresh_server` and does not mark this session as synced.
-/// `sync_pending_boards` parks a board while it waits for confirmations.
 ///
-/// After that sync, schedules one delegated VTXO refresh when none is pending.
+/// Mailbox, pending Arkoor, pending rounds, and pending boards must then succeed.
+/// The first of those errors fails this call and does not mark the session synced.
+/// `Wallet::sync` may already have logged that error. That log is not a second failure.
+/// Boards are checked once here. `sync_pending_boards` parks a board while it waits
+/// for confirmations.
+///
+/// After those steps, schedules one delegated VTXO refresh when none is pending.
 /// A scheduling failure still marks this session synced and returns `warning`.
 /// The status is `idle`, `scheduled`, `pending`, or `warning`.
 ///
@@ -354,9 +359,21 @@ pub async fn bark_sync() -> Result<String, JsValue> {
         crate::pending_actions::continue_pending_offboards(&wallet).await;
         wallet.sync().await;
         crate::pending_actions::continue_pending_offboards(&wallet).await;
-        wallet.sync_pending_boards().await.map_err(bark_error)?;
+        crate::required_sync::require_mailbox_arkoor_rounds_and_boards(
+            async { wallet.sync_mailbox().await.map_err(bark_error) },
+            async { wallet.sync_pending_arkoor_sends().await.map_err(bark_error) },
+            async {
+                wallet
+                    .sync_pending_rounds()
+                    .await
+                    .map(|_| ())
+                    .map_err(bark_error)
+            },
+            async { wallet.sync_pending_boards().await.map_err(bark_error) },
+        )
+        .await?;
         let refresh_status = delegated_refresh_status(&wallet).await;
-        // A missed exit sync does not fail this session. Item 4 owns which steps fail the sync.
+        // A missed exit sync does not fail this session.
         let _exit_sync = wallet.sync_exits().await;
         Ok(refresh_status)
     }
