@@ -326,4 +326,29 @@ describe('BarkDashboardBalance', () => {
     expect(screen.queryByTestId('dashboard-bark-refresh-notice')).not.toBeInTheDocument()
     expect(screen.getByTestId('dashboard-bark-balance-amount')).toHaveTextContent('0.00050000')
   })
+
+  it('DASH-BARK-12 shows the embedded session loading screen while Bark is opening', () => {
+    loadSnapshot.current.loadPhase = 'loading'
+    renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.getByTestId('bark-session-loading')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Establishing Bark session' })).toBeInTheDocument()
+    expect(screen.getByTestId('dashboard-bark-board-link')).toBeInTheDocument()
+    expect(screen.queryByTestId('dashboard-bark-balance-amount')).not.toBeInTheDocument()
+  })
+
+  it('DASH-BARK-13 shows the embedded session error when Bark open fails', () => {
+    loadSnapshot.current = {
+      ...loadSnapshot.current,
+      loadPhase: 'load-error',
+      errorMessage: 'signet unreachable',
+    }
+    renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.getByTestId('bark-session-load-error')).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Bark session could not be established' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('signet unreachable')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+    expect(screen.getByTestId('dashboard-bark-exit-link')).toBeInTheDocument()
+  })
 })

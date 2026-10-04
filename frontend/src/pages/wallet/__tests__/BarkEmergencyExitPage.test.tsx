@@ -32,6 +32,7 @@ const featureState = vi.hoisted(() => ({
 const loadSnapshot = vi.hoisted(() => ({
   loadPhase: 'loaded' as 'loaded' | 'loading' | 'load-error' | 'not-configured',
   networkMode: 'signet' as NetworkMode,
+  errorMessage: null as string | null,
 }))
 
 const syncSnapshot = vi.hoisted(() => ({
@@ -148,6 +149,7 @@ describe('BarkEmergencyExitPage', () => {
     walletStoreState.currentAddress = 'tb1qcurrent'
     walletStoreState.balance.confirmedSats = 50_000
     loadSnapshot.loadPhase = 'loaded'
+    loadSnapshot.errorMessage = null
     barkWorker.listVtxos.mockResolvedValue({ tipHeight: 90, rows: [spendableVtxo] })
     barkWorker.listEmergencyExits.mockResolvedValue([])
     barkWorker.exitTopology.mockResolvedValue({ nodes: [] })
@@ -198,12 +200,20 @@ describe('BarkEmergencyExitPage', () => {
     expect(screen.queryByTestId('bark-emergency-exit-start')).not.toBeInTheDocument()
   })
 
-  it('shows the establishing session state while Bark is loading', () => {
+  it('BARK-SESS-03 shows the Bark session loading screen while Bark is loading', () => {
     loadSnapshot.loadPhase = 'loading'
     renderWithProviders(<BarkEmergencyExitPage />)
-    expect(screen.getByTestId('bark-emergency-exit-session-loading')).toHaveTextContent(
-      'Establishing Bark session…',
-    )
+    expect(screen.getByTestId('bark-session-loading')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Establishing Bark session' })).toBeInTheDocument()
+    expect(screen.queryByTestId('bark-emergency-exit-start')).not.toBeInTheDocument()
+  })
+
+  it('BARK-SESS-04 shows the Bark session error screen when open fails', () => {
+    loadSnapshot.loadPhase = 'load-error'
+    loadSnapshot.errorMessage = 'signet unreachable'
+    renderWithProviders(<BarkEmergencyExitPage />)
+    expect(screen.getByTestId('bark-session-load-error')).toBeInTheDocument()
+    expect(screen.getByText('signet unreachable')).toBeInTheDocument()
     expect(screen.queryByTestId('bark-emergency-exit-start')).not.toBeInTheDocument()
   })
 

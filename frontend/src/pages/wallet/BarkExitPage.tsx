@@ -3,12 +3,14 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { barkSessionBlockingScreen } from '@/components/bark/bark-session-blocking-screen'
 import { BarkRailUnavailable } from '@/components/bark/BarkRailUnavailable'
 import { BarkPendingActionBanner } from '@/components/wallet/BarkPendingActionBanner'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
 import { useBarkSyncLifecycleSnapshot } from '@/hooks/useBarkSyncLifecycleSnapshot'
 import { barkExitPerformDeps, barkExitReviewDeps } from '@/lib/bark/bark-exit-live-deps'
 import { BarkOffboardParkedError, performBarkExit } from '@/lib/bark/perform-bark-exit'
@@ -31,6 +33,7 @@ export function BarkExitPage() {
   const networkMode = useWalletStore(selectCommittedNetworkMode)
   const currentAddress = useWalletStore((walletState) => walletState.currentAddress)
   const isBarkEnabled = useFeatureStore((featureState) => featureState.isBarkEnabled)
+  const loadSnapshot = useBarkLoadLifecycleSnapshot()
   const spendableSats = useBarkSyncLifecycleSnapshot().spendableSats
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -49,6 +52,14 @@ export function BarkExitPage() {
         backLabel="Back"
       />
     )
+  }
+
+  const sessionBlockingScreen = barkSessionBlockingScreen(
+    loadSnapshot.loadPhase,
+    loadSnapshot.errorMessage,
+  )
+  if (sessionBlockingScreen) {
+    return sessionBlockingScreen
   }
 
   const destinationAddress = currentAddress?.trim() ?? ''

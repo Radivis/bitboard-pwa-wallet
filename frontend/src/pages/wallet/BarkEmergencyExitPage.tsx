@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
-import { Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
+import { barkSessionBlockingScreen } from '@/components/bark/bark-session-blocking-screen'
 import { BarkRailUnavailable } from '@/components/bark/BarkRailUnavailable'
 import {
   BarkEmergencyExitClaimCard,
@@ -29,6 +29,11 @@ export function BarkEmergencyExitPage() {
     )
   }
 
+  const sessionBlockingScreen = barkSessionBlockingScreen(page.loadPhase, page.errorMessage)
+  if (sessionBlockingScreen) {
+    return sessionBlockingScreen
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader title="Bark emergency exit" />
@@ -37,49 +42,37 @@ export function BarkEmergencyExitPage() {
         Progress is a button. A successful Bark sync also broadcasts an exit that is already started.
       </p>
 
-      {page.sessionReady ? (
-        <>
-          <BarkEmergencyExitTreeCard
-            nodes={page.topologyNodes}
-            emptySelection={page.topologyVtxoIds.length === 0}
-            errorMessage={page.exitTreeError}
-            vtxoRows={page.vtxoRows}
-          />
-          <BarkEmergencyExitStartCard
-            wholeWallet={page.wholeWallet}
-            spendableVtxos={page.spendableVtxos}
-            selectedIds={page.selectedIds}
-            review={page.review}
-            busyAction={page.busyAction}
-            startBlocked={page.startBlocked}
-            onWholeWalletChange={page.selectWholeWallet}
-            onToggleVtxo={page.toggleVtxo}
-            onReview={page.onReview}
-            onStart={page.onStart}
-          />
-          <BarkEmergencyExitLiveCard
-            rows={page.liveExits}
-            vtxoRows={page.vtxoRows}
-            busyAction={page.busyAction}
-            onProgress={page.onProgress}
-            onCancel={page.onCancel}
-          />
-          <BarkEmergencyExitClaimCard
-            destinationAddress={page.destinationAddress}
-            busyAction={page.busyAction}
-            claimEnabled={page.claimEnabled}
-            onClaim={page.onClaim}
-          />
-        </>
-      ) : page.loadPhase === 'load-error' ? null : (
-        <div
-          className="flex items-center gap-2 text-sm text-muted-foreground"
-          data-testid="bark-emergency-exit-session-loading"
-        >
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          Establishing Bark session…
-        </div>
-      )}
+      <BarkEmergencyExitTreeCard
+        nodes={page.topologyNodes}
+        emptySelection={page.topologyVtxoIds.length === 0}
+        errorMessage={page.exitTreeError}
+        vtxoRows={page.vtxoRows}
+      />
+      <BarkEmergencyExitStartCard
+        wholeWallet={page.wholeWallet}
+        spendableVtxos={page.spendableVtxos}
+        selectedIds={page.selectedIds}
+        review={page.review}
+        busyAction={page.busyAction}
+        startBlocked={page.startBlocked}
+        onWholeWalletChange={page.selectWholeWallet}
+        onToggleVtxo={page.toggleVtxo}
+        onReview={page.onReview}
+        onStart={page.onStart}
+      />
+      <BarkEmergencyExitLiveCard
+        rows={page.liveExits}
+        vtxoRows={page.vtxoRows}
+        busyAction={page.busyAction}
+        onProgress={page.onProgress}
+        onCancel={page.onCancel}
+      />
+      <BarkEmergencyExitClaimCard
+        destinationAddress={page.destinationAddress}
+        busyAction={page.busyAction}
+        claimEnabled={page.claimEnabled}
+        onClaim={page.onClaim}
+      />
 
       <Button type="button" variant="outline" asChild>
         <Link to="/wallet/management">Back to management</Link>

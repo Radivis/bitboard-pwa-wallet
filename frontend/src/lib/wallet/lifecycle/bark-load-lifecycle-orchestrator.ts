@@ -40,6 +40,8 @@ function idleBarkLoadSnapshot(): BarkLoadLifecycleSnapshot {
 
 let snapshot: BarkLoadLifecycleSnapshot = idleBarkLoadSnapshot()
 
+let lastLoadParams: Omit<BarkLoadParams, 'allowRetryFromError'> | null = null
+
 let sessionGeneration = 0
 
 const listeners = new Set<(next: BarkLoadLifecycleSnapshot) => void>()
@@ -91,6 +93,7 @@ export function isBarkLoadFailedForNetwork(networkMode: NetworkMode): boolean {
 export function forceResetBarkLoadLifecycleForTeardown(): void {
   bumpSessionGeneration()
   inFlightLoadTracker.clearCurrent()
+  lastLoadParams = null
   setSnapshot(idleBarkLoadSnapshot())
 }
 
@@ -167,6 +170,9 @@ export async function orchestrateBarkLoad(params: BarkLoadParams): Promise<void>
     return
   }
 
+  const { allowRetryFromError, ...persistedParams } = params
+  void allowRetryFromError
+
   const key = loadKey(params)
   const coalesced = getCoalescedInFlightPromise(inFlightLoadTracker, key)
   if (coalesced != null) {
@@ -176,6 +182,8 @@ export async function orchestrateBarkLoad(params: BarkLoadParams): Promise<void>
   if (afterDifferentWork != null) {
     return afterDifferentWork
   }
+
+  lastLoadParams = persistedParams
 
   return inFlightLoadTracker.begin(key, async () => {
     const generation = sessionGeneration
@@ -219,9 +227,17 @@ export async function orchestrateBarkLoad(params: BarkLoadParams): Promise<void>
   })
 }
 
+export async function orchestrateBarkRetryLoad(): Promise<void> {
+  if (lastLoadParams == null) {
+    throw new Error('No Bark load to retry')
+  }
+  return orchestrateBarkLoad({ ...lastLoadParams, allowRetryFromError: true })
+}
+
 /** @internal Test-only reset */
 export function resetBarkLoadLifecycleStateForTests(): void {
   snapshot = idleBarkLoadSnapshot()
+  lastLoadParams = null
   sessionGeneration = 0
   inFlightLoadTracker.clearCurrent()
   listeners.clear()

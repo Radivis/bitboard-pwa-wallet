@@ -155,13 +155,24 @@ describe('BarkVtxoViewerPage', () => {
     expect(screen.queryByLabelText('Search')).not.toBeInTheDocument()
   })
 
-  it('shows Establishing Bark session while the session is loading', () => {
+  it('BARK-SESS-03 shows the Bark session loading screen while the session is loading', () => {
     loadSnapshot.current.loadPhase = 'loading'
     renderWithProviders(<BarkVtxoViewerPage />)
-    expect(screen.getByTestId('bark-vtxo-session-loading')).toHaveTextContent(
-      'Establishing Bark session…',
-    )
-    expect(screen.queryByTestId('bark-vtxo-card-spend:0')).not.toBeInTheDocument()
+    expect(screen.getByTestId('bark-session-loading')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Establishing Bark session' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('Search')).not.toBeInTheDocument()
+  })
+
+  it('BARK-SESS-04 shows the Bark session error screen when open fails', () => {
+    loadSnapshot.current = {
+      ...loadSnapshot.current,
+      loadPhase: 'load-error',
+      errorMessage: 'signet unreachable',
+    }
+    renderWithProviders(<BarkVtxoViewerPage />)
+    expect(screen.getByTestId('bark-session-load-error')).toBeInTheDocument()
+    expect(screen.getByText('signet unreachable')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Search')).not.toBeInTheDocument()
   })
 
   it('does not stay on Loading VTXOs while Bark sync holds the session', () => {

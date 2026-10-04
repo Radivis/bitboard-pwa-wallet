@@ -19,6 +19,15 @@ const featureState = vi.hoisted(() => ({
   isBarkEnabled: true,
 }))
 
+const loadSnapshot = vi.hoisted(() => ({
+  current: {
+    loadPhase: 'loaded' as 'loaded' | 'loading' | 'load-error' | 'not-configured',
+    networkMode: 'signet' as NetworkMode | null,
+    errorMessage: null as string | null,
+    receiveKeyIndex: 0 as number | null,
+  },
+}))
+
 const syncSnapshot = vi.hoisted(() => ({
   current: { spendableSats: 50_000 as number | null },
 }))
@@ -74,6 +83,10 @@ vi.mock('@/hooks/useBarkSyncLifecycleSnapshot', () => ({
   useBarkSyncLifecycleSnapshot: () => syncSnapshot.current,
 }))
 
+vi.mock('@/hooks/useBarkLoadLifecycleSnapshot', () => ({
+  useBarkLoadLifecycleSnapshot: () => loadSnapshot.current,
+}))
+
 vi.mock('@/hooks/useBarkPendingActionsQuery', () => ({
   useBarkPendingActionsQuery: () => ({ data: pendingActions.current }),
 }))
@@ -117,6 +130,12 @@ describe('BarkExitPage', () => {
     walletStoreState.networkMode = 'signet'
     walletStoreState.currentAddress = 'tb1qcurrent'
     walletStoreState.loadedDescriptorWallet = { networkMode: 'signet' }
+    loadSnapshot.current = {
+      loadPhase: 'loaded',
+      networkMode: 'signet',
+      errorMessage: null,
+      receiveKeyIndex: 0,
+    }
     syncSnapshot.current = { spendableSats: 50_000 }
     reviewBarkExitAmount.mockReset()
     reviewBarkExitAll.mockReset()
@@ -226,5 +245,24 @@ describe('BarkExitPage', () => {
     expect(toast.error).not.toHaveBeenCalled()
     expect(toast.success).not.toHaveBeenCalled()
     expect(navigate).not.toHaveBeenCalled()
+  })
+
+  it('BARK-SESS-03 hides the exit form while the Bark session is loading', () => {
+    loadSnapshot.current.loadPhase = 'loading'
+    renderWithProviders(<BarkExitPage />)
+    expect(screen.getByTestId('bark-session-loading')).toBeInTheDocument()
+    expect(screen.queryByTestId('bark-exit-amount')).not.toBeInTheDocument()
+  })
+
+  it('BARK-SESS-04 hides the exit form when the Bark session failed to open', () => {
+    loadSnapshot.current = {
+      ...loadSnapshot.current,
+      loadPhase: 'load-error',
+      errorMessage: 'signet unreachable',
+    }
+    renderWithProviders(<BarkExitPage />)
+    expect(screen.getByTestId('bark-session-load-error')).toBeInTheDocument()
+    expect(screen.getByText('signet unreachable')).toBeInTheDocument()
+    expect(screen.queryByTestId('bark-exit-amount')).not.toBeInTheDocument()
   })
 })

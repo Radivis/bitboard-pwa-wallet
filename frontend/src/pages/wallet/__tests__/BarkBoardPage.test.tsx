@@ -16,6 +16,15 @@ const featureState = vi.hoisted(() => ({
   isBarkEnabled: true,
 }))
 
+const loadSnapshot = vi.hoisted(() => ({
+  current: {
+    loadPhase: 'loaded' as 'loaded' | 'loading' | 'load-error' | 'not-configured',
+    networkMode: 'signet' as NetworkMode | null,
+    errorMessage: null as string | null,
+    receiveKeyIndex: 0 as number | null,
+  },
+}))
+
 const reviewBarkBoard = vi.hoisted(() => vi.fn())
 const performBarkBoard = vi.hoisted(() => vi.fn())
 const navigate = vi.hoisted(() => vi.fn())
@@ -36,6 +45,10 @@ vi.mock('sonner', () => ({
 
 vi.mock('@/hooks/useEsploraFeePresets', () => ({
   useEsploraFeePresets: () => ({ data: { Low: 1, Medium: 2, High: 4 }, isFetching: false }),
+}))
+
+vi.mock('@/hooks/useBarkLoadLifecycleSnapshot', () => ({
+  useBarkLoadLifecycleSnapshot: () => loadSnapshot.current,
 }))
 
 vi.mock('@/stores/featureStore', () => ({
@@ -91,6 +104,12 @@ describe('BarkBoardPage', () => {
     featureState.isBarkEnabled = true
     walletStoreState.networkMode = 'signet'
     walletStoreState.loadedDescriptorWallet = { networkMode: 'signet' }
+    loadSnapshot.current = {
+      loadPhase: 'loaded',
+      networkMode: 'signet',
+      errorMessage: null,
+      receiveKeyIndex: 0,
+    }
     reviewBarkBoard.mockReset()
     performBarkBoard.mockReset()
     navigate.mockReset()
@@ -156,5 +175,24 @@ describe('BarkBoardPage', () => {
     expect(toast.success).not.toHaveBeenCalled()
     expect(broadcastTransaction).not.toHaveBeenCalled()
     expect(navigate).not.toHaveBeenCalled()
+  })
+
+  it('BARK-SESS-03 hides the funding form while the Bark session is loading', () => {
+    loadSnapshot.current.loadPhase = 'loading'
+    renderWithProviders(<BarkBoardPage />)
+    expect(screen.getByTestId('bark-session-loading')).toBeInTheDocument()
+    expect(screen.queryByTestId('bark-board-amount')).not.toBeInTheDocument()
+  })
+
+  it('BARK-SESS-04 hides the funding form when the Bark session failed to open', () => {
+    loadSnapshot.current = {
+      ...loadSnapshot.current,
+      loadPhase: 'load-error',
+      errorMessage: 'signet unreachable',
+    }
+    renderWithProviders(<BarkBoardPage />)
+    expect(screen.getByTestId('bark-session-load-error')).toBeInTheDocument()
+    expect(screen.getByText('signet unreachable')).toBeInTheDocument()
+    expect(screen.queryByTestId('bark-board-amount')).not.toBeInTheDocument()
   })
 })

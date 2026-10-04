@@ -1,16 +1,16 @@
 import { Link } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 import { FiatBtcAmountDisplay } from '@/components/FiatBtcAmountDisplay'
+import { BarkSessionLoadError } from '@/components/bark/BarkSessionLoadError'
+import { BarkSessionLoading } from '@/components/bark/BarkSessionLoading'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { BarkPendingActionBanner } from '@/components/wallet/BarkPendingActionBanner'
-import { RailLoadErrorBanner } from '@/components/wallet/RailLoadErrorBanner'
 import { RailSyncControl } from '@/components/wallet/RailSyncControl'
 import { RailSyncErrorBanner } from '@/components/wallet/RailSyncErrorBanner'
 import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
 import { useBarkSyncLifecycleSnapshot } from '@/hooks/useBarkSyncLifecycleSnapshot'
 import { useBarkManualSyncMutation } from '@/hooks/useRailManualSyncMutations'
-import { orchestrateBarkLoad } from '@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator'
 import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
 import {
   barkRefreshNoticeText,
@@ -23,7 +23,6 @@ import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore
 
 export function BarkDashboardBalance() {
   const networkMode = useWalletStore(selectCommittedNetworkMode)
-  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const isBarkEnabled = useFeatureStore((featureState) => featureState.isBarkEnabled)
   const loadSnapshot = useBarkLoadLifecycleSnapshot()
   const syncSnapshot = useBarkSyncLifecycleSnapshot()
@@ -68,31 +67,9 @@ export function BarkDashboardBalance() {
       </CardHeader>
       <CardContent className="space-y-2">
         {loadSnapshot.loadPhase === 'load-error' ? (
-          <RailLoadErrorBanner
-            rail="bark"
-            loadPhase={loadSnapshot.loadPhase}
-            errorMessage={loadSnapshot.errorMessage}
-            onRetry={() => {
-              if (activeWalletId == null) return
-              void orchestrateBarkLoad({
-                walletId: activeWalletId,
-                networkMode,
-                allowRetryFromError: true,
-              }).catch(() => {
-                // The load snapshot already records the error.
-              })
-            }}
-          />
+          <BarkSessionLoadError embedded errorMessage={loadSnapshot.errorMessage} />
         ) : null}
-        {showEstablishingSession ? (
-          <div
-            className="flex items-center gap-2 text-sm text-muted-foreground"
-            data-testid="dashboard-bark-session-loading"
-          >
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-            Establishing Bark session…
-          </div>
-        ) : null}
+        {showEstablishingSession ? <BarkSessionLoading embedded /> : null}
         {showSyncPlaceholder ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />

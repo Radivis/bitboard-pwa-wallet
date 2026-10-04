@@ -71,6 +71,7 @@ vi.mock('@/lib/bark/bark-session-service', () => ({
 import {
   getBarkLoadLifecycleSnapshot,
   orchestrateBarkLoad,
+  orchestrateBarkRetryLoad,
   resetBarkLoadLifecycleStateForTests,
 } from '@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator'
 
@@ -167,5 +168,22 @@ describe('bark-load-lifecycle-orchestrator', () => {
     expect(terminateBarkWorkerMock).toHaveBeenCalled()
     expect(orchestrateBarkPostLoadSyncMock).not.toHaveBeenCalled()
     expect(forceResetBarkSyncLifecycleForTeardownMock).toHaveBeenCalled()
+  })
+
+  it('retries a failed open through orchestrateBarkRetryLoad', async () => {
+    workerMocks.openSession.mockRejectedValueOnce(new Error('signet unreachable'))
+    await expect(
+      orchestrateBarkLoad({ walletId: 1, networkMode: 'signet' }),
+    ).rejects.toThrow('signet unreachable')
+    expect(getBarkLoadLifecycleSnapshot().loadPhase).toBe('load-error')
+
+    workerMocks.openSession.mockResolvedValueOnce({
+      fingerprint: 'abcdef01',
+      receiveKeyIndex: 0,
+    })
+    await orchestrateBarkRetryLoad()
+
+    expect(getBarkLoadLifecycleSnapshot().loadPhase).toBe('loaded')
+    expect(workerMocks.openSession).toHaveBeenCalledTimes(2)
   })
 })

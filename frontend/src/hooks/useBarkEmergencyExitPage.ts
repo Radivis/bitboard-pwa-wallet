@@ -242,6 +242,7 @@ export function useBarkEmergencyExitPage() {
     unavailable,
     sessionReady,
     loadPhase: loadSnapshot.loadPhase,
+    errorMessage: loadSnapshot.errorMessage,
     vtxoRows,
     spendableVtxos,
     liveExits,

@@ -2,11 +2,13 @@ import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { barkSessionBlockingScreen } from '@/components/bark/bark-session-blocking-screen'
 import { BarkRailUnavailable } from '@/components/bark/BarkRailUnavailable'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
 import { useEsploraFeePresets } from '@/hooks/useEsploraFeePresets'
 import { barkBoardPerformDeps, barkBoardReviewDeps } from '@/lib/bark/bark-board-live-deps'
 import { performBarkBoard } from '@/lib/bark/perform-bark-board'
@@ -24,6 +26,7 @@ const CONFIRMATION_NOTE =
 export function BarkBoardPage() {
   const networkMode = useWalletStore(selectCommittedNetworkMode)
   const isBarkEnabled = useFeatureStore((featureState) => featureState.isBarkEnabled)
+  const loadSnapshot = useBarkLoadLifecycleSnapshot()
   const navigate = useNavigate()
   const feePresetsQuery = useEsploraFeePresets(networkMode)
   const feeRateSatPerVb =
@@ -43,6 +46,14 @@ export function BarkBoardPage() {
         backLabel="Back"
       />
     )
+  }
+
+  const sessionBlockingScreen = barkSessionBlockingScreen(
+    loadSnapshot.loadPhase,
+    loadSnapshot.errorMessage,
+  )
+  if (sessionBlockingScreen) {
+    return sessionBlockingScreen
   }
 
   async function onReview() {

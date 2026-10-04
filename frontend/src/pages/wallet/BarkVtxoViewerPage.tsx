@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 import { format } from 'date-fns'
+import { barkSessionBlockingScreen } from '@/components/bark/bark-session-blocking-screen'
 import { BarkRailUnavailable } from '@/components/bark/BarkRailUnavailable'
 import { BarkVtxoCard } from '@/components/bark/BarkVtxoCard'
 import { CardPagination } from '@/components/CardPagination'
@@ -10,7 +11,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { RailLoadErrorBanner } from '@/components/wallet/RailLoadErrorBanner'
 import { RailSyncErrorBanner } from '@/components/wallet/RailSyncErrorBanner'
 import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
 import { useBarkSyncLifecycleSnapshot } from '@/hooks/useBarkSyncLifecycleSnapshot'
@@ -31,7 +31,6 @@ import {
   type BarkVtxoSortKey,
 } from '@/lib/bark/bark-vtxo-viewer-display'
 import { errorMessage } from '@/lib/shared/utils'
-import { orchestrateBarkLoad } from '@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator'
 import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
 import { useFeatureStore } from '@/stores/featureStore'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
@@ -46,7 +45,6 @@ import {
 
 export function BarkVtxoViewerPage() {
   const networkMode = useWalletStore(selectCommittedNetworkMode)
-  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const isBarkEnabled = useFeatureStore((featureState) => featureState.isBarkEnabled)
   const loadSnapshot = useBarkLoadLifecycleSnapshot()
   const syncSnapshot = useBarkSyncLifecycleSnapshot()
@@ -80,7 +78,14 @@ export function BarkVtxoViewerPage() {
     )
   }
 
-  const sessionReady = loadSnapshot.loadPhase === 'loaded'
+  const sessionBlockingScreen = barkSessionBlockingScreen(
+    loadSnapshot.loadPhase,
+    loadSnapshot.errorMessage,
+  )
+  if (sessionBlockingScreen) {
+    return sessionBlockingScreen
+  }
+
   const isSyncing = syncSnapshot.syncPhase === 'syncing' || barkManualSync.isPending
   const syncedAtLabel = formatBarkSyncedAt(syncSnapshot.lastSuccessfulSyncAt)
   const listPresentation = barkVtxoListPresentation({
@@ -99,17 +104,6 @@ export function BarkVtxoViewerPage() {
         </p>
       ) : null}
 
-      <RailLoadErrorBanner
-        rail="bark"
-        loadPhase={loadSnapshot.loadPhase}
-        errorMessage={loadSnapshot.errorMessage}
-        onRetry={() => {
-          if (activeWalletId != null) {
-            void orchestrateBarkLoad({ walletId: activeWalletId, networkMode })
-          }
-        }}
-        isRetrying={loadSnapshot.loadPhase === 'loading'}
-      />
       <RailSyncErrorBanner
         rail="bark"
         syncPhase={syncSnapshot.syncPhase}
@@ -119,35 +113,25 @@ export function BarkVtxoViewerPage() {
         isRetrying={isSyncing}
       />
 
-      {sessionReady ? (
-        <BarkVtxoInventory
-          rows={vtxoRows}
-          tipHeight={vtxoList?.tipHeight ?? null}
-          networkMode={networkMode}
-          presentation={listPresentation}
-          errorMessage={vtxoListQuery.isError ? errorMessage(vtxoListQuery.error) : null}
-          searchQuery={searchQuery}
-          onSearchQueryChange={setSearchQuery}
-          stateFilter={stateFilter}
-          onStateFilterChange={setStateFilter}
-          hideFinished={hideFinished}
-          onHideFinishedChange={setHideFinished}
-          sortKey={sortKey}
-          onSortKeyChange={setSortKey}
-          pageIndex={pageIndex}
-          onPageIndexChange={setPageIndex}
-          pendingActions={pendingActions}
-          movements={movements}
-        />
-      ) : loadSnapshot.loadPhase === 'load-error' ? null : (
-        <div
-          className="flex items-center gap-2 text-sm text-muted-foreground"
-          data-testid="bark-vtxo-session-loading"
-        >
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          Establishing Bark session…
-        </div>
-      )}
+      <BarkVtxoInventory
+        rows={vtxoRows}
+        tipHeight={vtxoList?.tipHeight ?? null}
+        networkMode={networkMode}
+        presentation={listPresentation}
+        errorMessage={vtxoListQuery.isError ? errorMessage(vtxoListQuery.error) : null}
+        searchQuery={searchQuery}
+        onSearchQueryChange={setSearchQuery}
+        stateFilter={stateFilter}
+        onStateFilterChange={setStateFilter}
+        hideFinished={hideFinished}
+        onHideFinishedChange={setHideFinished}
+        sortKey={sortKey}
+        onSortKeyChange={setSortKey}
+        pageIndex={pageIndex}
+        onPageIndexChange={setPageIndex}
+        pendingActions={pendingActions}
+        movements={movements}
+      />
 
       <Button type="button" variant="outline" asChild>
         <Link to="/wallet/management">Back to management</Link>

@@ -19,6 +19,15 @@ const pendingActions = vi.hoisted(() => ({
   current: [] as BarkPendingAction[],
 }))
 
+const loadSnapshot = vi.hoisted(() => ({
+  current: {
+    loadPhase: 'loaded' as 'loaded' | 'loading' | 'load-error' | 'not-configured',
+    networkMode: 'signet' as NetworkMode | null,
+    errorMessage: null as string | null,
+    receiveKeyIndex: 0 as number | null,
+  },
+}))
+
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
   return {
@@ -44,6 +53,10 @@ vi.mock('@/stores/featureStore', () => ({
 
 vi.mock('@/hooks/useBarkPendingActionsQuery', () => ({
   useBarkPendingActionsQuery: () => ({ data: pendingActions.current }),
+}))
+
+vi.mock('@/hooks/useBarkLoadLifecycleSnapshot', () => ({
+  useBarkLoadLifecycleSnapshot: () => loadSnapshot.current,
 }))
 
 vi.mock('@/stores/walletStore', async (importOriginal) => {
@@ -77,6 +90,12 @@ describe('BarkPanel', () => {
     featureState.isBarkEnabled = true
     walletStoreState.networkMode = 'signet'
     walletStoreState.loadedDescriptorWallet = { networkMode: 'signet' }
+    loadSnapshot.current = {
+      loadPhase: 'loaded',
+      networkMode: 'signet',
+      errorMessage: null,
+      receiveKeyIndex: 0,
+    }
   })
 
   it('BARK-VTX-08 shows a pending offboard on the management panel', () => {
@@ -131,5 +150,27 @@ describe('BarkPanel', () => {
     walletStoreState.loadedDescriptorWallet = { networkMode: 'mutinynet' }
     renderWithProviders(<BarkPanel />)
     expect(screen.queryByTestId('bark-list-vtxos-link')).not.toBeInTheDocument()
+  })
+
+  it('BARK-SESS-01 shows the embedded loading screen and hides the links while the session is opening', () => {
+    loadSnapshot.current.loadPhase = 'loading'
+    renderWithProviders(<BarkPanel />)
+    expect(screen.getByTestId('bark-session-loading')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Establishing Bark session' })).toBeInTheDocument()
+    expect(screen.queryByTestId('bark-list-vtxos-link')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('bark-emergency-exit-link')).not.toBeInTheDocument()
+  })
+
+  it('BARK-SESS-02 shows the embedded error screen and hides the links when open fails', () => {
+    loadSnapshot.current = {
+      ...loadSnapshot.current,
+      loadPhase: 'load-error',
+      errorMessage: 'signet unreachable',
+    }
+    renderWithProviders(<BarkPanel />)
+    expect(screen.getByTestId('bark-session-load-error')).toBeInTheDocument()
+    expect(screen.getByText('signet unreachable')).toBeInTheDocument()
+    expect(screen.queryByTestId('bark-list-vtxos-link')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('bark-emergency-exit-link')).not.toBeInTheDocument()
   })
 })

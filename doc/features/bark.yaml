@@ -117,6 +117,37 @@ feature:
       - id: DASH-BARK-11
         description: Switching to another wallet, including one just created, drops the previous Bark balance before that wallet's own session is shown
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/bark-sync-lifecycle-orchestrator.test.ts
+      - id: DASH-BARK-12
+        description: >
+          While Bark loadPhase is loading and no spendable amount is available, the dashboard card
+          shows the embedded Bark session loading screen (heading "Establishing Bark session")
+        implemented_by: frontend/src/components/wallet/__tests__/BarkDashboardBalance.test.tsx
+      - id: DASH-BARK-13
+        description: >
+          When Bark session open fails, the dashboard card shows the embedded Bark session error
+          screen, including the sanitized message and Retry
+        implemented_by: frontend/src/components/wallet/__tests__/BarkDashboardBalance.test.tsx
+    session_screens:
+      - id: BARK-SESS-01
+        description: >
+          The management Bark card shows the embedded session loading screen while the session is
+          opening or not configured yet, and hides the VTXO and emergency-exit links until it is loaded
+        implemented_by: frontend/src/components/wallet/__tests__/BarkPanel.test.tsx
+      - id: BARK-SESS-02
+        description: >
+          The management Bark card shows the embedded session error screen when open fails, and hides
+          the VTXO and emergency-exit links
+        implemented_by: frontend/src/components/wallet/__tests__/BarkPanel.test.tsx
+      - id: BARK-SESS-03
+        description: >
+          The VTXO, emergency-exit, board, and exit pages replace their content with the full-page
+          Bark session loading screen while the session is opening
+        implemented_by: frontend/src/pages/wallet/__tests__/BarkVtxoViewerPage.test.tsx
+      - id: BARK-SESS-04
+        description: >
+          Those same pages replace their content with the full-page Bark session error screen when
+          open fails
+        implemented_by: frontend/src/pages/wallet/__tests__/BarkVtxoViewerPage.test.tsx
     sync:
       - id: BARK-SYNC-01
         description: bark_balance is refused until this session has completed a successful sync
@@ -342,6 +373,7 @@ feature:
         description: Bark entry on the Management page
         file: frontend/src/components/wallet/BarkPanel.tsx
         visible_elements:
+          - Embedded Bark session loading or error screen while the session is not ready
           - Pending Bark action banner
           - List VTXOs link to /wallet/bark/vtxos
           - Emergency exit link to /wallet/bark/emergency-exit
@@ -349,6 +381,7 @@ feature:
           - Contract BARK-VTX-01
           - Contract BARK-VTX-08
           - Contract BARK-EMG-01
+          - Contracts BARK-SESS-01 and BARK-SESS-02
           - Shown only when isBarkEnabled and the network is signet or mainnet
     - BarkVtxoViewer:
         description: Bark VTXO inventory
@@ -363,9 +396,11 @@ feature:
           - pagination at 20 cards per page
           - last successful sync subtitle when a sync time is known
           - Bark sync error banner
+          - Full-page Bark session loading or error screen while the session is not ready
           - Back to management
         requirements:
           - Contracts BARK-VTX-02 through BARK-VTX-07
+          - Contracts BARK-SESS-03 and BARK-SESS-04
           - Shown only when isBarkEnabled and the network is signet or mainnet
           - The list is the local Bark database
     - BarkEmergencyExit:
@@ -383,9 +418,11 @@ feature:
           - Progress button
           - Claim section to the current on-chain receive address
           - Back to management
+          - Full-page Bark session loading or error screen while the session is not ready
         requirements:
           - Contracts BARK-EMG-02 through BARK-EMG-08
           - Contracts BARK-EMG-10 through BARK-EMG-17
+          - Contracts BARK-SESS-03 and BARK-SESS-04
           - Shown only when isBarkEnabled and the network is signet or mainnet
           - Progress is a button, and a successful Bark sync also progresses exits that are already started
           - Claim stays disabled while every claimable exit is already in a pending claim
