@@ -107,7 +107,7 @@ export async function claimBarkEmergencyExits(
     const rows = await deps.syncExits()
     observed = claimObservedByBark(drained.vtxoIds, rows)
   } catch {
-    observed = false
+    // sync_exits failed. The pending claim stays until a later sync observes it.
   }
   if (observed) {
     await deps.clearPendingClaim()
