@@ -3,7 +3,9 @@ import {
   BARK_MAINNET_SERVER_URL,
   BARK_SIGNET_SERVER_URL,
   isBarkReceiveKeyIndex,
+  pendingEmergencyClaimFromUnknown,
   type BarkRailNetwork,
+  type PendingEmergencyClaim,
   type StoredBarkRail,
   type WalletSecretsPayload,
 } from '@/lib/wallet/wallet-domain-types'
@@ -40,6 +42,12 @@ function railWithPreservedFields(
   const nextDump = recordDump ?? existingRail?.recordDump
   if (nextDump != null) {
     barkRail.recordDump = nextDump
+  }
+  const pendingEmergencyClaim = pendingEmergencyClaimFromUnknown(
+    existingRail?.pendingEmergencyClaim,
+  )
+  if (pendingEmergencyClaim != null) {
+    barkRail.pendingEmergencyClaim = pendingEmergencyClaim
   }
   return barkRail
 }
@@ -199,6 +207,43 @@ export function applyBarkRecordDump(params: {
   )
   if (params.lastSuccessfulSyncAt !== undefined) {
     rail.lastSuccessfulSyncAt = params.lastSuccessfulSyncAt
+  }
+  return payloadWithRail(params.payload, params.network, rail)
+}
+
+function assertPendingEmergencyClaim(pending: PendingEmergencyClaim): void {
+  if (pendingEmergencyClaimFromUnknown(pending) == null) {
+    throw new Error('Bark pending emergency claim is invalid')
+  }
+}
+
+/**
+ * Sets or clears the broadcast claim Bark has not observed yet.
+ * Leaves the dump, fingerprint, receive index, and the other network unchanged.
+ */
+export function applyPendingEmergencyClaim(params: {
+  payload: WalletSecretsPayload
+  network: BarkRailNetwork
+  pending: PendingEmergencyClaim | null
+}): WalletSecretsPayload {
+  if (params.pending != null) {
+    assertPendingEmergencyClaim(params.pending)
+  }
+  const existingRail = requireRail(params.payload, params.network)
+  const rail = railWithPreservedFields(
+    params.network,
+    existingRail,
+    existingRail.fingerprint,
+    undefined,
+    undefined,
+  )
+  if (params.pending == null) {
+    delete rail.pendingEmergencyClaim
+  } else {
+    rail.pendingEmergencyClaim = {
+      txid: params.pending.txid,
+      vtxoIds: [...params.pending.vtxoIds],
+    }
   }
   return payloadWithRail(params.payload, params.network, rail)
 }

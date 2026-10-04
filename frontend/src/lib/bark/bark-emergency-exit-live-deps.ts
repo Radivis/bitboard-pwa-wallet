@@ -1,12 +1,14 @@
+import { barkEmergencyExitProgressDeps } from '@/lib/bark/bark-emergency-exit-progress-deps'
 import type { ClaimBarkEmergencyExitDeps } from '@/lib/bark/perform-bark-emergency-exit'
-import type { ProgressBarkEmergencyExitDeps } from '@/lib/bark/perform-bark-emergency-exit'
 import type { StartBarkEmergencyExitDeps } from '@/lib/bark/perform-bark-emergency-exit'
 import { getEsploraUrl } from '@/lib/wallet/bitcoin-utils'
 import { orchestrateBarkSync } from '@/lib/wallet/lifecycle/bark-sync-lifecycle-orchestrator'
 import { useWalletStore } from '@/stores/walletStore'
+import type { BarkEmergencyExitEstimate } from '@/workers/bark-api'
 import { getBarkWorker } from '@/workers/bark-factory'
 import { getCryptoWorker } from '@/workers/crypto-factory'
-import type { BarkEmergencyExitEstimate } from '@/workers/bark-api'
+
+export { barkEmergencyExitProgressDeps }
 
 export type ReviewBarkEmergencyExitDeps = {
   estimate: (vtxoIds: string[], feeRateSatPerVb: number) => Promise<BarkEmergencyExitEstimate>
@@ -25,34 +27,22 @@ export function barkEmergencyExitStartDeps(): StartBarkEmergencyExitDeps {
   }
 }
 
-export function barkEmergencyExitProgressDeps(): ProgressBarkEmergencyExitDeps {
-  return {
-    progress: () => getBarkWorker().progressEmergencyExits(),
-    signChild: (request, feeRateSatPerVb) =>
-      getCryptoWorker().signP2aCpfpChild({
-        parentTxHex: request.parentTxHex,
-        effectiveFeeRateSatPerVb: feeRateSatPerVb,
-        rbfMinFeeRateSatPerKwu: request.rbfMinFeeRateSatPerKwu,
-        currentPackageFeeSats: request.currentPackageFeeSats,
-      }),
-    provideChild: (parentTxid, childTxHex) =>
-      getBarkWorker().provideEmergencyExitCpfp(parentTxid, childTxHex),
-    rememberUnconfirmedChild: (childTxHex) =>
-      getCryptoWorker().applyUnconfirmedFundingTx(
-        childTxHex,
-        Math.floor(Date.now() / 1000),
-      ),
-  }
-}
-
 export function barkEmergencyExitClaimDeps(): ClaimBarkEmergencyExitDeps {
   return {
-    drain: (address, feeRateSatPerVb) =>
-      getBarkWorker().drainEmergencyExits(address, feeRateSatPerVb),
+    pendingVtxoIds: async () => {
+      const pending = await getBarkWorker().readPendingEmergencyClaim()
+      return pending?.vtxoIds ?? []
+    },
+    drain: (address, feeRateSatPerVb, excludeVtxoIds) =>
+      getBarkWorker().drainEmergencyExits(address, feeRateSatPerVb, excludeVtxoIds),
     broadcast: (rawTxHex) => {
       const { networkMode } = useWalletStore.getState()
       return getCryptoWorker().broadcastTransaction(rawTxHex, getEsploraUrl(networkMode))
     },
+    rememberPendingClaim: (pending) => getBarkWorker().writePendingEmergencyClaim(pending),
+    broadcastOnBarkChain: (rawTxHex) => getBarkWorker().broadcastEmergencyExitClaim(rawTxHex),
+    syncExits: () => getBarkWorker().syncEmergencyExits(),
+    clearPendingClaim: () => getBarkWorker().writePendingEmergencyClaim(null),
     syncBark: async () => {
       const { activeWalletId, networkMode } = useWalletStore.getState()
       if (activeWalletId == null) {
@@ -62,6 +52,7 @@ export function barkEmergencyExitClaimDeps(): ClaimBarkEmergencyExitDeps {
         walletId: activeWalletId,
         networkMode,
         throwOnError: true,
+        settleExits: false,
       })
     },
     startOnchainBackgroundSync: () => {

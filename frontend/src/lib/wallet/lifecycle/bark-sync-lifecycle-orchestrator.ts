@@ -1,3 +1,4 @@
+import { settleBarkExitAfterSync } from '@/lib/bark/bark-exit-after-sync'
 import { getBarkWorker } from '@/workers/bark-factory'
 import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
 import type { BarkRefreshStatus } from '@/lib/bark/bark-refresh-status'
@@ -29,6 +30,12 @@ export type BarkSyncParams = {
   networkMode: NetworkMode
   /** When false, sync errors stay on the snapshot and do not reject. */
   throwOnError?: boolean
+  /**
+   * When false, skip exit progress and pending-claim reconciliation.
+   * A claim uses this so a just-broadcast transaction is not treated as gone
+   * before the app Esplora has indexed it.
+   */
+  settleExits?: boolean
 }
 
 function idleBarkSyncSnapshot(): BarkSyncLifecycleSnapshot {
@@ -201,6 +208,14 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
         lastSuccessfulSyncAt: synced.lastSuccessfulSyncAt,
         refreshStatus: synced.refreshStatus ?? 'idle',
       })
+      if (generation !== sessionGeneration || params.settleExits === false) {
+        return
+      }
+      try {
+        await settleBarkExitAfterSync(params.networkMode)
+      } catch {
+        // The stamp stays. The next sync tries exit progress again.
+      }
     } catch (error) {
       if (generation !== sessionGeneration) {
         return

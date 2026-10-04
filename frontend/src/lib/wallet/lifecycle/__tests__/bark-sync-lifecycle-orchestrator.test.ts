@@ -7,6 +7,11 @@ const featureState = vi.hoisted(() => ({
 const workerMocks = vi.hoisted(() => ({
   sync: vi.fn(),
   readSpendableBalance: vi.fn(),
+  listEmergencyExits: vi.fn(),
+  readPendingEmergencyClaim: vi.fn(),
+  writePendingEmergencyClaim: vi.fn(),
+  progressEmergencyExits: vi.fn(),
+  provideEmergencyExitCpfp: vi.fn(),
 }))
 
 const loadSnapshot = vi.hoisted(() => ({
@@ -26,6 +31,17 @@ vi.mock('@/stores/featureStore', () => ({
 
 vi.mock('@/workers/bark-factory', () => ({
   getBarkWorker: () => workerMocks,
+}))
+
+vi.mock('@/workers/crypto-factory', () => ({
+  getCryptoWorker: () => ({
+    signP2aCpfpChild: vi.fn(),
+    applyUnconfirmedFundingTx: vi.fn(),
+  }),
+}))
+
+vi.mock('@/hooks/useEsploraFeePresets', () => ({
+  presetRatesForNetwork: vi.fn(async () => ({ Low: 1, Medium: 2, High: 4 })),
 }))
 
 vi.mock('@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator', () => ({
@@ -58,6 +74,9 @@ describe('bark-sync-lifecycle-orchestrator', () => {
       spendableSats: 50_000,
       lockedSats: 12_000,
     })
+    workerMocks.listEmergencyExits.mockResolvedValue([])
+    workerMocks.readPendingEmergencyClaim.mockResolvedValue(null)
+    workerMocks.progressEmergencyExits.mockResolvedValue({ requests: [] })
   })
 
   it('stores spendable sats after a successful sync', async () => {
@@ -131,6 +150,26 @@ describe('bark-sync-lifecycle-orchestrator', () => {
       lastSuccessfulSyncAt: '2024-03-02T12:00:00.000Z',
       errorMessage: null,
       refreshStatus: 'warning',
+    })
+  })
+
+  it('BARK-EMG-17 progresses started exits without dropping the sync stamp when progress throws', async () => {
+    workerMocks.listEmergencyExits.mockResolvedValue([
+      { vtxoId: 'exit-1', state: 'start', cancelable: true },
+    ])
+    workerMocks.progressEmergencyExits.mockRejectedValue(
+      new Error('bark_exit_insufficient_funds: short'),
+    )
+
+    await orchestrateBarkSync({ walletId: 1, networkMode: 'signet' })
+
+    expect(workerMocks.progressEmergencyExits).toHaveBeenCalledOnce()
+    expect(getBarkSyncLifecycleSnapshot()).toMatchObject({
+      syncPhase: 'not-syncing',
+      spendableSats: 50_000,
+      lockedSats: 12_000,
+      lastSuccessfulSyncAt: '2024-03-01T12:00:00.000Z',
+      errorMessage: null,
     })
   })
 

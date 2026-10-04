@@ -1,8 +1,11 @@
+import { claimObservedByBark } from '@/lib/bark/bark-emergency-claim'
 import type {
   BarkEmergencyCpfpRequest,
   BarkEmergencyExitDrain,
   BarkEmergencyExitProgress,
+  BarkEmergencyExitRow,
 } from '@/workers/bark-api'
+import type { PendingEmergencyClaim } from '@/lib/wallet/wallet-domain-types'
 
 export type StartBarkEmergencyExitDeps = {
   start: (vtxoIds: string[]) => Promise<void>
@@ -19,15 +22,25 @@ export type ProgressBarkEmergencyExitDeps = {
 }
 
 export type ClaimBarkEmergencyExitDeps = {
-  drain: (address: string, feeRateSatPerVb: number) => Promise<BarkEmergencyExitDrain>
+  pendingVtxoIds: () => Promise<string[]>
+  drain: (
+    address: string,
+    feeRateSatPerVb: number,
+    excludeVtxoIds: string[],
+  ) => Promise<BarkEmergencyExitDrain>
   broadcast: (rawTxHex: string) => Promise<string>
+  rememberPendingClaim: (pending: PendingEmergencyClaim) => Promise<void>
+  broadcastOnBarkChain: (rawTxHex: string) => Promise<void>
+  syncExits: () => Promise<BarkEmergencyExitRow[]>
+  clearPendingClaim: () => Promise<void>
   syncBark: () => Promise<void>
   startOnchainBackgroundSync: () => void
 }
 
 export type ClaimedBarkEmergencyExit = {
   txid: string
-  syncWarning: string | null
+  /** Bark's chain source reports every drained VTXO claim-in-progress or claimed. */
+  observed: boolean
 }
 
 function errorText(err: unknown): string {
@@ -71,7 +84,8 @@ export async function progressBarkEmergencyExits(
 }
 
 /**
- * Drains every claimable exit to the given address and broadcasts the signed transaction.
+ * Drains fresh claimable exits, broadcasts the signed transaction, and asks Bark's
+ * chain source whether it can see that spend. The app Esplora broadcast is not that proof.
  * Does not reveal a new on-chain address.
  */
 export async function claimBarkEmergencyExits(
@@ -79,14 +93,30 @@ export async function claimBarkEmergencyExits(
   destinationAddress: string,
   feeRateSatPerVb: number,
 ): Promise<ClaimedBarkEmergencyExit> {
-  const drained = await deps.drain(destinationAddress, feeRateSatPerVb)
+  const excludeVtxoIds = await deps.pendingVtxoIds()
+  const drained = await deps.drain(destinationAddress, feeRateSatPerVb, excludeVtxoIds)
   const txid = await deps.broadcast(drained.rawTxHex)
-  let syncWarning: string | null = null
+  await deps.rememberPendingClaim({ txid, vtxoIds: drained.vtxoIds })
+  try {
+    await deps.broadcastOnBarkChain(drained.rawTxHex)
+  } catch {
+    // The app Esplora already accepted the transaction. Observation is sync_exits.
+  }
+  let observed = false
+  try {
+    const rows = await deps.syncExits()
+    observed = claimObservedByBark(drained.vtxoIds, rows)
+  } catch {
+    observed = false
+  }
+  if (observed) {
+    await deps.clearPendingClaim()
+  }
   try {
     await deps.syncBark()
-  } catch (err) {
-    syncWarning = errorText(err)
+  } catch {
+    // A later sync can still observe the claim. The pending set stays until then.
   }
   deps.startOnchainBackgroundSync()
-  return { txid, syncWarning }
+  return { txid, observed }
 }

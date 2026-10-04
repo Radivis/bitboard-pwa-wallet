@@ -2,6 +2,9 @@ import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-s
 import type { HistoricalSignetOnchainChain } from '@/lib/wallet/historical-signet-onchain-chain'
 import type { EncryptedBlobMessage } from '@/workers/secrets-channel-types'
 import type { BarkRefreshStatus } from '@/lib/bark/bark-refresh-status'
+import type { PendingEmergencyClaim } from '@/lib/wallet/wallet-domain-types'
+
+export type { PendingEmergencyClaim }
 
 export type { BarkRefreshStatus }
 
@@ -158,6 +161,7 @@ export type BarkEmergencyExitProgress = {
 export type BarkEmergencyExitDrain = {
   psbtHex: string
   rawTxHex: string
+  vtxoIds: string[]
 }
 
 export const BARK_EXIT_GRAPH_NODE_STATUSES = ['pending', 'inProgress', 'confirmed'] as const
@@ -211,5 +215,13 @@ export interface BarkService {
   progressEmergencyExits(): Promise<BarkEmergencyExitProgress>
   provideEmergencyExitCpfp(exitTxid: string, childTxHex: string): Promise<void>
   cancelEmergencyExit(vtxoId: string): Promise<void>
-  drainEmergencyExits(address: string, feeRateSatPerVb: number): Promise<BarkEmergencyExitDrain>
+  drainEmergencyExits(
+    address: string,
+    feeRateSatPerVb: number,
+    excludeVtxoIds: string[],
+  ): Promise<BarkEmergencyExitDrain>
+  readPendingEmergencyClaim(): Promise<PendingEmergencyClaim | null>
+  writePendingEmergencyClaim(pending: PendingEmergencyClaim | null): Promise<void>
+  syncEmergencyExits(): Promise<BarkEmergencyExitRow[]>
+  broadcastEmergencyExitClaim(rawTxHex: string): Promise<void>
 }

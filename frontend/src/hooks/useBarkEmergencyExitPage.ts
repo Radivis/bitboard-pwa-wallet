@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { barkEmergencyExitQueryKey, useBarkEmergencyExitQuery } from '@/hooks/useBarkEmergencyExitQuery'
 import { barkExitTopologyQueryKey, useBarkExitTopologyQuery } from '@/hooks/useBarkExitTopologyQuery'
@@ -7,6 +7,10 @@ import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapsh
 import { useEsploraFeePresets } from '@/hooks/useEsploraFeePresets'
 import { barkVtxoListQueryKey, useBarkVtxoListQuery } from '@/hooks/useBarkVtxoListQuery'
 import { useBarkSyncLifecycleSnapshot } from '@/hooks/useBarkSyncLifecycleSnapshot'
+import {
+  emergencyExitClaimEnabled,
+  overlayPendingEmergencyClaim,
+} from '@/lib/bark/bark-emergency-claim'
 import {
   barkExitTopologyVtxoIds,
   emergencyExitStartBlocked,
@@ -36,6 +40,13 @@ export const BARK_EMERGENCY_EXIT_CANCEL_NOTE =
 
 export const BARK_EMERGENCY_EXIT_CLAIM_NOTE = 'The on-chain balance updates after the claim confirms.'
 
+export function barkPendingEmergencyClaimQueryKey(
+  walletId: number | null,
+  networkMode: string,
+) {
+  return ['bark', 'pending-emergency-claim', walletId, networkMode] as const
+}
+
 export type BarkEmergencyExitReview = {
   vtxoIds: string[]
   estimate: BarkEmergencyExitEstimate
@@ -54,6 +65,15 @@ export function useBarkEmergencyExitPage() {
   const syncSnapshot = useBarkSyncLifecycleSnapshot()
   const vtxoListQuery = useBarkVtxoListQuery()
   const exitQuery = useBarkEmergencyExitQuery()
+  const pendingClaimQuery = useQuery({
+    queryKey: barkPendingEmergencyClaimQueryKey(activeWalletId, networkMode),
+    enabled:
+      isBarkEnabled &&
+      isBarkNetworkMode(networkMode) &&
+      loadSnapshot.loadPhase === 'loaded' &&
+      activeWalletId != null,
+    queryFn: () => getBarkWorker().readPendingEmergencyClaim(),
+  })
   const queryClient = useQueryClient()
 
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -79,6 +99,11 @@ export function useBarkEmergencyExitPage() {
   const unavailable = !isBarkEnabled || !isBarkNetworkMode(networkMode)
   const sessionReady = loadSnapshot.loadPhase === 'loaded'
   const destinationAddress = currentAddress?.trim() ?? ''
+  const liveExits = useMemo(
+    () => overlayPendingEmergencyClaim(exitQuery.data ?? [], pendingClaimQuery.data ?? null),
+    [exitQuery.data, pendingClaimQuery.data],
+  )
+  const claimEnabled = emergencyExitClaimEnabled(liveExits)
   const startBlocked =
     review != null && emergencyExitStartBlocked(confirmedSats, review.estimate.exitBroadcastFeeSats)
   const exitTreeError = topologyQuery.isError
@@ -114,6 +139,9 @@ export function useBarkEmergencyExitPage() {
           networkMode,
           syncSnapshot.lastSuccessfulSyncAt,
         ),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: barkPendingEmergencyClaimQueryKey(activeWalletId, networkMode),
       }),
       queryClient.invalidateQueries({
         queryKey: barkExitTopologyQueryKey(
@@ -199,12 +227,9 @@ export function useBarkEmergencyExitPage() {
         destinationAddress,
         feeRateSatPerVb,
       )
-      const claimedMessage = `Claim broadcast ${claimed.txid}. ${BARK_EMERGENCY_EXIT_CLAIM_NOTE}`
-      toast.success(
-        claimed.syncWarning == null
-          ? claimedMessage
-          : `${claimedMessage} ${claimed.syncWarning}`,
-      )
+      if (claimed.observed) {
+        toast.success(`Claim broadcast ${claimed.txid}. ${BARK_EMERGENCY_EXIT_CLAIM_NOTE}`)
+      }
       await reloadLists()
     } catch (err) {
       toast.error(errorMessage(err) || 'Claim failed')
@@ -219,7 +244,8 @@ export function useBarkEmergencyExitPage() {
     loadPhase: loadSnapshot.loadPhase,
     vtxoRows,
     spendableVtxos,
-    liveExits: exitQuery.data ?? [],
+    liveExits,
+    claimEnabled,
     topologyVtxoIds,
     topologyNodes: topologyVtxoIds.length === 0 ? [] : topologyQuery.data?.nodes,
     exitTreeError,

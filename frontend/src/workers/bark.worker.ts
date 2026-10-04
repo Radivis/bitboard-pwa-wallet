@@ -20,6 +20,7 @@ import {
   sendOnchainFromWasm,
 } from '@/lib/bark/bark-exit-session'
 import {
+  broadcastEmergencyExitClaimFromWasm,
   cancelEmergencyExitFromWasm,
   drainEmergencyExitsFromWasm,
   estimateEmergencyExitFromWasm,
@@ -27,6 +28,7 @@ import {
   progressEmergencyExitsFromWasm,
   provideEmergencyExitCpfpFromWasm,
   startEmergencyExitFromWasm,
+  syncEmergencyExitsFromWasm,
   exitTopologyFromWasm,
 } from '@/lib/bark/bark-emergency-exit-session'
 import {
@@ -59,6 +61,7 @@ import type {
   BarkMovementRow,
   BarkPendingAction,
   BarkVtxoList,
+  PendingEmergencyClaim,
   BarkPreparedBoardFunding,
   BarkRevealedReceiveAddress,
   BarkService,
@@ -70,8 +73,10 @@ import type { BarkRailNetwork } from '@/lib/wallet/wallet-domain-types'
 import {
   persistBarkProtocolState,
   persistOpenedBarkRail,
+  readPendingEmergencyClaim as readPendingEmergencyClaimFromPayload,
   readRecordDumpForOpen,
   readStoredBarkReceiveKeyIndex,
+  writePendingEmergencyClaim as writePendingEmergencyClaimToPayload,
 } from '@/workers/bark-worker-metadata'
 import type { SecretsChannelService } from '@/workers/secrets-channel-types'
 
@@ -509,6 +514,7 @@ async function cancelEmergencyExitImpl(vtxoId: string): Promise<void> {
 async function drainEmergencyExitsImpl(
   address: string,
   feeRateSatPerVb: number,
+  excludeVtxoIds: string[],
 ): Promise<BarkEmergencyExitDrain> {
   const walletId = requireOpenWalletId()
   return mutateBark(
@@ -518,9 +524,50 @@ async function drainEmergencyExitsImpl(
         await getBarkWasm(),
         address,
         feeRateSatPerVb,
+        excludeVtxoIds,
       ),
     () => ({}),
   )
+}
+
+function requireOpenNetwork(): BarkRailNetwork {
+  if (openNetwork == null || openWalletId == null) {
+    throw new Error('Bark session is not open')
+  }
+  return openNetwork
+}
+
+async function readPendingEmergencyClaimImpl(): Promise<PendingEmergencyClaim | null> {
+  const walletId = requireOpenWalletId()
+  const network = requireOpenNetwork()
+  return readPendingEmergencyClaimFromPayload(encryptedPayloadDeps(), walletId, network)
+}
+
+async function writePendingEmergencyClaimImpl(
+  pending: PendingEmergencyClaim | null,
+): Promise<void> {
+  const walletId = requireOpenWalletId()
+  const network = requireOpenNetwork()
+  await writePendingEmergencyClaimToPayload(
+    encryptedPayloadDeps(),
+    walletId,
+    network,
+    pending,
+  )
+}
+
+async function syncEmergencyExitsImpl(): Promise<BarkEmergencyExitRow[]> {
+  const walletId = requireOpenWalletId()
+  return mutateBark(
+    walletId,
+    async () => syncEmergencyExitsFromWasm(await getBarkWasm()),
+    () => ({}),
+  )
+}
+
+async function broadcastEmergencyExitClaimImpl(rawTxHex: string): Promise<void> {
+  requireOpenSession()
+  await broadcastEmergencyExitClaimFromWasm(await getBarkWasm(), rawTxHex)
 }
 
 const barkService: BarkService = {
@@ -642,8 +689,28 @@ const barkService: BarkService = {
     return callBark(() => cancelEmergencyExitImpl(vtxoId))
   },
 
-  drainEmergencyExits(address: string, feeRateSatPerVb: number): Promise<BarkEmergencyExitDrain> {
-    return callBark(() => drainEmergencyExitsImpl(address, feeRateSatPerVb))
+  drainEmergencyExits(
+    address: string,
+    feeRateSatPerVb: number,
+    excludeVtxoIds: string[],
+  ): Promise<BarkEmergencyExitDrain> {
+    return callBark(() => drainEmergencyExitsImpl(address, feeRateSatPerVb, excludeVtxoIds))
+  },
+
+  readPendingEmergencyClaim(): Promise<PendingEmergencyClaim | null> {
+    return callBark(() => readPendingEmergencyClaimImpl())
+  },
+
+  writePendingEmergencyClaim(pending: PendingEmergencyClaim | null): Promise<void> {
+    return callBark(() => writePendingEmergencyClaimImpl(pending))
+  },
+
+  syncEmergencyExits(): Promise<BarkEmergencyExitRow[]> {
+    return callBark(() => syncEmergencyExitsImpl())
+  },
+
+  broadcastEmergencyExitClaim(rawTxHex: string): Promise<void> {
+    return callBark(() => broadcastEmergencyExitClaimImpl(rawTxHex))
   },
 }
 

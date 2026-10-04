@@ -1,9 +1,20 @@
+use std::collections::HashSet;
+
 use serde::Serialize;
 
 pub const BARK_EXIT_UNKNOWN_VTXO: &str = "bark_exit_unknown_vtxo";
 pub const BARK_EXIT_DUST: &str = "bark_exit_dust";
 pub const BARK_EXIT_ALREADY_EXITED: &str = "bark_exit_already_exited";
 pub const BARK_EXIT_ALREADY_SPENT: &str = "bark_exit_already_spent";
+pub const BARK_EXIT_NOTHING_STARTED: &str = "bark_exit_nothing_started";
+
+/// True when `after` contains an exit id that was not in `before`.
+pub fn exit_ids_grew(before: &[impl ToString], after: &[impl ToString]) -> bool {
+    let before_ids: HashSet<String> = before.iter().map(ToString::to_string).collect();
+    after
+        .iter()
+        .any(|exit_id| !before_ids.contains(&exit_id.to_string()))
+}
 
 /// Bark [`bark::exit::ExitStateKind`], named for the control page.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -133,6 +144,7 @@ struct EmergencyExitProgressJson {
 struct EmergencyExitDrainJson {
     psbt_hex: String,
     raw_tx_hex: String,
+    vtxo_ids: Vec<String>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -400,9 +412,10 @@ mod wasm {
     use wasm_bindgen::prelude::*;
 
     use super::{
-        BARK_EXIT_ALREADY_EXITED, BARK_EXIT_ALREADY_SPENT, BARK_EXIT_DUST, BARK_EXIT_UNKNOWN_VTXO,
-        BarkEmergencyExitStateKind, EmergencyExitCpfpRequestJson, EmergencyExitDrainJson,
-        EmergencyExitEstimateJson, EmergencyExitProgressJson, EmergencyExitRowJson, encode_hex,
+        BARK_EXIT_ALREADY_EXITED, BARK_EXIT_ALREADY_SPENT, BARK_EXIT_DUST,
+        BARK_EXIT_NOTHING_STARTED, BARK_EXIT_UNKNOWN_VTXO, BarkEmergencyExitStateKind,
+        EmergencyExitCpfpRequestJson, EmergencyExitDrainJson, EmergencyExitEstimateJson,
+        EmergencyExitProgressJson, EmergencyExitRowJson, encode_hex, exit_ids_grew,
         fee_rate_from_sat_per_vb, fee_rate_sat_per_vb, format_bark_exit_error, json_string,
         zero_estimate_json,
     };
@@ -530,31 +543,42 @@ mod wasm {
     }
 
     /// Empty id list starts an exit for the whole wallet. Does not offboard.
+    /// A start that adds no exit row is `bark_exit_nothing_started`.
     #[wasm_bindgen]
     pub async fn bark_start_emergency_exit(vtxo_ids_json: String) -> Result<(), JsValue> {
         run_with_synced_wallet(async |wallet| {
             let requested = parse_vtxo_ids(&vtxo_ids_json)?;
+            let before = wallet.exit_mgr().get_exit_vtxo_ids().await;
             if requested.is_empty() {
-                return map_anyhow_exit(wallet.exit_mgr().start_exit_for_entire_wallet().await);
-            }
-            let mut selected_vtxos = Vec::with_capacity(requested.len());
-            for vtxo_id in &requested {
-                match wallet.get_vtxo_by_id(*vtxo_id).await {
-                    Ok(wallet_vtxo) => selected_vtxos.push(wallet_vtxo.vtxo),
-                    Err(_) => {
-                        return Err(format_bark_exit_error(
-                            BARK_EXIT_UNKNOWN_VTXO,
-                            &vtxo_id.to_string(),
-                        ));
+                map_anyhow_exit(wallet.exit_mgr().start_exit_for_entire_wallet().await)?;
+            } else {
+                let mut selected_vtxos = Vec::with_capacity(requested.len());
+                for vtxo_id in &requested {
+                    match wallet.get_vtxo_by_id(*vtxo_id).await {
+                        Ok(wallet_vtxo) => selected_vtxos.push(wallet_vtxo.vtxo),
+                        Err(_) => {
+                            return Err(format_bark_exit_error(
+                                BARK_EXIT_UNKNOWN_VTXO,
+                                &vtxo_id.to_string(),
+                            ));
+                        }
                     }
                 }
+                map_anyhow_exit(
+                    wallet
+                        .exit_mgr()
+                        .start_exit_for_vtxos(&selected_vtxos)
+                        .await,
+                )?;
             }
-            map_anyhow_exit(
-                wallet
-                    .exit_mgr()
-                    .start_exit_for_vtxos(&selected_vtxos)
-                    .await,
-            )
+            let after = wallet.exit_mgr().get_exit_vtxo_ids().await;
+            if !exit_ids_grew(&before, &after) {
+                return Err(format_bark_exit_error(
+                    BARK_EXIT_NOTHING_STARTED,
+                    "Bark did not mark any VTXO for exit",
+                ));
+            }
+            Ok(())
         })
         .await
     }
@@ -563,27 +587,57 @@ mod wasm {
     #[wasm_bindgen]
     pub async fn bark_list_emergency_exits() -> Result<String, JsValue> {
         let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
-        let operation_result = async {
-            let live = map_anyhow_exit(wallet.exit_mgr().list_live(false, false).await)?;
-            let mut rows = live
-                .iter()
-                .map(|status| row_from_state(status.vtxo_id.to_string(), &status.state))
-                .collect::<Vec<_>>();
-            let seen = rows
-                .iter()
-                .map(|row| row.vtxo_id.clone())
-                .collect::<HashSet<_>>();
-            for claimable in wallet.exit_mgr().list_claimable().await {
-                let vtxo_id = claimable.id().to_string();
-                if seen.contains(&vtxo_id) {
-                    continue;
-                }
-                rows.push(row_from_state(vtxo_id, claimable.state()));
-            }
-            json_string(&rows)
-        }
-        .await;
+        let operation_result = async { json_string(&emergency_exit_rows(&wallet).await?) }.await;
         finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
+    }
+
+    /// `Wallet::sync_exits` against Bark's chain source, then the live exit rows.
+    #[wasm_bindgen]
+    pub async fn bark_sync_exits() -> Result<String, JsValue> {
+        run_with_synced_wallet(async |wallet| {
+            map_anyhow_exit(wallet.sync_exits().await)?;
+            json_string(&emergency_exit_rows(wallet).await?)
+        })
+        .await
+    }
+
+    /// Submits a claim transaction to Bark's chain source. Does not mark the exit spent.
+    #[wasm_bindgen]
+    pub async fn bark_broadcast_emergency_exit_claim(raw_tx_hex: String) -> Result<(), JsValue> {
+        run_with_synced_wallet(async |wallet| {
+            let claim_tx = bitcoin::consensus::encode::deserialize_hex::<Transaction>(&raw_tx_hex)
+                .map_err(|err| {
+                    format!("Bark emergency exit claim transaction is invalid: {err}")
+                })?;
+            wallet
+                .chain()
+                .broadcast_tx(&claim_tx)
+                .await
+                .map_err(bark_error)
+        })
+        .await
+    }
+
+    async fn emergency_exit_rows(
+        wallet: &bark::Wallet,
+    ) -> Result<Vec<EmergencyExitRowJson>, String> {
+        let live = map_anyhow_exit(wallet.exit_mgr().list_live(false, false).await)?;
+        let mut rows = live
+            .iter()
+            .map(|status| row_from_state(status.vtxo_id.to_string(), &status.state))
+            .collect::<Vec<_>>();
+        let seen = rows
+            .iter()
+            .map(|row| row.vtxo_id.clone())
+            .collect::<HashSet<_>>();
+        for claimable in wallet.exit_mgr().list_claimable().await {
+            let vtxo_id = claimable.id().to_string();
+            if seen.contains(&vtxo_id) {
+                continue;
+            }
+            rows.push(row_from_state(vtxo_id, claimable.state()));
+        }
+        Ok(rows)
     }
 
     /// `Exit::progress_exits` only. Returns Pay-to-Anchor parents that still need a child.
@@ -657,20 +711,33 @@ mod wasm {
 
     /// Signed claim PSBT and the extracted transaction. The worker does not broadcast it.
     /// `fee_rate_sat_per_vb` is the claim fee override.
+    /// `exclude_vtxo_ids_json` skips exits already in a pending claim.
     #[wasm_bindgen]
     pub async fn bark_drain_emergency_exits(
         address: String,
         requested_fee_rate_sat_per_vb: f64,
+        exclude_vtxo_ids_json: String,
     ) -> Result<String, JsValue> {
         run_with_synced_wallet(async |wallet| {
             let fee_rate = fee_rate_from_sat_per_vb(requested_fee_rate_sat_per_vb)?;
             let network = session_bitcoin_network()?;
             let destination = parse_receive_address(&address, network)?;
+            let excluded = parse_vtxo_ids(&exclude_vtxo_ids_json)?
+                .into_iter()
+                .collect::<HashSet<_>>();
             let claimable = wallet.exit_mgr().list_claimable().await;
+            let selected = claimable
+                .into_iter()
+                .filter(|exit_vtxo| !excluded.contains(&exit_vtxo.id()))
+                .collect::<Vec<_>>();
+            let vtxo_ids = selected
+                .iter()
+                .map(|exit_vtxo| exit_vtxo.id().to_string())
+                .collect::<Vec<_>>();
             let psbt = map_exit_error(
                 wallet
                     .exit_mgr()
-                    .drain_exits(&claimable, wallet, destination, Some(fee_rate))
+                    .drain_exits(&selected, wallet, destination, Some(fee_rate))
                     .await,
             )?;
             let raw_tx = psbt.clone().extract_tx().map_err(|err| {
@@ -679,6 +746,7 @@ mod wasm {
             json_string(&EmergencyExitDrainJson {
                 psbt_hex: encode_hex(&psbt.serialize()),
                 raw_tx_hex: serialize_hex(&raw_tx),
+                vtxo_ids,
             })
         })
         .await
@@ -784,9 +852,10 @@ mod wasm {
 #[cfg(test)]
 mod tests {
     use super::{
-        BARK_EXIT_ALREADY_EXITED, BARK_EXIT_ALREADY_SPENT, BARK_EXIT_DUST, BARK_EXIT_UNKNOWN_VTXO,
-        BarkEmergencyExitStateKind, ExitGraphChain, ExitGraphChainStatus, ExitGraphTransactionKind,
-        ExitGraphTransactionStatus, emergency_exit_state_json, exit_graph_transaction_from_bitcoin,
+        BARK_EXIT_ALREADY_EXITED, BARK_EXIT_ALREADY_SPENT, BARK_EXIT_DUST,
+        BARK_EXIT_NOTHING_STARTED, BARK_EXIT_UNKNOWN_VTXO, BarkEmergencyExitStateKind,
+        ExitGraphChain, ExitGraphChainStatus, ExitGraphTransactionKind, ExitGraphTransactionStatus,
+        emergency_exit_state_json, exit_graph_transaction_from_bitcoin, exit_ids_grew,
         fee_rate_from_sat_per_vb, fee_rate_sat_per_vb, merge_exit_graph,
     };
     use crate::exit_address::parse_signet_receive_address;
@@ -817,6 +886,15 @@ mod tests {
         assert_eq!(BARK_EXIT_DUST, "bark_exit_dust");
         assert_eq!(BARK_EXIT_ALREADY_EXITED, "bark_exit_already_exited");
         assert_eq!(BARK_EXIT_ALREADY_SPENT, "bark_exit_already_spent");
+        assert_eq!(BARK_EXIT_NOTHING_STARTED, "bark_exit_nothing_started");
+    }
+
+    #[test]
+    fn exit_start_that_adds_no_id_is_detected() {
+        assert!(!exit_ids_grew(&["already"], &["already"]));
+        assert!(!exit_ids_grew(&[] as &[&str], &[] as &[&str]));
+        assert!(exit_ids_grew(&["already"], &["already", "fresh"]));
+        assert!(exit_ids_grew(&[] as &[&str], &["fresh"]));
     }
 
     #[test]

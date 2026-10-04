@@ -1,12 +1,14 @@
 import {
   applyBarkRecordDump,
   applyOpenedBarkRail,
+  applyPendingEmergencyClaim,
   recordDumpForOpen,
 } from '@/lib/bark/bark-rail-metadata'
 import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
 import {
   parseWalletPayloadJson,
   type BarkRailNetwork,
+  type PendingEmergencyClaim,
   type StoredBarkRail,
   type WalletSecretsPayload,
 } from '@/lib/wallet/wallet-domain-types'
@@ -113,5 +115,27 @@ export async function persistBarkProtocolState(
     receiveKeyIndex: update.receiveKeyIndex,
     lastSuccessfulSyncAt: update.lastSuccessfulSyncAt,
   })
+  await writeDecryptedWalletPayload(deps, walletId, nextPayload)
+}
+
+/** Broadcast claim that Bark has not observed, if this rail has one. */
+export async function readPendingEmergencyClaim(
+  deps: BarkEncryptedPayloadDeps,
+  walletId: number,
+  network: BarkRailNetwork,
+): Promise<PendingEmergencyClaim | null> {
+  const payload = await readDecryptedWalletPayload(deps, walletId)
+  return payload.barkRails?.[network]?.pendingEmergencyClaim ?? null
+}
+
+/** Writes or clears the pending claim before the claim call returns. */
+export async function writePendingEmergencyClaim(
+  deps: BarkEncryptedPayloadDeps,
+  walletId: number,
+  network: BarkRailNetwork,
+  pending: PendingEmergencyClaim | null,
+): Promise<void> {
+  const payload = await readDecryptedWalletPayload(deps, walletId)
+  const nextPayload = applyPendingEmergencyClaim({ payload, network, pending })
   await writeDecryptedWalletPayload(deps, walletId, nextPayload)
 }

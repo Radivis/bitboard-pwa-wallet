@@ -50,6 +50,10 @@ const barkWorker = vi.hoisted(() => ({
   provideEmergencyExitCpfp: vi.fn(),
   cancelEmergencyExit: vi.fn(),
   drainEmergencyExits: vi.fn(),
+  readPendingEmergencyClaim: vi.fn(),
+  writePendingEmergencyClaim: vi.fn(),
+  syncEmergencyExits: vi.fn(),
+  broadcastEmergencyExitClaim: vi.fn(),
   offboardAll: vi.fn(),
   sendOnchain: vi.fn(),
 }))
@@ -156,7 +160,15 @@ describe('BarkEmergencyExitPage', () => {
     barkWorker.startEmergencyExit.mockResolvedValue(undefined)
     barkWorker.progressEmergencyExits.mockResolvedValue({ requests: [] })
     barkWorker.cancelEmergencyExit.mockResolvedValue(undefined)
-    barkWorker.drainEmergencyExits.mockResolvedValue({ psbtHex: 'psbt', rawTxHex: 'raw' })
+    barkWorker.drainEmergencyExits.mockResolvedValue({
+      psbtHex: 'psbt',
+      rawTxHex: 'raw',
+      vtxoIds: ['vtxo-1'],
+    })
+    barkWorker.readPendingEmergencyClaim.mockResolvedValue(null)
+    barkWorker.syncEmergencyExits.mockResolvedValue([])
+    barkWorker.broadcastEmergencyExitClaim.mockResolvedValue(undefined)
+    barkWorker.writePendingEmergencyClaim.mockResolvedValue(undefined)
     cryptoWorker.broadcastTransaction.mockResolvedValue('claim-txid')
     barkWorker.startEmergencyExit.mockClear()
     barkWorker.progressEmergencyExits.mockClear()
@@ -250,6 +262,9 @@ describe('BarkEmergencyExitPage', () => {
   })
 
   it('BARK-EMG-08 does not toast success when start, progress, or claim fails', async () => {
+    barkWorker.listEmergencyExits.mockResolvedValue([
+      exitRow({ vtxoId: 'claim-me', state: 'claimable', cancelable: false }),
+    ])
     barkWorker.startEmergencyExit.mockRejectedValue(new Error('bark_exit_already_exited: gone'))
     renderWithProviders(<BarkEmergencyExitPage />)
     fireEvent.click(await screen.findByTestId('bark-emergency-exit-vtxo-vtxo-1'))
@@ -278,6 +293,37 @@ describe('BarkEmergencyExitPage', () => {
     })
     expect(toast.success).not.toHaveBeenCalled()
     expect(cryptoWorker.getNewAddress).not.toHaveBeenCalled()
+  })
+
+  it('BARK-EMG-15 does not toast success when start marks nothing', async () => {
+    barkWorker.startEmergencyExit.mockRejectedValue(
+      new Error('bark_exit_nothing_started: Bark did not mark any VTXO for exit'),
+    )
+    renderWithProviders(<BarkEmergencyExitPage />)
+    fireEvent.click(await screen.findByTestId('bark-emergency-exit-vtxo-vtxo-1'))
+    fireEvent.click(screen.getByTestId('bark-emergency-exit-review'))
+    fireEvent.click(await screen.findByTestId('bark-emergency-exit-start'))
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalled()
+    })
+    expect(toast.success).not.toHaveBeenCalled()
+  })
+
+  it('does not offer a fresh claim for a VTXO Bark has not observed', async () => {
+    barkWorker.listEmergencyExits.mockResolvedValue([
+      exitRow({ vtxoId: 'held', state: 'claimable', cancelable: false }),
+    ])
+    barkWorker.readPendingEmergencyClaim.mockResolvedValue({
+      txid: 'claim-txid',
+      vtxoIds: ['held'],
+    })
+    renderWithProviders(<BarkEmergencyExitPage />)
+    await waitFor(() => {
+      expect(screen.getByTestId('bark-emergency-exit-row-held')).toHaveTextContent(
+        'Claim in progress',
+      )
+    })
+    expect(screen.getByTestId('bark-emergency-exit-claim')).toBeDisabled()
   })
 
   const exitTree: BarkExitGraph = {

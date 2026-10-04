@@ -73,6 +73,7 @@ export function readBarkEmergencyExitDrain(value: unknown): BarkEmergencyExitDra
   return {
     psbtHex: readHex(row.psbtHex, 'claim PSBT'),
     rawTxHex: readHex(row.rawTxHex, 'claim transaction'),
+    vtxoIds: readTextList(row.vtxoIds, 'claim VTXO ids'),
   }
 }
 

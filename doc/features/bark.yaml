@@ -66,9 +66,11 @@ feature:
     - Review, before start, shows the broadcast fee, the later claim fee, and how many transactions must be broadcast
     - Emergency exit broadcast, Pay-to-Anchor children, and the claim use the open network's High fee preset from the on-chain Esplora, not Bark's own fast rate
     - Start stays disabled when the on-chain confirmed balance is below the broadcast fee
-    - Progress is a button. It is not part of unlock sync or the periodic Bark sync
+    - Progress is a button. After a successful Bark sync, already-started exits take that same path, including Pay-to-Anchor children
     - Cancel is offered only while that exit is still cancelable
-    - Claim sends every claimable exit to the current on-chain receive address, broadcasts that signed transaction through the existing Esplora client, and does not reveal a new address
+    - A start that marks no VTXO is an error and does not toast success
+    - Claim sends every fresh claimable exit to the current on-chain receive address, broadcasts that signed transaction through the existing Esplora client, and does not reveal a new address
+    - A claim is finished only when Bark reports claim-in-progress or claimed for each drained VTXO. Until then those VTXOs stay claim-in-progress and are not drained again
     - A bark.exit movement is labeled as a Bark emergency exit, distinct from collaborative bark.offboard
     - The exit tree is shown on the Signet emergency-exit page when Bark is enabled. It loads the checked spendable VTXOs, or every spendable VTXO when the whole wallet is checked, plus every live exit
     - After Start clears the checkboxes, live exits keep the exit tree on screen
@@ -297,6 +299,15 @@ feature:
       - id: BARK-EMG-14
         description: Rendering the exit tree does not start, progress, cancel, or claim
         implemented_by: frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
+      - id: BARK-EMG-15
+        description: A start that marks no VTXO is an error and does not toast success
+        implemented_by: frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
+      - id: BARK-EMG-16
+        description: An unobserved claim is not finished, the pending set is stored before Bark exit sync, and a later drain excludes those VTXOs
+        implemented_by: frontend/src/lib/bark/__tests__/perform-bark-emergency-exit.test.ts
+      - id: BARK-EMG-17
+        description: A successful Bark sync progresses started exits, and a progress failure does not drop the sync stamp
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/bark-sync-lifecycle-orchestrator.test.ts
   pages:
     - BarkManagement:
         description: Bark entry on the Management page
@@ -345,6 +356,7 @@ feature:
           - Back to management
         requirements:
           - Contracts BARK-EMG-02 through BARK-EMG-08
-          - Contracts BARK-EMG-10 through BARK-EMG-14
+          - Contracts BARK-EMG-10 through BARK-EMG-17
           - Shown only when isBarkEnabled and the network is signet or mainnet
-          - Progress is a button, not unlock or periodic sync
+          - Progress is a button, and a successful Bark sync also progresses exits that are already started
+          - Claim stays disabled while every claimable exit is already in a pending claim

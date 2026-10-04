@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyBarkRecordDump,
   applyOpenedBarkRail,
+  applyPendingEmergencyClaim,
   applySuccessfulBarkSync,
   BarkFingerprintMismatchError,
   signetRecordDumpForOpen,
@@ -266,6 +267,61 @@ describe('barkRails metadata', () => {
       }),
     ).toThrow('Bark sync timestamp must be a parseable ISO-8601 string')
     expect(payload.barkRails?.signet?.lastSuccessfulSyncAt).toBe('2020-06-01T00:00:00.000Z')
+  })
+
+  it('keeps a pending emergency claim across a sync stamp and a dump flush', () => {
+    const pendingEmergencyClaim = { txid: 'claim-txid', vtxoIds: ['vtxo-1'] }
+    const payload = payloadWithArkadeSdk()
+    payload.barkRails = {
+      ...payload.barkRails,
+      signet: signetRail({
+        receiveKeyIndex: 2,
+        recordDump: signetDump,
+        pendingEmergencyClaim,
+      }),
+    }
+
+    const stamped = applySuccessfulBarkSync({
+      network: 'signet',
+      payload,
+      syncedAt: '2024-03-01T12:00:00.000Z',
+    })
+    expect(stamped.barkRails?.signet?.pendingEmergencyClaim).toEqual(pendingEmergencyClaim)
+
+    const flushed = applyBarkRecordDump({
+      network: 'signet',
+      payload: stamped,
+      recordDump: 'bmV4dC1kdW1w',
+    })
+    expect(flushed.barkRails?.signet?.pendingEmergencyClaim).toEqual(pendingEmergencyClaim)
+    expect(flushed.barkRails?.signet?.recordDump).toBe('bmV4dC1kdW1w')
+
+    const cleared = applyPendingEmergencyClaim({
+      payload: flushed,
+      network: 'signet',
+      pending: null,
+    })
+    expect(cleared.barkRails?.signet?.pendingEmergencyClaim).toBeUndefined()
+    expect(cleared.barkRails?.signet?.recordDump).toBe('bmV4dC1kdW1w')
+  })
+
+  it('omits a malformed pending emergency claim and keeps the record dump', () => {
+    const parsed = parseWalletPayloadJson(
+      JSON.stringify({
+        descriptorWallets: [],
+        lightningNwcConnections: [],
+        barkRails: {
+          signet: {
+            serverUrl: BARK_SIGNET_SERVER_URL,
+            fingerprint: 'abcdef01',
+            recordDump: signetDump,
+            pendingEmergencyClaim: { txid: '', vtxoIds: [] },
+          },
+        },
+      }),
+    )
+    expect(parsed.barkRails?.signet?.recordDump).toBe(signetDump)
+    expect(parsed.barkRails?.signet?.pendingEmergencyClaim).toBeUndefined()
   })
 
   it('drops a rail whose receiveKeyIndex is not a u32', () => {

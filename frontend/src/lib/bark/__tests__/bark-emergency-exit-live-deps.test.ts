@@ -48,6 +48,7 @@ describe('barkEmergencyExitClaimDeps', () => {
       walletId: 1,
       networkMode: 'signet',
       throwOnError: true,
+      settleExits: false,
     })
   })
 })

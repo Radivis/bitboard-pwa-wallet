@@ -195,10 +195,12 @@ export function BarkEmergencyExitLiveCard({
 export function BarkEmergencyExitClaimCard({
   destinationAddress,
   busyAction,
+  claimEnabled,
   onClaim,
 }: {
   destinationAddress: string
   busyAction: string | null
+  claimEnabled: boolean
   onClaim: () => void
 }) {
   return (
@@ -214,7 +216,7 @@ export function BarkEmergencyExitClaimCard({
         <Button
           type="button"
           data-testid="bark-emergency-exit-claim"
-          disabled={destinationAddress.length === 0 || busyAction != null}
+          disabled={!claimEnabled || destinationAddress.length === 0 || busyAction != null}
           onClick={onClaim}
         >
           Claim to this address

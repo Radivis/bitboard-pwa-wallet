@@ -341,6 +341,9 @@ pub async fn bark_last_revealed_key_index() -> Result<JsValue, JsValue> {
 /// After that sync, schedules one delegated VTXO refresh when none is pending.
 /// A scheduling failure still marks this session synced and returns `warning`.
 /// The status is `idle`, `scheduled`, `pending`, or `warning`.
+///
+/// `sync_exits` then runs so Bark's chain source can see a claim. That error
+/// does not fail this call.
 #[wasm_bindgen]
 pub async fn bark_sync() -> Result<String, JsValue> {
     let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
@@ -352,7 +355,10 @@ pub async fn bark_sync() -> Result<String, JsValue> {
         wallet.sync().await;
         crate::pending_actions::continue_pending_offboards(&wallet).await;
         wallet.sync_pending_boards().await.map_err(bark_error)?;
-        Ok(delegated_refresh_status(&wallet).await)
+        let refresh_status = delegated_refresh_status(&wallet).await;
+        // A missed exit sync does not fail this session. Item 4 owns which steps fail the sync.
+        let _exit_sync = wallet.sync_exits().await;
+        Ok(refresh_status)
     }
     .await;
     let refresh_status =

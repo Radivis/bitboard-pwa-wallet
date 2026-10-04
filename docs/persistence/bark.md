@@ -17,12 +17,13 @@ interface StoredBarkRail {
   lastSuccessfulSyncAt?: string
   receiveKeyIndex?: number
   recordDump?: string // versioned Bark Record bytes, standard base64
+  pendingEmergencyClaim?: { txid: string; vtxoIds: string[] }
 }
 
 barkRails?: Partial<Record<BarkRailNetwork, StoredBarkRail>>
 ```
 
-The map key is the network. The rail record does not repeat it. Signet `serverUrl` is `https://ark.signet.2nd.dev`. Mainnet `serverUrl` is `https://ark.second.tech`. A flush rewrites only the open network's dump.
+The map key is the network. The rail record does not repeat it. Signet `serverUrl` is `https://ark.signet.2nd.dev`. Mainnet `serverUrl` is `https://ark.second.tech`. A flush rewrites only the open network's dump. `pendingEmergencyClaim` is metadata on that rail, not a Bark protocol record. It remembers a broadcast claim until Bark reports those VTXOs claim-in-progress or claimed, or the app Esplora reports the transaction gone. A dump flush keeps the field.
 
 A legacy singular `barkRail` with `network: 'signet'` is read once into `barkRails.signet` (metadata only, no dump).
 

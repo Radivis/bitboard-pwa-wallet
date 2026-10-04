@@ -150,6 +150,17 @@ export interface StoredBarkRail {
    * dropping it would open an empty wallet and lose the exit chain.
    */
   recordDump?: string
+  /**
+   * Broadcast claim Bark has not yet observed. Kept until those VTXOs are
+   * claim-in-progress or claimed, or the app Esplora reports the transaction gone.
+   */
+  pendingEmergencyClaim?: PendingEmergencyClaim
+}
+
+/** A claim transaction already broadcast, and the VTXOs it spends. */
+export interface PendingEmergencyClaim {
+  txid: string
+  vtxoIds: string[]
 }
 
 export type StoredBarkRails = Partial<Record<BarkRailNetwork, StoredBarkRail>>
@@ -237,6 +248,21 @@ function optionalBarkRailFieldsMatch(value: Record<string, unknown>): boolean {
   return true
 }
 
+function isPendingEmergencyClaim(value: unknown): value is PendingEmergencyClaim {
+  if (!isRecord(value)) return false
+  if (typeof value.txid !== 'string' || value.txid.length === 0) return false
+  if (!Array.isArray(value.vtxoIds) || value.vtxoIds.length === 0) return false
+  return value.vtxoIds.every((vtxoId) => typeof vtxoId === 'string' && vtxoId.length > 0)
+}
+
+/** Keeps a well-formed pending claim. A malformed one is omitted so the dump stays. */
+export function pendingEmergencyClaimFromUnknown(
+  value: unknown,
+): PendingEmergencyClaim | undefined {
+  if (!isPendingEmergencyClaim(value)) return undefined
+  return { txid: value.txid, vtxoIds: [...value.vtxoIds] }
+}
+
 function copyOptionalBarkRailFields(
   source: StoredBarkRail,
   rail: StoredBarkRail,
@@ -249,6 +275,10 @@ function copyOptionalBarkRailFields(
   }
   if (source.recordDump != null && source.recordDump.length > 0) {
     rail.recordDump = source.recordDump
+  }
+  const pendingEmergencyClaim = pendingEmergencyClaimFromUnknown(source.pendingEmergencyClaim)
+  if (pendingEmergencyClaim != null) {
+    rail.pendingEmergencyClaim = pendingEmergencyClaim
   }
   return rail
 }

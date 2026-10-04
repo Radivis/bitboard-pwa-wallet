@@ -34,7 +34,7 @@ export function BarkEmergencyExitPage() {
       <PageHeader title="Bark emergency exit" />
       <p className="text-sm text-muted-foreground">{BARK_EMERGENCY_EXIT_CANCEL_NOTE}</p>
       <p className="text-sm text-muted-foreground">
-        Progress is a button. It runs only when you press it.
+        Progress is a button. A successful Bark sync also broadcasts an exit that is already started.
       </p>
 
       {page.sessionReady ? (
@@ -67,6 +67,7 @@ export function BarkEmergencyExitPage() {
           <BarkEmergencyExitClaimCard
             destinationAddress={page.destinationAddress}
             busyAction={page.busyAction}
+            claimEnabled={page.claimEnabled}
             onClaim={page.onClaim}
           />
         </>
