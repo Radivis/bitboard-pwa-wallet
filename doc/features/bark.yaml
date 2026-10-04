@@ -78,6 +78,10 @@ feature:
     - A node is pending, in progress, or confirmed. Needs a child appears only while that transaction is waiting for a Pay-to-Anchor child. That child is not a node
     - Focusing a node shows its transaction id and the VTXO ids whose exit leaf is that transaction
     - Rendering the exit tree does not start, progress, cancel, or claim
+    - A checkpoint, exit-row, or exit-child write exports and encrypts the open network's dump before that write returns
+    - That mid-call flush does not change lastSuccessfulSyncAt
+    - A dump taken at that flush, opened again, still has the board checkpoint, so the next sync can resume it
+    - A flush failure fails that write. The end-of-call flush still runs when the session is open
   contracts:
     dashboard:
       - id: DASH-BARK-01
@@ -147,6 +151,26 @@ feature:
       - id: BARK-META-02
         description: Stamping is refused when the Bark rail is missing or the timestamp is not ISO-8601
         implemented_by: frontend/src/lib/bark/__tests__/bark-rail-metadata.test.ts
+    durability:
+      - id: BARK-DUR-01
+        description: >
+          A checkpoint, exit-row, or exit-child write exports the dump before that write returns.
+          A VTXO write does not.
+        implemented_by: bitboard-bark/src/record_store.rs
+      - id: BARK-DUR-02
+        description: >
+          That flush does not change lastSuccessfulSyncAt. A CAS conflict re-reads and keeps the
+          other network's dump and the pending emergency claim.
+        implemented_by: frontend/src/workers/__tests__/bark-protocol-state-flush.test.ts
+      - id: BARK-DUR-03
+        description: >
+          A dump taken at that flush, opened again, still has the board checkpoint, so the next
+          sync can resume it
+        implemented_by: bitboard-bark/src/record_store.rs
+      - id: BARK-DUR-04
+        description: >
+          A flush failure fails that write. The end-of-call flush still runs when the session is open.
+        implemented_by: frontend/src/workers/__tests__/bark-durable-flush.test.ts
     settings:
       - id: BARK-PER-01
         description: The periodic sync card shows a Bark row only when isBarkEnabled

@@ -233,6 +233,22 @@ pub fn bark_export_record_dump() -> Result<String, JsValue> {
     export_active_record_dump().map_err(|err| JsValue::from_str(&err))
 }
 
+/// Persists a checkpoint, exit row, or exit child before that Bark write returns.
+/// The hook receives the encoded dump and must return a promise. It must not
+/// call back into this module.
+#[wasm_bindgen]
+pub fn bark_set_durable_record_flush_hook(hook: js_sys::Function) {
+    crate::record_store::set_process_durable_flush_hook(hook.clone());
+    ACTIVE_RECORD_STORE.with(|slot| {
+        let Ok(current) = slot.try_borrow() else {
+            return;
+        };
+        if let Some(store) = current.as_ref() {
+            store.install_js_durable_flush_hook(hook);
+        }
+    });
+}
+
 /// Drops the in-memory wallet and record store.
 #[wasm_bindgen]
 pub fn bark_close_session() -> Result<(), JsValue> {

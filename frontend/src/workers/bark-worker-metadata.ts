@@ -5,6 +5,9 @@ import {
   recordDumpForOpen,
 } from '@/lib/bark/bark-rail-metadata'
 import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
+
+/** Matches `WALLET_SECRETS_CAS_MAX_RETRIES` without pulling the database module into the worker. */
+const BARK_PROTOCOL_STATE_CAS_ATTEMPTS = 8
 import {
   parseWalletPayloadJson,
   type BarkRailNetwork,
@@ -96,7 +99,10 @@ export async function persistOpenedBarkRail(
   return rail
 }
 
-/** Replaces one network's dump, and optional cursor or sync time, after a protocol write. */
+/**
+ * Replaces one network's dump, and optional cursor or sync time, after a protocol write.
+ * On a revision conflict, re-reads and applies the same dump onto the newer payload.
+ */
 export async function persistBarkProtocolState(
   deps: BarkEncryptedPayloadDeps,
   walletId: number,
@@ -107,15 +113,33 @@ export async function persistBarkProtocolState(
     lastSuccessfulSyncAt?: string
   },
 ): Promise<void> {
-  const payload = await readDecryptedWalletPayload(deps, walletId)
-  const nextPayload = applyBarkRecordDump({
-    payload,
-    network,
-    recordDump: update.recordDump,
-    receiveKeyIndex: update.receiveKeyIndex,
-    lastSuccessfulSyncAt: update.lastSuccessfulSyncAt,
-  })
-  await writeDecryptedWalletPayload(deps, walletId, nextPayload)
+  for (let attempt = 1; attempt <= BARK_PROTOCOL_STATE_CAS_ATTEMPTS; attempt += 1) {
+    const current = await deps.encryptedHost.readEncryptedPayloadWithRevision(walletId)
+    const plaintext = await deps.secretsProxy.decrypt(current.payload)
+    const payload = parseWalletPayloadJson(plaintext)
+    const nextPayload = applyBarkRecordDump({
+      payload,
+      network,
+      recordDump: update.recordDump,
+      receiveKeyIndex: update.receiveKeyIndex,
+      lastSuccessfulSyncAt: update.lastSuccessfulSyncAt,
+    })
+    const encryptedNext = await deps.secretsProxy.encrypt(JSON.stringify(nextPayload))
+    const wrote = await deps.encryptedHost.writeEncryptedPayloadIfRevisionMatches(
+      walletId,
+      {
+        ciphertext: encryptedNext.ciphertext,
+        iv: encryptedNext.iv,
+        salt: encryptedNext.salt,
+        kdfPhc: encryptedNext.kdfPhc,
+      },
+      current.revision,
+    )
+    if (wrote) return
+  }
+  throw new Error(
+    `Failed to update encrypted wallet secrets after ${BARK_PROTOCOL_STATE_CAS_ATTEMPTS} CAS retries`,
+  )
 }
 
 /** Broadcast claim that Bark has not observed, if this rail has one. */

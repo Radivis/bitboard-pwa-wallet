@@ -71,6 +71,12 @@ import type {
 } from '@/workers/bark-api'
 import type { BarkRailNetwork } from '@/lib/wallet/wallet-domain-types'
 import {
+  createBarkCallQueue,
+  durableCheckpointFlush,
+  finishBarkMutation,
+  type BarkRailFlushMetadata,
+} from '@/workers/bark-durable-flush'
+import {
   persistBarkProtocolState,
   persistOpenedBarkRail,
   readPendingEmergencyClaim as readPendingEmergencyClaimFromPayload,
@@ -89,9 +95,10 @@ let encryptedWalletSecretsHost:
   | null = null
 let openWalletId: number | null = null
 let openNetwork: BarkRailNetwork | null = null
+const enqueueBarkCall = createBarkCallQueue()
 
 function callBark<T>(operation: () => Promise<T>): Promise<T> {
-  return operation().catch((err: unknown) => rethrowBarkError(err))
+  return enqueueBarkCall(operation).catch((err: unknown) => rethrowBarkError(err))
 }
 
 function rethrowBarkError(err: unknown): never {
@@ -107,19 +114,27 @@ function rethrowBarkError(err: unknown): never {
   throw new Error(message)
 }
 
+function useLoadedBarkWasm(wasm: BitboardBarkWasm): BitboardBarkWasm {
+  barkWasmModule = wasm
+  wasm.bark_set_durable_record_flush_hook(
+    durableCheckpointFlush((recordDump) => flushDurableCheckpoint(recordDump)),
+  )
+  return wasm
+}
+
 async function getBarkWasm(): Promise<BitboardBarkWasm> {
   if (wasmInitError) {
     throw new Error(`WASM init failed: ${wasmInitError}`)
   }
   if (!barkWasmModule) {
-    barkWasmModule = await loadBitboardBarkWasm()
+    useLoadedBarkWasm(await loadBitboardBarkWasm())
   }
-  return barkWasmModule
+  return barkWasmModule as BitboardBarkWasm
 }
 
 async function initWasm() {
   try {
-    barkWasmModule = await loadBitboardBarkWasm()
+    useLoadedBarkWasm(await loadBitboardBarkWasm())
     console.info('[bark.worker] WASM module loaded successfully')
   } catch (err) {
     wasmInitError = err instanceof Error ? err.message : String(err)
@@ -152,9 +167,17 @@ function encryptedPayloadDeps() {
   }
 }
 
-function barkErrorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message
-  return String(err)
+async function flushDurableCheckpoint(recordDump: string): Promise<void> {
+  if (typeof recordDump !== 'string' || recordDump.length === 0) {
+    throw new Error('Bark record dump is empty')
+  }
+  assertBarkRecordDumpWithinSizeLimit(recordDump)
+  const walletId = openWalletId
+  const network = openNetwork
+  if (walletId == null || network == null) {
+    throw new Error('Bark session is not open')
+  }
+  await persistBarkProtocolState(encryptedPayloadDeps(), walletId, network, { recordDump })
 }
 
 async function exportRecordDump(): Promise<string> {
@@ -183,47 +206,17 @@ async function flushBarkProtocolState(
   })
 }
 
-type BarkRailFlushMetadata = {
-  receiveKeyIndex?: number
-  lastSuccessfulSyncAt?: string
-}
-
 async function mutateBark<T>(
   walletId: number,
   operation: () => Promise<T>,
   metadata: (result: T) => BarkRailFlushMetadata,
 ): Promise<T> {
-  let operationError: unknown
-  let result: T | undefined
-  try {
-    result = await operation()
-  } catch (err) {
-    operationError = err
-  }
-
-  let flushError: unknown
-  if (openWalletId != null) {
-    try {
-      const flushMetadata =
-        operationError == null && result !== undefined ? metadata(result) : {}
-      await flushBarkProtocolState(walletId, flushMetadata)
-    } catch (err) {
-      flushError = err
-    }
-  }
-
-  if (operationError != null && flushError != null) {
-    throw new Error(
-      `${barkErrorMessage(operationError)} (Bark record dump was not saved: ${barkErrorMessage(flushError)})`,
-    )
-  }
-  if (flushError != null) {
-    throw flushError
-  }
-  if (operationError != null) {
-    throw operationError
-  }
-  return result as T
+  return finishBarkMutation({
+    sessionOpen: openWalletId != null,
+    operation,
+    flushProtocolState: (flushMetadata) => flushBarkProtocolState(walletId, flushMetadata),
+    metadata,
+  })
 }
 
 function requireOpenWalletId(): number {
@@ -252,6 +245,11 @@ async function openSessionImpl(
   const deps = encryptedPayloadDeps()
   const recordDump = await readRecordDumpForOpen(deps, params.walletId, network)
   let sessionOpened = false
+  const previousWalletId = openWalletId
+  const previousNetwork = openNetwork
+  // Exit load can write a durable row inside open. The flush hook reads these.
+  openWalletId = params.walletId
+  openNetwork = network
   try {
     const wasmModule = await getBarkWasm()
     const fingerprint = await wasmModule.bark_open_session(mnemonic, network, recordDump)
@@ -259,8 +257,6 @@ async function openSessionImpl(
       throw new Error('Bark open did not return a fingerprint')
     }
     sessionOpened = true
-    openWalletId = params.walletId
-    openNetwork = network
     const storedReceiveKeyIndex = await readStoredBarkReceiveKeyIndex(
       deps,
       params.walletId,
@@ -294,6 +290,9 @@ async function openSessionImpl(
       } catch {
         // The open error is the one the caller needs.
       }
+    } else {
+      openWalletId = previousWalletId
+      openNetwork = previousNetwork
     }
     rethrowBarkError(err)
   }

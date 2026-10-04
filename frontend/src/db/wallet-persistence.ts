@@ -339,6 +339,23 @@ async function updateWalletSecretsEncryptedPayloadWithRetryImpl({
   throw walletSecretsConflictError(maxRetries)
 }
 
+/** One payload CAS, serialized with other wallet-secrets writers. */
+export function writeSplitWalletSecretsPayloadIfRevisionMatches(
+  walletDb: Kysely<Database>,
+  walletId: number,
+  payload: EncryptedWalletSecretsBlob,
+  expectedRevision: number,
+): Promise<boolean> {
+  return withWalletSecretsWriterLock(() =>
+    putSplitWalletSecretsEncryptedIfRevisionMatches(
+      walletDb,
+      walletId,
+      { payload },
+      expectedRevision,
+    ),
+  )
+}
+
 export function updateWalletSecretsEncryptedPayloadWithRetry(
   input: UpdateWalletSecretsEncryptedPayloadWithRetryInput,
 ): Promise<void> {

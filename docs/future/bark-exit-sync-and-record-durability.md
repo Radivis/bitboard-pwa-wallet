@@ -1,6 +1,6 @@
 # Bark exit sync, stale success, and record durability
 
-Planning note. Nothing here is implemented.
+Planning note. Findings 3 and 4 are not implemented. Finding 5 is implemented.
 
 These are findings 3, 4, and 5 from the Bark implementation review (`.cursor/pr-reviews/pr-70-bark-implementation.md`). Finding 2 is already resolved. Delegated refresh is a separate change and does not cover these.
 
@@ -47,12 +47,4 @@ Fix:
 
 ## 5. Flush Bark checkpoints before the WASM call returns
 
-`SharedRecordStore` matches Bark's storage adaptor. The action machine writes checkpoints during `drive_action` so a crash can resume. Those writes sit in the WASM heap until `mutateBark` exports the dump after the call returns. Killing the tab inside `board_psbt`, an offboard drive, or exit progress drops checkpoints Bark would already have fsynced.
-
-`sync_pending_boards` only resumes boards already stored. A broadcast funding transaction whose board checkpoint never flushed is not picked up later. `recover_vtxos` is never called. The boarding key from `derive_store_next_keypair` is flushed at prepare time, so the key index survives and the pending board action may not.
-
-Fix:
-
-- Export and encrypt the record dump at each Bark checkpoint inside the long call, not only when `mutateBark` finishes.
-- A tab killed after broadcast still reloads a pending board, offboard, or exit checkpoint, and the next sync resumes it.
-- If a broadcast has no checkpoint, recovery is an explicit `recover_vtxos` (or the same resume path Bark uses for a stored board), not a silent miss.
+Implemented. A wallet-action checkpoint, exit row, or exit child is encrypted into the open network's dump before that write returns. `mutateBark` still flushes when the call returns. A tab killed after that flush reloads the checkpoint, and the next sync resumes a stored board or offboard. Exit rows reload on the next session open. See [Bark persistence](../persistence/bark.md).

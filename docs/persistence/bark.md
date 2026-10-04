@@ -42,7 +42,7 @@ File: `bitboard-bark/src/record_store.rs`
 
 `bark_open_session` loads the open network's dump, then `Wallet::open` with that persister and `MemoryLockManager`. `datadir` is unset, so Bark does not open its platform IndexedDB. An empty dump string means there is no encrypted dump yet. A corrupt dump or an unknown version fails the open.
 
-`bark_export_record_dump` exports the open network after a wallet call returns. The worker does not export on every `put`.
+`bark_export_record_dump` exports the open network. A wallet-action checkpoint, exit row, or exit child is encrypted and written before that Bark write returns, so a tab killed during board, offboard, or exit progress reloads the checkpoint and the next sync resumes it. Other puts stay in memory until the call returns. A missing flush hook on WASM fails the write. The mid-call flush does not stamp `lastSuccessfulSyncAt`.
 
 ## Worker persistence flow
 
@@ -58,6 +58,7 @@ sequenceDiagram
   BW->>BW: load StorageAdaptor, Wallet.open for that network
 
   Note over BW: sync send board exit mutate the map
+  Note over BW: checkpoint, exit row, and exit child flush before that write returns
 
   BW->>BW: export Record bytes for the open network
   BW->>EW: encrypt payload
@@ -78,6 +79,6 @@ Main thread code handles **ciphertext only**. Plaintext records stay in the Bark
 
 A flush replaces the open network's `recordDump` and leaves the other network's dump and every `sdkPersistenceJson` as they were read. An Arkade flush leaves both Bark dumps as they were read. The `wallet_secrets` row is still one ciphertext, so the row is re-encrypted either way.
 
-Flush runs after open, reveal, sync, board prepare, board submit, Arkoor, on-chain send, offboard, and emergency-exit start, progress, CPFP, cancel, and drain. A failed call still flushes when the session is open, so a checkpoint written before the error is not dropped. Peek, balance, history, VTXO list, estimates, exit list, and exit topology do not flush.
+A checkpoint, exit-row, or exit-child put or delete flushes during the call, before Bark continues to broadcast or the next step. That write does not change `lastSuccessfulSyncAt`. Flush also runs after open, reveal, sync, board prepare, board submit, Arkoor, on-chain send, offboard, and emergency-exit start, progress, CPFP, cancel, and drain. A failed call still flushes when the session is open, so a checkpoint written before the error is not dropped. Peek, balance, history, VTXO list, estimates, exit list, and exit topology do not flush. A revision conflict re-reads the payload and applies the dump again, leaving the other network and a pending emergency claim in place.
 
 `Wallet::open` receives the in-memory persister. Bark does not open IndexedDB. An empty `recordDump` starts a new in-memory store.

@@ -392,6 +392,7 @@ dependencies = [
  "base64 0.22.1",
  "bip39",
  "bitcoin",
+ "js-sys",
  "postcard",
  "reqwest",
  "serde",
