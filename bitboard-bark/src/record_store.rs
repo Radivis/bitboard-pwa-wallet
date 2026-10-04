@@ -307,7 +307,14 @@ impl StorageAdaptor for SharedRecordStore {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{Arc, Mutex};
+
     use super::*;
+
+    struct RecordedFlushes {
+        dumps: Arc<Mutex<Vec<String>>>,
+        hook: NativeDurableFlushHook,
+    }
 
     fn record(partition: u8, pk: &str, sort_key: Option<SortKey>, data: &[u8]) -> Record {
         Record {
@@ -446,18 +453,21 @@ mod tests {
         assert!(error.contains("corrupt"));
     }
 
-    fn flush_log() -> (
-        std::sync::Arc<std::sync::Mutex<Vec<String>>>,
-        std::sync::Arc<dyn Fn(String) -> Result<(), String> + Send + Sync>,
-    ) {
-        let flushed_dumps = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-        let record_dumps = std::sync::Arc::clone(&flushed_dumps);
-        let hook: std::sync::Arc<dyn Fn(String) -> Result<(), String> + Send + Sync> =
-            std::sync::Arc::new(move |record_dump| {
-                record_dumps.lock().expect("flush log").push(record_dump);
-                Ok(())
-            });
-        (flushed_dumps, hook)
+    fn flush_log() -> RecordedFlushes {
+        let dumps = Arc::new(Mutex::new(Vec::new()));
+        let record_dumps = Arc::clone(&dumps);
+        let hook: NativeDurableFlushHook = Arc::new(move |record_dump| {
+            record_dumps.lock().expect("flush log").push(record_dump);
+            Ok(())
+        });
+        RecordedFlushes { dumps, hook }
+    }
+
+    /// The flush-log lock must end before the restored store is awaited.
+    fn open_only_flushed_dump(flushed_dumps: &Mutex<Vec<String>>) -> SharedRecordStore {
+        let dumps = flushed_dumps.lock().expect("flush log");
+        assert_eq!(dumps.len(), 1);
+        dumped_store(&dumps[0])
     }
 
     fn dumped_store(record_dump: &str) -> SharedRecordStore {
@@ -467,7 +477,10 @@ mod tests {
     #[tokio::test]
     async fn checkpoint_put_flushes_the_dump_before_put_returns() {
         let mut store = SharedRecordStore::empty();
-        let (flushed_dumps, hook) = flush_log();
+        let RecordedFlushes {
+            dumps: flushed_dumps,
+            hook,
+        } = flush_log();
         store.set_durable_flush_hook(hook);
         store
             .put(record(
@@ -489,10 +502,7 @@ mod tests {
             .await
             .unwrap();
 
-        let dumps = flushed_dumps.lock().expect("flush log");
-        assert_eq!(dumps.len(), 1);
-        let restored = dumped_store(&dumps[0]);
-        drop(dumps);
+        let restored = open_only_flushed_dump(&flushed_dumps);
         let checkpoint = restored
             .get(partition::WALLET_ACTION_CHECKPOINT, b"board.txid.0")
             .await
@@ -510,7 +520,10 @@ mod tests {
     #[tokio::test]
     async fn vtxo_put_does_not_flush() {
         let mut store = SharedRecordStore::empty();
-        let (flushed_dumps, hook) = flush_log();
+        let RecordedFlushes {
+            dumps: flushed_dumps,
+            hook,
+        } = flush_log();
         store.set_durable_flush_hook(hook);
         store
             .put(record(
@@ -527,7 +540,10 @@ mod tests {
     #[tokio::test]
     async fn checkpoint_delete_flushes_the_dump_without_the_record() {
         let mut store = SharedRecordStore::empty();
-        let (flushed_dumps, hook) = flush_log();
+        let RecordedFlushes {
+            dumps: flushed_dumps,
+            hook,
+        } = flush_log();
         store.set_durable_flush_hook(hook);
         store
             .put(record(
@@ -545,10 +561,7 @@ mod tests {
             .await
             .unwrap();
 
-        let dumps = flushed_dumps.lock().expect("flush log");
-        assert_eq!(dumps.len(), 1);
-        let restored = dumped_store(&dumps[0]);
-        drop(dumps);
+        let restored = open_only_flushed_dump(&flushed_dumps);
         assert!(
             restored
                 .get(partition::WALLET_ACTION_CHECKPOINT, b"board.txid.0")
@@ -590,7 +603,10 @@ mod tests {
     async fn exit_vtxo_and_exit_child_puts_and_deletes_flush() {
         for exit_partition in [partition::EXIT_VTXO, partition::EXIT_CHILD_TX] {
             let mut store = SharedRecordStore::empty();
-            let (flushed_dumps, hook) = flush_log();
+            let RecordedFlushes {
+                dumps: flushed_dumps,
+                hook,
+            } = flush_log();
             store.set_durable_flush_hook(hook);
             store
                 .put(record(exit_partition, "exit", None, b"row"))
@@ -600,10 +616,7 @@ mod tests {
 
             flushed_dumps.lock().expect("flush log").clear();
             store.delete(exit_partition, b"exit").await.unwrap();
-            let dumps = flushed_dumps.lock().expect("flush log");
-            assert_eq!(dumps.len(), 1);
-            let restored = dumped_store(&dumps[0]);
-            drop(dumps);
+            let restored = open_only_flushed_dump(&flushed_dumps);
             assert!(
                 restored
                     .get(exit_partition, b"exit")

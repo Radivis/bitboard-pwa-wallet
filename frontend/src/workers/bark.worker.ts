@@ -114,7 +114,7 @@ function rethrowBarkError(err: unknown): never {
   throw new Error(message)
 }
 
-function useLoadedBarkWasm(wasm: BitboardBarkWasm): BitboardBarkWasm {
+function installLoadedBarkWasm(wasm: BitboardBarkWasm): BitboardBarkWasm {
   barkWasmModule = wasm
   wasm.bark_set_durable_record_flush_hook(
     durableCheckpointFlush((recordDump) => flushDurableCheckpoint(recordDump)),
@@ -127,14 +127,14 @@ async function getBarkWasm(): Promise<BitboardBarkWasm> {
     throw new Error(`WASM init failed: ${wasmInitError}`)
   }
   if (!barkWasmModule) {
-    useLoadedBarkWasm(await loadBitboardBarkWasm())
+    installLoadedBarkWasm(await loadBitboardBarkWasm())
   }
   return barkWasmModule as BitboardBarkWasm
 }
 
 async function initWasm() {
   try {
-    useLoadedBarkWasm(await loadBitboardBarkWasm())
+    installLoadedBarkWasm(await loadBitboardBarkWasm())
     console.info('[bark.worker] WASM module loaded successfully')
   } catch (err) {
     wasmInitError = err instanceof Error ? err.message : String(err)
