@@ -4,7 +4,7 @@ import type {
 } from '@/workers/arkade-api'
 import { ARKADE_PENDING_BATCH_INTENT_POLL_MS } from '@/lib/arkade/arkade-query-timings'
 
-/** Keep in sync with `bitboard-ark` `constants::BOARDING_REGISTER_INTENT_TTL_SECS`. */
+/** Keep in sync with `bitboard-arkade` `constants::BOARDING_REGISTER_INTENT_TTL_SECS`. */
 export const BOARDING_REGISTER_INTENT_TTL_SECS = 2 * 60
 
 export const BATCH_JOIN_STATUS_COMPLETED = 'completed'

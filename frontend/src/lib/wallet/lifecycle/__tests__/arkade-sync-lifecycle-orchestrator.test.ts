@@ -446,7 +446,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
 
   it('signerMigration still throws when cooperative migration fails', async () => {
     migrateDeprecatedSignerVtxos.mockRejectedValueOnce(
-      new Error('Ark client error: failed to get VTXOs for addresses: request failed'),
+      new Error('Arkade client error: failed to get VTXOs for addresses: request failed'),
     )
 
     await expect(

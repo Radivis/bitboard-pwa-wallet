@@ -39,7 +39,7 @@ describe('sanitizeErrorMessageForUi', () => {
   it('replaces Mutinynet WASM Blockchain Failed to fetch dumps', () => {
     const raw =
       'Blockchain error: Reqwest(reqwest::Error { kind: Request, source: "JsValue(TypeError: Failed to fetch\\n' +
-      'TypeError: Failed to fetch\\n at __wbg_fetch_9dad4fe911207b37 (http://localhost:3000/src/wasm-pkg/bitboard_ark/bitboard_ark_bg.js:925:14)" })'
+      'TypeError: Failed to fetch\\n at __wbg_fetch_9dad4fe911207b37 (http://localhost:3000/src/wasm-pkg/bitboard_arkade/bitboard_arkade_bg.js:925:14)" })'
     expect(replaceRawBlockchainFetchErrorMessage(raw)).toBe(
       BLOCKCHAIN_EXPLORER_UNREACHABLE_UI_MESSAGE,
     )

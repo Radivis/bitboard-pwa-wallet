@@ -187,7 +187,7 @@ where
 ///   `unwrap_or(Duration::ZERO)` so regtest and other thin Esplora stacks (arkade-regtest mempool
 ///   Esplora often lacks `block_time` on address/tx status) can still exercise unilateral-exit
 ///   completion in CI and local debugging without failing coin-select. Production Esplora usually
-///   supplies blocktime (and `bitboard-ark` backfills from `/tx/status` when the address listing
+///   supplies blocktime (and `bitboard-arkade` backfills from `/tx/status` when the address listing
 ///   omits it); missing blocktime is uncommon on mainnet-class networks. Affected inputs are
 ///   recorded in [`VtxoCompletionSelection::missing_blocktime_inputs`] and surfaced in the UI so
 ///   timelock eligibility is known to be estimated conservatively, not proven.

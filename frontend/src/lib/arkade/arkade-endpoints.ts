@@ -8,7 +8,7 @@ import { getArkOperatorUrl } from '@/lib/arkade/arkade-operator-proxy'
 export type ArkadeSupportedNetworkMode = 'mainnet' | 'mutinynet' | 'regtest'
 
 export interface ArkadeEndpoints {
-  arkServerUrl: string
+  arkadeServerUrl: string
   delegatorUrl: string
   esploraUrl: string
 }
@@ -49,7 +49,7 @@ export function getArkadeEndpoints(
     mode === 'regtest' ? regtestOperator : OPERATOR_ENV_OVERRIDES[mode]
 
   return {
-    arkServerUrl: getArkOperatorUrl(mode, operatorOverride),
+    arkadeServerUrl: getArkOperatorUrl(mode, operatorOverride),
     delegatorUrl: DEFAULT_DELEGATORS[mode],
     esploraUrl: getEsploraUrl(mode, null),
   }

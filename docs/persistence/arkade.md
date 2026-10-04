@@ -1,6 +1,6 @@
 # Arkade persistence
 
-Arkade (VTXO / offchain) is a **separate rail** from on-chain BDK. Balance and history come from the Ark operator and `bitboard-ark` WASM — not from `descriptorWallets[].changeSet`.
+Arkade (VTXO / offchain) is a **separate rail** from on-chain BDK. Balance and history come from the Ark operator and `bitboard-arkade` WASM — not from `descriptorWallets[].changeSet`.
 
 For the wallet model and balance buckets, see [arkade wallet model](../arkade-bitboard-wallet-model.md). For save/sync orchestration, see [wallet rail lifecycle](../wallet-rail-lifecycle.md#arkade-rail).
 
@@ -19,7 +19,7 @@ interface StoredArkadeAccount {
   createdAt: string
   lastSessionOpenedAt?: string
   lastSuccessfulOperatorSyncAt?: string
-  sdkPersistenceJson?: string      // full BitboardArkPersistence envelope
+  sdkPersistenceJson?: string      // full BitboardArkadePersistence envelope
 }
 ```
 
@@ -27,20 +27,20 @@ interface StoredArkadeAccount {
 
 **Size limit:** `sdkPersistenceJson` must not exceed 10 MB UTF-8 (`ARKADE_SDK_PERSISTENCE_JSON_MAX_BYTES` in `arkade-sdk-persistence-types.ts`).
 
-## Rust persistence envelope (`bitboard-ark`)
+## Rust persistence envelope (`bitboard-arkade`)
 
-File: `bitboard-ark/src/persistence.rs`
+File: `bitboard-arkade/src/persistence.rs`
 
 | Type | Purpose |
 |------|---------|
-| `BitboardArkPersistence` | Top-level JSON envelope (`version`, `engine`, `operator_identity`, `autonomous_mode`, `wallet_db`) |
+| `BitboardArkadePersistence` | Top-level JSON envelope (`version`, `engine`, `operator_identity`, `autonomous_mode`, `wallet_db`) |
 | `WalletDbSnapshot` | Boarding outputs, secret keys, VTXO snapshot, exit watches, host-tx observations, VTXO exit records, operator trust |
 | `OffchainVtxoSnapshot` | VTXO list + unilateral exit materials map (keyed by host tx) |
 | `JsonPersistenceDb` | In-memory mutex-backed DB implementing ark-client `Persistence` |
 
-**Current version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 12`
+**Current version:** `BITBOARD_ARKADE_PERSISTENCE_VERSION = 12`
 
-`BitboardArkPersistence::parse_import()` accepts versions 3–12. Published 0.3.3 wallets used v3; missing fields default. Leftover v4–v11 blobs deserialize as the current types (`vtxo_exit_records` empty until v3-style heal: pending unilateral deductions → `tagged`, snapshot `is_unrolled && !is_spent` → `unrolled`). Extra `unilateral_exit_watches` keys are ignored (never published; not healed). v11 `unilateral_exit_materials_by_leaf_tx` still imports via serde alias. Unsupported or corrupt blobs start from an empty `wallet_db` on session open. `autonomous_mode` (default **false**) is a per-ASP trust posture on the envelope: when true, session open uses `cached_operator_info` and does not call the operator.
+`BitboardArkadePersistence::parse_import()` accepts versions 3–12. Published 0.3.3 wallets used v3; missing fields default. Leftover v4–v11 blobs deserialize as the current types (`vtxo_exit_records` empty until v3-style heal: pending unilateral deductions → `tagged`, snapshot `is_unrolled && !is_spent` → `unrolled`). Extra `unilateral_exit_watches` keys are ignored (never published; not healed). v11 `unilateral_exit_materials_by_leaf_tx` still imports via serde alias. Unsupported or corrupt blobs start from an empty `wallet_db` on session open. `autonomous_mode` (default **false**) is a per-ASP trust posture on the envelope: when true, session open uses `cached_operator_info` and does not call the operator.
 
 ### Offchain receive cursor
 
@@ -63,7 +63,7 @@ sequenceDiagram
 
   Note over AW: operator sync / RPCs mutate in-memory DB
 
-  AW->>AW: ark_export_persistence_json()
+  AW->>AW: arkade_export_persistence_json()
   AW->>EW: encrypt updated payload
   AW->>Main: EncryptedWalletSecretsHost (ciphertext only)
   Main->>DB: CAS write sdkPersistenceJson on account row
@@ -100,6 +100,6 @@ Arkade previously used IndexedDB databases named `bitboard-arkade-{walletId}-{ne
 
 | Layer | Version mechanism |
 |-------|-------------------|
-| `BitboardArkPersistence.version` | Rust constant (12); `parse_import` accepts 3–12 (0.3.3 was v3) |
+| `BitboardArkadePersistence.version` | Rust constant (12); `parse_import` accepts 3–12 (0.3.3 was v3) |
 | Account metadata | `lastSuccessfulOperatorSyncAt` mirrors on-chain `lastSuccessfulEsploraSyncAt` semantics |
 | Frontend merge | `arkade-payload-merge.ts` ensures receive index only increases |

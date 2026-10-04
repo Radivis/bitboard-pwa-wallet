@@ -53,7 +53,7 @@ vi.mock('@/workers/secrets-channel', () => ({
 vi.mock('@/lib/arkade/arkade-accounts', () => ({
   ensureArkadeAccount: (...args: unknown[]) => ensureArkadeAccountMock(...args),
   resolveArkadeEndpointsForAccount: () => ({
-    arkServerUrl: 'https://asp.example',
+    arkadeServerUrl: 'https://asp.example',
     delegatorUrl: '',
     esploraUrl: 'https://mutinynet.com/api',
   }),
@@ -64,7 +64,7 @@ vi.mock('@/lib/arkade/arkade-endpoints', async (importOriginal) => {
   return {
     ...actual,
     getArkadeEndpoints: () => ({
-      arkServerUrl: 'https://asp.example',
+      arkadeServerUrl: 'https://asp.example',
       delegatorUrl: '',
       esploraUrl: 'https://mutinynet.com/api',
     }),

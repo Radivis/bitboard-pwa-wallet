@@ -4,7 +4,7 @@ The arkade-regtest stack ships a **minimal Esplora-compatible API** on port 7030
 
 **Stack setup and E2E commands:** [frontend/tests/e2e/fixtures/arkade-regtest/README.md](../frontend/tests/e2e/fixtures/arkade-regtest/README.md)
 
-**Implementation:** `bitboard-ark/src/esplora_blockchain.rs` (`EsploraBlockchain`, `map_tx_confirmations`, `find_tx_at`, `is_tx_relayed_on_network`).
+**Implementation:** `bitboard-arkade/src/esplora_blockchain.rs` (`EsploraBlockchain`, `map_tx_confirmations`, `find_tx_at`, `is_tx_relayed_on_network`).
 
 ---
 
@@ -88,7 +88,7 @@ Separate from step progress: detecting that the **final exit sweep** spent a VTX
 
 **Pitfall:** each unroll CPFP step spends the previous branch tx at **`vout 0`**. Treating “anything spent `vout 0` of the branch tip” as exit completion causes false `is_spent` / “Finalized” UI without a completion tx.
 
-**Rule:** completion probes must target the **actual virtual VTXO outpoint** `(host_txid, virtual_vout)`, not arbitrary branch-tip spends. See `detect_exiting_vtxo_completion_on_esplora` in `bitboard-ark/src/session/unilateral_exit/onchain.rs`.
+**Rule:** completion probes must target the **actual virtual VTXO outpoint** `(host_txid, virtual_vout)`, not arbitrary branch-tip spends. See `detect_exiting_vtxo_completion_on_esplora` in `bitboard-arkade/src/session/unilateral_exit/onchain.rs`.
 
 ---
 
@@ -129,7 +129,7 @@ When REG-04 / REG-07 stuck at “Step 1 of N” despite mining, or lock/unlock r
 |------|-------------------|
 | E2E `@arkade-reg04` | Manual unilateral unroll + mining |
 | E2E `@arkade-reg07` | Preconfirmed VTXO + automatic unroll |
-| `bitboard-ark/tests/autonomous_unilateral_exit_session_regtest.rs` | Native proceed-step unroll + complete in autonomous mode (Docker) |
-| `cargo test -p bitboard-ark --lib` | Unit coverage for orchestrator helpers |
+| `bitboard-arkade/tests/autonomous_unilateral_exit_session_regtest.rs` | Native proceed-step unroll + complete in autonomous mode (Docker) |
+| `cargo test -p bitboard-arkade --lib` | Unit coverage for orchestrator helpers |
 
 Contracts: `doc/features/arkade-regtest-contract.yaml` (REG-04, REG-07).

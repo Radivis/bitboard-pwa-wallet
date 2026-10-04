@@ -154,8 +154,8 @@ feature:
           it in the background and persists the SegWit-0 sidecar when it
           finishes. Completion fee estimate does not start a wallet-wide scan.
         implemented_by:
-          - bitboard-ark/src/session/bumper_sync_policy.rs
-          - bitboard-ark/src/session/unilateral_exit/complete.rs
+          - bitboard-arkade/src/session/bumper_sync_policy.rs
+          - bitboard-arkade/src/session/unilateral_exit/complete.rs
           - frontend/src/lib/arkade/__tests__/background-bumper-wallet-sync.test.ts
           - frontend/src/hooks/__tests__/useCompleteUnilateralExitFlow.test.tsx
           - third_party/ark-bdk-wallet/src/lib.rs

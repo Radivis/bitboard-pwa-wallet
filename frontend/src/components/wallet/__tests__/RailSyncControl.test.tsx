@@ -80,7 +80,7 @@ describe('RailSyncControl', () => {
         syncPhase="sync-error"
         lastSyncedAt={null}
         onSync={vi.fn()}
-        syncErrorMessage="Ark client error: failed to get VTXOs"
+        syncErrorMessage="Arkade client error: failed to get VTXOs"
         syncErrorDetailInBanner
       />,
     )

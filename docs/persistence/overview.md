@@ -80,7 +80,7 @@ Passwords, mnemonics, and NWC URIs are **never** stored in `localStorage` or `se
 | Worker | WASM crate | Runtime (ephemeral) | Flushed to |
 |--------|------------|---------------------|------------|
 | `crypto.worker` | `crypto` | `ACTIVE_WALLET`, BDK changeset | `descriptorWallets[].changeSet` in encrypted payload |
-| `arkade.worker` | `bitboard-ark` | `JsonPersistenceDb` | `sdkPersistenceJson` on active Arkade account |
+| `arkade.worker` | `bitboard-arkade` | `JsonPersistenceDb` | `sdkPersistenceJson` on active Arkade account |
 | `bark.worker` | `bitboard-bark` | in-memory `StorageAdaptor` | `recordDump` on `barkRails` for the open network |
 | `lab.worker` | `crypto` (`lab_*`) | In-memory `LabState` | Lab SQLite via `lab-factory.ts` on main thread |
 | `encryption.worker` | `bitboard-encryption` | Session password in worker memory | Not persisted (except near-zero wrapper; see [general.md](general.md)) |
@@ -110,7 +110,7 @@ Each rail has a save orchestrator that gates persistence on lifecycle phase. See
 | `bitboard-wallet` | Kysely forward migrations in `frontend/src/db/migrations/wallet/` | Report at OPFS `wallet-schema-migration-failure.json` |
 | `bitboard-lab` | Kysely forward migrations in `frontend/src/db/migrations/lab/` | Same pattern via lab migrator |
 
-Zustand stores may carry their own `version` + `migrate` (e.g. `featureStore`, `periodicSyncStore`). Arkade SDK JSON has an independent version in Rust (`BITBOARD_ARK_PERSISTENCE_VERSION`, currently **12**).
+Zustand stores may carry their own `version` + `migrate` (e.g. `featureStore`, `periodicSyncStore`). Arkade SDK JSON has an independent version in Rust (`BITBOARD_ARKADE_PERSISTENCE_VERSION`, currently **12**).
 
 ## Key file index
 
@@ -121,6 +121,6 @@ Zustand stores may carry their own `version` + `migrate` (e.g. `featureStore`, `
 | Zustand adapter | `frontend/src/db/storage-adapter.ts` |
 | Domain types | `frontend/src/lib/wallet/wallet-domain-types.ts` |
 | On-chain WASM | `crypto/src/wallet.rs`, `crypto/src/lib.rs` |
-| Arkade WASM | `bitboard-ark/src/persistence.rs` |
+| Arkade WASM | `bitboard-arkade/src/persistence.rs` |
 | Bark WASM | `bitboard-bark/src/record_store.rs`, `bitboard-bark/src/session.rs` |
 | Encryption | `bitboard-encryption/`, `frontend/src/db/encryption.ts` |

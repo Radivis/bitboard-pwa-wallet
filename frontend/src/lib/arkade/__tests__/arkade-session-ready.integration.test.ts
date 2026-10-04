@@ -123,7 +123,7 @@ vi.mock('@/lib/arkade/arkade-dashboard-sync', () => ({
 
 vi.mock('@/lib/arkade/arkade-endpoints', () => ({
   getArkadeEndpoints: vi.fn(() => ({
-    arkServerUrl: 'http://localhost/api/arkade/operator/mutinynet',
+    arkadeServerUrl: 'http://localhost/api/arkade/operator/mutinynet',
     delegatorUrl: '',
     esploraUrl: 'http://localhost/api/esplora/signet',
   })),

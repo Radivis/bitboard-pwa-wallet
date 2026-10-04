@@ -6,12 +6,12 @@ Unlock feeling like a full Esplora rescan (`/blocks`, scripthash `/txs`, 429s, d
 
 Related:
 
-- Sync entry: `ArkSession::sync_with_operator` / `sync_with_operator_and_vtxo_list` in `bitboard-ark/src/session/sync.rs`
+- Sync entry: `ArkadeSession::sync_with_operator` / `sync_with_operator_and_vtxo_list` in `bitboard-arkade/src/session/sync.rs`
 - Indexer fetch: `Client::fetch_all_vtxos` / `list_vtxos` in `third_party/ark-client/src/lib.rs`
 - Request filters: `GetVtxosRequest` in `third_party/ark-core/src/server.rs`
 - Background poll: `scheduleBackgroundArkadeOperatorSync` in `frontend/src/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator.ts`
 - Poll interval: `ARKADE_BACKGROUND_OPERATOR_SYNC_MIN_INTERVAL_MS` (15s) in `frontend/src/lib/arkade/arkade-sync-timings.ts`
-- Snapshot: `OffchainVtxoSnapshot` in `bitboard-ark/src/persistence.rs`
+- Snapshot: `OffchainVtxoSnapshot` in `bitboard-arkade/src/persistence.rs`
 - Feature contract: [doc/features/arkade.yaml](../../doc/features/arkade.yaml)
 
 ---
@@ -50,7 +50,7 @@ These stay. They removed the worst user-visible stalls but **do not** change the
 | Boarding address fetch flushes persistence only (no `persistAfterCriticalOperation` full list) | Opening Board no longer starts a second 10-GET indexer scan |
 | Incremental `discover_keys` from `peek_next_derivation_index()` | 11 gap-20 batches / ~7s → 1 batch / ~0.2s when the cache is warm |
 | Boarding-only settle skips VTXO list (`fetch_commitment_transaction_inputs_opt`) | Board input fetch ~7.6s → ~2.2s when `settleableVtxos=0` |
-| `ArkSession::list_vtxos` reads the snapshot when present | VTXO list UI ~8.6s → tens of ms |
+| `ArkadeSession::list_vtxos` reads the snapshot when present | VTXO list UI ~8.6s → tens of ms |
 | Send coin-select from snapshot + no blocking post-send full sync | Send ~15s → ~3s (remaining time is the ASP offchain send) |
 | `list_spendable_vtxos` / `list_vtxos_filtered` | Smaller payloads; send fallback only |
 
@@ -136,6 +136,6 @@ If the VTXO viewer / `offchain_history_from_snapshot` can drop old spent rows, a
 | **Later** | Script subscription | Near-zero steady-state list |
 | **Skip as sole fix** | `spendable_only` on all 370 scripts | Still **~10 GETs / ~3s** |
 
-The TypeScript SDK `doSyncVtxos` is the algorithm reference (local history, delta, upsert, rare full reconcile). Bitboard keeps the merge in `bitboard-ark` rather than importing a TS wallet repository. Rust `ark-client` has no equivalent sync API.
+The TypeScript SDK `doSyncVtxos` is the algorithm reference (local history, delta, upsert, rare full reconcile). Bitboard keeps the merge in `bitboard-arkade` rather than importing a TS wallet repository. Rust `ark-client` has no equivalent sync API.
 
-WASM: `npm run dev` does not rebuild WASM. After Rust changes, `cd frontend && npm run build:wasm` (or the `bitboard-ark` `wasm-pack` line) and hard-refresh.
+WASM: `npm run dev` does not rebuild WASM. After Rust changes, `cd frontend && npm run build:wasm` (or the `bitboard-arkade` `wasm-pack` line) and hard-refresh.

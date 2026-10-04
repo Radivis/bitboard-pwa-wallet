@@ -28,13 +28,13 @@ describe('arkade-endpoints', () => {
     const mutinynet = getArkadeEndpoints('mutinynet')
     const regtest = getArkadeEndpoints('regtest')
 
-    expect(mainnet.arkServerUrl).toBe(
+    expect(mainnet.arkadeServerUrl).toBe(
       `${window.location.origin}/api/arkade/operator/mainnet`,
     )
-    expect(mutinynet.arkServerUrl).toBe(
+    expect(mutinynet.arkadeServerUrl).toBe(
       `${window.location.origin}/api/arkade/operator/mutinynet`,
     )
-    expect(regtest.arkServerUrl).toBe(
+    expect(regtest.arkadeServerUrl).toBe(
       `${window.location.origin}/api/arkade/operator/regtest`,
     )
     expect(mainnet.delegatorUrl).toBe('')

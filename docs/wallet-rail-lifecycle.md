@@ -457,7 +457,7 @@ Lightning is optional — absence of connections is normal `not-configured`, not
 
 1. `ensureSecretsChannel` / `ensureArkadeEncryptedSecretsHost`
 2. Read encrypted mnemonic + payload; resolve Arkade account
-3. `ark_open_session` in arkade worker (hydrate Arkade SDK from `sdkPersistenceJson`, and the bumper BDK from the SegWit-0 descriptor-wallet changeset when one exists — not Esplora)
+3. `arkade_open_session` in arkade worker (hydrate Arkade SDK from `sdkPersistenceJson`, and the bumper BDK from the SegWit-0 descriptor-wallet changeset when one exists — not Esplora)
 4. `ensureArkadeAccount` (DB metadata)
 5. `refreshArkadeStoreFromLoadedWasm` — balance, payments, **receive address stable**
 6. Set `activeArkadeAccountId` when **load completes** (not when sync completes)

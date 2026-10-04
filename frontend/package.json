@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "vite",
     "build": "npm run build:wasm && tsc && vite build",
-    "build:wasm": "cd ../crypto && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg && cd ../bitboard-encryption && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_encryption && cd ../bitboard-lightning && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_lightning && cd ../bitboard-ark && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_ark && cd ../bitboard-bark && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_bark",
+    "build:wasm": "cd ../crypto && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg && cd ../bitboard-encryption && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_encryption && cd ../bitboard-lightning && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_lightning && cd ../bitboard-arkade && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_arkade && cd ../bitboard-bark && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_bark",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",

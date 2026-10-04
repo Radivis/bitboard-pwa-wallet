@@ -38,9 +38,9 @@ Memory caches are keyed by `walletId:networkMode:arkadeAccountId` (`arkadeWallet
 
 ## WASM / encrypted `sdkPersistenceJson`
 
-Flushed through the Arkade save lifecycle into `StoredArkadeAccount.sdkPersistenceJson`. Types: [`bitboard-ark/src/persistence.rs`](../../bitboard-ark/src/persistence.rs). Materials encode/decode: [`unilateral_exit_materials.rs`](../../bitboard-ark/src/unilateral_exit_materials.rs). Frontend bundle I/O: [`unilateral-exit-frontend-sdk-persistence.ts`](../../frontend/src/lib/wallet/lifecycle/unilateral-exit-frontend-sdk-persistence.ts).
+Flushed through the Arkade save lifecycle into `StoredArkadeAccount.sdkPersistenceJson`. Types: [`bitboard-arkade/src/persistence.rs`](../../bitboard-arkade/src/persistence.rs). Materials encode/decode: [`unilateral_exit_materials.rs`](../../bitboard-arkade/src/unilateral_exit_materials.rs). Frontend bundle I/O: [`unilateral-exit-frontend-sdk-persistence.ts`](../../frontend/src/lib/wallet/lifecycle/unilateral-exit-frontend-sdk-persistence.ts).
 
-**Envelope version:** `BITBOARD_ARK_PERSISTENCE_VERSION = 12`. `parse_import` accepts 3–12. Published 0.3.3 wallets used v3; missing fields default (`unilateral_exit_frontend` is `None`, `host_tx_observations` is empty, `vtxo_exit_records` is empty, `autonomous_mode` is false). When `unilateral_exit_frontend` is `None`, a one-shot overlay reads leftover SQLite `settings` rows. On open / first Esplora probe, empty `vtxo_exit_records` heal from a published v3 blob: leftover pending unilateral deductions become `tagged`, snapshot `is_unrolled && !is_spent` rows become `unrolled`. Intermediate phases are not reconstructed (v3 had no host-tx observations). Leftover 0.3.4-dev `unilateral_exit_watches` JSON keys are ignored (never published; not healed into records). v11 `unilateral_exit_materials_by_leaf_tx` keys still import via serde alias.
+**Envelope version:** `BITBOARD_ARKADE_PERSISTENCE_VERSION = 12`. `parse_import` accepts 3–12. Published 0.3.3 wallets used v3; missing fields default (`unilateral_exit_frontend` is `None`, `host_tx_observations` is empty, `vtxo_exit_records` is empty, `autonomous_mode` is false). When `unilateral_exit_frontend` is `None`, a one-shot overlay reads leftover SQLite `settings` rows. On open / first Esplora probe, empty `vtxo_exit_records` heal from a published v3 blob: leftover pending unilateral deductions become `tagged`, snapshot `is_unrolled && !is_spent` rows become `unrolled`. Intermediate phases are not reconstructed (v3 had no host-tx observations). Leftover 0.3.4-dev `unilateral_exit_watches` JSON keys are ignored (never published; not healed into records). v11 `unilateral_exit_materials_by_leaf_tx` keys still import via serde alias.
 
 | Version | What landed |
 |---------|-------------|
@@ -59,7 +59,7 @@ Flushed through the Arkade save lifecycle into `StoredArkadeAccount.sdkPersisten
 | `vtxo_exit_records` | `WalletDbSnapshot` | Per-outpoint exit pipeline (`ARK-EXIT-27`); spend-lock (pipeline ∪ `funding_lost`) for send/collab/renew/delegate; recover/migrate use pipeline membership only |
 | `host_tx_observations` | `WalletDbSnapshot` | Per virtual host txid: broadcast attempt, Esplora relay/confirmations, never-seen probe budget (`ARK-EXIT-28`) |
 | `cached_operator_info` | `WalletDbSnapshot` | Last `getInfo` snapshot for autonomous mode |
-| `autonomous_mode` | `BitboardArkPersistence` | Per-ASP trust posture; default false; session open skips operator RPC when true |
+| `autonomous_mode` | `BitboardArkadePersistence` | Per-ASP trust posture; default false; session open skips operator RPC when true |
 | `unilateral_exit_frontend` | `WalletDbSnapshot` | Frontend job bookmark, automation prefs, last failure |
 
 ### Materials (`UnilateralExitMaterialsRecord`)
@@ -120,7 +120,7 @@ A job exists iff `selected_leaf_outpoints.length > 0`. The machine writes this o
 | `branch_funding_lost` | Viability: foreign spend of first-step prevout (commitment) or tree/ark VTXO |
 | `user_aborted` | `ABORT_ORCHESTRATION` (includes `vtxo_ids` for copy) |
 
-Granular WASM setters (`ark_set_unilateral_exit_job` / `_automation_prefs` / `_failure`) flush `sdkPersistenceJson` only — they do not operator-sync.
+Granular WASM setters (`arkade_set_unilateral_exit_job` / `_automation_prefs` / `_failure`) flush `sdkPersistenceJson` only — they do not operator-sync.
 
 **Legacy settings overlay:** first session open after upgrade reads `unilateral-exit-lifecycle-storage`, `unilateral-exit-automation-prefs`, and `unilateral-exit-failure-storage` from the `settings` table when the envelope field is `None`, writes the merged bundle, then deletes that scope's key from each JSON (drops the settings row when the map is empty). Inactive SQLite job rows (`jobActive: false`) overlay as an empty job.
 

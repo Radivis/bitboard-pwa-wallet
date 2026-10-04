@@ -2,7 +2,7 @@
  * Esplora-compatible gateway for arkade-regtest.
  *
  * mempool/backend v3.3.1 (electrum mode) exposes GET /tx/:txId/hex but not /raw.
- * rust-esplora-client and bitboard-ark use GET /tx/:txId/raw for relay detection.
+ * rust-esplora-client and bitboard-arkade use GET /tx/:txId/raw for relay detection.
  *
  * This service serves from bitcoind when authoritative:
  * - GET /api/tx/:txid/raw — mempool or confirmed chain only (not wallet-only stubs)
@@ -297,7 +297,7 @@ async function handleTxStatus(req, res, txid) {
 
 /**
  * Mempool returns HTTP 500 for many regtest txs; rust-esplora-client retries 500 six
- * times with backoff. bitboard-ark treats 404/500 as "no merkle proof" and falls back
+ * times with backoff. bitboard-arkade treats 404/500 as "no merkle proof" and falls back
  * to /status — answer 404 immediately so progress polls stay fast.
  */
 async function handleTxMerkleProof(req, res, txid) {

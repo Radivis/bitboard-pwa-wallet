@@ -195,7 +195,7 @@ export interface OpenArkadeSessionParams {
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
   arkadeAccountId: string
-  arkServerUrl: string
+  arkadeServerUrl: string
   delegatorUrl: string
   esploraUrl: string
   bumperChangesetJson?: string

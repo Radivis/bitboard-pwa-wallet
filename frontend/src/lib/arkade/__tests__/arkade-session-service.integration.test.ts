@@ -221,7 +221,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
       id: TEST_ACCOUNT_ID,
       label: 'signet',
       networkMode: 'mutinynet',
-      operatorUrl: getArkadeEndpoints('mutinynet').arkServerUrl,
+      operatorUrl: getArkadeEndpoints('mutinynet').arkadeServerUrl,
       operatorSignerPkHex: '02deadbeef',
       createdAt: '2020-01-01T00:00:00.000Z',
     })
@@ -248,7 +248,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
         walletId: 7,
         networkMode: 'mutinynet',
         arkadeAccountId: expect.any(String),
-        arkServerUrl: endpoints.arkServerUrl,
+        arkadeServerUrl: endpoints.arkadeServerUrl,
         delegatorUrl: endpoints.delegatorUrl,
         esploraUrl: endpoints.esploraUrl,
       }),
@@ -272,7 +272,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
       id: TEST_ACCOUNT_ID,
       label: 'signet',
       networkMode: 'mutinynet' as const,
-      operatorUrl: getArkadeEndpoints('mutinynet').arkServerUrl,
+      operatorUrl: getArkadeEndpoints('mutinynet').arkadeServerUrl,
       operatorSignerPkHex: '02deadbeef',
       createdAt: '2020-01-01T00:00:00.000Z',
       lastSuccessfulOperatorSyncAt: '2020-01-02T00:00:00.000Z',
@@ -415,7 +415,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
       networkMode: 'mutinynet',
       operatorSignerPkHex: '02deadbeef',
       label: 'signet',
-      operatorUrl: getArkadeEndpoints('mutinynet').arkServerUrl,
+      operatorUrl: getArkadeEndpoints('mutinynet').arkadeServerUrl,
       createdAt: '2020-01-01T00:00:00.000Z',
     })
 
@@ -439,7 +439,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
       id: TEST_ACCOUNT_ID,
       label: 'signet',
       networkMode: 'mutinynet' as const,
-      operatorUrl: getArkadeEndpoints('mutinynet').arkServerUrl,
+      operatorUrl: getArkadeEndpoints('mutinynet').arkadeServerUrl,
       operatorSignerPkHex: '02deadbeef',
       createdAt: '2020-01-01T00:00:00.000Z',
     }

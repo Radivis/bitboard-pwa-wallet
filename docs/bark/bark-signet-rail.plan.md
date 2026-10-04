@@ -22,7 +22,7 @@ isProject: false
 
 # Bark Signet rail
 
-Bark is a second Ark rail beside Arkade. It uses Second's `bark-wallet` crate (0.7.x), compiled to WASM the same way `bitboard-ark` is, and it talks to Second's public Signet. It does not talk to Mutinynet, and it does not share VTXOs with Arkade.
+Bark is a second Ark rail beside Arkade. It uses Second's `bark-wallet` crate (0.7.x), compiled to WASM the same way `bitboard-arkade` is, and it talks to Second's public Signet. It does not talk to Mutinynet, and it does not share VTXOs with Arkade.
 
 ## Decisions already made
 

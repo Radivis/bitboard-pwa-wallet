@@ -6,7 +6,7 @@ members = [
     "crypto",
     "bitboard-encryption",
     "bitboard-lightning",
-    "bitboard-ark",
+    "bitboard-arkade",
     "bitboard-wasm-sleep",
 ]
 # bitboard-bark is its own workspace. See the comment in bitboard-bark/Cargo.toml.

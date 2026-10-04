@@ -139,19 +139,19 @@ describe('ArkadeSignerMigrationBanner', () => {
       JSON.stringify({
         code: 'client',
         message:
-          'Ark client error: failed to get VTXOs for addresses: request failed: request failed',
+          'Arkade client error: failed to get VTXOs for addresses: request failed: request failed',
       }),
     )
     renderBanner(migrationHint('migratable'))
 
     expect(
       screen.getByText(
-        'Ark client error: failed to get VTXOs for addresses: request failed',
+        'Arkade client error: failed to get VTXOs for addresses: request failed',
       ),
     ).toBeInTheDocument()
     expect(
       screen.queryByText(
-        '{"code":"client","message":"Ark client error: failed to get VTXOs for addresses: request failed: request failed"}',
+        '{"code":"client","message":"Arkade client error: failed to get VTXOs for addresses: request failed: request failed"}',
       ),
     ).not.toBeInTheDocument()
   })

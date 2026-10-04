@@ -9,8 +9,8 @@ Agent/human coding rules: `.cursor/rules/testing-strategy.mdc` (TDD procedure, A
 | Layer | Primary responsibility | Typical tool |
 |-------|------------------------|--------------|
 | **E2E** | Critical **happy paths** — app works in the browser with real workers | Playwright |
-| **Rust integration (regtest)** | Expected **error paths** and **wallet safety invariants** | `bitboard-ark/tests/*_regtest.rs` + arkade-regtest Docker |
-| **Rust unit / in-crate** | Pure logic, DTOs, persistence, classification | `cargo test` in `crypto/`, `bitboard-ark/` |
+| **Rust integration (regtest)** | Expected **error paths** and **wallet safety invariants** | `bitboard-arkade/tests/*_regtest.rs` + arkade-regtest Docker |
+| **Rust unit / in-crate** | Pure logic, DTOs, persistence, classification | `cargo test` in `crypto/`, `bitboard-arkade/` |
 | **Vitest** | Component behavior and **error UX** (banners, dialogs, formatters) | `frontend/` |
 
 **De-duplication:** E2E locks “does the user flow succeed?” Rust regtest locks “when it fails, do we fail safely?” (no false success, persistence not corrupted, no dangerous retries). Vitest locks “does the UI handle the error reasonably?”
@@ -25,16 +25,16 @@ From the repo root:
 cargo test                    # all crates
 cargo nextest run             # preferred when [cargo-nextest](https://nexte.st/) is installed
 cargo test -p crypto          # single crate
-cargo test -p bitboard-ark
+cargo test -p bitboard-arkade
 ```
 
 ### `crypto/`
 
 BDK wallet logic, descriptors, Esplora reconcile, Lab entities. Integration-style tests live in `crypto/tests/`. WASM boundary tests in `crypto/tests/wasm_boundary_tests.rs`.
 
-### `bitboard-ark/`
+### `bitboard-arkade/`
 
-Arkade wallet session (`ArkSession`), persistence, signer migration, exits. Most tests are **in-crate** (`*_tests.rs` next to sources) and run without Docker.
+Arkade wallet session (`ArkadeSession`), persistence, signer migration, exits. Most tests are **in-crate** (`*_tests.rs` next to sources) and run without Docker.
 
 **Regtest integration tests** (optional, need live stack):
 
@@ -49,11 +49,11 @@ Run ignored regtest tests (serial — shared `rotate-signer` / Docker):
 
 ```bash
 # Stack must be up — see “Arkade regtest” below
-ARKADE_REGTEST_RUN=1 cargo test -p bitboard-ark --test signer_migration_session_regtest -- --ignored --test-threads=1
+ARKADE_REGTEST_RUN=1 cargo test -p bitboard-arkade --test signer_migration_session_regtest -- --ignored --test-threads=1
 
 # Signer migration with E2E-exported fixture (skip native boarding)
 ARKADE_REGTEST_BOARDED_FIXTURE=frontend/test-results/arkade-boarded-fixture.json ARKADE_REGTEST_RUN=1 \
-  cargo test -p bitboard-ark --test signer_migration_session_regtest \
+  cargo test -p bitboard-arkade --test signer_migration_session_regtest \
   cooperative_signer_migration_clears_pending_recovery_due_to_expired_signer_with_boarded_fixture -- --ignored --test-threads=1
 ```
 
@@ -155,7 +155,7 @@ Then run the Rust fixture test (from repo root) as in the table above. Use a pat
 
 1. Add or extend a contract in `doc/features/` when behavior is user-visible or safety-critical.
 2. **Happy path** → Playwright if it is a critical journey; otherwise Vitest if UI-only.
-3. **Expected errors / invariants** → Rust (`bitboard-ark` unit or `*_regtest.rs`). Assert codes and persistence, not only message text.
+3. **Expected errors / invariants** → Rust (`bitboard-arkade` unit or `*_regtest.rs`). Assert codes and persistence, not only message text.
 4. **Error presentation** → Vitest on the component that surfaces the error.
 5. Avoid a second regtest happy path if E2E already covers it; use fixtures to share expensive setup.
 
@@ -163,4 +163,4 @@ Then run the Rust fixture test (from repo root) as in the table above. Use a pat
 
 When requirements are clear from the start, follow the red–green–refactor loop in `.cursor/rules/testing-strategy.mdc` and record progress in `.cursor/tdd-protocols/<task>.md`.
 
-Backend-style “write HTTP integration tests first” applies when adding server APIs; this repo’s wallet logic is primarily tested via `crypto/`, `bitboard-ark/`, Vitest, and Playwright as above.
+Backend-style “write HTTP integration tests first” applies when adding server APIs; this repo’s wallet logic is primarily tested via `crypto/`, `bitboard-arkade/`, Vitest, and Playwright as above.
