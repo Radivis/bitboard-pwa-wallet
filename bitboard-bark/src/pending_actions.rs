@@ -298,7 +298,7 @@ mod wasm_export {
         id: String,
         message: String,
     ) {
-        match crate::collaborative_exit::retire_offboard_if_server_spent_an_input(wallet, &message)
+        match crate::offboard_retirement::retire_offboard_if_server_spent_an_input(wallet, &message)
             .await
         {
             Ok(true) => forget_offboard_drive_error(&id),
@@ -342,7 +342,7 @@ mod wasm_export {
         for action in pending {
             let id = action.id();
             live_ids.push(id.clone());
-            if crate::collaborative_exit::stop_offboard_whose_inputs_are_already_consumed(
+            if crate::offboard_retirement::stop_offboard_whose_inputs_are_already_consumed(
                 wallet, &action,
             )
             .await

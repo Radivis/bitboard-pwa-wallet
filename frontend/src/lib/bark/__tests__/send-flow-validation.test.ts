@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { isValidArkadeAddress } from '@/lib/arkade/arkade-address'
 import {
   isBarkMainnetPolicyAddress,
@@ -34,6 +34,14 @@ describe('Bark receive addresses on the send form', () => {
     expect(isBarkSignetPolicyAddress(mainnetAddress)).toBe(false)
     expect(isBarkSendMode(true, mainnetAddress, false, 'mainnet')).toBe(true)
     expect(isBarkSendMode(true, mainnetAddress, false, 'signet')).toBe(false)
+  })
+
+  it('accepts a tark1p address on regtest only while the e2e flag is on', () => {
+    expect(isBarkSendMode(true, reportedBarkReceiveAddress, false, 'regtest')).toBe(false)
+    vi.stubEnv('VITE_E2E_BARK_REGTEST', 'true')
+    expect(isBarkSendMode(true, reportedBarkReceiveAddress, false, 'regtest')).toBe(true)
+    vi.unstubAllEnvs()
+    expect(isBarkSendMode(true, reportedBarkReceiveAddress, false, 'regtest')).toBe(false)
   })
 
   it('does not treat that address as valid when Bark is off', () => {

@@ -1,15 +1,19 @@
 # Bark regtest contracts (local captaind on the arkade-regtest chain)
 #
-# Phase 1 implements E2E-BARK-REG-02 only.
-# The other ids are the phase 2 list.
+# Phase 1: E2E-BARK-REG-02 and sync_fails_when_server_stopped.
+# Phase 2: the other Playwright journeys and the four dump invariants.
 #
-# Run: npm run test:e2e:bark-regtest (from frontend/)
+# From frontend/:
+#   npm run test:e2e:bark-regtest
+#   npm run test:e2e:bark-exit-regtest
+#   npm run test:e2e:bark-refresh-regtest
 
 contracts:
   - id: E2E-BARK-REG-01
     description: Enable Bark, unlock, peek a receive address, pay it, sync. Dashboard Bark spendable shows the payment. On-chain total and Arkade total stay unchanged.
     tags: ["@bark-regtest"]
     phase: 2
+    implemented_by: frontend/tests/e2e/bark-core-flows-regtest.spec.ts
   - id: E2E-BARK-REG-02
     description: Board from the on-chain wallet. Review shows fees and the net VTXO. After confirmations and a Bark sync, spendable includes that VTXO and the on-chain total has dropped.
     tags: ["@bark-regtest"]
@@ -19,18 +23,22 @@ contracts:
     description: Arkoor send to a second Bark wallet on the same server. Sender spendable drops. Recipient, after sync, shows the payment.
     tags: ["@bark-regtest"]
     phase: 2
+    implemented_by: frontend/tests/e2e/bark-core-flows-regtest.spec.ts
   - id: E2E-BARK-REG-04
     description: Collaborative exit of part of the balance, and of the whole spendable balance, to the current on-chain receive address.
     tags: ["@bark-exit-regtest"]
     phase: 2
+    implemented_by: frontend/tests/e2e/bark-exit-flows-regtest.spec.ts
   - id: E2E-BARK-REG-05
     description: Emergency exit of a selected VTXO. Progress mines between steps. Claimed funds arrive on-chain.
     tags: ["@bark-exit-regtest"]
     phase: 2
+    implemented_by: frontend/tests/e2e/bark-exit-flows-regtest.spec.ts
   - id: E2E-BARK-REG-06
     description: Sync when coins are due for refresh. The dashboard shows the refresh notice and the spendable amount stays.
-    tags: ["@bark-exit-regtest"]
+    tags: ["@bark-refresh-regtest"]
     phase: 2
+    implemented_by: frontend/tests/e2e/bark-refresh-regtest.spec.ts
 
 rust_invariants:
   - name: sync_fails_when_server_stopped_leaves_record_dump_unchanged
@@ -41,15 +49,23 @@ rust_invariants:
   - name: board_submission_rejected
     description: A rejected board leaves the on-chain inputs in place and writes no settled VTXO for that attempt.
     phase: 2
+    test: bitboard-bark/tests/board_submission_rejected_regtest.rs
+    run: BARK_REGTEST_RUN=1 cargo test --features regtest-support --test board_submission_rejected_regtest -- --ignored --test-threads=1
   - name: offboard_while_server_stopped
     description: Offboard fails while captaind is stopped. A later open of the same dump still has the pre-exit spendable VTXOs.
     phase: 2
+    test: bitboard-bark/tests/offboard_while_server_stopped_regtest.rs
+    run: BARK_REGTEST_BOARDED_FIXTURE=frontend/test-results/bark-boarded-fixture.json BARK_REGTEST_RUN=1 cargo test --features regtest-support --test offboard_while_server_stopped_regtest -- --ignored --test-threads=1
   - name: exit_input_already_spent
     description: A VTXO the server names as already spent is recorded spent once, and the offboard checkpoint is dropped.
     phase: 2
+    test: bitboard-bark/tests/exit_input_already_spent_regtest.rs
+    run: BARK_REGTEST_BOARDED_FIXTURE=frontend/test-results/bark-boarded-fixture.json BARK_REGTEST_RUN=1 cargo test --features regtest-support --test exit_input_already_spent_regtest -- --ignored --test-threads=1
   - name: emergency_exit_claim_before_observation
     description: Re-opening the dump after a claim broadcast does not drain those VTXOs again.
     phase: 2
+    test: bitboard-bark/tests/emergency_exit_claim_before_observation_regtest.rs
+    run: BARK_REGTEST_BOARDED_FIXTURE=frontend/test-results/bark-boarded-fixture.json BARK_REGTEST_RUN=1 cargo test --features regtest-support --test emergency_exit_claim_before_observation_regtest -- --ignored --test-threads=1
 
 infrastructure:
   stack: arkade-regtest

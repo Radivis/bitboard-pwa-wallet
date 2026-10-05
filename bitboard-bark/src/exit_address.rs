@@ -1,3 +1,5 @@
+#![cfg_attr(not(any(test, target_arch = "wasm32")), allow(dead_code))]
+
 use std::collections::HashSet;
 
 use bitcoin::Address;

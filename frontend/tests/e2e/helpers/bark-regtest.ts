@@ -69,6 +69,16 @@ export async function triggerBarkRailSync(page: Page, timeout = 120_000): Promis
   }).toPass({ timeout })
 }
 
+/** `null` when that rail card is not on the dashboard. */
+export async function readOptionalDashboardSats(
+  page: Page,
+  testId: string,
+): Promise<number | null> {
+  const amount = page.getByTestId(testId)
+  if ((await amount.count()) === 0 || !(await amount.isVisible())) return null
+  return satsFromFirstFormattedBitcoinDisplayInRoot(amount)
+}
+
 export async function readDashboardOnchainSats(page: Page): Promise<number> {
   const amount = page.getByTestId('dashboard-onchain-balance-amount')
   await expect(amount).toBeVisible()

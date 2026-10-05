@@ -7,6 +7,7 @@
  * This service serves from bitcoind when authoritative:
  * - GET /api/tx/:txid/raw — mempool or confirmed chain only (not wallet-only stubs)
  * - GET /api/tx/:txid/status — confirmed txs (mempool electrum often stays confirmed:false)
+ * - GET /api/tx/:txid — same confirmation overlay on the JSON body Bark's client reads
  *
  * POST /api/txs/package — bitcoind `submitpackage` (mempool electrum returns a generic RPC error)
  * All other paths are proxied to mempool_web unchanged.
@@ -22,9 +23,12 @@ const BITCOIN_RPC_PASSWORD = process.env.BITCOIN_RPC_PASSWORD || '123';
 const UPSTREAM_ESPLORA = process.env.UPSTREAM_ESPLORA || 'http://mempool_web';
 
 const TXID_RAW_PATH = /^\/api\/tx\/([0-9a-f]{64})\/raw$/i;
+const TXID_JSON_PATH = /^\/api\/tx\/([0-9a-f]{64})$/i;
+const TXID_OUTSPEND_PATH = /^\/api\/tx\/([0-9a-f]{64})\/outspend\/(\d+)$/i;
 const TXID_STATUS_PATH = /^\/api\/tx\/([0-9a-f]{64})\/status$/i;
 const TXID_MERKLE_PROOF_PATH = /^\/api\/tx\/([0-9a-f]{64})\/merkle-proof$/i;
 const TXS_PACKAGE_PATH = '/api/txs/package';
+const TX_BROADCAST_PATH = '/api/tx';
 
 /** Match mempool_web CORS so browser WASM can fetch from the Vite dev origin. */
 const CORS_HEADERS = {
@@ -165,6 +169,236 @@ async function bitcoinConfirmedTxStatus(txid) {
     block_height: blockHeight,
     block_hash: verbose.blockhash,
     block_time: verbose.blocktime ?? verbose.time ?? null,
+  };
+}
+
+/**
+ * Bark's Esplora client reads confirmation from `GET /tx/:txid` (`status.block_height`),
+ * not from `/status`. Electrum leaves that field false after the tx is mined, so a
+ * confirmed bitcoind status replaces `status` on the upstream JSON.
+ */
+async function handleTxJson(req, res, txid) {
+  if (req.method === 'OPTIONS') {
+    sendOptionsPreflight(res);
+    return;
+  }
+
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.writeHead(405, withCorsHeaders({ 'Content-Type': 'text/plain; charset=utf-8' }));
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  const upstreamUrl = new URL(`/api/tx/${txid}`, UPSTREAM_ESPLORA);
+  let upstream;
+  try {
+    upstream = await fetch(upstreamUrl);
+  } catch (error) {
+    console.error(`GET /api/tx/${txid} upstream error:`, error.message);
+    res.writeHead(502, withCorsHeaders({ 'Content-Type': 'text/plain; charset=utf-8' }));
+    res.end('Bad Gateway');
+    return;
+  }
+
+  const rawBody = Buffer.from(await upstream.arrayBuffer());
+  if (!upstream.ok) {
+    const fromBitcoind = await esploraTxJsonFromBitcoind(txid);
+    if (fromBitcoind != null) {
+      sendJson(res, 200, fromBitcoind);
+      return;
+    }
+    res.writeHead(
+      upstream.status,
+      withCorsHeaders({
+        'Content-Type': upstream.headers.get('content-type') || 'application/json',
+        'Content-Length': String(rawBody.length),
+      }),
+    );
+    if (req.method === 'HEAD') {
+      res.end();
+      return;
+    }
+    res.end(rawBody);
+    return;
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(rawBody.toString('utf8'));
+  } catch (error) {
+    console.error(`GET /api/tx/${txid} is not JSON:`, error.message);
+    res.writeHead(502, withCorsHeaders({ 'Content-Type': 'text/plain; charset=utf-8' }));
+    res.end('Upstream transaction JSON is invalid');
+    return;
+  }
+
+  try {
+    const confirmed = await bitcoinConfirmedTxStatus(txid);
+    if (confirmed != null) {
+      parsed.status = confirmed;
+    }
+  } catch (error) {
+    console.error(`GET /api/tx/${txid} bitcoind status error:`, error.message);
+    res.writeHead(500, withCorsHeaders({ 'Content-Type': 'text/plain; charset=utf-8' }));
+    res.end('Failed to get transaction status');
+    return;
+  }
+
+  const body = JSON.stringify(parsed);
+  res.writeHead(
+    200,
+    withCorsHeaders({
+      'Content-Type': 'application/json',
+      'Content-Length': String(Buffer.byteLength(body)),
+    }),
+  );
+  if (req.method === 'HEAD') {
+    res.end();
+    return;
+  }
+  res.end(body);
+}
+
+/**
+ * Bark asks `GET /tx/:txid/outspend/:vout` for the exit anchor's child.
+ * Electrum answers 404, so the exit stays `AwaitingConfirmation` after the
+ * package is mined. Bitcoind's mempool lookup covers an unconfirmed child;
+ * a short block scan covers a child already confirmed in or after the parent.
+ */
+async function handleTxOutspend(req, res, txid, vout) {
+  if (req.method === 'OPTIONS') {
+    sendOptionsPreflight(res);
+    return;
+  }
+
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.writeHead(405, withCorsHeaders({ 'Content-Type': 'text/plain; charset=utf-8' }));
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  try {
+    const unspent = await bitcoinRpc('gettxout', [txid, vout, true]);
+    if (unspent != null) {
+      sendJson(res, 200, { spent: false });
+      return;
+    }
+
+    const mempoolSpend = await mempoolSpender(txid, vout);
+    if (mempoolSpend != null) {
+      sendJson(res, 200, mempoolSpend);
+      return;
+    }
+
+    const confirmedSpend = await confirmedSpender(txid, vout);
+    if (confirmedSpend != null) {
+      sendJson(res, 200, confirmedSpend);
+      return;
+    }
+
+    const parent = await bitcoinGetRawTransactionVerbose(txid);
+    if (parent == null) {
+      const body = 'No such mempool or blockchain transaction';
+      res.writeHead(404, withCorsHeaders({ 'Content-Type': 'text/plain; charset=utf-8' }));
+      res.end(req.method === 'HEAD' ? undefined : body);
+      return;
+    }
+
+    sendJson(res, 200, { spent: false });
+  } catch (error) {
+    console.error(`GET /api/tx/${txid}/outspend/${vout} error:`, error.message);
+    res.writeHead(500, withCorsHeaders({ 'Content-Type': 'text/plain; charset=utf-8' }));
+    res.end('Failed to get output spend');
+  }
+}
+
+async function mempoolSpender(txid, vout) {
+  const rows = await bitcoinRpc('gettxspendingprevout', [[{ txid, vout: Number(vout) }]]);
+  const row = Array.isArray(rows) ? rows[0] : null;
+  if (row == null || typeof row.spendingtxid !== 'string') {
+    return null;
+  }
+  const confirmed = await bitcoinConfirmedTxStatus(row.spendingtxid);
+  return {
+    spent: true,
+    txid: row.spendingtxid,
+    vin: row.spendingvin ?? 0,
+    status: confirmed ?? { confirmed: false },
+  };
+}
+
+async function confirmedSpender(txid, vout) {
+  const parent = await bitcoinGetRawTransactionVerbose(txid);
+  if (parent == null || typeof parent.blockhash !== 'string') {
+    return null;
+  }
+  const startHeight =
+    typeof parent.blockheight === 'number'
+      ? parent.blockheight
+      : (await bitcoinRpc('getblockheader', [parent.blockhash])).height;
+  const tipHeight = await bitcoinRpc('getblockcount');
+  const voutNumber = Number(vout);
+  for (let height = startHeight; height <= tipHeight; height += 1) {
+    const blockHash = await bitcoinRpc('getblockhash', [height]);
+    const block = await bitcoinRpc('getblock', [blockHash, 2]);
+    for (const transaction of block.tx) {
+      const inputs = transaction.vin ?? [];
+      for (let vin = 0; vin < inputs.length; vin += 1) {
+        const input = inputs[vin];
+        if (input.txid === txid && input.vout === voutNumber) {
+          return {
+            spent: true,
+            txid: transaction.txid,
+            vin,
+            status: {
+              confirmed: true,
+              block_height: height,
+              block_hash: blockHash,
+              block_time: block.time,
+            },
+          };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Electrum often 404s `GET /tx/:txid` after the tx has left the mempool.
+ * Bark then treats a confirmed offboard as missing and rebroadcasts it forever.
+ * This is the Esplora JSON shape `get_tx_info` decodes, filled from bitcoind.
+ */
+async function esploraTxJsonFromBitcoind(txid) {
+  const verbose = await bitcoinGetRawTransactionVerbose(txid);
+  if (verbose == null) return null;
+  const confirmed = await bitcoinConfirmedTxStatus(txid);
+  const status = confirmed ?? { confirmed: false };
+  const vin = (verbose.vin ?? []).map((input) => ({
+    txid: input.txid ?? '0000000000000000000000000000000000000000000000000000000000000000',
+    vout: input.vout ?? 0,
+    prevout: null,
+    scriptsig: input.scriptSig?.hex ?? '',
+    witness: input.txinwitness ?? [],
+    sequence: input.sequence ?? 0,
+    is_coinbase: typeof input.coinbase === 'string',
+  }));
+  const vout = (verbose.vout ?? []).map((output) => ({
+    value: Math.round(Number(output.value) * 1e8),
+    scriptpubkey: output.scriptPubKey?.hex ?? '',
+  }));
+  const feeSats =
+    typeof verbose.fee === 'number' ? Math.round(Math.abs(verbose.fee) * 1e8) : 0;
+  return {
+    txid: verbose.txid,
+    version: verbose.version,
+    locktime: verbose.locktime,
+    vin,
+    vout,
+    size: verbose.size,
+    weight: verbose.weight ?? verbose.vsize * 4,
+    status,
+    fee: feeSats,
   };
 }
 
@@ -357,6 +591,62 @@ async function handleTxsPackage(req, res) {
 }
 
 /**
+ * Esplora `POST /tx` is raw transaction hex, and the response body is the txid.
+ * mempool electrum answers `sendrawtransaction` with a generic RPC error, so Bark
+ * offboard and exit broadcasts never land. This calls bitcoind and returns its message.
+ */
+async function handleTxBroadcast(req, res) {
+  if (req.method === 'OPTIONS') {
+    sendOptionsPreflight(res);
+    return;
+  }
+
+  if (req.method !== 'POST') {
+    res.writeHead(405, withCorsHeaders({ 'Content-Type': 'text/plain; charset=utf-8' }));
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  try {
+    const rawBody = (await readRequestBody(req)).trim();
+    if (!/^[0-9a-fA-F]+$/.test(rawBody)) {
+      const body = 'expected raw transaction hex';
+      res.writeHead(
+        400,
+        withCorsHeaders({
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Content-Length': String(Buffer.byteLength(body)),
+        }),
+      );
+      res.end(body);
+      return;
+    }
+
+    const txid = await bitcoinRpc('sendrawtransaction', [rawBody]);
+    const body = String(txid);
+    res.writeHead(
+      200,
+      withCorsHeaders({
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Content-Length': String(Buffer.byteLength(body)),
+      }),
+    );
+    res.end(body);
+  } catch (error) {
+    console.error('POST /api/tx error:', error.message);
+    const body = error.message || 'sendrawtransaction failed';
+    res.writeHead(
+      400,
+      withCorsHeaders({
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Content-Length': String(Buffer.byteLength(body)),
+      }),
+    );
+    res.end(body);
+  }
+}
+
+/**
  * Mempool returns HTTP 500 for many regtest txs; rust-esplora-client retries 500 six
  * times with backoff. bitboard-arkade treats 404/500 as "no merkle proof" and falls back
  * to /status — answer 404 immediately so progress polls stay fast.
@@ -406,6 +696,18 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  const outspendMatch = TXID_OUTSPEND_PATH.exec(pathname);
+  if (outspendMatch) {
+    void handleTxOutspend(req, res, outspendMatch[1].toLowerCase(), Number(outspendMatch[2]));
+    return;
+  }
+
+  const txJsonMatch = TXID_JSON_PATH.exec(pathname);
+  if (txJsonMatch) {
+    void handleTxJson(req, res, txJsonMatch[1].toLowerCase());
+    return;
+  }
+
   const statusMatch = TXID_STATUS_PATH.exec(pathname);
   if (statusMatch) {
     void handleTxStatus(req, res, statusMatch[1].toLowerCase());
@@ -420,6 +722,11 @@ const server = http.createServer((req, res) => {
 
   if (pathname === TXS_PACKAGE_PATH) {
     void handleTxsPackage(req, res);
+    return;
+  }
+
+  if (pathname === TX_BROADCAST_PATH) {
+    void handleTxBroadcast(req, res);
     return;
   }
 

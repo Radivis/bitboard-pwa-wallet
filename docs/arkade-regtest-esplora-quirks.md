@@ -16,7 +16,7 @@ For the same `txid`, regtest Esplora endpoints can disagree. Do not assume “vi
 |----------|--------------------------|-----------------|
 | `GET /tx/{txid}/merkle-proof` | **404** from `esplora_gateway` (mempool returns **500**, which rust-esplora-client retries 6× and stalls progress polls) | Confirmation when present; treat missing as "not confirmed" (never fail the poll) |
 | `GET /tx/{txid}/status` | Mempool electrum may keep `confirmed: false` for virtual-tree stubs even after mining; **`esplora_gateway` overrides with bitcoind when the tx is in a block** | **Primary** confirmation depth (`map_tx_confirmations` main path) |
-| `GET /tx/{txid}` (JSON) | Often available for **virtual-tree artifacts before relay**; may show `confirmed: false` indefinitely until mined | Loading tx bytes when raw is missing (`find_tx_at` fallback); **not** sole proof of relay |
+| `GET /tx/{txid}` (JSON) | Often available for **virtual-tree artifacts before relay**. For a tx bitcoind has **confirmed**, `esplora_gateway` replaces `status` with that confirmation so Bark can leave `AwaitingConfirmation` | Loading tx bytes when raw is missing (`find_tx_at` fallback); **not** sole proof of relay |
 | `GET /tx/{txid}/raw` | **200** when bitcoind has the tx in **mempool or chain** (not wallet-only); **404** otherwise (`esplora_gateway`) | Strict “on real network” check (`is_tx_relayed_on_network`) |
 
 **Confirmed on regtest** usually means: `get_tx_status` succeeds and reports a block height.

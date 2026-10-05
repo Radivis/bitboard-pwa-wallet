@@ -11,8 +11,10 @@ pub const BARK_MAINNET_ESPLORA_URL: &str = "https://mempool.second.tech/api";
 
 #[cfg(any(test, target_arch = "wasm32"))]
 mod emergency_exit;
-#[cfg(any(test, target_arch = "wasm32"))]
+#[cfg(any(test, target_arch = "wasm32", feature = "regtest-support"))]
 mod exit_address;
+#[cfg(any(test, target_arch = "wasm32", feature = "regtest-support"))]
+mod offboard_retirement;
 #[cfg(any(test, target_arch = "wasm32"))]
 mod pending_actions;
 #[cfg(any(test, target_arch = "wasm32"))]

@@ -1,3 +1,4 @@
+import { isE2eBarkRegtestControlEnabled } from '@/lib/bark/e2e/bark-regtest-env'
 import { isLightningSendMode } from '@/lib/lightning/send-flow-validation'
 import { isValidSendAmountSats } from '@/lib/wallet/send/send-amount-validation'
 import type { NetworkMode } from '@/stores/walletStore'
@@ -22,6 +23,10 @@ export function isBarkPolicyAddressForNetwork(
 ): boolean {
   if (networkMode === 'mainnet') return isBarkMainnetPolicyAddress(address)
   if (networkMode === 'signet') return isBarkSignetPolicyAddress(address)
+  // Regtest Bark addresses use the Signet HRP `tark`. Product builds leave this off.
+  if (networkMode === 'regtest' && isE2eBarkRegtestControlEnabled()) {
+    return isBarkSignetPolicyAddress(address)
+  }
   return false
 }
 
