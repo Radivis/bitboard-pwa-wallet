@@ -56,18 +56,30 @@ fn session_endpoints(network: Network) -> Result<(&'static str, &'static str), S
     }
 }
 
-fn config_for_network(network: Network) -> Result<bark::Config, String> {
-    let (server_address, esplora_address) = session_endpoints(network)?;
+fn config_for_endpoints(
+    network: Network,
+    server_address: String,
+    esplora_address: String,
+) -> bark::Config {
     // `server_access_token` is deprecated since bark-wallet 0.2.4: the server does not
     // enforce it, and the field will be removed. `Config::network_default` still sets it,
     // and bark-wallet 0.7.1 has no replacement constructor, so the struct update copies it.
     #[allow(deprecated)]
-    Ok(bark::Config {
-        server_address: server_address.to_owned(),
-        esplora_address: Some(esplora_address.to_owned()),
+    bark::Config {
+        server_address,
+        esplora_address: Some(esplora_address),
         user_agent: Some(bark_user_agent()),
         ..bark::Config::network_default(network)
-    })
+    }
+}
+
+fn config_for_network(network: Network) -> Result<bark::Config, String> {
+    let (server_address, esplora_address) = session_endpoints(network)?;
+    Ok(config_for_endpoints(
+        network,
+        server_address.to_owned(),
+        esplora_address.to_owned(),
+    ))
 }
 
 fn remember_session_network(network: Network) {
@@ -131,6 +143,7 @@ async fn open_network_session(
     mnemonic_plaintext: String,
     network: Network,
     record_dump: String,
+    config: bark::Config,
 ) -> Result<String, String> {
     let seed = {
         let mnemonic_guard = MnemonicPlaintext(mnemonic_plaintext);
@@ -138,7 +151,6 @@ async fn open_network_session(
             Mnemonic::parse(mnemonic_guard.0.as_str()).map_err(|err| err.to_string())?;
         bark::WalletSeed::new_from_mnemonic(network, &parsed_mnemonic)
     };
-    let config = config_for_network(network)?;
 
     let store = if record_dump.is_empty() {
         SharedRecordStore::empty()
@@ -222,7 +234,30 @@ pub async fn bark_open_session(
     record_dump: String,
 ) -> Result<String, JsValue> {
     let bitcoin_network = parse_open_network(&network).map_err(|err| JsValue::from_str(&err))?;
-    open_network_session(mnemonic, bitcoin_network, record_dump)
+    let config = config_for_network(bitcoin_network).map_err(|err| JsValue::from_str(&err))?;
+    open_network_session(mnemonic, bitcoin_network, record_dump, config)
+        .await
+        .map_err(|err| JsValue::from_str(&err))
+}
+
+/// Opens a Bark wallet on bitcoin regtest against caller-supplied URLs.
+///
+/// Playwright calls this only when `VITE_E2E_BARK_REGTEST` is set. Signet and
+/// Mainnet stay on [`bark_open_session`] and the public Second endpoints.
+#[wasm_bindgen]
+pub async fn bark_open_regtest_session(
+    mnemonic: String,
+    record_dump: String,
+    server_url: String,
+    esplora_url: String,
+) -> Result<String, JsValue> {
+    if server_url.trim().is_empty() || esplora_url.trim().is_empty() {
+        return Err(JsValue::from_str(
+            "Bark regtest requires a server URL and an Esplora URL",
+        ));
+    }
+    let config = config_for_endpoints(Network::Regtest, server_url, esplora_url);
+    open_network_session(mnemonic, Network::Regtest, record_dump, config)
         .await
         .map_err(|err| JsValue::from_str(&err))
 }

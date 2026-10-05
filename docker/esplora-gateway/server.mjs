@@ -8,6 +8,7 @@
  * - GET /api/tx/:txid/raw — mempool or confirmed chain only (not wallet-only stubs)
  * - GET /api/tx/:txid/status — confirmed txs (mempool electrum often stays confirmed:false)
  *
+ * POST /api/txs/package — bitcoind `submitpackage` (mempool electrum returns a generic RPC error)
  * All other paths are proxied to mempool_web unchanged.
  */
 import http from 'node:http';
@@ -23,6 +24,7 @@ const UPSTREAM_ESPLORA = process.env.UPSTREAM_ESPLORA || 'http://mempool_web';
 const TXID_RAW_PATH = /^\/api\/tx\/([0-9a-f]{64})\/raw$/i;
 const TXID_STATUS_PATH = /^\/api\/tx\/([0-9a-f]{64})\/status$/i;
 const TXID_MERKLE_PROOF_PATH = /^\/api\/tx\/([0-9a-f]{64})\/merkle-proof$/i;
+const TXS_PACKAGE_PATH = '/api/txs/package';
 
 /** Match mempool_web CORS so browser WASM can fetch from the Vite dev origin. */
 const CORS_HEADERS = {
@@ -295,6 +297,65 @@ async function handleTxStatus(req, res, txid) {
   proxyToUpstream(req, res);
 }
 
+function readRequestBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', (chunk) => chunks.push(chunk));
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', reject);
+  });
+}
+
+function sendJson(res, statusCode, payload) {
+  const body = JSON.stringify(payload);
+  res.writeHead(
+    statusCode,
+    withCorsHeaders({
+      'Content-Type': 'application/json',
+      'Content-Length': String(Buffer.byteLength(body)),
+    }),
+  );
+  res.end(body);
+}
+
+/**
+ * Esplora `POST /txs/package` is a JSON array of raw tx hex. Bark's board drive
+ * broadcasts the funding transaction this way. mempool's electrum backend answers
+ * with a generic submitpackage RPC error, so the gateway calls bitcoind directly
+ * and returns Core's result object (`package_msg`, `tx-results`).
+ */
+async function handleTxsPackage(req, res) {
+  if (req.method === 'OPTIONS') {
+    sendOptionsPreflight(res);
+    return;
+  }
+
+  if (req.method !== 'POST') {
+    res.writeHead(405, withCorsHeaders({ 'Content-Type': 'text/plain; charset=utf-8' }));
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  try {
+    const rawBody = await readRequestBody(req);
+    const parsed = JSON.parse(rawBody);
+    const hexesAreRawTransactions =
+      Array.isArray(parsed) &&
+      parsed.length > 0 &&
+      parsed.every((txHex) => typeof txHex === 'string' && /^[0-9a-fA-F]+$/.test(txHex));
+    if (!hexesAreRawTransactions) {
+      sendJson(res, 400, { error: 'expected a JSON array of raw transaction hex' });
+      return;
+    }
+
+    const packageResult = await bitcoinRpc('submitpackage', [parsed]);
+    sendJson(res, 200, packageResult);
+  } catch (error) {
+    console.error('POST /api/txs/package error:', error.message);
+    sendJson(res, 400, { error: error.message || 'submitpackage failed' });
+  }
+}
+
 /**
  * Mempool returns HTTP 500 for many regtest txs; rust-esplora-client retries 500 six
  * times with backoff. bitboard-arkade treats 404/500 as "no merkle proof" and falls back
@@ -354,6 +415,11 @@ const server = http.createServer((req, res) => {
   const merkleProofMatch = TXID_MERKLE_PROOF_PATH.exec(pathname);
   if (merkleProofMatch) {
     void handleTxMerkleProof(req, res, merkleProofMatch[1].toLowerCase());
+    return;
+  }
+
+  if (pathname === TXS_PACKAGE_PATH) {
+    void handleTxsPackage(req, res);
     return;
   }
 

@@ -9,7 +9,7 @@ export const BITCOIN_MAINNET_AVERAGE_BLOCK_SECONDS = 10 * 60
  */
 export const BITCOIN_SIGNET_AVERAGE_BLOCK_SECONDS = 10 * 60
 
-export type BarkBitcoinNetwork = 'signet' | 'mainnet'
+export type BarkBitcoinNetwork = 'signet' | 'mainnet' | 'regtest'
 
 export interface BarkVtxoExpiryDisplay {
   blocksLabel: string

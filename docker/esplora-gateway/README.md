@@ -6,7 +6,8 @@ This gateway:
 
 - **`GET /api/tx/:txid/raw`** — bitcoind mempool or confirmed chain only (404 for wallet-only / virtual stubs)
 - **`GET /api/tx/:txid/status`** — bitcoind status when the tx is **confirmed** (overrides stale electrum `confirmed: false`)
-- **All other paths** — proxied to `mempool_web` unchanged (broadcast, package submit, JSON `/tx`, etc.)
+- **`POST /api/txs/package`** — bitcoind `submitpackage` (JSON array of raw tx hex). mempool electrum returns a generic RPC error, which leaves Bark board funding unbroadcast.
+- **All other paths** — proxied to `mempool_web` unchanged (single-tx broadcast, JSON `/tx`, etc.)
 
 Wired via [`../arkade-regtest.override.yml`](../arkade-regtest.override.yml); host port `MEMPOOL_WEB_PORT` (default 7030) binds here instead of `mempool_web`.
 

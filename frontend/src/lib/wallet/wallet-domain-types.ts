@@ -14,6 +14,10 @@ import {
   historicalSignetOnchainWasMutinynet,
   renameSignetMapKeyToMutinynet,
 } from '@/lib/wallet/historical-signet-onchain-chain'
+import {
+  BARK_REGTEST_SERVER_URL,
+  isE2eBarkRegtestControlEnabled,
+} from '@/lib/bark/e2e/bark-regtest-env'
 
 export enum AddressType {
   SegWit = 'segwit',
@@ -111,12 +115,13 @@ export const BARK_MAINNET_SERVER_URL = 'https://ark.second.tech'
 const BARK_RAIL_SERVER_URL: Record<BarkRailNetwork, string> = {
   signet: BARK_SIGNET_SERVER_URL,
   mainnet: BARK_MAINNET_SERVER_URL,
+  regtest: BARK_REGTEST_SERVER_URL,
 }
 
 /** UTF-8 cap for one network's Bark record dump. Same size as an Arkade SDK blob. */
 export const BARK_RECORD_DUMP_MAX_BYTES = 10 * 1024 * 1024
 
-export type BarkRailNetwork = 'signet' | 'mainnet'
+export type BarkRailNetwork = 'signet' | 'mainnet' | 'regtest'
 
 const MAX_BARK_RECEIVE_KEY_INDEX = 0xffff_ffff
 
@@ -329,12 +334,23 @@ function legacySignetBarkRail(value: unknown): StoredBarkRail | undefined {
 
 export function isStoredBarkRails(value: unknown): value is StoredBarkRails {
   if (!isRecord(value) || Array.isArray(value)) return false
+  const regtestEnabled = isE2eBarkRegtestControlEnabled()
   for (const key of Object.keys(value)) {
-    if (key !== 'signet' && key !== 'mainnet') return false
+    if (key === 'signet' || key === 'mainnet') continue
+    if (key === 'regtest') continue
+    return false
   }
   if (value.signet !== undefined && !isStoredSignetBarkRail(value.signet)) return false
   if (value.mainnet !== undefined && !isStoredMainnetBarkRail(value.mainnet)) return false
-  return value.signet !== undefined || value.mainnet !== undefined
+  if (
+    regtestEnabled &&
+    value.regtest !== undefined &&
+    !isStoredBarkRailForNetwork(value.regtest, 'regtest')
+  ) {
+    return false
+  }
+  const hasRegtest = regtestEnabled && isStoredBarkRailForNetwork(value.regtest, 'regtest')
+  return value.signet !== undefined || value.mainnet !== undefined || hasRegtest
 }
 
 function sanitizeBarkRails(
@@ -344,7 +360,10 @@ function sanitizeBarkRails(
   const railsRecord = isRecord(railsValue) ? railsValue : {}
   const signet = canonicalSignetBarkRail(railsRecord.signet) ?? legacySignetBarkRail(legacyRail)
   const mainnet = canonicalMainnetBarkRail(railsRecord.mainnet)
-  if (signet == null && mainnet == null) {
+  const regtest = isE2eBarkRegtestControlEnabled()
+    ? canonicalBarkRail(railsRecord.regtest, 'regtest')
+    : undefined
+  if (signet == null && mainnet == null && regtest == null) {
     if (legacyRail != null && import.meta.env.DEV && legacySignetBarkRail(legacyRail) == null) {
       console.warn('[wallet-secrets] Dropping invalid barkRail')
     }
@@ -356,6 +375,7 @@ function sanitizeBarkRails(
   return {
     ...(signet != null ? { signet } : {}),
     ...(mainnet != null ? { mainnet } : {}),
+    ...(regtest != null ? { regtest } : {}),
   }
 }
 

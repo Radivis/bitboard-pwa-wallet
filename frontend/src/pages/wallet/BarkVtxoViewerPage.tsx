@@ -143,7 +143,7 @@ export function BarkVtxoViewerPage() {
 interface BarkVtxoInventoryProps {
   rows: BarkVtxoRow[]
   tipHeight: number | null
-  networkMode: 'signet' | 'mainnet'
+  networkMode: 'signet' | 'mainnet' | 'regtest'
   presentation: BarkVtxoListPresentation
   errorMessage: string | null
   searchQuery: string

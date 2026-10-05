@@ -2,7 +2,7 @@ import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-s
 import type { HistoricalSignetOnchainChain } from '@/lib/wallet/historical-signet-onchain-chain'
 import type { EncryptedBlobMessage } from '@/workers/secrets-channel-types'
 import type { BarkRefreshStatus } from '@/lib/bark/bark-refresh-status'
-import type { PendingEmergencyClaim } from '@/lib/wallet/wallet-domain-types'
+import type { BarkRailNetwork, PendingEmergencyClaim } from '@/lib/wallet/wallet-domain-types'
 
 export type { PendingEmergencyClaim }
 
@@ -11,7 +11,12 @@ export type { BarkRefreshStatus }
 export type OpenBarkSessionParams = {
   walletId: number
   encryptedMnemonic: EncryptedBlobMessage
-  networkMode: 'signet' | 'mainnet'
+  networkMode: BarkRailNetwork
+  /**
+   * Browser Esplora base for a regtest open. The on-chain wallet uses the
+   * same-origin proxy; a direct `localhost:7030` fetch from the dev origin fails.
+   */
+  regtestEsploraUrl?: string
 }
 
 export type OpenBarkSessionResult = {

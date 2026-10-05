@@ -1,6 +1,7 @@
 import { getDatabase, getWalletSecretsEncrypted } from '@/db'
 import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
-import { isBarkReceiveKeyIndex } from '@/lib/wallet/wallet-domain-types'
+import { getEsploraUrl } from '@/lib/wallet/bitcoin-utils'
+import { isBarkReceiveKeyIndex, type BarkRailNetwork } from '@/lib/wallet/wallet-domain-types'
 import {
   forceResetBarkSyncLifecycleForTeardown,
   orchestrateBarkPostLoadSync,
@@ -132,7 +133,7 @@ export function rememberBarkReceiveKeyIndex(receiveKeyIndex: number): void {
 
 async function openBarkWorkerSession(
   walletId: number,
-  networkMode: 'signet' | 'mainnet',
+  networkMode: BarkRailNetwork,
 ): Promise<{
   receiveKeyIndex: number
   lastSuccessfulSyncAt?: string
@@ -145,6 +146,9 @@ async function openBarkWorkerSession(
     walletId,
     encryptedMnemonic: encrypted.mnemonic,
     networkMode,
+    ...(networkMode === 'regtest'
+      ? { regtestEsploraUrl: getEsploraUrl('regtest') }
+      : {}),
   })
   if (!isBarkReceiveKeyIndex(opened.receiveKeyIndex)) {
     throw new Error('Bark session opened without a receive key index')
@@ -195,9 +199,6 @@ export async function orchestrateBarkLoad(params: BarkLoadParams): Promise<void>
       receiveKeyIndex: null,
     })
     try {
-      if (networkMode !== 'signet' && networkMode !== 'mainnet') {
-        throw new Error('Bark network is not supported')
-      }
       const opened = await openBarkWorkerSession(walletId, networkMode)
       if (generation !== sessionGeneration) {
         return

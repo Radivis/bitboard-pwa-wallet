@@ -20,8 +20,11 @@ mod sync_gate;
 #[cfg(any(test, target_arch = "wasm32"))]
 mod vtxo_list;
 
-#[cfg(any(test, target_arch = "wasm32"))]
+#[cfg(any(test, target_arch = "wasm32", feature = "regtest-support"))]
 mod record_store;
+
+#[cfg(all(feature = "regtest-support", not(target_arch = "wasm32")))]
+pub mod regtest_session;
 #[cfg(any(test, target_arch = "wasm32"))]
 mod refresh;
 #[cfg(any(test, target_arch = "wasm32"))]

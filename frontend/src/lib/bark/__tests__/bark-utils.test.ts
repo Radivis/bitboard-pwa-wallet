@@ -29,4 +29,13 @@ describe('isBarkActiveForNetworkMode', () => {
     expect(isBarkActiveForNetworkMode('regtest')).toBe(false)
     expect(isBarkActiveForNetworkMode('lab')).toBe(false)
   })
+
+  it('treats regtest as a Bark network only while the Playwright flag is on', () => {
+    featureState.isBarkEnabled = true
+    vi.stubEnv('VITE_E2E_BARK_REGTEST', 'true')
+    expect(isBarkActiveForNetworkMode('regtest')).toBe(true)
+    expect(isBarkActiveForNetworkMode('testnet')).toBe(false)
+    vi.unstubAllEnvs()
+    expect(isBarkActiveForNetworkMode('regtest')).toBe(false)
+  })
 })

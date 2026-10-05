@@ -100,6 +100,7 @@ npm run test:e2e:sequential   # E2E_SEQUENTIAL=true
 | `test:e2e:lab` | `@lab` | Lab SQLite flows |
 | `test:e2e:arkade` | `@arkade` | Arkade mock |
 | `test:e2e:arkade-regtest` | `@arkade-regtest` | REG-01/02, short VTXO expiry |
+| `test:e2e:bark-regtest` | `@bark-regtest` | E2E-BARK-REG-02 board from on-chain (local captaind) |
 | `test:e2e:arkade-regtest-longexpiry` | `@arkade-exit-regtest` | REG-03/04, long expiry |
 | `test:e2e:arkade-regtest-reg04` | `@arkade-reg04` | REG-04 only |
 | `test:e2e:arkade-regtest-reg07` | `@arkade-reg07` | REG-07 preconfirmed VTXO + automatic unroll |

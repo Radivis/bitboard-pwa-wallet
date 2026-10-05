@@ -36,6 +36,11 @@ import {
   readBarkRevealedReceiveAddress,
   receiveKeyIndexForSessionOpen,
 } from '@/lib/bark/bark-receive-cursor'
+import {
+  BARK_REGTEST_ESPLORA_URL,
+  BARK_REGTEST_SERVER_URL,
+  isE2eBarkRegtestControlEnabled,
+} from '@/lib/bark/e2e/bark-regtest-env'
 import { loadBitboardBarkWasm, type BitboardBarkWasm } from '@/lib/bark/load-bitboard-bark-wasm'
 import {
   assertBarkRecordDumpWithinSizeLimit,
@@ -237,6 +242,36 @@ async function closeSessionImpl(): Promise<void> {
   }
 }
 
+async function openBarkWalletFingerprint(
+  wasmModule: BitboardBarkWasm,
+  mnemonic: string,
+  network: BarkRailNetwork,
+  recordDump: string,
+  regtestEsploraUrl: string | undefined,
+): Promise<string> {
+  if (network !== 'regtest') {
+    const fingerprint = await wasmModule.bark_open_session(mnemonic, network, recordDump)
+    return fingerprint
+  }
+  if (!isE2eBarkRegtestControlEnabled()) {
+    throw new Error('Bark regtest is not enabled')
+  }
+  const wasmWithRegtest = wasmModule as BitboardBarkWasm & {
+    bark_open_regtest_session: (
+      mnemonic: string,
+      recordDump: string,
+      serverUrl: string,
+      esploraUrl: string,
+    ) => Promise<string>
+  }
+  return wasmWithRegtest.bark_open_regtest_session(
+    mnemonic,
+    recordDump,
+    BARK_REGTEST_SERVER_URL,
+    regtestEsploraUrl ?? BARK_REGTEST_ESPLORA_URL,
+  )
+}
+
 async function openSessionImpl(
   params: OpenBarkSessionParams,
 ): Promise<OpenBarkSessionResult> {
@@ -252,7 +287,13 @@ async function openSessionImpl(
   openNetwork = network
   try {
     const wasmModule = await getBarkWasm()
-    const fingerprint = await wasmModule.bark_open_session(mnemonic, network, recordDump)
+    const fingerprint = await openBarkWalletFingerprint(
+      wasmModule,
+      mnemonic,
+      network,
+      recordDump,
+      params.regtestEsploraUrl,
+    )
     if (typeof fingerprint !== 'string' || fingerprint.length === 0) {
       throw new Error('Bark open did not return a fingerprint')
     }

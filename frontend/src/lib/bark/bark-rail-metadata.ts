@@ -1,3 +1,4 @@
+import { BARK_REGTEST_SERVER_URL } from '@/lib/bark/e2e/bark-regtest-env'
 import {
   assertBarkRecordDumpWithinSizeLimit,
   BARK_MAINNET_SERVER_URL,
@@ -18,7 +19,9 @@ export class BarkFingerprintMismatchError extends Error {
 }
 
 export function barkServerUrl(network: BarkRailNetwork): string {
-  return network === 'signet' ? BARK_SIGNET_SERVER_URL : BARK_MAINNET_SERVER_URL
+  if (network === 'signet') return BARK_SIGNET_SERVER_URL
+  if (network === 'regtest') return BARK_REGTEST_SERVER_URL
+  return BARK_MAINNET_SERVER_URL
 }
 
 function railWithPreservedFields(
