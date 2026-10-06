@@ -205,7 +205,7 @@ export function BarkEmergencyExitLiveCard({
         ) : null}
         {proceedAutomatically && automaticProgressError != null ? (
           <p
-            className="text-xs text-destructive"
+            className="min-w-0 break-all text-xs text-destructive"
             role="alert"
             data-testid="bark-emergency-exit-automatic-progress-error"
           >

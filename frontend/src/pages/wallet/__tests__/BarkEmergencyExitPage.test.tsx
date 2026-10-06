@@ -202,6 +202,8 @@ describe('BarkEmergencyExitPage', () => {
     barkWorker.sendOnchain.mockClear()
     barkWorker.estimateEmergencyExit.mockClear()
     barkWorker.writeProceedAutomatically.mockClear()
+    idleAutomationActivity.inFlight = false
+    idleAutomationActivity.errorMessage = null
     syncAutomation.mockClear()
     stopAutomation.mockClear()
     cryptoWorker.getNewAddress.mockClear()
@@ -239,6 +241,19 @@ describe('BarkEmergencyExitPage', () => {
     expect(screen.getByTestId('bark-emergency-exit-automatic-status')).toHaveTextContent(
       'Waiting for the next block.',
     )
+  })
+
+  it('shows the full automatic progress error on the live exits card', async () => {
+    const childRejectReason = 'version=3 child would have too many ancestors'
+    const packageError = `${'p'.repeat(400)} ${childRejectReason}`
+    barkWorker.readProceedAutomatically.mockResolvedValue(true)
+    idleAutomationActivity.errorMessage = packageError
+    renderWithProviders(<BarkEmergencyExitPage />)
+
+    const alert = await screen.findByTestId('bark-emergency-exit-automatic-progress-error')
+    expect(alert).toHaveTextContent(childRejectReason)
+    expect(alert).toHaveClass('break-all')
+    expect(screen.queryByTestId('bark-emergency-exit-automatic-status')).not.toBeInTheDocument()
   })
 
   it('disables Progress while proceed automatically is already on', async () => {

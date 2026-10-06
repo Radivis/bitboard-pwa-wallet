@@ -73,4 +73,13 @@ describe('sanitizeErrorMessageForUi', () => {
     expect(out.length).toBeLessThanOrEqual(320)
     expect(out.endsWith('…')).toBe(true)
   })
+
+  it('keeps the full sanitized text when the length cap is removed', () => {
+    const long = `${'x'.repeat(400)} https://explorer.example/tx/abc child-reject-reason`
+    const out = sanitizeErrorMessageForUi(long, { maxLength: Number.POSITIVE_INFINITY })
+    expect(out).toContain('child-reject-reason')
+    expect(out).toContain('[url]')
+    expect(out).not.toContain('https://')
+    expect(out.endsWith('…')).toBe(false)
+  })
 })

@@ -240,12 +240,12 @@ function publishAutomationActivity(next: BarkEmergencyExitAutomationActivity): v
   automationActivity = next
   for (const listener of automationActivityListeners) listener()
   if (next.errorMessage != null && next.errorMessage !== previousError) {
-    toast.error(next.errorMessage)
+    toast.error(next.errorMessage, { duration: Number.POSITIVE_INFINITY })
   }
 }
 
 function automationActivityError(error: unknown, fallback: string): string {
-  const message = userFacingErrorMessage(error).trim()
+  const message = userFacingErrorMessage(error, { maxLength: Number.POSITIVE_INFINITY }).trim()
   return message.length > 0 ? message : fallback
 }
 
