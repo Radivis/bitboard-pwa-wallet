@@ -3,6 +3,7 @@ import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
 import { progressBarkEmergencyExits } from '@/lib/bark/perform-bark-emergency-exit'
 import { presetRatesForNetwork } from '@/hooks/useEsploraFeePresets'
 import { appQueryClient } from '@/lib/shared/app-query-client'
+import { userFacingErrorMessage } from '@/lib/shared/utils'
 import { fetchEsploraChainTip, getEsploraUrl } from '@/lib/wallet/bitcoin-utils'
 import { getBarkLoadLifecycleSnapshot, subscribeBarkLoadLifecycle } from '@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
@@ -10,6 +11,7 @@ import { loadCustomEsploraUrl } from '@/lib/wallet/wallet-utils'
 import type { BarkRailNetwork } from '@/lib/wallet/wallet-domain-types'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import { getBarkWorker } from '@/workers/bark-factory'
+import { toast } from 'sonner'
 
 /** Production poll. Signet and mainnet blocks are minutes apart. */
 export const BARK_EMERGENCY_EXIT_TIP_POLL_MS = 15_000
@@ -39,8 +41,13 @@ export type BarkEmergencyExitAutomationSessionGate = {
 export type BarkEmergencyExitAutomationGate = BarkEmergencyExitAutomationSessionGate & {
   exitCount: number
   previousTip: BarkEmergencyExitTip | null
-  nextTip: BarkEmergencyExitTip
+  nextTip: BarkEmergencyExitTip | null
   justBecameActive: boolean
+}
+
+export type BarkEmergencyExitAutomationActivity = {
+  inFlight: boolean
+  errorMessage: string | null
 }
 
 export type BarkEmergencyExitAutomationScope = {
@@ -70,7 +77,9 @@ export function shouldProgressBarkEmergencyExitOnTip(
   if (!gate.sameNetwork) return false
   if (!gate.sessionLoaded) return false
   if (gate.exitCount < 1) return false
-  return gate.justBecameActive || barkEmergencyExitTipChanged(gate.previousTip, gate.nextTip)
+  if (gate.justBecameActive) return true
+  if (gate.nextTip == null) return false
+  return barkEmergencyExitTipChanged(gate.previousTip, gate.nextTip)
 }
 
 export async function watchBarkEmergencyExitTips(deps: {
@@ -81,10 +90,19 @@ export async function watchBarkEmergencyExitTips(deps: {
   progress: () => Promise<void>
   wait: (signal: AbortSignal) => Promise<void>
   afterProgress?: () => Promise<void>
+  onListed?: () => Promise<void>
+  onProgressStart?: () => void
+  onProgressSuccess?: () => void
+  onProgressIdle?: () => void
+  onProgressError?: (error: unknown) => void
+  onTipReadError?: (error: unknown) => void
 }): Promise<void> {
   let previousTip: BarkEmergencyExitTip | null = null
   let justBecameActive = true
+  let rememberNextTipWithoutProgress = false
   while (!deps.signal.aborted) {
+    if (justBecameActive) deps.onProgressStart?.()
+
     let session: BarkEmergencyExitAutomationSessionGate
     try {
       session = await deps.readGate()
@@ -94,15 +112,17 @@ export async function watchBarkEmergencyExitTips(deps: {
       continue
     }
     if (deps.signal.aborted) return
-    if (!sessionStillAllowsAutomation(session)) return
+    if (!sessionStillAllowsAutomation(session)) {
+      deps.onProgressIdle?.()
+      return
+    }
 
-    let nextTip: BarkEmergencyExitTip
+    let nextTip: BarkEmergencyExitTip | null = null
     try {
       nextTip = await deps.fetchTip()
-    } catch {
+    } catch (error) {
       if (deps.signal.aborted) return
-      await deps.wait(deps.signal)
-      continue
+      deps.onTipReadError?.(error)
     }
     if (deps.signal.aborted) return
 
@@ -111,12 +131,25 @@ export async function watchBarkEmergencyExitTips(deps: {
       exitCount = await deps.listExitCount()
     } catch {
       if (deps.signal.aborted) return
+      if (justBecameActive) deps.onProgressIdle?.()
       await deps.wait(deps.signal)
       continue
     }
     if (deps.signal.aborted) return
 
-    if (
+    if (deps.onListed != null) {
+      try {
+        await deps.onListed()
+      } catch {
+        // The next poll lists again. A failed refresh must not skip progress.
+      }
+    }
+    if (deps.signal.aborted) return
+
+    if (rememberNextTipWithoutProgress && nextTip != null) {
+      previousTip = nextTip
+      rememberNextTipWithoutProgress = false
+    } else if (
       shouldProgressBarkEmergencyExitOnTip({
         ...session,
         exitCount,
@@ -125,16 +158,31 @@ export async function watchBarkEmergencyExitTips(deps: {
         justBecameActive,
       })
     ) {
+      let progressed = false
       try {
+        if (!justBecameActive) deps.onProgressStart?.()
         await deps.progress()
-        previousTip = nextTip
+        progressed = true
         justBecameActive = false
-        if (deps.afterProgress != null) {
-          await deps.afterProgress()
+        if (nextTip != null) {
+          previousTip = nextTip
+        } else {
+          rememberNextTipWithoutProgress = true
         }
-      } catch {
-        // The next poll retries this tip. A failed broadcast must not look finished.
+        deps.onProgressSuccess?.()
+      } catch (error) {
+        if (deps.signal.aborted) return
+        deps.onProgressError?.(error)
       }
+      if (progressed && deps.afterProgress != null) {
+        try {
+          await deps.afterProgress()
+        } catch {
+          // The exit already progressed. The next poll refreshes the lists.
+        }
+      }
+    } else if (justBecameActive) {
+      deps.onProgressIdle?.()
     }
     if (deps.signal.aborted) return
     await deps.wait(deps.signal)
@@ -160,6 +208,47 @@ type ActiveAutomationRun = {
 let automationGeneration = 0
 let activeAutomationRun: ActiveAutomationRun | null = null
 
+const idleAutomationActivity: BarkEmergencyExitAutomationActivity = {
+  inFlight: false,
+  errorMessage: null,
+}
+
+let automationActivity: BarkEmergencyExitAutomationActivity = idleAutomationActivity
+const automationActivityListeners = new Set<() => void>()
+
+export function getBarkEmergencyExitAutomationActivity(): BarkEmergencyExitAutomationActivity {
+  return automationActivity
+}
+
+export function subscribeBarkEmergencyExitAutomationActivity(
+  listener: () => void,
+): () => void {
+  automationActivityListeners.add(listener)
+  return () => {
+    automationActivityListeners.delete(listener)
+  }
+}
+
+function publishAutomationActivity(next: BarkEmergencyExitAutomationActivity): void {
+  if (
+    automationActivity.inFlight === next.inFlight &&
+    automationActivity.errorMessage === next.errorMessage
+  ) {
+    return
+  }
+  const previousError = automationActivity.errorMessage
+  automationActivity = next
+  for (const listener of automationActivityListeners) listener()
+  if (next.errorMessage != null && next.errorMessage !== previousError) {
+    toast.error(next.errorMessage)
+  }
+}
+
+function automationActivityError(error: unknown, fallback: string): string {
+  const message = userFacingErrorMessage(error).trim()
+  return message.length > 0 ? message : fallback
+}
+
 /** Stops the tip loop. Unlocking on the same network starts it again when the switch is on. */
 export function stopBarkEmergencyExitAutomation(): void {
   automationGeneration += 1
@@ -167,6 +256,7 @@ export function stopBarkEmergencyExitAutomation(): void {
   activeAutomationRun = null
   running?.abort.abort()
   running?.unsubscribe()
+  publishAutomationActivity(idleAutomationActivity)
 }
 
 /**
@@ -186,7 +276,17 @@ export async function syncBarkEmergencyExitAutomation(
   if (!session.walletUnlocked || !session.sameWallet || !session.sameNetwork || !session.sessionLoaded) {
     return
   }
-  const proceedAutomatically = await getBarkWorker().readProceedAutomatically()
+  let proceedAutomatically: boolean
+  try {
+    proceedAutomatically = await getBarkWorker().readProceedAutomatically()
+  } catch (error) {
+    if (token !== automationGeneration) return
+    publishAutomationActivity({
+      inFlight: false,
+      errorMessage: automationActivityError(error, 'Could not read automatic proceeding'),
+    })
+    return
+  }
   if (token !== automationGeneration || !proceedAutomatically) return
   if (!readLiveSessionGate(scope).sessionLoaded) return
 
@@ -218,7 +318,36 @@ export async function syncBarkEmergencyExitAutomation(
       listExitCount: async () => (await getBarkWorker().listEmergencyExits()).length,
       progress: () => progressOpenEmergencyExits(scope),
       wait: (signal) => waitForBarkEmergencyExitTipPoll(scope.networkMode, signal),
+      onListed: () => invalidateBarkEmergencyExitQueries(scope),
       afterProgress: () => invalidateBarkEmergencyExitQueries(scope),
+      onProgressStart: () => {
+        publishAutomationActivity({
+          inFlight: true,
+          errorMessage: automationActivity.errorMessage,
+        })
+      },
+      onProgressSuccess: () => {
+        publishAutomationActivity(idleAutomationActivity)
+      },
+      onProgressIdle: () => {
+        publishAutomationActivity({
+          inFlight: false,
+          errorMessage: automationActivity.errorMessage,
+        })
+      },
+      onProgressError: (error) => {
+        publishAutomationActivity({
+          inFlight: false,
+          errorMessage: automationActivityError(error, 'Emergency exit failed to progress'),
+        })
+      },
+      onTipReadError: (error) => {
+        if (automationActivity.inFlight) return
+        publishAutomationActivity({
+          inFlight: false,
+          errorMessage: automationActivityError(error, 'Could not read the chain tip'),
+        })
+      },
     })
   } finally {
     if (activeAutomationRun?.generation === token) {
@@ -277,15 +406,10 @@ async function progressOpenEmergencyExits(
 async function invalidateBarkEmergencyExitQueries(
   scope: BarkEmergencyExitAutomationScope,
 ): Promise<void> {
-  await appQueryClient.invalidateQueries({
-    queryKey: ['bark', 'emergency-exits', scope.walletId, scope.networkMode],
-  })
-  await appQueryClient.invalidateQueries({
-    queryKey: ['bark', 'exit-topology', scope.walletId, scope.networkMode],
-  })
-  await appQueryClient.invalidateQueries({
-    queryKey: ['bark', 'vtxos', scope.walletId, scope.networkMode],
-  })
+  const barkListPrefix = (listName: string) => ['bark', listName, scope.walletId] as const
+  await appQueryClient.invalidateQueries({ queryKey: barkListPrefix('emergency-exits') })
+  await appQueryClient.invalidateQueries({ queryKey: barkListPrefix('exit-topology') })
+  await appQueryClient.invalidateQueries({ queryKey: barkListPrefix('vtxos') })
 }
 
 function waitForBarkEmergencyExitTipPoll(

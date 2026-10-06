@@ -63,10 +63,14 @@ export function BarkEmergencyExitPage() {
       />
       <BarkEmergencyExitLiveCard
         rows={page.liveExits}
+        liveExitsLoading={page.liveExitsLoading}
+        liveExitsError={page.liveExitsError}
         vtxoRows={page.vtxoRows}
         busyAction={page.busyAction}
         proceedAutomatically={page.proceedAutomatically}
         proceedAutomaticallyPending={page.proceedAutomaticallyPending}
+        automaticProgressInFlight={page.automaticProgressInFlight}
+        automaticProgressError={page.automaticProgressError}
         onProceedAutomaticallyChange={page.onProceedAutomaticallyChange}
         onProgress={page.onProgress}
         onCancel={page.onCancel}

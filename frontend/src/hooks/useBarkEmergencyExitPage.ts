@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useSyncExternalStore } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { barkEmergencyExitQueryKey, useBarkEmergencyExitQuery } from '@/hooks/useBarkEmergencyExitQuery'
+import { useBarkEmergencyExitQuery } from '@/hooks/useBarkEmergencyExitQuery'
 import { barkExitTopologyQueryKey, useBarkExitTopologyQuery } from '@/hooks/useBarkExitTopologyQuery'
 import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
 import { useEsploraFeePresets } from '@/hooks/useEsploraFeePresets'
@@ -27,6 +27,8 @@ import {
   startBarkEmergencyExit,
 } from '@/lib/bark/perform-bark-emergency-exit'
 import {
+  getBarkEmergencyExitAutomationActivity,
+  subscribeBarkEmergencyExitAutomationActivity,
   syncBarkEmergencyExitAutomation,
   stopBarkEmergencyExitAutomation,
 } from '@/lib/bark/bark-emergency-exit-automation'
@@ -96,6 +98,12 @@ export function useBarkEmergencyExitPage() {
   })
   const queryClient = useQueryClient()
 
+  const proceedAutomatically = proceedAutomaticallyQuery.data === true
+  const automaticProgress = useSyncExternalStore(
+    subscribeBarkEmergencyExitAutomationActivity,
+    getBarkEmergencyExitAutomationActivity,
+  )
+
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [wholeWallet, setWholeWallet] = useState(false)
   const [review, setReview] = useState<BarkEmergencyExitReview | null>(null)
@@ -123,6 +131,10 @@ export function useBarkEmergencyExitPage() {
     () => overlayPendingEmergencyClaim(exitQuery.data ?? [], pendingClaimQuery.data ?? null),
     [exitQuery.data, pendingClaimQuery.data],
   )
+  const liveExitsLoading = exitQuery.isLoading
+  const liveExitsError = exitQuery.isError
+    ? errorMessage(exitQuery.error) || 'Could not load live exits.'
+    : null
   const claimEnabled = emergencyExitClaimEnabled(liveExits)
   const startBlocked =
     review != null && emergencyExitStartBlocked(confirmedSats, review.estimate.exitBroadcastFeeSats)
@@ -151,7 +163,7 @@ export function useBarkEmergencyExitPage() {
   async function reloadLists() {
     await Promise.all([
       queryClient.invalidateQueries({
-        queryKey: barkEmergencyExitQueryKey(activeWalletId, networkMode),
+        queryKey: ['bark', 'emergency-exits', activeWalletId],
       }),
       queryClient.invalidateQueries({
         queryKey: barkVtxoListQueryKey(
@@ -210,6 +222,7 @@ export function useBarkEmergencyExitPage() {
   }
 
   async function onProgress() {
+    if (proceedAutomatically) return
     setBusyAction('progress')
     try {
       await progressBarkEmergencyExits(barkEmergencyExitProgressDeps(), feeRateSatPerVb)
@@ -283,6 +296,8 @@ export function useBarkEmergencyExitPage() {
     vtxoRows,
     spendableVtxos,
     liveExits,
+    liveExitsLoading,
+    liveExitsError,
     claimEnabled,
     topologyVtxoIds,
     topologyNodes: topologyVtxoIds.length === 0 ? [] : topologyQuery.data?.nodes,
@@ -299,8 +314,10 @@ export function useBarkEmergencyExitPage() {
     onStart: () => void onStart(),
     onProgress: () => void onProgress(),
     onProceedAutomaticallyChange: (enabled: boolean) => void onProceedAutomaticallyChange(enabled),
-    proceedAutomatically: proceedAutomaticallyQuery.data === true,
+    proceedAutomatically,
     proceedAutomaticallyPending: proceedAutomaticallyQuery.isPending,
+    automaticProgressInFlight: automaticProgress.inFlight,
+    automaticProgressError: automaticProgress.errorMessage,
     onCancel: (vtxoId: string) => void onCancel(vtxoId),
     onClaim: () => void onClaim(),
   }

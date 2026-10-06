@@ -81,9 +81,16 @@ const spendableVtxo: BarkVtxoRow = {
 const syncAutomation = vi.hoisted(() => vi.fn(async () => undefined))
 const stopAutomation = vi.hoisted(() => vi.fn())
 
+const idleAutomationActivity = vi.hoisted(() => ({
+  inFlight: false,
+  errorMessage: null as string | null,
+}))
+
 vi.mock('@/lib/bark/bark-emergency-exit-automation', () => ({
   syncBarkEmergencyExitAutomation: (...args: unknown[]) => syncAutomation(...args),
   stopBarkEmergencyExitAutomation: (...args: unknown[]) => stopAutomation(...args),
+  getBarkEmergencyExitAutomationActivity: () => idleAutomationActivity,
+  subscribeBarkEmergencyExitAutomationActivity: () => () => undefined,
 }))
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
@@ -228,6 +235,21 @@ describe('BarkEmergencyExitPage', () => {
     })
     expect(syncAutomation).toHaveBeenCalledWith({ walletId: 1, networkMode: 'signet' })
     expect(stopAutomation).not.toHaveBeenCalled()
+    expect(screen.getByTestId('bark-emergency-exit-progress')).toBeDisabled()
+    expect(screen.getByTestId('bark-emergency-exit-automatic-status')).toHaveTextContent(
+      'Waiting for the next block.',
+    )
+  })
+
+  it('disables Progress while proceed automatically is already on', async () => {
+    barkWorker.readProceedAutomatically.mockResolvedValue(true)
+    renderWithProviders(<BarkEmergencyExitPage />)
+
+    const progress = await screen.findByTestId('bark-emergency-exit-progress')
+    await waitFor(() => {
+      expect(progress).toBeDisabled()
+    })
+    expect(screen.getByTestId('bark-emergency-exit-automatic-status')).toBeInTheDocument()
   })
 
   it('BARK-EMG-02 is not the control surface unless Bark is enabled on signet', () => {
@@ -294,6 +316,18 @@ describe('BarkEmergencyExitPage', () => {
     expect(barkWorker.estimateEmergencyExit).toHaveBeenLastCalledWith([], 1)
     expect(barkWorker.offboardAll).not.toHaveBeenCalled()
     expect(barkWorker.sendOnchain).not.toHaveBeenCalled()
+  })
+
+  it('shows a started exit under Live exits', async () => {
+    barkWorker.listEmergencyExits
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([exitRow({ vtxoId: 'vtxo-1', state: 'start', cancelable: true })])
+    renderWithProviders(<BarkEmergencyExitPage />)
+    fireEvent.click(await screen.findByTestId('bark-emergency-exit-vtxo-vtxo-1'))
+    fireEvent.click(screen.getByTestId('bark-emergency-exit-review'))
+    fireEvent.click(await screen.findByTestId('bark-emergency-exit-start'))
+    expect(await screen.findByTestId('bark-emergency-exit-row-vtxo-1')).toBeInTheDocument()
+    expect(screen.getByTestId('bark-emergency-exit-row-vtxo-1')).toHaveTextContent('Started')
   })
 
   it('keeps start disabled when confirmed balance is below the broadcast fee', async () => {

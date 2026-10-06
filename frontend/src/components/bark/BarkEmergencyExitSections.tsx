@@ -12,6 +12,7 @@ import {
   type BarkEmergencyExitReview,
 } from '@/hooks/useBarkEmergencyExitPage'
 import type { BarkEmergencyExitRow, BarkExitGraphNode, BarkVtxoRow } from '@/workers/bark-api'
+import { Loader2 } from 'lucide-react'
 
 export const BARK_EMERGENCY_EXIT_AUTOMATION_NOTE =
   'Automatic proceeding requires the app to stay unlocked and this wallet to stay on this network. This process cannot be delegated.'
@@ -138,23 +139,32 @@ export function BarkEmergencyExitStartCard({
 
 export function BarkEmergencyExitLiveCard({
   rows,
+  liveExitsLoading,
+  liveExitsError,
   vtxoRows,
   busyAction,
   proceedAutomatically,
   proceedAutomaticallyPending,
+  automaticProgressInFlight,
+  automaticProgressError,
   onProceedAutomaticallyChange,
   onProgress,
   onCancel,
 }: {
   rows: BarkEmergencyExitRow[]
+  liveExitsLoading: boolean
+  liveExitsError: string | null
   vtxoRows: BarkVtxoRow[]
   busyAction: string | null
   proceedAutomatically: boolean
   proceedAutomaticallyPending: boolean
+  automaticProgressInFlight: boolean
+  automaticProgressError: string | null
   onProceedAutomaticallyChange: (enabled: boolean) => void
   onProgress: () => void
   onCancel: (vtxoId: string) => void
 }) {
+  const progressDisabled = busyAction != null || proceedAutomatically
   return (
     <Card>
       <CardHeader>
@@ -180,11 +190,38 @@ export function BarkEmergencyExitLiveCard({
         <Button
           type="button"
           data-testid="bark-emergency-exit-progress"
-          disabled={busyAction != null}
+          disabled={progressDisabled}
           onClick={onProgress}
         >
+          {automaticProgressInFlight ? (
+            <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
+          ) : null}
           Progress
         </Button>
+        {proceedAutomatically && (automaticProgressInFlight || automaticProgressError == null) ? (
+          <p className="text-xs text-muted-foreground" data-testid="bark-emergency-exit-automatic-status">
+            {automaticProgressInFlight ? 'Proceeding…' : 'Waiting for the next block.'}
+          </p>
+        ) : null}
+        {proceedAutomatically && automaticProgressError != null ? (
+          <p
+            className="text-xs text-destructive"
+            role="alert"
+            data-testid="bark-emergency-exit-automatic-progress-error"
+          >
+            {automaticProgressError}
+          </p>
+        ) : null}
+        {liveExitsError != null ? (
+          <p className="text-xs text-destructive" role="alert" data-testid="bark-emergency-exit-list-error">
+            {liveExitsError}
+          </p>
+        ) : null}
+        {liveExitsLoading ? (
+          <p className="text-xs text-muted-foreground" data-testid="bark-emergency-exit-list-loading">
+            Loading live exits…
+          </p>
+        ) : null}
         <ul className="space-y-2">
           {rows.map((row) => (
             <li
