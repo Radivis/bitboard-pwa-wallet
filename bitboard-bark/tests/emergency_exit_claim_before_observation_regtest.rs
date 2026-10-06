@@ -11,7 +11,10 @@ static REGTEST_INTEGRATION_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::co
 async fn progress_exit_once(wallet: &RegtestBarkWallet, exit_id: &str) -> String {
     wallet.sync_exit_bumper().await.expect("sync exit bumper");
     wallet.progress_exits().await.expect("progress exit");
-    wallet.exit_progress_label(exit_id).await.expect("exit label")
+    wallet
+        .exit_progress_label(exit_id)
+        .await
+        .expect("exit label")
 }
 
 /// Default captaind `vtxo_exit_delta`. One mine per `awaiting` step.

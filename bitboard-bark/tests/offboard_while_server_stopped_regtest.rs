@@ -41,6 +41,9 @@ async fn offboard_while_server_stopped() {
     )
     .await
     .expect("reopen dump");
-    let spendable_after = reopened.spendable_vtxo_ids().await.expect("spendable after");
+    let spendable_after = reopened
+        .spendable_vtxo_ids()
+        .await
+        .expect("spendable after");
     assert_eq!(spendable_before, spendable_after);
 }

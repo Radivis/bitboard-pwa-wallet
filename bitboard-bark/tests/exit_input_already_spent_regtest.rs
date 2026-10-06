@@ -53,7 +53,10 @@ async fn exit_input_already_spent() {
         .expect("retire spent input");
     assert_eq!(named, vec![spent_id.clone()]);
     assert_eq!(
-        stale.spent_vtxo_count(&spent_id).await.expect("spent count"),
+        stale
+            .spent_vtxo_count(&spent_id)
+            .await
+            .expect("spent count"),
         1
     );
     let pending_after_retire = stale.pending_offboard_ids().await.expect("pending");

@@ -1246,7 +1246,7 @@ mod tests {
         );
 
         let several_cosigners = exit_graph_tx_types(
-            &[checkpoint_script.clone()],
+            std::slice::from_ref(&checkpoint_script),
             &[vec![user_pubkey, server_pubkey]],
             server_pubkey,
             exit_delta,
@@ -1308,7 +1308,7 @@ mod tests {
         let nodes = merge_exit_graph(&[chain_spending_anchor(
             "vtxo-a",
             &anchor_txid,
-            &[virtual_tx.clone()],
+            std::slice::from_ref(&virtual_tx),
             ExitGraphChainStatus::Pending,
         )]);
 

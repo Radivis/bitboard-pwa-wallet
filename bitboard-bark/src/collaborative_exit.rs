@@ -133,4 +133,3 @@ pub async fn bark_offboard_all(address: String) -> Result<String, JsValue> {
     .await;
     finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
 }
-

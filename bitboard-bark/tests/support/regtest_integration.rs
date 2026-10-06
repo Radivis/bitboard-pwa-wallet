@@ -10,7 +10,8 @@ pub const DEFAULT_ESPLORA_URL: &str = "http://localhost:7030/api";
 pub const DEFAULT_CAPTAIND_CONTAINER: &str = "bitboard-regtest-captaind";
 
 /// Fresh regtest wallet. The same phrase is safe to recreate; the dump lives in memory.
-pub const FRESH_REGTEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+pub const FRESH_REGTEST_MNEMONIC: &str =
+    "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
 pub fn regtest_enabled() -> bool {
     std::env::var("BARK_REGTEST_RUN")
@@ -36,10 +37,7 @@ pub fn regtest_endpoints() -> RegtestEndpoints {
 }
 
 fn docker(args: &[&str]) {
-    let status = Command::new("docker")
-        .args(args)
-        .status()
-        .expect("docker");
+    let status = Command::new("docker").args(args).status().expect("docker");
     assert!(status.success(), "docker {} failed", args.join(" "));
 }
 
@@ -103,9 +101,8 @@ struct BoardedFixtureFile {
 
 /// `BARK_REGTEST_BOARDED_FIXTURE`, or the Playwright export under `frontend/test-results/`.
 pub fn load_boarded_fixture() -> (String, String) {
-    let path = std::env::var("BARK_REGTEST_BOARDED_FIXTURE").unwrap_or_else(|_| {
-        "frontend/test-results/bark-boarded-fixture.json".to_owned()
-    });
+    let path = std::env::var("BARK_REGTEST_BOARDED_FIXTURE")
+        .unwrap_or_else(|_| "frontend/test-results/bark-boarded-fixture.json".to_owned());
     let resolved = resolve_repo_path(&path);
     let text = std::fs::read_to_string(&resolved).unwrap_or_else(|err| {
         panic!(
@@ -113,7 +110,8 @@ pub fn load_boarded_fixture() -> (String, String) {
             resolved.display()
         )
     });
-    let parsed: BoardedFixtureFile = serde_json::from_str(&text).expect("boarded Bark fixture json");
+    let parsed: BoardedFixtureFile =
+        serde_json::from_str(&text).expect("boarded Bark fixture json");
     (parsed.mnemonic, parsed.record_dump)
 }
 
@@ -129,7 +127,10 @@ pub async fn open_boarded_fixture_with_exit_bumper(
     )
     .await
     .expect("open boarded fixture with exit bumper");
-    let address = wallet.exit_bumper_address().await.expect("exit bumper address");
+    let address = wallet
+        .exit_bumper_address()
+        .await
+        .expect("exit bumper address");
     fund_regtest_address(&address, "0.01");
     wallet.sync_exit_bumper().await.expect("sync exit bumper");
     let balance_sats = wallet

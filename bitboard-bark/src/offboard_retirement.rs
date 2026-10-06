@@ -1,4 +1,6 @@
-#![cfg_attr(not(any(test, target_arch = "wasm32")), allow(dead_code))]
+// Callers live in the wasm session and the regtest harness. Native unit tests
+// compile this module without those callers.
+#![cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 
 //! Server already spent an offboard input. Record that locally and drop the checkpoint.
 
@@ -55,7 +57,10 @@ pub(crate) fn send_onchain_split_already_spent_its_inputs(
     kind: &bark::actions::offboard::OffboardKind,
     progress: &bark::actions::offboard::Progress,
 ) -> bool {
-    let send_onchain = matches!(kind, bark::actions::offboard::OffboardKind::SendOnchain { .. });
+    let send_onchain = matches!(
+        kind,
+        bark::actions::offboard::OffboardKind::SendOnchain { .. }
+    );
     let split_is_committed = !matches!(
         progress,
         bark::actions::offboard::Progress::Start

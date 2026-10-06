@@ -67,22 +67,11 @@ impl RegtestBarkWallet {
             store.clone(),
         ));
         let bumper: ExitBumper = Arc::new(tokio::sync::RwLock::new(
-            bark::onchain::OnchainWallet::load_or_create(
-                network,
-                [7u8; 64],
-                persister.clone(),
-            )
-            .await
-            .map_err(|err| format!("{err:#}"))?,
+            bark::onchain::OnchainWallet::load_or_create(network, [7u8; 64], persister.clone())
+                .await
+                .map_err(|err| format!("{err:#}"))?,
         ));
-        Self::open_store(
-            mnemonic,
-            server_url,
-            esplora_url,
-            store,
-            Some(bumper),
-        )
-        .await
+        Self::open_store(mnemonic, server_url, esplora_url, store, Some(bumper)).await
     }
 
     async fn open_store(
@@ -130,7 +119,10 @@ impl RegtestBarkWallet {
     }
 
     pub async fn exit_bumper_address(&self) -> Result<String, String> {
-        let bumper = self.exit_bumper.as_ref().ok_or("exit bumper is not attached")?;
+        let bumper = self
+            .exit_bumper
+            .as_ref()
+            .ok_or("exit bumper is not attached")?;
         let address = bumper
             .write()
             .await
@@ -141,7 +133,10 @@ impl RegtestBarkWallet {
     }
 
     pub async fn sync_exit_bumper(&self) -> Result<(), String> {
-        let bumper = self.exit_bumper.as_ref().ok_or("exit bumper is not attached")?;
+        let bumper = self
+            .exit_bumper
+            .as_ref()
+            .ok_or("exit bumper is not attached")?;
         bumper
             .write()
             .await
@@ -151,7 +146,10 @@ impl RegtestBarkWallet {
     }
 
     pub async fn exit_bumper_balance_sats(&self) -> Result<u64, String> {
-        let bumper = self.exit_bumper.as_ref().ok_or("exit bumper is not attached")?;
+        let bumper = self
+            .exit_bumper
+            .as_ref()
+            .ok_or("exit bumper is not attached")?;
         Ok(bumper.read().await.balance().await.to_sat())
     }
 
@@ -257,10 +255,7 @@ impl RegtestBarkWallet {
             .pending_offboards()
             .await
             .map_err(|err| format!("{err:#}"))?;
-        Ok(pending
-            .into_iter()
-            .map(|offboard| offboard.id())
-            .collect())
+        Ok(pending.into_iter().map(|offboard| offboard.id()).collect())
     }
 
     /// Ids the server named, after the product path records them spent and drops checkpoints.
@@ -356,10 +351,7 @@ impl RegtestBarkWallet {
         let raw_tx = psbt
             .extract_tx()
             .map_err(|err| format!("claim transaction could not be extracted: {err}"))?;
-        Ok((
-            bitcoin::consensus::encode::serialize_hex(&raw_tx),
-            ids,
-        ))
+        Ok((bitcoin::consensus::encode::serialize_hex(&raw_tx), ids))
     }
 
     async fn bare_vtxos_by_id(
