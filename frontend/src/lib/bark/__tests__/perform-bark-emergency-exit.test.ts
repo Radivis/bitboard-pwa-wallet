@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
-import { claimBarkEmergencyExits } from '@/lib/bark/perform-bark-emergency-exit'
-import type { ClaimBarkEmergencyExitDeps } from '@/lib/bark/perform-bark-emergency-exit'
+import {
+  claimBarkEmergencyExits,
+  progressBarkEmergencyExits,
+} from '@/lib/bark/perform-bark-emergency-exit'
+import type {
+  ClaimBarkEmergencyExitDeps,
+  ProgressBarkEmergencyExitDeps,
+} from '@/lib/bark/perform-bark-emergency-exit'
 import type { BarkEmergencyExitRow } from '@/workers/bark-api'
 
 function claimableRow(vtxoId: string): BarkEmergencyExitRow {
@@ -101,5 +107,34 @@ describe('claimBarkEmergencyExits', () => {
     })
     expect(deps.rememberPendingClaim).toHaveBeenCalledOnce()
     expect(deps.clearPendingClaim).not.toHaveBeenCalled()
+  })
+})
+
+describe('progressBarkEmergencyExits', () => {
+  it('runs one progress at a time', async () => {
+    let inProgress = 0
+    let maxInProgress = 0
+    const deps: ProgressBarkEmergencyExitDeps = {
+      progress: vi.fn(async () => {
+        inProgress += 1
+        maxInProgress = Math.max(maxInProgress, inProgress)
+        await new Promise((resolve) => {
+          setTimeout(resolve, 20)
+        })
+        inProgress -= 1
+        return { requests: [] }
+      }),
+      signChild: vi.fn(async () => 'child'),
+      provideChild: vi.fn(async () => undefined),
+      rememberUnconfirmedChild: vi.fn(async () => undefined),
+    }
+
+    await Promise.all([
+      progressBarkEmergencyExits(deps, 1),
+      progressBarkEmergencyExits(deps, 1),
+    ])
+
+    expect(maxInProgress).toBe(1)
+    expect(deps.progress).toHaveBeenCalledTimes(2)
   })
 })

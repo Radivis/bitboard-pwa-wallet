@@ -68,6 +68,20 @@ function bumpSessionGeneration(): void {
   sessionGeneration += 1
 }
 
+function stopEmergencyExitAutomation(): void {
+  void import('@/lib/bark/bark-emergency-exit-automation')
+    .then((automation) => {
+      automation.stopBarkEmergencyExitAutomation()
+    })
+    .catch(() => undefined)
+}
+
+function syncEmergencyExitAutomation(walletId: number, networkMode: BarkRailNetwork): void {
+  void import('@/lib/bark/bark-emergency-exit-automation')
+    .then((automation) => automation.syncBarkEmergencyExitAutomation({ walletId, networkMode }))
+    .catch(() => undefined)
+}
+
 export function getBarkLoadLifecycleSnapshot(): BarkLoadLifecycleSnapshot {
   return { ...snapshot }
 }
@@ -96,6 +110,7 @@ export function forceResetBarkLoadLifecycleForTeardown(): void {
   inFlightLoadTracker.clearCurrent()
   lastLoadParams = null
   setSnapshot(idleBarkLoadSnapshot())
+  stopEmergencyExitAutomation()
 }
 
 /**
@@ -105,6 +120,7 @@ export function forceResetBarkLoadLifecycleForTeardown(): void {
 export function discardShownBarkLoadForSessionChange(): void {
   bumpSessionGeneration()
   setSnapshot(idleBarkLoadSnapshot())
+  stopEmergencyExitAutomation()
 }
 
 export function syncBarkLoadLifecycleWithLockPhase(lockPhase: LockLifecyclePhase): void {
@@ -117,6 +133,7 @@ export function syncBarkLoadLifecycleWithLockPhase(lockPhase: LockLifecyclePhase
     return
   }
   setSnapshot(idleBarkLoadSnapshot())
+  stopEmergencyExitAutomation()
 }
 
 /** After Generate new address persists a cursor, keep the in-memory index aligned. */
@@ -211,12 +228,14 @@ export async function orchestrateBarkLoad(params: BarkLoadParams): Promise<void>
       })
       rememberBarkPersistedSyncTime(opened.lastSuccessfulSyncAt ?? null)
       orchestrateBarkPostLoadSync({ walletId, networkMode })
+      syncEmergencyExitAutomation(walletId, networkMode)
     } catch (error) {
       if (generation !== sessionGeneration) {
         return
       }
       terminateBarkWorker()
       forceResetBarkSyncLifecycleForTeardown()
+      stopEmergencyExitAutomation()
       setSnapshot({
         loadPhase: 'load-error',
         networkMode,

@@ -85,9 +85,11 @@ import {
   persistBarkProtocolState,
   persistOpenedBarkRail,
   readPendingEmergencyClaim as readPendingEmergencyClaimFromPayload,
+  readProceedAutomatically as readProceedAutomaticallyFromPayload,
   readRecordDumpForOpen,
   readStoredBarkReceiveKeyIndex,
   writePendingEmergencyClaim as writePendingEmergencyClaimToPayload,
+  writeProceedAutomatically as writeProceedAutomaticallyToPayload,
 } from '@/workers/bark-worker-metadata'
 import type { SecretsChannelService } from '@/workers/secrets-channel-types'
 
@@ -596,6 +598,23 @@ async function writePendingEmergencyClaimImpl(
   )
 }
 
+async function readProceedAutomaticallyImpl(): Promise<boolean> {
+  const walletId = requireOpenWalletId()
+  const network = requireOpenNetwork()
+  return readProceedAutomaticallyFromPayload(encryptedPayloadDeps(), walletId, network)
+}
+
+async function writeProceedAutomaticallyImpl(enabled: boolean): Promise<void> {
+  const walletId = requireOpenWalletId()
+  const network = requireOpenNetwork()
+  await writeProceedAutomaticallyToPayload(
+    encryptedPayloadDeps(),
+    walletId,
+    network,
+    enabled,
+  )
+}
+
 async function syncEmergencyExitsImpl(): Promise<BarkEmergencyExitRow[]> {
   const walletId = requireOpenWalletId()
   return mutateBark(
@@ -743,6 +762,14 @@ const barkService: BarkService = {
 
   writePendingEmergencyClaim(pending: PendingEmergencyClaim | null): Promise<void> {
     return callBark(() => writePendingEmergencyClaimImpl(pending))
+  },
+
+  readProceedAutomatically(): Promise<boolean> {
+    return callBark(() => readProceedAutomaticallyImpl())
+  },
+
+  writeProceedAutomatically(enabled: boolean): Promise<void> {
+    return callBark(() => writeProceedAutomaticallyImpl(enabled))
   },
 
   syncEmergencyExits(): Promise<BarkEmergencyExitRow[]> {

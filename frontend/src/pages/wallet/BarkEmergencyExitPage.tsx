@@ -39,7 +39,8 @@ export function BarkEmergencyExitPage() {
       <PageHeader title="Bark emergency exit" />
       <p className="text-sm text-muted-foreground">{BARK_EMERGENCY_EXIT_CANCEL_NOTE}</p>
       <p className="text-sm text-muted-foreground">
-        Progress is a button. A successful Bark sync also broadcasts an exit that is already started.
+        Proceed automatically advances an exit when a new block arrives. A successful Bark sync
+        also progresses an exit that is already started.
       </p>
 
       <BarkEmergencyExitTreeCard
@@ -64,6 +65,9 @@ export function BarkEmergencyExitPage() {
         rows={page.liveExits}
         vtxoRows={page.vtxoRows}
         busyAction={page.busyAction}
+        proceedAutomatically={page.proceedAutomatically}
+        proceedAutomaticallyPending={page.proceedAutomaticallyPending}
+        onProceedAutomaticallyChange={page.onProceedAutomaticallyChange}
         onProgress={page.onProgress}
         onCancel={page.onCancel}
       />

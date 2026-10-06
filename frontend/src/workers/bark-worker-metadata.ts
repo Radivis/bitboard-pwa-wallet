@@ -2,6 +2,7 @@ import {
   applyBarkRecordDump,
   applyOpenedBarkRail,
   applyPendingEmergencyClaim,
+  applyProceedAutomatically,
   recordDumpForOpen,
 } from '@/lib/bark/bark-rail-metadata'
 import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
@@ -161,5 +162,27 @@ export async function writePendingEmergencyClaim(
 ): Promise<void> {
   const payload = await readDecryptedWalletPayload(deps, walletId)
   const nextPayload = applyPendingEmergencyClaim({ payload, network, pending })
+  await writeDecryptedWalletPayload(deps, walletId, nextPayload)
+}
+
+/** True only when this rail stored automatic emergency-exit proceeding. */
+export async function readProceedAutomatically(
+  deps: BarkEncryptedPayloadDeps,
+  walletId: number,
+  network: BarkRailNetwork,
+): Promise<boolean> {
+  const payload = await readDecryptedWalletPayload(deps, walletId)
+  return payload.barkRails?.[network]?.proceedAutomatically === true
+}
+
+/** Writes or clears automatic emergency-exit proceeding for the open rail. */
+export async function writeProceedAutomatically(
+  deps: BarkEncryptedPayloadDeps,
+  walletId: number,
+  network: BarkRailNetwork,
+  enabled: boolean,
+): Promise<void> {
+  const payload = await readDecryptedWalletPayload(deps, walletId)
+  const nextPayload = applyProceedAutomatically({ payload, network, enabled })
   await writeDecryptedWalletPayload(deps, walletId, nextPayload)
 }

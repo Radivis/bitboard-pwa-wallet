@@ -1,3 +1,5 @@
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { BarkExitTreeGraph } from '@/components/bark/BarkExitTreeGraph'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,6 +12,9 @@ import {
   type BarkEmergencyExitReview,
 } from '@/hooks/useBarkEmergencyExitPage'
 import type { BarkEmergencyExitRow, BarkExitGraphNode, BarkVtxoRow } from '@/workers/bark-api'
+
+export const BARK_EMERGENCY_EXIT_AUTOMATION_NOTE =
+  'Automatic proceeding requires the app to stay unlocked and this wallet to stay on this network. This process cannot be delegated.'
 
 export function BarkEmergencyExitTreeCard({
   nodes,
@@ -135,12 +140,18 @@ export function BarkEmergencyExitLiveCard({
   rows,
   vtxoRows,
   busyAction,
+  proceedAutomatically,
+  proceedAutomaticallyPending,
+  onProceedAutomaticallyChange,
   onProgress,
   onCancel,
 }: {
   rows: BarkEmergencyExitRow[]
   vtxoRows: BarkVtxoRow[]
   busyAction: string | null
+  proceedAutomatically: boolean
+  proceedAutomaticallyPending: boolean
+  onProceedAutomaticallyChange: (enabled: boolean) => void
   onProgress: () => void
   onCancel: (vtxoId: string) => void
 }) {
@@ -150,6 +161,22 @@ export function BarkEmergencyExitLiveCard({
         <CardTitle>Live exits</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1">
+            <Label htmlFor="bark-emergency-exit-proceed-automatically" className="text-sm font-medium">
+              Proceed automatically
+            </Label>
+            <p className="text-xs text-muted-foreground">{BARK_EMERGENCY_EXIT_AUTOMATION_NOTE}</p>
+          </div>
+          <Switch
+            id="bark-emergency-exit-proceed-automatically"
+            checked={proceedAutomatically}
+            disabled={busyAction != null || proceedAutomaticallyPending}
+            onCheckedChange={onProceedAutomaticallyChange}
+            aria-label="Proceed automatically"
+            data-testid="bark-emergency-exit-proceed-automatically"
+          />
+        </div>
         <Button
           type="button"
           data-testid="bark-emergency-exit-progress"

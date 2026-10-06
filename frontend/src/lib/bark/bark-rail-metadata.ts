@@ -5,6 +5,7 @@ import {
   BARK_SIGNET_SERVER_URL,
   isBarkReceiveKeyIndex,
   pendingEmergencyClaimFromUnknown,
+  proceedAutomaticallyFromUnknown,
   type BarkRailNetwork,
   type PendingEmergencyClaim,
   type StoredBarkRail,
@@ -51,6 +52,9 @@ function railWithPreservedFields(
   )
   if (pendingEmergencyClaim != null) {
     barkRail.pendingEmergencyClaim = pendingEmergencyClaim
+  }
+  if (proceedAutomaticallyFromUnknown(existingRail?.proceedAutomatically) === true) {
+    barkRail.proceedAutomatically = true
   }
   return barkRail
 }
@@ -247,6 +251,31 @@ export function applyPendingEmergencyClaim(params: {
       txid: params.pending.txid,
       vtxoIds: [...params.pending.vtxoIds],
     }
+  }
+  return payloadWithRail(params.payload, params.network, rail)
+}
+
+/**
+ * Turns automatic emergency-exit proceeding on or off for one network.
+ * Off deletes the field. A later sync flush keeps an explicit true.
+ */
+export function applyProceedAutomatically(params: {
+  payload: WalletSecretsPayload
+  network: BarkRailNetwork
+  enabled: boolean
+}): WalletSecretsPayload {
+  const existingRail = requireRail(params.payload, params.network)
+  const rail = railWithPreservedFields(
+    params.network,
+    existingRail,
+    existingRail.fingerprint,
+    undefined,
+    undefined,
+  )
+  if (params.enabled) {
+    rail.proceedAutomatically = true
+  } else {
+    delete rail.proceedAutomatically
   }
   return payloadWithRail(params.payload, params.network, rail)
 }

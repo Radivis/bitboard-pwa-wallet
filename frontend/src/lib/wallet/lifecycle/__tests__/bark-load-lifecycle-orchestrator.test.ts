@@ -17,6 +17,14 @@ const forceResetBarkSyncLifecycleForTeardownMock = vi.hoisted(() => vi.fn())
 const prepareBarkSyncForSessionOpenMock = vi.hoisted(() => vi.fn())
 const rememberBarkPersistedSyncTimeMock = vi.hoisted(() => vi.fn())
 
+const syncEmergencyExitAutomationMock = vi.hoisted(() => vi.fn(async () => undefined))
+const stopEmergencyExitAutomationMock = vi.hoisted(() => vi.fn())
+
+vi.mock('@/lib/bark/bark-emergency-exit-automation', () => ({
+  syncBarkEmergencyExitAutomation: (...args: unknown[]) => syncEmergencyExitAutomationMock(...args),
+  stopBarkEmergencyExitAutomation: (...args: unknown[]) => stopEmergencyExitAutomationMock(...args),
+}))
+
 vi.mock('@/lib/wallet/lifecycle/bark-sync-lifecycle-orchestrator', () => ({
   orchestrateBarkPostLoadSync: (...args: unknown[]) => orchestrateBarkPostLoadSyncMock(...args),
   forceResetBarkSyncLifecycleForTeardown: (...args: unknown[]) =>
@@ -102,6 +110,12 @@ describe('bark-load-lifecycle-orchestrator', () => {
     expect(orchestrateBarkPostLoadSyncMock).toHaveBeenCalledWith({
       walletId: 1,
       networkMode: 'signet',
+    })
+    await vi.waitFor(() => {
+      expect(syncEmergencyExitAutomationMock).toHaveBeenCalledWith({
+        walletId: 1,
+        networkMode: 'signet',
+      })
     })
     expect(rememberBarkPersistedSyncTimeMock).toHaveBeenCalledWith(null)
   })

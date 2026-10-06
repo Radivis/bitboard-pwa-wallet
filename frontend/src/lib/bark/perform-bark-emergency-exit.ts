@@ -55,11 +55,29 @@ export async function startBarkEmergencyExit(
   await deps.start(vtxoIds)
 }
 
+let barkEmergencyExitProgressQueue: Promise<void> = Promise.resolve()
+
 /**
  * One Progress press: advance Bark's exit manager, sign each Pay-to-Anchor child
  * from the on-chain wallet, then advance again so those exits leave the CPFP wait.
+ * A tip tick, this call, and post-sync settle share one queue so two CPFP passes
+ * do not overlap.
  */
-export async function progressBarkEmergencyExits(
+export function progressBarkEmergencyExits(
+  deps: ProgressBarkEmergencyExitDeps,
+  feeRateSatPerVb: number,
+): Promise<void> {
+  const run = barkEmergencyExitProgressQueue.then(() =>
+    progressBarkEmergencyExitsOnce(deps, feeRateSatPerVb),
+  )
+  barkEmergencyExitProgressQueue = run.then(
+    () => undefined,
+    () => undefined,
+  )
+  return run
+}
+
+async function progressBarkEmergencyExitsOnce(
   deps: ProgressBarkEmergencyExitDeps,
   feeRateSatPerVb: number,
 ): Promise<void> {

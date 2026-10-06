@@ -26,6 +26,10 @@ import {
   progressBarkEmergencyExits,
   startBarkEmergencyExit,
 } from '@/lib/bark/perform-bark-emergency-exit'
+import {
+  syncBarkEmergencyExitAutomation,
+  stopBarkEmergencyExitAutomation,
+} from '@/lib/bark/bark-emergency-exit-automation'
 import { NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB } from '@/lib/esplora/esplora-fee-estimates'
 import { errorMessage } from '@/lib/shared/utils'
 import { formatSats } from '@/lib/wallet/bitcoin-utils'
@@ -45,6 +49,13 @@ export function barkPendingEmergencyClaimQueryKey(
   networkMode: string,
 ) {
   return ['bark', 'pending-emergency-claim', walletId, networkMode] as const
+}
+
+export function barkProceedAutomaticallyQueryKey(
+  walletId: number | null,
+  networkMode: string,
+) {
+  return ['bark', 'proceed-automatically', walletId, networkMode] as const
 }
 
 export type BarkEmergencyExitReview = {
@@ -73,6 +84,15 @@ export function useBarkEmergencyExitPage() {
       loadSnapshot.loadPhase === 'loaded' &&
       activeWalletId != null,
     queryFn: () => getBarkWorker().readPendingEmergencyClaim(),
+  })
+  const proceedAutomaticallyQuery = useQuery({
+    queryKey: barkProceedAutomaticallyQueryKey(activeWalletId, networkMode),
+    enabled:
+      isBarkEnabled &&
+      isBarkNetworkMode(networkMode) &&
+      loadSnapshot.loadPhase === 'loaded' &&
+      activeWalletId != null,
+    queryFn: () => getBarkWorker().readProceedAutomatically(),
   })
   const queryClient = useQueryClient()
 
@@ -215,6 +235,23 @@ export function useBarkEmergencyExitPage() {
     }
   }
 
+  async function onProceedAutomaticallyChange(enabled: boolean) {
+    if (activeWalletId == null || !isBarkNetworkMode(networkMode)) return
+    const queryKey = barkProceedAutomaticallyQueryKey(activeWalletId, networkMode)
+    queryClient.setQueryData(queryKey, enabled)
+    try {
+      await getBarkWorker().writeProceedAutomatically(enabled)
+      if (enabled) {
+        void syncBarkEmergencyExitAutomation({ walletId: activeWalletId, networkMode })
+      } else {
+        stopBarkEmergencyExitAutomation()
+      }
+    } catch (err) {
+      queryClient.setQueryData(queryKey, !enabled)
+      toast.error(errorMessage(err) || 'Could not save automatic proceeding')
+    }
+  }
+
   async function onClaim() {
     if (destinationAddress.length === 0) {
       toast.error('No on-chain receive address is available.')
@@ -261,6 +298,9 @@ export function useBarkEmergencyExitPage() {
     onReview: () => void onReview(),
     onStart: () => void onStart(),
     onProgress: () => void onProgress(),
+    onProceedAutomaticallyChange: (enabled: boolean) => void onProceedAutomaticallyChange(enabled),
+    proceedAutomatically: proceedAutomaticallyQuery.data === true,
+    proceedAutomaticallyPending: proceedAutomaticallyQuery.isPending,
     onCancel: (vtxoId: string) => void onCancel(vtxoId),
     onClaim: () => void onClaim(),
   }

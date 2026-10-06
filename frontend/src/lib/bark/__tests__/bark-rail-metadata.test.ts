@@ -3,6 +3,7 @@ import {
   applyBarkRecordDump,
   applyOpenedBarkRail,
   applyPendingEmergencyClaim,
+  applyProceedAutomatically,
   applySuccessfulBarkSync,
   BarkFingerprintMismatchError,
   signetRecordDumpForOpen,
@@ -322,6 +323,60 @@ describe('barkRails metadata', () => {
     )
     expect(parsed.barkRails?.signet?.recordDump).toBe(signetDump)
     expect(parsed.barkRails?.signet?.pendingEmergencyClaim).toBeUndefined()
+  })
+
+  it('keeps proceed automatically across a sync stamp and a dump flush', () => {
+    const payload = payloadWithArkadeSdk()
+    payload.barkRails = {
+      ...payload.barkRails,
+      signet: signetRail({
+        receiveKeyIndex: 2,
+        recordDump: signetDump,
+        proceedAutomatically: true,
+      }),
+    }
+
+    const stamped = applySuccessfulBarkSync({
+      network: 'signet',
+      payload,
+      syncedAt: '2024-03-01T12:00:00.000Z',
+    })
+    expect(stamped.barkRails?.signet?.proceedAutomatically).toBe(true)
+
+    const flushed = applyBarkRecordDump({
+      network: 'signet',
+      payload: stamped,
+      recordDump: 'bmV4dC1kdW1w',
+    })
+    expect(flushed.barkRails?.signet?.proceedAutomatically).toBe(true)
+    expect(flushed.barkRails?.signet?.recordDump).toBe('bmV4dC1kdW1w')
+
+    const turnedOff = applyProceedAutomatically({
+      payload: flushed,
+      network: 'signet',
+      enabled: false,
+    })
+    expect(turnedOff.barkRails?.signet?.proceedAutomatically).toBeUndefined()
+    expect(turnedOff.barkRails?.signet?.recordDump).toBe('bmV4dC1kdW1w')
+  })
+
+  it('omits a non-boolean proceed automatically flag and keeps the record dump', () => {
+    const parsed = parseWalletPayloadJson(
+      JSON.stringify({
+        descriptorWallets: [],
+        lightningNwcConnections: [],
+        barkRails: {
+          signet: {
+            serverUrl: BARK_SIGNET_SERVER_URL,
+            fingerprint: 'abcdef01',
+            recordDump: signetDump,
+            proceedAutomatically: 'yes',
+          },
+        },
+      }),
+    )
+    expect(parsed.barkRails?.signet?.recordDump).toBe(signetDump)
+    expect(parsed.barkRails?.signet?.proceedAutomatically).toBeUndefined()
   })
 
   it('drops a rail whose receiveKeyIndex is not a u32', () => {

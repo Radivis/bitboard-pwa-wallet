@@ -232,6 +232,8 @@ export interface BarkService {
   ): Promise<BarkEmergencyExitDrain>
   readPendingEmergencyClaim(): Promise<PendingEmergencyClaim | null>
   writePendingEmergencyClaim(pending: PendingEmergencyClaim | null): Promise<void>
+  readProceedAutomatically(): Promise<boolean>
+  writeProceedAutomatically(enabled: boolean): Promise<void>
   syncEmergencyExits(): Promise<BarkEmergencyExitRow[]>
   broadcastEmergencyExitClaim(rawTxHex: string): Promise<void>
 }

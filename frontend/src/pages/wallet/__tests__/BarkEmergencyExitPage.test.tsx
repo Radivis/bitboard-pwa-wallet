@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { toast } from 'sonner'
 import { BarkEmergencyExitPage } from '@/pages/wallet/BarkEmergencyExitPage'
 import { renderWithProviders } from '@/test-utils/test-providers'
@@ -53,6 +54,8 @@ const barkWorker = vi.hoisted(() => ({
   drainEmergencyExits: vi.fn(),
   readPendingEmergencyClaim: vi.fn(),
   writePendingEmergencyClaim: vi.fn(),
+  readProceedAutomatically: vi.fn(),
+  writeProceedAutomatically: vi.fn(),
   syncEmergencyExits: vi.fn(),
   broadcastEmergencyExitClaim: vi.fn(),
   offboardAll: vi.fn(),
@@ -74,6 +77,14 @@ const spendableVtxo: BarkVtxoRow = {
   lockHolder: null,
   registered: true,
 }
+
+const syncAutomation = vi.hoisted(() => vi.fn(async () => undefined))
+const stopAutomation = vi.hoisted(() => vi.fn())
+
+vi.mock('@/lib/bark/bark-emergency-exit-automation', () => ({
+  syncBarkEmergencyExitAutomation: (...args: unknown[]) => syncAutomation(...args),
+  stopBarkEmergencyExitAutomation: (...args: unknown[]) => stopAutomation(...args),
+}))
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
@@ -168,6 +179,9 @@ describe('BarkEmergencyExitPage', () => {
       vtxoIds: ['vtxo-1'],
     })
     barkWorker.readPendingEmergencyClaim.mockResolvedValue(null)
+    barkWorker.writePendingEmergencyClaim.mockResolvedValue(undefined)
+    barkWorker.readProceedAutomatically.mockResolvedValue(false)
+    barkWorker.writeProceedAutomatically.mockResolvedValue(undefined)
     barkWorker.syncEmergencyExits.mockResolvedValue([])
     barkWorker.broadcastEmergencyExitClaim.mockResolvedValue(undefined)
     barkWorker.writePendingEmergencyClaim.mockResolvedValue(undefined)
@@ -180,9 +194,40 @@ describe('BarkEmergencyExitPage', () => {
     barkWorker.offboardAll.mockClear()
     barkWorker.sendOnchain.mockClear()
     barkWorker.estimateEmergencyExit.mockClear()
+    barkWorker.writeProceedAutomatically.mockClear()
+    syncAutomation.mockClear()
+    stopAutomation.mockClear()
     cryptoWorker.getNewAddress.mockClear()
     vi.mocked(toast.success).mockReset()
     vi.mocked(toast.error).mockReset()
+  })
+
+  it('keeps proceed automatically off until the switch is turned on', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<BarkEmergencyExitPage />)
+
+    expect(
+      await screen.findByText(
+        'Automatic proceeding requires the app to stay unlocked and this wallet to stay on this network. This process cannot be delegated.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/Proceed automatically advances an exit when a new block arrives/),
+    ).toBeInTheDocument()
+
+    const toggle = await screen.findByTestId('bark-emergency-exit-proceed-automatically')
+    expect(toggle).toHaveAttribute('data-state', 'unchecked')
+    await waitFor(() => {
+      expect(toggle).toBeEnabled()
+    })
+
+    await user.click(toggle)
+
+    await waitFor(() => {
+      expect(barkWorker.writeProceedAutomatically).toHaveBeenCalledWith(true)
+    })
+    expect(syncAutomation).toHaveBeenCalledWith({ walletId: 1, networkMode: 'signet' })
+    expect(stopAutomation).not.toHaveBeenCalled()
   })
 
   it('BARK-EMG-02 is not the control surface unless Bark is enabled on signet', () => {

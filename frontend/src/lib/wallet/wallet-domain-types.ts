@@ -160,6 +160,11 @@ export interface StoredBarkRail {
    * claim-in-progress or claimed, or the app Esplora reports the transaction gone.
    */
   pendingEmergencyClaim?: PendingEmergencyClaim
+  /**
+   * When true, the app advances emergency exits on a new chain tip while this
+   * wallet stays unlocked on this network. Absent means off.
+   */
+  proceedAutomatically?: boolean
 }
 
 /** A claim transaction already broadcast, and the VTXOs it spends. */
@@ -268,6 +273,11 @@ export function pendingEmergencyClaimFromUnknown(
   return { txid: value.txid, vtxoIds: [...value.vtxoIds] }
 }
 
+/** Only an explicit true turns automatic proceeding on. Anything else is off. */
+export function proceedAutomaticallyFromUnknown(value: unknown): true | undefined {
+  return value === true ? true : undefined
+}
+
 function copyOptionalBarkRailFields(
   source: StoredBarkRail,
   rail: StoredBarkRail,
@@ -284,6 +294,9 @@ function copyOptionalBarkRailFields(
   const pendingEmergencyClaim = pendingEmergencyClaimFromUnknown(source.pendingEmergencyClaim)
   if (pendingEmergencyClaim != null) {
     rail.pendingEmergencyClaim = pendingEmergencyClaim
+  }
+  if (proceedAutomaticallyFromUnknown(source.proceedAutomatically) === true) {
+    rail.proceedAutomatically = true
   }
   return rail
 }

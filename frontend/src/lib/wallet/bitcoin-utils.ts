@@ -42,6 +42,35 @@ export async function fetchEsploraTipBlockHeight(
   return height
 }
 
+/**
+ * Fetches the current chain tip hash from an Esplora-style HTTP API.
+ * @see https://github.com/Blockstream/esplora/blob/master/API.md
+ */
+export async function fetchEsploraTipBlockHash(esploraBaseUrl: string): Promise<string> {
+  const base = esploraBaseUrl.replace(/\/$/, '')
+  const url = `${base}/blocks/tip/hash`
+  const fetchResponse = await fetch(url)
+  if (!fetchResponse.ok) {
+    throw new Error(`Esplora tip hash failed: HTTP ${fetchResponse.status}`)
+  }
+  const hash = (await fetchResponse.text()).trim().toLowerCase()
+  if (!/^[0-9a-f]{64}$/.test(hash)) {
+    throw new Error('Esplora returned an invalid tip hash')
+  }
+  return hash
+}
+
+/** Height and hash of the Esplora chain tip. A reorg can keep the height and change the hash. */
+export async function fetchEsploraChainTip(
+  esploraBaseUrl: string,
+): Promise<{ height: number; hash: string }> {
+  const [height, hash] = await Promise.all([
+    fetchEsploraTipBlockHeight(esploraBaseUrl),
+    fetchEsploraTipBlockHash(esploraBaseUrl),
+  ])
+  return { height, hash }
+}
+
 function sameOriginEsploraProxyBase(
   providerId: string,
   network: EsploraProxyNetwork,
