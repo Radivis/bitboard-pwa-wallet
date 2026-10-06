@@ -52,8 +52,6 @@ function statusLabel(status: BarkExitGraphNodeStatus): string {
   }
 }
 
-const BARK_EXIT_NODE_TX_TYPE = 'tree'
-
 function BarkExitCoinBadge({
   txid,
   count,
@@ -87,11 +85,11 @@ function BarkExitCoinBadge({
 
 function BarkExitTreeNode({ data }: NodeProps<Node<BarkExitTreeNodeData>>) {
   const iconKind = resolveUnilateralExitNodeIconKind({
-    txType: BARK_EXIT_NODE_TX_TYPE,
+    txType: data.txType,
     isLeaf: data.isLeaf,
   })
   const Icon = unilateralExitNodeIconComponent(iconKind)
-  const typeLabel = formatUnilateralExitTxTypeLabel(BARK_EXIT_NODE_TX_TYPE, data.isLeaf)
+  const typeLabel = formatUnilateralExitTxTypeLabel(data.txType, data.isLeaf)
   return (
     <div
       className={cn(
@@ -205,7 +203,7 @@ function BarkExitTreeDetail({
         {node.txid}
       </button>
       <p data-testid="bark-exit-tree-detail-status">
-        {formatUnilateralExitTxTypeLabel(BARK_EXIT_NODE_TX_TYPE, node.leafVtxoIds.length > 0)}
+        {formatUnilateralExitTxTypeLabel(node.txType, node.leafVtxoIds.length > 0)}
         {' · '}
         {statusLabel(node.status)}
       </p>

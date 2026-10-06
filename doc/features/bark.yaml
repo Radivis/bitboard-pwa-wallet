@@ -76,6 +76,7 @@ feature:
     - After Start clears the checkboxes, live exits keep the exit tree on screen
     - The exit tree has one node per exit transaction. A txid shared by two VTXOs is one node. An input that spends a transaction outside the tree is not a node
     - A node is pending, in progress, or confirmed. Needs a child appears only while that transaction is waiting for a Pay-to-Anchor child. That child is not a node
+    - A checkpoint transaction shows the checkpoint icon and the Checkpoint label. Another non-leaf transaction shows the tree icon
     - Focusing a node shows its transaction id and the VTXO ids whose exit leaf is that transaction
     - Rendering the exit tree does not start, progress, cancel, or claim
     - A checkpoint, exit-row, or exit-child write exports and encrypts the open network's dump before that write returns
@@ -368,6 +369,9 @@ feature:
       - id: BARK-EMG-17
         description: A successful Bark sync progresses started exits, and a progress failure does not drop the sync stamp
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/bark-sync-lifecycle-orchestrator.test.ts
+      - id: BARK-EMG-18
+        description: A checkpoint transaction shows the checkpoint icon and the Checkpoint label. Another non-leaf transaction shows the tree icon
+        implemented_by: frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
   pages:
     - BarkManagement:
         description: Bark entry on the Management page
@@ -409,7 +413,7 @@ feature:
         file: frontend/src/routes/wallet/bark/emergency-exit.tsx
         visible_elements:
           - Exit tree for the checked spendable VTXOs, or every spendable VTXO when the whole wallet is checked, plus every live exit
-          - A leaf node shows the leaf icon and a coin badge. A shared ancestor shows the tree icon and no coin badge. A confirmed leaf uses the unrolled coin icon
+          - A leaf node shows the leaf icon and a coin badge. A shared ancestor shows the tree icon and no coin badge. A checkpoint shows the checkpoint icon. A confirmed leaf uses the unrolled coin icon
           - Focused exit-tree node shows its transaction id and the VTXO ids that end on it
           - Spendable VTXO checkboxes
           - Review of broadcast fee, claim fee, and transaction count
@@ -421,7 +425,7 @@ feature:
           - Full-page Bark session loading or error screen while the session is not ready
         requirements:
           - Contracts BARK-EMG-02 through BARK-EMG-08
-          - Contracts BARK-EMG-10 through BARK-EMG-17
+          - Contracts BARK-EMG-10 through BARK-EMG-18
           - Contracts BARK-SESS-03 and BARK-SESS-04
           - Shown only when isBarkEnabled and the network is signet or mainnet
           - Progress is a button, and a successful Bark sync also progresses exits that are already started

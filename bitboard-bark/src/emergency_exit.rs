@@ -167,11 +167,21 @@ const EXIT_GRAPH_RANK_NEEDS_CHILD: u8 = 1;
 const EXIT_GRAPH_RANK_IN_PROGRESS: u8 = 2;
 const EXIT_GRAPH_RANK_CONFIRMED: u8 = 3;
 
+/// Kind of one exit-graph transaction. Bark does not label hops, so this is ours.
+/// Wire values match Arkade's chained-tx labels.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ExitGraphTxType {
+    Tree,
+    Checkpoint,
+}
+
 /// One exit transaction, before spends are limited to other nodes in the graph.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExitGraphTransaction {
     pub txid: String,
     pub input_txids: Vec<String>,
+    pub tx_type: ExitGraphTxType,
 }
 
 /// How far one VTXO's exit has moved. The transaction list is the genesis chain.
@@ -217,6 +227,7 @@ struct ExitGraphDraft {
     leaf_vtxo_ids: Vec<String>,
     rank: u8,
     waiting_on_txids: Vec<String>,
+    tx_type: ExitGraphTxType,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -228,6 +239,7 @@ pub(crate) struct ExitGraphNodeJson {
     status: &'static str,
     needs_child: bool,
     waiting_on_txids: Vec<String>,
+    tx_type: ExitGraphTxType,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -247,7 +259,98 @@ pub(crate) fn exit_graph_transaction_from_bitcoin(
             .iter()
             .map(|input| input.previous_output.txid.to_string())
             .collect(),
+        tx_type: ExitGraphTxType::Tree,
     }
+}
+
+/// Labels each hop of one VTXO's exit chain.
+///
+/// `past_arkoor_pubkeys` is the out-of-round suffix. Earlier hops are the
+/// cosigned round and tree. A suffix hop is a checkpoint when its continuation
+/// output is that hop's checkpoint policy. Any other hop is a tree transaction.
+pub(crate) fn exit_graph_tx_types(
+    continuation_scripts: &[bitcoin::ScriptBuf],
+    arkoor_pubkeys: &[Vec<bitcoin::secp256k1::PublicKey>],
+    server_pubkey: bitcoin::secp256k1::PublicKey,
+    exit_delta: u16,
+    expiry_height: u32,
+) -> Vec<ExitGraphTxType> {
+    if arkoor_pubkeys.len() > continuation_scripts.len() {
+        return vec![ExitGraphTxType::Tree; continuation_scripts.len()];
+    }
+    let prefix_len = continuation_scripts.len() - arkoor_pubkeys.len();
+    continuation_scripts
+        .iter()
+        .enumerate()
+        .map(|(index, script)| {
+            tx_type_for_hop(
+                index,
+                prefix_len,
+                script,
+                arkoor_pubkeys,
+                server_pubkey,
+                exit_delta,
+                expiry_height,
+            )
+        })
+        .collect()
+}
+
+fn tx_type_for_hop(
+    index: usize,
+    prefix_len: usize,
+    script: &bitcoin::ScriptBuf,
+    arkoor_pubkeys: &[Vec<bitcoin::secp256k1::PublicKey>],
+    server_pubkey: bitcoin::secp256k1::PublicKey,
+    exit_delta: u16,
+    expiry_height: u32,
+) -> ExitGraphTxType {
+    let Some(hop_index) = index.checked_sub(prefix_len) else {
+        return ExitGraphTxType::Tree;
+    };
+    let Some([user_pubkey]) = arkoor_pubkeys.get(hop_index).map(Vec::as_slice) else {
+        return ExitGraphTxType::Tree;
+    };
+    let checkpoint_script = bark::ark::ServerVtxoPolicy::new_checkpoint(*user_pubkey)
+        .script_pubkey(server_pubkey, exit_delta, expiry_height);
+    if script == &checkpoint_script {
+        ExitGraphTxType::Checkpoint
+    } else {
+        ExitGraphTxType::Tree
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn exit_graph_transactions_from_vtxo<P: bark::ark::vtxo::Policy>(
+    vtxo: &bark::ark::Vtxo<bark::ark::vtxo::Full, P>,
+) -> Vec<ExitGraphTransaction> {
+    let items: Vec<_> = vtxo.transactions().collect();
+    let continuation_scripts = items
+        .iter()
+        .map(|item| {
+            item.tx
+                .output
+                .get(item.output_idx)
+                .map(|output| output.script_pubkey.clone())
+                .unwrap_or_else(bitcoin::ScriptBuf::new)
+        })
+        .collect::<Vec<_>>();
+    let tx_types = exit_graph_tx_types(
+        &continuation_scripts,
+        &vtxo.past_arkoor_pubkeys(),
+        vtxo.server_pubkey(),
+        vtxo.exit_delta(),
+        vtxo.expiry_height(),
+    );
+    items
+        .iter()
+        .zip(tx_types)
+        .map(|(item, tx_type)| {
+            let mut transaction = exit_graph_transaction_from_bitcoin(&item.tx);
+            transaction.tx_type = tx_type;
+            transaction
+        })
+        .collect()
 }
 
 /// Merges exit chains into one graph. The last transaction of a chain is that coin's leaf.
@@ -268,7 +371,9 @@ pub(crate) fn merge_exit_graph(chains: &[ExitGraphChain]) -> Vec<ExitGraphNodeJs
                     leaf_vtxo_ids: Vec::new(),
                     rank: EXIT_GRAPH_RANK_PENDING,
                     waiting_on_txids: Vec::new(),
+                    tx_type: ExitGraphTxType::Tree,
                 });
+            draft.tx_type = merged_tx_type(draft.tx_type, transaction.tx_type);
             if leaf_txid.as_ref() == Some(&transaction.txid) {
                 push_unique(&mut draft.leaf_vtxo_ids, chain.vtxo_id.clone());
             }
@@ -300,6 +405,7 @@ pub(crate) fn merge_exit_graph(chains: &[ExitGraphChain]) -> Vec<ExitGraphNodeJs
                 status: exit_graph_status_label(draft.rank),
                 needs_child: draft.rank == EXIT_GRAPH_RANK_NEEDS_CHILD,
                 waiting_on_txids,
+                tx_type: draft.tx_type,
             }
         })
         .collect()
@@ -382,6 +488,14 @@ fn exit_graph_status_label(rank: u8) -> &'static str {
         "inProgress"
     } else {
         "pending"
+    }
+}
+
+fn merged_tx_type(current: ExitGraphTxType, incoming: ExitGraphTxType) -> ExitGraphTxType {
+    if current == ExitGraphTxType::Checkpoint || incoming == ExitGraphTxType::Checkpoint {
+        ExitGraphTxType::Checkpoint
+    } else {
+        ExitGraphTxType::Tree
     }
 }
 
@@ -773,10 +887,7 @@ mod wasm {
                         ));
                     }
                 };
-                let transactions = full_vtxo
-                    .transactions()
-                    .map(|item| super::exit_graph_transaction_from_bitcoin(&item.tx))
-                    .collect();
+                let transactions = super::exit_graph_transactions_from_vtxo(&full_vtxo);
                 let exit_status = map_anyhow_exit(
                     wallet
                         .exit_mgr()
@@ -855,8 +966,9 @@ mod tests {
         BARK_EXIT_ALREADY_EXITED, BARK_EXIT_ALREADY_SPENT, BARK_EXIT_DUST,
         BARK_EXIT_NOTHING_STARTED, BARK_EXIT_UNKNOWN_VTXO, BarkEmergencyExitStateKind,
         ExitGraphChain, ExitGraphChainStatus, ExitGraphTransactionKind, ExitGraphTransactionStatus,
-        emergency_exit_state_json, exit_graph_transaction_from_bitcoin, exit_ids_grew,
-        fee_rate_from_sat_per_vb, fee_rate_sat_per_vb, merge_exit_graph,
+        ExitGraphTxType, emergency_exit_state_json, exit_graph_transaction_from_bitcoin,
+        exit_graph_tx_types, exit_ids_grew, fee_rate_from_sat_per_vb, fee_rate_sat_per_vb,
+        merge_exit_graph,
     };
     use crate::exit_address::parse_signet_receive_address;
 
@@ -1061,5 +1173,82 @@ mod tests {
             nodes[0].leaf_vtxo_ids,
             vec!["vtxo-a".to_owned(), "vtxo-b".to_owned()]
         );
+    }
+
+    fn keypair_pubkey(secret_byte: u8) -> bitcoin::secp256k1::PublicKey {
+        let secp = bitcoin::secp256k1::Secp256k1::new();
+        let secret =
+            bitcoin::secp256k1::SecretKey::from_slice(&[secret_byte; 32]).expect("non-zero secret");
+        bitcoin::secp256k1::PublicKey::from_secret_key(&secp, &secret)
+    }
+
+    #[test]
+    fn exit_graph_marks_a_checkpoint_hop_and_leaves_the_prefix_and_vtxo_hop_as_tree() {
+        let user_pubkey = keypair_pubkey(1);
+        let server_pubkey = keypair_pubkey(2);
+        let exit_delta = 24;
+        let expiry_height = 100;
+        let checkpoint_script = bark::ark::ServerVtxoPolicy::new_checkpoint(user_pubkey)
+            .script_pubkey(server_pubkey, exit_delta, expiry_height);
+        let other_script = bitcoin::ScriptBuf::new();
+        let tx_types = exit_graph_tx_types(
+            &[
+                other_script.clone(),
+                checkpoint_script.clone(),
+                other_script,
+            ],
+            &[vec![user_pubkey], vec![user_pubkey]],
+            server_pubkey,
+            exit_delta,
+            expiry_height,
+        );
+
+        assert_eq!(
+            tx_types,
+            vec![
+                ExitGraphTxType::Tree,
+                ExitGraphTxType::Checkpoint,
+                ExitGraphTxType::Tree,
+            ]
+        );
+
+        let several_cosigners = exit_graph_tx_types(
+            &[checkpoint_script.clone()],
+            &[vec![user_pubkey, server_pubkey]],
+            server_pubkey,
+            exit_delta,
+            expiry_height,
+        );
+        assert_eq!(several_cosigners, vec![ExitGraphTxType::Tree]);
+
+        let longer_arkoor_list = exit_graph_tx_types(
+            &[checkpoint_script],
+            &[vec![user_pubkey], vec![user_pubkey]],
+            server_pubkey,
+            exit_delta,
+            expiry_height,
+        );
+        assert_eq!(longer_arkoor_list, vec![ExitGraphTxType::Tree]);
+    }
+
+    #[test]
+    fn exit_graph_keeps_checkpoint_when_chains_share_a_txid() {
+        let outside = outside_txid(5);
+        let shared = transaction_spending(&[outside]);
+        let shared_txid = shared.compute_txid().to_string();
+        let mut checkpoint_chain = chain_from_transactions(
+            "vtxo-a",
+            std::slice::from_ref(&shared),
+            ExitGraphChainStatus::Pending,
+        );
+        checkpoint_chain.transactions[0].tx_type = ExitGraphTxType::Checkpoint;
+        let tree_chain =
+            chain_from_transactions("vtxo-b", &[shared], ExitGraphChainStatus::Pending);
+
+        let nodes = merge_exit_graph(&[tree_chain, checkpoint_chain]);
+
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].txid, shared_txid);
+        assert_eq!(nodes[0].tx_type, ExitGraphTxType::Checkpoint);
     }
 }

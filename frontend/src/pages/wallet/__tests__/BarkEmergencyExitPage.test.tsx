@@ -345,14 +345,25 @@ describe('BarkEmergencyExitPage', () => {
         status: 'pending',
         needsChild: false,
         waitingOnTxids: [],
+        txType: 'tree',
+      },
+      {
+        txid: 'checkpoint-txid',
+        spends: ['parent-txid'],
+        leafVtxoIds: [],
+        status: 'pending',
+        needsChild: false,
+        waitingOnTxids: [],
+        txType: 'checkpoint',
       },
       {
         txid: 'leaf-txid',
-        spends: ['parent-txid'],
+        spends: ['checkpoint-txid'],
         leafVtxoIds: ['vtxo-1'],
         status: 'inProgress',
         needsChild: true,
         waitingOnTxids: [],
+        txType: 'tree',
       },
     ],
   }
@@ -400,6 +411,7 @@ describe('BarkEmergencyExitPage', () => {
           status: 'confirmed',
           needsChild: false,
           waitingOnTxids: [],
+          txType: 'tree',
         },
       ],
     })
@@ -414,6 +426,10 @@ describe('BarkEmergencyExitPage', () => {
 
     const parent = screen.getByTestId('bark-exit-tree-node-parent-txid')
     expect(parent).toHaveAttribute('data-icon', 'tree')
+    const checkpoint = screen.getByTestId('bark-exit-tree-node-checkpoint-txid')
+    expect(checkpoint).toHaveAttribute('data-icon', 'checkpoint')
+    fireEvent.click(checkpoint)
+    expect(screen.getByTestId('bark-exit-tree-detail-status')).toHaveTextContent('Checkpoint')
     expect(screen.queryByTestId('bark-exit-tree-vtxo-count-parent-txid')).not.toBeInTheDocument()
     expect(screen.queryByTestId('bark-exit-tree-unrolled-vtxo-count-parent-txid')).not.toBeInTheDocument()
 

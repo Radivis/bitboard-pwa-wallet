@@ -173,6 +173,10 @@ export const BARK_EXIT_GRAPH_NODE_STATUSES = ['pending', 'inProgress', 'confirme
 
 export type BarkExitGraphNodeStatus = (typeof BARK_EXIT_GRAPH_NODE_STATUSES)[number]
 
+export const BARK_EXIT_GRAPH_TX_TYPES = ['tree', 'checkpoint'] as const
+
+export type BarkExitGraphTxType = (typeof BARK_EXIT_GRAPH_TX_TYPES)[number]
+
 export type BarkExitGraphNode = {
   txid: string
   spends: string[]
@@ -180,6 +184,7 @@ export type BarkExitGraphNode = {
   status: BarkExitGraphNodeStatus
   needsChild: boolean
   waitingOnTxids: string[]
+  txType: BarkExitGraphTxType
 }
 
 export type BarkExitGraph = {

@@ -19,7 +19,11 @@ import {
   UNILATERAL_EXIT_NODE_DIAMETER_PX,
   type UnilateralExitLayoutDirection,
 } from '@/lib/arkade/unilateral-exit-topology'
-import type { BarkExitGraphNode, BarkExitGraphNodeStatus } from '@/workers/bark-api'
+import type {
+  BarkExitGraphNode,
+  BarkExitGraphNodeStatus,
+  BarkExitGraphTxType,
+} from '@/workers/bark-api'
 
 export { resolveLayoutDirection, shortTxid }
 
@@ -38,6 +42,7 @@ export type BarkExitGraphEdgePath = {
 
 export type BarkExitTreeNodeData = {
   txid: string
+  txType: BarkExitGraphTxType
   status: BarkExitGraphNodeStatus
   needsChild: boolean
   isOnExitPath: boolean
@@ -122,6 +127,7 @@ export function layoutBarkExitGraph(params: {
       targetPosition,
       data: {
         txid,
+        txType: graphNode.txType,
         status: graphNode.status,
         needsChild: graphNode.needsChild,
         isOnExitPath: pathTxids.has(txid),

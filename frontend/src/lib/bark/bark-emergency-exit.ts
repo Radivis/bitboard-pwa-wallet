@@ -1,9 +1,11 @@
 import {
   BARK_EMERGENCY_EXIT_STATES,
   BARK_EXIT_GRAPH_NODE_STATUSES,
+  BARK_EXIT_GRAPH_TX_TYPES,
   type BarkExitGraph,
   type BarkExitGraphNode,
   type BarkExitGraphNodeStatus,
+  type BarkExitGraphTxType,
   type BarkEmergencyCpfpRequest,
   type BarkEmergencyExitDrain,
   type BarkEmergencyExitEstimate,
@@ -174,6 +176,9 @@ function readExitGraphNode(value: unknown): BarkExitGraphNode {
   if (typeof row.needsChild !== 'boolean') {
     throw new Error('Bark exit tree node has no needs-child flag')
   }
+  if (!isExitGraphTxType(row.txType)) {
+    throw new Error('Bark exit tree node has an unknown transaction type')
+  }
   return {
     txid: readText(row.txid, 'exit tree transaction id'),
     spends: readTextList(row.spends, 'exit tree spends'),
@@ -181,7 +186,15 @@ function readExitGraphNode(value: unknown): BarkExitGraphNode {
     status: row.status,
     needsChild: row.needsChild,
     waitingOnTxids: readTextList(row.waitingOnTxids, 'exit tree waiting transactions'),
+    txType: row.txType,
   }
+}
+
+function isExitGraphTxType(value: unknown): value is BarkExitGraphTxType {
+  return (
+    typeof value === 'string' &&
+    (BARK_EXIT_GRAPH_TX_TYPES as readonly string[]).includes(value)
+  )
 }
 
 function isExitGraphNodeStatus(value: unknown): value is BarkExitGraphNodeStatus {

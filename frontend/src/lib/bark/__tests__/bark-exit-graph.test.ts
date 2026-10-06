@@ -16,6 +16,7 @@ const parentNode: BarkExitGraphNode = {
   status: 'pending',
   needsChild: false,
   waitingOnTxids: [],
+  txType: 'tree',
 }
 
 const leafNode: BarkExitGraphNode = {
@@ -25,6 +26,7 @@ const leafNode: BarkExitGraphNode = {
   status: 'inProgress',
   needsChild: true,
   waitingOnTxids: [],
+  txType: 'tree',
 }
 
 describe('readBarkExitGraph', () => {
@@ -42,6 +44,24 @@ describe('readBarkExitGraph', () => {
     expect(graph.nodes[0]?.waitingOnTxids).toEqual(['round-txid'])
     expect(graph.nodes[1]?.needsChild).toBe(true)
     expect(graph.nodes[1]?.status).toBe('inProgress')
+    expect(graph.nodes[0]?.txType).toBe('tree')
+    expect(graph.nodes[1]?.txType).toBe('tree')
+  })
+
+  it('reads a checkpoint transaction type', () => {
+    const graph = readBarkExitGraph({
+      nodes: [{ ...parentNode, txType: 'checkpoint' }],
+    })
+
+    expect(graph.nodes[0]?.txType).toBe('checkpoint')
+  })
+
+  it('rejects an unknown transaction type', () => {
+    expect(() =>
+      readBarkExitGraph({
+        nodes: [{ ...parentNode, txType: 'ark' }],
+      }),
+    ).toThrow(/unknown transaction type/)
   })
 
   it('rejects an unknown status', () => {
@@ -106,6 +126,7 @@ describe('layoutBarkExitGraph', () => {
       status: 'pending',
       needsChild: false,
       waitingOnTxids: [],
+      txType: 'tree',
     }
     const graphNodes = [parentNode, leafNode, secondLeaf]
     const { nodes, edgePaths } = layoutBarkExitGraph({
