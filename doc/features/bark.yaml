@@ -74,9 +74,10 @@ feature:
     - A bark.exit movement is labeled as a Bark emergency exit, distinct from collaborative bark.offboard
     - The exit tree is shown on the Signet emergency-exit page when Bark is enabled. It loads the checked spendable VTXOs, or every spendable VTXO when the whole wallet is checked, plus every live exit
     - After Start clears the checkboxes, live exits keep the exit tree on screen
-    - The exit tree has one node per exit transaction. A txid shared by two VTXOs is one node. An input that spends a transaction outside the tree is not a node
+    - The exit tree has one node per exit transaction, plus the chain anchor. A txid shared by two VTXOs is one node. An input that is neither an exit transaction nor that anchor is not a node
     - A node is pending, in progress, or confirmed. Needs a child appears only while that transaction is waiting for a Pay-to-Anchor child. That child is not a node
     - A checkpoint transaction shows the checkpoint icon and the Checkpoint label. Another non-leaf transaction shows the tree icon
+    - The chain anchor shows the commitment icon and the Commitment label. It is confirmed unless a child is still waiting on it
     - Focusing a node shows its transaction id and the VTXO ids whose exit leaf is that transaction
     - Rendering the exit tree does not start, progress, cancel, or claim
     - A checkpoint, exit-row, or exit-child write exports and encrypts the open network's dump before that write returns
@@ -349,7 +350,7 @@ feature:
         description: The exit tree loads the checked spendable VTXOs, or every spendable VTXO when the whole wallet is checked, plus every live exit, and stays after Start clears the checkboxes
         implemented_by: frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
       - id: BARK-EMG-11
-        description: One node per exit transaction. A shared txid is one node. An input outside the chain is not a node
+        description: One node per exit transaction, plus the chain anchor. A shared txid is one node. An input that is neither an exit transaction nor that anchor is not a node
         implemented_by: bitboard-bark/src/emergency_exit.rs
       - id: BARK-EMG-12
         description: A node is pending, in progress, or confirmed. Needs a child appears only for AwaitingCpfpBroadcast, and that child is not a node
@@ -371,6 +372,9 @@ feature:
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/bark-sync-lifecycle-orchestrator.test.ts
       - id: BARK-EMG-18
         description: A checkpoint transaction shows the checkpoint icon and the Checkpoint label. Another non-leaf transaction shows the tree icon
+        implemented_by: frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
+      - id: BARK-EMG-19
+        description: The chain anchor shows the commitment icon and the Commitment label. It is confirmed unless a child is still waiting on it
         implemented_by: frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
   pages:
     - BarkManagement:
@@ -413,7 +417,7 @@ feature:
         file: frontend/src/routes/wallet/bark/emergency-exit.tsx
         visible_elements:
           - Exit tree for the checked spendable VTXOs, or every spendable VTXO when the whole wallet is checked, plus every live exit
-          - A leaf node shows the leaf icon and a coin badge. A shared ancestor shows the tree icon and no coin badge. A checkpoint shows the checkpoint icon. A confirmed leaf uses the unrolled coin icon
+          - A leaf node shows the leaf icon and a coin badge. A shared ancestor shows the tree icon and no coin badge. A checkpoint shows the checkpoint icon. The chain anchor shows the commitment icon. A confirmed leaf uses the unrolled coin icon
           - Focused exit-tree node shows its transaction id and the VTXO ids that end on it
           - Spendable VTXO checkboxes
           - Review of broadcast fee, claim fee, and transaction count
@@ -425,7 +429,7 @@ feature:
           - Full-page Bark session loading or error screen while the session is not ready
         requirements:
           - Contracts BARK-EMG-02 through BARK-EMG-08
-          - Contracts BARK-EMG-10 through BARK-EMG-18
+          - Contracts BARK-EMG-10 through BARK-EMG-19
           - Contracts BARK-SESS-03 and BARK-SESS-04
           - Shown only when isBarkEnabled and the network is signet or mainnet
           - Progress is a button, and a successful Bark sync also progresses exits that are already started

@@ -339,8 +339,17 @@ describe('BarkEmergencyExitPage', () => {
   const exitTree: BarkExitGraph = {
     nodes: [
       {
-        txid: 'parent-txid',
+        txid: 'anchor-txid',
         spends: [],
+        leafVtxoIds: [],
+        status: 'confirmed',
+        needsChild: false,
+        waitingOnTxids: [],
+        txType: 'commitment',
+      },
+      {
+        txid: 'parent-txid',
+        spends: ['anchor-txid'],
         leafVtxoIds: [],
         status: 'pending',
         needsChild: false,
@@ -426,6 +435,10 @@ describe('BarkEmergencyExitPage', () => {
 
     const parent = screen.getByTestId('bark-exit-tree-node-parent-txid')
     expect(parent).toHaveAttribute('data-icon', 'tree')
+    const anchor = screen.getByTestId('bark-exit-tree-node-anchor-txid')
+    expect(anchor).toHaveAttribute('data-icon', 'commitment')
+    fireEvent.click(anchor)
+    expect(screen.getByTestId('bark-exit-tree-detail-status')).toHaveTextContent('Commitment')
     const checkpoint = screen.getByTestId('bark-exit-tree-node-checkpoint-txid')
     expect(checkpoint).toHaveAttribute('data-icon', 'checkpoint')
     fireEvent.click(checkpoint)

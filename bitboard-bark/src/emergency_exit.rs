@@ -174,6 +174,7 @@ const EXIT_GRAPH_RANK_CONFIRMED: u8 = 3;
 pub enum ExitGraphTxType {
     Tree,
     Checkpoint,
+    Commitment,
 }
 
 /// One exit transaction, before spends are limited to other nodes in the graph.
@@ -263,6 +264,14 @@ pub(crate) fn exit_graph_transaction_from_bitcoin(
     }
 }
 
+pub(crate) fn chain_anchor_transaction(txid: &str) -> ExitGraphTransaction {
+    ExitGraphTransaction {
+        txid: txid.to_owned(),
+        input_txids: Vec::new(),
+        tx_type: ExitGraphTxType::Commitment,
+    }
+}
+
 /// Labels each hop of one VTXO's exit chain.
 ///
 /// `past_arkoor_pubkeys` is the out-of-round suffix. Earlier hops are the
@@ -342,19 +351,19 @@ fn exit_graph_transactions_from_vtxo<P: bark::ark::vtxo::Policy>(
         vtxo.exit_delta(),
         vtxo.expiry_height(),
     );
-    items
-        .iter()
-        .zip(tx_types)
-        .map(|(item, tx_type)| {
-            let mut transaction = exit_graph_transaction_from_bitcoin(&item.tx);
-            transaction.tx_type = tx_type;
-            transaction
-        })
-        .collect()
+    let mut transactions = vec![chain_anchor_transaction(
+        &vtxo.chain_anchor().txid.to_string(),
+    )];
+    transactions.extend(items.iter().zip(tx_types).map(|(item, tx_type)| {
+        let mut transaction = exit_graph_transaction_from_bitcoin(&item.tx);
+        transaction.tx_type = tx_type;
+        transaction
+    }));
+    transactions
 }
 
-/// Merges exit chains into one graph. The last transaction of a chain is that coin's leaf.
-/// An input txid that is not itself a node stays off the graph.
+/// Merges exit chains into one graph. The last transaction that is not the chain
+/// anchor is that coin's leaf. An input txid that is not itself a node stays off the graph.
 pub(crate) fn merge_exit_graph(chains: &[ExitGraphChain]) -> Vec<ExitGraphNodeJson> {
     let mut drafts: std::collections::BTreeMap<String, ExitGraphDraft> =
         std::collections::BTreeMap::new();
@@ -374,12 +383,15 @@ pub(crate) fn merge_exit_graph(chains: &[ExitGraphChain]) -> Vec<ExitGraphNodeJs
                     tx_type: ExitGraphTxType::Tree,
                 });
             draft.tx_type = merged_tx_type(draft.tx_type, transaction.tx_type);
-            if leaf_txid.as_ref() == Some(&transaction.txid) {
+            if leaf_txid.as_ref() == Some(&transaction.txid)
+                && transaction.tx_type != ExitGraphTxType::Commitment
+            {
                 push_unique(&mut draft.leaf_vtxo_ids, chain.vtxo_id.clone());
             }
         }
         apply_chain_status(&mut drafts, chain);
     }
+    confirm_chain_anchors(&mut drafts);
 
     let node_txids: std::collections::BTreeSet<String> = drafts.keys().cloned().collect();
     drafts
@@ -491,9 +503,30 @@ fn exit_graph_status_label(rank: u8) -> &'static str {
     }
 }
 
+fn confirm_chain_anchors(drafts: &mut std::collections::BTreeMap<String, ExitGraphDraft>) {
+    let waited_on_txids = drafts
+        .values()
+        .filter(|draft| draft.rank == EXIT_GRAPH_RANK_PENDING)
+        .flat_map(|draft| draft.waiting_on_txids.iter().cloned())
+        .collect::<std::collections::BTreeSet<_>>();
+    for (txid, draft) in drafts.iter_mut() {
+        if draft.tx_type != ExitGraphTxType::Commitment {
+            continue;
+        }
+        draft.waiting_on_txids.clear();
+        draft.rank = if waited_on_txids.contains(txid) {
+            EXIT_GRAPH_RANK_PENDING
+        } else {
+            EXIT_GRAPH_RANK_CONFIRMED
+        };
+    }
+}
+
 fn merged_tx_type(current: ExitGraphTxType, incoming: ExitGraphTxType) -> ExitGraphTxType {
     if current == ExitGraphTxType::Checkpoint || incoming == ExitGraphTxType::Checkpoint {
         ExitGraphTxType::Checkpoint
+    } else if current == ExitGraphTxType::Commitment || incoming == ExitGraphTxType::Commitment {
+        ExitGraphTxType::Commitment
     } else {
         ExitGraphTxType::Tree
     }
@@ -966,9 +999,9 @@ mod tests {
         BARK_EXIT_ALREADY_EXITED, BARK_EXIT_ALREADY_SPENT, BARK_EXIT_DUST,
         BARK_EXIT_NOTHING_STARTED, BARK_EXIT_UNKNOWN_VTXO, BarkEmergencyExitStateKind,
         ExitGraphChain, ExitGraphChainStatus, ExitGraphTransactionKind, ExitGraphTransactionStatus,
-        ExitGraphTxType, emergency_exit_state_json, exit_graph_transaction_from_bitcoin,
-        exit_graph_tx_types, exit_ids_grew, fee_rate_from_sat_per_vb, fee_rate_sat_per_vb,
-        merge_exit_graph,
+        ExitGraphTxType, chain_anchor_transaction, emergency_exit_state_json,
+        exit_graph_transaction_from_bitcoin, exit_graph_tx_types, exit_ids_grew,
+        fee_rate_from_sat_per_vb, fee_rate_sat_per_vb, merge_exit_graph,
     };
     use crate::exit_address::parse_signet_receive_address;
 
@@ -1250,5 +1283,125 @@ mod tests {
         assert_eq!(nodes.len(), 1);
         assert_eq!(nodes[0].txid, shared_txid);
         assert_eq!(nodes[0].tx_type, ExitGraphTxType::Checkpoint);
+    }
+
+    fn chain_spending_anchor(
+        vtxo_id: &str,
+        anchor_txid: &str,
+        transactions: &[bitcoin::Transaction],
+        status: ExitGraphChainStatus,
+    ) -> ExitGraphChain {
+        let mut graph_transactions = vec![chain_anchor_transaction(anchor_txid)];
+        graph_transactions.extend(transactions.iter().map(exit_graph_transaction_from_bitcoin));
+        ExitGraphChain {
+            vtxo_id: vtxo_id.to_owned(),
+            transactions: graph_transactions,
+            status,
+        }
+    }
+
+    #[test]
+    fn exit_graph_shows_a_confirmed_chain_anchor_that_the_first_exit_tx_spends() {
+        let anchor = outside_txid(4);
+        let anchor_txid = anchor.to_string();
+        let virtual_tx = transaction_spending(&[anchor]);
+        let nodes = merge_exit_graph(&[chain_spending_anchor(
+            "vtxo-a",
+            &anchor_txid,
+            &[virtual_tx.clone()],
+            ExitGraphChainStatus::Pending,
+        )]);
+
+        assert_eq!(nodes.len(), 2);
+        let anchor_node = nodes
+            .iter()
+            .find(|node| node.txid == anchor_txid)
+            .expect("anchor");
+        let virtual_node = nodes
+            .iter()
+            .find(|node| node.txid == virtual_tx.compute_txid().to_string())
+            .expect("virtual");
+        assert_eq!(anchor_node.tx_type, ExitGraphTxType::Commitment);
+        assert_eq!(anchor_node.status, "confirmed");
+        assert!(!anchor_node.needs_child);
+        assert!(anchor_node.leaf_vtxo_ids.is_empty());
+        assert!(anchor_node.spends.is_empty());
+        assert_eq!(virtual_node.spends, vec![anchor_txid]);
+        assert_eq!(virtual_node.status, "pending");
+        assert_eq!(virtual_node.leaf_vtxo_ids, vec!["vtxo-a".to_owned()]);
+
+        let only_anchor = merge_exit_graph(&[chain_spending_anchor(
+            "vtxo-empty",
+            &anchor.to_string(),
+            &[],
+            ExitGraphChainStatus::Pending,
+        )]);
+        assert_eq!(only_anchor.len(), 1);
+        assert!(only_anchor[0].leaf_vtxo_ids.is_empty());
+        assert_eq!(only_anchor[0].status, "confirmed");
+    }
+
+    #[test]
+    fn exit_graph_leaves_the_chain_anchor_pending_while_a_child_waits_on_it() {
+        let anchor = outside_txid(3);
+        let anchor_txid = anchor.to_string();
+        let virtual_tx = transaction_spending(&[anchor]);
+        let virtual_txid = virtual_tx.compute_txid().to_string();
+        let nodes = merge_exit_graph(&[chain_spending_anchor(
+            "vtxo-a",
+            &anchor_txid,
+            &[virtual_tx],
+            ExitGraphChainStatus::Transactions(vec![ExitGraphTransactionStatus {
+                txid: virtual_txid.clone(),
+                kind: ExitGraphTransactionKind::WaitingOnInputs,
+                waiting_on_txids: vec![anchor_txid.clone()],
+            }]),
+        )]);
+
+        let anchor_node = nodes
+            .iter()
+            .find(|node| node.txid == anchor_txid)
+            .expect("anchor");
+        let virtual_node = nodes
+            .iter()
+            .find(|node| node.txid == virtual_txid)
+            .expect("virtual");
+        assert_eq!(anchor_node.status, "pending");
+        assert!(!anchor_node.needs_child);
+        assert_eq!(virtual_node.waiting_on_txids, vec![anchor_txid]);
+    }
+
+    #[test]
+    fn exit_graph_merges_a_shared_chain_anchor_into_one_commitment_node() {
+        let anchor = outside_txid(2);
+        let anchor_txid = anchor.to_string();
+        let virtual_a = transaction_spending(&[anchor]);
+        let mut virtual_b = transaction_spending(&[anchor]);
+        virtual_b.output[0].value = bitcoin::Amount::from_sat(20_000);
+        let mut tree_named_anchor = chain_spending_anchor(
+            "vtxo-b",
+            &anchor_txid,
+            &[virtual_b.clone()],
+            ExitGraphChainStatus::Pending,
+        );
+        tree_named_anchor.transactions[0].tx_type = ExitGraphTxType::Tree;
+        let nodes = merge_exit_graph(&[
+            tree_named_anchor,
+            chain_spending_anchor(
+                "vtxo-a",
+                &anchor_txid,
+                &[virtual_a],
+                ExitGraphChainStatus::Pending,
+            ),
+        ]);
+
+        let anchor_nodes: Vec<_> = nodes
+            .iter()
+            .filter(|node| node.txid == anchor_txid)
+            .collect();
+        assert_eq!(anchor_nodes.len(), 1);
+        assert_eq!(anchor_nodes[0].tx_type, ExitGraphTxType::Commitment);
+        assert_eq!(anchor_nodes[0].status, "confirmed");
+        assert_eq!(nodes.len(), 3);
     }
 }

@@ -56,6 +56,14 @@ describe('readBarkExitGraph', () => {
     expect(graph.nodes[0]?.txType).toBe('checkpoint')
   })
 
+  it('reads a commitment transaction type', () => {
+    const graph = readBarkExitGraph({
+      nodes: [{ ...parentNode, txType: 'commitment' }],
+    })
+
+    expect(graph.nodes[0]?.txType).toBe('commitment')
+  })
+
   it('rejects an unknown transaction type', () => {
     expect(() =>
       readBarkExitGraph({
