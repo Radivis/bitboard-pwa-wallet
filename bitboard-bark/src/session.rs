@@ -61,16 +61,13 @@ fn config_for_endpoints(
     server_address: String,
     esplora_address: String,
 ) -> bark::Config {
-    // `server_access_token` is deprecated since bark-wallet 0.2.4: the server does not
-    // enforce it, and the field will be removed. `Config::network_default` still sets it,
-    // and bark-wallet 0.7.1 has no replacement constructor, so the struct update copies it.
-    #[allow(deprecated)]
-    bark::Config {
-        server_address,
-        esplora_address: Some(esplora_address),
-        user_agent: Some(bark_user_agent()),
-        ..bark::Config::network_default(network)
-    }
+    // A struct update would copy deprecated `server_access_token`.
+    // `network_default` already sets that field to None.
+    let mut config = bark::Config::network_default(network);
+    config.server_address = server_address;
+    config.esplora_address = Some(esplora_address);
+    config.user_agent = Some(bark_user_agent());
+    config
 }
 
 fn config_for_network(network: Network) -> Result<bark::Config, String> {

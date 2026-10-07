@@ -84,13 +84,12 @@ impl RegtestBarkWallet {
         let network = Network::Regtest;
         let parsed_mnemonic = bip39::Mnemonic::parse(mnemonic).map_err(|err| err.to_string())?;
         let seed = bark::WalletSeed::new_from_mnemonic(network, &parsed_mnemonic);
-        #[allow(deprecated)]
-        let config = bark::Config {
-            server_address: server_url.to_owned(),
-            esplora_address: Some(esplora_url.to_owned()),
-            user_agent: Some(format!("bitboard/{}", env!("CARGO_PKG_VERSION"))),
-            ..bark::Config::network_default(network)
-        };
+        // A struct update would copy deprecated `server_access_token`.
+        // `network_default` already sets that field to None.
+        let mut config = bark::Config::network_default(network);
+        config.server_address = server_url.to_owned();
+        config.esplora_address = Some(esplora_url.to_owned());
+        config.user_agent = Some(format!("bitboard/{}", env!("CARGO_PKG_VERSION")));
         let persister = Arc::new(bark::persist::adaptor::StorageAdaptorWrapper::new(
             store.clone(),
         ));

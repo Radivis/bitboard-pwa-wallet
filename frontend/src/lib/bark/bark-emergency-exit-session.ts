@@ -28,17 +28,13 @@ export type BarkEmergencyExitWasm = Pick<
   | 'bark_broadcast_emergency_exit_claim'
 >
 
-function vtxoIdsJson(vtxoIds: string[]): string {
-  return JSON.stringify(vtxoIds)
-}
-
 export async function estimateEmergencyExitFromWasm(
   wasm: BarkEmergencyExitWasm,
   vtxoIds: string[],
   feeRateSatPerVb: number,
 ): Promise<BarkEmergencyExitEstimate> {
   return readBarkEmergencyExitEstimate(
-    await wasm.bark_estimate_emergency_exit(vtxoIdsJson(vtxoIds), feeRateSatPerVb),
+    await wasm.bark_estimate_emergency_exit(vtxoIds, feeRateSatPerVb),
   )
 }
 
@@ -46,7 +42,7 @@ export async function startEmergencyExitFromWasm(
   wasm: BarkEmergencyExitWasm,
   vtxoIds: string[],
 ): Promise<void> {
-  await wasm.bark_start_emergency_exit(vtxoIdsJson(vtxoIds))
+  await wasm.bark_start_emergency_exit(vtxoIds)
 }
 
 export async function listEmergencyExitsFromWasm(
@@ -83,11 +79,7 @@ export async function drainEmergencyExitsFromWasm(
   excludeVtxoIds: string[],
 ): Promise<BarkEmergencyExitDrain> {
   return readBarkEmergencyExitDrain(
-    await wasm.bark_drain_emergency_exits(
-      address,
-      feeRateSatPerVb,
-      JSON.stringify(excludeVtxoIds),
-    ),
+    await wasm.bark_drain_emergency_exits(address, feeRateSatPerVb, excludeVtxoIds),
   )
 }
 
@@ -108,5 +100,5 @@ export async function exitTopologyFromWasm(
   wasm: BarkEmergencyExitWasm,
   vtxoIds: string[],
 ): Promise<BarkExitGraph> {
-  return readBarkExitGraph(await wasm.bark_exit_topology(vtxoIdsJson(vtxoIds)))
+  return readBarkExitGraph(await wasm.bark_exit_topology(vtxoIds))
 }
