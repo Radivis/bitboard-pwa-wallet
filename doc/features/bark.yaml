@@ -72,7 +72,7 @@ feature:
     - Claim sends every fresh claimable exit to the current on-chain receive address, broadcasts that signed transaction through the existing Esplora client, and does not reveal a new address
     - A claim is finished only when Bark reports claim-in-progress or claimed for each drained VTXO. Until then those VTXOs stay claim-in-progress and are not drained again
     - A bark.exit movement is labeled as a Bark emergency exit, distinct from collaborative bark.offboard
-    - The exit tree is shown on the Signet emergency-exit page when Bark is enabled. It loads the checked spendable VTXOs, or every spendable VTXO when the whole wallet is checked, plus every live exit
+    - The exit tree is shown on the emergency-exit page when Bark is enabled on signet or mainnet. It loads the checked spendable VTXOs, or every spendable VTXO when the whole wallet is checked, plus every live exit
     - After Start clears the checkboxes, live exits keep the exit tree on screen
     - The exit tree has one node per exit transaction, plus the chain anchor. A txid shared by two VTXOs is one node. An input that is neither an exit transaction nor that anchor is not a node
     - A node is pending, in progress, or confirmed. Needs a child appears only while that transaction is waiting for a Pay-to-Anchor child. That child is not a node
