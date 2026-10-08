@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { AlertTriangle, Coins, FlaskConical, Layers, RefreshCw, Waypoints, Zap } from 'lucide-react'
+import { AlertTriangle, Coins, Dog, FlaskConical, Layers, RefreshCw, Zap } from 'lucide-react'
 import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
 import { useFeatureStore } from '@/stores/featureStore'
 import {
@@ -246,7 +246,7 @@ export function FeatureToggles() {
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Waypoints className="h-4 w-4" />
+            <Dog className="h-4 w-4" />
             <Label htmlFor="bark-toggle" className="cursor-pointer">
               Bark
             </Label>

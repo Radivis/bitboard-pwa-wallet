@@ -108,7 +108,21 @@ describe('BarkPanel', () => {
     expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
   })
 
-  it('BARK-VTX-01 shows List VTXOs when Bark is on and the network is signet', () => {
+  it('BARK-VTX-01 shows List VTXOs when Bark is on and the network is signet or mainnet', () => {
+    const signetRender = renderWithProviders(<BarkPanel />)
+    expect(screen.getByTestId('bark-list-vtxos-link')).toHaveAttribute(
+      'href',
+      '/wallet/bark/vtxos',
+    )
+    expect(screen.getByTestId('bark-list-vtxos-link')).toHaveTextContent('List VTXOs')
+    signetRender.unmount()
+
+    walletStoreState.networkMode = 'mainnet'
+    walletStoreState.loadedDescriptorWallet = { networkMode: 'mainnet' }
+    loadSnapshot.current = {
+      ...loadSnapshot.current,
+      networkMode: 'mainnet',
+    }
     renderWithProviders(<BarkPanel />)
     expect(screen.getByTestId('bark-list-vtxos-link')).toHaveAttribute(
       'href',
@@ -117,7 +131,21 @@ describe('BarkPanel', () => {
     expect(screen.getByTestId('bark-list-vtxos-link')).toHaveTextContent('List VTXOs')
   })
 
-  it('BARK-EMG-01 shows Emergency exit only when Bark is on and the network is signet', () => {
+  it('BARK-EMG-01 shows Emergency exit only when Bark is on and the network is signet or mainnet', () => {
+    const signetRender = renderWithProviders(<BarkPanel />)
+    expect(screen.getByTestId('bark-emergency-exit-link')).toHaveAttribute(
+      'href',
+      '/wallet/bark/emergency-exit',
+    )
+    expect(screen.getByTestId('bark-emergency-exit-link')).toHaveTextContent('Emergency exit')
+    signetRender.unmount()
+
+    walletStoreState.networkMode = 'mainnet'
+    walletStoreState.loadedDescriptorWallet = { networkMode: 'mainnet' }
+    loadSnapshot.current = {
+      ...loadSnapshot.current,
+      networkMode: 'mainnet',
+    }
     renderWithProviders(<BarkPanel />)
     expect(screen.getByTestId('bark-emergency-exit-link')).toHaveAttribute(
       'href',
@@ -126,7 +154,7 @@ describe('BarkPanel', () => {
     expect(screen.getByTestId('bark-emergency-exit-link')).toHaveTextContent('Emergency exit')
   })
 
-  it('BARK-EMG-01 hides Emergency exit when Bark is off or the network is not signet', () => {
+  it('BARK-EMG-01 hides Emergency exit when Bark is off or the network is not signet or mainnet', () => {
     featureState.isBarkEnabled = false
     const disabled = renderWithProviders(<BarkPanel />)
     expect(screen.queryByTestId('bark-emergency-exit-link')).not.toBeInTheDocument()
@@ -139,7 +167,7 @@ describe('BarkPanel', () => {
     expect(screen.queryByTestId('bark-emergency-exit-link')).not.toBeInTheDocument()
   })
 
-  it('BARK-VTX-01 hides List VTXOs when Bark is off or the network is not signet', () => {
+  it('BARK-VTX-01 hides List VTXOs when Bark is off or the network is not signet or mainnet', () => {
     featureState.isBarkEnabled = false
     const disabled = renderWithProviders(<BarkPanel />)
     expect(screen.queryByTestId('bark-list-vtxos-link')).not.toBeInTheDocument()

@@ -56,7 +56,7 @@ export function BarkEnableConfirmModal({
         </DialogDescription>
         <p>
           <strong className="text-foreground">Bark support is brand new</strong> in Bitboard
-          Wallet. Behavior, operator connectivity, and edge cases are still being hardened.
+          Wallet. Not everything that works in Arkade works in Bark yet.
         </p>
         <p>
           <strong className="text-foreground">Signet is strongly advised</strong> for trying
