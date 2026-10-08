@@ -340,11 +340,6 @@ function canonicalMainnetBarkRail(value: unknown): StoredBarkRail | undefined {
   return canonicalBarkRail(value, 'mainnet')
 }
 
-function legacySignetBarkRail(value: unknown): StoredBarkRail | undefined {
-  if (!isRecord(value) || value.network !== 'signet') return undefined
-  return canonicalSignetBarkRail(value)
-}
-
 export function isStoredBarkRails(value: unknown): value is StoredBarkRails {
   if (!isRecord(value) || Array.isArray(value)) return false
   const regtestEnabled = isE2eBarkRegtestControlEnabled()
@@ -368,18 +363,14 @@ export function isStoredBarkRails(value: unknown): value is StoredBarkRails {
 
 function sanitizeBarkRails(
   railsValue: unknown,
-  legacyRail: unknown,
 ): StoredBarkRails | undefined {
   const railsRecord = isRecord(railsValue) ? railsValue : {}
-  const signet = canonicalSignetBarkRail(railsRecord.signet) ?? legacySignetBarkRail(legacyRail)
+  const signet = canonicalSignetBarkRail(railsRecord.signet)
   const mainnet = canonicalMainnetBarkRail(railsRecord.mainnet)
   const regtest = isE2eBarkRegtestControlEnabled()
     ? canonicalBarkRail(railsRecord.regtest, 'regtest')
     : undefined
   if (signet == null && mainnet == null && regtest == null) {
-    if (legacyRail != null && import.meta.env.DEV && legacySignetBarkRail(legacyRail) == null) {
-      console.warn('[wallet-secrets] Dropping invalid barkRail')
-    }
     if (railsValue != null && signet == null && railsRecord.signet != null && import.meta.env.DEV) {
       console.warn('[wallet-secrets] Dropping invalid barkRails.signet')
     }
@@ -752,8 +743,7 @@ function normalizeWalletSecretsPayload(raw: unknown): unknown {
   delete withoutLegacyKeys.arkadeAccounts
   delete withoutLegacyKeys.activeArkadeAccountIdByNetwork
 
-  const barkRails = sanitizeBarkRails(withoutLegacyKeys.barkRails, withoutLegacyKeys.barkRail)
-  delete withoutLegacyKeys.barkRail
+  const barkRails = sanitizeBarkRails(withoutLegacyKeys.barkRails)
   delete withoutLegacyKeys.barkRails
 
   return {

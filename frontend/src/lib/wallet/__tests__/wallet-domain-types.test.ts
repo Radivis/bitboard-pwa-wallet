@@ -215,10 +215,11 @@ describe('parseWalletPayloadJson', () => {
       ],
       arkadeAccounts: [validSignetAccount],
       activeArkadeAccountIdByNetwork: { signet: 'acct-good' },
-      barkRail: {
-        network: 'signet',
-        serverUrl: 'https://ark.signet.2nd.dev',
-        fingerprint: 'abcdef01',
+      barkRails: {
+        signet: {
+          serverUrl: 'https://ark.signet.2nd.dev',
+          fingerprint: 'abcdef01',
+        },
       },
     })
     const migrated = parseWalletPayloadJson(json)
@@ -270,10 +271,11 @@ describe('parseWalletPayloadJson', () => {
         ],
         arkadeAccounts: [validSignetAccount],
         activeArkadeAccountIdByNetwork: { signet: 'acct-good' },
-        barkRail: {
-          network: 'signet',
-          serverUrl: 'https://ark.signet.2nd.dev',
-          fingerprint: 'abcdef01',
+        barkRails: {
+          signet: {
+            serverUrl: 'https://ark.signet.2nd.dev',
+            fingerprint: 'abcdef01',
+          },
         },
       }),
     )

@@ -66,38 +66,6 @@ describe('barkRails metadata', () => {
     expect(parsed.barkRails).toBeUndefined()
   })
 
-  it('moves a legacy signet barkRail onto barkRails.signet without a dump', () => {
-    const written = parseWalletPayloadJson(
-      JSON.stringify({
-        descriptorWallets: [],
-        lightningNwcConnections: [],
-        barkRail: {
-          network: 'signet',
-          serverUrl: BARK_SIGNET_SERVER_URL,
-          fingerprint: 'abcdef01',
-          lastSuccessfulSyncAt: '2020-06-01T00:00:00.000Z',
-        },
-      }),
-    )
-    expect(written.barkRails?.signet).toEqual({
-      serverUrl: BARK_SIGNET_SERVER_URL,
-      fingerprint: 'abcdef01',
-      lastSuccessfulSyncAt: '2020-06-01T00:00:00.000Z',
-    })
-    expect(written.barkRails?.signet?.recordDump).toBeUndefined()
-    expect(written).not.toHaveProperty('barkRail')
-
-    const dropped = parseWalletPayloadJson(
-      JSON.stringify({
-        descriptorWallets: [],
-        lightningNwcConnections: [],
-        barkRail: { network: 'mainnet', fingerprint: 'nope' },
-      }),
-    )
-    expect(dropped.barkRails).toBeUndefined()
-    expect(dropped.arkadeAccounts).toEqual([])
-  })
-
   it('keeps an over-cap dump and refuses to open it', () => {
     const recordDump = 'a'.repeat(BARK_RECORD_DUMP_MAX_BYTES + 1)
     const parsed = parseWalletPayloadJson(
@@ -384,11 +352,12 @@ describe('barkRails metadata', () => {
       JSON.stringify({
         descriptorWallets: [],
         lightningNwcConnections: [],
-        barkRail: {
-          network: 'signet',
-          serverUrl: BARK_SIGNET_SERVER_URL,
-          fingerprint: 'abcdef01',
-          receiveKeyIndex: -1,
+        barkRails: {
+          signet: {
+            serverUrl: BARK_SIGNET_SERVER_URL,
+            fingerprint: 'abcdef01',
+            receiveKeyIndex: -1,
+          },
         },
       }),
     )

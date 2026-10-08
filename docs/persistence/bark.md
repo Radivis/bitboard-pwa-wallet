@@ -25,8 +25,6 @@ barkRails?: Partial<Record<BarkRailNetwork, StoredBarkRail>>
 
 The map key is the network. The rail record does not repeat it. Signet `serverUrl` is `https://ark.signet.2nd.dev`. Mainnet `serverUrl` is `https://ark.second.tech`. A flush rewrites only the open network's dump. `pendingEmergencyClaim` is metadata on that rail, not a Bark protocol record. It remembers a broadcast claim until Bark reports those VTXOs claim-in-progress or claimed, or the app Esplora reports the transaction gone. A dump flush keeps the field.
 
-A legacy singular `barkRail` with `network: 'signet'` is read once into `barkRails.signet` (metadata only, no dump).
-
 **Size limit:** each `recordDump` must not exceed 10 MB of UTF-8 (`BARK_RECORD_DUMP_MAX_BYTES` in `wallet-domain-types.ts`). An over-cap dump is kept on the payload. Session open refuses it. Dropping it would open an empty wallet and lose the exit chain.
 
 ## Rust record store (`bitboard-bark`)
