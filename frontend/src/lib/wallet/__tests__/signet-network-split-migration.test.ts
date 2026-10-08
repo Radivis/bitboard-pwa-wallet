@@ -4,16 +4,16 @@ import { createTestDatabase } from '@/db/test-helpers'
 import type { Database } from '@/db/schema'
 import {
   classifyHistoricalSignetEsplora,
-  LIVE_NETWORK_SPLIT_ESPLORA_MIGRATED_KEY,
-  LIVE_NETWORK_SPLIT_ONCHAIN_CHAIN_KEY,
   MUTINYNET_ESPLORA_SETTINGS_KEY,
   setConfiguredHistoricalSignetOnchainChain,
   SIGNET_ESPLORA_SETTINGS_KEY,
+  SIGNET_NETWORK_SPLIT_ESPLORA_MIGRATED_KEY,
+  SIGNET_NETWORK_SPLIT_ONCHAIN_CHAIN_KEY,
 } from '@/lib/wallet/historical-signet-onchain-chain'
 import {
-  migrateLiveNetworkSplitEsploraSettings,
-  resetLiveNetworkSplitMigrationForTests,
-} from '@/lib/wallet/live-network-split-migration'
+  migrateSignetNetworkSplitEsploraSettings,
+  resetSignetNetworkSplitMigrationForTests,
+} from '@/lib/wallet/signet-network-split-migration'
 
 async function insertSetting(
   walletDb: Kysely<Database>,
@@ -65,12 +65,12 @@ describe('classifyHistoricalSignetEsplora', () => {
   })
 })
 
-describe('migrateLiveNetworkSplitEsploraSettings', () => {
+describe('migrateSignetNetworkSplitEsploraSettings', () => {
   let walletDb: Kysely<Database>
 
   afterEach(async () => {
     setConfiguredHistoricalSignetOnchainChain(null)
-    resetLiveNetworkSplitMigrationForTests()
+    resetSignetNetworkSplitMigrationForTests()
     await walletDb.destroy()
   })
 
@@ -78,14 +78,14 @@ describe('migrateLiveNetworkSplitEsploraSettings', () => {
     walletDb = await createTestDatabase()
     await insertSetting(walletDb, SIGNET_ESPLORA_SETTINGS_KEY, 'https://mutinynet.com/api')
 
-    const chain = await migrateLiveNetworkSplitEsploraSettings(walletDb)
+    const chain = await migrateSignetNetworkSplitEsploraSettings(walletDb)
 
     expect(chain).toBe('mutinynet')
     expect(await readSetting(walletDb, SIGNET_ESPLORA_SETTINGS_KEY)).toBeNull()
     expect(await readSetting(walletDb, MUTINYNET_ESPLORA_SETTINGS_KEY)).toBe(
       'https://mutinynet.com/api',
     )
-    expect(await readSetting(walletDb, LIVE_NETWORK_SPLIT_ONCHAIN_CHAIN_KEY)).toBe('mutinynet')
+    expect(await readSetting(walletDb, SIGNET_NETWORK_SPLIT_ONCHAIN_CHAIN_KEY)).toBe('mutinynet')
   })
 
   it('leaves a public Signet URL on the signet key', async () => {
@@ -96,7 +96,7 @@ describe('migrateLiveNetworkSplitEsploraSettings', () => {
       'https://mempool.space/signet/api',
     )
 
-    const chain = await migrateLiveNetworkSplitEsploraSettings(walletDb)
+    const chain = await migrateSignetNetworkSplitEsploraSettings(walletDb)
 
     expect(chain).toBe('public-signet')
     expect(await readSetting(walletDb, SIGNET_ESPLORA_SETTINGS_KEY)).toBe(
@@ -109,7 +109,7 @@ describe('migrateLiveNetworkSplitEsploraSettings', () => {
     walletDb = await createTestDatabase()
     await insertSetting(walletDb, SIGNET_ESPLORA_SETTINGS_KEY, 'https://example.com/api')
 
-    const chain = await migrateLiveNetworkSplitEsploraSettings(walletDb)
+    const chain = await migrateSignetNetworkSplitEsploraSettings(walletDb)
 
     expect(chain).toBe('custom-host')
     expect(await readSetting(walletDb, SIGNET_ESPLORA_SETTINGS_KEY)).toBe(
@@ -121,14 +121,14 @@ describe('migrateLiveNetworkSplitEsploraSettings', () => {
   it('does not move a later public Signet URL after the flag is set', async () => {
     walletDb = await createTestDatabase()
     await insertSetting(walletDb, SIGNET_ESPLORA_SETTINGS_KEY, 'https://mutinynet.com/api')
-    await migrateLiveNetworkSplitEsploraSettings(walletDb)
+    await migrateSignetNetworkSplitEsploraSettings(walletDb)
     await insertSetting(
       walletDb,
       SIGNET_ESPLORA_SETTINGS_KEY,
       'https://mempool.space/signet/api',
     )
 
-    const chain = await migrateLiveNetworkSplitEsploraSettings(walletDb)
+    const chain = await migrateSignetNetworkSplitEsploraSettings(walletDb)
 
     expect(chain).toBe('mutinynet')
     expect(await readSetting(walletDb, SIGNET_ESPLORA_SETTINGS_KEY)).toBe(
@@ -137,13 +137,13 @@ describe('migrateLiveNetworkSplitEsploraSettings', () => {
     expect(await readSetting(walletDb, MUTINYNET_ESPLORA_SETTINGS_KEY)).toBe(
       'https://mutinynet.com/api',
     )
-    expect(await readSetting(walletDb, LIVE_NETWORK_SPLIT_ESPLORA_MIGRATED_KEY)).toBe('1')
+    expect(await readSetting(walletDb, SIGNET_NETWORK_SPLIT_ESPLORA_MIGRATED_KEY)).toBe('1')
   })
 
   it('records mutinynet when there was no custom URL', async () => {
     walletDb = await createTestDatabase()
 
-    const chain = await migrateLiveNetworkSplitEsploraSettings(walletDb)
+    const chain = await migrateSignetNetworkSplitEsploraSettings(walletDb)
 
     expect(chain).toBe('mutinynet')
     expect(await readSetting(walletDb, SIGNET_ESPLORA_SETTINGS_KEY)).toBeNull()

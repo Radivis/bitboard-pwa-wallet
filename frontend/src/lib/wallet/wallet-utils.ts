@@ -32,14 +32,14 @@ import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { startBarkLoadAfterUnlock } from '@/lib/bark/bark-session-service'
 import type { OnchainSyncThenSaveParams } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-types'
 import { CUSTOM_ESPLORA_URL_KEY_PREFIX } from '@/lib/wallet/historical-signet-onchain-chain'
-import { ensureLiveNetworkSplitMigrated } from '@/lib/wallet/live-network-split-migration'
+import { ensureSignetNetworkSplitMigrated } from '@/lib/wallet/signet-network-split-migration'
 
 /**
  * Classifies the pre-split Signet Esplora row once.
  * Mutinynet URLs move to the mutinynet key. Public Signet URLs stay on signet.
  */
 export async function migrateCustomEsploraUrlSignetToMutinynet(): Promise<void> {
-  await ensureLiveNetworkSplitMigrated()
+  await ensureSignetNetworkSplitMigrated()
 }
 
 async function orchestrateOnchainSyncThenSaveFromWalletUtils(
@@ -100,7 +100,7 @@ export async function saveCustomEsploraUrl(
   url: string,
 ): Promise<void> {
   validateEsploraUrl(url, network)
-  await ensureLiveNetworkSplitMigrated()
+  await ensureSignetNetworkSplitMigrated()
   const walletDb = getDatabase()
   const settingsKey = `${CUSTOM_ESPLORA_URL_KEY_PREFIX}${network}`
 
@@ -127,7 +127,7 @@ export async function saveCustomEsploraUrl(
 export async function deleteCustomEsploraUrl(
   network: NetworkMode,
 ): Promise<void> {
-  await ensureLiveNetworkSplitMigrated()
+  await ensureSignetNetworkSplitMigrated()
   const walletDb = getDatabase()
   await walletDb
     .deleteFrom('settings')
@@ -138,7 +138,7 @@ export async function deleteCustomEsploraUrl(
 export async function loadCustomEsploraUrl(
   network: NetworkMode,
 ): Promise<string | null> {
-  await ensureLiveNetworkSplitMigrated()
+  await ensureSignetNetworkSplitMigrated()
   const walletDb = getDatabase()
   const settingsRow = await walletDb
     .selectFrom('settings')

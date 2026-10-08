@@ -1,5 +1,5 @@
 import { wrap, type Remote } from 'comlink'
-import { configureWorkerHistoricalSignetOnchainChain } from '@/lib/wallet/live-network-split-migration'
+import { configureWorkerHistoricalSignetOnchainChain } from '@/lib/wallet/signet-network-split-migration'
 import type { HistoricalSignetOnchainChain } from '@/lib/wallet/historical-signet-onchain-chain'
 
 export type RailWorkerHealthStatus = 'initializing' | 'healthy' | 'error' | 'crashed'

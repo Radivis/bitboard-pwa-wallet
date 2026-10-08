@@ -9,8 +9,8 @@
  */
 export type HistoricalSignetOnchainChain = 'mutinynet' | 'public-signet' | 'custom-host'
 
-export const LIVE_NETWORK_SPLIT_ESPLORA_MIGRATED_KEY = 'live_network_split_esplora_migrated'
-export const LIVE_NETWORK_SPLIT_ONCHAIN_CHAIN_KEY = 'live_network_split_onchain_chain'
+export const SIGNET_NETWORK_SPLIT_ESPLORA_MIGRATED_KEY = 'signet_network_split_esplora_migrated'
+export const SIGNET_NETWORK_SPLIT_ONCHAIN_CHAIN_KEY = 'signet_network_split_onchain_chain'
 export const CUSTOM_ESPLORA_URL_KEY_PREFIX = 'custom_esplora_url_'
 export const SIGNET_ESPLORA_SETTINGS_KEY = `${CUSTOM_ESPLORA_URL_KEY_PREFIX}signet`
 export const MUTINYNET_ESPLORA_SETTINGS_KEY = `${CUSTOM_ESPLORA_URL_KEY_PREFIX}mutinynet`

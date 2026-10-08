@@ -9,7 +9,7 @@ import {
   LIGHTNING_PERSIST_STORAGE_KEY,
   WALLET_PERSIST_STORAGE_KEY,
 } from '@/lib/wallet/historical-signet-onchain-chain'
-import { ensureLiveNetworkSplitMigrated } from '@/lib/wallet/live-network-split-migration'
+import { ensureSignetNetworkSplitMigrated } from '@/lib/wallet/signet-network-split-migration'
 import {
   blockLabDatabaseAccessForTeardown,
   resetLabDatabaseAccessTeardownGuard,
@@ -55,7 +55,7 @@ export const sqliteStorage: StateStorage = {
       key === LIGHTNING_PERSIST_STORAGE_KEY
     ) {
       try {
-        await ensureLiveNetworkSplitMigrated()
+        await ensureSignetNetworkSplitMigrated()
       } catch (migrationError) {
         console.error('Signet/Mutinynet split migration failed:', migrationError)
       }

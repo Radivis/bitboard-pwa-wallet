@@ -223,7 +223,7 @@ describe('parseWalletPayloadJson', () => {
       },
     })
     const migrated = parseWalletPayloadJson(json)
-    expect(migrated.liveNetworkSplitApplied).toBe(true)
+    expect(migrated.signetNetworkSplitApplied).toBe(true)
     expect(migrated.descriptorWallets[0].network).toBe('mutinynet')
     expect(migrated.lightningNwcConnections[0].networkMode).toBe('mutinynet')
     expect(migrated.arkadeAccounts[0].networkMode).toBe('mutinynet')
@@ -242,7 +242,7 @@ describe('parseWalletPayloadJson', () => {
       }),
     )
     expect(kept.descriptorWallets[0].network).toBe('signet')
-    expect(kept.liveNetworkSplitApplied).toBe(true)
+    expect(kept.signetNetworkSplitApplied).toBe(true)
   })
 
   it('keeps public-signet descriptors and lightning on signet and still moves Arkade', () => {
@@ -279,7 +279,7 @@ describe('parseWalletPayloadJson', () => {
         },
       }),
     )
-    expect(parsed.liveNetworkSplitApplied).toBe(true)
+    expect(parsed.signetNetworkSplitApplied).toBe(true)
     expect(parsed.descriptorWallets[0].network).toBe('signet')
     expect(parsed.lightningNwcConnections[0].networkMode).toBe('signet')
     expect(parsed.arkadeAccounts[0].networkMode).toBe('mutinynet')
@@ -308,7 +308,7 @@ describe('parseWalletPayloadJson', () => {
         arkadeAccounts: [validSignetAccount],
       }),
     )
-    expect(parsed.liveNetworkSplitApplied).toBeUndefined()
+    expect(parsed.signetNetworkSplitApplied).toBeUndefined()
     expect(parsed.descriptorWallets[0].network).toBe('signet')
     expect(parsed.arkadeAccounts[0].networkMode).toBe('mutinynet')
   })

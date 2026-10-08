@@ -61,7 +61,7 @@ describe('lightning-wallet-secrets persistence', () => {
     ],
     arkadeAccounts: [],
     activeArkadeAccountIdByNetwork: {},
-    liveNetworkSplitApplied: true,
+    signetNetworkSplitApplied: true,
   }
 
   beforeEach(async () => {

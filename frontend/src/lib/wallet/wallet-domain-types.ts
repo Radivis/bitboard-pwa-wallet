@@ -196,7 +196,7 @@ export interface WalletSecretsPayload {
    * rewritten to `mutinynet`. Absent means the rewrite still needs to run.
    * New wallets set this immediately so public Signet rows stay `signet`.
    */
-  liveNetworkSplitApplied?: true
+  signetNetworkSplitApplied?: true
 }
 
 /** Sensitive wallet data stored encrypted. Shared with db layer and workers. */
@@ -572,8 +572,8 @@ export function walletSecretsPayloadFromSecrets(
     arkadeAccounts: secrets.arkadeAccounts ?? [],
     activeArkadeAccountIdByNetwork: secrets.activeArkadeAccountIdByNetwork ?? {},
     ...(secrets.barkRails != null ? { barkRails: secrets.barkRails } : {}),
-    ...(secrets.liveNetworkSplitApplied === true
-      ? { liveNetworkSplitApplied: true as const }
+    ...(secrets.signetNetworkSplitApplied === true
+      ? { signetNetworkSplitApplied: true as const }
       : {}),
   }
 }
@@ -701,8 +701,8 @@ function rewriteSignetNetworkField(
  * Until that chain is configured, Arkade is rewritten but the flag stays unset
  * so a later parse can still classify descriptors.
  */
-function applyLiveNetworkSplit(raw: Record<string, unknown>): void {
-  if (raw.liveNetworkSplitApplied === true) return
+function applySignetNetworkSplit(raw: Record<string, unknown>): void {
+  if (raw.signetNetworkSplitApplied === true) return
 
   rewriteSignetNetworkField(raw.arkadeAccounts, 'networkMode')
   rewriteSignetNetworkField(raw.arkadeOperatorConnections, 'networkMode')
@@ -716,13 +716,13 @@ function applyLiveNetworkSplit(raw: Record<string, unknown>): void {
     rewriteSignetNetworkField(raw.descriptorWallets, 'network')
     rewriteSignetNetworkField(raw.lightningNwcConnections, 'networkMode')
   }
-  raw.liveNetworkSplitApplied = true
+  raw.signetNetworkSplitApplied = true
 }
 
 function normalizeWalletSecretsPayload(raw: unknown): unknown {
   if (!isRecord(raw)) return raw
 
-  applyLiveNetworkSplit(raw)
+  applySignetNetworkSplit(raw)
 
   const withoutLegacyKeys = { ...raw }
   delete withoutLegacyKeys.arkadeWallets
