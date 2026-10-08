@@ -11,6 +11,7 @@ export function BarkPanel() {
   const networkMode = useWalletStore(selectCommittedNetworkMode)
   const loadSnapshot = useBarkLoadLifecycleSnapshot()
   if (!isBarkActiveForNetworkMode(networkMode)) return null
+  if (loadSnapshot.loadPhase === 'not-configured') return null
 
   return (
     <Card data-testid="bark-management-panel">

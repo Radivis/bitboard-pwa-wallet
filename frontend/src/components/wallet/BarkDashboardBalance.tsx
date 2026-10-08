@@ -32,7 +32,7 @@ export function BarkDashboardBalance() {
   )
 
   const show = isBarkEnabled && isBarkNetworkMode(networkMode)
-  if (!show) return null
+  if (!show || loadSnapshot.loadPhase === 'not-configured') return null
 
   const spendableSats = syncSnapshot.spendableSats
   const lockedSats = syncSnapshot.lockedSats ?? 0

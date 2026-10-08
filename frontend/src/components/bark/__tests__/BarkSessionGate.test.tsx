@@ -18,14 +18,15 @@ describe('BarkSessionGate', () => {
     expect(screen.queryByText('ready')).not.toBeInTheDocument()
   })
 
-  it('shows the loading screen when Bark is not configured yet', () => {
-    render(
+  it('renders nothing when Bark is not configured', () => {
+    const { container } = render(
       <BarkSessionGate loadPhase="not-configured" errorMessage={null}>
         <p>ready</p>
       </BarkSessionGate>,
     )
 
-    expect(screen.getByTestId('bark-session-loading')).toBeInTheDocument()
+    expect(container).toBeEmptyDOMElement()
+    expect(screen.queryByTestId('bark-session-loading')).not.toBeInTheDocument()
     expect(screen.queryByText('ready')).not.toBeInTheDocument()
   })
 
