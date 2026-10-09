@@ -6,6 +6,11 @@ import {
   resetWalletDatabaseAccessTeardownGuard,
 } from './database'
 import {
+  LIGHTNING_PERSIST_STORAGE_KEY,
+  WALLET_PERSIST_STORAGE_KEY,
+} from '@/lib/wallet/historical-signet-onchain-chain'
+import { ensureSignetNetworkSplitMigrated } from '@/lib/wallet/signet-network-split-migration'
+import {
   blockLabDatabaseAccessForTeardown,
   resetLabDatabaseAccessTeardownGuard,
 } from './lab-database'
@@ -45,6 +50,16 @@ export function resetSqliteStorageTeardownGuard(): void {
 export const sqliteStorage: StateStorage = {
   async getItem(key: string): Promise<string | null> {
     if (sqliteStorageTeardownBlocked) return null
+    if (
+      key === WALLET_PERSIST_STORAGE_KEY ||
+      key === LIGHTNING_PERSIST_STORAGE_KEY
+    ) {
+      try {
+        await ensureSignetNetworkSplitMigrated()
+      } catch (migrationError) {
+        console.error('Signet/Mutinynet split migration failed:', migrationError)
+      }
+    }
     await ensureMigrated()
     const settingsRecord = await getDatabase()
       .selectFrom('settings')

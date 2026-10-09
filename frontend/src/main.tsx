@@ -7,9 +7,11 @@ import { routeTree } from './routeTree.gen'
 import './index.css'
 import { ensureE2eArkadeMockControl } from '@/lib/arkade/e2e/e2e-arkade-mock-control'
 import { ensureE2eArkadeRegtestControl } from '@/lib/arkade/e2e/e2e-arkade-regtest-control'
+import { ensureE2eBarkRegtestControl } from '@/lib/bark/e2e/e2e-bark-regtest-control'
 
 ensureE2eArkadeMockControl()
 ensureE2eArkadeRegtestControl()
+ensureE2eBarkRegtestControl()
 
 const router = createRouter({
   routeTree,

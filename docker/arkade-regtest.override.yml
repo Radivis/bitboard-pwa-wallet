@@ -65,3 +65,23 @@ services:
     container_name: bitboard-regtest-emulator
   solver:
     container_name: bitboard-regtest-solver
+
+  # Bark server. Profile `bark` only — `start --profile ark` does not boot it.
+  # Image pin matches bark-wallet 0.7.1 (protocol versions 4 through 5).
+  captaind:
+    image: docker.io/secondark/captaind:0.7.1
+    container_name: bitboard-regtest-captaind
+    profiles: ["bark"]
+    restart: on-failure
+    depends_on:
+      - bitcoin
+    volumes:
+      - captaind_datadir:/data/captaind
+      - captaind_postgres:/var/lib/postgresql/data
+      - ${BARK_CAPTAIND_TOML:-../../docker/captaind/captaind.toml}:/root/captaind/captaind.toml:ro
+    ports:
+      - "${CAPTAIND_PORT:-3535}:3535"
+
+volumes:
+  captaind_datadir:
+  captaind_postgres:

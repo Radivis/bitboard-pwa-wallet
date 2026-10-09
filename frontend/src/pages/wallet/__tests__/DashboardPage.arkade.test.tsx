@@ -5,6 +5,13 @@ import { DashboardPage } from '@/pages/wallet/DashboardPage'
 
 const arkadeHistoryMock = vi.hoisted(() => vi.fn())
 const arkadeBalanceMock = vi.hoisted(() => vi.fn())
+const barkHistoryMock = vi.hoisted(() => vi.fn())
+const featureStoreState = vi.hoisted(() => ({
+  isArkadeEnabled: true,
+  isMainnetAccessEnabled: false,
+  isLightningEnabled: false,
+  isBarkEnabled: false,
+}))
 
 let walletStoreState: Record<string, unknown> = {}
 
@@ -22,15 +29,8 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 
 vi.mock('@/stores/featureStore', () => ({
   useFeatureStore: Object.assign(
-    (selector: (s: Record<string, unknown>) => unknown) =>
-      selector({ isArkadeEnabled: true, isMainnetAccessEnabled: false, isLightningEnabled: false }),
-    {
-      getState: () => ({
-        isArkadeEnabled: true,
-        isMainnetAccessEnabled: false,
-        isLightningEnabled: false,
-      }),
-    },
+    (selector: (state: typeof featureStoreState) => unknown) => selector(featureStoreState),
+    { getState: () => featureStoreState },
   ),
 }))
 
@@ -103,6 +103,7 @@ vi.mock('@/hooks/useRailManualSyncMutations', () => ({
   useOnchainFullRescanSyncMutation: () => ({ mutate: vi.fn(), isPending: false }),
   useLightningManualSyncMutation: () => ({ mutate: vi.fn(), isPending: false }),
   useArkadeManualSyncMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  useBarkManualSyncMutation: () => ({ mutate: vi.fn(), isPending: false }),
 }))
 
 vi.mock('@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator', () => ({
@@ -124,6 +125,10 @@ vi.mock('@/hooks/useLightningMutations', () => ({
     isSuccess: false,
   }),
   useNavigatorOnline: () => true,
+}))
+
+vi.mock('@/hooks/useBarkHistoryQuery', () => ({
+  useBarkHistoryQuery: () => barkHistoryMock(),
 }))
 
 vi.mock('@/hooks/useArkadeQueries', () => ({
@@ -209,11 +214,11 @@ describe('DashboardPage Arkade contracts', () => {
     walletStoreState = {
       activeWalletId: 1,
       walletStatus: 'unlocked',
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       addressType: 'taproot',
       accountId: 0,
       loadedDescriptorWallet: {
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
         addressType: 'taproot',
         accountId: 0,
       },
@@ -234,6 +239,11 @@ describe('DashboardPage Arkade contracts', () => {
       data: { confirmedSats: 42_000, totalSats: 42_000 },
     })
     arkadeHistoryMock.mockReturnValue({
+      isLoading: false,
+      data: [],
+    })
+    featureStoreState.isBarkEnabled = false
+    barkHistoryMock.mockReturnValue({
       isLoading: false,
       data: [],
     })
@@ -263,6 +273,37 @@ describe('DashboardPage Arkade contracts', () => {
     })
     renderWithProviders(<DashboardPage />)
     expect(screen.getByText('Loading Arkade activity…')).toBeInTheDocument()
+  })
+
+  it('BARK-HIST-03 omits Bark movements when Bark is disabled or the network is not signet', () => {
+    barkHistoryMock.mockReturnValue({
+      isLoading: false,
+      data: [
+        {
+          id: 3,
+          status: 'successful',
+          subsystemName: 'bark.board',
+          subsystemKind: 'board',
+          effectiveBalanceSats: 8_000,
+          offchainFeeSats: 10,
+          createdAtUnixSeconds: 1_700_000_100,
+        },
+      ],
+    })
+    const disabled = renderWithProviders(<DashboardPage />)
+    expect(screen.queryByTestId('bark-movement-3')).not.toBeInTheDocument()
+    disabled.unmount()
+
+    featureStoreState.isBarkEnabled = true
+    walletStoreState.networkMode = 'signet'
+    walletStoreState.loadedDescriptorWallet = {
+      networkMode: 'signet',
+      addressType: 'taproot',
+      accountId: 0,
+    }
+    renderWithProviders(<DashboardPage />)
+    expect(screen.getByTestId('bark-movement-3')).toBeInTheDocument()
+    expect(screen.getByText('Successful')).toBeInTheDocument()
   })
 
   it('DASH-ARK-30 preserves Arkade balance after remount simulating navigation return', () => {

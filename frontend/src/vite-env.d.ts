@@ -13,6 +13,10 @@ interface ImportMetaEnv {
   readonly VITE_E2E_ARKADE_MOCK?: string
   /** E2E-only: real local arkd via arkade-regtest (no operator mock). */
   readonly VITE_E2E_ARKADE_REGTEST?: string
+  /** E2E-only: local captaind on the arkade-regtest chain. */
+  readonly VITE_E2E_BARK_REGTEST?: string
+  readonly VITE_BARK_REGTEST_SERVER_URL?: string
+  readonly VITE_BARK_REGTEST_ESPLORA_URL?: string
   /** Local arkd operator URL for regtest (dev / E2E). */
   readonly VITE_ARKADE_OPERATOR_REGTEST?: string
   /** Set to `1` or `true` to hide TanStack Router devtools in dev (e.g. for screenshots). */
@@ -48,6 +52,10 @@ interface Window {
   __E2E_ARKADE__?: import('@/lib/arkade/e2e/e2e-arkade-mock-control').E2eArkadeMockControl
   /** DEV + `VITE_E2E_ARKADE_REGTEST`: export boarded-wallet fixture for Rust regtest. */
   __e2eExportBoardedWalletSdkPersistenceJson?: () => Promise<string>
+  /** DEV + `VITE_E2E_BARK_REGTEST`: mnemonic and Bark record dump after a board flush. */
+  __e2eExportBoardedBarkFixture?: () => Promise<
+    import('@/lib/bark/e2e/e2e-bark-regtest-control').BarkBoardedFixture
+  >
   /** DEV + `VITE_E2E_ARKADE_REGTEST`: read operator trust status from the live WASM session. */
   __e2eGetOperatorTrustStatus?: () => Promise<
     import('@/workers/arkade-api').ArkadeOperatorTrustStatus

@@ -12,7 +12,7 @@ import {
   TEST_PASSWORD,
 } from './helpers/wallet-setup'
 import { goToWalletTab } from './helpers/wallet-nav'
-import { enableArkadeFeature, switchToSignet } from './helpers/arkade-settings'
+import { enableArkadeFeature, switchToMutinynet } from './helpers/arkade-settings'
 import {
   E2E_ARKADE_MOCK_DEFAULT_BALANCE_SATS,
   E2E_ARKADE_MOCK_INCOMING_TXID,
@@ -78,7 +78,7 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
     await expectNoInitialWalletSyncErrorToast(page)
 
     await enableArkadeFeature(page)
-    await switchToSignet(page)
+    await switchToMutinynet(page)
 
     await goToWalletTab(page, 'Dashboard')
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
@@ -91,7 +91,7 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
   test('E2E-ARK-MOCK-02 shows fixture incoming payment in activity feed', async ({ page }) => {
     await createWalletViaUI(page)
     await enableArkadeFeature(page)
-    await switchToSignet(page)
+    await switchToMutinynet(page)
     await goToWalletTab(page, 'Dashboard')
 
     await waitForArkadeMockDashboardBalance(page)
@@ -102,7 +102,7 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
   test('E2E-ARK-MOCK-03 receive round-trip preserves Arkade balance display', async ({ page }) => {
     await createWalletViaUI(page)
     await enableArkadeFeature(page)
-    await switchToSignet(page)
+    await switchToMutinynet(page)
     await goToWalletTab(page, 'Dashboard')
 
     await waitForArkadeMockDashboardBalance(page)
@@ -125,7 +125,7 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
 
     await createWalletViaUI(page)
     await enableArkadeFeature(page)
-    await switchToSignet(page)
+    await switchToMutinynet(page)
     await goToWalletTab(page, 'Dashboard')
 
     await waitForArkadeMockDashboardBalance(page)
@@ -153,7 +153,7 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
     test.setTimeout(ARKADE_MOCK_TEST_TIMEOUT_MS * 4)
     await createWalletViaUI(page)
     await enableArkadeFeature(page)
-    await switchToSignet(page)
+    await switchToMutinynet(page)
 
     await goToWalletTab(page, 'Dashboard')
     await waitForArkadeLoadReady(page)
@@ -174,7 +174,7 @@ test.describe('Dashboard Arkade mock ASP @arkade', () => {
     test.setTimeout(ARKADE_MOCK_TEST_TIMEOUT_MS * 4)
     await createWalletViaUI(page)
     await enableArkadeFeature(page)
-    await switchToSignet(page)
+    await switchToMutinynet(page)
 
     await goToWalletTab(page, 'Dashboard')
     await waitForArkadeLoadReady(page)

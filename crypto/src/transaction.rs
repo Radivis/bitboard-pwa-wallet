@@ -325,6 +325,49 @@ pub fn build_transaction(
         .map_err(|e: bitcoin::psbt::PsbtParseError| CryptoError::Transaction(e.to_string()))
 }
 
+/// Signed funding PSBT plus the extracted transaction Bark or the local wallet can apply.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SignedFundingPsbt {
+    pub psbt_base64: String,
+    pub raw_tx_hex: String,
+    pub txid: String,
+}
+
+/// Signs and finalizes a PSBT. Does not broadcast and does not insert the transaction.
+pub fn sign_funding_psbt(
+    wallet: &Wallet,
+    psbt_base64: &str,
+) -> Result<SignedFundingPsbt, CryptoError> {
+    let mut psbt: Psbt = psbt_base64
+        .parse()
+        .map_err(|err: bitcoin::psbt::PsbtParseError| CryptoError::Transaction(err.to_string()))?;
+    let finalized = sign_transaction(wallet, &mut psbt)?;
+    if !finalized {
+        return Err(CryptoError::Transaction(
+            "Funding PSBT was not finalized".to_owned(),
+        ));
+    }
+    let transaction = extract_transaction(psbt.clone())?;
+    Ok(SignedFundingPsbt {
+        psbt_base64: psbt.to_string(),
+        raw_tx_hex: bitcoin::consensus::encode::serialize_hex(&transaction),
+        txid: transaction.compute_txid().to_string(),
+    })
+}
+
+/// Inserts a broadcast funding transaction as unconfirmed so the inputs are spent locally.
+pub fn apply_unconfirmed_funding_transaction(
+    wallet: &mut Wallet,
+    raw_tx_hex: &str,
+    last_seen_unix_seconds: u64,
+) -> Result<(), CryptoError> {
+    let transaction = bitcoin::consensus::encode::deserialize_hex::<Transaction>(raw_tx_hex)
+        .map_err(|err| CryptoError::Transaction(err.to_string()))?;
+    wallet.apply_unconfirmed_txs([(transaction, last_seen_unix_seconds)]);
+    Ok(())
+}
+
 // BDK wallet.sign(SignOptions) is deprecated; required until BDK provides replacement API.
 #[allow(deprecated)]
 pub fn sign_transaction(wallet: &Wallet, psbt: &mut Psbt) -> Result<bool, CryptoError> {

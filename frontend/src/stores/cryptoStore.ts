@@ -12,6 +12,7 @@ import { useLightningStore } from '@/stores/lightningStore';
 import { clearAutoLockTimer, clearLegacySessionState } from '@/stores/sessionStore';
 import { awaitArkadeSyncQuiescence } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator';
 import { closeArkadeSession } from '@/lib/arkade/arkade-session-service';
+import { closeBarkSession } from '@/lib/bark/bark-session-service';
 import { endWalletSecretsSessionReliably } from '@/lib/wallet/wallet-secrets-session';
 import { getArkadeWorkerIfExists } from '@/workers/arkade-factory';
 import { resetSecretsChannel } from '@/workers/secrets-channel';
@@ -93,6 +94,13 @@ interface CryptoState {
   buildTransaction: (params: BuildTransactionParams) => Promise<string>;
 
   signAndExtractTransaction: (psbtBase64: string) => Promise<string>;
+
+  signFundingPsbt: (psbtBase64: string) => Promise<import('@/workers/crypto-api').SignedFundingPsbt>;
+
+  applyUnconfirmedFundingTx: (
+    rawTxHex: string,
+    lastSeenUnixSeconds: number,
+  ) => Promise<void>;
 
   broadcastTransaction: (
     rawTxHex: string,
@@ -251,6 +259,14 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
     signAndExtractTransaction: (psbtBase64) =>
       withErrorHandling((worker) => worker.signAndExtractTransaction(psbtBase64)),
 
+    signFundingPsbt: (psbtBase64) =>
+      withErrorHandling((worker) => worker.signFundingPsbt(psbtBase64)),
+
+    applyUnconfirmedFundingTx: (rawTxHex, lastSeenUnixSeconds) =>
+      withErrorHandling((worker) =>
+        worker.applyUnconfirmedFundingTx(rawTxHex, lastSeenUnixSeconds),
+      ),
+
     broadcastTransaction: (rawTxHex, esploraUrl) =>
       withErrorHandling((worker) => worker.broadcastTransaction(rawTxHex, esploraUrl)),
 
@@ -298,9 +314,27 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
       useLightningStore.getState().purgeLightningConnectionsFromMemory();
       removeLightningConnectionsHydrationQueries();
       removeOnchainDashboardQueries();
+      const closeSessionsPromise = Promise.allSettled([
+        closeArkadeSession(),
+        closeBarkSession(),
+      ]);
+
       try {
-        await closeArkadeSession();
+        const [arkadeResult, barkResult] = await closeSessionsPromise;
+        if (arkadeResult.status === 'rejected' && barkResult.status === 'rejected') {
+          throw new AggregateError(
+            [arkadeResult.reason, barkResult.reason],
+            'Failed to close wallet sessions',
+          );
+        }
+        if (arkadeResult.status === 'rejected') {
+          throw arkadeResult.reason;
+        }
+        if (barkResult.status === 'rejected') {
+          throw barkResult.reason;
+        }
       } finally {
+        // Lock must drop the crypto worker and clear runtime secrets even if session teardown rejects.
         terminateCryptoWorker();
         await endWalletSecretsSessionReliably();
         resetSecretsChannel();

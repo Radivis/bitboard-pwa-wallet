@@ -4,8 +4,28 @@ import {
   ONCHAIN_ARKADE_BOARDING_ACTIVITY_LABEL,
   isBoardingFundToVtxoPair,
   mergeAndSortDashboardActivity,
+  type DashboardActivityItem,
   type LightningPaymentWithWallet,
 } from '@/lib/lightning/lightning-dashboard-sync'
+import type { BarkMovementRow } from '@/workers/bark-api'
+
+function activityRowId(item: DashboardActivityItem): string {
+  if (item.kind === 'chain') return item.tx.txid
+  if (item.kind === 'lightning') return item.payment.paymentHash
+  if (item.kind === 'arkade') return item.payment.txid
+  return String(item.movement.id)
+}
+
+function barkMovement(overrides: Partial<BarkMovementRow> & Pick<BarkMovementRow, 'id' | 'createdAtUnixSeconds'>): BarkMovementRow {
+  return {
+    status: 'successful',
+    subsystemName: 'bark.board',
+    subsystemKind: 'board',
+    effectiveBalanceSats: 10_000,
+    offchainFeeSats: 100,
+    ...overrides,
+  }
+}
 import type { TransactionDetails } from '@/workers/crypto-types'
 
 const chainOlder: TransactionDetails = {
@@ -49,7 +69,7 @@ describe('mergeAndSortDashboardActivity', () => {
       [chainOlder, chainNewer],
       [lnMiddle],
     )
-    expect(merged.map((i) => (i.kind === 'chain' ? i.tx.txid : i.payment.paymentHash))).toEqual([
+    expect(merged.map(activityRowId)).toEqual([
       'bb',
       'ln1',
       'aa',
@@ -192,11 +212,24 @@ describe('mergeAndSortDashboardActivity', () => {
       [...confirmedChain, pendingSend],
       [lnMiddle],
     )
-    const topTenTxids = merged
-      .slice(0, 10)
-      .map((item) => (item.kind === 'chain' ? item.tx.txid : item.payment.paymentHash))
+    const topTenTxids = merged.slice(0, 10).map(activityRowId)
 
     expect(topTenTxids[0]).toBe('pending-send')
     expect(topTenTxids).toContain('pending-send')
+  })
+
+  it('BARK-HIST-02 orders Bark movements newest first with the other rails', () => {
+    const merged = mergeAndSortDashboardActivity(
+      [chainOlder],
+      [],
+      [],
+      [
+        barkMovement({ id: 1, createdAtUnixSeconds: 50, status: 'failed', effectiveBalanceSats: -500 }),
+        barkMovement({ id: 2, createdAtUnixSeconds: 250 }),
+      ],
+    )
+    expect(merged.map(activityRowId)).toEqual(['2', 'aa', '1'])
+    expect(merged[0].kind).toBe('bark')
+    expect(merged[2].kind).toBe('bark')
   })
 })

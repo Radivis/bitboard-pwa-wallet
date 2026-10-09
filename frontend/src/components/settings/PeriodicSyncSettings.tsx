@@ -27,6 +27,7 @@ const RAIL_LABELS: Record<DashboardRailId, string> = {
   onchain: 'On-chain',
   lightning: 'Lightning',
   arkade: 'Arkade',
+  bark: 'Bark',
 }
 
 function PeriodicSyncRailRow({ rail }: { rail: DashboardRailId }) {
@@ -112,6 +113,7 @@ function PeriodicSyncRailRow({ rail }: { rail: DashboardRailId }) {
 export function PeriodicSyncSettings() {
   const isLightningEnabled = useFeatureStore((state) => state.isLightningEnabled)
   const isArkadeEnabled = useFeatureStore((state) => state.isArkadeEnabled)
+  const isBarkEnabled = useFeatureStore((state) => state.isBarkEnabled)
 
   const visibleRails: DashboardRailId[] = ['onchain']
   if (isLightningEnabled) {
@@ -119,6 +121,9 @@ export function PeriodicSyncSettings() {
   }
   if (isArkadeEnabled) {
     visibleRails.push('arkade')
+  }
+  if (isBarkEnabled) {
+    visibleRails.push('bark')
   }
 
   return (

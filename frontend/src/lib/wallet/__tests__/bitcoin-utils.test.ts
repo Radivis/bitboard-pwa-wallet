@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import type { TransactionDetails } from '@/workers/crypto-types'
 import {
+  fetchEsploraChainTip,
   fetchEsploraTipBlockHeight,
   formatSats,
   getEsploraUrl,
@@ -112,9 +113,9 @@ describe('getEsploraUrl', () => {
     )
   })
 
-  it('maps legacy standard signet base to legacy proxy', () => {
+  it('maps public signet base to the default proxy', () => {
     expect(getEsploraUrl('signet', 'https://mempool.space/signet/api')).toBe(
-      `${window.location.origin}/api/esplora/legacy/signet`,
+      `${window.location.origin}/api/esplora/default/signet`,
     )
   })
 
@@ -144,9 +145,9 @@ describe('validateEsploraUrl', () => {
     ).not.toThrow()
   })
 
-  it('accepts Mutinynet default Esplora URL for signet', () => {
+  it('accepts Mutinynet Esplora URL for mutinynet', () => {
     expect(() =>
-      validateEsploraUrl('https://mutinynet.com/api', 'signet'),
+      validateEsploraUrl('https://mutinynet.com/api', 'mutinynet'),
     ).not.toThrow()
   })
 
@@ -204,6 +205,30 @@ describe('fetchEsploraTipBlockHeight', () => {
     expect(vi.mocked(fetch)).toHaveBeenCalledWith(
       'https://example.com/api/blocks/tip/height',
     )
+  })
+})
+
+describe('fetchEsploraChainTip', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('reads the tip height and hash together', async () => {
+    const hash = 'ab'.repeat(32)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.endsWith('/blocks/tip/hash')) {
+          return { ok: true, text: async () => ` ${hash.toUpperCase()} \n` }
+        }
+        return { ok: true, text: async () => '100' }
+      }),
+    )
+
+    await expect(fetchEsploraChainTip('https://example.com/api')).resolves.toEqual({
+      height: 100,
+      hash,
+    })
   })
 })
 

@@ -11,6 +11,7 @@ This folder documents **what** is persisted, **where**, and **how** reads and wr
 | [bitcoin-onchain.md](bitcoin-onchain.md) | BDK descriptor wallets, changesets, Esplora sync metadata |
 | [lightning.md](lightning.md) | NWC connections, encrypted snapshots, Lightning store |
 | [arkade.md](arkade.md) | Arkade accounts, `sdkPersistenceJson`, Arkade WASM envelope |
+| [bark.md](bark.md) | Bark rails, per-network record dumps, Bark WASM adaptor |
 | [unilateral-exit.md](unilateral-exit.md) | Unilateral-exit materials, watches, job/prefs/failure stores |
 | [lab.md](lab.md) | Lab simulator chain state, entities, mempool |
 | [general.md](general.md) | Shared wallet DB, encryption, Zustand settings, library, backups |
@@ -48,8 +49,6 @@ flowchart TB
 
 There is **no IndexedDB fallback**. If OPFS or SQLite is unavailable, the app shows `SecureStorageUnavailableBanner` and does not silently degrade.
 
-**Legacy:** Arkade previously used per-wallet IndexedDB databases (`bitboard-arkade-{walletId}-{networkMode}`). These are deleted on session open; Arkade state now lives in `sdkPersistenceJson` inside encrypted wallet secrets.
-
 ## Two persistence layers
 
 ### 1. Encrypted wallet secrets (`wallet_secrets`)
@@ -62,6 +61,7 @@ interface WalletSecretsPayload {
   lightningNwcConnections: StoredNwcLightningConnection[]
   arkadeAccounts: StoredArkadeAccount[]
   activeArkadeAccountIdByNetwork: Partial<Record<ArkadeSupportedNetworkMode, string>>
+  barkAccounts: StoredBarkAccount[]
 }
 ```
 
@@ -78,7 +78,8 @@ Passwords, mnemonics, and NWC URIs are **never** stored in `localStorage` or `se
 | Worker | WASM crate | Runtime (ephemeral) | Flushed to |
 |--------|------------|---------------------|------------|
 | `crypto.worker` | `crypto` | `ACTIVE_WALLET`, BDK changeset | `descriptorWallets[].changeSet` in encrypted payload |
-| `arkade.worker` | `bitboard-ark` | `JsonPersistenceDb` | `sdkPersistenceJson` on active Arkade account |
+| `arkade.worker` | `bitboard-arkade` | `JsonPersistenceDb` | `sdkPersistenceJson` on active Arkade account |
+| `bark.worker` | `bitboard-bark` | in-memory `StorageAdaptor` | `recordDump` on `barkAccounts` for the open network |
 | `lab.worker` | `crypto` (`lab_*`) | In-memory `LabState` | Lab SQLite via `lab-factory.ts` on main thread |
 | `encryption.worker` | `bitboard-encryption` | Session password in worker memory | Not persisted (except near-zero wrapper; see [general.md](general.md)) |
 
@@ -107,7 +108,7 @@ Each rail has a save orchestrator that gates persistence on lifecycle phase. See
 | `bitboard-wallet` | Kysely forward migrations in `frontend/src/db/migrations/wallet/` | Report at OPFS `wallet-schema-migration-failure.json` |
 | `bitboard-lab` | Kysely forward migrations in `frontend/src/db/migrations/lab/` | Same pattern via lab migrator |
 
-Zustand stores may carry their own `version` + `migrate` (e.g. `featureStore`, `periodicSyncStore`). Arkade SDK JSON has an independent version in Rust (`BITBOARD_ARK_PERSISTENCE_VERSION`, currently **12**).
+Zustand stores may carry their own `version` + `migrate` (e.g. `featureStore`, `periodicSyncStore`). Arkade SDK JSON has an independent version in Rust (`BITBOARD_ARKADE_PERSISTENCE_VERSION`, currently **12**).
 
 ## Key file index
 
@@ -118,5 +119,6 @@ Zustand stores may carry their own `version` + `migrate` (e.g. `featureStore`, `
 | Zustand adapter | `frontend/src/db/storage-adapter.ts` |
 | Domain types | `frontend/src/lib/wallet/wallet-domain-types.ts` |
 | On-chain WASM | `crypto/src/wallet.rs`, `crypto/src/lib.rs` |
-| Arkade WASM | `bitboard-ark/src/persistence.rs` |
+| Arkade WASM | `bitboard-arkade/src/persistence.rs` |
+| Bark WASM | `bitboard-bark/src/record_store.rs`, `bitboard-bark/src/session.rs` |
 | Encryption | `bitboard-encryption/`, `frontend/src/db/encryption.ts` |

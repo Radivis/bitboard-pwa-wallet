@@ -77,8 +77,10 @@ export const UNILATERAL_EXIT_NODE_DIAMETER_PX = 48
  */
 const UNILATERAL_EXIT_LAYOUT_NODE_SIZE_PX = UNILATERAL_EXIT_NODE_DIAMETER_PX * 2
 
-const EXIT_PATH_EDGE_COLOR = '#3b82f6'
-const DEFAULT_EDGE_COLOR = '#94a3b8'
+export const EXIT_GRAPH_PATH_EDGE_COLOR = '#3b82f6'
+export const EXIT_GRAPH_DEFAULT_EDGE_COLOR = '#94a3b8'
+export const EXIT_GRAPH_PATH_STROKE_WIDTH = 2.5
+export const EXIT_GRAPH_DEFAULT_STROKE_WIDTH = 1.5
 
 export type UnilateralExitGraphEdgePath = {
   id: string
@@ -98,7 +100,7 @@ export function resolveNodeConnectionPositions(layoutDirection: UnilateralExitLa
   return { sourcePosition: Position.Bottom, targetPosition: Position.Top }
 }
 
-function connectionPointFromNodeCenter(
+export function connectionPointFromNodeCenter(
   center: { x: number; y: number },
   side: Position,
   nodeDiameter: number = UNILATERAL_EXIT_NODE_DIAMETER_PX,
@@ -166,8 +168,8 @@ function buildEdgePaths(params: {
         id: `${source}->${target}`,
         path,
         animated: onPath,
-        stroke: onPath ? EXIT_PATH_EDGE_COLOR : DEFAULT_EDGE_COLOR,
-        strokeWidth: onPath ? 2.5 : 1.5,
+        stroke: onPath ? EXIT_GRAPH_PATH_EDGE_COLOR : EXIT_GRAPH_DEFAULT_EDGE_COLOR,
+        strokeWidth: onPath ? EXIT_GRAPH_PATH_STROKE_WIDTH : EXIT_GRAPH_DEFAULT_STROKE_WIDTH,
       },
     ]
   })

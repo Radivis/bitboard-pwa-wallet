@@ -1,0 +1,788 @@
+mod api_types;
+mod balance_display;
+mod cached_operator_info;
+mod constants;
+mod error;
+mod esplora_blockchain;
+mod exit_balance;
+mod incremental_vtxo_sync;
+mod network;
+mod offchain_snapshot;
+mod operator_config_diff;
+mod outpoint;
+mod persistence;
+mod session;
+mod signer_migration;
+mod unilateral_exit_materials;
+#[cfg(target_arch = "wasm32")]
+mod wasm_sleep;
+
+#[cfg(test)]
+mod indexer_fetch_tests;
+#[cfg(test)]
+mod persistence_tests;
+#[cfg(test)]
+mod receive_address_tests;
+#[cfg(test)]
+mod session_boarding_utxo_tests;
+#[cfg(test)]
+mod session_exit_candidate_tests;
+#[cfg(test)]
+mod session_mapper_tests;
+#[cfg(not(target_arch = "wasm32"))]
+pub use api_types::{
+    CompleteUnilateralExitParams, ProceedUnilateralExitStepParams, SendPaymentParams,
+    UnilateralExitBatchEstimateParams, UnilateralExitJobViabilityDto,
+    UnilateralExitJobViabilityKind, UnilateralExitPhase, UnilateralExitProgressParams,
+    UnilateralExitTopologyParams,
+};
+#[cfg(not(target_arch = "wasm32"))]
+pub use network::NetworkMode;
+#[cfg(not(target_arch = "wasm32"))]
+pub use outpoint::{OnchainOutPoint, VirtualOutPoint};
+#[cfg(not(target_arch = "wasm32"))]
+pub use session::{ArkadeSession, OpenArkadeSessionParams};
+
+#[cfg(target_arch = "wasm32")]
+use crate::session::{ArkadeSession, OpenArkadeSessionParams};
+
+#[cfg(target_arch = "wasm32")]
+use crate::api_types::CompleteUnilateralExitParams;
+
+#[cfg(target_arch = "wasm32")]
+use crate::network::NetworkMode;
+
+use std::cell::RefCell;
+use std::future::Future;
+use std::rc::Rc;
+
+use wasm_bindgen::prelude::*;
+
+#[cfg(target_arch = "wasm32")]
+use crate::api_types::{
+    CollaborativeExitFeeEstimateParams, CollaborativeExitParams, OpenSessionParams,
+    PendingBatchIntentActionParams, SendPaymentParams, UnilateralExitCompletionFeeEstimateParams,
+};
+
+#[cfg(not(target_arch = "wasm32"))]
+use crate::api_types::{
+    CollaborativeExitFeeEstimateParams, CollaborativeExitParams, OpenSessionParams,
+    PendingBatchIntentActionParams, UnilateralExitCompletionFeeEstimateParams,
+};
+use crate::error::{ArkResult, ArkWasmError, map_js_error};
+
+thread_local! {
+    static ACTIVE_SESSION: RefCell<Option<Rc<ArkadeSession>>> = const { RefCell::new(None) };
+}
+
+#[wasm_bindgen(start)]
+pub fn init() {
+    console_error_panic_hook::set_once();
+}
+
+fn active_session_rc() -> ArkResult<Rc<ArkadeSession>> {
+    ACTIVE_SESSION.with(|session_cell| {
+        let session_borrow = session_cell
+            .try_borrow()
+            .map_err(|_| ArkWasmError::SessionAlreadyBorrowed)?;
+        session_borrow.clone().ok_or(ArkWasmError::SessionNotOpen)
+    })
+}
+
+fn with_session<F, R>(callback: F) -> ArkResult<R>
+where
+    F: FnOnce(&ArkadeSession) -> ArkResult<R>,
+{
+    let session = active_session_rc()?;
+    callback(session.as_ref())
+}
+
+async fn with_session_async<F, Fut, R>(run: F) -> ArkResult<R>
+where
+    F: FnOnce(Rc<ArkadeSession>) -> Fut,
+    Fut: Future<Output = ArkResult<R>>,
+{
+    let session = active_session_rc()?;
+    run(session).await
+}
+
+async fn export_session_json<T, F, Fut>(run: F) -> ArkResult<JsValue>
+where
+    T: serde::Serialize,
+    F: FnOnce(Rc<ArkadeSession>) -> Fut,
+    Fut: Future<Output = ArkResult<T>>,
+{
+    to_js_value(with_session_async(run).await?)
+}
+
+struct OnIntentRegisteredJsGuard;
+
+impl Drop for OnIntentRegisteredJsGuard {
+    fn drop(&mut self) {
+        crate::session::intents::set_on_intent_registered_js(None);
+    }
+}
+
+async fn export_batch_join_json<T, F, Fut>(
+    on_registered: js_sys::Function,
+    run: F,
+) -> ArkResult<JsValue>
+where
+    T: serde::Serialize,
+    F: FnOnce(Rc<ArkadeSession>) -> Fut,
+    Fut: Future<Output = ArkResult<T>>,
+{
+    crate::session::intents::set_on_intent_registered_js(Some(on_registered));
+    let _clear = OnIntentRegisteredJsGuard;
+    export_session_json(run).await
+}
+
+fn clear_active_session() -> ArkResult<()> {
+    ACTIVE_SESSION.with(|session_cell| {
+        let mut session_borrow_mut = session_cell
+            .try_borrow_mut()
+            .map_err(|_| ArkWasmError::SessionAlreadyBorrowed)?;
+        session_borrow_mut.take();
+        Ok(())
+    })
+}
+
+fn to_js_value<T: serde::Serialize>(value: T) -> ArkResult<JsValue> {
+    Ok(serde_wasm_bindgen::to_value(&value)?)
+}
+
+async fn map_js_async<T>(future: impl Future<Output = ArkResult<T>>) -> Result<T, JsValue> {
+    map_js_error(future.await)
+}
+
+#[wasm_bindgen]
+pub async fn arkade_open_session(params: JsValue) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let params: OpenSessionParams = serde_wasm_bindgen::from_value(params)?;
+        let network_mode = NetworkMode::parse(&params.network_mode)
+            .ok_or_else(|| ArkWasmError::UnsupportedNetworkMode(params.network_mode.clone()))?;
+
+        let (session, migration_hint) = ArkadeSession::open(OpenArkadeSessionParams {
+            mnemonic_words: &params.mnemonic,
+            network_mode,
+            arkade_server_url: params.arkade_server_url,
+            delegator_url: params.delegator_url,
+            esplora_url: params.esplora_url,
+            sdk_persistence_json: params.sdk_persistence_json.as_deref(),
+            bumper_changeset_json: params.bumper_changeset_json.as_deref(),
+            bumper_full_scan_done: params.bumper_full_scan_done,
+        })
+        .await?;
+
+        let arkade_address = session.peek_offchain_address()?;
+        let operator_signer_pk_hex = session.operator_signer_pk_hex();
+        let bumper_hydrate_fell_back_to_empty = session.bumper_hydrate_fell_back_to_empty();
+        let signer_migration_hint =
+            migration_hint.map(|hint| crate::api_types::OperatorSignerMigrationHintDto {
+                previous_signer_pk_hex: hint.previous_signer_pk_hex,
+                deprecated_status: hint.deprecated_status,
+                cutoff_unix: hint.cutoff_unix,
+            });
+        ACTIVE_SESSION.with(|session_cell| -> ArkResult<()> {
+            let mut session_borrow_mut = session_cell
+                .try_borrow_mut()
+                .map_err(|_| ArkWasmError::SessionAlreadyBorrowed)?;
+            *session_borrow_mut = Some(Rc::new(session));
+            Ok(())
+        })?;
+
+        to_js_value(crate::api_types::OpenSessionResult {
+            arkade_address,
+            operator_signer_pk_hex,
+            signer_migration_hint,
+            bumper_hydrate_fell_back_to_empty,
+        })
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub fn arkade_operator_signer_pk_hex() -> Result<String, JsValue> {
+    map_js_error(with_session(|session| Ok(session.operator_signer_pk_hex())))
+}
+
+#[wasm_bindgen]
+pub async fn arkade_enter_autonomous_mode() -> Result<(), JsValue> {
+    map_js_async(async {
+        with_session_async(|session| async move { session.enter_autonomous_mode().await }).await
+    })
+    .await
+}
+
+/// Best-effort bumper BDK Esplora sync. Session open and unlock must not start this
+/// (LIFE-ARK-LOAD-04). Exit proceed and the first onchain_bumper_info may await it.
+/// Completing a unilateral exit schedules it in the background and does not wait.
+#[wasm_bindgen]
+pub async fn arkade_sync_bumper_wallet() -> Result<(), JsValue> {
+    map_js_async(async {
+        with_session_async(|session| async move {
+            session.sync_bumper_wallet_best_effort().await;
+            Ok(())
+        })
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub fn arkade_export_bumper_wallet_changeset() -> Result<String, JsValue> {
+    map_js_error(with_session(|session| {
+        session.export_bumper_wallet_changeset()
+    }))
+}
+
+#[wasm_bindgen]
+pub fn arkade_bumper_wallet_full_scan_done() -> Result<bool, JsValue> {
+    map_js_error(with_session(|session| {
+        Ok(session.bumper_wallet_full_scan_done())
+    }))
+}
+
+#[wasm_bindgen]
+pub async fn arkade_exit_autonomous_mode() -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let result =
+            with_session_async(|session| async move { session.exit_autonomous_mode().await })
+                .await?;
+        to_js_value(result)
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub fn arkade_autonomous_mode_status() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.autonomous_mode_status()?)
+    }))
+}
+
+#[wasm_bindgen]
+pub async fn arkade_sync_with_operator(schedule_background_full: bool) -> Result<JsValue, JsValue> {
+    map_js_async(async move {
+        let result = with_session_async(move |session| async move {
+            session
+                .sync_with_operator_scheduling(schedule_background_full)
+                .await
+        })
+        .await?;
+        to_js_value(result)
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_reconcile_full_offchain_vtxo_list() -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let result = with_session_async(|session| async move {
+            session.reconcile_full_offchain_vtxo_list().await
+        })
+        .await?;
+        to_js_value(result)
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub fn arkade_operator_trust_status() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.operator_trust_status())
+    }))
+}
+
+#[wasm_bindgen]
+pub fn arkade_operator_config_diff() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.operator_config_diff()?)
+    }))
+}
+
+#[wasm_bindgen]
+pub async fn arkade_accept_pending_operator_config() -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let result =
+            with_session_async(
+                |session| async move { session.accept_pending_operator_config().await },
+            )
+            .await?;
+        to_js_value(result)
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_review_operator_config_in_autonomous_mode() -> Result<(), JsValue> {
+    map_js_async(async {
+        with_session_async(|session| async move {
+            session.review_operator_config_in_autonomous_mode().await
+        })
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_migrate_deprecated_signer_vtxos(
+    on_registered: js_sys::Function,
+) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        crate::session::intents::set_on_intent_registered_js(Some(on_registered));
+        let _clear = OnIntentRegisteredJsGuard;
+        let result =
+            with_session_async(
+                |session| async move { session.migrate_deprecated_signer_vtxos().await },
+            )
+            .await?;
+        to_js_value(result)
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_close_session() -> Result<(), JsValue> {
+    map_js_async(async {
+        let _ = arkade_export_persistence_json_internal();
+        clear_active_session()?;
+        Ok(())
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub fn arkade_export_persistence_json() -> Result<String, JsValue> {
+    map_js_error(arkade_export_persistence_json_internal())
+}
+
+fn arkade_export_persistence_json_internal() -> ArkResult<String> {
+    with_session(|session| session.export_persistence())
+}
+
+#[wasm_bindgen]
+pub async fn arkade_get_balance() -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        export_session_json(|session| async move { session.balance().await }).await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub fn arkade_get_address() -> Result<String, JsValue> {
+    map_js_error(with_session(|session| session.peek_offchain_address()))
+}
+
+#[wasm_bindgen]
+pub fn arkade_reveal_next_receive_address() -> Result<String, JsValue> {
+    map_js_error(with_session(|session| {
+        session.reveal_next_offchain_address()
+    }))
+}
+
+#[wasm_bindgen]
+pub fn arkade_get_boarding_address() -> Result<String, JsValue> {
+    map_js_error(with_session(|session| session.boarding_address()))
+}
+
+#[wasm_bindgen]
+pub async fn arkade_get_boarding_status() -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        export_session_json(|session| async move { session.boarding_status().await }).await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_send_payment(params: JsValue) -> Result<String, JsValue> {
+    map_js_async(async {
+        let params: SendPaymentParams = serde_wasm_bindgen::from_value(params)?;
+        with_session_async(|session| async move { session.send_payment(params).await }).await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_get_transaction_history() -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        export_session_json(|session| async move { session.transaction_history().await }).await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_get_delegate_info() -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        export_session_json(|session| async move { session.delegate_info().await }).await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_get_expiring_vtxo_count() -> Result<u32, JsValue> {
+    map_js_async(async {
+        with_session_async(|session| async move { session.expiring_vtxo_count().await }).await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub fn arkade_operator_scheduled_session() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.operator_scheduled_session()?)
+    }))
+}
+
+#[wasm_bindgen]
+pub async fn arkade_get_vtxo_expiry_status() -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        export_session_json(|session| async move { session.vtxo_expiry_status().await }).await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_renew_vtxos_now(on_registered: js_sys::Function) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        export_batch_join_json(on_registered, |session| async move {
+            session.renew_vtxos_now().await
+        })
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_delegate_spendable_vtxos() -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        export_session_json(|session| async move { session.delegate_spendable_vtxos().await }).await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_finalize_pending_transactions() -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        export_session_json(|session| async move { session.finalize_pending_transactions().await })
+            .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_onboard_boarded_utxos(
+    on_registered: js_sys::Function,
+) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        export_batch_join_json(on_registered, |session| async move {
+            session.onboard_boarded_utxos().await
+        })
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_get_recoverable_vtxo_fee_estimate() -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        export_session_json(|session| async move { session.recoverable_vtxo_fee_estimate().await })
+            .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_recover_recoverable_vtxos(
+    on_registered: js_sys::Function,
+) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        export_batch_join_json(on_registered, |session| async move {
+            session.recover_recoverable_vtxos().await
+        })
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_cancel_pending_batch_intent(params: JsValue) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let params: PendingBatchIntentActionParams = serde_wasm_bindgen::from_value(params)?;
+        export_session_json(
+            |session| async move { session.cancel_pending_batch_intent(params).await },
+        )
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_retry_pending_batch_intent(
+    params: JsValue,
+    on_registered: js_sys::Function,
+) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let params: PendingBatchIntentActionParams = serde_wasm_bindgen::from_value(params)?;
+        export_batch_join_json(on_registered, |session| async move {
+            session.retry_pending_batch_intent(params).await
+        })
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_abort_in_flight_batch_join() -> Result<(), JsValue> {
+    map_js_async(async {
+        with_session_async(|session| async move {
+            session.abort_in_flight_batch_join().await;
+            Ok(())
+        })
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_list_exit_candidates() -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        export_session_json(|session| async move { session.list_exit_candidates().await }).await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_list_vtxos() -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        export_session_json(|session| async move { session.list_vtxos().await }).await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_list_unilateral_exits_in_progress() -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        export_session_json(
+            |session| async move { session.list_unilateral_exits_in_progress().await },
+        )
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub fn arkade_list_vtxo_exit_records() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.list_vtxo_exit_records())
+    }))
+}
+
+#[wasm_bindgen]
+pub fn arkade_peek_onchain_bumper_address() -> Result<String, JsValue> {
+    map_js_error(with_session(|session| session.onchain_bumper_address()))
+}
+
+#[wasm_bindgen]
+pub fn arkade_unilateral_exit_timelock() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.unilateral_exit_timelock()?)
+    }))
+}
+
+#[wasm_bindgen]
+pub async fn arkade_get_onchain_bumper_info() -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        export_session_json(|session| async move { session.onchain_bumper_info().await }).await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_collaborative_exit(
+    params: JsValue,
+    on_registered: js_sys::Function,
+) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let params: CollaborativeExitParams = serde_wasm_bindgen::from_value(params)?;
+        export_batch_join_json(on_registered, |session| async move {
+            session.collaborative_exit(params).await
+        })
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_get_collaborative_exit_fee_estimate(
+    params: JsValue,
+) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let params: CollaborativeExitFeeEstimateParams = serde_wasm_bindgen::from_value(params)?;
+        export_session_json(|session| async move {
+            session
+                .collaborative_exit_fee_estimate(&params.destination_address, params.amount_sats)
+                .await
+        })
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_complete_unilateral_exit(params: JsValue) -> Result<String, JsValue> {
+    map_js_async(async {
+        let params: CompleteUnilateralExitParams = serde_wasm_bindgen::from_value(params)?;
+        with_session_async(|session| async move { session.complete_unilateral_exit(params).await })
+            .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_estimate_unilateral_exit_completion(
+    params: JsValue,
+) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let params: UnilateralExitCompletionFeeEstimateParams =
+            serde_wasm_bindgen::from_value(params)?;
+        export_session_json(|session| async move {
+            session.estimate_unilateral_exit_completion(params).await
+        })
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_get_unilateral_exit_topology(params: JsValue) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let params: crate::api_types::UnilateralExitTopologyParams =
+            serde_wasm_bindgen::from_value(params)?;
+        export_session_json(
+            |session| async move { session.get_unilateral_exit_topology(params).await },
+        )
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_estimate_unilateral_exit_batch(params: JsValue) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let params: crate::api_types::UnilateralExitBatchEstimateParams =
+            serde_wasm_bindgen::from_value(params)?;
+        export_session_json(|session| async move {
+            session.estimate_unilateral_exit_batch(params).await
+        })
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_proceed_unilateral_exit_step(params: JsValue) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let params: crate::api_types::ProceedUnilateralExitStepParams =
+            serde_wasm_bindgen::from_value(params)?;
+        export_session_json(
+            |session| async move { session.proceed_unilateral_exit_step(params).await },
+        )
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_get_unilateral_exit_progress(params: JsValue) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let params: crate::api_types::UnilateralExitProgressParams =
+            serde_wasm_bindgen::from_value(params)?;
+        export_session_json(
+            |session| async move { session.get_unilateral_exit_progress(params).await },
+        )
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub async fn arkade_evaluate_unilateral_exit_job_viability(
+    params: JsValue,
+) -> Result<JsValue, JsValue> {
+    map_js_async(async {
+        let params: crate::api_types::UnilateralExitProgressParams =
+            serde_wasm_bindgen::from_value(params)?;
+        export_session_json(|session| async move {
+            session.evaluate_unilateral_exit_job_viability(params).await
+        })
+        .await
+    })
+    .await
+}
+
+#[wasm_bindgen]
+pub fn arkade_get_unilateral_exit_frontend() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.unilateral_exit_frontend())
+    }))
+}
+
+#[wasm_bindgen]
+pub fn arkade_set_unilateral_exit_frontend(params: JsValue) -> Result<(), JsValue> {
+    map_js_error(with_session(|session| {
+        let dto: crate::api_types::UnilateralExitFrontendPersistenceDto =
+            serde_wasm_bindgen::from_value(params)?;
+        session.set_unilateral_exit_frontend(dto);
+        Ok(())
+    }))
+}
+
+#[wasm_bindgen]
+pub fn arkade_tag_unilateral_exit_plan(params: JsValue) -> Result<(), JsValue> {
+    map_js_error(with_session(|session| {
+        let params: crate::api_types::UnilateralExitProgressParams =
+            serde_wasm_bindgen::from_value(params)?;
+        session.tag_unilateral_exit_plan(&params.vtxo_outpoints)?;
+        Ok(())
+    }))
+}
+
+#[wasm_bindgen]
+pub fn arkade_untag_unilateral_exit_plan_if_safe(params: JsValue) -> Result<(), JsValue> {
+    map_js_error(with_session(|session| {
+        let params: crate::api_types::UnilateralExitProgressParams =
+            serde_wasm_bindgen::from_value(params)?;
+        session.untag_unilateral_exit_plan_if_safe(&params.vtxo_outpoints)?;
+        Ok(())
+    }))
+}
+
+#[wasm_bindgen]
+pub fn arkade_set_unilateral_exit_job(params: JsValue) -> Result<(), JsValue> {
+    map_js_error(with_session(|session| {
+        let dto: crate::api_types::UnilateralExitJobDto = serde_wasm_bindgen::from_value(params)?;
+        session.set_unilateral_exit_job(dto);
+        Ok(())
+    }))
+}
+
+#[wasm_bindgen]
+pub fn arkade_set_unilateral_exit_automation_prefs(params: JsValue) -> Result<(), JsValue> {
+    map_js_error(with_session(|session| {
+        let dto: crate::api_types::UnilateralExitAutomationPrefsDto =
+            serde_wasm_bindgen::from_value(params)?;
+        session.set_unilateral_exit_automation_prefs(dto);
+        Ok(())
+    }))
+}
+
+#[wasm_bindgen]
+pub fn arkade_set_unilateral_exit_failure(params: JsValue) -> Result<(), JsValue> {
+    map_js_error(with_session(|session| {
+        let dto: Option<crate::api_types::UnilateralExitFailureDto> =
+            serde_wasm_bindgen::from_value(params)?;
+        session.set_unilateral_exit_failure(dto);
+        Ok(())
+    }))
+}

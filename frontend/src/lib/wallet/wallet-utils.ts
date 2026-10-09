@@ -29,9 +29,18 @@ import {
 } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
 import { orchestrateArkadeLoad } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
+import { startBarkLoadAfterUnlock } from '@/lib/bark/bark-session-service'
 import type { OnchainSyncThenSaveParams } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-types'
+import { CUSTOM_ESPLORA_URL_KEY_PREFIX } from '@/lib/wallet/historical-signet-onchain-chain'
+import { ensureSignetNetworkSplitMigrated } from '@/lib/wallet/signet-network-split-migration'
 
-const CUSTOM_ESPLORA_URL_KEY_PREFIX = 'custom_esplora_url_'
+/**
+ * Classifies the pre-split Signet Esplora row once.
+ * Mutinynet URLs move to the mutinynet key. Public Signet URLs stay on signet.
+ */
+export async function migrateCustomEsploraUrlSignetToMutinynet(): Promise<void> {
+  await ensureSignetNetworkSplitMigrated()
+}
 
 async function orchestrateOnchainSyncThenSaveFromWalletUtils(
   params: OnchainSyncThenSaveParams,
@@ -92,6 +101,7 @@ export async function saveCustomEsploraUrl(
 ): Promise<void> {
   validateEsploraUrl(url, network)
   await ensureMigrated()
+  await ensureSignetNetworkSplitMigrated()
   const walletDb = getDatabase()
   const settingsKey = `${CUSTOM_ESPLORA_URL_KEY_PREFIX}${network}`
 
@@ -119,6 +129,7 @@ export async function deleteCustomEsploraUrl(
   network: NetworkMode,
 ): Promise<void> {
   await ensureMigrated()
+  await ensureSignetNetworkSplitMigrated()
   const walletDb = getDatabase()
   await walletDb
     .deleteFrom('settings')
@@ -130,6 +141,7 @@ export async function loadCustomEsploraUrl(
   network: NetworkMode,
 ): Promise<string | null> {
   await ensureMigrated()
+  await ensureSignetNetworkSplitMigrated()
   const walletDb = getDatabase()
   const settingsRow = await walletDb
     .selectFrom('settings')
@@ -506,6 +518,7 @@ export async function loadDescriptorWalletWithoutSync(params: {
       )
     })
   }
+  startBarkLoadAfterUnlock({ walletId, networkMode })
 }
 
 /**
@@ -549,6 +562,7 @@ export async function loadDescriptorWalletAndSync(params: {
       )
     })
   }
+  startBarkLoadAfterUnlock({ walletId, networkMode })
 
   const { orchestrateOnchainPostUnlockSync } = await import(
     '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'

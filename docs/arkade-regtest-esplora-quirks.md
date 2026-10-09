@@ -4,7 +4,7 @@ The arkade-regtest stack ships a **minimal Esplora-compatible API** on port 7030
 
 **Stack setup and E2E commands:** [frontend/tests/e2e/fixtures/arkade-regtest/README.md](../frontend/tests/e2e/fixtures/arkade-regtest/README.md)
 
-**Implementation:** `bitboard-ark/src/esplora_blockchain.rs` (`EsploraBlockchain`, `map_tx_confirmations`, `find_tx_at`, `is_tx_relayed_on_network`).
+**Implementation:** `bitboard-arkade/src/esplora_blockchain.rs` (`EsploraBlockchain`, `map_tx_confirmations`, `find_tx_at`, `is_tx_relayed_on_network`).
 
 ---
 
@@ -16,7 +16,7 @@ For the same `txid`, regtest Esplora endpoints can disagree. Do not assume “vi
 |----------|--------------------------|-----------------|
 | `GET /tx/{txid}/merkle-proof` | **404** from `esplora_gateway` (mempool returns **500**, which rust-esplora-client retries 6× and stalls progress polls) | Confirmation when present; treat missing as "not confirmed" (never fail the poll) |
 | `GET /tx/{txid}/status` | Mempool electrum may keep `confirmed: false` for virtual-tree stubs even after mining; **`esplora_gateway` overrides with bitcoind when the tx is in a block** | **Primary** confirmation depth (`map_tx_confirmations` main path) |
-| `GET /tx/{txid}` (JSON) | Often available for **virtual-tree artifacts before relay**; may show `confirmed: false` indefinitely until mined | Loading tx bytes when raw is missing (`find_tx_at` fallback); **not** sole proof of relay |
+| `GET /tx/{txid}` (JSON) | Often available for **virtual-tree artifacts before relay**. For a tx bitcoind has **confirmed**, `esplora_gateway` replaces `status` with that confirmation so Bark can leave `AwaitingConfirmation` | Loading tx bytes when raw is missing (`find_tx_at` fallback); **not** sole proof of relay |
 | `GET /tx/{txid}/raw` | **200** when bitcoind has the tx in **mempool or chain** (not wallet-only); **404** otherwise (`esplora_gateway`) | Strict “on real network” check (`is_tx_relayed_on_network`) |
 
 **Confirmed on regtest** usually means: `get_tx_status` succeeds and reports a block height.
@@ -88,7 +88,7 @@ Separate from step progress: detecting that the **final exit sweep** spent a VTX
 
 **Pitfall:** each unroll CPFP step spends the previous branch tx at **`vout 0`**. Treating “anything spent `vout 0` of the branch tip” as exit completion causes false `is_spent` / “Finalized” UI without a completion tx.
 
-**Rule:** completion probes must target the **actual virtual VTXO outpoint** `(host_txid, virtual_vout)`, not arbitrary branch-tip spends. See `detect_exiting_vtxo_completion_on_esplora` in `bitboard-ark/src/session/unilateral_exit/onchain.rs`.
+**Rule:** completion probes must target the **actual virtual VTXO outpoint** `(host_txid, virtual_vout)`, not arbitrary branch-tip spends. See `detect_exiting_vtxo_completion_on_esplora` in `bitboard-arkade/src/session/unilateral_exit/onchain.rs`.
 
 ---
 
@@ -129,7 +129,7 @@ When REG-04 / REG-07 stuck at “Step 1 of N” despite mining, or lock/unlock r
 |------|-------------------|
 | E2E `@arkade-reg04` | Manual unilateral unroll + mining |
 | E2E `@arkade-reg07` | Preconfirmed VTXO + automatic unroll |
-| `bitboard-ark/tests/autonomous_unilateral_exit_session_regtest.rs` | Native proceed-step unroll + complete in autonomous mode (Docker) |
-| `cargo test -p bitboard-ark --lib` | Unit coverage for orchestrator helpers |
+| `bitboard-arkade/tests/autonomous_unilateral_exit_session_regtest.rs` | Native proceed-step unroll + complete in autonomous mode (Docker) |
+| `cargo test -p bitboard-arkade --lib` | Unit coverage for orchestrator helpers |
 
 Contracts: `doc/features/arkade-regtest-contract.yaml` (REG-04, REG-07).

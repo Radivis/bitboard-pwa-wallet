@@ -9,13 +9,22 @@ import { ARKADE_SUPPORTED_NETWORK_MODES } from '@/lib/arkade/arkade-domain-types
 import { ARKADE_SDK_PERSISTENCE_JSON_MAX_BYTES } from '@/lib/arkade/arkade-sdk-persistence-types'
 import type { LightningNetworkMode } from '@/lib/lightning/lightning-utils'
 import { LIGHTNING_NETWORK_MODES } from '@/lib/lightning/lightning-utils'
+import {
+  getConfiguredHistoricalSignetOnchainChain,
+  historicalSignetOnchainWasMutinynet,
+  renameSignetMapKeyToMutinynet,
+} from '@/lib/wallet/historical-signet-onchain-chain'
+import {
+  BARK_REGTEST_SERVER_URL,
+  isE2eBarkRegtestControlEnabled,
+} from '@/lib/bark/e2e/bark-regtest-env'
 
 export enum AddressType {
   SegWit = 'segwit',
   Taproot = 'taproot',
 }
 
-export type BitcoinNetwork = 'bitcoin' | 'testnet' | 'signet' | 'regtest'
+export type BitcoinNetwork = 'bitcoin' | 'testnet' | 'signet' | 'mutinynet' | 'regtest'
 
 /** Domain wallet summary; map from SQLite via `mapDbWalletToDomain()` at the DB hook boundary. */
 export interface WalletSummary {
@@ -92,6 +101,81 @@ export interface StoredNwcLightningConnection {
 }
 
 /**
+ * Second's public Signet Ark server.
+ * Keep in sync with `BARK_SIGNET_SERVER_URL` in `bitboard-bark/src/lib.rs`.
+ */
+export const BARK_SIGNET_SERVER_URL = 'https://ark.signet.2nd.dev'
+
+/**
+ * Second's public Mainnet Ark server.
+ * Keep in sync with `BARK_MAINNET_SERVER_URL` in `bitboard-bark/src/lib.rs`.
+ */
+export const BARK_MAINNET_SERVER_URL = 'https://ark.second.tech'
+
+const BARK_RAIL_SERVER_URL: Record<BarkRailNetwork, string> = {
+  signet: BARK_SIGNET_SERVER_URL,
+  mainnet: BARK_MAINNET_SERVER_URL,
+  regtest: BARK_REGTEST_SERVER_URL,
+}
+
+/** UTF-8 cap for one network's Bark record dump. Same size as an Arkade SDK blob. */
+export const BARK_RECORD_DUMP_MAX_BYTES = 10 * 1024 * 1024
+
+export type BarkRailNetwork = 'signet' | 'mainnet' | 'regtest'
+
+const MAX_BARK_RECEIVE_KEY_INDEX = 0xffff_ffff
+
+/** True for a Bark VTXO key index in `0..=u32::MAX`. */
+export function isBarkReceiveKeyIndex(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= MAX_BARK_RECEIVE_KEY_INDEX
+  )
+}
+
+/**
+ * One Bark account inside encrypted wallet secrets.
+ * Protocol records live in `recordDump`.
+ */
+export interface StoredBarkAccount {
+  id: string
+  networkMode: BarkRailNetwork
+  serverUrl: string
+  fingerprint: string
+  /** ISO-8601 time of the last successful Bark sync. Open must preserve it and must not invent one. */
+  lastSuccessfulSyncAt?: string
+  /**
+   * Last Bark receive key revealed for this account.
+   * Absent until the first reveal. Not Bark's last VTXO key: change keys share that sequence.
+   */
+  receiveKeyIndex?: number
+  /**
+   * Versioned Bark `Record` bytes for this network, standard base64.
+   * Absent until the first successful open flush. An over-cap dump is kept:
+   * dropping it would open an empty wallet and lose the exit chain.
+   */
+  recordDump?: string
+  /**
+   * Broadcast claim Bark has not yet observed. Kept until those VTXOs are
+   * claim-in-progress or claimed, or the app Esplora reports the transaction gone.
+   */
+  pendingEmergencyClaim?: PendingEmergencyClaim
+  /**
+   * When true, the app advances emergency exits on a new chain tip while this
+   * wallet stays unlocked on this network. Absent means off.
+   */
+  proceedAutomatically?: boolean
+}
+
+/** A claim transaction already broadcast, and the VTXOs it spends. */
+export interface PendingEmergencyClaim {
+  txid: string
+  vtxoIds: string[]
+}
+
+/**
  * Encrypted wallet payload without the mnemonic (descriptor state + Lightning).
  * Stored in the main `encrypted_data` column after split migration.
  */
@@ -105,6 +189,14 @@ export interface WalletSecretsPayload {
   activeArkadeAccountIdByNetwork: Partial<
     Record<ArkadeSupportedNetworkMode, string>
   >
+  /** Bark accounts (one account per supported network). */
+  barkAccounts: StoredBarkAccount[]
+  /**
+   * Set once the historical `signet` rows (Mutinynet infrastructure) have been
+   * rewritten to `mutinynet`. Absent means the rewrite still needs to run.
+   * New wallets set this immediately so public Signet rows stay `signet`.
+   */
+  signetNetworkSplitApplied?: true
 }
 
 /** Sensitive wallet data stored encrypted. Shared with db layer and workers. */
@@ -116,6 +208,7 @@ const SUPPORTED_BITCOIN_NETWORKS: readonly BitcoinNetwork[] = [
   'bitcoin',
   'testnet',
   'signet',
+  'mutinynet',
   'regtest',
 ]
 
@@ -143,6 +236,125 @@ export function assertIso8601LastSuccessfulEsploraSyncAt(value: string): void {
     throw new Error(
       'Invalid lastSuccessfulEsploraSyncAt: expected parseable ISO-8601 timestamp',
     )
+  }
+}
+
+const BARK_FINGERPRINT_PATTERN = /^[0-9a-f]{8}$/i
+
+function isBarkFingerprint(value: unknown): value is string {
+  return typeof value === 'string' && BARK_FINGERPRINT_PATTERN.test(value)
+}
+
+function isPendingEmergencyClaim(value: unknown): value is PendingEmergencyClaim {
+  if (!isRecord(value)) return false
+  if (typeof value.txid !== 'string' || value.txid.length === 0) return false
+  if (!Array.isArray(value.vtxoIds) || value.vtxoIds.length === 0) return false
+  return value.vtxoIds.every((vtxoId) => typeof vtxoId === 'string' && vtxoId.length > 0)
+}
+
+/** Keeps a well-formed pending claim. A malformed one is omitted so the dump stays. */
+export function pendingEmergencyClaimFromUnknown(
+  value: unknown,
+): PendingEmergencyClaim | undefined {
+  if (!isPendingEmergencyClaim(value)) return undefined
+  return { txid: value.txid, vtxoIds: [...value.vtxoIds] }
+}
+
+/** Only an explicit true turns automatic proceeding on. Anything else is off. */
+export function proceedAutomaticallyFromUnknown(value: unknown): true | undefined {
+  return value === true ? true : undefined
+}
+
+export function isStoredBarkAccount(value: unknown): value is StoredBarkAccount {
+  if (!isRecord(value)) return false
+  if (!isNonEmptyString(value.id)) return false
+  const regtestEnabled = isE2eBarkRegtestControlEnabled()
+  const allowedNetworks: readonly BarkRailNetwork[] = regtestEnabled
+    ? ['signet', 'mainnet', 'regtest']
+    : ['signet', 'mainnet']
+  if (
+    typeof value.networkMode !== 'string' ||
+    !allowedNetworks.includes(value.networkMode as BarkRailNetwork)
+  ) {
+    return false
+  }
+  const network = value.networkMode as BarkRailNetwork
+  if (value.serverUrl !== BARK_RAIL_SERVER_URL[network]) return false
+  if (!isBarkFingerprint(value.fingerprint)) return false
+  if (value.lastSuccessfulSyncAt !== undefined && !isIso8601Timestamp(value.lastSuccessfulSyncAt)) {
+    return false
+  }
+  if (value.receiveKeyIndex !== undefined && !isBarkReceiveKeyIndex(value.receiveKeyIndex)) {
+    return false
+  }
+  if (value.recordDump !== undefined && typeof value.recordDump !== 'string') {
+    return false
+  }
+  if (
+    value.pendingEmergencyClaim !== undefined &&
+    !isPendingEmergencyClaim(value.pendingEmergencyClaim)
+  ) {
+    return false
+  }
+  if (
+    value.proceedAutomatically !== undefined &&
+    typeof value.proceedAutomatically !== 'boolean'
+  ) {
+    return false
+  }
+  return true
+}
+
+function sanitizeStoredBarkAccountRow(row: unknown): StoredBarkAccount | null {
+  if (!isRecord(row)) return null
+  if (isStoredBarkAccount(row)) {
+    return row
+  }
+  const cleaned: Record<string, unknown> = { ...row }
+  const pendingEmergencyClaim = pendingEmergencyClaimFromUnknown(row.pendingEmergencyClaim)
+  if (pendingEmergencyClaim != null) {
+    cleaned.pendingEmergencyClaim = pendingEmergencyClaim
+  } else {
+    delete cleaned.pendingEmergencyClaim
+  }
+  if (proceedAutomaticallyFromUnknown(row.proceedAutomatically) === true) {
+    cleaned.proceedAutomatically = true
+  } else {
+    delete cleaned.proceedAutomatically
+  }
+  if (isStoredBarkAccount(cleaned)) {
+    return cleaned
+  }
+  if (import.meta.env.DEV) {
+    console.warn('[wallet-secrets] Dropping invalid barkAccount row', row)
+  }
+  return null
+}
+
+function deduplicateBarkAccountsByNetwork(accounts: StoredBarkAccount[]): StoredBarkAccount[] {
+  const seenNetworks = new Set<BarkRailNetwork>()
+  const deduplicated: StoredBarkAccount[] = []
+  for (const account of accounts) {
+    if (seenNetworks.has(account.networkMode)) {
+      if (import.meta.env.DEV) {
+        console.warn(
+          '[wallet-secrets] Dropping duplicate barkAccount for network',
+          account.networkMode,
+        )
+      }
+      continue
+    }
+    seenNetworks.add(account.networkMode)
+    deduplicated.push(account)
+  }
+  return deduplicated
+}
+
+/** Throws when a dump is larger than [`BARK_RECORD_DUMP_MAX_BYTES`]. Does not modify the dump. */
+export function assertBarkRecordDumpWithinSizeLimit(recordDump: string): void {
+  const byteLength = new TextEncoder().encode(recordDump).byteLength
+  if (byteLength > BARK_RECORD_DUMP_MAX_BYTES) {
+    throw new Error(`Bark record dump exceeds ${BARK_RECORD_DUMP_MAX_BYTES} bytes`)
   }
 }
 
@@ -273,6 +485,15 @@ export function isWalletSecretsPayload(value: unknown): value is WalletSecretsPa
   ) {
     return false
   }
+  if (!Array.isArray(value.barkAccounts)) return false
+  if (!value.barkAccounts.every((row) => isStoredBarkAccount(row))) {
+    return false
+  }
+  const barkNetworks = new Set<string>()
+  for (const account of value.barkAccounts) {
+    if (barkNetworks.has(account.networkMode)) return false
+    barkNetworks.add(account.networkMode)
+  }
   return true
 }
 
@@ -309,7 +530,31 @@ export function isWalletSecrets(value: unknown): value is WalletSecrets {
   ) {
     return false
   }
+  if (!Array.isArray(value.barkAccounts)) return false
+  if (!value.barkAccounts.every((row) => isStoredBarkAccount(row))) {
+    return false
+  }
+  const barkNetworksSecrets = new Set<string>()
+  for (const account of value.barkAccounts) {
+    if (barkNetworksSecrets.has(account.networkMode)) return false
+    barkNetworksSecrets.add(account.networkMode)
+  }
   return true
+}
+
+export function walletSecretsPayloadFromSecrets(
+  secrets: WalletSecrets | WalletSecretsPayload,
+): WalletSecretsPayload {
+  return {
+    descriptorWallets: secrets.descriptorWallets,
+    lightningNwcConnections: secrets.lightningNwcConnections,
+    arkadeAccounts: secrets.arkadeAccounts ?? [],
+    activeArkadeAccountIdByNetwork: secrets.activeArkadeAccountIdByNetwork ?? {},
+    barkAccounts: secrets.barkAccounts ?? [],
+    ...(secrets.signetNetworkSplitApplied === true
+      ? { signetNetworkSplitApplied: true as const }
+      : {}),
+  }
 }
 
 export function assembleWalletSecrets(
@@ -318,10 +563,7 @@ export function assembleWalletSecrets(
 ): WalletSecrets {
   return {
     mnemonic,
-    descriptorWallets: payload.descriptorWallets,
-    lightningNwcConnections: payload.lightningNwcConnections,
-    arkadeAccounts: payload.arkadeAccounts,
-    activeArkadeAccountIdByNetwork: payload.activeArkadeAccountIdByNetwork,
+    ...walletSecretsPayloadFromSecrets(payload),
   }
 }
 
@@ -417,8 +659,49 @@ function pickActiveArkadeAccountIdByNetworkField(raw: Record<string, unknown>): 
   return raw.activeArkadeConnectionIdByNetwork
 }
 
+function rewriteSignetNetworkField(
+  value: unknown,
+  field: 'network' | 'networkMode',
+): void {
+  if (!Array.isArray(value)) return
+  for (const row of value) {
+    if (isRecord(row) && row[field] === 'signet') {
+      row[field] = 'mutinynet'
+    }
+  }
+}
+
+/**
+ * Historical Arkade `signet` rows were the Mutinynet operator.
+ * On-chain descriptors and Lightning connections move to Mutinynet only when
+ * the configured pre-split Esplora chain was Mutinynet. Bark stays on public
+ * Signet (`barkAccounts` with `networkMode: 'signet'` is left untouched).
+ *
+ * Until that chain is configured, Arkade is rewritten but the flag stays unset
+ * so a later parse can still classify descriptors.
+ */
+function applySignetNetworkSplit(raw: Record<string, unknown>): void {
+  if (raw.signetNetworkSplitApplied === true) return
+
+  rewriteSignetNetworkField(raw.arkadeAccounts, 'networkMode')
+  rewriteSignetNetworkField(raw.arkadeOperatorConnections, 'networkMode')
+  renameSignetMapKeyToMutinynet(raw.activeArkadeAccountIdByNetwork)
+  renameSignetMapKeyToMutinynet(raw.activeArkadeConnectionIdByNetwork)
+
+  const historicalSignetChain = getConfiguredHistoricalSignetOnchainChain()
+  if (historicalSignetChain == null) return
+
+  if (historicalSignetOnchainWasMutinynet(historicalSignetChain)) {
+    rewriteSignetNetworkField(raw.descriptorWallets, 'network')
+    rewriteSignetNetworkField(raw.lightningNwcConnections, 'networkMode')
+  }
+  raw.signetNetworkSplitApplied = true
+}
+
 function normalizeWalletSecretsPayload(raw: unknown): unknown {
   if (!isRecord(raw)) return raw
+
+  applySignetNetworkSplit(raw)
 
   const withoutLegacyKeys = { ...raw }
   delete withoutLegacyKeys.arkadeWallets
@@ -439,6 +722,16 @@ function normalizeWalletSecretsPayload(raw: unknown): unknown {
   delete withoutLegacyKeys.arkadeAccounts
   delete withoutLegacyKeys.activeArkadeAccountIdByNetwork
 
+  delete withoutLegacyKeys.barkRails
+  const barkAccountsRaw = withoutLegacyKeys.barkAccounts
+  delete withoutLegacyKeys.barkAccounts
+  const barkAccounts = deduplicateBarkAccountsByNetwork(
+    (sanitizeOptionalObjectArray(
+      barkAccountsRaw,
+      sanitizeStoredBarkAccountRow,
+    ) as StoredBarkAccount[]) ?? [],
+  )
+
   return {
     ...withoutLegacyKeys,
     lightningNwcConnections: coalesceNullishArrayField(
@@ -449,6 +742,7 @@ function normalizeWalletSecretsPayload(raw: unknown): unknown {
       pickActiveArkadeAccountIdByNetworkField(raw),
       validAccountIds,
     ),
+    barkAccounts,
   }
 }
 
@@ -488,6 +782,20 @@ function describeWalletSecretsPayloadValidationIssues(value: unknown): string[] 
     !isRecord(value.activeArkadeAccountIdByNetwork)
   ) {
     issues.push('activeArkadeAccountIdByNetwork must be an object')
+  }
+  if (!Array.isArray(value.barkAccounts)) {
+    issues.push('barkAccounts must be an array')
+  } else if (!value.barkAccounts.every((row) => isStoredBarkAccount(row))) {
+    issues.push('barkAccounts contains an invalid row')
+  } else {
+    const barkNetworks = new Set<string>()
+    for (const account of value.barkAccounts) {
+      if (barkNetworks.has(account.networkMode)) {
+        issues.push(`barkAccounts has duplicate account for network ${account.networkMode}`)
+        break
+      }
+      barkNetworks.add(account.networkMode)
+    }
   }
   return issues
 }

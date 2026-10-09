@@ -1,53 +1,101 @@
+import type { NetworkMode } from '@/stores/walletStore'
+
 /**
- * Curated third-party faucets aligned with default Esplora stacks (Testnet4 / Mutinynet).
+ * Supported networks with curated third-party test faucets.
  */
-export type FaucetStackId = 'mempool_testnet4' | 'mutinynet_signet'
+export type FaucetNetwork = 'testnet' | 'signet' | 'mutinynet'
 
 export type FaucetEntry = {
   id: string
   label: string
   url: string
-  stackId: FaucetStackId
+  network: FaucetNetwork
 }
 
-export const FAUCET_ENTRIES: FaucetEntry[] = [
-  {
-    id: 'mempool-testnet4',
-    label: 'Mempool (testnet4)',
-    url: 'https://mempool.space/testnet4/faucet',
-    stackId: 'mempool_testnet4',
-  },
-  {
-    id: 'testnet4-dev',
-    label: 'Testnet4.dev',
-    url: 'https://faucet.testnet4.dev/',
-    stackId: 'mempool_testnet4',
-  },
-  {
-    id: 'coinfaucet-eu',
-    label: 'Coinfaucet (EU)',
-    url: 'https://coinfaucet.eu/en/btc-testnet4/',
-    stackId: 'mempool_testnet4',
-  },
-  {
-    id: 'testnet4-info',
-    label: 'Testnet4.info',
-    url: 'https://testnet4.info/',
-    stackId: 'mempool_testnet4',
-  },
-  {
-    id: 'eternitybits',
-    label: 'Eternity Bits',
-    url: 'https://eternitybits.com/faucet/',
-    stackId: 'mempool_testnet4',
-  },
-  {
-    id: 'mutinynet',
-    label: 'Mutinynet',
-    url: 'https://faucet.mutinynet.com/',
-    stackId: 'mutinynet_signet',
-  },
-]
+export const FAUCETS_BY_NETWORK: Record<FaucetNetwork, FaucetEntry[]> = {
+  testnet: [
+    {
+      id: 'mempool-testnet4',
+      label: 'Mempool (testnet4)',
+      url: 'https://mempool.space/testnet4/faucet',
+      network: 'testnet',
+    },
+    {
+      id: 'testnet4-dev',
+      label: 'Testnet4.dev',
+      url: 'https://faucet.testnet4.dev/',
+      network: 'testnet',
+    },
+    {
+      id: 'coinfaucet-eu',
+      label: 'Coinfaucet (EU)',
+      url: 'https://coinfaucet.eu/en/btc-testnet4/',
+      network: 'testnet',
+    },
+    {
+      id: 'testnet4-info',
+      label: 'Testnet4.info',
+      url: 'https://testnet4.info/',
+      network: 'testnet',
+    },
+    {
+      id: 'eternitybits',
+      label: 'Eternity Bits',
+      url: 'https://eternitybits.com/faucet/',
+      network: 'testnet',
+    },
+  ],
+  signet: [
+    {
+      id: 'bitcoin-signet-faucet',
+      label: 'Bitcoin Signet Faucet',
+      url: 'https://bitcoinsignetfaucet.com/',
+      network: 'signet',
+    },
+    {
+      id: 'alt-signet-faucet',
+      label: 'Alt Signet Faucet',
+      url: 'https://alt.signetfaucet.com/',
+      network: 'signet',
+    },
+    {
+      id: 'signet-dcorral',
+      label: 'Signet (dcorral)',
+      url: 'https://signet.dcorral.com/',
+      network: 'signet',
+    },
+    {
+      id: 'coinbin-signet',
+      label: 'Coinbin',
+      url: 'https://faucet.coinbin.org/',
+      network: 'signet',
+    },
+  ],
+  mutinynet: [
+    {
+      id: 'mutinynet',
+      label: 'Mutinynet',
+      url: 'https://faucet.mutinynet.com/',
+      network: 'mutinynet',
+    },
+  ],
+}
+
+export const FAUCET_ENTRIES: FaucetEntry[] = Object.values(FAUCETS_BY_NETWORK).flat()
+
+function isFaucetNetwork(network: NetworkMode): network is FaucetNetwork {
+  return network === 'testnet' || network === 'signet' || network === 'mutinynet'
+}
+
+/**
+ * Returns curated faucets for the given network mode, or an empty array if none.
+ */
+export function faucetsForNetwork(network: NetworkMode): FaucetEntry[] {
+  if (isFaucetNetwork(network)) {
+    return FAUCETS_BY_NETWORK[network]
+  }
+  return []
+}
 
 /** Same-origin path prefix for faucet proxy (no trailing slash). */
 export const FAUCET_SAME_ORIGIN_PROXY_PREFIX = '/api/faucet'

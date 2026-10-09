@@ -1,5 +1,6 @@
 import { useMutation } from '@tanstack/react-query'
 import { orchestrateArkadeSyncThenSave } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
+import { orchestrateBarkSync } from '@/lib/wallet/lifecycle/bark-sync-lifecycle-orchestrator'
 import { orchestrateLightningSyncThenSave } from '@/lib/wallet/lifecycle/lightning-sync-lifecycle-orchestrator'
 import { collectLightningDashboardSyncPatches } from '@/lib/lightning/lightning-dashboard-sync'
 import {
@@ -22,6 +23,29 @@ function logArkadeManualSyncError(err: unknown): void {
 
 function logLightningManualSyncError(err: unknown): void {
   console.error('Lightning manual sync failed', err)
+}
+
+function logBarkManualSyncError(err: unknown): void {
+  console.error('Bark sync failed', err)
+}
+
+export function useBarkManualSyncMutation() {
+  const networkMode = useWalletStore((walletState) => walletState.networkMode)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
+
+  return useMutation({
+    mutationFn: async () => {
+      if (activeWalletId == null) {
+        throw new Error('Bark session is not open')
+      }
+      await orchestrateBarkSync({
+        walletId: activeWalletId,
+        networkMode,
+        throwOnError: true,
+      })
+    },
+    onError: logBarkManualSyncError,
+  })
 }
 
 export function useOnchainIncrementalSyncMutation() {

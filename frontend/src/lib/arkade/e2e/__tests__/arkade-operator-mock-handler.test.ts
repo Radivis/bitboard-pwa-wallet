@@ -18,7 +18,7 @@ const PARTITION = 'mock-handler-unit-test'
 describe('arkade operator mock vtxo builder', () => {
   it('parseScriptsFromRequestUrl reads repeated scripts query params', () => {
     const scripts = parseScriptsFromRequestUrl(
-      'http://localhost/api/arkade/operator/signet/v1/indexer/vtxos?scripts=5120abc&scripts=5120def',
+      'http://localhost/api/arkade/operator/mutinynet/v1/indexer/vtxos?scripts=5120abc&scripts=5120def',
     )
     expect(scripts).toEqual(['5120abc', '5120def'])
   })
@@ -79,7 +79,7 @@ describe('arkade operator mock vtxo builder', () => {
     const mockState = getE2eArkadeOperatorMockState(PARTITION)
     const response = buildListVtxosResponse(
       mockState,
-      'http://localhost/api/arkade/operator/signet/v1/indexer/vtxos?scripts=5120abc',
+      'http://localhost/api/arkade/operator/mutinynet/v1/indexer/vtxos?scripts=5120abc',
     )
 
     expect(response.vtxos).toHaveLength(1)

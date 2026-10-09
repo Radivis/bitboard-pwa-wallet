@@ -242,7 +242,7 @@ export default defineConfig({
         // Version-scoped so a new release gets a fresh precache namespace (see repository root VERSION).
         cacheId: workboxCacheId,
         cleanupOutdatedCaches: true,
-        // Default 2 MiB is too small for WASM bundles (bitboard_crypto ~2.2 MiB, bitboard_ark ~6.1 MiB).
+        // Default 2 MiB is too small for WASM bundles (bitboard_crypto ~2.2 MiB, bitboard_arkade ~6.1 MiB).
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,wasm}'],
         runtimeCaching: [],

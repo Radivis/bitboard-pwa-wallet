@@ -3,6 +3,7 @@ import { useWalletStore } from '@/stores/walletStore'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useLightningBalancesForDashboardQuery } from '@/hooks/useLightningMutations'
+import { useBarkSyncLifecycleSnapshot } from '@/hooks/useBarkSyncLifecycleSnapshot'
 import type { FiatRateProviderId } from '@/lib/fiat/fiat-rate-service-whitelist'
 import {
   buildMainnetFiatRateRequestUrl,
@@ -28,10 +29,17 @@ function usePortfolioPositiveForFiatRatesFetch(): boolean {
   const balance = useWalletStore((walletState) => walletState.balance)
   const arkadeBalance = useWalletStore((walletState) => walletState.arkadeBalance)
   const lightningBalancesQuery = useLightningBalancesForDashboardQuery()
+  const barkSync = useBarkSyncLifecycleSnapshot()
   const onChainTotalSats = balance?.totalSats ?? 0
   const lightningTotalSats = lightningBalancesQuery.data?.totalSats ?? 0
   const arkadeTotalSats = arkadeBalance?.totalSats ?? 0
-  return onChainTotalSats > 0 || lightningTotalSats > 0 || arkadeTotalSats > 0
+  const barkSpendableSats = barkSync.spendableSats ?? 0
+  return (
+    onChainTotalSats > 0 ||
+    lightningTotalSats > 0 ||
+    arkadeTotalSats > 0 ||
+    barkSpendableSats > 0
+  )
 }
 
 /**

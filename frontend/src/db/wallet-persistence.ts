@@ -14,6 +14,7 @@ import {
 import {
   assembleWalletSecrets,
   parseWalletPayloadJson,
+  walletSecretsPayloadFromSecrets,
   type DescriptorWalletData,
   type WalletSecrets,
   type WalletSecretsPayload,
@@ -338,6 +339,23 @@ async function updateWalletSecretsEncryptedPayloadWithRetryImpl({
   throw walletSecretsConflictError(maxRetries)
 }
 
+/** One payload CAS, serialized with other wallet-secrets writers. */
+export function writeSplitWalletSecretsPayloadIfRevisionMatches(
+  walletDb: Kysely<Database>,
+  walletId: number,
+  payload: EncryptedWalletSecretsBlob,
+  expectedRevision: number,
+): Promise<boolean> {
+  return withWalletSecretsWriterLock(() =>
+    putSplitWalletSecretsEncryptedIfRevisionMatches(
+      walletDb,
+      walletId,
+      { payload },
+      expectedRevision,
+    ),
+  )
+}
+
 export function updateWalletSecretsEncryptedPayloadWithRetry(
   input: UpdateWalletSecretsEncryptedPayloadWithRetryInput,
 ): Promise<void> {
@@ -390,12 +408,7 @@ export async function saveWalletSecrets(params: {
     const { walletDb, walletId, secrets } = params
     await assertWalletExists(walletDb, walletId)
 
-    const payload: WalletSecretsPayload = {
-      descriptorWallets: secrets.descriptorWallets,
-      lightningNwcConnections: secrets.lightningNwcConnections,
-      arkadeAccounts: secrets.arkadeAccounts ?? [],
-      activeArkadeAccountIdByNetwork: secrets.activeArkadeAccountIdByNetwork ?? {},
-    }
+    const payload = walletSecretsPayloadFromSecrets(secrets)
     const payloadEnc = await encryptData(JSON.stringify(payload))
     const mnemonicEnc = await encryptData(secrets.mnemonic)
 
@@ -606,12 +619,7 @@ export async function reencryptAllWalletSecretsWithNewPassword(params: {
     mnemonic: EncryptedWalletSecretsBlob
   }[] = []
   for (const { walletId, secrets } of decrypted) {
-    const payload: WalletSecretsPayload = {
-      descriptorWallets: secrets.descriptorWallets,
-      lightningNwcConnections: secrets.lightningNwcConnections,
-      arkadeAccounts: secrets.arkadeAccounts ?? [],
-      activeArkadeAccountIdByNetwork: secrets.activeArkadeAccountIdByNetwork ?? {},
-    }
+    const payload = walletSecretsPayloadFromSecrets(secrets)
     const payloadEnc = await encryptDataWithPassword(newPassword, JSON.stringify(payload))
     const mnemonicEnc = await encryptDataWithPassword(newPassword, secrets.mnemonic)
     blobs.push({

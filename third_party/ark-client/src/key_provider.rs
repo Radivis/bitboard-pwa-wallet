@@ -135,7 +135,7 @@ pub trait KeyProvider: Send + Sync {
     ///
     /// Default `Ok(None)` is for [`StaticKeyProvider`] (`OfflineClient::new_with_keypair`): one
     /// fixed keypair, no derivation cursor. [`Bip32KeyProvider`] overrides with `Some(next_index)`.
-    /// Bitboard (`bitboard-ark`) always uses `new_with_bip32_at_index`, so callers there always
+    /// Bitboard (`bitboard-arkade`) always uses `new_with_bip32_at_index`, so callers there always
     /// see `Some` — the `None` branch exists for generic `Client<K: KeyProvider>` only.
     fn peek_next_derivation_index(&self) -> Result<Option<u32>, Error> {
         Ok(None)

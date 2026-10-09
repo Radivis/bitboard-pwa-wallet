@@ -4,7 +4,7 @@ import { enrichArkadeOperatorErrorMessage } from '@/lib/arkade/arkade-operator-e
 describe('enrichArkadeOperatorErrorMessage', () => {
   it('appends batch SSE hint for Vercel function crash during join batch', () => {
     const message =
-      'Ark client error: Failed to join batch: batch event stream: request failed: Event stream request failed with status 500: FUNCTION_INVOCATION_FAILED'
+      'Arkade client error: Failed to join batch: batch event stream: request failed: Event stream request failed with status 500: FUNCTION_INVOCATION_FAILED'
     const enriched = enrichArkadeOperatorErrorMessage(message)
     expect(enriched).toContain('FUNCTION_INVOCATION_FAILED')
     expect(enriched).toContain('batch event stream')
@@ -15,7 +15,7 @@ describe('enrichArkadeOperatorErrorMessage', () => {
     const enriched = enrichArkadeOperatorErrorMessage(
       'request failed: error in response: status code 400: DIGEST_MISMATCH',
     )
-    expect(enriched).toContain('Refresh your Ark session')
+    expect(enriched).toContain('Refresh your Arkade session')
   })
 
   it('duplicated_input_enrichment_does_not_push_retry_wedge', () => {

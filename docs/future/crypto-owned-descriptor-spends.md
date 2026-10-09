@@ -62,7 +62,7 @@ Proceed today: sync bumper → `bump_tx_at_fee_rate` → `broadcast_package`. Af
 1. Arkade builds / already has the unroll parent.
 2. Main thread: `reserveConfirmedCoins` then `signAnchorChild`.
 3. Arkade (or crypto, if we centralize broadcast) submits the package.
-4. Arkade continues only when **package accepted** (same success as today’s `broadcast_unilateral_exit_step_at_fee_rate` Ok path, including redundant-broadcast / already-relayed handling in [proceed.rs](../../bitboard-ark/src/session/unilateral_exit/proceed.rs)).
+4. Arkade continues only when **package accepted** (same success as today’s `broadcast_unilateral_exit_step_at_fee_rate` Ok path, including redundant-broadcast / already-relayed handling in [proceed.rs](../../bitboard-arkade/src/session/unilateral_exit/proceed.rs)).
 5. On `package-not-child-with-unconfirmed-parents` or other reject: `releaseLease`, existing `waitingForParentData` / retry / pause policy. Do not treat “child signed” as done.
 
 Do not persist a “send succeeded” note or advance the job DAG on sign-only.

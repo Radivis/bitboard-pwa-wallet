@@ -1,7 +1,7 @@
 {
   "name": "bitboard-pwa-wallet",
   "private": true,
-  "version": "0.3.5",
+  "version": "0.3.6",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "vite",
     "build": "npm run build:wasm && tsc && vite build",
-    "build:wasm": "cd ../crypto && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg && cd ../bitboard-encryption && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_encryption && cd ../bitboard-lightning && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_lightning && cd ../bitboard-ark && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_ark",
+    "build:wasm": "cd ../crypto && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg && cd ../bitboard-encryption && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_encryption && cd ../bitboard-lightning && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_lightning && cd ../bitboard-arkade && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_arkade && cd ../bitboard-bark && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg/bitboard_bark",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
@@ -34,6 +34,11 @@
     "test:e2e:lab": "playwright test --grep @lab",
     "test:e2e:arkade": "VITE_E2E_ARKADE_MOCK=true playwright test --grep @arkade",
     "test:e2e:arkade-regtest": "REQUIRE_ARKADE_REGTEST=1 npm run regtest:clean-start && REQUIRE_ARKADE_REGTEST=1 VITE_E2E_ARKADE_REGTEST=true playwright test --grep @arkade-regtest",
+    "regtest:bark-start": "../scripts/start-bark-regtest.sh",
+    "regtest:bark-clean-start": "npm run regtest:clean && npm run regtest:bark-start",
+    "test:e2e:bark-regtest": "REQUIRE_ARKADE_REGTEST=1 REQUIRE_BARK_REGTEST=1 npm run regtest:bark-clean-start && REQUIRE_ARKADE_REGTEST=1 REQUIRE_BARK_REGTEST=1 VITE_E2E_BARK_REGTEST=true BARK_REGTEST_EXPORT_BOARDED_FIXTURE=1 playwright test --grep @bark-regtest",
+    "test:e2e:bark-exit-regtest": "BARK_CAPTAIND_TOML=docker/captaind/captaind.exit.toml REQUIRE_ARKADE_REGTEST=1 REQUIRE_BARK_REGTEST=1 npm run regtest:bark-clean-start && REQUIRE_ARKADE_REGTEST=1 REQUIRE_BARK_REGTEST=1 VITE_E2E_BARK_REGTEST=true playwright test --grep @bark-exit-regtest",
+    "test:e2e:bark-refresh-regtest": "BARK_CAPTAIND_TOML=docker/captaind/captaind.refresh.toml REQUIRE_ARKADE_REGTEST=1 REQUIRE_BARK_REGTEST=1 npm run regtest:bark-clean-start && REQUIRE_ARKADE_REGTEST=1 REQUIRE_BARK_REGTEST=1 VITE_E2E_BARK_REGTEST=true playwright test --grep @bark-refresh-regtest",
     "test:e2e:arkade-regtest-longexpiry": "ARKD_VTXO_TREE_EXPIRY=200 REQUIRE_ARKADE_REGTEST=1 npm run regtest:clean-start && REQUIRE_ARKADE_REGTEST=1 VITE_E2E_ARKADE_REGTEST=true playwright test --grep @arkade-exit-regtest",
     "test:e2e:arkade-regtest-reg04": "ARKD_VTXO_TREE_EXPIRY=200 REQUIRE_ARKADE_REGTEST=1 npm run regtest:clean-start && REQUIRE_ARKADE_REGTEST=1 VITE_E2E_ARKADE_REGTEST=true playwright test --grep @arkade-reg04",
     "test:e2e:arkade-regtest-reg07": "ARKD_VTXO_TREE_EXPIRY=200 REQUIRE_ARKADE_REGTEST=1 npm run regtest:clean-start && REQUIRE_ARKADE_REGTEST=1 VITE_E2E_ARKADE_REGTEST=true playwright test --grep @arkade-reg07",

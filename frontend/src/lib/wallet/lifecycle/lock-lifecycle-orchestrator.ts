@@ -10,6 +10,8 @@ import {
   orchestrateArkadeLoad,
   awaitArkadeLoadQuiescence,
 } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
+import { awaitBarkLoadQuiescence } from '@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator'
+import { startBarkLoadAfterUnlock } from '@/lib/bark/bark-session-service'
 import {
   awaitArkadeSaveQuiescence,
   isArkadeSaveBlockingLock,
@@ -161,6 +163,10 @@ async function runUnlockLoad(params: UnlockLoadParams): Promise<void> {
       )
     })
   }
+  startBarkLoadAfterUnlock({
+    walletId: params.walletId,
+    networkMode: params.networkMode,
+  })
   void orchestrateLightningLoad({
     walletId: params.walletId,
     networkMode: params.networkMode,
@@ -317,6 +323,7 @@ export async function orchestrateLock(): Promise<void> {
 
     await awaitOnchainLoadQuiescence()
     await awaitArkadeLoadQuiescence()
+    await awaitBarkLoadQuiescence()
     await awaitLightningLoadQuiescence()
     await awaitOnchainSyncQuiescence()
     await awaitOnchainSaveQuiescence()

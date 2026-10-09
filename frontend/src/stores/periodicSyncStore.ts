@@ -34,6 +34,26 @@ function defaultPeriodicSyncRailState(): PeriodicSyncRailState {
     onchain: defaultRailSettings(),
     lightning: defaultRailSettings(),
     arkade: defaultRailSettings(),
+    bark: defaultRailSettings(),
+  }
+}
+
+export function migratePeriodicSyncPersistedState(persistedState: unknown): {
+  rails: PeriodicSyncRailState
+} {
+  if (persistedState == null || typeof persistedState !== 'object') {
+    return { rails: defaultPeriodicSyncRailState() }
+  }
+  const persisted = persistedState as { rails?: Partial<PeriodicSyncRailState> }
+  const defaults = defaultPeriodicSyncRailState()
+  const rails = persisted.rails ?? {}
+  return {
+    rails: {
+      onchain: { ...defaults.onchain, ...rails.onchain },
+      lightning: { ...defaults.lightning, ...rails.lightning },
+      arkade: { ...defaults.arkade, ...rails.arkade },
+      bark: { ...defaults.bark, ...rails.bark },
+    },
   }
 }
 
@@ -68,23 +88,9 @@ export const usePeriodicSyncStore = create<PeriodicSyncState>()(
     {
       name: 'periodic-sync-storage',
       storage: createJSONStorage(() => sqliteStorage),
-      version: 1,
+      version: 2,
       partialize: (state) => ({ rails: state.rails }),
-      migrate: (persistedState) => {
-        if (persistedState == null || typeof persistedState !== 'object') {
-          return { rails: defaultPeriodicSyncRailState() }
-        }
-        const persisted = persistedState as { rails?: Partial<PeriodicSyncRailState> }
-        const defaults = defaultPeriodicSyncRailState()
-        const rails = persisted.rails ?? {}
-        return {
-          rails: {
-            onchain: { ...defaults.onchain, ...rails.onchain },
-            lightning: { ...defaults.lightning, ...rails.lightning },
-            arkade: { ...defaults.arkade, ...rails.arkade },
-          },
-        }
-      },
+      migrate: (persistedState) => migratePeriodicSyncPersistedState(persistedState),
     },
   ),
 )

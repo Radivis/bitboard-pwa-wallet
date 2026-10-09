@@ -37,6 +37,10 @@ import type {
 } from './crypto-wire-types';
 import type { EncryptedBlobMessage, SecretsChannelService } from './secrets-channel-types';
 import {
+  setConfiguredHistoricalSignetOnchainChain,
+  type HistoricalSignetOnchainChain,
+} from '@/lib/wallet/historical-signet-onchain-chain';
+import {
   assertIso8601LastSuccessfulEsploraSyncAt,
   parseWalletPayloadJson,
   type WalletSecretsPayload,
@@ -78,6 +82,35 @@ async function invokeWasmCrypto<T>(
   } catch (err) {
     return rethrowWasmCryptoErrorForComlink(err);
   }
+}
+
+type FundingPsbtWasm = {
+  sign_funding_psbt(psbtBase64: string): Promise<unknown>;
+  apply_unconfirmed_funding_transaction(
+    rawTxHex: string,
+    lastSeenUnixSeconds: bigint,
+  ): Promise<void>;
+};
+
+function fundingPsbtWasm(wasmModule: BitboardCryptoModule): FundingPsbtWasm {
+  return wasmModule as unknown as FundingPsbtWasm;
+}
+
+type P2aCpfpWasm = {
+  sign_p2a_cpfp_child(
+    parentTxHex: string,
+    effectiveFeeRateSatPerVb: number,
+    rbfMinFeeRateSatPerKwu: bigint | undefined,
+    currentPackageFeeSats: bigint | undefined,
+  ): Promise<string>;
+};
+
+function p2aCpfpWasm(wasmModule: BitboardCryptoModule): P2aCpfpWasm {
+  return wasmModule as unknown as P2aCpfpWasm;
+}
+
+function optionalFeeCount(value: number | null): bigint | undefined {
+  return value == null ? undefined : BigInt(value);
 }
 
 async function initWasm() {
@@ -154,6 +187,8 @@ function buildInitialWalletSecretsPayload({
     lightningNwcConnections: [],
     arkadeAccounts: [],
     activeArkadeAccountIdByNetwork: {},
+    barkAccounts: [],
+    signetNetworkSplitApplied: true,
   };
 }
 
@@ -266,6 +301,12 @@ const cryptoService = {
   async ping(): Promise<boolean> {
     await getWasm();
     return true;
+  },
+
+  async configureHistoricalSignetOnchainChain(
+    chain: HistoricalSignetOnchainChain | null,
+  ): Promise<void> {
+    setConfiguredHistoricalSignetOnchainChain(chain);
   },
 
   async generateMnemonic(wordCount: 12 | 24): Promise<string> {
@@ -555,6 +596,38 @@ const cryptoService = {
   async signAndExtractTransaction(psbtBase64: string): Promise<string> {
     return invokeWasmCrypto((wasmModule) =>
       wasmModule.sign_and_extract_transaction(psbtBase64),
+    );
+  },
+
+  async signP2aCpfpChild(
+    params: import('./crypto-api').SignP2aCpfpChildParams,
+  ): Promise<string> {
+    return invokeWasmCrypto((wasmModule) =>
+      p2aCpfpWasm(wasmModule).sign_p2a_cpfp_child(
+        params.parentTxHex,
+        params.effectiveFeeRateSatPerVb,
+        optionalFeeCount(params.rbfMinFeeRateSatPerKwu),
+        optionalFeeCount(params.currentPackageFeeSats),
+      ),
+    );
+  },
+
+  async signFundingPsbt(psbtBase64: string): Promise<import('./crypto-api').SignedFundingPsbt> {
+    const signed = await invokeWasmCrypto((wasmModule) =>
+      fundingPsbtWasm(wasmModule).sign_funding_psbt(psbtBase64),
+    );
+    return parseWasmJsonWire<import('./crypto-api').SignedFundingPsbt>(signed);
+  },
+
+  async applyUnconfirmedFundingTx(
+    rawTxHex: string,
+    lastSeenUnixSeconds: number,
+  ): Promise<void> {
+    await invokeWasmCrypto((wasmModule) =>
+      fundingPsbtWasm(wasmModule).apply_unconfirmed_funding_transaction(
+        rawTxHex,
+        BigInt(lastSeenUnixSeconds),
+      ),
     );
   },
 

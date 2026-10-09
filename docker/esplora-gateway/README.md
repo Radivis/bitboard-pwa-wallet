@@ -6,7 +6,11 @@ This gateway:
 
 - **`GET /api/tx/:txid/raw`** — bitcoind mempool or confirmed chain only (404 for wallet-only / virtual stubs)
 - **`GET /api/tx/:txid/status`** — bitcoind status when the tx is **confirmed** (overrides stale electrum `confirmed: false`)
-- **All other paths** — proxied to `mempool_web` unchanged (broadcast, package submit, JSON `/tx`, etc.)
+- **`GET /api/tx/:txid`** — the same bitcoind confirmation is written onto the JSON `status` Bark reads (`block_height` stays absent on electrum after the tx is mined)
+- **`GET /api/tx/:txid/outspend/:vout`** — bitcoind mempool spend, or a scan from the parent block when the child is already confirmed. Electrum returns 404, which leaves a Bark exit in `AwaitingConfirmation`
+- **`POST /api/txs/package`** — bitcoind `submitpackage` (JSON array of raw tx hex). mempool electrum returns a generic RPC error, which leaves Bark board funding unbroadcast.
+- **`POST /api/tx`** — bitcoind `sendrawtransaction` (raw tx hex, response is the txid). mempool electrum hides the Core error, which leaves Bark offboard and exit broadcasts unsent.
+- **All other paths** — proxied to `mempool_web` unchanged (JSON `/tx/:txid`, blocks, and so on)
 
 Wired via [`../arkade-regtest.override.yml`](../arkade-regtest.override.yml); host port `MEMPOOL_WEB_PORT` (default 7030) binds here instead of `mempool_web`.
 

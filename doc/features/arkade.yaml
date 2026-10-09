@@ -3,7 +3,7 @@ feature:
   description: "Educational Arkade (VTXO) layer with Bitboard-hosted Fulmine delegator"
   user_stories:
     - As a user, I want to enable Arkade under Settings → Features so I can use an offchain Bitcoin layer without a Lightning wallet
-    - As a user, I want my Arkade wallet to use the correct operator and delegator for the network I selected (mainnet, testnet, signet/Mutinynet)
+    - As a user, I want my Arkade wallet to use the correct operator and delegator for the network I selected (mainnet, mutinynet)
     - As a user, I want to see my Arkade balance separately from my on-chain balance
     - As a user, I want to receive funds on an Arkade address (ark1/tark1) with a QR code
     - As a user, I want to send Arkade payments to an Arkade address
@@ -21,13 +21,13 @@ feature:
     - As a user, I want waiting for host transaction broadcast distinguished from waiting for the first confirmation, waiting for 6 confirmations, and waiting for the unilateral-exit timelock
   requirements:
     - Arkade is gated by isArkadeEnabled (default off) and isMainnetAccessEnabled for mainnet
-    - Arkade is available on mainnet, signet, and regtest (local arkd via arkade-regtest for dev/E2E); not on lab in v1
+    - Arkade is available on mainnet, mutinynet, and regtest (local arkd via arkade-regtest for dev/E2E); not on lab or public signet in v1
     - delegatorProvider must be configured at first Wallet.create per (wallet_id, networkMode)
     - Mnemonic decryption runs only in workers (secrets channel); never on the main thread
     - Default delegator and operator URLs come from arkade-endpoints.ts (env overrides supported)
     - Network switch terminates and reopens the Arkade worker session for the new network
     - Lock wallet terminates arkade.worker and clears session state
-    - BitboardArkPersistence (engine ark-rs, wire version 11) in sdkPersistenceJson per Arkade account inside encrypted wallet_secrets; autonomous_mode defaults false and is keyed to that ASP
+    - BitboardArkadePersistence (engine ark-rs, wire version 11) in sdkPersistenceJson per Arkade account inside encrypted wallet_secrets; autonomous_mode defaults false and is keyed to that ASP
     - Offchain receive derivation cursor is a single scalar in walletDb (see docs/arkade-bitboard-wallet-model.md); no index arrays in sdkPersistenceJson
     - Wallet reopen hydrates boarding outputs from sdkPersistenceJson; operator required for live balance sync and sends unless persisted autonomous_mode is true
   contracts:
@@ -124,9 +124,9 @@ feature:
       - id: ARK-EXIT-13
         description: Unilateral exit control page at /wallet/arkade/unilateral-exit with responsive VTXO tree graph (React Flow + d3-dag), multi-select leaves, and Management entry link (Start unilateral exit / Control unilateral exit). Node detail shows per-outpoint VTXO exit phase from child actors (ARK-EXIT-32) and remaining tree expiry (ARK-EXIT-35). Unspent host VTXOs stay on the graph after unroll (host tx 6 conf); the overlay swaps Lucide Coins for HandCoins. Host-tx graph fills follow ARK-EXIT-35. Leaf selection unlocks after branch-complete (idle host, leftover children stay). After the broadcast job releases, the page keeps a durable Branch complete status linking to /wallet/arkade/complete-unilateral-exit while leftover children wait to be claimed.
       - id: ARK-EXIT-14
-        description: ark_estimate_unilateral_exit_batch unions deduped virtual steps across selected VTXO leaves for batch fee estimate and bumper sufficiency gate
+        description: arkade_estimate_unilateral_exit_batch unions deduped virtual steps across selected VTXO leaves for batch fee estimate and bumper sufficiency gate
       - id: ARK-EXIT-15
-        description: ark_proceed_unilateral_exit_step advances one virtual tx per call with caller feerate, returns without blocking on confirmation, persists current_step_waiting_since for progress UI, and skips already-on-chain branch txs. Already-on-chain requires Esplora `/tx/{txid}/raw` (mempool or chain) in addition to `/status.confirmed` so indexer/virtual-tree JSON stubs cannot skip an unpublished step (false 1-conf rewinds to step 2 after lock and REG-04 mines forever). The XState machine polls until 1-conf
+        description: arkade_proceed_unilateral_exit_step advances one virtual tx per call with caller feerate, returns without blocking on confirmation, persists current_step_waiting_since for progress UI, and skips already-on-chain branch txs. Already-on-chain requires Esplora `/tx/{txid}/raw` (mempool or chain) in addition to `/status.confirmed` so indexer/virtual-tree JSON stubs cannot skip an unpublished step (false 1-conf rewinds to step 2 after lock and REG-04 mines forever). The XState machine polls until 1-conf
       - id: ARK-EXIT-16
         description: Host virtual txs (leaf or intermediate) must reach 6 confirmations on Esplora before WASM marks is_unrolled. ARK-EXIT-29 applies the same 6-conf rule to every tree/ark host including terminals.
       - id: ARK-EXIT-17
@@ -276,7 +276,7 @@ feature:
           (reorgs); it does not stop after N confirmations.
     autonomous_mode:
       - id: ARK-AUTO-01
-        description: BitboardArkPersistence.autonomous_mode is persisted per ASP connection; missing or legacy blobs default false; opt-in is explicit via the Management switch (with confirm) or operator-trust review
+        description: BitboardArkadePersistence.autonomous_mode is persisted per ASP connection; missing or legacy blobs default false; opt-in is explicit via the Management switch (with confirm) or operator-trust review
       - id: ARK-AUTO-02
         description: Entering or leaving autonomous mode, including trust-review enter, flushes sdkPersistenceJson with the current autonomous_mode flag
       - id: ARK-AUTO-03
@@ -407,7 +407,7 @@ feature:
         - View VTXOs link to /wallet/arkade/vtxos
       - requirements:
         - Shown only when isArkadeEnabled and current network supports Arkade
-        - Collaborative exit and fee estimates via bitboard-ark WASM in arkade.worker
+        - Collaborative exit and fee estimates via bitboard-arkade WASM in arkade.worker
         - Unilateral exit via ark-rs unroll APIs; bumper balance and fee estimates from worker
     - WalletReceiveArkadeMode:
       - description: "Arkade receive integrated in main Receive page"
@@ -478,7 +478,7 @@ feature:
         - Confirm exit action
         - Back to Management
       - requirements:
-        - Collaborative exit and fee estimates via bitboard-ark WASM in arkade.worker
+        - Collaborative exit and fee estimates via bitboard-arkade WASM in arkade.worker
         - Shown only when isArkadeEnabled and current network supports Arkade
         - Session load uses the full-page Arkade loading and error screens
         - Successful submit, or an already-processing collaborative intent, returns to /wallet/management

@@ -1,18 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { Circle, ExternalLink, RefreshCw } from 'lucide-react'
-import { customEsploraUrlQueryKey } from '@/components/settings/EsploraUrlSettings'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { getEsploraUrl } from '@/lib/wallet/bitcoin-utils'
 import {
   checkFaucetReachability,
-  faucetsForStack,
-  resolveFaucetStack,
+  faucetsForNetwork,
   type FaucetReachability,
 } from '@/lib/faucet/faucet-matching'
-import { loadCustomEsploraUrl } from '@/lib/wallet/wallet-utils'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 
 const REACHABILITY_TIMEOUT_MS = 8000
@@ -41,38 +36,9 @@ function reachabilityLabel(
 
 export function FaucetLinker() {
   const committedNetworkMode = useWalletStore(selectCommittedNetworkMode)
-  const enabled =
-    committedNetworkMode === 'testnet' || committedNetworkMode === 'signet'
-
-  const { data: customEsploraUrl, isSuccess: customUrlLoaded } = useQuery({
-    queryKey: customEsploraUrlQueryKey(committedNetworkMode),
-    queryFn: () => loadCustomEsploraUrl(committedNetworkMode),
-    enabled,
-  })
-
-  const resolvedEsploraUrl = useMemo(
-    () => getEsploraUrl(committedNetworkMode, customEsploraUrl ?? null),
-    [committedNetworkMode, customEsploraUrl],
-  )
-
-  const stackId = useMemo(() => {
-    if (!enabled || !customUrlLoaded) return null
-    return resolveFaucetStack(
-      committedNetworkMode,
-      customEsploraUrl ?? null,
-      resolvedEsploraUrl,
-    )
-  }, [
-    committedNetworkMode,
-    customEsploraUrl,
-    customUrlLoaded,
-    enabled,
-    resolvedEsploraUrl,
-  ])
-
   const faucets = useMemo(
-    () => (stackId ? faucetsForStack(stackId) : []),
-    [stackId],
+    () => faucetsForNetwork(committedNetworkMode),
+    [committedNetworkMode],
   )
 
   const [reachabilityById, setReachabilityById] = useState<
@@ -110,11 +76,11 @@ export function FaucetLinker() {
   }, [faucets])
 
   useEffect(() => {
-    if (!customUrlLoaded || faucets.length === 0) return
+    if (faucets.length === 0) return
     void runChecks()
-  }, [customUrlLoaded, faucets, runChecks])
+  }, [faucets, runChecks])
 
-  if (!enabled || !customUrlLoaded || faucets.length === 0) {
+  if (faucets.length === 0) {
     return null
   }
 

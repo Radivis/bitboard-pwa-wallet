@@ -32,6 +32,7 @@ export function usePeriodicSyncRefetchInterval(rail: DashboardRailId): number | 
   )
   const isLightningEnabled = useFeatureStore((featureState) => featureState.isLightningEnabled)
   const isArkadeEnabled = useFeatureStore((featureState) => featureState.isArkadeEnabled)
+  const isBarkEnabled = useFeatureStore((featureState) => featureState.isBarkEnabled)
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const rails = usePeriodicSyncStore((periodicSyncState) => periodicSyncState.rails)
   const documentVisibilityState = useSyncExternalStore(
@@ -45,6 +46,7 @@ export function usePeriodicSyncRefetchInterval(rail: DashboardRailId): number | 
     isPeriodicSyncEnabled,
     isLightningEnabled,
     isArkadeEnabled,
+    isBarkEnabled,
     networkMode,
     rails,
     documentVisibilityState,
@@ -64,6 +66,7 @@ export function getPeriodicSyncRefetchIntervalMs(rail: DashboardRailId): number 
     isPeriodicSyncEnabled: featureState.isPeriodicSyncEnabled,
     isLightningEnabled: featureState.isLightningEnabled,
     isArkadeEnabled: featureState.isArkadeEnabled,
+    isBarkEnabled: featureState.isBarkEnabled,
     networkMode,
     rails: periodicSyncState.rails,
     documentVisibilityState: isDocumentVisibleForPeriodicSync()
