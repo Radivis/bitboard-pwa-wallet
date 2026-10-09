@@ -314,14 +314,27 @@ export const useCryptoStore = create<CryptoState>((set, get) => {
       useLightningStore.getState().purgeLightningConnectionsFromMemory();
       removeLightningConnectionsHydrationQueries();
       removeOnchainDashboardQueries();
+      const closeSessionsPromise = Promise.allSettled([
+        closeArkadeSession(),
+        closeBarkSession(),
+      ]);
+
       try {
-        await closeArkadeSession();
-      } finally {
-        try {
-          await closeBarkSession();
-        } catch {
-          // Bark close is best-effort; lock must still drop the crypto worker.
+        const [arkadeResult, barkResult] = await closeSessionsPromise;
+        if (arkadeResult.status === 'rejected' && barkResult.status === 'rejected') {
+          throw new AggregateError(
+            [arkadeResult.reason, barkResult.reason],
+            'Failed to close wallet sessions',
+          );
         }
+        if (arkadeResult.status === 'rejected') {
+          throw arkadeResult.reason;
+        }
+        if (barkResult.status === 'rejected') {
+          throw barkResult.reason;
+        }
+      } finally {
+        // Lock must drop the crypto worker and clear runtime secrets even if session teardown rejects.
         terminateCryptoWorker();
         await endWalletSecretsSessionReliably();
         resetSecretsChannel();
