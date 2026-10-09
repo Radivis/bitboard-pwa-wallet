@@ -26,7 +26,7 @@ export async function exportBoardedBarkFixtureForE2e(): Promise<BarkBoardedFixtu
   }
 
   const secrets = await loadWalletSecrets(getDatabase(), walletId)
-  const recordDump = secrets.barkRails?.regtest?.recordDump
+  const recordDump = secrets.barkAccounts?.find((a) => a.networkMode === 'regtest')?.recordDump
   if (recordDump == null || recordDump.trim() === '') {
     throw new Error('Bark regtest record dump is missing after boarding')
   }

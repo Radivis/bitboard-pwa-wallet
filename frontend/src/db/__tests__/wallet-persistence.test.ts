@@ -63,6 +63,7 @@ describe('Wallet Persistence with Encryption', () => {
     lightningNwcConnections: [],
     arkadeAccounts: [],
     activeArkadeAccountIdByNetwork: {},
+    barkAccounts: [],
     signetNetworkSplitApplied: true,
   }
 

@@ -83,7 +83,7 @@ import {
 } from '@/workers/bark-durable-flush'
 import {
   persistBarkProtocolState,
-  persistOpenedBarkRail,
+  persistOpenedBarkAccount,
   readPendingEmergencyClaim as readPendingEmergencyClaimFromPayload,
   readProceedAutomatically as readProceedAutomaticallyFromPayload,
   readRecordDumpForOpen,
@@ -313,7 +313,7 @@ async function openSessionImpl(
         readBarkRevealedReceiveAddress(await wasmModule.bark_reveal_next_address()),
     })
     const exportedDump = await exportRecordDump()
-    const barkRail = await persistOpenedBarkRail(
+    const barkAccount = await persistOpenedBarkAccount(
       deps,
       params.walletId,
       network,
@@ -324,7 +324,7 @@ async function openSessionImpl(
     return {
       fingerprint,
       receiveKeyIndex,
-      lastSuccessfulSyncAt: barkRail.lastSuccessfulSyncAt,
+      lastSuccessfulSyncAt: barkAccount.lastSuccessfulSyncAt,
     }
   } catch (err) {
     if (sessionOpened) {

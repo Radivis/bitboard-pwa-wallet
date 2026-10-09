@@ -136,16 +136,18 @@ export function isBarkReceiveKeyIndex(value: unknown): value is number {
 }
 
 /**
- * One Bark network inside encrypted wallet secrets.
- * The map key is the network. Protocol records live in `recordDump`.
+ * One Bark account inside encrypted wallet secrets.
+ * Protocol records live in `recordDump`.
  */
-export interface StoredBarkRail {
+export interface StoredBarkAccount {
+  id: string
+  networkMode: BarkRailNetwork
   serverUrl: string
   fingerprint: string
   /** ISO-8601 time of the last successful Bark sync. Open must preserve it and must not invent one. */
   lastSuccessfulSyncAt?: string
   /**
-   * Last Bark receive key revealed for this rail.
+   * Last Bark receive key revealed for this account.
    * Absent until the first reveal. Not Bark's last VTXO key: change keys share that sequence.
    */
   receiveKeyIndex?: number
@@ -173,8 +175,6 @@ export interface PendingEmergencyClaim {
   vtxoIds: string[]
 }
 
-export type StoredBarkRails = Partial<Record<BarkRailNetwork, StoredBarkRail>>
-
 /**
  * Encrypted wallet payload without the mnemonic (descriptor state + Lightning).
  * Stored in the main `encrypted_data` column after split migration.
@@ -189,8 +189,8 @@ export interface WalletSecretsPayload {
   activeArkadeAccountIdByNetwork: Partial<
     Record<ArkadeSupportedNetworkMode, string>
   >
-  /** Present after a successful Bark session open. One dump per network. */
-  barkRails?: StoredBarkRails
+  /** Bark accounts (one account per supported network). */
+  barkAccounts: StoredBarkAccount[]
   /**
    * Set once the historical `signet` rows (Mutinynet infrastructure) have been
    * rewritten to `mutinynet`. Absent means the rewrite still needs to run.
@@ -245,19 +245,6 @@ function isBarkFingerprint(value: unknown): value is string {
   return typeof value === 'string' && BARK_FINGERPRINT_PATTERN.test(value)
 }
 
-function optionalBarkRailFieldsMatch(value: Record<string, unknown>): boolean {
-  if (value.lastSuccessfulSyncAt !== undefined && !isIso8601Timestamp(value.lastSuccessfulSyncAt)) {
-    return false
-  }
-  if (value.receiveKeyIndex !== undefined && !isBarkReceiveKeyIndex(value.receiveKeyIndex)) {
-    return false
-  }
-  if (value.recordDump !== undefined && typeof value.recordDump !== 'string') {
-    return false
-  }
-  return true
-}
-
 function isPendingEmergencyClaim(value: unknown): value is PendingEmergencyClaim {
   if (!isRecord(value)) return false
   if (typeof value.txid !== 'string' || value.txid.length === 0) return false
@@ -278,109 +265,89 @@ export function proceedAutomaticallyFromUnknown(value: unknown): true | undefine
   return value === true ? true : undefined
 }
 
-function copyOptionalBarkRailFields(
-  source: StoredBarkRail,
-  rail: StoredBarkRail,
-): StoredBarkRail {
-  if (source.lastSuccessfulSyncAt != null) {
-    rail.lastSuccessfulSyncAt = source.lastSuccessfulSyncAt
-  }
-  if (source.receiveKeyIndex != null) {
-    rail.receiveKeyIndex = source.receiveKeyIndex
-  }
-  if (source.recordDump != null && source.recordDump.length > 0) {
-    rail.recordDump = source.recordDump
-  }
-  const pendingEmergencyClaim = pendingEmergencyClaimFromUnknown(source.pendingEmergencyClaim)
-  if (pendingEmergencyClaim != null) {
-    rail.pendingEmergencyClaim = pendingEmergencyClaim
-  }
-  if (proceedAutomaticallyFromUnknown(source.proceedAutomatically) === true) {
-    rail.proceedAutomatically = true
-  }
-  return rail
-}
-
-function isStoredBarkRailForNetwork(
-  value: unknown,
-  network: BarkRailNetwork,
-): value is StoredBarkRail {
+export function isStoredBarkAccount(value: unknown): value is StoredBarkAccount {
   if (!isRecord(value)) return false
-  if (value.serverUrl !== BARK_RAIL_SERVER_URL[network]) return false
-  if (!isBarkFingerprint(value.fingerprint)) return false
-  return optionalBarkRailFieldsMatch(value)
-}
-
-/** Signet rail after parse. `network` is not a field; the map key carries it. */
-export function isStoredSignetBarkRail(value: unknown): value is StoredBarkRail {
-  return isStoredBarkRailForNetwork(value, 'signet')
-}
-
-function isStoredMainnetBarkRail(value: unknown): value is StoredBarkRail {
-  return isStoredBarkRailForNetwork(value, 'mainnet')
-}
-
-function canonicalBarkRail(
-  value: unknown,
-  network: BarkRailNetwork,
-): StoredBarkRail | undefined {
-  if (!isStoredBarkRailForNetwork(value, network)) return undefined
-  const rail: StoredBarkRail = {
-    serverUrl: BARK_RAIL_SERVER_URL[network],
-    fingerprint: value.fingerprint,
-  }
-  return copyOptionalBarkRailFields(value, rail)
-}
-
-function canonicalSignetBarkRail(value: unknown): StoredBarkRail | undefined {
-  return canonicalBarkRail(value, 'signet')
-}
-
-function canonicalMainnetBarkRail(value: unknown): StoredBarkRail | undefined {
-  return canonicalBarkRail(value, 'mainnet')
-}
-
-export function isStoredBarkRails(value: unknown): value is StoredBarkRails {
-  if (!isRecord(value) || Array.isArray(value)) return false
+  if (!isNonEmptyString(value.id)) return false
   const regtestEnabled = isE2eBarkRegtestControlEnabled()
-  for (const key of Object.keys(value)) {
-    if (key === 'signet' || key === 'mainnet') continue
-    if (key === 'regtest') continue
-    return false
-  }
-  if (value.signet !== undefined && !isStoredSignetBarkRail(value.signet)) return false
-  if (value.mainnet !== undefined && !isStoredMainnetBarkRail(value.mainnet)) return false
+  const allowedNetworks: readonly BarkRailNetwork[] = regtestEnabled
+    ? ['signet', 'mainnet', 'regtest']
+    : ['signet', 'mainnet']
   if (
-    regtestEnabled &&
-    value.regtest !== undefined &&
-    !isStoredBarkRailForNetwork(value.regtest, 'regtest')
+    typeof value.networkMode !== 'string' ||
+    !allowedNetworks.includes(value.networkMode as BarkRailNetwork)
   ) {
     return false
   }
-  const hasRegtest = regtestEnabled && isStoredBarkRailForNetwork(value.regtest, 'regtest')
-  return value.signet !== undefined || value.mainnet !== undefined || hasRegtest
+  const network = value.networkMode as BarkRailNetwork
+  if (value.serverUrl !== BARK_RAIL_SERVER_URL[network]) return false
+  if (!isBarkFingerprint(value.fingerprint)) return false
+  if (value.lastSuccessfulSyncAt !== undefined && !isIso8601Timestamp(value.lastSuccessfulSyncAt)) {
+    return false
+  }
+  if (value.receiveKeyIndex !== undefined && !isBarkReceiveKeyIndex(value.receiveKeyIndex)) {
+    return false
+  }
+  if (value.recordDump !== undefined && typeof value.recordDump !== 'string') {
+    return false
+  }
+  if (
+    value.pendingEmergencyClaim !== undefined &&
+    !isPendingEmergencyClaim(value.pendingEmergencyClaim)
+  ) {
+    return false
+  }
+  if (
+    value.proceedAutomatically !== undefined &&
+    typeof value.proceedAutomatically !== 'boolean'
+  ) {
+    return false
+  }
+  return true
 }
 
-function sanitizeBarkRails(
-  railsValue: unknown,
-): StoredBarkRails | undefined {
-  const railsRecord = isRecord(railsValue) ? railsValue : {}
-  const signet = canonicalSignetBarkRail(railsRecord.signet)
-  const mainnet = canonicalMainnetBarkRail(railsRecord.mainnet)
-  const regtest = isE2eBarkRegtestControlEnabled()
-    ? canonicalBarkRail(railsRecord.regtest, 'regtest')
-    : undefined
-  if (signet == null && mainnet == null && regtest == null) {
-    if (railsValue != null && signet == null && railsRecord.signet != null && import.meta.env.DEV) {
-      console.warn('[wallet-secrets] Dropping invalid barkRails.signet')
+function sanitizeStoredBarkAccountRow(row: unknown): StoredBarkAccount | null {
+  if (!isRecord(row)) return null
+  if (isStoredBarkAccount(row)) {
+    return row
+  }
+  const cleaned: Record<string, unknown> = { ...row }
+  const pendingEmergencyClaim = pendingEmergencyClaimFromUnknown(row.pendingEmergencyClaim)
+  if (pendingEmergencyClaim != null) {
+    cleaned.pendingEmergencyClaim = pendingEmergencyClaim
+  } else {
+    delete cleaned.pendingEmergencyClaim
+  }
+  if (proceedAutomaticallyFromUnknown(row.proceedAutomatically) === true) {
+    cleaned.proceedAutomatically = true
+  } else {
+    delete cleaned.proceedAutomatically
+  }
+  if (isStoredBarkAccount(cleaned)) {
+    return cleaned
+  }
+  if (import.meta.env.DEV) {
+    console.warn('[wallet-secrets] Dropping invalid barkAccount row', row)
+  }
+  return null
+}
+
+function deduplicateBarkAccountsByNetwork(accounts: StoredBarkAccount[]): StoredBarkAccount[] {
+  const seenNetworks = new Set<BarkRailNetwork>()
+  const deduplicated: StoredBarkAccount[] = []
+  for (const account of accounts) {
+    if (seenNetworks.has(account.networkMode)) {
+      if (import.meta.env.DEV) {
+        console.warn(
+          '[wallet-secrets] Dropping duplicate barkAccount for network',
+          account.networkMode,
+        )
+      }
+      continue
     }
-    return undefined
+    seenNetworks.add(account.networkMode)
+    deduplicated.push(account)
   }
-  return {
-    ...(signet != null ? { signet } : {}),
-    ...(mainnet != null ? { mainnet } : {}),
-    ...(regtest != null ? { regtest } : {}),
-  }
+  return deduplicated
 }
 
 /** Throws when a dump is larger than [`BARK_RECORD_DUMP_MAX_BYTES`]. Does not modify the dump. */
@@ -518,8 +485,14 @@ export function isWalletSecretsPayload(value: unknown): value is WalletSecretsPa
   ) {
     return false
   }
-  if (value.barkRails !== undefined && !isStoredBarkRails(value.barkRails)) {
+  if (!Array.isArray(value.barkAccounts)) return false
+  if (!value.barkAccounts.every((row) => isStoredBarkAccount(row))) {
     return false
+  }
+  const barkNetworks = new Set<string>()
+  for (const account of value.barkAccounts) {
+    if (barkNetworks.has(account.networkMode)) return false
+    barkNetworks.add(account.networkMode)
   }
   return true
 }
@@ -557,8 +530,14 @@ export function isWalletSecrets(value: unknown): value is WalletSecrets {
   ) {
     return false
   }
-  if (value.barkRails !== undefined && !isStoredBarkRails(value.barkRails)) {
+  if (!Array.isArray(value.barkAccounts)) return false
+  if (!value.barkAccounts.every((row) => isStoredBarkAccount(row))) {
     return false
+  }
+  const barkNetworksSecrets = new Set<string>()
+  for (const account of value.barkAccounts) {
+    if (barkNetworksSecrets.has(account.networkMode)) return false
+    barkNetworksSecrets.add(account.networkMode)
   }
   return true
 }
@@ -571,7 +550,7 @@ export function walletSecretsPayloadFromSecrets(
     lightningNwcConnections: secrets.lightningNwcConnections,
     arkadeAccounts: secrets.arkadeAccounts ?? [],
     activeArkadeAccountIdByNetwork: secrets.activeArkadeAccountIdByNetwork ?? {},
-    ...(secrets.barkRails != null ? { barkRails: secrets.barkRails } : {}),
+    barkAccounts: secrets.barkAccounts ?? [],
     ...(secrets.signetNetworkSplitApplied === true
       ? { signetNetworkSplitApplied: true as const }
       : {}),
@@ -696,7 +675,7 @@ function rewriteSignetNetworkField(
  * Historical Arkade `signet` rows were the Mutinynet operator.
  * On-chain descriptors and Lightning connections move to Mutinynet only when
  * the configured pre-split Esplora chain was Mutinynet. Bark stays on public
- * Signet (`barkRails.signet` is left untouched).
+ * Signet (`barkAccounts` with `networkMode: 'signet'` is left untouched).
  *
  * Until that chain is configured, Arkade is rewritten but the flag stays unset
  * so a later parse can still classify descriptors.
@@ -743,8 +722,15 @@ function normalizeWalletSecretsPayload(raw: unknown): unknown {
   delete withoutLegacyKeys.arkadeAccounts
   delete withoutLegacyKeys.activeArkadeAccountIdByNetwork
 
-  const barkRails = sanitizeBarkRails(withoutLegacyKeys.barkRails)
   delete withoutLegacyKeys.barkRails
+  const barkAccountsRaw = withoutLegacyKeys.barkAccounts
+  delete withoutLegacyKeys.barkAccounts
+  const barkAccounts = deduplicateBarkAccountsByNetwork(
+    (sanitizeOptionalObjectArray(
+      barkAccountsRaw,
+      sanitizeStoredBarkAccountRow,
+    ) as StoredBarkAccount[]) ?? [],
+  )
 
   return {
     ...withoutLegacyKeys,
@@ -756,7 +742,7 @@ function normalizeWalletSecretsPayload(raw: unknown): unknown {
       pickActiveArkadeAccountIdByNetworkField(raw),
       validAccountIds,
     ),
-    ...(barkRails != null ? { barkRails } : {}),
+    barkAccounts,
   }
 }
 
@@ -797,8 +783,19 @@ function describeWalletSecretsPayloadValidationIssues(value: unknown): string[] 
   ) {
     issues.push('activeArkadeAccountIdByNetwork must be an object')
   }
-  if (value.barkRails !== undefined && !isStoredBarkRails(value.barkRails)) {
-    issues.push('barkRails is invalid')
+  if (!Array.isArray(value.barkAccounts)) {
+    issues.push('barkAccounts must be an array')
+  } else if (!value.barkAccounts.every((row) => isStoredBarkAccount(row))) {
+    issues.push('barkAccounts contains an invalid row')
+  } else {
+    const barkNetworks = new Set<string>()
+    for (const account of value.barkAccounts) {
+      if (barkNetworks.has(account.networkMode)) {
+        issues.push(`barkAccounts has duplicate account for network ${account.networkMode}`)
+        break
+      }
+      barkNetworks.add(account.networkMode)
+    }
   }
   return issues
 }

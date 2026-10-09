@@ -49,8 +49,6 @@ flowchart TB
 
 There is **no IndexedDB fallback**. If OPFS or SQLite is unavailable, the app shows `SecureStorageUnavailableBanner` and does not silently degrade.
 
-**Legacy:** Arkade previously used per-wallet IndexedDB databases (`bitboard-arkade-{walletId}-{networkMode}`). These are deleted on session open; Arkade state now lives in `sdkPersistenceJson` inside encrypted wallet secrets. Bark protocol state lives only in `barkRails`.
-
 ## Two persistence layers
 
 ### 1. Encrypted wallet secrets (`wallet_secrets`)
@@ -63,7 +61,7 @@ interface WalletSecretsPayload {
   lightningNwcConnections: StoredNwcLightningConnection[]
   arkadeAccounts: StoredArkadeAccount[]
   activeArkadeAccountIdByNetwork: Partial<Record<ArkadeSupportedNetworkMode, string>>
-  barkRails?: Partial<Record<'signet' | 'mainnet', StoredBarkRail>>
+  barkAccounts: StoredBarkAccount[]
 }
 ```
 
@@ -81,7 +79,7 @@ Passwords, mnemonics, and NWC URIs are **never** stored in `localStorage` or `se
 |--------|------------|---------------------|------------|
 | `crypto.worker` | `crypto` | `ACTIVE_WALLET`, BDK changeset | `descriptorWallets[].changeSet` in encrypted payload |
 | `arkade.worker` | `bitboard-arkade` | `JsonPersistenceDb` | `sdkPersistenceJson` on active Arkade account |
-| `bark.worker` | `bitboard-bark` | in-memory `StorageAdaptor` | `recordDump` on `barkRails` for the open network |
+| `bark.worker` | `bitboard-bark` | in-memory `StorageAdaptor` | `recordDump` on `barkAccounts` for the open network |
 | `lab.worker` | `crypto` (`lab_*`) | In-memory `LabState` | Lab SQLite via `lab-factory.ts` on main thread |
 | `encryption.worker` | `bitboard-encryption` | Session password in worker memory | Not persisted (except near-zero wrapper; see [general.md](general.md)) |
 

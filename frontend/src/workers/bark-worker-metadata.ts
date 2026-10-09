@@ -1,8 +1,9 @@
 import {
   applyBarkRecordDump,
-  applyOpenedBarkRail,
+  applyOpenedBarkAccount,
   applyPendingEmergencyClaim,
   applyProceedAutomatically,
+  findBarkAccount,
   recordDumpForOpen,
 } from '@/lib/bark/bark-rail-metadata'
 import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
@@ -13,7 +14,7 @@ import {
   parseWalletPayloadJson,
   type BarkRailNetwork,
   type PendingEmergencyClaim,
-  type StoredBarkRail,
+  type StoredBarkAccount,
   type WalletSecretsPayload,
 } from '@/lib/wallet/wallet-domain-types'
 import type { Remote } from 'comlink'
@@ -52,17 +53,17 @@ async function writeDecryptedWalletPayload(
   })
 }
 
-/** Stored receive cursor for one network, if that rail has one. Does not reveal. */
+/** Stored receive cursor for one network, if that account has one. Does not reveal. */
 export async function readStoredBarkReceiveKeyIndex(
   deps: BarkEncryptedPayloadDeps,
   walletId: number,
   network: BarkRailNetwork,
 ): Promise<number | undefined> {
   const payload = await readDecryptedWalletPayload(deps, walletId)
-  return payload.barkRails?.[network]?.receiveKeyIndex
+  return findBarkAccount(payload, network)?.receiveKeyIndex
 }
 
-/** Dump to pass into `bark_open_session`. Empty when this rail has no dump yet. */
+/** Dump to pass into `bark_open_session`. Empty when this account has no dump yet. */
 export async function readRecordDumpForOpen(
   deps: BarkEncryptedPayloadDeps,
   walletId: number,
@@ -73,19 +74,19 @@ export async function readRecordDumpForOpen(
 }
 
 /**
- * Writes `barkRails[network]` after open. Replaces that network's dump only.
+ * Writes or updates `barkAccounts` after open. Replaces that network's dump only.
  * Does not rewrite the other network or `sdkPersistenceJson`.
  */
-export async function persistOpenedBarkRail(
+export async function persistOpenedBarkAccount(
   deps: BarkEncryptedPayloadDeps,
   walletId: number,
   network: BarkRailNetwork,
   fingerprint: string,
   receiveKeyIndex: number,
   recordDump: string,
-): Promise<StoredBarkRail> {
+): Promise<StoredBarkAccount> {
   const payload = await readDecryptedWalletPayload(deps, walletId)
-  const nextPayload = applyOpenedBarkRail({
+  const nextPayload = applyOpenedBarkAccount({
     payload,
     network,
     fingerprint,
@@ -93,11 +94,11 @@ export async function persistOpenedBarkRail(
     recordDump,
   })
   await writeDecryptedWalletPayload(deps, walletId, nextPayload)
-  const rail = nextPayload.barkRails?.[network]
-  if (rail == null) {
-    throw new Error('Bark rail is missing')
+  const account = findBarkAccount(nextPayload, network)
+  if (account == null) {
+    throw new Error('Bark account is missing')
   }
-  return rail
+  return account
 }
 
 /**
@@ -143,14 +144,14 @@ export async function persistBarkProtocolState(
   )
 }
 
-/** Broadcast claim that Bark has not observed, if this rail has one. */
+/** Broadcast claim that Bark has not observed, if this account has one. */
 export async function readPendingEmergencyClaim(
   deps: BarkEncryptedPayloadDeps,
   walletId: number,
   network: BarkRailNetwork,
 ): Promise<PendingEmergencyClaim | null> {
   const payload = await readDecryptedWalletPayload(deps, walletId)
-  return payload.barkRails?.[network]?.pendingEmergencyClaim ?? null
+  return findBarkAccount(payload, network)?.pendingEmergencyClaim ?? null
 }
 
 /** Writes or clears the pending claim before the claim call returns. */
@@ -165,14 +166,14 @@ export async function writePendingEmergencyClaim(
   await writeDecryptedWalletPayload(deps, walletId, nextPayload)
 }
 
-/** True only when this rail stored automatic emergency-exit proceeding. */
+/** True only when this account stored automatic emergency-exit proceeding. */
 export async function readProceedAutomatically(
   deps: BarkEncryptedPayloadDeps,
   walletId: number,
   network: BarkRailNetwork,
 ): Promise<boolean> {
   const payload = await readDecryptedWalletPayload(deps, walletId)
-  return payload.barkRails?.[network]?.proceedAutomatically === true
+  return findBarkAccount(payload, network)?.proceedAutomatically === true
 }
 
 /** Writes or clears automatic emergency-exit proceeding for the open rail. */

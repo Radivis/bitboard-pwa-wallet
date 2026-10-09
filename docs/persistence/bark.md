@@ -6,24 +6,27 @@ For save/sync orchestration, see [wallet rail lifecycle](../wallet-rail-lifecycl
 
 ## Encrypted payload (`wallet_secrets`)
 
-Each Bark network is one entry in `WalletSecretsPayload.barkRails`:
+Each Bark network is an entry in `WalletSecretsPayload.barkAccounts`:
 
 ```typescript
-type BarkRailNetwork = 'signet' | 'mainnet'
+type BarkRailNetwork = 'signet' | 'mainnet' | 'regtest'
 
-interface StoredBarkRail {
+interface StoredBarkAccount {
+  id: string
+  networkMode: BarkRailNetwork
   serverUrl: string
   fingerprint: string
   lastSuccessfulSyncAt?: string
   receiveKeyIndex?: number
   recordDump?: string // versioned Bark Record bytes, standard base64
   pendingEmergencyClaim?: { txid: string; vtxoIds: string[] }
+  proceedAutomatically?: boolean
 }
 
-barkRails?: Partial<Record<BarkRailNetwork, StoredBarkRail>>
+barkAccounts: StoredBarkAccount[]
 ```
 
-The map key is the network. The rail record does not repeat it. Signet `serverUrl` is `https://ark.signet.2nd.dev`. Mainnet `serverUrl` is `https://ark.second.tech`. A flush rewrites only the open network's dump. `pendingEmergencyClaim` is metadata on that rail, not a Bark protocol record. It remembers a broadcast claim until Bark reports those VTXOs claim-in-progress or claimed, or the app Esplora reports the transaction gone. A dump flush keeps the field.
+Each account represents a Bark configuration for a specific `networkMode` (enforcing at most one account per network mode). Signet `serverUrl` is `https://ark.signet.2nd.dev`. Mainnet `serverUrl` is `https://ark.second.tech`. A flush rewrites only the open network's dump. `pendingEmergencyClaim` is metadata on that account, not a Bark protocol record. It remembers a broadcast claim until Bark reports those VTXOs claim-in-progress or claimed, or the app Esplora reports the transaction gone. A dump flush keeps the field.
 
 **Size limit:** each `recordDump` must not exceed 10 MB of UTF-8 (`BARK_RECORD_DUMP_MAX_BYTES` in `wallet-domain-types.ts`). An over-cap dump is kept on the payload. Session open refuses it. Dropping it would open an empty wallet and lose the exit chain.
 
@@ -70,7 +73,7 @@ Key modules:
 |--------|------|
 | `frontend/src/workers/bark.worker.ts` | Session, export, flush after mutating calls |
 | `frontend/src/workers/bark-persistence-channel.ts` | Worker ↔ encryption channel |
-| `frontend/src/workers/bark-worker-metadata.ts` | CAS write of the open network's rail only |
+| `frontend/src/workers/bark-worker-metadata.ts` | CAS write of the open network's account only |
 | `frontend/src/lib/bark/bark-rail-metadata.ts` | Merge helpers that leave the other network and Arkade untouched |
 
 Main thread code handles **ciphertext only**. Plaintext records stay in the Bark worker.

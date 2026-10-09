@@ -67,7 +67,7 @@ describe('parseWalletPayloadJson', () => {
     expect(parsed.activeArkadeAccountIdByNetwork).toEqual({})
   })
 
-  it('normalizes missing arkade account fields to empty defaults', () => {
+  it('normalizes missing arkade and bark account fields to empty defaults', () => {
     const json = JSON.stringify({
       descriptorWallets: [],
       lightningNwcConnections: [],
@@ -75,6 +75,69 @@ describe('parseWalletPayloadJson', () => {
     const parsed = parseWalletPayloadJson(json)
     expect(parsed.arkadeAccounts).toEqual([])
     expect(parsed.activeArkadeAccountIdByNetwork).toEqual({})
+    expect(parsed.barkAccounts).toEqual([])
+  })
+
+  it('strips legacy barkRails key on parse and preserves barkAccounts', () => {
+    const payload = {
+      descriptorWallets: [],
+      lightningNwcConnections: [],
+      barkRails: {
+        signet: {
+          serverUrl: 'https://ark.signet.2nd.dev',
+          fingerprint: 'abcdef01',
+        },
+      },
+      barkAccounts: [
+        {
+          id: 'bark-1',
+          networkMode: 'signet',
+          serverUrl: 'https://ark.signet.2nd.dev',
+          fingerprint: 'abcdef01',
+        },
+      ],
+    }
+    const parsed = parseWalletPayloadJson(JSON.stringify(payload))
+    expect(parsed).not.toHaveProperty('barkRails')
+    expect(parsed.barkAccounts).toHaveLength(1)
+    expect(parsed.barkAccounts[0].id).toBe('bark-1')
+  })
+
+  it('drops invalid barkAccounts and deduplicates by networkMode', () => {
+    const payload = {
+      descriptorWallets: [],
+      lightningNwcConnections: [],
+      barkAccounts: [
+        {
+          id: 'bark-valid-1',
+          networkMode: 'signet',
+          serverUrl: 'https://ark.signet.2nd.dev',
+          fingerprint: 'abcdef01',
+        },
+        {
+          id: 'bark-duplicate-signet',
+          networkMode: 'signet',
+          serverUrl: 'https://ark2.signet.2nd.dev',
+          fingerprint: '01234567',
+        },
+        {
+          id: '', // invalid id
+          networkMode: 'mainnet',
+          serverUrl: 'https://ark.second.tech',
+          fingerprint: 'ffffffff',
+        },
+        {
+          id: 'bark-valid-mainnet',
+          networkMode: 'mainnet',
+          serverUrl: 'https://ark.second.tech',
+          fingerprint: '11223344',
+        },
+      ],
+    }
+    const parsed = parseWalletPayloadJson(JSON.stringify(payload))
+    expect(parsed.barkAccounts).toHaveLength(2)
+    expect(parsed.barkAccounts[0].id).toBe('bark-valid-1')
+    expect(parsed.barkAccounts[1].id).toBe('bark-valid-mainnet')
   })
 
   const validSignetAccount = {
@@ -215,12 +278,14 @@ describe('parseWalletPayloadJson', () => {
       ],
       arkadeAccounts: [validSignetAccount],
       activeArkadeAccountIdByNetwork: { signet: 'acct-good' },
-      barkRails: {
-        signet: {
+      barkAccounts: [
+        {
+          id: 'bark-signet',
+          networkMode: 'signet',
           serverUrl: 'https://ark.signet.2nd.dev',
           fingerprint: 'abcdef01',
         },
-      },
+      ],
     })
     const migrated = parseWalletPayloadJson(json)
     expect(migrated.signetNetworkSplitApplied).toBe(true)
@@ -228,10 +293,14 @@ describe('parseWalletPayloadJson', () => {
     expect(migrated.lightningNwcConnections[0].networkMode).toBe('mutinynet')
     expect(migrated.arkadeAccounts[0].networkMode).toBe('mutinynet')
     expect(migrated.activeArkadeAccountIdByNetwork).toEqual({ mutinynet: 'acct-good' })
-    expect(migrated.barkRails?.signet).toEqual({
-      serverUrl: 'https://ark.signet.2nd.dev',
-      fingerprint: 'abcdef01',
-    })
+    expect(migrated.barkAccounts).toEqual([
+      {
+        id: 'bark-signet',
+        networkMode: 'signet',
+        serverUrl: 'https://ark.signet.2nd.dev',
+        fingerprint: 'abcdef01',
+      },
+    ])
 
     const kept = parseWalletPayloadJson(
       JSON.stringify({
@@ -271,12 +340,14 @@ describe('parseWalletPayloadJson', () => {
         ],
         arkadeAccounts: [validSignetAccount],
         activeArkadeAccountIdByNetwork: { signet: 'acct-good' },
-        barkRails: {
-          signet: {
+        barkAccounts: [
+          {
+            id: 'bark-signet',
+            networkMode: 'signet',
             serverUrl: 'https://ark.signet.2nd.dev',
             fingerprint: 'abcdef01',
           },
-        },
+        ],
       }),
     )
     expect(parsed.signetNetworkSplitApplied).toBe(true)
@@ -284,10 +355,14 @@ describe('parseWalletPayloadJson', () => {
     expect(parsed.lightningNwcConnections[0].networkMode).toBe('signet')
     expect(parsed.arkadeAccounts[0].networkMode).toBe('mutinynet')
     expect(parsed.activeArkadeAccountIdByNetwork).toEqual({ mutinynet: 'acct-good' })
-    expect(parsed.barkRails?.signet).toEqual({
-      serverUrl: 'https://ark.signet.2nd.dev',
-      fingerprint: 'abcdef01',
-    })
+    expect(parsed.barkAccounts).toEqual([
+      {
+        id: 'bark-signet',
+        networkMode: 'signet',
+        serverUrl: 'https://ark.signet.2nd.dev',
+        fingerprint: 'abcdef01',
+      },
+    ])
   })
 
   it('does not freeze the split flag before the historical chain is known', () => {

@@ -8,13 +8,13 @@ import {
   proceedAutomaticallyFromUnknown,
   type BarkRailNetwork,
   type PendingEmergencyClaim,
-  type StoredBarkRail,
+  type StoredBarkAccount,
   type WalletSecretsPayload,
 } from '@/lib/wallet/wallet-domain-types'
 
 export class BarkFingerprintMismatchError extends Error {
   constructor() {
-    super('Bark fingerprint does not match the stored rail')
+    super('Bark fingerprint does not match the stored account')
     this.name = 'BarkFingerprintMismatchError'
   }
 }
@@ -25,60 +25,75 @@ export function barkServerUrl(network: BarkRailNetwork): string {
   return BARK_MAINNET_SERVER_URL
 }
 
-function railWithPreservedFields(
+export function findBarkAccount(
+  payload: WalletSecretsPayload,
   network: BarkRailNetwork,
-  existingRail: StoredBarkRail | undefined,
+): StoredBarkAccount | undefined {
+  return payload.barkAccounts.find((account) => account.networkMode === network)
+}
+
+export function requireBarkAccount(
+  payload: WalletSecretsPayload,
+  network: BarkRailNetwork,
+): StoredBarkAccount {
+  const account = findBarkAccount(payload, network)
+  if (account == null) {
+    throw new Error('Bark account is missing')
+  }
+  return account
+}
+
+export function upsertBarkAccountInPayload(
+  payload: WalletSecretsPayload,
+  account: StoredBarkAccount,
+): WalletSecretsPayload {
+  const index = payload.barkAccounts.findIndex((a) => a.networkMode === account.networkMode)
+  const nextAccounts = [...payload.barkAccounts]
+  if (index >= 0) {
+    nextAccounts[index] = account
+  } else {
+    nextAccounts.push(account)
+  }
+  return {
+    ...payload,
+    barkAccounts: nextAccounts,
+  }
+}
+
+function accountWithPreservedFields(
+  network: BarkRailNetwork,
+  existingAccount: StoredBarkAccount | undefined,
   fingerprint: string,
   receiveKeyIndex: number | undefined,
   recordDump: string | undefined,
-): StoredBarkRail {
-  const barkRail: StoredBarkRail = {
+): StoredBarkAccount {
+  const barkAccount: StoredBarkAccount = {
+    id: existingAccount?.id ?? crypto.randomUUID(),
+    networkMode: network,
     serverUrl: barkServerUrl(network),
     fingerprint,
   }
-  if (existingRail?.lastSuccessfulSyncAt != null) {
-    barkRail.lastSuccessfulSyncAt = existingRail.lastSuccessfulSyncAt
+  if (existingAccount?.lastSuccessfulSyncAt != null) {
+    barkAccount.lastSuccessfulSyncAt = existingAccount.lastSuccessfulSyncAt
   }
-  const nextReceiveKeyIndex = receiveKeyIndex ?? existingRail?.receiveKeyIndex
+  const nextReceiveKeyIndex = receiveKeyIndex ?? existingAccount?.receiveKeyIndex
   if (nextReceiveKeyIndex != null) {
-    barkRail.receiveKeyIndex = nextReceiveKeyIndex
+    barkAccount.receiveKeyIndex = nextReceiveKeyIndex
   }
-  const nextDump = recordDump ?? existingRail?.recordDump
+  const nextDump = recordDump ?? existingAccount?.recordDump
   if (nextDump != null) {
-    barkRail.recordDump = nextDump
+    barkAccount.recordDump = nextDump
   }
   const pendingEmergencyClaim = pendingEmergencyClaimFromUnknown(
-    existingRail?.pendingEmergencyClaim,
+    existingAccount?.pendingEmergencyClaim,
   )
   if (pendingEmergencyClaim != null) {
-    barkRail.pendingEmergencyClaim = pendingEmergencyClaim
+    barkAccount.pendingEmergencyClaim = pendingEmergencyClaim
   }
-  if (proceedAutomaticallyFromUnknown(existingRail?.proceedAutomatically) === true) {
-    barkRail.proceedAutomatically = true
+  if (proceedAutomaticallyFromUnknown(existingAccount?.proceedAutomatically) === true) {
+    barkAccount.proceedAutomatically = true
   }
-  return barkRail
-}
-
-function payloadWithRail(
-  payload: WalletSecretsPayload,
-  network: BarkRailNetwork,
-  rail: StoredBarkRail,
-): WalletSecretsPayload {
-  return {
-    ...payload,
-    barkRails: {
-      ...payload.barkRails,
-      [network]: rail,
-    },
-  }
-}
-
-function requireRail(payload: WalletSecretsPayload, network: BarkRailNetwork): StoredBarkRail {
-  const existingRail = payload.barkRails?.[network]
-  if (existingRail == null) {
-    throw new Error('Bark rail is missing')
-  }
-  return existingRail
+  return barkAccount
 }
 
 /**
@@ -89,7 +104,7 @@ export function recordDumpForOpen(
   payload: WalletSecretsPayload,
   network: BarkRailNetwork,
 ): string {
-  const recordDump = payload.barkRails?.[network]?.recordDump
+  const recordDump = findBarkAccount(payload, network)?.recordDump
   if (recordDump == null || recordDump.length === 0) return ''
   assertBarkRecordDumpWithinSizeLimit(recordDump)
   return recordDump
@@ -102,10 +117,10 @@ export function signetRecordDumpForOpen(payload: WalletSecretsPayload): string {
 
 /**
  * Records a successful open for one network. Keeps an existing sync timestamp
- * and the other network's dump. Pass `receiveKeyIndex` after a reveal or a recovered key.
+ * and other network accounts. Pass `receiveKeyIndex` after a reveal or a recovered key.
  * Pass `recordDump` to replace this network's protocol records.
  */
-export function applyOpenedBarkRail(params: {
+export function applyOpenedBarkAccount(params: {
   payload: WalletSecretsPayload
   network: BarkRailNetwork
   fingerprint: string
@@ -125,20 +140,19 @@ export function applyOpenedBarkRail(params: {
     assertBarkRecordDumpWithinSizeLimit(params.recordDump)
   }
 
-  const existingRail = params.payload.barkRails?.[params.network]
+  const existingAccount = findBarkAccount(params.payload, params.network)
   if (
-    existingRail != null &&
-    existingRail.fingerprint.toLowerCase() !== params.fingerprint.toLowerCase()
+    existingAccount != null &&
+    existingAccount.fingerprint.toLowerCase() !== params.fingerprint.toLowerCase()
   ) {
     throw new BarkFingerprintMismatchError()
   }
 
-  return payloadWithRail(
+  return upsertBarkAccountInPayload(
     params.payload,
-    params.network,
-    railWithPreservedFields(
+    accountWithPreservedFields(
       params.network,
-      existingRail,
+      existingAccount,
       params.fingerprint,
       params.receiveKeyIndex,
       params.recordDump,
@@ -148,7 +162,7 @@ export function applyOpenedBarkRail(params: {
 
 /**
  * Stamps `lastSuccessfulSyncAt` after `Wallet::sync` succeeds.
- * Leaves the fingerprint, receive index, the other network, and Arkade unchanged.
+ * Leaves the fingerprint, receive index, other network accounts, and Arkade unchanged.
  */
 export function applySuccessfulBarkSync(params: {
   payload: WalletSecretsPayload
@@ -165,21 +179,21 @@ export function applySuccessfulBarkSync(params: {
     }
     assertBarkRecordDumpWithinSizeLimit(params.recordDump)
   }
-  const existingRail = requireRail(params.payload, params.network)
-  const rail = railWithPreservedFields(
+  const existingAccount = requireBarkAccount(params.payload, params.network)
+  const account = accountWithPreservedFields(
     params.network,
-    existingRail,
-    existingRail.fingerprint,
+    existingAccount,
+    existingAccount.fingerprint,
     undefined,
     params.recordDump,
   )
-  rail.lastSuccessfulSyncAt = params.syncedAt
-  return payloadWithRail(params.payload, params.network, rail)
+  account.lastSuccessfulSyncAt = params.syncedAt
+  return upsertBarkAccountInPayload(params.payload, account)
 }
 
 /**
  * Replaces one network's record dump after a protocol write.
- * Leaves the other network's dump and Arkade account objects unchanged.
+ * Leaves the other network accounts and Arkade account objects unchanged.
  */
 export function applyBarkRecordDump(params: {
   payload: WalletSecretsPayload
@@ -204,18 +218,18 @@ export function applyBarkRecordDump(params: {
   ) {
     throw new Error('Bark sync timestamp must be a parseable ISO-8601 string')
   }
-  const existingRail = requireRail(params.payload, params.network)
-  const rail = railWithPreservedFields(
+  const existingAccount = requireBarkAccount(params.payload, params.network)
+  const account = accountWithPreservedFields(
     params.network,
-    existingRail,
-    existingRail.fingerprint,
+    existingAccount,
+    existingAccount.fingerprint,
     params.receiveKeyIndex,
     params.recordDump,
   )
   if (params.lastSuccessfulSyncAt !== undefined) {
-    rail.lastSuccessfulSyncAt = params.lastSuccessfulSyncAt
+    account.lastSuccessfulSyncAt = params.lastSuccessfulSyncAt
   }
-  return payloadWithRail(params.payload, params.network, rail)
+  return upsertBarkAccountInPayload(params.payload, account)
 }
 
 function assertPendingEmergencyClaim(pending: PendingEmergencyClaim): void {
@@ -226,7 +240,7 @@ function assertPendingEmergencyClaim(pending: PendingEmergencyClaim): void {
 
 /**
  * Sets or clears the broadcast claim Bark has not observed yet.
- * Leaves the dump, fingerprint, receive index, and the other network unchanged.
+ * Leaves the dump, fingerprint, receive index, and other network accounts unchanged.
  */
 export function applyPendingEmergencyClaim(params: {
   payload: WalletSecretsPayload
@@ -236,23 +250,23 @@ export function applyPendingEmergencyClaim(params: {
   if (params.pending != null) {
     assertPendingEmergencyClaim(params.pending)
   }
-  const existingRail = requireRail(params.payload, params.network)
-  const rail = railWithPreservedFields(
+  const existingAccount = requireBarkAccount(params.payload, params.network)
+  const account = accountWithPreservedFields(
     params.network,
-    existingRail,
-    existingRail.fingerprint,
+    existingAccount,
+    existingAccount.fingerprint,
     undefined,
     undefined,
   )
   if (params.pending == null) {
-    delete rail.pendingEmergencyClaim
+    delete account.pendingEmergencyClaim
   } else {
-    rail.pendingEmergencyClaim = {
+    account.pendingEmergencyClaim = {
       txid: params.pending.txid,
       vtxoIds: [...params.pending.vtxoIds],
     }
   }
-  return payloadWithRail(params.payload, params.network, rail)
+  return upsertBarkAccountInPayload(params.payload, account)
 }
 
 /**
@@ -264,18 +278,18 @@ export function applyProceedAutomatically(params: {
   network: BarkRailNetwork
   enabled: boolean
 }): WalletSecretsPayload {
-  const existingRail = requireRail(params.payload, params.network)
-  const rail = railWithPreservedFields(
+  const existingAccount = requireBarkAccount(params.payload, params.network)
+  const account = accountWithPreservedFields(
     params.network,
-    existingRail,
-    existingRail.fingerprint,
+    existingAccount,
+    existingAccount.fingerprint,
     undefined,
     undefined,
   )
   if (params.enabled) {
-    rail.proceedAutomatically = true
+    account.proceedAutomatically = true
   } else {
-    delete rail.proceedAutomatically
+    delete account.proceedAutomatically
   }
-  return payloadWithRail(params.payload, params.network, rail)
+  return upsertBarkAccountInPayload(params.payload, account)
 }

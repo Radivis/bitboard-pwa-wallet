@@ -29,7 +29,7 @@ feature:
     - A failed sync does not replace the last shown spendable or locked amount
     - When locked sats are above zero, the dashboard headline is spendable plus locked and shows those two sub-lines
     - The first failed sync of a session shows the error banner and no amount
-    - lastSuccessfulSyncAt is stamped on the open network's barkRails entry only after Wallet sync succeeds
+    - lastSuccessfulSyncAt is stamped on the open network's barkAccounts entry only after Wallet sync succeeds
     - Periodic sync for Bark follows the master toggle, the per-rail switch, signet or mainnet, and tab visibility
     - Board from on-chain is offered only when isBarkEnabled and the network is signet or mainnet
     - Confirm signs the reviewed PSBT and submits it to Bark. It does not broadcast through the on-chain Esplora client

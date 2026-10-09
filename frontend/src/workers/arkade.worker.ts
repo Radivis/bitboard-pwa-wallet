@@ -204,25 +204,6 @@ function requestDecrypt(encryptedBlob: EncryptedBlobMessage): Promise<string> {
   return secretsProxy.decrypt(encryptedBlob)
 }
 
-function legacyIndexedDbName(
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-): string {
-  return `bitboard-arkade-${walletId}-${networkMode}`
-}
-
-function deleteLegacyArkadeIndexedDb(
-  walletId: number,
-  networkMode: ArkadeSupportedNetworkMode,
-): void {
-  if (typeof indexedDB === 'undefined') return
-  try {
-    indexedDB.deleteDatabase(legacyIndexedDbName(walletId, networkMode))
-  } catch {
-    // Ignore — database may not exist.
-  }
-}
-
 type ArkadePersistScope = {
   walletId: number
   arkadeAccountId: string
@@ -441,7 +422,6 @@ async function openSessionImpl(
   }
 
   await closeSessionImpl()
-  deleteLegacyArkadeIndexedDb(params.walletId, params.networkMode)
 
   const encryptedPayloadMessage = encryptedBlobForDbToMessage(params.encryptedPayload)
   const { accountFound, sdkPersistenceJson } = await loadArkadeAccountSdkPersistence(

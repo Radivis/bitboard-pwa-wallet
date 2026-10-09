@@ -73,7 +73,7 @@ Key modules:
 
 | Module | Role |
 |--------|------|
-| `frontend/src/workers/arkade.worker.ts` | Session, export, legacy IndexedDB cleanup |
+| `frontend/src/workers/arkade.worker.ts` | Session, export, flush after mutating calls |
 | `frontend/src/workers/arkade-persistence-channel.ts` | Worker ↔ encryption channel |
 | `frontend/src/lib/arkade/arkade-encrypted-persistence-manager.ts` | Channel setup coordination |
 | `frontend/src/lib/arkade/arkade-sdk-persistence.ts` | Merge helpers, export/import |
@@ -91,10 +91,6 @@ Main thread code (`EncryptedWalletSecretsHost`) handles **ciphertext only** — 
 | `unilateralExitControlStore` | No | Selection, graph epoch (memory only) |
 
 Unilateral-exit WASM fields (`unilateral_exit_materials_by_host_tx`, watches, host-tx observations, `vtxo_exit_records`, step wait, pending deductions, `unilateral_exit_frontend`) are documented in [unilateral-exit.md](unilateral-exit.md).
-
-## Legacy IndexedDB
-
-Arkade previously used IndexedDB databases named `bitboard-arkade-{walletId}-{networkMode}`. On session open, `arkade.worker.ts` deletes these databases. All Arkade state now lives in `sdkPersistenceJson` inside encrypted wallet secrets.
 
 ## Versioning summary
 
