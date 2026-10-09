@@ -253,6 +253,7 @@ export function SendFlow() {
     lightningRecipientOk,
     canBuildLightning,
     submitLightningPayment,
+    resolvedSignetFamilyInvoiceModal,
   } = useSendFlowLightning({
     isLightningEnabled,
     networkMode,
@@ -900,6 +901,8 @@ export function SendFlow() {
         onLabIncreaseToChangeFreeReview={handleLabIncreaseToChangeFreeReview}
         labReviewPending={labReviewPending}
       />
+
+      {resolvedSignetFamilyInvoiceModal}
     </div>
   )
 }

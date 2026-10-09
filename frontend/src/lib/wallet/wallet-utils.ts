@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 
-import { getDatabase } from '@/db/database'
+import { getDatabase, ensureMigrated } from '@/db/database'
 import type { NetworkMode } from '@/stores/walletStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
@@ -100,6 +100,7 @@ export async function saveCustomEsploraUrl(
   url: string,
 ): Promise<void> {
   validateEsploraUrl(url, network)
+  await ensureMigrated()
   await ensureSignetNetworkSplitMigrated()
   const walletDb = getDatabase()
   const settingsKey = `${CUSTOM_ESPLORA_URL_KEY_PREFIX}${network}`
@@ -127,6 +128,7 @@ export async function saveCustomEsploraUrl(
 export async function deleteCustomEsploraUrl(
   network: NetworkMode,
 ): Promise<void> {
+  await ensureMigrated()
   await ensureSignetNetworkSplitMigrated()
   const walletDb = getDatabase()
   await walletDb
@@ -138,6 +140,7 @@ export async function deleteCustomEsploraUrl(
 export async function loadCustomEsploraUrl(
   network: NetworkMode,
 ): Promise<string | null> {
+  await ensureMigrated()
   await ensureSignetNetworkSplitMigrated()
   const walletDb = getDatabase()
   const settingsRow = await walletDb
