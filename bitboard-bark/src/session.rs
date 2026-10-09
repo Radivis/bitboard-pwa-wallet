@@ -432,20 +432,34 @@ pub async fn bark_sync() -> Result<String, JsValue> {
     Ok(refresh_status)
 }
 
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console, js_name = warn)]
+    fn console_warn(s: &str);
+}
+
 /// `Wallet::sync` already resumes a stored delegated round. Submit another
 /// only when that list is empty. Selector misses and schedule errors stay
 /// inside this status so the caller can still treat the sync as successful.
 async fn delegated_refresh_status(wallet: &bark::Wallet) -> String {
     let pending_round_count = match wallet.pending_round_states().await {
         Ok(states) => states.len(),
-        Err(_) => return BARK_REFRESH_WARNING.to_owned(),
+        Err(err) => {
+            console_warn(&format!("Bark could not read pending round states: {err:#}"));
+            return BARK_REFRESH_WARNING.to_owned();
+        }
     };
     if !should_schedule_delegated_refresh(pending_round_count) {
         return BARK_REFRESH_PENDING.to_owned();
     }
     match wallet.maybe_schedule_maintenance_refresh_delegated().await {
         Ok(scheduled) => refresh_status_after_schedule(scheduled.is_some()).to_owned(),
-        Err(_) => BARK_REFRESH_WARNING.to_owned(),
+        Err(err) => {
+            console_warn(&format!(
+                "Bark could not schedule maintenance refresh: {err:#}"
+            ));
+            BARK_REFRESH_WARNING.to_owned()
+        }
     }
 }
 
