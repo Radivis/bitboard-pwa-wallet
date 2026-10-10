@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router'
+import { BarkNextRefreshHint } from '@/components/bark/BarkNextRefreshHint'
 import { BarkSessionGate } from '@/components/bark/BarkSessionGate'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -25,6 +26,7 @@ export function BarkPanel() {
           embedded
         >
           <>
+            <BarkNextRefreshHint />
             <BarkPendingActionBanner />
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outline" size="sm" asChild>

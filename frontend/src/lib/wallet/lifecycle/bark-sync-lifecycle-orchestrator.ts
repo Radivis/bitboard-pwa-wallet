@@ -1,7 +1,9 @@
 import { settleBarkExitAfterSync } from '@/lib/bark/bark-exit-after-sync'
 import { getBarkWorker } from '@/workers/bark-factory'
 import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
+import type { BarkNextRefreshObservation } from '@/lib/bark/bark-next-refresh-hint'
 import type { BarkRefreshStatus } from '@/lib/bark/bark-refresh-status'
+import type { BarkSyncResult } from '@/workers/bark-api'
 import type { NetworkMode } from '@/stores/walletStore'
 import { getBarkLoadLifecycleSnapshot } from '@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator'
 import type { LockLifecyclePhase } from '@/lib/wallet/lifecycle/lock-lifecycle-types'
@@ -23,6 +25,8 @@ export type BarkSyncLifecycleSnapshot = {
   lockedSats: number | null
   lastSuccessfulSyncAt: string | null
   refreshStatus: BarkRefreshStatus
+  /** Next refresh period from the last successful sync of this session. Failed syncs keep it. */
+  nextRefresh: BarkNextRefreshObservation | null
 }
 
 export type BarkSyncParams = {
@@ -47,7 +51,13 @@ function idleBarkSyncSnapshot(): BarkSyncLifecycleSnapshot {
     lockedSats: null,
     lastSuccessfulSyncAt: null,
     refreshStatus: 'idle',
+    nextRefresh: null,
   }
+}
+
+function observeNextRefresh(synced: BarkSyncResult): BarkNextRefreshObservation | null {
+  if (synced.nextRefresh == null) return null
+  return { ...synced.nextRefresh, observedAt: synced.lastSuccessfulSyncAt }
 }
 
 let snapshot: BarkSyncLifecycleSnapshot = idleBarkSyncSnapshot()
@@ -129,6 +139,7 @@ export function prepareBarkSyncForSessionOpen(networkMode: NetworkMode): void {
     lockedSats: null,
     lastSuccessfulSyncAt: null,
     refreshStatus: 'idle',
+    nextRefresh: null,
   })
 }
 
@@ -188,6 +199,7 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
       lockedSats: previous.lockedSats,
       lastSuccessfulSyncAt: previous.lastSuccessfulSyncAt,
       refreshStatus: previous.refreshStatus,
+      nextRefresh: previous.nextRefresh,
     })
     try {
       const worker = getBarkWorker()
@@ -207,6 +219,7 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
         lockedSats: balance.lockedSats,
         lastSuccessfulSyncAt: synced.lastSuccessfulSyncAt,
         refreshStatus: synced.refreshStatus ?? 'idle',
+        nextRefresh: observeNextRefresh(synced),
       })
       if (generation !== sessionGeneration || params.settleExits === false) {
         return
@@ -229,6 +242,7 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
         lockedSats: kept.lockedSats,
         lastSuccessfulSyncAt: kept.lastSuccessfulSyncAt,
         refreshStatus: kept.refreshStatus,
+        nextRefresh: kept.nextRefresh,
       })
       if (throwOnError) {
         throw error
@@ -265,6 +279,7 @@ export function recordBarkSpendableAfterSend(result: {
     lockedSats: current.lockedSats,
     lastSuccessfulSyncAt: result.lastSuccessfulSyncAt,
     refreshStatus: current.refreshStatus,
+    nextRefresh: current.nextRefresh,
   })
 }
 

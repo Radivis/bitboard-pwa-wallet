@@ -1,12 +1,15 @@
 import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
 import type { HistoricalSignetOnchainChain } from '@/lib/wallet/historical-signet-onchain-chain'
 import type { EncryptedBlobMessage } from '@/workers/secrets-channel-types'
-import type { BarkRefreshStatus } from '@/lib/bark/bark-refresh-status'
+import type {
+  BarkNextRefreshSchedule,
+  BarkRefreshStatus,
+} from '@/lib/bark/bark-refresh-status'
 import type { BarkRailNetwork, PendingEmergencyClaim } from '@/lib/wallet/wallet-domain-types'
 
 export type { PendingEmergencyClaim }
 
-export type { BarkRefreshStatus }
+export type { BarkNextRefreshSchedule, BarkRefreshStatus }
 
 export type OpenBarkSessionParams = {
   walletId: number
@@ -28,6 +31,8 @@ export type OpenBarkSessionResult = {
 export type BarkSyncResult = {
   lastSuccessfulSyncAt: string
   refreshStatus: BarkRefreshStatus
+  /** `null` when the wallet has no spendable VTXOs or the chain tip is unknown. */
+  nextRefresh: BarkNextRefreshSchedule | null
 }
 
 export type BarkRevealedReceiveAddress = {

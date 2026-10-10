@@ -4,6 +4,7 @@ import { screen } from '@testing-library/react'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { BarkDashboardBalance } from '@/components/wallet/BarkDashboardBalance'
 import type { NetworkMode } from '@/stores/walletStore'
+import type { BarkNextRefreshObservation } from '@/lib/bark/bark-next-refresh-hint'
 import type { BarkPendingAction } from '@/workers/bark-api'
 
 const walletStoreState = vi.hoisted(() => ({
@@ -38,6 +39,7 @@ const syncSnapshot = vi.hoisted(() => ({
     lockedSats: null as number | null,
     lastSuccessfulSyncAt: null as string | null,
     refreshStatus: 'idle' as 'idle' | 'scheduled' | 'pending' | 'warning',
+    nextRefresh: null as BarkNextRefreshObservation | null,
   },
 }))
 
@@ -128,7 +130,31 @@ describe('BarkDashboardBalance', () => {
       lockedSats: null,
       lastSuccessfulSyncAt: null,
       refreshStatus: 'idle',
+      nextRefresh: null,
     }
+  })
+
+  it('DASH-BARK-14 shows the next refresh hint as the first element of the card content', () => {
+    syncSnapshot.current.spendableSats = 50_000
+    syncSnapshot.current.lockedSats = 0
+    syncSnapshot.current.nextRefresh = {
+      tipHeight: 1_000,
+      nextRefreshHeight: 1_012,
+      observedAt: '2026-10-10T12:00:00.000Z',
+    }
+    renderWithProviders(<BarkDashboardBalance />)
+
+    const hint = screen.getByTestId('bark-next-refresh-hint')
+    expect(hint).toHaveTextContent('Unlock this wallet around')
+    expect(hint).toHaveClass('border-amber-500/40')
+    expect(hint.parentElement?.firstElementChild).toBe(hint)
+  })
+
+  it('DASH-BARK-14 shows no next refresh hint without a schedule', () => {
+    syncSnapshot.current.spendableSats = 50_000
+    syncSnapshot.current.lockedSats = 0
+    renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.queryByTestId('bark-next-refresh-hint')).not.toBeInTheDocument()
   })
 
   it('DASH-BARK-01 shows the card when Bark is active on signet', () => {

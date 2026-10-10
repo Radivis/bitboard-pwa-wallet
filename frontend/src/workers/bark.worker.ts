@@ -1,7 +1,10 @@
 import { expose, wrap, type Remote } from 'comlink'
 import { readBarkBalance } from '@/lib/bark/bark-balance'
 import { pendingActionsFromWasm } from '@/lib/bark/bark-pending-actions'
-import { readBarkRefreshStatus } from '@/lib/bark/bark-refresh-status'
+import {
+  readBarkNextRefreshSchedule,
+  readBarkRefreshStatus,
+} from '@/lib/bark/bark-refresh-status'
 import {
   barkArkoorSendDepsFromWasm,
   performBarkArkoorSend,
@@ -372,9 +375,13 @@ async function syncImpl(): Promise<BarkSyncResult> {
     async () => {
       const wasmModule = await getBarkWasm()
       const refreshStatus = readBarkRefreshStatus(await wasmModule.bark_sync())
+      const nextRefresh = readBarkNextRefreshSchedule(
+        await wasmModule.bark_next_refresh_schedule(),
+      )
       return {
         lastSuccessfulSyncAt: new Date().toISOString(),
         refreshStatus,
+        nextRefresh,
       }
     },
     (result) => ({ lastSuccessfulSyncAt: result.lastSuccessfulSyncAt }),

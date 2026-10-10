@@ -52,6 +52,7 @@ import {
   discardShownBarkBalanceForSessionChange,
   getBarkSyncLifecycleSnapshot,
   orchestrateBarkSync,
+  prepareBarkSyncForSessionOpen,
   resetBarkSyncLifecycleStateForTests,
   syncBarkSyncLifecycleWithLockPhase,
 } from '@/lib/wallet/lifecycle/bark-sync-lifecycle-orchestrator'
@@ -184,6 +185,64 @@ describe('bark-sync-lifecycle-orchestrator', () => {
       lockedSats: null,
       lastSuccessfulSyncAt: null,
     })
+  })
+
+  it('BARK-SYNC-09 stores the next refresh schedule with the sync time', async () => {
+    workerMocks.sync.mockResolvedValueOnce({
+      lastSuccessfulSyncAt: '2024-03-01T12:00:00.000Z',
+      refreshStatus: 'idle',
+      nextRefresh: { tipHeight: 1_000, nextRefreshHeight: 1_144 },
+    })
+
+    await orchestrateBarkSync({ walletId: 1, networkMode: 'signet' })
+
+    expect(getBarkSyncLifecycleSnapshot().nextRefresh).toEqual({
+      tipHeight: 1_000,
+      nextRefreshHeight: 1_144,
+      observedAt: '2024-03-01T12:00:00.000Z',
+    })
+  })
+
+  it('BARK-SYNC-09 keeps the next refresh schedule when a later sync fails', async () => {
+    workerMocks.sync.mockResolvedValueOnce({
+      lastSuccessfulSyncAt: '2024-03-01T12:00:00.000Z',
+      refreshStatus: 'idle',
+      nextRefresh: { tipHeight: 1_000, nextRefreshHeight: 1_144 },
+    })
+    await orchestrateBarkSync({ walletId: 1, networkMode: 'signet' })
+    workerMocks.sync.mockRejectedValueOnce(new Error('Bark server unreachable'))
+
+    await orchestrateBarkSync({ walletId: 1, networkMode: 'signet', throwOnError: false })
+
+    expect(getBarkSyncLifecycleSnapshot()).toMatchObject({
+      syncPhase: 'sync-error',
+      nextRefresh: {
+        tipHeight: 1_000,
+        nextRefreshHeight: 1_144,
+        observedAt: '2024-03-01T12:00:00.000Z',
+      },
+    })
+  })
+
+  it('BARK-SYNC-09 clears the next refresh schedule on lock and session change', async () => {
+    const syncedWithSchedule = {
+      lastSuccessfulSyncAt: '2024-03-01T12:00:00.000Z',
+      refreshStatus: 'idle',
+      nextRefresh: { tipHeight: 1_000, nextRefreshHeight: 1_144 },
+    }
+    workerMocks.sync.mockResolvedValue(syncedWithSchedule)
+
+    await orchestrateBarkSync({ walletId: 1, networkMode: 'signet' })
+    syncBarkSyncLifecycleWithLockPhase('locked')
+    expect(getBarkSyncLifecycleSnapshot().nextRefresh).toBeNull()
+
+    await orchestrateBarkSync({ walletId: 1, networkMode: 'signet' })
+    discardShownBarkBalanceForSessionChange()
+    expect(getBarkSyncLifecycleSnapshot().nextRefresh).toBeNull()
+
+    await orchestrateBarkSync({ walletId: 2, networkMode: 'signet' })
+    prepareBarkSyncForSessionOpen('signet')
+    expect(getBarkSyncLifecycleSnapshot().nextRefresh).toBeNull()
   })
 
   it('does not republish a balance after the shown snapshot was discarded', async () => {

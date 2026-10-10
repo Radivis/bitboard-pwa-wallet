@@ -8,8 +8,8 @@ use wasm_bindgen::prelude::*;
 use crate::board::clear_prepared_board_funding;
 use crate::record_store::SharedRecordStore;
 use crate::refresh::{
-    BARK_REFRESH_PENDING, BARK_REFRESH_WARNING, refresh_status_after_schedule,
-    should_schedule_delegated_refresh,
+    BARK_REFRESH_PENDING, BARK_REFRESH_WARNING, next_refresh_schedule_json,
+    refresh_status_after_schedule, should_schedule_delegated_refresh,
 };
 use crate::sync_gate::BarkSessionSyncGate;
 use crate::{
@@ -459,6 +459,35 @@ async fn delegated_refresh_status(wallet: &bark::Wallet) -> String {
                 "Bark could not schedule maintenance refresh: {err:#}"
             ));
             BARK_REFRESH_WARNING.to_owned()
+        }
+    }
+}
+
+/// Chain tip and the first block of the next refresh period, as JSON, or `null`.
+/// `null` covers a wallet without spendable VTXOs and a chain or store read failure,
+/// so a successful sync is not undone by this read.
+#[wasm_bindgen]
+pub async fn bark_next_refresh_schedule() -> Result<String, JsValue> {
+    let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
+    let operation_result = async {
+        let tip_height = read_or_warn("chain tip", wallet.chain().tip().await);
+        let required_refresh_height = read_or_warn(
+            "next required refresh height",
+            wallet.get_next_required_refresh_blockheight().await,
+        )
+        .flatten();
+        next_refresh_schedule_json(tip_height, required_refresh_height)
+    }
+    .await;
+    finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
+}
+
+fn read_or_warn<T>(label: &str, read: anyhow::Result<T>) -> Option<T> {
+    match read {
+        Ok(value) => Some(value),
+        Err(err) => {
+            console_warn(&format!("Bark could not read the {label}: {err:#}"));
+            None
         }
     }
 }
