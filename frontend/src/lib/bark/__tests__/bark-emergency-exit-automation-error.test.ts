@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import {
-  getBarkEmergencyExitAutomationActivity,
   stopBarkEmergencyExitAutomation,
   syncBarkEmergencyExitAutomation,
 } from '@/lib/bark/bark-emergency-exit-automation'
 import { replaceBarkLoadLifecycleSnapshotForTests, resetBarkLoadLifecycleStateForTests } from '@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator'
+import { useBarkEmergencyExitAutomationStore } from '@/stores/barkEmergencyExitAutomationStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import { useWalletStore } from '@/stores/walletStore'
 
@@ -56,7 +56,7 @@ describe('Bark emergency exit automation errors', () => {
 
     await syncBarkEmergencyExitAutomation({ walletId: 1, networkMode: 'signet' })
 
-    const shown = getBarkEmergencyExitAutomationActivity().errorMessage
+    const shown = useBarkEmergencyExitAutomationStore.getState().errorMessage
     expect(shown).toContain(childRejectReason)
     expect(shown).toContain('[url]')
     expect(shown).not.toContain('https://')

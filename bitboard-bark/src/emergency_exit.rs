@@ -24,6 +24,20 @@ pub fn exit_ids_grew(before: &[impl ToString], after: &[impl ToString]) -> bool 
         .any(|exit_id| !before_ids.contains(&exit_id.to_string()))
 }
 
+/// Exit transactions that still need their first child. A package whose child is already
+/// broadcast is never replaced, and a parent shared by several exits is listed once.
+#[cfg(any(test, target_arch = "wasm32"))]
+pub fn cpfp_requests_needing_first_child(
+    requests: Vec<bark::exit::ExitCpfpRequest>,
+) -> Vec<bark::exit::ExitCpfpRequest> {
+    let mut seen_parent_txids = HashSet::new();
+    requests
+        .into_iter()
+        .filter(|request| request.rbf_requirement.is_none())
+        .filter(|request| seen_parent_txids.insert(request.exit_tx.compute_txid()))
+        .collect()
+}
+
 /// Bark [`bark::exit::ExitStateKind`], named for the control page.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BarkEmergencyExitStateKind {
@@ -135,8 +149,6 @@ struct EmergencyExitCpfpRequestJson {
     vtxo_id: String,
     parent_txid: String,
     parent_tx_hex: String,
-    rbf_min_fee_rate_sat_per_kwu: Option<u64>,
-    current_package_fee_sats: Option<u64>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -572,8 +584,8 @@ mod wasm {
         BARK_EXIT_DUST, BARK_EXIT_FAILED, BARK_EXIT_INSUFFICIENT_FUNDS, BARK_EXIT_NOT_CLAIMABLE,
         BARK_EXIT_NOT_EXITING, BARK_EXIT_NOTHING_STARTED, BARK_EXIT_UNKNOWN_VTXO,
         BarkEmergencyExitStateKind, EmergencyExitCpfpRequestJson, EmergencyExitDrainJson,
-        EmergencyExitEstimateJson, EmergencyExitProgressJson, EmergencyExitRowJson, encode_hex,
-        exit_ids_grew, fee_rate_from_sat_per_vb, fee_rate_sat_per_vb, format_bark_exit_error,
+        EmergencyExitEstimateJson, EmergencyExitProgressJson, EmergencyExitRowJson,
+        cpfp_requests_needing_first_child, encode_hex, exit_ids_grew, fee_rate_from_sat_per_vb, fee_rate_sat_per_vb, format_bark_exit_error,
         json_string, zero_estimate_json,
     };
     use crate::exit_address::parse_receive_address;
@@ -801,29 +813,15 @@ mod wasm {
     pub async fn bark_progress_emergency_exits() -> Result<String, JsValue> {
         run_with_synced_wallet(async |wallet| {
             map_anyhow_exit(wallet.exit_mgr().progress_exits(wallet).await)?;
-            let mut seen_txids = HashSet::new();
-            let mut requests = Vec::new();
-            for request in wallet.exit_mgr().exits_needing_cpfp().await {
-                let parent_txid = request.exit_tx.compute_txid();
-                if !seen_txids.insert(parent_txid) {
-                    continue;
-                }
-                let (rbf_min_fee_rate_sat_per_kwu, current_package_fee_sats) =
-                    match request.rbf_requirement {
-                        Some(requirement) => (
-                            Some(requirement.min_fee_rate.to_sat_per_kwu()),
-                            Some(requirement.current_package_fee.to_sat()),
-                        ),
-                        None => (None, None),
-                    };
-                requests.push(EmergencyExitCpfpRequestJson {
-                    vtxo_id: request.vtxo_id.to_string(),
-                    parent_txid: parent_txid.to_string(),
-                    parent_tx_hex: serialize_hex(&request.exit_tx),
-                    rbf_min_fee_rate_sat_per_kwu,
-                    current_package_fee_sats,
-                });
-            }
+            let requests =
+                cpfp_requests_needing_first_child(wallet.exit_mgr().exits_needing_cpfp().await)
+                    .into_iter()
+                    .map(|request| EmergencyExitCpfpRequestJson {
+                        vtxo_id: request.vtxo_id.to_string(),
+                        parent_txid: request.exit_tx.compute_txid().to_string(),
+                        parent_tx_hex: serialize_hex(&request.exit_tx),
+                    })
+                    .collect();
             json_string(&EmergencyExitProgressJson { requests })
         })
         .await
@@ -1010,7 +1008,7 @@ mod tests {
         BARK_EXIT_NOT_EXITING, BARK_EXIT_NOTHING_STARTED, BARK_EXIT_UNKNOWN_VTXO,
         BarkEmergencyExitStateKind, ExitGraphChain, ExitGraphChainStatus, ExitGraphTransactionKind,
         ExitGraphTransactionStatus, ExitGraphTxType, chain_anchor_transaction,
-        emergency_exit_state_json, exit_graph_transaction_from_bitcoin, exit_graph_tx_types,
+        cpfp_requests_needing_first_child, emergency_exit_state_json, exit_graph_transaction_from_bitcoin, exit_graph_tx_types,
         exit_ids_grew, fee_rate_from_sat_per_vb, fee_rate_sat_per_vb, merge_exit_graph,
     };
     use crate::exit_address::parse_signet_receive_address;
@@ -1424,5 +1422,50 @@ mod tests {
         assert_eq!(anchor_nodes[0].tx_type, ExitGraphTxType::Commitment);
         assert_eq!(anchor_nodes[0].status, "confirmed");
         assert_eq!(nodes.len(), 3);
+    }
+
+    fn cpfp_request(
+        vtxo_byte: u8,
+        exit_tx: &bitcoin::Transaction,
+        rbf_requirement: Option<bark::exit::RbfRequirement>,
+    ) -> bark::exit::ExitCpfpRequest {
+        bark::exit::ExitCpfpRequest {
+            vtxo_id: bitcoin::OutPoint::new(outside_txid(vtxo_byte), 0).into(),
+            exit_tx: exit_tx.clone(),
+            rbf_requirement,
+        }
+    }
+
+    #[test]
+    fn cpfp_requests_never_replace_a_broadcast_child() {
+        let waiting_parent = transaction_spending(&[outside_txid(10)]);
+        let broadcast_parent = transaction_spending(&[outside_txid(11)]);
+        let broadcast_child = bark::exit::RbfRequirement {
+            min_fee_rate: bitcoin::FeeRate::from_sat_per_kwu(500),
+            current_package_fee: bitcoin::Amount::from_sat(1_000),
+        };
+
+        let kept = cpfp_requests_needing_first_child(vec![
+            cpfp_request(1, &waiting_parent, None),
+            cpfp_request(2, &broadcast_parent, Some(broadcast_child)),
+        ]);
+
+        let kept_parents: Vec<_> = kept
+            .iter()
+            .map(|request| request.exit_tx.compute_txid())
+            .collect();
+        assert_eq!(kept_parents, vec![waiting_parent.compute_txid()]);
+    }
+
+    #[test]
+    fn cpfp_requests_list_a_shared_parent_once() {
+        let shared_parent = transaction_spending(&[outside_txid(12)]);
+
+        let kept = cpfp_requests_needing_first_child(vec![
+            cpfp_request(1, &shared_parent, None),
+            cpfp_request(2, &shared_parent, None),
+        ]);
+
+        assert_eq!(kept.len(), 1);
     }
 }

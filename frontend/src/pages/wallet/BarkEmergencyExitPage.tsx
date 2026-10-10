@@ -48,6 +48,7 @@ export function BarkEmergencyExitPage() {
         emptySelection={page.topologyVtxoIds.length === 0}
         errorMessage={page.exitTreeError}
         vtxoRows={page.vtxoRows}
+        fundingStatus={page.fundingStatus}
       />
       <BarkEmergencyExitStartCard
         wholeWallet={page.wholeWallet}

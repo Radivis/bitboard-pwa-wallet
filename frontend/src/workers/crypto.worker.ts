@@ -100,17 +100,11 @@ type P2aCpfpWasm = {
   sign_p2a_cpfp_child(
     parentTxHex: string,
     effectiveFeeRateSatPerVb: number,
-    rbfMinFeeRateSatPerKwu: bigint | undefined,
-    currentPackageFeeSats: bigint | undefined,
   ): Promise<string>;
 };
 
 function p2aCpfpWasm(wasmModule: BitboardCryptoModule): P2aCpfpWasm {
   return wasmModule as unknown as P2aCpfpWasm;
-}
-
-function optionalFeeCount(value: number | null): bigint | undefined {
-  return value == null ? undefined : BigInt(value);
 }
 
 async function initWasm() {
@@ -606,8 +600,6 @@ const cryptoService = {
       p2aCpfpWasm(wasmModule).sign_p2a_cpfp_child(
         params.parentTxHex,
         params.effectiveFeeRateSatPerVb,
-        optionalFeeCount(params.rbfMinFeeRateSatPerKwu),
-        optionalFeeCount(params.currentPackageFeeSats),
       ),
     );
   },

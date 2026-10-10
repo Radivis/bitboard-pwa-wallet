@@ -406,6 +406,22 @@ feature:
       - id: BARK-EMG-19
         description: The chain anchor shows the commitment icon and the Commitment label. It is confirmed unless a child is still waiting on it
         implemented_by: frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
+      - id: BARK-EMG-20
+        description: Progress never replaces an exit package whose child is already broadcast
+        implemented_by: bitboard-bark/src/emergency_exit.rs
+      - id: BARK-EMG-21
+        description: When confirmed coins run out, progress submits the children it can fund, does not error, and shows Broadcasting N of M below the exit tree until a run funds every request
+        implemented_by:
+          - frontend/src/lib/bark/__tests__/perform-bark-emergency-exit.test.ts
+          - frontend/src/lib/bark/__tests__/bark-emergency-exit-funding-status.test.ts
+          - frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
+      - id: BARK-EMG-22
+        description: When the children left waiting need more than the on-chain wallet holds including pending coins, progress fails with bark_cpfp_unfundable instead of waiting, and the funding banner is cleared
+        implemented_by:
+          - crypto/tests/p2a_cpfp_tests.rs
+          - frontend/src/lib/bark/__tests__/perform-bark-emergency-exit.test.ts
+          - frontend/src/lib/bark/__tests__/bark-emergency-exit-funding-status.test.ts
+          - frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
   pages:
     - BarkManagement:
         description: Bark entry on the Management page
@@ -449,6 +465,7 @@ feature:
         file: frontend/src/routes/wallet/bark/emergency-exit.tsx
         visible_elements:
           - Exit tree for the checked spendable VTXOs, or every spendable VTXO when the whole wallet is checked, plus every live exit
+          - Banner below the exit tree while some exit transactions are waiting for confirmed funds
           - A leaf node shows the leaf icon and a coin badge. A shared ancestor shows the tree icon and no coin badge. A checkpoint shows the checkpoint icon. The chain anchor shows the commitment icon. A confirmed leaf uses the unrolled coin icon
           - Focused exit-tree node shows its transaction id and the VTXO ids that end on it
           - Spendable VTXO checkboxes
@@ -461,7 +478,7 @@ feature:
           - Full-page Bark session loading or error screen while the session is not ready
         requirements:
           - Contracts BARK-EMG-02 through BARK-EMG-08
-          - Contracts BARK-EMG-10 through BARK-EMG-19
+          - Contracts BARK-EMG-10 through BARK-EMG-22
           - Contracts BARK-SESS-03 and BARK-SESS-04
           - Shown only when isBarkEnabled and the network is signet or mainnet
           - Progress is a button, and a successful Bark sync also progresses exits that are already started

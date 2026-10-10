@@ -565,17 +565,9 @@ pub fn apply_unconfirmed_funding_transaction(
 pub fn sign_p2a_cpfp_child(
     parent_tx_hex: &str,
     effective_fee_rate_sat_per_vb: f64,
-    rbf_min_fee_rate_sat_per_kwu: Option<u64>,
-    current_package_fee_sats: Option<u64>,
 ) -> Result<String, JsValue> {
     let signed = with_wallet_mut(|wallet| {
-        p2a_cpfp::sign_p2a_cpfp_child(
-            wallet,
-            parent_tx_hex,
-            effective_fee_rate_sat_per_vb,
-            rbf_min_fee_rate_sat_per_kwu,
-            current_package_fee_sats,
-        )
+        p2a_cpfp::sign_p2a_cpfp_child(wallet, parent_tx_hex, effective_fee_rate_sat_per_vb)
     })?;
     accumulate_staged_changes();
     signed.map_err(JsValue::from)

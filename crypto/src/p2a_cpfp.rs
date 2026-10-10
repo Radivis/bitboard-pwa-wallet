@@ -7,13 +7,16 @@ use bdk_wallet::KeychainKind;
 use bdk_wallet::Wallet;
 use bitcoin::consensus::encode::{deserialize_hex, serialize_hex};
 use bitcoin::psbt::Input;
-use bitcoin::{Amount, FeeRate, OutPoint, ScriptBuf, Transaction, TxOut, Weight, Witness};
+use bitcoin::{Amount, OutPoint, ScriptBuf, Transaction, TxOut, Weight, Witness};
 
 use crate::error::CryptoError;
 use crate::transaction::sign_transaction;
 use crate::validation::fee_rate_from_sat_per_vb_float;
 
 pub const BARK_CPFP_INSUFFICIENT_FUNDS: &str = "bark_cpfp_insufficient_funds";
+/// `bark_cpfp_insufficient_funds: needed_sats=<sats>; <detail>`, read by
+/// `barkCpfpShortfallNeededSats` in `frontend/src/lib/bark/perform-bark-emergency-exit.ts`.
+pub const BARK_CPFP_NEEDED_SATS_LABEL: &str = "needed_sats";
 
 /// Satisfaction weight BDK adds for the foreign anchor input.
 /// A Pay-to-Anchor spend has an empty witness. That encodes as one byte
@@ -26,8 +29,6 @@ pub fn sign_p2a_cpfp_child(
     wallet: &mut Wallet,
     parent_tx_hex: &str,
     effective_fee_rate_sat_per_vb: f64,
-    rbf_min_fee_rate_sat_per_kwu: Option<u64>,
-    current_package_fee_sats: Option<u64>,
 ) -> Result<String, CryptoError> {
     let parent_tx = deserialize_hex::<Transaction>(parent_tx_hex)
         .map_err(|err| CryptoError::Transaction(format!("Parent transaction is invalid: {err}")))?;
@@ -38,7 +39,6 @@ pub fn sign_p2a_cpfp_child(
         ))
     })?;
     let effective_fee_rate = fee_rate_from_sat_per_vb_float(effective_fee_rate_sat_per_vb)?;
-    let rbf_package_fee = rbf_package_fee(rbf_min_fee_rate_sat_per_kwu, current_package_fee_sats)?;
     let change_script = wallet
         .reveal_next_address(KeychainKind::Internal)
         .address
@@ -60,53 +60,11 @@ pub fn sign_p2a_cpfp_child(
             return Ok(serialize_hex(&child_tx));
         }
         settled_child_weight = child_weight;
-        fee_needed = package_fee(
-            effective_fee_rate,
-            parent_weight,
-            child_weight,
-            rbf_package_fee,
-        );
+        fee_needed = (parent_weight + child_weight) * effective_fee_rate;
     }
     Err(CryptoError::Transaction(
         "Could not settle a Pay-to-Anchor child fee".to_owned(),
     ))
-}
-
-fn rbf_package_fee(
-    min_fee_rate_sat_per_kwu: Option<u64>,
-    current_package_fee_sats: Option<u64>,
-) -> Result<Option<(FeeRate, Amount)>, CryptoError> {
-    match (min_fee_rate_sat_per_kwu, current_package_fee_sats) {
-        (None, None) => Ok(None),
-        (Some(min_fee_rate_sat_per_kwu), Some(current_package_fee_sats)) => Ok(Some((
-            FeeRate::from_sat_per_kwu(min_fee_rate_sat_per_kwu),
-            Amount::from_sat(current_package_fee_sats),
-        ))),
-        _ => Err(CryptoError::Transaction(
-            "RBF fee rate and current package fee must be provided together".to_owned(),
-        )),
-    }
-}
-
-fn package_fee(
-    effective_fee_rate: FeeRate,
-    parent_weight: Weight,
-    child_weight: Weight,
-    rbf_package_fee: Option<(FeeRate, Amount)>,
-) -> Amount {
-    let total_weight = parent_weight + child_weight;
-    let Some((min_effective_fee_rate, current_package_fee)) = rbf_package_fee else {
-        return total_weight * effective_fee_rate;
-    };
-    let min_relay_fee = FeeRate::from_sat_per_vb(1).expect("1 sat/vb is a valid fee rate");
-    let min_package_fee =
-        current_package_fee + parent_weight * min_relay_fee + child_weight * min_relay_fee;
-    let desired_fee = total_weight * min_effective_fee_rate;
-    if desired_fee < min_package_fee {
-        min_package_fee
-    } else {
-        desired_fee
-    }
 }
 
 fn fee_anchor(parent_tx: &Transaction) -> Option<(OutPoint, TxOut)> {
@@ -151,7 +109,10 @@ fn build_child(
     let mut psbt = match tx_builder.finish() {
         Ok(psbt) => psbt,
         Err(bdk_wallet::error::CreateTxError::CoinSelection(err)) => {
-            return Err(insufficient_funds(err.to_string()));
+            return Err(insufficient_funds(format!(
+                "{BARK_CPFP_NEEDED_SATS_LABEL}={}; {err}",
+                err.needed.to_sat()
+            )));
         }
         Err(bdk_wallet::error::CreateTxError::OutputBelowDustLimit(_)) => {
             return Err(insufficient_funds(

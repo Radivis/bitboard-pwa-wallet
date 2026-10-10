@@ -160,8 +160,6 @@ export type BarkEmergencyCpfpRequest = {
   vtxoId: string
   parentTxid: string
   parentTxHex: string
-  rbfMinFeeRateSatPerKwu: number | null
-  currentPackageFeeSats: number | null
 }
 
 export type BarkEmergencyExitProgress = {

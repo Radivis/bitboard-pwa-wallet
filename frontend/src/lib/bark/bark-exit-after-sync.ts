@@ -1,10 +1,11 @@
 import { claimTransactionVisibility } from '@/lib/bark/bark-claim-transaction-visibility'
-import { barkEmergencyExitProgressDeps } from '@/lib/bark/bark-emergency-exit-progress-deps'
+import type { BarkEmergencyExitScope } from '@/lib/bark/bark-emergency-exit-funding-status'
+import { runBarkEmergencyExitProgress } from '@/lib/bark/bark-emergency-exit-progress-deps'
 import { pendingClaimDecision } from '@/lib/bark/bark-emergency-claim'
-import { progressBarkEmergencyExits } from '@/lib/bark/perform-bark-emergency-exit'
 import { presetRatesForNetwork } from '@/hooks/useEsploraFeePresets'
 import { getEsploraUrl } from '@/lib/wallet/bitcoin-utils'
-import type { NetworkMode } from '@/stores/walletStore'
+import { useBarkEmergencyExitFundingStore } from '@/stores/barkEmergencyExitFundingStore'
+import { useWalletStore, type NetworkMode } from '@/stores/walletStore'
 import { getBarkWorker } from '@/workers/bark-factory'
 
 async function reconcilePendingEmergencyClaim(networkMode: NetworkMode): Promise<void> {
@@ -31,7 +32,15 @@ async function reconcilePendingEmergencyClaim(networkMode: NetworkMode): Promise
 export async function settleBarkExitAfterSync(networkMode: NetworkMode): Promise<void> {
   await reconcilePendingEmergencyClaim(networkMode)
   const rows = await getBarkWorker().listEmergencyExits()
-  if (rows.length === 0) return
+  if (rows.length === 0) {
+    useBarkEmergencyExitFundingStore.getState().clearFundingStatus()
+    return
+  }
   const feeRates = await presetRatesForNetwork(networkMode)
-  await progressBarkEmergencyExits(barkEmergencyExitProgressDeps(), feeRates.High)
+  await runBarkEmergencyExitProgress(activeExitScope(networkMode), feeRates.High)
+}
+
+function activeExitScope(networkMode: NetworkMode): BarkEmergencyExitScope | null {
+  const { activeWalletId } = useWalletStore.getState()
+  return activeWalletId == null ? null : { walletId: activeWalletId, networkMode }
 }

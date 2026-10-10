@@ -99,8 +99,6 @@ function readCpfpRequest(value: unknown): BarkEmergencyCpfpRequest {
     vtxoId: readText(row.vtxoId, 'CPFP VTXO id'),
     parentTxid: readText(row.parentTxid, 'CPFP parent transaction id'),
     parentTxHex: readHex(row.parentTxHex, 'CPFP parent transaction'),
-    rbfMinFeeRateSatPerKwu: readOptionalCount(row.rbfMinFeeRateSatPerKwu, 'RBF fee rate'),
-    currentPackageFeeSats: readOptionalCount(row.currentPackageFeeSats, 'package fee'),
   }
 }
 
@@ -138,14 +136,6 @@ function readSats(value: unknown, label: string): number {
 function readCount(value: unknown): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
     throw new Error('Bark emergency exit transaction count is invalid')
-  }
-  return value
-}
-
-function readOptionalCount(value: unknown, label: string): number | null {
-  if (value == null) return null
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
-    throw new Error(`Bark emergency exit ${label} is invalid`)
   }
   return value
 }

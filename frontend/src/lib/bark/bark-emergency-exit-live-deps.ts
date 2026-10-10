@@ -1,4 +1,7 @@
-import { barkEmergencyExitProgressDeps } from '@/lib/bark/bark-emergency-exit-progress-deps'
+import {
+  barkEmergencyExitProgressDeps,
+  runBarkEmergencyExitProgress,
+} from '@/lib/bark/bark-emergency-exit-progress-deps'
 import type { ClaimBarkEmergencyExitDeps } from '@/lib/bark/perform-bark-emergency-exit'
 import type { StartBarkEmergencyExitDeps } from '@/lib/bark/perform-bark-emergency-exit'
 import { getEsploraUrl } from '@/lib/wallet/bitcoin-utils'
@@ -8,7 +11,7 @@ import type { BarkEmergencyExitEstimate } from '@/workers/bark-api'
 import { getBarkWorker } from '@/workers/bark-factory'
 import { getCryptoWorker } from '@/workers/crypto-factory'
 
-export { barkEmergencyExitProgressDeps }
+export { barkEmergencyExitProgressDeps, runBarkEmergencyExitProgress }
 
 export type ReviewBarkEmergencyExitDeps = {
   estimate: (vtxoIds: string[], feeRateSatPerVb: number) => Promise<BarkEmergencyExitEstimate>

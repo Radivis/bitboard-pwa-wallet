@@ -151,8 +151,6 @@ export interface PrepareOnchainSendParams extends BuildTransactionParams {
 export type SignP2aCpfpChildParams = {
   parentTxHex: string
   effectiveFeeRateSatPerVb: number
-  rbfMinFeeRateSatPerKwu: number | null
-  currentPackageFeeSats: number | null
 }
 
 export interface SignedFundingPsbt {

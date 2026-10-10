@@ -1,5 +1,6 @@
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { BarkEmergencyExitFundingBanner } from '@/components/bark/BarkEmergencyExitFundingBanner'
 import { BarkExitTreeGraph } from '@/components/bark/BarkExitTreeGraph'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -11,6 +12,7 @@ import {
   BARK_EMERGENCY_EXIT_CLAIM_NOTE,
   type BarkEmergencyExitReview,
 } from '@/hooks/useBarkEmergencyExitPage'
+import type { BarkEmergencyExitFundingStatus } from '@/lib/bark/bark-emergency-exit-funding-status'
 import type { BarkEmergencyExitRow, BarkExitGraphNode, BarkVtxoRow } from '@/workers/bark-api'
 import { Loader2 } from 'lucide-react'
 
@@ -22,24 +24,27 @@ export function BarkEmergencyExitTreeCard({
   emptySelection,
   errorMessage,
   vtxoRows,
+  fundingStatus,
 }: {
   nodes: BarkExitGraphNode[] | undefined
   emptySelection: boolean
   errorMessage: string | null
   vtxoRows: BarkVtxoRow[]
+  fundingStatus: BarkEmergencyExitFundingStatus | null
 }) {
   return (
     <Card>
       <CardHeader>
         <CardTitle>Exit tree</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-3">
         <BarkExitTreeGraph
           nodes={nodes}
           emptySelection={emptySelection}
           errorMessage={errorMessage}
           vtxoRows={vtxoRows}
         />
+        <BarkEmergencyExitFundingBanner status={fundingStatus} />
       </CardContent>
     </Card>
   )

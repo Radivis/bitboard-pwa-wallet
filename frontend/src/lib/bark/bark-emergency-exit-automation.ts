@@ -1,6 +1,5 @@
-import { barkEmergencyExitProgressDeps } from '@/lib/bark/bark-emergency-exit-progress-deps'
+import { runBarkEmergencyExitProgress } from '@/lib/bark/bark-emergency-exit-progress-deps'
 import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
-import { progressBarkEmergencyExits } from '@/lib/bark/perform-bark-emergency-exit'
 import { presetRatesForNetwork } from '@/hooks/useEsploraFeePresets'
 import { appQueryClient } from '@/lib/shared/app-query-client'
 import { userFacingErrorMessage } from '@/lib/shared/utils'
@@ -9,6 +8,11 @@ import { getBarkLoadLifecycleSnapshot, subscribeBarkLoadLifecycle } from '@/lib/
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { loadCustomEsploraUrl } from '@/lib/wallet/wallet-utils'
 import type { BarkRailNetwork } from '@/lib/wallet/wallet-domain-types'
+import {
+  IDLE_BARK_EMERGENCY_EXIT_AUTOMATION_ACTIVITY,
+  useBarkEmergencyExitAutomationStore,
+  type BarkEmergencyExitAutomationActivity,
+} from '@/stores/barkEmergencyExitAutomationStore'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import { getBarkWorker } from '@/workers/bark-factory'
 import { toast } from 'sonner'
@@ -43,11 +47,6 @@ export type BarkEmergencyExitAutomationGate = BarkEmergencyExitAutomationSession
   previousTip: BarkEmergencyExitTip | null
   nextTip: BarkEmergencyExitTip | null
   justBecameActive: boolean
-}
-
-export type BarkEmergencyExitAutomationActivity = {
-  inFlight: boolean
-  errorMessage: string | null
 }
 
 export type BarkEmergencyExitAutomationScope = {
@@ -208,38 +207,19 @@ type ActiveAutomationRun = {
 let automationGeneration = 0
 let activeAutomationRun: ActiveAutomationRun | null = null
 
-const idleAutomationActivity: BarkEmergencyExitAutomationActivity = {
-  inFlight: false,
-  errorMessage: null,
+function currentAutomationActivity(): BarkEmergencyExitAutomationActivity {
+  const { inFlight, errorMessage } = useBarkEmergencyExitAutomationStore.getState()
+  return { inFlight, errorMessage }
 }
 
-let automationActivity: BarkEmergencyExitAutomationActivity = idleAutomationActivity
-const automationActivityListeners = new Set<() => void>()
-
-export function getBarkEmergencyExitAutomationActivity(): BarkEmergencyExitAutomationActivity {
-  return automationActivity
-}
-
-export function subscribeBarkEmergencyExitAutomationActivity(
-  listener: () => void,
-): () => void {
-  automationActivityListeners.add(listener)
-  return () => {
-    automationActivityListeners.delete(listener)
-  }
-}
-
+/** A new error also opens a toast that stays until dismissed. */
 function publishAutomationActivity(next: BarkEmergencyExitAutomationActivity): void {
-  if (
-    automationActivity.inFlight === next.inFlight &&
-    automationActivity.errorMessage === next.errorMessage
-  ) {
+  const previous = currentAutomationActivity()
+  if (previous.inFlight === next.inFlight && previous.errorMessage === next.errorMessage) {
     return
   }
-  const previousError = automationActivity.errorMessage
-  automationActivity = next
-  for (const listener of automationActivityListeners) listener()
-  if (next.errorMessage != null && next.errorMessage !== previousError) {
+  useBarkEmergencyExitAutomationStore.getState().setActivity(next)
+  if (next.errorMessage != null && next.errorMessage !== previous.errorMessage) {
     toast.error(next.errorMessage, { duration: Number.POSITIVE_INFINITY })
   }
 }
@@ -256,7 +236,7 @@ export function stopBarkEmergencyExitAutomation(): void {
   activeAutomationRun = null
   running?.abort.abort()
   running?.unsubscribe()
-  publishAutomationActivity(idleAutomationActivity)
+  publishAutomationActivity(IDLE_BARK_EMERGENCY_EXIT_AUTOMATION_ACTIVITY)
 }
 
 /**
@@ -323,16 +303,16 @@ export async function syncBarkEmergencyExitAutomation(
       onProgressStart: () => {
         publishAutomationActivity({
           inFlight: true,
-          errorMessage: automationActivity.errorMessage,
+          errorMessage: currentAutomationActivity().errorMessage,
         })
       },
       onProgressSuccess: () => {
-        publishAutomationActivity(idleAutomationActivity)
+        publishAutomationActivity(IDLE_BARK_EMERGENCY_EXIT_AUTOMATION_ACTIVITY)
       },
       onProgressIdle: () => {
         publishAutomationActivity({
           inFlight: false,
-          errorMessage: automationActivity.errorMessage,
+          errorMessage: currentAutomationActivity().errorMessage,
         })
       },
       onProgressError: (error) => {
@@ -342,7 +322,7 @@ export async function syncBarkEmergencyExitAutomation(
         })
       },
       onTipReadError: (error) => {
-        if (automationActivity.inFlight) return
+        if (currentAutomationActivity().inFlight) return
         publishAutomationActivity({
           inFlight: false,
           errorMessage: automationActivityError(error, 'Could not read the chain tip'),
@@ -400,7 +380,7 @@ async function progressOpenEmergencyExits(
   scope: BarkEmergencyExitAutomationScope,
 ): Promise<void> {
   const feeRates = await presetRatesForNetwork(scope.networkMode)
-  await progressBarkEmergencyExits(barkEmergencyExitProgressDeps(), feeRates.High)
+  await runBarkEmergencyExitProgress(scope, feeRates.High)
 }
 
 async function invalidateBarkEmergencyExitQueries(

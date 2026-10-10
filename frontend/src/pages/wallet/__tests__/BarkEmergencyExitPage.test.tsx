@@ -4,6 +4,11 @@ import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { toast } from 'sonner'
 import { BarkEmergencyExitPage } from '@/pages/wallet/BarkEmergencyExitPage'
+import {
+  IDLE_BARK_EMERGENCY_EXIT_AUTOMATION_ACTIVITY,
+  useBarkEmergencyExitAutomationStore,
+} from '@/stores/barkEmergencyExitAutomationStore'
+import { useBarkEmergencyExitFundingStore } from '@/stores/barkEmergencyExitFundingStore'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import type { NetworkMode } from '@/stores/walletStore'
 import type { BarkEmergencyExitRow, BarkExitGraph, BarkVtxoRow } from '@/workers/bark-api'
@@ -65,6 +70,7 @@ const barkWorker = vi.hoisted(() => ({
 const cryptoWorker = vi.hoisted(() => ({
   signP2aCpfpChild: vi.fn(),
   applyUnconfirmedFundingTx: vi.fn(),
+  getBalance: vi.fn(),
   broadcastTransaction: vi.fn(),
   getNewAddress: vi.fn(),
 }))
@@ -81,16 +87,9 @@ const spendableVtxo: BarkVtxoRow = {
 const syncAutomation = vi.hoisted(() => vi.fn(async () => undefined))
 const stopAutomation = vi.hoisted(() => vi.fn())
 
-const idleAutomationActivity = vi.hoisted(() => ({
-  inFlight: false,
-  errorMessage: null as string | null,
-}))
-
 vi.mock('@/lib/bark/bark-emergency-exit-automation', () => ({
   syncBarkEmergencyExitAutomation: (...args: unknown[]) => syncAutomation(...args),
   stopBarkEmergencyExitAutomation: (...args: unknown[]) => stopAutomation(...args),
-  getBarkEmergencyExitAutomationActivity: () => idleAutomationActivity,
-  subscribeBarkEmergencyExitAutomationActivity: () => () => undefined,
 }))
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
@@ -202,11 +201,21 @@ describe('BarkEmergencyExitPage', () => {
     barkWorker.sendOnchain.mockClear()
     barkWorker.estimateEmergencyExit.mockClear()
     barkWorker.writeProceedAutomatically.mockClear()
-    idleAutomationActivity.inFlight = false
-    idleAutomationActivity.errorMessage = null
+    useBarkEmergencyExitAutomationStore.setState(IDLE_BARK_EMERGENCY_EXIT_AUTOMATION_ACTIVITY)
     syncAutomation.mockClear()
     stopAutomation.mockClear()
     cryptoWorker.getNewAddress.mockClear()
+    cryptoWorker.signP2aCpfpChild.mockReset().mockResolvedValue('child')
+    cryptoWorker.applyUnconfirmedFundingTx.mockReset().mockResolvedValue(undefined)
+    cryptoWorker.getBalance.mockReset().mockResolvedValue({
+      confirmedSats: 0,
+      trustedPendingSats: 1_000_000,
+      untrustedPendingSats: 0,
+      immatureSats: 0,
+      totalSats: 1_000_000,
+    })
+    barkWorker.provideEmergencyExitCpfp.mockReset().mockResolvedValue(undefined)
+    useBarkEmergencyExitFundingStore.getState().clearFundingStatus()
     vi.mocked(toast.success).mockReset()
     vi.mocked(toast.error).mockReset()
   })
@@ -247,7 +256,7 @@ describe('BarkEmergencyExitPage', () => {
     const childRejectReason = 'version=3 child would have too many ancestors'
     const packageError = `${'p'.repeat(400)} ${childRejectReason}`
     barkWorker.readProceedAutomatically.mockResolvedValue(true)
-    idleAutomationActivity.errorMessage = packageError
+    useBarkEmergencyExitAutomationStore.setState({ errorMessage: packageError })
     renderWithProviders(<BarkEmergencyExitPage />)
 
     const alert = await screen.findByTestId('bark-emergency-exit-automatic-progress-error')
@@ -397,6 +406,80 @@ describe('BarkEmergencyExitPage', () => {
     })
     expect(toast.success).not.toHaveBeenCalled()
     expect(cryptoWorker.getNewAddress).not.toHaveBeenCalled()
+  })
+
+  it('BARK-EMG-21 shows Broadcasting N of M below the exit tree after a partial progress, without a toast', async () => {
+    barkWorker.exitTopology.mockResolvedValue(exitTree)
+    barkWorker.listEmergencyExits.mockResolvedValue([
+      exitRow({ vtxoId: 'vtxo-1', state: 'processing', cancelable: false }),
+    ])
+    barkWorker.progressEmergencyExits.mockResolvedValue({
+      requests: [
+        { vtxoId: 'vtxo-1', parentTxid: 'parent-1', parentTxHex: '00' },
+        { vtxoId: 'vtxo-2', parentTxid: 'parent-2', parentTxHex: '00' },
+      ],
+    })
+    cryptoWorker.signP2aCpfpChild
+      .mockResolvedValueOnce('child-1')
+      .mockRejectedValueOnce(new Error('bark_cpfp_insufficient_funds: short'))
+    renderWithProviders(<BarkEmergencyExitPage />)
+    const graph = await screen.findByTestId('bark-exit-tree-graph')
+
+    fireEvent.click(screen.getByTestId('bark-emergency-exit-progress'))
+
+    const banner = await screen.findByTestId('bark-emergency-exit-funding-banner')
+    expect(banner).toHaveTextContent(
+      'Broadcasting 1 of 2 transactions. The rest are waiting for confirmed funds.',
+    )
+    expect(graph.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(graph.closest('[data-slot="card"]')).toContainElement(banner)
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(toast.success).not.toHaveBeenCalled()
+  })
+
+  it('BARK-EMG-22 toasts an error and shows no funding banner when the wallet cannot fund the waiting children', async () => {
+    barkWorker.listEmergencyExits.mockResolvedValue([
+      exitRow({ vtxoId: 'vtxo-1', state: 'processing', cancelable: false }),
+    ])
+    barkWorker.progressEmergencyExits.mockResolvedValue({
+      requests: [{ vtxoId: 'vtxo-1', parentTxid: 'parent-1', parentTxHex: '00' }],
+    })
+    cryptoWorker.signP2aCpfpChild.mockRejectedValue(
+      new Error('bark_cpfp_insufficient_funds: needed_sats=3000; Insufficient funds'),
+    )
+    cryptoWorker.getBalance.mockResolvedValue({
+      confirmedSats: 0,
+      trustedPendingSats: 0,
+      untrustedPendingSats: 0,
+      immatureSats: 0,
+      totalSats: 0,
+    })
+    renderWithProviders(<BarkEmergencyExitPage />)
+
+    fireEvent.click(await screen.findByTestId('bark-emergency-exit-progress'))
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/^bark_cpfp_unfundable: /))
+    })
+    expect(toast.success).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('bark-emergency-exit-funding-banner')).not.toBeInTheDocument()
+  })
+
+  it('shows no funding banner after a progress that funds every request', async () => {
+    barkWorker.listEmergencyExits.mockResolvedValue([
+      exitRow({ vtxoId: 'vtxo-1', state: 'processing', cancelable: false }),
+    ])
+    barkWorker.progressEmergencyExits.mockResolvedValue({
+      requests: [{ vtxoId: 'vtxo-1', parentTxid: 'parent-1', parentTxHex: '00' }],
+    })
+    renderWithProviders(<BarkEmergencyExitPage />)
+
+    fireEvent.click(await screen.findByTestId('bark-emergency-exit-progress'))
+
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith('Emergency exit progressed.')
+    })
+    expect(screen.queryByTestId('bark-emergency-exit-funding-banner')).not.toBeInTheDocument()
   })
 
   it('BARK-EMG-15 does not toast success when start marks nothing', async () => {
