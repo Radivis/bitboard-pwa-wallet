@@ -14,6 +14,7 @@ import {
   type ConnectedLightningWallet,
   type LightningConnectionConfig,
 } from '@/lib/lightning/lightning-backend-service'
+import { loadLightningConnectionsForWallet } from '@/lib/lightning/lightning-wallet-secrets'
 import { orchestrateLightningSaveConnections } from '@/lib/wallet/lifecycle/lightning-save-lifecycle-orchestrator'
 import { reloadLightningRailAfterConnectionsChanged } from '@/lib/wallet/lifecycle/lightning-load-lifecycle-orchestrator'
 import { useWalletStore } from '@/stores/walletStore'
@@ -204,8 +205,8 @@ export const useLightningStore = create<LightningState>()(
           throw new Error('Invalid NWC connection string')
         }
 
+        const forWallet = await loadLightningConnectionsForWallet({ walletId })
         const others = get().connectedWallets.filter((connection) => connection.walletId !== walletId)
-        const forWallet = get().connectedWallets.filter((connection) => connection.walletId === walletId)
 
         const trimmedLabel = label.trim()
         if (
@@ -260,48 +261,46 @@ export const useLightningStore = create<LightningState>()(
 
       removeConnection: async (connectionId) => {
         const removed = get().connectedWallets.find((connection) => connection.id === connectionId)
-        const wallets = get().connectedWallets.filter((connection) => connection.id !== connectionId)
+        if (!removed) {
+          return
+        }
+
+        const { walletId } = removed
+        const persistedForWallet = await loadLightningConnectionsForWallet({ walletId })
+        const forWallet = persistedForWallet.filter((connection) => connection.id !== connectionId)
+        const others = get().connectedWallets.filter((connection) => connection.walletId !== walletId)
         const updatedActiveIds = { ...get().activeConnectionIds }
 
-        if (removed) {
-          const { walletId } = removed
-          const perNetwork: ActiveLightningConnectionsByNetwork = {
-            ...(updatedActiveIds[walletId] ?? {}),
-          }
-          for (const mode of LIGHTNING_NETWORK_MODES) {
-            if (perNetwork[mode] === connectionId) {
-              const replacement = wallets.find(
-                (connection) =>
-                  connection.walletId === walletId && connection.networkMode === mode,
-              )
-              if (replacement) {
-                perNetwork[mode] = replacement.id
-              } else {
-                delete perNetwork[mode]
-              }
+        const perNetwork: ActiveLightningConnectionsByNetwork = {
+          ...(updatedActiveIds[walletId] ?? {}),
+        }
+        for (const mode of LIGHTNING_NETWORK_MODES) {
+          if (perNetwork[mode] === connectionId) {
+            const replacement = forWallet.find((connection) => connection.networkMode === mode)
+            if (replacement) {
+              perNetwork[mode] = replacement.id
+            } else {
+              delete perNetwork[mode]
             }
           }
-          if (Object.keys(perNetwork).length === 0) {
-            delete updatedActiveIds[walletId]
-          } else {
-            updatedActiveIds[walletId] = perNetwork
-          }
+        }
+        if (Object.keys(perNetwork).length === 0) {
+          delete updatedActiveIds[walletId]
+        } else {
+          updatedActiveIds[walletId] = perNetwork
         }
 
         set({
-          connectedWallets: wallets,
+          connectedWallets: [...others, ...forWallet],
           activeConnectionIds: updatedActiveIds,
         })
 
-        if (removed) {
-          const forWallet = wallets.filter((connection) => connection.walletId === removed.walletId)
-          await orchestrateLightningSaveConnections({
-            walletId: removed.walletId,
-            networkMode: removed.networkMode,
-            connections: forWallet,
-          })
-          await reloadLightningRailAfterConnectionsChanged(removed.walletId)
-        }
+        await orchestrateLightningSaveConnections({
+          walletId,
+          networkMode: removed.networkMode,
+          connections: forWallet,
+        })
+        await reloadLightningRailAfterConnectionsChanged(walletId)
       },
 
       renameConnection: async ({ connectionId, newLabel }) => {
@@ -326,9 +325,9 @@ export const useLightningStore = create<LightningState>()(
         }
 
         const { walletId } = target
-        const duplicate = get().connectedWallets.some(
+        const persistedForWallet = await loadLightningConnectionsForWallet({ walletId })
+        const duplicate = persistedForWallet.some(
           (connection) =>
-            connection.walletId === walletId &&
             connection.id !== connectionId &&
             connection.label.trim() === trimmed,
         )
@@ -336,15 +335,15 @@ export const useLightningStore = create<LightningState>()(
           throw new Error('Another Lightning wallet already uses this label')
         }
 
-        const nextWallets = get().connectedWallets.map((connection) =>
+        const forWallet = persistedForWallet.map((connection) =>
           connection.id === connectionId
             ? { ...connection, label: trimmed }
             : connection,
         )
+        const others = get().connectedWallets.filter((connection) => connection.walletId !== walletId)
 
-        set({ connectedWallets: nextWallets })
+        set({ connectedWallets: [...others, ...forWallet] })
 
-        const forWallet = nextWallets.filter((connection) => connection.walletId === walletId)
         await orchestrateLightningSaveConnections({
           walletId,
           networkMode: target.networkMode,
