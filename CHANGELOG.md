@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The networks Signet and Mutinynet are now properly separated rather than Signet pointing towards Mutinynet silently
 
+### Fixed
+
+- Rails like Lightning, Arkade, and Bark are now loaded immediately after feature unlock
+- NWC Lightning connections now are not overwritten when they failed to load into memory
+
 ### Security
 
 - Turning on Bark asks you to acknowledge that the feature is new and that Mainnet amounts should stay very small
