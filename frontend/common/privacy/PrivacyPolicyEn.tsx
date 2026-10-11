@@ -225,8 +225,8 @@ export function PrivacyPolicyEn() {
       <p>
         When Arkade is enabled and you use it, your app connects to the <strong>Arkade operator</strong>{' '}
         for that network. Unless a different operator is configured for your build, defaults are the
-        public operators at <strong>arkade.computer</strong> (mainnet) and{' '}
-        <strong>mutinynet.arkade.sh</strong> (signet). The operator processes requests needed for
+        public operators at <strong>arkade.computer</strong> (mainnet),{' '}
+        <strong>signet.arkade.sh</strong> (signet), and <strong>mutinynet.arkade.sh</strong> (mutinynet). The operator processes requests needed for
         balance and VTXO sync, Arkade-to-Arkade sends, boarding funds into Arkade, and collaborative
         exits back to on-chain Bitcoin. Bitboard <strong>does not operate</strong> the Arkade operator.
       </p>

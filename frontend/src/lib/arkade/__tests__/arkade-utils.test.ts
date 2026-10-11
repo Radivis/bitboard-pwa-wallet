@@ -44,10 +44,10 @@ describe('isArkadeActiveForNetworkMode', () => {
     expect(isArkadeActiveForNetworkMode('mutinynet')).toBe(true)
   })
 
-  it('returns false on public signet', () => {
+  it('returns true on public signet when feature is on', () => {
     featureState.isArkadeEnabled = true
     walletState.networkMode = 'signet'
-    expect(isArkadeActiveForNetworkMode('signet')).toBe(false)
+    expect(isArkadeActiveForNetworkMode('signet')).toBe(true)
   })
 
   it('requires mainnet access on mainnet', () => {

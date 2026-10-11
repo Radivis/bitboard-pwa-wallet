@@ -246,7 +246,8 @@ export function PrivacyPolicyDe() {
         Ist Arkade aktiviert und nutzen Sie es, verbindet sich die App mit dem{' '}
         <strong>Arkade-Betreiber</strong> des jeweiligen Netzwerks. Sofern für Ihren Build kein anderer
         Betreiber konfiguriert ist, sind das die öffentlichen Betreiber unter{' '}
-        <strong>arkade.computer</strong> (Mainnet) und <strong>mutinynet.arkade.sh</strong> (Signet).
+        <strong>arkade.computer</strong> (Mainnet), <strong>signet.arkade.sh</strong> (Signet) und{' '}
+        <strong>mutinynet.arkade.sh</strong> (Mutinynet).
         Der Betreiber verarbeitet Anfragen für Kontostand- und VTXO-Synchronisation, Arkade-zu-Arkade-Versendungen,
         Boarding von Guthaben in Arkade sowie kollaborative Exits zurück auf on-chain Bitcoin. Bitboard{' '}
         <strong>betreibt den Arkade-Betreiber nicht</strong>.

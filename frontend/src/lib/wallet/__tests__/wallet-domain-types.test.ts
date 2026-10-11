@@ -410,6 +410,29 @@ describe('parseWalletPayloadJson', () => {
     expect(parsed.activeArkadeAccountIdByNetwork.regtest).toBe('acct-regtest')
   })
 
+  it('accepts signet arkadeAccounts when signetNetworkSplitApplied is true', () => {
+    const json = JSON.stringify({
+      signetNetworkSplitApplied: true,
+      descriptorWallets: [],
+      lightningNwcConnections: [],
+      arkadeAccounts: [
+        {
+          id: 'acct-signet',
+          label: 'Signet',
+          networkMode: 'signet',
+          operatorUrl: 'https://signet.arkade.sh',
+          operatorSignerPkHex: '02abc',
+          createdAt: '2020-01-01T00:00:00.000Z',
+        },
+      ],
+      activeArkadeAccountIdByNetwork: { signet: 'acct-signet' },
+    })
+    const parsed = parseWalletPayloadJson(json)
+    expect(parsed.arkadeAccounts).toHaveLength(1)
+    expect(parsed.arkadeAccounts[0].networkMode).toBe('signet')
+    expect(parsed.activeArkadeAccountIdByNetwork.signet).toBe('acct-signet')
+  })
+
   it('accepts descriptor wallet with lastSuccessfulEsploraSyncAt', () => {
     const isoTimestamp = '2025-01-01T12:00:00.000Z'
     const json = JSON.stringify({
