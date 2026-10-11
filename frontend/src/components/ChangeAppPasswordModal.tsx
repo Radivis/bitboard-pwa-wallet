@@ -15,7 +15,7 @@ import {
 } from '@/components/AppPasswordFields'
 import { AppPasswordFundsLossWarning } from '@/components/AppPasswordFundsLossWarning'
 import {
-  ensureMigrated,
+  ensureSchemaMigrated,
   getDatabase,
   reencryptAllWalletSecretsWithNewPassword,
 } from '@/db'
@@ -63,7 +63,7 @@ export function ChangeAppPasswordModal({
 
   const reencryptMutation = useMutation({
     mutationFn: async (params: { current: string; next: string }) => {
-      await ensureMigrated()
+      await ensureSchemaMigrated()
       const walletDb = getDatabase()
       await reencryptAllWalletSecretsWithNewPassword({
         walletDb,

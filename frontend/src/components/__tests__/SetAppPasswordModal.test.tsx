@@ -26,7 +26,7 @@ const dbMocks = vi.hoisted(() => ({
   generateAndPersistNearZeroSession: vi.fn().mockResolvedValue(undefined),
 }))
 vi.mock('@/db', () => ({
-  ensureMigrated: vi.fn().mockResolvedValue(undefined),
+  ensureSchemaMigrated: vi.fn().mockResolvedValue(undefined),
   getDatabase: vi.fn().mockReturnValue({}),
   generateAndPersistNearZeroSession: (...args: unknown[]) =>
     dbMocks.generateAndPersistNearZeroSession(...args),

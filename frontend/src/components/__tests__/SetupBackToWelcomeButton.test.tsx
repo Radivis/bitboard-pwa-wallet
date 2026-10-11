@@ -19,10 +19,10 @@ vi.mock('sonner', () => ({
   },
 }))
 
-const ensureMigrated = vi.hoisted(() => vi.fn())
+const ensureSchemaMigrated = vi.hoisted(() => vi.fn())
 const getDatabase = vi.hoisted(() => vi.fn())
 vi.mock('@/db', () => ({
-  ensureMigrated: (...args: unknown[]) => ensureMigrated(...args),
+  ensureSchemaMigrated: (...args: unknown[]) => ensureSchemaMigrated(...args),
   getDatabase: (...args: unknown[]) => getDatabase(...args),
 }))
 
@@ -38,7 +38,7 @@ describe('SetupBackToWelcomeButton', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockNavigate.mockResolvedValue(undefined)
-    ensureMigrated.mockResolvedValue(undefined)
+    ensureSchemaMigrated.mockResolvedValue(undefined)
     getDatabase.mockReturnValue({})
     abandonFirstRunAppPasswordChoiceIfNoWallets.mockResolvedValue(undefined)
   })

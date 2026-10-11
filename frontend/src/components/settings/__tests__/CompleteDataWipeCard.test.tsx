@@ -3,7 +3,7 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test-utils/test-providers'
 
-const ensureMigratedMock = vi.hoisted(() => vi.fn())
+const ensureSchemaMigratedMock = vi.hoisted(() => vi.fn())
 const getDatabaseMock = vi.hoisted(() => vi.fn())
 const wipeAllAppDataOpfsAndReloadMock = vi.hoisted(() => vi.fn())
 const anyWalletHasNoMnemonicBackupFlagMock = vi.hoisted(() => vi.fn())
@@ -31,7 +31,7 @@ vi.mock('@/db', async () => {
     '@/db/database-teardown-blocked-error'
   )
   return {
-    ensureMigrated: (...args: unknown[]) => ensureMigratedMock(...args),
+    ensureSchemaMigrated: (...args: unknown[]) => ensureSchemaMigratedMock(...args),
     getDatabase: (...args: unknown[]) => getDatabaseMock(...args),
     useWallets: () => ({ data: walletsState.data }),
     isWalletDatabaseTeardownBlockedError,
@@ -64,16 +64,16 @@ const completeDataWipeCardSourceByPath = import.meta.glob('../CompleteDataWipeCa
 describe('CompleteDataWipeCard teardown-blocked retry', () => {
   beforeEach(() => {
     walletsState.data = []
-    ensureMigratedMock.mockReset()
+    ensureSchemaMigratedMock.mockReset()
     getDatabaseMock.mockReset()
     wipeAllAppDataOpfsAndReloadMock.mockReset().mockResolvedValue(undefined)
     anyWalletHasNoMnemonicBackupFlagMock.mockReset().mockResolvedValue(false)
     toastError.mockReset()
   })
 
-  it('CompleteDataWipeCard proceeds to wipe when ensureMigrated is teardown-blocked', async () => {
+  it('CompleteDataWipeCard proceeds to wipe when ensureSchemaMigrated is teardown-blocked', async () => {
     const user = userEvent.setup()
-    ensureMigratedMock.mockRejectedValueOnce(new WalletDatabaseTeardownBlockedError())
+    ensureSchemaMigratedMock.mockRejectedValueOnce(new WalletDatabaseTeardownBlockedError())
 
     renderWithProviders(<CompleteDataWipeCard />)
 
@@ -87,9 +87,9 @@ describe('CompleteDataWipeCard teardown-blocked retry', () => {
     expect(anyWalletHasNoMnemonicBackupFlagMock).not.toHaveBeenCalled()
   })
 
-  it('toasts and does not wipe when ensureMigrated fails for another reason', async () => {
+  it('toasts and does not wipe when ensureSchemaMigrated fails for another reason', async () => {
     const user = userEvent.setup()
-    ensureMigratedMock.mockRejectedValueOnce(new Error('disk full'))
+    ensureSchemaMigratedMock.mockRejectedValueOnce(new Error('disk full'))
 
     renderWithProviders(<CompleteDataWipeCard />)
 

@@ -88,7 +88,6 @@ function initialSignetPayload(): WalletSecretsPayload {
         recordDump: INITIAL_BARK_DUMP,
       },
     ],
-    signetNetworkSplitApplied: true,
   }
 }
 

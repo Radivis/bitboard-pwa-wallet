@@ -8,6 +8,10 @@ import {
 } from './encryption'
 import { trackWalletSecretsWrite } from '@/db/wallet-secrets-write-tracker'
 import {
+  deleteWalletDataMigrationMarkers,
+  recordAllWalletDataMigrationsApplied,
+} from '@/db/data-migrations/wallet-data-migration-markers'
+import {
   isWalletWriterLockHeld,
   withWalletWriterLock,
 } from '@/lib/shared/opfs-writer-lock'
@@ -73,6 +77,11 @@ export type UpdateWalletSecretsPayloadWithRetryInput = {
     payload: WalletSecretsPayload,
   ) => WalletSecretsPayload | Promise<WalletSecretsPayload>
   maxRetries?: number
+  /**
+   * Runs in the same transaction as a successful CAS write. If it throws, the
+   * payload write rolls back too and the error propagates without a retry.
+   */
+  writeAlongsideInTransaction?: (transaction: Kysely<Database>) => Promise<void>
 }
 
 export type UpdateWalletSecretsEncryptedPayloadWithRetryInput = {
@@ -297,6 +306,7 @@ async function updateWalletSecretsPayloadWithRetryImpl({
   walletId,
   transform,
   maxRetries = WALLET_SECRETS_CAS_MAX_RETRIES,
+  writeAlongsideInTransaction,
 }: UpdateWalletSecretsPayloadWithRetryInput): Promise<void> {
 
   for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
@@ -305,23 +315,54 @@ async function updateWalletSecretsPayloadWithRetryImpl({
     const payload = parseWalletPayloadJson(payloadPlaintext)
     const nextPayload = await transform(payload)
     const encryptedPayload = await encryptData(JSON.stringify(nextPayload))
-    const updated = await putSplitWalletSecretsEncryptedIfRevisionMatches(
-      walletDb,
-      walletId,
-      {
-        payload: {
-          ciphertext: encryptedPayload.ciphertext,
-          iv: encryptedPayload.iv,
-          salt: encryptedPayload.salt,
-          kdfPhc: encryptedPayload.kdfPhc,
-        },
+    const blobs: PutSplitWalletSecretsEncryptedInput = {
+      payload: {
+        ciphertext: encryptedPayload.ciphertext,
+        iv: encryptedPayload.iv,
+        salt: encryptedPayload.salt,
+        kdfPhc: encryptedPayload.kdfPhc,
       },
-      current.revision,
-    )
+    }
+    const updated = writeAlongsideInTransaction
+      ? await putPayloadAndWriteAlongsideIfRevisionMatches({
+          walletDb,
+          walletId,
+          blobs,
+          expectedRevision: current.revision,
+          writeAlongsideInTransaction,
+        })
+      : await putSplitWalletSecretsEncryptedIfRevisionMatches(
+          walletDb,
+          walletId,
+          blobs,
+          current.revision,
+        )
     if (updated) return
     logWalletSecretsConflictRetry(attempt, maxRetries)
   }
   throw walletSecretsConflictError(maxRetries)
+}
+
+function putPayloadAndWriteAlongsideIfRevisionMatches(params: {
+  walletDb: Kysely<Database>
+  walletId: number
+  blobs: PutSplitWalletSecretsEncryptedInput
+  expectedRevision: number
+  writeAlongsideInTransaction: (transaction: Kysely<Database>) => Promise<void>
+}): Promise<boolean> {
+  const { walletDb, walletId, blobs, expectedRevision, writeAlongsideInTransaction } = params
+  return walletDb.transaction().execute(async (transaction) => {
+    const updated = await putSplitWalletSecretsEncryptedIfRevisionMatches(
+      transaction,
+      walletId,
+      blobs,
+      expectedRevision,
+    )
+    if (updated) {
+      await writeAlongsideInTransaction(transaction)
+    }
+    return updated
+  })
 }
 
 export function updateWalletSecretsPayloadWithRetry(
@@ -361,7 +402,9 @@ export function updateWalletSecretsEncryptedPayloadWithRetry(
 }
 
 /**
- * Inserts a wallet row via the given callback, then persists encrypted secrets (split format).
+ * Inserts a wallet row via the given callback, then persists encrypted secrets (split format)
+ * and all wallet data migration markers in one transaction. A wallet left without markers
+ * would be migrated on the next unlock, relabeling its public Signet rows.
  */
 export async function persistNewWalletWithSecrets(params: {
   walletDb: Kysely<Database>
@@ -381,10 +424,15 @@ export async function persistNewWalletWithSecrets(params: {
   } = params
   const walletId = await insertWalletRow()
   try {
-    await putSecrets(walletDb, walletId, {
-      payload: encryptedBlobs.payload,
-      mnemonic: encryptedBlobs.mnemonic,
-    })
+    await withWalletSecretsWriterLock(() =>
+      walletDb.transaction().execute(async (transaction) => {
+        await putSecrets(transaction, walletId, {
+          payload: encryptedBlobs.payload,
+          mnemonic: encryptedBlobs.mnemonic,
+        })
+        await recordAllWalletDataMigrationsApplied(transaction, walletId)
+      }),
+    )
     return walletId
   } catch (err) {
     await walletDb.deleteFrom('wallets').where('wallet_id', '=', walletId).execute()
@@ -570,13 +618,15 @@ export async function deleteWalletSecrets(
 }
 
 /**
- * Removes encrypted secrets and the wallet row (including `no_mnemonic_backup` on `wallets`).
+ * Removes encrypted secrets, data migration markers, and the wallet row
+ * (including `no_mnemonic_backup` on `wallets`).
  */
 export async function deleteWalletCompletely(
   walletDb: Kysely<Database>,
   walletId: number,
 ): Promise<void> {
   await deleteWalletSecrets(walletDb, walletId)
+  await deleteWalletDataMigrationMarkers(walletDb, walletId)
   await walletDb.deleteFrom('wallets').where('wallet_id', '=', walletId).execute()
 }
 

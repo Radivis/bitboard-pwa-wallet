@@ -291,7 +291,7 @@ vi.mock('@/stores/themeStore', () => ({
 
 vi.mock('@/db', () => ({
   getDatabase: vi.fn(),
-  ensureMigrated: vi.fn().mockResolvedValue(undefined),
+  ensureSchemaMigrated: vi.fn().mockResolvedValue(undefined),
   isWalletDatabaseTeardownBlockedError: (error: unknown) =>
     error instanceof Error && error.message === 'Wallet database access blocked during teardown',
   loadWalletSecrets: vi.fn().mockRejectedValue(new Error('Wrong password')),

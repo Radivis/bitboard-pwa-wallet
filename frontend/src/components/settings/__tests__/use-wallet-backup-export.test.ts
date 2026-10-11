@@ -14,7 +14,7 @@ const mockTriggerBrowserSaveLocalBlob = vi.hoisted(() => vi.fn())
 const mockSignWalletBackupManifest = vi.hoisted(() => vi.fn())
 const mockZipWalletBackupForLocalExport = vi.hoisted(() => vi.fn())
 const mockLoadWalletSecrets = vi.hoisted(() => vi.fn())
-const mockEnsureMigrated = vi.hoisted(() => vi.fn())
+const mockEnsureSchemaMigrated = vi.hoisted(() => vi.fn())
 const mockGetDatabase = vi.hoisted(() => vi.fn())
 const mockLoadWalletSecretsWithPassword = vi.hoisted(() => vi.fn())
 
@@ -39,7 +39,7 @@ vi.mock('@/stores/walletStore', () => ({
 
 vi.mock('@/db', () => ({
   useWallets: () => ({ data: walletsState.data }),
-  ensureMigrated: mockEnsureMigrated,
+  ensureSchemaMigrated: mockEnsureSchemaMigrated,
   getDatabase: mockGetDatabase,
   loadWalletSecrets: mockLoadWalletSecrets,
 }))
@@ -49,7 +49,7 @@ vi.mock('@/db/wallet-persistence', () => ({
 }))
 
 vi.mock('@/db/database', () => ({
-  ensureMigrated: mockEnsureMigrated,
+  ensureSchemaMigrated: mockEnsureSchemaMigrated,
   getDatabase: mockGetDatabase,
 }))
 
@@ -79,7 +79,7 @@ describe('useWalletBackupExport', () => {
     walletsState.data = [
       { walletId: 1, name: 'Test', createdAt: new Date().toISOString() },
     ]
-    mockEnsureMigrated.mockResolvedValue(undefined)
+    mockEnsureSchemaMigrated.mockResolvedValue(undefined)
     mockGetDatabase.mockReturnValue({})
     mockLoadWalletSecretsWithPassword.mockResolvedValue(undefined)
     mockSignWalletBackupManifest.mockResolvedValue('{"format_version":1}')
@@ -125,7 +125,7 @@ describe('useWalletBackupExport', () => {
     })
 
     expect(compareResult).toEqual({ match: true, skipped: false })
-    expect(mockEnsureMigrated).toHaveBeenCalled()
+    expect(mockEnsureSchemaMigrated).toHaveBeenCalled()
     expect(mockLoadWalletSecretsWithPassword).toHaveBeenCalledWith({}, 'correct', 1)
   })
 

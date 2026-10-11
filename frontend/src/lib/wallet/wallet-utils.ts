@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 
-import { getDatabase, ensureMigrated } from '@/db/database'
+import { getDatabase } from '@/db/database'
 import type { NetworkMode } from '@/stores/walletStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
@@ -32,14 +32,15 @@ import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { startBarkLoadAfterUnlock } from '@/lib/bark/bark-session-service'
 import type { OnchainSyncThenSaveParams } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-types'
 import { CUSTOM_ESPLORA_URL_KEY_PREFIX } from '@/lib/wallet/historical-signet-onchain-chain'
-import { ensureSignetNetworkSplitMigrated } from '@/lib/wallet/signet-network-split-migration'
+import { ensureSchemaAndDataMigrated } from '@/db/data-migrations/device-data-migrations'
 
 /**
- * Classifies the pre-split Signet Esplora row once.
- * Mutinynet URLs move to the mutinynet key. Public Signet URLs stay on signet.
+ * Runs pending schema and device data migrations, including the one-time
+ * classification of the pre-split Signet Esplora row. Mutinynet URLs move to
+ * the mutinynet key. Public Signet URLs stay on signet.
  */
 export async function migrateCustomEsploraUrlSignetToMutinynet(): Promise<void> {
-  await ensureSignetNetworkSplitMigrated()
+  await ensureSchemaAndDataMigrated()
 }
 
 async function orchestrateOnchainSyncThenSaveFromWalletUtils(
@@ -100,8 +101,7 @@ export async function saveCustomEsploraUrl(
   url: string,
 ): Promise<void> {
   validateEsploraUrl(url, network)
-  await ensureMigrated()
-  await ensureSignetNetworkSplitMigrated()
+  await ensureSchemaAndDataMigrated()
   const walletDb = getDatabase()
   const settingsKey = `${CUSTOM_ESPLORA_URL_KEY_PREFIX}${network}`
 
@@ -128,8 +128,7 @@ export async function saveCustomEsploraUrl(
 export async function deleteCustomEsploraUrl(
   network: NetworkMode,
 ): Promise<void> {
-  await ensureMigrated()
-  await ensureSignetNetworkSplitMigrated()
+  await ensureSchemaAndDataMigrated()
   const walletDb = getDatabase()
   await walletDb
     .deleteFrom('settings')
@@ -140,8 +139,7 @@ export async function deleteCustomEsploraUrl(
 export async function loadCustomEsploraUrl(
   network: NetworkMode,
 ): Promise<string | null> {
-  await ensureMigrated()
-  await ensureSignetNetworkSplitMigrated()
+  await ensureSchemaAndDataMigrated()
   const walletDb = getDatabase()
   const settingsRow = await walletDb
     .selectFrom('settings')

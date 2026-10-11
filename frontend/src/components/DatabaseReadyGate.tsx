@@ -63,7 +63,7 @@ export function DatabaseReadyGate({ children }: DatabaseReadyGateProps) {
           )
           await migrateCustomEsploraUrlSignetToMutinynet()
         } catch (migrationError) {
-          console.error('Signet/Mutinynet split migration failed:', migrationError)
+          console.error('Device data migrations failed:', migrationError)
         }
       }
 

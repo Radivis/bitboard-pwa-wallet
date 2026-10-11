@@ -142,7 +142,7 @@ export function useDataBackupsCard() {
         opfsBasename: LAB_SQLITE_OPFS_BASENAME,
         sqliteBytes,
         destroyDatabase: destroyLabDatabase,
-        ensureMigrated: ensureLabMigrated,
+        ensureSchemaMigrated: ensureLabMigrated,
         successToastMessage: 'Lab backup imported. Reloading…',
         onBeforeReload: () => setLabFileExists(true),
       })

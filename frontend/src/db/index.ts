@@ -1,7 +1,7 @@
 export { awaitInFlightWalletSecretsWrites } from './wallet-secrets-write-tracker'
 export {
   getDatabase,
-  ensureMigrated,
+  ensureSchemaMigrated,
   destroyDatabase,
   checkDatabaseHealth,
   getInitialDatabaseHealth,
@@ -10,6 +10,7 @@ export {
 } from './database'
 export type { DatabaseHealthResult } from './database'
 export { sqliteStorage } from './storage-adapter'
+export { ensureSchemaAndDataMigrated } from './data-migrations/device-data-migrations'
 export {
   useWallets,
   useWallet,

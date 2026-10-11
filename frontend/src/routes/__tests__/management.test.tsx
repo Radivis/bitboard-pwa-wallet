@@ -88,7 +88,7 @@ vi.mock('@/db', () => ({
   useWalletNoMnemonicBackupFlag: () => ({
     data: managementDbMocks.noMnemonicBackupFlag,
   }),
-  ensureMigrated: vi.fn().mockResolvedValue(undefined),
+  ensureSchemaMigrated: vi.fn().mockResolvedValue(undefined),
   getDatabase: vi.fn().mockReturnValue({}),
   tryLoadNearZeroSessionIntoMemory: vi.fn().mockResolvedValue(false),
 }))

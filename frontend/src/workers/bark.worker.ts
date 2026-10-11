@@ -49,10 +49,6 @@ import {
   assertBarkRecordDumpWithinSizeLimit,
   isBarkReceiveKeyIndex,
 } from '@/lib/wallet/wallet-domain-types'
-import {
-  setConfiguredHistoricalSignetOnchainChain,
-  type HistoricalSignetOnchainChain,
-} from '@/lib/wallet/historical-signet-onchain-chain'
 import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
 import type {
   BarkArkoorSendParams,
@@ -648,12 +644,6 @@ const barkService: BarkService = {
   async ping(): Promise<boolean> {
     await getBarkWasm()
     return true
-  },
-
-  async configureHistoricalSignetOnchainChain(
-    chain: HistoricalSignetOnchainChain | null,
-  ): Promise<void> {
-    setConfiguredHistoricalSignetOnchainChain(chain)
   },
 
   async openSession(params: OpenBarkSessionParams): Promise<OpenBarkSessionResult> {

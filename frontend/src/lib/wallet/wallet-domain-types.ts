@@ -10,11 +10,6 @@ import { ARKADE_SDK_PERSISTENCE_JSON_MAX_BYTES } from '@/lib/arkade/arkade-sdk-p
 import type { LightningNetworkMode } from '@/lib/lightning/lightning-utils'
 import { LIGHTNING_NETWORK_MODES } from '@/lib/lightning/lightning-utils'
 import {
-  getConfiguredHistoricalSignetOnchainChain,
-  historicalSignetOnchainWasMutinynet,
-  renameSignetMapKeyToMutinynet,
-} from '@/lib/wallet/historical-signet-onchain-chain'
-import {
   BARK_REGTEST_SERVER_URL,
   isE2eBarkRegtestControlEnabled,
 } from '@/lib/bark/e2e/bark-regtest-env'
@@ -191,12 +186,6 @@ export interface WalletSecretsPayload {
   >
   /** Bark accounts (one account per supported network). */
   barkAccounts: StoredBarkAccount[]
-  /**
-   * Set once the historical `signet` rows (Mutinynet infrastructure) have been
-   * rewritten to `mutinynet`. Absent means the rewrite still needs to run.
-   * New wallets set this immediately so public Signet rows stay `signet`.
-   */
-  signetNetworkSplitApplied?: true
 }
 
 /** Sensitive wallet data stored encrypted. Shared with db layer and workers. */
@@ -551,9 +540,6 @@ export function walletSecretsPayloadFromSecrets(
     arkadeAccounts: secrets.arkadeAccounts ?? [],
     activeArkadeAccountIdByNetwork: secrets.activeArkadeAccountIdByNetwork ?? {},
     barkAccounts: secrets.barkAccounts ?? [],
-    ...(secrets.signetNetworkSplitApplied === true
-      ? { signetNetworkSplitApplied: true as const }
-      : {}),
   }
 }
 
@@ -659,49 +645,8 @@ function pickActiveArkadeAccountIdByNetworkField(raw: Record<string, unknown>): 
   return raw.activeArkadeConnectionIdByNetwork
 }
 
-function rewriteSignetNetworkField(
-  value: unknown,
-  field: 'network' | 'networkMode',
-): void {
-  if (!Array.isArray(value)) return
-  for (const row of value) {
-    if (isRecord(row) && row[field] === 'signet') {
-      row[field] = 'mutinynet'
-    }
-  }
-}
-
-/**
- * Historical Arkade `signet` rows were the Mutinynet operator.
- * On-chain descriptors and Lightning connections move to Mutinynet only when
- * the configured pre-split Esplora chain was Mutinynet. Bark stays on public
- * Signet (`barkAccounts` with `networkMode: 'signet'` is left untouched).
- *
- * Until that chain is configured, Arkade is rewritten but the flag stays unset
- * so a later parse can still classify descriptors.
- */
-function applySignetNetworkSplit(raw: Record<string, unknown>): void {
-  if (raw.signetNetworkSplitApplied === true) return
-
-  rewriteSignetNetworkField(raw.arkadeAccounts, 'networkMode')
-  rewriteSignetNetworkField(raw.arkadeOperatorConnections, 'networkMode')
-  renameSignetMapKeyToMutinynet(raw.activeArkadeAccountIdByNetwork)
-  renameSignetMapKeyToMutinynet(raw.activeArkadeConnectionIdByNetwork)
-
-  const historicalSignetChain = getConfiguredHistoricalSignetOnchainChain()
-  if (historicalSignetChain == null) return
-
-  if (historicalSignetOnchainWasMutinynet(historicalSignetChain)) {
-    rewriteSignetNetworkField(raw.descriptorWallets, 'network')
-    rewriteSignetNetworkField(raw.lightningNwcConnections, 'networkMode')
-  }
-  raw.signetNetworkSplitApplied = true
-}
-
 function normalizeWalletSecretsPayload(raw: unknown): unknown {
   if (!isRecord(raw)) return raw
-
-  applySignetNetworkSplit(raw)
 
   const withoutLegacyKeys = { ...raw }
   delete withoutLegacyKeys.arkadeWallets

@@ -16,7 +16,7 @@ const mockParseWalletBackupZipFile = vi.hoisted(() => vi.fn())
 const mockAnyWalletHasNoMnemonicBackupFlag = vi.hoisted(() => vi.fn())
 const mockReplaceOpfsSqliteAfterDestroy = vi.hoisted(() => vi.fn())
 const mockVerifyWalletBackupManifest = vi.hoisted(() => vi.fn())
-const mockEnsureMigrated = vi.hoisted(() => vi.fn())
+const mockEnsureSchemaMigrated = vi.hoisted(() => vi.fn())
 const mockGetDatabase = vi.hoisted(() => vi.fn())
 
 vi.mock('sonner', () => ({
@@ -46,12 +46,12 @@ vi.mock('@/workers/encryption-factory', () => ({
 
 vi.mock('@/db/database', () => ({
   destroyDatabase: vi.fn(),
-  ensureMigrated: mockEnsureMigrated,
+  ensureSchemaMigrated: mockEnsureSchemaMigrated,
   getDatabase: mockGetDatabase,
 }))
 
 vi.mock('@/db', () => ({
-  ensureMigrated: mockEnsureMigrated,
+  ensureSchemaMigrated: mockEnsureSchemaMigrated,
   getDatabase: mockGetDatabase,
 }))
 
@@ -82,7 +82,7 @@ describe('useWalletBackupImport', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    mockEnsureMigrated.mockResolvedValue(undefined)
+    mockEnsureSchemaMigrated.mockResolvedValue(undefined)
     mockGetDatabase.mockReturnValue({})
     mockAnyWalletHasNoMnemonicBackupFlag.mockResolvedValue(false)
     mockParseWalletBackupZipFile.mockResolvedValue(parsedBackup)

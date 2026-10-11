@@ -12,7 +12,7 @@ export async function replaceOpfsSqliteAfterDestroy(options: {
   opfsBasename: string
   sqliteBytes: Uint8Array
   destroyDatabase: () => Promise<void>
-  ensureMigrated: () => Promise<void>
+  ensureSchemaMigrated: () => Promise<void>
   successToastMessage: string
   onBeforeReload?: () => void
 }): Promise<void> {
@@ -20,7 +20,7 @@ export async function replaceOpfsSqliteAfterDestroy(options: {
     opfsBasename,
     sqliteBytes,
     destroyDatabase,
-    ensureMigrated,
+    ensureSchemaMigrated,
     successToastMessage,
     onBeforeReload,
   } = options
@@ -40,7 +40,7 @@ export async function replaceOpfsSqliteAfterDestroy(options: {
     sqliteBytes.byteOffset + sqliteBytes.byteLength,
   ) as ArrayBuffer
   await writeArrayBufferToOpfsRoot(opfsBasename, sqliteArrayBuffer)
-  await ensureMigrated()
+  await ensureSchemaMigrated()
   onBeforeReload?.()
   toast.success(successToastMessage)
   window.setTimeout(() => {

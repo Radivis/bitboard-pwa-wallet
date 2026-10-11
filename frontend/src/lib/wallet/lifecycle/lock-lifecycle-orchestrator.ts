@@ -44,6 +44,7 @@ import {
 } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
 import { syncAllRailLifecyclesWithLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-handoff'
 import { awaitInFlightWalletSecretsWrites } from '@/db/wallet-secrets-write-tracker'
+import { runPendingWalletDataMigrationsForUnlock } from '@/db/data-migrations/run-pending-wallet-data-migrations'
 import {
   ensureWalletSecretsSession,
   endWalletSecretsSession,
@@ -143,6 +144,7 @@ function revertAfterUnlockFailure(): void {
 }
 
 async function runUnlockLoad(params: UnlockLoadParams): Promise<void> {
+  await runPendingWalletDataMigrationsForUnlock()
   await waitForCryptoWorkerHealthy()
   await orchestrateOnchainLoad({
     walletId: params.walletId,

@@ -1,5 +1,4 @@
 import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
-import type { HistoricalSignetOnchainChain } from '@/lib/wallet/historical-signet-onchain-chain'
 import type { EncryptedBlobMessage } from '@/workers/secrets-channel-types'
 import type {
   BarkNextRefreshSchedule,
@@ -196,9 +195,6 @@ export type BarkExitGraph = {
 }
 
 export interface BarkService {
-  configureHistoricalSignetOnchainChain(
-    chain: HistoricalSignetOnchainChain | null,
-  ): Promise<void>
   setSecretsPort(port: MessagePort): Promise<void>
   setEncryptedWalletSecretsHost(host: EncryptedWalletSecretsHost): Promise<void>
   ping(): Promise<boolean>

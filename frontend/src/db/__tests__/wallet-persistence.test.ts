@@ -64,7 +64,6 @@ describe('Wallet Persistence with Encryption', () => {
     arkadeAccounts: [],
     activeArkadeAccountIdByNetwork: {},
     barkAccounts: [],
-    signetNetworkSplitApplied: true,
   }
 
   beforeEach(async () => {

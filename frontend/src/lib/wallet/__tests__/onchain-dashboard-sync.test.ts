@@ -30,7 +30,7 @@ vi.mock('@/lib/wallet/onchain-esplora-sync-metadata', () => ({
 }))
 
 vi.mock('@/db/database', () => ({
-  ensureMigrated: vi.fn(async () => undefined),
+  ensureSchemaMigrated: vi.fn(async () => undefined),
 }))
 
 import { useWalletStore } from '@/stores/walletStore'

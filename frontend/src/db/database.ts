@@ -20,7 +20,7 @@ export function blockWalletDatabaseAccessForTeardown(): void {
   walletDatabaseAccessBlockedForTeardown = true
 }
 
-/** Clears the hard-block so {@link getDatabase} / {@link ensureMigrated} may open SQLite again. */
+/** Clears the hard-block so {@link getDatabase} / {@link ensureSchemaMigrated} may open SQLite again. */
 export function resetWalletDatabaseAccessTeardownGuard(): void {
   walletDatabaseAccessBlockedForTeardown = false
 }
@@ -44,7 +44,7 @@ export function getDatabase(): Kysely<Database> {
   return instance
 }
 
-export async function ensureMigrated(): Promise<void> {
+export async function ensureSchemaMigrated(): Promise<void> {
   assertWalletDatabaseAccessAllowed()
   if (migrated) return
   if (migrationPromise) {
@@ -99,7 +99,7 @@ export type DatabaseHealthResult =
  */
 export async function checkDatabaseHealth(): Promise<DatabaseHealthResult> {
   try {
-    await ensureMigrated()
+    await ensureSchemaMigrated()
     await getDatabase()
       .selectFrom('settings')
       .select('key')

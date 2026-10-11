@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useWalletStore } from '@/stores/walletStore'
-import { getDatabase, ensureMigrated } from './database'
+import { getDatabase, ensureSchemaMigrated } from './database'
 import { getAllFavoriteSlugs, setArticleFavorite } from './library-articles'
 import { listLibraryHistory } from './library-history'
 import { walletHasNoMnemonicBackupFlag } from './wallet-no-mnemonic-backup'
@@ -14,7 +14,7 @@ export function useWallets() {
   return useQuery({
     queryKey: walletKeys.all,
     queryFn: async () => {
-      await ensureMigrated()
+      await ensureSchemaMigrated()
       const rows = await getDatabase().selectFrom('wallets').selectAll().execute()
       return rows.map(mapDbWalletToDomain)
     },
@@ -26,7 +26,7 @@ export function useWallet(walletId: number | null) {
   return useQuery({
     queryKey: walletId === null ? walletKeys.detailNone : walletKeys.byId(walletId),
     queryFn: async () => {
-      await ensureMigrated()
+      await ensureSchemaMigrated()
       const wallet = await getDatabase()
         .selectFrom('wallets')
         .selectAll()
@@ -43,7 +43,7 @@ export function useAddWallet() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (wallet: NewWallet) => {
-      await ensureMigrated()
+      await ensureSchemaMigrated()
       const insertResult = await getDatabase()
         .insertInto('wallets')
         .values(wallet)
@@ -66,7 +66,7 @@ export function useUpdateWallet() {
       walletId: number
       walletChanges: WalletUpdate
     }) => {
-      await ensureMigrated()
+      await ensureSchemaMigrated()
       await getDatabase()
         .updateTable('wallets')
         .set(walletChanges)
@@ -93,7 +93,7 @@ export function useDeleteWallet() {
         '@/lib/arkade/arkade-session-service'
       )
       await discardArkadeSessionForWalletDeletion()
-      await ensureMigrated()
+      await ensureSchemaMigrated()
       await deleteWalletCompletely(getDatabase(), id)
     },
     onSuccess: () => {
@@ -109,7 +109,7 @@ export function useWalletNoMnemonicBackupFlag(walletId: number | null) {
         ? walletKeys.noMnemonicBackupNone
         : walletKeys.noMnemonicBackup(walletId),
     queryFn: async () => {
-      await ensureMigrated()
+      await ensureSchemaMigrated()
       if (walletId === null) return false
       return walletHasNoMnemonicBackupFlag(getDatabase(), walletId)
     },
@@ -122,7 +122,7 @@ export function useLibraryFavorites() {
   return useQuery({
     queryKey: libraryKeys.favorites,
     queryFn: async () => {
-      await ensureMigrated()
+      await ensureSchemaMigrated()
       const slugs = await getAllFavoriteSlugs(getDatabase())
       return new Set(slugs)
     },
@@ -133,7 +133,7 @@ export function useSetArticleFavorite() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (params: { articleSlug: string; isFavorite: boolean }) => {
-      await ensureMigrated()
+      await ensureSchemaMigrated()
       await setArticleFavorite(getDatabase(), params.articleSlug, params.isFavorite)
     },
     onSuccess: () => {
@@ -146,7 +146,7 @@ export function useLibraryHistory(limit: number) {
   return useQuery({
     queryKey: libraryKeys.history(limit),
     queryFn: async () => {
-      await ensureMigrated()
+      await ensureSchemaMigrated()
       return listLibraryHistory(getDatabase(), limit)
     },
   })

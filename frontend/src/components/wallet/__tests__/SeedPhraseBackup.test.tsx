@@ -13,7 +13,7 @@ const dbMocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/db', () => ({
-  ensureMigrated: vi.fn().mockResolvedValue(undefined),
+  ensureSchemaMigrated: vi.fn().mockResolvedValue(undefined),
   getDatabase: vi.fn().mockReturnValue({}),
   tryLoadNearZeroSessionIntoMemory: (...args: unknown[]) =>
     dbMocks.tryLoadNearZeroSessionIntoMemory(...args),

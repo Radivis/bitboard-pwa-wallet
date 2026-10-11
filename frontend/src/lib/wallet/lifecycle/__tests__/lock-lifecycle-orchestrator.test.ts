@@ -35,6 +35,12 @@ const awaitInFlightWalletSecretsWrites = vi.fn()
 const ensureWalletSecretsSession = vi.fn()
 const endWalletSecretsSession = vi.fn()
 const isWalletSecretsSessionActive = vi.fn()
+const runPendingWalletDataMigrationsForUnlock = vi.fn()
+
+vi.mock('@/db/data-migrations/run-pending-wallet-data-migrations', () => ({
+  runPendingWalletDataMigrationsForUnlock: (...args: unknown[]) =>
+    runPendingWalletDataMigrationsForUnlock(...args),
+}))
 
 vi.mock('@/stores/cryptoStore', () => ({
   useCryptoStore: {
@@ -228,6 +234,7 @@ describe('lock-lifecycle-orchestrator', () => {
     ensureWalletSecretsSession.mockResolvedValue(undefined)
     endWalletSecretsSession.mockResolvedValue(undefined)
     isWalletSecretsSessionActive.mockResolvedValue(true)
+    runPendingWalletDataMigrationsForUnlock.mockResolvedValue(undefined)
   })
 
   it('initial state is no-lock with operation none', () => {
@@ -375,6 +382,30 @@ describe('lock-lifecycle-orchestrator', () => {
       }),
     ).rejects.toThrow('load failed')
 
+    expect(endWalletSecretsSession).toHaveBeenCalledTimes(1)
+    expect(getLockLifecycleSnapshot()).toEqual({
+      phase: 'locked',
+      operation: 'none',
+    })
+  })
+
+  it('manual unlock fails and does not load rails when wallet data migrations fail', async () => {
+    walletStoreState.activeWalletId = 1
+    walletStoreState.walletStatus = 'locked'
+    syncLockLifecycleWithActiveWallet(1)
+    runPendingWalletDataMigrationsForUnlock.mockRejectedValue(new Error('migration failed'))
+
+    await expect(
+      orchestrateManualUnlock({
+        ...unlockParams,
+        password: 'secret',
+      }),
+    ).rejects.toThrow('migration failed')
+
+    expect(orchestrateOnchainLoad).not.toHaveBeenCalled()
+    expect(orchestrateArkadeLoad).not.toHaveBeenCalled()
+    expect(startBarkLoadAfterUnlock).not.toHaveBeenCalled()
+    expect(orchestrateLightningLoad).not.toHaveBeenCalled()
     expect(endWalletSecretsSession).toHaveBeenCalledTimes(1)
     expect(getLockLifecycleSnapshot()).toEqual({
       phase: 'locked',
