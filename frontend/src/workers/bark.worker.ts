@@ -46,7 +46,7 @@ import {
 } from '@/lib/bark/e2e/bark-regtest-env'
 import { loadBitboardBarkWasm, type BitboardBarkWasm } from '@/lib/bark/load-bitboard-bark-wasm'
 import {
-  assertBarkRecordDumpWithinSizeLimit,
+  assertBarkRecordEnvelopeWithinSizeLimit,
   isBarkReceiveKeyIndex,
 } from '@/lib/wallet/wallet-domain-types'
 import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
@@ -85,7 +85,7 @@ import {
   persistOpenedBarkAccount,
   readPendingEmergencyClaim as readPendingEmergencyClaimFromPayload,
   readProceedAutomatically as readProceedAutomaticallyFromPayload,
-  readRecordDumpForOpen,
+  readRecordEnvelopeForOpen,
   readStoredBarkReceiveKeyIndex,
   writePendingEmergencyClaim as writePendingEmergencyClaimToPayload,
   writeProceedAutomatically as writeProceedAutomaticallyToPayload,
@@ -123,7 +123,7 @@ function rethrowBarkError(err: unknown): never {
 function installLoadedBarkWasm(wasm: BitboardBarkWasm): BitboardBarkWasm {
   barkWasmModule = wasm
   wasm.bark_set_durable_record_flush_hook(
-    durableCheckpointFlush((recordDump) => flushDurableCheckpoint(recordDump)),
+    durableCheckpointFlush((recordEnvelope) => flushDurableCheckpoint(recordEnvelope)),
   )
   return wasm
 }
@@ -173,40 +173,40 @@ function encryptedPayloadDeps() {
   }
 }
 
-async function flushDurableCheckpoint(recordDump: string): Promise<void> {
-  if (typeof recordDump !== 'string' || recordDump.length === 0) {
-    throw new Error('Bark record dump is empty')
+async function flushDurableCheckpoint(recordEnvelope: string): Promise<void> {
+  if (typeof recordEnvelope !== 'string' || recordEnvelope.length === 0) {
+    throw new Error('Bark record envelope is empty')
   }
-  assertBarkRecordDumpWithinSizeLimit(recordDump)
+  assertBarkRecordEnvelopeWithinSizeLimit(recordEnvelope)
   const walletId = openWalletId
   const network = openNetwork
   if (walletId == null || network == null) {
     throw new Error('Bark session is not open')
   }
-  await persistBarkProtocolState(encryptedPayloadDeps(), walletId, network, { recordDump })
+  await persistBarkProtocolState(encryptedPayloadDeps(), walletId, network, { recordEnvelope })
 }
 
-async function exportRecordDump(): Promise<string> {
+async function exportRecordEnvelope(): Promise<string> {
   const wasmModule = await getBarkWasm()
-  const recordDump = wasmModule.bark_export_record_dump()
-  if (typeof recordDump !== 'string' || recordDump.length === 0) {
-    throw new Error('Bark record dump is empty')
+  const recordEnvelope = wasmModule.bark_export_record_envelope()
+  if (typeof recordEnvelope !== 'string' || recordEnvelope.length === 0) {
+    throw new Error('Bark record envelope is empty')
   }
-  assertBarkRecordDumpWithinSizeLimit(recordDump)
-  return recordDump
+  assertBarkRecordEnvelopeWithinSizeLimit(recordEnvelope)
+  return recordEnvelope
 }
 
 async function flushBarkProtocolState(
   walletId: number,
   update: { receiveKeyIndex?: number; lastSuccessfulSyncAt?: string } = {},
 ): Promise<void> {
-  const recordDump = await exportRecordDump()
+  const recordEnvelope = await exportRecordEnvelope()
   const network = openNetwork
   if (network == null) {
     throw new Error('Bark session is not open')
   }
   await persistBarkProtocolState(encryptedPayloadDeps(), walletId, network, {
-    recordDump,
+    recordEnvelope,
     receiveKeyIndex: update.receiveKeyIndex,
     lastSuccessfulSyncAt: update.lastSuccessfulSyncAt,
   })
@@ -247,11 +247,11 @@ async function openBarkWalletFingerprint(
   wasmModule: BitboardBarkWasm,
   mnemonic: string,
   network: BarkRailNetwork,
-  recordDump: string,
+  recordEnvelope: string,
   regtestEsploraUrl: string | undefined,
 ): Promise<string> {
   if (network !== 'regtest') {
-    const fingerprint = await wasmModule.bark_open_session(mnemonic, network, recordDump)
+    const fingerprint = await wasmModule.bark_open_session(mnemonic, network, recordEnvelope)
     return fingerprint
   }
   if (!isE2eBarkRegtestControlEnabled()) {
@@ -260,14 +260,14 @@ async function openBarkWalletFingerprint(
   const wasmWithRegtest = wasmModule as BitboardBarkWasm & {
     bark_open_regtest_session: (
       mnemonic: string,
-      recordDump: string,
+      recordEnvelope: string,
       serverUrl: string,
       esploraUrl: string,
     ) => Promise<string>
   }
   return wasmWithRegtest.bark_open_regtest_session(
     mnemonic,
-    recordDump,
+    recordEnvelope,
     BARK_REGTEST_SERVER_URL,
     regtestEsploraUrl ?? BARK_REGTEST_ESPLORA_URL,
   )
@@ -279,7 +279,7 @@ async function openSessionImpl(
   const network = params.networkMode
   const mnemonic = await requireSecretsProxy().decrypt(params.encryptedMnemonic)
   const deps = encryptedPayloadDeps()
-  const recordDump = await readRecordDumpForOpen(deps, params.walletId, network)
+  const recordEnvelope = await readRecordEnvelopeForOpen(deps, params.walletId, network)
   let sessionOpened = false
   const previousWalletId = openWalletId
   const previousNetwork = openNetwork
@@ -292,7 +292,7 @@ async function openSessionImpl(
       wasmModule,
       mnemonic,
       network,
-      recordDump,
+      recordEnvelope,
       params.regtestEsploraUrl,
     )
     if (typeof fingerprint !== 'string' || fingerprint.length === 0) {
@@ -311,14 +311,14 @@ async function openSessionImpl(
       revealNextReceiveAddress: async () =>
         readBarkRevealedReceiveAddress(await wasmModule.bark_reveal_next_address()),
     })
-    const exportedDump = await exportRecordDump()
+    const exportedEnvelope = await exportRecordEnvelope()
     const barkAccount = await persistOpenedBarkAccount(
       deps,
       params.walletId,
       network,
       fingerprint,
       receiveKeyIndex,
-      exportedDump,
+      exportedEnvelope,
     )
     return {
       fingerprint,

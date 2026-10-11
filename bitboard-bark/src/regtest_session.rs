@@ -43,25 +43,25 @@ impl RegtestBarkWallet {
         .await
     }
 
-    /// Opens the wallet that produced `encoded_dump`.
-    pub async fn open_from_encoded_dump(
+    /// Opens the wallet that produced `encoded_envelope`.
+    pub async fn open_from_encoded_envelope(
         mnemonic: &str,
-        encoded_dump: &str,
+        encoded_envelope: &str,
         server_url: &str,
         esplora_url: &str,
     ) -> Result<Self, String> {
-        let store = SharedRecordStore::from_encoded_dump(encoded_dump)?;
+        let store = SharedRecordStore::from_encoded_envelope(encoded_envelope)?;
         Self::open_store(mnemonic, server_url, esplora_url, store, None).await
     }
 
-    /// Same dump, plus a BDK wallet that can pay the exit child transaction.
-    pub async fn open_from_encoded_dump_with_exit_bumper(
+    /// Same envelope, plus a BDK wallet that can pay the exit child transaction.
+    pub async fn open_from_encoded_envelope_with_exit_bumper(
         mnemonic: &str,
-        encoded_dump: &str,
+        encoded_envelope: &str,
         server_url: &str,
         esplora_url: &str,
     ) -> Result<Self, String> {
-        let store = SharedRecordStore::from_encoded_dump(encoded_dump)?;
+        let store = SharedRecordStore::from_encoded_envelope(encoded_envelope)?;
         let network = Network::Regtest;
         let persister = Arc::new(bark::persist::adaptor::StorageAdaptorWrapper::new(
             store.clone(),
@@ -152,8 +152,8 @@ impl RegtestBarkWallet {
         Ok(bumper.read().await.balance().await.to_sat())
     }
 
-    pub fn export_encoded_dump(&self) -> Result<String, String> {
-        self.store.export_encoded_dump()
+    pub fn export_encoded_envelope(&self) -> Result<String, String> {
+        self.store.export_encoded_envelope()
     }
 
     /// The product sync path calls this before `Wallet::sync`. `sync` returns

@@ -135,6 +135,26 @@ describe('parseWalletPayloadJson', () => {
     expect(parsed.barkAccounts[1].id).toBe('bark-valid-mainnet')
   })
 
+  it('migrates legacy recordDump to recordEnvelope on parse', () => {
+    const parsed = parseWalletPayloadJson(
+      JSON.stringify({
+        descriptorWallets: [],
+        lightningNwcConnections: [],
+        barkAccounts: [
+          {
+            id: 'bark-signet',
+            networkMode: 'signet',
+            serverUrl: 'https://ark.signet.2nd.dev',
+            fingerprint: 'abcdef01',
+            recordDump: 'c2lnbmV0LWVudmVsb3Bl',
+          },
+        ],
+      }),
+    )
+    expect(parsed.barkAccounts[0].recordEnvelope).toBe('c2lnbmV0LWVudmVsb3Bl')
+    expect(parsed.barkAccounts[0]).not.toHaveProperty('recordDump')
+  })
+
   const validSignetAccount = {
     id: 'acct-good',
     label: 'Mutinynet',

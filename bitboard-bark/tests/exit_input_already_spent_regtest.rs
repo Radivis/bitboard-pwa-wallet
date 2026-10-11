@@ -26,7 +26,7 @@ async fn exit_input_already_spent() {
         "fixture needs two spendable VTXOs so the claim test can keep the other, got {spendable:?}"
     );
     let spent_id = spendable[0].clone();
-    let dump_before_spend = wallet.export_encoded_dump().expect("dump before spend");
+    let dump_before_spend = wallet.export_encoded_envelope().expect("dump before spend");
     let destination = regtest_receive_address();
     wallet
         .offboard_vtxos(std::slice::from_ref(&spent_id), destination.clone())
@@ -35,7 +35,7 @@ async fn exit_input_already_spent() {
     drop(wallet);
 
     let (mnemonic, _) = load_boarded_fixture();
-    let stale = RegtestBarkWallet::open_from_encoded_dump(
+    let stale = RegtestBarkWallet::open_from_encoded_envelope(
         &mnemonic,
         &dump_before_spend,
         &endpoints.captaind_url,

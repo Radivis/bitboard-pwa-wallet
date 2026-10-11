@@ -1,10 +1,10 @@
 import {
-  applyBarkRecordDump,
+  applyBarkRecordEnvelope,
   applyOpenedBarkAccount,
   applyPendingEmergencyClaim,
   applyProceedAutomatically,
   findBarkAccount,
-  recordDumpForOpen,
+  recordEnvelopeForOpen,
 } from '@/lib/bark/bark-rail-metadata'
 import {
   parseWalletPayloadJson,
@@ -44,18 +44,18 @@ export async function readStoredBarkReceiveKeyIndex(
   return findBarkAccount(payload, network)?.receiveKeyIndex
 }
 
-/** Dump to pass into `bark_open_session`. Empty when this account has no dump yet. */
-export async function readRecordDumpForOpen(
+/** Envelope to pass into `bark_open_session`. Empty when this account has no envelope yet. */
+export async function readRecordEnvelopeForOpen(
   deps: BarkEncryptedPayloadDeps,
   walletId: number,
   network: BarkRailNetwork,
 ): Promise<string> {
   const payload = await readDecryptedWalletPayload(deps, walletId)
-  return recordDumpForOpen(payload, network)
+  return recordEnvelopeForOpen(payload, network)
 }
 
 /**
- * Writes or updates `barkAccounts` after open. Replaces that network's dump only.
+ * Writes or updates `barkAccounts` after open. Replaces that network's envelope only.
  * Does not rewrite the other network or `sdkPersistenceJson`.
  */
 export async function persistOpenedBarkAccount(
@@ -64,7 +64,7 @@ export async function persistOpenedBarkAccount(
   network: BarkRailNetwork,
   fingerprint: string,
   receiveKeyIndex: number,
-  recordDump: string,
+  recordEnvelope: string,
 ): Promise<StoredBarkAccount> {
   const nextPayload = await updateDecryptedWalletPayload(deps, walletId, (payload) =>
     applyOpenedBarkAccount({
@@ -72,7 +72,7 @@ export async function persistOpenedBarkAccount(
       network,
       fingerprint,
       receiveKeyIndex,
-      recordDump,
+      recordEnvelope,
     }),
   )
   const account = findBarkAccount(nextPayload, network)
@@ -83,24 +83,24 @@ export async function persistOpenedBarkAccount(
 }
 
 /**
- * Replaces one network's dump, and optional cursor or sync time, after a protocol write.
- * On a revision conflict, re-reads and applies the same dump onto the newer payload.
+ * Replaces one network's envelope, and optional cursor or sync time, after a protocol write.
+ * On a revision conflict, re-reads and applies the same envelope onto the newer payload.
  */
 export async function persistBarkProtocolState(
   deps: BarkEncryptedPayloadDeps,
   walletId: number,
   network: BarkRailNetwork,
   update: {
-    recordDump: string
+    recordEnvelope: string
     receiveKeyIndex?: number
     lastSuccessfulSyncAt?: string
   },
 ): Promise<void> {
   await updateDecryptedWalletPayload(deps, walletId, (payload) =>
-    applyBarkRecordDump({
+    applyBarkRecordEnvelope({
       payload,
       network,
-      recordDump: update.recordDump,
+      recordEnvelope: update.recordEnvelope,
       receiveKeyIndex: update.receiveKeyIndex,
       lastSuccessfulSyncAt: update.lastSuccessfulSyncAt,
     }),

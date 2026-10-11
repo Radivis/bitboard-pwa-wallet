@@ -50,7 +50,7 @@ bip39 = "2.0"
 # Record store methods return anyhow::Result. Already in the bark graph.
 anyhow = "1"
 async-trait = "0.1"
-# Compact Record dump stored on each encrypted bark rail.
+# Compact Record envelope stored on each encrypted bark rail.
 postcard = { version = "1", features = ["use-std"] }
 base64 = "0.22"
 

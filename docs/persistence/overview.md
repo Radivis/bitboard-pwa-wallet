@@ -11,7 +11,7 @@ This folder documents **what** is persisted, **where**, and **how** reads and wr
 | [bitcoin-onchain.md](bitcoin-onchain.md) | BDK descriptor wallets, changesets, Esplora sync metadata |
 | [lightning.md](lightning.md) | NWC connections, encrypted snapshots, Lightning store |
 | [arkade.md](arkade.md) | Arkade accounts, `sdkPersistenceJson`, Arkade WASM envelope |
-| [bark.md](bark.md) | Bark rails, per-network record dumps, Bark WASM adaptor |
+| [bark.md](bark.md) | Bark rails, per-network record envelopes, Bark WASM adaptor |
 | [unilateral-exit.md](unilateral-exit.md) | Unilateral-exit materials, watches, job/prefs/failure stores |
 | [lab.md](lab.md) | Lab simulator chain state, entities, mempool |
 | [general.md](general.md) | Shared wallet DB, encryption, Zustand settings, library, backups |
@@ -79,7 +79,7 @@ Passwords, mnemonics, and NWC URIs are **never** stored in `localStorage` or `se
 |--------|------------|---------------------|------------|
 | `crypto.worker` | `crypto` | `ACTIVE_WALLET`, BDK changeset | `descriptorWallets[].changeSet` in encrypted payload |
 | `arkade.worker` | `bitboard-arkade` | `JsonPersistenceDb` | `sdkPersistenceJson` on active Arkade account |
-| `bark.worker` | `bitboard-bark` | in-memory `StorageAdaptor` | `recordDump` on `barkAccounts` for the open network |
+| `bark.worker` | `bitboard-bark` | in-memory `StorageAdaptor` | `recordEnvelope` on `barkAccounts` for the open network |
 | `lab.worker` | `crypto` (`lab_*`) | In-memory `LabState` | Lab SQLite via `lab-factory.ts` on main thread |
 | `encryption.worker` | `bitboard-encryption` | Session password in worker memory | Not persisted (except near-zero wrapper; see [general.md](general.md)) |
 

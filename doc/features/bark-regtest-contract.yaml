@@ -36,8 +36,8 @@ contracts:
     implemented_by: frontend/tests/e2e/bark-exit-flows-regtest.spec.ts
 
 rust_invariants:
-  - name: sync_fails_when_server_stopped_leaves_record_dump_unchanged
-    description: refresh_server fails while captaind is stopped, and the record dump bytes stay the same.
+  - name: sync_fails_when_server_stopped_leaves_record_envelope_unchanged
+    description: refresh_server fails while captaind is stopped, and the record envelope bytes stay the same.
     test: bitboard-bark/tests/sync_while_server_stopped_regtest.rs
     run: BARK_REGTEST_RUN=1 cargo test --features regtest-support --test sync_while_server_stopped_regtest -- --ignored --test-threads=1
   - name: board_submission_rejected

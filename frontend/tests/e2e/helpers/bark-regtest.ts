@@ -132,7 +132,7 @@ export async function readDashboardBarkSpendableSats(page: Page): Promise<number
 
 export async function exportBoardedBarkFixture(page: Page): Promise<{
   mnemonic: string
-  recordDump: string
+  recordEnvelope: string
 }> {
   await page.waitForFunction(
     () => typeof window.__e2eExportBoardedBarkFixture === 'function',
@@ -155,8 +155,8 @@ export async function writeBoardedBarkFixture(
   fixturePath: string,
 ): Promise<void> {
   const fixture = await exportBoardedBarkFixture(page)
-  if (fixture.mnemonic.trim() === '' || fixture.recordDump.trim() === '') {
-    throw new Error('Bark boarded fixture is missing a mnemonic or record dump')
+  if (fixture.mnemonic.trim() === '' || fixture.recordEnvelope.trim() === '') {
+    throw new Error('Bark boarded fixture is missing a mnemonic or record envelope')
   }
   await fs.mkdir(path.dirname(fixturePath), { recursive: true })
   await fs.writeFile(fixturePath, JSON.stringify(fixture, null, 2), 'utf8')

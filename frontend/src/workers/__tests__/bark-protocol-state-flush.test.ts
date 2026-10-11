@@ -44,7 +44,7 @@ function signetPayload(mainnetDump: string, sdkPersistenceJson: string): WalletS
         serverUrl: BARK_SIGNET_SERVER_URL,
         fingerprint: 'abcdef01',
         lastSuccessfulSyncAt: syncedAt,
-        recordDump: 'b2xk',
+        recordEnvelope: 'b2xk',
         pendingEmergencyClaim: pendingClaim,
       },
       {
@@ -52,7 +52,7 @@ function signetPayload(mainnetDump: string, sdkPersistenceJson: string): WalletS
         networkMode: 'mainnet',
         serverUrl: BARK_MAINNET_SERVER_URL,
         fingerprint: 'abcdef01',
-        recordDump: mainnetDump,
+        recordEnvelope: mainnetDump,
       },
     ],
   }
@@ -88,17 +88,17 @@ describe('persistBarkProtocolState', () => {
       },
       7,
       'signet',
-      { recordDump: checkpointDump },
+      { recordEnvelope: checkpointDump },
     )
 
     expect(transformRuns).toBe(2)
     const written = parseWalletPayloadJson(writtenJson)
     const signetAcct = written.barkAccounts.find((a) => a.networkMode === 'signet')
     const mainnetAcct = written.barkAccounts.find((a) => a.networkMode === 'mainnet')
-    expect(signetAcct?.recordDump).toBe(checkpointDump)
+    expect(signetAcct?.recordEnvelope).toBe(checkpointDump)
     expect(signetAcct?.lastSuccessfulSyncAt).toBe(syncedAt)
     expect(signetAcct?.pendingEmergencyClaim).toEqual(pendingClaim)
-    expect(mainnetAcct?.recordDump).toBe('bWFpbm5ldC12Mg==')
+    expect(mainnetAcct?.recordEnvelope).toBe('bWFpbm5ldC12Mg==')
     expect(written.arkadeAccounts[0]?.sdkPersistenceJson).toBe('{"version":2}')
   })
 })

@@ -113,8 +113,8 @@ const BARK_RAIL_SERVER_URL: Record<BarkRailNetwork, string> = {
   regtest: BARK_REGTEST_SERVER_URL,
 }
 
-/** UTF-8 cap for one network's Bark record dump. Same size as an Arkade SDK blob. */
-export const BARK_RECORD_DUMP_MAX_BYTES = 10 * 1024 * 1024
+/** UTF-8 cap for one network's Bark record envelope. Same size as an Arkade SDK blob. */
+export const BARK_RECORD_ENVELOPE_MAX_BYTES = 10 * 1024 * 1024
 
 export type BarkRailNetwork = 'signet' | 'mainnet' | 'regtest'
 
@@ -132,7 +132,7 @@ export function isBarkReceiveKeyIndex(value: unknown): value is number {
 
 /**
  * One Bark account inside encrypted wallet secrets.
- * Protocol records live in `recordDump`.
+ * Protocol records live in `recordEnvelope`.
  */
 export interface StoredBarkAccount {
   id: string
@@ -148,10 +148,10 @@ export interface StoredBarkAccount {
   receiveKeyIndex?: number
   /**
    * Versioned Bark `Record` bytes for this network, standard base64.
-   * Absent until the first successful open flush. An over-cap dump is kept:
+   * Absent until the first successful open flush. An over-cap envelope is kept:
    * dropping it would open an empty wallet and lose the exit chain.
    */
-  recordDump?: string
+  recordEnvelope?: string
   /**
    * Broadcast claim Bark has not yet observed. Kept until those VTXOs are
    * claim-in-progress or claimed, or the app Esplora reports the transaction gone.
@@ -241,7 +241,7 @@ function isPendingEmergencyClaim(value: unknown): value is PendingEmergencyClaim
   return value.vtxoIds.every((vtxoId) => typeof vtxoId === 'string' && vtxoId.length > 0)
 }
 
-/** Keeps a well-formed pending claim. A malformed one is omitted so the dump stays. */
+/** Keeps a well-formed pending claim. A malformed one is omitted so the envelope stays. */
 export function pendingEmergencyClaimFromUnknown(
   value: unknown,
 ): PendingEmergencyClaim | undefined {
@@ -276,7 +276,10 @@ export function isStoredBarkAccount(value: unknown): value is StoredBarkAccount 
   if (value.receiveKeyIndex !== undefined && !isBarkReceiveKeyIndex(value.receiveKeyIndex)) {
     return false
   }
-  if (value.recordDump !== undefined && typeof value.recordDump !== 'string') {
+  if (value.recordEnvelope !== undefined && typeof value.recordEnvelope !== 'string') {
+    return false
+  }
+  if (value.recordEnvelope !== undefined && typeof value.recordEnvelope !== 'string') {
     return false
   }
   if (
@@ -294,12 +297,24 @@ export function isStoredBarkAccount(value: unknown): value is StoredBarkAccount 
   return true
 }
 
+function migrateLegacyBarkRecordEnvelopeField(
+  row: Record<string, unknown>,
+): Record<string, unknown> {
+  const cleaned: Record<string, unknown> = { ...row }
+  if (cleaned.recordEnvelope === undefined && typeof cleaned.recordEnvelope === 'string') {
+    cleaned.recordEnvelope = cleaned.recordEnvelope
+  }
+  delete cleaned.recordEnvelope
+  return cleaned
+}
+
 function sanitizeStoredBarkAccountRow(row: unknown): StoredBarkAccount | null {
   if (!isRecord(row)) return null
-  if (isStoredBarkAccount(row)) {
-    return row
+  const migrated = migrateLegacyBarkRecordEnvelopeField(row)
+  if (isStoredBarkAccount(migrated)) {
+    return migrated as StoredBarkAccount
   }
-  const cleaned: Record<string, unknown> = { ...row }
+  const cleaned: Record<string, unknown> = { ...migrated }
   const pendingEmergencyClaim = pendingEmergencyClaimFromUnknown(row.pendingEmergencyClaim)
   if (pendingEmergencyClaim != null) {
     cleaned.pendingEmergencyClaim = pendingEmergencyClaim
@@ -339,11 +354,11 @@ function deduplicateBarkAccountsByNetwork(accounts: StoredBarkAccount[]): Stored
   return deduplicated
 }
 
-/** Throws when a dump is larger than [`BARK_RECORD_DUMP_MAX_BYTES`]. Does not modify the dump. */
-export function assertBarkRecordDumpWithinSizeLimit(recordDump: string): void {
-  const byteLength = new TextEncoder().encode(recordDump).byteLength
-  if (byteLength > BARK_RECORD_DUMP_MAX_BYTES) {
-    throw new Error(`Bark record dump exceeds ${BARK_RECORD_DUMP_MAX_BYTES} bytes`)
+/** Throws when an envelope is larger than [`BARK_RECORD_ENVELOPE_MAX_BYTES`]. Does not modify it. */
+export function assertBarkRecordEnvelopeWithinSizeLimit(recordEnvelope: string): void {
+  const byteLength = new TextEncoder().encode(recordEnvelope).byteLength
+  if (byteLength > BARK_RECORD_ENVELOPE_MAX_BYTES) {
+    throw new Error(`Bark record envelope exceeds ${BARK_RECORD_ENVELOPE_MAX_BYTES} bytes`)
   }
 }
 

@@ -85,7 +85,7 @@ function initialSignetPayload(): WalletSecretsPayload {
         networkMode: 'signet',
         serverUrl: BARK_SIGNET_SERVER_URL,
         fingerprint: 'abcdef01',
-        recordDump: INITIAL_BARK_DUMP,
+        recordEnvelope: INITIAL_BARK_DUMP,
       },
     ],
   }
@@ -126,7 +126,7 @@ describe('encrypted wallet secrets host (real SQLite)', () => {
   }
 
   function signetBarkDump(payload: WalletSecretsPayload): string | undefined {
-    return payload.barkAccounts.find((account) => account.networkMode === 'signet')?.recordDump
+    return payload.barkAccounts.find((account) => account.networkMode === 'signet')?.recordEnvelope
   }
 
   beforeEach(async () => {
@@ -160,7 +160,7 @@ describe('encrypted wallet secrets host (real SQLite)', () => {
           ...currentPayload,
           barkAccounts: currentPayload.barkAccounts.map((account) => ({
             ...account,
-            recordDump: NEXT_BARK_DUMP,
+            recordEnvelope: NEXT_BARK_DUMP,
           })),
         }
         await putSplitWalletSecretsEncrypted(walletDb, walletId, {
@@ -207,7 +207,7 @@ describe('encrypted wallet secrets host (real SQLite)', () => {
     const host = createEncryptedWalletSecretsHost()
     const barkDeps = { secretsProxy: plainSecretsProxy, encryptedHost: host }
     const interleaving = interleaveOnFirstDecrypt(() =>
-      persistBarkProtocolState(barkDeps, walletId, 'signet', { recordDump: NEXT_BARK_DUMP }),
+      persistBarkProtocolState(barkDeps, walletId, 'signet', { recordEnvelope: NEXT_BARK_DUMP }),
     )
 
     await persistSdkJsonToEncryptedPayload(

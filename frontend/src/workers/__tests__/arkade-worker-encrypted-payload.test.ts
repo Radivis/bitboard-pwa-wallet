@@ -151,14 +151,14 @@ describe('arkade-worker-encrypted-payload', () => {
           networkMode: 'signet',
           serverUrl: 'https://ark.signet.2nd.dev',
           fingerprint: 'abcdef01',
-          recordDump: signetDump,
+          recordEnvelope: signetDump,
         },
         {
           id: 'bark-mainnet',
           networkMode: 'mainnet',
           serverUrl: 'https://ark.second.tech',
           fingerprint: 'abcdef01',
-          recordDump: mainnetDump,
+          recordEnvelope: mainnetDump,
         },
       ],
     })
@@ -170,8 +170,8 @@ describe('arkade-worker-encrypted-payload', () => {
     })
 
     const payload = parseWalletPayloadJson(storedPayloadJson)
-    expect(payload.barkAccounts.find((a) => a.networkMode === 'signet')?.recordDump).toBe(signetDump)
-    expect(payload.barkAccounts.find((a) => a.networkMode === 'mainnet')?.recordDump).toBe(mainnetDump)
+    expect(payload.barkAccounts.find((a) => a.networkMode === 'signet')?.recordEnvelope).toBe(signetDump)
+    expect(payload.barkAccounts.find((a) => a.networkMode === 'mainnet')?.recordEnvelope).toBe(mainnetDump)
     expect(payload.arkadeAccounts[0]?.sdkPersistenceJson).toBe('{"version":3,"wallet_db":{}}')
   })
 })

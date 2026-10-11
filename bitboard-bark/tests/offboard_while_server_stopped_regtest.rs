@@ -29,11 +29,11 @@ async fn offboard_while_server_stopped() {
         .offboard_all(regtest_receive_address())
         .await
         .expect_err("offboard_all should fail while captaind is stopped");
-    let dump_after = wallet.export_encoded_dump().expect("dump after");
+    let dump_after = wallet.export_encoded_envelope().expect("dump after");
     drop(wallet);
     drop(_resume_captaind);
 
-    let reopened = bitboard_bark::regtest_session::RegtestBarkWallet::open_from_encoded_dump(
+    let reopened = bitboard_bark::regtest_session::RegtestBarkWallet::open_from_encoded_envelope(
         &support::regtest_integration::load_boarded_fixture().0,
         &dump_after,
         &endpoints.captaind_url,

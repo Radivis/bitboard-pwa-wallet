@@ -5,12 +5,12 @@ export type BarkRailFlushMetadata = {
   lastSuccessfulSyncAt?: string
 }
 
-/** Resolves only after the checkpoint dump has been persisted. */
+/** Resolves only after the checkpoint envelope has been persisted. */
 export function durableCheckpointFlush(
-  persistDump: (recordDump: string) => Promise<void>,
-): (recordDump: string) => Promise<void> {
-  return async (recordDump: string) => {
-    await persistDump(recordDump)
+  persistEnvelope: (recordEnvelope: string) => Promise<void>,
+): (recordEnvelope: string) => Promise<void> {
+  return async (recordEnvelope: string) => {
+    await persistEnvelope(recordEnvelope)
   }
 }
 
@@ -25,7 +25,7 @@ function barkErrorMessage(err: unknown): string {
 }
 
 /**
- * Runs one mutating Bark call, then exports the dump when the session is open.
+ * Runs one mutating Bark call, then exports the envelope when the session is open.
  * A checkpoint flush inside `operation` is separate and happens before this return.
  */
 export async function finishBarkMutation<T>(params: {
@@ -55,7 +55,7 @@ export async function finishBarkMutation<T>(params: {
 
   if (operationError != null && flushError != null) {
     throw new Error(
-      `${barkErrorMessage(operationError)} (Bark record dump was not saved: ${barkErrorMessage(flushError)})`,
+      `${barkErrorMessage(operationError)} (Bark record envelope was not saved: ${barkErrorMessage(flushError)})`,
     )
   }
   if (flushError != null) {

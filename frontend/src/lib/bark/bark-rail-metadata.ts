@@ -1,6 +1,6 @@
 import { BARK_REGTEST_SERVER_URL } from '@/lib/bark/e2e/bark-regtest-env'
 import {
-  assertBarkRecordDumpWithinSizeLimit,
+  assertBarkRecordEnvelopeWithinSizeLimit,
   BARK_MAINNET_SERVER_URL,
   BARK_SIGNET_SERVER_URL,
   isBarkReceiveKeyIndex,
@@ -65,7 +65,7 @@ function accountWithPreservedFields(
   existingAccount: StoredBarkAccount | undefined,
   fingerprint: string,
   receiveKeyIndex: number | undefined,
-  recordDump: string | undefined,
+  recordEnvelope: string | undefined,
 ): StoredBarkAccount {
   const barkAccount: StoredBarkAccount = {
     id: existingAccount?.id ?? crypto.randomUUID(),
@@ -80,9 +80,9 @@ function accountWithPreservedFields(
   if (nextReceiveKeyIndex != null) {
     barkAccount.receiveKeyIndex = nextReceiveKeyIndex
   }
-  const nextDump = recordDump ?? existingAccount?.recordDump
-  if (nextDump != null) {
-    barkAccount.recordDump = nextDump
+  const nextEnvelope = recordEnvelope ?? existingAccount?.recordEnvelope
+  if (nextEnvelope != null) {
+    barkAccount.recordEnvelope = nextEnvelope
   }
   const pendingEmergencyClaim = pendingEmergencyClaimFromUnknown(
     existingAccount?.pendingEmergencyClaim,
@@ -97,35 +97,35 @@ function accountWithPreservedFields(
 }
 
 /**
- * Dump to load when opening one network.
- * An over-cap dump is refused here and left on the payload by parse.
+ * Envelope to load when opening one network.
+ * An over-cap envelope is refused here and left on the payload by parse.
  */
-export function recordDumpForOpen(
+export function recordEnvelopeForOpen(
   payload: WalletSecretsPayload,
   network: BarkRailNetwork,
 ): string {
-  const recordDump = findBarkAccount(payload, network)?.recordDump
-  if (recordDump == null || recordDump.length === 0) return ''
-  assertBarkRecordDumpWithinSizeLimit(recordDump)
-  return recordDump
+  const recordEnvelope = findBarkAccount(payload, network)?.recordEnvelope
+  if (recordEnvelope == null || recordEnvelope.length === 0) return ''
+  assertBarkRecordEnvelopeWithinSizeLimit(recordEnvelope)
+  return recordEnvelope
 }
 
-/** Signet dump. Prefer [`recordDumpForOpen`] when the network is a parameter. */
-export function signetRecordDumpForOpen(payload: WalletSecretsPayload): string {
-  return recordDumpForOpen(payload, 'signet')
+/** Signet envelope. Prefer [`recordEnvelopeForOpen`] when the network is a parameter. */
+export function signetRecordEnvelopeForOpen(payload: WalletSecretsPayload): string {
+  return recordEnvelopeForOpen(payload, 'signet')
 }
 
 /**
  * Records a successful open for one network. Keeps an existing sync timestamp
  * and other network accounts. Pass `receiveKeyIndex` after a reveal or a recovered key.
- * Pass `recordDump` to replace this network's protocol records.
+ * Pass `recordEnvelope` to replace this network's protocol records.
  */
 export function applyOpenedBarkAccount(params: {
   payload: WalletSecretsPayload
   network: BarkRailNetwork
   fingerprint: string
   receiveKeyIndex?: number
-  recordDump?: string
+  recordEnvelope?: string
 }): WalletSecretsPayload {
   if (
     params.receiveKeyIndex !== undefined &&
@@ -133,11 +133,11 @@ export function applyOpenedBarkAccount(params: {
   ) {
     throw new Error('Bark receive key index is invalid')
   }
-  if (params.recordDump !== undefined) {
-    if (params.recordDump.length === 0) {
-      throw new Error('Bark record dump is empty')
+  if (params.recordEnvelope !== undefined) {
+    if (params.recordEnvelope.length === 0) {
+      throw new Error('Bark record envelope is empty')
     }
-    assertBarkRecordDumpWithinSizeLimit(params.recordDump)
+    assertBarkRecordEnvelopeWithinSizeLimit(params.recordEnvelope)
   }
 
   const existingAccount = findBarkAccount(params.payload, params.network)
@@ -155,7 +155,7 @@ export function applyOpenedBarkAccount(params: {
       existingAccount,
       params.fingerprint,
       params.receiveKeyIndex,
-      params.recordDump,
+      params.recordEnvelope,
     ),
   )
 }
@@ -168,16 +168,16 @@ export function applySuccessfulBarkSync(params: {
   payload: WalletSecretsPayload
   network: BarkRailNetwork
   syncedAt: string
-  recordDump?: string
+  recordEnvelope?: string
 }): WalletSecretsPayload {
   if (!Number.isFinite(Date.parse(params.syncedAt))) {
     throw new Error('Bark sync timestamp must be a parseable ISO-8601 string')
   }
-  if (params.recordDump !== undefined) {
-    if (params.recordDump.length === 0) {
-      throw new Error('Bark record dump is empty')
+  if (params.recordEnvelope !== undefined) {
+    if (params.recordEnvelope.length === 0) {
+      throw new Error('Bark record envelope is empty')
     }
-    assertBarkRecordDumpWithinSizeLimit(params.recordDump)
+    assertBarkRecordEnvelopeWithinSizeLimit(params.recordEnvelope)
   }
   const existingAccount = requireBarkAccount(params.payload, params.network)
   const account = accountWithPreservedFields(
@@ -185,27 +185,27 @@ export function applySuccessfulBarkSync(params: {
     existingAccount,
     existingAccount.fingerprint,
     undefined,
-    params.recordDump,
+    params.recordEnvelope,
   )
   account.lastSuccessfulSyncAt = params.syncedAt
   return upsertBarkAccountInPayload(params.payload, account)
 }
 
 /**
- * Replaces one network's record dump after a protocol write.
+ * Replaces one network's record envelope after a protocol write.
  * Leaves the other network accounts and Arkade account objects unchanged.
  */
-export function applyBarkRecordDump(params: {
+export function applyBarkRecordEnvelope(params: {
   payload: WalletSecretsPayload
   network: BarkRailNetwork
-  recordDump: string
+  recordEnvelope: string
   receiveKeyIndex?: number
   lastSuccessfulSyncAt?: string
 }): WalletSecretsPayload {
-  if (params.recordDump.length === 0) {
-    throw new Error('Bark record dump is empty')
+  if (params.recordEnvelope.length === 0) {
+    throw new Error('Bark record envelope is empty')
   }
-  assertBarkRecordDumpWithinSizeLimit(params.recordDump)
+  assertBarkRecordEnvelopeWithinSizeLimit(params.recordEnvelope)
   if (
     params.receiveKeyIndex !== undefined &&
     !isBarkReceiveKeyIndex(params.receiveKeyIndex)
@@ -224,7 +224,7 @@ export function applyBarkRecordDump(params: {
     existingAccount,
     existingAccount.fingerprint,
     params.receiveKeyIndex,
-    params.recordDump,
+    params.recordEnvelope,
   )
   if (params.lastSuccessfulSyncAt !== undefined) {
     account.lastSuccessfulSyncAt = params.lastSuccessfulSyncAt
@@ -240,7 +240,7 @@ function assertPendingEmergencyClaim(pending: PendingEmergencyClaim): void {
 
 /**
  * Sets or clears the broadcast claim Bark has not observed yet.
- * Leaves the dump, fingerprint, receive index, and other network accounts unchanged.
+ * Leaves the envelope, fingerprint, receive index, and other network accounts unchanged.
  */
 export function applyPendingEmergencyClaim(params: {
   payload: WalletSecretsPayload
