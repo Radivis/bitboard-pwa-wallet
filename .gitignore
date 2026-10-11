@@ -10,7 +10,8 @@
 /.cursor/pr-reviews/
 /.cursor/ux-audits/
 
-/target
+# Rust build output (workspace root and member crates)
+target/
 .env
 .env.testnet
 # Legacy single-file imprint
@@ -19,7 +20,6 @@
 # Coverage reports
 lcov.info
 /coverage/
-/target/
 /tests/logs/
 /test-results/
 /frontend/coverage/

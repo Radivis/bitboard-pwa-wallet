@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The networks Signet and Mutinynet are now properly separated rather than Signet pointing towards Mutinynet silently
+- The privacy policy now covers the Bark rail: Second's Ark server and chain source, direct (unproxied) connections, linkability with on-chain activity, and local encrypted Bark state
 
 ### Fixed
 

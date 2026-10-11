@@ -102,7 +102,9 @@ export function PrivacyPolicyEn() {
         operator hosts on <strong>mainnet</strong> and <strong>signet</strong>. This exists so the PWA
         can reach those hosts from the browser without cross-origin restrictions. The routes forward
         requests and responses; they do not implement wallet logic and are not used to store your
-        recovery material.
+        recovery material. Traffic of the optional <strong>Bark</strong> rail is{' '}
+        <strong>not</strong> proxied; your browser contacts Second&apos;s Bark services directly (see
+        Section 7).
       </p>
       <p>
         Wallet-related data is stored in a <strong>SQLite</strong> database in the{' '}
@@ -290,7 +292,85 @@ export function PrivacyPolicyEn() {
         separate from Esplora&apos;s view of your on-chain footprint.
       </p>
 
-      <h2>7. Nostr Wallet Connect (NWC)</h2>
+      <h2>7. Bark (Second&apos;s Ark wallet)</h2>
+      <p>
+        <strong>Bark</strong> is a second, <strong>optional</strong> offchain payment layer based on
+        the Ark protocol. The Bark wallet software and the Bark Ark servers are developed and operated
+        by <strong>Second</strong>, not by Bitboard. Bark is <strong>off by default</strong>. You can turn it on under <strong>Settings → Features</strong>{' '}
+        for <strong>mainnet</strong> and <strong>signet</strong>; turning it on asks you to acknowledge
+        that the feature is new and that mainnet amounts should stay very small. Like Arkade, Bark holds
+        Bitcoin as <strong>VTXOs</strong>, but Bark balances, VTXOs, and history are{' '}
+        <strong>separate</strong> from your on-chain wallet and from Arkade. Bitboard{' '}
+        <strong>does not custody Bark funds</strong> and <strong>does not operate a Bark backend</strong>:
+        the Bark wallet library runs in your browser, and its keys are derived on your device from your
+        wallet&apos;s recovery phrase.
+      </p>
+      <p>
+        When Bark is enabled and this wallet is unlocked on mainnet or signet, the app opens a Bark
+        session and connects to <strong>two services operated by Second</strong>: the{' '}
+        <strong>Bark Ark server</strong> (<strong>ark.second.tech</strong> on mainnet,{' '}
+        <strong>ark.signet.2nd.dev</strong> on signet) and a <strong>block-explorer service</strong>{' '}
+        that Bark uses as its own chain source (<strong>mempool.second.tech</strong> on mainnet,{' '}
+        <strong>esplora.signet.2nd.dev</strong> on signet). These endpoints are fixed in the app and
+        cannot be changed in Settings. For its own chain queries, Bark does <strong>not</strong> use
+        the Esplora server you configure under Settings (Section 5). Bitboard{' '}
+        <strong>does not operate</strong> either service. The app contacts them after unlock, when you
+        sync manually, on the periodic sync interval (if you enable it for Bark), and when you receive,
+        send, board, or exit with Bark.
+      </p>
+      <p>
+        Unlike Esplora, fiat-rate, faucet, and Arkade traffic, Bark traffic is <strong>not</strong>{' '}
+        routed through the hosted Vercel proxy. Your browser contacts Second&apos;s servers{' '}
+        <strong>directly</strong>, so <strong>Second can see your IP address</strong> and usual
+        connection metadata (such as TLS and timing); Vercel does not see this traffic. With every
+        request to the Ark server, the app also sends an <strong>app identifier including the Bitboard
+        version</strong> (<code>bitboard/</code> followed by the version number), which tells Second
+        that the request comes from Bitboard.
+      </p>
+      <p>
+        From a privacy perspective, the Bark Ark server can build a <strong>Bark activity profile</strong>{' '}
+        from the protocol traffic your wallet generates: for example your <strong>VTXOs</strong>,{' '}
+        <strong>amounts</strong>, <strong>timing</strong>, involved <strong>Bark addresses</strong>{' '}
+        (<code>ark1p</code> / <code>tark1p</code>), payments received through the server&apos;s{' '}
+        <strong>mailbox</strong>, Bark-to-Bark sends, and your participation in batch rounds. Because
+        boarding is funded from your on-chain wallet and exits pay to your current on-chain receive
+        address, the server can also <strong>link this Bark activity to on-chain addresses and
+        transactions</strong> of your wallet. Bark&apos;s chain source additionally sees which
+        transactions and outputs Bark queries or broadcasts. Because Second operates both services, it
+        can in principle <strong>combine both views</strong> and associate them with the same wallet.{' '}
+        <strong>TLS</strong> protects data only in transit; Second sees the decrypted requests it
+        processes.
+      </p>
+      <p>
+        Each Bark VTXO has an <strong>expiry</strong> and must be refreshed before it expires. After a
+        successful sync, the app may submit a <strong>refresh request</strong> for VTXOs that are due to
+        the Bark Ark server, which processes it in a later batch round. There is{' '}
+        <strong>no separate delegator service</strong> for Bark: refreshes only make progress while the
+        wallet is unlocked and syncing, which is why the app shows when to unlock the wallet again.
+      </p>
+      <p>
+        An <strong>emergency exit</strong> (unilateral exit) moves VTXOs back on-chain{' '}
+        <strong>without contacting the Bark Ark server</strong>. Exit transactions are broadcast through
+        Bark&apos;s chain source operated by Second. Fee rates for these transactions come from your
+        configured Esplora server, and the final claim transaction is also broadcast through your
+        configured Esplora server (Section 5), so both operators can see that transaction.
+      </p>
+      <p>
+        Bark protocol state — VTXOs, movement history, pending boards, sends, exits and their
+        checkpoints, as well as the server URL, a wallet fingerprint, the receive key index, and the
+        time of the last successful sync — is stored <strong>per network</strong> in your encrypted
+        wallet payload on the device. Bark does not use separate browser databases for this. It is
+        subject to the same <strong>app-password encryption rules</strong> described in the encryption
+        section below.
+      </p>
+      <p>
+        Using Bark involves a trade-off similar to Arkade: you may gain <strong>speed and
+        convenience</strong> for offchain payments, but <strong>Second</strong> becomes a{' '}
+        <strong>trusted third party</strong> that can observe metadata about your Bark activity, your
+        IP address, and the on-chain transactions linked to it.
+      </p>
+
+      <h2>8. Nostr Wallet Connect (NWC)</h2>
       <p>
         For Lightning, Bitboard uses <strong>Nostr Wallet Connect (NWC)</strong> — a standard way to
         link an <strong>existing</strong> Lightning wallet you already use. Bitboard does not hold your
@@ -310,18 +390,19 @@ export function PrivacyPolicyEn() {
         the encryption rules in this policy.
       </p>
 
-      <h2>8. Encryption of sensitive app data</h2>
+      <h2>9. Encryption of sensitive app data</h2>
       <p>
         In short: unless you set an <strong>app password</strong>, sensitive material (recovery
-        phrase, keys, Lightning connection details, Arkade SDK persistence, etc.) is{' '}
-        <strong>not</strong> protected on your device by the strong “encryption at rest” described
+        phrase, keys, Lightning connection details, Arkade SDK persistence, Bark protocol state, etc.)
+        is <strong>not</strong> protected on your device by the strong “encryption at rest” described
         here. The operator <strong>recommends setting an app password</strong> before storing any seed,
-        descriptor, NWC connection string, or Arkade wallet state in the app.
+        descriptor, NWC connection string, Arkade wallet state, or Bark wallet state in the app.
       </p>
       <p>
         In more detail: recovery phrases (seeds), keys, descriptors, NWC connection strings, Arkade
-        SDK persistence and operator session state, and cached balances/transactions in the wallet
-        database are <strong>strongly encrypted at rest only after you set an app password</strong>.
+        SDK persistence and operator session state, Bark protocol state, and cached
+        balances/transactions in the wallet database are{' '}
+        <strong>strongly encrypted at rest only after you set an app password</strong>.
         Until then, that strong encryption is not applied.
       </p>
       <p>
@@ -334,7 +415,7 @@ export function PrivacyPolicyEn() {
         path from near-zero mode to a proper app password.
       </p>
 
-      <h2>9. Backups (exports)</h2>
+      <h2>10. Backups (exports)</h2>
       <p>
         You can download data from the app (export). <strong>Wallet exports</strong> are{' '}
         <strong>digitally signed</strong> to help ensure the export has not been tampered with by
@@ -361,7 +442,7 @@ export function PrivacyPolicyEn() {
         report are not affected by this restriction.
       </p>
 
-      <h2>10. Legal bases (Art. 6 GDPR)</h2>
+      <h2>11. Legal bases (Art. 6 GDPR)</h2>
       <p>
         Where the operator processes personal data, the operator relies on the following legal bases:
       </p>
@@ -391,10 +472,11 @@ export function PrivacyPolicyEn() {
         <li>
           <strong>Connections to Esplora endpoints, allowlisted fiat spot-ticker providers (when you use
           fiat denomination on mainnet), allowlisted test faucets, Arkade operators (when you enable and
-          use Arkade), optional VTXO delegators (when configured in your build), and Nostr Wallet
+          use Arkade), optional VTXO delegators (when configured in your build), Second&apos;s Bark Ark
+          server and Bark chain source (when you enable and use Bark), and Nostr Wallet
           Connect</strong>: <strong>Art. 6(1)(f) GDPR</strong> (legitimate interests in the
-          functionality of the wallet, Lab test networks, optional Arkade features, and Lightning
-          features you use).
+          functionality of the wallet, Lab test networks, optional Arkade and Bark features, and
+          Lightning features you use).
         </li>
         <li>
           <strong>Email correspondence with the controller</strong> (for example privacy requests):{' '}
@@ -402,7 +484,7 @@ export function PrivacyPolicyEn() {
         </li>
       </ul>
 
-      <h2>11. Recipients and categories of recipients</h2>
+      <h2>12. Recipients and categories of recipients</h2>
       <p>
         Beyond Bitboard itself as controller, personal data may — depending on how you use the
         website and the app — be processed by the following categories of recipients:
@@ -445,6 +527,12 @@ export function PrivacyPolicyEn() {
           <strong>not</strong> Bitboard.
         </li>
         <li>
+          <strong>Second (Bark):</strong> the operator of the Bark Ark server and of the block-explorer
+          service Bark uses as its chain source, for the network you use, in connection with Bark sync,
+          mailbox, sends, boarding, refreshes, offboards, and emergency exits you initiate (your browser
+          reaches these services directly, not via the hosted proxy).
+        </li>
+        <li>
           <strong>Nostr relays and Lightning operator (NWC):</strong> the Nostr relays you choose or
           that your connected Lightning wallet specifies, and the operator of that connected
           Lightning infrastructure, in connection with NWC payments and notifications.
@@ -460,19 +548,21 @@ export function PrivacyPolicyEn() {
         necessary for the purposes described above.
       </p>
 
-      <h2>12. Categories of data and storage periods</h2>
+      <h2>13. Categories of data and storage periods</h2>
       <p>
         <strong>Categories</strong> may include in particular: technical connection/access data from
         hosting (Vercel); language preference (locally in the browser); on-device wallet data (e.g. key
         material, descriptors, transaction and balance information you create or fetch); optional
         Library article favorites and reading history (locally in the wallet database); NWC
         connection data and cached Lightning information locally; Arkade SDK persistence and cached
-        Arkade balances/transactions locally; short-lived UI preferences (e.g. dismissed banners) in
+        Arkade balances/transactions locally; Bark protocol state (VTXOs, movement history, pending
+        actions and exits) locally; short-lived UI preferences (e.g. dismissed banners) in
         the browser’s <code>sessionStorage</code>; optionally a migration error report stored locally
         in OPFS (only if a schema migration has failed); data visible to or processed by Esplora
         (including <strong>/fee-estimates</strong> calls when you use on-chain Send), allowlisted fiat
         spot-ticker APIs when you use fiat denomination on mainnet, public test faucets, Arkade
-        operators and optional VTXO delegators in connection with requests you initiate, and
+        operators and optional VTXO delegators, Second&apos;s Bark services (including your IP address
+        and the Bitboard app identifier) in connection with requests you initiate, and
         NWC/Lightning third parties in connection with requests you initiate; HTTP metadata processed
         by Vercel when you use the hosted app’s <code>/api/esplora</code>, <code>/api/fiat-rates</code>,{' '}
         <code>/api/faucet</code>, or <code>/api/arkade/operator</code> proxies; and contact data
@@ -497,7 +587,7 @@ export function PrivacyPolicyEn() {
         any statutory retention obligations.
       </p>
 
-      <h2>13. International transfers (in particular USA / Vercel)</h2>
+      <h2>14. International transfers (in particular USA / Vercel)</h2>
       <p>
         Use of Vercel may involve <strong>transferring personal data to the United States</strong>.
         According to its own information, <strong>Vercel is certified under the EU-US Data Privacy
@@ -515,14 +605,14 @@ export function PrivacyPolicyEn() {
         and contractual documents for details.
       </p>
 
-      <h2>14. No automated decision-making</h2>
+      <h2>15. No automated decision-making</h2>
       <p>
         The operator does not carry out <strong>automated decision-making</strong>, including profiling, with
         legal effect or similarly significant effect on you within the meaning of{' '}
         <strong>Art. 22 GDPR</strong>.
       </p>
 
-      <h2>15. Right to lodge a complaint</h2>
+      <h2>16. Right to lodge a complaint</h2>
       <p>
         You have the right to lodge a complaint with a <strong>supervisory authority</strong>,
         in particular in the Member State of your habitual residence, place of work, or the place of
@@ -530,7 +620,7 @@ export function PrivacyPolicyEn() {
         your federal state is one example.
       </p>
 
-      <h2>16. Your rights</h2>
+      <h2>17. Your rights</h2>
       <p>
         Where personal data is processed, you generally have the following rights under the GDPR,
         including:
@@ -575,9 +665,9 @@ export function PrivacyPolicyEn() {
         settings.
       </p>
 
-      <h2>17. Version and changes to this privacy policy</h2>
+      <h2>18. Version and changes to this privacy policy</h2>
       <p>
-        <strong>Version:</strong> June 2026.
+        <strong>Version:</strong> October 2026.
       </p>
       <p>
         The operator may update this privacy policy when technical or legal requirements change. The current
