@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { proxyMarker } from 'comlink'
 
 const syncWithOperator = vi.fn()
 const scheduleBackgroundFullVtxoReconcile = vi.fn()
@@ -532,6 +533,15 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     })
 
     await expect(awaitArkadeSyncQuiescence()).resolves.toBeUndefined()
+  })
+
+  it('registers the background reconcile callback as a Comlink proxy', async () => {
+    await orchestrateArkadeSyncThenSave(syncParams)
+
+    const onFinished = setOnBackgroundFullReconcileFinished.mock.lastCall?.[0] as
+      | Record<PropertyKey, unknown>
+      | undefined
+    expect(onFinished?.[proxyMarker]).toBe(true)
   })
 
   it('background reconcile warning is replaced and cleared only when it is still current', async () => {

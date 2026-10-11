@@ -1,6 +1,6 @@
 # Wallet session context and rail reconciler
 
-Planning note. Nothing here is implemented except the stopgap activation hooks named below and most of "Related problem A".
+Planning note. Nothing here is implemented except the stopgap activation hooks named below and "Related problem A".
 
 Related:
 
@@ -186,7 +186,7 @@ Ordering constraint: Arkade aborts must still happen **before** the descriptor s
 
 Several writers read the encrypted `wallet_secrets` payload, change it in a worker, and write the whole blob back with a transform that ignores the current row (`transform: async () => blob`). A write that lands between their read and their write is lost.
 
-**Status: fixed for the Arkade and Bark workers.** The bug became visible on Signet, the first network where Arkade and Bark run side by side. Opening an Arkade session failed with "Failed to update encrypted wallet secrets after 8 CAS retries".
+**Status: fixed.** The bug became visible on Signet, the first network where Arkade and Bark run side by side. Opening an Arkade session failed with "Failed to update encrypted wallet secrets after 8 CAS retries".
 
 Two causes combined:
 
@@ -201,15 +201,9 @@ What was done:
 4. `writeEncryptedPayloadCAS`, `readEncryptedPayloadWithRevision`, and `writeEncryptedPayloadIfRevisionMatches` were removed from the host.
 5. When a rail worker is terminated, its host's detach signal aborts. A transform that will never settle then releases the critical section.
 
-Tests: `frontend/src/lib/wallet/__tests__/encrypted-wallet-secrets-host.integration.test.ts` (real SQLite), plus `does not let a same-tab writer land between read and CAS…` in `wallet-persistence.test.ts`.
+6. `resolveDescriptorWallet` keeps its read-only worker call as the fast path, with no write when the row exists. When a row must be added, `persistDescriptorWalletRowIfMissing` adds it in a CAS transform on the current payload, using the non-activating `createDescriptorWalletRowIfMissing`. `ensureSegwit0DescriptorRow` shares that helper.
 
-Still open:
-
-| Writer | File | Today |
-|--------|------|-------|
-| `resolveDescriptorWallet` | `frontend/src/lib/wallet/descriptor-wallet-manager.ts` | reads without revision, writes `transform: async () => encryptedPayloadToStore` |
-
-Fix: move the worker call inside the CAS transform, like `ensureSegwit0DescriptorRow` and `updateDescriptorWalletChangeset` already do. If the row already exists the transform returns the current blob unchanged.
+Tests: `frontend/src/lib/wallet/__tests__/encrypted-wallet-secrets-host.integration.test.ts` (real SQLite), `does not let a same-tab writer land between read and CAS…` in `wallet-persistence.test.ts`, and `keeps a payload change committed while the new descriptor row was being created` in `descriptor-wallet-manager.test.ts`.
 
 ---
 

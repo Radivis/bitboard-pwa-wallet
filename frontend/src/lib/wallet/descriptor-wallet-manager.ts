@@ -10,7 +10,9 @@ import type {
   WalletSecrets,
   WalletSecretsPayload,
 } from '@/db/wallet-persistence'
-import type { EncryptedBlobForDb } from '@/workers/crypto-api'
+import type { Kysely } from 'kysely'
+import type { Database } from '@/db/schema'
+import type { EncryptedBlobForDb, ResolveDescriptorWalletResult } from '@/workers/crypto-api'
 import type { AddressType, BitcoinNetwork } from '@/workers/crypto-types'
 import { ensureSecretsChannel } from '@/workers/secrets-channel'
 import { useCryptoStore } from '@/stores/cryptoStore'
@@ -76,22 +78,67 @@ export async function resolveDescriptorWallet(params: {
     targetAddressType,
     targetAccountId,
   })
-  if (resolveDescriptorWorkerResponse.encryptedMnemonicToStore !== null) {
+  assertNoMnemonicUpdate(resolveDescriptorWorkerResponse, 'resolveDescriptorWallet')
+  if (resolveDescriptorWorkerResponse.encryptedPayloadToStore === null) {
+    return resolveDescriptorWorkerResponse.descriptorWalletData
+  }
+  // That payload was built from the read above; add the row to the current one instead.
+  return persistDescriptorWalletRowIfMissing({
+    walletDb,
+    walletId,
+    encryptedMnemonic: encryptedBlobs.mnemonic,
+    targetNetwork,
+    targetAddressType,
+    targetAccountId,
+  })
+}
+
+function assertNoMnemonicUpdate(
+  workerResponse: ResolveDescriptorWalletResult,
+  workerMethodName: string,
+): void {
+  if (workerResponse.encryptedMnemonicToStore !== null) {
     throw new Error(
-      'resolveDescriptorWallet returned mnemonic update, which is unsupported in payload-only CAS writes',
+      `${workerMethodName} returned mnemonic update, which is unsupported in payload-only CAS writes`,
     )
   }
-  if (resolveDescriptorWorkerResponse.encryptedPayloadToStore !== null) {
-    const encryptedPayloadToStore = workerBlobToPersistence(
-      resolveDescriptorWorkerResponse.encryptedPayloadToStore,
-    )
-    await updateWalletSecretsEncryptedPayloadWithRetry({
-      walletDb,
-      walletId,
-      transform: async () => encryptedPayloadToStore,
-    })
+}
+
+/**
+ * Adds the (network, addressType, accountId) row in a CAS transform on the current payload,
+ * without replacing ACTIVE_WALLET. Returns the stored row, which may come from another writer.
+ */
+export async function persistDescriptorWalletRowIfMissing(params: {
+  walletDb: Kysely<Database>
+  walletId: number
+  encryptedMnemonic: EncryptedWalletSecretsBlob
+  targetNetwork: BitcoinNetwork
+  targetAddressType: AddressType
+  targetAccountId: number
+}): Promise<DescriptorWalletData> {
+  const { walletDb, walletId, ...rowTarget } = params
+  const { createDescriptorWalletRowIfMissing } = useCryptoStore.getState()
+  let storedRow: DescriptorWalletData | null = null
+  await updateWalletSecretsEncryptedPayloadWithRetry({
+    walletDb,
+    walletId,
+    transform: async (currentPayload) => {
+      const createRowResponse = await createDescriptorWalletRowIfMissing({
+        encryptedPayload: currentPayload,
+        ...rowTarget,
+      })
+      assertNoMnemonicUpdate(createRowResponse, 'createDescriptorWalletRowIfMissing')
+      storedRow = createRowResponse.descriptorWalletData
+      if (createRowResponse.encryptedPayloadToStore === null) {
+        return currentPayload
+      }
+      return workerBlobToPersistence(createRowResponse.encryptedPayloadToStore)
+    },
+  })
+  if (storedRow == null) {
+    throw new Error('Descriptor wallet row CAS completed without a row')
   }
-  return resolveDescriptorWorkerResponse.descriptorWalletData
+  return storedRow
 }
 
 /**

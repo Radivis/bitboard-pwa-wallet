@@ -1,3 +1,4 @@
+import { proxy } from 'comlink'
 import { getArkadeWorker } from '@/workers/arkade-factory'
 import { refreshArkadeStoreFromLoadedWasm } from '@/lib/arkade/arkade-persistence-store-sync'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
@@ -234,8 +235,10 @@ async function handleBackgroundFullVtxoReconcileFinished(
 }
 
 function ensureBackgroundFullReconcileFollowUp(): void {
-  getArkadeWorker().setOnBackgroundFullReconcileFinished((outcome) =>
-    handleBackgroundFullVtxoReconcileFinished(outcome),
+  getArkadeWorker().setOnBackgroundFullReconcileFinished(
+    proxy((outcome: BackgroundFullVtxoReconcileOutcome) =>
+      handleBackgroundFullVtxoReconcileFinished(outcome),
+    ),
   )
 }
 
