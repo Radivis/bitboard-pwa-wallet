@@ -23,6 +23,8 @@ export type BarkSyncLifecycleSnapshot = {
   spendableSats: number | null
   /** Locked sats from that same balance read. Failed syncs keep the last figure. */
   lockedSats: number | null
+  /** Exiting sats from that same balance read. Failed syncs keep the last figure. */
+  exitingSats: number | null
   lastSuccessfulSyncAt: string | null
   refreshStatus: BarkRefreshStatus
   /** Next refresh period from the last successful sync of this session. Failed syncs keep it. */
@@ -49,6 +51,7 @@ function idleBarkSyncSnapshot(): BarkSyncLifecycleSnapshot {
     errorMessage: null,
     spendableSats: null,
     lockedSats: null,
+    exitingSats: null,
     lastSuccessfulSyncAt: null,
     refreshStatus: 'idle',
     nextRefresh: null,
@@ -137,6 +140,7 @@ export function prepareBarkSyncForSessionOpen(networkMode: NetworkMode): void {
     errorMessage: null,
     spendableSats: null,
     lockedSats: null,
+    exitingSats: null,
     lastSuccessfulSyncAt: null,
     refreshStatus: 'idle',
     nextRefresh: null,
@@ -197,6 +201,7 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
       errorMessage: null,
       spendableSats: previous.spendableSats,
       lockedSats: previous.lockedSats,
+      exitingSats: previous.exitingSats,
       lastSuccessfulSyncAt: previous.lastSuccessfulSyncAt,
       refreshStatus: previous.refreshStatus,
       nextRefresh: previous.nextRefresh,
@@ -217,6 +222,7 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
         errorMessage: null,
         spendableSats: balance.spendableSats,
         lockedSats: balance.lockedSats,
+        exitingSats: balance.exitingSats,
         lastSuccessfulSyncAt: synced.lastSuccessfulSyncAt,
         refreshStatus: synced.refreshStatus ?? 'idle',
         nextRefresh: observeNextRefresh(synced),
@@ -240,6 +246,7 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
         errorMessage: userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK),
         spendableSats: kept.spendableSats,
         lockedSats: kept.lockedSats,
+        exitingSats: kept.exitingSats,
         lastSuccessfulSyncAt: kept.lastSuccessfulSyncAt,
         refreshStatus: kept.refreshStatus,
         nextRefresh: kept.nextRefresh,
@@ -277,6 +284,7 @@ export function recordBarkSpendableAfterSend(result: {
     errorMessage: null,
     spendableSats: result.spendableSats,
     lockedSats: current.lockedSats,
+    exitingSats: current.exitingSats,
     lastSuccessfulSyncAt: result.lastSuccessfulSyncAt,
     refreshStatus: current.refreshStatus,
     nextRefresh: current.nextRefresh,

@@ -93,6 +93,7 @@ export type BarkPendingAction = {
 export type BarkBalanceParts = {
   spendableSats: number
   lockedSats: number
+  exitingSats: number
 }
 
 export type BarkMovementRow = {

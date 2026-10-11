@@ -74,6 +74,7 @@ describe('bark-sync-lifecycle-orchestrator', () => {
     workerMocks.readSpendableBalance.mockResolvedValue({
       spendableSats: 50_000,
       lockedSats: 12_000,
+      exitingSats: 0,
     })
     workerMocks.listEmergencyExits.mockResolvedValue([])
     workerMocks.readPendingEmergencyClaim.mockResolvedValue(null)
@@ -91,6 +92,21 @@ describe('bark-sync-lifecycle-orchestrator', () => {
       lockedSats: 12_000,
       lastSuccessfulSyncAt: '2024-03-01T12:00:00.000Z',
       errorMessage: null,
+    })
+  })
+
+  it('stores exitingSats in lifecycle snapshot', async () => {
+    workerMocks.readSpendableBalance.mockResolvedValueOnce({
+      spendableSats: 50_000,
+      lockedSats: 12_000,
+      exitingSats: 7_500,
+    })
+    await orchestrateBarkSync({ walletId: 1, networkMode: 'signet' })
+
+    expect(getBarkSyncLifecycleSnapshot()).toMatchObject({
+      spendableSats: 50_000,
+      lockedSats: 12_000,
+      exitingSats: 7_500,
     })
   })
 

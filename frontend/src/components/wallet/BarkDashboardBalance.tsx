@@ -37,6 +37,7 @@ export function BarkDashboardBalance() {
 
   const spendableSats = syncSnapshot.spendableSats
   const lockedSats = syncSnapshot.lockedSats ?? 0
+  const exitingSats = syncSnapshot.exitingSats ?? 0
   const totalSats = spendableSats == null ? null : spendableSats + lockedSats
   const isSyncing = syncSnapshot.syncPhase === 'syncing' || barkManualSync.isPending
   const showEstablishingSession =
@@ -95,7 +96,7 @@ export function BarkDashboardBalance() {
             data-testid="dashboard-bark-balance-amount"
           />
         ) : null}
-        {spendableSats != null && lockedSats > 0 ? (
+        {spendableSats != null && (lockedSats > 0 || exitingSats > 0) ? (
           <div
             className="space-y-1 text-sm text-muted-foreground"
             data-testid="dashboard-bark-balance-subbalances"
@@ -107,19 +108,36 @@ export function BarkDashboardBalance() {
                 showFiatLayout={false}
                 btcPriceInFiat={null}
                 currency={defaultFiatCurrency}
+                isDetail
                 data-testid="dashboard-bark-balance-spendable"
               />
             </div>
-            <div className="flex flex-wrap items-baseline gap-2">
-              <span>Locked</span>
-              <FiatBtcAmountDisplay
-                amountSats={lockedSats}
-                showFiatLayout={false}
-                btcPriceInFiat={null}
-                currency={defaultFiatCurrency}
-                data-testid="dashboard-bark-balance-locked"
-              />
-            </div>
+            {lockedSats > 0 ? (
+              <div className="flex flex-wrap items-baseline gap-2">
+                <span>Locked</span>
+                <FiatBtcAmountDisplay
+                  amountSats={lockedSats}
+                  showFiatLayout={false}
+                  btcPriceInFiat={null}
+                  currency={defaultFiatCurrency}
+                  isDetail
+                  data-testid="dashboard-bark-balance-locked"
+                />
+              </div>
+            ) : null}
+            {exitingSats > 0 ? (
+              <div className="flex flex-wrap items-baseline gap-2">
+                <span>Exiting</span>
+                <FiatBtcAmountDisplay
+                  amountSats={exitingSats}
+                  showFiatLayout={false}
+                  btcPriceInFiat={null}
+                  currency={defaultFiatCurrency}
+                  isDetail
+                  data-testid="dashboard-bark-balance-exiting"
+                />
+              </div>
+            ) : null}
           </div>
         ) : null}
         <BarkPendingActionBanner />
