@@ -513,6 +513,10 @@ const cryptoService = {
     return mapWireBalanceToDomain(wire as WireBalanceInfo);
   },
 
+  async getLocalChainTipHeight(): Promise<number> {
+    return invokeWasmCrypto((wasmModule) => wasmModule.get_local_chain_tip_height());
+  },
+
   async exportChangeset(): Promise<string> {
     return invokeWasmCrypto((wasmModule) => wasmModule.export_changeset());
   },

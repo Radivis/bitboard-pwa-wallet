@@ -5,6 +5,7 @@ import type {
   BarkEmergencyExitProgress,
   BarkEmergencyExitRow,
 } from '@/workers/bark-api'
+import { errorMessage } from '@/lib/shared/utils'
 import { formatSats } from '@/lib/wallet/bitcoin-utils'
 import type { PendingEmergencyClaim } from '@/lib/wallet/wallet-domain-types'
 
@@ -58,8 +59,15 @@ export type ClaimedBarkEmergencyExit = {
   observed: boolean
 }
 
-function errorText(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
+/**
+ * Text after `bark_cpfp_insufficient_funds: `, or null for other errors. The marker is
+ * not at the start because `CryptoError::Transaction` prefixes `Transaction error: `.
+ */
+function insufficientFundsDetail(err: unknown): string | null {
+  const marker = `${BARK_CPFP_INSUFFICIENT_FUNDS}: `
+  const message = errorMessage(err)
+  const markerIndex = message.indexOf(marker)
+  return markerIndex === -1 ? null : message.slice(markerIndex + marker.length)
 }
 
 export function barkEmergencyExitChildrenWaitForFunds(
@@ -70,12 +78,12 @@ export function barkEmergencyExitChildrenWaitForFunds(
 
 /** The bumper wallet has no confirmed coin left for this Pay-to-Anchor child. */
 export function isBarkCpfpInsufficientFundsError(err: unknown): boolean {
-  return errorText(err).startsWith(BARK_CPFP_INSUFFICIENT_FUNDS)
+  return insufficientFundsDetail(err) != null
 }
 
 /** Even pending coins cannot pay for the children that are waiting. */
 export function isBarkCpfpUnfundableError(err: unknown): boolean {
-  return errorText(err).startsWith(BARK_CPFP_UNFUNDABLE)
+  return errorMessage(err).startsWith(BARK_CPFP_UNFUNDABLE)
 }
 
 /**
@@ -83,10 +91,10 @@ export function isBarkCpfpUnfundableError(err: unknown): boolean {
  * Zero when the error does not name an amount, so it never causes a false unfundable error.
  */
 export function barkCpfpShortfallNeededSats(err: unknown): number {
-  const neededPrefix = `${BARK_CPFP_INSUFFICIENT_FUNDS}: ${BARK_CPFP_NEEDED_SATS_LABEL}=`
-  const message = errorText(err)
-  if (!message.startsWith(neededPrefix)) return 0
-  const neededSats = Number(message.slice(neededPrefix.length).split(';', 1)[0])
+  const neededLabel = `${BARK_CPFP_NEEDED_SATS_LABEL}=`
+  const detail = insufficientFundsDetail(err)
+  if (detail == null || !detail.startsWith(neededLabel)) return 0
+  const neededSats = Number(detail.slice(neededLabel.length).split(';', 1)[0])
   return Number.isSafeInteger(neededSats) && neededSats > 0 ? neededSats : 0
 }
 
@@ -148,7 +156,7 @@ async function progressBarkEmergencyExitsOnce(
     if (providedChildren > 0) {
       await deps.progress().catch(() => undefined)
     }
-    throw err instanceof Error ? err : new Error(errorText(err))
+    throw err instanceof Error ? err : new Error(errorMessage(err))
   }
   if (providedChildren > 0) {
     await deps.progress()

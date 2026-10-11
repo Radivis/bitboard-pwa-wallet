@@ -16,6 +16,7 @@ import {
   emergencyExitStartBlocked,
 } from '@/lib/bark/bark-emergency-exit'
 import { barkEmergencyExitFundingStatusFor } from '@/lib/bark/bark-emergency-exit-funding-status'
+import { catchUpOnchainWalletForBarkExit } from '@/lib/bark/bark-emergency-exit-onchain-catch-up-live'
 import {
   barkEmergencyExitClaimDeps,
   barkEmergencyExitReviewDeps,
@@ -236,6 +237,7 @@ export function useBarkEmergencyExitPage() {
     if (proceedAutomatically) return
     setBusyAction('progress')
     try {
+      await catchUpOnchainWalletForBarkExit(networkMode)
       const outcome = await runBarkEmergencyExitProgress(exitScope, feeRateSatPerVb)
       if (!barkEmergencyExitChildrenWaitForFunds(outcome)) {
         toast.success('Emergency exit progressed.')

@@ -1,12 +1,14 @@
+import {
+  catchUpOnchainWalletForBarkExit,
+  fetchBarkExitChainTip,
+} from '@/lib/bark/bark-emergency-exit-onchain-catch-up-live'
 import { runBarkEmergencyExitProgress } from '@/lib/bark/bark-emergency-exit-progress-deps'
 import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
 import { presetRatesForNetwork } from '@/hooks/useEsploraFeePresets'
 import { appQueryClient } from '@/lib/shared/app-query-client'
 import { userFacingErrorMessage } from '@/lib/shared/utils'
-import { fetchEsploraChainTip, getEsploraUrl } from '@/lib/wallet/bitcoin-utils'
 import { getBarkLoadLifecycleSnapshot, subscribeBarkLoadLifecycle } from '@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
-import { loadCustomEsploraUrl } from '@/lib/wallet/wallet-utils'
 import type { BarkRailNetwork } from '@/lib/wallet/wallet-domain-types'
 import {
   IDLE_BARK_EMERGENCY_EXIT_AUTOMATION_ACTIVITY,
@@ -86,7 +88,8 @@ export async function watchBarkEmergencyExitTips(deps: {
   readGate: () => Promise<BarkEmergencyExitAutomationSessionGate>
   fetchTip: () => Promise<BarkEmergencyExitTip>
   listExitCount: () => Promise<number>
-  progress: () => Promise<void>
+  /** `observedTip` is null when this poll could not read the tip. */
+  progress: (observedTip: BarkEmergencyExitTip | null) => Promise<void>
   wait: (signal: AbortSignal) => Promise<void>
   afterProgress?: () => Promise<void>
   onListed?: () => Promise<void>
@@ -160,7 +163,7 @@ export async function watchBarkEmergencyExitTips(deps: {
       let progressed = false
       try {
         if (!justBecameActive) deps.onProgressStart?.()
-        await deps.progress()
+        await deps.progress(nextTip)
         progressed = true
         justBecameActive = false
         if (nextTip != null) {
@@ -294,9 +297,9 @@ export async function syncBarkEmergencyExitAutomation(
     await watchBarkEmergencyExitTips({
       signal: abort.signal,
       readGate: () => readPersistedSessionGate(scope),
-      fetchTip: () => fetchTipForNetwork(scope.networkMode),
+      fetchTip: () => fetchBarkExitChainTip(scope.networkMode),
       listExitCount: async () => (await getBarkWorker().listEmergencyExits()).length,
-      progress: () => progressOpenEmergencyExits(scope),
+      progress: (observedTip) => progressOpenEmergencyExits(scope, observedTip),
       wait: (signal) => waitForBarkEmergencyExitTipPoll(scope.networkMode, signal),
       onListed: () => invalidateBarkEmergencyExitQueries(scope),
       afterProgress: () => invalidateBarkEmergencyExitQueries(scope),
@@ -367,18 +370,11 @@ async function readPersistedSessionGate(
   return { ...readLiveSessionGate(scope), proceedAutomatically }
 }
 
-async function fetchTipForNetwork(networkMode: BarkRailNetwork): Promise<BarkEmergencyExitTip> {
-  const customUrl = await loadCustomEsploraUrl(networkMode)
-  const esploraUrl = getEsploraUrl(networkMode, customUrl)
-  if (esploraUrl.length === 0) {
-    throw new Error('Esplora URL is missing')
-  }
-  return fetchEsploraChainTip(esploraUrl)
-}
-
 async function progressOpenEmergencyExits(
   scope: BarkEmergencyExitAutomationScope,
+  observedTip: BarkEmergencyExitTip | null,
 ): Promise<void> {
+  await catchUpOnchainWalletForBarkExit(scope.networkMode, observedTip?.height)
   const feeRates = await presetRatesForNetwork(scope.networkMode)
   await runBarkEmergencyExitProgress(scope, feeRates.High)
 }

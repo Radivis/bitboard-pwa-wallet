@@ -87,6 +87,12 @@ const spendableVtxo: BarkVtxoRow = {
 const syncAutomation = vi.hoisted(() => vi.fn(async () => undefined))
 const stopAutomation = vi.hoisted(() => vi.fn())
 
+const catchUpOnchainWallet = vi.hoisted(() => vi.fn(async () => undefined))
+
+vi.mock('@/lib/bark/bark-emergency-exit-onchain-catch-up-live', () => ({
+  catchUpOnchainWalletForBarkExit: (...args: unknown[]) => catchUpOnchainWallet(...args),
+}))
+
 vi.mock('@/lib/bark/bark-emergency-exit-automation', () => ({
   syncBarkEmergencyExitAutomation: (...args: unknown[]) => syncAutomation(...args),
   stopBarkEmergencyExitAutomation: (...args: unknown[]) => stopAutomation(...args),
@@ -204,6 +210,7 @@ describe('BarkEmergencyExitPage', () => {
     useBarkEmergencyExitAutomationStore.setState(IDLE_BARK_EMERGENCY_EXIT_AUTOMATION_ACTIVITY)
     syncAutomation.mockClear()
     stopAutomation.mockClear()
+    catchUpOnchainWallet.mockReset().mockResolvedValue(undefined)
     cryptoWorker.getNewAddress.mockClear()
     cryptoWorker.signP2aCpfpChild.mockReset().mockResolvedValue('child')
     cryptoWorker.applyUnconfirmedFundingTx.mockReset().mockResolvedValue(undefined)
@@ -429,7 +436,7 @@ describe('BarkEmergencyExitPage', () => {
 
     const banner = await screen.findByTestId('bark-emergency-exit-funding-banner')
     expect(banner).toHaveTextContent(
-      'Broadcasting 1 of 2 transactions. The rest are waiting for confirmed funds.',
+      'Broadcasting 1 of 2 exit transactions. 1 is waiting for confirmed funds.',
     )
     expect(graph.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(graph.closest('[data-slot="card"]')).toContainElement(banner)
@@ -480,6 +487,29 @@ describe('BarkEmergencyExitPage', () => {
       expect(toast.success).toHaveBeenCalledWith('Emergency exit progressed.')
     })
     expect(screen.queryByTestId('bark-emergency-exit-funding-banner')).not.toBeInTheDocument()
+  })
+
+  it('BARK-EMG-23 catches the on-chain wallet up to the chain tip before a manual progress', async () => {
+    const events: string[] = []
+    catchUpOnchainWallet.mockImplementation(async () => {
+      events.push('catch-up')
+    })
+    barkWorker.progressEmergencyExits.mockImplementation(async () => {
+      events.push('progress')
+      return { requests: [] }
+    })
+    barkWorker.listEmergencyExits.mockResolvedValue([
+      exitRow({ vtxoId: 'vtxo-1', state: 'processing', cancelable: false }),
+    ])
+    renderWithProviders(<BarkEmergencyExitPage />)
+
+    fireEvent.click(await screen.findByTestId('bark-emergency-exit-progress'))
+
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith('Emergency exit progressed.')
+    })
+    expect(catchUpOnchainWallet).toHaveBeenCalledWith('signet')
+    expect(events[0]).toBe('catch-up')
   })
 
   it('BARK-EMG-15 does not toast success when start marks nothing', async () => {

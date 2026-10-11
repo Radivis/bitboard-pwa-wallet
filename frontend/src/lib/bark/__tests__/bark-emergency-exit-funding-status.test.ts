@@ -136,9 +136,31 @@ describe('barkEmergencyExitFundingStatusFor', () => {
 })
 
 describe('formatBarkEmergencyExitFundingBanner', () => {
-  it('BARK-EMG-21 names how many transactions are broadcasting and that the rest wait for funds', () => {
-    expect(
-      formatBarkEmergencyExitFundingBanner({ ...SIGNET_WALLET, providedChildren: 1, requestedChildren: 3 }),
-    ).toBe('Broadcasting 1 of 3 transactions. The rest are waiting for confirmed funds.')
+  function bannerFor(providedChildren: number, requestedChildren: number): string {
+    return formatBarkEmergencyExitFundingBanner({ ...SIGNET_WALLET, providedChildren, requestedChildren })
+  }
+
+  it('BARK-EMG-21 names how many exit transactions are broadcasting and how many wait for funds', () => {
+    expect(bannerFor(1, 3)).toBe(
+      'Broadcasting 1 of 3 exit transactions. 2 are waiting for confirmed funds.',
+    )
+  })
+
+  it('BARK-EMG-21 uses the singular when one exit transaction waits after a partial broadcast', () => {
+    expect(bannerFor(2, 3)).toBe(
+      'Broadcasting 2 of 3 exit transactions. 1 is waiting for confirmed funds.',
+    )
+  })
+
+  it('BARK-EMG-21 explains the wait for change when no exit transaction could be broadcast', () => {
+    expect(bannerFor(0, 1)).toBe(
+      '1 exit transaction is waiting for confirmed funds. Change from earlier exit transactions must confirm first.',
+    )
+  })
+
+  it('BARK-EMG-21 uses the plural when several exit transactions wait and none could be broadcast', () => {
+    expect(bannerFor(0, 2)).toBe(
+      '2 exit transactions are waiting for confirmed funds. Change from earlier exit transactions must confirm first.',
+    )
   })
 })

@@ -214,6 +214,33 @@ describe('progressBarkEmergencyExits', () => {
     expect(deps.onchainTotalSats).not.toHaveBeenCalled()
   })
 
+  it('BARK-EMG-21 skips a shortfall the crypto worker reports through Comlink', async () => {
+    const deps = progressDeps({
+      signChild: vi.fn(async (request: BarkEmergencyCpfpRequest) => {
+        if (request.parentTxid === 'parent-1') return 'child-1'
+        throw workerShortfallError(124)
+      }),
+    })
+
+    await expect(progressBarkEmergencyExits(deps, 1)).resolves.toEqual({
+      requestedChildren: 3,
+      providedChildren: 1,
+    })
+  })
+
+  it('BARK-EMG-22 sums the needed sats of shortfalls the crypto worker reports through Comlink', async () => {
+    const deps = progressDeps({
+      signChild: vi.fn(async () => {
+        throw workerShortfallError(124)
+      }),
+      onchainTotalSats: vi.fn(async () => 0),
+    })
+
+    await expect(progressBarkEmergencyExits(deps, 1)).rejects.toThrow(
+      /^bark_cpfp_unfundable: Waiting exit transactions need at least 372 sat/,
+    )
+  })
+
   it('rethrows a signer error that is not a funding shortfall', async () => {
     const deps = progressDeps({
       signChild: vi.fn(async () => {
@@ -231,6 +258,16 @@ describe('progressBarkEmergencyExits', () => {
 function shortfallError(neededSats: number): Error {
   return new Error(
     `bark_cpfp_insufficient_funds: needed_sats=${neededSats}; Insufficient funds: 0 sat available of ${neededSats} sat needed`,
+  )
+}
+
+/** `CryptoError::Transaction` as `rethrowWasmCryptoErrorForComlink` forwards it to the main thread. */
+function workerShortfallError(neededSats: number): Error {
+  return new Error(
+    JSON.stringify({
+      code: 'transaction',
+      message: `Transaction error: bark_cpfp_insufficient_funds: needed_sats=${neededSats}; Insufficient funds: 0 BTC available of 0.00000124 BTC needed`,
+    }),
   )
 }
 

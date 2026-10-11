@@ -410,7 +410,7 @@ feature:
         description: Progress never replaces an exit package whose child is already broadcast
         implemented_by: bitboard-bark/src/emergency_exit.rs
       - id: BARK-EMG-21
-        description: When confirmed coins run out, progress submits the children it can fund, does not error, and shows Broadcasting N of M below the exit tree until a run funds every request
+        description: When confirmed coins run out, progress submits the children it can fund, does not error, and shows a banner below the exit tree until a run funds every request. The banner reads "Broadcasting N of M exit transactions" after a partial run, and says that change from earlier exit transactions must confirm first when none could be broadcast
         implemented_by:
           - frontend/src/lib/bark/__tests__/perform-bark-emergency-exit.test.ts
           - frontend/src/lib/bark/__tests__/bark-emergency-exit-funding-status.test.ts
@@ -421,6 +421,13 @@ feature:
           - crypto/tests/p2a_cpfp_tests.rs
           - frontend/src/lib/bark/__tests__/perform-bark-emergency-exit.test.ts
           - frontend/src/lib/bark/__tests__/bark-emergency-exit-funding-status.test.ts
+          - frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
+      - id: BARK-EMG-23
+        description: Before automatic progress on a new tip and before a manual Progress press, the on-chain wallet syncs until its local chain has reached the Esplora tip, so change confirmed in that block can fund the next children. A wallet still behind after a sync is synced again, up to a fixed limit. A failed tip read or sync does not block progress
+        implemented_by:
+          - crypto/tests/wallet_tests.rs
+          - frontend/src/lib/bark/__tests__/bark-emergency-exit-onchain-catch-up.test.ts
+          - frontend/src/lib/bark/__tests__/bark-emergency-exit-automation.test.ts
           - frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
   pages:
     - BarkManagement:
@@ -478,7 +485,7 @@ feature:
           - Full-page Bark session loading or error screen while the session is not ready
         requirements:
           - Contracts BARK-EMG-02 through BARK-EMG-08
-          - Contracts BARK-EMG-10 through BARK-EMG-22
+          - Contracts BARK-EMG-10 through BARK-EMG-23
           - Contracts BARK-SESS-03 and BARK-SESS-04
           - Shown only when isBarkEnabled and the network is signet or mainnet
           - Progress is a button, and a successful Bark sync also progresses exits that are already started

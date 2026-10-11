@@ -281,6 +281,12 @@ pub fn get_balance() -> Result<JsValue, JsValue> {
     Ok(serde_wasm_bindgen::to_value(&balance)?)
 }
 
+/// Height of the newest block the active wallet has synced.
+#[wasm_bindgen]
+pub fn get_local_chain_tip_height() -> Result<u32, JsValue> {
+    with_wallet(wallet::local_chain_tip_height)
+}
+
 /// Export the full accumulated changeset as a JSON string.
 ///
 /// This includes all changes since the wallet was created or loaded,

@@ -276,6 +276,8 @@ export interface CryptoService {
     params: LabEntityBuildAndSignTransactionParams,
   ): Promise<unknown>;
   getBalance(): Promise<BalanceInfo>;
+  /** Height of the newest block the active wallet has synced. */
+  getLocalChainTipHeight(): Promise<number>;
   exportChangeset(): Promise<string>;
 
   syncWallet(esploraUrl: string): Promise<SyncResult>;
