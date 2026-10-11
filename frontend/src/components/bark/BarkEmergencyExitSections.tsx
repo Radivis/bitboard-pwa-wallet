@@ -21,12 +21,14 @@ export const BARK_EMERGENCY_EXIT_AUTOMATION_NOTE =
 
 export function BarkEmergencyExitTreeCard({
   nodes,
+  exitRows,
   emptySelection,
   errorMessage,
   vtxoRows,
   fundingStatus,
 }: {
   nodes: BarkExitGraphNode[] | undefined
+  exitRows: BarkEmergencyExitRow[]
   emptySelection: boolean
   errorMessage: string | null
   vtxoRows: BarkVtxoRow[]
@@ -40,6 +42,7 @@ export function BarkEmergencyExitTreeCard({
       <CardContent className="space-y-3">
         <BarkExitTreeGraph
           nodes={nodes}
+          exitRows={exitRows}
           emptySelection={emptySelection}
           errorMessage={errorMessage}
           vtxoRows={vtxoRows}

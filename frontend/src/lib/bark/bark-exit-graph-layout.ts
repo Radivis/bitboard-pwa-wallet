@@ -19,7 +19,13 @@ import {
   UNILATERAL_EXIT_NODE_DIAMETER_PX,
   type UnilateralExitLayoutDirection,
 } from '@/lib/arkade/unilateral-exit-topology'
+import {
+  resolveExitCoinStage,
+  type ExitCoinStage,
+} from '@/lib/arkade/unilateral-exit-node-icons'
 import type {
+  BarkEmergencyExitRow,
+  BarkEmergencyExitState,
   BarkExitGraphNode,
   BarkExitGraphNodeStatus,
   BarkExitGraphTxType,
@@ -48,8 +54,32 @@ export type BarkExitTreeNodeData = {
   isOnExitPath: boolean
   isLeaf: boolean
   leafVtxoCount: number
+  coinStage: ExitCoinStage
   isFocused: boolean
   layoutDirection: UnilateralExitLayoutDirection
+}
+
+const BARK_EXIT_TIMELOCK_ELAPSED_STATES: ReadonlySet<BarkEmergencyExitState> = new Set([
+  'claimable',
+  'claimInProgress',
+  'claimed',
+])
+
+/** Coin badge stage for a leaf tx: Bark's `awaitingDelta` is the exit timelock, `claimable` its end. */
+export function resolveBarkLeafCoinStage(params: {
+  leafVtxoIds: string[]
+  status: BarkExitGraphNodeStatus
+  exitRows: BarkEmergencyExitRow[]
+}): ExitCoinStage {
+  const trackedStates = params.exitRows
+    .filter((row) => params.leafVtxoIds.includes(row.vtxoId))
+    .map((row) => row.state)
+  return resolveExitCoinStage({
+    trackedVtxosPastTimelock: trackedStates.map((state) =>
+      BARK_EXIT_TIMELOCK_ELAPSED_STATES.has(state),
+    ),
+    txConfirmed: params.status === 'confirmed' || trackedStates.includes('awaitingDelta'),
+  })
 }
 
 export function barkExitPathTxids(nodes: BarkExitGraphNode[]): Set<string> {
@@ -85,8 +115,9 @@ export function layoutBarkExitGraph(params: {
   nodes: BarkExitGraphNode[]
   layoutDirection: UnilateralExitLayoutDirection
   focusedNodeId?: string | null
+  exitRows?: BarkEmergencyExitRow[]
 }): { nodes: Node<BarkExitTreeNodeData>[]; edgePaths: BarkExitGraphEdgePath[] } {
-  const { nodes: graphNodes, layoutDirection, focusedNodeId = null } = params
+  const { nodes: graphNodes, layoutDirection, focusedNodeId = null, exitRows = [] } = params
   if (graphNodes.length === 0) {
     return { nodes: [], edgePaths: [] }
   }
@@ -133,6 +164,11 @@ export function layoutBarkExitGraph(params: {
         isOnExitPath: pathTxids.has(txid),
         isLeaf: graphNode.leafVtxoIds.length > 0,
         leafVtxoCount: graphNode.leafVtxoIds.length,
+        coinStage: resolveBarkLeafCoinStage({
+          leafVtxoIds: graphNode.leafVtxoIds,
+          status: graphNode.status,
+          exitRows,
+        }),
         isFocused: focusedNodeId === txid,
         layoutDirection,
       },

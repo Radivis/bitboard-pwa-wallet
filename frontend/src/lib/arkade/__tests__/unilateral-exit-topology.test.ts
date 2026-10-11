@@ -134,7 +134,7 @@ describe('unilateral-exit-topology helpers', () => {
 
     expect(nodes).toHaveLength(3)
     expect(nodes.find((node) => node.id === 'cc')?.data.exitableVtxoCount).toBe(1)
-    expect(nodes.find((node) => node.id === 'cc')?.data.hostsUnrolled).toBe(false)
+    expect(nodes.find((node) => node.id === 'cc')?.data.hostCoinStage).toBe('exitable')
     expect(nodes.find((node) => node.id === 'aa')?.data.exitableVtxoCount).toBe(0)
     expect(nodes.find((node) => node.id === 'bb')?.data.exitableVtxoCount).toBe(0)
     expect(edgePaths).toHaveLength(2)
@@ -225,25 +225,44 @@ describe('unilateral-exit-topology helpers', () => {
     expect(nodes.find((node) => node.id === 'leaf')?.data.exitableVtxoCount).toBe(2)
   })
 
-  it('layoutUnilateralExitGraph marks unrolled host VTXOs with hostsUnrolled', () => {
+  it('layoutUnilateralExitGraph sets hostCoinStage from host outpoints and VTXO exit children', () => {
     const topology: ArkadeUnilateralExitTopology = {
       ...sampleTopology,
       hostOutpoints: [
+        { txid: 'bb', vout: 0, amountSats: 5_000, isUnrolled: false, expiresAt: FAR_FUTURE_EXPIRES_AT },
         { txid: 'cc', vout: 0, amountSats: 25_000, isUnrolled: true, expiresAt: FAR_FUTURE_EXPIRES_AT },
         { txid: 'cc', vout: 1, amountSats: 10_000, isUnrolled: true, expiresAt: FAR_FUTURE_EXPIRES_AT },
       ],
     }
-    const { nodes } = layoutUnilateralExitGraph({
+    const layoutParams = {
       topology,
       selectedLeafOutpoints: [],
       nodeStatuses: [],
       inProgressOverlay: null,
-      layoutDirection: 'TB',
-    })
+      layoutDirection: 'TB' as const,
+    }
 
-    expect(nodes.find((node) => node.id === 'cc')?.data.exitableVtxoCount).toBe(2)
-    expect(nodes.find((node) => node.id === 'cc')?.data.hostsUnrolled).toBe(true)
-    expect(nodes.find((node) => node.id === 'bb')?.data.hostsUnrolled).toBe(false)
+    const timelocked = layoutUnilateralExitGraph(layoutParams).nodes
+    expect(timelocked.find((node) => node.id === 'cc')?.data.exitableVtxoCount).toBe(2)
+    expect(timelocked.find((node) => node.id === 'cc')?.data.hostCoinStage).toBe('timelocked')
+    expect(timelocked.find((node) => node.id === 'bb')?.data.hostCoinStage).toBe('exitable')
+
+    const claimable = layoutUnilateralExitGraph({
+      ...layoutParams,
+      vtxoExitSnapshots: {
+        'cc:0': { childId: 'vtxoExit:cc:0', txid: 'cc', vout: 0, phase: 'complete_ready', machineState: 'complete_ready' },
+        'cc:1': { childId: 'vtxoExit:cc:1', txid: 'cc', vout: 1, phase: 'complete_ready', machineState: 'complete_ready' },
+      },
+    }).nodes
+    expect(claimable.find((node) => node.id === 'cc')?.data.hostCoinStage).toBe('claimable')
+
+    const firstConfirmation = layoutUnilateralExitGraph({
+      ...layoutParams,
+      nodeStatuses: [{ txid: 'bb', confirmations: 1, status: 'confirmed' }],
+    }).nodes
+    expect(firstConfirmation.find((node) => node.id === 'bb')?.data.hostCoinStage).toBe(
+      'timelocked',
+    )
   })
 
   it('layoutUnilateralExitGraph attaches overlay only to in-progress nodes', () => {

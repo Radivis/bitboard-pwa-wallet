@@ -616,7 +616,7 @@ describe('BarkEmergencyExitPage', () => {
     expect(screen.getByTestId('bark-exit-tree-graph')).toBeInTheDocument()
   })
 
-  it('shows a leaf icon and coin badge, a tree icon on the ancestor, and the unrolled coin when confirmed', async () => {
+  it('shows a leaf icon and coin badge, a tree icon on the ancestor, and the timelocked coin when confirmed', async () => {
     barkWorker.exitTopology.mockResolvedValue({
       nodes: [
         ...exitTree.nodes,
@@ -638,7 +638,7 @@ describe('BarkEmergencyExitPage', () => {
     const leaf = await screen.findByTestId('bark-exit-tree-node-leaf-txid')
     expect(leaf).toHaveAttribute('data-icon', 'leaf')
     expect(screen.getByTestId('bark-exit-tree-vtxo-count-leaf-txid')).toBeInTheDocument()
-    expect(screen.queryByTestId('bark-exit-tree-unrolled-vtxo-count-leaf-txid')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('bark-exit-tree-timelocked-vtxo-count-leaf-txid')).not.toBeInTheDocument()
 
     const parent = screen.getByTestId('bark-exit-tree-node-parent-txid')
     expect(parent).toHaveAttribute('data-icon', 'tree')
@@ -651,14 +651,46 @@ describe('BarkEmergencyExitPage', () => {
     fireEvent.click(checkpoint)
     expect(screen.getByTestId('bark-exit-tree-detail-status')).toHaveTextContent('Checkpoint')
     expect(screen.queryByTestId('bark-exit-tree-vtxo-count-parent-txid')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('bark-exit-tree-unrolled-vtxo-count-parent-txid')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('bark-exit-tree-timelocked-vtxo-count-parent-txid')).not.toBeInTheDocument()
 
     const confirmed = screen.getByTestId('bark-exit-tree-node-confirmed-leaf')
     expect(confirmed).toHaveAttribute('data-icon', 'leaf')
-    expect(screen.getByTestId('bark-exit-tree-unrolled-vtxo-count-confirmed-leaf')).toHaveTextContent(
-      '2×',
-    )
+    expect(
+      await screen.findByTestId('bark-exit-tree-timelocked-vtxo-count-confirmed-leaf'),
+    ).toHaveTextContent('2×')
     expect(screen.queryByTestId('bark-exit-tree-vtxo-count-confirmed-leaf')).not.toBeInTheDocument()
+    expect(
+      screen.queryByTestId('bark-exit-tree-claimable-vtxo-count-confirmed-leaf'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows the claimable coin badge once every exit on the leaf is claimable', async () => {
+    barkWorker.exitTopology.mockResolvedValue({
+      nodes: [
+        ...exitTree.nodes,
+        {
+          txid: 'claimable-leaf',
+          spends: ['parent-txid'],
+          leafVtxoIds: ['vtxo-1', 'vtxo-2'],
+          status: 'confirmed',
+          needsChild: false,
+          waitingOnTxids: [],
+          txType: 'tree',
+        },
+      ],
+    })
+    barkWorker.listEmergencyExits.mockResolvedValue([
+      exitRow({ vtxoId: 'vtxo-1', state: 'claimable', cancelable: false }),
+      exitRow({ vtxoId: 'vtxo-2', state: 'claimable', cancelable: false }),
+    ])
+    renderWithProviders(<BarkEmergencyExitPage />)
+
+    expect(
+      await screen.findByTestId('bark-exit-tree-claimable-vtxo-count-claimable-leaf'),
+    ).toHaveTextContent('2×')
+    expect(
+      screen.queryByTestId('bark-exit-tree-timelocked-vtxo-count-claimable-leaf'),
+    ).not.toBeInTheDocument()
   })
 
   it('BARK-EMG-12 shows the needs-child badge and not a child node', async () => {

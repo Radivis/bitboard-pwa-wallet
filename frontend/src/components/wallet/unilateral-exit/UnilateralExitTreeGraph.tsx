@@ -11,8 +11,6 @@ import '@xyflow/react/dist/style.css'
 import {
   Check,
   Cog,
-  Coins,
-  HandCoins,
   Loader2,
   Megaphone,
   Pickaxe,
@@ -40,6 +38,8 @@ import type {
   ArkadeVtxoOutpoint,
 } from '@/workers/arkade-api'
 import { cn } from '@/lib/shared/utils'
+import type { VtxoExitChildSnapshotMap } from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit-machine-types'
+import { ExitTreeCoinBadge } from '@/components/wallet/unilateral-exit/ExitTreeCoinBadge'
 import { UnilateralExitTreeEdgesOverlay } from '@/components/wallet/unilateral-exit/UnilateralExitTreeEdgesOverlay'
 
 interface UnilateralExitTreeGraphProps {
@@ -47,6 +47,7 @@ interface UnilateralExitTreeGraphProps {
   topology: ArkadeUnilateralExitTopology | undefined
   selectedLeafOutpoints: ArkadeVtxoOutpoint[]
   nodeStatuses: ArkadeUnilateralExitNodeStatus[]
+  vtxoExitSnapshots: VtxoExitChildSnapshotMap
   inProgressOverlay: UnilateralExitInProgressOverlayKind | null
   proceedingAutomatically?: boolean
   focusedNodeId: string | null
@@ -132,41 +133,6 @@ function UnilateralExitInProgressBadge({
   )
 }
 
-function UnilateralExitHostVtxoBadge({
-  txid,
-  count,
-  hostsUnrolled,
-}: {
-  txid: string
-  count: number
-  hostsUnrolled: boolean
-}) {
-  if (count <= 0) {
-    return null
-  }
-  const OverlayIcon = hostsUnrolled ? HandCoins : Coins
-  const vtxoNoun = count === 1 ? 'VTXO' : 'VTXOs'
-  const overlayLabel = hostsUnrolled
-    ? `${count} unrolled ${vtxoNoun}`
-    : `${count} exitable ${vtxoNoun}`
-  const testIdPrefix = hostsUnrolled
-    ? 'unilateral-exit-unrolled-vtxo-count'
-    : 'unilateral-exit-vtxo-count'
-
-  return (
-    <div
-      className="absolute left-1/2 top-[calc(50%+10px)] flex -translate-x-1/2 items-center gap-0.5 rounded-full bg-background px-0.5 text-amber-600 shadow-sm"
-      aria-label={overlayLabel}
-      data-testid={`${testIdPrefix}-${txid.slice(0, 8)}`}
-    >
-      {count > 1 && (
-        <span className="text-[10px] font-semibold leading-none">{count}×</span>
-      )}
-      <OverlayIcon className="size-3" aria-hidden />
-    </div>
-  )
-}
-
 function UnilateralExitTreeNode({
   data,
 }: NodeProps<Node<UnilateralExitTreeNodeData>>) {
@@ -194,10 +160,11 @@ function UnilateralExitTreeNode({
       aria-label={`${data.txType} node`}
     >
       <Icon className="size-5" aria-hidden />
-      <UnilateralExitHostVtxoBadge
-        txid={data.txid}
+      <ExitTreeCoinBadge
         count={data.exitableVtxoCount}
-        hostsUnrolled={data.hostsUnrolled}
+        stage={data.hostCoinStage}
+        testIdPrefix="unilateral-exit"
+        testIdSuffix={data.txid.slice(0, 8)}
       />
       {data.status === 'confirmed' && (
         <Check
@@ -235,6 +202,7 @@ function UnilateralExitTreeGraphCanvas({
   topology,
   selectedLeafOutpoints,
   nodeStatuses,
+  vtxoExitSnapshots,
   inProgressOverlay,
   proceedingAutomatically,
   focusedNodeId,
@@ -261,11 +229,13 @@ function UnilateralExitTreeGraphCanvas({
         focusedNodeId,
         onReadyToProceed: dispatchReadyToProceed,
         readyToProceedDisabled,
+        vtxoExitSnapshots,
       }),
     [
       topology,
       selectedLeafOutpoints,
       nodeStatuses,
+      vtxoExitSnapshots,
       inProgressOverlay,
       proceedingAutomatically,
       layoutDirection,
@@ -304,6 +274,7 @@ export function UnilateralExitTreeGraph({
   topology,
   selectedLeafOutpoints,
   nodeStatuses,
+  vtxoExitSnapshots,
   inProgressOverlay,
   proceedingAutomatically,
   focusedNodeId,
@@ -357,6 +328,7 @@ export function UnilateralExitTreeGraph({
               topology={topology}
               selectedLeafOutpoints={selectedLeafOutpoints}
               nodeStatuses={nodeStatuses}
+              vtxoExitSnapshots={vtxoExitSnapshots}
               inProgressOverlay={inProgressOverlay}
               proceedingAutomatically={proceedingAutomatically}
               focusedNodeId={focusedNodeId}
