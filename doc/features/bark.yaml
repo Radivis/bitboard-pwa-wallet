@@ -68,6 +68,7 @@ feature:
     - A failed Arkoor send leaves the shown Bark spendable amount unchanged
     - The emergency-exit link and page exist only when isBarkEnabled and the network is signet or mainnet
     - Emergency exit does not call send_onchain or offboard_all
+    - Emergency exit never contacts or waits for the Ark server. Review, start, progress, cancel, and claim work in a session whose Bark sync failed because the server is unreachable
     - Review, before start, shows the broadcast fee, the later claim fee, and how many transactions must be broadcast
     - Emergency exit broadcast, Pay-to-Anchor children, and the claim use the open network's High fee preset from the on-chain Esplora, not Bark's own fast rate
     - Start stays disabled when the on-chain confirmed balance is below the broadcast fee
@@ -429,6 +430,9 @@ feature:
           - frontend/src/lib/bark/__tests__/bark-emergency-exit-onchain-catch-up.test.ts
           - frontend/src/lib/bark/__tests__/bark-emergency-exit-automation.test.ts
           - frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
+      - id: BARK-EMG-24
+        description: A claim does not run a Bark sync, so it never contacts the Ark server. Bark sees the claim through its exit sync against the chain source
+        implemented_by: frontend/src/lib/bark/__tests__/bark-emergency-exit-live-deps.test.ts
   pages:
     - BarkManagement:
         description: Bark entry on the Management page
@@ -485,7 +489,7 @@ feature:
           - Full-page Bark session loading or error screen while the session is not ready
         requirements:
           - Contracts BARK-EMG-02 through BARK-EMG-08
-          - Contracts BARK-EMG-10 through BARK-EMG-23
+          - Contracts BARK-EMG-10 through BARK-EMG-24
           - Contracts BARK-SESS-03 and BARK-SESS-04
           - Shown only when isBarkEnabled and the network is signet or mainnet
           - Progress is a button, and a successful Bark sync also progresses exits that are already started

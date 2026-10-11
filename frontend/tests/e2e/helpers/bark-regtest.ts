@@ -23,14 +23,32 @@ export function resolveBarkBoardedFixtureExportPath(): string | null {
   return raw
 }
 
-export async function restartCaptaind(): Promise<void> {
-  await execFileAsync('docker', ['restart', CAPTAIND_REGTEST_CONTAINER], {
+async function runCaptaindDockerCommand(command: 'restart' | 'stop' | 'start'): Promise<void> {
+  await execFileAsync('docker', [command, CAPTAIND_REGTEST_CONTAINER], {
     maxBuffer: 10 * 1024 * 1024,
   })
+}
+
+async function waitForCaptaindHealthy(): Promise<void> {
   const { waitForBarkRegtestHealthy } = await import(
     '../../../../scripts/bark-regtest-health.mjs'
   )
   await waitForBarkRegtestHealthy()
+}
+
+export async function restartCaptaind(): Promise<void> {
+  await runCaptaindDockerCommand('restart')
+  await waitForCaptaindHealthy()
+}
+
+/** `docker stop` returns once captaind is down, so the Ark server is unreachable afterwards. */
+export async function stopCaptaind(): Promise<void> {
+  await runCaptaindDockerCommand('stop')
+}
+
+export async function startCaptaind(): Promise<void> {
+  await runCaptaindDockerCommand('start')
+  await waitForCaptaindHealthy()
 }
 
 export async function waitForBarkLoadReady(page: Page, timeout = 120_000): Promise<void> {
@@ -67,6 +85,22 @@ export async function triggerBarkRailSync(page: Page, timeout = 120_000): Promis
       throw new Error(`Bark sync still in progress: ${syncPhase ?? 'unknown'}`)
     }
   }).toPass({ timeout })
+}
+
+/** A manual Bark sync that ends in the rail sync error, e.g. while captaind is stopped. */
+export async function expectBarkRailSyncFails(page: Page, timeout = 120_000): Promise<void> {
+  await goToWalletTab(page, 'Dashboard')
+  await waitForBarkLoadReady(page, timeout)
+  const syncButton = page.getByTestId('rail-sync-bark')
+  await expect(syncButton).toBeEnabled({ timeout })
+  await syncButton.click()
+  await expect
+    .poll(
+      async () =>
+        page.getByTestId('dashboard-bark-balance-card').getAttribute('data-rail-bark-sync'),
+      { timeout, intervals: [500, 1000, 2000] },
+    )
+    .toBe('sync-error')
 }
 
 /** `null` when that rail card is not on the dashboard. */

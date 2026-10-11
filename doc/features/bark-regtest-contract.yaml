@@ -30,6 +30,10 @@ contracts:
     description: Sync when coins are due for refresh. The dashboard shows the refresh notice and the spendable amount stays.
     tags: ["@bark-refresh-regtest"]
     implemented_by: frontend/tests/e2e/bark-refresh-regtest.spec.ts
+  - id: E2E-BARK-REG-07
+    description: With captaind stopped, a reloaded and unlocked wallet opens Bark from its stored records and its Bark sync fails. Emergency exit of a selected VTXO still starts, progresses, and claims. Claimed funds arrive on-chain.
+    tags: ["@bark-exit-regtest"]
+    implemented_by: frontend/tests/e2e/bark-exit-flows-regtest.spec.ts
 
 rust_invariants:
   - name: sync_fails_when_server_stopped_leaves_record_dump_unchanged

@@ -37,7 +37,6 @@ export type ClaimBarkEmergencyExitDeps = {
   broadcastOnBarkChain: (rawTxHex: string) => Promise<void>
   syncExits: () => Promise<BarkEmergencyExitRow[]>
   clearPendingClaim: () => Promise<void>
-  syncBark: () => Promise<void>
   startOnchainBackgroundSync: () => void
 }
 
@@ -196,7 +195,7 @@ async function assertWaitingChildrenFundable(
 /**
  * Drains fresh claimable exits, broadcasts the signed transaction, and asks Bark's
  * chain source whether it can see that spend. The app Esplora broadcast is not that proof.
- * Does not reveal a new on-chain address.
+ * Does not reveal a new on-chain address. Does not run a Bark sync, which needs the Ark server.
  */
 export async function claimBarkEmergencyExits(
   deps: ClaimBarkEmergencyExitDeps,
@@ -221,11 +220,6 @@ export async function claimBarkEmergencyExits(
   }
   if (observed) {
     await deps.clearPendingClaim()
-  }
-  try {
-    await deps.syncBark()
-  } catch {
-    // A later sync can still observe the claim. The pending set stays until then.
   }
   deps.startOnchainBackgroundSync()
   return { txid, observed }

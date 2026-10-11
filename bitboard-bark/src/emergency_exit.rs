@@ -590,9 +590,7 @@ mod wasm {
     };
     use crate::exit_address::parse_receive_address;
     use crate::session::session_bitcoin_network;
-    use crate::session::{
-        bark_error, finish_wallet_operation, require_session_synced, take_active_wallet,
-    };
+    use crate::session::{bark_error, finish_wallet_operation, take_active_wallet};
 
     fn format_exit_error(err: &bark::exit::ExitError) -> String {
         let code = match err {
@@ -664,11 +662,12 @@ mod wasm {
         Ok(vtxos.into_iter().map(|vtxo| vtxo.id()).collect())
     }
 
-    async fn run_with_synced_wallet<T, F>(operation: F) -> Result<T, JsValue>
+    /// Emergency exits must work while the Ark server is unreachable. They therefore
+    /// do not wait for `bark_sync`, which needs the server.
+    async fn run_with_open_wallet<T, F>(operation: F) -> Result<T, JsValue>
     where
         F: AsyncFnOnce(&bark::Wallet) -> Result<T, String>,
     {
-        require_session_synced().map_err(|err| JsValue::from_str(&err))?;
         let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
         let operation_result = operation(&wallet).await;
         finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
@@ -682,7 +681,7 @@ mod wasm {
         vtxo_ids: Vec<String>,
         requested_fee_rate_sat_per_vb: f64,
     ) -> Result<String, JsValue> {
-        run_with_synced_wallet(async |wallet| {
+        run_with_open_wallet(async |wallet| {
             let fee_rate = fee_rate_from_sat_per_vb(requested_fee_rate_sat_per_vb)?;
             let requested = parse_vtxo_ids(vtxo_ids)?;
             let vtxo_ids = if requested.is_empty() {
@@ -713,7 +712,7 @@ mod wasm {
     /// A start that adds no exit row is `bark_exit_nothing_started`.
     #[wasm_bindgen]
     pub async fn bark_start_emergency_exit(vtxo_ids: Vec<String>) -> Result<(), JsValue> {
-        run_with_synced_wallet(async |wallet| {
+        run_with_open_wallet(async |wallet| {
             let requested = parse_vtxo_ids(vtxo_ids)?;
             let before = wallet.exit_mgr().get_exit_vtxo_ids().await;
             if requested.is_empty() {
@@ -753,15 +752,13 @@ mod wasm {
     /// Live exit rows. Does not progress them and does not require a fresh sync.
     #[wasm_bindgen]
     pub async fn bark_list_emergency_exits() -> Result<String, JsValue> {
-        let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
-        let operation_result = async { json_string(&emergency_exit_rows(&wallet).await?) }.await;
-        finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
+        run_with_open_wallet(async |wallet| json_string(&emergency_exit_rows(wallet).await?)).await
     }
 
     /// `Wallet::sync_exits` against Bark's chain source, then the live exit rows.
     #[wasm_bindgen]
     pub async fn bark_sync_exits() -> Result<String, JsValue> {
-        run_with_synced_wallet(async |wallet| {
+        run_with_open_wallet(async |wallet| {
             map_anyhow_exit(wallet.sync_exits().await)?;
             json_string(&emergency_exit_rows(wallet).await?)
         })
@@ -771,7 +768,7 @@ mod wasm {
     /// Submits a claim transaction to Bark's chain source. Does not mark the exit spent.
     #[wasm_bindgen]
     pub async fn bark_broadcast_emergency_exit_claim(raw_tx_hex: String) -> Result<(), JsValue> {
-        run_with_synced_wallet(async |wallet| {
+        run_with_open_wallet(async |wallet| {
             let claim_tx = bitcoin::consensus::encode::deserialize_hex::<Transaction>(&raw_tx_hex)
                 .map_err(|err| {
                     format!("Bark emergency exit claim transaction is invalid: {err}")
@@ -811,7 +808,7 @@ mod wasm {
     /// Does not call `Wallet::progress_exits`.
     #[wasm_bindgen]
     pub async fn bark_progress_emergency_exits() -> Result<String, JsValue> {
-        run_with_synced_wallet(async |wallet| {
+        run_with_open_wallet(async |wallet| {
             map_anyhow_exit(wallet.exit_mgr().progress_exits(wallet).await)?;
             let requests =
                 cpfp_requests_needing_first_child(wallet.exit_mgr().exits_needing_cpfp().await)
@@ -833,7 +830,7 @@ mod wasm {
         exit_txid: String,
         child_tx_hex: String,
     ) -> Result<(), JsValue> {
-        run_with_synced_wallet(async |wallet| {
+        run_with_open_wallet(async |wallet| {
             let parent_txid = exit_txid
                 .parse::<Txid>()
                 .map_err(|_| "Bark emergency exit transaction id is invalid".to_owned())?;
@@ -853,7 +850,7 @@ mod wasm {
 
     #[wasm_bindgen]
     pub async fn bark_cancel_emergency_exit(vtxo_id: String) -> Result<(), JsValue> {
-        run_with_synced_wallet(async |wallet| {
+        run_with_open_wallet(async |wallet| {
             let parsed_id = vtxo_id
                 .parse::<bark::ark::VtxoId>()
                 .map_err(|_| format_bark_exit_error(BARK_EXIT_UNKNOWN_VTXO, vtxo_id.trim()))?;
@@ -871,7 +868,7 @@ mod wasm {
         requested_fee_rate_sat_per_vb: f64,
         exclude_vtxo_ids: Vec<String>,
     ) -> Result<String, JsValue> {
-        run_with_synced_wallet(async |wallet| {
+        run_with_open_wallet(async |wallet| {
             let fee_rate = fee_rate_from_sat_per_vb(requested_fee_rate_sat_per_vb)?;
             let network = session_bitcoin_network()?;
             let destination = parse_receive_address(&address, network)?;
@@ -913,40 +910,39 @@ mod wasm {
         if requested.is_empty() {
             return super::exit_graph_json(Vec::new()).map_err(|err| JsValue::from_str(&err));
         }
-        let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
-        let operation_result = async {
+        run_with_open_wallet(async |wallet| {
             let mut chains = Vec::with_capacity(requested.len());
             for vtxo_id in requested {
-                let full_vtxo = match wallet.get_full_vtxo(vtxo_id).await {
-                    Ok(vtxo) => vtxo,
-                    Err(_) => {
-                        return Err(format_bark_exit_error(
-                            BARK_EXIT_UNKNOWN_VTXO,
-                            &vtxo_id.to_string(),
-                        ));
-                    }
-                };
-                let transactions = super::exit_graph_transactions_from_vtxo(&full_vtxo);
-                let exit_status = map_anyhow_exit(
-                    wallet
-                        .exit_mgr()
-                        .get_exit_status(vtxo_id, false, false)
-                        .await,
-                )?;
-                let status = match exit_status {
-                    Some(status) => chain_status_from_exit_state(&status.state),
-                    None => super::ExitGraphChainStatus::Pending,
-                };
-                chains.push(super::ExitGraphChain {
-                    vtxo_id: vtxo_id.to_string(),
-                    transactions,
-                    status,
-                });
+                chains.push(exit_graph_chain(wallet, vtxo_id).await?);
             }
             super::exit_graph_json(super::merge_exit_graph(&chains))
-        }
-        .await;
-        finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
+        })
+        .await
+    }
+
+    async fn exit_graph_chain(
+        wallet: &bark::Wallet,
+        vtxo_id: bark::ark::VtxoId,
+    ) -> Result<super::ExitGraphChain, String> {
+        let full_vtxo = wallet
+            .get_full_vtxo(vtxo_id)
+            .await
+            .map_err(|_| format_bark_exit_error(BARK_EXIT_UNKNOWN_VTXO, &vtxo_id.to_string()))?;
+        let exit_status = map_anyhow_exit(
+            wallet
+                .exit_mgr()
+                .get_exit_status(vtxo_id, false, false)
+                .await,
+        )?;
+        let status = match exit_status {
+            Some(status) => chain_status_from_exit_state(&status.state),
+            None => super::ExitGraphChainStatus::Pending,
+        };
+        Ok(super::ExitGraphChain {
+            vtxo_id: vtxo_id.to_string(),
+            transactions: super::exit_graph_transactions_from_vtxo(&full_vtxo),
+            status,
+        })
     }
 
     fn chain_status_from_exit_state(state: &bark::exit::ExitState) -> super::ExitGraphChainStatus {

@@ -5,7 +5,6 @@ import {
 import type { ClaimBarkEmergencyExitDeps } from '@/lib/bark/perform-bark-emergency-exit'
 import type { StartBarkEmergencyExitDeps } from '@/lib/bark/perform-bark-emergency-exit'
 import { getEsploraUrl } from '@/lib/wallet/bitcoin-utils'
-import { orchestrateBarkSync } from '@/lib/wallet/lifecycle/bark-sync-lifecycle-orchestrator'
 import { useWalletStore } from '@/stores/walletStore'
 import type { BarkEmergencyExitEstimate } from '@/workers/bark-api'
 import { getBarkWorker } from '@/workers/bark-factory'
@@ -46,18 +45,6 @@ export function barkEmergencyExitClaimDeps(): ClaimBarkEmergencyExitDeps {
     broadcastOnBarkChain: (rawTxHex) => getBarkWorker().broadcastEmergencyExitClaim(rawTxHex),
     syncExits: () => getBarkWorker().syncEmergencyExits(),
     clearPendingClaim: () => getBarkWorker().writePendingEmergencyClaim(null),
-    syncBark: async () => {
-      const { activeWalletId, networkMode } = useWalletStore.getState()
-      if (activeWalletId == null) {
-        throw new Error('Bark session is not open')
-      }
-      await orchestrateBarkSync({
-        walletId: activeWalletId,
-        networkMode,
-        throwOnError: true,
-        settleExits: false,
-      })
-    },
     startOnchainBackgroundSync: () => {
       const { activeWalletId, networkMode, addressType, accountId } = useWalletStore.getState()
       if (activeWalletId == null || networkMode === 'lab') return

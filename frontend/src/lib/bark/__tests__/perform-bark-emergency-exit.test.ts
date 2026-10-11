@@ -24,7 +24,6 @@ function claimDeps(
     broadcastOnBarkChain: vi.fn(async () => undefined),
     syncExits: vi.fn(async () => [claimableRow('vtxo-1')]),
     clearPendingClaim: vi.fn(async () => undefined),
-    syncBark: vi.fn(async () => undefined),
     startOnchainBackgroundSync: vi.fn(),
     ...overrides,
   }
