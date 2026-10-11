@@ -458,5 +458,40 @@ describe('Wallet Persistence with Encryption', () => {
       const withRevision = await getWalletSecretsEncryptedWithRevision(walletDb, walletId)
       expect(withRevision.revision).toBeGreaterThanOrEqual(2)
     })
+
+    it('does not let a same-tab writer land between read and CAS of an encrypted payload update', async () => {
+      await saveWalletSecrets({
+        walletDb,
+        walletId,
+        secrets: sampleSecrets,
+      })
+
+      let transformRuns = 0
+      const concurrentWrites: Promise<void>[] = []
+      await updateWalletSecretsEncryptedPayloadWithRetry({
+        walletDb,
+        walletId,
+        transform: async (payloadBlob) => {
+          transformRuns += 1
+          const concurrentWrite = updateWalletSecretsEncryptedPayloadWithRetry({
+            walletDb,
+            walletId,
+            transform: async (currentBlob) => currentBlob,
+          })
+          concurrentWrites.push(concurrentWrite)
+          await Promise.race([concurrentWrite, waitMilliseconds(CONCURRENT_WRITE_GRACE_MS)])
+          return payloadBlob
+        },
+      })
+      await Promise.all(concurrentWrites)
+
+      expect(transformRuns).toBe(1)
+    })
   })
 })
+
+const CONCURRENT_WRITE_GRACE_MS = 20
+
+function waitMilliseconds(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds))
+}

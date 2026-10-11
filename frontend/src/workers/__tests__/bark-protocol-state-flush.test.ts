@@ -64,14 +64,13 @@ describe('persistBarkProtocolState', () => {
       signetPayload('bWFpbm5ldC12MQ==', '{"version":1}'),
       signetPayload('bWFpbm5ldC12Mg==', '{"version":2}'),
     ]
-    const revisionsSeen: number[] = []
     let writtenJson = ''
-    let reads = 0
+    let transformRuns = 0
 
     await persistBarkProtocolState(
       {
         secretsProxy: {
-          decrypt: async () => JSON.stringify(payloads[reads - 1]),
+          decrypt: async () => JSON.stringify(payloads[transformRuns - 1]),
           encrypt: async (plaintext: string) => {
             writtenJson = plaintext
             return encryptedBlob()
@@ -79,17 +78,11 @@ describe('persistBarkProtocolState', () => {
         },
         encryptedHost: {
           readEncryptedPayload: async () => encryptedBlob(),
-          readEncryptedPayloadWithRevision: async () => {
-            const revision = reads === 0 ? 1 : 2
-            reads += 1
-            return { payload: encryptedBlob(), revision }
-          },
-          writeEncryptedPayloadCAS: async () => {
-            throw new Error('checkpoint flush must not reuse the stale encrypted blob')
-          },
-          writeEncryptedPayloadIfRevisionMatches: async (_walletId, _blob, expectedRevision) => {
-            revisionsSeen.push(expectedRevision)
-            return expectedRevision === 2
+          updateEncryptedPayload: async (_walletId, transform) => {
+            for (let attempt = 0; attempt < payloads.length; attempt += 1) {
+              transformRuns += 1
+              await transform(encryptedBlob())
+            }
           },
         },
       },
@@ -98,7 +91,7 @@ describe('persistBarkProtocolState', () => {
       { recordDump: checkpointDump },
     )
 
-    expect(revisionsSeen).toEqual([1, 2])
+    expect(transformRuns).toBe(2)
     const written = parseWalletPayloadJson(writtenJson)
     const signetAcct = written.barkAccounts.find((a) => a.networkMode === 'signet')
     const mainnetAcct = written.barkAccounts.find((a) => a.networkMode === 'mainnet')

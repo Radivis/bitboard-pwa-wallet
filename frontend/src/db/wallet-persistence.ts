@@ -11,6 +11,7 @@ import {
   isWalletWriterLockHeld,
   withWalletWriterLock,
 } from '@/lib/shared/opfs-writer-lock'
+import { createSerialTaskQueue } from '@/lib/shared/serial-task-queue'
 import {
   assembleWalletSecrets,
   parseWalletPayloadJson,
@@ -27,6 +28,20 @@ async function withWalletSecretsWriterLock<T>(work: () => Promise<T>): Promise<T
     return work()
   }
   return withWalletWriterLock(work)
+}
+
+/**
+ * The writer lock is re-entrant for the whole tab while any holder runs, so it does not
+ * keep same-tab writers out of each other's read → CAS window. This queue does.
+ * Work inside must never wait for another wallet-secrets write, or it deadlocks.
+ */
+const runWalletSecretsCriticalSection = createSerialTaskQueue()
+
+/** Tracked from queue entry so lock/switch flows also wait for writes still queued here. */
+function withWalletSecretsCriticalSection<T>(work: () => Promise<T>): Promise<T> {
+  return withWalletSecretsWriterLock(() =>
+    trackWalletSecretsWrite(runWalletSecretsCriticalSection(work)),
+  )
 }
 
 /** Encrypted blob shape for reading/writing without decryption (used by descriptor-wallet-manager with crypto worker). */
@@ -312,9 +327,7 @@ async function updateWalletSecretsPayloadWithRetryImpl({
 export function updateWalletSecretsPayloadWithRetry(
   input: UpdateWalletSecretsPayloadWithRetryInput,
 ): Promise<void> {
-  return withWalletSecretsWriterLock(() =>
-    trackWalletSecretsWrite(updateWalletSecretsPayloadWithRetryImpl(input)),
-  )
+  return withWalletSecretsCriticalSection(() => updateWalletSecretsPayloadWithRetryImpl(input))
 }
 
 async function updateWalletSecretsEncryptedPayloadWithRetryImpl({
@@ -339,28 +352,11 @@ async function updateWalletSecretsEncryptedPayloadWithRetryImpl({
   throw walletSecretsConflictError(maxRetries)
 }
 
-/** One payload CAS, serialized with other wallet-secrets writers. */
-export function writeSplitWalletSecretsPayloadIfRevisionMatches(
-  walletDb: Kysely<Database>,
-  walletId: number,
-  payload: EncryptedWalletSecretsBlob,
-  expectedRevision: number,
-): Promise<boolean> {
-  return withWalletSecretsWriterLock(() =>
-    putSplitWalletSecretsEncryptedIfRevisionMatches(
-      walletDb,
-      walletId,
-      { payload },
-      expectedRevision,
-    ),
-  )
-}
-
 export function updateWalletSecretsEncryptedPayloadWithRetry(
   input: UpdateWalletSecretsEncryptedPayloadWithRetryInput,
 ): Promise<void> {
-  return withWalletSecretsWriterLock(() =>
-    trackWalletSecretsWrite(updateWalletSecretsEncryptedPayloadWithRetryImpl(input)),
+  return withWalletSecretsCriticalSection(() =>
+    updateWalletSecretsEncryptedPayloadWithRetryImpl(input),
   )
 }
 

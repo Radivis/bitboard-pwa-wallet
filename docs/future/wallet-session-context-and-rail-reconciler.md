@@ -1,6 +1,6 @@
 # Wallet session context and rail reconciler
 
-Planning note. Nothing here is implemented except the stopgap activation hooks named below.
+Planning note. Nothing here is implemented except the stopgap activation hooks named below and most of "Related problem A".
 
 Related:
 
@@ -184,35 +184,32 @@ Ordering constraint: Arkade aborts must still happen **before** the descriptor s
 
 ## Related problem A: blind payload writes
 
-Several writers read the encrypted `wallet_secrets` payload, change it in a worker, and write the whole blob back with a transform that ignores the current row (`transform: async () => blob`). A write that lands between their read and their write is lost. Runtime logs in the NWC investigation showed no loss, but the window is real and covers every payload field.
+Several writers read the encrypted `wallet_secrets` payload, change it in a worker, and write the whole blob back with a transform that ignores the current row (`transform: async () => blob`). A write that lands between their read and their write is lost.
 
-Writers to fix:
+**Status: fixed for the Arkade and Bark workers.** The bug became visible on Signet, the first network where Arkade and Bark run side by side. Opening an Arkade session failed with "Failed to update encrypted wallet secrets after 8 CAS retries".
+
+Two causes combined:
+
+- The OPFS writer lock is re-entrant for the whole tab while any holder runs. It therefore never kept same-tab writers out of each other's read → CAS window.
+- Every worker encrypt and decrypt runs Argon2id, so a read-modify-write window lasts seconds. Each durable Bark record commits a full payload write.
+
+What was done:
+
+1. `wallet-persistence.ts` runs every `update*WithRetry` call in a same-tab FIFO critical section (`createSerialTaskQueue`). Same-tab writers can no longer land inside each other's read → CAS window. Work inside must never wait for another wallet-secrets write.
+2. `EncryptedWalletSecretsHost.updateEncryptedPayload(walletId, transform)` runs read → transform → CAS inside that section, with the transform as a Comlink-proxied worker callback. The worker helper `updateDecryptedWalletPayload` (`frontend/src/workers/worker-wallet-payload-update.ts`) decrypts, applies a pure merge, and encrypts inside the callback. The originally planned worker-side retry loop was not used: with Argon2-length windows it would lose CAS races even more often.
+3. All Arkade writers (`persistSdkJsonToEncryptedPayload`, `updateOperatorSyncAtEncrypted`, `ensureArkadeAccountEncrypted`) and Bark writers (`persistOpenedBarkAccount`, `persistBarkProtocolState`, `writePendingEmergencyClaim`, `writeProceedAutomatically`) use it.
+4. `writeEncryptedPayloadCAS`, `readEncryptedPayloadWithRevision`, and `writeEncryptedPayloadIfRevisionMatches` were removed from the host.
+5. When a rail worker is terminated, its host's detach signal aborts. A transform that will never settle then releases the critical section.
+
+Tests: `frontend/src/lib/wallet/__tests__/encrypted-wallet-secrets-host.integration.test.ts` (real SQLite), plus `does not let a same-tab writer land between read and CAS…` in `wallet-persistence.test.ts`.
+
+Still open:
 
 | Writer | File | Today |
 |--------|------|-------|
-| `persistSdkJsonToEncryptedPayload`, `updateOperatorSyncAtEncrypted`, `ensureArkadeAccountEncrypted` | `frontend/src/workers/arkade-worker-encrypted-payload.ts` | read via `readEncryptedPayload`, write via `writeEncryptedPayloadCAS` (blob fixed before the CAS loop) |
-| `persistOpenedBarkAccount`, `writePendingEmergencyClaim`, `writeProceedAutomatically` | `frontend/src/workers/bark-worker-metadata.ts` | same; `persistBarkProtocolState` already does it right |
 | `resolveDescriptorWallet` | `frontend/src/lib/wallet/descriptor-wallet-manager.ts` | reads without revision, writes `transform: async () => encryptedPayloadToStore` |
-| `writeEncryptedPayloadCAS` | `frontend/src/lib/wallet/encrypted-wallet-secrets-host.ts` | `transform: async () => blob` |
 
-Fix:
-
-1. Extract the `persistBarkProtocolState` loop into a shared worker helper:
-
-   ```ts
-   async function updateDecryptedPayloadWithCas(
-     deps: { secretsProxy; encryptedHost },
-     walletId: number,
-     apply: (payload: WalletSecretsPayload) => WalletSecretsPayload,
-   ): Promise<WalletSecretsPayload>
-   ```
-
-   It reads with revision, decrypts, applies, encrypts, and calls `writeEncryptedPayloadIfRevisionMatches`; on a mismatch it re-reads and re-applies, up to `WALLET_SECRETS_CAS_MAX_RETRIES`.
-2. Port the Arkade and Bark writers to it. Their merge functions (`mergeSdkPersistenceIntoPayload`, `applyOpenedBarkAccount`, …) are already pure `payload → payload`, so this is mostly plumbing.
-3. `resolveDescriptorWallet`: move the worker call inside the CAS transform, like `ensureSegwit0DescriptorRow` and `updateDescriptorWalletChangeset` already do. If the row already exists the transform returns the current blob unchanged.
-4. Remove `writeEncryptedPayloadCAS` from `EncryptedWalletSecretsHost` once no caller is left. A host method that writes a precomputed blob invites the bug back.
-
-Tests (Vitest, fake host with a revision counter): for each writer, a concurrent write between read and write is preserved and the writer's own change is applied on top. One test per writer file is enough.
+Fix: move the worker call inside the CAS transform, like `ensureSegwit0DescriptorRow` and `updateDescriptorWalletChangeset` already do. If the row already exists the transform returns the current blob unchanged.
 
 ---
 

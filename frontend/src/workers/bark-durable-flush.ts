@@ -1,3 +1,5 @@
+import { createSerialTaskQueue, type SerialTaskQueue } from '@/lib/shared/serial-task-queue'
+
 export type BarkRailFlushMetadata = {
   receiveKeyIndex?: number
   lastSuccessfulSyncAt?: string
@@ -13,16 +15,8 @@ export function durableCheckpointFlush(
 }
 
 /** One Bark worker call at a time, including a checkpoint flush awaited inside it. */
-export function createBarkCallQueue(): <T>(operation: () => Promise<T>) => Promise<T> {
-  let tail: Promise<void> = Promise.resolve()
-  return function enqueueBarkCall<T>(operation: () => Promise<T>): Promise<T> {
-    const run = tail.then(operation, operation)
-    tail = run.then(
-      () => undefined,
-      () => undefined,
-    )
-    return run
-  }
+export function createBarkCallQueue(): SerialTaskQueue {
+  return createSerialTaskQueue()
 }
 
 function barkErrorMessage(err: unknown): string {

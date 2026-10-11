@@ -32,14 +32,20 @@ describe('arkade-worker-encrypted-payload', () => {
     },
   }
 
+  const storedBlob = {
+    ciphertext: new Uint8Array([9]),
+    iv: new Uint8Array([8]),
+    salt: new Uint8Array([7]),
+    kdfPhc: 'phc',
+  }
+
   const encryptedHost = {
-    readEncryptedPayload: async () => ({
-      ciphertext: new Uint8Array([9]),
-      iv: new Uint8Array([8]),
-      salt: new Uint8Array([7]),
-      kdfPhc: 'phc',
-    }),
-    writeEncryptedPayloadCAS: async () => {
+    readEncryptedPayload: async () => storedBlob,
+    updateEncryptedPayload: async (
+      _walletId: number,
+      transform: (currentBlob: typeof storedBlob) => Promise<unknown>,
+    ) => {
+      await transform(storedBlob)
       storedPayloadJson = encryptedRoundTripJson
     },
   }
