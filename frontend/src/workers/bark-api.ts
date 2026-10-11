@@ -51,7 +51,7 @@ export type BarkBoardFeeEstimate = {
 }
 
 /** Same shape as a board fee estimate. `netAmountSats` is what arrives on-chain. */
-export type BarkExitFeeEstimate = BarkBoardFeeEstimate
+export type BarkOffboardFeeEstimate = BarkBoardFeeEstimate
 
 export type BarkArkoorSendParams = {
   address: string
@@ -210,9 +210,9 @@ export interface BarkService {
   boardPsbt(psbtBase64: string): Promise<BarkBoardAccepted>
   history(): Promise<BarkMovementRow[]>
   listVtxos(): Promise<BarkVtxoList>
-  estimateSendOnchain(address: string, amountSats: number): Promise<BarkExitFeeEstimate>
+  estimateSendOnchain(address: string, amountSats: number): Promise<BarkOffboardFeeEstimate>
   sendOnchain(address: string, amountSats: number): Promise<string>
-  estimateOffboardAll(address: string): Promise<BarkExitFeeEstimate>
+  estimateOffboardAll(address: string): Promise<BarkOffboardFeeEstimate>
   offboardAll(address: string): Promise<string>
   sendArkoorPayment(params: BarkArkoorSendParams): Promise<BarkArkoorSendResult>
   estimateEmergencyExit(

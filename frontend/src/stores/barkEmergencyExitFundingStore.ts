@@ -8,7 +8,7 @@ import {
   type BarkEmergencyExitProgressOutcome,
 } from '@/lib/bark/perform-bark-emergency-exit'
 
-/** Whether the last Bark exit progress run left children waiting for confirmed funds. */
+/** Whether the last Bark emergency exit progress run left children waiting for confirmed funds. */
 interface BarkEmergencyExitFundingState {
   fundingStatus: BarkEmergencyExitFundingStatus | null
   /** Keeps the status while children are still waiting for funds, clears it otherwise. */

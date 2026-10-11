@@ -41,9 +41,9 @@ test.describe('Bark exit flows regtest @bark-exit-regtest', () => {
   test('E2E-BARK-REG-04 collaborative exit of part and then the rest', async ({ page }) => {
     await boardRegtestBarkWallet(page)
     const spendableBeforePartialExit = await readDashboardBarkSpendableSats(page)
-    await exitBarkAmount(page, PARTIAL_EXIT_SATS)
+    await offboardBarkAmount(page, PARTIAL_EXIT_SATS)
     await syncUntilBarkSpendableDrops(page, spendableBeforePartialExit)
-    await exitBarkRemainder(page)
+    await offboardBarkRemainder(page)
   })
 
   test('E2E-BARK-REG-05 emergency exit progresses to a claim', async ({ page }) => {
@@ -193,36 +193,36 @@ async function clickEmergencyExitAction(page: Page, action: EmergencyExitAction)
   }
 }
 
-async function exitBarkAmount(page: Page, amountSats: number): Promise<number> {
+async function offboardBarkAmount(page: Page, amountSats: number): Promise<number> {
   await goToWalletTab(page, 'Dashboard')
   const onchainBefore = await readDashboardOnchainSats(page)
-  await page.getByTestId('dashboard-bark-exit-link').click()
-  await expect(page.getByTestId('bark-exit-destination')).toHaveText(/bcrt1/)
+  await page.getByTestId('dashboard-bark-offboard-link').click()
+  await expect(page.getByTestId('bark-offboard-destination')).toHaveText(/bcrt1/)
   await expect(page.locator('input')).toHaveCount(1)
-  await page.getByTestId('bark-exit-amount').fill(String(amountSats))
-  await page.getByTestId('bark-exit-review-amount').click()
-  const arrivedSats = await readExitOnchainAmount(page)
-  await confirmExitAndReturnToDashboard(page)
+  await page.getByTestId('bark-offboard-amount').fill(String(amountSats))
+  await page.getByTestId('bark-offboard-review-amount').click()
+  const arrivedSats = await readOffboardOnchainAmount(page)
+  await confirmOffboardAndReturnToDashboard(page)
   await mineUntilOnchainGain(page, onchainBefore, arrivedSats)
   return arrivedSats
 }
 
-async function exitBarkRemainder(page: Page): Promise<void> {
+async function offboardBarkRemainder(page: Page): Promise<void> {
   await goToWalletTab(page, 'Dashboard')
   const onchainBefore = await readDashboardOnchainSats(page)
   expect(onchainBefore).toBeGreaterThan(0)
-  await page.getByTestId('dashboard-bark-exit-link').click()
-  const reviewAll = page.getByTestId('bark-exit-review-all')
+  await page.getByTestId('dashboard-bark-offboard-link').click()
+  const reviewAll = page.getByTestId('bark-offboard-review-all')
   await expect(reviewAll).toBeEnabled({ timeout: 60_000 })
   await reviewAll.click()
-  const arrivedSats = await readExitOnchainAmount(page)
+  const arrivedSats = await readOffboardOnchainAmount(page)
   expect(arrivedSats).toBeGreaterThan(0)
-  await confirmExitAndReturnToDashboard(page)
+  await confirmOffboardAndReturnToDashboard(page)
   await mineUntilOnchainGain(page, onchainBefore, arrivedSats)
 }
 
-async function confirmExitAndReturnToDashboard(page: Page): Promise<void> {
-  await page.getByTestId('bark-exit-confirm').click()
+async function confirmOffboardAndReturnToDashboard(page: Page): Promise<void> {
+  await page.getByTestId('bark-offboard-confirm').click()
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({ timeout: 120_000 })
 }
 
@@ -238,8 +238,8 @@ async function syncUntilBarkSpendableDrops(page: Page, spendableBefore: number):
 }
 
 
-async function readExitOnchainAmount(page: Page): Promise<number> {
-  const amount = page.getByTestId('bark-exit-onchain-amount')
+async function readOffboardOnchainAmount(page: Page): Promise<number> {
+  const amount = page.getByTestId('bark-offboard-onchain-amount')
   await expect(amount).toBeVisible({ timeout: 60_000 })
   const text = (await amount.textContent()) ?? ''
   const sats = Number(text.replace(/\D/g, ''))

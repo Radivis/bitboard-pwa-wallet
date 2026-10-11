@@ -1,10 +1,10 @@
 import { parseBarkBoardAmountSats } from '@/lib/bark/review-bark-board'
-import type { BarkExitFeeEstimate } from '@/workers/bark-api'
+import type { BarkOffboardFeeEstimate } from '@/workers/bark-api'
 
-export type BarkExitMode = 'amount' | 'all'
+export type BarkOffboardMode = 'amount' | 'all'
 
-export type BarkExitReview = {
-  mode: BarkExitMode
+export type BarkOffboardReview = {
+  mode: BarkOffboardMode
   destinationAddress: string
   amountSats: number | null
   feeSats: number
@@ -12,12 +12,12 @@ export type BarkExitReview = {
   grossAmountSats: number
 }
 
-export type ReviewBarkExitDeps = {
-  estimateSendOnchain: (address: string, amountSats: number) => Promise<BarkExitFeeEstimate>
-  estimateOffboardAll: (address: string) => Promise<BarkExitFeeEstimate>
+export type ReviewBarkOffboardDeps = {
+  estimateSendOnchain: (address: string, amountSats: number) => Promise<BarkOffboardFeeEstimate>
+  estimateOffboardAll: (address: string) => Promise<BarkOffboardFeeEstimate>
 }
 
-export { parseBarkBoardAmountSats as parseBarkExitAmountSats }
+export { parseBarkBoardAmountSats as parseBarkOffboardAmountSats }
 
 function requireDestination(address: string): string {
   const destinationAddress = address.trim()
@@ -28,11 +28,11 @@ function requireDestination(address: string): string {
 }
 
 function reviewFromEstimate(
-  mode: BarkExitMode,
+  mode: BarkOffboardMode,
   destinationAddress: string,
   amountSats: number | null,
-  estimate: BarkExitFeeEstimate,
-): BarkExitReview {
+  estimate: BarkOffboardFeeEstimate,
+): BarkOffboardReview {
   return {
     mode,
     destinationAddress,
@@ -44,20 +44,20 @@ function reviewFromEstimate(
 }
 
 /** Estimates a chosen on-chain amount at the server offboard fee rate. Does not send. */
-export async function reviewBarkExitAmount(
-  deps: ReviewBarkExitDeps,
+export async function reviewBarkOffboardAmount(
+  deps: ReviewBarkOffboardDeps,
   input: { destinationAddress: string; amountSats: number },
-): Promise<BarkExitReview> {
+): Promise<BarkOffboardReview> {
   const destinationAddress = requireDestination(input.destinationAddress)
   const estimate = await deps.estimateSendOnchain(destinationAddress, input.amountSats)
   return reviewFromEstimate('amount', destinationAddress, input.amountSats, estimate)
 }
 
 /** Estimates offboarding every spendable VTXO. The server fee comes out of that pile. */
-export async function reviewBarkExitAll(
-  deps: ReviewBarkExitDeps,
+export async function reviewBarkOffboardAll(
+  deps: ReviewBarkOffboardDeps,
   input: { destinationAddress: string },
-): Promise<BarkExitReview> {
+): Promise<BarkOffboardReview> {
   const destinationAddress = requireDestination(input.destinationAddress)
   const estimate = await deps.estimateOffboardAll(destinationAddress)
   return reviewFromEstimate('all', destinationAddress, null, estimate)

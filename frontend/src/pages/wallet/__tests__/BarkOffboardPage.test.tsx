@@ -2,8 +2,8 @@ import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { toast } from 'sonner'
-import { BarkExitPage } from '@/pages/wallet/BarkExitPage'
-import { BarkOffboardParkedError } from '@/lib/bark/perform-bark-exit'
+import { BarkOffboardPage } from '@/pages/wallet/BarkOffboardPage'
+import { BarkOffboardParkedError } from '@/lib/bark/perform-bark-offboard'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import type { NetworkMode } from '@/stores/walletStore'
 import type { BarkPendingAction } from '@/workers/bark-api'
@@ -36,9 +36,9 @@ const pendingActions = vi.hoisted(() => ({
   current: [] as BarkPendingAction[],
 }))
 
-const reviewBarkExitAmount = vi.hoisted(() => vi.fn())
-const reviewBarkExitAll = vi.hoisted(() => vi.fn())
-const performBarkExit = vi.hoisted(() => vi.fn())
+const reviewBarkOffboardAmount = vi.hoisted(() => vi.fn())
+const reviewBarkOffboardAll = vi.hoisted(() => vi.fn())
+const performBarkOffboard = vi.hoisted(() => vi.fn())
 const navigate = vi.hoisted(() => vi.fn())
 const getNewAddress = vi.hoisted(() => vi.fn())
 const broadcastTransaction = vi.hoisted(() => vi.fn())
@@ -91,22 +91,22 @@ vi.mock('@/hooks/useBarkPendingActionsQuery', () => ({
   useBarkPendingActionsQuery: () => ({ data: pendingActions.current }),
 }))
 
-vi.mock('@/lib/bark/review-bark-exit', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/bark/review-bark-exit')>()
-  return { ...actual, reviewBarkExitAmount, reviewBarkExitAll }
+vi.mock('@/lib/bark/review-bark-offboard', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/bark/review-bark-offboard')>()
+  return { ...actual, reviewBarkOffboardAmount, reviewBarkOffboardAll }
 })
 
-vi.mock('@/lib/bark/perform-bark-exit', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/bark/perform-bark-exit')>()
-  return { ...actual, performBarkExit }
+vi.mock('@/lib/bark/perform-bark-offboard', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/bark/perform-bark-offboard')>()
+  return { ...actual, performBarkOffboard }
 })
 
-vi.mock('@/lib/bark/bark-exit-live-deps', () => ({
-  barkExitReviewDeps: () => ({
+vi.mock('@/lib/bark/bark-offboard-live-deps', () => ({
+  barkOffboardReviewDeps: () => ({
     estimateSendOnchain: vi.fn(),
     estimateOffboardAll: vi.fn(),
   }),
-  barkExitPerformDeps: () => ({
+  barkOffboardPerformDeps: () => ({
     sendOnchain: vi.fn(),
     offboardAll: vi.fn(),
     syncBark: vi.fn(),
@@ -123,7 +123,7 @@ const amountReview = {
   grossAmountSats: 10_250,
 }
 
-describe('BarkExitPage', () => {
+describe('BarkOffboardPage', () => {
   beforeEach(() => {
     pendingActions.current = []
     featureState.isBarkEnabled = true
@@ -137,9 +137,9 @@ describe('BarkExitPage', () => {
       receiveKeyIndex: 0,
     }
     syncSnapshot.current = { spendableSats: 50_000 }
-    reviewBarkExitAmount.mockReset()
-    reviewBarkExitAll.mockReset()
-    performBarkExit.mockReset()
+    reviewBarkOffboardAmount.mockReset()
+    reviewBarkOffboardAll.mockReset()
+    performBarkOffboard.mockReset()
     navigate.mockReset()
     getNewAddress.mockReset()
     broadcastTransaction.mockReset()
@@ -149,47 +149,47 @@ describe('BarkExitPage', () => {
 
   it('BARK-EXIT-03 is not a form unless Bark is enabled on signet', () => {
     featureState.isBarkEnabled = false
-    const disabled = renderWithProviders(<BarkExitPage />)
+    const disabled = renderWithProviders(<BarkOffboardPage />)
     expect(screen.getByText(/available on Signet and Mainnet when Bark is enabled/)).toBeInTheDocument()
-    expect(screen.queryByTestId('bark-exit-amount')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('bark-offboard-amount')).not.toBeInTheDocument()
     disabled.unmount()
 
     featureState.isBarkEnabled = true
     walletStoreState.networkMode = 'mutinynet'
     walletStoreState.loadedDescriptorWallet = { networkMode: 'mutinynet' }
-    renderWithProviders(<BarkExitPage />)
-    expect(screen.queryByTestId('bark-exit-amount')).not.toBeInTheDocument()
+    renderWithProviders(<BarkOffboardPage />)
+    expect(screen.queryByTestId('bark-offboard-amount')).not.toBeInTheDocument()
   })
 
   it('BARK-EXIT-04 shows the server fee and the on-chain amount before confirm', async () => {
-    reviewBarkExitAmount.mockResolvedValue(amountReview)
-    renderWithProviders(<BarkExitPage />)
-    fireEvent.change(screen.getByTestId('bark-exit-amount'), { target: { value: '10000' } })
-    fireEvent.click(screen.getByTestId('bark-exit-review-amount'))
+    reviewBarkOffboardAmount.mockResolvedValue(amountReview)
+    renderWithProviders(<BarkOffboardPage />)
+    fireEvent.change(screen.getByTestId('bark-offboard-amount'), { target: { value: '10000' } })
+    fireEvent.click(screen.getByTestId('bark-offboard-review-amount'))
 
-    expect(reviewBarkExitAmount).toHaveBeenCalledWith(
+    expect(reviewBarkOffboardAmount).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         destinationAddress: 'tb1qcurrent',
         amountSats: 10_000,
       }),
     )
-    expect(await screen.findByTestId('bark-exit-fee')).toHaveTextContent('250')
-    expect(screen.getByTestId('bark-exit-onchain-amount')).toHaveTextContent('10000')
-    expect(screen.getByTestId('bark-exit-destination')).toHaveTextContent('tb1qcurrent')
-    expect(screen.queryByTestId('bark-exit-confirm')).toBeInTheDocument()
+    expect(await screen.findByTestId('bark-offboard-fee')).toHaveTextContent('250')
+    expect(screen.getByTestId('bark-offboard-onchain-amount')).toHaveTextContent('10000')
+    expect(screen.getByTestId('bark-offboard-destination')).toHaveTextContent('tb1qcurrent')
+    expect(screen.queryByTestId('bark-offboard-confirm')).toBeInTheDocument()
   })
 
   it('confirm uses the current address and does not reveal a new one', async () => {
-    reviewBarkExitAmount.mockResolvedValue(amountReview)
-    performBarkExit.mockResolvedValue({ txid: 'cc', syncWarning: null })
-    renderWithProviders(<BarkExitPage />)
-    fireEvent.change(screen.getByTestId('bark-exit-amount'), { target: { value: '10000' } })
-    fireEvent.click(screen.getByTestId('bark-exit-review-amount'))
-    fireEvent.click(await screen.findByTestId('bark-exit-confirm'))
+    reviewBarkOffboardAmount.mockResolvedValue(amountReview)
+    performBarkOffboard.mockResolvedValue({ txid: 'cc', syncWarning: null })
+    renderWithProviders(<BarkOffboardPage />)
+    fireEvent.change(screen.getByTestId('bark-offboard-amount'), { target: { value: '10000' } })
+    fireEvent.click(screen.getByTestId('bark-offboard-review-amount'))
+    fireEvent.click(await screen.findByTestId('bark-offboard-confirm'))
 
     await waitFor(() => {
-      expect(performBarkExit).toHaveBeenCalledWith(expect.anything(), amountReview)
+      expect(performBarkOffboard).toHaveBeenCalledWith(expect.anything(), amountReview)
     })
     expect(getNewAddress).not.toHaveBeenCalled()
     expect(broadcastTransaction).not.toHaveBeenCalled()
@@ -198,17 +198,17 @@ describe('BarkExitPage', () => {
 
   it('disables exit entire balance when spendable sats are zero', () => {
     syncSnapshot.current = { spendableSats: 0 }
-    renderWithProviders(<BarkExitPage />)
-    expect(screen.getByTestId('bark-exit-review-all')).toBeDisabled()
+    renderWithProviders(<BarkOffboardPage />)
+    expect(screen.getByTestId('bark-offboard-review-all')).toBeDisabled()
   })
 
   it('BARK-EXIT-07 does not toast success when the exit throws', async () => {
-    reviewBarkExitAmount.mockResolvedValue(amountReview)
-    performBarkExit.mockRejectedValue(new Error('insufficient funds'))
-    renderWithProviders(<BarkExitPage />)
-    fireEvent.change(screen.getByTestId('bark-exit-amount'), { target: { value: '10000' } })
-    fireEvent.click(screen.getByTestId('bark-exit-review-amount'))
-    fireEvent.click(await screen.findByTestId('bark-exit-confirm'))
+    reviewBarkOffboardAmount.mockResolvedValue(amountReview)
+    performBarkOffboard.mockRejectedValue(new Error('insufficient funds'))
+    renderWithProviders(<BarkOffboardPage />)
+    fireEvent.change(screen.getByTestId('bark-offboard-amount'), { target: { value: '10000' } })
+    fireEvent.click(screen.getByTestId('bark-offboard-review-amount'))
+    fireEvent.click(await screen.findByTestId('bark-offboard-confirm'))
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalled()
@@ -230,12 +230,12 @@ describe('BarkExitPage', () => {
         error: null,
       },
     ]
-    reviewBarkExitAmount.mockResolvedValue(amountReview)
-    performBarkExit.mockRejectedValue(new BarkOffboardParkedError())
-    renderWithProviders(<BarkExitPage />)
-    fireEvent.change(screen.getByTestId('bark-exit-amount'), { target: { value: '10000' } })
-    fireEvent.click(screen.getByTestId('bark-exit-review-amount'))
-    fireEvent.click(await screen.findByTestId('bark-exit-confirm'))
+    reviewBarkOffboardAmount.mockResolvedValue(amountReview)
+    performBarkOffboard.mockRejectedValue(new BarkOffboardParkedError())
+    renderWithProviders(<BarkOffboardPage />)
+    fireEvent.change(screen.getByTestId('bark-offboard-amount'), { target: { value: '10000' } })
+    fireEvent.click(screen.getByTestId('bark-offboard-review-amount'))
+    fireEvent.click(await screen.findByTestId('bark-offboard-confirm'))
 
     await waitFor(() => {
       expect(screen.getByTestId('bark-pending-action-banner')).toHaveTextContent(
@@ -249,9 +249,9 @@ describe('BarkExitPage', () => {
 
   it('BARK-SESS-03 hides the exit form while the Bark session is loading', () => {
     loadSnapshot.current.loadPhase = 'loading'
-    renderWithProviders(<BarkExitPage />)
+    renderWithProviders(<BarkOffboardPage />)
     expect(screen.getByTestId('bark-session-loading')).toBeInTheDocument()
-    expect(screen.queryByTestId('bark-exit-amount')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('bark-offboard-amount')).not.toBeInTheDocument()
   })
 
   it('BARK-SESS-04 hides the exit form when the Bark session failed to open', () => {
@@ -260,9 +260,9 @@ describe('BarkExitPage', () => {
       loadPhase: 'load-error',
       errorMessage: 'signet unreachable',
     }
-    renderWithProviders(<BarkExitPage />)
+    renderWithProviders(<BarkOffboardPage />)
     expect(screen.getByTestId('bark-session-load-error')).toBeInTheDocument()
     expect(screen.getByText('signet unreachable')).toBeInTheDocument()
-    expect(screen.queryByTestId('bark-exit-amount')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('bark-offboard-amount')).not.toBeInTheDocument()
   })
 })

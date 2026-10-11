@@ -1,4 +1,4 @@
-import type { BarkExitReview } from '@/lib/bark/review-bark-exit'
+import type { BarkOffboardReview } from '@/lib/bark/review-bark-offboard'
 
 export class BarkOffboardParkedError extends Error {
   constructor() {
@@ -7,14 +7,14 @@ export class BarkOffboardParkedError extends Error {
   }
 }
 
-export type PerformBarkExitDeps = {
+export type PerformBarkOffboardDeps = {
   sendOnchain: (address: string, amountSats: number) => Promise<string>
   offboardAll: (address: string) => Promise<string>
   syncBark: () => Promise<void>
   startOnchainBackgroundSync: () => void
 }
 
-export type PerformedBarkExit = {
+export type PerformedBarkOffboard = {
   txid: string
   syncWarning: string | null
 }
@@ -25,9 +25,9 @@ function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
 
-async function submitExit(
-  deps: PerformBarkExitDeps,
-  review: BarkExitReview,
+async function submitOffboard(
+  deps: PerformBarkOffboardDeps,
+  review: BarkOffboardReview,
 ): Promise<string> {
   try {
     if (review.mode === 'amount') {
@@ -46,15 +46,15 @@ async function submitExit(
 }
 
 /**
- * Submits a reviewed collaborative exit to Bark.
+ * Submits a reviewed offboard to Bark.
  * Does not reveal a new on-chain address and does not broadcast through Esplora.
- * A parked exit is not a success: Bark retries it on the next sync.
+ * A parked offboard is not a success: Bark retries it on the next sync.
  */
-export async function performBarkExit(
-  deps: PerformBarkExitDeps,
-  review: BarkExitReview,
-): Promise<PerformedBarkExit> {
-  const txid = await submitExit(deps, review)
+export async function performBarkOffboard(
+  deps: PerformBarkOffboardDeps,
+  review: BarkOffboardReview,
+): Promise<PerformedBarkOffboard> {
+  const txid = await submitOffboard(deps, review)
   let syncWarning: string | null = null
   try {
     await deps.syncBark()

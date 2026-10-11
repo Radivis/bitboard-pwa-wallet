@@ -38,7 +38,7 @@ import { Route as LabLayer2RouteImport } from './routes/lab/layer-2'
 import { Route as LabControlRouteImport } from './routes/lab/control'
 import { Route as LabBlocksRouteImport } from './routes/lab/blocks'
 import { Route as WalletBarkVtxosRouteImport } from './routes/wallet/bark/vtxos'
-import { Route as WalletBarkExitRouteImport } from './routes/wallet/bark/exit'
+import { Route as WalletBarkOffboardRouteImport } from './routes/wallet/bark/offboard'
 import { Route as WalletBarkEmergencyExitRouteImport } from './routes/wallet/bark/emergency-exit'
 import { Route as WalletBarkBoardRouteImport } from './routes/wallet/bark/board'
 import { Route as WalletArkadeVtxosRouteImport } from './routes/wallet/arkade/vtxos'
@@ -196,9 +196,9 @@ const WalletBarkVtxosRoute = WalletBarkVtxosRouteImport.update({
   path: '/bark/vtxos',
   getParentRoute: () => WalletRoute,
 } as any)
-const WalletBarkExitRoute = WalletBarkExitRouteImport.update({
-  id: '/bark/exit',
-  path: '/bark/exit',
+const WalletBarkOffboardRoute = WalletBarkOffboardRouteImport.update({
+  id: '/bark/offboard',
+  path: '/bark/offboard',
   getParentRoute: () => WalletRoute,
 } as any)
 const WalletBarkEmergencyExitRoute = WalletBarkEmergencyExitRouteImport.update({
@@ -300,7 +300,7 @@ export interface FileRoutesByFullPath {
   '/wallet/arkade/vtxos': typeof WalletArkadeVtxosRoute
   '/wallet/bark/board': typeof WalletBarkBoardRoute
   '/wallet/bark/emergency-exit': typeof WalletBarkEmergencyExitRoute
-  '/wallet/bark/exit': typeof WalletBarkExitRoute
+  '/wallet/bark/offboard': typeof WalletBarkOffboardRoute
   '/wallet/bark/vtxos': typeof WalletBarkVtxosRoute
 }
 export interface FileRoutesByTo {
@@ -338,7 +338,7 @@ export interface FileRoutesByTo {
   '/wallet/arkade/vtxos': typeof WalletArkadeVtxosRoute
   '/wallet/bark/board': typeof WalletBarkBoardRoute
   '/wallet/bark/emergency-exit': typeof WalletBarkEmergencyExitRoute
-  '/wallet/bark/exit': typeof WalletBarkExitRoute
+  '/wallet/bark/offboard': typeof WalletBarkOffboardRoute
   '/wallet/bark/vtxos': typeof WalletBarkVtxosRoute
 }
 export interface FileRoutesById {
@@ -382,7 +382,7 @@ export interface FileRoutesById {
   '/wallet/arkade/vtxos': typeof WalletArkadeVtxosRoute
   '/wallet/bark/board': typeof WalletBarkBoardRoute
   '/wallet/bark/emergency-exit': typeof WalletBarkEmergencyExitRoute
-  '/wallet/bark/exit': typeof WalletBarkExitRoute
+  '/wallet/bark/offboard': typeof WalletBarkOffboardRoute
   '/wallet/bark/vtxos': typeof WalletBarkVtxosRoute
 }
 export interface FileRouteTypes {
@@ -427,7 +427,7 @@ export interface FileRouteTypes {
     | '/wallet/arkade/vtxos'
     | '/wallet/bark/board'
     | '/wallet/bark/emergency-exit'
-    | '/wallet/bark/exit'
+    | '/wallet/bark/offboard'
     | '/wallet/bark/vtxos'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -465,7 +465,7 @@ export interface FileRouteTypes {
     | '/wallet/arkade/vtxos'
     | '/wallet/bark/board'
     | '/wallet/bark/emergency-exit'
-    | '/wallet/bark/exit'
+    | '/wallet/bark/offboard'
     | '/wallet/bark/vtxos'
   id:
     | '__root__'
@@ -508,7 +508,7 @@ export interface FileRouteTypes {
     | '/wallet/arkade/vtxos'
     | '/wallet/bark/board'
     | '/wallet/bark/emergency-exit'
-    | '/wallet/bark/exit'
+    | '/wallet/bark/offboard'
     | '/wallet/bark/vtxos'
   fileRoutesById: FileRoutesById
 }
@@ -727,11 +727,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WalletBarkVtxosRouteImport
       parentRoute: typeof WalletRoute
     }
-    '/wallet/bark/exit': {
-      id: '/wallet/bark/exit'
-      path: '/bark/exit'
-      fullPath: '/wallet/bark/exit'
-      preLoaderRoute: typeof WalletBarkExitRouteImport
+    '/wallet/bark/offboard': {
+      id: '/wallet/bark/offboard'
+      path: '/bark/offboard'
+      fullPath: '/wallet/bark/offboard'
+      preLoaderRoute: typeof WalletBarkOffboardRouteImport
       parentRoute: typeof WalletRoute
     }
     '/wallet/bark/emergency-exit': {
@@ -902,7 +902,7 @@ interface WalletRouteChildren {
   WalletArkadeVtxosRoute: typeof WalletArkadeVtxosRoute
   WalletBarkBoardRoute: typeof WalletBarkBoardRoute
   WalletBarkEmergencyExitRoute: typeof WalletBarkEmergencyExitRoute
-  WalletBarkExitRoute: typeof WalletBarkExitRoute
+  WalletBarkOffboardRoute: typeof WalletBarkOffboardRoute
   WalletBarkVtxosRoute: typeof WalletBarkVtxosRoute
 }
 
@@ -920,7 +920,7 @@ const WalletRouteChildren: WalletRouteChildren = {
   WalletArkadeVtxosRoute: WalletArkadeVtxosRoute,
   WalletBarkBoardRoute: WalletBarkBoardRoute,
   WalletBarkEmergencyExitRoute: WalletBarkEmergencyExitRoute,
-  WalletBarkExitRoute: WalletBarkExitRoute,
+  WalletBarkOffboardRoute: WalletBarkOffboardRoute,
   WalletBarkVtxosRoute: WalletBarkVtxosRoute,
 }
 

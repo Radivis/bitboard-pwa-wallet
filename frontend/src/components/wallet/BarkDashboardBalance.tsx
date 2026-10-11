@@ -149,7 +149,7 @@ export function BarkDashboardBalance() {
             </Link>
           </Button>
           <Button type="button" variant="outline" size="sm" asChild>
-            <Link to="/wallet/bark/exit" data-testid="dashboard-bark-exit-link">
+            <Link to="/wallet/bark/offboard" data-testid="dashboard-bark-offboard-link">
               Exit to on-chain
             </Link>
           </Button>

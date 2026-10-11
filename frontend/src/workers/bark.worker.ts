@@ -21,7 +21,7 @@ import {
   estimateSendOnchainFromWasm,
   offboardAllFromWasm,
   sendOnchainFromWasm,
-} from '@/lib/bark/bark-exit-session'
+} from '@/lib/bark/bark-offboard-session'
 import {
   broadcastEmergencyExitClaimFromWasm,
   cancelEmergencyExitFromWasm,
@@ -60,7 +60,7 @@ import type {
   BarkEmergencyExitEstimate,
   BarkEmergencyExitProgress,
   BarkEmergencyExitRow,
-  BarkExitFeeEstimate,
+  BarkOffboardFeeEstimate,
   BarkExitGraph,
   BarkMovementRow,
   BarkPendingAction,
@@ -441,7 +441,7 @@ async function listPendingActionsImpl(): Promise<BarkPendingAction[]> {
 async function estimateSendOnchainImpl(
   address: string,
   amountSats: number,
-): Promise<BarkExitFeeEstimate> {
+): Promise<BarkOffboardFeeEstimate> {
   requireOpenSession()
   return estimateSendOnchainFromWasm(await getBarkWasm(), address, amountSats)
 }
@@ -455,7 +455,7 @@ async function sendOnchainImpl(address: string, amountSats: number): Promise<str
   )
 }
 
-async function estimateOffboardAllImpl(address: string): Promise<BarkExitFeeEstimate> {
+async function estimateOffboardAllImpl(address: string): Promise<BarkOffboardFeeEstimate> {
   requireOpenSession()
   return estimateOffboardAllFromWasm(await getBarkWasm(), address)
 }
@@ -694,7 +694,7 @@ const barkService: BarkService = {
     return callBark(() => listVtxosImpl())
   },
 
-  estimateSendOnchain(address: string, amountSats: number): Promise<BarkExitFeeEstimate> {
+  estimateSendOnchain(address: string, amountSats: number): Promise<BarkOffboardFeeEstimate> {
     return callBark(() => estimateSendOnchainImpl(address, amountSats))
   },
 
@@ -702,7 +702,7 @@ const barkService: BarkService = {
     return callBark(() => sendOnchainImpl(address, amountSats))
   },
 
-  estimateOffboardAll(address: string): Promise<BarkExitFeeEstimate> {
+  estimateOffboardAll(address: string): Promise<BarkOffboardFeeEstimate> {
     return callBark(() => estimateOffboardAllImpl(address))
   },
 

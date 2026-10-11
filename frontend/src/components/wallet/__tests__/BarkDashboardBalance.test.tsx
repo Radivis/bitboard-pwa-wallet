@@ -175,9 +175,9 @@ describe('BarkDashboardBalance', () => {
 
   it('BARK-EXIT-01 links to Exit to on-chain when Bark is enabled on signet', () => {
     renderWithProviders(<BarkDashboardBalance />)
-    expect(screen.getByTestId('dashboard-bark-exit-link')).toHaveAttribute(
+    expect(screen.getByTestId('dashboard-bark-offboard-link')).toHaveAttribute(
       'href',
-      '/wallet/bark/exit',
+      '/wallet/bark/offboard',
     )
   })
 
@@ -415,6 +415,6 @@ describe('BarkDashboardBalance', () => {
     ).toBeInTheDocument()
     expect(screen.getByText('signet unreachable')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
-    expect(screen.getByTestId('dashboard-bark-exit-link')).toBeInTheDocument()
+    expect(screen.getByTestId('dashboard-bark-offboard-link')).toBeInTheDocument()
   })
 })

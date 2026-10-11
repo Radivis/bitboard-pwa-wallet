@@ -1,4 +1,4 @@
-import { settleBarkExitAfterSync } from '@/lib/bark/bark-exit-after-sync'
+import { settleBarkEmergencyExitAfterSync } from '@/lib/bark/bark-emergency-exit-after-sync'
 import { getBarkWorker } from '@/workers/bark-factory'
 import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
 import type { BarkNextRefreshObservation } from '@/lib/bark/bark-next-refresh-hint'
@@ -231,7 +231,7 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
         return
       }
       try {
-        await settleBarkExitAfterSync(params.networkMode)
+        await settleBarkEmergencyExitAfterSync(params.networkMode)
       } catch {
         // The stamp stays. The next sync tries exit progress again.
       }

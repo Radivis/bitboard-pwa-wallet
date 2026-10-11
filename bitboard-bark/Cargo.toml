@@ -34,7 +34,7 @@ regtest-support = [
 ]
 
 [dependencies]
-# Address checks for collaborative exit run in native tests as well as WASM.
+# Address checks for offboard run in native tests as well as WASM.
 bitcoin = "0.32.7"
 # VTXO list JSON is built in native tests and in the WASM session.
 serde = { version = "1", features = ["derive"] }

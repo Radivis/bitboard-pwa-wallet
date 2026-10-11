@@ -29,7 +29,7 @@ async function reconcilePendingEmergencyClaim(networkMode: NetworkMode): Promise
  * After a successful Bark sync: drop a claim Bark has now seen, then broadcast
  * exits that are already started. An empty exit list skips progress.
  */
-export async function settleBarkExitAfterSync(networkMode: NetworkMode): Promise<void> {
+export async function settleBarkEmergencyExitAfterSync(networkMode: NetworkMode): Promise<void> {
   await reconcilePendingEmergencyClaim(networkMode)
   const rows = await getBarkWorker().listEmergencyExits()
   if (rows.length === 0) {

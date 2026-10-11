@@ -10,7 +10,7 @@ export const IDLE_BARK_EMERGENCY_EXIT_AUTOMATION_ACTIVITY: BarkEmergencyExitAuto
   errorMessage: null,
 }
 
-/** What the per-block Bark exit automation is doing right now, and its last error. */
+/** What the per-block Bark emergency exit automation is doing right now, and its last error. */
 interface BarkEmergencyExitAutomationState extends BarkEmergencyExitAutomationActivity {
   setActivity: (activity: BarkEmergencyExitAutomationActivity) => void
 }
