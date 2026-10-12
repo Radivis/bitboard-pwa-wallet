@@ -8,9 +8,12 @@ import { decryptDataWithPassword } from '../encryption'
 import {
   saveWalletSecrets,
   loadWalletSecrets,
+  loadWalletSecretsWithPassword,
   reencryptAllWalletSecretsWithNewPassword,
+  updateWalletSecretsPayloadWithRetry,
 } from '../wallet-persistence'
 import { TEST_MNEMONIC_12 } from '@/test-utils/test-providers'
+import { interleaveBeforeNextEncryptWithPassword } from './mock-encryption-worker'
 import {
   beginWalletSecretsSession,
   endWalletSecretsSession,
@@ -38,6 +41,15 @@ import {
 } from '../near-zero-security'
 
 const PARTIAL_UPGRADE_USER_PASSWORD = 'user-password-after-partial-upgrade'
+const DESCRIPTOR_WALLET_WRITTEN_DURING_UPGRADE = {
+  network: 'signet' as const,
+  addressType: 'taproot' as const,
+  accountId: 0,
+  externalDescriptor: "tr([fingerprint/86'/1'/0']xpub.../0/*)",
+  internalDescriptor: "tr([fingerprint/86'/1'/0']xpub.../1/*)",
+  changeSet: '{"last_reveal":{"0":3}}',
+  fullScanDone: true,
+}
 
 async function persistSampleWalletSecrets(
   walletDb: Kysely<Database>,
@@ -290,6 +302,36 @@ describe('near-zero security', () => {
 
     const loaded = await loadWalletSecrets(walletDb, walletId)
     expect(loaded.mnemonic).toBe(TEST_MNEMONIC_12)
+  })
+
+  it('LIFE-SECRETS-01 upgradeNearZeroToUserPassword keeps a payload update requested while it ran', async () => {
+    await generateAndPersistNearZeroSession(walletDb)
+    const walletId = await persistSampleWalletSecrets(walletDb)
+
+    const interleaving = interleaveBeforeNextEncryptWithPassword(() =>
+      updateWalletSecretsPayloadWithRetry({
+        walletDb,
+        walletId,
+        transform: (payload) => ({
+          ...payload,
+          descriptorWallets: [DESCRIPTOR_WALLET_WRITTEN_DURING_UPGRADE],
+        }),
+      }),
+    )
+
+    await upgradeNearZeroToUserPassword({
+      walletDb,
+      newPassword: PARTIAL_UPGRADE_USER_PASSWORD,
+    })
+    await interleaving.awaitConcurrentWrite()
+
+    const loaded = await loadWalletSecretsWithPassword(
+      walletDb,
+      PARTIAL_UPGRADE_USER_PASSWORD,
+      walletId,
+    )
+    expect(loaded.mnemonic).toBe(TEST_MNEMONIC_12)
+    expect(loaded.descriptorWallets).toEqual([DESCRIPTOR_WALLET_WRITTEN_DURING_UPGRADE])
   })
 
   it('syncNearZeroSecurityActiveFlagFromDb sets the store from settings without starting a session', async () => {

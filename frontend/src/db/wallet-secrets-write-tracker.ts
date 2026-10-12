@@ -4,7 +4,9 @@
  */
 const pendingWalletSecretsWrites = new Set<Promise<unknown>>()
 
-const WALLET_SECRETS_FLUSH_TIMEOUT_MS = 60_000
+export const WALLET_SECRETS_FLUSH_TIMEOUT_MS = 60_000
+
+const DEADLINE_REACHED = Symbol('wallet-secrets-flush-deadline-reached')
 
 export function trackWalletSecretsWrite<T>(promise: Promise<T>): Promise<T> {
   pendingWalletSecretsWrites.add(promise)
@@ -20,18 +22,29 @@ export function trackWalletSecretsWrite<T>(promise: Promise<T>): Promise<T> {
  * Times out so a hung write cannot block lock forever.
  */
 export async function awaitInFlightWalletSecretsWrites(): Promise<void> {
-  const deadline = Date.now() + WALLET_SECRETS_FLUSH_TIMEOUT_MS
-  while (pendingWalletSecretsWrites.size > 0) {
-    if (Date.now() > deadline) {
-      if (import.meta.env.DEV) {
-        console.error(
-          '[wallet-secrets] awaitInFlightWalletSecretsWrites timed out',
-          { pending: pendingWalletSecretsWrites.size },
-        )
+  let deadlineTimer: ReturnType<typeof setTimeout> | undefined
+  const deadlineReached = new Promise<typeof DEADLINE_REACHED>((resolve) => {
+    deadlineTimer = setTimeout(() => resolve(DEADLINE_REACHED), WALLET_SECRETS_FLUSH_TIMEOUT_MS)
+  })
+  try {
+    while (pendingWalletSecretsWrites.size > 0) {
+      const snapshot = [...pendingWalletSecretsWrites]
+      const outcome = await Promise.race([Promise.allSettled(snapshot), deadlineReached])
+      if (outcome === DEADLINE_REACHED) {
+        reportFlushTimeout()
+        return
       }
-      break
     }
-    const snapshot = [...pendingWalletSecretsWrites]
-    await Promise.allSettled(snapshot)
+  } finally {
+    clearTimeout(deadlineTimer)
   }
+}
+
+function reportFlushTimeout(): void {
+  if (!import.meta.env.DEV) {
+    return
+  }
+  console.error('[wallet-secrets] awaitInFlightWalletSecretsWrites timed out', {
+    pending: pendingWalletSecretsWrites.size,
+  })
 }

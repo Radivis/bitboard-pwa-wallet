@@ -27,10 +27,34 @@ export interface EncryptedWalletSecretsHost {
 export type EncryptedWalletSecretsHostOptions = {
   /** Aborted when the worker using this host is terminated. */
   detachSignal?: AbortSignal
+  /** Upper bound for one transform run; defaults to {@link DEFAULT_TRANSFORM_TIMEOUT_MS}. */
+  transformTimeoutMs?: number
 }
+
+/**
+ * A transform decrypts and re-encrypts with Argon2id, which takes seconds. Anything far
+ * beyond that is a stuck worker that would otherwise hold the critical section forever.
+ */
+const DEFAULT_TRANSFORM_TIMEOUT_MS = 60_000
 
 const WORKER_DETACHED_ERROR_MESSAGE =
   'Wallet secrets update was abandoned because its worker was detached'
+
+const TRANSFORM_TIMED_OUT_ERROR_MESSAGE =
+  'Wallet secrets update was abandoned because its transform did not finish in time'
+
+function rejectWhenTimedOut<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
+  let timeoutTimer: ReturnType<typeof setTimeout> | undefined
+  const timedOut = new Promise<never>((_resolve, reject) => {
+    timeoutTimer = setTimeout(
+      () => reject(new Error(TRANSFORM_TIMED_OUT_ERROR_MESSAGE)),
+      timeoutMs,
+    )
+  })
+  return Promise.race([work, timedOut]).finally(() => {
+    clearTimeout(timeoutTimer)
+  })
+}
 
 /**
  * A terminated worker never settles its Comlink calls. Without this, its transform
@@ -66,7 +90,10 @@ export function createEncryptedWalletSecretsHost(
         walletDb: getDatabase(),
         walletId,
         transform: (currentPayload) =>
-          rejectWhenDetached(transform(currentPayload), options.detachSignal),
+          rejectWhenTimedOut(
+            rejectWhenDetached(transform(currentPayload), options.detachSignal),
+            options.transformTimeoutMs ?? DEFAULT_TRANSFORM_TIMEOUT_MS,
+          ),
       })
     },
   }

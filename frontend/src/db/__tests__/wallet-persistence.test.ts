@@ -26,6 +26,7 @@ vi.mock('@/workers/encryption-factory', async () => {
 })
 
 import { TEST_MNEMONIC_12 } from '@/test-utils/test-providers'
+import { interleaveBeforeNextEncryptWithPassword } from './mock-encryption-worker'
 import {
   saveWalletSecrets,
   loadWalletSecrets,
@@ -316,6 +317,42 @@ describe('Wallet Persistence with Encryption', () => {
 
       await expect(loadWalletSecretsWithPassword(walletDb, oldPass, walletId)).rejects.toThrow()
       await expect(loadWalletSecretsWithPassword(walletDb, oldPass, walletId2)).rejects.toThrow()
+    })
+
+    it('LIFE-SECRETS-01 keeps a payload update requested while it ran, readable with the new password', async () => {
+      const updatedChangeSet = '{"last_reveal":{"0":9}}'
+      await endWalletSecretsSession()
+      await beginWalletSecretsSession(oldPass)
+      await saveWalletSecrets({ walletDb, walletId, secrets: sampleSecrets })
+
+      const interleaving = interleaveBeforeNextEncryptWithPassword(() =>
+        updateWalletSecretsPayloadWithRetry({
+          walletDb,
+          walletId,
+          transform: (payload) => ({
+            ...payload,
+            descriptorWallets: payload.descriptorWallets.map((descriptorWallet) => ({
+              ...descriptorWallet,
+              changeSet: updatedChangeSet,
+            })),
+          }),
+        }),
+      )
+
+      await reencryptAllWalletSecretsWithNewPassword({
+        walletDb,
+        oldPassword: oldPass,
+        newPassword: newPass,
+        afterReencrypt: async () => {
+          await endWalletSecretsSession()
+          await beginWalletSecretsSession(newPass)
+        },
+      })
+      await interleaving.awaitConcurrentWrite()
+
+      const loaded = await loadWalletSecretsWithPassword(walletDb, newPass, walletId)
+      expect(loaded.mnemonic).toBe(sampleSecrets.mnemonic)
+      expect(loaded.descriptorWallets[0]?.changeSet).toBe(updatedChangeSet)
     })
 
     it('throws when current password is wrong (no partial writes)', async () => {

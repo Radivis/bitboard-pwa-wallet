@@ -641,11 +641,31 @@ export async function listWalletIdsWithSecrets(
   return rows.map((row) => row.wallet_id)
 }
 
-export async function reencryptAllWalletSecretsWithNewPassword(params: {
+type ReencryptAllWalletSecretsParams = {
   walletDb: Kysely<Database>
   oldPassword: string
   newPassword: string
-}): Promise<void> {
+  /**
+   * Runs inside the same critical section right after the write, typically to move the
+   * secrets session to the new password. Payload updates queued meanwhile run only after
+   * it, so they read and write with the new password instead of being overwritten.
+   * Must not wait for another wallet-secrets write, or it deadlocks.
+   */
+  afterReencrypt?: () => Promise<void>
+}
+
+export function reencryptAllWalletSecretsWithNewPassword(
+  params: ReencryptAllWalletSecretsParams,
+): Promise<void> {
+  return withWalletSecretsCriticalSection(async () => {
+    await reencryptAllWalletSecretsWithNewPasswordImpl(params)
+    await params.afterReencrypt?.()
+  })
+}
+
+async function reencryptAllWalletSecretsWithNewPasswordImpl(
+  params: ReencryptAllWalletSecretsParams,
+): Promise<void> {
   const { walletDb, oldPassword, newPassword } = params
 
   const walletIds = await listWalletIdsWithSecrets(walletDb)

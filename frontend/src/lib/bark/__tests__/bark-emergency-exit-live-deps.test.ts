@@ -41,8 +41,18 @@ vi.mock('@/workers/crypto-factory', () => ({
   getCryptoWorker: () => cryptoWorkerMock,
 }))
 
+const DEFAULT_ESPLORA_URL = 'https://esplora.example'
+const CUSTOM_ESPLORA_URL = 'https://my-own-esplora.example/api'
+
+const customEsploraUrlState = vi.hoisted(() => ({ current: null as string | null }))
+
 vi.mock('@/lib/wallet/bitcoin-utils', () => ({
-  getEsploraUrl: () => 'https://esplora.example',
+  getEsploraUrl: (_networkMode: string, customUrl?: string | null) =>
+    customUrl || DEFAULT_ESPLORA_URL,
+}))
+
+vi.mock('@/lib/wallet/wallet-utils', () => ({
+  loadCustomEsploraUrl: async () => customEsploraUrlState.current,
 }))
 
 import { barkEmergencyExitClaimDeps } from '@/lib/bark/bark-emergency-exit-live-deps'
@@ -51,6 +61,7 @@ import { claimBarkEmergencyExits } from '@/lib/bark/perform-bark-emergency-exit'
 describe('barkEmergencyExitClaimDeps', () => {
   beforeEach(() => {
     syncMock.mockReset()
+    customEsploraUrlState.current = null
     walletState.activeWalletId = 1
     walletState.networkMode = 'signet'
     barkWorkerMock.readPendingEmergencyClaim.mockResolvedValue(null)
@@ -73,5 +84,13 @@ describe('barkEmergencyExitClaimDeps', () => {
     ).resolves.toEqual({ txid: 'txid-claim', observed: true })
 
     expect(syncMock).not.toHaveBeenCalled()
+  })
+
+  it('BARK-EMG-25 the claim broadcast uses the custom Esplora URL when one is set', async () => {
+    customEsploraUrlState.current = CUSTOM_ESPLORA_URL
+
+    await claimBarkEmergencyExits(barkEmergencyExitClaimDeps(), 'tb1qcurrent', 2)
+
+    expect(cryptoWorkerMock.broadcastTransaction).toHaveBeenCalledWith('00', CUSTOM_ESPLORA_URL)
   })
 })

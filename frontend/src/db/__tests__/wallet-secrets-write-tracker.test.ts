@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   awaitInFlightWalletSecretsWrites,
   trackWalletSecretsWrite,
+  WALLET_SECRETS_FLUSH_TIMEOUT_MS,
 } from '@/db/wallet-secrets-write-tracker'
 
 describe('wallet-secrets-write-tracker', () => {
@@ -20,5 +21,29 @@ describe('wallet-secrets-write-tracker', () => {
     await awaitInFlightWalletSecretsWrites()
     await trackedWritePromise
     expect(writeCompleted).toBe(true)
+  })
+
+  it('LIFE-SECRETS-02 stops waiting at the deadline when a write never settles', async () => {
+    vi.useFakeTimers()
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    let settleStalledWrite: () => void = () => undefined
+    const stalledWrite = trackWalletSecretsWrite(
+      new Promise<void>((resolve) => {
+        settleStalledWrite = resolve
+      }),
+    )
+    try {
+      let waitEnded = false
+      void awaitInFlightWalletSecretsWrites().then(() => {
+        waitEnded = true
+      })
+      await vi.advanceTimersByTimeAsync(WALLET_SECRETS_FLUSH_TIMEOUT_MS + 1)
+      expect(waitEnded).toBe(true)
+    } finally {
+      settleStalledWrite()
+      await stalledWrite
+      consoleErrorSpy.mockRestore()
+      vi.useRealTimers()
+    }
   })
 })

@@ -4,6 +4,7 @@ import { runBarkEmergencyExitProgress } from '@/lib/bark/bark-emergency-exit-pro
 import { pendingClaimDecision } from '@/lib/bark/bark-emergency-claim'
 import { presetRatesForNetwork } from '@/hooks/useEsploraFeePresets'
 import { getEsploraUrl } from '@/lib/wallet/bitcoin-utils'
+import { loadCustomEsploraUrl } from '@/lib/wallet/wallet-utils'
 import { useBarkEmergencyExitFundingStore } from '@/stores/barkEmergencyExitFundingStore'
 import { useWalletStore, type NetworkMode } from '@/stores/walletStore'
 import { getBarkWorker } from '@/workers/bark-factory'
@@ -13,7 +14,8 @@ async function reconcilePendingEmergencyClaim(networkMode: NetworkMode): Promise
   const pending = await worker.readPendingEmergencyClaim()
   if (pending == null) return
   const rows = await worker.listEmergencyExits()
-  const esploraUrl = getEsploraUrl(networkMode)
+  const customUrl = await loadCustomEsploraUrl(networkMode)
+  const esploraUrl = getEsploraUrl(networkMode, customUrl)
   const visibility =
     esploraUrl.length === 0
       ? 'unknown'

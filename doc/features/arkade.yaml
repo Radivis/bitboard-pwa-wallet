@@ -363,6 +363,10 @@ feature:
           When that digest must not be persisted, the snapshot and accepted operator cache are not
           written and pending trust is staged. Background full reconcile reports operatorTrustPending
           instead of success, and the host keeps any existing reconcile warning.
+    operator_proxy:
+      - id: ARK-PROXY-01
+        description: The hosted operator proxy answers 404 Unknown network for a network path segment that is not one of its own upstream keys, including inherited object keys such as __proto__ and constructor, and makes no upstream request
+        implemented_by: frontend/src/lib/arkade/__tests__/arkade-operator-vercel-function.test.ts
     vtxo_viewer:
       - id: ARK-VTX-01
         description: VTXO viewer page lists VTXO cards when session open and Arkade active

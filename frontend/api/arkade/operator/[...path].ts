@@ -12,7 +12,10 @@ const ARKADE_OPERATOR_UPSTREAM_BASES: Record<string, string> = {
 }
 
 function getUpstreamArkOperatorBase(network: string): string | null {
-  return ARKADE_OPERATOR_UPSTREAM_BASES[network] ?? null
+  if (!Object.hasOwn(ARKADE_OPERATOR_UPSTREAM_BASES, network)) {
+    return null
+  }
+  return ARKADE_OPERATOR_UPSTREAM_BASES[network]
 }
 
 // Inlined from src/lib/shared/validate-proxied-upstream-url.ts

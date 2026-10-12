@@ -79,6 +79,7 @@ feature:
     - Cancel is offered only while that exit is still cancelable
     - A start that marks no VTXO is an error and does not toast success
     - Claim sends every fresh claimable exit to the current on-chain receive address, broadcasts that signed transaction through the existing Esplora client, and does not reveal a new address
+    - The claim broadcast and the check whether a pending claim is visible use the Esplora configured for the network, which is the custom URL when one is set
     - A claim is finished only when Bark reports claim-in-progress or claimed for each drained VTXO. Until then those VTXOs stay claim-in-progress and are not drained again
     - A bark.exit movement is labeled as a Bark emergency exit, distinct from collaborative bark.offboard
     - The exit tree is shown on the emergency-exit page when Bark is enabled on signet or mainnet. It loads the checked spendable VTXOs, or every spendable VTXO when the whole wallet is checked, plus every live exit
@@ -445,6 +446,11 @@ feature:
       - id: BARK-EMG-24
         description: A claim does not run a Bark sync, so it never contacts the Ark server. Bark sees the claim through its exit sync against the chain source
         implemented_by: frontend/src/lib/bark/__tests__/bark-emergency-exit-live-deps.test.ts
+      - id: BARK-EMG-25
+        description: The claim broadcast and the post-sync check whether a pending claim is visible use the Esplora configured for the network, which is the custom URL when one is set
+        implemented_by:
+          - frontend/src/lib/bark/__tests__/bark-emergency-exit-live-deps.test.ts
+          - frontend/src/lib/bark/__tests__/bark-emergency-exit-after-sync.test.ts
   pages:
     - BarkManagement:
         description: Bark entry on the Management page
@@ -501,7 +507,7 @@ feature:
           - Full-page Bark session loading or error screen while the session is not ready
         requirements:
           - Contracts BARK-EMG-02 through BARK-EMG-08
-          - Contracts BARK-EMG-10 through BARK-EMG-24
+          - Contracts BARK-EMG-10 through BARK-EMG-25
           - Contracts BARK-SESS-03 and BARK-SESS-04
           - Shown only when isBarkEnabled and the network is signet or mainnet
           - Progress is a button, and a successful Bark sync also progresses exits that are already started

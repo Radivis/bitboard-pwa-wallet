@@ -19,10 +19,7 @@ import {
   getDatabase,
   reencryptAllWalletSecretsWithNewPassword,
 } from '@/db'
-import {
-  beginWalletSecretsSession,
-  endWalletSecretsSession,
-} from '@/lib/wallet/wallet-secrets-session'
+import { replaceWalletSecretsSession } from '@/lib/wallet/wallet-secrets-session'
 import { errorMessage } from '@/lib/shared/utils'
 
 const CHANGE_APP_PASSWORD_FIELDS_CONFIG = {
@@ -69,9 +66,8 @@ export function ChangeAppPasswordModal({
         walletDb,
         oldPassword: params.current,
         newPassword: params.next,
+        afterReencrypt: () => replaceWalletSecretsSession(params.next),
       })
-      await endWalletSecretsSession()
-      await beginWalletSecretsSession(params.next)
     },
     onSuccess: () => {
       setPhase('success')

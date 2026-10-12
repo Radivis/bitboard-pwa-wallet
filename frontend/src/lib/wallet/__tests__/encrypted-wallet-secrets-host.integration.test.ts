@@ -40,6 +40,7 @@ const INITIAL_BARK_DUMP = 'b2xkLWR1bXA='
 const NEXT_BARK_DUMP = 'bmV4dC1kdW1w'
 const PENDING_CLAIM = { txid: 'aa', vtxoIds: ['vtxo-1'] }
 const CONCURRENT_WRITE_GRACE_MS = 20
+const TEST_TRANSFORM_TIMEOUT_MS = 30
 
 function fakeEncrypt(plaintext: string): EncryptedBlob {
   return {
@@ -250,5 +251,21 @@ describe('encrypted wallet secrets host (real SQLite)', () => {
       stored.barkAccounts.find((account) => account.networkMode === 'signet')
         ?.pendingEmergencyClaim,
     ).toEqual(PENDING_CLAIM)
+  })
+
+  it('LIFE-SECRETS-03 updateEncryptedPayload rejects a transform that exceeds its time budget and frees the queue', async () => {
+    const budgetedHost = createEncryptedWalletSecretsHost({
+      transformTimeoutMs: TEST_TRANSFORM_TIMEOUT_MS,
+    })
+    const stalledUpdate = budgetedHost.updateEncryptedPayload(
+      walletId,
+      () => new Promise<EncryptedBlob>(() => undefined),
+    )
+
+    await expect(stalledUpdate).rejects.toThrow(/did not finish/i)
+    const host = createEncryptedWalletSecretsHost()
+    await expect(
+      host.updateEncryptedPayload(walletId, async (currentBlob) => currentBlob),
+    ).resolves.toBeUndefined()
   })
 })
