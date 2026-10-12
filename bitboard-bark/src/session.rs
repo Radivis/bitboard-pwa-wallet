@@ -309,6 +309,18 @@ pub(crate) fn finish_wallet_operation<T>(
     }
 }
 
+/// Takes the open wallet, runs `operation`, and stores the wallet again.
+/// Does not wait for `bark_sync`, which needs the Ark server, so emergency exits
+/// work while that server is unreachable.
+pub(crate) async fn run_with_open_wallet<T, F>(operation: F) -> Result<T, JsValue>
+where
+    F: AsyncFnOnce(&bark::Wallet) -> Result<T, String>,
+{
+    let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
+    let operation_result = operation(&wallet).await;
+    finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
+}
+
 pub(crate) fn bark_error(err: impl std::fmt::Display) -> String {
     format!("{err:#}")
 }
@@ -445,7 +457,9 @@ async fn delegated_refresh_status(wallet: &bark::Wallet) -> String {
     let pending_round_count = match wallet.pending_round_states().await {
         Ok(states) => states.len(),
         Err(err) => {
-            console_warn(&format!("Bark could not read pending round states: {err:#}"));
+            console_warn(&format!(
+                "Bark could not read pending round states: {err:#}"
+            ));
             return BARK_REFRESH_WARNING.to_owned();
         }
     };
@@ -468,8 +482,7 @@ async fn delegated_refresh_status(wallet: &bark::Wallet) -> String {
 /// so a successful sync is not undone by this read.
 #[wasm_bindgen]
 pub async fn bark_next_refresh_schedule() -> Result<String, JsValue> {
-    let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
-    let operation_result = async {
+    run_with_open_wallet(async |wallet| {
         let tip_height = read_or_warn("chain tip", wallet.chain().tip().await);
         let required_refresh_height = read_or_warn(
             "next required refresh height",
@@ -477,9 +490,8 @@ pub async fn bark_next_refresh_schedule() -> Result<String, JsValue> {
         )
         .flatten();
         next_refresh_schedule_json(tip_height, required_refresh_height)
-    }
-    .await;
-    finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
+    })
+    .await
 }
 
 fn read_or_warn<T>(label: &str, read: anyhow::Result<T>) -> Option<T> {
@@ -492,7 +504,9 @@ fn read_or_warn<T>(label: &str, read: anyhow::Result<T>) -> Option<T> {
     }
 }
 
-/// Spendable and locked satoshis. Refused until `bark_sync` has succeeded in this session.
+/// Spendable, locked, and exiting satoshis. Exiting sats are coins in an emergency exit
+/// and are not part of the spendable or locked figures.
+/// Refused until `bark_sync` has succeeded in this session.
 #[wasm_bindgen]
 pub async fn bark_balance() -> Result<String, JsValue> {
     require_session_synced().map_err(|err| JsValue::from_str(&err))?;

@@ -585,12 +585,12 @@ mod wasm {
         BARK_EXIT_NOT_EXITING, BARK_EXIT_NOTHING_STARTED, BARK_EXIT_UNKNOWN_VTXO,
         BarkEmergencyExitStateKind, EmergencyExitCpfpRequestJson, EmergencyExitDrainJson,
         EmergencyExitEstimateJson, EmergencyExitProgressJson, EmergencyExitRowJson,
-        cpfp_requests_needing_first_child, encode_hex, exit_ids_grew, fee_rate_from_sat_per_vb, fee_rate_sat_per_vb, format_bark_exit_error,
-        json_string, zero_estimate_json,
+        cpfp_requests_needing_first_child, encode_hex, exit_ids_grew, fee_rate_from_sat_per_vb,
+        fee_rate_sat_per_vb, format_bark_exit_error, json_string, zero_estimate_json,
     };
     use crate::exit_address::parse_receive_address;
     use crate::session::session_bitcoin_network;
-    use crate::session::{bark_error, finish_wallet_operation, take_active_wallet};
+    use crate::session::{bark_error, run_with_open_wallet};
 
     fn format_exit_error(err: &bark::exit::ExitError) -> String {
         let code = match err {
@@ -660,17 +660,6 @@ mod wasm {
     async fn unspent_vtxo_ids(wallet: &bark::Wallet) -> Result<Vec<bark::ark::VtxoId>, String> {
         let vtxos = wallet.vtxos().await.map_err(bark_error)?;
         Ok(vtxos.into_iter().map(|vtxo| vtxo.id()).collect())
-    }
-
-    /// Emergency exits must work while the Ark server is unreachable. They therefore
-    /// do not wait for `bark_sync`, which needs the server.
-    async fn run_with_open_wallet<T, F>(operation: F) -> Result<T, JsValue>
-    where
-        F: AsyncFnOnce(&bark::Wallet) -> Result<T, String>,
-    {
-        let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
-        let operation_result = operation(&wallet).await;
-        finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
     }
 
     /// Broadcast fee, later claim fee, and how many exit transactions still need a child.
@@ -1004,8 +993,9 @@ mod tests {
         BARK_EXIT_NOT_EXITING, BARK_EXIT_NOTHING_STARTED, BARK_EXIT_UNKNOWN_VTXO,
         BarkEmergencyExitStateKind, ExitGraphChain, ExitGraphChainStatus, ExitGraphTransactionKind,
         ExitGraphTransactionStatus, ExitGraphTxType, chain_anchor_transaction,
-        cpfp_requests_needing_first_child, emergency_exit_state_json, exit_graph_transaction_from_bitcoin, exit_graph_tx_types,
-        exit_ids_grew, fee_rate_from_sat_per_vb, fee_rate_sat_per_vb, merge_exit_graph,
+        cpfp_requests_needing_first_child, emergency_exit_state_json,
+        exit_graph_transaction_from_bitcoin, exit_graph_tx_types, exit_ids_grew,
+        fee_rate_from_sat_per_vb, fee_rate_sat_per_vb, merge_exit_graph,
     };
     use crate::exit_address::parse_signet_receive_address;
 

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  BarkCpfpUnfundableError,
   claimBarkEmergencyExits,
   progressBarkEmergencyExits,
 } from '@/lib/bark/perform-bark-emergency-exit'
@@ -186,6 +187,11 @@ describe('progressBarkEmergencyExits', () => {
     await expect(progressed).rejects.toThrow(/^bark_cpfp_unfundable: /)
     await expect(progressed).rejects.toThrow('need at least 6000 sat')
     await expect(progressed).rejects.toThrow('holds 5000 sat')
+    await expect(progressed).rejects.toBeInstanceOf(BarkCpfpUnfundableError)
+    await expect(progressed).rejects.toMatchObject({
+      waitingNeededSats: 6_000,
+      onchainTotalSats: 5_000,
+    })
     expect(deps.provideChild).toHaveBeenCalledWith('parent-1', 'child-1')
     expect(deps.progress).toHaveBeenCalledTimes(2)
   })

@@ -195,13 +195,19 @@ fn is_durable_partition(partition_id: u8) -> bool {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-async fn invoke_durable_flush(hook: &DurableFlushHook, record_envelope: String) -> Result<(), String> {
+async fn invoke_durable_flush(
+    hook: &DurableFlushHook,
+    record_envelope: String,
+) -> Result<(), String> {
     let DurableFlushHook::Native(flush) = hook;
     flush(record_envelope)
 }
 
 #[cfg(target_arch = "wasm32")]
-async fn invoke_durable_flush(hook: &DurableFlushHook, record_envelope: String) -> Result<(), String> {
+async fn invoke_durable_flush(
+    hook: &DurableFlushHook,
+    record_envelope: String,
+) -> Result<(), String> {
     let DurableFlushHook::Js(flush) = hook;
     // The hook persists the envelope. It must not call back into this WASM module.
     let result = flush
@@ -312,7 +318,7 @@ mod tests {
     use super::*;
 
     struct RecordedFlushes {
-        dumps: Arc<Mutex<Vec<String>>>,
+        envelopes: Arc<Mutex<Vec<String>>>,
         hook: NativeDurableFlushHook,
     }
 
@@ -463,7 +469,7 @@ mod tests {
                 .push(record_envelope);
             Ok(())
         });
-        RecordedFlushes { dumps: envelopes, hook }
+        RecordedFlushes { envelopes, hook }
     }
 
     /// The flush-log lock must end before the restored store is awaited.
@@ -474,15 +480,14 @@ mod tests {
     }
 
     fn envelope_store(record_envelope: &str) -> SharedRecordStore {
-        SharedRecordStore::from_encoded_envelope(record_envelope)
-            .expect("envelope round-trips")
+        SharedRecordStore::from_encoded_envelope(record_envelope).expect("envelope round-trips")
     }
 
     #[tokio::test]
     async fn checkpoint_put_flushes_the_envelope_before_put_returns() {
         let mut store = SharedRecordStore::empty();
         let RecordedFlushes {
-            dumps: flushed_dumps,
+            envelopes: flushed_envelopes,
             hook,
         } = flush_log();
         store.set_durable_flush_hook(hook);
@@ -506,7 +511,7 @@ mod tests {
             .await
             .unwrap();
 
-        let restored = open_only_flushed_envelope(&flushed_dumps);
+        let restored = open_only_flushed_envelope(&flushed_envelopes);
         let checkpoint = restored
             .get(partition::WALLET_ACTION_CHECKPOINT, b"board.txid.0")
             .await
@@ -525,7 +530,7 @@ mod tests {
     async fn vtxo_put_does_not_flush() {
         let mut store = SharedRecordStore::empty();
         let RecordedFlushes {
-            dumps: flushed_dumps,
+            envelopes: flushed_envelopes,
             hook,
         } = flush_log();
         store.set_durable_flush_hook(hook);
@@ -538,14 +543,14 @@ mod tests {
             ))
             .await
             .unwrap();
-        assert!(flushed_dumps.lock().expect("flush log").is_empty());
+        assert!(flushed_envelopes.lock().expect("flush log").is_empty());
     }
 
     #[tokio::test]
     async fn checkpoint_delete_flushes_the_envelope_without_the_record() {
         let mut store = SharedRecordStore::empty();
         let RecordedFlushes {
-            dumps: flushed_dumps,
+            envelopes: flushed_envelopes,
             hook,
         } = flush_log();
         store.set_durable_flush_hook(hook);
@@ -558,14 +563,14 @@ mod tests {
             ))
             .await
             .unwrap();
-        flushed_dumps.lock().expect("flush log").clear();
+        flushed_envelopes.lock().expect("flush log").clear();
 
         store
             .delete(partition::WALLET_ACTION_CHECKPOINT, b"board.txid.0")
             .await
             .unwrap();
 
-        let restored = open_only_flushed_envelope(&flushed_dumps);
+        let restored = open_only_flushed_envelope(&flushed_envelopes);
         assert!(
             restored
                 .get(partition::WALLET_ACTION_CHECKPOINT, b"board.txid.0")
@@ -608,7 +613,7 @@ mod tests {
         for exit_partition in [partition::EXIT_VTXO, partition::EXIT_CHILD_TX] {
             let mut store = SharedRecordStore::empty();
             let RecordedFlushes {
-                dumps: flushed_dumps,
+                envelopes: flushed_envelopes,
                 hook,
             } = flush_log();
             store.set_durable_flush_hook(hook);
@@ -616,11 +621,11 @@ mod tests {
                 .put(record(exit_partition, "exit", None, b"row"))
                 .await
                 .unwrap();
-            assert_eq!(flushed_dumps.lock().expect("flush log").len(), 1);
+            assert_eq!(flushed_envelopes.lock().expect("flush log").len(), 1);
 
-            flushed_dumps.lock().expect("flush log").clear();
+            flushed_envelopes.lock().expect("flush log").clear();
             store.delete(exit_partition, b"exit").await.unwrap();
-            let restored = open_only_flushed_envelope(&flushed_dumps);
+            let restored = open_only_flushed_envelope(&flushed_envelopes);
             assert!(
                 restored
                     .get(exit_partition, b"exit")

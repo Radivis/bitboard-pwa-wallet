@@ -4,28 +4,11 @@ import { isLightningSupported } from '@/lib/lightning/lightning-utils'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
 import { startBarkLoadAfterUnlock } from '@/lib/bark/bark-session-service'
-import { orchestrateLightningLoad } from '@/lib/wallet/lifecycle/lightning-load-lifecycle-orchestrator'
-import { orchestrateArkadeLoad } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
 import {
-  useRailLoadOnFeatureActivation,
-  type RailLoadTarget,
-} from '@/hooks/useRailLoadOnFeatureActivation'
-
-function startLightningLoad(target: RailLoadTarget): void {
-  void orchestrateLightningLoad({ ...target, allowRetryFromError: true }).catch((err) => {
-    void import('@/lib/wallet/rail-sync-error-toast').then(({ reportLightningLoadError }) =>
-      reportLightningLoadError(err),
-    )
-  })
-}
-
-function startArkadeLoad(target: RailLoadTarget): void {
-  void orchestrateArkadeLoad({ ...target, allowRetryFromError: true }).catch((err) => {
-    void import('@/lib/arkade/arkade-session-open-error-toast').then(
-      ({ reportArkadeSessionOpenError }) => reportArkadeSessionOpenError(err),
-    )
-  })
-}
+  startArkadeLoadAfterUnlock,
+  startLightningLoadAfterUnlock,
+} from '@/lib/wallet/lifecycle/rail-load-starters'
+import { useRailLoadOnFeatureActivation } from '@/hooks/useRailLoadOnFeatureActivation'
 
 /**
  * Lightning has no network-switch reload, so its activation includes the network.
@@ -40,12 +23,12 @@ export function useRailLoadsOnFeatureActivation(): void {
   useRailLoadOnFeatureActivation({
     isRailActivated: isLightningEnabled && isLightningSupported(networkMode),
     isRailActiveForNetwork: isLightningSupported,
-    startRailLoad: startLightningLoad,
+    startRailLoad: startLightningLoadAfterUnlock,
   })
   useRailLoadOnFeatureActivation({
     isRailActivated: isArkadeEnabled,
     isRailActiveForNetwork: isArkadeActiveForNetworkMode,
-    startRailLoad: startArkadeLoad,
+    startRailLoad: startArkadeLoadAfterUnlock,
   })
   useRailLoadOnFeatureActivation({
     isRailActivated: isBarkEnabled,

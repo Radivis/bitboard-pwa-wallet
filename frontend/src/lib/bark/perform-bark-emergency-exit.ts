@@ -50,6 +50,24 @@ export const BARK_CPFP_INSUFFICIENT_FUNDS = 'bark_cpfp_insufficient_funds'
 const BARK_CPFP_NEEDED_SATS_LABEL = 'needed_sats'
 export const BARK_CPFP_UNFUNDABLE = 'bark_cpfp_unfundable'
 
+/**
+ * Even pending coins cannot pay for the Pay-to-Anchor children that are waiting. Created and
+ * caught on the main thread, so the class survives. The message keeps the code prefix for the toast.
+ */
+export class BarkCpfpUnfundableError extends Error {
+  readonly waitingNeededSats: number
+  readonly onchainTotalSats: number
+
+  constructor(params: { waitingNeededSats: number; onchainTotalSats: number }) {
+    super(
+      `${BARK_CPFP_UNFUNDABLE}: Waiting exit transactions need at least ${formatSats(params.waitingNeededSats)} sat, but the on-chain wallet holds ${formatSats(params.onchainTotalSats)} sat including pending coins. Add on-chain funds to continue the emergency exit.`,
+    )
+    this.name = 'BarkCpfpUnfundableError'
+    this.waitingNeededSats = params.waitingNeededSats
+    this.onchainTotalSats = params.onchainTotalSats
+  }
+}
+
 type SignedChild = { childTxHex: string } | { shortfallSats: number }
 
 export type ClaimedBarkEmergencyExit = {
@@ -81,8 +99,8 @@ export function isBarkCpfpInsufficientFundsError(err: unknown): boolean {
 }
 
 /** Even pending coins cannot pay for the children that are waiting. */
-export function isBarkCpfpUnfundableError(err: unknown): boolean {
-  return errorMessage(err).startsWith(BARK_CPFP_UNFUNDABLE)
+export function isBarkCpfpUnfundableError(err: unknown): err is BarkCpfpUnfundableError {
+  return err instanceof BarkCpfpUnfundableError
 }
 
 /**
@@ -187,9 +205,7 @@ async function assertWaitingChildrenFundable(
 ): Promise<void> {
   const onchainTotalSats = await deps.onchainTotalSats()
   if (onchainTotalSats >= waitingNeededSats) return
-  throw new Error(
-    `${BARK_CPFP_UNFUNDABLE}: Waiting exit transactions need at least ${formatSats(waitingNeededSats)} sat, but the on-chain wallet holds ${formatSats(onchainTotalSats)} sat including pending coins. Add on-chain funds to continue the emergency exit.`,
-  )
+  throw new BarkCpfpUnfundableError({ waitingNeededSats, onchainTotalSats })
 }
 
 /**

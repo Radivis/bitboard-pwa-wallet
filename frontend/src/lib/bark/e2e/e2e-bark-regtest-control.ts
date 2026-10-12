@@ -16,7 +16,7 @@ export type BarkBoardedFixture = {
 
 /**
  * Mnemonic and Bark record envelope after a board flush.
- * Rust phase 1 does not load this file; the export proves the dump round-trip.
+ * Rust phase 1 does not load this file; the export proves the record envelope round-trip.
  */
 export async function exportBoardedBarkFixtureForE2e(): Promise<BarkBoardedFixture> {
   const walletId = useWalletStore.getState().activeWalletId

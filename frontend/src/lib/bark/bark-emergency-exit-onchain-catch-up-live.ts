@@ -1,3 +1,4 @@
+import type { BarkEmergencyExitTip } from '@/lib/bark/bark-emergency-exit-automation'
 import {
   catchUpOnchainWalletToChainTip,
   type OnchainCatchUpDeps,
@@ -10,7 +11,7 @@ import { getCryptoWorker } from '@/workers/crypto-factory'
 
 export async function fetchBarkExitChainTip(
   networkMode: NetworkMode,
-): Promise<{ height: number; hash: string }> {
+): Promise<BarkEmergencyExitTip> {
   const customUrl = await loadCustomEsploraUrl(networkMode)
   const esploraUrl = getEsploraUrl(networkMode, customUrl)
   if (esploraUrl.length === 0) {

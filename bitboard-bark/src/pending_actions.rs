@@ -394,16 +394,13 @@ mod wasm_export {
         vtxo: &bark::WalletVtxo,
         live_exit_ids: &HashSet<bark::ark::VtxoId>,
     ) -> BarkVtxoBalanceClass {
-        if vtxo.state.kind() == bark::vtxo::VtxoStateKind::Spent {
-            BarkVtxoBalanceClass::Ignored
-        } else if live_exit_ids.contains(&vtxo.id()) {
-            BarkVtxoBalanceClass::Exiting
-        } else {
-            match vtxo.state.kind() {
-                bark::vtxo::VtxoStateKind::Spendable => BarkVtxoBalanceClass::Spendable,
-                bark::vtxo::VtxoStateKind::Locked => BarkVtxoBalanceClass::Locked,
-                _ => BarkVtxoBalanceClass::Ignored,
-            }
+        use bark::vtxo::VtxoStateKind;
+        match vtxo.state.kind() {
+            VtxoStateKind::Spent => BarkVtxoBalanceClass::Ignored,
+            _ if live_exit_ids.contains(&vtxo.id()) => BarkVtxoBalanceClass::Exiting,
+            VtxoStateKind::Spendable => BarkVtxoBalanceClass::Spendable,
+            VtxoStateKind::Locked => BarkVtxoBalanceClass::Locked,
+            _ => BarkVtxoBalanceClass::Ignored,
         }
     }
 

@@ -2,20 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { readBarkBalance, readBarkSpendableSats } from '@/lib/bark/bark-balance'
 
 describe('readBarkBalance', () => {
-  it('reads spendable and locked sats from the balance JSON', () => {
-    expect(
-      readBarkBalance('{"spendableSats":1000,"lockedSats":450}'),
-    ).toEqual({ spendableSats: 1_000, lockedSats: 450, exitingSats: 0 })
-  })
-
-  it('parses exitingSats when present or defaults to 0', () => {
+  it('reads spendable, locked, and exiting sats from the balance JSON', () => {
     expect(
       readBarkBalance('{"spendableSats":1000,"lockedSats":450,"exitingSats":2500}'),
     ).toEqual({ spendableSats: 1_000, lockedSats: 450, exitingSats: 2_500 })
+  })
 
-    expect(
-      readBarkBalance('{"spendableSats":1000,"lockedSats":450}'),
-    ).toEqual({ spendableSats: 1_000, lockedSats: 450, exitingSats: 0 })
+  it('rejects a balance that is missing exiting sats, as a stale WASM build emits', () => {
+    expect(() => readBarkBalance('{"spendableSats":1000,"lockedSats":450}')).toThrow(
+      'Bark balance exiting sats are not a satoshi count',
+    )
   })
 
   it('rejects negative or invalid exitingSats', () => {

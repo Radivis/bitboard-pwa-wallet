@@ -27,8 +27,7 @@ import { invalidateOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboar
 import {
   orchestrateOnchainLoad,
 } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
-import { orchestrateArkadeLoad } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
-import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
+import { startArkadeLoadAfterUnlock } from '@/lib/wallet/lifecycle/rail-load-starters'
 import { startBarkLoadAfterUnlock } from '@/lib/bark/bark-session-service'
 import type { OnchainSyncThenSaveParams } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-types'
 import { CUSTOM_ESPLORA_URL_KEY_PREFIX } from '@/lib/wallet/historical-signet-onchain-chain'
@@ -509,13 +508,7 @@ export async function loadDescriptorWalletWithoutSync(params: {
     accountId,
     clearLastSyncTime: false,
   })
-  if (isArkadeActiveForNetworkMode(networkMode)) {
-    void orchestrateArkadeLoad({ walletId, networkMode }).catch((err) => {
-      void import('@/lib/arkade/arkade-session-open-error-toast').then(
-        ({ reportArkadeSessionOpenError }) => reportArkadeSessionOpenError(err),
-      )
-    })
-  }
+  startArkadeLoadAfterUnlock({ walletId, networkMode, allowRetryFromError: false })
   startBarkLoadAfterUnlock({ walletId, networkMode })
 }
 
@@ -553,13 +546,7 @@ export async function loadDescriptorWalletAndSync(params: {
     clearLastSyncTime: true,
   })
 
-  if (isArkadeActiveForNetworkMode(networkMode)) {
-    void orchestrateArkadeLoad({ walletId, networkMode }).catch((err) => {
-      void import('@/lib/arkade/arkade-session-open-error-toast').then(
-        ({ reportArkadeSessionOpenError }) => reportArkadeSessionOpenError(err),
-      )
-    })
-  }
+  startArkadeLoadAfterUnlock({ walletId, networkMode, allowRetryFromError: false })
   startBarkLoadAfterUnlock({ walletId, networkMode })
 
   const { orchestrateOnchainPostUnlockSync } = await import(

@@ -1,6 +1,7 @@
 import { getEsploraUrl } from '@/lib/wallet/bitcoin-utils'
 import type { NetworkMode } from '@/stores/walletStore'
 import { getArkOperatorUrl } from '@/lib/arkade/arkade-operator-proxy'
+import { ARKADE_SUPPORTED_NETWORK_MODES } from '@/lib/arkade/arkade-domain-types'
 
 /**
  * Networks with an Arkade operator in v1 (live mainnet/signet/mutinynet, local regtest for dev/E2E).
@@ -37,12 +38,7 @@ const DEFAULT_DELEGATORS: Record<ArkadeSupportedNetworkMode, string> = {
 export function isArkadeSupportedNetworkMode(
   mode: NetworkMode,
 ): mode is ArkadeSupportedNetworkMode {
-  return (
-    mode === 'mainnet' ||
-    mode === 'signet' ||
-    mode === 'mutinynet' ||
-    mode === 'regtest'
-  )
+  return (ARKADE_SUPPORTED_NETWORK_MODES as readonly NetworkMode[]).includes(mode)
 }
 
 export function networkModeToArkadeIsMainnet(

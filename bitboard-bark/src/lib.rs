@@ -37,9 +37,9 @@ mod arkoor;
 #[cfg(target_arch = "wasm32")]
 mod board;
 #[cfg(target_arch = "wasm32")]
-mod offboard;
-#[cfg(target_arch = "wasm32")]
 mod history;
+#[cfg(target_arch = "wasm32")]
+mod offboard;
 #[cfg(target_arch = "wasm32")]
 mod session;
 #[cfg(target_arch = "wasm32")]

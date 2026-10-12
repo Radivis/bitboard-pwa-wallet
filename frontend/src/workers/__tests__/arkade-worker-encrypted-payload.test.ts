@@ -127,9 +127,9 @@ describe('arkade-worker-encrypted-payload', () => {
     expect(JSON.parse(sdkJson).wallet_db.offchain_next_derivation_index).toBe(2)
   })
 
-  it('persistSdkJsonToEncryptedPayload leaves bark rail dumps unchanged', async () => {
-    const signetDump = 'c2lnbmV0'
-    const mainnetDump = 'bWFpbg'
+  it('persistSdkJsonToEncryptedPayload leaves bark record envelopes unchanged', async () => {
+    const signetRecordEnvelope = 'c2lnbmV0'
+    const mainnetRecordEnvelope = 'bWFpbg'
     storedPayloadJson = JSON.stringify({
       descriptorWallets: [],
       lightningNwcConnections: [],
@@ -151,14 +151,14 @@ describe('arkade-worker-encrypted-payload', () => {
           networkMode: 'signet',
           serverUrl: 'https://ark.signet.2nd.dev',
           fingerprint: 'abcdef01',
-          recordEnvelope: signetDump,
+          recordEnvelope: signetRecordEnvelope,
         },
         {
           id: 'bark-mainnet',
           networkMode: 'mainnet',
           serverUrl: 'https://ark.second.tech',
           fingerprint: 'abcdef01',
-          recordEnvelope: mainnetDump,
+          recordEnvelope: mainnetRecordEnvelope,
         },
       ],
     })
@@ -170,8 +170,8 @@ describe('arkade-worker-encrypted-payload', () => {
     })
 
     const payload = parseWalletPayloadJson(storedPayloadJson)
-    expect(payload.barkAccounts.find((a) => a.networkMode === 'signet')?.recordEnvelope).toBe(signetDump)
-    expect(payload.barkAccounts.find((a) => a.networkMode === 'mainnet')?.recordEnvelope).toBe(mainnetDump)
+    expect(payload.barkAccounts.find((a) => a.networkMode === 'signet')?.recordEnvelope).toBe(signetRecordEnvelope)
+    expect(payload.barkAccounts.find((a) => a.networkMode === 'mainnet')?.recordEnvelope).toBe(mainnetRecordEnvelope)
     expect(payload.arkadeAccounts[0]?.sdkPersistenceJson).toBe('{"version":3,"wallet_db":{}}')
   })
 })

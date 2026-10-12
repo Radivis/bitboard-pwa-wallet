@@ -94,13 +94,8 @@ export function arkOperatorViteProxyEntries(): ArkadeOperatorViteProxyEntry[] {
 export function getUpstreamArkOperatorBase(
   network: string,
 ): string | null {
-  if (
-    network !== 'mainnet' &&
-    network !== 'signet' &&
-    network !== 'mutinynet' &&
-    network !== 'regtest'
-  ) {
+  if (!Object.hasOwn(ARKADE_OPERATOR_UPSTREAM_BASES, network)) {
     return null
   }
-  return ARKADE_OPERATOR_UPSTREAM_BASES[network]
+  return ARKADE_OPERATOR_UPSTREAM_BASES[network as ArkadeSupportedNetworkMode]
 }

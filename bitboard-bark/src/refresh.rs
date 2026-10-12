@@ -68,8 +68,14 @@ mod tests {
 
     #[test]
     fn next_refresh_schedule_is_null_without_a_tip_or_a_required_height() {
-        assert_eq!(next_refresh_schedule_json(None, Some(1_100)).unwrap(), "null");
-        assert_eq!(next_refresh_schedule_json(Some(1_000), None).unwrap(), "null");
+        assert_eq!(
+            next_refresh_schedule_json(None, Some(1_100)).unwrap(),
+            "null"
+        );
+        assert_eq!(
+            next_refresh_schedule_json(Some(1_000), None).unwrap(),
+            "null"
+        );
         assert_eq!(next_refresh_schedule_json(None, None).unwrap(), "null");
     }
 

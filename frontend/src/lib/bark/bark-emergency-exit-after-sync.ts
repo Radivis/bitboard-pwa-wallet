@@ -1,5 +1,5 @@
 import { claimTransactionVisibility } from '@/lib/bark/bark-claim-transaction-visibility'
-import type { BarkEmergencyExitScope } from '@/lib/bark/bark-emergency-exit-funding-status'
+import { barkEmergencyExitScopeFor } from '@/lib/bark/bark-emergency-exit-funding-status'
 import { runBarkEmergencyExitProgress } from '@/lib/bark/bark-emergency-exit-progress-deps'
 import { pendingClaimDecision } from '@/lib/bark/bark-emergency-claim'
 import { presetRatesForNetwork } from '@/hooks/useEsploraFeePresets'
@@ -37,10 +37,9 @@ export async function settleBarkEmergencyExitAfterSync(networkMode: NetworkMode)
     return
   }
   const feeRates = await presetRatesForNetwork(networkMode)
-  await runBarkEmergencyExitProgress(activeExitScope(networkMode), feeRates.High)
-}
-
-function activeExitScope(networkMode: NetworkMode): BarkEmergencyExitScope | null {
   const { activeWalletId } = useWalletStore.getState()
-  return activeWalletId == null ? null : { walletId: activeWalletId, networkMode }
+  await runBarkEmergencyExitProgress(
+    barkEmergencyExitScopeFor(activeWalletId, networkMode),
+    feeRates.High,
+  )
 }

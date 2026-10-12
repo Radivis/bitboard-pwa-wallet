@@ -8,7 +8,7 @@ import {
 } from '@/lib/wallet/wallet-domain-types'
 import type { EncryptedBlob } from '@/lib/shared/encrypted-blob-types'
 
-const checkpointDump = 'Y2hlY2twb2ludC1kdW1w'
+const checkpointRecordEnvelope = 'Y2hlY2twb2ludC1kdW1w'
 const syncedAt = '2020-01-01T00:00:00.000Z'
 const pendingClaim = { txid: 'aa', vtxoIds: ['vtxo-1'] }
 
@@ -21,7 +21,7 @@ function encryptedBlob(): EncryptedBlob {
   }
 }
 
-function signetPayload(mainnetDump: string, sdkPersistenceJson: string): WalletSecretsPayload {
+function signetPayload(mainnetRecordEnvelope: string, sdkPersistenceJson: string): WalletSecretsPayload {
   return {
     descriptorWallets: [],
     lightningNwcConnections: [],
@@ -52,7 +52,7 @@ function signetPayload(mainnetDump: string, sdkPersistenceJson: string): WalletS
         networkMode: 'mainnet',
         serverUrl: BARK_MAINNET_SERVER_URL,
         fingerprint: 'abcdef01',
-        recordEnvelope: mainnetDump,
+        recordEnvelope: mainnetRecordEnvelope,
       },
     ],
   }
@@ -88,14 +88,14 @@ describe('persistBarkProtocolState', () => {
       },
       7,
       'signet',
-      { recordEnvelope: checkpointDump },
+      { recordEnvelope: checkpointRecordEnvelope },
     )
 
     expect(transformRuns).toBe(2)
     const written = parseWalletPayloadJson(writtenJson)
     const signetAcct = written.barkAccounts.find((a) => a.networkMode === 'signet')
     const mainnetAcct = written.barkAccounts.find((a) => a.networkMode === 'mainnet')
-    expect(signetAcct?.recordEnvelope).toBe(checkpointDump)
+    expect(signetAcct?.recordEnvelope).toBe(checkpointRecordEnvelope)
     expect(signetAcct?.lastSuccessfulSyncAt).toBe(syncedAt)
     expect(signetAcct?.pendingEmergencyClaim).toEqual(pendingClaim)
     expect(mainnetAcct?.recordEnvelope).toBe('bWFpbm5ldC12Mg==')

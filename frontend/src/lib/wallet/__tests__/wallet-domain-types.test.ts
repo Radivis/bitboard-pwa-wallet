@@ -155,6 +155,39 @@ describe('parseWalletPayloadJson', () => {
     expect(parsed.barkAccounts[0]).not.toHaveProperty('recordDump')
   })
 
+  function parsedSignetBarkAccount(recordFields: Record<string, string>) {
+    return parseWalletPayloadJson(
+      JSON.stringify({
+        descriptorWallets: [],
+        lightningNwcConnections: [],
+        barkAccounts: [
+          {
+            id: 'bark-signet',
+            networkMode: 'signet',
+            serverUrl: 'https://ark.signet.2nd.dev',
+            fingerprint: 'abcdef01',
+            ...recordFields,
+          },
+        ],
+      }),
+    ).barkAccounts[0]
+  }
+
+  it('keeps a current recordEnvelope on parse', () => {
+    expect(parsedSignetBarkAccount({ recordEnvelope: 'Y3VycmVudA==' }).recordEnvelope).toBe(
+      'Y3VycmVudA==',
+    )
+  })
+
+  it('prefers recordEnvelope over a leftover legacy recordDump and drops the legacy field', () => {
+    const account = parsedSignetBarkAccount({
+      recordEnvelope: 'Y3VycmVudA==',
+      recordDump: 'c3RhbGU=',
+    })
+    expect(account.recordEnvelope).toBe('Y3VycmVudA==')
+    expect(account).not.toHaveProperty('recordDump')
+  })
+
   const validSignetAccount = {
     id: 'acct-good',
     label: 'Mutinynet',

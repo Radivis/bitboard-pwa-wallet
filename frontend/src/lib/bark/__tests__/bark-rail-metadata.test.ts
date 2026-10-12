@@ -20,8 +20,8 @@ import {
 } from '@/lib/wallet/wallet-domain-types'
 
 const sdkPersistenceJson = '{"vtxos":[{"id":"keep-me"}]}'
-const signetDump = 'c2lnbmV0LWR1bXA='
-const mainnetDump = 'bWFpbm5ldC1kdW1w'
+const signetRecordEnvelope = 'c2lnbmV0LWR1bXA='
+const mainnetRecordEnvelope = 'bWFpbm5ldC1kdW1w'
 
 function signetAccount(overrides: Partial<StoredBarkAccount> = {}): StoredBarkAccount {
   return {
@@ -55,7 +55,7 @@ function payloadWithArkadeSdk(): WalletSecretsPayload {
         networkMode: 'mainnet',
         serverUrl: BARK_MAINNET_SERVER_URL,
         fingerprint: 'abcdef01',
-        recordEnvelope: mainnetDump,
+        recordEnvelope: mainnetRecordEnvelope,
       },
     ],
   }
@@ -73,7 +73,7 @@ describe('barkAccounts metadata', () => {
     expect(findBarkAccount(parsed, 'signet')).toBeUndefined()
   })
 
-  it('keeps an over-cap dump and refuses to open it', () => {
+  it('keeps an over-cap record envelope and refuses to open it', () => {
     const recordEnvelope = 'a'.repeat(BARK_RECORD_ENVELOPE_MAX_BYTES + 1)
     const parsed = parseWalletPayloadJson(
       JSON.stringify({
@@ -96,25 +96,25 @@ describe('barkAccounts metadata', () => {
     )
   })
 
-  it('keeps sdkPersistenceJson, the mainnet dump, preserves id, and refuses a different fingerprint', () => {
+  it('keeps sdkPersistenceJson, the mainnet record envelope, preserves id, and refuses a different fingerprint', () => {
     const payload = payloadWithArkadeSdk()
     payload.barkAccounts.push(
       signetAccount({
         lastSuccessfulSyncAt: '2020-06-01T00:00:00.000Z',
         receiveKeyIndex: 0,
-        recordEnvelope: signetDump,
+        recordEnvelope: signetRecordEnvelope,
       }),
     )
 
     const next = applyOpenedBarkAccount({ network: 'signet', payload, fingerprint: 'abcdef01' })
 
     expect(next.arkadeAccounts[0]?.sdkPersistenceJson).toBe(sdkPersistenceJson)
-    expect(findBarkAccount(next, 'mainnet')?.recordEnvelope).toBe(mainnetDump)
+    expect(findBarkAccount(next, 'mainnet')?.recordEnvelope).toBe(mainnetRecordEnvelope)
     expect(findBarkAccount(next, 'signet')).toEqual(
       signetAccount({
         lastSuccessfulSyncAt: '2020-06-01T00:00:00.000Z',
         receiveKeyIndex: 0,
-        recordEnvelope: signetDump,
+        recordEnvelope: signetRecordEnvelope,
       }),
     )
 
@@ -131,7 +131,7 @@ describe('barkAccounts metadata', () => {
       payload,
       fingerprint: 'abcdef01',
       receiveKeyIndex: 0,
-      recordEnvelope: signetDump,
+      recordEnvelope: signetRecordEnvelope,
     })
     const signetAcct = findBarkAccount(opened, 'signet')
     expect(signetAcct).toBeDefined()
@@ -142,12 +142,12 @@ describe('barkAccounts metadata', () => {
 
   it('keeps receiveKeyIndex on open and replaces it when a reveal index is passed', () => {
     const payload = payloadWithArkadeSdk()
-    payload.barkAccounts.push(signetAccount({ receiveKeyIndex: 0, recordEnvelope: signetDump }))
+    payload.barkAccounts.push(signetAccount({ receiveKeyIndex: 0, recordEnvelope: signetRecordEnvelope }))
 
     const opened = applyOpenedBarkAccount({ network: 'signet', payload, fingerprint: 'abcdef01' })
     expect(findBarkAccount(opened, 'signet')?.receiveKeyIndex).toBe(0)
     expect(opened.arkadeAccounts[0]?.sdkPersistenceJson).toBe(sdkPersistenceJson)
-    expect(findBarkAccount(opened, 'mainnet')?.recordEnvelope).toBe(mainnetDump)
+    expect(findBarkAccount(opened, 'mainnet')?.recordEnvelope).toBe(mainnetRecordEnvelope)
 
     const revealed = applyOpenedBarkAccount({
       network: 'signet',
@@ -156,13 +156,13 @@ describe('barkAccounts metadata', () => {
       receiveKeyIndex: 2,
     })
     expect(findBarkAccount(revealed, 'signet')?.receiveKeyIndex).toBe(2)
-    expect(findBarkAccount(revealed, 'signet')?.recordEnvelope).toBe(signetDump)
+    expect(findBarkAccount(revealed, 'signet')?.recordEnvelope).toBe(signetRecordEnvelope)
     expect(revealed.arkadeAccounts[0]?.sdkPersistenceJson).toBe(sdkPersistenceJson)
   })
 
   it('stamps lastSuccessfulSyncAt and keeps the fingerprint, receive index, and Arkade payload', () => {
     const payload = payloadWithArkadeSdk()
-    payload.barkAccounts.push(signetAccount({ receiveKeyIndex: 2, recordEnvelope: signetDump }))
+    payload.barkAccounts.push(signetAccount({ receiveKeyIndex: 2, recordEnvelope: signetRecordEnvelope }))
 
     const stamped = applySuccessfulBarkSync({
       network: 'signet',
@@ -173,18 +173,18 @@ describe('barkAccounts metadata', () => {
     expect(findBarkAccount(stamped, 'signet')).toEqual(
       signetAccount({
         receiveKeyIndex: 2,
-        recordEnvelope: signetDump,
+        recordEnvelope: signetRecordEnvelope,
         lastSuccessfulSyncAt: '2024-03-01T12:00:00.000Z',
       }),
     )
     expect(stamped.arkadeAccounts[0]?.sdkPersistenceJson).toBe(sdkPersistenceJson)
-    expect(findBarkAccount(stamped, 'mainnet')?.recordEnvelope).toBe(mainnetDump)
+    expect(findBarkAccount(stamped, 'mainnet')?.recordEnvelope).toBe(mainnetRecordEnvelope)
     expect(findBarkAccount(payload, 'signet')?.lastSuccessfulSyncAt).toBeUndefined()
   })
 
-  it('writes a mainnet open and leaves the signet dump', () => {
+  it('writes a mainnet open and leaves the signet record envelope', () => {
     const payload = payloadWithArkadeSdk()
-    payload.barkAccounts.push(signetAccount({ recordEnvelope: signetDump, receiveKeyIndex: 1 }))
+    payload.barkAccounts.push(signetAccount({ recordEnvelope: signetRecordEnvelope, receiveKeyIndex: 1 }))
 
     const opened = applyOpenedBarkAccount({
       network: 'mainnet',
@@ -199,27 +199,27 @@ describe('barkAccounts metadata', () => {
     expect(mainnetAcct?.fingerprint).toBe('abcdef01')
     expect(mainnetAcct?.receiveKeyIndex).toBe(0)
     expect(mainnetAcct?.recordEnvelope).toBe('bWFpbm5ldC1vcGVu')
-    expect(findBarkAccount(opened, 'signet')?.recordEnvelope).toBe(signetDump)
+    expect(findBarkAccount(opened, 'signet')?.recordEnvelope).toBe(signetRecordEnvelope)
     expect(opened.arkadeAccounts[0]?.sdkPersistenceJson).toBe(sdkPersistenceJson)
   })
 
-  it('replaces only the signet dump on a protocol flush', () => {
+  it('replaces only the signet record envelope on a protocol flush', () => {
     const payload = payloadWithArkadeSdk()
-    payload.barkAccounts.push(signetAccount({ receiveKeyIndex: 1, recordEnvelope: signetDump }))
-    const nextDump = 'bmV4dC1kdW1w'
+    payload.barkAccounts.push(signetAccount({ receiveKeyIndex: 1, recordEnvelope: signetRecordEnvelope }))
+    const nextRecordEnvelope = 'bmV4dC1kdW1w'
 
     const flushed = applyBarkRecordEnvelope({
       network: 'signet',
       payload,
-      recordEnvelope: nextDump,
+      recordEnvelope: nextRecordEnvelope,
       receiveKeyIndex: 3,
     })
 
-    expect(findBarkAccount(flushed, 'signet')?.recordEnvelope).toBe(nextDump)
+    expect(findBarkAccount(flushed, 'signet')?.recordEnvelope).toBe(nextRecordEnvelope)
     expect(findBarkAccount(flushed, 'signet')?.receiveKeyIndex).toBe(3)
-    expect(findBarkAccount(flushed, 'mainnet')?.recordEnvelope).toBe(mainnetDump)
+    expect(findBarkAccount(flushed, 'mainnet')?.recordEnvelope).toBe(mainnetRecordEnvelope)
     expect(flushed.arkadeAccounts[0]?.sdkPersistenceJson).toBe(sdkPersistenceJson)
-    expect(findBarkAccount(payload, 'signet')?.recordEnvelope).toBe(signetDump)
+    expect(findBarkAccount(payload, 'signet')?.recordEnvelope).toBe(signetRecordEnvelope)
   })
 
   it('refuses to stamp when the account is missing or the timestamp is not ISO-8601', () => {
@@ -248,13 +248,13 @@ describe('barkAccounts metadata', () => {
     expect(findBarkAccount(payload, 'signet')?.lastSuccessfulSyncAt).toBe('2020-06-01T00:00:00.000Z')
   })
 
-  it('keeps a pending emergency claim across a sync stamp and a dump flush', () => {
+  it('keeps a pending emergency claim across a sync stamp and a record envelope flush', () => {
     const pendingEmergencyClaim = { txid: 'claim-txid', vtxoIds: ['vtxo-1'] }
     const payload = payloadWithArkadeSdk()
     payload.barkAccounts.push(
       signetAccount({
         receiveKeyIndex: 2,
-        recordEnvelope: signetDump,
+        recordEnvelope: signetRecordEnvelope,
         pendingEmergencyClaim,
       }),
     )
@@ -294,22 +294,22 @@ describe('barkAccounts metadata', () => {
             networkMode: 'signet',
             serverUrl: BARK_SIGNET_SERVER_URL,
             fingerprint: 'abcdef01',
-            recordEnvelope: signetDump,
+            recordEnvelope: signetRecordEnvelope,
             pendingEmergencyClaim: { txid: '', vtxoIds: [] },
           },
         ],
       }),
     )
-    expect(findBarkAccount(parsed, 'signet')?.recordEnvelope).toBe(signetDump)
+    expect(findBarkAccount(parsed, 'signet')?.recordEnvelope).toBe(signetRecordEnvelope)
     expect(findBarkAccount(parsed, 'signet')?.pendingEmergencyClaim).toBeUndefined()
   })
 
-  it('keeps proceed automatically across a sync stamp and a dump flush', () => {
+  it('keeps proceed automatically across a sync stamp and a record envelope flush', () => {
     const payload = payloadWithArkadeSdk()
     payload.barkAccounts.push(
       signetAccount({
         receiveKeyIndex: 2,
-        recordEnvelope: signetDump,
+        recordEnvelope: signetRecordEnvelope,
         proceedAutomatically: true,
       }),
     )
@@ -349,13 +349,13 @@ describe('barkAccounts metadata', () => {
             networkMode: 'signet',
             serverUrl: BARK_SIGNET_SERVER_URL,
             fingerprint: 'abcdef01',
-            recordEnvelope: signetDump,
+            recordEnvelope: signetRecordEnvelope,
             proceedAutomatically: 'yes',
           },
         ],
       }),
     )
-    expect(findBarkAccount(parsed, 'signet')?.recordEnvelope).toBe(signetDump)
+    expect(findBarkAccount(parsed, 'signet')?.recordEnvelope).toBe(signetRecordEnvelope)
     expect(findBarkAccount(parsed, 'signet')?.proceedAutomatically).toBeUndefined()
   })
 

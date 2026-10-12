@@ -70,7 +70,9 @@ async fn emergency_exit_claim_before_observation() {
         .expect("drain claim");
     assert_eq!(claimed_ids, vec![exit_id.clone()]);
     broadcast_raw_tx(&endpoints.esplora_url, &raw_tx_hex).await;
-    let dump_before_exit_sync = wallet.export_encoded_envelope().expect("dump before exit sync");
+    let dump_before_exit_sync = wallet
+        .export_encoded_envelope()
+        .expect("dump before exit sync");
     drop(wallet);
 
     let (mnemonic, _) = load_boarded_fixture();

@@ -17,7 +17,7 @@ export function readBarkBalance(value: unknown): BarkBalanceParts {
   return {
     spendableSats: readNonNegativeSats(row.spendableSats, 'spendable'),
     lockedSats: readNonNegativeSats(row.lockedSats, 'locked'),
-    exitingSats: row.exitingSats != null ? readNonNegativeSats(row.exitingSats, 'exiting') : 0,
+    exitingSats: readNonNegativeSats(row.exitingSats, 'exiting'),
   }
 }
 

@@ -279,9 +279,6 @@ export function isStoredBarkAccount(value: unknown): value is StoredBarkAccount 
   if (value.recordEnvelope !== undefined && typeof value.recordEnvelope !== 'string') {
     return false
   }
-  if (value.recordEnvelope !== undefined && typeof value.recordEnvelope !== 'string') {
-    return false
-  }
   if (
     value.pendingEmergencyClaim !== undefined &&
     !isPendingEmergencyClaim(value.pendingEmergencyClaim)
@@ -297,20 +294,22 @@ export function isStoredBarkAccount(value: unknown): value is StoredBarkAccount 
   return true
 }
 
-function migrateLegacyBarkRecordEnvelopeField(
-  row: Record<string, unknown>,
-): Record<string, unknown> {
+/** Pre-release name of `recordEnvelope`. Must survive renames of the current field. */
+const LEGACY_BARK_RECORD_DUMP_FIELD = 'recordDump'
+
+function migrateLegacyBarkRecordDumpField(row: Record<string, unknown>): Record<string, unknown> {
   const cleaned: Record<string, unknown> = { ...row }
-  if (cleaned.recordEnvelope === undefined && typeof cleaned.recordEnvelope === 'string') {
-    cleaned.recordEnvelope = cleaned.recordEnvelope
+  const legacyRecordDump = cleaned[LEGACY_BARK_RECORD_DUMP_FIELD]
+  if (cleaned.recordEnvelope === undefined && typeof legacyRecordDump === 'string') {
+    cleaned.recordEnvelope = legacyRecordDump
   }
-  delete cleaned.recordEnvelope
+  delete cleaned[LEGACY_BARK_RECORD_DUMP_FIELD]
   return cleaned
 }
 
 function sanitizeStoredBarkAccountRow(row: unknown): StoredBarkAccount | null {
   if (!isRecord(row)) return null
-  const migrated = migrateLegacyBarkRecordEnvelopeField(row)
+  const migrated = migrateLegacyBarkRecordDumpField(row)
   if (isStoredBarkAccount(migrated)) {
     return migrated as StoredBarkAccount
   }

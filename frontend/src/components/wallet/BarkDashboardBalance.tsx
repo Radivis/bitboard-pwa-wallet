@@ -18,6 +18,7 @@ import {
   barkRefreshWarningText,
   type BarkRefreshStatus,
 } from '@/lib/bark/bark-refresh-status'
+import type { FiatCurrencyCode } from '@/lib/fiat/supported-fiat-currencies'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
@@ -101,42 +102,27 @@ export function BarkDashboardBalance() {
             className="space-y-1 text-sm text-muted-foreground"
             data-testid="dashboard-bark-balance-subbalances"
           >
-            <div className="flex flex-wrap items-baseline gap-2">
-              <span>Spendable</span>
-              <FiatBtcAmountDisplay
-                amountSats={spendableSats}
-                showFiatLayout={false}
-                btcPriceInFiat={null}
-                currency={defaultFiatCurrency}
-                isDetail
-                data-testid="dashboard-bark-balance-spendable"
-              />
-            </div>
+            <BarkSubBalanceRow
+              label="Spendable"
+              amountSats={spendableSats}
+              currency={defaultFiatCurrency}
+              testId="dashboard-bark-balance-spendable"
+            />
             {lockedSats > 0 ? (
-              <div className="flex flex-wrap items-baseline gap-2">
-                <span>Locked</span>
-                <FiatBtcAmountDisplay
-                  amountSats={lockedSats}
-                  showFiatLayout={false}
-                  btcPriceInFiat={null}
-                  currency={defaultFiatCurrency}
-                  isDetail
-                  data-testid="dashboard-bark-balance-locked"
-                />
-              </div>
+              <BarkSubBalanceRow
+                label="Locked"
+                amountSats={lockedSats}
+                currency={defaultFiatCurrency}
+                testId="dashboard-bark-balance-locked"
+              />
             ) : null}
             {exitingSats > 0 ? (
-              <div className="flex flex-wrap items-baseline gap-2">
-                <span>Exiting</span>
-                <FiatBtcAmountDisplay
-                  amountSats={exitingSats}
-                  showFiatLayout={false}
-                  btcPriceInFiat={null}
-                  currency={defaultFiatCurrency}
-                  isDetail
-                  data-testid="dashboard-bark-balance-exiting"
-                />
-              </div>
+              <BarkSubBalanceRow
+                label="Exiting"
+                amountSats={exitingSats}
+                currency={defaultFiatCurrency}
+                testId="dashboard-bark-balance-exiting"
+              />
             ) : null}
           </div>
         ) : null}
@@ -156,6 +142,32 @@ export function BarkDashboardBalance() {
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+function BarkSubBalanceRow({
+  label,
+  amountSats,
+  currency,
+  testId,
+}: {
+  label: string
+  amountSats: number
+  currency: FiatCurrencyCode
+  testId: string
+}) {
+  return (
+    <div className="flex flex-wrap items-baseline gap-2">
+      <span>{label}</span>
+      <FiatBtcAmountDisplay
+        amountSats={amountSats}
+        showFiatLayout={false}
+        btcPriceInFiat={null}
+        currency={currency}
+        isDetail
+        data-testid={testId}
+      />
+    </div>
   )
 }
 

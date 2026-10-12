@@ -1,4 +1,4 @@
-import { saveLightningConnectionsForWallet } from '@/lib/lightning/lightning-wallet-secrets'
+import { updateLightningConnectionsForWallet } from '@/lib/lightning/lightning-wallet-secrets'
 import { batchApplyNwcSnapshotPatches } from '@/lib/lightning/lightning-wallet-snapshot-persistence'
 import {
   invalidateLightningDashboardQueries,
@@ -41,9 +41,9 @@ function railScopeFromParams(
 
 async function runSaveBody(params: LightningSaveParams): Promise<void> {
   if (params.saveKind === 'connections') {
-    await saveLightningConnectionsForWallet({
+    await updateLightningConnectionsForWallet({
       walletId: params.walletId,
-      connections: params.connections,
+      updateConnections: params.updateConnections,
     })
     return
   }

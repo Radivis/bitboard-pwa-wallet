@@ -1,9 +1,16 @@
 import type { BarkEmergencyExitProgressOutcome } from '@/lib/bark/perform-bark-emergency-exit'
 import type { NetworkMode } from '@/stores/walletStore'
 
-export type BarkEmergencyExitScope = {
+export type BarkEmergencyExitScope<TNetworkMode extends NetworkMode = NetworkMode> = {
   walletId: number
-  networkMode: NetworkMode
+  networkMode: TNetworkMode
+}
+
+export function barkEmergencyExitScopeFor<TNetworkMode extends NetworkMode>(
+  walletId: number | null,
+  networkMode: TNetworkMode,
+): BarkEmergencyExitScope<TNetworkMode> | null {
+  return walletId == null ? null : { walletId, networkMode }
 }
 
 /** The last progress run left some exit transactions without a funded child. */

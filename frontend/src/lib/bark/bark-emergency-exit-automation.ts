@@ -2,6 +2,7 @@ import {
   catchUpOnchainWalletForBarkExit,
   fetchBarkExitChainTip,
 } from '@/lib/bark/bark-emergency-exit-onchain-catch-up-live'
+import type { BarkEmergencyExitScope } from '@/lib/bark/bark-emergency-exit-funding-status'
 import { runBarkEmergencyExitProgress } from '@/lib/bark/bark-emergency-exit-progress-deps'
 import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
 import { presetRatesForNetwork } from '@/hooks/useEsploraFeePresets'
@@ -51,10 +52,7 @@ export type BarkEmergencyExitAutomationGate = BarkEmergencyExitAutomationSession
   justBecameActive: boolean
 }
 
-export type BarkEmergencyExitAutomationScope = {
-  walletId: number
-  networkMode: BarkRailNetwork
-}
+export type BarkEmergencyExitAutomationScope = BarkEmergencyExitScope<BarkRailNetwork>
 
 /** A missing previous tip counts as a change. A reorg at the same height changes the hash. */
 export function barkEmergencyExitTipChanged(

@@ -29,6 +29,9 @@ feature:
     - Activating or switching to another wallet clears the previous wallet's Bark balance, sync time, and pending-action placeholder before that wallet's own Bark session is shown
     - A failed sync does not replace the last shown spendable or locked amount
     - When locked sats are above zero, the dashboard headline is spendable plus locked and shows those two sub-lines
+    - Exiting sats are coins in an emergency exit. They are read with spendable and locked sats after a successful Bark sync and are never added to the dashboard headline
+    - When exiting sats are above zero, the card shows the sub-lines with an Exiting line, even when locked sats are zero. A zero locked amount has no Locked line
+    - Sub-lines use the detail amount size, not the headline size
     - The first failed sync of a session shows the error banner and no amount
     - lastSuccessfulSyncAt is stamped on the open network's barkAccounts entry only after Wallet sync succeeds
     - Periodic sync for Bark follows the master toggle, the per-rail switch, signet or mainnet, and tab visibility
@@ -86,9 +89,9 @@ feature:
     - The chain anchor shows the commitment icon and the Commitment label. It is confirmed unless a child is still waiting on it
     - Focusing a node shows its transaction id and the VTXO ids whose exit leaf is that transaction
     - Rendering the exit tree does not start, progress, cancel, or claim
-    - A checkpoint, exit-row, or exit-child write exports and encrypts the open network's dump before that write returns
+    - A checkpoint, exit-row, or exit-child write exports and encrypts the open network's record envelope before that write returns
     - That mid-call flush does not change lastSuccessfulSyncAt
-    - A dump taken at that flush, opened again, still has the board checkpoint, so the next sync can resume it
+    - A record envelope taken at that flush, opened again, still has the board checkpoint, so the next sync can resume it
     - A flush failure fails that write. The end-of-call flush still runs when the session is open
   contracts:
     dashboard:
@@ -139,6 +142,15 @@ feature:
         description: >
           After a sync that reported a next refresh height, the dashboard card shows the next refresh
           hint as the first element of its content. Without one, no hint is shown
+        implemented_by: frontend/src/components/wallet/__tests__/BarkDashboardBalance.test.tsx
+      - id: DASH-BARK-15
+        description: When exiting sats are above zero, the card shows an Exiting sub-line, and the headline stays spendable plus locked
+        implemented_by: frontend/src/components/wallet/__tests__/BarkDashboardBalance.test.tsx
+      - id: DASH-BARK-16
+        description: The Spendable, Locked, and Exiting sub-lines use the detail amount size, not the headline size
+        implemented_by: frontend/src/components/wallet/__tests__/BarkDashboardBalance.test.tsx
+      - id: DASH-BARK-17
+        description: When locked sats are zero and exiting sats are above zero, the card shows the Spendable and Exiting sub-lines and no Locked line
         implemented_by: frontend/src/components/wallet/__tests__/BarkDashboardBalance.test.tsx
     session_screens:
       - id: BARK-SESS-01
@@ -213,17 +225,17 @@ feature:
     durability:
       - id: BARK-DUR-01
         description: >
-          A checkpoint, exit-row, or exit-child write exports the dump before that write returns.
+          A checkpoint, exit-row, or exit-child write exports the record envelope before that write returns.
           A VTXO write does not.
         implemented_by: bitboard-bark/src/record_store.rs
       - id: BARK-DUR-02
         description: >
           That flush does not change lastSuccessfulSyncAt. A CAS conflict re-reads and keeps the
-          other network's dump and the pending emergency claim.
+          other network's record envelope and the pending emergency claim.
         implemented_by: frontend/src/workers/__tests__/bark-protocol-state-flush.test.ts
       - id: BARK-DUR-03
         description: >
-          A dump taken at that flush, opened again, still has the board checkpoint, so the next
+          A record envelope taken at that flush, opened again, still has the board checkpoint, so the next
           sync can resume it
         implemented_by: bitboard-bark/src/record_store.rs
       - id: BARK-DUR-04

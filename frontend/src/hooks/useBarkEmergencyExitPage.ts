@@ -15,7 +15,10 @@ import {
   barkExitTopologyVtxoIds,
   emergencyExitStartBlocked,
 } from '@/lib/bark/bark-emergency-exit'
-import { barkEmergencyExitFundingStatusFor } from '@/lib/bark/bark-emergency-exit-funding-status'
+import {
+  barkEmergencyExitFundingStatusFor,
+  barkEmergencyExitScopeFor,
+} from '@/lib/bark/bark-emergency-exit-funding-status'
 import { catchUpOnchainWalletForBarkExit } from '@/lib/bark/bark-emergency-exit-onchain-catch-up-live'
 import {
   barkEmergencyExitClaimDeps,
@@ -108,7 +111,7 @@ export function useBarkEmergencyExitPage() {
     (automationState) => automationState.errorMessage,
   )
   const exitScope = useMemo(
-    () => (activeWalletId == null ? null : { walletId: activeWalletId, networkMode }),
+    () => barkEmergencyExitScopeFor(activeWalletId, networkMode),
     [activeWalletId, networkMode],
   )
   const fundingStatus = barkEmergencyExitFundingStatusFor(

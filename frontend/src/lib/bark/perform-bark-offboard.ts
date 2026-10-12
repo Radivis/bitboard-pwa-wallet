@@ -1,4 +1,5 @@
 import type { BarkOffboardReview } from '@/lib/bark/review-bark-offboard'
+import { errorMessage } from '@/lib/shared/utils'
 
 export class BarkOffboardParkedError extends Error {
   constructor() {
@@ -21,10 +22,6 @@ export type PerformedBarkOffboard = {
 
 const PARKED_MARKER = 'bark_offboard_parked'
 
-function errorText(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
-}
-
 async function submitOffboard(
   deps: PerformBarkOffboardDeps,
   review: BarkOffboardReview,
@@ -38,10 +35,10 @@ async function submitOffboard(
     }
     return await deps.offboardAll(review.destinationAddress)
   } catch (err) {
-    if (errorText(err).includes(PARKED_MARKER)) {
+    if (errorMessage(err).includes(PARKED_MARKER)) {
       throw new BarkOffboardParkedError()
     }
-    throw err instanceof Error ? err : new Error(errorText(err))
+    throw err instanceof Error ? err : new Error(errorMessage(err))
   }
 }
 
@@ -59,7 +56,7 @@ export async function performBarkOffboard(
   try {
     await deps.syncBark()
   } catch (err) {
-    syncWarning = errorText(err)
+    syncWarning = errorMessage(err)
   }
   deps.startOnchainBackgroundSync()
   return { txid, syncWarning }
