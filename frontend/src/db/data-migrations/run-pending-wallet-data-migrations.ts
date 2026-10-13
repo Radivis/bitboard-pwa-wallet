@@ -1,5 +1,5 @@
 import type { Kysely } from 'kysely'
-import { ensureSchemaMigrated, getDatabase } from '@/db/database'
+import { ensureSchemaAndDataMigrated, getDatabase } from '@/db/database'
 import {
   SCHEMA_MIGRATION_RETRY_DELAY_MS,
   SCHEMA_MIGRATION_RETRY_MAX_ATTEMPTS,
@@ -57,7 +57,7 @@ async function runPendingWalletDataMigrationsOnce(walletDb: Kysely<Database>): P
 }
 
 export async function runPendingWalletDataMigrationsForUnlock(): Promise<void> {
-  await ensureSchemaMigrated()
+  await ensureSchemaAndDataMigrated()
   await runPendingWalletDataMigrations(getDatabase())
 }
 

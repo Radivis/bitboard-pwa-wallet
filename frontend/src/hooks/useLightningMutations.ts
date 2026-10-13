@@ -15,7 +15,7 @@ import {
   type NwcConnectionConfig,
   type LightningConnectionConfig,
 } from '@/lib/lightning/lightning-backend-service'
-import { ensureSchemaMigrated } from '@/db/database'
+import { ensureSchemaAndDataMigrated } from '@/db/database'
 import {
   loadNwcSnapshotForConnection,
 } from '@/lib/lightning/lightning-wallet-snapshot-persistence'
@@ -217,7 +217,7 @@ export function useLnWalletBalanceQuery(params: {
       config,
     }),
     queryFn: async (): Promise<LnWalletBalanceQueryResult> => {
-      await ensureSchemaMigrated()
+      await ensureSchemaAndDataMigrated()
       try {
         const { balanceSats } = await runWithLightningConnectionSync(connectionId, async () => {
           const service = createBackendService(config)

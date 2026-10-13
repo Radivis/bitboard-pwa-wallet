@@ -2,14 +2,9 @@ import type { StateStorage } from 'zustand/middleware'
 import {
   blockWalletDatabaseAccessForTeardown,
   getDatabase,
-  ensureSchemaMigrated,
+  ensureSchemaAndDataMigrated,
   resetWalletDatabaseAccessTeardownGuard,
 } from './database'
-import {
-  LIGHTNING_PERSIST_STORAGE_KEY,
-  WALLET_PERSIST_STORAGE_KEY,
-} from '@/lib/wallet/historical-signet-onchain-chain'
-import { ensureSchemaAndDataMigrated } from './data-migrations/device-data-migrations'
 import {
   blockLabDatabaseAccessForTeardown,
   resetLabDatabaseAccessTeardownGuard,
@@ -47,27 +42,10 @@ export function resetSqliteStorageTeardownGuard(): void {
   resetLabDatabaseAccessTeardownGuard()
 }
 
-/**
- * The wallet and Lightning stores' persist `migrate` reads a device data
- * migration result. If device migrations fail, those stores still hydrate.
- */
-async function ensureMigratedBeforePersistedRead(key: string): Promise<void> {
-  if (key !== WALLET_PERSIST_STORAGE_KEY && key !== LIGHTNING_PERSIST_STORAGE_KEY) {
-    await ensureSchemaMigrated()
-    return
-  }
-  try {
-    await ensureSchemaAndDataMigrated()
-  } catch (migrationError) {
-    console.error('Schema or device data migrations failed:', migrationError)
-    await ensureSchemaMigrated()
-  }
-}
-
 export const sqliteStorage: StateStorage = {
   async getItem(key: string): Promise<string | null> {
     if (sqliteStorageTeardownBlocked) return null
-    await ensureMigratedBeforePersistedRead(key)
+    await ensureSchemaAndDataMigrated()
     const settingsRecord = await getDatabase()
       .selectFrom('settings')
       .select('value')
@@ -78,7 +56,7 @@ export const sqliteStorage: StateStorage = {
 
   async setItem(key: string, value: string): Promise<void> {
     if (sqliteStorageTeardownBlocked) return
-    await ensureSchemaMigrated()
+    await ensureSchemaAndDataMigrated()
     await getDatabase()
       .insertInto('settings')
       .values({ key, value })
@@ -88,7 +66,7 @@ export const sqliteStorage: StateStorage = {
 
   async removeItem(key: string): Promise<void> {
     if (sqliteStorageTeardownBlocked) return
-    await ensureSchemaMigrated()
+    await ensureSchemaAndDataMigrated()
     await getDatabase()
       .deleteFrom('settings')
       .where('key', '=', key)

@@ -39,12 +39,8 @@ vi.mock('@/stores/walletStore', () => ({
   },
 }))
 
-vi.mock('@/db/data-migrations/device-data-migrations', () => ({
-  ensureSchemaAndDataMigrated: vi.fn().mockResolvedValue(undefined),
-}))
-
 vi.mock('@/db/database', () => ({
-  ensureSchemaMigrated: vi.fn().mockResolvedValue(undefined),
+  ensureSchemaAndDataMigrated: vi.fn().mockResolvedValue(undefined),
   getDatabase: vi.fn(() => ({
     selectFrom: vi.fn(() => ({
       select: vi.fn(() => ({

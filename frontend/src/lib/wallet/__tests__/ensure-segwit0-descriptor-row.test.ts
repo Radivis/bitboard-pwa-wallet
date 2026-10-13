@@ -13,7 +13,7 @@ vi.mock('@/workers/secrets-channel', () => ({
 }))
 
 vi.mock('@/db', () => ({
-  ensureSchemaMigrated: vi.fn().mockResolvedValue(undefined),
+  ensureSchemaAndDataMigrated: vi.fn().mockResolvedValue(undefined),
   getDatabase: vi.fn(() => ({})),
   getWalletSecretsEncrypted: vi.fn(async () => ({
     mnemonic: { ciphertext: new Uint8Array(), iv: new Uint8Array(), salt: new Uint8Array(), kdfPhc: 'x' },

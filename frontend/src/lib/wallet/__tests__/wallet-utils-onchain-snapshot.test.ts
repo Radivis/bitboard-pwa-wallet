@@ -10,7 +10,7 @@ vi.mock('@/db/storage-adapter', () => ({
 }))
 
 vi.mock('@/db/database', () => ({
-  ensureSchemaMigrated: vi.fn(async () => undefined),
+  ensureSchemaAndDataMigrated: vi.fn(async () => undefined),
   getDatabase: vi.fn(() => ({
     selectFrom: vi.fn(() => ({
       select: vi.fn(() => ({

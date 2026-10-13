@@ -26,7 +26,7 @@ vi.mock('@/lib/arkade/arkade-accounts', () => ({
 }))
 
 vi.mock('@/db/database', () => ({
-  ensureSchemaMigrated: vi.fn(async () => undefined),
+  ensureSchemaAndDataMigrated: vi.fn(async () => undefined),
 }))
 
 vi.mock('@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator', () => ({

@@ -1,4 +1,4 @@
-import { ensureSchemaMigrated } from '@/db/database'
+import { ensureSchemaAndDataMigrated } from '@/db/database'
 import { getOnchainSyncLifecycleSnapshot } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
 import { appQueryClient } from '@/lib/shared/app-query-client'
 import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
@@ -89,7 +89,7 @@ export async function resolveOnchainEsploraSyncMetadata(): Promise<
     return { isStaleOnchain: false }
   }
 
-  await ensureSchemaMigrated()
+  await ensureSchemaAndDataMigrated()
   const lastSuccessfulEsploraSyncAt =
     await loadLastSuccessfulEsploraSyncAtForDescriptorWallet({
       walletId: context.walletId,

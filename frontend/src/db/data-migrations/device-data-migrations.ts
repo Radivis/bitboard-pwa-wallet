@@ -1,5 +1,4 @@
 import type { Kysely } from 'kysely'
-import { ensureSchemaMigrated, getDatabase } from '@/db/database'
 import type { Database } from '@/db/schema'
 import {
   parseHistoricalSignetOnchainChain,
@@ -25,24 +24,12 @@ const DEVICE_DATA_MIGRATIONS: readonly DeviceDataMigration[] = [
   },
 ]
 
-let deviceDataMigrationPromise: Promise<void> | null = null
-
 /** Runs every device data migration that has not run yet, then hydrates all results. */
 export async function runDeviceDataMigrations(walletDb: Kysely<Database>): Promise<void> {
   for (const migration of DEVICE_DATA_MIGRATIONS) {
     const result = await applyDeviceDataMigrationOnce(walletDb, migration)
     migration.hydrate(result)
   }
-}
-
-/**
- * Schema migrations, then device data migrations, against the app database.
- * Use before reading settings that a device data migration may rewrite.
- * Wallet data migrations need an unlocked session and run at unlock instead.
- */
-export async function ensureSchemaAndDataMigrated(): Promise<void> {
-  await ensureSchemaMigrated()
-  await ensureDeviceDataMigrated()
 }
 
 export async function readDeviceDataMigrationResult(
@@ -55,19 +42,6 @@ export async function readDeviceDataMigrationResult(
     .where('migration_name', '=', migrationName)
     .executeTakeFirst()
   return migrationRow?.result ?? null
-}
-
-/** Once per page load. Retries on the next call after a failure. */
-async function ensureDeviceDataMigrated(): Promise<void> {
-  if (!deviceDataMigrationPromise) {
-    deviceDataMigrationPromise = runDeviceDataMigrations(getDatabase())
-  }
-  try {
-    await deviceDataMigrationPromise
-  } catch (migrationError) {
-    deviceDataMigrationPromise = null
-    throw migrationError
-  }
 }
 
 async function applyDeviceDataMigrationOnce(

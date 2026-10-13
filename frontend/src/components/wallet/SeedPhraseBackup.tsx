@@ -5,7 +5,7 @@ import { useWalletStore } from '@/stores/walletStore'
 import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
 import {
   getDatabase,
-  ensureSchemaMigrated,
+  ensureSchemaAndDataMigrated,
   clearWalletNoMnemonicBackupFlag,
   useWalletNoMnemonicBackupFlag,
 } from '@/db'
@@ -53,7 +53,7 @@ export function SeedPhraseBackup() {
   const closeMnemonicDialog = useCallback(
     async (confirmed: boolean) => {
       if (confirmed && activeWalletId) {
-        await ensureSchemaMigrated()
+        await ensureSchemaAndDataMigrated()
         await clearWalletNoMnemonicBackupFlag(getDatabase(), activeWalletId)
         invalidateWalletRelatedQueriesAndNotifyOtherTabs(queryClient)
       }
@@ -77,7 +77,7 @@ export function SeedPhraseBackup() {
       try {
         setLoading(true)
         setError(null)
-        await ensureSchemaMigrated()
+        await ensureSchemaAndDataMigrated()
         await load(activeWalletId)
       } catch {
         setError(fallbackError)

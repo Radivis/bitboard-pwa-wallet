@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SplitWalletSecretsEncryptedBlobs } from '@/db'
 import { useWalletStore } from '@/stores/walletStore'
 
-const mockEnsureSchemaMigrated = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+const mockEnsureSchemaAndDataMigrated = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const mockGetDatabase = vi.hoisted(() => vi.fn())
 const mockPersistNewWalletWithSecrets = vi.hoisted(() => vi.fn())
 const mockSetWalletNoMnemonicBackupFlag = vi.hoisted(() => vi.fn())
@@ -19,7 +19,7 @@ const mockStartBarkSessionForNewWallet = vi.hoisted(() => vi.fn())
 const mockCloseBarkSessionForWalletChange = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 
 vi.mock('@/db', () => ({
-  ensureSchemaMigrated: mockEnsureSchemaMigrated,
+  ensureSchemaAndDataMigrated: mockEnsureSchemaAndDataMigrated,
   getDatabase: mockGetDatabase,
   persistNewWalletWithSecrets: mockPersistNewWalletWithSecrets,
   setWalletNoMnemonicBackupFlag: mockSetWalletNoMnemonicBackupFlag,
@@ -122,7 +122,7 @@ describe('new wallet helpers', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    mockEnsureSchemaMigrated.mockResolvedValue(undefined)
+    mockEnsureSchemaAndDataMigrated.mockResolvedValue(undefined)
     mockGetDatabase.mockReturnValue(walletDb)
     mockSetWalletNoMnemonicBackupFlag.mockResolvedValue(undefined)
     mockOrchestrateOnchainSetupAfterPersist.mockResolvedValue(undefined)

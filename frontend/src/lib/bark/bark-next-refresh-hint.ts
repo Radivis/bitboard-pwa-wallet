@@ -24,8 +24,7 @@ const REFRESH_PERIOD_STARTED_TEXT =
 
 function unlockAroundText(dateLabel: string): string {
   return (
-    `Unlock this wallet around ${dateLabel} so Bark can refresh your VTXOs. ` +
-    'Bark has no delegate that can refresh them while the wallet is locked.'
+    `Unlock this wallet around ${dateLabel} so your Bark VTXOs can be refreshed automatically.`
   )
 }
 

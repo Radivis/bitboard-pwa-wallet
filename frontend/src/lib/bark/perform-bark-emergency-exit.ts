@@ -51,7 +51,7 @@ const BARK_CPFP_NEEDED_SATS_LABEL = 'needed_sats'
 export const BARK_CPFP_UNFUNDABLE = 'bark_cpfp_unfundable'
 
 /**
- * Even pending coins cannot pay for the Pay-to-Anchor children that are waiting. Created and
+ * Pending coins cannot pay for the Pay-to-Anchor children that are waiting. Created and
  * caught on the main thread, so the class survives. The message keeps the code prefix for the toast.
  */
 export class BarkCpfpUnfundableError extends Error {
@@ -98,7 +98,7 @@ export function isBarkCpfpInsufficientFundsError(err: unknown): boolean {
   return insufficientFundsDetail(err) != null
 }
 
-/** Even pending coins cannot pay for the children that are waiting. */
+/** Pending coins cannot pay for the children that are waiting. */
 export function isBarkCpfpUnfundableError(err: unknown): err is BarkCpfpUnfundableError {
   return err instanceof BarkCpfpUnfundableError
 }

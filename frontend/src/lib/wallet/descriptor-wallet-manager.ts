@@ -1,6 +1,6 @@
 import {
   getDatabase,
-  ensureSchemaMigrated,
+  ensureSchemaAndDataMigrated,
   getWalletSecretsEncrypted,
   updateWalletSecretsEncryptedPayloadWithRetry,
 } from '@/db'
@@ -66,7 +66,7 @@ export async function resolveDescriptorWallet(params: {
   targetAccountId: number
 }): Promise<DescriptorWalletData> {
   const { walletId, targetNetwork, targetAddressType, targetAccountId } = params
-  await ensureSchemaMigrated()
+  await ensureSchemaAndDataMigrated()
   await ensureSecretsChannel()
   const walletDb = getDatabase()
   const { resolveDescriptorWallet: workerResolve } = useCryptoStore.getState()
@@ -165,7 +165,7 @@ export async function updateDescriptorWalletChangeset(params: {
     markFullScanDone,
     lastSuccessfulEsploraSyncAt,
   } = params
-  await ensureSchemaMigrated()
+  await ensureSchemaAndDataMigrated()
   await ensureSecretsChannel()
   const walletDb = getDatabase()
   const { updateDescriptorWalletChangeset: workerUpdate } = useCryptoStore.getState()

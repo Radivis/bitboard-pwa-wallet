@@ -5,7 +5,7 @@ import { updateWalletSecretsPayloadWithRetry } from '@/db/wallet-persistence'
 const readLastSuccessfulEsploraSyncAtForDescriptorWallet = vi.fn()
 
 vi.mock('@/db/database', () => ({
-  ensureSchemaMigrated: vi.fn(async () => undefined),
+  ensureSchemaAndDataMigrated: vi.fn(async () => undefined),
   getDatabase: vi.fn(() => ({})),
 }))
 

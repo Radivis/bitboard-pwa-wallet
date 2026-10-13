@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { ensureSchemaMigrated, getDatabase, loadWalletSecretsPayload } from '@/db'
+import { ensureSchemaAndDataMigrated, getDatabase, loadWalletSecretsPayload } from '@/db'
 import { findDescriptorWallet } from '@/lib/wallet/descriptor-wallet-manager'
 import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
 import { WALLET_DB_QUERY_KEY_ROOT } from '@/lib/wallet/wallet-query-key-root'
@@ -48,7 +48,7 @@ export function useCommittedExternalDescriptor() {
         return null
       }
 
-      await ensureSchemaMigrated()
+      await ensureSchemaAndDataMigrated()
       const walletDb = getDatabase()
       const payload = await loadWalletSecretsPayload(walletDb, walletId)
       const found = findDescriptorWallet({

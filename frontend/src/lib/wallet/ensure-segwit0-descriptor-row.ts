@@ -1,5 +1,5 @@
 import {
-  ensureSchemaMigrated,
+  ensureSchemaAndDataMigrated,
   getDatabase,
   getWalletSecretsEncrypted,
   loadWalletSecretsPayload,
@@ -21,7 +21,7 @@ export async function ensureSegwit0DescriptorRow(params: {
   network: BitcoinNetwork
 }): Promise<DescriptorWalletData> {
   const { walletId, network } = params
-  await ensureSchemaMigrated()
+  await ensureSchemaAndDataMigrated()
   await ensureSecretsChannel()
   const walletDb = getDatabase()
   const secretsPayload = await loadWalletSecretsPayload(walletDb, walletId)

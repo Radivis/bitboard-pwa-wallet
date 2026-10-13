@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 
-import { getDatabase } from '@/db/database'
+import { getDatabase, ensureSchemaAndDataMigrated } from '@/db/database'
 import type { NetworkMode } from '@/stores/walletStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
@@ -31,8 +31,6 @@ import { startArkadeLoadAfterUnlock } from '@/lib/wallet/lifecycle/rail-load-sta
 import { startBarkLoadAfterUnlock } from '@/lib/bark/bark-session-service'
 import type { OnchainSyncThenSaveParams } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-types'
 import { CUSTOM_ESPLORA_URL_KEY_PREFIX } from '@/lib/wallet/historical-signet-onchain-chain'
-import { ensureSchemaAndDataMigrated } from '@/db/data-migrations/device-data-migrations'
-
 /**
  * Runs pending schema and device data migrations, including the one-time
  * classification of the pre-split Signet Esplora row. Mutinynet URLs move to

@@ -13,7 +13,7 @@ const discardArkadeSessionForWalletDeletionMock = vi.hoisted(() => vi.fn())
 
 vi.mock('../database', () => ({
   getDatabase: () => testDb,
-  ensureSchemaMigrated: async () => {},
+  ensureSchemaAndDataMigrated: async () => {},
 }))
 
 vi.mock('@/lib/arkade/arkade-session-service', () => ({

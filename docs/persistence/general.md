@@ -25,7 +25,7 @@ Bookkeeping tables: `schema_migrations`, `schema_migrations_lock` (Kysely migrat
 
 Rewrites of stored data (as opposed to schema changes) live in `frontend/src/db/data-migrations/`.
 
-- **Device migrations** (`device-data-migrations.ts`) rewrite plaintext device settings. They run before persisted Zustand stores hydrate. Code that reads settings a device migration may rewrite calls `ensureSchemaAndDataMigrated()` (schema migrations, then device data migrations) instead of `ensureSchemaMigrated()`. Their `result` may only hold facts derived from plaintext settings.
+- **Device migrations** (`device-data-migrations.ts`) rewrite plaintext device settings. `ensureSchemaAndDataMigrated()` in `database.ts` is the single guard before any app-database access: it runs schema migrations, then device data migrations, once per opened database (reset by `destroyDatabase`). Schema-only migration is not exported. Their `result` may only hold facts derived from plaintext settings.
 - **Wallet migrations** (`wallet-data-migration-registry.ts`) rewrite the encrypted `WalletSecretsPayload`. They run for every wallet at unlock, before any rail loads (`runPendingWalletDataMigrationsForUnlock`). A failure fails the unlock. Each wallet's payload is re-encrypted and its markers inserted in one transaction with the CAS revision check.
 - **Privacy rule:** every wallet gets every marker, and its payload is always re-encrypted, whether or not the migration changed anything. Neither the markers nor `wallet_secrets.updated_at` should reveal wallet contents. Per-wallet outcomes belong in the encrypted payload.
 - New wallets get all markers in the same transaction that stores their secrets. `deleteWalletCompletely` removes them.

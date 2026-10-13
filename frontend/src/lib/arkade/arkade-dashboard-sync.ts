@@ -1,4 +1,4 @@
-import { ensureSchemaMigrated } from '@/db/database'
+import { ensureSchemaAndDataMigrated } from '@/db/database'
 import { getArkadeSaveLifecycleSnapshot } from '@/lib/wallet/lifecycle/arkade-save-lifecycle-orchestrator'
 import { getArkadeSyncLifecycleSnapshot } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
 import { appQueryClient } from '@/lib/shared/app-query-client'
@@ -69,7 +69,7 @@ export async function resolveArkadeOperatorSyncMetadata(): Promise<
     return { isStaleArkade: false }
   }
 
-  await ensureSchemaMigrated()
+  await ensureSchemaAndDataMigrated()
   const account = await loadActiveArkadeAccountForNetwork({
     walletId: context.walletId,
     networkMode: context.networkMode,

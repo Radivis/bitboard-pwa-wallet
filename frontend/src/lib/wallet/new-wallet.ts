@@ -1,6 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query'
 import {
-  ensureSchemaMigrated,
+  ensureSchemaAndDataMigrated,
   getDatabase,
   persistNewWalletWithSecrets,
   setWalletNoMnemonicBackupFlag,
@@ -141,7 +141,7 @@ export async function persistAndActivateNewWallet(
     queryClient,
   } = params
 
-  await ensureSchemaMigrated()
+  await ensureSchemaAndDataMigrated()
   const walletDb = getDatabase()
   let walletId: number
   try {

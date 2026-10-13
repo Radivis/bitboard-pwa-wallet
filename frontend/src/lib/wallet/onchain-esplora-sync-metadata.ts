@@ -1,4 +1,4 @@
-import { ensureSchemaMigrated, getDatabase } from '@/db/database'
+import { ensureSchemaAndDataMigrated, getDatabase } from '@/db/database'
 import {
   getWalletSecretsEncrypted,
   updateWalletSecretsPayloadWithRetry,
@@ -85,7 +85,7 @@ export async function loadLastSuccessfulEsploraSyncAtForDescriptorWallet(params:
   accountId: number
 }): Promise<string | undefined> {
   const { walletId, network, addressType, accountId } = params
-  await ensureSchemaMigrated()
+  await ensureSchemaAndDataMigrated()
   await ensureSecretsChannel()
   const encryptedBlobs = await getWalletSecretsEncrypted(getDatabase(), walletId)
   const { readLastSuccessfulEsploraSyncAtForDescriptorWallet } =

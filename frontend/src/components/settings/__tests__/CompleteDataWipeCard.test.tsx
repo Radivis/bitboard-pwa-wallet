@@ -3,7 +3,7 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test-utils/test-providers'
 
-const ensureSchemaMigratedMock = vi.hoisted(() => vi.fn())
+const ensureSchemaAndDataMigratedMock = vi.hoisted(() => vi.fn())
 const getDatabaseMock = vi.hoisted(() => vi.fn())
 const wipeAllAppDataOpfsAndReloadMock = vi.hoisted(() => vi.fn())
 const anyWalletHasNoMnemonicBackupFlagMock = vi.hoisted(() => vi.fn())
@@ -31,7 +31,7 @@ vi.mock('@/db', async () => {
     '@/db/database-teardown-blocked-error'
   )
   return {
-    ensureSchemaMigrated: (...args: unknown[]) => ensureSchemaMigratedMock(...args),
+    ensureSchemaAndDataMigrated: (...args: unknown[]) => ensureSchemaAndDataMigratedMock(...args),
     getDatabase: (...args: unknown[]) => getDatabaseMock(...args),
     useWallets: () => ({ data: walletsState.data }),
     isWalletDatabaseTeardownBlockedError,
@@ -64,16 +64,16 @@ const completeDataWipeCardSourceByPath = import.meta.glob('../CompleteDataWipeCa
 describe('CompleteDataWipeCard teardown-blocked retry', () => {
   beforeEach(() => {
     walletsState.data = []
-    ensureSchemaMigratedMock.mockReset()
+    ensureSchemaAndDataMigratedMock.mockReset()
     getDatabaseMock.mockReset()
     wipeAllAppDataOpfsAndReloadMock.mockReset().mockResolvedValue(undefined)
     anyWalletHasNoMnemonicBackupFlagMock.mockReset().mockResolvedValue(false)
     toastError.mockReset()
   })
 
-  it('CompleteDataWipeCard proceeds to wipe when ensureSchemaMigrated is teardown-blocked', async () => {
+  it('CompleteDataWipeCard proceeds to wipe when ensureSchemaAndDataMigrated is teardown-blocked', async () => {
     const user = userEvent.setup()
-    ensureSchemaMigratedMock.mockRejectedValueOnce(new WalletDatabaseTeardownBlockedError())
+    ensureSchemaAndDataMigratedMock.mockRejectedValueOnce(new WalletDatabaseTeardownBlockedError())
 
     renderWithProviders(<CompleteDataWipeCard />)
 
@@ -87,9 +87,9 @@ describe('CompleteDataWipeCard teardown-blocked retry', () => {
     expect(anyWalletHasNoMnemonicBackupFlagMock).not.toHaveBeenCalled()
   })
 
-  it('toasts and does not wipe when ensureSchemaMigrated fails for another reason', async () => {
+  it('toasts and does not wipe when ensureSchemaAndDataMigrated fails for another reason', async () => {
     const user = userEvent.setup()
-    ensureSchemaMigratedMock.mockRejectedValueOnce(new Error('disk full'))
+    ensureSchemaAndDataMigratedMock.mockRejectedValueOnce(new Error('disk full'))
 
     renderWithProviders(<CompleteDataWipeCard />)
 

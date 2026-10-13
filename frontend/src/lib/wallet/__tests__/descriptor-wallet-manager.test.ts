@@ -47,7 +47,7 @@ vi.mock('@/db', async (importOriginal) => {
       if (!testDb) throw new Error('testDb not initialized')
       return testDb
     },
-    ensureSchemaMigrated: vi.fn().mockResolvedValue(undefined),
+    ensureSchemaAndDataMigrated: vi.fn().mockResolvedValue(undefined),
   }
 })
 
