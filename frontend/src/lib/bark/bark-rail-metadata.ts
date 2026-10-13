@@ -4,8 +4,11 @@ import {
   BARK_MAINNET_SERVER_URL,
   BARK_SIGNET_SERVER_URL,
   isBarkReceiveKeyIndex,
+  emergencyExitFeePresetFromUnknown,
+  emergencyExitMaxFeeRateFromUnknown,
   pendingEmergencyClaimFromUnknown,
   proceedAutomaticallyFromUnknown,
+  type BarkEmergencyExitFeePreset,
   type BarkRailNetwork,
   type PendingEmergencyClaim,
   type StoredBarkAccount,
@@ -92,6 +95,18 @@ function accountWithPreservedFields(
   }
   if (proceedAutomaticallyFromUnknown(existingAccount?.proceedAutomatically) === true) {
     barkAccount.proceedAutomatically = true
+  }
+  const emergencyExitFeePreset = emergencyExitFeePresetFromUnknown(
+    existingAccount?.emergencyExitFeePreset,
+  )
+  if (emergencyExitFeePreset != null) {
+    barkAccount.emergencyExitFeePreset = emergencyExitFeePreset
+  }
+  const emergencyExitMaxFeeRateSatPerVb = emergencyExitMaxFeeRateFromUnknown(
+    existingAccount?.emergencyExitMaxFeeRateSatPerVb,
+  )
+  if (emergencyExitMaxFeeRateSatPerVb != null) {
+    barkAccount.emergencyExitMaxFeeRateSatPerVb = emergencyExitMaxFeeRateSatPerVb
   }
   return barkAccount
 }
@@ -291,5 +306,55 @@ export function applyProceedAutomatically(params: {
   } else {
     delete account.proceedAutomatically
   }
+  return upsertBarkAccountInPayload(params.payload, account)
+}
+
+/**
+ * Stores the low, medium, or high degree for automatic emergency-exit proceeding.
+ * A later sync flush keeps it.
+ */
+export function applyEmergencyExitFeePreset(params: {
+  payload: WalletSecretsPayload
+  network: BarkRailNetwork
+  feePreset: BarkEmergencyExitFeePreset
+}): WalletSecretsPayload {
+  const feePreset = emergencyExitFeePresetFromUnknown(params.feePreset)
+  if (feePreset == null) {
+    throw new Error('Emergency exit fee preset must be Low, Medium, or High')
+  }
+  const existingAccount = requireBarkAccount(params.payload, params.network)
+  const account = accountWithPreservedFields(
+    params.network,
+    existingAccount,
+    existingAccount.fingerprint,
+    undefined,
+    undefined,
+  )
+  account.emergencyExitFeePreset = feePreset
+  return upsertBarkAccountInPayload(params.payload, account)
+}
+
+/**
+ * Stores the maximum sat/vB for automatic emergency-exit proceeding.
+ * A later sync flush keeps it.
+ */
+export function applyEmergencyExitMaxFeeRate(params: {
+  payload: WalletSecretsPayload
+  network: BarkRailNetwork
+  maxFeeRateSatPerVb: number
+}): WalletSecretsPayload {
+  const maxFeeRateSatPerVb = emergencyExitMaxFeeRateFromUnknown(params.maxFeeRateSatPerVb)
+  if (maxFeeRateSatPerVb == null) {
+    throw new Error('Max fee rate must be a positive number of sat/vB')
+  }
+  const existingAccount = requireBarkAccount(params.payload, params.network)
+  const account = accountWithPreservedFields(
+    params.network,
+    existingAccount,
+    existingAccount.fingerprint,
+    undefined,
+    undefined,
+  )
+  account.emergencyExitMaxFeeRateSatPerVb = maxFeeRateSatPerVb
   return upsertBarkAccountInPayload(params.payload, account)
 }

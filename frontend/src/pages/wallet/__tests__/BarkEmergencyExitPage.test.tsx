@@ -61,6 +61,9 @@ const barkWorker = vi.hoisted(() => ({
   writePendingEmergencyClaim: vi.fn(),
   readProceedAutomatically: vi.fn(),
   writeProceedAutomatically: vi.fn(),
+  readEmergencyExitFeePrefs: vi.fn(),
+  writeEmergencyExitFeePreset: vi.fn(),
+  writeEmergencyExitMaxFeeRate: vi.fn(),
   syncEmergencyExits: vi.fn(),
   broadcastEmergencyExitClaim: vi.fn(),
   offboardAll: vi.fn(),
@@ -194,6 +197,12 @@ describe('BarkEmergencyExitPage', () => {
     barkWorker.writePendingEmergencyClaim.mockResolvedValue(undefined)
     barkWorker.readProceedAutomatically.mockResolvedValue(false)
     barkWorker.writeProceedAutomatically.mockResolvedValue(undefined)
+    barkWorker.readEmergencyExitFeePrefs.mockResolvedValue({
+      feePresetLabel: 'Medium',
+      maxFeeRateSatPerVb: null,
+    })
+    barkWorker.writeEmergencyExitFeePreset.mockResolvedValue(undefined)
+    barkWorker.writeEmergencyExitMaxFeeRate.mockResolvedValue(undefined)
     barkWorker.syncEmergencyExits.mockResolvedValue([])
     barkWorker.broadcastEmergencyExitClaim.mockResolvedValue(undefined)
     barkWorker.writePendingEmergencyClaim.mockResolvedValue(undefined)
@@ -322,7 +331,7 @@ describe('BarkEmergencyExitPage', () => {
     expect(await screen.findByTestId('bark-emergency-exit-broadcast-fee')).toHaveTextContent('1500')
     expect(screen.getByTestId('bark-emergency-exit-claim-fee')).toHaveTextContent('800')
     expect(screen.getByTestId('bark-emergency-exit-tx-count')).toHaveTextContent('4')
-    expect(barkWorker.estimateEmergencyExit).toHaveBeenCalledWith(['vtxo-1'], 1)
+    expect(barkWorker.estimateEmergencyExit).toHaveBeenCalledWith(['vtxo-1'], 2)
     expect(screen.getByTestId('bark-emergency-exit-fee-rate')).toHaveTextContent('1.50 sat/vB')
     expect(barkWorker.startEmergencyExit).not.toHaveBeenCalled()
   })
@@ -344,7 +353,7 @@ describe('BarkEmergencyExitPage', () => {
     await waitFor(() => {
       expect(barkWorker.startEmergencyExit).toHaveBeenLastCalledWith([])
     })
-    expect(barkWorker.estimateEmergencyExit).toHaveBeenLastCalledWith([], 1)
+    expect(barkWorker.estimateEmergencyExit).toHaveBeenLastCalledWith([], 2)
     expect(barkWorker.offboardAll).not.toHaveBeenCalled()
     expect(barkWorker.sendOnchain).not.toHaveBeenCalled()
   })
@@ -724,6 +733,106 @@ describe('BarkEmergencyExitPage', () => {
     expect(barkWorker.startEmergencyExit).not.toHaveBeenCalled()
     expect(barkWorker.progressEmergencyExits).not.toHaveBeenCalled()
     expect(barkWorker.cancelEmergencyExit).not.toHaveBeenCalled()
+    expect(barkWorker.drainEmergencyExits).not.toHaveBeenCalled()
+  })
+
+  it('BARK-EMG-26 reviews, progresses, and claims at the selected fee rate, including custom', async () => {
+    const user = userEvent.setup()
+    barkWorker.listEmergencyExits.mockResolvedValue([
+      exitRow({ vtxoId: 'vtxo-1', state: 'claimable', cancelable: false }),
+    ])
+    barkWorker.progressEmergencyExits.mockResolvedValue({
+      requests: [{ vtxoId: 'vtxo-1', parentTxid: 'parent-1', parentTxHex: '00' }],
+    })
+    renderWithProviders(<BarkEmergencyExitPage />)
+
+    expect(await screen.findByRole('button', { name: 'Custom' })).toBeInTheDocument()
+    fireEvent.click(await screen.findByTestId('bark-emergency-exit-vtxo-vtxo-1'))
+    fireEvent.click(screen.getByTestId('bark-emergency-exit-review'))
+    expect(await screen.findByTestId('bark-emergency-exit-fee-review')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'High (1.00)' }))
+    await waitFor(() => {
+      expect(screen.queryByTestId('bark-emergency-exit-fee-review')).not.toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByTestId('bark-emergency-exit-review'))
+    await waitFor(() => {
+      expect(barkWorker.estimateEmergencyExit).toHaveBeenLastCalledWith(['vtxo-1'], 1)
+    })
+
+    fireEvent.click(screen.getByTestId('bark-emergency-exit-progress'))
+    await waitFor(() => {
+      expect(cryptoWorker.signP2aCpfpChild).toHaveBeenCalledWith({
+        parentTxHex: '00',
+        effectiveFeeRateSatPerVb: 1,
+      })
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Custom' }))
+    await user.type(screen.getByLabelText('Custom fee rate (sat/vB)'), '3.5')
+    fireEvent.click(screen.getByTestId('bark-emergency-exit-claim'))
+    await waitFor(() => {
+      expect(barkWorker.drainEmergencyExits).toHaveBeenCalledWith('tb1qcurrent', 3.5, [])
+    })
+  })
+
+  it('BARK-EMG-27 shows the max fee controls without custom, and changing the max clears a cap pause', async () => {
+    const user = userEvent.setup()
+    barkWorker.readProceedAutomatically.mockResolvedValue(true)
+    barkWorker.readEmergencyExitFeePrefs.mockResolvedValue({
+      feePresetLabel: 'High',
+      maxFeeRateSatPerVb: 0.5,
+    })
+    useBarkEmergencyExitAutomationStore.setState({
+      inFlight: false,
+      errorMessage: null,
+      pausedReason: 'feeCapExceeded',
+    })
+    renderWithProviders(<BarkEmergencyExitPage />)
+
+    expect(await screen.findByTestId('bark-emergency-exit-max-fee-warning')).toBeInTheDocument()
+    expect(screen.getByTestId('bark-emergency-exit-max-fee-rate')).toHaveValue(0.5)
+    expect(screen.queryByRole('button', { name: 'Custom' })).not.toBeInTheDocument()
+    expect(screen.getByTestId('bark-emergency-exit-automation-paused')).toHaveTextContent(
+      'live fee rate exceeds your maximum',
+    )
+
+    fireEvent.change(screen.getByTestId('bark-emergency-exit-max-fee-rate'), {
+      target: { value: '10' },
+    })
+    await waitFor(() => {
+      expect(barkWorker.writeEmergencyExitMaxFeeRate).toHaveBeenCalledWith(10)
+    })
+    await waitFor(() => {
+      expect(screen.queryByTestId('bark-emergency-exit-automation-paused')).not.toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Low (0.50)' }))
+    await waitFor(() => {
+      expect(barkWorker.writeEmergencyExitFeePreset).toHaveBeenCalledWith('Low')
+    })
+  })
+
+  it('does not claim while the automatic fee cap is exceeded', async () => {
+    barkWorker.readProceedAutomatically.mockResolvedValue(true)
+    barkWorker.readEmergencyExitFeePrefs.mockResolvedValue({
+      feePresetLabel: 'High',
+      maxFeeRateSatPerVb: 0.5,
+    })
+    barkWorker.listEmergencyExits.mockResolvedValue([
+      exitRow({ vtxoId: 'vtxo-1', state: 'claimable', cancelable: false }),
+    ])
+    renderWithProviders(<BarkEmergencyExitPage />)
+
+    expect(await screen.findByTestId('bark-emergency-exit-automation-paused')).toBeInTheDocument()
+    const claim = screen.getByTestId('bark-emergency-exit-claim')
+    await waitFor(() => {
+      expect(claim).toBeEnabled()
+    })
+    fireEvent.click(claim)
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalled()
+    })
     expect(barkWorker.drainEmergencyExits).not.toHaveBeenCalled()
   })
 })

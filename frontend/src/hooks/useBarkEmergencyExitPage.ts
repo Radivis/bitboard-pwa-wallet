@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useBarkEmergencyExitQuery } from '@/hooks/useBarkEmergencyExitQuery'
+import { useOnchainFeeRateSelection } from '@/hooks/useOnchainFeeRateSelection'
 import { barkExitTopologyQueryKey, useBarkExitTopologyQuery } from '@/hooks/useBarkExitTopologyQuery'
 import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
-import { useEsploraFeePresets } from '@/hooks/useEsploraFeePresets'
 import { barkVtxoListQueryKey, useBarkVtxoListQuery } from '@/hooks/useBarkVtxoListQuery'
 import { useBarkSyncLifecycleSnapshot } from '@/hooks/useBarkSyncLifecycleSnapshot'
 import {
@@ -32,18 +32,27 @@ import {
   startBarkEmergencyExit,
 } from '@/lib/bark/perform-bark-emergency-exit'
 import {
+  BARK_EMERGENCY_EXIT_AUTOMATION_PAUSE_LABELS,
+  effectiveBarkEmergencyExitMaxFeeRate,
+} from '@/lib/bark/bark-emergency-exit-automated-fee'
+import {
   syncBarkEmergencyExitAutomation,
   stopBarkEmergencyExitAutomation,
 } from '@/lib/bark/bark-emergency-exit-automation'
-import { NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB } from '@/lib/esplora/esplora-fee-estimates'
+import { resolveAutomatedStepFeeRateSatPerVb, defaultMaxFeeRateSatPerVb } from '@/lib/onchain/automated-step-fee-rate'
 import { errorMessage } from '@/lib/shared/utils'
 import { formatSats } from '@/lib/wallet/bitcoin-utils'
 import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
-import { useBarkEmergencyExitAutomationStore } from '@/stores/barkEmergencyExitAutomationStore'
+import { DEFAULT_BARK_EMERGENCY_EXIT_FEE_PRESET } from '@/lib/wallet/wallet-domain-types'
+import {
+  clearBarkEmergencyExitAutomationPause,
+  pauseBarkEmergencyExitAutomation,
+  useBarkEmergencyExitAutomationStore,
+} from '@/stores/barkEmergencyExitAutomationStore'
 import { useBarkEmergencyExitFundingStore } from '@/stores/barkEmergencyExitFundingStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
-import type { BarkEmergencyExitEstimate, BarkVtxoRow } from '@/workers/bark-api'
+import type { BarkEmergencyExitEstimate, BarkEmergencyExitFeePrefs, BarkVtxoRow } from '@/workers/bark-api'
 import { getBarkWorker } from '@/workers/bark-factory'
 
 export const BARK_EMERGENCY_EXIT_CANCEL_NOTE =
@@ -65,6 +74,13 @@ export function barkProceedAutomaticallyQueryKey(
   return ['bark', 'proceed-automatically', walletId, networkMode] as const
 }
 
+export function barkEmergencyExitFeePrefsQueryKey(
+  walletId: number | null,
+  networkMode: string,
+) {
+  return ['bark', 'emergency-exit-fee-prefs', walletId, networkMode] as const
+}
+
 export type BarkEmergencyExitReview = {
   vtxoIds: string[]
   estimate: BarkEmergencyExitEstimate
@@ -76,9 +92,8 @@ export function useBarkEmergencyExitPage() {
   const currentAddress = useWalletStore((walletState) => walletState.currentAddress)
   const confirmedSats = useWalletStore((walletState) => walletState.balance?.confirmedSats ?? 0)
   const isBarkEnabled = useFeatureStore((featureState) => featureState.isBarkEnabled)
-  const feePresetsQuery = useEsploraFeePresets(networkMode)
-  const feeRateSatPerVb =
-    feePresetsQuery.data?.High ?? NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB.High
+  const feeSelection = useOnchainFeeRateSelection(networkMode)
+  const manualFeeRateSatPerVb = feeSelection.effectiveFeeRate
   const loadSnapshot = useBarkLoadLifecycleSnapshot()
   const syncSnapshot = useBarkSyncLifecycleSnapshot()
   const vtxoListQuery = useBarkVtxoListQuery()
@@ -101,6 +116,15 @@ export function useBarkEmergencyExitPage() {
       activeWalletId != null,
     queryFn: () => getBarkWorker().readProceedAutomatically(),
   })
+  const feePrefsQuery = useQuery({
+    queryKey: barkEmergencyExitFeePrefsQueryKey(activeWalletId, networkMode),
+    enabled:
+      isBarkEnabled &&
+      isBarkNetworkMode(networkMode) &&
+      loadSnapshot.loadPhase === 'loaded' &&
+      activeWalletId != null,
+    queryFn: () => getBarkWorker().readEmergencyExitFeePrefs(),
+  })
   const queryClient = useQueryClient()
 
   const proceedAutomatically = proceedAutomaticallyQuery.data === true
@@ -110,6 +134,27 @@ export function useBarkEmergencyExitPage() {
   const automaticProgressError = useBarkEmergencyExitAutomationStore(
     (automationState) => automationState.errorMessage,
   )
+  const pausedReason = useBarkEmergencyExitAutomationStore(
+    (automationState) => automationState.pausedReason,
+  )
+  const automatedFeePresetLabel =
+    feePrefsQuery.data?.feePresetLabel ?? DEFAULT_BARK_EMERGENCY_EXIT_FEE_PRESET
+  const maxFeeRateSatPerVb = effectiveBarkEmergencyExitMaxFeeRate(
+    feePrefsQuery.data?.maxFeeRateSatPerVb ?? null,
+    feeSelection.presetSatPerVbByLabel.High,
+  )
+  const automatedFeeResolution = resolveAutomatedStepFeeRateSatPerVb(
+    automatedFeePresetLabel,
+    feeSelection.presetSatPerVbByLabel,
+    maxFeeRateSatPerVb,
+  )
+  const displayedPauseReason =
+    !proceedAutomatically
+      ? null
+      : (pausedReason ?? (automatedFeeResolution.capExceeded ? 'feeCapExceeded' : null))
+  const feeRateForActions = proceedAutomatically
+    ? automatedFeeResolution.feeRateSatPerVb
+    : manualFeeRateSatPerVb
   const exitScope = useMemo(
     () => barkEmergencyExitScopeFor(activeWalletId, networkMode),
     [activeWalletId, networkMode],
@@ -123,6 +168,10 @@ export function useBarkEmergencyExitPage() {
   const [wholeWallet, setWholeWallet] = useState(false)
   const [review, setReview] = useState<BarkEmergencyExitReview | null>(null)
   const [busyAction, setBusyAction] = useState<string | null>(null)
+
+  useEffect(() => {
+    setReview(null)
+  }, [feeRateForActions])
   const vtxoRows = vtxoListQuery.data?.rows ?? []
   const spendableVtxos = vtxoRows.filter((row) => row.state === 'spendable')
   const topologyVtxoIds = useMemo(
@@ -201,15 +250,30 @@ export function useBarkEmergencyExitPage() {
     ])
   }
 
+  function feeCapBlocksBroadcast(): boolean {
+    if (!proceedAutomatically) return false
+    if (pausedReason === 'feeCapExceeded' || automatedFeeResolution.capExceeded) {
+      if (pausedReason !== 'feeCapExceeded') {
+        pauseBarkEmergencyExitAutomation('feeCapExceeded')
+      }
+      return true
+    }
+    return false
+  }
+
   async function onReview() {
     const vtxoIds = wholeWallet ? [] : selectedIds
     if (!wholeWallet && vtxoIds.length === 0) {
       toast.error('Select spendable VTXOs or the whole wallet.')
       return
     }
+    if (feeCapBlocksBroadcast()) {
+      toast.error(BARK_EMERGENCY_EXIT_AUTOMATION_PAUSE_LABELS.feeCapExceeded)
+      return
+    }
     setBusyAction('review')
     try {
-      const estimate = await barkEmergencyExitReviewDeps().estimate(vtxoIds, feeRateSatPerVb)
+      const estimate = await barkEmergencyExitReviewDeps().estimate(vtxoIds, feeRateForActions)
       setReview({ vtxoIds, estimate })
     } catch (err) {
       setReview(null)
@@ -241,7 +305,7 @@ export function useBarkEmergencyExitPage() {
     setBusyAction('progress')
     try {
       await catchUpOnchainWalletForBarkExit(networkMode)
-      const outcome = await runBarkEmergencyExitProgress(exitScope, feeRateSatPerVb)
+      const outcome = await runBarkEmergencyExitProgress(exitScope, manualFeeRateSatPerVb)
       if (!barkEmergencyExitChildrenWaitForFunds(outcome)) {
         toast.success('Emergency exit progressed.')
       }
@@ -269,17 +333,57 @@ export function useBarkEmergencyExitPage() {
   async function onProceedAutomaticallyChange(enabled: boolean) {
     if (activeWalletId == null || !isBarkNetworkMode(networkMode)) return
     const queryKey = barkProceedAutomaticallyQueryKey(activeWalletId, networkMode)
+    const feePrefsKey = barkEmergencyExitFeePrefsQueryKey(activeWalletId, networkMode)
     queryClient.setQueryData(queryKey, enabled)
     try {
       await getBarkWorker().writeProceedAutomatically(enabled)
       if (enabled) {
+        const maxFeeRate = defaultMaxFeeRateSatPerVb(feeSelection.presetSatPerVbByLabel.High)
+        await getBarkWorker().writeEmergencyExitMaxFeeRate(maxFeeRate)
+        queryClient.setQueryData(feePrefsKey, (current: BarkEmergencyExitFeePrefs | undefined) => ({
+          feePresetLabel: current?.feePresetLabel ?? automatedFeePresetLabel,
+          maxFeeRateSatPerVb: maxFeeRate,
+        }))
         void syncBarkEmergencyExitAutomation({ walletId: activeWalletId, networkMode })
       } else {
         stopBarkEmergencyExitAutomation()
       }
     } catch (err) {
       queryClient.setQueryData(queryKey, !enabled)
+      if (enabled) {
+        await getBarkWorker().writeProceedAutomatically(false).catch(() => undefined)
+      }
       toast.error(errorMessage(err) || 'Could not save automatic proceeding')
+    }
+  }
+
+  async function onAutomaticFeePresetChange(feePresetLabel: BarkEmergencyExitFeePrefs['feePresetLabel']) {
+    if (activeWalletId == null) return
+    const feePrefsKey = barkEmergencyExitFeePrefsQueryKey(activeWalletId, networkMode)
+    try {
+      await getBarkWorker().writeEmergencyExitFeePreset(feePresetLabel)
+      queryClient.setQueryData(feePrefsKey, (current: BarkEmergencyExitFeePrefs | undefined) => ({
+        feePresetLabel,
+        maxFeeRateSatPerVb: current?.maxFeeRateSatPerVb ?? null,
+      }))
+      clearBarkEmergencyExitAutomationPause()
+    } catch (err) {
+      toast.error(errorMessage(err) || 'Could not save the fee rate')
+    }
+  }
+
+  async function onMaxFeeRateChange(nextMaxFeeRateSatPerVb: number) {
+    if (activeWalletId == null) return
+    const feePrefsKey = barkEmergencyExitFeePrefsQueryKey(activeWalletId, networkMode)
+    try {
+      await getBarkWorker().writeEmergencyExitMaxFeeRate(nextMaxFeeRateSatPerVb)
+      queryClient.setQueryData(feePrefsKey, (current: BarkEmergencyExitFeePrefs | undefined) => ({
+        feePresetLabel: current?.feePresetLabel ?? automatedFeePresetLabel,
+        maxFeeRateSatPerVb: nextMaxFeeRateSatPerVb,
+      }))
+      clearBarkEmergencyExitAutomationPause()
+    } catch (err) {
+      toast.error(errorMessage(err) || 'Could not save the maximum fee rate')
     }
   }
 
@@ -288,12 +392,16 @@ export function useBarkEmergencyExitPage() {
       toast.error('No on-chain receive address is available.')
       return
     }
+    if (feeCapBlocksBroadcast()) {
+      toast.error(BARK_EMERGENCY_EXIT_AUTOMATION_PAUSE_LABELS.feeCapExceeded)
+      return
+    }
     setBusyAction('claim')
     try {
       const claimed = await claimBarkEmergencyExits(
         barkEmergencyExitClaimDeps(),
         destinationAddress,
-        feeRateSatPerVb,
+        feeRateForActions,
       )
       if (claimed.observed) {
         toast.success(`Claim broadcast ${claimed.txid}. ${BARK_EMERGENCY_EXIT_CLAIM_NOTE}`)
@@ -333,10 +441,27 @@ export function useBarkEmergencyExitPage() {
     onStart: () => void onStart(),
     onProgress: () => void onProgress(),
     onProceedAutomaticallyChange: (enabled: boolean) => void onProceedAutomaticallyChange(enabled),
+    onAutomaticFeePresetChange: (
+      preset: BarkEmergencyExitFeePrefs['feePresetLabel'],
+      _rateSatPerVb: number,
+    ) => void onAutomaticFeePresetChange(preset),
+    onMaxFeeRateChange: (nextMaxFeeRateSatPerVb: number) =>
+      void onMaxFeeRateChange(nextMaxFeeRateSatPerVb),
     proceedAutomatically,
     proceedAutomaticallyPending: proceedAutomaticallyQuery.isPending,
     automaticProgressInFlight,
     automaticProgressError,
+    displayedPauseReason,
+    manualFeePresetSelection: feeSelection.feePresetSelection,
+    automatedFeePresetLabel,
+    presetSatPerVbByLabel: feeSelection.presetSatPerVbByLabel,
+    feeEstimatesRefreshing: feeSelection.feeEstimatesRefreshing,
+    customFeeRate: feeSelection.customFeeRate,
+    useCustomFee: feeSelection.useCustomFee,
+    maxFeeRateSatPerVb,
+    onSelectManualPreset: feeSelection.handleSelectFeePreset,
+    setCustomFeeRate: feeSelection.setCustomFeeRate,
+    onSelectCustomMode: feeSelection.handleSelectCustomMode,
     onCancel: (vtxoId: string) => void onCancel(vtxoId),
     onClaim: () => void onClaim(),
   }

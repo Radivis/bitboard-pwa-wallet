@@ -73,7 +73,9 @@ feature:
     - Emergency exit does not call send_onchain or offboard_all
     - Emergency exit never contacts or waits for the Ark server. Review, start, progress, cancel, and claim work in a session whose Bark sync failed because the server is unreachable
     - Review, before start, shows the broadcast fee, the later claim fee, and how many transactions must be broadcast
-    - Emergency exit broadcast, Pay-to-Anchor children, and the claim use the open network's High fee preset from the on-chain Esplora, not Bark's own fast rate
+    - While Proceed automatically is off, Review, Progress, and Claim use the fee rate selected on the page (low, medium, high, or custom sat/vB). Presets come from the open network's on-chain Esplora, not Bark's own fast rate
+    - While Proceed automatically is on, each automatic progress resolves the saved low, medium, or high degree to the live Esplora preset, locks that sat/vB for that call, and pauses without broadcasting when the live rate exceeds the saved maximum or the step is unfundable. A partial funding wait does not pause. Claim uses that same resolved rate and does not broadcast while the fee-cap pause is active
+    - After a successful Bark sync, already-started exits progress at the High preset while Proceed automatically is off, and use that same automatic fee lock while it is on
     - Start stays disabled when the on-chain confirmed balance is below the broadcast fee
     - Progress is a button. After a successful Bark sync, already-started exits take that same path, including Pay-to-Anchor children
     - Cancel is offered only while that exit is still cancelable
@@ -451,6 +453,15 @@ feature:
         implemented_by:
           - frontend/src/lib/bark/__tests__/bark-emergency-exit-live-deps.test.ts
           - frontend/src/lib/bark/__tests__/bark-emergency-exit-after-sync.test.ts
+      - id: BARK-EMG-26
+        description: While Proceed automatically is off, Review, Progress, and Claim use the fee rate selected on the page, including a custom sat/vB
+        implemented_by: frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
+      - id: BARK-EMG-27
+        description: Automatic progress resolves the saved fee degree, locks that sat/vB for the call, and pauses when the live preset exceeds the max or the step is unfundable. A partial funding wait does not pause. Changing the degree or the max clears the pause. A Bark sync uses that lock only while Proceed automatically is on; otherwise it keeps the High preset
+        implemented_by:
+          - frontend/src/lib/bark/__tests__/bark-emergency-exit-automated-fee.test.ts
+          - frontend/src/lib/bark/__tests__/bark-emergency-exit-after-sync.test.ts
+          - frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
   pages:
     - BarkManagement:
         description: Bark entry on the Management page
@@ -498,6 +509,8 @@ feature:
           - A leaf node shows the leaf icon and a coin badge. A shared ancestor shows the tree icon and no coin badge. A checkpoint shows the checkpoint icon. The chain anchor shows the commitment icon. The leaf coin badge shows Coins before the leaf confirms, an Hourglass from its first confirmation (or awaitingDelta) while the exit timelock runs, and HandCoins once every exit on that leaf is claimable, the same three stages as the Arkade unilateral exit graph
           - Focused exit-tree node shows its transaction id and the VTXO ids that end on it
           - Spendable VTXO checkboxes
+          - Fee rate selector (low / medium / high / custom) while Proceed automatically is off
+          - Proceed automatically switch, congestion warning, max fee rate, and low / medium / high presets while Proceed automatically is on
           - Review of broadcast fee, claim fee, and transaction count
           - Start for the selection or the whole wallet
           - Live exit rows with state and Cancel when cancelable
@@ -507,7 +520,7 @@ feature:
           - Full-page Bark session loading or error screen while the session is not ready
         requirements:
           - Contracts BARK-EMG-02 through BARK-EMG-08
-          - Contracts BARK-EMG-10 through BARK-EMG-25
+          - Contracts BARK-EMG-10 through BARK-EMG-27
           - Contracts BARK-SESS-03 and BARK-SESS-04
           - Shown only when isBarkEnabled and the network is signet or mainnet
           - Progress is a button, and a successful Bark sync also progresses exits that are already started

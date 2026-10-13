@@ -1,9 +1,11 @@
+import { decideBarkEmergencyExitAutomatedFee } from '@/lib/bark/bark-emergency-exit-automated-fee'
 import {
   catchUpOnchainWalletForBarkExit,
   fetchBarkExitChainTip,
 } from '@/lib/bark/bark-emergency-exit-onchain-catch-up-live'
 import type { BarkEmergencyExitScope } from '@/lib/bark/bark-emergency-exit-funding-status'
 import { runBarkEmergencyExitProgress } from '@/lib/bark/bark-emergency-exit-progress-deps'
+import { isBarkCpfpUnfundableError } from '@/lib/bark/perform-bark-emergency-exit'
 import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
 import { presetRatesForNetwork } from '@/hooks/useEsploraFeePresets'
 import { appQueryClient } from '@/lib/shared/app-query-client'
@@ -13,10 +15,11 @@ import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import type { BarkRailNetwork } from '@/lib/wallet/wallet-domain-types'
 import {
   IDLE_BARK_EMERGENCY_EXIT_AUTOMATION_ACTIVITY,
+  pauseBarkEmergencyExitAutomation,
   useBarkEmergencyExitAutomationStore,
   type BarkEmergencyExitAutomationActivity,
 } from '@/stores/barkEmergencyExitAutomationStore'
-import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
+import { selectCommittedNetworkMode, useWalletStore, type NetworkMode } from '@/stores/walletStore'
 import { getBarkWorker } from '@/workers/bark-factory'
 import { toast } from 'sonner'
 
@@ -209,14 +212,24 @@ let automationGeneration = 0
 let activeAutomationRun: ActiveAutomationRun | null = null
 
 function currentAutomationActivity(): BarkEmergencyExitAutomationActivity {
-  const { inFlight, errorMessage } = useBarkEmergencyExitAutomationStore.getState()
-  return { inFlight, errorMessage }
+  const { inFlight, errorMessage, pausedReason } = useBarkEmergencyExitAutomationStore.getState()
+  return { inFlight, errorMessage, pausedReason }
+}
+
+function activityKeepingPause(
+  patch: Partial<BarkEmergencyExitAutomationActivity>,
+): BarkEmergencyExitAutomationActivity {
+  return { ...currentAutomationActivity(), ...patch }
 }
 
 /** A new error also opens a toast that stays until dismissed. */
 function publishAutomationActivity(next: BarkEmergencyExitAutomationActivity): void {
   const previous = currentAutomationActivity()
-  if (previous.inFlight === next.inFlight && previous.errorMessage === next.errorMessage) {
+  if (
+    previous.inFlight === next.inFlight &&
+    previous.errorMessage === next.errorMessage &&
+    previous.pausedReason === next.pausedReason
+  ) {
     return
   }
   useBarkEmergencyExitAutomationStore.getState().setActivity(next)
@@ -265,6 +278,7 @@ export async function syncBarkEmergencyExitAutomation(
     publishAutomationActivity({
       inFlight: false,
       errorMessage: automationActivityError(error, 'Could not read automatic proceeding'),
+      pausedReason: null,
     })
     return
   }
@@ -297,37 +311,40 @@ export async function syncBarkEmergencyExitAutomation(
       readGate: () => readPersistedSessionGate(scope),
       fetchTip: () => fetchBarkExitChainTip(scope.networkMode),
       listExitCount: async () => (await getBarkWorker().listEmergencyExits()).length,
-      progress: (observedTip) => progressOpenEmergencyExits(scope, observedTip),
+      progress: (observedTip) =>
+        progressBarkEmergencyExitAutomatically({
+          scope,
+          networkMode: scope.networkMode,
+          observedTipHeight: observedTip?.height,
+        }),
       wait: (signal) => waitForBarkEmergencyExitTipPoll(scope.networkMode, signal),
       onListed: () => invalidateBarkEmergencyExitQueries(scope),
       afterProgress: () => invalidateBarkEmergencyExitQueries(scope),
       onProgressStart: () => {
-        publishAutomationActivity({
-          inFlight: true,
-          errorMessage: currentAutomationActivity().errorMessage,
-        })
+        publishAutomationActivity(activityKeepingPause({ inFlight: true }))
       },
       onProgressSuccess: () => {
-        publishAutomationActivity(IDLE_BARK_EMERGENCY_EXIT_AUTOMATION_ACTIVITY)
+        publishAutomationActivity(activityKeepingPause({ inFlight: false, errorMessage: null }))
       },
       onProgressIdle: () => {
-        publishAutomationActivity({
-          inFlight: false,
-          errorMessage: currentAutomationActivity().errorMessage,
-        })
+        publishAutomationActivity(activityKeepingPause({ inFlight: false }))
       },
       onProgressError: (error) => {
-        publishAutomationActivity({
-          inFlight: false,
-          errorMessage: automationActivityError(error, 'Emergency exit failed to progress'),
-        })
+        publishAutomationActivity(
+          activityKeepingPause({
+            inFlight: false,
+            errorMessage: automationActivityError(error, 'Emergency exit failed to progress'),
+          }),
+        )
       },
       onTipReadError: (error) => {
         if (currentAutomationActivity().inFlight) return
-        publishAutomationActivity({
-          inFlight: false,
-          errorMessage: automationActivityError(error, 'Could not read the chain tip'),
-        })
+        publishAutomationActivity(
+          activityKeepingPause({
+            inFlight: false,
+            errorMessage: automationActivityError(error, 'Could not read the chain tip'),
+          }),
+        )
       },
     })
   } finally {
@@ -368,13 +385,41 @@ async function readPersistedSessionGate(
   return { ...readLiveSessionGate(scope), proceedAutomatically }
 }
 
-async function progressOpenEmergencyExits(
-  scope: BarkEmergencyExitAutomationScope,
-  observedTip: BarkEmergencyExitTip | null,
-): Promise<void> {
-  await catchUpOnchainWalletForBarkExit(scope.networkMode, observedTip?.height)
-  const feeRates = await presetRatesForNetwork(scope.networkMode)
-  await runBarkEmergencyExitProgress(scope, feeRates.High)
+/**
+ * Catch up the on-chain wallet, lock the automatic fee for one progress call,
+ * and pause when the cap is exceeded or the children are unfundable.
+ * A partial funding wait returns normally so the next block can try again.
+ */
+export async function progressBarkEmergencyExitAutomatically(params: {
+  scope: BarkEmergencyExitScope | null
+  networkMode: NetworkMode
+  observedTipHeight?: number
+}): Promise<void> {
+  if (useBarkEmergencyExitAutomationStore.getState().pausedReason != null) return
+
+  const prefs = await getBarkWorker().readEmergencyExitFeePrefs()
+  const presetSatPerVbByLabel = await presetRatesForNetwork(params.networkMode)
+  const decision = decideBarkEmergencyExitAutomatedFee({
+    pausedReason: null,
+    feePresetLabel: prefs.feePresetLabel,
+    presetSatPerVbByLabel,
+    storedMaxFeeRateSatPerVb: prefs.maxFeeRateSatPerVb,
+  })
+  if (decision.action === 'paused') {
+    pauseBarkEmergencyExitAutomation(decision.pausedReason)
+    return
+  }
+
+  await catchUpOnchainWalletForBarkExit(params.networkMode, params.observedTipHeight)
+  try {
+    await runBarkEmergencyExitProgress(params.scope, decision.feeRateSatPerVb)
+  } catch (error) {
+    if (isBarkCpfpUnfundableError(error)) {
+      pauseBarkEmergencyExitAutomation('fundsInsufficient')
+      return
+    }
+    throw error
+  }
 }
 
 async function invalidateBarkEmergencyExitQueries(

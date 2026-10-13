@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyBarkRecordEnvelope,
+  applyEmergencyExitFeePreset,
+  applyEmergencyExitMaxFeeRate,
   applyOpenedBarkAccount,
   applyPendingEmergencyClaim,
   applyProceedAutomatically,
@@ -357,6 +359,62 @@ describe('barkAccounts metadata', () => {
     )
     expect(findBarkAccount(parsed, 'signet')?.recordEnvelope).toBe(signetRecordEnvelope)
     expect(findBarkAccount(parsed, 'signet')?.proceedAutomatically).toBeUndefined()
+  })
+
+  it('keeps the emergency-exit fee degree and max across a sync flush and drops malformed values', () => {
+    const payload = payloadWithArkadeSdk()
+    payload.barkAccounts.push(
+      signetAccount({
+        recordEnvelope: signetRecordEnvelope,
+        proceedAutomatically: true,
+        emergencyExitFeePreset: 'Low',
+        emergencyExitMaxFeeRateSatPerVb: 12,
+      }),
+    )
+
+    const stamped = applySuccessfulBarkSync({
+      network: 'signet',
+      payload,
+      syncedAt: '2024-03-01T12:00:00.000Z',
+    })
+    expect(findBarkAccount(stamped, 'signet')?.emergencyExitFeePreset).toBe('Low')
+    expect(findBarkAccount(stamped, 'signet')?.emergencyExitMaxFeeRateSatPerVb).toBe(12)
+
+    const changed = applyEmergencyExitFeePreset({
+      payload: stamped,
+      network: 'signet',
+      feePreset: 'High',
+    })
+    const capped = applyEmergencyExitMaxFeeRate({
+      payload: changed,
+      network: 'signet',
+      maxFeeRateSatPerVb: 25,
+    })
+    expect(findBarkAccount(capped, 'signet')?.emergencyExitFeePreset).toBe('High')
+    expect(findBarkAccount(capped, 'signet')?.emergencyExitMaxFeeRateSatPerVb).toBe(25)
+    expect(findBarkAccount(capped, 'signet')?.recordEnvelope).toBe(signetRecordEnvelope)
+    expect(findBarkAccount(capped, 'signet')?.proceedAutomatically).toBe(true)
+
+    const parsed = parseWalletPayloadJson(
+      JSON.stringify({
+        descriptorWallets: [],
+        lightningNwcConnections: [],
+        barkAccounts: [
+          {
+            id: 'bark-account-signet',
+            networkMode: 'signet',
+            serverUrl: BARK_SIGNET_SERVER_URL,
+            fingerprint: 'abcdef01',
+            recordEnvelope: signetRecordEnvelope,
+            emergencyExitFeePreset: 'custom',
+            emergencyExitMaxFeeRateSatPerVb: 0,
+          },
+        ],
+      }),
+    )
+    expect(findBarkAccount(parsed, 'signet')?.recordEnvelope).toBe(signetRecordEnvelope)
+    expect(findBarkAccount(parsed, 'signet')?.emergencyExitFeePreset).toBeUndefined()
+    expect(findBarkAccount(parsed, 'signet')?.emergencyExitMaxFeeRateSatPerVb).toBeUndefined()
   })
 
   it('drops an account whose receiveKeyIndex is not a u32', () => {

@@ -4,9 +4,18 @@ import type {
   BarkNextRefreshSchedule,
   BarkRefreshStatus,
 } from '@/lib/bark/bark-refresh-status'
-import type { BarkRailNetwork, PendingEmergencyClaim } from '@/lib/wallet/wallet-domain-types'
+import type {
+  BarkEmergencyExitFeePreset,
+  BarkRailNetwork,
+  PendingEmergencyClaim,
+} from '@/lib/wallet/wallet-domain-types'
 
 export type { PendingEmergencyClaim }
+
+export type BarkEmergencyExitFeePrefs = {
+  feePresetLabel: BarkEmergencyExitFeePreset
+  maxFeeRateSatPerVb: number | null
+}
 
 export type { BarkNextRefreshSchedule, BarkRefreshStatus }
 
@@ -234,6 +243,9 @@ export interface BarkService {
   writePendingEmergencyClaim(pending: PendingEmergencyClaim | null): Promise<void>
   readProceedAutomatically(): Promise<boolean>
   writeProceedAutomatically(enabled: boolean): Promise<void>
+  readEmergencyExitFeePrefs(): Promise<BarkEmergencyExitFeePrefs>
+  writeEmergencyExitFeePreset(feePreset: BarkEmergencyExitFeePreset): Promise<void>
+  writeEmergencyExitMaxFeeRate(maxFeeRateSatPerVb: number): Promise<void>
   syncEmergencyExits(): Promise<BarkEmergencyExitRow[]>
   broadcastEmergencyExitClaim(rawTxHex: string): Promise<void>
 }

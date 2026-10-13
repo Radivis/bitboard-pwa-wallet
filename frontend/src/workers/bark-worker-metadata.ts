@@ -1,5 +1,7 @@
 import {
   applyBarkRecordEnvelope,
+  applyEmergencyExitFeePreset,
+  applyEmergencyExitMaxFeeRate,
   applyOpenedBarkAccount,
   applyPendingEmergencyClaim,
   applyProceedAutomatically,
@@ -7,7 +9,11 @@ import {
   recordEnvelopeForOpen,
 } from '@/lib/bark/bark-rail-metadata'
 import {
+  DEFAULT_BARK_EMERGENCY_EXIT_FEE_PRESET,
+  emergencyExitFeePresetFromUnknown,
+  emergencyExitMaxFeeRateFromUnknown,
   parseWalletPayloadJson,
+  type BarkEmergencyExitFeePreset,
   type BarkRailNetwork,
   type PendingEmergencyClaim,
   type StoredBarkAccount,
@@ -17,6 +23,7 @@ import {
   updateDecryptedWalletPayload,
   type WorkerWalletPayloadDeps,
 } from '@/workers/worker-wallet-payload-update'
+import type { BarkEmergencyExitFeePrefs } from '@/workers/bark-api'
 
 export type BarkEncryptedPayloadDeps = WorkerWalletPayloadDeps
 
@@ -148,5 +155,46 @@ export async function writeProceedAutomatically(
 ): Promise<void> {
   await updateDecryptedWalletPayload(deps, walletId, (payload) =>
     applyProceedAutomatically({ payload, network, enabled }),
+  )
+}
+
+/** Saved automatic fee degree and max. Missing degree is Medium. Missing max is null. */
+export async function readEmergencyExitFeePrefs(
+  deps: BarkEncryptedPayloadDeps,
+  walletId: number,
+  network: BarkRailNetwork,
+): Promise<BarkEmergencyExitFeePrefs> {
+  const payload = await readDecryptedWalletPayload(deps, walletId)
+  const account = findBarkAccount(payload, network)
+  return {
+    feePresetLabel:
+      emergencyExitFeePresetFromUnknown(account?.emergencyExitFeePreset) ??
+      DEFAULT_BARK_EMERGENCY_EXIT_FEE_PRESET,
+    maxFeeRateSatPerVb:
+      emergencyExitMaxFeeRateFromUnknown(account?.emergencyExitMaxFeeRateSatPerVb) ?? null,
+  }
+}
+
+/** Stores the low, medium, or high degree for automatic emergency-exit proceeding. */
+export async function writeEmergencyExitFeePreset(
+  deps: BarkEncryptedPayloadDeps,
+  walletId: number,
+  network: BarkRailNetwork,
+  feePreset: BarkEmergencyExitFeePreset,
+): Promise<void> {
+  await updateDecryptedWalletPayload(deps, walletId, (payload) =>
+    applyEmergencyExitFeePreset({ payload, network, feePreset }),
+  )
+}
+
+/** Stores the maximum sat/vB for automatic emergency-exit proceeding. */
+export async function writeEmergencyExitMaxFeeRate(
+  deps: BarkEncryptedPayloadDeps,
+  walletId: number,
+  network: BarkRailNetwork,
+  maxFeeRateSatPerVb: number,
+): Promise<void> {
+  await updateDecryptedWalletPayload(deps, walletId, (payload) =>
+    applyEmergencyExitMaxFeeRate({ payload, network, maxFeeRateSatPerVb }),
   )
 }

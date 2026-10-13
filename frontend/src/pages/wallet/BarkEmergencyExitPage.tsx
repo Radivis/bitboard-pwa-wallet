@@ -4,6 +4,7 @@ import { barkSessionBlockingScreen } from '@/components/bark/bark-session-blocki
 import { BarkRailUnavailable } from '@/components/bark/BarkRailUnavailable'
 import {
   BarkEmergencyExitClaimCard,
+  BarkEmergencyExitFeeCard,
   BarkEmergencyExitLiveCard,
   BarkEmergencyExitStartCard,
   BarkEmergencyExitTreeCard,
@@ -51,6 +52,25 @@ export function BarkEmergencyExitPage() {
         vtxoRows={page.vtxoRows}
         fundingStatus={page.fundingStatus}
       />
+      <BarkEmergencyExitFeeCard
+        busyAction={page.busyAction}
+        proceedAutomatically={page.proceedAutomatically}
+        proceedAutomaticallyPending={page.proceedAutomaticallyPending}
+        pausedReason={page.displayedPauseReason}
+        manualFeePresetSelection={page.manualFeePresetSelection}
+        automatedFeePresetLabel={page.automatedFeePresetLabel}
+        presetSatPerVbByLabel={page.presetSatPerVbByLabel}
+        feeEstimatesRefreshing={page.feeEstimatesRefreshing}
+        customFeeRate={page.customFeeRate}
+        useCustomFee={page.useCustomFee}
+        maxFeeRateSatPerVb={page.maxFeeRateSatPerVb}
+        onProceedAutomaticallyChange={page.onProceedAutomaticallyChange}
+        onSelectManualPreset={page.onSelectManualPreset}
+        onSelectAutomaticPreset={page.onAutomaticFeePresetChange}
+        setCustomFeeRate={page.setCustomFeeRate}
+        onSelectCustomMode={page.onSelectCustomMode}
+        onMaxFeeRateChange={page.onMaxFeeRateChange}
+      />
       <BarkEmergencyExitStartCard
         wholeWallet={page.wholeWallet}
         spendableVtxos={page.spendableVtxos}
@@ -70,10 +90,9 @@ export function BarkEmergencyExitPage() {
         vtxoRows={page.vtxoRows}
         busyAction={page.busyAction}
         proceedAutomatically={page.proceedAutomatically}
-        proceedAutomaticallyPending={page.proceedAutomaticallyPending}
         automaticProgressInFlight={page.automaticProgressInFlight}
         automaticProgressError={page.automaticProgressError}
-        onProceedAutomaticallyChange={page.onProceedAutomaticallyChange}
+        automationPaused={page.displayedPauseReason != null}
         onProgress={page.onProgress}
         onCancel={page.onCancel}
       />

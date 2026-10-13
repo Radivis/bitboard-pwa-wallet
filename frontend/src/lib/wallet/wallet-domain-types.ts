@@ -162,7 +162,24 @@ export interface StoredBarkAccount {
    * wallet stays unlocked on this network. Absent means off.
    */
   proceedAutomatically?: boolean
+  /**
+   * Low, medium, or high degree used while automatic emergency-exit proceeding
+   * is on. Absent means Medium.
+   */
+  emergencyExitFeePreset?: BarkEmergencyExitFeePreset
+  /**
+   * Maximum sat/vB for automatic emergency-exit proceeding. Absent until the
+   * user turns automatic proceeding on.
+   */
+  emergencyExitMaxFeeRateSatPerVb?: number
 }
+
+/** Fee degree for automatic Bark emergency-exit proceeding. Custom is manual only. */
+export const BARK_EMERGENCY_EXIT_FEE_PRESETS = ['Low', 'Medium', 'High'] as const
+
+export type BarkEmergencyExitFeePreset = (typeof BARK_EMERGENCY_EXIT_FEE_PRESETS)[number]
+
+export const DEFAULT_BARK_EMERGENCY_EXIT_FEE_PRESET: BarkEmergencyExitFeePreset = 'Medium'
 
 /** A claim transaction already broadcast, and the VTXOs it spends. */
 export interface PendingEmergencyClaim {
@@ -254,6 +271,25 @@ export function proceedAutomaticallyFromUnknown(value: unknown): true | undefine
   return value === true ? true : undefined
 }
 
+/** Keeps Low, Medium, or High. Anything else is omitted. */
+export function emergencyExitFeePresetFromUnknown(
+  value: unknown,
+): BarkEmergencyExitFeePreset | undefined {
+  if (
+    typeof value === 'string' &&
+    (BARK_EMERGENCY_EXIT_FEE_PRESETS as readonly string[]).includes(value)
+  ) {
+    return value as BarkEmergencyExitFeePreset
+  }
+  return undefined
+}
+
+/** Keeps a positive finite sat/vB cap. Anything else is omitted. */
+export function emergencyExitMaxFeeRateFromUnknown(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return undefined
+  return value
+}
+
 export function isStoredBarkAccount(value: unknown): value is StoredBarkAccount {
   if (!isRecord(value)) return false
   if (!isNonEmptyString(value.id)) return false
@@ -291,6 +327,18 @@ export function isStoredBarkAccount(value: unknown): value is StoredBarkAccount 
   ) {
     return false
   }
+  if (
+    value.emergencyExitFeePreset !== undefined &&
+    emergencyExitFeePresetFromUnknown(value.emergencyExitFeePreset) == null
+  ) {
+    return false
+  }
+  if (
+    value.emergencyExitMaxFeeRateSatPerVb !== undefined &&
+    emergencyExitMaxFeeRateFromUnknown(value.emergencyExitMaxFeeRateSatPerVb) == null
+  ) {
+    return false
+  }
   return true
 }
 
@@ -324,6 +372,20 @@ function sanitizeStoredBarkAccountRow(row: unknown): StoredBarkAccount | null {
     cleaned.proceedAutomatically = true
   } else {
     delete cleaned.proceedAutomatically
+  }
+  const emergencyExitFeePreset = emergencyExitFeePresetFromUnknown(row.emergencyExitFeePreset)
+  if (emergencyExitFeePreset != null) {
+    cleaned.emergencyExitFeePreset = emergencyExitFeePreset
+  } else {
+    delete cleaned.emergencyExitFeePreset
+  }
+  const emergencyExitMaxFeeRateSatPerVb = emergencyExitMaxFeeRateFromUnknown(
+    row.emergencyExitMaxFeeRateSatPerVb,
+  )
+  if (emergencyExitMaxFeeRateSatPerVb != null) {
+    cleaned.emergencyExitMaxFeeRateSatPerVb = emergencyExitMaxFeeRateSatPerVb
+  } else {
+    delete cleaned.emergencyExitMaxFeeRateSatPerVb
   }
   if (isStoredBarkAccount(cleaned)) {
     return cleaned
