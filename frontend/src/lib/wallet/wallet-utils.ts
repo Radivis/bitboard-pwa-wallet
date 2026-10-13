@@ -31,14 +31,6 @@ import { startArkadeLoadAfterUnlock } from '@/lib/wallet/lifecycle/rail-load-sta
 import { startBarkLoadAfterUnlock } from '@/lib/bark/bark-session-service'
 import type { OnchainSyncThenSaveParams } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-types'
 import { CUSTOM_ESPLORA_URL_KEY_PREFIX } from '@/lib/wallet/historical-signet-onchain-chain'
-/**
- * Runs pending schema and device data migrations, including the one-time
- * classification of the pre-split Signet Esplora row. Mutinynet URLs move to
- * the mutinynet key. Public Signet URLs stay on signet.
- */
-export async function migrateCustomEsploraUrlSignetToMutinynet(): Promise<void> {
-  await ensureSchemaAndDataMigrated()
-}
 
 async function orchestrateOnchainSyncThenSaveFromWalletUtils(
   params: OnchainSyncThenSaveParams,

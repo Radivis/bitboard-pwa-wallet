@@ -1,11 +1,6 @@
 import type { Kysely } from 'kysely'
 import { ensureSchemaAndDataMigrated, getDatabase } from '@/db/database'
-import {
-  SCHEMA_MIGRATION_RETRY_DELAY_MS,
-  SCHEMA_MIGRATION_RETRY_MAX_ATTEMPTS,
-  withRetries,
-} from '@/db/migrations/retry-async'
-import { tryWriteWalletMigrationFailureReport } from '@/db/migrations/wallet-migration-failure-report'
+import { withMigrationRetriesAndFailureReport } from '@/db/migrations/wallet-migration-failure-report'
 import type { Database } from '@/db/schema'
 import {
   listWalletIdsWithSecrets,
@@ -34,18 +29,7 @@ import {
  * unmigrated payload's `signet` rows would be read as public Signet.
  */
 export async function runPendingWalletDataMigrations(walletDb: Kysely<Database>): Promise<void> {
-  try {
-    await withRetries(() => runPendingWalletDataMigrationsOnce(walletDb), {
-      maxAttempts: SCHEMA_MIGRATION_RETRY_MAX_ATTEMPTS,
-      delayMs: SCHEMA_MIGRATION_RETRY_DELAY_MS,
-    })
-  } catch (lastError) {
-    await tryWriteWalletMigrationFailureReport({
-      attempts: SCHEMA_MIGRATION_RETRY_MAX_ATTEMPTS,
-      lastError,
-    })
-    throw lastError
-  }
+  await withMigrationRetriesAndFailureReport(() => runPendingWalletDataMigrationsOnce(walletDb))
 }
 
 async function runPendingWalletDataMigrationsOnce(walletDb: Kysely<Database>): Promise<void> {

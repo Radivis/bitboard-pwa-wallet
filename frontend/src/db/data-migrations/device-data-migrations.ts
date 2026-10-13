@@ -1,5 +1,6 @@
 import type { Kysely } from 'kysely'
 import type { Database } from '@/db/schema'
+import { withMigrationRetriesAndFailureReport } from '@/db/migrations/wallet-migration-failure-report'
 import {
   parseHistoricalSignetOnchainChain,
   setConfiguredHistoricalSignetOnchainChain,
@@ -27,9 +28,20 @@ const DEVICE_DATA_MIGRATIONS: readonly DeviceDataMigration[] = [
 /** Runs every device data migration that has not run yet, then hydrates all results. */
 export async function runDeviceDataMigrations(walletDb: Kysely<Database>): Promise<void> {
   for (const migration of DEVICE_DATA_MIGRATIONS) {
-    const result = await applyDeviceDataMigrationOnce(walletDb, migration)
+    const result = await applyDeviceDataMigrationOnce(walletDb, migration).catch(
+      (migrationError: unknown) => {
+        throw new Error(`Migration "${migration.name}" failed`, { cause: migrationError })
+      },
+    )
     migration.hydrate(result)
   }
+}
+
+/** Like {@link runDeviceDataMigrations}, plus retries and the OPFS failure report. */
+export async function runDeviceDataMigrationsWithFailureReport(
+  walletDb: Kysely<Database>,
+): Promise<void> {
+  await withMigrationRetriesAndFailureReport(() => runDeviceDataMigrations(walletDb))
 }
 
 export async function readDeviceDataMigrationResult(

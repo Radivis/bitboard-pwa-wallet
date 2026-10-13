@@ -2,7 +2,7 @@ import { Kysely } from 'kysely'
 import { WaSqliteWorkerDialect } from 'kysely-wasqlite-worker'
 import type { Database } from './schema'
 import { runWalletMigrations } from './migrations/run-wallet-migrations'
-import { runDeviceDataMigrations } from './data-migrations/device-data-migrations'
+import { runDeviceDataMigrationsWithFailureReport } from './data-migrations/device-data-migrations'
 import { WALLET_SQLITE_OPFS_BASENAME } from './opfs/opfs-sqlite-database-names'
 import { isBenignSqliteWorkerCloseFailure } from './sqlite-worker-close-error'
 import { WalletDatabaseTeardownBlockedError } from './database-teardown-blocked-error'
@@ -71,7 +71,7 @@ async function ensureSchemaMigrated(): Promise<void> {
 /** Once per opened database. Retries on the next call after a failure. */
 async function ensureDeviceDataMigrated(): Promise<void> {
   if (!deviceDataMigrationPromise) {
-    deviceDataMigrationPromise = runDeviceDataMigrations(getDatabase())
+    deviceDataMigrationPromise = runDeviceDataMigrationsWithFailureReport(getDatabase())
   }
   try {
     await deviceDataMigrationPromise
