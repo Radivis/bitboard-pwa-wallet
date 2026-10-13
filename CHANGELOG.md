@@ -24,16 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The networks Signet and Mutinynet are now properly separated rather than Signet pointing towards Mutinynet silently
-- The privacy policy now covers the Bark rail: Second's Ark server and chain source, direct (unproxied) connections, linkability with on-chain activity, and local encrypted Bark state
 
 ### Fixed
 
 - Rails like Lightning, Arkade, and Bark are now loaded immediately after feature unlock
 - NWC Lightning connections now are not overwritten when they failed to load into memory
-
-### Security
-
-- Turning on Bark asks you to acknowledge that the feature is new and that Mainnet amounts should stay very small
 
 ## [0.3.5] - 2026-09-27
 

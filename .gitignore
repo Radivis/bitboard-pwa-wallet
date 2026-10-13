@@ -14,6 +14,8 @@
 target/
 .env
 .env.testnet
+# TypeScript caches
+*.tsbuildinfo
 # Legacy single-file imprint
 .env.imprint
 !/scripts/README.md
