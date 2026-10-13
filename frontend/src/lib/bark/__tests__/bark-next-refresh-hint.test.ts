@@ -24,8 +24,7 @@ describe('formatBarkNextRefreshHint', () => {
       periodStarted: false,
       dateLabel,
       text:
-        `Unlock this wallet around ${dateLabel} so Bark can refresh your VTXOs. ` +
-        'Bark has no delegate that can refresh them while the wallet is locked.',
+        `Unlock this wallet around 2026-10-11 14:00 so your Bark VTXOs can be refreshed automatically.`
     })
   })
 
