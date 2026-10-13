@@ -1,4 +1,4 @@
-//! Collaborative exit at the server's offboard fee rate.
+//! Cooperative offboard at the server's offboard fee rate.
 //!
 //! `prepare_offboard` rejects a rate below the server's current slow target.
 //! `Wallet::send_onchain` and `Wallet::offboard_all` commit

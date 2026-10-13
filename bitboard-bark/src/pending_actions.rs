@@ -22,21 +22,26 @@ const BOARD_IN_PROGRESS_STATUS: &str =
 pub enum BarkVtxoBalanceClass {
     Spendable,
     Locked,
+    Exiting,
     Ignored,
 }
 
-/// Spendable and locked are separate sums. Spent and exited coins are ignored.
-pub fn sum_spendable_and_locked_sats(vtxos: &[(BarkVtxoBalanceClass, u64)]) -> (u64, u64) {
+/// Spendable, locked, and exiting are separate sums. Spent and non-exiting unspendable coins are ignored.
+pub fn sum_spendable_locked_and_exiting_sats(
+    vtxos: &[(BarkVtxoBalanceClass, u64)],
+) -> (u64, u64, u64) {
     let mut spendable_sats = 0u64;
     let mut locked_sats = 0u64;
+    let mut exiting_sats = 0u64;
     for (class, amount_sats) in vtxos {
         match class {
             BarkVtxoBalanceClass::Spendable => spendable_sats += *amount_sats,
             BarkVtxoBalanceClass::Locked => locked_sats += *amount_sats,
+            BarkVtxoBalanceClass::Exiting => exiting_sats += *amount_sats,
             BarkVtxoBalanceClass::Ignored => {}
         }
     }
-    (spendable_sats, locked_sats)
+    (spendable_sats, locked_sats, exiting_sats)
 }
 
 /// A confirmation wait can park with no error. Every earlier stage that
@@ -183,12 +188,18 @@ struct PendingBarkActionJson<'a> {
 struct BarkBalanceJson {
     spendable_sats: u64,
     locked_sats: u64,
+    exiting_sats: u64,
 }
 
-pub fn bark_balance_json(spendable_sats: u64, locked_sats: u64) -> Result<String, String> {
+pub fn bark_balance_json(
+    spendable_sats: u64,
+    locked_sats: u64,
+    exiting_sats: u64,
+) -> Result<String, String> {
     serde_json::to_string(&BarkBalanceJson {
         spendable_sats,
         locked_sats,
+        exiting_sats,
     })
     .map_err(|err| err.to_string())
 }
@@ -214,13 +225,13 @@ pub fn pending_actions_to_json(actions: &[PendingBarkAction]) -> Result<String, 
 #[cfg(target_arch = "wasm32")]
 mod wasm_export {
     use std::cell::RefCell;
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
 
     use wasm_bindgen::prelude::*;
 
     use super::{
         BarkVtxoBalanceClass, PendingBarkAction, bark_balance_json, pending_actions_to_json,
-        sum_spendable_and_locked_sats,
+        sum_spendable_locked_and_exiting_sats,
     };
     use crate::session::{bark_error, finish_wallet_operation, take_active_wallet};
 
@@ -362,18 +373,33 @@ mod wasm_export {
 
     pub async fn read_session_balance_json(wallet: &bark::Wallet) -> Result<String, String> {
         let vtxos = wallet.all_vtxos().await.map_err(bark_error)?;
+        let live_exit_ids: HashSet<bark::ark::VtxoId> = wallet
+            .exit_mgr()
+            .get_exit_vtxos()
+            .await
+            .into_iter()
+            .filter(|exit| bark::exit::ExitStateKind::LIVE_STATES.contains(&exit.state().kind()))
+            .map(|exit| exit.id())
+            .collect();
         let classified = vtxos
             .iter()
-            .map(|vtxo| (balance_class(vtxo), vtxo.amount().to_sat()))
+            .map(|vtxo| (balance_class(vtxo, &live_exit_ids), vtxo.amount().to_sat()))
             .collect::<Vec<_>>();
-        let (spendable_sats, locked_sats) = sum_spendable_and_locked_sats(&classified);
-        bark_balance_json(spendable_sats, locked_sats)
+        let (spendable_sats, locked_sats, exiting_sats) =
+            sum_spendable_locked_and_exiting_sats(&classified);
+        bark_balance_json(spendable_sats, locked_sats, exiting_sats)
     }
 
-    fn balance_class(vtxo: &bark::WalletVtxo) -> BarkVtxoBalanceClass {
+    fn balance_class(
+        vtxo: &bark::WalletVtxo,
+        live_exit_ids: &HashSet<bark::ark::VtxoId>,
+    ) -> BarkVtxoBalanceClass {
+        use bark::vtxo::VtxoStateKind;
         match vtxo.state.kind() {
-            bark::vtxo::VtxoStateKind::Spendable => BarkVtxoBalanceClass::Spendable,
-            bark::vtxo::VtxoStateKind::Locked => BarkVtxoBalanceClass::Locked,
+            VtxoStateKind::Spent => BarkVtxoBalanceClass::Ignored,
+            _ if live_exit_ids.contains(&vtxo.id()) => BarkVtxoBalanceClass::Exiting,
+            VtxoStateKind::Spendable => BarkVtxoBalanceClass::Spendable,
+            VtxoStateKind::Locked => BarkVtxoBalanceClass::Locked,
             _ => BarkVtxoBalanceClass::Ignored,
         }
     }
@@ -465,12 +491,12 @@ mod tests {
     use super::{
         BARK_EXIT_AWAITING_CONFIRMATION_STATUS, BARK_EXIT_PARKED_STATUS, BarkVtxoBalanceClass,
         PendingBarkAction, bark_balance_json, offboard_stage_waits_without_an_error,
-        pending_actions_to_json, sum_spendable_and_locked_sats,
+        pending_actions_to_json, sum_spendable_locked_and_exiting_sats,
     };
 
     #[test]
     fn locked_sats_are_the_sum_of_locked_vtxos_and_stay_separate_from_spendable() {
-        let (spendable_sats, locked_sats) = sum_spendable_and_locked_sats(&[
+        let (spendable_sats, locked_sats, exiting_sats) = sum_spendable_locked_and_exiting_sats(&[
             (BarkVtxoBalanceClass::Spendable, 1_000),
             (BarkVtxoBalanceClass::Locked, 400),
             (BarkVtxoBalanceClass::Locked, 50),
@@ -479,11 +505,36 @@ mod tests {
 
         assert_eq!(spendable_sats, 1_000);
         assert_eq!(locked_sats, 450);
+        assert_eq!(exiting_sats, 0);
 
-        let json = bark_balance_json(spendable_sats, locked_sats).expect("json");
+        let json = bark_balance_json(spendable_sats, locked_sats, exiting_sats).expect("json");
         let value: serde_json::Value = serde_json::from_str(&json).expect("parse");
         assert_eq!(value["spendableSats"], 1_000);
         assert_eq!(value["lockedSats"], 450);
+        assert_eq!(value["exitingSats"], 0);
+    }
+
+    #[test]
+    fn sums_spendable_locked_and_exiting_sats() {
+        let (spendable_sats, locked_sats, exiting_sats) = sum_spendable_locked_and_exiting_sats(&[
+            (BarkVtxoBalanceClass::Spendable, 1_000),
+            (BarkVtxoBalanceClass::Locked, 400),
+            (BarkVtxoBalanceClass::Exiting, 2_500),
+            (BarkVtxoBalanceClass::Locked, 50),
+            (BarkVtxoBalanceClass::Ignored, 9_000),
+        ]);
+        assert_eq!(spendable_sats, 1_000);
+        assert_eq!(locked_sats, 450);
+        assert_eq!(exiting_sats, 2_500);
+    }
+
+    #[test]
+    fn bark_balance_json_includes_exiting_sats() {
+        let json = bark_balance_json(1_000, 450, 2_500).expect("json");
+        let value: serde_json::Value = serde_json::from_str(&json).expect("parse");
+        assert_eq!(value["spendableSats"], 1_000);
+        assert_eq!(value["lockedSats"], 450);
+        assert_eq!(value["exitingSats"], 2_500);
     }
 
     #[test]

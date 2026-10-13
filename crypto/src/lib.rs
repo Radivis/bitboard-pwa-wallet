@@ -281,6 +281,12 @@ pub fn get_balance() -> Result<JsValue, JsValue> {
     Ok(serde_wasm_bindgen::to_value(&balance)?)
 }
 
+/// Height of the newest block the active wallet has synced.
+#[wasm_bindgen]
+pub fn get_local_chain_tip_height() -> Result<u32, JsValue> {
+    with_wallet(wallet::local_chain_tip_height)
+}
+
 /// Export the full accumulated changeset as a JSON string.
 ///
 /// This includes all changes since the wallet was created or loaded,
@@ -565,17 +571,9 @@ pub fn apply_unconfirmed_funding_transaction(
 pub fn sign_p2a_cpfp_child(
     parent_tx_hex: &str,
     effective_fee_rate_sat_per_vb: f64,
-    rbf_min_fee_rate_sat_per_kwu: Option<u64>,
-    current_package_fee_sats: Option<u64>,
 ) -> Result<String, JsValue> {
     let signed = with_wallet_mut(|wallet| {
-        p2a_cpfp::sign_p2a_cpfp_child(
-            wallet,
-            parent_tx_hex,
-            effective_fee_rate_sat_per_vb,
-            rbf_min_fee_rate_sat_per_kwu,
-            current_package_fee_sats,
-        )
+        p2a_cpfp::sign_p2a_cpfp_child(wallet, parent_tx_hex, effective_fee_rate_sat_per_vb)
     })?;
     accumulate_staged_changes();
     signed.map_err(JsValue::from)

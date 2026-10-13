@@ -1,4 +1,4 @@
-import { useMemo, useState, useSyncExternalStore } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useBarkEmergencyExitQuery } from '@/hooks/useBarkEmergencyExitQuery'
@@ -16,19 +16,22 @@ import {
   emergencyExitStartBlocked,
 } from '@/lib/bark/bark-emergency-exit'
 import {
+  barkEmergencyExitFundingStatusFor,
+  barkEmergencyExitScopeFor,
+} from '@/lib/bark/bark-emergency-exit-funding-status'
+import { catchUpOnchainWalletForBarkExit } from '@/lib/bark/bark-emergency-exit-onchain-catch-up-live'
+import {
   barkEmergencyExitClaimDeps,
-  barkEmergencyExitProgressDeps,
   barkEmergencyExitReviewDeps,
   barkEmergencyExitStartDeps,
+  runBarkEmergencyExitProgress,
 } from '@/lib/bark/bark-emergency-exit-live-deps'
 import {
+  barkEmergencyExitChildrenWaitForFunds,
   claimBarkEmergencyExits,
-  progressBarkEmergencyExits,
   startBarkEmergencyExit,
 } from '@/lib/bark/perform-bark-emergency-exit'
 import {
-  getBarkEmergencyExitAutomationActivity,
-  subscribeBarkEmergencyExitAutomationActivity,
   syncBarkEmergencyExitAutomation,
   stopBarkEmergencyExitAutomation,
 } from '@/lib/bark/bark-emergency-exit-automation'
@@ -36,6 +39,8 @@ import { NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB } from '@/lib/esplora/esplora-f
 import { errorMessage } from '@/lib/shared/utils'
 import { formatSats } from '@/lib/wallet/bitcoin-utils'
 import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
+import { useBarkEmergencyExitAutomationStore } from '@/stores/barkEmergencyExitAutomationStore'
+import { useBarkEmergencyExitFundingStore } from '@/stores/barkEmergencyExitFundingStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import type { BarkEmergencyExitEstimate, BarkVtxoRow } from '@/workers/bark-api'
@@ -99,9 +104,19 @@ export function useBarkEmergencyExitPage() {
   const queryClient = useQueryClient()
 
   const proceedAutomatically = proceedAutomaticallyQuery.data === true
-  const automaticProgress = useSyncExternalStore(
-    subscribeBarkEmergencyExitAutomationActivity,
-    getBarkEmergencyExitAutomationActivity,
+  const automaticProgressInFlight = useBarkEmergencyExitAutomationStore(
+    (automationState) => automationState.inFlight,
+  )
+  const automaticProgressError = useBarkEmergencyExitAutomationStore(
+    (automationState) => automationState.errorMessage,
+  )
+  const exitScope = useMemo(
+    () => barkEmergencyExitScopeFor(activeWalletId, networkMode),
+    [activeWalletId, networkMode],
+  )
+  const fundingStatus = barkEmergencyExitFundingStatusFor(
+    useBarkEmergencyExitFundingStore((fundingState) => fundingState.fundingStatus),
+    exitScope,
   )
 
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -225,8 +240,11 @@ export function useBarkEmergencyExitPage() {
     if (proceedAutomatically) return
     setBusyAction('progress')
     try {
-      await progressBarkEmergencyExits(barkEmergencyExitProgressDeps(), feeRateSatPerVb)
-      toast.success('Emergency exit progressed.')
+      await catchUpOnchainWalletForBarkExit(networkMode)
+      const outcome = await runBarkEmergencyExitProgress(exitScope, feeRateSatPerVb)
+      if (!barkEmergencyExitChildrenWaitForFunds(outcome)) {
+        toast.success('Emergency exit progressed.')
+      }
       await reloadLists()
     } catch (err) {
       toast.error(errorMessage(err) || 'Emergency exit failed to progress')
@@ -302,6 +320,7 @@ export function useBarkEmergencyExitPage() {
     topologyVtxoIds,
     topologyNodes: topologyVtxoIds.length === 0 ? [] : topologyQuery.data?.nodes,
     exitTreeError,
+    fundingStatus,
     wholeWallet,
     selectedIds,
     review,
@@ -316,8 +335,8 @@ export function useBarkEmergencyExitPage() {
     onProceedAutomaticallyChange: (enabled: boolean) => void onProceedAutomaticallyChange(enabled),
     proceedAutomatically,
     proceedAutomaticallyPending: proceedAutomaticallyQuery.isPending,
-    automaticProgressInFlight: automaticProgress.inFlight,
-    automaticProgressError: automaticProgress.errorMessage,
+    automaticProgressInFlight,
+    automaticProgressError,
     onCancel: (vtxoId: string) => void onCancel(vtxoId),
     onClaim: () => void onClaim(),
   }

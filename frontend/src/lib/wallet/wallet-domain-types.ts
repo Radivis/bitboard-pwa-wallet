@@ -10,11 +10,6 @@ import { ARKADE_SDK_PERSISTENCE_JSON_MAX_BYTES } from '@/lib/arkade/arkade-sdk-p
 import type { LightningNetworkMode } from '@/lib/lightning/lightning-utils'
 import { LIGHTNING_NETWORK_MODES } from '@/lib/lightning/lightning-utils'
 import {
-  getConfiguredHistoricalSignetOnchainChain,
-  historicalSignetOnchainWasMutinynet,
-  renameSignetMapKeyToMutinynet,
-} from '@/lib/wallet/historical-signet-onchain-chain'
-import {
   BARK_REGTEST_SERVER_URL,
   isE2eBarkRegtestControlEnabled,
 } from '@/lib/bark/e2e/bark-regtest-env'
@@ -118,8 +113,8 @@ const BARK_RAIL_SERVER_URL: Record<BarkRailNetwork, string> = {
   regtest: BARK_REGTEST_SERVER_URL,
 }
 
-/** UTF-8 cap for one network's Bark record dump. Same size as an Arkade SDK blob. */
-export const BARK_RECORD_DUMP_MAX_BYTES = 10 * 1024 * 1024
+/** UTF-8 cap for one network's Bark record envelope. Same size as an Arkade SDK blob. */
+export const BARK_RECORD_ENVELOPE_MAX_BYTES = 10 * 1024 * 1024
 
 export type BarkRailNetwork = 'signet' | 'mainnet' | 'regtest'
 
@@ -137,7 +132,7 @@ export function isBarkReceiveKeyIndex(value: unknown): value is number {
 
 /**
  * One Bark account inside encrypted wallet secrets.
- * Protocol records live in `recordDump`.
+ * Protocol records live in `recordEnvelope`.
  */
 export interface StoredBarkAccount {
   id: string
@@ -153,10 +148,10 @@ export interface StoredBarkAccount {
   receiveKeyIndex?: number
   /**
    * Versioned Bark `Record` bytes for this network, standard base64.
-   * Absent until the first successful open flush. An over-cap dump is kept:
+   * Absent until the first successful open flush. An over-cap envelope is kept:
    * dropping it would open an empty wallet and lose the exit chain.
    */
-  recordDump?: string
+  recordEnvelope?: string
   /**
    * Broadcast claim Bark has not yet observed. Kept until those VTXOs are
    * claim-in-progress or claimed, or the app Esplora reports the transaction gone.
@@ -191,12 +186,6 @@ export interface WalletSecretsPayload {
   >
   /** Bark accounts (one account per supported network). */
   barkAccounts: StoredBarkAccount[]
-  /**
-   * Set once the historical `signet` rows (Mutinynet infrastructure) have been
-   * rewritten to `mutinynet`. Absent means the rewrite still needs to run.
-   * New wallets set this immediately so public Signet rows stay `signet`.
-   */
-  signetNetworkSplitApplied?: true
 }
 
 /** Sensitive wallet data stored encrypted. Shared with db layer and workers. */
@@ -252,7 +241,7 @@ function isPendingEmergencyClaim(value: unknown): value is PendingEmergencyClaim
   return value.vtxoIds.every((vtxoId) => typeof vtxoId === 'string' && vtxoId.length > 0)
 }
 
-/** Keeps a well-formed pending claim. A malformed one is omitted so the dump stays. */
+/** Keeps a well-formed pending claim. A malformed one is omitted so the envelope stays. */
 export function pendingEmergencyClaimFromUnknown(
   value: unknown,
 ): PendingEmergencyClaim | undefined {
@@ -287,7 +276,7 @@ export function isStoredBarkAccount(value: unknown): value is StoredBarkAccount 
   if (value.receiveKeyIndex !== undefined && !isBarkReceiveKeyIndex(value.receiveKeyIndex)) {
     return false
   }
-  if (value.recordDump !== undefined && typeof value.recordDump !== 'string') {
+  if (value.recordEnvelope !== undefined && typeof value.recordEnvelope !== 'string') {
     return false
   }
   if (
@@ -305,12 +294,26 @@ export function isStoredBarkAccount(value: unknown): value is StoredBarkAccount 
   return true
 }
 
+/** Pre-release name of `recordEnvelope`. Must survive renames of the current field. */
+const LEGACY_BARK_RECORD_DUMP_FIELD = 'recordDump'
+
+function migrateLegacyBarkRecordDumpField(row: Record<string, unknown>): Record<string, unknown> {
+  const cleaned: Record<string, unknown> = { ...row }
+  const legacyRecordDump = cleaned[LEGACY_BARK_RECORD_DUMP_FIELD]
+  if (cleaned.recordEnvelope === undefined && typeof legacyRecordDump === 'string') {
+    cleaned.recordEnvelope = legacyRecordDump
+  }
+  delete cleaned[LEGACY_BARK_RECORD_DUMP_FIELD]
+  return cleaned
+}
+
 function sanitizeStoredBarkAccountRow(row: unknown): StoredBarkAccount | null {
   if (!isRecord(row)) return null
-  if (isStoredBarkAccount(row)) {
-    return row
+  const migrated = migrateLegacyBarkRecordDumpField(row)
+  if (isStoredBarkAccount(migrated)) {
+    return migrated as StoredBarkAccount
   }
-  const cleaned: Record<string, unknown> = { ...row }
+  const cleaned: Record<string, unknown> = { ...migrated }
   const pendingEmergencyClaim = pendingEmergencyClaimFromUnknown(row.pendingEmergencyClaim)
   if (pendingEmergencyClaim != null) {
     cleaned.pendingEmergencyClaim = pendingEmergencyClaim
@@ -350,11 +353,11 @@ function deduplicateBarkAccountsByNetwork(accounts: StoredBarkAccount[]): Stored
   return deduplicated
 }
 
-/** Throws when a dump is larger than [`BARK_RECORD_DUMP_MAX_BYTES`]. Does not modify the dump. */
-export function assertBarkRecordDumpWithinSizeLimit(recordDump: string): void {
-  const byteLength = new TextEncoder().encode(recordDump).byteLength
-  if (byteLength > BARK_RECORD_DUMP_MAX_BYTES) {
-    throw new Error(`Bark record dump exceeds ${BARK_RECORD_DUMP_MAX_BYTES} bytes`)
+/** Throws when an envelope is larger than [`BARK_RECORD_ENVELOPE_MAX_BYTES`]. Does not modify it. */
+export function assertBarkRecordEnvelopeWithinSizeLimit(recordEnvelope: string): void {
+  const byteLength = new TextEncoder().encode(recordEnvelope).byteLength
+  if (byteLength > BARK_RECORD_ENVELOPE_MAX_BYTES) {
+    throw new Error(`Bark record envelope exceeds ${BARK_RECORD_ENVELOPE_MAX_BYTES} bytes`)
   }
 }
 
@@ -551,9 +554,6 @@ export function walletSecretsPayloadFromSecrets(
     arkadeAccounts: secrets.arkadeAccounts ?? [],
     activeArkadeAccountIdByNetwork: secrets.activeArkadeAccountIdByNetwork ?? {},
     barkAccounts: secrets.barkAccounts ?? [],
-    ...(secrets.signetNetworkSplitApplied === true
-      ? { signetNetworkSplitApplied: true as const }
-      : {}),
   }
 }
 
@@ -659,49 +659,8 @@ function pickActiveArkadeAccountIdByNetworkField(raw: Record<string, unknown>): 
   return raw.activeArkadeConnectionIdByNetwork
 }
 
-function rewriteSignetNetworkField(
-  value: unknown,
-  field: 'network' | 'networkMode',
-): void {
-  if (!Array.isArray(value)) return
-  for (const row of value) {
-    if (isRecord(row) && row[field] === 'signet') {
-      row[field] = 'mutinynet'
-    }
-  }
-}
-
-/**
- * Historical Arkade `signet` rows were the Mutinynet operator.
- * On-chain descriptors and Lightning connections move to Mutinynet only when
- * the configured pre-split Esplora chain was Mutinynet. Bark stays on public
- * Signet (`barkAccounts` with `networkMode: 'signet'` is left untouched).
- *
- * Until that chain is configured, Arkade is rewritten but the flag stays unset
- * so a later parse can still classify descriptors.
- */
-function applySignetNetworkSplit(raw: Record<string, unknown>): void {
-  if (raw.signetNetworkSplitApplied === true) return
-
-  rewriteSignetNetworkField(raw.arkadeAccounts, 'networkMode')
-  rewriteSignetNetworkField(raw.arkadeOperatorConnections, 'networkMode')
-  renameSignetMapKeyToMutinynet(raw.activeArkadeAccountIdByNetwork)
-  renameSignetMapKeyToMutinynet(raw.activeArkadeConnectionIdByNetwork)
-
-  const historicalSignetChain = getConfiguredHistoricalSignetOnchainChain()
-  if (historicalSignetChain == null) return
-
-  if (historicalSignetOnchainWasMutinynet(historicalSignetChain)) {
-    rewriteSignetNetworkField(raw.descriptorWallets, 'network')
-    rewriteSignetNetworkField(raw.lightningNwcConnections, 'networkMode')
-  }
-  raw.signetNetworkSplitApplied = true
-}
-
 function normalizeWalletSecretsPayload(raw: unknown): unknown {
   if (!isRecord(raw)) return raw
-
-  applySignetNetworkSplit(raw)
 
   const withoutLegacyKeys = { ...raw }
   delete withoutLegacyKeys.arkadeWallets

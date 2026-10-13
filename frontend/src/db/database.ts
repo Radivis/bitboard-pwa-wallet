@@ -2,6 +2,7 @@ import { Kysely } from 'kysely'
 import { WaSqliteWorkerDialect } from 'kysely-wasqlite-worker'
 import type { Database } from './schema'
 import { runWalletMigrations } from './migrations/run-wallet-migrations'
+import { runDeviceDataMigrationsWithFailureReport } from './data-migrations/device-data-migrations'
 import { WALLET_SQLITE_OPFS_BASENAME } from './opfs/opfs-sqlite-database-names'
 import { isBenignSqliteWorkerCloseFailure } from './sqlite-worker-close-error'
 import { WalletDatabaseTeardownBlockedError } from './database-teardown-blocked-error'
@@ -14,13 +15,14 @@ export {
 let instance: Kysely<Database> | null = null
 let migrated = false
 let migrationPromise: Promise<void> | null = null
+let deviceDataMigrationPromise: Promise<void> | null = null
 let walletDatabaseAccessBlockedForTeardown = false
 
 export function blockWalletDatabaseAccessForTeardown(): void {
   walletDatabaseAccessBlockedForTeardown = true
 }
 
-/** Clears the hard-block so {@link getDatabase} / {@link ensureMigrated} may open SQLite again. */
+/** Clears the hard-block so {@link getDatabase} / {@link ensureSchemaAndDataMigrated} may open SQLite again. */
 export function resetWalletDatabaseAccessTeardownGuard(): void {
   walletDatabaseAccessBlockedForTeardown = false
 }
@@ -44,7 +46,16 @@ export function getDatabase(): Kysely<Database> {
   return instance
 }
 
-export async function ensureMigrated(): Promise<void> {
+/**
+ * Guard before any app-database access: schema migrations, then device data
+ * migrations. Wallet data migrations need an unlocked session and run at unlock.
+ */
+export async function ensureSchemaAndDataMigrated(): Promise<void> {
+  await ensureSchemaMigrated()
+  await ensureDeviceDataMigrated()
+}
+
+async function ensureSchemaMigrated(): Promise<void> {
   assertWalletDatabaseAccessAllowed()
   if (migrated) return
   if (migrationPromise) {
@@ -55,6 +66,19 @@ export async function ensureMigrated(): Promise<void> {
   await migrationPromise
   migrationPromise = null
   migrated = true
+}
+
+/** Once per opened database. Retries on the next call after a failure. */
+async function ensureDeviceDataMigrated(): Promise<void> {
+  if (!deviceDataMigrationPromise) {
+    deviceDataMigrationPromise = runDeviceDataMigrationsWithFailureReport(getDatabase())
+  }
+  try {
+    await deviceDataMigrationPromise
+  } catch (migrationError) {
+    deviceDataMigrationPromise = null
+    throw migrationError
+  }
 }
 
 export async function destroyDatabase(): Promise<void> {
@@ -86,6 +110,7 @@ export async function destroyDatabase(): Promise<void> {
   } finally {
     instance = null
     migrated = false
+    deviceDataMigrationPromise = null
   }
 }
 
@@ -99,7 +124,7 @@ export type DatabaseHealthResult =
  */
 export async function checkDatabaseHealth(): Promise<DatabaseHealthResult> {
   try {
-    await ensureMigrated()
+    await ensureSchemaAndDataMigrated()
     await getDatabase()
       .selectFrom('settings')
       .select('key')

@@ -37,10 +37,6 @@ import type {
 } from './crypto-wire-types';
 import type { EncryptedBlobMessage, SecretsChannelService } from './secrets-channel-types';
 import {
-  setConfiguredHistoricalSignetOnchainChain,
-  type HistoricalSignetOnchainChain,
-} from '@/lib/wallet/historical-signet-onchain-chain';
-import {
   assertIso8601LastSuccessfulEsploraSyncAt,
   parseWalletPayloadJson,
   type WalletSecretsPayload,
@@ -100,17 +96,11 @@ type P2aCpfpWasm = {
   sign_p2a_cpfp_child(
     parentTxHex: string,
     effectiveFeeRateSatPerVb: number,
-    rbfMinFeeRateSatPerKwu: bigint | undefined,
-    currentPackageFeeSats: bigint | undefined,
   ): Promise<string>;
 };
 
 function p2aCpfpWasm(wasmModule: BitboardCryptoModule): P2aCpfpWasm {
   return wasmModule as unknown as P2aCpfpWasm;
-}
-
-function optionalFeeCount(value: number | null): bigint | undefined {
-  return value == null ? undefined : BigInt(value);
 }
 
 async function initWasm() {
@@ -188,7 +178,6 @@ function buildInitialWalletSecretsPayload({
     arkadeAccounts: [],
     activeArkadeAccountIdByNetwork: {},
     barkAccounts: [],
-    signetNetworkSplitApplied: true,
   };
 }
 
@@ -301,12 +290,6 @@ const cryptoService = {
   async ping(): Promise<boolean> {
     await getWasm();
     return true;
-  },
-
-  async configureHistoricalSignetOnchainChain(
-    chain: HistoricalSignetOnchainChain | null,
-  ): Promise<void> {
-    setConfiguredHistoricalSignetOnchainChain(chain);
   },
 
   async generateMnemonic(wordCount: 12 | 24): Promise<string> {
@@ -519,6 +502,10 @@ const cryptoService = {
     return mapWireBalanceToDomain(wire as WireBalanceInfo);
   },
 
+  async getLocalChainTipHeight(): Promise<number> {
+    return invokeWasmCrypto((wasmModule) => wasmModule.get_local_chain_tip_height());
+  },
+
   async exportChangeset(): Promise<string> {
     return invokeWasmCrypto((wasmModule) => wasmModule.export_changeset());
   },
@@ -606,8 +593,6 @@ const cryptoService = {
       p2aCpfpWasm(wasmModule).sign_p2a_cpfp_child(
         params.parentTxHex,
         params.effectiveFeeRateSatPerVb,
-        optionalFeeCount(params.rbfMinFeeRateSatPerKwu),
-        optionalFeeCount(params.currentPackageFeeSats),
       ),
     );
   },

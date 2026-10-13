@@ -48,6 +48,18 @@ feature:
       - id: LIFE-LOCK-02
         description: orchestrateLock awaits on-chain, Arkade, and Lightning load/sync/save quiescence and wallet-secrets writes before worker purge; hard-blocks on on-chain, Arkade, or Lightning save-error (re-checked after save quiescence)
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/lock-lifecycle-orchestrator.test.ts
+    wallet_secrets_writes:
+      - id: LIFE-SECRETS-01
+        description: A payload write requested while the app password changes (Change password or the near-zero upgrade) waits until every wallet is re-encrypted and the secrets session uses the new password. It is then kept and readable with the new password
+        implemented_by:
+          - frontend/src/db/__tests__/wallet-persistence.test.ts
+          - frontend/src/db/__tests__/near-zero-security.test.ts
+      - id: LIFE-SECRETS-02
+        description: Waiting for in-flight wallet-secrets writes (before lock, wallet switch, or delete) stops at its deadline even when one write never settles
+        implemented_by: frontend/src/db/__tests__/wallet-secrets-write-tracker.test.ts
+      - id: LIFE-SECRETS-03
+        description: A worker payload transform that does not finish within its time budget fails its write, and later wallet-secrets writes still run
+        implemented_by: frontend/src/lib/wallet/__tests__/encrypted-wallet-secrets-host.integration.test.ts
     onchain:
       - id: LIFE-ONC-LOAD-01
         description: OnchainLoadLifecycle loading includes WASM load and refreshWalletStoreFromLoadedBdk

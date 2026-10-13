@@ -1,28 +1,22 @@
+import { createSerialTaskQueue, type SerialTaskQueue } from '@/lib/shared/serial-task-queue'
+
 export type BarkRailFlushMetadata = {
   receiveKeyIndex?: number
   lastSuccessfulSyncAt?: string
 }
 
-/** Resolves only after the checkpoint dump has been persisted. */
+/** Resolves only after the checkpoint envelope has been persisted. */
 export function durableCheckpointFlush(
-  persistDump: (recordDump: string) => Promise<void>,
-): (recordDump: string) => Promise<void> {
-  return async (recordDump: string) => {
-    await persistDump(recordDump)
+  persistEnvelope: (recordEnvelope: string) => Promise<void>,
+): (recordEnvelope: string) => Promise<void> {
+  return async (recordEnvelope: string) => {
+    await persistEnvelope(recordEnvelope)
   }
 }
 
 /** One Bark worker call at a time, including a checkpoint flush awaited inside it. */
-export function createBarkCallQueue(): <T>(operation: () => Promise<T>) => Promise<T> {
-  let tail: Promise<void> = Promise.resolve()
-  return function enqueueBarkCall<T>(operation: () => Promise<T>): Promise<T> {
-    const run = tail.then(operation, operation)
-    tail = run.then(
-      () => undefined,
-      () => undefined,
-    )
-    return run
-  }
+export function createBarkCallQueue(): SerialTaskQueue {
+  return createSerialTaskQueue()
 }
 
 function barkErrorMessage(err: unknown): string {
@@ -31,7 +25,7 @@ function barkErrorMessage(err: unknown): string {
 }
 
 /**
- * Runs one mutating Bark call, then exports the dump when the session is open.
+ * Runs one mutating Bark call, then exports the envelope when the session is open.
  * A checkpoint flush inside `operation` is separate and happens before this return.
  */
 export async function finishBarkMutation<T>(params: {
@@ -61,7 +55,7 @@ export async function finishBarkMutation<T>(params: {
 
   if (operationError != null && flushError != null) {
     throw new Error(
-      `${barkErrorMessage(operationError)} (Bark record dump was not saved: ${barkErrorMessage(flushError)})`,
+      `${barkErrorMessage(operationError)} (Bark record envelope was not saved: ${barkErrorMessage(flushError)})`,
     )
   }
   if (flushError != null) {

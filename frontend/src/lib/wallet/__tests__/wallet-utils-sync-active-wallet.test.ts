@@ -39,12 +39,8 @@ vi.mock('@/stores/walletStore', () => ({
   },
 }))
 
-vi.mock('@/lib/wallet/signet-network-split-migration', () => ({
-  ensureSignetNetworkSplitMigrated: vi.fn().mockResolvedValue('mutinynet'),
-}))
-
 vi.mock('@/db/database', () => ({
-  ensureMigrated: vi.fn().mockResolvedValue(undefined),
+  ensureSchemaAndDataMigrated: vi.fn().mockResolvedValue(undefined),
   getDatabase: vi.fn(() => ({
     selectFrom: vi.fn(() => ({
       select: vi.fn(() => ({

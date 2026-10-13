@@ -9,6 +9,8 @@ export interface Database {
   wallet_secrets: WalletSecretsTable
   library_history: LibraryHistoryTable
   library_articles: LibraryArticlesTable
+  device_data_migrations: DeviceDataMigrationsTable
+  wallet_data_migrations: WalletDataMigrationsTable
 }
 
 interface WalletsTable {
@@ -72,3 +74,25 @@ interface LibraryArticlesTable {
 export type LibraryArticleRow = Selectable<LibraryArticlesTable>
 export type NewLibraryArticleRow = Insertable<LibraryArticlesTable>
 export type LibraryArticleUpdate = Updateable<LibraryArticlesTable>
+
+/** One row per device-level data migration (e.g. settings rewrites). */
+interface DeviceDataMigrationsTable {
+  migration_name: string
+  applied_at: string
+  /** Plaintext outcome derived from plaintext device settings only. */
+  result: string | null
+}
+
+export type DeviceDataMigrationRow = Selectable<DeviceDataMigrationsTable>
+
+/**
+ * One marker per (wallet, data migration). Plaintext, so no result column:
+ * every wallet gets every marker regardless of what the migration changed.
+ */
+interface WalletDataMigrationsTable {
+  wallet_id: number
+  migration_name: string
+  applied_at: string
+}
+
+export type WalletDataMigrationRow = Selectable<WalletDataMigrationsTable>

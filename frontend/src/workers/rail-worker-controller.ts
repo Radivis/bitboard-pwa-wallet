@@ -1,14 +1,9 @@
 import { wrap, type Remote } from 'comlink'
-import { configureWorkerHistoricalSignetOnchainChain } from '@/lib/wallet/signet-network-split-migration'
-import type { HistoricalSignetOnchainChain } from '@/lib/wallet/historical-signet-onchain-chain'
 
 export type RailWorkerHealthStatus = 'initializing' | 'healthy' | 'error' | 'crashed'
 
 export interface RailWorkerService {
   ping(): Promise<unknown>
-  configureHistoricalSignetOnchainChain(
-    chain: HistoricalSignetOnchainChain | null,
-  ): Promise<void>
 }
 
 interface RailWorkerState<TService> {
@@ -100,9 +95,6 @@ export function createRailWorkerController<TService extends RailWorkerService>(
   async function verifyWorkerHealth(proxy: Remote<TService>): Promise<void> {
     try {
       await proxy.ping()
-      await configureWorkerHistoricalSignetOnchainChain((chain) =>
-        proxy.configureHistoricalSignetOnchainChain(chain),
-      )
       setStatus('healthy')
       console.info(`[${options.logPrefix}] Worker health check passed`)
     } catch (err) {

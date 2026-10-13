@@ -8,9 +8,10 @@ import {
   type NodeProps,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { Check, Coins, HandCoins, Loader2 } from 'lucide-react'
+import { Check, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { BarkExitTreeEdgesOverlay } from '@/components/bark/BarkExitTreeEdgesOverlay'
+import { ExitTreeCoinBadge } from '@/components/wallet/unilateral-exit/ExitTreeCoinBadge'
 import {
   formatUnilateralExitTxTypeLabel,
   resolveUnilateralExitNodeIconKind,
@@ -24,10 +25,16 @@ import {
 } from '@/lib/bark/bark-exit-graph-layout'
 import { cn } from '@/lib/shared/utils'
 import { formatSats } from '@/lib/wallet/bitcoin-utils'
-import type { BarkExitGraphNode, BarkExitGraphNodeStatus, BarkVtxoRow } from '@/workers/bark-api'
+import type {
+  BarkEmergencyExitRow,
+  BarkExitGraphNode,
+  BarkExitGraphNodeStatus,
+  BarkVtxoRow,
+} from '@/workers/bark-api'
 
 interface BarkExitTreeGraphProps {
   nodes: BarkExitGraphNode[] | undefined
+  exitRows: BarkEmergencyExitRow[]
   emptySelection: boolean
   errorMessage: string | null
   vtxoRows: BarkVtxoRow[]
@@ -52,37 +59,6 @@ function statusLabel(status: BarkExitGraphNodeStatus): string {
   }
 }
 
-function BarkExitCoinBadge({
-  txid,
-  count,
-  confirmed,
-}: {
-  txid: string
-  count: number
-  confirmed: boolean
-}) {
-  if (count <= 0) return null
-  const OverlayIcon = confirmed ? HandCoins : Coins
-  const vtxoNoun = count === 1 ? 'VTXO' : 'VTXOs'
-  const overlayLabel = confirmed
-    ? `${count} exited ${vtxoNoun}`
-    : `${count} exiting ${vtxoNoun}`
-  return (
-    <div
-      className="absolute left-1/2 top-[calc(50%+10px)] flex -translate-x-1/2 items-center gap-0.5 rounded-full bg-background px-0.5 text-amber-600 shadow-sm"
-      aria-label={overlayLabel}
-      data-testid={
-        confirmed
-          ? `bark-exit-tree-unrolled-vtxo-count-${txid}`
-          : `bark-exit-tree-vtxo-count-${txid}`
-      }
-    >
-      {count > 1 ? <span className="text-[10px] font-semibold leading-none">{count}×</span> : null}
-      <OverlayIcon className="size-3" aria-hidden />
-    </div>
-  )
-}
-
 function BarkExitTreeNode({ data }: NodeProps<Node<BarkExitTreeNodeData>>) {
   const iconKind = resolveUnilateralExitNodeIconKind({
     txType: data.txType,
@@ -103,10 +79,11 @@ function BarkExitTreeNode({ data }: NodeProps<Node<BarkExitTreeNodeData>>) {
       aria-label={`${shortTxid(data.txid)}, ${statusLabel(data.status)}, ${typeLabel}`}
     >
       <Icon className="size-5" aria-hidden />
-      <BarkExitCoinBadge
-        txid={data.txid}
+      <ExitTreeCoinBadge
         count={data.leafVtxoCount}
-        confirmed={data.status === 'confirmed'}
+        stage={data.coinStage}
+        testIdPrefix="bark-exit-tree"
+        testIdSuffix={data.txid}
       />
       {data.status === 'confirmed' && (
         <Check
@@ -138,11 +115,13 @@ const nodeTypes = {
 
 function BarkExitTreeCanvas({
   graphNodes,
+  exitRows,
   layoutDirection,
   focusedTxid,
   onFocus,
 }: {
   graphNodes: BarkExitGraphNode[]
+  exitRows: BarkEmergencyExitRow[]
   layoutDirection: 'LR' | 'TB'
   focusedTxid: string | null
   onFocus: (txid: string) => void
@@ -153,8 +132,9 @@ function BarkExitTreeCanvas({
         nodes: graphNodes,
         layoutDirection,
         focusedNodeId: focusedTxid,
+        exitRows,
       }),
-    [graphNodes, layoutDirection, focusedTxid],
+    [graphNodes, layoutDirection, focusedTxid, exitRows],
   )
 
   return (
@@ -234,6 +214,7 @@ function BarkExitTreeDetail({
 
 export function BarkExitTreeGraph({
   nodes,
+  exitRows,
   emptySelection,
   errorMessage,
   vtxoRows,
@@ -293,6 +274,7 @@ export function BarkExitTreeGraph({
             <ReactFlowProvider>
               <BarkExitTreeCanvas
                 graphNodes={nodes}
+                exitRows={exitRows}
                 layoutDirection={layoutDirection}
                 focusedTxid={focusedTxid}
                 onFocus={setFocusedTxid}

@@ -33,6 +33,14 @@ export async function isWalletSecretsSessionActive(): Promise<boolean> {
   return getEncryptionWorker().isSecretsSessionActive()
 }
 
+/** Ends the current session (if any) and starts one with `password`. */
+export async function replaceWalletSecretsSession(password: string): Promise<void> {
+  if (await isWalletSecretsSessionActive()) {
+    await endWalletSecretsSession()
+  }
+  await beginWalletSecretsSession(password)
+}
+
 export async function ensureWalletSecretsSession(password?: string): Promise<void> {
   if (await isWalletSecretsSessionActive()) {
     return

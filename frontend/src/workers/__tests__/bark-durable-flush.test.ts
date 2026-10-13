@@ -8,8 +8,8 @@ import {
 describe('bark durable flush', () => {
   it('checkpoint flush finishes before the operation resolves and the call flushes again', async () => {
     const events: string[] = []
-    const hook = durableCheckpointFlush(async (recordDump) => {
-      events.push(`checkpoint:${recordDump}`)
+    const hook = durableCheckpointFlush(async (recordEnvelope) => {
+      events.push(`checkpoint:${recordEnvelope}`)
     })
 
     await finishBarkMutation({

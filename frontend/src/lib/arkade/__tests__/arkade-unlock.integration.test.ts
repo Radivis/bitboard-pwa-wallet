@@ -174,6 +174,7 @@ describe('orchestrateArkadeLoad after unlock (integration)', () => {
     expect(orchestrateArkadeLoadMock).toHaveBeenCalledWith({
       walletId: 3,
       networkMode: 'mutinynet',
+      allowRetryFromError: false,
     })
     expect(resolveLoad).toBeDefined()
     resolveLoad!()
@@ -200,6 +201,7 @@ describe('orchestrateArkadeLoad after unlock (integration)', () => {
     expect(orchestrateArkadeLoadMock).toHaveBeenCalledWith({
       walletId: 3,
       networkMode: 'mutinynet',
+      allowRetryFromError: false,
     })
     expect(resolveLoad).toBeDefined()
     resolveLoad!()

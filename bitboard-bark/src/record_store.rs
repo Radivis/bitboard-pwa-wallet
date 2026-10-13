@@ -1,6 +1,6 @@
 //! In-memory [`StorageAdaptor`] for one open Bark network.
 //!
-//! The encrypted rail stores a versioned dump of Bark `Record` bytes. This
+//! The encrypted rail stores a versioned envelope of Bark `Record` bytes. This
 //! module does not interpret VTXO, movement, or exit payloads.
 
 use std::collections::{BTreeMap, HashMap};
@@ -16,10 +16,10 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use serde::{Deserialize, Serialize};
 
-pub(crate) const BARK_RECORD_DUMP_VERSION: u32 = 1;
+pub(crate) const BARK_RECORD_ENVELOPE_VERSION: u32 = 1;
 
 #[derive(Debug, Serialize, Deserialize)]
-struct BarkRecordDump {
+struct BarkRecordEnvelope {
     version: u32,
     records: Vec<Record>,
 }
@@ -74,30 +74,30 @@ impl SharedRecordStore {
         store
     }
 
-    /// Loads a dump produced by [`Self::export_encoded_dump`].
+    /// Loads an envelope produced by [`Self::export_encoded_envelope`].
     ///
     /// An empty string, a bad version, and corrupt bytes are errors. Callers
-    /// that have no dump yet use [`Self::empty`] instead of substituting one.
-    pub(crate) fn from_encoded_dump(encoded: &str) -> Result<Self, String> {
+    /// that have no envelope yet use [`Self::empty`] instead of substituting one.
+    pub(crate) fn from_encoded_envelope(encoded: &str) -> Result<Self, String> {
         if encoded.is_empty() {
-            return Err("Bark record dump is empty".to_owned());
+            return Err("Bark record envelope is empty".to_owned());
         }
         let bytes = STANDARD
             .decode(encoded)
-            .map_err(|_| "Bark record dump is not valid base64".to_owned())?;
-        let dump: BarkRecordDump =
-            postcard::from_bytes(&bytes).map_err(|_| "Bark record dump is corrupt".to_owned())?;
-        if dump.version != BARK_RECORD_DUMP_VERSION {
+            .map_err(|_| "Bark record envelope is not valid base64".to_owned())?;
+        let envelope: BarkRecordEnvelope = postcard::from_bytes(&bytes)
+            .map_err(|_| "Bark record envelope is corrupt".to_owned())?;
+        if envelope.version != BARK_RECORD_ENVELOPE_VERSION {
             return Err(format!(
-                "Bark record dump version {} is not supported",
-                dump.version
+                "Bark record envelope version {} is not supported",
+                envelope.version
             ));
         }
 
         let store = Self::empty();
         {
             let mut records = store.lock_records()?;
-            for record in dump.records {
+            for record in envelope.records {
                 let partition = records.partitions.entry(record.partition).or_default();
                 partition.insert(record.pk.clone(), record);
             }
@@ -132,14 +132,14 @@ impl SharedRecordStore {
         });
     }
 
-    pub(crate) fn export_encoded_dump(&self) -> Result<String, String> {
+    pub(crate) fn export_encoded_envelope(&self) -> Result<String, String> {
         let records = self.lock_records()?;
-        let dump = BarkRecordDump {
-            version: BARK_RECORD_DUMP_VERSION,
+        let envelope = BarkRecordEnvelope {
+            version: BARK_RECORD_ENVELOPE_VERSION,
             records: collect_records(&records),
         };
-        let bytes = postcard::to_allocvec(&dump)
-            .map_err(|_| "Bark record dump could not be encoded".to_owned())?;
+        let bytes = postcard::to_allocvec(&envelope)
+            .map_err(|_| "Bark record envelope could not be encoded".to_owned())?;
         Ok(STANDARD.encode(bytes))
     }
 
@@ -156,10 +156,10 @@ impl SharedRecordStore {
         let Some(hook) = self.durable_flush_hook()? else {
             return Ok(());
         };
-        let record_dump = self
-            .export_encoded_dump()
+        let record_envelope = self
+            .export_encoded_envelope()
             .map_err(|err| anyhow::anyhow!(err))?;
-        invoke_durable_flush(&hook, record_dump)
+        invoke_durable_flush(&hook, record_envelope)
             .await
             .map_err(|err| anyhow::anyhow!(err))
     }
@@ -195,19 +195,25 @@ fn is_durable_partition(partition_id: u8) -> bool {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-async fn invoke_durable_flush(hook: &DurableFlushHook, record_dump: String) -> Result<(), String> {
+async fn invoke_durable_flush(
+    hook: &DurableFlushHook,
+    record_envelope: String,
+) -> Result<(), String> {
     let DurableFlushHook::Native(flush) = hook;
-    flush(record_dump)
+    flush(record_envelope)
 }
 
 #[cfg(target_arch = "wasm32")]
-async fn invoke_durable_flush(hook: &DurableFlushHook, record_dump: String) -> Result<(), String> {
+async fn invoke_durable_flush(
+    hook: &DurableFlushHook,
+    record_envelope: String,
+) -> Result<(), String> {
     let DurableFlushHook::Js(flush) = hook;
-    // The hook persists the dump. It must not call back into this WASM module.
+    // The hook persists the envelope. It must not call back into this WASM module.
     let result = flush
         .call1(
             &wasm_bindgen::JsValue::NULL,
-            &wasm_bindgen::JsValue::from_str(&record_dump),
+            &wasm_bindgen::JsValue::from_str(&record_envelope),
         )
         .map_err(js_value_message)?;
     let promise = result
@@ -312,7 +318,7 @@ mod tests {
     use super::*;
 
     struct RecordedFlushes {
-        dumps: Arc<Mutex<Vec<String>>>,
+        envelopes: Arc<Mutex<Vec<String>>>,
         hook: NativeDurableFlushHook,
     }
 
@@ -416,8 +422,8 @@ mod tests {
             .unwrap();
         store.put(record(9, "exit", None, b"raw")).await.unwrap();
 
-        let encoded = store.export_encoded_dump().unwrap();
-        let restored = SharedRecordStore::from_encoded_dump(&encoded).unwrap();
+        let encoded = store.export_encoded_envelope().unwrap();
+        let restored = SharedRecordStore::from_encoded_envelope(&encoded).unwrap();
 
         let original = store.get(4, b"vtxo").await.unwrap();
         let imported = restored.get(4, b"vtxo").await.unwrap();
@@ -429,56 +435,59 @@ mod tests {
     }
 
     #[test]
-    fn unknown_dump_version_is_refused() {
-        let dump = BarkRecordDump {
-            version: BARK_RECORD_DUMP_VERSION + 1,
+    fn unknown_envelope_version_is_refused() {
+        let envelope = BarkRecordEnvelope {
+            version: BARK_RECORD_ENVELOPE_VERSION + 1,
             records: Vec::new(),
         };
-        let bytes = postcard::to_allocvec(&dump).unwrap();
+        let bytes = postcard::to_allocvec(&envelope).unwrap();
         let encoded = STANDARD.encode(bytes);
 
-        let error = SharedRecordStore::from_encoded_dump(&encoded).unwrap_err();
+        let error = SharedRecordStore::from_encoded_envelope(&encoded).unwrap_err();
 
         assert!(error.contains("version"));
         assert!(error.contains('2'));
     }
 
     #[test]
-    fn corrupt_dump_bytes_are_refused() {
-        let error = SharedRecordStore::from_encoded_dump("not-base64!!!").unwrap_err();
+    fn corrupt_envelope_bytes_are_refused() {
+        let error = SharedRecordStore::from_encoded_envelope("not-base64!!!").unwrap_err();
         assert!(error.contains("base64"));
 
-        let encoded = STANDARD.encode(b"not a postcard dump");
-        let error = SharedRecordStore::from_encoded_dump(&encoded).unwrap_err();
+        let encoded = STANDARD.encode(b"not a postcard envelope");
+        let error = SharedRecordStore::from_encoded_envelope(&encoded).unwrap_err();
         assert!(error.contains("corrupt"));
     }
 
     fn flush_log() -> RecordedFlushes {
-        let dumps = Arc::new(Mutex::new(Vec::new()));
-        let record_dumps = Arc::clone(&dumps);
-        let hook: NativeDurableFlushHook = Arc::new(move |record_dump| {
-            record_dumps.lock().expect("flush log").push(record_dump);
+        let envelopes = Arc::new(Mutex::new(Vec::new()));
+        let flushed_envelopes = Arc::clone(&envelopes);
+        let hook: NativeDurableFlushHook = Arc::new(move |record_envelope| {
+            flushed_envelopes
+                .lock()
+                .expect("flush log")
+                .push(record_envelope);
             Ok(())
         });
-        RecordedFlushes { dumps, hook }
+        RecordedFlushes { envelopes, hook }
     }
 
     /// The flush-log lock must end before the restored store is awaited.
-    fn open_only_flushed_dump(flushed_dumps: &Mutex<Vec<String>>) -> SharedRecordStore {
-        let dumps = flushed_dumps.lock().expect("flush log");
-        assert_eq!(dumps.len(), 1);
-        dumped_store(&dumps[0])
+    fn open_only_flushed_envelope(flushed_envelopes: &Mutex<Vec<String>>) -> SharedRecordStore {
+        let envelopes = flushed_envelopes.lock().expect("flush log");
+        assert_eq!(envelopes.len(), 1);
+        envelope_store(&envelopes[0])
     }
 
-    fn dumped_store(record_dump: &str) -> SharedRecordStore {
-        SharedRecordStore::from_encoded_dump(record_dump).expect("dump round-trips")
+    fn envelope_store(record_envelope: &str) -> SharedRecordStore {
+        SharedRecordStore::from_encoded_envelope(record_envelope).expect("envelope round-trips")
     }
 
     #[tokio::test]
-    async fn checkpoint_put_flushes_the_dump_before_put_returns() {
+    async fn checkpoint_put_flushes_the_envelope_before_put_returns() {
         let mut store = SharedRecordStore::empty();
         let RecordedFlushes {
-            dumps: flushed_dumps,
+            envelopes: flushed_envelopes,
             hook,
         } = flush_log();
         store.set_durable_flush_hook(hook);
@@ -502,18 +511,18 @@ mod tests {
             .await
             .unwrap();
 
-        let restored = open_only_flushed_dump(&flushed_dumps);
+        let restored = open_only_flushed_envelope(&flushed_envelopes);
         let checkpoint = restored
             .get(partition::WALLET_ACTION_CHECKPOINT, b"board.txid.0")
             .await
             .unwrap()
-            .expect("checkpoint is in the flushed dump");
+            .expect("checkpoint is in the flushed envelope");
         assert_eq!(checkpoint.data, b"broadcasting");
         let coin = restored
             .get(partition::VTXO, b"coin")
             .await
             .unwrap()
-            .expect("earlier records are in the same dump");
+            .expect("earlier records are in the same envelope");
         assert_eq!(coin.data, b"already-there");
     }
 
@@ -521,7 +530,7 @@ mod tests {
     async fn vtxo_put_does_not_flush() {
         let mut store = SharedRecordStore::empty();
         let RecordedFlushes {
-            dumps: flushed_dumps,
+            envelopes: flushed_envelopes,
             hook,
         } = flush_log();
         store.set_durable_flush_hook(hook);
@@ -534,14 +543,14 @@ mod tests {
             ))
             .await
             .unwrap();
-        assert!(flushed_dumps.lock().expect("flush log").is_empty());
+        assert!(flushed_envelopes.lock().expect("flush log").is_empty());
     }
 
     #[tokio::test]
-    async fn checkpoint_delete_flushes_the_dump_without_the_record() {
+    async fn checkpoint_delete_flushes_the_envelope_without_the_record() {
         let mut store = SharedRecordStore::empty();
         let RecordedFlushes {
-            dumps: flushed_dumps,
+            envelopes: flushed_envelopes,
             hook,
         } = flush_log();
         store.set_durable_flush_hook(hook);
@@ -554,14 +563,14 @@ mod tests {
             ))
             .await
             .unwrap();
-        flushed_dumps.lock().expect("flush log").clear();
+        flushed_envelopes.lock().expect("flush log").clear();
 
         store
             .delete(partition::WALLET_ACTION_CHECKPOINT, b"board.txid.0")
             .await
             .unwrap();
 
-        let restored = open_only_flushed_dump(&flushed_dumps);
+        let restored = open_only_flushed_envelope(&flushed_envelopes);
         assert!(
             restored
                 .get(partition::WALLET_ACTION_CHECKPOINT, b"board.txid.0")
@@ -574,7 +583,7 @@ mod tests {
     #[tokio::test]
     async fn flush_hook_error_fails_put_and_keeps_the_record() {
         let mut store = SharedRecordStore::empty();
-        store.set_durable_flush_hook(std::sync::Arc::new(|_record_dump| {
+        store.set_durable_flush_hook(std::sync::Arc::new(|_record_envelope| {
             Err("disk full".to_owned())
         }));
 
@@ -604,7 +613,7 @@ mod tests {
         for exit_partition in [partition::EXIT_VTXO, partition::EXIT_CHILD_TX] {
             let mut store = SharedRecordStore::empty();
             let RecordedFlushes {
-                dumps: flushed_dumps,
+                envelopes: flushed_envelopes,
                 hook,
             } = flush_log();
             store.set_durable_flush_hook(hook);
@@ -612,11 +621,11 @@ mod tests {
                 .put(record(exit_partition, "exit", None, b"row"))
                 .await
                 .unwrap();
-            assert_eq!(flushed_dumps.lock().expect("flush log").len(), 1);
+            assert_eq!(flushed_envelopes.lock().expect("flush log").len(), 1);
 
-            flushed_dumps.lock().expect("flush log").clear();
+            flushed_envelopes.lock().expect("flush log").clear();
             store.delete(exit_partition, b"exit").await.unwrap();
-            let restored = open_only_flushed_dump(&flushed_dumps);
+            let restored = open_only_flushed_envelope(&flushed_envelopes);
             assert!(
                 restored
                     .get(exit_partition, b"exit")

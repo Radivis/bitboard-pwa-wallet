@@ -16,6 +16,11 @@ const tipAtEleven: BarkEmergencyExitTip = {
   hash: 'b'.repeat(64),
 }
 
+const tipAtTwelve: BarkEmergencyExitTip = {
+  height: 12,
+  hash: 'd'.repeat(64),
+}
+
 function openGate(
   overrides: Partial<BarkEmergencyExitAutomationGate> = {},
 ): BarkEmergencyExitAutomationGate {
@@ -114,6 +119,37 @@ describe('watchBarkEmergencyExitTips', () => {
     })
 
     expect(progress).toHaveBeenCalledTimes(2)
+  })
+
+  it('BARK-EMG-23 hands progress the tip it observed, or null when the tip read failed', async () => {
+    let fetches = 0
+    let waits = 0
+    const progress = vi.fn(async (_observedTip: BarkEmergencyExitTip | null) => undefined)
+    const controller = new AbortController()
+
+    await watchBarkEmergencyExitTips({
+      signal: controller.signal,
+      readGate: async () => ({
+        proceedAutomatically: true,
+        walletUnlocked: true,
+        sameWallet: true,
+        sameNetwork: true,
+        sessionLoaded: true,
+      }),
+      fetchTip: async () => {
+        fetches += 1
+        if (fetches === 1) throw new Error('esplora down')
+        return fetches === 2 ? tipAtEleven : tipAtTwelve
+      },
+      listExitCount: async () => 1,
+      progress,
+      wait: async () => {
+        waits += 1
+        if (waits >= 3) controller.abort()
+      },
+    })
+
+    expect(progress.mock.calls).toEqual([[null], [tipAtTwelve]])
   })
 
   it('refreshes the exit list before it progresses', async () => {

@@ -11,6 +11,35 @@ const SALT_LENGTH_BYTES = 16
 const IV_LENGTH_BYTES = 12
 
 let sessionPassword: string | null = null
+let beforeNextEncryptWithPassword: (() => Promise<void>) | null = null
+
+const CONCURRENT_WRITE_HEAD_START_MS = 20
+
+/**
+ * On the next `encryptDataWithPassword` (a password re-encrypt has read every wallet by then),
+ * starts `concurrentWrite` and gives it a short head start before the re-encrypt continues.
+ */
+export function interleaveBeforeNextEncryptWithPassword(concurrentWrite: () => Promise<void>): {
+  awaitConcurrentWrite: () => Promise<void>
+} {
+  let concurrentWritePromise: Promise<void> | null = null
+  beforeNextEncryptWithPassword = async () => {
+    concurrentWritePromise = concurrentWrite()
+    await Promise.race([
+      concurrentWritePromise.catch(() => undefined),
+      new Promise((resolve) => setTimeout(resolve, CONCURRENT_WRITE_HEAD_START_MS)),
+    ])
+  }
+  return {
+    awaitConcurrentWrite: () => concurrentWritePromise ?? Promise.resolve(),
+  }
+}
+
+async function runBeforeNextEncryptWithPasswordHook(): Promise<void> {
+  const hook = beforeNextEncryptWithPassword
+  beforeNextEncryptWithPassword = null
+  await hook?.()
+}
 
 async function deriveKey(password: string, salt: Uint8Array): Promise<CryptoKey> {
   const rawKey = new Uint8Array(
@@ -99,6 +128,7 @@ export function getMockEncryptionWorker() {
     },
 
     async encryptDataWithPassword(password: string, plaintext: string): Promise<EncryptedBlob> {
+      await runBeforeNextEncryptWithPasswordHook()
       return encryptWithPassword(password, plaintext)
     },
 
@@ -111,4 +141,5 @@ export function getMockEncryptionWorker() {
 /** Reset mock session between tests. */
 export function resetMockEncryptionWorkerSession(): void {
   sessionPassword = null
+  beforeNextEncryptWithPassword = null
 }

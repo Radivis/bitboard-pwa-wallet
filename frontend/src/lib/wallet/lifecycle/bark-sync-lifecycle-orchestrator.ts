@@ -1,7 +1,9 @@
-import { settleBarkExitAfterSync } from '@/lib/bark/bark-exit-after-sync'
+import { settleBarkEmergencyExitAfterSync } from '@/lib/bark/bark-emergency-exit-after-sync'
 import { getBarkWorker } from '@/workers/bark-factory'
 import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
+import type { BarkNextRefreshObservation } from '@/lib/bark/bark-next-refresh-hint'
 import type { BarkRefreshStatus } from '@/lib/bark/bark-refresh-status'
+import type { BarkSyncResult } from '@/workers/bark-api'
 import type { NetworkMode } from '@/stores/walletStore'
 import { getBarkLoadLifecycleSnapshot } from '@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator'
 import type { LockLifecyclePhase } from '@/lib/wallet/lifecycle/lock-lifecycle-types'
@@ -21,8 +23,12 @@ export type BarkSyncLifecycleSnapshot = {
   spendableSats: number | null
   /** Locked sats from that same balance read. Failed syncs keep the last figure. */
   lockedSats: number | null
+  /** Exiting sats from that same balance read. Failed syncs keep the last figure. */
+  exitingSats: number | null
   lastSuccessfulSyncAt: string | null
   refreshStatus: BarkRefreshStatus
+  /** Next refresh period from the last successful sync of this session. Failed syncs keep it. */
+  nextRefresh: BarkNextRefreshObservation | null
 }
 
 export type BarkSyncParams = {
@@ -45,9 +51,16 @@ function idleBarkSyncSnapshot(): BarkSyncLifecycleSnapshot {
     errorMessage: null,
     spendableSats: null,
     lockedSats: null,
+    exitingSats: null,
     lastSuccessfulSyncAt: null,
     refreshStatus: 'idle',
+    nextRefresh: null,
   }
+}
+
+function observeNextRefresh(synced: BarkSyncResult): BarkNextRefreshObservation | null {
+  if (synced.nextRefresh == null) return null
+  return { ...synced.nextRefresh, observedAt: synced.lastSuccessfulSyncAt }
 }
 
 let snapshot: BarkSyncLifecycleSnapshot = idleBarkSyncSnapshot()
@@ -127,8 +140,10 @@ export function prepareBarkSyncForSessionOpen(networkMode: NetworkMode): void {
     errorMessage: null,
     spendableSats: null,
     lockedSats: null,
+    exitingSats: null,
     lastSuccessfulSyncAt: null,
     refreshStatus: 'idle',
+    nextRefresh: null,
   })
 }
 
@@ -186,8 +201,10 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
       errorMessage: null,
       spendableSats: previous.spendableSats,
       lockedSats: previous.lockedSats,
+      exitingSats: previous.exitingSats,
       lastSuccessfulSyncAt: previous.lastSuccessfulSyncAt,
       refreshStatus: previous.refreshStatus,
+      nextRefresh: previous.nextRefresh,
     })
     try {
       const worker = getBarkWorker()
@@ -205,14 +222,16 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
         errorMessage: null,
         spendableSats: balance.spendableSats,
         lockedSats: balance.lockedSats,
+        exitingSats: balance.exitingSats,
         lastSuccessfulSyncAt: synced.lastSuccessfulSyncAt,
         refreshStatus: synced.refreshStatus ?? 'idle',
+        nextRefresh: observeNextRefresh(synced),
       })
       if (generation !== sessionGeneration || params.settleExits === false) {
         return
       }
       try {
-        await settleBarkExitAfterSync(params.networkMode)
+        await settleBarkEmergencyExitAfterSync(params.networkMode)
       } catch {
         // The stamp stays. The next sync tries exit progress again.
       }
@@ -227,8 +246,10 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
         errorMessage: userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK),
         spendableSats: kept.spendableSats,
         lockedSats: kept.lockedSats,
+        exitingSats: kept.exitingSats,
         lastSuccessfulSyncAt: kept.lastSuccessfulSyncAt,
         refreshStatus: kept.refreshStatus,
+        nextRefresh: kept.nextRefresh,
       })
       if (throwOnError) {
         throw error
@@ -263,8 +284,10 @@ export function recordBarkSpendableAfterSend(result: {
     errorMessage: null,
     spendableSats: result.spendableSats,
     lockedSats: current.lockedSats,
+    exitingSats: current.exitingSats,
     lastSuccessfulSyncAt: result.lastSuccessfulSyncAt,
     refreshStatus: current.refreshStatus,
+    nextRefresh: current.nextRefresh,
   })
 }
 

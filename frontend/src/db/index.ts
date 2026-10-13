@@ -1,7 +1,7 @@
 export { awaitInFlightWalletSecretsWrites } from './wallet-secrets-write-tracker'
 export {
   getDatabase,
-  ensureMigrated,
+  ensureSchemaAndDataMigrated,
   destroyDatabase,
   checkDatabaseHealth,
   getInitialDatabaseHealth,

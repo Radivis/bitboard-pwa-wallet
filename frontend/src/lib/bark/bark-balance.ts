@@ -1,6 +1,6 @@
 import type { BarkBalanceParts } from '@/workers/bark-api'
 
-/** `{ spendableSats, lockedSats }` from `bark_balance`, as JSON or an object. */
+/** `{ spendableSats, lockedSats, exitingSats }` from `bark_balance`, as JSON or an object. */
 export function readBarkBalance(value: unknown): BarkBalanceParts {
   let parsed = value
   if (typeof value === 'string') {
@@ -17,6 +17,7 @@ export function readBarkBalance(value: unknown): BarkBalanceParts {
   return {
     spendableSats: readNonNegativeSats(row.spendableSats, 'spendable'),
     lockedSats: readNonNegativeSats(row.lockedSats, 'locked'),
+    exitingSats: readNonNegativeSats(row.exitingSats, 'exiting'),
   }
 }
 

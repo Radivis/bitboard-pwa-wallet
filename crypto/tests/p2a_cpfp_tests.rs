@@ -2,7 +2,9 @@
 
 mod common;
 
-use bitboard_crypto::p2a_cpfp::{BARK_CPFP_INSUFFICIENT_FUNDS, sign_p2a_cpfp_child};
+use bitboard_crypto::p2a_cpfp::{
+    BARK_CPFP_INSUFFICIENT_FUNDS, BARK_CPFP_NEEDED_SATS_LABEL, sign_p2a_cpfp_child,
+};
 use bitcoin::consensus::encode::{deserialize_hex, serialize_hex};
 use bitcoin::hashes::Hash;
 use bitcoin::transaction::Version;
@@ -41,8 +43,8 @@ fn parent_without_anchor_is_rejected() {
             script_pubkey: ScriptBuf::new(),
         }],
     };
-    let error = sign_p2a_cpfp_child(&mut wallet, &serialize_hex(&parent), 2.0, None, None)
-        .expect_err("no anchor");
+    let error =
+        sign_p2a_cpfp_child(&mut wallet, &serialize_hex(&parent), 2.0).expect_err("no anchor");
     let message = error.to_string();
     assert!(message.contains("no Pay-to-Anchor"));
     assert!(!message.contains(BARK_CPFP_INSUFFICIENT_FUNDS));
@@ -52,9 +54,25 @@ fn parent_without_anchor_is_rejected() {
 fn unfunded_wallet_reports_insufficient_confirmed_funds() {
     let mut wallet = create_test_wallet(DEFAULT_NETWORK, DEFAULT_ADDRESS_TYPE);
     let parent = parent_with_anchor();
-    let error = sign_p2a_cpfp_child(&mut wallet, &serialize_hex(&parent), 2.0, None, None)
-        .expect_err("no coins");
+    let error =
+        sign_p2a_cpfp_child(&mut wallet, &serialize_hex(&parent), 2.0).expect_err("no coins");
     assert!(error.to_string().contains(BARK_CPFP_INSUFFICIENT_FUNDS));
+}
+
+#[test]
+fn insufficient_funds_error_names_the_needed_sats() {
+    let mut wallet = create_test_wallet(DEFAULT_NETWORK, DEFAULT_ADDRESS_TYPE);
+    let parent = parent_with_anchor();
+    let message = sign_p2a_cpfp_child(&mut wallet, &serialize_hex(&parent), 2.0)
+        .expect_err("no coins")
+        .to_string();
+    let needed_prefix = format!("{BARK_CPFP_INSUFFICIENT_FUNDS}: {BARK_CPFP_NEEDED_SATS_LABEL}=");
+    let needed_sats: u64 = message
+        .split_once(&needed_prefix)
+        .and_then(|(_, rest)| rest.split_once(';'))
+        .map(|(needed, _)| needed.parse().expect("needed sats is a number"))
+        .expect("error names the needed sats");
+    assert!(needed_sats > 0);
 }
 
 #[test]
@@ -62,8 +80,8 @@ fn funded_wallet_signs_a_version_3_child_that_spends_the_anchor() {
     let mut wallet = create_test_wallet(DEFAULT_NETWORK, DEFAULT_ADDRESS_TYPE);
     fund_test_wallet(&mut wallet, FUNDING_AMOUNT);
     let parent = parent_with_anchor();
-    let child_hex = sign_p2a_cpfp_child(&mut wallet, &serialize_hex(&parent), 2.0, None, None)
-        .expect("signed child");
+    let child_hex =
+        sign_p2a_cpfp_child(&mut wallet, &serialize_hex(&parent), 2.0).expect("signed child");
     let child: Transaction = deserialize_hex(&child_hex).expect("child hex");
     assert_eq!(child.version, Version(3));
     assert!(

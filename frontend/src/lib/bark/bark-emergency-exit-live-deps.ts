@@ -1,14 +1,17 @@
-import { barkEmergencyExitProgressDeps } from '@/lib/bark/bark-emergency-exit-progress-deps'
+import {
+  barkEmergencyExitProgressDeps,
+  runBarkEmergencyExitProgress,
+} from '@/lib/bark/bark-emergency-exit-progress-deps'
 import type { ClaimBarkEmergencyExitDeps } from '@/lib/bark/perform-bark-emergency-exit'
 import type { StartBarkEmergencyExitDeps } from '@/lib/bark/perform-bark-emergency-exit'
 import { getEsploraUrl } from '@/lib/wallet/bitcoin-utils'
-import { orchestrateBarkSync } from '@/lib/wallet/lifecycle/bark-sync-lifecycle-orchestrator'
+import { loadCustomEsploraUrl } from '@/lib/wallet/wallet-utils'
 import { useWalletStore } from '@/stores/walletStore'
 import type { BarkEmergencyExitEstimate } from '@/workers/bark-api'
 import { getBarkWorker } from '@/workers/bark-factory'
 import { getCryptoWorker } from '@/workers/crypto-factory'
 
-export { barkEmergencyExitProgressDeps }
+export { barkEmergencyExitProgressDeps, runBarkEmergencyExitProgress }
 
 export type ReviewBarkEmergencyExitDeps = {
   estimate: (vtxoIds: string[], feeRateSatPerVb: number) => Promise<BarkEmergencyExitEstimate>
@@ -35,26 +38,16 @@ export function barkEmergencyExitClaimDeps(): ClaimBarkEmergencyExitDeps {
     },
     drain: (address, feeRateSatPerVb, excludeVtxoIds) =>
       getBarkWorker().drainEmergencyExits(address, feeRateSatPerVb, excludeVtxoIds),
-    broadcast: (rawTxHex) => {
+    broadcast: async (rawTxHex) => {
       const { networkMode } = useWalletStore.getState()
-      return getCryptoWorker().broadcastTransaction(rawTxHex, getEsploraUrl(networkMode))
+      const customUrl = await loadCustomEsploraUrl(networkMode)
+      const esploraUrl = getEsploraUrl(networkMode, customUrl)
+      return getCryptoWorker().broadcastTransaction(rawTxHex, esploraUrl)
     },
     rememberPendingClaim: (pending) => getBarkWorker().writePendingEmergencyClaim(pending),
     broadcastOnBarkChain: (rawTxHex) => getBarkWorker().broadcastEmergencyExitClaim(rawTxHex),
     syncExits: () => getBarkWorker().syncEmergencyExits(),
     clearPendingClaim: () => getBarkWorker().writePendingEmergencyClaim(null),
-    syncBark: async () => {
-      const { activeWalletId, networkMode } = useWalletStore.getState()
-      if (activeWalletId == null) {
-        throw new Error('Bark session is not open')
-      }
-      await orchestrateBarkSync({
-        walletId: activeWalletId,
-        networkMode,
-        throwOnError: true,
-        settleExits: false,
-      })
-    },
     startOnchainBackgroundSync: () => {
       const { activeWalletId, networkMode, addressType, accountId } = useWalletStore.getState()
       if (activeWalletId == null || networkMode === 'lab') return

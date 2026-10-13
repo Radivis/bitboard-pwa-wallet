@@ -8,8 +8,8 @@ use wasm_bindgen::prelude::*;
 use crate::board::clear_prepared_board_funding;
 use crate::record_store::SharedRecordStore;
 use crate::refresh::{
-    BARK_REFRESH_PENDING, BARK_REFRESH_WARNING, refresh_status_after_schedule,
-    should_schedule_delegated_refresh,
+    BARK_REFRESH_PENDING, BARK_REFRESH_WARNING, next_refresh_schedule_json,
+    refresh_status_after_schedule, should_schedule_delegated_refresh,
 };
 use crate::sync_gate::BarkSessionSyncGate;
 use crate::{
@@ -124,7 +124,7 @@ fn clear_record_store() {
     });
 }
 
-fn export_active_record_dump() -> Result<String, String> {
+fn export_active_record_envelope() -> Result<String, String> {
     ACTIVE_RECORD_STORE.with(|slot| {
         let current = slot
             .try_borrow()
@@ -132,14 +132,14 @@ fn export_active_record_dump() -> Result<String, String> {
         let store = current
             .as_ref()
             .ok_or_else(|| "Bark session is not open".to_owned())?;
-        store.export_encoded_dump()
+        store.export_encoded_envelope()
     })
 }
 
 async fn open_network_session(
     mnemonic_plaintext: String,
     network: Network,
-    record_dump: String,
+    record_envelope: String,
     config: bark::Config,
 ) -> Result<String, String> {
     let seed = {
@@ -149,10 +149,10 @@ async fn open_network_session(
         bark::WalletSeed::new_from_mnemonic(network, &parsed_mnemonic)
     };
 
-    let store = if record_dump.is_empty() {
+    let store = if record_envelope.is_empty() {
         SharedRecordStore::empty()
     } else {
-        SharedRecordStore::from_encoded_dump(&record_dump)?
+        SharedRecordStore::from_encoded_envelope(&record_envelope)?
     };
 
     install_record_store(store.clone())?;
@@ -222,17 +222,17 @@ fn drop_active_wallet() -> Result<(), String> {
 
 /// Opens or creates a Bark wallet for `signet` or `mainnet` on the in-memory record store.
 ///
-/// `record_dump` is empty when this network has no encrypted dump yet.
+/// `record_envelope` is empty when this network has no encrypted envelope yet.
 /// The custom persister is set, so Bark does not open IndexedDB.
 #[wasm_bindgen]
 pub async fn bark_open_session(
     mnemonic: String,
     network: String,
-    record_dump: String,
+    record_envelope: String,
 ) -> Result<String, JsValue> {
     let bitcoin_network = parse_open_network(&network).map_err(|err| JsValue::from_str(&err))?;
     let config = config_for_network(bitcoin_network).map_err(|err| JsValue::from_str(&err))?;
-    open_network_session(mnemonic, bitcoin_network, record_dump, config)
+    open_network_session(mnemonic, bitcoin_network, record_envelope, config)
         .await
         .map_err(|err| JsValue::from_str(&err))
 }
@@ -244,7 +244,7 @@ pub async fn bark_open_session(
 #[wasm_bindgen]
 pub async fn bark_open_regtest_session(
     mnemonic: String,
-    record_dump: String,
+    record_envelope: String,
     server_url: String,
     esplora_url: String,
 ) -> Result<String, JsValue> {
@@ -254,19 +254,19 @@ pub async fn bark_open_regtest_session(
         ));
     }
     let config = config_for_endpoints(Network::Regtest, server_url, esplora_url);
-    open_network_session(mnemonic, Network::Regtest, record_dump, config)
+    open_network_session(mnemonic, Network::Regtest, record_envelope, config)
         .await
         .map_err(|err| JsValue::from_str(&err))
 }
 
-/// Exports the open network's record dump. Plaintext stays in this worker.
+/// Exports the open network's record envelope. Plaintext stays in this worker.
 #[wasm_bindgen]
-pub fn bark_export_record_dump() -> Result<String, JsValue> {
-    export_active_record_dump().map_err(|err| JsValue::from_str(&err))
+pub fn bark_export_record_envelope() -> Result<String, JsValue> {
+    export_active_record_envelope().map_err(|err| JsValue::from_str(&err))
 }
 
 /// Persists a checkpoint, exit row, or exit child before that Bark write returns.
-/// The hook receives the encoded dump and must return a promise. It must not
+/// The hook receives the encoded envelope and must return a promise. It must not
 /// call back into this module.
 #[wasm_bindgen]
 pub fn bark_set_durable_record_flush_hook(hook: js_sys::Function) {
@@ -307,6 +307,18 @@ pub(crate) fn finish_wallet_operation<T>(
         (Err(operation_error), _) => Err(operation_error),
         (Ok(_), Err(restore_error)) => Err(restore_error),
     }
+}
+
+/// Takes the open wallet, runs `operation`, and stores the wallet again.
+/// Does not wait for `bark_sync`, which needs the Ark server, so emergency exits
+/// work while that server is unreachable.
+pub(crate) async fn run_with_open_wallet<T, F>(operation: F) -> Result<T, JsValue>
+where
+    F: AsyncFnOnce(&bark::Wallet) -> Result<T, String>,
+{
+    let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
+    let operation_result = operation(&wallet).await;
+    finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
 }
 
 pub(crate) fn bark_error(err: impl std::fmt::Display) -> String {
@@ -445,7 +457,9 @@ async fn delegated_refresh_status(wallet: &bark::Wallet) -> String {
     let pending_round_count = match wallet.pending_round_states().await {
         Ok(states) => states.len(),
         Err(err) => {
-            console_warn(&format!("Bark could not read pending round states: {err:#}"));
+            console_warn(&format!(
+                "Bark could not read pending round states: {err:#}"
+            ));
             return BARK_REFRESH_WARNING.to_owned();
         }
     };
@@ -463,7 +477,36 @@ async fn delegated_refresh_status(wallet: &bark::Wallet) -> String {
     }
 }
 
-/// Spendable and locked satoshis. Refused until `bark_sync` has succeeded in this session.
+/// Chain tip and the first block of the next refresh period, as JSON, or `null`.
+/// `null` covers a wallet without spendable VTXOs and a chain or store read failure,
+/// so a successful sync is not undone by this read.
+#[wasm_bindgen]
+pub async fn bark_next_refresh_schedule() -> Result<String, JsValue> {
+    run_with_open_wallet(async |wallet| {
+        let tip_height = read_or_warn("chain tip", wallet.chain().tip().await);
+        let required_refresh_height = read_or_warn(
+            "next required refresh height",
+            wallet.get_next_required_refresh_blockheight().await,
+        )
+        .flatten();
+        next_refresh_schedule_json(tip_height, required_refresh_height)
+    })
+    .await
+}
+
+fn read_or_warn<T>(label: &str, read: anyhow::Result<T>) -> Option<T> {
+    match read {
+        Ok(value) => Some(value),
+        Err(err) => {
+            console_warn(&format!("Bark could not read the {label}: {err:#}"));
+            None
+        }
+    }
+}
+
+/// Spendable, locked, and exiting satoshis. Exiting sats are coins in an emergency exit
+/// and are not part of the spendable or locked figures.
+/// Refused until `bark_sync` has succeeded in this session.
 #[wasm_bindgen]
 pub async fn bark_balance() -> Result<String, JsValue> {
     require_session_synced().map_err(|err| JsValue::from_str(&err))?;

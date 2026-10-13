@@ -9,7 +9,7 @@ use bitcoin::address::NetworkUnchecked;
 /// Prefix the UI matches when an offboard parked before broadcast.
 pub const BARK_OFFBOARD_PARKED_PREFIX: &str = "bark_offboard_parked";
 
-/// On-chain receive address for a collaborative or emergency exit on the open network.
+/// On-chain receive address for offboard or emergency exit on the open network.
 pub fn parse_receive_address(address: &str, network: Network) -> Result<Address, String> {
     let unchecked = address
         .trim()
@@ -24,7 +24,7 @@ pub fn parse_receive_address(address: &str, network: Network) -> Result<Address,
         })
 }
 
-/// Signet receive address for a collaborative exit.
+/// Signet receive address for offboard.
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 pub fn parse_signet_receive_address(address: &str) -> Result<Address, String> {
     parse_receive_address(address, Network::Signet)

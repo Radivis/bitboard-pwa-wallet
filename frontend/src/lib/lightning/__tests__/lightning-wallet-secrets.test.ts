@@ -2,9 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Kysely } from 'kysely'
 import type { Database } from '@/db/schema'
 import { createTestDatabase } from '@/db/test-helpers'
-import { saveWalletSecrets, loadWalletSecretsPayload } from '@/db/wallet-persistence'
+import {
+  saveWalletSecrets,
+  loadWalletSecretsPayload,
+  updateWalletSecretsPayloadWithRetry,
+} from '@/db/wallet-persistence'
 import { beginWalletSecretsSession, endWalletSecretsSession } from '@/lib/wallet/wallet-secrets-session'
-import { saveLightningConnectionsForWallet } from '@/lib/lightning/lightning-wallet-secrets'
+import {
+  connectedWalletToStored,
+  loadLightningConnectionsForWallet,
+  updateLightningConnectionsForWallet,
+} from '@/lib/lightning/lightning-wallet-secrets'
 import type { WalletSecrets } from '@/db/wallet-persistence'
 import type { ConnectedLightningWallet } from '@/lib/lightning/lightning-backend-service'
 import { TEST_MNEMONIC_12 } from '@/test-utils/test-providers'
@@ -62,7 +70,6 @@ describe('lightning-wallet-secrets persistence', () => {
     arkadeAccounts: [],
     activeArkadeAccountIdByNetwork: {},
     barkAccounts: [],
-    signetNetworkSplitApplied: true,
   }
 
   beforeEach(async () => {
@@ -85,54 +92,91 @@ describe('lightning-wallet-secrets persistence', () => {
     await testDb.destroy()
   })
 
-  it('preserves existing snapshots when saving updated connection list', async () => {
-    const nextConnections: ConnectedLightningWallet[] = [
-      {
-        id: 'conn-1',
-        walletId,
-        label: 'Conn 1 renamed',
-        networkMode: 'signet',
-        config: {
-          type: 'nwc',
-          connectionString:
-            'nostr+walletconnect://0000000000000000000000000000000000000000000000000000000000000000?relay=wss%3A%2F%2Frelay.example.com',
-        },
-        createdAt: '2020-01-01T00:00:00.000Z',
-      },
-      {
-        id: 'conn-2',
-        walletId,
-        label: 'Conn 2',
-        networkMode: 'signet',
-        config: {
-          type: 'nwc',
-          connectionString:
-            'nostr+walletconnect://1111111111111111111111111111111111111111111111111111111111111111?relay=wss%3A%2F%2Frelay.example.com',
-        },
-        createdAt: '2020-01-03T00:00:00.000Z',
-      },
-    ]
-
-    await saveLightningConnectionsForWallet({
+  function secondConnection(): ConnectedLightningWallet {
+    return {
+      id: 'conn-2',
       walletId,
-      connections: nextConnections,
+      label: 'Conn 2',
+      networkMode: 'signet',
+      config: {
+        type: 'nwc',
+        connectionString:
+          'nostr+walletconnect://1111111111111111111111111111111111111111111111111111111111111111?relay=wss%3A%2F%2Frelay.example.com',
+      },
+      createdAt: '2020-01-03T00:00:00.000Z',
+    }
+  }
+
+  function renameConnection(connectionId: string, label: string) {
+    return (storedConnections: ConnectedLightningWallet[]) =>
+      storedConnections.map((connection) =>
+        connection.id === connectionId ? { ...connection, label } : connection,
+      )
+  }
+
+  it('preserves existing snapshots when updating the connection list', async () => {
+    await updateLightningConnectionsForWallet({
+      walletId,
+      updateConnections: (storedConnections) => [
+        ...renameConnection('conn-1', 'Conn 1 renamed')(storedConnections),
+        secondConnection(),
+      ],
     })
 
     const payload = await loadWalletSecretsPayload(testDb, walletId)
     expect(payload.descriptorWallets).toEqual(baseSecrets.descriptorWallets)
     expect(payload.lightningNwcConnections).toHaveLength(2)
     const preserved = payload.lightningNwcConnections.find((c) => c.id === 'conn-1')
+    expect(preserved?.label).toBe('Conn 1 renamed')
     expect(preserved?.nwcSnapshot?.balanceSats).toBe(100)
   })
 
   it('removes connections without touching descriptor payload', async () => {
-    await saveLightningConnectionsForWallet({
+    await updateLightningConnectionsForWallet({
       walletId,
-      connections: [],
+      updateConnections: () => [],
     })
 
     const payload = await loadWalletSecretsPayload(testDb, walletId)
     expect(payload.lightningNwcConnections).toEqual([])
     expect(payload.descriptorWallets).toEqual(baseSecrets.descriptorWallets)
+  })
+
+  it('keeps a connection another writer added after the caller read the list', async () => {
+    const readBeforeOtherWriter = await loadLightningConnectionsForWallet({ walletId })
+    expect(readBeforeOtherWriter.map((connection) => connection.id)).toEqual(['conn-1'])
+    await updateWalletSecretsPayloadWithRetry({
+      walletDb: testDb,
+      walletId,
+      transform: (payload) => ({
+        ...payload,
+        lightningNwcConnections: [
+          ...payload.lightningNwcConnections,
+          connectedWalletToStored(secondConnection()),
+        ],
+      }),
+    })
+
+    await updateLightningConnectionsForWallet({
+      walletId,
+      updateConnections: renameConnection('conn-1', 'Conn 1 renamed'),
+    })
+
+    const payload = await loadWalletSecretsPayload(testDb, walletId)
+    expect(payload.lightningNwcConnections.map((connection) => connection.id)).toEqual([
+      'conn-1',
+      'conn-2',
+    ])
+    expect(payload.lightningNwcConnections[0]?.label).toBe('Conn 1 renamed')
+  })
+
+  it('returns the connection list it wrote', async () => {
+    const written = await updateLightningConnectionsForWallet({
+      walletId,
+      updateConnections: (storedConnections) => [...storedConnections, secondConnection()],
+    })
+
+    expect(written.map((connection) => connection.id)).toEqual(['conn-1', 'conn-2'])
+    expect(written.every((connection) => connection.walletId === walletId)).toBe(true)
   })
 })

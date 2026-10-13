@@ -10,16 +10,18 @@
 /.cursor/pr-reviews/
 /.cursor/ux-audits/
 
-/target
+# Rust build output (workspace root and member crates)
+target/
 .env
 .env.testnet
+# TypeScript caches
+*.tsbuildinfo
 # Legacy single-file imprint
 .env.imprint
 !/scripts/README.md
 # Coverage reports
 lcov.info
 /coverage/
-/target/
 /tests/logs/
 /test-results/
 /frontend/coverage/

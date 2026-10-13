@@ -18,7 +18,7 @@ interface StoredBarkAccount {
   fingerprint: string
   lastSuccessfulSyncAt?: string
   receiveKeyIndex?: number
-  recordDump?: string // versioned Bark Record bytes, standard base64
+  recordEnvelope?: string // versioned Bark Record bytes, standard base64
   pendingEmergencyClaim?: { txid: string; vtxoIds: string[] }
   proceedAutomatically?: boolean
 }
@@ -26,9 +26,11 @@ interface StoredBarkAccount {
 barkAccounts: StoredBarkAccount[]
 ```
 
-Each account represents a Bark configuration for a specific `networkMode` (enforcing at most one account per network mode). Signet `serverUrl` is `https://ark.signet.2nd.dev`. Mainnet `serverUrl` is `https://ark.second.tech`. A flush rewrites only the open network's dump. `pendingEmergencyClaim` is metadata on that account, not a Bark protocol record. It remembers a broadcast claim until Bark reports those VTXOs claim-in-progress or claimed, or the app Esplora reports the transaction gone. A dump flush keeps the field.
+Parsers accept the legacy `recordDump` field and normalize it to `recordEnvelope`.
 
-**Size limit:** each `recordDump` must not exceed 10 MB of UTF-8 (`BARK_RECORD_DUMP_MAX_BYTES` in `wallet-domain-types.ts`). An over-cap dump is kept on the payload. Session open refuses it. Dropping it would open an empty wallet and lose the exit chain.
+Each account represents a Bark configuration for a specific `networkMode` (enforcing at most one account per network mode). Signet `serverUrl` is `https://ark.signet.2nd.dev`. Mainnet `serverUrl` is `https://ark.second.tech`. A flush rewrites only the open network's envelope. `pendingEmergencyClaim` is metadata on that account, not a Bark protocol record. It remembers a broadcast claim until Bark reports those VTXOs claim-in-progress or claimed, or the app Esplora reports the transaction gone. An envelope flush keeps the field.
+
+**Size limit:** each `recordEnvelope` must not exceed 10 MB of UTF-8 (`BARK_RECORD_ENVELOPE_MAX_BYTES` in `wallet-domain-types.ts`). An over-cap envelope is kept on the payload. Session open refuses it. Dropping it would open an empty wallet and lose the exit chain.
 
 ## Rust record store (`bitboard-bark`)
 
@@ -37,13 +39,13 @@ File: `bitboard-bark/src/record_store.rs`
 | Type | Purpose |
 |------|---------|
 | `SharedRecordStore` | In-memory `StorageAdaptor` (put, get, delete, query_sorted, get_all) |
-| Encoded dump | `version: 1` plus `Vec<Record>`, postcard bytes, standard base64 |
+| Encoded envelope | `version: 1` plus `Vec<Record>`, postcard bytes, standard base64 |
 
 `StorageAdaptorWrapper` implements `BarkPersister`. Bitboard does not re-declare VTXO, movement, or exit tables. `query_sorted` uses Bark's `SortKey` order and skips records that have no sort key.
 
-`bark_open_session` loads the open network's dump, then `Wallet::open` with that persister and `MemoryLockManager`. `datadir` is unset, so Bark does not open its platform IndexedDB. An empty dump string means there is no encrypted dump yet. A corrupt dump or an unknown version fails the open.
+`bark_open_session` loads the open network's envelope, then `Wallet::open` with that persister and `MemoryLockManager`. `datadir` is unset, so Bark does not open its platform IndexedDB. An empty envelope string means there is no encrypted envelope yet. A corrupt envelope or an unknown version fails the open.
 
-`bark_export_record_dump` exports the open network. A wallet-action checkpoint, exit row, or exit child is encrypted and written before that Bark write returns, so a tab killed during board, offboard, or exit progress reloads the checkpoint and the next sync resumes it. Other puts stay in memory until the call returns. A missing flush hook on WASM fails the write. The mid-call flush does not stamp `lastSuccessfulSyncAt`.
+`bark_export_record_envelope` exports the open network. A wallet-action checkpoint, exit row, or exit child is encrypted and written before that Bark write returns, so a tab killed during board, offboard, or exit progress reloads the checkpoint and the next sync resumes it. Other puts stay in memory until the call returns. A missing flush hook on WASM fails the write. The mid-call flush does not stamp `lastSuccessfulSyncAt`.
 
 ## Worker persistence flow
 
@@ -55,7 +57,7 @@ sequenceDiagram
   participant DB as wallet_secrets
 
   Main->>BW: openSession for signet or mainnet
-  BW->>EW: decrypt that network's recordDump
+  BW->>EW: decrypt that network's recordEnvelope
   BW->>BW: load StorageAdaptor, Wallet.open for that network
 
   Note over BW: sync send board exit mutate the map
@@ -78,8 +80,8 @@ Key modules:
 
 Main thread code handles **ciphertext only**. Plaintext records stay in the Bark worker.
 
-A flush replaces the open network's `recordDump` and leaves the other network's dump and every `sdkPersistenceJson` as they were read. An Arkade flush leaves both Bark dumps as they were read. The `wallet_secrets` row is still one ciphertext, so the row is re-encrypted either way.
+A flush replaces the open network's `recordEnvelope` and leaves the other network's envelope and every `sdkPersistenceJson` as they were read. An Arkade flush leaves both Bark envelopes as they were read. The `wallet_secrets` row is still one ciphertext, so the row is re-encrypted either way.
 
-A checkpoint, exit-row, or exit-child put or delete flushes during the call, before Bark continues to broadcast or the next step. That write does not change `lastSuccessfulSyncAt`. Flush also runs after open, reveal, sync, board prepare, board submit, Arkoor, on-chain send, offboard, and emergency-exit start, progress, CPFP, cancel, and drain. A failed call still flushes when the session is open, so a checkpoint written before the error is not dropped. Peek, balance, history, VTXO list, estimates, exit list, and exit topology do not flush. A revision conflict re-reads the payload and applies the dump again, leaving the other network and a pending emergency claim in place.
+A checkpoint, exit-row, or exit-child put or delete flushes during the call, before Bark continues to broadcast or the next step. That write does not change `lastSuccessfulSyncAt`. Flush also runs after open, reveal, sync, board prepare, board submit, Arkoor, on-chain send, offboard, and emergency-exit start, progress, CPFP, cancel, and drain. A failed call still flushes when the session is open, so a checkpoint written before the error is not dropped. Peek, balance, history, VTXO list, estimates, exit list, and exit topology do not flush. A revision conflict re-reads the payload and applies the envelope again, leaving the other network and a pending emergency claim in place.
 
-`Wallet::open` receives the in-memory persister. Bark does not open IndexedDB. An empty `recordDump` starts a new in-memory store.
+`Wallet::open` receives the in-memory persister. Bark does not open IndexedDB. An empty `recordEnvelope` starts a new in-memory store.

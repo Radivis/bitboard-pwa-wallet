@@ -4,19 +4,24 @@
  * Run: `npm run test:e2e:bark-exit-regtest` from `frontend/`.
  * That clean-start loads docker/captaind/captaind.exit.toml (`vtxo_exit_delta = 6`).
  *
- * Contracts: E2E-BARK-REG-04 and E2E-BARK-REG-05.
+ * Contracts: E2E-BARK-REG-04, E2E-BARK-REG-05, and E2E-BARK-REG-07.
  */
-import { type Page, test, expect } from '@playwright/test'
+import { type Locator, type Page, test, expect } from '@playwright/test'
 import { boardRegtestBarkWallet } from './helpers/bark-regtest-scenarios'
 import {
+  expectBarkRailSyncFails,
   readDashboardBarkSpendableSats,
   readDashboardOnchainSats,
   restartCaptaind,
+  startCaptaind,
+  stopCaptaind,
   triggerBarkRailSync,
+  waitForBarkLoadReady,
 } from './helpers/bark-regtest'
 import { runDashboardSyncUntilIdle } from './helpers/dashboard-sync'
 import { fundRegtestWalletReceiveAddress, mineRegtestBlocks } from './helpers/regtest'
 import { goToWalletTab } from './helpers/wallet-nav'
+import { unlockWalletViaUI } from './helpers/wallet-setup'
 
 const BARK_REGTEST_TIMEOUT_MS = 600_000
 const EXIT_DELTA_BLOCKS = 6
@@ -36,9 +41,9 @@ test.describe('Bark exit flows regtest @bark-exit-regtest', () => {
   test('E2E-BARK-REG-04 collaborative exit of part and then the rest', async ({ page }) => {
     await boardRegtestBarkWallet(page)
     const spendableBeforePartialExit = await readDashboardBarkSpendableSats(page)
-    await exitBarkAmount(page, PARTIAL_EXIT_SATS)
+    await offboardBarkAmount(page, PARTIAL_EXIT_SATS)
     await syncUntilBarkSpendableDrops(page, spendableBeforePartialExit)
-    await exitBarkRemainder(page)
+    await offboardBarkRemainder(page)
   })
 
   test('E2E-BARK-REG-05 emergency exit progresses to a claim', async ({ page }) => {
@@ -46,52 +51,101 @@ test.describe('Bark exit flows regtest @bark-exit-regtest', () => {
     // The child spends confirmed on-chain coins. The boarded VTXO's 330 sat
     // anchor is not enough, and the board change is not what coin selection saw.
     await fundConfirmedCoinsForExitChild(page)
-    await goToWalletTab(page, 'Management')
-    await page.getByTestId('bark-emergency-exit-link').click()
-    await expect(page.getByRole('heading', { name: 'Bark emergency exit' })).toBeVisible({
-      timeout: 30_000,
-    })
-
-    const vtxo = page.locator('[data-testid^="bark-emergency-exit-vtxo-"]').first()
-    await expect(vtxo).toBeVisible({ timeout: 60_000 })
-    await vtxo.click()
-    await page.getByTestId('bark-emergency-exit-review').click()
-    await page.getByTestId('bark-emergency-exit-start').click()
-    await expect(page.getByText('Emergency exit started.')).toBeVisible({ timeout: 120_000 })
-
-    const row = page.locator('[data-testid^="bark-emergency-exit-row-"]').first()
-    for (let step = 0; step < 12; step += 1) {
-      await expect(row).toBeVisible({ timeout: 30_000 })
-      const text = (await row.textContent()) ?? ''
-      if (text.includes('Claimable')) break
-      if (text.includes('Waiting for timelock')) {
-        await mineRegtestBlocks(EXIT_DELTA_BLOCKS)
-      } else {
-        await mineRegtestBlocks(1)
-      }
-      await progressEmergencyExitOnce(page)
-    }
-    await expect(row).toContainText('Claimable')
-
-    await goToWalletTab(page, 'Dashboard')
-    const onchainBeforeClaim = await readDashboardOnchainSats(page)
-    await goToWalletTab(page, 'Management')
-    await page.getByTestId('bark-emergency-exit-link').click()
-    const claim = page.getByTestId('bark-emergency-exit-claim')
-    await expect(claim).toBeEnabled({ timeout: 30_000 })
-    await claim.click()
-    await expect(page.getByText(/Claim broadcast/)).toBeVisible({ timeout: 120_000 })
-
-    await goToWalletTab(page, 'Dashboard')
-    await mineUntilOnchainExceeds(page, onchainBeforeClaim)
+    await startEmergencyExitOfOneVtxo(page)
+    await progressEmergencyExitUntilClaimable(page)
+    await claimEmergencyExitUntilOnchainGain(page)
     await triggerBarkRailSync(page)
     await expect(page.getByText('Bark emergency exit', { exact: true })).toBeVisible({
       timeout: 60_000,
     })
   })
+
+  test('E2E-BARK-REG-07 emergency exit reaches a claim while the Ark server is stopped', async ({
+    page,
+  }) => {
+    await boardRegtestBarkWallet(page)
+    await fundConfirmedCoinsForExitChild(page)
+    await stopCaptaind()
+    try {
+      await reopenWalletInFreshBarkSession(page)
+      await expectBarkRailSyncFails(page)
+      await startEmergencyExitOfOneVtxo(page)
+      await progressEmergencyExitUntilClaimable(page)
+      await claimEmergencyExitUntilOnchainGain(page)
+    } finally {
+      await startCaptaind()
+    }
+  })
 })
 
 const EXIT_CHILD_FUND_SATS = 100_000
+
+/** A reload drops the worker, so the next unlock opens Bark from its stored records without a sync. */
+async function reopenWalletInFreshBarkSession(page: Page): Promise<void> {
+  await page.reload()
+  await page.goto('/wallet')
+  await unlockWalletViaUI(page)
+  await waitForBarkLoadReady(page)
+}
+
+async function openEmergencyExitPage(page: Page): Promise<void> {
+  await goToWalletTab(page, 'Management')
+  await page.getByTestId('bark-emergency-exit-link').click()
+  await expect(page.getByRole('heading', { name: 'Bark emergency exit' })).toBeVisible({
+    timeout: 30_000,
+  })
+}
+
+async function startEmergencyExitOfOneVtxo(page: Page): Promise<void> {
+  await openEmergencyExitPage(page)
+  const vtxo = page.locator('[data-testid^="bark-emergency-exit-vtxo-"]').first()
+  await expect(vtxo).toBeVisible({ timeout: 60_000 })
+  await vtxo.click()
+  await clickEmergencyExitAction(page, {
+    label: 'Emergency exit review',
+    buttonTestId: 'bark-emergency-exit-review',
+    success: page.getByTestId('bark-emergency-exit-fee-review'),
+  })
+  await clickEmergencyExitAction(page, {
+    label: 'Emergency exit start',
+    buttonTestId: 'bark-emergency-exit-start',
+    success: page.getByText('Emergency exit started.'),
+  })
+}
+
+async function progressEmergencyExitUntilClaimable(page: Page): Promise<void> {
+  const row = page.locator('[data-testid^="bark-emergency-exit-row-"]').first()
+  for (let step = 0; step < 12; step += 1) {
+    await expect(row).toBeVisible({ timeout: 30_000 })
+    const text = (await row.textContent()) ?? ''
+    if (text.includes('Claimable')) break
+    if (text.includes('Waiting for timelock')) {
+      await mineRegtestBlocks(EXIT_DELTA_BLOCKS)
+    } else {
+      await mineRegtestBlocks(1)
+    }
+    await clickEmergencyExitAction(page, {
+      label: 'Emergency exit progress',
+      buttonTestId: 'bark-emergency-exit-progress',
+      success: page.getByText('Emergency exit progressed.'),
+    })
+  }
+  await expect(row).toContainText('Claimable')
+}
+
+async function claimEmergencyExitUntilOnchainGain(page: Page): Promise<void> {
+  await goToWalletTab(page, 'Dashboard')
+  const onchainBeforeClaim = await readDashboardOnchainSats(page)
+  await openEmergencyExitPage(page)
+  await expect(page.getByTestId('bark-emergency-exit-claim')).toBeEnabled({ timeout: 30_000 })
+  await clickEmergencyExitAction(page, {
+    label: 'Emergency exit claim',
+    buttonTestId: 'bark-emergency-exit-claim',
+    success: page.getByText(/Claim broadcast/),
+  })
+  await goToWalletTab(page, 'Dashboard')
+  await mineUntilOnchainExceeds(page, onchainBeforeClaim)
+}
 
 async function fundConfirmedCoinsForExitChild(page: Page): Promise<void> {
   await goToWalletTab(page, 'Receive')
@@ -105,7 +159,14 @@ async function fundConfirmedCoinsForExitChild(page: Page): Promise<void> {
   await runDashboardSyncUntilIdle(page)
 }
 
-async function progressEmergencyExitOnce(page: Page): Promise<void> {
+type EmergencyExitAction = {
+  label: string
+  buttonTestId: string
+  success: Locator
+}
+
+/** Clicks one emergency-exit control and fails with the error toast text instead of a timeout. */
+async function clickEmergencyExitAction(page: Page, action: EmergencyExitAction): Promise<void> {
   const notes: string[] = []
   const onConsole = (message: { type: () => string; text: () => string }) => {
     const type = message.type()
@@ -114,55 +175,54 @@ async function progressEmergencyExitOnce(page: Page): Promise<void> {
   page.on('console', onConsole)
   const errorToast = page.locator('[data-sonner-toast][data-type="error"]')
   const errorsBefore = await errorToast.count()
-  await page.getByTestId('bark-emergency-exit-progress').click()
-  const progressed = page.getByText('Emergency exit progressed.')
+  await page.getByTestId(action.buttonTestId).click()
   const failed = errorToast.nth(errorsBefore)
   try {
-    await expect(progressed.or(failed).first()).toBeVisible({ timeout: 120_000 })
+    await expect(action.success.or(failed).first()).toBeVisible({ timeout: 120_000 })
   } catch (err) {
-    page.off('console', onConsole)
     throw new Error(
-      `Emergency exit progress produced no toast. Console: ${notes.join(' | ') || '(none)'}`,
+      `${action.label} showed neither its result nor an error. Console: ${notes.join(' | ') || '(none)'}`,
       { cause: err },
     )
+  } finally {
+    page.off('console', onConsole)
   }
-  page.off('console', onConsole)
   if (await failed.isVisible()) {
     const message = (await failed.innerText()).replace(/\s+/g, ' ').trim()
-    throw new Error(`Emergency exit progress failed: ${message}`)
+    throw new Error(`${action.label} failed: ${message}`)
   }
 }
 
-async function exitBarkAmount(page: Page, amountSats: number): Promise<number> {
+async function offboardBarkAmount(page: Page, amountSats: number): Promise<number> {
   await goToWalletTab(page, 'Dashboard')
   const onchainBefore = await readDashboardOnchainSats(page)
-  await page.getByTestId('dashboard-bark-exit-link').click()
-  await expect(page.getByTestId('bark-exit-destination')).toHaveText(/bcrt1/)
+  await page.getByTestId('dashboard-bark-offboard-link').click()
+  await expect(page.getByTestId('bark-offboard-destination')).toHaveText(/bcrt1/)
   await expect(page.locator('input')).toHaveCount(1)
-  await page.getByTestId('bark-exit-amount').fill(String(amountSats))
-  await page.getByTestId('bark-exit-review-amount').click()
-  const arrivedSats = await readExitOnchainAmount(page)
-  await confirmExitAndReturnToDashboard(page)
+  await page.getByTestId('bark-offboard-amount').fill(String(amountSats))
+  await page.getByTestId('bark-offboard-review-amount').click()
+  const arrivedSats = await readOffboardOnchainAmount(page)
+  await confirmOffboardAndReturnToDashboard(page)
   await mineUntilOnchainGain(page, onchainBefore, arrivedSats)
   return arrivedSats
 }
 
-async function exitBarkRemainder(page: Page): Promise<void> {
+async function offboardBarkRemainder(page: Page): Promise<void> {
   await goToWalletTab(page, 'Dashboard')
   const onchainBefore = await readDashboardOnchainSats(page)
   expect(onchainBefore).toBeGreaterThan(0)
-  await page.getByTestId('dashboard-bark-exit-link').click()
-  const reviewAll = page.getByTestId('bark-exit-review-all')
+  await page.getByTestId('dashboard-bark-offboard-link').click()
+  const reviewAll = page.getByTestId('bark-offboard-review-all')
   await expect(reviewAll).toBeEnabled({ timeout: 60_000 })
   await reviewAll.click()
-  const arrivedSats = await readExitOnchainAmount(page)
+  const arrivedSats = await readOffboardOnchainAmount(page)
   expect(arrivedSats).toBeGreaterThan(0)
-  await confirmExitAndReturnToDashboard(page)
+  await confirmOffboardAndReturnToDashboard(page)
   await mineUntilOnchainGain(page, onchainBefore, arrivedSats)
 }
 
-async function confirmExitAndReturnToDashboard(page: Page): Promise<void> {
-  await page.getByTestId('bark-exit-confirm').click()
+async function confirmOffboardAndReturnToDashboard(page: Page): Promise<void> {
+  await page.getByTestId('bark-offboard-confirm').click()
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({ timeout: 120_000 })
 }
 
@@ -178,8 +238,8 @@ async function syncUntilBarkSpendableDrops(page: Page, spendableBefore: number):
 }
 
 
-async function readExitOnchainAmount(page: Page): Promise<number> {
-  const amount = page.getByTestId('bark-exit-onchain-amount')
+async function readOffboardOnchainAmount(page: Page): Promise<number> {
+  const amount = page.getByTestId('bark-offboard-onchain-amount')
   await expect(amount).toBeVisible({ timeout: 60_000 })
   const text = (await amount.textContent()) ?? ''
   const sats = Number(text.replace(/\D/g, ''))

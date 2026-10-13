@@ -95,8 +95,8 @@ pub fn resolve_repo_path(path: &str) -> PathBuf {
 #[derive(Deserialize)]
 struct BoardedFixtureFile {
     mnemonic: String,
-    #[serde(rename = "recordDump")]
-    record_dump: String,
+    #[serde(rename = "recordEnvelope", alias = "recordDump")]
+    record_envelope: String,
 }
 
 /// `BARK_REGTEST_BOARDED_FIXTURE`, or the Playwright export under `frontend/test-results/`.
@@ -112,16 +112,16 @@ pub fn load_boarded_fixture() -> (String, String) {
     });
     let parsed: BoardedFixtureFile =
         serde_json::from_str(&text).expect("boarded Bark fixture json");
-    (parsed.mnemonic, parsed.record_dump)
+    (parsed.mnemonic, parsed.record_envelope)
 }
 
 pub async fn open_boarded_fixture_with_exit_bumper(
     endpoints: &RegtestEndpoints,
 ) -> RegtestBarkWallet {
-    let (mnemonic, record_dump) = load_boarded_fixture();
-    let wallet = RegtestBarkWallet::open_from_encoded_dump_with_exit_bumper(
+    let (mnemonic, record_envelope) = load_boarded_fixture();
+    let wallet = RegtestBarkWallet::open_from_encoded_envelope_with_exit_bumper(
         &mnemonic,
-        &record_dump,
+        &record_envelope,
         &endpoints.captaind_url,
         &endpoints.esplora_url,
     )
@@ -145,10 +145,10 @@ pub async fn open_boarded_fixture_with_exit_bumper(
 }
 
 pub async fn open_boarded_fixture(endpoints: &RegtestEndpoints) -> RegtestBarkWallet {
-    let (mnemonic, record_dump) = load_boarded_fixture();
-    RegtestBarkWallet::open_from_encoded_dump(
+    let (mnemonic, record_envelope) = load_boarded_fixture();
+    RegtestBarkWallet::open_from_encoded_envelope(
         &mnemonic,
-        &record_dump,
+        &record_envelope,
         &endpoints.captaind_url,
         &endpoints.esplora_url,
     )

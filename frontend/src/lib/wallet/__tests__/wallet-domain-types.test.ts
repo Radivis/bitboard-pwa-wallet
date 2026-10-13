@@ -1,5 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
-import { setConfiguredHistoricalSignetOnchainChain } from '@/lib/wallet/historical-signet-onchain-chain'
+import { describe, expect, it } from 'vitest'
 import {
   assertIso8601LastSuccessfulEsploraSyncAt,
   parseWalletPayloadJson,
@@ -7,10 +6,6 @@ import {
 } from '../wallet-domain-types'
 
 describe('parseWalletPayloadJson', () => {
-  beforeEach(() => {
-    setConfiguredHistoricalSignetOnchainChain(null)
-  })
-
   it('assertIso8601LastSuccessfulEsploraSyncAt rejects invalid timestamps', () => {
     expect(() =>
       assertIso8601LastSuccessfulEsploraSyncAt('not-a-valid-timestamp'),
@@ -140,6 +135,59 @@ describe('parseWalletPayloadJson', () => {
     expect(parsed.barkAccounts[1].id).toBe('bark-valid-mainnet')
   })
 
+  it('migrates legacy recordDump to recordEnvelope on parse', () => {
+    const parsed = parseWalletPayloadJson(
+      JSON.stringify({
+        descriptorWallets: [],
+        lightningNwcConnections: [],
+        barkAccounts: [
+          {
+            id: 'bark-signet',
+            networkMode: 'signet',
+            serverUrl: 'https://ark.signet.2nd.dev',
+            fingerprint: 'abcdef01',
+            recordDump: 'c2lnbmV0LWVudmVsb3Bl',
+          },
+        ],
+      }),
+    )
+    expect(parsed.barkAccounts[0].recordEnvelope).toBe('c2lnbmV0LWVudmVsb3Bl')
+    expect(parsed.barkAccounts[0]).not.toHaveProperty('recordDump')
+  })
+
+  function parsedSignetBarkAccount(recordFields: Record<string, string>) {
+    return parseWalletPayloadJson(
+      JSON.stringify({
+        descriptorWallets: [],
+        lightningNwcConnections: [],
+        barkAccounts: [
+          {
+            id: 'bark-signet',
+            networkMode: 'signet',
+            serverUrl: 'https://ark.signet.2nd.dev',
+            fingerprint: 'abcdef01',
+            ...recordFields,
+          },
+        ],
+      }),
+    ).barkAccounts[0]
+  }
+
+  it('keeps a current recordEnvelope on parse', () => {
+    expect(parsedSignetBarkAccount({ recordEnvelope: 'Y3VycmVudA==' }).recordEnvelope).toBe(
+      'Y3VycmVudA==',
+    )
+  })
+
+  it('prefers recordEnvelope over a leftover legacy recordDump and drops the legacy field', () => {
+    const account = parsedSignetBarkAccount({
+      recordEnvelope: 'Y3VycmVudA==',
+      recordDump: 'c3RhbGU=',
+    })
+    expect(account.recordEnvelope).toBe('Y3VycmVudA==')
+    expect(account).not.toHaveProperty('recordDump')
+  })
+
   const validSignetAccount = {
     id: 'acct-good',
     label: 'Mutinynet',
@@ -163,7 +211,7 @@ describe('parseWalletPayloadJson', () => {
     expect(parsed).not.toHaveProperty('activeArkadeConnectionIdByNetwork')
     expect(parsed.arkadeAccounts).toHaveLength(1)
     expect(parsed.arkadeAccounts[0].id).toBe('acct-good')
-    expect(parsed.activeArkadeAccountIdByNetwork).toEqual({ mutinynet: 'acct-good' })
+    expect(parsed.activeArkadeAccountIdByNetwork).toEqual({ signet: 'acct-good' })
   })
 
   it('keeps arkadeAccounts when only the new keys are present', () => {
@@ -180,7 +228,7 @@ describe('parseWalletPayloadJson', () => {
     })
     const parsed = parseWalletPayloadJson(json)
     expect(parsed.arkadeAccounts).toHaveLength(1)
-    expect(parsed.activeArkadeAccountIdByNetwork.mutinynet).toBe('acct-good')
+    expect(parsed.activeArkadeAccountIdByNetwork.signet).toBe('acct-good')
     expect(parsed).not.toHaveProperty('arkadeOperatorConnections')
   })
 
@@ -200,7 +248,7 @@ describe('parseWalletPayloadJson', () => {
     expect(parsed).not.toHaveProperty('activeArkadeConnectionIdByNetwork')
     expect(parsed.arkadeAccounts).toHaveLength(1)
     expect(parsed.arkadeAccounts[0].id).toBe('acct-good')
-    expect(parsed.activeArkadeAccountIdByNetwork).toEqual({ mutinynet: 'acct-good' })
+    expect(parsed.activeArkadeAccountIdByNetwork).toEqual({ signet: 'acct-good' })
   })
 
   it('drops invalid arkadeAccounts instead of rejecting the wallet', () => {
@@ -222,7 +270,7 @@ describe('parseWalletPayloadJson', () => {
     const parsed = parseWalletPayloadJson(json)
     expect(parsed.arkadeAccounts).toHaveLength(1)
     expect(parsed.arkadeAccounts[0].id).toBe('acct-good')
-    expect(parsed.activeArkadeAccountIdByNetwork).toEqual({ mutinynet: 'acct-good' })
+    expect(parsed.activeArkadeAccountIdByNetwork).toEqual({ signet: 'acct-good' })
   })
 
   it('normalizes null arkadeAccounts to empty array', () => {
@@ -249,12 +297,11 @@ describe('parseWalletPayloadJson', () => {
     })
     const parsed = parseWalletPayloadJson(json)
     expect(parsed.arkadeAccounts).toHaveLength(1)
-    expect(parsed.arkadeAccounts[0].networkMode).toBe('mutinynet')
-    expect(parsed.activeArkadeAccountIdByNetwork.mutinynet).toBe('acct-good')
+    expect(parsed.arkadeAccounts[0].networkMode).toBe('signet')
+    expect(parsed.activeArkadeAccountIdByNetwork.signet).toBe('acct-good')
   })
 
-  it('rewrites historical signet rows to mutinynet once and leaves Bark on public signet', () => {
-    setConfiguredHistoricalSignetOnchainChain('mutinynet')
+  it('no longer rewrites signet rows', () => {
     const json = JSON.stringify({
       descriptorWallets: [
         {
@@ -287,74 +334,11 @@ describe('parseWalletPayloadJson', () => {
         },
       ],
     })
-    const migrated = parseWalletPayloadJson(json)
-    expect(migrated.signetNetworkSplitApplied).toBe(true)
-    expect(migrated.descriptorWallets[0].network).toBe('mutinynet')
-    expect(migrated.lightningNwcConnections[0].networkMode).toBe('mutinynet')
-    expect(migrated.arkadeAccounts[0].networkMode).toBe('mutinynet')
-    expect(migrated.activeArkadeAccountIdByNetwork).toEqual({ mutinynet: 'acct-good' })
-    expect(migrated.barkAccounts).toEqual([
-      {
-        id: 'bark-signet',
-        networkMode: 'signet',
-        serverUrl: 'https://ark.signet.2nd.dev',
-        fingerprint: 'abcdef01',
-      },
-    ])
-
-    const kept = parseWalletPayloadJson(
-      JSON.stringify({
-        ...migrated,
-        descriptorWallets: [
-          { ...migrated.descriptorWallets[0], network: 'signet' },
-        ],
-      }),
-    )
-    expect(kept.descriptorWallets[0].network).toBe('signet')
-    expect(kept.signetNetworkSplitApplied).toBe(true)
-  })
-
-  it('keeps public-signet descriptors and lightning on signet and still moves Arkade', () => {
-    setConfiguredHistoricalSignetOnchainChain('public-signet')
-    const parsed = parseWalletPayloadJson(
-      JSON.stringify({
-        descriptorWallets: [
-          {
-            network: 'signet',
-            addressType: 'taproot',
-            accountId: 0,
-            externalDescriptor: 'tr(xpub.../0/*)',
-            internalDescriptor: 'tr(xpub.../1/*)',
-            changeSet: '{}',
-            fullScanDone: false,
-          },
-        ],
-        lightningNwcConnections: [
-          {
-            id: 'conn-1',
-            label: 'LN',
-            networkMode: 'signet',
-            connectionString: 'nostr+walletconnect://abc?relay=wss%3A%2F%2Fx&secret=y',
-            createdAt: '2020-01-01T00:00:00.000Z',
-          },
-        ],
-        arkadeAccounts: [validSignetAccount],
-        activeArkadeAccountIdByNetwork: { signet: 'acct-good' },
-        barkAccounts: [
-          {
-            id: 'bark-signet',
-            networkMode: 'signet',
-            serverUrl: 'https://ark.signet.2nd.dev',
-            fingerprint: 'abcdef01',
-          },
-        ],
-      }),
-    )
-    expect(parsed.signetNetworkSplitApplied).toBe(true)
+    const parsed = parseWalletPayloadJson(json)
     expect(parsed.descriptorWallets[0].network).toBe('signet')
     expect(parsed.lightningNwcConnections[0].networkMode).toBe('signet')
-    expect(parsed.arkadeAccounts[0].networkMode).toBe('mutinynet')
-    expect(parsed.activeArkadeAccountIdByNetwork).toEqual({ mutinynet: 'acct-good' })
+    expect(parsed.arkadeAccounts[0].networkMode).toBe('signet')
+    expect(parsed.activeArkadeAccountIdByNetwork).toEqual({ signet: 'acct-good' })
     expect(parsed.barkAccounts).toEqual([
       {
         id: 'bark-signet',
@@ -363,29 +347,6 @@ describe('parseWalletPayloadJson', () => {
         fingerprint: 'abcdef01',
       },
     ])
-  })
-
-  it('does not freeze the split flag before the historical chain is known', () => {
-    const parsed = parseWalletPayloadJson(
-      JSON.stringify({
-        descriptorWallets: [
-          {
-            network: 'signet',
-            addressType: 'taproot',
-            accountId: 0,
-            externalDescriptor: 'tr(xpub.../0/*)',
-            internalDescriptor: 'tr(xpub.../1/*)',
-            changeSet: '{}',
-            fullScanDone: false,
-          },
-        ],
-        lightningNwcConnections: [],
-        arkadeAccounts: [validSignetAccount],
-      }),
-    )
-    expect(parsed.signetNetworkSplitApplied).toBeUndefined()
-    expect(parsed.descriptorWallets[0].network).toBe('signet')
-    expect(parsed.arkadeAccounts[0].networkMode).toBe('mutinynet')
   })
 
   it('accepts regtest arkadeAccounts for arkade-regtest E2E', () => {
@@ -408,6 +369,28 @@ describe('parseWalletPayloadJson', () => {
     expect(parsed.arkadeAccounts).toHaveLength(1)
     expect(parsed.arkadeAccounts[0].networkMode).toBe('regtest')
     expect(parsed.activeArkadeAccountIdByNetwork.regtest).toBe('acct-regtest')
+  })
+
+  it('accepts signet arkadeAccounts', () => {
+    const json = JSON.stringify({
+      descriptorWallets: [],
+      lightningNwcConnections: [],
+      arkadeAccounts: [
+        {
+          id: 'acct-signet',
+          label: 'Signet',
+          networkMode: 'signet',
+          operatorUrl: 'https://signet.arkade.sh',
+          operatorSignerPkHex: '02abc',
+          createdAt: '2020-01-01T00:00:00.000Z',
+        },
+      ],
+      activeArkadeAccountIdByNetwork: { signet: 'acct-signet' },
+    })
+    const parsed = parseWalletPayloadJson(json)
+    expect(parsed.arkadeAccounts).toHaveLength(1)
+    expect(parsed.arkadeAccounts[0].networkMode).toBe('signet')
+    expect(parsed.activeArkadeAccountIdByNetwork.signet).toBe('acct-signet')
   })
 
   it('accepts descriptor wallet with lastSuccessfulEsploraSyncAt', () => {

@@ -8,7 +8,7 @@ import {
 } from '@/lib/wallet/wallet-domain-types'
 import type { EncryptedBlob } from '@/lib/shared/encrypted-blob-types'
 
-const checkpointDump = 'Y2hlY2twb2ludC1kdW1w'
+const checkpointRecordEnvelope = 'Y2hlY2twb2ludC1kdW1w'
 const syncedAt = '2020-01-01T00:00:00.000Z'
 const pendingClaim = { txid: 'aa', vtxoIds: ['vtxo-1'] }
 
@@ -21,7 +21,7 @@ function encryptedBlob(): EncryptedBlob {
   }
 }
 
-function signetPayload(mainnetDump: string, sdkPersistenceJson: string): WalletSecretsPayload {
+function signetPayload(mainnetRecordEnvelope: string, sdkPersistenceJson: string): WalletSecretsPayload {
   return {
     descriptorWallets: [],
     lightningNwcConnections: [],
@@ -44,7 +44,7 @@ function signetPayload(mainnetDump: string, sdkPersistenceJson: string): WalletS
         serverUrl: BARK_SIGNET_SERVER_URL,
         fingerprint: 'abcdef01',
         lastSuccessfulSyncAt: syncedAt,
-        recordDump: 'b2xk',
+        recordEnvelope: 'b2xk',
         pendingEmergencyClaim: pendingClaim,
       },
       {
@@ -52,7 +52,7 @@ function signetPayload(mainnetDump: string, sdkPersistenceJson: string): WalletS
         networkMode: 'mainnet',
         serverUrl: BARK_MAINNET_SERVER_URL,
         fingerprint: 'abcdef01',
-        recordDump: mainnetDump,
+        recordEnvelope: mainnetRecordEnvelope,
       },
     ],
   }
@@ -64,14 +64,13 @@ describe('persistBarkProtocolState', () => {
       signetPayload('bWFpbm5ldC12MQ==', '{"version":1}'),
       signetPayload('bWFpbm5ldC12Mg==', '{"version":2}'),
     ]
-    const revisionsSeen: number[] = []
     let writtenJson = ''
-    let reads = 0
+    let transformRuns = 0
 
     await persistBarkProtocolState(
       {
         secretsProxy: {
-          decrypt: async () => JSON.stringify(payloads[reads - 1]),
+          decrypt: async () => JSON.stringify(payloads[transformRuns - 1]),
           encrypt: async (plaintext: string) => {
             writtenJson = plaintext
             return encryptedBlob()
@@ -79,33 +78,27 @@ describe('persistBarkProtocolState', () => {
         },
         encryptedHost: {
           readEncryptedPayload: async () => encryptedBlob(),
-          readEncryptedPayloadWithRevision: async () => {
-            const revision = reads === 0 ? 1 : 2
-            reads += 1
-            return { payload: encryptedBlob(), revision }
-          },
-          writeEncryptedPayloadCAS: async () => {
-            throw new Error('checkpoint flush must not reuse the stale encrypted blob')
-          },
-          writeEncryptedPayloadIfRevisionMatches: async (_walletId, _blob, expectedRevision) => {
-            revisionsSeen.push(expectedRevision)
-            return expectedRevision === 2
+          updateEncryptedPayload: async (_walletId, transform) => {
+            for (let attempt = 0; attempt < payloads.length; attempt += 1) {
+              transformRuns += 1
+              await transform(encryptedBlob())
+            }
           },
         },
       },
       7,
       'signet',
-      { recordDump: checkpointDump },
+      { recordEnvelope: checkpointRecordEnvelope },
     )
 
-    expect(revisionsSeen).toEqual([1, 2])
+    expect(transformRuns).toBe(2)
     const written = parseWalletPayloadJson(writtenJson)
     const signetAcct = written.barkAccounts.find((a) => a.networkMode === 'signet')
     const mainnetAcct = written.barkAccounts.find((a) => a.networkMode === 'mainnet')
-    expect(signetAcct?.recordDump).toBe(checkpointDump)
+    expect(signetAcct?.recordEnvelope).toBe(checkpointRecordEnvelope)
     expect(signetAcct?.lastSuccessfulSyncAt).toBe(syncedAt)
     expect(signetAcct?.pendingEmergencyClaim).toEqual(pendingClaim)
-    expect(mainnetAcct?.recordDump).toBe('bWFpbm5ldC12Mg==')
+    expect(mainnetAcct?.recordEnvelope).toBe('bWFpbm5ldC12Mg==')
     expect(written.arkadeAccounts[0]?.sdkPersistenceJson).toBe('{"version":2}')
   })
 })

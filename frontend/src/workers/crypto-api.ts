@@ -1,5 +1,4 @@
 import type { EncryptedBlob } from '@/lib/shared/encrypted-blob-types';
-import type { HistoricalSignetOnchainChain } from '@/lib/wallet/historical-signet-onchain-chain';
 import type {
   AddressType,
   BitcoinNetwork,
@@ -151,8 +150,6 @@ export interface PrepareOnchainSendParams extends BuildTransactionParams {
 export type SignP2aCpfpChildParams = {
   parentTxHex: string
   effectiveFeeRateSatPerVb: number
-  rbfMinFeeRateSatPerKwu: number | null
-  currentPackageFeeSats: number | null
 }
 
 export interface SignedFundingPsbt {
@@ -237,14 +234,6 @@ export interface CryptoService {
   /** Lightweight health check -- resolves `true` if WASM is loaded. */
   ping(): Promise<boolean>;
 
-  /**
-   * Tells payload parsing whether pre-split `signet` descriptors were Mutinynet.
-   * Null leaves those rows unchanged until a later call.
-   */
-  configureHistoricalSignetOnchainChain(
-    chain: HistoricalSignetOnchainChain | null,
-  ): Promise<void>;
-
   generateMnemonic(wordCount: 12 | 24): Promise<string>;
   validateMnemonic(mnemonic: string): Promise<boolean>;
   deriveDescriptors(params: DeriveDescriptorsParams): Promise<DescriptorPair>;
@@ -278,6 +267,8 @@ export interface CryptoService {
     params: LabEntityBuildAndSignTransactionParams,
   ): Promise<unknown>;
   getBalance(): Promise<BalanceInfo>;
+  /** Height of the newest block the active wallet has synced. */
+  getLocalChainTipHeight(): Promise<number>;
   exportChangeset(): Promise<string>;
 
   syncWallet(esploraUrl: string): Promise<SyncResult>;

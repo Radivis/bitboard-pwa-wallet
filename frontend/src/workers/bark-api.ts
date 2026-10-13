@@ -1,12 +1,14 @@
 import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
-import type { HistoricalSignetOnchainChain } from '@/lib/wallet/historical-signet-onchain-chain'
 import type { EncryptedBlobMessage } from '@/workers/secrets-channel-types'
-import type { BarkRefreshStatus } from '@/lib/bark/bark-refresh-status'
+import type {
+  BarkNextRefreshSchedule,
+  BarkRefreshStatus,
+} from '@/lib/bark/bark-refresh-status'
 import type { BarkRailNetwork, PendingEmergencyClaim } from '@/lib/wallet/wallet-domain-types'
 
 export type { PendingEmergencyClaim }
 
-export type { BarkRefreshStatus }
+export type { BarkNextRefreshSchedule, BarkRefreshStatus }
 
 export type OpenBarkSessionParams = {
   walletId: number
@@ -28,6 +30,8 @@ export type OpenBarkSessionResult = {
 export type BarkSyncResult = {
   lastSuccessfulSyncAt: string
   refreshStatus: BarkRefreshStatus
+  /** `null` when the wallet has no spendable VTXOs or the chain tip is unknown. */
+  nextRefresh: BarkNextRefreshSchedule | null
 }
 
 export type BarkRevealedReceiveAddress = {
@@ -47,7 +51,7 @@ export type BarkBoardFeeEstimate = {
 }
 
 /** Same shape as a board fee estimate. `netAmountSats` is what arrives on-chain. */
-export type BarkExitFeeEstimate = BarkBoardFeeEstimate
+export type BarkOffboardFeeEstimate = BarkBoardFeeEstimate
 
 export type BarkArkoorSendParams = {
   address: string
@@ -88,6 +92,7 @@ export type BarkPendingAction = {
 export type BarkBalanceParts = {
   spendableSats: number
   lockedSats: number
+  exitingSats: number
 }
 
 export type BarkMovementRow = {
@@ -155,8 +160,6 @@ export type BarkEmergencyCpfpRequest = {
   vtxoId: string
   parentTxid: string
   parentTxHex: string
-  rbfMinFeeRateSatPerKwu: number | null
-  currentPackageFeeSats: number | null
 }
 
 export type BarkEmergencyExitProgress = {
@@ -192,9 +195,6 @@ export type BarkExitGraph = {
 }
 
 export interface BarkService {
-  configureHistoricalSignetOnchainChain(
-    chain: HistoricalSignetOnchainChain | null,
-  ): Promise<void>
   setSecretsPort(port: MessagePort): Promise<void>
   setEncryptedWalletSecretsHost(host: EncryptedWalletSecretsHost): Promise<void>
   ping(): Promise<boolean>
@@ -210,9 +210,9 @@ export interface BarkService {
   boardPsbt(psbtBase64: string): Promise<BarkBoardAccepted>
   history(): Promise<BarkMovementRow[]>
   listVtxos(): Promise<BarkVtxoList>
-  estimateSendOnchain(address: string, amountSats: number): Promise<BarkExitFeeEstimate>
+  estimateSendOnchain(address: string, amountSats: number): Promise<BarkOffboardFeeEstimate>
   sendOnchain(address: string, amountSats: number): Promise<string>
-  estimateOffboardAll(address: string): Promise<BarkExitFeeEstimate>
+  estimateOffboardAll(address: string): Promise<BarkOffboardFeeEstimate>
   offboardAll(address: string): Promise<string>
   sendArkoorPayment(params: BarkArkoorSendParams): Promise<BarkArkoorSendResult>
   estimateEmergencyExit(

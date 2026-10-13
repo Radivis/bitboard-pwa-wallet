@@ -23,14 +23,32 @@ export function resolveBarkBoardedFixtureExportPath(): string | null {
   return raw
 }
 
-export async function restartCaptaind(): Promise<void> {
-  await execFileAsync('docker', ['restart', CAPTAIND_REGTEST_CONTAINER], {
+async function runCaptaindDockerCommand(command: 'restart' | 'stop' | 'start'): Promise<void> {
+  await execFileAsync('docker', [command, CAPTAIND_REGTEST_CONTAINER], {
     maxBuffer: 10 * 1024 * 1024,
   })
+}
+
+async function waitForCaptaindHealthy(): Promise<void> {
   const { waitForBarkRegtestHealthy } = await import(
     '../../../../scripts/bark-regtest-health.mjs'
   )
   await waitForBarkRegtestHealthy()
+}
+
+export async function restartCaptaind(): Promise<void> {
+  await runCaptaindDockerCommand('restart')
+  await waitForCaptaindHealthy()
+}
+
+/** `docker stop` returns once captaind is down, so the Ark server is unreachable afterwards. */
+export async function stopCaptaind(): Promise<void> {
+  await runCaptaindDockerCommand('stop')
+}
+
+export async function startCaptaind(): Promise<void> {
+  await runCaptaindDockerCommand('start')
+  await waitForCaptaindHealthy()
 }
 
 export async function waitForBarkLoadReady(page: Page, timeout = 120_000): Promise<void> {
@@ -69,6 +87,22 @@ export async function triggerBarkRailSync(page: Page, timeout = 120_000): Promis
   }).toPass({ timeout })
 }
 
+/** A manual Bark sync that ends in the rail sync error, e.g. while captaind is stopped. */
+export async function expectBarkRailSyncFails(page: Page, timeout = 120_000): Promise<void> {
+  await goToWalletTab(page, 'Dashboard')
+  await waitForBarkLoadReady(page, timeout)
+  const syncButton = page.getByTestId('rail-sync-bark')
+  await expect(syncButton).toBeEnabled({ timeout })
+  await syncButton.click()
+  await expect
+    .poll(
+      async () =>
+        page.getByTestId('dashboard-bark-balance-card').getAttribute('data-rail-bark-sync'),
+      { timeout, intervals: [500, 1000, 2000] },
+    )
+    .toBe('sync-error')
+}
+
 /** `null` when that rail card is not on the dashboard. */
 export async function readOptionalDashboardSats(
   page: Page,
@@ -98,7 +132,7 @@ export async function readDashboardBarkSpendableSats(page: Page): Promise<number
 
 export async function exportBoardedBarkFixture(page: Page): Promise<{
   mnemonic: string
-  recordDump: string
+  recordEnvelope: string
 }> {
   await page.waitForFunction(
     () => typeof window.__e2eExportBoardedBarkFixture === 'function',
@@ -121,8 +155,8 @@ export async function writeBoardedBarkFixture(
   fixturePath: string,
 ): Promise<void> {
   const fixture = await exportBoardedBarkFixture(page)
-  if (fixture.mnemonic.trim() === '' || fixture.recordDump.trim() === '') {
-    throw new Error('Bark boarded fixture is missing a mnemonic or record dump')
+  if (fixture.mnemonic.trim() === '' || fixture.recordEnvelope.trim() === '') {
+    throw new Error('Bark boarded fixture is missing a mnemonic or record envelope')
   }
   await fs.mkdir(path.dirname(fixturePath), { recursive: true })
   await fs.writeFile(fixturePath, JSON.stringify(fixture, null, 2), 'utf8')

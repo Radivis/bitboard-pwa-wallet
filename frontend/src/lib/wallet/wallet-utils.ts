@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 
-import { getDatabase, ensureMigrated } from '@/db/database'
+import { getDatabase, ensureSchemaAndDataMigrated } from '@/db/database'
 import type { NetworkMode } from '@/stores/walletStore'
 import { useWalletStore } from '@/stores/walletStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
@@ -27,20 +27,10 @@ import { invalidateOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboar
 import {
   orchestrateOnchainLoad,
 } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
-import { orchestrateArkadeLoad } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
-import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
+import { startArkadeLoadAfterUnlock } from '@/lib/wallet/lifecycle/rail-load-starters'
 import { startBarkLoadAfterUnlock } from '@/lib/bark/bark-session-service'
 import type { OnchainSyncThenSaveParams } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-types'
 import { CUSTOM_ESPLORA_URL_KEY_PREFIX } from '@/lib/wallet/historical-signet-onchain-chain'
-import { ensureSignetNetworkSplitMigrated } from '@/lib/wallet/signet-network-split-migration'
-
-/**
- * Classifies the pre-split Signet Esplora row once.
- * Mutinynet URLs move to the mutinynet key. Public Signet URLs stay on signet.
- */
-export async function migrateCustomEsploraUrlSignetToMutinynet(): Promise<void> {
-  await ensureSignetNetworkSplitMigrated()
-}
 
 async function orchestrateOnchainSyncThenSaveFromWalletUtils(
   params: OnchainSyncThenSaveParams,
@@ -100,8 +90,7 @@ export async function saveCustomEsploraUrl(
   url: string,
 ): Promise<void> {
   validateEsploraUrl(url, network)
-  await ensureMigrated()
-  await ensureSignetNetworkSplitMigrated()
+  await ensureSchemaAndDataMigrated()
   const walletDb = getDatabase()
   const settingsKey = `${CUSTOM_ESPLORA_URL_KEY_PREFIX}${network}`
 
@@ -128,8 +117,7 @@ export async function saveCustomEsploraUrl(
 export async function deleteCustomEsploraUrl(
   network: NetworkMode,
 ): Promise<void> {
-  await ensureMigrated()
-  await ensureSignetNetworkSplitMigrated()
+  await ensureSchemaAndDataMigrated()
   const walletDb = getDatabase()
   await walletDb
     .deleteFrom('settings')
@@ -140,8 +128,7 @@ export async function deleteCustomEsploraUrl(
 export async function loadCustomEsploraUrl(
   network: NetworkMode,
 ): Promise<string | null> {
-  await ensureMigrated()
-  await ensureSignetNetworkSplitMigrated()
+  await ensureSchemaAndDataMigrated()
   const walletDb = getDatabase()
   const settingsRow = await walletDb
     .selectFrom('settings')
@@ -511,13 +498,7 @@ export async function loadDescriptorWalletWithoutSync(params: {
     accountId,
     clearLastSyncTime: false,
   })
-  if (isArkadeActiveForNetworkMode(networkMode)) {
-    void orchestrateArkadeLoad({ walletId, networkMode }).catch((err) => {
-      void import('@/lib/arkade/arkade-session-open-error-toast').then(
-        ({ reportArkadeSessionOpenError }) => reportArkadeSessionOpenError(err),
-      )
-    })
-  }
+  startArkadeLoadAfterUnlock({ walletId, networkMode, allowRetryFromError: false })
   startBarkLoadAfterUnlock({ walletId, networkMode })
 }
 
@@ -555,13 +536,7 @@ export async function loadDescriptorWalletAndSync(params: {
     clearLastSyncTime: true,
   })
 
-  if (isArkadeActiveForNetworkMode(networkMode)) {
-    void orchestrateArkadeLoad({ walletId, networkMode }).catch((err) => {
-      void import('@/lib/arkade/arkade-session-open-error-toast').then(
-        ({ reportArkadeSessionOpenError }) => reportArkadeSessionOpenError(err),
-      )
-    })
-  }
+  startArkadeLoadAfterUnlock({ walletId, networkMode, allowRetryFromError: false })
   startBarkLoadAfterUnlock({ walletId, networkMode })
 
   const { orchestrateOnchainPostUnlockSync } = await import(

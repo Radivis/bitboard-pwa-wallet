@@ -84,7 +84,7 @@ async function waitUntilBarkSpendableAtLeast(page: Page, minimumSats: number): P
 
 /**
  * Fresh wallet, Bark on, regtest, one board above the server minimum.
- * When `exportFixturePath` is set, boards a second VTXO and writes the dump
+ * When `exportFixturePath` is set, boards a second VTXO and writes the record envelope
  * after both are spendable so Rust tests can spend one and exit the other.
  */
 export async function boardRegtestBarkWallet(

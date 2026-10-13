@@ -14,7 +14,7 @@ import {
 import { getMatchingLightningConnectionsForDashboard } from '@/lib/lightning/lightning-connection-utils'
 import { runWithLightningConnectionSync } from '@/lib/wallet/lifecycle/lightning-sync-lifecycle-orchestrator'
 import { appQueryClient } from '@/lib/shared/app-query-client'
-import { ensureMigrated, getDatabase } from '@/db/database'
+import { ensureSchemaAndDataMigrated, getDatabase } from '@/db/database'
 import { loadWalletSecretsPayload } from '@/db/wallet-persistence'
 import {
   snapshotMapFromPayload,
@@ -120,7 +120,7 @@ export async function fetchLightningPaymentsForActiveWallet(): Promise<
     return { payments: [], patches: [] }
   }
 
-  await ensureMigrated()
+  await ensureSchemaAndDataMigrated()
 
   const snapshotById = await readSnapshotMapForActiveWallet()
 
@@ -217,7 +217,7 @@ export async function fetchLightningBalancesForDashboard(): Promise<LightningBal
     return { lightningBalanceRows: [], totalSats: 0, patches: [] }
   }
 
-  await ensureMigrated()
+  await ensureSchemaAndDataMigrated()
 
   const snapshotById = await readSnapshotMapForActiveWallet()
 

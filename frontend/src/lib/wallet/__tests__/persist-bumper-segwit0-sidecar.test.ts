@@ -12,7 +12,7 @@ vi.mock('@/lib/wallet/descriptor-wallet-manager', () => ({
 }))
 
 vi.mock('@/db', () => ({
-  ensureMigrated: vi.fn().mockResolvedValue(undefined),
+  ensureSchemaAndDataMigrated: vi.fn().mockResolvedValue(undefined),
   getDatabase: vi.fn(() => ({})),
   loadWalletSecretsPayload: (...args: unknown[]) =>
     mockLoadWalletSecretsPayload(...args),

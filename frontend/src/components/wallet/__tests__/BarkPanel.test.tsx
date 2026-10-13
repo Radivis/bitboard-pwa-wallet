@@ -4,6 +4,7 @@ import { screen } from '@testing-library/react'
 import { BarkPanel } from '@/components/wallet/BarkPanel'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import type { NetworkMode } from '@/stores/walletStore'
+import type { BarkNextRefreshObservation } from '@/lib/bark/bark-next-refresh-hint'
 import type { BarkPendingAction } from '@/workers/bark-api'
 
 const walletStoreState = vi.hoisted(() => ({
@@ -25,6 +26,12 @@ const loadSnapshot = vi.hoisted(() => ({
     networkMode: 'signet' as NetworkMode | null,
     errorMessage: null as string | null,
     receiveKeyIndex: 0 as number | null,
+  },
+}))
+
+const syncSnapshot = vi.hoisted(() => ({
+  current: {
+    nextRefresh: null as BarkNextRefreshObservation | null,
   },
 }))
 
@@ -57,6 +64,10 @@ vi.mock('@/hooks/useBarkPendingActionsQuery', () => ({
 
 vi.mock('@/hooks/useBarkLoadLifecycleSnapshot', () => ({
   useBarkLoadLifecycleSnapshot: () => loadSnapshot.current,
+}))
+
+vi.mock('@/hooks/useBarkSyncLifecycleSnapshot', () => ({
+  useBarkSyncLifecycleSnapshot: () => syncSnapshot.current,
 }))
 
 vi.mock('@/stores/walletStore', async (importOriginal) => {
@@ -96,6 +107,29 @@ describe('BarkPanel', () => {
       errorMessage: null,
       receiveKeyIndex: 0,
     }
+    syncSnapshot.current = { nextRefresh: null }
+  })
+
+  it('BARK-VTX-09 shows the next refresh hint above the pending-action banner', () => {
+    pendingActions.current = [pendingOffboard()]
+    syncSnapshot.current = {
+      nextRefresh: {
+        tipHeight: 1_000,
+        nextRefreshHeight: 1_000,
+        observedAt: '2026-10-10T12:00:00.000Z',
+      },
+    }
+    renderWithProviders(<BarkPanel />)
+
+    const hint = screen.getByTestId('bark-next-refresh-hint')
+    expect(hint).toHaveTextContent("Bark's refresh period has started")
+    const banner = screen.getByTestId('bark-pending-action-banner')
+    expect(hint.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('BARK-VTX-09 shows no next refresh hint without a schedule', () => {
+    renderWithProviders(<BarkPanel />)
+    expect(screen.queryByTestId('bark-next-refresh-hint')).not.toBeInTheDocument()
   })
 
   it('BARK-VTX-08 shows a pending offboard on the management panel', () => {

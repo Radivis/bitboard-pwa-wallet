@@ -34,7 +34,7 @@ const NETWORK_INFOMODE: Record<NetworkMode, { title: string; text: string }> = {
   },
   signet: {
     title: 'Signet',
-    text: 'Public Bitcoin Signet. Coins are not real money. Default Esplora is mempool.space signet. Bark uses this network.',
+    text: 'Public Bitcoin Signet. Coins are not real money. Default Esplora is mempool.space signet. Bark and Arkade use this network.',
   },
   mutinynet: {
     title: 'Mutinynet',

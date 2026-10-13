@@ -11,12 +11,12 @@ export { BARK_REGTEST_ESPLORA_URL, BARK_REGTEST_SERVER_URL, isE2eBarkRegtestCont
 
 export type BarkBoardedFixture = {
   mnemonic: string
-  recordDump: string
+  recordEnvelope: string
 }
 
 /**
- * Mnemonic and Bark record dump after a board flush.
- * Rust phase 1 does not load this file; the export proves the dump round-trip.
+ * Mnemonic and Bark record envelope after a board flush.
+ * Rust phase 1 does not load this file; the export proves the record envelope round-trip.
  */
 export async function exportBoardedBarkFixtureForE2e(): Promise<BarkBoardedFixture> {
   const walletId = useWalletStore.getState().activeWalletId
@@ -26,11 +26,11 @@ export async function exportBoardedBarkFixtureForE2e(): Promise<BarkBoardedFixtu
   }
 
   const secrets = await loadWalletSecrets(getDatabase(), walletId)
-  const recordDump = secrets.barkAccounts?.find((a) => a.networkMode === 'regtest')?.recordDump
-  if (recordDump == null || recordDump.trim() === '') {
-    throw new Error('Bark regtest record dump is missing after boarding')
+  const recordEnvelope = secrets.barkAccounts?.find((a) => a.networkMode === 'regtest')?.recordEnvelope
+  if (recordEnvelope == null || recordEnvelope.trim() === '') {
+    throw new Error('Bark regtest record envelope is missing after boarding')
   }
-  return { mnemonic: secrets.mnemonic, recordDump }
+  return { mnemonic: secrets.mnemonic, recordEnvelope }
 }
 
 export function ensureE2eBarkRegtestControl(): void {

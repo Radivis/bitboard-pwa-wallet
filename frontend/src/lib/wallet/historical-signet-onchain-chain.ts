@@ -9,8 +9,13 @@
  */
 export type HistoricalSignetOnchainChain = 'mutinynet' | 'public-signet' | 'custom-host'
 
-export const SIGNET_NETWORK_SPLIT_ESPLORA_MIGRATED_KEY = 'signet_network_split_esplora_migrated'
-export const SIGNET_NETWORK_SPLIT_ONCHAIN_CHAIN_KEY = 'signet_network_split_onchain_chain'
+/**
+ * Settings keys written by pre-release builds before `device_data_migrations`
+ * existed. Read once so those dev databases keep their original classification.
+ */
+export const LEGACY_SIGNET_NETWORK_SPLIT_ESPLORA_MIGRATED_KEY =
+  'signet_network_split_esplora_migrated'
+export const LEGACY_SIGNET_NETWORK_SPLIT_ONCHAIN_CHAIN_KEY = 'signet_network_split_onchain_chain'
 export const CUSTOM_ESPLORA_URL_KEY_PREFIX = 'custom_esplora_url_'
 export const SIGNET_ESPLORA_SETTINGS_KEY = `${CUSTOM_ESPLORA_URL_KEY_PREFIX}signet`
 export const MUTINYNET_ESPLORA_SETTINGS_KEY = `${CUSTOM_ESPLORA_URL_KEY_PREFIX}mutinynet`

@@ -4,6 +4,7 @@ import { screen } from '@testing-library/react'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { BarkDashboardBalance } from '@/components/wallet/BarkDashboardBalance'
 import type { NetworkMode } from '@/stores/walletStore'
+import type { BarkNextRefreshObservation } from '@/lib/bark/bark-next-refresh-hint'
 import type { BarkPendingAction } from '@/workers/bark-api'
 
 const walletStoreState = vi.hoisted(() => ({
@@ -36,8 +37,10 @@ const syncSnapshot = vi.hoisted(() => ({
     errorMessage: null as string | null,
     spendableSats: null as number | null,
     lockedSats: null as number | null,
+    exitingSats: null as number | null,
     lastSuccessfulSyncAt: null as string | null,
     refreshStatus: 'idle' as 'idle' | 'scheduled' | 'pending' | 'warning',
+    nextRefresh: null as BarkNextRefreshObservation | null,
   },
 }))
 
@@ -126,9 +129,34 @@ describe('BarkDashboardBalance', () => {
       errorMessage: null,
       spendableSats: null,
       lockedSats: null,
+      exitingSats: null,
       lastSuccessfulSyncAt: null,
       refreshStatus: 'idle',
+      nextRefresh: null,
     }
+  })
+
+  it('DASH-BARK-14 shows the next refresh hint as the first element of the card content', () => {
+    syncSnapshot.current.spendableSats = 50_000
+    syncSnapshot.current.lockedSats = 0
+    syncSnapshot.current.nextRefresh = {
+      tipHeight: 1_000,
+      nextRefreshHeight: 1_012,
+      observedAt: '2026-10-10T12:00:00.000Z',
+    }
+    renderWithProviders(<BarkDashboardBalance />)
+
+    const hint = screen.getByTestId('bark-next-refresh-hint')
+    expect(hint).toHaveTextContent('Unlock this wallet around')
+    expect(hint).toHaveClass('border-amber-500/40')
+    expect(hint.parentElement?.firstElementChild).toBe(hint)
+  })
+
+  it('DASH-BARK-14 shows no next refresh hint without a schedule', () => {
+    syncSnapshot.current.spendableSats = 50_000
+    syncSnapshot.current.lockedSats = 0
+    renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.queryByTestId('bark-next-refresh-hint')).not.toBeInTheDocument()
   })
 
   it('DASH-BARK-01 shows the card when Bark is active on signet', () => {
@@ -147,9 +175,9 @@ describe('BarkDashboardBalance', () => {
 
   it('BARK-EXIT-01 links to Exit to on-chain when Bark is enabled on signet', () => {
     renderWithProviders(<BarkDashboardBalance />)
-    expect(screen.getByTestId('dashboard-bark-exit-link')).toHaveAttribute(
+    expect(screen.getByTestId('dashboard-bark-offboard-link')).toHaveAttribute(
       'href',
-      '/wallet/bark/exit',
+      '/wallet/bark/offboard',
     )
   })
 
@@ -211,6 +239,44 @@ describe('BarkDashboardBalance', () => {
     expect(screen.getByTestId('dashboard-bark-balance-spendable')).toHaveTextContent('0.00040000')
     expect(screen.getByTestId('dashboard-bark-balance-subbalances')).toHaveTextContent('Locked')
     expect(screen.getByTestId('dashboard-bark-balance-locked')).toHaveTextContent('0.00010000')
+  })
+
+  it('DASH-BARK-15 shows exiting sub-line when exiting sats are positive without including them in total balance', () => {
+    syncSnapshot.current.spendableSats = 40_000
+    syncSnapshot.current.lockedSats = 10_000
+    syncSnapshot.current.exitingSats = 5_000
+    renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.getByTestId('dashboard-bark-balance-amount')).toHaveTextContent('0.00050000')
+    expect(screen.getByTestId('dashboard-bark-balance-subbalances')).toHaveTextContent('Exiting')
+    expect(screen.getByTestId('dashboard-bark-balance-exiting')).toHaveTextContent('0.00005000')
+  })
+
+  it('DASH-BARK-16 renders spendable, locked, and exiting detail lines with isDetail sizing', () => {
+    syncSnapshot.current.spendableSats = 40_000
+    syncSnapshot.current.lockedSats = 10_000
+    syncSnapshot.current.exitingSats = 5_000
+    renderWithProviders(<BarkDashboardBalance />)
+    const spendable = screen.getByTestId('dashboard-bark-balance-spendable')
+    const locked = screen.getByTestId('dashboard-bark-balance-locked')
+    const exiting = screen.getByTestId('dashboard-bark-balance-exiting')
+    expect(spendable).toHaveClass('text-sm')
+    expect(spendable).not.toHaveClass('text-3xl')
+    expect(locked).toHaveClass('text-sm')
+    expect(locked).not.toHaveClass('text-3xl')
+    expect(exiting).toHaveClass('text-sm')
+    expect(exiting).not.toHaveClass('text-3xl')
+  })
+
+  it('DASH-BARK-17 shows subbalances when locked is 0 but exiting is positive', () => {
+    syncSnapshot.current.spendableSats = 40_000
+    syncSnapshot.current.lockedSats = 0
+    syncSnapshot.current.exitingSats = 5_000
+    renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.getByTestId('dashboard-bark-balance-amount')).toHaveTextContent('0.00040000')
+    expect(screen.getByTestId('dashboard-bark-balance-subbalances')).toBeInTheDocument()
+    expect(screen.getByTestId('dashboard-bark-balance-spendable')).toHaveTextContent('0.00040000')
+    expect(screen.queryByTestId('dashboard-bark-balance-locked')).not.toBeInTheDocument()
+    expect(screen.getByTestId('dashboard-bark-balance-exiting')).toHaveTextContent('0.00005000')
   })
 
   it('DASH-BARK-10 shows a pending offboard banner without cancel or retry', () => {
@@ -349,6 +415,6 @@ describe('BarkDashboardBalance', () => {
     ).toBeInTheDocument()
     expect(screen.getByText('signet unreachable')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
-    expect(screen.getByTestId('dashboard-bark-exit-link')).toBeInTheDocument()
+    expect(screen.getByTestId('dashboard-bark-offboard-link')).toBeInTheDocument()
   })
 })

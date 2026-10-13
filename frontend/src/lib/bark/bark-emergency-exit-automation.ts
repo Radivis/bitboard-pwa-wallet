@@ -1,14 +1,21 @@
-import { barkEmergencyExitProgressDeps } from '@/lib/bark/bark-emergency-exit-progress-deps'
+import {
+  catchUpOnchainWalletForBarkExit,
+  fetchBarkExitChainTip,
+} from '@/lib/bark/bark-emergency-exit-onchain-catch-up-live'
+import type { BarkEmergencyExitScope } from '@/lib/bark/bark-emergency-exit-funding-status'
+import { runBarkEmergencyExitProgress } from '@/lib/bark/bark-emergency-exit-progress-deps'
 import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
-import { progressBarkEmergencyExits } from '@/lib/bark/perform-bark-emergency-exit'
 import { presetRatesForNetwork } from '@/hooks/useEsploraFeePresets'
 import { appQueryClient } from '@/lib/shared/app-query-client'
 import { userFacingErrorMessage } from '@/lib/shared/utils'
-import { fetchEsploraChainTip, getEsploraUrl } from '@/lib/wallet/bitcoin-utils'
 import { getBarkLoadLifecycleSnapshot, subscribeBarkLoadLifecycle } from '@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
-import { loadCustomEsploraUrl } from '@/lib/wallet/wallet-utils'
 import type { BarkRailNetwork } from '@/lib/wallet/wallet-domain-types'
+import {
+  IDLE_BARK_EMERGENCY_EXIT_AUTOMATION_ACTIVITY,
+  useBarkEmergencyExitAutomationStore,
+  type BarkEmergencyExitAutomationActivity,
+} from '@/stores/barkEmergencyExitAutomationStore'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import { getBarkWorker } from '@/workers/bark-factory'
 import { toast } from 'sonner'
@@ -45,15 +52,7 @@ export type BarkEmergencyExitAutomationGate = BarkEmergencyExitAutomationSession
   justBecameActive: boolean
 }
 
-export type BarkEmergencyExitAutomationActivity = {
-  inFlight: boolean
-  errorMessage: string | null
-}
-
-export type BarkEmergencyExitAutomationScope = {
-  walletId: number
-  networkMode: BarkRailNetwork
-}
+export type BarkEmergencyExitAutomationScope = BarkEmergencyExitScope<BarkRailNetwork>
 
 /** A missing previous tip counts as a change. A reorg at the same height changes the hash. */
 export function barkEmergencyExitTipChanged(
@@ -87,7 +86,8 @@ export async function watchBarkEmergencyExitTips(deps: {
   readGate: () => Promise<BarkEmergencyExitAutomationSessionGate>
   fetchTip: () => Promise<BarkEmergencyExitTip>
   listExitCount: () => Promise<number>
-  progress: () => Promise<void>
+  /** `observedTip` is null when this poll could not read the tip. */
+  progress: (observedTip: BarkEmergencyExitTip | null) => Promise<void>
   wait: (signal: AbortSignal) => Promise<void>
   afterProgress?: () => Promise<void>
   onListed?: () => Promise<void>
@@ -161,7 +161,7 @@ export async function watchBarkEmergencyExitTips(deps: {
       let progressed = false
       try {
         if (!justBecameActive) deps.onProgressStart?.()
-        await deps.progress()
+        await deps.progress(nextTip)
         progressed = true
         justBecameActive = false
         if (nextTip != null) {
@@ -208,38 +208,19 @@ type ActiveAutomationRun = {
 let automationGeneration = 0
 let activeAutomationRun: ActiveAutomationRun | null = null
 
-const idleAutomationActivity: BarkEmergencyExitAutomationActivity = {
-  inFlight: false,
-  errorMessage: null,
+function currentAutomationActivity(): BarkEmergencyExitAutomationActivity {
+  const { inFlight, errorMessage } = useBarkEmergencyExitAutomationStore.getState()
+  return { inFlight, errorMessage }
 }
 
-let automationActivity: BarkEmergencyExitAutomationActivity = idleAutomationActivity
-const automationActivityListeners = new Set<() => void>()
-
-export function getBarkEmergencyExitAutomationActivity(): BarkEmergencyExitAutomationActivity {
-  return automationActivity
-}
-
-export function subscribeBarkEmergencyExitAutomationActivity(
-  listener: () => void,
-): () => void {
-  automationActivityListeners.add(listener)
-  return () => {
-    automationActivityListeners.delete(listener)
-  }
-}
-
+/** A new error also opens a toast that stays until dismissed. */
 function publishAutomationActivity(next: BarkEmergencyExitAutomationActivity): void {
-  if (
-    automationActivity.inFlight === next.inFlight &&
-    automationActivity.errorMessage === next.errorMessage
-  ) {
+  const previous = currentAutomationActivity()
+  if (previous.inFlight === next.inFlight && previous.errorMessage === next.errorMessage) {
     return
   }
-  const previousError = automationActivity.errorMessage
-  automationActivity = next
-  for (const listener of automationActivityListeners) listener()
-  if (next.errorMessage != null && next.errorMessage !== previousError) {
+  useBarkEmergencyExitAutomationStore.getState().setActivity(next)
+  if (next.errorMessage != null && next.errorMessage !== previous.errorMessage) {
     toast.error(next.errorMessage, { duration: Number.POSITIVE_INFINITY })
   }
 }
@@ -256,7 +237,7 @@ export function stopBarkEmergencyExitAutomation(): void {
   activeAutomationRun = null
   running?.abort.abort()
   running?.unsubscribe()
-  publishAutomationActivity(idleAutomationActivity)
+  publishAutomationActivity(IDLE_BARK_EMERGENCY_EXIT_AUTOMATION_ACTIVITY)
 }
 
 /**
@@ -314,25 +295,25 @@ export async function syncBarkEmergencyExitAutomation(
     await watchBarkEmergencyExitTips({
       signal: abort.signal,
       readGate: () => readPersistedSessionGate(scope),
-      fetchTip: () => fetchTipForNetwork(scope.networkMode),
+      fetchTip: () => fetchBarkExitChainTip(scope.networkMode),
       listExitCount: async () => (await getBarkWorker().listEmergencyExits()).length,
-      progress: () => progressOpenEmergencyExits(scope),
+      progress: (observedTip) => progressOpenEmergencyExits(scope, observedTip),
       wait: (signal) => waitForBarkEmergencyExitTipPoll(scope.networkMode, signal),
       onListed: () => invalidateBarkEmergencyExitQueries(scope),
       afterProgress: () => invalidateBarkEmergencyExitQueries(scope),
       onProgressStart: () => {
         publishAutomationActivity({
           inFlight: true,
-          errorMessage: automationActivity.errorMessage,
+          errorMessage: currentAutomationActivity().errorMessage,
         })
       },
       onProgressSuccess: () => {
-        publishAutomationActivity(idleAutomationActivity)
+        publishAutomationActivity(IDLE_BARK_EMERGENCY_EXIT_AUTOMATION_ACTIVITY)
       },
       onProgressIdle: () => {
         publishAutomationActivity({
           inFlight: false,
-          errorMessage: automationActivity.errorMessage,
+          errorMessage: currentAutomationActivity().errorMessage,
         })
       },
       onProgressError: (error) => {
@@ -342,7 +323,7 @@ export async function syncBarkEmergencyExitAutomation(
         })
       },
       onTipReadError: (error) => {
-        if (automationActivity.inFlight) return
+        if (currentAutomationActivity().inFlight) return
         publishAutomationActivity({
           inFlight: false,
           errorMessage: automationActivityError(error, 'Could not read the chain tip'),
@@ -387,20 +368,13 @@ async function readPersistedSessionGate(
   return { ...readLiveSessionGate(scope), proceedAutomatically }
 }
 
-async function fetchTipForNetwork(networkMode: BarkRailNetwork): Promise<BarkEmergencyExitTip> {
-  const customUrl = await loadCustomEsploraUrl(networkMode)
-  const esploraUrl = getEsploraUrl(networkMode, customUrl)
-  if (esploraUrl.length === 0) {
-    throw new Error('Esplora URL is missing')
-  }
-  return fetchEsploraChainTip(esploraUrl)
-}
-
 async function progressOpenEmergencyExits(
   scope: BarkEmergencyExitAutomationScope,
+  observedTip: BarkEmergencyExitTip | null,
 ): Promise<void> {
+  await catchUpOnchainWalletForBarkExit(scope.networkMode, observedTip?.height)
   const feeRates = await presetRatesForNetwork(scope.networkMode)
-  await progressBarkEmergencyExits(barkEmergencyExitProgressDeps(), feeRates.High)
+  await runBarkEmergencyExitProgress(scope, feeRates.High)
 }
 
 async function invalidateBarkEmergencyExitQueries(

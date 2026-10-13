@@ -2,9 +2,12 @@
 
 mod common;
 
-use bdk_wallet::KeychainKind;
+use bdk_wallet::chain::BlockId;
+use bdk_wallet::{KeychainKind, Update};
 use bitboard_crypto::types::{AddressType, BitcoinNetwork};
 use bitboard_crypto::wallet;
+use bitcoin::BlockHash;
+use bitcoin::hashes::Hash;
 use common::wallet_fixtures::{
     DEFAULT_ADDRESS_TYPE, DEFAULT_NETWORK, create_test_wallet, descriptors_for_test,
 };
@@ -21,6 +24,28 @@ fn get_balance_returns_zero_for_new_wallet() {
     assert_eq!(balance.untrusted_pending_sats, 0);
     assert_eq!(balance.immature_sats, 0);
     assert_eq!(balance.total_sats, 0);
+}
+
+#[test]
+fn local_chain_tip_height_follows_applied_chain_updates() {
+    let mut wallet = create_test_wallet(DEFAULT_NETWORK, DEFAULT_ADDRESS_TYPE);
+    assert_eq!(wallet::local_chain_tip_height(&wallet), 0);
+
+    let mut chain = wallet.local_chain().tip();
+    for height in 1..=3u32 {
+        chain = chain.insert(BlockId {
+            height,
+            hash: BlockHash::from_byte_array([height as u8; 32]),
+        });
+    }
+    wallet
+        .apply_update(Update {
+            chain: Some(chain),
+            ..Default::default()
+        })
+        .expect("chain update must connect to genesis");
+
+    assert_eq!(wallet::local_chain_tip_height(&wallet), 3);
 }
 
 // --- Address type tests ---

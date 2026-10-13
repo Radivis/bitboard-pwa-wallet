@@ -6,12 +6,13 @@ import {
   orchestrateOnchainLoad,
   awaitOnchainLoadQuiescence,
 } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
-import {
-  orchestrateArkadeLoad,
-  awaitArkadeLoadQuiescence,
-} from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
+import { awaitArkadeLoadQuiescence } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
 import { awaitBarkLoadQuiescence } from '@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator'
 import { startBarkLoadAfterUnlock } from '@/lib/bark/bark-session-service'
+import {
+  startArkadeLoadAfterUnlock,
+  startLightningLoadAfterUnlock,
+} from '@/lib/wallet/lifecycle/rail-load-starters'
 import {
   awaitArkadeSaveQuiescence,
   isArkadeSaveBlockingLock,
@@ -20,10 +21,7 @@ import {
 import {
   awaitArkadeSyncQuiescence,
 } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator'
-import {
-  orchestrateLightningLoad,
-  awaitLightningLoadQuiescence,
-} from '@/lib/wallet/lifecycle/lightning-load-lifecycle-orchestrator'
+import { awaitLightningLoadQuiescence } from '@/lib/wallet/lifecycle/lightning-load-lifecycle-orchestrator'
 import {
   awaitLightningSaveQuiescence,
   isLightningSaveBlockingLock,
@@ -32,7 +30,6 @@ import {
 import {
   awaitLightningSyncQuiescence,
 } from '@/lib/wallet/lifecycle/lightning-sync-lifecycle-orchestrator'
-import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
 import { orchestrateOnchainPostUnlockSync } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
 import {
   awaitOnchainSaveQuiescence,
@@ -44,6 +41,7 @@ import {
 } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
 import { syncAllRailLifecyclesWithLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-handoff'
 import { awaitInFlightWalletSecretsWrites } from '@/db/wallet-secrets-write-tracker'
+import { runPendingWalletDataMigrationsForUnlock } from '@/db/data-migrations/run-pending-wallet-data-migrations'
 import {
   ensureWalletSecretsSession,
   endWalletSecretsSession,
@@ -143,6 +141,7 @@ function revertAfterUnlockFailure(): void {
 }
 
 async function runUnlockLoad(params: UnlockLoadParams): Promise<void> {
+  await runPendingWalletDataMigrationsForUnlock()
   await waitForCryptoWorkerHealthy()
   await orchestrateOnchainLoad({
     walletId: params.walletId,
@@ -152,30 +151,10 @@ async function runUnlockLoad(params: UnlockLoadParams): Promise<void> {
     clearLastSyncTime: params.networkMode !== 'lab',
     allowRetryFromError: true,
   })
-  if (isArkadeActiveForNetworkMode(params.networkMode)) {
-    void orchestrateArkadeLoad({
-      walletId: params.walletId,
-      networkMode: params.networkMode,
-      allowRetryFromError: true,
-    }).catch((err) => {
-      void import('@/lib/arkade/arkade-session-open-error-toast').then(
-        ({ reportArkadeSessionOpenError }) => reportArkadeSessionOpenError(err),
-      )
-    })
-  }
-  startBarkLoadAfterUnlock({
-    walletId: params.walletId,
-    networkMode: params.networkMode,
-  })
-  void orchestrateLightningLoad({
-    walletId: params.walletId,
-    networkMode: params.networkMode,
-    allowRetryFromError: true,
-  }).catch((err) => {
-    void import('@/lib/wallet/rail-sync-error-toast').then(({ reportLightningLoadError }) =>
-      reportLightningLoadError(err),
-    )
-  })
+  const railLoadTarget = { walletId: params.walletId, networkMode: params.networkMode }
+  startArkadeLoadAfterUnlock(railLoadTarget)
+  startBarkLoadAfterUnlock(railLoadTarget)
+  startLightningLoadAfterUnlock(railLoadTarget)
   if (params.networkMode !== 'lab') {
     void orchestrateOnchainPostUnlockSync({
       walletId: params.walletId,

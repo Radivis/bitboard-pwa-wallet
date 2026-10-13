@@ -143,6 +143,11 @@ pub fn start_incremental_sync_request(
     wallet.start_sync_with_revealed_spks_at(now).build()
 }
 
+/// Height of the newest block the wallet has synced. Coins confirmed above it still look unconfirmed.
+pub fn local_chain_tip_height(wallet: &Wallet) -> u32 {
+    wallet.local_chain().tip().height()
+}
+
 /// Return the current wallet balance broken down by confirmation status.
 pub fn get_balance(wallet: &Wallet) -> BalanceInfo {
     let balance = wallet.balance();

@@ -21,10 +21,14 @@ export function createEncryptedSecretsHostChannel(
 } {
   let encryptedSecretsHostReady = false
   let encryptedSecretsHostPromise: Promise<void> | null = null
+  let hostDetachController = new AbortController()
 
+  /** Called when the worker is terminated; abandons its in-flight payload transforms. */
   function resetEncryptedSecretsHostChannel(): void {
     encryptedSecretsHostReady = false
     encryptedSecretsHostPromise = null
+    hostDetachController.abort()
+    hostDetachController = new AbortController()
   }
 
   async function ensureEncryptedSecretsHost(): Promise<void> {
@@ -36,7 +40,10 @@ export function createEncryptedSecretsHostChannel(
 
     encryptedSecretsHostPromise = (async () => {
       const worker = await loadWorker()
-      await worker.setEncryptedWalletSecretsHost(proxy(createEncryptedWalletSecretsHost()))
+      const host = createEncryptedWalletSecretsHost({
+        detachSignal: hostDetachController.signal,
+      })
+      await worker.setEncryptedWalletSecretsHost(proxy(host))
       encryptedSecretsHostReady = true
     })().finally(() => {
       encryptedSecretsHostPromise = null
