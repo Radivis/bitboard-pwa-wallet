@@ -41,6 +41,8 @@ export type BarkSyncResult = {
   refreshStatus: BarkRefreshStatus
   /** `null` when the wallet has no spendable VTXOs or the chain tip is unknown. */
   nextRefresh: BarkNextRefreshSchedule | null
+  /** VTXOs recorded as spent because an exit output was taken on-chain. Empty when none. */
+  seizedVtxoIds: string[]
 }
 
 export type BarkRevealedReceiveAddress = {

@@ -1,6 +1,7 @@
 import { expose, wrap, type Remote } from 'comlink'
 import { readBarkBalance } from '@/lib/bark/bark-balance'
 import { pendingActionsFromWasm } from '@/lib/bark/bark-pending-actions'
+import { readBarkSeizedVtxoIds } from '@/lib/bark/bark-exit-seizure'
 import {
   readBarkNextRefreshSchedule,
   readBarkRefreshStatus,
@@ -378,10 +379,12 @@ async function syncImpl(): Promise<BarkSyncResult> {
       const nextRefresh = readBarkNextRefreshSchedule(
         await wasmModule.bark_next_refresh_schedule(),
       )
+      const seizedVtxoIds = readBarkSeizedVtxoIds(wasmModule.bark_exit_seizures())
       return {
         lastSuccessfulSyncAt: new Date().toISOString(),
         refreshStatus,
         nextRefresh,
+        seizedVtxoIds,
       }
     },
     (result) => ({ lastSuccessfulSyncAt: result.lastSuccessfulSyncAt }),

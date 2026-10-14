@@ -29,6 +29,8 @@ export type BarkSyncLifecycleSnapshot = {
   refreshStatus: BarkRefreshStatus
   /** Next refresh period from the last successful sync of this session. Failed syncs keep it. */
   nextRefresh: BarkNextRefreshObservation | null
+  /** VTXOs recorded spent by the last successful seizure scan. Failed syncs keep them. */
+  seizedVtxoIds: string[]
 }
 
 export type BarkSyncParams = {
@@ -55,6 +57,7 @@ function idleBarkSyncSnapshot(): BarkSyncLifecycleSnapshot {
     lastSuccessfulSyncAt: null,
     refreshStatus: 'idle',
     nextRefresh: null,
+    seizedVtxoIds: [],
   }
 }
 
@@ -144,6 +147,7 @@ export function prepareBarkSyncForSessionOpen(networkMode: NetworkMode): void {
     lastSuccessfulSyncAt: null,
     refreshStatus: 'idle',
     nextRefresh: null,
+    seizedVtxoIds: [],
   })
 }
 
@@ -205,6 +209,7 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
       lastSuccessfulSyncAt: previous.lastSuccessfulSyncAt,
       refreshStatus: previous.refreshStatus,
       nextRefresh: previous.nextRefresh,
+      seizedVtxoIds: previous.seizedVtxoIds,
     })
     try {
       const worker = getBarkWorker()
@@ -226,6 +231,7 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
         lastSuccessfulSyncAt: synced.lastSuccessfulSyncAt,
         refreshStatus: synced.refreshStatus ?? 'idle',
         nextRefresh: observeNextRefresh(synced),
+        seizedVtxoIds: synced.seizedVtxoIds ?? [],
       })
       if (generation !== sessionGeneration || params.settleExits === false) {
         return
@@ -250,6 +256,7 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
         lastSuccessfulSyncAt: kept.lastSuccessfulSyncAt,
         refreshStatus: kept.refreshStatus,
         nextRefresh: kept.nextRefresh,
+        seizedVtxoIds: kept.seizedVtxoIds,
       })
       if (throwOnError) {
         throw error
@@ -288,6 +295,7 @@ export function recordBarkSpendableAfterSend(result: {
     lastSuccessfulSyncAt: result.lastSuccessfulSyncAt,
     refreshStatus: current.refreshStatus,
     nextRefresh: current.nextRefresh,
+    seizedVtxoIds: current.seizedVtxoIds,
   })
 }
 

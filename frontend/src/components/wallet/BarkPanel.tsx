@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router'
+import { BarkExitSeizureWarning } from '@/components/bark/BarkExitSeizureWarning'
 import { BarkNextRefreshHint } from '@/components/bark/BarkNextRefreshHint'
 import { BarkSessionGate } from '@/components/bark/BarkSessionGate'
 import { Button } from '@/components/ui/button'
@@ -26,6 +27,7 @@ export function BarkPanel() {
           embedded
         >
           <>
+            <BarkExitSeizureWarning />
             <BarkNextRefreshHint />
             <BarkPendingActionBanner />
             <div className="flex flex-wrap gap-2">

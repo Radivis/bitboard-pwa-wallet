@@ -4,6 +4,7 @@ import { screen } from '@testing-library/react'
 import { BarkPanel } from '@/components/wallet/BarkPanel'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import type { NetworkMode } from '@/stores/walletStore'
+import { BARK_EXIT_SEIZURE_WARNING } from '@/lib/bark/bark-exit-seizure'
 import type { BarkNextRefreshObservation } from '@/lib/bark/bark-next-refresh-hint'
 import type { BarkPendingAction } from '@/workers/bark-api'
 
@@ -32,6 +33,7 @@ const loadSnapshot = vi.hoisted(() => ({
 const syncSnapshot = vi.hoisted(() => ({
   current: {
     nextRefresh: null as BarkNextRefreshObservation | null,
+    seizedVtxoIds: [] as string[],
   },
 }))
 
@@ -107,7 +109,7 @@ describe('BarkPanel', () => {
       errorMessage: null,
       receiveKeyIndex: 0,
     }
-    syncSnapshot.current = { nextRefresh: null }
+    syncSnapshot.current = { nextRefresh: null, seizedVtxoIds: [] }
   })
 
   it('BARK-VTX-09 shows the next refresh hint above the pending-action banner', () => {
@@ -125,6 +127,22 @@ describe('BarkPanel', () => {
     expect(hint).toHaveTextContent("Bark's refresh period has started")
     const banner = screen.getByTestId('bark-pending-action-banner')
     expect(hint.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('BARK-SYNC-11 shows a seizure warning above the pending-action banner', () => {
+    pendingActions.current = [pendingOffboard()]
+    syncSnapshot.current = { nextRefresh: null, seizedVtxoIds: ['vtxo-a'] }
+    renderWithProviders(<BarkPanel />)
+
+    const warning = screen.getByTestId('bark-exit-seizure-warning')
+    expect(warning).toHaveTextContent(BARK_EXIT_SEIZURE_WARNING)
+    const banner = screen.getByTestId('bark-pending-action-banner')
+    expect(warning.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('BARK-SYNC-11 shows no seizure warning when the sync recorded none', () => {
+    renderWithProviders(<BarkPanel />)
+    expect(screen.queryByTestId('bark-exit-seizure-warning')).not.toBeInTheDocument()
   })
 
   it('BARK-VTX-09 shows no next refresh hint without a schedule', () => {
