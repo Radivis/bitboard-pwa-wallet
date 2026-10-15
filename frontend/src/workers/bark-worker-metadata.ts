@@ -1,7 +1,9 @@
 import {
   applyBarkRecordEnvelope,
+  applyClearedExitSeizureNotice,
   applyEmergencyExitFeePreset,
   applyEmergencyExitMaxFeeRate,
+  applyMergedExitSeizureVtxoIds,
   applyOpenedBarkAccount,
   applyPendingEmergencyClaim,
   applyProceedAutomatically,
@@ -122,6 +124,40 @@ export async function readPendingEmergencyClaim(
 ): Promise<PendingEmergencyClaim | null> {
   const payload = await readDecryptedWalletPayload(deps, walletId)
   return findBarkAccount(payload, network)?.pendingEmergencyClaim ?? null
+}
+
+/** VTXO ids still waiting for the user to dismiss the seizure banner. */
+export async function readExitSeizureVtxoIds(
+  deps: BarkEncryptedPayloadDeps,
+  walletId: number,
+  network: BarkRailNetwork,
+): Promise<string[]> {
+  const payload = await readDecryptedWalletPayload(deps, walletId)
+  return findBarkAccount(payload, network)?.exitSeizureVtxoIds ?? []
+}
+
+/** Adds ids from a seizure scan. An empty scan does not remove a stored notice. */
+export async function mergeExitSeizureVtxoIds(
+  deps: BarkEncryptedPayloadDeps,
+  walletId: number,
+  network: BarkRailNetwork,
+  vtxoIds: readonly string[],
+): Promise<void> {
+  if (vtxoIds.length === 0) return
+  await updateDecryptedWalletPayload(deps, walletId, (payload) =>
+    applyMergedExitSeizureVtxoIds({ payload, network, vtxoIds }),
+  )
+}
+
+/** Drops the seizure notice after the user dismisses the banner. */
+export async function clearExitSeizureNotice(
+  deps: BarkEncryptedPayloadDeps,
+  walletId: number,
+  network: BarkRailNetwork,
+): Promise<void> {
+  await updateDecryptedWalletPayload(deps, walletId, (payload) =>
+    applyClearedExitSeizureNotice({ payload, network }),
+  )
 }
 
 /** Writes or clears the pending claim before the claim call returns. */

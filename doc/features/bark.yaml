@@ -59,7 +59,7 @@ feature:
     - The notice covers only the open wallet and network. It is cleared on lock, wallet switch, and session change
     - A confirmed spend of a chain anchor, or of a hot checkpoint whose next exit transaction is not yet confirmed, by any transaction other than that next exit transaction records every unspent VTXO whose history passes through that anchor or checkpoint as spent, before refresh is scheduled
     - A checkpoint whose next exit transaction is already confirmed is not watched
-    - The dashboard Bark card and the management Bark card warn when that sync recorded such a spend. The warning clears on lock, wallet switch, and session change, and when a later successful sync records none
+    - The wallet layout shows a banner when that sync recorded such a spend. The notice is stored on that wallet's Bark account. The banner stays until the user dismisses it. Lock, wallet switch, and session change hide it until that wallet is unlocked again. A later sync that records no seizure does not remove it
     - The VTXO list link and page exist only when isBarkEnabled and the network is signet or mainnet
     - The VTXO list is the local Bark database. It is not an operator snapshot
     - Spent and Exited VTXOs stay hidden until the user shows them. Locked VTXOs stay visible
@@ -226,13 +226,17 @@ feature:
           A confirmed foreign spend of a chain anchor or of a hot checkpoint records every unspent
           VTXO whose history passes through that anchor or checkpoint as spent, before refresh is
           scheduled. A checkpoint whose next exit transaction is already confirmed is not watched.
-          Both Bark cards warn. A failed sync keeps the warning. Lock, wallet switch, session
-          change, and a successful sync that finds no seizure clear it
+          The wallet layout shows a banner for the wallet and network that recorded the spend.
+          The notice is stored on that Bark account. The banner stays until the user dismisses it.
+          Lock, wallet switch, and session change hide it until that wallet is unlocked again.
+          A later sync that records no seizure does not remove it
         implemented_by:
           - bitboard-bark/src/exit_seizure.rs
+          - frontend/src/lib/bark/__tests__/bark-rail-metadata.test.ts
           - frontend/src/lib/wallet/lifecycle/__tests__/bark-sync-lifecycle-orchestrator.test.ts
-          - frontend/src/components/wallet/__tests__/BarkDashboardBalance.test.tsx
-          - frontend/src/components/wallet/__tests__/BarkPanel.test.tsx
+          - frontend/src/lib/wallet/lifecycle/__tests__/bark-load-lifecycle-orchestrator.test.ts
+          - frontend/src/lib/bark/__tests__/bark-exit-seizure-notice.test.ts
+          - frontend/src/components/bark/__tests__/BarkExitSeizureBanner.test.tsx
     metadata:
       - id: BARK-META-01
         description: A successful sync stamp keeps the fingerprint and receive index and writes an ISO timestamp
@@ -484,7 +488,6 @@ feature:
         visible_elements:
           - Embedded Bark session loading or error screen while the session is not ready
           - Yellow next refresh hint at the top of the card content
-          - Warning when a sync recorded an exit output spent outside this wallet
           - Pending Bark action banner
           - List VTXOs link to /wallet/bark/vtxos
           - Emergency exit link to /wallet/bark/emergency-exit
@@ -492,7 +495,6 @@ feature:
           - Contract BARK-VTX-01
           - Contract BARK-VTX-08
           - Contract BARK-VTX-09
-          - Contract BARK-SYNC-11
           - Contract BARK-EMG-01
           - Contracts BARK-SESS-01 and BARK-SESS-02
           - Shown only when isBarkEnabled and the network is signet or mainnet

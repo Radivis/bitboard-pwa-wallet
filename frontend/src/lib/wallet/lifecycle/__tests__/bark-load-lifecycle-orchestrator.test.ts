@@ -77,6 +77,10 @@ vi.mock('@/lib/bark/bark-session-service', () => ({
 }))
 
 import {
+  barkExitSeizureNoticeIds,
+  useBarkExitSeizureNoticeStore,
+} from '@/lib/bark/bark-exit-seizure-notice'
+import {
   getBarkLoadLifecycleSnapshot,
   orchestrateBarkLoad,
   orchestrateBarkRetryLoad,
@@ -86,6 +90,7 @@ import {
 describe('bark-load-lifecycle-orchestrator', () => {
   beforeEach(() => {
     resetBarkLoadLifecycleStateForTests()
+    useBarkExitSeizureNoticeStore.setState({ notice: null })
     vi.clearAllMocks()
     featureState.isBarkEnabled = true
     workerMocks.openSession.mockResolvedValue({
@@ -118,6 +123,18 @@ describe('bark-load-lifecycle-orchestrator', () => {
       })
     })
     expect(rememberBarkPersistedSyncTimeMock).toHaveBeenCalledWith(null)
+  })
+
+  it('shows a seizure notice stored on the Bark account when the session opens', async () => {
+    workerMocks.openSession.mockResolvedValue({
+      fingerprint: 'abcdef01',
+      receiveKeyIndex: 0,
+      exitSeizureVtxoIds: ['vtxo-b', 'vtxo-a'],
+    })
+
+    await orchestrateBarkLoad({ walletId: 1, networkMode: 'signet' })
+
+    expect(barkExitSeizureNoticeIds(1, 'signet')).toEqual(['vtxo-a', 'vtxo-b'])
   })
 
   it('remembers a persisted sync time without blocking on the post-load sync', async () => {

@@ -4,7 +4,6 @@ import { screen } from '@testing-library/react'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { BarkDashboardBalance } from '@/components/wallet/BarkDashboardBalance'
 import type { NetworkMode } from '@/stores/walletStore'
-import { BARK_EXIT_SEIZURE_WARNING } from '@/lib/bark/bark-exit-seizure'
 import type { BarkNextRefreshObservation } from '@/lib/bark/bark-next-refresh-hint'
 import type { BarkPendingAction } from '@/workers/bark-api'
 
@@ -42,7 +41,6 @@ const syncSnapshot = vi.hoisted(() => ({
     lastSuccessfulSyncAt: null as string | null,
     refreshStatus: 'idle' as 'idle' | 'scheduled' | 'pending' | 'warning',
     nextRefresh: null as BarkNextRefreshObservation | null,
-    seizedVtxoIds: [] as string[],
   },
 }))
 
@@ -135,7 +133,6 @@ describe('BarkDashboardBalance', () => {
       lastSuccessfulSyncAt: null,
       refreshStatus: 'idle',
       nextRefresh: null,
-      seizedVtxoIds: [],
     }
   })
 
@@ -153,20 +150,6 @@ describe('BarkDashboardBalance', () => {
     expect(hint).toHaveTextContent('Unlock this wallet around')
     expect(hint).toHaveClass('border-amber-500/40')
     expect(hint.parentElement?.firstElementChild).toBe(hint)
-  })
-
-  it('BARK-SYNC-11 shows a seizure warning and hides it when no VTXO was seized', () => {
-    syncSnapshot.current.spendableSats = 50_000
-    syncSnapshot.current.seizedVtxoIds = ['vtxo-a']
-    const { rerender } = renderWithProviders(<BarkDashboardBalance />)
-
-    expect(screen.getByTestId('bark-exit-seizure-warning')).toHaveTextContent(
-      BARK_EXIT_SEIZURE_WARNING,
-    )
-
-    syncSnapshot.current.seizedVtxoIds = []
-    rerender(<BarkDashboardBalance />)
-    expect(screen.queryByTestId('bark-exit-seizure-warning')).not.toBeInTheDocument()
   })
 
   it('DASH-BARK-14 shows no next refresh hint without a schedule', () => {

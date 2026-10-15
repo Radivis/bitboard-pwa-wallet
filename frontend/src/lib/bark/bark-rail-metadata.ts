@@ -6,6 +6,7 @@ import {
   isBarkReceiveKeyIndex,
   emergencyExitFeePresetFromUnknown,
   emergencyExitMaxFeeRateFromUnknown,
+  exitSeizureVtxoIdsFromUnknown,
   pendingEmergencyClaimFromUnknown,
   proceedAutomaticallyFromUnknown,
   type BarkEmergencyExitFeePreset,
@@ -107,6 +108,10 @@ function accountWithPreservedFields(
   )
   if (emergencyExitMaxFeeRateSatPerVb != null) {
     barkAccount.emergencyExitMaxFeeRateSatPerVb = emergencyExitMaxFeeRateSatPerVb
+  }
+  const exitSeizureVtxoIds = exitSeizureVtxoIdsFromUnknown(existingAccount?.exitSeizureVtxoIds)
+  if (exitSeizureVtxoIds != null) {
+    barkAccount.exitSeizureVtxoIds = exitSeizureVtxoIds
   }
   return barkAccount
 }
@@ -356,5 +361,48 @@ export function applyEmergencyExitMaxFeeRate(params: {
     undefined,
   )
   account.emergencyExitMaxFeeRateSatPerVb = maxFeeRateSatPerVb
+  return upsertBarkAccountInPayload(params.payload, account)
+}
+
+/**
+ * Adds VTXO ids to the seizure notice. An empty list leaves the stored notice unchanged.
+ * A later sync flush keeps the merged list.
+ */
+export function applyMergedExitSeizureVtxoIds(params: {
+  payload: WalletSecretsPayload
+  network: BarkRailNetwork
+  vtxoIds: readonly string[]
+}): WalletSecretsPayload {
+  const incoming = exitSeizureVtxoIdsFromUnknown([...params.vtxoIds])
+  if (incoming == null) return params.payload
+  const existingAccount = requireBarkAccount(params.payload, params.network)
+  const account = accountWithPreservedFields(
+    params.network,
+    existingAccount,
+    existingAccount.fingerprint,
+    undefined,
+    undefined,
+  )
+  account.exitSeizureVtxoIds = exitSeizureVtxoIdsFromUnknown([
+    ...(account.exitSeizureVtxoIds ?? []),
+    ...incoming,
+  ])
+  return upsertBarkAccountInPayload(params.payload, account)
+}
+
+/** Removes the seizure notice. A later sync flush does not restore it. */
+export function applyClearedExitSeizureNotice(params: {
+  payload: WalletSecretsPayload
+  network: BarkRailNetwork
+}): WalletSecretsPayload {
+  const existingAccount = requireBarkAccount(params.payload, params.network)
+  const account = accountWithPreservedFields(
+    params.network,
+    existingAccount,
+    existingAccount.fingerprint,
+    undefined,
+    undefined,
+  )
+  delete account.exitSeizureVtxoIds
   return upsertBarkAccountInPayload(params.payload, account)
 }

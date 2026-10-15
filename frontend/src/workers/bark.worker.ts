@@ -83,8 +83,11 @@ import {
   type BarkRailFlushMetadata,
 } from '@/workers/bark-durable-flush'
 import {
+  clearExitSeizureNotice as clearExitSeizureNoticeInPayload,
+  mergeExitSeizureVtxoIds as mergeExitSeizureVtxoIdsInPayload,
   persistBarkProtocolState,
   persistOpenedBarkAccount,
+  readExitSeizureVtxoIds as readExitSeizureVtxoIdsFromPayload,
   readPendingEmergencyClaim as readPendingEmergencyClaimFromPayload,
   readProceedAutomatically as readProceedAutomaticallyFromPayload,
   readRecordEnvelopeForOpen,
@@ -329,6 +332,7 @@ async function openSessionImpl(
       fingerprint,
       receiveKeyIndex,
       lastSuccessfulSyncAt: barkAccount.lastSuccessfulSyncAt,
+      exitSeizureVtxoIds: barkAccount.exitSeizureVtxoIds ?? [],
     }
   } catch (err) {
     if (sessionOpened) {
@@ -379,7 +383,21 @@ async function syncImpl(): Promise<BarkSyncResult> {
       const nextRefresh = readBarkNextRefreshSchedule(
         await wasmModule.bark_next_refresh_schedule(),
       )
-      const seizedVtxoIds = readBarkSeizedVtxoIds(wasmModule.bark_exit_seizures())
+      const scannedVtxoIds = readBarkSeizedVtxoIds(wasmModule.bark_exit_seizures())
+      const network = requireOpenNetwork()
+      if (scannedVtxoIds.length > 0) {
+        await mergeExitSeizureVtxoIdsInPayload(
+          encryptedPayloadDeps(),
+          walletId,
+          network,
+          scannedVtxoIds,
+        )
+      }
+      const seizedVtxoIds = await readExitSeizureVtxoIdsFromPayload(
+        encryptedPayloadDeps(),
+        walletId,
+        network,
+      )
       return {
         lastSuccessfulSyncAt: new Date().toISOString(),
         refreshStatus,
@@ -589,6 +607,12 @@ function requireOpenNetwork(): BarkRailNetwork {
   return openNetwork
 }
 
+async function clearExitSeizureNoticeImpl(): Promise<void> {
+  const walletId = requireOpenWalletId()
+  const network = requireOpenNetwork()
+  await clearExitSeizureNoticeInPayload(encryptedPayloadDeps(), walletId, network)
+}
+
 async function readPendingEmergencyClaimImpl(): Promise<PendingEmergencyClaim | null> {
   const walletId = requireOpenWalletId()
   const network = requireOpenNetwork()
@@ -788,6 +812,10 @@ const barkService: BarkService = {
     excludeVtxoIds: string[],
   ): Promise<BarkEmergencyExitDrain> {
     return callBark(() => drainEmergencyExitsImpl(address, feeRateSatPerVb, excludeVtxoIds))
+  },
+
+  clearExitSeizureNotice(): Promise<void> {
+    return callBark(() => clearExitSeizureNoticeImpl())
   },
 
   readPendingEmergencyClaim(): Promise<PendingEmergencyClaim | null> {

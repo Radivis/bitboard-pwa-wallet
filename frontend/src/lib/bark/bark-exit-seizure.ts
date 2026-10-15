@@ -1,7 +1,7 @@
 const INVALID_EXIT_SEIZURES = 'Bark exit seizures are invalid'
 
 export const BARK_EXIT_SEIZURE_WARNING =
-  'An exit output was spent on-chain outside this wallet. Those VTXOs are now spent.'
+  'The Bark operator spent an exit output on-chain outside this wallet. As a result, some of your VTXOs are now spent.'
 
 /** Reads the JSON array from `bark_exit_seizures`. */
 export function readBarkSeizedVtxoIds(value: unknown): string[] {

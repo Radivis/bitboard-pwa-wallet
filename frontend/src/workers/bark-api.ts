@@ -34,6 +34,8 @@ export type OpenBarkSessionResult = {
   fingerprint: string
   receiveKeyIndex: number
   lastSuccessfulSyncAt?: string
+  /** Seizure notice stored on this Bark account. Empty when the user has dismissed it or none was recorded. */
+  exitSeizureVtxoIds?: string[]
 }
 
 export type BarkSyncResult = {
@@ -41,7 +43,10 @@ export type BarkSyncResult = {
   refreshStatus: BarkRefreshStatus
   /** `null` when the wallet has no spendable VTXOs or the chain tip is unknown. */
   nextRefresh: BarkNextRefreshSchedule | null
-  /** VTXOs recorded as spent because an exit output was taken on-chain. Empty when none. */
+  /**
+   * Seizure notice stored on this Bark account after the scan.
+   * Includes ids recorded by an earlier sync. Empty when the user has dismissed it or none was recorded.
+   */
   seizedVtxoIds: string[]
 }
 
@@ -241,6 +246,7 @@ export interface BarkService {
     feeRateSatPerVb: number,
     excludeVtxoIds: string[],
   ): Promise<BarkEmergencyExitDrain>
+  clearExitSeizureNotice(): Promise<void>
   readPendingEmergencyClaim(): Promise<PendingEmergencyClaim | null>
   writePendingEmergencyClaim(pending: PendingEmergencyClaim | null): Promise<void>
   readProceedAutomatically(): Promise<boolean>

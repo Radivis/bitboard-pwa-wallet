@@ -172,6 +172,11 @@ export interface StoredBarkAccount {
    * user turns automatic proceeding on.
    */
   emergencyExitMaxFeeRateSatPerVb?: number
+  /**
+   * VTXOs whose exit output was spent on-chain outside this wallet.
+   * Kept until the user dismisses the banner. Absent when none are waiting.
+   */
+  exitSeizureVtxoIds?: string[]
 }
 
 /** Fee degree for automatic Bark emergency-exit proceeding. Custom is manual only. */
@@ -284,6 +289,13 @@ export function emergencyExitFeePresetFromUnknown(
   return undefined
 }
 
+/** Keeps a non-empty list of VTXO ids. A malformed list is omitted. */
+export function exitSeizureVtxoIdsFromUnknown(value: unknown): string[] | undefined {
+  if (!Array.isArray(value) || value.length === 0) return undefined
+  if (!value.every((id) => typeof id === 'string' && id.length > 0)) return undefined
+  return [...new Set(value)].sort()
+}
+
 /** Keeps a positive finite sat/vB cap. Anything else is omitted. */
 export function emergencyExitMaxFeeRateFromUnknown(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return undefined
@@ -339,6 +351,12 @@ export function isStoredBarkAccount(value: unknown): value is StoredBarkAccount 
   ) {
     return false
   }
+  if (
+    value.exitSeizureVtxoIds !== undefined &&
+    exitSeizureVtxoIdsFromUnknown(value.exitSeizureVtxoIds) == null
+  ) {
+    return false
+  }
   return true
 }
 
@@ -386,6 +404,12 @@ function sanitizeStoredBarkAccountRow(row: unknown): StoredBarkAccount | null {
     cleaned.emergencyExitMaxFeeRateSatPerVb = emergencyExitMaxFeeRateSatPerVb
   } else {
     delete cleaned.emergencyExitMaxFeeRateSatPerVb
+  }
+  const exitSeizureVtxoIds = exitSeizureVtxoIdsFromUnknown(row.exitSeizureVtxoIds)
+  if (exitSeizureVtxoIds != null) {
+    cleaned.exitSeizureVtxoIds = exitSeizureVtxoIds
+  } else {
+    delete cleaned.exitSeizureVtxoIds
   }
   if (isStoredBarkAccount(cleaned)) {
     return cleaned

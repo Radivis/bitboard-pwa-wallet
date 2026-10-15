@@ -50,6 +50,10 @@ vi.mock('@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator', () => ({
 }))
 
 import {
+  barkExitSeizureNoticeIds,
+  useBarkExitSeizureNoticeStore,
+} from '@/lib/bark/bark-exit-seizure-notice'
+import {
   discardShownBarkBalanceForSessionChange,
   getBarkSyncLifecycleSnapshot,
   orchestrateBarkSync,
@@ -61,6 +65,7 @@ import {
 describe('bark-sync-lifecycle-orchestrator', () => {
   beforeEach(() => {
     resetBarkSyncLifecycleStateForTests()
+    useBarkExitSeizureNoticeStore.setState({ notice: null })
     vi.clearAllMocks()
     featureState.isBarkEnabled = true
     loadSnapshot.current = {
@@ -242,55 +247,34 @@ describe('bark-sync-lifecycle-orchestrator', () => {
     })
   })
 
-  it('BARK-SYNC-11 stores seized VTXOs and keeps them when a later sync fails', async () => {
-    workerMocks.sync.mockResolvedValueOnce({
-      lastSuccessfulSyncAt: '2024-03-01T12:00:00.000Z',
-      refreshStatus: 'idle',
-      nextRefresh: null,
-      seizedVtxoIds: ['vtxo-a', 'vtxo-b'],
-    })
-    await orchestrateBarkSync({ walletId: 1, networkMode: 'signet' })
-    expect(getBarkSyncLifecycleSnapshot().seizedVtxoIds).toEqual(['vtxo-a', 'vtxo-b'])
-
-    workerMocks.sync.mockRejectedValueOnce(new Error('Bark server unreachable'))
-    await orchestrateBarkSync({ walletId: 1, networkMode: 'signet', throwOnError: false })
-
-    expect(getBarkSyncLifecycleSnapshot()).toMatchObject({
-      syncPhase: 'sync-error',
-      seizedVtxoIds: ['vtxo-a', 'vtxo-b'],
-    })
-  })
-
-  it('BARK-SYNC-11 clears seized VTXOs on lock, session change, and a sync that finds none', async () => {
-    const seized = {
+  it('BARK-SYNC-11 shows the stored seizure notice and hides it when the session changes', async () => {
+    const storedNotice = {
       lastSuccessfulSyncAt: '2024-03-01T12:00:00.000Z',
       refreshStatus: 'idle' as const,
       nextRefresh: null,
-      seizedVtxoIds: ['vtxo-a'],
+      seizedVtxoIds: ['vtxo-b', 'vtxo-a'],
     }
-    workerMocks.sync.mockResolvedValue(seized)
-
+    workerMocks.sync.mockResolvedValueOnce(storedNotice)
     await orchestrateBarkSync({ walletId: 1, networkMode: 'signet' })
-    syncBarkSyncLifecycleWithLockPhase('locked')
-    expect(getBarkSyncLifecycleSnapshot().seizedVtxoIds).toEqual([])
+    expect(barkExitSeizureNoticeIds(1, 'signet')).toEqual(['vtxo-a', 'vtxo-b'])
 
+    workerMocks.sync.mockRejectedValueOnce(new Error('Bark server unreachable'))
+    await orchestrateBarkSync({ walletId: 1, networkMode: 'signet', throwOnError: false })
+    expect(getBarkSyncLifecycleSnapshot().syncPhase).toBe('sync-error')
+    expect(barkExitSeizureNoticeIds(1, 'signet')).toEqual(['vtxo-a', 'vtxo-b'])
+
+    syncBarkSyncLifecycleWithLockPhase('locked')
+    expect(barkExitSeizureNoticeIds(1, 'signet')).toEqual([])
+
+    workerMocks.sync.mockResolvedValueOnce(storedNotice)
     await orchestrateBarkSync({ walletId: 1, networkMode: 'signet' })
     discardShownBarkBalanceForSessionChange()
-    expect(getBarkSyncLifecycleSnapshot().seizedVtxoIds).toEqual([])
+    expect(barkExitSeizureNoticeIds(1, 'signet')).toEqual([])
 
-    await orchestrateBarkSync({ walletId: 2, networkMode: 'signet' })
+    workerMocks.sync.mockResolvedValueOnce(storedNotice)
+    await orchestrateBarkSync({ walletId: 1, networkMode: 'signet' })
     prepareBarkSyncForSessionOpen('signet')
-    expect(getBarkSyncLifecycleSnapshot().seizedVtxoIds).toEqual([])
-
-    await orchestrateBarkSync({ walletId: 1, networkMode: 'signet' })
-    workerMocks.sync.mockResolvedValueOnce({
-      lastSuccessfulSyncAt: '2024-03-02T12:00:00.000Z',
-      refreshStatus: 'idle',
-      nextRefresh: null,
-      seizedVtxoIds: [],
-    })
-    await orchestrateBarkSync({ walletId: 1, networkMode: 'signet' })
-    expect(getBarkSyncLifecycleSnapshot().seizedVtxoIds).toEqual([])
+    expect(barkExitSeizureNoticeIds(1, 'signet')).toEqual([])
   })
 
   it('BARK-SYNC-09 clears the next refresh schedule on lock and session change', async () => {

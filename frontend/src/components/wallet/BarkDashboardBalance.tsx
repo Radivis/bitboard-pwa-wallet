@@ -1,7 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 import { FiatBtcAmountDisplay } from '@/components/FiatBtcAmountDisplay'
-import { BarkExitSeizureWarning } from '@/components/bark/BarkExitSeizureWarning'
 import { BarkNextRefreshHint } from '@/components/bark/BarkNextRefreshHint'
 import { BarkSessionLoadError } from '@/components/bark/BarkSessionLoadError'
 import { BarkSessionLoading } from '@/components/bark/BarkSessionLoading'
@@ -70,7 +69,6 @@ export function BarkDashboardBalance() {
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
-        <BarkExitSeizureWarning />
         <BarkNextRefreshHint />
         {loadSnapshot.loadPhase === 'load-error' ? (
           <BarkSessionLoadError embedded errorMessage={loadSnapshot.errorMessage} />

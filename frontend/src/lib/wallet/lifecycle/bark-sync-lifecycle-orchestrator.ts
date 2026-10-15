@@ -1,4 +1,5 @@
 import { settleBarkEmergencyExitAfterSync } from '@/lib/bark/bark-emergency-exit-after-sync'
+import { useBarkExitSeizureNoticeStore } from '@/lib/bark/bark-exit-seizure-notice'
 import { getBarkWorker } from '@/workers/bark-factory'
 import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
 import type { BarkNextRefreshObservation } from '@/lib/bark/bark-next-refresh-hint'
@@ -29,8 +30,6 @@ export type BarkSyncLifecycleSnapshot = {
   refreshStatus: BarkRefreshStatus
   /** Next refresh period from the last successful sync of this session. Failed syncs keep it. */
   nextRefresh: BarkNextRefreshObservation | null
-  /** VTXOs recorded spent by the last successful seizure scan. Failed syncs keep them. */
-  seizedVtxoIds: string[]
 }
 
 export type BarkSyncParams = {
@@ -57,7 +56,6 @@ function idleBarkSyncSnapshot(): BarkSyncLifecycleSnapshot {
     lastSuccessfulSyncAt: null,
     refreshStatus: 'idle',
     nextRefresh: null,
-    seizedVtxoIds: [],
   }
 }
 
@@ -108,6 +106,7 @@ export async function awaitBarkSyncQuiescence(): Promise<void> {
 export function forceResetBarkSyncLifecycleForTeardown(): void {
   bumpSessionGeneration()
   inFlightSyncTracker.clearCurrent()
+  useBarkExitSeizureNoticeStore.getState().hideNotice()
   setSnapshot(idleBarkSyncSnapshot())
 }
 
@@ -117,6 +116,7 @@ export function forceResetBarkSyncLifecycleForTeardown(): void {
  */
 export function discardShownBarkBalanceForSessionChange(): void {
   bumpSessionGeneration()
+  useBarkExitSeizureNoticeStore.getState().hideNotice()
   setSnapshot(idleBarkSyncSnapshot())
 }
 
@@ -137,6 +137,7 @@ export function syncBarkSyncLifecycleWithLockPhase(lockPhase: LockLifecyclePhase
 export function prepareBarkSyncForSessionOpen(networkMode: NetworkMode): void {
   bumpSessionGeneration()
   inFlightSyncTracker.clearCurrent()
+  useBarkExitSeizureNoticeStore.getState().hideNotice()
   setSnapshot({
     syncPhase: 'not-syncing',
     networkMode,
@@ -147,7 +148,6 @@ export function prepareBarkSyncForSessionOpen(networkMode: NetworkMode): void {
     lastSuccessfulSyncAt: null,
     refreshStatus: 'idle',
     nextRefresh: null,
-    seizedVtxoIds: [],
   })
 }
 
@@ -209,7 +209,6 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
       lastSuccessfulSyncAt: previous.lastSuccessfulSyncAt,
       refreshStatus: previous.refreshStatus,
       nextRefresh: previous.nextRefresh,
-      seizedVtxoIds: previous.seizedVtxoIds,
     })
     try {
       const worker = getBarkWorker()
@@ -217,6 +216,9 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
       if (generation !== sessionGeneration) {
         return
       }
+      useBarkExitSeizureNoticeStore
+        .getState()
+        .showNotice(params.walletId, params.networkMode, synced.seizedVtxoIds ?? [])
       const balance = await worker.readSpendableBalance()
       if (generation !== sessionGeneration) {
         return
@@ -231,7 +233,6 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
         lastSuccessfulSyncAt: synced.lastSuccessfulSyncAt,
         refreshStatus: synced.refreshStatus ?? 'idle',
         nextRefresh: observeNextRefresh(synced),
-        seizedVtxoIds: synced.seizedVtxoIds ?? [],
       })
       if (generation !== sessionGeneration || params.settleExits === false) {
         return
@@ -256,7 +257,6 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
         lastSuccessfulSyncAt: kept.lastSuccessfulSyncAt,
         refreshStatus: kept.refreshStatus,
         nextRefresh: kept.nextRefresh,
-        seizedVtxoIds: kept.seizedVtxoIds,
       })
       if (throwOnError) {
         throw error
@@ -295,7 +295,6 @@ export function recordBarkSpendableAfterSend(result: {
     lastSuccessfulSyncAt: result.lastSuccessfulSyncAt,
     refreshStatus: current.refreshStatus,
     nextRefresh: current.nextRefresh,
-    seizedVtxoIds: current.seizedVtxoIds,
   })
 }
 
