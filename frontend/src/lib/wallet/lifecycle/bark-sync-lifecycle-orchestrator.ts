@@ -1,4 +1,5 @@
 import { settleBarkEmergencyExitAfterSync } from '@/lib/bark/bark-emergency-exit-after-sync'
+import { barkSyncErrorMessageWithServerNotice } from '@/lib/bark/bark-server-notice'
 import { useBarkExitChainNoticeStore } from '@/lib/bark/bark-exit-seizure-notice'
 import { getBarkWorker } from '@/workers/bark-factory'
 import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
@@ -11,10 +12,6 @@ import type { LockLifecyclePhase } from '@/lib/wallet/lifecycle/lock-lifecycle-t
 import type { SyncLifecyclePhase } from '@/lib/wallet/lifecycle/rail-lifecycle-types'
 import { shouldSkipRailLifecycleResetForLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-phase'
 import { createInFlightLifecycleTracker } from '@/lib/wallet/lifecycle/lifecycle-in-flight-tracker'
-import {
-  LIFECYCLE_SYNC_ERROR_FALLBACK,
-  userFacingLifecycleErrorMessage,
-} from '@/lib/shared/utils'
 
 export type BarkSyncLifecycleSnapshot = {
   syncPhase: SyncLifecyclePhase
@@ -248,10 +245,11 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
         return
       }
       const kept = getBarkSyncLifecycleSnapshot()
+      const errorMessage = await barkSyncErrorMessageWithServerNotice(params.networkMode, error)
       setSnapshot({
         syncPhase: 'sync-error',
         networkMode: params.networkMode,
-        errorMessage: userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK),
+        errorMessage,
         spendableSats: kept.spendableSats,
         lockedSats: kept.lockedSats,
         exitingSats: kept.exitingSats,

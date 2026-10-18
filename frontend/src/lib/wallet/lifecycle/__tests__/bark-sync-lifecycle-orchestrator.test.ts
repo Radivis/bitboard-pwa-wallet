@@ -135,6 +135,33 @@ describe('bark-sync-lifecycle-orchestrator', () => {
     })
   })
 
+  it('shows the Ark server public notice when the browser handshake fails', async () => {
+    workerMocks.sync.mockRejectedValueOnce(
+      new Error(
+        'Failed to connect to Ark server: handshake request failed: TypeError: Failed to fetch',
+      ),
+    )
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ psa: "We're down, sorry..." }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    await orchestrateBarkSync({
+      walletId: 1,
+      networkMode: 'signet',
+      throwOnError: false,
+    })
+
+    expect(getBarkSyncLifecycleSnapshot().errorMessage).toBe("We're down, sorry...")
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/bark/server-notice?network=signet',
+      expect.objectContaining({ cache: 'no-store' }),
+    )
+    fetchMock.mockRestore()
+  })
+
   it('shows a sync error and no amount when the first sync of a session fails', async () => {
     workerMocks.sync.mockRejectedValueOnce(new Error('Bark server unreachable'))
 
