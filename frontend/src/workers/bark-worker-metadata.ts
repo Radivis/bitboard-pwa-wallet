@@ -1,9 +1,9 @@
 import {
   applyBarkRecordEnvelope,
-  applyClearedExitSeizureNotice,
+  applyClearedExitChainNotice,
   applyEmergencyExitFeePreset,
   applyEmergencyExitMaxFeeRate,
-  applyMergedExitSeizureVtxoIds,
+  applyMergedExitChainNotice,
   applyOpenedBarkAccount,
   applyPendingEmergencyClaim,
   applyProceedAutomatically,
@@ -26,6 +26,7 @@ import {
   type WorkerWalletPayloadDeps,
 } from '@/workers/worker-wallet-payload-update'
 import type { BarkEmergencyExitFeePrefs } from '@/workers/bark-api'
+import type { BarkExitChainNoticeKind } from '@/lib/bark/bark-exit-seizure'
 
 export type BarkEncryptedPayloadDeps = WorkerWalletPayloadDeps
 
@@ -126,37 +127,43 @@ export async function readPendingEmergencyClaim(
   return findBarkAccount(payload, network)?.pendingEmergencyClaim ?? null
 }
 
-/** VTXO ids still waiting for the user to dismiss the seizure banner. */
-export async function readExitSeizureVtxoIds(
+/** VTXO ids still waiting for the user to dismiss a sweep or seizure section. */
+export async function readExitChainNotices(
   deps: BarkEncryptedPayloadDeps,
   walletId: number,
   network: BarkRailNetwork,
-): Promise<string[]> {
+): Promise<{ anchorSweepVtxoIds: string[]; checkpointSeizureVtxoIds: string[] }> {
   const payload = await readDecryptedWalletPayload(deps, walletId)
-  return findBarkAccount(payload, network)?.exitSeizureVtxoIds ?? []
+  const account = findBarkAccount(payload, network)
+  return {
+    anchorSweepVtxoIds: account?.exitAnchorSweepVtxoIds ?? [],
+    checkpointSeizureVtxoIds: account?.exitCheckpointSeizureVtxoIds ?? [],
+  }
 }
 
-/** Adds ids from a seizure scan. An empty scan does not remove a stored notice. */
-export async function mergeExitSeizureVtxoIds(
+/** Adds ids from a scan. An empty list does not remove the stored list. */
+export async function mergeExitChainNotice(
   deps: BarkEncryptedPayloadDeps,
   walletId: number,
   network: BarkRailNetwork,
+  kind: BarkExitChainNoticeKind,
   vtxoIds: readonly string[],
 ): Promise<void> {
   if (vtxoIds.length === 0) return
   await updateDecryptedWalletPayload(deps, walletId, (payload) =>
-    applyMergedExitSeizureVtxoIds({ payload, network, vtxoIds }),
+    applyMergedExitChainNotice({ payload, network, kind, vtxoIds }),
   )
 }
 
-/** Drops the seizure notice after the user dismisses the banner. */
-export async function clearExitSeizureNotice(
+/** Drops the sweep list or the seizure list after the user dismisses that section. */
+export async function clearExitChainNotice(
   deps: BarkEncryptedPayloadDeps,
   walletId: number,
   network: BarkRailNetwork,
+  kind: BarkExitChainNoticeKind,
 ): Promise<void> {
   await updateDecryptedWalletPayload(deps, walletId, (payload) =>
-    applyClearedExitSeizureNotice({ payload, network }),
+    applyClearedExitChainNotice({ payload, network, kind }),
   )
 }
 

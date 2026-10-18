@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { BarkExitSeizureBanner } from '@/components/bark/BarkExitSeizureBanner'
-import { BARK_EXIT_SEIZURE_WARNING } from '@/lib/bark/bark-exit-seizure'
 import {
-  barkExitSeizureNoticeIds,
-  useBarkExitSeizureNoticeStore,
+  BARK_ANCHOR_SWEEP_WARNING,
+  BARK_CHECKPOINT_SEIZURE_WARNING,
+} from '@/lib/bark/bark-exit-seizure'
+import {
+  barkExitChainNoticeIds,
+  useBarkExitChainNoticeStore,
 } from '@/lib/bark/bark-exit-seizure-notice'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import type { NetworkMode } from '@/stores/walletStore'
@@ -20,10 +23,10 @@ const featureState = vi.hoisted(() => ({
   isBarkEnabled: true,
 }))
 
-const clearExitSeizureNotice = vi.hoisted(() => vi.fn())
+const clearExitChainNotice = vi.hoisted(() => vi.fn())
 
 vi.mock('@/workers/bark-factory', () => ({
-  getBarkWorker: () => ({ clearExitSeizureNotice }),
+  getBarkWorker: () => ({ clearExitChainNotice }),
 }))
 
 vi.mock('@/stores/featureStore', () => ({
@@ -46,9 +49,9 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
 
 describe('BarkExitSeizureBanner', () => {
   beforeEach(() => {
-    useBarkExitSeizureNoticeStore.setState({ notice: null })
-    clearExitSeizureNotice.mockReset()
-    clearExitSeizureNotice.mockResolvedValue(undefined)
+    useBarkExitChainNoticeStore.setState({ notice: null })
+    clearExitChainNotice.mockReset()
+    clearExitChainNotice.mockResolvedValue(undefined)
     featureState.isBarkEnabled = true
     walletStoreState.networkMode = 'signet'
     walletStoreState.activeWalletId = 1
@@ -56,30 +59,42 @@ describe('BarkExitSeizureBanner', () => {
     walletStoreState.loadedDescriptorWallet = { networkMode: 'signet' }
   })
 
-  it('BARK-SYNC-11 shows a dismissible banner and hides it after the account write', async () => {
-    useBarkExitSeizureNoticeStore.getState().showNotice(1, 'signet', ['vtxo-a'])
+  it('BARK-SYNC-11 shows both sections and dismisses only the chosen list', async () => {
+    useBarkExitChainNoticeStore.getState().showNotice(1, 'signet', {
+      anchorSweepVtxoIds: ['vtxo-a'],
+      checkpointSeizureVtxoIds: ['vtxo-b'],
+    })
     renderWithProviders(<BarkExitSeizureBanner />)
 
-    expect(screen.getByTestId('bark-exit-seizure-banner')).toHaveTextContent(
-      BARK_EXIT_SEIZURE_WARNING,
-    )
+    const banner = screen.getByTestId('bark-exit-seizure-banner')
+    expect(banner).toHaveTextContent(BARK_ANCHOR_SWEEP_WARNING)
+    expect(banner).toHaveTextContent(BARK_CHECKPOINT_SEIZURE_WARNING)
+    expect(screen.getByTestId('bark-exit-anchor-sweep-ids')).toHaveTextContent('vtxo-a')
+    expect(screen.getByTestId('bark-exit-checkpoint-seizure-ids')).toHaveTextContent('vtxo-b')
 
-    fireEvent.click(screen.getByTestId('bark-exit-seizure-dismiss'))
+    fireEvent.click(screen.getByTestId('bark-exit-anchor-sweep-dismiss'))
 
     await waitFor(() => {
-      expect(screen.queryByTestId('bark-exit-seizure-banner')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('bark-exit-anchor-sweep-ids')).not.toBeInTheDocument()
     })
-    expect(clearExitSeizureNotice).toHaveBeenCalledOnce()
-    expect(barkExitSeizureNoticeIds(1, 'signet')).toEqual([])
+    expect(screen.getByTestId('bark-exit-checkpoint-seizure-ids')).toHaveTextContent('vtxo-b')
+    expect(clearExitChainNotice).toHaveBeenCalledWith('sweep')
+    expect(barkExitChainNoticeIds(1, 'signet')).toEqual({
+      anchorSweepVtxoIds: [],
+      checkpointSeizureVtxoIds: ['vtxo-b'],
+    })
   })
 
   it('BARK-SYNC-11 hides the banner while locked and shows it again after unlock', () => {
-    useBarkExitSeizureNoticeStore.getState().showNotice(1, 'signet', ['vtxo-a'])
+    useBarkExitChainNoticeStore.getState().showNotice(1, 'signet', {
+      anchorSweepVtxoIds: ['vtxo-a'],
+      checkpointSeizureVtxoIds: [],
+    })
     walletStoreState.walletStatus = 'locked'
     const { rerender } = renderWithProviders(<BarkExitSeizureBanner />)
 
     expect(screen.queryByTestId('bark-exit-seizure-banner')).not.toBeInTheDocument()
-    expect(barkExitSeizureNoticeIds(1, 'signet')).toEqual(['vtxo-a'])
+    expect(barkExitChainNoticeIds(1, 'signet').anchorSweepVtxoIds).toEqual(['vtxo-a'])
 
     walletStoreState.walletStatus = 'unlocked'
     rerender(<BarkExitSeizureBanner />)
@@ -87,7 +102,10 @@ describe('BarkExitSeizureBanner', () => {
   })
 
   it('BARK-SYNC-11 does not show another wallet notice', () => {
-    useBarkExitSeizureNoticeStore.getState().showNotice(2, 'signet', ['vtxo-a'])
+    useBarkExitChainNoticeStore.getState().showNotice(2, 'signet', {
+      anchorSweepVtxoIds: ['vtxo-a'],
+      checkpointSeizureVtxoIds: [],
+    })
     renderWithProviders(<BarkExitSeizureBanner />)
     expect(screen.queryByTestId('bark-exit-seizure-banner')).not.toBeInTheDocument()
   })

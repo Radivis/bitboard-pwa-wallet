@@ -77,8 +77,8 @@ vi.mock('@/lib/bark/bark-session-service', () => ({
 }))
 
 import {
-  barkExitSeizureNoticeIds,
-  useBarkExitSeizureNoticeStore,
+  barkExitChainNoticeIds,
+  useBarkExitChainNoticeStore,
 } from '@/lib/bark/bark-exit-seizure-notice'
 import {
   getBarkLoadLifecycleSnapshot,
@@ -90,7 +90,7 @@ import {
 describe('bark-load-lifecycle-orchestrator', () => {
   beforeEach(() => {
     resetBarkLoadLifecycleStateForTests()
-    useBarkExitSeizureNoticeStore.setState({ notice: null })
+    useBarkExitChainNoticeStore.setState({ notice: null })
     vi.clearAllMocks()
     featureState.isBarkEnabled = true
     workerMocks.openSession.mockResolvedValue({
@@ -129,12 +129,16 @@ describe('bark-load-lifecycle-orchestrator', () => {
     workerMocks.openSession.mockResolvedValue({
       fingerprint: 'abcdef01',
       receiveKeyIndex: 0,
-      exitSeizureVtxoIds: ['vtxo-b', 'vtxo-a'],
+      exitAnchorSweepVtxoIds: ['vtxo-b', 'vtxo-a'],
+      exitCheckpointSeizureVtxoIds: ['vtxo-c'],
     })
 
     await orchestrateBarkLoad({ walletId: 1, networkMode: 'signet' })
 
-    expect(barkExitSeizureNoticeIds(1, 'signet')).toEqual(['vtxo-a', 'vtxo-b'])
+    expect(barkExitChainNoticeIds(1, 'signet')).toEqual({
+      anchorSweepVtxoIds: ['vtxo-a', 'vtxo-b'],
+      checkpointSeizureVtxoIds: ['vtxo-c'],
+    })
   })
 
   it('remembers a persisted sync time without blocking on the post-load sync', async () => {

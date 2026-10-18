@@ -1,16 +1,41 @@
-const INVALID_EXIT_SEIZURES = 'Bark exit seizures are invalid'
+const INVALID_EXIT_CHAIN_NOTICES = 'Bark exit chain notices are invalid'
 
-export const BARK_EXIT_SEIZURE_WARNING =
-  'The Bark operator spent an exit output on-chain outside this wallet. As a result, some of your VTXOs are now spent.'
+/** A sweep is an anchor spend. A seizure is a checkpoint spend. */
+export type BarkExitChainNoticeKind = 'sweep' | 'seizure'
 
-/** Reads the JSON array from `bark_exit_seizures`. */
-export function readBarkSeizedVtxoIds(value: unknown): string[] {
+export const BARK_ANCHOR_SWEEP_WARNING =
+  'The on-chain output backing these VTXOs was spent outside the exit. Wait for Bark to renew them. Renewal runs automatically while this wallet is unlocked and synced.'
+
+export const BARK_CHECKPOINT_SEIZURE_WARNING =
+  'A checkpoint from an emergency exit was spent because the exit was not continued. These VTXOs are spent, and this wallet cannot recover them.'
+
+export type BarkExitChainNotices = {
+  anchorSweepVtxoIds: string[]
+  checkpointSeizureVtxoIds: string[]
+}
+
+/** Reads the JSON object from `bark_exit_chain_notices`. */
+export function readBarkExitChainNotices(value: unknown): BarkExitChainNotices {
   if (typeof value !== 'string') {
-    throw new Error(INVALID_EXIT_SEIZURES)
+    throw new Error(INVALID_EXIT_CHAIN_NOTICES)
   }
   const parsed: unknown = JSON.parse(value)
-  if (!Array.isArray(parsed) || parsed.some((id) => typeof id !== 'string' || id.length === 0)) {
-    throw new Error(INVALID_EXIT_SEIZURES)
+  if (!isRecord(parsed)) {
+    throw new Error(INVALID_EXIT_CHAIN_NOTICES)
   }
-  return parsed
+  return {
+    anchorSweepVtxoIds: vtxoIdsFromUnknown(parsed.anchorSweepVtxoIds),
+    checkpointSeizureVtxoIds: vtxoIdsFromUnknown(parsed.checkpointSeizureVtxoIds),
+  }
+}
+
+function vtxoIdsFromUnknown(value: unknown): string[] {
+  if (!Array.isArray(value) || value.some((id) => typeof id !== 'string' || id.length === 0)) {
+    throw new Error(INVALID_EXIT_CHAIN_NOTICES)
+  }
+  return value
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value != null && !Array.isArray(value)
 }

@@ -57,9 +57,9 @@ feature:
     - That time is the start of the next refresh period (Bark's next required refresh height), estimated from the sync time and the average block interval of the open network
     - When the refresh period has already started, the notice asks the user to keep the wallet unlocked and synced instead of naming a time
     - The notice covers only the open wallet and network. It is cleared on lock, wallet switch, and session change
-    - A confirmed spend of a chain anchor, or of a hot checkpoint whose next exit transaction is not yet confirmed, by any transaction other than that next exit transaction records every unspent VTXO whose history passes through that anchor or checkpoint as spent, before refresh is scheduled
-    - A checkpoint whose next exit transaction is already confirmed is not watched
-    - The wallet layout shows a banner when that sync recorded such a spend. The notice is stored on that wallet's Bark account. The banner stays until the user dismisses it. Lock, wallet switch, and session change hide it until that wallet is unlocked again. A later sync that records no seizure does not remove it
+    - A confirmed spend of a chain anchor by any transaction other than the first exit transaction is an anchor sweep. It records every unspent VTXO with that anchor. Those coins stay spendable so renewal can run. The scan checks anchors before checkpoints. A history whose anchor was swept is not checked for a checkpoint seizure
+    - A confirmed spend of a hot checkpoint whose next exit transaction is not yet confirmed, by any transaction other than that next exit transaction, records every remaining unspent VTXO whose history passes through that checkpoint as spent, before refresh is scheduled. A checkpoint whose next exit transaction is already confirmed is not watched
+    - The wallet layout shows one banner. Each recorded kind is its own section and lists its VTXO ids. Both sections show together when both lists have ids. Each sync appends newly recorded ids onto the matching list and leaves the other list in place. A sync that records neither removes nothing. Dismissing a section clears only that list. Lock, wallet switch, and session change hide the banner until that wallet is unlocked again
     - The VTXO list link and page exist only when isBarkEnabled and the network is signet or mainnet
     - The VTXO list is the local Bark database. It is not an operator snapshot
     - Spent and Exited VTXOs stay hidden until the user shows them. Locked VTXOs stay visible
@@ -223,13 +223,17 @@ feature:
         implemented_by: frontend/src/lib/bark/__tests__/bark-next-refresh-hint.test.ts
       - id: BARK-SYNC-11
         description: >
-          A confirmed foreign spend of a chain anchor or of a hot checkpoint records every unspent
-          VTXO whose history passes through that anchor or checkpoint as spent, before refresh is
-          scheduled. A checkpoint whose next exit transaction is already confirmed is not watched.
-          The wallet layout shows a banner for the wallet and network that recorded the spend.
-          The notice is stored on that Bark account. The banner stays until the user dismisses it.
-          Lock, wallet switch, and session change hide it until that wallet is unlocked again.
-          A later sync that records no seizure does not remove it
+          A confirmed foreign spend of a chain anchor is an anchor sweep. It records every unspent
+          VTXO with that anchor and leaves those coins spendable. The scan checks anchors first. A
+          history whose anchor was swept is not checked for a checkpoint seizure. A confirmed foreign spend of a hot
+          checkpoint records every remaining unspent VTXO whose history passes through it as spent,
+          before refresh is scheduled. A checkpoint whose next exit transaction is already confirmed
+          is not watched. The wallet layout shows one banner. Each kind is a section that lists its
+          VTXO ids, and both sections show together when both lists have ids. Each list is stored
+          on that Bark account. A later sync appends ids onto the matching list and leaves the
+          other list in place. A sync that records neither removes nothing. Dismissing a section
+          clears only that list. Lock, wallet switch, and session change hide the banner until
+          that wallet is unlocked again
         implemented_by:
           - bitboard-bark/src/exit_seizure.rs
           - frontend/src/lib/bark/__tests__/bark-rail-metadata.test.ts

@@ -1,5 +1,5 @@
 import { settleBarkEmergencyExitAfterSync } from '@/lib/bark/bark-emergency-exit-after-sync'
-import { useBarkExitSeizureNoticeStore } from '@/lib/bark/bark-exit-seizure-notice'
+import { useBarkExitChainNoticeStore } from '@/lib/bark/bark-exit-seizure-notice'
 import { getBarkWorker } from '@/workers/bark-factory'
 import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
 import type { BarkNextRefreshObservation } from '@/lib/bark/bark-next-refresh-hint'
@@ -106,7 +106,7 @@ export async function awaitBarkSyncQuiescence(): Promise<void> {
 export function forceResetBarkSyncLifecycleForTeardown(): void {
   bumpSessionGeneration()
   inFlightSyncTracker.clearCurrent()
-  useBarkExitSeizureNoticeStore.getState().hideNotice()
+  useBarkExitChainNoticeStore.getState().hideNotice()
   setSnapshot(idleBarkSyncSnapshot())
 }
 
@@ -116,7 +116,7 @@ export function forceResetBarkSyncLifecycleForTeardown(): void {
  */
 export function discardShownBarkBalanceForSessionChange(): void {
   bumpSessionGeneration()
-  useBarkExitSeizureNoticeStore.getState().hideNotice()
+  useBarkExitChainNoticeStore.getState().hideNotice()
   setSnapshot(idleBarkSyncSnapshot())
 }
 
@@ -137,7 +137,7 @@ export function syncBarkSyncLifecycleWithLockPhase(lockPhase: LockLifecyclePhase
 export function prepareBarkSyncForSessionOpen(networkMode: NetworkMode): void {
   bumpSessionGeneration()
   inFlightSyncTracker.clearCurrent()
-  useBarkExitSeizureNoticeStore.getState().hideNotice()
+  useBarkExitChainNoticeStore.getState().hideNotice()
   setSnapshot({
     syncPhase: 'not-syncing',
     networkMode,
@@ -216,9 +216,10 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
       if (generation !== sessionGeneration) {
         return
       }
-      useBarkExitSeizureNoticeStore
-        .getState()
-        .showNotice(params.walletId, params.networkMode, synced.seizedVtxoIds ?? [])
+      useBarkExitChainNoticeStore.getState().showNotice(params.walletId, params.networkMode, {
+        anchorSweepVtxoIds: synced.exitAnchorSweepVtxoIds ?? [],
+        checkpointSeizureVtxoIds: synced.exitCheckpointSeizureVtxoIds ?? [],
+      })
       const balance = await worker.readSpendableBalance()
       if (generation !== sessionGeneration) {
         return

@@ -195,7 +195,7 @@ async fn open_network_session(
 
 fn clear_session_sync_gate() {
     SESSION_SYNC_GATE.with(|gate| gate.borrow_mut().clear());
-    crate::exit_seizure::clear_exit_seizures();
+    crate::exit_seizure::clear_exit_chain_notices();
 }
 
 fn mark_session_synced() {
@@ -404,9 +404,9 @@ pub async fn bark_last_revealed_key_index() -> Result<JsValue, JsValue> {
 /// Boards are checked once here. `sync_pending_boards` parks a board while it waits
 /// for confirmations.
 ///
-/// After those steps, records spendable and locked VTXOs whose chain anchor or hot
-/// checkpoint was spent by another confirmed transaction, then schedules one
-/// delegated VTXO refresh when none is pending.
+/// After those steps, records an anchor sweep without marking those coins spent,
+/// then a checkpoint seizure on the remaining coins and marks those spent, then
+/// schedules one delegated VTXO refresh when none is pending.
 /// A scheduling failure still marks this session synced and returns `warning`.
 /// The status is `idle`, `scheduled`, `pending`, or `warning`.
 ///
@@ -435,7 +435,7 @@ pub async fn bark_sync() -> Result<String, JsValue> {
             async { wallet.sync_pending_boards().await.map_err(bark_error) },
         )
         .await?;
-        crate::exit_seizure::record_exit_chain_seizures(&wallet).await;
+        crate::exit_seizure::record_exit_chain_notices(&wallet).await;
         let refresh_status = delegated_refresh_status(&wallet).await;
         // A missed exit sync does not fail this session.
         let _exit_sync = wallet.sync_exits().await;
@@ -481,12 +481,13 @@ async fn delegated_refresh_status(wallet: &bark::Wallet) -> String {
     }
 }
 
-/// VTXO ids recorded as spent by the last completed exit-chain seizure scan, as a JSON array.
-/// Empty when that scan found none. A scan that could not read the wallet, or could not read
-/// every watched output, keeps the previous list.
+/// Anchor-sweep and checkpoint-seizure VTXO ids from the last completed scan, as JSON
+/// `{"anchorSweepVtxoIds":[],"checkpointSeizureVtxoIds":[]}`. Empty lists mean that scan found
+/// none of that kind. A scan that could not read the wallet, or could not read every watched
+/// output, keeps both previous lists.
 #[wasm_bindgen]
-pub fn bark_exit_seizures() -> String {
-    crate::exit_seizure::exit_seizures_json()
+pub fn bark_exit_chain_notices() -> String {
+    crate::exit_seizure::exit_chain_notices_json()
 }
 
 /// Chain tip and the first block of the next refresh period, as JSON, or `null`.

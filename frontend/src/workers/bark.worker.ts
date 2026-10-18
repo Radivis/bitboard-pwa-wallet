@@ -1,7 +1,7 @@
 import { expose, wrap, type Remote } from 'comlink'
 import { readBarkBalance } from '@/lib/bark/bark-balance'
 import { pendingActionsFromWasm } from '@/lib/bark/bark-pending-actions'
-import { readBarkSeizedVtxoIds } from '@/lib/bark/bark-exit-seizure'
+import { readBarkExitChainNotices, type BarkExitChainNoticeKind } from '@/lib/bark/bark-exit-seizure'
 import {
   readBarkNextRefreshSchedule,
   readBarkRefreshStatus,
@@ -83,11 +83,11 @@ import {
   type BarkRailFlushMetadata,
 } from '@/workers/bark-durable-flush'
 import {
-  clearExitSeizureNotice as clearExitSeizureNoticeInPayload,
-  mergeExitSeizureVtxoIds as mergeExitSeizureVtxoIdsInPayload,
+  clearExitChainNotice as clearExitChainNoticeInPayload,
+  mergeExitChainNotice as mergeExitChainNoticeInPayload,
   persistBarkProtocolState,
   persistOpenedBarkAccount,
-  readExitSeizureVtxoIds as readExitSeizureVtxoIdsFromPayload,
+  readExitChainNotices as readExitChainNoticesFromPayload,
   readPendingEmergencyClaim as readPendingEmergencyClaimFromPayload,
   readProceedAutomatically as readProceedAutomaticallyFromPayload,
   readRecordEnvelopeForOpen,
@@ -332,7 +332,8 @@ async function openSessionImpl(
       fingerprint,
       receiveKeyIndex,
       lastSuccessfulSyncAt: barkAccount.lastSuccessfulSyncAt,
-      exitSeizureVtxoIds: barkAccount.exitSeizureVtxoIds ?? [],
+      exitAnchorSweepVtxoIds: barkAccount.exitAnchorSweepVtxoIds ?? [],
+      exitCheckpointSeizureVtxoIds: barkAccount.exitCheckpointSeizureVtxoIds ?? [],
     }
   } catch (err) {
     if (sessionOpened) {
@@ -383,17 +384,27 @@ async function syncImpl(): Promise<BarkSyncResult> {
       const nextRefresh = readBarkNextRefreshSchedule(
         await wasmModule.bark_next_refresh_schedule(),
       )
-      const scannedVtxoIds = readBarkSeizedVtxoIds(wasmModule.bark_exit_seizures())
+      const scanned = readBarkExitChainNotices(wasmModule.bark_exit_chain_notices())
       const network = requireOpenNetwork()
-      if (scannedVtxoIds.length > 0) {
-        await mergeExitSeizureVtxoIdsInPayload(
+      if (scanned.anchorSweepVtxoIds.length > 0) {
+        await mergeExitChainNoticeInPayload(
           encryptedPayloadDeps(),
           walletId,
           network,
-          scannedVtxoIds,
+          'sweep',
+          scanned.anchorSweepVtxoIds,
         )
       }
-      const seizedVtxoIds = await readExitSeizureVtxoIdsFromPayload(
+      if (scanned.checkpointSeizureVtxoIds.length > 0) {
+        await mergeExitChainNoticeInPayload(
+          encryptedPayloadDeps(),
+          walletId,
+          network,
+          'seizure',
+          scanned.checkpointSeizureVtxoIds,
+        )
+      }
+      const stored = await readExitChainNoticesFromPayload(
         encryptedPayloadDeps(),
         walletId,
         network,
@@ -402,7 +413,8 @@ async function syncImpl(): Promise<BarkSyncResult> {
         lastSuccessfulSyncAt: new Date().toISOString(),
         refreshStatus,
         nextRefresh,
-        seizedVtxoIds,
+        exitAnchorSweepVtxoIds: stored.anchorSweepVtxoIds,
+        exitCheckpointSeizureVtxoIds: stored.checkpointSeizureVtxoIds,
       }
     },
     (result) => ({ lastSuccessfulSyncAt: result.lastSuccessfulSyncAt }),
@@ -607,10 +619,10 @@ function requireOpenNetwork(): BarkRailNetwork {
   return openNetwork
 }
 
-async function clearExitSeizureNoticeImpl(): Promise<void> {
+async function clearExitChainNoticeImpl(kind: BarkExitChainNoticeKind): Promise<void> {
   const walletId = requireOpenWalletId()
   const network = requireOpenNetwork()
-  await clearExitSeizureNoticeInPayload(encryptedPayloadDeps(), walletId, network)
+  await clearExitChainNoticeInPayload(encryptedPayloadDeps(), walletId, network, kind)
 }
 
 async function readPendingEmergencyClaimImpl(): Promise<PendingEmergencyClaim | null> {
@@ -814,8 +826,8 @@ const barkService: BarkService = {
     return callBark(() => drainEmergencyExitsImpl(address, feeRateSatPerVb, excludeVtxoIds))
   },
 
-  clearExitSeizureNotice(): Promise<void> {
-    return callBark(() => clearExitSeizureNoticeImpl())
+  clearExitChainNotice(kind): Promise<void> {
+    return callBark(() => clearExitChainNoticeImpl(kind))
   },
 
   readPendingEmergencyClaim(): Promise<PendingEmergencyClaim | null> {

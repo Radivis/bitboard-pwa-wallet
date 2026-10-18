@@ -6,7 +6,7 @@ import {
   isBarkReceiveKeyIndex,
   emergencyExitFeePresetFromUnknown,
   emergencyExitMaxFeeRateFromUnknown,
-  exitSeizureVtxoIdsFromUnknown,
+  seizureVtxoIdsFromUnknown,
   pendingEmergencyClaimFromUnknown,
   proceedAutomaticallyFromUnknown,
   type BarkEmergencyExitFeePreset,
@@ -15,6 +15,7 @@ import {
   type StoredBarkAccount,
   type WalletSecretsPayload,
 } from '@/lib/wallet/wallet-domain-types'
+import type { BarkExitChainNoticeKind } from '@/lib/bark/bark-exit-seizure'
 
 export class BarkFingerprintMismatchError extends Error {
   constructor() {
@@ -109,9 +110,15 @@ function accountWithPreservedFields(
   if (emergencyExitMaxFeeRateSatPerVb != null) {
     barkAccount.emergencyExitMaxFeeRateSatPerVb = emergencyExitMaxFeeRateSatPerVb
   }
-  const exitSeizureVtxoIds = exitSeizureVtxoIdsFromUnknown(existingAccount?.exitSeizureVtxoIds)
-  if (exitSeizureVtxoIds != null) {
-    barkAccount.exitSeizureVtxoIds = exitSeizureVtxoIds
+  const exitAnchorSweepVtxoIds = seizureVtxoIdsFromUnknown(existingAccount?.exitAnchorSweepVtxoIds)
+  if (exitAnchorSweepVtxoIds != null) {
+    barkAccount.exitAnchorSweepVtxoIds = exitAnchorSweepVtxoIds
+  }
+  const exitCheckpointSeizureVtxoIds = seizureVtxoIdsFromUnknown(
+    existingAccount?.exitCheckpointSeizureVtxoIds,
+  )
+  if (exitCheckpointSeizureVtxoIds != null) {
+    barkAccount.exitCheckpointSeizureVtxoIds = exitCheckpointSeizureVtxoIds
   }
   return barkAccount
 }
@@ -365,15 +372,16 @@ export function applyEmergencyExitMaxFeeRate(params: {
 }
 
 /**
- * Adds VTXO ids to the seizure notice. An empty list leaves the stored notice unchanged.
- * A later sync flush keeps the merged list.
+ * Adds VTXO ids to the sweep list or the seizure list. An empty list leaves that
+ * list unchanged. The other list is left in place. A later sync flush keeps both.
  */
-export function applyMergedExitSeizureVtxoIds(params: {
+export function applyMergedExitChainNotice(params: {
   payload: WalletSecretsPayload
   network: BarkRailNetwork
+  kind: BarkExitChainNoticeKind
   vtxoIds: readonly string[]
 }): WalletSecretsPayload {
-  const incoming = exitSeizureVtxoIdsFromUnknown([...params.vtxoIds])
+  const incoming = seizureVtxoIdsFromUnknown([...params.vtxoIds])
   if (incoming == null) return params.payload
   const existingAccount = requireBarkAccount(params.payload, params.network)
   const account = accountWithPreservedFields(
@@ -383,17 +391,16 @@ export function applyMergedExitSeizureVtxoIds(params: {
     undefined,
     undefined,
   )
-  account.exitSeizureVtxoIds = exitSeizureVtxoIdsFromUnknown([
-    ...(account.exitSeizureVtxoIds ?? []),
-    ...incoming,
-  ])
+  const field = noticeField(params.kind)
+  account[field] = seizureVtxoIdsFromUnknown([...(account[field] ?? []), ...incoming])
   return upsertBarkAccountInPayload(params.payload, account)
 }
 
-/** Removes the seizure notice. A later sync flush does not restore it. */
-export function applyClearedExitSeizureNotice(params: {
+/** Removes the sweep list or the seizure list. A later sync flush does not restore it. */
+export function applyClearedExitChainNotice(params: {
   payload: WalletSecretsPayload
   network: BarkRailNetwork
+  kind: BarkExitChainNoticeKind
 }): WalletSecretsPayload {
   const existingAccount = requireBarkAccount(params.payload, params.network)
   const account = accountWithPreservedFields(
@@ -403,6 +410,12 @@ export function applyClearedExitSeizureNotice(params: {
     undefined,
     undefined,
   )
-  delete account.exitSeizureVtxoIds
+  delete account[noticeField(params.kind)]
   return upsertBarkAccountInPayload(params.payload, account)
+}
+
+function noticeField(
+  kind: BarkExitChainNoticeKind,
+): 'exitAnchorSweepVtxoIds' | 'exitCheckpointSeizureVtxoIds' {
+  return kind === 'sweep' ? 'exitAnchorSweepVtxoIds' : 'exitCheckpointSeizureVtxoIds'
 }

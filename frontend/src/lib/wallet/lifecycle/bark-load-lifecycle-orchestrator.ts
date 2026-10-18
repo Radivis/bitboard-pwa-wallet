@@ -2,7 +2,7 @@ import { getDatabase, getWalletSecretsEncrypted } from '@/db'
 import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
 import { getEsploraUrl } from '@/lib/wallet/bitcoin-utils'
 import { isBarkReceiveKeyIndex, type BarkRailNetwork } from '@/lib/wallet/wallet-domain-types'
-import { useBarkExitSeizureNoticeStore } from '@/lib/bark/bark-exit-seizure-notice'
+import { useBarkExitChainNoticeStore } from '@/lib/bark/bark-exit-seizure-notice'
 import {
   forceResetBarkSyncLifecycleForTeardown,
   orchestrateBarkPostLoadSync,
@@ -155,7 +155,8 @@ async function openBarkWorkerSession(
 ): Promise<{
   receiveKeyIndex: number
   lastSuccessfulSyncAt?: string
-  exitSeizureVtxoIds: string[]
+  exitAnchorSweepVtxoIds: string[]
+  exitCheckpointSeizureVtxoIds: string[]
 }> {
   const worker = getBarkWorker()
   await ensureSecretsChannel()
@@ -175,7 +176,8 @@ async function openBarkWorkerSession(
   return {
     receiveKeyIndex: opened.receiveKeyIndex,
     lastSuccessfulSyncAt: opened.lastSuccessfulSyncAt,
-    exitSeizureVtxoIds: opened.exitSeizureVtxoIds ?? [],
+    exitAnchorSweepVtxoIds: opened.exitAnchorSweepVtxoIds ?? [],
+    exitCheckpointSeizureVtxoIds: opened.exitCheckpointSeizureVtxoIds ?? [],
   }
 }
 
@@ -230,9 +232,10 @@ export async function orchestrateBarkLoad(params: BarkLoadParams): Promise<void>
         receiveKeyIndex: opened.receiveKeyIndex,
       })
       rememberBarkPersistedSyncTime(opened.lastSuccessfulSyncAt ?? null)
-      useBarkExitSeizureNoticeStore
-        .getState()
-        .showNotice(walletId, networkMode, opened.exitSeizureVtxoIds)
+      useBarkExitChainNoticeStore.getState().showNotice(walletId, networkMode, {
+        anchorSweepVtxoIds: opened.exitAnchorSweepVtxoIds,
+        checkpointSeizureVtxoIds: opened.exitCheckpointSeizureVtxoIds,
+      })
       orchestrateBarkPostLoadSync({ walletId, networkMode })
       syncEmergencyExitAutomation(walletId, networkMode)
     } catch (error) {

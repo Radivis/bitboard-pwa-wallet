@@ -1,53 +1,71 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  barkExitSeizureNoticeIds,
-  useBarkExitSeizureNoticeStore,
+  barkExitChainNoticeIds,
+  useBarkExitChainNoticeStore,
 } from '@/lib/bark/bark-exit-seizure-notice'
 
-const clearExitSeizureNotice = vi.hoisted(() => vi.fn())
+const clearExitChainNotice = vi.hoisted(() => vi.fn())
 
 vi.mock('@/workers/bark-factory', () => ({
-  getBarkWorker: () => ({ clearExitSeizureNotice }),
+  getBarkWorker: () => ({ clearExitChainNotice }),
 }))
 
-describe('bark exit seizure notice', () => {
+describe('bark exit chain notice', () => {
   beforeEach(() => {
-    useBarkExitSeizureNoticeStore.setState({ notice: null })
-    clearExitSeizureNotice.mockReset()
-    clearExitSeizureNotice.mockResolvedValue(undefined)
+    useBarkExitChainNoticeStore.setState({ notice: null })
+    clearExitChainNotice.mockReset()
+    clearExitChainNotice.mockResolvedValue(undefined)
   })
 
-  it('shows a notice from the Bark account and hides an empty one', () => {
-    const { showNotice } = useBarkExitSeizureNoticeStore.getState()
-    showNotice(1, 'signet', ['vtxo-b', 'vtxo-a'])
-    expect(barkExitSeizureNoticeIds(1, 'signet')).toEqual(['vtxo-a', 'vtxo-b'])
-    expect(barkExitSeizureNoticeIds(2, 'signet')).toEqual([])
+  it('shows both lists and hides them only when both are empty', () => {
+    const { showNotice } = useBarkExitChainNoticeStore.getState()
+    showNotice(1, 'signet', {
+      anchorSweepVtxoIds: ['vtxo-b', 'vtxo-a'],
+      checkpointSeizureVtxoIds: ['vtxo-c'],
+    })
+    expect(barkExitChainNoticeIds(1, 'signet')).toEqual({
+      anchorSweepVtxoIds: ['vtxo-a', 'vtxo-b'],
+      checkpointSeizureVtxoIds: ['vtxo-c'],
+    })
+    expect(barkExitChainNoticeIds(2, 'signet')).toEqual({
+      anchorSweepVtxoIds: [],
+      checkpointSeizureVtxoIds: [],
+    })
 
-    showNotice(1, 'signet', [])
-    expect(barkExitSeizureNoticeIds(1, 'signet')).toEqual([])
+    showNotice(1, 'signet', { anchorSweepVtxoIds: [], checkpointSeizureVtxoIds: [] })
+    expect(barkExitChainNoticeIds(1, 'signet')).toEqual({
+      anchorSweepVtxoIds: [],
+      checkpointSeizureVtxoIds: [],
+    })
   })
 
   it('hides the banner without forgetting a different wallet', () => {
-    const { showNotice, hideNotice } = useBarkExitSeizureNoticeStore.getState()
-    showNotice(1, 'signet', ['vtxo-a'])
+    const { showNotice, hideNotice } = useBarkExitChainNoticeStore.getState()
+    showNotice(1, 'signet', { anchorSweepVtxoIds: ['vtxo-a'], checkpointSeizureVtxoIds: [] })
     hideNotice()
-    expect(barkExitSeizureNoticeIds(1, 'signet')).toEqual([])
+    expect(barkExitChainNoticeIds(1, 'signet').anchorSweepVtxoIds).toEqual([])
 
-    showNotice(2, 'signet', ['vtxo-c'])
-    showNotice(1, 'mainnet', [])
-    expect(barkExitSeizureNoticeIds(2, 'signet')).toEqual(['vtxo-c'])
+    showNotice(2, 'signet', { anchorSweepVtxoIds: [], checkpointSeizureVtxoIds: ['vtxo-c'] })
+    showNotice(1, 'mainnet', { anchorSweepVtxoIds: [], checkpointSeizureVtxoIds: [] })
+    expect(barkExitChainNoticeIds(2, 'signet').checkpointSeizureVtxoIds).toEqual(['vtxo-c'])
   })
 
-  it('dismisses only after the Bark account write succeeds', async () => {
-    const { showNotice, dismissNotice } = useBarkExitSeizureNoticeStore.getState()
-    showNotice(1, 'signet', ['vtxo-a'])
-    clearExitSeizureNotice.mockRejectedValueOnce(new Error('payload write failed'))
+  it('dismisses one list and leaves the other section up', async () => {
+    const { showNotice, dismissNotice } = useBarkExitChainNoticeStore.getState()
+    showNotice(1, 'signet', {
+      anchorSweepVtxoIds: ['vtxo-a'],
+      checkpointSeizureVtxoIds: ['vtxo-b'],
+    })
+    clearExitChainNotice.mockRejectedValueOnce(new Error('payload write failed'))
 
-    await expect(dismissNotice(1, 'signet')).rejects.toThrow('payload write failed')
-    expect(barkExitSeizureNoticeIds(1, 'signet')).toEqual(['vtxo-a'])
+    await expect(dismissNotice(1, 'signet', 'sweep')).rejects.toThrow('payload write failed')
+    expect(barkExitChainNoticeIds(1, 'signet').anchorSweepVtxoIds).toEqual(['vtxo-a'])
 
-    await dismissNotice(1, 'signet')
-    expect(clearExitSeizureNotice).toHaveBeenCalledTimes(2)
-    expect(barkExitSeizureNoticeIds(1, 'signet')).toEqual([])
+    await dismissNotice(1, 'signet', 'sweep')
+    expect(clearExitChainNotice).toHaveBeenCalledWith('sweep')
+    expect(barkExitChainNoticeIds(1, 'signet')).toEqual({
+      anchorSweepVtxoIds: [],
+      checkpointSeizureVtxoIds: ['vtxo-b'],
+    })
   })
 })

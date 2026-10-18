@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyBarkRecordEnvelope,
-  applyClearedExitSeizureNotice,
+  applyClearedExitChainNotice,
   applyEmergencyExitFeePreset,
-  applyMergedExitSeizureVtxoIds,
+  applyMergedExitChainNotice,
   applyEmergencyExitMaxFeeRate,
   applyOpenedBarkAccount,
   applyPendingEmergencyClaim,
@@ -308,64 +308,80 @@ describe('barkAccounts metadata', () => {
     expect(findBarkAccount(parsed, 'signet')?.pendingEmergencyClaim).toBeUndefined()
   })
 
-  it('keeps an exit seizure notice across a sync stamp and clears it only when dismissed', () => {
+  it('keeps the sweep list and the seizure list across a sync stamp and clears only the dismissed list', () => {
     const payload = payloadWithArkadeSdk()
     payload.barkAccounts.push(
       signetAccount({
         receiveKeyIndex: 2,
         recordEnvelope: signetRecordEnvelope,
-        exitSeizureVtxoIds: ['vtxo-a'],
+        exitAnchorSweepVtxoIds: ['vtxo-a'],
       }),
     )
 
-    const merged = applyMergedExitSeizureVtxoIds({
+    const mergedAnchors = applyMergedExitChainNotice({
       network: 'signet',
       payload,
+      kind: 'sweep',
       vtxoIds: ['vtxo-c', 'vtxo-a'],
     })
-    expect(findBarkAccount(merged, 'signet')?.exitSeizureVtxoIds).toEqual([
+    const merged = applyMergedExitChainNotice({
+      network: 'signet',
+      payload: mergedAnchors,
+      kind: 'seizure',
+      vtxoIds: ['vtxo-d'],
+    })
+    expect(findBarkAccount(merged, 'signet')?.exitAnchorSweepVtxoIds).toEqual([
       'vtxo-a',
       'vtxo-c',
     ])
-    expect(findBarkAccount(merged, 'mainnet')?.exitSeizureVtxoIds).toBeUndefined()
+    expect(findBarkAccount(merged, 'signet')?.exitCheckpointSeizureVtxoIds).toEqual(['vtxo-d'])
+    expect(findBarkAccount(merged, 'mainnet')?.exitAnchorSweepVtxoIds).toBeUndefined()
 
     const stamped = applySuccessfulBarkSync({
       network: 'signet',
       payload: merged,
       syncedAt: '2024-03-01T12:00:00.000Z',
     })
-    expect(findBarkAccount(stamped, 'signet')?.exitSeizureVtxoIds).toEqual([
+    expect(findBarkAccount(stamped, 'signet')?.exitAnchorSweepVtxoIds).toEqual([
       'vtxo-a',
       'vtxo-c',
     ])
+    expect(findBarkAccount(stamped, 'signet')?.exitCheckpointSeizureVtxoIds).toEqual(['vtxo-d'])
 
     const flushed = applyBarkRecordEnvelope({
       network: 'signet',
       payload: stamped,
       recordEnvelope: 'bmV4dC1kdW1w',
     })
-    expect(findBarkAccount(flushed, 'signet')?.exitSeizureVtxoIds).toEqual([
-      'vtxo-a',
-      'vtxo-c',
-    ])
+    expect(findBarkAccount(flushed, 'signet')?.exitCheckpointSeizureVtxoIds).toEqual(['vtxo-d'])
 
-    const unchanged = applyMergedExitSeizureVtxoIds({
+    const unchanged = applyMergedExitChainNotice({
       network: 'signet',
       payload: flushed,
+      kind: 'seizure',
       vtxoIds: [],
     })
-    expect(findBarkAccount(unchanged, 'signet')?.exitSeizureVtxoIds).toEqual([
+    expect(findBarkAccount(unchanged, 'signet')?.exitAnchorSweepVtxoIds).toEqual([
       'vtxo-a',
       'vtxo-c',
     ])
+    expect(findBarkAccount(unchanged, 'signet')?.exitCheckpointSeizureVtxoIds).toEqual(['vtxo-d'])
 
-    const cleared = applyClearedExitSeizureNotice({ payload: unchanged, network: 'signet' })
-    expect(findBarkAccount(cleared, 'signet')?.exitSeizureVtxoIds).toBeUndefined()
-    expect(findBarkAccount(cleared, 'signet')?.recordEnvelope).toBe('bmV4dC1kdW1w')
-    expect(findBarkAccount(cleared, 'mainnet')?.recordEnvelope).toBe(mainnetRecordEnvelope)
+    const clearedCheckpoint = applyClearedExitChainNotice({
+      payload: unchanged,
+      network: 'signet',
+      kind: 'seizure',
+    })
+    expect(findBarkAccount(clearedCheckpoint, 'signet')?.exitCheckpointSeizureVtxoIds).toBeUndefined()
+    expect(findBarkAccount(clearedCheckpoint, 'signet')?.exitAnchorSweepVtxoIds).toEqual([
+      'vtxo-a',
+      'vtxo-c',
+    ])
+    expect(findBarkAccount(clearedCheckpoint, 'signet')?.recordEnvelope).toBe('bmV4dC1kdW1w')
+    expect(findBarkAccount(clearedCheckpoint, 'mainnet')?.recordEnvelope).toBe(mainnetRecordEnvelope)
   })
 
-  it('omits a malformed exit seizure notice and keeps the record envelope', () => {
+  it('omits a malformed exit seizure list and drops the old combined field', () => {
     const parsed = parseWalletPayloadJson(
       JSON.stringify({
         descriptorWallets: [],
@@ -377,13 +393,16 @@ describe('barkAccounts metadata', () => {
             serverUrl: BARK_SIGNET_SERVER_URL,
             fingerprint: 'abcdef01',
             recordEnvelope: signetRecordEnvelope,
-            exitSeizureVtxoIds: ['vtxo-a', ''],
+            exitCheckpointSeizureVtxoIds: ['vtxo-a', ''],
+            exitSeizureVtxoIds: ['vtxo-old'],
           },
         ],
       }),
     )
     expect(findBarkAccount(parsed, 'signet')?.recordEnvelope).toBe(signetRecordEnvelope)
-    expect(findBarkAccount(parsed, 'signet')?.exitSeizureVtxoIds).toBeUndefined()
+    expect(findBarkAccount(parsed, 'signet')?.exitCheckpointSeizureVtxoIds).toBeUndefined()
+    expect(findBarkAccount(parsed, 'signet')?.exitAnchorSweepVtxoIds).toBeUndefined()
+    expect(JSON.stringify(findBarkAccount(parsed, 'signet'))).not.toContain('exitSeizureVtxoIds')
   })
 
   it('keeps proceed automatically across a sync stamp and a record envelope flush', () => {

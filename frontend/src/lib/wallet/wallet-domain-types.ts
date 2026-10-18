@@ -173,10 +173,15 @@ export interface StoredBarkAccount {
    */
   emergencyExitMaxFeeRateSatPerVb?: number
   /**
-   * VTXOs whose exit output was spent on-chain outside this wallet.
-   * Kept until the user dismisses the banner. Absent when none are waiting.
+   * VTXOs whose chain anchor was swept outside the exit. They stay spendable
+   * so renewal can run. Kept until the user dismisses that banner section.
    */
-  exitSeizureVtxoIds?: string[]
+  exitAnchorSweepVtxoIds?: string[]
+  /**
+   * VTXOs whose hot checkpoint was spent because the exit was not continued.
+   * Kept until the user dismisses that banner section.
+   */
+  exitCheckpointSeizureVtxoIds?: string[]
 }
 
 /** Fee degree for automatic Bark emergency-exit proceeding. Custom is manual only. */
@@ -290,7 +295,7 @@ export function emergencyExitFeePresetFromUnknown(
 }
 
 /** Keeps a non-empty list of VTXO ids. A malformed list is omitted. */
-export function exitSeizureVtxoIdsFromUnknown(value: unknown): string[] | undefined {
+export function seizureVtxoIdsFromUnknown(value: unknown): string[] | undefined {
   if (!Array.isArray(value) || value.length === 0) return undefined
   if (!value.every((id) => typeof id === 'string' && id.length > 0)) return undefined
   return [...new Set(value)].sort()
@@ -352,8 +357,14 @@ export function isStoredBarkAccount(value: unknown): value is StoredBarkAccount 
     return false
   }
   if (
-    value.exitSeizureVtxoIds !== undefined &&
-    exitSeizureVtxoIdsFromUnknown(value.exitSeizureVtxoIds) == null
+    value.exitAnchorSweepVtxoIds !== undefined &&
+    seizureVtxoIdsFromUnknown(value.exitAnchorSweepVtxoIds) == null
+  ) {
+    return false
+  }
+  if (
+    value.exitCheckpointSeizureVtxoIds !== undefined &&
+    seizureVtxoIdsFromUnknown(value.exitCheckpointSeizureVtxoIds) == null
   ) {
     return false
   }
@@ -376,6 +387,7 @@ function migrateLegacyBarkRecordDumpField(row: Record<string, unknown>): Record<
 function sanitizeStoredBarkAccountRow(row: unknown): StoredBarkAccount | null {
   if (!isRecord(row)) return null
   const migrated = migrateLegacyBarkRecordDumpField(row)
+  delete migrated.exitSeizureVtxoIds
   if (isStoredBarkAccount(migrated)) {
     return migrated as StoredBarkAccount
   }
@@ -405,12 +417,19 @@ function sanitizeStoredBarkAccountRow(row: unknown): StoredBarkAccount | null {
   } else {
     delete cleaned.emergencyExitMaxFeeRateSatPerVb
   }
-  const exitSeizureVtxoIds = exitSeizureVtxoIdsFromUnknown(row.exitSeizureVtxoIds)
-  if (exitSeizureVtxoIds != null) {
-    cleaned.exitSeizureVtxoIds = exitSeizureVtxoIds
+  const exitAnchorSweepVtxoIds = seizureVtxoIdsFromUnknown(row.exitAnchorSweepVtxoIds)
+  if (exitAnchorSweepVtxoIds != null) {
+    cleaned.exitAnchorSweepVtxoIds = exitAnchorSweepVtxoIds
   } else {
-    delete cleaned.exitSeizureVtxoIds
+    delete cleaned.exitAnchorSweepVtxoIds
   }
+  const exitCheckpointSeizureVtxoIds = seizureVtxoIdsFromUnknown(row.exitCheckpointSeizureVtxoIds)
+  if (exitCheckpointSeizureVtxoIds != null) {
+    cleaned.exitCheckpointSeizureVtxoIds = exitCheckpointSeizureVtxoIds
+  } else {
+    delete cleaned.exitCheckpointSeizureVtxoIds
+  }
+  delete cleaned.exitSeizureVtxoIds
   if (isStoredBarkAccount(cleaned)) {
     return cleaned
   }
