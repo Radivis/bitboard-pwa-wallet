@@ -107,6 +107,63 @@ fn build_child(
     change_script: &bitcoin::ScriptBuf,
     fee_needed: Amount,
 ) -> Result<Transaction, CryptoError> {
+    let first_try = finish_child(
+        wallet,
+        anchor_outpoint,
+        anchor_output,
+        change_script,
+        fee_needed,
+        None,
+    );
+    if !is_insufficient_funds(&first_try) {
+        return first_try;
+    }
+    // Branch-and-bound can spend a coin that covers the absolute fee and then
+    // reject the result because the leftover change is dust. A larger confirmed
+    // coin still pays the fee. The dust error's "needed" amount is only the dust
+    // threshold, so callers must not treat it as a balance shortfall.
+    let Some(largest_outpoint) = largest_confirmed_outpoint(wallet) else {
+        return first_try;
+    };
+    finish_child(
+        wallet,
+        anchor_outpoint,
+        anchor_output,
+        change_script,
+        fee_needed,
+        Some(largest_outpoint),
+    )
+}
+
+fn is_insufficient_funds(result: &Result<Transaction, CryptoError>) -> bool {
+    matches!(result, Err(err) if err.to_string().contains(BARK_CPFP_INSUFFICIENT_FUNDS))
+}
+
+fn largest_confirmed_outpoint(wallet: &Wallet) -> Option<OutPoint> {
+    let tip_height = wallet.latest_checkpoint().height();
+    wallet
+        .list_unspent()
+        .filter(|utxo| {
+            let confirmations = utxo
+                .chain_position
+                .confirmation_height_upper_bound()
+                .map_or(0, |height| {
+                    tip_height.saturating_add(1).saturating_sub(height)
+                });
+            confirmations >= 1
+        })
+        .max_by_key(|utxo| utxo.txout.value)
+        .map(|utxo| utxo.outpoint)
+}
+
+fn finish_child(
+    wallet: &mut Wallet,
+    anchor_outpoint: OutPoint,
+    anchor_output: &TxOut,
+    change_script: &bitcoin::ScriptBuf,
+    fee_needed: Amount,
+    required_outpoint: Option<OutPoint>,
+) -> Result<Transaction, CryptoError> {
     let mut tx_builder = wallet.build_tx();
     tx_builder.only_witness_utxo();
     tx_builder.exclude_unconfirmed();
@@ -119,6 +176,11 @@ fn build_child(
     tx_builder
         .add_foreign_utxo(anchor_outpoint, anchor_input, FEE_ANCHOR_SPEND_WEIGHT)
         .map_err(|err| CryptoError::Transaction(err.to_string()))?;
+    if let Some(outpoint) = required_outpoint {
+        tx_builder
+            .add_utxo(outpoint)
+            .map_err(|err| CryptoError::Transaction(err.to_string()))?;
+    }
     tx_builder.drain_to(change_script.clone());
     tx_builder.fee_absolute(fee_needed);
     let mut psbt = match tx_builder.finish() {

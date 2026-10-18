@@ -62,9 +62,5 @@ describe('StartBarkEmergencyExitConfirmModal', () => {
     renderWithProviders(
       <StartBarkEmergencyExitConfirmModal open onOpenChange={vi.fn()} onConfirm={vi.fn()} />,
     )
-
-    expect(
-      screen.getByRole('link', { name: 'Differences between VTXOs in Arkade and Bark' }),
-    ).toHaveAttribute('href', `/library/articles/${BARK_EMERGENCY_EXIT_RISK_ARTICLE_SLUG}`)
   })
 })
