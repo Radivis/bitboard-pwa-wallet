@@ -20,6 +20,7 @@ describe('BarkMovementItem', () => {
     const row = screen.getByTestId('bark-movement-7')
     expect(row).toHaveTextContent('Failed')
     expect(row).toHaveTextContent('Bark boarding')
+    expect(row.querySelector('svg.lucide-dog')).toBeInTheDocument()
     expect(screen.getByTestId('bark-movement-amount-7')).toHaveTextContent('-')
     expect(screen.getByTestId('bark-movement-amount-7')).toHaveTextContent('0.00050000')
   })
