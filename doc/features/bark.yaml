@@ -80,6 +80,7 @@ feature:
     - While Proceed automatically is on, each automatic progress resolves the saved low, medium, or high degree to the live Esplora preset, locks that sat/vB for that call, and pauses without broadcasting when the live rate exceeds the saved maximum or the step is unfundable. A partial funding wait does not pause. Claim uses that same resolved rate and does not broadcast while the fee-cap pause is active
     - After a successful Bark sync, already-started exits progress at the High preset while Proceed automatically is off, and use that same automatic fee lock while it is on
     - Start stays disabled when the on-chain confirmed balance is below the broadcast fee
+    - Start asks for confirmation and stays disabled until the user acknowledges the loss-of-funds and on-chain fee risks. The exit is marked only after that confirmation
     - Progress is a button. After a successful Bark sync, already-started exits take that same path, including Pay-to-Anchor children
     - Cancel is offered only while that exit is still cancelable
     - A start that marks no VTXO is an error and does not toast success
@@ -485,6 +486,11 @@ feature:
           - frontend/src/lib/bark/__tests__/bark-emergency-exit-automated-fee.test.ts
           - frontend/src/lib/bark/__tests__/bark-emergency-exit-after-sync.test.ts
           - frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
+      - id: BARK-EMG-28
+        description: Start asks for confirmation and does not mark any VTXO until the user acknowledges the loss-of-funds and on-chain fee risks
+        implemented_by:
+          - frontend/src/components/bark/__tests__/StartBarkEmergencyExitConfirmModal.test.tsx
+          - frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
   pages:
     - BarkManagement:
         description: Bark entry on the Management page
@@ -536,6 +542,7 @@ feature:
           - Proceed automatically switch, congestion warning, max fee rate, and low / medium / high presets while Proceed automatically is on
           - Review of broadcast fee, claim fee, and transaction count
           - Start for the selection or the whole wallet
+          - Confirmation before start, with the loss-of-funds and fee risks, disabled until those risks are acknowledged
           - Live exit rows with state and Cancel when cancelable
           - Progress button
           - Claim section to the current on-chain receive address
@@ -543,7 +550,7 @@ feature:
           - Full-page Bark session loading or error screen while the session is not ready
         requirements:
           - Contracts BARK-EMG-02 through BARK-EMG-08
-          - Contracts BARK-EMG-10 through BARK-EMG-27
+          - Contracts BARK-EMG-10 through BARK-EMG-28
           - Contracts BARK-SESS-03 and BARK-SESS-04
           - Shown only when isBarkEnabled and the network is signet or mainnet
           - Progress is a button, and a successful Bark sync also progresses exits that are already started

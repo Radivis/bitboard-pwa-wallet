@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { PageHeader } from '@/components/PageHeader'
 import { barkSessionBlockingScreen } from '@/components/bark/bark-session-blocking-screen'
 import { BarkRailUnavailable } from '@/components/bark/BarkRailUnavailable'
+import { StartBarkEmergencyExitConfirmModal } from '@/components/bark/StartBarkEmergencyExitConfirmModal'
 import {
   BarkEmergencyExitClaimCard,
   BarkEmergencyExitFeeCard,
@@ -17,6 +19,7 @@ import {
 
 export function BarkEmergencyExitPage() {
   const page = useBarkEmergencyExitPage()
+  const [startConfirmOpen, setStartConfirmOpen] = useState(false)
 
   if (page.unavailable) {
     return (
@@ -37,6 +40,13 @@ export function BarkEmergencyExitPage() {
 
   return (
     <div className="space-y-6">
+      <StartBarkEmergencyExitConfirmModal
+        open={startConfirmOpen}
+        onOpenChange={setStartConfirmOpen}
+        onConfirm={() => {
+          void page.onStart()
+        }}
+      />
       <PageHeader title="Bark emergency exit" />
       <p className="text-sm text-muted-foreground">{BARK_EMERGENCY_EXIT_CANCEL_NOTE}</p>
       <p className="text-sm text-muted-foreground">
@@ -82,7 +92,7 @@ export function BarkEmergencyExitPage() {
         onWholeWalletChange={page.selectWholeWallet}
         onToggleVtxo={page.toggleVtxo}
         onReview={page.onReview}
-        onStart={page.onStart}
+        onStart={() => setStartConfirmOpen(true)}
       />
       <BarkEmergencyExitLiveCard
         rows={page.liveExits}

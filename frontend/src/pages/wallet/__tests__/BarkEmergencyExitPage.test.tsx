@@ -21,6 +21,12 @@ class ResizeObserverStub {
 
 globalThis.ResizeObserver = ResizeObserverStub
 
+async function confirmBarkEmergencyExitStart() {
+  fireEvent.click(await screen.findByTestId('bark-emergency-exit-start'))
+  fireEvent.click(await screen.findByTestId('bark-emergency-exit-start-ack'))
+  fireEvent.click(screen.getByTestId('bark-emergency-exit-start-confirm'))
+}
+
 const walletStoreState = vi.hoisted(() => ({
   networkMode: 'signet' as NetworkMode,
   activeWalletId: 1 as number | null,
@@ -341,7 +347,7 @@ describe('BarkEmergencyExitPage', () => {
     renderWithProviders(<BarkEmergencyExitPage />)
     fireEvent.click(await screen.findByTestId('bark-emergency-exit-vtxo-vtxo-1'))
     fireEvent.click(screen.getByTestId('bark-emergency-exit-review'))
-    fireEvent.click(await screen.findByTestId('bark-emergency-exit-start'))
+    await confirmBarkEmergencyExitStart()
     await waitFor(() => {
       expect(barkWorker.startEmergencyExit).toHaveBeenCalledWith(['vtxo-1'])
     })
@@ -350,13 +356,33 @@ describe('BarkEmergencyExitPage', () => {
 
     fireEvent.click(screen.getByTestId('bark-emergency-exit-whole-wallet'))
     fireEvent.click(screen.getByTestId('bark-emergency-exit-review'))
-    fireEvent.click(await screen.findByTestId('bark-emergency-exit-start'))
+    await confirmBarkEmergencyExitStart()
     await waitFor(() => {
       expect(barkWorker.startEmergencyExit).toHaveBeenLastCalledWith([])
     })
     expect(barkWorker.estimateEmergencyExit).toHaveBeenLastCalledWith([], 2)
     expect(barkWorker.offboardAll).not.toHaveBeenCalled()
     expect(barkWorker.sendOnchain).not.toHaveBeenCalled()
+  })
+
+  it('BARK-EMG-28 does not start until the risk acknowledgment is confirmed', async () => {
+    renderWithProviders(<BarkEmergencyExitPage />)
+    fireEvent.click(await screen.findByTestId('bark-emergency-exit-vtxo-vtxo-1'))
+    fireEvent.click(screen.getByTestId('bark-emergency-exit-review'))
+    fireEvent.click(await screen.findByTestId('bark-emergency-exit-start'))
+
+    expect(await screen.findByTestId('bark-emergency-exit-start-confirm-modal')).toBeInTheDocument()
+    expect(screen.getByTestId('bark-emergency-exit-start-confirm')).toBeDisabled()
+    expect(barkWorker.startEmergencyExit).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(barkWorker.startEmergencyExit).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('bark-emergency-exit-start-confirm-modal')).not.toBeInTheDocument()
+
+    await confirmBarkEmergencyExitStart()
+    await waitFor(() => {
+      expect(barkWorker.startEmergencyExit).toHaveBeenCalledWith(['vtxo-1'])
+    })
   })
 
   it('shows a started exit under Live exits', async () => {
@@ -366,7 +392,7 @@ describe('BarkEmergencyExitPage', () => {
     renderWithProviders(<BarkEmergencyExitPage />)
     fireEvent.click(await screen.findByTestId('bark-emergency-exit-vtxo-vtxo-1'))
     fireEvent.click(screen.getByTestId('bark-emergency-exit-review'))
-    fireEvent.click(await screen.findByTestId('bark-emergency-exit-start'))
+    await confirmBarkEmergencyExitStart()
     expect(await screen.findByTestId('bark-emergency-exit-row-vtxo-1')).toBeInTheDocument()
     expect(screen.getByTestId('bark-emergency-exit-row-vtxo-1')).toHaveTextContent('Started')
   })
@@ -399,7 +425,7 @@ describe('BarkEmergencyExitPage', () => {
     renderWithProviders(<BarkEmergencyExitPage />)
     fireEvent.click(await screen.findByTestId('bark-emergency-exit-vtxo-vtxo-1'))
     fireEvent.click(screen.getByTestId('bark-emergency-exit-review'))
-    fireEvent.click(await screen.findByTestId('bark-emergency-exit-start'))
+    await confirmBarkEmergencyExitStart()
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalled()
     })
@@ -529,7 +555,7 @@ describe('BarkEmergencyExitPage', () => {
     renderWithProviders(<BarkEmergencyExitPage />)
     fireEvent.click(await screen.findByTestId('bark-emergency-exit-vtxo-vtxo-1'))
     fireEvent.click(screen.getByTestId('bark-emergency-exit-review'))
-    fireEvent.click(await screen.findByTestId('bark-emergency-exit-start'))
+    await confirmBarkEmergencyExitStart()
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalled()
     })
@@ -615,7 +641,7 @@ describe('BarkEmergencyExitPage', () => {
       exitRow({ vtxoId: 'vtxo-1', state: 'start', cancelable: true }),
     ])
     fireEvent.click(screen.getByTestId('bark-emergency-exit-review'))
-    fireEvent.click(await screen.findByTestId('bark-emergency-exit-start'))
+    await confirmBarkEmergencyExitStart()
     await waitFor(() => {
       expect(barkWorker.startEmergencyExit).toHaveBeenCalledWith(['vtxo-1'])
     })
