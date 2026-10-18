@@ -75,7 +75,6 @@ export function BarkEmergencyExitPage() {
         customFeeRate={page.customFeeRate}
         useCustomFee={page.useCustomFee}
         maxFeeRateSatPerVb={page.maxFeeRateSatPerVb}
-        onProceedAutomaticallyChange={page.onProceedAutomaticallyChange}
         onSelectManualPreset={page.onSelectManualPreset}
         onSelectAutomaticPreset={page.onAutomaticFeePresetChange}
         setCustomFeeRate={page.setCustomFeeRate}
@@ -101,9 +100,11 @@ export function BarkEmergencyExitPage() {
         vtxoRows={page.vtxoRows}
         busyAction={page.busyAction}
         proceedAutomatically={page.proceedAutomatically}
+        proceedAutomaticallyPending={page.proceedAutomaticallyPending}
         automaticProgressInFlight={page.automaticProgressInFlight}
         automaticProgressError={page.automaticProgressError}
         automationPaused={page.displayedPauseReason != null}
+        onProceedAutomaticallyChange={page.onProceedAutomaticallyChange}
         onProgress={page.onProgress}
         onCancel={page.onCancel}
       />

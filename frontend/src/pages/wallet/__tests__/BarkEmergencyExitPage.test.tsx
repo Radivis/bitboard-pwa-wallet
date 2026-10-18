@@ -257,6 +257,8 @@ describe('BarkEmergencyExitPage', () => {
     ).toBeInTheDocument()
 
     const toggle = await screen.findByTestId('bark-emergency-exit-proceed-automatically')
+    expect(screen.getByTestId('bark-emergency-exit-live-card')).toContainElement(toggle)
+    expect(screen.getByTestId('bark-emergency-exit-fee-card')).not.toContainElement(toggle)
     expect(toggle).toHaveAttribute('data-state', 'unchecked')
     await waitFor(() => {
       expect(toggle).toBeEnabled()
@@ -333,13 +335,17 @@ describe('BarkEmergencyExitPage', () => {
 
   it('BARK-EMG-03 shows the broadcast fee, claim fee, and transaction count before start', async () => {
     renderWithProviders(<BarkEmergencyExitPage />)
+    const review = await screen.findByRole('button', { name: 'Review emergency exit' })
+    expect(review).toHaveAttribute('data-variant', 'default')
+    expect(screen.queryByTestId('bark-emergency-exit-start')).not.toBeInTheDocument()
     fireEvent.click(await screen.findByTestId('bark-emergency-exit-vtxo-vtxo-1'))
-    fireEvent.click(screen.getByTestId('bark-emergency-exit-review'))
+    fireEvent.click(review)
     expect(await screen.findByTestId('bark-emergency-exit-broadcast-fee')).toHaveTextContent('1500')
     expect(screen.getByTestId('bark-emergency-exit-claim-fee')).toHaveTextContent('800')
     expect(screen.getByTestId('bark-emergency-exit-tx-count')).toHaveTextContent('4')
     expect(barkWorker.estimateEmergencyExit).toHaveBeenCalledWith(['vtxo-1'], 2)
     expect(screen.getByTestId('bark-emergency-exit-fee-rate')).toHaveTextContent('1.50 sat/vB')
+    expect(screen.getByTestId('bark-emergency-exit-start')).toBeInTheDocument()
     expect(barkWorker.startEmergencyExit).not.toHaveBeenCalled()
   })
 
@@ -809,6 +815,7 @@ describe('BarkEmergencyExitPage', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('bark-emergency-exit-fee-review')).not.toBeInTheDocument()
     })
+    expect(screen.queryByTestId('bark-emergency-exit-start')).not.toBeInTheDocument()
     fireEvent.click(screen.getByTestId('bark-emergency-exit-review'))
     await waitFor(() => {
       expect(barkWorker.estimateEmergencyExit).toHaveBeenLastCalledWith(['vtxo-1'], 1)

@@ -607,7 +607,10 @@ feature:
           - Focused exit-tree node shows its transaction id and the VTXO ids that end on it
           - Spendable VTXO checkboxes
           - Fee rate selector (low / medium / high / custom) while Proceed automatically is off
-          - Proceed automatically switch, congestion warning, max fee rate, and low / medium / high presets while Proceed automatically is on
+          - Congestion warning, max fee rate, and low / medium / high presets while Proceed automatically is on
+          - Proceed automatically switch in Live exits
+          - Review emergency exit as the primary button in Start an exit
+          - Start emergency exit only after Review emergency exit has produced a review
           - Review of broadcast fee, claim fee, and transaction count
           - Start for the selection or the whole wallet
           - Confirmation before start, with the loss-of-funds and fee risks, disabled until those risks are acknowledged

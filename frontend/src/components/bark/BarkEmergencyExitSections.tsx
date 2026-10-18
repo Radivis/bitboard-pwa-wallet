@@ -111,12 +111,11 @@ export function BarkEmergencyExitStartCard({
         </ul>
         <Button
           type="button"
-          variant="outline"
           data-testid="bark-emergency-exit-review"
           disabled={busyAction != null}
           onClick={onReview}
         >
-          Review
+          Review emergency exit
         </Button>
         {review != null ? (
           <div className="space-y-1 text-sm" data-testid="bark-emergency-exit-fee-review">
@@ -139,14 +138,16 @@ export function BarkEmergencyExitStartCard({
             ) : null}
           </div>
         ) : null}
-        <Button
-          type="button"
-          data-testid="bark-emergency-exit-start"
-          disabled={review == null || startBlocked || busyAction != null}
-          onClick={onStart}
-        >
-          Start emergency exit
-        </Button>
+        {review != null ? (
+          <Button
+            type="button"
+            data-testid="bark-emergency-exit-start"
+            disabled={startBlocked || busyAction != null}
+            onClick={onStart}
+          >
+            Start emergency exit
+          </Button>
+        ) : null}
       </CardContent>
     </Card>
   )
@@ -164,7 +165,6 @@ export function BarkEmergencyExitFeeCard({
   customFeeRate,
   useCustomFee,
   maxFeeRateSatPerVb,
-  onProceedAutomaticallyChange,
   onSelectManualPreset,
   onSelectAutomaticPreset,
   setCustomFeeRate,
@@ -182,7 +182,6 @@ export function BarkEmergencyExitFeeCard({
   customFeeRate: string
   useCustomFee: boolean
   maxFeeRateSatPerVb: number
-  onProceedAutomaticallyChange: (enabled: boolean) => void
   onSelectManualPreset: (preset: SendFeePresetLabel, rateSatPerVb: number) => void
   onSelectAutomaticPreset: (preset: SendFeePresetLabel, rateSatPerVb: number) => void
   setCustomFeeRate: (value: string) => void
@@ -202,22 +201,6 @@ export function BarkEmergencyExitFeeCard({
         <CardTitle>Fee rate</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="space-y-1">
-            <Label htmlFor="bark-emergency-exit-proceed-automatically" className="text-sm font-medium">
-              Proceed automatically
-            </Label>
-            <p className="text-xs text-muted-foreground">{BARK_EMERGENCY_EXIT_AUTOMATION_NOTE}</p>
-          </div>
-          <Switch
-            id="bark-emergency-exit-proceed-automatically"
-            checked={proceedAutomatically}
-            disabled={controlsPending}
-            onCheckedChange={onProceedAutomaticallyChange}
-            aria-label="Proceed automatically"
-            data-testid="bark-emergency-exit-proceed-automatically"
-          />
-        </div>
         {proceedAutomatically ? (
           <>
             <p
@@ -288,9 +271,11 @@ export function BarkEmergencyExitLiveCard({
   vtxoRows,
   busyAction,
   proceedAutomatically,
+  proceedAutomaticallyPending,
   automaticProgressInFlight,
   automaticProgressError,
   automationPaused,
+  onProceedAutomaticallyChange,
   onProgress,
   onCancel,
 }: {
@@ -300,9 +285,11 @@ export function BarkEmergencyExitLiveCard({
   vtxoRows: BarkVtxoRow[]
   busyAction: string | null
   proceedAutomatically: boolean
+  proceedAutomaticallyPending: boolean
   automaticProgressInFlight: boolean
   automaticProgressError: string | null
   automationPaused: boolean
+  onProceedAutomaticallyChange: (enabled: boolean) => void
   onProgress: () => void
   onCancel: (vtxoId: string) => void
 }) {
@@ -312,11 +299,16 @@ export function BarkEmergencyExitLiveCard({
     !automationPaused &&
     (automaticProgressInFlight || automaticProgressError == null)
   return (
-    <Card>
+    <Card data-testid="bark-emergency-exit-live-card">
       <CardHeader>
         <CardTitle>Live exits</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
+        <ProceedAutomaticallySwitch
+          proceedAutomatically={proceedAutomatically}
+          disabled={busyAction != null || proceedAutomaticallyPending}
+          onProceedAutomaticallyChange={onProceedAutomaticallyChange}
+        />
         <Button
           type="button"
           data-testid="bark-emergency-exit-progress"
@@ -417,6 +409,35 @@ export function BarkEmergencyExitClaimCard({
         </Button>
       </CardContent>
     </Card>
+  )
+}
+
+function ProceedAutomaticallySwitch({
+  proceedAutomatically,
+  disabled,
+  onProceedAutomaticallyChange,
+}: {
+  proceedAutomatically: boolean
+  disabled: boolean
+  onProceedAutomaticallyChange: (enabled: boolean) => void
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="space-y-1">
+        <Label htmlFor="bark-emergency-exit-proceed-automatically" className="text-sm font-medium">
+          Proceed automatically
+        </Label>
+        <p className="text-xs text-muted-foreground">{BARK_EMERGENCY_EXIT_AUTOMATION_NOTE}</p>
+      </div>
+      <Switch
+        id="bark-emergency-exit-proceed-automatically"
+        checked={proceedAutomatically}
+        disabled={disabled}
+        onCheckedChange={onProceedAutomaticallyChange}
+        aria-label="Proceed automatically"
+        data-testid="bark-emergency-exit-proceed-automatically"
+      />
+    </div>
   )
 }
 

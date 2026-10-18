@@ -72,11 +72,6 @@ export function StartBarkEmergencyExitConfirmModal({
           many on-chain transactions. Each step costs miner fees from your on-chain wallet, and fees
           can spike when many users exit at once.
         </p>
-        <p>
-          <ArticleLink slug={BARK_EMERGENCY_EXIT_RISK_ARTICLE_SLUG}>
-            Differences between VTXOs in Arkade and Bark
-          </ArticleLink>
-        </p>
         <div className="flex gap-3 rounded-md border border-border p-3">
           <input
             id="bark-emergency-exit-start-ack"
