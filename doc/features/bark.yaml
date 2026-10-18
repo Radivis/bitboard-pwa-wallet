@@ -64,7 +64,7 @@ feature:
     - When the refresh period has already started, the notice asks the user to keep the wallet unlocked and synced instead of naming a time
     - The notice covers only the open wallet and network. It is cleared on lock, wallet switch, and session change
     - A confirmed spend of a chain anchor by any transaction other than the first exit transaction is an anchor sweep. It records every unspent VTXO with that anchor. Those coins stay spendable so renewal can run. The scan checks anchors before checkpoints. A history whose anchor was swept is not checked for a checkpoint seizure
-    - A confirmed spend of a hot checkpoint whose next exit transaction is not yet confirmed, by any transaction other than that next exit transaction, records every remaining unspent VTXO whose history passes through that checkpoint as spent, before refresh is scheduled. A checkpoint whose next exit transaction is already confirmed is not watched
+    - A confirmed spend of one output of a hot checkpoint, when that output's next exit transaction is not yet confirmed, by any transaction other than that next exit transaction, records every remaining unspent VTXO whose history continues through that output as spent, before refresh is scheduled. Another output of the same checkpoint transaction is not recorded. A checkpoint output whose next exit transaction is already confirmed is not watched
     - The wallet layout shows one banner. Each recorded kind is its own section and lists its VTXO ids. Both sections show together when both lists have ids. Each sync appends newly recorded ids onto the matching list and leaves the other list in place. A sync that records neither removes nothing. Dismissing a section clears only that list. Lock, wallet switch, and session change hide the banner until that wallet is unlocked again
     - The VTXO list link and page exist only when isBarkEnabled and the network is signet or mainnet
     - The VTXO list is the local Bark database. It is not an operator snapshot
@@ -246,9 +246,10 @@ feature:
         description: >
           A confirmed foreign spend of a chain anchor is an anchor sweep. It records every unspent
           VTXO with that anchor and leaves those coins spendable. The scan checks anchors first. A
-          history whose anchor was swept is not checked for a checkpoint seizure. A confirmed foreign spend of a hot
-          checkpoint records every remaining unspent VTXO whose history passes through it as spent,
-          before refresh is scheduled. A checkpoint whose next exit transaction is already confirmed
+          history whose anchor was swept is not checked for a checkpoint seizure. A confirmed foreign spend of one
+          output of a hot checkpoint records every remaining unspent VTXO whose history continues through
+          that output as spent, before refresh is scheduled. Another output of the same checkpoint
+          transaction is not recorded. A checkpoint output whose next exit transaction is already confirmed
           is not watched. The wallet layout shows one banner. Each kind is a section that lists its
           VTXO ids, and both sections show together when both lists have ids. Each list is stored
           on that Bark account. A later sync appends ids onto the matching list and leaves the
