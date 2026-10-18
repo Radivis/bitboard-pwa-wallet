@@ -244,11 +244,12 @@ describe('BarkVtxoViewerPage', () => {
     expect(screen.getByTestId('bark-vtxo-card-exit:3')).toBeInTheDocument()
   })
 
-  it('BARK-VTX-10 shows a started exit, a timelock, and a checkpoint seizure while spent and exited are hidden', () => {
+  it('BARK-VTX-10 shows a started exit, a timelock, an anchor sweep, and a checkpoint seizure while spent and exited are hidden', () => {
     vtxoListQuery.mockReturnValue({
       data: vtxoList([
         sampleRow({ id: 'started:1', state: 'spendable' }),
         sampleRow({ id: 'timelock:2', state: 'exited' }),
+        sampleRow({ id: 'swept:5', state: 'spent' }),
         sampleRow({ id: 'seized:3', state: 'spent' }),
         sampleRow({ id: 'claimed:4', state: 'exited' }),
       ]),
@@ -270,7 +271,7 @@ describe('BarkVtxoViewerPage', () => {
       ],
     })
     useBarkExitChainNoticeStore.getState().showNotice(1, 'signet', {
-      anchorSweepVtxoIds: [],
+      anchorSweepVtxoIds: ['swept:5'],
       checkpointSeizureVtxoIds: ['seized:3'],
     })
 
@@ -281,6 +282,9 @@ describe('BarkVtxoViewerPage', () => {
     )
     expect(screen.getByTestId('bark-vtxo-exit-phase-timelock:2')).toHaveTextContent(
       'Emergency exit phase: waiting for timelock, 10 of 40 blocks',
+    )
+    expect(screen.getByTestId('bark-vtxo-exit-phase-swept:5')).toHaveTextContent(
+      'Emergency exit phase: anchor swept',
     )
     expect(screen.getByTestId('bark-vtxo-exit-phase-seized:3')).toHaveTextContent(
       'Emergency exit phase: checkpoint seized',

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  barkVtxoIdsKeptWhenFinished,
   formatBarkVtxoEmergencyExitPhaseLine,
   resolveBarkVtxoExitPhase,
 } from '@/lib/bark/bark-vtxo-exit-phase'
@@ -175,6 +176,16 @@ describe('resolveBarkVtxoExitPhase', () => {
 
   it('reads an exited coin with no live row as claimed', () => {
     expect(phaseLine({ vtxoState: 'exited' })).toBe('Emergency exit phase: claimed')
+  })
+
+  it('keeps an anchor sweep and a checkpoint seizure listed when spent coins are hidden', () => {
+    expect(
+      barkVtxoIdsKeptWhenFinished({
+        exitRows: [exitRow('live', 'start')],
+        anchorSweepVtxoIds: ['swept'],
+        checkpointSeizureVtxoIds: ['seized'],
+      }),
+    ).toEqual(new Set(['live', 'swept', 'seized']))
   })
 
   it('lets an anchor sweep win over a live exit', () => {

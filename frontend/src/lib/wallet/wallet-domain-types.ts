@@ -173,8 +173,8 @@ export interface StoredBarkAccount {
    */
   emergencyExitMaxFeeRateSatPerVb?: number
   /**
-   * VTXOs whose chain anchor was swept outside the exit. They stay spendable
-   * so renewal can run. Kept until the user dismisses that banner section.
+   * VTXOs whose chain anchor was swept by the server after expiry. They are
+   * marked spent. Kept until the user dismisses that banner section.
    */
   exitAnchorSweepVtxoIds?: string[]
   /**

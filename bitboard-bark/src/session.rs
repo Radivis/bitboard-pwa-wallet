@@ -404,9 +404,10 @@ pub async fn bark_last_revealed_key_index() -> Result<JsValue, JsValue> {
 /// Boards are checked once here. `sync_pending_boards` parks a board while it waits
 /// for confirmations.
 ///
-/// After those steps, records an anchor sweep without marking those coins spent,
-/// then a checkpoint seizure on the remaining coins and marks those spent, then
-/// schedules one delegated VTXO refresh when none is pending.
+/// After those steps, records an anchor sweep and a checkpoint seizure on the
+/// remaining coins, marks both spent, then schedules one delegated VTXO refresh
+/// when none is pending. Swept anchors are not refreshed: the server already
+/// claimed that output.
 /// A scheduling failure still marks this session synced and returns `warning`.
 /// The status is `idle`, `scheduled`, `pending`, or `warning`.
 ///

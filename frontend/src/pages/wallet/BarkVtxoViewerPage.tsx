@@ -248,8 +248,13 @@ function BarkVtxoInventory({
     [checkpointSeizureVtxoIds],
   )
   const keepWhenFinishedIds = useMemo(
-    () => barkVtxoIdsKeptWhenFinished({ exitRows, checkpointSeizureVtxoIds }),
-    [checkpointSeizureVtxoIds, exitRows],
+    () =>
+      barkVtxoIdsKeptWhenFinished({
+        exitRows,
+        anchorSweepVtxoIds,
+        checkpointSeizureVtxoIds,
+      }),
+    [anchorSweepVtxoIds, checkpointSeizureVtxoIds, exitRows],
   )
   const filteredRows = useMemo(
     () =>

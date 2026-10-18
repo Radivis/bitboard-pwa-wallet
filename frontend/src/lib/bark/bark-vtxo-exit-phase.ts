@@ -90,10 +90,12 @@ export function formatBarkVtxoEmergencyExitPhaseLine(
 
 export function barkVtxoIdsKeptWhenFinished(params: {
   exitRows: readonly BarkEmergencyExitRow[]
+  anchorSweepVtxoIds: readonly string[]
   checkpointSeizureVtxoIds: readonly string[]
 }): Set<string> {
   return new Set([
     ...params.exitRows.map((row) => row.vtxoId),
+    ...params.anchorSweepVtxoIds,
     ...params.checkpointSeizureVtxoIds,
   ])
 }

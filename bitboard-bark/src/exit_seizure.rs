@@ -3,10 +3,10 @@
 //! the next exit transaction is a checkpoint seizure. Another output of that
 //! same checkpoint transaction is a different coin and stays spendable. Anchors
 //! are checked first. A history whose anchor was swept is not checked for a
-//! checkpoint seizure, and those coins stay spendable. A checkpoint seizure
-//! marks the remaining coins that continue through the spent output. The VTXO
-//! outpoint itself is never watched: Bark treats a spend of that output as the
-//! user's claim.
+//! checkpoint seizure. Both outcomes mark those coins spent before refresh:
+//! the server already claimed the anchor after expiry, so renewal cannot
+//! restore it. The VTXO outpoint itself is never watched: Bark treats a spend
+//! of that output as the user's claim.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -307,13 +307,19 @@ mod scan {
         let checkpoint_outcomes =
             exit_outcomes_from_spends(&checkpoint_watched, &checkpoint_spends);
         let checkpoint_notices = split_exit_notices(&remaining, &checkpoint_outcomes);
-        if !checkpoint_notices.checkpoint_seizure_vtxo_ids.is_empty() {
-            mark_ids_spent(
-                wallet,
-                &unspent,
-                &checkpoint_notices.checkpoint_seizure_vtxo_ids,
+        let spent_ids = anchor_notices
+            .anchor_sweep_vtxo_ids
+            .iter()
+            .cloned()
+            .chain(
+                checkpoint_notices
+                    .checkpoint_seizure_vtxo_ids
+                    .iter()
+                    .cloned(),
             )
-            .await?;
+            .collect::<Vec<_>>();
+        if !spent_ids.is_empty() {
+            mark_ids_spent(wallet, &unspent, &spent_ids).await?;
         }
         Ok(RecordedExitChainNotices {
             anchor_sweep_vtxo_ids: anchor_notices.anchor_sweep_vtxo_ids,

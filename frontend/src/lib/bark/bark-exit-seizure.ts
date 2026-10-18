@@ -4,7 +4,7 @@ const INVALID_EXIT_CHAIN_NOTICES = 'Bark exit chain notices are invalid'
 export type BarkExitChainNoticeKind = 'sweep' | 'seizure'
 
 export const BARK_ANCHOR_SWEEP_WARNING =
-  'The on-chain output backing these VTXOs was spent outside the exit. Wait for Bark to renew them. Renewal runs automatically while this wallet is unlocked and synced.'
+  'The on-chain output backing these VTXOs was spent by the server after expiry. These VTXOs are spent, and this wallet cannot recover them.'
 
 export const BARK_CHECKPOINT_SEIZURE_WARNING =
   'A checkpoint from an emergency exit was spent because the exit was not continued. These VTXOs are spent, and this wallet cannot recover them.'

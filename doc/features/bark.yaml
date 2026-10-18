@@ -63,12 +63,12 @@ feature:
     - That time is the start of the next refresh period (Bark's next required refresh height), estimated from the sync time and the average block interval of the open network
     - When the refresh period has already started, the notice asks the user to keep the wallet unlocked and synced instead of naming a time
     - The notice covers only the open wallet and network. It is cleared on lock, wallet switch, and session change
-    - A confirmed spend of a chain anchor by any transaction other than the first exit transaction is an anchor sweep. It records every unspent VTXO with that anchor. Those coins stay spendable so renewal can run. The scan checks anchors before checkpoints. A history whose anchor was swept is not checked for a checkpoint seizure
+    - A confirmed spend of a chain anchor by any transaction other than the first exit transaction is an anchor sweep. It records every unspent VTXO with that anchor and marks those coins spent before refresh is scheduled. The server already claimed that output after expiry, so renewal cannot restore them. The scan checks anchors before checkpoints. A history whose anchor was swept is not checked for a checkpoint seizure
     - A confirmed spend of one output of a hot checkpoint, when that output's next exit transaction is not yet confirmed, by any transaction other than that next exit transaction, records every remaining unspent VTXO whose history continues through that output as spent, before refresh is scheduled. Another output of the same checkpoint transaction is not recorded. A checkpoint output whose next exit transaction is already confirmed is not watched
     - The wallet layout shows one banner. Each recorded kind is its own section and lists its VTXO ids. Both sections show together when both lists have ids. Each sync appends newly recorded ids onto the matching list and leaves the other list in place. A sync that records neither removes nothing. Dismissing a section clears only that list. Lock, wallet switch, and session change hide the banner until that wallet is unlocked again
     - The VTXO list link and page exist only when isBarkEnabled and the network is signet or mainnet
     - The VTXO list is the local Bark database. It is not an operator snapshot
-    - Spent and Exited VTXOs stay hidden until the user shows them, except a live emergency exit and a checkpoint-seized coin, which stay listed. Locked VTXOs stay visible
+    - Spent and Exited VTXOs stay hidden until the user shows them, except a live emergency exit, an anchor-swept coin, and a checkpoint-seized coin, which stay listed. Locked VTXOs stay visible
     - A VTXO card shows id, amount, state, a lock line that names the pending action or history label, expiry as blocks remaining plus an approximate date, and Registered only when the coin is registered
     - A card ends with Emergency exit phase when the coin has a live exit, is claimed, or is named by an anchor sweep or checkpoint seizure. A coin with no exit omits that line. A sweep or seizure wins over a live exit. While processing, the copy is the frontier exit-tree phase, and it names how many non-anchor exit transactions are confirmed once one is. After confirmation, the copy is the timelock as blocks elapsed of the total. Until that exit tree has loaded, a processing coin reads processing
     - Search, state chips, sort, and pagination filter the loaded list and do not call the worker again
@@ -245,7 +245,8 @@ feature:
       - id: BARK-SYNC-11
         description: >
           A confirmed foreign spend of a chain anchor is an anchor sweep. It records every unspent
-          VTXO with that anchor and leaves those coins spendable. The scan checks anchors first. A
+          VTXO with that anchor and marks those coins spent before refresh is scheduled. Renewal
+          cannot restore them. The scan checks anchors first. A
           history whose anchor was swept is not checked for a checkpoint seizure. A confirmed foreign spend of one
           output of a hot checkpoint records every remaining unspent VTXO whose history continues through
           that output as spent, before refresh is scheduled. Another output of the same checkpoint
@@ -414,7 +415,7 @@ feature:
         description: A card shows id, amount, state, blocks until expiry with an approximate date, a lock line that names the exit instead of a raw id, and Registered only when true
         implemented_by: frontend/src/components/bark/__tests__/BarkVtxoCard.test.tsx
       - id: BARK-VTX-04
-        description: Hide spent and exited defaults on, and the toggle shows those cards. A live emergency exit and a checkpoint-seized coin stay listed while the toggle is on
+        description: Hide spent and exited defaults on, and the toggle shows those cards. A live emergency exit, an anchor-swept coin, and a checkpoint-seized coin stay listed while the toggle is on
         implemented_by:
           - frontend/src/pages/wallet/__tests__/BarkVtxoViewerPage.test.tsx
           - frontend/src/lib/bark/__tests__/bark-vtxo-viewer-display.test.ts
@@ -585,7 +586,7 @@ feature:
           - search by id or sats amount
           - state filter chips with counts from the full list
           - sort by amount or expiry height
-          - hide spent and exited toggle, default on, keeping a live emergency exit and a checkpoint-seized coin listed
+          - hide spent and exited toggle, default on, keeping a live emergency exit, an anchor-swept coin, and a checkpoint-seized coin listed
           - pagination at 20 cards per page
           - last successful sync subtitle when a sync time is known
           - Bark sync error banner
