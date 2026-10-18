@@ -1,9 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { FiatBtcAmountDisplay } from '@/components/FiatBtcAmountDisplay'
-import { useMainnetFiatRatesQuery } from '@/hooks/useMainnetFiatRatesQuery'
-import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
-import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
+import { useMainnetFiatAmountProps } from '@/hooks/useMainnetFiatAmountProps'
 import {
   ARKADE_BALANCE_BOARDING_INFOMODE,
   ARKADE_BALANCE_BOARDING_PENDING_INFOMODE,
@@ -36,22 +34,12 @@ export function ArkadeBalanceBreakdown({
   balance,
   amountTestId,
 }: ArkadeBalanceBreakdownProps) {
-  const networkMode = useWalletStore(selectCommittedNetworkMode)
-  const fiatDenominationMode = useFiatDenominationStore(
-    (fiatDenominationState) => fiatDenominationState.fiatDenominationMode,
-  )
-  const defaultFiatCurrency = useFiatDenominationStore(
-    (fiatDenominationState) => fiatDenominationState.defaultFiatCurrency,
-  )
-  const mainnetFiatLayout = networkMode === 'mainnet' && fiatDenominationMode
-  const fiatRatesQuery = useMainnetFiatRatesQuery()
-  const btcPriceInFiat = fiatRatesQuery.data?.btcPriceInFiat
-
+  const fiatAmount = useMainnetFiatAmountProps()
   const fiatAmountProps = {
-    showFiatLayout: mainnetFiatLayout,
-    btcPriceInFiat,
-    currency: defaultFiatCurrency,
-    rateLoading: fiatRatesQuery.isPending,
+    showFiatLayout: fiatAmount.showFiatLayout,
+    btcPriceInFiat: fiatAmount.btcPriceInFiat,
+    currency: fiatAmount.currency,
+    rateLoading: fiatAmount.rateLoading,
   }
 
   const boardingSpendableSats = balance.boardingSpendableSats ?? 0

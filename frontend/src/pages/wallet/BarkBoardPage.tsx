@@ -2,20 +2,26 @@ import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import {
+  BarkDenominationAmountField,
+  BarkReviewedAmountLine,
+} from '@/components/bark/BarkDenominationAmountField'
 import { barkSessionBlockingScreen } from '@/components/bark/bark-session-blocking-screen'
 import { BarkRailUnavailable } from '@/components/bark/BarkRailUnavailable'
+import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
+import { amountSatsFromSatsOrFiatField } from '@/components/wallet/send/amount-sats-from-sats-or-fiat-field'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
 import { useEsploraFeePresets } from '@/hooks/useEsploraFeePresets'
+import { useMainnetFiatAmountProps } from '@/hooks/useMainnetFiatAmountProps'
 import { barkBoardPerformDeps, barkBoardReviewDeps } from '@/lib/bark/bark-board-live-deps'
+import { barkAmountReviewDecision } from '@/lib/bark/bark-denomination-amount'
 import { performBarkBoard } from '@/lib/bark/perform-bark-board'
-import { parseBarkBoardAmountSats, reviewBarkBoard, type BarkBoardReview } from '@/lib/bark/review-bark-board'
+import { reviewBarkBoard, type BarkBoardReview } from '@/lib/bark/review-bark-board'
 import { NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB } from '@/lib/esplora/esplora-fee-estimates'
 import { errorMessage } from '@/lib/shared/utils'
-import { formatSats } from '@/lib/wallet/bitcoin-utils'
 import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
 import { useFeatureStore } from '@/stores/featureStore'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
@@ -29,6 +35,7 @@ export function BarkBoardPage() {
   const loadSnapshot = useBarkLoadLifecycleSnapshot()
   const navigate = useNavigate()
   const feePresetsQuery = useEsploraFeePresets(networkMode)
+  const fiatAmount = useMainnetFiatAmountProps()
   const feeRateSatPerVb =
     feePresetsQuery.data?.Medium ?? NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB.Medium
   const [amountRaw, setAmountRaw] = useState('')
@@ -56,13 +63,31 @@ export function BarkBoardPage() {
     return sessionBlockingScreen
   }
 
+  const fiatPriceBlocksReview = fiatAmount.mainnetFiatEntry && !fiatAmount.hasUsableFiatSpot
+  const parsedAmountSats = amountSatsFromSatsOrFiatField(amountRaw, {
+    useFiatAmountEntry: fiatAmount.mainnetFiatEntry,
+    btcPriceInFiat: fiatAmount.btcPriceInFiat,
+  })
+
+  function clearAmountEntry() {
+    setAmountRaw('')
+    setReview(null)
+    setReviewError(null)
+  }
+
   async function onReview() {
-    const amountSats = parseBarkBoardAmountSats(amountRaw)
-    if (amountSats == null) {
+    const amountDecision = barkAmountReviewDecision(amountRaw, fiatAmount)
+    if (amountDecision.kind === 'blocked') {
       setReview(null)
-      setReviewError('Enter a whole number of satoshis.')
+      setReviewError(null)
       return
     }
+    if (amountDecision.kind === 'invalid') {
+      setReview(null)
+      setReviewError(amountDecision.message)
+      return
+    }
+    const amountSats = amountDecision.amountSats
     setIsReviewing(true)
     setReviewError(null)
     try {
@@ -102,6 +127,12 @@ export function BarkBoardPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="Board to Bark" />
+      {networkMode === 'mainnet' ? (
+        <BitcoinFiatDenominationSwitch
+          disabled={isReviewing || isConfirming}
+          onFiatModeChange={clearAmountEntry}
+        />
+      ) : null}
       <p className="text-sm text-muted-foreground" data-testid="bark-board-confirmation-note">
         This sends public Signet coins from your on-chain wallet into Bark. Bark broadcasts the
         funding transaction. {CONFIRMATION_NOTE}
@@ -111,24 +142,28 @@ export function BarkBoardPage() {
           <CardTitle className="text-base">Amount</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <label className="block space-y-1 text-sm">
-            <span>Satoshis</span>
-            <Input
-              inputMode="numeric"
-              value={amountRaw}
-              onChange={(event) => {
-                setAmountRaw(event.target.value)
-                setReview(null)
-              }}
-              data-testid="bark-board-amount"
-            />
-          </label>
+          <BarkDenominationAmountField
+            satsLabel="Satoshis"
+            fiatLabel={`Amount (${fiatAmount.currency})`}
+            amountRaw={amountRaw}
+            onAmountChange={(nextAmountRaw) => {
+              setAmountRaw(nextAmountRaw)
+              setReview(null)
+            }}
+            inputTestId="bark-board-amount"
+            priceUnavailableTestId="bark-board-fiat-price-unavailable"
+            btcPreviewTestId="bark-board-amount-btc-preview"
+            mainnetFiatEntry={fiatAmount.mainnetFiatEntry}
+            hasUsableFiatSpot={fiatAmount.hasUsableFiatSpot}
+            currency={fiatAmount.currency}
+            parsedAmountSats={parsedAmountSats}
+          />
           <Button
             type="button"
             onClick={() => {
               void onReview()
             }}
-            disabled={isReviewing || isConfirming}
+            disabled={isReviewing || isConfirming || fiatPriceBlocksReview}
             data-testid="bark-board-review"
           >
             {isReviewing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
@@ -147,15 +182,24 @@ export function BarkBoardPage() {
             <CardTitle className="text-base">Review</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <p data-testid="bark-board-onchain-fee">
-              On-chain fee: {formatSats(review.onchainFeeSats)}
-            </p>
-            <p data-testid="bark-board-offchain-fee">
-              Bark board fee: {formatSats(review.offchainFeeSats)}
-            </p>
-            <p data-testid="bark-board-net-vtxo">
-              VTXO you receive: {formatSats(review.netVtxoSats)}
-            </p>
+            <BarkReviewedAmountLine
+              label="On-chain fee:"
+              amountSats={review.onchainFeeSats}
+              testId="bark-board-onchain-fee"
+              fiat={fiatAmount}
+            />
+            <BarkReviewedAmountLine
+              label="Bark board fee:"
+              amountSats={review.offchainFeeSats}
+              testId="bark-board-offchain-fee"
+              fiat={fiatAmount}
+            />
+            <BarkReviewedAmountLine
+              label="VTXO you receive:"
+              amountSats={review.netVtxoSats}
+              testId="bark-board-net-vtxo"
+              fiat={fiatAmount}
+            />
             <Button
               type="button"
               onClick={() => {

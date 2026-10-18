@@ -138,7 +138,7 @@ describe('BarkPanel', () => {
     const banner = screen.getByTestId('bark-pending-action-banner')
     expect(banner).toHaveTextContent('Bark exit')
     expect(banner).toHaveTextContent('Waiting for the exit transaction to confirm.')
-    expect(banner).toHaveTextContent('10000 sats')
+    expect(screen.getByTestId('bark-pending-action-amount')).toHaveTextContent('0.00010000')
     expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
   })
 

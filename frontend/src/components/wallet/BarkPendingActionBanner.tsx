@@ -1,6 +1,8 @@
 import { CircleAlert, Loader2 } from 'lucide-react'
+import { FiatBtcAmountDisplay } from '@/components/FiatBtcAmountDisplay'
 import { useBarkPendingActionsQuery } from '@/hooks/useBarkPendingActionsQuery'
-import { formatSats, truncateAddress } from '@/lib/wallet/bitcoin-utils'
+import { useMainnetFiatAmountProps } from '@/hooks/useMainnetFiatAmountProps'
+import { truncateAddress } from '@/lib/wallet/bitcoin-utils'
 import type { BarkPendingAction } from '@/workers/bark-api'
 
 export function BarkPendingActionBanner() {
@@ -18,6 +20,7 @@ export function BarkPendingActionBanner() {
 }
 
 function BarkPendingActionRow({ action }: { action: BarkPendingAction }) {
+  const fiatAmount = useMainnetFiatAmountProps()
   const failed = action.error != null
   return (
     <div
@@ -45,7 +48,16 @@ function BarkPendingActionRow({ action }: { action: BarkPendingAction }) {
         <div className="space-y-1">
           <p className="font-medium">{action.title}</p>
           <p className="break-words text-muted-foreground">{action.status}</p>
-          <p data-testid="bark-pending-action-amount">{formatSats(action.amountSats)} sats</p>
+          <p data-testid="bark-pending-action-amount">
+            <FiatBtcAmountDisplay
+              amountSats={action.amountSats}
+              showFiatLayout={fiatAmount.showFiatLayout}
+              btcPriceInFiat={fiatAmount.btcPriceInFiat}
+              currency={fiatAmount.currency}
+              rateLoading={fiatAmount.rateLoading}
+              isDetail
+            />
+          </p>
           {action.destination != null ? (
             <p className="text-xs text-muted-foreground" title={action.destination}>
               Destination:{' '}

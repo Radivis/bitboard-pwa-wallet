@@ -4,6 +4,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { toast } from 'sonner'
 import { BarkBoardPage } from '@/pages/wallet/BarkBoardPage'
 import { renderWithProviders } from '@/test-utils/test-providers'
+import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import type { NetworkMode } from '@/stores/walletStore'
 
 const walletStoreState = vi.hoisted(() => ({
@@ -41,6 +42,17 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn() },
+}))
+
+const fiatRatesQueryMock = vi.hoisted(() =>
+  vi.fn(() => ({
+    data: undefined as { btcPriceInFiat: number } | undefined,
+    isPending: false,
+  })),
+)
+
+vi.mock('@/hooks/useMainnetFiatRatesQuery', () => ({
+  useMainnetFiatRatesQuery: () => fiatRatesQueryMock(),
 }))
 
 vi.mock('@/hooks/useEsploraFeePresets', () => ({
@@ -101,6 +113,8 @@ vi.mock('@/lib/bark/bark-board-live-deps', () => ({
 
 describe('BarkBoardPage', () => {
   beforeEach(() => {
+    useFiatDenominationStore.setState({ fiatDenominationMode: false, defaultFiatCurrency: 'USD' })
+    fiatRatesQueryMock.mockReturnValue({ data: undefined, isPending: false })
     featureState.isBarkEnabled = true
     walletStoreState.networkMode = 'signet'
     walletStoreState.loadedDescriptorWallet = { networkMode: 'signet' }
@@ -175,6 +189,98 @@ describe('BarkBoardPage', () => {
     expect(toast.success).not.toHaveBeenCalled()
     expect(broadcastTransaction).not.toHaveBeenCalled()
     expect(navigate).not.toHaveBeenCalled()
+  })
+
+  function enableMainnetFiatEntry() {
+    walletStoreState.networkMode = 'mainnet'
+    walletStoreState.loadedDescriptorWallet = { networkMode: 'mainnet' }
+    loadSnapshot.current.networkMode = 'mainnet'
+    useFiatDenominationStore.setState({ fiatDenominationMode: true, defaultFiatCurrency: 'USD' })
+    fiatRatesQueryMock.mockReturnValue({
+      data: { btcPriceInFiat: 100_000 },
+      isPending: false,
+    })
+  }
+
+  it('BARK-BOARD-09 converts a mainnet fiat amount to sats before review', async () => {
+    enableMainnetFiatEntry()
+    reviewBarkBoard.mockResolvedValue({
+      fundingAddress: 'bc1qboard',
+      psbtBase64: 'reviewed-psbt',
+      onchainFeeSats: 210,
+      offchainFeeSats: 40,
+      netVtxoSats: 9_960,
+      grossAmountSats: 10_000,
+    })
+    renderWithProviders(<BarkBoardPage />)
+    expect(screen.getByRole('switch', { name: /Denomination/ })).toBeInTheDocument()
+    expect(screen.getByText('Amount (USD)')).toBeInTheDocument()
+    fireEvent.change(screen.getByTestId('bark-board-amount'), { target: { value: '10' } })
+    fireEvent.click(screen.getByTestId('bark-board-review'))
+
+    await waitFor(() => {
+      expect(reviewBarkBoard).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ amountSats: 10_000 }),
+      )
+    })
+    expect(await screen.findByTestId('bark-board-onchain-fee')).toHaveTextContent('$0.21')
+    expect(screen.getByTestId('bark-board-offchain-fee')).toHaveTextContent('$0.04')
+    expect(screen.getByTestId('bark-board-net-vtxo')).toHaveTextContent('$9.96')
+  })
+
+  it('BARK-BOARD-09 rejects an invalid fiat amount without reviewing', () => {
+    enableMainnetFiatEntry()
+    renderWithProviders(<BarkBoardPage />)
+    fireEvent.change(screen.getByTestId('bark-board-amount'), { target: { value: 'abc' } })
+    fireEvent.click(screen.getByTestId('bark-board-review'))
+
+    expect(reviewBarkBoard).not.toHaveBeenCalled()
+    expect(screen.getByTestId('bark-board-review-error')).toHaveTextContent(
+      'Enter an amount in USD.',
+    )
+  })
+
+  it('BARK-BOARD-09 disables review when the Bitcoin price is unavailable', () => {
+    enableMainnetFiatEntry()
+    fiatRatesQueryMock.mockReturnValue({ data: undefined, isPending: true })
+    renderWithProviders(<BarkBoardPage />)
+
+    expect(screen.getByTestId('bark-board-review')).toBeDisabled()
+    expect(screen.getByTestId('bark-board-fiat-price-unavailable')).toHaveTextContent(
+      'Bitcoin price is unavailable.',
+    )
+    fireEvent.change(screen.getByTestId('bark-board-amount'), { target: { value: '10' } })
+    fireEvent.click(screen.getByTestId('bark-board-review'))
+    expect(reviewBarkBoard).not.toHaveBeenCalled()
+  })
+
+  it('BARK-BOARD-09 keeps whole sats on signet when fiat mode is on', async () => {
+    useFiatDenominationStore.setState({ fiatDenominationMode: true, defaultFiatCurrency: 'USD' })
+    fiatRatesQueryMock.mockReturnValue({
+      data: { btcPriceInFiat: 100_000 },
+      isPending: false,
+    })
+    reviewBarkBoard.mockResolvedValue({
+      fundingAddress: 'tb1qboard',
+      psbtBase64: 'reviewed-psbt',
+      onchainFeeSats: 210,
+      offchainFeeSats: 40,
+      netVtxoSats: 9_960,
+      grossAmountSats: 10_000,
+    })
+    renderWithProviders(<BarkBoardPage />)
+    expect(screen.queryByRole('switch', { name: /Denomination/ })).not.toBeInTheDocument()
+    expect(screen.getByText('Satoshis')).toBeInTheDocument()
+    fireEvent.change(screen.getByTestId('bark-board-amount'), { target: { value: '10000' } })
+    fireEvent.click(screen.getByTestId('bark-board-review'))
+
+    await waitFor(() => {
+      expect(reviewBarkBoard).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ amountSats: 10_000 }),
+      )
+    })
   })
 
   it('BARK-SESS-03 hides the funding form while the Bark session is loading', () => {
