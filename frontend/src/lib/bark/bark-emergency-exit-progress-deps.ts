@@ -41,7 +41,10 @@ export async function runBarkEmergencyExitProgress(
   try {
     outcome = await progressBarkEmergencyExits(barkEmergencyExitProgressDeps(), feeRateSatPerVb)
   } catch (err) {
-    if (isBarkCpfpUnfundableError(err)) fundingStore.clearFundingStatus()
+    if (isBarkCpfpUnfundableError(err)) {
+      fundingStore.clearFundingStatus()
+      if (scope != null) fundingStore.recordUnfundedParents(scope, err.unfundedParentTxids)
+    }
     throw err
   }
   if (scope != null) fundingStore.recordProgressOutcome(scope, outcome)

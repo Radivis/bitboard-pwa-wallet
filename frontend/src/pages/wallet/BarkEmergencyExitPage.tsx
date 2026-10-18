@@ -51,6 +51,7 @@ export function BarkEmergencyExitPage() {
         errorMessage={page.exitTreeError}
         vtxoRows={page.vtxoRows}
         fundingStatus={page.fundingStatus}
+        unfundedParentTxids={page.unfundedParentTxids}
       />
       <BarkEmergencyExitFeeCard
         busyAction={page.busyAction}

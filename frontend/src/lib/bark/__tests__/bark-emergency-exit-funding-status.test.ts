@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { runBarkEmergencyExitProgress } from '@/lib/bark/bark-emergency-exit-progress-deps'
 import {
   barkEmergencyExitFundingStatusFor,
+  barkEmergencyExitUnfundedParentTxidsFor,
   formatBarkEmergencyExitFundingBanner,
 } from '@/lib/bark/bark-emergency-exit-funding-status'
 import { useBarkEmergencyExitFundingStore } from '@/stores/barkEmergencyExitFundingStore'
@@ -49,6 +50,10 @@ function fundingStatus() {
   return useBarkEmergencyExitFundingStore.getState().fundingStatus
 }
 
+function unfundedParentTxids() {
+  return useBarkEmergencyExitFundingStore.getState().unfundedParents?.txids ?? []
+}
+
 function progressReturns(parentTxids: string[]) {
   barkWorker.progressEmergencyExits.mockResolvedValue({
     requests: parentTxids.map(cpfpRequest),
@@ -58,6 +63,7 @@ function progressReturns(parentTxids: string[]) {
 describe('runBarkEmergencyExitProgress', () => {
   beforeEach(() => {
     useBarkEmergencyExitFundingStore.getState().clearFundingStatus()
+    useBarkEmergencyExitFundingStore.getState().clearUnfundedParents()
     barkWorker.progressEmergencyExits.mockReset()
     barkWorker.provideEmergencyExitCpfp.mockReset().mockResolvedValue(undefined)
     cryptoWorker.signP2aCpfpChild.mockReset().mockResolvedValue('child')
@@ -80,7 +86,9 @@ describe('runBarkEmergencyExitProgress', () => {
       ...SIGNET_WALLET,
       providedChildren: 1,
       requestedChildren: 2,
+      unfundedParentTxids: ['parent-2'],
     })
+    expect(unfundedParentTxids()).toEqual(['parent-2'])
     expect(listener).toHaveBeenCalled()
   })
 
@@ -93,6 +101,7 @@ describe('runBarkEmergencyExitProgress', () => {
     await runBarkEmergencyExitProgress(SIGNET_WALLET, 1)
 
     expect(fundingStatus()).toBeNull()
+    expect(unfundedParentTxids()).toEqual([])
   })
 
   it('BARK-EMG-22 clears the funding status when progress fails as unfundable', async () => {
@@ -108,6 +117,7 @@ describe('runBarkEmergencyExitProgress', () => {
       /^bark_cpfp_unfundable: /,
     )
     expect(fundingStatus()).toBeNull()
+    expect(unfundedParentTxids()).toEqual(['parent-1'])
   })
 
   it('BARK-EMG-21 clears the funding status after a run with no requests', async () => {
@@ -119,11 +129,17 @@ describe('runBarkEmergencyExitProgress', () => {
     await runBarkEmergencyExitProgress(SIGNET_WALLET, 1)
 
     expect(fundingStatus()).toBeNull()
+    expect(unfundedParentTxids()).toEqual([])
   })
 })
 
 describe('barkEmergencyExitFundingStatusFor', () => {
-  const status = { ...SIGNET_WALLET, providedChildren: 1, requestedChildren: 3 }
+  const status = {
+    ...SIGNET_WALLET,
+    providedChildren: 1,
+    requestedChildren: 3,
+    unfundedParentTxids: ['parent-2'],
+  }
 
   it('returns the status for the same wallet and network', () => {
     expect(barkEmergencyExitFundingStatusFor(status, SIGNET_WALLET)).toBe(status)
@@ -135,9 +151,28 @@ describe('barkEmergencyExitFundingStatusFor', () => {
   })
 })
 
+describe('barkEmergencyExitUnfundedParentTxidsFor', () => {
+  const stored = { ...SIGNET_WALLET, txids: ['parent-2'] }
+
+  it('returns the shortfall parents for the same wallet and network', () => {
+    expect(barkEmergencyExitUnfundedParentTxidsFor(stored, SIGNET_WALLET)).toEqual(['parent-2'])
+  })
+
+  it('hides the shortfall parents from another wallet or network', () => {
+    expect(barkEmergencyExitUnfundedParentTxidsFor(stored, { walletId: 2, networkMode: 'signet' })).toEqual([])
+    expect(barkEmergencyExitUnfundedParentTxidsFor(stored, { walletId: 1, networkMode: 'mainnet' })).toEqual([])
+    expect(barkEmergencyExitUnfundedParentTxidsFor(null, SIGNET_WALLET)).toEqual([])
+  })
+})
+
 describe('formatBarkEmergencyExitFundingBanner', () => {
   function bannerFor(providedChildren: number, requestedChildren: number): string {
-    return formatBarkEmergencyExitFundingBanner({ ...SIGNET_WALLET, providedChildren, requestedChildren })
+    return formatBarkEmergencyExitFundingBanner({
+      ...SIGNET_WALLET,
+      providedChildren,
+      requestedChildren,
+      unfundedParentTxids: [],
+    })
   }
 
   it('BARK-EMG-21 names how many exit transactions are broadcasting and how many wait for funds', () => {

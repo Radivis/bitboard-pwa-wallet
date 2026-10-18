@@ -43,6 +43,8 @@ export type ClaimBarkEmergencyExitDeps = {
 export type BarkEmergencyExitProgressOutcome = {
   requestedChildren: number
   providedChildren: number
+  /** Parents whose Pay-to-Anchor child the bumper wallet could not fund. */
+  unfundedParentTxids: string[]
 }
 
 export const BARK_CPFP_INSUFFICIENT_FUNDS = 'bark_cpfp_insufficient_funds'
@@ -57,14 +59,20 @@ export const BARK_CPFP_UNFUNDABLE = 'bark_cpfp_unfundable'
 export class BarkCpfpUnfundableError extends Error {
   readonly waitingNeededSats: number
   readonly onchainTotalSats: number
+  readonly unfundedParentTxids: readonly string[]
 
-  constructor(params: { waitingNeededSats: number; onchainTotalSats: number }) {
+  constructor(params: {
+    waitingNeededSats: number
+    onchainTotalSats: number
+    unfundedParentTxids: readonly string[]
+  }) {
     super(
       `${BARK_CPFP_UNFUNDABLE}: Waiting exit transactions need at least ${formatSats(params.waitingNeededSats)} sat, but the on-chain wallet holds ${formatSats(params.onchainTotalSats)} sat including pending coins. Add on-chain funds to continue the emergency exit.`,
     )
     this.name = 'BarkCpfpUnfundableError'
     this.waitingNeededSats = params.waitingNeededSats
     this.onchainTotalSats = params.onchainTotalSats
+    this.unfundedParentTxids = params.unfundedParentTxids
   }
 }
 
@@ -155,11 +163,13 @@ async function progressBarkEmergencyExitsOnce(
   const { requests } = await deps.progress()
   let providedChildren = 0
   let waitingNeededSats = 0
+  const unfundedParentTxids: string[] = []
   try {
     for (const request of requests) {
       const signed = await signFundedChild(deps, request, feeRateSatPerVb)
       if ('shortfallSats' in signed) {
         waitingNeededSats += signed.shortfallSats
+        unfundedParentTxids.push(request.parentTxid)
         continue
       }
       await deps.provideChild(request.parentTxid, signed.childTxHex)
@@ -167,7 +177,7 @@ async function progressBarkEmergencyExitsOnce(
       await deps.rememberUnconfirmedChild(signed.childTxHex)
     }
     if (providedChildren < requests.length) {
-      await assertWaitingChildrenFundable(deps, waitingNeededSats)
+      await assertWaitingChildrenFundable(deps, waitingNeededSats, unfundedParentTxids)
     }
   } catch (err) {
     if (providedChildren > 0) {
@@ -178,7 +188,7 @@ async function progressBarkEmergencyExitsOnce(
   if (providedChildren > 0) {
     await deps.progress()
   }
-  return { requestedChildren: requests.length, providedChildren }
+  return { requestedChildren: requests.length, providedChildren, unfundedParentTxids }
 }
 
 /** A shortfall when the wallet has no confirmed coin left for this child. */
@@ -202,10 +212,15 @@ async function signFundedChild(
 async function assertWaitingChildrenFundable(
   deps: ProgressBarkEmergencyExitDeps,
   waitingNeededSats: number,
+  unfundedParentTxids: readonly string[],
 ): Promise<void> {
   const onchainTotalSats = await deps.onchainTotalSats()
   if (onchainTotalSats >= waitingNeededSats) return
-  throw new BarkCpfpUnfundableError({ waitingNeededSats, onchainTotalSats })
+  throw new BarkCpfpUnfundableError({
+    waitingNeededSats,
+    onchainTotalSats,
+    unfundedParentTxids,
+  })
 }
 
 /**

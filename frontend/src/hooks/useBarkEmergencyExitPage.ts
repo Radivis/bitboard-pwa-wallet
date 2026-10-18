@@ -18,6 +18,7 @@ import {
 import {
   barkEmergencyExitFundingStatusFor,
   barkEmergencyExitScopeFor,
+  barkEmergencyExitUnfundedParentTxidsFor,
 } from '@/lib/bark/bark-emergency-exit-funding-status'
 import { catchUpOnchainWalletForBarkExit } from '@/lib/bark/bark-emergency-exit-onchain-catch-up-live'
 import {
@@ -161,6 +162,10 @@ export function useBarkEmergencyExitPage() {
   )
   const fundingStatus = barkEmergencyExitFundingStatusFor(
     useBarkEmergencyExitFundingStore((fundingState) => fundingState.fundingStatus),
+    exitScope,
+  )
+  const unfundedParentTxids = barkEmergencyExitUnfundedParentTxidsFor(
+    useBarkEmergencyExitFundingStore((fundingState) => fundingState.unfundedParents),
     exitScope,
   )
 
@@ -429,6 +434,7 @@ export function useBarkEmergencyExitPage() {
     topologyNodes: topologyVtxoIds.length === 0 ? [] : topologyQuery.data?.nodes,
     exitTreeError,
     fundingStatus,
+    unfundedParentTxids,
     wholeWallet,
     selectedIds,
     review,

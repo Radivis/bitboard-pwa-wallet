@@ -111,7 +111,11 @@ describe('progressBarkEmergencyExitAutomatically', () => {
     expect(runBarkEmergencyExitProgress).toHaveBeenCalledTimes(1)
 
     runBarkEmergencyExitProgress.mockRejectedValueOnce(
-      new BarkCpfpUnfundableError({ waitingNeededSats: 3_000, onchainTotalSats: 100 }),
+      new BarkCpfpUnfundableError({
+        waitingNeededSats: 3_000,
+        onchainTotalSats: 100,
+        unfundedParentTxids: [],
+      }),
     )
     await expect(
       progressBarkEmergencyExitAutomatically({ scope, networkMode: 'signet' }),

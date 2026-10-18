@@ -16,6 +16,11 @@ export function barkEmergencyExitScopeFor<TNetworkMode extends NetworkMode>(
 /** The last progress run left some exit transactions without a funded child. */
 export type BarkEmergencyExitFundingStatus = BarkEmergencyExitScope & BarkEmergencyExitProgressOutcome
 
+/** Parents still waiting for a confirmed coin, kept when the funding banner is cleared. */
+export type BarkEmergencyExitUnfundedParents = BarkEmergencyExitScope & {
+  txids: readonly string[]
+}
+
 export function barkEmergencyExitFundingStatusFor(
   status: BarkEmergencyExitFundingStatus | null,
   scope: BarkEmergencyExitScope | null,
@@ -23,6 +28,20 @@ export function barkEmergencyExitFundingStatusFor(
   if (status == null || scope == null) return null
   if (status.walletId !== scope.walletId || status.networkMode !== scope.networkMode) return null
   return status
+}
+
+/** Shortfall parents for this wallet. Empty when the stored list belongs to another scope. */
+const NO_UNFUNDED_PARENT_TXIDS: readonly string[] = []
+
+export function barkEmergencyExitUnfundedParentTxidsFor(
+  stored: BarkEmergencyExitUnfundedParents | null,
+  scope: BarkEmergencyExitScope | null,
+): readonly string[] {
+  if (stored == null || scope == null) return NO_UNFUNDED_PARENT_TXIDS
+  if (stored.walletId !== scope.walletId || stored.networkMode !== scope.networkMode) {
+    return NO_UNFUNDED_PARENT_TXIDS
+  }
+  return stored.txids
 }
 
 /**

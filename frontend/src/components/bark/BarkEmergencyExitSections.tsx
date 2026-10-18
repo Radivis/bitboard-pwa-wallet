@@ -30,6 +30,7 @@ export function BarkEmergencyExitTreeCard({
   errorMessage,
   vtxoRows,
   fundingStatus,
+  unfundedParentTxids,
 }: {
   nodes: BarkExitGraphNode[] | undefined
   exitRows: BarkEmergencyExitRow[]
@@ -37,6 +38,7 @@ export function BarkEmergencyExitTreeCard({
   errorMessage: string | null
   vtxoRows: BarkVtxoRow[]
   fundingStatus: BarkEmergencyExitFundingStatus | null
+  unfundedParentTxids: readonly string[]
 }) {
   return (
     <Card>
@@ -50,6 +52,7 @@ export function BarkEmergencyExitTreeCard({
           emptySelection={emptySelection}
           errorMessage={errorMessage}
           vtxoRows={vtxoRows}
+          unfundedParentTxids={unfundedParentTxids}
         />
         <BarkEmergencyExitFundingBanner status={fundingStatus} />
       </CardContent>

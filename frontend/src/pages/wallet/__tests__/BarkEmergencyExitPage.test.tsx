@@ -232,6 +232,7 @@ describe('BarkEmergencyExitPage', () => {
     })
     barkWorker.provideEmergencyExitCpfp.mockReset().mockResolvedValue(undefined)
     useBarkEmergencyExitFundingStore.getState().clearFundingStatus()
+    useBarkEmergencyExitFundingStore.getState().clearUnfundedParents()
     vi.mocked(toast.success).mockReset()
     vi.mocked(toast.error).mockReset()
   })
@@ -702,14 +703,41 @@ describe('BarkEmergencyExitPage', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('BARK-EMG-12 shows the needs-child badge and not a child node', async () => {
-    barkWorker.exitTopology.mockResolvedValue(exitTree)
+  it('BARK-EMG-12 shows broadcast, confirmation, and confirmed phases and not a child label', async () => {
+    barkWorker.exitTopology.mockResolvedValue({
+      nodes: exitTree.nodes.map((node) =>
+        node.txid === 'checkpoint-txid'
+          ? { ...node, status: 'inProgress' as const, needsChild: false }
+          : node,
+      ),
+    })
     barkWorker.listEmergencyExits.mockResolvedValue([
       exitRow({ vtxoId: 'vtxo-1', state: 'processing', cancelable: true }),
     ])
     renderWithProviders(<BarkEmergencyExitPage />)
-    expect(await screen.findByTestId('bark-exit-tree-needs-child-leaf-txid')).toBeInTheDocument()
+    expect(
+      await screen.findByTestId('bark-exit-tree-phase-awaitingCpfpBroadcast-leaf-txid'),
+    ).toHaveAttribute('data-icon', 'megaphone')
+    expect(screen.getByTestId('bark-exit-tree-phase-awaitingConfirmation-checkpoint-txid')).toHaveAttribute(
+      'data-icon',
+      'pickaxe',
+    )
+    expect(screen.getByTestId('bark-exit-tree-phase-confirmed-anchor-txid')).toBeInTheDocument()
+    expect(screen.queryByTestId('bark-exit-tree-phase-notProcessing-parent-txid')).not.toBeInTheDocument()
+    expect(screen.queryByText('Child')).not.toBeInTheDocument()
     expect(screen.queryByTestId('bark-exit-tree-node-child-txid')).not.toBeInTheDocument()
+
+    useBarkEmergencyExitFundingStore.getState().recordUnfundedParents(
+      { walletId: 1, networkMode: 'signet' },
+      ['leaf-txid'],
+    )
+    expect(
+      await screen.findByTestId('bark-exit-tree-phase-awaitingBumperFunding-leaf-txid'),
+    ).toHaveAttribute('data-icon', 'wallet')
+    fireEvent.click(screen.getByTestId('bark-exit-tree-node-leaf-txid'))
+    expect(screen.getByTestId('bark-exit-tree-detail-phase')).toHaveTextContent(
+      'Waiting for confirmed funds',
+    )
   })
 
   it('BARK-EMG-13 shows the focused transaction id and the leaf VTXO id', async () => {

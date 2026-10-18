@@ -36,7 +36,9 @@ export async function settleBarkEmergencyExitAfterSync(networkMode: NetworkMode)
   await reconcilePendingEmergencyClaim(networkMode)
   const rows = await getBarkWorker().listEmergencyExits()
   if (rows.length === 0) {
-    useBarkEmergencyExitFundingStore.getState().clearFundingStatus()
+    const fundingStore = useBarkEmergencyExitFundingStore.getState()
+    fundingStore.clearFundingStatus()
+    fundingStore.clearUnfundedParents()
     return
   }
   const { activeWalletId } = useWalletStore.getState()

@@ -8,19 +8,24 @@ import {
   type NodeProps,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { Check, Loader2 } from 'lucide-react'
+import { Check, Megaphone, Pickaxe, Wallet, type LucideIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { BarkExitTreeEdgesOverlay } from '@/components/bark/BarkExitTreeEdgesOverlay'
 import { ExitTreeCoinBadge } from '@/components/wallet/unilateral-exit/ExitTreeCoinBadge'
+import { ExitTreeInProgressBadge } from '@/components/wallet/unilateral-exit/ExitTreeInProgressBadge'
 import {
   formatUnilateralExitTxTypeLabel,
   resolveUnilateralExitNodeIconKind,
   unilateralExitNodeIconComponent,
 } from '@/lib/arkade/unilateral-exit-node-icons'
 import {
+  barkExitNodePhaseLabel,
+  BARK_EXIT_NODE_PHASE,
   layoutBarkExitGraph,
+  resolveBarkExitNodePhase,
   resolveLayoutDirection,
   shortTxid,
+  type BarkExitNodePhase,
   type BarkExitTreeNodeData,
 } from '@/lib/bark/bark-exit-graph-layout'
 import { cn } from '@/lib/shared/utils'
@@ -38,6 +43,7 @@ interface BarkExitTreeGraphProps {
   emptySelection: boolean
   errorMessage: string | null
   vtxoRows: BarkVtxoRow[]
+  unfundedParentTxids: readonly string[]
 }
 
 const GRAPH_CONTROLS_STYLE = {
@@ -47,6 +53,32 @@ const GRAPH_CONTROLS_STYLE = {
   '--xy-controls-button-color': 'var(--foreground)',
   '--xy-controls-button-color-hover': 'var(--foreground)',
 } as CSSProperties
+
+function barkExitPhaseIcon(phase: BarkExitNodePhase): LucideIcon | null {
+  switch (phase) {
+    case BARK_EXIT_NODE_PHASE.awaitingBumperFunding:
+      return Wallet
+    case BARK_EXIT_NODE_PHASE.awaitingCpfpBroadcast:
+      return Megaphone
+    case BARK_EXIT_NODE_PHASE.awaitingConfirmation:
+      return Pickaxe
+    default:
+      return null
+  }
+}
+
+function barkExitPhaseIconName(phase: BarkExitNodePhase): string | undefined {
+  switch (phase) {
+    case BARK_EXIT_NODE_PHASE.awaitingBumperFunding:
+      return 'wallet'
+    case BARK_EXIT_NODE_PHASE.awaitingCpfpBroadcast:
+      return 'megaphone'
+    case BARK_EXIT_NODE_PHASE.awaitingConfirmation:
+      return 'pickaxe'
+    default:
+      return undefined
+  }
+}
 
 function statusLabel(status: BarkExitGraphNodeStatus): string {
   switch (status) {
@@ -66,6 +98,8 @@ function BarkExitTreeNode({ data }: NodeProps<Node<BarkExitTreeNodeData>>) {
   })
   const Icon = unilateralExitNodeIconComponent(iconKind)
   const typeLabel = formatUnilateralExitTxTypeLabel(data.txType, data.isLeaf)
+  const phaseIcon = barkExitPhaseIcon(data.phase)
+  const phaseLabel = barkExitNodePhaseLabel(data.phase) ?? undefined
   return (
     <div
       className={cn(
@@ -85,25 +119,20 @@ function BarkExitTreeNode({ data }: NodeProps<Node<BarkExitTreeNodeData>>) {
         testIdPrefix="bark-exit-tree"
         testIdSuffix={data.txid}
       />
-      {data.status === 'confirmed' && (
+      {data.phase === BARK_EXIT_NODE_PHASE.confirmed && (
         <Check
           className="absolute -right-1 -top-1 size-4 rounded-full bg-background text-green-600"
-          aria-hidden
+          data-testid={`bark-exit-tree-phase-confirmed-${data.txid}`}
+          aria-label="Confirmed"
         />
       )}
-      {data.status === 'inProgress' && (
-        <Loader2
-          className="absolute -right-1 -top-1 size-4 animate-spin text-blue-600"
-          aria-hidden
+      {phaseIcon != null && (
+        <ExitTreeInProgressBadge
+          icon={phaseIcon}
+          iconName={barkExitPhaseIconName(data.phase)}
+          label={phaseLabel}
+          testId={`bark-exit-tree-phase-${data.phase}-${data.txid}`}
         />
-      )}
-      {data.needsChild && (
-        <span
-          className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-background px-1 text-[9px] font-medium text-amber-700"
-          data-testid={`bark-exit-tree-needs-child-${data.txid}`}
-        >
-          Child
-        </span>
       )}
     </div>
   )
@@ -118,12 +147,14 @@ function BarkExitTreeCanvas({
   exitRows,
   layoutDirection,
   focusedTxid,
+  unfundedParentTxids,
   onFocus,
 }: {
   graphNodes: BarkExitGraphNode[]
   exitRows: BarkEmergencyExitRow[]
   layoutDirection: 'LR' | 'TB'
   focusedTxid: string | null
+  unfundedParentTxids: readonly string[]
   onFocus: (txid: string) => void
 }) {
   const { nodes, edgePaths } = useMemo(
@@ -133,8 +164,9 @@ function BarkExitTreeCanvas({
         layoutDirection,
         focusedNodeId: focusedTxid,
         exitRows,
+        unfundedParentTxids,
       }),
-    [graphNodes, layoutDirection, focusedTxid, exitRows],
+    [graphNodes, layoutDirection, focusedTxid, exitRows, unfundedParentTxids],
   )
 
   return (
@@ -163,14 +195,25 @@ function BarkExitTreeCanvas({
 function BarkExitTreeDetail({
   node,
   vtxoRows,
+  unfundedParentTxids,
 }: {
   node: BarkExitGraphNode
   vtxoRows: BarkVtxoRow[]
+  unfundedParentTxids: readonly string[]
 }) {
   async function copyTxid() {
     await navigator.clipboard.writeText(node.txid)
     toast.success('Exit transaction id copied')
   }
+
+  const phaseLabel = barkExitNodePhaseLabel(
+    resolveBarkExitNodePhase({
+      status: node.status,
+      needsChild: node.needsChild,
+      txid: node.txid,
+      unfundedParentTxids: new Set(unfundedParentTxids),
+    }),
+  )
 
   return (
     <div className="space-y-2 text-sm" data-testid="bark-exit-tree-detail">
@@ -187,8 +230,8 @@ function BarkExitTreeDetail({
         {' · '}
         {statusLabel(node.status)}
       </p>
-      {node.needsChild ? (
-        <p data-testid="bark-exit-tree-detail-needs-child">Needs a Pay-to-Anchor child</p>
+      {phaseLabel != null ? (
+        <p data-testid="bark-exit-tree-detail-phase">{phaseLabel}</p>
       ) : null}
       {node.waitingOnTxids.length > 0 ? (
         <p data-testid="bark-exit-tree-detail-waiting">
@@ -218,6 +261,7 @@ export function BarkExitTreeGraph({
   emptySelection,
   errorMessage,
   vtxoRows,
+  unfundedParentTxids,
 }: BarkExitTreeGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [layoutDirection, setLayoutDirection] = useState<'LR' | 'TB'>('TB')
@@ -277,13 +321,20 @@ export function BarkExitTreeGraph({
                 exitRows={exitRows}
                 layoutDirection={layoutDirection}
                 focusedTxid={focusedTxid}
+                unfundedParentTxids={unfundedParentTxids}
                 onFocus={setFocusedTxid}
               />
             </ReactFlowProvider>
           </div>
         )}
       </div>
-      {focusedNode != null ? <BarkExitTreeDetail node={focusedNode} vtxoRows={vtxoRows} /> : null}
+      {focusedNode != null ? (
+        <BarkExitTreeDetail
+          node={focusedNode}
+          vtxoRows={vtxoRows}
+          unfundedParentTxids={unfundedParentTxids}
+        />
+      ) : null}
     </div>
   )
 }
