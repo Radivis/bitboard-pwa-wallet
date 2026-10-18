@@ -89,6 +89,24 @@ describe('bark-vtxo-viewer-display', () => {
     expect(filtered.map((row) => row.id)).toEqual(['lock:1'])
   })
 
+  it('keeps a live exit and a checkpoint seizure while spent and exited are hidden', () => {
+    const filtered = filterBarkVtxoRows(
+      [
+        sampleRow({ id: 'timelock', state: 'exited' }),
+        sampleRow({ id: 'seized', state: 'spent' }),
+        sampleRow({ id: 'claimed', state: 'exited' }),
+        sampleRow({ id: 'spent', state: 'spent' }),
+      ],
+      {
+        searchQuery: '',
+        stateFilter: null,
+        hideFinished: true,
+        keepWhenFinishedIds: new Set(['timelock', 'seized']),
+      },
+    )
+    expect(filtered.map((row) => row.id)).toEqual(['timelock', 'seized'])
+  })
+
   it('counts states from the full list', () => {
     const counts = countBarkVtxoStates([
       sampleRow({ id: 'a:0', state: 'spendable' }),

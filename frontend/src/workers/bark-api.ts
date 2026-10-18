@@ -174,6 +174,12 @@ export type BarkEmergencyExitRow = {
   vtxoId: string
   state: BarkEmergencyExitState
   cancelable: boolean
+  /** Tip when Bark last stored an awaiting-delta exit. */
+  tipHeight?: number
+  /** Block that confirmed the exit chain. */
+  confirmedHeight?: number
+  /** First height at which the exit can be claimed. */
+  claimableHeight?: number
 }
 
 export type BarkEmergencyCpfpRequest = {

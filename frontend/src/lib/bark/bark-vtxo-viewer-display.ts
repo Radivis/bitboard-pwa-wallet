@@ -102,6 +102,8 @@ export interface FilterBarkVtxoRowsOptions {
   searchQuery: string
   stateFilter: BarkVtxoState | null
   hideFinished: boolean
+  /** Live exits and checkpoint seizures stay listed while spent and exited are hidden. */
+  keepWhenFinishedIds?: ReadonlySet<string>
 }
 
 export function filterBarkVtxoRows(
@@ -109,7 +111,11 @@ export function filterBarkVtxoRows(
   options: FilterBarkVtxoRowsOptions,
 ): BarkVtxoRow[] {
   return rows.filter((row) => {
-    if (options.hideFinished && isFinishedBarkVtxoState(row.state)) {
+    if (
+      options.hideFinished &&
+      isFinishedBarkVtxoState(row.state) &&
+      !options.keepWhenFinishedIds?.has(row.id)
+    ) {
       return false
     }
     if (options.stateFilter != null && row.state !== options.stateFilter) {

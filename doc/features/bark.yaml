@@ -19,6 +19,7 @@ feature:
     - As a user with Bark enabled on signet or mainnet, I want to exit a chosen amount, or my whole spendable Bark balance, to my current on-chain receive address
     - As a user, I want a failed Bark exit to leave the page without a success message, and a parked exit to stay visible as a banner on the exit page, the dashboard, and management
     - As a user with Bark enabled on signet or mainnet, I want to open a VTXO list from wallet management and see each coin's Bark state
+    - As a user, I want each Bark VTXO card to show how far that coin's emergency exit has gotten, including a started exit, the timelock after confirmation, and an anchor sweep or checkpoint seizure
     - As a user with Bark enabled on signet or mainnet, I want to send to a Bark Ark address from the send form
     - As a user with Bark enabled on signet or mainnet, I want an emergency-exit control page where I can exit selected spendable VTXOs or the whole wallet, watch each coin's exit state, progress it, cancel while Bark still allows it, and claim claimable coins to my current on-chain receive address
     - As a user, I want a failed emergency-exit step to leave the page without a success message
@@ -62,8 +63,9 @@ feature:
     - The wallet layout shows one banner. Each recorded kind is its own section and lists its VTXO ids. Both sections show together when both lists have ids. Each sync appends newly recorded ids onto the matching list and leaves the other list in place. A sync that records neither removes nothing. Dismissing a section clears only that list. Lock, wallet switch, and session change hide the banner until that wallet is unlocked again
     - The VTXO list link and page exist only when isBarkEnabled and the network is signet or mainnet
     - The VTXO list is the local Bark database. It is not an operator snapshot
-    - Spent and Exited VTXOs stay hidden until the user shows them. Locked VTXOs stay visible
+    - Spent and Exited VTXOs stay hidden until the user shows them, except a live emergency exit and a checkpoint-seized coin, which stay listed. Locked VTXOs stay visible
     - A VTXO card shows id, amount, state, a lock line that names the pending action or history label, expiry as blocks remaining plus an approximate date, and Registered only when the coin is registered
+    - A card ends with Emergency exit phase when the coin has a live exit, is claimed, or is named by an anchor sweep or checkpoint seizure. A coin with no exit omits that line. A sweep or seizure wins over a live exit. While processing, the copy is the frontier exit-tree phase, and it names how many non-anchor exit transactions are confirmed once one is. After confirmation, the copy is the timelock as blocks elapsed of the total. Until that exit tree has loaded, a processing coin reads processing
     - Search, state chips, sort, and pagination filter the loaded list and do not call the worker again
     - A Signet Bark policy address (tark1p) is a valid send recipient when isBarkEnabled and the network is signet
     - A Mainnet Bark policy address (ark1p) is a valid send recipient when isBarkEnabled and the network is mainnet
@@ -362,8 +364,10 @@ feature:
         description: A card shows id, amount, state, blocks until expiry with an approximate date, a lock line that names the exit instead of a raw id, and Registered only when true
         implemented_by: frontend/src/components/bark/__tests__/BarkVtxoCard.test.tsx
       - id: BARK-VTX-04
-        description: Hide spent and exited defaults on, and the toggle shows those cards
-        implemented_by: frontend/src/pages/wallet/__tests__/BarkVtxoViewerPage.test.tsx
+        description: Hide spent and exited defaults on, and the toggle shows those cards. A live emergency exit and a checkpoint-seized coin stay listed while the toggle is on
+        implemented_by:
+          - frontend/src/pages/wallet/__tests__/BarkVtxoViewerPage.test.tsx
+          - frontend/src/lib/bark/__tests__/bark-vtxo-viewer-display.test.ts
       - id: BARK-VTX-05
         description: Search matches a partial id or a sats amount
         implemented_by: frontend/src/lib/bark/__tests__/bark-vtxo-viewer-display.test.ts
@@ -381,6 +385,20 @@ feature:
           The management Bark card shows the next refresh hint above the pending-action banner
           when the last sync reported a next refresh height
         implemented_by: frontend/src/components/wallet/__tests__/BarkPanel.test.tsx
+      - id: BARK-VTX-10
+        description: >
+          Each card ends with Emergency exit phase when the coin has a live exit, is claimed, or
+          is named by an anchor sweep or checkpoint seizure. A coin with no exit omits that line.
+          Copy is started, the frontier node phase while processing (with how many non-anchor exit
+          transactions are confirmed once one is), waiting for timelock with blocks elapsed of the
+          total after confirmation, ready to claim, claim in progress, claimed, anchor swept, or
+          checkpoint seized. A sweep or seizure wins over a live exit. While the exit tree for a
+          processing coin has not loaded, the copy is processing
+        implemented_by:
+          - frontend/src/lib/bark/__tests__/bark-vtxo-exit-phase.test.ts
+          - frontend/src/components/bark/__tests__/BarkVtxoCard.test.tsx
+          - frontend/src/pages/wallet/__tests__/BarkVtxoViewerPage.test.tsx
+          - bitboard-bark/src/emergency_exit.rs
     send:
       - id: BARK-SEND-01
         description: A peeked Signet Bark receive address is a Bark send destination and is not an Arkade address
@@ -513,11 +531,11 @@ feature:
         path: /wallet/bark/vtxos
         file: frontend/src/routes/wallet/bark/vtxos.tsx
         visible_elements:
-          - VTXO card grid with id, amount, Bark state, blocks until expiry and an approximate date, a lock line that names the pending action or history label, and Registered when registered
+          - VTXO card grid with id, amount, Bark state, blocks until expiry and an approximate date, a lock line that names the pending action or history label, Registered when registered, and a last line Emergency exit phase when the coin has a live exit, is claimed, or was swept or seized
           - search by id or sats amount
           - state filter chips with counts from the full list
           - sort by amount or expiry height
-          - hide spent and exited toggle, default on
+          - hide spent and exited toggle, default on, keeping a live emergency exit and a checkpoint-seized coin listed
           - pagination at 20 cards per page
           - last successful sync subtitle when a sync time is known
           - Bark sync error banner
@@ -525,6 +543,7 @@ feature:
           - Back to management
         requirements:
           - Contracts BARK-VTX-02 through BARK-VTX-07
+          - Contract BARK-VTX-10
           - Contracts BARK-SESS-03 and BARK-SESS-04
           - Shown only when isBarkEnabled and the network is signet or mainnet
           - The list is the local Bark database

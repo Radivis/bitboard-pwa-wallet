@@ -17,6 +17,7 @@ interface BarkVtxoCardProps {
   networkMode: BarkBitcoinNetwork
   pendingActions?: readonly BarkPendingAction[]
   movements?: readonly BarkMovementRow[]
+  emergencyExitPhaseLine?: string | null
   now?: Date
 }
 
@@ -26,6 +27,7 @@ export function BarkVtxoCard({
   networkMode,
   pendingActions = [],
   movements = [],
+  emergencyExitPhaseLine = null,
   now = new Date(),
 }: BarkVtxoCardProps) {
   const [copied, setCopied] = useState(false)
@@ -86,6 +88,14 @@ export function BarkVtxoCard({
             data-testid={`bark-vtxo-lock-holder-${row.id}`}
           >
             {lockHolderLine}
+          </div>
+        ) : null}
+        {emergencyExitPhaseLine != null ? (
+          <div
+            className="text-xs text-muted-foreground"
+            data-testid={`bark-vtxo-exit-phase-${row.id}`}
+          >
+            {emergencyExitPhaseLine}
           </div>
         ) : null}
       </CardContent>

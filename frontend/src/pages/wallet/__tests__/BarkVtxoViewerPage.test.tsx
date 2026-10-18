@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, screen } from '@testing-library/react'
+import { useBarkExitChainNoticeStore } from '@/lib/bark/bark-exit-seizure-notice'
 import { BarkVtxoViewerPage } from '@/pages/wallet/BarkVtxoViewerPage'
 import { BARK_VTXO_VIEWER_PAGE_SIZE } from '@/lib/bark/bark-vtxo-viewer-display'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import type { NetworkMode } from '@/stores/walletStore'
-import type { BarkVtxoList, BarkVtxoRow } from '@/workers/bark-api'
+import type { BarkEmergencyExitRow, BarkExitGraph, BarkVtxoList, BarkVtxoRow } from '@/workers/bark-api'
 
 const walletStoreState = vi.hoisted(() => ({
   networkMode: 'signet' as NetworkMode,
@@ -36,13 +37,21 @@ const syncSnapshot = vi.hoisted(() => ({
   },
 }))
 
-  const vtxoListQuery = vi.hoisted(() =>
+const vtxoListQuery = vi.hoisted(() =>
   vi.fn(() => ({
     data: { tipHeight: null, rows: [] } as BarkVtxoList | undefined,
     isLoading: false,
     isError: false,
     error: null as unknown,
   })),
+)
+
+const emergencyExitQuery = vi.hoisted(() =>
+  vi.fn(() => ({ data: [] as BarkEmergencyExitRow[] })),
+)
+
+const exitTopologyQuery = vi.hoisted(() =>
+  vi.fn(() => ({ data: undefined as BarkExitGraph | undefined })),
 )
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
@@ -81,6 +90,14 @@ vi.mock('@/hooks/useBarkSyncLifecycleSnapshot', () => ({
 
 vi.mock('@/hooks/useBarkVtxoListQuery', () => ({
   useBarkVtxoListQuery: () => vtxoListQuery(),
+}))
+
+vi.mock('@/hooks/useBarkEmergencyExitQuery', () => ({
+  useBarkEmergencyExitQuery: () => emergencyExitQuery(),
+}))
+
+vi.mock('@/hooks/useBarkExitTopologyQuery', () => ({
+  useBarkExitTopologyQuery: () => exitTopologyQuery(),
 }))
 
 vi.mock('@/hooks/useBarkPendingActionsQuery', () => ({
@@ -139,6 +156,9 @@ describe('BarkVtxoViewerPage', () => {
       isError: false,
       error: null,
     })
+    emergencyExitQuery.mockReturnValue({ data: [] })
+    exitTopologyQuery.mockReturnValue({ data: undefined })
+    useBarkExitChainNoticeStore.setState({ notice: null })
   })
 
   it('BARK-VTX-02 is not the inventory unless Bark is enabled on signet', () => {
@@ -222,6 +242,50 @@ describe('BarkVtxoViewerPage', () => {
 
     expect(screen.getByTestId('bark-vtxo-card-spent:2')).toBeInTheDocument()
     expect(screen.getByTestId('bark-vtxo-card-exit:3')).toBeInTheDocument()
+  })
+
+  it('BARK-VTX-10 shows a started exit, a timelock, and a checkpoint seizure while spent and exited are hidden', () => {
+    vtxoListQuery.mockReturnValue({
+      data: vtxoList([
+        sampleRow({ id: 'started:1', state: 'spendable' }),
+        sampleRow({ id: 'timelock:2', state: 'exited' }),
+        sampleRow({ id: 'seized:3', state: 'spent' }),
+        sampleRow({ id: 'claimed:4', state: 'exited' }),
+      ]),
+      isLoading: false,
+      isError: false,
+      error: null,
+    })
+    emergencyExitQuery.mockReturnValue({
+      data: [
+        { vtxoId: 'started:1', state: 'start', cancelable: true },
+        {
+          vtxoId: 'timelock:2',
+          state: 'awaitingDelta',
+          cancelable: false,
+          tipHeight: 100,
+          confirmedHeight: 90,
+          claimableHeight: 130,
+        },
+      ],
+    })
+    useBarkExitChainNoticeStore.getState().showNotice(1, 'signet', {
+      anchorSweepVtxoIds: [],
+      checkpointSeizureVtxoIds: ['seized:3'],
+    })
+
+    renderWithProviders(<BarkVtxoViewerPage />)
+
+    expect(screen.getByTestId('bark-vtxo-exit-phase-started:1')).toHaveTextContent(
+      'Emergency exit phase: started',
+    )
+    expect(screen.getByTestId('bark-vtxo-exit-phase-timelock:2')).toHaveTextContent(
+      'Emergency exit phase: waiting for timelock, 10 of 40 blocks',
+    )
+    expect(screen.getByTestId('bark-vtxo-exit-phase-seized:3')).toHaveTextContent(
+      'Emergency exit phase: checkpoint seized',
+    )
+    expect(screen.queryByTestId('bark-vtxo-card-claimed:4')).not.toBeInTheDocument()
   })
 
   it('BARK-VTX-06 filters by a state chip whose count is from the full list', () => {
