@@ -7,6 +7,7 @@ use bdk_wallet::KeychainKind;
 use bdk_wallet::Wallet;
 use bitcoin::consensus::encode::{deserialize_hex, serialize_hex};
 use bitcoin::psbt::Input;
+use bitcoin::transaction::Version;
 use bitcoin::{Amount, OutPoint, ScriptBuf, Transaction, TxOut, Weight, Witness};
 
 use crate::error::CryptoError;
@@ -23,6 +24,20 @@ pub const BARK_CPFP_NEEDED_SATS_LABEL: &str = "needed_sats";
 /// (witness stack length 0), and witness bytes count as one weight unit each.
 const FEE_ANCHOR_SPEND_WEIGHT: Weight = Weight::from_wu(1);
 const MAX_FEE_ITERATIONS: usize = 100;
+
+/// Version-3 child that spends a Pay-to-Anchor (empty witness) and a signed wallet coin.
+/// Bark emergency-exit children and Arkade unilateral-exit bump children share this shape.
+pub fn is_pay_to_anchor_cpfp_child(tx: &Transaction) -> bool {
+    if tx.version != Version(3) {
+        return false;
+    }
+    let has_anchor_input = tx
+        .input
+        .iter()
+        .any(|input| input.script_sig.is_empty() && input.witness.is_empty());
+    let has_signed_input = tx.input.iter().any(|input| !input.witness.is_empty());
+    has_anchor_input && has_signed_input
+}
 
 /// Signed raw transaction hex. Does not insert the child into the wallet.
 pub fn sign_p2a_cpfp_child(

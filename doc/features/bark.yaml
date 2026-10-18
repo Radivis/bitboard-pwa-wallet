@@ -17,6 +17,7 @@ feature:
     - As a user on mainnet with fiat denomination mode, I want Bark balances and board and exit amounts shown in my fiat currency
     - As a user, I want a failed board to leave my on-chain wallet unspent
     - As a user, I want Bark fund movements on the activity list, including failed movements that still changed funds
+    - As a user, I want an on-chain Pay-to-Anchor fee bump to show a CPFP fee bump badge on the dashboard, so it is not mistaken for an empty payment
     - As a user with Bark enabled on signet or mainnet, I want to exit a chosen amount, or my whole spendable Bark balance, to my current on-chain receive address
     - As a user, I want a failed Bark exit to leave the page without a success message, and a parked exit to stay visible as a banner on the exit page, the dashboard, and management
     - As a user with Bark enabled on signet or mainnet, I want to open a VTXO list from wallet management and see each coin's Bark state
@@ -169,6 +170,13 @@ feature:
           Spendable, Locked, and Exiting sub-lines show fiat as the primary amount and bitcoin as
           the secondary amount. On signet those amounts stay in bitcoin even when fiat mode is on
         implemented_by: frontend/src/components/wallet/__tests__/BarkDashboardBalance.test.tsx
+      - id: DASH-BARK-19
+        description: >
+          A confirmed or pending on-chain Pay-to-Anchor CPFP child shows a CPFP fee bump badge
+          beside its direction. A normal send does not
+        implemented_by:
+          - crypto/tests/p2a_cpfp_tests.rs
+          - frontend/src/components/__tests__/TransactionItem.test.tsx
     session_screens:
       - id: BARK-SESS-01
         description: >

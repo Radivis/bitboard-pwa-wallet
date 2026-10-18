@@ -3,8 +3,10 @@
 mod common;
 
 use bitboard_crypto::p2a_cpfp::{
-    BARK_CPFP_INSUFFICIENT_FUNDS, BARK_CPFP_NEEDED_SATS_LABEL, sign_p2a_cpfp_child,
+    BARK_CPFP_INSUFFICIENT_FUNDS, BARK_CPFP_NEEDED_SATS_LABEL, is_pay_to_anchor_cpfp_child,
+    sign_p2a_cpfp_child,
 };
+use bitboard_crypto::wallet;
 use bitcoin::consensus::encode::{deserialize_hex, serialize_hex};
 use bitcoin::hashes::Hash;
 use bitcoin::transaction::Version;
@@ -92,4 +94,15 @@ fn funded_wallet_signs_a_version_3_child_that_spends_the_anchor() {
         "child must spend the parent anchor"
     );
     assert!(child.input.len() >= 2, "child also spends a wallet coin");
+    assert!(is_pay_to_anchor_cpfp_child(&child));
+    assert!(!is_pay_to_anchor_cpfp_child(&parent));
+}
+
+#[test]
+fn funded_wallet_history_is_not_marked_as_a_cpfp_fee_bump() {
+    let mut wallet = create_test_wallet(DEFAULT_NETWORK, DEFAULT_ADDRESS_TYPE);
+    fund_test_wallet(&mut wallet, FUNDING_AMOUNT);
+    let history = wallet::get_transaction_list(&wallet);
+    assert!(!history.is_empty(), "funded wallet has history");
+    assert!(history.iter().all(|row| !row.is_cpfp_fee_bump));
 }
