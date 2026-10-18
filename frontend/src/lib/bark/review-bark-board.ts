@@ -52,3 +52,25 @@ export async function reviewBarkBoard(
     grossAmountSats: estimate.grossAmountSats,
   }
 }
+
+/**
+ * Rebuilds the on-chain funding PSBT at a new fee rate.
+ * Keeps the prepared funding address, so it does not derive another VTXO key
+ * and does not ask the server for the board fee again.
+ */
+export async function repriceBarkBoardOnchain(
+  deps: Pick<ReviewBarkBoardDeps, 'prepareOnchainSend'>,
+  review: BarkBoardReview,
+  feeRateSatPerVb: number,
+): Promise<BarkBoardReview> {
+  const onchain = await deps.prepareOnchainSend({
+    toAddress: review.fundingAddress,
+    amountSats: review.grossAmountSats,
+    feeRateSatPerVb,
+  })
+  return {
+    ...review,
+    psbtBase64: onchain.psbtBase64,
+    onchainFeeSats: onchain.feeSats,
+  }
+}

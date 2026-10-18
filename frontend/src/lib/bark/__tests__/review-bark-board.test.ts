@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   parseBarkBoardAmountSats,
+  repriceBarkBoardOnchain,
   reviewBarkBoard,
+  type BarkBoardReview,
   type ReviewBarkBoardDeps,
 } from '@/lib/bark/review-bark-board'
 
@@ -59,6 +61,35 @@ describe('reviewBarkBoard', () => {
     ).rejects.toThrow('below minimum')
     expect(deps.prepareBoardFunding).not.toHaveBeenCalled()
     expect(deps.prepareOnchainSend).not.toHaveBeenCalled()
+  })
+})
+
+describe('repriceBarkBoardOnchain', () => {
+  it('BARK-BOARD-10 rebuilds only the on-chain PSBT at the new fee rate', async () => {
+    const deps = reviewDeps()
+    const review: BarkBoardReview = {
+      fundingAddress: 'tb1qboardfunding',
+      psbtBase64: 'unsigned-psbt',
+      onchainFeeSats: 180,
+      offchainFeeSats: 50,
+      netVtxoSats: 19_950,
+      grossAmountSats: 20_000,
+    }
+    deps.prepareOnchainSend = vi.fn(async ({ toAddress, amountSats, feeRateSatPerVb }) => {
+      deps.calls.push(`onchain:${toAddress}:${amountSats}:${feeRateSatPerVb}`)
+      return { psbtBase64: 'repriced-psbt', feeSats: 360 }
+    })
+
+    const repriced = await repriceBarkBoardOnchain(deps, review, 4)
+
+    expect(deps.calls).toEqual(['onchain:tb1qboardfunding:20000:4'])
+    expect(deps.estimateBoardOffchainFee).not.toHaveBeenCalled()
+    expect(deps.prepareBoardFunding).not.toHaveBeenCalled()
+    expect(repriced).toEqual({
+      ...review,
+      psbtBase64: 'repriced-psbt',
+      onchainFeeSats: 360,
+    })
   })
 })
 

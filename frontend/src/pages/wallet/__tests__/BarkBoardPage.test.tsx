@@ -27,6 +27,7 @@ const loadSnapshot = vi.hoisted(() => ({
 }))
 
 const reviewBarkBoard = vi.hoisted(() => vi.fn())
+const repriceBarkBoardOnchain = vi.hoisted(() => vi.fn())
 const performBarkBoard = vi.hoisted(() => vi.fn())
 const navigate = vi.hoisted(() => vi.fn())
 const broadcastTransaction = vi.hoisted(() => vi.fn())
@@ -88,7 +89,7 @@ vi.mock('@/stores/cryptoStore', () => ({
 
 vi.mock('@/lib/bark/review-bark-board', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/bark/review-bark-board')>()
-  return { ...actual, reviewBarkBoard }
+  return { ...actual, reviewBarkBoard, repriceBarkBoardOnchain }
 })
 
 vi.mock('@/lib/bark/perform-bark-board', () => ({
@@ -125,6 +126,7 @@ describe('BarkBoardPage', () => {
       receiveKeyIndex: 0,
     }
     reviewBarkBoard.mockReset()
+    repriceBarkBoardOnchain.mockReset()
     performBarkBoard.mockReset()
     navigate.mockReset()
     broadcastTransaction.mockReset()
@@ -166,6 +168,169 @@ describe('BarkBoardPage', () => {
       /after the server's required confirmations/,
     )
     expect(screen.getByTestId('bark-board-confirm')).toBeInTheDocument()
+    expect(screen.getByTestId('bark-board-fee-rate')).toBeInTheDocument()
+  })
+
+  it('BARK-BOARD-10 rebuilds the funding PSBT at the selected fee rate and confirms that PSBT', async () => {
+    reviewBarkBoard.mockResolvedValue({
+      fundingAddress: 'tb1qboard',
+      psbtBase64: 'reviewed-psbt',
+      onchainFeeSats: 210,
+      offchainFeeSats: 40,
+      netVtxoSats: 9_960,
+      grossAmountSats: 10_000,
+    })
+    repriceBarkBoardOnchain.mockResolvedValue({
+      fundingAddress: 'tb1qboard',
+      psbtBase64: 'repriced-psbt',
+      onchainFeeSats: 420,
+      offchainFeeSats: 40,
+      netVtxoSats: 9_960,
+      grossAmountSats: 10_000,
+    })
+    performBarkBoard.mockResolvedValue({ localWalletWarning: null })
+    renderWithProviders(<BarkBoardPage />)
+    expect(screen.queryByTestId('bark-board-fee-rate')).not.toBeInTheDocument()
+    fireEvent.change(screen.getByTestId('bark-board-amount'), { target: { value: '10000' } })
+    fireEvent.click(screen.getByTestId('bark-board-review'))
+
+    expect(await screen.findByTestId('bark-board-fee-rate')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(reviewBarkBoard).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ amountSats: 10_000, feeRateSatPerVb: 2 }),
+      )
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'High (4.00)' }))
+
+    await waitFor(() => {
+      expect(repriceBarkBoardOnchain).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          fundingAddress: 'tb1qboard',
+          psbtBase64: 'reviewed-psbt',
+          grossAmountSats: 10_000,
+        }),
+        4,
+      )
+    })
+    expect(reviewBarkBoard).toHaveBeenCalledTimes(1)
+    expect(await screen.findByTestId('bark-board-onchain-fee')).toHaveTextContent('420')
+    expect(screen.getByTestId('bark-board-offchain-fee')).toHaveTextContent('40')
+    expect(screen.getByTestId('bark-board-net-vtxo')).toHaveTextContent('9960')
+
+    fireEvent.click(screen.getByTestId('bark-board-confirm'))
+    await waitFor(() => {
+      expect(performBarkBoard).toHaveBeenCalledWith(expect.anything(), 'repriced-psbt')
+    })
+  })
+
+  it('BARK-BOARD-10 keeps confirm disabled until a custom fee rate is a positive number', async () => {
+    reviewBarkBoard.mockResolvedValue({
+      fundingAddress: 'tb1qboard',
+      psbtBase64: 'reviewed-psbt',
+      onchainFeeSats: 210,
+      offchainFeeSats: 40,
+      netVtxoSats: 9_960,
+      grossAmountSats: 10_000,
+    })
+    repriceBarkBoardOnchain.mockResolvedValue({
+      fundingAddress: 'tb1qboard',
+      psbtBase64: 'custom-psbt',
+      onchainFeeSats: 350,
+      offchainFeeSats: 40,
+      netVtxoSats: 9_960,
+      grossAmountSats: 10_000,
+    })
+    renderWithProviders(<BarkBoardPage />)
+    fireEvent.change(screen.getByTestId('bark-board-amount'), { target: { value: '10000' } })
+    fireEvent.click(screen.getByTestId('bark-board-review'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Custom' }))
+
+    expect(screen.getByTestId('bark-board-confirm')).toBeDisabled()
+    expect(repriceBarkBoardOnchain).not.toHaveBeenCalled()
+
+    fireEvent.change(screen.getByLabelText('Custom fee rate (sat/vB)'), {
+      target: { value: '3.5' },
+    })
+    await waitFor(() => {
+      expect(repriceBarkBoardOnchain).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ psbtBase64: 'reviewed-psbt' }),
+        3.5,
+      )
+    })
+    expect(reviewBarkBoard).toHaveBeenCalledTimes(1)
+    expect(await screen.findByTestId('bark-board-onchain-fee')).toHaveTextContent('350')
+    expect(screen.getByTestId('bark-board-confirm')).toBeEnabled()
+  })
+
+  it('BARK-BOARD-10 ignores a fee rebuild that finishes after a newer rate was chosen', async () => {
+    const reviewed = {
+      fundingAddress: 'tb1qboard',
+      psbtBase64: 'reviewed-psbt',
+      onchainFeeSats: 210,
+      offchainFeeSats: 40,
+      netVtxoSats: 9_960,
+      grossAmountSats: 10_000,
+    }
+    reviewBarkBoard.mockResolvedValue(reviewed)
+    let resolveHigh: (review: typeof reviewed) => void = () => {}
+    repriceBarkBoardOnchain.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveHigh = resolve
+        }),
+    )
+    repriceBarkBoardOnchain.mockResolvedValueOnce({
+      ...reviewed,
+      psbtBase64: 'low-psbt',
+      onchainFeeSats: 100,
+    })
+    renderWithProviders(<BarkBoardPage />)
+    fireEvent.change(screen.getByTestId('bark-board-amount'), { target: { value: '10000' } })
+    fireEvent.click(screen.getByTestId('bark-board-review'))
+    fireEvent.click(await screen.findByRole('button', { name: 'High (4.00)' }))
+    await waitFor(() => {
+      expect(repriceBarkBoardOnchain).toHaveBeenCalledTimes(1)
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Low (1.00)' }))
+    expect(await screen.findByTestId('bark-board-onchain-fee')).toHaveTextContent('100')
+
+    resolveHigh({ ...reviewed, psbtBase64: 'stale-psbt', onchainFeeSats: 999 })
+    await waitFor(() => {
+      expect(screen.getByTestId('bark-board-confirm')).toBeEnabled()
+    })
+    expect(screen.getByTestId('bark-board-onchain-fee')).toHaveTextContent('100')
+    expect(screen.getByTestId('bark-board-onchain-fee')).not.toHaveTextContent('999')
+  })
+
+  it('BARK-BOARD-10 keeps confirm disabled after a fee rebuild error', async () => {
+    reviewBarkBoard.mockResolvedValue({
+      fundingAddress: 'tb1qboard',
+      psbtBase64: 'reviewed-psbt',
+      onchainFeeSats: 210,
+      offchainFeeSats: 40,
+      netVtxoSats: 9_960,
+      grossAmountSats: 10_000,
+    })
+    repriceBarkBoardOnchain.mockRejectedValue(new Error('fee rate rejected'))
+    renderWithProviders(<BarkBoardPage />)
+    fireEvent.change(screen.getByTestId('bark-board-amount'), { target: { value: '10000' } })
+    fireEvent.click(screen.getByTestId('bark-board-review'))
+    fireEvent.click(await screen.findByRole('button', { name: 'High (4.00)' }))
+
+    expect(await screen.findByTestId('bark-board-reprice-error')).toHaveTextContent(
+      'fee rate rejected',
+    )
+    expect(screen.getByTestId('bark-board-confirm')).toBeDisabled()
+    expect(screen.getByTestId('bark-board-onchain-fee')).toHaveTextContent('210')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Medium (2.00)' }))
+    await waitFor(() => {
+      expect(screen.getByTestId('bark-board-confirm')).toBeEnabled()
+    })
+    expect(screen.queryByTestId('bark-board-reprice-error')).not.toBeInTheDocument()
   })
 
   it('BARK-BOARD-06 does not toast success when the board submission fails', async () => {

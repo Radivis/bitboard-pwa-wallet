@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -10,17 +10,21 @@ import { barkSessionBlockingScreen } from '@/components/bark/bark-session-blocki
 import { BarkRailUnavailable } from '@/components/bark/BarkRailUnavailable'
 import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
 import { amountSatsFromSatsOrFiatField } from '@/components/wallet/send/amount-sats-from-sats-or-fiat-field'
+import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
-import { useEsploraFeePresets } from '@/hooks/useEsploraFeePresets'
+import { useOnchainFeeRateSelection } from '@/hooks/useOnchainFeeRateSelection'
 import { useMainnetFiatAmountProps } from '@/hooks/useMainnetFiatAmountProps'
 import { barkBoardPerformDeps, barkBoardReviewDeps } from '@/lib/bark/bark-board-live-deps'
 import { barkAmountReviewDecision } from '@/lib/bark/bark-denomination-amount'
 import { performBarkBoard } from '@/lib/bark/perform-bark-board'
-import { reviewBarkBoard, type BarkBoardReview } from '@/lib/bark/review-bark-board'
-import { NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB } from '@/lib/esplora/esplora-fee-estimates'
+import {
+  repriceBarkBoardOnchain,
+  reviewBarkBoard,
+  type BarkBoardReview,
+} from '@/lib/bark/review-bark-board'
 import { errorMessage } from '@/lib/shared/utils'
 import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
 import { useFeatureStore } from '@/stores/featureStore'
@@ -34,15 +38,70 @@ export function BarkBoardPage() {
   const isBarkEnabled = useFeatureStore((featureState) => featureState.isBarkEnabled)
   const loadSnapshot = useBarkLoadLifecycleSnapshot()
   const navigate = useNavigate()
-  const feePresetsQuery = useEsploraFeePresets(networkMode)
+  const {
+    feePresetSelection,
+    presetSatPerVbByLabel,
+    feeEstimatesRefreshing,
+    handleSelectFeePreset,
+    handleSelectCustomMode,
+    effectiveFeeRate,
+    customFeeParsed,
+    customFeeRate,
+    setCustomFeeRate,
+    useCustomFee,
+  } = useOnchainFeeRateSelection(networkMode)
   const fiatAmount = useMainnetFiatAmountProps()
-  const feeRateSatPerVb =
-    feePresetsQuery.data?.Medium ?? NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB.Medium
   const [amountRaw, setAmountRaw] = useState('')
   const [review, setReview] = useState<BarkBoardReview | null>(null)
+  const [reviewedAtFeeRate, setReviewedAtFeeRate] = useState<number | null>(null)
   const [reviewError, setReviewError] = useState<string | null>(null)
+  const [repriceError, setRepriceError] = useState<string | null>(null)
   const [isReviewing, setIsReviewing] = useState(false)
+  const [isRepricing, setIsRepricing] = useState(false)
   const [isConfirming, setIsConfirming] = useState(false)
+  const reviewRef = useRef(review)
+  // Replacing the review object must not start another rebuild. The effect
+  // reads the current review here and reruns only when the selected rate changes.
+  reviewRef.current = review
+
+  useEffect(() => {
+    const currentReview = reviewRef.current
+    if (currentReview == null || reviewedAtFeeRate == null) return
+    if (useCustomFee && customFeeParsed == null) {
+      setIsRepricing(false)
+      return
+    }
+    if (effectiveFeeRate === reviewedAtFeeRate) {
+      setIsRepricing(false)
+      setRepriceError(null)
+      return
+    }
+
+    let ignoreStaleResult = false
+    setIsRepricing(true)
+    setRepriceError(null)
+    const feeRateSatPerVb = effectiveFeeRate
+    void repriceBarkBoardOnchain(
+      barkBoardReviewDeps(networkMode),
+      currentReview,
+      feeRateSatPerVb,
+    )
+      .then((nextReview) => {
+        if (ignoreStaleResult) return
+        setReview(nextReview)
+        setReviewedAtFeeRate(feeRateSatPerVb)
+      })
+      .catch((err) => {
+        if (ignoreStaleResult) return
+        setRepriceError(errorMessage(err))
+      })
+      .finally(() => {
+        if (!ignoreStaleResult) setIsRepricing(false)
+      })
+    return () => {
+      ignoreStaleResult = true
+    }
+  }, [reviewedAtFeeRate, effectiveFeeRate, useCustomFee, customFeeParsed, networkMode])
 
   if (!isBarkEnabled || !isBarkNetworkMode(networkMode)) {
     return (
@@ -63,41 +122,60 @@ export function BarkBoardPage() {
     return sessionBlockingScreen
   }
 
+  const customFeeRateIsMissing = useCustomFee && customFeeParsed == null
+  const reviewedRateIsCurrent =
+    reviewedAtFeeRate != null && effectiveFeeRate === reviewedAtFeeRate
+  const confirmDisabled =
+    isConfirming ||
+    isRepricing ||
+    customFeeRateIsMissing ||
+    repriceError != null ||
+    !reviewedRateIsCurrent
   const fiatPriceBlocksReview = fiatAmount.mainnetFiatEntry && !fiatAmount.hasUsableFiatSpot
   const parsedAmountSats = amountSatsFromSatsOrFiatField(amountRaw, {
     useFiatAmountEntry: fiatAmount.mainnetFiatEntry,
     btcPriceInFiat: fiatAmount.btcPriceInFiat,
   })
 
+  function discardReview() {
+    setReview(null)
+    setReviewedAtFeeRate(null)
+    setRepriceError(null)
+    setIsRepricing(false)
+  }
+
   function clearAmountEntry() {
     setAmountRaw('')
-    setReview(null)
     setReviewError(null)
+    discardReview()
   }
 
   async function onReview() {
     const amountDecision = barkAmountReviewDecision(amountRaw, fiatAmount)
     if (amountDecision.kind === 'blocked') {
-      setReview(null)
       setReviewError(null)
+      discardReview()
       return
     }
     if (amountDecision.kind === 'invalid') {
-      setReview(null)
+      discardReview()
       setReviewError(amountDecision.message)
       return
     }
     const amountSats = amountDecision.amountSats
+    const feeRateSatPerVb = effectiveFeeRate
     setIsReviewing(true)
     setReviewError(null)
+    setRepriceError(null)
     try {
       const nextReview = await reviewBarkBoard(barkBoardReviewDeps(networkMode), {
         amountSats,
         feeRateSatPerVb,
       })
       setReview(nextReview)
+      setReviewedAtFeeRate(feeRateSatPerVb)
     } catch (err) {
-      setReview(null)
+      discardReview()
       setReviewError(errorMessage(err))
     } finally {
       setIsReviewing(false)
@@ -148,7 +226,7 @@ export function BarkBoardPage() {
             amountRaw={amountRaw}
             onAmountChange={(nextAmountRaw) => {
               setAmountRaw(nextAmountRaw)
-              setReview(null)
+              discardReview()
             }}
             inputTestId="bark-board-amount"
             priceUnavailableTestId="bark-board-fiat-price-unavailable"
@@ -163,7 +241,7 @@ export function BarkBoardPage() {
             onClick={() => {
               void onReview()
             }}
-            disabled={isReviewing || isConfirming || fiatPriceBlocksReview}
+            disabled={isReviewing || isConfirming || isRepricing || fiatPriceBlocksReview}
             data-testid="bark-board-review"
           >
             {isReviewing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
@@ -181,7 +259,20 @@ export function BarkBoardPage() {
           <CardHeader>
             <CardTitle className="text-base">Review</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm">
+          <CardContent className="space-y-3 text-sm">
+            <div data-testid="bark-board-fee-rate">
+              <SendOnChainFeeSection
+                feePresetSelection={feePresetSelection}
+                presetSatPerVbByLabel={presetSatPerVbByLabel}
+                feeEstimatesRefreshing={feeEstimatesRefreshing}
+                customFeeRate={customFeeRate}
+                useCustomFee={useCustomFee}
+                isPending={isConfirming}
+                onSelectPreset={handleSelectFeePreset}
+                setCustomFeeRate={setCustomFeeRate}
+                onSelectCustomMode={handleSelectCustomMode}
+              />
+            </div>
             <BarkReviewedAmountLine
               label="On-chain fee:"
               amountSats={review.onchainFeeSats}
@@ -200,15 +291,20 @@ export function BarkBoardPage() {
               testId="bark-board-net-vtxo"
               fiat={fiatAmount}
             />
+            {repriceError != null ? (
+              <p className="text-sm text-destructive" data-testid="bark-board-reprice-error">
+                {repriceError}
+              </p>
+            ) : null}
             <Button
               type="button"
               onClick={() => {
                 void onConfirm()
               }}
-              disabled={isConfirming}
+              disabled={confirmDisabled}
               data-testid="bark-board-confirm"
             >
-              {isConfirming ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {isConfirming || isRepricing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Confirm board
             </Button>
           </CardContent>
