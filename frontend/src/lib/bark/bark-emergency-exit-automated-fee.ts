@@ -1,5 +1,6 @@
 import type { SendFeePresetLabel } from '@/lib/esplora/esplora-fee-estimates'
 import {
+  AUTOMATIC_PROCEEDING_FEE_CAP_EXCEEDED_LABEL,
   defaultMaxFeeRateSatPerVb,
   resolveAutomatedStepFeeRateSatPerVb,
 } from '@/lib/onchain/automated-step-fee-rate'
@@ -9,7 +10,7 @@ export const BARK_EMERGENCY_EXIT_AUTOMATION_PAUSE_LABELS: Record<
   BarkEmergencyExitAutomationPauseReason,
   string
 > = {
-  feeCapExceeded: 'Automatic proceeding paused: live fee rate exceeds your maximum.',
+  feeCapExceeded: AUTOMATIC_PROCEEDING_FEE_CAP_EXCEEDED_LABEL,
   fundsInsufficient: 'Automatic proceeding paused: insufficient on-chain funds.',
 }
 

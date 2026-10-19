@@ -136,7 +136,10 @@ fn build_child(
 }
 
 fn is_insufficient_funds(result: &Result<Transaction, CryptoError>) -> bool {
-    matches!(result, Err(err) if err.to_string().contains(BARK_CPFP_INSUFFICIENT_FUNDS))
+    match result {
+        Err(CryptoError::Transaction(message)) => message.starts_with(BARK_CPFP_INSUFFICIENT_FUNDS),
+        _ => false,
+    }
 }
 
 fn largest_confirmed_outpoint(wallet: &Wallet) -> Option<OutPoint> {
@@ -222,4 +225,28 @@ fn finish_child(
 
 fn insufficient_funds(detail: String) -> CryptoError {
     CryptoError::Transaction(format!("{BARK_CPFP_INSUFFICIENT_FUNDS}: {detail}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{BARK_CPFP_INSUFFICIENT_FUNDS, is_insufficient_funds};
+    use crate::error::CryptoError;
+
+    #[test]
+    fn insufficient_funds_matches_only_a_transaction_error_that_starts_with_the_marker() {
+        let marked = Err(CryptoError::Transaction(format!(
+            "{BARK_CPFP_INSUFFICIENT_FUNDS}: needed_sats=1"
+        )));
+        assert!(is_insufficient_funds(&marked));
+
+        let quoted_later_in_the_same_variant = Err(CryptoError::Transaction(format!(
+            "builder note mentioned {BARK_CPFP_INSUFFICIENT_FUNDS}"
+        )));
+        assert!(!is_insufficient_funds(&quoted_later_in_the_same_variant));
+
+        let quoted_on_another_variant = Err(CryptoError::Wallet(format!(
+            "log mentioned {BARK_CPFP_INSUFFICIENT_FUNDS}"
+        )));
+        assert!(!is_insufficient_funds(&quoted_on_another_variant));
+    }
 }

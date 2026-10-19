@@ -1,5 +1,9 @@
 import type { SendFeePresetLabel } from '@/lib/esplora/esplora-fee-estimates'
 
+/** Shown when the live preset for automatic proceeding is above the user's max. */
+export const AUTOMATIC_PROCEEDING_FEE_CAP_EXCEEDED_LABEL =
+  'Automatic proceeding paused: live fee rate exceeds your maximum.'
+
 /** Default max fee cap when enabling automatic proceeding. */
 export function defaultMaxFeeRateSatPerVb(highPresetSatPerVb: number): number {
   return Math.max(10, highPresetSatPerVb * 2)

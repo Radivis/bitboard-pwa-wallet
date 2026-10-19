@@ -1,6 +1,6 @@
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { Input } from '@/components/ui/input'
+import { AutomatedFeeCapControls } from '@/components/wallet/AutomatedFeeCapControls'
 import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
 import { BarkEmergencyExitFundingBanner } from '@/components/bark/BarkEmergencyExitFundingBanner'
 import { BarkExitTreeGraph } from '@/components/bark/BarkExitTreeGraph'
@@ -189,11 +189,6 @@ export function BarkEmergencyExitFeeCard({
   onMaxFeeRateChange: (maxFeeRateSatPerVb: number) => void
 }) {
   const controlsPending = busyAction != null || proceedAutomaticallyPending
-  const handleMaxFeeInputChange = (rawValue: string) => {
-    const parsed = Number.parseFloat(rawValue.trim())
-    if (!Number.isFinite(parsed) || parsed <= 0) return
-    onMaxFeeRateChange(parsed)
-  }
 
   return (
     <Card data-testid="bark-emergency-exit-fee-card">
@@ -202,42 +197,18 @@ export function BarkEmergencyExitFeeCard({
       </CardHeader>
       <CardContent className="space-y-4">
         {proceedAutomatically ? (
-          <>
-            <p
-              className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300"
-              role="alert"
-              data-testid="bark-emergency-exit-max-fee-warning"
-            >
-              Fee rates may increase suddenly due to congestion. So, please set a reasonable maximum
-              for the fee rate.
-            </p>
-            <div className="space-y-2">
-              <Label htmlFor="bark-emergency-exit-max-fee-rate">Max fee rate (sat/vB)</Label>
-              <Input
-                id="bark-emergency-exit-max-fee-rate"
-                type="number"
-                inputMode="decimal"
-                step="any"
-                min="0.01"
-                value={maxFeeRateSatPerVb}
-                onChange={(event) => handleMaxFeeInputChange(event.target.value)}
-                disabled={controlsPending}
-                data-testid="bark-emergency-exit-max-fee-rate"
-              />
-            </div>
-            <SendOnChainFeeSection
-              feePresetSelection={automatedFeePresetLabel}
-              presetSatPerVbByLabel={presetSatPerVbByLabel}
-              feeEstimatesRefreshing={feeEstimatesRefreshing}
-              customFeeRate=""
-              useCustomFee={false}
-              isPending={controlsPending}
-              onSelectPreset={onSelectAutomaticPreset}
-              setCustomFeeRate={() => {}}
-              onSelectCustomMode={() => {}}
-              hideCustom
-            />
-          </>
+          <AutomatedFeeCapControls
+            warningTestId="bark-emergency-exit-max-fee-warning"
+            maxFeeInputId="bark-emergency-exit-max-fee-rate"
+            maxFeeTestId="bark-emergency-exit-max-fee-rate"
+            maxFeeRateSatPerVb={maxFeeRateSatPerVb}
+            onMaxFeeRateChange={onMaxFeeRateChange}
+            feePresetSelection={automatedFeePresetLabel}
+            presetSatPerVbByLabel={presetSatPerVbByLabel}
+            feeEstimatesRefreshing={feeEstimatesRefreshing}
+            isPending={controlsPending}
+            onSelectPreset={onSelectAutomaticPreset}
+          />
         ) : (
           <SendOnChainFeeSection
             feePresetSelection={manualFeePresetSelection}
