@@ -3,7 +3,10 @@ import { Button } from '@/components/ui/button'
 import {
   BARK_ANCHOR_SWEEP_WARNING,
   BARK_CHECKPOINT_SEIZURE_WARNING,
-  type BarkExitChainNoticeKind,
+  BARK_INTERNAL_SEIZURE_WARNING,
+  BARK_LEAF_SEIZURE_WARNING,
+  vtxoIdsForExitNodeSweepKind,
+  type BarkExitNodeSweepKind,
 } from '@/lib/bark/bark-exit-seizure'
 import { useBarkExitChainNoticeStore } from '@/lib/bark/bark-exit-seizure-notice'
 import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
@@ -12,7 +15,7 @@ import { useFeatureStore } from '@/stores/featureStore'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import type { NetworkMode } from '@/stores/walletStore'
 
-const EMPTY_NOTICE_IDS: readonly string[] = []
+const EMPTY_NOTICE_ITEMS: readonly [] = []
 
 /** Stays until the user dismisses each section. Lock and later syncs do not remove a list. */
 export function BarkExitSeizureBanner() {
@@ -25,15 +28,21 @@ export function BarkExitSeizureBanner() {
     walletId != null && notice?.walletId === walletId && notice.networkMode === networkMode
       ? notice
       : null
-  const anchorSweepVtxoIds = shownNotice?.anchorSweepVtxoIds ?? EMPTY_NOTICE_IDS
-  const checkpointSeizureVtxoIds = shownNotice?.checkpointSeizureVtxoIds ?? EMPTY_NOTICE_IDS
+  const exitNodeSweepVtxoItems = shownNotice?.exitNodeSweepVtxoItems ?? EMPTY_NOTICE_ITEMS
+  const anchorSweepVtxoIds = vtxoIdsForExitNodeSweepKind(exitNodeSweepVtxoItems, 'anchor')
+  const internalSeizureVtxoIds = vtxoIdsForExitNodeSweepKind(exitNodeSweepVtxoItems, 'internal')
+  const leafSeizureVtxoIds = vtxoIdsForExitNodeSweepKind(exitNodeSweepVtxoItems, 'leaf')
+  const checkpointSeizureVtxoIds = vtxoIdsForExitNodeSweepKind(exitNodeSweepVtxoItems, 'checkpoint')
 
   if (
     walletId == null ||
     !walletIsUnlockedOrSyncing(walletStatus) ||
     !isBarkEnabled ||
     !isBarkNetworkMode(networkMode) ||
-    (anchorSweepVtxoIds.length === 0 && checkpointSeizureVtxoIds.length === 0)
+    (anchorSweepVtxoIds.length === 0 &&
+      internalSeizureVtxoIds.length === 0 &&
+      leafSeizureVtxoIds.length === 0 &&
+      checkpointSeizureVtxoIds.length === 0)
   ) {
     return null
   }
@@ -47,7 +56,7 @@ export function BarkExitSeizureBanner() {
       <div className="mx-auto flex max-w-screen-xl flex-col gap-4">
         {anchorSweepVtxoIds.length > 0 ? (
           <NoticeSection
-            kind="sweep"
+            kind="anchor"
             walletId={walletId}
             networkMode={networkMode}
             warning={BARK_ANCHOR_SWEEP_WARNING}
@@ -55,9 +64,29 @@ export function BarkExitSeizureBanner() {
             testId="bark-exit-anchor-sweep"
           />
         ) : null}
+        {internalSeizureVtxoIds.length > 0 ? (
+          <NoticeSection
+            kind="internal"
+            walletId={walletId}
+            networkMode={networkMode}
+            warning={BARK_INTERNAL_SEIZURE_WARNING}
+            vtxoIds={internalSeizureVtxoIds}
+            testId="bark-exit-internal-seizure"
+          />
+        ) : null}
+        {leafSeizureVtxoIds.length > 0 ? (
+          <NoticeSection
+            kind="leaf"
+            walletId={walletId}
+            networkMode={networkMode}
+            warning={BARK_LEAF_SEIZURE_WARNING}
+            vtxoIds={leafSeizureVtxoIds}
+            testId="bark-exit-leaf-seizure"
+          />
+        ) : null}
         {checkpointSeizureVtxoIds.length > 0 ? (
           <NoticeSection
-            kind="seizure"
+            kind="checkpoint"
             walletId={walletId}
             networkMode={networkMode}
             warning={BARK_CHECKPOINT_SEIZURE_WARNING}
@@ -71,7 +100,7 @@ export function BarkExitSeizureBanner() {
 }
 
 function NoticeSection(props: {
-  kind: BarkExitChainNoticeKind
+  kind: BarkExitNodeSweepKind
   walletId: number
   networkMode: NetworkMode
   warning: string

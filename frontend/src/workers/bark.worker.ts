@@ -1,7 +1,10 @@
 import { expose, wrap, type Remote } from 'comlink'
 import { readBarkBalance } from '@/lib/bark/bark-balance'
 import { pendingActionsFromWasm } from '@/lib/bark/bark-pending-actions'
-import { readBarkExitChainNotices, type BarkExitChainNoticeKind } from '@/lib/bark/bark-exit-seizure'
+import {
+  readBarkExitChainNotices,
+  type BarkExitNodeSweepKind,
+} from '@/lib/bark/bark-exit-seizure'
 import {
   readBarkNextRefreshSchedule,
   readBarkRefreshStatus,
@@ -332,8 +335,7 @@ async function openSessionImpl(
       fingerprint,
       receiveKeyIndex,
       lastSuccessfulSyncAt: barkAccount.lastSuccessfulSyncAt,
-      exitAnchorSweepVtxoIds: barkAccount.exitAnchorSweepVtxoIds ?? [],
-      exitCheckpointSeizureVtxoIds: barkAccount.exitCheckpointSeizureVtxoIds ?? [],
+      exitNodeSweepVtxoItems: barkAccount.exitNodeSweepVtxoItems ?? [],
     }
   } catch (err) {
     if (sessionOpened) {
@@ -386,25 +388,8 @@ async function syncImpl(): Promise<BarkSyncResult> {
       )
       const scanned = readBarkExitChainNotices(wasmModule.bark_exit_chain_notices())
       const network = requireOpenNetwork()
-      if (scanned.anchorSweepVtxoIds.length > 0) {
-        await mergeExitChainNoticeInPayload(
-          encryptedPayloadDeps(),
-          walletId,
-          network,
-          'sweep',
-          scanned.anchorSweepVtxoIds,
-        )
-      }
-      if (scanned.checkpointSeizureVtxoIds.length > 0) {
-        await mergeExitChainNoticeInPayload(
-          encryptedPayloadDeps(),
-          walletId,
-          network,
-          'seizure',
-          scanned.checkpointSeizureVtxoIds,
-        )
-      }
-      const stored = await readExitChainNoticesFromPayload(
+      await mergeExitChainNoticeInPayload(encryptedPayloadDeps(), walletId, network, scanned)
+      const exitNodeSweepVtxoItems = await readExitChainNoticesFromPayload(
         encryptedPayloadDeps(),
         walletId,
         network,
@@ -413,8 +398,7 @@ async function syncImpl(): Promise<BarkSyncResult> {
         lastSuccessfulSyncAt: new Date().toISOString(),
         refreshStatus,
         nextRefresh,
-        exitAnchorSweepVtxoIds: stored.anchorSweepVtxoIds,
-        exitCheckpointSeizureVtxoIds: stored.checkpointSeizureVtxoIds,
+        exitNodeSweepVtxoItems,
       }
     },
     (result) => ({ lastSuccessfulSyncAt: result.lastSuccessfulSyncAt }),
@@ -619,7 +603,7 @@ function requireOpenNetwork(): BarkRailNetwork {
   return openNetwork
 }
 
-async function clearExitChainNoticeImpl(kind: BarkExitChainNoticeKind): Promise<void> {
+async function clearExitChainNoticeImpl(kind: BarkExitNodeSweepKind): Promise<void> {
   const walletId = requireOpenWalletId()
   const network = requireOpenNetwork()
   await clearExitChainNoticeInPayload(encryptedPayloadDeps(), walletId, network, kind)

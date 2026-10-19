@@ -270,10 +270,10 @@ describe('BarkVtxoViewerPage', () => {
         },
       ],
     })
-    useBarkExitChainNoticeStore.getState().showNotice(1, 'signet', {
-      anchorSweepVtxoIds: ['swept:5'],
-      checkpointSeizureVtxoIds: ['seized:3'],
-    })
+    useBarkExitChainNoticeStore.getState().showNotice(1, 'signet', [
+      { vtxoId: 'swept:5', nodeKind: 'anchor' },
+      { vtxoId: 'seized:3', nodeKind: 'checkpoint' },
+    ])
 
     renderWithProviders(<BarkVtxoViewerPage />)
 

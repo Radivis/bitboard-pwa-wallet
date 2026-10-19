@@ -482,10 +482,11 @@ async fn delegated_refresh_status(wallet: &bark::Wallet) -> String {
     }
 }
 
-/// Anchor-sweep and checkpoint-seizure VTXO ids from the last completed scan, as JSON
-/// `{"anchorSweepVtxoIds":[],"checkpointSeizureVtxoIds":[]}`. Empty lists mean that scan found
-/// none of that kind. A scan that could not read the wallet, or could not read every watched
-/// output, keeps both previous lists.
+/// Seized exit outputs from the last completed scan, as JSON
+/// `{"exitNodeSweepVtxoItems":[{"vtxoId":"...","nodeKind":"anchor"}]}`.
+/// `nodeKind` is `anchor`, `internal`, `leaf`, or `checkpoint`. An empty array means that
+/// scan found none. A scan that could not read the wallet, or could not read every watched
+/// output, keeps the previous items.
 #[wasm_bindgen]
 pub fn bark_exit_chain_notices() -> String {
     crate::exit_seizure::exit_chain_notices_json()

@@ -9,7 +9,10 @@ import type {
   BarkRailNetwork,
   PendingEmergencyClaim,
 } from '@/lib/wallet/wallet-domain-types'
-import type { BarkExitChainNoticeKind } from '@/lib/bark/bark-exit-seizure'
+import type {
+  BarkExitNodeSweepKind,
+  BarkExitNodeSweepVtxoItem,
+} from '@/lib/bark/bark-exit-seizure'
 
 export type { PendingEmergencyClaim }
 
@@ -35,10 +38,11 @@ export type OpenBarkSessionResult = {
   fingerprint: string
   receiveKeyIndex: number
   lastSuccessfulSyncAt?: string
-  /** Anchor sweeps stored on this Bark account. Empty when that section was dismissed or none was recorded. */
-  exitAnchorSweepVtxoIds?: string[]
-  /** Checkpoint seizures stored on this Bark account. Empty when that section was dismissed or none was recorded. */
-  exitCheckpointSeizureVtxoIds?: string[]
+  /**
+   * Seized exit outputs stored on this Bark account. Empty when every section
+   * was dismissed or none was recorded.
+   */
+  exitNodeSweepVtxoItems?: BarkExitNodeSweepVtxoItem[]
 }
 
 export type BarkSyncResult = {
@@ -47,11 +51,10 @@ export type BarkSyncResult = {
   /** `null` when the wallet has no spendable VTXOs or the chain tip is unknown. */
   nextRefresh: BarkNextRefreshSchedule | null
   /**
-   * Sweep and seizure lists stored on this Bark account after the scan.
-   * Each list includes ids recorded by an earlier sync. Empty when that section was dismissed or none was recorded.
+   * Seized exit outputs stored on this Bark account after the scan.
+   * Includes items recorded by an earlier sync. Empty when every section was dismissed or none was recorded.
    */
-  exitAnchorSweepVtxoIds: string[]
-  exitCheckpointSeizureVtxoIds: string[]
+  exitNodeSweepVtxoItems: BarkExitNodeSweepVtxoItem[]
 }
 
 export type BarkRevealedReceiveAddress = {
@@ -256,7 +259,7 @@ export interface BarkService {
     feeRateSatPerVb: number,
     excludeVtxoIds: string[],
   ): Promise<BarkEmergencyExitDrain>
-  clearExitChainNotice(kind: BarkExitChainNoticeKind): Promise<void>
+  clearExitChainNotice(kind: BarkExitNodeSweepKind): Promise<void>
   readPendingEmergencyClaim(): Promise<PendingEmergencyClaim | null>
   writePendingEmergencyClaim(pending: PendingEmergencyClaim | null): Promise<void>
   readProceedAutomatically(): Promise<boolean>

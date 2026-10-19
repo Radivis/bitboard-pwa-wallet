@@ -213,10 +213,9 @@ export async function orchestrateBarkSync(params: BarkSyncParams): Promise<void>
       if (generation !== sessionGeneration) {
         return
       }
-      useBarkExitChainNoticeStore.getState().showNotice(params.walletId, params.networkMode, {
-        anchorSweepVtxoIds: synced.exitAnchorSweepVtxoIds ?? [],
-        checkpointSeizureVtxoIds: synced.exitCheckpointSeizureVtxoIds ?? [],
-      })
+      useBarkExitChainNoticeStore
+        .getState()
+        .showNotice(params.walletId, params.networkMode, synced.exitNodeSweepVtxoItems ?? [])
       const balance = await worker.readSpendableBalance()
       if (generation !== sessionGeneration) {
         return

@@ -6,7 +6,6 @@ import {
   isBarkReceiveKeyIndex,
   emergencyExitFeePresetFromUnknown,
   emergencyExitMaxFeeRateFromUnknown,
-  seizureVtxoIdsFromUnknown,
   pendingEmergencyClaimFromUnknown,
   proceedAutomaticallyFromUnknown,
   type BarkEmergencyExitFeePreset,
@@ -15,7 +14,13 @@ import {
   type StoredBarkAccount,
   type WalletSecretsPayload,
 } from '@/lib/wallet/wallet-domain-types'
-import type { BarkExitChainNoticeKind } from '@/lib/bark/bark-exit-seizure'
+import {
+  exitNodeSweepVtxoItemsFromUnknown,
+  exitNodeSweepVtxoItemsWithoutKind,
+  mergeExitNodeSweepVtxoItems,
+  type BarkExitNodeSweepKind,
+  type BarkExitNodeSweepVtxoItem,
+} from '@/lib/bark/bark-exit-seizure'
 
 export class BarkFingerprintMismatchError extends Error {
   constructor() {
@@ -110,15 +115,11 @@ function accountWithPreservedFields(
   if (emergencyExitMaxFeeRateSatPerVb != null) {
     barkAccount.emergencyExitMaxFeeRateSatPerVb = emergencyExitMaxFeeRateSatPerVb
   }
-  const exitAnchorSweepVtxoIds = seizureVtxoIdsFromUnknown(existingAccount?.exitAnchorSweepVtxoIds)
-  if (exitAnchorSweepVtxoIds != null) {
-    barkAccount.exitAnchorSweepVtxoIds = exitAnchorSweepVtxoIds
-  }
-  const exitCheckpointSeizureVtxoIds = seizureVtxoIdsFromUnknown(
-    existingAccount?.exitCheckpointSeizureVtxoIds,
+  const exitNodeSweepVtxoItems = exitNodeSweepVtxoItemsFromUnknown(
+    existingAccount?.exitNodeSweepVtxoItems,
   )
-  if (exitCheckpointSeizureVtxoIds != null) {
-    barkAccount.exitCheckpointSeizureVtxoIds = exitCheckpointSeizureVtxoIds
+  if (exitNodeSweepVtxoItems != null && exitNodeSweepVtxoItems.length > 0) {
+    barkAccount.exitNodeSweepVtxoItems = exitNodeSweepVtxoItems
   }
   return barkAccount
 }
@@ -372,17 +373,15 @@ export function applyEmergencyExitMaxFeeRate(params: {
 }
 
 /**
- * Adds VTXO ids to the sweep list or the seizure list. An empty list leaves that
- * list unchanged. The other list is left in place. A later sync flush keeps both.
+ * Adds sweep items. An empty list leaves the stored items unchanged. A later
+ * sync flush keeps the merged list. Duplicate vtxo-and-kind pairs are dropped.
  */
 export function applyMergedExitChainNotice(params: {
   payload: WalletSecretsPayload
   network: BarkRailNetwork
-  kind: BarkExitChainNoticeKind
-  vtxoIds: readonly string[]
+  items: readonly BarkExitNodeSweepVtxoItem[]
 }): WalletSecretsPayload {
-  const incoming = seizureVtxoIdsFromUnknown([...params.vtxoIds])
-  if (incoming == null) return params.payload
+  if (params.items.length === 0) return params.payload
   const existingAccount = requireBarkAccount(params.payload, params.network)
   const account = accountWithPreservedFields(
     params.network,
@@ -391,16 +390,17 @@ export function applyMergedExitChainNotice(params: {
     undefined,
     undefined,
   )
-  const field = noticeField(params.kind)
-  account[field] = seizureVtxoIdsFromUnknown([...(account[field] ?? []), ...incoming])
+  const merged = mergeExitNodeSweepVtxoItems(account.exitNodeSweepVtxoItems ?? [], params.items)
+  if (merged.length === 0) return params.payload
+  account.exitNodeSweepVtxoItems = merged
   return upsertBarkAccountInPayload(params.payload, account)
 }
 
-/** Removes the sweep list or the seizure list. A later sync flush does not restore it. */
+/** Removes one node kind. A later sync flush does not restore those items. */
 export function applyClearedExitChainNotice(params: {
   payload: WalletSecretsPayload
   network: BarkRailNetwork
-  kind: BarkExitChainNoticeKind
+  kind: BarkExitNodeSweepKind
 }): WalletSecretsPayload {
   const existingAccount = requireBarkAccount(params.payload, params.network)
   const account = accountWithPreservedFields(
@@ -410,12 +410,11 @@ export function applyClearedExitChainNotice(params: {
     undefined,
     undefined,
   )
-  delete account[noticeField(params.kind)]
+  const remaining = exitNodeSweepVtxoItemsWithoutKind(account.exitNodeSweepVtxoItems ?? [], params.kind)
+  if (remaining.length === 0) {
+    delete account.exitNodeSweepVtxoItems
+  } else {
+    account.exitNodeSweepVtxoItems = remaining
+  }
   return upsertBarkAccountInPayload(params.payload, account)
-}
-
-function noticeField(
-  kind: BarkExitChainNoticeKind,
-): 'exitAnchorSweepVtxoIds' | 'exitCheckpointSeizureVtxoIds' {
-  return kind === 'sweep' ? 'exitAnchorSweepVtxoIds' : 'exitCheckpointSeizureVtxoIds'
 }

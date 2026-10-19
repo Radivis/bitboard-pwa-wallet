@@ -308,80 +308,79 @@ describe('barkAccounts metadata', () => {
     expect(findBarkAccount(parsed, 'signet')?.pendingEmergencyClaim).toBeUndefined()
   })
 
-  it('keeps the sweep list and the seizure list across a sync stamp and clears only the dismissed list', () => {
+  it('keeps sweep items across a sync stamp and clears only the dismissed kind', () => {
     const payload = payloadWithArkadeSdk()
     payload.barkAccounts.push(
       signetAccount({
         receiveKeyIndex: 2,
         recordEnvelope: signetRecordEnvelope,
-        exitAnchorSweepVtxoIds: ['vtxo-a'],
+        exitNodeSweepVtxoItems: [{ vtxoId: 'vtxo-a', nodeKind: 'anchor' }],
       }),
     )
 
-    const mergedAnchors = applyMergedExitChainNotice({
-      network: 'signet',
-      payload,
-      kind: 'sweep',
-      vtxoIds: ['vtxo-c', 'vtxo-a'],
-    })
     const merged = applyMergedExitChainNotice({
       network: 'signet',
-      payload: mergedAnchors,
-      kind: 'seizure',
-      vtxoIds: ['vtxo-d'],
+      payload,
+      items: [
+        { vtxoId: 'vtxo-c', nodeKind: 'anchor' },
+        { vtxoId: 'vtxo-a', nodeKind: 'anchor' },
+        { vtxoId: 'vtxo-d', nodeKind: 'checkpoint' },
+        { vtxoId: 'vtxo-leaf', nodeKind: 'leaf' },
+        { vtxoId: 'vtxo-internal', nodeKind: 'internal' },
+      ],
     })
-    expect(findBarkAccount(merged, 'signet')?.exitAnchorSweepVtxoIds).toEqual([
-      'vtxo-a',
-      'vtxo-c',
+    expect(findBarkAccount(merged, 'signet')?.exitNodeSweepVtxoItems).toEqual([
+      { vtxoId: 'vtxo-a', nodeKind: 'anchor' },
+      { vtxoId: 'vtxo-c', nodeKind: 'anchor' },
+      { vtxoId: 'vtxo-internal', nodeKind: 'internal' },
+      { vtxoId: 'vtxo-leaf', nodeKind: 'leaf' },
+      { vtxoId: 'vtxo-d', nodeKind: 'checkpoint' },
     ])
-    expect(findBarkAccount(merged, 'signet')?.exitCheckpointSeizureVtxoIds).toEqual(['vtxo-d'])
-    expect(findBarkAccount(merged, 'mainnet')?.exitAnchorSweepVtxoIds).toBeUndefined()
+    expect(findBarkAccount(merged, 'mainnet')?.exitNodeSweepVtxoItems).toBeUndefined()
 
     const stamped = applySuccessfulBarkSync({
       network: 'signet',
       payload: merged,
       syncedAt: '2024-03-01T12:00:00.000Z',
     })
-    expect(findBarkAccount(stamped, 'signet')?.exitAnchorSweepVtxoIds).toEqual([
-      'vtxo-a',
-      'vtxo-c',
-    ])
-    expect(findBarkAccount(stamped, 'signet')?.exitCheckpointSeizureVtxoIds).toEqual(['vtxo-d'])
+    expect(findBarkAccount(stamped, 'signet')?.exitNodeSweepVtxoItems).toEqual(
+      findBarkAccount(merged, 'signet')?.exitNodeSweepVtxoItems,
+    )
 
     const flushed = applyBarkRecordEnvelope({
       network: 'signet',
       payload: stamped,
       recordEnvelope: 'bmV4dC1kdW1w',
     })
-    expect(findBarkAccount(flushed, 'signet')?.exitCheckpointSeizureVtxoIds).toEqual(['vtxo-d'])
+    expect(findBarkAccount(flushed, 'signet')?.exitNodeSweepVtxoItems).toEqual(
+      findBarkAccount(merged, 'signet')?.exitNodeSweepVtxoItems,
+    )
 
     const unchanged = applyMergedExitChainNotice({
       network: 'signet',
       payload: flushed,
-      kind: 'seizure',
-      vtxoIds: [],
+      items: [],
     })
-    expect(findBarkAccount(unchanged, 'signet')?.exitAnchorSweepVtxoIds).toEqual([
-      'vtxo-a',
-      'vtxo-c',
-    ])
-    expect(findBarkAccount(unchanged, 'signet')?.exitCheckpointSeizureVtxoIds).toEqual(['vtxo-d'])
+    expect(findBarkAccount(unchanged, 'signet')?.exitNodeSweepVtxoItems).toEqual(
+      findBarkAccount(merged, 'signet')?.exitNodeSweepVtxoItems,
+    )
 
     const clearedCheckpoint = applyClearedExitChainNotice({
       payload: unchanged,
       network: 'signet',
-      kind: 'seizure',
+      kind: 'checkpoint',
     })
-    expect(findBarkAccount(clearedCheckpoint, 'signet')?.exitCheckpointSeizureVtxoIds).toBeUndefined()
-    expect(findBarkAccount(clearedCheckpoint, 'signet')?.exitAnchorSweepVtxoIds).toEqual([
-      'vtxo-a',
-      'vtxo-c',
+    expect(findBarkAccount(clearedCheckpoint, 'signet')?.exitNodeSweepVtxoItems).toEqual([
+      { vtxoId: 'vtxo-a', nodeKind: 'anchor' },
+      { vtxoId: 'vtxo-c', nodeKind: 'anchor' },
+      { vtxoId: 'vtxo-internal', nodeKind: 'internal' },
+      { vtxoId: 'vtxo-leaf', nodeKind: 'leaf' },
     ])
     expect(findBarkAccount(clearedCheckpoint, 'signet')?.recordEnvelope).toBe('bmV4dC1kdW1w')
     expect(findBarkAccount(clearedCheckpoint, 'mainnet')?.recordEnvelope).toBe(mainnetRecordEnvelope)
   })
 
-  it('omits a malformed exit seizure list and drops the old combined field', () => {
+  it('omits a malformed exit node sweep item list', () => {
     const parsed = parseWalletPayloadJson(
       JSON.stringify({
         descriptorWallets: [],
@@ -393,16 +392,13 @@ describe('barkAccounts metadata', () => {
             serverUrl: BARK_SIGNET_SERVER_URL,
             fingerprint: 'abcdef01',
             recordEnvelope: signetRecordEnvelope,
-            exitCheckpointSeizureVtxoIds: ['vtxo-a', ''],
-            exitSeizureVtxoIds: ['vtxo-old'],
+            exitNodeSweepVtxoItems: [{ vtxoId: '', nodeKind: 'anchor' }],
           },
         ],
       }),
     )
     expect(findBarkAccount(parsed, 'signet')?.recordEnvelope).toBe(signetRecordEnvelope)
-    expect(findBarkAccount(parsed, 'signet')?.exitCheckpointSeizureVtxoIds).toBeUndefined()
-    expect(findBarkAccount(parsed, 'signet')?.exitAnchorSweepVtxoIds).toBeUndefined()
-    expect(JSON.stringify(findBarkAccount(parsed, 'signet'))).not.toContain('exitSeizureVtxoIds')
+    expect(findBarkAccount(parsed, 'signet')?.exitNodeSweepVtxoItems).toBeUndefined()
   })
 
   it('keeps proceed automatically across a sync stamp and a record envelope flush', () => {

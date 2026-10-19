@@ -4,6 +4,10 @@ import {
   type BarkExitNodePhase,
 } from '@/lib/bark/bark-exit-graph-layout'
 import type {
+  BarkExitNodeSweepKind,
+  BarkExitNodeSweepVtxoItem,
+} from '@/lib/bark/bark-exit-seizure'
+import type {
   BarkEmergencyExitRow,
   BarkExitGraphNode,
   BarkVtxoState,
@@ -22,6 +26,8 @@ export const BARK_VTXO_EXIT_PHASE = {
   claimInProgress: 'claimInProgress',
   claimed: 'claimed',
   anchorSwept: 'anchorSwept',
+  internalSeized: 'internalSeized',
+  leafSeized: 'leafSeized',
   checkpointSeized: 'checkpointSeized',
 } as const
 
@@ -56,6 +62,8 @@ export type BarkVtxoExitPhase =
   | { kind: typeof BARK_VTXO_EXIT_PHASE.claimInProgress }
   | { kind: typeof BARK_VTXO_EXIT_PHASE.claimed }
   | { kind: typeof BARK_VTXO_EXIT_PHASE.anchorSwept }
+  | { kind: typeof BARK_VTXO_EXIT_PHASE.internalSeized }
+  | { kind: typeof BARK_VTXO_EXIT_PHASE.leafSeized }
   | { kind: typeof BARK_VTXO_EXIT_PHASE.checkpointSeized }
 
 const FRONTIER_PHASES_WITH_CONFIRMED_COUNT = new Set<BarkExitNodePhase>([
@@ -69,11 +77,12 @@ export function resolveBarkVtxoExitPhase(params: {
   exitRow: BarkEmergencyExitRow | null
   graphNodes: readonly BarkExitGraphNode[] | null
   unfundedParentTxids: ReadonlySet<string>
-  anchorSwept: boolean
-  checkpointSeized: boolean
+  sweptNodeKinds: ReadonlySet<BarkExitNodeSweepKind>
 }): BarkVtxoExitPhase | null {
-  if (params.anchorSwept) return { kind: BARK_VTXO_EXIT_PHASE.anchorSwept }
-  if (params.checkpointSeized) return { kind: BARK_VTXO_EXIT_PHASE.checkpointSeized }
+  if (params.sweptNodeKinds.has('anchor')) return { kind: BARK_VTXO_EXIT_PHASE.anchorSwept }
+  if (params.sweptNodeKinds.has('internal')) return { kind: BARK_VTXO_EXIT_PHASE.internalSeized }
+  if (params.sweptNodeKinds.has('leaf')) return { kind: BARK_VTXO_EXIT_PHASE.leafSeized }
+  if (params.sweptNodeKinds.has('checkpoint')) return { kind: BARK_VTXO_EXIT_PHASE.checkpointSeized }
   if (params.exitRow == null) {
     return params.vtxoState === 'exited' ? { kind: BARK_VTXO_EXIT_PHASE.claimed } : null
   }
@@ -90,13 +99,11 @@ export function formatBarkVtxoEmergencyExitPhaseLine(
 
 export function barkVtxoIdsKeptWhenFinished(params: {
   exitRows: readonly BarkEmergencyExitRow[]
-  anchorSweepVtxoIds: readonly string[]
-  checkpointSeizureVtxoIds: readonly string[]
+  exitNodeSweepVtxoItems: readonly BarkExitNodeSweepVtxoItem[]
 }): Set<string> {
   return new Set([
     ...params.exitRows.map((row) => row.vtxoId),
-    ...params.anchorSweepVtxoIds,
-    ...params.checkpointSeizureVtxoIds,
+    ...params.exitNodeSweepVtxoItems.map((item) => item.vtxoId),
   ])
 }
 
@@ -208,6 +215,10 @@ function formatBarkVtxoExitPhaseCopy(phase: BarkVtxoExitPhase | null): string | 
       return 'claimed'
     case BARK_VTXO_EXIT_PHASE.anchorSwept:
       return 'anchor swept'
+    case BARK_VTXO_EXIT_PHASE.internalSeized:
+      return 'internal node seized'
+    case BARK_VTXO_EXIT_PHASE.leafSeized:
+      return 'leaf seized'
     case BARK_VTXO_EXIT_PHASE.checkpointSeized:
       return 'checkpoint seized'
   }

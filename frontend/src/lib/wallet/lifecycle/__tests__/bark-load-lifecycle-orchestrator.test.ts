@@ -77,7 +77,7 @@ vi.mock('@/lib/bark/bark-session-service', () => ({
 }))
 
 import {
-  barkExitChainNoticeIds,
+  barkExitChainNoticeItems,
   useBarkExitChainNoticeStore,
 } from '@/lib/bark/bark-exit-seizure-notice'
 import {
@@ -129,16 +129,22 @@ describe('bark-load-lifecycle-orchestrator', () => {
     workerMocks.openSession.mockResolvedValue({
       fingerprint: 'abcdef01',
       receiveKeyIndex: 0,
-      exitAnchorSweepVtxoIds: ['vtxo-b', 'vtxo-a'],
-      exitCheckpointSeizureVtxoIds: ['vtxo-c'],
+      exitNodeSweepVtxoItems: [
+        { vtxoId: 'vtxo-b', nodeKind: 'anchor' },
+        { vtxoId: 'vtxo-a', nodeKind: 'anchor' },
+        { vtxoId: 'vtxo-c', nodeKind: 'checkpoint' },
+        { vtxoId: 'vtxo-internal', nodeKind: 'internal' },
+      ],
     })
 
     await orchestrateBarkLoad({ walletId: 1, networkMode: 'signet' })
 
-    expect(barkExitChainNoticeIds(1, 'signet')).toEqual({
-      anchorSweepVtxoIds: ['vtxo-a', 'vtxo-b'],
-      checkpointSeizureVtxoIds: ['vtxo-c'],
-    })
+    expect(barkExitChainNoticeItems(1, 'signet')).toEqual([
+      { vtxoId: 'vtxo-a', nodeKind: 'anchor' },
+      { vtxoId: 'vtxo-b', nodeKind: 'anchor' },
+      { vtxoId: 'vtxo-internal', nodeKind: 'internal' },
+      { vtxoId: 'vtxo-c', nodeKind: 'checkpoint' },
+    ])
   })
 
   it('remembers a persisted sync time without blocking on the post-load sync', async () => {

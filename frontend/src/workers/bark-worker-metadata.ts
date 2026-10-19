@@ -26,7 +26,10 @@ import {
   type WorkerWalletPayloadDeps,
 } from '@/workers/worker-wallet-payload-update'
 import type { BarkEmergencyExitFeePrefs } from '@/workers/bark-api'
-import type { BarkExitChainNoticeKind } from '@/lib/bark/bark-exit-seizure'
+import type {
+  BarkExitNodeSweepKind,
+  BarkExitNodeSweepVtxoItem,
+} from '@/lib/bark/bark-exit-seizure'
 
 export type BarkEncryptedPayloadDeps = WorkerWalletPayloadDeps
 
@@ -127,40 +130,35 @@ export async function readPendingEmergencyClaim(
   return findBarkAccount(payload, network)?.pendingEmergencyClaim ?? null
 }
 
-/** VTXO ids still waiting for the user to dismiss a sweep or seizure section. */
+/** Sweep items still waiting for the user to dismiss a section. */
 export async function readExitChainNotices(
   deps: BarkEncryptedPayloadDeps,
   walletId: number,
   network: BarkRailNetwork,
-): Promise<{ anchorSweepVtxoIds: string[]; checkpointSeizureVtxoIds: string[] }> {
+): Promise<BarkExitNodeSweepVtxoItem[]> {
   const payload = await readDecryptedWalletPayload(deps, walletId)
-  const account = findBarkAccount(payload, network)
-  return {
-    anchorSweepVtxoIds: account?.exitAnchorSweepVtxoIds ?? [],
-    checkpointSeizureVtxoIds: account?.exitCheckpointSeizureVtxoIds ?? [],
-  }
+  return findBarkAccount(payload, network)?.exitNodeSweepVtxoItems ?? []
 }
 
-/** Adds ids from a scan. An empty list does not remove the stored list. */
+/** Adds items from a scan. An empty list does not remove stored items. */
 export async function mergeExitChainNotice(
   deps: BarkEncryptedPayloadDeps,
   walletId: number,
   network: BarkRailNetwork,
-  kind: BarkExitChainNoticeKind,
-  vtxoIds: readonly string[],
+  items: readonly BarkExitNodeSweepVtxoItem[],
 ): Promise<void> {
-  if (vtxoIds.length === 0) return
+  if (items.length === 0) return
   await updateDecryptedWalletPayload(deps, walletId, (payload) =>
-    applyMergedExitChainNotice({ payload, network, kind, vtxoIds }),
+    applyMergedExitChainNotice({ payload, network, items }),
   )
 }
 
-/** Drops the sweep list or the seizure list after the user dismisses that section. */
+/** Drops one node kind after the user dismisses that section. */
 export async function clearExitChainNotice(
   deps: BarkEncryptedPayloadDeps,
   walletId: number,
   network: BarkRailNetwork,
-  kind: BarkExitChainNoticeKind,
+  kind: BarkExitNodeSweepKind,
 ): Promise<void> {
   await updateDecryptedWalletPayload(deps, walletId, (payload) =>
     applyClearedExitChainNotice({ payload, network, kind }),

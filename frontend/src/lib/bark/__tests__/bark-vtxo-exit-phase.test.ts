@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { BarkExitNodeSweepKind } from '@/lib/bark/bark-exit-seizure'
 import {
   barkVtxoIdsKeptWhenFinished,
   formatBarkVtxoEmergencyExitPhaseLine,
@@ -36,16 +37,14 @@ function phaseLine(params: {
   exitRow?: BarkEmergencyExitRow | null
   graphNodes?: readonly BarkExitGraphNode[] | null
   unfundedParentTxids?: ReadonlySet<string>
-  anchorSwept?: boolean
-  checkpointSeized?: boolean
+  sweptNodeKinds?: readonly BarkExitNodeSweepKind[]
 }): string | null {
   const phase = resolveBarkVtxoExitPhase({
     vtxoState: params.vtxoState ?? 'spendable',
     exitRow: params.exitRow ?? null,
     graphNodes: params.graphNodes ?? null,
     unfundedParentTxids: params.unfundedParentTxids ?? new Set(),
-    anchorSwept: params.anchorSwept ?? false,
-    checkpointSeized: params.checkpointSeized ?? false,
+    sweptNodeKinds: new Set(params.sweptNodeKinds ?? []),
   })
   return formatBarkVtxoEmergencyExitPhaseLine(phase)
 }
@@ -182,17 +181,21 @@ describe('resolveBarkVtxoExitPhase', () => {
     expect(
       barkVtxoIdsKeptWhenFinished({
         exitRows: [exitRow('live', 'start')],
-        anchorSweepVtxoIds: ['swept'],
-        checkpointSeizureVtxoIds: ['seized'],
+        exitNodeSweepVtxoItems: [
+          { vtxoId: 'swept', nodeKind: 'anchor' },
+          { vtxoId: 'seized', nodeKind: 'checkpoint' },
+          { vtxoId: 'leaf', nodeKind: 'leaf' },
+          { vtxoId: 'internal', nodeKind: 'internal' },
+        ],
       }),
-    ).toEqual(new Set(['live', 'swept', 'seized']))
+    ).toEqual(new Set(['live', 'swept', 'seized', 'leaf', 'internal']))
   })
 
   it('lets an anchor sweep win over a live exit', () => {
     expect(
       phaseLine({
         exitRow: exitRow('vtxo-1', 'start'),
-        anchorSwept: true,
+        sweptNodeKinds: ['anchor'],
       }),
     ).toBe('Emergency exit phase: anchor swept')
   })
@@ -206,8 +209,18 @@ describe('resolveBarkVtxoExitPhase', () => {
           confirmedHeight: 90,
           claimableHeight: 130,
         }),
-        checkpointSeized: true,
+        sweptNodeKinds: ['checkpoint'],
       }),
     ).toBe('Emergency exit phase: checkpoint seized')
+  })
+
+  it('names the seized node, and an upstream node wins when more than one kind includes the coin', () => {
+    expect(phaseLine({ sweptNodeKinds: ['leaf'] })).toBe('Emergency exit phase: leaf seized')
+    expect(phaseLine({ sweptNodeKinds: ['internal'] })).toBe(
+      'Emergency exit phase: internal node seized',
+    )
+    expect(phaseLine({ sweptNodeKinds: ['internal', 'leaf', 'checkpoint'] })).toBe(
+      'Emergency exit phase: internal node seized',
+    )
   })
 })

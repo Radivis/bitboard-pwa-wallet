@@ -4,9 +4,11 @@ import { BarkExitSeizureBanner } from '@/components/bark/BarkExitSeizureBanner'
 import {
   BARK_ANCHOR_SWEEP_WARNING,
   BARK_CHECKPOINT_SEIZURE_WARNING,
+  BARK_INTERNAL_SEIZURE_WARNING,
+  BARK_LEAF_SEIZURE_WARNING,
 } from '@/lib/bark/bark-exit-seizure'
 import {
-  barkExitChainNoticeIds,
+  barkExitChainNoticeItems,
   useBarkExitChainNoticeStore,
 } from '@/lib/bark/bark-exit-seizure-notice'
 import { renderWithProviders } from '@/test-utils/test-providers'
@@ -60,16 +62,22 @@ describe('BarkExitSeizureBanner', () => {
   })
 
   it('BARK-SYNC-11 shows both sections and dismisses only the chosen list', async () => {
-    useBarkExitChainNoticeStore.getState().showNotice(1, 'signet', {
-      anchorSweepVtxoIds: ['vtxo-a'],
-      checkpointSeizureVtxoIds: ['vtxo-b'],
-    })
+    useBarkExitChainNoticeStore.getState().showNotice(1, 'signet', [
+      { vtxoId: 'vtxo-a', nodeKind: 'anchor' },
+      { vtxoId: 'vtxo-internal', nodeKind: 'internal' },
+      { vtxoId: 'vtxo-leaf', nodeKind: 'leaf' },
+      { vtxoId: 'vtxo-b', nodeKind: 'checkpoint' },
+    ])
     renderWithProviders(<BarkExitSeizureBanner />)
 
     const banner = screen.getByTestId('bark-exit-seizure-banner')
     expect(banner).toHaveTextContent(BARK_ANCHOR_SWEEP_WARNING)
+    expect(banner).toHaveTextContent(BARK_INTERNAL_SEIZURE_WARNING)
+    expect(banner).toHaveTextContent(BARK_LEAF_SEIZURE_WARNING)
     expect(banner).toHaveTextContent(BARK_CHECKPOINT_SEIZURE_WARNING)
     expect(screen.getByTestId('bark-exit-anchor-sweep-ids')).toHaveTextContent('vtxo-a')
+    expect(screen.getByTestId('bark-exit-internal-seizure-ids')).toHaveTextContent('vtxo-internal')
+    expect(screen.getByTestId('bark-exit-leaf-seizure-ids')).toHaveTextContent('vtxo-leaf')
     expect(screen.getByTestId('bark-exit-checkpoint-seizure-ids')).toHaveTextContent('vtxo-b')
 
     fireEvent.click(screen.getByTestId('bark-exit-anchor-sweep-dismiss'))
@@ -78,23 +86,23 @@ describe('BarkExitSeizureBanner', () => {
       expect(screen.queryByTestId('bark-exit-anchor-sweep-ids')).not.toBeInTheDocument()
     })
     expect(screen.getByTestId('bark-exit-checkpoint-seizure-ids')).toHaveTextContent('vtxo-b')
-    expect(clearExitChainNotice).toHaveBeenCalledWith('sweep')
-    expect(barkExitChainNoticeIds(1, 'signet')).toEqual({
-      anchorSweepVtxoIds: [],
-      checkpointSeizureVtxoIds: ['vtxo-b'],
-    })
+    expect(clearExitChainNotice).toHaveBeenCalledWith('anchor')
+    expect(barkExitChainNoticeItems(1, 'signet')).toEqual([
+      { vtxoId: 'vtxo-internal', nodeKind: 'internal' },
+      { vtxoId: 'vtxo-leaf', nodeKind: 'leaf' },
+      { vtxoId: 'vtxo-b', nodeKind: 'checkpoint' },
+    ])
   })
 
   it('BARK-SYNC-11 hides the banner while locked and shows it again after unlock', () => {
-    useBarkExitChainNoticeStore.getState().showNotice(1, 'signet', {
-      anchorSweepVtxoIds: ['vtxo-a'],
-      checkpointSeizureVtxoIds: [],
-    })
+    useBarkExitChainNoticeStore.getState().showNotice(1, 'signet', [
+      { vtxoId: 'vtxo-a', nodeKind: 'anchor' },
+    ])
     walletStoreState.walletStatus = 'locked'
     const { rerender } = renderWithProviders(<BarkExitSeizureBanner />)
 
     expect(screen.queryByTestId('bark-exit-seizure-banner')).not.toBeInTheDocument()
-    expect(barkExitChainNoticeIds(1, 'signet').anchorSweepVtxoIds).toEqual(['vtxo-a'])
+    expect(barkExitChainNoticeItems(1, 'signet')).toEqual([{ vtxoId: 'vtxo-a', nodeKind: 'anchor' }])
 
     walletStoreState.walletStatus = 'unlocked'
     rerender(<BarkExitSeizureBanner />)
@@ -102,10 +110,9 @@ describe('BarkExitSeizureBanner', () => {
   })
 
   it('BARK-SYNC-11 does not show another wallet notice', () => {
-    useBarkExitChainNoticeStore.getState().showNotice(2, 'signet', {
-      anchorSweepVtxoIds: ['vtxo-a'],
-      checkpointSeizureVtxoIds: [],
-    })
+    useBarkExitChainNoticeStore.getState().showNotice(2, 'signet', [
+      { vtxoId: 'vtxo-a', nodeKind: 'anchor' },
+    ])
     renderWithProviders(<BarkExitSeizureBanner />)
     expect(screen.queryByTestId('bark-exit-seizure-banner')).not.toBeInTheDocument()
   })

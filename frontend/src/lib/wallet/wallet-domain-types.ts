@@ -13,6 +13,10 @@ import {
   BARK_REGTEST_SERVER_URL,
   isE2eBarkRegtestControlEnabled,
 } from '@/lib/bark/e2e/bark-regtest-env'
+import {
+  exitNodeSweepVtxoItemsFromUnknown,
+  type BarkExitNodeSweepVtxoItem,
+} from '@/lib/bark/bark-exit-seizure'
 
 export enum AddressType {
   SegWit = 'segwit',
@@ -173,15 +177,10 @@ export interface StoredBarkAccount {
    */
   emergencyExitMaxFeeRateSatPerVb?: number
   /**
-   * VTXOs whose chain anchor was swept by the server after expiry. They are
-   * marked spent. Kept until the user dismisses that banner section.
+   * VTXOs marked spent because an exit output was seized. Each item names the
+   * coin and the node that was spent. Kept until the user dismisses that kind.
    */
-  exitAnchorSweepVtxoIds?: string[]
-  /**
-   * VTXOs whose hot checkpoint was spent because the exit was not continued.
-   * Kept until the user dismisses that banner section.
-   */
-  exitCheckpointSeizureVtxoIds?: string[]
+  exitNodeSweepVtxoItems?: BarkExitNodeSweepVtxoItem[]
 }
 
 /** Fee degree for automatic Bark emergency-exit proceeding. Custom is manual only. */
@@ -294,13 +293,6 @@ export function emergencyExitFeePresetFromUnknown(
   return undefined
 }
 
-/** Keeps a non-empty list of VTXO ids. A malformed list is omitted. */
-export function seizureVtxoIdsFromUnknown(value: unknown): string[] | undefined {
-  if (!Array.isArray(value) || value.length === 0) return undefined
-  if (!value.every((id) => typeof id === 'string' && id.length > 0)) return undefined
-  return [...new Set(value)].sort()
-}
-
 /** Keeps a positive finite sat/vB cap. Anything else is omitted. */
 export function emergencyExitMaxFeeRateFromUnknown(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return undefined
@@ -357,14 +349,8 @@ export function isStoredBarkAccount(value: unknown): value is StoredBarkAccount 
     return false
   }
   if (
-    value.exitAnchorSweepVtxoIds !== undefined &&
-    seizureVtxoIdsFromUnknown(value.exitAnchorSweepVtxoIds) == null
-  ) {
-    return false
-  }
-  if (
-    value.exitCheckpointSeizureVtxoIds !== undefined &&
-    seizureVtxoIdsFromUnknown(value.exitCheckpointSeizureVtxoIds) == null
+    value.exitNodeSweepVtxoItems !== undefined &&
+    exitNodeSweepVtxoItemsFromUnknown(value.exitNodeSweepVtxoItems) == null
   ) {
     return false
   }
@@ -387,7 +373,6 @@ function migrateLegacyBarkRecordDumpField(row: Record<string, unknown>): Record<
 function sanitizeStoredBarkAccountRow(row: unknown): StoredBarkAccount | null {
   if (!isRecord(row)) return null
   const migrated = migrateLegacyBarkRecordDumpField(row)
-  delete migrated.exitSeizureVtxoIds
   if (isStoredBarkAccount(migrated)) {
     return migrated as StoredBarkAccount
   }
@@ -417,19 +402,12 @@ function sanitizeStoredBarkAccountRow(row: unknown): StoredBarkAccount | null {
   } else {
     delete cleaned.emergencyExitMaxFeeRateSatPerVb
   }
-  const exitAnchorSweepVtxoIds = seizureVtxoIdsFromUnknown(row.exitAnchorSweepVtxoIds)
-  if (exitAnchorSweepVtxoIds != null) {
-    cleaned.exitAnchorSweepVtxoIds = exitAnchorSweepVtxoIds
+  const exitNodeSweepVtxoItems = exitNodeSweepVtxoItemsFromUnknown(cleaned.exitNodeSweepVtxoItems)
+  if (exitNodeSweepVtxoItems != null && exitNodeSweepVtxoItems.length > 0) {
+    cleaned.exitNodeSweepVtxoItems = exitNodeSweepVtxoItems
   } else {
-    delete cleaned.exitAnchorSweepVtxoIds
+    delete cleaned.exitNodeSweepVtxoItems
   }
-  const exitCheckpointSeizureVtxoIds = seizureVtxoIdsFromUnknown(row.exitCheckpointSeizureVtxoIds)
-  if (exitCheckpointSeizureVtxoIds != null) {
-    cleaned.exitCheckpointSeizureVtxoIds = exitCheckpointSeizureVtxoIds
-  } else {
-    delete cleaned.exitCheckpointSeizureVtxoIds
-  }
-  delete cleaned.exitSeizureVtxoIds
   if (isStoredBarkAccount(cleaned)) {
     return cleaned
   }

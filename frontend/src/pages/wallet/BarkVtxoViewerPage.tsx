@@ -38,6 +38,13 @@ import {
 } from '@/lib/bark/bark-emergency-exit-funding-status'
 import { useBarkExitChainNoticeStore } from '@/lib/bark/bark-exit-seizure-notice'
 import {
+  exitNodeSweepKindsByVtxoId,
+  type BarkExitNodeSweepKind,
+  type BarkExitNodeSweepVtxoItem,
+} from '@/lib/bark/bark-exit-seizure'
+
+const EMPTY_SWEPT_NODE_KINDS: ReadonlySet<BarkExitNodeSweepKind> = new Set()
+import {
   barkVtxoIdsKeptWhenFinished,
   formatBarkVtxoEmergencyExitPhaseLine,
   resolveBarkVtxoExitPhase,
@@ -173,8 +180,7 @@ export function BarkVtxoViewerPage() {
         exitRows={exitRows}
         graphNodes={graphNodes}
         unfundedParentTxids={unfundedParentTxids}
-        anchorSweepVtxoIds={shownExitChainNotice?.anchorSweepVtxoIds ?? []}
-        checkpointSeizureVtxoIds={shownExitChainNotice?.checkpointSeizureVtxoIds ?? []}
+        exitNodeSweepVtxoItems={shownExitChainNotice?.exitNodeSweepVtxoItems ?? []}
       />
 
       <Button type="button" variant="outline" asChild>
@@ -205,8 +211,7 @@ interface BarkVtxoInventoryProps {
   exitRows: readonly BarkEmergencyExitRow[]
   graphNodes: readonly BarkExitGraphNode[] | null
   unfundedParentTxids: readonly string[]
-  anchorSweepVtxoIds: readonly string[]
-  checkpointSeizureVtxoIds: readonly string[]
+  exitNodeSweepVtxoItems: readonly BarkExitNodeSweepVtxoItem[]
 }
 
 function BarkVtxoInventory({
@@ -230,8 +235,7 @@ function BarkVtxoInventory({
   exitRows,
   graphNodes,
   unfundedParentTxids,
-  anchorSweepVtxoIds,
-  checkpointSeizureVtxoIds,
+  exitNodeSweepVtxoItems,
 }: BarkVtxoInventoryProps) {
   const stateCounts = useMemo(() => countBarkVtxoStates(rows), [rows])
   const exitRowByVtxoId = useMemo(
@@ -242,19 +246,17 @@ function BarkVtxoInventory({
     () => new Set(unfundedParentTxids),
     [unfundedParentTxids],
   )
-  const anchorSweepVtxoIdSet = useMemo(() => new Set(anchorSweepVtxoIds), [anchorSweepVtxoIds])
-  const checkpointSeizureVtxoIdSet = useMemo(
-    () => new Set(checkpointSeizureVtxoIds),
-    [checkpointSeizureVtxoIds],
+  const sweptNodeKindsByVtxoId = useMemo(
+    () => exitNodeSweepKindsByVtxoId(exitNodeSweepVtxoItems),
+    [exitNodeSweepVtxoItems],
   )
   const keepWhenFinishedIds = useMemo(
     () =>
       barkVtxoIdsKeptWhenFinished({
         exitRows,
-        anchorSweepVtxoIds,
-        checkpointSeizureVtxoIds,
+        exitNodeSweepVtxoItems,
       }),
-    [anchorSweepVtxoIds, checkpointSeizureVtxoIds, exitRows],
+    [exitNodeSweepVtxoItems, exitRows],
   )
   const filteredRows = useMemo(
     () =>
@@ -372,8 +374,7 @@ function BarkVtxoInventory({
                     exitRow: exitRowByVtxoId.get(row.id) ?? null,
                     graphNodes,
                     unfundedParentTxids: unfundedParentTxidSet,
-                    anchorSwept: anchorSweepVtxoIdSet.has(row.id),
-                    checkpointSeized: checkpointSeizureVtxoIdSet.has(row.id),
+                    sweptNodeKinds: sweptNodeKindsByVtxoId.get(row.id) ?? EMPTY_SWEPT_NODE_KINDS,
                   }),
                 )}
               />
