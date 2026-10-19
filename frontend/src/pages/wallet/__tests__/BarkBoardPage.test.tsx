@@ -165,6 +165,10 @@ describe('BarkBoardPage', () => {
     expect(screen.getByTestId('bark-board-offchain-fee')).toHaveTextContent('40')
     expect(screen.getByTestId('bark-board-net-vtxo')).toHaveTextContent('9960')
     expect(screen.getByTestId('bark-board-confirmation-note')).toHaveTextContent(
+      /sends coins from your on-chain wallet into Bark/,
+    )
+    expect(screen.getByTestId('bark-board-confirmation-note')).not.toHaveTextContent(/Signet/)
+    expect(screen.getByTestId('bark-board-confirmation-note')).toHaveTextContent(
       /after the server's required confirmations/,
     )
     expect(screen.getByTestId('bark-board-confirm')).toBeInTheDocument()

@@ -212,8 +212,8 @@ export function BarkBoardPage() {
         />
       ) : null}
       <p className="text-sm text-muted-foreground" data-testid="bark-board-confirmation-note">
-        This sends public Signet coins from your on-chain wallet into Bark. Bark broadcasts the
-        funding transaction. {CONFIRMATION_NOTE}
+        This sends coins from your on-chain wallet into Bark. Bark broadcasts the funding
+        transaction. {CONFIRMATION_NOTE}
       </p>
       <Card>
         <CardHeader>

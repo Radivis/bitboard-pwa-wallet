@@ -4,8 +4,9 @@ import {
   userFacingLifecycleErrorMessage,
 } from '@/lib/shared/utils'
 import type { NetworkMode } from '@/stores/walletStore'
+import { BARK_SERVER_NOTICE_PATH } from '@/lib/bark/bark-server-notice-path'
 
-export const BARK_SERVER_NOTICE_PATH = '/api/bark/server-notice'
+export { BARK_SERVER_NOTICE_PATH }
 
 type BarkPublicNoticeNetwork = 'signet' | 'mainnet'
 

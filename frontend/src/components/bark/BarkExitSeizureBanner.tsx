@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import {
   BARK_ANCHOR_SWEEP_WARNING,
   BARK_CHECKPOINT_SEIZURE_WARNING,
+  BARK_EXIT_NODE_SWEEP_KINDS,
   BARK_INTERNAL_SEIZURE_WARNING,
   BARK_LEAF_SEIZURE_WARNING,
   vtxoIdsForExitNodeSweepKind,
@@ -17,6 +18,13 @@ import type { NetworkMode } from '@/stores/walletStore'
 
 const EMPTY_NOTICE_ITEMS: readonly [] = []
 
+const SEIZURE_NOTICE_BY_KIND: Record<BarkExitNodeSweepKind, { warning: string; testId: string }> = {
+  anchor: { warning: BARK_ANCHOR_SWEEP_WARNING, testId: 'bark-exit-anchor-sweep' },
+  internal: { warning: BARK_INTERNAL_SEIZURE_WARNING, testId: 'bark-exit-internal-seizure' },
+  leaf: { warning: BARK_LEAF_SEIZURE_WARNING, testId: 'bark-exit-leaf-seizure' },
+  checkpoint: { warning: BARK_CHECKPOINT_SEIZURE_WARNING, testId: 'bark-exit-checkpoint-seizure' },
+}
+
 /** Stays until the user dismisses each section. Lock and later syncs do not remove a list. */
 export function BarkExitSeizureBanner() {
   const walletId = useWalletStore((walletState) => walletState.activeWalletId)
@@ -29,20 +37,18 @@ export function BarkExitSeizureBanner() {
       ? notice
       : null
   const exitNodeSweepVtxoItems = shownNotice?.exitNodeSweepVtxoItems ?? EMPTY_NOTICE_ITEMS
-  const anchorSweepVtxoIds = vtxoIdsForExitNodeSweepKind(exitNodeSweepVtxoItems, 'anchor')
-  const internalSeizureVtxoIds = vtxoIdsForExitNodeSweepKind(exitNodeSweepVtxoItems, 'internal')
-  const leafSeizureVtxoIds = vtxoIdsForExitNodeSweepKind(exitNodeSweepVtxoItems, 'leaf')
-  const checkpointSeizureVtxoIds = vtxoIdsForExitNodeSweepKind(exitNodeSweepVtxoItems, 'checkpoint')
+  const noticeSections = BARK_EXIT_NODE_SWEEP_KINDS.map((kind) => ({
+    kind,
+    ...SEIZURE_NOTICE_BY_KIND[kind],
+    vtxoIds: vtxoIdsForExitNodeSweepKind(exitNodeSweepVtxoItems, kind),
+  })).filter((section) => section.vtxoIds.length > 0)
 
   if (
     walletId == null ||
     !walletIsUnlockedOrSyncing(walletStatus) ||
     !isBarkEnabled ||
     !isBarkNetworkMode(networkMode) ||
-    (anchorSweepVtxoIds.length === 0 &&
-      internalSeizureVtxoIds.length === 0 &&
-      leafSeizureVtxoIds.length === 0 &&
-      checkpointSeizureVtxoIds.length === 0)
+    noticeSections.length === 0
   ) {
     return null
   }
@@ -54,46 +60,17 @@ export function BarkExitSeizureBanner() {
       className="border-b border-red-900/80 bg-red-600 px-4 py-3 text-red-50 shadow-md dark:bg-red-950 dark:text-red-50"
     >
       <div className="mx-auto flex max-w-screen-xl flex-col gap-4">
-        {anchorSweepVtxoIds.length > 0 ? (
+        {noticeSections.map((section) => (
           <NoticeSection
-            kind="anchor"
+            key={section.kind}
+            kind={section.kind}
             walletId={walletId}
             networkMode={networkMode}
-            warning={BARK_ANCHOR_SWEEP_WARNING}
-            vtxoIds={anchorSweepVtxoIds}
-            testId="bark-exit-anchor-sweep"
+            warning={section.warning}
+            vtxoIds={section.vtxoIds}
+            testId={section.testId}
           />
-        ) : null}
-        {internalSeizureVtxoIds.length > 0 ? (
-          <NoticeSection
-            kind="internal"
-            walletId={walletId}
-            networkMode={networkMode}
-            warning={BARK_INTERNAL_SEIZURE_WARNING}
-            vtxoIds={internalSeizureVtxoIds}
-            testId="bark-exit-internal-seizure"
-          />
-        ) : null}
-        {leafSeizureVtxoIds.length > 0 ? (
-          <NoticeSection
-            kind="leaf"
-            walletId={walletId}
-            networkMode={networkMode}
-            warning={BARK_LEAF_SEIZURE_WARNING}
-            vtxoIds={leafSeizureVtxoIds}
-            testId="bark-exit-leaf-seizure"
-          />
-        ) : null}
-        {checkpointSeizureVtxoIds.length > 0 ? (
-          <NoticeSection
-            kind="checkpoint"
-            walletId={walletId}
-            networkMode={networkMode}
-            warning={BARK_CHECKPOINT_SEIZURE_WARNING}
-            vtxoIds={checkpointSeizureVtxoIds}
-            testId="bark-exit-checkpoint-seizure"
-          />
-        ) : null}
+        ))}
       </div>
     </div>
   )

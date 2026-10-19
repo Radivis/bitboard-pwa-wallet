@@ -3,9 +3,6 @@ import { AppModal } from '@/components/AppModal'
 import { Button } from '@/components/ui/button'
 import { DialogDescription } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { ArticleLink } from '@/lib/library/article-shared'
-
-export const BARK_EMERGENCY_EXIT_RISK_ARTICLE_SLUG = 'differences-between-vtxos-in-arkade-and-bark'
 
 interface StartBarkEmergencyExitConfirmModalProps {
   open: boolean

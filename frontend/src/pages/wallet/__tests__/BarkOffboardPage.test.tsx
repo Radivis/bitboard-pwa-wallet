@@ -191,6 +191,10 @@ describe('BarkOffboardPage', () => {
     expect(await screen.findByTestId('bark-offboard-fee')).toHaveTextContent('250')
     expect(screen.getByTestId('bark-offboard-onchain-amount')).toHaveTextContent('10000')
     expect(screen.getByTestId('bark-offboard-destination')).toHaveTextContent('tb1qcurrent')
+    expect(screen.getByTestId('bark-offboard-confirmation-note')).toHaveTextContent(
+      /sends Bark funds to your on-chain address/,
+    )
+    expect(screen.getByTestId('bark-offboard-confirmation-note')).not.toHaveTextContent(/Signet/)
     expect(screen.queryByTestId('bark-offboard-confirm')).toBeInTheDocument()
   })
 

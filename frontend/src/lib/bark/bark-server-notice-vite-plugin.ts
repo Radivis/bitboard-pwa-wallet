@@ -1,15 +1,30 @@
+import type { ServerResponse } from 'node:http'
 import type { Plugin } from 'vite'
 import {
-  BARK_PUBLIC_SERVER_ORIGINS,
-  readBarkHandshakePublicNotice,
-  type BarkPublicServerNetwork,
-} from '../../../api/bark/read-handshake-psa'
+  barkServerNoticeHttpResult,
+  type BarkServerNoticeHttpResult,
+} from '../../../api/bark/server-notice-http'
+import { BARK_SERVER_NOTICE_PATH } from './bark-server-notice-path'
 
-export const BARK_SERVER_NOTICE_PATH = '/api/bark/server-notice'
+export { BARK_SERVER_NOTICE_PATH }
 
-function publicServerNetwork(value: string | null): BarkPublicServerNetwork | null {
-  if (value === 'signet' || value === 'mainnet') return value
-  return null
+function writeServerNoticeResult(res: ServerResponse, result: BarkServerNoticeHttpResult): void {
+  if (result.status === 204) {
+    res.statusCode = 204
+    res.end()
+    return
+  }
+  if (result.status === 405) {
+    res.statusCode = 405
+    res.end(result.body)
+    return
+  }
+  res.statusCode = result.status
+  res.setHeader('content-type', 'application/json')
+  if (result.status === 200) {
+    res.setHeader('cache-control', 'no-store')
+  }
+  res.end(JSON.stringify(result.json))
 }
 
 /** Dev-server route for the Bark handshake public notice. Production uses `api/bark/server-notice.ts`. */
@@ -24,35 +39,14 @@ export function barkServerNoticeVitePlugin(): Plugin {
           next()
           return
         }
-        if (req.method === 'OPTIONS') {
-          res.statusCode = 204
-          res.end()
-          return
-        }
-        if (req.method !== 'GET') {
-          res.statusCode = 405
-          res.end('Method not allowed')
-          return
-        }
-        const network = publicServerNetwork(new URL(requestUrl, 'http://localhost').searchParams.get('network'))
-        if (network == null) {
-          res.statusCode = 400
-          res.setHeader('content-type', 'application/json')
-          res.end(JSON.stringify({ psa: null }))
-          return
-        }
-        void readBarkHandshakePublicNotice(BARK_PUBLIC_SERVER_ORIGINS[network])
-          .then((psa) => {
-            res.statusCode = 200
-            res.setHeader('content-type', 'application/json')
-            res.setHeader('cache-control', 'no-store')
-            res.end(JSON.stringify({ psa }))
+        const networkQuery = new URL(requestUrl, 'http://localhost').searchParams.get('network')
+        void barkServerNoticeHttpResult(req.method, networkQuery)
+          .then((result) => {
+            if (!res.writableEnded) writeServerNoticeResult(res, result)
           })
           .catch(() => {
             if (!res.writableEnded) {
-              res.statusCode = 200
-              res.setHeader('content-type', 'application/json')
-              res.end(JSON.stringify({ psa: null }))
+              writeServerNoticeResult(res, { status: 200, json: { psa: null } })
             }
           })
       })

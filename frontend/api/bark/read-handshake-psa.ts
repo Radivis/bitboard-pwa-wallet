@@ -10,12 +10,29 @@ export type BarkPublicServerNetwork = keyof typeof BARK_PUBLIC_SERVER_ORIGINS
 
 const HANDSHAKE_PATH = '/bark_server.ArkService/Handshake'
 const HANDSHAKE_TIMEOUT_MS = 8_000
+
+/** Must stay equal to `bark-wallet` in `bitboard-bark/Cargo.toml`. */
+export const BARK_HANDSHAKE_CLIENT_VERSION = '0.7.1'
+
+const PROTOBUF_WIRE_TYPE_VARINT = 0
+const PROTOBUF_WIRE_TYPE_FIXED64 = 1
+const PROTOBUF_WIRE_TYPE_LENGTH_DELIMITED = 2
+const PROTOBUF_WIRE_TYPE_FIXED32 = 5
+const PROTOBUF_WIRE_TYPE_MASK = 7
+const PROTOBUF_FIELD_NUMBER_SHIFT = 3
+const PROTOBUF_VARINT_CONTINUATION = 0x80
+const PROTOBUF_VARINT_VALUE_MASK = 0x7f
+
+/** HandshakeRequest.version is field 1. HandshakeResponse.psa is field 3. */
+const HANDSHAKE_VERSION_FIELD_NUMBER = 1
 const PSA_FIELD_NUMBER = 3
+const HANDSHAKE_VERSION_FIELD_TAG =
+  (HANDSHAKE_VERSION_FIELD_NUMBER << PROTOBUF_FIELD_NUMBER_SHIFT) | PROTOBUF_WIRE_TYPE_LENGTH_DELIMITED
 
 export function encodeHandshakeRequestFrame(barkVersion: string): Buffer {
   const versionBytes = Buffer.from(barkVersion, 'utf8')
   const message = Buffer.alloc(2 + versionBytes.length)
-  message[0] = 0x0a
+  message[0] = HANDSHAKE_VERSION_FIELD_TAG
   message[1] = versionBytes.length
   versionBytes.copy(message, 2)
   const frame = Buffer.alloc(5 + message.length)
@@ -85,7 +102,7 @@ export function readBarkHandshakePublicNotice(origin: string): Promise<string | 
     request.on('end', () => {
       finish(readHandshakePsaFromGrpcFrames(Buffer.concat(chunks)))
     })
-    request.end(encodeHandshakeRequestFrame('0.7.1'))
+    request.end(encodeHandshakeRequestFrame(BARK_HANDSHAKE_CLIENT_VERSION))
   })
 }
 
@@ -106,23 +123,23 @@ function readProtobufStringField(message: Uint8Array, fieldNumber: number): stri
     const key = readVarint(message, offset)
     if (key == null) return value
     offset = key.offset
-    const field = key.value >>> 3
-    const wireType = key.value & 7
-    if (wireType === 0) {
+    const field = key.value >>> PROTOBUF_FIELD_NUMBER_SHIFT
+    const wireType = key.value & PROTOBUF_WIRE_TYPE_MASK
+    if (wireType === PROTOBUF_WIRE_TYPE_VARINT) {
       const skipped = readVarint(message, offset)
       if (skipped == null) return value
       offset = skipped.offset
       continue
     }
-    if (wireType === 1) {
+    if (wireType === PROTOBUF_WIRE_TYPE_FIXED64) {
       offset += 8
       continue
     }
-    if (wireType === 5) {
+    if (wireType === PROTOBUF_WIRE_TYPE_FIXED32) {
       offset += 4
       continue
     }
-    if (wireType !== 2) return value
+    if (wireType !== PROTOBUF_WIRE_TYPE_LENGTH_DELIMITED) return value
     const length = readVarint(message, offset)
     if (length == null) return value
     offset = length.offset
@@ -147,8 +164,8 @@ function readVarint(
   while (cursor < bytes.length && shift <= 28) {
     const byte = bytes[cursor] ?? 0
     cursor += 1
-    value += (byte & 0x7f) * 2 ** shift
-    if ((byte & 0x80) === 0) {
+    value += (byte & PROTOBUF_VARINT_VALUE_MASK) * 2 ** shift
+    if ((byte & PROTOBUF_VARINT_CONTINUATION) === 0) {
       return { value, offset: cursor }
     }
     shift += 7
@@ -156,7 +173,7 @@ function readVarint(
   while (cursor < bytes.length) {
     const byte = bytes[cursor] ?? 0
     cursor += 1
-    if ((byte & 0x80) === 0) {
+    if ((byte & PROTOBUF_VARINT_CONTINUATION) === 0) {
       return { value: 0, offset: cursor }
     }
   }

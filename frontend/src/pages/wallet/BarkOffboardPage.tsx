@@ -161,7 +161,7 @@ export function BarkOffboardPage() {
       ) : null}
       <BarkPendingActionBanner />
       <p className="text-sm text-muted-foreground" data-testid="bark-offboard-confirmation-note">
-        This sends Bark funds to your on-chain Signet address. Bark broadcasts the exit.{' '}
+        This sends Bark funds to your on-chain address. Bark broadcasts the exit.{' '}
         {CONFIRMATION_NOTE}
       </p>
       {destinationAddress.length === 0 ? (

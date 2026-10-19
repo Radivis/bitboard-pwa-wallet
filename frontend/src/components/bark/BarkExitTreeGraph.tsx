@@ -54,30 +54,18 @@ const GRAPH_CONTROLS_STYLE = {
   '--xy-controls-button-color-hover': 'var(--foreground)',
 } as CSSProperties
 
-function barkExitPhaseIcon(phase: BarkExitNodePhase): LucideIcon | null {
-  switch (phase) {
-    case BARK_EXIT_NODE_PHASE.awaitingBumperFunding:
-      return Wallet
-    case BARK_EXIT_NODE_PHASE.awaitingCpfpBroadcast:
-      return Megaphone
-    case BARK_EXIT_NODE_PHASE.awaitingConfirmation:
-      return Pickaxe
-    default:
-      return null
-  }
+const BARK_EXIT_PHASE_BADGE: Partial<
+  Record<BarkExitNodePhase, { icon: LucideIcon; iconName: string }>
+> = {
+  [BARK_EXIT_NODE_PHASE.awaitingBumperFunding]: { icon: Wallet, iconName: 'wallet' },
+  [BARK_EXIT_NODE_PHASE.awaitingCpfpBroadcast]: { icon: Megaphone, iconName: 'megaphone' },
+  [BARK_EXIT_NODE_PHASE.awaitingConfirmation]: { icon: Pickaxe, iconName: 'pickaxe' },
 }
 
-function barkExitPhaseIconName(phase: BarkExitNodePhase): string | undefined {
-  switch (phase) {
-    case BARK_EXIT_NODE_PHASE.awaitingBumperFunding:
-      return 'wallet'
-    case BARK_EXIT_NODE_PHASE.awaitingCpfpBroadcast:
-      return 'megaphone'
-    case BARK_EXIT_NODE_PHASE.awaitingConfirmation:
-      return 'pickaxe'
-    default:
-      return undefined
-  }
+function barkExitPhaseBadge(
+  phase: BarkExitNodePhase,
+): { icon: LucideIcon; iconName: string } | null {
+  return BARK_EXIT_PHASE_BADGE[phase] ?? null
 }
 
 function statusLabel(status: BarkExitGraphNodeStatus): string {
@@ -98,7 +86,7 @@ function BarkExitTreeNode({ data }: NodeProps<Node<BarkExitTreeNodeData>>) {
   })
   const Icon = unilateralExitNodeIconComponent(iconKind)
   const typeLabel = formatUnilateralExitTxTypeLabel(data.txType, data.isLeaf)
-  const phaseIcon = barkExitPhaseIcon(data.phase)
+  const phaseBadge = barkExitPhaseBadge(data.phase)
   const phaseLabel = barkExitNodePhaseLabel(data.phase) ?? undefined
   return (
     <div
@@ -126,10 +114,10 @@ function BarkExitTreeNode({ data }: NodeProps<Node<BarkExitTreeNodeData>>) {
           aria-label="Confirmed"
         />
       )}
-      {phaseIcon != null && (
+      {phaseBadge != null && (
         <ExitTreeInProgressBadge
-          icon={phaseIcon}
-          iconName={barkExitPhaseIconName(data.phase)}
+          icon={phaseBadge.icon}
+          iconName={phaseBadge.iconName}
           label={phaseLabel}
           testId={`bark-exit-tree-phase-${data.phase}-${data.txid}`}
         />
