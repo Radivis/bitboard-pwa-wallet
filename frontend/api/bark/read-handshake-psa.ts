@@ -11,6 +11,9 @@ export type BarkPublicServerNetwork = keyof typeof BARK_PUBLIC_SERVER_ORIGINS
 const HANDSHAKE_PATH = '/bark_server.ArkService/Handshake'
 const HANDSHAKE_TIMEOUT_MS = 8_000
 
+/** A handshake public notice fits well under this. Larger bodies are dropped. */
+export const HANDSHAKE_RESPONSE_BODY_CAP_BYTES = 64 * 1024
+
 /** Must stay equal to `bark-wallet` in `bitboard-bark/Cargo.toml`. */
 export const BARK_HANDSHAKE_CLIENT_VERSION = '0.7.1'
 
@@ -95,8 +98,16 @@ export function readBarkHandshakePublicNotice(origin: string): Promise<string | 
       'x-user-agent': 'bitboard/server-notice',
     })
     const chunks: Buffer[] = []
+    let receivedByteCount = 0
     request.on('data', (chunk: Buffer) => {
-      chunks.push(chunk)
+      if (settled) return
+      const nextCount = pushHandshakeResponseChunk(chunks, receivedByteCount, chunk)
+      if (nextCount == null) {
+        finish(null)
+        request.destroy()
+        return
+      }
+      receivedByteCount = nextCount
     })
     request.on('error', () => finish(null))
     request.on('end', () => {
@@ -106,14 +117,28 @@ export function readBarkHandshakePublicNotice(origin: string): Promise<string | 
   })
 }
 
+/**
+ * Appends one response chunk. Returns null when the body would pass the cap,
+ * without storing that chunk.
+ */
+export function pushHandshakeResponseChunk(
+  chunks: Buffer[],
+  receivedByteCount: number,
+  chunk: Buffer,
+): number | null {
+  const nextCount = receivedByteCount + chunk.length
+  if (nextCount > HANDSHAKE_RESPONSE_BODY_CAP_BYTES) return null
+  chunks.push(chunk)
+  return nextCount
+}
+
+/**
+ * Big-endian uint32. Bitwise shifts sign-extend in JavaScript, and a negative
+ * frame length makes the handshake loop run without advancing.
+ */
 function readUint32Be(bytes: Uint8Array, offset: number): number | null {
   if (offset + 4 > bytes.length) return null
-  return (
-    ((bytes[offset] ?? 0) << 24) |
-    ((bytes[offset + 1] ?? 0) << 16) |
-    ((bytes[offset + 2] ?? 0) << 8) |
-    (bytes[offset + 3] ?? 0)
-  )
+  return new DataView(bytes.buffer, bytes.byteOffset + offset, 4).getUint32(0, false)
 }
 
 function readProtobufStringField(message: Uint8Array, fieldNumber: number): string | null {

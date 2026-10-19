@@ -10,6 +10,9 @@ export { BARK_SERVER_NOTICE_PATH }
 
 type BarkPublicNoticeNetwork = 'signet' | 'mainnet'
 
+/** Static label so operator text is not read as the wallet's own error. */
+export const BARK_ARK_OPERATOR_NOTICE_PREFIX = 'Message from the Ark operator:'
+
 /** True when the browser lost the handshake before any server status was readable. */
 export function barkSyncFailureShouldReadServerNotice(message: string): boolean {
   const lower = message.toLowerCase()
@@ -35,23 +38,24 @@ export async function fetchBarkServerPublicNotice(
 }
 
 /**
- * When the gRPC-Web handshake fails in the browser, replace that transport error
- * with the server's handshake public notice if the same-origin reader can see it.
+ * When the gRPC-Web handshake fails in the browser, keep that transport error
+ * and append the server's handshake public notice when the same-origin reader can see it.
  */
 export async function barkSyncErrorMessageWithServerNotice(
   networkMode: NetworkMode,
   error: unknown,
 ): Promise<string> {
-  const fallback = userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK)
+  const transportError = userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK)
   const network = barkPublicNoticeNetwork(networkMode)
   const raw = error instanceof Error ? error.message : String(error)
   if (network == null || !barkSyncFailureShouldReadServerNotice(raw)) {
-    return fallback
+    return transportError
   }
   try {
     const notice = await fetchBarkServerPublicNotice(network)
-    return notice ?? fallback
+    if (notice == null) return transportError
+    return `${transportError} ${BARK_ARK_OPERATOR_NOTICE_PREFIX} ${notice}`
   } catch {
-    return fallback
+    return transportError
   }
 }

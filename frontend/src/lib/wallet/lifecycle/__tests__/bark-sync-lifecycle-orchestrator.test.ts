@@ -154,7 +154,9 @@ describe('bark-sync-lifecycle-orchestrator', () => {
       throwOnError: false,
     })
 
-    expect(getBarkSyncLifecycleSnapshot().errorMessage).toBe("We're down, sorry...")
+    expect(getBarkSyncLifecycleSnapshot().errorMessage).toBe(
+      'Failed to connect to Ark server: handshake request failed: TypeError: Failed to fetch Message from the Ark operator: We\'re down, sorry...',
+    )
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/bark/server-notice?network=signet',
       expect.objectContaining({ cache: 'no-store' }),

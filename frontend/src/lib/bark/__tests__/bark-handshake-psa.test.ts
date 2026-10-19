@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { barkServerNoticeHttpResult } from '../../../../api/bark/server-notice-http'
 import {
   BARK_HANDSHAKE_CLIENT_VERSION,
+  HANDSHAKE_RESPONSE_BODY_CAP_BYTES,
   encodeHandshakeRequestFrame,
+  pushHandshakeResponseChunk,
   readHandshakePsaFromGrpcFrames,
 } from '../../../../api/bark/read-handshake-psa'
 
@@ -17,6 +19,25 @@ describe('readHandshakePsaFromGrpcFrames', () => {
 
   it('returns null for a non-grpc error page', () => {
     expect(readHandshakePsaFromGrpcFrames(Buffer.from('Internal Server Error'))).toBeNull()
+  })
+
+  it('returns null when a frame length has the high bit set', () => {
+    const frame = Uint8Array.from([0x00, 0xff, 0xff, 0xff, 0xfb])
+    expect(readHandshakePsaFromGrpcFrames(frame)).toBeNull()
+  })
+
+  it('stops collecting when the next chunk would pass the body cap', () => {
+    const chunks: Buffer[] = []
+    const receivedByteCount = pushHandshakeResponseChunk(
+      chunks,
+      0,
+      Buffer.alloc(HANDSHAKE_RESPONSE_BODY_CAP_BYTES),
+    )
+    expect(receivedByteCount).toBe(HANDSHAKE_RESPONSE_BODY_CAP_BYTES)
+    expect(
+      pushHandshakeResponseChunk(chunks, HANDSHAKE_RESPONSE_BODY_CAP_BYTES, Buffer.alloc(1)),
+    ).toBeNull()
+    expect(chunks).toHaveLength(1)
   })
 
   it('encodes the named Bark client version as protobuf field 1', () => {
