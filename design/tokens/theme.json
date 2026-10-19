@@ -1,0 +1,155 @@
+{
+  "collection": "theme",
+  "modes": ["light", "dark"],
+  "model": {
+    "theme": "Light and dark are the modes of this collection.",
+    "accent": "Accent tokens do not store a hex. Each theme mode aliases a token in the network collection, which then resolves mainnet, testnet, neutral, or lab.",
+    "colorValue": "A resolved color is { hex, alpha }. hex is #RRGGBB. alpha is 0 to 1. null means that mode was not defined.",
+    "alias": "An alias names another token. An alpha on the alias replaces the target alpha. The alias follows the target's modes."
+  },
+  "tokens": {
+    "background": {
+      "light": { "hex": "#F7F8F9", "alpha": 1 },
+      "dark": { "hex": "#040404", "alpha": 1 }
+    },
+    "text": {
+      "regular": {
+        "default": {
+          "light": null,
+          "dark": { "hex": "#E4E5E7", "alpha": 1 }
+        }
+      },
+      "button": {
+        "default": {
+          "light": { "hex": "#000000", "alpha": 1 },
+          "dark": null
+        },
+        "hover": {
+          "light": { "hex": "#1A1A1A", "alpha": 1 },
+          "dark": { "hex": "#E6E6E6", "alpha": 1 }
+        },
+        "active": {
+          "light": { "hex": "#333333", "alpha": 1 },
+          "dark": { "hex": "#CCCCCC", "alpha": 1 }
+        },
+        "disabled": {
+          "light": null,
+          "dark": { "hex": "#919191", "alpha": 1 }
+        },
+        "primary": {
+          "disabled": {
+            "light": { "hex": "#262626", "alpha": 1 },
+            "dark": { "hex": "#1E1E1E", "alpha": 1 }
+          }
+        },
+        "tertiary": {
+          "disabled": {
+            "light": { "hex": "#6F6F6F", "alpha": 1 },
+            "dark": null
+          }
+        }
+      }
+    },
+    "accent": {
+      "primary": {
+        "default": {
+          "light": { "alias": "network/onLight/primary/default" },
+          "dark": { "alias": "network/onDark/primary/default" }
+        },
+        "hover": {
+          "light": { "alias": "network/onLight/primary/hover" },
+          "dark": { "alias": "network/onDark/primary/hover" }
+        },
+        "active": {
+          "light": { "alias": "network/onLight/primary/active" },
+          "dark": { "alias": "network/onDark/primary/active" }
+        },
+        "disabled": {
+          "light": { "alias": "network/onLight/primary/disabled" },
+          "dark": { "alias": "network/onDark/primary/disabled" }
+        }
+      },
+      "secondary": {
+        "default": {
+          "light": { "alias": "network/onLight/secondary/default" },
+          "dark": { "alias": "network/onDark/secondary/default" }
+        },
+        "hover": {
+          "light": { "alias": "network/onLight/secondary/hover" },
+          "dark": { "alias": "network/onDark/secondary/hover" }
+        },
+        "active": {
+          "light": { "alias": "network/onLight/secondary/active" },
+          "dark": { "alias": "network/onDark/secondary/active" }
+        },
+        "disabled": {
+          "light": { "alias": "network/onLight/secondary/disabled" },
+          "dark": { "alias": "network/onDark/secondary/disabled" }
+        }
+      },
+      "secondaryStroke": {
+        "default": {
+          "light": { "alias": "network/onLight/secondary/default", "alpha": 0.5 },
+          "dark": { "alias": "network/onDark/secondary/default", "alpha": 0.5 }
+        },
+        "hover": {
+          "light": { "alias": "network/onLight/secondary/hover", "alpha": 0.5 },
+          "dark": { "alias": "network/onDark/secondary/hover", "alpha": 0.5 }
+        },
+        "active": {
+          "light": { "alias": "network/onLight/secondary/active", "alpha": 0.5 },
+          "dark": { "alias": "network/onDark/secondary/active", "alpha": 0.5 }
+        },
+        "disabled": {
+          "light": { "alias": "network/onLight/secondary/disabled", "alpha": 0.5 },
+          "dark": { "alias": "network/onDark/secondary/disabled", "alpha": 0.5 }
+        }
+      },
+      "tertiary": {
+        "default": { "alias": "theme/accent/primary/default" }
+      }
+    }
+  },
+  "unresolvedModes": [
+    {
+      "path": "text/regular/default",
+      "missing": "light",
+      "figmaName": "Text/Regular/Dark/Default"
+    },
+    {
+      "path": "text/button/default",
+      "missing": "dark",
+      "figmaName": "Text/Button/Light/Default"
+    },
+    {
+      "path": "text/button/disabled",
+      "missing": "light",
+      "figmaName": "Text/Button/Dark/Disabled"
+    },
+    {
+      "path": "text/button/tertiary/disabled",
+      "missing": "dark",
+      "figmaName": "Text/Button/Light/Tertiary/Disabled"
+    }
+  ],
+  "provenance": {
+    "background": { "light": "Background/Light", "dark": "Background/Dark" },
+    "text/regular/default": { "dark": "Text/Regular/Dark/Default" },
+    "text/button/default": { "light": "Text/Button/Light/Default" },
+    "text/button/hover": {
+      "light": "Text/Button/Light/Hover",
+      "dark": "Text/Button/Dark/Hover"
+    },
+    "text/button/active": {
+      "light": "Text/Button/Light/Active",
+      "dark": "Text/Button/Dark/Active"
+    },
+    "text/button/disabled": { "dark": "Text/Button/Dark/Disabled" },
+    "text/button/primary/disabled": {
+      "light": "Text/Button/Light/Primary/Disabled",
+      "dark": "Text/Button/Dark/Primary/Disabled"
+    },
+    "text/button/tertiary/disabled": { "light": "Text/Button/Light/Tertiary/Disabled" },
+    "accent/tertiary/default": "Basics page: tertiary buttons use the primary color. The dark background makes that color read as quieter."
+  }
+}

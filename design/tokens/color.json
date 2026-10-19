@@ -1,0 +1,7 @@
+{
+  "collections": {
+    "theme": "theme.json",
+    "network": "network.json"
+  },
+  "resolution": "A screen selects one theme mode and one network mode. A theme token that aliases a network token uses the theme mode to choose the alias, then the network mode to choose the hex. Signet and Mutinynet use the testnet value. Regtest uses the lab value. Those names are not extra modes."
+}
