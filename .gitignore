@@ -10,6 +10,8 @@
 /.cursor/pr-reviews/
 /.cursor/ux-audits/
 
+/.idea/
+
 # Rust build output (workspace root and member crates)
 target/
 .env

@@ -123,7 +123,6 @@ pub fn watched_hop_outputs(
 }
 
 /// Anchors, then hot hops. Shared outputs are listed once, and an anchor wins a clash.
-#[cfg(test)]
 pub fn watched_exit_outputs(
     histories: &[VtxoExitHistory],
     confirmed_next_hop_txids: &BTreeSet<Txid>,
@@ -140,6 +139,19 @@ pub fn watched_exit_outputs(
             .or_insert(watched);
     }
     watched_by_outpoint.into_values().collect()
+}
+
+/// Hot hops of branches that are still eligible after the anchor check.
+/// An outpoint already watched as an anchor stays an anchor.
+pub fn hop_outputs_after_anchor_check(
+    histories: &[VtxoExitHistory],
+    confirmed_next_hop_txids: &BTreeSet<Txid>,
+    anchor_outpoints: &BTreeSet<OutPoint>,
+) -> Vec<WatchedExitOutput> {
+    watched_exit_outputs(histories, confirmed_next_hop_txids)
+        .into_iter()
+        .filter(|watched| !anchor_outpoints.contains(&watched.outpoint))
+        .collect()
 }
 
 fn anchor_output_of_one(history: &VtxoExitHistory) -> Option<WatchedExitOutput> {
@@ -222,29 +234,33 @@ pub fn split_exit_notices(
     let mut leaf_seizure_vtxo_ids = BTreeSet::new();
     let mut internal_seizure_vtxo_ids = BTreeSet::new();
     for history in histories {
-        if outcomes
-            .iter()
-            .any(|outcome| history_matches_outcome(history, *outcome) && is_anchor_sweep(*outcome))
-        {
-            anchor_sweep_vtxo_ids.insert(history.vtxo_id.clone());
-            continue;
-        }
+        let mut anchor_swept = false;
+        let mut checkpoint_seized = false;
+        let mut leaf_seized = false;
+        let mut internal_seized = false;
         for outcome in outcomes {
             if !history_matches_outcome(history, *outcome) {
                 continue;
             }
             match outcome {
-                ExitChainOutcome::CheckpointSeizure(_) => {
-                    checkpoint_seizure_vtxo_ids.insert(history.vtxo_id.clone());
-                }
-                ExitChainOutcome::LeafSeizure(_) => {
-                    leaf_seizure_vtxo_ids.insert(history.vtxo_id.clone());
-                }
-                ExitChainOutcome::InternalSeizure(_) => {
-                    internal_seizure_vtxo_ids.insert(history.vtxo_id.clone());
-                }
-                ExitChainOutcome::AnchorSweep(_) => {}
+                ExitChainOutcome::AnchorSweep(_) => anchor_swept = true,
+                ExitChainOutcome::CheckpointSeizure(_) => checkpoint_seized = true,
+                ExitChainOutcome::LeafSeizure(_) => leaf_seized = true,
+                ExitChainOutcome::InternalSeizure(_) => internal_seized = true,
             }
+        }
+        if anchor_swept {
+            anchor_sweep_vtxo_ids.insert(history.vtxo_id.clone());
+            continue;
+        }
+        if checkpoint_seized {
+            checkpoint_seizure_vtxo_ids.insert(history.vtxo_id.clone());
+        }
+        if leaf_seized {
+            leaf_seizure_vtxo_ids.insert(history.vtxo_id.clone());
+        }
+        if internal_seized {
+            internal_seizure_vtxo_ids.insert(history.vtxo_id.clone());
         }
     }
     ExitChainNotices {
@@ -253,10 +269,6 @@ pub fn split_exit_notices(
         leaf_seizure_vtxo_ids: leaf_seizure_vtxo_ids.into_iter().collect(),
         internal_seizure_vtxo_ids: internal_seizure_vtxo_ids.into_iter().collect(),
     }
-}
-
-fn is_anchor_sweep(outcome: ExitChainOutcome) -> bool {
-    matches!(outcome, ExitChainOutcome::AnchorSweep(_))
 }
 
 fn history_matches_outcome(history: &VtxoExitHistory, outcome: ExitChainOutcome) -> bool {
@@ -281,8 +293,8 @@ mod scan {
     use serde::Serialize;
 
     use super::{
-        ExitHop, ExitOutputSpend, VtxoExitHistory, exit_outcomes_from_spends, split_exit_notices,
-        watched_anchor_outputs, watched_hop_outputs,
+        ExitHop, ExitOutputSpend, VtxoExitHistory, exit_outcomes_from_spends,
+        hop_outputs_after_anchor_check, split_exit_notices, watched_anchor_outputs,
     };
 
     #[derive(Clone, Serialize)]
@@ -366,7 +378,12 @@ mod scan {
             })
             .cloned()
             .collect::<Vec<_>>();
-        let hop_watched = watched_hop_outputs(&remaining, &confirmed_next_hops);
+        let anchor_outpoints = anchor_watched
+            .iter()
+            .map(|watched| watched.outpoint)
+            .collect::<BTreeSet<_>>();
+        let hop_watched =
+            hop_outputs_after_anchor_check(&remaining, &confirmed_next_hops, &anchor_outpoints);
         let hop_spends = spend_by_outpoint(wallet, &hop_watched).await?;
         let hop_outcomes = exit_outcomes_from_spends(&hop_watched, &hop_spends);
         let hop_notices = split_exit_notices(&remaining, &hop_outcomes);
@@ -571,7 +588,8 @@ pub(crate) use scan::{
 mod tests {
     use super::{
         ExitChainNotices, ExitChainOutcome, ExitHop, ExitHopRole, ExitOutputSpend, VtxoExitHistory,
-        exit_outcomes_from_spends, hop_role, split_exit_notices, watched_exit_outputs,
+        exit_outcomes_from_spends, hop_outputs_after_anchor_check, hop_role, split_exit_notices,
+        watched_exit_outputs,
     };
     use bitcoin::hashes::Hash;
     use bitcoin::{OutPoint, Txid};
@@ -633,6 +651,50 @@ mod tests {
                 hop(30, 0, ExitHopRole::Leaf),
             ],
         )
+    }
+
+    #[test]
+    fn an_anchor_keeps_an_outpoint_that_is_also_a_hop() {
+        let shared = outpoint(10, 0);
+        let histories = [
+            history(
+                "anchored",
+                shared,
+                vec![
+                    hop(20, 0, ExitHopRole::Internal),
+                    hop(21, 0, ExitHopRole::Leaf),
+                ],
+            ),
+            history(
+                "through-hop",
+                outpoint(1, 0),
+                vec![
+                    hop(10, 0, ExitHopRole::Internal),
+                    hop(30, 0, ExitHopRole::Leaf),
+                ],
+            ),
+        ];
+
+        let watched = watched_exit_outputs(&histories, &BTreeSet::new());
+        let shared_watch = watched
+            .iter()
+            .find(|output| output.outpoint == shared)
+            .expect("shared outpoint is watched");
+
+        assert_eq!(shared_watch.outcome, ExitChainOutcome::AnchorSweep(shared));
+        assert_eq!(shared_watch.allowed_spend, txid(20));
+        assert_eq!(
+            watched
+                .iter()
+                .filter(|output| output.outpoint == shared)
+                .count(),
+            1
+        );
+
+        let anchor_outpoints = BTreeSet::from([shared, outpoint(1, 0)]);
+        let hops = hop_outputs_after_anchor_check(&histories, &BTreeSet::new(), &anchor_outpoints);
+        assert!(hops.iter().all(|output| output.outpoint != shared));
+        assert!(hops.iter().any(|output| output.outpoint == outpoint(20, 0)));
     }
 
     #[test]

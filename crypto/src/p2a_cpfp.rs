@@ -122,7 +122,7 @@ fn build_child(
     // reject the result because the leftover change is dust. A larger confirmed
     // coin still pays the fee. The dust error's "needed" amount is only the dust
     // threshold, so callers must not treat it as a balance shortfall.
-    let Some(largest_outpoint) = largest_confirmed_outpoint(wallet) else {
+    let Some(largest_outpoint) = outpoint_with_largest_confirmed_value(wallet) else {
         return first_try;
     };
     finish_child(
@@ -142,7 +142,7 @@ fn is_insufficient_funds(result: &Result<Transaction, CryptoError>) -> bool {
     }
 }
 
-fn largest_confirmed_outpoint(wallet: &Wallet) -> Option<OutPoint> {
+fn outpoint_with_largest_confirmed_value(wallet: &Wallet) -> Option<OutPoint> {
     let tip_height = wallet.latest_checkpoint().height();
     wallet
         .list_unspent()
