@@ -51,10 +51,10 @@ export const article: LibraryArticle = {
         </p>
       </ArticleSection>
 
-      <ArticleSection title="In Bitboard Wallet">
+      <ArticleSection title="In Bitcoin Codex">
         <p>
           Enable Arkade under Settings → Features, then use{' '}
-          <ArticleLink slug="arkade-bitboard-wallet">Arkade in Bitboard Wallet</ArticleLink> for
+          <ArticleLink slug="arkade-bitboard-wallet">Arkade in Bitcoin Codex</ArticleLink> for
           addresses, boarding, and payments. To fund Arkade from on-chain, read{' '}
           <ArticleLink slug="boarding-to-arkade">Boarding Bitcoin into Arkade</ArticleLink>.
         </p>

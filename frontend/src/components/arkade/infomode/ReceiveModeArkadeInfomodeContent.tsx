@@ -22,7 +22,7 @@ export function ReceiveModeArkadeInfomodeContent() {
         mode your sender will use.
       </InfomodeParagraph>
       <InfomodeParagraph>
-        <ArticleLink slug={ARKADE_LIBRARY_SLUGS.overview}>Arkade in Bitboard Wallet</ArticleLink>
+        <ArticleLink slug={ARKADE_LIBRARY_SLUGS.overview}>Arkade in Bitcoin Codex</ArticleLink>
       </InfomodeParagraph>
     </div>
   )

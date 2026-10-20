@@ -63,7 +63,7 @@ export const article: LibraryArticle = {
           Once settled, you can send Arkade-to-Arkade instantly and receive on your{' '}
           <code className="text-sm">ark1</code>/<code className="text-sm">tark1</code> address. See{' '}
           <ArticleLink slug="what-is-a-vtxo">What is a VTXO?</ArticleLink> and{' '}
-          <ArticleLink slug="arkade-bitboard-wallet">Arkade in Bitboard Wallet</ArticleLink>.
+          <ArticleLink slug="arkade-bitboard-wallet">Arkade in Bitcoin Codex</ArticleLink>.
         </p>
       </ArticleSection>
     </div>

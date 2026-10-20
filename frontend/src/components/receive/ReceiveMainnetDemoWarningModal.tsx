@@ -34,10 +34,10 @@ export function ReceiveMainnetDemoWarningModal({
     >
       <div className="space-y-3 text-sm text-muted-foreground">
         <DialogDescription className="sr-only">
-          Warning that Bitboard Wallet is in demo mode on Mainnet and funds are not secure.
+          Warning that Bitcoin Codex is in demo mode on Mainnet and funds are not secure.
         </DialogDescription>
         <p>
-          <strong className="text-foreground">Bitboard Wallet is still in DEMO MODE.</strong>
+          <strong className="text-foreground">Bitcoin Codex is still in DEMO MODE.</strong>
         </p>
         <p>
           Funds in this wallet must{' '}

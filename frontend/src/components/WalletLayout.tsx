@@ -46,7 +46,7 @@ import { selectCommittedNetworkMode, useWalletStore, type NetworkMode } from '@/
 import { cn } from '@/lib/shared/utils'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 
-const APP_TITLE = 'Bitboard Wallet'
+const APP_TITLE = 'Bitcoin Codex'
 
 interface WalletLayoutProps {
   children: ReactNode

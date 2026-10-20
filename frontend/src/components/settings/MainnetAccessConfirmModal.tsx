@@ -55,7 +55,7 @@ export function MainnetAccessConfirmModal({
           enabling Mainnet access.
         </DialogDescription>
         <p>
-          Bitboard Wallet is an <strong className="text-foreground">early demo</strong>.
+          Bitcoin Codex is an <strong className="text-foreground">early demo</strong>.
           Using real bitcoin on Mainnet is only appropriate for{' '}
           <strong className="text-foreground">experienced Bitcoin users</strong>, and even
           then only with <strong className="text-foreground">tiny amounts</strong>.

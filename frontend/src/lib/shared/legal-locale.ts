@@ -24,10 +24,10 @@ export const LEGAL_SUBSECTION_DISCLAIMER_EN = 'Disclaimer'
 
 /** Non-custodial disclaimer (app + landing). */
 export const DISCLAIMER_BODY_DE =
-  'Bitboard Wallet ist eine nicht verwahrende (Non-Custodial-)Wallet: Sie verwalten Ihre Schlüssel und Guthaben selbst. Der Betreiber verwahrt keine Vermögenswerte und hat keinen Zugriff auf Ihre Wiederherstellungsphrase oder private Schlüssel. Sie sind für die Sicherung Ihrer Zugangsdaten und für Ihre Transaktionen selbst verantwortlich. Soweit gesetzlich zulässig, haftet der Betreiber nicht für Verluste, Schäden oder entgangenen Gewinn aus der Nutzung der App.'
+  'Bitcoin Codex ist eine nicht verwahrende (Non-Custodial-)Wallet: Sie verwalten Ihre Schlüssel und Guthaben selbst. Der Betreiber verwahrt keine Vermögenswerte und hat keinen Zugriff auf Ihre Wiederherstellungsphrase oder private Schlüssel. Sie sind für die Sicherung Ihrer Zugangsdaten und für Ihre Transaktionen selbst verantwortlich. Soweit gesetzlich zulässig, haftet der Betreiber nicht für Verluste, Schäden oder entgangenen Gewinn aus der Nutzung der App.'
 
 export const DISCLAIMER_BODY_EN =
-  'Bitboard Wallet is a non-custodial wallet: you hold your keys and funds. The operator does not custody assets and has no access to your recovery phrase or private keys. You are solely responsible for securing your credentials and for your transactions. To the extent permitted by law, the operator accepts no liability for any losses, damages, or missed profits arising from use of the app.'
+  'Bitcoin Codex is a non-custodial wallet: you hold your keys and funds. The operator does not custody assets and has no access to your recovery phrase or private keys. You are solely responsible for securing your credentials and for your transactions. To the extent permitted by law, the operator accepts no liability for any losses, damages, or missed profits arising from use of the app.'
 
 /** Landing footer / dark background — contrast-safe (avoid theme primary white-on-white). */
 export function legalLocaleSwitcherLandingButtonClass(active: boolean): string {

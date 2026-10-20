@@ -53,7 +53,7 @@ test.describe('Arkade Infomode @arkade', () => {
     await expect(infomodeDialog).toBeVisible()
     await expect(infomodeDialog.getByRole('heading', { name: 'Arkade balance' })).toBeVisible()
     await expect(
-      infomodeDialog.getByRole('link', { name: 'Arkade in Bitboard Wallet' }),
+      infomodeDialog.getByRole('link', { name: 'Arkade in Bitcoin Codex' }),
     ).toBeVisible()
     await page.getByRole('button', { name: 'Close explanation' }).click()
 

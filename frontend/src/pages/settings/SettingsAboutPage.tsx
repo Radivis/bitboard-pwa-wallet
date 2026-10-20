@@ -19,7 +19,7 @@ export function SettingsAboutPage() {
           <CardTitle>About</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>Bitboard Wallet &mdash; from zero to clarity.</p>
+          <p>Bitcoin Codex &mdash; from zero to clarity.</p>
           <AppDescription />
           <p>Version {import.meta.env.VITE_APP_VERSION}</p>
           <p>

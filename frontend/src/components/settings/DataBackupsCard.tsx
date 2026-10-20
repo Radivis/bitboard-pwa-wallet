@@ -194,7 +194,7 @@ export function DataBackupsCard() {
           </div>
           <p className="text-sm text-muted-foreground">
             Lab data is tied to wallets on this device; only use this backup on your own restores.
-            Sharing lab exports between different Bitboard Wallet installs is not supported and may
+            Sharing lab exports between different Bitcoin Codex installs is not supported and may
             confuse balances and owners in the lab.
           </p>
         </div>

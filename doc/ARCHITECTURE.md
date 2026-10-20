@@ -2,7 +2,7 @@
 
 ## Tech Stack
 
-Bitboard Wallet is a PWA using the following technologies
+Bitcoin Codex is a PWA using the following technologies
 
 ### Frontend / UI
 Language: TypeScript

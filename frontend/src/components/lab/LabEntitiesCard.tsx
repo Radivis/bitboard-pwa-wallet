@@ -192,7 +192,7 @@ export function LabEntitiesCard() {
             </CardDescription>
             <p className="text-sm text-muted-foreground pt-1 max-w-prose">
               Lab entities use <span className="font-medium text-foreground/90">simple wallets</span> (one
-              address type per entity). The Bitboard Wallet uses{' '}
+              address type per entity). The Bitcoin Codex uses{' '}
               <span className="font-medium text-foreground/90">advanced wallets</span> that support multiple
               address types.
             </p>

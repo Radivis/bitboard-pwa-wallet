@@ -21,7 +21,7 @@ export function ArkadeFeatureInfomodeContent() {
       </InfomodeParagraph>
       <InfomodeParagraph>
         Learn more:{' '}
-        <ArticleLink slug={ARKADE_LIBRARY_SLUGS.overview}>Arkade in Bitboard Wallet</ArticleLink>
+        <ArticleLink slug={ARKADE_LIBRARY_SLUGS.overview}>Arkade in Bitcoin Codex</ArticleLink>
         {' '}and{' '}
         <ArticleLink slug={ARKADE_LIBRARY_SLUGS.vtxo}>What is a VTXO?</ArticleLink>.
       </InfomodeParagraph>

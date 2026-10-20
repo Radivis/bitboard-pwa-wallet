@@ -51,7 +51,7 @@ export const article: LibraryArticle = {
         </p>
       </ArticleSection>
 
-      <ArticleSection title="How Bitboard Wallet Handles This">
+      <ArticleSection title="How Bitcoin Codex Handles This">
         <p>
           Bitboard uses <strong>Nostr Wallet Connect</strong> so you can link a Lightning wallet
           that speaks NIP-47 without Bitboard holding your Lightning keys. Understanding Nostr helps

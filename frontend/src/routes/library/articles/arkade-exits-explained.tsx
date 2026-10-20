@@ -87,7 +87,7 @@ export const article: LibraryArticle = {
             Risks of Arkade unilateral exit
           </ArticleLink>
           . For Arkade basics, read{' '}
-          <ArticleLink slug="arkade-bitboard-wallet">Arkade in Bitboard Wallet</ArticleLink> and{' '}
+          <ArticleLink slug="arkade-bitboard-wallet">Arkade in Bitcoin Codex</ArticleLink> and{' '}
           <ArticleLink slug="what-is-a-vtxo">What is a VTXO?</ArticleLink>.
         </p>
       </ArticleSection>

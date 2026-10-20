@@ -22,7 +22,7 @@ function SetupWelcome() {
       <div className="text-center">
         <h1 className="flex items-center justify-center gap-3 text-3xl font-bold tracking-tight">
           <DesignAppLogo className="h-10 w-[33px]" />
-          Bitboard Wallet
+          Bitcoin Codex
         </h1>
         <AppDescription className="mt-2" />
       </div>
