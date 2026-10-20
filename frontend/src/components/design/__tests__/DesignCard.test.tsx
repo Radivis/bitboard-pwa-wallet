@@ -30,6 +30,14 @@ describe('DesignCard', () => {
     expect(card?.getAttribute('data-elevation')).toBe('1')
     expect(card?.className).toContain('shadow-[var(--design-card-shadow)]')
     expect(card?.className).not.toContain('border')
+    const header = document.querySelector('[data-slot="design-card-header"]')
+    expect(header?.className).toContain('gap-1.5')
+    expect(header?.className).toContain('px-6')
+    expect(header?.className).toContain('pt-6')
+    const content = document.querySelector('[data-slot="design-card-content"]')
+    expect(content?.className).toContain('px-6')
+    expect(content?.className).toContain('pt-4')
+    expect(content?.className).toContain('pb-6')
   })
 
   it('marks a nested card as elevation 2', () => {
