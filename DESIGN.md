@@ -97,6 +97,10 @@ Light, Dark, and System. The selected option uses the nav-button selected fill a
 
 Opened from the header menu button. It holds the theme switcher and the primary navigation: Wallet, Lab, Library, and Settings. Those entries are Nav-Buttons. The panel sits under the header on the right. Only the bottom-left corner is rounded.
 
+### Network drawer
+
+Opened from the header chain badge, to the left of the info toggle. It uses the same panel as the side drawer. Online and Offline stay visible together. The switch follows the current network and remembers the last network of each kind. Rows are Nav-Buttons for Mainnet, Testnet 4, Signet, Lab, and Regtest. Mutinynet is not listed. Settings keeps its own network selector.
+
 ### Input-Field
 
 `Status` is Empty, Filled, Disabled, or Readonly.

@@ -29,11 +29,19 @@ import {
   DESIGN_SIDE_DRAWER_ID,
   type DesignDrawerNavItem,
 } from '@/components/design/DesignSideDrawer'
+import {
+  DesignNetworkDrawer,
+  DESIGN_NETWORK_DRAWER_ID,
+  NetworkChainBadge,
+} from '@/components/design/DesignNetworkDrawer'
+import { DRAWER_NETWORK_LABELS } from '@/components/design/network-drawer-labels'
+import { useNetworkModeSelection } from '@/hooks/useNetworkModeSelection'
+import { useNetworkConnectivityStore } from '@/stores/networkConnectivityStore'
 import { NearZeroSecurityBanner } from '@/components/NearZeroSecurityBanner'
 import { NoMnemonicBackupBanner } from '@/components/NoMnemonicBackupBanner'
 import { SecureStorageUnavailableBanner } from '@/components/SecureStorageUnavailableBanner'
 import { useWallet } from '@/db'
-import { useWalletStore } from '@/stores/walletStore'
+import { selectCommittedNetworkMode, useWalletStore, type NetworkMode } from '@/stores/walletStore'
 import { cn } from '@/lib/shared/utils'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 
@@ -306,6 +314,29 @@ function isPrimaryNavItemActive(
     : !!matchRoute({ to: item.to, fuzzy: false })
 }
 
+function NetworkBadgeButton({
+  network,
+  expanded,
+  onClick,
+}: {
+  network: NetworkMode
+  expanded: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={`Network, ${DRAWER_NETWORK_LABELS[network]}`}
+      aria-expanded={expanded}
+      aria-controls={DESIGN_NETWORK_DRAWER_ID}
+      onClick={onClick}
+      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+    >
+      <NetworkChainBadge network={network} size="header" />
+    </button>
+  )
+}
+
 function AppMenuButton({ expanded, onClick }: { expanded: boolean; onClick: () => void }) {
   return (
     <button
@@ -470,6 +501,10 @@ export function WalletLayout({ children }: WalletLayoutProps) {
   const location = useLocation()
   const matchRoute = useMatchRoute()
   const [sideDrawerOpen, setSideDrawerOpen] = useState(false)
+  const [networkDrawerOpen, setNetworkDrawerOpen] = useState(false)
+  const committedNetwork = useWalletStore(selectCommittedNetworkMode)
+  const rememberNetwork = useNetworkConnectivityStore((state) => state.rememberNetwork)
+  const { selectNetwork, isSwitching, statusLine, unlockDialog } = useNetworkModeSelection()
   const isSetupRoute = location.pathname.startsWith('/setup')
   const showLibrarySubNav = !isSetupRoute && isLibrarySectionPath(location.pathname)
   const showWalletSubNav = !isSetupRoute && isWalletSectionPath(location.pathname)
@@ -494,7 +529,12 @@ export function WalletLayout({ children }: WalletLayoutProps) {
   }, [walletDisplayName])
 
   useEffect(() => {
+    rememberNetwork(committedNetwork)
+  }, [committedNetwork, rememberNetwork])
+
+  useEffect(() => {
     setSideDrawerOpen(false)
+    setNetworkDrawerOpen(false)
   }, [location.pathname])
 
   return (
@@ -522,10 +562,21 @@ export function WalletLayout({ children }: WalletLayoutProps) {
             </span>
           </h1>
           <div className="flex items-center gap-3">
+            <NetworkBadgeButton
+              network={committedNetwork}
+              expanded={networkDrawerOpen}
+              onClick={() => {
+                setSideDrawerOpen(false)
+                setNetworkDrawerOpen((open) => !open)
+              }}
+            />
             <InfomodeToggle />
             <AppMenuButton
               expanded={sideDrawerOpen}
-              onClick={() => setSideDrawerOpen((open) => !open)}
+              onClick={() => {
+                setNetworkDrawerOpen(false)
+                setSideDrawerOpen((open) => !open)
+              }}
             />
           </div>
         </div>
@@ -533,10 +584,25 @@ export function WalletLayout({ children }: WalletLayoutProps) {
 
       <DesignSideDrawer
         open={sideDrawerOpen}
-        onOpen={() => setSideDrawerOpen(true)}
+        onOpen={() => {
+          setNetworkDrawerOpen(false)
+          setSideDrawerOpen(true)
+        }}
         onClose={() => setSideDrawerOpen(false)}
         navItems={buildDrawerNavItems(location.pathname, matchRoute)}
       />
+      <DesignNetworkDrawer
+        open={networkDrawerOpen}
+        onOpen={() => {
+          setSideDrawerOpen(false)
+          setNetworkDrawerOpen(true)
+        }}
+        onClose={() => setNetworkDrawerOpen(false)}
+        onSelectNetwork={selectNetwork}
+        isSwitching={isSwitching}
+        statusLine={statusLine}
+      />
+      {unlockDialog}
 
       <SecureStorageUnavailableBanner />
       <NearZeroSecurityBanner />

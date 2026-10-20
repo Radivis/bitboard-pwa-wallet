@@ -11,6 +11,7 @@ import {
   RouterProvider,
 } from '@tanstack/react-router'
 import { WalletLayout } from '@/components/WalletLayout'
+import { DESIGN_NETWORK_DRAWER_ID } from '@/components/design/DesignNetworkDrawer'
 import { DESIGN_SIDE_DRAWER_ID } from '@/components/design/DesignSideDrawer'
 import { createTestQueryClient } from '@/test-utils/test-utils'
 
@@ -80,6 +81,24 @@ describe('WalletLayout side drawer', () => {
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: 'Menu' })).not.toBeInTheDocument()
     })
+    expect(menuButton).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('network badge opens the network drawer and closes the menu', async () => {
+    const user = userEvent.setup()
+    renderSetupLayout()
+
+    const menuButton = await screen.findByRole('button', { name: 'Menu' })
+    await user.click(menuButton)
+    expect(screen.getByRole('dialog', { name: 'Menu' })).toBeInTheDocument()
+
+    const networkButton = screen.getByRole('button', { name: 'Network, Testnet 4' })
+    expect(networkButton).toHaveAttribute('aria-controls', DESIGN_NETWORK_DRAWER_ID)
+    await user.click(networkButton)
+
+    expect(screen.queryByRole('dialog', { name: 'Menu' })).not.toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Network' })).toBeInTheDocument()
+    expect(networkButton).toHaveAttribute('aria-expanded', 'true')
     expect(menuButton).toHaveAttribute('aria-expanded', 'false')
   })
 })
