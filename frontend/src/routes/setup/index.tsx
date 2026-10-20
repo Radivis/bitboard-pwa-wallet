@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { Plus, Download, Settings } from 'lucide-react'
 import { AppDescription } from '@/components/AppDescription'
+import { DesignAppLogo } from '@/components/design/DesignAppLogo'
 import { DesignButton } from '@/components/design/DesignButton'
 import {
   DesignCard,
@@ -20,13 +21,7 @@ function SetupWelcome() {
     <div className="space-y-6">
       <div className="text-center">
         <h1 className="flex items-center justify-center gap-3 text-3xl font-bold tracking-tight">
-          <img
-            src="/bitboard-icon.png"
-            alt=""
-            className="h-10 w-10 shrink-0"
-            width={40}
-            height={40}
-          />
+          <DesignAppLogo className="h-10 w-[33px]" />
           Bitboard Wallet
         </h1>
         <AppDescription className="mt-2" />

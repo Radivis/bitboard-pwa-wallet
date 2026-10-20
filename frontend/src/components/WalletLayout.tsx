@@ -23,6 +23,7 @@ import {
   Menu,
   type LucideIcon,
 } from 'lucide-react'
+import { DesignAppLogo } from '@/components/design/DesignAppLogo'
 import { InfomodeToggle } from '@/components/infomode/InfomodeToggle'
 import {
   DesignSideDrawer,
@@ -542,13 +543,7 @@ export function WalletLayout({ children }: WalletLayoutProps) {
       <header className="sticky top-0 z-50 border-b border-border bg-[var(--design-elevation-drawer)]">
         <div className="mx-auto flex h-14 max-w-screen-xl items-center justify-between px-4">
           <h1 className="flex min-w-0 max-w-full items-center gap-2 text-lg font-semibold tracking-tight">
-            <img
-              src="/bitboard-icon.png"
-              alt=""
-              className="h-7 w-7 shrink-0"
-              width={28}
-              height={28}
-            />
+            <DesignAppLogo />
             <span className="min-w-0 truncate">
               {APP_TITLE}
               {showWalletSuffix && walletDisplayName !== null && (
