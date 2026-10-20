@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import { List } from 'lucide-react'
+import { DesignCard, DesignCardContent } from '@/components/design/DesignCard'
+import { DesignInput } from '@/components/design/DesignInput'
 import { LibraryArticleList } from '@/components/library/LibraryArticleList'
 import { PageHeader } from '@/components/PageHeader'
-import { Input } from '@/components/ui/input'
 import { listArticlesSortedByTitle } from '@/lib/library/articles'
 import { getTagLabel } from '@/lib/library/tags'
 
@@ -37,7 +38,7 @@ export function LibraryIndexPage() {
         <label htmlFor="library-search" className="text-sm font-medium text-foreground">
           Search
         </label>
-        <Input
+        <DesignInput
           id="library-search"
           type="search"
           placeholder="Filter by title or tag…"
@@ -47,10 +48,14 @@ export function LibraryIndexPage() {
         />
       </div>
 
-      <LibraryArticleList
-        articles={articles}
-        emptyMessage="No articles match your search. Try a different term."
-      />
+      <DesignCard>
+        <DesignCardContent>
+          <LibraryArticleList
+            articles={articles}
+            emptyMessage="No articles match your search. Try a different term."
+          />
+        </DesignCardContent>
+      </DesignCard>
     </div>
   )
 }

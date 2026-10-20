@@ -20,7 +20,7 @@ export function LibraryArticleList({
   }
 
   return (
-    <ul className="divide-y divide-border rounded-lg border border-border">
+    <ul className="divide-y divide-border">
       {articles.map((article) => {
         const tagIdsToShow =
           excludeTagId != null
