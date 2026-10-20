@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -10,7 +11,15 @@ import {
   Outlet,
   RouterProvider,
 } from '@tanstack/react-router'
-import { DesignSideDrawer, type DesignDrawerNavItem } from '@/components/design/DesignSideDrawer'
+import {
+  DesignSideDrawer,
+  DESIGN_SIDE_DRAWER_ID,
+  type DesignDrawerNavItem,
+} from '@/components/design/DesignSideDrawer'
+import {
+  DRAWER_ENTER_FROM_RIGHT_CLASS,
+  DRAWER_EXIT_TO_RIGHT_CLASS,
+} from '@/components/design/use-drawer-presence'
 
 vi.mock('@/db/storage-adapter', () => ({
   sqliteStorage: {
@@ -111,5 +120,52 @@ describe('DesignSideDrawer', () => {
 
     await user.click(screen.getByTestId('design-side-drawer-backdrop'))
     expect(onClose).toHaveBeenCalledTimes(2)
+  })
+
+  it('enters from the right and retracts off to the right', async () => {
+    const user = userEvent.setup()
+    function ClosingDrawer() {
+      const [open, setOpen] = useState(true)
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(false)}>
+            Close drawer
+          </button>
+          <DesignSideDrawer
+            open={open}
+            onOpen={() => setOpen(true)}
+            onClose={() => setOpen(false)}
+            navItems={drawerNavItems}
+          />
+        </>
+      )
+    }
+
+    const rootRoute = createRootRoute({ component: () => <Outlet /> })
+    const walletRoute = createRoute({
+      getParentRoute: () => rootRoute,
+      path: 'wallet',
+      component: ClosingDrawer,
+    })
+    const router = createRouter({
+      routeTree: rootRoute.addChildren([walletRoute]),
+      history: createMemoryHistory({ initialEntries: ['/wallet'] }),
+    })
+    render(<RouterProvider router={router} />)
+
+    const panel = await screen.findByRole('dialog', { name: 'Menu' })
+    expect(panel).toHaveAttribute('data-motion', 'enter')
+    expect(panel).toHaveClass(DRAWER_ENTER_FROM_RIGHT_CLASS)
+
+    await user.click(screen.getByRole('button', { name: 'Close drawer' }))
+
+    const exitingPanel = document.getElementById(DESIGN_SIDE_DRAWER_ID)
+    expect(exitingPanel).toHaveAttribute('data-motion', 'exit')
+    expect(exitingPanel).toHaveClass(DRAWER_EXIT_TO_RIGHT_CLASS)
+    expect(screen.queryByRole('dialog', { name: 'Menu' })).not.toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(document.getElementById(DESIGN_SIDE_DRAWER_ID)).toBeNull()
+    })
   })
 })

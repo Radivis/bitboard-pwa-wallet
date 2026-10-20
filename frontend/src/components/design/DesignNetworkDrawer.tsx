@@ -8,6 +8,11 @@ import {
   DrawerSectionLabel,
 } from '@/components/design/design-drawer-chrome'
 import { useDrawerEscape } from '@/components/design/use-drawer-escape'
+import {
+  DRAWER_ENTER_FROM_TOP_CLASS,
+  DRAWER_EXIT_TO_TOP_CLASS,
+  useDrawerPresence,
+} from '@/components/design/use-drawer-presence'
 import { designFocusClassName } from '@/components/design/design-classes'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { cn } from '@/lib/shared/utils'
@@ -55,6 +60,7 @@ export function DesignNetworkDrawer({
   statusLine = null,
 }: DesignNetworkDrawerProps) {
   const panelRef = useRef<HTMLDivElement>(null)
+  const { mounted, motion } = useDrawerPresence(open)
   const committedNetwork = useWalletStore(selectCommittedNetworkMode)
   const regtestEnabled = useFeatureStore((featureState) => featureState.isRegtestModeEnabled)
   const lastOnlineNetwork = useNetworkConnectivityStore((state) => state.lastOnlineNetwork)
@@ -62,7 +68,7 @@ export function DesignNetworkDrawer({
   useNetworkDrawerSwipe({ open, panelRef, onOpen, onClose })
   useDrawerEscape(open, onClose)
 
-  if (!open) return null
+  if (!mounted) return null
 
   const onlineSelected = isOnlineNetwork(committedNetwork)
   const offlineNetworks = regtestEnabled
@@ -94,9 +100,15 @@ export function DesignNetworkDrawer({
         role="dialog"
         aria-label="Network"
         aria-modal="false"
+        aria-hidden={motion === 'exit' || undefined}
         tabIndex={-1}
         data-slot="design-network-drawer"
-        className={designDrawerPanelClassName}
+        data-motion={motion}
+        className={cn(
+          designDrawerPanelClassName,
+          motion === 'enter' ? DRAWER_ENTER_FROM_TOP_CLASS : DRAWER_EXIT_TO_TOP_CLASS,
+          motion === 'exit' && 'pointer-events-none',
+        )}
       >
         <div
           role="group"

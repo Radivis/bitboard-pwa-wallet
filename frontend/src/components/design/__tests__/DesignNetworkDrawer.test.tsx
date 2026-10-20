@@ -1,7 +1,12 @@
+import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { DesignNetworkDrawer } from '@/components/design/DesignNetworkDrawer'
+import { DesignNetworkDrawer, DESIGN_NETWORK_DRAWER_ID } from '@/components/design/DesignNetworkDrawer'
+import {
+  DRAWER_ENTER_FROM_TOP_CLASS,
+  DRAWER_EXIT_TO_TOP_CLASS,
+} from '@/components/design/use-drawer-presence'
 import { useFeatureStore } from '@/stores/featureStore'
 import { useNetworkConnectivityStore } from '@/stores/networkConnectivityStore'
 import { useWalletStore } from '@/stores/walletStore'
@@ -53,5 +58,41 @@ describe('DesignNetworkDrawer', () => {
 
     await user.click(screen.getByRole('button', { name: 'Lab' }))
     expect(onSelectNetwork).toHaveBeenCalledWith('lab')
+  })
+
+  it('enters from the top and retracts upward', async () => {
+    const user = userEvent.setup()
+    function ClosingDrawer() {
+      const [open, setOpen] = useState(true)
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(false)}>
+            Close network
+          </button>
+          <DesignNetworkDrawer
+            open={open}
+            onOpen={() => setOpen(true)}
+            onClose={() => setOpen(false)}
+            onSelectNetwork={vi.fn()}
+          />
+        </>
+      )
+    }
+    render(<ClosingDrawer />)
+
+    const panel = screen.getByRole('dialog', { name: 'Network' })
+    expect(panel).toHaveAttribute('data-motion', 'enter')
+    expect(panel).toHaveClass(DRAWER_ENTER_FROM_TOP_CLASS)
+
+    await user.click(screen.getByRole('button', { name: 'Close network' }))
+
+    const exitingPanel = document.getElementById(DESIGN_NETWORK_DRAWER_ID)
+    expect(exitingPanel).toHaveAttribute('data-motion', 'exit')
+    expect(exitingPanel).toHaveClass(DRAWER_EXIT_TO_TOP_CLASS)
+    expect(screen.queryByRole('dialog', { name: 'Network' })).not.toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(document.getElementById(DESIGN_NETWORK_DRAWER_ID)).toBeNull()
+    })
   })
 })
