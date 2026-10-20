@@ -101,7 +101,7 @@ The only theme variant is Light. Dark should follow the theme mode through the `
 
 ### Card
 
-A single component. The surface, title, and description follow the theme (`surface/card`, `text/card/title`, `text/card/description`). `stroke/card` is bound and the border is hidden. An action inside the card is a Button, so that action follows the network.
+`theme` is Light or Dark, and `elevation` is 1 or 2. Elevation 2 is for a card nested inside another card. The surface, title, and description follow the theme (`surface/card`, `text/card/title`, `text/card/description`). `stroke/card` is bound and the border is hidden. Light cards use drop shadows. Dark cards use only an inner shadow. An action inside the card is a Button, so that action follows the network.
 
 ### Toast
 
