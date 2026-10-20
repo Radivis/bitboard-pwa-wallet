@@ -13,6 +13,7 @@ import {
   fundRegtestWalletReceiveAddress,
   waitForConfirmedBalance,
 } from './regtest'
+import { clickDrawerNavLink } from './drawer-nav'
 import {
   waitForArkadeLoadReady,
   waitForDashboardArkadeBalanceAtLeast,
@@ -23,7 +24,7 @@ import {
 const REGTEST_NETWORK_SWITCH_TIMEOUT_MS = process.env.CI ? 90_000 : 60_000
 
 export async function enableRegtestDeveloperMode(page: Page): Promise<void> {
-  await page.getByRole('link', { name: /settings/i }).click()
+  await clickDrawerNavLink(page, 'Settings')
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
   await openSettingsFeaturesTab(page)
   const regtestModeSwitch = page.getByRole('switch', {
@@ -38,7 +39,7 @@ export async function enableRegtestDeveloperMode(page: Page): Promise<void> {
 }
 
 export async function switchToRegtestNetwork(page: Page): Promise<void> {
-  await page.getByRole('link', { name: /settings/i }).click()
+  await clickDrawerNavLink(page, 'Settings')
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
   await page.getByRole('button', { name: 'Regtest' }).click()
   await waitForSettingsNetworkModeButtonSelected(

@@ -24,7 +24,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { DesignAppLogo } from '@/components/design/DesignAppLogo'
-import { DesignNavButton } from '@/components/design/DesignNavButton'
+import { DesignCompactNavButton } from '@/components/design/DesignCompactNavButton'
 import { InfomodeToggle } from '@/components/infomode/InfomodeToggle'
 import {
   DesignSideDrawer,
@@ -219,30 +219,18 @@ const LAB_SUB_NAV_ITEMS: SectionSubNavItem[] = [
 const SECONDARY_NAV_SURFACE_CLASS =
   'border-border bg-header/95 backdrop-blur supports-[backdrop-filter]:bg-header/80'
 
-const LOWER_NAV_SURFACE_CLASS =
-  'border-border bg-nav-lower-tier/95 backdrop-blur supports-[backdrop-filter]:bg-nav-lower-tier/80'
-
 /** Bottom nav item labels: narrow screens truncate past ~14 character widths. */
 const BOTTOM_NAV_LABEL_SPAN_CLASS =
   'max-w-[14ch] truncate text-center leading-tight'
 
-/**
- * Primary section bar (Tailwind `h-16`). Wallet sub-nav uses literal `bottom-16` in JSX
- * (same 4rem offset) so Tailwind’s scanner keeps the class; do not change one without the other.
- */
-const PRIMARY_BOTTOM_NAV_HEIGHT_CLASS = 'h-16'
+/** Section footer height for Library, Lab, and Settings (`h-14`). */
+const SECTION_SUB_NAV_HEIGHT_CLASS = 'h-14'
 
-/** Wallet subsection bar height (`h-14`). */
-const WALLET_SUB_NAV_HEIGHT_CLASS = 'h-14'
+/** Clears the compact wallet footer (68px control plus the bar's vertical padding). */
+const MAIN_BOTTOM_PADDING_WALLET_SECTION_CLASS = 'pb-24'
 
-/**
- * Main content bottom padding when both fixed bars show: must match
- * WALLET_SUB_NAV_HEIGHT_CLASS + PRIMARY_BOTTOM_NAV_HEIGHT_CLASS (3.5rem + 4rem).
- */
-const MAIN_BOTTOM_PADDING_WALLET_SECTION_CLASS = 'pb-[7.5rem]'
-
-/** Main padding when only the primary bar is fixed (`h-16` + comfortable scroll inset). */
-const MAIN_BOTTOM_PADDING_PRIMARY_ONLY_CLASS = 'pb-20'
+/** Clears a single section footer (`h-14` plus a small scroll inset). */
+const MAIN_BOTTOM_PADDING_SECTION_CLASS = 'pb-20'
 
 function isWalletSectionPath(pathname: string): boolean {
   return pathname === '/' || pathname.startsWith('/wallet')
@@ -367,71 +355,14 @@ function buildDrawerNavItems(
   }))
 }
 
-/**
- * One column in the primary bottom nav: inactive tabs show the parent nav’s lower-tier surface;
- * active tab uses the same header-tier surface as `SectionSubNav`.
- */
-function PrimaryNavTabColumn({
-  isActiveCategory,
-  children,
-}: {
-  isActiveCategory: boolean
-  children: React.ReactNode
-}) {
-  return (
-    <div
-      className={cn(
-        'flex min-h-0 min-w-0 flex-1 flex-col',
-        isActiveCategory && SECONDARY_NAV_SURFACE_CLASS,
-        isActiveCategory ? 'border-t border-t-transparent' : 'border-t border-border',
-      )}
-    >
-      {children}
-    </div>
-  )
-}
-
-function PrimarySectionNav() {
-  const matchRoute = useMatchRoute()
-  const pathname = useLocation().pathname
-
-  return (
-    <nav
-      aria-label="Main sections"
-      className={cn(
-        'fixed bottom-0 left-0 right-0 z-50 w-full',
-        PRIMARY_BOTTOM_NAV_HEIGHT_CLASS,
-        LOWER_NAV_SURFACE_CLASS,
-      )}
-    >
-      <div className="mx-auto flex h-full min-h-0 w-full max-w-screen-xl min-w-0 items-stretch px-2">
-        {PRIMARY_NAV_ITEMS.map((item) => {
-          const isActive = isPrimaryNavItemActive(item, pathname, matchRoute)
-          return (
-            <PrimaryNavTabColumn key={item.to} isActiveCategory={isActive}>
-              <BottomNavLink
-                to={item.to}
-                label={item.label}
-                icon={item.icon}
-                isActive={isActive}
-                preload={item.linkPreload}
-              />
-            </PrimaryNavTabColumn>
-          )
-        })}
-      </div>
-    </nav>
-  )
-}
-
 function SectionSubNav({
   ariaLabel,
   items,
-  useDesignNav = false,
+  compact = false,
 }: {
   ariaLabel: string
   items: SectionSubNavItem[]
-  useDesignNav?: boolean
+  compact?: boolean
 }) {
   const matchRoute = useMatchRoute()
   const location = useLocation()
@@ -441,38 +372,40 @@ function SectionSubNav({
     <nav
       aria-label={ariaLabel}
       className={cn(
-        'fixed bottom-16 left-0 right-0 z-40 border-t',
+        'fixed bottom-0 left-0 right-0 z-40 border-t',
         SECONDARY_NAV_SURFACE_CLASS,
       )}
     >
       <div
         className={cn(
-          'mx-auto grid w-full max-w-screen-xl items-stretch px-2',
-          WALLET_SUB_NAV_HEIGHT_CLASS,
+          'mx-auto w-full max-w-screen-xl items-stretch px-2',
+          compact ? 'flex gap-2 py-2' : cn('grid', SECTION_SUB_NAV_HEIGHT_CLASS),
         )}
-        style={{
-          gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))`,
-        }}
+        style={
+          compact
+            ? undefined
+            : { gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }
+        }
       >
         {items.map((item) => {
           const isActive =
             item.kind === 'match'
               ? !!matchRoute({ to: item.to, fuzzy: false })
               : item.isActive(pathname)
-          if (useDesignNav) {
+          if (compact) {
             const Icon = item.icon
             return (
-              <DesignNavButton
+              <DesignCompactNavButton
                 key={item.to}
                 asChild
                 status={isActive ? 'selected' : 'default'}
-                className="w-full"
+                className="min-w-0 flex-1"
               >
                 <Link to={item.to} preload={item.linkPreload}>
-                  <Icon className="h-5 w-5 shrink-0" aria-hidden />
-                  <span>{item.label}</span>
+                  <Icon aria-hidden />
+                  <span className="max-w-full truncate">{item.label}</span>
                 </Link>
-              </DesignNavButton>
+              </DesignCompactNavButton>
             )
           }
           return (
@@ -504,7 +437,7 @@ function BottomNavigationChrome() {
         <SectionSubNav ariaLabel="Library" items={LIBRARY_SUB_NAV_ITEMS} />
       )}
       {showWalletSubNav && (
-        <SectionSubNav ariaLabel="Wallet" items={WALLET_SUB_NAV_ITEMS} useDesignNav />
+        <SectionSubNav ariaLabel="Wallet" items={WALLET_SUB_NAV_ITEMS} compact />
       )}
       {showLabSubNav && (
         <SectionSubNav ariaLabel="Lab" items={LAB_SUB_NAV_ITEMS} />
@@ -512,7 +445,6 @@ function BottomNavigationChrome() {
       {showSettingsSubNav && (
         <SectionSubNav ariaLabel="Settings" items={SETTINGS_SUB_NAV_ITEMS} />
       )}
-      <PrimarySectionNav />
     </>
   )
 }
@@ -625,13 +557,11 @@ export function WalletLayout({ children }: WalletLayoutProps) {
       <main
         className={cn(
           'mx-auto max-w-screen-xl px-4 py-6',
-          !isSetupRoute &&
-            (showWalletSubNav ||
-            showLibrarySubNav ||
-            showLabSubNav ||
-            showSettingsSubNav
-              ? MAIN_BOTTOM_PADDING_WALLET_SECTION_CLASS
-              : MAIN_BOTTOM_PADDING_PRIMARY_ONLY_CLASS),
+          showWalletSubNav
+            ? MAIN_BOTTOM_PADDING_WALLET_SECTION_CLASS
+            : showLibrarySubNav || showLabSubNav || showSettingsSubNav
+              ? MAIN_BOTTOM_PADDING_SECTION_CLASS
+              : undefined,
         )}
       >
         {children}

@@ -26,6 +26,7 @@ import {
   openSettingsMainTab,
 } from './helpers/settings-waits'
 import { ensureSegwitAddressesFeatureOn } from './helpers/segwit-addresses-feature'
+import { clickDrawerNavLink } from './helpers/drawer-nav'
 
 /** Redirect follows broadcast + persistence; post-broadcast sync runs in the background (see useBroadcastTransactionMutation). */
 const POST_BROADCAST_URL_TIMEOUT_MS = E2E_IS_CI ? 45_000 : 20_000
@@ -92,7 +93,7 @@ test.describe('Send Page', () => {
       await goToWalletTab(page, 'Dashboard')
       await waitForOnchainRailNotSyncing(page)
 
-      await page.getByRole('link', { name: /settings/i }).click()
+      await clickDrawerNavLink(page, 'Settings')
       await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
       await openSettingsFeaturesTab(page)
       const regtestModeSwitch = page.getByRole('switch', {
@@ -109,7 +110,7 @@ test.describe('Send Page', () => {
       await goToWalletTab(page, 'Dashboard')
       await waitForOnchainRailNotSyncing(page)
 
-      await page.getByRole('link', { name: /settings/i }).click()
+      await clickDrawerNavLink(page, 'Settings')
       await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
       await page.getByRole('button', { name: 'SegWit (BIP84)' }).click()
       await page.getByRole('button', { name: 'Change' }).click()

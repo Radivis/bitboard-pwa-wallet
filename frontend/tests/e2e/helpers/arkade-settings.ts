@@ -1,4 +1,5 @@
 import { type Page, expect } from '@playwright/test'
+import { clickDrawerNavLink } from './drawer-nav'
 import {
   openSettingsFeaturesTab,
   openSettingsMainTab,
@@ -7,7 +8,7 @@ import {
 } from './settings-waits'
 
 export async function enableArkadeFeature(page: Page): Promise<void> {
-  await page.getByRole('link', { name: /settings/i }).click()
+  await clickDrawerNavLink(page, 'Settings')
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
   await openSettingsFeaturesTab(page)
   const arkadeSwitch = page.getByRole('switch', {
@@ -31,7 +32,7 @@ export async function enableArkadeFeature(page: Page): Promise<void> {
 const ARKADE_SIGNET_SWITCH_TIMEOUT_MS = process.env.CI ? 90_000 : 60_000
 
 export async function switchToSignet(page: Page): Promise<void> {
-  await page.getByRole('link', { name: /settings/i }).click()
+  await clickDrawerNavLink(page, 'Settings')
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
   await page.getByRole('button', { name: 'Signet' }).click()
   await waitForSettingsNetworkModeButtonSelected(page, 'Signet', ARKADE_SIGNET_SWITCH_TIMEOUT_MS)

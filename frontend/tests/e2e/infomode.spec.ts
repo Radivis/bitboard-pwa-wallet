@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { createWalletViaUI } from './helpers/wallet-setup'
+import { clickDrawerNavLink } from './helpers/drawer-nav'
 
 async function getDocumentNetwork(page: Page): Promise<string | undefined> {
   return page.evaluate(() => document.documentElement.dataset.network)
@@ -10,7 +11,7 @@ test.describe('Infomode on Settings', () => {
     test.setTimeout(120_000)
     await createWalletViaUI(page)
 
-    await page.getByRole('link', { name: /settings/i }).click()
+    await clickDrawerNavLink(page, 'Settings')
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
     const networkCardDescription = page

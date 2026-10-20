@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { clickDrawerNavLink } from './helpers/drawer-nav'
 import { createWalletViaUI } from './helpers/wallet-setup'
 import {
   openSettingsFeaturesTab,
@@ -12,7 +13,7 @@ test.describe('Settings Page', () => {
     test.setTimeout(120_000)
     await createWalletViaUI(page)
 
-    await page.getByRole('link', { name: /settings/i }).click()
+    await clickDrawerNavLink(page, 'Settings')
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
     const testnetButton = page.getByRole('button', { name: 'Testnet' })
@@ -30,7 +31,7 @@ test.describe('Settings Page', () => {
   test('settings address type switch', async ({ page }) => {
     await createWalletViaUI(page)
 
-    await page.getByRole('link', { name: /settings/i }).click()
+    await clickDrawerNavLink(page, 'Settings')
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
     await openSettingsFeaturesTab(page)
@@ -51,7 +52,7 @@ test.describe('Settings Page', () => {
   test('settings Esplora endpoint', async ({ page }) => {
     await createWalletViaUI(page)
 
-    await page.getByRole('link', { name: /settings/i }).click()
+    await clickDrawerNavLink(page, 'Settings')
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
     await expect(page.getByText(/Esplora Endpoint/)).toBeVisible()
 
@@ -96,7 +97,7 @@ test.describe('Settings Page', () => {
     test.setTimeout(120_000)
     await createWalletViaUI(page)
 
-    await page.getByRole('link', { name: /settings/i }).click()
+    await clickDrawerNavLink(page, 'Settings')
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
     await waitForSettingsNetworkSwitchComplete(page)
