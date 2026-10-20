@@ -89,6 +89,14 @@ Network mode changes the accent. Theme mode changes whether that accent comes fr
 
 Navigation, not a Button. `status` is default, hover, active, or selected. It uses the `nav-button` tokens, so the network accent does not recolor it. Selected is the strongest fill. The stroke stays at 50%.
 
+### Theme switcher
+
+Light, Dark, and System. The selected option uses the nav-button selected fill and stroke. It is the only theme control, and it lives in the side drawer.
+
+### Side drawer
+
+Opened from the header menu button. It holds the theme switcher and the primary navigation: Wallet, Lab, Library, and Settings. Those entries are Nav-Buttons. The panel sits under the header on the right. Only the bottom-left corner is rounded.
+
 ### Input-Field
 
 `Status` is Empty, Filled, Disabled, or Readonly.

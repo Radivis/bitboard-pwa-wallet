@@ -11,7 +11,6 @@ import {
   mockLoadWalletSecretsPayload,
   mockResolveDescriptorWallet,
   mockSetNetworkMode,
-  mockSetThemeMode,
   mockUpdateDescriptorWalletChangeset,
   mockWalletsState,
   nearZeroSecurityState,
@@ -39,7 +38,7 @@ describe('Settings routes', () => {
       renderWithProviders(<SettingsMainPage />)
       expect(screen.getByText('Network')).toBeInTheDocument()
       expect(screen.queryByText('Address Type')).not.toBeInTheDocument()
-      expect(screen.getByText('Appearance')).toBeInTheDocument()
+      expect(screen.queryByText('Appearance')).not.toBeInTheDocument()
       expect(screen.getByText('Currency / unit defaults')).toBeInTheDocument()
       expect(
         screen.getByText(/Available options depend on the selected rate service/i),
@@ -133,14 +132,6 @@ describe('Settings routes', () => {
         expect(screen.getByTestId('confirmation-dialog')).toBeInTheDocument()
       })
       expect(screen.getByText('Change Address Type?')).toBeInTheDocument()
-    })
-
-    it('theme selector calls setThemeMode', async () => {
-      const user = userEvent.setup()
-      renderWithProviders(<SettingsMainPage />)
-
-      await user.click(screen.getByRole('button', { name: /Dark/ }))
-      expect(mockSetThemeMode).toHaveBeenCalledWith('dark')
     })
 
     it('network switch when unlocked calls updateDescriptorWalletChangeset then resolveDescriptorWallet in order', async () => {

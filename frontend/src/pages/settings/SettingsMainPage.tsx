@@ -9,7 +9,6 @@ import {
   CardTitle,
   CardDescription,
 } from '@/components/ui/card'
-import { ThemeSelector } from '@/components/settings/ThemeSelector'
 import { NetworkSelector } from '@/components/settings/NetworkSelector'
 import { NetworkCardCommittedDescriptor } from '@/components/settings/NetworkCardCommittedDescriptor'
 import { AddressTypeSelector } from '@/components/settings/AddressTypeSelector'
@@ -100,16 +99,6 @@ export function SettingsMainPage() {
       ) : null}
 
       {isPeriodicSyncEnabled ? <PeriodicSyncSettings /> : null}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Appearance</CardTitle>
-          <CardDescription>Choose your preferred color scheme.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ThemeSelector />
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader>

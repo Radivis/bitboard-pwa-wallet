@@ -26,6 +26,10 @@
   --design-nav-background-active: #0000001f;
   --design-nav-background-selected: #00000033;
   --design-nav-stroke: #00000080;
+  --design-drawer-surface: #F7F8F9cc;
+  --design-drawer-track: #0000000a;
+  --design-drawer-divider: #00000014;
+  --design-drawer-label: #6B7280;
   --design-status-success-surface: #F0FDF7;
   --design-status-success-foreground: #0A7F4A;
   --design-status-success-description: #065F37;
@@ -83,6 +87,10 @@
   --design-nav-background-active: #FFFFFF1f;
   --design-nav-background-selected: #FFFFFF33;
   --design-nav-stroke: #FFFFFF80;
+  --design-drawer-surface: #0D0F11cc;
+  --design-drawer-track: #ffffff0a;
+  --design-drawer-divider: #ffffff14;
+  --design-drawer-label: #6B7280;
   --design-status-success-surface: #04150E;
   --design-status-success-foreground: #219C64;
   --design-status-success-description: #25C17B;

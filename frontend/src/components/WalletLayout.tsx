@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 import { Link, useMatchRoute, useLocation } from '@tanstack/react-router'
 import {
   Home,
@@ -20,10 +20,15 @@ import {
   History,
   Blocks,
   Zap,
+  Menu,
   type LucideIcon,
 } from 'lucide-react'
 import { InfomodeToggle } from '@/components/infomode/InfomodeToggle'
-import { ThemeToggle } from '@/components/ThemeToggle'
+import {
+  DesignSideDrawer,
+  DESIGN_SIDE_DRAWER_ID,
+  type DesignDrawerNavItem,
+} from '@/components/design/DesignSideDrawer'
 import { NearZeroSecurityBanner } from '@/components/NearZeroSecurityBanner'
 import { NoMnemonicBackupBanner } from '@/components/NoMnemonicBackupBanner'
 import { SecureStorageUnavailableBanner } from '@/components/SecureStorageUnavailableBanner'
@@ -301,6 +306,34 @@ function isPrimaryNavItemActive(
     : !!matchRoute({ to: item.to, fuzzy: false })
 }
 
+function AppMenuButton({ expanded, onClick }: { expanded: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label="Menu"
+      aria-expanded={expanded}
+      aria-controls={DESIGN_SIDE_DRAWER_ID}
+      onClick={onClick}
+      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+    >
+      <Menu className="h-6 w-6" aria-hidden />
+    </button>
+  )
+}
+
+function buildDrawerNavItems(
+  pathname: string,
+  matchRoute: ReturnType<typeof useMatchRoute>,
+): DesignDrawerNavItem[] {
+  return PRIMARY_NAV_ITEMS.map((item) => ({
+    to: item.to,
+    label: item.label,
+    icon: item.icon,
+    selected: isPrimaryNavItemActive(item, pathname, matchRoute),
+    linkPreload: item.linkPreload,
+  }))
+}
+
 /**
  * One column in the primary bottom nav: inactive tabs show the parent nav’s lower-tier surface;
  * active tab uses the same header-tier surface as `SectionSubNav`.
@@ -435,6 +468,8 @@ function BottomNavigationChrome() {
 
 export function WalletLayout({ children }: WalletLayoutProps) {
   const location = useLocation()
+  const matchRoute = useMatchRoute()
+  const [sideDrawerOpen, setSideDrawerOpen] = useState(false)
   const isSetupRoute = location.pathname.startsWith('/setup')
   const showLibrarySubNav = !isSetupRoute && isLibrarySectionPath(location.pathname)
   const showWalletSubNav = !isSetupRoute && isWalletSectionPath(location.pathname)
@@ -457,6 +492,10 @@ export function WalletLayout({ children }: WalletLayoutProps) {
     document.title =
       walletDisplayName !== null ? `${APP_TITLE}: ${walletDisplayName}` : APP_TITLE
   }, [walletDisplayName])
+
+  useEffect(() => {
+    setSideDrawerOpen(false)
+  }, [location.pathname])
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -484,10 +523,20 @@ export function WalletLayout({ children }: WalletLayoutProps) {
           </h1>
           <div className="flex items-center gap-3">
             <InfomodeToggle />
-            <ThemeToggle />
+            <AppMenuButton
+              expanded={sideDrawerOpen}
+              onClick={() => setSideDrawerOpen((open) => !open)}
+            />
           </div>
         </div>
       </header>
+
+      <DesignSideDrawer
+        open={sideDrawerOpen}
+        onOpen={() => setSideDrawerOpen(true)}
+        onClose={() => setSideDrawerOpen(false)}
+        navItems={buildDrawerNavItems(location.pathname, matchRoute)}
+      />
 
       <SecureStorageUnavailableBanner />
       <NearZeroSecurityBanner />
