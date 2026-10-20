@@ -6,8 +6,8 @@ import { ArkadeCollaborativeExitInfomodeContent } from '@/components/arkade/info
 import { ArkadeExitOperatorFeesInfomodeContent } from '@/components/arkade/infomode/ArkadeExitOperatorFeesInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { PageHeader } from '@/components/PageHeader'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { DesignButton } from '@/components/design/DesignButton'
+import { DesignInput } from '@/components/design/DesignInput'
 import { Label } from '@/components/ui/label'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
@@ -140,7 +140,7 @@ export function CollaborativeExitContent({ exitFlow }: CollaborativeExitContentP
       )}
       <div className="space-y-2">
         <Label htmlFor="arkade-collab-destination">On-chain destination</Label>
-        <Input
+        <DesignInput
           id="arkade-collab-destination"
           value={collabDestination}
           onChange={(event) => setCollabDestination(event.target.value)}
@@ -148,19 +148,18 @@ export function CollaborativeExitContent({ exitFlow }: CollaborativeExitContentP
           autoComplete="off"
         />
         {currentAddress && (
-          <Button
+          <DesignButton
             type="button"
-            variant="link"
-            className="h-auto p-0 text-xs"
+            appearance="tertiary"
             onClick={() => setCollabDestination(currentAddress)}
           >
             Use current receive address
-          </Button>
+          </DesignButton>
         )}
       </div>
       <div className="space-y-2">
         <Label htmlFor="arkade-collab-amount">Amount (sats, optional)</Label>
-        <Input
+        <DesignInput
           id="arkade-collab-amount"
           type="number"
           value={collabAmountSats}
@@ -194,23 +193,21 @@ export function CollaborativeExitContent({ exitFlow }: CollaborativeExitContentP
       </div>
       <CollaborativeExitFeeEstimate collaborativeFeeQuery={collaborativeFeeQuery} />
       <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="outline" asChild>
+        <DesignButton type="button" appearance="secondary" asChild>
           <Link to="/wallet/management">Back to Management</Link>
-        </Button>
-        <Button
+        </DesignButton>
+        <DesignButton
           type="button"
           disabled={!canCollaborativeExit || collaborativeExitMutation.isPending}
           onClick={handleCollaborativeExit}
+          icon={
+            collaborativeExitSubmitPhase ? (
+              <Loader2 className="animate-spin" aria-hidden />
+            ) : undefined
+          }
         >
-          {collaborativeExitSubmitPhase ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-              Exiting…
-            </>
-          ) : (
-            'Confirm exit'
-          )}
-        </Button>
+          {collaborativeExitSubmitPhase ? 'Exiting…' : 'Confirm exit'}
+        </DesignButton>
       </div>
     </div>
   )
@@ -236,9 +233,9 @@ export function CollaborativeExitPage() {
       <div className="mx-auto w-full max-w-md space-y-4">
         <PageHeader title="Collaborative exit" icon={ArkadeIcon} />
         <p className="text-muted-foreground">Arkade is not enabled for this network.</p>
-        <Button type="button" variant="outline" asChild>
+        <DesignButton type="button" appearance="secondary" asChild>
           <Link to="/wallet/management">Back to Management</Link>
-        </Button>
+        </DesignButton>
       </div>
     )
   }

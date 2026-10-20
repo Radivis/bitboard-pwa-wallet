@@ -1,6 +1,6 @@
 import { Loader2 } from 'lucide-react'
 import { DialogDescription } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
 import { AppModal } from '@/components/AppModal'
 import { OperatorConfigDiffViewer } from '@/components/wallet/OperatorConfigDiffViewer'
 import {
@@ -29,28 +29,32 @@ export function OperatorConfigTrustModal({ open }: OperatorConfigTrustModalProps
       isCloseButtonHidden
       footer={
         <div className="flex w-full flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button
+          <DesignButton
             type="button"
-            variant="outline"
+            appearance="secondary"
             disabled={pending}
             onClick={() => acceptMutation.mutate()}
+            icon={
+              acceptMutation.isPending ? (
+                <Loader2 className="animate-spin" aria-hidden />
+              ) : undefined
+            }
           >
-            {acceptMutation.isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-            ) : null}
             Trust Arkade operator and accept changes
-          </Button>
-          <Button
+          </DesignButton>
+          <DesignButton
             type="button"
             autoFocus
             disabled={pending}
             onClick={() => reviewMutation.mutate()}
+            icon={
+              reviewMutation.isPending ? (
+                <Loader2 className="animate-spin" aria-hidden />
+              ) : undefined
+            }
           >
-            {reviewMutation.isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-            ) : null}
             Review changes safely in autonomous mode
-          </Button>
+          </DesignButton>
         </div>
       }
     >

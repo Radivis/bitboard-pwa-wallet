@@ -24,6 +24,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { DesignAppLogo } from '@/components/design/DesignAppLogo'
+import { DesignNavButton } from '@/components/design/DesignNavButton'
 import { InfomodeToggle } from '@/components/infomode/InfomodeToggle'
 import {
   DesignSideDrawer,
@@ -426,9 +427,11 @@ function PrimarySectionNav() {
 function SectionSubNav({
   ariaLabel,
   items,
+  useDesignNav = false,
 }: {
   ariaLabel: string
   items: SectionSubNavItem[]
+  useDesignNav?: boolean
 }) {
   const matchRoute = useMatchRoute()
   const location = useLocation()
@@ -456,6 +459,22 @@ function SectionSubNav({
             item.kind === 'match'
               ? !!matchRoute({ to: item.to, fuzzy: false })
               : item.isActive(pathname)
+          if (useDesignNav) {
+            const Icon = item.icon
+            return (
+              <DesignNavButton
+                key={item.to}
+                asChild
+                status={isActive ? 'selected' : 'default'}
+                className="w-full"
+              >
+                <Link to={item.to} preload={item.linkPreload}>
+                  <Icon className="h-5 w-5 shrink-0" aria-hidden />
+                  <span>{item.label}</span>
+                </Link>
+              </DesignNavButton>
+            )
+          }
           return (
             <BottomNavLink
               key={item.to}
@@ -485,7 +504,7 @@ function BottomNavigationChrome() {
         <SectionSubNav ariaLabel="Library" items={LIBRARY_SUB_NAV_ITEMS} />
       )}
       {showWalletSubNav && (
-        <SectionSubNav ariaLabel="Wallet" items={WALLET_SUB_NAV_ITEMS} />
+        <SectionSubNav ariaLabel="Wallet" items={WALLET_SUB_NAV_ITEMS} useDesignNav />
       )}
       {showLabSubNav && (
         <SectionSubNav ariaLabel="Lab" items={LAB_SUB_NAV_ITEMS} />

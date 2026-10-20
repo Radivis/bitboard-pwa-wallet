@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { DoorOpen } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
+import { DesignCard, DesignCardContent } from '@/components/design/DesignCard'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { ArkadeVtxoClassificationIcon } from '@/components/arkade/ArkadeVtxoClassificationIcon'
 import {
@@ -51,8 +51,8 @@ export function ArkadeVtxoCard({ row, unilateralExitPhase }: ArkadeVtxoCardProps
   }
 
   return (
-    <Card data-testid={`arkade-vtxo-card-${row.id}`}>
-      <CardContent className="space-y-2 p-4">
+    <DesignCard data-testid={`arkade-vtxo-card-${row.id}`}>
+      <DesignCardContent className="space-y-2">
         <div className="flex items-start justify-between gap-3">
           <button
             type="button"
@@ -95,7 +95,7 @@ export function ArkadeVtxoCard({ row, unilateralExitPhase }: ArkadeVtxoCardProps
             {unilateralExitPhaseLine}
           </div>
         ) : null}
-      </CardContent>
-    </Card>
+      </DesignCardContent>
+    </DesignCard>
   )
 }

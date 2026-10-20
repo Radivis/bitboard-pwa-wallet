@@ -8,7 +8,7 @@ import {
 import QrScanner from 'qr-scanner'
 import { Zap, ZapOff } from 'lucide-react'
 import { AppModal } from '@/components/AppModal'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
 
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024
 
@@ -279,16 +279,16 @@ export function RecipientQrScanModal({
             aria-hidden
             onChange={handleFileChange}
           />
-          <Button
+          <DesignButton
             type="button"
-            variant="outline"
+            appearance="secondary"
             onClick={() => fileInputRef.current?.click()}
           >
             Upload image
-          </Button>
-          <Button type="button" variant="outline" onClick={requestClose}>
+          </DesignButton>
+          <DesignButton type="button" appearance="secondary" onClick={requestClose}>
             Cancel
-          </Button>
+          </DesignButton>
         </div>
       )}
     >
@@ -307,24 +307,18 @@ export function RecipientQrScanModal({
             aria-label="Camera preview for QR scanning"
           />
           {flashAvailable ? (
-            <Button
+            <DesignButton
               type="button"
-              variant="secondary"
-              size="icon"
-              className="absolute top-2 right-2 z-10 bg-background/80 shadow-md"
+              appearance="tertiary"
+              className="absolute top-2 right-2 z-10"
               onClick={(e) => {
                 e.stopPropagation()
                 void handleFlashToggle()
               }}
               aria-pressed={flashOn}
               aria-label={flashOn ? 'Turn flash off' : 'Turn flash on'}
-            >
-              {flashOn ? (
-                <ZapOff className="size-4" aria-hidden />
-              ) : (
-                <Zap className="size-4" aria-hidden />
-              )}
-            </Button>
+              icon={flashOn ? <ZapOff aria-hidden /> : <Zap aria-hidden />}
+            />
           ) : null}
         </div>
         {cameraError != null ? (

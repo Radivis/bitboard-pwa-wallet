@@ -1,6 +1,6 @@
 import { AlertTriangle, Loader2 } from 'lucide-react'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import {
   ARKADE_INFOMODE_IDS,
@@ -86,24 +86,19 @@ export function ArkadeRecoverableVtxoBanner() {
               Could not estimate the operator fee ({feeError}). You can still recover now.
             </p>
           ) : null}
-          <Button
+          <DesignButton
             type="button"
-            size="sm"
-            variant="secondary"
+            appearance="tertiary"
             disabled={
               autonomousModeActive || recoverMutation.isPending || hasPendingRecoverIntent
             }
             onClick={() => recoverMutation.mutate()}
+            icon={
+              recoverSubmitPhase ? <Loader2 className="animate-spin" aria-hidden /> : undefined
+            }
           >
-            {recoverSubmitPhase ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-                Recovering…
-              </>
-            ) : (
-              'Recover now'
-            )}
-          </Button>
+            {recoverSubmitPhase ? 'Recovering…' : 'Recover now'}
+          </DesignButton>
         </div>
       </div>
     </div>

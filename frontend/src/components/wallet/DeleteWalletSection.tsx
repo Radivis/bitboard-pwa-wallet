@@ -10,6 +10,7 @@ import { useWalletStore } from '@/stores/walletStore'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { AppModal } from '@/components/AppModal'
+import { DesignButton } from '@/components/design/DesignButton'
 import { Button } from '@/components/ui/button'
 import { DialogDescription } from '@/components/ui/dialog'
 
@@ -177,14 +178,14 @@ export function DeleteWalletSection({
         isCloseButtonHidden={probingMainnet}
         footer={(requestClose) => (
           <>
-            <Button
+            <DesignButton
               type="button"
-              variant="outline"
+              appearance="secondary"
               disabled={probingMainnet}
               onClick={requestClose}
             >
               Cancel
-            </Button>
+            </DesignButton>
             <Button
               type="button"
               variant="destructive"
@@ -210,9 +211,9 @@ export function DeleteWalletSection({
         title="Mainnet bitcoin may be at risk"
         footer={(requestClose) => (
           <>
-            <Button type="button" variant="outline" onClick={requestClose}>
+            <DesignButton type="button" appearance="secondary" onClick={requestClose}>
               Cancel
-            </Button>
+            </DesignButton>
             <Button
               type="button"
               variant="destructive"
@@ -247,9 +248,9 @@ export function DeleteWalletSection({
         title="Cannot delete this wallet"
         footerClassName="justify-end"
         footer={(requestClose) => (
-          <Button type="button" variant="default" onClick={requestClose}>
+          <DesignButton type="button" onClick={requestClose}>
             Understood
-          </Button>
+          </DesignButton>
         )}
       >
         <DialogDescription asChild>

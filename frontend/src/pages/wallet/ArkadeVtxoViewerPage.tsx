@@ -8,8 +8,8 @@ import { ArkadeVtxoCard } from '@/components/arkade/ArkadeVtxoCard'
 import { ArkadeVtxoClassificationIcon } from '@/components/arkade/ArkadeVtxoClassificationIcon'
 import { CardPagination } from '@/components/CardPagination'
 import { PageHeader } from '@/components/PageHeader'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { DesignButton } from '@/components/design/DesignButton'
+import { DesignInput } from '@/components/design/DesignInput'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { RailSyncWarningBanner } from '@/components/wallet/RailSyncWarningBanner'
@@ -86,9 +86,9 @@ export function ArkadeVtxoViewerPage() {
       <div className="space-y-4">
         <PageHeader title="VTXOs" icon={ArkadeIcon} />
         <p className="text-muted-foreground">Arkade is not enabled for this network.</p>
-        <Button type="button" variant="outline" asChild>
+        <DesignButton type="button" appearance="secondary" asChild>
           <Link to="/wallet">Back</Link>
-        </Button>
+        </DesignButton>
       </div>
     )
   }
@@ -126,7 +126,7 @@ export function ArkadeVtxoViewerPage() {
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="arkade-vtxo-search">Search</Label>
-            <Input
+            <DesignInput
               id="arkade-vtxo-search"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
@@ -161,31 +161,28 @@ export function ArkadeVtxoViewerPage() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button
+          <DesignButton
             type="button"
-            size="sm"
-            variant={classificationFilter == null ? 'default' : 'outline'}
+            appearance={classificationFilter == null ? 'primary' : 'secondary'}
             onClick={() => setClassificationFilter(null)}
           >
             All ({allRows.length})
-          </Button>
+          </DesignButton>
           {ARKADE_VTXO_CLASSIFICATIONS.map((classification) => (
-            <Button
+            <DesignButton
               key={classification}
               type="button"
-              size="sm"
-              variant={classificationFilter === classification ? 'default' : 'outline'}
-              className="gap-1.5"
+              appearance={classificationFilter === classification ? 'primary' : 'secondary'}
               onClick={() =>
                 setClassificationFilter((current) =>
                   current === classification ? null : classification,
                 )
               }
+              icon={<ArkadeVtxoClassificationIcon classification={classification} />}
             >
-              <ArkadeVtxoClassificationIcon classification={classification} className="h-4 w-4" />
               {getArkadeVtxoClassificationLabel(classification)} (
               {classificationCounts[classification]})
-            </Button>
+            </DesignButton>
           ))}
         </div>
       </div>
@@ -219,9 +216,9 @@ export function ArkadeVtxoViewerPage() {
         </CardPagination>
       )}
 
-      <Button type="button" variant="outline" asChild>
+      <DesignButton type="button" appearance="secondary" asChild>
         <Link to="/wallet">Back to wallet</Link>
-      </Button>
+      </DesignButton>
     </div>
   )
 }

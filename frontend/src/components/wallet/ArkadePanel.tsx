@@ -5,8 +5,13 @@ import { ArkadeSessionGate } from '@/components/arkade/ArkadeSessionGate'
 import { ArkadeBoardingInfomodeContent } from '@/components/arkade/infomode/ArkadeBoardingInfomodeContent'
 import { ArkadeOverviewInfomodeContent } from '@/components/arkade/infomode/ArkadeOverviewInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import {
+  DesignCard,
+  DesignCardContent,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
+import { DesignButton } from '@/components/design/DesignButton'
 import {
   ARKADE_DELEGATOR_FEE_INFOMODE,
   ARKADE_INFOMODE_IDS,
@@ -80,9 +85,9 @@ export function ArkadePanel() {
       : 'configured delegator'
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+    <DesignCard>
+      <DesignCardHeader>
+        <DesignCardTitle className="flex items-center gap-2">
           <ArkadeIcon className="h-5 w-5" />
           <InfomodeWrapper
             infoId={ARKADE_INFOMODE_IDS.managementPanel}
@@ -91,9 +96,9 @@ export function ArkadePanel() {
           >
             Arkade (offchain layer)
           </InfomodeWrapper>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+        </DesignCardTitle>
+      </DesignCardHeader>
+      <DesignCardContent className="space-y-4">
         <ArkadeOperatorTrustGate />
         <ArkadeAutonomousModeSwitch />
         <ArkadePendingBatchIntentBanner />
@@ -167,22 +172,22 @@ export function ArkadePanel() {
         <ArkadeExitSection />
 
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" size="sm" asChild>
+          <DesignButton type="button" appearance="secondary" asChild>
             <Link to="/wallet/arkade/vtxos">View VTXOs</Link>
-          </Button>
+          </DesignButton>
           <InfomodeWrapper
             infoId={ARKADE_INFOMODE_IDS.boardFromOnchain}
             infoComponent={ArkadeBoardingInfomodeContent}
             as="span"
           >
             {autonomousModeActive ? (
-              <Button type="button" variant="outline" size="sm" disabled>
+              <DesignButton type="button" appearance="secondary" disabled>
                 Board from on-chain
-              </Button>
+              </DesignButton>
             ) : (
-              <Button type="button" variant="outline" size="sm" asChild>
+              <DesignButton type="button" appearance="secondary" asChild>
                 <Link to="/wallet/arkade/board">Board from on-chain</Link>
-              </Button>
+              </DesignButton>
             )}
           </InfomodeWrapper>
           <InfomodeWrapper
@@ -191,27 +196,22 @@ export function ArkadePanel() {
             infoText={ARKADE_RENEW_VTXOS_INFOMODE.text}
             as="span"
           >
-            <Button
+            <DesignButton
               type="button"
-              variant="secondary"
-              size="sm"
+              appearance="tertiary"
               disabled={
                 autonomousModeActive || renewMutation.isPending || hasPendingRenewIntent
               }
               onClick={() => renewMutation.mutate()}
+              icon={
+                renewSubmitPhase ? <Loader2 className="animate-spin" aria-hidden /> : undefined
+              }
             >
-              {renewSubmitPhase ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-                  Renewing…
-                </>
-              ) : (
-                'Renew VTXOs now'
-              )}
-            </Button>
+              {renewSubmitPhase ? 'Renewing…' : 'Renew VTXOs now'}
+            </DesignButton>
           </InfomodeWrapper>
         </div>
-      </CardContent>
-    </Card>
+      </DesignCardContent>
+    </DesignCard>
   )
 }

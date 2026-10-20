@@ -5,7 +5,12 @@ import { ArkadeSessionLoading } from '@/components/arkade/ArkadeSessionLoading'
 import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
 import { ArkadeOverviewInfomodeContent } from '@/components/arkade/infomode/ArkadeOverviewInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  DesignCard,
+  DesignCardContent,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { ArkadeBalanceBreakdown } from '@/components/wallet/ArkadeBalanceBreakdown'
 import { ArkadePendingBatchIntentBanner } from '@/components/wallet/ArkadePendingBatchIntentBanner'
 import { ArkadeSignerMigrationBanner } from '@/components/wallet/ArkadeSignerMigrationBanner'
@@ -53,14 +58,15 @@ export function ArkadeDashboardBalance() {
   if (!show) return null
 
   return (
-    <Card
+    <DesignCard
+      elevation={2}
       data-testid="dashboard-arkade-balance-card"
       data-rail-arkade-load={arkadeRail.loadPhase}
       data-rail-arkade-sync={arkadeRail.syncPhase}
     >
-      <CardHeader className="pb-2">
+      <DesignCardHeader>
         <div className="flex flex-wrap items-start justify-between gap-2">
-          <CardTitle className="flex items-center gap-2 text-base">
+          <DesignCardTitle className="flex items-center gap-2">
             <ArkadeIcon className="h-4 w-4" />
             <InfomodeWrapper
               infoId={ARKADE_INFOMODE_IDS.dashboardBalance}
@@ -69,7 +75,7 @@ export function ArkadeDashboardBalance() {
             >
               Arkade balance
             </InfomodeWrapper>
-          </CardTitle>
+          </DesignCardTitle>
           <RailSyncControl
             rail="arkade"
             syncLabel="Sync Arkade"
@@ -84,8 +90,8 @@ export function ArkadeDashboardBalance() {
             syncWarningDetailInBanner={arkadeLoadSnapshot.loadPhase === 'loaded'}
           />
         </div>
-      </CardHeader>
-      <CardContent className="space-y-2">
+      </DesignCardHeader>
+      <DesignCardContent className="space-y-2">
         <ArkadePendingBatchIntentBanner />
         <ArkadeSignerMigrationBanner />
         <ArkadePendingRecoveryDueToExpiredSignerBanner />
@@ -160,7 +166,7 @@ export function ArkadeDashboardBalance() {
         >
           Arkade in Management
         </Link>
-      </CardContent>
-    </Card>
+      </DesignCardContent>
+    </DesignCard>
   )
 }

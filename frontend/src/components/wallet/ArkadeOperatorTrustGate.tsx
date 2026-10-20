@@ -1,5 +1,5 @@
 import { Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
 import { OperatorConfigDiffViewer } from '@/components/wallet/OperatorConfigDiffViewer'
 import { OperatorConfigTrustModal } from '@/components/wallet/OperatorConfigTrustModal'
 import {
@@ -46,29 +46,31 @@ export function ArkadeOperatorTrustGate() {
             <OperatorConfigDiffViewer entries={diffQuery.data.entries} />
           ) : null}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap">
-            <Button
+            <DesignButton
               type="button"
-              size="sm"
-              variant="outline"
+              appearance="secondary"
               disabled={pending}
               onClick={() => acceptMutation.mutate()}
+              icon={
+                acceptMutation.isPending ? (
+                  <Loader2 className="animate-spin" aria-hidden />
+                ) : undefined
+              }
             >
-              {acceptMutation.isPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-              ) : null}
               Trust Arkade operator and accept changes
-            </Button>
-            <Button
+            </DesignButton>
+            <DesignButton
               type="button"
-              size="sm"
               disabled={pending}
               onClick={() => reviewMutation.mutate()}
+              icon={
+                reviewMutation.isPending ? (
+                  <Loader2 className="animate-spin" aria-hidden />
+                ) : undefined
+              }
             >
-              {reviewMutation.isPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-              ) : null}
               Continue review safely in autonomous mode
-            </Button>
+            </DesignButton>
           </div>
         </div>
       ) : null}

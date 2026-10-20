@@ -1,6 +1,6 @@
 import { AlertTriangle, X } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
 import { CopyableVtxoIdList } from '@/components/wallet/unilateral-exit/CopyableVtxoIdList'
 import {
   clearPersistedUnilateralExitFailure,
@@ -101,19 +101,18 @@ export function UnilateralExitFailureBanner() {
           ) : null}
           <div className="flex flex-wrap items-center gap-2">
             {failure.reasonCode !== 'user_aborted' ? (
-              <Button variant="outline" size="sm" asChild>
+              <DesignButton appearance="secondary" asChild>
                 <Link to="/wallet/arkade/vtxos">Open VTXO viewer</Link>
-              </Button>
+              </DesignButton>
             ) : null}
-            <Button
-              variant="ghost"
-              size="sm"
+            <DesignButton
+              appearance="tertiary"
               onClick={() => clearPersistedUnilateralExitFailure(walletScope)}
               data-testid="unilateral-exit-failure-dismiss"
+              icon={<X aria-hidden />}
             >
-              <X className="mr-1 h-4 w-4" aria-hidden />
               Dismiss
-            </Button>
+            </DesignButton>
           </div>
         </div>
       </div>

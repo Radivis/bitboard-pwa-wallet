@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AppModal } from '@/components/AppModal'
+import { DesignButton } from '@/components/design/DesignButton'
 import { Button } from '@/components/ui/button'
 import { DialogDescription } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
@@ -32,9 +33,9 @@ export function AbortUnilateralExitConfirmModal({
       contentClassName="sm:max-w-lg border-destructive"
       footer={(requestClose) => (
         <>
-          <Button type="button" variant="outline" onClick={requestClose}>
+          <DesignButton type="button" appearance="secondary" onClick={requestClose}>
             Cancel
-          </Button>
+          </DesignButton>
           <Button
             type="button"
             variant="destructive"

@@ -8,6 +8,7 @@ export type DesignBannerAction = {
   label: string
   onClick: React.ComponentProps<'button'>['onClick']
   icon?: React.ReactNode
+  disabled?: boolean
 }
 
 export function DesignBanner({
@@ -47,12 +48,22 @@ export function DesignBanner({
         {primaryAction != null || secondaryAction != null ? (
           <div className="flex flex-wrap items-center gap-4">
             {primaryAction != null ? (
-              <DesignButton appearance="secondary" icon={primaryAction.icon} onClick={primaryAction.onClick}>
+              <DesignButton
+                appearance="secondary"
+                icon={primaryAction.icon}
+                onClick={primaryAction.onClick}
+                disabled={primaryAction.disabled}
+              >
                 {primaryAction.label}
               </DesignButton>
             ) : null}
             {secondaryAction != null ? (
-              <DesignButton appearance="tertiary" icon={secondaryAction.icon} onClick={secondaryAction.onClick}>
+              <DesignButton
+                appearance="tertiary"
+                icon={secondaryAction.icon}
+                onClick={secondaryAction.onClick}
+                disabled={secondaryAction.disabled}
+              >
                 {secondaryAction.label}
               </DesignButton>
             ) : null}

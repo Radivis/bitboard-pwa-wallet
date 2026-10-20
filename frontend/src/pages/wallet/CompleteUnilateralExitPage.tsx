@@ -6,8 +6,8 @@ import { ArkadeSessionGate } from '@/components/arkade/ArkadeSessionGate'
 import { ArkadeUnilateralExitInfomodeContent } from '@/components/arkade/infomode/ArkadeUnilateralExitInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { PageHeader } from '@/components/PageHeader'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { DesignButton } from '@/components/design/DesignButton'
+import { DesignInput } from '@/components/design/DesignInput'
 import { Label } from '@/components/ui/label'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
@@ -147,15 +147,14 @@ function CompleteUnilateralExitInProgressList({
           <BitcoinAmountDisplay amountSats={selectedTotalSats} size="sm" />
         </p>
         {readyCount > 0 && (
-          <Button
+          <DesignButton
             type="button"
-            variant="outline"
-            size="sm"
+            appearance="secondary"
             data-testid="arkade-unilateral-select-all-ready"
             onClick={onSelectAllReady}
           >
             Select all ready ({readyCount})
-          </Button>
+          </DesignButton>
         )}
       </div>
       <ul className="max-h-96 space-y-2 overflow-y-auto rounded-md border p-2">
@@ -339,17 +338,16 @@ export function CompleteUnilateralExitContent({ exitFlow }: CompleteUnilateralEx
       <div className="space-y-2">
         <Label htmlFor="arkade-complete-batch-destination">Destination address</Label>
         <div className="flex items-center gap-2">
-          <Input
+          <DesignInput
             id="arkade-complete-batch-destination"
             className="font-mono"
             value={completeDestination}
             onChange={(event) => setCompleteDestination(event.target.value)}
             autoComplete="off"
           />
-          <Button
+          <DesignButton
             type="button"
-            size="icon"
-            variant="outline"
+            appearance="secondary"
             data-testid="arkade-complete-destination-copy"
             aria-label="Copy destination address"
             disabled={completeDestination.trim().length === 0}
@@ -360,9 +358,8 @@ export function CompleteUnilateralExitContent({ exitFlow }: CompleteUnilateralEx
                 'Failed to copy destination address',
               )
             }
-          >
-            <Copy className="h-4 w-4" aria-hidden />
-          </Button>
+            icon={<Copy aria-hidden />}
+          />
         </div>
       </div>
 
@@ -381,10 +378,10 @@ export function CompleteUnilateralExitContent({ exitFlow }: CompleteUnilateralEx
       )}
 
       <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="outline" asChild>
+        <DesignButton type="button" appearance="secondary" asChild>
           <Link to="/wallet/management">Back to Management</Link>
-        </Button>
-        <Button
+        </DesignButton>
+        <DesignButton
           type="button"
           disabled={
             completeExitMutation.isPending ||
@@ -394,7 +391,7 @@ export function CompleteUnilateralExitContent({ exitFlow }: CompleteUnilateralEx
           onClick={handleCompleteExit}
         >
           {completeExitMutation.isPending ? 'Completing…' : 'Complete exit'}
-        </Button>
+        </DesignButton>
       </div>
     </div>
   )
@@ -420,9 +417,9 @@ export function CompleteUnilateralExitPage() {
       <div className="space-y-4">
         <PageHeader title="Complete unilateral exit" icon={ArkadeIcon} />
         <p className="text-muted-foreground">Arkade is not enabled for this network.</p>
-        <Button type="button" variant="outline" asChild>
+        <DesignButton type="button" appearance="secondary" asChild>
           <Link to="/wallet/management">Back to Management</Link>
-        </Button>
+        </DesignButton>
       </div>
     )
   }

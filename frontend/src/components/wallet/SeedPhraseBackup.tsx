@@ -18,8 +18,14 @@ import { restoreNearZeroSecretsSessionForOperation } from '@/lib/wallet/restore-
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { AppModal } from '@/components/AppModal'
 import { EnterAppPasswordModal } from '@/components/EnterAppPasswordModal'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
+import {
+  DesignCard,
+  DesignCardContent,
+  DesignCardDescription,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/shared/utils'
 import { DialogDescription } from '@/components/ui/dialog'
@@ -126,17 +132,17 @@ export function SeedPhraseBackup() {
         }
         className="rounded-xl"
       >
-        <Card
+        <DesignCard
           className={cn(
             noMnemonicBackupFlag &&
               'border-2 border-destructive shadow-sm ring-1 ring-destructive/20',
           )}
         >
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+          <DesignCardHeader>
+            <DesignCardTitle className="flex items-center gap-2">
               <Eye className="h-5 w-5" />
               Seed Phrase Backup
-            </CardTitle>
+            </DesignCardTitle>
             {noMnemonicBackupFlag && (
               <p className="text-sm font-bold text-destructive">
                 No backup of the seed phrase has been recorded for this wallet.
@@ -144,27 +150,27 @@ export function SeedPhraseBackup() {
                 and store them safely.
               </p>
             )}
-            <CardDescription>
+            <DesignCardDescription>
               {nearZeroActive
                 ? 'View your seed phrase to back up your wallet.'
                 : 'View your seed phrase to back up your wallet. You will need to confirm your Bitboard app password.'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Button
-              variant="outline"
+            </DesignCardDescription>
+          </DesignCardHeader>
+          <DesignCardContent className="space-y-3">
+            <DesignButton
+              appearance="secondary"
               onClick={() => {
                 void handleShowSeedPhraseClick()
               }}
               disabled={loading}
             >
               {loading ? 'Decrypting...' : 'Show Seed Phrase'}
-            </Button>
+            </DesignButton>
             {error && !showPasswordPrompt ? (
               <p className="text-sm text-destructive">{error}</p>
             ) : null}
-          </CardContent>
-        </Card>
+          </DesignCardContent>
+        </DesignCard>
       </InfomodeWrapper>
 
       <EnterAppPasswordModal
@@ -200,9 +206,9 @@ export function SeedPhraseBackup() {
         contentClassName="sm:max-w-lg"
         footerClassName="justify-end"
         footer={(requestClose) => (
-          <Button variant="outline" onClick={requestClose}>
+          <DesignButton appearance="secondary" onClick={requestClose}>
             Close
-          </Button>
+          </DesignButton>
         )}
       >
         <>

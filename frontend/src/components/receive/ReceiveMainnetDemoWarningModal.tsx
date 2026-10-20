@@ -1,5 +1,5 @@
 import { AppModal } from '@/components/AppModal'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
 import { DialogDescription } from '@/components/ui/dialog'
 
 interface ReceiveMainnetDemoWarningModalProps {
@@ -26,9 +26,9 @@ export function ReceiveMainnetDemoWarningModal({
       onInteractOutside={(e) => e.preventDefault()}
       onEscapeKeyDown={(e) => e.preventDefault()}
       footer={(requestClose) => (
-        <Button type="button" onClick={requestClose}>
+        <DesignButton type="button" onClick={requestClose}>
           OK
-        </Button>
+        </DesignButton>
       )}
       footerClassName="justify-end"
     >

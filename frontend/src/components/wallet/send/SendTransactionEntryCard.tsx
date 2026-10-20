@@ -1,7 +1,7 @@
 import type { ComponentProps } from 'react'
 import { useRef, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { AlertTriangle, ArrowUpRight, ScanQrCode } from 'lucide-react'
+import { ArrowUpRight, ScanQrCode } from 'lucide-react'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { PageHeader } from '@/components/PageHeader'
 import {
@@ -10,9 +10,15 @@ import {
 } from '@/lib/arkade/arkade-infomode'
 import { SendLightningWalletPicker } from '@/components/wallet/send/SendLightningWalletPicker'
 import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { DesignBanner } from '@/components/design/DesignBanner'
+import { DesignButton } from '@/components/design/DesignButton'
+import {
+  DesignCard,
+  DesignCardContent,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
+import { DesignInput } from '@/components/design/DesignInput'
 import { Label } from '@/components/ui/label'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { NETWORK_LABELS, type NetworkMode } from '@/stores/walletStore'
@@ -217,9 +223,9 @@ export function SendTransactionEntryCard({
         />
       ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle className="flex items-center gap-2">
             <ArrowUpRight className="h-5 w-5" />
             {isArkadeSendMode ? (
               <InfomodeWrapper
@@ -233,9 +239,9 @@ export function SendTransactionEntryCard({
             ) : (
               cardTitle
             )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+          </DesignCardTitle>
+        </DesignCardHeader>
+        <DesignCardContent>
           <form
             className="space-y-4"
             onSubmit={(e) => {
@@ -256,19 +262,18 @@ export function SendTransactionEntryCard({
                       ? 'Arkade address'
                       : 'Recipient Address'}
                 </Label>
-                <Button
+                <DesignButton
                   type="button"
-                  variant="outline"
-                  size="sm"
+                  appearance="secondary"
                   className="shrink-0"
                   disabled={isPending}
                   onClick={() => setRecipientScanOpen(true)}
+                  icon={<ScanQrCode aria-hidden />}
                 >
-                  <ScanQrCode className="mr-2 h-4 w-4" aria-hidden />
                   Scan QR code
-                </Button>
+                </DesignButton>
               </div>
-              <Input
+              <DesignInput
                 id="recipient-address"
                 value={recipient}
                 onChange={(e) => onRecipientChange(e.target.value)}
@@ -396,22 +401,12 @@ export function SendTransactionEntryCard({
               </div>
 
               {showMainnetZeroBalanceWarning ? (
-                <div
+                <DesignBanner
                   role="alert"
-                  className="flex gap-3 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-3 text-sm text-amber-800 dark:border-amber-500/40 dark:text-amber-100"
-                >
-                  <AlertTriangle
-                    className="mt-0.5 h-5 w-5 shrink-0"
-                    aria-hidden
-                  />
-                  <div>
-                    <p className="font-medium">No spendable balance</p>
-                    <p className="mt-1 text-muted-foreground">
-                      You cannot send on this network until you have funds. Receive
-                      Bitcoin first, then enter an amount here.
-                    </p>
-                  </div>
-                </div>
+                  status="warning"
+                  title="No spendable balance"
+                  description="You cannot send on this network until you have funds. Receive Bitcoin first, then enter an amount here."
+                />
               ) : isLightningSendMode && !needsUserLightningAmount ? (
                 <div className="space-y-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm tabular-nums">
                   <FiatBtcAmountDisplay
@@ -424,21 +419,17 @@ export function SendTransactionEntryCard({
                     rateLoading={fiatRatesLoading}
                   />
                   {showBip11WithZeroBalance ? (
-                    <div
+                    <DesignBanner
                       role="alert"
-                      className="mt-2 flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-2 text-xs text-amber-900 dark:text-amber-100"
-                    >
-                      <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
-                      <span>
-                        Not enough balance to pay this invoice. Fund your wallet
-                        first.
-                      </span>
-                    </div>
+                      status="warning"
+                      className="mt-2"
+                      title="Not enough balance to pay this invoice. Fund your wallet first."
+                    />
                   ) : null}
                 </div>
               ) : (
                 <>
-                  <Input
+                  <DesignInput
                     id="send-amount"
                     type="text"
                     inputMode="decimal"
@@ -539,13 +530,13 @@ export function SendTransactionEntryCard({
                 }
               />
             ) : (
-              <Button type="submit" className="w-full" disabled={!canBuild || isPending}>
+              <DesignButton type="submit" className="w-full" disabled={!canBuild || isPending}>
                 {submitLabel}
-              </Button>
+              </DesignButton>
             )}
           </form>
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
     </div>
   )
 }

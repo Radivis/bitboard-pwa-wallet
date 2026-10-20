@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Hourglass, Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import {
   ARKADE_INFOMODE_IDS,
@@ -179,26 +179,24 @@ export function ArkadePendingBatchIntentBanner() {
                 {showCancel || showRetry ? (
                   <div className="flex gap-2">
                     {showCancel ? (
-                      <Button
+                      <DesignButton
                         type="button"
-                        size="sm"
-                        variant="secondary"
+                        appearance="tertiary"
                         disabled={mutationInFlightForRow}
                         onClick={() => cancelIntentMutation.mutate(pendingIntent)}
                       >
                         Cancel
-                      </Button>
+                      </DesignButton>
                     ) : null}
                     {showRetry ? (
-                      <Button
+                      <DesignButton
                         type="button"
-                        size="sm"
-                        variant="secondary"
+                        appearance="tertiary"
                         disabled={mutationInFlightForRow || !retryEnabled}
                         onClick={() => retryIntentMutation.mutate(pendingIntent)}
                       >
                         {retryLabel}
-                      </Button>
+                      </DesignButton>
                     ) : null}
                   </div>
                 ) : null}

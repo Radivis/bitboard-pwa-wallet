@@ -1,5 +1,5 @@
 import { AlertTriangle, Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
 import type { ArkadeSignerMigrationHint, ArkadeSignerMigrationResult } from '@/workers/arkade-api'
 import { formatSignerMigrationPartialStatus } from '@/lib/arkade/arkade-signer-migration-display'
 import {
@@ -114,28 +114,27 @@ export function ArkadeSignerMigrationBanner() {
             </p>
           ) : null}
           {migrateActionVisible ? (
-            <Button
+            <DesignButton
               type="button"
-              size="sm"
-              variant="secondary"
+              appearance="tertiary"
               disabled={
                 autonomousModeActive ||
                 signerMigrationMutation.isPending ||
                 hasPendingMigrateIntent
               }
               onClick={() => signerMigrationMutation.mutate()}
+              icon={
+                migrateSubmitPhase ? (
+                  <Loader2 className="animate-spin" aria-hidden />
+                ) : undefined
+              }
             >
-              {migrateSubmitPhase ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-                  Migrating…
-                </>
-              ) : partialMigrationResult != null ? (
-                'Migrate again'
-              ) : (
-                copy.actionLabel
-              )}
-            </Button>
+              {migrateSubmitPhase
+                ? 'Migrating…'
+                : partialMigrationResult != null
+                  ? 'Migrate again'
+                  : copy.actionLabel}
+            </DesignButton>
           ) : null}
           {migrationErrorMessage != null ? (
             <p className="text-destructive">{migrationErrorMessage}</p>

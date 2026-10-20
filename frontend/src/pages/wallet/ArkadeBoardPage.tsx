@@ -6,14 +6,19 @@ import { arkadeSessionBlockingScreen } from '@/components/arkade/arkade-session-
 import { ArkadeBoardingInfomodeContent } from '@/components/arkade/infomode/ArkadeBoardingInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { PageHeader } from '@/components/PageHeader'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
 import {
   ARKADE_BOARDING_ADDRESS_INFOMODE,
   ARKADE_BOARD_STATUS_EXPIRED_INFOMODE,
   ARKADE_BOARD_STATUS_READY_INFOMODE,
   ARKADE_INFOMODE_IDS,
 } from '@/lib/arkade/arkade-infomode'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  DesignCard,
+  DesignCardContent,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import {
   useArkadeBoardingAddressQuery,
   useArkadeBoardingStatusQuery,
@@ -57,9 +62,9 @@ export function ArkadeBoardPage() {
       <div className="space-y-4">
         <PageHeader title="Board to Arkade" icon={ArkadeIcon} />
         <p className="text-muted-foreground">Arkade is not enabled for this network.</p>
-        <Button type="button" variant="outline" asChild>
+        <DesignButton type="button" appearance="secondary" asChild>
           <Link to="/wallet">Back</Link>
-        </Button>
+        </DesignButton>
       </div>
     )
   }
@@ -90,9 +95,9 @@ export function ArkadeBoardPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Board to Arkade" icon={ArkadeIcon} />
-      <Card>
-        <CardHeader>
-          <CardTitle>
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle>
             <InfomodeWrapper
               infoId={ARKADE_INFOMODE_IDS.boardFlow}
               infoComponent={ArkadeBoardingInfomodeContent}
@@ -100,9 +105,9 @@ export function ArkadeBoardPage() {
             >
               From on-chain to Arkade
             </InfomodeWrapper>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4 text-sm">
+          </DesignCardTitle>
+        </DesignCardHeader>
+        <DesignCardContent className="space-y-4 text-sm">
           <ArkadePendingBatchIntentBanner />
           <ol className="list-decimal space-y-2 pl-5">
             <li>Copy the boarding address below.</li>
@@ -140,12 +145,17 @@ export function ArkadeBoardPage() {
                 </p>
               </InfomodeWrapper>
               <div className="flex flex-wrap gap-2">
-                <Button type="button" variant="outline" onClick={handleCopy} disabled={!boardingAddress}>
-                  <Copy className="h-4 w-4" aria-hidden />
+                <DesignButton
+                  type="button"
+                  appearance="secondary"
+                  onClick={handleCopy}
+                  disabled={!boardingAddress}
+                  icon={<Copy aria-hidden />}
+                >
                   {copied ? 'Copied' : 'Copy boarding address'}
-                </Button>
+                </DesignButton>
                 {boardingAddress ? (
-                  <Button type="button" variant="outline" asChild>
+                  <DesignButton type="button" appearance="secondary" asChild>
                     <a
                       href={boardingExplorerUrl(networkMode, boardingAddress)}
                       target="_blank"
@@ -154,7 +164,7 @@ export function ArkadeBoardPage() {
                       <ExternalLink className="h-4 w-4" aria-hidden />
                       View on explorer
                     </a>
-                  </Button>
+                  </DesignButton>
                 ) : null}
               </div>
             </>
@@ -199,24 +209,20 @@ export function ArkadeBoardPage() {
             </div>
           ) : null}
 
-          <Button
+          <DesignButton
             type="button"
             disabled={
               onboardMutation.isPending || !boardingAddress || hasPendingOnchainBatchIntent
             }
             onClick={() => onboardMutation.mutate()}
+            icon={
+              settleSubmitPhase ? <Loader2 className="animate-spin" aria-hidden /> : undefined
+            }
           >
-            {settleSubmitPhase ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-                Settling…
-              </>
-            ) : (
-              'Settle boarding UTXO'
-            )}
-          </Button>
-        </CardContent>
-      </Card>
+            {settleSubmitPhase ? 'Settling…' : 'Settle boarding UTXO'}
+          </DesignButton>
+        </DesignCardContent>
+      </DesignCard>
     </div>
   )
 }

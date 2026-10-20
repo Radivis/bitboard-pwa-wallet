@@ -1,6 +1,6 @@
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { Input } from '@/components/ui/input'
+import { DesignInput } from '@/components/design/DesignInput'
 import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
 import type { SendFeePresetLabel } from '@/lib/esplora/esplora-fee-estimates'
 import type { UnilateralExitAutomationPausedReason } from '@/lib/wallet/lifecycle/unilateral-exit-automation-types'
@@ -89,7 +89,7 @@ export function UnilateralExitAutomationSection(props: {
 
           <div className="space-y-2">
             <Label htmlFor="unilateral-exit-max-fee-rate">Max fee rate (sat/vB)</Label>
-            <Input
+            <DesignInput
               id="unilateral-exit-max-fee-rate"
               type="number"
               inputMode="decimal"
