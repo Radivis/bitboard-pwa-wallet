@@ -32,7 +32,7 @@ export function DesignInfoToggle({
         className={cn(
           'inline-flex size-6 items-center justify-center rounded-full motion-safe:transition-colors motion-safe:duration-200 motion-safe:ease-in-out',
           pressed
-            ? 'bg-[color-mix(in_srgb,var(--design-text-regular)_50%,transparent)]'
+            ? 'bg-[color-mix(in_srgb,var(--design-text-regular)_25%,transparent)] dark:bg-[color-mix(in_srgb,var(--design-text-regular)_50%,transparent)]'
             : 'bg-transparent',
           iconClassName,
         )}

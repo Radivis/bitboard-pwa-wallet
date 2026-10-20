@@ -38,7 +38,8 @@ describe('DesignInfoToggle', () => {
     expect(plate).toHaveClass(
       'motion-safe:duration-200',
       'motion-safe:ease-in-out',
-      'bg-[color-mix(in_srgb,var(--design-text-regular)_50%,transparent)]',
+      'bg-[color-mix(in_srgb,var(--design-text-regular)_25%,transparent)]',
+      'dark:bg-[color-mix(in_srgb,var(--design-text-regular)_50%,transparent)]',
     )
   })
 
