@@ -21,16 +21,22 @@ export function DesignInfoToggle({
       data-slot="design-info-toggle"
       data-status={pressed ? 'active' : 'inactive'}
       className={cn(
-        'design-ui inline-flex size-12 shrink-0 items-center justify-center rounded-full',
+        'design-ui inline-flex size-12 shrink-0 items-center justify-center rounded-full text-[var(--design-text-regular)]',
         designFocusClassName,
-        pressed
-          ? 'text-[var(--design-text-regular)]'
-          : 'text-[var(--design-input-placeholder)]',
         className,
       )}
       {...props}
     >
-      <span className={cn('inline-flex', iconClassName)}>
+      <span
+        data-slot="design-info-toggle-plate"
+        className={cn(
+          'inline-flex size-6 items-center justify-center rounded-full motion-safe:transition-colors motion-safe:duration-200 motion-safe:ease-in-out',
+          pressed
+            ? 'bg-[color-mix(in_srgb,var(--design-text-regular)_50%,transparent)]'
+            : 'bg-transparent',
+          iconClassName,
+        )}
+      >
         <CircleQuestionMark className="size-6" aria-hidden />
       </span>
     </button>

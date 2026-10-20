@@ -97,7 +97,7 @@ export function SetAppPasswordModal({ open, onSessionStarted }: SetAppPasswordMo
           Choose a password for this browser. It encrypts all wallets you store in Bitboard on this
           device.{' '}
           <span className="font-medium text-foreground/90">
-            Use Infomode (lightbulb button above) to get more information about parts of this form
+            Use Infomode (question mark button above) to get more information about parts of this form
             by tapping them.
           </span>
         </DialogDescription>

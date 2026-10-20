@@ -39,13 +39,13 @@ export function InfomodeHintToast() {
         if (kind === 'intro') {
           toast.message('Try Infomode', {
             description:
-              'Tap the lightbulb next to the theme control in the header. When it’s on, highlighted areas explain wallet concepts—tap a highlight to read a short popup.',
+              'Tap the question mark in the header. When it’s on, highlighted areas explain wallet concepts—tap a highlight to read a short popup.',
             duration: INFOMODE_HINT_TOAST_DURATION_MS,
           })
         } else if (kind === 'reminder') {
           toast.message('Welcome back', {
             description:
-              'It’s been a while. Turn on Infomode with the header lightbulb anytime you want contextual explanations around the app.',
+              'It’s been a while. Turn on Infomode with the header question mark anytime you want contextual explanations around the app.',
             duration: INFOMODE_HINT_TOAST_DURATION_MS,
           })
         }

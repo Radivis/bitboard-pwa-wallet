@@ -1,7 +1,6 @@
-import { Lightbulb, LightbulbOff } from 'lucide-react'
 import { toast } from 'sonner'
+import { DesignInfoToggle } from '@/components/design/DesignInfoToggle'
 import { useInfomodeStore } from '@/stores/infomodeStore'
-import { cn } from '@/lib/shared/utils'
 
 const INFO_MODE_TOGGLE_TOAST_DURATION_MS = 6_000
 
@@ -16,8 +15,14 @@ export function InfomodeToggle({ className }: InfomodeToggleProps) {
   const lightbulbSuppressionCue = useInfomodeStore((state) => state.lightbulbSuppressionCue)
 
   return (
-    <button
-      type="button"
+    <DesignInfoToggle
+      key={lightbulbSuppressionCue}
+      pressed={isActive}
+      aria-label={isActive ? 'Turn off infomode' : 'Turn on infomode'}
+      className={className}
+      iconClassName={
+        lightbulbSuppressionCue > 0 ? 'infomode-lightbulb-jitter--active' : undefined
+      }
       onClick={() => {
         const willBeActive = !isActive
         toggleInfomode()
@@ -27,32 +32,14 @@ export function InfomodeToggle({ className }: InfomodeToggleProps) {
               'Anything with a cyan border is an explainer zone—tap it to read what that part of the app does. (Taps there open help instead of the control underneath.)',
             duration: INFO_MODE_TOGGLE_TOAST_DURATION_MS,
           })
-        } else {
-          toast.message('Infomode off', {
-            description: 'Normal behavior is back: buttons, links, and fields respond the usual way when you tap them.',
-            duration: INFO_MODE_TOGGLE_TOAST_DURATION_MS,
-          })
+          return
         }
+        toast.message('Infomode off', {
+          description:
+            'Normal behavior is back: buttons, links, and fields respond the usual way when you tap them.',
+          duration: INFO_MODE_TOGGLE_TOAST_DURATION_MS,
+        })
       }}
-      aria-pressed={isActive}
-      aria-label={isActive ? 'Turn off infomode' : 'Turn on infomode'}
-      className={cn(
-        'flex h-9 w-9 shrink-0 items-center justify-center rounded-md transition-colors',
-        'hover:bg-accent hover:text-accent-foreground',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-        isActive ? 'text-cyan-500' : 'text-muted-foreground',
-        className,
-      )}
-    >
-      <span
-        key={lightbulbSuppressionCue}
-        className={cn(
-          'inline-flex',
-          lightbulbSuppressionCue > 0 && 'infomode-lightbulb-jitter--active',
-        )}
-      >
-        {isActive ? <Lightbulb className="h-5 w-5" /> : <LightbulbOff className="h-5 w-5" />}
-      </span>
-    </button>
+    />
   )
 }

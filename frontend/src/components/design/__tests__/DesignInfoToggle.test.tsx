@@ -29,4 +29,25 @@ describe('DesignInfoToggle', () => {
     expect(toggle).toHaveAttribute('aria-pressed', 'false')
     expect(toggle).toHaveAttribute('data-status', 'inactive')
   })
+
+  it('fills the question-mark plate when pressed', () => {
+    render(<DesignInfoToggle pressed aria-label="Turn off infomode" />)
+    const plate = screen.getByRole('button', { name: 'Turn off infomode' }).querySelector(
+      '[data-slot="design-info-toggle-plate"]',
+    )
+    expect(plate).toHaveClass(
+      'motion-safe:duration-200',
+      'motion-safe:ease-in-out',
+      'bg-[color-mix(in_srgb,var(--design-text-regular)_50%,transparent)]',
+    )
+  })
+
+  it('leaves the plate clear when inactive', () => {
+    render(<DesignInfoToggle pressed={false} aria-label="Turn on infomode" />)
+    const plate = screen.getByRole('button', { name: 'Turn on infomode' }).querySelector(
+      '[data-slot="design-info-toggle-plate"]',
+    )
+    expect(plate).toHaveClass('motion-safe:duration-200', 'motion-safe:ease-in-out', 'bg-transparent')
+    expect(plate?.className).not.toContain('color-mix')
+  })
 })
