@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode, type RefObject, useEffect, useRef, useState } from 'react'
 import { Link, useMatchRoute, useLocation } from '@tanstack/react-router'
 import {
   Home,
@@ -24,6 +24,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { DesignAppLogo } from '@/components/design/DesignAppLogo'
+import { useBottomNavSwipe } from '@/components/design/bottom-nav-swipe'
 import { DesignCompactNavButton } from '@/components/design/DesignCompactNavButton'
 import { InfomodeToggle } from '@/components/infomode/InfomodeToggle'
 import {
@@ -216,8 +217,8 @@ const LAB_SUB_NAV_ITEMS: SectionSubNavItem[] = [
   },
 ]
 
-const SECONDARY_NAV_SURFACE_CLASS =
-  'border-border bg-header/95 backdrop-blur supports-[backdrop-filter]:bg-header/80'
+const BOTTOM_NAV_SURFACE_CLASS =
+  'border-border bg-[var(--design-elevation-drawer)]'
 
 /** Bottom nav item labels: narrow screens truncate past ~14 character widths. */
 const BOTTOM_NAV_LABEL_SPAN_CLASS =
@@ -359,10 +360,14 @@ function SectionSubNav({
   ariaLabel,
   items,
   compact = false,
+  hidden,
+  navRef,
 }: {
   ariaLabel: string
   items: SectionSubNavItem[]
   compact?: boolean
+  hidden: boolean
+  navRef: RefObject<HTMLElement | null>
 }) {
   const matchRoute = useMatchRoute()
   const location = useLocation()
@@ -370,10 +375,14 @@ function SectionSubNav({
 
   return (
     <nav
+      ref={navRef}
       aria-label={ariaLabel}
+      aria-hidden={hidden}
+      inert={hidden || undefined}
       className={cn(
-        'fixed bottom-0 left-0 right-0 z-40 border-t',
-        SECONDARY_NAV_SURFACE_CLASS,
+        'fixed bottom-0 left-0 right-0 z-40 border-t motion-safe:transition-transform motion-safe:duration-200',
+        BOTTOM_NAV_SURFACE_CLASS,
+        hidden && 'pointer-events-none translate-y-full',
       )}
     >
       <div
@@ -424,7 +433,13 @@ function SectionSubNav({
   )
 }
 
-function BottomNavigationChrome() {
+function BottomNavigationChrome({
+  hidden,
+  navRef,
+}: {
+  hidden: boolean
+  navRef: RefObject<HTMLElement | null>
+}) {
   const location = useLocation()
   const showLibrarySubNav = isLibrarySectionPath(location.pathname)
   const showWalletSubNav = isWalletSectionPath(location.pathname)
@@ -434,16 +449,27 @@ function BottomNavigationChrome() {
   return (
     <>
       {showLibrarySubNav && (
-        <SectionSubNav ariaLabel="Library" items={LIBRARY_SUB_NAV_ITEMS} />
+        <SectionSubNav ariaLabel="Library" items={LIBRARY_SUB_NAV_ITEMS} hidden={hidden} navRef={navRef} />
       )}
       {showWalletSubNav && (
-        <SectionSubNav ariaLabel="Wallet" items={WALLET_SUB_NAV_ITEMS} compact />
+        <SectionSubNav
+          ariaLabel="Wallet"
+          items={WALLET_SUB_NAV_ITEMS}
+          compact
+          hidden={hidden}
+          navRef={navRef}
+        />
       )}
       {showLabSubNav && (
-        <SectionSubNav ariaLabel="Lab" items={LAB_SUB_NAV_ITEMS} />
+        <SectionSubNav ariaLabel="Lab" items={LAB_SUB_NAV_ITEMS} hidden={hidden} navRef={navRef} />
       )}
       {showSettingsSubNav && (
-        <SectionSubNav ariaLabel="Settings" items={SETTINGS_SUB_NAV_ITEMS} />
+        <SectionSubNav
+          ariaLabel="Settings"
+          items={SETTINGS_SUB_NAV_ITEMS}
+          hidden={hidden}
+          navRef={navRef}
+        />
       )}
     </>
   )
@@ -454,6 +480,9 @@ export function WalletLayout({ children }: WalletLayoutProps) {
   const matchRoute = useMatchRoute()
   const [sideDrawerOpen, setSideDrawerOpen] = useState(false)
   const [networkDrawerOpen, setNetworkDrawerOpen] = useState(false)
+  const [bottomNavHidden, setBottomNavHidden] = useState(false)
+  const bottomNavRef = useRef<HTMLElement>(null)
+  useBottomNavSwipe(bottomNavRef, setBottomNavHidden)
   const committedNetwork = useWalletStore(selectCommittedNetworkMode)
   const rememberNetwork = useNetworkConnectivityStore((state) => state.rememberNetwork)
   const { selectNetwork, isSwitching, statusLine, unlockDialog } = useNetworkModeSelection()
@@ -557,17 +586,19 @@ export function WalletLayout({ children }: WalletLayoutProps) {
       <main
         className={cn(
           'mx-auto max-w-screen-xl px-4 py-6',
-          showWalletSubNav
-            ? MAIN_BOTTOM_PADDING_WALLET_SECTION_CLASS
-            : showLibrarySubNav || showLabSubNav || showSettingsSubNav
-              ? MAIN_BOTTOM_PADDING_SECTION_CLASS
-              : undefined,
+          bottomNavHidden
+            ? undefined
+            : showWalletSubNav
+              ? MAIN_BOTTOM_PADDING_WALLET_SECTION_CLASS
+              : showLibrarySubNav || showLabSubNav || showSettingsSubNav
+                ? MAIN_BOTTOM_PADDING_SECTION_CLASS
+                : undefined,
         )}
       >
         {children}
       </main>
 
-      {!isSetupRoute && <BottomNavigationChrome />}
+      {!isSetupRoute && <BottomNavigationChrome hidden={bottomNavHidden} navRef={bottomNavRef} />}
     </div>
   )
 }
