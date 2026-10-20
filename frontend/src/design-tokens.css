@@ -1,0 +1,301 @@
+/* Design-system colors. Consumed only by components in frontend/src/components/design. */
+
+/* Neutral (data-palette="neutral") is last so a locked or missing wallet wins over data-network. */
+
+:root {
+  --design-font-ui: "Plus Jakarta Sans", sans-serif;
+  --design-font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --design-background: #F7F8F9;
+  --design-text-regular: #000000;
+  --design-text-button: #000000;
+  --design-text-button-hover: #1A1A1A;
+  --design-text-button-active: #333333;
+  --design-text-button-disabled: #6F6F6F;
+  --design-text-button-primary-disabled: #262626;
+  --design-text-button-tertiary-disabled: #6F6F6F;
+  --design-text-card-title: #192222;
+  --design-text-card-description: #334242;
+  --design-surface-card: #EFF1F5;
+  --design-stroke-card: #DFE8E8e6;
+  --design-input-enabled-background: #0000001f;
+  --design-input-disabled-background: #0000000a;
+  --design-input-placeholder: #575757;
+  --design-input-content: #000000;
+  --design-nav-background: #0000000a;
+  --design-nav-background-hover: #00000014;
+  --design-nav-background-active: #0000001f;
+  --design-nav-background-selected: #00000033;
+  --design-nav-stroke: #00000080;
+  --design-status-success-surface: #F0FDF7;
+  --design-status-success-foreground: #0A7F4A;
+  --design-status-success-description: #065F37;
+  --design-status-success-stroke: #0A7F4A40;
+  --design-status-error-surface: #FEF2F2;
+  --design-status-error-foreground: #C91D1D;
+  --design-status-error-description: #991B1B;
+  --design-status-error-stroke: #C91D1D40;
+  --design-status-warning-surface: #F9EDD2;
+  --design-status-warning-foreground: #866313;
+  --design-status-warning-description: #59420D;
+  --design-status-warning-stroke: #86631340;
+  --design-status-info-surface: #D2F7F9;
+  --design-status-info-foreground: #11787D;
+  --design-status-info-description: #0B4D50;
+  --design-status-info-stroke: #11787D40;
+  --design-status-risk-surface: #FCE8F1;
+  --design-status-risk-foreground: #C91C6A;
+  --design-status-risk-description: #9C1753;
+  --design-status-risk-stroke: #C91C6A40;
+  --design-focus-ring: #739ED4;
+  --design-accent-primary: #F7931A;
+  --design-accent-secondary: #A85E06;
+  --design-accent-secondary-stroke: #A85E0680;
+  --design-accent-primary-hover: #EF8708;
+  --design-accent-secondary-hover: #8F5005;
+  --design-accent-secondary-stroke-hover: #8F500580;
+  --design-accent-primary-active: #D77907;
+  --design-accent-secondary-active: #774204;
+  --design-accent-secondary-stroke-active: #77420480;
+  --design-accent-primary-disabled: #9F8B72;
+  --design-accent-secondary-disabled: #675847;
+  --design-accent-secondary-stroke-disabled: #67584780;
+}
+
+.dark {
+  --design-background: #040404;
+  --design-text-regular: #E4E5E7;
+  --design-text-button: #000000;
+  --design-text-button-hover: #E6E6E6;
+  --design-text-button-active: #CCCCCC;
+  --design-text-button-disabled: #919191;
+  --design-text-button-primary-disabled: #1E1E1E;
+  --design-text-button-tertiary-disabled: #919191;
+  --design-text-card-title: #E4E5E7;
+  --design-text-card-description: #B8BFC6;
+  --design-surface-card: #090A0B;
+  --design-stroke-card: #DFE8E8e6;
+  --design-input-enabled-background: #FFFFFF1f;
+  --design-input-disabled-background: #FFFFFF0a;
+  --design-input-placeholder: #8C8C8C;
+  --design-input-content: #E4E5E7;
+  --design-nav-background: #FFFFFF0a;
+  --design-nav-background-hover: #FFFFFF14;
+  --design-nav-background-active: #FFFFFF1f;
+  --design-nav-background-selected: #FFFFFF33;
+  --design-nav-stroke: #FFFFFF80;
+  --design-status-success-surface: #04150E;
+  --design-status-success-foreground: #219C64;
+  --design-status-success-description: #25C17B;
+  --design-status-success-stroke: #219C6440;
+  --design-status-error-surface: #150404;
+  --design-status-error-foreground: #EF3434;
+  --design-status-error-description: #F26363;
+  --design-status-error-stroke: #EF343440;
+  --design-status-warning-surface: #241B05;
+  --design-status-warning-foreground: #E5A819;
+  --design-status-warning-description: #EBBA47;
+  --design-status-warning-stroke: #E5A81940;
+  --design-status-info-surface: #072122;
+  --design-status-info-foreground: #28B6BD;
+  --design-status-info-description: #57D5DB;
+  --design-status-info-stroke: #28B6BD40;
+  --design-status-risk-surface: #1B040E;
+  --design-status-risk-foreground: #D74285;
+  --design-status-risk-description: #E06CA0;
+  --design-status-risk-stroke: #D7428540;
+  --design-focus-ring: #56779F;
+  --design-accent-primary: #B96E13;
+  --design-accent-secondary: #EA952F;
+  --design-accent-secondary-stroke: #EA952F80;
+  --design-accent-primary-hover: #A26011;
+  --design-accent-secondary-hover: #E88918;
+  --design-accent-secondary-stroke-hover: #E8891880;
+  --design-accent-primary-active: #8B530E;
+  --design-accent-secondary-active: #D17C15;
+  --design-accent-secondary-stroke-active: #D17C1580;
+  --design-accent-primary-disabled: #776855;
+  --design-accent-secondary-disabled: #9F8E7A;
+  --design-accent-secondary-stroke-disabled: #9F8E7A80;
+}
+
+:root[data-network="mainnet"] {
+  --design-accent-primary: #F7931A;
+  --design-accent-secondary: #A85E06;
+  --design-accent-secondary-stroke: #A85E0680;
+  --design-accent-primary-hover: #EF8708;
+  --design-accent-secondary-hover: #8F5005;
+  --design-accent-secondary-stroke-hover: #8F500580;
+  --design-accent-primary-active: #D77907;
+  --design-accent-secondary-active: #774204;
+  --design-accent-secondary-stroke-active: #77420480;
+  --design-accent-primary-disabled: #9F8B72;
+  --design-accent-secondary-disabled: #675847;
+  --design-accent-secondary-stroke-disabled: #67584780;
+}
+
+:root[data-network="testnet"],
+:root[data-network="signet"] {
+  --design-accent-primary: #1CB524;
+  --design-accent-secondary: #0E5D12;
+  --design-accent-secondary-stroke: #0E5D1280;
+  --design-accent-primary-hover: #199F20;
+  --design-accent-secondary-hover: #0B470E;
+  --design-accent-secondary-stroke-hover: #0B470E80;
+  --design-accent-primary-active: #15891B;
+  --design-accent-secondary-active: #073109;
+  --design-accent-secondary-stroke-active: #07310980;
+  --design-accent-primary-disabled: #59785B;
+  --design-accent-secondary-disabled: #2E3D2E;
+  --design-accent-secondary-stroke-disabled: #2E3D2E80;
+}
+
+:root[data-network="lab"],
+:root[data-network="regtest"] {
+  --design-accent-primary: #E765E0;
+  --design-accent-secondary: #C71FBE;
+  --design-accent-secondary-stroke: #C71FBE80;
+  --design-accent-primary-hover: #E44FDC;
+  --design-accent-secondary-hover: #B11CA9;
+  --design-accent-secondary-stroke-hover: #B11CA980;
+  --design-accent-primary-active: #E039D7;
+  --design-accent-secondary-active: #9B1894;
+  --design-accent-secondary-stroke-active: #9B189480;
+  --design-accent-primary-disabled: #B399B2;
+  --design-accent-secondary-disabled: #846282;
+  --design-accent-secondary-stroke-disabled: #84628280;
+}
+
+:root[data-palette="neutral"] {
+  --design-accent-primary: #739ED4;
+  --design-accent-secondary: #356AAC;
+  --design-accent-secondary-stroke: #356AAC80;
+  --design-accent-primary-hover: #5F90CE;
+  --design-accent-secondary-hover: #2F5E99;
+  --design-accent-secondary-stroke-hover: #2F5E9980;
+  --design-accent-primary-active: #4C83C8;
+  --design-accent-secondary-active: #295285;
+  --design-accent-secondary-stroke-active: #29528580;
+  --design-accent-primary-disabled: #9AA2AD;
+  --design-accent-secondary-disabled: #656F7C;
+  --design-accent-secondary-stroke-disabled: #656F7C80;
+}
+
+.dark[data-network="mainnet"] {
+  --design-accent-primary: #B96E13;
+  --design-accent-secondary: #EA952F;
+  --design-accent-secondary-stroke: #EA952F80;
+  --design-accent-primary-hover: #A26011;
+  --design-accent-secondary-hover: #E88918;
+  --design-accent-secondary-stroke-hover: #E8891880;
+  --design-accent-primary-active: #8B530E;
+  --design-accent-secondary-active: #D17C15;
+  --design-accent-secondary-stroke-active: #D17C1580;
+  --design-accent-primary-disabled: #776855;
+  --design-accent-secondary-disabled: #9F8E7A;
+  --design-accent-secondary-stroke-disabled: #9F8E7A80;
+}
+
+.dark[data-network="testnet"],
+.dark[data-network="signet"] {
+  --design-accent-primary: #15881B;
+  --design-accent-secondary: #1EC226;
+  --design-accent-secondary-stroke: #1EC22680;
+  --design-accent-primary-hover: #127217;
+  --design-accent-secondary-hover: #1BAC22;
+  --design-accent-secondary-stroke-hover: #1BAC2280;
+  --design-accent-primary-active: #0E5C12;
+  --design-accent-secondary-active: #17961D;
+  --design-accent-secondary-stroke-active: #17961D80;
+  --design-accent-primary-disabled: #435A44;
+  --design-accent-secondary-disabled: #608061;
+  --design-accent-secondary-stroke-disabled: #60806180;
+}
+
+.dark[data-network="lab"],
+.dark[data-network="regtest"] {
+  --design-accent-primary: #AD4BA8;
+  --design-accent-secondary: #D194CE;
+  --design-accent-secondary-stroke: #D194CE80;
+  --design-accent-primary-hover: #9B4397;
+  --design-accent-secondary-hover: #C982C6;
+  --design-accent-secondary-stroke-hover: #C982C680;
+  --design-accent-primary-active: #893C85;
+  --design-accent-secondary-active: #C270BE;
+  --design-accent-secondary-stroke-active: #C270BE80;
+  --design-accent-primary-disabled: #867285;
+  --design-accent-secondary-disabled: #B9ACB8;
+  --design-accent-secondary-stroke-disabled: #B9ACB880;
+}
+
+.dark[data-palette="neutral"] {
+  --design-accent-primary: #56779F;
+  --design-accent-secondary: #95ABC6;
+  --design-accent-secondary-stroke: #95ABC680;
+  --design-accent-primary-hover: #4D6B8E;
+  --design-accent-secondary-hover: #849EBD;
+  --design-accent-secondary-stroke-hover: #849EBD80;
+  --design-accent-primary-active: #445E7E;
+  --design-accent-secondary-active: #7491B4;
+  --design-accent-secondary-stroke-active: #7491B480;
+  --design-accent-primary-disabled: #737A82;
+  --design-accent-secondary-disabled: #A9ADB2;
+  --design-accent-secondary-stroke-disabled: #A9ADB280;
+}
+
+.design-ui {
+  font-family: var(--design-font-ui);
+}
+.design-mono {
+  font-family: var(--design-font-mono);
+}
+
+[data-slot="design-banner"][data-status="success"],
+[data-slot="design-toast"][data-status="success"] {
+  background: var(--design-status-success-surface);
+  color: var(--design-status-success-foreground);
+  border-color: var(--design-status-success-stroke);
+}
+[data-slot="design-banner"][data-status="success"] [data-slot="design-status-description"],
+[data-slot="design-toast"][data-status="success"] [data-slot="design-status-description"] {
+  color: var(--design-status-success-description);
+}
+[data-slot="design-banner"][data-status="error"],
+[data-slot="design-toast"][data-status="error"] {
+  background: var(--design-status-error-surface);
+  color: var(--design-status-error-foreground);
+  border-color: var(--design-status-error-stroke);
+}
+[data-slot="design-banner"][data-status="error"] [data-slot="design-status-description"],
+[data-slot="design-toast"][data-status="error"] [data-slot="design-status-description"] {
+  color: var(--design-status-error-description);
+}
+[data-slot="design-banner"][data-status="warning"],
+[data-slot="design-toast"][data-status="warning"] {
+  background: var(--design-status-warning-surface);
+  color: var(--design-status-warning-foreground);
+  border-color: var(--design-status-warning-stroke);
+}
+[data-slot="design-banner"][data-status="warning"] [data-slot="design-status-description"],
+[data-slot="design-toast"][data-status="warning"] [data-slot="design-status-description"] {
+  color: var(--design-status-warning-description);
+}
+[data-slot="design-banner"][data-status="info"],
+[data-slot="design-toast"][data-status="info"] {
+  background: var(--design-status-info-surface);
+  color: var(--design-status-info-foreground);
+  border-color: var(--design-status-info-stroke);
+}
+[data-slot="design-banner"][data-status="info"] [data-slot="design-status-description"],
+[data-slot="design-toast"][data-status="info"] [data-slot="design-status-description"] {
+  color: var(--design-status-info-description);
+}
+[data-slot="design-banner"][data-status="risk"],
+[data-slot="design-toast"][data-status="risk"] {
+  background: var(--design-status-risk-surface);
+  color: var(--design-status-risk-foreground);
+  border-color: var(--design-status-risk-stroke);
+}
+[data-slot="design-banner"][data-status="risk"] [data-slot="design-status-description"],
+[data-slot="design-toast"][data-status="risk"] [data-slot="design-status-description"] {
+  color: var(--design-status-risk-description);
+}

@@ -16,7 +16,8 @@
     "onLightAndOnDark": "These are groups, not modes. onLight is the accent used on a light theme. onDark is the accent used on a dark theme. The theme collection aliases one or the other.",
     "colorValue": "A resolved color is { hex, alpha }. hex is #RRGGBB. alpha is 0 to 1. null means that network mode was not defined.",
     "values": "Hex values are the painted Basics swatches. Dark primaries match the opaque chip beside the 75% swatch, which is the light primary composited on black.",
-    "stateGeneration": "Hover, active, and disabled are derived from that color's default. Hover lowers HSL lightness by 5 points. Active lowers it by 10. Disabled multiplies saturation by 0.2 and keeps hue and lightness."
+    "stateGeneration": "Hover, active, and disabled are derived from that color's default. Hover lowers HSL lightness by 5 points. Active lowers it by 10. Disabled multiplies saturation by 0.2 and keeps hue and lightness.",
+    "neutral": "Neutral is the accent when no wallet exists yet, or the wallet is locked. It is not a network the user picks. It wins over the committed network."
   },
   "tokens": {
     "onLight": {

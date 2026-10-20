@@ -1,4 +1,8 @@
 @import "@fontsource-variable/inter";
+@import "@fontsource/plus-jakarta-sans/400.css";
+@import "@fontsource/plus-jakarta-sans/600.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "./design-tokens.css";
 @import "tailwindcss";
 @source "../common";
 @import "tw-animate-css";

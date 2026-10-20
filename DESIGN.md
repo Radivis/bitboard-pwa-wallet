@@ -27,6 +27,8 @@ A screen picks one theme mode and one network mode. The two collections stay sep
 
 Light and Mainnet are the defaults. Signet and Mutinynet use the Testnet accent. Regtest uses the Lab accent. Those names are not extra modes.
 
+Neutral is the accent when no wallet exists yet, or the wallet is locked. It is not a network the user picks. It wins over the committed network, so a locked mainnet wallet still uses Neutral.
+
 `theme/accent/*` does not store a hex. Light aliases `network/onLight`. Dark aliases `network/onDark`. The network mode then resolves Mainnet, Testnet, Neutral, or Lab. `onLight` and `onDark` are groups, not modes.
 
 Status, card, text, input, and nav-button colors follow the theme only. A button placed inside a card, toast, or banner still follows the network, because it uses accent tokens.
@@ -43,9 +45,9 @@ Hover, active, and disabled are derived from that accent's default, in HSL:
 
 A secondary stroke is the secondary color at 50% opacity. The stroke is its own variable because a Figma alias cannot add alpha.
 
-### Tokens not copied into the repo yet
+### Input and nav-button colors
 
-`theme.json` has background, text, accent, card, and status. The Figma `theme` collection also has input and nav-button colors. They use black in Light and white in Dark:
+These theme tokens use black in Light and white in Dark. `input/content` aliases `text/regular/default`.
 
 | Token | Light | Dark |
 |---|---|---|

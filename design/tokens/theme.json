@@ -476,6 +476,99 @@
           }
         }
       }
+    },
+    "input": {
+      "enabled": {
+        "background": {
+          "light": {
+            "hex": "#000000",
+            "alpha": 0.12
+          },
+          "dark": {
+            "hex": "#FFFFFF",
+            "alpha": 0.12
+          }
+        }
+      },
+      "disabled": {
+        "background": {
+          "light": {
+            "hex": "#000000",
+            "alpha": 0.04
+          },
+          "dark": {
+            "hex": "#FFFFFF",
+            "alpha": 0.04
+          }
+        }
+      },
+      "placeholder": {
+        "light": {
+          "hex": "#575757",
+          "alpha": 1
+        },
+        "dark": {
+          "hex": "#8C8C8C",
+          "alpha": 1
+        }
+      },
+      "content": {
+        "alias": "theme/text/regular/default"
+      }
+    },
+    "nav-button": {
+      "background": {
+        "default": {
+          "light": {
+            "hex": "#000000",
+            "alpha": 0.04
+          },
+          "dark": {
+            "hex": "#FFFFFF",
+            "alpha": 0.04
+          }
+        },
+        "hover": {
+          "light": {
+            "hex": "#000000",
+            "alpha": 0.08
+          },
+          "dark": {
+            "hex": "#FFFFFF",
+            "alpha": 0.08
+          }
+        },
+        "active": {
+          "light": {
+            "hex": "#000000",
+            "alpha": 0.12
+          },
+          "dark": {
+            "hex": "#FFFFFF",
+            "alpha": 0.12
+          }
+        },
+        "selected": {
+          "light": {
+            "hex": "#000000",
+            "alpha": 0.2
+          },
+          "dark": {
+            "hex": "#FFFFFF",
+            "alpha": 0.2
+          }
+        }
+      },
+      "stroke": {
+        "light": {
+          "hex": "#000000",
+          "alpha": 0.5
+        },
+        "dark": {
+          "hex": "#FFFFFF",
+          "alpha": 0.5
+        }
+      }
     }
   },
   "unresolvedModes": [],
@@ -545,6 +638,15 @@
     "status/risk": {
       "light": "Toast Type=Risk",
       "dark": "Toast/Risk frame"
-    }
+    },
+    "input/enabled/background": "Figma theme input/enabled/background. Black at 12% in Light, white at 12% in Dark.",
+    "input/disabled/background": "Figma theme input/disabled/background. Black at 4% in Light, white at 4% in Dark.",
+    "input/placeholder": {
+      "light": "#575757",
+      "dark": "#8C8C8C"
+    },
+    "input/content": "Aliases text/regular/default.",
+    "nav-button/background": "Black in Light and white in Dark. Default 4%, hover 8%, active 12%, selected 20%.",
+    "nav-button/stroke": "Black at 50% in Light, white at 50% in Dark."
   }
 }
