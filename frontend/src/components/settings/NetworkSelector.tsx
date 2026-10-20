@@ -1,7 +1,7 @@
 import { NETWORK_LABELS, type NetworkMode } from '@/stores/walletStore'
 import { useNetworkModeSelection } from '@/hooks/useNetworkModeSelection'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { cn } from '@/lib/shared/utils'
 
@@ -64,9 +64,8 @@ export function NetworkSelector() {
               infoTitle={title}
               infoText={text}
             >
-              <Button
-                variant={displayNetworkMode === network ? 'default' : 'outline'}
-                size="sm"
+              <DesignButton
+                appearance={displayNetworkMode === network ? 'primary' : 'secondary'}
                 onClick={() => selectNetwork(network)}
                 disabled={isSwitching}
                 aria-disabled={isMainnetBlocked || undefined}
@@ -76,7 +75,7 @@ export function NetworkSelector() {
                 )}
               >
                 {NETWORK_LABELS[network]}
-              </Button>
+              </DesignButton>
             </InfomodeWrapper>
           )
         })}

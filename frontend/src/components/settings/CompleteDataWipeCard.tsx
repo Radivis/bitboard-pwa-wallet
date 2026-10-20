@@ -12,14 +12,15 @@ import { wipeAllAppDataOpfsAndReload } from '@/db/opfs/wipe-all-app-data-opfs-an
 import { useWalletStore } from '@/stores/walletStore'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { AppModal } from '@/components/AppModal'
+import { DesignButton } from '@/components/design/DesignButton'
 import { Button } from '@/components/ui/button'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+  DesignCard,
+  DesignCardContent,
+  DesignCardDescription,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { DialogDescription } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { cn, userFacingErrorMessage } from '@/lib/shared/utils'
@@ -147,23 +148,23 @@ export function CompleteDataWipeCard() {
 
   return (
     <>
-      <Card
+      <DesignCard
         data-testid="complete-data-wipe-card"
         className="border-2 border-destructive shadow-sm ring-1 ring-destructive/20"
       >
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+        <DesignCardHeader>
+          <DesignCardTitle>
             <Eraser className="h-5 w-5" />
             Delete all app data
-          </CardTitle>
-          <CardDescription>
+          </DesignCardTitle>
+          <DesignCardDescription>
             Permanently remove all local Bitboard data on this device: the wallet database and the
             lab database (both stored as SQLite in your browser). This cannot be undone. You will
             need your seed phrase or a signed wallet backup to recover funds; Lightning connection
             details and other app data stored locally will be lost.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
+          </DesignCardDescription>
+        </DesignCardHeader>
+        <DesignCardContent className="gap-3">
           <Button
             type="button"
             variant="destructive"
@@ -180,8 +181,8 @@ export function CompleteDataWipeCard() {
               Unlock your wallet to run preflight checks before wiping.
             </p>
           )}
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
 
       <AppModal
         isOpen={riskModalOpen}
@@ -194,9 +195,9 @@ export function CompleteDataWipeCard() {
         isCloseButtonHidden={probing}
         footer={(requestClose) => (
           <>
-            <Button type="button" variant="outline" disabled={probing} onClick={requestClose}>
+            <DesignButton type="button" appearance="secondary" disabled={probing} onClick={requestClose}>
               Cancel
-            </Button>
+            </DesignButton>
             <Button
               type="button"
               variant="destructive"
@@ -247,9 +248,9 @@ export function CompleteDataWipeCard() {
         title="Mainnet bitcoin may be at risk"
         footer={(requestClose) => (
           <>
-            <Button type="button" variant="outline" onClick={requestClose}>
+            <DesignButton type="button" appearance="secondary" onClick={requestClose}>
               Cancel
-            </Button>
+            </DesignButton>
             <Button
               type="button"
               variant="destructive"
@@ -293,9 +294,9 @@ export function CompleteDataWipeCard() {
         title="Some mainnet balances could not be verified"
         footer={(requestClose) => (
           <>
-            <Button type="button" variant="outline" onClick={requestClose}>
+            <DesignButton type="button" appearance="secondary" onClick={requestClose}>
               Cancel
-            </Button>
+            </DesignButton>
             <Button
               type="button"
               variant="destructive"
@@ -337,9 +338,9 @@ export function CompleteDataWipeCard() {
         contentClassName="sm:max-w-lg"
         footer={(requestClose) => (
           <>
-            <Button type="button" variant="default" onClick={requestClose}>
+            <DesignButton type="button" onClick={requestClose}>
               Back up seed phrases first
-            </Button>
+            </DesignButton>
             <Button
               type="button"
               variant="destructive"

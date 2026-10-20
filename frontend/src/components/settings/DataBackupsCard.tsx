@@ -1,12 +1,12 @@
 import { Database, FlaskConical, FileWarning, Upload } from 'lucide-react'
+import { DesignButton } from '@/components/design/DesignButton'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+  DesignCard,
+  DesignCardContent,
+  DesignCardDescription,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { ConfirmationDialog } from '@/components/ConfirmationDialog'
 import { WalletBackupExportPasswordModal } from '@/components/settings/WalletBackupExportPasswordModal'
 import { WalletBackupImportBypassModal } from '@/components/settings/WalletBackupImportBypassModal'
@@ -55,7 +55,7 @@ export function DataBackupsCard() {
   } = useDataBackupsCard()
 
   return (
-    <Card id="data-backups">
+    <DesignCard id="data-backups">
       <input
         ref={importFileInputRef}
         type="file"
@@ -112,19 +112,19 @@ export function DataBackupsCard() {
         verificationError={importVerifyInlineMessage}
         passwordResetKey={importPasswordResetKey}
       />
-      <CardHeader>
-        <CardTitle>Data Backups</CardTitle>
-        <CardDescription>
+      <DesignCardHeader>
+        <DesignCardTitle>Data Backups</DesignCardTitle>
+        <DesignCardDescription>
           Export full local database files from this device as ZIP archives. Wallet exports are
           signed with a password you choose. Lab exports are a single SQLite file in a ZIP
           with no cryptographic signature.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+        </DesignCardDescription>
+      </DesignCardHeader>
+      <DesignCardContent className="gap-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-          <Button
+          <DesignButton
             type="button"
-            variant="outline"
+            appearance="secondary"
             disabled={nearZeroActive || exportBusy !== null}
             onClick={() => exportWallet()}
             className="w-full sm:w-auto"
@@ -134,7 +134,7 @@ export function DataBackupsCard() {
           >
             <Database className="size-4" aria-hidden />
             Export wallet data
-          </Button>
+          </DesignButton>
           {nearZeroActive ? (
             <p
               id={WALLET_EXPORT_REQUIRES_APP_PASSWORD_NOTE_ID}
@@ -143,16 +143,16 @@ export function DataBackupsCard() {
               {WALLET_EXPORT_REQUIRES_APP_PASSWORD_NOTE}
             </p>
           ) : null}
-          <Button
+          <DesignButton
             type="button"
-            variant="outline"
+            appearance="secondary"
             disabled={exportBusy !== null || anyImportBusy}
             onClick={() => importFileInputRef.current?.click()}
             className="w-full sm:w-auto"
           >
             <Upload className="size-4" aria-hidden />
             Import wallet backup
-          </Button>
+          </DesignButton>
         </div>
 
         <div className="flex flex-col gap-2">
@@ -165,26 +165,26 @@ export function DataBackupsCard() {
             onChange={(e) => void onLabImportFilePick(e)}
           />
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-            <Button
+            <DesignButton
               type="button"
-              variant="outline"
+              appearance="secondary"
               disabled={labFileExists === false || exportBusy !== null}
               onClick={() => void exportLab()}
               className="w-full sm:w-auto"
             >
               <FlaskConical className="size-4" aria-hidden />
               Export lab data
-            </Button>
-            <Button
+            </DesignButton>
+            <DesignButton
               type="button"
-              variant="outline"
+              appearance="secondary"
               disabled={exportBusy !== null || anyImportBusy}
               onClick={() => labImportFileInputRef.current?.click()}
               className="w-full sm:w-auto"
             >
               <Upload className="size-4" aria-hidden />
               Import lab backup
-            </Button>
+            </DesignButton>
             {labFileExists === false ? (
               <p className="text-sm text-muted-foreground sm:max-w-md">
                 No lab database file yet. Open the Lab once to create local lab data, or import a lab
@@ -201,23 +201,23 @@ export function DataBackupsCard() {
 
         {migrationReportExists ? (
           <div className="flex flex-col gap-2 border-t pt-4 sm:flex-row sm:flex-wrap sm:items-start">
-            <Button
+            <DesignButton
               type="button"
-              variant="outline"
+              appearance="secondary"
               disabled={exportBusy !== null}
               onClick={() => void exportMigrationReport()}
               className="w-full shrink-0 sm:w-auto"
             >
               <FileWarning className="size-4" aria-hidden />
               Export migration error report
-            </Button>
+            </DesignButton>
             <p className="text-sm text-muted-foreground sm:min-w-0 sm:flex-1">
               Send this file to the project maintainer for diagnosis when your deployment lists
               contact details under Settings → Developer contact.
             </p>
           </div>
         ) : null}
-      </CardContent>
-    </Card>
+      </DesignCardContent>
+    </DesignCard>
   )
 }

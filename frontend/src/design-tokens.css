@@ -6,7 +6,8 @@
   --design-font-ui: "Plus Jakarta Sans", sans-serif;
   --design-font-mono: "JetBrains Mono", ui-monospace, monospace;
   --design-background: #F7F8F9;
-  --design-elevation-drawer: #E9EDF2b3;
+  --design-elevation-drawer: #E9EDF24d;
+  --design-elevation-nav-bar: #E9EDF2b3;
   --design-text-regular: #000000;
   --design-text-button: #000000;
   --design-text-button-hover: #1A1A1A;
@@ -68,7 +69,8 @@
 
 .dark {
   --design-background: #040404;
-  --design-elevation-drawer: #121417b3;
+  --design-elevation-drawer: #1214174d;
+  --design-elevation-nav-bar: #121417b3;
   --design-text-regular: #E4E5E7;
   --design-text-button: #000000;
   --design-text-button-hover: #E6E6E6;

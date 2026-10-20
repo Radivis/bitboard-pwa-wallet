@@ -1,5 +1,6 @@
 import { DialogDescription } from '@/components/ui/dialog'
 import { AppModal } from '@/components/AppModal'
+import { DesignButton } from '@/components/design/DesignButton'
 import { Button } from '@/components/ui/button'
 
 interface WalletBackupImportBypassModalProps {
@@ -27,9 +28,9 @@ export function WalletBackupImportBypassModal({
       contentClassName="sm:max-w-lg"
       footer={() => (
         <>
-          <Button type="button" variant="outline" disabled={isBusy} onClick={onAbort}>
+          <DesignButton type="button" appearance="secondary" disabled={isBusy} onClick={onAbort}>
             Abort import
-          </Button>
+          </DesignButton>
           <Button
             type="button"
             variant="destructive"

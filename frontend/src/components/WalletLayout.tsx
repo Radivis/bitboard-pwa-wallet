@@ -218,20 +218,10 @@ const LAB_SUB_NAV_ITEMS: SectionSubNavItem[] = [
 ]
 
 const BOTTOM_NAV_SURFACE_CLASS =
-  'border-border bg-[var(--design-elevation-drawer)]'
+  'border-border bg-[var(--design-elevation-nav-bar)]'
 
-/** Bottom nav item labels: narrow screens truncate past ~14 character widths. */
-const BOTTOM_NAV_LABEL_SPAN_CLASS =
-  'max-w-[14ch] truncate text-center leading-tight'
-
-/** Section footer height for Library, Lab, and Settings (`h-14`). */
-const SECTION_SUB_NAV_HEIGHT_CLASS = 'h-14'
-
-/** Clears the compact wallet footer (68px control plus the bar's vertical padding). */
-const MAIN_BOTTOM_PADDING_WALLET_SECTION_CLASS = 'pb-24'
-
-/** Clears a single section footer (`h-14` plus a small scroll inset). */
-const MAIN_BOTTOM_PADDING_SECTION_CLASS = 'pb-20'
+/** Clears a compact section footer (68px control plus the bar's vertical padding). */
+const MAIN_BOTTOM_PADDING_WITH_NAV_CLASS = 'pb-24'
 
 function isWalletSectionPath(pathname: string): boolean {
   return pathname === '/' || pathname.startsWith('/wallet')
@@ -247,52 +237,6 @@ function isLabSectionPath(pathname: string): boolean {
 
 function isSettingsSectionPath(pathname: string): boolean {
   return pathname.startsWith('/settings')
-}
-
-const NAV_LINK_CLASS =
-  'group flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
-
-function navItemInnerClassNames(isActive: boolean) {
-  return cn(
-    'inline-flex w-max min-w-0 max-w-full flex-col items-center gap-1 rounded-md px-1 py-1 text-xs transition-[color,box-shadow,ring] sm:px-2',
-    isActive
-      ? cn(
-          'font-medium text-primary',
-          'ring-1 ring-primary/45',
-          'shadow-[0_0_16px_-3px_color-mix(in_hsl,var(--primary)_50%,transparent)]',
-        )
-      : 'text-muted-foreground group-hover:text-foreground',
-  )
-}
-
-type BottomNavLinkProps = {
-  to: string
-  label: string
-  icon: LucideIcon
-  isActive: boolean
-  preload?: false
-}
-
-function BottomNavLink({
-  to,
-  label,
-  icon: Icon,
-  isActive,
-  preload,
-}: BottomNavLinkProps) {
-  return (
-    <Link
-      to={to}
-      preload={preload}
-      className={NAV_LINK_CLASS}
-      aria-current={isActive ? 'page' : undefined}
-    >
-      <span className={navItemInnerClassNames(isActive)}>
-        <Icon className="h-5 w-5 shrink-0" aria-hidden />
-        <span className={BOTTOM_NAV_LABEL_SPAN_CLASS}>{label}</span>
-      </span>
-    </Link>
-  )
 }
 
 function isPrimaryNavItemActive(
@@ -359,13 +303,11 @@ function buildDrawerNavItems(
 function SectionSubNav({
   ariaLabel,
   items,
-  compact = false,
   hidden,
   navRef,
 }: {
   ariaLabel: string
   items: SectionSubNavItem[]
-  compact?: boolean
   hidden: boolean
   navRef: RefObject<HTMLElement | null>
 }) {
@@ -385,47 +327,25 @@ function SectionSubNav({
         hidden && 'pointer-events-none translate-y-full',
       )}
     >
-      <div
-        className={cn(
-          'mx-auto w-full max-w-screen-xl items-stretch px-2',
-          compact ? 'flex gap-2 py-2' : cn('grid', SECTION_SUB_NAV_HEIGHT_CLASS),
-        )}
-        style={
-          compact
-            ? undefined
-            : { gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }
-        }
-      >
+      <div className="mx-auto flex w-full max-w-screen-xl items-stretch gap-2 px-2 py-2">
         {items.map((item) => {
           const isActive =
             item.kind === 'match'
               ? !!matchRoute({ to: item.to, fuzzy: false })
               : item.isActive(pathname)
-          if (compact) {
-            const Icon = item.icon
-            return (
-              <DesignCompactNavButton
-                key={item.to}
-                asChild
-                status={isActive ? 'selected' : 'default'}
-                className="min-w-0 flex-1"
-              >
-                <Link to={item.to} preload={item.linkPreload}>
-                  <Icon aria-hidden />
-                  <span className="max-w-full truncate">{item.label}</span>
-                </Link>
-              </DesignCompactNavButton>
-            )
-          }
+          const Icon = item.icon
           return (
-            <BottomNavLink
+            <DesignCompactNavButton
               key={item.to}
-              to={item.to}
-              label={item.label}
-              icon={item.icon}
-              isActive={isActive}
-              preload={item.linkPreload}
-            />
+              asChild
+              status={isActive ? 'selected' : 'default'}
+              className="min-w-0 flex-1"
+            >
+              <Link to={item.to} preload={item.linkPreload}>
+                <Icon aria-hidden />
+                <span className="max-w-full truncate">{item.label}</span>
+              </Link>
+            </DesignCompactNavButton>
           )
         })}
       </div>
@@ -455,7 +375,6 @@ function BottomNavigationChrome({
         <SectionSubNav
           ariaLabel="Wallet"
           items={WALLET_SUB_NAV_ITEMS}
-          compact
           hidden={hidden}
           navRef={navRef}
         />
@@ -520,7 +439,7 @@ export function WalletLayout({ children }: WalletLayoutProps) {
 
   return (
     <div className="min-h-screen bg-[var(--design-background)] text-foreground">
-      <header className="sticky top-0 z-50 border-b border-border bg-[var(--design-elevation-drawer)]">
+      <header className="sticky top-0 z-50 border-b border-border bg-[var(--design-elevation-nav-bar)]">
         <div className="mx-auto flex h-14 max-w-screen-xl items-center justify-between px-4">
           <h1 className="flex min-w-0 max-w-full items-center gap-2 text-lg font-semibold tracking-tight">
             <DesignAppLogo />
@@ -586,13 +505,10 @@ export function WalletLayout({ children }: WalletLayoutProps) {
       <main
         className={cn(
           'mx-auto max-w-screen-xl px-4 py-6',
-          bottomNavHidden
+          bottomNavHidden ||
+          !(showWalletSubNav || showLibrarySubNav || showLabSubNav || showSettingsSubNav)
             ? undefined
-            : showWalletSubNav
-              ? MAIN_BOTTOM_PADDING_WALLET_SECTION_CLASS
-              : showLibrarySubNav || showLabSubNav || showSettingsSubNav
-                ? MAIN_BOTTOM_PADDING_SECTION_CLASS
-                : undefined,
+            : MAIN_BOTTOM_PADDING_WITH_NAV_CLASS,
         )}
       >
         {children}

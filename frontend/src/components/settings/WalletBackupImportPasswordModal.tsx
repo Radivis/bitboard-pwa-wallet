@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useState } from 'react'
 import { DialogDescription } from '@/components/ui/dialog'
 import { AppModal } from '@/components/AppModal'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 
@@ -55,16 +55,16 @@ export function WalletBackupImportPasswordModal({
       isBlockDismissed={isBusy}
       footer={() => (
         <>
-          <Button type="button" variant="outline" disabled={isBusy} onClick={handleCancel}>
+          <DesignButton type="button" appearance="secondary" disabled={isBusy} onClick={handleCancel}>
             Cancel
-          </Button>
-          <Button
+          </DesignButton>
+          <DesignButton
             type="button"
             disabled={isBusy || password.length === 0}
             onClick={() => void onConfirm(password)}
           >
             {isBusy ? 'Verifying…' : 'Verify and import'}
-          </Button>
+          </DesignButton>
         </>
       )}
     >

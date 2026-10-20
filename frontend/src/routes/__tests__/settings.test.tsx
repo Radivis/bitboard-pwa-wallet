@@ -391,7 +391,7 @@ describe('Settings routes', () => {
       renderWithProviders(<SettingsAboutPage />)
       const devContactHeading = screen.getByText('Developer Contact Info')
       expect(devContactHeading).toBeInTheDocument()
-      const devContactCard = devContactHeading.closest('[data-slot="card"]')
+      const devContactCard = devContactHeading.closest('[data-slot="design-card"]')
       expect(devContactCard).toBeTruthy()
       expect(within(devContactCard as HTMLElement).getByText('Michael Hrenka')).toBeInTheDocument()
       expect(

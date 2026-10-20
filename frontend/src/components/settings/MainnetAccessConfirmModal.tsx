@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AppModal } from '@/components/AppModal'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
 import { DialogDescription } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 
@@ -32,10 +32,10 @@ export function MainnetAccessConfirmModal({
       contentClassName="sm:max-w-lg"
       footer={(requestClose) => (
         <>
-          <Button type="button" variant="outline" onClick={requestClose}>
+          <DesignButton type="button" appearance="secondary" onClick={requestClose}>
             Cancel
-          </Button>
-          <Button
+          </DesignButton>
+          <DesignButton
             type="button"
             disabled={!acknowledgedRisks}
             onClick={() => {
@@ -44,7 +44,7 @@ export function MainnetAccessConfirmModal({
             }}
           >
             Activate access
-          </Button>
+          </DesignButton>
         </>
       )}
       footerClassName="justify-end gap-2"

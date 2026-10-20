@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Shield, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { DialogDescription } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { AppModal } from '@/components/AppModal'
 import {
@@ -135,12 +135,12 @@ export function UpgradeFromNearZeroPasswordModal({
                 />
 
                 <div className="flex justify-between gap-4">
-                  <Button type="button" variant="outline" onClick={requestClose}>
+                  <DesignButton type="button" appearance="secondary" onClick={requestClose}>
                     Cancel
-                  </Button>
-                  <Button type="submit" disabled={!canSubmit}>
+                  </DesignButton>
+                  <DesignButton type="submit" disabled={!canSubmit}>
                     Set password
-                  </Button>
+                  </DesignButton>
                 </div>
               </form>
             </div>
@@ -161,9 +161,9 @@ export function UpgradeFromNearZeroPasswordModal({
                   Near-zero security mode is off. Your wallets use your new password now.
                 </p>
               </div>
-              <Button type="button" className="mt-2" onClick={requestClose}>
+              <DesignButton type="button" className="mt-2" onClick={requestClose}>
                 Done
-              </Button>
+              </DesignButton>
             </div>
           )}
         </>
