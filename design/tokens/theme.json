@@ -22,6 +22,18 @@
         "alpha": 1
       }
     },
+    "elevation": {
+      "drawer": {
+        "light": {
+          "hex": "#E9EDF2",
+          "alpha": 0.7
+        },
+        "dark": {
+          "hex": "#121417",
+          "alpha": 0.7
+        }
+      }
+    },
     "text": {
       "regular": {
         "default": {
@@ -577,6 +589,7 @@
       "light": "Background/Light",
       "dark": "Background/Dark"
     },
+    "elevation/drawer": "Figma theme elevation/drawer. Elevation 2 at 70% opacity. The top bar uses this surface.",
     "text/regular/default": {
       "light": "Tertiary default label is #000000.",
       "dark": "Text/Regular/Dark/Default"

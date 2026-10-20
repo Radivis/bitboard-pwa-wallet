@@ -538,8 +538,8 @@ export function WalletLayout({ children }: WalletLayoutProps) {
   }, [location.pathname])
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-50 border-b border-border bg-header/95 backdrop-blur supports-[backdrop-filter]:bg-header/80">
+    <div className="min-h-screen bg-[var(--design-background)] text-foreground">
+      <header className="sticky top-0 z-50 border-b border-border bg-[var(--design-elevation-drawer)]">
         <div className="mx-auto flex h-14 max-w-screen-xl items-center justify-between px-4">
           <h1 className="flex min-w-0 max-w-full items-center gap-2 text-lg font-semibold tracking-tight">
             <img
