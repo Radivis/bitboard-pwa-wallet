@@ -262,43 +262,55 @@
 }
 
 [data-slot="design-banner"][data-status="success"],
-[data-slot="design-toast"][data-status="success"] {
+[data-slot="design-toast"][data-status="success"],
+.design-toaster [data-sonner-toast][data-type="success"] {
   background: var(--design-status-success-surface);
   color: var(--design-status-success-foreground);
   border-color: var(--design-status-success-stroke);
 }
 [data-slot="design-banner"][data-status="success"] [data-slot="design-status-description"],
-[data-slot="design-toast"][data-status="success"] [data-slot="design-status-description"] {
+[data-slot="design-toast"][data-status="success"] [data-slot="design-status-description"],
+.design-toaster [data-sonner-toast][data-type="success"] [data-description] {
   color: var(--design-status-success-description);
 }
 [data-slot="design-banner"][data-status="error"],
-[data-slot="design-toast"][data-status="error"] {
+[data-slot="design-toast"][data-status="error"],
+.design-toaster [data-sonner-toast][data-type="error"] {
   background: var(--design-status-error-surface);
   color: var(--design-status-error-foreground);
   border-color: var(--design-status-error-stroke);
 }
 [data-slot="design-banner"][data-status="error"] [data-slot="design-status-description"],
-[data-slot="design-toast"][data-status="error"] [data-slot="design-status-description"] {
+[data-slot="design-toast"][data-status="error"] [data-slot="design-status-description"],
+.design-toaster [data-sonner-toast][data-type="error"] [data-description] {
   color: var(--design-status-error-description);
 }
 [data-slot="design-banner"][data-status="warning"],
-[data-slot="design-toast"][data-status="warning"] {
+[data-slot="design-toast"][data-status="warning"],
+.design-toaster [data-sonner-toast][data-type="warning"] {
   background: var(--design-status-warning-surface);
   color: var(--design-status-warning-foreground);
   border-color: var(--design-status-warning-stroke);
 }
 [data-slot="design-banner"][data-status="warning"] [data-slot="design-status-description"],
-[data-slot="design-toast"][data-status="warning"] [data-slot="design-status-description"] {
+[data-slot="design-toast"][data-status="warning"] [data-slot="design-status-description"],
+.design-toaster [data-sonner-toast][data-type="warning"] [data-description] {
   color: var(--design-status-warning-description);
 }
 [data-slot="design-banner"][data-status="info"],
-[data-slot="design-toast"][data-status="info"] {
+[data-slot="design-toast"][data-status="info"],
+.design-toaster [data-sonner-toast][data-type="info"],
+.design-toaster [data-sonner-toast][data-type="loading"],
+.design-toaster [data-sonner-toast]:not([data-type]) {
   background: var(--design-status-info-surface);
   color: var(--design-status-info-foreground);
   border-color: var(--design-status-info-stroke);
 }
 [data-slot="design-banner"][data-status="info"] [data-slot="design-status-description"],
-[data-slot="design-toast"][data-status="info"] [data-slot="design-status-description"] {
+[data-slot="design-toast"][data-status="info"] [data-slot="design-status-description"],
+.design-toaster [data-sonner-toast][data-type="info"] [data-description],
+.design-toaster [data-sonner-toast][data-type="loading"] [data-description],
+.design-toaster [data-sonner-toast]:not([data-type]) [data-description] {
   color: var(--design-status-info-description);
 }
 [data-slot="design-banner"][data-status="risk"],
@@ -310,6 +322,100 @@
 [data-slot="design-banner"][data-status="risk"] [data-slot="design-status-description"],
 [data-slot="design-toast"][data-status="risk"] [data-slot="design-status-description"] {
   color: var(--design-status-risk-description);
+}
+
+/* Unstyled Sonner toasts share DesignToast layout. Status color comes from the rules above. */
+.design-toaster [data-sonner-toast] {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: var(--width);
+  border-style: solid;
+  border-width: 1px;
+  border-radius: 16px;
+  padding: 0.5rem 1rem;
+  font-family: var(--design-font-ui);
+}
+
+.design-toaster [data-sonner-toast] [data-content] {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.design-toaster [data-sonner-toast] [data-title] {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.design-toaster [data-sonner-toast] [data-description] {
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.design-toaster [data-sonner-toast] [data-icon] {
+  display: flex;
+  flex-shrink: 0;
+  align-self: center;
+  align-items: center;
+}
+
+.design-toaster [data-sonner-toast] [data-icon] svg {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+}
+
+.design-toaster [data-sonner-toast] .sonner-loader {
+  position: static;
+  inset: auto;
+  width: 1.5rem;
+  height: 1.5rem;
+  transform: none;
+}
+
+/* Beat Sonner's dark-theme close-button color so the mark matches the status icon. */
+.design-toaster[data-sonner-toaster][data-sonner-theme] [data-sonner-toast] [data-close-button] {
+  order: 1;
+  display: inline-flex;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  align-self: center;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.design-toaster[data-sonner-toaster][data-sonner-theme] [data-sonner-toast] [data-close-button] svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: inherit;
+}
+
+.design-toaster [data-sonner-toast] [data-action] {
+  flex-shrink: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--design-accent-secondary);
+  font-family: var(--design-font-ui);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.5;
+  cursor: pointer;
 }
 
 /* Card shadows follow the theme. Light uses drop shadows; dark uses an inner shadow. Elevation 2 is the nested-card step. */

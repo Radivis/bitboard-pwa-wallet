@@ -82,7 +82,7 @@ const sampleCollaborativeExitIntent: ArkadePendingBatchIntent = {
 vi.mock('sonner', () => ({
   toast: {
     success: (...args: unknown[]) => toastSuccess(...args),
-    message: (...args: unknown[]) => toastMessage(...args),
+    info: (...args: unknown[]) => toastMessage(...args),
     error: vi.fn(),
   },
 }))

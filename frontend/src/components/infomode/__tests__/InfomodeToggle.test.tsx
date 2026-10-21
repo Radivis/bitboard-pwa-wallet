@@ -5,7 +5,7 @@ import { InfomodeToggle } from '@/components/infomode/InfomodeToggle'
 import { useInfomodeStore } from '@/stores/infomodeStore'
 
 vi.mock('sonner', () => ({
-  toast: { message: vi.fn() },
+  toast: { info: vi.fn() },
 }))
 
 describe('InfomodeToggle', () => {

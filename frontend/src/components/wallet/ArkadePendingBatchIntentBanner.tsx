@@ -101,7 +101,7 @@ export function ArkadePendingBatchIntentBanner() {
           operatorFinalized,
         })
         if (disappearance.type === 'cancelled') {
-          toast.message(pendingBatchIntentCancelledMessage())
+          toast.info(pendingBatchIntentCancelledMessage())
           continue
         }
         if (disappearance.type === 'succeeded') {

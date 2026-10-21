@@ -21,7 +21,7 @@ export function DesignToast({
     <article
       data-slot="design-toast"
       data-status={status}
-      className={cn('design-ui flex items-start gap-2 rounded-[16px] border px-4 py-2', className)}
+      className={cn('design-ui flex items-center gap-2 rounded-[16px] border px-4 py-2', className)}
       {...props}
     >
       <DesignStatusIcon status={status} />

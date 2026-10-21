@@ -27,14 +27,14 @@ export function InfomodeToggle({ className }: InfomodeToggleProps) {
         const willBeActive = !isActive
         toggleInfomode()
         if (willBeActive) {
-          toast.message('Infomode on', {
+          toast.info('Infomode on', {
             description:
               'Anything with a cyan border is an explainer zone—tap it to read what that part of the app does. (Taps there open help instead of the control underneath.)',
             duration: INFO_MODE_TOGGLE_TOAST_DURATION_MS,
           })
           return
         }
-        toast.message('Infomode off', {
+        toast.info('Infomode off', {
           description:
             'Normal behavior is back: buttons, links, and fields respond the usual way when you tap them.',
           duration: INFO_MODE_TOGGLE_TOAST_DURATION_MS,

@@ -8,7 +8,7 @@ import {
 } from '@/lib/infomode/infomode-suppression-feedback'
 
 vi.mock('sonner', () => ({
-  toast: { message: vi.fn() },
+  toast: { info: vi.fn() },
 }))
 
 describe('notifyInfomodePrimaryActionSuppressed', () => {
@@ -26,7 +26,7 @@ describe('notifyInfomodePrimaryActionSuppressed', () => {
   it('shows a deduplicated sonner message and bumps the lightbulb cue', () => {
     notifyInfomodePrimaryActionSuppressed()
 
-    expect(vi.mocked(toast.message)).toHaveBeenCalledWith(INFOMODE_SUPPRESSION_TOAST_TEXT, {
+    expect(vi.mocked(toast.info)).toHaveBeenCalledWith(INFOMODE_SUPPRESSION_TOAST_TEXT, {
       id: INFOMODE_PRIMARY_SUPPRESSED_TOAST_ID,
       duration: 8_000,
     })

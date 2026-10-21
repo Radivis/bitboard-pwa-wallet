@@ -37,13 +37,13 @@ export function InfomodeHintToast() {
         const kind = getInfomodeHintKind(lastOpened, now.getTime())
 
         if (kind === 'intro') {
-          toast.message('Try Infomode', {
+          toast.info('Try Infomode', {
             description:
               'Tap the question mark in the header. When it’s on, highlighted areas explain wallet concepts—tap a highlight to read a short popup.',
             duration: INFOMODE_HINT_TOAST_DURATION_MS,
           })
         } else if (kind === 'reminder') {
-          toast.message('Welcome back', {
+          toast.info('Welcome back', {
             description:
               'It’s been a while. Turn on Infomode with the header question mark anytime you want contextual explanations around the app.',
             duration: INFOMODE_HINT_TOAST_DURATION_MS,

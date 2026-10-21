@@ -13,7 +13,7 @@ const INFOMODE_SUPPRESSION_TOAST_DURATION_MS = 8_000
  * does not run). Surfaces a toast and nudges the question-mark control visually.
  */
 export function notifyInfomodePrimaryActionSuppressed(): void {
-  toast.message(INFOMODE_SUPPRESSION_TOAST_TEXT, {
+  toast.info(INFOMODE_SUPPRESSION_TOAST_TEXT, {
     id: INFOMODE_PRIMARY_SUPPRESSED_TOAST_ID,
     duration: INFOMODE_SUPPRESSION_TOAST_DURATION_MS,
   })

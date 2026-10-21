@@ -624,7 +624,7 @@ function toastBatchJoinResult(
   }
   abandonInFlightRegisteredIntents()
   if (idleMessage != null) {
-    toast.message(idleMessage)
+    toast.info(idleMessage)
   }
 }
 

@@ -1,47 +1,48 @@
-import { CircleCheck, CircleX, Info, Loader2, TriangleAlert } from 'lucide-react'
+import { CircleCheck, CircleX, Info, Loader2, TriangleAlert, X } from 'lucide-react'
 import { Toaster as Sonner, type ToasterProps } from 'sonner'
 
+import { cn } from '@/lib/shared/utils'
 import { useResolvedTheme } from '@/stores/themeStore'
 
 const TOAST_BELOW_HEADER_OFFSET = { top: 'var(--toast-top-offset)' } as const
 
-const statusClassName = {
-  success:
-    'border-[var(--design-status-success-stroke)] bg-[var(--design-status-success-surface)] text-[var(--design-status-success-foreground)]',
-  error:
-    'border-[var(--design-status-error-stroke)] bg-[var(--design-status-error-surface)] text-[var(--design-status-error-foreground)]',
-  warning:
-    'border-[var(--design-status-warning-stroke)] bg-[var(--design-status-warning-surface)] text-[var(--design-status-warning-foreground)]',
-  info:
-    'border-[var(--design-status-info-stroke)] bg-[var(--design-status-info-surface)] text-[var(--design-status-info-foreground)]',
-} as const
-
-export function DesignToaster({ ...props }: ToasterProps) {
+export function DesignToaster({ className, toastOptions, ...props }: ToasterProps) {
   const resolvedTheme = useResolvedTheme()
 
   return (
     <Sonner
+      {...props}
       theme={resolvedTheme}
+      className={cn('design-toaster', className)}
       closeButton
       offset={TOAST_BELOW_HEADER_OFFSET}
       mobileOffset={TOAST_BELOW_HEADER_OFFSET}
       toastOptions={{
+        ...toastOptions,
+        unstyled: true,
         closeButtonAriaLabel: 'Close',
         classNames: {
-          toast: 'design-ui rounded-[16px] border',
+          toast:
+            'design-ui flex w-[var(--width)] items-center gap-2 rounded-[16px] border px-4 py-2',
           title: 'text-base font-semibold',
           description: 'text-base font-normal',
-          ...statusClassName,
+          content: 'flex min-w-0 flex-1 flex-col gap-1',
+          icon: 'flex shrink-0 items-center self-center',
+          closeButton:
+            'order-last inline-flex size-5 shrink-0 items-center justify-center self-center border-0 bg-transparent p-0 text-inherit',
+          actionButton:
+            'shrink-0 border-0 bg-transparent p-0 text-base font-semibold text-[var(--design-accent-secondary)]',
+          ...toastOptions?.classNames,
         },
       }}
       icons={{
-        success: <CircleCheck className="size-6" />,
-        info: <Info className="size-6" />,
-        warning: <TriangleAlert className="size-6" />,
-        error: <CircleX className="size-6" />,
-        loading: <Loader2 className="size-6 animate-spin" />,
+        success: <CircleCheck className="size-6" aria-hidden />,
+        info: <Info className="size-6" aria-hidden />,
+        warning: <TriangleAlert className="size-6" aria-hidden />,
+        error: <CircleX className="size-6" aria-hidden />,
+        loading: <Loader2 className="size-6 animate-spin" aria-hidden />,
+        close: <X className="size-3.5" aria-hidden />,
       }}
-      {...props}
     />
   )
 }

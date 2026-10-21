@@ -58,7 +58,7 @@ function PeriodicSyncRailRow({ rail }: { rail: DashboardRailId }) {
     }
     const clamped = clampIntervalSeconds(parsed)
     if (clamped !== parsed) {
-      toast.message(
+      toast.info(
         `Interval adjusted to ${clamped} seconds (allowed range ${MIN_PERIODIC_SYNC_INTERVAL_SECONDS}–${MAX_PERIODIC_SYNC_INTERVAL_SECONDS}).`,
       )
     }
