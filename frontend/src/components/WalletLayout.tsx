@@ -24,6 +24,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { DesignAppLogo } from '@/components/design/DesignAppLogo'
+import { designGlassBlurClassName } from '@/components/design/design-drawer-chrome'
 import { useBottomNavSwipe } from '@/components/design/bottom-nav-swipe'
 import { DesignCompactNavButton } from '@/components/design/DesignCompactNavButton'
 import { InfomodeToggle } from '@/components/infomode/InfomodeToggle'
@@ -217,8 +218,8 @@ const LAB_SUB_NAV_ITEMS: SectionSubNavItem[] = [
   },
 ]
 
-const BOTTOM_NAV_SURFACE_CLASS =
-  'border-border bg-[var(--design-elevation-nav-bar)]'
+const NAV_BAR_SURFACE_CLASS =
+  `bg-[var(--design-elevation-nav-bar)] ${designGlassBlurClassName}`
 
 /** Clears a compact section footer (68px control plus the bar's vertical padding). */
 const MAIN_BOTTOM_PADDING_WITH_NAV_CLASS = 'pb-24'
@@ -322,8 +323,8 @@ function SectionSubNav({
       aria-hidden={hidden}
       inert={hidden || undefined}
       className={cn(
-        'fixed bottom-0 left-0 right-0 z-40 border-t motion-safe:transition-transform motion-safe:duration-200',
-        BOTTOM_NAV_SURFACE_CLASS,
+        'fixed bottom-0 left-0 right-0 z-40 motion-safe:transition-transform motion-safe:duration-200',
+        NAV_BAR_SURFACE_CLASS,
         hidden && 'pointer-events-none translate-y-full',
       )}
     >
@@ -439,7 +440,7 @@ export function WalletLayout({ children }: WalletLayoutProps) {
 
   return (
     <div className="min-h-screen bg-[var(--design-background)] text-foreground">
-      <header className="sticky top-0 z-50 border-b border-border bg-[var(--design-elevation-nav-bar)]">
+      <header className={`sticky top-0 z-50 ${NAV_BAR_SURFACE_CLASS}`}>
         <div className="mx-auto flex h-14 max-w-screen-xl items-center justify-between px-4">
           <h1 className="flex min-w-0 max-w-full items-center gap-2 text-lg font-semibold tracking-tight">
             <DesignAppLogo />
