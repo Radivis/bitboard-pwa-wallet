@@ -14,6 +14,9 @@ describe('DesignCompactNavButton', () => {
     expect(link).toHaveAttribute('data-status', 'selected')
     expect(link).toHaveAttribute('aria-current', 'page')
     expect(link.className).toContain('flex-col')
+    expect(link.className).toContain('gap-0')
+    expect(link.className).toContain('text-xs')
+    expect(link.className).toContain('md:text-base')
     expect(link.className).toContain('--design-nav-background-selected')
   })
 

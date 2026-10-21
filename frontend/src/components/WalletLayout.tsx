@@ -221,7 +221,7 @@ const LAB_SUB_NAV_ITEMS: SectionSubNavItem[] = [
 const NAV_BAR_SURFACE_CLASS =
   `bg-[var(--design-elevation-nav-bar)] ${designGlassBlurClassName}`
 
-/** Clears a compact section footer (68px control plus the bar's vertical padding). */
+/** Clears a compact section footer (60px large control plus the bar's vertical padding). */
 const MAIN_BOTTOM_PADDING_WITH_NAV_CLASS = 'pb-24'
 
 function isWalletSectionPath(pathname: string): boolean {
