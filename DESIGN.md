@@ -59,7 +59,7 @@ These theme tokens use black in Light and white in Dark. `input/content` aliases
 | `nav-button/background/hover` | black 8% | white 8% |
 | `nav-button/background/active` | black 12% | white 12% |
 | `nav-button/background/selected` | black 20% | white 20% |
-| `nav-button/stroke` | black 50% | white 50% |
+| `nav-button/stroke` | black 10% | white 10% |
 
 ## Type and shape
 
@@ -87,7 +87,7 @@ Network mode changes the accent. Theme mode changes whether that accent comes fr
 
 ### Nav-Button
 
-Navigation, not a Button. `status` is default, hover, active, or selected. It uses the `nav-button` tokens, so the network accent does not recolor it. Selected is the strongest fill. The stroke stays at 50%.
+Navigation, not a Button. `status` is default, hover, active, or selected. It uses the `nav-button` tokens, so the network accent does not recolor it. Selected is the strongest fill. The stroke stays at 10%.
 
 ### Theme switcher
 
