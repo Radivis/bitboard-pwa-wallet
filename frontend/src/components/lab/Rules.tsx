@@ -172,7 +172,7 @@ export function LabRulesCard() {
               ) : (
                 <span
                   aria-labelledby="lab-miner-subsidy-label"
-                  className="min-w-[8rem] font-mono text-base tabular-nums"
+                  className="design-mono min-w-[8rem] text-base tabular-nums"
                 >
                   {currentSubsidySats.toLocaleString()}
                 </span>

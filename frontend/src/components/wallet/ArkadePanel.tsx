@@ -164,7 +164,9 @@ export function ArkadePanel() {
             as="span"
           >
             <p className="text-xs text-muted-foreground">
-              Delegator service fee: {delegateFee} sats per renewal ({delegatorLabel})
+              Delegator service fee:{' '}
+              <span className="design-mono tabular-nums">{delegateFee} sats</span> per renewal (
+              {delegatorLabel})
             </p>
           </InfomodeWrapper>
         )}

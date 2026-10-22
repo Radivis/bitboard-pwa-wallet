@@ -202,8 +202,10 @@ function WalletRow({
             ) : (
               <>
                 <span>
-                  {balanceQuery.data.balanceSats.toLocaleString()}{' '}
-                  {getPrefixedBitcoinDisplayUnitLabel('sat', wallet.networkMode)}
+                  <span className="design-mono tabular-nums">
+                    {balanceQuery.data.balanceSats.toLocaleString()}{' '}
+                    {getPrefixedBitcoinDisplayUnitLabel('sat', wallet.networkMode)}
+                  </span>
                   {balanceQuery.data.isStaleBalance ? (
                     <span className="ml-1.5 text-amber-700 dark:text-amber-400">
                       (cached)

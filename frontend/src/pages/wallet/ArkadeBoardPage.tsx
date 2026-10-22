@@ -183,10 +183,18 @@ export function ArkadeBoardPage() {
                     infoText={ARKADE_BOARD_STATUS_READY_INFOMODE.text}
                     as="span"
                   >
-                    Ready to settle: {formatSats(boardingStatus.spendableSats)}
+                    Ready to settle:{' '}
+                    <span className="design-mono tabular-nums">
+                      {formatSats(boardingStatus.spendableSats)}
+                    </span>
                   </InfomodeWrapper>
                 </li>
-                <li>Pending confirmation: {formatSats(boardingStatus.pendingSats)}</li>
+                <li>
+                  Pending confirmation:{' '}
+                  <span className="design-mono tabular-nums">
+                    {formatSats(boardingStatus.pendingSats)}
+                  </span>
+                </li>
                 <li>
                   <InfomodeWrapper
                     infoId={ARKADE_INFOMODE_IDS.boardStatusExpired}
@@ -194,7 +202,10 @@ export function ArkadeBoardPage() {
                     infoText={ARKADE_BOARD_STATUS_EXPIRED_INFOMODE.text}
                     as="span"
                   >
-                    Unilateral exit only: {formatSats(boardingStatus.expiredSats)}
+                    Unilateral exit only:{' '}
+                    <span className="design-mono tabular-nums">
+                      {formatSats(boardingStatus.expiredSats)}
+                    </span>
                   </InfomodeWrapper>
                 </li>
               </ul>

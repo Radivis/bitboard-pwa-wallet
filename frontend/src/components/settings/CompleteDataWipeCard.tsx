@@ -265,7 +265,9 @@ export function CompleteDataWipeCard() {
                 <li key={row.walletId}>
                   <span className="text-foreground">{row.name}</span>
                   {' — '}
-                  {formatSats(row.totalSats)} sats ({formatBTC(row.totalSats)} BTC)
+                  <span className="design-mono tabular-nums">
+                    {formatSats(row.totalSats)} sats ({formatBTC(row.totalSats)} BTC)
+                  </span>
                 </li>
               ))}
             </ul>

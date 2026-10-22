@@ -102,7 +102,7 @@ function NodeDetailVtxoOutpointRow({
       <span>Outpoint {vtxoRow.vout}</span>
       <span className="text-right text-muted-foreground">
         {vtxoRow.amountLabel != null ? (
-          <span className="block">{vtxoRow.amountLabel}</span>
+          <span className="design-mono block tabular-nums">{vtxoRow.amountLabel}</span>
         ) : null}
         {phaseLabel !== '' ? (
           <span className="block" data-testid="unilateral-exit-vtxo-phase">

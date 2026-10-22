@@ -76,7 +76,7 @@ export function BitcoinAmountDisplay({
 
   const interactiveUnit = allowUnitToggle
   const passThroughForParentLink = interactiveUnit
-  const numericClass = cn(SIZE_CLASSES[size], tabular && 'tabular-nums')
+  const numericClass = cn(SIZE_CLASSES[size], 'design-mono', tabular && 'tabular-nums')
 
   return (
     <span
