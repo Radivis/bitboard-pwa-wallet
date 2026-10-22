@@ -1,13 +1,13 @@
-import { useParams } from '@tanstack/react-router'
+import { Link, useParams } from '@tanstack/react-router'
 import { Star } from 'lucide-react'
 import { DesignButton } from '@/components/design/DesignButton'
+import { DesignTag } from '@/components/design/DesignTag'
 import {
   DesignCard,
   DesignCardContent,
   DesignCardHeader,
   DesignCardTitle,
 } from '@/components/design/DesignCard'
-import { Badge } from '@/components/ui/badge'
 import { useLibraryFavorites, useSetArticleFavorite } from '@/db'
 import { getArticle, isArticleSlug, LIBRARY_ARTICLE_TITLE_CLASS } from '@/lib/library/articles'
 import { getTagLabel } from '@/lib/library/tags'
@@ -66,11 +66,13 @@ export function ArticlePage() {
             }
           />
         </div>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-3">
           {article.tagIds.map((tagId) => (
-            <Badge key={tagId} variant="secondary">
-              {getTagLabel(tagId)}
-            </Badge>
+            <DesignTag key={tagId} asChild>
+              <Link to="/library/tags" search={{ tag: tagId }}>
+                {getTagLabel(tagId)}
+              </Link>
+            </DesignTag>
           ))}
         </div>
       </header>

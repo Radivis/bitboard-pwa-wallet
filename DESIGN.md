@@ -129,6 +129,14 @@ A status message that stays on the page. It uses the same five types and the sam
 
 A question-mark control for revealing extra explanation. `status` is inactive or active. The target is 48px, and the icon is 24px.
 
+### Tag
+
+A small label. Height 24, corner radius 12, padding 8 by 4. An optional icon is 16px. The label is Plus Jakarta Sans Bold at 12px.
+
+`state` is Default, Hover, or Active. The fill uses the nav-button backgrounds (4%, 8%, and 12%). The stroke is `tag/stroke`: black at 20% in Light, white at 20% in Dark. The label uses regular text, so it stays readable on both themes. The network accent does not recolor it.
+
+Library tags are often links. They do not grow a separate mobile affordance. Space them apart so neighboring tags are not a single tap target.
+
 ## Building a screen
 
 Set the frame's theme mode and network mode. Put instances on that frame and leave them on Auto, so they inherit both modes. A component that should ignore the network still uses theme tokens only; its embedded buttons keep using accent tokens.

@@ -31,6 +31,7 @@
   --design-nav-background-active: #0000001f;
   --design-nav-background-selected: #00000033;
   --design-nav-stroke: #0000001a;
+  --design-tag-stroke: #00000033;
   --design-wallet-group-stroke: #00000040;
   --design-drawer-surface: #F7F8F9cc;
   --design-drawer-track: #0000000a;
@@ -98,6 +99,7 @@
   --design-nav-background-active: #FFFFFF1f;
   --design-nav-background-selected: #FFFFFF33;
   --design-nav-stroke: #FFFFFF1a;
+  --design-tag-stroke: #FFFFFF33;
   --design-wallet-group-stroke: #ffffff40;
   --design-drawer-surface: #0D0F11cc;
   --design-drawer-track: #ffffff0a;

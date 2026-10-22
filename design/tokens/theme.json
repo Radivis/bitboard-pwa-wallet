@@ -581,6 +581,18 @@
           "alpha": 0.1
         }
       }
+    },
+    "tag": {
+      "stroke": {
+        "light": {
+          "hex": "#000000",
+          "alpha": 0.2
+        },
+        "dark": {
+          "hex": "#FFFFFF",
+          "alpha": 0.2
+        }
+      }
     }
   },
   "unresolvedModes": [],
@@ -660,6 +672,7 @@
     },
     "input/content": "Aliases text/regular/default.",
     "nav-button/background": "Black in Light and white in Dark. Default 4%, hover 8%, active 12%, selected 20%.",
-    "nav-button/stroke": "Black at 10% in Light, white at 10% in Dark."
+    "nav-button/stroke": "Black at 10% in Light, white at 10% in Dark.",
+    "tag/stroke": "Figma Tag stroke. Black at 20% in Light. Dark is white at 20%, matching the nav-button stroke flip."
   }
 }

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { DoorOpen } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import { DesignCard, DesignCardContent } from '@/components/design/DesignCard'
+import { DesignTag } from '@/components/design/DesignTag'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { ArkadeVtxoClassificationIcon } from '@/components/arkade/ArkadeVtxoClassificationIcon'
 import {
@@ -24,18 +24,9 @@ interface ArkadeVtxoCardProps {
 function ArkadeVtxoFlagChipBadge({ chip }: { chip: ArkadeVtxoFlagChip }) {
   const label = getArkadeVtxoFlagChipLabel(chip)
   if (chip === 'unilateralExitPrepared') {
-    return (
-      <Badge variant="outline" className="gap-1 text-xs font-normal">
-        <DoorOpen aria-hidden className="h-3.5 w-3.5" />
-        {label}
-      </Badge>
-    )
+    return <DesignTag icon={<DoorOpen aria-hidden />}>{label}</DesignTag>
   }
-  return (
-    <Badge variant="outline" className="text-xs font-normal">
-      {label}
-    </Badge>
-  )
+  return <DesignTag>{label}</DesignTag>
 }
 
 export function ArkadeVtxoCard({ row, unilateralExitPhase }: ArkadeVtxoCardProps) {

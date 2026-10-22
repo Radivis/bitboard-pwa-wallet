@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { Badge } from '@/components/ui/badge'
+import { DesignTag } from '@/components/design/DesignTag'
 import type { LibraryArticle } from '@/lib/library/articles'
 import { getTagLabel, type LibraryTagId } from '@/lib/library/tags'
 
@@ -37,17 +37,13 @@ export function LibraryArticleList({
                 {article.title}
               </Link>
               {tagIdsToShow.length > 0 ? (
-                <div className="flex max-w-full flex-wrap gap-1.5 sm:justify-end">
+                <div className="flex max-w-full flex-wrap gap-3 sm:justify-end">
                   {tagIdsToShow.map((tagId) => (
-                    <Badge key={tagId} variant="secondary" asChild>
-                      <Link
-                        to="/library/tags"
-                        search={{ tag: tagId }}
-                        className="cursor-pointer"
-                      >
+                    <DesignTag key={tagId} asChild>
+                      <Link to="/library/tags" search={{ tag: tagId }}>
                         {getTagLabel(tagId)}
                       </Link>
-                    </Badge>
+                    </DesignTag>
                   ))}
                 </div>
               ) : null}
