@@ -10,6 +10,8 @@
   --design-elevation-nav-bar: #E9EDF2b3;
   --design-elevation-4: #DCE2EA;
   --design-text-regular: #000000;
+  --design-special-bitcoin: #F7931A;
+  --design-special-bitcoin-stroke: #362817;
   --design-text-button: #000000;
   --design-text-button-hover: #1A1A1A;
   --design-text-button-active: #333333;
@@ -74,6 +76,8 @@
   --design-elevation-nav-bar: #121417b3;
   --design-elevation-4: #1B1E22;
   --design-text-regular: #E4E5E7;
+  --design-special-bitcoin: #F7931A;
+  --design-special-bitcoin-stroke: #36281700;
   --design-text-button: #000000;
   --design-text-button-hover: #E6E6E6;
   --design-text-button-active: #CCCCCC;

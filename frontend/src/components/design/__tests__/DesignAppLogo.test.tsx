@@ -3,12 +3,13 @@ import { render } from '@testing-library/react'
 import { DesignAppLogo } from '@/components/design/DesignAppLogo'
 
 describe('DesignAppLogo', () => {
-  it('uses the light book color and switches the book to the dark color', () => {
+  it('uses the text color for the book and the bitcoin colors for the mark', () => {
     render(<DesignAppLogo />)
     const logo = document.querySelector('[data-slot="design-app-logo"]')
-    const book = logo?.querySelector('path')
-    expect(book?.getAttribute('class')).toContain('fill-[#141313]')
-    expect(book?.getAttribute('class')).toContain('dark:fill-[#F4F4F4]')
-    expect(logo?.querySelector('[stroke="#363535"]')?.getAttribute('class')).toContain('dark:hidden')
+    const paths = logo?.querySelectorAll('path')
+    expect(paths?.[0]?.getAttribute('class')).toContain('fill-[var(--design-text-regular)]')
+    expect(paths?.[1]?.getAttribute('class')).toContain('fill-[var(--design-text-regular)]')
+    expect(paths?.[2]?.getAttribute('class')).toContain('fill-[var(--design-special-bitcoin)]')
+    expect(paths?.[3]?.getAttribute('class')).toContain('stroke-[var(--design-special-bitcoin-stroke)]')
   })
 })
