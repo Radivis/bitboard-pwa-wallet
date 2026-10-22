@@ -10,7 +10,7 @@ import { cn } from '@/lib/shared/utils'
 const DESIGN_MODAL_MAX_HEIGHT_CLASS = 'max-h-[min(90dvh,calc(100vh-2rem))]'
 
 const panelClassName =
-  'design-ui flex w-[clamp(380px,50vw,760px)] max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden rounded-[24px] border-0 bg-[var(--design-elevation-4)] p-3 shadow-[var(--design-modal-shadow)] sm:max-w-[calc(100%-2rem)]'
+  'design-ui flex w-[clamp(380px,50vw,760px)] max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden rounded-[24px] border-0 bg-[var(--design-elevation-4)] p-3 sm:max-w-[calc(100%-2rem)]'
 
 export type DesignModalRequestClose = () => void
 

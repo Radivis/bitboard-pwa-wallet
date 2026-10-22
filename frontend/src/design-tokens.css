@@ -437,13 +437,14 @@
   --design-card-shadow: inset 0 4px 9px 0 rgb(245 244 246 / 0.08);
 }
 
-/* Modal shadows follow the Figma Modal variants. Dark adds the Elevation 4 inner shadow on top of the same drop shadows. */
+/* Set on the element, not through a Tailwind shadow utility. DialogContent also
+   applies shadow-lg, and that utility wins over shadow-[var(--design-modal-shadow)]. */
 [data-slot="design-modal"] {
-  --design-modal-shadow: 0 2px 3px 0 rgb(0 0 0 / 0.3), 0 6px 10px 4px rgb(0 0 0 / 0.15);
+  box-shadow: 0 2px 3px 0 rgb(0 0 0 / 0.3), 0 6px 10px 4px rgb(0 0 0 / 0.15);
 }
 
 .dark [data-slot="design-modal"] {
-  --design-modal-shadow:
+  box-shadow:
     inset 0 4px 13px 0 rgb(220 219 224 / 0.08),
     0 2px 3px 0 rgb(0 0 0 / 0.3),
     0 6px 10px 4px rgb(0 0 0 / 0.15);
