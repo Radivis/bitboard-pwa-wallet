@@ -1,10 +1,9 @@
 import { useState } from 'react'
-import { useNavigate } from '@tanstack/react-router'
 import { DesignBanner } from '@/components/design/DesignBanner'
 import { WalletUnlock } from '@/components/WalletUnlock'
+import { usePostLockWalletReturn } from '@/hooks/usePostLockWalletReturn'
 import { useWallet } from '@/db'
 import { usePostLockPrivacyRedirectStore } from '@/stores/postLockPrivacyRedirectStore'
-import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
 import { useWalletStore } from '@/stores/walletStore'
 
 /**
@@ -12,36 +11,31 @@ import { useWalletStore } from '@/stores/walletStore'
  * and offers returning to the prior wallet screen after unlock.
  */
 export function PostLockPrivacyBanner() {
-  const navigate = useNavigate()
   const [returnUnlockOpen, setReturnUnlockOpen] = useState(false)
-  const privacyRedirect = usePostLockPrivacyRedirectStore((postLockPrivacyRedirectState) => postLockPrivacyRedirectState.privacyRedirect)
+  const privacyRedirect = usePostLockPrivacyRedirectStore(
+    (postLockPrivacyRedirectState) => postLockPrivacyRedirectState.privacyRedirect,
+  )
   const dismiss = usePostLockPrivacyRedirectStore(
     (postLockPrivacyRedirectState) => postLockPrivacyRedirectState.dismissPrivacyRedirectBanner,
   )
-  const nearZeroActive = useNearZeroSecurityStore((nearZeroSecurityState) => nearZeroSecurityState.active)
+  const { finishReturnAfterUnlock, returnWithoutPassword } = usePostLockWalletReturn()
+  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const { data: activeWalletRow, isSuccess: walletRowLoaded } =
     useWallet(activeWalletId)
   const walletDisplayName =
     walletRowLoaded && activeWalletRow?.name ? activeWalletRow.name : undefined
 
-  if (privacyRedirect === null) return null
-
-  const { returnPath } = privacyRedirect
-
-  const finishReturnAfterUnlock = () => {
-    setReturnUnlockOpen(false)
-    dismiss()
-    void navigate({ to: returnPath, replace: true })
-  }
+  if (privacyRedirect === null || walletStatus === 'unlocked') return null
 
   const handleUnlockAndReturn = () => {
-    if (nearZeroActive) {
-      dismiss()
-      void navigate({ to: returnPath, replace: true })
-      return
-    }
+    if (returnWithoutPassword()) return
     setReturnUnlockOpen(true)
+  }
+
+  const handleUnlockSuccess = () => {
+    setReturnUnlockOpen(false)
+    finishReturnAfterUnlock()
   }
 
   return (
@@ -66,7 +60,7 @@ export function PostLockPrivacyBanner() {
         <WalletUnlock
           walletName={walletDisplayName}
           onDismiss={() => setReturnUnlockOpen(false)}
-          onUnlockSuccess={finishReturnAfterUnlock}
+          onUnlockSuccess={handleUnlockSuccess}
         />
       ) : null}
     </>

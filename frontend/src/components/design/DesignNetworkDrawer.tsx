@@ -181,7 +181,7 @@ export function NetworkChainBadge({
       aria-hidden
       className={cn(
         'inline-flex shrink-0 items-center justify-center rounded-full font-bold leading-none',
-        size === 'header' ? 'size-10 text-base' : 'size-6 text-[15px]',
+        size === 'header' ? 'size-10 text-[20px]' : 'size-6 text-[15px]',
       )}
       style={{ backgroundColor: badge.background, color: badge.color }}
     >

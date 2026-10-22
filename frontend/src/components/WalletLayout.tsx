@@ -20,36 +20,24 @@ import {
   History,
   Blocks,
   Zap,
-  Menu,
   type LucideIcon,
 } from 'lucide-react'
-import { DesignAppLogo } from '@/components/design/DesignAppLogo'
-import { designGlassBlurClassName } from '@/components/design/design-drawer-chrome'
+import { designNavBarSurfaceClassName } from '@/components/design/design-drawer-chrome'
 import { useBottomNavSwipe } from '@/components/design/bottom-nav-swipe'
 import { DesignCompactNavButton } from '@/components/design/DesignCompactNavButton'
-import { DesignInfomodeToggle } from '@/components/design/DesignInfomodeToggle'
 import {
   DesignSideDrawer,
-  DESIGN_SIDE_DRAWER_ID,
   type DesignDrawerNavItem,
 } from '@/components/design/DesignSideDrawer'
-import {
-  DesignNetworkDrawer,
-  DESIGN_NETWORK_DRAWER_ID,
-  NetworkChainBadge,
-} from '@/components/design/DesignNetworkDrawer'
-import { DRAWER_NETWORK_LABELS } from '@/components/design/network-drawer-labels'
+import { DesignNetworkDrawer } from '@/components/design/DesignNetworkDrawer'
+import { WalletTopBar } from '@/components/WalletTopBar'
 import { useNetworkModeSelection } from '@/hooks/useNetworkModeSelection'
 import { useNetworkConnectivityStore } from '@/stores/networkConnectivityStore'
 import { NearZeroSecurityBanner } from '@/components/NearZeroSecurityBanner'
 import { NoMnemonicBackupBanner } from '@/components/NoMnemonicBackupBanner'
 import { SecureStorageUnavailableBanner } from '@/components/SecureStorageUnavailableBanner'
-import { useWallet } from '@/db'
-import { selectCommittedNetworkMode, useWalletStore, type NetworkMode } from '@/stores/walletStore'
+import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import { cn } from '@/lib/shared/utils'
-import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
-
-const APP_TITLE = 'Bitcoin Codex'
 
 interface WalletLayoutProps {
   children: ReactNode
@@ -218,9 +206,6 @@ const LAB_SUB_NAV_ITEMS: SectionSubNavItem[] = [
   },
 ]
 
-const NAV_BAR_SURFACE_CLASS =
-  `bg-[var(--design-elevation-nav-bar)] ${designGlassBlurClassName}`
-
 /** Clears a compact section footer (60px large control plus the bar's vertical padding). */
 const MAIN_BOTTOM_PADDING_WITH_NAV_CLASS = 'pb-24'
 
@@ -248,44 +233,6 @@ function isPrimaryNavItemActive(
   return item.isActive
     ? item.isActive(pathname)
     : !!matchRoute({ to: item.to, fuzzy: false })
-}
-
-function NetworkBadgeButton({
-  network,
-  expanded,
-  onClick,
-}: {
-  network: NetworkMode
-  expanded: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={`Network, ${DRAWER_NETWORK_LABELS[network]}`}
-      aria-expanded={expanded}
-      aria-controls={DESIGN_NETWORK_DRAWER_ID}
-      onClick={onClick}
-      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-    >
-      <NetworkChainBadge network={network} size="header" />
-    </button>
-  )
-}
-
-function AppMenuButton({ expanded, onClick }: { expanded: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      aria-label="Menu"
-      aria-expanded={expanded}
-      aria-controls={DESIGN_SIDE_DRAWER_ID}
-      onClick={onClick}
-      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-    >
-      <Menu className="h-6 w-6" aria-hidden />
-    </button>
-  )
 }
 
 function buildDrawerNavItems(
@@ -324,7 +271,7 @@ function SectionSubNav({
       inert={hidden || undefined}
       className={cn(
         'fixed bottom-0 left-0 right-0 z-40 motion-safe:transition-transform motion-safe:duration-200',
-        NAV_BAR_SURFACE_CLASS,
+        designNavBarSurfaceClassName,
         hidden && 'pointer-events-none translate-y-full',
       )}
     >
@@ -412,23 +359,6 @@ export function WalletLayout({ children }: WalletLayoutProps) {
   const showLabSubNav = !isSetupRoute && isLabSectionPath(location.pathname)
   const showSettingsSubNav = !isSetupRoute && isSettingsSectionPath(location.pathname)
 
-  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
-  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
-  const { data: activeWalletRow, isSuccess: activeWalletLoaded } = useWallet(activeWalletId)
-  const walletDisplayName =
-    activeWalletId && activeWalletLoaded && activeWalletRow?.name
-      ? activeWalletRow.name
-      : null
-  const showWalletSuffix = Boolean(walletDisplayName)
-  /** Same signal as network unlock: `walletStatus` is not persisted, so use session. */
-  const walletSuffixMuted =
-    activeWalletId !== null && !walletIsUnlockedOrSyncing(walletStatus)
-
-  useEffect(() => {
-    document.title =
-      walletDisplayName !== null ? `${APP_TITLE}: ${walletDisplayName}` : APP_TITLE
-  }, [walletDisplayName])
-
   useEffect(() => {
     rememberNetwork(committedNetwork)
   }, [committedNetwork, rememberNetwork])
@@ -440,42 +370,18 @@ export function WalletLayout({ children }: WalletLayoutProps) {
 
   return (
     <div className="min-h-screen bg-[var(--design-background)] text-foreground">
-      <header className={`sticky top-0 z-50 ${NAV_BAR_SURFACE_CLASS}`}>
-        <div className="mx-auto flex h-14 max-w-screen-xl items-center justify-between px-4">
-          <h1 className="flex min-w-0 max-w-full items-center gap-2 text-lg font-semibold tracking-tight">
-            <DesignAppLogo />
-            <span className="min-w-0 truncate">
-              {APP_TITLE}
-              {showWalletSuffix && walletDisplayName !== null && (
-                <span
-                  className={cn(walletSuffixMuted && 'opacity-40')}
-                  title={walletDisplayName}
-                >
-                  :&nbsp;{walletDisplayName}
-                </span>
-              )}
-            </span>
-          </h1>
-          <div className="flex items-center gap-3">
-            <NetworkBadgeButton
-              network={committedNetwork}
-              expanded={networkDrawerOpen}
-              onClick={() => {
-                setSideDrawerOpen(false)
-                setNetworkDrawerOpen((open) => !open)
-              }}
-            />
-            <DesignInfomodeToggle />
-            <AppMenuButton
-              expanded={sideDrawerOpen}
-              onClick={() => {
-                setNetworkDrawerOpen(false)
-                setSideDrawerOpen((open) => !open)
-              }}
-            />
-          </div>
-        </div>
-      </header>
+      <WalletTopBar
+        sideDrawerOpen={sideDrawerOpen}
+        networkDrawerOpen={networkDrawerOpen}
+        onToggleSideDrawer={() => {
+          setNetworkDrawerOpen(false)
+          setSideDrawerOpen((open) => !open)
+        }}
+        onToggleNetworkDrawer={() => {
+          setSideDrawerOpen(false)
+          setNetworkDrawerOpen((open) => !open)
+        }}
+      />
 
       <DesignSideDrawer
         open={sideDrawerOpen}

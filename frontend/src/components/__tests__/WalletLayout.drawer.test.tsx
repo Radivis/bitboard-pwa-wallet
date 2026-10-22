@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClientProvider } from '@tanstack/react-query'
@@ -13,7 +13,9 @@ import {
 import { WalletLayout } from '@/components/WalletLayout'
 import { DESIGN_NETWORK_DRAWER_ID } from '@/components/design/DesignNetworkDrawer'
 import { DESIGN_SIDE_DRAWER_ID } from '@/components/design/DesignSideDrawer'
+import { InfomodeProvider } from '@/components/infomode/InfomodeProvider'
 import { createTestQueryClient } from '@/test-utils/test-utils'
+import { useWalletStore } from '@/stores/walletStore'
 
 vi.mock('@/db/storage-adapter', () => ({
   sqliteStorage: {
@@ -28,7 +30,9 @@ function renderSetupLayout() {
   const rootRoute = createRootRoute({
     component: () => (
       <QueryClientProvider client={queryClient}>
-        <Outlet />
+        <InfomodeProvider>
+          <Outlet />
+        </InfomodeProvider>
       </QueryClientProvider>
     ),
   })
@@ -58,6 +62,15 @@ function renderSetupLayout() {
 }
 
 describe('WalletLayout side drawer', () => {
+  afterEach(() => {
+    useWalletStore.setState({
+      walletStatus: 'none',
+      activeWalletId: null,
+      networkMode: 'testnet',
+      loadedDescriptorWallet: null,
+    })
+  })
+
   it('hamburger opens and closes the drawer without the old theme toggle', async () => {
     const user = userEvent.setup()
     renderSetupLayout()
@@ -86,6 +99,12 @@ describe('WalletLayout side drawer', () => {
 
   it('network badge opens the network drawer and closes the menu', async () => {
     const user = userEvent.setup()
+    useWalletStore.setState({
+      walletStatus: 'unlocked',
+      activeWalletId: 1,
+      networkMode: 'testnet',
+      loadedDescriptorWallet: null,
+    })
     renderSetupLayout()
 
     const menuButton = await screen.findByRole('button', { name: 'Menu' })
