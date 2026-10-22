@@ -13,7 +13,7 @@ import {
   DRAWER_EXIT_TO_TOP_CLASS,
   useDrawerPresence,
 } from '@/components/design/use-drawer-presence'
-import { designFocusClassName } from '@/components/design/design-classes'
+import { DesignSwitch } from '@/components/design/DesignSwitch'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { cn } from '@/lib/shared/utils'
 import {
@@ -130,24 +130,16 @@ export function DesignNetworkDrawer({
           motion === 'exit' && 'pointer-events-none',
         )}
       >
-        <div
-          role="group"
+        <DesignSwitch
           aria-label="Network type"
-          className="flex w-full gap-1 rounded-[24px] border border-[var(--design-drawer-divider)] bg-[var(--design-drawer-track)] p-1"
-        >
-          <ConnectivityOption
-            label="Offline"
-            pressed={!onlineSelected}
-            disabled={isSwitching}
-            onClick={() => selectConnectivity(false)}
-          />
-          <ConnectivityOption
-            label="Online"
-            pressed={onlineSelected}
-            disabled={isSwitching}
-            onClick={() => selectConnectivity(true)}
-          />
-        </div>
+          value={onlineSelected ? 'online' : 'offline'}
+          disabled={isSwitching}
+          onValueChange={(connectivity) => selectConnectivity(connectivity === 'online')}
+          options={[
+            { value: 'offline', label: 'Offline' },
+            { value: 'online', label: 'Online' },
+          ]}
+        />
         <div className="flex flex-col gap-2">
           <DrawerSectionLabel>Network</DrawerSectionLabel>
           <div className="flex flex-col gap-6">
@@ -199,36 +191,6 @@ export function NetworkChainBadge({
         badge.mark
       )}
     </span>
-  )
-}
-
-function ConnectivityOption({
-  label,
-  pressed,
-  disabled,
-  onClick,
-}: {
-  label: string
-  pressed: boolean
-  disabled: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={pressed}
-      disabled={disabled}
-      onClick={onClick}
-      className={cn(
-        designFocusClassName,
-        'h-9 min-w-0 flex-1 text-base font-semibold',
-        pressed
-          ? 'rounded-[20px] border border-[var(--design-nav-stroke)] bg-[var(--design-nav-background-selected)] text-[var(--design-text-regular)]'
-          : 'rounded-[10px] border border-transparent bg-transparent text-[var(--design-drawer-label)]',
-      )}
-    >
-      {label}
-    </button>
   )
 }
 
