@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AppModal } from '@/components/AppModal'
 import { DesignButton } from '@/components/design/DesignButton'
+import { DesignCheckbox } from '@/components/design/DesignCheckbox'
 import { Button } from '@/components/ui/button'
 import { DialogDescription } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
@@ -81,10 +82,8 @@ export function StartUnilateralExitConfirmModal({
           </ArticleLink>
         </p>
         <div className="flex gap-3 rounded-md border border-border p-3">
-          <input
+          <DesignCheckbox
             id="unilateral-exit-start-ack"
-            type="checkbox"
-            className="mt-1 size-4 shrink-0 rounded border-input accent-primary"
             checked={acknowledgedRisks}
             data-testid="unilateral-exit-start-ack"
             onChange={(event) => setAcknowledgedRisks(event.target.checked)}

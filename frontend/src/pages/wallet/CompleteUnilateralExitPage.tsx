@@ -8,6 +8,7 @@ import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { PageHeader } from '@/components/PageHeader'
 import { DesignBanner } from '@/components/design/DesignBanner'
 import { DesignButton } from '@/components/design/DesignButton'
+import { DesignCheckbox } from '@/components/design/DesignCheckbox'
 import { DesignInput } from '@/components/design/DesignInput'
 import { Label } from '@/components/ui/label'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
@@ -162,9 +163,7 @@ function CompleteUnilateralExitInProgressList({
         {rows?.map((row) => (
           <li key={row.id}>
             <label className="flex cursor-pointer items-start gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="mt-1"
+              <DesignCheckbox
                 checked={includesArkadeVtxoOutpoint(selectedOutpoints, {
                   txid: row.txid,
                   vout: row.vout,

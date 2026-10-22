@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AppModal } from '@/components/AppModal'
 import { DesignButton } from '@/components/design/DesignButton'
+import { DesignCheckbox } from '@/components/design/DesignCheckbox'
 import { DialogDescription } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 
@@ -69,10 +70,8 @@ export function ArkadeEnableConfirmModal({
           while the feature matures.
         </p>
         <div className="flex gap-3 rounded-md border border-border p-3">
-          <input
+          <DesignCheckbox
             id="arkade-enable-ack"
-            type="checkbox"
-            className="mt-1 size-4 shrink-0 rounded border-input accent-primary"
             checked={acknowledgedRisks}
             onChange={(event) => setAcknowledgedRisks(event.target.checked)}
           />

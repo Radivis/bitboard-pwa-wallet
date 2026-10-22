@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AppModal } from '@/components/AppModal'
 import { DesignButton } from '@/components/design/DesignButton'
+import { DesignCheckbox } from '@/components/design/DesignCheckbox'
 import { Button } from '@/components/ui/button'
 import { DialogDescription } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
@@ -68,10 +69,8 @@ export function AbortUnilateralExitConfirmModal({
           must restart the exit promptly.
         </p>
         <div className="flex items-start gap-2 text-foreground">
-          <input
+          <DesignCheckbox
             id="abort-unilateral-exit-acknowledge"
-            type="checkbox"
-            className="mt-1"
             checked={acknowledgedRisks}
             onChange={(event) => setAcknowledgedRisks(event.target.checked)}
             data-testid="unilateral-exit-abort-acknowledge"

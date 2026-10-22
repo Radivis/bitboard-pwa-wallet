@@ -13,6 +13,7 @@ import { useWalletStore } from '@/stores/walletStore'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { AppModal } from '@/components/AppModal'
 import { DesignButton } from '@/components/design/DesignButton'
+import { DesignCheckbox } from '@/components/design/DesignCheckbox'
 import { Button } from '@/components/ui/button'
 import {
   DesignCard,
@@ -222,13 +223,11 @@ export function CompleteDataWipeCard() {
               If you are unsure, cancel and back up first.
             </p>
             <div className="flex items-start gap-2">
-              <input
-                type="checkbox"
+              <DesignCheckbox
                 id="complete-wipe-risk-understood"
                 checked={riskUnderstood}
-                onChange={(e) => setRiskUnderstood(e.target.checked)}
+                onChange={(event) => setRiskUnderstood(event.target.checked)}
                 disabled={probing}
-                className="mt-1 size-4 shrink-0 rounded border-input"
               />
               <Label
                 htmlFor="complete-wipe-risk-understood"

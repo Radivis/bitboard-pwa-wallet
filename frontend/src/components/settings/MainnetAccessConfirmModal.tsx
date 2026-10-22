@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AppModal } from '@/components/AppModal'
 import { DesignButton } from '@/components/design/DesignButton'
+import { DesignCheckbox } from '@/components/design/DesignCheckbox'
 import { DialogDescription } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 
@@ -66,12 +67,10 @@ export function MainnetAccessConfirmModal({
           <strong className="text-foreground">secure backup of your seed phrase</strong>.
         </p>
         <div className="flex gap-3 rounded-md border border-border p-3">
-          <input
+          <DesignCheckbox
             id="mainnet-access-ack"
-            type="checkbox"
-            className="mt-1 size-4 shrink-0 rounded border-input accent-primary"
             checked={acknowledgedRisks}
-            onChange={(e) => setAcknowledgedRisks(e.target.checked)}
+            onChange={(event) => setAcknowledgedRisks(event.target.checked)}
           />
           <Label htmlFor="mainnet-access-ack" className="cursor-pointer font-normal">
             I understand the risks and have a seed phrase backup ready

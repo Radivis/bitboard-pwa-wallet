@@ -19,6 +19,7 @@ import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { AppModal } from '@/components/AppModal'
 import { EnterAppPasswordModal } from '@/components/EnterAppPasswordModal'
 import { DesignButton } from '@/components/design/DesignButton'
+import { DesignCheckbox } from '@/components/design/DesignCheckbox'
 import {
   DesignCard,
   DesignCardContent,
@@ -224,12 +225,10 @@ export function SeedPhraseBackup() {
             your funds.
           </div>
           <div className="flex items-start gap-2">
-            <input
-              type="checkbox"
+            <DesignCheckbox
               id="seed-backup-confirmed"
               checked={backupConfirmed}
-              onChange={(e) => setBackupConfirmed(e.target.checked)}
-              className="mt-1 size-4 shrink-0 rounded border-input"
+              onChange={(event) => setBackupConfirmed(event.target.checked)}
             />
             <Label
               htmlFor="seed-backup-confirmed"
