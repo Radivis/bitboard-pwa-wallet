@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react'
-import { AppModal } from '@/components/AppModal'
 import { DesignButton } from '@/components/design/DesignButton'
-import { DesignCheckbox } from '@/components/design/DesignCheckbox'
+import { DesignModal } from '@/components/design/DesignModal'
 import { DialogDescription } from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
 
 interface ArkadeEnableConfirmModalProps {
   open: boolean
@@ -25,12 +23,17 @@ export function ArkadeEnableConfirmModal({
   }, [open])
 
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={onOpenChange}
       onCancel={() => onOpenChange(false)}
       title="Enable Arkade"
-      contentClassName="sm:max-w-lg"
+      optIn={{
+        id: 'arkade-enable-ack',
+        label: 'I understand Arkade is new, and accept the associated risks',
+        checked: acknowledgedRisks,
+        onChange: setAcknowledgedRisks,
+      }}
       footer={(requestClose) => (
         <>
           <DesignButton type="button" appearance="secondary" onClick={requestClose}>
@@ -48,7 +51,6 @@ export function ArkadeEnableConfirmModal({
           </DesignButton>
         </>
       )}
-      footerClassName="justify-end gap-2"
     >
       <div className="space-y-4 text-sm text-muted-foreground">
         <DialogDescription className="sr-only">
@@ -69,17 +71,7 @@ export function ArkadeEnableConfirmModal({
           to <strong className="text-foreground">very small sums</strong> you can afford to lose
           while the feature matures.
         </p>
-        <div className="flex gap-3 rounded-md border border-border p-3">
-          <DesignCheckbox
-            id="arkade-enable-ack"
-            checked={acknowledgedRisks}
-            onChange={(event) => setAcknowledgedRisks(event.target.checked)}
-          />
-          <Label htmlFor="arkade-enable-ack" className="cursor-pointer font-normal">
-            I understand Arkade is new, and accept the associated risks
-          </Label>
-        </div>
       </div>
-    </AppModal>
+    </DesignModal>
   )
 }

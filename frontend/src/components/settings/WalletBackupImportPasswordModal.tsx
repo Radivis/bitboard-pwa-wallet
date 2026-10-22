@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useState } from 'react'
 import { DialogDescription } from '@/components/ui/dialog'
-import { AppModal } from '@/components/AppModal'
+import { DesignModal } from '@/components/design/DesignModal'
 import { DesignButton } from '@/components/design/DesignButton'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
@@ -47,7 +47,7 @@ export function WalletBackupImportPasswordModal({
   }, [onCancel])
 
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={onOpenChange}
       title="Verify wallet backup"
@@ -87,6 +87,6 @@ export function WalletBackupImportPasswordModal({
           </p>
         ) : null}
       </div>
-    </AppModal>
+    </DesignModal>
   )
 }

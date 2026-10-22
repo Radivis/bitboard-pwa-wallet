@@ -1,7 +1,7 @@
 import { Loader2 } from 'lucide-react'
 import { DialogDescription } from '@/components/ui/dialog'
 import { DesignButton } from '@/components/design/DesignButton'
-import { AppModal } from '@/components/AppModal'
+import { DesignModal } from '@/components/design/DesignModal'
 import { OperatorConfigDiffViewer } from '@/components/wallet/OperatorConfigDiffViewer'
 import {
   useAcceptOperatorConfigMutation,
@@ -20,7 +20,7 @@ export function OperatorConfigTrustModal({ open }: OperatorConfigTrustModalProps
   const pending = reviewMutation.isPending || acceptMutation.isPending
 
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={() => {}}
       title="Operator configuration changed"
@@ -71,6 +71,6 @@ export function OperatorConfigTrustModal({ open }: OperatorConfigTrustModalProps
       ) : diffQuery.data ? (
         <OperatorConfigDiffViewer entries={diffQuery.data.entries} />
       ) : null}
-    </AppModal>
+    </DesignModal>
   )
 }

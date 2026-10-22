@@ -3,7 +3,7 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import { KeyRound } from 'lucide-react'
 import { DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { AppModal } from '@/components/AppModal'
+import { DesignModal } from '@/components/design/DesignModal'
 import { beginWalletSecretsSession } from '@/lib/wallet/wallet-secrets-session'
 import {
   AppPasswordFields,
@@ -77,7 +77,7 @@ export function SetAppPasswordModal({ open, onSessionStarted }: SetAppPasswordMo
   }
 
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={() => {}}
       onCancel={handleBackToSetup}
@@ -88,7 +88,6 @@ export function SetAppPasswordModal({ open, onSessionStarted }: SetAppPasswordMo
         </>
       }
       closeAriaLabel="Back to setup"
-      contentClassName="sm:max-w-md"
       onInteractOutside={(e) => e.preventDefault()}
       onEscapeKeyDown={(e) => e.preventDefault()}
     >
@@ -128,6 +127,6 @@ export function SetAppPasswordModal({ open, onSessionStarted }: SetAppPasswordMo
 
         <NearZeroSecurityOptIn onSessionStarted={onSessionStarted} />
       </div>
-    </AppModal>
+    </DesignModal>
   )
 }

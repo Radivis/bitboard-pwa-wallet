@@ -1,7 +1,7 @@
 import { useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
-import { AppModal } from '@/components/AppModal'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
+import { DesignModal } from '@/components/design/DesignModal'
 
 interface MigrationFailureReportModalProps {
   isOpen: boolean
@@ -37,21 +37,20 @@ export function MigrationFailureReportModal({
   }
 
   return (
-    <AppModal
+    <DesignModal
       isOpen={isOpen}
       onOpenChange={onOpenChange}
       title="Wallet upgrade failed"
       onCancel={() => onOpenChange(false)}
-      contentClassName="sm:max-w-2xl"
       footer={() => (
-        <div className="flex w-full flex-col gap-2 sm:flex-row sm:justify-end sm:gap-2">
-          <Button type="button" variant="outline" onClick={handleCopy}>
+        <>
+          <DesignButton type="button" appearance="secondary" onClick={() => void handleCopy()}>
             Copy report
-          </Button>
-          <Button type="button" onClick={handleGoToSettings}>
+          </DesignButton>
+          <DesignButton type="button" onClick={handleGoToSettings}>
             Go to Settings
-          </Button>
-        </div>
+          </DesignButton>
+        </>
       )}
     >
       <div className="flex max-h-[min(50vh,420px)] flex-col gap-3 overflow-hidden">
@@ -66,6 +65,6 @@ export function MigrationFailureReportModal({
           {reportText}
         </pre>
       </div>
-    </AppModal>
+    </DesignModal>
   )
 }

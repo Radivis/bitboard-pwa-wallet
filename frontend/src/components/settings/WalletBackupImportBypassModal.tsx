@@ -1,5 +1,5 @@
 import { DialogDescription } from '@/components/ui/dialog'
-import { AppModal } from '@/components/AppModal'
+import { DesignModal } from '@/components/design/DesignModal'
 import { DesignButton } from '@/components/design/DesignButton'
 import { Button } from '@/components/ui/button'
 
@@ -19,13 +19,12 @@ export function WalletBackupImportBypassModal({
   isBusy,
 }: WalletBackupImportBypassModalProps) {
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={onOpenChange}
       title="Could not verify backup"
       onCancel={onAbort}
       isBlockDismissed={isBusy}
-      contentClassName="sm:max-w-lg"
       footer={() => (
         <>
           <DesignButton type="button" appearance="secondary" disabled={isBusy} onClick={onAbort}>
@@ -41,7 +40,6 @@ export function WalletBackupImportBypassModal({
           </Button>
         </>
       )}
-      footerClassName="justify-end gap-2"
     >
       <div className="space-y-3 text-left text-sm text-muted-foreground">
         <DialogDescription className="sr-only">
@@ -59,6 +57,6 @@ export function WalletBackupImportBypassModal({
           verifying the cryptographic signature. Only continue if you accept that risk.
         </p>
       </div>
-    </AppModal>
+    </DesignModal>
   )
 }

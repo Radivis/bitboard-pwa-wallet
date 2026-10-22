@@ -9,7 +9,7 @@ import { userFacingErrorMessage } from '@/lib/shared/utils'
 import { useWalletStore } from '@/stores/walletStore'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { AppModal } from '@/components/AppModal'
+import { DesignModal } from '@/components/design/DesignModal'
 import { DesignButton } from '@/components/design/DesignButton'
 import { Button } from '@/components/ui/button'
 import { DialogDescription } from '@/components/ui/dialog'
@@ -170,7 +170,7 @@ export function DeleteWalletSection({
         </InfomodeWrapper>
       </div>
 
-      <AppModal
+      <DesignModal
         isOpen={firstDialogOpen}
         onOpenChange={setFirstDialogOpen}
         onCancel={() => {}}
@@ -202,9 +202,9 @@ export function DeleteWalletSection({
           need this wallet again, confirm you have your recovery phrase saved somewhere safe before
           continuing.
         </DialogDescription>
-      </AppModal>
+      </DesignModal>
 
-      <AppModal
+      <DesignModal
         isOpen={mainnetWarnOpen}
         onOpenChange={setMainnetWarnOpen}
         onCancel={() => {}}
@@ -239,14 +239,13 @@ export function DeleteWalletSection({
             </p>
           </div>
         </DialogDescription>
-      </AppModal>
+      </DesignModal>
 
-      <AppModal
+      <DesignModal
         isOpen={mainnetBlockedOpen}
         onOpenChange={setMainnetBlockedOpen}
         onCancel={() => {}}
         title="Cannot delete this wallet"
-        footerClassName="justify-end"
         footer={(requestClose) => (
           <DesignButton type="button" onClick={requestClose}>
             Understood
@@ -275,7 +274,7 @@ export function DeleteWalletSection({
             </p>
           </div>
         </DialogDescription>
-      </AppModal>
+      </DesignModal>
     </>
   )
 }

@@ -1,6 +1,6 @@
 import { DialogDescription } from '@/components/ui/dialog'
 import { DesignButton } from '@/components/design/DesignButton'
-import { AppModal } from '@/components/AppModal'
+import { DesignModal } from '@/components/design/DesignModal'
 import type { AddressType } from '@/lib/wallet/wallet-domain-types'
 import { LabAddressTypeBadge } from '@/components/lab/LabAddressTypeBadge'
 
@@ -25,7 +25,7 @@ export function DeadLabEntityRecipientModal({
   isPending = false,
 }: DeadLabEntityRecipientModalProps) {
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={onOpenChange}
       title="Send to dead lab entity?"
@@ -49,6 +49,6 @@ export function DeadLabEntityRecipientModal({
           . That is generally not a good idea. Proceed anyway?
         </span>
       </DialogDescription>
-    </AppModal>
+    </DesignModal>
   )
 }

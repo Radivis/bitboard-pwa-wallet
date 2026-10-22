@@ -16,10 +16,9 @@ import {
 import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet/wallet-query-cache-sync'
 import { restoreNearZeroSecretsSessionForOperation } from '@/lib/wallet/restore-near-zero-secrets-session'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { AppModal } from '@/components/AppModal'
 import { EnterAppPasswordModal } from '@/components/EnterAppPasswordModal'
 import { DesignButton } from '@/components/design/DesignButton'
-import { DesignCheckbox } from '@/components/design/DesignCheckbox'
+import { DesignModal } from '@/components/design/DesignModal'
 import {
   DesignCard,
   DesignCardContent,
@@ -27,7 +26,6 @@ import {
   DesignCardHeader,
   DesignCardTitle,
 } from '@/components/design/DesignCard'
-import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/shared/utils'
 import { DialogDescription } from '@/components/ui/dialog'
 import { MnemonicGrid } from '@/components/MnemonicGrid'
@@ -192,7 +190,7 @@ export function SeedPhraseBackup() {
         loadingText="Decrypting..."
       />
 
-      <AppModal
+      <DesignModal
         isOpen={showMnemonic}
         onOpenChange={() => {}}
         onCancel={() => {
@@ -204,8 +202,12 @@ export function SeedPhraseBackup() {
             <span className="min-w-0">Your Seed Phrase</span>
           </>
         }
-        contentClassName="sm:max-w-lg"
-        footerClassName="justify-end"
+        optIn={{
+          id: 'seed-backup-confirmed',
+          label: 'I have actually made a backup of this seed phrase',
+          checked: backupConfirmed,
+          onChange: setBackupConfirmed,
+        }}
         footer={(requestClose) => (
           <DesignButton appearance="secondary" onClick={requestClose}>
             Close
@@ -224,21 +226,8 @@ export function SeedPhraseBackup() {
             Never share these words with anyone. Anyone who has them can steal
             your funds.
           </div>
-          <div className="flex items-start gap-2">
-            <DesignCheckbox
-              id="seed-backup-confirmed"
-              checked={backupConfirmed}
-              onChange={(event) => setBackupConfirmed(event.target.checked)}
-            />
-            <Label
-              htmlFor="seed-backup-confirmed"
-              className="cursor-pointer text-sm font-normal leading-snug"
-            >
-              I have actually made a backup of this seed phrase
-            </Label>
-          </div>
         </>
-      </AppModal>
+      </DesignModal>
     </>
   )
 }

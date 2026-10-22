@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react'
 import { DialogDescription } from '@/components/ui/dialog'
-import { AppModal } from '@/components/AppModal'
+import { DesignModal } from '@/components/design/DesignModal'
 import { DesignButton } from '@/components/design/DesignButton'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
@@ -101,7 +101,7 @@ export function WalletBackupExportPasswordModal({
   }, [onCancel])
 
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={onOpenChange}
       title="Sign wallet backup"
@@ -212,6 +212,6 @@ export function WalletBackupExportPasswordModal({
           </div>
         ) : null}
       </div>
-    </AppModal>
+    </DesignModal>
   )
 }

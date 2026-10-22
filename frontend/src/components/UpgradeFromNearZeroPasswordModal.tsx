@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { DialogDescription } from '@/components/ui/dialog'
 import { DesignButton } from '@/components/design/DesignButton'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { AppModal } from '@/components/AppModal'
+import { DesignModal } from '@/components/design/DesignModal'
 import {
   AppPasswordFields,
   isNewAppPasswordValid,
@@ -101,7 +101,7 @@ export function UpgradeFromNearZeroPasswordModal({
   const blockDismiss = phase === 'running'
 
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={onOpenChange}
       onCancel={() => {}}
@@ -112,7 +112,6 @@ export function UpgradeFromNearZeroPasswordModal({
         </>
       }
       isBlockDismissed={blockDismiss}
-      contentClassName="sm:max-w-md"
     >
       {(requestClose) => (
         <>
@@ -168,6 +167,6 @@ export function UpgradeFromNearZeroPasswordModal({
           )}
         </>
       )}
-    </AppModal>
+    </DesignModal>
   )
 }

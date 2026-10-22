@@ -1,6 +1,6 @@
 import { DialogDescription } from '@/components/ui/dialog'
 import { DesignButton } from '@/components/design/DesignButton'
-import { AppModal } from '@/components/AppModal'
+import { DesignModal } from '@/components/design/DesignModal'
 import { ArticleLink } from '@/lib/library/article-shared'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 
@@ -30,7 +30,7 @@ export function DustChangeChoiceModal({
   isPending = false,
 }: DustChangeChoiceModalProps) {
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={onOpenChange}
       title="Change and fees"
@@ -86,6 +86,6 @@ export function DustChangeChoiceModal({
           </p>
         </div>
       </DialogDescription>
-    </AppModal>
+    </DesignModal>
   )
 }

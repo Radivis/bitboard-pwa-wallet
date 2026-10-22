@@ -7,7 +7,7 @@ import { DesignButton } from '@/components/design/DesignButton'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { AppModal } from '@/components/AppModal'
+import { DesignModal } from '@/components/design/DesignModal'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import {
   AppPasswordFields,
@@ -99,7 +99,7 @@ export function ChangeAppPasswordModal({
   const blockDismiss = phase === 'running'
 
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={onOpenChange}
       onCancel={() => {}}
@@ -110,7 +110,6 @@ export function ChangeAppPasswordModal({
         </>
       }
       isBlockDismissed={blockDismiss}
-      contentClassName="sm:max-w-md"
     >
       {(requestClose) => (
         <>
@@ -189,6 +188,6 @@ export function ChangeAppPasswordModal({
           )}
         </>
       )}
-    </AppModal>
+    </DesignModal>
   )
 }

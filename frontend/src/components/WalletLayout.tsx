@@ -27,7 +27,7 @@ import { DesignAppLogo } from '@/components/design/DesignAppLogo'
 import { designGlassBlurClassName } from '@/components/design/design-drawer-chrome'
 import { useBottomNavSwipe } from '@/components/design/bottom-nav-swipe'
 import { DesignCompactNavButton } from '@/components/design/DesignCompactNavButton'
-import { InfomodeToggle } from '@/components/infomode/InfomodeToggle'
+import { DesignInfomodeToggle } from '@/components/design/DesignInfomodeToggle'
 import {
   DesignSideDrawer,
   DESIGN_SIDE_DRAWER_ID,
@@ -465,7 +465,7 @@ export function WalletLayout({ children }: WalletLayoutProps) {
                 setNetworkDrawerOpen((open) => !open)
               }}
             />
-            <InfomodeToggle />
+            <DesignInfomodeToggle />
             <AppMenuButton
               expanded={sideDrawerOpen}
               onClick={() => {

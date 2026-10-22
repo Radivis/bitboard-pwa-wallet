@@ -1,4 +1,4 @@
-import { AppModal } from '@/components/AppModal'
+import { DesignModal } from '@/components/design/DesignModal'
 import { DesignButton } from '@/components/design/DesignButton'
 import { DialogDescription } from '@/components/ui/dialog'
 
@@ -16,12 +16,11 @@ export function ReceiveMainnetDemoWarningModal({
   onOpenChange,
 }: ReceiveMainnetDemoWarningModalProps) {
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={onOpenChange}
       onCancel={() => onOpenChange(false)}
       title="Demo mode (Mainnet)"
-      contentClassName="sm:max-w-lg"
       isCloseButtonHidden
       onInteractOutside={(e) => e.preventDefault()}
       onEscapeKeyDown={(e) => e.preventDefault()}
@@ -30,7 +29,6 @@ export function ReceiveMainnetDemoWarningModal({
           OK
         </DesignButton>
       )}
-      footerClassName="justify-end"
     >
       <div className="space-y-3 text-sm text-muted-foreground">
         <DialogDescription className="sr-only">
@@ -45,6 +43,6 @@ export function ReceiveMainnetDemoWarningModal({
           secure. Please only use minimal amounts for testing and experimentation.
         </p>
       </div>
-    </AppModal>
+    </DesignModal>
   )
 }

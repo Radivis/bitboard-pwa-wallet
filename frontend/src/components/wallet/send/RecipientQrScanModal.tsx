@@ -7,7 +7,7 @@ import {
 } from 'react'
 import QrScanner from 'qr-scanner'
 import { Zap, ZapOff } from 'lucide-react'
-import { AppModal } from '@/components/AppModal'
+import { DesignModal } from '@/components/design/DesignModal'
 import { DesignButton } from '@/components/design/DesignButton'
 
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024
@@ -257,7 +257,7 @@ export function RecipientQrScanModal({
   }, [isOpen, onOpenChange, onScanned])
 
   return (
-    <AppModal
+    <DesignModal
       isOpen={isOpen}
       onOpenChange={(next) => {
         if (!next) {
@@ -267,7 +267,6 @@ export function RecipientQrScanModal({
       }}
       title="Scan QR code"
       onCancel={() => {}}
-      contentClassName="sm:max-w-md"
       footer={(requestClose) => (
         <div className="flex w-full flex-wrap items-center justify-end gap-2">
           <input
@@ -332,6 +331,6 @@ export function RecipientQrScanModal({
           </p>
         ) : null}
       </div>
-    </AppModal>
+    </DesignModal>
   )
 }

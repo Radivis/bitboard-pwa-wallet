@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react'
-import { AppModal } from '@/components/AppModal'
 import { DesignButton } from '@/components/design/DesignButton'
-import { DesignCheckbox } from '@/components/design/DesignCheckbox'
+import { DesignModal } from '@/components/design/DesignModal'
 import { DialogDescription } from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
 
 interface MainnetAccessConfirmModalProps {
   open: boolean
@@ -25,12 +23,17 @@ export function MainnetAccessConfirmModal({
   }, [open])
 
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={onOpenChange}
       onCancel={() => onOpenChange(false)}
       title="Mainnet access"
-      contentClassName="sm:max-w-lg"
+      optIn={{
+        id: 'mainnet-access-ack',
+        label: 'I understand the risks and have a seed phrase backup ready',
+        checked: acknowledgedRisks,
+        onChange: setAcknowledgedRisks,
+      }}
       footer={(requestClose) => (
         <>
           <DesignButton type="button" appearance="secondary" onClick={requestClose}>
@@ -48,7 +51,6 @@ export function MainnetAccessConfirmModal({
           </DesignButton>
         </>
       )}
-      footerClassName="justify-end gap-2"
     >
       <div className="space-y-4 text-sm text-muted-foreground">
         <DialogDescription className="sr-only">
@@ -66,17 +68,7 @@ export function MainnetAccessConfirmModal({
           this demo phase. Safeguarding coins depends crucially on having a{' '}
           <strong className="text-foreground">secure backup of your seed phrase</strong>.
         </p>
-        <div className="flex gap-3 rounded-md border border-border p-3">
-          <DesignCheckbox
-            id="mainnet-access-ack"
-            checked={acknowledgedRisks}
-            onChange={(event) => setAcknowledgedRisks(event.target.checked)}
-          />
-          <Label htmlFor="mainnet-access-ack" className="cursor-pointer font-normal">
-            I understand the risks and have a seed phrase backup ready
-          </Label>
-        </div>
       </div>
-    </AppModal>
+    </DesignModal>
   )
 }
