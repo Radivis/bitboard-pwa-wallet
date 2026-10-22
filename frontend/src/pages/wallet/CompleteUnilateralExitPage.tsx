@@ -6,6 +6,7 @@ import { ArkadeSessionGate } from '@/components/arkade/ArkadeSessionGate'
 import { ArkadeUnilateralExitInfomodeContent } from '@/components/arkade/infomode/ArkadeUnilateralExitInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { PageHeader } from '@/components/PageHeader'
+import { DesignBanner } from '@/components/design/DesignBanner'
 import { DesignButton } from '@/components/design/DesignButton'
 import { DesignInput } from '@/components/design/DesignInput'
 import { Label } from '@/components/ui/label'
@@ -327,12 +328,13 @@ export function CompleteUnilateralExitContent({ exitFlow }: CompleteUnilateralEx
       />
 
       {waitingBanner != null && (
-        <p
-          className="text-sm text-amber-700 dark:text-amber-300"
+        <DesignBanner
+          role="status"
+          status="warning"
           data-testid="arkade-unilateral-complete-waiting"
-        >
-          {waitingBanner}
-        </p>
+          title="Waiting to complete"
+          description={waitingBanner}
+        />
       )}
 
       <div className="space-y-2">

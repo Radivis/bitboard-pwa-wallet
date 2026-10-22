@@ -121,9 +121,9 @@ A transient status message. `Type` is Success, Error, Warning, Info, or Risk. It
 
 ### Banner
 
-A status message that stays on the page. It uses the same five types and the same status tokens as Toast. It has no close icon.
+A status message that stays on the page. It uses the same five types and the same status tokens as Toast. It has no close icon. Title and description are centered. `optionalContent` sits between the description and the action panel, full width and left-aligned, for lists, diffs, or other detail that is not a second paragraph.
 
-`has-primary-action` shows a secondary Button. `has-secondary-action` shows a tertiary Button. The sample labels are Retry and Dismiss. The banner surface does not follow the network. Those buttons do.
+`has-primary-action` shows a secondary Button. `has-secondary-action` shows a tertiary Button. `show-optional-content` reveals that middle section. The sample labels are Retry and Dismiss. The banner surface does not follow the network. Those buttons do.
 
 ### info-toggle
 

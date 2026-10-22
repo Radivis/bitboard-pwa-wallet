@@ -13,11 +13,10 @@ describe('DesignBanner', () => {
         status="error"
         title="Exit stopped"
         description="Try the exit again."
+        optionalContent={<p>Three VTXOs</p>}
         primaryAction={{ label: 'Retry', onClick: retry }}
         secondaryAction={{ label: 'Dismiss', onClick: dismiss }}
-      >
-        <p>Three VTXOs</p>
-      </DesignBanner>,
+      />
     )
     expect(screen.getByText('Three VTXOs')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument()

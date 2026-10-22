@@ -284,21 +284,27 @@ function BalanceDesignCard() {
                   data-testid="dashboard-onchain-balance-amount"
                 />
                 {networkMode !== 'lab' && isStaleOnchain ? (
-              <p
-                className="mt-2 text-xs text-amber-700 dark:text-amber-400"
-                data-testid="onchain-esplora-stale-banner"
-              >
-                Showing on-chain data from your wallet&apos;s saved chain state.
-                Esplora has not been verified this session.
-                {lastSuccessfulEsploraSyncAt != null && (
-                  <>
-                    {' '}
-                    Last verified with Esplora:{' '}
-                    {new Date(lastSuccessfulEsploraSyncAt).toLocaleString()}.
-                  </>
-                )}
-              </p>
-            ) : null}
+                  <DesignBanner
+                    role="status"
+                    status="warning"
+                    className="mt-2"
+                    data-testid="onchain-esplora-stale-banner"
+                    title="Showing saved chain state"
+                    description={
+                      <>
+                        Showing on-chain data from your wallet&apos;s saved chain state. Esplora
+                        has not been verified this session.
+                        {lastSuccessfulEsploraSyncAt != null && (
+                          <>
+                            {' '}
+                            Last verified with Esplora:{' '}
+                            {new Date(lastSuccessfulEsploraSyncAt).toLocaleString()}.
+                          </>
+                        )}
+                      </>
+                    }
+                  />
+                ) : null}
             {onChainDisplay.showBreakdown && (
               <ul className="mt-3 space-y-1.5 text-sm">
                 {onChainDisplay.confirmedSats > 0 && (
@@ -490,20 +496,25 @@ function BalanceDesignCard() {
                   ))}
                 </ul>
                 {hasStaleLightningBalance && (
-                  <p
-                    className="mt-2 text-xs text-amber-700 dark:text-amber-400"
+                  <DesignBanner
+                    role="status"
+                    status="warning"
+                    className="mt-2"
                     data-testid="lightning-balance-stale-banner"
-                  >
-                    Showing last known Lightning balance saved in this app (not a
-                    live check). NWC could not be reached.
-                    {newestStaleBalanceIso != null && (
+                    title="Showing saved Lightning balance"
+                    description={
                       <>
-                        {' '}
-                        Updated:{' '}
-                        {new Date(newestStaleBalanceIso).toLocaleString()}.
+                        Showing last known Lightning balance saved in this app (not a live check).
+                        NWC could not be reached.
+                        {newestStaleBalanceIso != null && (
+                          <>
+                            {' '}
+                            Updated: {new Date(newestStaleBalanceIso).toLocaleString()}.
+                          </>
+                        )}
                       </>
-                    )}
-                  </p>
+                    }
+                  />
                 )}
                 {lightningBalanceRows.some((balanceRow) => balanceRow.error != null) && (
                   <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
@@ -683,14 +694,19 @@ function RecentTransactions() {
           hasLnWalletForNetwork &&
           stalePaymentsAsOf != null &&
           lightningPayments.length > 0 && (
-            <p
-              className="mb-3 text-xs text-amber-700 dark:text-amber-400"
+            <DesignBanner
+              role="status"
+              status="warning"
+              className="mb-3"
               data-testid="lightning-history-stale-banner"
-            >
-              Some Lightning activity below may be from the last successful sync
-              in this app (NWC unreachable). List saved:{' '}
-              {new Date(stalePaymentsAsOf).toLocaleString()}.
-            </p>
+              title="Lightning activity may be out of date"
+              description={
+                <>
+                  Some Lightning activity below may be from the last successful sync in this app
+                  (NWC unreachable). List saved: {new Date(stalePaymentsAsOf).toLocaleString()}.
+                </>
+              }
+            />
           )}
         {networkMode !== 'lab' && mergedActivity.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-8 text-center">

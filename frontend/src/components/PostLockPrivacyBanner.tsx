@@ -1,7 +1,6 @@
 import { useState } from 'react'
-import { Lock } from 'lucide-react'
 import { useNavigate } from '@tanstack/react-router'
-import { Button } from '@/components/ui/button'
+import { DesignBanner } from '@/components/design/DesignBanner'
 import { WalletUnlock } from '@/components/WalletUnlock'
 import { useWallet } from '@/db'
 import { usePostLockPrivacyRedirectStore } from '@/stores/postLockPrivacyRedirectStore'
@@ -47,42 +46,22 @@ export function PostLockPrivacyBanner() {
 
   return (
     <>
-      <div
+      <DesignBanner
         role="region"
         aria-label="Wallet lock privacy notice"
-        className="mb-6 rounded-lg border border-sky-800/60 bg-sky-950/40 px-4 py-4 text-sky-50 shadow-sm dark:border-sky-700/50 dark:bg-sky-950/60"
-      >
-        <div className="mx-auto flex max-w-screen-xl flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-          <div className="flex min-w-0 gap-3">
-            <Lock
-              className="mt-0.5 h-5 w-5 shrink-0 text-sky-200"
-              aria-hidden
-            />
-            <div className="min-w-0 space-y-1">
-              <p className="text-sm font-semibold leading-snug text-sky-100">
-                Wallet locked — moved to Library for privacy
-              </p>
-              <p className="text-sm leading-relaxed text-sky-100/90">
-                You left the wallet area so balances and activity are not visible on screen.
-                You can dismiss this note or unlock and return to where you were.
-              </p>
-            </div>
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:pt-0.5">
-            <Button
-              type="button"
-              variant="secondary"
-              className="border-sky-700/80 bg-sky-900/50 text-sky-50 hover:bg-sky-900/70"
-              onClick={() => dismiss()}
-            >
-              Dismiss
-            </Button>
-            <Button type="button" onClick={handleUnlockAndReturn}>
-              Unlock wallet and go to previous page
-            </Button>
-          </div>
-        </div>
-      </div>
+        status="info"
+        className="mb-6"
+        title="Wallet locked — moved to Library for privacy"
+        description="You left the wallet area so balances and activity are not visible on screen. You can dismiss this note or unlock and return to where you were."
+        primaryAction={{
+          label: 'Unlock wallet and go to previous page',
+          onClick: handleUnlockAndReturn,
+        }}
+        secondaryAction={{
+          label: 'Dismiss',
+          onClick: () => dismiss(),
+        }}
+      />
       {returnUnlockOpen ? (
         <WalletUnlock
           walletName={walletDisplayName}

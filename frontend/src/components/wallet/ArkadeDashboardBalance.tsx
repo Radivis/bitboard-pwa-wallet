@@ -11,6 +11,7 @@ import {
   DesignCardHeader,
   DesignCardTitle,
 } from '@/components/design/DesignCard'
+import { DesignBanner } from '@/components/design/DesignBanner'
 import { ArkadeBalanceBreakdown } from '@/components/wallet/ArkadeBalanceBreakdown'
 import { ArkadePendingBatchIntentBanner } from '@/components/wallet/ArkadePendingBatchIntentBanner'
 import { ArkadeSignerMigrationBanner } from '@/components/wallet/ArkadeSignerMigrationBanner'
@@ -136,27 +137,34 @@ export function ArkadeDashboardBalance() {
               amountTestId="dashboard-arkade-balance-amount"
             />
             {isStaleArkade ? (
-              <InfomodeWrapper
-                infoId={ARKADE_INFOMODE_IDS.operatorStale}
-                infoTitle={ARKADE_OPERATOR_STALE_INFOMODE.title}
-                infoText={ARKADE_OPERATOR_STALE_INFOMODE.text}
-                as="span"
-              >
-                <p
-                  className="text-xs text-amber-700 dark:text-amber-400"
-                  data-testid="arkade-operator-stale-banner"
-                >
-                  Showing Arkade data from your wallet&apos;s saved operator state. The operator
-                  has not been verified this session.
-                  {lastSuccessfulOperatorSyncAt != null && (
-                    <>
-                      {' '}
-                      Last verified with operator:{' '}
-                      {new Date(lastSuccessfulOperatorSyncAt).toLocaleString()}.
-                    </>
-                  )}
-                </p>
-              </InfomodeWrapper>
+              <DesignBanner
+                role="status"
+                status="warning"
+                data-testid="arkade-operator-stale-banner"
+                title={
+                  <InfomodeWrapper
+                    infoId={ARKADE_INFOMODE_IDS.operatorStale}
+                    infoTitle={ARKADE_OPERATOR_STALE_INFOMODE.title}
+                    infoText={ARKADE_OPERATOR_STALE_INFOMODE.text}
+                    as="span"
+                  >
+                    Showing saved operator state
+                  </InfomodeWrapper>
+                }
+                description={
+                  <>
+                    Showing Arkade data from your wallet&apos;s saved operator state. The operator
+                    has not been verified this session.
+                    {lastSuccessfulOperatorSyncAt != null && (
+                      <>
+                        {' '}
+                        Last verified with operator:{' '}
+                        {new Date(lastSuccessfulOperatorSyncAt).toLocaleString()}.
+                      </>
+                    )}
+                  </>
+                }
+              />
             ) : null}
           </>
         ) : null}

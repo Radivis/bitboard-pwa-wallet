@@ -1,5 +1,5 @@
-import { AlertTriangle, Loader2 } from 'lucide-react'
-import { DesignButton } from '@/components/design/DesignButton'
+import { Loader2 } from 'lucide-react'
+import { DesignBanner } from '@/components/design/DesignBanner'
 import type { ArkadeSignerMigrationHint, ArkadeSignerMigrationResult } from '@/workers/arkade-api'
 import { formatSignerMigrationPartialStatus } from '@/lib/arkade/arkade-signer-migration-display'
 import {
@@ -97,50 +97,46 @@ export function ArkadeSignerMigrationBanner() {
         )
       : null
 
+  const migrateLabel = migrateSubmitPhase
+    ? 'Migrating…'
+    : partialMigrationResult != null
+      ? 'Migrate again'
+      : copy.actionLabel
+
   return (
-    <div
-      className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+    <DesignBanner
       role="status"
+      status="warning"
       data-testid="arkade-signer-migration-banner"
-    >
-      <div className="flex items-start gap-2">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
-        <div className="space-y-2">
-          <p className="font-medium">{copy.title}</p>
-          <p className="text-muted-foreground">{copy.body}</p>
-          {partialMigrationResult != null && !partialMigrationResult.migrationComplete ? (
-            <p className="text-muted-foreground" data-testid="arkade-signer-migration-partial">
+      title={copy.title}
+      description={copy.body}
+      optionalContent={
+        partialMigrationResult != null && !partialMigrationResult.migrationComplete ? (
+          <div className="space-y-2">
+            <p data-testid="arkade-signer-migration-partial">
               {formatSignerMigrationPartialStatus(partialMigrationResult)}
             </p>
-          ) : null}
-          {migrateActionVisible ? (
-            <DesignButton
-              type="button"
-              appearance="tertiary"
-              disabled={
+            {migrationErrorMessage != null ? <p>{migrationErrorMessage}</p> : null}
+          </div>
+        ) : migrationErrorMessage != null ? (
+          <p>{migrationErrorMessage}</p>
+        ) : null
+      }
+      primaryAction={
+        migrateActionVisible && migrateLabel != null
+          ? {
+              label: migrateLabel,
+              disabled:
                 autonomousModeActive ||
                 signerMigrationMutation.isPending ||
-                hasPendingMigrateIntent
-              }
-              onClick={() => signerMigrationMutation.mutate()}
-              icon={
-                migrateSubmitPhase ? (
-                  <Loader2 className="animate-spin" aria-hidden />
-                ) : undefined
-              }
-            >
-              {migrateSubmitPhase
-                ? 'Migrating…'
-                : partialMigrationResult != null
-                  ? 'Migrate again'
-                  : copy.actionLabel}
-            </DesignButton>
-          ) : null}
-          {migrationErrorMessage != null ? (
-            <p className="text-destructive">{migrationErrorMessage}</p>
-          ) : null}
-        </div>
-      </div>
-    </div>
+                hasPendingMigrateIntent,
+              onClick: () => signerMigrationMutation.mutate(),
+              icon: migrateSubmitPhase ? (
+                <Loader2 className="animate-spin" aria-hidden />
+              ) : undefined,
+            }
+          : undefined
+      }
+    />
   )
 }

@@ -1,6 +1,6 @@
-import { AlertTriangle, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
-import { DesignButton } from '@/components/design/DesignButton'
+import { DesignBanner } from '@/components/design/DesignBanner'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import {
   ARKADE_INFOMODE_IDS,
@@ -40,67 +40,51 @@ export function ArkadeRecoverableVtxoBanner() {
   const feeError = feeEstimate?.estimateError
 
   return (
-    <div
-      className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+    <DesignBanner
       role="status"
+      status="warning"
       data-testid="arkade-recoverable-vtxo-banner"
-    >
-      <div className="flex items-start gap-2">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
-        <div className="space-y-2">
-          <InfomodeWrapper
-            infoId={ARKADE_INFOMODE_IDS.recoverableVtxoBanner}
-            infoTitle={ARKADE_RECOVERABLE_VTXO_BANNER_INFOMODE.title}
-            infoText={ARKADE_RECOVERABLE_VTXO_BANNER_INFOMODE.text}
-            as="span"
-          >
-            <p className="font-medium">Recoverable now</p>
-          </InfomodeWrapper>
-          <p className="text-muted-foreground">
-            {recoverableVtxoCount} VTXO{recoverableVtxoCount === 1 ? '' : 's'} totaling{' '}
-            <BitcoinAmountDisplay amountSats={recoverableSats} size="sm" /> can be
-            batch-settled back into your Arkade balance.
+      title={
+        <InfomodeWrapper
+          infoId={ARKADE_INFOMODE_IDS.recoverableVtxoBanner}
+          infoTitle={ARKADE_RECOVERABLE_VTXO_BANNER_INFOMODE.title}
+          infoText={ARKADE_RECOVERABLE_VTXO_BANNER_INFOMODE.text}
+          as="span"
+        >
+          Recoverable now
+        </InfomodeWrapper>
+      }
+      description={
+        <>
+          {recoverableVtxoCount} VTXO{recoverableVtxoCount === 1 ? '' : 's'} totaling{' '}
+          <BitcoinAmountDisplay amountSats={recoverableSats} size="sm" /> can be batch-settled
+          back into your Arkade balance.
+        </>
+      }
+      optionalContent={
+        feeLoading ? (
+          <div className="flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            Estimating operator fee…
+          </div>
+        ) : feeEstimate?.estimatedTotalFeeSats != null &&
+          feeEstimate.estimatedReceiveSats != null ? (
+          <p>
+            Estimated operator fee:{' '}
+            <BitcoinAmountDisplay amountSats={feeEstimate.estimatedTotalFeeSats} size="sm" />.
+            You would receive about{' '}
+            <BitcoinAmountDisplay amountSats={feeEstimate.estimatedReceiveSats} size="sm" />.
           </p>
-          {feeLoading ? (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-              Estimating operator fee…
-            </div>
-          ) : feeEstimate?.estimatedTotalFeeSats != null &&
-            feeEstimate.estimatedReceiveSats != null ? (
-            <p className="text-muted-foreground">
-              Estimated operator fee:{' '}
-              <BitcoinAmountDisplay
-                amountSats={feeEstimate.estimatedTotalFeeSats}
-                size="sm"
-              />
-              . You would receive about{' '}
-              <BitcoinAmountDisplay
-                amountSats={feeEstimate.estimatedReceiveSats}
-                size="sm"
-              />
-              .
-            </p>
-          ) : feeError != null ? (
-            <p className="text-amber-700 dark:text-amber-400">
-              Could not estimate the operator fee ({feeError}). You can still recover now.
-            </p>
-          ) : null}
-          <DesignButton
-            type="button"
-            appearance="tertiary"
-            disabled={
-              autonomousModeActive || recoverMutation.isPending || hasPendingRecoverIntent
-            }
-            onClick={() => recoverMutation.mutate()}
-            icon={
-              recoverSubmitPhase ? <Loader2 className="animate-spin" aria-hidden /> : undefined
-            }
-          >
-            {recoverSubmitPhase ? 'Recovering…' : 'Recover now'}
-          </DesignButton>
-        </div>
-      </div>
-    </div>
+        ) : feeError != null ? (
+          <p>Could not estimate the operator fee ({feeError}). You can still recover now.</p>
+        ) : null
+      }
+      primaryAction={{
+        label: recoverSubmitPhase ? 'Recovering…' : 'Recover now',
+        disabled: autonomousModeActive || recoverMutation.isPending || hasPendingRecoverIntent,
+        onClick: () => recoverMutation.mutate(),
+        icon: recoverSubmitPhase ? <Loader2 className="animate-spin" aria-hidden /> : undefined,
+      }}
+    />
   )
 }

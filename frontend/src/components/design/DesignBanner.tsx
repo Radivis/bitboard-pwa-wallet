@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { Link } from '@tanstack/react-router'
 
 import { cn } from '@/lib/shared/utils'
 import { DesignButton } from '@/components/design/DesignButton'
@@ -6,24 +7,28 @@ import { DesignStatusIcon, type DesignStatus } from '@/components/design/design-
 
 export type DesignBannerAction = {
   label: string
-  onClick: React.ComponentProps<'button'>['onClick']
+  onClick?: (event: React.MouseEvent<HTMLElement>) => void
+  /** Router path. Renders the action as a link instead of a button. */
+  to?: string
   icon?: React.ReactNode
   disabled?: boolean
+  testId?: string
 }
 
 export function DesignBanner({
   status,
   title,
   description,
+  optionalContent,
   primaryAction,
   secondaryAction,
   className,
-  children,
   ...props
-}: React.ComponentProps<'section'> & {
+}: Omit<React.ComponentProps<'section'>, 'title'> & {
   status: DesignStatus
   title: React.ReactNode
   description?: React.ReactNode
+  optionalContent?: React.ReactNode
   primaryAction?: DesignBannerAction
   secondaryAction?: DesignBannerAction
 }) {
@@ -31,45 +36,70 @@ export function DesignBanner({
     <section
       data-slot="design-banner"
       data-status={status}
-      className={cn('design-ui flex items-start gap-3 rounded-[16px] border px-4 py-3', className)}
+      className={cn(
+        'design-ui flex items-center gap-2 rounded-[16px] border px-4 py-2',
+        className,
+      )}
       {...props}
     >
       <DesignStatusIcon status={status} />
-      <div className="flex min-w-0 flex-1 flex-col gap-3">
-        <div className="flex flex-col gap-1">
-          <p className="text-base font-semibold">{title}</p>
-          {description != null ? (
-            <p data-slot="design-status-description" className="text-base font-normal">
-              {description}
-            </p>
-          ) : null}
-        </div>
-        {children}
+      <div className="flex min-w-0 flex-1 flex-col items-center gap-1">
+        <p className="w-full text-center text-base font-semibold leading-5">{title}</p>
+        {description != null ? (
+          <p
+            data-slot="design-status-description"
+            className="w-full text-center text-base font-normal leading-5"
+          >
+            {description}
+          </p>
+        ) : null}
+        {optionalContent != null ? (
+          <div data-slot="design-banner-optional-content" className="w-full text-left text-base">
+            {optionalContent}
+          </div>
+        ) : null}
         {primaryAction != null || secondaryAction != null ? (
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-wrap items-center justify-center gap-4 p-1">
             {primaryAction != null ? (
-              <DesignButton
-                appearance="secondary"
-                icon={primaryAction.icon}
-                onClick={primaryAction.onClick}
-                disabled={primaryAction.disabled}
-              >
-                {primaryAction.label}
-              </DesignButton>
+              <DesignBannerActionButton action={primaryAction} appearance="secondary" />
             ) : null}
             {secondaryAction != null ? (
-              <DesignButton
-                appearance="tertiary"
-                icon={secondaryAction.icon}
-                onClick={secondaryAction.onClick}
-                disabled={secondaryAction.disabled}
-              >
-                {secondaryAction.label}
-              </DesignButton>
+              <DesignBannerActionButton action={secondaryAction} appearance="tertiary" />
             ) : null}
           </div>
         ) : null}
       </div>
     </section>
+  )
+}
+
+function DesignBannerActionButton({
+  action,
+  appearance,
+}: {
+  action: DesignBannerAction
+  appearance: 'secondary' | 'tertiary'
+}) {
+  if (action.to != null) {
+    return (
+      <DesignButton appearance={appearance} disabled={action.disabled} asChild>
+        <Link to={action.to} onClick={action.onClick} data-testid={action.testId}>
+          {action.icon}
+          {action.label}
+        </Link>
+      </DesignButton>
+    )
+  }
+
+  return (
+    <DesignButton
+      appearance={appearance}
+      icon={action.icon}
+      onClick={action.onClick}
+      disabled={action.disabled}
+      data-testid={action.testId}
+    >
+      {action.label}
+    </DesignButton>
   )
 }
