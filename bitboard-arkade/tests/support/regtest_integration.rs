@@ -108,6 +108,27 @@ pub fn run_regtest_cli(args: &[&str]) {
     }
 }
 
+/// `node regtest.mjs rpc …` stdout. `run_regtest_cli` drops it.
+pub fn bitcoin_cli_stdout(args: &[&str]) -> String {
+    let regtest_cli = repo_root().join("regtest/regtest.mjs");
+    let mut rpc_args = vec!["rpc"];
+    rpc_args.extend_from_slice(args);
+    let output = Command::new("node")
+        .arg(&regtest_cli)
+        .args(&rpc_args)
+        .current_dir(repo_root())
+        .output()
+        .unwrap_or_else(|error| panic!("failed to spawn bitcoin rpc {args:?}: {error}"));
+    if !output.status.success() {
+        panic!(
+            "bitcoin rpc {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
 pub fn docker_command(args: &[&str]) {
     let output = Command::new("docker")
         .args(args)

@@ -6,10 +6,14 @@
  *
  * This service serves from bitcoind when authoritative:
  * - GET /api/tx/:txid/raw — mempool or confirmed chain only (not wallet-only stubs)
- * - GET /api/tx/:txid/status — confirmed txs (mempool electrum often stays confirmed:false)
- * - GET /api/tx/:txid — same confirmation overlay on the JSON body Bark's client reads
+ * - GET /api/tx/:txid/status — confirmed body from bitcoind, or confirmed:false when
+ *   bitcoind has the tx only in the mempool (reorg). Proxy only if bitcoind lacks the tx.
+ * - GET /api/tx/:txid — when bitcoind has the tx, status is overwritten from that view
+ *   so a stale Fulcrum confirmation cannot survive a reorg, and Bark sees block_height
+ * - GET /api/blocks/tip/height — bitcoind getblockcount
  *
  * POST /api/txs/package — bitcoind `submitpackage` (mempool electrum returns a generic RPC error)
+ * POST /api/tx — bitcoind `sendrawtransaction`
  * All other paths are proxied to mempool_web unchanged.
  */
 import http from 'node:http';
@@ -27,6 +31,7 @@ const TXID_JSON_PATH = /^\/api\/tx\/([0-9a-f]{64})$/i;
 const TXID_OUTSPEND_PATH = /^\/api\/tx\/([0-9a-f]{64})\/outspend\/(\d+)$/i;
 const TXID_STATUS_PATH = /^\/api\/tx\/([0-9a-f]{64})\/status$/i;
 const TXID_MERKLE_PROOF_PATH = /^\/api\/tx\/([0-9a-f]{64})\/merkle-proof$/i;
+const TIP_HEIGHT_PATH = '/api/blocks/tip/height';
 const TXS_PACKAGE_PATH = '/api/txs/package';
 const TX_BROADCAST_PATH = '/api/tx';
 
@@ -147,15 +152,22 @@ async function bitcoinGetRawTransactionHexOnNetwork(txid) {
   }
 }
 
-async function bitcoinConfirmedTxStatus(txid) {
+/**
+ * Bitcoind's view of a tx the node actually has.
+ * `null` when the tx is absent (virtual-tree stub, wallet-only, unknown).
+ * Mempool and 0-conf chain txs are `{ confirmed: false }`.
+ */
+async function bitcoinAuthoritativeStatus(txid) {
   const verbose = await bitcoinGetRawTransactionVerbose(txid);
+  if (verbose == null) {
+    return null;
+  }
   if (
-    verbose == null ||
     typeof verbose.confirmations !== 'number' ||
     verbose.confirmations <= 0 ||
     verbose.blockhash == null
   ) {
-    return null;
+    return { confirmed: false };
   }
 
   let blockHeight = verbose.blockheight;
@@ -174,8 +186,9 @@ async function bitcoinConfirmedTxStatus(txid) {
 
 /**
  * Bark's Esplora client reads confirmation from `GET /tx/:txid` (`status.block_height`),
- * not from `/status`. Electrum leaves that field false after the tx is mined, so a
- * confirmed bitcoind status replaces `status` on the upstream JSON.
+ * not from `/status`. Electrum leaves that field false after the tx is mined, and can
+ * keep `confirmed: true` after `invalidateblock`. Whenever bitcoind has the tx, its
+ * status replaces `status` on the upstream JSON.
  */
 async function handleTxJson(req, res, txid) {
   if (req.method === 'OPTIONS') {
@@ -233,9 +246,9 @@ async function handleTxJson(req, res, txid) {
   }
 
   try {
-    const confirmed = await bitcoinConfirmedTxStatus(txid);
-    if (confirmed != null) {
-      parsed.status = confirmed;
+    const status = await bitcoinAuthoritativeStatus(txid);
+    if (status != null) {
+      parsed.status = status;
     }
   } catch (error) {
     console.error(`GET /api/tx/${txid} bitcoind status error:`, error.message);
@@ -318,7 +331,7 @@ async function mempoolSpender(txid, vout) {
   if (row == null || typeof row.spendingtxid !== 'string') {
     return null;
   }
-  const confirmed = await bitcoinConfirmedTxStatus(row.spendingtxid);
+  const confirmed = await bitcoinAuthoritativeStatus(row.spendingtxid);
   return {
     spent: true,
     txid: row.spendingtxid,
@@ -372,7 +385,7 @@ async function confirmedSpender(txid, vout) {
 async function esploraTxJsonFromBitcoind(txid) {
   const verbose = await bitcoinGetRawTransactionVerbose(txid);
   if (verbose == null) return null;
-  const confirmed = await bitcoinConfirmedTxStatus(txid);
+  const confirmed = await bitcoinAuthoritativeStatus(txid);
   const status = confirmed ?? { confirmed: false };
   const vin = (verbose.vin ?? []).map((input) => ({
     txid: input.txid ?? '0000000000000000000000000000000000000000000000000000000000000000',
@@ -497,7 +510,7 @@ async function handleTxStatus(req, res, txid) {
   }
 
   try {
-    const status = await bitcoinConfirmedTxStatus(txid);
+    const status = await bitcoinAuthoritativeStatus(txid);
     if (status != null) {
       const body = JSON.stringify(status);
       if (req.method === 'HEAD') {
@@ -688,8 +701,47 @@ async function handleTxMerkleProof(req, res, txid) {
   res.end(body);
 }
 
+async function handleTipHeight(req, res) {
+  if (req.method === 'OPTIONS') {
+    sendOptionsPreflight(res);
+    return;
+  }
+
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.writeHead(405, withCorsHeaders({ 'Content-Type': 'text/plain; charset=utf-8' }));
+    res.end('Method Not Allowed');
+    return;
+  }
+
+  try {
+    const height = await bitcoinRpc('getblockcount');
+    const body = String(height);
+    res.writeHead(
+      200,
+      withCorsHeaders({
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Content-Length': String(Buffer.byteLength(body)),
+      }),
+    );
+    if (req.method === 'HEAD') {
+      res.end();
+      return;
+    }
+    res.end(body);
+  } catch (error) {
+    console.error('GET /api/blocks/tip/height bitcoind error:', error.message);
+    res.writeHead(500, withCorsHeaders({ 'Content-Type': 'text/plain; charset=utf-8' }));
+    res.end('Failed to get block count');
+  }
+}
+
 const server = http.createServer((req, res) => {
   const pathname = new URL(req.url || '/', 'http://localhost').pathname;
+  if (pathname === TIP_HEIGHT_PATH) {
+    void handleTipHeight(req, res);
+    return;
+  }
+
   const rawMatch = TXID_RAW_PATH.exec(pathname);
   if (rawMatch) {
     void handleRawTransaction(req, res, rawMatch[1].toLowerCase());

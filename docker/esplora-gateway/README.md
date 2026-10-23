@@ -5,12 +5,13 @@ mempool/backend v3.3.1 in electrum mode serves `GET /api/tx/:txId/hex` but not `
 This gateway:
 
 - **`GET /api/tx/:txid/raw`** — bitcoind mempool or confirmed chain only (404 for wallet-only / virtual stubs)
-- **`GET /api/tx/:txid/status`** — bitcoind status when the tx is **confirmed** (overrides stale electrum `confirmed: false`)
-- **`GET /api/tx/:txid`** — the same bitcoind confirmation is written onto the JSON `status` Bark reads (`block_height` stays absent on electrum after the tx is mined)
+- **`GET /api/tx/:txid/status`** — bitcoind status when the tx is **confirmed**; `{ "confirmed": false }` when bitcoind has it in the mempool (does not proxy a stale Fulcrum confirmation). Proxy only when bitcoind does not have the tx.
+- **`GET /api/tx/:txid`** — when bitcoind has the tx, `status` is overwritten from that view, including `confirmed: false` after a reorg. A mined tx gets `block_height` so Bark can leave `AwaitingConfirmation`. Virtual-tree stubs bitcoind lacks stay proxied.
+- **`GET /api/blocks/tip/height`** — bitcoind `getblockcount`, so a reorg changes the height the wallet uses to drop its confirmation cache
 - **`GET /api/tx/:txid/outspend/:vout`** — bitcoind mempool spend, or a scan from the parent block when the child is already confirmed. Electrum returns 404, which leaves a Bark exit in `AwaitingConfirmation`
 - **`POST /api/txs/package`** — bitcoind `submitpackage` (JSON array of raw tx hex). mempool electrum returns a generic RPC error, which leaves Bark board funding unbroadcast.
 - **`POST /api/tx`** — bitcoind `sendrawtransaction` (raw tx hex, response is the txid). mempool electrum hides the Core error, which leaves Bark offboard and exit broadcasts unsent.
-- **All other paths** — proxied to `mempool_web` unchanged (JSON `/tx/:txid`, blocks, and so on)
+- **All other paths** — proxied to `mempool_web` unchanged
 
 Wired via [`../arkade-regtest.override.yml`](../arkade-regtest.override.yml); host port `MEMPOOL_WEB_PORT` (default 7030) binds here instead of `mempool_web`.
 
@@ -25,7 +26,7 @@ curl -sf -o /dev/null -w "hex=%{http_code}\n" http://localhost:7030/api/tx/$TXID
 curl -sf -o /dev/null -w "%{http_code}\n" \
   http://localhost:7030/api/tx/0000000000000000000000000000000000000000000000000000000000000000/raw
 
-# Tip height (proxied)
+# Tip height (bitcoind getblockcount)
 curl -sf http://localhost:7030/api/blocks/tip/height
 
 # CORS on /raw (required for browser WASM from Vite dev server)
