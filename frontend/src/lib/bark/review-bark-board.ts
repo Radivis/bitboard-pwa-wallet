@@ -1,3 +1,4 @@
+import { parsePositiveWholeSats } from '@/lib/fiat/sats-or-fiat-amount'
 import type { BarkBoardFeeEstimate, BarkPreparedBoardFunding } from '@/workers/bark-api'
 
 export type BarkBoardReview = {
@@ -21,11 +22,7 @@ export type ReviewBarkBoardDeps = {
 
 /** Positive whole sats. Rejects empty input, zero, fractions, and leading zeros. */
 export function parseBarkBoardAmountSats(raw: string): number | null {
-  const trimmed = raw.trim()
-  if (!/^[1-9]\d*$/.test(trimmed)) return null
-  const amountSats = Number(trimmed)
-  if (!Number.isSafeInteger(amountSats) || amountSats <= 0) return null
-  return amountSats
+  return parsePositiveWholeSats(raw)
 }
 
 /**

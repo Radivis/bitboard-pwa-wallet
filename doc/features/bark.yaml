@@ -332,7 +332,7 @@ feature:
           review. When the Bitcoin price is missing or still loading, Review stays disabled. On signet
           the amount stays a whole number of satoshis even when fiat mode is on
         implemented_by:
-          - frontend/src/components/wallet/send/__tests__/amount-sats-from-sats-or-fiat-field.test.ts
+          - frontend/src/lib/fiat/__tests__/sats-or-fiat-amount.test.ts
           - frontend/src/pages/wallet/__tests__/BarkBoardPage.test.tsx
       - id: BARK-BOARD-10
         description: >
@@ -406,7 +406,7 @@ feature:
           balance is unchanged. On signet the amount stays a whole number of satoshis even when fiat
           mode is on
         implemented_by:
-          - frontend/src/components/wallet/send/__tests__/amount-sats-from-sats-or-fiat-field.test.ts
+          - frontend/src/lib/fiat/__tests__/sats-or-fiat-amount.test.ts
           - frontend/src/pages/wallet/__tests__/BarkOffboardPage.test.tsx
     vtxo_list:
       - id: BARK-VTX-01

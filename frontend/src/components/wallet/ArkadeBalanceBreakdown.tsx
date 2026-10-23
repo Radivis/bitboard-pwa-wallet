@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { FiatBtcAmountDisplay } from '@/components/FiatBtcAmountDisplay'
+import { FiatBtcAmountDisplay, LabeledFiatBtcAmount } from '@/components/FiatBtcAmountDisplay'
 import { useMainnetFiatAmountProps } from '@/hooks/useMainnetFiatAmountProps'
 import {
   ARKADE_BALANCE_BOARDING_INFOMODE,
@@ -55,6 +55,7 @@ export function ArkadeBalanceBreakdown({
   const showPendingRecoveryDueToExpiredSigner = pendingRecoveryDueToExpiredSignerSats > 0
   const pendingOperatorSweepSats = arkadeRecoverablePendingOperatorSweepSats(balance)
   const pendingOperatorSweepCount = arkadeRecoverablePendingOperatorSweepVtxoCount(balance)
+  const pendingOperatorSweepVtxoLabel = pendingOperatorSweepCount === 1 ? 'VTXO' : 'VTXOs'
   const showPendingOperatorSweep = pendingOperatorSweepSats > 0
   const onchainBumperSats = arkadeOnchainBumperSats(balance)
   const showBumperBreakdown = onchainBumperSats > 0
@@ -77,22 +78,24 @@ export function ArkadeBalanceBreakdown({
               infoText={ARKADE_BALANCE_BOARDING_INFOMODE.text}
               as="span"
             >
-              <p data-testid="arkade-balance-boarding-spendable">
-                Incl. on-chain boarding (ready to{' '}
-                <Link
-                  to="/wallet/arkade/board"
-                  className="text-primary underline-offset-4 hover:underline"
-                  data-testid="arkade-balance-settle-in-management-link"
-                >
-                  settle in management
-                </Link>
-                ):{' '}
-                <FiatBtcAmountDisplay
-                  amountSats={boardingSpendableSats}
-                  {...fiatAmountProps}
-                  isDetail
-                />
-              </p>
+              <LabeledFiatBtcAmount
+                label={
+                  <>
+                    Incl. on-chain boarding (ready to{' '}
+                    <Link
+                      to="/wallet/arkade/board"
+                      className="text-primary underline-offset-4 hover:underline"
+                      data-testid="arkade-balance-settle-in-management-link"
+                    >
+                      settle in management
+                    </Link>
+                    ):
+                  </>
+                }
+                amountSats={boardingSpendableSats}
+                testId="arkade-balance-boarding-spendable"
+                fiat={fiatAmountProps}
+              />
             </InfomodeWrapper>
           )}
           {boardingPendingSats > 0 && (
@@ -102,14 +105,12 @@ export function ArkadeBalanceBreakdown({
               infoText={ARKADE_BALANCE_BOARDING_PENDING_INFOMODE.text}
               as="span"
             >
-              <p data-testid="arkade-balance-boarding-pending">
-                Pending boarding confirmation:{' '}
-                <FiatBtcAmountDisplay
-                  amountSats={boardingPendingSats}
-                  {...fiatAmountProps}
-                  isDetail
-                />
-              </p>
+              <LabeledFiatBtcAmount
+                label="Pending boarding confirmation:"
+                amountSats={boardingPendingSats}
+                testId="arkade-balance-boarding-pending"
+                fiat={fiatAmountProps}
+              />
             </InfomodeWrapper>
           )}
           {boardingSpendableSats > 0 && offchainSpendableSats > 0 && (
@@ -119,14 +120,11 @@ export function ArkadeBalanceBreakdown({
               infoText={ARKADE_BALANCE_VTXOS_INFOMODE.text}
               as="span"
             >
-              <p>
-                Offchain VTXOs:{' '}
-                <FiatBtcAmountDisplay
-                  amountSats={offchainSpendableSats}
-                  {...fiatAmountProps}
-                  isDetail
-                />
-              </p>
+              <LabeledFiatBtcAmount
+                label="Offchain VTXOs:"
+                amountSats={offchainSpendableSats}
+                fiat={fiatAmountProps}
+              />
             </InfomodeWrapper>
           )}
         </div>
@@ -140,14 +138,12 @@ export function ArkadeBalanceBreakdown({
               infoText={ARKADE_BALANCE_EXIT_PROGRESS_INFOMODE.text}
               as="span"
             >
-              <p data-testid="arkade-balance-unilateral-exit">
-                Unilateral exit in progress: −{' '}
-                <FiatBtcAmountDisplay
-                  amountSats={unilateralExitSats}
-                  {...fiatAmountProps}
-                  isDetail
-                />
-              </p>
+              <LabeledFiatBtcAmount
+                label="Unilateral exit in progress: −"
+                amountSats={unilateralExitSats}
+                testId="arkade-balance-unilateral-exit"
+                fiat={fiatAmountProps}
+              />
             </InfomodeWrapper>
           )}
           {collaborativeExitSats > 0 && (
@@ -157,27 +153,24 @@ export function ArkadeBalanceBreakdown({
               infoText={ARKADE_BALANCE_EXIT_PROGRESS_INFOMODE.text}
               as="span"
             >
-              <p data-testid="arkade-balance-collaborative-exit">
-                Collaborative exit in progress: −{' '}
-                <FiatBtcAmountDisplay
-                  amountSats={collaborativeExitSats}
-                  {...fiatAmountProps}
-                  isDetail
-                />
-              </p>
+              <LabeledFiatBtcAmount
+                label="Collaborative exit in progress: −"
+                amountSats={collaborativeExitSats}
+                testId="arkade-balance-collaborative-exit"
+                fiat={fiatAmountProps}
+              />
             </InfomodeWrapper>
           )}
         </div>
       )}
       {showPendingRecoveryDueToExpiredSigner && (
-        <p className="text-xs text-muted-foreground" data-testid="arkade-balance-pending-recovery-due-to-expired-signer">
-          Pending recovery (expired signer):{' '}
-          <FiatBtcAmountDisplay
-            amountSats={pendingRecoveryDueToExpiredSignerSats}
-            {...fiatAmountProps}
-            isDetail
-          />
-        </p>
+        <LabeledFiatBtcAmount
+          label="Pending recovery (expired signer):"
+          amountSats={pendingRecoveryDueToExpiredSignerSats}
+          testId="arkade-balance-pending-recovery-due-to-expired-signer"
+          className="text-xs text-muted-foreground"
+          fiat={fiatAmountProps}
+        />
       )}
       {showPendingOperatorSweep && (
         <InfomodeWrapper
@@ -186,18 +179,13 @@ export function ArkadeBalanceBreakdown({
           infoText={ARKADE_BALANCE_RECOVERABLE_PENDING_OPERATOR_SWEEP_INFOMODE.text}
           as="span"
         >
-          <p
+          <LabeledFiatBtcAmount
+            label={`Expired — waiting for operator sweep (${pendingOperatorSweepCount} ${pendingOperatorSweepVtxoLabel}):`}
+            amountSats={pendingOperatorSweepSats}
+            testId="arkade-balance-recoverable-pending-operator-sweep"
             className="text-xs text-muted-foreground"
-            data-testid="arkade-balance-recoverable-pending-operator-sweep"
-          >
-            Expired — waiting for operator sweep ({pendingOperatorSweepCount} VTXO
-            {pendingOperatorSweepCount === 1 ? '' : 's'}):{' '}
-            <FiatBtcAmountDisplay
-              amountSats={pendingOperatorSweepSats}
-              {...fiatAmountProps}
-              isDetail
-            />
-          </p>
+            fiat={fiatAmountProps}
+          />
         </InfomodeWrapper>
       )}
       {showBumperBreakdown && (
@@ -206,14 +194,13 @@ export function ArkadeBalanceBreakdown({
           infoComponent={ArkadeBumperWalletInfomodeContent}
           as="span"
         >
-          <p className="text-xs text-muted-foreground" data-testid="arkade-balance-bumper">
-            Bumper wallet (exit fees):{' '}
-            <FiatBtcAmountDisplay
-              amountSats={onchainBumperSats}
-              {...fiatAmountProps}
-              isDetail
-            />
-          </p>
+          <LabeledFiatBtcAmount
+            label="Bumper wallet (exit fees):"
+            amountSats={onchainBumperSats}
+            testId="arkade-balance-bumper"
+            className="text-xs text-muted-foreground"
+            fiat={fiatAmountProps}
+          />
         </InfomodeWrapper>
       )}
       {showRecoverableTotal && (
@@ -223,14 +210,12 @@ export function ArkadeBalanceBreakdown({
           infoText={ARKADE_BALANCE_RECOVERABLE_INFOMODE.text}
           as="span"
         >
-          <p className="text-xs text-muted-foreground">
-            Total (incl. recoverable):{' '}
-            <FiatBtcAmountDisplay
-              amountSats={balance.totalSats}
-              {...fiatAmountProps}
-              isDetail
-            />
-          </p>
+          <LabeledFiatBtcAmount
+            label="Total (incl. recoverable):"
+            amountSats={balance.totalSats}
+            className="text-xs text-muted-foreground"
+            fiat={fiatAmountProps}
+          />
         </InfomodeWrapper>
       )}
     </div>

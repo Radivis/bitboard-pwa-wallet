@@ -7,7 +7,6 @@ import { BarkRailUnavailable } from '@/components/bark/BarkRailUnavailable'
 import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
 import { LabeledFiatBtcAmount } from '@/components/FiatBtcAmountDisplay'
 import { SatsOrFiatAmountField } from '@/components/SatsOrFiatAmountField'
-import { amountSatsFromSatsOrFiatField } from '@/components/wallet/send/amount-sats-from-sats-or-fiat-field'
 import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
@@ -16,15 +15,18 @@ import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapsh
 import { useOnchainFeeRateSelection } from '@/hooks/useOnchainFeeRateSelection'
 import { useMainnetFiatAmountProps } from '@/hooks/useMainnetFiatAmountProps'
 import { barkBoardPerformDeps, barkBoardReviewDeps } from '@/lib/bark/bark-board-live-deps'
-import { barkAmountReviewDecision } from '@/lib/bark/bark-denomination-amount'
 import { performBarkBoard } from '@/lib/bark/perform-bark-board'
 import {
   repriceBarkBoardOnchain,
   reviewBarkBoard,
   type BarkBoardReview,
 } from '@/lib/bark/review-bark-board'
-import { errorMessage } from '@/lib/shared/utils'
 import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
+import {
+  amountSatsFromSatsOrFiatField,
+  satsOrFiatAmountReviewDecision,
+} from '@/lib/fiat/sats-or-fiat-amount'
+import { errorMessage } from '@/lib/shared/utils'
 import { useFeatureStore } from '@/stores/featureStore'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 
@@ -149,7 +151,7 @@ export function BarkBoardPage() {
   }
 
   async function onReview() {
-    const amountDecision = barkAmountReviewDecision(amountRaw, fiatAmount)
+    const amountDecision = satsOrFiatAmountReviewDecision(amountRaw, fiatAmount)
     if (amountDecision.kind === 'blocked') {
       setReviewError(null)
       discardReview()

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { amountSatsFromSatsOrFiatField } from '@/components/wallet/send/amount-sats-from-sats-or-fiat-field'
+import {
+  amountSatsFromSatsOrFiatField,
+  satsOrFiatAmountReviewDecision,
+} from '@/lib/fiat/sats-or-fiat-amount'
 
 const spotPriceUsdPerBtc = 100_000
 
@@ -42,14 +45,51 @@ describe('amountSatsFromSatsOrFiatField', () => {
     expect(amountSatsFromSatsOrFiatField('0', fiatOptions)).toBeNull()
     expect(amountSatsFromSatsOrFiatField('0.00', fiatOptions)).toBeNull()
     expect(amountSatsFromSatsOrFiatField('abc', fiatOptions)).toBeNull()
-    expect(
-      amountSatsFromSatsOrFiatField('0.00000001', fiatOptions),
-    ).toBeNull()
+    expect(amountSatsFromSatsOrFiatField('0.00000001', fiatOptions)).toBeNull()
     expect(
       amountSatsFromSatsOrFiatField('10', {
         useFiatAmountEntry: true,
         btcPriceInFiat: null,
       }),
     ).toBeNull()
+  })
+})
+
+describe('satsOrFiatAmountReviewDecision', () => {
+  const fiatEntry = {
+    mainnetFiatEntry: true,
+    hasUsableFiatSpot: true,
+    btcPriceInFiat: spotPriceUsdPerBtc,
+    currency: 'USD' as const,
+  }
+
+  it('blocks review when fiat entry has no usable spot price', () => {
+    expect(
+      satsOrFiatAmountReviewDecision('10', {
+        ...fiatEntry,
+        hasUsableFiatSpot: false,
+        btcPriceInFiat: null,
+      }),
+    ).toEqual({ kind: 'blocked' })
+  })
+
+  it('rejects an unusable field', () => {
+    expect(satsOrFiatAmountReviewDecision('abc', fiatEntry)).toEqual({
+      kind: 'invalid',
+      message: 'Enter an amount in USD.',
+    })
+    expect(
+      satsOrFiatAmountReviewDecision('1.5', { ...fiatEntry, mainnetFiatEntry: false }),
+    ).toEqual({
+      kind: 'invalid',
+      message: 'Enter a whole number of satoshis.',
+    })
+  })
+
+  it('returns sats when the field is usable', () => {
+    expect(satsOrFiatAmountReviewDecision('10', fiatEntry)).toEqual({
+      kind: 'ready',
+      amountSats: 10_000,
+    })
   })
 })

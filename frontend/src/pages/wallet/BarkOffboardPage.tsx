@@ -9,14 +9,12 @@ import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominat
 import { LabeledFiatBtcAmount } from '@/components/FiatBtcAmountDisplay'
 import { SatsOrFiatAmountField } from '@/components/SatsOrFiatAmountField'
 import { BarkPendingActionBanner } from '@/components/wallet/BarkPendingActionBanner'
-import { amountSatsFromSatsOrFiatField } from '@/components/wallet/send/amount-sats-from-sats-or-fiat-field'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
 import { useBarkSyncLifecycleSnapshot } from '@/hooks/useBarkSyncLifecycleSnapshot'
 import { useMainnetFiatAmountProps } from '@/hooks/useMainnetFiatAmountProps'
-import { barkAmountReviewDecision } from '@/lib/bark/bark-denomination-amount'
 import { barkOffboardPerformDeps, barkOffboardReviewDeps } from '@/lib/bark/bark-offboard-live-deps'
 import { BarkOffboardParkedError, performBarkOffboard } from '@/lib/bark/perform-bark-offboard'
 import {
@@ -24,8 +22,12 @@ import {
   reviewBarkOffboardAmount,
   type BarkOffboardReview,
 } from '@/lib/bark/review-bark-offboard'
-import { errorMessage } from '@/lib/shared/utils'
 import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
+import {
+  amountSatsFromSatsOrFiatField,
+  satsOrFiatAmountReviewDecision,
+} from '@/lib/fiat/sats-or-fiat-amount'
+import { errorMessage } from '@/lib/shared/utils'
 import { useFeatureStore } from '@/stores/featureStore'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 
@@ -81,7 +83,7 @@ export function BarkOffboardPage() {
   }
 
   async function onReviewAmount() {
-    const amountDecision = barkAmountReviewDecision(amountRaw, fiatAmount)
+    const amountDecision = satsOrFiatAmountReviewDecision(amountRaw, fiatAmount)
     if (amountDecision.kind === 'blocked') {
       setReview(null)
       setReviewError(null)

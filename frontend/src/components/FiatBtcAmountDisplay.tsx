@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import {
   BitcoinAmountDisplay,
   type BitcoinAmountDisplaySize,
@@ -99,21 +100,23 @@ export function FiatBtcAmountDisplay({
 }
 
 type LabeledFiatBtcAmountProps = {
-  label: string
+  label: ReactNode
   amountSats: number
-  testId: string
+  testId?: string
+  className?: string
   fiat: MainnetFiatAmountDisplayProps
 }
 
-/** A review row: label, then fiat and bitcoin for the same sat amount. */
+/** A detail row: label, then fiat and bitcoin for the same sat amount. */
 export function LabeledFiatBtcAmount({
   label,
   amountSats,
   testId,
+  className,
   fiat,
 }: LabeledFiatBtcAmountProps) {
   return (
-    <p data-testid={testId}>
+    <p className={className} data-testid={testId}>
       {label}{' '}
       <FiatBtcAmountDisplay
         amountSats={amountSats}
