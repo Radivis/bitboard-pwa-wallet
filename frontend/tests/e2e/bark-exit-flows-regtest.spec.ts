@@ -106,9 +106,17 @@ async function startEmergencyExitOfOneVtxo(page: Page): Promise<void> {
     buttonTestId: 'bark-emergency-exit-review',
     success: page.getByTestId('bark-emergency-exit-fee-review'),
   })
+  await page.getByTestId('bark-emergency-exit-start').click()
+  await confirmEmergencyExitStart(page)
+}
+
+/** Acknowledge the loss-of-funds and fee risks, then confirm. Start runs only after that. */
+async function confirmEmergencyExitStart(page: Page): Promise<void> {
+  await expect(page.getByTestId('bark-emergency-exit-start-confirm-modal')).toBeVisible()
+  await page.getByTestId('bark-emergency-exit-start-ack').check()
   await clickEmergencyExitAction(page, {
     label: 'Emergency exit start',
-    buttonTestId: 'bark-emergency-exit-start',
+    buttonTestId: 'bark-emergency-exit-start-confirm',
     success: page.getByText('Emergency exit started.'),
   })
 }
@@ -124,13 +132,58 @@ async function progressEmergencyExitUntilClaimable(page: Page): Promise<void> {
     } else {
       await mineRegtestBlocks(1)
     }
-    await clickEmergencyExitAction(page, {
-      label: 'Emergency exit progress',
-      buttonTestId: 'bark-emergency-exit-progress',
-      success: page.getByText('Emergency exit progressed.'),
-    })
+    await clickEmergencyExitProgress(page)
   }
   await expect(row).toContainText('Claimable')
+}
+
+/**
+ * A full progress toasts. A partial one leaves children waiting for confirmed change
+ * and shows the funding banner instead, so the next pass can fund them after a block.
+ */
+async function clickEmergencyExitProgress(page: Page): Promise<void> {
+  const notes: string[] = []
+  const onConsole = (message: { type: () => string; text: () => string }) => {
+    const type = message.type()
+    if (type === 'error' || type === 'warning') notes.push(`${type}: ${message.text()}`)
+  }
+  page.on('console', onConsole)
+  const progressButton = page.getByTestId('bark-emergency-exit-progress')
+  const errorToast = page.locator('[data-sonner-toast][data-type="error"]')
+  const errorsBefore = await errorToast.count()
+  const fundingBanner = page.getByTestId('bark-emergency-exit-funding-banner')
+  const progressed = page.getByText('Emergency exit progressed.')
+  let sawProgressToast = false
+  const watchProgressToast = progressed
+    .waitFor({ state: 'visible', timeout: 120_000 })
+    .then(() => {
+      sawProgressToast = true
+    })
+    .catch(() => undefined)
+  try {
+    await progressButton.click()
+    await expect(progressButton).toBeDisabled()
+    await expect(progressButton).toBeEnabled({ timeout: 120_000 })
+    const failed = errorToast.nth(errorsBefore)
+    if (await failed.isVisible()) {
+      const message = (await failed.innerText()).replace(/\s+/g, ' ').trim()
+      throw new Error(`Emergency exit progress failed: ${message}`)
+    }
+    if (!sawProgressToast && !(await fundingBanner.isVisible())) {
+      await expect(progressed.or(fundingBanner).first()).toBeVisible({ timeout: 5_000 })
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith('Emergency exit progress failed:')) {
+      throw err
+    }
+    throw new Error(
+      `Emergency exit progress showed neither its result nor an error. Console: ${notes.join(' | ') || '(none)'}`,
+      { cause: err },
+    )
+  } finally {
+    page.off('console', onConsole)
+    void watchProgressToast
+  }
 }
 
 async function claimEmergencyExitUntilOnchainGain(page: Page): Promise<void> {

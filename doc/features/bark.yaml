@@ -14,11 +14,15 @@ feature:
     - As a user with Bark enabled on signet or mainnet, I want to know when to unlock this wallet again so Bark can refresh my VTXOs, because Bark has no delegate that refreshes them while the wallet is locked
     - As a user, I want Bark to sync after unlock, from the Sync control, and on the same periodic interval policy as the other rails
     - As a user with Bark enabled on signet or mainnet, I want to board an amount from my on-chain wallet into Bark
+    - As a user boarding into Bark, I want to choose the on-chain fee rate for the funding transaction before I confirm
+    - As a user on mainnet with fiat denomination mode, I want Bark balances and board and exit amounts shown in my fiat currency
     - As a user, I want a failed board to leave my on-chain wallet unspent
     - As a user, I want Bark fund movements on the activity list, including failed movements that still changed funds
+    - As a user, I want an on-chain Pay-to-Anchor fee bump to show a CPFP fee bump badge on the dashboard, so it is not mistaken for an empty payment
     - As a user with Bark enabled on signet or mainnet, I want to exit a chosen amount, or my whole spendable Bark balance, to my current on-chain receive address
     - As a user, I want a failed Bark exit to leave the page without a success message, and a parked exit to stay visible as a banner on the exit page, the dashboard, and management
     - As a user with Bark enabled on signet or mainnet, I want to open a VTXO list from wallet management and see each coin's Bark state
+    - As a user, I want each Bark VTXO card to show how far that coin's emergency exit has gotten, including a started exit, the timelock after confirmation, and an anchor sweep or a seizure of a checkpoint, leaf, or internal node
     - As a user with Bark enabled on signet or mainnet, I want to send to a Bark Ark address from the send form
     - As a user with Bark enabled on signet or mainnet, I want an emergency-exit control page where I can exit selected spendable VTXOs or the whole wallet, watch each coin's exit state, progress it, cancel while Bark still allows it, and claim claimable coins to my current on-chain receive address
     - As a user, I want a failed emergency-exit step to leave the page without a success message
@@ -29,6 +33,7 @@ feature:
     - Activating or switching to another wallet clears the previous wallet's Bark balance, sync time, and pending-action placeholder before that wallet's own Bark session is shown
     - A failed sync does not replace the last shown spendable or locked amount
     - When locked sats are above zero, the dashboard headline is spendable plus locked and shows those two sub-lines
+    - On mainnet with fiat denomination mode and a usable Bitcoin price, Bark balance amounts and board and exit amount entry use that fiat currency. Signet stays in bitcoin even when fiat mode is on
     - Exiting sats are coins in an emergency exit. They are read with spendable and locked sats after a successful Bark sync and are never added to the dashboard headline
     - When exiting sats are above zero, the card shows the sub-lines with an Exiting line, even when locked sats are zero. A zero locked amount has no Locked line
     - Sub-lines use the detail amount size, not the headline size
@@ -37,6 +42,7 @@ feature:
     - Periodic sync for Bark follows the master toggle, the per-rail switch, signet or mainnet, and tab visibility
     - Board from on-chain is offered only when isBarkEnabled and the network is signet or mainnet
     - Confirm signs the reviewed PSBT and submits it to Bark. It does not broadcast through the on-chain Esplora client
+    - Review lets the user pick the on-chain fee rate. Confirm signs the funding transaction built at that rate. Changing the rate does not derive another VTXO key
     - A failed board submission does not apply the funding transaction to the on-chain wallet
     - Boarding does not change the stored receive key index
     - Spendable Bark balance updates after confirmations and a later Bark sync
@@ -57,10 +63,14 @@ feature:
     - That time is the start of the next refresh period (Bark's next required refresh height), estimated from the sync time and the average block interval of the open network
     - When the refresh period has already started, the notice asks the user to keep the wallet unlocked and synced instead of naming a time
     - The notice covers only the open wallet and network. It is cleared on lock, wallet switch, and session change
+    - A confirmed spend of one output of an anchor transaction, by any transaction other than the first exit transaction of the branch through that output, is an anchor sweep. It records every unspent VTXO on that branch and marks those coins spent before refresh is scheduled. The server already claimed that output after expiry, so renewal cannot restore them. The scan checks each output of an anchor transaction on its own, before hops. Only the branch through the swept output is left out of the hop seizure check. A branch through another output of the same anchor transaction is still checked
+    - A confirmed spend of one output of a hot exit hop, when that output's next exit transaction is not yet confirmed, by any transaction other than that next exit transaction, records every remaining unspent VTXO whose history continues through that output as spent, before refresh is scheduled. The recorded kind is checkpoint, leaf, or internal node, from the hop that was spent. A history can be recorded under more than one kind when more than one of its hops was seized. Another output of the same transaction is not recorded. A hop whose next exit transaction is already confirmed is not watched. The VTXO outpoint itself is not watched
+    - The wallet layout shows one banner. Each recorded kind is its own section and lists its VTXO ids. Every section with ids shows together. The Bark account stores one array of items, each with a VTXO id and a node kind of anchor, internal, leaf, or checkpoint. Each sync appends newly recorded items and leaves the others in place. A sync that records nothing removes nothing. Dismissing a section removes only that kind. Lock, wallet switch, and session change hide the banner until that wallet is unlocked again
     - The VTXO list link and page exist only when isBarkEnabled and the network is signet or mainnet
     - The VTXO list is the local Bark database. It is not an operator snapshot
-    - Spent and Exited VTXOs stay hidden until the user shows them. Locked VTXOs stay visible
+    - Spent and Exited VTXOs stay hidden until the user shows them, except a live emergency exit, an anchor-swept coin, and a coin seized at a checkpoint, leaf, or internal node, which stay listed. Locked VTXOs stay visible
     - A VTXO card shows id, amount, state, a lock line that names the pending action or history label, expiry as blocks remaining plus an approximate date, and Registered only when the coin is registered
+    - A card ends with Emergency exit phase when the coin has a live exit, is claimed, or is named by an anchor sweep or a hop seizure. A coin with no exit omits that line. A sweep or seizure wins over a live exit. When more than one item names the coin, the phase prefers an internal node, then a leaf, then a checkpoint. While processing, the copy is the frontier exit-tree phase, and it names how many non-anchor exit transactions are confirmed once one is. After confirmation, the copy is the timelock as blocks elapsed of the total. Until that exit tree has loaded, a processing coin reads processing
     - Search, state chips, sort, and pagination filter the loaded list and do not call the worker again
     - A Signet Bark policy address (tark1p) is a valid send recipient when isBarkEnabled and the network is signet
     - A Mainnet Bark policy address (ark1p) is a valid send recipient when isBarkEnabled and the network is mainnet
@@ -73,8 +83,11 @@ feature:
     - Emergency exit does not call send_onchain or offboard_all
     - Emergency exit never contacts or waits for the Ark server. Review, start, progress, cancel, and claim work in a session whose Bark sync failed because the server is unreachable
     - Review, before start, shows the broadcast fee, the later claim fee, and how many transactions must be broadcast
-    - Emergency exit broadcast, Pay-to-Anchor children, and the claim use the open network's High fee preset from the on-chain Esplora, not Bark's own fast rate
+    - While Proceed automatically is off, Review, Progress, and Claim use the fee rate selected on the page (low, medium, high, or custom sat/vB). Presets come from the open network's on-chain Esplora, not Bark's own fast rate
+    - While Proceed automatically is on, each automatic progress resolves the saved low, medium, or high degree to the live Esplora preset, locks that sat/vB for that call, and pauses without broadcasting when the live rate exceeds the saved maximum or the step is unfundable. A partial funding wait does not pause. Claim uses that same resolved rate and does not broadcast while the fee-cap pause is active
+    - After a successful Bark sync, already-started exits progress at the High preset while Proceed automatically is off, and use that same automatic fee lock while it is on
     - Start stays disabled when the on-chain confirmed balance is below the broadcast fee
+    - Start asks for confirmation and stays disabled until the user acknowledges the loss-of-funds and on-chain fee risks. The exit is marked only after that confirmation
     - Progress is a button. After a successful Bark sync, already-started exits take that same path, including Pay-to-Anchor children
     - Cancel is offered only while that exit is still cancelable
     - A start that marks no VTXO is an error and does not toast success
@@ -85,7 +98,7 @@ feature:
     - The exit tree is shown on the emergency-exit page when Bark is enabled on signet or mainnet. It loads the checked spendable VTXOs, or every spendable VTXO when the whole wallet is checked, plus every live exit
     - After Start clears the checkboxes, live exits keep the exit tree on screen
     - The exit tree has one node per exit transaction, plus the chain anchor. A txid shared by two VTXOs is one node. An input that is neither an exit transaction nor that anchor is not a node
-    - A node is pending, in progress, or confirmed. Needs a child appears only while that transaction is waiting for a Pay-to-Anchor child. That child is not a node
+    - Each exit-tree node shows one phase. Not processing has no badge. Waiting for confirmed funds shows a spinner and a wallet icon. Waiting to broadcast the Pay-to-Anchor child shows a spinner and a megaphone. Waiting for confirmation shows a spinner and a pickaxe. Confirmed shows a check.
     - A checkpoint transaction shows the checkpoint icon and the Checkpoint label. Another non-leaf transaction shows the tree icon
     - The chain anchor shows the commitment icon and the Commitment label. It is confirmed unless a child is still waiting on it
     - Focusing a node shows its transaction id and the VTXO ids whose exit leaf is that transaction
@@ -153,6 +166,19 @@ feature:
       - id: DASH-BARK-17
         description: When locked sats are zero and exiting sats are above zero, the card shows the Spendable and Exiting sub-lines and no Locked line
         implemented_by: frontend/src/components/wallet/__tests__/BarkDashboardBalance.test.tsx
+      - id: DASH-BARK-18
+        description: >
+          On mainnet with fiat denomination mode and a usable spot price, the Bark headline and
+          Spendable, Locked, and Exiting sub-lines show fiat as the primary amount and bitcoin as
+          the secondary amount. On signet those amounts stay in bitcoin even when fiat mode is on
+        implemented_by: frontend/src/components/wallet/__tests__/BarkDashboardBalance.test.tsx
+      - id: DASH-BARK-19
+        description: >
+          A confirmed or pending on-chain Pay-to-Anchor CPFP child shows a CPFP fee bump badge
+          beside its direction. A normal send does not
+        implemented_by:
+          - crypto/tests/p2a_cpfp_tests.rs
+          - frontend/src/components/__tests__/TransactionItem.test.tsx
     session_screens:
       - id: BARK-SESS-01
         description: >
@@ -216,6 +242,32 @@ feature:
           The hint names an approximate unlock time when the next refresh height is ahead of the tip,
           and asks to stay unlocked when the refresh period has started
         implemented_by: frontend/src/lib/bark/__tests__/bark-next-refresh-hint.test.ts
+      - id: BARK-SYNC-11
+        description: >
+          A confirmed foreign spend of one output of an anchor transaction, by any transaction other
+          than the first exit transaction of the branch through that output, is an anchor sweep. It
+          records every unspent VTXO on that branch and marks those coins spent before refresh is
+          scheduled. Renewal cannot restore them. The scan checks each output of an anchor
+          transaction on its own, before hops. Only the branch through the swept output is left out
+          of the hop seizure check. A branch through another output of the same anchor transaction
+          is still checked. A confirmed foreign spend of one output of a hot exit hop
+          records every remaining unspent VTXO whose history continues through that output as spent,
+          before refresh is scheduled, and names the spent node as a checkpoint, a leaf, or an
+          internal node. A history can appear as more than one item. Another output of
+          the same transaction is not recorded. A hop whose next exit transaction is already
+          confirmed is not watched, and the VTXO outpoint is not watched. The wallet layout shows
+          one banner. Each kind is a section that lists its VTXO ids, and every section with ids
+          shows together. The Bark account stores one array of items, each with a VTXO id and a
+          node kind. A later sync appends items and leaves the others in place. A sync that
+          records nothing removes nothing. Dismissing a section removes only that kind. Lock,
+          wallet switch, and session change hide the banner until that wallet is unlocked again
+        implemented_by:
+          - bitboard-bark/src/exit_seizure.rs
+          - frontend/src/lib/bark/__tests__/bark-rail-metadata.test.ts
+          - frontend/src/lib/wallet/lifecycle/__tests__/bark-sync-lifecycle-orchestrator.test.ts
+          - frontend/src/lib/wallet/lifecycle/__tests__/bark-load-lifecycle-orchestrator.test.ts
+          - frontend/src/lib/bark/__tests__/bark-exit-seizure-notice.test.ts
+          - frontend/src/components/bark/__tests__/BarkExitSeizureBanner.test.tsx
     metadata:
       - id: BARK-META-01
         description: A successful sync stamp keeps the fingerprint and receive index and writes an ISO timestamp
@@ -272,6 +324,26 @@ feature:
       - id: BARK-BOARD-08
         description: The board fee is estimated before a new VTXO key is derived
         implemented_by: frontend/src/lib/bark/__tests__/review-bark-board.test.ts
+      - id: BARK-BOARD-09
+        description: >
+          On mainnet with fiat denomination mode and a usable spot price, the board amount is entered
+          in the default fiat currency and converted to sats before review. Review shows the on-chain
+          fee, the Bark board fee, and the net VTXO in fiat. An invalid fiat amount does not start
+          review. When the Bitcoin price is missing or still loading, Review stays disabled. On signet
+          the amount stays a whole number of satoshis even when fiat mode is on
+        implemented_by:
+          - frontend/src/lib/fiat/__tests__/sats-or-fiat-amount.test.ts
+          - frontend/src/pages/wallet/__tests__/BarkBoardPage.test.tsx
+      - id: BARK-BOARD-10
+        description: >
+          Review lets the user pick low, medium, high, or a custom sat/vB from the open network's
+          Esplora presets. Confirm signs the PSBT built at that rate. Changing the rate rebuilds only
+          the on-chain funding transaction and does not derive another VTXO key. Confirm stays
+          disabled while that rebuild is in flight, while a custom rate is not a positive number,
+          and after a rebuild error.
+        implemented_by:
+          - frontend/src/lib/bark/__tests__/review-bark-board.test.ts
+          - frontend/src/pages/wallet/__tests__/BarkBoardPage.test.tsx
     history:
       - id: BARK-HIST-01
         description: A history payload maps to movement rows with status and signed balance
@@ -325,6 +397,17 @@ feature:
       - id: BARK-EXIT-12
         description: A new exit selects spendable VTXOs only, and a server rejection that names a spent VTXO records that id once
         implemented_by: bitboard-bark/src/exit_address.rs
+      - id: BARK-EXIT-13
+        description: >
+          On mainnet with fiat denomination mode and a usable spot price, the chosen exit amount is
+          entered in the default fiat currency and converted to sats before review. Review shows the
+          server fee and the on-chain amount in fiat. An invalid fiat amount does not start review.
+          When the Bitcoin price is missing or still loading, Review amount stays disabled. Exit entire
+          balance is unchanged. On signet the amount stays a whole number of satoshis even when fiat
+          mode is on
+        implemented_by:
+          - frontend/src/lib/fiat/__tests__/sats-or-fiat-amount.test.ts
+          - frontend/src/pages/wallet/__tests__/BarkOffboardPage.test.tsx
     vtxo_list:
       - id: BARK-VTX-01
         description: Management shows List VTXOs only when Bark is on and the network is signet or mainnet
@@ -336,8 +419,10 @@ feature:
         description: A card shows id, amount, state, blocks until expiry with an approximate date, a lock line that names the exit instead of a raw id, and Registered only when true
         implemented_by: frontend/src/components/bark/__tests__/BarkVtxoCard.test.tsx
       - id: BARK-VTX-04
-        description: Hide spent and exited defaults on, and the toggle shows those cards
-        implemented_by: frontend/src/pages/wallet/__tests__/BarkVtxoViewerPage.test.tsx
+        description: Hide spent and exited defaults on, and the toggle shows those cards. A live emergency exit, an anchor-swept coin, and a coin seized at a checkpoint, leaf, or internal node stay listed while the toggle is on
+        implemented_by:
+          - frontend/src/pages/wallet/__tests__/BarkVtxoViewerPage.test.tsx
+          - frontend/src/lib/bark/__tests__/bark-vtxo-viewer-display.test.ts
       - id: BARK-VTX-05
         description: Search matches a partial id or a sats amount
         implemented_by: frontend/src/lib/bark/__tests__/bark-vtxo-viewer-display.test.ts
@@ -355,6 +440,22 @@ feature:
           The management Bark card shows the next refresh hint above the pending-action banner
           when the last sync reported a next refresh height
         implemented_by: frontend/src/components/wallet/__tests__/BarkPanel.test.tsx
+      - id: BARK-VTX-10
+        description: >
+          Each card ends with Emergency exit phase when the coin has a live exit, is claimed, or
+          is named by an anchor sweep or a hop seizure. A coin with no exit omits that line.
+          Copy is started, the frontier node phase while processing (with how many non-anchor exit
+          transactions are confirmed once one is), waiting for timelock with blocks elapsed of the
+          total after confirmation, ready to claim, claim in progress, claimed, anchor swept,
+          internal node seized, leaf seized, or checkpoint seized. A sweep or seizure wins over a
+          live exit. When more than one item names the coin, the phase prefers an
+          internal node, then a leaf, then a checkpoint. While the exit tree for a processing coin has not loaded, the
+          copy is processing
+        implemented_by:
+          - frontend/src/lib/bark/__tests__/bark-vtxo-exit-phase.test.ts
+          - frontend/src/components/bark/__tests__/BarkVtxoCard.test.tsx
+          - frontend/src/pages/wallet/__tests__/BarkVtxoViewerPage.test.tsx
+          - bitboard-bark/src/emergency_exit.rs
     send:
       - id: BARK-SEND-01
         description: A peeked Signet Bark receive address is a Bark send destination and is not an Arkade address
@@ -397,8 +498,8 @@ feature:
         description: One node per exit transaction, plus the chain anchor. A shared txid is one node. An input that is neither an exit transaction nor that anchor is not a node
         implemented_by: bitboard-bark/src/emergency_exit.rs
       - id: BARK-EMG-12
-        description: A node is pending, in progress, or confirmed. Needs a child appears only for AwaitingCpfpBroadcast, and that child is not a node
-        implemented_by: bitboard-bark/src/emergency_exit.rs
+        description: Each node shows not processing, waiting for confirmed funds, waiting to broadcast, waiting for confirmation, or confirmed, with the wallet, megaphone, pickaxe, or check.
+        implemented_by: frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
       - id: BARK-EMG-13
         description: Focusing a node shows its txid and the VTXO ids whose exit leaf is that transaction
         implemented_by: frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
@@ -451,6 +552,20 @@ feature:
         implemented_by:
           - frontend/src/lib/bark/__tests__/bark-emergency-exit-live-deps.test.ts
           - frontend/src/lib/bark/__tests__/bark-emergency-exit-after-sync.test.ts
+      - id: BARK-EMG-26
+        description: While Proceed automatically is off, Review, Progress, and Claim use the fee rate selected on the page, including a custom sat/vB
+        implemented_by: frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
+      - id: BARK-EMG-27
+        description: Automatic progress resolves the saved fee degree, locks that sat/vB for the call, and pauses when the live preset exceeds the max or the step is unfundable. A partial funding wait does not pause. Changing the degree or the max clears the pause. A Bark sync uses that lock only while Proceed automatically is on; otherwise it keeps the High preset
+        implemented_by:
+          - frontend/src/lib/bark/__tests__/bark-emergency-exit-automated-fee.test.ts
+          - frontend/src/lib/bark/__tests__/bark-emergency-exit-after-sync.test.ts
+          - frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
+      - id: BARK-EMG-28
+        description: Start asks for confirmation and does not mark any VTXO until the user acknowledges the loss-of-funds and on-chain fee risks
+        implemented_by:
+          - frontend/src/components/bark/__tests__/StartBarkEmergencyExitConfirmModal.test.tsx
+          - frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
   pages:
     - BarkManagement:
         description: Bark entry on the Management page
@@ -473,11 +588,11 @@ feature:
         path: /wallet/bark/vtxos
         file: frontend/src/routes/wallet/bark/vtxos.tsx
         visible_elements:
-          - VTXO card grid with id, amount, Bark state, blocks until expiry and an approximate date, a lock line that names the pending action or history label, and Registered when registered
+          - VTXO card grid with id, amount, Bark state, blocks until expiry and an approximate date, a lock line that names the pending action or history label, Registered when registered, and a last line Emergency exit phase when the coin has a live exit, is claimed, or was swept or seized
           - search by id or sats amount
           - state filter chips with counts from the full list
           - sort by amount or expiry height
-          - hide spent and exited toggle, default on
+          - hide spent and exited toggle, default on, keeping a live emergency exit, an anchor-swept coin, and a checkpoint-seized coin listed
           - pagination at 20 cards per page
           - last successful sync subtitle when a sync time is known
           - Bark sync error banner
@@ -485,6 +600,7 @@ feature:
           - Back to management
         requirements:
           - Contracts BARK-VTX-02 through BARK-VTX-07
+          - Contract BARK-VTX-10
           - Contracts BARK-SESS-03 and BARK-SESS-04
           - Shown only when isBarkEnabled and the network is signet or mainnet
           - The list is the local Bark database
@@ -498,8 +614,14 @@ feature:
           - A leaf node shows the leaf icon and a coin badge. A shared ancestor shows the tree icon and no coin badge. A checkpoint shows the checkpoint icon. The chain anchor shows the commitment icon. The leaf coin badge shows Coins before the leaf confirms, an Hourglass from its first confirmation (or awaitingDelta) while the exit timelock runs, and HandCoins once every exit on that leaf is claimable, the same three stages as the Arkade unilateral exit graph
           - Focused exit-tree node shows its transaction id and the VTXO ids that end on it
           - Spendable VTXO checkboxes
+          - Fee rate selector (low / medium / high / custom) while Proceed automatically is off
+          - Congestion warning, max fee rate, and low / medium / high presets while Proceed automatically is on
+          - Proceed automatically switch in Live exits
+          - Review emergency exit as the primary button in Start an exit
+          - Start emergency exit only after Review emergency exit has produced a review
           - Review of broadcast fee, claim fee, and transaction count
           - Start for the selection or the whole wallet
+          - Confirmation before start, with the loss-of-funds and fee risks, disabled until those risks are acknowledged
           - Live exit rows with state and Cancel when cancelable
           - Progress button
           - Claim section to the current on-chain receive address
@@ -507,7 +629,7 @@ feature:
           - Full-page Bark session loading or error screen while the session is not ready
         requirements:
           - Contracts BARK-EMG-02 through BARK-EMG-08
-          - Contracts BARK-EMG-10 through BARK-EMG-25
+          - Contracts BARK-EMG-10 through BARK-EMG-28
           - Contracts BARK-SESS-03 and BARK-SESS-04
           - Shown only when isBarkEnabled and the network is signet or mainnet
           - Progress is a button, and a successful Bark sync also progresses exits that are already started

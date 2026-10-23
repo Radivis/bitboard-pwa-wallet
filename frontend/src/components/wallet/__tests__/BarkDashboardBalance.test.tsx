@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { BarkDashboardBalance } from '@/components/wallet/BarkDashboardBalance'
+import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import type { NetworkMode } from '@/stores/walletStore'
 import type { BarkNextRefreshObservation } from '@/lib/bark/bark-next-refresh-hint'
 import type { BarkPendingAction } from '@/workers/bark-api'
@@ -90,6 +91,17 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   }
 })
 
+const fiatRatesQueryMock = vi.hoisted(() =>
+  vi.fn(() => ({
+    data: undefined as { btcPriceInFiat: number } | undefined,
+    isPending: false,
+  })),
+)
+
+vi.mock('@/hooks/useMainnetFiatRatesQuery', () => ({
+  useMainnetFiatRatesQuery: () => fiatRatesQueryMock(),
+}))
+
 vi.mock('@/hooks/useRailManualSyncMutations', () => ({
   useBarkManualSyncMutation: () => ({
     mutate: vi.fn(),
@@ -114,6 +126,8 @@ function pendingOffboard(): BarkPendingAction {
 describe('BarkDashboardBalance', () => {
   beforeEach(() => {
     pendingActions.current = []
+    useFiatDenominationStore.setState({ fiatDenominationMode: false, defaultFiatCurrency: 'USD' })
+    fiatRatesQueryMock.mockReturnValue({ data: undefined, isPending: false })
     featureState.isBarkEnabled = true
     walletStoreState.networkMode = 'signet'
     walletStoreState.loadedDescriptorWallet = { networkMode: 'signet' }
@@ -287,7 +301,7 @@ describe('BarkDashboardBalance', () => {
     expect(banner).toHaveTextContent(
       'This exit is still in progress. Sync Bark to continue it.',
     )
-    expect(banner).toHaveTextContent('10000 sats')
+    expect(screen.getByTestId('bark-pending-action-amount')).toHaveTextContent('0.00010000')
     expect(banner).toHaveTextContent('tb1qcurr...xxxxxxxx')
     expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
@@ -400,6 +414,42 @@ describe('BarkDashboardBalance', () => {
     expect(screen.getByRole('heading', { name: 'Establishing Bark session' })).toBeInTheDocument()
     expect(screen.getByTestId('dashboard-bark-board-link')).toBeInTheDocument()
     expect(screen.queryByTestId('dashboard-bark-balance-amount')).not.toBeInTheDocument()
+  })
+
+  it('DASH-BARK-18 shows fiat primary and bitcoin secondary on mainnet', () => {
+    walletStoreState.networkMode = 'mainnet'
+    walletStoreState.loadedDescriptorWallet = { networkMode: 'mainnet' }
+    useFiatDenominationStore.setState({ fiatDenominationMode: true, defaultFiatCurrency: 'USD' })
+    fiatRatesQueryMock.mockReturnValue({
+      data: { btcPriceInFiat: 100_000 },
+      isPending: false,
+    })
+    syncSnapshot.current.spendableSats = 40_000
+    syncSnapshot.current.lockedSats = 10_000
+    syncSnapshot.current.exitingSats = 5_000
+    renderWithProviders(<BarkDashboardBalance />)
+
+    expect(screen.getByTestId('dashboard-bark-balance-amount')).toHaveTextContent(/\$50/)
+    expect(screen.getByTestId('dashboard-bark-balance-amount-btc-segment')).toHaveTextContent(
+      '0.00050000',
+    )
+    expect(screen.getByTestId('dashboard-bark-balance-spendable')).toHaveTextContent(/\$40/)
+    expect(screen.getByTestId('dashboard-bark-balance-locked')).toHaveTextContent(/\$10/)
+    expect(screen.getByTestId('dashboard-bark-balance-exiting')).toHaveTextContent(/\$5/)
+  })
+
+  it('DASH-BARK-18 keeps bitcoin amounts on signet when fiat mode is on', () => {
+    useFiatDenominationStore.setState({ fiatDenominationMode: true, defaultFiatCurrency: 'USD' })
+    fiatRatesQueryMock.mockReturnValue({
+      data: { btcPriceInFiat: 100_000 },
+      isPending: false,
+    })
+    syncSnapshot.current.spendableSats = 50_000
+    syncSnapshot.current.lockedSats = 0
+    renderWithProviders(<BarkDashboardBalance />)
+
+    expect(screen.getByTestId('dashboard-bark-balance-amount')).toHaveTextContent('0.00050000')
+    expect(screen.queryByTestId('dashboard-bark-balance-amount-btc-segment')).not.toBeInTheDocument()
   })
 
   it('DASH-BARK-13 shows the embedded session error when Bark open fails', () => {

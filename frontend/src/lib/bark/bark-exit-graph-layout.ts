@@ -50,13 +50,57 @@ export type BarkExitTreeNodeData = {
   txid: string
   txType: BarkExitGraphTxType
   status: BarkExitGraphNodeStatus
-  needsChild: boolean
+  phase: BarkExitNodePhase
   isOnExitPath: boolean
   isLeaf: boolean
   leafVtxoCount: number
   coinStage: ExitCoinStage
   isFocused: boolean
   layoutDirection: UnilateralExitLayoutDirection
+}
+
+export const BARK_EXIT_NODE_PHASE = {
+  notProcessing: 'notProcessing',
+  awaitingBumperFunding: 'awaitingBumperFunding',
+  awaitingCpfpBroadcast: 'awaitingCpfpBroadcast',
+  awaitingConfirmation: 'awaitingConfirmation',
+  confirmed: 'confirmed',
+} as const
+
+export type BarkExitNodePhase = (typeof BARK_EXIT_NODE_PHASE)[keyof typeof BARK_EXIT_NODE_PHASE]
+
+/** Corner-badge copy. Not processing and confirmed use the status line and the check. */
+export function barkExitNodePhaseLabel(phase: BarkExitNodePhase): string | null {
+  switch (phase) {
+    case BARK_EXIT_NODE_PHASE.awaitingBumperFunding:
+      return 'Waiting for confirmed funds'
+    case BARK_EXIT_NODE_PHASE.awaitingCpfpBroadcast:
+      return 'Broadcasting'
+    case BARK_EXIT_NODE_PHASE.awaitingConfirmation:
+      return 'Waiting for confirmation'
+    default:
+      return null
+  }
+}
+
+/**
+ * Maps a stored exit-graph node to a corner phase. A shortfall parent is waiting for
+ * bumper funds; every other child-less in-progress node is waiting to broadcast.
+ */
+export function resolveBarkExitNodePhase(params: {
+  status: BarkExitGraphNodeStatus
+  needsChild: boolean
+  txid: string
+  unfundedParentTxids: ReadonlySet<string>
+}): BarkExitNodePhase {
+  if (params.status === 'confirmed') return BARK_EXIT_NODE_PHASE.confirmed
+  if (params.status === 'inProgress' && params.needsChild) {
+    return params.unfundedParentTxids.has(params.txid)
+      ? BARK_EXIT_NODE_PHASE.awaitingBumperFunding
+      : BARK_EXIT_NODE_PHASE.awaitingCpfpBroadcast
+  }
+  if (params.status === 'inProgress') return BARK_EXIT_NODE_PHASE.awaitingConfirmation
+  return BARK_EXIT_NODE_PHASE.notProcessing
 }
 
 const BARK_EXIT_TIMELOCK_ELAPSED_STATES: ReadonlySet<BarkEmergencyExitState> = new Set([
@@ -116,8 +160,16 @@ export function layoutBarkExitGraph(params: {
   layoutDirection: UnilateralExitLayoutDirection
   focusedNodeId?: string | null
   exitRows?: BarkEmergencyExitRow[]
+  unfundedParentTxids?: readonly string[]
 }): { nodes: Node<BarkExitTreeNodeData>[]; edgePaths: BarkExitGraphEdgePath[] } {
-  const { nodes: graphNodes, layoutDirection, focusedNodeId = null, exitRows = [] } = params
+  const {
+    nodes: graphNodes,
+    layoutDirection,
+    focusedNodeId = null,
+    exitRows = [],
+    unfundedParentTxids = [],
+  } = params
+  const unfundedParentTxidSet = new Set(unfundedParentTxids)
   if (graphNodes.length === 0) {
     return { nodes: [], edgePaths: [] }
   }
@@ -160,7 +212,12 @@ export function layoutBarkExitGraph(params: {
         txid,
         txType: graphNode.txType,
         status: graphNode.status,
-        needsChild: graphNode.needsChild,
+        phase: resolveBarkExitNodePhase({
+          status: graphNode.status,
+          needsChild: graphNode.needsChild,
+          txid,
+          unfundedParentTxids: unfundedParentTxidSet,
+        }),
         isOnExitPath: pathTxids.has(txid),
         isLeaf: graphNode.leafVtxoIds.length > 0,
         leafVtxoCount: graphNode.leafVtxoIds.length,

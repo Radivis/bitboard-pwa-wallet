@@ -4,6 +4,7 @@ use bdk_wallet::{ChangeSet, KeychainKind, Wallet};
 use bitcoin::Network as BdkNetwork;
 
 use crate::error::CryptoError;
+use crate::p2a_cpfp::is_pay_to_anchor_cpfp_child;
 use crate::transaction::WalletUtxoRow;
 use crate::types::{BalanceInfo, BitcoinNetwork, TransactionDetails};
 
@@ -230,6 +231,7 @@ pub fn get_transaction_list(wallet: &Wallet) -> Vec<TransactionDetails> {
                 confirmation_time,
                 is_confirmed,
                 is_lab_tx: false,
+                is_cpfp_fee_bump: is_pay_to_anchor_cpfp_child(tx),
             }
         })
         .collect()

@@ -90,7 +90,25 @@ function readEmergencyExitRow(value: unknown): BarkEmergencyExitRow {
   if (typeof row.cancelable !== 'boolean') {
     throw new Error('Bark emergency exit row has no cancelable flag')
   }
-  return { vtxoId: row.vtxoId, state: row.state, cancelable: row.cancelable }
+  const tipHeight = readOptionalBlockHeight(row.tipHeight, 'tip height')
+  const confirmedHeight = readOptionalBlockHeight(row.confirmedHeight, 'confirmed height')
+  const claimableHeight = readOptionalBlockHeight(row.claimableHeight, 'claimable height')
+  return {
+    vtxoId: row.vtxoId,
+    state: row.state,
+    cancelable: row.cancelable,
+    ...(tipHeight == null ? {} : { tipHeight }),
+    ...(confirmedHeight == null ? {} : { confirmedHeight }),
+    ...(claimableHeight == null ? {} : { claimableHeight }),
+  }
+}
+
+function readOptionalBlockHeight(value: unknown, label: string): number | undefined {
+  if (value == null) return undefined
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new Error(`Bark emergency exit row has no ${label}`)
+  }
+  return value
 }
 
 function readCpfpRequest(value: unknown): BarkEmergencyCpfpRequest {

@@ -47,6 +47,24 @@ describe('BarkVtxoCard', () => {
     expect(expiry).not.toHaveTextContent(String(row.expiryHeight))
     expect(screen.queryByTestId(`bark-vtxo-lock-holder-${row.id}`)).not.toBeInTheDocument()
     expect(screen.queryByTestId(`bark-vtxo-registered-${row.id}`)).not.toBeInTheDocument()
+    expect(screen.queryByTestId(`bark-vtxo-exit-phase-${row.id}`)).not.toBeInTheDocument()
+  })
+
+  it('BARK-VTX-10 shows the emergency exit phase on the last line', () => {
+    const row = sampleRow({ id: 'exit:1' })
+    renderWithProviders(
+      <BarkVtxoCard
+        row={row}
+        tipHeight={tipHeight}
+        networkMode="signet"
+        now={now}
+        emergencyExitPhaseLine="Emergency exit phase: started"
+      />,
+    )
+
+    expect(screen.getByTestId('bark-vtxo-exit-phase-exit:1')).toHaveTextContent(
+      'Emergency exit phase: started',
+    )
   })
 
   it('BARK-VTX-03 names a locked exit instead of the action id', () => {

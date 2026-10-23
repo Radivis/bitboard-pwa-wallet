@@ -14,6 +14,8 @@ import { Switch } from '@/components/ui/switch'
 import { RailSyncErrorBanner } from '@/components/wallet/RailSyncErrorBanner'
 import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
 import { useBarkSyncLifecycleSnapshot } from '@/hooks/useBarkSyncLifecycleSnapshot'
+import { useBarkEmergencyExitQuery } from '@/hooks/useBarkEmergencyExitQuery'
+import { useBarkExitTopologyQuery } from '@/hooks/useBarkExitTopologyQuery'
 import { useBarkHistoryQuery } from '@/hooks/useBarkHistoryQuery'
 import { useBarkPendingActionsQuery } from '@/hooks/useBarkPendingActionsQuery'
 import { useBarkVtxoListQuery } from '@/hooks/useBarkVtxoListQuery'
@@ -30,12 +32,32 @@ import {
   type BarkVtxoListPresentation,
   type BarkVtxoSortKey,
 } from '@/lib/bark/bark-vtxo-viewer-display'
+import {
+  barkEmergencyExitScopeFor,
+  barkEmergencyExitUnfundedParentTxidsFor,
+} from '@/lib/bark/bark-emergency-exit-funding-status'
+import { useBarkExitChainNoticeStore } from '@/lib/bark/bark-exit-seizure-notice'
+import {
+  exitNodeSweepKindsByVtxoId,
+  type BarkExitNodeSweepKind,
+  type BarkExitNodeSweepVtxoItem,
+} from '@/lib/bark/bark-exit-seizure'
+
+const EMPTY_SWEPT_NODE_KINDS: ReadonlySet<BarkExitNodeSweepKind> = new Set()
+import {
+  barkVtxoIdsKeptWhenFinished,
+  formatBarkVtxoEmergencyExitPhaseLine,
+  resolveBarkVtxoExitPhase,
+} from '@/lib/bark/bark-vtxo-exit-phase'
 import { errorMessage } from '@/lib/shared/utils'
 import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
+import { useBarkEmergencyExitFundingStore } from '@/stores/barkEmergencyExitFundingStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import {
   BARK_VTXO_STATES,
+  type BarkEmergencyExitRow,
+  type BarkExitGraphNode,
   type BarkMovementRow,
   type BarkPendingAction,
   type BarkVtxoList,
@@ -43,8 +65,11 @@ import {
   type BarkVtxoState,
 } from '@/workers/bark-api'
 
+const EMPTY_BARK_EMERGENCY_EXIT_ROWS: BarkEmergencyExitRow[] = []
+
 export function BarkVtxoViewerPage() {
   const networkMode = useWalletStore(selectCommittedNetworkMode)
+  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const isBarkEnabled = useFeatureStore((featureState) => featureState.isBarkEnabled)
   const loadSnapshot = useBarkLoadLifecycleSnapshot()
   const syncSnapshot = useBarkSyncLifecycleSnapshot()
@@ -56,6 +81,27 @@ export function BarkVtxoViewerPage() {
   const movements = historyQuery.data ?? []
   const vtxoList: BarkVtxoList | undefined = vtxoListQuery.data
   const vtxoRows = vtxoList?.rows ?? EMPTY_BARK_VTXO_ROWS
+  const exitRows = useBarkEmergencyExitQuery().data ?? EMPTY_BARK_EMERGENCY_EXIT_ROWS
+  const processingVtxoIds = useMemo(
+    () => exitRows.filter((row) => row.state === 'processing').map((row) => row.vtxoId),
+    [exitRows],
+  )
+  const topologyQuery = useBarkExitTopologyQuery(processingVtxoIds)
+  const unfundedParents = useBarkEmergencyExitFundingStore(
+    (fundingState) => fundingState.unfundedParents,
+  )
+  const unfundedParentTxids = barkEmergencyExitUnfundedParentTxidsFor(
+    unfundedParents,
+    barkEmergencyExitScopeFor(activeWalletId, networkMode),
+  )
+  const exitChainNotice = useBarkExitChainNoticeStore((noticeState) => noticeState.notice)
+  const shownExitChainNotice =
+    exitChainNotice != null &&
+    exitChainNotice.walletId === activeWalletId &&
+    exitChainNotice.networkMode === networkMode
+      ? exitChainNotice
+      : null
+  const graphNodes = topologyQuery.data == null ? null : topologyQuery.data.nodes
 
   const [searchQuery, setSearchQuery] = useState('')
   const [stateFilter, setStateFilter] = useState<BarkVtxoState | null>(null)
@@ -131,6 +177,10 @@ export function BarkVtxoViewerPage() {
         onPageIndexChange={setPageIndex}
         pendingActions={pendingActions}
         movements={movements}
+        exitRows={exitRows}
+        graphNodes={graphNodes}
+        unfundedParentTxids={unfundedParentTxids}
+        exitNodeSweepVtxoItems={shownExitChainNotice?.exitNodeSweepVtxoItems ?? []}
       />
 
       <Button type="button" variant="outline" asChild>
@@ -158,6 +208,10 @@ interface BarkVtxoInventoryProps {
   onPageIndexChange: (pageIndex: number) => void
   pendingActions: readonly BarkPendingAction[]
   movements: readonly BarkMovementRow[]
+  exitRows: readonly BarkEmergencyExitRow[]
+  graphNodes: readonly BarkExitGraphNode[] | null
+  unfundedParentTxids: readonly string[]
+  exitNodeSweepVtxoItems: readonly BarkExitNodeSweepVtxoItem[]
 }
 
 function BarkVtxoInventory({
@@ -178,15 +232,44 @@ function BarkVtxoInventory({
   onPageIndexChange,
   pendingActions,
   movements,
+  exitRows,
+  graphNodes,
+  unfundedParentTxids,
+  exitNodeSweepVtxoItems,
 }: BarkVtxoInventoryProps) {
   const stateCounts = useMemo(() => countBarkVtxoStates(rows), [rows])
+  const exitRowByVtxoId = useMemo(
+    () => new Map(exitRows.map((row) => [row.vtxoId, row])),
+    [exitRows],
+  )
+  const unfundedParentTxidSet = useMemo(
+    () => new Set(unfundedParentTxids),
+    [unfundedParentTxids],
+  )
+  const sweptNodeKindsByVtxoId = useMemo(
+    () => exitNodeSweepKindsByVtxoId(exitNodeSweepVtxoItems),
+    [exitNodeSweepVtxoItems],
+  )
+  const keepWhenFinishedIds = useMemo(
+    () =>
+      barkVtxoIdsKeptWhenFinished({
+        exitRows,
+        exitNodeSweepVtxoItems,
+      }),
+    [exitNodeSweepVtxoItems, exitRows],
+  )
   const filteredRows = useMemo(
     () =>
       sortBarkVtxoRows(
-        filterBarkVtxoRows(rows, { searchQuery, stateFilter, hideFinished }),
+        filterBarkVtxoRows(rows, {
+          searchQuery,
+          stateFilter,
+          hideFinished,
+          keepWhenFinishedIds,
+        }),
         sortKey,
       ),
-    [hideFinished, rows, searchQuery, sortKey, stateFilter],
+    [hideFinished, keepWhenFinishedIds, rows, searchQuery, sortKey, stateFilter],
   )
   const pageRows = paginateBarkVtxoRows(filteredRows, pageIndex, BARK_VTXO_VIEWER_PAGE_SIZE)
 
@@ -285,6 +368,15 @@ function BarkVtxoInventory({
                 networkMode={networkMode}
                 pendingActions={pendingActions}
                 movements={movements}
+                emergencyExitPhaseLine={formatBarkVtxoEmergencyExitPhaseLine(
+                  resolveBarkVtxoExitPhase({
+                    vtxoState: row.state,
+                    exitRow: exitRowByVtxoId.get(row.id) ?? null,
+                    graphNodes,
+                    unfundedParentTxids: unfundedParentTxidSet,
+                    sweptNodeKinds: sweptNodeKindsByVtxoId.get(row.id) ?? EMPTY_SWEPT_NODE_KINDS,
+                  }),
+                )}
               />
             ))}
           </div>

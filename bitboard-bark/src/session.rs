@@ -195,6 +195,7 @@ async fn open_network_session(
 
 fn clear_session_sync_gate() {
     SESSION_SYNC_GATE.with(|gate| gate.borrow_mut().clear());
+    crate::exit_seizure::clear_exit_chain_notices();
 }
 
 fn mark_session_synced() {
@@ -403,7 +404,10 @@ pub async fn bark_last_revealed_key_index() -> Result<JsValue, JsValue> {
 /// Boards are checked once here. `sync_pending_boards` parks a board while it waits
 /// for confirmations.
 ///
-/// After those steps, schedules one delegated VTXO refresh when none is pending.
+/// After those steps, records an anchor sweep and a checkpoint seizure on the
+/// remaining coins, marks both spent, then schedules one delegated VTXO refresh
+/// when none is pending. Swept anchors are not refreshed: the server already
+/// claimed that output.
 /// A scheduling failure still marks this session synced and returns `warning`.
 /// The status is `idle`, `scheduled`, `pending`, or `warning`.
 ///
@@ -432,6 +436,7 @@ pub async fn bark_sync() -> Result<String, JsValue> {
             async { wallet.sync_pending_boards().await.map_err(bark_error) },
         )
         .await?;
+        crate::exit_seizure::record_exit_chain_notices(&wallet).await;
         let refresh_status = delegated_refresh_status(&wallet).await;
         // A missed exit sync does not fail this session.
         let _exit_sync = wallet.sync_exits().await;
@@ -475,6 +480,16 @@ async fn delegated_refresh_status(wallet: &bark::Wallet) -> String {
             BARK_REFRESH_WARNING.to_owned()
         }
     }
+}
+
+/// Seized exit outputs from the last completed scan, as JSON
+/// `{"exitNodeSweepVtxoItems":[{"vtxoId":"...","nodeKind":"anchor"}]}`.
+/// `nodeKind` is `anchor`, `internal`, `leaf`, or `checkpoint`. An empty array means that
+/// scan found none. A scan that could not read the wallet, or could not read every watched
+/// output, keeps the previous items.
+#[wasm_bindgen]
+pub fn bark_exit_chain_notices() -> String {
+    crate::exit_seizure::exit_chain_notices_json()
 }
 
 /// Chain tip and the first block of the next refresh period, as JSON, or `null`.

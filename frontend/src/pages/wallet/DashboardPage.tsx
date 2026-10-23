@@ -71,8 +71,7 @@ import { useLightningSyncMetadataQuery } from '@/hooks/useLightningDashboardQuer
 import { useArkadeHistoryQuery } from '@/hooks/useArkadeQueries'
 import { useBarkHistoryQuery } from '@/hooks/useBarkHistoryQuery'
 import { isArkadeActiveForNetworkMode } from '@/lib/arkade/arkade-utils'
-import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
-import { useMainnetFiatRatesQuery } from '@/hooks/useMainnetFiatRatesQuery'
+import { useMainnetFiatAmountProps } from '@/hooks/useMainnetFiatAmountProps'
 import {
   LAB_WALLET_BALANCE_DISCLAIMER,
   walletBalanceCardTitle,
@@ -237,22 +236,12 @@ function BalanceCard() {
     return times.reduce((newerIso, olderIso) => (newerIso > olderIso ? newerIso : olderIso))
   }, [lightningBalanceRows])
 
-  const fiatDenominationMode = useFiatDenominationStore(
-    (fiatDenominationState) => fiatDenominationState.fiatDenominationMode,
-  )
-  const defaultFiatCurrency = useFiatDenominationStore(
-    (fiatDenominationState) => fiatDenominationState.defaultFiatCurrency,
-  )
-  const fiatRatesQuery = useMainnetFiatRatesQuery()
-  const btcPriceInFiat = fiatRatesQuery.data?.btcPriceInFiat
-  const mainnetFiatLayout =
-    networkMode === 'mainnet' && fiatDenominationMode
-
+  const fiatAmount = useMainnetFiatAmountProps()
   const fiatAmountProps = {
-    showFiatLayout: mainnetFiatLayout,
-    btcPriceInFiat,
-    currency: defaultFiatCurrency,
-    rateLoading: fiatRatesQuery.isPending,
+    showFiatLayout: fiatAmount.showFiatLayout,
+    btcPriceInFiat: fiatAmount.btcPriceInFiat,
+    currency: fiatAmount.currency,
+    rateLoading: fiatAmount.rateLoading,
   }
 
   return (

@@ -131,4 +131,7 @@ pub struct TransactionDetails {
     /// Lab sets `sent_sats` to non-change outputs only; wallet sync uses input totals.
     #[serde(default)]
     pub is_lab_tx: bool,
+    /// Pay-to-Anchor CPFP child: version 3, an empty anchor witness, and a signed wallet input.
+    #[serde(default)]
+    pub is_cpfp_fee_bump: bool,
 }

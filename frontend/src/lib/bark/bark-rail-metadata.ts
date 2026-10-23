@@ -4,13 +4,23 @@ import {
   BARK_MAINNET_SERVER_URL,
   BARK_SIGNET_SERVER_URL,
   isBarkReceiveKeyIndex,
+  emergencyExitFeePresetFromUnknown,
+  emergencyExitMaxFeeRateFromUnknown,
   pendingEmergencyClaimFromUnknown,
   proceedAutomaticallyFromUnknown,
+  type BarkEmergencyExitFeePreset,
   type BarkRailNetwork,
   type PendingEmergencyClaim,
   type StoredBarkAccount,
   type WalletSecretsPayload,
 } from '@/lib/wallet/wallet-domain-types'
+import {
+  exitNodeSweepVtxoItemsFromUnknown,
+  exitNodeSweepVtxoItemsWithoutKind,
+  mergeExitNodeSweepVtxoItems,
+  type BarkExitNodeSweepKind,
+  type BarkExitNodeSweepVtxoItem,
+} from '@/lib/bark/bark-exit-seizure'
 
 export class BarkFingerprintMismatchError extends Error {
   constructor() {
@@ -92,6 +102,24 @@ function accountWithPreservedFields(
   }
   if (proceedAutomaticallyFromUnknown(existingAccount?.proceedAutomatically) === true) {
     barkAccount.proceedAutomatically = true
+  }
+  const emergencyExitFeePreset = emergencyExitFeePresetFromUnknown(
+    existingAccount?.emergencyExitFeePreset,
+  )
+  if (emergencyExitFeePreset != null) {
+    barkAccount.emergencyExitFeePreset = emergencyExitFeePreset
+  }
+  const emergencyExitMaxFeeRateSatPerVb = emergencyExitMaxFeeRateFromUnknown(
+    existingAccount?.emergencyExitMaxFeeRateSatPerVb,
+  )
+  if (emergencyExitMaxFeeRateSatPerVb != null) {
+    barkAccount.emergencyExitMaxFeeRateSatPerVb = emergencyExitMaxFeeRateSatPerVb
+  }
+  const exitNodeSweepVtxoItems = exitNodeSweepVtxoItemsFromUnknown(
+    existingAccount?.exitNodeSweepVtxoItems,
+  )
+  if (exitNodeSweepVtxoItems != null && exitNodeSweepVtxoItems.length > 0) {
+    barkAccount.exitNodeSweepVtxoItems = exitNodeSweepVtxoItems
   }
   return barkAccount
 }
@@ -290,6 +318,103 @@ export function applyProceedAutomatically(params: {
     account.proceedAutomatically = true
   } else {
     delete account.proceedAutomatically
+  }
+  return upsertBarkAccountInPayload(params.payload, account)
+}
+
+/**
+ * Stores the low, medium, or high degree for automatic emergency-exit proceeding.
+ * A later sync flush keeps it.
+ */
+export function applyEmergencyExitFeePreset(params: {
+  payload: WalletSecretsPayload
+  network: BarkRailNetwork
+  feePreset: BarkEmergencyExitFeePreset
+}): WalletSecretsPayload {
+  const feePreset = emergencyExitFeePresetFromUnknown(params.feePreset)
+  if (feePreset == null) {
+    throw new Error('Emergency exit fee preset must be Low, Medium, or High')
+  }
+  const existingAccount = requireBarkAccount(params.payload, params.network)
+  const account = accountWithPreservedFields(
+    params.network,
+    existingAccount,
+    existingAccount.fingerprint,
+    undefined,
+    undefined,
+  )
+  account.emergencyExitFeePreset = feePreset
+  return upsertBarkAccountInPayload(params.payload, account)
+}
+
+/**
+ * Stores the maximum sat/vB for automatic emergency-exit proceeding.
+ * A later sync flush keeps it.
+ */
+export function applyEmergencyExitMaxFeeRate(params: {
+  payload: WalletSecretsPayload
+  network: BarkRailNetwork
+  maxFeeRateSatPerVb: number
+}): WalletSecretsPayload {
+  const maxFeeRateSatPerVb = emergencyExitMaxFeeRateFromUnknown(params.maxFeeRateSatPerVb)
+  if (maxFeeRateSatPerVb == null) {
+    throw new Error('Max fee rate must be a positive number of sat/vB')
+  }
+  const existingAccount = requireBarkAccount(params.payload, params.network)
+  const account = accountWithPreservedFields(
+    params.network,
+    existingAccount,
+    existingAccount.fingerprint,
+    undefined,
+    undefined,
+  )
+  account.emergencyExitMaxFeeRateSatPerVb = maxFeeRateSatPerVb
+  return upsertBarkAccountInPayload(params.payload, account)
+}
+
+/**
+ * Adds sweep items. An empty list leaves the stored items unchanged. A later
+ * sync flush keeps the merged list. Duplicate vtxo-and-kind pairs are dropped.
+ */
+export function applyMergedExitChainNotice(params: {
+  payload: WalletSecretsPayload
+  network: BarkRailNetwork
+  items: readonly BarkExitNodeSweepVtxoItem[]
+}): WalletSecretsPayload {
+  if (params.items.length === 0) return params.payload
+  const existingAccount = requireBarkAccount(params.payload, params.network)
+  const account = accountWithPreservedFields(
+    params.network,
+    existingAccount,
+    existingAccount.fingerprint,
+    undefined,
+    undefined,
+  )
+  const merged = mergeExitNodeSweepVtxoItems(account.exitNodeSweepVtxoItems ?? [], params.items)
+  if (merged.length === 0) return params.payload
+  account.exitNodeSweepVtxoItems = merged
+  return upsertBarkAccountInPayload(params.payload, account)
+}
+
+/** Removes one node kind. A later sync flush does not restore those items. */
+export function applyClearedExitChainNotice(params: {
+  payload: WalletSecretsPayload
+  network: BarkRailNetwork
+  kind: BarkExitNodeSweepKind
+}): WalletSecretsPayload {
+  const existingAccount = requireBarkAccount(params.payload, params.network)
+  const account = accountWithPreservedFields(
+    params.network,
+    existingAccount,
+    existingAccount.fingerprint,
+    undefined,
+    undefined,
+  )
+  const remaining = exitNodeSweepVtxoItemsWithoutKind(account.exitNodeSweepVtxoItems ?? [], params.kind)
+  if (remaining.length === 0) {
+    delete account.exitNodeSweepVtxoItems
+  } else {
+    account.exitNodeSweepVtxoItems = remaining
   }
   return upsertBarkAccountInPayload(params.payload, account)
 }

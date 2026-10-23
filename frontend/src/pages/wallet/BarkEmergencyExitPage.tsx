@@ -1,9 +1,12 @@
+import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { PageHeader } from '@/components/PageHeader'
 import { barkSessionBlockingScreen } from '@/components/bark/bark-session-blocking-screen'
 import { BarkRailUnavailable } from '@/components/bark/BarkRailUnavailable'
+import { StartBarkEmergencyExitConfirmModal } from '@/components/bark/StartBarkEmergencyExitConfirmModal'
 import {
   BarkEmergencyExitClaimCard,
+  BarkEmergencyExitFeeCard,
   BarkEmergencyExitLiveCard,
   BarkEmergencyExitStartCard,
   BarkEmergencyExitTreeCard,
@@ -16,6 +19,7 @@ import {
 
 export function BarkEmergencyExitPage() {
   const page = useBarkEmergencyExitPage()
+  const [startConfirmOpen, setStartConfirmOpen] = useState(false)
 
   if (page.unavailable) {
     return (
@@ -36,6 +40,13 @@ export function BarkEmergencyExitPage() {
 
   return (
     <div className="space-y-6">
+      <StartBarkEmergencyExitConfirmModal
+        open={startConfirmOpen}
+        onOpenChange={setStartConfirmOpen}
+        onConfirm={() => {
+          void page.onStart()
+        }}
+      />
       <PageHeader title="Bark emergency exit" />
       <p className="text-sm text-muted-foreground">{BARK_EMERGENCY_EXIT_CANCEL_NOTE}</p>
       <p className="text-sm text-muted-foreground">
@@ -50,6 +61,25 @@ export function BarkEmergencyExitPage() {
         errorMessage={page.exitTreeError}
         vtxoRows={page.vtxoRows}
         fundingStatus={page.fundingStatus}
+        unfundedParentTxids={page.unfundedParentTxids}
+      />
+      <BarkEmergencyExitFeeCard
+        busyAction={page.busyAction}
+        proceedAutomatically={page.proceedAutomatically}
+        proceedAutomaticallyPending={page.proceedAutomaticallyPending}
+        pausedReason={page.displayedPauseReason}
+        manualFeePresetSelection={page.manualFeePresetSelection}
+        automatedFeePresetLabel={page.automatedFeePresetLabel}
+        presetSatPerVbByLabel={page.presetSatPerVbByLabel}
+        feeEstimatesRefreshing={page.feeEstimatesRefreshing}
+        customFeeRate={page.customFeeRate}
+        useCustomFee={page.useCustomFee}
+        maxFeeRateSatPerVb={page.maxFeeRateSatPerVb}
+        onSelectManualPreset={page.onSelectManualPreset}
+        onSelectAutomaticPreset={page.onAutomaticFeePresetChange}
+        setCustomFeeRate={page.setCustomFeeRate}
+        onSelectCustomMode={page.onSelectCustomMode}
+        onMaxFeeRateChange={page.onMaxFeeRateChange}
       />
       <BarkEmergencyExitStartCard
         wholeWallet={page.wholeWallet}
@@ -61,7 +91,7 @@ export function BarkEmergencyExitPage() {
         onWholeWalletChange={page.selectWholeWallet}
         onToggleVtxo={page.toggleVtxo}
         onReview={page.onReview}
-        onStart={page.onStart}
+        onStart={() => setStartConfirmOpen(true)}
       />
       <BarkEmergencyExitLiveCard
         rows={page.liveExits}
@@ -73,6 +103,7 @@ export function BarkEmergencyExitPage() {
         proceedAutomaticallyPending={page.proceedAutomaticallyPending}
         automaticProgressInFlight={page.automaticProgressInFlight}
         automaticProgressError={page.automaticProgressError}
+        automationPaused={page.displayedPauseReason != null}
         onProceedAutomaticallyChange={page.onProceedAutomaticallyChange}
         onProgress={page.onProgress}
         onCancel={page.onCancel}

@@ -19,12 +19,13 @@ describe('formatBarkNextRefreshHint', () => {
       networkMode: 'mainnet',
     })
 
-    const dateLabel = approximateDate(144, 'mainnet')
+    // 144 mainnet blocks at 10 minutes is 24 hours after observedAt, in UTC.
+    // The label is local wall time, so the assertion must not hardcode a timezone offset.
+    const dateLabel = format(new Date('2026-10-11T12:00:00.000Z'), 'yyyy-MM-dd HH:mm')
     expect(hint).toEqual({
       periodStarted: false,
       dateLabel,
-      text:
-        `Unlock this wallet around 2026-10-11 14:00 so your Bark VTXOs can be refreshed automatically.`
+      text: `Unlock this wallet around ${dateLabel} so your Bark VTXOs can be refreshed automatically.`,
     })
   })
 

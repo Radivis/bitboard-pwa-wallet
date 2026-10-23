@@ -7,6 +7,7 @@ use bdk_wallet::KeychainKind;
 use bdk_wallet::Wallet;
 use bitcoin::consensus::encode::{deserialize_hex, serialize_hex};
 use bitcoin::psbt::Input;
+use bitcoin::transaction::Version;
 use bitcoin::{Amount, OutPoint, ScriptBuf, Transaction, TxOut, Weight, Witness};
 
 use crate::error::CryptoError;
@@ -23,6 +24,20 @@ pub const BARK_CPFP_NEEDED_SATS_LABEL: &str = "needed_sats";
 /// (witness stack length 0), and witness bytes count as one weight unit each.
 const FEE_ANCHOR_SPEND_WEIGHT: Weight = Weight::from_wu(1);
 const MAX_FEE_ITERATIONS: usize = 100;
+
+/// Version-3 child that spends a Pay-to-Anchor (empty witness) and a signed wallet coin.
+/// Bark emergency-exit children and Arkade unilateral-exit bump children share this shape.
+pub fn is_pay_to_anchor_cpfp_child(tx: &Transaction) -> bool {
+    if tx.version != Version(3) {
+        return false;
+    }
+    let has_anchor_input = tx
+        .input
+        .iter()
+        .any(|input| input.script_sig.is_empty() && input.witness.is_empty());
+    let has_signed_input = tx.input.iter().any(|input| !input.witness.is_empty());
+    has_anchor_input && has_signed_input
+}
 
 /// Signed raw transaction hex. Does not insert the child into the wallet.
 pub fn sign_p2a_cpfp_child(
@@ -92,6 +107,66 @@ fn build_child(
     change_script: &bitcoin::ScriptBuf,
     fee_needed: Amount,
 ) -> Result<Transaction, CryptoError> {
+    let first_try = finish_child(
+        wallet,
+        anchor_outpoint,
+        anchor_output,
+        change_script,
+        fee_needed,
+        None,
+    );
+    if !is_insufficient_funds(&first_try) {
+        return first_try;
+    }
+    // Branch-and-bound can spend a coin that covers the absolute fee and then
+    // reject the result because the leftover change is dust. A larger confirmed
+    // coin still pays the fee. The dust error's "needed" amount is only the dust
+    // threshold, so callers must not treat it as a balance shortfall.
+    let Some(largest_outpoint) = outpoint_with_largest_confirmed_value(wallet) else {
+        return first_try;
+    };
+    finish_child(
+        wallet,
+        anchor_outpoint,
+        anchor_output,
+        change_script,
+        fee_needed,
+        Some(largest_outpoint),
+    )
+}
+
+fn is_insufficient_funds(result: &Result<Transaction, CryptoError>) -> bool {
+    match result {
+        Err(CryptoError::Transaction(message)) => message.starts_with(BARK_CPFP_INSUFFICIENT_FUNDS),
+        _ => false,
+    }
+}
+
+fn outpoint_with_largest_confirmed_value(wallet: &Wallet) -> Option<OutPoint> {
+    let tip_height = wallet.latest_checkpoint().height();
+    wallet
+        .list_unspent()
+        .filter(|utxo| {
+            let confirmations = utxo
+                .chain_position
+                .confirmation_height_upper_bound()
+                .map_or(0, |height| {
+                    tip_height.saturating_add(1).saturating_sub(height)
+                });
+            confirmations >= 1
+        })
+        .max_by_key(|utxo| utxo.txout.value)
+        .map(|utxo| utxo.outpoint)
+}
+
+fn finish_child(
+    wallet: &mut Wallet,
+    anchor_outpoint: OutPoint,
+    anchor_output: &TxOut,
+    change_script: &bitcoin::ScriptBuf,
+    fee_needed: Amount,
+    required_outpoint: Option<OutPoint>,
+) -> Result<Transaction, CryptoError> {
     let mut tx_builder = wallet.build_tx();
     tx_builder.only_witness_utxo();
     tx_builder.exclude_unconfirmed();
@@ -104,6 +179,11 @@ fn build_child(
     tx_builder
         .add_foreign_utxo(anchor_outpoint, anchor_input, FEE_ANCHOR_SPEND_WEIGHT)
         .map_err(|err| CryptoError::Transaction(err.to_string()))?;
+    if let Some(outpoint) = required_outpoint {
+        tx_builder
+            .add_utxo(outpoint)
+            .map_err(|err| CryptoError::Transaction(err.to_string()))?;
+    }
     tx_builder.drain_to(change_script.clone());
     tx_builder.fee_absolute(fee_needed);
     let mut psbt = match tx_builder.finish() {
@@ -145,4 +225,28 @@ fn build_child(
 
 fn insufficient_funds(detail: String) -> CryptoError {
     CryptoError::Transaction(format!("{BARK_CPFP_INSUFFICIENT_FUNDS}: {detail}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{BARK_CPFP_INSUFFICIENT_FUNDS, is_insufficient_funds};
+    use crate::error::CryptoError;
+
+    #[test]
+    fn insufficient_funds_matches_only_a_transaction_error_that_starts_with_the_marker() {
+        let marked = Err(CryptoError::Transaction(format!(
+            "{BARK_CPFP_INSUFFICIENT_FUNDS}: needed_sats=1"
+        )));
+        assert!(is_insufficient_funds(&marked));
+
+        let quoted_later_in_the_same_variant = Err(CryptoError::Transaction(format!(
+            "builder note mentioned {BARK_CPFP_INSUFFICIENT_FUNDS}"
+        )));
+        assert!(!is_insufficient_funds(&quoted_later_in_the_same_variant));
+
+        let quoted_on_another_variant = Err(CryptoError::Wallet(format!(
+            "log mentioned {BARK_CPFP_INSUFFICIENT_FUNDS}"
+        )));
+        assert!(!is_insufficient_funds(&quoted_on_another_variant));
+    }
 }

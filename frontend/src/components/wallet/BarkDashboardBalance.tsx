@@ -12,14 +12,16 @@ import { RailSyncErrorBanner } from '@/components/wallet/RailSyncErrorBanner'
 import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
 import { useBarkSyncLifecycleSnapshot } from '@/hooks/useBarkSyncLifecycleSnapshot'
 import { useBarkManualSyncMutation } from '@/hooks/useRailManualSyncMutations'
+import {
+  useMainnetFiatAmountProps,
+  type MainnetFiatAmountDisplayProps,
+} from '@/hooks/useMainnetFiatAmountProps'
 import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
 import {
   barkRefreshNoticeText,
   barkRefreshWarningText,
   type BarkRefreshStatus,
 } from '@/lib/bark/bark-refresh-status'
-import type { FiatCurrencyCode } from '@/lib/fiat/supported-fiat-currencies'
-import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 
@@ -29,9 +31,13 @@ export function BarkDashboardBalance() {
   const loadSnapshot = useBarkLoadLifecycleSnapshot()
   const syncSnapshot = useBarkSyncLifecycleSnapshot()
   const barkManualSync = useBarkManualSyncMutation()
-  const defaultFiatCurrency = useFiatDenominationStore(
-    (fiatDenominationState) => fiatDenominationState.defaultFiatCurrency,
-  )
+  const fiatAmount = useMainnetFiatAmountProps()
+  const fiatAmountProps: MainnetFiatAmountDisplayProps = {
+    showFiatLayout: fiatAmount.showFiatLayout,
+    btcPriceInFiat: fiatAmount.btcPriceInFiat,
+    currency: fiatAmount.currency,
+    rateLoading: fiatAmount.rateLoading,
+  }
 
   const show = isBarkEnabled && isBarkNetworkMode(networkMode)
   if (!show || loadSnapshot.loadPhase === 'not-configured') return null
@@ -91,9 +97,7 @@ export function BarkDashboardBalance() {
         {totalSats != null && spendableSats != null ? (
           <FiatBtcAmountDisplay
             amountSats={totalSats}
-            showFiatLayout={false}
-            btcPriceInFiat={null}
-            currency={defaultFiatCurrency}
+            {...fiatAmountProps}
             data-testid="dashboard-bark-balance-amount"
           />
         ) : null}
@@ -105,14 +109,14 @@ export function BarkDashboardBalance() {
             <BarkSubBalanceRow
               label="Spendable"
               amountSats={spendableSats}
-              currency={defaultFiatCurrency}
+              fiatAmountProps={fiatAmountProps}
               testId="dashboard-bark-balance-spendable"
             />
             {lockedSats > 0 ? (
               <BarkSubBalanceRow
                 label="Locked"
                 amountSats={lockedSats}
-                currency={defaultFiatCurrency}
+                fiatAmountProps={fiatAmountProps}
                 testId="dashboard-bark-balance-locked"
               />
             ) : null}
@@ -120,7 +124,7 @@ export function BarkDashboardBalance() {
               <BarkSubBalanceRow
                 label="Exiting"
                 amountSats={exitingSats}
-                currency={defaultFiatCurrency}
+                fiatAmountProps={fiatAmountProps}
                 testId="dashboard-bark-balance-exiting"
               />
             ) : null}
@@ -148,12 +152,12 @@ export function BarkDashboardBalance() {
 function BarkSubBalanceRow({
   label,
   amountSats,
-  currency,
+  fiatAmountProps,
   testId,
 }: {
   label: string
   amountSats: number
-  currency: FiatCurrencyCode
+  fiatAmountProps: MainnetFiatAmountDisplayProps
   testId: string
 }) {
   return (
@@ -161,9 +165,7 @@ function BarkSubBalanceRow({
       <span>{label}</span>
       <FiatBtcAmountDisplay
         amountSats={amountSats}
-        showFiatLayout={false}
-        btcPriceInFiat={null}
-        currency={currency}
+        {...fiatAmountProps}
         isDetail
         data-testid={testId}
       />

@@ -78,6 +78,27 @@ pub fn emergency_exit_state_json(kind: BarkEmergencyExitStateKind) -> &'static s
     }
 }
 
+/// Block heights Bark records once every exit transaction has confirmed and the claim timelock is running.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AwaitingDeltaHeights {
+    pub tip_height: u32,
+    pub confirmed_height: u32,
+    pub claimable_height: u32,
+}
+
+/// `AwaitingDelta` carries the tip, the block that confirmed the exit, and the height where a claim can be signed.
+#[cfg(any(test, target_arch = "wasm32"))]
+pub fn awaiting_delta_heights(state: &bark::exit::ExitState) -> Option<AwaitingDeltaHeights> {
+    let bark::exit::ExitState::AwaitingDelta(delta) = state else {
+        return None;
+    };
+    Some(AwaitingDeltaHeights {
+        tip_height: delta.tip_height,
+        confirmed_height: delta.confirmed_block.height,
+        claimable_height: delta.claimable_height,
+    })
+}
+
 #[cfg(target_arch = "wasm32")]
 pub fn format_bark_exit_error(code: &str, detail: &str) -> String {
     format!("{code}: {detail}")
@@ -140,6 +161,12 @@ struct EmergencyExitRowJson {
     vtxo_id: String,
     state: &'static str,
     cancelable: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tip_height: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    confirmed_height: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    claimable_height: Option<u32>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -585,8 +612,9 @@ mod wasm {
         BARK_EXIT_NOT_EXITING, BARK_EXIT_NOTHING_STARTED, BARK_EXIT_UNKNOWN_VTXO,
         BarkEmergencyExitStateKind, EmergencyExitCpfpRequestJson, EmergencyExitDrainJson,
         EmergencyExitEstimateJson, EmergencyExitProgressJson, EmergencyExitRowJson,
-        cpfp_requests_needing_first_child, encode_hex, exit_ids_grew, fee_rate_from_sat_per_vb,
-        fee_rate_sat_per_vb, format_bark_exit_error, json_string, zero_estimate_json,
+        awaiting_delta_heights, cpfp_requests_needing_first_child, encode_hex, exit_ids_grew,
+        fee_rate_from_sat_per_vb, fee_rate_sat_per_vb, format_bark_exit_error, json_string,
+        zero_estimate_json,
     };
     use crate::exit_address::parse_receive_address;
     use crate::session::session_bitcoin_network;
@@ -650,10 +678,14 @@ mod wasm {
 
     fn row_from_state(vtxo_id: String, state: &bark::exit::ExitState) -> EmergencyExitRowJson {
         let kind = kind_from_bark(state.kind());
+        let heights = awaiting_delta_heights(state);
         EmergencyExitRowJson {
             vtxo_id,
             state: super::emergency_exit_state_json(kind),
             cancelable: state.is_cancelable(),
+            tip_height: heights.map(|progress| progress.tip_height),
+            confirmed_height: heights.map(|progress| progress.confirmed_height),
+            claimable_height: heights.map(|progress| progress.claimable_height),
         }
     }
 
@@ -987,12 +1019,13 @@ mod wasm {
 #[cfg(test)]
 mod tests {
     use super::{
-        BARK_EXIT_ALREADY_BROADCAST, BARK_EXIT_ALREADY_EXITED, BARK_EXIT_ALREADY_SPENT,
-        BARK_EXIT_CANNOT_CANCEL, BARK_EXIT_CLAIM_FEE, BARK_EXIT_CLAIM_MISSING_INPUTS,
-        BARK_EXIT_DUST, BARK_EXIT_FAILED, BARK_EXIT_INSUFFICIENT_FUNDS, BARK_EXIT_NOT_CLAIMABLE,
-        BARK_EXIT_NOT_EXITING, BARK_EXIT_NOTHING_STARTED, BARK_EXIT_UNKNOWN_VTXO,
-        BarkEmergencyExitStateKind, ExitGraphChain, ExitGraphChainStatus, ExitGraphTransactionKind,
-        ExitGraphTransactionStatus, ExitGraphTxType, chain_anchor_transaction,
+        AwaitingDeltaHeights, BARK_EXIT_ALREADY_BROADCAST, BARK_EXIT_ALREADY_EXITED,
+        BARK_EXIT_ALREADY_SPENT, BARK_EXIT_CANNOT_CANCEL, BARK_EXIT_CLAIM_FEE,
+        BARK_EXIT_CLAIM_MISSING_INPUTS, BARK_EXIT_DUST, BARK_EXIT_FAILED,
+        BARK_EXIT_INSUFFICIENT_FUNDS, BARK_EXIT_NOT_CLAIMABLE, BARK_EXIT_NOT_EXITING,
+        BARK_EXIT_NOTHING_STARTED, BARK_EXIT_UNKNOWN_VTXO, BarkEmergencyExitStateKind,
+        ExitGraphChain, ExitGraphChainStatus, ExitGraphTransactionKind, ExitGraphTransactionStatus,
+        ExitGraphTxType, awaiting_delta_heights, chain_anchor_transaction,
         cpfp_requests_needing_first_child, emergency_exit_state_json,
         exit_graph_transaction_from_bitcoin, exit_graph_tx_types, exit_ids_grew,
         fee_rate_from_sat_per_vb, fee_rate_sat_per_vb, merge_exit_graph,
@@ -1000,6 +1033,25 @@ mod tests {
     use crate::exit_address::parse_signet_receive_address;
 
     const MAINNET_ADDRESS: &str = "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4";
+
+    #[test]
+    fn awaiting_delta_heights_come_from_the_confirmed_exit() {
+        use bark::exit::ExitState;
+
+        let confirmed_block = "90:0000000000000000000000000000000000000000000000000000000000000000"
+            .parse()
+            .expect("confirmed block");
+        let awaiting_delta = ExitState::new_awaiting_delta(100, confirmed_block, 40);
+        assert_eq!(
+            awaiting_delta_heights(&awaiting_delta),
+            Some(AwaitingDeltaHeights {
+                tip_height: 100,
+                confirmed_height: 90,
+                claimable_height: 130,
+            })
+        );
+        assert_eq!(awaiting_delta_heights(&ExitState::new_start(100)), None);
+    }
 
     #[test]
     fn emergency_exit_state_json_covers_each_kind() {

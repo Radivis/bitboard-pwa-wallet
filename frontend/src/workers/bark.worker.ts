@@ -2,6 +2,10 @@ import { expose, wrap, type Remote } from 'comlink'
 import { readBarkBalance } from '@/lib/bark/bark-balance'
 import { pendingActionsFromWasm } from '@/lib/bark/bark-pending-actions'
 import {
+  readBarkExitChainNotices,
+  type BarkExitNodeSweepKind,
+} from '@/lib/bark/bark-exit-seizure'
+import {
   readBarkNextRefreshSchedule,
   readBarkRefreshStatus,
 } from '@/lib/bark/bark-refresh-status'
@@ -58,6 +62,7 @@ import type {
   BarkBoardFeeEstimate,
   BarkEmergencyExitDrain,
   BarkEmergencyExitEstimate,
+  BarkEmergencyExitFeePrefs,
   BarkEmergencyExitProgress,
   BarkEmergencyExitRow,
   BarkOffboardFeeEstimate,
@@ -73,7 +78,7 @@ import type {
   OpenBarkSessionParams,
   OpenBarkSessionResult,
 } from '@/workers/bark-api'
-import type { BarkRailNetwork } from '@/lib/wallet/wallet-domain-types'
+import type { BarkEmergencyExitFeePreset, BarkRailNetwork } from '@/lib/wallet/wallet-domain-types'
 import {
   createBarkCallQueue,
   durableCheckpointFlush,
@@ -81,14 +86,20 @@ import {
   type BarkRailFlushMetadata,
 } from '@/workers/bark-durable-flush'
 import {
+  clearExitChainNotice as clearExitChainNoticeInPayload,
+  mergeExitChainNotice as mergeExitChainNoticeInPayload,
   persistBarkProtocolState,
   persistOpenedBarkAccount,
+  readExitChainNotices as readExitChainNoticesFromPayload,
   readPendingEmergencyClaim as readPendingEmergencyClaimFromPayload,
   readProceedAutomatically as readProceedAutomaticallyFromPayload,
   readRecordEnvelopeForOpen,
   readStoredBarkReceiveKeyIndex,
   writePendingEmergencyClaim as writePendingEmergencyClaimToPayload,
   writeProceedAutomatically as writeProceedAutomaticallyToPayload,
+  readEmergencyExitFeePrefs as readEmergencyExitFeePrefsFromPayload,
+  writeEmergencyExitFeePreset as writeEmergencyExitFeePresetToPayload,
+  writeEmergencyExitMaxFeeRate as writeEmergencyExitMaxFeeRateToPayload,
 } from '@/workers/bark-worker-metadata'
 import type { SecretsChannelService } from '@/workers/secrets-channel-types'
 
@@ -324,6 +335,7 @@ async function openSessionImpl(
       fingerprint,
       receiveKeyIndex,
       lastSuccessfulSyncAt: barkAccount.lastSuccessfulSyncAt,
+      exitNodeSweepVtxoItems: barkAccount.exitNodeSweepVtxoItems ?? [],
     }
   } catch (err) {
     if (sessionOpened) {
@@ -374,10 +386,19 @@ async function syncImpl(): Promise<BarkSyncResult> {
       const nextRefresh = readBarkNextRefreshSchedule(
         await wasmModule.bark_next_refresh_schedule(),
       )
+      const scanned = readBarkExitChainNotices(wasmModule.bark_exit_chain_notices())
+      const network = requireOpenNetwork()
+      await mergeExitChainNoticeInPayload(encryptedPayloadDeps(), walletId, network, scanned)
+      const exitNodeSweepVtxoItems = await readExitChainNoticesFromPayload(
+        encryptedPayloadDeps(),
+        walletId,
+        network,
+      )
       return {
         lastSuccessfulSyncAt: new Date().toISOString(),
         refreshStatus,
         nextRefresh,
+        exitNodeSweepVtxoItems,
       }
     },
     (result) => ({ lastSuccessfulSyncAt: result.lastSuccessfulSyncAt }),
@@ -582,6 +603,12 @@ function requireOpenNetwork(): BarkRailNetwork {
   return openNetwork
 }
 
+async function clearExitChainNoticeImpl(kind: BarkExitNodeSweepKind): Promise<void> {
+  const walletId = requireOpenWalletId()
+  const network = requireOpenNetwork()
+  await clearExitChainNoticeInPayload(encryptedPayloadDeps(), walletId, network, kind)
+}
+
 async function readPendingEmergencyClaimImpl(): Promise<PendingEmergencyClaim | null> {
   const walletId = requireOpenWalletId()
   const network = requireOpenNetwork()
@@ -615,6 +642,36 @@ async function writeProceedAutomaticallyImpl(enabled: boolean): Promise<void> {
     walletId,
     network,
     enabled,
+  )
+}
+
+async function readEmergencyExitFeePrefsImpl(): Promise<BarkEmergencyExitFeePrefs> {
+  const walletId = requireOpenWalletId()
+  const network = requireOpenNetwork()
+  return readEmergencyExitFeePrefsFromPayload(encryptedPayloadDeps(), walletId, network)
+}
+
+async function writeEmergencyExitFeePresetImpl(
+  feePreset: BarkEmergencyExitFeePreset,
+): Promise<void> {
+  const walletId = requireOpenWalletId()
+  const network = requireOpenNetwork()
+  await writeEmergencyExitFeePresetToPayload(
+    encryptedPayloadDeps(),
+    walletId,
+    network,
+    feePreset,
+  )
+}
+
+async function writeEmergencyExitMaxFeeRateImpl(maxFeeRateSatPerVb: number): Promise<void> {
+  const walletId = requireOpenWalletId()
+  const network = requireOpenNetwork()
+  await writeEmergencyExitMaxFeeRateToPayload(
+    encryptedPayloadDeps(),
+    walletId,
+    network,
+    maxFeeRateSatPerVb,
   )
 }
 
@@ -753,6 +810,10 @@ const barkService: BarkService = {
     return callBark(() => drainEmergencyExitsImpl(address, feeRateSatPerVb, excludeVtxoIds))
   },
 
+  clearExitChainNotice(kind): Promise<void> {
+    return callBark(() => clearExitChainNoticeImpl(kind))
+  },
+
   readPendingEmergencyClaim(): Promise<PendingEmergencyClaim | null> {
     return callBark(() => readPendingEmergencyClaimImpl())
   },
@@ -767,6 +828,18 @@ const barkService: BarkService = {
 
   writeProceedAutomatically(enabled: boolean): Promise<void> {
     return callBark(() => writeProceedAutomaticallyImpl(enabled))
+  },
+
+  readEmergencyExitFeePrefs(): Promise<BarkEmergencyExitFeePrefs> {
+    return callBark(() => readEmergencyExitFeePrefsImpl())
+  },
+
+  writeEmergencyExitFeePreset(feePreset: BarkEmergencyExitFeePreset): Promise<void> {
+    return callBark(() => writeEmergencyExitFeePresetImpl(feePreset))
+  },
+
+  writeEmergencyExitMaxFeeRate(maxFeeRateSatPerVb: number): Promise<void> {
+    return callBark(() => writeEmergencyExitMaxFeeRateImpl(maxFeeRateSatPerVb))
   },
 
   syncEmergencyExits(): Promise<BarkEmergencyExitRow[]> {

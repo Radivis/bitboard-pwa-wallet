@@ -11,7 +11,6 @@ import '@xyflow/react/dist/style.css'
 import {
   Check,
   Cog,
-  Loader2,
   Megaphone,
   Pickaxe,
   Play,
@@ -40,6 +39,7 @@ import type {
 import { cn } from '@/lib/shared/utils'
 import type { VtxoExitChildSnapshotMap } from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit-machine-types'
 import { ExitTreeCoinBadge } from '@/components/wallet/unilateral-exit/ExitTreeCoinBadge'
+import { ExitTreeInProgressBadge } from '@/components/wallet/unilateral-exit/ExitTreeInProgressBadge'
 import { UnilateralExitTreeEdgesOverlay } from '@/components/wallet/unilateral-exit/UnilateralExitTreeEdgesOverlay'
 
 interface UnilateralExitTreeGraphProps {
@@ -116,20 +116,13 @@ function UnilateralExitInProgressBadge({
       : unilateralExitInProgressOverlayLabel(overlay, { proceedingAutomatically })
 
   return (
-    <div
-      className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full bg-background"
-      data-testid={
+    <ExitTreeInProgressBadge
+      icon={OverlayIcon}
+      label={overlayLabel}
+      testId={
         overlay == null ? 'unilateral-exit-in-progress' : `unilateral-exit-in-progress-${overlay}`
       }
-      title={overlayLabel}
-      aria-label={overlayLabel}
-      aria-hidden={overlayLabel == null}
-    >
-      <Loader2 className="absolute size-5 animate-spin text-blue-600" />
-      {OverlayIcon != null && (
-        <OverlayIcon className="relative z-10 size-2.5 text-blue-700" strokeWidth={2.5} />
-      )}
-    </div>
+    />
   )
 }
 

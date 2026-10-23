@@ -4,9 +4,22 @@ import type {
   BarkNextRefreshSchedule,
   BarkRefreshStatus,
 } from '@/lib/bark/bark-refresh-status'
-import type { BarkRailNetwork, PendingEmergencyClaim } from '@/lib/wallet/wallet-domain-types'
+import type {
+  BarkEmergencyExitFeePreset,
+  BarkRailNetwork,
+  PendingEmergencyClaim,
+} from '@/lib/wallet/wallet-domain-types'
+import type {
+  BarkExitNodeSweepKind,
+  BarkExitNodeSweepVtxoItem,
+} from '@/lib/bark/bark-exit-seizure'
 
 export type { PendingEmergencyClaim }
+
+export type BarkEmergencyExitFeePrefs = {
+  feePresetLabel: BarkEmergencyExitFeePreset
+  maxFeeRateSatPerVb: number | null
+}
 
 export type { BarkNextRefreshSchedule, BarkRefreshStatus }
 
@@ -25,6 +38,11 @@ export type OpenBarkSessionResult = {
   fingerprint: string
   receiveKeyIndex: number
   lastSuccessfulSyncAt?: string
+  /**
+   * Seized exit outputs stored on this Bark account. Empty when every section
+   * was dismissed or none was recorded.
+   */
+  exitNodeSweepVtxoItems?: BarkExitNodeSweepVtxoItem[]
 }
 
 export type BarkSyncResult = {
@@ -32,6 +50,11 @@ export type BarkSyncResult = {
   refreshStatus: BarkRefreshStatus
   /** `null` when the wallet has no spendable VTXOs or the chain tip is unknown. */
   nextRefresh: BarkNextRefreshSchedule | null
+  /**
+   * Seized exit outputs stored on this Bark account after the scan.
+   * Includes items recorded by an earlier sync. Empty when every section was dismissed or none was recorded.
+   */
+  exitNodeSweepVtxoItems: BarkExitNodeSweepVtxoItem[]
 }
 
 export type BarkRevealedReceiveAddress = {
@@ -154,6 +177,12 @@ export type BarkEmergencyExitRow = {
   vtxoId: string
   state: BarkEmergencyExitState
   cancelable: boolean
+  /** Tip when Bark last stored an awaiting-delta exit. */
+  tipHeight?: number
+  /** Block that confirmed the exit chain. */
+  confirmedHeight?: number
+  /** First height at which the exit can be claimed. */
+  claimableHeight?: number
 }
 
 export type BarkEmergencyCpfpRequest = {
@@ -230,10 +259,14 @@ export interface BarkService {
     feeRateSatPerVb: number,
     excludeVtxoIds: string[],
   ): Promise<BarkEmergencyExitDrain>
+  clearExitChainNotice(kind: BarkExitNodeSweepKind): Promise<void>
   readPendingEmergencyClaim(): Promise<PendingEmergencyClaim | null>
   writePendingEmergencyClaim(pending: PendingEmergencyClaim | null): Promise<void>
   readProceedAutomatically(): Promise<boolean>
   writeProceedAutomatically(enabled: boolean): Promise<void>
+  readEmergencyExitFeePrefs(): Promise<BarkEmergencyExitFeePrefs>
+  writeEmergencyExitFeePreset(feePreset: BarkEmergencyExitFeePreset): Promise<void>
+  writeEmergencyExitMaxFeeRate(maxFeeRateSatPerVb: number): Promise<void>
   syncEmergencyExits(): Promise<BarkEmergencyExitRow[]>
   broadcastEmergencyExitClaim(rawTxHex: string): Promise<void>
 }

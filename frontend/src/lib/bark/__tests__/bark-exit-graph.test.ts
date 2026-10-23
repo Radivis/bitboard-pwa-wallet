@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   barkExitPathTxids,
   layoutBarkExitGraph,
+  resolveBarkExitNodePhase,
   resolveBarkLeafCoinStage,
 } from '@/lib/bark/bark-exit-graph-layout'
 import {
@@ -172,6 +173,54 @@ describe('resolveBarkLeafCoinStage', () => {
   })
 })
 
+describe('resolveBarkExitNodePhase', () => {
+  it('keeps a child-less in-progress node on broadcast until that parent is a shortfall', () => {
+    expect(
+      resolveBarkExitNodePhase({
+        status: 'inProgress',
+        needsChild: true,
+        txid: 'leaf-txid',
+        unfundedParentTxids: new Set(),
+      }),
+    ).toBe('awaitingCpfpBroadcast')
+    expect(
+      resolveBarkExitNodePhase({
+        status: 'inProgress',
+        needsChild: true,
+        txid: 'leaf-txid',
+        unfundedParentTxids: new Set(['leaf-txid']),
+      }),
+    ).toBe('awaitingBumperFunding')
+  })
+
+  it('maps confirmation, a confirmed node, and a pending node', () => {
+    expect(
+      resolveBarkExitNodePhase({
+        status: 'inProgress',
+        needsChild: false,
+        txid: 'leaf-txid',
+        unfundedParentTxids: new Set(['leaf-txid']),
+      }),
+    ).toBe('awaitingConfirmation')
+    expect(
+      resolveBarkExitNodePhase({
+        status: 'confirmed',
+        needsChild: false,
+        txid: 'leaf-txid',
+        unfundedParentTxids: new Set(),
+      }),
+    ).toBe('confirmed')
+    expect(
+      resolveBarkExitNodePhase({
+        status: 'pending',
+        needsChild: false,
+        txid: 'leaf-txid',
+        unfundedParentTxids: new Set(),
+      }),
+    ).toBe('notProcessing')
+  })
+})
+
 describe('layoutBarkExitGraph', () => {
   it('sets coinStage from exit rows', () => {
     const { nodes } = layoutBarkExitGraph({
@@ -182,6 +231,8 @@ describe('layoutBarkExitGraph', () => {
 
     expect(nodes.find((node) => node.id === 'leaf-txid')?.data.coinStage).toBe('claimable')
     expect(nodes.find((node) => node.id === 'parent-txid')?.data.coinStage).toBe('exitable')
+    expect(nodes.find((node) => node.id === 'leaf-txid')?.data.phase).toBe('confirmed')
+    expect(nodes.find((node) => node.id === 'parent-txid')?.data.phase).toBe('notProcessing')
   })
 
   it('links a child to its parent and omits an outside spend', () => {
@@ -195,6 +246,7 @@ describe('layoutBarkExitGraph', () => {
     expect(nodes.find((node) => node.id === 'parent-txid')?.data.isOnExitPath).toBe(true)
     expect(nodes.find((node) => node.id === 'leaf-txid')?.data.isOnExitPath).toBe(true)
     expect(edgePaths[0]?.animated).toBe(true)
+    expect(nodes.find((node) => node.id === 'leaf-txid')?.data.phase).toBe('awaitingCpfpBroadcast')
   })
 
   it('draws one parent when two leaves share it and highlights that parent for either leaf', () => {

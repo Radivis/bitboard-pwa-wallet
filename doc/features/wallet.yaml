@@ -104,6 +104,7 @@ feature:
           - each transaction shows: direction (sent/received), amount, date, confirmation status
             - sent amount in list = net paid to recipients (excludes fee)
             - received amount in list = net received (unchanged)
+            - a Pay-to-Anchor CPFP child shows a CPFP fee bump badge beside its direction; a normal send does not
           - click_event per transaction:
             - expand to show transaction details (txid, fee, total including fee for sent, block height); Lightning sent payments show fee and total including fee when expanded
         - receive button

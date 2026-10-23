@@ -1,3 +1,4 @@
+import { parsePositiveWholeSats } from '@/lib/fiat/sats-or-fiat-amount'
 import type { BarkBoardFeeEstimate, BarkPreparedBoardFunding } from '@/workers/bark-api'
 
 export type BarkBoardReview = {
@@ -21,11 +22,7 @@ export type ReviewBarkBoardDeps = {
 
 /** Positive whole sats. Rejects empty input, zero, fractions, and leading zeros. */
 export function parseBarkBoardAmountSats(raw: string): number | null {
-  const trimmed = raw.trim()
-  if (!/^[1-9]\d*$/.test(trimmed)) return null
-  const amountSats = Number(trimmed)
-  if (!Number.isSafeInteger(amountSats) || amountSats <= 0) return null
-  return amountSats
+  return parsePositiveWholeSats(raw)
 }
 
 /**
@@ -50,5 +47,27 @@ export async function reviewBarkBoard(
     offchainFeeSats: estimate.feeSats,
     netVtxoSats: estimate.netAmountSats,
     grossAmountSats: estimate.grossAmountSats,
+  }
+}
+
+/**
+ * Rebuilds the on-chain funding PSBT at a new fee rate.
+ * Keeps the prepared funding address, so it does not derive another VTXO key
+ * and does not ask the server for the board fee again.
+ */
+export async function repriceBarkBoardOnchain(
+  deps: Pick<ReviewBarkBoardDeps, 'prepareOnchainSend'>,
+  review: BarkBoardReview,
+  feeRateSatPerVb: number,
+): Promise<BarkBoardReview> {
+  const onchain = await deps.prepareOnchainSend({
+    toAddress: review.fundingAddress,
+    amountSats: review.grossAmountSats,
+    feeRateSatPerVb,
+  })
+  return {
+    ...review,
+    psbtBase64: onchain.psbtBase64,
+    onchainFeeSats: onchain.feeSats,
   }
 }

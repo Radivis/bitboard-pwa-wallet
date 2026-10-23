@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyBarkRecordEnvelope,
+  applyClearedExitChainNotice,
+  applyEmergencyExitFeePreset,
+  applyMergedExitChainNotice,
+  applyEmergencyExitMaxFeeRate,
   applyOpenedBarkAccount,
   applyPendingEmergencyClaim,
   applyProceedAutomatically,
@@ -304,6 +308,99 @@ describe('barkAccounts metadata', () => {
     expect(findBarkAccount(parsed, 'signet')?.pendingEmergencyClaim).toBeUndefined()
   })
 
+  it('keeps sweep items across a sync stamp and clears only the dismissed kind', () => {
+    const payload = payloadWithArkadeSdk()
+    payload.barkAccounts.push(
+      signetAccount({
+        receiveKeyIndex: 2,
+        recordEnvelope: signetRecordEnvelope,
+        exitNodeSweepVtxoItems: [{ vtxoId: 'vtxo-a', nodeKind: 'anchor' }],
+      }),
+    )
+
+    const merged = applyMergedExitChainNotice({
+      network: 'signet',
+      payload,
+      items: [
+        { vtxoId: 'vtxo-c', nodeKind: 'anchor' },
+        { vtxoId: 'vtxo-a', nodeKind: 'anchor' },
+        { vtxoId: 'vtxo-d', nodeKind: 'checkpoint' },
+        { vtxoId: 'vtxo-leaf', nodeKind: 'leaf' },
+        { vtxoId: 'vtxo-internal', nodeKind: 'internal' },
+      ],
+    })
+    expect(findBarkAccount(merged, 'signet')?.exitNodeSweepVtxoItems).toEqual([
+      { vtxoId: 'vtxo-a', nodeKind: 'anchor' },
+      { vtxoId: 'vtxo-c', nodeKind: 'anchor' },
+      { vtxoId: 'vtxo-internal', nodeKind: 'internal' },
+      { vtxoId: 'vtxo-leaf', nodeKind: 'leaf' },
+      { vtxoId: 'vtxo-d', nodeKind: 'checkpoint' },
+    ])
+    expect(findBarkAccount(merged, 'mainnet')?.exitNodeSweepVtxoItems).toBeUndefined()
+
+    const stamped = applySuccessfulBarkSync({
+      network: 'signet',
+      payload: merged,
+      syncedAt: '2024-03-01T12:00:00.000Z',
+    })
+    expect(findBarkAccount(stamped, 'signet')?.exitNodeSweepVtxoItems).toEqual(
+      findBarkAccount(merged, 'signet')?.exitNodeSweepVtxoItems,
+    )
+
+    const flushed = applyBarkRecordEnvelope({
+      network: 'signet',
+      payload: stamped,
+      recordEnvelope: 'bmV4dC1kdW1w',
+    })
+    expect(findBarkAccount(flushed, 'signet')?.exitNodeSweepVtxoItems).toEqual(
+      findBarkAccount(merged, 'signet')?.exitNodeSweepVtxoItems,
+    )
+
+    const unchanged = applyMergedExitChainNotice({
+      network: 'signet',
+      payload: flushed,
+      items: [],
+    })
+    expect(findBarkAccount(unchanged, 'signet')?.exitNodeSweepVtxoItems).toEqual(
+      findBarkAccount(merged, 'signet')?.exitNodeSweepVtxoItems,
+    )
+
+    const clearedCheckpoint = applyClearedExitChainNotice({
+      payload: unchanged,
+      network: 'signet',
+      kind: 'checkpoint',
+    })
+    expect(findBarkAccount(clearedCheckpoint, 'signet')?.exitNodeSweepVtxoItems).toEqual([
+      { vtxoId: 'vtxo-a', nodeKind: 'anchor' },
+      { vtxoId: 'vtxo-c', nodeKind: 'anchor' },
+      { vtxoId: 'vtxo-internal', nodeKind: 'internal' },
+      { vtxoId: 'vtxo-leaf', nodeKind: 'leaf' },
+    ])
+    expect(findBarkAccount(clearedCheckpoint, 'signet')?.recordEnvelope).toBe('bmV4dC1kdW1w')
+    expect(findBarkAccount(clearedCheckpoint, 'mainnet')?.recordEnvelope).toBe(mainnetRecordEnvelope)
+  })
+
+  it('omits a malformed exit node sweep item list', () => {
+    const parsed = parseWalletPayloadJson(
+      JSON.stringify({
+        descriptorWallets: [],
+        lightningNwcConnections: [],
+        barkAccounts: [
+          {
+            id: 'bark-account-signet',
+            networkMode: 'signet',
+            serverUrl: BARK_SIGNET_SERVER_URL,
+            fingerprint: 'abcdef01',
+            recordEnvelope: signetRecordEnvelope,
+            exitNodeSweepVtxoItems: [{ vtxoId: '', nodeKind: 'anchor' }],
+          },
+        ],
+      }),
+    )
+    expect(findBarkAccount(parsed, 'signet')?.recordEnvelope).toBe(signetRecordEnvelope)
+    expect(findBarkAccount(parsed, 'signet')?.exitNodeSweepVtxoItems).toBeUndefined()
+  })
+
   it('keeps proceed automatically across a sync stamp and a record envelope flush', () => {
     const payload = payloadWithArkadeSdk()
     payload.barkAccounts.push(
@@ -357,6 +454,62 @@ describe('barkAccounts metadata', () => {
     )
     expect(findBarkAccount(parsed, 'signet')?.recordEnvelope).toBe(signetRecordEnvelope)
     expect(findBarkAccount(parsed, 'signet')?.proceedAutomatically).toBeUndefined()
+  })
+
+  it('keeps the emergency-exit fee degree and max across a sync flush and drops malformed values', () => {
+    const payload = payloadWithArkadeSdk()
+    payload.barkAccounts.push(
+      signetAccount({
+        recordEnvelope: signetRecordEnvelope,
+        proceedAutomatically: true,
+        emergencyExitFeePreset: 'Low',
+        emergencyExitMaxFeeRateSatPerVb: 12,
+      }),
+    )
+
+    const stamped = applySuccessfulBarkSync({
+      network: 'signet',
+      payload,
+      syncedAt: '2024-03-01T12:00:00.000Z',
+    })
+    expect(findBarkAccount(stamped, 'signet')?.emergencyExitFeePreset).toBe('Low')
+    expect(findBarkAccount(stamped, 'signet')?.emergencyExitMaxFeeRateSatPerVb).toBe(12)
+
+    const changed = applyEmergencyExitFeePreset({
+      payload: stamped,
+      network: 'signet',
+      feePreset: 'High',
+    })
+    const capped = applyEmergencyExitMaxFeeRate({
+      payload: changed,
+      network: 'signet',
+      maxFeeRateSatPerVb: 25,
+    })
+    expect(findBarkAccount(capped, 'signet')?.emergencyExitFeePreset).toBe('High')
+    expect(findBarkAccount(capped, 'signet')?.emergencyExitMaxFeeRateSatPerVb).toBe(25)
+    expect(findBarkAccount(capped, 'signet')?.recordEnvelope).toBe(signetRecordEnvelope)
+    expect(findBarkAccount(capped, 'signet')?.proceedAutomatically).toBe(true)
+
+    const parsed = parseWalletPayloadJson(
+      JSON.stringify({
+        descriptorWallets: [],
+        lightningNwcConnections: [],
+        barkAccounts: [
+          {
+            id: 'bark-account-signet',
+            networkMode: 'signet',
+            serverUrl: BARK_SIGNET_SERVER_URL,
+            fingerprint: 'abcdef01',
+            recordEnvelope: signetRecordEnvelope,
+            emergencyExitFeePreset: 'custom',
+            emergencyExitMaxFeeRateSatPerVb: 0,
+          },
+        ],
+      }),
+    )
+    expect(findBarkAccount(parsed, 'signet')?.recordEnvelope).toBe(signetRecordEnvelope)
+    expect(findBarkAccount(parsed, 'signet')?.emergencyExitFeePreset).toBeUndefined()
+    expect(findBarkAccount(parsed, 'signet')?.emergencyExitMaxFeeRateSatPerVb).toBeUndefined()
   })
 
   it('drops an account whose receiveKeyIndex is not a u32', () => {

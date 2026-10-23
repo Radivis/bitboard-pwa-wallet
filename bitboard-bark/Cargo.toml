@@ -96,3 +96,9 @@ required-features = ["regtest-support"]
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = ["-Oz", "--enable-bulk-memory", "--enable-nontrapping-float-to-int", "--enable-sign-ext"]
+
+# Bark exit review calls Esplora from WASM. crates.io esplora-client 0.12.3
+# does not retry a browser "Failed to fetch"; the vendored client does.
+# Keep in sync with the workspace patch in the repository root Cargo.toml.
+[patch.crates-io]
+esplora-client = { path = "../third_party/esplora-client" }

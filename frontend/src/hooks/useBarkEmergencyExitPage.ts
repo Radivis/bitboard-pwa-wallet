@@ -1,10 +1,13 @@
-import { useMemo, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useBarkEmergencyExitQuery } from '@/hooks/useBarkEmergencyExitQuery'
+import {
+  barkPendingEmergencyClaimQueryKey,
+  useBarkEmergencyExitPersistedState,
+} from '@/hooks/useBarkEmergencyExitPersistedState'
 import { barkExitTopologyQueryKey, useBarkExitTopologyQuery } from '@/hooks/useBarkExitTopologyQuery'
 import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
-import { useEsploraFeePresets } from '@/hooks/useEsploraFeePresets'
 import { barkVtxoListQueryKey, useBarkVtxoListQuery } from '@/hooks/useBarkVtxoListQuery'
 import { useBarkSyncLifecycleSnapshot } from '@/hooks/useBarkSyncLifecycleSnapshot'
 import {
@@ -18,6 +21,7 @@ import {
 import {
   barkEmergencyExitFundingStatusFor,
   barkEmergencyExitScopeFor,
+  barkEmergencyExitUnfundedParentTxidsFor,
 } from '@/lib/bark/bark-emergency-exit-funding-status'
 import { catchUpOnchainWalletForBarkExit } from '@/lib/bark/bark-emergency-exit-onchain-catch-up-live'
 import {
@@ -31,11 +35,7 @@ import {
   claimBarkEmergencyExits,
   startBarkEmergencyExit,
 } from '@/lib/bark/perform-bark-emergency-exit'
-import {
-  syncBarkEmergencyExitAutomation,
-  stopBarkEmergencyExitAutomation,
-} from '@/lib/bark/bark-emergency-exit-automation'
-import { NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB } from '@/lib/esplora/esplora-fee-estimates'
+import { BARK_EMERGENCY_EXIT_AUTOMATION_PAUSE_LABELS } from '@/lib/bark/bark-emergency-exit-automated-fee'
 import { errorMessage } from '@/lib/shared/utils'
 import { formatSats } from '@/lib/wallet/bitcoin-utils'
 import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
@@ -51,19 +51,11 @@ export const BARK_EMERGENCY_EXIT_CANCEL_NOTE =
 
 export const BARK_EMERGENCY_EXIT_CLAIM_NOTE = 'The on-chain balance updates after the claim confirms.'
 
-export function barkPendingEmergencyClaimQueryKey(
-  walletId: number | null,
-  networkMode: string,
-) {
-  return ['bark', 'pending-emergency-claim', walletId, networkMode] as const
-}
-
-export function barkProceedAutomaticallyQueryKey(
-  walletId: number | null,
-  networkMode: string,
-) {
-  return ['bark', 'proceed-automatically', walletId, networkMode] as const
-}
+export {
+  barkEmergencyExitFeePrefsQueryKey,
+  barkPendingEmergencyClaimQueryKey,
+  barkProceedAutomaticallyQueryKey,
+} from '@/hooks/useBarkEmergencyExitPersistedState'
 
 export type BarkEmergencyExitReview = {
   vtxoIds: string[]
@@ -76,34 +68,18 @@ export function useBarkEmergencyExitPage() {
   const currentAddress = useWalletStore((walletState) => walletState.currentAddress)
   const confirmedSats = useWalletStore((walletState) => walletState.balance?.confirmedSats ?? 0)
   const isBarkEnabled = useFeatureStore((featureState) => featureState.isBarkEnabled)
-  const feePresetsQuery = useEsploraFeePresets(networkMode)
-  const feeRateSatPerVb =
-    feePresetsQuery.data?.High ?? NON_ESPLORA_FEE_PRESET_RATES_SAT_PER_VB.High
+  const persisted = useBarkEmergencyExitPersistedState()
+  const {
+    pendingEmergencyClaim,
+    proceedAutomatically,
+    feeRateForActions,
+    feeCapBlocksBroadcast,
+  } = persisted
   const loadSnapshot = useBarkLoadLifecycleSnapshot()
   const syncSnapshot = useBarkSyncLifecycleSnapshot()
   const vtxoListQuery = useBarkVtxoListQuery()
   const exitQuery = useBarkEmergencyExitQuery()
-  const pendingClaimQuery = useQuery({
-    queryKey: barkPendingEmergencyClaimQueryKey(activeWalletId, networkMode),
-    enabled:
-      isBarkEnabled &&
-      isBarkNetworkMode(networkMode) &&
-      loadSnapshot.loadPhase === 'loaded' &&
-      activeWalletId != null,
-    queryFn: () => getBarkWorker().readPendingEmergencyClaim(),
-  })
-  const proceedAutomaticallyQuery = useQuery({
-    queryKey: barkProceedAutomaticallyQueryKey(activeWalletId, networkMode),
-    enabled:
-      isBarkEnabled &&
-      isBarkNetworkMode(networkMode) &&
-      loadSnapshot.loadPhase === 'loaded' &&
-      activeWalletId != null,
-    queryFn: () => getBarkWorker().readProceedAutomatically(),
-  })
   const queryClient = useQueryClient()
-
-  const proceedAutomatically = proceedAutomaticallyQuery.data === true
   const automaticProgressInFlight = useBarkEmergencyExitAutomationStore(
     (automationState) => automationState.inFlight,
   )
@@ -118,11 +94,19 @@ export function useBarkEmergencyExitPage() {
     useBarkEmergencyExitFundingStore((fundingState) => fundingState.fundingStatus),
     exitScope,
   )
+  const unfundedParentTxids = barkEmergencyExitUnfundedParentTxidsFor(
+    useBarkEmergencyExitFundingStore((fundingState) => fundingState.unfundedParents),
+    exitScope,
+  )
 
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [wholeWallet, setWholeWallet] = useState(false)
   const [review, setReview] = useState<BarkEmergencyExitReview | null>(null)
   const [busyAction, setBusyAction] = useState<string | null>(null)
+
+  useEffect(() => {
+    setReview(null)
+  }, [feeRateForActions])
   const vtxoRows = vtxoListQuery.data?.rows ?? []
   const spendableVtxos = vtxoRows.filter((row) => row.state === 'spendable')
   const topologyVtxoIds = useMemo(
@@ -143,8 +127,8 @@ export function useBarkEmergencyExitPage() {
   const sessionReady = loadSnapshot.loadPhase === 'loaded'
   const destinationAddress = currentAddress?.trim() ?? ''
   const liveExits = useMemo(
-    () => overlayPendingEmergencyClaim(exitQuery.data ?? [], pendingClaimQuery.data ?? null),
-    [exitQuery.data, pendingClaimQuery.data],
+    () => overlayPendingEmergencyClaim(exitQuery.data ?? [], pendingEmergencyClaim),
+    [exitQuery.data, pendingEmergencyClaim],
   )
   const liveExitsLoading = exitQuery.isLoading
   const liveExitsError = exitQuery.isError
@@ -207,9 +191,13 @@ export function useBarkEmergencyExitPage() {
       toast.error('Select spendable VTXOs or the whole wallet.')
       return
     }
+    if (feeCapBlocksBroadcast()) {
+      toast.error(BARK_EMERGENCY_EXIT_AUTOMATION_PAUSE_LABELS.feeCapExceeded)
+      return
+    }
     setBusyAction('review')
     try {
-      const estimate = await barkEmergencyExitReviewDeps().estimate(vtxoIds, feeRateSatPerVb)
+      const estimate = await barkEmergencyExitReviewDeps().estimate(vtxoIds, feeRateForActions)
       setReview({ vtxoIds, estimate })
     } catch (err) {
       setReview(null)
@@ -241,7 +229,7 @@ export function useBarkEmergencyExitPage() {
     setBusyAction('progress')
     try {
       await catchUpOnchainWalletForBarkExit(networkMode)
-      const outcome = await runBarkEmergencyExitProgress(exitScope, feeRateSatPerVb)
+      const outcome = await runBarkEmergencyExitProgress(exitScope, feeRateForActions)
       if (!barkEmergencyExitChildrenWaitForFunds(outcome)) {
         toast.success('Emergency exit progressed.')
       }
@@ -266,26 +254,13 @@ export function useBarkEmergencyExitPage() {
     }
   }
 
-  async function onProceedAutomaticallyChange(enabled: boolean) {
-    if (activeWalletId == null || !isBarkNetworkMode(networkMode)) return
-    const queryKey = barkProceedAutomaticallyQueryKey(activeWalletId, networkMode)
-    queryClient.setQueryData(queryKey, enabled)
-    try {
-      await getBarkWorker().writeProceedAutomatically(enabled)
-      if (enabled) {
-        void syncBarkEmergencyExitAutomation({ walletId: activeWalletId, networkMode })
-      } else {
-        stopBarkEmergencyExitAutomation()
-      }
-    } catch (err) {
-      queryClient.setQueryData(queryKey, !enabled)
-      toast.error(errorMessage(err) || 'Could not save automatic proceeding')
-    }
-  }
-
   async function onClaim() {
     if (destinationAddress.length === 0) {
       toast.error('No on-chain receive address is available.')
+      return
+    }
+    if (feeCapBlocksBroadcast()) {
+      toast.error(BARK_EMERGENCY_EXIT_AUTOMATION_PAUSE_LABELS.feeCapExceeded)
       return
     }
     setBusyAction('claim')
@@ -293,7 +268,7 @@ export function useBarkEmergencyExitPage() {
       const claimed = await claimBarkEmergencyExits(
         barkEmergencyExitClaimDeps(),
         destinationAddress,
-        feeRateSatPerVb,
+        feeRateForActions,
       )
       if (claimed.observed) {
         toast.success(`Claim broadcast ${claimed.txid}. ${BARK_EMERGENCY_EXIT_CLAIM_NOTE}`)
@@ -321,6 +296,7 @@ export function useBarkEmergencyExitPage() {
     topologyNodes: topologyVtxoIds.length === 0 ? [] : topologyQuery.data?.nodes,
     exitTreeError,
     fundingStatus,
+    unfundedParentTxids,
     wholeWallet,
     selectedIds,
     review,
@@ -332,11 +308,24 @@ export function useBarkEmergencyExitPage() {
     onReview: () => void onReview(),
     onStart: () => void onStart(),
     onProgress: () => void onProgress(),
-    onProceedAutomaticallyChange: (enabled: boolean) => void onProceedAutomaticallyChange(enabled),
+    onProceedAutomaticallyChange: persisted.onProceedAutomaticallyChange,
+    onAutomaticFeePresetChange: persisted.onAutomaticFeePresetChange,
+    onMaxFeeRateChange: persisted.onMaxFeeRateChange,
     proceedAutomatically,
-    proceedAutomaticallyPending: proceedAutomaticallyQuery.isPending,
+    proceedAutomaticallyPending: persisted.proceedAutomaticallyPending,
     automaticProgressInFlight,
     automaticProgressError,
+    displayedPauseReason: persisted.displayedPauseReason,
+    manualFeePresetSelection: persisted.manualFeePresetSelection,
+    automatedFeePresetLabel: persisted.automatedFeePresetLabel,
+    presetSatPerVbByLabel: persisted.presetSatPerVbByLabel,
+    feeEstimatesRefreshing: persisted.feeEstimatesRefreshing,
+    customFeeRate: persisted.customFeeRate,
+    useCustomFee: persisted.useCustomFee,
+    maxFeeRateSatPerVb: persisted.maxFeeRateSatPerVb,
+    onSelectManualPreset: persisted.onSelectManualPreset,
+    setCustomFeeRate: persisted.setCustomFeeRate,
+    onSelectCustomMode: persisted.onSelectCustomMode,
     onCancel: (vtxoId: string) => void onCancel(vtxoId),
     onClaim: () => void onClaim(),
   }

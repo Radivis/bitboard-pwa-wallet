@@ -34,6 +34,8 @@ export interface WireTransactionDetails {
   confirmation_time: number | null;
   is_confirmed: boolean;
   is_lab_tx: boolean;
+  /** Absent on a stale WASM build; treat that as not a CPFP fee bump. */
+  is_cpfp_fee_bump?: boolean;
 }
 
 export interface WireReviewInputUtxo {

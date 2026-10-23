@@ -26,6 +26,8 @@ mod vtxo_list;
 mod record_store;
 
 #[cfg(any(test, target_arch = "wasm32"))]
+mod exit_seizure;
+#[cfg(any(test, target_arch = "wasm32"))]
 mod refresh;
 #[cfg(all(feature = "regtest-support", not(target_arch = "wasm32")))]
 pub mod regtest_session;

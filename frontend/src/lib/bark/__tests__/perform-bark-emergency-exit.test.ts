@@ -170,6 +170,7 @@ describe('progressBarkEmergencyExits', () => {
     await expect(progressBarkEmergencyExits(deps, 1)).resolves.toEqual({
       requestedChildren: 3,
       providedChildren: 1,
+      unfundedParentTxids: ['parent-2', 'parent-3'],
     })
   })
 
@@ -191,6 +192,7 @@ describe('progressBarkEmergencyExits', () => {
     await expect(progressed).rejects.toMatchObject({
       waitingNeededSats: 6_000,
       onchainTotalSats: 5_000,
+      unfundedParentTxids: ['parent-2', 'parent-3'],
     })
     expect(deps.provideChild).toHaveBeenCalledWith('parent-1', 'child-1')
     expect(deps.progress).toHaveBeenCalledTimes(2)
@@ -208,6 +210,7 @@ describe('progressBarkEmergencyExits', () => {
     await expect(progressBarkEmergencyExits(deps, 1)).resolves.toEqual({
       requestedChildren: 3,
       providedChildren: 1,
+      unfundedParentTxids: ['parent-2', 'parent-3'],
     })
   })
 
@@ -230,6 +233,7 @@ describe('progressBarkEmergencyExits', () => {
     await expect(progressBarkEmergencyExits(deps, 1)).resolves.toEqual({
       requestedChildren: 3,
       providedChildren: 1,
+      unfundedParentTxids: ['parent-2', 'parent-3'],
     })
   })
 

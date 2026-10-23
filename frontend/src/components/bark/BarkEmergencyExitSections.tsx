@@ -1,11 +1,14 @@
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { AutomatedFeeCapControls } from '@/components/wallet/AutomatedFeeCapControls'
+import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
 import { BarkEmergencyExitFundingBanner } from '@/components/bark/BarkEmergencyExitFundingBanner'
 import { BarkExitTreeGraph } from '@/components/bark/BarkExitTreeGraph'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { barkEmergencyExitStateLabel } from '@/lib/bark/bark-emergency-exit'
-import { formatSatPerVbTwoDecimals } from '@/lib/esplora/esplora-fee-estimates'
+import { BARK_EMERGENCY_EXIT_AUTOMATION_PAUSE_LABELS } from '@/lib/bark/bark-emergency-exit-automated-fee'
+import { formatSatPerVbTwoDecimals, type SendFeePresetLabel } from '@/lib/esplora/esplora-fee-estimates'
 import { formatSats } from '@/lib/wallet/bitcoin-utils'
 import {
   barkEmergencyExitAmountLabel,
@@ -13,6 +16,7 @@ import {
   type BarkEmergencyExitReview,
 } from '@/hooks/useBarkEmergencyExitPage'
 import type { BarkEmergencyExitFundingStatus } from '@/lib/bark/bark-emergency-exit-funding-status'
+import type { BarkEmergencyExitAutomationPauseReason } from '@/stores/barkEmergencyExitAutomationStore'
 import type { BarkEmergencyExitRow, BarkExitGraphNode, BarkVtxoRow } from '@/workers/bark-api'
 import { Loader2 } from 'lucide-react'
 
@@ -26,6 +30,7 @@ export function BarkEmergencyExitTreeCard({
   errorMessage,
   vtxoRows,
   fundingStatus,
+  unfundedParentTxids,
 }: {
   nodes: BarkExitGraphNode[] | undefined
   exitRows: BarkEmergencyExitRow[]
@@ -33,6 +38,7 @@ export function BarkEmergencyExitTreeCard({
   errorMessage: string | null
   vtxoRows: BarkVtxoRow[]
   fundingStatus: BarkEmergencyExitFundingStatus | null
+  unfundedParentTxids: readonly string[]
 }) {
   return (
     <Card>
@@ -46,6 +52,7 @@ export function BarkEmergencyExitTreeCard({
           emptySelection={emptySelection}
           errorMessage={errorMessage}
           vtxoRows={vtxoRows}
+          unfundedParentTxids={unfundedParentTxids}
         />
         <BarkEmergencyExitFundingBanner status={fundingStatus} />
       </CardContent>
@@ -104,12 +111,11 @@ export function BarkEmergencyExitStartCard({
         </ul>
         <Button
           type="button"
-          variant="outline"
           data-testid="bark-emergency-exit-review"
           disabled={busyAction != null}
           onClick={onReview}
         >
-          Review
+          Review emergency exit
         </Button>
         {review != null ? (
           <div className="space-y-1 text-sm" data-testid="bark-emergency-exit-fee-review">
@@ -132,14 +138,98 @@ export function BarkEmergencyExitStartCard({
             ) : null}
           </div>
         ) : null}
-        <Button
-          type="button"
-          data-testid="bark-emergency-exit-start"
-          disabled={review == null || startBlocked || busyAction != null}
-          onClick={onStart}
-        >
-          Start emergency exit
-        </Button>
+        {review != null ? (
+          <Button
+            type="button"
+            data-testid="bark-emergency-exit-start"
+            disabled={startBlocked || busyAction != null}
+            onClick={onStart}
+          >
+            Start emergency exit
+          </Button>
+        ) : null}
+      </CardContent>
+    </Card>
+  )
+}
+
+export function BarkEmergencyExitFeeCard({
+  busyAction,
+  proceedAutomatically,
+  proceedAutomaticallyPending,
+  pausedReason,
+  manualFeePresetSelection,
+  automatedFeePresetLabel,
+  presetSatPerVbByLabel,
+  feeEstimatesRefreshing,
+  customFeeRate,
+  useCustomFee,
+  maxFeeRateSatPerVb,
+  onSelectManualPreset,
+  onSelectAutomaticPreset,
+  setCustomFeeRate,
+  onSelectCustomMode,
+  onMaxFeeRateChange,
+}: {
+  busyAction: string | null
+  proceedAutomatically: boolean
+  proceedAutomaticallyPending: boolean
+  pausedReason: BarkEmergencyExitAutomationPauseReason | null
+  manualFeePresetSelection: SendFeePresetLabel
+  automatedFeePresetLabel: SendFeePresetLabel
+  presetSatPerVbByLabel: Record<SendFeePresetLabel, number>
+  feeEstimatesRefreshing: boolean
+  customFeeRate: string
+  useCustomFee: boolean
+  maxFeeRateSatPerVb: number
+  onSelectManualPreset: (preset: SendFeePresetLabel, rateSatPerVb: number) => void
+  onSelectAutomaticPreset: (preset: SendFeePresetLabel, rateSatPerVb: number) => void
+  setCustomFeeRate: (value: string) => void
+  onSelectCustomMode: () => void
+  onMaxFeeRateChange: (maxFeeRateSatPerVb: number) => void
+}) {
+  const controlsPending = busyAction != null || proceedAutomaticallyPending
+
+  return (
+    <Card data-testid="bark-emergency-exit-fee-card">
+      <CardHeader>
+        <CardTitle>Fee rate</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {proceedAutomatically ? (
+          <AutomatedFeeCapControls
+            warningTestId="bark-emergency-exit-max-fee-warning"
+            maxFeeInputId="bark-emergency-exit-max-fee-rate"
+            maxFeeTestId="bark-emergency-exit-max-fee-rate"
+            maxFeeRateSatPerVb={maxFeeRateSatPerVb}
+            onMaxFeeRateChange={onMaxFeeRateChange}
+            feePresetSelection={automatedFeePresetLabel}
+            presetSatPerVbByLabel={presetSatPerVbByLabel}
+            feeEstimatesRefreshing={feeEstimatesRefreshing}
+            isPending={controlsPending}
+            onSelectPreset={onSelectAutomaticPreset}
+          />
+        ) : (
+          <SendOnChainFeeSection
+            feePresetSelection={manualFeePresetSelection}
+            presetSatPerVbByLabel={presetSatPerVbByLabel}
+            feeEstimatesRefreshing={feeEstimatesRefreshing}
+            customFeeRate={customFeeRate}
+            useCustomFee={useCustomFee}
+            isPending={controlsPending}
+            onSelectPreset={onSelectManualPreset}
+            setCustomFeeRate={setCustomFeeRate}
+            onSelectCustomMode={onSelectCustomMode}
+          />
+        )}
+        {proceedAutomatically && pausedReason != null ? (
+          <p
+            className="text-xs text-amber-700 dark:text-amber-400"
+            data-testid="bark-emergency-exit-automation-paused"
+          >
+            {BARK_EMERGENCY_EXIT_AUTOMATION_PAUSE_LABELS[pausedReason]}
+          </p>
+        ) : null}
       </CardContent>
     </Card>
   )
@@ -155,6 +245,7 @@ export function BarkEmergencyExitLiveCard({
   proceedAutomaticallyPending,
   automaticProgressInFlight,
   automaticProgressError,
+  automationPaused,
   onProceedAutomaticallyChange,
   onProgress,
   onCancel,
@@ -168,33 +259,27 @@ export function BarkEmergencyExitLiveCard({
   proceedAutomaticallyPending: boolean
   automaticProgressInFlight: boolean
   automaticProgressError: string | null
+  automationPaused: boolean
   onProceedAutomaticallyChange: (enabled: boolean) => void
   onProgress: () => void
   onCancel: (vtxoId: string) => void
 }) {
   const progressDisabled = busyAction != null || proceedAutomatically
+  const showAutomaticStatus =
+    proceedAutomatically &&
+    !automationPaused &&
+    (automaticProgressInFlight || automaticProgressError == null)
   return (
-    <Card>
+    <Card data-testid="bark-emergency-exit-live-card">
       <CardHeader>
         <CardTitle>Live exits</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="space-y-1">
-            <Label htmlFor="bark-emergency-exit-proceed-automatically" className="text-sm font-medium">
-              Proceed automatically
-            </Label>
-            <p className="text-xs text-muted-foreground">{BARK_EMERGENCY_EXIT_AUTOMATION_NOTE}</p>
-          </div>
-          <Switch
-            id="bark-emergency-exit-proceed-automatically"
-            checked={proceedAutomatically}
-            disabled={busyAction != null || proceedAutomaticallyPending}
-            onCheckedChange={onProceedAutomaticallyChange}
-            aria-label="Proceed automatically"
-            data-testid="bark-emergency-exit-proceed-automatically"
-          />
-        </div>
+        <ProceedAutomaticallySwitch
+          proceedAutomatically={proceedAutomatically}
+          disabled={busyAction != null || proceedAutomaticallyPending}
+          onProceedAutomaticallyChange={onProceedAutomaticallyChange}
+        />
         <Button
           type="button"
           data-testid="bark-emergency-exit-progress"
@@ -206,7 +291,7 @@ export function BarkEmergencyExitLiveCard({
           ) : null}
           Progress
         </Button>
-        {proceedAutomatically && (automaticProgressInFlight || automaticProgressError == null) ? (
+        {showAutomaticStatus ? (
           <p className="text-xs text-muted-foreground" data-testid="bark-emergency-exit-automatic-status">
             {automaticProgressInFlight ? 'Proceeding…' : 'Waiting for the next block.'}
           </p>
@@ -295,6 +380,35 @@ export function BarkEmergencyExitClaimCard({
         </Button>
       </CardContent>
     </Card>
+  )
+}
+
+function ProceedAutomaticallySwitch({
+  proceedAutomatically,
+  disabled,
+  onProceedAutomaticallyChange,
+}: {
+  proceedAutomatically: boolean
+  disabled: boolean
+  onProceedAutomaticallyChange: (enabled: boolean) => void
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="space-y-1">
+        <Label htmlFor="bark-emergency-exit-proceed-automatically" className="text-sm font-medium">
+          Proceed automatically
+        </Label>
+        <p className="text-xs text-muted-foreground">{BARK_EMERGENCY_EXIT_AUTOMATION_NOTE}</p>
+      </div>
+      <Switch
+        id="bark-emergency-exit-proceed-automatically"
+        checked={proceedAutomatically}
+        disabled={disabled}
+        onCheckedChange={onProceedAutomaticallyChange}
+        aria-label="Proceed automatically"
+        data-testid="bark-emergency-exit-proceed-automatically"
+      />
+    </div>
   )
 }
 
