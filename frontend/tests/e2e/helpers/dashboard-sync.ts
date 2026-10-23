@@ -29,16 +29,29 @@ export async function waitForOnchainRailSyncButtonEnabled(
 }
 
 /**
- * Waits until the on-chain rail is idle: sync control not showing "Syncing…" and no
- * on-chain sync-error banner. Use after import/create and after network/address switches.
+ * Waits until the on-chain rail leaves "Syncing…".
+ * The sync-error banner may still be visible. Use before leaving a public network
+ * whose Esplora outage must not fail the test.
  */
-export async function waitForOnchainRailNotSyncing(
+export async function waitForOnchainRailSyncAttemptFinished(
   page: Page,
   timeout = syncControlTimeoutMs(),
 ): Promise<void> {
   const syncButton = page.getByTestId('rail-sync-onchain')
   await expect(syncButton).toBeVisible({ timeout })
   await expect(syncButton).not.toHaveText(/Syncing/i, { timeout })
+}
+
+/**
+ * Waits until the on-chain rail is idle: sync control not showing "Syncing…" and no
+ * on-chain sync-error banner. Use after import/create and after network/address switches
+ * when that sync is required to succeed.
+ */
+export async function waitForOnchainRailNotSyncing(
+  page: Page,
+  timeout = syncControlTimeoutMs(),
+): Promise<void> {
+  await waitForOnchainRailSyncAttemptFinished(page, timeout)
   await expect(page.getByTestId('wallet-sync-error-banner-onchain')).not.toBeVisible({
     timeout,
   })
