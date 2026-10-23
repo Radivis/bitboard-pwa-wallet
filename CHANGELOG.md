@@ -15,6 +15,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [0.3.6] - 2026-10-23
+
+### Added
+
+- Bark is now also a supported layer 2 rail that can be unlocked as feature
+
+### Changed
+
+- The networks Signet and Mutinynet are now properly separated rather than Signet pointing towards Mutinynet silently
+- During a unilateral exit the coins icon on a tx node is replaced with a hourglass icon after the first confirmation; after the timelock has elapsed that is replaced by the "hand coins" icon
+
+### Fixed
+
+- Rails like Lightning, Arkade, and Bark are now loaded immediately after feature unlock
+- NWC Lightning connections now are not overwritten when they failed to load into memory
+
 ## [0.3.5] - 2026-09-27
 
 ### Added

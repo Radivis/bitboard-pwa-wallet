@@ -13,6 +13,7 @@ import { useWalletCryptoSessionPathGateStore } from '@/stores/walletCryptoSessio
 import { useAutoLockActivityBumps } from '@/hooks/useAutoLockActivityBumps'
 import { useLabCrossTabCacheSync } from '@/hooks/useLabCrossTabCacheSync'
 import { useWalletCrossTabCacheSync } from '@/hooks/useWalletCrossTabCacheSync'
+import { useRailLoadsOnFeatureActivation } from '@/hooks/useRailLoadsOnFeatureActivation'
 import {
   syncLockLifecycleFromWalletStore,
   syncLockLifecycleWithActiveWallet,
@@ -26,6 +27,7 @@ export function AppInitializer({ children }: AppInitializerProps) {
   useAutoLockActivityBumps()
   useLabCrossTabCacheSync()
   useWalletCrossTabCacheSync()
+  useRailLoadsOnFeatureActivation()
   const navigate = useNavigate()
   const location = useLocation()
   const { data: wallets, isLoading, isFetching } = useWallets()

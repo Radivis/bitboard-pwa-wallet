@@ -7,7 +7,7 @@ const featureState = vi.hoisted(() => ({
 }))
 
 const walletState = vi.hoisted(() => ({
-  networkMode: 'testnet' as const,
+  networkMode: 'testnet' as 'testnet' | 'signet' | 'mutinynet' | 'mainnet' | 'regtest' | 'lab',
 }))
 
 vi.mock('@/stores/featureStore', () => ({
@@ -38,7 +38,13 @@ describe('isArkadeActiveForNetworkMode', () => {
     expect(isArkadeActiveForNetworkMode('testnet')).toBe(false)
   })
 
-  it('returns true on signet when feature is on', () => {
+  it('returns true on mutinynet when feature is on', () => {
+    featureState.isArkadeEnabled = true
+    walletState.networkMode = 'mutinynet'
+    expect(isArkadeActiveForNetworkMode('mutinynet')).toBe(true)
+  })
+
+  it('returns true on public signet when feature is on', () => {
     featureState.isArkadeEnabled = true
     walletState.networkMode = 'signet'
     expect(isArkadeActiveForNetworkMode('signet')).toBe(true)

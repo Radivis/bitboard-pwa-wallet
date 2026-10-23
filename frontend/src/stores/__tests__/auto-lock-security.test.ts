@@ -5,11 +5,15 @@ const {
   resetSecretsChannelMock,
   endWalletSecretsSessionReliablyMock,
   getArkadeWorkerIfExistsMock,
+  closeArkadeSessionMock,
+  closeBarkSessionMock,
 } = vi.hoisted(() => ({
   terminateCryptoWorkerMock: vi.fn(),
   resetSecretsChannelMock: vi.fn(),
   endWalletSecretsSessionReliablyMock: vi.fn().mockResolvedValue(undefined),
   getArkadeWorkerIfExistsMock: vi.fn().mockReturnValue(null),
+  closeArkadeSessionMock: vi.fn().mockResolvedValue(undefined),
+  closeBarkSessionMock: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@/workers/crypto-factory', () => {
@@ -31,6 +35,7 @@ vi.mock('@/workers/crypto-factory', () => {
 vi.mock('@/workers/secrets-channel', () => ({
   resetSecretsChannel: resetSecretsChannelMock,
   resetArkadeWorkerSecretsChannel: vi.fn(),
+  resetBarkWorkerSecretsChannel: vi.fn(),
 }))
 
 vi.mock('@/lib/wallet/wallet-secrets-session', () => ({
@@ -40,7 +45,11 @@ vi.mock('@/lib/wallet/wallet-secrets-session', () => ({
 }))
 
 vi.mock('@/lib/arkade/arkade-session-service', () => ({
-  closeArkadeSession: vi.fn().mockResolvedValue(undefined),
+  closeArkadeSession: closeArkadeSessionMock,
+}))
+
+vi.mock('@/lib/bark/bark-session-service', () => ({
+  closeBarkSession: closeBarkSessionMock,
 }))
 
 vi.mock('@/workers/arkade-factory', () => ({
@@ -94,6 +103,8 @@ import { useWalletStore } from '../walletStore'
 describe('auto-lock security purge', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    closeArkadeSessionMock.mockReset().mockResolvedValue(undefined)
+    closeBarkSessionMock.mockReset().mockResolvedValue(undefined)
     vi.useFakeTimers()
     clearAutoLockTimer()
     useNearZeroSecurityStore.setState({ active: false })
@@ -222,5 +233,85 @@ describe('auto-lock security purge', () => {
 
     expect(onLock).not.toHaveBeenCalled()
     expect(useWalletStore.getState().walletStatus).toBe('unlocked')
+  })
+
+  it('closes Arkade and Bark sessions in parallel before running later cleanup steps', async () => {
+    let arkadeActive = false
+    let barkActive = false
+    let ranInParallel = false
+    let cleanedUpWhileClosing = false
+
+    closeArkadeSessionMock.mockImplementation(async () => {
+      arkadeActive = true
+      if (barkActive) ranInParallel = true
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      arkadeActive = false
+    })
+
+    closeBarkSessionMock.mockImplementation(async () => {
+      barkActive = true
+      if (arkadeActive) ranInParallel = true
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      barkActive = false
+    })
+
+    terminateCryptoWorkerMock.mockImplementation(() => {
+      if (arkadeActive || barkActive) {
+        cleanedUpWhileClosing = true
+      }
+    })
+
+    const lockPromise = useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState()
+    await vi.advanceTimersByTimeAsync(100)
+    await lockPromise
+
+    expect(ranInParallel).toBe(true)
+    expect(cleanedUpWhileClosing).toBe(false)
+    expect(terminateCryptoWorkerMock).toHaveBeenCalled()
+    expect(endWalletSecretsSessionReliablyMock).toHaveBeenCalled()
+  })
+
+  it('purges sensitive state and propagates error if Bark session close fails', async () => {
+    closeBarkSessionMock.mockRejectedValue(new Error('Bark close failed'))
+
+    await expect(
+      useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState(),
+    ).rejects.toThrow('Bark close failed')
+
+    expect(terminateCryptoWorkerMock).toHaveBeenCalled()
+    expect(endWalletSecretsSessionReliablyMock).toHaveBeenCalled()
+    expect(resetSecretsChannelMock).toHaveBeenCalled()
+  })
+
+  it('purges sensitive state and aggregates errors if both Arkade and Bark session close fail', async () => {
+    const arkadeError = new Error('Arkade close failed')
+    const barkError = new Error('Bark close failed')
+    closeArkadeSessionMock.mockRejectedValue(arkadeError)
+    closeBarkSessionMock.mockRejectedValue(barkError)
+
+    const lockPromise = useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState()
+    await expect(lockPromise).rejects.toSatisfy((err: unknown) => {
+      return (
+        err instanceof AggregateError &&
+        err.errors.includes(arkadeError) &&
+        err.errors.includes(barkError)
+      )
+    })
+
+    expect(terminateCryptoWorkerMock).toHaveBeenCalled()
+    expect(endWalletSecretsSessionReliablyMock).toHaveBeenCalled()
+    expect(resetSecretsChannelMock).toHaveBeenCalled()
+  })
+
+  it('purges sensitive state and propagates error if Arkade session close fails', async () => {
+    closeArkadeSessionMock.mockRejectedValue(new Error('Arkade close failed'))
+
+    await expect(
+      useCryptoStore.getState().lockAndPurgeSensitiveRuntimeState(),
+    ).rejects.toThrow('Arkade close failed')
+
+    expect(terminateCryptoWorkerMock).toHaveBeenCalled()
+    expect(endWalletSecretsSessionReliablyMock).toHaveBeenCalled()
+    expect(resetSecretsChannelMock).toHaveBeenCalled()
   })
 })

@@ -27,13 +27,17 @@ export async function enableArkadeFeature(page: Page): Promise<void> {
   await openSettingsMainTab(page)
 }
 
-/** Mock ASP E2E: signet switch + mocked operator session (not live Mutinynet). */
-const ARKADE_SIGNET_SWITCH_TIMEOUT_MS = process.env.CI ? 90_000 : 60_000
+/** Mock ASP E2E: Mutinynet switch + mocked operator session (not live Mutinynet). */
+const ARKADE_MUTINYNET_SWITCH_TIMEOUT_MS = process.env.CI ? 90_000 : 60_000
 
-export async function switchToSignet(page: Page): Promise<void> {
+export async function switchToMutinynet(page: Page): Promise<void> {
   await page.getByRole('link', { name: /settings/i }).click()
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
-  await page.getByRole('button', { name: 'Signet' }).click()
-  await waitForSettingsNetworkModeButtonSelected(page, 'Signet', ARKADE_SIGNET_SWITCH_TIMEOUT_MS)
-  await waitForSettingsNetworkSwitchComplete(page, ARKADE_SIGNET_SWITCH_TIMEOUT_MS)
+  await page.getByRole('button', { name: 'Mutinynet' }).click()
+  await waitForSettingsNetworkModeButtonSelected(
+    page,
+    'Mutinynet',
+    ARKADE_MUTINYNET_SWITCH_TIMEOUT_MS,
+  )
+  await waitForSettingsNetworkSwitchComplete(page, ARKADE_MUTINYNET_SWITCH_TIMEOUT_MS)
 }

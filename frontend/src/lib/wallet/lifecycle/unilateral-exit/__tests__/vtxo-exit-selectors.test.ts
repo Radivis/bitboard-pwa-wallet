@@ -3,6 +3,7 @@ import { UNILATERAL_EXIT_HOST_TX_CONFIRMATIONS } from '@/lib/arkade/unilateral-e
 import {
   formatVtxoExitPhaseCopy,
   hasLeftoverBranchCompleteVtxoChildren,
+  resolveArkadeHostCoinStage,
   resolveVtxoExitPhaseForCopy,
   shouldShowUnilateralExitBranchCompleteStatus,
   vtxoExitPhaseCopyFromPhase,
@@ -68,6 +69,100 @@ describe('vtxoExitPhaseCopyFromPhase', () => {
         recordPhase: 'complete_ready',
       }),
     ).toBe('complete_ready')
+  })
+})
+
+describe('resolveArkadeHostCoinStage', () => {
+  const HOST_TXID = 'cc'.repeat(32)
+
+  function hostOutpoint(vout: number, isUnrolled = false) {
+    return { txid: HOST_TXID, vout, isUnrolled }
+  }
+
+  function hostChild(vout: number, phase: ArkadeVtxoExitPhase): VtxoExitChildSnapshotMap[string] {
+    return {
+      childId: `vtxoExit:${HOST_TXID}:${vout}`,
+      txid: HOST_TXID,
+      vout,
+      phase,
+      machineState: phase,
+    }
+  }
+
+  function childMap(
+    ...children: VtxoExitChildSnapshotMap[string][]
+  ): VtxoExitChildSnapshotMap {
+    return Object.fromEntries(children.map((child) => [`${child.txid}:${child.vout}`, child]))
+  }
+
+  it('arkade_coin_stage_exitable_before_first_confirmation', () => {
+    expect(
+      resolveArkadeHostCoinStage({
+        hostOutpoints: [hostOutpoint(0)],
+        nodeConfirmed: false,
+        vtxoExitSnapshots: childMap(hostChild(0, 'host_relayed')),
+      }),
+    ).toBe('exitable')
+    expect(
+      resolveArkadeHostCoinStage({
+        hostOutpoints: [hostOutpoint(0)],
+        nodeConfirmed: false,
+        vtxoExitSnapshots: {},
+      }),
+    ).toBe('exitable')
+  })
+
+  it('arkade_coin_stage_timelocked_when_node_confirmed', () => {
+    expect(
+      resolveArkadeHostCoinStage({
+        hostOutpoints: [hostOutpoint(0)],
+        nodeConfirmed: true,
+        vtxoExitSnapshots: childMap(hostChild(0, 'host_relayed')),
+      }),
+    ).toBe('timelocked')
+  })
+
+  it('arkade_coin_stage_timelocked_when_child_host_confirmed', () => {
+    expect(
+      resolveArkadeHostCoinStage({
+        hostOutpoints: [hostOutpoint(0)],
+        nodeConfirmed: false,
+        vtxoExitSnapshots: childMap(hostChild(0, 'host_confirmed')),
+      }),
+    ).toBe('timelocked')
+  })
+
+  it('arkade_coin_stage_timelocked_when_host_unrolled_without_children', () => {
+    expect(
+      resolveArkadeHostCoinStage({
+        hostOutpoints: [hostOutpoint(0, true), hostOutpoint(1, true)],
+        nodeConfirmed: false,
+        vtxoExitSnapshots: {},
+      }),
+    ).toBe('timelocked')
+  })
+
+  it('arkade_coin_stage_claimable_when_all_children_complete_ready', () => {
+    expect(
+      resolveArkadeHostCoinStage({
+        hostOutpoints: [hostOutpoint(0, true), hostOutpoint(1, true)],
+        nodeConfirmed: false,
+        vtxoExitSnapshots: childMap(
+          hostChild(0, 'complete_ready'),
+          hostChild(1, 'complete_ready'),
+        ),
+      }),
+    ).toBe('claimable')
+  })
+
+  it('arkade_coin_stage_timelocked_when_children_mix_complete_ready_and_unrolled', () => {
+    expect(
+      resolveArkadeHostCoinStage({
+        hostOutpoints: [hostOutpoint(0, true), hostOutpoint(1, true)],
+        nodeConfirmed: false,
+        vtxoExitSnapshots: childMap(hostChild(0, 'complete_ready'), hostChild(1, 'unrolled')),
+      }),
+    ).toBe('timelocked')
   })
 })
 

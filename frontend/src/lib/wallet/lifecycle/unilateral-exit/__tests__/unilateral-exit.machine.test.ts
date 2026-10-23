@@ -106,6 +106,32 @@ function progress(
   }
 }
 
+/** Step 0 mined; cursor has moved to the next unpublished step. */
+function progressAfterFirstStepConfirmed(): ArkadeUnilateralExitProgress {
+  return progress({
+    stepIndex: 1,
+    totalSteps: 2,
+    phase: 'idle',
+    currentStepTxRelayed: false,
+    nodeStatuses: [
+      { txid: 'step0', confirmations: 1, status: 'confirmed' },
+      { txid: 'step1', confirmations: 0, status: 'inProgress' },
+    ],
+  })
+}
+
+/** Confirming block orphaned; step 0 is back in the mempool at 0 confirmations. */
+function progressAfterReorgStillRelayed(): ArkadeUnilateralExitProgress {
+  return progress({
+    stepIndex: 0,
+    totalSteps: 2,
+    phase: 'waiting',
+    currentStepTxRelayed: true,
+    currentStepWaitingSince: 1_700_000_000,
+    nodeStatuses: [{ txid: 'step0', confirmations: 0, status: 'inProgress' }],
+  })
+}
+
 const startedTestActors: Array<ReturnType<typeof createActor>> = []
 
 function branchCompleteReleasedToIdle(
@@ -658,6 +684,112 @@ describe('unilateralExitMachine', () => {
     expect(proceedStep).not.toHaveBeenCalled()
     expect(testActor.getSnapshot().context.progress?.stepIndex).toBe(6)
     expect(testActor.getSnapshot().context.proceedRequested).toBe(false)
+  })
+
+  it('manual idle poll rewinds step index after a still-relayed reorg without broadcasting', async () => {
+    let fetchCount = 0
+    const fetchProgress = vi.fn(async () => {
+      fetchCount += 1
+      if (fetchCount === 1) {
+        return progress({
+          phase: 'waiting',
+          stepIndex: 0,
+          currentStepTxRelayed: true,
+          currentStepWaitingSince: 1_700_000_000,
+        })
+      }
+      if (fetchCount === 2) {
+        return progressAfterFirstStepConfirmed()
+      }
+      return progressAfterReorgStillRelayed()
+    })
+    const proceedStep = vi.fn()
+    const ensureBroadcast = vi.fn()
+    const { testActor } = createTestActor({ fetchProgress, proceedStep, ensureBroadcast })
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'START_MANUAL',
+      walletScope,
+      outpoints: [leaf],
+      feeRateSatPerVb: 2,
+    })
+    await waitFor(testActor, (state) => state.matches('waitingConfirm'))
+    expect(ensureBroadcast).not.toHaveBeenCalled()
+
+    testActor.send({ type: 'POLL_TICK' })
+    await waitFor(
+      testActor,
+      (state) => state.matches('idle') && state.context.progress?.stepIndex === 1,
+    )
+    expect(proceedStep).not.toHaveBeenCalled()
+
+    testActor.send({ type: 'POLL_TICK' })
+    await waitFor(
+      testActor,
+      (state) => state.matches('idle') && state.context.progress?.stepIndex === 0,
+    )
+    const snapshot = testActor.getSnapshot()
+    expect(snapshot.matches('complete')).toBe(false)
+    expect(snapshot.matches('terminated')).toBe(false)
+    expect(snapshot.matches('error')).toBe(false)
+    expect(snapshot.context.progress?.nodeStatuses[0]?.confirmations).toBe(0)
+    expect(snapshot.context.jobOutpoints).toEqual([leaf])
+    expect(proceedStep).not.toHaveBeenCalled()
+    expect(ensureBroadcast).not.toHaveBeenCalled()
+  })
+
+  it('automatic waitingConfirm poll rewinds a still-relayed step without broadcasting', async () => {
+    let fetchCount = 0
+    const fetchProgress = vi.fn(async () => {
+      fetchCount += 1
+      if (fetchCount === 1) {
+        return progress({
+          stepIndex: 1,
+          totalSteps: 2,
+          phase: 'waiting',
+          currentStepTxRelayed: true,
+          currentStepWaitingSince: 1_700_000_000,
+          nodeStatuses: [
+            { txid: 'step0', confirmations: 1, status: 'confirmed' },
+            { txid: 'step1', confirmations: 0, status: 'inProgress' },
+          ],
+        })
+      }
+      return progressAfterReorgStillRelayed()
+    })
+    const proceedStep = vi.fn()
+    const ensureBroadcast = vi.fn()
+    const evaluatePolicy = vi.fn(async () => ({
+      feeRateSatPerVb: 2,
+      pausedReason: null,
+    }))
+    const { testActor } = createTestActor({
+      fetchProgress,
+      proceedStep,
+      ensureBroadcast,
+      evaluatePolicy,
+    })
+    testActor.send({ type: 'WALLET_CONFIGURED', walletScope })
+    testActor.send({
+      type: 'START_AUTOMATIC',
+      walletScope,
+      outpoints: [leaf],
+    })
+    await waitFor(
+      testActor,
+      (state) => state.matches('waitingConfirm') && state.context.progress?.stepIndex === 1,
+    )
+    expect(testActor.getSnapshot().context.feeRateSatPerVb).toBeNull()
+
+    testActor.send({ type: 'POLL_TICK' })
+    await waitFor(
+      testActor,
+      (state) => state.matches('waitingConfirm') && state.context.progress?.stepIndex === 0,
+    )
+    expect(testActor.getSnapshot().context.progress?.nodeStatuses[0]?.confirmations).toBe(0)
+    expect(proceedStep).not.toHaveBeenCalled()
+    expect(ensureBroadcast).not.toHaveBeenCalled()
+    expect(evaluatePolicy).not.toHaveBeenCalled()
   })
 
   it('manual ensureBroadcast stays idle when progress jumps to an already-relayed later step', async () => {

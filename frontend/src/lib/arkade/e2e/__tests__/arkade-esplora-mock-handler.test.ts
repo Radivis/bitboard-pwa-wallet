@@ -14,7 +14,7 @@ describe('arkade esplora mock', () => {
         '/api/esplora/default/testnet/address/tb1qexample/txs',
       ),
     ).toBe('/address/tb1qexample/txs')
-    expect(esploraPathAfterProxyPrefix('/api/arkade/operator/signet/v1/info')).toBeNull()
+    expect(esploraPathAfterProxyPrefix('/api/arkade/operator/mutinynet/v1/info')).toBeNull()
   })
 
   it('returns the Testnet4 genesis hash as the empty-chain tip', () => {

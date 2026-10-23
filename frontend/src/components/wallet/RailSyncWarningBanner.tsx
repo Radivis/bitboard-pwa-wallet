@@ -9,6 +9,7 @@ const SYNC_WARNING_TITLES: Record<DashboardRailId, string> = {
   onchain: 'On-chain sync completed with warnings',
   lightning: 'Lightning sync completed with warnings',
   arkade: 'Arkade sync completed with warnings',
+  bark: 'Bark sync completed with warnings',
 }
 
 export type RailSyncWarningBannerProps = {

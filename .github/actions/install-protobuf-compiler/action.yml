@@ -1,0 +1,27 @@
+name: Install pinned protobuf compiler
+description: >
+  Installs the current Ubuntu 24.04 protobuf-compiler package when it is still
+  upstream 3.21.12, so prost/tonic builds do not follow a newer protoc. Ubuntu
+  packaging revisions of that release are accepted; a different protoc version
+  fails the job. Jobs that use this action must run on ubuntu-24.04.
+
+runs:
+  using: composite
+  steps:
+    - name: Install protobuf-compiler 3.21.12
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo apt-get update
+        candidate="$(apt-cache policy protobuf-compiler | awk '/Candidate:/ { print $2 }')"
+        case "$candidate" in
+          3.21.12-*) ;;
+          *)
+            echo "Refusing protobuf-compiler candidate '${candidate}'; expected upstream 3.21.12." >&2
+            exit 1
+            ;;
+        esac
+        sudo apt-get install -y "protobuf-compiler=${candidate}"
+        protoc_version="$(protoc --version)"
+        echo "Installed protobuf-compiler ${candidate} (${protoc_version})"
+        printf '%s\n' "$protoc_version" | grep -q 'libprotoc 3.21.12'

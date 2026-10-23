@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import { WALLET_SQLITE_OPFS_BASENAME } from '@/db/opfs/opfs-sqlite-database-names'
-import { ensureMigrated, getDatabase } from '@/db/database'
+import { ensureSchemaAndDataMigrated, getDatabase } from '@/db/database'
 import { useWallets } from '@/db'
 import { loadWalletSecretsWithPassword } from '@/db/wallet-persistence'
 import { resolveArgon2CiParamsOrThrow } from '@/lib/shared/argon2-ci-env'
@@ -40,7 +40,7 @@ export function useWalletBackupExport() {
       if (walletIdForBackupPasswordCompare == null) {
         return { match: false, skipped: true }
       }
-      await ensureMigrated()
+      await ensureSchemaAndDataMigrated()
       try {
         await loadWalletSecretsWithPassword(
           getDatabase(),

@@ -23,6 +23,9 @@ interface FeatureState {
   /** When true, Arkade (VTXO) layer is available on mainnet, testnet, and signet. */
   isArkadeEnabled: boolean
   setIsArkadeEnabled: (enabled: boolean) => void
+  /** When true, a Signet wallet opens a public-Signet Bark session. */
+  isBarkEnabled: boolean
+  setIsBarkEnabled: (enabled: boolean) => void
   /** When true, rails may poll providers on a configurable interval (Settings → Main). */
   isPeriodicSyncEnabled: boolean
   setIsPeriodicSyncEnabled: (enabled: boolean) => void
@@ -45,6 +48,7 @@ function migrateLegacyFeatureState(persistedState: unknown): Partial<FeatureStat
       ...legacy,
       isUtxoSelectionEnabled: legacy.isUtxoSelectionEnabled ?? false,
       isArkadeEnabled: legacy.isArkadeEnabled ?? false,
+      isBarkEnabled: legacy.isBarkEnabled ?? false,
       isPeriodicSyncEnabled: legacy.isPeriodicSyncEnabled ?? false,
     }
   }
@@ -55,8 +59,27 @@ function migrateLegacyFeatureState(persistedState: unknown): Partial<FeatureStat
     isSegwitAddressesEnabled: legacy.segwitAddressesEnabled ?? false,
     isUtxoSelectionEnabled: false,
     isArkadeEnabled: false,
+    isBarkEnabled: false,
     isPeriodicSyncEnabled: false,
   }
+}
+
+export function migrateFeaturePersistedState(persistedState: unknown, version: number): unknown {
+  const base = migrateLegacyFeatureState(persistedState) ?? persistedState
+  if (base != null && typeof base === 'object') {
+    const merged = { ...base } as FeatureState
+    if (version < 3) {
+      merged.isArkadeEnabled = merged.isArkadeEnabled ?? false
+    }
+    if (version < 4) {
+      merged.isPeriodicSyncEnabled = merged.isPeriodicSyncEnabled ?? false
+    }
+    if (version < 5) {
+      merged.isBarkEnabled = merged.isBarkEnabled ?? false
+    }
+    return merged
+  }
+  return base
 }
 
 export const useFeatureStore = create<FeatureState>()(
@@ -74,27 +97,16 @@ export const useFeatureStore = create<FeatureState>()(
       setIsUtxoSelectionEnabled: (enabled) => set({ isUtxoSelectionEnabled: enabled }),
       isArkadeEnabled: false,
       setIsArkadeEnabled: (enabled) => set({ isArkadeEnabled: enabled }),
+      isBarkEnabled: false,
+      setIsBarkEnabled: (enabled) => set({ isBarkEnabled: enabled }),
       isPeriodicSyncEnabled: false,
       setIsPeriodicSyncEnabled: (enabled) => set({ isPeriodicSyncEnabled: enabled }),
     }),
     {
       name: 'feature-storage',
       storage: createJSONStorage(() => sqliteStorage),
-      version: 4,
-      migrate: (persistedState, version) => {
-        const base = migrateLegacyFeatureState(persistedState) ?? persistedState
-        if (base != null && typeof base === 'object') {
-          const merged = { ...base } as FeatureState
-          if (version < 3) {
-            merged.isArkadeEnabled = merged.isArkadeEnabled ?? false
-          }
-          if (version < 4) {
-            merged.isPeriodicSyncEnabled = merged.isPeriodicSyncEnabled ?? false
-          }
-          return merged
-        }
-        return base
-      },
+      version: 5,
+      migrate: migrateFeaturePersistedState,
       partialize: (state) => ({
         isLightningEnabled: state.isLightningEnabled,
         isMainnetAccessEnabled: state.isMainnetAccessEnabled,
@@ -102,6 +114,7 @@ export const useFeatureStore = create<FeatureState>()(
         isSegwitAddressesEnabled: state.isSegwitAddressesEnabled,
         isUtxoSelectionEnabled: state.isUtxoSelectionEnabled,
         isArkadeEnabled: state.isArkadeEnabled,
+        isBarkEnabled: state.isBarkEnabled,
         isPeriodicSyncEnabled: state.isPeriodicSyncEnabled,
       }),
     },

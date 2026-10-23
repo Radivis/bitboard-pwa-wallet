@@ -28,6 +28,7 @@ vi.mock('@/stores/walletStore', () => ({
     lab: 'Lab',
     regtest: 'Regtest',
     signet: 'Signet',
+    mutinynet: 'Mutinynet',
     testnet: 'Testnet',
     mainnet: 'Mainnet',
   },

@@ -26,7 +26,7 @@ vi.mock('@/lib/arkade/arkade-accounts', () => ({
 }))
 
 vi.mock('@/db/database', () => ({
-  ensureMigrated: vi.fn(async () => undefined),
+  ensureSchemaAndDataMigrated: vi.fn(async () => undefined),
 }))
 
 vi.mock('@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator', () => ({
@@ -50,7 +50,7 @@ describe('resolveArkadeOperatorSyncMetadata', () => {
     arkadeSyncPhaseRef.syncPhase = 'not-syncing'
     arkadeSavePhaseRef.savePhase = 'not-saving'
     useWalletStore.setState({
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       activeWalletId: 1,
       walletStatus: 'unlocked',
       activeArkadeAccountId: 'conn-1',

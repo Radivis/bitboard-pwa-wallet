@@ -1,5 +1,12 @@
-import type { ArkadeVtxoExitPhase } from '@/workers/arkade-api'
+import type {
+  ArkadeUnilateralExitHostOutpoint,
+  ArkadeVtxoExitPhase,
+} from '@/workers/arkade-api'
 import { UNILATERAL_EXIT_HOST_TX_CONFIRMATIONS } from '@/lib/arkade/unilateral-exit-confirmations'
+import {
+  resolveExitCoinStage,
+  type ExitCoinStage,
+} from '@/lib/arkade/unilateral-exit-node-icons'
 import { vtxoExitPhaseFromMachineState } from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit.machine'
 import {
   vtxoExitOutpointKey,
@@ -116,6 +123,35 @@ export function hasLeftoverBranchCompleteVtxoChildren(
   return Object.values(snapshots).some((child) =>
     BRANCH_COMPLETE_LEFTOVER_CHILD_PHASES.has(child.phase),
   )
+}
+
+const HOST_CONFIRMED_CHILD_PHASES: ReadonlySet<ArkadeVtxoExitPhase> = new Set([
+  'host_confirmed',
+  'unrolled',
+  'complete_ready',
+])
+
+/** Coin badge stage for a host tx: Esplora-backed `complete_ready` is the only timelock-elapsed signal. */
+export function resolveArkadeHostCoinStage(params: {
+  hostOutpoints: Pick<ArkadeUnilateralExitHostOutpoint, 'txid' | 'vout' | 'isUnrolled'>[]
+  nodeConfirmed: boolean
+  vtxoExitSnapshots: VtxoExitChildSnapshotMap
+}): ExitCoinStage {
+  const trackedPhases = params.hostOutpoints.flatMap((hostOutpoint) => {
+    const phase = lookupVtxoExitChildPhase(
+      params.vtxoExitSnapshots,
+      hostOutpoint.txid,
+      hostOutpoint.vout,
+    )
+    return phase == null ? [] : [phase]
+  })
+  return resolveExitCoinStage({
+    trackedVtxosPastTimelock: trackedPhases.map((phase) => phase === 'complete_ready'),
+    txConfirmed:
+      params.nodeConfirmed ||
+      params.hostOutpoints.some((hostOutpoint) => hostOutpoint.isUnrolled) ||
+      trackedPhases.some((phase) => HOST_CONFIRMED_CHILD_PHASES.has(phase)),
+  })
 }
 
 export function shouldShowUnilateralExitBranchCompleteStatus(params: {

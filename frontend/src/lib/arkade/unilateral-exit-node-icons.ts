@@ -1,5 +1,14 @@
 import type { LucideIcon } from 'lucide-react'
-import { Anchor, GitFork, Leaf, Milestone, TreePalm } from 'lucide-react'
+import {
+  Anchor,
+  Coins,
+  GitFork,
+  HandCoins,
+  Hourglass,
+  Leaf,
+  Milestone,
+  TreePalm,
+} from 'lucide-react'
 
 export type UnilateralExitNodeIconKind =
   | 'commitment'
@@ -39,6 +48,35 @@ export function unilateralExitNodeIconComponent(kind: UnilateralExitNodeIconKind
       return GitFork
     case 'leaf':
       return Leaf
+  }
+}
+
+/**
+ * Coin badge on an exit-tree node: `exitable` before the host tx confirms, `timelocked` once it
+ * has a confirmation and the exit timelock runs, `claimable` once the timelock has elapsed.
+ */
+export type ExitCoinStage = 'exitable' | 'timelocked' | 'claimable'
+
+/** `trackedVtxosPastTimelock` has one entry per VTXO on the node that has exit state. */
+export function resolveExitCoinStage(params: {
+  trackedVtxosPastTimelock: boolean[]
+  txConfirmed: boolean
+}): ExitCoinStage {
+  const { trackedVtxosPastTimelock, txConfirmed } = params
+  if (trackedVtxosPastTimelock.length > 0 && trackedVtxosPastTimelock.every(Boolean)) {
+    return 'claimable'
+  }
+  return txConfirmed ? 'timelocked' : 'exitable'
+}
+
+export function exitCoinStageIconComponent(stage: ExitCoinStage): LucideIcon {
+  switch (stage) {
+    case 'exitable':
+      return Coins
+    case 'timelocked':
+      return Hourglass
+    case 'claimable':
+      return HandCoins
   }
 }
 

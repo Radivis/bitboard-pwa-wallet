@@ -214,7 +214,7 @@ WASM may jump several phases in one reconcile (e.g. load after an hour: `host_br
 4. Children consume `funding_lost` / exited from WASM; job `terminated` means “no remaining broadcastable tagged VTXOs.”
 5. **Shipped:** VTXO machines are the UI source of phase. Control page / Complete dialog subscribe to children. Job machine is only the broadcaster. Update `.cursor/rules/unilateral-exit-xstate.mdc` for the two-machine family.
 
-Do not put a Rust port of XState in `bitboard-ark`. Persist a phase enum (or equivalent) and let the frontend machine mirror it.
+Do not put a Rust port of XState in `bitboard-arkade`. Persist a phase enum (or equivalent) and let the frontend machine mirror it.
 
 ---
 

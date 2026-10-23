@@ -35,6 +35,7 @@ describe('canBuildOnChainSend', () => {
   const base = {
     isLightningSendMode: false,
     isArkadeSendMode: false,
+    isBarkSendMode: false,
     normalizedRecipient: recipient,
     networkMode: 'signet' as const,
     amountSats: 10_000,
@@ -56,6 +57,10 @@ describe('canBuildOnChainSend', () => {
 
   it('rejects arkade send mode', () => {
     expect(canBuildOnChainSend({ ...base, isArkadeSendMode: true })).toBe(false)
+  })
+
+  it('rejects bark send mode', () => {
+    expect(canBuildOnChainSend({ ...base, isBarkSendMode: true })).toBe(false)
   })
 
   it('rejects invalid address', () => {
@@ -139,8 +144,10 @@ describe('canProceedToSendReview', () => {
     expect(
       canProceedToSendReview({
         isLightningSendMode: true,
+        isBarkSendMode: false,
         isArkadeSendMode: false,
         canBuildLightning: true,
+        canBuildBark: false,
         canBuildArkade: false,
         canBuildOnChain: false,
         fiatRateOk: true,
@@ -149,8 +156,10 @@ describe('canProceedToSendReview', () => {
     expect(
       canProceedToSendReview({
         isLightningSendMode: true,
+        isBarkSendMode: false,
         isArkadeSendMode: false,
         canBuildLightning: false,
+        canBuildBark: true,
         canBuildArkade: true,
         canBuildOnChain: true,
         fiatRateOk: true,
@@ -158,12 +167,29 @@ describe('canProceedToSendReview', () => {
     ).toBe(false)
   })
 
+  it('uses bark path before arkade when in bark send mode', () => {
+    expect(
+      canProceedToSendReview({
+        isLightningSendMode: false,
+        isBarkSendMode: true,
+        isArkadeSendMode: true,
+        canBuildLightning: false,
+        canBuildBark: true,
+        canBuildArkade: false,
+        canBuildOnChain: false,
+        fiatRateOk: true,
+      }),
+    ).toBe(true)
+  })
+
   it('uses arkade path when in arkade send mode', () => {
     expect(
       canProceedToSendReview({
         isLightningSendMode: false,
+        isBarkSendMode: false,
         isArkadeSendMode: true,
         canBuildLightning: false,
+        canBuildBark: false,
         canBuildArkade: true,
         canBuildOnChain: false,
         fiatRateOk: true,
@@ -175,8 +201,10 @@ describe('canProceedToSendReview', () => {
     expect(
       canProceedToSendReview({
         isLightningSendMode: false,
+        isBarkSendMode: false,
         isArkadeSendMode: false,
         canBuildLightning: false,
+        canBuildBark: false,
         canBuildArkade: false,
         canBuildOnChain: true,
         fiatRateOk: true,
@@ -188,8 +216,10 @@ describe('canProceedToSendReview', () => {
     expect(
       canProceedToSendReview({
         isLightningSendMode: false,
+        isBarkSendMode: false,
         isArkadeSendMode: false,
         canBuildLightning: false,
+        canBuildBark: false,
         canBuildArkade: false,
         canBuildOnChain: true,
         fiatRateOk: false,

@@ -88,7 +88,7 @@ vi.mock('@/db', () => ({
   useAddWallet: () => ({ mutateAsync: dbMocks.mockMutateAsync }),
   useWallets: () => ({ data: [], isLoading: false }),
   getDatabase: vi.fn(),
-  ensureMigrated: vi.fn().mockResolvedValue(undefined),
+  ensureSchemaAndDataMigrated: vi.fn().mockResolvedValue(undefined),
   persistNewWalletWithSecrets: dbMocks.mockPersistNewWalletWithSecrets,
   setWalletNoMnemonicBackupFlag: dbMocks.mockSetWalletNoMnemonicBackupFlag,
   walletKeys: {
@@ -100,6 +100,7 @@ vi.mock('@/db', () => ({
 
 vi.mock('@/workers/secrets-channel', () => ({
   ensureSecretsChannel: vi.fn().mockResolvedValue(undefined),
+  resetBarkWorkerSecretsChannel: vi.fn(),
 }))
 
 vi.mock('@/lib/wallet/bitcoin-utils', () => ({

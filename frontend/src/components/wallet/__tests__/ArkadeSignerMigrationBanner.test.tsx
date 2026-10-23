@@ -31,7 +31,7 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
 
 const walletStoreState = vi.hoisted(() => ({
   arkadeSignerMigrationHint: null as ArkadeSignerMigrationHint | null,
-  networkMode: 'signet' as NetworkMode,
+  networkMode: 'mutinynet' as NetworkMode,
   activeWalletId: 1 as number | null,
   activeArkadeAccountId: 'conn-1' as string | null,
   setArkadeSignerMigrationHint: vi.fn(),
@@ -139,19 +139,19 @@ describe('ArkadeSignerMigrationBanner', () => {
       JSON.stringify({
         code: 'client',
         message:
-          'Ark client error: failed to get VTXOs for addresses: request failed: request failed',
+          'Arkade client error: failed to get VTXOs for addresses: request failed: request failed',
       }),
     )
     renderBanner(migrationHint('migratable'))
 
     expect(
       screen.getByText(
-        'Ark client error: failed to get VTXOs for addresses: request failed',
+        'Arkade client error: failed to get VTXOs for addresses: request failed',
       ),
     ).toBeInTheDocument()
     expect(
       screen.queryByText(
-        '{"code":"client","message":"Ark client error: failed to get VTXOs for addresses: request failed: request failed"}',
+        '{"code":"client","message":"Arkade client error: failed to get VTXOs for addresses: request failed: request failed"}',
       ),
     ).not.toBeInTheDocument()
   })

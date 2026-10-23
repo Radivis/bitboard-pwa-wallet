@@ -6,7 +6,7 @@
 import { test, expect } from '@playwright/test'
 import { createWalletViaUI, expectNoInitialWalletSyncErrorToast } from './helpers/wallet-setup'
 import { goToWalletTab } from './helpers/wallet-nav'
-import { enableArkadeFeature, switchToSignet } from './helpers/arkade-settings'
+import { enableArkadeFeature, switchToMutinynet } from './helpers/arkade-settings'
 import {
   buildArkadeMockPartitionId,
   installArkadeMockIsolation,
@@ -38,7 +38,7 @@ test.describe('Arkade Infomode @arkade', () => {
     await expectNoInitialWalletSyncErrorToast(page)
 
     await enableArkadeFeature(page)
-    await switchToSignet(page)
+    await switchToMutinynet(page)
     await waitForArkadeWasmSessionReady(page)
 
     await goToWalletTab(page, 'Dashboard')

@@ -25,7 +25,7 @@ function basePayload(): WalletSecretsPayload {
       {
         id: 'conn-1',
         label: 'Mutinynet',
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
         operatorUrl: 'https://signet.arkade.example/v1',
         operatorSignerPkHex: '02abc',
         createdAt: '2020-01-01T00:00:00.000Z',

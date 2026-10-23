@@ -1,4 +1,4 @@
-import type { ConnectedLightningWallet } from '@/lib/lightning/lightning-backend-service'
+import type { LightningConnectionsUpdate } from '@/lib/lightning/lightning-wallet-secrets'
 import type { NwcSnapshotPatch } from '@/lib/lightning/lightning-wallet-snapshot-persistence'
 import type { NetworkMode } from '@/stores/walletStore'
 import type { SaveLifecyclePhase } from '@/lib/wallet/lifecycle/rail-lifecycle-types'
@@ -15,7 +15,8 @@ export type LightningSaveLifecycleSnapshot = {
 export type LightningSaveConnectionsParams = {
   walletId: number
   networkMode: NetworkMode
-  connections: ConnectedLightningWallet[]
+  /** Runs on the stored list inside the CAS. Must be idempotent: a retry runs it again. */
+  updateConnections: LightningConnectionsUpdate
 }
 
 export type LightningSaveSnapshotPatchesParams = {

@@ -2,7 +2,7 @@ import { AlertTriangle } from 'lucide-react'
 import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { ensureMigrated, getDatabase, generateAndPersistNearZeroSession } from '@/db'
+import { ensureSchemaAndDataMigrated, getDatabase, generateAndPersistNearZeroSession } from '@/db'
 import { errorMessage } from '@/lib/shared/utils'
 
 interface NearZeroSecurityOptInProps {
@@ -16,7 +16,7 @@ interface NearZeroSecurityOptInProps {
 export function NearZeroSecurityOptIn({ onSessionStarted }: NearZeroSecurityOptInProps) {
   const mutation = useMutation({
     mutationFn: async () => {
-      await ensureMigrated()
+      await ensureSchemaAndDataMigrated()
       await generateAndPersistNearZeroSession(getDatabase())
     },
     onSuccess: () => {

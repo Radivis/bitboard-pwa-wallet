@@ -11,6 +11,7 @@ export type OnchainSyncKind =
   | 'descriptorSwitch'
   | 'setupInitial'
   | 'postBroadcast'
+  | 'barkExitCatchUp'
 
 export type OnchainSyncLifecycleSnapshot = {
   syncPhase: SyncLifecyclePhase

@@ -65,10 +65,10 @@ export async function ensureArkadeAccount(params: {
 
 export function resolveArkadeEndpointsForAccount(
   account: Pick<StoredArkadeAccount, 'networkMode' | 'operatorUrl' | 'delegatorUrl'>,
-): { arkServerUrl: string; delegatorUrl: string; esploraUrl: string } {
+): { arkadeServerUrl: string; delegatorUrl: string; esploraUrl: string } {
   const defaults = getArkadeEndpoints(account.networkMode)
   return {
-    arkServerUrl: account.operatorUrl,
+    arkadeServerUrl: account.operatorUrl,
     delegatorUrl: account.delegatorUrl ?? defaults.delegatorUrl,
     esploraUrl: defaults.esploraUrl,
   }

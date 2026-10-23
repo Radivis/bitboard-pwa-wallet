@@ -2,7 +2,8 @@
  * E2E-ARK-REG-07 — preconfirmed VTXO unilateral unroll with Proceed automatically enabled.
  *
  * Chained self-sends (40% + 30%) create intermediate virtual hosts with exitable outpoints that
- * are not leaf-selectable, then automatic unroll runs on all terminal leaf siblings.
+ * are not leaf-selectable, then automatic unroll runs on all terminal leaf siblings. The first
+ * two-block confirmation is orphaned once so that step has to wait again.
  *
  * Run: `npm run test:e2e:arkade-regtest-reg07` from `frontend/`.
  */

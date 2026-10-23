@@ -9,6 +9,8 @@ lerna-debug.log*
 
 node_modules
 .vendor-deps
+# TanStack Router generator scratch copies of routeTree.gen.ts
+.tanstack/tmp/
 playwright-report
 dist
 dist-ssr

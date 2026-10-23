@@ -1,7 +1,7 @@
 import { expect, type Page } from '@playwright/test'
 import { ensureOnChainBumperFunds } from './arkade-management'
 import { formatUnilateralExitFailure } from './esplora-unilateral-exit-diagnostics'
-import { mineRegtestBlocks } from './arkade-regtest'
+import { mineRegtestBlocks, reorgExcludingMempool } from './arkade-regtest'
 import { confirmStartUnilateralExitIfShown } from './arkade-unilateral-exit-start-confirm'
 import { isUnilateralExitBranchCompleteInPage } from './arkade-unilateral-exit-branch-complete'
 
@@ -15,6 +15,10 @@ const MAX_AUTOMATION_RECOVERY_ATTEMPTS = 5
 /** Chained 5-step unroll spends far more bumper than the batch estimate suggests (large parent vsizes). */
 const REG07_BUMPER_FUNDING_SATS = 10_000_000
 const MIN_BUMPER_BALANCE_SATS = 50_000
+/** The automatic runner mines this many blocks per confirmation wait. A shallower orphan would leave 1-conf. */
+const FIRST_CONFIRMATION_PAIR_BLOCKS = 2
+/** Cover the 2s automatic poll after the orphan, including a rebroadcast of the rewound step. */
+const CONFIRMATION_PAIR_REORG_UI_TIMEOUT_MS = 60_000
 /** Transient regtest indexer lag; mine and resume. Treat RPC -25/-26 as retryable when rebroadcasting or bumper is depleted. */
 const RETRYABLE_INDEXER_ERROR_PATTERN =
   /code.:.-26|code.:.-25|txn-already-in-mempool|outspends|failed to get transaction|error sending request|request failed/i
@@ -410,9 +414,88 @@ async function ensureAutomaticUnilateralExitMode(page: Page): Promise<void> {
   await expect(startButton).toBeEnabled({ timeout: 120_000 })
 }
 
+async function readDisplayedStepIndex(page: Page): Promise<number | null> {
+  const progress = page.getByTestId('unilateral-exit-step-progress')
+  if (!(await progress.isVisible())) {
+    return null
+  }
+  const raw = await progress.getAttribute('data-step-index')
+  if (raw == null || raw === '') {
+    return null
+  }
+  const parsed = Number(raw)
+  return Number.isInteger(parsed) ? parsed : null
+}
+
+/**
+ * Mine the two blocks this runner uses for one confirmation, then orphan both.
+ *
+ * One confirmation is enough to advance a step, so a 1-block orphan after this pair would leave
+ * the step confirmed. Depth 2 puts that transaction back in the mempool.
+ */
+async function confirmThenOrphanFirstStepPair(page: Page): Promise<void> {
+  const stepIndexBeforeMine = await readDisplayedStepIndex(page)
+  if (stepIndexBeforeMine == null) {
+    await failUnilateralExit(
+      page,
+      `expected step progress before the two-block reorg, saw "${(await readStepProgressSignature(page)) || '(empty)'}"`,
+    )
+  }
+
+  await mineRegtestBlocks(FIRST_CONFIRMATION_PAIR_BLOCKS)
+  try {
+    await expect(async () => {
+      if (await isBranchComplete(page)) {
+        return
+      }
+      const stepIndex = await readDisplayedStepIndex(page)
+      if (stepIndex != null && stepIndex > stepIndexBeforeMine) {
+        return
+      }
+      throw new Error(
+        `step still at ${stepIndex ?? 'hidden'} after ${FIRST_CONFIRMATION_PAIR_BLOCKS} confirmations (was ${stepIndexBeforeMine})`,
+      )
+    }).toPass({ timeout: CONFIRMATION_PAIR_REORG_UI_TIMEOUT_MS })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    await failUnilateralExit(page, message)
+  }
+
+  await reorgExcludingMempool(FIRST_CONFIRMATION_PAIR_BLOCKS)
+
+  try {
+    await expect(async () => {
+      await assertNoAutomationOrExitError(page)
+      if (await isBranchComplete(page)) {
+        throw new Error('branch still complete after orphaning the first confirmation pair')
+      }
+      const stepIndex = await readDisplayedStepIndex(page)
+      const progress = page.getByTestId('unilateral-exit-step-progress')
+      const phase = await progress.getAttribute('data-progress-phase')
+      const relayed = await progress.getAttribute('data-step-relayed')
+      const waitingAgain = phase === 'waiting' || relayed === 'true'
+      const proceedButton = page.getByTestId('unilateral-exit-proceed')
+      const manualProceedEnabled =
+        (await proceedButton.isVisible()) && (await proceedButton.isEnabled())
+      if (manualProceedEnabled) {
+        throw new Error('manual Proceed re-enabled after the two-block reorg')
+      }
+      if (stepIndex !== stepIndexBeforeMine || !waitingAgain) {
+        throw new Error(
+          `step did not return to ${stepIndexBeforeMine} waiting after the two-block reorg (index=${stepIndex ?? 'hidden'}, phase=${phase ?? 'hidden'}, relayed=${relayed ?? 'hidden'})`,
+        )
+      }
+    }).toPass({ timeout: CONFIRMATION_PAIR_REORG_UI_TIMEOUT_MS })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    await failUnilateralExit(page, message)
+  }
+}
+
 /**
  * Enable Proceed automatically, click Start unroll once, mine while the background runner and WASM
- * advance each virtual step until branch complete.
+ * advance each virtual step until branch complete. The first two-block confirmation is orphaned
+ * once so that step has to wait again before mining continues.
  */
 export async function runAutomaticUnilateralUnrollUntilBranchComplete(page: Page): Promise<void> {
   await ensureAutomaticUnilateralExitMode(page)
@@ -429,12 +512,13 @@ export async function runAutomaticUnilateralUnrollUntilBranchComplete(page: Page
     }
   }).toPass({ timeout: 120_000 })
 
-  const deadlineMs = Date.now() + AUTOMATIC_UNROLL_DEADLINE_MS
+  let deadlineMs = Date.now() + AUTOMATIC_UNROLL_DEADLINE_MS
   const recoveryAttempts = { count: 0 }
   let sawProceedingAutomatically = false
   let lastProgressText = await readStepProgressSignature(page)
   let minesWithoutProgress = 0
   let waitConfirmationMines = 0
+  let orphanedFirstConfirmationPair = false
   const bumperTopUps = { count: 0 }
   let advancingStuckCycles = 0
 
@@ -499,6 +583,16 @@ export async function runAutomaticUnilateralUnrollUntilBranchComplete(page: Page
           waitConfirmationMines = 0
           continue
         }
+      }
+      if (!orphanedFirstConfirmationPair) {
+        const reorgStartedAt = Date.now()
+        await confirmThenOrphanFirstStepPair(page)
+        deadlineMs += Date.now() - reorgStartedAt
+        orphanedFirstConfirmationPair = true
+        waitConfirmationMines = 0
+        lastProgressText = await readStepProgressSignature(page)
+        minesWithoutProgress = 0
+        continue
       }
       await mineRegtestBlocks(2)
       waitConfirmationMines += 1

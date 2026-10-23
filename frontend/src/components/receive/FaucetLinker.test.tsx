@@ -5,8 +5,8 @@ import { FaucetLinker } from '@/components/receive/FaucetLinker'
 import { renderWithProviders } from '@/test-utils/test-providers'
 
 const walletState = {
-  networkMode: 'testnet' as const,
-  loadedDescriptorWallet: null as { networkMode: 'testnet' } | null,
+  networkMode: 'testnet' as 'testnet' | 'signet' | 'mainnet',
+  loadedDescriptorWallet: null as { networkMode: 'testnet' | 'signet' | 'mainnet' } | null,
 }
 
 vi.mock('@/stores/walletStore', () => ({
@@ -78,6 +78,28 @@ describe('FaucetLinker', () => {
     await waitFor(() => {
       expect(fetchMock.mock.calls.length).toBeGreaterThan(firstCalls)
     })
+  })
+
+  it('lists public signet faucets when the wallet is on signet', async () => {
+    walletState.networkMode = 'signet'
+    renderWithProviders(<FaucetLinker />)
+
+    expect(await screen.findByRole('link', { name: /Bitcoin Signet Faucet/i })).toHaveAttribute(
+      'href',
+      'https://bitcoinsignetfaucet.com/',
+    )
+    expect(screen.getByRole('link', { name: /Alt Signet Faucet/i })).toHaveAttribute(
+      'href',
+      'https://alt.signetfaucet.com/',
+    )
+    expect(screen.getByRole('link', { name: /Signet \(dcorral\)/i })).toHaveAttribute(
+      'href',
+      'https://signet.dcorral.com/',
+    )
+    expect(screen.getByRole('link', { name: /Coinbin/i })).toHaveAttribute(
+      'href',
+      'https://faucet.coinbin.org/',
+    )
   })
 
   it('renders nothing when not on testnet or signet', () => {

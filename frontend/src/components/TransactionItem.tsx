@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowUpRight, ArrowDownLeft, Clock, CheckCircle2 } from 'lucide-react'
+import { ArrowUpFromLine, ArrowUpRight, ArrowDownLeft, Clock, CheckCircle2 } from 'lucide-react'
 import { formatDistanceToNow, format } from 'date-fns'
 import type { TransactionDetails } from '@/workers/crypto-types'
 import {
@@ -21,6 +21,8 @@ import {
   ONCHAIN_ARKADE_BOARDING_ACTIVITY_LABEL,
 } from '@/lib/lightning/lightning-dashboard-sync'
 import { cn } from '@/lib/shared/utils'
+
+export const CPFP_FEE_BUMP_ACTIVITY_LABEL = 'CPFP fee bump'
 
 interface TransactionItemProps {
   transaction: TransactionDetails
@@ -85,6 +87,12 @@ export function TransactionItem({ transaction, activityLabel }: TransactionItemP
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-medium capitalize">{direction}</p>
+            {transaction.isCpfpFeeBump === true ? (
+              <DashboardActivityRailBadge
+                icon={ArrowUpFromLine}
+                label={CPFP_FEE_BUMP_ACTIVITY_LABEL}
+              />
+            ) : null}
             {activityLabel != null && activityLabel !== '' && activityInfomode != null ? (
               <InfomodeWrapper
                 infoId={activityInfomode.infoId}

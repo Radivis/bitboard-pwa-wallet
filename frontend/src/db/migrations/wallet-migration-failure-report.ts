@@ -4,6 +4,11 @@
  */
 
 import { writeTextFileToOpfsRoot } from '@/db/opfs/opfs-root-file'
+import {
+  SCHEMA_MIGRATION_RETRY_DELAY_MS,
+  SCHEMA_MIGRATION_RETRY_MAX_ATTEMPTS,
+  withRetries,
+} from './retry-async'
 
 export const WALLET_MIGRATION_FAILURE_OPFS_FILENAME = 'wallet-schema-migration-failure.json'
 
@@ -67,6 +72,27 @@ export function buildWalletMigrationFailureReportV1(input: {
     isProductionBuild: import.meta.env.PROD === true,
     error: serializeErrorChain(input.lastError),
     migrationNameFromMessage: extractMigrationNameFromErrorMessage(message),
+  }
+}
+
+/**
+ * Retries a migration step. When every attempt fails, writes the OPFS failure
+ * report and rethrows, so the app can surface the report on next start.
+ */
+export async function withMigrationRetriesAndFailureReport(
+  runMigrationStep: () => Promise<void>,
+): Promise<void> {
+  try {
+    await withRetries(runMigrationStep, {
+      maxAttempts: SCHEMA_MIGRATION_RETRY_MAX_ATTEMPTS,
+      delayMs: SCHEMA_MIGRATION_RETRY_DELAY_MS,
+    })
+  } catch (lastError) {
+    await tryWriteWalletMigrationFailureReport({
+      attempts: SCHEMA_MIGRATION_RETRY_MAX_ATTEMPTS,
+      lastError,
+    })
+    throw lastError
   }
 }
 

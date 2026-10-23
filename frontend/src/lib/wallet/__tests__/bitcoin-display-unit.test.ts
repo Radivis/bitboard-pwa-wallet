@@ -46,9 +46,10 @@ describe('bitcoin-display-unit', () => {
     expect(isBitcoinDisplayUnit(null)).toBe(false)
   })
 
-  it('isLiveTestNetwork identifies testnet, signet, and regtest only', () => {
+  it('isLiveTestNetwork identifies testnet, signet, mutinynet, and regtest', () => {
     expect(isLiveTestNetwork('testnet')).toBe(true)
     expect(isLiveTestNetwork('signet')).toBe(true)
+    expect(isLiveTestNetwork('mutinynet')).toBe(true)
     expect(isLiveTestNetwork('regtest')).toBe(true)
     expect(isLiveTestNetwork('mainnet')).toBe(false)
     expect(isLiveTestNetwork('lab')).toBe(false)

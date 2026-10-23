@@ -5,6 +5,7 @@ import { createTestDatabase } from '@/db/test-helpers'
 import {
   saveWalletSecrets,
   loadWalletSecrets,
+  updateWalletSecretsPayloadWithRetry,
 } from '@/db/wallet-persistence'
 import {
   beginWalletSecretsSession,
@@ -46,7 +47,7 @@ vi.mock('@/db', async (importOriginal) => {
       if (!testDb) throw new Error('testDb not initialized')
       return testDb
     },
-    ensureMigrated: vi.fn().mockResolvedValue(undefined),
+    ensureSchemaAndDataMigrated: vi.fn().mockResolvedValue(undefined),
   }
 })
 
@@ -151,6 +152,7 @@ vi.mock('@/stores/cryptoStore', () => ({
     getState: () => ({
       createWallet: mockCreateWallet,
       resolveDescriptorWallet: mockResolveDescriptorWallet,
+      createDescriptorWalletRowIfMissing: mockResolveDescriptorWallet,
       updateDescriptorWalletChangeset: mockUpdateDescriptorWalletChangeset,
     }),
   },
@@ -352,6 +354,55 @@ describe('resolveDescriptorWallet', () => {
     )
 
     const loaded = await loadWalletSecrets(testDb, walletId)
+    expect(loaded.descriptorWallets).toHaveLength(2)
+    expect(loaded.descriptorWallets[1]).toEqual(result)
+  })
+
+  it('keeps a payload change committed while the new descriptor row was being created', async () => {
+    const concurrentConnection = {
+      id: 'conn-concurrent',
+      label: 'Concurrent',
+      networkMode: 'signet' as const,
+      connectionString: 'nostr+walletconnect://abc?relay=wss%3A%2F%2Frelay.example.com',
+      createdAt: '2020-01-01T00:00:00.000Z',
+    }
+    let concurrentWriteDone = false
+    mockCreateWallet.mockImplementation(async () => {
+      if (!concurrentWriteDone) {
+        concurrentWriteDone = true
+        await updateWalletSecretsPayloadWithRetry({
+          walletDb: testDb,
+          walletId,
+          transform: (payload) => ({
+            ...payload,
+            lightningNwcConnections: [...payload.lightningNwcConnections, concurrentConnection],
+          }),
+        })
+      }
+      return {
+        externalDescriptor: 'tr(new...)',
+        internalDescriptor: 'tr(new...)',
+        firstAddress: 'tb1qnewaddress',
+        changesetJson: '{"last_reveal":{"0":0}}',
+      }
+    })
+    await saveWalletSecrets({
+      walletDb: testDb,
+      walletId,
+      secrets: mockSecrets,
+    })
+
+    const result = await resolveDescriptorWallet({
+      walletId,
+      targetNetwork: 'testnet',
+      targetAddressType: 'segwit',
+      targetAccountId: 0,
+    })
+
+    const loaded = await loadWalletSecrets(testDb, walletId)
+    expect(loaded.lightningNwcConnections.map((connection) => connection.id)).toEqual([
+      'conn-concurrent',
+    ])
     expect(loaded.descriptorWallets).toHaveLength(2)
     expect(loaded.descriptorWallets[1]).toEqual(result)
   })

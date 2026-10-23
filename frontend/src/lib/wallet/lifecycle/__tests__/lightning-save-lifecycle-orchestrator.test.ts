@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const saveLightningConnectionsForWallet = vi.fn()
+const updateLightningConnectionsForWallet = vi.fn()
 const batchApplyNwcSnapshotPatches = vi.fn()
 const invalidateLightningDashboardQueries = vi.fn()
 const invalidateLightningSyncMetadataQueries = vi.fn()
 
 vi.mock('@/lib/lightning/lightning-wallet-secrets', () => ({
-  saveLightningConnectionsForWallet: (...args: unknown[]) =>
-    saveLightningConnectionsForWallet(...args),
+  updateLightningConnectionsForWallet: (...args: unknown[]) =>
+    updateLightningConnectionsForWallet(...args),
 }))
 
 vi.mock('@/lib/lightning/lightning-wallet-snapshot-persistence', () => ({
@@ -41,7 +41,7 @@ describe('lightning-save-lifecycle-orchestrator', () => {
   beforeEach(() => {
     resetLightningSaveLifecycleStateForTests()
     vi.clearAllMocks()
-    saveLightningConnectionsForWallet.mockResolvedValue(undefined)
+    updateLightningConnectionsForWallet.mockResolvedValue(undefined)
     batchApplyNwcSnapshotPatches.mockResolvedValue(undefined)
   })
 
@@ -71,11 +71,11 @@ describe('lightning-save-lifecycle-orchestrator', () => {
   it('save connections list success', async () => {
     await orchestrateLightningSaveConnections({
       ...railScope,
-      connections: [],
+      updateConnections: () => [],
     })
 
     expect(getLightningSaveLifecycleSnapshot().savePhase).toBe('not-saving')
-    expect(saveLightningConnectionsForWallet).toHaveBeenCalled()
+    expect(updateLightningConnectionsForWallet).toHaveBeenCalled()
   })
 
   it('save failure sets save-error', async () => {

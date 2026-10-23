@@ -80,6 +80,29 @@ async function invokeWasmCrypto<T>(
   }
 }
 
+type FundingPsbtWasm = {
+  sign_funding_psbt(psbtBase64: string): Promise<unknown>;
+  apply_unconfirmed_funding_transaction(
+    rawTxHex: string,
+    lastSeenUnixSeconds: bigint,
+  ): Promise<void>;
+};
+
+function fundingPsbtWasm(wasmModule: BitboardCryptoModule): FundingPsbtWasm {
+  return wasmModule as unknown as FundingPsbtWasm;
+}
+
+type P2aCpfpWasm = {
+  sign_p2a_cpfp_child(
+    parentTxHex: string,
+    effectiveFeeRateSatPerVb: number,
+  ): Promise<string>;
+};
+
+function p2aCpfpWasm(wasmModule: BitboardCryptoModule): P2aCpfpWasm {
+  return wasmModule as unknown as P2aCpfpWasm;
+}
+
 async function initWasm() {
   try {
     cryptoWasmModule = await import('@/wasm-pkg/bitboard_crypto');
@@ -154,6 +177,7 @@ function buildInitialWalletSecretsPayload({
     lightningNwcConnections: [],
     arkadeAccounts: [],
     activeArkadeAccountIdByNetwork: {},
+    barkAccounts: [],
   };
 }
 
@@ -478,6 +502,10 @@ const cryptoService = {
     return mapWireBalanceToDomain(wire as WireBalanceInfo);
   },
 
+  async getLocalChainTipHeight(): Promise<number> {
+    return invokeWasmCrypto((wasmModule) => wasmModule.get_local_chain_tip_height());
+  },
+
   async exportChangeset(): Promise<string> {
     return invokeWasmCrypto((wasmModule) => wasmModule.export_changeset());
   },
@@ -555,6 +583,36 @@ const cryptoService = {
   async signAndExtractTransaction(psbtBase64: string): Promise<string> {
     return invokeWasmCrypto((wasmModule) =>
       wasmModule.sign_and_extract_transaction(psbtBase64),
+    );
+  },
+
+  async signP2aCpfpChild(
+    params: import('./crypto-api').SignP2aCpfpChildParams,
+  ): Promise<string> {
+    return invokeWasmCrypto((wasmModule) =>
+      p2aCpfpWasm(wasmModule).sign_p2a_cpfp_child(
+        params.parentTxHex,
+        params.effectiveFeeRateSatPerVb,
+      ),
+    );
+  },
+
+  async signFundingPsbt(psbtBase64: string): Promise<import('./crypto-api').SignedFundingPsbt> {
+    const signed = await invokeWasmCrypto((wasmModule) =>
+      fundingPsbtWasm(wasmModule).sign_funding_psbt(psbtBase64),
+    );
+    return parseWasmJsonWire<import('./crypto-api').SignedFundingPsbt>(signed);
+  },
+
+  async applyUnconfirmedFundingTx(
+    rawTxHex: string,
+    lastSeenUnixSeconds: number,
+  ): Promise<void> {
+    await invokeWasmCrypto((wasmModule) =>
+      fundingPsbtWasm(wasmModule).apply_unconfirmed_funding_transaction(
+        rawTxHex,
+        BigInt(lastSeenUnixSeconds),
+      ),
     );
   },
 

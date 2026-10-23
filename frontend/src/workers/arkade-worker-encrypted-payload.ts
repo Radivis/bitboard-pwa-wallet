@@ -1,5 +1,4 @@
 import type { ArkadeSignerMigrationHint } from '@/workers/arkade-api'
-import type { EncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
 import {
   ensureArkadeAccountInPayload,
   findActiveArkadeAccount,
@@ -10,32 +9,17 @@ import {
   type ArkadeAccountSummary,
 } from '@/lib/arkade/arkade-payload-merge'
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
-import { parseWalletPayloadJson } from '@/lib/wallet/wallet-domain-types'
-import type { Remote } from 'comlink'
-import type { EncryptedBlobMessage, SecretsChannelService } from '@/workers/secrets-channel-types'
+import {
+  parseWalletPayloadJson,
+  type StoredArkadeAccount,
+} from '@/lib/wallet/wallet-domain-types'
+import type { EncryptedBlobMessage } from '@/workers/secrets-channel-types'
+import {
+  updateDecryptedWalletPayload,
+  type WorkerWalletPayloadDeps,
+} from '@/workers/worker-wallet-payload-update'
 
-type EncryptedBlobStoreFields = {
-  ciphertext: Uint8Array
-  iv: Uint8Array
-  salt: Uint8Array
-  kdfPhc: EncryptedBlobMessage['kdfPhc']
-}
-
-export type ArkadeEncryptedPayloadDeps = {
-  secretsProxy: Remote<SecretsChannelService> | SecretsChannelService
-  encryptedHost: Remote<EncryptedWalletSecretsHost> | EncryptedWalletSecretsHost
-}
-
-function encryptedBlobMessageToStoreFields(
-  blob: EncryptedBlobMessage,
-): EncryptedBlobStoreFields {
-  return {
-    ciphertext: blob.ciphertext,
-    iv: blob.iv,
-    salt: blob.salt,
-    kdfPhc: blob.kdfPhc,
-  }
-}
+export type ArkadeEncryptedPayloadDeps = WorkerWalletPayloadDeps
 
 async function decryptPayload(
   deps: ArkadeEncryptedPayloadDeps,
@@ -43,14 +27,6 @@ async function decryptPayload(
 ) {
   const plaintext = await deps.secretsProxy.decrypt(encryptedPayload)
   return parseWalletPayloadJson(plaintext)
-}
-
-async function encryptPayload(
-  deps: ArkadeEncryptedPayloadDeps,
-  payload: ReturnType<typeof parseWalletPayloadJson>,
-): Promise<EncryptedBlobStoreFields> {
-  const encryptedBlob = await deps.secretsProxy.encrypt(JSON.stringify(payload))
-  return encryptedBlobMessageToStoreFields(encryptedBlob)
 }
 
 async function readEncryptedPayload(
@@ -64,14 +40,6 @@ async function readEncryptedPayload(
     salt: blob.salt,
     kdfPhc: blob.kdfPhc,
   }
-}
-
-async function writeEncryptedPayload(
-  deps: ArkadeEncryptedPayloadDeps,
-  walletId: number,
-  encryptedPayload: EncryptedBlobStoreFields,
-): Promise<void> {
-  await deps.encryptedHost.writeEncryptedPayloadCAS(walletId, encryptedPayload)
 }
 
 export async function loadArkadeAccountSdkPersistence(
@@ -133,16 +101,14 @@ export async function persistSdkJsonToEncryptedPayload(
     lastSuccessfulOperatorSyncAt?: string
   },
 ): Promise<void> {
-  const encryptedPayload = await readEncryptedPayload(deps, params.walletId)
-  const payload = await decryptPayload(deps, encryptedPayload)
-  const merged = mergeSdkPersistenceIntoPayload(
-    payload,
-    params.arkadeAccountId,
-    params.sdkPersistenceJson,
-    params.lastSuccessfulOperatorSyncAt,
+  await updateDecryptedWalletPayload(deps, params.walletId, (payload) =>
+    mergeSdkPersistenceIntoPayload(
+      payload,
+      params.arkadeAccountId,
+      params.sdkPersistenceJson,
+      params.lastSuccessfulOperatorSyncAt,
+    ),
   )
-  const newEncrypted = await encryptPayload(deps, merged)
-  await writeEncryptedPayload(deps, params.walletId, newEncrypted)
 }
 
 export async function updateOperatorSyncAtEncrypted(
@@ -153,15 +119,13 @@ export async function updateOperatorSyncAtEncrypted(
     lastSuccessfulOperatorSyncAt: string
   },
 ): Promise<void> {
-  const encryptedPayload = await readEncryptedPayload(deps, params.walletId)
-  const payload = await decryptPayload(deps, encryptedPayload)
-  const merged = updateOperatorSyncAtInPayload(
-    payload,
-    params.arkadeAccountId,
-    params.lastSuccessfulOperatorSyncAt,
+  await updateDecryptedWalletPayload(deps, params.walletId, (payload) =>
+    updateOperatorSyncAtInPayload(
+      payload,
+      params.arkadeAccountId,
+      params.lastSuccessfulOperatorSyncAt,
+    ),
   )
-  const newEncrypted = await encryptPayload(deps, merged)
-  await writeEncryptedPayload(deps, params.walletId, newEncrypted)
 }
 
 export async function ensureArkadeAccountEncrypted(
@@ -185,11 +149,9 @@ export async function ensureArkadeAccountEncrypted(
     sdkPersistenceJson = await options.exportInitialSdkFromWasm()
   }
 
-  const encryptedPayload = await readEncryptedPayload(deps, params.walletId)
-  const payload = await decryptPayload(deps, encryptedPayload)
-  const { payload: mergedPayload, account } = ensureArkadeAccountInPayload(
-    payload,
-    {
+  let ensuredAccount: StoredArkadeAccount | null = null
+  await updateDecryptedWalletPayload(deps, params.walletId, (payload) => {
+    const { payload: mergedPayload, account } = ensureArkadeAccountInPayload(payload, {
       networkMode: params.networkMode,
       operatorSignerPkHex: params.operatorSignerPkHex,
       operatorUrl: params.operatorUrl,
@@ -197,9 +159,12 @@ export async function ensureArkadeAccountEncrypted(
       sdkPersistenceJson,
       arkadeAccountId: params.arkadeAccountId,
       signerMigrationHint: params.signerMigrationHint,
-    },
-  )
-  const newEncrypted = await encryptPayload(deps, mergedPayload)
-  await writeEncryptedPayload(deps, params.walletId, newEncrypted)
-  return toArkadeAccountSummary(account)
+    })
+    ensuredAccount = account
+    return mergedPayload
+  })
+  if (ensuredAccount == null) {
+    throw new Error('Arkade account was not written')
+  }
+  return toArkadeAccountSummary(ensuredAccount)
 }

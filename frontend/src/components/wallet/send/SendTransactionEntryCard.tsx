@@ -18,8 +18,16 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { NETWORK_LABELS, type NetworkMode } from '@/stores/walletStore'
 import { MAX_BOLT11_PAYMENT_REQUEST_LENGTH } from '@/lib/lightning/lightning-input-limits'
 import { isLightningPayloadLengthOk } from '@/lib/lightning/send-flow-validation'
+import {
+  sendRecipientFieldLabel,
+  sendRecipientFormatErrorMessage,
+  sendRecipientPlaceholder,
+} from '@/lib/bark/send-flow-validation'
 import { amountInputPlaceholderForUnit } from '@/lib/wallet/bitcoin-display-unit'
-import { isValidBolt11Invoice } from '@/lib/lightning/lightning-utils'
+import {
+  bolt11SignetFamilyConfirmationText,
+  isValidBolt11Invoice,
+} from '@/lib/lightning/lightning-utils'
 import type { SendAmountUnit } from '@/stores/sendStore'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { BitcoinUnitSelect } from '@/components/BitcoinUnitSelect'
@@ -46,7 +54,11 @@ export function SendTransactionEntryCard({
   cardTitle,
   submitLabel,
   isLightningSendMode,
+  isBarkSendMode,
   isArkadeSendMode,
+  barkAvailable,
+  barkSpendableSats,
+  barkBalanceLoading,
   arkadeAvailable,
   arkadeBalanceSats,
   arkadeBalanceLoading,
@@ -59,6 +71,9 @@ export function SendTransactionEntryCard({
   lightningRecipientOk,
   normalizedRecipient,
   bolt11NetworkMismatch,
+  signetFamilyNeedsConfirmation,
+  signetFamilyInvoiceConfirmed,
+  onSignetFamilyInvoiceConfirmedChange,
   bolt11DecodeOk,
   matchingLightningConnections,
   balanceQueries,
@@ -99,7 +114,11 @@ export function SendTransactionEntryCard({
   cardTitle: string
   submitLabel: string
   isLightningSendMode: boolean
+  isBarkSendMode: boolean
   isArkadeSendMode: boolean
+  barkAvailable: boolean
+  barkSpendableSats: number | null
+  barkBalanceLoading: boolean
   arkadeAvailable: boolean
   arkadeBalanceSats: number | undefined
   arkadeBalanceLoading: boolean
@@ -112,6 +131,9 @@ export function SendTransactionEntryCard({
   lightningRecipientOk: boolean
   normalizedRecipient: string
   bolt11NetworkMismatch: boolean
+  signetFamilyNeedsConfirmation: boolean
+  signetFamilyInvoiceConfirmed: boolean
+  onSignetFamilyInvoiceConfirmedChange: (confirmed: boolean) => void
   bolt11DecodeOk: boolean
   matchingLightningConnections: LightningWalletPickerProps['connectedLightningWallets']
   balanceQueries: LightningWalletPickerProps['balanceQueries']
@@ -160,15 +182,18 @@ export function SendTransactionEntryCard({
   const submitInFlightRef = useRef(false)
   const hasUsableFiatSpot = isUsableBtcSpotPriceInFiat(btcPriceInFiat)
   const showSubmitSpinner =
-    buildOrLabPreparing || (isPending && (isArkadeSendMode || isLightningSendMode))
+    buildOrLabPreparing ||
+    (isPending && (isBarkSendMode || isArkadeSendMode || isLightningSendMode))
 
   const arkadeSpendableSats = arkadeBalanceSats ?? 0
   const hideEditableAmountForZeroMainnet =
     networkMode === 'mainnet' &&
     !isLabWithNoBalance &&
     ((!isLightningSendMode &&
+      !isBarkSendMode &&
       !isArkadeSendMode &&
       confirmedBalance <= 0) ||
+      (isBarkSendMode && !barkBalanceLoading && (barkSpendableSats ?? 0) <= 0) ||
       (isArkadeSendMode && !arkadeBalanceLoading && arkadeSpendableSats <= 0) ||
       (isLightningSendMode &&
         needsUserLightningAmount &&
@@ -177,7 +202,10 @@ export function SendTransactionEntryCard({
 
   const showMainnetZeroBalanceWarning =
     hideEditableAmountForZeroMainnet &&
-    (needsUserLightningAmount || (!isLightningSendMode && !isArkadeSendMode) || isArkadeSendMode)
+    (needsUserLightningAmount ||
+      (!isLightningSendMode && !isBarkSendMode && !isArkadeSendMode) ||
+      isBarkSendMode ||
+      isArkadeSendMode)
 
   const showBip11WithZeroBalance =
     hideEditableAmountForZeroMainnet &&
@@ -250,11 +278,11 @@ export function SendTransactionEntryCard({
             <div className="space-y-2">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <Label htmlFor="recipient-address">
-                  {isLightningSendMode
-                    ? 'Invoice, Lightning address, or LNURL'
-                    : isArkadeSendMode
-                      ? 'Arkade address'
-                      : 'Recipient Address'}
+                  {sendRecipientFieldLabel({
+                    isLightningSendMode,
+                    isBarkSendMode,
+                    isArkadeSendMode,
+                  })}
                 </Label>
                 <Button
                   type="button"
@@ -272,30 +300,26 @@ export function SendTransactionEntryCard({
                 id="recipient-address"
                 value={recipient}
                 onChange={(e) => onRecipientChange(e.target.value)}
-                placeholder={
-                  isArkadeSendMode
-                    ? 'ark1… or tark1…'
-                    : lightningAvailable && arkadeAvailable
-                      ? 'bc1q…, ark1…, BOLT11, Lightning address, or LNURL'
-                      : lightningAvailable
-                        ? 'bc1q…, BOLT11, Lightning address, or LNURL'
-                        : arkadeAvailable
-                          ? 'bc1q… or ark1… / tark1…'
-                          : 'bc1q…'
-                }
+                placeholder={sendRecipientPlaceholder({
+                  isBarkSendMode,
+                  isArkadeSendMode,
+                  lightningAvailable,
+                  arkadeAvailable,
+                  barkAvailable,
+                  networkMode,
+                })}
                 disabled={isPending}
               />
               {recipient && !recipientFormatValid && (
                 <p className="text-xs text-destructive">
-                  {isLightningSendMode
-                    ? 'Invalid Lightning invoice, Lightning address, or LNURL.'
-                    : isArkadeSendMode
-                      ? 'Invalid Arkade address (ark1 or tark1).'
-                      : arkadeAvailable && lightningAvailable
-                        ? `Invalid address for ${networkMode}, Arkade, or Lightning.`
-                        : arkadeAvailable
-                          ? `Invalid on-chain or Arkade address for ${networkMode}.`
-                          : `Invalid address for ${networkMode}`}
+                  {sendRecipientFormatErrorMessage({
+                    isLightningSendMode,
+                    isArkadeSendMode,
+                    barkAvailable,
+                    arkadeAvailable,
+                    lightningAvailable,
+                    networkMode,
+                  })}
                 </p>
               )}
               {recipient && isLightningSendMode && !lightningRecipientOk && (
@@ -320,6 +344,27 @@ export function SendTransactionEntryCard({
                   )}
                 </p>
               )}
+              {isLightningSendMode &&
+                signetFamilyNeedsConfirmation &&
+                !bolt11NetworkMismatch && (
+                  <div className="flex gap-3 rounded-md border border-border p-3">
+                    <input
+                      id="bolt11-signet-family-confirm"
+                      type="checkbox"
+                      className="mt-1 size-4 shrink-0 rounded border-input accent-primary"
+                      checked={signetFamilyInvoiceConfirmed}
+                      onChange={(event) =>
+                        onSignetFamilyInvoiceConfirmedChange(event.target.checked)
+                      }
+                    />
+                    <Label
+                      htmlFor="bolt11-signet-family-confirm"
+                      className="cursor-pointer text-xs font-normal"
+                    >
+                      {bolt11SignetFamilyConfirmationText(networkMode)}
+                    </Label>
+                  </div>
+                )}
               {isLightningSendMode &&
                 isValidBolt11Invoice(normalizedRecipient) &&
                 bolt11NetworkMismatch && (
@@ -384,7 +429,8 @@ export function SendTransactionEntryCard({
                       : 'Amount'}
                 </Label>
                 {(needsUserLightningAmount ||
-                  (!isLightningSendMode && !isArkadeSendMode)) &&
+                  (!isLightningSendMode && !isBarkSendMode && !isArkadeSendMode) ||
+                  isBarkSendMode) &&
                   !useFiatAmountField && (
                     <BitcoinUnitSelect
                       value={amountUnit}
@@ -489,6 +535,19 @@ export function SendTransactionEntryCard({
                       '—'
                     )}
                   </>
+                ) : isBarkSendMode ? (
+                  <>
+                    Bark balance:{' '}
+                    <span data-testid="send-bark-balance">
+                      {barkBalanceLoading ? (
+                        'Loading balance…'
+                      ) : barkSpendableSats == null ? (
+                        'Sync Bark before sending'
+                      ) : (
+                        spendableAmountRows(barkSpendableSats)
+                      )}
+                    </span>
+                  </>
                 ) : isArkadeSendMode ? (
                   <>
                     Arkade balance:{' '}
@@ -504,7 +563,10 @@ export function SendTransactionEntryCard({
                   </>
                 )}
               </div>
-              {isLabWithNoBalance && !isLightningSendMode && !isArkadeSendMode && (
+              {isLabWithNoBalance &&
+                !isLightningSendMode &&
+                !isBarkSendMode &&
+                !isArkadeSendMode && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">
                   No balance. Mine blocks or make a transaction to your wallet in
                   the lab.
@@ -512,7 +574,7 @@ export function SendTransactionEntryCard({
               )}
             </div>
 
-            {!isLightningSendMode && !isArkadeSendMode && (
+            {!isLightningSendMode && !isBarkSendMode && !isArkadeSendMode && (
               <SendOnChainFeeSection
                 feePresetSelection={feePresetSelection}
                 presetSatPerVbByLabel={presetSatPerVbByLabel}
@@ -529,9 +591,11 @@ export function SendTransactionEntryCard({
             {showSubmitSpinner ? (
               <LoadingSpinner
                 text={
-                  isArkadeSendMode
-                    ? 'Sending Arkade payment...'
-                    : isLightningSendMode
+                  isBarkSendMode
+                    ? 'Sending Bark payment...'
+                    : isArkadeSendMode
+                      ? 'Sending Arkade payment...'
+                      : isLightningSendMode
                       ? 'Sending Lightning payment...'
                       : networkMode === 'lab'
                         ? 'Preparing transaction...'

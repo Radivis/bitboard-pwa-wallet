@@ -19,7 +19,7 @@ describe('userFacingErrorMessage', () => {
   it('remaps WASM reqwest Failed to fetch dumps to a short explorer message', () => {
     const err = new Error(
       'Blockchain error: Reqwest(reqwest::Error { kind: Request, source: "JsValue(TypeError: Failed to fetch\\n' +
-        'TypeError: Failed to fetch\\n at __wbg_fetch (http://localhost:3000/src/wasm-pkg/bitboard_ark/bitboard_ark_bg.js:1:1)" })',
+        'TypeError: Failed to fetch\\n at __wbg_fetch (http://localhost:3000/src/wasm-pkg/bitboard_arkade/bitboard_arkade_bg.js:1:1)" })',
     )
     expect(userFacingErrorMessage(err)).toBe(BLOCKCHAIN_EXPLORER_UNREACHABLE_UI_MESSAGE)
   })
@@ -29,7 +29,7 @@ describe('userFacingErrorMessage', () => {
       JSON.stringify({
         code: 'client',
         message:
-          'Ark client error: Failed to join batch: batch event stream: request failed: Event stream request failed with status 500: FUNCTION_INVOCATION_FAILED',
+          'Arkade client error: Failed to join batch: batch event stream: request failed: Event stream request failed with status 500: FUNCTION_INVOCATION_FAILED',
       }),
     )
     expect(errorMessage(err)).toContain('500')
@@ -38,7 +38,7 @@ describe('userFacingErrorMessage', () => {
     expect(facing).toContain('500')
     expect(facing).toContain('FUNCTION_INVOCATION_FAILED')
     expect(facing).toContain('Preview proxy failed during batch event stream')
-    expect(facing).not.toBe('Ark client error: Failed to join batch: request failed')
+    expect(facing).not.toBe('Arkade client error: Failed to join batch: request failed')
   })
 
   it('collapses redundant request-failed chain when no other detail is present', () => {
@@ -46,11 +46,11 @@ describe('userFacingErrorMessage', () => {
       JSON.stringify({
         code: 'client',
         message:
-          'Ark client error: failed to get VTXOs for addresses: request failed: request failed',
+          'Arkade client error: failed to get VTXOs for addresses: request failed: request failed',
       }),
     )
     expect(userFacingErrorMessage(err)).toBe(
-      'Ark client error: failed to get VTXOs for addresses: request failed',
+      'Arkade client error: failed to get VTXOs for addresses: request failed',
     )
   })
 })

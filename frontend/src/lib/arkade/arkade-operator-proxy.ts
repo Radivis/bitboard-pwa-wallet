@@ -20,7 +20,8 @@ export const ARKADE_OPERATOR_UPSTREAM_BASES: Record<
   string
 > = {
   mainnet: 'https://arkade.computer',
-  signet: 'https://mutinynet.arkade.sh',
+  signet: 'https://signet.arkade.sh',
+  mutinynet: 'https://mutinynet.arkade.sh',
   get regtest() {
     return regtestOperatorUpstreamBase()
   },
@@ -93,8 +94,8 @@ export function arkOperatorViteProxyEntries(): ArkadeOperatorViteProxyEntry[] {
 export function getUpstreamArkOperatorBase(
   network: string,
 ): string | null {
-  if (network !== 'mainnet' && network !== 'signet' && network !== 'regtest') {
+  if (!Object.hasOwn(ARKADE_OPERATOR_UPSTREAM_BASES, network)) {
     return null
   }
-  return ARKADE_OPERATOR_UPSTREAM_BASES[network]
+  return ARKADE_OPERATOR_UPSTREAM_BASES[network as ArkadeSupportedNetworkMode]
 }

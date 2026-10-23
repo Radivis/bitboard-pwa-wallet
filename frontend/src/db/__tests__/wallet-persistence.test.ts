@@ -26,6 +26,7 @@ vi.mock('@/workers/encryption-factory', async () => {
 })
 
 import { TEST_MNEMONIC_12 } from '@/test-utils/test-providers'
+import { interleaveBeforeNextEncryptWithPassword } from './mock-encryption-worker'
 import {
   saveWalletSecrets,
   loadWalletSecrets,
@@ -63,6 +64,7 @@ describe('Wallet Persistence with Encryption', () => {
     lightningNwcConnections: [],
     arkadeAccounts: [],
     activeArkadeAccountIdByNetwork: {},
+    barkAccounts: [],
   }
 
   beforeEach(async () => {
@@ -317,6 +319,42 @@ describe('Wallet Persistence with Encryption', () => {
       await expect(loadWalletSecretsWithPassword(walletDb, oldPass, walletId2)).rejects.toThrow()
     })
 
+    it('LIFE-SECRETS-01 keeps a payload update requested while it ran, readable with the new password', async () => {
+      const updatedChangeSet = '{"last_reveal":{"0":9}}'
+      await endWalletSecretsSession()
+      await beginWalletSecretsSession(oldPass)
+      await saveWalletSecrets({ walletDb, walletId, secrets: sampleSecrets })
+
+      const interleaving = interleaveBeforeNextEncryptWithPassword(() =>
+        updateWalletSecretsPayloadWithRetry({
+          walletDb,
+          walletId,
+          transform: (payload) => ({
+            ...payload,
+            descriptorWallets: payload.descriptorWallets.map((descriptorWallet) => ({
+              ...descriptorWallet,
+              changeSet: updatedChangeSet,
+            })),
+          }),
+        }),
+      )
+
+      await reencryptAllWalletSecretsWithNewPassword({
+        walletDb,
+        oldPassword: oldPass,
+        newPassword: newPass,
+        afterReencrypt: async () => {
+          await endWalletSecretsSession()
+          await beginWalletSecretsSession(newPass)
+        },
+      })
+      await interleaving.awaitConcurrentWrite()
+
+      const loaded = await loadWalletSecretsWithPassword(walletDb, newPass, walletId)
+      expect(loaded.mnemonic).toBe(sampleSecrets.mnemonic)
+      expect(loaded.descriptorWallets[0]?.changeSet).toBe(updatedChangeSet)
+    })
+
     it('throws when current password is wrong (no partial writes)', async () => {
       await endWalletSecretsSession()
       await beginWalletSecretsSession(oldPass)
@@ -456,5 +494,40 @@ describe('Wallet Persistence with Encryption', () => {
       const withRevision = await getWalletSecretsEncryptedWithRevision(walletDb, walletId)
       expect(withRevision.revision).toBeGreaterThanOrEqual(2)
     })
+
+    it('does not let a same-tab writer land between read and CAS of an encrypted payload update', async () => {
+      await saveWalletSecrets({
+        walletDb,
+        walletId,
+        secrets: sampleSecrets,
+      })
+
+      let transformRuns = 0
+      const concurrentWrites: Promise<void>[] = []
+      await updateWalletSecretsEncryptedPayloadWithRetry({
+        walletDb,
+        walletId,
+        transform: async (payloadBlob) => {
+          transformRuns += 1
+          const concurrentWrite = updateWalletSecretsEncryptedPayloadWithRetry({
+            walletDb,
+            walletId,
+            transform: async (currentBlob) => currentBlob,
+          })
+          concurrentWrites.push(concurrentWrite)
+          await Promise.race([concurrentWrite, waitMilliseconds(CONCURRENT_WRITE_GRACE_MS)])
+          return payloadBlob
+        },
+      })
+      await Promise.all(concurrentWrites)
+
+      expect(transformRuns).toBe(1)
+    })
   })
 })
+
+const CONCURRENT_WRITE_GRACE_MS = 20
+
+function waitMilliseconds(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds))
+}
