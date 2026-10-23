@@ -8,10 +8,13 @@ import {
 import type { Node } from '@xyflow/react'
 import { Position, getSmoothStepPath } from '@xyflow/react'
 import type { UnilateralExitInProgressOverlayKind } from '@/lib/arkade/unilateral-exit-control-phase'
+import type { ExitCoinStage } from '@/lib/arkade/unilateral-exit-node-icons'
 import {
   hostTxVtxoExpiryUrgency,
   type UnilateralExitVtxoExpiryUrgency,
 } from '@/lib/arkade/unilateral-exit-vtxo-expiry'
+import type { VtxoExitChildSnapshotMap } from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit-machine-types'
+import { resolveArkadeHostCoinStage } from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit-selectors'
 import type {
   ArkadeUnilateralExitHostOutpoint,
   ArkadeUnilateralExitNodeStatus,
@@ -64,7 +67,7 @@ export type UnilateralExitTreeNodeData = {
   confirmations: number
   layoutDirection: UnilateralExitLayoutDirection
   exitableVtxoCount: number
-  hostsUnrolled: boolean
+  hostCoinStage: ExitCoinStage
   vtxoExpiryUrgency: UnilateralExitVtxoExpiryUrgency
 }
 
@@ -77,8 +80,10 @@ export const UNILATERAL_EXIT_NODE_DIAMETER_PX = 48
  */
 const UNILATERAL_EXIT_LAYOUT_NODE_SIZE_PX = UNILATERAL_EXIT_NODE_DIAMETER_PX * 2
 
-const EXIT_PATH_EDGE_COLOR = '#3b82f6'
-const DEFAULT_EDGE_COLOR = '#94a3b8'
+export const EXIT_GRAPH_PATH_EDGE_COLOR = '#3b82f6'
+export const EXIT_GRAPH_DEFAULT_EDGE_COLOR = '#94a3b8'
+export const EXIT_GRAPH_PATH_STROKE_WIDTH = 2.5
+export const EXIT_GRAPH_DEFAULT_STROKE_WIDTH = 1.5
 
 export type UnilateralExitGraphEdgePath = {
   id: string
@@ -98,7 +103,7 @@ export function resolveNodeConnectionPositions(layoutDirection: UnilateralExitLa
   return { sourcePosition: Position.Bottom, targetPosition: Position.Top }
 }
 
-function connectionPointFromNodeCenter(
+export function connectionPointFromNodeCenter(
   center: { x: number; y: number },
   side: Position,
   nodeDiameter: number = UNILATERAL_EXIT_NODE_DIAMETER_PX,
@@ -166,8 +171,8 @@ function buildEdgePaths(params: {
         id: `${source}->${target}`,
         path,
         animated: onPath,
-        stroke: onPath ? EXIT_PATH_EDGE_COLOR : DEFAULT_EDGE_COLOR,
-        strokeWidth: onPath ? 2.5 : 1.5,
+        stroke: onPath ? EXIT_GRAPH_PATH_EDGE_COLOR : EXIT_GRAPH_DEFAULT_EDGE_COLOR,
+        strokeWidth: onPath ? EXIT_GRAPH_PATH_STROKE_WIDTH : EXIT_GRAPH_DEFAULT_STROKE_WIDTH,
       },
     ]
   })
@@ -223,12 +228,6 @@ function groupHostOutpointsByTxid(
     siblings.sort((left, right) => left.vout - right.vout)
   }
   return grouped
-}
-
-function hostOutpointsAreUnrolled(
-  hostOutpoints: ArkadeUnilateralExitHostOutpoint[],
-): boolean {
-  return hostOutpoints.length > 0 && hostOutpoints.every((hostOutpoint) => hostOutpoint.isUnrolled)
 }
 
 export function hostOutpointsForTxid(
@@ -342,6 +341,7 @@ export function layoutUnilateralExitGraph(params: {
   focusedNodeId?: string | null
   onReadyToProceed?: () => void
   readyToProceedDisabled?: boolean
+  vtxoExitSnapshots?: VtxoExitChildSnapshotMap
   nowSeconds?: number
 }): { nodes: Node<UnilateralExitTreeNodeData>[]; edgePaths: UnilateralExitGraphEdgePath[] } {
   const {
@@ -354,6 +354,7 @@ export function layoutUnilateralExitGraph(params: {
     focusedNodeId,
     onReadyToProceed,
     readyToProceedDisabled,
+    vtxoExitSnapshots = {},
     nowSeconds = Math.floor(Date.now() / 1000),
   } = params
   const pathTxids = computeExitPathTxids(topology, selectedLeafOutpoints)
@@ -425,7 +426,11 @@ export function layoutUnilateralExitGraph(params: {
         isLeaf,
         isSelectedLeaf: allLeafOutpointsSelected(leafOutpoints, selectedLeafOutpoints),
         exitableVtxoCount: hostOutpoints.length,
-        hostsUnrolled: hostOutpointsAreUnrolled(hostOutpoints),
+        hostCoinStage: resolveArkadeHostCoinStage({
+          hostOutpoints,
+          nodeConfirmed: status?.status === 'confirmed',
+          vtxoExitSnapshots,
+        }),
         vtxoExpiryUrgency: hostTxVtxoExpiryUrgency(hostOutpoints, nowSeconds),
         pathTxids,
         focusedNodeId,
@@ -457,7 +462,7 @@ function buildTreeNodeData(params: {
   isLeaf: boolean
   isSelectedLeaf: boolean
   exitableVtxoCount: number
-  hostsUnrolled: boolean
+  hostCoinStage: ExitCoinStage
   vtxoExpiryUrgency: UnilateralExitVtxoExpiryUrgency
   pathTxids: Set<string>
   focusedNodeId?: string | null
@@ -491,7 +496,7 @@ function buildTreeNodeData(params: {
     confirmations: params.status?.confirmations ?? 0,
     layoutDirection: params.layoutDirection,
     exitableVtxoCount: params.exitableVtxoCount,
-    hostsUnrolled: params.hostsUnrolled,
+    hostCoinStage: params.hostCoinStage,
     vtxoExpiryUrgency: params.vtxoExpiryUrgency,
   }
 }

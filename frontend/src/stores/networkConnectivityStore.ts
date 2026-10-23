@@ -3,10 +3,10 @@ import { createJSONStorage, persist } from 'zustand/middleware'
 import { sqliteStorage } from '@/db/storage-adapter'
 import type { NetworkMode } from '@/stores/walletStore'
 
-export type OnlineNetworkMode = 'mainnet' | 'testnet' | 'signet'
+export type OnlineNetworkMode = 'mainnet' | 'testnet' | 'signet' | 'mutinynet'
 export type OfflineNetworkMode = 'lab' | 'regtest'
 
-const ONLINE_NETWORKS: readonly OnlineNetworkMode[] = ['mainnet', 'testnet', 'signet']
+const ONLINE_NETWORKS: readonly OnlineNetworkMode[] = ['mainnet', 'testnet', 'signet', 'mutinynet']
 
 type NetworkConnectivityState = {
   lastOnlineNetwork: OnlineNetworkMode

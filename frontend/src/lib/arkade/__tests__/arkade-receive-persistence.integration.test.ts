@@ -34,7 +34,7 @@ function emptyPayloadJson(): string {
       {
         id: CONNECTION_ID,
         label: 'signet',
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
         operatorUrl: 'https://signet.arkade.example/v1',
         operatorSignerPkHex: '02abc',
         createdAt: '2020-01-01T00:00:00.000Z',
@@ -61,14 +61,20 @@ describe('arkade receive persistence (encrypted worker path)', () => {
     },
   }
 
+  const storedBlob = {
+    ciphertext: new Uint8Array([9]),
+    iv: new Uint8Array([8]),
+    salt: new Uint8Array([7]),
+    kdfPhc: 'phc',
+  }
+
   const encryptedHost = {
-    readEncryptedPayload: async () => ({
-      ciphertext: new Uint8Array([9]),
-      iv: new Uint8Array([8]),
-      salt: new Uint8Array([7]),
-      kdfPhc: 'phc',
-    }),
-    writeEncryptedPayloadCAS: async (_walletId: number, _blob: unknown) => {
+    readEncryptedPayload: async () => storedBlob,
+    updateEncryptedPayload: async (
+      _walletId: number,
+      transform: (currentBlob: typeof storedBlob) => Promise<unknown>,
+    ) => {
+      await transform(storedBlob)
       storedPayloadJson = encryptedRoundTripJson
     },
   }

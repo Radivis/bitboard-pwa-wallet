@@ -31,6 +31,8 @@ pub enum BitcoinNetwork {
     Bitcoin,
     Testnet,
     Signet,
+    /// Mutinynet is a custom signet. Address encoding matches public Signet.
+    Mutinynet,
     Regtest,
 }
 
@@ -39,7 +41,7 @@ impl From<BitcoinNetwork> for Network {
         match network {
             BitcoinNetwork::Bitcoin => Network::Bitcoin,
             BitcoinNetwork::Testnet => Network::Testnet,
-            BitcoinNetwork::Signet => Network::Signet,
+            BitcoinNetwork::Signet | BitcoinNetwork::Mutinynet => Network::Signet,
             BitcoinNetwork::Regtest => Network::Regtest,
         }
     }
@@ -66,6 +68,7 @@ impl TryFrom<&str> for BitcoinNetwork {
             "bitcoin" => Ok(BitcoinNetwork::Bitcoin),
             "testnet" => Ok(BitcoinNetwork::Testnet),
             "signet" => Ok(BitcoinNetwork::Signet),
+            "mutinynet" => Ok(BitcoinNetwork::Mutinynet),
             "regtest" => Ok(BitcoinNetwork::Regtest),
             _ => Err(CryptoError::Descriptor(format!(
                 "Unknown network: {}",
@@ -128,4 +131,7 @@ pub struct TransactionDetails {
     /// Lab sets `sent_sats` to non-change outputs only; wallet sync uses input totals.
     #[serde(default)]
     pub is_lab_tx: bool,
+    /// Pay-to-Anchor CPFP child: version 3, an empty anchor witness, and a signed wallet input.
+    #[serde(default)]
+    pub is_cpfp_fee_bump: bool,
 }

@@ -5,10 +5,13 @@ use bitcoin::FeeRate;
 use crate::error::CryptoError;
 
 /// Maximum allowed fee rate (sat/vB). Prevents overflow or nonsensical values from JS.
-/// Must match `MAX_FEE_RATE_SAT_PER_VB` in `frontend/src/lib/esplora-fee-estimates.ts`.
+/// Must match `MAX_FEE_RATE_SAT_PER_VB` in `frontend/src/lib/esplora/esplora-fee-estimates.ts`
+/// and `MAX_FEE_RATE_SAT_PER_VB` in `bitboard-bark/src/emergency_exit.rs`.
+/// The Bark crate is a separate workspace and cannot call this function.
 const MAX_FEE_RATE_SAT_PER_VB: f64 = 1_000_000.0;
 
 /// `FeeRate::from_sat_per_vb_unchecked(sat_vb)` uses `sat_vb * (1000 / 4)` sat/kwu (`rust-bitcoin`).
+/// Must match `SAT_PER_KWU_PER_SAT_VB` in `bitboard-bark/src/emergency_exit.rs`.
 const SAT_PER_KWU_PER_SAT_VB: u64 = 250;
 
 /// Validates `fee_rate_sat_per_vb` from JS: must be finite, positive, and below max.

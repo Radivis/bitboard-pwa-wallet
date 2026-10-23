@@ -6,7 +6,7 @@ import { ArkadePendingRecoveryDueToExpiredSignerBanner } from '@/components/wall
 const balanceQueryMock = vi.fn()
 const walletStoreState = vi.hoisted(() => ({
   arkadeBalance: null as { pendingRecoveryDueToExpiredSignerSats?: number } | null,
-  networkMode: 'signet' as const,
+  networkMode: 'mutinynet' as const,
 }))
 
 vi.mock('@/hooks/useArkadeQueries', () => ({

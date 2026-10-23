@@ -4,6 +4,7 @@ use bdk_wallet::{ChangeSet, KeychainKind, Wallet};
 use bitcoin::Network as BdkNetwork;
 
 use crate::error::CryptoError;
+use crate::p2a_cpfp::is_pay_to_anchor_cpfp_child;
 use crate::transaction::WalletUtxoRow;
 use crate::types::{BalanceInfo, BitcoinNetwork, TransactionDetails};
 
@@ -13,6 +14,8 @@ use crate::types::{BalanceInfo, BitcoinNetwork, TransactionDetails};
 pub(crate) fn bdk_network_for_app(network: BitcoinNetwork) -> BdkNetwork {
     match network {
         BitcoinNetwork::Testnet => BdkNetwork::Testnet4,
+        // Mutinynet shares Signet address encoding; BDK has no Mutinynet variant.
+        BitcoinNetwork::Mutinynet => BdkNetwork::Signet,
         _ => network.into(),
     }
 }
@@ -65,7 +68,7 @@ pub fn load_wallet(
 
     let networks_to_try: Vec<BdkNetwork> = match network {
         BitcoinNetwork::Testnet => vec![bdk_network_for_app(network), BdkNetwork::Testnet],
-        _ => vec![network.into()],
+        _ => vec![bdk_network_for_app(network)],
     };
 
     let mut last_err: Option<CryptoError> = None;
@@ -139,6 +142,11 @@ pub fn start_incremental_sync_request(
 ) -> SyncRequest<(KeychainKind, u32)> {
     ensure_current_external_address(wallet);
     wallet.start_sync_with_revealed_spks_at(now).build()
+}
+
+/// Height of the newest block the wallet has synced. Coins confirmed above it still look unconfirmed.
+pub fn local_chain_tip_height(wallet: &Wallet) -> u32 {
+    wallet.local_chain().tip().height()
 }
 
 /// Return the current wallet balance broken down by confirmation status.
@@ -223,6 +231,7 @@ pub fn get_transaction_list(wallet: &Wallet) -> Vec<TransactionDetails> {
                 confirmation_time,
                 is_confirmed,
                 is_lab_tx: false,
+                is_cpfp_fee_bump: is_pay_to_anchor_cpfp_child(tx),
             }
         })
         .collect()

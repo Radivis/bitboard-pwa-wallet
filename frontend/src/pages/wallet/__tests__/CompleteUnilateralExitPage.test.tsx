@@ -72,7 +72,7 @@ describe('CompleteUnilateralExitPage', () => {
             isError: true,
             error: new Error(
               'Blockchain error: Reqwest(reqwest::Error { kind: Request, source: "JsValue(TypeError: Failed to fetch\\n' +
-                'TypeError: Failed to fetch\\n at __wbg_fetch (http://localhost:3000/src/wasm-pkg/bitboard_ark/bitboard_ark_bg.js:1:1)" })',
+                'TypeError: Failed to fetch\\n at __wbg_fetch (http://localhost:3000/src/wasm-pkg/bitboard_arkade/bitboard_arkade_bg.js:1:1)" })',
             ),
           },
         })}

@@ -676,6 +676,162 @@ async fn anchor_and_chain_reconcile_fixes_wrong_hash_at_anchor_height_when_tip_a
     assert_eq!(wallet.balance().untrusted_pending.to_sat(), 0);
 }
 
+/// A conflicting `/blocks` hash below the anchor must not drop the anchor height.
+/// `CheckPoint::insert` purges every higher checkpoint, and skipping locked anchor
+/// heights then leaves a gap `apply_update` rejects.
+#[tokio::test]
+async fn anchor_and_chain_reconcile_keeps_anchor_height_when_lower_block_hash_changes() {
+    let mut wallet = regtest_segwit_wallet_with_revealed_receive();
+    let shared_hash = unique_block_hash(0x11);
+    let stale_lower_hash = unique_block_hash(0xab);
+    let corrected_lower_hash = unique_block_hash(0xcd);
+    let anchor_hash = unique_block_hash(0x3c);
+    let lower_height = 170u32;
+    let tip_height = 180u32;
+    let (funding_tx, txid) = funding_tx_and_id(&wallet);
+
+    let mut chain_tip = CheckPoint::new(BlockId {
+        height: 0,
+        hash: BlockHash::from_byte_array([0u8; 32]),
+    });
+    chain_tip = chain_tip.insert(BlockId {
+        height: lower_height,
+        hash: stale_lower_hash,
+    });
+    for height in (lower_height + 1)..=tip_height {
+        chain_tip = chain_tip.insert(BlockId {
+            height,
+            hash: shared_hash,
+        });
+    }
+
+    let mut tx_update = TxUpdate::<ConfirmationBlockTime>::default();
+    tx_update.txs.push(Arc::new(funding_tx));
+    tx_update.seen_ats.insert((txid, FUNDING_BLOCK_TIME));
+    wallet
+        .apply_update(Update {
+            tx_update,
+            chain: Some(chain_tip),
+            ..Default::default()
+        })
+        .expect("seen_at below a stale lower checkpoint");
+
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(format!("/tx/{txid}")))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(esplora_confirmed_tx_json(
+                txid,
+                anchor_hash,
+                FUNDING_BLOCK_HEIGHT,
+            )),
+        )
+        .mount(&server)
+        .await;
+
+    let mut block_summaries = Vec::new();
+    for height in lower_height..=tip_height {
+        let block_hash = if height == lower_height {
+            corrected_lower_hash
+        } else if height == FUNDING_BLOCK_HEIGHT {
+            anchor_hash
+        } else {
+            shared_hash
+        };
+        block_summaries.push(esplora_block_summary_json(block_hash, height, shared_hash));
+    }
+    Mock::given(method("GET"))
+        .and(path("/blocks"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(block_summaries))
+        .mount(&server)
+        .await;
+
+    let esplora_client = EsploraClient::new(&server.uri()).expect("mock esplora client");
+    let local_chain_tip = wallet.local_chain().tip().clone();
+    let reconcile_update =
+        build_anchor_and_chain_reconcile_update(&local_chain_tip, esplora_client.inner(), &[txid])
+            .await
+            .expect("reconcile update build")
+            .expect("expected reconcile update");
+
+    sync::apply_update(&mut wallet, reconcile_update).expect("reconcile apply");
+    assert_eq!(wallet.balance().confirmed.to_sat(), FUNDING_SATS);
+    assert_eq!(wallet.balance().untrusted_pending.to_sat(), 0);
+}
+
+/// `/blocks` can move past the wallet tip before `/block-height/{tip}` answers.
+/// The repair must still mention that tip or `apply_update` rejects the anchor.
+#[tokio::test]
+async fn anchor_and_chain_reconcile_keeps_local_tip_when_blocks_list_skips_it() {
+    let mut wallet = regtest_segwit_wallet_with_revealed_receive();
+    let local_tip_height = 180u32;
+    let local_tip_hash = unique_block_hash(0x22);
+    let anchor_height = 182u32;
+    let anchor_hash = unique_block_hash(0x3c);
+    let newer_tip_height = 183u32;
+    let newer_tip_hash = unique_block_hash(0x44);
+    let (funding_tx, txid) = funding_tx_and_id(&wallet);
+
+    let mut tx_update = TxUpdate::<ConfirmationBlockTime>::default();
+    tx_update.txs.push(Arc::new(funding_tx));
+    tx_update.seen_ats.insert((txid, FUNDING_BLOCK_TIME));
+    wallet
+        .apply_update(Update {
+            tx_update,
+            chain: Some(sparse_genesis_and_tip(local_tip_height, local_tip_hash)),
+            ..Default::default()
+        })
+        .expect("seen_at at the pre-mine tip");
+
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(format!("/tx/{txid}")))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(esplora_confirmed_tx_json(
+                txid,
+                anchor_hash,
+                anchor_height,
+            )),
+        )
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/blocks"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(vec![esplora_block_summary_json(
+                newer_tip_hash,
+                newer_tip_height,
+                anchor_hash,
+            )]),
+        )
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/block-height/{local_tip_height}")))
+        .respond_with(ResponseTemplate::new(404))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/block-height/0"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(BlockHash::from_byte_array([0u8; 32]).to_string()),
+        )
+        .mount(&server)
+        .await;
+
+    let esplora_client = EsploraClient::new(&server.uri()).expect("mock esplora client");
+    let local_chain_tip = wallet.local_chain().tip().clone();
+    let reconcile_update =
+        build_anchor_and_chain_reconcile_update(&local_chain_tip, esplora_client.inner(), &[txid])
+            .await
+            .expect("reconcile update build")
+            .expect("expected reconcile update");
+
+    sync::apply_update(&mut wallet, reconcile_update).expect("reconcile apply");
+    assert_eq!(wallet.balance().confirmed.to_sat(), FUNDING_SATS);
+}
+
 #[tokio::test]
 async fn anchor_and_chain_reconcile_inserts_missing_anchor_height_on_sparse_tip() {
     let mut wallet = regtest_segwit_wallet_with_revealed_receive();

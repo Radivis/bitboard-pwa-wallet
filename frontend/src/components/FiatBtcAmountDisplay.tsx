@@ -1,8 +1,10 @@
+import type { ReactNode } from 'react'
 import {
   BitcoinAmountDisplay,
   type BitcoinAmountDisplaySize,
 } from '@/components/BitcoinAmountDisplay'
 import { FiatAmountDisplay } from '@/components/FiatAmountDisplay'
+import type { MainnetFiatAmountDisplayProps } from '@/hooks/useMainnetFiatAmountProps'
 import type { FiatCurrencyCode } from '@/lib/fiat/supported-fiat-currencies'
 import { cn } from '@/lib/shared/utils'
 
@@ -94,5 +96,36 @@ export function FiatBtcAmountDisplay({
         />
       </span>
     </span>
+  )
+}
+
+type LabeledFiatBtcAmountProps = {
+  label: ReactNode
+  amountSats: number
+  testId?: string
+  className?: string
+  fiat: MainnetFiatAmountDisplayProps
+}
+
+/** A detail row: label, then fiat and bitcoin for the same sat amount. */
+export function LabeledFiatBtcAmount({
+  label,
+  amountSats,
+  testId,
+  className,
+  fiat,
+}: LabeledFiatBtcAmountProps) {
+  return (
+    <p className={className} data-testid={testId}>
+      {label}{' '}
+      <FiatBtcAmountDisplay
+        amountSats={amountSats}
+        showFiatLayout={fiat.showFiatLayout}
+        btcPriceInFiat={fiat.btcPriceInFiat}
+        currency={fiat.currency}
+        rateLoading={fiat.rateLoading}
+        isDetail
+      />
+    </p>
   )
 }

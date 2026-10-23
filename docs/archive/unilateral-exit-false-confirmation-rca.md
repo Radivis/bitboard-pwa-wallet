@@ -1,6 +1,6 @@
 # Unilateral exit: false confirmations vs `submitpackage` (archived)
 
-> **Archived.** The Mutinynet skip / `package-not-child-with-unconfirmed-parents` issue described here has been resolved as a **cursor skip**. Live gating is `wait_cap_holds_unbroadcast_successor` in [`progress.rs`](../../bitboard-ark/src/session/unilateral_exit/progress.rs). The same RPC can still occur after correct sequencing (indexer vs submit bitcoind, reorg, unconfirmed CPFP bumper); that wait is `waitingForParentData` in [unilateral-exit.md](../unilateral-exit.md). Proposed approaches below (especially gating `first_incomplete_step_index` on `/raw` or submit-node spendability) **do not fully represent current code**.
+> **Archived.** The Mutinynet skip / `package-not-child-with-unconfirmed-parents` issue described here has been resolved as a **cursor skip**. Live gating is `wait_cap_holds_unbroadcast_successor` in [`progress.rs`](../../bitboard-arkade/src/session/unilateral_exit/progress.rs). The same RPC can still occur after correct sequencing (indexer vs submit bitcoind, reorg, unconfirmed CPFP bumper); that wait is `waitingForParentData` in [unilateral-exit.md](../unilateral-exit.md). Proposed approaches below (especially gating `first_incomplete_step_index` on `/raw` or submit-node spendability) **do not fully represent current code**.
 
 The remainder is the original 2026-08-16 agent handoff, kept for context.
 
@@ -185,8 +185,8 @@ Manually: open Mutinynet explorer + the wallet’s configured Esplora URL for `d
 
 | Piece | Path |
 |-------|------|
-| `first_incomplete_step_index` | `bitboard-ark/src/session/unilateral_exit/progress.rs` |
-| `map_tx_confirmations` / `mined_tx_confirmations` / `broadcast_package_at` | `bitboard-ark/src/esplora_blockchain.rs` |
+| `first_incomplete_step_index` | `bitboard-arkade/src/session/unilateral_exit/progress.rs` |
+| `map_tx_confirmations` / `mined_tx_confirmations` / `broadcast_package_at` | `bitboard-arkade/src/esplora_blockchain.rs` |
 | `get_height` cache-bust | `third_party/esplora-client/src/async.rs`, `blocking.rs` |
 | Machine poll / proceed | `frontend/src/lib/wallet/lifecycle/unilateral-exit/unilateral-exit.machine.ts` |
 | `ensureBroadcastActor` | `…/unilateral-exit.actors.ts` |

@@ -45,6 +45,7 @@ vi.mock('@/stores/walletStore', async () => {
 const receiveFeatureState = {
   isLightningEnabled: false,
   isSegwitAddressesEnabled: true,
+  isBarkEnabled: false,
 }
 
 vi.mock('@/stores/featureStore', () => ({
@@ -54,6 +55,7 @@ vi.mock('@/stores/featureStore', () => ({
       getState: () => ({
         ...receiveFeatureState,
         isArkadeEnabled: false,
+        isBarkEnabled: receiveFeatureState.isBarkEnabled,
         isMainnetAccessEnabled: true,
       }),
     },
@@ -86,6 +88,7 @@ describe('ReceivePage', () => {
       vi.fn().mockResolvedValue({ ok: true, status: 200 }),
     )
     receiveFeatureState.isSegwitAddressesEnabled = true
+    receiveFeatureState.isBarkEnabled = false
     walletStoreState = {
       activeWalletId: 1,
       walletStatus: 'unlocked',
@@ -198,5 +201,28 @@ describe('ReceivePage', () => {
     await waitFor(() => {
       expect(mockGetNewAddress).toHaveBeenCalled()
     })
+  })
+
+  it('shows a Bark segment on signet when the flag is on', () => {
+    walletStoreState.networkMode = 'signet'
+    receiveFeatureState.isBarkEnabled = true
+    renderWithProviders(<ReceivePage />)
+    expect(screen.getByRole('button', { name: 'Bark' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Receive Bitcoin' })).toBeInTheDocument()
+    expect(screen.queryByText('Bark receiving address')).not.toBeInTheDocument()
+  })
+  it('hides Bark when the flag is off', () => {
+    walletStoreState.networkMode = 'signet'
+    receiveFeatureState.isBarkEnabled = false
+    renderWithProviders(<ReceivePage />)
+    expect(screen.queryByRole('button', { name: 'Bark' })).not.toBeInTheDocument()
+  })
+
+  it('hides Bark when the network is not signet', () => {
+    walletStoreState.networkMode = 'testnet'
+    receiveFeatureState.isBarkEnabled = true
+    renderWithProviders(<ReceivePage />)
+    expect(screen.queryByRole('button', { name: 'Bark' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Receive Bitcoin' })).toBeInTheDocument()
   })
 })

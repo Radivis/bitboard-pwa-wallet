@@ -10,9 +10,9 @@ import {
 import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
 import {
   beginWalletSecretsSession,
-  endWalletSecretsSession,
   endWalletSecretsSessionReliably,
   isWalletSecretsSessionActive,
+  replaceWalletSecretsSession,
 } from '@/lib/wallet/wallet-secrets-session'
 
 /**
@@ -328,11 +328,10 @@ export async function upgradeNearZeroToUserPassword(params: {
       walletDb,
       oldPassword: nearZeroSessionSecret,
       newPassword,
+      afterReencrypt: () => replaceWalletSecretsSession(newPassword),
     })
+  } else {
+    await replaceWalletSecretsSession(newPassword)
   }
-  if (await isWalletSecretsSessionActive()) {
-    await endWalletSecretsSession()
-  }
-  await beginWalletSecretsSession(newPassword)
   await clearNearZeroSecuritySettings(walletDb)
 }

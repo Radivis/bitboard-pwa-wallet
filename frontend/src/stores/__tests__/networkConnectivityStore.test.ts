@@ -26,10 +26,15 @@ describe('network connectivity memory', () => {
     expect(useNetworkConnectivityStore.getState().lastOnlineNetwork).toBe('signet')
     expect(useNetworkConnectivityStore.getState().lastOfflineNetwork).toBe('lab')
 
+    useNetworkConnectivityStore.getState().rememberNetwork('mutinynet')
+
+    expect(useNetworkConnectivityStore.getState().lastOnlineNetwork).toBe('mutinynet')
+    expect(useNetworkConnectivityStore.getState().lastOfflineNetwork).toBe('lab')
+
     useNetworkConnectivityStore.getState().rememberNetwork('regtest')
 
     expect(useNetworkConnectivityStore.getState().lastOfflineNetwork).toBe('regtest')
-    expect(useNetworkConnectivityStore.getState().lastOnlineNetwork).toBe('signet')
+    expect(useNetworkConnectivityStore.getState().lastOnlineNetwork).toBe('mutinynet')
   })
 
   it('asks for the other side and skips disabled regtest', () => {

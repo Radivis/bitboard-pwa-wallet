@@ -32,14 +32,20 @@ describe('arkade-worker-encrypted-payload', () => {
     },
   }
 
+  const storedBlob = {
+    ciphertext: new Uint8Array([9]),
+    iv: new Uint8Array([8]),
+    salt: new Uint8Array([7]),
+    kdfPhc: 'phc',
+  }
+
   const encryptedHost = {
-    readEncryptedPayload: async () => ({
-      ciphertext: new Uint8Array([9]),
-      iv: new Uint8Array([8]),
-      salt: new Uint8Array([7]),
-      kdfPhc: 'phc',
-    }),
-    writeEncryptedPayloadCAS: async () => {
+    readEncryptedPayload: async () => storedBlob,
+    updateEncryptedPayload: async (
+      _walletId: number,
+      transform: (currentBlob: typeof storedBlob) => Promise<unknown>,
+    ) => {
+      await transform(storedBlob)
       storedPayloadJson = encryptedRoundTripJson
     },
   }
@@ -56,7 +62,7 @@ describe('arkade-worker-encrypted-payload', () => {
       deps,
       {
         walletId: 1,
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
         arkadeAccountId: 'conn-1',
         operatorSignerPkHex: '02abc',
         operatorUrl: 'https://signet.arkade.example/v1',
@@ -67,14 +73,14 @@ describe('arkade-worker-encrypted-payload', () => {
 
     expect(summary.id).toBe('conn-1')
     const payload = parseWalletPayloadJson(storedPayloadJson)
-    expect(payload.activeArkadeAccountIdByNetwork.signet).toBe('conn-1')
+    expect(payload.activeArkadeAccountIdByNetwork.mutinynet).toBe('conn-1')
     expect(payload.arkadeAccounts[0]?.sdkPersistenceJson).toBe('{"version":3}')
   })
 
   it('updates operator sync timestamp without changing sdk blob', async () => {
     await ensureArkadeAccountEncrypted(deps, {
       walletId: 1,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       arkadeAccountId: 'conn-1',
       operatorSignerPkHex: '02abc',
       operatorUrl: 'https://signet.arkade.example/v1',
@@ -100,7 +106,7 @@ describe('arkade-worker-encrypted-payload', () => {
   it('persistSdkJsonToEncryptedPayload merges monotonic receive cursor', async () => {
     await ensureArkadeAccountEncrypted(deps, {
       walletId: 1,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       arkadeAccountId: 'conn-1',
       operatorSignerPkHex: '02abc',
       operatorUrl: 'https://signet.arkade.example/v1',
@@ -119,5 +125,53 @@ describe('arkade-worker-encrypted-payload', () => {
     const payload = parseWalletPayloadJson(storedPayloadJson)
     const sdkJson = payload.arkadeAccounts[0]?.sdkPersistenceJson ?? '{}'
     expect(JSON.parse(sdkJson).wallet_db.offchain_next_derivation_index).toBe(2)
+  })
+
+  it('persistSdkJsonToEncryptedPayload leaves bark record envelopes unchanged', async () => {
+    const signetRecordEnvelope = 'c2lnbmV0'
+    const mainnetRecordEnvelope = 'bWFpbg'
+    storedPayloadJson = JSON.stringify({
+      descriptorWallets: [],
+      lightningNwcConnections: [],
+      arkadeAccounts: [
+        {
+          id: 'conn-1',
+          label: 'asp',
+          networkMode: 'mutinynet',
+          operatorUrl: 'https://signet.arkade.example/v1',
+          operatorSignerPkHex: '02abc',
+          createdAt: '2020-01-01T00:00:00.000Z',
+          sdkPersistenceJson: '{"version":3}',
+        },
+      ],
+      activeArkadeAccountIdByNetwork: { mutinynet: 'conn-1' },
+      barkAccounts: [
+        {
+          id: 'bark-signet',
+          networkMode: 'signet',
+          serverUrl: 'https://ark.signet.2nd.dev',
+          fingerprint: 'abcdef01',
+          recordEnvelope: signetRecordEnvelope,
+        },
+        {
+          id: 'bark-mainnet',
+          networkMode: 'mainnet',
+          serverUrl: 'https://ark.second.tech',
+          fingerprint: 'abcdef01',
+          recordEnvelope: mainnetRecordEnvelope,
+        },
+      ],
+    })
+
+    await persistSdkJsonToEncryptedPayload(deps, {
+      walletId: 1,
+      arkadeAccountId: 'conn-1',
+      sdkPersistenceJson: '{"version":3,"wallet_db":{}}',
+    })
+
+    const payload = parseWalletPayloadJson(storedPayloadJson)
+    expect(payload.barkAccounts.find((a) => a.networkMode === 'signet')?.recordEnvelope).toBe(signetRecordEnvelope)
+    expect(payload.barkAccounts.find((a) => a.networkMode === 'mainnet')?.recordEnvelope).toBe(mainnetRecordEnvelope)
+    expect(payload.arkadeAccounts[0]?.sdkPersistenceJson).toBe('{"version":3,"wallet_db":{}}')
   })
 })

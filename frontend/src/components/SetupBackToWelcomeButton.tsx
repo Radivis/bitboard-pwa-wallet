@@ -3,7 +3,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { ensureMigrated, getDatabase } from '@/db'
+import { ensureSchemaAndDataMigrated, getDatabase } from '@/db'
 import { userFacingErrorMessage } from '@/lib/shared/utils'
 import { abandonFirstRunAppPasswordChoiceIfNoWallets } from '@/lib/wallet/abandon-first-run-app-password-choice'
 
@@ -14,7 +14,7 @@ export function SetupBackToWelcomeButton() {
 
   const leaveSetupForWelcome = async () => {
     try {
-      await ensureMigrated()
+      await ensureSchemaAndDataMigrated()
       await abandonFirstRunAppPasswordChoiceIfNoWallets(getDatabase())
       await navigate({ to: '/setup' })
     } catch (err) {

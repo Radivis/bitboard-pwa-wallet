@@ -76,6 +76,7 @@ export function mapWireTransactionToDomain(wire: WireTransactionDetails): Transa
     confirmationTime: wire.confirmation_time,
     isConfirmed: wire.is_confirmed,
     isLabTx: wire.is_lab_tx,
+    isCpfpFeeBump: wire.is_cpfp_fee_bump === true,
   };
 }
 

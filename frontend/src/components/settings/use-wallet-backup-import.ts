@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { toast } from 'sonner'
 import { WALLET_SQLITE_OPFS_BASENAME } from '@/db/opfs/opfs-sqlite-database-names'
-import { destroyDatabase, ensureMigrated, getDatabase } from '@/db/database'
+import { destroyDatabase, ensureSchemaAndDataMigrated, getDatabase } from '@/db/database'
 import { anyWalletHasNoMnemonicBackupFlag } from '@/db/wallet-no-mnemonic-backup'
 import { BackupZipInvalidError } from '@/lib/shared/backup-zip-invalid-error'
 import { replaceOpfsSqliteAfterDestroy } from '@/db/opfs/opfs-sqlite-replace-and-reload'
@@ -68,7 +68,7 @@ export function useWalletBackupImport() {
     }
     try {
       const parsed = await parseWalletBackupZipFile(file)
-      await ensureMigrated()
+      await ensureSchemaAndDataMigrated()
       const blocked = await anyWalletHasNoMnemonicBackupFlag(getDatabase())
       if (blocked) {
         toast.error(
@@ -107,7 +107,7 @@ export function useWalletBackupImport() {
         opfsBasename: WALLET_SQLITE_OPFS_BASENAME,
         sqliteBytes,
         destroyDatabase,
-        ensureMigrated,
+        ensureMigrated: ensureSchemaAndDataMigrated,
         successToastMessage: 'Wallet backup imported. Reloading…',
         onBeforeReload: clearWalletImportUiState,
       })

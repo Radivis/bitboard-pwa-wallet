@@ -31,6 +31,7 @@ import {
 } from '@/components/design/DesignSideDrawer'
 import { DesignNetworkDrawer } from '@/components/design/DesignNetworkDrawer'
 import { WalletTopBar } from '@/components/WalletTopBar'
+import { BarkExitSeizureBanner } from '@/components/bark/BarkExitSeizureBanner'
 import { useNetworkModeSelection } from '@/hooks/useNetworkModeSelection'
 import { useNetworkConnectivityStore } from '@/stores/networkConnectivityStore'
 import { NearZeroSecurityBanner } from '@/components/NearZeroSecurityBanner'
@@ -408,6 +409,7 @@ export function WalletLayout({ children }: WalletLayoutProps) {
       <SecureStorageUnavailableBanner />
       <NearZeroSecurityBanner />
       <NoMnemonicBackupBanner />
+      <BarkExitSeizureBanner />
 
       <main
         className={cn(

@@ -5,7 +5,7 @@ export const config = {
 }
 
 // Inlined from src/lib/esplora/esplora-service-whitelist.ts
-type EsploraProxyNetwork = 'mainnet' | 'testnet' | 'signet'
+type EsploraProxyNetwork = 'mainnet' | 'testnet' | 'signet' | 'mutinynet'
 type EsploraProviderId = 'default' | 'blockstream' | 'legacy'
 type ProviderBases = Partial<Record<EsploraProxyNetwork, string>>
 
@@ -13,7 +13,8 @@ const ESPLORA_PROVIDER_BASES: Record<EsploraProviderId, ProviderBases> = {
   default: {
     mainnet: 'https://mempool.space/api',
     testnet: 'https://mempool.space/testnet4/api',
-    signet: 'https://mutinynet.com/api',
+    signet: 'https://mempool.space/signet/api',
+    mutinynet: 'https://mutinynet.com/api',
   },
   blockstream: {
     mainnet: 'https://blockstream.info/api',
@@ -21,12 +22,16 @@ const ESPLORA_PROVIDER_BASES: Record<EsploraProviderId, ProviderBases> = {
   },
   legacy: {
     testnet: 'https://blockstream.info/testnet/api',
-    signet: 'https://mempool.space/signet/api',
   },
 }
 
 function isEsploraProxyNetwork(mode: string): mode is EsploraProxyNetwork {
-  return mode === 'mainnet' || mode === 'testnet' || mode === 'signet'
+  return (
+    mode === 'mainnet' ||
+    mode === 'testnet' ||
+    mode === 'signet' ||
+    mode === 'mutinynet'
+  )
 }
 
 function isKnownEsploraProviderId(id: string): id is EsploraProviderId {

@@ -13,8 +13,12 @@ describe('lightningNetworkModeFromNip47Network', () => {
     expect(lightningNetworkModeFromNip47Network('testnet')).toBe('testnet')
   })
 
-  it('maps signet', () => {
+  it('maps signet without borrowing the app mode', () => {
     expect(lightningNetworkModeFromNip47Network('signet')).toBe('signet')
+  })
+
+  it('maps an explicit mutinynet report', () => {
+    expect(lightningNetworkModeFromNip47Network('mutinynet')).toBe('mutinynet')
   })
 
   it('returns null for regtest', () => {

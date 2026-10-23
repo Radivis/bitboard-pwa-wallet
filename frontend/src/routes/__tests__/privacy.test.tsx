@@ -50,4 +50,23 @@ describe('PrivacyPage', () => {
       screen.getByText(/This privacy policy covers both/i),
     ).toBeInTheDocument()
   })
+
+  it('describes the Bark rail in both languages', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<PrivacyPage />)
+    expect(
+      await screen.findByRole('heading', { name: /7\. Bark \(Second's Ark wallet\)/i }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: /8\. Nostr Wallet Connect \(NWC\)/i }),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /Deutsch/i }))
+    expect(
+      await screen.findByRole('heading', { name: /7\. Bark \(Ark-Wallet von Second\)/i }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: /8\. Nostr Wallet Connect \(NWC\)/i }),
+    ).toBeInTheDocument()
+  })
 })

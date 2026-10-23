@@ -8,7 +8,7 @@ import {
 import { arkadeBalanceQueryKey } from '@/lib/arkade/arkade-query-keys'
 
 const walletId = 1
-const networkMode = 'signet' as const
+const networkMode = 'mutinynet' as const
 const arkadeAccountId = 'conn-1'
 
 // Mirrors docs/arkade-bitboard-wallet-model.md — unilateral vs collaborative exit balance timing.

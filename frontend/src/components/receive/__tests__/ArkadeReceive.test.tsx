@@ -18,8 +18,8 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/stores/walletStore')>()
   const state = {
     ...actual.useWalletStore.getState(),
-    networkMode: 'signet' as const,
-    committedNetworkMode: 'signet' as const,
+    networkMode: 'mutinynet' as const,
+    committedNetworkMode: 'mutinynet' as const,
   }
   return {
     ...actual,

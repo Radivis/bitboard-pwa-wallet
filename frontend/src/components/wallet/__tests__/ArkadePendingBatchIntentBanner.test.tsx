@@ -201,7 +201,7 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
 vi.mock('@/hooks/useArkadeLifecycleSnapshots', () => ({
   useArkadeLoadLifecycleSnapshot: () => ({
     loadPhase: 'loaded',
-    networkMode: 'signet',
+    networkMode: 'mutinynet',
     errorMessage: null,
   }),
   useArkadeSyncLifecycleSnapshot: () => ({
@@ -241,9 +241,9 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/stores/walletStore')>()
   const state = {
     ...actual.useWalletStore.getState(),
-    networkMode: 'signet' as const,
+    networkMode: 'mutinynet' as const,
     activeWalletId: 1,
-    committedNetworkMode: 'signet' as const,
+    committedNetworkMode: 'mutinynet' as const,
   }
   return {
     ...actual,

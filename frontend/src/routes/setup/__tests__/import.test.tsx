@@ -90,7 +90,7 @@ vi.mock('@/db', () => ({
   useAddWallet: () => ({ mutateAsync: mockMutateAsync }),
   useWallets: () => ({ data: [], isLoading: false }),
   getDatabase: vi.fn(),
-  ensureMigrated: vi.fn().mockResolvedValue(undefined),
+  ensureSchemaAndDataMigrated: vi.fn().mockResolvedValue(undefined),
   persistNewWalletWithSecrets: vi.fn().mockResolvedValue(1),
   setWalletNoMnemonicBackupFlag: vi.fn().mockResolvedValue(undefined),
   walletKeys: { all: ['wallet_db', 'wallets'] as const },

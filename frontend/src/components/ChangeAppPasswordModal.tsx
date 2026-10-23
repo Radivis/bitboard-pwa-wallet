@@ -15,14 +15,11 @@ import {
 } from '@/components/AppPasswordFields'
 import { AppPasswordFundsLossWarning } from '@/components/AppPasswordFundsLossWarning'
 import {
-  ensureMigrated,
+  ensureSchemaAndDataMigrated,
   getDatabase,
   reencryptAllWalletSecretsWithNewPassword,
 } from '@/db'
-import {
-  beginWalletSecretsSession,
-  endWalletSecretsSession,
-} from '@/lib/wallet/wallet-secrets-session'
+import { replaceWalletSecretsSession } from '@/lib/wallet/wallet-secrets-session'
 import { errorMessage } from '@/lib/shared/utils'
 
 const CHANGE_APP_PASSWORD_FIELDS_CONFIG = {
@@ -63,15 +60,14 @@ export function ChangeAppPasswordModal({
 
   const reencryptMutation = useMutation({
     mutationFn: async (params: { current: string; next: string }) => {
-      await ensureMigrated()
+      await ensureSchemaAndDataMigrated()
       const walletDb = getDatabase()
       await reencryptAllWalletSecretsWithNewPassword({
         walletDb,
         oldPassword: params.current,
         newPassword: params.next,
+        afterReencrypt: () => replaceWalletSecretsSession(params.next),
       })
-      await endWalletSecretsSession()
-      await beginWalletSecretsSession(params.next)
     },
     onSuccess: () => {
       setPhase('success')

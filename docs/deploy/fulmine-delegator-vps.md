@@ -8,7 +8,7 @@ Bitboard runs **three Fulmine instances** on one VPS—one per live network—so
 |-----------------------------|-----------------|--------------------|------------------------------------------|------------------------|
 | `mainnet` | `fulmine-mainnet` | `delegator-mainnet.bitboard-wallet.com` | Production Arkade operator | `https://mempool.space/api` |
 | `testnet` | `fulmine-testnet4` | `delegator-testnet4.bitboard-wallet.com` | Testnet4 operator | `https://mempool.space/testnet4/api` |
-| `signet` (Mutinynet) | `fulmine-mutinynet` | `delegator-mutinynet.bitboard-wallet.com` | Mutinynet Arkade operator | `https://mutinynet.com/api` |
+| `mutinynet` | `fulmine-mutinynet` | `delegator-mutinynet.bitboard-wallet.com` | Mutinynet Arkade operator | `https://mutinynet.com/api` |
 
 Each instance needs an isolated `FULMINE_DATADIR` and `FULMINE_HTTP_PORT` (e.g. 7001, 7002, 7003). Expose HTTPS via Caddy or Traefik on the hostnames above.
 
@@ -27,10 +27,10 @@ Set Vite env vars (see `frontend/.env.example`) so builds point at your hostname
 
 - `VITE_ARKADE_DELEGATOR_MAINNET`
 - `VITE_ARKADE_DELEGATOR_TESTNET`
-- `VITE_ARKADE_DELEGATOR_SIGNET`
+- `VITE_ARKADE_DELEGATOR_MUTINYNET`
 - `VITE_ARKADE_OPERATOR_MAINNET`
 - `VITE_ARKADE_OPERATOR_TESTNET`
-- `VITE_ARKADE_OPERATOR_SIGNET`
+- `VITE_ARKADE_OPERATOR_MUTINYNET`
 
 Defaults in code fall back to Arkade public operators when env vars are unset (development only).
 

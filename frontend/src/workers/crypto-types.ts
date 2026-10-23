@@ -47,6 +47,11 @@ export interface TransactionDetails {
    * Lab `sentSats` is payment to recipients only; BDK/Esplora uses wallet input totals.
    */
   isLabTx: boolean;
+  /**
+   * Pay-to-Anchor CPFP child. Missing means false so lab rows and a stale
+   * transaction list stay unlabeled.
+   */
+  isCpfpFeeBump?: boolean;
 }
 
 export interface NodeInfo {

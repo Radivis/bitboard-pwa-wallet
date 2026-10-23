@@ -18,7 +18,7 @@ export async function openSettingsFeaturesTab(page: Page): Promise<void> {
 }
 
 /** Networks that are only disabled during an in-flight switch (not feature-gated). */
-const SETTINGS_NETWORK_SWITCH_IDLE_BUTTONS = ['Testnet', 'Signet', 'Lab'] as const
+const SETTINGS_NETWORK_SWITCH_IDLE_BUTTONS = ['Testnet', 'Signet', 'Mutinynet', 'Lab'] as const
 
 /**
  * After clicking a network on Settings, waits until the switch mutation finishes:

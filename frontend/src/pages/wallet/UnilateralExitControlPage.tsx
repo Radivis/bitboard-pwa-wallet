@@ -575,6 +575,7 @@ export function UnilateralExitControlPage() {
               topology={topologyQuery.data}
               selectedLeafOutpoints={jobOutpoints}
               nodeStatuses={nodeStatuses}
+              vtxoExitSnapshots={vtxoExitSnapshots}
               inProgressOverlay={inProgressOverlay}
               proceedingAutomatically={proceedingAutomatically}
               focusedNodeId={focusedNodeId}

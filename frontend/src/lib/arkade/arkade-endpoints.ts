@@ -1,14 +1,19 @@
 import { getEsploraUrl } from '@/lib/wallet/bitcoin-utils'
 import type { NetworkMode } from '@/stores/walletStore'
 import { getArkOperatorUrl } from '@/lib/arkade/arkade-operator-proxy'
+import { ARKADE_SUPPORTED_NETWORK_MODES } from '@/lib/arkade/arkade-domain-types'
 
 /**
- * Networks with an Arkade operator in v1 (live mainnet/signet, local regtest for dev/E2E).
+ * Networks with an Arkade operator in v1 (live mainnet/signet/mutinynet, local regtest for dev/E2E).
  */
-export type ArkadeSupportedNetworkMode = 'mainnet' | 'signet' | 'regtest'
+export type ArkadeSupportedNetworkMode =
+  | 'mainnet'
+  | 'signet'
+  | 'mutinynet'
+  | 'regtest'
 
 export interface ArkadeEndpoints {
-  arkServerUrl: string
+  arkadeServerUrl: string
   delegatorUrl: string
   esploraUrl: string
 }
@@ -18,6 +23,7 @@ const REGTEST_OPERATOR_DEFAULT = 'http://localhost:7070'
 const OPERATOR_ENV_OVERRIDES: Record<ArkadeSupportedNetworkMode, string | undefined> = {
   mainnet: import.meta.env.VITE_ARKADE_OPERATOR_MAINNET,
   signet: import.meta.env.VITE_ARKADE_OPERATOR_SIGNET,
+  mutinynet: import.meta.env.VITE_ARKADE_OPERATOR_MUTINYNET,
   regtest: import.meta.env.VITE_ARKADE_OPERATOR_REGTEST,
 }
 
@@ -25,13 +31,14 @@ const OPERATOR_ENV_OVERRIDES: Record<ArkadeSupportedNetworkMode, string | undefi
 const DEFAULT_DELEGATORS: Record<ArkadeSupportedNetworkMode, string> = {
   mainnet: import.meta.env.VITE_ARKADE_DELEGATOR_MAINNET ?? '',
   signet: import.meta.env.VITE_ARKADE_DELEGATOR_SIGNET ?? '',
+  mutinynet: import.meta.env.VITE_ARKADE_DELEGATOR_MUTINYNET ?? '',
   regtest: import.meta.env.VITE_ARKADE_DELEGATOR_REGTEST ?? '',
 }
 
 export function isArkadeSupportedNetworkMode(
   mode: NetworkMode,
 ): mode is ArkadeSupportedNetworkMode {
-  return mode === 'mainnet' || mode === 'signet' || mode === 'regtest'
+  return (ARKADE_SUPPORTED_NETWORK_MODES as readonly NetworkMode[]).includes(mode)
 }
 
 export function networkModeToArkadeIsMainnet(
@@ -49,7 +56,7 @@ export function getArkadeEndpoints(
     mode === 'regtest' ? regtestOperator : OPERATOR_ENV_OVERRIDES[mode]
 
   return {
-    arkServerUrl: getArkOperatorUrl(mode, operatorOverride),
+    arkadeServerUrl: getArkOperatorUrl(mode, operatorOverride),
     delegatorUrl: DEFAULT_DELEGATORS[mode],
     esploraUrl: getEsploraUrl(mode, null),
   }

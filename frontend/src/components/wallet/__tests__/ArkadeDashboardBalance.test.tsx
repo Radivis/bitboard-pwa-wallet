@@ -6,7 +6,7 @@ import type { NetworkMode } from '@/stores/walletStore'
 
 const balanceQueryMock = vi.hoisted(() => vi.fn())
 const walletStoreState = vi.hoisted(() => ({
-  networkMode: 'signet' as NetworkMode,
+  networkMode: 'mutinynet' as NetworkMode,
   arkadeBalance: null as { confirmedSats: number; totalSats: number } | null,
   arkadeSignerMigrationHint: null as {
     previousSignerPkHex: string
@@ -136,7 +136,7 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
 describe('ArkadeDashboardBalance', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    walletStoreState.networkMode = 'signet'
+    walletStoreState.networkMode = 'mutinynet'
     walletStoreState.arkadeBalance = null
     walletStoreState.arkadeSignerMigrationHint = null
     arkadeLifecycleState.rail = {

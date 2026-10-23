@@ -19,7 +19,7 @@ vi.mock('@/lib/lightning/send-flow-validation', async (importOriginal) => {
       networkMode: string
       lightningAvailable: boolean
     }) =>
-      networkMode === 'signet' &&
+      (networkMode === 'signet' || networkMode === 'mutinynet') &&
       (normalizedRecipient.startsWith('tb1') ||
         normalizedRecipient.startsWith('lntbs')),
   }
@@ -54,7 +54,7 @@ describe('isSendRecipientFormatValidWithArkade', () => {
     expect(
       isSendRecipientFormatValidWithArkade({
         normalizedRecipient: onChainRecipient,
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
         lightningAvailable: true,
         arkadeAvailable: true,
       }),
@@ -62,7 +62,7 @@ describe('isSendRecipientFormatValidWithArkade', () => {
     expect(
       isSendRecipientFormatValidWithArkade({
         normalizedRecipient: lnInvoice,
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
         lightningAvailable: true,
         arkadeAvailable: true,
       }),
@@ -70,7 +70,7 @@ describe('isSendRecipientFormatValidWithArkade', () => {
     expect(
       isSendRecipientFormatValidWithArkade({
         normalizedRecipient: arkRecipient,
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
         lightningAvailable: true,
         arkadeAvailable: true,
       }),
@@ -86,7 +86,7 @@ describe('canBuildArkadeSend', () => {
     recipientFormatValid: true,
     arkadeConfirmedBalanceSats: 100_000,
     arkadeBalanceQuerySuccess: true,
-    networkMode: 'signet' as const,
+    networkMode: 'mutinynet' as const,
   }
 
   it('allows valid arkade send', () => {

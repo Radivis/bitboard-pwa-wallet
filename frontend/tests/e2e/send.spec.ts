@@ -12,7 +12,10 @@ import {
   REGTEST_DASHBOARD_MIN_VISIBLE_SATS,
 } from './helpers/regtest'
 import { runRegtestPostFundDashboardCheck } from './helpers/regtest-onchain-balance-diagnostics'
-import { waitForOnchainRailNotSyncing } from './helpers/dashboard-sync'
+import {
+  waitForOnchainRailNotSyncing,
+  waitForOnchainRailSyncAttemptFinished,
+} from './helpers/dashboard-sync'
 import {
   assertSendPageSpendableOnChainBalance,
   waitForSendReviewTransactionButtonEnabled,
@@ -91,7 +94,9 @@ test.describe('Send Page', () => {
 
       await importWalletViaUI(page, TEST_MNEMONIC, TEST_PASSWORD)
       await goToWalletTab(page, 'Dashboard')
-      await waitForOnchainRailNotSyncing(page)
+      // Import syncs public testnet before Regtest is enabled. A mempool.space
+      // timeout leaves the sync-error banner up; switching networks does not need that sync.
+      await waitForOnchainRailSyncAttemptFinished(page)
 
       await clickDrawerNavLink(page, 'Settings')
       await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()

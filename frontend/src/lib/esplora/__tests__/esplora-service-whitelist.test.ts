@@ -61,13 +61,13 @@ describe('customEsploraMatchesWhitelistedBase', () => {
     ).toEqual({ providerId: 'legacy' })
   })
 
-  it('matches legacy standard signet (mempool signet, not mutinynet)', () => {
+  it('matches default public signet (mempool signet)', () => {
     expect(
       customEsploraMatchesWhitelistedBase(
         'https://mempool.space/signet/api',
         'signet',
       ),
-    ).toEqual({ providerId: 'legacy' })
+    ).toEqual({ providerId: 'default' })
   })
 
   it('returns null for unknown host', () => {
@@ -104,13 +104,11 @@ describe('getUpstreamBaseForEsploraProxy', () => {
     expect(getUpstreamBaseForEsploraProxy('blockstream', 'testnet')).toBeNull()
   })
 
-  it('resolves legacy testnet and signet', () => {
+  it('resolves legacy testnet and has no legacy signet row', () => {
     expect(getUpstreamBaseForEsploraProxy('legacy', 'testnet')).toBe(
       ESPLORA_PROVIDER_BASES.legacy.testnet,
     )
-    expect(getUpstreamBaseForEsploraProxy('legacy', 'signet')).toBe(
-      ESPLORA_PROVIDER_BASES.legacy.signet,
-    )
+    expect(getUpstreamBaseForEsploraProxy('legacy', 'signet')).toBeNull()
   })
 })
 

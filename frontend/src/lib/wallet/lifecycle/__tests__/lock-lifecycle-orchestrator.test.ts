@@ -21,6 +21,10 @@ const syncArkadeSyncLifecycleWithLockPhase = vi.fn()
 const syncArkadeSaveLifecycleWithLockPhase = vi.fn()
 const orchestrateLightningLoad = vi.fn()
 const awaitLightningLoadQuiescence = vi.fn()
+const startBarkLoadAfterUnlock = vi.fn()
+const awaitBarkLoadQuiescence = vi.fn()
+const syncBarkLoadLifecycleWithLockPhase = vi.fn()
+const syncBarkSyncLifecycleWithLockPhase = vi.fn()
 const awaitLightningSyncQuiescence = vi.fn()
 const awaitLightningSaveQuiescence = vi.fn()
 const isLightningSaveBlockingLock = vi.fn()
@@ -31,6 +35,12 @@ const awaitInFlightWalletSecretsWrites = vi.fn()
 const ensureWalletSecretsSession = vi.fn()
 const endWalletSecretsSession = vi.fn()
 const isWalletSecretsSessionActive = vi.fn()
+const runPendingWalletDataMigrationsForUnlock = vi.fn()
+
+vi.mock('@/db/data-migrations/run-pending-wallet-data-migrations', () => ({
+  runPendingWalletDataMigrationsForUnlock: (...args: unknown[]) =>
+    runPendingWalletDataMigrationsForUnlock(...args),
+}))
 
 vi.mock('@/stores/cryptoStore', () => ({
   useCryptoStore: {
@@ -99,6 +109,21 @@ vi.mock('@/lib/wallet/lifecycle/lightning-load-lifecycle-orchestrator', () => ({
   awaitLightningLoadQuiescence: (...args: unknown[]) => awaitLightningLoadQuiescence(...args),
   syncLightningLoadLifecycleWithLockPhase: (...args: unknown[]) =>
     syncLightningLoadLifecycleWithLockPhase(...args),
+}))
+
+vi.mock('@/lib/bark/bark-session-service', () => ({
+  startBarkLoadAfterUnlock: (...args: unknown[]) => startBarkLoadAfterUnlock(...args),
+}))
+
+vi.mock('@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator', () => ({
+  awaitBarkLoadQuiescence: (...args: unknown[]) => awaitBarkLoadQuiescence(...args),
+  syncBarkLoadLifecycleWithLockPhase: (...args: unknown[]) =>
+    syncBarkLoadLifecycleWithLockPhase(...args),
+}))
+
+vi.mock('@/lib/wallet/lifecycle/bark-sync-lifecycle-orchestrator', () => ({
+  syncBarkSyncLifecycleWithLockPhase: (...args: unknown[]) =>
+    syncBarkSyncLifecycleWithLockPhase(...args),
 }))
 
 vi.mock('@/lib/wallet/lifecycle/lightning-sync-lifecycle-orchestrator', () => ({
@@ -192,6 +217,7 @@ describe('lock-lifecycle-orchestrator', () => {
     orchestrateOnchainPostUnlockSync.mockResolvedValue(undefined)
     awaitOnchainLoadQuiescence.mockResolvedValue(undefined)
     awaitArkadeLoadQuiescence.mockResolvedValue(undefined)
+    awaitBarkLoadQuiescence.mockResolvedValue(undefined)
     awaitLightningLoadQuiescence.mockResolvedValue(undefined)
     awaitOnchainSyncQuiescence.mockResolvedValue(undefined)
     awaitOnchainSaveQuiescence.mockResolvedValue(undefined)
@@ -208,6 +234,7 @@ describe('lock-lifecycle-orchestrator', () => {
     ensureWalletSecretsSession.mockResolvedValue(undefined)
     endWalletSecretsSession.mockResolvedValue(undefined)
     isWalletSecretsSessionActive.mockResolvedValue(true)
+    runPendingWalletDataMigrationsForUnlock.mockResolvedValue(undefined)
   })
 
   it('initial state is no-lock with operation none', () => {
@@ -332,6 +359,7 @@ describe('lock-lifecycle-orchestrator', () => {
     expect(syncOnchainSyncLifecycleWithLockPhase).toHaveBeenCalledWith('locked')
     expect(syncOnchainSaveLifecycleWithLockPhase).toHaveBeenCalledWith('locked')
     expect(syncArkadeLoadLifecycleWithLockPhase).toHaveBeenCalledWith('locked')
+    expect(syncBarkSyncLifecycleWithLockPhase).toHaveBeenCalledWith('locked')
     expect(syncArkadeSyncLifecycleWithLockPhase).toHaveBeenCalledWith('locked')
     expect(syncArkadeSaveLifecycleWithLockPhase).toHaveBeenCalledWith('locked')
   })
@@ -354,6 +382,30 @@ describe('lock-lifecycle-orchestrator', () => {
       }),
     ).rejects.toThrow('load failed')
 
+    expect(endWalletSecretsSession).toHaveBeenCalledTimes(1)
+    expect(getLockLifecycleSnapshot()).toEqual({
+      phase: 'locked',
+      operation: 'none',
+    })
+  })
+
+  it('manual unlock fails and does not load rails when wallet data migrations fail', async () => {
+    walletStoreState.activeWalletId = 1
+    walletStoreState.walletStatus = 'locked'
+    syncLockLifecycleWithActiveWallet(1)
+    runPendingWalletDataMigrationsForUnlock.mockRejectedValue(new Error('migration failed'))
+
+    await expect(
+      orchestrateManualUnlock({
+        ...unlockParams,
+        password: 'secret',
+      }),
+    ).rejects.toThrow('migration failed')
+
+    expect(orchestrateOnchainLoad).not.toHaveBeenCalled()
+    expect(orchestrateArkadeLoad).not.toHaveBeenCalled()
+    expect(startBarkLoadAfterUnlock).not.toHaveBeenCalled()
+    expect(orchestrateLightningLoad).not.toHaveBeenCalled()
     expect(endWalletSecretsSession).toHaveBeenCalledTimes(1)
     expect(getLockLifecycleSnapshot()).toEqual({
       phase: 'locked',
@@ -405,6 +457,10 @@ describe('lock-lifecycle-orchestrator', () => {
       walletId: 1,
       networkMode: 'testnet',
       allowRetryFromError: true,
+    })
+    expect(startBarkLoadAfterUnlock).toHaveBeenCalledWith({
+      walletId: 1,
+      networkMode: 'testnet',
     })
     expect(orchestrateLightningLoad).toHaveBeenCalledWith({
       walletId: 1,

@@ -1,35 +1,20 @@
-import { proxy } from 'comlink'
-import { createEncryptedWalletSecretsHost } from '@/lib/wallet/encrypted-wallet-secrets-host'
+import { createEncryptedSecretsHostChannel } from '@/workers/encrypted-secrets-host-channel'
 
-let encryptedSecretsHostReady = false
-let encryptedSecretsHostPromise: Promise<void> | null = null
+const arkadeSecretsHostChannel = createEncryptedSecretsHostChannel(async () => {
+  const { getArkadeWorker } = await import('@/workers/arkade-factory')
+  return getArkadeWorker()
+})
 
 export function resetArkadePersistenceChannel(): void {
-  encryptedSecretsHostReady = false
-  encryptedSecretsHostPromise = null
+  arkadeSecretsHostChannel.resetEncryptedSecretsHostChannel()
 }
 
 /**
  * Registers the main-thread encrypted DB host on the Arkade worker (Comlink).
  * Ciphertext only — no wallet payload decrypt on the main thread.
  */
-export async function ensureArkadeEncryptedSecretsHost(): Promise<void> {
-  if (encryptedSecretsHostReady) return
-  if (encryptedSecretsHostPromise) {
-    await encryptedSecretsHostPromise
-    return
-  }
-
-  encryptedSecretsHostPromise = (async () => {
-    const { getArkadeWorker } = await import('@/workers/arkade-factory')
-    const worker = getArkadeWorker()
-    await worker.setEncryptedWalletSecretsHost(proxy(createEncryptedWalletSecretsHost()))
-    encryptedSecretsHostReady = true
-  })().finally(() => {
-    encryptedSecretsHostPromise = null
-  })
-
-  await encryptedSecretsHostPromise
+export function ensureArkadeEncryptedSecretsHost(): Promise<void> {
+  return arkadeSecretsHostChannel.ensureEncryptedSecretsHost()
 }
 
 /** @deprecated Use ensureArkadeEncryptedSecretsHost */

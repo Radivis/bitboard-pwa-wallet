@@ -1,7 +1,7 @@
 import { afterEach, describe, it, expect } from 'vitest'
 import {
   destroyDatabase,
-  ensureMigrated,
+  ensureSchemaAndDataMigrated,
   getDatabase,
   isWalletDatabaseTeardownBlockedError,
   WalletDatabaseTeardownBlockedError,
@@ -30,10 +30,10 @@ describe('wallet database teardown guard', () => {
     await destroyDatabase().catch(() => undefined)
   })
 
-  it('blocks getDatabase and ensureMigrated after blockSqliteStorageForTeardown', async () => {
+  it('blocks getDatabase and ensureSchemaAndDataMigrated after blockSqliteStorageForTeardown', async () => {
     blockSqliteStorageForTeardown()
     expect(() => getDatabase()).toThrow(/blocked during teardown/i)
-    await expect(ensureMigrated()).rejects.toThrow(/blocked during teardown/i)
+    await expect(ensureSchemaAndDataMigrated()).rejects.toThrow(/blocked during teardown/i)
   })
 
   it('persist-only block does not throw from getDatabase', async () => {
@@ -52,7 +52,7 @@ describe('wallet database teardown guard', () => {
   it('hard-block throws from getDatabase', async () => {
     blockWalletAndLabDatabaseAccessForTeardown()
     expect(() => getDatabase()).toThrow(/blocked during teardown/i)
-    await expect(ensureMigrated()).rejects.toThrow(/blocked during teardown/i)
+    await expect(ensureSchemaAndDataMigrated()).rejects.toThrow(/blocked during teardown/i)
   })
 
   it('resetSqliteStorageTeardownGuard unblocks getDatabase after hard-block', () => {

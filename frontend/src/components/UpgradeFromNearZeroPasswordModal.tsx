@@ -12,7 +12,7 @@ import {
 } from '@/components/AppPasswordFields'
 import { AppPasswordFundsLossWarning } from '@/components/AppPasswordFundsLossWarning'
 import {
-  ensureMigrated,
+  ensureSchemaAndDataMigrated,
   getDatabase,
   upgradeNearZeroToUserPassword,
 } from '@/db'
@@ -68,7 +68,7 @@ export function UpgradeFromNearZeroPasswordModal({
       if (!walletIsUnlockedOrSyncing(useWalletStore.getState().walletStatus)) {
         throw new Error('Session expired — unlock and try again.')
       }
-      await ensureMigrated()
+      await ensureSchemaAndDataMigrated()
       const walletDb = getDatabase()
       await upgradeNearZeroToUserPassword({
         walletDb,

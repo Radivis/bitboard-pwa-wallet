@@ -97,7 +97,7 @@ vi.mock('@/lib/wallet/onchain-dashboard-sync', () => ({
 }))
 
 vi.mock('@/db/database', () => ({
-  ensureMigrated: vi.fn().mockResolvedValue(undefined),
+  ensureSchemaAndDataMigrated: vi.fn().mockResolvedValue(undefined),
   getDatabase: vi.fn(() => ({
     selectFrom: vi.fn(() => ({
       select: vi.fn(() => ({

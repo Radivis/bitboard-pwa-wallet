@@ -166,7 +166,7 @@ describe('arkade-load-lifecycle-orchestrator', () => {
     ensureArkadeAccountMock.mockResolvedValue({
       id: TEST_ACCOUNT_ID,
       label: 'signet',
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       operatorUrl: 'https://asp.example',
       operatorSignerPkHex: '02deadbeef',
       createdAt: '2020-01-01T00:00:00.000Z',
@@ -179,7 +179,7 @@ describe('arkade-load-lifecycle-orchestrator', () => {
   it('load not-configured when feature off', async () => {
     featureState.isArkadeEnabled = false
 
-    await orchestrateArkadeLoad({ walletId: 1, networkMode: 'signet' })
+    await orchestrateArkadeLoad({ walletId: 1, networkMode: 'mutinynet' })
 
     expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('not-configured')
     expect(closeArkadeSessionMock).toHaveBeenCalled()
@@ -195,7 +195,7 @@ describe('arkade-load-lifecycle-orchestrator', () => {
       callOrder.push('setActive')
     })
 
-    await orchestrateArkadeLoad({ walletId: 1, networkMode: 'signet' })
+    await orchestrateArkadeLoad({ walletId: 1, networkMode: 'mutinynet' })
 
     expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loaded')
     expect(workerMocks.openSession).toHaveBeenCalled()
@@ -203,7 +203,7 @@ describe('arkade-load-lifecycle-orchestrator', () => {
     expect(orchestrateArkadePostLoadSyncMock).toHaveBeenCalledWith(
       expect.objectContaining({
         walletId: 1,
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
         arkadeAccountId: TEST_ACCOUNT_ID,
       }),
     )
@@ -216,13 +216,13 @@ describe('arkade-load-lifecycle-orchestrator', () => {
       order.push('postLoadSync')
     })
 
-    await orchestrateArkadeLoad({ walletId: 1, networkMode: 'signet' })
+    await orchestrateArkadeLoad({ walletId: 1, networkMode: 'mutinynet' })
 
     expect(order.indexOf('setActive')).toBeLessThan(order.indexOf('postLoadSync'))
   })
 
   it('LIFE-ARK-LOAD-04 reaches loaded without starting bumper Esplora', async () => {
-    await orchestrateArkadeLoad({ walletId: 1, networkMode: 'signet' })
+    await orchestrateArkadeLoad({ walletId: 1, networkMode: 'mutinynet' })
 
     expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loaded')
     expect(workerMocks.syncBumperWallet).not.toHaveBeenCalled()
@@ -232,7 +232,7 @@ describe('arkade-load-lifecycle-orchestrator', () => {
   it('does not mark the rail loaded when the active wallet changed', async () => {
     walletState.activeWalletId = 2
 
-    await orchestrateArkadeLoad({ walletId: 1, networkMode: 'signet' })
+    await orchestrateArkadeLoad({ walletId: 1, networkMode: 'mutinynet' })
 
     expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('not-configured')
     expect(workerMocks.openSession).not.toHaveBeenCalled()
@@ -259,11 +259,11 @@ describe('arkade-load-lifecycle-orchestrator', () => {
       }
     })
 
-    const previousLoad = orchestrateArkadeLoad({ walletId: 1, networkMode: 'signet' })
+    const previousLoad = orchestrateArkadeLoad({ walletId: 1, networkMode: 'mutinynet' })
     await previousOpenStarted
 
     walletState.activeWalletId = 2
-    const nextLoad = orchestrateArkadeLoad({ walletId: 2, networkMode: 'signet' })
+    const nextLoad = orchestrateArkadeLoad({ walletId: 2, networkMode: 'mutinynet' })
     rejectPreviousOpen(new Error('operator unreachable'))
 
     await expect(previousLoad).rejects.toThrow('operator unreachable')
@@ -284,18 +284,18 @@ describe('arkade-load-lifecycle-orchestrator', () => {
     )
 
     await expect(
-      orchestrateArkadeLoad({ walletId: 1, networkMode: 'signet' }),
+      orchestrateArkadeLoad({ walletId: 1, networkMode: 'mutinynet' }),
     ).rejects.toThrow('sdkPersistenceJson operator signer mismatch')
 
     expect(getArkadeLoadLifecycleSnapshot()).toEqual({
       loadPhase: 'load-error',
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       errorMessage: 'sdkPersistenceJson operator signer mismatch',
     })
     expect(workerMocks.closeSession).not.toHaveBeenCalled()
     expect(terminateArkadeWorkerMock).toHaveBeenCalled()
     expect(clearArkadeDashboardStoreMock).toHaveBeenCalled()
-    expect(isArkadeLoadFailedForNetwork('signet')).toBe(true)
+    expect(isArkadeLoadFailedForNetwork('mutinynet')).toBe(true)
     expect(isArkadeLoadFailedForNetwork('testnet')).toBe(false)
   })
 })

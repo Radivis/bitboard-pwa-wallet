@@ -7,20 +7,20 @@ For network switching and Esplora, see [`descriptor-wallet-switching.md`](descri
 ## Separate rail, not BDK changeset
 
 - **On-chain** balance and history come from the BDK wallet (`DescriptorWalletData.changeSet`) and Esplora sync.
-- **Arkade** balance and history come from the Arkade operator and **ark-rs** (`bitboard-ark` WASM) in `arkade.worker`.
+- **Arkade** balance and history come from the Arkade operator and **ark-rs** (`bitboard-arkade` WASM) in `arkade.worker`.
 - Do not merge Arkade totals into the BDK dashboard balance.
 
 ## One Bitboard wallet, Arkade accounts per live network
 
 - Arkade state is stored as **accounts** in encrypted `wallet_secrets` (`arkadeAccounts[]`). Each account is this wallet's local Arkade partition for one ASP on one network, with its own `sdkPersistenceJson`, URLs, and canonical `operatorSignerPkHex` from `getInfo`.
 - `activeArkadeAccountIdByNetwork` picks the account used for session, dashboard, and sync on `mainnet`, `testnet`, and `signet` (Mutinynet). Switching operators is adding/switching accounts—not merging blobs across ASPs.
-- **BitboardArkPersistence** (`sdkPersistenceJson`, engine `ark-rs`, wire `version: 3`) includes `operator_identity` and an `offchain_vtxo_snapshot` inside `wallet_db`. Balance and history read from the loaded WASM session immediately after unlock (local snapshot + Esplora boarding + on-chain bumper).
+- **BitboardArkadePersistence** (`sdkPersistenceJson`, engine `ark-rs`, wire `version: 3`) includes `operator_identity` and an `offchain_vtxo_snapshot` inside `wallet_db`. Balance and history read from the loaded WASM session immediately after unlock (local snapshot + Esplora boarding + on-chain bumper).
 - **Operator sync** (`sync_with_operator`) refreshes the snapshot and re-exports `sdkPersistenceJson` to the active account row. `lastSuccessfulOperatorSyncAt` on the account mirrors `lastSuccessfulEsploraSyncAt` for on-chain BDK.
 - **Local-first:** Operator failure during a session keeps the last-synced blob; the dashboard may show a stale banner until operator sync succeeds this unlock.
 
 ## Persistence in the worker
 
-`bitboard-ark` exports a `BitboardArkPersistence` JSON envelope (`version: 3`) after critical RPCs, operator sync, and on `closeSession`. Unsupported or malformed blobs start from an empty `wallet_db` on session open.
+`bitboard-arkade` exports a `BitboardArkadePersistence` JSON envelope (`version: 3`) after critical RPCs, operator sync, and on `closeSession`. Unsupported or malformed blobs start from an empty `wallet_db` on session open.
 
 ### Offchain receive derivation cursor
 
@@ -39,7 +39,7 @@ Balance buckets (`pre_confirmed`, cooperatively spendable `confirmed`, `recovera
 
 ### Balance buckets and how they combine
 
-Arkade balance is not one monolithic number. Bitboard classifies funds into buckets at several layers, then maps them to dashboard fields in `bitboard-ark/src/balance_display.rs` (`build_arkade_balance_dto`).
+Arkade balance is not one monolithic number. Bitboard classifies funds into buckets at several layers, then maps them to dashboard fields in `bitboard-arkade/src/balance_display.rs` (`build_arkade_balance_dto`).
 
 #### Layer 1 — VTXO state (`ark-core` `VtxoList`)
 
@@ -107,9 +107,9 @@ Management → Arkade offers two paths:
 | **Unilateral exit** | No (after unroll) | Operator down or you need trustless exit; per-VTXO; multiple on-chain txs |
 | **Autonomous mode** | No (explicit, persisted switch) | Do not contact this ASP (down or untrusted); reuses `cached_operator_info` + per-VTXO `unilateral_exit_materials`; only unilateral exit allowed; Esplora still required; survives reload |
 
-Collaborative exit and unilateral unroll are implemented in `bitboard-ark` (`collaborative_redeem`, `proceed_unilateral_exit_step`, etc.). **Autonomous mode** branches the same unilateral exit RPCs to snapshot-backed materials instead of ASP indexer/batch APIs. The on-chain **bumper** is BIP84 account 0 (same HD account as the SegWit-0 descriptor row). **Boarding** uses the mnemonic master key as a single keypair, not that BIP84 account.
+Collaborative exit and unilateral unroll are implemented in `bitboard-arkade` (`collaborative_redeem`, `proceed_unilateral_exit_step`, etc.). **Autonomous mode** branches the same unilateral exit RPCs to snapshot-backed materials instead of ASP indexer/batch APIs. The on-chain **bumper** is BIP84 account 0 (same HD account as the SegWit-0 descriptor row). **Boarding** uses the mnemonic master key as a single keypair, not that BIP84 account.
 
-**Unilateral exit control:** Management links to `/wallet/arkade/unilateral-exit`. The control page is a view of the XState actor: merged DAG (React Flow + d3-dag), multi-leaf selection, one virtual tx per `ark_proceed_unilateral_exit_step`. Proceed is non-blocking; the machine polls until the current step has **1 confirmation**. A host virtual tx is marked `is_unrolled` only after **6 confirmations**. Shared-leaf and automation details: [unilateral-exit.md](unilateral-exit.md).
+**Unilateral exit control:** Management links to `/wallet/arkade/unilateral-exit`. The control page is a view of the XState actor: merged DAG (React Flow + d3-dag), multi-leaf selection, one virtual tx per `arkade_proceed_unilateral_exit_step`. Proceed is non-blocking; the machine polls until the current step has **1 confirmation**. A host virtual tx is marked `is_unrolled` only after **6 confirmations**. Shared-leaf and automation details: [unilateral-exit.md](unilateral-exit.md).
 
 ### Unilateral vs collaborative exit balance timing
 
@@ -167,7 +167,7 @@ Contract `ARK-REC-08`. Recover / migrate are not spend-locked. Renew / expiry / 
 
 After unroll, completing the exit spends on-chain UTXOs that fund the exit PSBT. Upstream `ark-client` coin-select requires Esplora `confirmation_blocktime` and skips inputs without it. Bitboard vendors a permissive fork in `third_party/ark-client/src/coin_select.rs` (`coin_select_vtxo_outpoints_for_onchain`):
 
-- **Why:** arkade-regtest and other minimal Esplora backends often omit `block_time` even for confirmed txs. Requiring blocktime blocked REG-04 completion tests and local unilateral-exit debugging. Production paths usually get blocktime from Esplora; `bitboard-ark` also backfills from `/tx/{txid}/status` when the address UTXO listing omits it.
+- **Why:** arkade-regtest and other minimal Esplora backends often omit `block_time` even for confirmed txs. Requiring blocktime blocked REG-04 completion tests and local unilateral-exit debugging. Production paths usually get blocktime from Esplora; `bitboard-arkade` also backfills from `/tx/{txid}/status` when the address UTXO listing omits it.
 - **Behavior:** Missing blocktime is treated as epoch zero for timelock checks; inputs are still selectable. The completion fee estimate includes `missingBlocktimeInputs` (virtual outpoint + on-chain outpoint) and the UI shows a non-blocking warning (contract `ARK-EXIT-04`).
 - **Not a mainnet trust relaxation by design:** The fork exists for regtest convenience and indexer-gap tolerance; missing blocktime should be rare on well-behaved Esplora.
 

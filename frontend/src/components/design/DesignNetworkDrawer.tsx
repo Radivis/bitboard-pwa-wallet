@@ -58,6 +58,7 @@ const CHAIN_BADGE_STYLE: Record<NetworkMode, { mark: string; color: string; back
   mainnet: { mark: '₿', color: '#F7931A', background: 'rgba(247,147,26,0.15)' },
   testnet: { mark: 'T4', color: '#379C3C', background: 'rgba(35,114,39,0.15)' },
   signet: { mark: 'S', color: '#379C3C', background: 'rgba(35,114,39,0.15)' },
+  mutinynet: { mark: 'M', color: '#379C3C', background: 'rgba(35,114,39,0.15)' },
   lab: { mark: '', color: '#DB2777', background: 'rgba(192,38,105,0.1)' },
   regtest: { mark: 'R', color: '#DB2777', background: 'rgba(192,38,105,0.1)' },
 }

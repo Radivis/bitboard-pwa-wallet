@@ -2,7 +2,7 @@ import type { StateStorage } from 'zustand/middleware'
 import {
   blockWalletDatabaseAccessForTeardown,
   getDatabase,
-  ensureMigrated,
+  ensureSchemaAndDataMigrated,
   resetWalletDatabaseAccessTeardownGuard,
 } from './database'
 import {
@@ -45,7 +45,7 @@ export function resetSqliteStorageTeardownGuard(): void {
 export const sqliteStorage: StateStorage = {
   async getItem(key: string): Promise<string | null> {
     if (sqliteStorageTeardownBlocked) return null
-    await ensureMigrated()
+    await ensureSchemaAndDataMigrated()
     const settingsRecord = await getDatabase()
       .selectFrom('settings')
       .select('value')
@@ -56,7 +56,7 @@ export const sqliteStorage: StateStorage = {
 
   async setItem(key: string, value: string): Promise<void> {
     if (sqliteStorageTeardownBlocked) return
-    await ensureMigrated()
+    await ensureSchemaAndDataMigrated()
     await getDatabase()
       .insertInto('settings')
       .values({ key, value })
@@ -66,7 +66,7 @@ export const sqliteStorage: StateStorage = {
 
   async removeItem(key: string): Promise<void> {
     if (sqliteStorageTeardownBlocked) return
-    await ensureMigrated()
+    await ensureSchemaAndDataMigrated()
     await getDatabase()
       .deleteFrom('settings')
       .where('key', '=', key)

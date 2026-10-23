@@ -5,6 +5,8 @@ import {
 } from '@/lib/lightning/lightning-input-limits'
 import {
   bolt11NetworkModeFromPrefix,
+  bolt11InvoiceMatchesAppNetwork,
+  bolt11SignetFamilyNeedsConfirmation,
   isLightningAddress,
   isLnurlPayDestination,
   isValidBolt11Invoice,
@@ -36,7 +38,18 @@ export function isBolt11NetworkMismatch(
   if (!isValidBolt11Invoice(normalizedRecipient)) return false
   const invoiceNetwork = bolt11NetworkModeFromPrefix(normalizedRecipient)
   if (invoiceNetwork == null) return false
-  return invoiceNetwork !== networkMode
+  if (bolt11SignetFamilyNeedsConfirmation(invoiceNetwork, networkMode)) return false
+  return !bolt11InvoiceMatchesAppNetwork(invoiceNetwork, networkMode)
+}
+
+export function bolt11SignetFamilyNeedsConfirmationForRecipient(
+  normalizedRecipient: string,
+  networkMode: NetworkMode,
+): boolean {
+  if (!isValidBolt11Invoice(normalizedRecipient)) return false
+  const invoiceNetwork = bolt11NetworkModeFromPrefix(normalizedRecipient)
+  if (invoiceNetwork == null) return false
+  return bolt11SignetFamilyNeedsConfirmation(invoiceNetwork, networkMode)
 }
 
 export type NeedsUserLightningAmountInput = {
@@ -182,6 +195,8 @@ export type CanBuildLightningSendInput = {
   matchingLightningConnectionsCount: number
   hasLightningWalletSelected: boolean
   bolt11NetworkMismatch: boolean
+  signetFamilyNeedsConfirmation?: boolean
+  signetFamilyInvoiceConfirmed?: boolean
   bolt11DecodeOk: boolean
   needsUserLightningAmount: boolean
   lightningPayAmountSats: number
@@ -198,6 +213,8 @@ export function canBuildLightningSend({
   matchingLightningConnectionsCount,
   hasLightningWalletSelected,
   bolt11NetworkMismatch,
+  signetFamilyNeedsConfirmation = false,
+  signetFamilyInvoiceConfirmed = false,
   bolt11DecodeOk,
   needsUserLightningAmount,
   lightningPayAmountSats,
@@ -214,6 +231,7 @@ export function canBuildLightningSend({
     ) &&
     hasLightningWalletSelected &&
     !bolt11NetworkMismatch &&
+    (!signetFamilyNeedsConfirmation || signetFamilyInvoiceConfirmed) &&
     bolt11DecodeOk &&
     isLightningAmountInputOk(needsUserLightningAmount, amountSats) &&
     lightningPayAmountSats >= 1 &&

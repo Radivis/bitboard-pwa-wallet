@@ -33,7 +33,7 @@ import {
 
 const saveParams = {
   walletId: 1,
-  networkMode: 'signet' as const,
+  networkMode: 'mutinynet' as const,
   arkadeAccountId: 'conn-1',
 }
 
