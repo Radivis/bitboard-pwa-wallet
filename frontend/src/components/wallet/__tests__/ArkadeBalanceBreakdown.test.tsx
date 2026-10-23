@@ -12,8 +12,8 @@ const fiatRatesQueryMock = vi.hoisted(() =>
 )
 
 const walletStoreState = vi.hoisted(() => ({
-  networkMode: 'signet' as 'signet' | 'mainnet',
-  loadedDescriptorWallet: null as { networkMode: 'signet' | 'mainnet' } | null,
+  networkMode: 'mutinynet' as 'signet' | 'mainnet',
+  loadedDescriptorWallet: null as { networkMode: 'mutinynet' | 'mainnet' } | null,
 }))
 
 vi.mock('@/hooks/useMainnetFiatRatesQuery', () => ({
@@ -36,7 +36,7 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
 
 describe('ArkadeBalanceBreakdown', () => {
   beforeEach(() => {
-    walletStoreState.networkMode = 'signet'
+    walletStoreState.networkMode = 'mutinynet'
     walletStoreState.loadedDescriptorWallet = null
     useFiatDenominationStore.setState({ fiatDenominationMode: false })
     fiatRatesQueryMock.mockReturnValue({ data: undefined, isPending: false })

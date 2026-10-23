@@ -152,7 +152,7 @@ The wallet ships same-origin proxies under [`frontend/api/`](../frontend/api/):
 - [`api/esplora/[...path].ts`](../frontend/api/esplora/[...path].ts) — Esplora endpoints (provider + network allowlist).
 - [`api/faucet/[...path].ts`](../frontend/api/faucet/[...path].ts) — Testnet faucets (id allowlist).
 - [`api/fiat-rates/[...path].ts`](../frontend/api/fiat-rates/[...path].ts) — Kraken / CoinGecko / blockchain.info ticker endpoints.
-- [`api/arkade/operator/[...path].ts`](../frontend/api/arkade/operator/[...path].ts) — Arkade operator (mainnet/signet); unary calls are buffered, **SSE** paths (`v1/batch/events`, script subscription streams, `v1/txs` with `Accept: text/event-stream`) stream through with `maxDuration` **300s**.
+- [`api/arkade/operator/[...path].ts`](../frontend/api/arkade/operator/[...path].ts) — Arkade operator (mainnet/signet/mutinynet); unary calls are buffered, **SSE** paths (`v1/batch/events`, script subscription streams, `v1/txs` with `Accept: text/event-stream`) stream through with `maxDuration` **300s**.
 
 ### Rule: handlers must be fully self-contained
 

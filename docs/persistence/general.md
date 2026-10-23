@@ -16,8 +16,19 @@ Initial migration: `frontend/src/db/migrations/wallet/20260417120000_initial_wal
 | `settings` | Key/value store for Zustand persist and app config |
 | `library_history` | Article visit timestamps |
 | `library_articles` | Article favorites |
+| `device_data_migrations` | One row per device-level data migration: `migration_name`, `applied_at`, plaintext `result` |
+| `wallet_data_migrations` | One marker per (`wallet_id`, `migration_name`) with `applied_at`; no result column |
 
 Bookkeeping tables: `schema_migrations`, `schema_migrations_lock` (Kysely migrator).
+
+### Data migrations
+
+Rewrites of stored data (as opposed to schema changes) live in `frontend/src/db/data-migrations/`.
+
+- **Device migrations** (`device-data-migrations.ts`) rewrite plaintext device settings. `ensureSchemaAndDataMigrated()` in `database.ts` is the single guard before any app-database access: it runs schema migrations, then device data migrations, once per opened database (reset by `destroyDatabase`). Schema-only migration is not exported. Their `result` may only hold facts derived from plaintext settings.
+- **Wallet migrations** (`wallet-data-migration-registry.ts`) rewrite the encrypted `WalletSecretsPayload`. They run for every wallet at unlock, before any rail loads (`runPendingWalletDataMigrationsForUnlock`). A failure fails the unlock. Each wallet's payload is re-encrypted and its markers inserted in one transaction with the CAS revision check.
+- **Privacy rule:** every wallet gets every marker, and its payload is always re-encrypted, whether or not the migration changed anything. Neither the markers nor `wallet_secrets.updated_at` should reveal wallet contents. Per-wallet outcomes belong in the encrypted payload.
+- New wallets get all markers in the same transaction that stores their secrets. `deleteWalletCompletely` removes them.
 
 Migration failure reports are written to OPFS as `wallet-schema-migration-failure.json` (`wallet-migration-failure-report.ts`).
 

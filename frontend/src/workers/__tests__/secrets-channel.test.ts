@@ -25,6 +25,10 @@ vi.mock('../arkade-factory', () => ({
   }),
 }));
 
+vi.mock('../bark-factory', () => ({
+  getBarkWorkerIfExists: () => null,
+}));
+
 describe('secrets-channel', () => {
   beforeEach(async () => {
     vi.clearAllMocks();

@@ -65,3 +65,33 @@ services:
     container_name: bitboard-regtest-emulator
   solver:
     container_name: bitboard-regtest-solver
+
+  # Bark server. Profile `bark` only — `start --profile ark` does not boot it.
+  # Image pin matches bark-wallet 0.7.1 (protocol versions 4 through 5).
+  # Mount the config directory. Binding one toml makes Docker create a
+  # root-owned directory when that file is missing, and git checkout cannot
+  # replace it. The image start script reads CAPTAIND_CONFIG.
+  captaind:
+    image: docker.io/secondark/captaind:0.7.1
+    container_name: bitboard-regtest-captaind
+    profiles: ["bark"]
+    restart: on-failure
+    depends_on:
+      - bitcoin
+    environment:
+      CAPTAIND_CONFIG: /captaind-config/${BARK_CAPTAIND_CONFIG_FILE:-captaind.toml}
+    volumes:
+      - captaind_datadir:/data/captaind
+      - captaind_postgres:/var/lib/postgresql/data
+      - type: bind
+        source: ../../docker/captaind
+        target: /captaind-config
+        read_only: true
+        bind:
+          create_host_path: false
+    ports:
+      - "${CAPTAIND_PORT:-3535}:3535"
+
+volumes:
+  captaind_datadir:
+  captaind_postgres:

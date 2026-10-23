@@ -282,6 +282,47 @@ fn sign_transaction_produces_finalized_psbt() {
 }
 
 #[test]
+fn sign_funding_psbt_does_not_insert_the_transaction_until_apply() {
+    let mut wallet = funded_wallet();
+    let psbt = transaction::build_transaction(
+        &mut wallet,
+        VALID_SIGNET_ADDRESS,
+        SEND_AMOUNT,
+        FEE_RATE,
+        Network::Testnet,
+    )
+    .expect("Build should succeed");
+
+    let signed =
+        transaction::sign_funding_psbt(&wallet, &psbt.to_string()).expect("Signing should succeed");
+    assert!(
+        signed.psbt_base64.parse::<bitcoin::Psbt>().is_ok(),
+        "Signed PSBT must stay parseable"
+    );
+    assert!(
+        !wallet_lists_txid(&wallet, &signed.txid),
+        "Signing must not insert the funding transaction"
+    );
+
+    transaction::apply_unconfirmed_funding_transaction(
+        &mut wallet,
+        &signed.raw_tx_hex,
+        1_700_000_000,
+    )
+    .expect("Apply should succeed");
+    assert!(
+        wallet_lists_txid(&wallet, &signed.txid),
+        "Applied funding transaction must be visible to the wallet"
+    );
+}
+
+fn wallet_lists_txid(wallet: &bdk_wallet::Wallet, txid: &str) -> bool {
+    wallet
+        .transactions()
+        .any(|canonical_tx| canonical_tx.tx_node.txid.to_string() == txid)
+}
+
+#[test]
 fn extract_transaction_returns_valid_tx() {
     let mut wallet = funded_wallet();
     let mut psbt = transaction::build_transaction(

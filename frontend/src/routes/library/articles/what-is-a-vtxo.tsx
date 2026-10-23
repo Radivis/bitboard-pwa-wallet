@@ -16,7 +16,12 @@ export const article: LibraryArticle = {
           A <strong>VTXO</strong> (virtual UTXO) is an offchain Bitcoin balance unit in Arkade.
           Think of it as a signed promise that you own a certain amount of Bitcoin, enforced by
           on-chain rules if anything goes wrong—similar in spirit to how Lightning holds channel
-          balances offchain, but using a different design with an operator.
+          balances offchain, but using a different design with an operator. Bark uses the same word
+          for a coin with a different shape; see{' '}
+          <ArticleLink slug="differences-between-vtxos-in-arkade-and-bark">
+            Differences between VTXOs in Arkade and Bark
+          </ArticleLink>
+          .
         </p>
       </ArticleSection>
 

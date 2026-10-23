@@ -12,7 +12,7 @@ Vendored from [bitcoindevkit/rust-esplora-client](https://github.com/bitcoindevk
 |------|---------|-----|---------------|
 | **WASM request timeout** | Upstream `AsyncClient::Builder::timeout` applies only on native (`reqwest::Client::timeout`). On `wasm32`, reqwest has no client-level timeout, so long-hanging Esplora calls could block the PWA worker indefinitely. | Store `request_timeout` from the builder on WASM and apply `.timeout(d)` on each individual request. | `src/async.rs` |
 
-Consumers: `ark-bdk-wallet` (on-chain sync), `bitboard-ark` (unilateral exit fee rate, UTXO blocktime backfill). See also [`../ark-bdk-wallet/README.md`](../ark-bdk-wallet/README.md).
+Consumers: `ark-bdk-wallet` (on-chain sync), `bitboard-arkade` (unilateral exit fee rate, UTXO blocktime backfill). See also [`../ark-bdk-wallet/README.md`](../ark-bdk-wallet/README.md).
 
 When syncing with upstream BDK releases, re-apply the WASM timeout hunk and verify Esplora sync in the browser.
 

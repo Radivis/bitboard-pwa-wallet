@@ -1,0 +1,214 @@
+#![cfg(not(target_arch = "wasm32"))]
+
+mod common;
+
+use bitboard_crypto::p2a_cpfp::{
+    BARK_CPFP_INSUFFICIENT_FUNDS, BARK_CPFP_NEEDED_SATS_LABEL, is_pay_to_anchor_cpfp_child,
+    sign_p2a_cpfp_child,
+};
+use bitboard_crypto::wallet;
+use bitcoin::consensus::encode::{deserialize_hex, serialize_hex};
+use bitcoin::hashes::Hash;
+use bitcoin::transaction::Version;
+use bitcoin::{Amount, OutPoint, ScriptBuf, Transaction, TxIn, TxOut, Txid};
+use common::wallet_fixtures::{
+    DEFAULT_ADDRESS_TYPE, DEFAULT_NETWORK, create_test_wallet, fund_test_wallet,
+};
+
+const FUNDING_AMOUNT: u64 = 100_000;
+
+fn parent_with_anchor() -> Transaction {
+    Transaction {
+        version: Version::TWO,
+        lock_time: bitcoin::absolute::LockTime::ZERO,
+        input: vec![TxIn {
+            previous_output: OutPoint::new(Txid::from_byte_array([2u8; 32]), 0),
+            ..Default::default()
+        }],
+        output: vec![TxOut {
+            value: Amount::ZERO,
+            script_pubkey: ScriptBuf::new_p2a(),
+        }],
+    }
+}
+
+#[test]
+fn parent_without_anchor_is_rejected() {
+    let mut wallet = create_test_wallet(DEFAULT_NETWORK, DEFAULT_ADDRESS_TYPE);
+    fund_test_wallet(&mut wallet, FUNDING_AMOUNT);
+    let parent = Transaction {
+        version: Version::TWO,
+        lock_time: bitcoin::absolute::LockTime::ZERO,
+        input: vec![TxIn::default()],
+        output: vec![TxOut {
+            value: Amount::from_sat(1_000),
+            script_pubkey: ScriptBuf::new(),
+        }],
+    };
+    let error =
+        sign_p2a_cpfp_child(&mut wallet, &serialize_hex(&parent), 2.0).expect_err("no anchor");
+    let message = error.to_string();
+    assert!(message.contains("no Pay-to-Anchor"));
+    assert!(!message.contains(BARK_CPFP_INSUFFICIENT_FUNDS));
+}
+
+#[test]
+fn unfunded_wallet_reports_insufficient_confirmed_funds() {
+    let mut wallet = create_test_wallet(DEFAULT_NETWORK, DEFAULT_ADDRESS_TYPE);
+    let parent = parent_with_anchor();
+    let error =
+        sign_p2a_cpfp_child(&mut wallet, &serialize_hex(&parent), 2.0).expect_err("no coins");
+    assert!(error.to_string().contains(BARK_CPFP_INSUFFICIENT_FUNDS));
+}
+
+#[test]
+fn insufficient_funds_error_names_the_needed_sats() {
+    let mut wallet = create_test_wallet(DEFAULT_NETWORK, DEFAULT_ADDRESS_TYPE);
+    let parent = parent_with_anchor();
+    let message = sign_p2a_cpfp_child(&mut wallet, &serialize_hex(&parent), 2.0)
+        .expect_err("no coins")
+        .to_string();
+    let needed_prefix = format!("{BARK_CPFP_INSUFFICIENT_FUNDS}: {BARK_CPFP_NEEDED_SATS_LABEL}=");
+    let needed_sats: u64 = message
+        .split_once(&needed_prefix)
+        .and_then(|(_, rest)| rest.split_once(';'))
+        .map(|(needed, _)| needed.parse().expect("needed sats is a number"))
+        .expect("error names the needed sats");
+    assert!(needed_sats > 0);
+}
+
+#[test]
+fn funded_wallet_signs_a_version_3_child_that_spends_the_anchor() {
+    let mut wallet = create_test_wallet(DEFAULT_NETWORK, DEFAULT_ADDRESS_TYPE);
+    fund_test_wallet(&mut wallet, FUNDING_AMOUNT);
+    let parent = parent_with_anchor();
+    let child_hex =
+        sign_p2a_cpfp_child(&mut wallet, &serialize_hex(&parent), 2.0).expect("signed child");
+    let child: Transaction = deserialize_hex(&child_hex).expect("child hex");
+    assert_eq!(child.version, Version(3));
+    assert!(
+        child
+            .input
+            .iter()
+            .any(|input| input.previous_output.txid == parent.compute_txid()),
+        "child must spend the parent anchor"
+    );
+    assert!(child.input.len() >= 2, "child also spends a wallet coin");
+    assert!(is_pay_to_anchor_cpfp_child(&child));
+    assert!(!is_pay_to_anchor_cpfp_child(&parent));
+}
+
+#[test]
+fn funded_wallet_history_is_not_marked_as_a_cpfp_fee_bump() {
+    let mut wallet = create_test_wallet(DEFAULT_NETWORK, DEFAULT_ADDRESS_TYPE);
+    fund_test_wallet(&mut wallet, FUNDING_AMOUNT);
+    let history = wallet::get_transaction_list(&wallet);
+    assert!(!history.is_empty(), "funded wallet has history");
+    assert!(history.iter().all(|row| !row.is_cpfp_fee_bump));
+}
+
+/// A coin that covers the package fee but leaves dust change must not block a larger coin.
+#[test]
+fn smaller_coin_dust_change_falls_back_to_the_larger_confirmed_coin() {
+    let mut wallet = create_test_wallet(DEFAULT_NETWORK, DEFAULT_ADDRESS_TYPE);
+    let parent = wide_parent(160);
+    let fee_rate = bitcoin::FeeRate::from_sat_per_vb(2).expect("2 sat/vb");
+    let parent_fee_sats = (parent.weight() * fee_rate).to_sat();
+    let small_coin_sats = parent_fee_sats + 250;
+    let large_coin_sats = parent_fee_sats + 80_000;
+    fund_two_confirmed_coins(&mut wallet, small_coin_sats, large_coin_sats);
+
+    let child_hex = sign_p2a_cpfp_child(&mut wallet, &serialize_hex(&parent), 2.0)
+        .expect("larger confirmed coin pays the fee and a non-dust change");
+    let child: Transaction = deserialize_hex(&child_hex).expect("child hex");
+    assert!(is_pay_to_anchor_cpfp_child(&child));
+    let change_sats = child
+        .output
+        .iter()
+        .map(|output| output.value.to_sat())
+        .max()
+        .expect("change output");
+    assert!(
+        change_sats > 10_000,
+        "change {change_sats} should come from the larger coin, parent fee was {parent_fee_sats}"
+    );
+}
+
+fn wide_parent(filler_outputs: usize) -> Transaction {
+    let mut output = vec![TxOut {
+        value: Amount::ZERO,
+        script_pubkey: ScriptBuf::new_p2a(),
+    }];
+    let filler_script = ScriptBuf::from_bytes(vec![0x51; 32]);
+    for _ in 0..filler_outputs {
+        output.push(TxOut {
+            value: Amount::ZERO,
+            script_pubkey: filler_script.clone(),
+        });
+    }
+    Transaction {
+        version: Version::TWO,
+        lock_time: bitcoin::absolute::LockTime::ZERO,
+        input: vec![TxIn {
+            previous_output: OutPoint::new(Txid::from_byte_array([3u8; 32]), 0),
+            ..Default::default()
+        }],
+        output,
+    }
+}
+
+fn fund_two_confirmed_coins(wallet: &mut bdk_wallet::Wallet, small_sats: u64, large_sats: u64) {
+    use std::collections::BTreeSet;
+    use std::sync::Arc;
+
+    use bdk_wallet::chain::local_chain::CheckPoint;
+    use bdk_wallet::chain::{BlockId, ConfirmationBlockTime, TxUpdate};
+    use bdk_wallet::{KeychainKind, Update};
+    use bitcoin::BlockHash;
+
+    let receive_address = wallet.peek_address(KeychainKind::External, 0).address;
+    let script_pubkey = receive_address.script_pubkey();
+    let funding_tx = Transaction {
+        version: Version::TWO,
+        lock_time: bitcoin::absolute::LockTime::ZERO,
+        input: vec![TxIn {
+            previous_output: OutPoint::new(Txid::from_byte_array([4u8; 32]), 0),
+            ..Default::default()
+        }],
+        output: vec![
+            TxOut {
+                value: Amount::from_sat(small_sats),
+                script_pubkey: script_pubkey.clone(),
+            },
+            TxOut {
+                value: Amount::from_sat(large_sats),
+                script_pubkey,
+            },
+        ],
+    };
+    let txid = funding_tx.compute_txid();
+    let block_id = BlockId {
+        height: 1_000,
+        hash: BlockHash::all_zeros(),
+    };
+    let anchor = ConfirmationBlockTime {
+        block_id,
+        confirmation_time: 1_700_000_000,
+    };
+    let mut tx_update = TxUpdate::<ConfirmationBlockTime>::default();
+    tx_update.txs.push(Arc::new(funding_tx));
+    tx_update.anchors = BTreeSet::from([(anchor, txid)]);
+    let checkpoint = CheckPoint::new(BlockId {
+        height: 0,
+        hash: BlockHash::all_zeros(),
+    })
+    .push(block_id)
+    .expect("ascending heights");
+    wallet
+        .apply_update(Update {
+            tx_update,
+            chain: Some(checkpoint),
+            ..Default::default()
+        })
+        .expect("funding update applies");
+}

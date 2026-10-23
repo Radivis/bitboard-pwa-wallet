@@ -131,6 +131,20 @@ async function waitForSendLightningPayReady(page: Page) {
   })
 }
 
+/** Resolved LNURL invoices use `lntbs`, which Signet and Mutinynet share. */
+async function confirmSignetFamilyInvoiceModal(page: Page) {
+  const confirmationDialog = page.getByRole('dialog', {
+    name: 'Confirm invoice network',
+  })
+  await expect(confirmationDialog).toBeVisible({ timeout: 15_000 })
+  await expect(confirmationDialog).toContainText(
+    'Signet and Mutinynet invoices share a BOLT11 prefix',
+  )
+  await confirmationDialog
+    .getByRole('button', { name: 'Confirm and pay' })
+    .click()
+}
+
 test.describe('LNURL pay send @nwc', () => {
   test.beforeEach(async () => {
     test.skip(
@@ -162,6 +176,7 @@ test.describe('LNURL pay send @nwc', () => {
     const payButton = page.getByRole('button', { name: /pay with lightning/i })
     await expect(payButton).toBeEnabled({ timeout: 15_000 })
     await payButton.click()
+    await confirmSignetFamilyInvoiceModal(page)
 
     await expect(page.getByText('Lightning payment sent!')).toBeVisible({
       timeout: 20_000,
@@ -195,6 +210,7 @@ test.describe('LNURL pay send @nwc', () => {
     const payButton = page.getByRole('button', { name: /pay with lightning/i })
     await expect(payButton).toBeEnabled({ timeout: 15_000 })
     await payButton.click()
+    await confirmSignetFamilyInvoiceModal(page)
 
     await expect(page.getByText('Lightning payment sent!')).toBeVisible({
       timeout: 20_000,

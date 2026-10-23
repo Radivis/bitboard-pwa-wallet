@@ -71,6 +71,7 @@ export function useOnchainFeeRateSelection(networkMode: NetworkMode) {
     handleSelectFeePreset,
     handleSelectCustomMode,
     effectiveFeeRate,
+    customFeeParsed,
     customFeeRate,
     setCustomFeeRate,
     useCustomFee,

@@ -1,4 +1,5 @@
 import type { TransactionDetails } from '@/workers/crypto-types'
+import type { BarkMovementRow } from '@/workers/bark-api'
 import type { ArkadePaymentRow } from '@/workers/arkade-api'
 import {
   formatTxDirection,
@@ -13,7 +14,7 @@ import {
 import { getMatchingLightningConnectionsForDashboard } from '@/lib/lightning/lightning-connection-utils'
 import { runWithLightningConnectionSync } from '@/lib/wallet/lifecycle/lightning-sync-lifecycle-orchestrator'
 import { appQueryClient } from '@/lib/shared/app-query-client'
-import { ensureMigrated, getDatabase } from '@/db/database'
+import { ensureSchemaAndDataMigrated, getDatabase } from '@/db/database'
 import { loadWalletSecretsPayload } from '@/db/wallet-persistence'
 import {
   snapshotMapFromPayload,
@@ -119,7 +120,7 @@ export async function fetchLightningPaymentsForActiveWallet(): Promise<
     return { payments: [], patches: [] }
   }
 
-  await ensureMigrated()
+  await ensureSchemaAndDataMigrated()
 
   const snapshotById = await readSnapshotMapForActiveWallet()
 
@@ -216,7 +217,7 @@ export async function fetchLightningBalancesForDashboard(): Promise<LightningBal
     return { lightningBalanceRows: [], totalSats: 0, patches: [] }
   }
 
-  await ensureMigrated()
+  await ensureSchemaAndDataMigrated()
 
   const snapshotById = await readSnapshotMapForActiveWallet()
 
@@ -373,6 +374,7 @@ export type DashboardActivityItem =
       payment: ArkadePaymentRow
       activityLabel?: string
     }
+  | { kind: 'bark'; movement: BarkMovementRow }
 
 /** Sort key so unconfirmed on-chain txs stay above confirmed history (see lab mempool ordering). */
 const UNCONFIRMED_CHAIN_SORT_PRIORITY = Number.MAX_SAFE_INTEGER
@@ -392,6 +394,10 @@ function arkadeSortTime(payment: ArkadePaymentRow): number {
   return payment.timestamp > 0 ? payment.timestamp : 0
 }
 
+function barkSortTime(movement: BarkMovementRow): number {
+  return movement.createdAtUnixSeconds
+}
+
 function dashboardActivitySortTime(item: DashboardActivityItem): number {
   if (item.kind === 'chain') {
     return chainSortTime(item.tx)
@@ -399,7 +405,10 @@ function dashboardActivitySortTime(item: DashboardActivityItem): number {
   if (item.kind === 'lightning') {
     return lightningSortTime(item.payment)
   }
-  return arkadeSortTime(item.payment)
+  if (item.kind === 'arkade') {
+    return arkadeSortTime(item.payment)
+  }
+  return barkSortTime(item.movement)
 }
 
 /** Boarding onboard often shares a block second with the funding on-chain send. */
@@ -522,11 +531,13 @@ export function mergeAndSortDashboardActivity(
   onChain: TransactionDetails[],
   lightning: LightningPaymentWithWallet[],
   arkade: ArkadePaymentRow[] = [],
+  bark: BarkMovementRow[] = [],
 ): DashboardActivityItem[] {
   const items: DashboardActivityItem[] = [
     ...onChain.map((tx) => ({ kind: 'chain' as const, tx })),
     ...lightning.map((payment) => ({ kind: 'lightning' as const, payment })),
     ...arkade.map((payment) => ({ kind: 'arkade' as const, payment })),
+    ...bark.map((movement) => ({ kind: 'bark' as const, movement })),
   ]
 
   items.sort(compareDashboardActivityItems)

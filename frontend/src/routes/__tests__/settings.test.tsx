@@ -68,6 +68,7 @@ describe('Settings routes', () => {
       expect(screen.getByTestId('periodic-sync-row-onchain')).toBeInTheDocument()
       expect(screen.queryByTestId('periodic-sync-row-lightning')).not.toBeInTheDocument()
       expect(screen.queryByTestId('periodic-sync-row-arkade')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('periodic-sync-row-bark')).not.toBeInTheDocument()
     })
 
     it('shows Lightning and Arkade periodic sync rows when those features are enabled', () => {
@@ -78,6 +79,14 @@ describe('Settings routes', () => {
       expect(screen.getByTestId('periodic-sync-row-onchain')).toBeInTheDocument()
       expect(screen.getByTestId('periodic-sync-row-lightning')).toBeInTheDocument()
       expect(screen.getByTestId('periodic-sync-row-arkade')).toBeInTheDocument()
+      expect(screen.queryByTestId('periodic-sync-row-bark')).not.toBeInTheDocument()
+    })
+
+    it('shows a Bark periodic sync row when Bark is enabled', () => {
+      featureStoreState.isPeriodicSyncEnabled = true
+      featureStoreState.isBarkEnabled = true
+      renderWithProviders(<SettingsMainPage />)
+      expect(screen.getByTestId('periodic-sync-row-bark')).toBeInTheDocument()
     })
 
     it('network selector commits loaded descriptor wallet after switch completes', async () => {
@@ -364,6 +373,40 @@ describe('Settings routes', () => {
       await user.click(screen.getByRole('switch', { name: 'Enable periodic sync' }))
 
       expect(featureStoreState.setIsPeriodicSyncEnabled).toHaveBeenCalledWith(true)
+    })
+
+    it('opens Bark confirmation modal when enabling the toggle', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<SettingsFeaturesPage />)
+
+      const barkSwitch = screen.getByRole('switch', { name: 'Enable Bark rail' })
+      expect(barkSwitch).not.toBeChecked()
+
+      await user.click(barkSwitch)
+
+      expect(screen.getByRole('heading', { name: 'Enable Bark', level: 2 })).toBeInTheDocument()
+      expect(screen.getByText(/Bark support is brand new/i)).toBeInTheDocument()
+      expect(screen.getByText(/Signet is strongly advised/i)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Enable Bark' })).toBeDisabled()
+      expect(featureStoreState.setIsBarkEnabled).not.toHaveBeenCalled()
+    })
+
+    it('enables Bark after acknowledging the new-feature warning', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<SettingsFeaturesPage />)
+
+      await user.click(screen.getByRole('switch', { name: 'Enable Bark rail' }))
+      await user.click(
+        screen.getByRole('checkbox', {
+          name: /I understand Bark is new/i,
+        }),
+      )
+
+      const enableBark = screen.getByRole('button', { name: 'Enable Bark' })
+      await expect(enableBark).toBeEnabled()
+      await user.click(enableBark)
+
+      expect(featureStoreState.setIsBarkEnabled).toHaveBeenCalledWith(true)
     })
 
     it('enables Arkade after acknowledging the new-feature warning', async () => {

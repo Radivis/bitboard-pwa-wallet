@@ -5,7 +5,7 @@ alwaysApply: true
 
 # WASM rebuild workflow
 
-On-chain sync, encryption, Lightning, and Ark logic run in **WebAssembly** loaded by the frontend worker. `npm run dev` does **not** rebuild WASM — only `npm run build` runs `build:wasm` automatically. Edits under the Rust crates below do not reach the browser until WASM is rebuilt.
+On-chain sync, encryption, Lightning, and Arkade logic run in **WebAssembly** loaded by the frontend worker. `npm run dev` does **not** rebuild WASM — only `npm run build` runs `build:wasm` automatically. Edits under the Rust crates below do not reach the browser until WASM is rebuilt.
 
 ## WASM source crates
 
@@ -14,7 +14,7 @@ On-chain sync, encryption, Lightning, and Ark logic run in **WebAssembly** loade
 | `crypto/` | `bitboard_crypto_bg.wasm` (root pkg) |
 | `bitboard-encryption/` | `bitboard_encryption/` |
 | `bitboard-lightning/` | `bitboard_lightning/` |
-| `bitboard-ark/` | `bitboard_ark/` |
+| `bitboard-arkade/` | `bitboard_arkade/` |
 
 Also treat changes as WASM-affecting when you touch **path dependencies** those crates use (e.g. `bitboard-wasm-sleep/`, `third_party/ark-bdk-wallet/`, `third_party/esplora-client/` when pulled in by a WASM crate).
 
@@ -38,7 +38,7 @@ Single crate (faster when only one package changed):
 
 ```bash
 cd crypto && wasm-pack build --target bundler --out-dir ../frontend/src/wasm-pkg
-# encryption / lightning / ark: same pattern, out-dir as in frontend/package.json "build:wasm"
+# encryption / lightning / arkade: same pattern, out-dir as in frontend/package.json "build:wasm"
 ```
 
 Requires Rust + `wasm-pack` on PATH (`source "$HOME/.cargo/env"` if needed).

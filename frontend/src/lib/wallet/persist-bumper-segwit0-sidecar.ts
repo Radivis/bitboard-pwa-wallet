@@ -1,4 +1,4 @@
-import { ensureMigrated, getDatabase, loadWalletSecretsPayload } from '@/db'
+import { ensureSchemaAndDataMigrated, getDatabase, loadWalletSecretsPayload } from '@/db'
 import {
   findDescriptorWallet,
   updateDescriptorWalletChangeset,
@@ -18,7 +18,7 @@ async function loadExistingSegwit0DescriptorRow(params: {
   walletId: number
   network: BitcoinNetwork
 }): Promise<DescriptorWalletData | undefined> {
-  await ensureMigrated()
+  await ensureSchemaAndDataMigrated()
   const secretsPayload = await loadWalletSecretsPayload(getDatabase(), params.walletId)
   return findDescriptorWallet({
     secretsPayload,

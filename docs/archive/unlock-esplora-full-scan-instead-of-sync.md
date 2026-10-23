@@ -91,9 +91,9 @@ Full-scan UI: `Scanning blockchain…` then `Wallet synced` with a shared toast 
 
 ## Root cause 2 — Arkade session open blocks on a cold bumper `full_scan`
 
-Unlock starts Arkade load in parallel with on-chain post-unlock sync (`runUnlockLoad`). WASM `ArkSession::open` **awaits** Esplora before returning, so the spinner “Establishing Arkade session…” includes the bumper scan:
+Unlock starts Arkade load in parallel with on-chain post-unlock sync (`runUnlockLoad`). WASM `ArkadeSession::open` **awaits** Esplora before returning, so the spinner “Establishing Arkade session…” includes the bumper scan:
 
-```237:237:bitboard-ark/src/session/open.rs
+```237:237:bitboard-arkade/src/session/open.rs
         sync_onchain_wallet_for_session_open(&client).await;
 ```
 
@@ -101,7 +101,7 @@ Unlock starts Arkade load in parallel with on-chain post-unlock sync (`runUnlock
 
 The bumper BDK wallet is `create_wallet_no_persist()` every session (`ArkBdkWallet::new_from_xpriv`). Ark JSON persistence stores boarding outputs and offchain snapshot, **not** a BDK changeset. Every session is a cold full scan of the boarding/on-chain HD wallet, even when the main crypto wallet already has a changeset.
 
-Same helper is used on autonomous-mode enter (`bitboard-ark/src/session/autonomous.rs`) and on unilateral-exit proceed/complete (those can stay stricter; they need chain truth for fees/prevouts). Unlock/session-open is the user-visible stall.
+Same helper is used on autonomous-mode enter (`bitboard-arkade/src/session/autonomous.rs`) and on unilateral-exit proceed/complete (those can stay stricter; they need chain truth for fees/prevouts). Unlock/session-open is the user-visible stall.
 
 The bumper and the main wallet are **different BDK instances** (different workers) hitting the **same** Mutinynet `/api/esplora` origin. Parallel 2 (crypto full scan) + parallel 5 (ark bumper) is enough to 429 public Esplora.
 
@@ -217,7 +217,7 @@ WASM: after Rust/path-dep edits, `cd frontend && npm run build:wasm` and hard-re
 | `frontend/src/hooks/useOnchainPeriodicSyncQuery.ts` | Accidental first incremental + toast |
 | `frontend/src/components/ActiveWalletBootstrap.tsx` | Mounts that query always |
 | `frontend/src/lib/esplora/esplora-full-scan-retry.ts` | Restarts whole full scan |
-| `bitboard-ark/src/session/open.rs` | Awaits bumper Esplora on open |
+| `bitboard-arkade/src/session/open.rs` | Awaits bumper Esplora on open |
 | `third_party/ark-bdk-wallet/src/lib.rs` | Empty wallet + `full_scan(..., 5, 5)` |
 | `crypto/src/lib.rs` | `sync_wallet` vs `full_scan_wallet` |
 | `docs/wallet-rail-lifecycle.md` | Says postUnlock is incremental (lie today) |

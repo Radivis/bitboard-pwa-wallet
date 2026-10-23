@@ -48,32 +48,58 @@ export async function loadLightningConnectionsForWallet(params: {
   )
 }
 
-export async function saveLightningConnectionsForWallet(params: {
+/** Maps the stored connection list to the next one. May run again after a CAS conflict. */
+export type LightningConnectionsUpdate = (
+  storedConnections: ConnectedLightningWallet[],
+) => ConnectedLightningWallet[]
+
+/** Keeps each connection's stored NWC snapshot, which the connected-wallet shape does not carry. */
+function storedConnectionsWithSnapshots(
+  previousConnections: StoredNwcLightningConnection[],
+  nextConnections: ConnectedLightningWallet[],
+): StoredNwcLightningConnection[] {
+  const previousById = new Map(
+    previousConnections.map((storedConnection) => [storedConnection.id, storedConnection] as const),
+  )
+  return nextConnections.map((connection) => {
+    const base = connectedWalletToStored(connection)
+    const previous = previousById.get(connection.id)
+    return previous?.nwcSnapshot != null ? { ...base, nwcSnapshot: previous.nwcSnapshot } : base
+  })
+}
+
+/**
+ * Runs `updateConnections` on the stored list inside the wallet-secrets CAS, so a change
+ * another writer committed after the caller's read is kept. Returns the list that was written.
+ */
+export async function updateLightningConnectionsForWallet(params: {
   walletId: number
-  connections: ConnectedLightningWallet[]
-}): Promise<void> {
-  const { walletId, connections } = params
-  const nwcOnly = connections.filter((connection) => connection.walletId === walletId)
+  updateConnections: LightningConnectionsUpdate
+}): Promise<ConnectedLightningWallet[]> {
+  const { walletId, updateConnections } = params
+  let writtenConnections: ConnectedLightningWallet[] | null = null
   await updateWalletSecretsPayloadWithRetry({
     walletDb: getDatabase(),
     walletId,
     transform: async (payload): Promise<WalletSecretsPayload> => {
-      const previousById = new Map(
-        payload.lightningNwcConnections.map(
-          (storedConnection) => [storedConnection.id, storedConnection] as const,
-        ),
+      const storedConnections = payload.lightningNwcConnections.map((storedConnection) =>
+        storedToConnected(walletId, storedConnection),
       )
+      const nextConnections = updateConnections(storedConnections).filter(
+        (connection) => connection.walletId === walletId,
+      )
+      writtenConnections = nextConnections
       return {
         ...payload,
-        lightningNwcConnections: nwcOnly.map((connection) => {
-          const base = connectedWalletToStored(connection)
-          const prev = previousById.get(connection.id)
-          if (prev?.nwcSnapshot != null) {
-            return { ...base, nwcSnapshot: prev.nwcSnapshot }
-          }
-          return base
-        }),
+        lightningNwcConnections: storedConnectionsWithSnapshots(
+          payload.lightningNwcConnections,
+          nextConnections,
+        ),
       }
     },
   })
+  if (writtenConnections == null) {
+    throw new Error('Lightning connections update finished without writing')
+  }
+  return writtenConnections
 }

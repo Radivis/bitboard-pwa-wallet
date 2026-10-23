@@ -4,7 +4,7 @@ Local [arkade-regtest](https://github.com/ArkLabsHQ/arkade-regtest) stack for `@
 
 Testing strategy and commands: [TESTING.md](../../../../../TESTING.md) at repo root.
 
-**Esplora API quirks (virtual-tree JSON, `/raw` vs `/status`, unilateral-exit pitfalls):** [docs/arkade-regtest-esplora-quirks.md](../../../../../docs/arkade-regtest-esplora-quirks.md) — read before changing `bitboard-ark/src/esplora_blockchain.rs` or unilateral-exit progress logic.
+**Esplora API quirks (virtual-tree JSON, `/raw` vs `/status`, unilateral-exit pitfalls):** [docs/arkade-regtest-esplora-quirks.md](../../../../../docs/arkade-regtest-esplora-quirks.md) — read before changing `bitboard-arkade/src/esplora_blockchain.rs` or unilateral-exit progress logic.
 
 ## Ports (host)
 
@@ -48,7 +48,7 @@ same stack with a different (block-denominated) `ARKD_VTXO_TREE_EXPIRY`:
 
 ### REG-05 → Rust fixture (optional)
 
-Export a boarded wallet JSON for `bitboard-ark` `cooperative_signer_migration_clears_pending_recovery_due_to_expired_signer_with_boarded_fixture`:
+Export a boarded wallet JSON for `bitboard-arkade` `cooperative_signer_migration_clears_pending_recovery_due_to_expired_signer_with_boarded_fixture`:
 
 ```bash
 # from frontend/ — long-expiry stack + E2E (writes test-results/arkade-boarded-fixture.json)
@@ -58,7 +58,7 @@ ARKD_VTXO_TREE_EXPIRY=200 REQUIRE_ARKADE_REGTEST=1 VITE_E2E_ARKADE_REGTEST=true 
 
 # from repo root — consume the same file
 ARKADE_REGTEST_BOARDED_FIXTURE=frontend/test-results/arkade-boarded-fixture.json ARKADE_REGTEST_RUN=1 \
-  cargo test -p bitboard-ark --test signer_migration_session_regtest \
+  cargo test -p bitboard-arkade --test signer_migration_session_regtest \
   cooperative_signer_migration_clears_pending_recovery_due_to_expired_signer_with_boarded_fixture -- --ignored --test-threads=1
 ```
 
@@ -100,7 +100,7 @@ E2E uses `TEST_MNEMONIC` from [`helpers/wallet-setup.ts`](../helpers/wallet-setu
 - **Flaky Esplora index**: helpers poll tip height after `mine`; run `triggerArkadeRailSync` after chain advances.
 - **Recoverable banner never appears / boarding settle fails**: repeated E2E runs on the same deterministic wallet leave many boarding UTXOs at the same address. After ~30 regtest blocks (`ARKD_BOARDING_EXIT_DELAY=30`), cooperative settle is rejected (`INVALID_PSBT_INPUT … expired`). Reset the stack before a clean run: `node regtest/regtest.mjs clean && node regtest/regtest.mjs start --profile ark` (or restart from repo root via `scripts/start-arkade-regtest.sh` after `clean`).
 - **Boarding settle must be fast**: with block-denominated `ARKD_BOARDING_EXIT_DELAY=30`, arkd still applies a **~30 second** wall-clock cooperative window (`validateBoardingInput` uses `exitDelay.Seconds()` as seconds). Fund → settle within ~25s; the E2E helper enforces this.
-- **REG-04 complete exit failed with `no matching unrolled VTXOs`**: after unroll, arkd's indexer marks the virtual VTXO `is_spent`/`is_unrolled`, which moves it into the exiting / unspendable buckets (`VtxoList::unspendable()`, compat alias `spent()`) — completion coin-select must search `all()`, not only `all_unspent()`. Fixed in vendored `third_party/ark-client/src/coin_select.rs`; native regression: `ARKADE_REGTEST_RUN=1 cargo test -p bitboard-ark --test autonomous_unilateral_exit_session_regtest -- --ignored` (complete without operator sync).
+- **REG-04 complete exit failed with `no matching unrolled VTXOs`**: after unroll, arkd's indexer marks the virtual VTXO `is_spent`/`is_unrolled`, which moves it into the exiting / unspendable buckets (`VtxoList::unspendable()`, compat alias `spent()`) — completion coin-select must search `all()`, not only `all_unspent()`. Fixed in vendored `third_party/ark-client/src/coin_select.rs`; native regression: `ARKADE_REGTEST_RUN=1 cargo test -p bitboard-arkade --test autonomous_unilateral_exit_session_regtest -- --ignored` (complete without operator sync).
 - **`Timed out waiting … from config.webServer`**: Playwright waits for Vite on **`http://127.0.0.1:3100`** (not port 3000). E2E Vite binds to `127.0.0.1` explicitly so IPv6-only `localhost` does not cause a silent hang. The `scripts/e2e-dev-server.mjs` wrapper logs probe progress every 5s. `globalSetup` only checks Docker (Esplora + arkd), not Vite.
 - **Signer rotation invalidates in-flight operator state**: the `@arkade-signer-regtest` suite uses a **fresh wallet per test** and calls `restartArkadeOperator` after `rotate-signer` (same isolation pattern as other serial regtest suites). Do not reuse a wallet that boarded before rotation without reloading the session.
 - **Unilateral exit stuck / empty step progress**: probe Esplora from the host while the stack is up:

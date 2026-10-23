@@ -135,10 +135,14 @@ where
     Ok(None)
 }
 
+// `CheckPoint::insert` drops every block above a conflicting height, so the
+// chain rebuild records anchors in a height map instead of calling these.
+#[allow(dead_code)]
 fn checkpoint_hash_at_height(tip: &CheckPoint, height: u32) -> Option<BlockHash> {
     tip.get(height).map(|checkpoint| checkpoint.hash())
 }
 
+#[allow(dead_code)]
 fn insert_anchor_blocks_into_chain(
     mut tip: CheckPoint,
     anchors: &BTreeSet<(ConfirmationBlockTime, Txid)>,
@@ -155,18 +159,28 @@ fn insert_anchor_blocks_into_chain(
 async fn ensure_esplora_blocks_covering_anchors<S>(
     esplora_async_client: &AsyncClient<S>,
     latest_blocks: &BTreeMap<u32, BlockHash>,
-    mut tip: CheckPoint,
+    local_tip: &CheckPoint,
+    tip: CheckPoint,
     anchors: &BTreeSet<(ConfirmationBlockTime, Txid)>,
 ) -> Result<CheckPoint, CryptoError>
 where
     S: Sleeper + Clone + Send + Sync,
     S::Sleep: Send,
 {
-    tip = insert_anchor_blocks_into_chain(tip, anchors);
+    // `CheckPoint::insert` drops every checkpoint above a conflicting height.
+    // Rebuilding from an explicit height map keeps local checkpoints that the
+    // update still has to mention, while `/tx` anchors stay authoritative.
+    let mut desired_blocks: BTreeMap<u32, BlockHash> = BTreeMap::new();
+    // Keep every local checkpoint. A stale `/blocks` list can omit the wallet tip
+    // while `/tx` already anchors a later height; dropping the tip makes
+    // `apply_update` refuse the chain.
+    for checkpoint in local_tip.iter() {
+        desired_blocks.insert(checkpoint.height(), checkpoint.hash());
+    }
+    for checkpoint in tip.iter() {
+        desired_blocks.insert(checkpoint.height(), checkpoint.hash());
+    }
 
-    // `/tx` anchors are the source of truth for those heights. `/blocks` can lag or
-    // disagree at the same height; overwriting would leave BDK `is_block_in_chain`
-    // as Some(false) and the receive stuck in untrusted pending.
     let locked_anchor_heights: BTreeSet<u32> = anchors
         .iter()
         .map(|(anchor, _txid)| anchor.block_id.height)
@@ -190,28 +204,28 @@ where
         else {
             continue;
         };
-
-        if checkpoint_hash_at_height(&tip, height) != Some(esplora_hash) {
-            tip = tip.insert(BlockId {
-                height,
-                hash: esplora_hash,
-            });
-        }
+        desired_blocks.insert(height, esplora_hash);
     }
 
     for (&height, &block_hash) in latest_blocks.iter() {
         if locked_anchor_heights.contains(&height) {
             continue;
         }
-        if checkpoint_hash_at_height(&tip, height) != Some(block_hash) {
-            tip = tip.insert(BlockId {
-                height,
-                hash: block_hash,
-            });
-        }
+        desired_blocks.insert(height, block_hash);
     }
 
-    Ok(tip)
+    for (anchor, _txid) in anchors {
+        desired_blocks.insert(anchor.block_id.height, anchor.block_id.hash);
+    }
+
+    let oldest_checkpoint = local_tip.iter().last().unwrap_or_else(|| local_tip.clone());
+    let blocks_above_oldest: Vec<BlockId> = desired_blocks
+        .range((oldest_checkpoint.height() + 1)..)
+        .map(|(&height, &hash)| BlockId { height, hash })
+        .collect();
+    oldest_checkpoint.extend(blocks_above_oldest).map_err(|_| {
+        CryptoError::Blockchain("failed to rebuild Esplora checkpoints in height order".to_string())
+    })
 }
 
 const LATEST_BLOCKS_FETCH_ATTEMPTS: usize = 3;
@@ -337,6 +351,7 @@ where
         return ensure_esplora_blocks_covering_anchors(
             esplora_async_client,
             latest_blocks,
+            local_tip,
             tip,
             anchors,
         )
@@ -383,7 +398,14 @@ where
         }
     };
 
-    ensure_esplora_blocks_covering_anchors(esplora_async_client, latest_blocks, tip, anchors).await
+    ensure_esplora_blocks_covering_anchors(
+        esplora_async_client,
+        latest_blocks,
+        local_tip,
+        tip,
+        anchors,
+    )
+    .await
 }
 
 fn bootstrap_checkpoints_from_latest_blocks_only(

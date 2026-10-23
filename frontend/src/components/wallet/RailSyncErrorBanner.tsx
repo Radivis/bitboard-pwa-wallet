@@ -9,6 +9,7 @@ const SYNC_ERROR_TITLES: Record<DashboardRailId, string> = {
   onchain: 'On-chain sync failed',
   lightning: 'Lightning sync failed',
   arkade: 'Arkade operator sync failed',
+  bark: 'Bark sync failed',
 }
 
 export type RailSyncErrorBannerProps = {

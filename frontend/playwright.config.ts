@@ -60,6 +60,9 @@ function buildE2eDevServerCommand(): string {
     envFlags.push('VITE_E2E_ARKADE_REGTEST=true')
     envFlags.push('VITE_ARKADE_OPERATOR_REGTEST=http://localhost:7070')
   }
+  if (process.env.VITE_E2E_BARK_REGTEST === 'true') {
+    envFlags.push('VITE_E2E_BARK_REGTEST=true')
+  }
   return `${envFlags.join(' ')} node scripts/e2e-dev-server.mjs`
 }
 
@@ -67,7 +70,8 @@ const devServerCommand = buildE2eDevServerCommand()
 const usesE2eEnvSpecificDevServer =
   process.env.VITE_E2E_NWC_MOCK === 'true' ||
   process.env.VITE_E2E_ARKADE_MOCK === 'true' ||
-  process.env.VITE_E2E_ARKADE_REGTEST === 'true'
+  process.env.VITE_E2E_ARKADE_REGTEST === 'true' ||
+  process.env.VITE_E2E_BARK_REGTEST === 'true'
 
 /** Vite middleware mocks must not reuse a plain dev server. Regtest can reuse :3100 if already up. */
 const requiresFreshE2eDevServer =

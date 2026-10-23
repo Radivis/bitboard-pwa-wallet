@@ -354,7 +354,7 @@ export function handleE2eArkadeOperatorMockRequest(
   res: ServerResponse,
   rawUrl: string,
 ): boolean {
-  if (!rawUrl.startsWith('/api/arkade/operator/signet')) {
+  if (!rawUrl.startsWith('/api/arkade/operator/mutinynet')) {
     return false
   }
 
@@ -372,7 +372,7 @@ export function handleE2eArkadeOperatorMockRequest(
     return true
   }
 
-  const upstreamPath = rawUrl.replace(/^\/api\/arkade\/operator\/signet/, '') || '/'
+  const upstreamPath = rawUrl.replace(/^\/api\/arkade\/operator\/mutinynet/, '') || '/'
 
   if (upstreamPath.startsWith('/v1/info')) {
     // Keep indexer payments across `/v1/info`. Sync always refreshes server info first;

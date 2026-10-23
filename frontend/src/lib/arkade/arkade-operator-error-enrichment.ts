@@ -21,7 +21,7 @@ export function enrichArkadeOperatorErrorMessage(message: string): string {
     message.includes('DIGEST_MISMATCH') ||
     message.includes('BUILD_VERSION_TOO_OLD')
   ) {
-    return `${message} — Refresh your Ark session or update the app, then retry.`
+    return `${message} — Refresh your Arkade session or update the app, then retry.`
   }
 
   if (lower.includes('missing forfeit tx')) {

@@ -1,0 +1,470 @@
+import type { AnchorHTMLAttributes, ReactNode } from 'react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { screen } from '@testing-library/react'
+import { renderWithProviders } from '@/test-utils/test-providers'
+import { BarkDashboardBalance } from '@/components/wallet/BarkDashboardBalance'
+import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
+import type { NetworkMode } from '@/stores/walletStore'
+import type { BarkNextRefreshObservation } from '@/lib/bark/bark-next-refresh-hint'
+import type { BarkPendingAction } from '@/workers/bark-api'
+
+const walletStoreState = vi.hoisted(() => ({
+  networkMode: 'signet' as NetworkMode,
+  activeWalletId: 1 as number | null,
+  loadedDescriptorWallet: { networkMode: 'signet' as NetworkMode },
+}))
+
+const featureState = vi.hoisted(() => ({
+  isBarkEnabled: true,
+}))
+
+const loadSnapshot = vi.hoisted(() => ({
+  current: {
+    loadPhase: 'loaded' as 'loaded' | 'loading' | 'load-error' | 'not-configured',
+    networkMode: 'signet' as NetworkMode | null,
+    errorMessage: null as string | null,
+    receiveKeyIndex: 0 as number | null,
+  },
+}))
+
+const pendingActions = vi.hoisted(() => ({
+  current: [] as BarkPendingAction[],
+}))
+
+const syncSnapshot = vi.hoisted(() => ({
+  current: {
+    syncPhase: 'not-syncing' as 'not-syncing' | 'syncing' | 'sync-error' | 'not-configured',
+    networkMode: 'signet' as NetworkMode | null,
+    errorMessage: null as string | null,
+    spendableSats: null as number | null,
+    lockedSats: null as number | null,
+    exitingSats: null as number | null,
+    lastSuccessfulSyncAt: null as string | null,
+    refreshStatus: 'idle' as 'idle' | 'scheduled' | 'pending' | 'warning',
+    nextRefresh: null as BarkNextRefreshObservation | null,
+  },
+}))
+
+vi.mock('@/stores/featureStore', () => ({
+  useFeatureStore: Object.assign(
+    (selector: (state: typeof featureState) => unknown) => selector(featureState),
+    { getState: () => featureState },
+  ),
+}))
+
+vi.mock('@/stores/walletStore', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/stores/walletStore')>()
+  return {
+    ...actual,
+    useWalletStore: Object.assign(
+      (selector: (state: typeof walletStoreState) => unknown) => selector(walletStoreState),
+      { getState: () => walletStoreState },
+    ),
+  }
+})
+
+vi.mock('@/hooks/useBarkLoadLifecycleSnapshot', () => ({
+  useBarkLoadLifecycleSnapshot: () => loadSnapshot.current,
+}))
+
+vi.mock('@/hooks/useBarkSyncLifecycleSnapshot', () => ({
+  useBarkSyncLifecycleSnapshot: () => syncSnapshot.current,
+}))
+
+vi.mock('@/hooks/useBarkPendingActionsQuery', () => ({
+  useBarkPendingActionsQuery: () => ({ data: pendingActions.current }),
+}))
+
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-router')>()
+  return {
+    ...actual,
+    Link: ({
+      children,
+      to,
+      ...props
+    }: { children: ReactNode; to: string } & AnchorHTMLAttributes<HTMLAnchorElement>) => (
+      <a href={to} {...props}>
+        {children}
+      </a>
+    ),
+  }
+})
+
+const fiatRatesQueryMock = vi.hoisted(() =>
+  vi.fn(() => ({
+    data: undefined as { btcPriceInFiat: number } | undefined,
+    isPending: false,
+  })),
+)
+
+vi.mock('@/hooks/useMainnetFiatRatesQuery', () => ({
+  useMainnetFiatRatesQuery: () => fiatRatesQueryMock(),
+}))
+
+vi.mock('@/hooks/useRailManualSyncMutations', () => ({
+  useBarkManualSyncMutation: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
+}))
+
+function pendingOffboard(): BarkPendingAction {
+  return {
+    id: '20fb503685add1f2fe5af4056979dc98',
+    kind: 'offboard',
+    title: 'Bark exit',
+    status: 'This exit is still in progress. Sync Bark to continue it.',
+    amountSats: 10_000,
+    feeSats: 50_815,
+    destination: 'tb1qcurrentaddressxxxxxxxx',
+    txid: null,
+    error: null,
+  }
+}
+
+describe('BarkDashboardBalance', () => {
+  beforeEach(() => {
+    pendingActions.current = []
+    useFiatDenominationStore.setState({ fiatDenominationMode: false, defaultFiatCurrency: 'USD' })
+    fiatRatesQueryMock.mockReturnValue({ data: undefined, isPending: false })
+    featureState.isBarkEnabled = true
+    walletStoreState.networkMode = 'signet'
+    walletStoreState.loadedDescriptorWallet = { networkMode: 'signet' }
+    loadSnapshot.current = {
+      loadPhase: 'loaded',
+      networkMode: 'signet',
+      errorMessage: null,
+      receiveKeyIndex: 0,
+    }
+    syncSnapshot.current = {
+      syncPhase: 'not-syncing',
+      networkMode: 'signet',
+      errorMessage: null,
+      spendableSats: null,
+      lockedSats: null,
+      exitingSats: null,
+      lastSuccessfulSyncAt: null,
+      refreshStatus: 'idle',
+      nextRefresh: null,
+    }
+  })
+
+  it('DASH-BARK-14 shows the next refresh hint as the first element of the card content', () => {
+    syncSnapshot.current.spendableSats = 50_000
+    syncSnapshot.current.lockedSats = 0
+    syncSnapshot.current.nextRefresh = {
+      tipHeight: 1_000,
+      nextRefreshHeight: 1_012,
+      observedAt: '2026-10-10T12:00:00.000Z',
+    }
+    renderWithProviders(<BarkDashboardBalance />)
+
+    const hint = screen.getByTestId('bark-next-refresh-hint')
+    expect(hint).toHaveTextContent('Unlock this wallet around')
+    expect(hint).toHaveClass('border-amber-500/40')
+    expect(hint.parentElement?.firstElementChild).toBe(hint)
+  })
+
+  it('DASH-BARK-14 shows no next refresh hint without a schedule', () => {
+    syncSnapshot.current.spendableSats = 50_000
+    syncSnapshot.current.lockedSats = 0
+    renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.queryByTestId('bark-next-refresh-hint')).not.toBeInTheDocument()
+  })
+
+  it('DASH-BARK-01 shows the card when Bark is active on signet', () => {
+    renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.getByTestId('dashboard-bark-balance-card')).toBeInTheDocument()
+    expect(screen.getByText('Bark balance')).toBeInTheDocument()
+  })
+
+  it('BARK-BOARD-01 links to Board from on-chain when Bark is enabled on signet', () => {
+    renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.getByTestId('dashboard-bark-board-link')).toHaveAttribute(
+      'href',
+      '/wallet/bark/board',
+    )
+  })
+
+  it('BARK-EXIT-01 links to Exit to on-chain when Bark is enabled on signet', () => {
+    renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.getByTestId('dashboard-bark-offboard-link')).toHaveAttribute(
+      'href',
+      '/wallet/bark/offboard',
+    )
+  })
+
+  it('DASH-BARK-02 hides the card when Bark is disabled or the network is not signet', () => {
+    featureState.isBarkEnabled = false
+    const disabled = renderWithProviders(<BarkDashboardBalance />)
+    expect(disabled.container).toBeEmptyDOMElement()
+    expect(disabled.queryByTestId('dashboard-bark-board-link')).not.toBeInTheDocument()
+    disabled.unmount()
+
+    featureState.isBarkEnabled = true
+    walletStoreState.networkMode = 'testnet'
+    walletStoreState.loadedDescriptorWallet = { networkMode: 'testnet' }
+    const otherNetwork = renderWithProviders(<BarkDashboardBalance />)
+    expect(otherNetwork.container).toBeEmptyDOMElement()
+    expect(otherNetwork.queryByTestId('dashboard-bark-board-link')).not.toBeInTheDocument()
+  })
+
+  it('BARK-EXIT-02 omits the exit link when Bark is disabled or the network is not signet', () => {
+    featureState.isBarkEnabled = false
+    const disabled = renderWithProviders(<BarkDashboardBalance />)
+    expect(disabled.queryByRole('link', { name: 'Exit to on-chain' })).not.toBeInTheDocument()
+    disabled.unmount()
+
+    featureState.isBarkEnabled = true
+    walletStoreState.networkMode = 'mutinynet'
+    walletStoreState.loadedDescriptorWallet = { networkMode: 'mutinynet' }
+    const mutinynet = renderWithProviders(<BarkDashboardBalance />)
+    expect(mutinynet.queryByRole('link', { name: 'Exit to on-chain' })).not.toBeInTheDocument()
+  })
+
+  it('BARK-BOARD-02 omits the board link when Bark is disabled or the network is not signet', () => {
+    featureState.isBarkEnabled = false
+    const disabled = renderWithProviders(<BarkDashboardBalance />)
+    expect(disabled.queryByRole('link', { name: 'Board from on-chain' })).not.toBeInTheDocument()
+    disabled.unmount()
+
+    featureState.isBarkEnabled = true
+    walletStoreState.networkMode = 'mutinynet'
+    walletStoreState.loadedDescriptorWallet = { networkMode: 'mutinynet' }
+    const mutinynet = renderWithProviders(<BarkDashboardBalance />)
+    expect(mutinynet.queryByRole('link', { name: 'Board from on-chain' })).not.toBeInTheDocument()
+  })
+
+  it('DASH-BARK-03 shows spendable sats after a successful sync', () => {
+    syncSnapshot.current.spendableSats = 50_000
+    syncSnapshot.current.lockedSats = 0
+    renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.getByTestId('dashboard-bark-balance-amount')).toHaveTextContent('0.00050000')
+    expect(screen.queryByTestId('dashboard-bark-balance-subbalances')).not.toBeInTheDocument()
+  })
+
+  it('DASH-BARK-09 shows spendable and locked sub-lines when locked sats are positive', () => {
+    syncSnapshot.current.spendableSats = 40_000
+    syncSnapshot.current.lockedSats = 10_000
+    renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.getByTestId('dashboard-bark-balance-amount')).toHaveTextContent('0.00050000')
+    expect(screen.getByTestId('dashboard-bark-balance-subbalances')).toHaveTextContent('Spendable')
+    expect(screen.getByTestId('dashboard-bark-balance-spendable')).toHaveTextContent('0.00040000')
+    expect(screen.getByTestId('dashboard-bark-balance-subbalances')).toHaveTextContent('Locked')
+    expect(screen.getByTestId('dashboard-bark-balance-locked')).toHaveTextContent('0.00010000')
+  })
+
+  it('DASH-BARK-15 shows exiting sub-line when exiting sats are positive without including them in total balance', () => {
+    syncSnapshot.current.spendableSats = 40_000
+    syncSnapshot.current.lockedSats = 10_000
+    syncSnapshot.current.exitingSats = 5_000
+    renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.getByTestId('dashboard-bark-balance-amount')).toHaveTextContent('0.00050000')
+    expect(screen.getByTestId('dashboard-bark-balance-subbalances')).toHaveTextContent('Exiting')
+    expect(screen.getByTestId('dashboard-bark-balance-exiting')).toHaveTextContent('0.00005000')
+  })
+
+  it('DASH-BARK-16 renders spendable, locked, and exiting detail lines with isDetail sizing', () => {
+    syncSnapshot.current.spendableSats = 40_000
+    syncSnapshot.current.lockedSats = 10_000
+    syncSnapshot.current.exitingSats = 5_000
+    renderWithProviders(<BarkDashboardBalance />)
+    const spendable = screen.getByTestId('dashboard-bark-balance-spendable')
+    const locked = screen.getByTestId('dashboard-bark-balance-locked')
+    const exiting = screen.getByTestId('dashboard-bark-balance-exiting')
+    expect(spendable).toHaveClass('text-sm')
+    expect(spendable).not.toHaveClass('text-3xl')
+    expect(locked).toHaveClass('text-sm')
+    expect(locked).not.toHaveClass('text-3xl')
+    expect(exiting).toHaveClass('text-sm')
+    expect(exiting).not.toHaveClass('text-3xl')
+  })
+
+  it('DASH-BARK-17 shows subbalances when locked is 0 but exiting is positive', () => {
+    syncSnapshot.current.spendableSats = 40_000
+    syncSnapshot.current.lockedSats = 0
+    syncSnapshot.current.exitingSats = 5_000
+    renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.getByTestId('dashboard-bark-balance-amount')).toHaveTextContent('0.00040000')
+    expect(screen.getByTestId('dashboard-bark-balance-subbalances')).toBeInTheDocument()
+    expect(screen.getByTestId('dashboard-bark-balance-spendable')).toHaveTextContent('0.00040000')
+    expect(screen.queryByTestId('dashboard-bark-balance-locked')).not.toBeInTheDocument()
+    expect(screen.getByTestId('dashboard-bark-balance-exiting')).toHaveTextContent('0.00005000')
+  })
+
+  it('DASH-BARK-10 shows a pending offboard banner without cancel or retry', () => {
+    pendingActions.current = [pendingOffboard()]
+    renderWithProviders(<BarkDashboardBalance />)
+    const banner = screen.getByTestId('bark-pending-action-banner')
+    expect(banner).toHaveTextContent('Bark exit')
+    expect(banner).toHaveTextContent(
+      'This exit is still in progress. Sync Bark to continue it.',
+    )
+    expect(screen.getByTestId('bark-pending-action-amount')).toHaveTextContent('0.00010000')
+    expect(banner).toHaveTextContent('tb1qcurr...xxxxxxxx')
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
+    expect(banner).toHaveAttribute('data-state', 'pending')
+  })
+
+  it('DASH-BARK-10 turns the banner red when the pending exit stopped with an error', () => {
+    pendingActions.current = [
+      {
+        ...pendingOffboard(),
+        status:
+          'Splitting coins for the on-chain amount failed: vtxo is not spendable (state: spent). Sync Bark to retry it.',
+        error: 'vtxo is not spendable (state: spent)',
+      },
+    ]
+    renderWithProviders(<BarkDashboardBalance />)
+    const banner = screen.getByTestId('bark-pending-action-banner')
+    expect(banner).toHaveAttribute('data-state', 'error')
+    expect(banner).toHaveClass('border-red-500/40')
+    expect(banner).toHaveTextContent('vtxo is not spendable (state: spent)')
+  })
+
+  it('DASH-BARK-04 does not render on-chain or Arkade balance amounts', () => {
+    syncSnapshot.current.spendableSats = 50_000
+    renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.queryByTestId('dashboard-onchain-balance-amount')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('dashboard-arkade-balance-amount')).not.toBeInTheDocument()
+  })
+
+  it('DASH-BARK-05 keeps the previous amount and shows the sync error banner', () => {
+    syncSnapshot.current = {
+      syncPhase: 'sync-error',
+      networkMode: 'signet',
+      errorMessage: 'Bark server unreachable',
+      spendableSats: 50_000,
+      lastSuccessfulSyncAt: '2024-03-01T12:00:00.000Z',
+      refreshStatus: 'idle',
+    }
+    renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.getByTestId('wallet-sync-error-banner-bark')).toBeInTheDocument()
+    expect(screen.getByText('Bark sync failed')).toBeInTheDocument()
+    expect(screen.getByTestId('dashboard-bark-balance-amount')).toHaveTextContent('0.00050000')
+  })
+
+  it('DASH-BARK-06 shows the banner and no amount when nothing has synced yet', () => {
+    syncSnapshot.current = {
+      syncPhase: 'sync-error',
+      networkMode: 'signet',
+      errorMessage: 'Bark server unreachable',
+      spendableSats: null,
+      lastSuccessfulSyncAt: null,
+      refreshStatus: 'idle',
+    }
+    renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.getByTestId('wallet-sync-error-banner-bark')).toBeInTheDocument()
+    expect(screen.queryByTestId('dashboard-bark-balance-amount')).not.toBeInTheDocument()
+  })
+
+  it('DASH-BARK-07 shows a refresh notice and not the sync error banner', () => {
+    syncSnapshot.current = {
+      syncPhase: 'not-syncing',
+      networkMode: 'signet',
+      errorMessage: null,
+      spendableSats: 50_000,
+      lastSuccessfulSyncAt: '2024-03-01T12:00:00.000Z',
+      refreshStatus: 'scheduled',
+    }
+    const scheduled = renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.getByTestId('dashboard-bark-refresh-notice')).toHaveTextContent(
+      'Bark refresh scheduled',
+    )
+    expect(screen.queryByTestId('wallet-sync-error-banner-bark')).not.toBeInTheDocument()
+    expect(screen.getByTestId('dashboard-bark-balance-amount')).toHaveTextContent('0.00050000')
+    scheduled.unmount()
+
+    syncSnapshot.current = {
+      ...syncSnapshot.current,
+      refreshStatus: 'pending',
+    }
+    renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.getByTestId('dashboard-bark-refresh-notice')).toHaveTextContent(
+      'still in progress',
+    )
+    expect(screen.queryByTestId('dashboard-bark-refresh-warning')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('wallet-sync-error-banner-bark')).not.toBeInTheDocument()
+  })
+
+  it('DASH-BARK-08 keeps the amount and shows a refresh warning instead of the sync error banner', () => {
+    syncSnapshot.current = {
+      syncPhase: 'not-syncing',
+      networkMode: 'signet',
+      errorMessage: null,
+      spendableSats: 50_000,
+      lastSuccessfulSyncAt: '2024-03-01T12:00:00.000Z',
+      refreshStatus: 'warning',
+    }
+    renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.getByTestId('dashboard-bark-refresh-warning')).toHaveTextContent(
+      'could not schedule a refresh',
+    )
+    expect(screen.queryByTestId('wallet-sync-error-banner-bark')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('dashboard-bark-refresh-notice')).not.toBeInTheDocument()
+    expect(screen.getByTestId('dashboard-bark-balance-amount')).toHaveTextContent('0.00050000')
+  })
+
+  it('DASH-BARK-12 shows the embedded session loading screen while Bark is opening', () => {
+    loadSnapshot.current.loadPhase = 'loading'
+    renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.getByTestId('bark-session-loading')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Establishing Bark session' })).toBeInTheDocument()
+    expect(screen.getByTestId('dashboard-bark-board-link')).toBeInTheDocument()
+    expect(screen.queryByTestId('dashboard-bark-balance-amount')).not.toBeInTheDocument()
+  })
+
+  it('DASH-BARK-18 shows fiat primary and bitcoin secondary on mainnet', () => {
+    walletStoreState.networkMode = 'mainnet'
+    walletStoreState.loadedDescriptorWallet = { networkMode: 'mainnet' }
+    useFiatDenominationStore.setState({ fiatDenominationMode: true, defaultFiatCurrency: 'USD' })
+    fiatRatesQueryMock.mockReturnValue({
+      data: { btcPriceInFiat: 100_000 },
+      isPending: false,
+    })
+    syncSnapshot.current.spendableSats = 40_000
+    syncSnapshot.current.lockedSats = 10_000
+    syncSnapshot.current.exitingSats = 5_000
+    renderWithProviders(<BarkDashboardBalance />)
+
+    expect(screen.getByTestId('dashboard-bark-balance-amount')).toHaveTextContent(/\$50/)
+    expect(screen.getByTestId('dashboard-bark-balance-amount-btc-segment')).toHaveTextContent(
+      '0.00050000',
+    )
+    expect(screen.getByTestId('dashboard-bark-balance-spendable')).toHaveTextContent(/\$40/)
+    expect(screen.getByTestId('dashboard-bark-balance-locked')).toHaveTextContent(/\$10/)
+    expect(screen.getByTestId('dashboard-bark-balance-exiting')).toHaveTextContent(/\$5/)
+  })
+
+  it('DASH-BARK-18 keeps bitcoin amounts on signet when fiat mode is on', () => {
+    useFiatDenominationStore.setState({ fiatDenominationMode: true, defaultFiatCurrency: 'USD' })
+    fiatRatesQueryMock.mockReturnValue({
+      data: { btcPriceInFiat: 100_000 },
+      isPending: false,
+    })
+    syncSnapshot.current.spendableSats = 50_000
+    syncSnapshot.current.lockedSats = 0
+    renderWithProviders(<BarkDashboardBalance />)
+
+    expect(screen.getByTestId('dashboard-bark-balance-amount')).toHaveTextContent('0.00050000')
+    expect(screen.queryByTestId('dashboard-bark-balance-amount-btc-segment')).not.toBeInTheDocument()
+  })
+
+  it('DASH-BARK-13 shows the embedded session error when Bark open fails', () => {
+    loadSnapshot.current = {
+      ...loadSnapshot.current,
+      loadPhase: 'load-error',
+      errorMessage: 'signet unreachable',
+    }
+    renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.getByTestId('bark-session-load-error')).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Bark session could not be established' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('signet unreachable')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+    expect(screen.getByTestId('dashboard-bark-offboard-link')).toBeInTheDocument()
+  })
+})

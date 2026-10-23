@@ -14,19 +14,19 @@ const basePayload = (): WalletSecretsPayload => ({
     {
       id: 'conn-a',
       label: 'Mutinynet',
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       operatorUrl: 'https://signet.arkade.example/v1',
       operatorSignerPkHex: '02abc',
       createdAt: '2020-01-01T00:00:00.000Z',
       lastSuccessfulOperatorSyncAt: '2020-01-02T00:00:00.000Z',
     },
   ],
-  activeArkadeAccountIdByNetwork: { signet: 'conn-a' },
+  activeArkadeAccountIdByNetwork: { mutinynet: 'conn-a' },
 })
 
 describe('arkade-accounts', () => {
   it('findActiveArkadeAccount resolves active id for network', () => {
-    const account = findActiveArkadeAccount(basePayload(), 'signet')
+    const account = findActiveArkadeAccount(basePayload(), 'mutinynet')
     expect(account?.id).toBe('conn-a')
     expect(account?.operatorSignerPkHex).toBe('02abc')
   })
@@ -40,13 +40,13 @@ describe('arkade-accounts', () => {
 
   it('buildDefaultArkadeAccount carries sdkPersistenceJson', () => {
     const account = buildDefaultArkadeAccount({
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       operatorUrl: 'https://signet.arkade.example/v1',
       delegatorUrl: 'https://delegator.example',
       operatorSignerPkHex: '02abc',
       sdkPersistenceJson: '{"version":3}',
     })
-    expect(account.networkMode).toBe('signet')
+    expect(account.networkMode).toBe('mutinynet')
     expect(account.sdkPersistenceJson).toBe('{"version":3}')
     expect(account.label).toBe(defaultArkadeOperatorLabel('https://signet.arkade.example/v1'))
   })

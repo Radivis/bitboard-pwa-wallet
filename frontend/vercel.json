@@ -17,6 +17,9 @@
     },
     "api/lnurl/[...path].ts": {
       "maxDuration": 10
+    },
+    "api/bark/server-notice.ts": {
+      "maxDuration": 10
     }
   },
   "rewrites": [

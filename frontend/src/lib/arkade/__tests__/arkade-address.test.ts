@@ -11,4 +11,9 @@ describe('isValidArkadeAddress', () => {
     expect(isValidArkadeAddress('')).toBe(false)
     expect(isValidArkadeAddress('bc1qtest')).toBe(false)
   })
+
+  it('rejects Bark policy addresses', () => {
+    expect(isValidArkadeAddress('tark1pqqqqqqqqqqqqqq')).toBe(false)
+    expect(isValidArkadeAddress('ark1pqqqqqqqqqqqqqq')).toBe(false)
+  })
 })

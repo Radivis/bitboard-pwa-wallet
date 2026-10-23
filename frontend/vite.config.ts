@@ -8,6 +8,7 @@ import { e2eArkadeOperatorMockPlugin } from './src/lib/arkade/e2e/vite-e2e-arkad
 import { esploraViteProxyEntries } from './src/lib/esplora/esplora-service-whitelist'
 import { fiatRateViteProxyEntries } from './src/lib/fiat/fiat-rate-service-whitelist'
 import { faucetViteProxyEntries } from './src/lib/faucet/faucet-definitions'
+import { barkServerNoticeVitePlugin } from './src/lib/bark/bark-server-notice-vite-plugin'
 import { lnurlViteDevProxyPlugin } from './src/lib/lightning/lnurl-vite-dev-proxy-plugin'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
@@ -198,6 +199,7 @@ export default defineConfig({
   plugins: [
     rejectArgon2CiInProductionBuild(),
     lnurlViteDevProxyPlugin(),
+    barkServerNoticeVitePlugin(),
     e2eArkadeOperatorMockPlugin(),
     tanstackRouter({
       target: 'react',
@@ -242,7 +244,7 @@ export default defineConfig({
         // Version-scoped so a new release gets a fresh precache namespace (see repository root VERSION).
         cacheId: workboxCacheId,
         cleanupOutdatedCaches: true,
-        // Default 2 MiB is too small for WASM bundles (bitboard_crypto ~2.2 MiB, bitboard_ark ~6.1 MiB).
+        // Default 2 MiB is too small for WASM bundles (bitboard_crypto ~2.2 MiB, bitboard_arkade ~6.1 MiB).
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,wasm}'],
         runtimeCaching: [],

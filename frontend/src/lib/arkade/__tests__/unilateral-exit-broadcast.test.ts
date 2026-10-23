@@ -79,7 +79,7 @@ describe('unilateral-exit-broadcast', () => {
     expect(
       isPackageNotChildWithUnconfirmedParentsError(
         new Error(
-          'Ark client error: transaction package not accepted: package-not-child-with-unconfirmed-parents',
+          'Arkade client error: transaction package not accepted: package-not-child-with-unconfirmed-parents',
         ),
       ),
     ).toBe(true)

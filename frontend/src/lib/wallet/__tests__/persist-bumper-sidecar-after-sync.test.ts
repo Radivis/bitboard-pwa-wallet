@@ -63,7 +63,7 @@ describe('persistBumperSidecarBestEffort', () => {
 
     await expect(
       persistBumperSidecarBestEffort(
-        { walletId: 4, networkMode: 'signet' },
+        { walletId: 4, networkMode: 'mutinynet' },
         'after proceed',
       ),
     ).resolves.toBeUndefined()
@@ -82,7 +82,7 @@ describe('persistBumperSidecarAfterWalletWideSyncIfNeeded', () => {
   it('skips persist when the bumper scan was not wallet-wide', async () => {
     await persistBumperSidecarAfterWalletWideSyncIfNeeded({
       walletId: 4,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       needsBumperWalletSync: false,
     })
 
@@ -93,7 +93,7 @@ describe('persistBumperSidecarAfterWalletWideSyncIfNeeded', () => {
   it('persists after a wallet-wide bumper scan', async () => {
     await persistBumperSidecarAfterWalletWideSyncIfNeeded({
       walletId: 4,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       needsBumperWalletSync: true,
     })
 
@@ -109,13 +109,13 @@ describe('SE-07 persistBumperSidecarAfterWalletSync session bind', () => {
 
     const persisted = await persistBumperSidecarAfterWalletSync({
       walletId: 4,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
     })
 
     expect(persisted).toBe(false)
     expect(hasOpenSession).toHaveBeenCalledWith({
       walletId: 4,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       arkadeAccountId: 'acct-1',
     })
     expect(exportBumperWalletChangeset).not.toHaveBeenCalled()
@@ -127,7 +127,7 @@ describe('SE-07 persistBumperSidecarAfterWalletSync session bind', () => {
 
     const persisted = await persistBumperSidecarAfterWalletSync({
       walletId: 4,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
     })
 
     expect(persisted).toBe(false)
@@ -139,20 +139,20 @@ describe('SE-07 persistBumperSidecarAfterWalletSync session bind', () => {
   it('persistBumperSidecarAfterWalletSync_persists_when_session_matches', async () => {
     const persisted = await persistBumperSidecarAfterWalletSync({
       walletId: 4,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
     })
 
     expect(persisted).toBe(true)
     expect(hasOpenSession).toHaveBeenCalledWith({
       walletId: 4,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       arkadeAccountId: 'acct-1',
     })
     expect(exportBumperWalletChangeset).toHaveBeenCalled()
     expect(persistBumperSegwit0SidecarIfAllowed).toHaveBeenCalledWith(
       expect.objectContaining({
         walletId: 4,
-        network: 'signet',
+        network: 'mutinynet',
         changesetJson: '{"local":{}}',
         markFullScanDone: true,
       }),

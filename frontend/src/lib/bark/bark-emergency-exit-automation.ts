@@ -1,0 +1,453 @@
+import { decideBarkEmergencyExitAutomatedFee } from '@/lib/bark/bark-emergency-exit-automated-fee'
+import {
+  catchUpOnchainWalletForBarkExit,
+  fetchBarkExitChainTip,
+} from '@/lib/bark/bark-emergency-exit-onchain-catch-up-live'
+import type { BarkEmergencyExitScope } from '@/lib/bark/bark-emergency-exit-funding-status'
+import { runBarkEmergencyExitProgress } from '@/lib/bark/bark-emergency-exit-progress-deps'
+import { isBarkCpfpUnfundableError } from '@/lib/bark/perform-bark-emergency-exit'
+import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
+import { presetRatesForNetwork } from '@/hooks/useEsploraFeePresets'
+import { appQueryClient } from '@/lib/shared/app-query-client'
+import { userFacingErrorMessage } from '@/lib/shared/utils'
+import { getBarkLoadLifecycleSnapshot, subscribeBarkLoadLifecycle } from '@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator'
+import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
+import type { BarkRailNetwork } from '@/lib/wallet/wallet-domain-types'
+import {
+  IDLE_BARK_EMERGENCY_EXIT_AUTOMATION_ACTIVITY,
+  pauseBarkEmergencyExitAutomation,
+  useBarkEmergencyExitAutomationStore,
+  type BarkEmergencyExitAutomationActivity,
+} from '@/stores/barkEmergencyExitAutomationStore'
+import { selectCommittedNetworkMode, useWalletStore, type NetworkMode } from '@/stores/walletStore'
+import { getBarkWorker } from '@/workers/bark-factory'
+import { toast } from 'sonner'
+
+/** Production poll. Signet and mainnet blocks are minutes apart. */
+export const BARK_EMERGENCY_EXIT_TIP_POLL_MS = 15_000
+
+/** Regtest blocks arrive when a test mines them. */
+export const BARK_EMERGENCY_EXIT_TIP_POLL_MS_REGTEST = 2_000
+
+export function barkEmergencyExitTipPollMs(networkMode: string): number {
+  return networkMode === 'regtest'
+    ? BARK_EMERGENCY_EXIT_TIP_POLL_MS_REGTEST
+    : BARK_EMERGENCY_EXIT_TIP_POLL_MS
+}
+
+export type BarkEmergencyExitTip = {
+  height: number
+  hash: string
+}
+
+export type BarkEmergencyExitAutomationSessionGate = {
+  proceedAutomatically: boolean
+  walletUnlocked: boolean
+  sameWallet: boolean
+  sameNetwork: boolean
+  sessionLoaded: boolean
+}
+
+export type BarkEmergencyExitAutomationGate = BarkEmergencyExitAutomationSessionGate & {
+  exitCount: number
+  previousTip: BarkEmergencyExitTip | null
+  nextTip: BarkEmergencyExitTip | null
+  justBecameActive: boolean
+}
+
+export type BarkEmergencyExitAutomationScope = BarkEmergencyExitScope<BarkRailNetwork>
+
+/** A missing previous tip counts as a change. A reorg at the same height changes the hash. */
+export function barkEmergencyExitTipChanged(
+  previousTip: BarkEmergencyExitTip | null,
+  nextTip: BarkEmergencyExitTip,
+): boolean {
+  if (previousTip == null) return true
+  return previousTip.height !== nextTip.height || previousTip.hash !== nextTip.hash
+}
+
+/**
+ * Automatic progress runs only for this wallet, on this network, while unlocked,
+ * with at least one exit, and only when the tip moved or automation just turned on.
+ */
+export function shouldProgressBarkEmergencyExitOnTip(
+  gate: BarkEmergencyExitAutomationGate,
+): boolean {
+  if (!gate.proceedAutomatically) return false
+  if (!gate.walletUnlocked) return false
+  if (!gate.sameWallet) return false
+  if (!gate.sameNetwork) return false
+  if (!gate.sessionLoaded) return false
+  if (gate.exitCount < 1) return false
+  if (gate.justBecameActive) return true
+  if (gate.nextTip == null) return false
+  return barkEmergencyExitTipChanged(gate.previousTip, gate.nextTip)
+}
+
+export async function watchBarkEmergencyExitTips(deps: {
+  signal: AbortSignal
+  readGate: () => Promise<BarkEmergencyExitAutomationSessionGate>
+  fetchTip: () => Promise<BarkEmergencyExitTip>
+  listExitCount: () => Promise<number>
+  /** `observedTip` is null when this poll could not read the tip. */
+  progress: (observedTip: BarkEmergencyExitTip | null) => Promise<void>
+  wait: (signal: AbortSignal) => Promise<void>
+  afterProgress?: () => Promise<void>
+  onListed?: () => Promise<void>
+  onProgressStart?: () => void
+  onProgressSuccess?: () => void
+  onProgressIdle?: () => void
+  onProgressError?: (error: unknown) => void
+  onTipReadError?: (error: unknown) => void
+}): Promise<void> {
+  let previousTip: BarkEmergencyExitTip | null = null
+  let justBecameActive = true
+  let rememberNextTipWithoutProgress = false
+  while (!deps.signal.aborted) {
+    if (justBecameActive) deps.onProgressStart?.()
+
+    let session: BarkEmergencyExitAutomationSessionGate
+    try {
+      session = await deps.readGate()
+    } catch {
+      if (deps.signal.aborted) return
+      await deps.wait(deps.signal)
+      continue
+    }
+    if (deps.signal.aborted) return
+    if (!sessionStillAllowsAutomation(session)) {
+      deps.onProgressIdle?.()
+      return
+    }
+
+    let nextTip: BarkEmergencyExitTip | null = null
+    try {
+      nextTip = await deps.fetchTip()
+    } catch (error) {
+      if (deps.signal.aborted) return
+      deps.onTipReadError?.(error)
+    }
+    if (deps.signal.aborted) return
+
+    let exitCount: number
+    try {
+      exitCount = await deps.listExitCount()
+    } catch {
+      if (deps.signal.aborted) return
+      if (justBecameActive) deps.onProgressIdle?.()
+      await deps.wait(deps.signal)
+      continue
+    }
+    if (deps.signal.aborted) return
+
+    if (deps.onListed != null) {
+      try {
+        await deps.onListed()
+      } catch {
+        // The next poll lists again. A failed refresh must not skip progress.
+      }
+    }
+    if (deps.signal.aborted) return
+
+    if (rememberNextTipWithoutProgress && nextTip != null) {
+      previousTip = nextTip
+      rememberNextTipWithoutProgress = false
+    } else if (
+      shouldProgressBarkEmergencyExitOnTip({
+        ...session,
+        exitCount,
+        previousTip,
+        nextTip,
+        justBecameActive,
+      })
+    ) {
+      let progressed = false
+      try {
+        if (!justBecameActive) deps.onProgressStart?.()
+        await deps.progress(nextTip)
+        progressed = true
+        justBecameActive = false
+        if (nextTip != null) {
+          previousTip = nextTip
+        } else {
+          rememberNextTipWithoutProgress = true
+        }
+        deps.onProgressSuccess?.()
+      } catch (error) {
+        if (deps.signal.aborted) return
+        deps.onProgressError?.(error)
+      }
+      if (progressed && deps.afterProgress != null) {
+        try {
+          await deps.afterProgress()
+        } catch {
+          // The exit already progressed. The next poll refreshes the lists.
+        }
+      }
+    } else if (justBecameActive) {
+      deps.onProgressIdle?.()
+    }
+    if (deps.signal.aborted) return
+    await deps.wait(deps.signal)
+  }
+}
+
+function sessionStillAllowsAutomation(session: BarkEmergencyExitAutomationSessionGate): boolean {
+  return (
+    session.proceedAutomatically &&
+    session.walletUnlocked &&
+    session.sameWallet &&
+    session.sameNetwork &&
+    session.sessionLoaded
+  )
+}
+
+type ActiveAutomationRun = {
+  generation: number
+  abort: AbortController
+  unsubscribe: () => void
+}
+
+let automationGeneration = 0
+let activeAutomationRun: ActiveAutomationRun | null = null
+
+function currentAutomationActivity(): BarkEmergencyExitAutomationActivity {
+  const { inFlight, errorMessage, pausedReason } = useBarkEmergencyExitAutomationStore.getState()
+  return { inFlight, errorMessage, pausedReason }
+}
+
+function activityKeepingPause(
+  patch: Partial<BarkEmergencyExitAutomationActivity>,
+): BarkEmergencyExitAutomationActivity {
+  return { ...currentAutomationActivity(), ...patch }
+}
+
+/** A new error also opens a toast that stays until dismissed. */
+function publishAutomationActivity(next: BarkEmergencyExitAutomationActivity): void {
+  const previous = currentAutomationActivity()
+  if (
+    previous.inFlight === next.inFlight &&
+    previous.errorMessage === next.errorMessage &&
+    previous.pausedReason === next.pausedReason
+  ) {
+    return
+  }
+  useBarkEmergencyExitAutomationStore.getState().setActivity(next)
+  if (next.errorMessage != null && next.errorMessage !== previous.errorMessage) {
+    toast.error(next.errorMessage, { duration: Number.POSITIVE_INFINITY })
+  }
+}
+
+function automationActivityError(error: unknown, fallback: string): string {
+  const message = userFacingErrorMessage(error, { maxLength: Number.POSITIVE_INFINITY }).trim()
+  return message.length > 0 ? message : fallback
+}
+
+/** Stops the tip loop. Unlocking on the same network starts it again when the switch is on. */
+export function stopBarkEmergencyExitAutomation(): void {
+  automationGeneration += 1
+  const running = activeAutomationRun
+  activeAutomationRun = null
+  running?.abort.abort()
+  running?.unsubscribe()
+  publishAutomationActivity(IDLE_BARK_EMERGENCY_EXIT_AUTOMATION_ACTIVITY)
+}
+
+/**
+ * Starts the tip loop when this wallet's rail has automatic proceeding on and the
+ * Bark session is loaded for that same wallet and network. A no-op otherwise.
+ */
+export async function syncBarkEmergencyExitAutomation(
+  scope: BarkEmergencyExitAutomationScope,
+): Promise<void> {
+  const token = ++automationGeneration
+  const previous = activeAutomationRun
+  activeAutomationRun = null
+  previous?.abort.abort()
+  previous?.unsubscribe()
+
+  const session = readLiveSessionGate(scope)
+  if (!session.walletUnlocked || !session.sameWallet || !session.sameNetwork || !session.sessionLoaded) {
+    return
+  }
+  let proceedAutomatically: boolean
+  try {
+    proceedAutomatically = await getBarkWorker().readProceedAutomatically()
+  } catch (error) {
+    if (token !== automationGeneration) return
+    publishAutomationActivity({
+      inFlight: false,
+      errorMessage: automationActivityError(error, 'Could not read automatic proceeding'),
+      pausedReason: null,
+    })
+    return
+  }
+  if (token !== automationGeneration || !proceedAutomatically) return
+  if (!readLiveSessionGate(scope).sessionLoaded) return
+
+  const abort = new AbortController()
+  const unsubscribeWallet = useWalletStore.subscribe(() => {
+    if (!liveSessionStillMatches(scope)) {
+      stopBarkEmergencyExitAutomation()
+    }
+  })
+  const unsubscribeLoad = subscribeBarkLoadLifecycle(() => {
+    if (!liveSessionStillMatches(scope)) {
+      stopBarkEmergencyExitAutomation()
+    }
+  })
+  const unsubscribe = () => {
+    unsubscribeWallet()
+    unsubscribeLoad()
+  }
+  if (token !== automationGeneration) {
+    unsubscribe()
+    return
+  }
+  activeAutomationRun = { generation: token, abort, unsubscribe }
+  try {
+    await watchBarkEmergencyExitTips({
+      signal: abort.signal,
+      readGate: () => readPersistedSessionGate(scope),
+      fetchTip: () => fetchBarkExitChainTip(scope.networkMode),
+      listExitCount: async () => (await getBarkWorker().listEmergencyExits()).length,
+      progress: (observedTip) =>
+        progressBarkEmergencyExitAutomatically({
+          scope,
+          networkMode: scope.networkMode,
+          observedTipHeight: observedTip?.height,
+        }),
+      wait: (signal) => waitForBarkEmergencyExitTipPoll(scope.networkMode, signal),
+      onListed: () => invalidateBarkEmergencyExitQueries(scope),
+      afterProgress: () => invalidateBarkEmergencyExitQueries(scope),
+      onProgressStart: () => {
+        publishAutomationActivity(activityKeepingPause({ inFlight: true }))
+      },
+      onProgressSuccess: () => {
+        publishAutomationActivity(activityKeepingPause({ inFlight: false, errorMessage: null }))
+      },
+      onProgressIdle: () => {
+        publishAutomationActivity(activityKeepingPause({ inFlight: false }))
+      },
+      onProgressError: (error) => {
+        publishAutomationActivity(
+          activityKeepingPause({
+            inFlight: false,
+            errorMessage: automationActivityError(error, 'Emergency exit failed to progress'),
+          }),
+        )
+      },
+      onTipReadError: (error) => {
+        if (currentAutomationActivity().inFlight) return
+        publishAutomationActivity(
+          activityKeepingPause({
+            inFlight: false,
+            errorMessage: automationActivityError(error, 'Could not read the chain tip'),
+          }),
+        )
+      },
+    })
+  } finally {
+    if (activeAutomationRun?.generation === token) {
+      activeAutomationRun.unsubscribe()
+      activeAutomationRun = null
+    }
+  }
+}
+
+function liveSessionStillMatches(scope: BarkEmergencyExitAutomationScope): boolean {
+  const session = readLiveSessionGate(scope)
+  return session.walletUnlocked && session.sameWallet && session.sameNetwork && session.sessionLoaded
+}
+
+function readLiveSessionGate(
+  scope: BarkEmergencyExitAutomationScope,
+): Omit<BarkEmergencyExitAutomationSessionGate, 'proceedAutomatically'> {
+  const wallet = useWalletStore.getState()
+  const load = getBarkLoadLifecycleSnapshot()
+  const committedNetwork = selectCommittedNetworkMode(wallet)
+  return {
+    walletUnlocked: walletIsUnlockedOrSyncing(wallet.walletStatus),
+    sameWallet: wallet.activeWalletId === scope.walletId,
+    sameNetwork:
+      committedNetwork === scope.networkMode && load.networkMode === scope.networkMode,
+    sessionLoaded:
+      load.loadPhase === 'loaded' &&
+      load.networkMode === scope.networkMode &&
+      isBarkActiveForNetworkMode(scope.networkMode),
+  }
+}
+
+async function readPersistedSessionGate(
+  scope: BarkEmergencyExitAutomationScope,
+): Promise<BarkEmergencyExitAutomationSessionGate> {
+  const proceedAutomatically = await getBarkWorker().readProceedAutomatically()
+  return { ...readLiveSessionGate(scope), proceedAutomatically }
+}
+
+/**
+ * Catch up the on-chain wallet, lock the automatic fee for one progress call,
+ * and pause when the cap is exceeded or the children are unfundable.
+ * A partial funding wait returns normally so the next block can try again.
+ */
+export async function progressBarkEmergencyExitAutomatically(params: {
+  scope: BarkEmergencyExitScope | null
+  networkMode: NetworkMode
+  observedTipHeight?: number
+}): Promise<void> {
+  if (useBarkEmergencyExitAutomationStore.getState().pausedReason != null) return
+
+  const prefs = await getBarkWorker().readEmergencyExitFeePrefs()
+  const presetSatPerVbByLabel = await presetRatesForNetwork(params.networkMode)
+  const decision = decideBarkEmergencyExitAutomatedFee({
+    pausedReason: null,
+    feePresetLabel: prefs.feePresetLabel,
+    presetSatPerVbByLabel,
+    storedMaxFeeRateSatPerVb: prefs.maxFeeRateSatPerVb,
+  })
+  if (decision.action === 'paused') {
+    pauseBarkEmergencyExitAutomation(decision.pausedReason)
+    return
+  }
+
+  await catchUpOnchainWalletForBarkExit(params.networkMode, params.observedTipHeight)
+  try {
+    await runBarkEmergencyExitProgress(params.scope, decision.feeRateSatPerVb)
+  } catch (error) {
+    if (isBarkCpfpUnfundableError(error)) {
+      pauseBarkEmergencyExitAutomation('fundsInsufficient')
+      return
+    }
+    throw error
+  }
+}
+
+async function invalidateBarkEmergencyExitQueries(
+  scope: BarkEmergencyExitAutomationScope,
+): Promise<void> {
+  const barkListPrefix = (listName: string) => ['bark', listName, scope.walletId] as const
+  await appQueryClient.invalidateQueries({ queryKey: barkListPrefix('emergency-exits') })
+  await appQueryClient.invalidateQueries({ queryKey: barkListPrefix('exit-topology') })
+  await appQueryClient.invalidateQueries({ queryKey: barkListPrefix('vtxos') })
+}
+
+function waitForBarkEmergencyExitTipPoll(
+  networkMode: BarkRailNetwork,
+  signal: AbortSignal,
+): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) {
+      resolve()
+      return
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', finish)
+      resolve()
+    }, barkEmergencyExitTipPollMs(networkMode))
+    function finish() {
+      clearTimeout(timer)
+      resolve()
+    }
+    signal.addEventListener('abort', finish, { once: true })
+  })
+}

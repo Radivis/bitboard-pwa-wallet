@@ -1,6 +1,11 @@
 /** Keep user-visible error snippets bounded; full text may contain paths or noisy detail. */
 const MAX_UI_ERROR_LENGTH = 320
 
+export type SanitizeErrorMessageOptions = {
+  /** Character cap after path and URL stripping. `Infinity` keeps the full sanitized text. */
+  maxLength?: number
+}
+
 /**
  * `ark_grpc` wraps `ark_rest::Error` as `request failed: {source}` while REST also
  * displays `request failed`, producing a redundant chain segment in operator errors.
@@ -50,7 +55,10 @@ export function replaceRawBlockchainFetchErrorMessage(message: string): string {
  * local file paths, file URLs, `http(s)` endpoints (e.g. custom Esplora hosts), or
  * unbounded implementation detail.
  */
-export function sanitizeErrorMessageForUi(raw: string): string {
+export function sanitizeErrorMessageForUi(
+  raw: string,
+  options?: SanitizeErrorMessageOptions,
+): string {
   if (!raw) return ''
 
   const explorerReplaced = replaceRawBlockchainFetchErrorMessage(raw)
@@ -69,8 +77,9 @@ export function sanitizeErrorMessageForUi(raw: string): string {
   normalizedMessage = normalizedMessage.replace(/\s+/g, ' ').trim()
   normalizedMessage = collapseRedundantArkOperatorErrorSegments(normalizedMessage)
 
-  if (normalizedMessage.length <= MAX_UI_ERROR_LENGTH) {
+  const maxLength = options?.maxLength ?? MAX_UI_ERROR_LENGTH
+  if (!Number.isFinite(maxLength) || normalizedMessage.length <= maxLength) {
     return normalizedMessage
   }
-  return `${normalizedMessage.slice(0, MAX_UI_ERROR_LENGTH - 1)}…`
+  return `${normalizedMessage.slice(0, maxLength - 1)}…`
 }

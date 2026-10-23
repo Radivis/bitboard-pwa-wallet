@@ -254,7 +254,8 @@ body {
   }
 }
 
-.unilateral-exit-tree-edge-animated {
+.unilateral-exit-tree-edge-animated,
+.bark-exit-tree-edge-animated {
   stroke-dasharray: 5;
   animation: unilateral-exit-edge-dash 0.5s linear infinite;
 }

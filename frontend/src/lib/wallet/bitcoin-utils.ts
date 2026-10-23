@@ -10,8 +10,10 @@ import type { BitcoinNetwork, TransactionDetails } from '@/workers/crypto-types'
 export const DEFAULT_ESPLORA_URLS: Record<NetworkMode, string> = {
   lab: '', // In-app chain; no Esplora
   regtest: 'http://localhost:7030/api',
-  /** Mutinynet — preferred for Lightning testing (fast blocks, shared infra). */
-  signet: 'https://mutinynet.com/api',
+  /** Public Bitcoin Signet (default signet challenge). */
+  signet: 'https://mempool.space/signet/api',
+  /** Mutinynet — fast custom signet used for Lightning and Arkade testing. */
+  mutinynet: 'https://mutinynet.com/api',
   testnet: 'https://mempool.space/testnet4/api',
   mainnet: 'https://mempool.space/api',
 }
@@ -40,6 +42,35 @@ export async function fetchEsploraTipBlockHeight(
   return height
 }
 
+/**
+ * Fetches the current chain tip hash from an Esplora-style HTTP API.
+ * @see https://github.com/Blockstream/esplora/blob/master/API.md
+ */
+export async function fetchEsploraTipBlockHash(esploraBaseUrl: string): Promise<string> {
+  const base = esploraBaseUrl.replace(/\/$/, '')
+  const url = `${base}/blocks/tip/hash`
+  const fetchResponse = await fetch(url)
+  if (!fetchResponse.ok) {
+    throw new Error(`Esplora tip hash failed: HTTP ${fetchResponse.status}`)
+  }
+  const hash = (await fetchResponse.text()).trim().toLowerCase()
+  if (!/^[0-9a-f]{64}$/.test(hash)) {
+    throw new Error('Esplora returned an invalid tip hash')
+  }
+  return hash
+}
+
+/** Height and hash of the Esplora chain tip. A reorg can keep the height and change the hash. */
+export async function fetchEsploraChainTip(
+  esploraBaseUrl: string,
+): Promise<{ height: number; hash: string }> {
+  const [height, hash] = await Promise.all([
+    fetchEsploraTipBlockHeight(esploraBaseUrl),
+    fetchEsploraTipBlockHash(esploraBaseUrl),
+  ])
+  return { height, hash }
+}
+
 function sameOriginEsploraProxyBase(
   providerId: string,
   network: EsploraProxyNetwork,
@@ -52,6 +83,7 @@ const NETWORK_MODE_TO_BITCOIN: Record<NetworkMode, BitcoinNetwork> = {
   mainnet: 'bitcoin',
   testnet: 'testnet',
   signet: 'signet',
+  mutinynet: 'mutinynet',
   regtest: 'regtest',
 }
 
@@ -130,6 +162,7 @@ const ADDRESS_PREFIXES: Record<NetworkMode, string[]> = {
   mainnet: ['bc1p', 'bc1q', '1', '3'],
   testnet: ['tb1p', 'tb1q', 'm', 'n', '2'],
   signet: ['tb1p', 'tb1q'],
+  mutinynet: ['tb1p', 'tb1q'],
   regtest: ['bcrt1p', 'bcrt1q'],
   lab: ['bcrt1q', 'bcrt1p'],
 }
@@ -187,7 +220,8 @@ export function getEsploraUrl(
   if (
     network === 'mainnet' ||
     network === 'testnet' ||
-    network === 'signet'
+    network === 'signet' ||
+    network === 'mutinynet'
   ) {
     if (customUrl) {
       const match = customEsploraMatchesWhitelistedBase(customUrl, network)

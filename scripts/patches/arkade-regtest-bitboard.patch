@@ -1,5 +1,5 @@
 diff --git a/lib/chain.mjs b/lib/chain.mjs
-index 2575622..935ed14 100644
+index 2575622..1d95ac0 100644
 --- a/lib/chain.mjs
 +++ b/lib/chain.mjs
 @@ -8,7 +8,7 @@
@@ -11,7 +11,7 @@ index 2575622..935ed14 100644
  import { waitFor, waitForOrFail } from './wait.mjs';
  
  const CLI = ['bitcoin-cli', '-regtest', '-rpcuser=admin1', '-rpcpassword=123'];
-@@ -24,6 +24,29 @@ function loadedWalletCount() {
+@@ -24,6 +24,37 @@ function loadedWalletCount() {
    }
  }
  
@@ -38,10 +38,31 @@ index 2575622..935ed14 100644
 +  return loadedWalletCount() > 0;
 +}
 +
++/** Wallet RPCs (mine, faucet, send) need a loaded wallet — not guaranteed after `docker compose up`. */
++export async function ensureWalletReady() {
++  return waitFor('Bitcoin Core wallet', () => ensureBitcoinWalletLoaded(), {
++    attempts: 15,
++    intervalMs: 2000,
++  });
++}
++
  export function bitcoinCli(args, opts = {}) {
    return dockerExec('bitcoin', [...CLI, ...args], opts);
  }
-@@ -51,20 +74,15 @@ export async function bootstrapChain() {
+@@ -36,7 +67,11 @@ export function getBalance() {
+   return Number.isFinite(n) ? n : 0;
+ }
+ 
+-export function mine(n = 1) {
++export async function mine(n = 1) {
++  if (!(await ensureWalletReady())) {
++    warn('mine aborted: Bitcoin Core wallet is not loaded');
++    return false;
++  }
+   const r = bitcoinCli(['-generate', String(n)], { capture: true });
+   if (r.code !== 0) warn(`mine ${n} failed: ${r.stderr || r.stdout}`);
+   return r.code === 0;
+@@ -51,20 +86,11 @@ export async function bootstrapChain() {
    // Ensure EXACTLY ONE wallet is loaded, so bitcoin-cli (and Boltz) can route
    // wallet RPCs without an explicit -rpcwallet. The wrinkle: btcpay/Core images
    // differ — Core 30's image auto-creates the empty-named "" wallet on startup,
@@ -49,13 +70,9 @@ index 2575622..935ed14 100644
 -  // image's own wallet, and only create our own (named) wallet if none appears —
 -  // creating a second one would make every wallet RPC ambiguous.
 -  const auto = await waitFor('Bitcoin Core wallet', () => loadedWalletCount() > 0, {
-+  // while Core 31 creates none and rejects empty names. After a container restart
-+  // the wallet directory may already exist on disk without being loaded, so
-+  // createwallet fails with "Database already exists" until loadwallet runs.
-+  const ready = await waitFor('Bitcoin Core wallet', () => ensureBitcoinWalletLoaded(), {
-     attempts: 15,
-     intervalMs: 2000,
-   });
+-    attempts: 15,
+-    intervalMs: 2000,
+-  });
 -  if (!auto) {
 -    await waitForOrFail('Bitcoin Core wallet (created)', () => {
 -      if(loadedWalletCount() === 0) {
@@ -63,13 +80,128 @@ index 2575622..935ed14 100644
 -      }
 -      return loadedWalletCount() > 0;
 -    }, { attempts: 10, intervalMs: 2000 });
-+  if (!ready) {
++  // while Core 31 creates none and rejects empty names. After a container restart
++  // the wallet directory may already exist on disk without being loaded, so
++  // createwallet fails with "Database already exists" until loadwallet runs.
++  if (!(await ensureWalletReady())) {
 +    fail('Bitcoin Core wallet did not become ready in time');
    }
  
    if (getBalance() >= 1) return;
+@@ -90,38 +116,99 @@ export async function bootstrapChain() {
+ // NOT mine to confirm the send. Pass { confirm: true } to mine one block so the
+ // send confirms immediately; otherwise it sits in the mempool until the next
+ // block (the auto-miner, an explicit `mine`, or a later faucet --confirm).
+-export function faucet(address, amountBtc, { confirm = false } = {}) {
++export async function faucet(address, amountBtc, { confirm = false } = {}) {
++  if (!(await ensureWalletReady())) {
++    warn('faucet aborted: Bitcoin Core wallet is not loaded');
++    return false;
++  }
+   const amt = parseFloat(amountBtc);
+   let guard = 0;
+   while (getBalance() < amt && guard++ < 5) {
+     log(`Node wallet has < ${amt} BTC spendable; mining 101 blocks to top up...`);
+-    mine(101);
++    if (!(await mine(101))) return false;
+   }
+   const r = bitcoinCli(['sendtoaddress', address, String(amountBtc)], { capture: true });
+   if (r.code !== 0) {
+     warn(`faucet ${amountBtc} -> ${address} failed: ${r.stderr || r.stdout}`);
+     return false;
+   }
+-  if (confirm) mine(1);
++  if (confirm && !(await mine(1))) return false;
+   return true;
+ }
+ 
+-// Simulate a chain reorg of `depth` blocks: invalidate the block at
+-// (tip - depth + 1) — orphaning it and everything after — then mine a strictly
+-// longer competing branch (depth + 1 blocks) so it becomes the active chain.
+-export function reorg(depth = 1) {
++// First block a `depth` reorg orphans: tip - depth + 1. Null when the wallet or
++// chain cannot satisfy the request.
++function reorgTarget(depth) {
+   const tip = parseInt(bitcoinCli(['getblockcount'], { capture: true }).stdout, 10);
+   if (!Number.isFinite(tip) || tip < depth) {
+     warn(`cannot reorg ${depth} block(s): chain height is ${tip}`);
+-    return false;
++    return null;
+   }
+-  const target = tip - depth + 1; // first block to orphan
++  const target = tip - depth + 1;
+   const hash = bitcoinCli(['getblockhash', String(target)], { capture: true }).stdout.trim();
+-  log(`Reorg: invalidating block ${target} (${hash.slice(0, 12)}…), re-mining ${depth + 1}...`);
++  if (!hash) {
++    warn(`cannot reorg: missing block hash at height ${target}`);
++    return null;
++  }
++  return { target, hash };
++}
++
++function invalidateBlock(hash) {
+   const inv = bitcoinCli(['invalidateblock', hash], { capture: true });
+   if (inv.code !== 0) {
+     warn(`invalidateblock failed: ${inv.stderr || inv.stdout}`);
+     return false;
+   }
+-  return mine(depth + 1);
++  return true;
++}
++
++// Coinbase-only blocks. `generateblock` with an empty tx list does not pull the
++// mempool, so orphaned transactions stay at 0 confirmations.
++async function mineCoinbaseOnlyBlocks(count) {
++  const addr = bitcoinCli(['getnewaddress'], { capture: true }).stdout.trim();
++  if (!addr) {
++    warn('generateblock aborted: getnewaddress returned empty');
++    return false;
++  }
++  for (let i = 0; i < count; i += 1) {
++    const mined = bitcoinCli(['generateblock', addr, '[]'], { capture: true });
++    if (mined.code !== 0) {
++      warn(`generateblock failed: ${mined.stderr || mined.stdout}`);
++      return false;
++    }
++  }
++  return true;
++}
++
++// Simulate a chain reorg of `depth` blocks: invalidate the block at
++// (tip - depth + 1) — orphaning it and everything after — then mine a strictly
++// longer competing branch (depth + 1 blocks) so it becomes the active chain.
++// `-generate` includes mempool transactions, so an orphaned tx is usually mined again.
++export async function reorg(depth = 1) {
++  if (!(await ensureWalletReady())) {
++    warn('reorg aborted: Bitcoin Core wallet is not loaded');
++    return false;
++  }
++  const located = reorgTarget(depth);
++  if (!located) return false;
++  log(`Reorg: invalidating block ${located.target} (${located.hash.slice(0, 12)}…), re-mining ${depth + 1}...`);
++  if (!invalidateBlock(located.hash)) return false;
++  return await mine(depth + 1);
+ }
++
++// Same orphan point as `reorg`, then a longer coinbase-only branch. Mempool
++// transactions from the orphaned blocks are not re-mined.
++export async function reorgExcludingMempool(depth = 1) {
++  if (!(await ensureWalletReady())) {
++    warn('reorg aborted: Bitcoin Core wallet is not loaded');
++    return false;
++  }
++  const located = reorgTarget(depth);
++  if (!located) return false;
++  const replacementBlocks = depth + 1;
++  log(
++    `Reorg excluding mempool: invalidating block ${located.target} (${located.hash.slice(0, 12)}…), mining ${replacementBlocks} empty block(s)...`,
++  );
++  if (!invalidateBlock(located.hash)) return false;
++  return await mineCoinbaseOnlyBlocks(replacementBlocks);
++}
+\ No newline at end of file
 diff --git a/lib/compose.mjs b/lib/compose.mjs
-index dc00adf..4320d7b 100644
+index dc00adf..96e5f9b 100644
 --- a/lib/compose.mjs
 +++ b/lib/compose.mjs
 @@ -3,18 +3,27 @@
@@ -101,6 +233,123 @@ index dc00adf..4320d7b 100644
      ...profiles.flatMap((p) => ['--profile', p]),
    ];
  }
+@@ -31,7 +40,10 @@ export function composeUp(services = [], { profiles = [] } = {}) {
+ 
+ // Every service is profile-gated, so stop/down must enable all profiles to
+ // target the whole project (compose ignores profiled services otherwise).
+-export const ALL_PROFILES = ['base', 'ark', 'delegate', 'boltz', 'emulator', 'solver'];
++// `bark` is on the stop list so a running captaind is torn down with the stack.
++// It is not on the unscoped start list: only `--profile bark` boots captaind.
++export const START_PROFILES = ['base', 'ark', 'delegate', 'boltz', 'emulator', 'solver'];
++export const ALL_PROFILES = [...START_PROFILES, 'bark'];
+ 
+ export function composeStop() {
+   return compose(['stop'], { profiles: ALL_PROFILES });
+diff --git a/lib/esplora-diagnostics.mjs b/lib/esplora-diagnostics.mjs
+new file mode 100644
+index 0000000..dfe6d9c
+--- /dev/null
++++ b/lib/esplora-diagnostics.mjs
+@@ -0,0 +1,99 @@
++// Esplora tx probes for manual regtest debugging.
++//   node regtest.mjs esplora-tip
++//   node regtest.mjs esplora-tx <txid> [txid...]
++import { fetchText } from './wait.mjs';
++import { log } from './log.mjs';
++
++const ESPLORA_API = 'http://localhost:7030/api';
++
++async function fetchJson(url) {
++  const { ok, status, text } = await fetchText(url);
++  if (!ok) {
++    return { ok: false, status, text };
++  }
++  try {
++    return { ok: true, status, body: JSON.parse(text) };
++  } catch {
++    return { ok: true, status, body: text };
++  }
++}
++
++async function fetchChainTipHeight() {
++  const { ok, status, body } = await fetchJson(`${ESPLORA_API}/blocks/tip/height`);
++  if (!ok) {
++    return null;
++  }
++  if (typeof body === 'number') {
++    return body;
++  }
++  if (typeof body === 'string' && /^\d+$/.test(body.trim())) {
++    return Number.parseInt(body.trim(), 10);
++  }
++  return null;
++}
++
++function confirmationsFromStatus(status, tipHeight) {
++  if (status?.confirmed !== true) {
++    return 0;
++  }
++  if (status.block_height != null && tipHeight != null) {
++    return Math.max(0, tipHeight - status.block_height + 1);
++  }
++  return 1;
++}
++
++async function probeTx(txid, tipHeight) {
++  const statusRes = await fetchJson(`${ESPLORA_API}/tx/${txid}/status`);
++  const rawRes = await fetchText(`${ESPLORA_API}/tx/${txid}/raw`);
++  const merkleRes = await fetchJson(`${ESPLORA_API}/tx/${txid}/merkle-proof`);
++  const txRes = await fetchJson(`${ESPLORA_API}/tx/${txid}`);
++
++  const status = statusRes.ok ? statusRes.body : null;
++  const txJsonStatus = txRes.ok ? txRes.body?.status : null;
++  const merkleHeight =
++    merkleRes.ok && typeof merkleRes.body?.block_height === 'number'
++      ? merkleRes.body.block_height
++      : null;
++
++  let inferredConfirmations = 0;
++  if (merkleHeight != null && tipHeight != null) {
++    inferredConfirmations = Math.max(0, tipHeight - merkleHeight + 1);
++  } else {
++    inferredConfirmations = Math.max(
++      confirmationsFromStatus(status, tipHeight),
++      confirmationsFromStatus(txJsonStatus, tipHeight),
++    );
++  }
++
++  log(`txid ${txid}`);
++  log(`  inferred_confirmations=${inferredConfirmations}`);
++  log(
++    `  /status: http=${statusRes.status} confirmed=${status?.confirmed ?? false} block_height=${status?.block_height ?? '(missing)'}`,
++  );
++  log(`  /raw: http=${rawRes.status} available=${rawRes.ok}`);
++  if (merkleHeight != null) {
++    log(`  /merkle-proof: block_height=${merkleHeight}`);
++  } else {
++    log(`  /merkle-proof: http=${merkleRes.status} ${merkleRes.ok ? '' : merkleRes.text?.slice(0, 120) ?? ''}`.trim());
++  }
++  log(
++    `  /tx JSON: http=${txRes.status} confirmed=${txJsonStatus?.confirmed ?? false} block_height=${txJsonStatus?.block_height ?? '(missing)'}`,
++  );
++}
++
++export async function esploraTip() {
++  const tip = await fetchChainTipHeight();
++  log(`Esplora ${ESPLORA_API}`);
++  log(`chain_tip_height=${tip ?? 'unknown'}`);
++}
++
++export async function esploraTx(txids) {
++  if (txids.length === 0) {
++    throw new Error('usage: node regtest.mjs esplora-tx <txid> [txid...]');
++  }
++  const tip = await fetchChainTipHeight();
++  log(`Esplora ${ESPLORA_API} chain_tip_height=${tip ?? 'unknown'}`);
++  for (const txid of txids) {
++    await probeTx(txid, tip);
++  }
++}
 diff --git a/lib/log.mjs b/lib/log.mjs
 index 5e2a31e..fbb5aab 100644
 --- a/lib/log.mjs
@@ -166,19 +415,75 @@ index 06bd4f5..13cd16e 100644
  }
  
 diff --git a/regtest.mjs b/regtest.mjs
-index 3a9717e..f40f17d 100644
+index 3a9717e..dc824a4 100644
 --- a/regtest.mjs
 +++ b/regtest.mjs
-@@ -21,7 +21,7 @@
+@@ -9,27 +9,31 @@
+ //   node regtest.mjs rpc <args...>     (bitcoin-cli passthrough, in the bitcoin container)
+ //   node regtest.mjs rotate-signer [--cutoff <secs>] [--new-key <hex>]  (rotate operator signer; deprecate the previous)
+ //   node regtest.mjs set-signers --active <priv> [--deprecated <priv>[:<cutoff>],...]  (apply an explicit signer set)
+-//   node regtest.mjs signer-info       (print the active + deprecated signer set)
++//   node regtest.mjs esplora-tip
++//   node regtest.mjs esplora-tx <txid> [txid...]
+ //
+ // Profiles (and their dependencies) let you bring up a subset of the stack:
+ //   ark → base,  delegate → ark,  boltz → ark,  emulator → ark,
+-//   solver → ark + emulator. `--profile boltz` brings up base+ark+boltz.
++//   solver → ark + emulator, bark → ark.
++//   `--profile boltz` brings up base+ark+boltz.
++//   `--profile bark` brings up base+ark+captaind. `--profile ark` does not.
+ //   Selection precedence: --profile flags > REGTEST_PROFILES env (comma-list)
+-//   > full stack.
++//   > START_PROFILES (bark is omitted; stop/clean still include it).
+ //
+ // Replaces the old bash scripts + the nigiri binary entirely.
  import { loadEnv, env } from './lib/env.mjs';
  import { log, warn, fail } from './lib/log.mjs';
- import { ROOT, composeUp, composeStop, composeDown, ALL_PROFILES } from './lib/compose.mjs';
+-import { ROOT, composeUp, composeStop, composeDown, ALL_PROFILES } from './lib/compose.mjs';
 -import { docker } from './lib/proc.mjs';
++import { ROOT, composeUp, composeStop, composeDown, START_PROFILES } from './lib/compose.mjs';
 +import { docker, dockerExec, resolveContainerName } from './lib/proc.mjs';
  import { sleep, waitForOrFail, httpOk, fetchJson } from './lib/wait.mjs';
- import { bitcoinCli, bootstrapChain, mine, faucet, reorg } from './lib/chain.mjs';
+-import { bitcoinCli, bootstrapChain, mine, faucet, reorg } from './lib/chain.mjs';
++import { bitcoinCli, bootstrapChain, mine, faucet, reorg, reorgExcludingMempool } from './lib/chain.mjs';
  import { setupArkd, applyArkdFees } from './lib/setup/arkd.mjs';
-@@ -238,7 +238,8 @@ async function main() {
+ import { setupFulmine, setupDelegator } from './lib/setup/fulmine.mjs';
+ import { setupBoltz } from './lib/setup/boltz.mjs';
+ import { setupSolver } from './lib/setup/solver.mjs';
+ import { createInvoice, payInvoice } from './lib/invoice.mjs';
+ import { rotateSigner, setSigners, signerInfo, clearSignerState } from './lib/setup/signer.mjs';
++import { esploraTip, esploraTx } from './lib/esplora-diagnostics.mjs';
+ 
+ // Each profile's direct prerequisites. resolveProfiles() expands the transitive
+ // closure so the orchestrator can enable every profile a target tier needs.
+@@ -40,6 +44,7 @@ const PROFILE_DEPS = {
+   boltz: ['ark'], // boltz + its own boltz-fulmine + boltz-lnd (independent of the delegator)
+   emulator: ['ark'],
+   solver: ['ark', 'emulator'],
++  bark: ['ark'],
+ };
+ 
+ function resolveProfiles(requested) {
+@@ -139,6 +144,9 @@ function banner(active) {
+     lines.push(`  Solver HTTP     http://localhost:${env('SOLVER_HTTP_PORT', '7091')}`);
+     lines.push(`  Solver gRPC     localhost:${env('SOLVER_GRPC_PORT', '7090')}`);
+   }
++  if (active.has('bark')) {
++    lines.push(`  Captaind        http://localhost:${env('CAPTAIND_PORT', '3535')}`);
++  }
+   lines.push(
+     '',
+     `  Active profiles: ${[...active].join(', ')}`,
+@@ -156,7 +164,7 @@ async function start(opts) {
+     .split(',')
+     .map((s) => s.trim())
+     .filter(Boolean);
+-  const requested = opts.profiles.length ? opts.profiles : fromEnv.length ? fromEnv : ALL_PROFILES;
++  const requested = opts.profiles.length ? opts.profiles : fromEnv.length ? fromEnv : START_PROFILES;
+   const active = new Set(resolveProfiles(requested));
+ 
+   // Emulator opt-out: clearing EMULATOR_IMAGE disables it — and the solver,
+@@ -238,7 +246,8 @@ async function main() {
    // `ark` / `arkd` are raw passthroughs into the arkd container, so forward
    // every following token verbatim (flags included) without our own parsing.
    if (argv[0] === 'ark' || argv[0] === 'arkd') {
@@ -188,7 +493,7 @@ index 3a9717e..f40f17d 100644
      process.exitCode = res.code;
      return;
    }
-@@ -248,7 +249,8 @@ async function main() {
+@@ -248,14 +257,15 @@ async function main() {
    // `bitcoin-cli -regtest … getblockcount`, keeping downstream migrations a
    // find-replace (`nigiri rpc …` → `node regtest.mjs rpc …`, same arg shape).
    if (argv[0] === 'rpc') {
@@ -198,3 +503,60 @@ index 3a9717e..f40f17d 100644
      process.exitCode = res.code;
      return;
    }
+ 
+   const opts = parseArgs(argv);
+   if (!opts.command) {
+-    fail('usage: node regtest.mjs <start|stop|clean|faucet|mine|reorg|rpc|ark|arkd|rotate-signer|set-signers|signer-info> [options]');
++    fail('usage: node regtest.mjs <start|stop|clean|faucet|mine|reorg|reorg-excluding-mempool|rpc|ark|arkd|rotate-signer|set-signers|signer-info> [options]');
+   }
+ 
+   // faucet/mine act on a running node and don't need override discovery, but
+@@ -275,23 +285,32 @@ async function main() {
+     case 'faucet': {
+       const [address, amount] = opts.positional;
+       if (!address || !amount) fail('usage: node regtest.mjs faucet <address> <amountBtc> [--confirm]');
+-      if (!faucet(address, amount, { confirm: opts.confirm })) fail('faucet failed');
++      if (!(await faucet(address, amount, { confirm: opts.confirm }))) fail('faucet failed');
+       log(`Sent ${amount} BTC to ${address}${opts.confirm ? ' and mined 1 block' : ' (unconfirmed; mine to confirm)'}`);
+       break;
+     }
+     case 'mine': {
+       const n = parseInt(opts.positional[0] || '1', 10);
+-      if (!mine(n)) fail('mine failed');
++      if (!(await mine(n))) fail('mine failed');
+       log(`Mined ${n} block(s)`);
+       break;
+     }
+     case 'reorg': {
+       const depth = parseInt(opts.positional[0] || '1', 10);
+       if (!Number.isFinite(depth) || depth < 1) fail('usage: node regtest.mjs reorg [depth>=1]');
+-      if (!reorg(depth)) fail('reorg failed');
++      if (!(await reorg(depth))) fail('reorg failed');
+       log(`Reorged ${depth} block(s)`);
+       break;
+     }
++    case 'reorg-excluding-mempool': {
++      const depth = parseInt(opts.positional[0] || '1', 10);
++      if (!Number.isFinite(depth) || depth < 1) {
++        fail('usage: node regtest.mjs reorg-excluding-mempool [depth>=1]');
++      }
++      if (!(await reorgExcludingMempool(depth))) fail('reorg-excluding-mempool failed');
++      log(`Reorged ${depth} block(s) without re-mining the mempool`);
++      break;
++    }
+     case 'create-invoice':
+       createInvoice({ secondary: process.argv.includes('--secondary') });
+       break;
+@@ -304,6 +323,12 @@ async function main() {
+     case 'signer-info':
+       await signerInfo();
+       break;
++    case 'esplora-tip':
++      await esploraTip();
++      break;
++    case 'esplora-tx':
++      await esploraTx(opts.positional);
++      break;
+     case 'set-signers': {
+       if (!opts.active) fail('usage: node regtest.mjs set-signers --active <priv> [--deprecated <priv>[:<cutoff>],...]');
+       const deprecated = (opts.deprecated || '')

@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import { InfomodeToggle } from '@/components/infomode/InfomodeToggle'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { BarkExitSeizureBanner } from '@/components/bark/BarkExitSeizureBanner'
 import { NearZeroSecurityBanner } from '@/components/NearZeroSecurityBanner'
 import { NoMnemonicBackupBanner } from '@/components/NoMnemonicBackupBanner'
 import { SecureStorageUnavailableBanner } from '@/components/SecureStorageUnavailableBanner'
@@ -492,6 +493,7 @@ export function WalletLayout({ children }: WalletLayoutProps) {
       <SecureStorageUnavailableBanner />
       <NearZeroSecurityBanner />
       <NoMnemonicBackupBanner />
+      <BarkExitSeizureBanner />
 
       <main
         className={cn(

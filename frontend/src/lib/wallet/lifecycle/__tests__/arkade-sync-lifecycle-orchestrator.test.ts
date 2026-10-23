@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { proxyMarker } from 'comlink'
 
 const syncWithOperator = vi.fn()
 const scheduleBackgroundFullVtxoReconcile = vi.fn()
@@ -44,7 +45,7 @@ vi.mock('@/lib/arkade/arkade-endpoints', async (importOriginal) => {
 })
 
 vi.mock('@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator', () => ({
-  getArkadeLoadLifecycleSnapshot: () => ({ loadPhase: loadPhaseRef.phase, networkMode: 'signet', errorMessage: null }),
+  getArkadeLoadLifecycleSnapshot: () => ({ loadPhase: loadPhaseRef.phase, networkMode: 'mutinynet', errorMessage: null }),
 }))
 
 vi.mock('@/lib/wallet/lifecycle/arkade-save-lifecycle-orchestrator', async (importOriginal) => {
@@ -104,7 +105,7 @@ function completeMigrationResult(): ArkadeSignerMigrationResult {
 
 const syncParams = {
   walletId: 1,
-  networkMode: 'signet' as const,
+  networkMode: 'mutinynet' as const,
   arkadeAccountId: 'conn-1',
   syncKind: 'manual' as const,
 }
@@ -121,7 +122,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     orchestrateArkadeSave.mockResolvedValue(undefined)
     configureArkadeSyncForLoadedRail({
       walletId: 1,
-      networkMode: 'signet',
+      networkMode: 'mutinynet',
       arkadeAccountId: 'conn-1',
     })
     getAutonomousModeStatus.mockResolvedValue({ active: false })
@@ -198,7 +199,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
       useWalletStore.setState({
         activeWalletId: 1,
         activeArkadeAccountId: 'conn-1',
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
       })
 
       let resolveSync!: () => void
@@ -236,7 +237,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
       useWalletStore.setState({
         activeWalletId: 1,
         activeArkadeAccountId: 'conn-1',
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
       })
       getAutonomousModeStatus.mockResolvedValue({ active: true })
 
@@ -255,11 +256,11 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
       useWalletStore.setState({
         activeWalletId: 1,
         activeArkadeAccountId: 'conn-1',
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
       })
       getAutonomousModeStatus.mockResolvedValue({ active: false })
       persistActiveUnilateralExitJob(
-        { walletId: 1, networkMode: 'signet', arkadeAccountId: 'conn-1' },
+        { walletId: 1, networkMode: 'mutinynet', arkadeAccountId: 'conn-1' },
         [{ txid: 'aa'.repeat(32), vout: 0 }],
       )
 
@@ -293,7 +294,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
       syncPhase: 'sync-error',
       railScope: {
         walletId: 1,
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
         arkadeAccountId: 'conn-1',
       },
       errorMessage: 'operator down',
@@ -313,7 +314,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
       syncPhase: 'not-syncing',
       railScope: {
         walletId: 1,
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
         arkadeAccountId: 'conn-1',
       },
       errorMessage: null,
@@ -436,7 +437,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
       syncPhase: 'sync-error',
       railScope: {
         walletId: 1,
-        networkMode: 'signet',
+        networkMode: 'mutinynet',
         arkadeAccountId: 'conn-1',
       },
       errorMessage: 'operator vtxos down',
@@ -446,7 +447,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
 
   it('signerMigration still throws when cooperative migration fails', async () => {
     migrateDeprecatedSignerVtxos.mockRejectedValueOnce(
-      new Error('Ark client error: failed to get VTXOs for addresses: request failed'),
+      new Error('Arkade client error: failed to get VTXOs for addresses: request failed'),
     )
 
     await expect(
@@ -532,6 +533,15 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     })
 
     await expect(awaitArkadeSyncQuiescence()).resolves.toBeUndefined()
+  })
+
+  it('registers the background reconcile callback as a Comlink proxy', async () => {
+    await orchestrateArkadeSyncThenSave(syncParams)
+
+    const onFinished = setOnBackgroundFullReconcileFinished.mock.lastCall?.[0] as
+      | Record<PropertyKey, unknown>
+      | undefined
+    expect(onFinished?.[proxyMarker]).toBe(true)
   })
 
   it('background reconcile warning is replaced and cleared only when it is still current', async () => {

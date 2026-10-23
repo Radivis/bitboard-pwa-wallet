@@ -19,6 +19,8 @@ const mockSetActiveWallet = vi.hoisted(() => vi.fn())
 
 const mockCloseArkadeSession = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 
+const mockCloseBarkSessionForWalletChange = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+
 const mockTearDownArkadeWorkerAndClientState = vi.hoisted(() => vi.fn())
 
 const mockReleasePreviousWalletDashboardSession = vi.hoisted(() => vi.fn())
@@ -40,6 +42,11 @@ vi.mock('@/lib/wallet/onchain-dashboard-sync', () => ({
 
 vi.mock('@/lib/arkade/arkade-session-service', () => ({
   closeArkadeSession: (...args: unknown[]) => mockCloseArkadeSession(...args),
+}))
+
+vi.mock('@/lib/bark/bark-session-service', () => ({
+  closeBarkSessionForWalletChange: (...args: unknown[]) =>
+    mockCloseBarkSessionForWalletChange(...args),
 }))
 
 vi.mock('@/lib/arkade/arkade-session-teardown', () => ({
@@ -93,6 +100,9 @@ describe('prepareActiveWalletSwitch', () => {
     mockCloseArkadeSession.mockImplementation(async () => {
       callOrder.push('closeArkadeSession')
     })
+    mockCloseBarkSessionForWalletChange.mockImplementation(async () => {
+      callOrder.push('closeBarkSession')
+    })
     mockReleasePreviousWalletDashboardSession.mockImplementation(() => {
       callOrder.push('releasePreviousDashboard')
     })
@@ -126,6 +136,7 @@ describe('prepareActiveWalletSwitch', () => {
     expect(callOrder).toEqual([
       'awaitSecrets',
       'closeArkadeSession',
+      'closeBarkSession',
       'releasePreviousDashboard',
       'purgeLightning',
       'removeHydrationQueries',

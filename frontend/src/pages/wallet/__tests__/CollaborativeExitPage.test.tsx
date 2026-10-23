@@ -17,7 +17,7 @@ type ExitFlow = ReturnType<typeof useCollaborativeExitFlow>
 
 function buildExitFlow(overrides: Partial<ExitFlow>): ExitFlow {
   return {
-    networkMode: 'signet',
+    networkMode: 'mutinynet',
     currentAddress: 'tb1qexample',
     balanceQuery: { data: { confirmedSats: 280_603, totalSats: 280_603 } },
     collabDestination: 'tb1pa5gq79tt8mnhe9hqus3rhnw3cr4gt4spy86cv0x92ck',

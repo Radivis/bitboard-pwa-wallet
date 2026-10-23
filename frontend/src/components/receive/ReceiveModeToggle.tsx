@@ -1,16 +1,17 @@
-import { Bitcoin, Zap } from 'lucide-react'
+import { Bitcoin, Dog, Zap } from 'lucide-react'
 import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
 import { cn } from '@/lib/shared/utils'
 import { ReceiveModeArkadeInfomodeContent } from '@/components/arkade/infomode/ReceiveModeArkadeInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 
-export type ReceiveMode = 'bitcoin' | 'lightning' | 'arkade'
+export type ReceiveMode = 'bitcoin' | 'lightning' | 'arkade' | 'bark'
 
 interface ReceiveModeToggleProps {
   mode: ReceiveMode
   onModeChange: (mode: ReceiveMode) => void
   showLightning: boolean
   showArkade: boolean
+  showBark: boolean
 }
 
 export function ReceiveModeToggle({
@@ -18,6 +19,7 @@ export function ReceiveModeToggle({
   onModeChange,
   showLightning,
   showArkade,
+  showBark,
 }: ReceiveModeToggleProps) {
   return (
     <InfomodeWrapper
@@ -66,6 +68,21 @@ export function ReceiveModeToggle({
           >
             <ArkadeIcon className="h-5 w-5" />
             Arkade
+          </button>
+        ) : null}
+        {showBark ? (
+          <button
+            type="button"
+            onClick={() => onModeChange('bark')}
+            className={cn(
+              'flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-3 text-sm font-medium transition-all',
+              mode === 'bark'
+                ? 'bg-background shadow-sm'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <Dog className="h-5 w-5" aria-hidden />
+            Bark
           </button>
         ) : null}
       </div>

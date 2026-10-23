@@ -1,0 +1,16 @@
+use crate::error::ArkResult;
+
+use super::ArkadeSession;
+
+impl ArkadeSession {
+    pub fn peek_offchain_address(&self) -> ArkResult<String> {
+        let (address, _) = self.client.peek_offchain_receive_address()?;
+        Ok(address.to_string())
+    }
+
+    pub fn reveal_next_offchain_address(&self) -> ArkResult<String> {
+        self.ensure_operator_rpc_allowed()?;
+        let (address, _) = self.client.reveal_next_offchain_receive_address()?;
+        Ok(address.to_string())
+    }
+}

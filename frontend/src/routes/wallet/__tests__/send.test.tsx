@@ -63,6 +63,7 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
       lab: 'Lab',
       regtest: 'Regtest',
       signet: 'Signet',
+      mutinynet: 'Mutinynet',
       testnet: 'Testnet',
       mainnet: 'Mainnet',
     },
