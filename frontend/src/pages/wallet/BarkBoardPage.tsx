@@ -2,13 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
-import {
-  BarkDenominationAmountField,
-  BarkReviewedAmountLine,
-} from '@/components/bark/BarkDenominationAmountField'
 import { barkSessionBlockingScreen } from '@/components/bark/bark-session-blocking-screen'
 import { BarkRailUnavailable } from '@/components/bark/BarkRailUnavailable'
 import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
+import { LabeledFiatBtcAmount } from '@/components/FiatBtcAmountDisplay'
+import { SatsOrFiatAmountField } from '@/components/SatsOrFiatAmountField'
 import { amountSatsFromSatsOrFiatField } from '@/components/wallet/send/amount-sats-from-sats-or-fiat-field'
 import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
 import { PageHeader } from '@/components/PageHeader'
@@ -220,7 +218,7 @@ export function BarkBoardPage() {
           <CardTitle className="text-base">Amount</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <BarkDenominationAmountField
+          <SatsOrFiatAmountField
             satsLabel="Satoshis"
             fiatLabel={`Amount (${fiatAmount.currency})`}
             amountRaw={amountRaw}
@@ -231,9 +229,7 @@ export function BarkBoardPage() {
             inputTestId="bark-board-amount"
             priceUnavailableTestId="bark-board-fiat-price-unavailable"
             btcPreviewTestId="bark-board-amount-btc-preview"
-            mainnetFiatEntry={fiatAmount.mainnetFiatEntry}
-            hasUsableFiatSpot={fiatAmount.hasUsableFiatSpot}
-            currency={fiatAmount.currency}
+            fiat={fiatAmount}
             parsedAmountSats={parsedAmountSats}
           />
           <Button
@@ -273,19 +269,19 @@ export function BarkBoardPage() {
                 onSelectCustomMode={handleSelectCustomMode}
               />
             </div>
-            <BarkReviewedAmountLine
+            <LabeledFiatBtcAmount
               label="On-chain fee:"
               amountSats={review.onchainFeeSats}
               testId="bark-board-onchain-fee"
               fiat={fiatAmount}
             />
-            <BarkReviewedAmountLine
+            <LabeledFiatBtcAmount
               label="Bark board fee:"
               amountSats={review.offchainFeeSats}
               testId="bark-board-offchain-fee"
               fiat={fiatAmount}
             />
-            <BarkReviewedAmountLine
+            <LabeledFiatBtcAmount
               label="VTXO you receive:"
               amountSats={review.netVtxoSats}
               testId="bark-board-net-vtxo"

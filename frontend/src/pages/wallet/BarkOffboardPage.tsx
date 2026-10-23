@@ -3,13 +3,11 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
-import {
-  BarkDenominationAmountField,
-  BarkReviewedAmountLine,
-} from '@/components/bark/BarkDenominationAmountField'
 import { barkSessionBlockingScreen } from '@/components/bark/bark-session-blocking-screen'
 import { BarkRailUnavailable } from '@/components/bark/BarkRailUnavailable'
 import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
+import { LabeledFiatBtcAmount } from '@/components/FiatBtcAmountDisplay'
+import { SatsOrFiatAmountField } from '@/components/SatsOrFiatAmountField'
 import { BarkPendingActionBanner } from '@/components/wallet/BarkPendingActionBanner'
 import { amountSatsFromSatsOrFiatField } from '@/components/wallet/send/amount-sats-from-sats-or-fiat-field'
 import { PageHeader } from '@/components/PageHeader'
@@ -183,7 +181,7 @@ export function BarkOffboardPage() {
               <CardTitle className="text-base">Amount</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <BarkDenominationAmountField
+              <SatsOrFiatAmountField
                 satsLabel="Satoshis that should arrive on-chain"
                 fiatLabel={`${fiatAmount.currency} that should arrive on-chain`}
                 amountRaw={amountRaw}
@@ -194,9 +192,7 @@ export function BarkOffboardPage() {
                 inputTestId="bark-offboard-amount"
                 priceUnavailableTestId="bark-offboard-fiat-price-unavailable"
                 btcPreviewTestId="bark-offboard-amount-btc-preview"
-                mainnetFiatEntry={fiatAmount.mainnetFiatEntry}
-                hasUsableFiatSpot={fiatAmount.hasUsableFiatSpot}
-                currency={fiatAmount.currency}
+                fiat={fiatAmount}
                 parsedAmountSats={parsedAmountSats}
               />
               <div className="flex flex-wrap gap-2">
@@ -236,13 +232,13 @@ export function BarkOffboardPage() {
                 <CardTitle className="text-base">Review</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
-                <BarkReviewedAmountLine
+                <LabeledFiatBtcAmount
                   label="Server fee:"
                   amountSats={review.feeSats}
                   testId="bark-offboard-fee"
                   fiat={fiatAmount}
                 />
-                <BarkReviewedAmountLine
+                <LabeledFiatBtcAmount
                   label="On-chain amount:"
                   amountSats={review.onchainAmountSats}
                   testId="bark-offboard-onchain-amount"

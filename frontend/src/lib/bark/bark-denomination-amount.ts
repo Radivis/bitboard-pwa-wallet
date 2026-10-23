@@ -2,8 +2,6 @@ import { amountSatsFromSatsOrFiatField } from '@/components/wallet/send/amount-s
 import type { MainnetFiatAmountDisplayProps } from '@/hooks/useMainnetFiatAmountProps'
 import type { FiatCurrencyCode } from '@/lib/fiat/supported-fiat-currencies'
 
-export const BARK_BITCOIN_PRICE_UNAVAILABLE_MESSAGE = 'Bitcoin price is unavailable.'
-
 export function barkAmountEntryErrorMessage(
   mainnetFiatEntry: boolean,
   currency: FiatCurrencyCode,
