@@ -19,7 +19,7 @@ Default expiry knobs:
 - `required_board_confirmations` = 3
 - `min_board_amount` = 20000 sat
 
-The regtest Bark client treats a VTXO as due for refresh when 12 or fewer blocks remain. Receive, board, and Arkoor stay on the default file. Exit and refresh each clean-start, because captaind keeps the lifetime it booted with. `BARK_CAPTAIND_TOML` selects the file.
+The regtest Bark client treats a VTXO as due for refresh when 12 or fewer blocks remain. Receive, board, and Arkoor stay on the default file. Exit and refresh each clean-start, because captaind keeps the lifetime it booted with. `BARK_CAPTAIND_TOML` selects the file. Compose mounts `docker/captaind/` as a directory and sets `CAPTAIND_CONFIG` to the chosen file inside that mount.
 
 From `frontend/`:
 
