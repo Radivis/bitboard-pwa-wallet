@@ -26,30 +26,11 @@ import {
 import { useFeatureStore } from '@/stores/featureStore'
 import { selectCommittedNetworkMode, useWalletStore, type NetworkMode } from '@/stores/walletStore'
 import { DRAWER_NETWORK_LABELS } from '@/components/design/network-drawer-labels'
+import { networkDrawerSwipeMode } from '@/components/design/network-drawer-swipe'
 
 export const DESIGN_NETWORK_DRAWER_ID = 'app-network-drawer'
 
 const DRAWER_SWIPE_DISTANCE_PX = 48
-
-/** Extra space below the top bar that still opens the network drawer. */
-export const NETWORK_DRAWER_OPEN_ZONE_EXTRA_PX = 50
-
-export function networkDrawerSwipeMode({
-  open,
-  startY,
-  headerBottom,
-  startedOnPanel,
-}: {
-  open: boolean
-  startY: number
-  headerBottom: number | null
-  startedOnPanel: boolean
-}): 'open' | 'close' | null {
-  if (open && startedOnPanel) return 'close'
-  if (open || headerBottom == null) return null
-  const zoneBottom = headerBottom + NETWORK_DRAWER_OPEN_ZONE_EXTRA_PX
-  return startY <= zoneBottom ? 'open' : null
-}
 
 const ONLINE_NETWORKS: OnlineNetworkMode[] = ['mainnet', 'testnet', 'signet', 'mutinynet']
 const OFFLINE_NETWORKS: OfflineNetworkMode[] = ['lab', 'regtest']

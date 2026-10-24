@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   NETWORK_DRAWER_OPEN_ZONE_EXTRA_PX,
   networkDrawerSwipeMode,
-} from '@/components/design/DesignNetworkDrawer'
+} from '@/components/design/network-drawer-swipe'
 
 const headerBottom = 56
 
