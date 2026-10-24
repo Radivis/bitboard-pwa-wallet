@@ -51,7 +51,7 @@ export function networkDrawerSwipeMode({
   return startY <= zoneBottom ? 'open' : null
 }
 
-const ONLINE_NETWORKS: OnlineNetworkMode[] = ['mainnet', 'testnet', 'signet']
+const ONLINE_NETWORKS: OnlineNetworkMode[] = ['mainnet', 'testnet', 'signet', 'mutinynet']
 const OFFLINE_NETWORKS: OfflineNetworkMode[] = ['lab', 'regtest']
 
 const CHAIN_BADGE_STYLE: Record<NetworkMode, { mark: string; color: string; background: string }> = {

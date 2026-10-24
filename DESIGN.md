@@ -99,7 +99,7 @@ Opened from the header menu button. It holds the theme switcher and the primary 
 
 ### Network drawer
 
-Opened from the header chain badge, to the left of the info toggle. It uses the same panel as the side drawer. Online and Offline stay visible together. The switch follows the current network and remembers the last network of each kind. Rows are Nav-Buttons for Mainnet, Testnet 4, Signet, Lab, and Regtest. Mutinynet is not listed. Settings keeps its own network selector.
+Opened from the header chain badge, to the left of the info toggle. It uses the same panel as the side drawer. Online and Offline stay visible together. The switch follows the current network and remembers the last network of each kind. Rows are Nav-Buttons for Mainnet, Testnet 4, Signet, Mutinynet, Lab, and Regtest. Settings keeps its own network selector.
 
 ### Input-Field
 

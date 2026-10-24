@@ -29,16 +29,23 @@ describe('DesignNetworkDrawer', () => {
     })
   })
 
-  it('marks the committed network and omits Mutinynet and disabled Regtest', () => {
-    render(<DesignNetworkDrawer open onOpen={vi.fn()} onClose={vi.fn()} onSelectNetwork={vi.fn()} />)
+  it('marks the committed network, lists Mutinynet, and omits disabled Regtest', async () => {
+    const user = userEvent.setup()
+    const onSelectNetwork = vi.fn()
+    render(
+      <DesignNetworkDrawer open onOpen={vi.fn()} onClose={vi.fn()} onSelectNetwork={onSelectNetwork} />,
+    )
 
     expect(screen.getByRole('button', { name: 'Online' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: 'Offline' })).toHaveAttribute('aria-pressed', 'false')
     expect(screen.getByRole('button', { name: 'Testnet 4' })).toHaveAttribute('data-status', 'selected')
     expect(screen.getByRole('button', { name: 'Signet' })).toHaveAttribute('data-status', 'default')
+    expect(screen.getByRole('button', { name: 'Mutinynet' })).toHaveAttribute('data-status', 'default')
     expect(screen.getByRole('button', { name: 'Lab' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Mutinynet' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Regtest' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Mutinynet' }))
+    expect(onSelectNetwork).toHaveBeenCalledWith('mutinynet')
   })
 
   it('asks for the remembered network when the switch flips', async () => {
