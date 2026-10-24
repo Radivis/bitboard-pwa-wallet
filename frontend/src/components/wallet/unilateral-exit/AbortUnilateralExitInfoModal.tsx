@@ -1,4 +1,5 @@
-import { AppModal } from '@/components/AppModal'
+import { DesignModal } from '@/components/design/DesignModal'
+import { DesignButton } from '@/components/design/DesignButton'
 import { Button } from '@/components/ui/button'
 import { DialogDescription } from '@/components/ui/dialog'
 import { ArticleLink } from '@/lib/library/article-shared'
@@ -16,17 +17,16 @@ export function AbortUnilateralExitInfoModal({
   onContinue,
 }: AbortUnilateralExitInfoModalProps) {
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={onOpenChange}
       onCancel={() => onOpenChange(false)}
       title="Abort unilateral exit?"
-      contentClassName="sm:max-w-lg"
       footer={(requestClose) => (
         <>
-          <Button type="button" variant="outline" onClick={requestClose}>
+          <DesignButton type="button" appearance="secondary" onClick={requestClose}>
             Cancel
-          </Button>
+          </DesignButton>
           <Button
             type="button"
             variant="destructive"
@@ -40,7 +40,6 @@ export function AbortUnilateralExitInfoModal({
           </Button>
         </>
       )}
-      footerClassName="justify-end gap-2"
     >
       <div
         className="space-y-4 text-sm text-muted-foreground"
@@ -68,6 +67,6 @@ export function AbortUnilateralExitInfoModal({
           </ArticleLink>
         </p>
       </div>
-    </AppModal>
+    </DesignModal>
   )
 }

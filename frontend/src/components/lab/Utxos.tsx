@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
+import { DesignButton } from '@/components/design/DesignButton'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+  DesignCard,
+  DesignCardContent,
+  DesignCardDescription,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { Button } from '@/components/ui/button'
 import { truncateAddress } from '@/lib/wallet/bitcoin-utils'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import {
@@ -80,15 +80,13 @@ function LabOwnerUtxosInner({
             <span className="text-right w-28 shrink-0">
               <BitcoinAmountDisplay amountSats={utxo.amountSats} size="sm" />
             </span>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8 shrink-0"
+            <DesignButton
+              appearance="tertiary"
+              className="h-12 w-12 shrink-0 px-0"
               onClick={() => onCopyAddress(utxo.address)}
               aria-label={`Copy ${truncateAddress(utxo.address)}`}
-            >
-              <Copy className="h-4 w-4" />
-            </Button>
+              icon={<Copy aria-hidden />}
+            />
           </div>
         ))}
       </div>
@@ -129,14 +127,14 @@ export function LabUtxosCard({
 This is not the same as the Addresses card above: Addresses shows one combined balance per address. This card lists each unspent output on its own row, so one address can appear multiple times if several separate coins still sit there."
       className="rounded-xl"
     >
-      <Card>
-        <CardHeader>
-          <CardTitle>UTXOs</CardTitle>
-          <CardDescription>
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle>UTXOs</DesignCardTitle>
+          <DesignCardDescription>
             Each unspent coin (output) as its own row—not merged per address like the Addresses card above.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+          </DesignCardDescription>
+        </DesignCardHeader>
+        <DesignCardContent>
           {isLoading && totalOwnerCount === 0 ? (
             <p className="text-sm text-muted-foreground py-4">Loading UTXOs…</p>
           ) : isError ? (
@@ -194,8 +192,8 @@ This is not the same as the Addresses card above: Addresses shows one combined b
               </div>
             </CardPagination>
           )}
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
     </InfomodeWrapper>
   )
 }

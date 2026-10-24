@@ -9,6 +9,7 @@ import { ArkadeBumperWalletInfomodeContent } from '@/components/arkade/infomode/
 import { ArkadeUnilateralExitInfomodeContent } from '@/components/arkade/infomode/ArkadeUnilateralExitInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { PageHeader } from '@/components/PageHeader'
+import { DesignButton } from '@/components/design/DesignButton'
 import { Button } from '@/components/ui/button'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
@@ -492,9 +493,9 @@ export function UnilateralExitControlPage() {
       <div className="space-y-4">
         <PageHeader title="Unilateral exit control" icon={ArkadeIcon} />
         <p className="text-muted-foreground">Arkade is not enabled for this network.</p>
-        <Button type="button" variant="outline" asChild>
+        <DesignButton type="button" appearance="secondary" asChild>
           <Link to="/wallet/management">Back to Management</Link>
-        </Button>
+        </DesignButton>
       </div>
     )
   }
@@ -748,16 +749,20 @@ export function UnilateralExitControlPage() {
         {(proceedButton.visible || showAbortButton) && (
           <div className="flex w-full flex-col gap-2 md:col-span-2 xl:col-span-3">
             {proceedButton.visible && (
-              <Button
+              <DesignButton
                 type="button"
                 className="w-full"
                 data-testid="unilateral-exit-proceed"
                 disabled={proceedButton.disabled}
                 onClick={handleProceedClick}
+                icon={
+                  proceedButton.showSpinner ? (
+                    <Loader2 className="animate-spin" />
+                  ) : undefined
+                }
               >
-                {proceedButton.showSpinner && <Loader2 className="mr-2 size-4 animate-spin" />}
                 {proceedButton.label}
-              </Button>
+              </DesignButton>
             )}
 
             {showAbortButton && (
@@ -774,9 +779,14 @@ export function UnilateralExitControlPage() {
           </div>
         )}
 
-        <Button type="button" variant="outline" className="w-full md:col-span-2 xl:col-span-3" asChild>
+        <DesignButton
+          type="button"
+          appearance="secondary"
+          className="w-full md:col-span-2 xl:col-span-3"
+          asChild
+        >
           <Link to="/wallet/management">Back to Management</Link>
-        </Button>
+        </DesignButton>
       </section>
     </div>
   )

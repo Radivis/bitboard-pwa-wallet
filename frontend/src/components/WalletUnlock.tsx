@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { AppModal } from '@/components/AppModal'
+import { DesignModal } from '@/components/design/DesignModal'
 import { useWalletStore } from '@/stores/walletStore'
 import { orchestrateManualUnlock } from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
 import { navigateAwayFromWalletUnlockPrompt } from '@/lib/shared/app-router'
@@ -80,7 +80,7 @@ export function WalletUnlock({
   })
 
   return (
-    <AppModal
+    <DesignModal
       isOpen
       isModal
       onOpenChange={() => {}}
@@ -93,7 +93,6 @@ export function WalletUnlock({
           </span>
         </>
       }
-      contentClassName="sm:max-w-md"
       onInteractOutside={(e) => e.preventDefault()}
     >
       <>
@@ -138,6 +137,6 @@ export function WalletUnlock({
           )}
         </form>
       </>
-    </AppModal>
+    </DesignModal>
   )
 }

@@ -1,5 +1,5 @@
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
-import { Input } from '@/components/ui/input'
+import { DesignInput } from '@/components/design/DesignInput'
 import type { MainnetFiatAmountProps } from '@/hooks/useMainnetFiatAmountProps'
 import { fiatAmountInputPlaceholder } from '@/lib/fiat/format-fiat-display'
 
@@ -40,7 +40,7 @@ export function SatsOrFiatAmountField({
   return (
     <label className="block space-y-1 text-sm">
       <span>{fiat.mainnetFiatEntry ? fiatLabel : satsLabel}</span>
-      <Input
+      <DesignInput
         inputMode={fiat.mainnetFiatEntry ? 'decimal' : 'numeric'}
         value={amountRaw}
         placeholder={

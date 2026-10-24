@@ -213,8 +213,8 @@ export default defineConfig({
       // User confirms refresh so sends / password flows are not interrupted mid-action.
       registerType: 'prompt',
       manifest: {
-        name: 'Bitboard Wallet',
-        short_name: 'Bitboard',
+        name: 'Bitcoin Codex',
+        short_name: 'Codex',
         description: 'A Progressive Web App Bitcoin wallet',
         theme_color: '#1a1a2e',
         background_color: '#1a1a2e',

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Copy, Eye, EyeOff } from 'lucide-react'
 import { toast } from 'sonner'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
 import { useCommittedExternalDescriptor } from '@/hooks/useCommittedExternalDescriptor'
 import { useRequireUnlockedWallet } from '@/hooks/useRequireUnlockedWallet'
 import { useWalletStore } from '@/stores/walletStore'
@@ -58,48 +58,45 @@ export function NetworkCardCommittedDescriptor() {
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <p className="text-sm font-medium leading-none text-foreground">Receiving descriptor</p>
           {walletUnlocked && query.data ? (
-            <Button
+            <DesignButton
               type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 shrink-0 text-muted-foreground"
+              appearance="tertiary"
+              className="h-12 w-12 shrink-0 px-0"
               onClick={handleRevealToggle}
               aria-label={
                 descriptorVisible ? 'Hide receiving descriptor' : 'Show receiving descriptor'
               }
               aria-pressed={descriptorVisible}
-            >
-              {descriptorVisible ? (
-                <EyeOff className="h-4 w-4" aria-hidden />
-              ) : (
-                <Eye className="h-4 w-4" aria-hidden />
-              )}
-            </Button>
+              icon={
+                descriptorVisible ? (
+                  <EyeOff aria-hidden />
+                ) : (
+                  <Eye aria-hidden />
+                )
+              }
+            />
           ) : !walletUnlocked ? (
-            <Button
+            <DesignButton
               type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 shrink-0 text-muted-foreground"
+              appearance="tertiary"
+              className="h-12 w-12 shrink-0 px-0"
               onClick={handleRevealToggle}
               aria-label="Unlock to show receiving descriptor"
-            >
-              <Eye className="h-4 w-4" aria-hidden />
-            </Button>
+              icon={<Eye aria-hidden />}
+            />
           ) : null}
         </div>
         {walletUnlocked && query.data && descriptorVisible ? (
-          <Button
+          <DesignButton
             type="button"
-            variant="ghost"
-            size="sm"
-            className="h-8 shrink-0 self-start px-2 sm:self-auto"
+            appearance="tertiary"
+            className="shrink-0 self-start sm:self-auto"
             onClick={handleCopyDescriptor}
             aria-label="Copy receiving descriptor"
+            icon={<Copy aria-hidden />}
           >
-            <Copy className="mr-1 h-4 w-4" aria-hidden />
             Copy
-          </Button>
+          </DesignButton>
         ) : null}
       </div>
 

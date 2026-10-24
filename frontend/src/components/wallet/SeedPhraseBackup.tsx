@@ -16,11 +16,16 @@ import {
 import { invalidateWalletRelatedQueriesAndNotifyOtherTabs } from '@/lib/wallet/wallet-query-cache-sync'
 import { restoreNearZeroSecretsSessionForOperation } from '@/lib/wallet/restore-near-zero-secrets-session'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { AppModal } from '@/components/AppModal'
 import { EnterAppPasswordModal } from '@/components/EnterAppPasswordModal'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
+import { DesignButton } from '@/components/design/DesignButton'
+import { DesignModal } from '@/components/design/DesignModal'
+import {
+  DesignCard,
+  DesignCardContent,
+  DesignCardDescription,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { cn } from '@/lib/shared/utils'
 import { DialogDescription } from '@/components/ui/dialog'
 import { MnemonicGrid } from '@/components/MnemonicGrid'
@@ -126,17 +131,17 @@ export function SeedPhraseBackup() {
         }
         className="rounded-xl"
       >
-        <Card
+        <DesignCard
           className={cn(
             noMnemonicBackupFlag &&
               'border-2 border-destructive shadow-sm ring-1 ring-destructive/20',
           )}
         >
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+          <DesignCardHeader>
+            <DesignCardTitle className="flex items-center gap-2">
               <Eye className="h-5 w-5" />
               Seed Phrase Backup
-            </CardTitle>
+            </DesignCardTitle>
             {noMnemonicBackupFlag && (
               <p className="text-sm font-bold text-destructive">
                 No backup of the seed phrase has been recorded for this wallet.
@@ -144,27 +149,27 @@ export function SeedPhraseBackup() {
                 and store them safely.
               </p>
             )}
-            <CardDescription>
+            <DesignCardDescription>
               {nearZeroActive
                 ? 'View your seed phrase to back up your wallet.'
                 : 'View your seed phrase to back up your wallet. You will need to confirm your Bitboard app password.'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Button
-              variant="outline"
+            </DesignCardDescription>
+          </DesignCardHeader>
+          <DesignCardContent className="space-y-3">
+            <DesignButton
+              appearance="secondary"
               onClick={() => {
                 void handleShowSeedPhraseClick()
               }}
               disabled={loading}
             >
               {loading ? 'Decrypting...' : 'Show Seed Phrase'}
-            </Button>
+            </DesignButton>
             {error && !showPasswordPrompt ? (
               <p className="text-sm text-destructive">{error}</p>
             ) : null}
-          </CardContent>
-        </Card>
+          </DesignCardContent>
+        </DesignCard>
       </InfomodeWrapper>
 
       <EnterAppPasswordModal
@@ -185,7 +190,7 @@ export function SeedPhraseBackup() {
         loadingText="Decrypting..."
       />
 
-      <AppModal
+      <DesignModal
         isOpen={showMnemonic}
         onOpenChange={() => {}}
         onCancel={() => {
@@ -197,12 +202,16 @@ export function SeedPhraseBackup() {
             <span className="min-w-0">Your Seed Phrase</span>
           </>
         }
-        contentClassName="sm:max-w-lg"
-        footerClassName="justify-end"
+        optIn={{
+          id: 'seed-backup-confirmed',
+          label: 'I have actually made a backup of this seed phrase',
+          checked: backupConfirmed,
+          onChange: setBackupConfirmed,
+        }}
         footer={(requestClose) => (
-          <Button variant="outline" onClick={requestClose}>
+          <DesignButton appearance="secondary" onClick={requestClose}>
             Close
-          </Button>
+          </DesignButton>
         )}
       >
         <>
@@ -217,23 +226,8 @@ export function SeedPhraseBackup() {
             Never share these words with anyone. Anyone who has them can steal
             your funds.
           </div>
-          <div className="flex items-start gap-2">
-            <input
-              type="checkbox"
-              id="seed-backup-confirmed"
-              checked={backupConfirmed}
-              onChange={(e) => setBackupConfirmed(e.target.checked)}
-              className="mt-1 size-4 shrink-0 rounded border-input"
-            />
-            <Label
-              htmlFor="seed-backup-confirmed"
-              className="cursor-pointer text-sm font-normal leading-snug"
-            >
-              I have actually made a backup of this seed phrase
-            </Label>
-          </div>
         </>
-      </AppModal>
+      </DesignModal>
     </>
   )
 }

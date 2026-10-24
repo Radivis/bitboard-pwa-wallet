@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { RefreshCw } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
 import type { SyncLifecyclePhase } from '@/lib/wallet/lifecycle/rail-lifecycle-types'
 
 export type DashboardRailId = 'onchain' | 'lightning' | 'arkade' | 'bark'
@@ -65,20 +65,21 @@ export function RailSyncControl({
   return (
     <div className="mt-3 flex flex-col items-start gap-1">
       <div className="flex flex-wrap items-center gap-2">
-        <Button
+        <DesignButton
           type="button"
-          variant="outline"
-          size="sm"
+          appearance="secondary"
           data-testid={`rail-sync-${rail}`}
           onClick={onSync}
           disabled={isSyncing}
+          icon={
+            <RefreshCw
+              className={isSyncing ? 'animate-spin' : undefined}
+              aria-hidden
+            />
+          }
         >
-          <RefreshCw
-            className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`}
-            aria-hidden
-          />
           {isSyncing ? 'Syncing…' : syncLabel}
-        </Button>
+        </DesignButton>
         {secondaryAction}
       </div>
       <p

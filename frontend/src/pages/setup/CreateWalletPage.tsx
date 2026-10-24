@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { DialogDescription } from '@/components/ui/dialog'
-import { AppModal } from '@/components/AppModal'
+import { DesignButton } from '@/components/design/DesignButton'
+import { DesignModal } from '@/components/design/DesignModal'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { MnemonicGrid } from '@/components/MnemonicGrid'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
@@ -182,25 +183,23 @@ export function CreateWalletPage() {
               onSubmit={() => void requestAppPasswordForCreate('generate')}
               onOpenSkipBackupWarning={() => setSkipBackupWarningOpen(true)}
             />
-            <AppModal
+            <DesignModal
               isOpen={skipBackupWarningOpen}
               onOpenChange={setSkipBackupWarningOpen}
               onCancel={() => {}}
               title="Quick start without viewing backup"
-              contentClassName="sm:max-w-lg"
               footer={(requestClose) => (
                 <>
-                  <Button type="button" variant="outline" onClick={requestClose}>
+                  <DesignButton type="button" appearance="secondary" onClick={requestClose}>
                     Abort
-                  </Button>
-                  <Button
+                  </DesignButton>
+                  <DesignButton
                     type="button"
-                    variant="destructive"
                     disabled={quickCreateWalletMutation.isPending}
                     onClick={() => void requestAppPasswordForCreate('quickCreate')}
                   >
                     Understood! Proceed!
-                  </Button>
+                  </DesignButton>
                 </>
               )}
             >
@@ -222,7 +221,7 @@ export function CreateWalletPage() {
                   </p>
                 </div>
               </DialogDescription>
-            </AppModal>
+            </DesignModal>
           </>
         )}
 

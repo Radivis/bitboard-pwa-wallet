@@ -8,9 +8,14 @@ import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominat
 import { LabeledFiatBtcAmount } from '@/components/FiatBtcAmountDisplay'
 import { SatsOrFiatAmountField } from '@/components/SatsOrFiatAmountField'
 import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
+import { DesignButton } from '@/components/design/DesignButton'
+import {
+  DesignCard,
+  DesignCardContent,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { PageHeader } from '@/components/PageHeader'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
 import { useOnchainFeeRateSelection } from '@/hooks/useOnchainFeeRateSelection'
 import { useMainnetFiatAmountProps } from '@/hooks/useMainnetFiatAmountProps'
@@ -215,11 +220,11 @@ export function BarkBoardPage() {
         This sends coins from your on-chain wallet into Bark. Bark broadcasts the funding
         transaction. {CONFIRMATION_NOTE}
       </p>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Amount</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle>Amount</DesignCardTitle>
+        </DesignCardHeader>
+        <DesignCardContent className="space-y-3">
           <SatsOrFiatAmountField
             satsLabel="Satoshis"
             fiatLabel={`Amount (${fiatAmount.currency})`}
@@ -234,30 +239,30 @@ export function BarkBoardPage() {
             fiat={fiatAmount}
             parsedAmountSats={parsedAmountSats}
           />
-          <Button
+          <DesignButton
             type="button"
             onClick={() => {
               void onReview()
             }}
             disabled={isReviewing || isConfirming || isRepricing || fiatPriceBlocksReview}
             data-testid="bark-board-review"
+            icon={isReviewing ? <Loader2 className="animate-spin" aria-hidden /> : undefined}
           >
-            {isReviewing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Review
-          </Button>
+          </DesignButton>
           {reviewError != null ? (
             <p className="text-sm text-destructive" data-testid="bark-board-review-error">
               {reviewError}
             </p>
           ) : null}
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
       {review != null ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Review</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
+        <DesignCard>
+          <DesignCardHeader>
+            <DesignCardTitle>Review</DesignCardTitle>
+          </DesignCardHeader>
+          <DesignCardContent className="space-y-3 text-sm">
             <div data-testid="bark-board-fee-rate">
               <SendOnChainFeeSection
                 feePresetSelection={feePresetSelection}
@@ -294,19 +299,23 @@ export function BarkBoardPage() {
                 {repriceError}
               </p>
             ) : null}
-            <Button
+            <DesignButton
               type="button"
               onClick={() => {
                 void onConfirm()
               }}
               disabled={confirmDisabled}
               data-testid="bark-board-confirm"
+              icon={
+                isConfirming || isRepricing ? (
+                  <Loader2 className="animate-spin" aria-hidden />
+                ) : undefined
+              }
             >
-              {isConfirming || isRepricing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Confirm board
-            </Button>
-          </CardContent>
-        </Card>
+            </DesignButton>
+          </DesignCardContent>
+        </DesignCard>
       ) : null}
     </div>
   )

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react'
 import { DialogDescription } from '@/components/ui/dialog'
-import { AppModal } from '@/components/AppModal'
-import { Button } from '@/components/ui/button'
+import { DesignModal } from '@/components/design/DesignModal'
+import { DesignButton } from '@/components/design/DesignButton'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Label } from '@/components/ui/label'
 import { APP_PASSWORD_MIN_LENGTH } from '@/lib/shared/app-password-policy'
@@ -101,7 +101,7 @@ export function WalletBackupExportPasswordModal({
   }, [onCancel])
 
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={onOpenChange}
       title="Sign wallet backup"
@@ -109,16 +109,16 @@ export function WalletBackupExportPasswordModal({
       isBlockDismissed={isBusy}
       footer={() => (
         <>
-          <Button type="button" variant="outline" disabled={isBusy} onClick={handleCancel}>
+          <DesignButton type="button" appearance="secondary" disabled={isBusy} onClick={handleCancel}>
             Cancel
-          </Button>
-          <Button
+          </DesignButton>
+          <DesignButton
             type="button"
             disabled={isBusy || !canSubmit}
             onClick={() => void onConfirm(password)}
           >
             {isBusy ? 'Signing…' : 'Sign and export'}
-          </Button>
+          </DesignButton>
         </>
       )}
     >
@@ -212,6 +212,6 @@ export function WalletBackupExportPasswordModal({
           </div>
         ) : null}
       </div>
-    </AppModal>
+    </DesignModal>
   )
 }

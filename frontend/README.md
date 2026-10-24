@@ -1,6 +1,6 @@
-# Bitboard Wallet Frontend
+# Bitcoin Codex Frontend
 
-React + TypeScript frontend for the Bitboard Wallet application.
+React + TypeScript frontend for the Bitcoin Codex application.
 
 For how this fits with Rust/WASM workers, OPFS SQLite, and deployment, see the [repository root README](../README.md) and [architecture overview](../doc/ARCHITECTURE.md).
 

@@ -336,7 +336,7 @@ describe('BarkEmergencyExitPage', () => {
   it('BARK-EMG-03 shows the broadcast fee, claim fee, and transaction count before start', async () => {
     renderWithProviders(<BarkEmergencyExitPage />)
     const review = await screen.findByRole('button', { name: 'Review emergency exit' })
-    expect(review).toHaveAttribute('data-variant', 'default')
+    expect(review).toHaveAttribute('data-type', 'primary')
     expect(screen.queryByTestId('bark-emergency-exit-start')).not.toBeInTheDocument()
     fireEvent.click(await screen.findByTestId('bark-emergency-exit-vtxo-vtxo-1'))
     fireEvent.click(review)
@@ -481,7 +481,7 @@ describe('BarkEmergencyExitPage', () => {
       'Broadcasting 1 of 2 exit transactions. 1 is waiting for confirmed funds.',
     )
     expect(graph.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(graph.closest('[data-slot="card"]')).toContainElement(banner)
+    expect(graph.closest('[data-slot="design-card"]')).toContainElement(banner)
     expect(toast.error).not.toHaveBeenCalled()
     expect(toast.success).not.toHaveBeenCalled()
   })

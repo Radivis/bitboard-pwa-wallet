@@ -3,7 +3,7 @@ import { AddressType, useWalletStore } from '@/stores/walletStore'
 import { useDescriptorWalletSwitchMutation } from '@/hooks/useDescriptorWalletSwitchMutation'
 import { useRequireUnlockedWallet } from '@/hooks/useRequireUnlockedWallet'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
 import { ConfirmationDialog } from '@/components/ConfirmationDialog'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 
@@ -50,15 +50,14 @@ export function AddressTypeSelector() {
           infoText="Taproot-style addresses (often shown as bc1p…) are the newer standard many wallets use by default. They can enable nicer privacy and efficiency features on-chain and remain fully compatible with normal sends and receives."
           className="min-w-0 flex-1"
         >
-          <Button
-            variant={addressType === AddressType.Taproot ? 'default' : 'outline'}
-            size="sm"
+          <DesignButton
+            appearance={addressType === AddressType.Taproot ? 'primary' : 'secondary'}
             onClick={() => handleChange(AddressType.Taproot)}
             className="w-full"
             disabled={isSwitching}
           >
             Taproot (BIP86)
-          </Button>
+          </DesignButton>
         </InfomodeWrapper>
         <InfomodeWrapper
           infoId="settings-address-type-segwit"
@@ -66,15 +65,14 @@ export function AddressTypeSelector() {
           infoText="Native SegWit addresses (often bc1q…) have been widely supported for years. They are cheaper to spend than old legacy addresses and work with virtually every exchange and wallet today."
           className="min-w-0 flex-1"
         >
-          <Button
-            variant={addressType === AddressType.SegWit ? 'default' : 'outline'}
-            size="sm"
+          <DesignButton
+            appearance={addressType === AddressType.SegWit ? 'primary' : 'secondary'}
             onClick={() => handleChange(AddressType.SegWit)}
             className="w-full"
             disabled={isSwitching}
           >
             SegWit (BIP84)
-          </Button>
+          </DesignButton>
         </InfomodeWrapper>
       </div>
       {isSwitching && statusLine && (

@@ -1,0 +1,10 @@
+---
+description: Do not use the Cursor IDE browser. A hung call blocks the whole agent turn.
+alwaysApply: true
+---
+
+# Do not use the IDE browser
+
+The built-in browser (`cursor-ide-browser`: `browser_navigate`, `browser_tabs`, `browser_lock`, `browser_snapshot`, `browser_click`, and the other tools in that namespace) often never returns. One stuck call has no timeout and blocks the rest of the turn. Do not call those tools.
+
+Verify UI with Vitest, or with the Playwright MCP (`user-playwright`) when a real page is required. If neither can reach the screen, say what you could not verify. Do not fall back to the IDE browser.

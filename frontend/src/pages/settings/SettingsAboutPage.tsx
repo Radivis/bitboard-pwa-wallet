@@ -2,7 +2,12 @@ import { Info } from 'lucide-react'
 import { GITHUB_CHANGELOG_URL } from '@common/public-links'
 import { PageHeader } from '@/components/PageHeader'
 import { AppDescription } from '@/components/AppDescription'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  DesignCard,
+  DesignCardContent,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { DeveloperContactCard } from '@/components/DeveloperContactCard'
 import { LegalNoticeCard } from '@/components/LegalNoticeCard'
 
@@ -14,12 +19,12 @@ export function SettingsAboutPage() {
     <div className="space-y-6">
       <PageHeader title="About" icon={Info} />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>About</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>Bitboard Wallet &mdash; from zero to clarity.</p>
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle>About</DesignCardTitle>
+        </DesignCardHeader>
+        <DesignCardContent className="gap-2 text-sm text-[var(--design-text-card-description)]">
+          <p>Bitcoin Codex &mdash; from zero to clarity.</p>
           <AppDescription />
           <p>Version {import.meta.env.VITE_APP_VERSION}</p>
           <p>
@@ -32,8 +37,8 @@ export function SettingsAboutPage() {
               Changelog
             </a>
           </p>
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
 
       <DeveloperContactCard />
 

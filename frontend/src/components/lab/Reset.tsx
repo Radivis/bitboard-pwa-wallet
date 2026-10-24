@@ -1,10 +1,10 @@
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+  DesignCard,
+  DesignCardContent,
+  DesignCardDescription,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { Button } from '@/components/ui/button'
 import { ConfirmationDialog } from '@/components/ConfirmationDialog'
 
@@ -23,17 +23,17 @@ export function LabResetCard({
 }) {
   return (
     <>
-      <Card>
-        <CardHeader>
-          <CardTitle>Drastic Measures</CardTitle>
-          <CardDescription>Irreversible actions</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle>Drastic Measures</DesignCardTitle>
+          <DesignCardDescription>Irreversible actions</DesignCardDescription>
+        </DesignCardHeader>
+        <DesignCardContent>
           <Button variant="destructive" onClick={onResetClick} disabled={resetting}>
             {resetting ? 'Resetting...' : 'Reset lab'}
           </Button>
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
       <ConfirmationDialog
         open={showConfirm}
         title="Reset lab?"

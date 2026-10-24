@@ -1,13 +1,13 @@
+import { DesignButton } from '@/components/design/DesignButton'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+  DesignCard,
+  DesignCardContent,
+  DesignCardDescription,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
+import { DesignInput } from '@/components/design/DesignInput'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { LAB_MAX_RANDOM_ENTITY_TRANSACTIONS } from '@/lib/lab/lab-random-limits'
@@ -95,12 +95,12 @@ export function LabMakeTransactionCard({
       infoText="Compose a payment inside the simulator: pick a funded lab address to spend from, a destination, an amount in satoshis, and a fee rate. The tx is built and broadcast into the lab mempool; mine blocks afterward to confirm it—same lifecycle as real Bitcoin, without real money."
       className="rounded-xl"
     >
-      <Card>
-        <CardHeader>
-          <CardTitle>Transaction</CardTitle>
-          <CardDescription>Send coins to another address</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle>Transaction</DesignCardTitle>
+          <DesignCardDescription>Send coins to another address</DesignCardDescription>
+        </DesignCardHeader>
+        <DesignCardContent className="gap-4">
           {txActionsDisabled ? (
             <p
               className="text-sm text-amber-600 dark:text-amber-400"
@@ -118,16 +118,16 @@ export function LabMakeTransactionCard({
           ) : null}
           {!showTxForm ? (
             <div className="space-y-4">
-              <Button
-                variant="outline"
+              <DesignButton
+                appearance="secondary"
                 onClick={() => setShowTxForm(true)}
                 disabled={txActionsDisabled || controlledAddressesCount === 0}
               >
                 Make transaction
-              </Button>
+              </DesignButton>
               <div className="space-y-2 border rounded-lg p-4">
                 <Label htmlFor="random-transaction-count">Number of random transactions</Label>
-                <Input
+                <DesignInput
                   id="random-transaction-count"
                   type="number"
                   min={MIN_RANDOM_TRANSACTION_COUNT}
@@ -152,15 +152,15 @@ export function LabMakeTransactionCard({
                     </p>
                   </div>
                 ) : null}
-                <Button
-                  variant="secondary"
+                <DesignButton
+                  appearance="tertiary"
                   onClick={onCreateRandomTransactions}
                   disabled={
                     txActionsDisabled || creatingRandomTransactions || labEntitiesCount === 0
                   }
                 >
                   Make random transaction
-                </Button>
+                </DesignButton>
                 {showRandomBatchConflictWarning ? (
                   <p
                     className="text-sm text-amber-600 dark:text-amber-400"
@@ -176,7 +176,7 @@ export function LabMakeTransactionCard({
             <div className="space-y-4 border rounded-lg p-4">
               <div className="space-y-2">
                 <Label htmlFor="from-address">From address</Label>
-                <Input
+                <DesignInput
                   id="from-address"
                   type="text"
                   placeholder="bcrt1q... or bcrt1p..."
@@ -192,7 +192,7 @@ export function LabMakeTransactionCard({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="to-address">To address</Label>
-                <Input
+                <DesignInput
                   id="to-address"
                   type="text"
                   placeholder="bcrt1q... or bcrt1p..."
@@ -202,7 +202,7 @@ export function LabMakeTransactionCard({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="amount">Amount (sats)</Label>
-                <Input
+                <DesignInput
                   id="amount"
                   type="number"
                   min={MIN_AMOUNT_SATS}
@@ -222,7 +222,7 @@ export function LabMakeTransactionCard({
                     Fee rate (sat/vB)
                   </InfomodeWrapper>
                 </Label>
-                <Input
+                <DesignInput
                   id="fee-rate"
                   type="number"
                   min={0.1}
@@ -233,14 +233,14 @@ export function LabMakeTransactionCard({
                 />
               </div>
               <div className="flex gap-2">
-                <Button
+                <DesignButton
                   onClick={onSend}
                   disabled={txActionsDisabled || sending || sendDisabledFromDeadEntity}
                 >
                   {sending ? 'Sending...' : 'Send'}
-                </Button>
-                <Button
-                  variant="outline"
+                </DesignButton>
+                <DesignButton
+                  appearance="secondary"
                   onClick={() => {
                     setShowTxForm(false)
                     setFromAddress('')
@@ -250,12 +250,12 @@ export function LabMakeTransactionCard({
                   disabled={sending}
                 >
                   Cancel
-                </Button>
+                </DesignButton>
               </div>
             </div>
           )}
-        </CardContent>
-    </Card>
+        </DesignCardContent>
+    </DesignCard>
     </InfomodeWrapper>
   )
 }

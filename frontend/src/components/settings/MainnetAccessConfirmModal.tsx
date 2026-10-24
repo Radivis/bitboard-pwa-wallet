@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
-import { AppModal } from '@/components/AppModal'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
+import { DesignModal } from '@/components/design/DesignModal'
 import { DialogDescription } from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
 
 interface MainnetAccessConfirmModalProps {
   open: boolean
@@ -24,18 +23,23 @@ export function MainnetAccessConfirmModal({
   }, [open])
 
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={onOpenChange}
       onCancel={() => onOpenChange(false)}
       title="Mainnet access"
-      contentClassName="sm:max-w-lg"
+      optIn={{
+        id: 'mainnet-access-ack',
+        label: 'I understand the risks and have a seed phrase backup ready',
+        checked: acknowledgedRisks,
+        onChange: setAcknowledgedRisks,
+      }}
       footer={(requestClose) => (
         <>
-          <Button type="button" variant="outline" onClick={requestClose}>
+          <DesignButton type="button" appearance="secondary" onClick={requestClose}>
             Cancel
-          </Button>
-          <Button
+          </DesignButton>
+          <DesignButton
             type="button"
             disabled={!acknowledgedRisks}
             onClick={() => {
@@ -44,10 +48,9 @@ export function MainnetAccessConfirmModal({
             }}
           >
             Activate access
-          </Button>
+          </DesignButton>
         </>
       )}
-      footerClassName="justify-end gap-2"
     >
       <div className="space-y-4 text-sm text-muted-foreground">
         <DialogDescription className="sr-only">
@@ -55,7 +58,7 @@ export function MainnetAccessConfirmModal({
           enabling Mainnet access.
         </DialogDescription>
         <p>
-          Bitboard Wallet is an <strong className="text-foreground">early demo</strong>.
+          Bitcoin Codex is an <strong className="text-foreground">early demo</strong>.
           Using real bitcoin on Mainnet is only appropriate for{' '}
           <strong className="text-foreground">experienced Bitcoin users</strong>, and even
           then only with <strong className="text-foreground">tiny amounts</strong>.
@@ -65,19 +68,7 @@ export function MainnetAccessConfirmModal({
           this demo phase. Safeguarding coins depends crucially on having a{' '}
           <strong className="text-foreground">secure backup of your seed phrase</strong>.
         </p>
-        <div className="flex gap-3 rounded-md border border-border p-3">
-          <input
-            id="mainnet-access-ack"
-            type="checkbox"
-            className="mt-1 size-4 shrink-0 rounded border-input accent-primary"
-            checked={acknowledgedRisks}
-            onChange={(e) => setAcknowledgedRisks(e.target.checked)}
-          />
-          <Label htmlFor="mainnet-access-ack" className="cursor-pointer font-normal">
-            I understand the risks and have a seed phrase backup ready
-          </Label>
-        </div>
       </div>
-    </AppModal>
+    </DesignModal>
   )
 }

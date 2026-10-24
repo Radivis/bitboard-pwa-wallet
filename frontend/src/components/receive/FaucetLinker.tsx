@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Circle, ExternalLink, RefreshCw } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
+import {
+  DesignCard,
+  DesignCardContent,
+  DesignCardDescription,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import {
   checkFaucetReachability,
@@ -91,33 +97,34 @@ export function FaucetLinker() {
       infoText="These links point to third-party faucets that may send small amounts of test coins. Bitboard does not operate them; availability changes often. The status indicator only reflects whether this app could get a successful HTTP response from the faucet page—blocked checks (for example due to browser security) show as UNKNOWN, not offline."
       className="rounded-xl"
     >
-      <Card>
-        <CardHeader>
+      <DesignCard>
+        <DesignCardHeader>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <CardTitle className="text-base">Test faucets</CardTitle>
-              <CardDescription className="mt-1">
+              <DesignCardTitle className="text-base">Test faucets</DesignCardTitle>
+              <DesignCardDescription className="mt-1">
                 Third-party sites for getting test coins; Bitboard does not control availability.
-              </CardDescription>
+              </DesignCardDescription>
             </div>
-            <Button
+            <DesignButton
               type="button"
-              variant="outline"
-              size="sm"
-              className="shrink-0 gap-1.5"
+              appearance="secondary"
+              className="shrink-0"
               onClick={() => void runChecks()}
               disabled={checking}
               aria-label="Recheck whether each faucet responds over HTTP"
+              icon={
+                <RefreshCw
+                  className={checking ? 'animate-spin' : undefined}
+                  aria-hidden
+                />
+              }
             >
-              <RefreshCw
-                className={`h-4 w-4 ${checking ? 'animate-spin' : ''}`}
-                aria-hidden
-              />
               Recheck
-            </Button>
+            </DesignButton>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
+        </DesignCardHeader>
+        <DesignCardContent className="space-y-3">
           <ul className="space-y-2">
             {faucets.map((faucet) => {
               const status = reachabilityById[faucet.id]
@@ -156,8 +163,8 @@ export function FaucetLinker() {
               )
             })}
           </ul>
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
     </InfomodeWrapper>
   )
 }

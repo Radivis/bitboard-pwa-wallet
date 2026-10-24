@@ -3,7 +3,7 @@ import {
   ARKADE_SESSION_LOAD_ERROR_TILT_CLASS,
   arkadeSessionStatusClassName,
 } from '@/components/arkade/arkade-session-status-layout'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
 import { orchestrateArkadeRetryLoad } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
 import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
 
@@ -27,15 +27,15 @@ export function ArkadeSessionLoadError({
           {sanitizedErrorMessage}
         </p>
       ) : null}
-      <Button
+      <DesignButton
         type="button"
-        variant="outline"
+        appearance="secondary"
         onClick={() => {
           void orchestrateArkadeRetryLoad()
         }}
       >
         Retry
-      </Button>
+      </DesignButton>
     </div>
   )
 }

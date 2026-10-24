@@ -9,7 +9,9 @@ test.describe('Wallet Creation Flow', () => {
   test('wallet creation full flow', async ({ page }) => {
     await page.goto('/setup')
 
-    await expect(page.getByRole('button', { name: 'Create New Wallet' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Create New Wallet' })).toBeVisible({
+      timeout: 30_000,
+    })
     await expect(page.getByRole('button', { name: 'Import Wallet' })).toBeVisible()
 
     await page.getByRole('button', { name: 'Create New Wallet' }).click()

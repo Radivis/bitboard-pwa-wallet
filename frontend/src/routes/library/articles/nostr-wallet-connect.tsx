@@ -64,7 +64,7 @@ export const article: LibraryArticle = {
         </p>
       </ArticleSection>
 
-      <ArticleSection title="How Bitboard Wallet Handles This">
+      <ArticleSection title="How Bitcoin Codex Handles This">
         <p>
           Bitboard uses NWC to integrate with external Lightning wallets. You paste your connection
           URI in the Lightning settings, and Bitboard can then show balances, send payments, and

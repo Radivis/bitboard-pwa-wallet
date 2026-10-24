@@ -5,7 +5,6 @@ import {
   Home,
   Loader2,
   ScanSearch,
-  AlertTriangle,
 } from 'lucide-react'
 import {
   useWalletStore,
@@ -18,9 +17,15 @@ import {
 } from '@/stores/lightningStore'
 import { PageHeader } from '@/components/PageHeader'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DesignBanner } from '@/components/design/DesignBanner'
+import { DesignButton } from '@/components/design/DesignButton'
+import {
+  DesignCard,
+  DesignCardContent,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { CardPagination } from '@/components/CardPagination'
 import { TransactionItem } from '@/components/TransactionItem'
 import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominationSwitch'
@@ -93,55 +98,31 @@ function InitialSyncErrorBanner() {
   }
 
   return (
-    <div
+    <DesignBanner
       role="alert"
-      className="flex flex-col gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-    >
-      <div className="flex min-w-0 flex-1 gap-3">
-        <AlertTriangle
-          className="h-5 w-5 shrink-0 text-amber-700 dark:text-amber-500"
-          aria-hidden
-        />
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-foreground">
-            Initial sync did not finish
-          </p>
-          <p className="text-xs break-words text-muted-foreground">
-            {message}
-          </p>
-        </div>
-      </div>
-      <div className="flex shrink-0 items-center justify-end gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={isOnchainSyncing}
-          onClick={() => {
-            void retryInitialEsploraSyncWithWalletStatus()
-          }}
-        >
-          {isOnchainSyncing ? 'Syncing...' : 'Retry'}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground"
-          disabled={isOnchainSyncing}
-          onClick={() => setInitialSyncErrorMessage(null)}
-        >
-          Dismiss
-        </Button>
-      </div>
-    </div>
+      status="warning"
+      title="Initial sync did not finish"
+      description={message}
+      primaryAction={{
+        label: isOnchainSyncing ? 'Syncing...' : 'Retry',
+        onClick: () => {
+          void retryInitialEsploraSyncWithWalletStatus()
+        },
+        disabled: isOnchainSyncing,
+      }}
+      secondaryAction={{
+        label: 'Dismiss',
+        onClick: () => setInitialSyncErrorMessage(null),
+        disabled: isOnchainSyncing,
+      }}
+    />
   )
 }
 
 /** Live Esplora networks; regtest included so developers can repair after bad local chain. */
 const FULL_RESCAN_NETWORKS: NetworkMode[] = ['mainnet', 'testnet', 'signet', 'mutinynet']
 
-function BalanceCard() {
+function BalanceDesignCard() {
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const balance = useWalletStore((walletState) => walletState.balance)
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
@@ -251,13 +232,13 @@ function BalanceCard() {
       infoText="This is your on-chain Bitcoin on the network shown in the badge. The headline is your total balance (everything the wallet counts toward that total). When something is still unconfirmed, you may see a breakdown: spendable (settled in a block), pending change (value returning from a send you made), and pending incoming (someone else’s payment to you not yet confirmed). Immature appears rarely (e.g. mining rewards before they mature). On Lab mode, the total comes from the simulator’s coins tied to your wallet instead of the live Esplora-backed ledger."
       className="rounded-xl"
     >
-      <Card>
-        <CardHeader>
+      <DesignCard>
+        <DesignCardHeader>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <CardTitle className="flex items-center gap-2">
+            <DesignCardTitle className="flex items-center gap-2">
               <Wallet className="h-5 w-5" />
               {walletBalanceCardTitle(networkMode)}
-            </CardTitle>
+            </DesignCardTitle>
             <div className="flex flex-wrap items-center justify-end gap-2">
               {networkMode === 'mainnet' ? (
                 <BitcoinFiatDenominationSwitch className="shrink-0" />
@@ -270,8 +251,8 @@ function BalanceCard() {
               {LAB_WALLET_BALANCE_DISCLAIMER}
             </p>
           ) : null}
-        </CardHeader>
-        <CardContent className="space-y-6">
+        </DesignCardHeader>
+        <DesignCardContent className="space-y-6">
           <div
             data-rail-onchain-load={onchainRail.loadPhase}
             data-rail-onchain-sync={onchainRail.syncPhase}
@@ -296,21 +277,27 @@ function BalanceCard() {
                   data-testid="dashboard-onchain-balance-amount"
                 />
                 {networkMode !== 'lab' && isStaleOnchain ? (
-              <p
-                className="mt-2 text-xs text-amber-700 dark:text-amber-400"
-                data-testid="onchain-esplora-stale-banner"
-              >
-                Showing on-chain data from your wallet&apos;s saved chain state.
-                Esplora has not been verified this session.
-                {lastSuccessfulEsploraSyncAt != null && (
-                  <>
-                    {' '}
-                    Last verified with Esplora:{' '}
-                    {new Date(lastSuccessfulEsploraSyncAt).toLocaleString()}.
-                  </>
-                )}
-              </p>
-            ) : null}
+                  <DesignBanner
+                    role="status"
+                    status="warning"
+                    className="mt-2"
+                    data-testid="onchain-esplora-stale-banner"
+                    title="Showing saved chain state"
+                    description={
+                      <>
+                        Showing on-chain data from your wallet&apos;s saved chain state. Esplora
+                        has not been verified this session.
+                        {lastSuccessfulEsploraSyncAt != null && (
+                          <>
+                            {' '}
+                            Last verified with Esplora:{' '}
+                            {new Date(lastSuccessfulEsploraSyncAt).toLocaleString()}.
+                          </>
+                        )}
+                      </>
+                    }
+                  />
+                ) : null}
             {onChainDisplay.showBreakdown && (
               <ul className="mt-3 space-y-1.5 text-sm">
                 {onChainDisplay.confirmedSats > 0 && (
@@ -396,24 +383,24 @@ function BalanceCard() {
                       infoTitle="Full rescan"
                       infoText="Re-scans a window of your addresses against Esplora (slower than Sync). Use if your balance or transaction list still looks wrong after a normal sync—for example a poor connection during restore."
                     >
-                      <Button
+                      <DesignButton
                         type="button"
-                        variant="ghost"
-                        size="sm"
+                        appearance="tertiary"
                         onClick={() => onchainFullRescanSync.mutate()}
                         disabled={
                           onchainRail.syncPhase === 'syncing' ||
                           onchainFullRescanSync.isPending
                         }
-                        className="text-muted-foreground"
                         data-testid="rail-sync-onchain-full-rescan"
+                        icon={
+                          <ScanSearch
+                            className={onchainFullRescanSync.isPending ? 'animate-pulse' : undefined}
+                            aria-hidden
+                          />
+                        }
                       >
-                        <ScanSearch
-                          className={`mr-2 h-4 w-4 ${onchainFullRescanSync.isPending ? 'animate-pulse' : ''}`}
-                          aria-hidden
-                        />
                         {onchainFullRescanSync.isPending ? 'Scanning…' : 'Full rescan'}
-                      </Button>
+                      </DesignButton>
                     </InfomodeWrapper>
                   ) : null
                 }
@@ -504,20 +491,25 @@ function BalanceCard() {
                   ))}
                 </ul>
                 {hasStaleLightningBalance && (
-                  <p
-                    className="mt-2 text-xs text-amber-700 dark:text-amber-400"
+                  <DesignBanner
+                    role="status"
+                    status="warning"
+                    className="mt-2"
                     data-testid="lightning-balance-stale-banner"
-                  >
-                    Showing last known Lightning balance saved in this app (not a
-                    live check). NWC could not be reached.
-                    {newestStaleBalanceIso != null && (
+                    title="Showing saved Lightning balance"
+                    description={
                       <>
-                        {' '}
-                        Updated:{' '}
-                        {new Date(newestStaleBalanceIso).toLocaleString()}.
+                        Showing last known Lightning balance saved in this app (not a live check).
+                        NWC could not be reached.
+                        {newestStaleBalanceIso != null && (
+                          <>
+                            {' '}
+                            Updated: {new Date(newestStaleBalanceIso).toLocaleString()}.
+                          </>
+                        )}
                       </>
-                    )}
-                  </p>
+                    }
+                  />
                 )}
                 {lightningBalanceRows.some((balanceRow) => balanceRow.error != null) && (
                   <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
@@ -551,8 +543,8 @@ function BalanceCard() {
                 )}
               </div>
             )}
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
     </InfomodeWrapper>
   )
 }
@@ -671,25 +663,25 @@ function RecentTransactions() {
 
   if (networkMode === 'lab' && !labChainReady) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Transactions</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle>Recent Transactions</DesignCardTitle>
+        </DesignCardHeader>
+        <DesignCardContent>
           <p className="text-sm text-muted-foreground py-4">
             Loading lab...
           </p>
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
     )
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Recent Transactions</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <DesignCard>
+      <DesignCardHeader>
+        <DesignCardTitle>Recent Transactions</DesignCardTitle>
+      </DesignCardHeader>
+      <DesignCardContent>
         {networkMode !== 'lab' &&
           isLightningEnabled &&
           hasLnWalletForNetwork &&
@@ -716,14 +708,19 @@ function RecentTransactions() {
           hasLnWalletForNetwork &&
           stalePaymentsAsOf != null &&
           lightningPayments.length > 0 && (
-            <p
-              className="mb-3 text-xs text-amber-700 dark:text-amber-400"
+            <DesignBanner
+              role="status"
+              status="warning"
+              className="mb-3"
               data-testid="lightning-history-stale-banner"
-            >
-              Some Lightning activity below may be from the last successful sync
-              in this app (NWC unreachable). List saved:{' '}
-              {new Date(stalePaymentsAsOf).toLocaleString()}.
-            </p>
+              title="Lightning activity may be out of date"
+              description={
+                <>
+                  Some Lightning activity below may be from the last successful sync in this app
+                  (NWC unreachable). List saved: {new Date(stalePaymentsAsOf).toLocaleString()}.
+                </>
+              }
+            />
           )}
         {networkMode !== 'lab' && mergedActivity.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-8 text-center">
@@ -796,8 +793,8 @@ function RecentTransactions() {
             </div>
           </CardPagination>
         )}
-      </CardContent>
-    </Card>
+      </DesignCardContent>
+    </DesignCard>
   )
 }
 
@@ -818,7 +815,7 @@ export function DashboardPage() {
       <InitialSyncErrorBanner />
       <OnchainSaveErrorBanner />
 
-      <BalanceCard />
+      <BalanceDesignCard />
       <RecentTransactions />
     </div>
   )

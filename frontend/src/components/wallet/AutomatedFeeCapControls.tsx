@@ -1,4 +1,4 @@
-import { Input } from '@/components/ui/input'
+import { DesignInput } from '@/components/design/DesignInput'
 import { Label } from '@/components/ui/label'
 import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
 import type { SendFeePresetLabel } from '@/lib/esplora/esplora-fee-estimates'
@@ -49,7 +49,7 @@ export function AutomatedFeeCapControls({
       </p>
       <div className="space-y-2">
         <Label htmlFor={maxFeeInputId}>Max fee rate (sat/vB)</Label>
-        <Input
+        <DesignInput
           id={maxFeeInputId}
           type="number"
           inputMode="decimal"

@@ -1,5 +1,11 @@
 import { Zap } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import {
+  DesignCard,
+  DesignCardContent,
+  DesignCardDescription,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { Badge } from '@/components/ui/badge'
 
 /**
@@ -10,25 +16,25 @@ import { Badge } from '@/components/ui/badge'
  */
 export function LightningNodeId() {
   return (
-    <Card className="opacity-75">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+    <DesignCard className="opacity-75">
+      <DesignCardHeader>
+        <DesignCardTitle className="flex items-center gap-2">
           <Zap className="h-5 w-5" />
           App-Internal Lightning Node
           <Badge variant="secondary">Work in Progress</Badge>
-        </CardTitle>
-        <CardDescription>
+        </DesignCardTitle>
+        <DesignCardDescription>
           A self-custodial Lightning node running directly in the browser via
           LDK compiled to WASM. This feature is under development and not yet
           available.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+        </DesignCardDescription>
+      </DesignCardHeader>
+      <DesignCardContent>
         <p className="text-sm text-muted-foreground">
           In the meantime, use NWC (Nostr Wallet Connect) to connect an
           external Lightning wallet for send and receive capabilities.
         </p>
-      </CardContent>
-    </Card>
+      </DesignCardContent>
+    </DesignCard>
   )
 }

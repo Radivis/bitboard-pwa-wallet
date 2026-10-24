@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+  DesignCard,
+  DesignCardContent,
+  DesignCardDescription,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
+import { DesignInput } from '@/components/design/DesignInput'
 import { Label } from '@/components/ui/label'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
 import {
@@ -64,14 +64,14 @@ export function LabRulesCard() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Rules</CardTitle>
-        <CardDescription>
+    <DesignCard>
+      <DesignCardHeader>
+        <DesignCardTitle>Rules</DesignCardTitle>
+        <DesignCardDescription>
           How the lab simulation works and how it differs from Bitcoin mainnet
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
+        </DesignCardDescription>
+      </DesignCardHeader>
+      <DesignCardContent className="gap-6">
         <ul className="space-y-3 text-sm">
           <li>
             <strong>No Proof of Work.</strong> In the lab, new blocks are created by clicking
@@ -141,7 +141,7 @@ export function LabRulesCard() {
           >
             <div className="flex min-w-[12rem] flex-col gap-2">
               <Label htmlFor="lab-block-weight-units">Max non-coinbase weight units (WU) per block</Label>
-              <Input
+              <DesignInput
                 id="lab-block-weight-units"
                 inputMode="numeric"
                 min={LAB_MIN_BLOCK_WEIGHT_UNITS}
@@ -150,16 +150,16 @@ export function LabRulesCard() {
                 onChange={(ev) => setDraftLimitWu(ev.target.value)}
               />
             </div>
-            <Button disabled={setLimit.isPending} type="submit" variant="secondary">
+            <DesignButton disabled={setLimit.isPending} type="submit" appearance="tertiary">
               Apply limit
-            </Button>
+            </DesignButton>
           </form>
 
           <div className="flex flex-col gap-3 border-t border-border/60 pt-6">
             <Label id="lab-miner-subsidy-label">Miner subsidy (sats)</Label>
             <div className="flex flex-wrap items-center gap-3">
               {subsidyEditMode ? (
-                <Input
+                <DesignInput
                   aria-labelledby="lab-miner-subsidy-label"
                   className="max-w-[14rem] font-mono tabular-nums"
                   id="lab-miner-subsidy-input"
@@ -172,12 +172,12 @@ export function LabRulesCard() {
               ) : (
                 <span
                   aria-labelledby="lab-miner-subsidy-label"
-                  className="min-w-[8rem] font-mono text-base tabular-nums"
+                  className="design-mono min-w-[8rem] text-base tabular-nums"
                 >
                   {currentSubsidySats.toLocaleString()}
                 </span>
               )}
-              <Button
+              <DesignButton
                 disabled={
                   subsidyEditMode || setMinerSubsidy.isPending || labState == null
                 }
@@ -185,38 +185,38 @@ export function LabRulesCard() {
                   applyHalfSubsidy()
                 }}
                 type="button"
-                variant="secondary"
+                appearance="tertiary"
               >
                 Half
-              </Button>
+              </DesignButton>
               {subsidyEditMode ? (
-                <Button
+                <DesignButton
                   disabled={setMinerSubsidy.isPending}
                   onClick={() => {
                     saveSubsidyFromDraft()
                   }}
                   type="button"
-                  variant="secondary"
+                  appearance="tertiary"
                 >
                   Save new amount
-                </Button>
+                </DesignButton>
               ) : (
-                <Button
+                <DesignButton
                   disabled={labState == null}
                   onClick={() => {
                     setDraftSubsidySats(String(currentSubsidySats))
                     setSubsidyEditMode(true)
                   }}
                   type="button"
-                  variant="secondary"
+                  appearance="tertiary"
                 >
                   Change to fixed amount
-                </Button>
+                </DesignButton>
               )}
             </div>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </DesignCardContent>
+    </DesignCard>
   )
 }

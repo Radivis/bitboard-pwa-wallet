@@ -1,8 +1,13 @@
-import { useParams } from '@tanstack/react-router'
+import { Link, useParams } from '@tanstack/react-router'
 import { Star } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DesignButton } from '@/components/design/DesignButton'
+import { DesignTag } from '@/components/design/DesignTag'
+import {
+  DesignCard,
+  DesignCardContent,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { useLibraryFavorites, useSetArticleFavorite } from '@/db'
 import { getArticle, isArticleSlug, LIBRARY_ARTICLE_TITLE_CLASS } from '@/lib/library/articles'
 import { getTagLabel } from '@/lib/library/tags'
@@ -20,17 +25,17 @@ export function ArticlePage() {
   if (!article) {
     return (
       <div className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Article not found</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
+        <DesignCard>
+          <DesignCardHeader>
+            <DesignCardTitle>Article not found</DesignCardTitle>
+          </DesignCardHeader>
+          <DesignCardContent className="text-sm text-[var(--design-text-card-description)]">
             <p>
               There is no article with this address. Check the link or pick a topic from the Library
               index.
             </p>
-          </CardContent>
-        </Card>
+          </DesignCardContent>
+        </DesignCard>
       </div>
     )
   }
@@ -40,40 +45,41 @@ export function ArticlePage() {
       <header className="space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <h2 className={LIBRARY_ARTICLE_TITLE_CLASS}>{article.title}</h2>
-          <Button
+          <DesignButton
             type="button"
-            variant="ghost"
-            size="icon"
-            className="shrink-0"
+            appearance="tertiary"
+            className="h-12 w-12 shrink-0 px-0"
             aria-pressed={isFavorite}
             aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
             disabled={setFavorite.isPending}
+            icon={
+              <Star
+                className={cn(isFavorite && 'fill-primary text-primary')}
+                aria-hidden
+              />
+            }
             onClick={() =>
               void setFavorite.mutateAsync({
                 articleSlug: article.slug,
                 isFavorite: !isFavorite,
               })
             }
-          >
-            <Star
-              className={cn(
-                'size-6',
-                isFavorite && 'fill-primary text-primary',
-              )}
-              aria-hidden
-            />
-          </Button>
+          />
         </div>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-3">
           {article.tagIds.map((tagId) => (
-            <Badge key={tagId} variant="secondary">
-              {getTagLabel(tagId)}
-            </Badge>
+            <DesignTag key={tagId} asChild>
+              <Link to="/library/tags" search={{ tag: tagId }}>
+                {getTagLabel(tagId)}
+              </Link>
+            </DesignTag>
           ))}
         </div>
       </header>
 
-      {article.body}
+      <DesignCard>
+        <DesignCardContent>{article.body}</DesignCardContent>
+      </DesignCard>
     </div>
   )
 }

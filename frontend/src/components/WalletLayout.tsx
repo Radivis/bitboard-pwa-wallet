@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect } from 'react'
+import { type ReactNode, type RefObject, useEffect, useRef, useState } from 'react'
 import { Link, useMatchRoute, useLocation } from '@tanstack/react-router'
 import {
   Home,
@@ -22,18 +22,23 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react'
-import { InfomodeToggle } from '@/components/infomode/InfomodeToggle'
-import { ThemeToggle } from '@/components/ThemeToggle'
+import { designNavBarSurfaceClassName } from '@/components/design/design-drawer-chrome'
+import { useBottomNavSwipe } from '@/components/design/bottom-nav-swipe'
+import { DesignCompactNavButton } from '@/components/design/DesignCompactNavButton'
+import {
+  DesignSideDrawer,
+  type DesignDrawerNavItem,
+} from '@/components/design/DesignSideDrawer'
+import { DesignNetworkDrawer } from '@/components/design/DesignNetworkDrawer'
+import { WalletTopBar } from '@/components/WalletTopBar'
 import { BarkExitSeizureBanner } from '@/components/bark/BarkExitSeizureBanner'
+import { useNetworkModeSelection } from '@/hooks/useNetworkModeSelection'
+import { useNetworkConnectivityStore } from '@/stores/networkConnectivityStore'
 import { NearZeroSecurityBanner } from '@/components/NearZeroSecurityBanner'
 import { NoMnemonicBackupBanner } from '@/components/NoMnemonicBackupBanner'
 import { SecureStorageUnavailableBanner } from '@/components/SecureStorageUnavailableBanner'
-import { useWallet } from '@/db'
-import { useWalletStore } from '@/stores/walletStore'
+import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 import { cn } from '@/lib/shared/utils'
-import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
-
-const APP_TITLE = 'Bitboard Wallet'
 
 interface WalletLayoutProps {
   children: ReactNode
@@ -202,33 +207,8 @@ const LAB_SUB_NAV_ITEMS: SectionSubNavItem[] = [
   },
 ]
 
-const SECONDARY_NAV_SURFACE_CLASS =
-  'border-border bg-header/95 backdrop-blur supports-[backdrop-filter]:bg-header/80'
-
-const LOWER_NAV_SURFACE_CLASS =
-  'border-border bg-nav-lower-tier/95 backdrop-blur supports-[backdrop-filter]:bg-nav-lower-tier/80'
-
-/** Bottom nav item labels: narrow screens truncate past ~14 character widths. */
-const BOTTOM_NAV_LABEL_SPAN_CLASS =
-  'max-w-[14ch] truncate text-center leading-tight'
-
-/**
- * Primary section bar (Tailwind `h-16`). Wallet sub-nav uses literal `bottom-16` in JSX
- * (same 4rem offset) so Tailwind’s scanner keeps the class; do not change one without the other.
- */
-const PRIMARY_BOTTOM_NAV_HEIGHT_CLASS = 'h-16'
-
-/** Wallet subsection bar height (`h-14`). */
-const WALLET_SUB_NAV_HEIGHT_CLASS = 'h-14'
-
-/**
- * Main content bottom padding when both fixed bars show: must match
- * WALLET_SUB_NAV_HEIGHT_CLASS + PRIMARY_BOTTOM_NAV_HEIGHT_CLASS (3.5rem + 4rem).
- */
-const MAIN_BOTTOM_PADDING_WALLET_SECTION_CLASS = 'pb-[7.5rem]'
-
-/** Main padding when only the primary bar is fixed (`h-16` + comfortable scroll inset). */
-const MAIN_BOTTOM_PADDING_PRIMARY_ONLY_CLASS = 'pb-20'
+/** Clears a compact section footer (60px large control plus the bar's vertical padding). */
+const MAIN_BOTTOM_PADDING_WITH_NAV_CLASS = 'pb-24'
 
 function isWalletSectionPath(pathname: string): boolean {
   return pathname === '/' || pathname.startsWith('/wallet')
@@ -246,52 +226,6 @@ function isSettingsSectionPath(pathname: string): boolean {
   return pathname.startsWith('/settings')
 }
 
-const NAV_LINK_CLASS =
-  'group flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
-
-function navItemInnerClassNames(isActive: boolean) {
-  return cn(
-    'inline-flex w-max min-w-0 max-w-full flex-col items-center gap-1 rounded-md px-1 py-1 text-xs transition-[color,box-shadow,ring] sm:px-2',
-    isActive
-      ? cn(
-          'font-medium text-primary',
-          'ring-1 ring-primary/45',
-          'shadow-[0_0_16px_-3px_color-mix(in_hsl,var(--primary)_50%,transparent)]',
-        )
-      : 'text-muted-foreground group-hover:text-foreground',
-  )
-}
-
-type BottomNavLinkProps = {
-  to: string
-  label: string
-  icon: LucideIcon
-  isActive: boolean
-  preload?: false
-}
-
-function BottomNavLink({
-  to,
-  label,
-  icon: Icon,
-  isActive,
-  preload,
-}: BottomNavLinkProps) {
-  return (
-    <Link
-      to={to}
-      preload={preload}
-      className={NAV_LINK_CLASS}
-      aria-current={isActive ? 'page' : undefined}
-    >
-      <span className={navItemInnerClassNames(isActive)}>
-        <Icon className="h-5 w-5 shrink-0" aria-hidden />
-        <span className={BOTTOM_NAV_LABEL_SPAN_CLASS}>{label}</span>
-      </span>
-    </Link>
-  )
-}
-
 function isPrimaryNavItemActive(
   item: PrimaryNavItem,
   pathname: string,
@@ -302,69 +236,29 @@ function isPrimaryNavItemActive(
     : !!matchRoute({ to: item.to, fuzzy: false })
 }
 
-/**
- * One column in the primary bottom nav: inactive tabs show the parent nav’s lower-tier surface;
- * active tab uses the same header-tier surface as `SectionSubNav`.
- */
-function PrimaryNavTabColumn({
-  isActiveCategory,
-  children,
-}: {
-  isActiveCategory: boolean
-  children: React.ReactNode
-}) {
-  return (
-    <div
-      className={cn(
-        'flex min-h-0 min-w-0 flex-1 flex-col',
-        isActiveCategory && SECONDARY_NAV_SURFACE_CLASS,
-        isActiveCategory ? 'border-t border-t-transparent' : 'border-t border-border',
-      )}
-    >
-      {children}
-    </div>
-  )
-}
-
-function PrimarySectionNav() {
-  const matchRoute = useMatchRoute()
-  const pathname = useLocation().pathname
-
-  return (
-    <nav
-      aria-label="Main sections"
-      className={cn(
-        'fixed bottom-0 left-0 right-0 z-50 w-full',
-        PRIMARY_BOTTOM_NAV_HEIGHT_CLASS,
-        LOWER_NAV_SURFACE_CLASS,
-      )}
-    >
-      <div className="mx-auto flex h-full min-h-0 w-full max-w-screen-xl min-w-0 items-stretch px-2">
-        {PRIMARY_NAV_ITEMS.map((item) => {
-          const isActive = isPrimaryNavItemActive(item, pathname, matchRoute)
-          return (
-            <PrimaryNavTabColumn key={item.to} isActiveCategory={isActive}>
-              <BottomNavLink
-                to={item.to}
-                label={item.label}
-                icon={item.icon}
-                isActive={isActive}
-                preload={item.linkPreload}
-              />
-            </PrimaryNavTabColumn>
-          )
-        })}
-      </div>
-    </nav>
-  )
+function buildDrawerNavItems(
+  pathname: string,
+  matchRoute: ReturnType<typeof useMatchRoute>,
+): DesignDrawerNavItem[] {
+  return PRIMARY_NAV_ITEMS.map((item) => ({
+    to: item.to,
+    label: item.label,
+    icon: item.icon,
+    selected: isPrimaryNavItemActive(item, pathname, matchRoute),
+    linkPreload: item.linkPreload,
+  }))
 }
 
 function SectionSubNav({
   ariaLabel,
   items,
+  hidden,
+  navRef,
 }: {
   ariaLabel: string
   items: SectionSubNavItem[]
+  hidden: boolean
+  navRef: RefObject<HTMLElement | null>
 }) {
   const matchRoute = useMatchRoute()
   const location = useLocation()
@@ -372,35 +266,35 @@ function SectionSubNav({
 
   return (
     <nav
+      ref={navRef}
       aria-label={ariaLabel}
+      aria-hidden={hidden}
+      inert={hidden || undefined}
       className={cn(
-        'fixed bottom-16 left-0 right-0 z-40 border-t',
-        SECONDARY_NAV_SURFACE_CLASS,
+        'fixed bottom-0 left-0 right-0 z-40 motion-safe:transition-transform motion-safe:duration-200',
+        designNavBarSurfaceClassName,
+        hidden && 'pointer-events-none translate-y-full',
       )}
     >
-      <div
-        className={cn(
-          'mx-auto grid w-full max-w-screen-xl items-stretch px-2',
-          WALLET_SUB_NAV_HEIGHT_CLASS,
-        )}
-        style={{
-          gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))`,
-        }}
-      >
+      <div className="mx-auto flex w-full max-w-screen-xl items-stretch gap-2 px-2 py-2">
         {items.map((item) => {
           const isActive =
             item.kind === 'match'
               ? !!matchRoute({ to: item.to, fuzzy: false })
               : item.isActive(pathname)
+          const Icon = item.icon
           return (
-            <BottomNavLink
+            <DesignCompactNavButton
               key={item.to}
-              to={item.to}
-              label={item.label}
-              icon={item.icon}
-              isActive={isActive}
-              preload={item.linkPreload}
-            />
+              asChild
+              status={isActive ? 'selected' : 'default'}
+              className="min-w-0 flex-1"
+            >
+              <Link to={item.to} preload={item.linkPreload}>
+                <Icon aria-hidden />
+                <span className="max-w-full truncate">{item.label}</span>
+              </Link>
+            </DesignCompactNavButton>
           )
         })}
       </div>
@@ -408,7 +302,13 @@ function SectionSubNav({
   )
 }
 
-function BottomNavigationChrome() {
+function BottomNavigationChrome({
+  hidden,
+  navRef,
+}: {
+  hidden: boolean
+  navRef: RefObject<HTMLElement | null>
+}) {
   const location = useLocation()
   const showLibrarySubNav = isLibrarySectionPath(location.pathname)
   const showWalletSubNav = isWalletSectionPath(location.pathname)
@@ -418,77 +318,93 @@ function BottomNavigationChrome() {
   return (
     <>
       {showLibrarySubNav && (
-        <SectionSubNav ariaLabel="Library" items={LIBRARY_SUB_NAV_ITEMS} />
+        <SectionSubNav ariaLabel="Library" items={LIBRARY_SUB_NAV_ITEMS} hidden={hidden} navRef={navRef} />
       )}
       {showWalletSubNav && (
-        <SectionSubNav ariaLabel="Wallet" items={WALLET_SUB_NAV_ITEMS} />
+        <SectionSubNav
+          ariaLabel="Wallet"
+          items={WALLET_SUB_NAV_ITEMS}
+          hidden={hidden}
+          navRef={navRef}
+        />
       )}
       {showLabSubNav && (
-        <SectionSubNav ariaLabel="Lab" items={LAB_SUB_NAV_ITEMS} />
+        <SectionSubNav ariaLabel="Lab" items={LAB_SUB_NAV_ITEMS} hidden={hidden} navRef={navRef} />
       )}
       {showSettingsSubNav && (
-        <SectionSubNav ariaLabel="Settings" items={SETTINGS_SUB_NAV_ITEMS} />
+        <SectionSubNav
+          ariaLabel="Settings"
+          items={SETTINGS_SUB_NAV_ITEMS}
+          hidden={hidden}
+          navRef={navRef}
+        />
       )}
-      <PrimarySectionNav />
     </>
   )
 }
 
 export function WalletLayout({ children }: WalletLayoutProps) {
   const location = useLocation()
+  const matchRoute = useMatchRoute()
+  const [sideDrawerOpen, setSideDrawerOpen] = useState(false)
+  const [networkDrawerOpen, setNetworkDrawerOpen] = useState(false)
+  const [bottomNavHidden, setBottomNavHidden] = useState(false)
+  const bottomNavRef = useRef<HTMLElement>(null)
+  useBottomNavSwipe(bottomNavRef, setBottomNavHidden)
+  const committedNetwork = useWalletStore(selectCommittedNetworkMode)
+  const rememberNetwork = useNetworkConnectivityStore((state) => state.rememberNetwork)
+  const { selectNetwork, isSwitching, statusLine, unlockDialog } = useNetworkModeSelection()
   const isSetupRoute = location.pathname.startsWith('/setup')
   const showLibrarySubNav = !isSetupRoute && isLibrarySectionPath(location.pathname)
   const showWalletSubNav = !isSetupRoute && isWalletSectionPath(location.pathname)
   const showLabSubNav = !isSetupRoute && isLabSectionPath(location.pathname)
   const showSettingsSubNav = !isSetupRoute && isSettingsSectionPath(location.pathname)
 
-  const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
-  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
-  const { data: activeWalletRow, isSuccess: activeWalletLoaded } = useWallet(activeWalletId)
-  const walletDisplayName =
-    activeWalletId && activeWalletLoaded && activeWalletRow?.name
-      ? activeWalletRow.name
-      : null
-  const showWalletSuffix = Boolean(walletDisplayName)
-  /** Same signal as network unlock: `walletStatus` is not persisted, so use session. */
-  const walletSuffixMuted =
-    activeWalletId !== null && !walletIsUnlockedOrSyncing(walletStatus)
+  useEffect(() => {
+    rememberNetwork(committedNetwork)
+  }, [committedNetwork, rememberNetwork])
 
   useEffect(() => {
-    document.title =
-      walletDisplayName !== null ? `${APP_TITLE}: ${walletDisplayName}` : APP_TITLE
-  }, [walletDisplayName])
+    setSideDrawerOpen(false)
+    setNetworkDrawerOpen(false)
+  }, [location.pathname])
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-50 border-b border-border bg-header/95 backdrop-blur supports-[backdrop-filter]:bg-header/80">
-        <div className="mx-auto flex h-14 max-w-screen-xl items-center justify-between px-4">
-          <h1 className="flex min-w-0 max-w-full items-center gap-2 text-lg font-semibold tracking-tight">
-            <img
-              src="/bitboard-icon.png"
-              alt=""
-              className="h-7 w-7 shrink-0"
-              width={28}
-              height={28}
-            />
-            <span className="min-w-0 truncate">
-              {APP_TITLE}
-              {showWalletSuffix && walletDisplayName !== null && (
-                <span
-                  className={cn(walletSuffixMuted && 'opacity-40')}
-                  title={walletDisplayName}
-                >
-                  :&nbsp;{walletDisplayName}
-                </span>
-              )}
-            </span>
-          </h1>
-          <div className="flex items-center gap-3">
-            <InfomodeToggle />
-            <ThemeToggle />
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-[var(--design-background)] text-foreground">
+      <WalletTopBar
+        sideDrawerOpen={sideDrawerOpen}
+        networkDrawerOpen={networkDrawerOpen}
+        onToggleSideDrawer={() => {
+          setNetworkDrawerOpen(false)
+          setSideDrawerOpen((open) => !open)
+        }}
+        onToggleNetworkDrawer={() => {
+          setSideDrawerOpen(false)
+          setNetworkDrawerOpen((open) => !open)
+        }}
+      />
+
+      <DesignSideDrawer
+        open={sideDrawerOpen}
+        onOpen={() => {
+          setNetworkDrawerOpen(false)
+          setSideDrawerOpen(true)
+        }}
+        onClose={() => setSideDrawerOpen(false)}
+        navItems={buildDrawerNavItems(location.pathname, matchRoute)}
+      />
+      <DesignNetworkDrawer
+        open={networkDrawerOpen}
+        onOpen={() => {
+          setSideDrawerOpen(false)
+          setNetworkDrawerOpen(true)
+        }}
+        onClose={() => setNetworkDrawerOpen(false)}
+        onSelectNetwork={selectNetwork}
+        isSwitching={isSwitching}
+        statusLine={statusLine}
+      />
+      {unlockDialog}
 
       <SecureStorageUnavailableBanner />
       <NearZeroSecurityBanner />
@@ -498,19 +414,16 @@ export function WalletLayout({ children }: WalletLayoutProps) {
       <main
         className={cn(
           'mx-auto max-w-screen-xl px-4 py-6',
-          !isSetupRoute &&
-            (showWalletSubNav ||
-            showLibrarySubNav ||
-            showLabSubNav ||
-            showSettingsSubNav
-              ? MAIN_BOTTOM_PADDING_WALLET_SECTION_CLASS
-              : MAIN_BOTTOM_PADDING_PRIMARY_ONLY_CLASS),
+          bottomNavHidden ||
+          !(showWalletSubNav || showLibrarySubNav || showLabSubNav || showSettingsSubNav)
+            ? undefined
+            : MAIN_BOTTOM_PADDING_WITH_NAV_CLASS,
         )}
       >
         {children}
       </main>
 
-      {!isSetupRoute && <BottomNavigationChrome />}
+      {!isSetupRoute && <BottomNavigationChrome hidden={bottomNavHidden} navRef={bottomNavRef} />}
     </div>
   )
 }

@@ -7,7 +7,7 @@ import type { LibraryArticle } from '@/lib/library/library-article'
 
 export const article: LibraryArticle = {
   slug: 'arkade-bitboard-wallet',
-  title: 'Arkade in Bitboard Wallet',
+  title: 'Arkade in Bitcoin Codex',
   tagIds: ['bitcoin', 'wallets'],
   body: (
     <div className={ARTICLE_BODY_CLASS}>

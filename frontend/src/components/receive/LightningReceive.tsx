@@ -2,9 +2,14 @@ import { useState, useCallback, useMemo } from 'react'
 import { Zap, Copy, Plus, Loader2 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { DesignButton } from '@/components/design/DesignButton'
+import {
+  DesignCard,
+  DesignCardContent,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
+import { DesignInput } from '@/components/design/DesignInput'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
@@ -95,14 +100,14 @@ function InvoiceQrDisplay({ invoice }: { invoice: LightningInvoice }) {
   }, [invoice.bolt11])
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+    <DesignCard>
+      <DesignCardHeader>
+        <DesignCardTitle className="flex items-center gap-2">
           <Zap className="h-5 w-5" />
           Lightning Invoice
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+        </DesignCardTitle>
+      </DesignCardHeader>
+      <DesignCardContent className="space-y-4">
         <div className="flex flex-col items-center gap-4">
           <div className="rounded-lg bg-white p-4">
             <QRCodeSVG
@@ -140,12 +145,10 @@ function InvoiceQrDisplay({ invoice }: { invoice: LightningInvoice }) {
           <div className="flex-1 truncate rounded-md border border-input bg-muted/50 px-3 py-2 font-mono text-xs">
             {invoice.bolt11}
           </div>
-          <Button size="icon" onClick={handleCopy} aria-label="Copy invoice">
-            <Copy className="h-4 w-4" />
-          </Button>
+          <DesignButton onClick={handleCopy} aria-label="Copy invoice" icon={<Copy />} />
         </div>
-      </CardContent>
-    </Card>
+      </DesignCardContent>
+    </DesignCard>
   )
 }
 
@@ -272,14 +275,14 @@ function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
       infoText="A Lightning invoice (also called a BOLT11 invoice) is a one-time payment request. You may enter how many satoshis you want to receive or leave the amount empty for an amountless invoice (the payer must choose the amount when paying). You can add an optional description and choose how long the invoice stays valid. The payer scans the QR code or pastes the invoice string into their Lightning wallet to pay you."
       className="rounded-xl"
     >
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle className="flex items-center gap-2">
             <Zap className="h-5 w-5" />
             Create Invoice
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+          </DesignCardTitle>
+        </DesignCardHeader>
+        <DesignCardContent>
           <form
             className="space-y-4"
             onSubmit={(e) => {
@@ -293,7 +296,7 @@ function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
                   ? `Amount (${defaultFiatCurrency}) (optional)`
                   : 'Amount (sats) (optional)'}
               </Label>
-              <Input
+              <DesignInput
                 id="invoice-amount"
                 type="text"
                 inputMode={mainnetFiatEntry ? 'decimal' : 'numeric'}
@@ -341,7 +344,7 @@ function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
 
             <div className="space-y-2">
               <Label htmlFor="invoice-description">Description (optional)</Label>
-              <Input
+              <DesignInput
                 id="invoice-description"
                 value={description}
                 maxLength={MAX_LIGHTNING_INVOICE_DESCRIPTION_LENGTH}
@@ -354,36 +357,36 @@ function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
               <Label htmlFor="invoice-expiry">Expiry</Label>
               <div className="flex gap-2">
                 {INVOICE_EXPIRY_OPTIONS.map((option) => (
-                  <Button
+                  <DesignButton
                     key={option.seconds}
                     type="button"
-                    variant={expirySeconds === option.seconds ? 'default' : 'outline'}
-                    size="sm"
+                    appearance={expirySeconds === option.seconds ? 'primary' : 'secondary'}
                     className="flex-1"
                     onClick={() => setExpirySeconds(option.seconds)}
                   >
                     {option.label}
-                  </Button>
+                  </DesignButton>
                 ))}
               </div>
             </div>
 
-            <Button type="submit" className="w-full" disabled={!canCreate}>
-              {createMutation.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating Invoice...
-                </>
-              ) : (
-                <>
-                  <Zap className="mr-2 h-4 w-4" />
-                  Create Invoice
-                </>
-              )}
-            </Button>
+            <DesignButton
+              type="submit"
+              className="w-full"
+              disabled={!canCreate}
+              icon={
+                createMutation.isPending ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <Zap />
+                )
+              }
+            >
+              {createMutation.isPending ? 'Creating Invoice...' : 'Create Invoice'}
+            </DesignButton>
           </form>
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
     </InfomodeWrapper>
   )
 }
@@ -396,8 +399,8 @@ function NoConnectionPrompt({
   hasOtherNetworkConnections: boolean
 }) {
   return (
-    <Card>
-      <CardContent className="py-6">
+    <DesignCard>
+      <DesignCardContent className="py-6">
         <div className="space-y-3 text-center">
           <Zap className="mx-auto h-8 w-8 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
@@ -405,12 +408,12 @@ function NoConnectionPrompt({
               ? `No Lightning wallet for ${networkLabel}. Connect or label one for this network in Management to create real invoices.`
               : 'No Lightning wallet connected. Connect one to create real invoices.'}
           </p>
-          <Button asChild variant="outline">
+          <DesignButton appearance="secondary" asChild>
             <Link to="/wallet/management">Connect Lightning Wallet</Link>
-          </Button>
+          </DesignButton>
         </div>
-      </CardContent>
-    </Card>
+      </DesignCardContent>
+    </DesignCard>
   )
 }
 
@@ -480,23 +483,23 @@ export function LightningReceive() {
       ) : (
         <>
           {activeInvoice && <InvoiceQrDisplay invoice={activeInvoice} />}
-          <Button
-            variant="outline"
+          <DesignButton
+            appearance="secondary"
             className="w-full"
             onClick={() => setShowCreateForm(true)}
+            icon={<Plus />}
           >
-            <Plus className="mr-2 h-4 w-4" />
             Create New Invoice
-          </Button>
+          </DesignButton>
         </>
       )}
 
       {pastInvoices.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Previous Invoices</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <DesignCard>
+          <DesignCardHeader>
+            <DesignCardTitle className="text-sm">Previous Invoices</DesignCardTitle>
+          </DesignCardHeader>
+          <DesignCardContent>
             <div className="space-y-2">
               {pastInvoices.map((invoice) => (
                 <InvoiceListItem
@@ -510,8 +513,8 @@ export function LightningReceive() {
                 />
               ))}
             </div>
-          </CardContent>
-        </Card>
+          </DesignCardContent>
+        </DesignCard>
       )}
     </div>
   )

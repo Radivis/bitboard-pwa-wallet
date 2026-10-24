@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react'
+import { DesignButton } from '@/components/design/DesignButton'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+  DesignCard,
+  DesignCardContent,
+  DesignCardDescription,
+  DesignCardFooter,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { DesignInput } from '@/components/design/DesignInput'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
@@ -181,28 +182,28 @@ export function LabEntitiesCard() {
         infoText="Simulated participants with their own descriptor wallets in the lab database. Create named or anonymous entities, rename them without rewriting the transaction graph, mark them as dead to exclude them from random transactions, or delete them when they have no activity."
         className="rounded-xl"
       >
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+        <DesignCard>
+          <DesignCardHeader>
+            <DesignCardTitle>
               <FlaskConical className="h-5 w-5" />
               Lab entities
-            </CardTitle>
-            <CardDescription>
+            </DesignCardTitle>
+            <DesignCardDescription>
               Simulator participants — optional name, same rules as mining’s lab-entity branch
-            </CardDescription>
+            </DesignCardDescription>
             <p className="text-sm text-muted-foreground pt-1 max-w-prose">
               Lab entities use <span className="font-medium text-foreground/90">simple wallets</span> (one
-              address type per entity). The Bitboard Wallet uses{' '}
+              address type per entity). The Bitcoin Codex uses{' '}
               <span className="font-medium text-foreground/90">advanced wallets</span> that support multiple
               address types.
             </p>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-6">
+          </DesignCardHeader>
+          <DesignCardContent className="gap-6">
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-3">
                 <div className="space-y-2 flex-1 min-w-0">
                   <Label htmlFor="new-lab-entity-name">Name (optional)</Label>
-                  <Input
+                  <DesignInput
                     id="new-lab-entity-name"
                     type="text"
                     placeholder="Alice"
@@ -213,13 +214,13 @@ export function LabEntitiesCard() {
                     maxLength={LAB_ENTITY_NAME_MAX_LENGTH}
                   />
                 </div>
-                <Button
+                <DesignButton
                   type="button"
                   onClick={onCreate}
                   disabled={!labNetworkEnabled || busy}
                 >
                   {createMutation.isPending ? 'Creating…' : 'Create lab entity'}
-                </Button>
+                </DesignButton>
               </div>
               {isSegwitAddressesEnabled ? (
                 <div className="flex flex-col gap-2 max-w-md">
@@ -263,14 +264,15 @@ export function LabEntitiesCard() {
               >
                 <div className="flex flex-row flex-wrap gap-4">
                   {rows.map((row) => (
-                    <Card
+                    <DesignCard
                       key={row.labEntityId}
-                      className="min-w-0 flex-[1_1_100%] gap-0 py-0 shadow-sm md:flex-[1_1_calc((100%-1rem)/2)] xl:flex-[1_1_calc((100%-2rem)/3)]"
+                      elevation={2}
+                      className="min-w-0 flex-[1_1_100%] md:flex-[1_1_calc((100%-1rem)/2)] xl:flex-[1_1_calc((100%-2rem)/3)]"
                     >
-                      <CardHeader className="space-y-2 pb-3 pt-4">
+                      <DesignCardHeader className="gap-2 pb-3 pt-4">
                         {renamingId === row.labEntityId ? (
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
-                            <Input
+                            <DesignInput
                               value={renameDraft}
                               onChange={(e) => setRenameDraft(e.target.value)}
                               disabled={busy}
@@ -279,18 +281,17 @@ export function LabEntitiesCard() {
                               maxLength={LAB_ENTITY_NAME_MAX_LENGTH}
                             />
                             <div className="flex shrink-0 gap-2">
-                              <Button size="sm" type="button" onClick={saveRename} disabled={busy}>
+                              <DesignButton type="button" onClick={saveRename} disabled={busy}>
                                 Save
-                              </Button>
-                              <Button
-                                size="sm"
+                              </DesignButton>
+                              <DesignButton
                                 type="button"
-                                variant="outline"
+                                appearance="secondary"
                                 onClick={cancelRename}
                                 disabled={busy}
                               >
                                 Cancel
-                              </Button>
+                              </DesignButton>
                             </div>
                           </div>
                         ) : (
@@ -307,32 +308,29 @@ export function LabEntitiesCard() {
                             ) : null}
                           </div>
                         )}
-                      </CardHeader>
-                      <CardContent className="py-3">
+                      </DesignCardHeader>
+                      <DesignCardContent className="py-3">
                         <p className="text-xs font-medium text-muted-foreground">Balance</p>
                         <div className="mt-1 text-lg font-semibold tracking-tight">
                           <BitcoinAmountDisplay amountSats={row.balanceSats} size="md" />
                         </div>
-                      </CardContent>
-                      <CardFooter className="flex flex-wrap justify-center gap-2 pt-3 pb-4">
+                      </DesignCardContent>
+                      <DesignCardFooter className="justify-center pt-3 pb-4">
                         {renamingId !== row.labEntityId ? (
-                          <Button
-                            size="icon-sm"
+                          <DesignButton
                             type="button"
-                            variant="outline"
+                            appearance="secondary"
                             className={labEntityActionButtonClassName}
                             onClick={() => beginRename(row.labEntityId, row.entityName)}
                             disabled={busy}
                             aria-label={`Rename ${row.displayName}`}
-                          >
-                            <Drama className={labEntityActionIconClassName} />
-                          </Button>
+                            icon={<Drama className={labEntityActionIconClassName} />}
+                          />
                         ) : null}
                         {row.isDead ? (
-                          <Button
-                            size="icon-sm"
+                          <DesignButton
                             type="button"
-                            variant="outline"
+                            appearance="secondary"
                             className={labEntityActionButtonClassName}
                             onClick={() =>
                               void setDeadMutation.mutateAsync(
@@ -346,17 +344,17 @@ export function LabEntitiesCard() {
                             }
                             disabled={busy}
                             aria-label={`Revive ${row.displayName}`}
-                          >
-                            <CrossedLucideIcon
-                              icon={Skull}
-                              sizeClassName={labEntityActionIconClassName}
-                            />
-                          </Button>
+                            icon={
+                              <CrossedLucideIcon
+                                icon={Skull}
+                                sizeClassName={labEntityActionIconClassName}
+                              />
+                            }
+                          />
                         ) : row.hasTransactions ? (
-                          <Button
-                            size="icon-sm"
+                          <DesignButton
                             type="button"
-                            variant="outline"
+                            appearance="secondary"
                             className={labEntityActionButtonClassName}
                             onClick={() =>
                               void setDeadMutation.mutateAsync(
@@ -370,9 +368,8 @@ export function LabEntitiesCard() {
                             }
                             disabled={busy}
                             aria-label={`Mark ${row.displayName} as dead`}
-                          >
-                            <Skull className={labEntityActionIconClassName} />
-                          </Button>
+                            icon={<Skull className={labEntityActionIconClassName} />}
+                          />
                         ) : (
                           <Button
                             size="icon-sm"
@@ -386,14 +383,14 @@ export function LabEntitiesCard() {
                             <Trash2 className={labEntityActionIconClassName} />
                           </Button>
                         )}
-                      </CardFooter>
-                    </Card>
+                      </DesignCardFooter>
+                    </DesignCard>
                   ))}
                 </div>
               </CardPagination>
             )}
-          </CardContent>
-        </Card>
+          </DesignCardContent>
+        </DesignCard>
       </InfomodeWrapper>
 
       <ConfirmationDialog

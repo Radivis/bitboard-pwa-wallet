@@ -1,6 +1,5 @@
-import { AlertTriangle, X } from 'lucide-react'
-import { Link } from '@tanstack/react-router'
-import { Button } from '@/components/ui/button'
+import { X } from 'lucide-react'
+import { DesignBanner } from '@/components/design/DesignBanner'
 import { CopyableVtxoIdList } from '@/components/wallet/unilateral-exit/CopyableVtxoIdList'
 import {
   clearPersistedUnilateralExitFailure,
@@ -68,55 +67,52 @@ export function UnilateralExitFailureBanner() {
 
   const summary = failureSummary(failure.reasonCode)
 
+  const userAborted = failure.reasonCode === 'user_aborted'
+
   return (
-    <div
-      className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm"
+    <DesignBanner
       role="alert"
+      status="error"
       data-testid="unilateral-exit-failure-banner"
       data-reason-code={failure.reasonCode}
-    >
-      <div className="flex items-start gap-2">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden />
-        <div className="min-w-0 flex-1 space-y-2">
-          <p className="font-medium">{failureTitle(failure.reasonCode)}</p>
-          {failure.reasonCode === 'user_aborted' ? (
-            <div className="space-y-2 text-muted-foreground">
-              <p>
-                You have aborted your previous unilateral exit of the VTXOs with the ids:
-              </p>
+      title={failureTitle(failure.reasonCode)}
+      description={
+        userAborted
+          ? 'You have aborted your previous unilateral exit of the VTXOs with the ids:'
+          : summary
+      }
+      optionalContent={
+        <div className="space-y-2">
+          {userAborted ? (
+            <>
               <CopyableVtxoIdList vtxoIds={failure.vtxoIds} />
               <p>Please restart that exit soon, or consider those coins lost.</p>
-            </div>
+            </>
           ) : null}
-          {summary != null ? <p className="text-muted-foreground">{summary}</p> : null}
-          {failure.detailMessage.length > 0 ? (
-            <p className="text-xs text-muted-foreground">{failure.detailMessage}</p>
-          ) : null}
-          {failure.reasonCode !== 'user_aborted' ? (
-            <p className="text-xs text-muted-foreground">
+          {failure.detailMessage.length > 0 ? <p className="text-xs">{failure.detailMessage}</p> : null}
+          {!userAborted ? (
+            <p className="text-xs">
               Job started {formatUnixTimestamp(failure.jobStartedAtUnix)} · detected{' '}
               {formatUnixTimestamp(failure.detectedAtUnix)} · {failure.selectedLeafOutpoints.length}{' '}
               leaf{failure.selectedLeafOutpoints.length === 1 ? '' : 's'}
             </p>
           ) : null}
-          <div className="flex flex-wrap items-center gap-2">
-            {failure.reasonCode !== 'user_aborted' ? (
-              <Button variant="outline" size="sm" asChild>
-                <Link to="/wallet/arkade/vtxos">Open VTXO viewer</Link>
-              </Button>
-            ) : null}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => clearPersistedUnilateralExitFailure(walletScope)}
-              data-testid="unilateral-exit-failure-dismiss"
-            >
-              <X className="mr-1 h-4 w-4" aria-hidden />
-              Dismiss
-            </Button>
-          </div>
         </div>
-      </div>
-    </div>
+      }
+      primaryAction={
+        userAborted
+          ? undefined
+          : {
+              label: 'Open VTXO viewer',
+              to: '/wallet/arkade/vtxos',
+            }
+      }
+      secondaryAction={{
+        label: 'Dismiss',
+        onClick: () => clearPersistedUnilateralExitFailure(walletScope),
+        testId: 'unilateral-exit-failure-dismiss',
+        icon: <X aria-hidden />,
+      }}
+    />
   )
 }

@@ -1,7 +1,7 @@
 import { Loader2 } from 'lucide-react'
 import { DialogDescription } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { AppModal } from '@/components/AppModal'
+import { DesignButton } from '@/components/design/DesignButton'
+import { DesignModal } from '@/components/design/DesignModal'
 import { OperatorConfigDiffViewer } from '@/components/wallet/OperatorConfigDiffViewer'
 import {
   useAcceptOperatorConfigMutation,
@@ -20,7 +20,7 @@ export function OperatorConfigTrustModal({ open }: OperatorConfigTrustModalProps
   const pending = reviewMutation.isPending || acceptMutation.isPending
 
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={() => {}}
       title="Operator configuration changed"
@@ -29,28 +29,32 @@ export function OperatorConfigTrustModal({ open }: OperatorConfigTrustModalProps
       isCloseButtonHidden
       footer={
         <div className="flex w-full flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button
+          <DesignButton
             type="button"
-            variant="outline"
+            appearance="secondary"
             disabled={pending}
             onClick={() => acceptMutation.mutate()}
+            icon={
+              acceptMutation.isPending ? (
+                <Loader2 className="animate-spin" aria-hidden />
+              ) : undefined
+            }
           >
-            {acceptMutation.isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-            ) : null}
             Trust Arkade operator and accept changes
-          </Button>
-          <Button
+          </DesignButton>
+          <DesignButton
             type="button"
             autoFocus
             disabled={pending}
             onClick={() => reviewMutation.mutate()}
+            icon={
+              reviewMutation.isPending ? (
+                <Loader2 className="animate-spin" aria-hidden />
+              ) : undefined
+            }
           >
-            {reviewMutation.isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-            ) : null}
             Review changes safely in autonomous mode
-          </Button>
+          </DesignButton>
         </div>
       }
     >
@@ -67,6 +71,6 @@ export function OperatorConfigTrustModal({ open }: OperatorConfigTrustModalProps
       ) : diffQuery.data ? (
         <OperatorConfigDiffViewer entries={diffQuery.data.entries} />
       ) : null}
-    </AppModal>
+    </DesignModal>
   )
 }

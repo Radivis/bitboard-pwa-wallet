@@ -1,14 +1,14 @@
 import { Link } from '@tanstack/react-router'
+import { DesignButton } from '@/components/design/DesignButton'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+  DesignCard,
+  DesignCardContent,
+  DesignCardDescription,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
+import { DesignInput } from '@/components/design/DesignInput'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   LAB_MAX_BLOCKS_PER_MINE,
@@ -74,14 +74,14 @@ export function LabBlocksCard({
       infoText="This simulates a single miner extending the lab chain—no proof of work, just the same block and coinbase structure as real Bitcoin for learning. Choose how many blocks to append, who receives the subsidy, then mine. Blocks are cryptographically structured like mainnet but exist only inside this app."
       className="rounded-xl"
     >
-      <Card>
-        <CardHeader>
+      <DesignCard>
+        <DesignCardHeader>
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="space-y-1.5">
-              <CardTitle>Currently mined block</CardTitle>
-              <CardDescription>
+              <DesignCardTitle>Currently mined block</DesignCardTitle>
+              <DesignCardDescription>
                 Simplified single-miner setup · Chain height (blocks mined): {blockCount}
-              </CardDescription>
+              </DesignCardDescription>
             </div>
             <Link
               to="/lab/block/current"
@@ -91,12 +91,12 @@ export function LabBlocksCard({
               Current template
             </Link>
           </div>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-6">
+        </DesignCardHeader>
+        <DesignCardContent className="gap-6">
           <div className="flex flex-col gap-4">
             <div className="space-y-2">
               <Label htmlFor="mine-count">Number of blocks</Label>
-              <Input
+              <DesignInput
                 id="mine-count"
                 type="number"
                 min={LAB_MIN_BLOCKS_PER_MINE}
@@ -123,32 +123,30 @@ export function LabBlocksCard({
                   infoTitle="Lab entity"
                   infoText="Lab entities are simulated participants with a BIP39-backed descriptor wallet stored in plaintext in the lab database—use them for “Alice”, “Bob”, etc., without touching your real wallet."
                 >
-                  <Button
+                  <DesignButton
                     type="button"
-                    variant={
-                      ownerType === LabOwnerType.LabEntity ? 'default' : 'outline'
+                    appearance={
+                      ownerType === LabOwnerType.LabEntity ? 'primary' : 'secondary'
                     }
-                    size="sm"
                     onClick={() => setOwnerType(LabOwnerType.LabEntity)}
                   >
                     Lab entity
-                  </Button>
+                  </DesignButton>
                 </InfomodeWrapper>
                 <InfomodeWrapper
                   infoId="lab-owner-type-wallet-button"
                   infoTitle="Wallet"
                   infoText="Mining rewards go straight to your loaded wallet’s active receive address (you must be unlocked). Use this when you want the lab chain to fund the same wallet you use elsewhere in Bitboard for practice sends and sync."
                 >
-                  <Button
+                  <DesignButton
                     type="button"
-                    variant={
-                      ownerType === LabOwnerType.Wallet ? 'default' : 'outline'
+                    appearance={
+                      ownerType === LabOwnerType.Wallet ? 'primary' : 'secondary'
                     }
-                    size="sm"
                     onClick={() => setOwnerType(LabOwnerType.Wallet)}
                   >
                     Wallet
-                  </Button>
+                  </DesignButton>
                 </InfomodeWrapper>
               </div>
             </div>
@@ -156,7 +154,7 @@ export function LabBlocksCard({
               <div className="space-y-2">
                 <Label htmlFor="target-address">Target address (active wallet)</Label>
                 {walletUnlocked ? (
-                  <Input
+                  <DesignInput
                     id="target-address"
                     type="text"
                     value={currentAddress ?? ''}
@@ -219,7 +217,7 @@ export function LabBlocksCard({
               infoTitle="Mine blocks"
               infoText="Runs the lab miner for the number of blocks you entered. Each block can pay coinbase to your chosen target, creating spendable test coins instantly—no electricity, no real network, just a teaching sandbox."
             >
-              <Button
+              <DesignButton
                 onClick={handleMineClick}
                 disabled={
                   mining ||
@@ -230,12 +228,12 @@ export function LabBlocksCard({
                 }
               >
                 {mining ? 'Mining...' : 'Mine blocks'}
-              </Button>
+              </DesignButton>
             </InfomodeWrapper>
           </div>
           {unlockDialog}
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
     </InfomodeWrapper>
   )
 }

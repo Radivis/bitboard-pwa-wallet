@@ -1,5 +1,5 @@
-import { AlertTriangle } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
+import { DesignBanner } from '@/components/design/DesignBanner'
 import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
 import { useSecureStorageAvailabilityStore } from '@/stores/secureStorageAvailabilityStore'
 
@@ -29,30 +29,19 @@ export function SecureStorageUnavailableBanner() {
     : 'Wallet data may not persist on this device. Try updating your browser or use a supported browser, and avoid relying on local data until storage works.'
 
   return (
-    <div
+    <DesignBanner
       role="alert"
-      className="border-b border-red-900/80 bg-red-600 px-4 py-4 text-red-50 shadow-md dark:bg-red-950 dark:text-red-50"
-    >
-      <div className="mx-auto flex max-w-screen-xl flex-col gap-2 sm:flex-row sm:items-start sm:gap-4">
-        <div className="flex min-w-0 gap-3">
-          <AlertTriangle
-            className="mt-0.5 h-7 w-7 shrink-0 text-red-100"
-            aria-hidden
-          />
-          <div className="min-w-0 space-y-1">
-            <p className="text-base font-semibold leading-snug">{title}</p>
-            <p className="text-sm leading-relaxed text-red-100">{body}</p>
-            {lastErrorMessage ? (
-              <p
-                className="font-mono text-xs leading-relaxed text-red-200/90 break-words"
-                data-testid="secure-storage-error-detail"
-              >
-                {sanitizeErrorMessageForUi(lastErrorMessage)}
-              </p>
-            ) : null}
-          </div>
-        </div>
-      </div>
-    </div>
+      status="error"
+      className="mx-4 mt-4"
+      title={title}
+      description={body}
+      optionalContent={
+        lastErrorMessage ? (
+          <p className="font-mono text-xs break-words" data-testid="secure-storage-error-detail">
+            {sanitizeErrorMessageForUi(lastErrorMessage)}
+          </p>
+        ) : null
+      }
+    />
   )
 }

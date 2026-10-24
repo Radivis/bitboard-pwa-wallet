@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { useEffect, useMemo, useRef } from 'react'
 import { useSearch } from '@tanstack/react-router'
 import { Tags as TagsIcon } from 'lucide-react'
+import { DesignCard } from '@/components/design/DesignCard'
 import { LibraryArticleList } from '@/components/library/LibraryArticleList'
 import { PageHeader } from '@/components/PageHeader'
 import { listArticlesSortedByTitle, type LibraryArticle } from '@/lib/library/articles'
@@ -45,32 +46,36 @@ function TagSection({
   }, [isFocused, tagId])
 
   return (
-    <details
-      ref={detailsRef}
-      id={`library-tag-${tagId}`}
-      className="group rounded-lg border border-border"
-    >
-      <summary className="cursor-pointer list-none px-4 py-3 font-medium text-foreground marker:content-none [&::-webkit-details-marker]:hidden">
-        <span className="inline-flex w-full items-center justify-between gap-2">
-          <span>{getTagLabel(tagId)}</span>
-          <span className="text-xs text-muted-foreground">
-            {articles.length} article{articles.length === 1 ? '' : 's'}
+    <DesignCard>
+      <details
+        ref={detailsRef}
+        id={`library-tag-${tagId}`}
+        className="group"
+      >
+        <summary className="design-ui cursor-pointer list-none px-6 py-6 font-semibold text-[var(--design-text-card-title)] marker:content-none group-open:pb-4 [&::-webkit-details-marker]:hidden">
+          <span className="inline-flex w-full items-center justify-between gap-2">
+            <span>{getTagLabel(tagId)}</span>
+            <span className="text-xs font-normal text-[var(--design-text-card-description)]">
+              {articles.length} article{articles.length === 1 ? '' : 's'}
+            </span>
           </span>
-        </span>
-      </summary>
-      <CardContentPadding>
-        <LibraryArticleList
-          articles={articles}
-          emptyMessage="No articles use this tag yet."
-          excludeTagId={tagId}
-        />
-      </CardContentPadding>
-    </details>
+        </summary>
+        <CardContentPadding>
+          <LibraryArticleList
+            articles={articles}
+            emptyMessage="No articles use this tag yet."
+            excludeTagId={tagId}
+          />
+        </CardContentPadding>
+      </details>
+    </DesignCard>
   )
 }
 
 function CardContentPadding({ children }: { children: ReactNode }) {
-  return <div className="border-t border-border px-4 pb-4 pt-2">{children}</div>
+  return (
+    <div className="border-t border-[var(--design-stroke-card)] px-6 pt-4 pb-6">{children}</div>
+  )
 }
 
 export function TagsPage() {

@@ -3,7 +3,7 @@ import { ArkadeCollaborativeExitInfomodeContent } from '@/components/arkade/info
 import { ArkadeExitInfomodeContent } from '@/components/arkade/infomode/ArkadeExitInfomodeContent'
 import { ArkadeUnilateralExitInfomodeContent } from '@/components/arkade/infomode/ArkadeUnilateralExitInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import { useArkadeAutonomousModeActive, useHasPendingBatchIntentKind } from '@/hooks/useArkadeQueries'
 import { useHasUnilateralExitInProgress } from '@/hooks/useHasUnilateralExitInProgress'
@@ -67,13 +67,13 @@ export function ArkadeExitSection() {
           as="span"
         >
           {collaborativeExitUnavailable ? (
-            <Button type="button" variant="outline" size="sm" disabled>
+            <DesignButton type="button" appearance="secondary" disabled>
               Collaborative exit
-            </Button>
+            </DesignButton>
           ) : (
-            <Button type="button" variant="outline" size="sm" asChild>
+            <DesignButton type="button" appearance="secondary" asChild>
               <Link to="/wallet/arkade/collaborative-exit">Collaborative exit</Link>
-            </Button>
+            </DesignButton>
           )}
         </InfomodeWrapper>
         <InfomodeWrapper
@@ -81,7 +81,7 @@ export function ArkadeExitSection() {
           infoComponent={ArkadeUnilateralExitInfomodeContent}
           as="span"
         >
-          <Button type="button" variant="outline" size="sm" asChild>
+          <DesignButton type="button" appearance="secondary" asChild>
             <Link
               to="/wallet/arkade/unilateral-exit"
               data-testid="arkade-unilateral-exit-control"
@@ -90,17 +90,17 @@ export function ArkadeExitSection() {
                 ? 'Control unilateral exit'
                 : 'Start unilateral exit'}
             </Link>
-          </Button>
+          </DesignButton>
         </InfomodeWrapper>
         {hasUnilateralExitInProgress && (
-          <Button type="button" variant="outline" size="sm" asChild>
+          <DesignButton type="button" appearance="secondary" asChild>
             <Link
               to="/wallet/arkade/complete-unilateral-exit"
               data-testid="arkade-complete-unilateral-exit"
             >
               Complete unilateral exit
             </Link>
-          </Button>
+          </DesignButton>
         )}
       </div>
       {collaborativeExitUnavailable && (

@@ -12,16 +12,14 @@ import {
   REGTEST_DASHBOARD_MIN_VISIBLE_SATS,
 } from './helpers/regtest'
 import { runRegtestPostFundDashboardCheck } from './helpers/regtest-onchain-balance-diagnostics'
-import {
-  waitForOnchainRailNotSyncing,
-  waitForOnchainRailSyncAttemptFinished,
-} from './helpers/dashboard-sync'
+import { waitForOnchainRailNotSyncing } from './helpers/dashboard-sync'
 import {
   assertSendPageSpendableOnChainBalance,
   waitForSendReviewTransactionButtonEnabled,
 } from './helpers/send-page'
 import { goToWalletTab } from './helpers/wallet-nav'
 import {
+  settingsNetworkButton,
   waitForSettingsAddressTypeSwitchComplete,
   waitForSettingsNetworkModeButtonSelected,
   waitForSettingsNetworkSwitchComplete,
@@ -29,6 +27,7 @@ import {
   openSettingsMainTab,
 } from './helpers/settings-waits'
 import { ensureSegwitAddressesFeatureOn } from './helpers/segwit-addresses-feature'
+import { clickDrawerNavLink } from './helpers/drawer-nav'
 
 /** Redirect follows broadcast + persistence; post-broadcast sync runs in the background (see useBroadcastTransactionMutation). */
 const POST_BROADCAST_URL_TIMEOUT_MS = E2E_IS_CI ? 45_000 : 20_000
@@ -93,11 +92,9 @@ test.describe('Send Page', () => {
 
       await importWalletViaUI(page, TEST_MNEMONIC, TEST_PASSWORD)
       await goToWalletTab(page, 'Dashboard')
-      // Import syncs public testnet before Regtest is enabled. A mempool.space
-      // timeout leaves the sync-error banner up; switching networks does not need that sync.
-      await waitForOnchainRailSyncAttemptFinished(page)
+      // Leave the public testnet scan in place. Switching to Regtest drops it.
 
-      await page.getByRole('link', { name: /settings/i }).click()
+      await clickDrawerNavLink(page, 'Settings')
       await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
       await openSettingsFeaturesTab(page)
       const regtestModeSwitch = page.getByRole('switch', {
@@ -107,14 +104,14 @@ test.describe('Send Page', () => {
       await regtestModeSwitch.click()
       await openSettingsMainTab(page)
 
-      await page.getByRole('button', { name: 'Regtest' }).click()
+      await settingsNetworkButton(page, 'Regtest').click()
       await waitForSettingsNetworkSwitchComplete(page)
       await waitForSettingsNetworkModeButtonSelected(page, 'Regtest')
       await ensureSegwitAddressesFeatureOn(page)
       await goToWalletTab(page, 'Dashboard')
       await waitForOnchainRailNotSyncing(page)
 
-      await page.getByRole('link', { name: /settings/i }).click()
+      await clickDrawerNavLink(page, 'Settings')
       await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
       await page.getByRole('button', { name: 'SegWit (BIP84)' }).click()
       await page.getByRole('button', { name: 'Change' }).click()

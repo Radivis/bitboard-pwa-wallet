@@ -1,5 +1,5 @@
-import { AppModal } from '@/components/AppModal'
-import { Button } from '@/components/ui/button'
+import { DesignModal } from '@/components/design/DesignModal'
+import { DesignButton } from '@/components/design/DesignButton'
 import { DialogDescription } from '@/components/ui/dialog'
 
 interface ReceiveMainnetDemoWarningModalProps {
@@ -16,28 +16,26 @@ export function ReceiveMainnetDemoWarningModal({
   onOpenChange,
 }: ReceiveMainnetDemoWarningModalProps) {
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={onOpenChange}
       onCancel={() => onOpenChange(false)}
       title="Demo mode (Mainnet)"
-      contentClassName="sm:max-w-lg"
       isCloseButtonHidden
       onInteractOutside={(e) => e.preventDefault()}
       onEscapeKeyDown={(e) => e.preventDefault()}
       footer={(requestClose) => (
-        <Button type="button" onClick={requestClose}>
+        <DesignButton type="button" onClick={requestClose}>
           OK
-        </Button>
+        </DesignButton>
       )}
-      footerClassName="justify-end"
     >
       <div className="space-y-3 text-sm text-muted-foreground">
         <DialogDescription className="sr-only">
-          Warning that Bitboard Wallet is in demo mode on Mainnet and funds are not secure.
+          Warning that Bitcoin Codex is in demo mode on Mainnet and funds are not secure.
         </DialogDescription>
         <p>
-          <strong className="text-foreground">Bitboard Wallet is still in DEMO MODE.</strong>
+          <strong className="text-foreground">Bitcoin Codex is still in DEMO MODE.</strong>
         </p>
         <p>
           Funds in this wallet must{' '}
@@ -45,6 +43,6 @@ export function ReceiveMainnetDemoWarningModal({
           secure. Please only use minimal amounts for testing and experimentation.
         </p>
       </div>
-    </AppModal>
+    </DesignModal>
   )
 }

@@ -3,8 +3,8 @@ import { screen } from '@testing-library/react'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { WalletBackupImportPasswordModal } from '@/components/settings/WalletBackupImportPasswordModal'
 
-vi.mock('@/components/infomode/InfomodeToggle', () => ({
-  InfomodeToggle: () => <button type="button" aria-label="Turn on infomode" />,
+vi.mock('@/components/design/DesignInfomodeToggle', () => ({
+  DesignInfomodeToggle: () => <button type="button" aria-label="Turn on infomode" />,
 }))
 
 describe('WalletBackupImportPasswordModal', () => {

@@ -17,10 +17,13 @@ describe('BitcoinAmountDisplay', () => {
   })
 
   it('renders formatted amount and tappable unit on mainnet', () => {
-    renderWithProviders(<BitcoinAmountDisplay amountSats={100_000_000} size="lg" />)
+    const { container } = renderWithProviders(
+      <BitcoinAmountDisplay amountSats={100_000_000} size="lg" />,
+    )
     expect(screen.getByText('1.00000000')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'BTC' })).toBeInTheDocument()
     expect(screen.queryByText('t')).not.toBeInTheDocument()
+    expect(container.querySelector('.design-mono')).toHaveTextContent('1.00000000')
   })
 
   it('shows grey t prefix and tBTC accessible name on testnet', () => {

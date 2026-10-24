@@ -1,6 +1,6 @@
 import { DialogDescription } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { AppModal } from '@/components/AppModal'
+import { DesignButton } from '@/components/design/DesignButton'
+import { DesignModal } from '@/components/design/DesignModal'
 
 interface ConfirmationDialogProps {
   open: boolean
@@ -21,30 +21,25 @@ export function ConfirmationDialog({
   cancelText = 'Cancel',
   onConfirm,
   onCancel,
-  variant = 'default',
 }: ConfirmationDialogProps) {
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={() => {}}
       title={title}
       onCancel={onCancel}
       footer={(requestClose) => (
         <>
-          <Button type="button" variant="outline" onClick={requestClose}>
+          <DesignButton type="button" appearance="secondary" onClick={requestClose}>
             {cancelText}
-          </Button>
-          <Button
-            type="button"
-            variant={variant === 'destructive' ? 'destructive' : 'default'}
-            onClick={onConfirm}
-          >
+          </DesignButton>
+          <DesignButton type="button" onClick={onConfirm}>
             {confirmText}
-          </Button>
+          </DesignButton>
         </>
       )}
     >
       <DialogDescription className="text-left">{message}</DialogDescription>
-    </AppModal>
+    </DesignModal>
   )
 }

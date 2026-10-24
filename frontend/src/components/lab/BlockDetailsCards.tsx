@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+  DesignCard,
+  DesignCardContent,
+  DesignCardDescription,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { truncateAddress } from '@/lib/wallet/bitcoin-utils'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
@@ -42,12 +42,12 @@ export function LabBlockHeaderCard({ block }: { block: LabBlockDetails }) {
       infoComponent={LabBlockHeaderInfomodeContent}
       className="rounded-xl"
     >
-      <Card>
-        <CardHeader>
-          <CardTitle>Block Header</CardTitle>
-          <CardDescription>Core header fields for this block</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4">
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle>Block Header</DesignCardTitle>
+          <DesignCardDescription>Core header fields for this block</DesignCardDescription>
+        </DesignCardHeader>
+        <DesignCardContent className="grid gap-4">
           <InfomodeWrapper
             infoId="lab-block-field-version"
             infoTitle="Version"
@@ -102,8 +102,8 @@ export function LabBlockHeaderCard({ block }: { block: LabBlockDetails }) {
           >
             <HeaderField label="Block header hash" value={block.header.blockHeaderHash} />
           </InfomodeWrapper>
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
     </InfomodeWrapper>
   )
 }
@@ -135,12 +135,12 @@ export function LabBlockMetadataCard({
       infoText="Where this block sits in the chain, when it was mined, who received the subsidy, how many transactions it contains, the fees from non-coinbase transactions, net moved BTC (sum of non-change outputs from non-coinbase transactions only; coinbase excluded), and (when recorded) the non-coinbase weight used versus the lab limit at mining time."
       className="rounded-xl"
     >
-      <Card>
-        <CardHeader>
-          <CardTitle>Contextual data</CardTitle>
-          <CardDescription>Block summary and mining context</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 text-sm">
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle>Contextual data</DesignCardTitle>
+          <DesignCardDescription>Block summary and mining context</DesignCardDescription>
+        </DesignCardHeader>
+        <DesignCardContent className="grid gap-3 text-sm">
           <p><span className="text-muted-foreground">Height:</span> {block.metadata.height}</p>
           <p>
             <span className="text-muted-foreground">Mined on:</span>{' '}
@@ -178,8 +178,8 @@ export function LabBlockMetadataCard({
               </span>
             </p>
           ) : null}
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
     </InfomodeWrapper>
   )
 }
@@ -280,12 +280,12 @@ export function LabBlockTransactionsCard({
       infoText="All transactions included in this block. Open a transaction to inspect inputs and outputs in detail."
       className="rounded-xl"
     >
-      <Card>
-        <CardHeader>
-          <CardTitle>Transactions</CardTitle>
-          <CardDescription>Transactions included in this block</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle>Transactions</DesignCardTitle>
+          <DesignCardDescription>Transactions included in this block</DesignCardDescription>
+        </DesignCardHeader>
+        <DesignCardContent>
           {totalCount === 0 ? (
             <p className="text-sm text-muted-foreground">No transactions in this block.</p>
           ) : showLoading ? (
@@ -303,8 +303,8 @@ export function LabBlockTransactionsCard({
               {labBlockTxList(txsForPage, wallets, entities, isTemplate)}
             </CardPagination>
           )}
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
     </InfomodeWrapper>
   )
 }

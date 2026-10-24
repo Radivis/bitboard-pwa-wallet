@@ -9,9 +9,14 @@ import { BitcoinFiatDenominationSwitch } from '@/components/BitcoinFiatDenominat
 import { LabeledFiatBtcAmount } from '@/components/FiatBtcAmountDisplay'
 import { SatsOrFiatAmountField } from '@/components/SatsOrFiatAmountField'
 import { BarkPendingActionBanner } from '@/components/wallet/BarkPendingActionBanner'
+import { DesignButton } from '@/components/design/DesignButton'
+import {
+  DesignCard,
+  DesignCardContent,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { PageHeader } from '@/components/PageHeader'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
 import { useBarkSyncLifecycleSnapshot } from '@/hooks/useBarkSyncLifecycleSnapshot'
 import { useMainnetFiatAmountProps } from '@/hooks/useMainnetFiatAmountProps'
@@ -168,21 +173,21 @@ export function BarkOffboardPage() {
         <p data-testid="bark-offboard-address-missing">Your on-chain receive address is not ready.</p>
       ) : (
         <>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Destination</CardTitle>
-            </CardHeader>
-            <CardContent>
+          <DesignCard>
+            <DesignCardHeader>
+              <DesignCardTitle>Destination</DesignCardTitle>
+            </DesignCardHeader>
+            <DesignCardContent>
               <p className="break-all text-sm" data-testid="bark-offboard-destination">
                 {destinationAddress}
               </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Amount</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
+            </DesignCardContent>
+          </DesignCard>
+          <DesignCard>
+            <DesignCardHeader>
+              <DesignCardTitle>Amount</DesignCardTitle>
+            </DesignCardHeader>
+            <DesignCardContent className="space-y-3">
               <SatsOrFiatAmountField
                 satsLabel="Satoshis that should arrive on-chain"
                 fiatLabel={`${fiatAmount.currency} that should arrive on-chain`}
@@ -198,20 +203,20 @@ export function BarkOffboardPage() {
                 parsedAmountSats={parsedAmountSats}
               />
               <div className="flex flex-wrap gap-2">
-                <Button
+                <DesignButton
                   type="button"
                   onClick={() => {
                     void onReviewAmount()
                   }}
                   disabled={isReviewing || isConfirming || fiatPriceBlocksReview}
                   data-testid="bark-offboard-review-amount"
+                  icon={isReviewing ? <Loader2 className="animate-spin" aria-hidden /> : undefined}
                 >
-                  {isReviewing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                   Review amount
-                </Button>
-                <Button
+                </DesignButton>
+                <DesignButton
                   type="button"
-                  variant="outline"
+                  appearance="secondary"
                   onClick={() => {
                     void onReviewAll()
                   }}
@@ -219,21 +224,21 @@ export function BarkOffboardPage() {
                   data-testid="bark-offboard-review-all"
                 >
                   Exit entire balance
-                </Button>
+                </DesignButton>
               </div>
               {reviewError != null ? (
                 <p className="text-sm text-destructive" data-testid="bark-offboard-review-error">
                   {reviewError}
                 </p>
               ) : null}
-            </CardContent>
-          </Card>
+            </DesignCardContent>
+          </DesignCard>
           {review != null ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Review</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
+            <DesignCard>
+              <DesignCardHeader>
+                <DesignCardTitle>Review</DesignCardTitle>
+              </DesignCardHeader>
+              <DesignCardContent className="space-y-2 text-sm">
                 <LabeledFiatBtcAmount
                   label="Server fee:"
                   amountSats={review.feeSats}
@@ -246,19 +251,19 @@ export function BarkOffboardPage() {
                   testId="bark-offboard-onchain-amount"
                   fiat={fiatAmount}
                 />
-                <Button
+                <DesignButton
                   type="button"
                   onClick={() => {
                     void onConfirm()
                   }}
                   disabled={isConfirming}
                   data-testid="bark-offboard-confirm"
+                  icon={isConfirming ? <Loader2 className="animate-spin" aria-hidden /> : undefined}
                 >
-                  {isConfirming ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                   Confirm exit
-                </Button>
-              </CardContent>
-            </Card>
+                </DesignButton>
+              </DesignCardContent>
+            </DesignCard>
           ) : null}
         </>
       )}

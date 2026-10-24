@@ -1,4 +1,4 @@
-# Bitboard Wallet — landing page
+# Bitcoin Codex — landing page
 
 Static marketing site for [Bitboard PWA Wallet](https://github.com/Radivis/bitboard-pwa-wallet), built with Vite and React.
 

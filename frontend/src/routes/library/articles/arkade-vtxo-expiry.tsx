@@ -25,7 +25,7 @@ export const article: LibraryArticle = {
           Bitboard can register presigned renewals with a Fulmine delegator, if you have set up a delegator so VTXOs stay spendable
           while you are offline. The delegator cannot redirect funds; it only submits intents you
           already signed. See{' '}
-          <ArticleLink slug="arkade-bitboard-wallet">Arkade in Bitboard Wallet</ArticleLink>.
+          <ArticleLink slug="arkade-bitboard-wallet">Arkade in Bitcoin Codex</ArticleLink>.
         </p>
       </ArticleSection>
 

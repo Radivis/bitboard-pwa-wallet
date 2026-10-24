@@ -1,6 +1,6 @@
 import { DialogDescription } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { AppModal } from '@/components/AppModal'
+import { DesignButton } from '@/components/design/DesignButton'
+import { DesignModal } from '@/components/design/DesignModal'
 import type { AddressType } from '@/lib/wallet/wallet-domain-types'
 import { LabAddressTypeBadge } from '@/components/lab/LabAddressTypeBadge'
 
@@ -25,19 +25,19 @@ export function DeadLabEntityRecipientModal({
   isPending = false,
 }: DeadLabEntityRecipientModalProps) {
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={onOpenChange}
       title="Send to dead lab entity?"
       onCancel={onCancel}
       footer={(requestClose) => (
         <>
-          <Button type="button" variant="outline" onClick={requestClose} disabled={isPending}>
+          <DesignButton type="button" appearance="secondary" onClick={requestClose} disabled={isPending}>
             Cancel
-          </Button>
-          <Button type="button" onClick={onConfirm} disabled={isPending}>
+          </DesignButton>
+          <DesignButton type="button" onClick={onConfirm} disabled={isPending}>
             Proceed anyway
-          </Button>
+          </DesignButton>
         </>
       )}
     >
@@ -49,6 +49,6 @@ export function DeadLabEntityRecipientModal({
           . That is generally not a good idea. Proceed anyway?
         </span>
       </DialogDescription>
-    </AppModal>
+    </DesignModal>
   )
 }

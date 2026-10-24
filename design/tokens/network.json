@@ -1,0 +1,325 @@
+{
+  "collection": "network",
+  "modes": [
+    "mainnet",
+    "testnet",
+    "neutral",
+    "lab"
+  ],
+  "sameColorAs": {
+    "signet": "testnet",
+    "mutinynet": "testnet",
+    "regtest": "lab"
+  },
+  "model": {
+    "network": "Mainnet, testnet, neutral, and lab are the modes of this collection.",
+    "onLightAndOnDark": "These are groups, not modes. onLight is the accent used on a light theme. onDark is the accent used on a dark theme. The theme collection aliases one or the other.",
+    "colorValue": "A resolved color is { hex, alpha }. hex is #RRGGBB. alpha is 0 to 1. null means that network mode was not defined.",
+    "values": "Hex values are the painted Basics swatches. Dark primaries match the opaque chip beside the 75% swatch, which is the light primary composited on black.",
+    "stateGeneration": "Hover, active, and disabled are derived from that color's default. Hover lowers HSL lightness by 5 points. Active lowers it by 10. Disabled multiplies saturation by 0.2 and keeps hue and lightness.",
+    "neutral": "Neutral is the accent when no wallet exists yet, or the wallet is locked. It is not a network the user picks. It wins over the committed network."
+  },
+  "tokens": {
+    "onLight": {
+      "primary": {
+        "default": {
+          "mainnet": {
+            "hex": "#F7931A",
+            "alpha": 1
+          },
+          "testnet": {
+            "hex": "#1CB524",
+            "alpha": 1
+          },
+          "neutral": {
+            "hex": "#739ED4",
+            "alpha": 1
+          },
+          "lab": {
+            "hex": "#E765E0",
+            "alpha": 1
+          }
+        },
+        "hover": {
+          "mainnet": {
+            "hex": "#EF8708",
+            "alpha": 1
+          },
+          "testnet": {
+            "hex": "#199F20",
+            "alpha": 1
+          },
+          "neutral": {
+            "hex": "#5F90CE",
+            "alpha": 1
+          },
+          "lab": {
+            "hex": "#E44FDC",
+            "alpha": 1
+          }
+        },
+        "active": {
+          "mainnet": {
+            "hex": "#D77907",
+            "alpha": 1
+          },
+          "testnet": {
+            "hex": "#15891B",
+            "alpha": 1
+          },
+          "neutral": {
+            "hex": "#4C83C8",
+            "alpha": 1
+          },
+          "lab": {
+            "hex": "#E039D7",
+            "alpha": 1
+          }
+        },
+        "disabled": {
+          "mainnet": {
+            "hex": "#9F8B72",
+            "alpha": 1
+          },
+          "testnet": {
+            "hex": "#59785B",
+            "alpha": 1
+          },
+          "neutral": {
+            "hex": "#9AA2AD",
+            "alpha": 1
+          },
+          "lab": {
+            "hex": "#B399B2",
+            "alpha": 1
+          }
+        }
+      },
+      "secondary": {
+        "default": {
+          "mainnet": {
+            "hex": "#A85E06",
+            "alpha": 1
+          },
+          "testnet": {
+            "hex": "#0E5D12",
+            "alpha": 1
+          },
+          "neutral": {
+            "hex": "#356AAC",
+            "alpha": 1
+          },
+          "lab": {
+            "hex": "#C71FBE",
+            "alpha": 1
+          }
+        },
+        "hover": {
+          "mainnet": {
+            "hex": "#8F5005",
+            "alpha": 1
+          },
+          "testnet": {
+            "hex": "#0B470E",
+            "alpha": 1
+          },
+          "neutral": {
+            "hex": "#2F5E99",
+            "alpha": 1
+          },
+          "lab": {
+            "hex": "#B11CA9",
+            "alpha": 1
+          }
+        },
+        "active": {
+          "mainnet": {
+            "hex": "#774204",
+            "alpha": 1
+          },
+          "testnet": {
+            "hex": "#073109",
+            "alpha": 1
+          },
+          "neutral": {
+            "hex": "#295285",
+            "alpha": 1
+          },
+          "lab": {
+            "hex": "#9B1894",
+            "alpha": 1
+          }
+        },
+        "disabled": {
+          "mainnet": {
+            "hex": "#675847",
+            "alpha": 1
+          },
+          "testnet": {
+            "hex": "#2E3D2E",
+            "alpha": 1
+          },
+          "neutral": {
+            "hex": "#656F7C",
+            "alpha": 1
+          },
+          "lab": {
+            "hex": "#846282",
+            "alpha": 1
+          }
+        }
+      }
+    },
+    "onDark": {
+      "primary": {
+        "default": {
+          "mainnet": {
+            "hex": "#B96E13",
+            "alpha": 1
+          },
+          "testnet": {
+            "hex": "#15881B",
+            "alpha": 1
+          },
+          "neutral": {
+            "hex": "#56779F",
+            "alpha": 1
+          },
+          "lab": {
+            "hex": "#AD4BA8",
+            "alpha": 1
+          }
+        },
+        "hover": {
+          "mainnet": {
+            "hex": "#A26011",
+            "alpha": 1
+          },
+          "testnet": {
+            "hex": "#127217",
+            "alpha": 1
+          },
+          "neutral": {
+            "hex": "#4D6B8E",
+            "alpha": 1
+          },
+          "lab": {
+            "hex": "#9B4397",
+            "alpha": 1
+          }
+        },
+        "active": {
+          "mainnet": {
+            "hex": "#8B530E",
+            "alpha": 1
+          },
+          "testnet": {
+            "hex": "#0E5C12",
+            "alpha": 1
+          },
+          "neutral": {
+            "hex": "#445E7E",
+            "alpha": 1
+          },
+          "lab": {
+            "hex": "#893C85",
+            "alpha": 1
+          }
+        },
+        "disabled": {
+          "mainnet": {
+            "hex": "#776855",
+            "alpha": 1
+          },
+          "testnet": {
+            "hex": "#435A44",
+            "alpha": 1
+          },
+          "neutral": {
+            "hex": "#737A82",
+            "alpha": 1
+          },
+          "lab": {
+            "hex": "#867285",
+            "alpha": 1
+          }
+        }
+      },
+      "secondary": {
+        "default": {
+          "mainnet": {
+            "hex": "#EA952F",
+            "alpha": 1
+          },
+          "testnet": {
+            "hex": "#1EC226",
+            "alpha": 1
+          },
+          "neutral": {
+            "hex": "#95ABC6",
+            "alpha": 1
+          },
+          "lab": {
+            "hex": "#D194CE",
+            "alpha": 1
+          }
+        },
+        "hover": {
+          "mainnet": {
+            "hex": "#E88918",
+            "alpha": 1
+          },
+          "testnet": {
+            "hex": "#1BAC22",
+            "alpha": 1
+          },
+          "neutral": {
+            "hex": "#849EBD",
+            "alpha": 1
+          },
+          "lab": {
+            "hex": "#C982C6",
+            "alpha": 1
+          }
+        },
+        "active": {
+          "mainnet": {
+            "hex": "#D17C15",
+            "alpha": 1
+          },
+          "testnet": {
+            "hex": "#17961D",
+            "alpha": 1
+          },
+          "neutral": {
+            "hex": "#7491B4",
+            "alpha": 1
+          },
+          "lab": {
+            "hex": "#C270BE",
+            "alpha": 1
+          }
+        },
+        "disabled": {
+          "mainnet": {
+            "hex": "#9F8E7A",
+            "alpha": 1
+          },
+          "testnet": {
+            "hex": "#608061",
+            "alpha": 1
+          },
+          "neutral": {
+            "hex": "#A9ADB2",
+            "alpha": 1
+          },
+          "lab": {
+            "hex": "#B9ACB8",
+            "alpha": 1
+          }
+        }
+      }
+    }
+  },
+  "missingModes": []
+}
