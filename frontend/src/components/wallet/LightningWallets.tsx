@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import { Zap, Trash2, Pencil, CheckCircle, XCircle, Loader2, Wifi } from 'lucide-react'
 import { toast } from 'sonner'
+import { ConfirmationDialog } from '@/components/ConfirmationDialog'
 import { DesignButton } from '@/components/design/DesignButton'
 import { designDestructiveIconClassName } from '@/components/design/design-classes'
 import {
@@ -150,6 +151,7 @@ function WalletRow({
   onRemove: () => void
 }) {
   const [renameOpen, setRenameOpen] = useState(false)
+  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false)
   const balanceQuery = useLnWalletBalanceQuery({
     connectionId: wallet.id,
     walletId: wallet.walletId,
@@ -253,7 +255,7 @@ function WalletRow({
           appearance="tertiary"
           onClick={(e) => {
             e.stopPropagation()
-            onRemove()
+            setRemoveConfirmOpen(true)
           }}
           aria-label={`Remove ${wallet.label}`}
           icon={<Trash2 className={designDestructiveIconClassName} />}
@@ -263,6 +265,19 @@ function WalletRow({
         wallet={wallet}
         open={renameOpen}
         onOpenChange={setRenameOpen}
+      />
+      <ConfirmationDialog
+        open={removeConfirmOpen}
+        title={`Remove ${wallet.label}?`}
+        message={`This disconnects the NWC wallet “${wallet.label}” from Bitboard on this device. Funds stay in that Lightning wallet. You can connect it again with its connection string.`}
+        confirmText="Remove"
+        cancelText="Cancel"
+        variant="destructive"
+        onConfirm={() => {
+          setRemoveConfirmOpen(false)
+          onRemove()
+        }}
+        onCancel={() => setRemoveConfirmOpen(false)}
       />
     </div>
   )

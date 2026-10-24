@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Complete redesign of the app according to a new design system
 - The theme switcher is now is the side drawer
 - The bottom nav bar now only has one row at max; top level navigation now works through the side drawer
+- Removing a NWC connected Lightning wallet now requires confirmation within a modal
 
 ## [0.3.6] - 2026-10-23
 
