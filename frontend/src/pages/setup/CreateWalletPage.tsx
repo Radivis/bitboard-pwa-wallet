@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { DialogDescription } from '@/components/ui/dialog'
 import { DesignButton } from '@/components/design/DesignButton'
+import { DesignDestructiveButton } from '@/components/design/DesignDestructiveButton'
 import { DesignModal } from '@/components/design/DesignModal'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { MnemonicGrid } from '@/components/MnemonicGrid'
@@ -358,15 +359,13 @@ function StepWordCountGenerate({
               <RefreshCw className="mr-2 h-4 w-4" />
               Generate & Continue
             </Button>
-            <Button
+            <DesignDestructiveButton
               type="button"
-              variant="destructive"
               className="w-full"
-              size="lg"
               onClick={onOpenSkipBackupWarning}
             >
               Generate but skip backup
-            </Button>
+            </DesignDestructiveButton>
           </>
         )}
       </CardContent>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { DesignButton } from '@/components/design/DesignButton'
+import { DesignDestructiveButton } from '@/components/design/DesignDestructiveButton'
 import { DesignModal } from '@/components/design/DesignModal'
-import { Button } from '@/components/ui/button'
 import { DialogDescription } from '@/components/ui/dialog'
 import { ArticleLink } from '@/lib/library/article-shared'
 import { ARKADE_LIBRARY_SLUGS } from '@/lib/arkade/arkade-infomode'
@@ -43,9 +43,8 @@ export function StartUnilateralExitConfirmModal({
           <DesignButton type="button" appearance="secondary" onClick={requestClose}>
             Cancel
           </DesignButton>
-          <Button
+          <DesignDestructiveButton
             type="button"
-            variant="destructive"
             disabled={!acknowledgedRisks}
             data-testid="unilateral-exit-start-confirm"
             onClick={() => {
@@ -54,7 +53,7 @@ export function StartUnilateralExitConfirmModal({
             }}
           >
             Start unroll
-          </Button>
+          </DesignDestructiveButton>
         </>
       )}
     >

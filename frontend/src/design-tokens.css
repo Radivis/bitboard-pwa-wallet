@@ -12,6 +12,11 @@
   --design-text-regular: #000000;
   --design-special-bitcoin: #F7931A;
   --design-special-bitcoin-stroke: #362817;
+  --design-special-destructive: #FF1500;
+  --design-special-destructive-background: #FF150080;
+  --design-special-destructive-background-hover: #FF15006B;
+  --design-special-destructive-background-active: #FF150057;
+  --design-text-regular-bright: #F7F8F9;
   --design-text-button: #000000;
   --design-text-button-hover: #1A1A1A;
   --design-text-button-active: #333333;
@@ -80,6 +85,11 @@
   --design-text-regular: #E4E5E7;
   --design-special-bitcoin: #F7931A;
   --design-special-bitcoin-stroke: #36281700;
+  --design-special-destructive: #FF1500;
+  --design-special-destructive-background: #FF150080;
+  --design-special-destructive-background-hover: #FF15006B;
+  --design-special-destructive-background-active: #FF150057;
+  --design-text-regular-bright: #F7F8F9;
   --design-text-button: #000000;
   --design-text-button-hover: #E6E6E6;
   --design-text-button-active: #CCCCCC;

@@ -1,7 +1,7 @@
 import { DialogDescription } from '@/components/ui/dialog'
 import { DesignModal } from '@/components/design/DesignModal'
 import { DesignButton } from '@/components/design/DesignButton'
-import { Button } from '@/components/ui/button'
+import { DesignDestructiveButton } from '@/components/design/DesignDestructiveButton'
 
 interface WalletBackupImportBypassModalProps {
   open: boolean
@@ -30,14 +30,13 @@ export function WalletBackupImportBypassModal({
           <DesignButton type="button" appearance="secondary" disabled={isBusy} onClick={onAbort}>
             Abort import
           </DesignButton>
-          <Button
+          <DesignDestructiveButton
             type="button"
-            variant="destructive"
             disabled={isBusy}
             onClick={() => void onProceedAnyway()}
           >
             {isBusy ? 'Importing…' : 'Proceed anyway'}
-          </Button>
+          </DesignDestructiveButton>
         </>
       )}
     >

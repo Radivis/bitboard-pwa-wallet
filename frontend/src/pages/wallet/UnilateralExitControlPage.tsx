@@ -10,7 +10,7 @@ import { ArkadeUnilateralExitInfomodeContent } from '@/components/arkade/infomod
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { PageHeader } from '@/components/PageHeader'
 import { DesignButton } from '@/components/design/DesignButton'
-import { Button } from '@/components/ui/button'
+import { DesignDestructiveButton } from '@/components/design/DesignDestructiveButton'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
 import { UnilateralExitAutomationSection } from '@/components/wallet/unilateral-exit/UnilateralExitAutomationSection'
@@ -766,15 +766,14 @@ export function UnilateralExitControlPage() {
             )}
 
             {showAbortButton && (
-              <Button
+              <DesignDestructiveButton
                 type="button"
-                variant="outline"
-                className="w-full border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive"
+                className="w-full"
                 data-testid="unilateral-exit-abort"
                 onClick={() => setAbortInfoOpen(true)}
               >
                 Abort unilateral exit
-              </Button>
+              </DesignDestructiveButton>
             )}
           </div>
         )}

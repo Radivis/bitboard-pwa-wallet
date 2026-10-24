@@ -1,6 +1,6 @@
 import { DesignModal } from '@/components/design/DesignModal'
 import { DesignButton } from '@/components/design/DesignButton'
-import { Button } from '@/components/ui/button'
+import { DesignDestructiveButton } from '@/components/design/DesignDestructiveButton'
 import { DialogDescription } from '@/components/ui/dialog'
 import { ArticleLink } from '@/lib/library/article-shared'
 import { ARKADE_LIBRARY_SLUGS } from '@/lib/arkade/arkade-infomode'
@@ -27,9 +27,8 @@ export function AbortUnilateralExitInfoModal({
           <DesignButton type="button" appearance="secondary" onClick={requestClose}>
             Cancel
           </DesignButton>
-          <Button
+          <DesignDestructiveButton
             type="button"
-            variant="destructive"
             data-testid="unilateral-exit-abort-info-continue"
             onClick={() => {
               onContinue()
@@ -37,7 +36,7 @@ export function AbortUnilateralExitInfoModal({
             }}
           >
             Continue
-          </Button>
+          </DesignDestructiveButton>
         </>
       )}
     >

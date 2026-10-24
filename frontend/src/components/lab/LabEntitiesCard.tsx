@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { DesignButton } from '@/components/design/DesignButton'
+import { designDestructiveIconClassName } from '@/components/design/design-classes'
 import {
   DesignCard,
   DesignCardContent,
@@ -9,7 +10,6 @@ import {
   DesignCardTitle,
 } from '@/components/design/DesignCard'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { Button } from '@/components/ui/button'
 import { DesignInput } from '@/components/design/DesignInput'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
@@ -371,17 +371,19 @@ export function LabEntitiesCard() {
                             icon={<Skull className={labEntityActionIconClassName} />}
                           />
                         ) : (
-                          <Button
-                            size="icon-sm"
+                          <DesignButton
                             type="button"
-                            variant="destructive"
+                            appearance="tertiary"
                             className={labEntityActionButtonClassName}
                             onClick={() => setDeleteId(row.labEntityId)}
                             disabled={busy}
                             aria-label={`Delete ${row.displayName}`}
-                          >
-                            <Trash2 className={labEntityActionIconClassName} />
-                          </Button>
+                            icon={
+                              <Trash2
+                                className={`${labEntityActionIconClassName} ${designDestructiveIconClassName}`}
+                              />
+                            }
+                          />
                         )}
                       </DesignCardFooter>
                     </DesignCard>

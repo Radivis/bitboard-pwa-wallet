@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { DesignButton } from '@/components/design/DesignButton'
+import { DesignDestructiveButton } from '@/components/design/DesignDestructiveButton'
 import { DesignModal } from '@/components/design/DesignModal'
-import { Button } from '@/components/ui/button'
 import { DialogDescription } from '@/components/ui/dialog'
 
 interface StartBarkEmergencyExitConfirmModalProps {
@@ -41,9 +41,8 @@ export function StartBarkEmergencyExitConfirmModal({
           <DesignButton type="button" appearance="secondary" onClick={requestClose}>
             Cancel
           </DesignButton>
-          <Button
+          <DesignDestructiveButton
             type="button"
-            variant="destructive"
             disabled={!acknowledgedRisks}
             data-testid="bark-emergency-exit-start-confirm"
             onClick={() => {
@@ -52,7 +51,7 @@ export function StartBarkEmergencyExitConfirmModal({
             }}
           >
             Start emergency exit
-          </Button>
+          </DesignDestructiveButton>
         </>
       )}
     >

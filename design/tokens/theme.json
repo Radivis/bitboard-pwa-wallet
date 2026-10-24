@@ -45,6 +45,16 @@
             "hex": "#E4E5E7",
             "alpha": 1
           }
+        },
+        "bright": {
+          "light": {
+            "hex": "#F7F8F9",
+            "alpha": 1
+          },
+          "dark": {
+            "hex": "#F7F8F9",
+            "alpha": 1
+          }
         }
       },
       "button": {
@@ -593,6 +603,50 @@
           "alpha": 0.2
         }
       }
+    },
+    "special": {
+      "destructive": {
+        "light": {
+          "hex": "#FF1500",
+          "alpha": 1
+        },
+        "dark": {
+          "hex": "#FF1500",
+          "alpha": 1
+        },
+        "background": {
+          "default": {
+            "light": {
+              "hex": "#FF1500",
+              "alpha": 0.5
+            },
+            "dark": {
+              "hex": "#FF1500",
+              "alpha": 0.5
+            }
+          },
+          "hover": {
+            "light": {
+              "hex": "#FF1500",
+              "alpha": 0.42
+            },
+            "dark": {
+              "hex": "#FF1500",
+              "alpha": 0.42
+            }
+          },
+          "active": {
+            "light": {
+              "hex": "#FF1500",
+              "alpha": 0.34
+            },
+            "dark": {
+              "hex": "#FF1500",
+              "alpha": 0.34
+            }
+          }
+        }
+      }
     }
   },
   "unresolvedModes": [],
@@ -673,6 +727,11 @@
     "input/content": "Aliases text/regular/default.",
     "nav-button/background": "Black in Light and white in Dark. Default 4%, hover 8%, active 12%, selected 20%.",
     "nav-button/stroke": "Black at 10% in Light, white at 10% in Dark.",
-    "tag/stroke": "Figma Tag stroke. Black at 20% in Light. Dark is white at 20%, matching the nav-button stroke flip."
+    "tag/stroke": "Figma Tag stroke. Black at 20% in Light. Dark is white at 20%, matching the nav-button stroke flip.",
+    "special/destructive": "Figma special/destructive. #FF1500 in Light and Dark. The Destructive-Button stroke uses this color. An icon-only destructive control uses it on the glyph.",
+    "special/destructive/background/default": "Figma special/destructive/background/default. #FF1500 at 50% opacity in Light and Dark.",
+    "special/destructive/background/hover": "Figma special/destructive/background/hover. #FF1500 at 42% opacity in Light and Dark.",
+    "special/destructive/background/active": "Figma special/destructive/background/active. #FF1500 at 34% opacity in Light and Dark.",
+    "text/regular/bright": "Figma text/regular/bright. #F7F8F9 in Light and Dark. Destructive-Button label and icon."
   }
 }

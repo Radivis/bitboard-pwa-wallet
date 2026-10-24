@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react'
 import { Zap, Trash2, Pencil, CheckCircle, XCircle, Loader2, Wifi } from 'lucide-react'
 import { toast } from 'sonner'
 import { DesignButton } from '@/components/design/DesignButton'
+import { designDestructiveIconClassName } from '@/components/design/design-classes'
 import {
   DesignCard,
   DesignCardContent,
@@ -255,7 +256,7 @@ function WalletRow({
             onRemove()
           }}
           aria-label={`Remove ${wallet.label}`}
-          icon={<Trash2 className="text-destructive" />}
+          icon={<Trash2 className={designDestructiveIconClassName} />}
         />
       </div>
       <RenameLightningWalletDialog

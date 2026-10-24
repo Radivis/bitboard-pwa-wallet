@@ -11,7 +11,7 @@ import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { DesignModal } from '@/components/design/DesignModal'
 import { DesignButton } from '@/components/design/DesignButton'
-import { Button } from '@/components/ui/button'
+import { DesignDestructiveButton } from '@/components/design/DesignDestructiveButton'
 import { DialogDescription } from '@/components/ui/dialog'
 
 export type DeleteWalletSectionProps = {
@@ -152,15 +152,14 @@ export function DeleteWalletSection({
             <p className="text-sm text-muted-foreground">
               Permanently remove this wallet from Bitboard on this device.
             </p>
-            <Button
+            <DesignDestructiveButton
               type="button"
-              variant="destructive"
               disabled={!canAttemptDelete || probingMainnet || deleteWalletMutation.isPending}
               onClick={() => setFirstDialogOpen(true)}
+              icon={<Trash2 />}
             >
-              <Trash2 className="mr-2 h-4 w-4" />
               Delete wallet
-            </Button>
+            </DesignDestructiveButton>
             {!canAttemptDelete && (
               <p className="text-xs text-muted-foreground">
                 Unlock your wallet to delete it.
@@ -186,14 +185,13 @@ export function DeleteWalletSection({
             >
               Cancel
             </DesignButton>
-            <Button
+            <DesignDestructiveButton
               type="button"
-              variant="destructive"
               disabled={probingMainnet || deleteWalletMutation.isPending}
               onClick={() => void onFirstDialogConfirm()}
             >
               {probingMainnet ? 'Checking…' : 'Continue'}
-            </Button>
+            </DesignDestructiveButton>
           </>
         )}
       >
@@ -214,14 +212,13 @@ export function DeleteWalletSection({
             <DesignButton type="button" appearance="secondary" onClick={requestClose}>
               Cancel
             </DesignButton>
-            <Button
+            <DesignDestructiveButton
               type="button"
-              variant="destructive"
               disabled={deleteWalletMutation.isPending}
               onClick={() => void performDelete().then(() => setMainnetWarnOpen(false))}
             >
               I have a backup — delete wallet
-            </Button>
+            </DesignDestructiveButton>
           </>
         )}
       >

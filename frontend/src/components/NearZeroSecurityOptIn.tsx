@@ -1,7 +1,7 @@
 import { AlertTriangle } from 'lucide-react'
 import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
+import { DesignDestructiveButton } from '@/components/design/DesignDestructiveButton'
 import { ensureSchemaAndDataMigrated, getDatabase, generateAndPersistNearZeroSession } from '@/db'
 import { errorMessage } from '@/lib/shared/utils'
 
@@ -51,15 +51,14 @@ export function NearZeroSecurityOptIn({ onSessionStarted }: NearZeroSecurityOptI
               is only slightly better than plaintext. Use this only to try the app; set a real
               password as soon as you can.
             </p>
-            <Button
+            <DesignDestructiveButton
               type="button"
-              variant="destructive"
               className="mt-1 w-full"
               disabled={mutation.isPending}
               onClick={() => mutation.mutate()}
             >
               {mutation.isPending ? 'Enabling…' : 'Use near-zero security mode'}
-            </Button>
+            </DesignDestructiveButton>
           </div>
         </div>
       </div>

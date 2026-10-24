@@ -5,7 +5,7 @@ import {
   DesignCardHeader,
   DesignCardTitle,
 } from '@/components/design/DesignCard'
-import { Button } from '@/components/ui/button'
+import { DesignDestructiveButton } from '@/components/design/DesignDestructiveButton'
 import { ConfirmationDialog } from '@/components/ConfirmationDialog'
 
 export function LabResetCard({
@@ -29,9 +29,9 @@ export function LabResetCard({
           <DesignCardDescription>Irreversible actions</DesignCardDescription>
         </DesignCardHeader>
         <DesignCardContent>
-          <Button variant="destructive" onClick={onResetClick} disabled={resetting}>
+          <DesignDestructiveButton onClick={onResetClick} disabled={resetting}>
             {resetting ? 'Resetting...' : 'Reset lab'}
-          </Button>
+          </DesignDestructiveButton>
         </DesignCardContent>
       </DesignCard>
       <ConfirmationDialog

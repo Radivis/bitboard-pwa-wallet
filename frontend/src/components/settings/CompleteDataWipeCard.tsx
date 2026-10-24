@@ -12,8 +12,8 @@ import { wipeAllAppDataOpfsAndReload } from '@/db/opfs/wipe-all-app-data-opfs-an
 import { useWalletStore } from '@/stores/walletStore'
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { DesignButton } from '@/components/design/DesignButton'
+import { DesignDestructiveButton } from '@/components/design/DesignDestructiveButton'
 import { DesignModal } from '@/components/design/DesignModal'
-import { Button } from '@/components/ui/button'
 import {
   DesignCard,
   DesignCardContent,
@@ -164,9 +164,8 @@ export function CompleteDataWipeCard() {
           </DesignCardDescription>
         </DesignCardHeader>
         <DesignCardContent className="gap-3">
-          <Button
+          <DesignDestructiveButton
             type="button"
-            variant="destructive"
             disabled={!canStartFlow || probing || wipeBusy}
             onClick={() => {
               resetRiskModalForm()
@@ -174,7 +173,7 @@ export function CompleteDataWipeCard() {
             }}
           >
             Delete all app data
-          </Button>
+          </DesignDestructiveButton>
           {hasWallets && !canStartFlow && (
             <p className="text-xs text-muted-foreground">
               Unlock your wallet to run preflight checks before wiping.
@@ -204,14 +203,13 @@ export function CompleteDataWipeCard() {
             <DesignButton type="button" appearance="secondary" disabled={probing} onClick={requestClose}>
               Cancel
             </DesignButton>
-            <Button
+            <DesignDestructiveButton
               type="button"
-              variant="destructive"
               disabled={probing || !riskUnderstood}
               onClick={() => void onRiskModalContinue()}
             >
               {probing ? 'Checking…' : 'Continue'}
-            </Button>
+            </DesignDestructiveButton>
           </>
         )}
       >
@@ -241,14 +239,13 @@ export function CompleteDataWipeCard() {
             <DesignButton type="button" appearance="secondary" onClick={requestClose}>
               Cancel
             </DesignButton>
-            <Button
+            <DesignDestructiveButton
               type="button"
-              variant="destructive"
               disabled={wipeBusy}
               onClick={() => void onMainnetModalContinue()}
             >
               I have verified my seed phrase backups
-            </Button>
+            </DesignDestructiveButton>
           </>
         )}
       >
@@ -289,14 +286,13 @@ export function CompleteDataWipeCard() {
             <DesignButton type="button" appearance="secondary" onClick={requestClose}>
               Cancel
             </DesignButton>
-            <Button
+            <DesignDestructiveButton
               type="button"
-              variant="destructive"
               disabled={wipeBusy}
               onClick={() => void onUnverifiableModalContinue()}
             >
               Continue anyway
-            </Button>
+            </DesignDestructiveButton>
           </>
         )}
       >
@@ -332,15 +328,14 @@ export function CompleteDataWipeCard() {
             <DesignButton type="button" onClick={requestClose}>
               Back up seed phrases first
             </DesignButton>
-            <Button
+            <DesignDestructiveButton
               type="button"
-              variant="destructive"
               className={cn('whitespace-normal text-left')}
               disabled={wipeBusy}
               onClick={() => void onNoBackupProceedAnyway()}
             >
               I am aware of that serious risk, but need my data be wiped anyway
-            </Button>
+            </DesignDestructiveButton>
           </>
         )}
       >
