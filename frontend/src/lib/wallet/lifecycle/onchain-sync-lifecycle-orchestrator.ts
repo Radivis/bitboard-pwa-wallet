@@ -47,6 +47,10 @@ let snapshot: OnchainSyncLifecycleSnapshot = {
   errorMessage: null,
 }
 
+/** Identifies the scan a switch or lock dropped so a late result cannot overwrite newer state. */
+let onchainSyncAttemptId = 0
+let abandonedOnchainSyncAttemptId = 0
+
 const listeners = new Set<(next: OnchainSyncLifecycleSnapshot) => void>()
 const inFlightSyncTracker = createInFlightLifecycleTracker()
 
@@ -140,6 +144,42 @@ export async function awaitOnchainSyncQuiescence(): Promise<void> {
   await inFlightSyncTracker.awaitQuiescence()
 }
 
+function onchainSyncAttemptWasAbandoned(attemptId: number): boolean {
+  return attemptId !== 0 && attemptId === abandonedOnchainSyncAttemptId
+}
+
+function clearOnchainSyncSnapshot(): void {
+  setSnapshot({
+    syncPhase: 'not-configured',
+    descriptorScope: null,
+    errorMessage: null,
+  })
+}
+
+/**
+ * A public Esplora full scan keeps the crypto worker busy until every request returns.
+ * Terminating that worker does not reliably settle the main-thread promise, so network
+ * switch and lock detach the attempt instead of waiting. The Esplora call itself does
+ * not hold the wallet writer lock.
+ * Skips when nothing is syncing, including an in-flight save after a finished scan.
+ */
+export async function abandonInFlightOnchainSync(): Promise<void> {
+  if (snapshot.syncPhase !== 'syncing') return
+  const inFlightSync = inFlightSyncTracker.getCurrent()
+  if (inFlightSync == null) return
+
+  abandonedOnchainSyncAttemptId = onchainSyncAttemptId
+  const { useCryptoStore } = await import('@/stores/cryptoStore')
+  const { resetSecretsChannel } = await import('@/workers/secrets-channel')
+  const { dismissAbandonedBlockchainScan } = await import('@/lib/wallet/wallet-utils')
+  useCryptoStore.getState().terminateWorker()
+  resetSecretsChannel()
+  dismissAbandonedBlockchainScan()
+  inFlightSyncTracker.clearCurrent()
+  clearOnchainSyncSnapshot()
+  void inFlightSync.promise.catch(() => undefined)
+}
+
 /** Drop a sync snapshot that still describes a wallet the user has left. */
 export function detachOnchainSyncSnapshotIfDifferentWallet(nextWalletId: number): void {
   const scopeWalletId = snapshot.descriptorScope?.walletId
@@ -206,19 +246,21 @@ export async function orchestrateOnchainSyncThenSave(
     if (!onchainSyncTargetsActiveWallet(params.walletId)) {
       return
     }
-    await withWalletWriterLock(async () => {
+    const attemptId = ++onchainSyncAttemptId
+    assertCanStartOnchainSync(params)
+    const scope = descriptorScopeFromParams(params)
+    configureOnchainSyncForLoadedRail(scope)
+    setSnapshot({ syncPhase: 'syncing', descriptorScope: scope, errorMessage: null })
+
+    try {
+      await runEsploraSyncBody(params)
+      if (onchainSyncAttemptWasAbandoned(attemptId)) return
       if (!onchainSyncTargetsActiveWallet(params.walletId)) {
         clearOnchainSyncSnapshotIfItBelongsToWallet(params.walletId)
         return
       }
-      assertCanStartOnchainSync(params)
-      const scope = descriptorScopeFromParams(params)
-      configureOnchainSyncForLoadedRail(scope)
-
-      setSnapshot({ syncPhase: 'syncing', descriptorScope: scope, errorMessage: null })
-
-      try {
-        await runEsploraSyncBody(params)
+      await withWalletWriterLock(async () => {
+        if (onchainSyncAttemptWasAbandoned(attemptId)) return
         if (!onchainSyncTargetsActiveWallet(params.walletId)) {
           clearOnchainSyncSnapshotIfItBelongsToWallet(params.walletId)
           return
@@ -231,30 +273,31 @@ export async function orchestrateOnchainSyncThenSave(
             throw saveError
           }
         }
-      } catch (error) {
-        if (!onchainSyncTargetsActiveWallet(params.walletId)) {
-          clearOnchainSyncSnapshotIfItBelongsToWallet(params.walletId)
-          return
-        }
-        setSnapshot({
-          syncPhase: 'sync-error',
-          descriptorScope: scope,
-          errorMessage: userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK),
-        })
-        if (params.networkMode !== 'lab') {
-          try {
-            await refreshWalletStoreFromLoadedBdk(params.walletId)
-            invalidateOnchainDashboardQueries()
-          } catch {
-            // Keep prior BDK-local store state when refresh fails.
-          }
-        }
-        params.onSyncError?.(error)
-        if (throwOnError) {
-          throw error
+      })
+    } catch (error) {
+      if (onchainSyncAttemptWasAbandoned(attemptId)) return
+      if (!onchainSyncTargetsActiveWallet(params.walletId)) {
+        clearOnchainSyncSnapshotIfItBelongsToWallet(params.walletId)
+        return
+      }
+      setSnapshot({
+        syncPhase: 'sync-error',
+        descriptorScope: scope,
+        errorMessage: userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK),
+      })
+      if (params.networkMode !== 'lab') {
+        try {
+          await refreshWalletStoreFromLoadedBdk(params.walletId)
+          invalidateOnchainDashboardQueries()
+        } catch {
+          // Keep prior BDK-local store state when refresh fails.
         }
       }
-    })
+      params.onSyncError?.(error)
+      if (throwOnError) {
+        throw error
+      }
+    }
   })
 }
 
@@ -291,6 +334,8 @@ export function resetOnchainSyncLifecycleStateForTests(): void {
     descriptorScope: null,
     errorMessage: null,
   }
+  onchainSyncAttemptId = 0
+  abandonedOnchainSyncAttemptId = 0
   inFlightSyncTracker.clearCurrent()
   listeners.clear()
 }

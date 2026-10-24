@@ -37,6 +37,7 @@ import {
   OnchainSaveBlockingLockError,
 } from '@/lib/wallet/lifecycle/onchain-save-lifecycle-orchestrator'
 import {
+  abandonInFlightOnchainSync,
   awaitOnchainSyncQuiescence,
 } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
 import { syncAllRailLifecyclesWithLockPhase } from '@/lib/wallet/lifecycle/rail-lifecycle-lock-handoff'
@@ -304,6 +305,7 @@ export async function orchestrateLock(): Promise<void> {
     await awaitArkadeLoadQuiescence()
     await awaitBarkLoadQuiescence()
     await awaitLightningLoadQuiescence()
+    await abandonInFlightOnchainSync()
     await awaitOnchainSyncQuiescence()
     await awaitOnchainSaveQuiescence()
     await awaitArkadeSyncQuiescence()

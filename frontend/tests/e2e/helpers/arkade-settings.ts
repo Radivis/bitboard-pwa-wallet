@@ -3,6 +3,7 @@ import { clickDrawerNavLink } from './drawer-nav'
 import {
   openSettingsFeaturesTab,
   openSettingsMainTab,
+  settingsNetworkButton,
   waitForSettingsNetworkSwitchComplete,
   waitForSettingsNetworkModeButtonSelected,
 } from './settings-waits'
@@ -34,7 +35,7 @@ const ARKADE_MUTINYNET_SWITCH_TIMEOUT_MS = process.env.CI ? 90_000 : 60_000
 export async function switchToMutinynet(page: Page): Promise<void> {
   await clickDrawerNavLink(page, 'Settings')
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
-  await page.getByRole('button', { name: 'Mutinynet' }).click()
+  await settingsNetworkButton(page, 'Mutinynet').click()
   await waitForSettingsNetworkModeButtonSelected(
     page,
     'Mutinynet',

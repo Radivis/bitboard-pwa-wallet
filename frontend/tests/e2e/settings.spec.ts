@@ -4,6 +4,7 @@ import { createWalletViaUI } from './helpers/wallet-setup'
 import {
   openSettingsFeaturesTab,
   openSettingsMainTab,
+  settingsNetworkButton,
   waitForSettingsNetworkSwitchComplete,
   waitForSettingsNetworkModeButtonSelected,
 } from './helpers/settings-waits'
@@ -16,8 +17,8 @@ test.describe('Settings Page', () => {
     await clickDrawerNavLink(page, 'Settings')
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
-    const testnetButton = page.getByRole('button', { name: 'Testnet' })
-    const signetButton = page.getByRole('button', { name: 'Signet' })
+    const testnetButton = settingsNetworkButton(page, 'Testnet')
+    const signetButton = settingsNetworkButton(page, 'Signet')
     await expect(testnetButton).toBeVisible()
     await expect(signetButton).toBeVisible()
 
@@ -50,6 +51,7 @@ test.describe('Settings Page', () => {
   })
 
   test('settings Esplora endpoint', async ({ page }) => {
+    test.setTimeout(120_000)
     await createWalletViaUI(page)
 
     await clickDrawerNavLink(page, 'Settings')
@@ -65,7 +67,7 @@ test.describe('Settings Page', () => {
     await regtestModeSwitch.click()
     await openSettingsMainTab(page)
 
-    await page.getByRole('button', { name: 'Regtest' }).click()
+    await settingsNetworkButton(page, 'Regtest').click()
     await waitForSettingsNetworkSwitchComplete(page)
     await waitForSettingsNetworkModeButtonSelected(page, 'Regtest')
 
@@ -101,8 +103,10 @@ test.describe('Settings Page', () => {
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
     await waitForSettingsNetworkSwitchComplete(page)
-    // Mainnet uses aria-disabled when access is off; Playwright treats that as non-clickable without force.
-    await page.getByRole('button', { name: 'Mainnet' }).click({ force: true })
+    // Mainnet is aria-disabled until Features access is on. A DOM click still runs the handler.
+    await settingsNetworkButton(page, 'Mainnet').evaluate((mainnetButton) => {
+      mainnetButton.click()
+    })
     await expect(
       page.getByText('Activate Mainnet access in Settings → Features before selecting Mainnet.'),
     ).toBeVisible({ timeout: 10000 })

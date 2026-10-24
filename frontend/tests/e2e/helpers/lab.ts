@@ -12,6 +12,7 @@ import {
 import { clickDrawerNavLink } from './drawer-nav'
 import { goToWalletTab } from './wallet-nav'
 import {
+  settingsNetworkButton,
   waitForSettingsNetworkModeButtonSelected,
   waitForSettingsNetworkSwitchComplete,
 } from './settings-waits'
@@ -32,9 +33,7 @@ export async function switchToLab(page: Page): Promise<void> {
   await clickDrawerNavLink(page, 'Settings')
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
-  await page
-    .getByRole('button', { name: 'Lab', exact: true })
-    .click()
+  await settingsNetworkButton(page, 'Lab').click()
   await waitForSettingsNetworkModeButtonSelected(page, 'Lab', 60_000)
 
   await waitForSettingsNetworkSwitchComplete(page)
@@ -207,6 +206,7 @@ export async function mineBlocksInLab(
   await page.getByLabel('Number of blocks').fill(String(count))
   await page.getByRole('button', {
     name: ownerType === LabOwnerType.LabEntity ? 'Lab entity' : 'Wallet',
+    exact: true,
   }).click()
 
   await expect(page.getByRole('button', { name: 'Mine blocks' })).toBeEnabled({

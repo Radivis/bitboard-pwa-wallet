@@ -12,16 +12,14 @@ import {
   REGTEST_DASHBOARD_MIN_VISIBLE_SATS,
 } from './helpers/regtest'
 import { runRegtestPostFundDashboardCheck } from './helpers/regtest-onchain-balance-diagnostics'
-import {
-  waitForOnchainRailNotSyncing,
-  waitForOnchainRailSyncAttemptFinished,
-} from './helpers/dashboard-sync'
+import { waitForOnchainRailNotSyncing } from './helpers/dashboard-sync'
 import {
   assertSendPageSpendableOnChainBalance,
   waitForSendReviewTransactionButtonEnabled,
 } from './helpers/send-page'
 import { goToWalletTab } from './helpers/wallet-nav'
 import {
+  settingsNetworkButton,
   waitForSettingsAddressTypeSwitchComplete,
   waitForSettingsNetworkModeButtonSelected,
   waitForSettingsNetworkSwitchComplete,
@@ -94,9 +92,7 @@ test.describe('Send Page', () => {
 
       await importWalletViaUI(page, TEST_MNEMONIC, TEST_PASSWORD)
       await goToWalletTab(page, 'Dashboard')
-      // Import syncs public testnet before Regtest is enabled. A mempool.space
-      // timeout leaves the sync-error banner up; switching networks does not need that sync.
-      await waitForOnchainRailSyncAttemptFinished(page)
+      // Leave the public testnet scan in place. Switching to Regtest drops it.
 
       await clickDrawerNavLink(page, 'Settings')
       await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
@@ -108,7 +104,7 @@ test.describe('Send Page', () => {
       await regtestModeSwitch.click()
       await openSettingsMainTab(page)
 
-      await page.getByRole('button', { name: 'Regtest' }).click()
+      await settingsNetworkButton(page, 'Regtest').click()
       await waitForSettingsNetworkSwitchComplete(page)
       await waitForSettingsNetworkModeButtonSelected(page, 'Regtest')
       await ensureSegwitAddressesFeatureOn(page)

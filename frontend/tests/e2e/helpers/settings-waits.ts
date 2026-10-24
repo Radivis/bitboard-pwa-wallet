@@ -1,4 +1,4 @@
-import { type Page, expect } from '@playwright/test'
+import { type Locator, type Page, expect } from '@playwright/test'
 
 /** Settings subsection bar (Main / Security / Features / About). */
 export async function openSettingsMainTab(page: Page): Promise<void> {
@@ -21,6 +21,14 @@ export async function openSettingsFeaturesTab(page: Page): Promise<void> {
 const SETTINGS_NETWORK_SWITCH_IDLE_BUTTONS = ['Testnet', 'Signet', 'Mutinynet', 'Lab'] as const
 
 /**
+ * Settings network control. Scoped to main so the header badge
+ * (`Network, Testnet 4`) does not match the Testnet button.
+ */
+export function settingsNetworkButton(page: Page, networkButtonName: string): Locator {
+  return page.getByRole('main').getByRole('button', { name: networkButtonName, exact: true })
+}
+
+/**
  * After clicking a network on Settings, waits until the switch mutation finishes:
  * non–feature-gated network buttons become enabled again (no `disabled={loading}`).
  * Mainnet is excluded: it can stay aria-disabled until Mainnet access is enabled in Features.
@@ -30,7 +38,7 @@ export async function waitForSettingsNetworkSwitchComplete(
   timeout = 120_000,
 ): Promise<void> {
   for (const name of SETTINGS_NETWORK_SWITCH_IDLE_BUTTONS) {
-    await expect(page.getByRole('button', { name, exact: true })).toBeEnabled({
+    await expect(settingsNetworkButton(page, name)).toBeEnabled({
       timeout,
     })
   }
@@ -44,7 +52,7 @@ export async function waitForSettingsNetworkSwitchCompleteIncludingMainnet(
   timeout = 120_000,
 ): Promise<void> {
   await waitForSettingsNetworkSwitchComplete(page, timeout)
-  await expect(page.getByRole('button', { name: 'Mainnet', exact: true })).toBeEnabled({
+  await expect(settingsNetworkButton(page, 'Mainnet')).toBeEnabled({
     timeout,
   })
 }
@@ -61,13 +69,15 @@ export async function waitForSettingsAddressTypeSwitchComplete(
   })
 }
 
-/** Network button uses `data-variant="default"` when that mode is active. */
+/** Selected network uses DesignButton `data-type="primary"`. */
 export async function waitForSettingsNetworkModeButtonSelected(
   page: Page,
   networkButtonName: string,
   timeout = 120_000,
 ): Promise<void> {
-  await expect(
-    page.getByRole('button', { name: networkButtonName, exact: true }),
-  ).toHaveAttribute('data-variant', 'default', { timeout })
+  await expect(settingsNetworkButton(page, networkButtonName)).toHaveAttribute(
+    'data-type',
+    'primary',
+    { timeout },
+  )
 }

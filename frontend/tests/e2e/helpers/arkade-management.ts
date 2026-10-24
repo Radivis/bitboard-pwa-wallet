@@ -2,6 +2,7 @@ import { type Page, expect } from '@playwright/test'
 import {
   openSettingsFeaturesTab,
   openSettingsMainTab,
+  settingsNetworkButton,
   waitForSettingsNetworkSwitchComplete,
   waitForSettingsNetworkModeButtonSelected,
 } from './settings-waits'
@@ -41,7 +42,7 @@ export async function enableRegtestDeveloperMode(page: Page): Promise<void> {
 export async function switchToRegtestNetwork(page: Page): Promise<void> {
   await clickDrawerNavLink(page, 'Settings')
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
-  await page.getByRole('button', { name: 'Regtest' }).click()
+  await settingsNetworkButton(page, 'Regtest').click()
   await waitForSettingsNetworkModeButtonSelected(
     page,
     'Regtest',

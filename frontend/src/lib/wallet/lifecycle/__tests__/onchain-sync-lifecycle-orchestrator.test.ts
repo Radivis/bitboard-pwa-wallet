@@ -3,9 +3,12 @@ import { AddressType } from '@/stores/walletStore'
 import { BadLocalChainStateError } from '@/lib/shared/bad-local-chain-state-error'
 
 const syncActiveWalletAndUpdateState = vi.fn()
+const dismissAbandonedBlockchainScan = vi.fn()
 const orchestrateOnchainSave = vi.fn()
 const refreshWalletStoreFromLoadedBdk = vi.fn()
 const invalidateOnchainDashboardQueries = vi.fn()
+const terminateWorker = vi.fn()
+const resetSecretsChannel = vi.fn()
 
 const loadSnapshot = { loadPhase: 'loaded' as const, networkMode: 'testnet' as const }
 let loadHydration: {
@@ -19,6 +22,8 @@ let loadHydration: {
 vi.mock('@/lib/wallet/wallet-utils', () => ({
   syncActiveWalletAndUpdateState: (...args: unknown[]) =>
     syncActiveWalletAndUpdateState(...args),
+  dismissAbandonedBlockchainScan: (...args: unknown[]) =>
+    dismissAbandonedBlockchainScan(...args),
 }))
 
 vi.mock('@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator', () => ({
@@ -41,6 +46,16 @@ vi.mock('@/lib/wallet/onchain-dashboard-sync', () => ({
     invalidateOnchainDashboardQueries(...args),
 }))
 
+vi.mock('@/stores/cryptoStore', () => ({
+  useCryptoStore: {
+    getState: () => ({ terminateWorker }),
+  },
+}))
+
+vi.mock('@/workers/secrets-channel', () => ({
+  resetSecretsChannel: (...args: unknown[]) => resetSecretsChannel(...args),
+}))
+
 const walletStoreState = {
   walletStatus: 'unlocked' as 'unlocked' | 'locked',
   activeWalletId: 1 as number | null,
@@ -58,6 +73,8 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
 })
 
 import {
+  abandonInFlightOnchainSync,
+  awaitOnchainSyncQuiescence,
   getOnchainSyncLifecycleSnapshot,
   orchestrateOnchainPostUnlockSync,
   orchestrateOnchainSyncThenSave,
@@ -142,6 +159,59 @@ describe('onchain-sync-lifecycle-orchestrator', () => {
     expect(getOnchainSyncLifecycleSnapshot().syncPhase).toBe('sync-error')
     expect(orchestrateOnchainSave).not.toHaveBeenCalled()
     expect(refreshWalletStoreFromLoadedBdk).toHaveBeenCalled()
+  })
+
+  it('abandon drops an in-flight scan without a sync-error', async () => {
+    let rejectSync: (error: unknown) => void = () => {}
+    syncActiveWalletAndUpdateState.mockImplementation(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectSync = reject
+        }),
+    )
+    terminateWorker.mockImplementation(() => {
+      rejectSync(new Error('worker terminated'))
+    })
+
+    const syncing = orchestrateOnchainSyncThenSave({
+      ...syncParams,
+      awaitCompletion: false,
+      throwOnError: false,
+    })
+    await vi.waitFor(() =>
+      expect(getOnchainSyncLifecycleSnapshot().syncPhase).toBe('syncing'),
+    )
+
+    await abandonInFlightOnchainSync()
+    await syncing
+
+    expect(terminateWorker).toHaveBeenCalledTimes(1)
+    expect(resetSecretsChannel).toHaveBeenCalledTimes(1)
+    expect(dismissAbandonedBlockchainScan).toHaveBeenCalledTimes(1)
+    expect(getOnchainSyncLifecycleSnapshot().syncPhase).toBe('not-configured')
+    expect(refreshWalletStoreFromLoadedBdk).not.toHaveBeenCalled()
+    expect(orchestrateOnchainSave).not.toHaveBeenCalled()
+  })
+
+  it('abandon returns while a scan promise stays pending', async () => {
+    syncActiveWalletAndUpdateState.mockImplementation(() => new Promise<void>(() => {}))
+    terminateWorker.mockImplementation(() => {})
+
+    const syncing = orchestrateOnchainSyncThenSave({
+      ...syncParams,
+      awaitCompletion: false,
+      throwOnError: false,
+    })
+    await vi.waitFor(() =>
+      expect(getOnchainSyncLifecycleSnapshot().syncPhase).toBe('syncing'),
+    )
+
+    await abandonInFlightOnchainSync()
+    await awaitOnchainSyncQuiescence()
+
+    expect(getOnchainSyncLifecycleSnapshot().syncPhase).toBe('not-configured')
+    expect(orchestrateOnchainSave).not.toHaveBeenCalled()
+    void syncing
   })
 
   it('duplicate sync coalesces', async () => {

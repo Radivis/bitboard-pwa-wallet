@@ -5,6 +5,7 @@ import { goToWalletTab } from './helpers/wallet-nav'
 import { clickDrawerNavLink } from './helpers/drawer-nav'
 import {
   openSettingsFeaturesTab,
+  settingsNetworkButton,
   waitForSettingsNetworkModeButtonSelected,
   waitForSettingsNetworkSwitchComplete,
 } from './helpers/settings-waits'
@@ -27,7 +28,7 @@ const LNURL_BECH32 = encodeLnurlForUrl(LNURL_PAY_HTTPS_URL)
 async function switchToSignetWithLightning(page: Page) {
   await clickDrawerNavLink(page, 'Settings')
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
-  await page.getByRole('button', { name: 'Signet' }).click()
+  await settingsNetworkButton(page, 'Signet').click()
   await waitForSettingsNetworkSwitchComplete(page)
   await waitForSettingsNetworkModeButtonSelected(page, 'Signet')
 
