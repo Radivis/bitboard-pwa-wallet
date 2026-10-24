@@ -15,6 +15,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [0.4.0] - TBD
+
+### Added
+
+- Always visible network selector for switching networks quickly without having to go to the "Settings" page
+- Always visible wallet lock toggle button
+- Almost always visible back button
+
+### Changed
+
+- Complete redesign of the app according to a new design system
+- The theme switcher is now is the side drawer
+- The bottom nav bar now only has one row at max; top level navigation now works through the side drawer
+
 ## [0.3.6] - 2026-10-23
 
 ### Added
