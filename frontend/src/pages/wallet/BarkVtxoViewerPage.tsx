@@ -6,9 +6,9 @@ import { barkSessionBlockingScreen } from '@/components/bark/bark-session-blocki
 import { BarkRailUnavailable } from '@/components/bark/BarkRailUnavailable'
 import { BarkVtxoCard } from '@/components/bark/BarkVtxoCard'
 import { CardPagination } from '@/components/CardPagination'
+import { DesignButton } from '@/components/design/DesignButton'
+import { DesignInput } from '@/components/design/DesignInput'
 import { PageHeader } from '@/components/PageHeader'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { RailSyncErrorBanner } from '@/components/wallet/RailSyncErrorBanner'
@@ -183,9 +183,9 @@ export function BarkVtxoViewerPage() {
         exitNodeSweepVtxoItems={shownExitChainNotice?.exitNodeSweepVtxoItems ?? []}
       />
 
-      <Button type="button" variant="outline" asChild>
+      <DesignButton type="button" appearance="secondary" asChild>
         <Link to="/wallet/management">Back to management</Link>
-      </Button>
+      </DesignButton>
     </div>
   )
 }
@@ -279,7 +279,7 @@ function BarkVtxoInventory({
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="bark-vtxo-search">Search</Label>
-            <Input
+            <DesignInput
               id="bark-vtxo-search"
               value={searchQuery}
               onChange={(event) => onSearchQueryChange(event.target.value)}
@@ -312,24 +312,22 @@ function BarkVtxoInventory({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button
+          <DesignButton
             type="button"
-            size="sm"
-            variant={stateFilter == null ? 'default' : 'outline'}
+            appearance={stateFilter == null ? 'primary' : 'secondary'}
             onClick={() => onStateFilterChange(null)}
           >
             All ({rows.length})
-          </Button>
+          </DesignButton>
           {BARK_VTXO_STATES.map((state) => (
-            <Button
+            <DesignButton
               key={state}
               type="button"
-              size="sm"
-              variant={stateFilter === state ? 'default' : 'outline'}
+              appearance={stateFilter === state ? 'primary' : 'secondary'}
               onClick={() => onStateFilterChange(stateFilter === state ? null : state)}
             >
               {getBarkVtxoStateLabel(state)} ({stateCounts[state]})
-            </Button>
+            </DesignButton>
           ))}
         </div>
       </div>

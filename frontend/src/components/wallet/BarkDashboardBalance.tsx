@@ -4,8 +4,13 @@ import { FiatBtcAmountDisplay } from '@/components/FiatBtcAmountDisplay'
 import { BarkNextRefreshHint } from '@/components/bark/BarkNextRefreshHint'
 import { BarkSessionLoadError } from '@/components/bark/BarkSessionLoadError'
 import { BarkSessionLoading } from '@/components/bark/BarkSessionLoading'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DesignButton } from '@/components/design/DesignButton'
+import {
+  DesignCard,
+  DesignCardContent,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { BarkPendingActionBanner } from '@/components/wallet/BarkPendingActionBanner'
 import { RailSyncControl } from '@/components/wallet/RailSyncControl'
 import { RailSyncErrorBanner } from '@/components/wallet/RailSyncErrorBanner'
@@ -53,14 +58,15 @@ export function BarkDashboardBalance() {
     loadSnapshot.loadPhase === 'loaded' && isSyncing && spendableSats == null
 
   return (
-    <Card
+    <DesignCard
+      elevation={2}
       data-testid="dashboard-bark-balance-card"
       data-rail-bark-load={loadSnapshot.loadPhase}
       data-rail-bark-sync={syncSnapshot.syncPhase}
     >
-      <CardHeader className="pb-2">
+      <DesignCardHeader>
         <div className="flex flex-wrap items-start justify-between gap-2">
-          <CardTitle className="text-base">Bark balance</CardTitle>
+          <DesignCardTitle>Bark balance</DesignCardTitle>
           <RailSyncControl
             rail="bark"
             syncLabel="Sync Bark"
@@ -73,8 +79,8 @@ export function BarkDashboardBalance() {
             syncErrorDetailInBanner={loadSnapshot.loadPhase === 'loaded'}
           />
         </div>
-      </CardHeader>
-      <CardContent className="space-y-2">
+      </DesignCardHeader>
+      <DesignCardContent className="space-y-2">
         <BarkNextRefreshHint />
         {loadSnapshot.loadPhase === 'load-error' ? (
           <BarkSessionLoadError embedded errorMessage={loadSnapshot.errorMessage} />
@@ -133,19 +139,19 @@ export function BarkDashboardBalance() {
         <BarkPendingActionBanner />
         <BarkRefreshStatusLine status={syncSnapshot.refreshStatus} />
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" size="sm" asChild>
+          <DesignButton type="button" appearance="secondary" asChild>
             <Link to="/wallet/bark/board" data-testid="dashboard-bark-board-link">
               Board from on-chain
             </Link>
-          </Button>
-          <Button type="button" variant="outline" size="sm" asChild>
+          </DesignButton>
+          <DesignButton type="button" appearance="secondary" asChild>
             <Link to="/wallet/bark/offboard" data-testid="dashboard-bark-offboard-link">
               Exit to on-chain
             </Link>
-          </Button>
+          </DesignButton>
         </div>
-      </CardContent>
-    </Card>
+      </DesignCardContent>
+    </DesignCard>
   )
 }
 

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { AppModal } from '@/components/AppModal'
+import { DesignButton } from '@/components/design/DesignButton'
+import { DesignModal } from '@/components/design/DesignModal'
 import { Button } from '@/components/ui/button'
 import { DialogDescription } from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
 
 interface StartBarkEmergencyExitConfirmModalProps {
   open: boolean
@@ -24,17 +24,23 @@ export function StartBarkEmergencyExitConfirmModal({
   }, [open])
 
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={onOpenChange}
       onCancel={() => onOpenChange(false)}
       title="Start emergency exit?"
-      contentClassName="sm:max-w-lg"
+      optIn={{
+        id: 'bark-emergency-exit-start-ack',
+        label: 'I understand these risks and want to start emergency exit',
+        checked: acknowledgedRisks,
+        onChange: setAcknowledgedRisks,
+        testId: 'bark-emergency-exit-start-ack',
+      }}
       footer={(requestClose) => (
         <>
-          <Button type="button" variant="outline" onClick={requestClose}>
+          <DesignButton type="button" appearance="secondary" onClick={requestClose}>
             Cancel
-          </Button>
+          </DesignButton>
           <Button
             type="button"
             variant="destructive"
@@ -49,7 +55,6 @@ export function StartBarkEmergencyExitConfirmModal({
           </Button>
         </>
       )}
-      footerClassName="justify-end gap-2"
     >
       <div
         className="space-y-4 text-sm text-muted-foreground"
@@ -69,20 +74,7 @@ export function StartBarkEmergencyExitConfirmModal({
           many on-chain transactions. Each step costs miner fees from your on-chain wallet, and fees
           can spike when many users exit at once.
         </p>
-        <div className="flex gap-3 rounded-md border border-border p-3">
-          <input
-            id="bark-emergency-exit-start-ack"
-            type="checkbox"
-            className="mt-1 size-4 shrink-0 rounded border-input accent-primary"
-            checked={acknowledgedRisks}
-            data-testid="bark-emergency-exit-start-ack"
-            onChange={(event) => setAcknowledgedRisks(event.target.checked)}
-          />
-          <Label htmlFor="bark-emergency-exit-start-ack" className="cursor-pointer font-normal">
-            I understand these risks and want to start emergency exit
-          </Label>
-        </div>
       </div>
-    </AppModal>
+    </DesignModal>
   )
 }

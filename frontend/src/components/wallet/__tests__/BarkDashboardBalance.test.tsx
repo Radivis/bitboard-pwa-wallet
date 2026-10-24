@@ -162,7 +162,8 @@ describe('BarkDashboardBalance', () => {
 
     const hint = screen.getByTestId('bark-next-refresh-hint')
     expect(hint).toHaveTextContent('Unlock this wallet around')
-    expect(hint).toHaveClass('border-amber-500/40')
+    expect(hint).toHaveAttribute('data-slot', 'design-banner')
+    expect(hint).toHaveAttribute('data-status', 'warning')
     expect(hint.parentElement?.firstElementChild).toBe(hint)
   })
 
@@ -320,7 +321,7 @@ describe('BarkDashboardBalance', () => {
     renderWithProviders(<BarkDashboardBalance />)
     const banner = screen.getByTestId('bark-pending-action-banner')
     expect(banner).toHaveAttribute('data-state', 'error')
-    expect(banner).toHaveClass('border-red-500/40')
+    expect(banner).toHaveAttribute('data-status', 'error')
     expect(banner).toHaveTextContent('vtxo is not spendable (state: spent)')
   })
 

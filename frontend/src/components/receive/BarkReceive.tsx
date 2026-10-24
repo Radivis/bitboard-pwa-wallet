@@ -2,9 +2,14 @@ import { Copy, Loader2, QrCode, RefreshCw } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
+import { DesignButton } from '@/components/design/DesignButton'
+import {
+  DesignCard,
+  DesignCardContent,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
 import {
   useBarkReceiveAddressQuery,
@@ -38,14 +43,14 @@ export function BarkReceive() {
 
   return (
     <>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle className="flex items-center gap-2">
             <QrCode className="h-5 w-5" />
             QR Code
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+          </DesignCardTitle>
+        </DesignCardHeader>
+        <DesignCardContent>
           <div className="flex flex-col items-center gap-4">
             {addressLoading ? (
               <LoadingSpinner text="Loading address…" />
@@ -65,12 +70,12 @@ export function BarkReceive() {
               </div>
             ) : null}
           </div>
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle>
             <InfomodeWrapper
               infoId="bark-receive-address"
               infoTitle="Bark receiving address"
@@ -79,9 +84,9 @@ export function BarkReceive() {
             >
               Bark receiving address
             </InfomodeWrapper>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+          </DesignCardTitle>
+        </DesignCardHeader>
+        <DesignCardContent className="space-y-3">
           {showAddressError ? (
             <p className="text-sm text-destructive">
               {snapshot.loadPhase === 'load-error' && snapshot.errorMessage
@@ -96,17 +101,15 @@ export function BarkReceive() {
               >
                 {addressLoading ? 'Loading…' : address || 'Loading…'}
               </div>
-              <Button
-                size="icon"
+              <DesignButton
                 onClick={handleCopy}
                 disabled={!address}
                 aria-label="Copy address"
-              >
-                <Copy className="h-4 w-4" />
-              </Button>
+                icon={<Copy />}
+              />
             </div>
           )}
-          <Button
+          <DesignButton
             type="button"
             className="w-full"
             data-testid="bark-generate-new-address"
@@ -114,16 +117,18 @@ export function BarkReceive() {
               revealMutation.isPending || !address || indexMissing || showAddressError
             }
             onClick={() => revealMutation.mutate()}
+            icon={
+              revealMutation.isPending ? (
+                <Loader2 className="animate-spin" aria-hidden />
+              ) : (
+                <RefreshCw />
+              )
+            }
           >
-            {revealMutation.isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-            ) : (
-              <RefreshCw className="mr-2 h-4 w-4" />
-            )}
             Generate New Address
-          </Button>
-        </CardContent>
-      </Card>
+          </DesignButton>
+        </DesignCardContent>
+      </DesignCard>
     </>
   )
 }

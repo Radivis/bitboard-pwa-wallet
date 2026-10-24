@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
+import { DesignCard, DesignCardContent } from '@/components/design/DesignCard'
+import { DesignTag } from '@/components/design/DesignTag'
 import { formatBarkVtxoExpiry, type BarkBitcoinNetwork } from '@/lib/bark/bark-vtxo-expiry'
 import {
   formatBarkVtxoLockHolderLine,
@@ -47,8 +47,8 @@ export function BarkVtxoCard({
   }
 
   return (
-    <Card data-testid={`bark-vtxo-card-${row.id}`}>
-      <CardContent className="space-y-2 p-4">
+    <DesignCard data-testid={`bark-vtxo-card-${row.id}`}>
+      <DesignCardContent className="space-y-2">
         <div className="flex items-start justify-between gap-3">
           <button
             type="button"
@@ -68,13 +68,7 @@ export function BarkVtxoCard({
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-semibold">{getBarkVtxoStateLabel(row.state)}</span>
           {row.registered ? (
-            <Badge
-              variant="outline"
-              className="text-xs font-normal"
-              data-testid={`bark-vtxo-registered-${row.id}`}
-            >
-              Registered
-            </Badge>
+            <DesignTag data-testid={`bark-vtxo-registered-${row.id}`}>Registered</DesignTag>
           ) : null}
         </div>
 
@@ -98,7 +92,7 @@ export function BarkVtxoCard({
             {emergencyExitPhaseLine}
           </div>
         ) : null}
-      </CardContent>
-    </Card>
+      </DesignCardContent>
+    </DesignCard>
   )
 }
