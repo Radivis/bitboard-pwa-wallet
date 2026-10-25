@@ -1,5 +1,5 @@
 import type { ArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
-import { normalizeEsploraBaseUrl } from '../esplora/esplora-service-whitelist'
+import { normalizeEsploraBaseUrl } from '../esplora/esplora-service-whitelist.ts'
 
 /** Same-origin path prefix for the Arkade operator proxy (no trailing slash). */
 export const ARKADE_OPERATOR_PROXY_PREFIX = '/api/arkade/operator'

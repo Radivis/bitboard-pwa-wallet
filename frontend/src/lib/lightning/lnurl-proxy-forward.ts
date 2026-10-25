@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { isLnurlProxyUpstreamUrlAllowed } from './lnurl-proxy-upstream-url'
+import { isLnurlProxyUpstreamUrlAllowed } from './lnurl-proxy-upstream-url.ts'
 
 const UPSTREAM_TIMEOUT_MS = 8_000
 
