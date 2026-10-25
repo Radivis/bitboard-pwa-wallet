@@ -86,7 +86,7 @@ export function LabBlocksCard({
             <Link
               to="/lab/block/current"
               preload={false}
-              className="inline-flex shrink-0 rounded-md border border-border bg-muted/40 px-2 py-1 text-sm font-medium transition-colors hover:bg-muted"
+              className="design-type-emphasis inline-flex shrink-0 rounded-md border border-border bg-muted/40 px-2 py-1 transition-colors hover:bg-muted"
             >
               Current template
             </Link>
@@ -159,18 +159,18 @@ export function LabBlocksCard({
                     type="text"
                     value={currentAddress ?? ''}
                     readOnly
-                    className="min-w-[200px] font-mono text-sm"
+                    className="design-type-addresses min-w-[200px]"
                   />
                 ) : (
-                  <p className="text-sm text-muted-foreground py-2">
+                  <p className="design-type-regular text-muted-foreground py-2">
                     Unlock wallet to mine to it
                   </p>
                 )}
               </div>
             ) : noLivingEntities ? (
-              <p className="text-sm text-muted-foreground">
+              <p className="design-type-regular text-muted-foreground">
                 Create at least one living lab entity on the{' '}
-                <Link to="/lab/control" className="underline font-medium text-foreground">
+                <Link to="/lab/control" className="design-type-emphasis underline text-foreground">
                   Control
                 </Link>{' '}
                 page before mining here.
@@ -190,7 +190,7 @@ export function LabBlocksCard({
                 <select
                   id="lab-entity-mine-select"
                   className={cn(
-                    'flex h-10 w-full max-w-md rounded-md border border-input bg-background px-3 py-2 text-sm',
+                    'design-type-addresses flex h-10 w-full max-w-md rounded-md border border-input bg-background px-3 py-2',
                     'ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                   )}
                   value={selectedLabEntityId ?? ''}
@@ -208,7 +208,7 @@ export function LabBlocksCard({
               </div>
             )}
             {ownerType === LabOwnerType.Wallet && activeWallet && (
-              <p className="text-sm text-muted-foreground">Mining to: {activeWallet.name}</p>
+              <p className="design-type-regular text-muted-foreground">Mining to: {activeWallet.name}</p>
             )}
           </div>
           <div className="border-t border-border pt-4">

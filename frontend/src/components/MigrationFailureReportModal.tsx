@@ -54,12 +54,12 @@ export function MigrationFailureReportModal({
       )}
     >
       <div className="flex max-h-[min(50vh,420px)] flex-col gap-3 overflow-hidden">
-        <p className="text-sm text-muted-foreground">
+        <p className="design-type-regular text-muted-foreground">
           A diagnostic file was saved on this device. You can copy the report below or export the
           same file from Settings → Data Backups.
         </p>
         <pre
-          className="min-h-0 flex-1 overflow-auto rounded-md border bg-muted/40 p-3 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap text-foreground"
+          className="design-type-addresses min-h-0 flex-1 overflow-auto rounded-md border bg-muted/40 p-3 break-words whitespace-pre-wrap text-foreground"
           tabIndex={0}
         >
           {reportText}

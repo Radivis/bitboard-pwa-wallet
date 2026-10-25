@@ -129,7 +129,7 @@ export function WalletTopBar({
                 </button>
               )}
               {hasMultipleWallets && walletDisplayName !== null && (
-                <span className="design-ui hidden max-w-48 truncate text-base font-semibold text-[var(--design-text-regular)] md:block">
+                <span className="design-type-emphasis design-ui hidden max-w-48 truncate text-[var(--design-text-regular)] md:block">
                   {walletDisplayName}
                 </span>
               )}

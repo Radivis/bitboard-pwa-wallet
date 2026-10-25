@@ -84,7 +84,7 @@ export async function goToArkadeBoardPage(page: Page): Promise<void> {
 
 export async function readBoardingAddress(page: Page): Promise<string> {
   await goToArkadeBoardPage(page)
-  const addressLocator = page.locator('.font-mono.text-xs').first()
+  const addressLocator = page.locator('.design-type-addresses:not(input):not(textarea):not(select)').first()
   await expect
     .poll(
       async () => {

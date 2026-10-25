@@ -29,13 +29,13 @@ export function LibraryIndexPage() {
     <div className="space-y-6">
       <PageHeader title="Library" icon={List} variant="area" />
 
-      <p className="text-sm text-muted-foreground">
+      <p className="design-type-regular text-muted-foreground">
         In-app guides and reference material. Articles are fixed for accuracy. Use the bottom bar to
         browse by tag, favorites, or history.
       </p>
 
       <div className="space-y-2">
-        <label htmlFor="library-search" className="text-sm font-medium text-foreground">
+        <label htmlFor="library-search" className="design-type-emphasis text-foreground">
           Search
         </label>
         <DesignInput

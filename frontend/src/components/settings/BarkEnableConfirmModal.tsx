@@ -52,7 +52,7 @@ export function BarkEnableConfirmModal({
         </>
       )}
     >
-      <div className="space-y-4 text-sm text-muted-foreground">
+      <div className="design-type-regular space-y-4 text-muted-foreground">
         <DialogDescription className="sr-only">
           Confirm that you understand Bark is a new feature and how to use it safely before
           enabling.

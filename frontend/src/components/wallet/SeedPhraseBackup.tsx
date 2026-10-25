@@ -143,7 +143,7 @@ export function SeedPhraseBackup() {
               Seed Phrase Backup
             </DesignCardTitle>
             {noMnemonicBackupFlag && (
-              <p className="text-sm font-bold text-destructive">
+              <p className="design-type-emphasis text-destructive">
                 No backup of the seed phrase has been recorded for this wallet.
                 Use “Show Seed Phrase” in a private place, write the words down,
                 and store them safely.
@@ -166,7 +166,7 @@ export function SeedPhraseBackup() {
               {loading ? 'Decrypting...' : 'Show Seed Phrase'}
             </DesignButton>
             {error && !showPasswordPrompt ? (
-              <p className="text-sm text-destructive">{error}</p>
+              <p className="design-type-regular text-destructive">{error}</p>
             ) : null}
           </DesignCardContent>
         </DesignCard>
@@ -222,7 +222,7 @@ export function SeedPhraseBackup() {
             words={mnemonicWords}
             columns={mnemonicWords.length > 12 ? 4 : 3}
           />
-          <div className="rounded-md bg-red-50 p-3 text-sm text-red-800 dark:bg-red-900/30 dark:text-red-200">
+          <div className="design-type-regular rounded-md bg-red-50 p-3 text-red-800 dark:bg-red-900/30 dark:text-red-200">
             Never share these words with anyone. Anyone who has them can steal
             your funds.
           </div>

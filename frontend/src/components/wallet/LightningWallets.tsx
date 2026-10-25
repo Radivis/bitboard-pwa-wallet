@@ -176,25 +176,25 @@ function WalletRow({
           onClick={onSetActive}
         >
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-medium">{wallet.label}</p>
-            <Badge variant="outline" className="text-xs">
+            <p className="design-type-emphasis">{wallet.label}</p>
+            <Badge variant="outline" className="design-type-regular">
               {NETWORK_LABELS[wallet.networkMode]}
             </Badge>
-            <Badge variant="outline" className="text-xs">
+            <Badge variant="outline" className="design-type-regular">
               {walletTypeBadgeLabel(wallet.config.type)}
             </Badge>
             {isActive && (
-              <Badge variant="default" className="text-xs">
+              <Badge variant="default" className="design-type-regular">
                 Active
               </Badge>
             )}
             {showNetworkMismatch && (
-              <Badge variant="destructive" className="text-xs">
+              <Badge variant="destructive" className="design-type-regular">
                 Probable network mismatch
               </Badge>
             )}
           </div>
-          <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">
+          <div className="design-type-regular flex flex-col gap-0.5 text-muted-foreground">
             {balanceQuery.isPending ? (
               <span className="flex items-center gap-1">
                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -205,7 +205,7 @@ function WalletRow({
             ) : (
               <>
                 <span>
-                  <span className="design-mono tabular-nums">
+                  <span className="design-type-addresses tabular-nums">
                     {balanceQuery.data.balanceSats.toLocaleString()}{' '}
                     {getPrefixedBitcoinDisplayUnitLabel('sat', wallet.networkMode)}
                   </span>
@@ -217,7 +217,7 @@ function WalletRow({
                 </span>
                 {balanceQuery.data.isStaleBalance &&
                   balanceQuery.data.balanceSnapshotAt != null && (
-                    <span className="text-[11px] text-amber-700/90 dark:text-amber-400/90">
+                    <span className="design-type-regular text-amber-700/90 dark:text-amber-400/90">
                       Last saved in this app:{' '}
                       {new Date(
                         balanceQuery.data.balanceSnapshotAt,
@@ -229,12 +229,12 @@ function WalletRow({
           </div>
         </button>
         {showNetworkMismatch && (
-          <p className="text-xs text-amber-700 dark:text-amber-400">
+          <p className="design-type-regular text-amber-700 dark:text-amber-400">
             The Lightning wallet&apos;s block height differs from your Esplora
             tip by more than {NWC_ESPLORA_BLOCK_HEIGHT_TOLERANCE} blocks. Confirm
             this NWC wallet runs on the same chain as the Esplora endpoint for{' '}
             {NETWORK_LABELS[wallet.networkMode]} in{' '}
-            <Link to="/settings" className="font-medium underline">
+            <Link to="/settings" className="design-type-emphasis underline">
               Settings
             </Link>
             .
@@ -339,11 +339,11 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
 
   return (
     <div className="space-y-4 rounded-lg border p-4">
-      <h4 className="text-sm font-medium">Connect Lightning Wallet</h4>
+      <h4 className="design-type-emphasis">Connect Lightning Wallet</h4>
 
       <div className="space-y-3">
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Type</Label>
+          <Label className="design-type-regular text-muted-foreground">Type</Label>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
             <InfomodeWrapper
               infoId="connect-lightning-nwc-type"
@@ -409,7 +409,7 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
             placeholder="nostr+walletconnect://..."
           />
           {connectionString.trim().length > 0 && !connectionStringValid && (
-            <p className="text-xs text-destructive">
+            <p className="design-type-regular text-destructive">
               Must start with nostr+walletconnect://
             </p>
           )}
@@ -417,11 +417,11 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
 
         {testSucceeded && testMutation.data.ok && (
           <div className="space-y-1">
-            <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+            <div className="design-type-regular flex items-center gap-2 text-green-600 dark:text-green-400">
               <CheckCircle className="h-4 w-4" />
               Connected to &ldquo;{testMutation.data.walletName}&rdquo;
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="design-type-regular text-muted-foreground">
               Network reported by wallet:{' '}
               {NETWORK_LABELS[testMutation.data.lightningNetworkMode]}
             </p>
@@ -439,13 +439,13 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
           />
         </div>
         {testMutation.isSuccess && !testMutation.data.ok && (
-          <div className="flex items-center gap-2 text-sm text-destructive">
+          <div className="design-type-regular flex items-center gap-2 text-destructive">
             <XCircle className="h-4 w-4" />
             {testMutation.data.error}
           </div>
         )}
         {testMutation.isError && (
-          <div className="flex items-center gap-2 text-sm text-destructive">
+          <div className="design-type-regular flex items-center gap-2 text-destructive">
             <XCircle className="h-4 w-4" />
             {testMutation.error instanceof Error
               ? testMutation.error.message
@@ -554,7 +554,7 @@ export function LightningWallets() {
 
           {!hasConnections && !showConnectForm && (
             <div className="space-y-3 text-center">
-              <p className="text-sm text-muted-foreground">
+              <p className="design-type-regular text-muted-foreground">
                 No Lightning wallet connected yet. Connect one via NWC to start
                 sending and receiving Lightning payments.
               </p>

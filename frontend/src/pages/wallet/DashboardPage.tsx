@@ -247,7 +247,7 @@ function BalanceDesignCard() {
             </div>
           </div>
           {networkMode === 'lab' ? (
-            <p className="text-sm font-bold text-foreground">
+            <p className="design-type-emphasis text-foreground">
               {LAB_WALLET_BALANCE_DISCLAIMER}
             </p>
           ) : null}
@@ -257,7 +257,7 @@ function BalanceDesignCard() {
             data-rail-onchain-load={onchainRail.loadPhase}
             data-rail-onchain-sync={onchainRail.syncPhase}
           >
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <p className="design-type-metadata mb-2 uppercase text-muted-foreground">
               {walletOnChainSectionLabel(networkMode)}
             </p>
             {onchainLoadSnapshot.loadPhase === 'load-error' ? (
@@ -300,7 +300,7 @@ function BalanceDesignCard() {
                   />
                 ) : null}
             {onChainDisplay.showBreakdown && (
-              <ul className="mt-3 space-y-1.5 text-sm">
+              <ul className="design-type-regular mt-3 space-y-1.5">
                 {onChainDisplay.confirmedSats > 0 && (
                   <li className="flex justify-between gap-2 text-muted-foreground">
                     <span>Spendable (settled)</span>
@@ -421,7 +421,7 @@ function BalanceDesignCard() {
           <BarkDashboardBalance />
 
           {isLightningBalancesSectionLoading && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="design-type-regular flex items-center gap-2 text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading Lightning balances…
             </div>
@@ -432,7 +432,7 @@ function BalanceDesignCard() {
                 data-rail-lightning-load={lightningRail.loadPhase}
                 data-rail-lightning-sync={lightningRail.syncPhase}
               >
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <p className="design-type-metadata mb-2 uppercase text-muted-foreground">
                   Lightning (NWC)
                 </p>
                 {showLightningLoadError ? (
@@ -447,11 +447,11 @@ function BalanceDesignCard() {
                 ) : (
                   <>
                 {lightningBalanceRows.length === 1 ? (
-                  <p className="mb-3 text-sm font-semibold text-foreground">
+                  <p className="design-type-emphasis mb-3 text-foreground">
                     {lightningBalanceRows[0].label}
                   </p>
                 ) : (
-                  <p className="mb-3 text-xs text-muted-foreground">
+                  <p className="design-type-regular mb-3 text-muted-foreground">
                     Total across {lightningBalanceRows.length} connected wallets
                   </p>
                 )}
@@ -460,13 +460,13 @@ function BalanceDesignCard() {
                   {...fiatAmountProps}
                   amountTypography="largeBalances"
                 />
-                <ul className="mt-3 space-y-1.5 border-t border-border pt-3 text-sm">
+                <ul className="design-type-regular mt-3 space-y-1.5 border-t border-border pt-3">
                   {lightningBalanceRows.map((row) => (
                     <li
                       key={row.connectionId}
                       className="flex justify-between gap-2"
                     >
-                      <span className="min-w-0 truncate font-medium text-foreground">
+                      <span className="design-type-emphasis min-w-0 truncate text-foreground">
                         {row.label}
                       </span>
                       <span className="shrink-0 text-muted-foreground">
@@ -485,7 +485,7 @@ function BalanceDesignCard() {
                             />
                             {row.isStaleBalance ? (
                               <span
-                                className="ml-1 text-xs font-normal text-amber-700 dark:text-amber-400"
+                                className="design-type-regular ml-1 text-amber-700 dark:text-amber-400"
                                 data-testid="lightning-balance-cached-tag"
                               >
                                 cached
@@ -519,7 +519,7 @@ function BalanceDesignCard() {
                   />
                 )}
                 {lightningBalanceRows.some((balanceRow) => balanceRow.error != null) && (
-                  <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+                  <p className="design-type-regular mt-2 text-amber-700 dark:text-amber-400">
                     Some Lightning wallets could not be reached and have no saved
                     balance yet; those show “—” and are not included in the
                     total.
@@ -675,7 +675,7 @@ function RecentTransactions() {
           <DesignCardTitle>Recent Transactions</DesignCardTitle>
         </DesignCardHeader>
         <DesignCardContent>
-          <p className="text-sm text-muted-foreground py-4">
+          <p className="design-type-regular text-muted-foreground py-4">
             Loading lab...
           </p>
         </DesignCardContent>
@@ -693,19 +693,19 @@ function RecentTransactions() {
           isLightningEnabled &&
           hasLnWalletForNetwork &&
           lightningHistoryQuery.isLoading && (
-          <p className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
+          <p className="design-type-regular mb-3 flex items-center gap-2 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading Lightning activity…
           </p>
         )}
         {networkMode !== 'lab' && arkadeActive && arkadeHistoryQuery.isLoading && (
-          <p className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
+          <p className="design-type-regular mb-3 flex items-center gap-2 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading Arkade activity…
           </p>
         )}
         {networkMode !== 'lab' && barkActive && barkHistoryQuery.isLoading && (
-          <p className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
+          <p className="design-type-regular mb-3 flex items-center gap-2 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading Bark activity…
           </p>
@@ -734,7 +734,7 @@ function RecentTransactions() {
             <div className="rounded-full bg-muted p-3">
               <Wallet className="h-6 w-6 text-muted-foreground" />
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="design-type-regular text-muted-foreground">
               No activity yet. On-chain transactions appear after you sync;
               Arkade payments appear when your Arkade session is open;
               Lightning payments appear when your NWC wallet reports them
@@ -746,7 +746,7 @@ function RecentTransactions() {
             <div className="rounded-full bg-muted p-3">
               <Wallet className="h-6 w-6 text-muted-foreground" />
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="design-type-regular text-muted-foreground">
               No transactions yet. Mine blocks or send to see activity.
             </p>
           </div>

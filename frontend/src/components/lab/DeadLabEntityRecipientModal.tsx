@@ -44,7 +44,7 @@ export function DeadLabEntityRecipientModal({
       <DialogDescription className="text-left">
         <span className="inline-flex flex-wrap items-center gap-2">
           You are trying to send to an address belonging to the DEAD Lab entity{' '}
-          <span className="font-medium">{entityDisplayName}</span>
+          <span className="design-type-emphasis">{entityDisplayName}</span>
           {addressType != null ? <LabAddressTypeBadge addressType={addressType} /> : null}
           . That is generally not a good idea. Proceed anyway?
         </span>

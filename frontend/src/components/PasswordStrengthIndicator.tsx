@@ -51,7 +51,7 @@ export function PasswordStrengthIndicator({
           />
         ))}
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="design-type-regular text-muted-foreground">
         Strength: {STRENGTH_LABELS[score]}
         {password.length < APP_PASSWORD_MIN_LENGTH && (
           <span className="ml-1">

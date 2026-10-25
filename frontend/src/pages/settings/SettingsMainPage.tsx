@@ -47,7 +47,7 @@ export function SettingsMainPage() {
     fiatRateProvider,
   )
   const fiatSettingsSelectClassName =
-    'rounded-md border border-input bg-background px-2 py-1 text-sm font-medium text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+    'design-type-addresses rounded-md border border-input bg-background px-2 py-1 text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
   return (
     <div className="space-y-6">
@@ -111,7 +111,7 @@ export function SettingsMainPage() {
         </DesignCardHeader>
         <DesignCardContent className="space-y-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <span className="text-sm text-muted-foreground">Default Bitcoin unit</span>
+            <span className="design-type-regular text-muted-foreground">Default Bitcoin unit</span>
             <BitcoinUnitSelect
               value={defaultBitcoinUnit}
               onChange={setDefaultBitcoinUnit}
@@ -119,7 +119,7 @@ export function SettingsMainPage() {
             />
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <span className="text-sm text-muted-foreground">Currency rate service</span>
+            <span className="design-type-regular text-muted-foreground">Currency rate service</span>
             <select
               className={fiatSettingsSelectClassName}
               value={fiatRateProvider}
@@ -142,11 +142,11 @@ export function SettingsMainPage() {
               onDefaultFiatCurrencyChange={setDefaultFiatCurrency}
               supportedCurrenciesQuery={fiatProviderSupportedCurrenciesQuery}
             />
-            <p className="text-xs text-muted-foreground sm:text-right">
+            <p className="design-type-regular text-muted-foreground sm:text-right">
               Available options depend on the selected rate service.
             </p>
             {fiatProviderSupportedCurrenciesQuery.isError ? (
-              <p className="text-xs text-destructive sm:text-right" role="alert">
+              <p className="design-type-regular text-destructive sm:text-right" role="alert">
                 Could not load the currency list for this service. Try again or pick
                 another rate service.
               </p>

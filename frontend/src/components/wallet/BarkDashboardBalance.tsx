@@ -87,7 +87,7 @@ export function BarkDashboardBalance() {
         ) : null}
         {showEstablishingSession ? <BarkSessionLoading embedded /> : null}
         {showSyncPlaceholder ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="design-type-regular flex items-center gap-2 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
             Loading…
           </div>
@@ -110,7 +110,7 @@ export function BarkDashboardBalance() {
         ) : null}
         {spendableSats != null && (lockedSats > 0 || exitingSats > 0) ? (
           <div
-            className="space-y-1 text-sm text-muted-foreground"
+            className="design-type-regular space-y-1 text-muted-foreground"
             data-testid="dashboard-bark-balance-subbalances"
           >
             <BarkSubBalanceRow
@@ -185,7 +185,7 @@ function BarkRefreshStatusLine({ status }: { status: BarkRefreshStatus | undefin
   const notice = status == null ? null : barkRefreshNoticeText(status)
   if (notice != null) {
     return (
-      <p className="text-sm text-muted-foreground" data-testid="dashboard-bark-refresh-notice">
+      <p className="design-type-regular text-muted-foreground" data-testid="dashboard-bark-refresh-notice">
         {notice}
       </p>
     )
@@ -193,7 +193,7 @@ function BarkRefreshStatusLine({ status }: { status: BarkRefreshStatus | undefin
   const warning = status == null ? null : barkRefreshWarningText(status)
   if (warning == null) return null
   return (
-    <p className="text-sm text-destructive" data-testid="dashboard-bark-refresh-warning">
+    <p className="design-type-regular text-destructive" data-testid="dashboard-bark-refresh-warning">
       {warning}
     </p>
   )

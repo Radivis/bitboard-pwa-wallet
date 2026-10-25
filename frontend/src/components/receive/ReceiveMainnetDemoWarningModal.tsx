@@ -30,7 +30,7 @@ export function ReceiveMainnetDemoWarningModal({
         </DesignButton>
       )}
     >
-      <div className="space-y-3 text-sm text-muted-foreground">
+      <div className="design-type-regular space-y-3 text-muted-foreground">
         <DialogDescription className="sr-only">
           Warning that Bitcoin Codex is in demo mode on Mainnet and funds are not secure.
         </DialogDescription>

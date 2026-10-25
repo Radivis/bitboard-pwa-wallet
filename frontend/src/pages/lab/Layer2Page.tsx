@@ -18,7 +18,7 @@ export function Layer2Page() {
           <DesignCardDescription>Lab layer two</DesignCardDescription>
         </DesignCardHeader>
         <DesignCardContent>
-          <p className="text-sm text-muted-foreground">
+          <p className="design-type-regular text-muted-foreground">
             Lightning in the lab is under construction.
           </p>
         </DesignCardContent>

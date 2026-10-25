@@ -110,7 +110,7 @@ export function ArkadeBoardPage() {
             </InfomodeWrapper>
           </DesignCardTitle>
         </DesignCardHeader>
-        <DesignCardContent className="space-y-4 text-sm">
+        <DesignCardContent className="design-type-regular space-y-4">
           <ArkadePendingBatchIntentBanner />
           <ol className="list-decimal space-y-2 pl-5">
             <li>Copy the boarding address below.</li>
@@ -141,7 +141,7 @@ export function ArkadeBoardPage() {
                 as="span"
               >
                 <p
-                  className="break-all rounded-md border bg-muted/40 p-2 font-mono text-xs"
+                  className="design-type-addresses break-all rounded-md border bg-muted/40 p-2"
                   data-testid="arkade-boarding-address"
                 >
                   {boardingAddress}
@@ -176,8 +176,8 @@ export function ArkadeBoardPage() {
           {boardingStatusQuery.isPending || boardingStatusQuery.isFetching ? (
             <p className="text-muted-foreground">Checking boarding UTXOs…</p>
           ) : boardingStatus ? (
-            <div className="rounded-md border bg-muted/20 p-3 text-sm">
-              <p className="font-medium">On-chain boarding status</p>
+            <div className="design-type-regular rounded-md border bg-muted/20 p-3">
+              <p className="design-type-emphasis">On-chain boarding status</p>
               <ul className="mt-2 space-y-1 text-muted-foreground">
                 <li>
                   <InfomodeWrapper
@@ -187,14 +187,14 @@ export function ArkadeBoardPage() {
                     as="span"
                   >
                     Ready to settle:{' '}
-                    <span className="design-mono tabular-nums">
+                    <span className="design-type-addresses tabular-nums">
                       {formatSats(boardingStatus.spendableSats)}
                     </span>
                   </InfomodeWrapper>
                 </li>
                 <li>
                   Pending confirmation:{' '}
-                  <span className="design-mono tabular-nums">
+                  <span className="design-type-addresses tabular-nums">
                     {formatSats(boardingStatus.pendingSats)}
                   </span>
                 </li>
@@ -206,7 +206,7 @@ export function ArkadeBoardPage() {
                     as="span"
                   >
                     Unilateral exit only:{' '}
-                    <span className="design-mono tabular-nums">
+                    <span className="design-type-addresses tabular-nums">
                       {formatSats(boardingStatus.expiredSats)}
                     </span>
                   </InfomodeWrapper>

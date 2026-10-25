@@ -19,9 +19,9 @@ import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore
 export type BitcoinAmountDisplaySize = 'sm' | 'md' | 'lg'
 
 const SIZE_CLASSES: Record<BitcoinAmountDisplaySize, string> = {
-  sm: 'text-sm',
-  md: 'text-base',
-  lg: 'text-3xl font-semibold',
+  sm: designTypeClassName.smallBalances,
+  md: designTypeClassName.smallBalances,
+  lg: designTypeClassName.largeBalances,
 }
 
 type BitcoinAmountDisplayProps = {
@@ -83,12 +83,9 @@ export function BitcoinAmountDisplay({
   const interactiveUnit = allowUnitToggle
   const passThroughForParentLink = interactiveUnit
   const numericClass = cn(
-    amountTypography != null
-      ? designTypeClassName[amountTypography]
-      : cn(SIZE_CLASSES[size], 'design-mono'),
+    amountTypography != null ? designTypeClassName[amountTypography] : SIZE_CLASSES[size],
     tabular && 'tabular-nums',
   )
-  const unitWeightClass = amountTypography == null ? 'font-medium' : undefined
 
   return (
     <span
@@ -108,7 +105,7 @@ export function BitcoinAmountDisplay({
         {formatted}
       </span>{' '}
       {!allowUnitToggle ? (
-        <span className={cn(unitWeightClass, tabular && 'tabular-nums')}>
+        <span className={cn(tabular && 'tabular-nums')}>
           <NetworkUnitPrefix indicator={networkUnitIndicator} />
           {unitLabel}
         </span>
@@ -133,7 +130,6 @@ export function BitcoinAmountDisplay({
           aria-label={accessibleUnitLabel}
           className={cn(
             'pointer-events-auto inline rounded px-0.5 underline decoration-dotted underline-offset-2 hover:bg-muted/60',
-            unitWeightClass,
             tabular && 'tabular-nums',
           )}
           onClick={(e) => {

@@ -40,7 +40,7 @@ export function WalletBackupImportBypassModal({
         </>
       )}
     >
-      <div className="space-y-3 text-left text-sm text-muted-foreground">
+      <div className="design-type-regular space-y-3 text-left text-muted-foreground">
         <DialogDescription className="sr-only">
           Verification failed after three password attempts. Choose whether to abort or import
           without signature verification.

@@ -52,10 +52,10 @@ function TagSection({
         id={`library-tag-${tagId}`}
         className="group"
       >
-        <summary className="design-ui cursor-pointer list-none px-6 py-6 font-semibold text-[var(--design-text-card-title)] marker:content-none group-open:pb-4 [&::-webkit-details-marker]:hidden">
+        <summary className="design-type-emphasis design-ui cursor-pointer list-none px-6 py-6 text-[var(--design-text-card-title)] marker:content-none group-open:pb-4 [&::-webkit-details-marker]:hidden">
           <span className="inline-flex w-full items-center justify-between gap-2">
             <span>{getTagLabel(tagId)}</span>
-            <span className="text-xs font-normal text-[var(--design-text-card-description)]">
+            <span className="design-type-regular text-[var(--design-text-card-description)]">
               {articles.length} article{articles.length === 1 ? '' : 's'}
             </span>
           </span>
@@ -86,7 +86,7 @@ export function TagsPage() {
     <div className="space-y-6">
       <PageHeader title="Tags" icon={TagsIcon} />
 
-      <p className="text-sm text-muted-foreground">
+      <p className="design-type-regular text-muted-foreground">
         Expand a tag to see articles that reference it. The same article can appear under several
         tags.
       </p>

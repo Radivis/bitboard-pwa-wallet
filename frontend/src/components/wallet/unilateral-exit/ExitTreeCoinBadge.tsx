@@ -47,7 +47,7 @@ export function ExitTreeCoinBadge({
       data-testid={exitCoinBadgeTestId(stage, testIdPrefix, testIdSuffix)}
     >
       {count > 1 && (
-        <span className="text-[10px] font-semibold leading-none">{count}×</span>
+        <span className="design-type-metadata">{count}×</span>
       )}
       <StageIcon className="size-3" aria-hidden />
     </div>

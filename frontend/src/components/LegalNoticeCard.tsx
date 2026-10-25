@@ -26,7 +26,7 @@ export function LegalNoticeCard() {
   return (
     <DesignCard id="legal-notice">
       <DesignCardHeader className="flex-row flex-wrap items-start justify-between gap-3">
-        <DesignCardTitle className="leading-tight">{hubTitle}</DesignCardTitle>
+        <DesignCardTitle>{hubTitle}</DesignCardTitle>
         <LegalLocaleSwitcher
           activeLocale={locale}
           onLocaleChange={setLocale}

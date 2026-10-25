@@ -22,11 +22,11 @@ export function DeveloperContactCard() {
     <DesignCard>
       <DesignCardHeader>
         <DesignCardTitle>Developer Contact Info</DesignCardTitle>
-        <DesignCardDescription className="font-medium text-[var(--design-text-regular)]">
+        <DesignCardDescription className="design-type-emphasis text-[var(--design-text-regular)]">
           Michael Hrenka
         </DesignCardDescription>
       </DesignCardHeader>
-      <DesignCardContent className="gap-2 text-sm">
+      <DesignCardContent className="design-type-regular gap-2">
         <p>
           <span className="text-muted-foreground">E-Mail: </span>
           <a className={linkClass} href={`mailto:${EMAIL}`}>

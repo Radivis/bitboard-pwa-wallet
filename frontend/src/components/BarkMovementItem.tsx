@@ -52,7 +52,7 @@ export function BarkMovementItem({ movement }: BarkMovementItemProps) {
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-medium">{STATUS_LABEL[movement.status]}</p>
+            <p className="design-type-emphasis">{STATUS_LABEL[movement.status]}</p>
             <DashboardActivityRailBadge
               icon={Dog}
               label={barkMovementActivityLabel(movement.subsystemName, movement.subsystemKind)}
@@ -61,7 +61,7 @@ export function BarkMovementItem({ movement }: BarkMovementItemProps) {
           {timestamp != null && (
             <button
               type="button"
-              className="text-xs text-muted-foreground hover:underline"
+              className="design-type-regular text-muted-foreground hover:underline"
               onClick={(event) => {
                 event.stopPropagation()
                 setShowAbsoluteTime(!showAbsoluteTime)
@@ -76,7 +76,7 @@ export function BarkMovementItem({ movement }: BarkMovementItemProps) {
         <div className="text-right">
           <p
             className={cn(
-              'text-sm font-medium',
+              'design-type-emphasis',
               isDecrease ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400',
             )}
             data-testid={`bark-movement-amount-${movement.id}`}
@@ -89,7 +89,7 @@ export function BarkMovementItem({ movement }: BarkMovementItemProps) {
         </div>
       </div>
       {expanded ? (
-        <div className="mt-3 space-y-1 border-t border-border pt-3 text-xs text-muted-foreground">
+        <div className="design-type-regular mt-3 space-y-1 border-t border-border pt-3 text-muted-foreground">
           <p>Kind: {movement.subsystemKind}</p>
           {movement.offchainFeeSats > 0 ? (
             <p>Off-chain fee: {movement.offchainFeeSats} sats</p>

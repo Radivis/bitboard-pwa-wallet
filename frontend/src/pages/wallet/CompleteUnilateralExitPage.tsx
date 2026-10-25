@@ -126,7 +126,7 @@ function CompleteUnilateralExitInProgressList({
 }) {
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <div className="design-type-regular flex items-center gap-2 text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
         Loading exits in progress…
       </div>
@@ -134,7 +134,7 @@ function CompleteUnilateralExitInProgressList({
   }
   if (rows?.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground" data-testid="arkade-unilateral-complete-empty">
+      <p className="design-type-regular text-muted-foreground" data-testid="arkade-unilateral-complete-empty">
         No unilateral exits in progress. Start an exit first, then return here after unroll.
       </p>
     )
@@ -144,7 +144,7 @@ function CompleteUnilateralExitInProgressList({
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">
+        <p className="design-type-regular text-muted-foreground">
           {selectedOutpoints.length} selected ·{' '}
           <BitcoinAmountDisplay amountSats={selectedTotalSats} size="sm" />
         </p>
@@ -162,7 +162,7 @@ function CompleteUnilateralExitInProgressList({
       <ul className="max-h-96 space-y-2 overflow-y-auto rounded-md border p-2">
         {rows?.map((row) => (
           <li key={row.id}>
-            <label className="flex cursor-pointer items-start gap-2 text-sm">
+            <label className="design-type-regular flex cursor-pointer items-start gap-2">
               <DesignCheckbox
                 checked={includesArkadeVtxoOutpoint(selectedOutpoints, {
                   txid: row.txid,
@@ -172,11 +172,11 @@ function CompleteUnilateralExitInProgressList({
               />
               <span className="flex-1 break-all">
                 <BitcoinAmountDisplay amountSats={row.amountSats} size="sm" />
-                <span className="block font-mono text-xs text-muted-foreground">
+                <span className="design-type-addresses block text-muted-foreground">
                   {row.txid}:{row.vout}
                 </span>
                 <span
-                  className="text-xs text-muted-foreground"
+                  className="design-type-regular text-muted-foreground"
                   data-testid="arkade-unilateral-complete-row-phase"
                 >
                   {row.virtualStatusState}
@@ -226,14 +226,14 @@ function CompleteUnilateralExitFeeDetails({
         onSelectCustomMode={completionFeeRateUi.handleSelectCustomMode}
       />
       {completionFeeQuery.isLoading && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="design-type-regular flex items-center gap-2 text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
           Estimating completion fee…
         </div>
       )}
       {completionFeeEstimate && (
         <div
-          className="space-y-1 rounded-md border bg-muted/40 p-2 text-xs"
+          className="design-type-regular space-y-1 rounded-md border bg-muted/40 p-2"
           data-testid="arkade-unilateral-completion-fee"
         >
           <p>
@@ -261,7 +261,7 @@ function CompleteUnilateralExitFeeDetails({
       )}
       {missingBlocktimeWarning != null && (
         <div
-          className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-200"
+          className="design-type-regular rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-amber-800 dark:text-amber-200"
           data-testid="arkade-complete-blocktime-warning"
         >
           <p>{missingBlocktimeWarning.summary}</p>
@@ -305,7 +305,7 @@ export function CompleteUnilateralExitContent({ exitFlow }: CompleteUnilateralEx
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
+      <p className="design-type-regular text-muted-foreground">
         <InfomodeWrapper
           infoId={ARKADE_INFOMODE_IDS.unilateralExit}
           infoComponent={ArkadeUnilateralExitInfomodeContent}
@@ -341,7 +341,7 @@ export function CompleteUnilateralExitContent({ exitFlow }: CompleteUnilateralEx
         <div className="flex items-center gap-2">
           <DesignInput
             id="arkade-complete-batch-destination"
-            className="font-mono"
+            className="design-type-addresses"
             value={completeDestination}
             onChange={(event) => setCompleteDestination(event.target.value)}
             autoComplete="off"
@@ -372,7 +372,7 @@ export function CompleteUnilateralExitContent({ exitFlow }: CompleteUnilateralEx
       />
 
       {completeExitMutation.isError && (
-        <p className="text-sm text-destructive" data-testid="arkade-complete-error">
+        <p className="design-type-regular text-destructive" data-testid="arkade-complete-error">
           Complete exit failed:{' '}
           {userFacingErrorMessage(completeExitMutation.error) || 'Unknown error'}
         </p>

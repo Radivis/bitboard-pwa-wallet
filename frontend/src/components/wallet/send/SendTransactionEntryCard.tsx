@@ -316,7 +316,7 @@ export function SendTransactionEntryCard({
                 disabled={isPending}
               />
               {recipient && !recipientFormatValid && (
-                <p className="text-xs text-destructive">
+                <p className="design-type-regular text-destructive">
                   {sendRecipientFormatErrorMessage({
                     isLightningSendMode,
                     isArkadeSendMode,
@@ -328,7 +328,7 @@ export function SendTransactionEntryCard({
                 </p>
               )}
               {recipient && isLightningSendMode && !lightningRecipientOk && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">
+                <p className="design-type-regular text-amber-600 dark:text-amber-400">
                   {hasAnyLightningConnection ? (
                     <>
                       No Lightning wallet for {NETWORK_LABELS[networkMode]}. Connect
@@ -364,7 +364,7 @@ export function SendTransactionEntryCard({
                     />
                     <Label
                       htmlFor="bolt11-signet-family-confirm"
-                      className="cursor-pointer text-xs font-normal"
+                      className="design-type-regular cursor-pointer"
                     >
                       {bolt11SignetFamilyConfirmationText(networkMode)}
                     </Label>
@@ -373,10 +373,10 @@ export function SendTransactionEntryCard({
               {isLightningSendMode &&
                 isValidBolt11Invoice(normalizedRecipient) &&
                 bolt11NetworkMismatch && (
-                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                  <p className="design-type-regular text-amber-700 dark:text-amber-400">
                     This invoice is for a different Bitcoin network than your
                     current mode. Switch network in{' '}
-                    <Link to="/settings" className="font-medium underline">
+                    <Link to="/settings" className="design-type-emphasis underline">
                       Settings
                     </Link>
                     .
@@ -385,14 +385,14 @@ export function SendTransactionEntryCard({
               {isLightningSendMode &&
                 isValidBolt11Invoice(normalizedRecipient) &&
                 !bolt11DecodeOk && (
-                  <p className="text-xs text-destructive">
+                  <p className="design-type-regular text-destructive">
                     Could not read this BOLT11 invoice. Check the payment request
                     and try again.
                   </p>
                 )}
               {isLightningSendMode &&
                 !isLightningPayloadLengthOk(normalizedRecipient) && (
-                <p className="text-xs text-destructive">
+                <p className="design-type-regular text-destructive">
                   Payment request is too long (
                   {MAX_BOLT11_PAYMENT_REQUEST_LENGTH} characters max).
                 </p>
@@ -418,8 +418,8 @@ export function SendTransactionEntryCard({
             {isLightningSendMode &&
               decodedBolt11?.description != null &&
               decodedBolt11.description.length > 0 && (
-                <p className="text-sm text-muted-foreground">
-                  <span className="font-medium text-foreground">Memo: </span>
+                <p className="design-type-regular text-muted-foreground">
+                  <span className="design-type-emphasis text-foreground">Memo: </span>
                   {decodedBolt11.description}
                 </p>
               )}
@@ -454,7 +454,7 @@ export function SendTransactionEntryCard({
                   description="You cannot send on this network until you have funds. Receive Bitcoin first, then enter an amount here."
                 />
               ) : isLightningSendMode && !needsUserLightningAmount ? (
-                <div className="space-y-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm tabular-nums">
+                <div className="design-type-regular space-y-2 rounded-md border border-border bg-muted/30 px-3 py-2 tabular-nums">
                   <FiatBtcAmountDisplay
                     amountSats={lightningPayAmountSats}
                     showFiatLayout={showFiatLayout}
@@ -492,7 +492,7 @@ export function SendTransactionEntryCard({
                     disabled={isPending}
                   />
                   {mainnetFiatMode && useFiatAmountField && hasUsableFiatSpot && (
-                      <p className="text-sm text-muted-foreground">
+                      <p className="design-type-regular text-muted-foreground">
                         <span className="mr-1">≈</span>
                         <BitcoinAmountDisplay
                           amountSats={parsedAmountSats}
@@ -505,7 +505,7 @@ export function SendTransactionEntryCard({
                   {mainnetFiatMode && useFiatAmountField && !fiatRatesLoading && (
                     <>
                       {!hasUsableFiatSpot ? (
-                        <p className="text-xs text-destructive">
+                        <p className="design-type-regular text-destructive">
                           Exchange rate unavailable. Check your connection or rate
                           service in Settings.
                         </p>
@@ -514,7 +514,7 @@ export function SendTransactionEntryCard({
                   )}
                 </>
               )}
-              <div className="text-xs text-muted-foreground">
+              <div className="design-type-regular text-muted-foreground">
                 {isLightningSendMode ? (
                   <>
                     Lightning wallet:{' '}
@@ -558,7 +558,7 @@ export function SendTransactionEntryCard({
                 !isLightningSendMode &&
                 !isBarkSendMode &&
                 !isArkadeSendMode && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">
+                <p className="design-type-regular text-amber-600 dark:text-amber-400">
                   No balance. Mine blocks or make a transaction to your wallet in
                   the lab.
                 </p>

@@ -27,10 +27,10 @@ function GuideRow({
     <div className={rowClass}>
       <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
       <div className="min-w-0 flex-1 space-y-0.5">
-        <p className="text-xs font-medium leading-tight text-popover-foreground">
+        <p className="design-type-metadata text-popover-foreground">
           <ArticleLink slug={slug}>{title}</ArticleLink>
         </p>
-        <p className="text-xs leading-snug text-muted-foreground">{blurb}</p>
+        <p className="design-type-regular text-muted-foreground">{blurb}</p>
       </div>
     </div>
   )
@@ -48,14 +48,14 @@ export function NwcWalletOptionsInfomodeContent() {
         '[&_.text-primary]:text-primary [&_a]:underline-offset-2 [&_a]:hover:underline',
       )}
     >
-      <h2 className="text-sm font-semibold leading-tight text-popover-foreground">
+      <h2 className="design-type-emphasis text-popover-foreground">
         NWC-compatible wallets
       </h2>
-      <p className="text-xs leading-relaxed text-muted-foreground">
+      <p className="design-type-regular text-muted-foreground">
         Bitboard uses Nostr Wallet Connect (NIP-47). Pick a wallet that fits how you use
         Bitcoin and Lightning, then paste its NWC connection string below.
       </p>
-      <p className="text-xs leading-relaxed text-muted-foreground">
+      <p className="design-type-regular text-muted-foreground">
         Background:{' '}
         <ArticleLink slug="what-is-nostr">What is Nostr?</ArticleLink>
         {' · '}
@@ -63,7 +63,7 @@ export function NwcWalletOptionsInfomodeContent() {
       </p>
 
       <div className="space-y-1.5">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <h3 className="design-type-metadata uppercase text-muted-foreground">
           Simple
         </h3>
         <div className="space-y-1.5">
@@ -95,7 +95,7 @@ export function NwcWalletOptionsInfomodeContent() {
       </div>
 
       <div className="space-y-1.5">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <h3 className="design-type-metadata uppercase text-muted-foreground">
           Advanced
         </h3>
         <div className="space-y-1.5">

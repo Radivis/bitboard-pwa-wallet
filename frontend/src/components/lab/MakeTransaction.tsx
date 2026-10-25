@@ -103,13 +103,13 @@ export function LabMakeTransactionCard({
         <DesignCardContent className="gap-4">
           {txActionsDisabled ? (
             <p
-              className="text-sm text-amber-600 dark:text-amber-400"
+              className="design-type-regular text-amber-600 dark:text-amber-400"
               role="status"
             >
               No coins exist yet. Please mine some blocks on the{' '}
               <a
                 href="/lab/blocks"
-                className="font-medium underline underline-offset-2 text-amber-700 dark:text-amber-300"
+                className="design-type-emphasis underline underline-offset-2 text-amber-700 dark:text-amber-300"
               >
                 Blocks page
               </a>{' '}
@@ -139,14 +139,14 @@ export function LabMakeTransactionCard({
                   disabled={creatingRandomTransactions || txActionsDisabled}
                 />
                 {hasMinedBlocks && labEntitiesCount === 0 ? (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="design-type-regular text-muted-foreground">
                     Mining a block to a name enables random transactions.
                   </p>
                 ) : null}
                 {creatingRandomTransactions && randomBatchProgress != null ? (
                   <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
                     <LoadingSpinner text="Rolling random transaction data and signing lab transactions" />
-                    <p className="text-center text-sm text-muted-foreground">
+                    <p className="design-type-regular text-center text-muted-foreground">
                       Created {randomBatchProgress.created} of {randomBatchProgress.total}{' '}
                       random transactions
                     </p>
@@ -163,7 +163,7 @@ export function LabMakeTransactionCard({
                 </DesignButton>
                 {showRandomBatchConflictWarning ? (
                   <p
-                    className="text-sm text-amber-600 dark:text-amber-400"
+                    className="design-type-regular text-amber-600 dark:text-amber-400"
                     role="status"
                   >
                     You chose more random transactions than there are lab entities. That makes
@@ -184,7 +184,7 @@ export function LabMakeTransactionCard({
                   onChange={(e) => setFromAddress(e.target.value)}
                 />
                 {sendDisabledFromDeadEntity && deadFromEntityDisplayName ? (
-                  <p className="text-sm text-muted-foreground" role="status">
+                  <p className="design-type-regular text-muted-foreground" role="status">
                     This address belongs to DEAD lab entity {deadFromEntityDisplayName} — sending is
                     disabled.
                   </p>

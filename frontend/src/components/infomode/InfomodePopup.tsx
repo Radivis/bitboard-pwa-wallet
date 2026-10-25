@@ -108,10 +108,10 @@ export function InfomodePopup({
   const content =
     entry.kind === 'inline' ? (
       <div className="space-y-2">
-        <h2 className="text-base font-semibold leading-tight text-popover-foreground">
+        <h2 className="design-type-emphasis text-popover-foreground">
           {entry.title}
         </h2>
-        <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
+        <p className="design-type-regular whitespace-pre-line text-muted-foreground">
           {entry.text}
         </p>
       </div>

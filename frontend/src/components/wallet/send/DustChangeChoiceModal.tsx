@@ -64,10 +64,10 @@ export function DustChangeChoiceModal({
       )}
     >
       <DialogDescription asChild>
-        <div className="space-y-3 text-left text-sm text-muted-foreground">
+        <div className="design-type-regular space-y-3 text-left text-muted-foreground">
           <p>
             With your inputs and fee rate, sending exactly{' '}
-            <span className="font-medium text-foreground">
+            <span className="design-type-emphasis text-foreground">
               <BitcoinAmountDisplay amountSats={exactAmountSats} size="sm" />
             </span>{' '}
             would leave no viable change output due to the dust limit. The value that cannot be a valid change output
@@ -75,7 +75,7 @@ export function DustChangeChoiceModal({
           </p>
           <p>
             You can keep that exact payment to the recipient, or increase the payment to{' '}
-            <span className="font-medium text-foreground">
+            <span className="design-type-emphasis text-foreground">
               <BitcoinAmountDisplay amountSats={changeFreeMaxSats} size="sm" />
             </span>{' '}
             so more value goes to the recipient rather than to the fee.

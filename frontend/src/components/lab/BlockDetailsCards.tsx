@@ -29,8 +29,8 @@ import { useWalletStore } from '@/stores/walletStore'
 function HeaderField({ label, value }: { label: string; value: string }) {
   return (
     <div className="space-y-1">
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="font-mono text-sm break-all">{value}</p>
+      <p className="design-type-metadata uppercase text-muted-foreground">{label}</p>
+      <p className="design-type-addresses break-all">{value}</p>
     </div>
   )
 }
@@ -140,7 +140,7 @@ export function LabBlockMetadataCard({
           <DesignCardTitle>Contextual data</DesignCardTitle>
           <DesignCardDescription>Block summary and mining context</DesignCardDescription>
         </DesignCardHeader>
-        <DesignCardContent className="grid gap-3 text-sm">
+        <DesignCardContent className="design-type-regular grid gap-3">
           <p><span className="text-muted-foreground">Height:</span> {block.metadata.height}</p>
           <p>
             <span className="text-muted-foreground">Mined on:</span>{' '}
@@ -173,7 +173,7 @@ export function LabBlockMetadataCard({
           {weightAtMiningRecorded && mineOperation != null ? (
             <p>
               <span className="text-muted-foreground">Non-coinbase weight (at mining):</span>{' '}
-              <span className="font-mono tabular-nums">
+              <span className="design-type-addresses tabular-nums">
                 {mineOperation.nonCoinbaseWeightUsedWu} / {mineOperation.blockWeightLimitWu} WU
               </span>
             </p>
@@ -287,11 +287,11 @@ export function LabBlockTransactionsCard({
         </DesignCardHeader>
         <DesignCardContent>
           {totalCount === 0 ? (
-            <p className="text-sm text-muted-foreground">No transactions in this block.</p>
+            <p className="design-type-regular text-muted-foreground">No transactions in this block.</p>
           ) : showLoading ? (
-            <p className="text-sm text-muted-foreground">Loading transactions…</p>
+            <p className="design-type-regular text-muted-foreground">Loading transactions…</p>
           ) : minedQuery.isError && !isTemplate ? (
-            <p className="text-sm text-destructive">Could not load transactions.</p>
+            <p className="design-type-regular text-destructive">Could not load transactions.</p>
           ) : (
             <CardPagination
               pageSize={LAB_CARD_PAGE_SIZE}

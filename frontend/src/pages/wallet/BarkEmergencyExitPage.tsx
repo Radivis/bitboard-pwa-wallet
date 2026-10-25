@@ -48,8 +48,8 @@ export function BarkEmergencyExitPage() {
         }}
       />
       <PageHeader title="Bark emergency exit" />
-      <p className="text-sm text-muted-foreground">{BARK_EMERGENCY_EXIT_CANCEL_NOTE}</p>
-      <p className="text-sm text-muted-foreground">
+      <p className="design-type-regular text-muted-foreground">{BARK_EMERGENCY_EXIT_CANCEL_NOTE}</p>
+      <p className="design-type-regular text-muted-foreground">
         Proceed automatically advances an exit when a new block arrives. A successful Bark sync
         also progresses an exit that is already started.
       </p>

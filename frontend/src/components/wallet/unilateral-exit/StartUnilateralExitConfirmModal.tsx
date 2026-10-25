@@ -58,7 +58,7 @@ export function StartUnilateralExitConfirmModal({
       )}
     >
       <div
-        className="space-y-4 text-sm text-muted-foreground"
+        className="design-type-regular space-y-4 text-muted-foreground"
         data-testid="unilateral-exit-start-confirm-modal"
       >
         <DialogDescription className="sr-only">

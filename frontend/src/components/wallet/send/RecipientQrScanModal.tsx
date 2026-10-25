@@ -292,7 +292,7 @@ export function RecipientQrScanModal({
       )}
     >
       <div className="space-y-3">
-        <p className="text-sm text-muted-foreground">
+        <p className="design-type-regular text-muted-foreground">
           Use the camera preview below, or choose an image file from the footer
           if you have no camera or a screenshot. Decodes a Bitcoin address,
           BIP21 payment URI, or Lightning invoice.
@@ -321,12 +321,12 @@ export function RecipientQrScanModal({
           ) : null}
         </div>
         {cameraError != null ? (
-          <p className="text-sm text-destructive" role="alert">
+          <p className="design-type-regular text-destructive" role="alert">
             {cameraError}
           </p>
         ) : null}
         {fileDecodeError != null ? (
-          <p className="text-sm text-destructive" role="alert">
+          <p className="design-type-regular text-destructive" role="alert">
             {fileDecodeError}
           </p>
         ) : null}

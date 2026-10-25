@@ -10,7 +10,7 @@ interface AppDescriptionProps {
  */
 export function AppDescription({ className }: AppDescriptionProps) {
   return (
-    <p className={cn('text-muted-foreground', className)}>
+    <p className={cn('design-type-regular text-muted-foreground', className)}>
       The interactive {' '}
       <InfomodeWrapper
         as="span"

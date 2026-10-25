@@ -35,7 +35,7 @@ export function ArkadeExitSection() {
 
   return (
     <div className="space-y-2 border-t pt-4">
-      <p className="text-sm font-medium">
+      <p className="design-type-emphasis">
         <InfomodeWrapper
           infoId={ARKADE_INFOMODE_IDS.exitSection}
           infoComponent={ArkadeExitInfomodeContent}
@@ -44,7 +44,7 @@ export function ArkadeExitSection() {
           Exit to on-chain
         </InfomodeWrapper>
       </p>
-      <p className="text-xs text-muted-foreground">
+      <p className="design-type-regular text-muted-foreground">
         Move Arkade funds back to a normal Bitcoin address.{' '}
         <InfomodeWrapper
           infoId={ARKADE_INFOMODE_IDS.learnAboutExits}
@@ -104,7 +104,7 @@ export function ArkadeExitSection() {
         )}
       </div>
       {collaborativeExitUnavailable && (
-        <p className="text-xs text-muted-foreground" data-testid="arkade-exit-collab-unavailable">
+        <p className="design-type-regular text-muted-foreground" data-testid="arkade-exit-collab-unavailable">
           {collaborativeExitUnavailableReason({
             hasPendingCollaborativeIntent,
             autonomousModeActive,

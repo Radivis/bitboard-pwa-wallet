@@ -58,13 +58,13 @@ export function OperatorConfigTrustModal({ open }: OperatorConfigTrustModalProps
         </div>
       }
     >
-      <DialogDescription className="text-left text-sm text-muted-foreground">
+      <DialogDescription className="design-type-regular text-left text-muted-foreground">
         Your Arkade service provider published new operator terms or configuration. Regular sync is paused until you choose how to proceed. You can trust the ASP
         and accept the new settings, or review the differences in autonomous mode using your
         last trusted configuration.
       </DialogDescription>
       {diffQuery.isLoading ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="design-type-regular flex items-center gap-2 text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
           Loading configuration diff…
         </div>

@@ -35,7 +35,7 @@ function CopyableVtxoIdRow({ vtxoId }: { vtxoId: string }) {
       <span className="text-muted-foreground" aria-hidden>*</span>
       <button
         type="button"
-        className="font-mono text-left text-xs text-primary underline-offset-4 hover:underline"
+        className="design-type-addresses text-left text-primary underline-offset-4 hover:underline"
         onClick={() => void handleCopy()}
         aria-label={`Copy VTXO id ${vtxoId}`}
         data-testid={`copy-vtxo-id-${vtxoId}`}

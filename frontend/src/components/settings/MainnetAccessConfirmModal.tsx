@@ -52,7 +52,7 @@ export function MainnetAccessConfirmModal({
         </>
       )}
     >
-      <div className="space-y-4 text-sm text-muted-foreground">
+      <div className="design-type-regular space-y-4 text-muted-foreground">
         <DialogDescription className="sr-only">
           Confirm that you understand Mainnet risks and have a seed phrase backup before
           enabling Mainnet access.

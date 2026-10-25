@@ -98,11 +98,11 @@ function NodeDetailVtxoOutpointRow({
   phaseLabel: string
 }) {
   return (
-    <li className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-xs">
+    <li className="design-type-regular flex items-center justify-between gap-3 rounded-md border px-3 py-2">
       <span>Outpoint {vtxoRow.vout}</span>
       <span className="text-right text-muted-foreground">
         {vtxoRow.amountLabel != null ? (
-          <span className="design-mono block tabular-nums">{vtxoRow.amountLabel}</span>
+          <span className="design-type-addresses block tabular-nums">{vtxoRow.amountLabel}</span>
         ) : null}
         {phaseLabel !== '' ? (
           <span className="block" data-testid="unilateral-exit-vtxo-phase">
@@ -188,7 +188,7 @@ export function UnilateralExitNodeDetailCard({
         </div>
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-medium">
+            <p className="design-type-emphasis">
               {formatUnilateralExitTxTypeLabel(txType, isExitStartLeaf)}
             </p>
             {status.status === 'confirmed' && (
@@ -198,20 +198,20 @@ export function UnilateralExitNodeDetailCard({
               <Loader2 className="size-4 animate-spin text-blue-600" aria-label={statusLabel} />
             )}
           </div>
-          <p className="font-mono text-xs break-all text-muted-foreground">{txid}</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="design-type-addresses break-all text-muted-foreground">{txid}</p>
+          <p className="design-type-regular text-muted-foreground">
             Short id: {shortTxid(txid)} · {statusLabel}
             {status.confirmations > 0 ? ` · ${status.confirmations} conf` : ''}
           </p>
           {topologyNode != null && topologyNode.spends.length > 0 && (
-            <p className="text-xs text-muted-foreground">
+            <p className="design-type-regular text-muted-foreground">
               Spends: {topologyNode.spends.map((spendTxid) => shortTxid(spendTxid)).join(', ')}
             </p>
           )}
           {vtxoRows.length > 0 && (
             <div className="space-y-3">
               <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground">
+                <p className="design-type-metadata text-muted-foreground">
                   VTXO outpoints on this {isExitStartLeaf ? 'leaf' : 'node'}
                 </p>
                 <ul className="space-y-1">
@@ -231,7 +231,7 @@ export function UnilateralExitNodeDetailCard({
                     infoComponent={ArkadeSharedLeafUnilateralExitInfomodeContent}
                     as="span"
                   >
-                    <Label htmlFor="unilateral-exit-leaf-select" className="text-sm">
+                    <Label htmlFor="unilateral-exit-leaf-select" className="design-type-regular">
                       Select this leaf for exit
                     </Label>
                   </InfomodeWrapper>

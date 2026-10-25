@@ -72,7 +72,7 @@ export function LabRulesCard() {
         </DesignCardDescription>
       </DesignCardHeader>
       <DesignCardContent className="gap-6">
-        <ul className="space-y-3 text-sm">
+        <ul className="design-type-regular space-y-3">
           <li>
             <strong>No Proof of Work.</strong> In the lab, new blocks are created by clicking
             &quot;Mine blocks&quot;. On mainnet, miners must solve a cryptographic puzzle
@@ -161,7 +161,7 @@ export function LabRulesCard() {
               {subsidyEditMode ? (
                 <DesignInput
                   aria-labelledby="lab-miner-subsidy-label"
-                  className="max-w-[14rem] font-mono tabular-nums"
+                  className="design-type-addresses max-w-[14rem] tabular-nums"
                   id="lab-miner-subsidy-input"
                   inputMode="numeric"
                   min={0}
@@ -172,7 +172,7 @@ export function LabRulesCard() {
               ) : (
                 <span
                   aria-labelledby="lab-miner-subsidy-label"
-                  className="design-mono min-w-[8rem] text-base tabular-nums"
+                  className="design-type-addresses min-w-[8rem] tabular-nums"
                 >
                   {currentSubsidySats.toLocaleString()}
                 </span>

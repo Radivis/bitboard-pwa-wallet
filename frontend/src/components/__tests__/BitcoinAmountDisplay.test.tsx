@@ -23,7 +23,7 @@ describe('BitcoinAmountDisplay', () => {
     expect(screen.getByText('1.00000000')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'BTC' })).toBeInTheDocument()
     expect(screen.queryByText('t')).not.toBeInTheDocument()
-    expect(container.querySelector('.design-mono')).toHaveTextContent('1.00000000')
+    expect(container.querySelector('.design-type-large-balances')).toHaveTextContent('1.00000000')
   })
 
   it('shows grey t prefix and tBTC accessible name on testnet', () => {
@@ -46,6 +46,6 @@ describe('BitcoinAmountDisplay', () => {
     const { container } = renderWithProviders(
       <BitcoinAmountDisplay amountSats={1000} size="sm" />,
     )
-    expect(container.querySelector('.text-sm')).toBeInTheDocument()
+    expect(container.querySelector('.design-type-small-balances')).toBeInTheDocument()
   })
 })

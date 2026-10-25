@@ -77,7 +77,7 @@ export async function createWalletViaUI(page: Page) {
 
   await expect(page.getByText('Step 2 of 3')).toBeVisible({ timeout: 30000 })
 
-  const wordSpans = page.locator('.font-mono.text-sm')
+  const wordSpans = page.locator('.design-type-addresses:not(input):not(textarea):not(select)')
   await expect(wordSpans.first()).toBeVisible()
   const words: string[] = []
   const count = await wordSpans.count()

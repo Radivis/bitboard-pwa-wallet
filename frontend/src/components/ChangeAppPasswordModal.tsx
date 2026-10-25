@@ -172,8 +172,8 @@ export function ChangeAppPasswordModal({
             <div className="flex flex-col items-center gap-4 py-6 text-center">
               <CheckCircle2 className="h-12 w-12 text-green-600 dark:text-green-500" aria-hidden />
               <div className="space-y-1">
-                <p className="font-medium text-foreground">Password updated</p>
-                <p className="text-sm text-muted-foreground">
+                <p className="design-type-emphasis text-foreground">Password updated</p>
+                <p className="design-type-regular text-muted-foreground">
                   All wallet secrets are now encrypted with your new password.
                 </p>
               </div>

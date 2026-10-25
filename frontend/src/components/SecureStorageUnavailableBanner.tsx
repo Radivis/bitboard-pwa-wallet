@@ -37,7 +37,7 @@ export function SecureStorageUnavailableBanner() {
       description={body}
       optionalContent={
         lastErrorMessage ? (
-          <p className="font-mono text-xs break-words" data-testid="secure-storage-error-detail">
+          <p className="design-type-addresses break-words" data-testid="secure-storage-error-detail">
             {sanitizeErrorMessageForUi(lastErrorMessage)}
           </p>
         ) : null

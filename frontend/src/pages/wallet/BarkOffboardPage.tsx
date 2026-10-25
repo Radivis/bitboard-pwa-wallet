@@ -165,7 +165,7 @@ export function BarkOffboardPage() {
         />
       ) : null}
       <BarkPendingActionBanner />
-      <p className="text-sm text-muted-foreground" data-testid="bark-offboard-confirmation-note">
+      <p className="design-type-regular text-muted-foreground" data-testid="bark-offboard-confirmation-note">
         This sends Bark funds to your on-chain address. Bark broadcasts the exit.{' '}
         {CONFIRMATION_NOTE}
       </p>
@@ -178,7 +178,7 @@ export function BarkOffboardPage() {
               <DesignCardTitle>Destination</DesignCardTitle>
             </DesignCardHeader>
             <DesignCardContent>
-              <p className="break-all text-sm" data-testid="bark-offboard-destination">
+              <p className="design-type-regular break-all" data-testid="bark-offboard-destination">
                 {destinationAddress}
               </p>
             </DesignCardContent>
@@ -227,7 +227,7 @@ export function BarkOffboardPage() {
                 </DesignButton>
               </div>
               {reviewError != null ? (
-                <p className="text-sm text-destructive" data-testid="bark-offboard-review-error">
+                <p className="design-type-regular text-destructive" data-testid="bark-offboard-review-error">
                   {reviewError}
                 </p>
               ) : null}
@@ -238,7 +238,7 @@ export function BarkOffboardPage() {
               <DesignCardHeader>
                 <DesignCardTitle>Review</DesignCardTitle>
               </DesignCardHeader>
-              <DesignCardContent className="space-y-2 text-sm">
+              <DesignCardContent className="design-type-regular space-y-2">
                 <LabeledFiatBtcAmount
                   label="Server fee:"
                   amountSats={review.feeSats}

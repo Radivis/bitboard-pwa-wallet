@@ -51,7 +51,7 @@ export function SendOnChainFeeSection(props: {
         </InfomodeWrapper>
       </Label>
       {feeEstimatesRefreshing ? (
-        <p className="text-xs text-muted-foreground">Refreshing fee estimates…</p>
+        <p className="design-type-regular text-muted-foreground">Refreshing fee estimates…</p>
       ) : null}
       <div className="flex flex-wrap gap-2">
         {SEND_FEE_PRESETS.map((preset) => {

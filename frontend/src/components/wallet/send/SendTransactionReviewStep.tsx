@@ -248,10 +248,10 @@ export function SendTransactionReviewStep({
           <DesignCardTitle>Transaction Details</DesignCardTitle>
         </DesignCardHeader>
         <DesignCardContent className="space-y-4">
-          <div className="space-y-2 text-sm">
+          <div className="design-type-regular space-y-2">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Recipient</span>
-              <span className="font-mono">{truncateAddress(recipient)}</span>
+              <span className="design-type-addresses">{truncateAddress(recipient)}</span>
             </div>
             <ReviewAmountRow
               label="Amount to send"

@@ -31,7 +31,7 @@ export function ArkadeReceive() {
 
   if (!isArkadeActiveForNetworkMode(networkMode)) {
     return (
-      <p className="text-sm text-muted-foreground">
+      <p className="design-type-regular text-muted-foreground">
         Enable Arkade under Settings → Features and select a supported network (mainnet
         or signet).{' '}
         <Link to="/settings" className="text-primary underline-offset-4 hover:underline">
@@ -102,7 +102,7 @@ export function ArkadeReceive() {
         </DesignCardHeader>
         <DesignCardContent className="space-y-3">
           {addressQuery.isError ? (
-            <p className="text-sm text-destructive">
+            <p className="design-type-regular text-destructive">
               Could not load Arkade address. Unlock the wallet and check your network.
             </p>
           ) : (
@@ -110,7 +110,7 @@ export function ArkadeReceive() {
               <div className="flex items-center gap-2">
                 <div
                   data-testid="arkade-receive-address"
-                  className="flex-1 truncate rounded-md border border-input bg-muted/50 px-3 py-2 font-mono text-sm"
+                  className="design-type-addresses flex-1 truncate rounded-md border border-input bg-muted/50 px-3 py-2"
                 >
                   {addressLoading ? 'Loading…' : address || 'Loading…'}
                 </div>

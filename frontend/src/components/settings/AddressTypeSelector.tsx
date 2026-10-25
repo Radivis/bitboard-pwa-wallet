@@ -8,7 +8,7 @@ import { ConfirmationDialog } from '@/components/ConfirmationDialog'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 
 const ADDRESS_SWITCH_SPINNER_CLASS =
-  'flex-row items-start justify-start gap-2 py-1 [&_.animate-spin]:mt-0.5 [&_.animate-spin]:h-4 [&_.animate-spin]:w-4 [&_p]:max-w-[min(100%,28rem)] [&_p]:text-left [&_p]:leading-snug'
+  'flex-row items-start justify-start gap-2 py-1 [&_.animate-spin]:mt-0.5 [&_.animate-spin]:h-4 [&_.animate-spin]:w-4 [&_p]:max-w-[min(100%,28rem)] [&_p]:text-left'
 
 export function AddressTypeSelector() {
   const addressType = useWalletStore((walletState) => walletState.addressType)

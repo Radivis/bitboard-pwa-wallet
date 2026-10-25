@@ -204,7 +204,7 @@ async function fundConfirmedCoinsForExitChild(page: Page): Promise<void> {
   await goToWalletTab(page, 'Receive')
   const addressEl = page
     .locator('[data-infomode-id="receive-receiving-address-card"]')
-    .locator('.font-mono')
+    .locator('.design-type-addresses:not(input):not(textarea):not(select)')
   await expect(addressEl).toHaveText(/bcrt1/)
   const receiveAddress = (await addressEl.textContent())?.trim() ?? ''
   await fundRegtestWalletReceiveAddress(receiveAddress, EXIT_CHILD_FUND_SATS)

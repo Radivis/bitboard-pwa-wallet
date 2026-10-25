@@ -9,12 +9,12 @@ export const INFOMODE_CONTENT_CLASS = cn(
 
 export function InfomodeHeading({ children }: { children: ReactNode }) {
   return (
-    <h2 className="text-base font-semibold leading-tight text-popover-foreground">
+    <h2 className="design-type-emphasis text-popover-foreground">
       {children}
     </h2>
   )
 }
 
 export function InfomodeParagraph({ children }: { children: ReactNode }) {
-  return <p className="text-xs leading-relaxed text-muted-foreground">{children}</p>
+  return <p className="design-type-regular text-muted-foreground">{children}</p>
 }

@@ -10,9 +10,9 @@ import { formatFiatFromSatsAndBtcPrice } from '@/lib/fiat/format-fiat-display'
 import { isUsableBtcSpotPriceInFiat } from '@/lib/fiat/is-usable-btc-spot-price-in-fiat'
 
 const SIZE_CLASSES: Record<BitcoinAmountDisplaySize, string> = {
-  sm: 'text-sm',
-  md: 'text-base',
-  lg: 'text-3xl font-semibold',
+  sm: designTypeClassName.smallBalances,
+  md: designTypeClassName.smallBalances,
+  lg: designTypeClassName.largeBalances,
 }
 
 type FiatAmountDisplayProps = {
@@ -43,7 +43,6 @@ export function FiatAmountDisplay({
     amountTypography != null ? designTypeClassName[amountTypography] : SIZE_CLASSES[size],
     tabular && 'tabular-nums',
   )
-  const unitWeightClass = amountTypography == null ? 'font-medium' : undefined
   const unitLabel = getFiatCurrencyUiMeta(currency).label
 
   if (!isUsableBtcSpotPriceInFiat(btcPriceInFiat)) {
@@ -52,7 +51,7 @@ export function FiatAmountDisplay({
         data-testid={dataTestId}
         className={cn(numericClass, 'text-muted-foreground', className)}
       >
-        {rateLoading ? '…' : '—'} <span className={unitWeightClass}>{currency}</span>
+        {rateLoading ? '…' : '—'} <span>{currency}</span>
       </span>
     )
   }

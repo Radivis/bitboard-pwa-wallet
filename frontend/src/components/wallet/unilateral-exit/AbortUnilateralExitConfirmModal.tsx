@@ -56,13 +56,13 @@ export function AbortUnilateralExitConfirmModal({
       )}
     >
       <div
-        className="space-y-4 rounded-md border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive"
+        className="design-type-regular space-y-4 rounded-md border border-destructive/50 bg-destructive/10 p-4 text-destructive"
         data-testid="unilateral-exit-abort-confirm-modal"
       >
         <DialogDescription className="sr-only">
           Final confirmation before aborting an active unilateral exit.
         </DialogDescription>
-        <p className="font-medium text-destructive">
+        <p className="design-type-emphasis text-destructive">
           You may lose funds if you do not restart this exit soon.
         </p>
         <p>

@@ -18,14 +18,14 @@ export function FavoritesPage() {
     <div className="space-y-6">
       <PageHeader title="Favorites" icon={Star} />
 
-      <p className="text-sm text-muted-foreground">
+      <p className="design-type-regular text-muted-foreground">
         Articles you marked with the star. Favorites are stored on this device only.
       </p>
 
       <DesignCard>
         <DesignCardContent>
           {isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
+            <p className="design-type-regular text-muted-foreground">Loading…</p>
           ) : (
             <LibraryArticleList
               articles={articles}

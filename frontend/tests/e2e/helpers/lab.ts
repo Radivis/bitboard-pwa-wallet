@@ -176,7 +176,7 @@ export async function mineBlocksInLab(
     ).toBeVisible({
       timeout: 10000,
     })
-    await expect(page.getByRole('main').locator('.font-mono').first()).toContainText(/bcrt1/, {
+    await expect(page.getByRole('main').locator('.design-type-addresses:not(input):not(textarea):not(select)').first()).toContainText(/bcrt1/, {
       timeout: 10000,
     })
   }

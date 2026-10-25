@@ -36,7 +36,7 @@ export const article: LibraryArticle = {
           </li>
           <li>
             Create a wallet connection and copy the{' '}
-            <code className="text-sm">nostr+walletconnect://</code> URI.
+            <code className="design-type-addresses">nostr+walletconnect://</code> URI.
           </li>
           <li>
             In Bitboard, open <strong>Management → Lightning</strong> and paste the URI.

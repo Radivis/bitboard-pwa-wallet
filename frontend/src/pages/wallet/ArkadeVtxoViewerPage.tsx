@@ -107,7 +107,7 @@ export function ArkadeVtxoViewerPage() {
     <div className="space-y-6">
       <PageHeader title="VTXOs" icon={ArkadeIcon} />
       {fromSnapshotSyncedAt != null && fromSnapshotSyncedAt > 0 ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="design-type-regular text-muted-foreground">
           From snapshot synced{' '}
           {format(new Date(fromSnapshotSyncedAt * 1000), 'yyyy-MM-dd HH:mm')}
         </p>
@@ -137,7 +137,7 @@ export function ArkadeVtxoViewerPage() {
             <Label htmlFor="arkade-vtxo-sort">Sort</Label>
             <select
               id="arkade-vtxo-sort"
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+              className="design-type-addresses flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 shadow-xs"
               value={sortKey}
               onChange={(event) => setSortKey(event.target.value as ArkadeVtxoSortKey)}
             >
@@ -188,14 +188,14 @@ export function ArkadeVtxoViewerPage() {
       </div>
 
       {vtxoListQuery.isLoading ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="design-type-regular flex items-center gap-2 text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
           Loading VTXOs…
         </div>
       ) : allRows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No VTXOs in this wallet yet.</p>
+        <p className="design-type-regular text-muted-foreground">No VTXOs in this wallet yet.</p>
       ) : filteredRows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No VTXOs match the current filters.</p>
+        <p className="design-type-regular text-muted-foreground">No VTXOs match the current filters.</p>
       ) : (
         <CardPagination
           pageSize={ARKADE_VTXO_VIEWER_PAGE_SIZE}

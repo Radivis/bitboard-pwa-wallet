@@ -145,7 +145,7 @@ export function BarkVtxoViewerPage() {
     <div className="space-y-6">
       <PageHeader title="Bark VTXOs" />
       {syncedAtLabel != null ? (
-        <p className="text-sm text-muted-foreground" data-testid="bark-vtxo-synced-at">
+        <p className="design-type-regular text-muted-foreground" data-testid="bark-vtxo-synced-at">
           Synced {syncedAtLabel}
         </p>
       ) : null}
@@ -290,7 +290,7 @@ function BarkVtxoInventory({
             <Label htmlFor="bark-vtxo-sort">Sort</Label>
             <select
               id="bark-vtxo-sort"
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+              className="design-type-addresses flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 shadow-xs"
               value={sortKey}
               onChange={(event) => onSortKeyChange(event.target.value as BarkVtxoSortKey)}
             >
@@ -333,22 +333,22 @@ function BarkVtxoInventory({
       </div>
 
       {presentation === 'waiting-for-sync' ? (
-        <p className="text-sm text-muted-foreground" data-testid="bark-vtxo-waiting-for-sync">
+        <p className="design-type-regular text-muted-foreground" data-testid="bark-vtxo-waiting-for-sync">
           The VTXO list loads when Bark sync finishes.
         </p>
       ) : presentation === 'loading' ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="design-type-regular flex items-center gap-2 text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
           Loading VTXOs…
         </div>
       ) : presentation === 'error' ? (
-        <p className="text-sm text-destructive" data-testid="bark-vtxo-list-error">
+        <p className="design-type-regular text-destructive" data-testid="bark-vtxo-list-error">
           Couldn&apos;t load Bark VTXOs. {errorMessage}
         </p>
       ) : rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No VTXOs in this wallet yet.</p>
+        <p className="design-type-regular text-muted-foreground">No VTXOs in this wallet yet.</p>
       ) : filteredRows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No VTXOs match the current filters.</p>
+        <p className="design-type-regular text-muted-foreground">No VTXOs match the current filters.</p>
       ) : (
         <CardPagination
           pageSize={BARK_VTXO_VIEWER_PAGE_SIZE}

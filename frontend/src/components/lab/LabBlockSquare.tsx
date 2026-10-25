@@ -119,7 +119,7 @@ export function LabBlockSquare({
           </>
         ) : null}
 
-        <div className="relative flex h-full min-h-0 flex-col justify-between gap-1 p-2 text-[0.9375rem] leading-tight">
+        <div className="design-type-regular relative flex h-full min-h-0 flex-col justify-between gap-1 p-2">
           <div className="grid min-w-0 grid-cols-2 gap-x-1 gap-y-1">
             <span className="flex min-w-0 items-center gap-1 tabular-nums">
               <Blocks
@@ -127,7 +127,7 @@ export function LabBlockSquare({
                 aria-hidden
               />
               <span className="sr-only">Height</span>
-              <span className="truncate font-mono">{height}</span>
+              <span className="design-type-addresses truncate">{height}</span>
             </span>
             <span className="flex min-w-0 items-center justify-end gap-1 tabular-nums">
               <ArrowLeftRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -143,7 +143,7 @@ export function LabBlockSquare({
               {minedBy ? (
                 <>
                   <span
-                    className="min-w-0 flex-1 truncate text-[0.75rem] leading-tight"
+                    className="design-type-regular min-w-0 flex-1 truncate"
                     title={minedByDisplayName ?? undefined}
                   >
                     {minedByDisplayName}
@@ -192,7 +192,7 @@ export function LabBlockSquare({
             </span>
           </div>
 
-          <div className="flex min-w-0 flex-col gap-0.5 border-t border-border/60 pt-1 text-sm text-muted-foreground">
+          <div className="design-type-regular flex min-w-0 flex-col gap-0.5 border-t border-border/60 pt-1 text-muted-foreground">
             <span className="flex min-w-0 items-center gap-1">
               <Calendar className="h-4 w-4 shrink-0" aria-hidden />
               <span className="sr-only">Mined on date</span>

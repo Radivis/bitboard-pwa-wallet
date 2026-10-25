@@ -191,10 +191,10 @@ export function LabEntitiesCard() {
             <DesignCardDescription>
               Simulator participants — optional name, same rules as mining’s lab-entity branch
             </DesignCardDescription>
-            <p className="text-sm text-muted-foreground pt-1 max-w-prose">
-              Lab entities use <span className="font-medium text-foreground/90">simple wallets</span> (one
+            <p className="design-type-regular text-muted-foreground pt-1 max-w-prose">
+              Lab entities use <span className="design-type-emphasis text-foreground/90">simple wallets</span> (one
               address type per entity). The Bitcoin Codex uses{' '}
-              <span className="font-medium text-foreground/90">advanced wallets</span> that support multiple
+              <span className="design-type-emphasis text-foreground/90">advanced wallets</span> that support multiple
               address types.
             </p>
           </DesignCardHeader>
@@ -226,10 +226,10 @@ export function LabEntitiesCard() {
                 <div className="flex flex-col gap-2 max-w-md">
                   <div className="flex items-center justify-between gap-3">
                     <div className="space-y-0.5">
-                      <Label htmlFor="new-lab-entity-address-type" className="text-base">
+                      <Label htmlFor="new-lab-entity-address-type" className="design-type-regular">
                         Address type
                       </Label>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="design-type-regular text-muted-foreground">
                         {newEntityUseTaproot ? 'Taproot (BIP86)' : 'SegWit (BIP84)'} — matches Settings until
                         you change this switch.
                       </p>
@@ -247,13 +247,13 @@ export function LabEntitiesCard() {
             </div>
 
             {!labNetworkEnabled ? (
-              <p className="text-sm text-muted-foreground">Switch to lab network to manage entities.</p>
+              <p className="design-type-regular text-muted-foreground">Switch to lab network to manage entities.</p>
             ) : isLoading && totalCount === 0 ? (
-              <p className="text-sm text-muted-foreground py-2">Loading entities…</p>
+              <p className="design-type-regular text-muted-foreground py-2">Loading entities…</p>
             ) : isError ? (
-              <p className="text-sm text-destructive py-2">Could not load lab entities.</p>
+              <p className="design-type-regular text-destructive py-2">Could not load lab entities.</p>
             ) : totalCount === 0 ? (
-              <p className="text-sm text-muted-foreground py-2">No lab entities yet.</p>
+              <p className="design-type-regular text-muted-foreground py-2">No lab entities yet.</p>
             ) : (
               <CardPagination
                 pageSize={LAB_ENTITIES_PAGE_SIZE}
@@ -296,7 +296,7 @@ export function LabEntitiesCard() {
                           </div>
                         ) : (
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-semibold leading-snug break-words text-base">
+                            <span className="design-type-emphasis break-words">
                               {row.displayName}
                             </span>
                             <LabAddressTypeBadge addressType={row.addressType} />
@@ -310,8 +310,8 @@ export function LabEntitiesCard() {
                         )}
                       </DesignCardHeader>
                       <DesignCardContent className="py-3">
-                        <p className="text-xs font-medium text-muted-foreground">Balance</p>
-                        <div className="mt-1 text-lg font-semibold tracking-tight">
+                        <p className="design-type-metadata text-muted-foreground">Balance</p>
+                        <div className="design-type-emphasis mt-1">
                           <BitcoinAmountDisplay amountSats={row.balanceSats} size="md" />
                         </div>
                       </DesignCardContent>

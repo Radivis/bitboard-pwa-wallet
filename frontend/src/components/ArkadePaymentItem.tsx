@@ -68,7 +68,7 @@ export function ArkadePaymentItem({ payment, activityLabel }: ArkadePaymentItemP
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-medium capitalize">
+            <p className="design-type-emphasis capitalize">
               {isSent ? 'Sent' : 'Received'}
             </p>
             <InfomodeWrapper
@@ -83,7 +83,7 @@ export function ArkadePaymentItem({ payment, activityLabel }: ArkadePaymentItemP
           {timestamp != null && (
             <button
               type="button"
-              className="text-xs text-muted-foreground hover:underline"
+              className="design-type-regular text-muted-foreground hover:underline"
               onClick={(e) => {
                 e.stopPropagation()
                 setShowAbsoluteTime(!showAbsoluteTime)
@@ -99,7 +99,7 @@ export function ArkadePaymentItem({ payment, activityLabel }: ArkadePaymentItemP
         <div className="text-right">
           <p
             className={cn(
-              'text-sm font-medium',
+              'design-type-emphasis',
               isSent ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400',
             )}
           >
@@ -112,8 +112,8 @@ export function ArkadePaymentItem({ payment, activityLabel }: ArkadePaymentItemP
       </div>
 
       {expanded && (
-        <div className="mt-3 space-y-1 border-t border-border pt-3 text-xs text-muted-foreground">
-          <p className="break-all font-mono">Txid: {payment.txid}</p>
+        <div className="design-type-regular mt-3 space-y-1 border-t border-border pt-3 text-muted-foreground">
+          <p className="design-type-addresses break-all">Txid: {payment.txid}</p>
           {payment.memo != null && payment.memo !== '' && (
             <p>Memo: {payment.memo}</p>
           )}

@@ -30,7 +30,7 @@ export function LightningNodeId() {
         </DesignCardDescription>
       </DesignCardHeader>
       <DesignCardContent>
-        <p className="text-sm text-muted-foreground">
+        <p className="design-type-regular text-muted-foreground">
           In the meantime, use NWC (Nostr Wallet Connect) to connect an
           external Lightning wallet for send and receive capabilities.
         </p>

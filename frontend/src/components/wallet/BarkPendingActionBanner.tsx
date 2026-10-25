@@ -43,14 +43,14 @@ function BarkPendingActionRow({ action }: { action: BarkPendingAction }) {
             />
           </p>
           {action.destination != null ? (
-            <p className="text-xs text-muted-foreground" title={action.destination}>
+            <p className="design-type-regular text-muted-foreground" title={action.destination}>
               Destination:{' '}
-              <span className="font-mono">{truncateAddress(action.destination)}</span>
+              <span className="design-type-addresses">{truncateAddress(action.destination)}</span>
             </p>
           ) : null}
           {action.txid != null ? (
-            <p className="text-xs text-muted-foreground" title={action.txid}>
-              <span className="font-mono">{truncateAddress(action.txid)}</span>
+            <p className="design-type-regular text-muted-foreground" title={action.txid}>
+              <span className="design-type-addresses">{truncateAddress(action.txid)}</span>
             </p>
           ) : null}
         </>

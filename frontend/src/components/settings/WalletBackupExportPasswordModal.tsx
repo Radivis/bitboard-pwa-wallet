@@ -123,7 +123,7 @@ export function WalletBackupExportPasswordModal({
       )}
     >
       <DialogDescription asChild>
-        <div className="space-y-3 text-left text-sm text-foreground">
+        <div className="design-type-regular space-y-3 text-left text-foreground">
           <p>
             This export is cryptographically signed. Use a <strong>strong</strong> password for
             signing—ideally your <strong>current Bitboard app password</strong>, so you only have one
@@ -164,7 +164,7 @@ export function WalletBackupExportPasswordModal({
           />
         </div>
         {password.length > 0 && confirmPassword.length > 0 && !passwordsMatch ? (
-          <p className="text-sm text-destructive" role="alert">
+          <p className="design-type-regular text-destructive" role="alert">
             Passwords do not match.
           </p>
         ) : null}
@@ -172,25 +172,25 @@ export function WalletBackupExportPasswordModal({
         confirmPassword.length > 0 &&
         passwordsMatch &&
         !meetsMinLength ? (
-          <p className="text-sm text-destructive" role="alert">
+          <p className="design-type-regular text-destructive" role="alert">
             Use at least {APP_PASSWORD_MIN_LENGTH} characters (Bitboard’s minimum app password length).
           </p>
         ) : null}
         {canCompare ? (
           <div className="space-y-2" aria-live="polite">
             {comparePending ? (
-              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <p className="design-type-regular flex items-center gap-2 text-muted-foreground">
                 <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
                 Checking against your Bitboard app password…
               </p>
             ) : compareResult?.skipped ? (
-              <p className="text-sm text-muted-foreground">
+              <p className="design-type-regular text-muted-foreground">
                 Could not compare to the app password (no wallet selected). You can still export; use
                 a password you will remember for import verification.
               </p>
             ) : compareResult?.match ? (
               <p
-                className="flex items-center gap-2 text-sm font-medium text-green-700 dark:text-green-400"
+                className="design-type-emphasis flex items-center gap-2 text-green-700 dark:text-green-400"
                 role="status"
               >
                 <CheckCircle2 className="size-4 shrink-0" aria-hidden />
@@ -198,7 +198,7 @@ export function WalletBackupExportPasswordModal({
               </p>
             ) : (
               <p
-                className="flex items-start gap-2 text-sm font-medium text-destructive"
+                className="design-type-emphasis flex items-start gap-2 text-destructive"
                 role="status"
               >
                 <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />

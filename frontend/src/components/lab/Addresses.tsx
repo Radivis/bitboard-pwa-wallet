@@ -72,7 +72,7 @@ function LabOwnerAddressesInner({
       ariaLabel={`Addresses page for ${getOwnerDisplayNameWithAddressTypeAria(ownerKey, wallets, entities)}`}
     >
       <div className="space-y-2">
-        <div className="flex gap-4 text-sm font-medium text-muted-foreground">
+        <div className="design-type-emphasis flex gap-4 text-muted-foreground">
           <span className="flex-1 min-w-0">Address</span>
           <span className="w-28 shrink-0 text-right">Balance</span>
           <span className="w-10 shrink-0" />
@@ -82,7 +82,7 @@ function LabOwnerAddressesInner({
             key={addressRow.address}
             className="flex gap-4 items-center py-2 border-b border-border last:border-0"
           >
-            <span className="font-mono text-sm break-all flex-1 min-w-0">
+            <span className="design-type-addresses break-all flex-1 min-w-0">
               {truncateAddress(addressRow.address)}
             </span>
             <span className="text-right w-28 shrink-0">
@@ -147,11 +147,11 @@ When you send from an address, the wallet spends whole previous outputs (UTXOs) 
         </DesignCardHeader>
         <DesignCardContent>
           {isLoading && totalOwnerCount === 0 ? (
-            <p className="text-sm text-muted-foreground py-4">Loading addresses…</p>
+            <p className="design-type-regular text-muted-foreground py-4">Loading addresses…</p>
           ) : isError ? (
-            <p className="text-sm text-destructive py-4">Could not load addresses.</p>
+            <p className="design-type-regular text-destructive py-4">Could not load addresses.</p>
           ) : totalOwnerCount === 0 ? (
-            <p className="text-sm text-muted-foreground py-4">
+            <p className="design-type-regular text-muted-foreground py-4">
               No addresses yet. Mine blocks to create addresses.
             </p>
           ) : (
@@ -170,7 +170,7 @@ When you send from an address, the wallet spends whole previous outputs (UTXOs) 
                     aria-label={`${getOwnerDisplayNameWithAddressTypeAria(owner, wallets, entities)} — addresses in this group`}
                     className="rounded-lg border-[3px] border-border bg-muted/15 p-4 shadow-sm"
                   >
-                    <h4 className="text-sm font-medium mb-3 flex flex-wrap items-center gap-2">
+                    <h4 className="design-type-emphasis mb-3 flex flex-wrap items-center gap-2">
                       {getOwnerIcon(owner) === 'wallet' ? (
                         <Wallet className="h-4 w-4" />
                       ) : (

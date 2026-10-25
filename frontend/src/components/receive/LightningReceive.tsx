@@ -122,7 +122,7 @@ function InvoiceQrDisplay({ invoice }: { invoice: LightningInvoice }) {
               }}
             />
           </div>
-          <p className="text-center text-sm text-muted-foreground">
+          <p className="design-type-regular text-center text-muted-foreground">
             {invoice.amountSats == null ? (
               <span className="text-muted-foreground">
                 {LIGHTNING_INVOICE_AMOUNT_SET_BY_PAYER_LABEL}
@@ -136,13 +136,13 @@ function InvoiceQrDisplay({ invoice }: { invoice: LightningInvoice }) {
             )}{' '}
             &middot; {expiryLabel} expiry
             {invoice.description && (
-              <span className="block text-xs">{invoice.description}</span>
+              <span className="design-type-regular block">{invoice.description}</span>
             )}
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex-1 truncate rounded-md border border-input bg-muted/50 px-3 py-2 font-mono text-xs">
+          <div className="design-type-addresses flex-1 truncate rounded-md border border-input bg-muted/50 px-3 py-2">
             {invoice.bolt11}
           </div>
           <DesignButton onClick={handleCopy} aria-label="Copy invoice" icon={<Copy />} />
@@ -178,7 +178,7 @@ function InvoiceListItem({
     >
       <div className="flex items-center justify-between">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">
+          <p className="design-type-emphasis">
             {invoice.amountSats == null ? (
               LIGHTNING_INVOICE_AMOUNT_SET_BY_PAYER_LABEL
             ) : (
@@ -186,7 +186,7 @@ function InvoiceListItem({
             )}
           </p>
           {invoice.description && (
-            <p className="truncate text-xs text-muted-foreground">
+            <p className="design-type-regular truncate text-muted-foreground">
               {invoice.description}
             </p>
           )}
@@ -313,7 +313,7 @@ function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
               {mainnetFiatEntry &&
                 parsedSatsForPreview != null &&
                 hasUsableFiatSpot && (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="design-type-regular text-muted-foreground">
                     ≈{' '}
                     <BitcoinAmountDisplay
                       amountSats={parsedSatsForPreview}
@@ -329,13 +329,13 @@ function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
                 parsePositiveFiatAmountInput(amountRaw)! > 0 &&
                 !hasUsableFiatSpot &&
                 !fiatRatesQuery.isPending && (
-                  <p className="text-xs text-destructive">
+                  <p className="design-type-regular text-destructive">
                     Exchange rate unavailable. Check your connection or rate service
                     in Settings.
                   </p>
                 )}
               {amountParse.kind === 'amountless' ? (
-                <p className="text-sm text-muted-foreground">
+                <p className="design-type-regular text-muted-foreground">
                   If you don&apos;t define an amount, the amount for this invoice must
                   be specified by payer.
                 </p>
@@ -403,7 +403,7 @@ function NoConnectionPrompt({
       <DesignCardContent className="py-6">
         <div className="space-y-3 text-center">
           <Zap className="mx-auto h-8 w-8 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
+          <p className="design-type-regular text-muted-foreground">
             {hasOtherNetworkConnections
               ? `No Lightning wallet for ${networkLabel}. Connect or label one for this network in Management to create real invoices.`
               : 'No Lightning wallet connected. Connect one to create real invoices.'}
@@ -497,7 +497,7 @@ export function LightningReceive() {
       {pastInvoices.length > 0 && (
         <DesignCard>
           <DesignCardHeader>
-            <DesignCardTitle className="text-sm">Previous Invoices</DesignCardTitle>
+            <DesignCardTitle>Previous Invoices</DesignCardTitle>
           </DesignCardHeader>
           <DesignCardContent>
             <div className="space-y-2">

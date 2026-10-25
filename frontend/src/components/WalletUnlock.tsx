@@ -125,7 +125,7 @@ export function WalletUnlock({
           </div>
 
           {unlockErrorMessage != null && (
-            <p className="text-sm text-destructive">{unlockErrorMessage}</p>
+            <p className="design-type-regular text-destructive">{unlockErrorMessage}</p>
           )}
 
           {unlockMutation.isPending ? (

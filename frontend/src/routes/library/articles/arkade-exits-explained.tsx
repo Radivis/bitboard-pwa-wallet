@@ -14,7 +14,7 @@ export const article: LibraryArticle = {
       <ArticleSection title="In a Nutshell">
         <p>
           <strong>Exiting</strong> moves Bitcoin from Arkade back to a normal on-chain{' '}
-          <code className="text-sm">bc1</code> address. Bitboard offers two paths:{' '}
+          <code className="design-type-addresses">bc1</code> address. Bitboard offers two paths:{' '}
           <strong>collaborative</strong> (with the operator, usually faster) and{' '}
           <strong>unilateral</strong> (without the operator, slower but trustless per VTXO).
         </p>

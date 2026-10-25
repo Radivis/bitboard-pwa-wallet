@@ -21,7 +21,7 @@ export function ReviewInputUtxoList({
         return (
         <div
           key={outpointKey}
-          className="flex items-center justify-between gap-2 text-sm"
+          className="design-type-regular flex items-center justify-between gap-2"
         >
           <div className="flex min-w-0 flex-1 items-center gap-2">
             {action != null && onAction != null ? (
@@ -38,7 +38,7 @@ export function ReviewInputUtxoList({
                 icon={action === 'add' ? <Plus /> : <Minus />}
               />
             ) : null}
-            <span className="font-mono text-muted-foreground truncate">
+            <span className="design-type-addresses text-muted-foreground truncate">
               {truncateAddress(utxo.address)}
             </span>
           </div>

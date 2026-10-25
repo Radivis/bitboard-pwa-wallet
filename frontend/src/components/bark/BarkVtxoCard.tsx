@@ -52,7 +52,7 @@ export function BarkVtxoCard({
         <div className="flex items-start justify-between gap-3">
           <button
             type="button"
-            className="font-mono text-left text-sm text-primary underline-offset-4 hover:underline"
+            className="design-type-addresses text-left text-primary underline-offset-4 hover:underline"
             onClick={() => void handleCopyId()}
             aria-label={`Copy VTXO id ${row.id}`}
           >
@@ -60,25 +60,25 @@ export function BarkVtxoCard({
           </button>
           <BitcoinAmountDisplay
             amountSats={row.amountSats}
-            className="font-semibold"
+            className="design-type-emphasis"
             data-testid={`bark-vtxo-amount-${row.id}`}
           />
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold">{getBarkVtxoStateLabel(row.state)}</span>
+          <span className="design-type-emphasis">{getBarkVtxoStateLabel(row.state)}</span>
           {row.registered ? (
             <DesignTag data-testid={`bark-vtxo-registered-${row.id}`}>Registered</DesignTag>
           ) : null}
         </div>
 
-        <div className="text-xs text-muted-foreground" data-testid={`bark-vtxo-expiry-${row.id}`}>
+        <div className="design-type-regular text-muted-foreground" data-testid={`bark-vtxo-expiry-${row.id}`}>
           <div>{expiry.blocksLabel}</div>
           {expiry.dateLabel != null ? <div>{expiry.dateLabel}</div> : null}
         </div>
         {lockHolderLine != null ? (
           <div
-            className="text-xs text-muted-foreground"
+            className="design-type-regular text-muted-foreground"
             data-testid={`bark-vtxo-lock-holder-${row.id}`}
           >
             {lockHolderLine}
@@ -86,7 +86,7 @@ export function BarkVtxoCard({
         ) : null}
         {emergencyExitPhaseLine != null ? (
           <div
-            className="text-xs text-muted-foreground"
+            className="design-type-regular text-muted-foreground"
             data-testid={`bark-vtxo-exit-phase-${row.id}`}
           >
             {emergencyExitPhaseLine}

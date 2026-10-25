@@ -59,7 +59,7 @@ function HistoryEntryCard({ entry }: { entry: HistoryEntry }) {
         </DesignCardTitle>
         <DesignCardDescription>
           <time dateTime={entry.accessed_at}>{new Date(entry.accessed_at).toLocaleString()}</time>
-          <span className="design-mono mt-1 block break-all text-xs">{entry.access_path}</span>
+          <span className="design-type-addresses mt-1 block break-all">{entry.access_path}</span>
         </DesignCardDescription>
       </DesignCardHeader>
     </DesignCard>
@@ -98,7 +98,7 @@ export function HistoryPage() {
     <div className="space-y-6">
       <PageHeader title="Library history" icon={History} />
 
-      <p className="text-sm text-muted-foreground">
+      <p className="design-type-regular text-muted-foreground">
         Articles you opened recently (stored on this device only). Index, tags, and other library
         screens are not listed here.
       </p>
@@ -111,7 +111,7 @@ export function HistoryPage() {
           description={loadError}
         />
       ) : isPending ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <p className="design-type-regular text-muted-foreground">Loading…</p>
       ) : (
         <HistoryEntries rows={rows} />
       )}

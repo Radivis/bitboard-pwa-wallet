@@ -47,7 +47,7 @@ export function ArkadeVtxoCard({ row, unilateralExitPhase }: ArkadeVtxoCardProps
         <div className="flex items-start justify-between gap-3">
           <button
             type="button"
-            className="font-mono text-left text-sm text-primary underline-offset-4 hover:underline"
+            className="design-type-addresses text-left text-primary underline-offset-4 hover:underline"
             onClick={() => void handleCopyId()}
             aria-label={`Copy VTXO id ${row.id}`}
           >
@@ -55,13 +55,13 @@ export function ArkadeVtxoCard({ row, unilateralExitPhase }: ArkadeVtxoCardProps
           </button>
           <BitcoinAmountDisplay
             amountSats={row.amountSats}
-            className="font-semibold"
+            className="design-type-emphasis"
             data-testid={`arkade-vtxo-amount-${row.id}`}
           />
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <span className="flex items-center gap-1.5 text-sm font-semibold">
+          <span className="design-type-emphasis flex items-center gap-1.5">
             <ArkadeVtxoClassificationIcon
               classification={row.classification}
               className="h-4 w-4"
@@ -73,14 +73,14 @@ export function ArkadeVtxoCard({ row, unilateralExitPhase }: ArkadeVtxoCardProps
           ))}
         </div>
 
-        <div className="text-xs text-muted-foreground">
+        <div className="design-type-regular text-muted-foreground">
           <span>Created: {formatArkadeVtxoDateTime(row.createdAt)}</span>
           <span className="mx-2">·</span>
           <span>Expires: {formatArkadeVtxoDateTime(row.expiresAt)}</span>
         </div>
         {unilateralExitPhaseLine != null ? (
           <div
-            className="text-xs text-muted-foreground"
+            className="design-type-regular text-muted-foreground"
             data-testid={`arkade-vtxo-unilateral-exit-phase-${row.id}`}
           >
             {unilateralExitPhaseLine}

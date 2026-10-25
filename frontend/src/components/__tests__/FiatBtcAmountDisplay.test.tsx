@@ -48,7 +48,7 @@ describe('FiatBtcAmountDisplay', () => {
       />,
     )
 
-    const smSizedElements = container.querySelectorAll('.text-sm')
+    const smSizedElements = container.querySelectorAll('.design-type-small-balances')
     expect(smSizedElements.length).toBeGreaterThanOrEqual(2)
   })
 

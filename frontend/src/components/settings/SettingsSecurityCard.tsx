@@ -55,7 +55,7 @@ export function SettingsSecurityCard({
               >
                 Set a real password
               </DesignButton>
-              <p className="text-sm text-muted-foreground">
+              <p className="design-type-regular text-muted-foreground">
                 You are in near-zero security mode. Setting a real password replaces the weak
                 storage and encrypts your wallets with a password only you know.
               </p>
@@ -71,7 +71,7 @@ export function SettingsSecurityCard({
                 Change app password
               </DesignButton>
               {!hasWallets && (
-                <p className="text-sm text-muted-foreground">
+                <p className="design-type-regular text-muted-foreground">
                   Add a wallet first—there is nothing encrypted to re-encrypt yet.
                 </p>
               )}

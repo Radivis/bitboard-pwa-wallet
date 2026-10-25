@@ -41,7 +41,7 @@ export function AutomatedFeeCapControls({
   return (
     <>
       <p
-        className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300"
+        className="design-type-regular rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-amber-800 dark:text-amber-300"
         role="alert"
         data-testid={warningTestId}
       >

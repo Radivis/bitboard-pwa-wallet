@@ -83,7 +83,7 @@ export function RailSyncControl({
         {secondaryAction}
       </div>
       <p
-        className={`text-xs ${isSyncError || hasSyncWarning ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground'}`}
+        className={`design-type-regular${isSyncError || hasSyncWarning ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground'}`}
         data-testid={`rail-sync-${rail}-caption`}
         {...(lastSyncedIso != null
           ? { 'data-rail-last-synced-at': lastSyncedIso }

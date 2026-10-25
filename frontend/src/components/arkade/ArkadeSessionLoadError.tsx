@@ -21,9 +21,9 @@ export function ArkadeSessionLoadError({
       <ArkadeIcon
         className={`size-24 ${ARKADE_SESSION_LOAD_ERROR_TILT_CLASS} text-red-600 dark:text-red-500`}
       />
-      <h1 className="text-2xl font-semibold">Arkade session could not be established</h1>
+      <h1 className="design-type-screen-heading">Arkade session could not be established</h1>
       {sanitizedErrorMessage !== '' ? (
-        <p className="max-w-xl text-muted-foreground" data-testid="arkade-session-load-error-message">
+        <p className="design-type-regular max-w-xl text-muted-foreground" data-testid="arkade-session-load-error-message">
           {sanitizedErrorMessage}
         </p>
       ) : null}

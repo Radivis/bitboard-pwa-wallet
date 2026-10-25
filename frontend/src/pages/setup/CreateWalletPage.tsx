@@ -167,7 +167,7 @@ export function CreateWalletPage() {
         <SetupFlowHeading
           title="Create Wallet"
           trailing={
-            <div className="ml-auto text-sm text-muted-foreground">
+            <div className="design-type-regular ml-auto text-muted-foreground">
               Step {step} of 3
             </div>
           }
@@ -205,7 +205,7 @@ export function CreateWalletPage() {
               )}
             >
               <DialogDescription asChild>
-                <div className="space-y-3 text-left text-sm text-foreground">
+                <div className="design-type-regular space-y-3 text-left text-foreground">
                   <p>
                     This quick start option still creates a seed phrase and stores it encrypted on this
                     device, but it will not be shown here. You can view it and back it up later from{' '}
@@ -215,7 +215,7 @@ export function CreateWalletPage() {
                     It is <strong>much safer</strong> to make a backup of the seed phrase immediately
                     using &quot;Generate &amp; Continue&quot; instead.
                   </p>
-                  <p className="font-semibold text-destructive">
+                  <p className="design-type-emphasis text-destructive">
                     If you skip writing down your seed phrase, permanent loss of funds is highly likely
                     if you lose this device, damage your data, or forget your Bitboard app password —
                     treat total loss as the expected outcome.
@@ -391,7 +391,7 @@ function StepBackup({
       </CardHeader>
       <CardContent className="space-y-4">
         <MnemonicGrid words={words} columns={words.length > 12 ? 4 : 3} />
-        <div className="rounded-md bg-yellow-50 p-3 text-sm text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200">
+        <div className="design-type-regular rounded-md bg-yellow-50 p-3 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200">
           Write down these words in order. You will need them to recover your
           wallet.
         </div>

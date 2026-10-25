@@ -126,7 +126,7 @@ export function EsploraUrlSettings() {
           {showNonWhitelistedEsploraWarning && (
             <div
               role="status"
-              className="rounded-md border border-amber-600/50 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-100"
+              className="design-type-regular rounded-md border border-amber-600/50 bg-amber-50 px-3 py-2 text-amber-950 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-100"
               data-testid="esplora-non-whitelisted-warning"
             >
               This app runs in your browser. Endpoints that are not in Bitboard’s

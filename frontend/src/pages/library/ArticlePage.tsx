@@ -29,7 +29,7 @@ export function ArticlePage() {
           <DesignCardHeader>
             <DesignCardTitle>Article not found</DesignCardTitle>
           </DesignCardHeader>
-          <DesignCardContent className="text-sm text-[var(--design-text-card-description)]">
+          <DesignCardContent className="design-type-regular text-[var(--design-text-card-description)]">
             <p>
               There is no article with this address. Check the link or pick a topic from the Library
               index.

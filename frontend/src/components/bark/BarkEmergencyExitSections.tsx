@@ -95,7 +95,7 @@ export function BarkEmergencyExitStartCard({
         <DesignCardTitle>Start an exit</DesignCardTitle>
       </DesignCardHeader>
       <DesignCardContent className="space-y-3">
-        <label className="flex items-center gap-2 text-sm">
+        <label className="design-type-regular flex items-center gap-2">
           <DesignCheckbox
             data-testid="bark-emergency-exit-whole-wallet"
             checked={wholeWallet}
@@ -123,7 +123,7 @@ export function BarkEmergencyExitStartCard({
           Review emergency exit
         </DesignButton>
         {review != null ? (
-          <div className="space-y-1 text-sm" data-testid="bark-emergency-exit-fee-review">
+          <div className="design-type-regular space-y-1" data-testid="bark-emergency-exit-fee-review">
             <p data-testid="bark-emergency-exit-fee-rate">
               Fee rate {formatSatPerVbTwoDecimals(review.estimate.feeRateSatPerVb)} sat/vB
             </p>
@@ -229,7 +229,7 @@ export function BarkEmergencyExitFeeCard({
         )}
         {proceedAutomatically && pausedReason != null ? (
           <p
-            className="text-xs text-amber-700 dark:text-amber-400"
+            className="design-type-regular text-amber-700 dark:text-amber-400"
             data-testid="bark-emergency-exit-automation-paused"
           >
             {BARK_EMERGENCY_EXIT_AUTOMATION_PAUSE_LABELS[pausedReason]}
@@ -299,13 +299,13 @@ export function BarkEmergencyExitLiveCard({
           Progress
         </DesignButton>
         {showAutomaticStatus ? (
-          <p className="text-xs text-muted-foreground" data-testid="bark-emergency-exit-automatic-status">
+          <p className="design-type-regular text-muted-foreground" data-testid="bark-emergency-exit-automatic-status">
             {automaticProgressInFlight ? 'Proceeding…' : 'Waiting for the next block.'}
           </p>
         ) : null}
         {proceedAutomatically && automaticProgressError != null ? (
           <p
-            className="min-w-0 break-all text-xs text-destructive"
+            className="design-type-regular min-w-0 break-all text-destructive"
             role="alert"
             data-testid="bark-emergency-exit-automatic-progress-error"
           >
@@ -313,12 +313,12 @@ export function BarkEmergencyExitLiveCard({
           </p>
         ) : null}
         {liveExitsError != null ? (
-          <p className="text-xs text-destructive" role="alert" data-testid="bark-emergency-exit-list-error">
+          <p className="design-type-regular text-destructive" role="alert" data-testid="bark-emergency-exit-list-error">
             {liveExitsError}
           </p>
         ) : null}
         {liveExitsLoading ? (
-          <p className="text-xs text-muted-foreground" data-testid="bark-emergency-exit-list-loading">
+          <p className="design-type-regular text-muted-foreground" data-testid="bark-emergency-exit-list-loading">
             Loading live exits…
           </p>
         ) : null}
@@ -326,11 +326,11 @@ export function BarkEmergencyExitLiveCard({
           {rows.map((row) => (
             <li
               key={row.vtxoId}
-              className="flex items-center justify-between gap-3 text-sm"
+              className="design-type-regular flex items-center justify-between gap-3"
               data-testid={`bark-emergency-exit-row-${row.vtxoId}`}
             >
               <span>
-                <span className="font-mono">{row.vtxoId}</span>
+                <span className="design-type-addresses">{row.vtxoId}</span>
                 {' · '}
                 {barkEmergencyExitAmountLabel(vtxoRows, row.vtxoId)}
                 {' · '}
@@ -372,10 +372,10 @@ export function BarkEmergencyExitClaimCard({
         <DesignCardTitle>Claim</DesignCardTitle>
       </DesignCardHeader>
       <DesignCardContent className="space-y-3">
-        <p className="text-sm" data-testid="bark-emergency-exit-destination">
+        <p className="design-type-regular" data-testid="bark-emergency-exit-destination">
           {destinationAddress || 'No receive address'}
         </p>
-        <p className="text-sm text-muted-foreground">{BARK_EMERGENCY_EXIT_CLAIM_NOTE}</p>
+        <p className="design-type-regular text-muted-foreground">{BARK_EMERGENCY_EXIT_CLAIM_NOTE}</p>
         <DesignButton
           type="button"
           data-testid="bark-emergency-exit-claim"
@@ -401,10 +401,10 @@ function ProceedAutomaticallySwitch({
   return (
     <div className="flex items-start justify-between gap-3">
       <div className="space-y-1">
-        <Label htmlFor="bark-emergency-exit-proceed-automatically" className="text-sm font-medium">
+        <Label htmlFor="bark-emergency-exit-proceed-automatically" className="design-type-emphasis">
           Proceed automatically
         </Label>
-        <p className="text-xs text-muted-foreground">{BARK_EMERGENCY_EXIT_AUTOMATION_NOTE}</p>
+        <p className="design-type-regular text-muted-foreground">{BARK_EMERGENCY_EXIT_AUTOMATION_NOTE}</p>
       </div>
       <Switch
         id="bark-emergency-exit-proceed-automatically"
@@ -431,14 +431,14 @@ function SpendableVtxoRow({
 }) {
   return (
     <li>
-      <label className="flex items-center gap-2 text-sm">
+      <label className="design-type-regular flex items-center gap-2">
         <DesignCheckbox
           data-testid={`bark-emergency-exit-vtxo-${row.id}`}
           checked={checked}
           disabled={disabled}
           onChange={onToggle}
         />
-        <span className="font-mono">{row.id}</span>
+        <span className="design-type-addresses">{row.id}</span>
         <span>{formatSats(row.amountSats)}</span>
       </label>
     </li>

@@ -82,7 +82,7 @@ export function WalletBackupImportPasswordModal({
           disabled={isBusy}
         />
         {verificationError ? (
-          <p className="text-sm text-destructive" role="alert" aria-live="assertive">
+          <p className="design-type-regular text-destructive" role="alert" aria-live="assertive">
             {verificationError}
           </p>
         ) : null}

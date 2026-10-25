@@ -12,7 +12,7 @@ export function SetupFlowHeading({
   return (
     <div className="flex items-center gap-2">
       <SetupBackToWelcomeButton />
-      <h2 className="text-xl font-bold">{title}</h2>
+      <h2 className="design-type-screen-heading">{title}</h2>
       {trailing}
     </div>
   )

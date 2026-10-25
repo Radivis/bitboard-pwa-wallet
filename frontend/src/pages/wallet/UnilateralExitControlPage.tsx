@@ -532,7 +532,7 @@ export function UnilateralExitControlPage() {
           title={hasInProgressExits ? 'Control unilateral exit' : 'Unilateral exit control'}
           icon={ArkadeIcon}
         />
-        <p className="text-sm text-muted-foreground">
+        <p className="design-type-regular text-muted-foreground">
           <InfomodeWrapper
             infoId={ARKADE_INFOMODE_IDS.unilateralExit}
             infoComponent={ArkadeUnilateralExitInfomodeContent}
@@ -549,7 +549,7 @@ export function UnilateralExitControlPage() {
             className="flex h-[min(480px,55vh)] min-h-[320px] w-full items-center justify-center rounded-md border bg-muted/20"
             data-testid="unilateral-exit-tree-idle"
           >
-            <p className="text-sm text-muted-foreground">
+            <p className="design-type-regular text-muted-foreground">
               No exit-eligible VTXOs right now. Board Arkade funds or sync with the operator, then
               return here to select leaves in the tree.
             </p>
@@ -559,14 +559,14 @@ export function UnilateralExitControlPage() {
             className="flex h-[320px] min-h-[280px] w-full items-center justify-center rounded-md border bg-muted/20"
             data-testid="unilateral-exit-tree-error"
           >
-            <p className="text-sm text-destructive">
+            <p className="design-type-regular text-destructive">
               {userFacingErrorMessage(topologyQuery.error) || 'Failed to load exit tree.'}
             </p>
           </div>
         ) : (
           <>
             {topologyQuery.isError ? (
-              <p className="text-xs text-destructive" data-testid="unilateral-exit-tree-refresh-error">
+              <p className="design-type-regular text-destructive" data-testid="unilateral-exit-tree-refresh-error">
                 Could not refresh exit tree. Showing the last loaded view.
               </p>
             ) : null}
@@ -601,7 +601,7 @@ export function UnilateralExitControlPage() {
 
         {showStepProgress && (
           <p
-            className="text-sm text-muted-foreground"
+            className="design-type-regular text-muted-foreground"
             data-testid="unilateral-exit-step-progress"
             data-step-index={stepIndex}
             data-total-steps={totalSteps}
@@ -623,7 +623,7 @@ export function UnilateralExitControlPage() {
           vtxoExitSnapshots,
         }) ? (
           <p
-            className="text-sm text-muted-foreground"
+            className="design-type-regular text-muted-foreground"
             data-testid="unilateral-exit-branch-complete"
           >
             Branch complete. Coins can be claimed via{' '}
@@ -639,7 +639,7 @@ export function UnilateralExitControlPage() {
         {unilateralExitSnapshotIsInState(actorSnapshot, UNILATERAL_EXIT_MACHINE_STATE.error) &&
         actorSnapshot.context.lastErrorMessage != null ? (
           <p
-            className="text-sm text-destructive"
+            className="design-type-regular text-destructive"
             data-testid="unilateral-exit-step-error"
             role="alert"
           >
@@ -651,29 +651,29 @@ export function UnilateralExitControlPage() {
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <div className="rounded-md border p-4 space-y-3">
-          <p className="text-sm font-medium">Selected leaves</p>
+          <p className="design-type-emphasis">Selected leaves</p>
           {jobOutpoints.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
+            <p className="design-type-regular text-muted-foreground">
               Open a leaf node in the tree and enable &quot;Select for exit&quot; in the detail panel.
             </p>
           ) : (
-            <ul className="space-y-1 text-xs">
+            <ul className="design-type-regular space-y-1">
               {jobOutpoints.map((outpoint) => (
-                <li key={`${outpoint.txid}:${outpoint.vout}`} className="font-mono break-all">
+                <li key={`${outpoint.txid}:${outpoint.vout}`} className="design-type-addresses break-all">
                   {outpoint.txid}:{outpoint.vout}
                 </li>
               ))}
             </ul>
           )}
           {selectedTotalSats > 0 && (
-            <p className="text-sm">
+            <p className="design-type-regular">
               Total: <BitcoinAmountDisplay amountSats={selectedTotalSats} />
             </p>
           )}
         </div>
 
         <div className="rounded-md border p-4 space-y-2">
-          <p className="text-sm font-medium">
+          <p className="design-type-emphasis">
             <InfomodeWrapper
               infoId={ARKADE_INFOMODE_IDS.bumperWallet}
               infoComponent={ArkadeBumperWalletInfomodeContent}
@@ -682,16 +682,16 @@ export function UnilateralExitControlPage() {
               Bumper wallet
             </InfomodeWrapper>
           </p>
-          <p className="text-sm" data-testid="unilateral-exit-bumper-balance">
+          <p className="design-type-regular" data-testid="unilateral-exit-bumper-balance">
             <BitcoinAmountDisplay amountSats={bumperInfoQuery.data?.balanceSats ?? 0} />
           </p>
           {bumperAddress != null && (
-            <p className="font-mono text-xs break-all text-muted-foreground" data-testid="arkade-bumper-address">
+            <p className="design-type-addresses break-all text-muted-foreground" data-testid="arkade-bumper-address">
               {bumperAddress}
             </p>
           )}
           {bumperLow && (
-            <p className="text-xs text-destructive">
+            <p className="design-type-regular text-destructive">
               Insufficient bumper balance.{' '}
               <Link to="/wallet/send" className="underline">
                 Fund bumper wallet
@@ -729,16 +729,16 @@ export function UnilateralExitControlPage() {
         ) : null}
 
         {batchEstimateQuery.isLoading && jobOutpoints.length > 0 && (
-          <p className="text-xs text-muted-foreground">Estimating package fees…</p>
+          <p className="design-type-regular text-muted-foreground">Estimating package fees…</p>
         )}
         {batchEstimate && jobOutpoints.length > 0 && (
-          <div className="rounded-md border p-4 text-sm space-y-1" data-testid="unilateral-exit-batch-fee">
+          <div className="design-type-regular rounded-md border p-4 space-y-1" data-testid="unilateral-exit-batch-fee">
             <p>
               Batch estimate ({batchEstimate.projectedUnrollSteps} steps):{' '}
               <BitcoinAmountDisplay amountSats={batchEstimate.estimatedPackageFeeSats} />
             </p>
             {jobActive && stepPackageFeeSats != null && (
-              <p className="text-xs text-muted-foreground">
+              <p className="design-type-regular text-muted-foreground">
                 This step at {formatSatPerVbTwoDecimals(feeRateSatPerVb)} sat/vB ≈{' '}
                 <BitcoinAmountDisplay amountSats={stepPackageFeeSats} />
               </p>

@@ -56,7 +56,7 @@ export function NetworkCardCommittedDescriptor() {
     >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <p className="text-sm font-medium leading-none text-foreground">Receiving descriptor</p>
+          <p className="design-type-emphasis text-foreground">Receiving descriptor</p>
           {walletUnlocked && query.data ? (
             <DesignButton
               type="button"
@@ -101,7 +101,7 @@ export function NetworkCardCommittedDescriptor() {
       </div>
 
       {!walletUnlocked ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="design-type-regular text-muted-foreground">
             Unlock your wallet to view the receiving descriptor.
           </p>
         ) : query.isPending ? (
@@ -110,19 +110,19 @@ export function NetworkCardCommittedDescriptor() {
             className="flex-row items-center justify-start gap-2 py-1 [&_.animate-spin]:h-4 [&_.animate-spin]:w-4"
           />
         ) : query.isError ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="design-type-regular text-muted-foreground">
             Could not load the descriptor. Try unlocking again or return after a moment.
           </p>
         ) : query.data === null || query.data === '' ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="design-type-regular text-muted-foreground">
             No saved descriptor for this network and address type yet.
           </p>
         ) : descriptorVisible ? (
-          <p className="break-all font-mono text-xs leading-relaxed text-muted-foreground">
+          <p className="design-type-addresses break-all text-muted-foreground">
             {query.data}
           </p>
         ) : (
-          <p className="min-w-0 select-none break-all font-mono text-xs leading-relaxed text-muted-foreground/80">
+          <p className="design-type-addresses min-w-0 select-none break-all text-muted-foreground/80">
             <span aria-hidden>{'•'.repeat(48)}</span>
             <span className="sr-only">
               Receiving descriptor hidden. Use the show button next to the label to reveal it.

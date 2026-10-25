@@ -18,7 +18,7 @@ export const article: LibraryArticle = {
       <ArticleSection title="How it Works">
         <p>
           The string starting with{' '}
-          <code className="rounded bg-muted px-1 py-0.5 text-xs">xpub</code> (or ypub, zpub) packages
+          <code className="design-type-addresses rounded bg-muted px-1 py-0.5">xpub</code> (or ypub, zpub) packages
           a <ArticleLink slug="secret-and-public-keys-in-bitcoin">public key</ArticleLink> with extra
           data so your wallet can derive many addresses from one export—without exposing private keys.
         </p>

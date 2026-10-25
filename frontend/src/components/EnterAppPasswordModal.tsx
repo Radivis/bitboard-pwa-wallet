@@ -88,7 +88,7 @@ export function EnterAppPasswordModal({
               autoFocus
             />
             {error ? (
-              <p className="text-sm text-destructive">{error}</p>
+              <p className="design-type-regular text-destructive">{error}</p>
             ) : null}
           </div>
 

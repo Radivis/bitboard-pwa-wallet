@@ -84,7 +84,7 @@ export function SetAppPasswordModal({ open, onSessionStarted }: SetAppPasswordMo
       title={
         <>
           <KeyRound className="mt-0.5 h-5 w-5 shrink-0" />
-          <span className="min-w-0 leading-tight">Set Bitboard app password</span>
+          <span className="min-w-0">Set Bitboard app password</span>
         </>
       }
       closeAriaLabel="Back to setup"
@@ -92,10 +92,10 @@ export function SetAppPasswordModal({ open, onSessionStarted }: SetAppPasswordMo
       onEscapeKeyDown={(e) => e.preventDefault()}
     >
       <div className="space-y-4">
-        <DialogDescription className="w-full max-w-none text-left text-sm text-muted-foreground">
+        <DialogDescription className="design-type-regular w-full max-w-none text-left text-muted-foreground">
           Choose a password for this browser. It encrypts all wallets you store in Bitboard on this
           device.{' '}
-          <span className="font-medium text-foreground/90">
+          <span className="design-type-emphasis text-foreground/90">
             Use Infomode (question mark button above) to get more information about parts of this form
             by tapping them.
           </span>
@@ -113,7 +113,7 @@ export function SetAppPasswordModal({ open, onSessionStarted }: SetAppPasswordMo
           />
 
           {submitError != null && (
-            <p className="text-sm text-destructive">{submitError}</p>
+            <p className="design-type-regular text-destructive">{submitError}</p>
           )}
 
           <Button type="submit" className="w-full" disabled={!passwordsValid || isSubmitting}>

@@ -103,7 +103,7 @@ function LabLayout() {
         </p>
         <button
           type="button"
-          className="text-sm underline"
+          className="design-type-regular underline"
           onClick={() => void refetch()}
         >
           Retry

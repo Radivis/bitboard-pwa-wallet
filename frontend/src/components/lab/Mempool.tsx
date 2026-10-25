@@ -36,7 +36,7 @@ export function LabMempoolCard({
         </DesignCardHeader>
         <DesignCardContent className="gap-3">
           {mempool.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-2">
+            <p className="design-type-regular text-muted-foreground py-2">
               Mempool is empty. Create a transaction to see it here.
             </p>
           ) : (

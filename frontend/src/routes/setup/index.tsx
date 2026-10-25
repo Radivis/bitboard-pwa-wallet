@@ -20,7 +20,7 @@ function SetupWelcome() {
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h1 className="flex items-center justify-center gap-3 text-3xl font-bold tracking-tight">
+        <h1 className="design-type-hero flex items-center justify-center gap-3">
           <DesignAppLogo className="h-10 w-[33px]" />
           Bitcoin Codex
         </h1>

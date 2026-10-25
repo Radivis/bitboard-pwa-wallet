@@ -64,7 +64,7 @@ function LabOwnerUtxosInner({
       ariaLabel={`UTXOs page for ${getOwnerDisplayNameWithAddressTypeAria(ownerKey, wallets, entities)}`}
     >
       <div className="space-y-2">
-        <div className="flex gap-4 text-sm font-medium text-muted-foreground">
+        <div className="design-type-emphasis flex gap-4 text-muted-foreground">
           <span className="flex-1 min-w-0">Address</span>
           <span className="w-28 shrink-0 text-right">Amount</span>
           <span className="w-10 shrink-0" />
@@ -74,7 +74,7 @@ function LabOwnerUtxosInner({
             key={`${utxo.txid}:${utxo.vout}`}
             className="flex gap-4 items-center py-2 border-b border-border last:border-0"
           >
-            <span className="font-mono text-sm break-all flex-1 min-w-0">
+            <span className="design-type-addresses break-all flex-1 min-w-0">
               {truncateAddress(utxo.address)}
             </span>
             <span className="text-right w-28 shrink-0">
@@ -136,11 +136,11 @@ This is not the same as the Addresses card above: Addresses shows one combined b
         </DesignCardHeader>
         <DesignCardContent>
           {isLoading && totalOwnerCount === 0 ? (
-            <p className="text-sm text-muted-foreground py-4">Loading UTXOs…</p>
+            <p className="design-type-regular text-muted-foreground py-4">Loading UTXOs…</p>
           ) : isError ? (
-            <p className="text-sm text-destructive py-4">Could not load UTXOs.</p>
+            <p className="design-type-regular text-destructive py-4">Could not load UTXOs.</p>
           ) : totalOwnerCount === 0 ? (
-            <p className="text-sm text-muted-foreground py-4">
+            <p className="design-type-regular text-muted-foreground py-4">
               No UTXOs yet. Mine blocks to create coinbase outputs.
             </p>
           ) : (
@@ -159,7 +159,7 @@ This is not the same as the Addresses card above: Addresses shows one combined b
                     aria-label={`${getOwnerDisplayNameWithAddressTypeAria(owner, wallets, entities)} — UTXOs in this group`}
                     className="rounded-lg border-[3px] border-border bg-muted/15 p-4 shadow-sm"
                   >
-                    <h4 className="text-sm font-medium mb-3 flex flex-wrap items-center gap-2">
+                    <h4 className="design-type-emphasis mb-3 flex flex-wrap items-center gap-2">
                       {getOwnerIcon(owner) === 'wallet' ? (
                         <Wallet className="h-4 w-4" />
                       ) : (

@@ -155,8 +155,8 @@ export function UpgradeFromNearZeroPasswordModal({
             <div className="flex flex-col items-center gap-4 py-6 text-center">
               <CheckCircle2 className="h-12 w-12 text-green-600 dark:text-green-500" aria-hidden />
               <div className="space-y-1">
-                <p className="font-medium text-foreground">Password saved</p>
-                <p className="text-sm text-muted-foreground">
+                <p className="design-type-emphasis text-foreground">Password saved</p>
+                <p className="design-type-regular text-muted-foreground">
                   Near-zero security mode is off. Your wallets use your new password now.
                 </p>
               </div>

@@ -101,7 +101,7 @@ export function FaucetLinker() {
         <DesignCardHeader>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <DesignCardTitle className="text-base">Test faucets</DesignCardTitle>
+              <DesignCardTitle>Test faucets</DesignCardTitle>
               <DesignCardDescription className="mt-1">
                 Third-party sites for getting test coins; Bitboard does not control availability.
               </DesignCardDescription>
@@ -141,17 +141,17 @@ export function FaucetLinker() {
                     href={faucet.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-start gap-2 rounded-md border border-transparent px-1 py-1 text-sm hover:border-border hover:bg-muted/50"
+                    className="design-type-regular flex items-start gap-2 rounded-md border border-transparent px-1 py-1 hover:border-border hover:bg-muted/50"
                     aria-label={`${faucet.label}. ${ariaStatus}`}
                   >
                     <Circle
                       className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${statusClasses(status)}`}
                       aria-hidden
                     />
-                    <span className="min-w-0 flex-1 font-medium leading-snug">
+                    <span className="design-type-emphasis min-w-0 flex-1">
                       {faucet.label}
                     </span>
-                    <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                    <span className="design-type-addresses shrink-0 text-muted-foreground">
                       {label}
                     </span>
                     <ExternalLink

@@ -1,4 +1,3 @@
-@import "@fontsource-variable/inter";
 @import "@fontsource/plus-jakarta-sans/400.css";
 @import "@fontsource/plus-jakarta-sans/600.css";
 @import "@fontsource/plus-jakarta-sans/700.css";
@@ -19,7 +18,7 @@
 :root {
   --hue: 120;
   --saturation-scale: 1;
-  font-family: "Inter Variable", system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: var(--design-font-ui);
   line-height: 1.5;
   font-weight: 400;
 

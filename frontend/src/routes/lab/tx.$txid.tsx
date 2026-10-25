@@ -143,7 +143,9 @@ function LabTxViewerPage() {
         <DesignCard>
           <DesignCardHeader>
             <div className="flex items-center justify-between gap-2">
-              <DesignCardTitle className="font-mono text-base break-all">{txid}</DesignCardTitle>
+              <DesignCardTitle className="break-all">
+                <span className="design-type-addresses">{txid}</span>
+              </DesignCardTitle>
               <DesignButton appearance="tertiary" className="h-12 w-12 shrink-0 px-0" onClick={handleCopyTxid} aria-label="Copy transaction id" icon={<Copy aria-hidden />} />
             </div>
             <DesignCardDescription>
@@ -174,14 +176,14 @@ function LabTxViewerPage() {
           </DesignCardHeader>
           <DesignCardContent>
             {isCoinbase(tx) ? (
-              <div className="space-y-2 text-sm">
+              <div className="design-type-regular space-y-2">
                 <p className="text-muted-foreground">
                   One coinbase input (no previous output spent).
                 </p>
                 {tx.inputs.map((input, index) => (
                   <div
                     key={`coinbase-${index}`}
-                    className="rounded-md border border-border p-3 font-mono text-xs space-y-1"
+                    className="design-type-addresses rounded-md border border-border p-3 space-y-1"
                   >
                     <p>
                       <span className="text-muted-foreground">Previous transaction:</span>{' '}
@@ -199,7 +201,7 @@ function LabTxViewerPage() {
                 ))}
               </div>
             ) : tx.inputs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No inputs</p>
+              <p className="design-type-regular text-muted-foreground">No inputs</p>
             ) : (
               <div className="space-y-2">
                 {tx.inputs.map((input, inputIndex) => {
@@ -219,13 +221,13 @@ function LabTxViewerPage() {
                             to="/lab/tx/$txid"
                             params={{ txid: input.prevTxid! }}
                             search={{ highlightVout: input.prevVout! }}
-                            className="font-mono text-sm text-primary hover:underline break-all"
+                            className="design-type-addresses text-primary hover:underline break-all"
                             preload={false}
                           >
                             {truncateAddress(input.prevTxid!, 10, 10)} : {input.prevVout}
                           </Link>
                         ) : null}
-                        <span className="font-mono text-sm break-all text-muted-foreground">
+                        <span className="design-type-addresses break-all text-muted-foreground">
                           {truncateAddress(input.address)}
                         </span>
                       </div>
@@ -272,7 +274,7 @@ function LabTxViewerPage() {
           </DesignCardHeader>
           <DesignCardContent>
             {tx.outputs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No outputs</p>
+              <p className="design-type-regular text-muted-foreground">No outputs</p>
             ) : (
               <div className="space-y-2">
                 {tx.outputs.map((output, index) => (
@@ -286,7 +288,7 @@ function LabTxViewerPage() {
                         'ring-2 ring-primary/60 ring-offset-2 ring-offset-background bg-muted/40',
                     )}
                   >
-                    <span className="font-mono text-sm break-all min-w-0 sm:flex-1">
+                    <span className="design-type-addresses break-all min-w-0 sm:flex-1">
                       {truncateAddress(output.address)}
                     </span>
                     <div className="flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto sm:shrink-0 sm:gap-4 sm:overflow-visible">

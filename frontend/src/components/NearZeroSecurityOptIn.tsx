@@ -31,11 +31,11 @@ export function NearZeroSecurityOptIn({ onSessionStarted }: NearZeroSecurityOptI
 
   return (
     <div className="space-y-3 border-t border-border pt-4">
-      <p className="text-center text-xs text-muted-foreground">or</p>
+      <p className="design-type-regular text-center text-muted-foreground">or</p>
       <div
         role="region"
         aria-label="Near-zero security mode"
-        className="rounded-lg border-2 border-red-700 bg-red-50 p-4 text-sm text-red-950 shadow-sm dark:border-red-600 dark:bg-red-950/50 dark:text-red-50"
+        className="design-type-regular rounded-lg border-2 border-red-700 bg-red-50 p-4 text-red-950 shadow-sm dark:border-red-600 dark:bg-red-950/50 dark:text-red-50"
       >
         <div className="flex gap-3">
           <AlertTriangle
@@ -43,10 +43,10 @@ export function NearZeroSecurityOptIn({ onSessionStarted }: NearZeroSecurityOptI
             aria-hidden
           />
           <div className="min-w-0 space-y-2">
-            <p className="text-base font-semibold leading-snug">Near-zero security mode</p>
-            <p className="leading-relaxed">
+            <p className="design-type-emphasis">Near-zero security mode</p>
+            <p className="design-type-regular">
               Bitboard will generate a random secret and store it in this browser&apos;s database
-              wrapped with a <span className="font-medium">fixed passphrase that is published in the
+              wrapped with a <span className="design-type-emphasis">fixed passphrase that is published in the
               source code</span>. Anyone who can read your stored data can decrypt your wallets—this
               is only slightly better than plaintext. Use this only to try the app; set a real
               password as soon as you can.

@@ -120,9 +120,9 @@ export function ArkadePanel() {
             (arkadeRail.syncPhase === 'syncing' || arkadeManualSync.isPending)
           }
         />
-        <p className="text-sm text-muted-foreground">
+        <p className="design-type-regular text-muted-foreground">
           Instant payments on Arkade use separate addresses from your on-chain{' '}
-          <code className="text-xs">bc1</code> receive address.
+          <code className="design-type-addresses">bc1</code> receive address.
           {delegatorConfigured
             ? ' Renewal is handled by the delegator while this app is closed.'
             : ' Use “Renew VTXOs now” while the app is open, or enable a delegator via deployment config.'}
@@ -135,13 +135,13 @@ export function ArkadePanel() {
         >
           <>
             {balanceQuery.isLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="design-type-regular flex items-center gap-2 text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
                 Loading Arkade balance…
               </div>
             ) : balance ? (
               <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Balance</p>
+                <p className="design-type-regular text-muted-foreground">Balance</p>
                 <ArkadeBalanceBreakdown balance={balance} />
                 <ArkadeOperatorBatchWindowIndicator />
                 <ArkadeVtxoExpiryIndicator />
@@ -149,7 +149,7 @@ export function ArkadePanel() {
             ) : null}
 
             {(storeReceiveAddress ?? addressQuery.data) && (
-              <div className="break-all rounded-md border bg-muted/40 p-2 font-mono text-xs">
+              <div className="design-type-addresses break-all rounded-md border bg-muted/40 p-2">
                 {storeReceiveAddress ?? addressQuery.data}
               </div>
             )}
@@ -163,9 +163,9 @@ export function ArkadePanel() {
             infoText={ARKADE_DELEGATOR_FEE_INFOMODE.text}
             as="span"
           >
-            <p className="text-xs text-muted-foreground">
+            <p className="design-type-regular text-muted-foreground">
               Delegator service fee:{' '}
-              <span className="design-mono tabular-nums">{delegateFee} sats</span> per renewal (
+              <span className="design-type-addresses tabular-nums">{delegateFee} sats</span> per renewal (
               {delegatorLabel})
             </p>
           </InfomodeWrapper>

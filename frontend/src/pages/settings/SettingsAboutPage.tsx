@@ -23,7 +23,7 @@ export function SettingsAboutPage() {
         <DesignCardHeader>
           <DesignCardTitle>About</DesignCardTitle>
         </DesignCardHeader>
-        <DesignCardContent className="gap-2 text-sm text-[var(--design-text-card-description)]">
+        <DesignCardContent className="design-type-regular gap-2 text-[var(--design-text-card-description)]">
           <p>Bitcoin Codex &mdash; from zero to clarity.</p>
           <AppDescription />
           <p>Version {import.meta.env.VITE_APP_VERSION}</p>

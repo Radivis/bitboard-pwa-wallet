@@ -216,7 +216,7 @@ export function BarkBoardPage() {
           onFiatModeChange={clearAmountEntry}
         />
       ) : null}
-      <p className="text-sm text-muted-foreground" data-testid="bark-board-confirmation-note">
+      <p className="design-type-regular text-muted-foreground" data-testid="bark-board-confirmation-note">
         This sends coins from your on-chain wallet into Bark. Bark broadcasts the funding
         transaction. {CONFIRMATION_NOTE}
       </p>
@@ -251,7 +251,7 @@ export function BarkBoardPage() {
             Review
           </DesignButton>
           {reviewError != null ? (
-            <p className="text-sm text-destructive" data-testid="bark-board-review-error">
+            <p className="design-type-regular text-destructive" data-testid="bark-board-review-error">
               {reviewError}
             </p>
           ) : null}
@@ -262,7 +262,7 @@ export function BarkBoardPage() {
           <DesignCardHeader>
             <DesignCardTitle>Review</DesignCardTitle>
           </DesignCardHeader>
-          <DesignCardContent className="space-y-3 text-sm">
+          <DesignCardContent className="design-type-regular space-y-3">
             <div data-testid="bark-board-fee-rate">
               <SendOnChainFeeSection
                 feePresetSelection={feePresetSelection}
@@ -295,7 +295,7 @@ export function BarkBoardPage() {
               fiat={fiatAmount}
             />
             {repriceError != null ? (
-              <p className="text-sm text-destructive" data-testid="bark-board-reprice-error">
+              <p className="design-type-regular text-destructive" data-testid="bark-board-reprice-error">
                 {repriceError}
               </p>
             ) : null}

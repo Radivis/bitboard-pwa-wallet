@@ -87,7 +87,7 @@ export function LabPreviousBlocksCard({
         </DesignCardHeader>
         <DesignCardContent>
           {totalCount === 0 ? (
-            <p className="text-sm text-muted-foreground py-2">No blocks mined yet.</p>
+            <p className="design-type-regular text-muted-foreground py-2">No blocks mined yet.</p>
           ) : (
             <CardPagination
               pageSize={LAB_CARD_PAGE_SIZE}

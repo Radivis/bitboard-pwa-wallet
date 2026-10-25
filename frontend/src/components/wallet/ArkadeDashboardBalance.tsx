@@ -102,12 +102,12 @@ export function ArkadeDashboardBalance() {
         ) : arkadeLoadSnapshot.loadPhase === 'loading' && balance == null ? (
           <ArkadeSessionLoading embedded />
         ) : isLoading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="design-type-regular flex items-center gap-2 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
             Loading…
           </div>
         ) : balanceQuery.isError && balance == null ? (
-          <p className="text-sm text-destructive" data-testid="dashboard-arkade-balance-error">
+          <p className="design-type-regular text-destructive" data-testid="dashboard-arkade-balance-error">
             Could not load Arkade balance. Check your network and try again.
           </p>
         ) : balance ? (
@@ -170,7 +170,7 @@ export function ArkadeDashboardBalance() {
         ) : null}
         <Link
           to="/wallet/management"
-          className="text-sm text-primary underline-offset-4 hover:underline"
+          className="design-type-regular text-primary underline-offset-4 hover:underline"
         >
           Arkade in Management
         </Link>

@@ -47,8 +47,8 @@ export function WalletsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold">Select Wallet</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <h2 className="design-type-screen-heading">Select Wallet</h2>
+        <p className="design-type-regular mt-1 text-muted-foreground">
           Choose a wallet to use
         </p>
       </div>
@@ -61,7 +61,7 @@ export function WalletsPage() {
             onClick={() => handleSelectWallet(wallet.walletId)}
           >
             <DesignCardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <DesignCardTitle className="flex items-center gap-2 text-base">
+              <DesignCardTitle className="flex items-center gap-2">
                 <Wallet className="h-4 w-4" />
                 {wallet.name}
               </DesignCardTitle>

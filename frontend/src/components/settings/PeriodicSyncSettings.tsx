@@ -76,7 +76,7 @@ function PeriodicSyncRailRow({ rail }: { rail: DashboardRailId }) {
       className="flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
       data-testid={`periodic-sync-row-${rail}`}
     >
-      <span className="text-sm font-medium text-foreground">{RAIL_LABELS[rail]}</span>
+      <span className="design-type-emphasis text-foreground">{RAIL_LABELS[rail]}</span>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
         <div className="flex items-center gap-2">
           <Label htmlFor={inputId} className="sr-only">
@@ -93,10 +93,10 @@ function PeriodicSyncRailRow({ rail }: { rail: DashboardRailId }) {
             className="w-28"
             aria-label={`${RAIL_LABELS[rail]} polling interval in seconds`}
           />
-          <span className="text-sm text-muted-foreground">seconds</span>
+          <span className="design-type-regular text-muted-foreground">seconds</span>
         </div>
         <div className="flex items-center justify-between gap-2 sm:justify-end">
-          <Label htmlFor={switchId} className="cursor-pointer text-sm text-muted-foreground">
+          <Label htmlFor={switchId} className="design-type-regular cursor-pointer text-muted-foreground">
             periodic sync enabled
           </Label>
           <Switch

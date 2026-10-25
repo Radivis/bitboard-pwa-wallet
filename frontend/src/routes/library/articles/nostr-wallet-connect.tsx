@@ -40,7 +40,7 @@ export const article: LibraryArticle = {
       <ArticleSection title="How it Really Works">
         <p>
           A typical NWC URI looks like{' '}
-          <code className="text-sm">
+          <code className="design-type-addresses">
             nostr+walletconnect://&lt;wallet_pubkey&gt;?relay=wss://…&amp;secret=&lt;shared_secret&gt;
           </code>
           . The <strong>wallet service</strong> publishes its public key; the <strong>relay</strong>{' '}

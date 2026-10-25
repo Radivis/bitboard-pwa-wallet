@@ -49,12 +49,12 @@ function PendingBatchIntentDestinationLine({
 }) {
   return (
     <p
-      className="text-xs text-muted-foreground"
+      className="design-type-regular text-muted-foreground"
       data-testid="arkade-pending-batch-intent-destination"
       title={destinationAddress}
     >
       On-chain destination:{' '}
-      <span className="font-mono">{truncateAddress(destinationAddress)}</span>
+      <span className="design-type-addresses">{truncateAddress(destinationAddress)}</span>
     </p>
   )
 }

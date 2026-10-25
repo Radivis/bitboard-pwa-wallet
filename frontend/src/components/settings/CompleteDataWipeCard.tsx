@@ -175,7 +175,7 @@ export function CompleteDataWipeCard() {
             Delete all app data
           </DesignDestructiveButton>
           {hasWallets && !canStartFlow && (
-            <p className="text-xs text-muted-foreground">
+            <p className="design-type-regular text-muted-foreground">
               Unlock your wallet to run preflight checks before wiping.
             </p>
           )}
@@ -214,7 +214,7 @@ export function CompleteDataWipeCard() {
         )}
       >
         <DialogDescription asChild>
-          <div className="space-y-4 text-sm text-muted-foreground">
+          <div className="design-type-regular space-y-4 text-muted-foreground">
             <p>
               This will erase <strong className="text-foreground">everything</strong> Bitboard keeps
               on this device in its databases—including all wallets, encrypted secrets, settings
@@ -250,7 +250,7 @@ export function CompleteDataWipeCard() {
         )}
       >
         <DialogDescription asChild>
-          <div className="space-y-3 text-sm text-muted-foreground">
+          <div className="design-type-regular space-y-3 text-muted-foreground">
             <p>
               The following wallets have a non-zero{' '}
               <strong className="text-foreground">mainnet</strong> on-chain balance (Lightning / NWC
@@ -262,7 +262,7 @@ export function CompleteDataWipeCard() {
                 <li key={row.walletId}>
                   <span className="text-foreground">{row.name}</span>
                   {' — '}
-                  <span className="design-mono tabular-nums">
+                  <span className="design-type-addresses tabular-nums">
                     {formatSats(row.totalSats)} sats ({formatBTC(row.totalSats)} BTC)
                   </span>
                 </li>
@@ -297,7 +297,7 @@ export function CompleteDataWipeCard() {
         )}
       >
         <DialogDescription asChild>
-          <div className="space-y-3 text-sm text-muted-foreground">
+          <div className="design-type-regular space-y-3 text-muted-foreground">
             <p>
               Bitboard could not read a trustworthy mainnet on-chain balance for the wallets below
               (often due to corrupted or mismatched local wallet data). Lightning / NWC balances are
@@ -340,7 +340,7 @@ export function CompleteDataWipeCard() {
         )}
       >
         <DialogDescription asChild>
-          <div className="space-y-3 text-sm text-muted-foreground">
+          <div className="design-type-regular space-y-3 text-muted-foreground">
             <p>
               At least one wallet still has{' '}
               <strong className="text-foreground">no recorded seed phrase backup</strong> in

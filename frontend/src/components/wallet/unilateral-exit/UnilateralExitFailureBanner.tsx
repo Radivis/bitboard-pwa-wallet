@@ -89,9 +89,9 @@ export function UnilateralExitFailureBanner() {
               <p>Please restart that exit soon, or consider those coins lost.</p>
             </>
           ) : null}
-          {failure.detailMessage.length > 0 ? <p className="text-xs">{failure.detailMessage}</p> : null}
+          {failure.detailMessage.length > 0 ? <p className="design-type-regular">{failure.detailMessage}</p> : null}
           {!userAborted ? (
-            <p className="text-xs">
+            <p className="design-type-regular">
               Job started {formatUnixTimestamp(failure.jobStartedAtUnix)} · detected{' '}
               {formatUnixTimestamp(failure.detectedAtUnix)} · {failure.selectedLeafOutpoints.length}{' '}
               leaf{failure.selectedLeafOutpoints.length === 1 ? '' : 's'}

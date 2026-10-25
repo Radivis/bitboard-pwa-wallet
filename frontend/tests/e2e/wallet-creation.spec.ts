@@ -28,7 +28,7 @@ test.describe('Wallet Creation Flow', () => {
     await expect(page.getByText('Step 2 of 3')).toBeVisible({ timeout: 15000 })
     await expect(page.getByText('Backup Seed Phrase')).toBeVisible()
 
-    const wordSpans = page.locator('.font-mono.text-sm')
+    const wordSpans = page.locator('.design-type-addresses:not(input):not(textarea):not(select)')
     await expect(wordSpans.first()).toBeVisible()
 
     const words: string[] = []

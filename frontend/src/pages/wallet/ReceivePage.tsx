@@ -252,7 +252,7 @@ export function ReceivePage() {
           </DesignCardHeader>
           <DesignCardContent className="space-y-3">
             <div className="flex items-center gap-2">
-              <div className="flex-1 truncate rounded-md border border-input bg-muted/50 px-3 py-2 font-mono text-sm">
+              <div className="design-type-addresses flex-1 truncate rounded-md border border-input bg-muted/50 px-3 py-2">
                 {currentAddress || 'Generating...'}
               </div>
               <DesignButton

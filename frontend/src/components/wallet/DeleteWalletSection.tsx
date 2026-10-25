@@ -148,8 +148,8 @@ export function DeleteWalletSection({
           infoText="Removes this wallet’s name, encrypted data, and settings from this device only. It does not remove coins from the Bitcoin network—you can still recover funds with your seed phrase in another wallet unless you delete without a backup."
         >
           <div className="space-y-2">
-            <p className="text-sm font-medium text-destructive">Danger zone</p>
-            <p className="text-sm text-muted-foreground">
+            <p className="design-type-emphasis text-destructive">Danger zone</p>
+            <p className="design-type-regular text-muted-foreground">
               Permanently remove this wallet from Bitboard on this device.
             </p>
             <DesignDestructiveButton
@@ -161,7 +161,7 @@ export function DeleteWalletSection({
               Delete wallet
             </DesignDestructiveButton>
             {!canAttemptDelete && (
-              <p className="text-xs text-muted-foreground">
+              <p className="design-type-regular text-muted-foreground">
                 Unlock your wallet to delete it.
               </p>
             )}
@@ -223,7 +223,7 @@ export function DeleteWalletSection({
         )}
       >
         <DialogDescription asChild>
-          <div className="space-y-3 text-sm text-muted-foreground">
+          <div className="design-type-regular space-y-3 text-muted-foreground">
             <p>
               This wallet has a non-zero <strong className="text-foreground">mainnet</strong>{' '}
               on-chain balance (Lightning / NWC balances are not counted here). Your recovery phrase
@@ -250,7 +250,7 @@ export function DeleteWalletSection({
         )}
       >
         <DialogDescription asChild>
-          <div className="space-y-3 text-sm text-muted-foreground">
+          <div className="design-type-regular space-y-3 text-muted-foreground">
             <p>
               This wallet has a non-zero <strong className="text-foreground">mainnet</strong>{' '}
               on-chain balance. Deleting it now would be extremely dangerous because Bitboard has no
@@ -264,7 +264,7 @@ export function DeleteWalletSection({
               </strong>
               .
             </p>
-            <p className="font-bold text-foreground">
+            <p className="design-type-emphasis text-foreground">
               Deletion cannot proceed while the &quot;no mnemonic backup&quot; flag is set for this
               wallet and mainnet funds are present. Use Seed Phrase Backup in Management to record
               your recovery phrase first; then you can delete the wallet if you still want to.

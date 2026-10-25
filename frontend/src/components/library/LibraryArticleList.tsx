@@ -16,7 +16,7 @@ export function LibraryArticleList({
   excludeTagId,
 }: LibraryArticleListProps) {
   if (articles.length === 0) {
-    return <p className="text-sm text-muted-foreground">{emptyMessage}</p>
+    return <p className="design-type-regular text-muted-foreground">{emptyMessage}</p>
   }
 
   return (
@@ -32,7 +32,7 @@ export function LibraryArticleList({
               <Link
                 to="/library/articles/$slug"
                 params={{ slug: article.slug }}
-                className="min-w-0 flex-1 font-medium text-foreground underline-offset-4 hover:underline"
+                className="design-type-emphasis min-w-0 flex-1 text-foreground underline-offset-4 hover:underline"
               >
                 {article.title}
               </Link>

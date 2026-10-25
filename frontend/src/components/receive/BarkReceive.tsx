@@ -88,7 +88,7 @@ export function BarkReceive() {
         </DesignCardHeader>
         <DesignCardContent className="space-y-3">
           {showAddressError ? (
-            <p className="text-sm text-destructive">
+            <p className="design-type-regular text-destructive">
               {snapshot.loadPhase === 'load-error' && snapshot.errorMessage
                 ? snapshot.errorMessage
                 : 'Could not load Bark address.'}
@@ -97,7 +97,7 @@ export function BarkReceive() {
             <div className="flex items-center gap-2">
               <div
                 data-testid="bark-receive-address"
-                className="flex-1 truncate rounded-md border border-input bg-muted/50 px-3 py-2 font-mono text-sm"
+                className="design-type-addresses flex-1 truncate rounded-md border border-input bg-muted/50 px-3 py-2"
               >
                 {addressLoading ? 'Loading…' : address || 'Loading…'}
               </div>

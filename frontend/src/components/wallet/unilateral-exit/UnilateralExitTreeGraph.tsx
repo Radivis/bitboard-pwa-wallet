@@ -307,11 +307,11 @@ export function UnilateralExitTreeGraph({
     >
       {topology == null ? (
         <div className="flex h-full items-center justify-center bg-muted/20">
-          <p className="text-sm text-muted-foreground">Loading exit tree…</p>
+          <p className="design-type-regular text-muted-foreground">Loading exit tree…</p>
         </div>
       ) : topology.nodes.length === 0 ? (
         <div className="flex h-full items-center justify-center bg-muted/20">
-          <p className="text-sm text-muted-foreground">No exit topology available.</p>
+          <p className="design-type-regular text-muted-foreground">No exit topology available.</p>
         </div>
       ) : (
         <div className="h-full w-full">

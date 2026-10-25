@@ -41,7 +41,7 @@ export function AbortUnilateralExitInfoModal({
       )}
     >
       <div
-        className="space-y-4 text-sm text-muted-foreground"
+        className="design-type-regular space-y-4 text-muted-foreground"
         data-testid="unilateral-exit-abort-info-modal"
       >
         <DialogDescription className="sr-only">

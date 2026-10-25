@@ -36,19 +36,19 @@ function CollaborativeExitFeeEstimate({
   return (
     <>
       {collaborativeFeeQuery.isLoading && (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="design-type-regular flex items-center gap-2 text-muted-foreground">
           <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
           Loading fee estimate…
         </div>
       )}
       {collaborativeFeeQuery.isError && (
-        <p className="text-xs text-destructive">
+        <p className="design-type-regular text-destructive">
           Could not load operator fee policy. You can still exit; fees apply at settlement.
         </p>
       )}
       {collaborativeFeeQuery.data && (
-        <div className="space-y-1 rounded-md border bg-muted/40 p-2 text-xs">
-          <p className="font-medium">
+        <div className="design-type-regular space-y-1 rounded-md border bg-muted/40 p-2">
+          <p className="design-type-emphasis">
             <InfomodeWrapper
               infoId={ARKADE_INFOMODE_IDS.exitOperatorFees}
               infoComponent={ArkadeExitOperatorFeesInfomodeContent}
@@ -114,7 +114,7 @@ export function CollaborativeExitContent({ exitFlow }: CollaborativeExitContentP
 
   return (
     <div className="max-w-md space-y-4">
-      <p className="text-sm text-muted-foreground">
+      <p className="design-type-regular text-muted-foreground">
         <InfomodeWrapper
           infoId={ARKADE_INFOMODE_IDS.collaborativeExit}
           infoComponent={ArkadeCollaborativeExitInfomodeContent}
@@ -126,7 +126,7 @@ export function CollaborativeExitContent({ exitFlow }: CollaborativeExitContentP
       </p>
       {collaborativeExitBlockedByRotation && (
         <p
-          className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-900 dark:text-amber-100"
+          className="design-type-regular rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-amber-900 dark:text-amber-100"
           data-testid="arkade-collab-exit-rotation-blocked"
         >
           Operator signer rotation cutoff has passed. Cooperative exit is no longer available for
@@ -134,7 +134,7 @@ export function CollaborativeExitContent({ exitFlow }: CollaborativeExitContentP
         </p>
       )}
       {networkMode === 'mainnet' && (
-        <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-900 dark:text-amber-100">
+        <p className="design-type-regular rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-amber-900 dark:text-amber-100">
           You are on mainnet. Confirm the destination address before exiting.
         </p>
       )}
@@ -167,7 +167,7 @@ export function CollaborativeExitContent({ exitFlow }: CollaborativeExitContentP
           placeholder="Leave empty for full balance"
         />
         {balanceQuery.data && (
-          <div className="space-y-0.5 text-xs text-muted-foreground">
+          <div className="design-type-regular space-y-0.5 text-muted-foreground">
             <p>
               Cooperatively exit spendable:{' '}
               <BitcoinAmountDisplay
@@ -189,7 +189,7 @@ export function CollaborativeExitContent({ exitFlow }: CollaborativeExitContentP
             )}
           </div>
         )}
-        {collabAmountError && <p className="text-xs text-destructive">{collabAmountError}</p>}
+        {collabAmountError && <p className="design-type-regular text-destructive">{collabAmountError}</p>}
       </div>
       <CollaborativeExitFeeEstimate collaborativeFeeQuery={collaborativeFeeQuery} />
       <div className="flex flex-wrap gap-2">

@@ -138,7 +138,7 @@ export function DataBackupsCard() {
           {nearZeroActive ? (
             <p
               id={WALLET_EXPORT_REQUIRES_APP_PASSWORD_NOTE_ID}
-              className="text-sm text-muted-foreground sm:max-w-md"
+              className="design-type-regular text-muted-foreground sm:max-w-md"
             >
               {WALLET_EXPORT_REQUIRES_APP_PASSWORD_NOTE}
             </p>
@@ -186,13 +186,13 @@ export function DataBackupsCard() {
               Import lab backup
             </DesignButton>
             {labFileExists === false ? (
-              <p className="text-sm text-muted-foreground sm:max-w-md">
+              <p className="design-type-regular text-muted-foreground sm:max-w-md">
                 No lab database file yet. Open the Lab once to create local lab data, or import a lab
                 backup ZIP.
               </p>
             ) : null}
           </div>
-          <p className="text-sm text-muted-foreground">
+          <p className="design-type-regular text-muted-foreground">
             Lab data is tied to wallets on this device; only use this backup on your own restores.
             Sharing lab exports between different Bitcoin Codex installs is not supported and may
             confuse balances and owners in the lab.
@@ -211,7 +211,7 @@ export function DataBackupsCard() {
               <FileWarning className="size-4" aria-hidden />
               Export migration error report
             </DesignButton>
-            <p className="text-sm text-muted-foreground sm:min-w-0 sm:flex-1">
+            <p className="design-type-regular text-muted-foreground sm:min-w-0 sm:flex-1">
               Send this file to the project maintainer for diagnosis when your deployment lists
               contact details under Settings → Developer contact.
             </p>
