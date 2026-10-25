@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { X } from 'lucide-react'
 
+import { designTypeClassName } from '@/components/design/design-type'
 import { cn } from '@/lib/shared/utils'
 import { DesignStatusIcon, type DesignStatus } from '@/components/design/design-status'
 
@@ -26,9 +27,9 @@ export function DesignToast({
     >
       <DesignStatusIcon status={status} />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <p className="text-base font-semibold">{title}</p>
+        <p className={designTypeClassName.emphasis}>{title}</p>
         {description != null ? (
-          <p data-slot="design-status-description" className="text-base font-normal">
+          <p data-slot="design-status-description" className={designTypeClassName.regular}>
             {description}
           </p>
         ) : null}

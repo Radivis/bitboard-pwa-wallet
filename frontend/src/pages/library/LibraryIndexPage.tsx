@@ -27,7 +27,7 @@ export function LibraryIndexPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Library" icon={List} />
+      <PageHeader title="Library" icon={List} variant="area" />
 
       <p className="text-sm text-muted-foreground">
         In-app guides and reference material. Articles are fixed for accuracy. Use the bottom bar to

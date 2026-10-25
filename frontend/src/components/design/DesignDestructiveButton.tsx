@@ -3,6 +3,7 @@ import { Slot } from 'radix-ui'
 
 import { cn } from '@/lib/shared/utils'
 import { designDestructiveShapeClassName, designFocusClassName } from '@/components/design/design-classes'
+import { designTypeClassName } from '@/components/design/design-type'
 
 const destructiveClassName =
   'border border-[var(--design-special-destructive)] bg-[var(--design-special-destructive-background)] text-[var(--design-text-regular-bright)] hover:bg-[var(--design-special-destructive-background-hover)] active:bg-[var(--design-special-destructive-background-active)] disabled:opacity-50'
@@ -25,6 +26,7 @@ export function DesignDestructiveButton({
       data-slot="design-destructive-button"
       className={cn(
         designDestructiveShapeClassName,
+        designTypeClassName.button,
         designFocusClassName,
         destructiveClassName,
         className,

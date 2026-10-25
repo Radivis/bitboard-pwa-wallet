@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { Link } from '@tanstack/react-router'
 
+import { designTypeClassName } from '@/components/design/design-type'
 import { cn } from '@/lib/shared/utils'
 import { DesignButton } from '@/components/design/DesignButton'
 import { DesignStatusIcon, type DesignStatus } from '@/components/design/design-status'
@@ -44,11 +45,11 @@ export function DesignBanner({
     >
       <DesignStatusIcon status={status} />
       <div className="flex min-w-0 flex-1 flex-col items-center gap-1">
-        <p className="w-full text-center text-base font-semibold leading-5">{title}</p>
+        <p className={cn('w-full text-center', designTypeClassName.emphasis)}>{title}</p>
         {description != null ? (
           <p
             data-slot="design-status-description"
-            className="w-full text-center text-base font-normal leading-5"
+            className={cn('w-full text-center', designTypeClassName.regular)}
           >
             {description}
           </p>

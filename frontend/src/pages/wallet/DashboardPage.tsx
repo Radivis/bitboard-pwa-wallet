@@ -810,7 +810,7 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={walletDashboardTitle(networkMode)} icon={Home} />
+      <PageHeader title={walletDashboardTitle(networkMode)} icon={Home} variant="area" />
 
       <InitialSyncErrorBanner />
       <OnchainSaveErrorBanner />

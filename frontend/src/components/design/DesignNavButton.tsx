@@ -3,6 +3,7 @@ import { Slot } from 'radix-ui'
 
 import { cn } from '@/lib/shared/utils'
 import { designFocusClassName, designPillClassName } from '@/components/design/design-classes'
+import { designTypeClassName } from '@/components/design/design-type'
 
 export type DesignNavButtonStatus = 'default' | 'selected'
 
@@ -32,8 +33,8 @@ export function DesignNavButton({
       aria-current={status === 'selected' ? 'page' : undefined}
       className={cn(
         designPillClassName,
+        designTypeClassName.largeButton,
         designFocusClassName,
-        'text-[21px]',
         statusClassName[status],
         className,
       )}

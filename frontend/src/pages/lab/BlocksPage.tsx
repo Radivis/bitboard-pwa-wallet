@@ -10,7 +10,7 @@ export function BlocksPage() {
 
   return (
     <>
-      <PageHeader title="Blocks" icon={Blocks} />
+      <PageHeader title="Blocks" icon={Blocks} variant="area" />
 
       <LabBlocksCard
         blockCount={labPageData.blockCount}

@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { DesignCheckbox } from '@/components/design/DesignCheckbox'
 import { DesignInfomodeToggle } from '@/components/design/DesignInfomodeToggle'
 import { designFocusClassName } from '@/components/design/design-classes'
+import { designTypeClassName } from '@/components/design/design-type'
 import { cn } from '@/lib/shared/utils'
 
 /** Tall modals must scroll inside the panel — Radix locks document scroll while open. */
@@ -118,7 +119,10 @@ export function DesignModal({
         <div className="flex w-full min-w-0 shrink-0 items-center justify-between gap-2 px-3">
           <DialogTitle
             asChild
-            className="min-w-0 text-left text-[21px] leading-7 font-semibold text-[var(--design-text-card-title)]"
+            className={cn(
+              'min-w-0 text-left text-[var(--design-text-card-title)]',
+              designTypeClassName.screenHeading,
+            )}
           >
             <h2>{title}</h2>
           </DialogTitle>

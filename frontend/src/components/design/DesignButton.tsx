@@ -3,6 +3,7 @@ import { Slot } from 'radix-ui'
 
 import { cn } from '@/lib/shared/utils'
 import { designFocusClassName, designPillClassName } from '@/components/design/design-classes'
+import { designTypeClassName } from '@/components/design/design-type'
 
 export type DesignButtonAppearance = 'primary' | 'secondary' | 'tertiary'
 
@@ -43,6 +44,7 @@ export function DesignButton({
       data-selected={showSelected ? 'true' : undefined}
       className={cn(
         designPillClassName,
+        designTypeClassName.button,
         designFocusClassName,
         appearanceClassName[appearance],
         appearance === 'secondary' && !showSelected && 'border',

@@ -1,5 +1,6 @@
 import * as React from 'react'
 
+import { designTypeClassName } from '@/components/design/design-type'
 import { cn } from '@/lib/shared/utils'
 
 export function DesignCard({
@@ -30,7 +31,7 @@ export function DesignCardTitle({ className, ...props }: React.ComponentProps<'d
   return (
     <div
       data-slot="design-card-title"
-      className={cn('flex items-center gap-2 text-base font-semibold', className)}
+      className={cn('flex items-center gap-2', designTypeClassName.emphasis, className)}
       {...props}
     />
   )
@@ -40,7 +41,7 @@ export function DesignCardDescription({ className, ...props }: React.ComponentPr
   return (
     <div
       data-slot="design-card-description"
-      className={cn('text-base font-normal text-[var(--design-text-card-description)]', className)}
+      className={cn(designTypeClassName.regular, 'text-[var(--design-text-card-description)]', className)}
       {...props}
     />
   )

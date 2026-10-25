@@ -2,6 +2,7 @@ import * as React from 'react'
 
 import { cn } from '@/lib/shared/utils'
 import { designFocusClassName } from '@/components/design/design-classes'
+import { designTypeClassName } from '@/components/design/design-type'
 
 function hasText(value: React.InputHTMLAttributes<HTMLInputElement>['value']) {
   return value != null && String(value).length > 0
@@ -41,7 +42,8 @@ export const DesignInput = React.forwardRef<
         readOnly={readOnly}
         data-slot="design-input-field"
         className={cn(
-          'design-mono min-w-0 flex-1 bg-transparent text-base text-[var(--design-input-content)] outline-none placeholder:text-[var(--design-input-placeholder)] disabled:cursor-not-allowed',
+          'min-w-0 flex-1 bg-transparent text-[var(--design-input-content)] outline-none placeholder:text-[var(--design-input-placeholder)] disabled:cursor-not-allowed',
+          designTypeClassName.addresses,
           designFocusClassName,
         )}
         {...props}
