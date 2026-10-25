@@ -86,12 +86,12 @@ export function WalletUnlock({
       onOpenChange={() => {}}
       onCancel={handleClose}
       title={
-        <>
-          <Lock className="mt-0.5 h-5 w-5 shrink-0" />
+        <span className="inline-flex min-w-0 items-center">
+          <Lock className="mr-2 h-5 w-5 shrink-0" />
           <span className="min-w-0">
             {variant === 'setup' ? 'Unlock to continue' : 'Unlock Wallet'}
           </span>
-        </>
+        </span>
       }
       onInteractOutside={(e) => e.preventDefault()}
     >
