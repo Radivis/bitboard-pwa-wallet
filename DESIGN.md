@@ -65,19 +65,20 @@ These theme tokens use black in Light and white in Dark. `input/content` aliases
 
 Spacing and elevation are drawn on the Basics page. They are not tokens yet. Type is the labeled samples on that page's typography frame. The sizes step by about 1.3.
 
-Interface text uses Plus Jakarta Sans. Addresses and input values use JetBrains Mono Medium, so an address stays distinct from interface copy.
+Interface text uses Plus Jakarta Sans. Addresses and input values use JetBrains Mono Medium, so an address stays distinct from interface copy. Dashboard totals use Large balances. Breakdown amounts use a small-balances alias of Addresses.
 
 | Style | Size / line height | Weight | Face |
 |---|---|---|---|
 | Metadata | 12 / 16 | Bold | Plus Jakarta Sans |
 | Regular | 16 / 20 | Regular | Plus Jakarta Sans |
 | Addresses | 16 / 20 | Medium | JetBrains Mono |
+| Large balances | 21 / 28 | SemiBold | JetBrains Mono |
 | Button | 16 / 20 | SemiBold | Plus Jakarta Sans |
 | Screen heading / Large button | 21 / 28 | SemiBold | Plus Jakarta Sans |
 | Area heading | 27 / 32 | Bold | Plus Jakarta Sans |
 | Hero | 35 / 40 | ExtraBold | Plus Jakarta Sans |
 
-Hero is only the title of the start page. That page is not built yet. Area heading is the title of an area index: Wallet, Lab, Library, and Settings. Screen heading is the main title of a regular page. Large button uses the same metrics for nav-button labels. Button is for button labels. Highlighted parts of regular text use an emphasis alias of Button: card titles, banner and toast titles, and article section headings. Metadata is for tags and other small labels. Regular is body copy.
+Hero is only the title of the start page. That page is not built yet. Area heading is the title of an area index: Wallet, Lab, Library, and Settings. Screen heading is the main title of a regular page. Large button uses the same metrics for nav-button labels. Button is for button labels. Highlighted parts of regular text use an emphasis alias of Button: card titles, banner and toast titles, and article section headings. Metadata is for tags and other small labels. Regular is body copy. Large balances is the headline total on the wallet dashboard: on-chain, Lightning, Arkade, and Bark. Small balances is the alias of Addresses used for the breakdown lines under those totals.
 
 Buttons and nav buttons are pills: height 48, corner radius 20. Cards, toasts, banners, and inputs use corner radius 16.
 

@@ -142,7 +142,7 @@ export function DesignNetworkDrawer({
         {isSwitching && statusLine ? (
           <LoadingSpinner
             text={statusLine}
-            className="flex-row items-start justify-start gap-2 py-1 [&_.animate-spin]:mt-0.5 [&_.animate-spin]:h-4 [&_.animate-spin]:w-4 [&_p]:text-left [&_p]:leading-snug"
+            className="flex-row items-start justify-start gap-2 py-1 [&_.animate-spin]:mt-0.5 [&_.animate-spin]:h-4 [&_.animate-spin]:w-4 [&_p]:text-left"
           />
         ) : null}
       </div>
@@ -162,8 +162,12 @@ export function NetworkChainBadge({
     <span
       aria-hidden
       className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded-full font-bold leading-none',
-        size === 'header' ? 'size-10 text-[20px]' : 'size-6 text-[15px]',
+        'inline-flex shrink-0 items-center justify-center rounded-full',
+        size === 'header'
+          // eslint-disable-next-line no-restricted-syntax -- one-letter chain mark sized to the circle
+          ? 'size-10 text-[20px] font-bold leading-none'
+          // eslint-disable-next-line no-restricted-syntax -- one-letter chain mark sized to the circle
+          : 'size-6 text-[15px] font-bold leading-none',
       )}
       style={{ backgroundColor: badge.background, color: badge.color }}
     >

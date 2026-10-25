@@ -5,6 +5,7 @@
 @import "@fontsource/plus-jakarta-sans/800.css";
 @import "@fontsource/jetbrains-mono/400.css";
 @import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource/jetbrains-mono/600.css";
 @import "./design-tokens.css";
 @import "tailwindcss";
 @source "../common";

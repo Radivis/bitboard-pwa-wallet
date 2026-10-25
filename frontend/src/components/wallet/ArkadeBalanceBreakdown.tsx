@@ -67,6 +67,7 @@ export function ArkadeBalanceBreakdown({
       <FiatBtcAmountDisplay
         amountSats={dashboardSpendableSats}
         {...fiatAmountProps}
+        amountTypography="largeBalances"
         data-testid={amountTestId}
       />
       {showBoardingBreakdown && (
@@ -94,6 +95,7 @@ export function ArkadeBalanceBreakdown({
                 }
                 amountSats={boardingSpendableSats}
                 testId="arkade-balance-boarding-spendable"
+                amountTypography="smallBalances"
                 fiat={fiatAmountProps}
               />
             </InfomodeWrapper>
@@ -109,6 +111,7 @@ export function ArkadeBalanceBreakdown({
                 label="Pending boarding confirmation:"
                 amountSats={boardingPendingSats}
                 testId="arkade-balance-boarding-pending"
+                amountTypography="smallBalances"
                 fiat={fiatAmountProps}
               />
             </InfomodeWrapper>
@@ -123,6 +126,7 @@ export function ArkadeBalanceBreakdown({
               <LabeledFiatBtcAmount
                 label="Offchain VTXOs:"
                 amountSats={offchainSpendableSats}
+                amountTypography="smallBalances"
                 fiat={fiatAmountProps}
               />
             </InfomodeWrapper>
@@ -142,6 +146,7 @@ export function ArkadeBalanceBreakdown({
                 label="Unilateral exit in progress: −"
                 amountSats={unilateralExitSats}
                 testId="arkade-balance-unilateral-exit"
+                amountTypography="smallBalances"
                 fiat={fiatAmountProps}
               />
             </InfomodeWrapper>
@@ -157,6 +162,7 @@ export function ArkadeBalanceBreakdown({
                 label="Collaborative exit in progress: −"
                 amountSats={collaborativeExitSats}
                 testId="arkade-balance-collaborative-exit"
+                amountTypography="smallBalances"
                 fiat={fiatAmountProps}
               />
             </InfomodeWrapper>
@@ -169,6 +175,7 @@ export function ArkadeBalanceBreakdown({
           amountSats={pendingRecoveryDueToExpiredSignerSats}
           testId="arkade-balance-pending-recovery-due-to-expired-signer"
           className="text-xs text-muted-foreground"
+          amountTypography="smallBalances"
           fiat={fiatAmountProps}
         />
       )}
@@ -184,6 +191,7 @@ export function ArkadeBalanceBreakdown({
             amountSats={pendingOperatorSweepSats}
             testId="arkade-balance-recoverable-pending-operator-sweep"
             className="text-xs text-muted-foreground"
+            amountTypography="smallBalances"
             fiat={fiatAmountProps}
           />
         </InfomodeWrapper>
@@ -199,6 +207,7 @@ export function ArkadeBalanceBreakdown({
             amountSats={onchainBumperSats}
             testId="arkade-balance-bumper"
             className="text-xs text-muted-foreground"
+            amountTypography="smallBalances"
             fiat={fiatAmountProps}
           />
         </InfomodeWrapper>
@@ -214,6 +223,7 @@ export function ArkadeBalanceBreakdown({
             label="Total (incl. recoverable):"
             amountSats={balance.totalSats}
             className="text-xs text-muted-foreground"
+            amountTypography="smallBalances"
             fiat={fiatAmountProps}
           />
         </InfomodeWrapper>

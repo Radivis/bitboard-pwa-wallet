@@ -55,7 +55,10 @@ export function DesignBanner({
           </p>
         ) : null}
         {optionalContent != null ? (
-          <div data-slot="design-banner-optional-content" className="w-full text-left text-base">
+          <div
+            data-slot="design-banner-optional-content"
+            className={cn('w-full text-left', designTypeClassName.regular)}
+          >
             {optionalContent}
           </div>
         ) : null}

@@ -104,6 +104,7 @@ export function BarkDashboardBalance() {
           <FiatBtcAmountDisplay
             amountSats={totalSats}
             {...fiatAmountProps}
+            amountTypography="largeBalances"
             data-testid="dashboard-bark-balance-amount"
           />
         ) : null}
@@ -173,6 +174,7 @@ function BarkSubBalanceRow({
         amountSats={amountSats}
         {...fiatAmountProps}
         isDetail
+        amountTypography="smallBalances"
         data-testid={testId}
       />
     </div>

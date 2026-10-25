@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { designTypeClassName } from '@/components/design/design-type'
 
 export const designGlassBlurClassName = 'backdrop-blur-[5px]'
 
@@ -12,7 +13,7 @@ export const designDrawerBackdropClassName = 'fixed inset-x-0 top-14 bottom-0 z-
 
 export function DrawerSectionLabel({ children }: { children: ReactNode }) {
   return (
-    <p className="text-base font-semibold tracking-[0.6px] text-[var(--design-drawer-label)] uppercase">
+    <p className={`${designTypeClassName.emphasis} text-[var(--design-drawer-label)] uppercase`}>
       {children}
     </p>
   )

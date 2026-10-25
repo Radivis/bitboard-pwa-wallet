@@ -295,11 +295,18 @@
   line-height: 20px;
   font-weight: 400;
 }
-.design-type-addresses {
+.design-type-addresses,
+.design-type-small-balances {
   font-family: var(--design-font-mono);
   font-size: 16px;
   line-height: 20px;
   font-weight: 500;
+}
+.design-type-large-balances {
+  font-family: var(--design-font-mono);
+  font-size: 21px;
+  line-height: 28px;
+  font-weight: 600;
 }
 .design-type-button,
 .design-type-emphasis,

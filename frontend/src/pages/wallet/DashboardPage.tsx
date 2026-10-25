@@ -274,6 +274,7 @@ function BalanceDesignCard() {
                 <FiatBtcAmountDisplay
                   amountSats={primarySats}
                   {...fiatAmountProps}
+                  amountTypography="largeBalances"
                   data-testid="dashboard-onchain-balance-amount"
                 />
                 {networkMode !== 'lab' && isStaleOnchain ? (
@@ -308,6 +309,7 @@ function BalanceDesignCard() {
                         amountSats={onChainDisplay.confirmedSats}
                         {...fiatAmountProps}
                         isDetail
+                        amountTypography="smallBalances"
                         className="text-muted-foreground"
                       />
                     </span>
@@ -321,6 +323,7 @@ function BalanceDesignCard() {
                         amountSats={onChainDisplay.trustedPendingSats}
                         {...fiatAmountProps}
                         isDetail
+                        amountTypography="smallBalances"
                         className="text-yellow-600 dark:text-yellow-400"
                       />
                     </span>
@@ -334,6 +337,7 @@ function BalanceDesignCard() {
                         amountSats={onChainDisplay.untrustedPendingSats}
                         {...fiatAmountProps}
                         isDetail
+                        amountTypography="smallBalances"
                         className="text-yellow-600 dark:text-yellow-400"
                       />
                     </span>
@@ -347,6 +351,7 @@ function BalanceDesignCard() {
                         amountSats={onChainDisplay.immatureSats}
                         {...fiatAmountProps}
                         isDetail
+                        amountTypography="smallBalances"
                         className="text-muted-foreground"
                       />
                     </span>
@@ -453,6 +458,7 @@ function BalanceDesignCard() {
                 <FiatBtcAmountDisplay
                   amountSats={lightningTotalSats}
                   {...fiatAmountProps}
+                  amountTypography="largeBalances"
                 />
                 <ul className="mt-3 space-y-1.5 border-t border-border pt-3 text-sm">
                   {lightningBalanceRows.map((row) => (
@@ -474,6 +480,7 @@ function BalanceDesignCard() {
                               amountSats={row.balanceSats}
                               {...fiatAmountProps}
                               isDetail
+                              amountTypography="smallBalances"
                               className="inline text-muted-foreground"
                             />
                             {row.isStaleBalance ? (

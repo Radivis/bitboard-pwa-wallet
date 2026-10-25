@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import { designFocusClassName } from '@/components/design/design-classes'
+import { designTypeClassName } from '@/components/design/design-type'
 import { cn } from '@/lib/shared/utils'
 
 export type DesignSwitchOption<Value extends string> = {
@@ -49,7 +50,8 @@ export function DesignSwitch<Value extends string>({
             onClick={() => onValueChange(option.value)}
             className={cn(
               designFocusClassName,
-              'inline-flex items-center justify-center border px-3 py-2 text-base font-semibold whitespace-nowrap disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:size-6 [&_svg]:shrink-0',
+              'inline-flex items-center justify-center border px-3 py-2 whitespace-nowrap disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:size-6 [&_svg]:shrink-0',
+              designTypeClassName.button,
               showsIcon
                 ? 'text-[var(--design-input-content)]'
                 : 'text-[var(--design-text-regular)]',

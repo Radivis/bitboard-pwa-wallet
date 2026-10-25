@@ -158,7 +158,10 @@ export function DesignModal({
               />
               <label
                 htmlFor={optIn.id}
-                className="cursor-pointer text-base leading-5 font-normal text-[var(--design-text-card-description)]"
+                className={cn(
+                  'cursor-pointer text-[var(--design-text-card-description)]',
+                  designTypeClassName.regular,
+                )}
               >
                 {optIn.label}
               </label>

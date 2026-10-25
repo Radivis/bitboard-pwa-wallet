@@ -9,6 +9,10 @@ import {
 import { useBitcoinUnit } from '@/hooks/useBitcoinUnit'
 import { BitcoinUnitSelect } from '@/components/BitcoinUnitSelect'
 import { NetworkUnitPrefix } from '@/components/NetworkUnitPrefix'
+import {
+  designTypeClassName,
+  type DesignAmountTypography,
+} from '@/components/design/design-type'
 import { cn } from '@/lib/shared/utils'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 
@@ -31,6 +35,7 @@ type BitcoinAmountDisplayProps = {
    * to avoid invalid nested interactive elements.
    */
   allowUnitToggle?: boolean
+  amountTypography?: DesignAmountTypography
   'data-testid'?: string
 }
 
@@ -40,6 +45,7 @@ export function BitcoinAmountDisplay({
   className,
   tabular = true,
   allowUnitToggle = true,
+  amountTypography,
   'data-testid': dataTestId,
 }: BitcoinAmountDisplayProps) {
   const { data: defaultUnit = 'BTC' } = useBitcoinUnit()
@@ -76,7 +82,13 @@ export function BitcoinAmountDisplay({
 
   const interactiveUnit = allowUnitToggle
   const passThroughForParentLink = interactiveUnit
-  const numericClass = cn(SIZE_CLASSES[size], 'design-mono', tabular && 'tabular-nums')
+  const numericClass = cn(
+    amountTypography != null
+      ? designTypeClassName[amountTypography]
+      : cn(SIZE_CLASSES[size], 'design-mono'),
+    tabular && 'tabular-nums',
+  )
+  const unitWeightClass = amountTypography == null ? 'font-medium' : undefined
 
   return (
     <span
@@ -96,7 +108,7 @@ export function BitcoinAmountDisplay({
         {formatted}
       </span>{' '}
       {!allowUnitToggle ? (
-        <span className={cn('font-medium', tabular && 'tabular-nums')}>
+        <span className={cn(unitWeightClass, tabular && 'tabular-nums')}>
           <NetworkUnitPrefix indicator={networkUnitIndicator} />
           {unitLabel}
         </span>
@@ -120,7 +132,8 @@ export function BitcoinAmountDisplay({
           type="button"
           aria-label={accessibleUnitLabel}
           className={cn(
-            'pointer-events-auto inline rounded px-0.5 font-medium underline decoration-dotted underline-offset-2 hover:bg-muted/60',
+            'pointer-events-auto inline rounded px-0.5 underline decoration-dotted underline-offset-2 hover:bg-muted/60',
+            unitWeightClass,
             tabular && 'tabular-nums',
           )}
           onClick={(e) => {
