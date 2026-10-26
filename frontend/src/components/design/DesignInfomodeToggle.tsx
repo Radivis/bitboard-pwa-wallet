@@ -29,7 +29,7 @@ export function DesignInfomodeToggle({ className }: DesignInfomodeToggleProps) {
         if (willBeActive) {
           toast.info('Infomode on', {
             description:
-              'Anything with a cyan border is an explainer zone—tap it to read what that part of the app does. (Taps there open help instead of the control underneath.)',
+              'Anything with a blue glow is an explainer zone—tap it to read what that part of the app does. (Taps there open help instead of the control underneath.)',
             duration: INFO_MODE_TOGGLE_TOAST_DURATION_MS,
           })
           return

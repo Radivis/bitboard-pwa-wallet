@@ -6,8 +6,8 @@ import {
   Wallet,
   Zap,
 } from 'lucide-react'
+import { INFOMODE_CONTENT_CLASS } from '@/components/infomode/InfomodeContentShared'
 import { ArticleLink } from '@/lib/library/article-shared'
-import { cn } from '@/lib/shared/utils'
 
 const rowClass =
   'flex gap-2 rounded-md border border-border/60 bg-muted/30 px-2 py-2 text-left'
@@ -42,12 +42,7 @@ function GuideRow({
  */
 export function NwcWalletOptionsInfomodeContent() {
   return (
-    <div
-      className={cn(
-        'space-y-3 pr-1',
-        '[&_.text-primary]:text-primary [&_a]:underline-offset-2 [&_a]:hover:underline',
-      )}
-    >
+    <div className={INFOMODE_CONTENT_CLASS}>
       <h2 className="design-type-emphasis text-popover-foreground">
         NWC-compatible wallets
       </h2>

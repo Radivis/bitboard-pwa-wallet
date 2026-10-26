@@ -1,5 +1,5 @@
+import { INFOMODE_CONTENT_CLASS } from '@/components/infomode/InfomodeContentShared'
 import { ArticleLink } from '@/lib/library/article-shared'
-import { cn } from '@/lib/shared/utils'
 
 const DESCRIPTORS_ARTICLE_SLUG = 'what-are-descriptors-and-descriptor-wallets' as const
 
@@ -9,12 +9,7 @@ const DESCRIPTORS_ARTICLE_SLUG = 'what-are-descriptors-and-descriptor-wallets' a
  */
 export function CommittedDescriptorInfomodeContent() {
   return (
-    <div
-      className={cn(
-        'space-y-2 pr-1',
-        '[&_a]:text-primary [&_a]:underline-offset-2 [&_a]:hover:underline',
-      )}
-    >
+    <div className={INFOMODE_CONTENT_CLASS}>
       <h2 className="design-type-emphasis text-popover-foreground">
         Output descriptors
       </h2>

@@ -1,4 +1,4 @@
-/* Design-system colors. Consumed only by components in frontend/src/components/design. */
+/* Design-system colors. Consumed by components in frontend/src/components/design and infomode. */
 
 /* Neutral (data-palette="neutral") is last so a locked or missing wallet wins over data-network. */
 
@@ -8,8 +8,11 @@
   --design-background: #F7F8F9;
   --design-elevation-drawer: #E9EDF24d;
   --design-elevation-nav-bar: #E9EDF2b3;
+  --design-elevation-3: #E2E7EE;
   --design-elevation-4: #DCE2EA;
   --design-text-regular: #000000;
+  --design-text-subdued: #333A42;
+  --design-special-infomode-highlight: #4079BF;
   --design-special-bitcoin: #F7931A;
   --design-special-bitcoin-stroke: #362817;
   --design-special-destructive: #FF1500;
@@ -81,8 +84,11 @@
   --design-background: #040404;
   --design-elevation-drawer: #1214174d;
   --design-elevation-nav-bar: #121417b3;
+  --design-elevation-3: #16191D;
   --design-elevation-4: #1B1E22;
   --design-text-regular: #E4E5E7;
+  --design-text-subdued: #B8BEC6;
+  --design-special-infomode-highlight: #4079BF;
   --design-special-bitcoin: #F7931A;
   --design-special-bitcoin-stroke: #36281700;
   --design-special-destructive: #FF1500;
@@ -520,4 +526,87 @@
     inset 0 4px 13px 0 rgb(220 219 224 / 0.08),
     0 2px 3px 0 rgb(0 0 0 / 0.3),
     0 6px 10px 4px rgb(0 0 0 / 0.15);
+}
+
+/*
+ * Info-Popup. Shadow is set here, not with a Tailwind shadow utility, so every
+ * layer stays: inner highlight, outer infomode glow, and the two drop shadows.
+ * The content root uses display: contents, so the heading and the close button
+ * share the first row and the body spans the full width.
+ */
+[data-infomode-popup] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  row-gap: 8px;
+  align-items: center;
+  box-sizing: border-box;
+  width: min(calc(100vw - 2rem), 394px);
+  max-height: min(50vh, 24rem);
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 12px 24px 24px;
+  border-radius: 20px;
+  background: var(--design-elevation-3);
+  color: var(--design-text-subdued);
+  box-shadow:
+    inset 0 4px 11px 0 rgb(229 227 232 / 0.08),
+    0 0 4px 4px var(--design-special-infomode-highlight),
+    0 4px 8px 3px rgb(0 0 0 / 0.15),
+    0 1px 3px 0 rgb(0 0 0 / 0.3);
+}
+
+[data-infomode-popup] > button {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  padding: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--design-text-regular);
+  cursor: pointer;
+}
+
+[data-infomode-popup] > button svg {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+[data-infomode-popup] .contents > :first-child {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
+  justify-self: start;
+  min-width: 0;
+}
+
+[data-infomode-popup] .contents > :not(:first-child) {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+  min-width: 0;
+}
+
+[data-infomode-popup] :is(h2, strong) {
+  color: var(--design-text-regular);
+}
+
+[data-infomode-popup] :is(p, li, h3) {
+  color: var(--design-text-subdued);
+}
+
+[data-infomode-popup] a {
+  color: var(--design-accent-secondary);
+  text-underline-offset: 2px;
+}
+
+[data-infomode-popup] a:hover {
+  text-decoration: underline;
 }

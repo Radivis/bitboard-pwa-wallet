@@ -32,6 +32,16 @@
           "hex": "#121417",
           "alpha": 0.7
         }
+      },
+      "3": {
+        "light": {
+          "hex": "#E2E7EE",
+          "alpha": 1
+        },
+        "dark": {
+          "hex": "#16191D",
+          "alpha": 1
+        }
       }
     },
     "text": {
@@ -55,6 +65,16 @@
             "hex": "#F7F8F9",
             "alpha": 1
           }
+        }
+      },
+      "subdued": {
+        "light": {
+          "hex": "#333A42",
+          "alpha": 1
+        },
+        "dark": {
+          "hex": "#B8BEC6",
+          "alpha": 1
         }
       },
       "button": {
@@ -646,6 +666,18 @@
             }
           }
         }
+      },
+      "infomode": {
+        "highlight": {
+          "light": {
+            "hex": "#4079BF",
+            "alpha": 1
+          },
+          "dark": {
+            "hex": "#4079BF",
+            "alpha": 1
+          }
+        }
       }
     }
   },
@@ -656,6 +688,9 @@
       "dark": "Background/Dark"
     },
     "elevation/drawer": "Figma theme elevation/drawer. Elevation 2 at 70% opacity. The top bar uses this surface.",
+    "elevation/3": "Figma theme elevation/3. Info-Popup surface. Light #E2E7EE, dark #16191D.",
+    "text/subdued": "Figma text/subdued. Info-Popup body. Light #333A42, dark #B8BEC6.",
+    "special/infomode/highlight": "Figma special/infomode/highlight. #4079BF in Light and Dark. Infomode target glow and Info-Popup outer glow.",
     "text/regular/default": {
       "light": "Tertiary default label is #000000.",
       "dark": "Text/Regular/Dark/Default"

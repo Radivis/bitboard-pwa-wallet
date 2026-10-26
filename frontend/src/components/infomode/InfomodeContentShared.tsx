@@ -1,20 +1,17 @@
 /* eslint-disable react-refresh/only-export-components -- shared infomode layout constant and presentational components */
 import type { ReactNode } from 'react'
-import { cn } from '@/lib/shared/utils'
 
-export const INFOMODE_CONTENT_CLASS = cn(
-  'space-y-2 pr-1',
-  '[&_a]:text-primary [&_a]:underline-offset-2 [&_a]:hover:underline',
-)
+/** Display contents so the heading and body join the popup grid. */
+export const INFOMODE_CONTENT_CLASS = 'contents'
 
 export function InfomodeHeading({ children }: { children: ReactNode }) {
   return (
-    <h2 className="design-type-emphasis text-popover-foreground">
+    <h2 className="design-type-emphasis text-[var(--design-text-regular)]">
       {children}
     </h2>
   )
 }
 
 export function InfomodeParagraph({ children }: { children: ReactNode }) {
-  return <p className="design-type-regular text-muted-foreground">{children}</p>
+  return <p className="design-type-regular text-[var(--design-text-subdued)]">{children}</p>
 }
