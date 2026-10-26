@@ -13,6 +13,7 @@ import {
   RouterProvider,
 } from '@tanstack/react-router'
 import { WalletTopBar, type WalletTopBarProps } from '@/components/WalletTopBar'
+import { DESIGN_WALLET_DRAWER_ID } from '@/components/design/DesignWalletDrawer'
 import { InfomodeProvider } from '@/components/infomode/InfomodeProvider'
 import { createTestQueryClient } from '@/test-utils/test-utils'
 import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
@@ -59,16 +60,25 @@ vi.mock('@/db/storage-adapter', () => ({
 function TopBarHarness() {
   const [sideDrawerOpen, setSideDrawerOpen] = useState(false)
   const [networkDrawerOpen, setNetworkDrawerOpen] = useState(false)
+  const [walletDrawerOpen, setWalletDrawerOpen] = useState(false)
   const barProps: WalletTopBarProps = {
     sideDrawerOpen,
     networkDrawerOpen,
+    walletDrawerOpen,
     onToggleSideDrawer: () => {
       setNetworkDrawerOpen(false)
+      setWalletDrawerOpen(false)
       setSideDrawerOpen((open) => !open)
     },
     onToggleNetworkDrawer: () => {
       setSideDrawerOpen(false)
+      setWalletDrawerOpen(false)
       setNetworkDrawerOpen((open) => !open)
+    },
+    onToggleWalletDrawer: () => {
+      setSideDrawerOpen(false)
+      setNetworkDrawerOpen(false)
+      setWalletDrawerOpen((open) => !open)
     },
   }
   return (
@@ -200,6 +210,27 @@ describe('WalletTopBar', () => {
       'aria-label',
       'Lock Wallet',
     )
+  })
+
+  it('toggles the wallet drawer from the wallet icon', async () => {
+    const user = userEvent.setup()
+    dbState.wallets = [
+      { walletId: 1, name: 'Alpha' },
+      { walletId: 2, name: 'Beta' },
+    ]
+    dbState.activeWallet = { walletId: 1, name: 'Alpha' }
+    useWalletStore.setState({ walletStatus: 'unlocked', activeWalletId: 1 })
+    await renderTopBar()
+
+    const walletsButton = screen.getByRole('button', { name: 'Wallets' })
+    expect(walletsButton).toHaveAttribute('aria-expanded', 'false')
+    expect(walletsButton).toHaveAttribute('aria-controls', DESIGN_WALLET_DRAWER_ID)
+
+    await user.click(walletsButton)
+    expect(walletsButton).toHaveAttribute('aria-expanded', 'true')
+
+    await user.click(walletsButton)
+    expect(walletsButton).toHaveAttribute('aria-expanded', 'false')
   })
 
   it('locks an unlocked wallet and opens unlock when the wallet is locked', async () => {

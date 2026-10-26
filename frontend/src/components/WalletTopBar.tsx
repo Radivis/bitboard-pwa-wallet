@@ -10,6 +10,7 @@ import {
   DESIGN_NETWORK_DRAWER_ID,
   NetworkChainBadge,
 } from '@/components/design/DesignNetworkDrawer'
+import { DESIGN_WALLET_DRAWER_ID } from '@/components/design/DesignWalletDrawer'
 import { DESIGN_SIDE_DRAWER_ID } from '@/components/design/DesignSideDrawer'
 import { DRAWER_NETWORK_LABELS } from '@/components/design/network-drawer-labels'
 import { WalletUnlock } from '@/components/WalletUnlock'
@@ -35,15 +36,19 @@ const topBarHitTargetClassName = cn(
 export type WalletTopBarProps = {
   sideDrawerOpen: boolean
   networkDrawerOpen: boolean
+  walletDrawerOpen: boolean
   onToggleSideDrawer: () => void
   onToggleNetworkDrawer: () => void
+  onToggleWalletDrawer: () => void
 }
 
 export function WalletTopBar({
   sideDrawerOpen,
   networkDrawerOpen,
+  walletDrawerOpen,
   onToggleSideDrawer,
   onToggleNetworkDrawer,
+  onToggleWalletDrawer,
 }: WalletTopBarProps) {
   const router = useRouter()
   const canGoBack = useCanGoBack()
@@ -124,7 +129,14 @@ export function WalletTopBar({
                 />
               )}
               {hasMultipleWallets && (
-                <button type="button" aria-label="Wallets" className={topBarHitTargetClassName}>
+                <button
+                  type="button"
+                  aria-label="Wallets"
+                  aria-expanded={walletDrawerOpen}
+                  aria-controls={DESIGN_WALLET_DRAWER_ID}
+                  onClick={onToggleWalletDrawer}
+                  className={topBarHitTargetClassName}
+                >
                   <Wallet className="size-6" aria-hidden />
                 </button>
               )}

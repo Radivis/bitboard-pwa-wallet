@@ -27,6 +27,7 @@ import { useFeatureStore } from '@/stores/featureStore'
 import { selectCommittedNetworkMode, useWalletStore, type NetworkMode } from '@/stores/walletStore'
 import { DRAWER_NETWORK_LABELS } from '@/components/design/network-drawer-labels'
 import { networkDrawerSwipeMode } from '@/components/design/network-drawer-swipe'
+import { networkOpenSwipeStartsOnWalletToggle } from '@/components/design/wallet-drawer-swipe'
 
 export const DESIGN_NETWORK_DRAWER_ID = 'app-network-drawer'
 
@@ -269,7 +270,7 @@ function gestureForNetworkPointerDown(
     headerBottom: appHeaderBottom(),
     startedOnPanel,
   })
-  if (mode == null) return null
+  if (mode == null || networkOpenSwipeStartsOnWalletToggle(mode, target)) return null
   return { startX: event.clientX, startY: event.clientY, pointerId: event.pointerId, mode }
 }
 

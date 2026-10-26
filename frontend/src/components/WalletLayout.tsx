@@ -30,7 +30,10 @@ import {
   type DesignDrawerNavItem,
 } from '@/components/design/DesignSideDrawer'
 import { DesignNetworkDrawer } from '@/components/design/DesignNetworkDrawer'
+import { DesignWalletDrawer } from '@/components/design/DesignWalletDrawer'
 import { WalletTopBar } from '@/components/WalletTopBar'
+import { useWallets } from '@/db'
+import { prepareActiveWalletSwitch } from '@/lib/wallet/prepare-active-wallet-switch'
 import { BarkExitSeizureBanner } from '@/components/bark/BarkExitSeizureBanner'
 import { useNetworkModeSelection } from '@/hooks/useNetworkModeSelection'
 import { useNetworkConnectivityStore } from '@/stores/networkConnectivityStore'
@@ -348,10 +351,13 @@ export function WalletLayout({ children }: WalletLayoutProps) {
   const matchRoute = useMatchRoute()
   const [sideDrawerOpen, setSideDrawerOpen] = useState(false)
   const [networkDrawerOpen, setNetworkDrawerOpen] = useState(false)
+  const [walletDrawerOpen, setWalletDrawerOpen] = useState(false)
+  const [isSwitchingWallet, setIsSwitchingWallet] = useState(false)
   const [bottomNavHidden, setBottomNavHidden] = useState(false)
   const bottomNavRef = useRef<HTMLElement>(null)
   useBottomNavSwipe(bottomNavRef, setBottomNavHidden)
   const committedNetwork = useWalletStore(selectCommittedNetworkMode)
+  const { data: wallets } = useWallets()
   const rememberNetwork = useNetworkConnectivityStore((state) => state.rememberNetwork)
   const { selectNetwork, isSwitching, statusLine, unlockDialog } = useNetworkModeSelection()
   const isSetupRoute = location.pathname.startsWith('/setup')
@@ -367,20 +373,48 @@ export function WalletLayout({ children }: WalletLayoutProps) {
   useEffect(() => {
     setSideDrawerOpen(false)
     setNetworkDrawerOpen(false)
+    setWalletDrawerOpen(false)
   }, [location.pathname])
+
+  useEffect(() => {
+    if ((wallets?.length ?? 0) > 1) return
+    setWalletDrawerOpen(false)
+  }, [wallets])
+
+  async function handleSelectWallet(walletId: number) {
+    if (walletId === useWalletStore.getState().activeWalletId) {
+      setWalletDrawerOpen(false)
+      return
+    }
+    setIsSwitchingWallet(true)
+    try {
+      await prepareActiveWalletSwitch(walletId)
+      setWalletDrawerOpen(false)
+    } finally {
+      setIsSwitchingWallet(false)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-[var(--design-background)] text-foreground">
       <WalletTopBar
         sideDrawerOpen={sideDrawerOpen}
         networkDrawerOpen={networkDrawerOpen}
+        walletDrawerOpen={walletDrawerOpen}
         onToggleSideDrawer={() => {
           setNetworkDrawerOpen(false)
+          setWalletDrawerOpen(false)
           setSideDrawerOpen((open) => !open)
         }}
         onToggleNetworkDrawer={() => {
           setSideDrawerOpen(false)
+          setWalletDrawerOpen(false)
           setNetworkDrawerOpen((open) => !open)
+        }}
+        onToggleWalletDrawer={() => {
+          setSideDrawerOpen(false)
+          setNetworkDrawerOpen(false)
+          setWalletDrawerOpen((open) => !open)
         }}
       />
 
@@ -388,6 +422,7 @@ export function WalletLayout({ children }: WalletLayoutProps) {
         open={sideDrawerOpen}
         onOpen={() => {
           setNetworkDrawerOpen(false)
+          setWalletDrawerOpen(false)
           setSideDrawerOpen(true)
         }}
         onClose={() => setSideDrawerOpen(false)}
@@ -397,12 +432,26 @@ export function WalletLayout({ children }: WalletLayoutProps) {
         open={networkDrawerOpen}
         onOpen={() => {
           setSideDrawerOpen(false)
+          setWalletDrawerOpen(false)
           setNetworkDrawerOpen(true)
         }}
         onClose={() => setNetworkDrawerOpen(false)}
         onSelectNetwork={selectNetwork}
         isSwitching={isSwitching}
         statusLine={statusLine}
+      />
+      <DesignWalletDrawer
+        open={walletDrawerOpen}
+        onOpen={() => {
+          setSideDrawerOpen(false)
+          setNetworkDrawerOpen(false)
+          setWalletDrawerOpen(true)
+        }}
+        onClose={() => setWalletDrawerOpen(false)}
+        onSelectWallet={(walletId) => {
+          void handleSelectWallet(walletId)
+        }}
+        isSwitching={isSwitchingWallet}
       />
       {unlockDialog}
 
