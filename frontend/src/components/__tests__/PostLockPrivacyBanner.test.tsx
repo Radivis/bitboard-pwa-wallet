@@ -61,6 +61,7 @@ describe('PostLockPrivacyBanner', () => {
     renderBanner()
 
     expect(await screen.findByRole('region', { name: 'Wallet lock privacy notice' })).toBeInTheDocument()
+    expect(screen.getByText('Wallet locked — moved to start for privacy')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Unlock wallet and go to previous page' })).toBeInTheDocument()
   })
 

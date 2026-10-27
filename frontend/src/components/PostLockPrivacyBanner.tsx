@@ -7,7 +7,7 @@ import { usePostLockPrivacyRedirectStore } from '@/stores/postLockPrivacyRedirec
 import { useWalletStore } from '@/stores/walletStore'
 
 /**
- * Shown on Library after locking from a wallet route: explains the privacy redirect
+ * Shown on start after locking from a wallet route: explains the privacy redirect
  * and offers returning to the prior wallet screen after unlock.
  */
 export function PostLockPrivacyBanner() {
@@ -44,8 +44,8 @@ export function PostLockPrivacyBanner() {
         role="region"
         aria-label="Wallet lock privacy notice"
         status="info"
-        className="mb-6"
-        title="Wallet locked — moved to Library for privacy"
+        className="mb-6 w-full"
+        title="Wallet locked — moved to start for privacy"
         description="You left the wallet area so balances and activity are not visible on screen. You can dismiss this note or unlock and return to where you were."
         primaryAction={{
           label: 'Unlock wallet and go to previous page',

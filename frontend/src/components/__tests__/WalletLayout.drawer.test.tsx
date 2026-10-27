@@ -68,7 +68,7 @@ function renderSetupLayout() {
       </WalletLayout>
     ),
   })
-  const destinationPaths = ['wallet', 'wallet/send', 'wallet/receive', 'wallet/management', 'lab/blocks', 'library', 'settings']
+  const destinationPaths = ['wallet', 'wallet/send', 'wallet/receive', 'wallet/management', 'lab/blocks', 'library', 'guides', 'settings']
   const destinationRoutes = destinationPaths.map((path) =>
     createRoute({
       getParentRoute: () => rootRoute,

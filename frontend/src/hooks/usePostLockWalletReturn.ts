@@ -3,7 +3,7 @@ import { useNearZeroSecurityStore } from '@/stores/nearZeroSecurityStore'
 import { usePostLockPrivacyRedirectStore } from '@/stores/postLockPrivacyRedirectStore'
 
 /**
- * Shared with the library privacy banner and the header lock control.
+ * Shared with the Start privacy banner and the header lock control.
  * After a lock from a wallet route, unlocking returns to that route.
  */
 export function usePostLockWalletReturn() {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useCanGoBack, useRouter } from '@tanstack/react-router'
+import { Link, useCanGoBack, useRouter } from '@tanstack/react-router'
 import { ChevronLeft, LockKeyhole, LockKeyholeOpen, Menu, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { DesignAppLogo } from '@/components/design/DesignAppLogo'
@@ -110,9 +110,9 @@ export function WalletTopBar({
               <ChevronLeft className="size-6" aria-hidden />
             </button>
           )}
-          <button type="button" aria-label="Home" className={topBarHitTargetClassName}>
+          <Link to="/" aria-label="Home" className={topBarHitTargetClassName}>
             <DesignAppLogo />
-          </button>
+          </Link>
         </div>
 
         <div className="flex min-w-0 justify-center">

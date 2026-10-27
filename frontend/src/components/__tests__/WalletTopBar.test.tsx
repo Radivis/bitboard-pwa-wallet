@@ -100,6 +100,11 @@ async function renderTopBar(initialPath = '/library') {
       </QueryClientProvider>
     ),
   })
+  const indexRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/',
+    component: () => <div>Start page</div>,
+  })
   const libraryRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: 'library',
@@ -116,11 +121,11 @@ async function renderTopBar(initialPath = '/library') {
     component: () => <div>Receive page</div>,
   })
   const router = createRouter({
-    routeTree: rootRoute.addChildren([libraryRoute, settingsRoute, receiveRoute]),
+    routeTree: rootRoute.addChildren([indexRoute, libraryRoute, settingsRoute, receiveRoute]),
     history: createMemoryHistory({ initialEntries: [initialPath] }),
   })
   const view = render(<RouterProvider router={router} />)
-  await screen.findByRole('button', { name: 'Home' })
+  await screen.findByRole('link', { name: 'Home' })
   return view
 }
 
@@ -150,8 +155,7 @@ describe('WalletTopBar', () => {
     await renderTopBar()
 
     expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Home' }).tagName).toBe('BUTTON')
-    expect(screen.queryByRole('link', { name: 'Home' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Home' }).tagName).toBe('A')
 
     await user.click(screen.getByRole('link', { name: 'Open settings' }))
     expect(await screen.findByText('Settings page')).toBeInTheDocument()
@@ -162,13 +166,13 @@ describe('WalletTopBar', () => {
     expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument()
   })
 
-  it('keeps the current page when the home logo is clicked', async () => {
+  it('opens Start when the home logo is clicked', async () => {
     const user = userEvent.setup()
     await renderTopBar()
 
-    await user.click(screen.getByRole('button', { name: 'Home' }))
+    await user.click(screen.getByRole('link', { name: 'Home' }))
 
-    expect(screen.getByRole('link', { name: 'Open settings' })).toBeInTheDocument()
+    expect(await screen.findByText('Start page')).toBeInTheDocument()
   })
 
   it('shows the network badge only while the wallet is unlocked', async () => {

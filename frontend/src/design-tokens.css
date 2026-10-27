@@ -8,6 +8,8 @@
   --design-background: #F7F8F9;
   --design-elevation-drawer: #E9EDF24d;
   --design-elevation-nav-bar: #E9EDF2b3;
+  --design-elevation-1: #EFF2F5;
+  --design-elevation-2: #E9EDF2;
   --design-elevation-3: #E2E7EE;
   --design-elevation-4: #DCE2EA;
   --design-text-regular: #000000;
@@ -84,6 +86,8 @@
   --design-background: #040404;
   --design-elevation-drawer: #1214174d;
   --design-elevation-nav-bar: #121417b3;
+  --design-elevation-1: #0D0F11;
+  --design-elevation-2: #121417;
   --design-elevation-3: #16191D;
   --design-elevation-4: #1B1E22;
   --design-text-regular: #E4E5E7;
@@ -513,6 +517,41 @@
 
 .dark [data-slot="design-card"][data-elevation="2"] {
   --design-card-shadow: inset 0 4px 9px 0 rgb(245 244 246 / 0.08);
+}
+
+/*
+ * Card-Button. Default, hover, and active each keep their own outer drop
+ * shadows and inner shadow. The fill steps through elevation 1, 2, and 3.
+ * Shadows are set here so a Tailwind shadow or ring utility cannot drop a layer.
+ */
+[data-slot="design-card-button"] {
+  background: var(--design-elevation-1);
+  color: var(--design-text-regular);
+  --design-card-button-shadow:
+    0 1px 2px 0 rgb(0 0 0 / 0.3),
+    0 1px 3px 1px rgb(0 0 0 / 0.15),
+    inset 0 4px 7px 0 rgb(245 244 246 / 0.08);
+  box-shadow: var(--design-card-button-shadow);
+}
+
+[data-slot="design-card-button"]:hover {
+  background: var(--design-elevation-2);
+  --design-card-button-shadow:
+    0 1px 2px 0 rgb(0 0 0 / 0.3),
+    0 2px 6px 2px rgb(0 0 0 / 0.15),
+    inset 0 4px 9px 0 rgb(236 235 239 / 0.08);
+}
+
+[data-slot="design-card-button"]:active {
+  background: var(--design-elevation-3);
+  --design-card-button-shadow:
+    0 4px 8px 3px rgb(0 0 0 / 0.15),
+    0 1px 3px 0 rgb(0 0 0 / 0.3),
+    inset 0 4px 11px 0 rgb(229 227 232 / 0.08);
+}
+
+[data-slot="design-card-button"]:focus-visible {
+  box-shadow: var(--design-card-button-shadow), 0 0 0 2px var(--design-focus-ring);
 }
 
 /* Set on the element, not through a Tailwind shadow utility. DialogContent also

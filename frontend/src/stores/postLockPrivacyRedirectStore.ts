@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 
 /**
- * When the user locks from a wallet route, we redirect to the Library. This store
+ * When the user locks from a wallet route, we redirect to Start. This store
  * remembers the wallet path so we can explain the redirect and offer “return after unlock”.
  */
 interface PostLockPrivacyRedirectState {

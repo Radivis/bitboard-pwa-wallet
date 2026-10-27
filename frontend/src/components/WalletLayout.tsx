@@ -13,6 +13,7 @@ import {
   Wallet,
   FlaskConical,
   BookOpen,
+  Signpost,
   SlidersHorizontal,
   List,
   Tags,
@@ -76,6 +77,12 @@ const PRIMARY_NAV_ITEMS: PrimaryNavItem[] = [
     label: 'Library',
     icon: BookOpen,
     isActive: (pathname) => pathname.startsWith('/library'),
+  },
+  {
+    to: '/guides',
+    label: 'Guides',
+    icon: Signpost,
+    isActive: (pathname) => pathname.startsWith('/guides'),
   },
   {
     to: '/settings',
@@ -214,7 +221,7 @@ const LAB_SUB_NAV_ITEMS: SectionSubNavItem[] = [
 const MAIN_BOTTOM_PADDING_WITH_NAV_CLASS = 'pb-24'
 
 function isWalletSectionPath(pathname: string): boolean {
-  return pathname === '/' || pathname.startsWith('/wallet')
+  return pathname.startsWith('/wallet')
 }
 
 function isLibrarySectionPath(pathname: string): boolean {

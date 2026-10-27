@@ -13,7 +13,7 @@ export const designTypeClassName = {
   /** Screen-heading metrics for nav-button labels. */
   largeButton: 'design-type-large-button',
   areaHeading: 'design-type-area-heading',
-  /** Start-page title. Unused until that page exists. */
+  /** Start-page title. */
   hero: 'design-type-hero',
   /** Metadata below the md breakpoint, button from 48rem. */
   compactNav: 'design-type-compact-nav',
