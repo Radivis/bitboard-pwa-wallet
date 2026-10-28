@@ -2,8 +2,8 @@ import { useEffect, useRef, type RefObject } from 'react'
 
 import { DesignNavButton } from '@/components/design/DesignNavButton'
 import {
-  designDrawerBackdropClassName,
   designDrawerPanelClassName,
+  DrawerBackdrop,
   DrawerSectionLabel,
 } from '@/components/design/design-drawer-chrome'
 import { useDrawerEscape } from '@/components/design/use-drawer-escape'
@@ -51,10 +51,10 @@ export function DesignWalletDrawer({
 
   return (
     <>
-      <div
-        data-testid="design-wallet-drawer-backdrop"
-        className={designDrawerBackdropClassName}
-        onClick={onClose}
+      <DrawerBackdrop
+        testId="design-wallet-drawer-backdrop"
+        motion={motion}
+        onClose={onClose}
       />
       <div
         ref={panelRef}

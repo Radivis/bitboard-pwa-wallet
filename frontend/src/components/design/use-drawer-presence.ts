@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
-export const DRAWER_MOTION_DURATION_MS = 250
+/** Panel slide is 0.25s. The page veil fades for 0.3s, so the tree stays mounted until the veil finishes. */
+export const DRAWER_MOTION_DURATION_MS = 300
 
 export const DRAWER_ENTER_FROM_RIGHT_CLASS = 'design-drawer-enter-from-right'
 export const DRAWER_EXIT_TO_RIGHT_CLASS = 'design-drawer-exit-to-right'

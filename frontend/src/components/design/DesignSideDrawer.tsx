@@ -5,8 +5,8 @@ import type { LucideIcon } from 'lucide-react'
 import { DesignNavButton } from '@/components/design/DesignNavButton'
 import { DesignThemeSwitcher } from '@/components/design/DesignThemeSwitcher'
 import {
-  designDrawerBackdropClassName,
   designDrawerPanelClassName,
+  DrawerBackdrop,
   DrawerSectionLabel,
 } from '@/components/design/design-drawer-chrome'
 import { useDrawerEscape } from '@/components/design/use-drawer-escape'
@@ -54,10 +54,10 @@ export function DesignSideDrawer({ open, onOpen, onClose, navItems }: DesignSide
 
   return (
     <>
-      <div
-        data-testid="design-side-drawer-backdrop"
-        className={designDrawerBackdropClassName}
-        onClick={onClose}
+      <DrawerBackdrop
+        testId="design-side-drawer-backdrop"
+        motion={motion}
+        onClose={onClose}
       />
       <div
         ref={panelRef}

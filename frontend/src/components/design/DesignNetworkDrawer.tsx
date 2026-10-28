@@ -3,8 +3,8 @@ import { FlaskConical } from 'lucide-react'
 
 import { DesignNavButton } from '@/components/design/DesignNavButton'
 import {
-  designDrawerBackdropClassName,
   designDrawerPanelClassName,
+  DrawerBackdrop,
   DrawerSectionLabel,
 } from '@/components/design/design-drawer-chrome'
 import { useDrawerEscape } from '@/components/design/use-drawer-escape'
@@ -92,10 +92,10 @@ export function DesignNetworkDrawer({
 
   return (
     <>
-      <div
-        data-testid="design-network-drawer-backdrop"
-        className={designDrawerBackdropClassName}
-        onClick={onClose}
+      <DrawerBackdrop
+        testId="design-network-drawer-backdrop"
+        motion={motion}
+        onClose={onClose}
       />
       <div
         ref={panelRef}

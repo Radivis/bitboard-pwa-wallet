@@ -156,12 +156,18 @@ describe('DesignSideDrawer', () => {
     const panel = await screen.findByRole('dialog', { name: 'Menu' })
     expect(panel).toHaveAttribute('data-motion', 'enter')
     expect(panel).toHaveClass(DRAWER_ENTER_FROM_RIGHT_CLASS)
+    expect(screen.getByTestId('design-side-drawer-backdrop')).toHaveAttribute('data-motion', 'enter')
+    await waitFor(() => {
+      expect(screen.getByTestId('design-side-drawer-backdrop')).toHaveAttribute('data-revealed', '')
+    })
 
     await user.click(screen.getByRole('button', { name: 'Close drawer' }))
 
     const exitingPanel = document.getElementById(DESIGN_SIDE_DRAWER_ID)
     expect(exitingPanel).toHaveAttribute('data-motion', 'exit')
     expect(exitingPanel).toHaveClass(DRAWER_EXIT_TO_RIGHT_CLASS)
+    expect(screen.getByTestId('design-side-drawer-backdrop')).toHaveAttribute('data-motion', 'exit')
+    expect(screen.getByTestId('design-side-drawer-backdrop')).not.toHaveAttribute('data-revealed')
     expect(screen.queryByRole('dialog', { name: 'Menu' })).not.toBeInTheDocument()
 
     await waitFor(() => {

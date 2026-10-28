@@ -6,7 +6,7 @@
   --design-font-ui: "Plus Jakarta Sans", sans-serif;
   --design-font-mono: "JetBrains Mono", ui-monospace, monospace;
   --design-background: #F7F8F9;
-  --design-elevation-drawer: #E9EDF24d;
+  --design-elevation-drawer: #E9EDF299;
   --design-elevation-nav-bar: #E9EDF2b3;
   --design-elevation-1: #EFF2F5;
   --design-elevation-2: #E9EDF2;
@@ -14,7 +14,7 @@
   --design-elevation-4: #DCE2EA;
   --design-text-regular: #000000;
   --design-text-subdued: #333A42;
-  --design-special-infomode-highlight: #4079BF;
+  --design-special-infomode-highlight: #4079BF99;
   --design-special-bitcoin: #F7931A;
   --design-special-bitcoin-stroke: #362817;
   --design-special-destructive: #FF1500;
@@ -84,7 +84,7 @@
 
 .dark {
   --design-background: #040404;
-  --design-elevation-drawer: #1214174d;
+  --design-elevation-drawer: #12141799;
   --design-elevation-nav-bar: #121417b3;
   --design-elevation-1: #0D0F11;
   --design-elevation-2: #121417;
@@ -92,7 +92,7 @@
   --design-elevation-4: #1B1E22;
   --design-text-regular: #E4E5E7;
   --design-text-subdued: #B8BEC6;
-  --design-special-infomode-highlight: #4079BF;
+  --design-special-infomode-highlight: #4079BF99;
   --design-special-bitcoin: #F7931A;
   --design-special-bitcoin-stroke: #36281700;
   --design-special-destructive: #FF1500;
@@ -588,7 +588,7 @@
   box-shadow:
     0 5px 12px 0 rgb(0 0 0 / 0.25),
     0 4px 8px 3px rgb(0 0 0 / 0.15),
-    0 0 4px 4px var(--design-special-infomode-highlight),
+    0 0 8px 8px var(--design-special-infomode-highlight),
     inset 0 4px 11px 0 rgb(229 227 232 / 0.08);
 }
 

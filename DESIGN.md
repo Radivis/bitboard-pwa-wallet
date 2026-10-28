@@ -122,7 +122,9 @@ Light, Dark, and System. The selected option uses the nav-button selected fill a
 
 ### Side drawer
 
-Opened from the header menu button. It holds the theme switcher and the primary navigation: Wallet, Lab, Library, and Settings. Those entries are Nav-Buttons. The panel sits under the header on the right. Only the bottom-left corner is rounded.
+Opened from the header menu button. It holds the theme switcher and the primary navigation: Wallet, Lab, Library, and Settings. Those entries are Nav-Buttons. The panel sits under the header on the right. Only the bottom-left corner is rounded. The panel fill is `elevation/drawer` at 60% opacity.
+
+While this drawer, the network drawer, or the wallet drawer is open, the page below the header is covered by pure black at 20% opacity. The veil fades in and out over 0.3s with ease-out. The header stays clear so its controls can still switch drawers.
 
 ### Network drawer
 
@@ -152,7 +154,7 @@ The only theme variant is Light. Dark should follow the theme mode through the `
 
 ### Info-Popup
 
-The explanation opened from info-toggle. The fill is `elevation/3`. Light and Dark use the elevation 3 shadow stack from the Basics elevation-patterns frame, plus an outer glow in `special/infomode/highlight`. It does not follow the network.
+The explanation opened from info-toggle. The fill is `elevation/3`. Light and Dark use the elevation 3 shadow stack from the Basics elevation-patterns frame, plus an outer glow in `special/infomode/highlight`: 8px blur, 8px spread, color at 60% opacity. The same glow outlines each infomode target. It does not follow the network.
 
 ### Toast
 

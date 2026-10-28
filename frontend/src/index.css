@@ -259,6 +259,7 @@ body {
 /*
  * Infomode highlight. The glow sits on the wrapper so a child card or button
  * keeps its own elevation shadow. Radius follows the painted control.
+ * Blur and spread are 8px. Opacity lives on --design-special-infomode-highlight (60%).
  */
 [data-infomode-active] [data-infomode-id] {
   cursor: help;
@@ -354,5 +355,28 @@ body {
 
   .design-drawer-exit-to-top {
     animation: design-drawer-exit-to-top 0.25s ease-out both;
+  }
+
+  [data-design-drawer-backdrop] {
+    transition: opacity 0.3s ease-out;
+  }
+}
+
+/*
+ * Page veil behind an open drawer. 20% pure black. Opacity fades over 0.3s
+ * ease-out when motion is allowed; the rule above supplies that transition.
+ */
+[data-design-drawer-backdrop] {
+  background-color: rgb(0 0 0 / 0.2);
+  opacity: 0;
+}
+
+[data-design-drawer-backdrop][data-motion='enter'][data-revealed] {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-design-drawer-backdrop][data-motion='enter'] {
+    opacity: 1;
   }
 }
