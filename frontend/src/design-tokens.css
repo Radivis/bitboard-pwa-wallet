@@ -304,6 +304,8 @@
   font-size: 16px;
   line-height: 20px;
   font-weight: 400;
+  /* Figma Regular letter spacing is -2% of the font size. */
+  letter-spacing: -0.02em;
 }
 .design-type-addresses,
 .design-type-small-balances {
