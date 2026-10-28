@@ -80,7 +80,7 @@ Interface text uses Plus Jakarta Sans. Addresses and input values use JetBrains 
 
 Hero is the setup welcome title. Area heading is the title of an area index: Wallet, Lab, Library, and Settings. Screen heading is the main title of a regular page. Large button uses the same metrics for nav-button labels. Button is for button labels. Highlighted parts of regular text use an emphasis alias of Button: card titles, banner and toast titles, and article section headings. Metadata is for tags and other small labels. Regular is body copy, with letter spacing of −2%. Large balances is the headline total on the wallet dashboard: on-chain, Lightning, Arkade, and Bark. Small balances is the alias of Addresses used for breakdown lines and for the smaller amount size. The large amount size uses Large balances. Fields, addresses, and identifiers use Addresses.
 
-Buttons and nav buttons are pills: height 48, corner radius 20. Cards, toasts, banners, and inputs use corner radius 16.
+Buttons and nav buttons are pills: height 48, corner radius 20. Cards, toasts, and inputs use corner radius 16. Banners use corner radius 24.
 
 Focus is a 2px ring in the Neutral primary color. The ring does not change with the network, so focus stays recognizable on every accent.
 
@@ -160,7 +160,9 @@ A transient status message. `Type` is Success, Error, Warning, Info, or Risk. It
 
 ### Banner
 
-A status message that stays on the page. It uses the same five types and the same status tokens as Toast. It has no close icon. Title and description are centered. `optionalContent` sits between the description and the action panel, full width and left-aligned, for lists, diffs, or other detail that is not a second paragraph.
+A status message that stays on the page. Its corner radius is 24. It uses the same five types and the same status tokens as Toast. It has no close icon. Title and description are centered. `optionalContent` sits between the description and the action panel, full width and left-aligned, for lists, diffs, or other detail that is not a second paragraph.
+
+The banner pads 16px on the sides and 8px on the top and bottom, with 8px between the status icon and the body. Title, description, and optional content are 8px apart. Above the action row, the text block has 16px of bottom padding and the body adds another 4px. The action row pads 4px and separates its buttons by 16px.
 
 `has-primary-action` shows a secondary Button. `has-secondary-action` shows a tertiary Button. `show-optional-content` reveals that middle section. The sample labels are Retry and Dismiss. The banner surface does not follow the network. Those buttons do.
 

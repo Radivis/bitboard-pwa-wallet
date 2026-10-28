@@ -33,37 +33,47 @@ export function DesignBanner({
   primaryAction?: DesignBannerAction
   secondaryAction?: DesignBannerAction
 }) {
+  const hasActions = primaryAction != null || secondaryAction != null
+
   return (
     <section
       data-slot="design-banner"
       data-status={status}
       className={cn(
-        'design-ui flex items-center gap-2 rounded-[16px] border px-4 py-2',
+        'design-ui flex items-center gap-2 rounded-[24px] border px-4 py-2',
         className,
       )}
       {...props}
     >
       <DesignStatusIcon status={status} />
-      <div className="flex min-w-0 flex-1 flex-col items-center gap-1">
-        <p className={cn('w-full text-center', designTypeClassName.emphasis)}>{title}</p>
-        {description != null ? (
-          <p
-            data-slot="design-status-description"
-            className={cn('w-full text-center', designTypeClassName.regular)}
-          >
-            {description}
-          </p>
-        ) : null}
-        {optionalContent != null ? (
-          <div
-            data-slot="design-banner-optional-content"
-            className={cn('w-full text-left', designTypeClassName.regular)}
-          >
-            {optionalContent}
-          </div>
-        ) : null}
-        {primaryAction != null || secondaryAction != null ? (
-          <div className="flex flex-wrap items-center justify-center gap-4 p-1">
+      <div
+        data-slot="design-banner-body"
+        className="flex min-w-0 flex-1 flex-col items-center justify-center gap-1"
+      >
+        <div
+          data-slot="design-banner-text"
+          className={cn('flex w-full flex-col items-start gap-2', hasActions && 'pb-4')}
+        >
+          <p className={cn('w-full text-center', designTypeClassName.emphasis)}>{title}</p>
+          {description != null ? (
+            <p
+              data-slot="design-status-description"
+              className={cn('w-full text-center', designTypeClassName.regular)}
+            >
+              {description}
+            </p>
+          ) : null}
+          {optionalContent != null ? (
+            <div
+              data-slot="design-banner-optional-content"
+              className={cn('w-full text-left', designTypeClassName.regular)}
+            >
+              {optionalContent}
+            </div>
+          ) : null}
+        </div>
+        {hasActions ? (
+          <div data-slot="design-banner-actions" className="flex flex-wrap items-start gap-4 p-1">
             {primaryAction != null ? (
               <DesignBannerActionButton action={primaryAction} appearance="secondary" />
             ) : null}
