@@ -71,7 +71,11 @@ describe('ExchangeGuideStepPage', () => {
     for (const content of EXCHANGE_GUIDE_STEPS.filter((entry) => entry.step > 1)) {
       const { unmount } = renderExchangeGuideStep(content.step)
       expect(await screen.findByRole('heading', { name: content.title })).toBeInTheDocument()
-      expect(screen.getByText(content.body)).toBeInTheDocument()
+      for (const paragraph of content.paragraphs) {
+        expect(screen.getByText(paragraph)).toBeInTheDocument()
+      }
+      const renderedParagraphs = content.paragraphs.map((paragraph) => screen.getByText(paragraph))
+      expect(new Set(renderedParagraphs).size).toBe(content.paragraphs.length)
       expect(screen.getByRole('img', { name: content.comicAlt })).toHaveAttribute(
         'src',
         content.comicSrc,

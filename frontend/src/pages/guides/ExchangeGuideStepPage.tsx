@@ -34,10 +34,12 @@ export function ExchangeGuideStepPage({ step }: { step: number }) {
       <div
         className={cn(
           designTypeClassName.regular,
-          'w-full max-w-xl text-[var(--design-text-regular)]',
+          'w-full max-w-xl space-y-4 text-[var(--design-text-regular)]',
         )}
       >
-        <p>{content.body}</p>
+        {content.paragraphs.map((paragraph) => (
+          <p key={paragraph}>{paragraph}</p>
+        ))}
         {content.linkHref ? (
           <a
             href={content.linkHref}

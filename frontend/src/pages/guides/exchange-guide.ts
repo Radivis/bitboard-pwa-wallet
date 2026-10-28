@@ -9,7 +9,7 @@ export const EXCHANGE_GUIDE_INTRO_PARAGRAPHS = [
 export interface ExchangeGuideStepContent {
   step: number
   title: string
-  body: string
+  paragraphs: readonly string[]
   linkHref?: string
   comicSrc: string
   comicAlt: string
@@ -21,7 +21,7 @@ export const EXCHANGE_GUIDE_STEPS: readonly ExchangeGuideStepContent[] = [
   {
     step: 1,
     title: 'Exchange Selection',
-    body: 'Pick an exchange. The following site is a good starting point:',
+    paragraphs: ['Pick an exchange. The following site is a good starting point:'],
     linkHref: COINGECKO_EXCHANGES_URL,
     comicSrc: '/comics/get-bitcoins/get-bitcoins-1-exchange-comparison.jpg',
     comicAlt: 'Comparing crypto exchanges on a laptop',
@@ -31,7 +31,9 @@ export const EXCHANGE_GUIDE_STEPS: readonly ExchangeGuideStepContent[] = [
   {
     step: 2,
     title: 'Registration and Verification',
-    body: 'Create an account. You will have to enter some personal data and get verified. The verification can take some time.',
+    paragraphs: [
+      'Create an account. You will have to enter some personal data and get verified. The verification can take some time.',
+    ],
     comicSrc: '/comics/get-bitcoins/get-bitcoins-2-KYC-booth.jpg',
     comicAlt: 'A verification booth for opening an exchange account',
     comicWidth: 1712,
@@ -40,7 +42,7 @@ export const EXCHANGE_GUIDE_STEPS: readonly ExchangeGuideStepContent[] = [
   {
     step: 3,
     title: 'Bitcoin Purchase',
-    body: 'Purchase Bitcoin (BTC) on the exchange via bank transfer (slow) or card (expensive).',
+    paragraphs: ['Purchase Bitcoin (BTC) on the exchange via bank transfer (slow) or card (expensive).'],
     comicSrc: '/comics/get-bitcoins/get-bitcoins-3-BuyBitcoins.jpg',
     comicAlt: 'Buying bitcoin on an exchange',
     comicWidth: 1168,
@@ -49,7 +51,11 @@ export const EXCHANGE_GUIDE_STEPS: readonly ExchangeGuideStepContent[] = [
   {
     step: 4,
     title: 'Coin Transfer',
-    body: 'Go on the receive page of your Bitcoin Codex wallet and copy the displayed code. On the exchange select Bitcoin as currency, if supported, paste the code, select a moderate fee, and confirm. It may take up to an hour for the transfer to complete. Bonus: Once you have Lightning set up, and the exchange supports that, choose that as currency instead.',
+    paragraphs: [
+      'Go on the receive page of your Bitcoin Codex wallet and copy the displayed code.',
+      'On the exchange select Bitcoin as currency, if supported, paste the code, select a moderate fee, and confirm. It may take up to an hour for the transfer to complete.',
+      'Bonus: Once you have Lightning set up, and the exchange supports that, choose that as currency instead.',
+    ],
     comicSrc: '/comics/get-bitcoins/get-bitcoins-4-WithdrawBitcoins.jpg',
     comicAlt: 'Withdrawing bitcoin from an exchange into a wallet',
     comicWidth: 1168,
