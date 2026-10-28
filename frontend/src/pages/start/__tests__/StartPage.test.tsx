@@ -68,6 +68,9 @@ describe('StartPage', () => {
     expect(screen.getByRole('link', { name: 'Guides' })).toHaveAttribute('href', '/guides')
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings')
     expect(screen.getByRole('heading', { name: 'Bitcoin Codex' })).toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: 'App areas' }).className).toContain(
+      'max-w-[648px]',
+    )
   })
 
   it('links Wallet to the wallet when one exists', async () => {

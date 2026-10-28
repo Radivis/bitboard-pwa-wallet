@@ -1,8 +1,15 @@
 export const designFocusClassName =
   'outline-none focus-visible:ring-2 focus-visible:ring-[var(--design-focus-ring)]'
 
+/** Ceiling for a labeled design button. A caller max-width still wins through `cn()`. */
+export const designButtonMaxWidthClassName = 'max-w-[600px]'
+
+/** Centered column for a vertical stack of buttons. Narrower parents still shrink it. */
+export const designButtonGroupClassName =
+  'mx-auto flex w-full max-w-[648px] flex-col items-center'
+
 const designButtonLayoutClassName =
-  'design-ui inline-flex h-12 shrink-0 items-center justify-center gap-2 px-6 whitespace-nowrap disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:size-6 [&_svg]:shrink-0'
+  `design-ui inline-flex h-12 shrink-0 items-center justify-center gap-2 px-6 whitespace-nowrap disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:size-6 [&_svg]:shrink-0 ${designButtonMaxWidthClassName}`
 
 export const designPillClassName = `${designButtonLayoutClassName} rounded-[20px]`
 

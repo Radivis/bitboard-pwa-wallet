@@ -45,5 +45,6 @@ describe('GuidesIndexPage', () => {
       'href',
       '/guides/introduction',
     )
+    expect(screen.getByRole('navigation', { name: 'Guides' }).className).toContain('max-w-[648px]')
   })
 })

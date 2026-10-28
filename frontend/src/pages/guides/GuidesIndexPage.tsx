@@ -1,5 +1,6 @@
 import { CircleDollarSign, Signpost, Sparkles } from 'lucide-react'
 import { DesignCardButton } from '@/components/design/DesignCardButton'
+import { designButtonGroupClassName } from '@/components/design/design-classes'
 import { designTypeClassName } from '@/components/design/design-type'
 import { cn } from '@/lib/shared/utils'
 
@@ -15,7 +16,7 @@ export function GuidesIndexPage() {
           Practical step by step instructions
         </p>
       </header>
-      <nav aria-label="Guides" className="flex w-full flex-col gap-6">
+      <nav aria-label="Guides" className={cn(designButtonGroupClassName, 'gap-6')}>
         <DesignCardButton to="/guides/how-to-get-bitcoin" icon={CircleDollarSign}>
           How to get Bitcoin
         </DesignCardButton>

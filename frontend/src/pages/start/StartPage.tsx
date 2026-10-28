@@ -1,7 +1,9 @@
 import { BookOpen, FlaskConical, Settings, Signpost, Wallet } from 'lucide-react'
 import { AppHero } from '@/components/AppHero'
 import { DesignCardButton } from '@/components/design/DesignCardButton'
+import { designButtonGroupClassName } from '@/components/design/design-classes'
 import { PostLockPrivacyBanner } from '@/components/PostLockPrivacyBanner'
+import { cn } from '@/lib/shared/utils'
 import { useWallets } from '@/db'
 
 export function StartPage() {
@@ -12,7 +14,7 @@ export function StartPage() {
     <div className="flex flex-col items-center gap-8">
       <PostLockPrivacyBanner />
       <AppHero />
-      <nav aria-label="App areas" className="flex w-full flex-col gap-6">
+      <nav aria-label="App areas" className={cn(designButtonGroupClassName, 'gap-6')}>
         <DesignCardButton to={walletDestination} icon={Wallet}>
           Wallet
         </DesignCardButton>

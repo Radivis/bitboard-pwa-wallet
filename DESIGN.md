@@ -98,6 +98,8 @@ Selected applies to secondary buttons only. The fill becomes the button color at
 
 Network mode changes the accent. Theme mode changes whether that accent comes from `onLight` or `onDark`.
 
+A labeled button is at most 600px wide. Button, Nav-Button, Destructive-Button, and Card-Button share that ceiling. A smaller max-width on a specific button still applies. A vertical collection of buttons sits in a centered flex column at most 648px wide, so a 600px button has 24px of room on each side. On a narrower parent the column and the buttons shrink together.
+
 ### Destructive-Button
 
 A labeled action that can discard funds or local data. It is separate from Button, so the network accent does not recolor it. The fill is `special/destructive/background`: `#FF1500` at 50% by default, 42% on hover, and 34% when active. The 1px stroke stays `special/destructive` (`#FF1500`). The top-left and bottom-right corners are 20px. The top-right and bottom-left corners are square. The label, and an icon inside the button, use `text/regular/bright`. Light and dark share these colors. There is no disabled color; a disabled button stays the same colors at 50% opacity.

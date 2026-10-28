@@ -49,6 +49,8 @@ describe('DesignCardButton', () => {
     expect(link).toHaveAttribute('href', '/library')
     expect(link).toHaveAttribute('data-slot', 'design-card-button')
     expect(link.className).toContain('rounded-[32px]')
+    expect(link.className).toContain('max-w-[600px]')
+    expect(link.className).toContain('mx-auto')
     expect(link.className).toContain(designTypeClassName.largeButton)
     expect(link.className).not.toContain('design-card-shadow')
     expect(link.className).not.toContain('design-surface-card')

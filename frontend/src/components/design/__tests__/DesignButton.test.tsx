@@ -52,4 +52,14 @@ describe('DesignButton', () => {
     )
     expect(screen.getByRole('button', { name: 'Later' })).toBeDisabled()
   })
+
+  it('caps width at 600px unless a caller sets a smaller max width', () => {
+    const { rerender } = render(<DesignButton>Save</DesignButton>)
+    expect(screen.getByRole('button', { name: 'Save' }).className).toContain('max-w-[600px]')
+
+    rerender(<DesignButton className="max-w-[18.625rem]">Save</DesignButton>)
+    const narrowed = screen.getByRole('button', { name: 'Save' })
+    expect(narrowed.className).toContain('max-w-[18.625rem]')
+    expect(narrowed.className).not.toContain('max-w-[600px]')
+  })
 })

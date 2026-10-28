@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
 
-import { designFocusClassName } from '@/components/design/design-classes'
+import { designButtonMaxWidthClassName, designFocusClassName } from '@/components/design/design-classes'
 import { designTypeClassName } from '@/components/design/design-type'
 import { cn } from '@/lib/shared/utils'
 
@@ -29,7 +29,8 @@ export function DesignCardButton({ to, icon: Icon, children }: DesignCardButtonP
       to={to}
       data-slot="design-card-button"
       className={cn(
-        'design-ui flex w-full items-center justify-center gap-1 rounded-[32px] px-6 py-3',
+        'design-ui mx-auto flex w-full items-center justify-center gap-1 rounded-[32px] px-6 py-3',
+        designButtonMaxWidthClassName,
         designTypeClassName.largeButton,
         designFocusClassName,
       )}
