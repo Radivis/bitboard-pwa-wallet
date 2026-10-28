@@ -1,4 +1,4 @@
-import { type ReactNode, type RefObject, useEffect, useRef, useState } from 'react'
+import { type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useMatchRoute, useLocation } from '@tanstack/react-router'
 import {
   Home,
@@ -26,6 +26,7 @@ import {
 import { designNavBarSurfaceClassName } from '@/components/design/design-drawer-chrome'
 import { useBottomNavSwipe } from '@/components/design/bottom-nav-swipe'
 import { DesignCompactNavButton } from '@/components/design/DesignCompactNavButton'
+import { DesignNavToggle } from '@/components/design/DesignNavToggle'
 import {
   DesignSideDrawer,
   type DesignDrawerNavItem,
@@ -217,8 +218,40 @@ const LAB_SUB_NAV_ITEMS: SectionSubNavItem[] = [
   },
 ]
 
-/** Clears a compact section footer (60px large control plus the bar's vertical padding). */
-const MAIN_BOTTOM_PADDING_WITH_NAV_CLASS = 'pb-24'
+/** Clears the 48px nav toggle plus the compact section footer. */
+const MAIN_BOTTOM_PADDING_WITH_NAV_CLASS = 'pb-36'
+
+/** Clears the nav toggle once the section footer has slid away. */
+const MAIN_BOTTOM_PADDING_WITH_TOGGLE_CLASS = 'pb-20'
+
+export const SECTION_SUB_NAV_ID = 'section-sub-nav'
+
+function mainBottomPaddingClass(showSectionNav: boolean, bottomNavHidden: boolean): string | undefined {
+  if (!showSectionNav) return undefined
+  return bottomNavHidden ? MAIN_BOTTOM_PADDING_WITH_TOGGLE_CLASS : MAIN_BOTTOM_PADDING_WITH_NAV_CLASS
+}
+
+function useSectionNavHeight(
+  navRef: RefObject<HTMLElement | null>,
+  chromeRef: RefObject<HTMLElement | null>,
+  measureKey: string,
+) {
+  useLayoutEffect(() => {
+    const nav = navRef.current
+    const chrome = chromeRef.current
+    if (!nav || !chrome) return
+
+    const applyHeight = () => {
+      chrome.style.setProperty('--section-nav-height', `${nav.offsetHeight}px`)
+    }
+    applyHeight()
+    if (typeof ResizeObserver === 'undefined') return
+
+    const observer = new ResizeObserver(applyHeight)
+    observer.observe(nav)
+    return () => observer.disconnect()
+  }, [navRef, chromeRef, measureKey])
+}
 
 function isWalletSectionPath(pathname: string): boolean {
   return pathname.startsWith('/wallet')
@@ -277,6 +310,7 @@ function SectionSubNav({
   return (
     <nav
       ref={navRef}
+      id={SECTION_SUB_NAV_ID}
       aria-label={ariaLabel}
       aria-hidden={hidden}
       inert={hidden || undefined}
@@ -315,15 +349,25 @@ function SectionSubNav({
 function BottomNavigationChrome({
   hidden,
   navRef,
+  onToggle,
 }: {
   hidden: boolean
   navRef: RefObject<HTMLElement | null>
+  onToggle: () => void
 }) {
   const location = useLocation()
   const showLibrarySubNav = isLibrarySectionPath(location.pathname)
   const showWalletSubNav = isWalletSectionPath(location.pathname)
   const showLabSubNav = isLabSectionPath(location.pathname)
   const showSettingsSubNav = isSettingsSectionPath(location.pathname)
+  const showSectionSubNav = showLibrarySubNav || showWalletSubNav || showLabSubNav || showSettingsSubNav
+  const chromeRef = useRef<HTMLDivElement>(null)
+  const [positionSettled, setPositionSettled] = useState(false)
+  useSectionNavHeight(navRef, chromeRef, location.pathname)
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setPositionSettled(true))
+    return () => cancelAnimationFrame(frame)
+  }, [])
 
   return (
     <>
@@ -348,6 +392,22 @@ function BottomNavigationChrome({
           hidden={hidden}
           navRef={navRef}
         />
+      )}
+      {showSectionSubNav && (
+        <div ref={chromeRef} className="pointer-events-none fixed inset-x-0 bottom-0 z-50">
+          <div className="relative mx-auto h-0 max-w-screen-xl">
+            <DesignNavToggle
+              expanded={!hidden}
+              aria-controls={SECTION_SUB_NAV_ID}
+              onClick={onToggle}
+              className={cn(
+                'pointer-events-auto absolute right-2',
+                positionSettled && 'motion-safe:transition-[bottom] motion-safe:duration-200',
+              )}
+              style={{ bottom: hidden ? '0.5rem' : 'var(--section-nav-height, 0px)' }}
+            />
+          </div>
+        </div>
       )}
     </>
   )
@@ -470,16 +530,22 @@ export function WalletLayout({ children }: WalletLayoutProps) {
       <main
         className={cn(
           'mx-auto max-w-screen-xl px-4 py-6',
-          bottomNavHidden ||
-          !(showWalletSubNav || showLibrarySubNav || showLabSubNav || showSettingsSubNav)
-            ? undefined
-            : MAIN_BOTTOM_PADDING_WITH_NAV_CLASS,
+          mainBottomPaddingClass(
+            showWalletSubNav || showLibrarySubNav || showLabSubNav || showSettingsSubNav,
+            bottomNavHidden,
+          ),
         )}
       >
         {children}
       </main>
 
-      {!isSetupRoute && <BottomNavigationChrome hidden={bottomNavHidden} navRef={bottomNavRef} />}
+      {!isSetupRoute && (
+        <BottomNavigationChrome
+          hidden={bottomNavHidden}
+          navRef={bottomNavRef}
+          onToggle={() => setBottomNavHidden((navHidden) => !navHidden)}
+        />
+      )}
     </div>
   )
 }

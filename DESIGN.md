@@ -110,6 +110,12 @@ An action that is only an icon does not use this button. Draw that icon in `spec
 
 Navigation, not a Button. `status` is default, hover, active, or selected. It uses the `nav-button` tokens, so the network accent does not recolor it. Selected is the strongest fill. The stroke stays at 10%.
 
+### Nav-Toggle
+
+A 48px pill, corner radius 20, with a 24px chevron. It sits flush above the section nav, at the trailing edge of that bar. It uses the nav-button fills for default, hover, and active.
+
+Pointing down, it hides the section nav and stays on screen. Pointing up, it shows the nav again. The chevron rotates 180 degrees over 0.4s with ease-out. A swipe on the bar still hides and shows it.
+
 ### Theme switcher
 
 Light, Dark, and System. The selected option uses the nav-button selected fill and stroke. It is the only theme control, and it lives in the side drawer.
