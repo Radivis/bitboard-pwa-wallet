@@ -20,7 +20,7 @@ Do **not** file public issues for undisclosed security bugs. Do **not** post exp
 - Clear **steps to reproduce** and a concise **impact** assessment (e.g. key exposure, unauthorized spend, cross-wallet data leak).
 - Optional: suggested fix or references.
 
-Avoid testing against **other people’s wallets** or **mainnet funds** without permission; prefer testnet, signet, lab mode, or a local setup where possible.
+Avoid testing against **other people’s wallets** or **mainnet funds** without permission; prefer testnet, signet, Labnet, or a local setup where possible.
 
 ### What to expect
 

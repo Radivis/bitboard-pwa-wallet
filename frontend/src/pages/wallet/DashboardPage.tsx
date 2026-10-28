@@ -229,7 +229,7 @@ function BalanceDesignCard() {
     <InfomodeWrapper
       infoId="dashboard-balance-card"
       infoTitle="Balance"
-      infoText="This is your on-chain Bitcoin on the network shown in the badge. The headline is your total balance (everything the wallet counts toward that total). When something is still unconfirmed, you may see a breakdown: spendable (settled in a block), pending change (value returning from a send you made), and pending incoming (someone else’s payment to you not yet confirmed). Immature appears rarely (e.g. mining rewards before they mature). On Lab mode, the total comes from the simulator’s coins tied to your wallet instead of the live Esplora-backed ledger."
+      infoText="This is your on-chain Bitcoin on the network shown in the badge. The headline is your total balance (everything the wallet counts toward that total). When something is still unconfirmed, you may see a breakdown: spendable (settled in a block), pending change (value returning from a send you made), and pending incoming (someone else’s payment to you not yet confirmed). Immature appears rarely (e.g. mining rewards before they mature). On Labnet, the total comes from the simulator’s coins tied to your wallet instead of the live Esplora-backed ledger."
       className="rounded-xl"
     >
       <DesignCard>

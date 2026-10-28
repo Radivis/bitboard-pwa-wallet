@@ -80,7 +80,7 @@ function LabLayout() {
     return (
       <div className="space-y-6">
         <p className="text-destructive">
-          Could not switch to Lab automatically. Open Settings, choose Lab under Network,
+          Could not switch to Labnet automatically. Open Settings, choose Labnet under Network,
           then try again.
         </p>
       </div>

@@ -19,7 +19,7 @@ test.describe('Infomode on Settings', () => {
       .getByText('Select the Bitcoin network to connect to.')
     const networkCard = page.locator('[data-infomode-id="settings-network-card"]')
     const testnetInNetworkCard = networkCard.getByRole('button', { name: 'Testnet' })
-    const labButton = page.getByRole('button', { name: 'Lab', exact: true })
+    const labButton = page.getByRole('button', { name: 'Labnet', exact: true })
     const infomodeDialog = page.getByRole('dialog', { name: 'Infomode explanation' })
 
     await page.getByRole('button', { name: 'Turn on infomode' }).click()
@@ -65,7 +65,7 @@ test.describe('Infomode on Settings', () => {
     await expect(page.getByText(suppressionRe)).toBeVisible()
     await expect(infomodeDialog).toBeVisible()
     await expect(
-      infomodeDialog.getByRole('heading', { name: 'Lab', exact: true }),
+      infomodeDialog.getByRole('heading', { name: 'Labnet', exact: true }),
     ).toBeVisible()
     await expect(infomodeDialog.getByRole('heading', { name: 'Bitcoin networks' })).toHaveCount(0)
     expect(await getDocumentNetwork(page)).toBe(networkBefore)

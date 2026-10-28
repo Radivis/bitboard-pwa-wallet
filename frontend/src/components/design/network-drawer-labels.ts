@@ -5,6 +5,6 @@ export const DRAWER_NETWORK_LABELS: Record<NetworkMode, string> = {
   testnet: 'Testnet 4',
   signet: 'Signet',
   mutinynet: 'Mutinynet',
-  lab: 'Lab',
+  lab: 'Labnet',
   regtest: 'Regtest',
 }

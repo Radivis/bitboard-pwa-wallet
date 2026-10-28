@@ -269,7 +269,7 @@ export function FeatureToggles() {
       <InfomodeWrapper
         infoId="settings-feature-lightning"
         infoTitle="Lightning Network"
-        infoText="The Lightning Network is a layer-2 payment protocol on top of Bitcoin. It enables fast, low-cost transactions by creating payment channels between nodes. Turn this on to enable Lightning-capable screens and flows in the app. Actual Lightning send, receive, and channel management are available when your wallet is on Mainnet, Testnet, or Signet—not on Lab or Regtest."
+        infoText="The Lightning Network is a layer-2 payment protocol on top of Bitcoin. It enables fast, low-cost transactions by creating payment channels between nodes. Turn this on to enable Lightning-capable screens and flows in the app. Actual Lightning send, receive, and channel management are available when your wallet is on Mainnet, Testnet, or Signet—not on Labnet or Regtest."
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">

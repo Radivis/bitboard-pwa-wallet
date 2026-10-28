@@ -247,7 +247,7 @@ export function LabEntitiesCard() {
             </div>
 
             {!labNetworkEnabled ? (
-              <p className="design-type-regular text-muted-foreground">Switch to lab network to manage entities.</p>
+              <p className="design-type-regular text-muted-foreground">Switch to Labnet to manage entities.</p>
             ) : isLoading && totalCount === 0 ? (
               <p className="design-type-regular text-muted-foreground py-2">Loading entities…</p>
             ) : isError ? (

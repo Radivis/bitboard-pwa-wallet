@@ -27,10 +27,10 @@ export function CommittedDescriptorInfomodeContent() {
       </p>
       <p className="design-type-regular text-muted-foreground">
         You may notice the <strong className="design-type-emphasis text-popover-foreground">same</strong> text when
-        switching between some networks (for example Testnet, Signet, and Lab): the string mostly
+        switching between some networks (for example Testnet, Signet, and Labnet): the string mostly
         describes your keys and paths, not which chain you are connected to. Bitboard still{' '}
         <strong className="design-type-emphasis text-popover-foreground">stores each network’s wallet
-        separately</strong>, because Testnet, Signet, Lab, and the others are different networks with
+        separately</strong>, because Testnet, Signet, Labnet, and the others are different networks with
         different coins and history—your balances and activity must not get mixed together.
       </p>
       <p className="design-type-regular text-muted-foreground">

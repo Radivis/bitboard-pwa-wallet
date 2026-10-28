@@ -28,13 +28,13 @@ export async function clickMainNavLab(page: Page): Promise<void> {
   await clickDrawerNavLink(page, 'Lab')
 }
 
-/** Switch to Lab network without changing address type (default is Taproot). */
+/** Switch to Labnet without changing address type (default is Taproot). */
 export async function switchToLab(page: Page): Promise<void> {
   await clickDrawerNavLink(page, 'Settings')
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
-  await settingsNetworkButton(page, 'Lab').click()
-  await waitForSettingsNetworkModeButtonSelected(page, 'Lab', 60_000)
+  await settingsNetworkButton(page, 'Labnet').click()
+  await waitForSettingsNetworkModeButtonSelected(page, 'Labnet', 60_000)
 
   await waitForSettingsNetworkSwitchComplete(page)
 

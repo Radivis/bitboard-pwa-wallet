@@ -41,7 +41,7 @@ describe('DesignNetworkDrawer', () => {
     expect(screen.getByRole('button', { name: 'Testnet 4' })).toHaveAttribute('data-status', 'selected')
     expect(screen.getByRole('button', { name: 'Signet' })).toHaveAttribute('data-status', 'default')
     expect(screen.getByRole('button', { name: 'Mutinynet' })).toHaveAttribute('data-status', 'default')
-    expect(screen.getByRole('button', { name: 'Lab' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Labnet' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Regtest' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Mutinynet' }))
@@ -63,7 +63,7 @@ describe('DesignNetworkDrawer', () => {
     await user.click(screen.getByRole('button', { name: 'Offline' }))
     expect(onSelectNetwork).toHaveBeenCalledWith('regtest')
 
-    await user.click(screen.getByRole('button', { name: 'Lab' }))
+    await user.click(screen.getByRole('button', { name: 'Labnet' }))
     expect(onSelectNetwork).toHaveBeenCalledWith('lab')
   })
 

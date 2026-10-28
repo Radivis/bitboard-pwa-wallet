@@ -36,7 +36,7 @@ const NETWORK_INFOMODE: Record<NetworkMode, { title: string; text: string }> = {
     text: '“Regression test” mode: usually a private or local chain developers run for automated tests and experiments. Not the same as the public internet Bitcoin networks most users pick.',
   },
   lab: {
-    title: 'Lab',
+    title: 'Labnet',
     text: 'Bitboard’s in-app simulator: a fake blockchain that runs inside your browser for safe practice—mine blocks, try transactions, and learn without touching mainnet or public testnets.',
   },
 }

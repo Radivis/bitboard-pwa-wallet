@@ -11,7 +11,7 @@ export type LabRouteContext = {
 
 /**
  * Runs while navigating into `/lab` (TanStack `beforeLoad`). Ensures the wallet
- * is on Lab network before the lab layout renders.
+ * is on Labnet before the lab layout renders.
  */
 export async function runLabRouteBeforeLoad(): Promise<LabRouteContext> {
   const snapshot = useWalletStore.getState()
@@ -26,7 +26,7 @@ export async function runLabRouteBeforeLoad(): Promise<LabRouteContext> {
     window.setTimeout(resolve, 0)
   })
 
-  toast.loading('Switching to Lab network…', {
+  toast.loading('Switching to Labnet…', {
     id: LAB_SWITCH_LOADING_TOAST_ID,
     duration: Infinity,
   })
@@ -44,7 +44,7 @@ export async function runLabRouteBeforeLoad(): Promise<LabRouteContext> {
       return { labAutoSwitchFailed: true }
     }
 
-    toast.info('Network set to Lab', {
+    toast.info('Network set to Labnet', {
       id: LAB_SWITCH_DONE_TOAST_ID,
       description:
         'Use Settings and choose another network when you want mainnet, testnet, or another live chain again.',
