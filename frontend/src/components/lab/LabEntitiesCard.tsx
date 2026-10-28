@@ -39,7 +39,7 @@ import {
   useLabSetEntityDeadMutation,
 } from '@/hooks/useLabMutations'
 import { toast } from 'sonner'
-import { Skull, FlaskConical, Drama, Trash2 } from 'lucide-react'
+import { Skull, FlaskConical, Drama, Trash2, UserRound } from 'lucide-react'
 
 /**
  * `p-0` + near-full-size glyphs. Default: 48×48 / 44px icons (touch-friendly).
@@ -206,6 +206,7 @@ export function LabEntitiesCard() {
                   <DesignInput
                     id="new-lab-entity-name"
                     type="text"
+                    leadingIcon={UserRound}
                     placeholder="Alice"
                     value={newEntityName}
                     onChange={(e) => setNewEntityName(e.target.value)}
@@ -273,6 +274,7 @@ export function LabEntitiesCard() {
                         {renamingId === row.labEntityId ? (
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
                             <DesignInput
+                              leadingIcon={UserRound}
                               value={renameDraft}
                               onChange={(e) => setRenameDraft(e.target.value)}
                               disabled={busy}

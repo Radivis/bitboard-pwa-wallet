@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
-import { Zap, Trash2, Pencil, CheckCircle, XCircle, Loader2, Wifi } from 'lucide-react'
+import { Zap, Trash2, Pencil, CheckCircle, XCircle, Loader2, Wifi, Tag, Link as LinkIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { ConfirmationDialog } from '@/components/ConfirmationDialog'
 import { DesignButton } from '@/components/design/DesignButton'
@@ -110,6 +110,7 @@ function RenameLightningWalletDialog({
           <Label htmlFor={`ln-rename-${wallet.id}`}>Label</Label>
           <DesignInput
             id={`ln-rename-${wallet.id}`}
+            leadingIcon={Tag}
             value={draftLabel}
             maxLength={MAX_LIGHTNING_WALLET_LABEL_LENGTH}
             onChange={(e) => setDraftLabel(e.target.value)}
@@ -400,6 +401,7 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
           <Label htmlFor="nwc-connection-string">NWC Connection String</Label>
           <DesignInput
             id="nwc-connection-string"
+            leadingIcon={LinkIcon}
             value={connectionString}
             maxLength={MAX_NWC_CONNECTION_STRING_LENGTH}
             onChange={(e) => {
@@ -432,6 +434,7 @@ function ConnectWalletForm({ onConnected }: { onConnected: () => void }) {
           <Label htmlFor="ln-wallet-label">Label</Label>
           <DesignInput
             id="ln-wallet-label"
+            leadingIcon={Tag}
             value={label}
             maxLength={MAX_LIGHTNING_WALLET_LABEL_LENGTH}
             onChange={(e) => setLabel(e.target.value)}

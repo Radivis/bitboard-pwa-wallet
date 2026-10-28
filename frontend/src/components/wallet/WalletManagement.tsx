@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Tag } from 'lucide-react'
 import { useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { useWalletStore } from '@/stores/walletStore'
@@ -84,6 +85,7 @@ export function WalletManagement({
           <div className="flex max-w-md flex-col gap-2 sm:flex-row sm:items-end">
             <DesignInput
               id="wallet-display-name"
+              leadingIcon={Tag}
               value={draftName}
               onChange={(e) => setDraftName(e.target.value)}
               maxLength={MAX_WALLET_NAME_LENGTH}

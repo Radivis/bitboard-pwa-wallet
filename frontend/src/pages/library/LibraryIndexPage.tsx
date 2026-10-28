@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { List } from 'lucide-react'
+import { List, Search } from 'lucide-react'
 import { DesignCard, DesignCardContent } from '@/components/design/DesignCard'
 import { DesignInput } from '@/components/design/DesignInput'
 import { LibraryArticleList } from '@/components/library/LibraryArticleList'
@@ -41,6 +41,7 @@ export function LibraryIndexPage() {
         <DesignInput
           id="library-search"
           type="search"
+          leadingIcon={Search}
           placeholder="Filter by title or tag…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}

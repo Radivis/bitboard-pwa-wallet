@@ -1,3 +1,4 @@
+import { Coins } from 'lucide-react'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { DesignInput } from '@/components/design/DesignInput'
 import type { MainnetFiatAmountProps } from '@/hooks/useMainnetFiatAmountProps'
@@ -41,6 +42,7 @@ export function SatsOrFiatAmountField({
     <label className="design-type-regular block space-y-1">
       <span>{fiat.mainnetFiatEntry ? fiatLabel : satsLabel}</span>
       <DesignInput
+        leadingIcon={Coins}
         inputMode={fiat.mainnetFiatEntry ? 'decimal' : 'numeric'}
         value={amountRaw}
         placeholder={

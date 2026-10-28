@@ -1,3 +1,4 @@
+import { ArrowDownLeft, ArrowUpRight, Coins, Gauge, Hash } from 'lucide-react'
 import { DesignButton } from '@/components/design/DesignButton'
 import {
   DesignCard,
@@ -130,6 +131,7 @@ export function LabMakeTransactionCard({
                 <DesignInput
                   id="random-transaction-count"
                   type="number"
+                  leadingIcon={Hash}
                   min={MIN_RANDOM_TRANSACTION_COUNT}
                   max={LAB_MAX_RANDOM_ENTITY_TRANSACTIONS}
                   value={randomTransactionCount}
@@ -179,6 +181,7 @@ export function LabMakeTransactionCard({
                 <DesignInput
                   id="from-address"
                   type="text"
+                  leadingIcon={ArrowUpRight}
                   placeholder="bcrt1q... or bcrt1p..."
                   value={fromAddress}
                   onChange={(e) => setFromAddress(e.target.value)}
@@ -195,6 +198,7 @@ export function LabMakeTransactionCard({
                 <DesignInput
                   id="to-address"
                   type="text"
+                  leadingIcon={ArrowDownLeft}
                   placeholder="bcrt1q... or bcrt1p..."
                   value={toAddress}
                   onChange={(e) => setToAddress(e.target.value)}
@@ -205,6 +209,7 @@ export function LabMakeTransactionCard({
                 <DesignInput
                   id="amount"
                   type="number"
+                  leadingIcon={Coins}
                   min={MIN_AMOUNT_SATS}
                   placeholder="1000"
                   value={amountSats}
@@ -225,6 +230,7 @@ export function LabMakeTransactionCard({
                 <DesignInput
                   id="fee-rate"
                   type="number"
+                  leadingIcon={Gauge}
                   min={0.1}
                   step={0.1}
                   placeholder="1"

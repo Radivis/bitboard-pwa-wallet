@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, Timer } from 'lucide-react'
 import { toast } from 'sonner'
 import type { DashboardRailId } from '@/components/wallet/RailSyncControl'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
@@ -19,6 +19,7 @@ import {
   usePeriodicSyncStore,
 } from '@/stores/periodicSyncStore'
 import {
+  DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS,
   MAX_PERIODIC_SYNC_INTERVAL_SECONDS,
   MIN_PERIODIC_SYNC_INTERVAL_SECONDS,
 } from '@/lib/wallet/periodic-sync/periodic-sync-constants'
@@ -85,10 +86,16 @@ function PeriodicSyncRailRow({ rail }: { rail: DashboardRailId }) {
           <DesignInput
             id={inputId}
             type="number"
+            leadingIcon={Timer}
             min={MIN_PERIODIC_SYNC_INTERVAL_SECONDS}
             max={MAX_PERIODIC_SYNC_INTERVAL_SECONDS}
             value={editIntervalSeconds}
+            resetTo={String(DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS)}
             onChange={(event) => setEditIntervalSeconds(event.target.value)}
+            onReset={() => {
+              setRailPeriodicSyncIntervalSeconds(rail, DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS)
+              setEditIntervalSeconds(String(DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS))
+            }}
             onBlur={() => commitInterval()}
             className="w-28"
             aria-label={`${RAIL_LABELS[rail]} polling interval in seconds`}

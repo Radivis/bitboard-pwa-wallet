@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Search } from 'lucide-react'
 import { format } from 'date-fns'
 import { barkSessionBlockingScreen } from '@/components/bark/bark-session-blocking-screen'
 import { BarkRailUnavailable } from '@/components/bark/BarkRailUnavailable'
@@ -281,6 +281,7 @@ function BarkVtxoInventory({
             <Label htmlFor="bark-vtxo-search">Search</Label>
             <DesignInput
               id="bark-vtxo-search"
+              leadingIcon={Search}
               value={searchQuery}
               onChange={(event) => onSearchQueryChange(event.target.value)}
               placeholder="VTXO id or sats amount"

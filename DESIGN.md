@@ -132,7 +132,11 @@ Opened from the header chain badge, to the left of the info toggle. It uses the 
 
 `Status` is Empty, Filled, Disabled, or Readonly.
 
-Empty shows the placeholder and an edit icon. Filled shows the value and a trailing icon. Disabled and Readonly show the field without that edit affordance.
+Empty shows the placeholder and a square-pen icon immediately after that text, in the placeholder color. Filled shows the value and a brush-cleaning icon at the trailing edge. That brush clears the field. Disabled and Readonly show the field without the pen or the brush.
+
+The leading icon matches the field's topic. It uses the content color when the field is enabled or readonly, and the placeholder color when the field is disabled.
+
+When the field has a default, a tertiary button labeled "Reset to default" sits below the field. It restores that default. It stays disabled while the current text already matches the default, or while the field is disabled or readonly.
 
 Disabled means the field can accept input, and it is currently unavailable. Readonly means the value is there to read, such as a receive address.
 

@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router'
+import { Hash, Wallet } from 'lucide-react'
 import { DesignButton } from '@/components/design/DesignButton'
 import {
   DesignCard,
@@ -99,6 +100,7 @@ export function LabBlocksCard({
               <DesignInput
                 id="mine-count"
                 type="number"
+                leadingIcon={Hash}
                 min={LAB_MIN_BLOCKS_PER_MINE}
                 max={LAB_MAX_BLOCKS_PER_MINE}
                 value={mineCount}
@@ -157,6 +159,7 @@ export function LabBlocksCard({
                   <DesignInput
                     id="target-address"
                     type="text"
+                    leadingIcon={Wallet}
                     value={currentAddress ?? ''}
                     readOnly
                     className="design-type-addresses min-w-[200px]"

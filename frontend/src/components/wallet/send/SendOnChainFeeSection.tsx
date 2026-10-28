@@ -1,3 +1,4 @@
+import { Gauge } from 'lucide-react'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { DesignButton } from '@/components/design/DesignButton'
 import { DesignInput } from '@/components/design/DesignInput'
@@ -104,6 +105,7 @@ export function SendOnChainFeeSection(props: {
       {!hideCustom && useCustomFee && (
         <DesignInput
           type="number"
+          leadingIcon={Gauge}
           inputMode="decimal"
           step="any"
           aria-label="Custom fee rate (sat/vB)"

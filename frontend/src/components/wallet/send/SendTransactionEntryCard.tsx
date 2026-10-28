@@ -1,7 +1,7 @@
 import type { ComponentProps } from 'react'
 import { useRef, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { ArrowUpRight, ScanQrCode } from 'lucide-react'
+import { ArrowUpRight, Coins, ScanQrCode, Wallet } from 'lucide-react'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { PageHeader } from '@/components/PageHeader'
 import {
@@ -303,6 +303,7 @@ export function SendTransactionEntryCard({
               </div>
               <DesignInput
                 id="recipient-address"
+                leadingIcon={Wallet}
                 value={recipient}
                 onChange={(e) => onRecipientChange(e.target.value)}
                 placeholder={sendRecipientPlaceholder({
@@ -478,6 +479,7 @@ export function SendTransactionEntryCard({
                   <DesignInput
                     id="send-amount"
                     type="text"
+                    leadingIcon={Coins}
                     inputMode="decimal"
                     autoComplete="off"
                     value={amount}

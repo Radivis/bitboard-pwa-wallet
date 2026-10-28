@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Search } from 'lucide-react'
 import { format } from 'date-fns'
 import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
 import { arkadeSessionBlockingScreen } from '@/components/arkade/arkade-session-blocking-screen'
@@ -128,6 +128,7 @@ export function ArkadeVtxoViewerPage() {
             <Label htmlFor="arkade-vtxo-search">Search</Label>
             <DesignInput
               id="arkade-vtxo-search"
+              leadingIcon={Search}
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="VTXO id or sats amount"

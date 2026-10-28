@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { Loader2 } from 'lucide-react'
+import { Coins, Loader2, Wallet } from 'lucide-react'
 import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
 import { ArkadeSessionGate } from '@/components/arkade/ArkadeSessionGate'
 import { ArkadeCollaborativeExitInfomodeContent } from '@/components/arkade/infomode/ArkadeCollaborativeExitInfomodeContent'
@@ -142,6 +142,7 @@ export function CollaborativeExitContent({ exitFlow }: CollaborativeExitContentP
         <Label htmlFor="arkade-collab-destination">On-chain destination</Label>
         <DesignInput
           id="arkade-collab-destination"
+          leadingIcon={Wallet}
           value={collabDestination}
           onChange={(event) => setCollabDestination(event.target.value)}
           placeholder="bc1…"
@@ -162,6 +163,7 @@ export function CollaborativeExitContent({ exitFlow }: CollaborativeExitContentP
         <DesignInput
           id="arkade-collab-amount"
           type="number"
+          leadingIcon={Coins}
           value={collabAmountSats}
           onChange={(event) => setCollabAmountSats(event.target.value)}
           placeholder="Leave empty for full balance"

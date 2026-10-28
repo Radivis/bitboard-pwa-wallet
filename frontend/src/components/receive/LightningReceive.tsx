@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react'
-import { Zap, Copy, Plus, Loader2 } from 'lucide-react'
+import { Zap, Copy, Plus, Loader2, Coins, MessageSquareText } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
 import { DesignButton } from '@/components/design/DesignButton'
@@ -299,6 +299,7 @@ function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
               <DesignInput
                 id="invoice-amount"
                 type="text"
+                leadingIcon={Coins}
                 inputMode={mainnetFiatEntry ? 'decimal' : 'numeric'}
                 pattern={mainnetFiatEntry ? undefined : '[0-9]*'}
                 value={amountRaw}
@@ -346,6 +347,7 @@ function InvoiceCreateForm({ onCreated }: { onCreated: () => void }) {
               <Label htmlFor="invoice-description">Description (optional)</Label>
               <DesignInput
                 id="invoice-description"
+                leadingIcon={MessageSquareText}
                 value={description}
                 maxLength={MAX_LIGHTNING_INVOICE_DESCRIPTION_LENGTH}
                 onChange={(e) => setDescription(e.target.value)}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Pickaxe, Weight } from 'lucide-react'
 import { DesignButton } from '@/components/design/DesignButton'
 import {
   DesignCard,
@@ -144,9 +145,11 @@ export function LabRulesCard() {
               <DesignInput
                 id="lab-block-weight-units"
                 inputMode="numeric"
+                leadingIcon={Weight}
                 min={LAB_MIN_BLOCK_WEIGHT_UNITS}
                 type="number"
                 value={draftLimitWu}
+                resetTo={String(LAB_DEFAULT_BLOCK_WEIGHT_UNITS)}
                 onChange={(ev) => setDraftLimitWu(ev.target.value)}
               />
             </div>
@@ -164,9 +167,11 @@ export function LabRulesCard() {
                   className="design-type-addresses max-w-[14rem] tabular-nums"
                   id="lab-miner-subsidy-input"
                   inputMode="numeric"
+                  leadingIcon={Pickaxe}
                   min={0}
                   type="number"
                   value={draftSubsidySats}
+                  resetTo={String(LAB_DEFAULT_MINER_SUBSIDY_SATS)}
                   onChange={(ev) => setDraftSubsidySats(ev.target.value)}
                 />
               ) : (

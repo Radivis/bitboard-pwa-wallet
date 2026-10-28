@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { Copy, Loader2 } from 'lucide-react'
+import { Copy, Loader2, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
 import { ArkadeSessionGate } from '@/components/arkade/ArkadeSessionGate'
@@ -342,6 +342,7 @@ export function CompleteUnilateralExitContent({ exitFlow }: CompleteUnilateralEx
           <DesignInput
             id="arkade-complete-batch-destination"
             className="design-type-addresses"
+            leadingIcon={Wallet}
             value={completeDestination}
             onChange={(event) => setCompleteDestination(event.target.value)}
             autoComplete="off"

@@ -139,8 +139,11 @@ export function EsploraUrlSettings() {
             <Label htmlFor="esplora-url">Endpoint URL</Label>
             <DesignInput
               id="esplora-url"
+              leadingIcon={Globe}
               value={editUrl}
+              resetTo={defaultUrl}
               onChange={(e) => setEditUrl(e.target.value)}
+              onReset={() => resetMutation.mutate()}
               placeholder={defaultUrl}
               disabled={loading}
             />
@@ -152,14 +155,6 @@ export function EsploraUrlSettings() {
               disabled={loading}
             >
               Save Endpoint
-            </DesignButton>
-            <DesignButton
-              type="button"
-              appearance="secondary"
-              onClick={() => resetMutation.mutate()}
-              disabled={loading || !isCustom}
-            >
-              Reset to Default
             </DesignButton>
           </div>
         </DesignCardContent>
