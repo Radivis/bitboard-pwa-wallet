@@ -71,6 +71,7 @@ function renderExchangeGuideStepLink({ step, label, icon }: ProgressStepLink) {
     <Link
       to="/guides/how-to-get-bitcoin/exchanges/$step"
       params={{ step: String(step) }}
+      replace
       aria-label={label}
     >
       {icon}

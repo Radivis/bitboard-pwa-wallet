@@ -23,7 +23,7 @@ export function ExchangeGuideIntroPage() {
         ))}
       </div>
       <DesignButton asChild className="w-full max-w-[18.625rem]">
-        <Link to="/guides/how-to-get-bitcoin/exchanges/$step" params={{ step: '1' }}>
+        <Link to="/guides/how-to-get-bitcoin/exchanges/$step" params={{ step: '1' }} replace>
           <Play aria-hidden />
           Step by Step Guide
         </Link>
