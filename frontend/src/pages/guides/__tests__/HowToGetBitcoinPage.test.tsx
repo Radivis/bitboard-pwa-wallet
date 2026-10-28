@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  Outlet,
+  RouterProvider,
+} from '@tanstack/react-router'
 import { HowToGetBitcoinPage } from '@/pages/guides/HowToGetBitcoinPage'
 
 function cardFor(title: string) {
@@ -8,15 +16,37 @@ function cardFor(title: string) {
   return within(card as HTMLElement)
 }
 
-describe('HowToGetBitcoinPage', () => {
-  it('groups the five ways to get Bitcoin into cards without leaving the page', () => {
-    render(<HowToGetBitcoinPage />)
+function renderHowToGetBitcoin() {
+  const rootRoute = createRootRoute({ component: Outlet })
+  const pageRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/guides/how-to-get-bitcoin',
+    component: HowToGetBitcoinPage,
+  })
+  const exchangesRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/guides/how-to-get-bitcoin/exchanges',
+    component: () => <div>Exchanges</div>,
+  })
+  const router = createRouter({
+    routeTree: rootRoute.addChildren([pageRoute, exchangesRoute]),
+    history: createMemoryHistory({ initialEntries: ['/guides/how-to-get-bitcoin'] }),
+  })
+  return render(<RouterProvider router={router} />)
+}
 
-    expect(screen.getByRole('heading', { name: 'How to get Bitcoin' })).toBeInTheDocument()
+describe('HowToGetBitcoinPage', () => {
+  it('groups the five ways to get Bitcoin and links only Exchanges', async () => {
+    renderHowToGetBitcoin()
+
+    expect(await screen.findByRole('heading', { name: 'How to get Bitcoin' })).toBeInTheDocument()
     expect(screen.getByText('From easiest to hardest')).toBeInTheDocument()
 
     const kycCard = cardFor('Typically requiring KYC procedures')
-    expect(kycCard.getByRole('button', { name: 'Exchanges' })).toBeInTheDocument()
+    expect(kycCard.getByRole('link', { name: 'Exchanges' })).toHaveAttribute(
+      'href',
+      '/guides/how-to-get-bitcoin/exchanges',
+    )
     expect(kycCard.getByRole('button', { name: 'Apps' })).toBeInTheDocument()
 
     const locationCard = cardFor('Depending on your location')
@@ -26,6 +56,6 @@ describe('HowToGetBitcoinPage', () => {
     const miningCard = cardFor('For truly dedicated people')
     expect(miningCard.getByRole('button', { name: 'Mining' })).toHaveClass('border')
 
-    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('link')).toHaveLength(1)
   })
 })

@@ -42,6 +42,7 @@ import { Route as LabBlocksRouteImport } from './routes/lab/blocks'
 import { Route as GuidesIntroductionRouteImport } from './routes/guides/introduction'
 import { Route as GuidesHowToGetBitcoinRouteImport } from './routes/guides/how-to-get-bitcoin'
 import { Route as GuidesIntroductionIndexRouteImport } from './routes/guides/introduction/index'
+import { Route as GuidesHowToGetBitcoinIndexRouteImport } from './routes/guides/how-to-get-bitcoin/index'
 import { Route as WalletBarkVtxosRouteImport } from './routes/wallet/bark/vtxos'
 import { Route as WalletBarkOffboardRouteImport } from './routes/wallet/bark/offboard'
 import { Route as WalletBarkEmergencyExitRouteImport } from './routes/wallet/bark/emergency-exit'
@@ -60,6 +61,9 @@ import { Route as GuidesIntroductionSettingsRouteImport } from './routes/guides/
 import { Route as GuidesIntroductionLibraryRouteImport } from './routes/guides/introduction/library'
 import { Route as GuidesIntroductionLabRouteImport } from './routes/guides/introduction/lab'
 import { Route as GuidesIntroductionGuidesRouteImport } from './routes/guides/introduction/guides'
+import { Route as GuidesHowToGetBitcoinExchangesRouteImport } from './routes/guides/how-to-get-bitcoin/exchanges'
+import { Route as GuidesHowToGetBitcoinExchangesIndexRouteImport } from './routes/guides/how-to-get-bitcoin/exchanges/index'
+import { Route as GuidesHowToGetBitcoinExchangesStepRouteImport } from './routes/guides/how-to-get-bitcoin/exchanges/$step'
 
 const WalletRoute = WalletRouteImport.update({
   id: '/wallet',
@@ -226,6 +230,12 @@ const GuidesIntroductionIndexRoute = GuidesIntroductionIndexRouteImport.update({
   path: '/',
   getParentRoute: () => GuidesIntroductionRoute,
 } as any)
+const GuidesHowToGetBitcoinIndexRoute =
+  GuidesHowToGetBitcoinIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => GuidesHowToGetBitcoinRoute,
+  } as any)
 const WalletBarkVtxosRoute = WalletBarkVtxosRouteImport.update({
   id: '/bark/vtxos',
   path: '/bark/vtxos',
@@ -323,6 +333,24 @@ const GuidesIntroductionGuidesRoute =
     path: '/guides',
     getParentRoute: () => GuidesIntroductionRoute,
   } as any)
+const GuidesHowToGetBitcoinExchangesRoute =
+  GuidesHowToGetBitcoinExchangesRouteImport.update({
+    id: '/exchanges',
+    path: '/exchanges',
+    getParentRoute: () => GuidesHowToGetBitcoinRoute,
+  } as any)
+const GuidesHowToGetBitcoinExchangesIndexRoute =
+  GuidesHowToGetBitcoinExchangesIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => GuidesHowToGetBitcoinExchangesRoute,
+  } as any)
+const GuidesHowToGetBitcoinExchangesStepRoute =
+  GuidesHowToGetBitcoinExchangesStepRouteImport.update({
+    id: '/$step',
+    path: '/$step',
+    getParentRoute: () => GuidesHowToGetBitcoinExchangesRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -333,7 +361,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRouteWithChildren
   '/setup': typeof SetupRouteWithChildren
   '/wallet': typeof WalletRouteWithChildren
-  '/guides/how-to-get-bitcoin': typeof GuidesHowToGetBitcoinRoute
+  '/guides/how-to-get-bitcoin': typeof GuidesHowToGetBitcoinRouteWithChildren
   '/guides/introduction': typeof GuidesIntroductionRouteWithChildren
   '/lab/blocks': typeof LabBlocksRoute
   '/lab/control': typeof LabControlRoute
@@ -357,6 +385,7 @@ export interface FileRoutesByFullPath {
   '/settings/': typeof SettingsIndexRoute
   '/setup/': typeof SetupIndexRoute
   '/wallet/': typeof WalletIndexRoute
+  '/guides/how-to-get-bitcoin/exchanges': typeof GuidesHowToGetBitcoinExchangesRouteWithChildren
   '/guides/introduction/guides': typeof GuidesIntroductionGuidesRoute
   '/guides/introduction/lab': typeof GuidesIntroductionLabRoute
   '/guides/introduction/library': typeof GuidesIntroductionLibraryRoute
@@ -375,12 +404,14 @@ export interface FileRoutesByFullPath {
   '/wallet/bark/emergency-exit': typeof WalletBarkEmergencyExitRoute
   '/wallet/bark/offboard': typeof WalletBarkOffboardRoute
   '/wallet/bark/vtxos': typeof WalletBarkVtxosRoute
+  '/guides/how-to-get-bitcoin/': typeof GuidesHowToGetBitcoinIndexRoute
   '/guides/introduction/': typeof GuidesIntroductionIndexRoute
+  '/guides/how-to-get-bitcoin/exchanges/$step': typeof GuidesHowToGetBitcoinExchangesStepRoute
+  '/guides/how-to-get-bitcoin/exchanges/': typeof GuidesHowToGetBitcoinExchangesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/privacy': typeof PrivacyRoute
-  '/guides/how-to-get-bitcoin': typeof GuidesHowToGetBitcoinRoute
   '/lab/blocks': typeof LabBlocksRoute
   '/lab/control': typeof LabControlRoute
   '/lab/layer-2': typeof LabLayer2Route
@@ -421,7 +452,10 @@ export interface FileRoutesByTo {
   '/wallet/bark/emergency-exit': typeof WalletBarkEmergencyExitRoute
   '/wallet/bark/offboard': typeof WalletBarkOffboardRoute
   '/wallet/bark/vtxos': typeof WalletBarkVtxosRoute
+  '/guides/how-to-get-bitcoin': typeof GuidesHowToGetBitcoinIndexRoute
   '/guides/introduction': typeof GuidesIntroductionIndexRoute
+  '/guides/how-to-get-bitcoin/exchanges/$step': typeof GuidesHowToGetBitcoinExchangesStepRoute
+  '/guides/how-to-get-bitcoin/exchanges': typeof GuidesHowToGetBitcoinExchangesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -433,7 +467,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRouteWithChildren
   '/setup': typeof SetupRouteWithChildren
   '/wallet': typeof WalletRouteWithChildren
-  '/guides/how-to-get-bitcoin': typeof GuidesHowToGetBitcoinRoute
+  '/guides/how-to-get-bitcoin': typeof GuidesHowToGetBitcoinRouteWithChildren
   '/guides/introduction': typeof GuidesIntroductionRouteWithChildren
   '/lab/blocks': typeof LabBlocksRoute
   '/lab/control': typeof LabControlRoute
@@ -457,6 +491,7 @@ export interface FileRoutesById {
   '/settings/': typeof SettingsIndexRoute
   '/setup/': typeof SetupIndexRoute
   '/wallet/': typeof WalletIndexRoute
+  '/guides/how-to-get-bitcoin/exchanges': typeof GuidesHowToGetBitcoinExchangesRouteWithChildren
   '/guides/introduction/guides': typeof GuidesIntroductionGuidesRoute
   '/guides/introduction/lab': typeof GuidesIntroductionLabRoute
   '/guides/introduction/library': typeof GuidesIntroductionLibraryRoute
@@ -475,7 +510,10 @@ export interface FileRoutesById {
   '/wallet/bark/emergency-exit': typeof WalletBarkEmergencyExitRoute
   '/wallet/bark/offboard': typeof WalletBarkOffboardRoute
   '/wallet/bark/vtxos': typeof WalletBarkVtxosRoute
+  '/guides/how-to-get-bitcoin/': typeof GuidesHowToGetBitcoinIndexRoute
   '/guides/introduction/': typeof GuidesIntroductionIndexRoute
+  '/guides/how-to-get-bitcoin/exchanges/$step': typeof GuidesHowToGetBitcoinExchangesStepRoute
+  '/guides/how-to-get-bitcoin/exchanges/': typeof GuidesHowToGetBitcoinExchangesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -512,6 +550,7 @@ export interface FileRouteTypes {
     | '/settings/'
     | '/setup/'
     | '/wallet/'
+    | '/guides/how-to-get-bitcoin/exchanges'
     | '/guides/introduction/guides'
     | '/guides/introduction/lab'
     | '/guides/introduction/library'
@@ -530,12 +569,14 @@ export interface FileRouteTypes {
     | '/wallet/bark/emergency-exit'
     | '/wallet/bark/offboard'
     | '/wallet/bark/vtxos'
+    | '/guides/how-to-get-bitcoin/'
     | '/guides/introduction/'
+    | '/guides/how-to-get-bitcoin/exchanges/$step'
+    | '/guides/how-to-get-bitcoin/exchanges/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/privacy'
-    | '/guides/how-to-get-bitcoin'
     | '/lab/blocks'
     | '/lab/control'
     | '/lab/layer-2'
@@ -576,7 +617,10 @@ export interface FileRouteTypes {
     | '/wallet/bark/emergency-exit'
     | '/wallet/bark/offboard'
     | '/wallet/bark/vtxos'
+    | '/guides/how-to-get-bitcoin'
     | '/guides/introduction'
+    | '/guides/how-to-get-bitcoin/exchanges/$step'
+    | '/guides/how-to-get-bitcoin/exchanges'
   id:
     | '__root__'
     | '/'
@@ -611,6 +655,7 @@ export interface FileRouteTypes {
     | '/settings/'
     | '/setup/'
     | '/wallet/'
+    | '/guides/how-to-get-bitcoin/exchanges'
     | '/guides/introduction/guides'
     | '/guides/introduction/lab'
     | '/guides/introduction/library'
@@ -629,7 +674,10 @@ export interface FileRouteTypes {
     | '/wallet/bark/emergency-exit'
     | '/wallet/bark/offboard'
     | '/wallet/bark/vtxos'
+    | '/guides/how-to-get-bitcoin/'
     | '/guides/introduction/'
+    | '/guides/how-to-get-bitcoin/exchanges/$step'
+    | '/guides/how-to-get-bitcoin/exchanges/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -876,6 +924,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GuidesIntroductionIndexRouteImport
       parentRoute: typeof GuidesIntroductionRoute
     }
+    '/guides/how-to-get-bitcoin/': {
+      id: '/guides/how-to-get-bitcoin/'
+      path: '/'
+      fullPath: '/guides/how-to-get-bitcoin/'
+      preLoaderRoute: typeof GuidesHowToGetBitcoinIndexRouteImport
+      parentRoute: typeof GuidesHowToGetBitcoinRoute
+    }
     '/wallet/bark/vtxos': {
       id: '/wallet/bark/vtxos'
       path: '/bark/vtxos'
@@ -1002,8 +1057,63 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GuidesIntroductionGuidesRouteImport
       parentRoute: typeof GuidesIntroductionRoute
     }
+    '/guides/how-to-get-bitcoin/exchanges': {
+      id: '/guides/how-to-get-bitcoin/exchanges'
+      path: '/exchanges'
+      fullPath: '/guides/how-to-get-bitcoin/exchanges'
+      preLoaderRoute: typeof GuidesHowToGetBitcoinExchangesRouteImport
+      parentRoute: typeof GuidesHowToGetBitcoinRoute
+    }
+    '/guides/how-to-get-bitcoin/exchanges/': {
+      id: '/guides/how-to-get-bitcoin/exchanges/'
+      path: '/'
+      fullPath: '/guides/how-to-get-bitcoin/exchanges/'
+      preLoaderRoute: typeof GuidesHowToGetBitcoinExchangesIndexRouteImport
+      parentRoute: typeof GuidesHowToGetBitcoinExchangesRoute
+    }
+    '/guides/how-to-get-bitcoin/exchanges/$step': {
+      id: '/guides/how-to-get-bitcoin/exchanges/$step'
+      path: '/$step'
+      fullPath: '/guides/how-to-get-bitcoin/exchanges/$step'
+      preLoaderRoute: typeof GuidesHowToGetBitcoinExchangesStepRouteImport
+      parentRoute: typeof GuidesHowToGetBitcoinExchangesRoute
+    }
   }
 }
+
+interface GuidesHowToGetBitcoinExchangesRouteChildren {
+  GuidesHowToGetBitcoinExchangesStepRoute: typeof GuidesHowToGetBitcoinExchangesStepRoute
+  GuidesHowToGetBitcoinExchangesIndexRoute: typeof GuidesHowToGetBitcoinExchangesIndexRoute
+}
+
+const GuidesHowToGetBitcoinExchangesRouteChildren: GuidesHowToGetBitcoinExchangesRouteChildren =
+  {
+    GuidesHowToGetBitcoinExchangesStepRoute:
+      GuidesHowToGetBitcoinExchangesStepRoute,
+    GuidesHowToGetBitcoinExchangesIndexRoute:
+      GuidesHowToGetBitcoinExchangesIndexRoute,
+  }
+
+const GuidesHowToGetBitcoinExchangesRouteWithChildren =
+  GuidesHowToGetBitcoinExchangesRoute._addFileChildren(
+    GuidesHowToGetBitcoinExchangesRouteChildren,
+  )
+
+interface GuidesHowToGetBitcoinRouteChildren {
+  GuidesHowToGetBitcoinExchangesRoute: typeof GuidesHowToGetBitcoinExchangesRouteWithChildren
+  GuidesHowToGetBitcoinIndexRoute: typeof GuidesHowToGetBitcoinIndexRoute
+}
+
+const GuidesHowToGetBitcoinRouteChildren: GuidesHowToGetBitcoinRouteChildren = {
+  GuidesHowToGetBitcoinExchangesRoute:
+    GuidesHowToGetBitcoinExchangesRouteWithChildren,
+  GuidesHowToGetBitcoinIndexRoute: GuidesHowToGetBitcoinIndexRoute,
+}
+
+const GuidesHowToGetBitcoinRouteWithChildren =
+  GuidesHowToGetBitcoinRoute._addFileChildren(
+    GuidesHowToGetBitcoinRouteChildren,
+  )
 
 interface GuidesIntroductionRouteChildren {
   GuidesIntroductionGuidesRoute: typeof GuidesIntroductionGuidesRoute
@@ -1027,13 +1137,13 @@ const GuidesIntroductionRouteWithChildren =
   GuidesIntroductionRoute._addFileChildren(GuidesIntroductionRouteChildren)
 
 interface GuidesRouteChildren {
-  GuidesHowToGetBitcoinRoute: typeof GuidesHowToGetBitcoinRoute
+  GuidesHowToGetBitcoinRoute: typeof GuidesHowToGetBitcoinRouteWithChildren
   GuidesIntroductionRoute: typeof GuidesIntroductionRouteWithChildren
   GuidesIndexRoute: typeof GuidesIndexRoute
 }
 
 const GuidesRouteChildren: GuidesRouteChildren = {
-  GuidesHowToGetBitcoinRoute: GuidesHowToGetBitcoinRoute,
+  GuidesHowToGetBitcoinRoute: GuidesHowToGetBitcoinRouteWithChildren,
   GuidesIntroductionRoute: GuidesIntroductionRouteWithChildren,
   GuidesIndexRoute: GuidesIndexRoute,
 }

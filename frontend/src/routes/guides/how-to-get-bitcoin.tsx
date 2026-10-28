@@ -1,6 +1,9 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { HowToGetBitcoinPage } from '@/pages/guides/HowToGetBitcoinPage'
+import { createFileRoute, Outlet } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/guides/how-to-get-bitcoin')({
-  component: HowToGetBitcoinPage,
+  component: HowToGetBitcoinLayout,
 })
+
+function HowToGetBitcoinLayout() {
+  return <Outlet />
+}

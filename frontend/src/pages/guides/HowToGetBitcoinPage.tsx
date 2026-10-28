@@ -1,17 +1,25 @@
 import { CircleDollarSign, Play } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
 import { DesignButton, type DesignButtonAppearance } from '@/components/design/DesignButton'
 import { DesignCard, DesignCardContent, DesignCardHeader, DesignCardTitle } from '@/components/design/DesignCard'
 import { designTypeClassName } from '@/components/design/design-type'
 import { cn } from '@/lib/shared/utils'
 
+interface HowToGetBitcoinOption {
+  label: string
+  appearance: DesignButtonAppearance
+  className?: string
+  to?: '/guides/how-to-get-bitcoin/exchanges'
+}
+
 const HOW_TO_GET_BITCOIN_GROUPS: {
   title: string
-  options: { label: string; appearance: DesignButtonAppearance; className?: string }[]
+  options: HowToGetBitcoinOption[]
 }[] = [
   {
     title: 'Typically requiring KYC procedures',
     options: [
-      { label: 'Exchanges', appearance: 'primary' },
+      { label: 'Exchanges', appearance: 'primary', to: '/guides/how-to-get-bitcoin/exchanges' },
       { label: 'Apps', appearance: 'primary' },
     ],
   },
@@ -27,6 +35,29 @@ const HOW_TO_GET_BITCOIN_GROUPS: {
     options: [{ label: 'Mining', appearance: 'tertiary', className: 'border border-[#d1d1d1]' }],
   },
 ]
+
+function HowToGetBitcoinChoice({ option }: { option: HowToGetBitcoinOption }) {
+  if (option.to) {
+    return (
+      <DesignButton asChild appearance={option.appearance} className={cn('w-full', option.className)}>
+        <Link to={option.to}>
+          <Play aria-hidden />
+          {option.label}
+        </Link>
+      </DesignButton>
+    )
+  }
+
+  return (
+    <DesignButton
+      appearance={option.appearance}
+      className={cn('w-full', option.className)}
+      icon={<Play aria-hidden />}
+    >
+      {option.label}
+    </DesignButton>
+  )
+}
 
 export function HowToGetBitcoinPage() {
   return (
@@ -48,14 +79,7 @@ export function HowToGetBitcoinPage() {
             </DesignCardHeader>
             <DesignCardContent className="gap-[15px]">
               {group.options.map((option) => (
-                <DesignButton
-                  key={option.label}
-                  appearance={option.appearance}
-                  className={cn('w-full', option.className)}
-                  icon={<Play aria-hidden />}
-                >
-                  {option.label}
-                </DesignButton>
+                <HowToGetBitcoinChoice key={option.label} option={option} />
               ))}
             </DesignCardContent>
           </DesignCard>
