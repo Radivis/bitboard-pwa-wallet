@@ -502,21 +502,19 @@
   cursor: pointer;
 }
 
-/* Card shadows follow the theme. Light uses drop shadows; dark uses an inner shadow. Elevation 2 is the nested-card step. */
+/* Elevation shadows match Basics / elevation-patterns. Light and dark share each stack: two drop shadows and an inner shadow. Elevation 2 is the nested-card step. */
 [data-slot="design-card"] {
-  --design-card-shadow: 0 1px 3px 1px rgb(0 0 0 / 0.15), 0 1px 2px 0 rgb(0 0 0 / 0.3);
-}
-
-.dark [data-slot="design-card"] {
-  --design-card-shadow: inset 0 4px 7px 0 rgb(245 244 246 / 0.08);
+  --design-card-shadow:
+    0 1px 3px 1px rgb(0 0 0 / 0.15),
+    0 3px 8px 0 rgb(0 0 0 / 0.25),
+    inset 0 4px 7px 0 rgb(245 244 246 / 0.08);
 }
 
 [data-slot="design-card"][data-elevation="2"] {
-  --design-card-shadow: 0 2px 6px 2px rgb(0 0 0 / 0.15), 0 1px 2px 0 rgb(0 0 0 / 0.3);
-}
-
-.dark [data-slot="design-card"][data-elevation="2"] {
-  --design-card-shadow: inset 0 4px 9px 0 rgb(245 244 246 / 0.08);
+  --design-card-shadow:
+    0 2px 6px 2px rgb(0 0 0 / 0.15),
+    0 4px 10px 0 rgb(0 0 0 / 0.25),
+    inset 0 4px 9px 0 rgb(236 235 239 / 0.08);
 }
 
 /*
@@ -528,8 +526,8 @@
   background: var(--design-elevation-1);
   color: var(--design-text-regular);
   --design-card-button-shadow:
-    0 1px 2px 0 rgb(0 0 0 / 0.3),
     0 1px 3px 1px rgb(0 0 0 / 0.15),
+    0 3px 8px 0 rgb(0 0 0 / 0.25),
     inset 0 4px 7px 0 rgb(245 244 246 / 0.08);
   box-shadow: var(--design-card-button-shadow);
 }
@@ -537,16 +535,16 @@
 [data-slot="design-card-button"]:hover {
   background: var(--design-elevation-2);
   --design-card-button-shadow:
-    0 1px 2px 0 rgb(0 0 0 / 0.3),
     0 2px 6px 2px rgb(0 0 0 / 0.15),
+    0 4px 10px 0 rgb(0 0 0 / 0.25),
     inset 0 4px 9px 0 rgb(236 235 239 / 0.08);
 }
 
 [data-slot="design-card-button"]:active {
   background: var(--design-elevation-3);
   --design-card-button-shadow:
+    0 5px 12px 0 rgb(0 0 0 / 0.25),
     0 4px 8px 3px rgb(0 0 0 / 0.15),
-    0 1px 3px 0 rgb(0 0 0 / 0.3),
     inset 0 4px 11px 0 rgb(229 227 232 / 0.08);
 }
 
@@ -557,19 +555,15 @@
 /* Set on the element, not through a Tailwind shadow utility. DialogContent also
    applies shadow-lg, and that utility wins over shadow-[var(--design-modal-shadow)]. */
 [data-slot="design-modal"] {
-  box-shadow: 0 2px 3px 0 rgb(0 0 0 / 0.3), 0 6px 10px 4px rgb(0 0 0 / 0.15);
-}
-
-.dark [data-slot="design-modal"] {
   box-shadow:
-    inset 0 4px 13px 0 rgb(220 219 224 / 0.08),
-    0 2px 3px 0 rgb(0 0 0 / 0.3),
-    0 6px 10px 4px rgb(0 0 0 / 0.15);
+    0 5px 14px 0 rgb(0 0 0 / 0.25),
+    0 6px 10px 4px rgb(0 0 0 / 0.15),
+    inset 0 4px 13px 0 rgb(220 219 224 / 0.08);
 }
 
 /*
  * Info-Popup. Shadow is set here, not with a Tailwind shadow utility, so every
- * layer stays: inner highlight, outer infomode glow, and the two drop shadows.
+ * layer stays: the elevation 3 drop shadows, the infomode glow, and the inner shadow.
  * The content root uses display: contents, so the heading and the close button
  * share the first row and the body spans the full width.
  */
@@ -590,10 +584,10 @@
   /* The fill stays slightly see-through so covered controls remain visible. */
   opacity: 0.9;
   box-shadow:
-    inset 0 4px 11px 0 rgb(229 227 232 / 0.08),
-    0 0 4px 4px var(--design-special-infomode-highlight),
+    0 5px 12px 0 rgb(0 0 0 / 0.25),
     0 4px 8px 3px rgb(0 0 0 / 0.15),
-    0 1px 3px 0 rgb(0 0 0 / 0.3);
+    0 0 4px 4px var(--design-special-infomode-highlight),
+    inset 0 4px 11px 0 rgb(229 227 232 / 0.08);
 }
 
 [data-infomode-popup] > button {

@@ -144,7 +144,15 @@ The only theme variant is Light. Dark should follow the theme mode through the `
 
 ### Card
 
-`theme` is Light or Dark, and `elevation` is 1 or 2. Elevation 2 is for a card nested inside another card. The surface, title, and description follow the theme (`surface/card`, `text/card/title`, `text/card/description`). `stroke/card` is bound and the border is hidden. Light cards use drop shadows. Dark cards use only an inner shadow. An action inside the card is a Button, so that action follows the network.
+`theme` is Light or Dark, and `elevation` is 1 or 2. Elevation 2 is for a card nested inside another card. The surface, title, and description follow the theme (`surface/card`, `text/card/title`, `text/card/description`). `stroke/card` is bound and the border is hidden. Light and Dark use the same shadow stack for that step: two drop shadows and an inner shadow, matching elevation 1 or elevation 2 on the Basics elevation-patterns frame. An action inside the card is a Button, so that action follows the network.
+
+### Modal
+
+`theme` is Light or Dark. The panel fill is `elevation/4`. Light and Dark use the elevation 4 shadow stack from the Basics elevation-patterns frame. It does not follow the network.
+
+### Info-Popup
+
+The explanation opened from info-toggle. The fill is `elevation/3`. Light and Dark use the elevation 3 shadow stack from the Basics elevation-patterns frame, plus an outer glow in `special/infomode/highlight`. It does not follow the network.
 
 ### Toast
 
