@@ -3,48 +3,63 @@ import { createPortal } from 'react-dom'
 import { XIcon } from 'lucide-react'
 import { designFocusClassName } from '@/components/design/design-classes'
 import type { InfomodeRegistryEntry } from '@/components/infomode/infomode-types'
-
-const VIEWPORT_MARGIN_PX = 8
-const GAP_PX = 8
+import {
+  computeInfomodePopupPosition,
+  type InfomodePopupPlacement,
+} from '@/lib/infomode/infomode-popup-position'
 
 interface InfomodePopupProps {
   open: boolean
   anchorElement: HTMLElement | null
+  placement: InfomodePopupPlacement
+  pointerX: number
+  pointerY: number
   entry: InfomodeRegistryEntry | null
   onRequestClose: () => void
 }
 
-function computePopupPosition(
-  anchorElement: HTMLElement,
+function measurePopupPosition(
   popupElement: HTMLElement,
+  anchorElement: HTMLElement,
+  placement: InfomodePopupPlacement,
+  pointerX: number,
+  pointerY: number,
 ): { top: number; left: number } {
-  const anchorRect = anchorElement.getBoundingClientRect()
   const popupRect = popupElement.getBoundingClientRect()
-  const viewportWidth = window.innerWidth
-  const viewportHeight = window.innerHeight
-
-  let top = anchorRect.bottom + GAP_PX
-  let left = anchorRect.left
-
-  if (top + popupRect.height > viewportHeight - VIEWPORT_MARGIN_PX) {
-    top = anchorRect.top - popupRect.height - GAP_PX
-  }
-  if (left + popupRect.width > viewportWidth - VIEWPORT_MARGIN_PX) {
-    left = viewportWidth - popupRect.width - VIEWPORT_MARGIN_PX
-  }
-  if (left < VIEWPORT_MARGIN_PX) {
-    left = VIEWPORT_MARGIN_PX
-  }
-  if (top < VIEWPORT_MARGIN_PX) {
-    top = VIEWPORT_MARGIN_PX
+  const popupSizeAndViewport = {
+    popupWidth: popupRect.width,
+    popupHeight: popupRect.height,
+    viewportWidth: window.innerWidth,
+    viewportHeight: window.innerHeight,
   }
 
-  return { top, left }
+  if (placement === 'pointer') {
+    return computeInfomodePopupPosition({
+      placement,
+      pointerX,
+      pointerY,
+      ...popupSizeAndViewport,
+    })
+  }
+
+  const anchorRect = anchorElement.getBoundingClientRect()
+  return computeInfomodePopupPosition({
+    placement,
+    anchorBox: {
+      top: anchorRect.top,
+      left: anchorRect.left,
+      bottom: anchorRect.bottom,
+    },
+    ...popupSizeAndViewport,
+  })
 }
 
 export function InfomodePopup({
   open,
   anchorElement,
+  placement,
+  pointerX,
+  pointerY,
   entry,
   onRequestClose,
 }: InfomodePopupProps) {
@@ -61,17 +76,17 @@ export function InfomodePopup({
       if (!anchorElement || !popupRef.current) {
         return
       }
-      setPosition(computePopupPosition(anchorElement, popupRef.current))
+      setPosition(
+        measurePopupPosition(popupRef.current, anchorElement, placement, pointerX, pointerY),
+      )
     }
 
     updatePosition()
-    window.addEventListener('scroll', updatePosition, true)
     window.addEventListener('resize', updatePosition)
     return () => {
-      window.removeEventListener('scroll', updatePosition, true)
       window.removeEventListener('resize', updatePosition)
     }
-  }, [open, anchorElement, entry])
+  }, [open, anchorElement, entry, placement, pointerX, pointerY])
 
   useLayoutEffect(() => {
     if (!open || !anchorElement || !entry) {
