@@ -2,7 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { appQueryClient } from '@/lib/shared/app-query-client'
 import { createRootRoute, Outlet } from '@tanstack/react-router'
 import { lazy, Suspense } from 'react'
-import { Toaster } from '@/components/ui/sonner'
+import { DesignToaster } from '@/components/design/DesignToaster'
 import { ThemeSynchronizer } from '@/stores/themeStore'
 import { WalletLayout } from '@/components/WalletLayout'
 import { RouterOutletErrorBoundary } from '@/components/RouterSafeErrorBoundary'
@@ -48,7 +48,7 @@ function RootComponent() {
           </AppInitializer>
         </DatabaseReadyGate>
       </InfomodeProvider>
-      <Toaster position="top-center" richColors />
+      <DesignToaster position="top-center" />
       <Suspense>
         <TanStackRouterDevtools position="bottom-right" />
       </Suspense>

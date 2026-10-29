@@ -5,8 +5,13 @@ import { toast } from 'sonner'
 import { ArkadeAddressInfomodeContent } from '@/components/arkade/infomode/ArkadeAddressInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DesignButton } from '@/components/design/DesignButton'
+import {
+  DesignCard,
+  DesignCardContent,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { ARKADE_INFOMODE_IDS } from '@/lib/arkade/arkade-infomode'
 import {
   useArkadeAddressQuery,
@@ -26,7 +31,7 @@ export function ArkadeReceive() {
 
   if (!isArkadeActiveForNetworkMode(networkMode)) {
     return (
-      <p className="text-sm text-muted-foreground">
+      <p className="design-type-regular text-muted-foreground">
         Enable Arkade under Settings → Features and select a supported network (mainnet
         or signet).{' '}
         <Link to="/settings" className="text-primary underline-offset-4 hover:underline">
@@ -53,14 +58,14 @@ export function ArkadeReceive() {
 
   return (
     <>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle className="flex items-center gap-2">
             <QrCode className="h-5 w-5" />
             QR Code
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+          </DesignCardTitle>
+        </DesignCardHeader>
+        <DesignCardContent>
           <div className="flex flex-col items-center gap-4">
             {addressLoading ? (
               <LoadingSpinner text="Loading address…" />
@@ -80,12 +85,12 @@ export function ArkadeReceive() {
               </div>
             ) : null}
           </div>
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle>
             <InfomodeWrapper
               infoId={ARKADE_INFOMODE_IDS.receiveAddress}
               infoComponent={ArkadeAddressInfomodeContent}
@@ -93,11 +98,11 @@ export function ArkadeReceive() {
             >
               Arkade receiving address
             </InfomodeWrapper>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+          </DesignCardTitle>
+        </DesignCardHeader>
+        <DesignCardContent className="space-y-3">
           {addressQuery.isError ? (
-            <p className="text-sm text-destructive">
+            <p className="design-type-regular text-destructive">
               Could not load Arkade address. Unlock the wallet and check your network.
             </p>
           ) : (
@@ -105,37 +110,37 @@ export function ArkadeReceive() {
               <div className="flex items-center gap-2">
                 <div
                   data-testid="arkade-receive-address"
-                  className="flex-1 truncate rounded-md border border-input bg-muted/50 px-3 py-2 font-mono text-sm"
+                  className="design-type-addresses flex-1 truncate rounded-md border border-input bg-muted/50 px-3 py-2"
                 >
                   {addressLoading ? 'Loading…' : address || 'Loading…'}
                 </div>
-                <Button
-                  size="icon"
+                <DesignButton
                   onClick={handleCopy}
                   disabled={!address}
                   aria-label="Copy address"
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
+                  icon={<Copy />}
+                />
               </div>
-              <Button
+              <DesignButton
                 type="button"
                 className="w-full"
                 data-testid="arkade-generate-new-address"
                 disabled={newAddressMutation.isPending || !address}
                 onClick={() => newAddressMutation.mutate()}
+                icon={
+                  newAddressMutation.isPending ? (
+                    <Loader2 className="animate-spin" aria-hidden />
+                  ) : (
+                    <RefreshCw />
+                  )
+                }
               >
-                {newAddressMutation.isPending ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-                ) : (
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                )}
                 Generate New Address
-              </Button>
+              </DesignButton>
             </>
           )}
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
     </>
   )
 }

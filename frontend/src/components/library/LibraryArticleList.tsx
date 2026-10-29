@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { Badge } from '@/components/ui/badge'
+import { DesignTag } from '@/components/design/DesignTag'
 import type { LibraryArticle } from '@/lib/library/articles'
 import { getTagLabel, type LibraryTagId } from '@/lib/library/tags'
 
@@ -16,11 +16,11 @@ export function LibraryArticleList({
   excludeTagId,
 }: LibraryArticleListProps) {
   if (articles.length === 0) {
-    return <p className="text-sm text-muted-foreground">{emptyMessage}</p>
+    return <p className="design-type-regular text-muted-foreground">{emptyMessage}</p>
   }
 
   return (
-    <ul className="divide-y divide-border rounded-lg border border-border">
+    <ul className="divide-y divide-border">
       {articles.map((article) => {
         const tagIdsToShow =
           excludeTagId != null
@@ -32,22 +32,18 @@ export function LibraryArticleList({
               <Link
                 to="/library/articles/$slug"
                 params={{ slug: article.slug }}
-                className="min-w-0 flex-1 font-medium text-foreground underline-offset-4 hover:underline"
+                className="design-type-emphasis min-w-0 flex-1 text-foreground underline-offset-4 hover:underline"
               >
                 {article.title}
               </Link>
               {tagIdsToShow.length > 0 ? (
-                <div className="flex max-w-full flex-wrap gap-1.5 sm:justify-end">
+                <div className="flex max-w-full flex-wrap gap-3 sm:justify-end">
                   {tagIdsToShow.map((tagId) => (
-                    <Badge key={tagId} variant="secondary" asChild>
-                      <Link
-                        to="/library/tags"
-                        search={{ tag: tagId }}
-                        className="cursor-pointer"
-                      >
+                    <DesignTag key={tagId} asChild>
+                      <Link to="/library/tags" search={{ tag: tagId }}>
                         {getTagLabel(tagId)}
                       </Link>
-                    </Badge>
+                    </DesignTag>
                   ))}
                 </div>
               ) : null}

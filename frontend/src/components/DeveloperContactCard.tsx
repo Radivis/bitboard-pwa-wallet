@@ -1,10 +1,10 @@
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+  DesignCard,
+  DesignCardContent,
+  DesignCardDescription,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 
 const EMAIL = 'michael.hrenka@protonmail.com'
 const GITHUB_URL = 'https://github.com/Radivis/'
@@ -19,14 +19,14 @@ const linkClass =
 /** Developer contact (Settings). Email is the primary channel; other links are for technical or informal reach-out. */
 export function DeveloperContactCard() {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Developer Contact Info</CardTitle>
-        <CardDescription className="text-base font-medium text-foreground">
+    <DesignCard>
+      <DesignCardHeader>
+        <DesignCardTitle>Developer Contact Info</DesignCardTitle>
+        <DesignCardDescription className="design-type-emphasis text-[var(--design-text-regular)]">
           Michael Hrenka
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-2 text-sm">
+        </DesignCardDescription>
+      </DesignCardHeader>
+      <DesignCardContent className="design-type-regular gap-2">
         <p>
           <span className="text-muted-foreground">E-Mail: </span>
           <a className={linkClass} href={`mailto:${EMAIL}`}>
@@ -67,7 +67,7 @@ export function DeveloperContactCard() {
             njump.me
           </a>
         </p>
-      </CardContent>
-    </Card>
+      </DesignCardContent>
+    </DesignCard>
   )
 }

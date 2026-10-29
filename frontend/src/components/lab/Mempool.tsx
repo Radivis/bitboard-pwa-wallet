@@ -1,11 +1,11 @@
 import { Link } from '@tanstack/react-router'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+  DesignCard,
+  DesignCardContent,
+  DesignCardDescription,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { LabTxCard } from '@/components/lab/LabTxCard'
 import { netMovedSatsFromMempoolEntry } from '@/lib/lab/lab-tx-net-moved'
@@ -29,14 +29,14 @@ export function LabMempoolCard({
       infoText="The mempool lists transactions that have been created in the lab but not yet included in a block. Once mined, they leave this list and appear under their block details page."
       className="rounded-xl"
     >
-      <Card>
-        <CardHeader>
-          <CardTitle>Mempool</CardTitle>
-          <CardDescription>Unconfirmed transactions waiting for mining</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle>Mempool</DesignCardTitle>
+          <DesignCardDescription>Unconfirmed transactions waiting for mining</DesignCardDescription>
+        </DesignCardHeader>
+        <DesignCardContent className="gap-3">
           {mempool.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-2">
+            <p className="design-type-regular text-muted-foreground py-2">
               Mempool is empty. Create a transaction to see it here.
             </p>
           ) : (
@@ -65,8 +65,8 @@ export function LabMempoolCard({
               })}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
     </InfomodeWrapper>
   )
 }

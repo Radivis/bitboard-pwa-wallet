@@ -1,13 +1,15 @@
 import { Link } from '@tanstack/react-router'
-import { Copy, Loader2 } from 'lucide-react'
+import { Copy, Loader2, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { ArkadeIcon } from '@/components/icons/ArkadeIcon'
 import { ArkadeSessionGate } from '@/components/arkade/ArkadeSessionGate'
 import { ArkadeUnilateralExitInfomodeContent } from '@/components/arkade/infomode/ArkadeUnilateralExitInfomodeContent'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { PageHeader } from '@/components/PageHeader'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { DesignBanner } from '@/components/design/DesignBanner'
+import { DesignButton } from '@/components/design/DesignButton'
+import { DesignCheckbox } from '@/components/design/DesignCheckbox'
+import { DesignInput } from '@/components/design/DesignInput'
 import { Label } from '@/components/ui/label'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import { SendOnChainFeeSection } from '@/components/wallet/send/SendOnChainFeeSection'
@@ -124,7 +126,7 @@ function CompleteUnilateralExitInProgressList({
 }) {
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <div className="design-type-regular flex items-center gap-2 text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
         Loading exits in progress…
       </div>
@@ -132,7 +134,7 @@ function CompleteUnilateralExitInProgressList({
   }
   if (rows?.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground" data-testid="arkade-unilateral-complete-empty">
+      <p className="design-type-regular text-muted-foreground" data-testid="arkade-unilateral-complete-empty">
         No unilateral exits in progress. Start an exit first, then return here after unroll.
       </p>
     )
@@ -142,29 +144,26 @@ function CompleteUnilateralExitInProgressList({
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">
+        <p className="design-type-regular text-muted-foreground">
           {selectedOutpoints.length} selected ·{' '}
           <BitcoinAmountDisplay amountSats={selectedTotalSats} size="sm" />
         </p>
         {readyCount > 0 && (
-          <Button
+          <DesignButton
             type="button"
-            variant="outline"
-            size="sm"
+            appearance="secondary"
             data-testid="arkade-unilateral-select-all-ready"
             onClick={onSelectAllReady}
           >
             Select all ready ({readyCount})
-          </Button>
+          </DesignButton>
         )}
       </div>
       <ul className="max-h-96 space-y-2 overflow-y-auto rounded-md border p-2">
         {rows?.map((row) => (
           <li key={row.id}>
-            <label className="flex cursor-pointer items-start gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="mt-1"
+            <label className="design-type-regular flex cursor-pointer items-start gap-2">
+              <DesignCheckbox
                 checked={includesArkadeVtxoOutpoint(selectedOutpoints, {
                   txid: row.txid,
                   vout: row.vout,
@@ -173,11 +172,11 @@ function CompleteUnilateralExitInProgressList({
               />
               <span className="flex-1 break-all">
                 <BitcoinAmountDisplay amountSats={row.amountSats} size="sm" />
-                <span className="block font-mono text-xs text-muted-foreground">
+                <span className="design-type-addresses block text-muted-foreground">
                   {row.txid}:{row.vout}
                 </span>
                 <span
-                  className="text-xs text-muted-foreground"
+                  className="design-type-regular text-muted-foreground"
                   data-testid="arkade-unilateral-complete-row-phase"
                 >
                   {row.virtualStatusState}
@@ -227,14 +226,14 @@ function CompleteUnilateralExitFeeDetails({
         onSelectCustomMode={completionFeeRateUi.handleSelectCustomMode}
       />
       {completionFeeQuery.isLoading && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="design-type-regular flex items-center gap-2 text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
           Estimating completion fee…
         </div>
       )}
       {completionFeeEstimate && (
         <div
-          className="space-y-1 rounded-md border bg-muted/40 p-2 text-xs"
+          className="design-type-regular space-y-1 rounded-md border bg-muted/40 p-2"
           data-testid="arkade-unilateral-completion-fee"
         >
           <p>
@@ -262,7 +261,7 @@ function CompleteUnilateralExitFeeDetails({
       )}
       {missingBlocktimeWarning != null && (
         <div
-          className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-200"
+          className="design-type-regular rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-amber-800 dark:text-amber-200"
           data-testid="arkade-complete-blocktime-warning"
         >
           <p>{missingBlocktimeWarning.summary}</p>
@@ -306,7 +305,7 @@ export function CompleteUnilateralExitContent({ exitFlow }: CompleteUnilateralEx
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
+      <p className="design-type-regular text-muted-foreground">
         <InfomodeWrapper
           infoId={ARKADE_INFOMODE_IDS.unilateralExit}
           infoComponent={ArkadeUnilateralExitInfomodeContent}
@@ -328,28 +327,29 @@ export function CompleteUnilateralExitContent({ exitFlow }: CompleteUnilateralEx
       />
 
       {waitingBanner != null && (
-        <p
-          className="text-sm text-amber-700 dark:text-amber-300"
+        <DesignBanner
+          role="status"
+          status="warning"
           data-testid="arkade-unilateral-complete-waiting"
-        >
-          {waitingBanner}
-        </p>
+          title="Waiting to complete"
+          description={waitingBanner}
+        />
       )}
 
       <div className="space-y-2">
         <Label htmlFor="arkade-complete-batch-destination">Destination address</Label>
         <div className="flex items-center gap-2">
-          <Input
+          <DesignInput
             id="arkade-complete-batch-destination"
-            className="font-mono"
+            className="design-type-addresses"
+            leadingIcon={Wallet}
             value={completeDestination}
             onChange={(event) => setCompleteDestination(event.target.value)}
             autoComplete="off"
           />
-          <Button
+          <DesignButton
             type="button"
-            size="icon"
-            variant="outline"
+            appearance="secondary"
             data-testid="arkade-complete-destination-copy"
             aria-label="Copy destination address"
             disabled={completeDestination.trim().length === 0}
@@ -360,9 +360,8 @@ export function CompleteUnilateralExitContent({ exitFlow }: CompleteUnilateralEx
                 'Failed to copy destination address',
               )
             }
-          >
-            <Copy className="h-4 w-4" aria-hidden />
-          </Button>
+            icon={<Copy aria-hidden />}
+          />
         </div>
       </div>
 
@@ -374,17 +373,17 @@ export function CompleteUnilateralExitContent({ exitFlow }: CompleteUnilateralEx
       />
 
       {completeExitMutation.isError && (
-        <p className="text-sm text-destructive" data-testid="arkade-complete-error">
+        <p className="design-type-regular text-destructive" data-testid="arkade-complete-error">
           Complete exit failed:{' '}
           {userFacingErrorMessage(completeExitMutation.error) || 'Unknown error'}
         </p>
       )}
 
       <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="outline" asChild>
+        <DesignButton type="button" appearance="secondary" asChild>
           <Link to="/wallet/management">Back to Management</Link>
-        </Button>
-        <Button
+        </DesignButton>
+        <DesignButton
           type="button"
           disabled={
             completeExitMutation.isPending ||
@@ -394,7 +393,7 @@ export function CompleteUnilateralExitContent({ exitFlow }: CompleteUnilateralEx
           onClick={handleCompleteExit}
         >
           {completeExitMutation.isPending ? 'Completing…' : 'Complete exit'}
-        </Button>
+        </DesignButton>
       </div>
     </div>
   )
@@ -420,9 +419,9 @@ export function CompleteUnilateralExitPage() {
       <div className="space-y-4">
         <PageHeader title="Complete unilateral exit" icon={ArkadeIcon} />
         <p className="text-muted-foreground">Arkade is not enabled for this network.</p>
-        <Button type="button" variant="outline" asChild>
+        <DesignButton type="button" appearance="secondary" asChild>
           <Link to="/wallet/management">Back to Management</Link>
-        </Button>
+        </DesignButton>
       </div>
     )
   }

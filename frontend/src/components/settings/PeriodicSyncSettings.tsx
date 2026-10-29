@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, Timer } from 'lucide-react'
 import { toast } from 'sonner'
 import type { DashboardRailId } from '@/components/wallet/RailSyncControl'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+  DesignCard,
+  DesignCardContent,
+  DesignCardDescription,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
+import { DesignInput } from '@/components/design/DesignInput'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { useFeatureStore } from '@/stores/featureStore'
@@ -19,6 +19,7 @@ import {
   usePeriodicSyncStore,
 } from '@/stores/periodicSyncStore'
 import {
+  DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS,
   MAX_PERIODIC_SYNC_INTERVAL_SECONDS,
   MIN_PERIODIC_SYNC_INTERVAL_SECONDS,
 } from '@/lib/wallet/periodic-sync/periodic-sync-constants'
@@ -59,7 +60,7 @@ function PeriodicSyncRailRow({ rail }: { rail: DashboardRailId }) {
     }
     const clamped = clampIntervalSeconds(parsed)
     if (clamped !== parsed) {
-      toast.message(
+      toast.info(
         `Interval adjusted to ${clamped} seconds (allowed range ${MIN_PERIODIC_SYNC_INTERVAL_SECONDS}–${MAX_PERIODIC_SYNC_INTERVAL_SECONDS}).`,
       )
     }
@@ -71,31 +72,38 @@ function PeriodicSyncRailRow({ rail }: { rail: DashboardRailId }) {
   const switchId = `periodic-sync-enabled-${rail}`
 
   return (
-    <div
-      className="flex flex-col gap-3 rounded-lg border border-border p-4 sm:flex-row sm:items-center sm:justify-between"
+    <DesignCard
+      elevation={2}
+      className="flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
       data-testid={`periodic-sync-row-${rail}`}
     >
-      <span className="text-sm font-medium text-foreground">{RAIL_LABELS[rail]}</span>
+      <span className="design-type-emphasis text-foreground">{RAIL_LABELS[rail]}</span>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
         <div className="flex items-center gap-2">
           <Label htmlFor={inputId} className="sr-only">
             {RAIL_LABELS[rail]} polling interval in seconds
           </Label>
-          <Input
+          <DesignInput
             id={inputId}
             type="number"
+            leadingIcon={Timer}
             min={MIN_PERIODIC_SYNC_INTERVAL_SECONDS}
             max={MAX_PERIODIC_SYNC_INTERVAL_SECONDS}
             value={editIntervalSeconds}
+            resetTo={String(DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS)}
             onChange={(event) => setEditIntervalSeconds(event.target.value)}
+            onReset={() => {
+              setRailPeriodicSyncIntervalSeconds(rail, DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS)
+              setEditIntervalSeconds(String(DEFAULT_PERIODIC_SYNC_INTERVAL_SECONDS))
+            }}
             onBlur={() => commitInterval()}
             className="w-28"
             aria-label={`${RAIL_LABELS[rail]} polling interval in seconds`}
           />
-          <span className="text-sm text-muted-foreground">seconds</span>
+          <span className="design-type-regular text-muted-foreground">seconds</span>
         </div>
         <div className="flex items-center justify-between gap-2 sm:justify-end">
-          <Label htmlFor={switchId} className="cursor-pointer text-sm text-muted-foreground">
+          <Label htmlFor={switchId} className="design-type-regular cursor-pointer text-muted-foreground">
             periodic sync enabled
           </Label>
           <Switch
@@ -106,7 +114,7 @@ function PeriodicSyncRailRow({ rail }: { rail: DashboardRailId }) {
           />
         </div>
       </div>
-    </div>
+    </DesignCard>
   )
 }
 
@@ -133,23 +141,23 @@ export function PeriodicSyncSettings() {
       infoText="When enabled under Features, each rail can poll its provider on a timer while the wallet is loaded and this browser tab is visible. Hydration after unlock and manual sync always run regardless. Turn off per-rail polling here if you prefer fewer background network requests."
       className="rounded-xl"
     >
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle>
             <RefreshCw className="h-5 w-5" />
             Periodic sync
-          </CardTitle>
-          <CardDescription>
+          </DesignCardTitle>
+          <DesignCardDescription>
             Control background polling per rail. Default interval is 300 seconds when
             the feature is first enabled.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
+          </DesignCardDescription>
+        </DesignCardHeader>
+        <DesignCardContent className="gap-3">
           {visibleRails.map((rail) => (
             <PeriodicSyncRailRow key={rail} rail={rail} />
           ))}
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
     </InfomodeWrapper>
   )
 }

@@ -11,7 +11,7 @@ feature:
     - Infomode is toggled from the header via a lightbulb control to the left of the theme (light/dark/system) selector; lit when on, dim/off when off
     - When infomode is active, elements that opt in receive a subtle cyan inner highlight at their border (visual cue only)
     - While infomode is active, a single global click listener handles clicks; per-element onClick handlers must not be required for performance on dense pages
-    - Clicking a supported element opens an info popup positioned near that element; the handler resolves the innermost opt-in ancestor of the click target
+    - Clicking a supported element opens an info popup at the pointer. The popup grows downward from that point when its full height fits below the pointer, and upward when it does not. Keyboard activation keeps the popup beside the element. The handler resolves the innermost opt-in ancestor of the click target
     - Clicking outside an open popup closes it; clicking another opt-in element replaces the popup content and position
     - Info content has two variants:
       - Inline: a title and body text supplied at the call site

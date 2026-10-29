@@ -73,7 +73,7 @@ export function FiatCurrencySettingsSelect({
 
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-      <span className="text-sm text-muted-foreground">Default fiat currency</span>
+      <span className="design-type-regular text-muted-foreground">Default fiat currency</span>
       <select
         className={selectClassName}
         value={defaultFiatCurrency}

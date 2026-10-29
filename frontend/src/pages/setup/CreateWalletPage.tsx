@@ -7,7 +7,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { DialogDescription } from '@/components/ui/dialog'
-import { AppModal } from '@/components/AppModal'
+import { DesignButton } from '@/components/design/DesignButton'
+import { DesignDestructiveButton } from '@/components/design/DesignDestructiveButton'
+import { DesignModal } from '@/components/design/DesignModal'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { MnemonicGrid } from '@/components/MnemonicGrid'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
@@ -165,7 +167,7 @@ export function CreateWalletPage() {
         <SetupFlowHeading
           title="Create Wallet"
           trailing={
-            <div className="ml-auto text-sm text-muted-foreground">
+            <div className="design-type-regular ml-auto text-muted-foreground">
               Step {step} of 3
             </div>
           }
@@ -182,30 +184,28 @@ export function CreateWalletPage() {
               onSubmit={() => void requestAppPasswordForCreate('generate')}
               onOpenSkipBackupWarning={() => setSkipBackupWarningOpen(true)}
             />
-            <AppModal
+            <DesignModal
               isOpen={skipBackupWarningOpen}
               onOpenChange={setSkipBackupWarningOpen}
               onCancel={() => {}}
               title="Quick start without viewing backup"
-              contentClassName="sm:max-w-lg"
               footer={(requestClose) => (
                 <>
-                  <Button type="button" variant="outline" onClick={requestClose}>
+                  <DesignButton type="button" appearance="secondary" onClick={requestClose}>
                     Abort
-                  </Button>
-                  <Button
+                  </DesignButton>
+                  <DesignButton
                     type="button"
-                    variant="destructive"
                     disabled={quickCreateWalletMutation.isPending}
                     onClick={() => void requestAppPasswordForCreate('quickCreate')}
                   >
                     Understood! Proceed!
-                  </Button>
+                  </DesignButton>
                 </>
               )}
             >
               <DialogDescription asChild>
-                <div className="space-y-3 text-left text-sm text-foreground">
+                <div className="design-type-regular space-y-3 text-left text-foreground">
                   <p>
                     This quick start option still creates a seed phrase and stores it encrypted on this
                     device, but it will not be shown here. You can view it and back it up later from{' '}
@@ -215,14 +215,14 @@ export function CreateWalletPage() {
                     It is <strong>much safer</strong> to make a backup of the seed phrase immediately
                     using &quot;Generate &amp; Continue&quot; instead.
                   </p>
-                  <p className="font-semibold text-destructive">
+                  <p className="design-type-emphasis text-destructive">
                     If you skip writing down your seed phrase, permanent loss of funds is highly likely
                     if you lose this device, damage your data, or forget your Bitboard app password —
                     treat total loss as the expected outcome.
                   </p>
                 </div>
               </DialogDescription>
-            </AppModal>
+            </DesignModal>
           </>
         )}
 
@@ -359,15 +359,13 @@ function StepWordCountGenerate({
               <RefreshCw className="mr-2 h-4 w-4" />
               Generate & Continue
             </Button>
-            <Button
+            <DesignDestructiveButton
               type="button"
-              variant="destructive"
               className="w-full"
-              size="lg"
               onClick={onOpenSkipBackupWarning}
             >
               Generate but skip backup
-            </Button>
+            </DesignDestructiveButton>
           </>
         )}
       </CardContent>
@@ -393,7 +391,7 @@ function StepBackup({
       </CardHeader>
       <CardContent className="space-y-4">
         <MnemonicGrid words={words} columns={words.length > 12 ? 4 : 3} />
-        <div className="rounded-md bg-yellow-50 p-3 text-sm text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200">
+        <div className="design-type-regular rounded-md bg-yellow-50 p-3 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200">
           Write down these words in order. You will need them to recover your
           wallet.
         </div>

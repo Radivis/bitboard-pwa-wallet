@@ -15,6 +15,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [0.4.0] - TBD
+
+### Added
+
+- Always visible network selector for switching networks quickly without having to go to the "Settings" page
+- Always visible wallet lock toggle button
+- Almost always visible back button
+
+### Changed
+
+- Complete redesign of the app according to a new design system
+- The theme switcher is now is the side drawer
+- The bottom nav bar now only has one row at max; top level navigation now works through the side drawer
+- Removing a NWC connected Lightning wallet now requires confirmation within a modal
+
 ## [0.3.6] - 2026-10-23
 
 ### Added
@@ -142,7 +157,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Arkade Support: enable under Settings → Features; separate balance, receive, send, and board-from-on-chain flows on mainnet, and signet (Mutinynet)
 - Network-scoped default Fulmine delegator URLs (env-configurable) for background VTXO renewal
-- Library articles "Arkade in Bitboard Wallet" and "VTXO expiry and renewal"; deploy notes in `docs/deploy/fulmine-delegator-vps.md`
+- Library articles "Arkade in Bitcoin Codex" and "VTXO expiry and renewal"; deploy notes in `docs/deploy/fulmine-delegator-vps.md`
 - Arkade collaborative and unilateral exit from Management (per-VTXO unilateral flow with unroll progress)
 - Arkade exit fee estimates: operator policy and satoshi preview for collaborative exit; unroll step count and bumper fee lower bound for unilateral exit
 

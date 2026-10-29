@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { LabBlock, LabMineOperationRecord, LabTxDetails } from '@/workers/lab-api'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+  DesignCard,
+  DesignCardContent,
+  DesignCardDescription,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import { CardPagination } from '@/components/CardPagination'
 import { LAB_CARD_PAGE_SIZE } from '@/lib/lab/lab-paginated-queries'
@@ -80,14 +80,14 @@ export function LabPreviousBlocksCard({
       infoText="Mined blocks as compact square cards: icons show height, transaction count, miner, fees, net moved BTC (sum of non-change outputs from non-coinbase transactions only; coinbase is excluded), mined date and time, and non-coinbase weight versus the limit recorded when the block was mined (shown only as background fill). Paginate when there are many blocks."
       className="rounded-xl"
     >
-      <Card>
-        <CardHeader>
-          <CardTitle>Previous blocks</CardTitle>
-          <CardDescription>Only the fee part of the miner reward is shown here. Open a block for full details.</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle>Previous blocks</DesignCardTitle>
+          <DesignCardDescription>Only the fee part of the miner reward is shown here. Open a block for full details.</DesignCardDescription>
+        </DesignCardHeader>
+        <DesignCardContent>
           {totalCount === 0 ? (
-            <p className="text-sm text-muted-foreground py-2">No blocks mined yet.</p>
+            <p className="design-type-regular text-muted-foreground py-2">No blocks mined yet.</p>
           ) : (
             <CardPagination
               pageSize={LAB_CARD_PAGE_SIZE}
@@ -115,8 +115,8 @@ export function LabPreviousBlocksCard({
               </div>
             </CardPagination>
           )}
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
     </InfomodeWrapper>
   )
 }

@@ -3,7 +3,7 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import { KeyRound } from 'lucide-react'
 import { DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { AppModal } from '@/components/AppModal'
+import { DesignModal } from '@/components/design/DesignModal'
 import { beginWalletSecretsSession } from '@/lib/wallet/wallet-secrets-session'
 import {
   AppPasswordFields,
@@ -77,27 +77,26 @@ export function SetAppPasswordModal({ open, onSessionStarted }: SetAppPasswordMo
   }
 
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={() => {}}
       onCancel={handleBackToSetup}
       title={
         <>
           <KeyRound className="mt-0.5 h-5 w-5 shrink-0" />
-          <span className="min-w-0 leading-tight">Set Bitboard app password</span>
+          <span className="min-w-0">Set Bitboard app password</span>
         </>
       }
       closeAriaLabel="Back to setup"
-      contentClassName="sm:max-w-md"
       onInteractOutside={(e) => e.preventDefault()}
       onEscapeKeyDown={(e) => e.preventDefault()}
     >
       <div className="space-y-4">
-        <DialogDescription className="w-full max-w-none text-left text-sm text-muted-foreground">
+        <DialogDescription className="design-type-regular w-full max-w-none text-left text-muted-foreground">
           Choose a password for this browser. It encrypts all wallets you store in Bitboard on this
           device.{' '}
-          <span className="font-medium text-foreground/90">
-            Use Infomode (lightbulb button above) to get more information about parts of this form
+          <span className="design-type-emphasis text-foreground/90">
+            Use Infomode (question mark button above) to get more information about parts of this form
             by tapping them.
           </span>
         </DialogDescription>
@@ -114,7 +113,7 @@ export function SetAppPasswordModal({ open, onSessionStarted }: SetAppPasswordMo
           />
 
           {submitError != null && (
-            <p className="text-sm text-destructive">{submitError}</p>
+            <p className="design-type-regular text-destructive">{submitError}</p>
           )}
 
           <Button type="submit" className="w-full" disabled={!passwordsValid || isSubmitting}>
@@ -128,6 +127,6 @@ export function SetAppPasswordModal({ open, onSessionStarted }: SetAppPasswordMo
 
         <NearZeroSecurityOptIn onSessionStarted={onSessionStarted} />
       </div>
-    </AppModal>
+    </DesignModal>
   )
 }

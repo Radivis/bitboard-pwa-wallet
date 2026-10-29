@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Hourglass, Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { DesignBanner, type DesignBannerAction } from '@/components/design/DesignBanner'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
 import {
   ARKADE_INFOMODE_IDS,
@@ -49,12 +49,12 @@ function PendingBatchIntentDestinationLine({
 }) {
   return (
     <p
-      className="text-xs text-muted-foreground"
+      className="design-type-regular text-muted-foreground"
       data-testid="arkade-pending-batch-intent-destination"
       title={destinationAddress}
     >
       On-chain destination:{' '}
-      <span className="font-mono">{truncateAddress(destinationAddress)}</span>
+      <span className="design-type-addresses">{truncateAddress(destinationAddress)}</span>
     </p>
   )
 }
@@ -101,7 +101,7 @@ export function ArkadePendingBatchIntentBanner() {
           operatorFinalized,
         })
         if (disappearance.type === 'cancelled') {
-          toast.message(pendingBatchIntentCancelledMessage())
+          toast.info(pendingBatchIntentCancelledMessage())
           continue
         }
         if (disappearance.type === 'succeeded') {
@@ -137,74 +137,65 @@ export function ArkadePendingBatchIntentBanner() {
         const retryEnabled = pendingIntentAllowsRetry(pendingIntent, nowUnixSeconds)
         const retryLabel = pendingIntentRetryButtonLabel(pendingIntent, nowUnixSeconds)
         const destinationAddress = pendingBatchIntentDestinationAddress(pendingIntent)
+        const retryAction: DesignBannerAction | undefined = showRetry
+          ? {
+              label: retryLabel,
+              disabled: mutationInFlightForRow || !retryEnabled,
+              onClick: () => retryIntentMutation.mutate(pendingIntent),
+            }
+          : undefined
+        const cancelAction: DesignBannerAction | undefined = showCancel
+          ? {
+              label: 'Cancel',
+              disabled: mutationInFlightForRow,
+              onClick: () => cancelIntentMutation.mutate(pendingIntent),
+            }
+          : undefined
         return (
-          <div
+          <DesignBanner
             key={rowKey}
-            className="rounded-md border border-sky-500/40 bg-sky-500/10 p-3 text-sm"
             role="status"
+            status="info"
             data-testid="arkade-pending-batch-intent-banner"
             data-lifecycle-phase={bannerPhase}
-          >
-            <div className="flex items-start gap-2">
-              {isProcessing ? (
-                <Loader2
-                  className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-sky-700 dark:text-sky-300"
-                  aria-hidden
-                  data-testid="arkade-pending-batch-intent-processing-spinner"
-                />
-              ) : (
-                <Hourglass
-                  className="mt-0.5 h-4 w-4 shrink-0 text-sky-700 dark:text-sky-300"
-                  aria-hidden
-                  data-testid="arkade-pending-batch-intent-timed-out-icon"
-                />
-              )}
-              <div className="space-y-2">
-                <InfomodeWrapper
-                  infoId={ARKADE_INFOMODE_IDS.pendingBatchIntentBanner}
-                  infoTitle={infomode.title}
-                  infoText={infomode.text}
-                  as="span"
-                >
-                  <p className="font-medium">{infomode.title}</p>
-                </InfomodeWrapper>
-                <p className="text-muted-foreground">
-                  {isProcessing
-                    ? `${pendingBatchIntentProcessingMessage(pendingIntent.kind)} ${pendingBatchIntentDurationHint()}`
-                    : pendingBatchIntentTimedOutMessage(pendingIntent.kind)}
-                </p>
-                {destinationAddress ? (
-                  <PendingBatchIntentDestinationLine destinationAddress={destinationAddress} />
-                ) : null}
-                {showCancel || showRetry ? (
-                  <div className="flex gap-2">
-                    {showCancel ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        disabled={mutationInFlightForRow}
-                        onClick={() => cancelIntentMutation.mutate(pendingIntent)}
-                      >
-                        Cancel
-                      </Button>
-                    ) : null}
-                    {showRetry ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        disabled={mutationInFlightForRow || !retryEnabled}
-                        onClick={() => retryIntentMutation.mutate(pendingIntent)}
-                      >
-                        {retryLabel}
-                      </Button>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </div>
+            title={
+              <InfomodeWrapper
+                infoId={ARKADE_INFOMODE_IDS.pendingBatchIntentBanner}
+                infoTitle={infomode.title}
+                infoText={infomode.text}
+                as="span"
+              >
+                <span className="inline-flex items-center justify-center gap-2">
+                  {isProcessing ? (
+                    <Loader2
+                      className="size-4 shrink-0 animate-spin"
+                      aria-hidden
+                      data-testid="arkade-pending-batch-intent-processing-spinner"
+                    />
+                  ) : (
+                    <Hourglass
+                      className="size-4 shrink-0"
+                      aria-hidden
+                      data-testid="arkade-pending-batch-intent-timed-out-icon"
+                    />
+                  )}
+                  {infomode.title}
+                </span>
+              </InfomodeWrapper>
+            }
+            description={
+              isProcessing
+                ? `${pendingBatchIntentProcessingMessage(pendingIntent.kind)} ${pendingBatchIntentDurationHint()}`
+                : pendingBatchIntentTimedOutMessage(pendingIntent.kind)
+            }
+            optionalContent={
+              destinationAddress ? (
+                <PendingBatchIntentDestinationLine destinationAddress={destinationAddress} />
+              ) : null
+            }
+            primaryAction={retryAction ?? cancelAction}
+            secondaryAction={retryAction != null ? cancelAction : undefined}
+          />
         )
       })}
     </div>

@@ -61,10 +61,10 @@ export function CardPagination({
         >
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+        <label className="design-type-regular flex items-center gap-2 text-muted-foreground">
           <span className="sr-only">{ariaLabel}</span>
           <select
-            className="rounded-md border border-input bg-background px-2 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="design-type-addresses rounded-md border border-input bg-background px-2 py-1.5 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label={ariaLabel}
             value={displayPageOneBased}
             onChange={(selectChangeEvent) => {

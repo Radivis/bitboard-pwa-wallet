@@ -12,7 +12,7 @@ export function ArkadeOverviewInfomodeContent() {
       <InfomodeHeading>Arkade balance</InfomodeHeading>
       <InfomodeParagraph>
         Arkade is a fast offchain Bitcoin layer. Your spendable amount here uses{' '}
-        <strong className="font-medium text-popover-foreground">virtual balance units (VTXOs)</strong>
+        <strong className="design-type-emphasis text-popover-foreground">virtual balance units (VTXOs)</strong>
         —not the same as your on-chain bc1 balance on the dashboard above.
       </InfomodeParagraph>
       <InfomodeParagraph>
@@ -21,7 +21,7 @@ export function ArkadeOverviewInfomodeContent() {
       </InfomodeParagraph>
       <InfomodeParagraph>
         Read{' '}
-        <ArticleLink slug={ARKADE_LIBRARY_SLUGS.overview}>Arkade in Bitboard Wallet</ArticleLink>
+        <ArticleLink slug={ARKADE_LIBRARY_SLUGS.overview}>Arkade in Bitcoin Codex</ArticleLink>
         {' '}and{' '}
         <ArticleLink slug={ARKADE_LIBRARY_SLUGS.vtxo}>What is a VTXO?</ArticleLink> in the Library.
       </InfomodeParagraph>

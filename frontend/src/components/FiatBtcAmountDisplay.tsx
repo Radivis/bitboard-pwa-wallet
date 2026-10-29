@@ -4,6 +4,7 @@ import {
   type BitcoinAmountDisplaySize,
 } from '@/components/BitcoinAmountDisplay'
 import { FiatAmountDisplay } from '@/components/FiatAmountDisplay'
+import type { DesignAmountTypography } from '@/components/design/design-type'
 import type { MainnetFiatAmountDisplayProps } from '@/hooks/useMainnetFiatAmountProps'
 import type { FiatCurrencyCode } from '@/lib/fiat/supported-fiat-currencies'
 import { cn } from '@/lib/shared/utils'
@@ -19,6 +20,7 @@ type FiatBtcAmountDisplayProps = {
   className?: string
   fiatClassName?: string
   btcClassName?: string
+  amountTypography?: DesignAmountTypography
   'data-testid'?: string
 }
 
@@ -46,6 +48,7 @@ export function FiatBtcAmountDisplay({
   className,
   fiatClassName,
   btcClassName,
+  amountTypography,
   'data-testid': dataTestId,
 }: FiatBtcAmountDisplayProps) {
   const { fiatSize, btcSize } = resolveFiatAndBtcSizes(isDetail, size)
@@ -59,6 +62,7 @@ export function FiatBtcAmountDisplay({
       <BitcoinAmountDisplay
         amountSats={amountSats}
         size={btcOnlySize}
+        amountTypography={amountTypography}
         className={className}
         data-testid={dataTestId}
       />
@@ -75,6 +79,7 @@ export function FiatBtcAmountDisplay({
         btcPriceInFiat={btcPriceInFiat}
         currency={currency}
         size={fiatSize}
+        amountTypography={amountTypography}
         className={fiatClassName}
         rateLoading={rateLoading}
         data-testid={dataTestId}
@@ -92,6 +97,7 @@ export function FiatBtcAmountDisplay({
         <BitcoinAmountDisplay
           amountSats={amountSats}
           size={btcSize}
+          amountTypography={amountTypography}
           className={btcClassName}
         />
       </span>
@@ -104,6 +110,7 @@ type LabeledFiatBtcAmountProps = {
   amountSats: number
   testId?: string
   className?: string
+  amountTypography?: DesignAmountTypography
   fiat: MainnetFiatAmountDisplayProps
 }
 
@@ -113,6 +120,7 @@ export function LabeledFiatBtcAmount({
   amountSats,
   testId,
   className,
+  amountTypography,
   fiat,
 }: LabeledFiatBtcAmountProps) {
   return (
@@ -124,6 +132,7 @@ export function LabeledFiatBtcAmount({
         btcPriceInFiat={fiat.btcPriceInFiat}
         currency={fiat.currency}
         rateLoading={fiat.rateLoading}
+        amountTypography={amountTypography}
         isDetail
       />
     </p>

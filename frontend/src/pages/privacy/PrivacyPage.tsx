@@ -33,7 +33,7 @@ export function PrivacyPage() {
       <PageHeader title={title} icon={Shield} />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">{privacyLanguageNote}</p>
+        <p className="design-type-regular text-muted-foreground">{privacyLanguageNote}</p>
         <LegalLocaleSwitcher
           activeLocale={locale}
           onLocaleChange={setLocale}

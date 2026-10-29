@@ -42,7 +42,7 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
     ...actual,
     useWalletStore: useWalletStoreMock,
     NETWORK_LABELS: {
-      lab: 'Lab',
+      lab: 'Labnet',
       regtest: 'Regtest',
       signet: 'Signet',
       mutinynet: 'Mutinynet',

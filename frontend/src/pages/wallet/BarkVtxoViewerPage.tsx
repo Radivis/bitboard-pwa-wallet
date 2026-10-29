@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Search } from 'lucide-react'
 import { format } from 'date-fns'
 import { barkSessionBlockingScreen } from '@/components/bark/bark-session-blocking-screen'
 import { BarkRailUnavailable } from '@/components/bark/BarkRailUnavailable'
 import { BarkVtxoCard } from '@/components/bark/BarkVtxoCard'
 import { CardPagination } from '@/components/CardPagination'
+import { DesignButton } from '@/components/design/DesignButton'
+import { DesignInput } from '@/components/design/DesignInput'
 import { PageHeader } from '@/components/PageHeader'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { RailSyncErrorBanner } from '@/components/wallet/RailSyncErrorBanner'
@@ -145,7 +145,7 @@ export function BarkVtxoViewerPage() {
     <div className="space-y-6">
       <PageHeader title="Bark VTXOs" />
       {syncedAtLabel != null ? (
-        <p className="text-sm text-muted-foreground" data-testid="bark-vtxo-synced-at">
+        <p className="design-type-regular text-muted-foreground" data-testid="bark-vtxo-synced-at">
           Synced {syncedAtLabel}
         </p>
       ) : null}
@@ -183,9 +183,9 @@ export function BarkVtxoViewerPage() {
         exitNodeSweepVtxoItems={shownExitChainNotice?.exitNodeSweepVtxoItems ?? []}
       />
 
-      <Button type="button" variant="outline" asChild>
+      <DesignButton type="button" appearance="secondary" asChild>
         <Link to="/wallet/management">Back to management</Link>
-      </Button>
+      </DesignButton>
     </div>
   )
 }
@@ -279,8 +279,9 @@ function BarkVtxoInventory({
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="bark-vtxo-search">Search</Label>
-            <Input
+            <DesignInput
               id="bark-vtxo-search"
+              leadingIcon={Search}
               value={searchQuery}
               onChange={(event) => onSearchQueryChange(event.target.value)}
               placeholder="VTXO id or sats amount"
@@ -290,7 +291,7 @@ function BarkVtxoInventory({
             <Label htmlFor="bark-vtxo-sort">Sort</Label>
             <select
               id="bark-vtxo-sort"
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+              className="design-type-addresses flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 shadow-xs"
               value={sortKey}
               onChange={(event) => onSortKeyChange(event.target.value as BarkVtxoSortKey)}
             >
@@ -312,45 +313,43 @@ function BarkVtxoInventory({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button
+          <DesignButton
             type="button"
-            size="sm"
-            variant={stateFilter == null ? 'default' : 'outline'}
+            appearance={stateFilter == null ? 'primary' : 'secondary'}
             onClick={() => onStateFilterChange(null)}
           >
             All ({rows.length})
-          </Button>
+          </DesignButton>
           {BARK_VTXO_STATES.map((state) => (
-            <Button
+            <DesignButton
               key={state}
               type="button"
-              size="sm"
-              variant={stateFilter === state ? 'default' : 'outline'}
+              appearance={stateFilter === state ? 'primary' : 'secondary'}
               onClick={() => onStateFilterChange(stateFilter === state ? null : state)}
             >
               {getBarkVtxoStateLabel(state)} ({stateCounts[state]})
-            </Button>
+            </DesignButton>
           ))}
         </div>
       </div>
 
       {presentation === 'waiting-for-sync' ? (
-        <p className="text-sm text-muted-foreground" data-testid="bark-vtxo-waiting-for-sync">
+        <p className="design-type-regular text-muted-foreground" data-testid="bark-vtxo-waiting-for-sync">
           The VTXO list loads when Bark sync finishes.
         </p>
       ) : presentation === 'loading' ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="design-type-regular flex items-center gap-2 text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
           Loading VTXOs…
         </div>
       ) : presentation === 'error' ? (
-        <p className="text-sm text-destructive" data-testid="bark-vtxo-list-error">
+        <p className="design-type-regular text-destructive" data-testid="bark-vtxo-list-error">
           Couldn&apos;t load Bark VTXOs. {errorMessage}
         </p>
       ) : rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No VTXOs in this wallet yet.</p>
+        <p className="design-type-regular text-muted-foreground">No VTXOs in this wallet yet.</p>
       ) : filteredRows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No VTXOs match the current filters.</p>
+        <p className="design-type-regular text-muted-foreground">No VTXOs match the current filters.</p>
       ) : (
         <CardPagination
           pageSize={BARK_VTXO_VIEWER_PAGE_SIZE}

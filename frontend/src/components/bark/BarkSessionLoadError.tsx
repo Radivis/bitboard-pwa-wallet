@@ -3,7 +3,7 @@ import {
   BARK_SESSION_LOAD_ERROR_TILT_CLASS,
   barkSessionStatusClassName,
 } from '@/components/bark/bark-session-status-layout'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
 import { orchestrateBarkRetryLoad } from '@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator'
 import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
 
@@ -22,21 +22,21 @@ export function BarkSessionLoadError({
         className={`size-24 ${BARK_SESSION_LOAD_ERROR_TILT_CLASS} text-red-600 dark:text-red-500`}
         aria-hidden
       />
-      <h1 className="text-2xl font-semibold">Bark session could not be established</h1>
+      <h1 className="design-type-screen-heading">Bark session could not be established</h1>
       {sanitizedErrorMessage !== '' ? (
-        <p className="max-w-xl text-muted-foreground" data-testid="bark-session-load-error-message">
+        <p className="design-type-regular max-w-xl text-muted-foreground" data-testid="bark-session-load-error-message">
           {sanitizedErrorMessage}
         </p>
       ) : null}
-      <Button
+      <DesignButton
         type="button"
-        variant="outline"
+        appearance="secondary"
         onClick={() => {
           void orchestrateBarkRetryLoad()
         }}
       >
         Retry
-      </Button>
+      </DesignButton>
     </div>
   )
 }

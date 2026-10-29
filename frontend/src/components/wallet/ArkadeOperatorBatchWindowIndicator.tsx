@@ -13,7 +13,7 @@ export function ArkadeOperatorBatchWindowIndicator() {
 
   if (scheduleQuery.isLoading) {
     return (
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <p className="design-type-regular flex items-center gap-1.5 text-muted-foreground">
         <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
         Checking operator batch schedule…
       </p>
@@ -33,7 +33,7 @@ export function ArkadeOperatorBatchWindowIndicator() {
         as="span"
       >
         <p
-          className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground"
+          className="design-type-regular flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-muted-foreground"
           data-testid="arkade-operator-batch-window-unavailable"
         >
           <CalendarClock className="h-3 w-3 shrink-0" aria-hidden />
@@ -55,7 +55,7 @@ export function ArkadeOperatorBatchWindowIndicator() {
     >
       <p
         className={cn(
-          'flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs',
+          'design-type-regular flex flex-wrap items-center gap-x-1.5 gap-y-0.5',
           inProgress
             ? 'text-emerald-700 dark:text-emerald-400'
             : 'text-muted-foreground',

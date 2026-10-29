@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
+import { DesignCard, DesignCardContent } from '@/components/design/DesignCard'
+import { DesignTag } from '@/components/design/DesignTag'
 import { formatBarkVtxoExpiry, type BarkBitcoinNetwork } from '@/lib/bark/bark-vtxo-expiry'
 import {
   formatBarkVtxoLockHolderLine,
@@ -47,12 +47,12 @@ export function BarkVtxoCard({
   }
 
   return (
-    <Card data-testid={`bark-vtxo-card-${row.id}`}>
-      <CardContent className="space-y-2 p-4">
+    <DesignCard data-testid={`bark-vtxo-card-${row.id}`}>
+      <DesignCardContent className="space-y-2">
         <div className="flex items-start justify-between gap-3">
           <button
             type="button"
-            className="font-mono text-left text-sm text-primary underline-offset-4 hover:underline"
+            className="design-type-addresses text-left text-primary underline-offset-4 hover:underline"
             onClick={() => void handleCopyId()}
             aria-label={`Copy VTXO id ${row.id}`}
           >
@@ -60,31 +60,25 @@ export function BarkVtxoCard({
           </button>
           <BitcoinAmountDisplay
             amountSats={row.amountSats}
-            className="font-semibold"
+            className="design-type-emphasis"
             data-testid={`bark-vtxo-amount-${row.id}`}
           />
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold">{getBarkVtxoStateLabel(row.state)}</span>
+          <span className="design-type-emphasis">{getBarkVtxoStateLabel(row.state)}</span>
           {row.registered ? (
-            <Badge
-              variant="outline"
-              className="text-xs font-normal"
-              data-testid={`bark-vtxo-registered-${row.id}`}
-            >
-              Registered
-            </Badge>
+            <DesignTag data-testid={`bark-vtxo-registered-${row.id}`}>Registered</DesignTag>
           ) : null}
         </div>
 
-        <div className="text-xs text-muted-foreground" data-testid={`bark-vtxo-expiry-${row.id}`}>
+        <div className="design-type-regular text-muted-foreground" data-testid={`bark-vtxo-expiry-${row.id}`}>
           <div>{expiry.blocksLabel}</div>
           {expiry.dateLabel != null ? <div>{expiry.dateLabel}</div> : null}
         </div>
         {lockHolderLine != null ? (
           <div
-            className="text-xs text-muted-foreground"
+            className="design-type-regular text-muted-foreground"
             data-testid={`bark-vtxo-lock-holder-${row.id}`}
           >
             {lockHolderLine}
@@ -92,13 +86,13 @@ export function BarkVtxoCard({
         ) : null}
         {emergencyExitPhaseLine != null ? (
           <div
-            className="text-xs text-muted-foreground"
+            className="design-type-regular text-muted-foreground"
             data-testid={`bark-vtxo-exit-phase-${row.id}`}
           >
             {emergencyExitPhaseLine}
           </div>
         ) : null}
-      </CardContent>
-    </Card>
+      </DesignCardContent>
+    </DesignCard>
   )
 }

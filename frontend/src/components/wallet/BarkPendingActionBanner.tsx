@@ -1,5 +1,5 @@
-import { CircleAlert, Loader2 } from 'lucide-react'
 import { FiatBtcAmountDisplay } from '@/components/FiatBtcAmountDisplay'
+import { DesignBanner } from '@/components/design/DesignBanner'
 import { useBarkPendingActionsQuery } from '@/hooks/useBarkPendingActionsQuery'
 import { useMainnetFiatAmountProps } from '@/hooks/useMainnetFiatAmountProps'
 import { truncateAddress } from '@/lib/wallet/bitcoin-utils'
@@ -23,31 +23,15 @@ function BarkPendingActionRow({ action }: { action: BarkPendingAction }) {
   const fiatAmount = useMainnetFiatAmountProps()
   const failed = action.error != null
   return (
-    <div
-      className={
-        failed
-          ? 'rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm'
-          : 'rounded-md border border-sky-500/40 bg-sky-500/10 p-3 text-sm'
-      }
+    <DesignBanner
+      status={failed ? 'error' : 'info'}
       role={failed ? 'alert' : 'status'}
       data-testid="bark-pending-action-banner"
       data-state={failed ? 'error' : 'pending'}
-    >
-      <div className="flex items-start gap-2">
-        {failed ? (
-          <CircleAlert
-            className="mt-0.5 h-4 w-4 shrink-0 text-red-700 dark:text-red-300"
-            aria-hidden
-          />
-        ) : (
-          <Loader2
-            className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-sky-700 dark:text-sky-300"
-            aria-hidden
-          />
-        )}
-        <div className="space-y-1">
-          <p className="font-medium">{action.title}</p>
-          <p className="break-words text-muted-foreground">{action.status}</p>
+      title={action.title}
+      description={action.status}
+      optionalContent={
+        <>
           <p data-testid="bark-pending-action-amount">
             <FiatBtcAmountDisplay
               amountSats={action.amountSats}
@@ -59,18 +43,18 @@ function BarkPendingActionRow({ action }: { action: BarkPendingAction }) {
             />
           </p>
           {action.destination != null ? (
-            <p className="text-xs text-muted-foreground" title={action.destination}>
+            <p className="design-type-regular text-muted-foreground" title={action.destination}>
               Destination:{' '}
-              <span className="font-mono">{truncateAddress(action.destination)}</span>
+              <span className="design-type-addresses">{truncateAddress(action.destination)}</span>
             </p>
           ) : null}
           {action.txid != null ? (
-            <p className="text-xs text-muted-foreground" title={action.txid}>
-              <span className="font-mono">{truncateAddress(action.txid)}</span>
+            <p className="design-type-regular text-muted-foreground" title={action.txid}>
+              <span className="design-type-addresses">{truncateAddress(action.txid)}</span>
             </p>
           ) : null}
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    />
   )
 }

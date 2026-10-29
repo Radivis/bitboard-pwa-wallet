@@ -1,6 +1,7 @@
 import { DialogDescription } from '@/components/ui/dialog'
-import { AppModal } from '@/components/AppModal'
-import { Button } from '@/components/ui/button'
+import { DesignModal } from '@/components/design/DesignModal'
+import { DesignButton } from '@/components/design/DesignButton'
+import { DesignDestructiveButton } from '@/components/design/DesignDestructiveButton'
 
 interface WalletBackupImportBypassModalProps {
   open: boolean
@@ -18,31 +19,28 @@ export function WalletBackupImportBypassModal({
   isBusy,
 }: WalletBackupImportBypassModalProps) {
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={onOpenChange}
       title="Could not verify backup"
       onCancel={onAbort}
       isBlockDismissed={isBusy}
-      contentClassName="sm:max-w-lg"
       footer={() => (
         <>
-          <Button type="button" variant="outline" disabled={isBusy} onClick={onAbort}>
+          <DesignButton type="button" appearance="secondary" disabled={isBusy} onClick={onAbort}>
             Abort import
-          </Button>
-          <Button
+          </DesignButton>
+          <DesignDestructiveButton
             type="button"
-            variant="destructive"
             disabled={isBusy}
             onClick={() => void onProceedAnyway()}
           >
             {isBusy ? 'Importing…' : 'Proceed anyway'}
-          </Button>
+          </DesignDestructiveButton>
         </>
       )}
-      footerClassName="justify-end gap-2"
     >
-      <div className="space-y-3 text-left text-sm text-muted-foreground">
+      <div className="design-type-regular space-y-3 text-left text-muted-foreground">
         <DialogDescription className="sr-only">
           Verification failed after three password attempts. Choose whether to abort or import
           without signature verification.
@@ -58,6 +56,6 @@ export function WalletBackupImportBypassModal({
           verifying the cryptographic signature. Only continue if you accept that risk.
         </p>
       </div>
-    </AppModal>
+    </DesignModal>
   )
 }

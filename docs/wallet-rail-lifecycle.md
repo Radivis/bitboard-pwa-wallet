@@ -123,7 +123,7 @@ When a rail is **`not-configured`**, all three lifecycles for that rail **must**
 
 When a rail becomes configured (gates satisfied — see per-rail sections), load, sync, and save transition out of `not-configured` together into their idle steady states (`not-syncing`, `not-saving`) before any in-flight work begins.
 
-**Lab exception:** On **lab** network, the on-chain Esplora rail has **no sync** — `OnchainSyncLifecycle` stays `not-configured` permanently. **Load** and **save** still apply to the **lab database** (`labDb` / lab worker state via `runLabOp` + `persistLabState`), modeled as a separate concern from Esplora-backed on-chain sync or as lab-specific load/save orchestration (detail in lab implementation planning).
+**Labnet exception:** On **Labnet**, the on-chain Esplora rail has **no sync** — `OnchainSyncLifecycle` stays `not-configured` permanently. **Load** and **save** still apply to the **lab database** (`labDb` / lab worker state via `runLabOp` + `persistLabState`), modeled as a separate concern from Esplora-backed on-chain sync or as lab-specific load/save orchestration (detail in lab implementation planning).
 
 ### Allowed combinations (examples)
 
@@ -161,15 +161,15 @@ The **only** deliberate coupling between routing and wallet crypto is **when to 
 | Concept | Meaning |
 |---------|---------|
 | **Hydration** | Near-zero session restore (`restoreNearZeroSecretsSessionForOperation` from the wallet-route gate, action-gated unlock, or seed-phrase reveal) plus bootstrap unlock (`orchestrateBootstrapUnlock` → per-rail **load**) when WASM is required. Restore must invalidate the secrets-session probe and drop a stale successful bootstrap cache while the wallet is still gated. Distinct from background **sync** and **save**, which follow load and are not route-gated. |
-| **Wallet route** | Any path under `/wallet` (dashboard, send, receive, management, wallets picker, etc.). Legacy `/` redirects to `/wallet`. |
-| **Non-wallet route** | Settings, setup, lab, library, privacy, and any other path that is not a wallet route. |
+| **Wallet route** | Any path under `/wallet` (dashboard, send, receive, management, wallets picker, etc.). `/` is the Start hub and is not a wallet route. |
+| **Non-wallet route** | Start, Guides, Settings, setup, lab, library, privacy, and any other path that is not a wallet route. |
 
 ### Rules
 
 1. **Start hydration only for operations that need a secrets session.** The `/wallet/*` secrets gate may restore a near-zero session and bootstrap when the wallet UI is gated. Settings, Lab, Library, or setup must **not** start hydration by themselves; those screens use `ensureWalletUnlockedForAction` / `useRequireUnlockedWallet` at action time (and seed-phrase reveal restores or reuses the session without a password prompt when the wrap is live).
 2. **Lifecycle is route-agnostic.** In-flight load, sync, and save continue regardless of navigation. Do not cancel debounced sync timers, disable bootstrap queries mid-flight, or skip save because the user left `/wallet`.
 3. **Lock and explicit user actions are exceptions.** Lock teardown, manual unlock, and network switch are intentional lifecycle drivers — not “navigation interference” in the sense above.
-4. **Privacy redirect after lock** (wallet route → Library via `navigateToLibraryIfOnWalletRoute`) stays in place. It is privacy-enhancing: the user leaves wallet UI after locking. It does not tear down in-flight lifecycle work; it only defers **the next** hydration until the user opens a wallet route again.
+4. **Privacy redirect after lock** (wallet route → Start via `navigateToStartIfOnWalletRoute`) stays in place. It is privacy-enhancing: the user leaves wallet UI after locking. It does not tear down in-flight lifecycle work; it only defers **the next** hydration until the user opens a wallet route again.
 5. **No route-based “special cases” for crypto needs.** Lab and Settings are **not** hydration entry points just because some screens eventually need wallet access. Do not add `/lab` or `/settings` to hydration gates to “pre-unlock” for those flows.
 
 ### Action-gated unlock (`requireUnlockedWallet`)
@@ -204,7 +204,7 @@ async function requireUnlockedWallet(action: () => void | Promise<void>): Promis
 - **`requireUnlockedWallet`** handles action-gated unlock on Settings, Lab, and similar — lifecycle orchestrators do not branch on pathname.
 - Lifecycle orchestrators stay free of `useLocation` and pathname checks; a dedicated hydration coordinator reads “entered wallet route” once.
 - TanStack Query `enabled` for bootstrap load may react to wallet-route entry, but must not flip off in a way that aborts an in-flight bootstrap when the user navigates away (LockLifecycle `bootstrap_unlock` extends the enabled window during unlock; the same “finish what you started” rule applies when leaving the route).
-- Post-lock redirect to Library remains in place.
+- Post-lock redirect to Start remains in place.
 
 ### Known violations (audit)
 
@@ -341,9 +341,9 @@ Lock teardown **awaits** in-flight sync (best-effort cancel/debounce) and save q
 
 ### When `not-configured`
 
-- **Lab network:** Esplora-backed **on-chain sync** is inactive — `OnchainSyncLifecycle` remains `not-configured`. Crypto worker load for lab wallet operations and **lab DB load/save** (`labDb`) are modeled under the on-chain rail (no separate `Lab*` lifecycle modules).
+- **Labnet:** Esplora-backed **on-chain sync** is inactive — `OnchainSyncLifecycle` remains `not-configured`. Crypto worker load for lab wallet operations and **lab DB load/save** (`labDb`) are modeled under the on-chain rail (no separate `Lab*` lifecycle modules).
 - `LockLifecycle` not `unlocked` (including `locked`, `locking`, `no-lock`) — all three on-chain lifecycles are `not-configured`.
-- Otherwise, when `LockLifecycle` is `unlocked` and a descriptor wallet exists for the committed triple, the on-chain rail is **configured** (load, sync, and save lifecycles leave `not-configured` together; sync stays `not-configured` on lab per lab exception).
+- Otherwise, when `LockLifecycle` is `unlocked` and a descriptor wallet exists for the committed triple, the on-chain rail is **configured** (load, sync, and save lifecycles leave `not-configured` together; sync stays `not-configured` on Labnet per the Labnet exception).
 
 ### LoadLifecycle
 
@@ -587,7 +587,7 @@ Stale banners are **informational** (amber, no Retry). Sync-error banners are **
 5. **React lifecycle hooks:** orchestrator-owned phase; `useSyncExternalStore` hooks in `frontend/src/hooks/`; stable snapshot getters for referential equality; TanStack Query for async work only.
 6. **Lightning `sync-error` aggregation:** **any failure** among dashboard-matching connections.
 7. **Route vs unlock:** Hydration starts on wallet routes only; Lab/Settings needs use `requireUnlockedWallet` at action time, not route-wide hydration (see [Action-gated unlock](#action-gated-unlock-requireunlockedwallet)).
-8. **Post-lock Library redirect:** retained for privacy (`navigateToLibraryIfOnWalletRoute`).
+8. **Post-lock Start redirect:** retained for privacy (`navigateToStartIfOnWalletRoute`).
 
 ### Still open
 
@@ -640,7 +640,7 @@ Audit of the codebase against [Route independence and wallet hydration](#route-i
 
 | Location | Behavior |
 |----------|----------|
-| [`app-router.ts`](../frontend/src/lib/shared/app-router.ts) `navigateToLibraryIfOnWalletRoute` | After lock, redirect off `/wallet` to Library for privacy. **Keep.** Does not cancel in-flight sync/save. |
+| [`app-router.ts`](../frontend/src/lib/shared/app-router.ts) `navigateToStartIfOnWalletRoute` | After lock, redirect off `/wallet` to Start for privacy. **Keep.** Does not cancel in-flight sync/save. |
 | Lock → Library + hydration on next wallet visit | Matches rules 1 and 4. |
 | Settings/Lab browsable while locked | Sensitive ops use `requireUnlockedWallet`; route-wide hydration is not required. |
 | Dashboard Arkade queries → `scheduleBackgroundArkadeOperatorSync` | Operator sync debounced from query fetches when balance/history/VTxO queries run (hydration, manual invalidation, or opt-in periodic `refetchInterval`). Timer may complete after navigation. **Correct** under route-independent lifecycle — do not cancel on route change. |

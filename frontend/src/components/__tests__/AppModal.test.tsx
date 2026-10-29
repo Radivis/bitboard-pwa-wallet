@@ -6,8 +6,8 @@ import { AppModal } from '@/components/AppModal'
 import { DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 
-vi.mock('@/components/infomode/InfomodeToggle', () => ({
-  InfomodeToggle: () => <button type="button" aria-label="Turn on infomode" />,
+vi.mock('@/components/design/DesignInfomodeToggle', () => ({
+  DesignInfomodeToggle: () => <button type="button" aria-label="Turn on infomode" />,
 }))
 
 describe('AppModal', () => {

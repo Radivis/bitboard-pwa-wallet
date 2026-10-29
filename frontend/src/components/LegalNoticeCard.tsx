@@ -1,10 +1,10 @@
 import { Link } from '@tanstack/react-router'
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+  DesignCard,
+  DesignCardContent,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { LegalLocaleSwitcher } from '@/components/LegalLocaleSwitcher'
 import { LegalHubSections } from '@common/legal/LegalHubSections'
 import {
@@ -24,16 +24,16 @@ export function LegalNoticeCard() {
     locale === 'de' ? PRIVACY_PAGE_TITLE_DE : PRIVACY_PAGE_TITLE_EN
 
   return (
-    <Card id="legal-notice">
-      <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 space-y-0">
-        <CardTitle className="leading-tight">{hubTitle}</CardTitle>
+    <DesignCard id="legal-notice">
+      <DesignCardHeader className="flex-row flex-wrap items-start justify-between gap-3">
+        <DesignCardTitle>{hubTitle}</DesignCardTitle>
         <LegalLocaleSwitcher
           activeLocale={locale}
           onLocaleChange={setLocale}
           ariaLabel="Legal notice language"
         />
-      </CardHeader>
-      <CardContent>
+      </DesignCardHeader>
+      <DesignCardContent>
         <LegalHubSections
           locale={locale}
           surface="app"
@@ -46,7 +46,7 @@ export function LegalNoticeCard() {
             </Link>
           }
         />
-      </CardContent>
-    </Card>
+      </DesignCardContent>
+    </DesignCard>
   )
 }

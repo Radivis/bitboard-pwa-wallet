@@ -1,15 +1,15 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createFileRoute, Link, useSearch } from '@tanstack/react-router'
+import { DesignButton } from '@/components/design/DesignButton'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+  DesignCard,
+  DesignCardContent,
+  DesignCardDescription,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { PageHeader } from '@/components/PageHeader'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { getLabWorker, initLabWorkerWithState } from '@/workers/lab-factory'
 import { runLabOp } from '@/lib/lab/lab-coordinator'
@@ -100,10 +100,9 @@ function LabTxViewerPage() {
       <div className="space-y-6">
         <p className="text-muted-foreground">Transaction not found.</p>
         <Link to="/lab/blocks" preload={false}>
-          <Button variant="outline">
-            <ArrowLeft className="mr-2 h-4 w-4" />
+          <DesignButton appearance="secondary" icon={<ArrowLeft aria-hidden />}>
             Back to lab
-          </Button>
+          </DesignButton>
         </Link>
       </div>
     )
@@ -123,9 +122,7 @@ function LabTxViewerPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-2">
         <Link to="/lab/blocks" preload={false}>
-          <Button variant="ghost" size="icon" aria-label="Back to lab">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
+          <DesignButton appearance="tertiary" className="h-12 w-12 px-0" aria-label="Back to lab" icon={<ArrowLeft aria-hidden />} />
         </Link>
         <div className="flex items-center gap-2">
           <PageHeader title="Transaction" icon={FlaskConical} />
@@ -143,15 +140,15 @@ function LabTxViewerPage() {
         infoText="The transaction id is the fingerprint of this payment on the lab chain—share it to refer to exactly this transfer. Confirmations count blocks mined on top: zero means it is still waiting in the mempool like a real network. “Total out” adds up every output amount; the fee is what is left from inputs minus outputs—the incentive that would go to a miner on mainnet (here it helps you read economic cost in the simulator)."
         className="rounded-xl"
       >
-        <Card>
-          <CardHeader>
+        <DesignCard>
+          <DesignCardHeader>
             <div className="flex items-center justify-between gap-2">
-              <CardTitle className="font-mono text-base break-all">{txid}</CardTitle>
-              <Button size="icon" variant="ghost" onClick={handleCopyTxid} aria-label="Copy transaction id">
-                <Copy className="h-4 w-4" />
-              </Button>
+              <DesignCardTitle className="break-all">
+                <span className="design-type-addresses">{txid}</span>
+              </DesignCardTitle>
+              <DesignButton appearance="tertiary" className="h-12 w-12 shrink-0 px-0" onClick={handleCopyTxid} aria-label="Copy transaction id" icon={<Copy aria-hidden />} />
             </div>
-            <CardDescription>
+            <DesignCardDescription>
               {timestamp ? `${timestamp} · ` : ''}
               {confirmationsText}
               {' · '}
@@ -161,9 +158,9 @@ function LabTxViewerPage() {
                 <BitcoinAmountDisplay amountSats={feeSats} size="sm" />
                 <span>fee</span>
               </span>
-            </CardDescription>
-          </CardHeader>
-        </Card>
+            </DesignCardDescription>
+          </DesignCardHeader>
+        </DesignCard>
       </InfomodeWrapper>
 
       <InfomodeWrapper
@@ -172,21 +169,21 @@ function LabTxViewerPage() {
         infoText="Each input spends a specific previous output from an earlier transaction. Follow the link to open that funding transaction and highlight which output is being spent. The address line shows where the coins came from; the owner badge shows whether that coin belonged to a named lab participant or your loaded wallet. Block-reward coinbase transactions use a synthetic reference (all-zero transaction id and maximum output index) instead of spending a prior coin."
         className="rounded-xl"
       >
-        <Card>
-          <CardHeader>
-            <CardTitle>Inputs</CardTitle>
-            <CardDescription>Inputs to this transaction</CardDescription>
-          </CardHeader>
-          <CardContent>
+        <DesignCard>
+          <DesignCardHeader>
+            <DesignCardTitle>Inputs</DesignCardTitle>
+            <DesignCardDescription>Inputs to this transaction</DesignCardDescription>
+          </DesignCardHeader>
+          <DesignCardContent>
             {isCoinbase(tx) ? (
-              <div className="space-y-2 text-sm">
+              <div className="design-type-regular space-y-2">
                 <p className="text-muted-foreground">
                   One coinbase input (no previous output spent).
                 </p>
                 {tx.inputs.map((input, index) => (
                   <div
                     key={`coinbase-${index}`}
-                    className="rounded-md border border-border p-3 font-mono text-xs space-y-1"
+                    className="design-type-addresses rounded-md border border-border p-3 space-y-1"
                   >
                     <p>
                       <span className="text-muted-foreground">Previous transaction:</span>{' '}
@@ -204,7 +201,7 @@ function LabTxViewerPage() {
                 ))}
               </div>
             ) : tx.inputs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No inputs</p>
+              <p className="design-type-regular text-muted-foreground">No inputs</p>
             ) : (
               <div className="space-y-2">
                 {tx.inputs.map((input, inputIndex) => {
@@ -224,13 +221,13 @@ function LabTxViewerPage() {
                             to="/lab/tx/$txid"
                             params={{ txid: input.prevTxid! }}
                             search={{ highlightVout: input.prevVout! }}
-                            className="font-mono text-sm text-primary hover:underline break-all"
+                            className="design-type-addresses text-primary hover:underline break-all"
                             preload={false}
                           >
                             {truncateAddress(input.prevTxid!, 10, 10)} : {input.prevVout}
                           </Link>
                         ) : null}
-                        <span className="font-mono text-sm break-all text-muted-foreground">
+                        <span className="design-type-addresses break-all text-muted-foreground">
                           {truncateAddress(input.address)}
                         </span>
                       </div>
@@ -260,8 +257,8 @@ function LabTxViewerPage() {
                 })}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </DesignCardContent>
+        </DesignCard>
       </InfomodeWrapper>
 
       <InfomodeWrapper
@@ -270,14 +267,14 @@ function LabTxViewerPage() {
         infoText="Outputs are the destinations of the payment: amounts locked to specific addresses. A row marked “Change” is not a second recipient—it is your wallet sending leftover value back to yourself after spending a larger coin than the payment amount, exactly like real Bitcoin wallets do to avoid losing the remainder."
         className="rounded-xl"
       >
-        <Card>
-          <CardHeader>
-            <CardTitle>Outputs</CardTitle>
-            <CardDescription>Outputs from this transaction</CardDescription>
-          </CardHeader>
-          <CardContent>
+        <DesignCard>
+          <DesignCardHeader>
+            <DesignCardTitle>Outputs</DesignCardTitle>
+            <DesignCardDescription>Outputs from this transaction</DesignCardDescription>
+          </DesignCardHeader>
+          <DesignCardContent>
             {tx.outputs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No outputs</p>
+              <p className="design-type-regular text-muted-foreground">No outputs</p>
             ) : (
               <div className="space-y-2">
                 {tx.outputs.map((output, index) => (
@@ -291,7 +288,7 @@ function LabTxViewerPage() {
                         'ring-2 ring-primary/60 ring-offset-2 ring-offset-background bg-muted/40',
                     )}
                   >
-                    <span className="font-mono text-sm break-all min-w-0 sm:flex-1">
+                    <span className="design-type-addresses break-all min-w-0 sm:flex-1">
                       {truncateAddress(output.address)}
                     </span>
                     <div className="flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto sm:shrink-0 sm:gap-4 sm:overflow-visible">
@@ -326,8 +323,8 @@ function LabTxViewerPage() {
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </DesignCardContent>
+        </DesignCard>
       </InfomodeWrapper>
     </div>
   )

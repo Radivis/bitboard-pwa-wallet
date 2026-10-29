@@ -3,8 +3,8 @@ import type { Plugin } from 'vite'
 import {
   barkServerNoticeHttpResult,
   type BarkServerNoticeHttpResult,
-} from '../../../api/bark/server-notice-http'
-import { BARK_SERVER_NOTICE_PATH } from './bark-server-notice-path'
+} from '../../../api/bark/server-notice-http.ts'
+import { BARK_SERVER_NOTICE_PATH } from './bark-server-notice-path.ts'
 
 export { BARK_SERVER_NOTICE_PATH }
 

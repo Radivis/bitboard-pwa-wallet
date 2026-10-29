@@ -1,6 +1,6 @@
 import { DialogDescription } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { AppModal } from '@/components/AppModal'
+import { DesignButton } from '@/components/design/DesignButton'
+import { DesignModal } from '@/components/design/DesignModal'
 import type { AddressType } from '@/lib/wallet/wallet-domain-types'
 import { LabAddressTypeBadge } from '@/components/lab/LabAddressTypeBadge'
 
@@ -25,30 +25,30 @@ export function DeadLabEntityRecipientModal({
   isPending = false,
 }: DeadLabEntityRecipientModalProps) {
   return (
-    <AppModal
+    <DesignModal
       isOpen={open}
       onOpenChange={onOpenChange}
       title="Send to dead lab entity?"
       onCancel={onCancel}
       footer={(requestClose) => (
         <>
-          <Button type="button" variant="outline" onClick={requestClose} disabled={isPending}>
+          <DesignButton type="button" appearance="secondary" onClick={requestClose} disabled={isPending}>
             Cancel
-          </Button>
-          <Button type="button" onClick={onConfirm} disabled={isPending}>
+          </DesignButton>
+          <DesignButton type="button" onClick={onConfirm} disabled={isPending}>
             Proceed anyway
-          </Button>
+          </DesignButton>
         </>
       )}
     >
       <DialogDescription className="text-left">
         <span className="inline-flex flex-wrap items-center gap-2">
           You are trying to send to an address belonging to the DEAD Lab entity{' '}
-          <span className="font-medium">{entityDisplayName}</span>
+          <span className="design-type-emphasis">{entityDisplayName}</span>
           {addressType != null ? <LabAddressTypeBadge addressType={addressType} /> : null}
           . That is generally not a good idea. Proceed anyway?
         </span>
       </DialogDescription>
-    </AppModal>
+    </DesignModal>
   )
 }

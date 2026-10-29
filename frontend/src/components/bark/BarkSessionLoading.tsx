@@ -35,8 +35,8 @@ export function BarkSessionLoading({ embedded = false }: { embedded?: boolean })
         className={`size-24 animate-spin ${BARK_SESSION_LOADING_SPIN_DURATION_CLASS}`}
         aria-hidden
       />
-      <h1 className="text-2xl font-semibold">Establishing Bark session</h1>
-      <p className="max-w-xl text-muted-foreground" data-testid="bark-session-loading-comment">
+      <h1 className="design-type-screen-heading">Establishing Bark session</h1>
+      <p className="design-type-regular max-w-xl text-muted-foreground" data-testid="bark-session-loading-comment">
         {BARK_SESSION_LOADING_COMMENTS[commentIndex]}
       </p>
     </div>

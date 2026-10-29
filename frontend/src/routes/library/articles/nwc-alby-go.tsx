@@ -36,7 +36,7 @@ export const article: LibraryArticle = {
           </li>
           <li>
             Create a new connection and copy the{' '}
-            <code className="text-sm">nostr+walletconnect://</code> URI (you may need to share or
+            <code className="design-type-addresses">nostr+walletconnect://</code> URI (you may need to share or
             display it as a QR code).
           </li>
           <li>

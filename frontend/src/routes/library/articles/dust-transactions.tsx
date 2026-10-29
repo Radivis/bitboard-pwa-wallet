@@ -49,7 +49,7 @@ export const article: LibraryArticle = {
         </p>
       </ArticleSection>
 
-      <ArticleSection title="How Bitboard Wallet Handles This">
+      <ArticleSection title="How Bitcoin Codex Handles This">
         <p>
           For clarity and predictable behavior, Bitboard uses a <strong>fixed dust floor</strong> of
           546 sats for send previews, lab simulations, and related messages. This keeps the UX

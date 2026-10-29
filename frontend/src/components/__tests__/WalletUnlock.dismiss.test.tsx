@@ -43,6 +43,18 @@ describe('WalletUnlock dismiss', () => {
     })
   })
 
+  it('places the lock icon to the left of the title', () => {
+    renderWithProviders(<WalletUnlock />)
+
+    const heading = screen.getByRole('heading', { name: 'Unlock Wallet' })
+    const titleRow = heading.querySelector('span.inline-flex')
+    const lockIcon = titleRow?.querySelector('svg')
+
+    expect(titleRow).toHaveClass('items-center')
+    expect(lockIcon).toHaveClass('mr-2')
+    expect(lockIcon?.nextElementSibling).toHaveTextContent('Unlock Wallet')
+  })
+
   it('navigates away from wallet unlock when the close button is clicked', async () => {
     const user = userEvent.setup()
     renderWithProviders(<WalletUnlock />)

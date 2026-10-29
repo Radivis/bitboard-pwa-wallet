@@ -1,7 +1,12 @@
 import { ArrowLeft, ArrowUpRight } from 'lucide-react'
 import { useCallback, useState, type ReactNode } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { DesignButton } from '@/components/design/DesignButton'
+import {
+  DesignCard,
+  DesignCardContent,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { PageHeader } from '@/components/PageHeader'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { DeadLabEntityRecipientModal } from '@/components/lab/DeadLabEntityRecipientModal'
@@ -238,15 +243,15 @@ export function SendTransactionReviewStep({
 
       <PageHeader title="Review Transaction" icon={ArrowUpRight} />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Transaction Details</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2 text-sm">
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle>Transaction Details</DesignCardTitle>
+        </DesignCardHeader>
+        <DesignCardContent className="space-y-4">
+          <div className="design-type-regular space-y-2">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Recipient</span>
-              <span className="font-mono">{truncateAddress(recipient)}</span>
+              <span className="design-type-addresses">{truncateAddress(recipient)}</span>
             </div>
             <ReviewAmountRow
               label="Amount to send"
@@ -333,16 +338,16 @@ export function SendTransactionReviewStep({
                       infoTitle={SEND_REVIEW_INFOMODE.inputUtxosToggle.infoTitle}
                       infoText={SEND_REVIEW_INFOMODE.inputUtxosToggle.infoText}
                     >
-                      <Button
+                      <DesignButton
                         type="button"
-                        variant="ghost"
-                        className="h-auto w-full px-0 text-sm text-muted-foreground hover:text-foreground"
+                        appearance="tertiary"
+                        className="w-full"
                         onClick={() => setShowInputUtxos((open) => !open)}
                       >
                         {showInputUtxos
                           ? 'Hide UTXOs to be used'
                           : 'Show UTXOs to be used'}
-                      </Button>
+                      </DesignButton>
                     </InfomodeWrapper>
                     {showInputUtxos ? (
                       isUtxoSelectionEnabled ? (
@@ -366,15 +371,15 @@ export function SendTransactionReviewStep({
           </div>
 
           <div className="flex gap-2">
-            <Button
-              variant="outline"
+            <DesignButton
+              appearance="secondary"
               className="flex-1"
               onClick={onBack}
               disabled={isPending}
+              icon={<ArrowLeft />}
             >
-              <ArrowLeft className="mr-2 h-4 w-4" />
               Back
-            </Button>
+            </DesignButton>
 
             {isPending ? (
               <div className="flex-1">
@@ -387,17 +392,17 @@ export function SendTransactionReviewStep({
                 />
               </div>
             ) : (
-              <Button
+              <DesignButton
                 className="flex-1"
                 onClick={onConfirmSend}
                 disabled={labConfirmSendDisabled || manualConfirmBlocked}
               >
                 Confirm and Send
-              </Button>
+              </DesignButton>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
     </div>
   )
 }

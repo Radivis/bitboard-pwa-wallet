@@ -1,5 +1,4 @@
-import { AlertTriangle } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { DesignBanner } from '@/components/design/DesignBanner'
 import type { DashboardRailId } from '@/components/wallet/RailSyncControl'
 
 export type RailLifecycleErrorBannerBlockProps = {
@@ -22,32 +21,17 @@ export function RailLifecycleErrorBannerBlock({
   retryLabel = 'Retry',
 }: RailLifecycleErrorBannerBlockProps) {
   return (
-    <div
+    <DesignBanner
       role="alert"
+      status={variant === 'sync-warning' ? 'warning' : 'error'}
       data-testid={`wallet-${variant}-error-banner-${rail}`}
-      className="flex flex-col gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-    >
-      <div className="flex min-w-0 flex-1 gap-3">
-        <AlertTriangle
-          className="h-5 w-5 shrink-0 text-amber-700 dark:text-amber-500"
-          aria-hidden
-        />
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-foreground">{title}</p>
-          <p className="text-xs break-words text-muted-foreground">{errorMessage}</p>
-        </div>
-      </div>
-      <div className="flex shrink-0 items-center justify-end gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={isRetrying}
-          onClick={onRetry}
-        >
-          {isRetrying ? 'Retrying…' : retryLabel}
-        </Button>
-      </div>
-    </div>
+      title={title}
+      description={errorMessage}
+      primaryAction={{
+        label: isRetrying ? 'Retrying…' : retryLabel,
+        onClick: onRetry,
+        disabled: isRetrying,
+      }}
+    />
   )
 }

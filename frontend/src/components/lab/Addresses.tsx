@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
+import { DesignButton } from '@/components/design/DesignButton'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+  DesignCard,
+  DesignCardContent,
+  DesignCardDescription,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { Button } from '@/components/ui/button'
 import { truncateAddress } from '@/lib/wallet/bitcoin-utils'
 import { BitcoinAmountDisplay } from '@/components/BitcoinAmountDisplay'
 import {
@@ -72,7 +72,7 @@ function LabOwnerAddressesInner({
       ariaLabel={`Addresses page for ${getOwnerDisplayNameWithAddressTypeAria(ownerKey, wallets, entities)}`}
     >
       <div className="space-y-2">
-        <div className="flex gap-4 text-sm font-medium text-muted-foreground">
+        <div className="design-type-emphasis flex gap-4 text-muted-foreground">
           <span className="flex-1 min-w-0">Address</span>
           <span className="w-28 shrink-0 text-right">Balance</span>
           <span className="w-10 shrink-0" />
@@ -82,7 +82,7 @@ function LabOwnerAddressesInner({
             key={addressRow.address}
             className="flex gap-4 items-center py-2 border-b border-border last:border-0"
           >
-            <span className="font-mono text-sm break-all flex-1 min-w-0">
+            <span className="design-type-addresses break-all flex-1 min-w-0">
               {truncateAddress(addressRow.address)}
             </span>
             <span className="text-right w-28 shrink-0">
@@ -91,15 +91,13 @@ function LabOwnerAddressesInner({
                 size="sm"
               />
             </span>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8 shrink-0"
+            <DesignButton
+              appearance="tertiary"
+              className="h-12 w-12 shrink-0 px-0"
               onClick={() => onCopyAddress(addressRow.address)}
               aria-label={`Copy ${truncateAddress(addressRow.address)}`}
-            >
-              <Copy className="h-4 w-4" />
-            </Button>
+              icon={<Copy aria-hidden />}
+            />
           </div>
         ))}
       </div>
@@ -140,20 +138,20 @@ export function LabAddressesCard({
 When you send from an address, the wallet spends whole previous outputs (UTXOs) that funded that payment, so the address is fully drained for that spend. Leftover value is not left on the same address: it goes to change on a new address from your wallet. Fresh change addresses reduce address reuse and improve privacy, and they behave like real Bitcoin wallets here. That is why you will see many past addresses with 0 sats—they are no longer holding coins, but they stay listed so you can see where funds once appeared. Compare with the UTXOs card: this view is one total per address; UTXOs lists each spendable coin separately."
       className="rounded-xl"
     >
-      <Card>
-        <CardHeader>
-          <CardTitle>Addresses</CardTitle>
-          <CardDescription>
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle>Addresses</DesignCardTitle>
+          <DesignCardDescription>
             Total balance per address (one row per address). After sends, expect lots of 0 sats—spent addresses stay listed.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+          </DesignCardDescription>
+        </DesignCardHeader>
+        <DesignCardContent>
           {isLoading && totalOwnerCount === 0 ? (
-            <p className="text-sm text-muted-foreground py-4">Loading addresses…</p>
+            <p className="design-type-regular text-muted-foreground py-4">Loading addresses…</p>
           ) : isError ? (
-            <p className="text-sm text-destructive py-4">Could not load addresses.</p>
+            <p className="design-type-regular text-destructive py-4">Could not load addresses.</p>
           ) : totalOwnerCount === 0 ? (
-            <p className="text-sm text-muted-foreground py-4">
+            <p className="design-type-regular text-muted-foreground py-4">
               No addresses yet. Mine blocks to create addresses.
             </p>
           ) : (
@@ -172,7 +170,7 @@ When you send from an address, the wallet spends whole previous outputs (UTXOs) 
                     aria-label={`${getOwnerDisplayNameWithAddressTypeAria(owner, wallets, entities)} — addresses in this group`}
                     className="rounded-lg border-[3px] border-border bg-muted/15 p-4 shadow-sm"
                   >
-                    <h4 className="text-sm font-medium mb-3 flex flex-wrap items-center gap-2">
+                    <h4 className="design-type-emphasis mb-3 flex flex-wrap items-center gap-2">
                       {getOwnerIcon(owner) === 'wallet' ? (
                         <Wallet className="h-4 w-4" />
                       ) : (
@@ -205,8 +203,8 @@ When you send from an address, the wallet spends whole previous outputs (UTXOs) 
               </div>
             </CardPagination>
           )}
-        </CardContent>
-      </Card>
+        </DesignCardContent>
+      </DesignCard>
     </InfomodeWrapper>
   )
 }

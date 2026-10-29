@@ -1,3 +1,4 @@
+import { DesignBanner } from '@/components/design/DesignBanner'
 import {
   formatAmountInBitcoinDisplayUnit,
   getPrefixedBitcoinDisplayUnitLabel,
@@ -18,22 +19,22 @@ export function OnchainDustWarningReviewBanner({
   if (warning == null) return null
   const satLabel = getPrefixedBitcoinDisplayUnitLabel('sat', networkMode)
   const amountUnitLabel = getPrefixedBitcoinDisplayUnitLabel(amountUnit, networkMode)
+  const raisedCopy = warning.isRaisedToMinDust
+    ? `Amount was below the minimum spendable output (${formatAmountInBitcoinDisplayUnit(UX_DUST_FLOOR_SATS, 'sat')} ${satLabel}). The amount shown above was set to ${formatAmountInBitcoinDisplayUnit(UX_DUST_FLOOR_SATS, amountUnit)} ${amountUnitLabel}.`
+    : null
+  const changeFreeCopy = warning.isBumpedChangeFree
+    ? 'The amount was increased so this payment does not leave change below the dust limit (change-free transfer).'
+    : null
+
   return (
-    <div className="font-bold text-destructive text-sm space-y-1 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2">
-      {warning.isRaisedToMinDust ? (
-        <p>
-          Amount was below the minimum spendable output ({formatAmountInBitcoinDisplayUnit(UX_DUST_FLOOR_SATS, 'sat')}{' '}
-          {satLabel}). The amount shown above was set to{' '}
-          {formatAmountInBitcoinDisplayUnit(UX_DUST_FLOOR_SATS, amountUnit)}{' '}
-          {amountUnitLabel}.
-        </p>
-      ) : null}
-      {warning.isBumpedChangeFree ? (
-        <p>
-          The amount was increased so this payment does not leave change below the dust limit
-          (change-free transfer).
-        </p>
-      ) : null}
-    </div>
+    <DesignBanner
+      role="status"
+      status="warning"
+      title="Amount adjusted"
+      description={raisedCopy ?? changeFreeCopy}
+      optionalContent={
+        raisedCopy != null && changeFreeCopy != null ? <p>{changeFreeCopy}</p> : undefined
+      }
+    />
   )
 }

@@ -1,6 +1,7 @@
+import { Gauge } from 'lucide-react'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { DesignButton } from '@/components/design/DesignButton'
+import { DesignInput } from '@/components/design/DesignInput'
 import { Label } from '@/components/ui/label'
 import {
   SEND_FEE_PRESETS,
@@ -51,7 +52,7 @@ export function SendOnChainFeeSection(props: {
         </InfomodeWrapper>
       </Label>
       {feeEstimatesRefreshing ? (
-        <p className="text-xs text-muted-foreground">Refreshing fee estimates…</p>
+        <p className="design-type-regular text-muted-foreground">Refreshing fee estimates…</p>
       ) : null}
       <div className="flex flex-wrap gap-2">
         {SEND_FEE_PRESETS.map((preset) => {
@@ -66,20 +67,19 @@ export function SendOnChainFeeSection(props: {
               infoText={infoText}
               className="min-w-[7.5rem] flex-1 sm:min-w-0"
             >
-              <Button
+              <DesignButton
                 type="button"
-                variant={
+                appearance={
                   !useCustomFee && feePresetSelection === preset.label
-                    ? 'default'
-                    : 'outline'
+                    ? 'primary'
+                    : 'secondary'
                 }
-                size="sm"
                 className="w-full"
                 disabled={isPending}
                 onClick={() => onSelectPreset(preset.label, presetRate)}
               >
                 {preset.label} ({rateShown})
-              </Button>
+              </DesignButton>
             </InfomodeWrapper>
           )
         })}
@@ -90,22 +90,22 @@ export function SendOnChainFeeSection(props: {
           infoText="Switch here when you already know the exact sat/vB you want—for example from a mempool dashboard, a node, or advice that matches current network conditions. After selecting Custom, type that number in the field below; use it if presets feel too coarse or you are following a specific recommendation."
           className="min-w-[7.5rem] flex-1 sm:min-w-0"
         >
-          <Button
+          <DesignButton
             type="button"
-            variant={useCustomFee ? 'default' : 'outline'}
-            size="sm"
+            appearance={useCustomFee ? 'primary' : 'secondary'}
             className="w-full"
             disabled={isPending}
             onClick={() => onSelectCustomMode()}
           >
             Custom
-          </Button>
+          </DesignButton>
         </InfomodeWrapper>
         ) : null}
       </div>
       {!hideCustom && useCustomFee && (
-        <Input
+        <DesignInput
           type="number"
+          leadingIcon={Gauge}
           inputMode="decimal"
           step="any"
           aria-label="Custom fee rate (sat/vB)"

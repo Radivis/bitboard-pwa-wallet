@@ -1,9 +1,9 @@
 import type { Plugin } from 'vite'
-import { handleE2eArkadeEsploraMockRequest } from './arkade-esplora-mock-handler'
+import { handleE2eArkadeEsploraMockRequest } from './arkade-esplora-mock-handler.ts'
 import {
   handleE2eArkadeOperatorMockControlRequest,
   handleE2eArkadeOperatorMockRequest,
-} from './arkade-operator-mock-handler'
+} from './arkade-operator-mock-handler.ts'
 
 export function e2eArkadeOperatorMockPlugin(): Plugin {
   return {

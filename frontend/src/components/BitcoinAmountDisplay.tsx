@@ -9,15 +9,19 @@ import {
 import { useBitcoinUnit } from '@/hooks/useBitcoinUnit'
 import { BitcoinUnitSelect } from '@/components/BitcoinUnitSelect'
 import { NetworkUnitPrefix } from '@/components/NetworkUnitPrefix'
+import {
+  designTypeClassName,
+  type DesignAmountTypography,
+} from '@/components/design/design-type'
 import { cn } from '@/lib/shared/utils'
 import { selectCommittedNetworkMode, useWalletStore } from '@/stores/walletStore'
 
 export type BitcoinAmountDisplaySize = 'sm' | 'md' | 'lg'
 
 const SIZE_CLASSES: Record<BitcoinAmountDisplaySize, string> = {
-  sm: 'text-sm',
-  md: 'text-base',
-  lg: 'text-3xl font-semibold',
+  sm: designTypeClassName.smallBalances,
+  md: designTypeClassName.smallBalances,
+  lg: designTypeClassName.largeBalances,
 }
 
 type BitcoinAmountDisplayProps = {
@@ -31,6 +35,7 @@ type BitcoinAmountDisplayProps = {
    * to avoid invalid nested interactive elements.
    */
   allowUnitToggle?: boolean
+  amountTypography?: DesignAmountTypography
   'data-testid'?: string
 }
 
@@ -40,6 +45,7 @@ export function BitcoinAmountDisplay({
   className,
   tabular = true,
   allowUnitToggle = true,
+  amountTypography,
   'data-testid': dataTestId,
 }: BitcoinAmountDisplayProps) {
   const { data: defaultUnit = 'BTC' } = useBitcoinUnit()
@@ -76,7 +82,10 @@ export function BitcoinAmountDisplay({
 
   const interactiveUnit = allowUnitToggle
   const passThroughForParentLink = interactiveUnit
-  const numericClass = cn(SIZE_CLASSES[size], tabular && 'tabular-nums')
+  const numericClass = cn(
+    amountTypography != null ? designTypeClassName[amountTypography] : SIZE_CLASSES[size],
+    tabular && 'tabular-nums',
+  )
 
   return (
     <span
@@ -96,7 +105,7 @@ export function BitcoinAmountDisplay({
         {formatted}
       </span>{' '}
       {!allowUnitToggle ? (
-        <span className={cn('font-medium', tabular && 'tabular-nums')}>
+        <span className={cn(tabular && 'tabular-nums')}>
           <NetworkUnitPrefix indicator={networkUnitIndicator} />
           {unitLabel}
         </span>
@@ -120,7 +129,7 @@ export function BitcoinAmountDisplay({
           type="button"
           aria-label={accessibleUnitLabel}
           className={cn(
-            'pointer-events-auto inline rounded px-0.5 font-medium underline decoration-dotted underline-offset-2 hover:bg-muted/60',
+            'pointer-events-auto inline rounded px-0.5 underline decoration-dotted underline-offset-2 hover:bg-muted/60',
             tabular && 'tabular-nums',
           )}
           onClick={(e) => {

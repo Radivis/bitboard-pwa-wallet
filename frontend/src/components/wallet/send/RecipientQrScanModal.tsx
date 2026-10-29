@@ -7,8 +7,8 @@ import {
 } from 'react'
 import QrScanner from 'qr-scanner'
 import { Zap, ZapOff } from 'lucide-react'
-import { AppModal } from '@/components/AppModal'
-import { Button } from '@/components/ui/button'
+import { DesignModal } from '@/components/design/DesignModal'
+import { DesignButton } from '@/components/design/DesignButton'
 
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024
 
@@ -257,7 +257,7 @@ export function RecipientQrScanModal({
   }, [isOpen, onOpenChange, onScanned])
 
   return (
-    <AppModal
+    <DesignModal
       isOpen={isOpen}
       onOpenChange={(next) => {
         if (!next) {
@@ -267,7 +267,6 @@ export function RecipientQrScanModal({
       }}
       title="Scan QR code"
       onCancel={() => {}}
-      contentClassName="sm:max-w-md"
       footer={(requestClose) => (
         <div className="flex w-full flex-wrap items-center justify-end gap-2">
           <input
@@ -279,21 +278,21 @@ export function RecipientQrScanModal({
             aria-hidden
             onChange={handleFileChange}
           />
-          <Button
+          <DesignButton
             type="button"
-            variant="outline"
+            appearance="secondary"
             onClick={() => fileInputRef.current?.click()}
           >
             Upload image
-          </Button>
-          <Button type="button" variant="outline" onClick={requestClose}>
+          </DesignButton>
+          <DesignButton type="button" appearance="secondary" onClick={requestClose}>
             Cancel
-          </Button>
+          </DesignButton>
         </div>
       )}
     >
       <div className="space-y-3">
-        <p className="text-sm text-muted-foreground">
+        <p className="design-type-regular text-muted-foreground">
           Use the camera preview below, or choose an image file from the footer
           if you have no camera or a screenshot. Decodes a Bitcoin address,
           BIP21 payment URI, or Lightning invoice.
@@ -307,37 +306,31 @@ export function RecipientQrScanModal({
             aria-label="Camera preview for QR scanning"
           />
           {flashAvailable ? (
-            <Button
+            <DesignButton
               type="button"
-              variant="secondary"
-              size="icon"
-              className="absolute top-2 right-2 z-10 bg-background/80 shadow-md"
+              appearance="tertiary"
+              className="absolute top-2 right-2 z-10"
               onClick={(e) => {
                 e.stopPropagation()
                 void handleFlashToggle()
               }}
               aria-pressed={flashOn}
               aria-label={flashOn ? 'Turn flash off' : 'Turn flash on'}
-            >
-              {flashOn ? (
-                <ZapOff className="size-4" aria-hidden />
-              ) : (
-                <Zap className="size-4" aria-hidden />
-              )}
-            </Button>
+              icon={flashOn ? <ZapOff aria-hidden /> : <Zap aria-hidden />}
+            />
           ) : null}
         </div>
         {cameraError != null ? (
-          <p className="text-sm text-destructive" role="alert">
+          <p className="design-type-regular text-destructive" role="alert">
             {cameraError}
           </p>
         ) : null}
         {fileDecodeError != null ? (
-          <p className="text-sm text-destructive" role="alert">
+          <p className="design-type-regular text-destructive" role="alert">
             {fileDecodeError}
           </p>
         ) : null}
       </div>
-    </AppModal>
+    </DesignModal>
   )
 }

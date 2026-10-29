@@ -162,7 +162,8 @@ describe('BarkDashboardBalance', () => {
 
     const hint = screen.getByTestId('bark-next-refresh-hint')
     expect(hint).toHaveTextContent('Unlock this wallet around')
-    expect(hint).toHaveClass('border-amber-500/40')
+    expect(hint).toHaveAttribute('data-slot', 'design-banner')
+    expect(hint).toHaveAttribute('data-status', 'warning')
     expect(hint.parentElement?.firstElementChild).toBe(hint)
   })
 
@@ -273,11 +274,11 @@ describe('BarkDashboardBalance', () => {
     const spendable = screen.getByTestId('dashboard-bark-balance-spendable')
     const locked = screen.getByTestId('dashboard-bark-balance-locked')
     const exiting = screen.getByTestId('dashboard-bark-balance-exiting')
-    expect(spendable).toHaveClass('text-sm')
+    expect(spendable).toHaveClass('design-type-small-balances')
     expect(spendable).not.toHaveClass('text-3xl')
-    expect(locked).toHaveClass('text-sm')
+    expect(locked).toHaveClass('design-type-small-balances')
     expect(locked).not.toHaveClass('text-3xl')
-    expect(exiting).toHaveClass('text-sm')
+    expect(exiting).toHaveClass('design-type-small-balances')
     expect(exiting).not.toHaveClass('text-3xl')
   })
 
@@ -320,7 +321,7 @@ describe('BarkDashboardBalance', () => {
     renderWithProviders(<BarkDashboardBalance />)
     const banner = screen.getByTestId('bark-pending-action-banner')
     expect(banner).toHaveAttribute('data-state', 'error')
-    expect(banner).toHaveClass('border-red-500/40')
+    expect(banner).toHaveAttribute('data-status', 'error')
     expect(banner).toHaveTextContent('vtxo is not spendable (state: spent)')
   })
 

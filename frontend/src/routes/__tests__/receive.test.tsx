@@ -125,7 +125,7 @@ describe('ReceivePage', () => {
       await screen.findByRole('heading', { name: 'Demo mode (Mainnet)' }),
     ).toBeInTheDocument()
     expect(
-      screen.getByText(/Bitboard Wallet is still in DEMO MODE/i),
+      screen.getByText(/Bitcoin Codex is still in DEMO MODE/i),
     ).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'OK' }))

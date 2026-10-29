@@ -1,13 +1,14 @@
+import { ArrowDownLeft, ArrowUpRight, Coins, Gauge, Hash } from 'lucide-react'
+import { DesignButton } from '@/components/design/DesignButton'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+  DesignCard,
+  DesignCardContent,
+  DesignCardDescription,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
+import { DesignInput } from '@/components/design/DesignInput'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { LAB_MAX_RANDOM_ENTITY_TRANSACTIONS } from '@/lib/lab/lab-random-limits'
@@ -95,21 +96,21 @@ export function LabMakeTransactionCard({
       infoText="Compose a payment inside the simulator: pick a funded lab address to spend from, a destination, an amount in satoshis, and a fee rate. The tx is built and broadcast into the lab mempool; mine blocks afterward to confirm it—same lifecycle as real Bitcoin, without real money."
       className="rounded-xl"
     >
-      <Card>
-        <CardHeader>
-          <CardTitle>Transaction</CardTitle>
-          <CardDescription>Send coins to another address</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <DesignCard>
+        <DesignCardHeader>
+          <DesignCardTitle>Transaction</DesignCardTitle>
+          <DesignCardDescription>Send coins to another address</DesignCardDescription>
+        </DesignCardHeader>
+        <DesignCardContent className="gap-4">
           {txActionsDisabled ? (
             <p
-              className="text-sm text-amber-600 dark:text-amber-400"
+              className="design-type-regular text-amber-600 dark:text-amber-400"
               role="status"
             >
               No coins exist yet. Please mine some blocks on the{' '}
               <a
                 href="/lab/blocks"
-                className="font-medium underline underline-offset-2 text-amber-700 dark:text-amber-300"
+                className="design-type-emphasis underline underline-offset-2 text-amber-700 dark:text-amber-300"
               >
                 Blocks page
               </a>{' '}
@@ -118,18 +119,19 @@ export function LabMakeTransactionCard({
           ) : null}
           {!showTxForm ? (
             <div className="space-y-4">
-              <Button
-                variant="outline"
+              <DesignButton
+                appearance="secondary"
                 onClick={() => setShowTxForm(true)}
                 disabled={txActionsDisabled || controlledAddressesCount === 0}
               >
                 Make transaction
-              </Button>
+              </DesignButton>
               <div className="space-y-2 border rounded-lg p-4">
                 <Label htmlFor="random-transaction-count">Number of random transactions</Label>
-                <Input
+                <DesignInput
                   id="random-transaction-count"
                   type="number"
+                  leadingIcon={Hash}
                   min={MIN_RANDOM_TRANSACTION_COUNT}
                   max={LAB_MAX_RANDOM_ENTITY_TRANSACTIONS}
                   value={randomTransactionCount}
@@ -139,31 +141,31 @@ export function LabMakeTransactionCard({
                   disabled={creatingRandomTransactions || txActionsDisabled}
                 />
                 {hasMinedBlocks && labEntitiesCount === 0 ? (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="design-type-regular text-muted-foreground">
                     Mining a block to a name enables random transactions.
                   </p>
                 ) : null}
                 {creatingRandomTransactions && randomBatchProgress != null ? (
                   <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
                     <LoadingSpinner text="Rolling random transaction data and signing lab transactions" />
-                    <p className="text-center text-sm text-muted-foreground">
+                    <p className="design-type-regular text-center text-muted-foreground">
                       Created {randomBatchProgress.created} of {randomBatchProgress.total}{' '}
                       random transactions
                     </p>
                   </div>
                 ) : null}
-                <Button
-                  variant="secondary"
+                <DesignButton
+                  appearance="tertiary"
                   onClick={onCreateRandomTransactions}
                   disabled={
                     txActionsDisabled || creatingRandomTransactions || labEntitiesCount === 0
                   }
                 >
                   Make random transaction
-                </Button>
+                </DesignButton>
                 {showRandomBatchConflictWarning ? (
                   <p
-                    className="text-sm text-amber-600 dark:text-amber-400"
+                    className="design-type-regular text-amber-600 dark:text-amber-400"
                     role="status"
                   >
                     You chose more random transactions than there are lab entities. That makes
@@ -176,15 +178,16 @@ export function LabMakeTransactionCard({
             <div className="space-y-4 border rounded-lg p-4">
               <div className="space-y-2">
                 <Label htmlFor="from-address">From address</Label>
-                <Input
+                <DesignInput
                   id="from-address"
                   type="text"
+                  leadingIcon={ArrowUpRight}
                   placeholder="bcrt1q... or bcrt1p..."
                   value={fromAddress}
                   onChange={(e) => setFromAddress(e.target.value)}
                 />
                 {sendDisabledFromDeadEntity && deadFromEntityDisplayName ? (
-                  <p className="text-sm text-muted-foreground" role="status">
+                  <p className="design-type-regular text-muted-foreground" role="status">
                     This address belongs to DEAD lab entity {deadFromEntityDisplayName} — sending is
                     disabled.
                   </p>
@@ -192,9 +195,10 @@ export function LabMakeTransactionCard({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="to-address">To address</Label>
-                <Input
+                <DesignInput
                   id="to-address"
                   type="text"
+                  leadingIcon={ArrowDownLeft}
                   placeholder="bcrt1q... or bcrt1p..."
                   value={toAddress}
                   onChange={(e) => setToAddress(e.target.value)}
@@ -202,9 +206,10 @@ export function LabMakeTransactionCard({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="amount">Amount (sats)</Label>
-                <Input
+                <DesignInput
                   id="amount"
                   type="number"
+                  leadingIcon={Coins}
                   min={MIN_AMOUNT_SATS}
                   placeholder="1000"
                   value={amountSats}
@@ -222,9 +227,10 @@ export function LabMakeTransactionCard({
                     Fee rate (sat/vB)
                   </InfomodeWrapper>
                 </Label>
-                <Input
+                <DesignInput
                   id="fee-rate"
                   type="number"
+                  leadingIcon={Gauge}
                   min={0.1}
                   step={0.1}
                   placeholder="1"
@@ -233,14 +239,14 @@ export function LabMakeTransactionCard({
                 />
               </div>
               <div className="flex gap-2">
-                <Button
+                <DesignButton
                   onClick={onSend}
                   disabled={txActionsDisabled || sending || sendDisabledFromDeadEntity}
                 >
                   {sending ? 'Sending...' : 'Send'}
-                </Button>
-                <Button
-                  variant="outline"
+                </DesignButton>
+                <DesignButton
+                  appearance="secondary"
                   onClick={() => {
                     setShowTxForm(false)
                     setFromAddress('')
@@ -250,12 +256,12 @@ export function LabMakeTransactionCard({
                   disabled={sending}
                 >
                   Cancel
-                </Button>
+                </DesignButton>
               </div>
             </div>
           )}
-        </CardContent>
-    </Card>
+        </DesignCardContent>
+    </DesignCard>
     </InfomodeWrapper>
   )
 }

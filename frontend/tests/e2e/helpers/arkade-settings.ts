@@ -1,13 +1,15 @@
 import { type Page, expect } from '@playwright/test'
+import { clickDrawerNavLink } from './drawer-nav'
 import {
   openSettingsFeaturesTab,
   openSettingsMainTab,
+  settingsNetworkButton,
   waitForSettingsNetworkSwitchComplete,
   waitForSettingsNetworkModeButtonSelected,
 } from './settings-waits'
 
 export async function enableArkadeFeature(page: Page): Promise<void> {
-  await page.getByRole('link', { name: /settings/i }).click()
+  await clickDrawerNavLink(page, 'Settings')
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
   await openSettingsFeaturesTab(page)
   const arkadeSwitch = page.getByRole('switch', {
@@ -31,9 +33,9 @@ export async function enableArkadeFeature(page: Page): Promise<void> {
 const ARKADE_MUTINYNET_SWITCH_TIMEOUT_MS = process.env.CI ? 90_000 : 60_000
 
 export async function switchToMutinynet(page: Page): Promise<void> {
-  await page.getByRole('link', { name: /settings/i }).click()
+  await clickDrawerNavLink(page, 'Settings')
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
-  await page.getByRole('button', { name: 'Mutinynet' }).click()
+  await settingsNetworkButton(page, 'Mutinynet').click()
   await waitForSettingsNetworkModeButtonSelected(
     page,
     'Mutinynet',

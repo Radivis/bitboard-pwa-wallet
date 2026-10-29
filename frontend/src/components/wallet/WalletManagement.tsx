@@ -1,15 +1,19 @@
 import { useEffect, useState } from 'react'
+import { Tag } from 'lucide-react'
 import { useNavigate } from '@tanstack/react-router'
-import { Lock } from 'lucide-react'
 import { toast } from 'sonner'
 import { useWalletStore } from '@/stores/walletStore'
-import { orchestrateLock } from '@/lib/wallet/lifecycle/lock-lifecycle-orchestrator'
-import { reportWalletSaveBlockingLock } from '@/lib/wallet/wallet-save-error-toast'
 import { useUpdateWallet, useWallet, useWallets } from '@/db'
 import { InfomodeWrapper } from '@/components/infomode/InfomodeWrapper'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { DesignButton } from '@/components/design/DesignButton'
+import {
+  DesignCard,
+  DesignCardContent,
+  DesignCardDescription,
+  DesignCardHeader,
+  DesignCardTitle,
+} from '@/components/design/DesignCard'
+import { DesignInput } from '@/components/design/DesignInput'
 import { Label } from '@/components/ui/label'
 import { DeleteWalletSection } from '@/components/wallet/DeleteWalletSection'
 
@@ -26,7 +30,6 @@ export function WalletManagement({
 }: WalletManagementProps = {}) {
   const navigate = useNavigate()
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
-  const walletStatus = useWalletStore((walletState) => walletState.walletStatus)
   const { data: wallets } = useWallets()
   const { data: walletRow, isSuccess: walletRowLoaded } = useWallet(activeWalletId)
   const updateWallet = useUpdateWallet()
@@ -40,17 +43,6 @@ export function WalletManagement({
   }, [activeWalletId, walletRowLoaded, walletRow?.name])
 
   if (!activeWalletId) return null
-
-  const handleLockWallet = async () => {
-    try {
-      await orchestrateLock()
-      toast.success('Wallet locked')
-    } catch (error) {
-      if (!reportWalletSaveBlockingLock(error)) {
-        throw error
-      }
-    }
-  }
 
   const trimmedDraft = draftName.trim()
   const storedName = (walletRow?.name ?? '').trim()
@@ -75,18 +67,14 @@ export function WalletManagement({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Lock className="h-5 w-5" />
-          Wallet Management
-        </CardTitle>
-        <CardDescription>
-          Lock your wallet to require your Bitboard app password for the next
-          access, or switch between multiple wallets.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
+    <DesignCard>
+      <DesignCardHeader>
+        <DesignCardTitle>Wallet Management</DesignCardTitle>
+        <DesignCardDescription>
+          Rename this wallet, add another, or switch between wallets when you have more than one.
+        </DesignCardDescription>
+      </DesignCardHeader>
+      <DesignCardContent className="space-y-6">
         <InfomodeWrapper
           infoId="wallet-rename"
           infoTitle="Wallet name"
@@ -95,22 +83,23 @@ export function WalletManagement({
         >
           <Label htmlFor="wallet-display-name">Wallet name</Label>
           <div className="flex max-w-md flex-col gap-2 sm:flex-row sm:items-end">
-            <Input
+            <DesignInput
               id="wallet-display-name"
+              leadingIcon={Tag}
               value={draftName}
               onChange={(e) => setDraftName(e.target.value)}
               maxLength={MAX_WALLET_NAME_LENGTH}
               autoComplete="off"
               className="sm:flex-1"
             />
-            <Button
+            <DesignButton
               type="button"
-              variant="secondary"
+              appearance="tertiary"
               disabled={!nameChanged || !nameValid || updateWallet.isPending}
               onClick={() => void handleSaveWalletName()}
             >
               Save name
-            </Button>
+            </DesignButton>
           </div>
         </InfomodeWrapper>
         <div className="flex flex-wrap gap-2">
@@ -119,35 +108,24 @@ export function WalletManagement({
             infoTitle="Add wallet"
             infoText="Opens the setup flow so you can create a brand-new wallet or import another recovery phrase. Use the same Bitboard app password you already set—it encrypts every wallet on this device. If your session is locked, you will unlock first. You can switch between wallets from the wallet list when you have more than one."
           >
-            <Button variant="outline" onClick={() => navigate({ to: '/setup' })}>
+            <DesignButton appearance="secondary" onClick={() => navigate({ to: '/setup' })}>
               Add Wallet
-            </Button>
+            </DesignButton>
           </InfomodeWrapper>
           {hasMultipleWallets && (
-            <Button
-              variant="outline"
+            <DesignButton
+              appearance="secondary"
               onClick={() => navigate({ to: '/wallet/wallets' })}
             >
               Switch Wallet
-            </Button>
-          )}
-          {walletStatus === 'unlocked' && (
-            <InfomodeWrapper
-              infoId="wallet-lock-wallet"
-              infoTitle="Lock wallet"
-              infoText="Immediately clears sensitive keys from this app’s memory and returns you to a locked state. The next time you use Bitboard you will enter your app password again—handy on a shared computer or when you walk away from the device."
-            >
-              <Button variant="outline" onClick={handleLockWallet}>
-                Lock Wallet
-              </Button>
-            </InfomodeWrapper>
+            </DesignButton>
           )}
         </div>
         <DeleteWalletSection
           autoOpenFirstDialog={deleteWalletAutoOpen}
           onAutoOpenConsumed={onDeleteWalletAutoOpenConsumed}
         />
-      </CardContent>
-    </Card>
+      </DesignCardContent>
+    </DesignCard>
   )
 }

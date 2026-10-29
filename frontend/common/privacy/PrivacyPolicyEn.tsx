@@ -475,7 +475,7 @@ export function PrivacyPolicyEn() {
           use Arkade), optional VTXO delegators (when configured in your build), Second&apos;s Bark Ark
           server and Bark chain source (when you enable and use Bark), and Nostr Wallet
           Connect</strong>: <strong>Art. 6(1)(f) GDPR</strong> (legitimate interests in the
-          functionality of the wallet, Lab test networks, optional Arkade and Bark features, and
+          functionality of the wallet, Labnet, optional Arkade and Bark features, and
           Lightning features you use).
         </li>
         <li>

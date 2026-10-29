@@ -8,6 +8,7 @@ import {
   getOnchainSaveLifecycleSnapshot,
 } from '@/lib/wallet/lifecycle/onchain-save-lifecycle-orchestrator'
 import {
+  abandonInFlightOnchainSync,
   awaitOnchainSyncQuiescence,
   getOnchainSyncLifecycleSnapshot,
 } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
@@ -66,6 +67,7 @@ export function shouldSkipOutgoingDescriptorSaveOnSyncError(): boolean {
  */
 export async function awaitOnchainQuiescenceBeforeDescriptorMutation(): Promise<void> {
   await awaitOnchainLoadQuiescence()
+  await abandonInFlightOnchainSync()
   await awaitOnchainSyncQuiescence()
   await awaitOnchainSaveQuiescence()
   assertNoInFlightOnchainLifecycle()

@@ -218,7 +218,7 @@ vi.mock('@/stores/walletStore', async () => {
       { getState: () => walletStoreState },
     ),
     NETWORK_LABELS: {
-      lab: 'Lab',
+      lab: 'Labnet',
       regtest: 'Regtest',
       signet: 'Signet',
       mutinynet: 'Mutinynet',
