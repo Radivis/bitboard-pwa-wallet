@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import type { BarkExitNodeSweepKind } from '@/lib/bark/bark-exit-seizure'
+import { shortTxid } from '@/lib/bark/bark-exit-graph-layout'
+import type { BarkExitNodeSweepKind, BarkExitNodeSweepVtxoItem } from '@/lib/bark/bark-exit-seizure'
 import {
   barkVtxoIdsKeptWhenFinished,
   formatBarkVtxoEmergencyExitPhaseLine,
+  formatBarkVtxoExitPhaseTitle,
   resolveBarkVtxoExitPhase,
 } from '@/lib/bark/bark-vtxo-exit-phase'
 import type {
@@ -38,15 +40,29 @@ function phaseLine(params: {
   graphNodes?: readonly BarkExitGraphNode[] | null
   unfundedParentTxids?: ReadonlySet<string>
   sweptNodeKinds?: readonly BarkExitNodeSweepKind[]
+  sweepItems?: readonly BarkExitNodeSweepVtxoItem[]
 }): string | null {
-  const phase = resolveBarkVtxoExitPhase({
+  return formatBarkVtxoEmergencyExitPhaseLine(resolvedPhase(params))
+}
+
+function resolvedPhase(params: {
+  vtxoState?: BarkVtxoState
+  exitRow?: BarkEmergencyExitRow | null
+  graphNodes?: readonly BarkExitGraphNode[] | null
+  unfundedParentTxids?: ReadonlySet<string>
+  sweptNodeKinds?: readonly BarkExitNodeSweepKind[]
+  sweepItems?: readonly BarkExitNodeSweepVtxoItem[]
+}) {
+  const sweepItems =
+    params.sweepItems ??
+    (params.sweptNodeKinds ?? []).map((nodeKind) => ({ vtxoId: 'vtxo-1', nodeKind }))
+  return resolveBarkVtxoExitPhase({
     vtxoState: params.vtxoState ?? 'spendable',
     exitRow: params.exitRow ?? null,
     graphNodes: params.graphNodes ?? null,
     unfundedParentTxids: params.unfundedParentTxids ?? new Set(),
-    sweptNodeKinds: new Set(params.sweptNodeKinds ?? []),
+    sweepItems,
   })
-  return formatBarkVtxoEmergencyExitPhaseLine(phase)
 }
 
 const anchor = graphNode({
@@ -222,5 +238,37 @@ describe('resolveBarkVtxoExitPhase', () => {
     expect(phaseLine({ sweptNodeKinds: ['internal', 'leaf', 'checkpoint'] })).toBe(
       'Emergency exit phase: internal node seized',
     )
+  })
+
+  it('names the spending transaction beside the winning node type', () => {
+    const anchorTxid = 'aa'.repeat(32)
+    const internalTxid = 'bb'.repeat(32)
+    const phase = resolvedPhase({
+      sweepItems: [
+        { vtxoId: 'vtxo-1', nodeKind: 'internal', spenderTxid: internalTxid },
+        { vtxoId: 'vtxo-1', nodeKind: 'anchor', spenderTxid: anchorTxid },
+      ],
+    })
+    expect(formatBarkVtxoEmergencyExitPhaseLine(phase)).toBe(
+      `Emergency exit phase: anchor swept · ${shortTxid(anchorTxid)}`,
+    )
+    expect(formatBarkVtxoExitPhaseTitle(phase)).toBe(anchorTxid)
+  })
+
+  it('names every spending transaction of the winning kind and omits a missing one', () => {
+    const earlierTxid = 'aa'.repeat(32)
+    const laterTxid = 'cc'.repeat(32)
+    const phase = resolvedPhase({
+      sweepItems: [
+        { vtxoId: 'vtxo-1', nodeKind: 'leaf', spenderTxid: laterTxid },
+        { vtxoId: 'vtxo-1', nodeKind: 'leaf', spenderTxid: earlierTxid },
+      ],
+    })
+    expect(formatBarkVtxoEmergencyExitPhaseLine(phase)).toBe(
+      `Emergency exit phase: leaf seized · ${shortTxid(earlierTxid)} · ${shortTxid(laterTxid)}`,
+    )
+    expect(formatBarkVtxoExitPhaseTitle(phase)).toBe(`${earlierTxid} ${laterTxid}`)
+    expect(phaseLine({ sweptNodeKinds: ['leaf'] })).toBe('Emergency exit phase: leaf seized')
+    expect(formatBarkVtxoExitPhaseTitle(resolvedPhase({ sweptNodeKinds: ['leaf'] }))).toBeNull()
   })
 })

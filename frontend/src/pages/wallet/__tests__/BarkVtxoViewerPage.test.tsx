@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, screen } from '@testing-library/react'
+import { shortTxid } from '@/lib/bark/bark-exit-graph-layout'
 import { useBarkExitChainNoticeStore } from '@/lib/bark/bark-exit-seizure-notice'
 import { BarkVtxoViewerPage } from '@/pages/wallet/BarkVtxoViewerPage'
 import { BARK_VTXO_VIEWER_PAGE_SIZE } from '@/lib/bark/bark-vtxo-viewer-display'
@@ -270,8 +271,9 @@ describe('BarkVtxoViewerPage', () => {
         },
       ],
     })
+    const anchorSpender = 'ab'.repeat(32)
     useBarkExitChainNoticeStore.getState().showNotice(1, 'signet', [
-      { vtxoId: 'swept:5', nodeKind: 'anchor' },
+      { vtxoId: 'swept:5', nodeKind: 'anchor', spenderTxid: anchorSpender },
       { vtxoId: 'seized:3', nodeKind: 'checkpoint' },
     ])
 
@@ -284,11 +286,13 @@ describe('BarkVtxoViewerPage', () => {
       'Emergency exit phase: waiting for timelock, 10 of 40 blocks',
     )
     expect(screen.getByTestId('bark-vtxo-exit-phase-swept:5')).toHaveTextContent(
-      'Emergency exit phase: anchor swept',
+      `Emergency exit phase: anchor swept · ${shortTxid(anchorSpender)}`,
     )
+    expect(screen.getByTestId('bark-vtxo-exit-phase-swept:5')).toHaveAttribute('title', anchorSpender)
     expect(screen.getByTestId('bark-vtxo-exit-phase-seized:3')).toHaveTextContent(
       'Emergency exit phase: checkpoint seized',
     )
+    expect(screen.getByTestId('bark-vtxo-exit-phase-seized:3')).not.toHaveAttribute('title')
     expect(screen.queryByTestId('bark-vtxo-card-claimed:4')).not.toBeInTheDocument()
   })
 

@@ -17,14 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.7] - TBD
 
-### Changed
+### Added
+- If VTXOs during emergency exit are swept or seized, the spending txid is now surfaced
 
+### Changed
 - Bark VTXOs that are undergoing emergency exit are locked; spending, refreshing, or offboarding them requires the cancellation of the emergency exit
+- If Bark seed-recovery on a new device fails, it can be retried and the Bark session won't be opened until that retry succeeds
 
 ### Fixed
-
 - Historical Mutinynet Arkade accounts that still pointed at the Signet operator proxy are rewritten to the Mutinynet proxy on upgrade
-
 
 ## [0.3.6] - 2026-10-23
 

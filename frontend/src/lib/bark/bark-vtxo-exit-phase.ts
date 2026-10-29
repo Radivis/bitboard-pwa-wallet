@@ -1,6 +1,7 @@
 import {
   BARK_EXIT_NODE_PHASE,
   resolveBarkExitNodePhase,
+  shortTxid,
   type BarkExitNodePhase,
 } from '@/lib/bark/bark-exit-graph-layout'
 import type {
@@ -61,10 +62,10 @@ export type BarkVtxoExitPhase =
   | { kind: typeof BARK_VTXO_EXIT_PHASE.claimable }
   | { kind: typeof BARK_VTXO_EXIT_PHASE.claimInProgress }
   | { kind: typeof BARK_VTXO_EXIT_PHASE.claimed }
-  | { kind: typeof BARK_VTXO_EXIT_PHASE.anchorSwept }
-  | { kind: typeof BARK_VTXO_EXIT_PHASE.internalSeized }
-  | { kind: typeof BARK_VTXO_EXIT_PHASE.leafSeized }
-  | { kind: typeof BARK_VTXO_EXIT_PHASE.checkpointSeized }
+  | { kind: typeof BARK_VTXO_EXIT_PHASE.anchorSwept; spenderTxids: readonly string[] }
+  | { kind: typeof BARK_VTXO_EXIT_PHASE.internalSeized; spenderTxids: readonly string[] }
+  | { kind: typeof BARK_VTXO_EXIT_PHASE.leafSeized; spenderTxids: readonly string[] }
+  | { kind: typeof BARK_VTXO_EXIT_PHASE.checkpointSeized; spenderTxids: readonly string[] }
 
 const FRONTIER_PHASES_WITH_CONFIRMED_COUNT = new Set<BarkExitNodePhase>([
   BARK_EXIT_NODE_PHASE.awaitingBumperFunding,
@@ -77,12 +78,32 @@ export function resolveBarkVtxoExitPhase(params: {
   exitRow: BarkEmergencyExitRow | null
   graphNodes: readonly BarkExitGraphNode[] | null
   unfundedParentTxids: ReadonlySet<string>
-  sweptNodeKinds: ReadonlySet<BarkExitNodeSweepKind>
+  sweepItems: readonly BarkExitNodeSweepVtxoItem[]
 }): BarkVtxoExitPhase | null {
-  if (params.sweptNodeKinds.has('anchor')) return { kind: BARK_VTXO_EXIT_PHASE.anchorSwept }
-  if (params.sweptNodeKinds.has('internal')) return { kind: BARK_VTXO_EXIT_PHASE.internalSeized }
-  if (params.sweptNodeKinds.has('leaf')) return { kind: BARK_VTXO_EXIT_PHASE.leafSeized }
-  if (params.sweptNodeKinds.has('checkpoint')) return { kind: BARK_VTXO_EXIT_PHASE.checkpointSeized }
+  if (hasSweepKind(params.sweepItems, 'anchor')) {
+    return {
+      kind: BARK_VTXO_EXIT_PHASE.anchorSwept,
+      spenderTxids: spenderTxidsForKind(params.sweepItems, 'anchor'),
+    }
+  }
+  if (hasSweepKind(params.sweepItems, 'internal')) {
+    return {
+      kind: BARK_VTXO_EXIT_PHASE.internalSeized,
+      spenderTxids: spenderTxidsForKind(params.sweepItems, 'internal'),
+    }
+  }
+  if (hasSweepKind(params.sweepItems, 'leaf')) {
+    return {
+      kind: BARK_VTXO_EXIT_PHASE.leafSeized,
+      spenderTxids: spenderTxidsForKind(params.sweepItems, 'leaf'),
+    }
+  }
+  if (hasSweepKind(params.sweepItems, 'checkpoint')) {
+    return {
+      kind: BARK_VTXO_EXIT_PHASE.checkpointSeized,
+      spenderTxids: spenderTxidsForKind(params.sweepItems, 'checkpoint'),
+    }
+  }
   if (params.exitRow == null) {
     return params.vtxoState === 'exited' ? { kind: BARK_VTXO_EXIT_PHASE.claimed } : null
   }
@@ -95,6 +116,13 @@ export function formatBarkVtxoEmergencyExitPhaseLine(
   const copy = formatBarkVtxoExitPhaseCopy(phase)
   if (copy == null) return null
   return `${EMERGENCY_EXIT_PHASE_LINE_PREFIX}${copy}`
+}
+
+/** Full spending transaction ids for a sweep or seizure phase, for the element title. */
+export function formatBarkVtxoExitPhaseTitle(phase: BarkVtxoExitPhase | null): string | null {
+  const spenderTxids = spenderTxidsOfPhase(phase)
+  if (spenderTxids.length === 0) return null
+  return spenderTxids.join(' ')
 }
 
 export function barkVtxoIdsKeptWhenFinished(params: {
@@ -214,14 +242,53 @@ function formatBarkVtxoExitPhaseCopy(phase: BarkVtxoExitPhase | null): string | 
     case BARK_VTXO_EXIT_PHASE.claimed:
       return 'claimed'
     case BARK_VTXO_EXIT_PHASE.anchorSwept:
-      return 'anchor swept'
+      return withSpenderTxids('anchor swept', phase.spenderTxids)
     case BARK_VTXO_EXIT_PHASE.internalSeized:
-      return 'internal node seized'
+      return withSpenderTxids('internal node seized', phase.spenderTxids)
     case BARK_VTXO_EXIT_PHASE.leafSeized:
-      return 'leaf seized'
+      return withSpenderTxids('leaf seized', phase.spenderTxids)
     case BARK_VTXO_EXIT_PHASE.checkpointSeized:
-      return 'checkpoint seized'
+      return withSpenderTxids('checkpoint seized', phase.spenderTxids)
   }
+}
+
+function hasSweepKind(
+  items: readonly BarkExitNodeSweepVtxoItem[],
+  kind: BarkExitNodeSweepKind,
+): boolean {
+  return items.some((item) => item.nodeKind === kind)
+}
+
+function spenderTxidsForKind(
+  items: readonly BarkExitNodeSweepVtxoItem[],
+  kind: BarkExitNodeSweepKind,
+): string[] {
+  const spenderTxids = new Set<string>()
+  for (const item of items) {
+    if (item.nodeKind !== kind || item.spenderTxid == null || item.spenderTxid.length === 0) {
+      continue
+    }
+    spenderTxids.add(item.spenderTxid)
+  }
+  return [...spenderTxids].sort()
+}
+
+function spenderTxidsOfPhase(phase: BarkVtxoExitPhase | null): readonly string[] {
+  if (phase == null) return []
+  switch (phase.kind) {
+    case BARK_VTXO_EXIT_PHASE.anchorSwept:
+    case BARK_VTXO_EXIT_PHASE.internalSeized:
+    case BARK_VTXO_EXIT_PHASE.leafSeized:
+    case BARK_VTXO_EXIT_PHASE.checkpointSeized:
+      return phase.spenderTxids
+    default:
+      return []
+  }
+}
+
+function withSpenderTxids(label: string, spenderTxids: readonly string[]): string {
+  if (spenderTxids.length === 0) return label
+  return `${label} · ${spenderTxids.map((spenderTxid) => shortTxid(spenderTxid)).join(' · ')}`
 }
 
 function withConfirmedCount(

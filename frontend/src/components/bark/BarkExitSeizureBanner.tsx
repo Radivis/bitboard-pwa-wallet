@@ -6,8 +6,9 @@ import {
   BARK_EXIT_NODE_SWEEP_KINDS,
   BARK_INTERNAL_SEIZURE_WARNING,
   BARK_LEAF_SEIZURE_WARNING,
-  vtxoIdsForExitNodeSweepKind,
+  vtxoRowsForExitNodeSweepKind,
   type BarkExitNodeSweepKind,
+  type BarkExitNodeSweepVtxoRow,
 } from '@/lib/bark/bark-exit-seizure'
 import { useBarkExitChainNoticeStore } from '@/lib/bark/bark-exit-seizure-notice'
 import { isBarkNetworkMode } from '@/lib/bark/bark-utils'
@@ -40,8 +41,8 @@ export function BarkExitSeizureBanner() {
   const noticeSections = BARK_EXIT_NODE_SWEEP_KINDS.map((kind) => ({
     kind,
     ...SEIZURE_NOTICE_BY_KIND[kind],
-    vtxoIds: vtxoIdsForExitNodeSweepKind(exitNodeSweepVtxoItems, kind),
-  })).filter((section) => section.vtxoIds.length > 0)
+    rows: vtxoRowsForExitNodeSweepKind(exitNodeSweepVtxoItems, kind),
+  })).filter((section) => section.rows.length > 0)
 
   if (
     walletId == null ||
@@ -67,7 +68,7 @@ export function BarkExitSeizureBanner() {
             walletId={walletId}
             networkMode={networkMode}
             warning={section.warning}
-            vtxoIds={section.vtxoIds}
+            rows={section.rows}
             testId={section.testId}
           />
         ))}
@@ -81,7 +82,7 @@ function NoticeSection(props: {
   walletId: number
   networkMode: NetworkMode
   warning: string
-  vtxoIds: readonly string[]
+  rows: readonly BarkExitNodeSweepVtxoRow[]
   testId: string
 }) {
   return (
@@ -91,8 +92,15 @@ function NoticeSection(props: {
         <div className="min-w-0 space-y-2">
           <p className="text-sm leading-relaxed">{props.warning}</p>
           <ul className="list-disc pl-5 text-sm leading-relaxed" data-testid={`${props.testId}-ids`}>
-            {props.vtxoIds.map((vtxoId) => (
-              <li key={vtxoId}>{vtxoId}</li>
+            {props.rows.map((row) => (
+              <li key={row.vtxoId}>
+                {row.vtxoId}
+                {row.spenderTxids.map((spenderTxid) => (
+                  <span key={spenderTxid} className="ml-2 break-all font-mono">
+                    {spenderTxid}
+                  </span>
+                ))}
+              </li>
             ))}
           </ul>
         </div>

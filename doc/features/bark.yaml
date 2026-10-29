@@ -23,7 +23,7 @@ feature:
     - As a user with Bark enabled on signet or mainnet, I want to exit a chosen amount, or my whole spendable Bark balance, to my current on-chain receive address
     - As a user, I want a failed Bark exit to leave the page without a success message, and a parked exit to stay visible as a banner on the exit page, the dashboard, and management
     - As a user with Bark enabled on signet or mainnet, I want to open a VTXO list from wallet management and see each coin's Bark state
-    - As a user, I want each Bark VTXO card to show how far that coin's emergency exit has gotten, including a started exit, the timelock after confirmation, and an anchor sweep or a seizure of a checkpoint, leaf, or internal node
+    - As a user, I want each Bark VTXO card to show how far that coin's emergency exit has gotten, including a started exit, the timelock after confirmation, and an anchor sweep or a seizure of a checkpoint, leaf, or internal node, with the spending transaction beside that node type
     - As a user with Bark enabled on signet or mainnet, I want to send to a Bark Ark address from the send form
     - As a user with Bark enabled on signet or mainnet, I want an emergency-exit control page where I can exit selected spendable VTXOs or the whole wallet, watch each coin's exit state, progress it, cancel while Bark still allows it, and claim claimable coins to my current on-chain receive address
     - As a user, I want a failed emergency-exit step to leave the page without a success message
@@ -66,14 +66,14 @@ feature:
     - That time is the start of the next refresh period (Bark's next required refresh height), estimated from the sync time and the average block interval of the open network
     - When the refresh period has already started, the notice asks the user to keep the wallet unlocked and synced instead of naming a time
     - The notice covers only the open wallet and network. It is cleared on lock, wallet switch, and session change
-    - A confirmed spend of one output of an anchor transaction, by any transaction other than the first exit transaction of the branch through that output, is an anchor sweep. It records every unspent VTXO on that branch and marks those coins spent before refresh is scheduled. The server already claimed that output after expiry, so renewal cannot restore them. The scan checks each output of an anchor transaction on its own, before hops. Only the branch through the swept output is left out of the hop seizure check. A branch through another output of the same anchor transaction is still checked
-    - A confirmed spend of one output of a hot exit hop, when that output's next exit transaction is not yet confirmed, by any transaction other than that next exit transaction, records every remaining unspent VTXO whose history continues through that output as spent, before refresh is scheduled. The recorded kind is checkpoint, leaf, or internal node, from the hop that was spent. A history can be recorded under more than one kind when more than one of its hops was seized. Another output of the same transaction is not recorded. A hop whose next exit transaction is already confirmed is not watched. The VTXO outpoint itself is not watched
-    - The wallet layout shows one banner. Each recorded kind is its own section and lists its VTXO ids. Every section with ids shows together. The Bark account stores one array of items, each with a VTXO id and a node kind of anchor, internal, leaf, or checkpoint. Each sync appends newly recorded items and leaves the others in place. A sync that records nothing removes nothing. Dismissing a section removes only that kind. Lock, wallet switch, and session change hide the banner until that wallet is unlocked again
+    - A confirmed spend of one output of an anchor transaction, by any transaction other than the first exit transaction of the branch through that output, is an anchor sweep. It records every unspent VTXO on that branch, with the spending transaction id, and marks those coins spent before refresh is scheduled. The server already claimed that output after expiry, so renewal cannot restore them. The scan checks each output of an anchor transaction on its own, before hops. Only the branch through the swept output is left out of the hop seizure check. A branch through another output of the same anchor transaction is still checked
+    - A confirmed spend of one output of a hot exit hop, when that output's next exit transaction is not yet confirmed, by any transaction other than that next exit transaction, records every remaining unspent VTXO whose history continues through that output as spent, before refresh is scheduled, and records the spending transaction id. The recorded kind is checkpoint, leaf, or internal node, from the hop that was spent. A history can be recorded under more than one kind when more than one of its hops was seized. Two spends of the same kind stay two items, distinguished by the spending transaction. Another output of the same transaction is not recorded. A hop whose next exit transaction is already confirmed is not watched. The VTXO outpoint itself is not watched
+    - The wallet layout shows one banner. Each recorded kind is its own section. The warning names Bark VTXOs. The section lists its VTXO ids, and each id is followed by the spending transaction id when one was recorded. Every section with ids shows together. The Bark account stores one array of items, each with a VTXO id, a node kind of anchor, internal, leaf, or checkpoint, and the spending transaction id. An item saved before that id existed still shows the kind. Each sync appends newly recorded items and leaves the others in place. A sync that records nothing removes nothing. Dismissing a section removes only that kind. Lock, wallet switch, and session change hide the banner until that wallet is unlocked again
     - The VTXO list link and page exist only when isBarkEnabled and the network is signet or mainnet
     - The VTXO list is the local Bark database. It is not an operator snapshot
     - Spent and Exited VTXOs stay hidden until the user shows them, except a live emergency exit, an anchor-swept coin, and a coin seized at a checkpoint, leaf, or internal node, which stay listed. Locked VTXOs stay visible
     - A VTXO card shows id, amount, state, a lock line that names the pending action or history label, expiry as blocks remaining plus an approximate date, and Registered only when the coin is registered
-    - A card ends with Emergency exit phase when the coin has a live exit, is claimed, or is named by an anchor sweep or a hop seizure. A coin with no exit omits that line. A sweep or seizure wins over a live exit. When more than one item names the coin, the phase prefers an internal node, then a leaf, then a checkpoint. While processing, the copy is the frontier exit-tree phase, and it names how many non-anchor exit transactions are confirmed once one is. After confirmation, the copy is the timelock as blocks elapsed of the total. Until that exit tree has loaded, a processing coin reads processing
+    - A card ends with Emergency exit phase when the coin has a live exit, is claimed, or is named by an anchor sweep or a hop seizure. A coin with no exit omits that line. A sweep or seizure wins over a live exit. When more than one item names the coin, the phase prefers an internal node, then a leaf, then a checkpoint. The phase line names the spending transaction beside that node type when the winning item has one, and keeps the node type alone when the stored item has no transaction id. While processing, the copy is the frontier exit-tree phase, and it names how many non-anchor exit transactions are confirmed once one is. After confirmation, the copy is the timelock as blocks elapsed of the total. Until that exit tree has loaded, a processing coin reads processing
     - Search, state chips, sort, and pagination filter the loaded list and do not call the worker again
     - A Signet Bark policy address (tark1p) is a valid send recipient when isBarkEnabled and the network is signet
     - A Mainnet Bark policy address (ark1p) is a valid send recipient when isBarkEnabled and the network is mainnet
@@ -259,26 +259,32 @@ feature:
         description: >
           A confirmed foreign spend of one output of an anchor transaction, by any transaction other
           than the first exit transaction of the branch through that output, is an anchor sweep. It
-          records every unspent VTXO on that branch and marks those coins spent before refresh is
+          records every unspent VTXO on that branch, with the spending transaction id, and marks
+          those coins spent before refresh is
           scheduled. Renewal cannot restore them. The scan checks each output of an anchor
           transaction on its own, before hops. Only the branch through the swept output is left out
           of the hop seizure check. A branch through another output of the same anchor transaction
           is still checked. A confirmed foreign spend of one output of a hot exit hop
           records every remaining unspent VTXO whose history continues through that output as spent,
           before refresh is scheduled, and names the spent node as a checkpoint, a leaf, or an
-          internal node. A history can appear as more than one item. Another output of
-          the same transaction is not recorded. A hop whose next exit transaction is already
-          confirmed is not watched, and the VTXO outpoint is not watched. The wallet layout shows
-          one banner. Each kind is a section that lists its VTXO ids, and every section with ids
-          shows together. The Bark account stores one array of items, each with a VTXO id and a
-          node kind. A later sync appends items and leaves the others in place. A sync that
-          records nothing removes nothing. Dismissing a section removes only that kind. Lock,
-          wallet switch, and session change hide the banner until that wallet is unlocked again
+          internal node, and records the spending transaction id. A history can appear as more
+          than one item. Two spends of the same kind stay two items, distinguished by that
+          transaction. Another output of the same transaction is not recorded. A hop whose next
+          exit transaction is already confirmed is not watched, and the VTXO outpoint is not
+          watched. The wallet layout shows one banner. Each kind is a section whose warning names
+          Bark VTXOs and lists its VTXO ids, each followed by the spending transaction id when one
+          was recorded. Every section with ids shows together. The Bark account stores one array
+          of items, each with a VTXO id, a node kind, and the spending transaction id. An item
+          saved before that id existed still shows the kind. A later sync appends items and leaves
+          the others in place. A sync that records nothing removes nothing. Dismissing a section
+          removes only that kind. Lock, wallet switch, and session change hide the banner until
+          that wallet is unlocked again
         implemented_by:
           - bitboard-bark/src/exit_seizure.rs
           - frontend/src/lib/bark/__tests__/bark-rail-metadata.test.ts
           - frontend/src/lib/wallet/lifecycle/__tests__/bark-sync-lifecycle-orchestrator.test.ts
           - frontend/src/lib/wallet/lifecycle/__tests__/bark-load-lifecycle-orchestrator.test.ts
+          - frontend/src/lib/bark/__tests__/bark-exit-seizure.test.ts
           - frontend/src/lib/bark/__tests__/bark-exit-seizure-notice.test.ts
           - frontend/src/components/bark/__tests__/BarkExitSeizureBanner.test.tsx
       - id: BARK-SYNC-12
@@ -468,8 +474,10 @@ feature:
           Copy is started, the frontier node phase while processing (with how many non-anchor exit
           transactions are confirmed once one is), waiting for timelock with blocks elapsed of the
           total after confirmation, ready to claim, claim in progress, claimed, anchor swept,
-          internal node seized, leaf seized, or checkpoint seized. A sweep or seizure wins over a
-          live exit. When more than one item names the coin, the phase prefers an
+          internal node seized, leaf seized, or checkpoint seized. A sweep or seizure line names
+          the spending transaction beside that node type when the winning item has one, and keeps
+          the node type alone when the stored item has no transaction id. A sweep or seizure wins
+          over a live exit. When more than one item names the coin, the phase prefers an
           internal node, then a leaf, then a checkpoint. While the exit tree for a processing coin has not loaded, the
           copy is processing
         implemented_by:

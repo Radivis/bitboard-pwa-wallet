@@ -49,6 +49,9 @@ vi.mock('@/stores/walletStore', async (importOriginal) => {
   }
 })
 
+const ANCHOR_SPENDER = 'aa'.repeat(32)
+const SECOND_ANCHOR_SPENDER = 'bb'.repeat(32)
+
 describe('BarkExitSeizureBanner', () => {
   beforeEach(() => {
     useBarkExitChainNoticeStore.setState({ notice: null })
@@ -63,7 +66,8 @@ describe('BarkExitSeizureBanner', () => {
 
   it('BARK-SYNC-11 shows both sections and dismisses only the chosen list', async () => {
     useBarkExitChainNoticeStore.getState().showNotice(1, 'signet', [
-      { vtxoId: 'vtxo-a', nodeKind: 'anchor' },
+      { vtxoId: 'vtxo-a', nodeKind: 'anchor', spenderTxid: SECOND_ANCHOR_SPENDER },
+      { vtxoId: 'vtxo-a', nodeKind: 'anchor', spenderTxid: ANCHOR_SPENDER },
       { vtxoId: 'vtxo-internal', nodeKind: 'internal' },
       { vtxoId: 'vtxo-leaf', nodeKind: 'leaf' },
       { vtxoId: 'vtxo-b', nodeKind: 'checkpoint' },
@@ -72,10 +76,15 @@ describe('BarkExitSeizureBanner', () => {
 
     const banner = screen.getByTestId('bark-exit-seizure-banner')
     expect(banner).toHaveTextContent(BARK_ANCHOR_SWEEP_WARNING)
+    expect(banner).toHaveTextContent('Bark VTXOs')
     expect(banner).toHaveTextContent(BARK_INTERNAL_SEIZURE_WARNING)
     expect(banner).toHaveTextContent(BARK_LEAF_SEIZURE_WARNING)
     expect(banner).toHaveTextContent(BARK_CHECKPOINT_SEIZURE_WARNING)
-    expect(screen.getByTestId('bark-exit-anchor-sweep-ids')).toHaveTextContent('vtxo-a')
+    const anchorIds = screen.getByTestId('bark-exit-anchor-sweep-ids')
+    expect(anchorIds).toHaveTextContent('vtxo-a')
+    expect(anchorIds).toHaveTextContent(ANCHOR_SPENDER)
+    expect(anchorIds).toHaveTextContent(SECOND_ANCHOR_SPENDER)
+    expect(anchorIds.querySelectorAll('li')).toHaveLength(1)
     expect(screen.getByTestId('bark-exit-internal-seizure-ids')).toHaveTextContent('vtxo-internal')
     expect(screen.getByTestId('bark-exit-leaf-seizure-ids')).toHaveTextContent('vtxo-leaf')
     expect(screen.getByTestId('bark-exit-checkpoint-seizure-ids')).toHaveTextContent('vtxo-b')

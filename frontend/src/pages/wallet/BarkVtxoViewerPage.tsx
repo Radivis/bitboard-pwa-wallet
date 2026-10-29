@@ -37,16 +37,11 @@ import {
   barkEmergencyExitUnfundedParentTxidsFor,
 } from '@/lib/bark/bark-emergency-exit-funding-status'
 import { useBarkExitChainNoticeStore } from '@/lib/bark/bark-exit-seizure-notice'
-import {
-  exitNodeSweepKindsByVtxoId,
-  type BarkExitNodeSweepKind,
-  type BarkExitNodeSweepVtxoItem,
-} from '@/lib/bark/bark-exit-seizure'
-
-const EMPTY_SWEPT_NODE_KINDS: ReadonlySet<BarkExitNodeSweepKind> = new Set()
+import { type BarkExitNodeSweepVtxoItem } from '@/lib/bark/bark-exit-seizure'
 import {
   barkVtxoIdsKeptWhenFinished,
   formatBarkVtxoEmergencyExitPhaseLine,
+  formatBarkVtxoExitPhaseTitle,
   resolveBarkVtxoExitPhase,
 } from '@/lib/bark/bark-vtxo-exit-phase'
 import { errorMessage } from '@/lib/shared/utils'
@@ -66,6 +61,7 @@ import {
 } from '@/workers/bark-api'
 
 const EMPTY_BARK_EMERGENCY_EXIT_ROWS: BarkEmergencyExitRow[] = []
+const EMPTY_SWEEP_ITEMS: readonly BarkExitNodeSweepVtxoItem[] = []
 
 export function BarkVtxoViewerPage() {
   const networkMode = useWalletStore(selectCommittedNetworkMode)
@@ -246,8 +242,8 @@ function BarkVtxoInventory({
     () => new Set(unfundedParentTxids),
     [unfundedParentTxids],
   )
-  const sweptNodeKindsByVtxoId = useMemo(
-    () => exitNodeSweepKindsByVtxoId(exitNodeSweepVtxoItems),
+  const sweepItemsByVtxoId = useMemo(
+    () => sweepItemsGroupedByVtxoId(exitNodeSweepVtxoItems),
     [exitNodeSweepVtxoItems],
   )
   const keepWhenFinishedIds = useMemo(
@@ -368,15 +364,13 @@ function BarkVtxoInventory({
                 networkMode={networkMode}
                 pendingActions={pendingActions}
                 movements={movements}
-                emergencyExitPhaseLine={formatBarkVtxoEmergencyExitPhaseLine(
-                  resolveBarkVtxoExitPhase({
-                    vtxoState: row.state,
-                    exitRow: exitRowByVtxoId.get(row.id) ?? null,
-                    graphNodes,
-                    unfundedParentTxids: unfundedParentTxidSet,
-                    sweptNodeKinds: sweptNodeKindsByVtxoId.get(row.id) ?? EMPTY_SWEPT_NODE_KINDS,
-                  }),
-                )}
+                {...barkVtxoExitPhaseProps({
+                  row,
+                  exitRow: exitRowByVtxoId.get(row.id) ?? null,
+                  graphNodes,
+                  unfundedParentTxids: unfundedParentTxidSet,
+                  sweepItems: sweepItemsByVtxoId.get(row.id) ?? EMPTY_SWEEP_ITEMS,
+                })}
               />
             ))}
           </div>
@@ -391,4 +385,36 @@ function formatBarkSyncedAt(isoTimestamp: string | null): string | null {
   const syncedAt = new Date(isoTimestamp)
   if (Number.isNaN(syncedAt.getTime())) return null
   return format(syncedAt, 'yyyy-MM-dd HH:mm')
+}
+
+function sweepItemsGroupedByVtxoId(
+  items: readonly BarkExitNodeSweepVtxoItem[],
+): Map<string, BarkExitNodeSweepVtxoItem[]> {
+  const grouped = new Map<string, BarkExitNodeSweepVtxoItem[]>()
+  for (const item of items) {
+    const sweepItems = grouped.get(item.vtxoId) ?? []
+    sweepItems.push(item)
+    grouped.set(item.vtxoId, sweepItems)
+  }
+  return grouped
+}
+
+function barkVtxoExitPhaseProps(params: {
+  row: BarkVtxoRow
+  exitRow: BarkEmergencyExitRow | null
+  graphNodes: readonly BarkExitGraphNode[] | null
+  unfundedParentTxids: ReadonlySet<string>
+  sweepItems: readonly BarkExitNodeSweepVtxoItem[]
+}): { emergencyExitPhaseLine: string | null; emergencyExitPhaseTitle: string | null } {
+  const phase = resolveBarkVtxoExitPhase({
+    vtxoState: params.row.state,
+    exitRow: params.exitRow,
+    graphNodes: params.graphNodes,
+    unfundedParentTxids: params.unfundedParentTxids,
+    sweepItems: params.sweepItems,
+  })
+  return {
+    emergencyExitPhaseLine: formatBarkVtxoEmergencyExitPhaseLine(phase),
+    emergencyExitPhaseTitle: formatBarkVtxoExitPhaseTitle(phase),
+  }
 }

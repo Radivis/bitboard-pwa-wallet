@@ -101,7 +101,10 @@ function sameItems(
   return (
     left.length === right.length &&
     left.every(
-      (item, index) => item.vtxoId === right[index]?.vtxoId && item.nodeKind === right[index]?.nodeKind,
+      (item, index) =>
+        item.vtxoId === right[index]?.vtxoId &&
+        item.nodeKind === right[index]?.nodeKind &&
+        item.spenderTxid === right[index]?.spenderTxid,
     )
   )
 }
