@@ -2,6 +2,8 @@ use std::collections::HashSet;
 
 use serde::Serialize;
 
+use crate::exit_address::ExitInputState;
+
 pub const BARK_EXIT_UNKNOWN_VTXO: &str = "bark_exit_unknown_vtxo";
 pub const BARK_EXIT_DUST: &str = "bark_exit_dust";
 pub const BARK_EXIT_ALREADY_EXITED: &str = "bark_exit_already_exited";
@@ -15,6 +17,95 @@ pub const BARK_EXIT_CLAIM_FEE: &str = "bark_exit_claim_fee";
 pub const BARK_EXIT_CLAIM_MISSING_INPUTS: &str = "bark_exit_claim_missing_inputs";
 pub const BARK_EXIT_NOT_CLAIMABLE: &str = "bark_exit_not_claimable";
 pub const BARK_EXIT_FAILED: &str = "bark_exit_failed";
+
+/// A live exit reserves its coin only while Bark still lists that coin as spendable
+/// and the exit recorded a movement. Locked, spent, and exited coins stay as they are.
+/// An exit with no movement cannot name a holder, so it is not locked.
+pub fn should_lock_exit_vtxo(state: ExitInputState, has_exit_movement: bool) -> bool {
+    has_exit_movement && state == ExitInputState::Spendable
+}
+
+fn exit_input_state(kind: bark::vtxo::VtxoStateKind) -> ExitInputState {
+    match kind {
+        bark::vtxo::VtxoStateKind::Spendable => ExitInputState::Spendable,
+        bark::vtxo::VtxoStateKind::Locked => ExitInputState::Locked,
+        bark::vtxo::VtxoStateKind::Spent => ExitInputState::Spent,
+        bark::vtxo::VtxoStateKind::Exited => ExitInputState::Exited,
+    }
+}
+
+fn wallet_error(err: impl std::fmt::Display) -> String {
+    format!("{err:#}")
+}
+
+/// Locks each live exit whose VTXO is still spendable, under that exit's movement.
+/// One exit at a time: each movement is its own holder, and a rejected holder
+/// fails the whole `lock_vtxos` call.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) async fn lock_spendable_exit_vtxos(wallet: &bark::Wallet) -> Result<(), String> {
+    let exits = wallet.exit_mgr().get_exit_vtxos().await;
+    for exit in exits {
+        let Some(movement_id) = exit.movement_id() else {
+            continue;
+        };
+        let Ok(vtxo) = wallet.get_vtxo_by_id(exit.id()).await else {
+            continue;
+        };
+        if !should_lock_exit_vtxo(exit_input_state(vtxo.state.kind()), true) {
+            continue;
+        }
+        wallet
+            .lock_vtxos(
+                std::iter::once(exit.id()),
+                Some(bark::vtxo::VtxoLockHolder::Movement { id: movement_id }),
+            )
+            .await
+            .map_err(wallet_error)?;
+    }
+    Ok(())
+}
+
+/// Releases the lock cancel left behind. Bark's cancel does not touch the VTXO.
+/// Only a movement lock whose history row is this exit and names this VTXO is released,
+/// so a send or refresh that holds the same coin keeps its lock.
+/// A retry is safe: cancel of an already-canceled exit succeeds, and unlock skips
+/// a coin that is no longer held by that movement.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) async fn release_exit_movement_lock(
+    wallet: &bark::Wallet,
+    vtxo_id: bark::ark::VtxoId,
+) -> Result<(), String> {
+    let Ok(vtxo) = wallet.get_vtxo_by_id(vtxo_id).await else {
+        return Ok(());
+    };
+    let movement_id = match &vtxo.state {
+        bark::vtxo::VtxoState::Locked {
+            holder: Some(bark::vtxo::VtxoLockHolder::Movement { id }),
+        } => *id,
+        _ => return Ok(()),
+    };
+    let movements = wallet.history().await.map_err(wallet_error)?;
+    let held_by_this_exit = movements.iter().any(|movement| {
+        movement.id == movement_id
+            && movement
+                .subsystem
+                .is_subsystem(bark::subsystem::Subsystem::EXIT)
+            && movement
+                .input_vtxos
+                .iter()
+                .any(|input_id| *input_id == vtxo_id)
+    });
+    if !held_by_this_exit {
+        return Ok(());
+    }
+    wallet
+        .unlock_vtxos(
+            std::iter::once(vtxo_id),
+            Some(bark::vtxo::VtxoLockHolder::Movement { id: movement_id }),
+        )
+        .await
+        .map_err(wallet_error)
+}
 
 /// True when `after` contains an exit id that was not in `before`.
 pub fn exit_ids_grew(before: &[impl ToString], after: &[impl ToString]) -> bool {
@@ -765,7 +856,7 @@ mod wasm {
                     "Bark did not mark any VTXO for exit",
                 ));
             }
-            Ok(())
+            super::lock_spendable_exit_vtxos(wallet).await
         })
         .await
     }
@@ -781,6 +872,7 @@ mod wasm {
     pub async fn bark_sync_exits() -> Result<String, JsValue> {
         run_with_open_wallet(async |wallet| {
             map_anyhow_exit(wallet.sync_exits().await)?;
+            super::lock_spendable_exit_vtxos(wallet).await?;
             json_string(&emergency_exit_rows(wallet).await?)
         })
         .await
@@ -830,6 +922,7 @@ mod wasm {
     #[wasm_bindgen]
     pub async fn bark_progress_emergency_exits() -> Result<String, JsValue> {
         run_with_open_wallet(async |wallet| {
+            super::lock_spendable_exit_vtxos(wallet).await?;
             map_anyhow_exit(wallet.exit_mgr().progress_exits(wallet).await)?;
             let requests =
                 cpfp_requests_needing_first_child(wallet.exit_mgr().exits_needing_cpfp().await)
@@ -875,7 +968,8 @@ mod wasm {
             let parsed_id = vtxo_id
                 .parse::<bark::ark::VtxoId>()
                 .map_err(|_| format_bark_exit_error(BARK_EXIT_UNKNOWN_VTXO, vtxo_id.trim()))?;
-            map_exit_error(wallet.exit_mgr().cancel_exit(parsed_id).await)
+            map_exit_error(wallet.exit_mgr().cancel_exit(parsed_id).await)?;
+            super::release_exit_movement_lock(wallet, parsed_id).await
         })
         .await
     }
@@ -1028,11 +1122,19 @@ mod tests {
         ExitGraphTxType, awaiting_delta_heights, chain_anchor_transaction,
         cpfp_requests_needing_first_child, emergency_exit_state_json,
         exit_graph_transaction_from_bitcoin, exit_graph_tx_types, exit_ids_grew,
-        fee_rate_from_sat_per_vb, fee_rate_sat_per_vb, merge_exit_graph,
+        fee_rate_from_sat_per_vb, fee_rate_sat_per_vb, merge_exit_graph, should_lock_exit_vtxo,
     };
-    use crate::exit_address::parse_signet_receive_address;
+    use crate::exit_address::{ExitInputState, parse_signet_receive_address};
 
     const MAINNET_ADDRESS: &str = "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4";
+
+    #[test]
+    fn a_spendable_exit_with_a_movement_is_locked_and_other_states_are_not() {
+        assert!(should_lock_exit_vtxo(ExitInputState::Spendable, true));
+        assert!(!should_lock_exit_vtxo(ExitInputState::Locked, true));
+        assert!(!should_lock_exit_vtxo(ExitInputState::Spent, true));
+        assert!(!should_lock_exit_vtxo(ExitInputState::Exited, true));
+    }
 
     #[test]
     fn awaiting_delta_heights_come_from_the_confirmed_exit() {

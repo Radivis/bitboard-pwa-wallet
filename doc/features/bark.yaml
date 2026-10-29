@@ -35,6 +35,7 @@ feature:
     - When locked sats are above zero, the dashboard headline is spendable plus locked and shows those two sub-lines
     - On mainnet with fiat denomination mode and a usable Bitcoin price, Bark balance amounts and board and exit amount entry use that fiat currency. Signet stays in bitcoin even when fiat mode is on
     - Exiting sats are coins in an emergency exit. They are read with spendable and locked sats after a successful Bark sync and are never added to the dashboard headline
+    - While a VTXO is in an emergency exit and Bark still lists it as spendable, it is locked to that exit's movement, so a send, a refresh, or a collaborative exit cannot select it. Cancel releases that lock. Once Bark marks the coin exited, that mark stays. An exit with no movement is not locked. Bark sync takes this lock before it refreshes coins, and start, progress, and exit sync take it as well
     - When exiting sats are above zero, the card shows the sub-lines with an Exiting line, even when locked sats are zero. A zero locked amount has no Locked line
     - Sub-lines use the detail amount size, not the headline size
     - The first failed sync of a session shows the error banner and no amount
@@ -566,6 +567,9 @@ feature:
         implemented_by:
           - frontend/src/components/bark/__tests__/StartBarkEmergencyExitConfirmModal.test.tsx
           - frontend/src/pages/wallet/__tests__/BarkEmergencyExitPage.test.tsx
+      - id: BARK-EMG-29
+        description: A spendable VTXO that has an exit movement is locked for that exit. A locked, spent, or exited VTXO is not locked again, and an exit without a movement is not locked. Cancel releases only that exit movement's lock
+        implemented_by: bitboard-bark/src/emergency_exit.rs
   pages:
     - BarkManagement:
         description: Bark entry on the Management page
@@ -629,7 +633,7 @@ feature:
           - Full-page Bark session loading or error screen while the session is not ready
         requirements:
           - Contracts BARK-EMG-02 through BARK-EMG-08
-          - Contracts BARK-EMG-10 through BARK-EMG-28
+          - Contracts BARK-EMG-10 through BARK-EMG-29
           - Contracts BARK-SESS-03 and BARK-SESS-04
           - Shown only when isBarkEnabled and the network is signet or mainnet
           - Progress is a button, and a successful Bark sync also progresses exits that are already started

@@ -413,10 +413,14 @@ pub async fn bark_last_revealed_key_index() -> Result<JsValue, JsValue> {
 ///
 /// `sync_exits` then runs so Bark's chain source can see a claim. That error
 /// does not fail this call.
+///
+/// Live emergency exits are locked before refresh, so a coin that is still
+/// spendable cannot be selected into a round.
 #[wasm_bindgen]
 pub async fn bark_sync() -> Result<String, JsValue> {
     let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
     let operation_result = async {
+        crate::emergency_exit::lock_spendable_exit_vtxos(&wallet).await?;
         wallet.refresh_server().await.map_err(bark_error)?;
         // Drive before `Wallet::sync` so this call sees a rejection. Sync drives
         // the same checkpoint again and only logs the failure.

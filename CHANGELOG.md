@@ -13,9 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+### Security
+
+## [0.3.7] - TBD
+
+### Changed
+
+- Bark VTXOs that are undergoing emergency exit are locked; spending, refreshing, or offboarding them requires the cancellation of the emergency exit
+
+### Fixed
+
 - Historical Mutinynet Arkade accounts that still pointed at the Signet operator proxy are rewritten to the Mutinynet proxy on upgrade
 
-### Security
 
 ## [0.3.6] - 2026-10-23
 
