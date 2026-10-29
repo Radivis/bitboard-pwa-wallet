@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { shortTxid } from '@/lib/bark/bark-exit-graph-layout'
 import type { BarkExitNodeSweepKind, BarkExitNodeSweepVtxoItem } from '@/lib/bark/bark-exit-seizure'
 import {
   barkVtxoIdsKeptWhenFinished,
@@ -250,7 +249,7 @@ describe('resolveBarkVtxoExitPhase', () => {
       ],
     })
     expect(formatBarkVtxoEmergencyExitPhaseLine(phase)).toBe(
-      `Emergency exit phase: anchor swept · ${shortTxid(anchorTxid)}`,
+      `Emergency exit phase: anchor swept · ${anchorTxid}`,
     )
     expect(formatBarkVtxoExitPhaseTitle(phase)).toBe(anchorTxid)
   })
@@ -265,7 +264,7 @@ describe('resolveBarkVtxoExitPhase', () => {
       ],
     })
     expect(formatBarkVtxoEmergencyExitPhaseLine(phase)).toBe(
-      `Emergency exit phase: leaf seized · ${shortTxid(earlierTxid)} · ${shortTxid(laterTxid)}`,
+      `Emergency exit phase: leaf seized · ${earlierTxid} · ${laterTxid}`,
     )
     expect(formatBarkVtxoExitPhaseTitle(phase)).toBe(`${earlierTxid} ${laterTxid}`)
     expect(phaseLine({ sweptNodeKinds: ['leaf'] })).toBe('Emergency exit phase: leaf seized')

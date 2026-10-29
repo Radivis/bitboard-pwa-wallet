@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, screen } from '@testing-library/react'
-import { shortTxid } from '@/lib/bark/bark-exit-graph-layout'
 import { useBarkExitChainNoticeStore } from '@/lib/bark/bark-exit-seizure-notice'
 import { BarkVtxoViewerPage } from '@/pages/wallet/BarkVtxoViewerPage'
 import { BARK_VTXO_VIEWER_PAGE_SIZE } from '@/lib/bark/bark-vtxo-viewer-display'
@@ -286,7 +285,7 @@ describe('BarkVtxoViewerPage', () => {
       'Emergency exit phase: waiting for timelock, 10 of 40 blocks',
     )
     expect(screen.getByTestId('bark-vtxo-exit-phase-swept:5')).toHaveTextContent(
-      `Emergency exit phase: anchor swept · ${shortTxid(anchorSpender)}`,
+      `Emergency exit phase: anchor swept · ${anchorSpender}`,
     )
     expect(screen.getByTestId('bark-vtxo-exit-phase-swept:5')).toHaveAttribute('title', anchorSpender)
     expect(screen.getByTestId('bark-vtxo-exit-phase-seized:3')).toHaveTextContent(

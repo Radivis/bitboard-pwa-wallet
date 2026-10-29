@@ -73,7 +73,7 @@ feature:
     - The VTXO list is the local Bark database. It is not an operator snapshot
     - Spent and Exited VTXOs stay hidden until the user shows them, except a live emergency exit, an anchor-swept coin, and a coin seized at a checkpoint, leaf, or internal node, which stay listed. Locked VTXOs stay visible
     - A VTXO card shows id, amount, state, a lock line that names the pending action or history label, expiry as blocks remaining plus an approximate date, and Registered only when the coin is registered
-    - A card ends with Emergency exit phase when the coin has a live exit, is claimed, or is named by an anchor sweep or a hop seizure. A coin with no exit omits that line. A sweep or seizure wins over a live exit. When more than one item names the coin, the phase prefers an internal node, then a leaf, then a checkpoint. The phase line names the spending transaction beside that node type when the winning item has one, and keeps the node type alone when the stored item has no transaction id. While processing, the copy is the frontier exit-tree phase, and it names how many non-anchor exit transactions are confirmed once one is. After confirmation, the copy is the timelock as blocks elapsed of the total. Until that exit tree has loaded, a processing coin reads processing
+    - A card ends with Emergency exit phase when the coin has a live exit, is claimed, or is named by an anchor sweep or a hop seizure. A coin with no exit omits that line. A sweep or seizure wins over a live exit. When more than one item names the coin, the phase prefers an internal node, then a leaf, then a checkpoint. The phase line names the full spending transaction id beside that node type when the winning item has one, and keeps the node type alone when the stored item has no transaction id. While processing, the copy is the frontier exit-tree phase, and it names how many non-anchor exit transactions are confirmed once one is. After confirmation, the copy is the timelock as blocks elapsed of the total. Until that exit tree has loaded, a processing coin reads processing
     - Search, state chips, sort, and pagination filter the loaded list and do not call the worker again
     - A Signet Bark policy address (tark1p) is a valid send recipient when isBarkEnabled and the network is signet
     - A Mainnet Bark policy address (ark1p) is a valid send recipient when isBarkEnabled and the network is mainnet
@@ -481,7 +481,7 @@ feature:
           transactions are confirmed once one is), waiting for timelock with blocks elapsed of the
           total after confirmation, ready to claim, claim in progress, claimed, anchor swept,
           internal node seized, leaf seized, or checkpoint seized. A sweep or seizure line names
-          the spending transaction beside that node type when the winning item has one, and keeps
+          the full spending transaction id beside that node type when the winning item has one, and keeps
           the node type alone when the stored item has no transaction id. A sweep or seizure wins
           over a live exit. When more than one item names the coin, the phase prefers an
           internal node, then a leaf, then a checkpoint. While the exit tree for a processing coin has not loaded, the

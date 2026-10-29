@@ -1,7 +1,6 @@
 import {
   BARK_EXIT_NODE_PHASE,
   resolveBarkExitNodePhase,
-  shortTxid,
   type BarkExitNodePhase,
 } from '@/lib/bark/bark-exit-graph-layout'
 import type {
@@ -288,7 +287,7 @@ function spenderTxidsOfPhase(phase: BarkVtxoExitPhase | null): readonly string[]
 
 function withSpenderTxids(label: string, spenderTxids: readonly string[]): string {
   if (spenderTxids.length === 0) return label
-  return `${label} · ${spenderTxids.map((spenderTxid) => shortTxid(spenderTxid)).join(' · ')}`
+  return `${label} · ${spenderTxids.join(' · ')}`
 }
 
 function withConfirmedCount(

@@ -94,7 +94,7 @@ export function BarkVtxoCard({
         ) : null}
         {emergencyExitPhaseLine != null ? (
           <div
-            className="text-xs text-muted-foreground"
+            className="break-all text-xs text-muted-foreground"
             data-testid={`bark-vtxo-exit-phase-${row.id}`}
             title={emergencyExitPhaseTitle ?? undefined}
           >
