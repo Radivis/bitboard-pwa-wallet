@@ -24,6 +24,8 @@ mod vtxo_list;
 
 #[cfg(any(test, target_arch = "wasm32", feature = "regtest-support"))]
 mod record_store;
+#[cfg(any(test, target_arch = "wasm32", feature = "regtest-support"))]
+mod recovery_open;
 
 #[cfg(any(test, target_arch = "wasm32"))]
 mod exit_seizure;

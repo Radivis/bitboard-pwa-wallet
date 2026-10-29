@@ -388,6 +388,7 @@ name = "bitboard-bark"
 version = "0.3.6"
 dependencies = [
  "anyhow",
+ "ark-lib",
  "async-trait",
  "bark-wallet",
  "base64 0.22.1",

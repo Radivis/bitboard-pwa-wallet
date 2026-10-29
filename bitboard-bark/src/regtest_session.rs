@@ -16,6 +16,7 @@ use bitcoin::{
 use crate::exit_address::spent_vtxo_ids_named_by_server;
 use crate::offboard_retirement::retire_offboard_if_server_spent_an_input;
 use crate::record_store::SharedRecordStore;
+use crate::recovery_open::RecoveryOpen;
 
 pub struct RegtestBarkWallet {
     wallet: bark::Wallet,
@@ -90,6 +91,7 @@ impl RegtestBarkWallet {
         config.server_address = server_url.to_owned();
         config.esplora_address = Some(esplora_url.to_owned());
         config.user_agent = Some(format!("bitboard/{}", env!("CARGO_PKG_VERSION")));
+        let recovery_open = RecoveryOpen::begin(&store);
         let persister = Arc::new(bark::persist::adaptor::StorageAdaptorWrapper::new(
             store.clone(),
         ));
@@ -105,11 +107,13 @@ impl RegtestBarkWallet {
                 lock_manager: Some(Box::new(
                     bark::lock_manager::memory::MemoryLockManager::new(),
                 )),
+                on_recovery_finished: Some(recovery_open.callback()),
                 ..bark::OpenWalletArgs::default()
             },
         )
         .await
         .map_err(|err| format!("{err:#}"))?;
+        recovery_open.finish(&store)?;
         Ok(Self {
             wallet,
             store,

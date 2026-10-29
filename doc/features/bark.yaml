@@ -9,6 +9,7 @@ feature:
   user_stories:
     - As a user with Bark enabled on signet or mainnet, I want the dashboard to show my Bark balance, including locked coins, on its own card
     - As a user, I want a newly activated wallet to show that wallet's Bark balance, not the previous wallet's balance or parked exit
+    - As a user restoring a wallet from its seed, I want a failed Bark recovery scan to leave that network's record empty, so the next open scans the recovery mailbox again
     - As a user, I want a failed Bark sync to keep the last shown spendable and locked amounts and show the rail sync error
     - As a user with Bark enabled on signet or mainnet, I want a sync to schedule a delegated refresh when coins are due, and to see whether that refresh was scheduled, is still pending, or could not be scheduled, without losing the spendable amount
     - As a user with Bark enabled on signet or mainnet, I want to know when to unlock this wallet again so Bark can refresh my VTXOs, because Bark has no delegate that refreshes them while the wallet is locked
@@ -109,6 +110,7 @@ feature:
     - That mid-call flush does not change lastSuccessfulSyncAt
     - A record envelope taken at that flush, opened again, still has the board checkpoint, so the next sync can resume it
     - A flush failure fails that write. The end-of-call flush still runs when the session is open
+    - The first open of an empty Bark record envelope does not save a Bark record when seed recovery fails or leaves unchecked VTXO ids. Retry opens that same empty envelope and scans again. A finished scan, including one that only leaves ids past the key gap, saves the record
   contracts:
     dashboard:
       - id: DASH-BARK-01
@@ -205,6 +207,12 @@ feature:
           Those same pages replace their content with the full-page Bark session error screen when
           open fails
         implemented_by: frontend/src/pages/wallet/__tests__/BarkVtxoViewerPage.test.tsx
+      - id: BARK-SESS-05
+        description: >
+          The first open of an empty envelope does not save a Bark record when seed recovery fails
+          or leaves unchecked ids. Retry opens that same empty envelope and scans again. A finished
+          scan, including one that only leaves ids past the key gap, saves the record
+        implemented_by: bitboard-bark/src/recovery_open.rs
     sync:
       - id: BARK-SYNC-01
         description: bark_balance is refused until this session has completed a successful sync

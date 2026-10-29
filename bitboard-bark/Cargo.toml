@@ -69,6 +69,8 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 tokio = { version = "1", features = ["macros", "rt", "sync"] }
 # Record-store unit tests. The product session stays wasm32.
 bark-wallet = { version = "0.7.1", default-features = false }
+# Recovery-report fixtures. Already in the bark-wallet graph.
+ark-lib = "0.7.1"
 anyhow = "1"
 async-trait = "0.1"
 postcard = { version = "1", features = ["use-std"] }

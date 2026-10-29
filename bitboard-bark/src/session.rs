@@ -7,6 +7,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::board::clear_prepared_board_funding;
 use crate::record_store::SharedRecordStore;
+use crate::recovery_open::RecoveryOpen;
 use crate::refresh::{
     BARK_REFRESH_EXIT_BLOCKED, BARK_REFRESH_IDLE, BARK_REFRESH_PENDING, BARK_REFRESH_WARNING,
     next_refresh_schedule_json, refresh_status_after_schedule, should_schedule_delegated_refresh,
@@ -157,7 +158,10 @@ async fn open_network_session(
     };
 
     install_record_store(store.clone())?;
-    let persister = Arc::new(bark::persist::adaptor::StorageAdaptorWrapper::new(store));
+    let recovery_open = RecoveryOpen::begin(&store);
+    let persister = Arc::new(bark::persist::adaptor::StorageAdaptorWrapper::new(
+        store.clone(),
+    ));
     let opened = bark::Wallet::open(
         network,
         seed,
@@ -170,6 +174,7 @@ async fn open_network_session(
             lock_manager: Some(Box::new(
                 bark::lock_manager::memory::MemoryLockManager::new(),
             )),
+            on_recovery_finished: Some(recovery_open.callback()),
             ..bark::OpenWalletArgs::default()
         },
     )
@@ -182,6 +187,11 @@ async fn open_network_session(
             return Err(format!("{err:#}"));
         }
     };
+    if let Err(err) = recovery_open.finish(&store) {
+        clear_record_store();
+        clear_session_network();
+        return Err(err);
+    }
 
     let fingerprint = wallet.fingerprint().to_string();
     if let Err(err) = store_wallet(wallet) {

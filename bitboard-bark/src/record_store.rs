@@ -35,6 +35,16 @@ struct RecordMap {
 pub(crate) struct SharedRecordStore {
     records: Arc<Mutex<RecordMap>>,
     durable_flush: Arc<Mutex<Option<DurableFlushHook>>>,
+    /// While set, a durable partition write stays in memory and does not call the hook.
+    ///
+    /// An empty-envelope open uses this so a recovery scan cannot stamp wallet
+    /// properties through an exit-row flush before the scan result is known.
+    durable_flush_suppressed: Arc<Mutex<bool>>,
+}
+
+/// Restores durable flushes when dropped.
+pub(crate) struct DeferredDurableFlush {
+    suppressed: Arc<Mutex<bool>>,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -68,6 +78,7 @@ impl SharedRecordStore {
         let store = Self {
             records: Arc::new(Mutex::new(RecordMap::default())),
             durable_flush: Arc::new(Mutex::new(None)),
+            durable_flush_suppressed: Arc::new(Mutex::new(false)),
         };
         #[cfg(target_arch = "wasm32")]
         store.adopt_process_flush_hook();
@@ -132,6 +143,36 @@ impl SharedRecordStore {
         });
     }
 
+    /// True when this store already has Bark wallet properties.
+    ///
+    /// An open of that store does not run seed recovery. An empty store does.
+    pub(crate) fn has_wallet_properties(&self) -> bool {
+        let Ok(records) = self.lock_records() else {
+            return true;
+        };
+        records
+            .partitions
+            .get(&partition::PROPERTIES)
+            .is_some_and(|rows| !rows.is_empty())
+    }
+
+    /// Drops every record without invoking the durable flush hook.
+    pub(crate) fn clear_records(&self) -> Result<(), String> {
+        let mut records = self.lock_records()?;
+        records.partitions.clear();
+        Ok(())
+    }
+
+    /// Keeps durable writes in memory until the guard is dropped.
+    pub(crate) fn defer_durable_flushes(&self) -> DeferredDurableFlush {
+        if let Ok(mut suppressed) = self.durable_flush_suppressed.lock() {
+            *suppressed = true;
+        }
+        DeferredDurableFlush {
+            suppressed: Arc::clone(&self.durable_flush_suppressed),
+        }
+    }
+
     pub(crate) fn export_encoded_envelope(&self) -> Result<String, String> {
         let records = self.lock_records()?;
         let envelope = BarkRecordEnvelope {
@@ -149,8 +190,15 @@ impl SharedRecordStore {
             .map_err(|_| "Bark record store lock is poisoned".to_owned())
     }
 
+    fn durable_flush_is_suppressed(&self) -> bool {
+        self.durable_flush_suppressed
+            .lock()
+            .map(|suppressed| *suppressed)
+            .unwrap_or(false)
+    }
+
     async fn flush_if_durable(&self, partition_id: u8) -> anyhow::Result<()> {
-        if !is_durable_partition(partition_id) {
+        if !is_durable_partition(partition_id) || self.durable_flush_is_suppressed() {
             return Ok(());
         }
         let Some(hook) = self.durable_flush_hook()? else {
@@ -186,6 +234,14 @@ pub(crate) fn set_process_durable_flush_hook(hook: js_sys::Function) {
     PROCESS_DURABLE_FLUSH_HOOK.with(|slot| {
         *slot.borrow_mut() = Some(hook);
     });
+}
+
+impl Drop for DeferredDurableFlush {
+    fn drop(&mut self) {
+        if let Ok(mut suppressed) = self.suppressed.lock() {
+            *suppressed = false;
+        }
+    }
 }
 
 fn is_durable_partition(partition_id: u8) -> bool {
