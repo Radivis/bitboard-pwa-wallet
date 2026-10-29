@@ -90,7 +90,7 @@ Focus is a 2px ring in the Neutral primary color. The ring does not change with 
 
 The main action control. `Type` is Primary, Secondary, or Tertiary. `Variant` is Default, Hover, Active, or Disabled. `show-icon` and an icon swap are optional.
 
-Primary is the filled accent. Secondary is an unfilled button with a 50% stroke and a secondary-accent label. Tertiary has no fill and no stroke; the label carries the state.
+Primary is the filled accent. Secondary is an unfilled button with a 50% stroke and a secondary-accent label. Tertiary has no fill. Its 1px stroke uses that state's label color, and it does not follow the network. Light uses 20% for default, hover, and active, and 10% when disabled. Dark uses 12% for default, hover, and active, and 6% when disabled.
 
 The set still contains a `Type=Hover` variant from before hover became a state. Use `Variant=Hover` on Primary, Secondary, or Tertiary.
 
@@ -102,7 +102,7 @@ A labeled button is at most 600px wide. Button, Nav-Button, Destructive-Button, 
 
 ### Destructive-Button
 
-A labeled action that can discard funds or local data. It is separate from Button, so the network accent does not recolor it. The fill is `special/destructive/background`: `#FF1500` at 50% by default, 42% on hover, and 34% when active. The 1px stroke stays `special/destructive` (`#FF1500`). The top-left and bottom-right corners are 20px. The top-right and bottom-left corners are square. The label, and an icon inside the button, use `text/regular/bright`. Light and dark share these colors. There is no disabled color; a disabled button stays the same colors at 50% opacity.
+A labeled action that can discard funds or local data. It is separate from Button, so the network accent does not recolor it. The fill is `special/destructive/background`: `#FF1500` at 50% by default, 42% on hover, and 34% when active. The 1px stroke stays `special/destructive` (`#FF1500`). The top-left and bottom-right corners are 20px. The top-right and bottom-left corners are 4px. The label, and an icon inside the button, use `text/regular/bright`. Light and dark share these colors. There is no disabled color; a disabled button stays the same colors at 50% opacity.
 
 An action that is only an icon does not use this button. Draw that icon in `special/destructive` and leave the control's existing chrome.
 

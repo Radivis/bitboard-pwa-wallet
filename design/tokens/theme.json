@@ -296,6 +296,48 @@
       }
     },
     "stroke": {
+      "tertiary": {
+        "default": {
+          "light": {
+            "hex": "#000000",
+            "alpha": 0.2
+          },
+          "dark": {
+            "hex": "#E4E5E7",
+            "alpha": 0.12
+          }
+        },
+        "hover": {
+          "light": {
+            "hex": "#1A1A1A",
+            "alpha": 0.2
+          },
+          "dark": {
+            "hex": "#D8D8D8",
+            "alpha": 0.12
+          }
+        },
+        "active": {
+          "light": {
+            "hex": "#333333",
+            "alpha": 0.2
+          },
+          "dark": {
+            "hex": "#CCCCCC",
+            "alpha": 0.12
+          }
+        },
+        "disabled": {
+          "light": {
+            "hex": "#6F6F6F",
+            "alpha": 0.1
+          },
+          "dark": {
+            "hex": "#919191",
+            "alpha": 0.06
+          }
+        }
+      },
       "card": {
         "light": {
           "hex": "#DFE8E8",
@@ -724,6 +766,10 @@
       "light": "Card component fill",
       "dark": "Card/Dark frame fill"
     },
+    "stroke/tertiary/default": "Figma stroke/tertiary/default. Label color at 20% in Light (#000000) and 12% in Dark (#E4E5E7).",
+    "stroke/tertiary/hover": "Figma stroke/tertiary/hover. text/button/hover at 20% in Light and 12% in Dark.",
+    "stroke/tertiary/active": "Figma stroke/tertiary/active. text/button/active at 20% in Light and 12% in Dark.",
+    "stroke/tertiary/disabled": "Figma stroke/tertiary/disabled. text/button/tertiary/disabled at 10% in Light and 6% in Dark.",
     "stroke/card": "Card and Card/Dark stroke, #DFE8E8 at 90% opacity in both themes.",
     "text/card/title": {
       "light": "Card title",

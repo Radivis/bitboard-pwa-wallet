@@ -54,7 +54,7 @@ describe('HowToGetBitcoinPage', () => {
     expect(locationCard.getByRole('button', { name: 'Bitcoin ATMs' })).toBeInTheDocument()
 
     const miningCard = cardFor('For truly dedicated people')
-    expect(miningCard.getByRole('button', { name: 'Mining' })).toHaveClass('border')
+    expect(miningCard.getByRole('button', { name: 'Mining' })).toHaveAttribute('data-type', 'tertiary')
 
     expect(screen.getAllByRole('link')).toHaveLength(1)
   })

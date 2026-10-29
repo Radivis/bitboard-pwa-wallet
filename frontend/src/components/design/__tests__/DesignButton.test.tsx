@@ -44,6 +44,23 @@ describe('DesignButton', () => {
     expect(screen.getByRole('button', { name: 'Keep' })).not.toHaveAttribute('data-selected')
   })
 
+  it('draws the tertiary stroke from the theme tokens', () => {
+    const { rerender } = render(<DesignButton appearance="tertiary">Later</DesignButton>)
+    const button = screen.getByRole('button', { name: 'Later' })
+    expect(button.className).toContain('border-[var(--design-stroke-tertiary)]')
+    expect(button.className).toContain('hover:border-[var(--design-stroke-tertiary-hover)]')
+    expect(button.className).toContain('active:border-[var(--design-stroke-tertiary-active)]')
+
+    rerender(
+      <DesignButton appearance="tertiary" disabled>
+        Later
+      </DesignButton>,
+    )
+    expect(screen.getByRole('button', { name: 'Later' }).className).toContain(
+      'disabled:border-[var(--design-stroke-tertiary-disabled)]',
+    )
+  })
+
   it('can be disabled', () => {
     render(
       <DesignButton appearance="tertiary" disabled>

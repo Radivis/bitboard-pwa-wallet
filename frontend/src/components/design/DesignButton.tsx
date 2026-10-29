@@ -13,7 +13,7 @@ const appearanceClassName: Record<DesignButtonAppearance, string> = {
   secondary:
     'border-[var(--design-accent-secondary-stroke)] bg-transparent text-[var(--design-accent-secondary)] hover:border-[var(--design-accent-secondary-stroke-hover)] hover:text-[var(--design-accent-secondary-hover)] active:border-[var(--design-accent-secondary-stroke-active)] active:text-[var(--design-accent-secondary-active)] disabled:border-[var(--design-accent-secondary-stroke-disabled)] disabled:text-[var(--design-accent-secondary-disabled)]',
   tertiary:
-    'bg-transparent text-[var(--design-text-regular)] hover:text-[var(--design-text-button-hover)] active:text-[var(--design-text-button-active)] disabled:text-[var(--design-text-button-tertiary-disabled)]',
+    'border border-[var(--design-stroke-tertiary)] bg-transparent text-[var(--design-text-regular)] hover:border-[var(--design-stroke-tertiary-hover)] hover:text-[var(--design-text-button-hover)] active:border-[var(--design-stroke-tertiary-active)] active:text-[var(--design-text-button-active)] disabled:border-[var(--design-stroke-tertiary-disabled)] disabled:text-[var(--design-text-button-tertiary-disabled)]',
 }
 
 const selectedSecondaryClassName =

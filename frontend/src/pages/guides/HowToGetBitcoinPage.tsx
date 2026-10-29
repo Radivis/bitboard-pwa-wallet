@@ -8,7 +8,6 @@ import { cn } from '@/lib/shared/utils'
 interface HowToGetBitcoinOption {
   label: string
   appearance: DesignButtonAppearance
-  className?: string
   to?: '/guides/how-to-get-bitcoin/exchanges'
 }
 
@@ -32,14 +31,14 @@ const HOW_TO_GET_BITCOIN_GROUPS: {
   },
   {
     title: 'For truly dedicated people',
-    options: [{ label: 'Mining', appearance: 'tertiary', className: 'border border-[#d1d1d1]' }],
+    options: [{ label: 'Mining', appearance: 'tertiary' }],
   },
 ]
 
 function HowToGetBitcoinChoice({ option }: { option: HowToGetBitcoinOption }) {
   if (option.to) {
     return (
-      <DesignButton asChild appearance={option.appearance} className={cn('w-full', option.className)}>
+      <DesignButton asChild appearance={option.appearance} className="w-full">
         <Link to={option.to}>
           <Play aria-hidden />
           {option.label}
@@ -51,7 +50,7 @@ function HowToGetBitcoinChoice({ option }: { option: HowToGetBitcoinOption }) {
   return (
     <DesignButton
       appearance={option.appearance}
-      className={cn('w-full', option.className)}
+      className="w-full"
       icon={<Play aria-hidden />}
     >
       {option.label}
