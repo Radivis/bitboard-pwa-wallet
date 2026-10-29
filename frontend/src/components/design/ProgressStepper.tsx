@@ -88,7 +88,6 @@ export function ProgressStepper({
     </nav>
   )
 }
-
 function StepControl({
   step,
   label,
@@ -103,3 +102,4 @@ function StepControl({
     </DesignNavButton>
   )
 }
+

@@ -35,4 +35,13 @@ describe('DesignNavToggle', () => {
     expect(button).toHaveAttribute('aria-expanded', 'false')
     expect(chevron(button)).toHaveClass('rotate-180')
   })
+
+  it('keeps the elevation fill on hover instead of replacing it with nav-button background', () => {
+    render(<DesignNavToggle expanded={false} />)
+    const button = screen.getByRole('button', { name: 'Show navigation' })
+    expect(button.className).toContain('--design-elevation-nav-bar')
+    expect(button.className).toContain('hover:shadow-[inset_0_0_0_999px_var(--design-nav-background-hover)]')
+    expect(button.className).not.toContain('hover:bg-[var(--design-nav-background-hover)]')
+  })
 })
+

@@ -4,8 +4,9 @@ import { designFocusClassName } from '@/components/design/design-classes'
 import { designNavBarSurfaceClassName } from '@/components/design/design-drawer-chrome'
 import { cn } from '@/lib/shared/utils'
 
+/** Tint on top of the glass fill — do not replace `background-color`, or the collapsed chip loses elevation. */
 const navToggleInteractionClassName =
-  'hover:bg-[var(--design-nav-background-hover)] active:bg-[var(--design-nav-background-active)]'
+  'hover:shadow-[inset_0_0_0_999px_var(--design-nav-background-hover)] active:shadow-[inset_0_0_0_999px_var(--design-nav-background-active)]'
 
 export function DesignNavToggle({
   expanded,

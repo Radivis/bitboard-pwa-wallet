@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import {
   createMemoryHistory,
   createRootRoute,
@@ -14,6 +15,7 @@ import {
   EXCHANGE_GUIDE_STEPS,
   parseExchangeGuideStep,
 } from '@/pages/guides/exchange-guide'
+import { GUIDE_STEP_NAV_ID } from '@/pages/guides/GuideStepNavChrome'
 
 function renderExchangeGuideStep(step: number) {
   const rootRoute = createRootRoute({ component: Outlet })
@@ -32,12 +34,14 @@ function renderExchangeGuideStep(step: number) {
 }
 
 describe('ExchangeGuideStepPage', () => {
-  it('shows the exchange comparison comic and the CoinGecko link on step 1', async () => {
+  it('shows the step indicator, comic above text, and nav stepper on step 1', async () => {
     renderExchangeGuideStep(1)
 
     expect(
       await screen.findByRole('heading', { name: 'Exchanges Step By Step' }),
     ).toBeInTheDocument()
+    expect(screen.getByText('Step 1/4')).toBeInTheDocument()
+    expect(screen.getByRole('progressbar', { name: 'Step 1 of 4' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Exchange Selection' })).toBeInTheDocument()
     expect(
       screen.getByText('Pick an exchange. The following site is a good starting point:'),
@@ -55,7 +59,21 @@ describe('ExchangeGuideStepPage', () => {
     expect(comic).toHaveAttribute('width', '1712')
     expect(comic).toHaveAttribute('height', '1152')
     expect(comic.className).toContain('w-[min(var(--exchange-comic-width),calc(100vw-32px))]')
+    expect(comic.className).toContain('rounded-[16px]')
     expect(comic.style.getPropertyValue('--exchange-comic-width')).toBe('1712px')
+
+    const stepHeading = screen.getByRole('heading', { name: 'Exchange Selection' })
+    expect(stepHeading.compareDocumentPosition(comic) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(
+      comic.compareDocumentPosition(screen.getByText('Pick an exchange. The following site is a good starting point:')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+
+    const textBlock = screen.getByText(
+      'Pick an exchange. The following site is a good starting point:',
+    ).parentElement
+    expect(textBlock?.className).toContain('px-0.5')
+
     expect(screen.getByRole('link', { name: 'Next step' })).toHaveAttribute(
       'href',
       '/guides/how-to-get-bitcoin/exchanges/2',
@@ -65,7 +83,43 @@ describe('ExchangeGuideStepPage', () => {
       '/guides/how-to-get-bitcoin/exchanges/4',
     )
     expect(screen.queryByRole('link', { name: 'Previous step' })).not.toBeInTheDocument()
+
+    const stepNav = document.getElementById(GUIDE_STEP_NAV_ID)
+    expect(stepNav).not.toBeNull()
+    expect(stepNav?.className).toContain('--design-elevation-nav-bar')
+    expect(stepNav?.className).not.toContain('pt-5')
+    const hideButton = screen.getByRole('button', { name: 'Hide navigation' })
+    expect(hideButton).toHaveAttribute('aria-controls', GUIDE_STEP_NAV_ID)
+    expect(stepNav?.contains(hideButton)).toBe(false)
+    expect(hideButton.className).toContain('bg-transparent')
+    expect(hideButton.style.bottom).toContain('--guide-step-nav-height')
   })
+
+  it('hides and shows the nav stepper with the toggle', async () => {
+    const user = userEvent.setup()
+    renderExchangeGuideStep(2)
+
+    const hideButton = await screen.findByRole('button', { name: 'Hide navigation' })
+    const stepNav = document.getElementById(GUIDE_STEP_NAV_ID)
+    expect(stepNav).not.toBeNull()
+    expect(stepNav).toHaveAttribute('aria-hidden', 'false')
+    expect(within(stepNav as HTMLElement).getByRole('link', { name: 'Next step' })).toBeInTheDocument()
+    expect(stepNav?.contains(hideButton)).toBe(false)
+
+    await user.click(hideButton)
+    const showButton = screen.getByRole('button', { name: 'Show navigation' })
+    expect(showButton.style.bottom).toBe('0.5rem')
+    expect(showButton.className).toContain('--design-elevation-nav-bar')
+    expect(showButton.className).not.toContain('bg-transparent')
+    expect(stepNav).toHaveAttribute('aria-hidden', 'true')
+    expect(stepNav?.className).toContain('translate-y-full')
+
+    await user.click(showButton)
+    const restoredHideButton = screen.getByRole('button', { name: 'Hide navigation' })
+    expect(restoredHideButton.className).toContain('bg-transparent')
+    expect(stepNav).toHaveAttribute('aria-hidden', 'false')
+  })
+
 
   it('shows each later step title, body, and comic', async () => {
     for (const content of EXCHANGE_GUIDE_STEPS.filter((entry) => entry.step > 1)) {
