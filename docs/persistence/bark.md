@@ -2,7 +2,7 @@
 
 Bark (Second's Ark wallet) is a **separate rail** from on-chain BDK and from Arkade. Balances and VTXOs come from the Bark server and `bitboard-bark` WASM. They are not added to the on-chain total or the Arkade total.
 
-For save/sync orchestration, see [wallet rail lifecycle](../wallet-rail-lifecycle.md).
+For save/sync orchestration, see [wallet rail lifecycle](../wallet-rail-lifecycle.md). For how an emergency exit is driven, see [Bark emergency exit](../bark-emergency-exit.md).
 
 ## Encrypted payload (`wallet_secrets`)
 

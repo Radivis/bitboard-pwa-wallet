@@ -503,6 +503,8 @@ feature:
         implemented_by:
           - frontend/src/lib/bark/__tests__/perform-bark-arkoor-send.test.ts
           - frontend/src/lib/bark/__tests__/send-flow-validation.test.ts
+    # How the wallet drives Bark's exit manager, including accepted reorg limits:
+    # docs/bark-emergency-exit.md
     emergency_exit:
       - id: BARK-EMG-01
         description: Management shows Emergency exit only when Bark is on and the network is signet or mainnet
