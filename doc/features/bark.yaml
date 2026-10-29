@@ -59,7 +59,7 @@ feature:
     - When the server rejects an exit input as already spent, that VTXO is recorded as spent and the offboard checkpoint is dropped, so a later exit cannot select it
     - A bark.offboard movement is labeled as a Bark exit
     - A bark.round movement whose kind is refresh is labeled Bark refresh, including a failed row
-    - After Wallet sync succeeds, a delegated refresh is scheduled only when no round is already pending and Bark's selector finds coins that must refresh
+    - After Wallet sync succeeds, a delegated refresh is scheduled only when no round is already pending and Bark's selector finds coins that must refresh. When that selector stays idle, spendable dust coins are consolidated with one delegated refresh when their total covers the refresh fee and a non-dust output. A dust set that cannot pay stays idle and does not warn. A refresh fee that would leave a sub-dust output stays idle. Any other failure to schedule that consolidation uses the existing refresh warning. A pending round, a scheduled must-refresh, a scheduling warning, or coins locked in an emergency exit skips dust consolidation. The same notice covers a scheduled or pending consolidation
     - A scheduling failure keeps the last shown spendable amount and does not use the rail sync error banner
     - The Bark card shows a notice when a refresh was scheduled or is still pending, a warning when scheduling failed, and a separate warning when coins that must refresh are locked in an emergency exit
     - After a successful sync with spendable VTXOs, the dashboard Bark card and the management Bark card show a yellow notice at the top of the card content with the approximate time to unlock this wallet again
@@ -291,6 +291,12 @@ feature:
         description: >
           A coin is inside Bark's must-refresh expiry window once the tip is past
           expiry minus the refresh threshold, including a coin that is already expired
+        implemented_by: bitboard-bark/src/refresh.rs
+      - id: BARK-SYNC-13
+        description: >
+          Dust consolidation is scheduled only from an idle maintenance refresh, and only
+          when the dust total meets the VTXO dust minimum. A refresh fee that leaves a
+          sub-dust output stays idle. Any other schedule error warns
         implemented_by: bitboard-bark/src/refresh.rs
     metadata:
       - id: BARK-META-01

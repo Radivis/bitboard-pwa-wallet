@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - If VTXOs during emergency exit are swept or seized, the spending txid is now surfaced
+- Implemented Bark dust VTXO consolidation
 
 ### Changed
 - Bark VTXOs that are undergoing emergency exit are locked; spending, refreshing, or offboarding them requires the cancellation of the emergency exit

@@ -10,7 +10,9 @@ use crate::record_store::SharedRecordStore;
 use crate::recovery_open::RecoveryOpen;
 use crate::refresh::{
     BARK_REFRESH_EXIT_BLOCKED, BARK_REFRESH_IDLE, BARK_REFRESH_PENDING, BARK_REFRESH_WARNING,
-    next_refresh_schedule_json, refresh_status_after_schedule, should_schedule_delegated_refresh,
+    dust_total_meets_vtxo_dust, next_refresh_schedule_json,
+    refresh_status_after_dust_consolidation, refresh_status_after_schedule,
+    should_schedule_delegated_refresh, should_schedule_dust_consolidation,
     vtxo_is_inside_refresh_expiry_window,
 };
 use crate::sync_gate::BarkSessionSyncGate;
@@ -418,7 +420,9 @@ pub async fn bark_last_revealed_key_index() -> Result<JsValue, JsValue> {
 /// After those steps, records an anchor sweep and a checkpoint seizure on the
 /// remaining coins, marks both spent, then schedules one delegated VTXO refresh
 /// when none is pending. Swept anchors are not refreshed: the server already
-/// claimed that output.
+/// claimed that output. When that refresh stays idle, spendable dust coins are
+/// consolidated with one delegated refresh when their total covers the refresh
+/// fee and a non-dust output. A set that cannot pay stays idle.
 /// A scheduling failure still marks this session synced and returns `warning`.
 /// The status is `idle`, `scheduled`, `pending`, or `warning`.
 ///
@@ -473,6 +477,10 @@ extern "C" {
 /// `Wallet::sync` already resumes a stored delegated round. Submit another
 /// only when that list is empty. Selector misses and schedule errors stay
 /// inside this status so the caller can still treat the sync as successful.
+///
+/// An idle maintenance refresh then consolidates spendable dust, when that
+/// set can pay for one output. A pending round, a stored refresh, a warning,
+/// or an exit block keeps its status and does not open a second round.
 async fn delegated_refresh_status(wallet: &bark::Wallet) -> String {
     let pending_round_count = match wallet.pending_round_states().await {
         Ok(states) => states.len(),
@@ -486,6 +494,14 @@ async fn delegated_refresh_status(wallet: &bark::Wallet) -> String {
     if !should_schedule_delegated_refresh(pending_round_count) {
         return BARK_REFRESH_PENDING.to_owned();
     }
+    let maintenance_status = maintenance_refresh_status(wallet).await;
+    if !should_schedule_dust_consolidation(&maintenance_status) {
+        return maintenance_status;
+    }
+    schedule_dust_consolidation(wallet).await
+}
+
+async fn maintenance_refresh_status(wallet: &bark::Wallet) -> String {
     match wallet.maybe_schedule_maintenance_refresh_delegated().await {
         Ok(scheduled) => {
             let status = refresh_status_after_schedule(scheduled.is_some());
@@ -502,6 +518,56 @@ async fn delegated_refresh_status(wallet: &bark::Wallet) -> String {
             BARK_REFRESH_WARNING.to_owned()
         }
     }
+}
+
+/// One delegated refresh of every spendable coin below the VTXO dust limit.
+/// A total that cannot pay, or a fee that would leave a sub-dust output, stays idle.
+async fn schedule_dust_consolidation(wallet: &bark::Wallet) -> String {
+    let dust_vtxos = match spendable_dust_vtxos(wallet).await {
+        Ok(vtxos) => vtxos,
+        Err(err) => {
+            console_warn(&format!(
+                "Bark could not read spendable VTXOs for dust consolidation: {err:#}"
+            ));
+            return BARK_REFRESH_WARNING.to_owned();
+        }
+    };
+    let dust_can_pay =
+        dust_total_meets_vtxo_dust(dust_vtxos.iter().map(|vtxo| vtxo.amount().to_sat()));
+    if !dust_can_pay {
+        return BARK_REFRESH_IDLE.to_owned();
+    }
+    match wallet.refresh_vtxos_delegated(dust_vtxos).await {
+        Ok(round) => refresh_status_after_dust_consolidation(Ok(round.is_some())).to_owned(),
+        Err(err) => {
+            let status = refresh_status_after_dust_consolidation(Err(&err));
+            warn_about_dust_consolidation(&err, status);
+            status.to_owned()
+        }
+    }
+}
+
+fn warn_about_dust_consolidation(err: &anyhow::Error, status: &str) {
+    if status == BARK_REFRESH_IDLE {
+        console_warn(&format!(
+            "Bark left dust unconsolidated because the refresh fee would leave a sub-dust output: {err:#}"
+        ));
+        return;
+    }
+    console_warn(&format!(
+        "Bark could not schedule dust consolidation: {err:#}"
+    ));
+}
+
+async fn spendable_dust_vtxos(
+    wallet: &bark::Wallet,
+) -> Result<Vec<bark::WalletVtxo>, anyhow::Error> {
+    let spendable_vtxos = wallet.spendable_vtxos().await?;
+    let dust_limit = bark::ark::vtxo::VTXO_DUST;
+    Ok(spendable_vtxos
+        .into_iter()
+        .filter(|vtxo| vtxo.amount() < dust_limit)
+        .collect())
 }
 
 /// A coin locked by its emergency-exit movement is invisible to Bark's refresh
