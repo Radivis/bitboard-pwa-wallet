@@ -1,4 +1,5 @@
 import { isE2eBarkRegtestControlEnabled } from '@/lib/bark/e2e/bark-regtest-env'
+import { barkEmergencyExitBlocksAmount } from '@/lib/bark/emergency-exit-blocks-action'
 import { isLightningSendMode } from '@/lib/lightning/send-flow-validation'
 import { isValidSendAmountSats } from '@/lib/wallet/send/send-amount-validation'
 import type { NetworkMode } from '@/stores/walletStore'
@@ -63,6 +64,7 @@ export function canBuildBarkSend({
   normalizedRecipient,
   amountSats,
   barkSpendableSats,
+  barkExitingSats,
   barkFeeSats,
   networkMode,
 }: {
@@ -70,6 +72,7 @@ export function canBuildBarkSend({
   normalizedRecipient: string
   amountSats: number
   barkSpendableSats: number | null
+  barkExitingSats: number | null
   barkFeeSats: number
   networkMode: NetworkMode
 }): boolean {
@@ -78,7 +81,12 @@ export function canBuildBarkSend({
   if (!isBarkPolicyAddressForNetwork(normalizedRecipient, networkMode)) return false
   if (!isValidSendAmountSats(amountSats)) return false
   if (!Number.isSafeInteger(barkFeeSats) || barkFeeSats < 0) return false
-  return amountSats + barkFeeSats <= barkSpendableSats
+  if (amountSats + barkFeeSats <= barkSpendableSats) return true
+  return barkEmergencyExitBlocksAmount({
+    amountSats: amountSats + barkFeeSats,
+    spendableSats: barkSpendableSats,
+    exitingSats: barkExitingSats,
+  })
 }
 
 export function sendRecipientFieldLabel({

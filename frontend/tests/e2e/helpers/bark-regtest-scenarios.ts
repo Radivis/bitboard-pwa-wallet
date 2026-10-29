@@ -135,7 +135,7 @@ export async function openSecondBarkRegtestPage(browser: Browser): Promise<{
   }
 }
 
-async function prepareRecipientBarkWallet(page: Page): Promise<void> {
+export async function prepareRecipientBarkWallet(page: Page): Promise<void> {
   const mnemonic = generateMnemonic(englishWordlist, 128)
   await importWalletViaUI(page, mnemonic, TEST_PASSWORD)
   await enableRegtestDeveloperMode(page)

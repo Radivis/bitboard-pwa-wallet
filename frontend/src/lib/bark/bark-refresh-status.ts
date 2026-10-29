@@ -1,4 +1,12 @@
-export const BARK_REFRESH_STATUSES = ['idle', 'scheduled', 'pending', 'warning'] as const
+import { BARK_EMERGENCY_EXIT_BLOCKS_ACTION } from '@/lib/bark/emergency-exit-blocks-action'
+
+export const BARK_REFRESH_STATUSES = [
+  'idle',
+  'scheduled',
+  'pending',
+  'warning',
+  'exit_blocked',
+] as const
 
 export type BarkRefreshStatus = (typeof BARK_REFRESH_STATUSES)[number]
 
@@ -56,6 +64,9 @@ export function barkRefreshNoticeText(status: BarkRefreshStatus): string | null 
 export function barkRefreshWarningText(status: BarkRefreshStatus): string | null {
   if (status === 'warning') {
     return 'Bark could not schedule a refresh.'
+  }
+  if (status === 'exit_blocked') {
+    return BARK_EMERGENCY_EXIT_BLOCKS_ACTION
   }
   return null
 }

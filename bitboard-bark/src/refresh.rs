@@ -9,6 +9,18 @@ pub const BARK_REFRESH_IDLE: &str = "idle";
 pub const BARK_REFRESH_SCHEDULED: &str = "scheduled";
 pub const BARK_REFRESH_PENDING: &str = "pending";
 pub const BARK_REFRESH_WARNING: &str = "warning";
+pub const BARK_REFRESH_EXIT_BLOCKED: &str = "exit_blocked";
+
+/// True when `tip_height` is inside Bark's must-refresh expiry window.
+/// Bark refreshes once the tip is past `expiry_height - refresh_expiry_threshold`.
+/// An already-expired coin is inside that window.
+pub fn vtxo_is_inside_refresh_expiry_window(
+    tip_height: u32,
+    expiry_height: u32,
+    refresh_expiry_threshold: u32,
+) -> bool {
+    tip_height > expiry_height.saturating_sub(refresh_expiry_threshold)
+}
 
 /// Pending rounds already cover the coins Bark would refresh. Skip scheduling.
 pub fn should_schedule_delegated_refresh(pending_round_count: usize) -> bool {
@@ -53,9 +65,9 @@ struct NextRefreshScheduleJson {
 #[cfg(test)]
 mod tests {
     use super::{
-        BARK_REFRESH_IDLE, BARK_REFRESH_PENDING, BARK_REFRESH_SCHEDULED, BARK_REFRESH_WARNING,
-        next_refresh_schedule_json, refresh_status_after_schedule,
-        should_schedule_delegated_refresh,
+        BARK_REFRESH_EXIT_BLOCKED, BARK_REFRESH_IDLE, BARK_REFRESH_PENDING, BARK_REFRESH_SCHEDULED,
+        BARK_REFRESH_WARNING, next_refresh_schedule_json, refresh_status_after_schedule,
+        should_schedule_delegated_refresh, vtxo_is_inside_refresh_expiry_window,
     };
 
     #[test]
@@ -106,5 +118,32 @@ mod tests {
         assert_eq!(BARK_REFRESH_SCHEDULED, "scheduled");
         assert_eq!(BARK_REFRESH_PENDING, "pending");
         assert_eq!(BARK_REFRESH_WARNING, "warning");
+        assert_eq!(BARK_REFRESH_EXIT_BLOCKED, "exit_blocked");
+    }
+
+    #[test]
+    fn the_refresh_expiry_window_includes_a_coin_near_or_past_expiry() {
+        let expiry_height = 20;
+        let threshold = 12;
+        assert!(!vtxo_is_inside_refresh_expiry_window(
+            8,
+            expiry_height,
+            threshold
+        ));
+        assert!(vtxo_is_inside_refresh_expiry_window(
+            9,
+            expiry_height,
+            threshold
+        ));
+        assert!(vtxo_is_inside_refresh_expiry_window(
+            25,
+            expiry_height,
+            threshold
+        ));
+        assert!(!vtxo_is_inside_refresh_expiry_window(
+            expiry_height,
+            expiry_height,
+            0
+        ));
     }
 }

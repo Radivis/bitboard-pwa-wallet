@@ -52,6 +52,11 @@ interface Window {
   __E2E_ARKADE__?: import('@/lib/arkade/e2e/e2e-arkade-mock-control').E2eArkadeMockControl
   /** DEV + `VITE_E2E_ARKADE_REGTEST`: export boarded-wallet fixture for Rust regtest. */
   __e2eExportBoardedWalletSdkPersistenceJson?: () => Promise<string>
+  /**
+   * DEV + `VITE_E2E_BARK_REGTEST`: when true, a Bark sync does not progress live
+   * emergency exits. The refresh regtest test sets this so it can still cancel.
+   */
+  __bitboardE2eSkipBarkExitSettle?: boolean
   /** DEV + `VITE_E2E_BARK_REGTEST`: mnemonic and Bark record envelope after a board flush. */
   __e2eExportBoardedBarkFixture?: () => Promise<
     import('@/lib/bark/e2e/e2e-bark-regtest-control').BarkBoardedFixture

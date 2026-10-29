@@ -6,8 +6,16 @@
  *
  * Contracts: E2E-BARK-REG-04, E2E-BARK-REG-05, and E2E-BARK-REG-07.
  */
-import { type Locator, type Page, test, expect } from '@playwright/test'
+import { type Page, test, expect } from '@playwright/test'
+import { BARK_EMERGENCY_EXIT_BLOCKS_ACTION } from '@/lib/bark/emergency-exit-blocks-action'
 import { boardRegtestBarkWallet } from './helpers/bark-regtest-scenarios'
+import {
+  cancelEmergencyExits,
+  clickEmergencyExitAction,
+  confirmEmergencyExitStart,
+  openEmergencyExitPage,
+  startEmergencyExitOfWholeWallet,
+} from './helpers/bark-emergency-exit'
 import {
   expectBarkRailSyncFails,
   readDashboardBarkSpendableSats,
@@ -40,6 +48,10 @@ test.describe('Bark exit flows regtest @bark-exit-regtest', () => {
 
   test('E2E-BARK-REG-04 collaborative exit of part and then the rest', async ({ page }) => {
     await boardRegtestBarkWallet(page)
+    await startEmergencyExitOfWholeWallet(page)
+    await expectOffboardReviewBlockedByEmergencyExit(page, PARTIAL_EXIT_SATS)
+    await cancelEmergencyExits(page)
+    await goToWalletTab(page, 'Dashboard')
     const spendableBeforePartialExit = await readDashboardBarkSpendableSats(page)
     await offboardBarkAmount(page, PARTIAL_EXIT_SATS)
     await syncUntilBarkSpendableDrops(page, spendableBeforePartialExit)
@@ -88,14 +100,6 @@ async function reopenWalletInFreshBarkSession(page: Page): Promise<void> {
   await waitForBarkLoadReady(page)
 }
 
-async function openEmergencyExitPage(page: Page): Promise<void> {
-  await goToWalletTab(page, 'Management')
-  await page.getByTestId('bark-emergency-exit-link').click()
-  await expect(page.getByRole('heading', { name: 'Bark emergency exit' })).toBeVisible({
-    timeout: 30_000,
-  })
-}
-
 async function startEmergencyExitOfOneVtxo(page: Page): Promise<void> {
   await openEmergencyExitPage(page)
   const vtxo = page.locator('[data-testid^="bark-emergency-exit-vtxo-"]').first()
@@ -108,17 +112,6 @@ async function startEmergencyExitOfOneVtxo(page: Page): Promise<void> {
   })
   await page.getByTestId('bark-emergency-exit-start').click()
   await confirmEmergencyExitStart(page)
-}
-
-/** Acknowledge the loss-of-funds and fee risks, then confirm. Start runs only after that. */
-async function confirmEmergencyExitStart(page: Page): Promise<void> {
-  await expect(page.getByTestId('bark-emergency-exit-start-confirm-modal')).toBeVisible()
-  await page.getByTestId('bark-emergency-exit-start-ack').check()
-  await clickEmergencyExitAction(page, {
-    label: 'Emergency exit start',
-    buttonTestId: 'bark-emergency-exit-start-confirm',
-    success: page.getByText('Emergency exit started.'),
-  })
 }
 
 async function progressEmergencyExitUntilClaimable(page: Page): Promise<void> {
@@ -212,38 +205,18 @@ async function fundConfirmedCoinsForExitChild(page: Page): Promise<void> {
   await runDashboardSyncUntilIdle(page)
 }
 
-type EmergencyExitAction = {
-  label: string
-  buttonTestId: string
-  success: Locator
-}
-
-/** Clicks one emergency-exit control and fails with the error toast text instead of a timeout. */
-async function clickEmergencyExitAction(page: Page, action: EmergencyExitAction): Promise<void> {
-  const notes: string[] = []
-  const onConsole = (message: { type: () => string; text: () => string }) => {
-    const type = message.type()
-    if (type === 'error' || type === 'warning') notes.push(`${type}: ${message.text()}`)
-  }
-  page.on('console', onConsole)
-  const errorToast = page.locator('[data-sonner-toast][data-type="error"]')
-  const errorsBefore = await errorToast.count()
-  await page.getByTestId(action.buttonTestId).click()
-  const failed = errorToast.nth(errorsBefore)
-  try {
-    await expect(action.success.or(failed).first()).toBeVisible({ timeout: 120_000 })
-  } catch (err) {
-    throw new Error(
-      `${action.label} showed neither its result nor an error. Console: ${notes.join(' | ') || '(none)'}`,
-      { cause: err },
-    )
-  } finally {
-    page.off('console', onConsole)
-  }
-  if (await failed.isVisible()) {
-    const message = (await failed.innerText()).replace(/\s+/g, ' ').trim()
-    throw new Error(`${action.label} failed: ${message}`)
-  }
+async function expectOffboardReviewBlockedByEmergencyExit(
+  page: Page,
+  amountSats: number,
+): Promise<void> {
+  await goToWalletTab(page, 'Dashboard')
+  await page.getByTestId('dashboard-bark-offboard-link').click()
+  await expect(page.getByTestId('bark-offboard-destination')).toHaveText(/bcrt1/)
+  await page.getByTestId('bark-offboard-amount').fill(String(amountSats))
+  await page.getByTestId('bark-offboard-review-amount').click()
+  await expect(page.getByTestId('bark-offboard-review-error')).toHaveText(
+    BARK_EMERGENCY_EXIT_BLOCKS_ACTION,
+  )
 }
 
 async function offboardBarkAmount(page: Page, amountSats: number): Promise<number> {

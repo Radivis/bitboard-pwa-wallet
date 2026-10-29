@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useBarkLoadLifecycleSnapshot } from '@/hooks/useBarkLoadLifecycleSnapshot'
 import { isBarkActiveForNetworkMode } from '@/lib/bark/bark-utils'
+import { e2eBarkSyncSettlesExits } from '@/lib/bark/e2e/bark-regtest-env'
 import { orchestrateBarkSync } from '@/lib/wallet/lifecycle/bark-sync-lifecycle-orchestrator'
 import { usePeriodicSyncRefetchInterval } from '@/lib/wallet/periodic-sync/usePeriodicSyncRefetchInterval'
 import { useWalletStore } from '@/stores/walletStore'
@@ -31,6 +32,7 @@ export function useBarkPeriodicSyncQuery(): void {
         walletId: activeWalletId,
         networkMode,
         throwOnError: false,
+        settleExits: e2eBarkSyncSettlesExits(),
       })
       return 'completed'
     },

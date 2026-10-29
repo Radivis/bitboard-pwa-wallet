@@ -8,7 +8,12 @@
  * Contract: E2E-BARK-REG-06.
  */
 import { test, expect } from '@playwright/test'
+import { BARK_EMERGENCY_EXIT_BLOCKS_ACTION } from '@/lib/bark/emergency-exit-blocks-action'
 import { boardRegtestBarkWallet } from './helpers/bark-regtest-scenarios'
+import {
+  cancelEmergencyExits,
+  startEmergencyExitOfWholeWallet,
+} from './helpers/bark-emergency-exit'
 import {
   readDashboardBarkSpendableSats,
   restartCaptaind,
@@ -36,8 +41,25 @@ test.describe('Bark refresh regtest @bark-refresh-regtest', () => {
     await boardRegtestBarkWallet(page)
     await goToWalletTab(page, 'Dashboard')
     const spendableBefore = await readDashboardBarkSpendableSats(page)
-    const notice = page.getByTestId('dashboard-bark-refresh-notice')
+    await startEmergencyExitOfWholeWallet(page)
+    // A normal Bark sync also broadcasts a live exit, which can end the cancel
+    // window. This attempt only needs the refresh status.
+    await page.evaluate(() => {
+      window.__bitboardE2eSkipBarkExitSettle = true
+    })
+    await mineRegtestBlocks(BLOCKS_TO_REACH_REFRESH_THRESHOLD)
+    await triggerBarkRailSync(page)
+    const warning = page.getByTestId('dashboard-bark-refresh-warning')
+    await expect(warning).toBeVisible({ timeout: 30_000 })
+    await expect(warning).toHaveText(BARK_EMERGENCY_EXIT_BLOCKS_ACTION)
+    await expect(page.getByTestId('dashboard-bark-refresh-notice')).toHaveCount(0)
+    await page.evaluate(() => {
+      window.__bitboardE2eSkipBarkExitSettle = false
+    })
+    await cancelEmergencyExits(page)
 
+    await goToWalletTab(page, 'Dashboard')
+    const notice = page.getByTestId('dashboard-bark-refresh-notice')
     for (let mined = 0; mined < BLOCKS_TO_REACH_REFRESH_THRESHOLD; mined += 1) {
       await triggerBarkRailSync(page)
       if (await notice.isVisible()) break

@@ -1,5 +1,9 @@
+import {
+  BARK_EMERGENCY_EXIT_BLOCKS_ACTION,
+  barkEmergencyExitBlocksAmount,
+} from '@/lib/bark/emergency-exit-blocks-action'
 import { parseBarkBoardAmountSats } from '@/lib/bark/review-bark-board'
-import type { BarkOffboardFeeEstimate } from '@/workers/bark-api'
+import type { BarkBalanceParts, BarkOffboardFeeEstimate } from '@/workers/bark-api'
 
 export type BarkOffboardMode = 'amount' | 'all'
 
@@ -15,6 +19,7 @@ export type BarkOffboardReview = {
 export type ReviewBarkOffboardDeps = {
   estimateSendOnchain: (address: string, amountSats: number) => Promise<BarkOffboardFeeEstimate>
   estimateOffboardAll: (address: string) => Promise<BarkOffboardFeeEstimate>
+  readBalance: () => Promise<Pick<BarkBalanceParts, 'spendableSats' | 'exitingSats'>>
 }
 
 export { parseBarkBoardAmountSats as parseBarkOffboardAmountSats }
@@ -49,6 +54,16 @@ export async function reviewBarkOffboardAmount(
   input: { destinationAddress: string; amountSats: number },
 ): Promise<BarkOffboardReview> {
   const destinationAddress = requireDestination(input.destinationAddress)
+  const balance = await deps.readBalance()
+  if (
+    barkEmergencyExitBlocksAmount({
+      amountSats: input.amountSats,
+      spendableSats: balance.spendableSats,
+      exitingSats: balance.exitingSats,
+    })
+  ) {
+    throw new Error(BARK_EMERGENCY_EXIT_BLOCKS_ACTION)
+  }
   const estimate = await deps.estimateSendOnchain(destinationAddress, input.amountSats)
   return reviewFromEstimate('amount', destinationAddress, input.amountSats, estimate)
 }

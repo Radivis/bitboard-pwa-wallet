@@ -117,6 +117,7 @@ vi.mock('@/lib/bark/bark-offboard-live-deps', () => ({
   barkOffboardReviewDeps: () => ({
     estimateSendOnchain: vi.fn(),
     estimateOffboardAll: vi.fn(),
+    readBalance: vi.fn(),
   }),
   barkOffboardPerformDeps: () => ({
     sendOnchain: vi.fn(),

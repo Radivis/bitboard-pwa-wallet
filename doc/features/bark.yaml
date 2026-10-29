@@ -36,6 +36,7 @@ feature:
     - On mainnet with fiat denomination mode and a usable Bitcoin price, Bark balance amounts and board and exit amount entry use that fiat currency. Signet stays in bitcoin even when fiat mode is on
     - Exiting sats are coins in an emergency exit. They are read with spendable and locked sats after a successful Bark sync and are never added to the dashboard headline
     - While a VTXO is in an emergency exit and Bark still lists it as spendable, it is locked to that exit's movement, so a send, a refresh, or a collaborative exit cannot select it. Cancel releases that lock. Once Bark marks the coin exited, that mark stays. An exit with no movement is not locked. Bark sync takes this lock before it refreshes coins, and start, progress, and exit sync take it as well
+    - A send, a collaborative-exit review, or a refresh that cannot use coins because they are locked in an emergency exit says "This cannot succeed until you cancel the emergency exit." A send that still fits in spendable proceeds. Exit entire balance stays disabled when spendable is zero. That refresh warning is separate from a scheduling failure
     - When exiting sats are above zero, the card shows the sub-lines with an Exiting line, even when locked sats are zero. A zero locked amount has no Locked line
     - Sub-lines use the detail amount size, not the headline size
     - The first failed sync of a session shows the error banner and no amount
@@ -59,7 +60,7 @@ feature:
     - A bark.round movement whose kind is refresh is labeled Bark refresh, including a failed row
     - After Wallet sync succeeds, a delegated refresh is scheduled only when no round is already pending and Bark's selector finds coins that must refresh
     - A scheduling failure keeps the last shown spendable amount and does not use the rail sync error banner
-    - The Bark card shows a notice when a refresh was scheduled or is still pending, and a distinct warning when scheduling failed
+    - The Bark card shows a notice when a refresh was scheduled or is still pending, a warning when scheduling failed, and a separate warning when coins that must refresh are locked in an emergency exit
     - After a successful sync with spendable VTXOs, the dashboard Bark card and the management Bark card show a yellow notice at the top of the card content with the approximate time to unlock this wallet again
     - That time is the start of the next refresh period (Bark's next required refresh height), estimated from the sync time and the average block interval of the open network
     - When the refresh period has already started, the notice asks the user to keep the wallet unlocked and synced instead of naming a time
@@ -180,6 +181,9 @@ feature:
         implemented_by:
           - crypto/tests/p2a_cpfp_tests.rs
           - frontend/src/components/__tests__/TransactionItem.test.tsx
+      - id: DASH-BARK-20
+        description: When refresh is blocked because coins are locked in an emergency exit, the card shows that warning and not the refresh notice or the rail sync error banner
+        implemented_by: frontend/src/components/wallet/__tests__/BarkDashboardBalance.test.tsx
     session_screens:
       - id: BARK-SESS-01
         description: >
@@ -269,6 +273,11 @@ feature:
           - frontend/src/lib/wallet/lifecycle/__tests__/bark-load-lifecycle-orchestrator.test.ts
           - frontend/src/lib/bark/__tests__/bark-exit-seizure-notice.test.ts
           - frontend/src/components/bark/__tests__/BarkExitSeizureBanner.test.tsx
+      - id: BARK-SYNC-12
+        description: >
+          A coin is inside Bark's must-refresh expiry window once the tip is past
+          expiry minus the refresh threshold, including a coin that is already expired
+        implemented_by: bitboard-bark/src/refresh.rs
     metadata:
       - id: BARK-META-01
         description: A successful sync stamp keeps the fingerprint and receive index and writes an ISO timestamp
@@ -409,6 +418,9 @@ feature:
         implemented_by:
           - frontend/src/lib/fiat/__tests__/sats-or-fiat-amount.test.ts
           - frontend/src/pages/wallet/__tests__/BarkOffboardPage.test.tsx
+      - id: BARK-EXIT-14
+        description: Review amount says the emergency exit must be canceled, and does not estimate, when spendable coins cannot cover the amount and an emergency exit is holding some
+        implemented_by: frontend/src/lib/bark/__tests__/review-bark-offboard.test.ts
     vtxo_list:
       - id: BARK-VTX-01
         description: Management shows List VTXOs only when Bark is on and the network is signet or mainnet
@@ -462,8 +474,13 @@ feature:
         description: A peeked Signet Bark receive address is a Bark send destination and is not an Arkade address
         implemented_by: frontend/src/lib/bark/__tests__/send-flow-validation.test.ts
       - id: BARK-SEND-02
-        description: A Bark send validates, estimates, sends, then syncs and reads the new spendable balance
+        description: A Bark send validates, reads the balance, estimates, sends, then syncs and reads the new spendable balance
         implemented_by: frontend/src/lib/bark/__tests__/perform-bark-arkoor-send.test.ts
+      - id: BARK-SEND-03
+        description: When the amount does not fit in spendable coins and an emergency exit is holding some, Send stays enabled and the payment fails with the sentence that the emergency exit must be canceled, without estimating or sending
+        implemented_by:
+          - frontend/src/lib/bark/__tests__/perform-bark-arkoor-send.test.ts
+          - frontend/src/lib/bark/__tests__/send-flow-validation.test.ts
     emergency_exit:
       - id: BARK-EMG-01
         description: Management shows Emergency exit only when Bark is on and the network is signet or mainnet

@@ -8,8 +8,9 @@ use wasm_bindgen::prelude::*;
 use crate::board::clear_prepared_board_funding;
 use crate::record_store::SharedRecordStore;
 use crate::refresh::{
-    BARK_REFRESH_PENDING, BARK_REFRESH_WARNING, next_refresh_schedule_json,
-    refresh_status_after_schedule, should_schedule_delegated_refresh,
+    BARK_REFRESH_EXIT_BLOCKED, BARK_REFRESH_IDLE, BARK_REFRESH_PENDING, BARK_REFRESH_WARNING,
+    next_refresh_schedule_json, refresh_status_after_schedule, should_schedule_delegated_refresh,
+    vtxo_is_inside_refresh_expiry_window,
 };
 use crate::sync_gate::BarkSessionSyncGate;
 use crate::{
@@ -476,7 +477,14 @@ async fn delegated_refresh_status(wallet: &bark::Wallet) -> String {
         return BARK_REFRESH_PENDING.to_owned();
     }
     match wallet.maybe_schedule_maintenance_refresh_delegated().await {
-        Ok(scheduled) => refresh_status_after_schedule(scheduled.is_some()).to_owned(),
+        Ok(scheduled) => {
+            let status = refresh_status_after_schedule(scheduled.is_some());
+            if status == BARK_REFRESH_IDLE && exit_locked_vtxo_blocks_refresh(wallet).await {
+                BARK_REFRESH_EXIT_BLOCKED.to_owned()
+            } else {
+                status.to_owned()
+            }
+        }
         Err(err) => {
             console_warn(&format!(
                 "Bark could not schedule maintenance refresh: {err:#}"
@@ -484,6 +492,41 @@ async fn delegated_refresh_status(wallet: &bark::Wallet) -> String {
             BARK_REFRESH_WARNING.to_owned()
         }
     }
+}
+
+/// A coin locked by its emergency-exit movement is invisible to Bark's refresh
+/// selector. When that coin is already inside the refresh window, say so instead
+/// of reporting that nothing was due.
+async fn exit_locked_vtxo_blocks_refresh(wallet: &bark::Wallet) -> bool {
+    let Ok(tip_height) = wallet.chain().tip().await else {
+        return false;
+    };
+    let refresh_expiry_threshold = u32::from(wallet.config().vtxo_refresh_expiry_threshold);
+    let exits = wallet.exit_mgr().get_exit_vtxos().await;
+    for exit in exits {
+        let Some(movement_id) = exit.movement_id() else {
+            continue;
+        };
+        let Ok(vtxo) = wallet.get_vtxo_by_id(exit.id()).await else {
+            continue;
+        };
+        let locked_by_this_exit = matches!(
+            &vtxo.state,
+            bark::vtxo::VtxoState::Locked {
+                holder: Some(bark::vtxo::VtxoLockHolder::Movement { id }),
+            } if *id == movement_id
+        );
+        if locked_by_this_exit
+            && vtxo_is_inside_refresh_expiry_window(
+                tip_height,
+                vtxo.expiry_height(),
+                refresh_expiry_threshold,
+            )
+        {
+            return true;
+        }
+    }
+    false
 }
 
 /// Seized exit outputs from the last completed scan, as JSON

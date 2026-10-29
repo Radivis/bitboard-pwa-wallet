@@ -7,14 +7,22 @@
  * in doc/features/bark-regtest-contract.yaml
  */
 import { test, expect } from '@playwright/test'
+import { BARK_EMERGENCY_EXIT_BLOCKS_ACTION } from '@/lib/bark/emergency-exit-blocks-action'
 import {
   BARK_REGTEST_BOARD_AMOUNT_SATS,
   BARK_REGTEST_PAYMENT_SATS,
   boardRegtestBarkWallet,
   openSecondBarkRegtestPage,
   payFreshBarkRecipient,
+  peekBarkReceiveAddress,
+  prepareRecipientBarkWallet,
 } from './helpers/bark-regtest-scenarios'
+import {
+  cancelEmergencyExits,
+  startEmergencyExitOfWholeWallet,
+} from './helpers/bark-emergency-exit'
 import { resolveBarkBoardedFixtureExportPath, restartCaptaind } from './helpers/bark-regtest'
+import { goToWalletTab } from './helpers/wallet-nav'
 
 const BARK_REGTEST_TIMEOUT_MS = 600_000
 
@@ -58,6 +66,21 @@ test.describe('Bark core flows regtest @bark-regtest', () => {
     await boardRegtestBarkWallet(page)
     const recipient = await openSecondBarkRegtestPage(browser)
     try {
+      await startEmergencyExitOfWholeWallet(page)
+      await prepareRecipientBarkWallet(recipient.page)
+      const destination = await peekBarkReceiveAddress(recipient.page)
+      await goToWalletTab(page, 'Send')
+      await page.locator('#recipient-address').fill(destination)
+      await expect(page.getByRole('heading', { name: 'Send on Bark' })).toBeVisible()
+      await page.getByLabel('Unit for amount entry').selectOption('sat')
+      await page.locator('#send-amount').fill(String(BARK_REGTEST_PAYMENT_SATS))
+      const sendButton = page.getByRole('button', { name: 'Send on Bark' })
+      await expect(sendButton).toBeEnabled({ timeout: 30_000 })
+      await sendButton.click()
+      await expect(page.getByText(BARK_EMERGENCY_EXIT_BLOCKS_ACTION)).toBeVisible({
+        timeout: 30_000,
+      })
+      await cancelEmergencyExits(page)
       const paid = await payFreshBarkRecipient(page, recipient.page, BARK_REGTEST_PAYMENT_SATS)
       expect(paid.senderSpendableBefore - paid.senderSpendableAfter).toBeGreaterThanOrEqual(
         BARK_REGTEST_PAYMENT_SATS,

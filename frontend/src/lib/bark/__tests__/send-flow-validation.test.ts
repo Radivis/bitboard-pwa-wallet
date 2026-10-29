@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { isValidArkadeAddress } from '@/lib/arkade/arkade-address'
 import {
+  canBuildBarkSend,
   isBarkMainnetPolicyAddress,
   isBarkSendMode,
   isBarkSignetPolicyAddress,
@@ -51,6 +52,34 @@ describe('Bark receive addresses on the send form', () => {
         recipientFormatValidWithoutBark: false,
         barkAvailable: false,
         normalizedRecipient: reportedBarkReceiveAddress,
+        networkMode: 'signet',
+      }),
+    ).toBe(false)
+  })
+
+  it('keeps Send enabled when spendable is short because coins are in an emergency exit', () => {
+    expect(
+      canBuildBarkSend({
+        isBarkSendMode: true,
+        normalizedRecipient: reportedBarkReceiveAddress,
+        amountSats: 10_000,
+        barkSpendableSats: 0,
+        barkExitingSats: 50_000,
+        barkFeeSats: 0,
+        networkMode: 'signet',
+      }),
+    ).toBe(true)
+  })
+
+  it('keeps Send disabled when spendable is short and nothing is exiting', () => {
+    expect(
+      canBuildBarkSend({
+        isBarkSendMode: true,
+        normalizedRecipient: reportedBarkReceiveAddress,
+        amountSats: 10_000,
+        barkSpendableSats: 0,
+        barkExitingSats: 0,
+        barkFeeSats: 0,
         networkMode: 'signet',
       }),
     ).toBe(false)

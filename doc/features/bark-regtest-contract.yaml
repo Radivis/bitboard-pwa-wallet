@@ -15,11 +15,11 @@ contracts:
     tags: ["@bark-regtest"]
     implemented_by: frontend/tests/e2e/bark-core-flows-regtest.spec.ts
   - id: E2E-BARK-REG-03
-    description: Arkoor send to a second Bark wallet on the same server. Sender spendable drops. Recipient, after sync, shows the payment.
+    description: While the boarded coins are in an emergency exit, an Arkoor send fails and tells the user to cancel that exit. After cancel, the sender spendable drops and the recipient, after sync, shows the payment.
     tags: ["@bark-regtest"]
     implemented_by: frontend/tests/e2e/bark-core-flows-regtest.spec.ts
   - id: E2E-BARK-REG-04
-    description: Collaborative exit of part of the balance, and of the whole spendable balance, to the current on-chain receive address.
+    description: While the boarded coins are in an emergency exit, reviewing a partial collaborative exit fails and tells the user to cancel that exit. After cancel, a partial exit and then the rest go to the current on-chain receive address.
     tags: ["@bark-exit-regtest"]
     implemented_by: frontend/tests/e2e/bark-exit-flows-regtest.spec.ts
   - id: E2E-BARK-REG-05
@@ -27,7 +27,7 @@ contracts:
     tags: ["@bark-exit-regtest"]
     implemented_by: frontend/tests/e2e/bark-exit-flows-regtest.spec.ts
   - id: E2E-BARK-REG-06
-    description: Sync when coins are due for refresh. The dashboard shows the refresh notice and the spendable amount stays.
+    description: While coins that are due for refresh are in an emergency exit, sync shows a warning that tells the user to cancel that exit and does not show the refresh notice. After cancel, sync shows the refresh notice and the spendable amount stays.
     tags: ["@bark-refresh-regtest"]
     implemented_by: frontend/tests/e2e/bark-refresh-regtest.spec.ts
   - id: E2E-BARK-REG-07

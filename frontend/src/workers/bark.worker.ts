@@ -499,11 +499,7 @@ async function sendArkoorPaymentImpl(
     async () => {
       const wasmModule = await getBarkWasm()
       return performBarkArkoorSend(
-        barkArkoorSendDepsFromWasm(
-          wasmModule,
-          async () => (await readSpendableBalanceImpl()).spendableSats,
-          () => syncImpl(),
-        ),
+        barkArkoorSendDepsFromWasm(wasmModule, () => readSpendableBalanceImpl(), () => syncImpl()),
         params,
       )
     },
