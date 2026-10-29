@@ -112,7 +112,7 @@ Navigation, not a Button. `status` is default, hover, active, or selected. It us
 
 ### Nav-Toggle
 
-A 48px pill, corner radius 20, with a 24px chevron. It sits flush above the section nav, at the trailing edge of that bar. It uses the nav-button fills for default, hover, and active.
+A 46 by 20 chip, corner radius 20, with a wide chevron. It sits centered on the section nav. The nav's glass surface extends up to the top of that chip, so the chevron and the buttons share one pane. Hover and active use the nav-button hover and active fills. When the bar is hidden, the chip keeps the glass on its own.
 
 Pointing down, it hides the section nav and stays on screen. Pointing up, it shows the nav again. The chevron rotates 180 degrees over 0.4s with ease-out. A swipe on the bar still hides and shows it.
 

@@ -218,11 +218,14 @@ const LAB_SUB_NAV_ITEMS: SectionSubNavItem[] = [
   },
 ]
 
-/** Clears the 48px nav toggle plus the compact section footer. */
-const MAIN_BOTTOM_PADDING_WITH_NAV_CLASS = 'pb-36'
+/** Matches DesignNavToggle's h-5. The bar glass includes this band above the buttons. */
+const SECTION_NAV_TOGGLE_BAND = '1.25rem'
+
+/** Clears the 20px nav toggle plus the compact section footer. */
+const MAIN_BOTTOM_PADDING_WITH_NAV_CLASS = 'pb-32'
 
 /** Clears the nav toggle once the section footer has slid away. */
-const MAIN_BOTTOM_PADDING_WITH_TOGGLE_CLASS = 'pb-20'
+const MAIN_BOTTOM_PADDING_WITH_TOGGLE_CLASS = 'pb-12'
 
 export const SECTION_SUB_NAV_ID = 'section-sub-nav'
 
@@ -315,7 +318,7 @@ function SectionSubNav({
       aria-hidden={hidden}
       inert={hidden || undefined}
       className={cn(
-        'fixed bottom-0 left-0 right-0 z-40 motion-safe:transition-transform motion-safe:duration-200',
+        'fixed bottom-0 left-0 right-0 z-40 pt-5 motion-safe:transition-transform motion-safe:duration-200',
         designNavBarSurfaceClassName,
         hidden && 'pointer-events-none translate-y-full',
       )}
@@ -401,10 +404,15 @@ function BottomNavigationChrome({
               aria-controls={SECTION_SUB_NAV_ID}
               onClick={onToggle}
               className={cn(
-                'pointer-events-auto absolute right-2',
+                'pointer-events-auto absolute left-1/2 -translate-x-1/2',
+                !hidden && 'bg-transparent backdrop-blur-none',
                 positionSettled && 'motion-safe:transition-[bottom] motion-safe:duration-200',
               )}
-              style={{ bottom: hidden ? '0.5rem' : 'var(--section-nav-height, 0px)' }}
+              style={{
+                bottom: hidden
+                  ? '0.5rem'
+                  : `calc(var(--section-nav-height, ${SECTION_NAV_TOGGLE_BAND}) - ${SECTION_NAV_TOGGLE_BAND})`,
+              }}
             />
           </div>
         </div>
