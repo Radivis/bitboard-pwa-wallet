@@ -23,7 +23,9 @@ interface StoredArkadeAccount {
 }
 ```
 
-`activeArkadeAccountIdByNetwork` selects which Arkade account is active per live network (`mainnet`, `testnet`, `signet`).
+`activeArkadeAccountIdByNetwork` selects which Arkade account is active per live network (`mainnet`, `signet`, `mutinynet`).
+
+v0.3.6 moved historical Arkade `signet` accounts to `mutinynet` but left `operatorUrl` on `/api/arkade/operator/signet`, which then forwarded to public Signet. The wallet migration `mutinynet-arkade-operator-url-repair` rewrites that proxy path to `/api/arkade/operator/mutinynet` for accounts already labeled `mutinynet`. The original `signet-network-split` migration does the same rewrite when it moves an account. Public Signet accounts, any other operator URL, and `sdkPersistenceJson` are left unchanged.
 
 **Size limit:** `sdkPersistenceJson` must not exceed 10 MB UTF-8 (`ARKADE_SDK_PERSISTENCE_JSON_MAX_BYTES` in `arkade-sdk-persistence-types.ts`).
 

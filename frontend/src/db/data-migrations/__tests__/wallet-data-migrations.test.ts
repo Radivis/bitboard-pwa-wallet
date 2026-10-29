@@ -25,10 +25,16 @@ import {
   updateWalletSecretsPayloadWithRetry,
   type WalletSecrets,
 } from '@/db/wallet-persistence'
-import { SIGNET_NETWORK_SPLIT_DATA_MIGRATION_NAME } from '@/db/data-migrations/data-migration-names'
+import {
+  MUTINYNET_ARKADE_OPERATOR_URL_REPAIR_DATA_MIGRATION_NAME,
+  SIGNET_NETWORK_SPLIT_DATA_MIGRATION_NAME,
+} from '@/db/data-migrations/data-migration-names'
 import { WALLET_DATA_MIGRATIONS } from '@/db/data-migrations/wallet-data-migration-registry'
 import { runPendingWalletDataMigrations } from '@/db/data-migrations/run-pending-wallet-data-migrations'
-import { recordAllWalletDataMigrationsApplied } from '@/db/data-migrations/wallet-data-migration-markers'
+import {
+  recordAllWalletDataMigrationsApplied,
+  recordWalletDataMigrationsApplied,
+} from '@/db/data-migrations/wallet-data-migration-markers'
 import {
   MUTINYNET_ESPLORA_SETTINGS_KEY,
   setConfiguredHistoricalSignetOnchainChain,
@@ -38,11 +44,14 @@ import { AddressType } from '@/lib/wallet/wallet-domain-types'
 
 const SESSION_PASSWORD = 'test-password-12345'
 
+const HISTORICAL_SIGNET_OPERATOR_PROXY_URL = 'http://127.0.0.1:5173/api/arkade/operator/signet'
+const MUTINYNET_OPERATOR_PROXY_URL = 'http://127.0.0.1:5173/api/arkade/operator/mutinynet'
+
 const signetArkadeAccount = {
   id: 'acct-signet',
   label: 'Arkade',
   networkMode: 'signet' as const,
-  operatorUrl: 'https://signet.arkade.sh',
+  operatorUrl: HISTORICAL_SIGNET_OPERATOR_PROXY_URL,
   operatorSignerPkHex: '02abc',
   createdAt: '2020-01-01T00:00:00.000Z',
 }
@@ -176,6 +185,7 @@ describe('wallet data migrations', () => {
       const migratedPayload = await loadWalletSecretsPayload(walletDb, walletId)
       expect(migratedPayload.descriptorWallets[0].network).toBe('mutinynet')
       expect(migratedPayload.arkadeAccounts[0].networkMode).toBe('mutinynet')
+      expect(migratedPayload.arkadeAccounts[0].operatorUrl).toBe(MUTINYNET_OPERATOR_PROXY_URL)
       expect(migratedPayload.activeArkadeAccountIdByNetwork).toEqual({
         mutinynet: signetArkadeAccount.id,
       })
@@ -214,7 +224,32 @@ describe('wallet data migrations', () => {
         (account) => account.id === 'acct-public-signet',
       )
       expect(publicSignetAccount?.networkMode).toBe('signet')
+      expect(publicSignetAccount?.operatorUrl).toBe(HISTORICAL_SIGNET_OPERATOR_PROXY_URL)
       expect(await readRevision(walletDb, walletId)).toBe(revisionBeforeSecondRun)
+    })
+
+    it('rewrites a v0.3.6 Mutinynet account that still uses the Signet operator proxy', async () => {
+      const walletId = await createWalletWithSecrets(walletDb, 'Upgraded wallet', {
+        ...createSignetWalletSecrets(),
+        descriptorWallets: [
+          { ...createSignetWalletSecrets().descriptorWallets[0], network: 'mutinynet' },
+        ],
+        arkadeAccounts: [{ ...signetArkadeAccount, networkMode: 'mutinynet' }],
+        activeArkadeAccountIdByNetwork: { mutinynet: signetArkadeAccount.id },
+      })
+      await recordWalletDataMigrationsApplied(walletDb, walletId, [
+        SIGNET_NETWORK_SPLIT_DATA_MIGRATION_NAME,
+      ])
+
+      await runPendingWalletDataMigrations(walletDb)
+
+      const migratedPayload = await loadWalletSecretsPayload(walletDb, walletId)
+      expect(migratedPayload.arkadeAccounts[0].networkMode).toBe('mutinynet')
+      expect(migratedPayload.arkadeAccounts[0].operatorUrl).toBe(MUTINYNET_OPERATOR_PROXY_URL)
+      expect(await listMarkerNames(walletDb, walletId)).toEqual(ALL_WALLET_MIGRATION_NAMES)
+      expect(await listMarkerNames(walletDb, walletId)).toContain(
+        MUTINYNET_ARKADE_OPERATOR_URL_REPAIR_DATA_MIGRATION_NAME,
+      )
     })
 
     it('keeps payload and revision unchanged when the marker insert fails', async () => {

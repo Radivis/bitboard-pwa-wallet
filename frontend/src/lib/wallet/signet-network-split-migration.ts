@@ -1,5 +1,6 @@
 import type { Kysely } from 'kysely'
 import type { Database } from '@/db/schema'
+import { ARKADE_OPERATOR_PROXY_PREFIX } from '@/lib/arkade/arkade-operator-proxy'
 import {
   classifyHistoricalSignetEsplora,
   historicalSignetOnchainWasMutinynet,
@@ -11,7 +12,14 @@ import {
   SIGNET_ESPLORA_SETTINGS_KEY,
   type HistoricalSignetOnchainChain,
 } from '@/lib/wallet/historical-signet-onchain-chain'
-import type { WalletSecretsPayload } from '@/lib/wallet/wallet-domain-types'
+import type { StoredArkadeAccount, WalletSecretsPayload } from '@/lib/wallet/wallet-domain-types'
+
+/**
+ * Before the Signet/Mutinynet split, the Signet slot of this path forwarded to
+ * mutinynet.arkade.sh. v0.3.6 pointed the same path at signet.arkade.sh.
+ */
+const HISTORICAL_SIGNET_OPERATOR_PROXY_PATH = `${ARKADE_OPERATOR_PROXY_PREFIX}/signet`
+const MUTINYNET_OPERATOR_PROXY_PATH = `${ARKADE_OPERATOR_PROXY_PREFIX}/mutinynet`
 
 /**
  * Pre-release builds set this inside the encrypted payload once they had
@@ -41,6 +49,8 @@ export async function migrateSignetNetworkSplitDeviceSettings(
 
 /**
  * Wallet step: historical Arkade `signet` rows were the Mutinynet operator.
+ * A same-origin `/api/arkade/operator/signet` URL is rewritten to the Mutinynet
+ * proxy path. Any other operator URL is left as stored.
  * Descriptors and Lightning connections move to Mutinynet only when the
  * pre-split Esplora chain was Mutinynet. Bark stays on public Signet.
  */
@@ -61,7 +71,7 @@ export function applySignetNetworkSplitToPayload(
     lightningNwcConnections: onchainWasMutinynet
       ? payload.lightningNwcConnections.map(moveSignetNetworkModeToMutinynet)
       : payload.lightningNwcConnections,
-    arkadeAccounts: payload.arkadeAccounts.map(moveSignetNetworkModeToMutinynet),
+    arkadeAccounts: payload.arkadeAccounts.map(moveHistoricalSignetArkadeAccountToMutinynet),
     activeArkadeAccountIdByNetwork: copyWithSignetKeyRenamedToMutinynet(
       payload.activeArkadeAccountIdByNetwork,
     ),
@@ -104,6 +114,60 @@ function moveSignetNetworkToMutinynet<Row extends { network: string }>(row: Row)
 
 function moveSignetNetworkModeToMutinynet<Row extends { networkMode: string }>(row: Row): Row {
   return row.networkMode === 'signet' ? ({ ...row, networkMode: 'mutinynet' } as Row) : row
+}
+
+function moveHistoricalSignetArkadeAccountToMutinynet(
+  account: StoredArkadeAccount,
+): StoredArkadeAccount {
+  if (account.networkMode !== 'signet') return account
+  return {
+    ...account,
+    networkMode: 'mutinynet',
+    operatorUrl: rewriteHistoricalSignetOperatorProxyUrl(account.operatorUrl),
+  }
+}
+
+/**
+ * v0.3.6 moved historical Arkade accounts to Mutinynet and left `operatorUrl`
+ * on the Signet proxy path. Wallets that already have the split marker still
+ * need that path pointed at Mutinynet. Public Signet accounts are not touched.
+ */
+export function repairMutinynetArkadeOperatorUrl(
+  payload: WalletSecretsPayload,
+): WalletSecretsPayload {
+  return {
+    ...payload,
+    arkadeAccounts: payload.arkadeAccounts.map(repairMutinynetAccountOperatorUrl),
+  }
+}
+
+function repairMutinynetAccountOperatorUrl(account: StoredArkadeAccount): StoredArkadeAccount {
+  if (account.networkMode !== 'mutinynet') return account
+  const operatorUrl = rewriteHistoricalSignetOperatorProxyUrl(account.operatorUrl)
+  if (operatorUrl === account.operatorUrl) return account
+  return { ...account, operatorUrl }
+}
+
+function rewriteHistoricalSignetOperatorProxyUrl(operatorUrl: string): string {
+  let parsedUrl: URL
+  try {
+    parsedUrl = new URL(operatorUrl)
+  } catch {
+    return operatorUrl
+  }
+  if (pathnameWithoutTrailingSlash(parsedUrl.pathname) !== HISTORICAL_SIGNET_OPERATOR_PROXY_PATH) {
+    return operatorUrl
+  }
+  parsedUrl.pathname = MUTINYNET_OPERATOR_PROXY_PATH
+  return parsedUrl.toString()
+}
+
+function pathnameWithoutTrailingSlash(pathname: string): string {
+  let normalizedPathname = pathname
+  while (normalizedPathname.length > 1 && normalizedPathname.endsWith('/')) {
+    normalizedPathname = normalizedPathname.slice(0, -1)
+  }
+  return normalizedPathname
 }
 
 function copyWithSignetKeyRenamedToMutinynet<Map extends Record<string, unknown>>(

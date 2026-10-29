@@ -15,7 +15,10 @@ import {
   setConfiguredHistoricalSignetOnchainChain,
   SIGNET_ESPLORA_SETTINGS_KEY,
 } from '@/lib/wallet/historical-signet-onchain-chain'
-import { applySignetNetworkSplitToPayload } from '@/lib/wallet/signet-network-split-migration'
+import {
+  applySignetNetworkSplitToPayload,
+  repairMutinynetArkadeOperatorUrl,
+} from '@/lib/wallet/signet-network-split-migration'
 import {
   AddressType,
   type WalletSecretsPayload,
@@ -204,11 +207,14 @@ const signetNwcConnection = {
   createdAt: '2020-01-01T00:00:00.000Z',
 }
 
+const HISTORICAL_SIGNET_OPERATOR_PROXY_URL = 'http://127.0.0.1:5173/api/arkade/operator/signet'
+const MUTINYNET_OPERATOR_PROXY_URL = 'http://127.0.0.1:5173/api/arkade/operator/mutinynet'
+
 const signetArkadeAccount = {
   id: 'acct-good',
   label: 'Mutinynet',
   networkMode: 'signet' as const,
-  operatorUrl: 'https://signet.arkade.example/v1',
+  operatorUrl: HISTORICAL_SIGNET_OPERATOR_PROXY_URL,
   operatorSignerPkHex: '02abc',
   createdAt: '2020-01-01T00:00:00.000Z',
 }
@@ -237,6 +243,7 @@ describe('applySignetNetworkSplitToPayload', () => {
     expect(migrated.descriptorWallets[0].network).toBe('mutinynet')
     expect(migrated.lightningNwcConnections[0].networkMode).toBe('mutinynet')
     expect(migrated.arkadeAccounts[0].networkMode).toBe('mutinynet')
+    expect(migrated.arkadeAccounts[0].operatorUrl).toBe(MUTINYNET_OPERATOR_PROXY_URL)
     expect(migrated.activeArkadeAccountIdByNetwork).toEqual({ mutinynet: 'acct-good' })
     expect(migrated.barkAccounts).toEqual([signetBarkAccount])
   })
@@ -248,9 +255,29 @@ describe('applySignetNetworkSplitToPayload', () => {
       expect(migrated.descriptorWallets[0].network).toBe('signet')
       expect(migrated.lightningNwcConnections[0].networkMode).toBe('signet')
       expect(migrated.arkadeAccounts[0].networkMode).toBe('mutinynet')
+      expect(migrated.arkadeAccounts[0].operatorUrl).toBe(MUTINYNET_OPERATOR_PROXY_URL)
       expect(migrated.activeArkadeAccountIdByNetwork).toEqual({ mutinynet: 'acct-good' })
       expect(migrated.barkAccounts).toEqual([signetBarkAccount])
     }
+  })
+
+  it('leaves a non-proxy Arkade operator URL unchanged when moving the account', () => {
+    const payload = createPreSplitPayload()
+    payload.arkadeAccounts[0].operatorUrl = 'https://asp.example/custom'
+
+    const migrated = applySignetNetworkSplitToPayload(payload, 'mutinynet')
+
+    expect(migrated.arkadeAccounts[0].networkMode).toBe('mutinynet')
+    expect(migrated.arkadeAccounts[0].operatorUrl).toBe('https://asp.example/custom')
+  })
+
+  it('rewrites a trailing-slash Signet operator proxy path', () => {
+    const payload = createPreSplitPayload()
+    payload.arkadeAccounts[0].operatorUrl = `${HISTORICAL_SIGNET_OPERATOR_PROXY_URL}/`
+
+    const migrated = applySignetNetworkSplitToPayload(payload, 'mutinynet')
+
+    expect(migrated.arkadeAccounts[0].operatorUrl).toBe(MUTINYNET_OPERATOR_PROXY_URL)
   })
 
   it('leaves a legacy-flagged payload unchanged and strips the flag', () => {
@@ -263,5 +290,46 @@ describe('applySignetNetworkSplitToPayload', () => {
 
     expect(migrated).toEqual(createPreSplitPayload())
     expect(migrated).not.toHaveProperty('signetNetworkSplitApplied')
+  })
+})
+
+describe('repairMutinynetArkadeOperatorUrl', () => {
+  it('rewrites a Mutinynet account that still uses the Signet proxy path', () => {
+    const payload = createPreSplitPayload()
+    payload.arkadeAccounts[0] = {
+      ...payload.arkadeAccounts[0],
+      networkMode: 'mutinynet',
+      sdkPersistenceJson: '{"operator_identity":{"network":"signet"}}',
+    }
+
+    const repaired = repairMutinynetArkadeOperatorUrl(payload)
+
+    expect(repaired.arkadeAccounts[0].networkMode).toBe('mutinynet')
+    expect(repaired.arkadeAccounts[0].operatorUrl).toBe(MUTINYNET_OPERATOR_PROXY_URL)
+    expect(repaired.arkadeAccounts[0].sdkPersistenceJson).toBe(
+      '{"operator_identity":{"network":"signet"}}',
+    )
+  })
+
+  it('leaves a public Signet account on the Signet proxy path', () => {
+    const payload = createPreSplitPayload()
+
+    const repaired = repairMutinynetArkadeOperatorUrl(payload)
+
+    expect(repaired.arkadeAccounts[0]).toEqual(payload.arkadeAccounts[0])
+  })
+
+  it('leaves an already-correct Mutinynet proxy URL unchanged', () => {
+    const payload = createPreSplitPayload()
+    payload.arkadeAccounts[0] = {
+      ...payload.arkadeAccounts[0],
+      networkMode: 'mutinynet',
+      operatorUrl: MUTINYNET_OPERATOR_PROXY_URL,
+    }
+
+    const repaired = repairMutinynetArkadeOperatorUrl(payload)
+
+    expect(repaired.arkadeAccounts[0].operatorUrl).toBe(MUTINYNET_OPERATOR_PROXY_URL)
+    expect(repaired.arkadeAccounts[0].networkMode).toBe('mutinynet')
   })
 })
