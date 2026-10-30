@@ -16,6 +16,8 @@ pub const CODE_WALLET_NOT_LOADED_FOR_LAB: &str = "wallet_not_loaded_for_lab";
 pub const CODE_ESPLORA_NETWORK_MISMATCH: &str = "esplora_network_mismatch";
 /// Matched by `frontend/src/lib/shared/wasm-crypto-error.ts`.
 pub const CODE_ESPLORA_CHAIN_MISMATCH: &str = "esplora_chain_mismatch";
+/// Matched by `frontend/src/lib/shared/wasm-crypto-error.ts`.
+pub const CODE_SYNC_SUPERSEDED: &str = "sync_superseded";
 
 pub const MSG_NO_ACTIVE_WALLET: &str = "No active wallet. Call create_wallet or load_wallet first.";
 pub const MSG_WALLET_ALREADY_BORROWED: &str =
@@ -70,6 +72,9 @@ pub enum CryptoError {
     /// The Esplora chain cannot be reconciled with the wallet's saved local chain.
     #[error("Esplora chain mismatch: {0}")]
     EsploraChainMismatch(String),
+    /// An Esplora update arrived after `load_wallet` / `create_wallet` replaced the active wallet.
+    #[error("{0}")]
+    SyncSuperseded(String),
 }
 
 impl CryptoError {
@@ -83,6 +88,7 @@ impl CryptoError {
             CryptoError::Serialization(_) => CODE_SERIALIZATION,
             CryptoError::EsploraNetworkMismatch(_) => CODE_ESPLORA_NETWORK_MISMATCH,
             CryptoError::EsploraChainMismatch(_) => CODE_ESPLORA_CHAIN_MISMATCH,
+            CryptoError::SyncSuperseded(_) => CODE_SYNC_SUPERSEDED,
         }
     }
 

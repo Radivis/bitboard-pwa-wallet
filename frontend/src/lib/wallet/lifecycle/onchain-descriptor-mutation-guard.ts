@@ -1,4 +1,6 @@
 import { useCryptoStore } from '@/stores/cryptoStore'
+import { useWalletStore } from '@/stores/walletStore'
+import type { OnchainSyncLifecycleSnapshot } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-types'
 import {
   awaitOnchainLoadQuiescence,
   getOnchainLoadLifecycleSnapshot,
@@ -20,6 +22,33 @@ export class OnchainDescriptorMutationBlockedError extends Error {
   }
 }
 
+/**
+ * A snapshot with no scope is treated as applying to the loaded wallet.
+ * A scope for another descriptor (for example a testnet scan left running
+ * after Lab was loaded) must not block the wallet that is loaded now.
+ */
+function syncSnapshotAppliesToLoadedDescriptor(
+  syncSnapshot: OnchainSyncLifecycleSnapshot,
+): boolean {
+  const scope = syncSnapshot.descriptorScope
+  if (scope == null) return true
+  const state = useWalletStore.getState()
+  return (
+    state.activeWalletId === scope.walletId &&
+    state.networkMode === scope.networkMode &&
+    state.addressType === scope.addressType &&
+    state.accountId === scope.accountId
+  )
+}
+
+function inFlightSyncBlocksDescriptorMutation(): boolean {
+  const syncSnapshot = getOnchainSyncLifecycleSnapshot()
+  return (
+    syncSnapshot.syncPhase === 'syncing' &&
+    syncSnapshotAppliesToLoadedDescriptor(syncSnapshot)
+  )
+}
+
 function assertNoInFlightOnchainLifecycle(): void {
   const loadSnapshot = getOnchainLoadLifecycleSnapshot()
   if (loadSnapshot.loadPhase === 'loading') {
@@ -28,8 +57,7 @@ function assertNoInFlightOnchainLifecycle(): void {
     )
   }
 
-  const syncSnapshot = getOnchainSyncLifecycleSnapshot()
-  if (syncSnapshot.syncPhase === 'syncing') {
+  if (inFlightSyncBlocksDescriptorMutation()) {
     throw new OnchainDescriptorMutationBlockedError(
       'On-chain sync is in progress — wait for it to finish.',
     )
@@ -45,7 +73,10 @@ function assertNoInFlightOnchainLifecycle(): void {
 
 function assertChangesetPersistenceAllowed(): void {
   const syncSnapshot = getOnchainSyncLifecycleSnapshot()
-  if (syncSnapshot.syncPhase === 'sync-error') {
+  if (
+    syncSnapshot.syncPhase === 'sync-error' &&
+    syncSnapshotAppliesToLoadedDescriptor(syncSnapshot)
+  ) {
     const detail = syncSnapshot.errorMessage?.trim()
     throw new OnchainDescriptorMutationBlockedError(
       detail
@@ -57,16 +88,26 @@ function assertChangesetPersistenceAllowed(): void {
 
 /** True when outgoing descriptor save must be skipped (preserve last good persisted changeset). */
 export function shouldSkipOutgoingDescriptorSaveOnSyncError(): boolean {
-  return getOnchainSyncLifecycleSnapshot().syncPhase === 'sync-error'
+  const syncSnapshot = getOnchainSyncLifecycleSnapshot()
+  return (
+    syncSnapshot.syncPhase === 'sync-error' &&
+    syncSnapshotAppliesToLoadedDescriptor(syncSnapshot)
+  )
 }
 
 /**
  * Waits for in-flight on-chain load/sync/save work, then rejects if lifecycle is still busy.
- * Does not block on `sync-error` — use for network/address switch entry.
+ * A scan whose descriptor is no longer loaded does not block. Does not block on `sync-error`.
  */
 export async function awaitOnchainQuiescenceBeforeDescriptorMutation(): Promise<void> {
   await awaitOnchainLoadQuiescence()
-  await awaitOnchainSyncQuiescence()
+  const syncSnapshot = getOnchainSyncLifecycleSnapshot()
+  const foreignInFlightScan =
+    syncSnapshot.syncPhase === 'syncing' &&
+    !syncSnapshotAppliesToLoadedDescriptor(syncSnapshot)
+  if (!foreignInFlightScan) {
+    await awaitOnchainSyncQuiescence()
+  }
   await awaitOnchainSaveQuiescence()
   assertNoInFlightOnchainLifecycle()
 }

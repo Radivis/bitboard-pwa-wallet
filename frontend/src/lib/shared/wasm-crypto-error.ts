@@ -12,6 +12,27 @@ export const WASM_CRYPTO_ERROR_CODE_ESPLORA_NETWORK_MISMATCH = 'esplora_network_
 /** Matches Rust `CODE_ESPLORA_CHAIN_MISMATCH` in `crypto/src/error.rs`. */
 export const WASM_CRYPTO_ERROR_CODE_ESPLORA_CHAIN_MISMATCH = 'esplora_chain_mismatch'
 
+/** Matches Rust `CODE_SYNC_SUPERSEDED` in `crypto/src/error.rs`. */
+export const WASM_CRYPTO_ERROR_CODE_SYNC_SUPERSEDED = 'sync_superseded'
+
+const SYNC_SUPERSEDED_MESSAGE =
+  'On-chain sync was discarded because the loaded wallet changed'
+
+/** Thrown when an Esplora scan must stop because a different descriptor wallet was loaded. */
+export class SyncSupersededError extends Error {
+  readonly code = WASM_CRYPTO_ERROR_CODE_SYNC_SUPERSEDED
+
+  constructor() {
+    super(SYNC_SUPERSEDED_MESSAGE)
+    this.name = 'SyncSupersededError'
+  }
+}
+
+export function isSyncSupersededError(err: unknown): boolean {
+  if (err instanceof SyncSupersededError) return true
+  return wasmCryptoErrorCode(err) === WASM_CRYPTO_ERROR_CODE_SYNC_SUPERSEDED
+}
+
 function isWasmCryptoErrorPayload(value: unknown): value is WasmCryptoErrorPayload {
   if (value == null || typeof value !== 'object') return false
   if (value instanceof Error) return false

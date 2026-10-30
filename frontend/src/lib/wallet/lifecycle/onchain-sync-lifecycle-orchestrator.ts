@@ -32,6 +32,7 @@ import {
   LIFECYCLE_SYNC_ERROR_FALLBACK,
   userFacingLifecycleErrorMessage,
 } from '@/lib/shared/utils'
+import { isSyncSupersededError } from '@/lib/shared/wasm-crypto-error'
 
 export type {
   OnchainSyncKind,
@@ -103,6 +104,18 @@ function toSaveParams(params: OnchainSyncParams): OnchainSaveParams {
 
 function onchainSyncTargetsActiveWallet(walletId: number): boolean {
   return useWalletStore.getState().activeWalletId === walletId
+}
+
+function onchainSyncMatchesLoadedDescriptor(
+  params: Pick<OnchainSyncParams, 'walletId' | 'networkMode' | 'addressType' | 'accountId'>,
+): boolean {
+  const state = useWalletStore.getState()
+  return (
+    state.activeWalletId === params.walletId &&
+    state.networkMode === params.networkMode &&
+    state.addressType === params.addressType &&
+    state.accountId === params.accountId
+  )
 }
 
 function clearOnchainSyncSnapshotIfItBelongsToWallet(walletId: number): void {
@@ -206,24 +219,26 @@ export async function orchestrateOnchainSyncThenSave(
     if (!onchainSyncTargetsActiveWallet(params.walletId)) {
       return
     }
-    await withWalletWriterLock(async () => {
-      if (!onchainSyncTargetsActiveWallet(params.walletId)) {
+    assertCanStartOnchainSync(params)
+    const scope = descriptorScopeFromParams(params)
+    configureOnchainSyncForLoadedRail(scope)
+
+    setSnapshot({ syncPhase: 'syncing', descriptorScope: scope, errorMessage: null })
+
+    try {
+      // Esplora HTTP stays outside the writer lock so a network switch can load
+      // another descriptor while a public indexer is stalled.
+      await runEsploraSyncBody(params)
+      if (!onchainSyncMatchesLoadedDescriptor(params)) {
         clearOnchainSyncSnapshotIfItBelongsToWallet(params.walletId)
         return
       }
-      assertCanStartOnchainSync(params)
-      const scope = descriptorScopeFromParams(params)
-      configureOnchainSyncForLoadedRail(scope)
-
-      setSnapshot({ syncPhase: 'syncing', descriptorScope: scope, errorMessage: null })
-
-      try {
-        await runEsploraSyncBody(params)
-        if (!onchainSyncTargetsActiveWallet(params.walletId)) {
+      setSnapshot({ syncPhase: 'not-syncing', descriptorScope: scope, errorMessage: null })
+      await withWalletWriterLock(async () => {
+        if (!onchainSyncMatchesLoadedDescriptor(params)) {
           clearOnchainSyncSnapshotIfItBelongsToWallet(params.walletId)
           return
         }
-        setSnapshot({ syncPhase: 'not-syncing', descriptorScope: scope, errorMessage: null })
         try {
           await orchestrateOnchainSave(toSaveParams(params))
         } catch (saveError) {
@@ -231,30 +246,33 @@ export async function orchestrateOnchainSyncThenSave(
             throw saveError
           }
         }
-      } catch (error) {
-        if (!onchainSyncTargetsActiveWallet(params.walletId)) {
-          clearOnchainSyncSnapshotIfItBelongsToWallet(params.walletId)
-          return
-        }
-        setSnapshot({
-          syncPhase: 'sync-error',
-          descriptorScope: scope,
-          errorMessage: userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK),
-        })
-        if (params.networkMode !== 'lab') {
-          try {
-            await refreshWalletStoreFromLoadedBdk(params.walletId)
-            invalidateOnchainDashboardQueries()
-          } catch {
-            // Keep prior BDK-local store state when refresh fails.
-          }
-        }
-        params.onSyncError?.(error)
-        if (throwOnError) {
-          throw error
+      })
+    } catch (error) {
+      if (
+        !onchainSyncMatchesLoadedDescriptor(params) ||
+        isSyncSupersededError(error)
+      ) {
+        clearOnchainSyncSnapshotIfItBelongsToWallet(params.walletId)
+        return
+      }
+      setSnapshot({
+        syncPhase: 'sync-error',
+        descriptorScope: scope,
+        errorMessage: userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK),
+      })
+      if (params.networkMode !== 'lab') {
+        try {
+          await refreshWalletStoreFromLoadedBdk(params.walletId)
+          invalidateOnchainDashboardQueries()
+        } catch {
+          // Keep prior BDK-local store state when refresh fails.
         }
       }
-    })
+      params.onSyncError?.(error)
+      if (throwOnError) {
+        throw error
+      }
+    }
   })
 }
 

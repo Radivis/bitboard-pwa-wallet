@@ -86,6 +86,10 @@ mod error_tests {
             CryptoError::Serialization("x".into()).code(),
             CODE_SERIALIZATION
         );
+        assert_eq!(
+            CryptoError::SyncSuperseded("x".into()).code(),
+            crate::error::CODE_SYNC_SUPERSEDED
+        );
     }
 
     #[test]
@@ -125,4 +129,11 @@ mod error_tests {
         assert!(payload.message.contains("insufficient funds"));
         // MapErrToJs -> JsValue shape is validated in wasm_boundary_tests; native tests gate code mapping.
     }
+}
+
+#[test]
+fn active_wallet_generation_advances_when_the_loaded_wallet_is_replaced() {
+    let captured_generation = super::active_wallet_generation();
+    super::bump_active_wallet_generation();
+    assert_ne!(super::active_wallet_generation(), captured_generation);
 }

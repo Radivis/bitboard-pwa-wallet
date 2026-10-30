@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { AddressType } from '@/stores/walletStore'
+import { AddressType, type NetworkMode } from '@/stores/walletStore'
 import { BadLocalChainStateError } from '@/lib/shared/bad-local-chain-state-error'
 
 const syncActiveWalletAndUpdateState = vi.fn()
@@ -44,6 +44,9 @@ vi.mock('@/lib/wallet/onchain-dashboard-sync', () => ({
 const walletStoreState = {
   walletStatus: 'unlocked' as 'unlocked' | 'locked',
   activeWalletId: 1 as number | null,
+  networkMode: 'testnet' as NetworkMode,
+  addressType: AddressType.Taproot,
+  accountId: 0,
   setWalletStatus: vi.fn(),
 }
 
@@ -86,6 +89,9 @@ describe('onchain-sync-lifecycle-orchestrator', () => {
     }
     walletStoreState.walletStatus = 'unlocked'
     walletStoreState.activeWalletId = 1
+    walletStoreState.networkMode = 'testnet'
+    walletStoreState.addressType = AddressType.Taproot
+    walletStoreState.accountId = 0
     syncActiveWalletAndUpdateState.mockResolvedValue(undefined)
     orchestrateOnchainSave.mockResolvedValue(undefined)
     refreshWalletStoreFromLoadedBdk.mockResolvedValue(undefined)
@@ -98,6 +104,31 @@ describe('onchain-sync-lifecycle-orchestrator', () => {
 
     expect(syncActiveWalletAndUpdateState).not.toHaveBeenCalled()
     expect(orchestrateOnchainSave).not.toHaveBeenCalled()
+  })
+
+  it('discards a scan when the loaded network changes during sync', async () => {
+    syncActiveWalletAndUpdateState.mockImplementation(async () => {
+      walletStoreState.networkMode = 'lab'
+    })
+
+    await orchestrateOnchainSyncThenSave(syncParams)
+
+    expect(orchestrateOnchainSave).not.toHaveBeenCalled()
+    expect(refreshWalletStoreFromLoadedBdk).not.toHaveBeenCalled()
+    expect(getOnchainSyncLifecycleSnapshot().syncPhase).toBe('not-configured')
+  })
+
+  it('does not surface a scan error after the loaded network changed', async () => {
+    syncActiveWalletAndUpdateState.mockImplementation(async () => {
+      walletStoreState.networkMode = 'lab'
+      throw new Error('connection timeout')
+    })
+
+    await orchestrateOnchainSyncThenSave(syncParams)
+
+    expect(orchestrateOnchainSave).not.toHaveBeenCalled()
+    expect(refreshWalletStoreFromLoadedBdk).not.toHaveBeenCalled()
+    expect(getOnchainSyncLifecycleSnapshot().syncPhase).toBe('not-configured')
   })
 
   it('does not save when the active wallet changes during sync', async () => {

@@ -6,6 +6,7 @@ import { useWalletStore } from '@/stores/walletStore'
 import { useCryptoStore } from '@/stores/cryptoStore'
 import { asBadLocalChainStateError } from '@/lib/shared/bad-local-chain-state-error'
 import { withEsploraFullScanRetries } from '@/lib/esplora/esplora-full-scan-retry'
+import { SyncSupersededError } from '@/lib/shared/wasm-crypto-error'
 import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
 import { showInitialSyncFailureToast } from '@/lib/wallet/wallet-sync-error-toast'
 import {
@@ -142,6 +143,9 @@ export async function loadCustomEsploraUrl(
 /** Stop-gap for full scan (consecutive unused addresses before stopping). Match import flow. */
 const FULL_SCAN_STOP_GAP = 20
 
+/** Stable id so a Lab switch can dismiss a scan that is still waiting on Esplora. */
+export const ONCHAIN_BLOCKCHAIN_SCAN_TOAST_ID = 'onchain-blockchain-scan'
+
 function invalidateDashboardQueriesAfterOnchainUpdate(): void {
   invalidateLightningDashboardQueries()
   invalidateOnchainDashboardQueries()
@@ -170,7 +174,7 @@ export async function syncActiveWalletAndUpdateState(
   if (!esploraUrl) {
     const balance = await getBalance()
     const transactionList = await getTransactionList()
-    if (onchainSyncStillTargetsActiveWallet(options?.walletId)) {
+    if (onchainSyncStillTargetsActiveWallet(options?.walletId, networkMode)) {
       setBalance(balance)
       setTransactions(transactionList)
     }
@@ -179,29 +183,35 @@ export async function syncActiveWalletAndUpdateState(
 
   let fullScanToastId: string | number | undefined
   if (options?.useFullScan) {
-    fullScanToastId = toast.loading('Scanning blockchain…')
+    fullScanToastId = toast.loading('Scanning blockchain…', {
+      id: ONCHAIN_BLOCKCHAIN_SCAN_TOAST_ID,
+    })
     try {
-      await withEsploraFullScanRetries(() =>
-        fullScanWallet(esploraUrl, FULL_SCAN_STOP_GAP),
-      )
+      await withEsploraFullScanRetries(async () => {
+        throwIfLoadedDescriptorLeftSync(options?.walletId, networkMode)
+        await fullScanWallet(esploraUrl, FULL_SCAN_STOP_GAP)
+      })
     } catch (err) {
       toast.dismiss(fullScanToastId)
       throw err
     }
   } else {
+    throwIfLoadedDescriptorLeftSync(options?.walletId, networkMode)
     await syncWallet(esploraUrl)
+    throwIfLoadedDescriptorLeftSync(options?.walletId, networkMode)
     const balance = await getBalance()
     // Primary repair: WASM sync_wallet runs anchor+chain reconcile after bdk_esplora.
     // This optional second call is a timing buffer if the indexer still lags.
     // See docs/esplora-bdk-anchor-reconcile.md.
     if (balance.confirmedSats === 0 && balance.untrustedPendingSats > 0) {
+      throwIfLoadedDescriptorLeftSync(options?.walletId, networkMode)
       await syncWallet(esploraUrl)
     }
   }
 
   const balance = await getBalance()
   const transactionList = await getTransactionList()
-  if (!onchainSyncStillTargetsActiveWallet(options?.walletId)) {
+  if (!onchainSyncStillTargetsActiveWallet(options?.walletId, networkMode)) {
     if (fullScanToastId != null) {
       toast.dismiss(fullScanToastId)
     }
@@ -214,8 +224,22 @@ export async function syncActiveWalletAndUpdateState(
   setTransactions(transactionList)
 }
 
-function onchainSyncStillTargetsActiveWallet(walletId: number | undefined): boolean {
-  return walletId == null || useWalletStore.getState().activeWalletId === walletId
+function onchainSyncStillTargetsActiveWallet(
+  walletId: number | undefined,
+  networkMode: NetworkMode,
+): boolean {
+  const state = useWalletStore.getState()
+  if (walletId != null && state.activeWalletId !== walletId) return false
+  return state.networkMode === networkMode
+}
+
+function throwIfLoadedDescriptorLeftSync(
+  walletId: number | undefined,
+  networkMode: NetworkMode,
+): void {
+  if (!onchainSyncStillTargetsActiveWallet(walletId, networkMode)) {
+    throw new SyncSupersededError()
+  }
 }
 
 export type DescriptorWalletEsploraSyncResult = 'completed' | 'syncFailed'

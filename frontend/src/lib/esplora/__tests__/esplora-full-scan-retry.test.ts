@@ -3,6 +3,7 @@ import {
   isRetryableEsploraFullScanError,
   withEsploraFullScanRetries,
 } from '@/lib/esplora/esplora-full-scan-retry'
+import { SyncSupersededError } from '@/lib/shared/wasm-crypto-error'
 
 describe('isRetryableEsploraFullScanError', () => {
   it('returns true for rate limit and HTTP 5xx patterns', () => {
@@ -20,6 +21,7 @@ describe('isRetryableEsploraFullScanError', () => {
   it('returns false for empty or likely permanent errors', () => {
     expect(isRetryableEsploraFullScanError('')).toBe(false)
     expect(isRetryableEsploraFullScanError('Invalid descriptor')).toBe(false)
+    expect(isRetryableEsploraFullScanError(new SyncSupersededError().message)).toBe(false)
   })
 })
 
