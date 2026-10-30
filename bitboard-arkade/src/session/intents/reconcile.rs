@@ -62,29 +62,21 @@ impl ArkadeSession {
         &self,
         record: &PendingBatchIntentRecord,
     ) -> ArkResult<PendingBatchIntentResolution> {
-        // Check if this is a timed-out boarding intent whose registration has expired.
-        // After the operator TTL, the intent is no longer registered, so we clear it
-        // even if the boarding UTXO is still in its cooperative window.
-        if record.kind == PendingBatchIntentKind::Board
-            && record.lifecycle_phase == PendingBatchIntentLifecyclePhase::TimedOut
-        {
-            let now = current_unix_timestamp();
-            let elapsed = now.saturating_sub(record.registered_at);
-            if elapsed >= BOARDING_REGISTER_INTENT_TTL_SECS {
-                return Ok(PendingBatchIntentResolution::BoardingRegistrationExpired);
-            }
-        }
-
-        if !record.onchain_outpoints.is_empty() {
-            return self.resolve_onchain_pending_intent(record).await;
-        }
-        if !record.vtxo_outpoints.is_empty() {
-            return Ok(resolve_vtxo_pending_intent(
+        let chain_resolution = if !record.onchain_outpoints.is_empty() {
+            self.resolve_onchain_pending_intent(record).await?
+        } else if !record.vtxo_outpoints.is_empty() {
+            resolve_vtxo_pending_intent(
                 record,
                 self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref(),
-            ));
-        }
-        Ok(PendingBatchIntentResolution::StillPending)
+            )
+        } else {
+            PendingBatchIntentResolution::StillPending
+        };
+        Ok(apply_boarding_registration_expiry(
+            record,
+            chain_resolution,
+            current_unix_timestamp(),
+        ))
     }
 
     async fn resolve_onchain_pending_intent(
@@ -239,6 +231,30 @@ fn resolve_vtxo_pending_intent(
     }
 }
 
+/// A timed-out boarding intent is abandoned after the operator registration TTL
+/// only while its inputs are still unspent inside the cooperative window.
+/// A spent output keeps its commitment txid. A closed boarding window stays closed.
+fn apply_boarding_registration_expiry(
+    record: &PendingBatchIntentRecord,
+    chain_resolution: PendingBatchIntentResolution,
+    now_unix_seconds: i64,
+) -> PendingBatchIntentResolution {
+    if record.kind != PendingBatchIntentKind::Board {
+        return chain_resolution;
+    }
+    if record.lifecycle_phase != PendingBatchIntentLifecyclePhase::TimedOut {
+        return chain_resolution;
+    }
+    if !matches!(chain_resolution, PendingBatchIntentResolution::StillPending) {
+        return chain_resolution;
+    }
+    let registration_age_seconds = now_unix_seconds.saturating_sub(record.registered_at);
+    if registration_age_seconds >= BOARDING_REGISTER_INTENT_TTL_SECS {
+        return PendingBatchIntentResolution::BoardingRegistrationExpired;
+    }
+    chain_resolution
+}
+
 fn outpoint_records_equal(
     left: &[PendingBatchOutpointRecord],
     right: &[crate::api_types::PendingBatchOutpointDto],
@@ -361,12 +377,12 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn reconcile_clears_timed_out_boarding_after_registration_ttl() {
-        use crate::persistence::PendingBatchOutpointRecord;
-
-        let expired_registration = PendingBatchIntentRecord {
-            kind: PendingBatchIntentKind::Board,
+    fn timed_out_intent_record(
+        kind: PendingBatchIntentKind,
+        registered_at: i64,
+    ) -> PendingBatchIntentRecord {
+        PendingBatchIntentRecord {
+            kind,
             intent_id: Some("intent-1".into()),
             onchain_outpoints: vec![PendingBatchOutpointRecord {
                 txid: "abc".into(),
@@ -374,19 +390,99 @@ mod tests {
             }],
             vtxo_outpoints: vec![],
             amount_sats: 50_000,
-            registered_at: current_unix_timestamp() - BOARDING_REGISTER_INTENT_TTL_SECS,
+            registered_at,
             destination_address: None,
             lifecycle_phase: PendingBatchIntentLifecyclePhase::TimedOut,
-        };
+        }
+    }
 
-        // This would normally require an async call to pending_batch_intent_resolution,
-        // but we can test the logic by checking the time calculation directly
-        let now = current_unix_timestamp();
-        let elapsed = now.saturating_sub(expired_registration.registered_at);
-        assert!(
-            elapsed >= BOARDING_REGISTER_INTENT_TTL_SECS,
-            "Registration should be considered expired"
+    #[test]
+    fn unspent_timed_out_boarding_expires_after_registration_ttl() {
+        let now = 1_700_000_000;
+        let record = timed_out_intent_record(
+            PendingBatchIntentKind::Board,
+            now - BOARDING_REGISTER_INTENT_TTL_SECS,
         );
+        assert!(matches!(
+            apply_boarding_registration_expiry(
+                &record,
+                PendingBatchIntentResolution::StillPending,
+                now,
+            ),
+            PendingBatchIntentResolution::BoardingRegistrationExpired
+        ));
+    }
+
+    #[test]
+    fn spent_boarding_output_keeps_commitment_txid_after_registration_ttl() {
+        let now = 1_700_000_000;
+        let record = timed_out_intent_record(
+            PendingBatchIntentKind::Board,
+            now - BOARDING_REGISTER_INTENT_TTL_SECS,
+        );
+        match apply_boarding_registration_expiry(
+            &record,
+            PendingBatchIntentResolution::Spent {
+                spend_txid: "commitment".into(),
+            },
+            now,
+        ) {
+            PendingBatchIntentResolution::Spent { spend_txid } => {
+                assert_eq!(spend_txid, "commitment");
+            }
+            other => panic!("expected spent, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn timed_out_boarding_stays_pending_until_registration_ttl() {
+        let now = 1_700_000_000;
+        let record = timed_out_intent_record(
+            PendingBatchIntentKind::Board,
+            now - BOARDING_REGISTER_INTENT_TTL_SECS + 1,
+        );
+        assert!(matches!(
+            apply_boarding_registration_expiry(
+                &record,
+                PendingBatchIntentResolution::StillPending,
+                now,
+            ),
+            PendingBatchIntentResolution::StillPending
+        ));
+    }
+
+    #[test]
+    fn closed_boarding_window_survives_registration_ttl() {
+        let now = 1_700_000_000;
+        let record = timed_out_intent_record(
+            PendingBatchIntentKind::Board,
+            now - BOARDING_REGISTER_INTENT_TTL_SECS,
+        );
+        assert!(matches!(
+            apply_boarding_registration_expiry(
+                &record,
+                PendingBatchIntentResolution::BoardingWindowExpired,
+                now,
+            ),
+            PendingBatchIntentResolution::BoardingWindowExpired
+        ));
+    }
+
+    #[test]
+    fn non_boarding_intent_ignores_registration_ttl() {
+        let now = 1_700_000_000;
+        let record = timed_out_intent_record(
+            PendingBatchIntentKind::Recover,
+            now - BOARDING_REGISTER_INTENT_TTL_SECS,
+        );
+        assert!(matches!(
+            apply_boarding_registration_expiry(
+                &record,
+                PendingBatchIntentResolution::StillPending,
+                now,
+            ),
+            PendingBatchIntentResolution::StillPending
+        ));
     }
 
     #[test]
