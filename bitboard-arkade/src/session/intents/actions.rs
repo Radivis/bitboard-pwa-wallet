@@ -359,6 +359,17 @@ mod tests {
     }
 
     #[test]
+    fn boarding_registration_expired_completes_without_retry() {
+        assert_eq!(
+            pending_intent_retry_decision(
+                &PendingBatchIntentResolution::BoardingRegistrationExpired,
+                &sample_boarding_pending_record(1),
+            ),
+            PendingIntentRetryDecision::CompleteWithoutRetry
+        );
+    }
+
+    #[test]
     fn spent_boarding_intent_completes_without_retry() {
         assert_eq!(
             pending_intent_retry_decision(
