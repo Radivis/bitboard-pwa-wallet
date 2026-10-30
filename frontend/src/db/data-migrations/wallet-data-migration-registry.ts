@@ -1,11 +1,13 @@
 import type { HistoricalSignetOnchainChain } from '@/lib/wallet/historical-signet-onchain-chain'
 import {
   applySignetNetworkSplitToPayload,
+  dropDescriptorWalletsContradictingTheirNetwork,
   repairMutinynetArkadeOperatorUrl,
 } from '@/lib/wallet/signet-network-split-migration'
 import type { WalletSecretsPayload } from '@/lib/wallet/wallet-domain-types'
 import {
   MUTINYNET_ARKADE_OPERATOR_URL_REPAIR_DATA_MIGRATION_NAME,
+  SIGNET_MUTINYNET_CHAIN_REPAIR_DATA_MIGRATION_NAME,
   SIGNET_NETWORK_SPLIT_DATA_MIGRATION_NAME,
 } from './data-migration-names'
 
@@ -32,5 +34,9 @@ export const WALLET_DATA_MIGRATIONS: readonly WalletDataMigration[] = [
   {
     name: MUTINYNET_ARKADE_OPERATOR_URL_REPAIR_DATA_MIGRATION_NAME,
     migrate: (payload) => repairMutinynetArkadeOperatorUrl(payload),
+  },
+  {
+    name: SIGNET_MUTINYNET_CHAIN_REPAIR_DATA_MIGRATION_NAME,
+    migrate: (payload) => dropDescriptorWalletsContradictingTheirNetwork(payload),
   },
 ]

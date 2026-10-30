@@ -5,8 +5,12 @@ import {
 } from '@/lib/shared/bad-local-chain-state-error'
 import { sanitizeErrorMessageForUi } from '@/lib/shared/sanitize-error-for-ui'
 import { errorMessage } from '@/lib/shared/utils'
+import { isEsploraNetworkMismatchError } from '@/lib/shared/wasm-crypto-error'
 
 const BAD_CHAIN_SYNC_HINT = `Try ${BAD_LOCAL_CHAIN_FULL_RESCAN_ACTION} — it can repair saved chain data.`
+
+/** The WASM message already names both networks and points to Settings. */
+const ESPLORA_NETWORK_MISMATCH_TITLE = 'Wrong Esplora network'
 
 type WalletSyncErrorContext =
   | 'initial-sync'
@@ -30,9 +34,14 @@ export function reportWalletSyncError(
         : 'Wallet bootstrap sync failed'
   console.error(logLabel, err)
 
-  const badChain = asBadLocalChainStateError(err)
   const detail = sanitizeErrorMessageForUi(errorMessage(err))
 
+  if (isEsploraNetworkMismatchError(err)) {
+    toast.error(ESPLORA_NETWORK_MISMATCH_TITLE, { description: detail })
+    return
+  }
+
+  const badChain = asBadLocalChainStateError(err)
   if (context === 'initial-sync') {
     if (badChain) {
       toast.error('Initial sync failed', {
@@ -77,8 +86,20 @@ export function showInitialSyncFailureToast(
 ): void {
   console.error('Initial sync failed', err)
 
-  const badChain = asBadLocalChainStateError(err)
+  const retryAction = {
+    label: 'Retry',
+    onClick: () => {
+      void onRetry()
+    },
+  }
   const detail = sanitizeErrorMessageForUi(errorMessage(err))
+
+  if (isEsploraNetworkMismatchError(err)) {
+    toast.error(ESPLORA_NETWORK_MISMATCH_TITLE, { description: detail, action: retryAction })
+    return
+  }
+
+  const badChain = asBadLocalChainStateError(err)
   const description = badChain
     ? `${badChain.message} ${BAD_CHAIN_SYNC_HINT} You can also retry.`
     : detail
@@ -87,11 +108,6 @@ export function showInitialSyncFailureToast(
 
   toast.error('Initial sync failed', {
     description,
-    action: {
-      label: 'Retry',
-      onClick: () => {
-        void onRetry()
-      },
-    },
+    action: retryAction,
   })
 }

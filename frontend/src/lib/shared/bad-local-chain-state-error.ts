@@ -1,4 +1,8 @@
 import { errorMessage } from '@/lib/shared/utils'
+import {
+  WASM_CRYPTO_ERROR_CODE_ESPLORA_CHAIN_MISMATCH,
+  wasmCryptoErrorCode,
+} from '@/lib/shared/wasm-crypto-error'
 
 const BAD_LOCAL_CHAIN_MARKERS = [
   'HeaderHashNotFound',
@@ -12,6 +16,13 @@ const BAD_LOCAL_CHAIN_MARKERS = [
  */
 export function isBadLocalChainStateMessage(detail: string): boolean {
   return BAD_LOCAL_CHAIN_MARKERS.some((m) => detail.includes(m))
+}
+
+function isBadLocalChainStateError(err: unknown): boolean {
+  if (wasmCryptoErrorCode(err) === WASM_CRYPTO_ERROR_CODE_ESPLORA_CHAIN_MISMATCH) {
+    return true
+  }
+  return isBadLocalChainStateMessage(errorMessage(err))
 }
 
 /** Single line explaining that persisted chain and Esplora disagree. */
@@ -44,8 +55,7 @@ export function asBadLocalChainStateError(err: unknown): BadLocalChainStateError
   if (err instanceof BadLocalChainStateError) {
     return err
   }
-  const errorMessageText = errorMessage(err)
-  if (!isBadLocalChainStateMessage(errorMessageText)) {
+  if (!isBadLocalChainStateError(err)) {
     return null
   }
   return new BadLocalChainStateError(USER_FACING_MESSAGE, { cause: err })

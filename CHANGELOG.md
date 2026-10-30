@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Historical Mutinynet Arkade accounts that still pointed at the Signet operator proxy are rewritten to the Mutinynet proxy on upgrade
+- On-chain wallets whose Signet or Mutinynet history got mixed by the v0.3.6 network split (all transactions stuck as pending) are repaired on unlock: affected Signet / Mutinynet descriptor wallets are reset and rescanned once from Esplora
+- On-chain sync now stops with "Wrong Esplora network" when the Esplora server for Signet serves Mutinynet (or the other way around) instead of mixing both chains, and reports an Esplora chain mismatch, which Full rescan repairs, when the server's chain replaces the saved one down to genesis
 
 ## [0.3.6] - 2026-10-23
 

@@ -17,12 +17,21 @@ import {
 } from '@/lib/wallet/historical-signet-onchain-chain'
 import {
   applySignetNetworkSplitToPayload,
+  dropDescriptorWalletsContradictingTheirNetwork,
   repairMutinynetArkadeOperatorUrl,
 } from '@/lib/wallet/signet-network-split-migration'
 import {
   AddressType,
+  type DescriptorWalletData,
   type WalletSecretsPayload,
 } from '@/lib/wallet/wallet-domain-types'
+import {
+  bdkChangesetJson,
+  MUTINYNET_ANCHOR_HEIGHT,
+  MUTINYNET_TIP_HEIGHT,
+  PUBLIC_SIGNET_ANCHOR_HEIGHT,
+  PUBLIC_SIGNET_TIP_HEIGHT,
+} from '@/test-utils/bdk-changeset-json-fixtures'
 
 async function insertSetting(
   walletDb: Kysely<Database>,
@@ -331,5 +340,97 @@ describe('repairMutinynetArkadeOperatorUrl', () => {
 
     expect(repaired.arkadeAccounts[0].operatorUrl).toBe(MUTINYNET_OPERATOR_PROXY_URL)
     expect(repaired.arkadeAccounts[0].networkMode).toBe('mutinynet')
+  })
+})
+
+const publicSignetHistoryChangeset = bdkChangesetJson({
+  blockHeights: [0, PUBLIC_SIGNET_ANCHOR_HEIGHT, PUBLIC_SIGNET_TIP_HEIGHT],
+  anchorHeights: [PUBLIC_SIGNET_ANCHOR_HEIGHT],
+})
+
+const mutinynetHistoryChangeset = bdkChangesetJson({
+  blockHeights: [0, MUTINYNET_ANCHOR_HEIGHT, MUTINYNET_TIP_HEIGHT],
+  anchorHeights: [MUTINYNET_ANCHOR_HEIGHT],
+})
+
+const publicSignetAnchorsUnderMutinynetTipChangeset = bdkChangesetJson({
+  blockHeights: [0, PUBLIC_SIGNET_ANCHOR_HEIGHT, MUTINYNET_TIP_HEIGHT],
+  anchorHeights: [PUBLIC_SIGNET_ANCHOR_HEIGHT],
+})
+
+const mixedHistoryChangeset = bdkChangesetJson({
+  blockHeights: [0, PUBLIC_SIGNET_ANCHOR_HEIGHT, MUTINYNET_ANCHOR_HEIGHT],
+  anchorHeights: [PUBLIC_SIGNET_ANCHOR_HEIGHT, MUTINYNET_ANCHOR_HEIGHT],
+})
+
+function descriptorRow(
+  network: DescriptorWalletData['network'],
+  changeSet: string,
+  accountId = 0,
+): DescriptorWalletData {
+  return { ...signetDescriptorWallet, network, accountId, changeSet, fullScanDone: true }
+}
+
+function payloadWithDescriptorRows(
+  descriptorWallets: DescriptorWalletData[],
+): WalletSecretsPayload {
+  return { ...createPreSplitPayload(), descriptorWallets }
+}
+
+describe('dropDescriptorWalletsContradictingTheirNetwork', () => {
+  it('drops a signet row with Mutinynet history', () => {
+    const payload = payloadWithDescriptorRows([descriptorRow('signet', mutinynetHistoryChangeset)])
+
+    const repaired = dropDescriptorWalletsContradictingTheirNetwork(payload)
+
+    expect(repaired.descriptorWallets).toEqual([])
+  })
+
+  it('drops a mutinynet row with public Signet anchors under a Mutinynet tip', () => {
+    const payload = payloadWithDescriptorRows([
+      descriptorRow('mutinynet', publicSignetAnchorsUnderMutinynetTipChangeset),
+    ])
+
+    const repaired = dropDescriptorWalletsContradictingTheirNetwork(payload)
+
+    expect(repaired.descriptorWallets).toEqual([])
+  })
+
+  it('drops mixed rows on either network', () => {
+    const payload = payloadWithDescriptorRows([
+      descriptorRow('signet', mixedHistoryChangeset, 0),
+      descriptorRow('mutinynet', mixedHistoryChangeset, 1),
+    ])
+
+    const repaired = dropDescriptorWalletsContradictingTheirNetwork(payload)
+
+    expect(repaired.descriptorWallets).toEqual([])
+  })
+
+  it('keeps matching, unknown, empty and non-signet-family rows unchanged', () => {
+    const keptRows = [
+      descriptorRow('signet', publicSignetHistoryChangeset, 0),
+      descriptorRow('mutinynet', mutinynetHistoryChangeset, 0),
+      descriptorRow('signet', '{}', 1),
+      descriptorRow('mutinynet', bdkChangesetJson({ blockHeights: [0] }), 1),
+      descriptorRow('testnet', mutinynetHistoryChangeset, 0),
+      descriptorRow('regtest', mutinynetHistoryChangeset, 0),
+    ]
+    const payload = payloadWithDescriptorRows(keptRows)
+
+    const repaired = dropDescriptorWalletsContradictingTheirNetwork(payload)
+
+    expect(repaired.descriptorWallets).toEqual(keptRows)
+  })
+
+  it('leaves Arkade accounts, Lightning connections and active Arkade ids unchanged', () => {
+    const payload = payloadWithDescriptorRows([descriptorRow('signet', mutinynetHistoryChangeset)])
+
+    const repaired = dropDescriptorWalletsContradictingTheirNetwork(payload)
+
+    expect(repaired.arkadeAccounts).toEqual(payload.arkadeAccounts)
+    expect(repaired.lightningNwcConnections).toEqual(payload.lightningNwcConnections)
+    expect(repaired.activeArkadeAccountIdByNetwork).toEqual(payload.activeArkadeAccountIdByNetwork)
+    expect(repaired.barkAccounts).toEqual(payload.barkAccounts)
   })
 })

@@ -12,6 +12,10 @@ pub const CODE_SERIALIZATION: &str = "serialization";
 pub const CODE_NO_ACTIVE_WALLET: &str = "no_active_wallet";
 pub const CODE_WALLET_ALREADY_BORROWED: &str = "wallet_already_borrowed";
 pub const CODE_WALLET_NOT_LOADED_FOR_LAB: &str = "wallet_not_loaded_for_lab";
+/// Matched by `frontend/src/lib/shared/wasm-crypto-error.ts`.
+pub const CODE_ESPLORA_NETWORK_MISMATCH: &str = "esplora_network_mismatch";
+/// Matched by `frontend/src/lib/shared/wasm-crypto-error.ts`.
+pub const CODE_ESPLORA_CHAIN_MISMATCH: &str = "esplora_chain_mismatch";
 
 pub const MSG_NO_ACTIVE_WALLET: &str = "No active wallet. Call create_wallet or load_wallet first.";
 pub const MSG_WALLET_ALREADY_BORROWED: &str =
@@ -60,6 +64,12 @@ pub enum CryptoError {
     Transaction(String),
     #[error("Serialization error: {0}")]
     Serialization(String),
+    /// The Esplora server serves a different network than the active wallet.
+    #[error("{0}")]
+    EsploraNetworkMismatch(String),
+    /// The Esplora chain cannot be reconciled with the wallet's saved local chain.
+    #[error("Esplora chain mismatch: {0}")]
+    EsploraChainMismatch(String),
 }
 
 impl CryptoError {
@@ -71,6 +81,8 @@ impl CryptoError {
             CryptoError::Blockchain(_) => CODE_BLOCKCHAIN,
             CryptoError::Transaction(_) => CODE_TRANSACTION,
             CryptoError::Serialization(_) => CODE_SERIALIZATION,
+            CryptoError::EsploraNetworkMismatch(_) => CODE_ESPLORA_NETWORK_MISMATCH,
+            CryptoError::EsploraChainMismatch(_) => CODE_ESPLORA_CHAIN_MISMATCH,
         }
     }
 
@@ -147,7 +159,7 @@ impl From<bdk_wallet::signer::SignerError> for CryptoError {
 
 impl From<bdk_wallet::chain::local_chain::CannotConnectError> for CryptoError {
     fn from(error: bdk_wallet::chain::local_chain::CannotConnectError) -> Self {
-        CryptoError::Blockchain(error.to_string())
+        CryptoError::EsploraChainMismatch(error.to_string())
     }
 }
 

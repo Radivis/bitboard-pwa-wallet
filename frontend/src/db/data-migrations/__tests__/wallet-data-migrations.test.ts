@@ -27,6 +27,7 @@ import {
 } from '@/db/wallet-persistence'
 import {
   MUTINYNET_ARKADE_OPERATOR_URL_REPAIR_DATA_MIGRATION_NAME,
+  SIGNET_MUTINYNET_CHAIN_REPAIR_DATA_MIGRATION_NAME,
   SIGNET_NETWORK_SPLIT_DATA_MIGRATION_NAME,
 } from '@/db/data-migrations/data-migration-names'
 import { WALLET_DATA_MIGRATIONS } from '@/db/data-migrations/wallet-data-migration-registry'
@@ -41,8 +42,24 @@ import {
   SIGNET_ESPLORA_SETTINGS_KEY,
 } from '@/lib/wallet/historical-signet-onchain-chain'
 import { AddressType } from '@/lib/wallet/wallet-domain-types'
+import {
+  bdkChangesetJson,
+  MUTINYNET_TIP_HEIGHT,
+  PUBLIC_SIGNET_ANCHOR_HEIGHT,
+  PUBLIC_SIGNET_TIP_HEIGHT,
+} from '@/test-utils/bdk-changeset-json-fixtures'
 
 const SESSION_PASSWORD = 'test-password-12345'
+
+const publicSignetHistoryChangeset = bdkChangesetJson({
+  blockHeights: [0, PUBLIC_SIGNET_ANCHOR_HEIGHT, PUBLIC_SIGNET_TIP_HEIGHT],
+  anchorHeights: [PUBLIC_SIGNET_ANCHOR_HEIGHT],
+})
+
+const publicSignetAnchorsUnderMutinynetTipChangeset = bdkChangesetJson({
+  blockHeights: [0, PUBLIC_SIGNET_ANCHOR_HEIGHT, MUTINYNET_TIP_HEIGHT],
+  anchorHeights: [PUBLIC_SIGNET_ANCHOR_HEIGHT],
+})
 
 const HISTORICAL_SIGNET_OPERATOR_PROXY_URL = 'http://127.0.0.1:5173/api/arkade/operator/signet'
 const MUTINYNET_OPERATOR_PROXY_URL = 'http://127.0.0.1:5173/api/arkade/operator/mutinynet'
@@ -252,6 +269,64 @@ describe('wallet data migrations', () => {
       )
     })
 
+    it('keeps a public Signet row on signet when the device classified public Signet', async () => {
+      await walletDb
+        .insertInto('settings')
+        .values({ key: SIGNET_ESPLORA_SETTINGS_KEY, value: 'https://mempool.space/signet/api' })
+        .execute()
+      const publicSignetSecrets = createSignetWalletSecrets()
+      publicSignetSecrets.descriptorWallets[0].changeSet = publicSignetHistoryChangeset
+      const walletId = await createWalletWithSecrets(walletDb, 'Signet wallet', publicSignetSecrets)
+
+      await runPendingWalletDataMigrations(walletDb)
+
+      const migratedPayload = await loadWalletSecretsPayload(walletDb, walletId)
+      expect(migratedPayload.descriptorWallets).toHaveLength(1)
+      expect(migratedPayload.descriptorWallets[0].network).toBe('signet')
+      expect(migratedPayload.descriptorWallets[0].changeSet).toBe(publicSignetHistoryChangeset)
+    })
+
+    it('drops a public Signet row that the split moved to mutinynet in the same pass', async () => {
+      const publicSignetSecrets = createSignetWalletSecrets()
+      publicSignetSecrets.descriptorWallets[0].changeSet = publicSignetHistoryChangeset
+      const walletId = await createWalletWithSecrets(walletDb, 'Signet wallet', publicSignetSecrets)
+
+      await runPendingWalletDataMigrations(walletDb)
+
+      const migratedPayload = await loadWalletSecretsPayload(walletDb, walletId)
+      expect(migratedPayload.descriptorWallets).toEqual([])
+      expect(migratedPayload.arkadeAccounts[0].networkMode).toBe('mutinynet')
+    })
+
+    it('drops a v0.3.6 mutinynet row whose public Signet anchors sit under a Mutinynet tip', async () => {
+      const walletId = await createWalletWithSecrets(walletDb, 'Upgraded wallet', {
+        ...createSignetWalletSecrets(),
+        descriptorWallets: [
+          {
+            ...createSignetWalletSecrets().descriptorWallets[0],
+            network: 'mutinynet',
+            changeSet: publicSignetAnchorsUnderMutinynetTipChangeset,
+            fullScanDone: true,
+          },
+        ],
+        arkadeAccounts: [{ ...signetArkadeAccount, networkMode: 'mutinynet' }],
+        activeArkadeAccountIdByNetwork: { mutinynet: signetArkadeAccount.id },
+      })
+      await recordWalletDataMigrationsApplied(walletDb, walletId, [
+        SIGNET_NETWORK_SPLIT_DATA_MIGRATION_NAME,
+        MUTINYNET_ARKADE_OPERATOR_URL_REPAIR_DATA_MIGRATION_NAME,
+      ])
+
+      await runPendingWalletDataMigrations(walletDb)
+
+      const migratedPayload = await loadWalletSecretsPayload(walletDb, walletId)
+      expect(migratedPayload.descriptorWallets).toEqual([])
+      expect(migratedPayload.arkadeAccounts[0].networkMode).toBe('mutinynet')
+      expect(await listMarkerNames(walletDb, walletId)).toContain(
+        SIGNET_MUTINYNET_CHAIN_REPAIR_DATA_MIGRATION_NAME,
+      )
+    })
+
     it('keeps payload and revision unchanged when the marker insert fails', async () => {
       const walletId = await createWalletWithSecrets(
         walletDb,
@@ -286,6 +361,9 @@ describe('wallet data migrations', () => {
 
       expect(await listMarkerNames(walletDb, walletId)).toEqual(ALL_WALLET_MIGRATION_NAMES)
       expect(ALL_WALLET_MIGRATION_NAMES).toContain(SIGNET_NETWORK_SPLIT_DATA_MIGRATION_NAME)
+      expect(ALL_WALLET_MIGRATION_NAMES).toContain(
+        SIGNET_MUTINYNET_CHAIN_REPAIR_DATA_MIGRATION_NAME,
+      )
     })
 
     it('rolls back wallet, secrets and markers when the marker insert fails', async () => {

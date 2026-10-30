@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { BadLocalChainStateError } from '@/lib/shared/bad-local-chain-state-error'
+import { WASM_CRYPTO_ERROR_CODE_ESPLORA_NETWORK_MISMATCH } from '@/lib/shared/wasm-crypto-error'
 import {
   reportWalletSyncError,
   showInitialSyncFailureToast,
@@ -12,6 +13,18 @@ vi.mock('sonner', () => ({
     error: (...args: unknown[]) => toastError(...args),
   },
 }))
+
+const ESPLORA_NETWORK_MISMATCH_MESSAGE =
+  'The Esplora server for Signet is on Mutinynet (tip height 3547496). Check the Esplora URL for Signet in Settings.'
+
+function esploraNetworkMismatchError(): Error {
+  return new Error(
+    JSON.stringify({
+      code: WASM_CRYPTO_ERROR_CODE_ESPLORA_NETWORK_MISMATCH,
+      message: ESPLORA_NETWORK_MISMATCH_MESSAGE,
+    }),
+  )
+}
 
 describe('reportWalletSyncError', () => {
   beforeEach(() => {
@@ -61,6 +74,17 @@ describe('reportWalletSyncError', () => {
     })
   })
 
+  it('shows an Esplora network mismatch as its own error with the Settings hint', () => {
+    for (const context of ['initial-sync', 'unlock-background-sync'] as const) {
+      toastError.mockClear()
+      reportWalletSyncError(context, esploraNetworkMismatchError())
+
+      expect(toastError).toHaveBeenCalledWith('Wrong Esplora network', {
+        description: ESPLORA_NETWORK_MISMATCH_MESSAGE,
+      })
+    }
+  })
+
   it('shows repair hint for initial-sync when error indicates bad local chain', () => {
     reportWalletSyncError(
       'initial-sync',
@@ -95,6 +119,15 @@ describe('showInitialSyncFailureToast', () => {
     const call = toastError.mock.calls[0][1] as { action: { onClick: () => void } }
     call.action.onClick()
     expect(onRetry).toHaveBeenCalled()
+  })
+
+  it('does not suggest Full rescan for an Esplora network mismatch', () => {
+    showInitialSyncFailureToast(esploraNetworkMismatchError(), vi.fn())
+
+    const [title, options] = toastError.mock.calls[0] as [string, { description: string }]
+    expect(title).toBe('Wrong Esplora network')
+    expect(options.description).toContain(ESPLORA_NETWORK_MISMATCH_MESSAGE)
+    expect(options.description).not.toMatch(/Full rescan/)
   })
 
   it('shows Full rescan hint for bad local chain', () => {

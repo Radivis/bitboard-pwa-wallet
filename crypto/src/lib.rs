@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 use bdk_wallet::chain::Merge;
 use bdk_wallet::{ChangeSet, KeychainKind, Wallet as BdkWallet};
@@ -29,6 +29,7 @@ use crate::error::{
     MapDisplayErrToJs, MapErrToJs, wasm_crypto_error,
 };
 pub mod esplora;
+pub mod esplora_network_identity;
 pub mod esplora_tx_anchor_reconcile;
 pub mod lab;
 pub mod lab_entity_wallet;
@@ -53,6 +54,8 @@ pub fn init() {
 
 thread_local! {
     static ACTIVE_WALLET: RefCell<Option<BdkWallet>> = const { RefCell::new(None) };
+    /// App network of `ACTIVE_WALLET`. BDK maps Signet and Mutinynet to the same network.
+    static ACTIVE_WALLET_NETWORK: Cell<Option<types::BitcoinNetwork>> = const { Cell::new(None) };
     static ACCUMULATED_CHANGESET: RefCell<ChangeSet> = RefCell::new(ChangeSet::default());
     static EXTERNAL_DESCRIPTOR_FOR_LAB: RefCell<String> = const { RefCell::new(String::new()) };
     static INTERNAL_DESCRIPTOR_FOR_LAB: RefCell<String> = const { RefCell::new(String::new()) };
@@ -194,10 +197,12 @@ pub fn create_wallet(
     address_type: &str,
     account_id: u32,
 ) -> Result<JsValue, JsValue> {
+    let bitcoin_network = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
     let (create_wallet_result, bdk_wallet, initial_changeset) =
         build_create_wallet_result(mnemonic_str, network, address_type, account_id)?;
 
     ACTIVE_WALLET.with(|wallet_cell| wallet_cell.replace(Some(bdk_wallet)));
+    ACTIVE_WALLET_NETWORK.with(|network_cell| network_cell.set(Some(bitcoin_network)));
     ACCUMULATED_CHANGESET.with(|changeset_cell| *changeset_cell.borrow_mut() = initial_changeset);
     EXTERNAL_DESCRIPTOR_FOR_LAB.with(|descriptor_cell| {
         *descriptor_cell.borrow_mut() = create_wallet_result.external_descriptor.clone()
@@ -251,6 +256,7 @@ pub fn load_wallet(
     .map_err(JsValue::from)?;
 
     ACTIVE_WALLET.with(|wallet_cell| wallet_cell.replace(Some(bdk_wallet)));
+    ACTIVE_WALLET_NETWORK.with(|network_cell| network_cell.set(Some(bitcoin_network)));
     ACCUMULATED_CHANGESET.with(|changeset_cell| *changeset_cell.borrow_mut() = changeset);
     EXTERNAL_DESCRIPTOR_FOR_LAB
         .with(|descriptor_cell| *descriptor_cell.borrow_mut() = external_descriptor.to_string());
@@ -340,7 +346,7 @@ pub async fn sync_wallet(esplora_url: &str) -> Result<JsValue, JsValue> {
         .map_display_err_to_js()?
         .into();
 
-    with_wallet_mut(|wallet| sync::apply_update(wallet, update).map_err(JsValue::from))??;
+    apply_esplora_update_to_active_wallet(update)?;
 
     apply_esplora_anchor_reconcile_passes(&esplora_client).await?;
 
@@ -449,10 +455,17 @@ pub async fn full_scan_wallet(esplora_url: &str, stop_gap: usize) -> Result<JsVa
         .map_display_err_to_js()?
         .into();
 
-    with_wallet_mut(|wallet| sync::apply_update(wallet, update).map_err(JsValue::from))??;
+    apply_esplora_update_to_active_wallet(update)?;
 
     accumulate_staged_changes();
     build_sync_result()
+}
+
+fn apply_esplora_update_to_active_wallet(update: bdk_wallet::Update) -> Result<(), JsValue> {
+    let app_network = ACTIVE_WALLET_NETWORK.with(Cell::get);
+    with_wallet_mut(|wallet| {
+        sync::apply_esplora_update(wallet, app_network, update).map_err(JsValue::from)
+    })?
 }
 
 fn build_sync_result() -> Result<JsValue, JsValue> {

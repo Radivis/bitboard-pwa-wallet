@@ -6,6 +6,12 @@ export const NO_ACTIVE_WALLET_WASM_MESSAGE =
 
 export const WASM_CRYPTO_ERROR_CODE_NO_ACTIVE_WALLET = 'no_active_wallet'
 
+/** Matches Rust `CODE_ESPLORA_NETWORK_MISMATCH` in `crypto/src/error.rs`. */
+export const WASM_CRYPTO_ERROR_CODE_ESPLORA_NETWORK_MISMATCH = 'esplora_network_mismatch'
+
+/** Matches Rust `CODE_ESPLORA_CHAIN_MISMATCH` in `crypto/src/error.rs`. */
+export const WASM_CRYPTO_ERROR_CODE_ESPLORA_CHAIN_MISMATCH = 'esplora_chain_mismatch'
+
 function isWasmCryptoErrorPayload(value: unknown): value is WasmCryptoErrorPayload {
   if (value == null || typeof value !== 'object') return false
   if (value instanceof Error) return false
@@ -43,6 +49,14 @@ export function wasmCryptoErrorCode(err: unknown): string | null {
 
 export function wasmCryptoErrorMessage(err: unknown): string | null {
   return parseWasmCryptoError(err)?.message ?? null
+}
+
+/**
+ * True when the Esplora server serves the other signet-family network. Full rescan cannot
+ * repair this; the Esplora URL in Settings has to change.
+ */
+export function isEsploraNetworkMismatchError(err: unknown): boolean {
+  return wasmCryptoErrorCode(err) === WASM_CRYPTO_ERROR_CODE_ESPLORA_NETWORK_MISMATCH
 }
 
 /** True when persisting/exporting without a loaded wallet is expected and safe to ignore. */

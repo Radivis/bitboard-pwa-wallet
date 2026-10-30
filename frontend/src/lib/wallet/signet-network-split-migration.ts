@@ -12,7 +12,12 @@ import {
   SIGNET_ESPLORA_SETTINGS_KEY,
   type HistoricalSignetOnchainChain,
 } from '@/lib/wallet/historical-signet-onchain-chain'
-import type { StoredArkadeAccount, WalletSecretsPayload } from '@/lib/wallet/wallet-domain-types'
+import { descriptorChangesetContradictsNetwork } from '@/lib/wallet/signet-mutinynet-chain-classifier'
+import type {
+  DescriptorWalletData,
+  StoredArkadeAccount,
+  WalletSecretsPayload,
+} from '@/lib/wallet/wallet-domain-types'
 
 /**
  * Before the Signet/Mutinynet split, the Signet slot of this path forwarded to
@@ -139,6 +144,34 @@ export function repairMutinynetArkadeOperatorUrl(
     ...payload,
     arkadeAccounts: payload.arkadeAccounts.map(repairMutinynetAccountOperatorUrl),
   }
+}
+
+/**
+ * Drops every Signet or Mutinynet descriptor row whose block history belongs to the
+ * other chain. Both networks derive identical descriptors, so a dropped row is only
+ * a cache: the next load recreates it from the mnemonic with `fullScanDone: false`,
+ * and the post-unlock full scan rebuilds it on its own network. Unreadable
+ * changesets, other networks, Arkade, Lightning and Bark are left as they are.
+ */
+export function dropDescriptorWalletsContradictingTheirNetwork(
+  payload: WalletSecretsPayload,
+): WalletSecretsPayload {
+  return {
+    ...payload,
+    descriptorWallets: payload.descriptorWallets.filter(
+      (descriptorWallet) => !descriptorWalletContradictsItsNetwork(descriptorWallet),
+    ),
+  }
+}
+
+function descriptorWalletContradictsItsNetwork(descriptorWallet: DescriptorWalletData): boolean {
+  if (descriptorWallet.network !== 'signet' && descriptorWallet.network !== 'mutinynet') {
+    return false
+  }
+  return descriptorChangesetContradictsNetwork(
+    descriptorWallet.changeSet,
+    descriptorWallet.network,
+  )
 }
 
 function repairMutinynetAccountOperatorUrl(account: StoredArkadeAccount): StoredArkadeAccount {
