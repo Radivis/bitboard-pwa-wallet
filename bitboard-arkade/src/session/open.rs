@@ -1,6 +1,9 @@
 use std::cell::Cell;
 use std::sync::{Arc, Mutex};
 
+#[cfg(target_arch = "wasm32")]
+use web_sys::console;
+
 use ark_bdk_wallet::Wallet as ArkBdkWallet;
 use ark_client::key_provider::display_receive_derivation_index;
 use ark_client::{Bip32KeyProvider, InMemorySwapStorage, OfflineClient};
@@ -205,6 +208,8 @@ impl ArkadeSession {
     pub async fn open(
         params: OpenArkadeSessionParams<'_>,
     ) -> ArkResult<(Self, Option<OperatorSignerMigrationHint>)> {
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] ArkadeSession::open START".into());
+        
         let OpenArkadeSessionParams {
             mnemonic_words,
             network_mode,
@@ -215,25 +220,43 @@ impl ArkadeSession {
             bumper_changeset_json,
             bumper_full_scan_done,
         } = params;
+        
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] parse_import START".into());
         let parsed = BitboardArkadePersistence::parse_import(sdk_persistence_json);
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] parse_import DONE".into());
+        
         let autonomous_mode = parsed.autonomous_mode;
         let cached_operator_info = parsed.wallet_db.cached_operator_info.clone();
         let persisted_operator_identity = parsed.operator_identity.clone();
         let offchain_next_derivation_index = parsed.wallet_db.offchain_next_derivation_index;
         let network = network_mode.to_bitcoin_network();
+        
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] session_open_connect_mode START".into());
         let connect_mode = session_open_connect_mode(
             autonomous_mode,
             cached_operator_info.is_some(),
             cached_operator_info.as_ref().map(|info| info.signer_pk_hex.as_str()),
             persisted_operator_identity.as_ref().map(|id| id.signer_pk_hex.as_str()),
         )?;
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] session_open_connect_mode DONE".into());
 
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] JsonPersistenceDb::from_snapshot START".into());
         let wallet_db = Arc::new(JsonPersistenceDb::from_snapshot(parsed.wallet_db));
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] JsonPersistenceDb::from_snapshot DONE".into());
+        
         let secp = Secp256k1::new();
+        
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] Mnemonic::parse START".into());
         let mnemonic = Mnemonic::parse(mnemonic_words)?;
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] Mnemonic::parse DONE".into());
+        
         let seed = mnemonic.to_seed("");
+        
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] Xpriv::new_master START".into());
         let xpriv = Xpriv::new_master(network, &seed)?;
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] Xpriv::new_master DONE".into());
 
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] delegator check START".into());
         let (delegator, delegator_xonly) = if delegator_url.trim().is_empty() {
             (None, None)
         } else {
@@ -243,8 +266,13 @@ impl ArkadeSession {
             let delegator_xonly: XOnlyPublicKey = delegator_pk.into();
             (Some(delegator), Some(delegator_xonly))
         };
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] delegator check DONE".into());
 
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] EsploraBlockchain::new START".into());
         let blockchain = Arc::new(EsploraBlockchain::new(&esplora_url)?);
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] EsploraBlockchain::new DONE".into());
+        
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] ArkBdkWallet::new_from_xpriv_hydrated START".into());
         let wallet = Arc::new(
             ArkBdkWallet::new_from_xpriv_hydrated(
                 xpriv,
@@ -257,6 +285,7 @@ impl ArkadeSession {
             )
             .map_err(|error| ArkWasmError::Wallet(error.to_string()))?,
         );
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] ArkBdkWallet::new_from_xpriv_hydrated DONE".into());
 
         // LIFE-ARK-LOAD-04 / UNLOCK-ARK-05: For LiveOperator mode, fetch server info early
         // before constructing OfflineClient, so we can use connect_with_cached_info to skip
@@ -264,13 +293,21 @@ impl ArkadeSession {
         // which can take 20-30s for wallets with high derivation indices (especially after
         // Signet→Mutinynet migration). First operator sync will run discover_keys via
         // list_vtxos and other operations that need it.
+        #[cfg(target_arch = "wasm32")] console::log_1(&format!("[TRACE] connect_mode check: {:?}", connect_mode).into());
         let live_operator_server_info = if connect_mode == SessionOpenConnectMode::LiveOperator {
             #[cfg(target_arch = "wasm32")]
             {
+                #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] WasmHttpClient::new START".into());
                 let mut network_client = ark_client::WasmHttpClient::new(arkade_server_url.clone())
                     .map_err(|e| ArkWasmError::Client(ark_client::Error::from(e)))?;
-                Some(network_client.get_info().await
-                    .map_err(|e| ArkWasmError::Client(ark_client::Error::from(e)))?)
+                #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] WasmHttpClient::new DONE".into());
+                
+                #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] network_client.get_info START".into());
+                let info = network_client.get_info().await
+                    .map_err(|e| ArkWasmError::Client(ark_client::Error::from(e)))?;
+                #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] network_client.get_info DONE".into());
+                
+                Some(info)
             }
             #[cfg(not(target_arch = "wasm32"))]
             {
@@ -282,6 +319,7 @@ impl ArkadeSession {
 
         // Always Bip32KeyProvider — never StaticKeyProvider/new_with_keypair — so ark-client
         // receive peek/reveal paths use the indexed branch, not the static fallback.
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] OfflineClient::new_with_bip32_at_index START".into());
         let offline = OfflineClient::<
             EsploraBlockchain,
             BumperWallet,
@@ -303,34 +341,52 @@ impl ArkadeSession {
             vec![],
         )
         .map_err(ArkWasmError::Client)?;
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] OfflineClient::new_with_bip32_at_index DONE".into());
 
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] connect check START".into());
         let client = match connect_mode {
             SessionOpenConnectMode::CachedOperatorInfo => {
+                #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] CachedOperatorInfo path".into());
                 let cached =
                     cached_operator_info.ok_or(ArkWasmError::AutonomousOperatorInfoMissing)?;
                 let server_info = cached.to_server_info()?;
                 offline.connect_with_cached_info(server_info).await?
             }
             SessionOpenConnectMode::LiveOperator => {
+                #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] LiveOperator path".into());
                 // On WASM: use pre-fetched server info to skip discover_keys
                 // On native (tests): use normal connect
                 match live_operator_server_info {
-                    Some(server_info) => offline.connect_with_cached_info(server_info).await?,
+                    Some(server_info) => {
+                        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] connect_with_cached_info START".into());
+                        let result = offline.connect_with_cached_info(server_info).await?;
+                        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] connect_with_cached_info DONE".into());
+                        result
+                    }
                     None => offline.connect().await?,
                 }
             }
         };
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] connect check DONE".into());
+        
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] warm cache check START".into());
         if offchain_next_derivation_index > 0 {
             let warm_through =
                 display_receive_derivation_index(offchain_next_derivation_index).saturating_add(1);
             client.warm_offchain_receive_key_cache(warm_through)?;
         }
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] warm cache check DONE".into());
+        
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] get server_info START".into());
         let server_info = client.server_info()?;
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] get server_info DONE".into());
+        
         let server_signer: XOnlyPublicKey = server_info.signer_pk.into();
         wallet_db.set_load_context(network, server_signer);
         // LIFE-ARK-LOAD-04 / UNLOCK-ARK-05: do not await or start bumper Esplora.
         // First onchain_bumper_info / proceed still uses sync_bumper_wallet_with_retries.
 
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] migration_hint check START".into());
         let migration_hint = match connect_mode {
             SessionOpenConnectMode::CachedOperatorInfo => None,
             SessionOpenConnectMode::LiveOperator => {
@@ -345,7 +401,9 @@ impl ArkadeSession {
                 hint
             }
         };
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] migration_hint check DONE".into());
 
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] operator_identity creation START".into());
         let operator_identity = Mutex::new(match connect_mode {
             SessionOpenConnectMode::CachedOperatorInfo => persisted_operator_identity
                 .unwrap_or_else(|| operator_identity_for_connected_signer(server_signer, network)),
@@ -353,9 +411,11 @@ impl ArkadeSession {
                 persisted_operator_identity_for_open(&migration_hint, server_signer, network)
             }
         });
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] operator_identity creation DONE".into());
 
         super::intents::install_intent_registered_hook(Arc::clone(&wallet_db));
 
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] ArkadeSession construction START".into());
         let session = Self {
             client,
             bumper_wallet: wallet,
@@ -370,7 +430,14 @@ impl ArkadeSession {
             ),
             vtxo_snapshot_apply: Mutex::new(()),
         };
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] ArkadeSession construction DONE".into());
+        
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] heal_vtxo_exit_records START".into());
         session.heal_vtxo_exit_records();
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] heal_vtxo_exit_records DONE".into());
+        
+        #[cfg(target_arch = "wasm32")] console::log_1(&"[TRACE] ArkadeSession::open COMPLETE".into());
+        
         // LIFE-ARK-LOAD-04 / UNLOCK-ARK-05: do not await host tx finality reconcile on open.
         // First unilateral exit operation or post-load sync runs it if needed. Probing Esplora
         // for many host txids (especially Signet txids on Mutinynet after migration) can hang
