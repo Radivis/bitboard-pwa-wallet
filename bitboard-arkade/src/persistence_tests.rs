@@ -20,6 +20,7 @@ use std::str::FromStr;
 const PK_CURRENT: &str = "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
 const PK_DEPRECATED: &str = "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5";
 const PK_UNKNOWN: &str = "030192e796452d6df9697c280542e1560557bcf79a347d925895043136225c7cb4";
+const PK_MUTINYNET_OPERATOR: &str = "03a34b99f22c790c4e36b2b3c2c35a36db06226e41c692fc82b8b56ac1c540c5bd";
 
 fn public_key(hex: &str) -> PublicKey {
     PublicKey::from_str(hex).expect("valid key")
@@ -1193,4 +1194,71 @@ fn published_v3_kitchen_sink_imports_heals_and_reexports_v12() {
     assert!(envelope.wallet_db.host_tx_observations.is_empty());
     assert!(envelope.wallet_db.unilateral_exit_frontend.is_none());
     assert!(!envelope.autonomous_mode);
+}
+
+#[test]
+fn validate_operator_identity_rejects_signet_signer_for_mutinynet_operator() {
+    let signet_signer = xonly(PK_CURRENT);
+    
+    let stored_identity = OperatorIdentity {
+        signer_pk_hex: signet_signer.to_string(),
+        network: "signet".to_string(),
+    };
+    
+    let mutinynet_server_info = test_server_info(PK_MUTINYNET_OPERATOR, vec![]);
+    
+    let result = validate_operator_identity(
+        Some(&stored_identity),
+        &mutinynet_server_info,
+        Network::Signet,
+        1_700_000_000,
+    );
+    
+    assert!(result.is_err(), "should reject Signet signer for Mutinynet operator");
+    let error_msg = result.unwrap_err();
+    assert!(
+        error_msg.contains("not recognized by the connected operator"),
+        "error should mention signer mismatch, got: {error_msg}"
+    );
+}
+
+#[test]
+fn validate_operator_identity_accepts_matching_signer() {
+    let signer = xonly(PK_CURRENT);
+    
+    let stored_identity = OperatorIdentity {
+        signer_pk_hex: signer.to_string(),
+        network: "signet".to_string(),
+    };
+    
+    let server_info = test_server_info(PK_CURRENT, vec![]);
+    
+    let result = validate_operator_identity(
+        Some(&stored_identity),
+        &server_info,
+        Network::Signet,
+        1_700_000_000,
+    );
+    
+    assert!(result.is_ok(), "should accept matching signer");
+    assert_eq!(result.unwrap(), None, "no migration hint for matching signer");
+}
+
+#[test]
+fn session_open_cached_mode_should_validate_operator_signer_against_persisted() {
+    // This test documents the expected behavior: when opening with cached operator info,
+    // we should validate that the cached operator's signer matches the persisted operator identity.
+    // This catches Signet→Mutinynet migration cases where the account was relabeled but
+    // still has Signet's cached operator info.
+    
+    // For now, this test is commented out because the validation doesn't exist yet.
+    // Once implemented, the session open should either:
+    // 1. Fail with a clear error about operator signer mismatch, OR
+    // 2. Force a live connect instead of using cached info when there's a mismatch
+    
+    // The test would check that opening with:
+    // - persisted_operator_identity.signer_pk_hex = PK_MUTINYNET_OPERATOR
+    // - cached_operator_info with signer_pk_hex = PK_CURRENT (Signet)
+    // - autonomous_mode = true
+    // Results in an error or forces live connect
 }

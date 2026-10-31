@@ -38,18 +38,34 @@ pub(crate) enum SessionOpenConnectMode {
 }
 
 /// ARK-AUTO-03/04: persisted autonomous mode must not live-connect, and must fail closed
-/// when cached operator info is missing.
+/// when cached operator info is missing. Additionally, validates that cached operator signer
+/// matches persisted operator identity to catch migration mismatches (Signet→Mutinynet).
 pub(crate) fn session_open_connect_mode(
     autonomous_mode: bool,
     cached_operator_info_present: bool,
+    cached_operator_signer: Option<&str>,
+    persisted_operator_signer: Option<&str>,
 ) -> ArkResult<SessionOpenConnectMode> {
     if !autonomous_mode {
         return Ok(SessionOpenConnectMode::LiveOperator);
     }
-    if cached_operator_info_present {
-        return Ok(SessionOpenConnectMode::CachedOperatorInfo);
+    if !cached_operator_info_present {
+        return Err(ArkWasmError::AutonomousOperatorInfoMissing);
     }
-    Err(ArkWasmError::AutonomousOperatorInfoMissing)
+    
+    // Validate cached operator signer matches persisted identity to catch migration issues
+    if let (Some(cached_signer), Some(persisted_signer)) = (cached_operator_signer, persisted_operator_signer) {
+        if cached_signer != persisted_signer {
+            return Err(ArkWasmError::Persistence(format!(
+                "Cached operator signer ({}) does not match persisted operator identity ({}). \
+                 This usually indicates a network migration (e.g., Signet to Mutinynet) where \
+                 cached operator info was not updated.",
+                cached_signer, persisted_signer
+            )));
+        }
+    }
+    
+    Ok(SessionOpenConnectMode::CachedOperatorInfo)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -205,8 +221,12 @@ impl ArkadeSession {
         let persisted_operator_identity = parsed.operator_identity.clone();
         let offchain_next_derivation_index = parsed.wallet_db.offchain_next_derivation_index;
         let network = network_mode.to_bitcoin_network();
-        let connect_mode =
-            session_open_connect_mode(autonomous_mode, cached_operator_info.is_some())?;
+        let connect_mode = session_open_connect_mode(
+            autonomous_mode,
+            cached_operator_info.is_some(),
+            cached_operator_info.as_ref().map(|info| info.signer_pk_hex.as_str()),
+            persisted_operator_identity.as_ref().map(|id| id.signer_pk_hex.as_str()),
+        )?;
 
         let wallet_db = Arc::new(JsonPersistenceDb::from_snapshot(parsed.wallet_db));
         let secp = Secp256k1::new();
@@ -412,21 +432,42 @@ mod tests {
 
     #[test]
     fn session_open_connect_mode_live_when_autonomous_off() {
-        let mode = session_open_connect_mode(false, false).expect("live connect");
+        let mode = session_open_connect_mode(false, false, None, None).expect("live connect");
         assert_eq!(mode, SessionOpenConnectMode::LiveOperator);
-        let mode = session_open_connect_mode(false, true).expect("live connect with cache");
+        let mode = session_open_connect_mode(false, true, Some("02signer"), Some("02signer"))
+            .expect("live connect with cache");
         assert_eq!(mode, SessionOpenConnectMode::LiveOperator);
     }
 
     #[test]
     fn session_open_connect_mode_cached_when_autonomous_and_cache() {
-        let mode = session_open_connect_mode(true, true).expect("cached connect");
+        let mode = session_open_connect_mode(true, true, Some("02signer"), Some("02signer"))
+            .expect("cached connect");
         assert_eq!(mode, SessionOpenConnectMode::CachedOperatorInfo);
     }
 
     #[test]
     fn session_open_connect_mode_errors_when_autonomous_without_cache() {
-        let error = session_open_connect_mode(true, false).expect_err("missing cache");
+        let error = session_open_connect_mode(true, false, None, None).expect_err("missing cache");
         assert!(matches!(error, ArkWasmError::AutonomousOperatorInfoMissing));
+    }
+    
+    #[test]
+    fn session_open_connect_mode_errors_when_cached_signer_mismatches_persisted() {
+        let error = session_open_connect_mode(
+            true,
+            true,
+            Some("02signetsigner"),
+            Some("02mutinynetsigner"),
+        )
+        .expect_err("signer mismatch");
+        
+        match error {
+            ArkWasmError::Persistence(msg) => {
+                assert!(msg.contains("Cached operator signer"));
+                assert!(msg.contains("does not match persisted operator identity"));
+            }
+            _ => panic!("expected Persistence error, got {:?}", error),
+        }
     }
 }
