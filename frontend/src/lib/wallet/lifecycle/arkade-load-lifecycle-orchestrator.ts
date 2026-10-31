@@ -41,6 +41,12 @@ import {
   LIFECYCLE_LOAD_ERROR_FALLBACK,
   userFacingLifecycleErrorMessage,
 } from '@/lib/shared/utils'
+import {
+  createSessionStartTimeout,
+  isSessionStartTimeoutError,
+  raceSessionStart,
+  SessionStartTimeoutError,
+} from '@/lib/wallet/lifecycle/session-start-timeout'
 
 export type { ArkadeLoadLifecycleSnapshot, ArkadeLoadParams } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-types'
 
@@ -66,9 +72,15 @@ const listeners = new Set<(next: ArkadeLoadLifecycleSnapshot) => void>()
 const inFlightLoadTracker = createInFlightLifecycleTracker()
 let lastLoadParams: ArkadeLoadParams | null = null
 let loadGeneration = 0
+let cancelArkadeSessionStartTimeout: (() => void) | null = null
 
 function arkadeLoadWasSuperseded(generation: number): boolean {
   return generation !== loadGeneration
+}
+
+function clearArkadeSessionStartTimeout(): void {
+  cancelArkadeSessionStartTimeout?.()
+  cancelArkadeSessionStartTimeout = null
 }
 
 function loadKey(params: ArkadeLoadParams): string {
@@ -117,12 +129,17 @@ async function runPostOpenArkadeMaintenance(
 async function runArkadeSessionOpenBody(params: {
   walletId: number
   networkMode: ArkadeSupportedNetworkMode
+  isStillCurrent: () => boolean
 }): Promise<{ arkadeAccountId: string }> {
   const { walletId, networkMode } = params
+  const abandonIf = () => !params.isStillCurrent()
 
   await ensureSecretsChannel()
+  if (abandonIf()) return { arkadeAccountId: '' }
   await ensureArkadeEncryptedSecretsHost()
+  if (abandonIf()) return { arkadeAccountId: '' }
   const encrypted = await getWalletSecretsEncrypted(getDatabase(), walletId)
+  if (abandonIf()) return { arkadeAccountId: '' }
 
   const account = await findActiveArkadeAccountSummary({
     walletId,
@@ -131,7 +148,7 @@ async function runArkadeSessionOpenBody(params: {
   })
   const hadPersistedAccount = account != null
 
-  if (useWalletStore.getState().activeWalletId !== walletId) {
+  if (abandonIf() || useWalletStore.getState().activeWalletId !== walletId) {
     return { arkadeAccountId: account?.id ?? '' }
   }
 
@@ -142,32 +159,52 @@ async function runArkadeSessionOpenBody(params: {
       account,
       sessionReuseState: arkadeSessionReuseState,
     })
+    if (abandonIf()) return { arkadeAccountId: '' }
     if (reusedAccountId != null) {
       return { arkadeAccountId: reusedAccountId }
     }
   }
 
-  const { worker, account: activeAccount, openResult } =
-    await openFreshArkadeWorkerSession({
+  try {
+    const { worker, account: activeAccount, openResult } =
+      await openFreshArkadeWorkerSession({
+        walletId,
+        networkMode,
+        encrypted,
+        account,
+        hadPersistedAccount,
+        abandonIf,
+      })
+    if (abandonIf()) return { arkadeAccountId: '' }
+
+    await hydrateArkadeDashboardAfterSessionOpen({
+      worker,
       walletId,
       networkMode,
-      encrypted,
-      account,
-      hadPersistedAccount,
+      arkadeAccountId: activeAccount.id,
+      signerMigrationHint: openResult.signerMigrationHint,
+      bumperHydrateFellBackToEmpty: openResult.bumperHydrateFellBackToEmpty === true,
+      sessionReuseState: arkadeSessionReuseState,
+      runPostOpenMaintenance: runPostOpenArkadeMaintenance,
+      abandonIf,
     })
+    if (abandonIf()) return { arkadeAccountId: '' }
+    return { arkadeAccountId: activeAccount.id }
+  } catch (error) {
+    if (abandonIf()) return { arkadeAccountId: '' }
+    throw error
+  }
+}
 
-  await hydrateArkadeDashboardAfterSessionOpen({
-    worker,
-    walletId,
+function failArkadeSessionStart(networkMode: ArkadeSupportedNetworkMode, error: unknown): never {
+  terminateArkadeWorker()
+  clearArkadeDashboardStore()
+  setSnapshot({
+    loadPhase: 'load-error',
     networkMode,
-    arkadeAccountId: activeAccount.id,
-    signerMigrationHint: openResult.signerMigrationHint,
-    bumperHydrateFellBackToEmpty: openResult.bumperHydrateFellBackToEmpty === true,
-    sessionReuseState: arkadeSessionReuseState,
-    runPostOpenMaintenance: runPostOpenArkadeMaintenance,
+    errorMessage: userFacingLifecycleErrorMessage(error, LIFECYCLE_LOAD_ERROR_FALLBACK),
   })
-
-  return { arkadeAccountId: activeAccount.id }
+  throw error
 }
 
 /** True when the loaded Arkade rail belongs to this wallet, not a previous session. */
@@ -230,6 +267,7 @@ export function isArkadeLoadFailedForNetwork(networkMode: NetworkMode): boolean 
  */
 export function forceResetArkadeLoadLifecycleForTeardown(): void {
   loadGeneration += 1
+  clearArkadeSessionStartTimeout()
   lastOpenedSessionKey = null
   lastLoadedAccountId = null
   inFlightLoadTracker.clearCurrent()
@@ -290,15 +328,28 @@ export async function orchestrateArkadeLoad(params: ArkadeLoadParams): Promise<v
 
   return inFlightLoadTracker.begin(key, async () => {
     const generation = loadGeneration
+    let sessionStartTimedOut = false
+    const sessionStartTimeout = createSessionStartTimeout('Arkade', () => {
+      if (arkadeLoadWasSuperseded(generation)) return
+      sessionStartTimedOut = true
+      loadGeneration += 1
+      terminateArkadeWorker()
+    })
+    cancelArkadeSessionStartTimeout = sessionStartTimeout.cancel
+    const isStillCurrent = () => !arkadeLoadWasSuperseded(generation)
     try {
-      const { arkadeAccountId } = await runArkadeSessionOpenBody({
-        walletId,
-        networkMode,
-      })
-      if (arkadeLoadWasSuperseded(generation)) {
-        return
+      const { arkadeAccountId } = await raceSessionStart(
+        runArkadeSessionOpenBody({
+          walletId,
+          networkMode,
+          isStillCurrent,
+        }),
+        sessionStartTimeout,
+      )
+      if (sessionStartTimedOut) {
+        failArkadeSessionStart(networkMode, new SessionStartTimeoutError('Arkade'))
       }
-      if (abandonArkadeLoadIfActiveWalletChanged(walletId)) {
+      if (!isStillCurrent() || abandonArkadeLoadIfActiveWalletChanged(walletId)) {
         return
       }
       lastLoadedAccountId = arkadeAccountId
@@ -319,6 +370,13 @@ export async function orchestrateArkadeLoad(params: ArkadeLoadParams): Promise<v
         arkadeAccountId,
       })
     } catch (error) {
+      if (sessionStartTimedOut || isSessionStartTimeoutError(error)) {
+        if (arkadeLoadWasSuperseded(generation) && !sessionStartTimedOut) return
+        const timeoutError = isSessionStartTimeoutError(error)
+          ? error
+          : new SessionStartTimeoutError('Arkade')
+        failArkadeSessionStart(networkMode, timeoutError)
+      }
       if (arkadeLoadWasSuperseded(generation)) {
         return
       }
@@ -327,13 +385,11 @@ export async function orchestrateArkadeLoad(params: ArkadeLoadParams): Promise<v
       if (activeWalletChanged) {
         throw error
       }
-      clearArkadeDashboardStore()
-      setSnapshot({
-        loadPhase: 'load-error',
-        networkMode,
-        errorMessage: userFacingLifecycleErrorMessage(error, LIFECYCLE_LOAD_ERROR_FALLBACK),
-      })
-      throw error
+      failArkadeSessionStart(networkMode, error)
+    } finally {
+      if (cancelArkadeSessionStartTimeout === sessionStartTimeout.cancel) {
+        cancelArkadeSessionStartTimeout = null
+      }
     }
   })
 }
@@ -348,6 +404,7 @@ export async function orchestrateArkadeRetryLoad(): Promise<void> {
 /** @internal Test-only reset */
 export function resetArkadeLoadLifecycleStateForTests(): void {
   loadGeneration = 0
+  clearArkadeSessionStartTimeout()
   snapshot = { loadPhase: 'not-configured', networkMode: null, errorMessage: null }
   inFlightLoadTracker.clearCurrent()
   lastLoadParams = null

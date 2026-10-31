@@ -161,6 +161,13 @@ feature:
         implemented_by:
           - frontend/src/lib/arkade/__tests__/arkade-session-service.integration.test.ts
           - frontend/src/lib/wallet/__tests__/prepare-active-wallet-switch.test.ts
+      - id: LIFE-ARK-LOAD-06
+        description: >
+          Arkade session start that does not finish within 30 seconds fails.
+          The load error is "Arkade session start timed out", shown on the session
+          error screen and reported by the session-open toast. A later completion
+          of that start does not clear the error.
+        implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-load-lifecycle-orchestrator.test.ts
       - id: LIFE-ARK-BUMP-01
         description: >
           onchain_bumper_info runs at most one wallet-wide bumper Esplora scan

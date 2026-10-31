@@ -144,6 +144,7 @@ import {
   orchestrateArkadeLoad,
   resetArkadeLoadLifecycleStateForTests,
 } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
+import { SESSION_START_TIMEOUT_MS } from '@/lib/wallet/lifecycle/session-start-timeout'
 
 describe('arkade-load-lifecycle-orchestrator', () => {
   beforeEach(() => {
@@ -275,6 +276,45 @@ describe('arkade-load-lifecycle-orchestrator', () => {
     expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loaded')
     expect(clearArkadeDashboardStoreMock).not.toHaveBeenCalled()
     expect(terminateArkadeWorkerMock).toHaveBeenCalled()
+  })
+
+  it('fails session start after 30 seconds and keeps that error if open finishes later', async () => {
+    vi.useFakeTimers()
+    let resolveOpen: (value: { arkadeAddress: string; operatorSignerPkHex: string }) => void =
+      () => {}
+    workerMocks.openSession.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveOpen = resolve
+        }),
+    )
+
+    try {
+      const loadPromise = orchestrateArkadeLoad({ walletId: 1, networkMode: 'mutinynet' })
+      const failure = expect(loadPromise).rejects.toThrow('Arkade session start timed out')
+
+      await vi.advanceTimersByTimeAsync(SESSION_START_TIMEOUT_MS - 1)
+      expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loading')
+
+      await vi.advanceTimersByTimeAsync(1)
+      await failure
+
+      expect(getArkadeLoadLifecycleSnapshot()).toEqual({
+        loadPhase: 'load-error',
+        networkMode: 'mutinynet',
+        errorMessage: 'Arkade session start timed out',
+      })
+      expect(terminateArkadeWorkerMock).toHaveBeenCalled()
+
+      resolveOpen({ arkadeAddress: 'tark1qtest', operatorSignerPkHex: '02deadbeef' })
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('load-error')
+      expect(setActiveArkadeAccountIdMock).not.toHaveBeenCalled()
+    } finally {
+      resetArkadeLoadLifecycleStateForTests()
+      vi.useRealTimers()
+    }
   })
 
   it('load failure sets load-error and tears down worker without leaving loading', async () => {

@@ -82,6 +82,8 @@ export async function openFreshArkadeWorkerSession(params: {
   encrypted: SplitWalletSecretsEncryptedBlobs
   account: ArkadeAccountSummary | undefined
   hadPersistedAccount: boolean
+  /** When this becomes true, skip persisting an account for an abandoned start. */
+  abandonIf?: () => boolean
 }): Promise<{
   worker: ArkadeWorker
   account: ArkadeAccountSummary
@@ -111,6 +113,9 @@ export async function openFreshArkadeWorkerSession(params: {
     bumperChangesetJson: bumperHydrate.bumperChangesetJson,
     bumperFullScanDone: bumperHydrate.bumperFullScanDone,
   })
+  if (params.abandonIf?.()) {
+    throw new Error('Arkade session start was abandoned')
+  }
 
   const account = await ensureArkadeAccount({
     walletId: params.walletId,
@@ -138,20 +143,22 @@ export async function hydrateArkadeDashboardAfterSessionOpen(params: {
     worker: ArkadeWorker,
     networkMode: ArkadeSupportedNetworkMode,
   ) => Promise<void>
+  /** When this becomes true, skip publishing a start that already timed out or was left. */
+  abandonIf?: () => boolean
 }): Promise<void> {
-  if (useWalletStore.getState().activeWalletId !== params.walletId) {
+  if (params.abandonIf?.() || useWalletStore.getState().activeWalletId !== params.walletId) {
     return
   }
   if (params.bumperHydrateFellBackToEmpty) {
     reportBumperHydrateFallbackWarning()
   }
   await params.worker.reconcileActiveAccountId(params.arkadeAccountId)
-  if (useWalletStore.getState().activeWalletId !== params.walletId) {
+  if (params.abandonIf?.() || useWalletStore.getState().activeWalletId !== params.walletId) {
     return
   }
   useWalletStore.getState().setLastOperatorSyncTime(null)
   await refreshArkadeStoreFromLoadedWasm(params.arkadeAccountId, params.walletId)
-  if (useWalletStore.getState().activeWalletId !== params.walletId) {
+  if (params.abandonIf?.() || useWalletStore.getState().activeWalletId !== params.walletId) {
     return
   }
   if (params.signerMigrationHint != null) {
