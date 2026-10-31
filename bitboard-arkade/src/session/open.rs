@@ -341,7 +341,11 @@ impl ArkadeSession {
             vtxo_snapshot_apply: Mutex::new(()),
         };
         session.heal_vtxo_exit_records();
-        session.reconcile_host_tx_finality_best_effort().await;
+        // LIFE-ARK-LOAD-04 / UNLOCK-ARK-05: do not await host tx finality reconcile on open.
+        // First unilateral exit operation or post-load sync runs it if needed. Probing Esplora
+        // for many host txids (especially Signet txids on Mutinynet after migration) can hang
+        // session open beyond the 30s timeout.
+        // session.reconcile_host_tx_finality_best_effort().await;
         Ok((session, migration_hint))
     }
 
