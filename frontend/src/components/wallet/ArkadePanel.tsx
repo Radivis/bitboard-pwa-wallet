@@ -126,6 +126,7 @@ export function ArkadePanel() {
         <ArkadeSessionGate
           loadPhase={arkadeLoadSnapshot.loadPhase}
           errorMessage={arkadeLoadSnapshot.errorMessage}
+          networkMode={arkadeLoadSnapshot.networkMode}
           embedded
         >
           <>

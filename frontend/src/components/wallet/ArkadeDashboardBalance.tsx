@@ -91,7 +91,11 @@ export function ArkadeDashboardBalance() {
         <ArkadePendingRecoveryDueToExpiredSignerBanner />
         <ArkadeRecoverableVtxoBanner />
         {arkadeLoadSnapshot.loadPhase === 'load-error' ? (
-          <ArkadeSessionLoadError embedded errorMessage={arkadeLoadSnapshot.errorMessage} />
+          <ArkadeSessionLoadError
+            embedded
+            errorMessage={arkadeLoadSnapshot.errorMessage}
+            networkMode={arkadeLoadSnapshot.networkMode}
+          />
         ) : arkadeLoadSnapshot.loadPhase === 'loading' && balance == null ? (
           <ArkadeSessionLoading embedded />
         ) : isLoading ? (

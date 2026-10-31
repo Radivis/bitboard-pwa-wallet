@@ -226,6 +226,15 @@ feature:
         implemented_by:
           - frontend/src/components/arkade/ArkadeSessionLoadError.tsx
           - frontend/src/components/wallet/ArkadeDashboardBalance.tsx
+      - id: LIFE-ARK-ERR-04
+        description: >
+          When Arkade session start fails on Signet, the session error and the
+          session-start toast append "Arkade infrastructure on Signet may be less
+          reliable than on Mainnet or Mutinynet. You may want to proceed on either
+          of those alternatives." Other networks do not.
+        implemented_by:
+          - frontend/src/components/arkade/__tests__/ArkadeSessionLoadError.test.tsx
+          - frontend/src/lib/arkade/__tests__/arkade-session-open-error-toast.test.ts
       - id: LIFE-ARK-ERR-03
         description: Arkade sync-error banner driven by syncPhase; operator-stale copy hidden when sync-error
         implemented_by:

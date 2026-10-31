@@ -431,6 +431,7 @@ export function CompleteUnilateralExitPage() {
     <ArkadeSessionGate
       loadPhase={arkadeLoadSnapshot.loadPhase}
       errorMessage={arkadeLoadSnapshot.errorMessage}
+      networkMode={arkadeLoadSnapshot.networkMode}
     >
       <CompleteUnilateralExitReady />
     </ArkadeSessionGate>

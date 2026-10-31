@@ -247,6 +247,7 @@ export function CollaborativeExitPage() {
     <ArkadeSessionGate
       loadPhase={arkadeLoadSnapshot.loadPhase}
       errorMessage={arkadeLoadSnapshot.errorMessage}
+      networkMode={arkadeLoadSnapshot.networkMode}
     >
       <CollaborativeExitReady />
     </ArkadeSessionGate>
