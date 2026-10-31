@@ -887,7 +887,7 @@ pub fn network_label(network: Network) -> String {
         Network::Testnet => "testnet".to_string(),
         Network::Signet => "signet".to_string(),
         Network::Regtest => "regtest".to_string(),
-        _ => "unknown".to_string(),
+        Network::Testnet4 => "testnet4".to_string(),
     }
 }
 

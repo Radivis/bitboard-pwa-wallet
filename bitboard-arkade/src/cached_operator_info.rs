@@ -116,7 +116,13 @@ impl CachedOperatorInfoRecord {
     }
 
     pub fn to_server_info(&self) -> ArkResult<Info> {
-        let network = parse_bitcoin_network(&self.network)?;
+        let network = parse_bitcoin_network(&self.network)
+            .map_err(|e| {
+                ArkWasmError::Snapshot(format!(
+                    "Failed to parse network '{}': {}. This usually means an unsupported network label.",
+                    self.network, e
+                ))
+            })?;
         let signer_pk = parse_public_key(&self.signer_pk_hex, "signer_pk")?;
         let forfeit_pk = parse_public_key(&self.forfeit_pk_hex, "forfeit_pk")?;
         let checkpoint_tapscript =
@@ -128,7 +134,12 @@ impl CachedOperatorInfoRecord {
             .parse::<Address<NetworkUnchecked>>()
             .map_err(|error| ArkWasmError::Snapshot(format!("invalid forfeit address: {error}")))?
             .require_network(network)
-            .map_err(|error| ArkWasmError::Snapshot(format!("forfeit address network: {error}")))?;
+            .map_err(|error| {
+                ArkWasmError::Snapshot(format!(
+                    "forfeit address network mismatch: address='{}' expected_network={:?} error={}",
+                    self.forfeit_address, network, error
+                ))
+            })?;
         let unilateral_exit_delay = Sequence::from_consensus(self.unilateral_exit_delay_consensus);
         let boarding_exit_delay = Sequence::from_consensus(self.boarding_exit_delay_consensus);
 
@@ -236,7 +247,7 @@ fn parse_bitcoin_network(label: &str) -> ArkResult<Network> {
     match label {
         "bitcoin" => Ok(Network::Bitcoin),
         "testnet" => Ok(Network::Testnet),
-        "signet" => Ok(Network::Signet),
+        "signet" | "mutinynet" => Ok(Network::Signet),
         "regtest" => Ok(Network::Regtest),
         other => Err(ArkWasmError::Snapshot(format!(
             "unsupported network: {other}"
@@ -250,7 +261,7 @@ pub fn network_label(network: Network) -> String {
         Network::Testnet => "testnet".to_string(),
         Network::Signet => "signet".to_string(),
         Network::Regtest => "regtest".to_string(),
-        _ => "unknown".to_string(),
+        Network::Testnet4 => "testnet4".to_string(),
     }
 }
 
@@ -309,5 +320,82 @@ mod tests {
             restored.unilateral_exit_delay.to_consensus_u32(),
             original.unilateral_exit_delay.to_consensus_u32()
         );
+    }
+
+    #[test]
+    fn parse_bitcoin_network_accepts_mutinynet() {
+        let network = parse_bitcoin_network("mutinynet").expect("mutinynet should parse");
+        assert_eq!(network, Network::Signet, "mutinynet should map to Signet");
+    }
+
+    #[test]
+    fn cached_operator_info_round_trips_mutinynet_as_signet() {
+        let mut mutinynet_info = sample_info();
+        mutinynet_info.network = Network::Signet;
+        
+        let mut cached = CachedOperatorInfoRecord::from_server_info(&mutinynet_info);
+        cached.network = "mutinynet".to_string();
+        
+        let restored = cached.to_server_info().expect("restore mutinynet");
+        assert_eq!(restored.network, Network::Signet, "mutinynet should restore as Signet");
+    }
+
+    #[test]
+    fn mutinynet_operator_info_deserializes_from_cache() {
+        // Simulate what happens when Mutinynet operator getInfo is cached
+        let secp = Secp256k1::new();
+        let signer_sk = bitcoin::secp256k1::SecretKey::from_slice(&[0x11; 32]).unwrap();
+        let forfeit_sk = bitcoin::secp256k1::SecretKey::from_slice(&[0x22; 32]).unwrap();
+        let signer_pk = PublicKey::from_secret_key(&secp, &signer_sk);
+        let forfeit_pk = PublicKey::from_secret_key(&secp, &forfeit_sk);
+        
+        // Mutinynet uses Signet network but operator returns "mutinynet" label
+        let forfeit_address = bitcoin::Address::p2tr(
+            &secp,
+            bitcoin::key::XOnlyPublicKey::from_slice(&[0x44; 32]).unwrap(),
+            None,
+            Network::Signet, // Mutinynet uses Signet addresses
+        );
+        
+        let original = Info {
+            version: "test".to_string(),
+            signer_pk,
+            forfeit_pk,
+            forfeit_address,
+            checkpoint_tapscript: ScriptBuf::new(),
+            network: Network::Signet, // ark-core converts Mutinynet → Signet
+            session_duration: 600,
+            unilateral_exit_delay: Sequence::from_consensus(144),
+            boarding_exit_delay: Sequence::from_consensus(144),
+            utxo_min_amount: None,
+            utxo_max_amount: None,
+            vtxo_min_amount: None,
+            vtxo_max_amount: None,
+            dust: Amount::from_sat(330),
+            fees: None,
+            scheduled_session: None,
+            deprecated_signers: vec![],
+            service_status: HashMap::new(),
+            digest: "digest-abc".to_string(),
+            max_tx_weight: 400_000,
+            max_op_return_outputs: 1,
+        };
+        
+        // Cache it (simulating what happens after getInfo)
+        let mut cached = CachedOperatorInfoRecord::from_server_info(&original);
+        // Operator returned "mutinynet" in JSON, but we stored "signet" via network_label
+        // Let's simulate what would happen if we stored "mutinynet" directly
+        cached.network = "mutinynet".to_string();
+        
+        // This should work - parse "mutinynet" and validate the Signet forfeit address
+        let restored = cached.to_server_info().expect("restore mutinynet cached info");
+        assert_eq!(restored.network, Network::Signet);
+        // Address is already validated by require_network in to_server_info
+    }
+
+    #[test]
+    fn testnet4_network_label_doesnt_panic() {
+        // Ensure we handle Testnet4 without panicking
+        assert_eq!(network_label(Network::Testnet4), "testnet4");
     }
 }
