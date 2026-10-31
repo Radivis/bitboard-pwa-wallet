@@ -64,7 +64,9 @@ import {
   getOnchainSyncLifecycleSnapshot,
   orchestrateOnchainPostUnlockSync,
   orchestrateOnchainSyncThenSave,
+  isOnchainSyncInFlight,
   resetOnchainSyncLifecycleStateForTests,
+  syncOnchainSyncLifecycleWithLockPhase,
 } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
 
 const syncParams = {
@@ -128,6 +130,43 @@ describe('onchain-sync-lifecycle-orchestrator', () => {
 
     expect(orchestrateOnchainSave).not.toHaveBeenCalled()
     expect(refreshWalletStoreFromLoadedBdk).not.toHaveBeenCalled()
+    expect(getOnchainSyncLifecycleSnapshot().syncPhase).toBe('not-configured')
+  })
+
+  it('clears an in-flight scan snapshot when the wallet locks', async () => {
+    let releaseScan!: () => void
+    const scanGate = new Promise<void>((resolve) => {
+      releaseScan = resolve
+    })
+    syncActiveWalletAndUpdateState.mockImplementation(() => scanGate)
+
+    const syncPromise = orchestrateOnchainSyncThenSave(syncParams)
+    await vi.waitFor(() =>
+      expect(getOnchainSyncLifecycleSnapshot().syncPhase).toBe('syncing'),
+    )
+
+    syncOnchainSyncLifecycleWithLockPhase('locked')
+    expect(getOnchainSyncLifecycleSnapshot().syncPhase).toBe('not-configured')
+    expect(isOnchainSyncInFlight()).toBe(true)
+
+    walletStoreState.walletStatus = 'locked'
+    releaseScan()
+    await syncPromise
+    expect(orchestrateOnchainSave).not.toHaveBeenCalled()
+    expect(getOnchainSyncLifecycleSnapshot().syncPhase).toBe('not-configured')
+  })
+
+  it('does not save or toast when the wallet locks during sync', async () => {
+    const onSyncError = vi.fn()
+    syncActiveWalletAndUpdateState.mockImplementation(async () => {
+      walletStoreState.walletStatus = 'locked'
+    })
+
+    await orchestrateOnchainSyncThenSave({ ...syncParams, onSyncError })
+
+    expect(orchestrateOnchainSave).not.toHaveBeenCalled()
+    expect(refreshWalletStoreFromLoadedBdk).not.toHaveBeenCalled()
+    expect(onSyncError).not.toHaveBeenCalled()
     expect(getOnchainSyncLifecycleSnapshot().syncPhase).toBe('not-configured')
   })
 

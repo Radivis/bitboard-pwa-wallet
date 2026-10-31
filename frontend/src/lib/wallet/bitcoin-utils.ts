@@ -14,7 +14,7 @@ export const DEFAULT_ESPLORA_URLS: Record<NetworkMode, string> = {
   signet: 'https://mempool.space/signet/api',
   /** Mutinynet — fast custom signet used for Lightning and Arkade testing. */
   mutinynet: 'https://mutinynet.com/api',
-  testnet: 'https://mempool.space/testnet4/api',
+  testnet: 'https://blockstream.info/testnet4/api',
   mainnet: 'https://mempool.space/api',
 }
 
@@ -141,21 +141,44 @@ export function formatSats(sats: number): string {
   return String(Math.floor(Math.min(sats, MAX_SAFE_SATS)))
 }
 
+const MAX_SAFE_SATS_DIGITS = String(MAX_SAFE_SATS)
+
+/**
+ * Satoshis from a non-negative decimal string. Digits past `fractionDigits` are dropped.
+ * `parseFloat` then `Math.floor` turns some exact amounts one sat too low
+ * (`0.00493086` BTC is 493086 sats, and the float product is just under that).
+ * Returns null when the text is not a plain decimal. Values above the safe integer range clamp.
+ */
+export function satsFromNonNegativeDecimalAmount(
+  amount: string,
+  fractionDigits: number,
+): number | null {
+  const match = /^(\d+)(?:\.(\d+))?$/.exec(amount)
+  if (match == null) return null
+  const whole = match[1] ?? '0'
+  const fraction = (match[2] ?? '').slice(0, fractionDigits).padEnd(fractionDigits, '0')
+  const digits = `${whole}${fraction}`.replace(/^0+/, '') || '0'
+  if (
+    digits.length > MAX_SAFE_SATS_DIGITS.length ||
+    (digits.length === MAX_SAFE_SATS_DIGITS.length && digits > MAX_SAFE_SATS_DIGITS)
+  ) {
+    return MAX_SAFE_SATS
+  }
+  return Number(digits)
+}
+
 /**
  * Parses a BTC amount string to satoshis. Returns 0 for invalid or negative
  * input; clamps to MAX_SAFE_INTEGER to avoid overflow.
  */
 export function parseBTC(btcString: string): number {
   if (typeof btcString !== 'string' || btcString.trim() === '') {
-    return 0;
+    return 0
   }
-  const parsed = parseFloat(btcString);
-  if (Number.isNaN(parsed) || !Number.isFinite(parsed) || parsed < 0) {
-    return 0;
-  }
-  const sats = parsed * SATS_PER_BTC;
-  const floored = Math.floor(sats);
-  return Math.min(floored, MAX_SAFE_SATS);
+  const trimmed = btcString.trim()
+  if (trimmed.startsWith('-')) return 0
+  const sats = satsFromNonNegativeDecimalAmount(trimmed, 8)
+  return sats ?? 0
 }
 
 const ADDRESS_PREFIXES: Record<NetworkMode, string[]> = {

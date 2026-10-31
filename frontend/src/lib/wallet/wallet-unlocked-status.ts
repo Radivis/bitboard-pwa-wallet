@@ -1,7 +1,10 @@
 import type { WalletStatus } from '@/stores/walletStore'
-import { isAnyRailSyncing } from '@/lib/wallet/lifecycle/wallet-rail-sync-aggregate'
 
-/** True when the WASM wallet session is active enough for descriptor/network switches. */
+/**
+ * True when this wallet session may use WASM and secrets.
+ * Locked and absent wallets stay gated even if a rail snapshot is still
+ * `syncing`: that request is leftover traffic, not an open session.
+ */
 export function walletIsUnlockedOrSyncing(walletStatus: WalletStatus): boolean {
-  return walletStatus === 'unlocked' || isAnyRailSyncing()
+  return walletStatus === 'unlocked'
 }

@@ -37,7 +37,7 @@ describe('customEsploraMatchesWhitelistedBase', () => {
   it('matches default testnet4 base with trailing slash', () => {
     expect(
       customEsploraMatchesWhitelistedBase(
-        'https://mempool.space/testnet4/api/',
+        'https://blockstream.info/testnet4/api/',
         'testnet',
       ),
     ).toEqual({ providerId: 'default' })

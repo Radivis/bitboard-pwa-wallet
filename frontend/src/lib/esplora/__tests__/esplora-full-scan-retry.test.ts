@@ -10,12 +10,13 @@ describe('isRetryableEsploraFullScanError', () => {
     expect(isRetryableEsploraFullScanError('HTTP status 429')).toBe(true)
     expect(isRetryableEsploraFullScanError('status 503')).toBe(true)
     expect(isRetryableEsploraFullScanError('Failed to fetch')).toBe(true)
-    expect(isRetryableEsploraFullScanError('connection timeout')).toBe(true)
+    expect(isRetryableEsploraFullScanError('tls handshake eof')).toBe(true)
     expect(
       isRetryableEsploraFullScanError(
         'Reqwest(reqwest::Error { kind: Request, source: TimedOut })',
       ),
-    ).toBe(true)
+    ).toBe(false)
+    expect(isRetryableEsploraFullScanError('connection timeout')).toBe(false)
   })
 
   it('returns false for empty or likely permanent errors', () => {
@@ -62,18 +63,24 @@ describe('withEsploraFullScanRetries', () => {
     expect(fn).toHaveBeenCalledTimes(1)
   })
 
-  it('default maxAttempts is 3: retries retryable errors before failing', async () => {
+  it('does not retry a request timeout', async () => {
+    const fn = vi.fn().mockRejectedValue(
+      new Error('Reqwest(reqwest::Error { kind: Request, source: TimedOut })'),
+    )
+    const retryPromise = withEsploraFullScanRetries(fn)
+    await expect(retryPromise).rejects.toThrow('TimedOut')
+    expect(fn).toHaveBeenCalledTimes(1)
+  })
+
+  it('default maxAttempts is 2: retries a handshake failure once', async () => {
     const fn = vi
       .fn()
-      .mockRejectedValueOnce(
-        new Error('Reqwest(reqwest::Error { kind: Request, source: TimedOut })'),
-      )
-      .mockRejectedValueOnce(new Error('HTTP status 429'))
+      .mockRejectedValueOnce(new Error('tls handshake eof'))
       .mockResolvedValueOnce('recovered')
     const retryPromise = withEsploraFullScanRetries(fn, { baseDelayMs: 100 })
     const resultPromise = retryPromise.then((result) => result)
     await vi.advanceTimersByTimeAsync(5000)
     await expect(resultPromise).resolves.toBe('recovered')
-    expect(fn).toHaveBeenCalledTimes(3)
+    expect(fn).toHaveBeenCalledTimes(2)
   })
 })

@@ -520,7 +520,7 @@ describe('lock-lifecycle-orchestrator', () => {
     expect(lockAndPurgeSensitiveRuntimeState).not.toHaveBeenCalled()
   })
 
-  it('orchestrateLock awaits load quiescence before sync quiescence', async () => {
+  it('orchestrateLock does not wait for an in-flight Esplora scan', async () => {
     walletStoreState.activeWalletId = 1
     syncLockLifecycleWithActiveWallet(1)
 
@@ -540,13 +540,9 @@ describe('lock-lifecycle-orchestrator', () => {
 
     await orchestrateLock()
 
-    expect(callOrder.indexOf('onchain-load')).toBeLessThan(callOrder.indexOf('onchain-sync'))
-    expect(callOrder).toEqual([
-      'onchain-load',
-      'arkade-load',
-      'lightning-load',
-      'onchain-sync',
-    ])
+    expect(callOrder).toEqual(['onchain-load', 'arkade-load', 'lightning-load'])
+    expect(awaitOnchainSyncQuiescence).not.toHaveBeenCalled()
+    expect(lockAndPurgeSensitiveRuntimeState).toHaveBeenCalled()
   })
 
   it('orchestrateLock re-checks save blocking after quiescence', async () => {

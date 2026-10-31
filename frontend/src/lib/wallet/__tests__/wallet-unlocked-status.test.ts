@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { markOnchainRailLoadedAfterExternalHydration } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
 import {
+  getOnchainSyncLifecycleSnapshot,
   orchestrateOnchainSyncThenSave,
   resetOnchainSyncLifecycleStateForTests,
 } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
@@ -53,7 +54,7 @@ describe('walletIsUnlockedOrSyncing', () => {
     expect(walletIsUnlockedOrSyncing('unlocked')).toBe(true)
   })
 
-  it('returns true when any rail is syncing even if wallet status is locked', async () => {
+  it('returns false when wallet status is locked even if a rail sync is still in flight', async () => {
     let resolveSync!: () => void
     const syncGate = new Promise<void>((resolve) => {
       resolveSync = resolve
@@ -67,7 +68,10 @@ describe('walletIsUnlockedOrSyncing', () => {
       markFullScanDone: false,
     })
 
-    await vi.waitFor(() => expect(walletIsUnlockedOrSyncing('locked')).toBe(true))
+    await vi.waitFor(() =>
+      expect(getOnchainSyncLifecycleSnapshot().syncPhase).toBe('syncing'),
+    )
+    expect(walletIsUnlockedOrSyncing('locked')).toBe(false)
 
     resolveSync()
     await syncPromise

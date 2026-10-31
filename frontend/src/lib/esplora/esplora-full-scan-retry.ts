@@ -1,7 +1,12 @@
 import { errorMessage } from '@/lib/shared/utils'
 
-/** Transient Esplora failures (timeouts, 429) often clear on retry during full scan. */
-export const DEFAULT_ESPLORA_FULL_SCAN_MAX_ATTEMPTS = 3
+/**
+ * One retry of the whole scan for fast transport failures (handshake, reset, 429).
+ * A per-request timeout is not retried here: the WASM budget was already spent,
+ * and a second 30s wait keeps the dashboard on "Syncing…" past the regtest send check.
+ * The funded-wallet test retries that case from the dashboard banner.
+ */
+export const DEFAULT_ESPLORA_FULL_SCAN_MAX_ATTEMPTS = 2
 
 const DEFAULT_BASE_DELAY_MS = 1000
 const DEFAULT_MAX_DELAY_MS = 8000
@@ -14,31 +19,43 @@ function sleepMs(ms: number): Promise<void> {
 }
 
 /**
- * Heuristic: public Esplora often fails transiently (429, timeouts). Avoid retrying
- * likely permanent errors (bad request, 404) by keeping this list explicit.
+ * Heuristic: public Esplora often fails transiently (429, handshake, reset).
+ * Avoid retrying likely permanent errors (bad request, 404) by keeping this list explicit.
  */
+function isEsploraFullScanRequestTimeout(normalizedDetail: string): boolean {
+  return (
+    normalizedDetail.includes('timeout') ||
+    normalizedDetail.includes('timed out') ||
+    normalizedDetail.includes('timedout')
+  )
+}
+
 export function isRetryableEsploraFullScanError(detail: string): boolean {
   const normalizedDetail = detail.toLowerCase()
   if (!normalizedDetail) return false
+  if (isEsploraFullScanRequestTimeout(normalizedDetail)) return false
   const patterns = [
     '429',
     '502',
     '503',
     '504',
     '408',
-    'timeout',
-    'timed out',
-    'timedout',
     'rate limit',
     'too many',
     'network',
     'failed to fetch',
     'networkerror',
     'econnreset',
+    'eproto',
+    'handshake',
+    'ssl',
     'aborted',
     'bad gateway',
     'service unavailable',
-    'gateway timeout',
+    'connection reset',
+    'connection refused',
+    'error sending request',
+    'error trying to connect',
   ]
   return patterns.some((pattern) => normalizedDetail.includes(pattern))
 }
