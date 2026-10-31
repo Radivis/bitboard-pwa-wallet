@@ -3,7 +3,10 @@ import { readBarkBalance } from '@/lib/bark/bark-balance'
 import { pendingActionsFromWasm } from '@/lib/bark/bark-pending-actions'
 import {
   readBarkExitChainNotices,
+  vtxoIdsMissingSpentOutput,
   type BarkExitNodeSweepKind,
+  type BarkExitNodeSweepVtxoItem,
+  type BarkExitSpentOutput,
 } from '@/lib/bark/bark-exit-seizure'
 import {
   readBarkNextRefreshSchedule,
@@ -386,9 +389,18 @@ async function syncImpl(): Promise<BarkSyncResult> {
       const nextRefresh = readBarkNextRefreshSchedule(
         await wasmModule.bark_next_refresh_schedule(),
       )
-      const scanned = readBarkExitChainNotices(wasmModule.bark_exit_chain_notices())
       const network = requireOpenNetwork()
-      await mergeExitChainNoticeInPayload(encryptedPayloadDeps(), walletId, network, scanned)
+      const stored = await readExitChainNoticesFromPayload(
+        encryptedPayloadDeps(),
+        walletId,
+        network,
+      )
+      const scanned = readBarkExitChainNotices(wasmModule.bark_exit_chain_notices())
+      const backfilled = await backfilledExitChainNotices(wasmModule, stored)
+      await mergeExitChainNoticeInPayload(encryptedPayloadDeps(), walletId, network, [
+        ...scanned,
+        ...backfilled,
+      ])
       const exitNodeSweepVtxoItems = await readExitChainNoticesFromPayload(
         encryptedPayloadDeps(),
         walletId,
@@ -403,6 +415,22 @@ async function syncImpl(): Promise<BarkSyncResult> {
     },
     (result) => ({ lastSuccessfulSyncAt: result.lastSuccessfulSyncAt }),
   )
+}
+
+async function backfilledExitChainNotices(
+  wasmModule: BitboardBarkWasm,
+  stored: readonly BarkExitNodeSweepVtxoItem[],
+): Promise<BarkExitNodeSweepVtxoItem[]> {
+  const vtxoIds = vtxoIdsMissingSpentOutput(stored)
+  if (vtxoIds.length === 0) return []
+  try {
+    return readBarkExitChainNotices(
+      await wasmModule.bark_backfill_exit_chain_notices(JSON.stringify(vtxoIds)),
+    )
+  } catch (err) {
+    console.warn('Bark could not fill in a spent exit output', err)
+    return []
+  }
 }
 
 async function readSpendableBalanceImpl(): Promise<BarkBalanceParts> {
@@ -599,10 +627,13 @@ function requireOpenNetwork(): BarkRailNetwork {
   return openNetwork
 }
 
-async function clearExitChainNoticeImpl(kind: BarkExitNodeSweepKind): Promise<void> {
+async function clearExitChainNoticeImpl(
+  kind: BarkExitNodeSweepKind,
+  spentOutput?: BarkExitSpentOutput | null,
+): Promise<void> {
   const walletId = requireOpenWalletId()
   const network = requireOpenNetwork()
-  await clearExitChainNoticeInPayload(encryptedPayloadDeps(), walletId, network, kind)
+  await clearExitChainNoticeInPayload(encryptedPayloadDeps(), walletId, network, kind, spentOutput)
 }
 
 async function readPendingEmergencyClaimImpl(): Promise<PendingEmergencyClaim | null> {
@@ -806,8 +837,8 @@ const barkService: BarkService = {
     return callBark(() => drainEmergencyExitsImpl(address, feeRateSatPerVb, excludeVtxoIds))
   },
 
-  clearExitChainNotice(kind): Promise<void> {
-    return callBark(() => clearExitChainNoticeImpl(kind))
+  clearExitChainNotice(kind, spentOutput): Promise<void> {
+    return callBark(() => clearExitChainNoticeImpl(kind, spentOutput))
   },
 
   readPendingEmergencyClaim(): Promise<PendingEmergencyClaim | null> {

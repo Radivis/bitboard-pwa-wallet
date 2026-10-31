@@ -16,10 +16,11 @@ import {
 } from '@/lib/wallet/wallet-domain-types'
 import {
   exitNodeSweepVtxoItemsFromUnknown,
-  exitNodeSweepVtxoItemsWithoutKind,
+  exitNodeSweepVtxoItemsWithoutSpend,
   mergeExitNodeSweepVtxoItems,
   type BarkExitNodeSweepKind,
   type BarkExitNodeSweepVtxoItem,
+  type BarkExitSpentOutput,
 } from '@/lib/bark/bark-exit-seizure'
 
 export class BarkFingerprintMismatchError extends Error {
@@ -396,11 +397,12 @@ export function applyMergedExitChainNotice(params: {
   return upsertBarkAccountInPayload(params.payload, account)
 }
 
-/** Removes one node kind. A later sync flush does not restore those items. */
+/** Removes one spent output. A missing output removes the kind. A later sync does not restore it. */
 export function applyClearedExitChainNotice(params: {
   payload: WalletSecretsPayload
   network: BarkRailNetwork
   kind: BarkExitNodeSweepKind
+  spentOutput?: BarkExitSpentOutput | null
 }): WalletSecretsPayload {
   const existingAccount = requireBarkAccount(params.payload, params.network)
   const account = accountWithPreservedFields(
@@ -410,7 +412,11 @@ export function applyClearedExitChainNotice(params: {
     undefined,
     undefined,
   )
-  const remaining = exitNodeSweepVtxoItemsWithoutKind(account.exitNodeSweepVtxoItems ?? [], params.kind)
+  const remaining = exitNodeSweepVtxoItemsWithoutSpend(
+    account.exitNodeSweepVtxoItems ?? [],
+    params.kind,
+    params.spentOutput ?? null,
+  )
   if (remaining.length === 0) {
     delete account.exitNodeSweepVtxoItems
   } else {

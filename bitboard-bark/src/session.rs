@@ -615,6 +615,21 @@ pub fn bark_exit_chain_notices() -> String {
     crate::exit_seizure::exit_chain_notices_json()
 }
 
+/// Spent outputs for VTXO ids already stored on a notice. The JSON argument is a
+/// string array of VTXO ids. The result uses the same shape as
+/// `bark_exit_chain_notices`, including `spentTxid` and `spentVout`.
+/// A VTXO that can no longer be read is omitted. A chain read that does not
+/// cover every watched output fails this call and leaves the stored notice as it was.
+#[wasm_bindgen]
+pub async fn bark_backfill_exit_chain_notices(vtxo_ids_json: String) -> Result<String, JsValue> {
+    run_with_open_wallet(async |wallet| {
+        let vtxo_ids = serde_json::from_str::<Vec<String>>(&vtxo_ids_json)
+            .map_err(|err| format!("Bark exit notice VTXO ids are invalid: {err}"))?;
+        crate::exit_seizure::backfill_exit_chain_notices_json(wallet, &vtxo_ids).await
+    })
+    .await
+}
+
 /// Chain tip and the first block of the next refresh period, as JSON, or `null`.
 /// `null` covers a wallet without spendable VTXOs and a chain or store read failure,
 /// so a successful sync is not undone by this read.

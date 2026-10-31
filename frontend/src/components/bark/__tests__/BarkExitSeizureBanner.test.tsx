@@ -82,8 +82,8 @@ describe('BarkExitSeizureBanner', () => {
     expect(banner).toHaveTextContent(BARK_CHECKPOINT_SEIZURE_WARNING)
     const anchorIds = screen.getByTestId('bark-exit-anchor-sweep-ids')
     expect(anchorIds).toHaveTextContent('vtxo-a')
-    expect(anchorIds).toHaveTextContent(ANCHOR_SPENDER)
-    expect(anchorIds).toHaveTextContent(SECOND_ANCHOR_SPENDER)
+    expect(anchorIds).not.toHaveTextContent(ANCHOR_SPENDER)
+    expect(anchorIds).not.toHaveTextContent(SECOND_ANCHOR_SPENDER)
     expect(anchorIds.querySelectorAll('li')).toHaveLength(1)
     expect(screen.getByTestId('bark-exit-internal-seizure-ids')).toHaveTextContent('vtxo-internal')
     expect(screen.getByTestId('bark-exit-leaf-seizure-ids')).toHaveTextContent('vtxo-leaf')
@@ -101,6 +101,69 @@ describe('BarkExitSeizureBanner', () => {
       { vtxoId: 'vtxo-leaf', nodeKind: 'leaf' },
       { vtxoId: 'vtxo-b', nodeKind: 'checkpoint' },
     ])
+  })
+
+  it('BARK-SYNC-11 gives each spent checkpoint output its own section and dismisses one', async () => {
+    const firstCheckpoint = '11'.repeat(32)
+    const secondCheckpoint = '22'.repeat(32)
+    const spender = '5e'.repeat(32)
+    useBarkExitChainNoticeStore.getState().showNotice(1, 'signet', [
+      {
+        vtxoId: 'vtxo-a',
+        nodeKind: 'checkpoint',
+        spenderTxid: spender,
+        spentTxid: firstCheckpoint,
+        spentVout: 0,
+      },
+      {
+        vtxoId: 'vtxo-b',
+        nodeKind: 'checkpoint',
+        spenderTxid: spender,
+        spentTxid: firstCheckpoint,
+        spentVout: 0,
+      },
+      {
+        vtxoId: 'vtxo-c',
+        nodeKind: 'checkpoint',
+        spenderTxid: spender,
+        spentTxid: secondCheckpoint,
+        spentVout: 1,
+      },
+    ])
+    renderWithProviders(<BarkExitSeizureBanner />)
+
+    const firstSection = screen.getByTestId(`bark-exit-checkpoint-seizure-${firstCheckpoint}-0-ids`)
+    const secondSection = screen.getByTestId(
+      `bark-exit-checkpoint-seizure-${secondCheckpoint}-1-ids`,
+    )
+    const banner = screen.getByTestId('bark-exit-seizure-banner')
+    expect(banner).toHaveTextContent(
+      `The checkpoint from an emergency exit with txid ${firstCheckpoint} output 0 was spent because the exit was not continued.`,
+    )
+    expect(banner).toHaveTextContent(
+      `The checkpoint from an emergency exit with txid ${secondCheckpoint} output 1 was spent because the exit was not continued.`,
+    )
+    expect(firstSection).toHaveTextContent('vtxo-a')
+    expect(firstSection).toHaveTextContent('vtxo-b')
+    expect(firstSection).not.toHaveTextContent(spender)
+    expect(firstSection.querySelectorAll('li')).toHaveLength(2)
+    expect(secondSection).toHaveTextContent('vtxo-c')
+    expect(secondSection).not.toHaveTextContent(spender)
+
+    fireEvent.click(screen.getByTestId(`bark-exit-checkpoint-seizure-${firstCheckpoint}-0-dismiss`))
+
+    await waitFor(() => {
+      expect(
+        screen.queryByTestId(`bark-exit-checkpoint-seizure-${firstCheckpoint}-0-ids`),
+      ).not.toBeInTheDocument()
+    })
+    expect(screen.getByTestId(`bark-exit-checkpoint-seizure-${secondCheckpoint}-1-ids`)).toHaveTextContent(
+      'vtxo-c',
+    )
+    expect(clearExitChainNotice).toHaveBeenCalledWith('checkpoint', {
+      spentTxid: firstCheckpoint,
+      spentVout: 0,
+    })
   })
 
   it('BARK-SYNC-11 hides the banner while locked and shows it again after unlock', () => {

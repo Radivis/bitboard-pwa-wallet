@@ -1,9 +1,10 @@
 import { create } from 'zustand'
 import {
-  exitNodeSweepVtxoItemsWithoutKind,
+  exitNodeSweepVtxoItemsWithoutSpend,
   normalizeExitNodeSweepVtxoItems,
   type BarkExitNodeSweepKind,
   type BarkExitNodeSweepVtxoItem,
+  type BarkExitSpentOutput,
 } from '@/lib/bark/bark-exit-seizure'
 import type { NetworkMode } from '@/stores/walletStore'
 import { getBarkWorker } from '@/workers/bark-factory'
@@ -28,13 +29,14 @@ interface BarkExitChainNoticeState {
   /** Hides the banner. Does not change the Bark account. */
   hideNotice: () => void
   /**
-   * Deletes one node kind on the open Bark account, then drops that section.
-   * A failed write leaves the banner up.
+   * Deletes one spent output on the open Bark account, then drops that section.
+   * A missing output deletes the whole kind. A failed write leaves the banner up.
    */
   dismissNotice: (
     walletId: number,
     networkMode: NetworkMode,
     kind: BarkExitNodeSweepKind,
+    spentOutput?: BarkExitSpentOutput | null,
   ) => Promise<void>
 }
 
@@ -60,13 +62,18 @@ export const useBarkExitChainNoticeStore = create<BarkExitChainNoticeState>((set
     if (get().notice == null) return
     set({ notice: null })
   },
-  dismissNotice: async (walletId, networkMode, kind) => {
-    await getBarkWorker().clearExitChainNotice(kind)
+  dismissNotice: async (walletId, networkMode, kind, spentOutput = null) => {
+    if (spentOutput == null) {
+      await getBarkWorker().clearExitChainNotice(kind)
+    } else {
+      await getBarkWorker().clearExitChainNotice(kind, spentOutput)
+    }
     const current = get().notice
     if (!matchesNotice(current, walletId, networkMode) || current == null) return
-    const exitNodeSweepVtxoItems = exitNodeSweepVtxoItemsWithoutKind(
+    const exitNodeSweepVtxoItems = exitNodeSweepVtxoItemsWithoutSpend(
       current.exitNodeSweepVtxoItems,
       kind,
+      spentOutput,
     )
     if (exitNodeSweepVtxoItems.length === 0) {
       set({ notice: null })
@@ -104,7 +111,9 @@ function sameItems(
       (item, index) =>
         item.vtxoId === right[index]?.vtxoId &&
         item.nodeKind === right[index]?.nodeKind &&
-        item.spenderTxid === right[index]?.spenderTxid,
+        item.spenderTxid === right[index]?.spenderTxid &&
+        item.spentTxid === right[index]?.spentTxid &&
+        item.spentVout === right[index]?.spentVout,
     )
   )
 }
