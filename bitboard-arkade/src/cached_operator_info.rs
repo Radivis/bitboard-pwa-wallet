@@ -116,7 +116,13 @@ impl CachedOperatorInfoRecord {
     }
 
     pub fn to_server_info(&self) -> ArkResult<Info> {
-        let network = parse_bitcoin_network(&self.network)?;
+        let network = parse_bitcoin_network(&self.network)
+            .map_err(|e| {
+                ArkWasmError::Snapshot(format!(
+                    "Failed to parse network '{}': {}. This usually means an unsupported network label.",
+                    self.network, e
+                ))
+            })?;
         let signer_pk = parse_public_key(&self.signer_pk_hex, "signer_pk")?;
         let forfeit_pk = parse_public_key(&self.forfeit_pk_hex, "forfeit_pk")?;
         let checkpoint_tapscript =
@@ -128,7 +134,12 @@ impl CachedOperatorInfoRecord {
             .parse::<Address<NetworkUnchecked>>()
             .map_err(|error| ArkWasmError::Snapshot(format!("invalid forfeit address: {error}")))?
             .require_network(network)
-            .map_err(|error| ArkWasmError::Snapshot(format!("forfeit address network: {error}")))?;
+            .map_err(|error| {
+                ArkWasmError::Snapshot(format!(
+                    "forfeit address network mismatch: address='{}' expected_network={:?} error={}",
+                    self.forfeit_address, network, error
+                ))
+            })?;
         let unilateral_exit_delay = Sequence::from_consensus(self.unilateral_exit_delay_consensus);
         let boarding_exit_delay = Sequence::from_consensus(self.boarding_exit_delay_consensus);
 
