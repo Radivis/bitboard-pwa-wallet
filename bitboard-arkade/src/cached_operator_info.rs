@@ -236,7 +236,7 @@ fn parse_bitcoin_network(label: &str) -> ArkResult<Network> {
     match label {
         "bitcoin" => Ok(Network::Bitcoin),
         "testnet" => Ok(Network::Testnet),
-        "signet" => Ok(Network::Signet),
+        "signet" | "mutinynet" => Ok(Network::Signet),
         "regtest" => Ok(Network::Regtest),
         other => Err(ArkWasmError::Snapshot(format!(
             "unsupported network: {other}"
@@ -309,5 +309,23 @@ mod tests {
             restored.unilateral_exit_delay.to_consensus_u32(),
             original.unilateral_exit_delay.to_consensus_u32()
         );
+    }
+
+    #[test]
+    fn parse_bitcoin_network_accepts_mutinynet() {
+        let network = parse_bitcoin_network("mutinynet").expect("mutinynet should parse");
+        assert_eq!(network, Network::Signet, "mutinynet should map to Signet");
+    }
+
+    #[test]
+    fn cached_operator_info_round_trips_mutinynet_as_signet() {
+        let mut mutinynet_info = sample_info();
+        mutinynet_info.network = Network::Signet;
+        
+        let mut cached = CachedOperatorInfoRecord::from_server_info(&mutinynet_info);
+        cached.network = "mutinynet".to_string();
+        
+        let restored = cached.to_server_info().expect("restore mutinynet");
+        assert_eq!(restored.network, Network::Signet, "mutinynet should restore as Signet");
     }
 }
