@@ -250,7 +250,7 @@ pub fn network_label(network: Network) -> String {
         Network::Testnet => "testnet".to_string(),
         Network::Signet => "signet".to_string(),
         Network::Regtest => "regtest".to_string(),
-        _ => "unknown".to_string(),
+        Network::Testnet4 => "testnet4".to_string(),
     }
 }
 
@@ -327,5 +327,64 @@ mod tests {
         
         let restored = cached.to_server_info().expect("restore mutinynet");
         assert_eq!(restored.network, Network::Signet, "mutinynet should restore as Signet");
+    }
+
+    #[test]
+    fn mutinynet_operator_info_deserializes_from_cache() {
+        // Simulate what happens when Mutinynet operator getInfo is cached
+        let secp = Secp256k1::new();
+        let signer_sk = bitcoin::secp256k1::SecretKey::from_slice(&[0x11; 32]).unwrap();
+        let forfeit_sk = bitcoin::secp256k1::SecretKey::from_slice(&[0x22; 32]).unwrap();
+        let signer_pk = PublicKey::from_secret_key(&secp, &signer_sk);
+        let forfeit_pk = PublicKey::from_secret_key(&secp, &forfeit_sk);
+        
+        // Mutinynet uses Signet network but operator returns "mutinynet" label
+        let forfeit_address = bitcoin::Address::p2tr(
+            &secp,
+            bitcoin::key::XOnlyPublicKey::from_slice(&[0x44; 32]).unwrap(),
+            None,
+            Network::Signet, // Mutinynet uses Signet addresses
+        );
+        
+        let original = Info {
+            version: "test".to_string(),
+            signer_pk,
+            forfeit_pk,
+            forfeit_address,
+            checkpoint_tapscript: ScriptBuf::new(),
+            network: Network::Signet, // ark-core converts Mutinynet → Signet
+            session_duration: 600,
+            unilateral_exit_delay: Sequence::from_consensus(144),
+            boarding_exit_delay: Sequence::from_consensus(144),
+            utxo_min_amount: None,
+            utxo_max_amount: None,
+            vtxo_min_amount: None,
+            vtxo_max_amount: None,
+            dust: Amount::from_sat(330),
+            fees: None,
+            scheduled_session: None,
+            deprecated_signers: vec![],
+            service_status: HashMap::new(),
+            digest: "digest-abc".to_string(),
+            max_tx_weight: 400_000,
+            max_op_return_outputs: 1,
+        };
+        
+        // Cache it (simulating what happens after getInfo)
+        let mut cached = CachedOperatorInfoRecord::from_server_info(&original);
+        // Operator returned "mutinynet" in JSON, but we stored "signet" via network_label
+        // Let's simulate what would happen if we stored "mutinynet" directly
+        cached.network = "mutinynet".to_string();
+        
+        // This should work - parse "mutinynet" and validate the Signet forfeit address
+        let restored = cached.to_server_info().expect("restore mutinynet cached info");
+        assert_eq!(restored.network, Network::Signet);
+        // Address is already validated by require_network in to_server_info
+    }
+
+    #[test]
+    fn testnet4_network_label_doesnt_panic() {
+        // Ensure we handle Testnet4 without panicking
+        assert_eq!(network_label(Network::Testnet4), "testnet4");
     }
 }
