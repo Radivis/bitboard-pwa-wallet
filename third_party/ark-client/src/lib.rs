@@ -27,6 +27,8 @@ use ark_core::VtxoList;
 use ark_core::DEFAULT_DERIVATION_PATH;
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 mod ark_grpc_wasm_shim;
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+pub use ark_grpc_wasm_shim::Client as WasmHttpClient;
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 use ark_grpc::VtxoChainResponse;
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]

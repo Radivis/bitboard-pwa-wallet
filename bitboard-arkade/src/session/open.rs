@@ -258,6 +258,27 @@ impl ArkadeSession {
             .map_err(|error| ArkWasmError::Wallet(error.to_string()))?,
         );
 
+        // LIFE-ARK-LOAD-04 / UNLOCK-ARK-05: For LiveOperator mode, fetch server info early
+        // before constructing OfflineClient, so we can use connect_with_cached_info to skip
+        // discover_keys. discover_keys probes the operator for batches of VTXO addresses,
+        // which can take 20-30s for wallets with high derivation indices (especially after
+        // Signet→Mutinynet migration). First operator sync will run discover_keys via
+        // list_vtxos and other operations that need it.
+        let live_operator_server_info = if connect_mode == SessionOpenConnectMode::LiveOperator {
+            #[cfg(target_arch = "wasm32")]
+            {
+                let mut network_client = ark_client::WasmHttpClient::new(arkade_server_url.clone());
+                Some(network_client.get_info().await
+                    .map_err(|e| ArkWasmError::Client(ark_client::Error::from(e)))?)
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                None // On native (tests), we'll use normal connect path below
+            }
+        } else {
+            None
+        };
+
         // Always Bip32KeyProvider — never StaticKeyProvider/new_with_keypair — so ark-client
         // receive peek/reveal paths use the indexed branch, not the static fallback.
         let offline = OfflineClient::<
@@ -288,7 +309,14 @@ impl ArkadeSession {
                 let server_info = cached.to_server_info()?;
                 offline.connect_with_cached_info(server_info).await?
             }
-            SessionOpenConnectMode::LiveOperator => offline.connect().await?,
+            SessionOpenConnectMode::LiveOperator => {
+                // On WASM: use pre-fetched server info to skip discover_keys
+                // On native (tests): use normal connect
+                match live_operator_server_info {
+                    Some(server_info) => offline.connect_with_cached_info(server_info).await?,
+                    None => offline.connect().await?,
+                }
+            }
         };
         if offchain_next_derivation_index > 0 {
             let warm_through =
