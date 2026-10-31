@@ -124,9 +124,9 @@ impl fmt::Display for Error {
                     if let Some(rest_error) = source.downcast_ref::<ark_rest::Error>() {
                         return f.write_str(&format_rest_request_error(rest_error));
                     }
-                    write!(f, "request failed: {source}")
+                    return write!(f, "request failed: {source}");
                 } else {
-                    f.write_str("request failed")
+                    return f.write_str("request failed");
                 }
             }
             kind => {
@@ -136,7 +136,7 @@ impl fmt::Display for Error {
                     Kind::Conversion => "failed to convert between types",
                     Kind::EventStreamDisconnect => "got disconnected from event stream",
                     Kind::EventStream => "error via event stream",
-                    Kind::Request => unreachable!("handled above"),
+                    Kind::Request => "request failed (unreachable: already handled above)",
                 };
                 write!(f, "{description}")?;
                 if let Some(source) = &self.inner.source {
