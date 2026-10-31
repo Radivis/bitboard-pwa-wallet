@@ -124,9 +124,9 @@ impl fmt::Display for Error {
                     if let Some(rest_error) = source.downcast_ref::<ark_rest::Error>() {
                         return f.write_str(&format_rest_request_error(rest_error));
                     }
-                    write!(f, "request failed: {source}")
+                    return write!(f, "request failed: {source}");
                 } else {
-                    f.write_str("request failed")
+                    return f.write_str("request failed");
                 }
             }
             kind => {
@@ -136,7 +136,7 @@ impl fmt::Display for Error {
                     Kind::Conversion => "failed to convert between types",
                     Kind::EventStreamDisconnect => "got disconnected from event stream",
                     Kind::EventStream => "error via event stream",
-                    Kind::Request => unreachable!("handled above"),
+                    Kind::Request => "request failed (unreachable: already handled above)",
                 };
                 write!(f, "{description}")?;
                 if let Some(source) = &self.inner.source {
@@ -189,10 +189,10 @@ impl fmt::Debug for Client {
 }
 
 impl Client {
-    pub fn new(url: String) -> Self {
-        Self {
-            inner: Arc::new(ark_rest::Client::new(url).expect("failed to create ark REST client")),
-        }
+    pub fn new(url: String) -> Result<Self, Error> {
+        Ok(Self {
+            inner: Arc::new(ark_rest::Client::new(url).map_err(Error::request)?),
+        })
     }
 
     pub async fn connect(&mut self) -> Result<(), Error> {
