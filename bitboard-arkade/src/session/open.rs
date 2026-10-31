@@ -267,7 +267,8 @@ impl ArkadeSession {
         let live_operator_server_info = if connect_mode == SessionOpenConnectMode::LiveOperator {
             #[cfg(target_arch = "wasm32")]
             {
-                let mut network_client = ark_client::WasmHttpClient::new(arkade_server_url.clone());
+                let mut network_client = ark_client::WasmHttpClient::new(arkade_server_url.clone())
+                    .map_err(|e| ArkWasmError::Client(ark_client::Error::from(e)))?;
                 Some(network_client.get_info().await
                     .map_err(|e| ArkWasmError::Client(ark_client::Error::from(e)))?)
             }
@@ -300,7 +301,8 @@ impl ArkadeSession {
             CLIENT_TIMEOUT,
             delegator_xonly,
             vec![],
-        );
+        )
+        .map_err(ArkWasmError::Client)?;
 
         let client = match connect_mode {
             SessionOpenConnectMode::CachedOperatorInfo => {

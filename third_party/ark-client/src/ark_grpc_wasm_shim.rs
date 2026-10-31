@@ -189,10 +189,10 @@ impl fmt::Debug for Client {
 }
 
 impl Client {
-    pub fn new(url: String) -> Self {
-        Self {
-            inner: Arc::new(ark_rest::Client::new(url).expect("failed to create ark REST client")),
-        }
+    pub fn new(url: String) -> Result<Self, Error> {
+        Ok(Self {
+            inner: Arc::new(ark_rest::Client::new(url).map_err(Error::request)?),
+        })
     }
 
     pub async fn connect(&mut self) -> Result<(), Error> {

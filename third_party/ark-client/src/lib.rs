@@ -587,9 +587,12 @@ where
         timeout: Duration,
         delegator_pk: Option<XOnlyPublicKey>,
         historical_delegator_pks: Vec<XOnlyPublicKey>,
-    ) -> Self {
+    ) -> Result<Self, Error> {
         let secp = Secp256k1::new();
 
+        #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+        let network_client = ark_grpc::Client::new(ark_server_url)?;
+        #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
         let network_client = ark_grpc::Client::new(ark_server_url);
 
         // Normalize historical delegator keys once (preserve order, remove duplicates), then
@@ -608,7 +611,7 @@ where
         let boltz_referral_id =
             boltz_referral_id.or_else(|| Some(DEFAULT_BOLTZ_REFERRAL_ID.to_string()));
 
-        Self {
+        Ok(Self {
             network_client,
             name,
             key_provider,
@@ -621,7 +624,7 @@ where
             timeout,
             delegator_pk,
             historical_delegator_pks,
-        }
+        })
     }
 
     /// Override the Boltz referral ID after construction.
@@ -660,7 +663,7 @@ where
         timeout: Duration,
         delegator_pk: Option<XOnlyPublicKey>,
         historical_delegator_pks: Vec<XOnlyPublicKey>,
-    ) -> OfflineClient<B, W, S, StaticKeyProvider> {
+    ) -> Result<OfflineClient<B, W, S, StaticKeyProvider>, Error> {
         let key_provider = Arc::new(StaticKeyProvider::new(kp));
 
         OfflineClient::new(
@@ -704,7 +707,7 @@ where
         timeout: Duration,
         delegator_pk: Option<XOnlyPublicKey>,
         historical_delegator_pks: Vec<XOnlyPublicKey>,
-    ) -> OfflineClient<B, W, S, Bip32KeyProvider> {
+    ) -> Result<OfflineClient<B, W, S, Bip32KeyProvider>, Error> {
         Self::new_with_bip32_at_index(
             name,
             xpriv,
@@ -738,7 +741,7 @@ where
         timeout: Duration,
         delegator_pk: Option<XOnlyPublicKey>,
         historical_delegator_pks: Vec<XOnlyPublicKey>,
-    ) -> OfflineClient<B, W, S, Bip32KeyProvider> {
+    ) -> Result<OfflineClient<B, W, S, Bip32KeyProvider>, Error> {
         let path = path.unwrap_or(
             DerivationPath::from_str(DEFAULT_DERIVATION_PATH).expect("valid derivation path"),
         );
