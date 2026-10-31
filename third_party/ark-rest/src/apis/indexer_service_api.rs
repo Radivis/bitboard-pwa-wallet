@@ -142,7 +142,7 @@ pub async fn indexer_service_get_asset(
     }
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -202,7 +202,7 @@ pub async fn indexer_service_get_batch_sweep_transactions(
     }
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -252,7 +252,7 @@ pub async fn indexer_service_get_commitment_tx(
     }
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -313,7 +313,7 @@ pub async fn indexer_service_get_connectors(
     }
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -373,7 +373,7 @@ pub async fn indexer_service_get_forfeit_txs(
     }
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -423,7 +423,7 @@ pub async fn indexer_service_get_subscription(
     }
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -484,7 +484,7 @@ pub async fn indexer_service_get_virtual_txs(
     }
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -547,7 +547,7 @@ pub async fn indexer_service_get_vtxo_chain(
     }
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -610,7 +610,7 @@ pub async fn indexer_service_get_vtxo_tree(
     }
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -672,7 +672,7 @@ pub async fn indexer_service_get_vtxo_tree_leaves(
     }
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -773,7 +773,7 @@ pub async fn indexer_service_get_vtxos(
     }
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -821,7 +821,7 @@ pub async fn indexer_service_subscribe_for_scripts(
     req_builder = req_builder.json(&p_subscribe_for_scripts_request);
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -869,7 +869,7 @@ pub async fn indexer_service_unsubscribe_for_scripts(
     req_builder = req_builder.json(&p_unsubscribe_for_scripts_request);
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp

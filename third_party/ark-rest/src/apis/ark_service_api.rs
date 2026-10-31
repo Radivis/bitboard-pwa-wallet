@@ -166,7 +166,7 @@ pub async fn ark_service_confirm_registration(
     req_builder = req_builder.json(&p_confirm_registration_request);
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -216,7 +216,7 @@ pub async fn ark_service_delete_intent(
     req_builder = req_builder.json(&p_delete_intent_request);
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -265,7 +265,7 @@ pub async fn ark_service_estimate_intent_fee(
     req_builder = req_builder.json(&p_estimate_intent_fee_request);
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -314,7 +314,7 @@ pub async fn ark_service_finalize_tx(
     req_builder = req_builder.json(&p_finalize_tx_request);
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -370,7 +370,7 @@ pub async fn ark_service_get_event_stream(
     }
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -410,7 +410,7 @@ pub async fn ark_service_get_info(
     }
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -466,7 +466,7 @@ pub async fn ark_service_get_intent(
     }
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -512,7 +512,7 @@ pub async fn ark_service_get_intent2(
     req_builder = req_builder.json(&p_get_intent_request);
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -560,7 +560,7 @@ pub async fn ark_service_get_pending_tx(
     req_builder = req_builder.json(&p_get_pending_tx_request);
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -603,7 +603,7 @@ pub async fn ark_service_get_transactions_stream(
     }
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -653,7 +653,7 @@ pub async fn ark_service_register_intent(
     req_builder = req_builder.json(&p_register_intent_request);
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -702,7 +702,7 @@ pub async fn ark_service_submit_signed_forfeit_txs(
     req_builder = req_builder.json(&p_submit_signed_forfeit_txs_request);
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -753,7 +753,7 @@ pub async fn ark_service_submit_tree_nonces(
     req_builder = req_builder.json(&p_submit_tree_nonces_request);
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -803,7 +803,7 @@ pub async fn ark_service_submit_tree_signatures(
     req_builder = req_builder.json(&p_submit_tree_signatures_request);
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -853,7 +853,7 @@ pub async fn ark_service_submit_tx(
     req_builder = req_builder.json(&p_submit_tx_request);
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -902,7 +902,7 @@ pub async fn ark_service_update_stream_topics(
     req_builder = req_builder.json(&p_update_stream_topics_request);
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp

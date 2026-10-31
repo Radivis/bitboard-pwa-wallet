@@ -76,7 +76,7 @@ pub async fn wallet_initializer_service_create(
     req_builder = req_builder.json(&p_create_request);
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -116,7 +116,7 @@ pub async fn wallet_initializer_service_gen_seed(
     }
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -156,7 +156,7 @@ pub async fn wallet_initializer_service_get_status(
     }
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -203,7 +203,7 @@ pub async fn wallet_initializer_service_restore(
     req_builder = req_builder.json(&p_restore_request);
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp
@@ -250,7 +250,7 @@ pub async fn wallet_initializer_service_unlock(
     req_builder = req_builder.json(&p_unlock_request);
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp

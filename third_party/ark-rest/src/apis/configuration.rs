@@ -13,6 +13,9 @@ pub struct Configuration {
     pub base_path: String,
     pub user_agent: Option<String>,
     pub client: reqwest::Client,
+    /// Operator config digest. Sent as `X-Digest` on each request. Kept off the
+    /// reqwest client: replacing that client on wasm makes the next request hang.
+    pub digest: Option<String>,
     pub basic_auth: Option<BasicAuth>,
     pub oauth_access_token: Option<String>,
     pub bearer_access_token: Option<String>,
@@ -31,6 +34,19 @@ impl Configuration {
     pub fn new() -> Configuration {
         Configuration::default()
     }
+
+    /// Sends `request`, adding `X-Digest` when this configuration has one.
+    pub async fn execute(
+        &self,
+        mut request: reqwest::Request,
+    ) -> Result<reqwest::Response, reqwest::Error> {
+        if let Some(digest) = &self.digest {
+            if let Ok(value) = reqwest::header::HeaderValue::from_str(digest) {
+                request.headers_mut().insert("X-Digest", value);
+            }
+        }
+        self.client.execute(request).await
+    }
 }
 
 impl Default for Configuration {
@@ -39,6 +55,7 @@ impl Default for Configuration {
             base_path: "http://localhost".to_owned(),
             user_agent: Some("OpenAPI-Generator/1.0.0/rust".to_owned()),
             client: reqwest::Client::new(),
+            digest: None,
             basic_auth: None,
             oauth_access_token: None,
             bearer_access_token: None,

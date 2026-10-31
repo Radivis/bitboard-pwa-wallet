@@ -21,9 +21,11 @@ panic = "abort"
 strip = true
 
 # esplora-client ignores Builder::timeout on wasm32; we need it for PWA Esplora sync (see third_party patch).
+# ark-fees `now()` uses SystemTime, which panics on wasm32-unknown-unknown and aborts session open.
 [patch.crates-io]
 esplora-client = { path = "third_party/esplora-client" }
 ark-client = { path = "third_party/ark-client" }
 ark-rest = { path = "third_party/ark-rest" }
 ark-bdk-wallet = { path = "third_party/ark-bdk-wallet" }
 ark-core = { path = "third_party/ark-core" }
+ark-fees = { path = "third_party/ark-fees" }

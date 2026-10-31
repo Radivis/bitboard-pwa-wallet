@@ -44,7 +44,7 @@ pub async fn signer_manager_service_load_signer(
     req_builder = req_builder.json(&p_load_signer_request);
 
     let req = req_builder.build()?;
-    let resp = configuration.client.execute(req).await?;
+    let resp = configuration.execute(req).await?;
 
     let status = resp.status();
     let content_type = resp

@@ -166,10 +166,9 @@ dependencies = [
 [[package]]
 name = "ark-fees"
 version = "0.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d992b425826e89ff4ce5d4d28eefa77893090bd12aedd0fcae14db1c46a1c819"
 dependencies = [
  "cel",
+ "js-sys",
 ]
 
 [[package]]

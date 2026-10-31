@@ -135,13 +135,17 @@ impl Client {
 
         // Lock-ordering invariant: when both write locks are held, acquire
         // `configuration` before `digest`. This is the only path that takes both.
-        // If another thread races past the unchanged check, the worst case is a
-        // redundant reqwest client rebuild; correctness is unchanged.
+        // The reqwest client stays the one created at startup. Replacing it on
+        // wasm makes the next request hang.
+        if let Some(digest) = normalized.as_deref() {
+            reqwest::header::HeaderValue::from_str(digest).map_err(Error::request)?;
+        }
+
         let mut configuration = self
             .configuration
             .write()
             .map_err(|_| Error::request("REST client configuration lock poisoned"))?;
-        configuration.client = build_reqwest_client(normalized.as_deref())?;
+        configuration.digest = normalized.clone();
 
         let mut current = self
             .digest
