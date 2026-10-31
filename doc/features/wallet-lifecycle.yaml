@@ -152,6 +152,15 @@ feature:
           on the load path. Bumper Esplora starts on first onchain_bumper_info
           or exit proceed/complete, not after loaded.
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-load-lifecycle-orchestrator.test.ts
+      - id: LIFE-ARK-LOAD-05
+        description: >
+          Switching wallets while Arkade session open has not reached loaded drops
+          that session immediately. A stuck open cannot block the switch. A later
+          failure of that open does not leave load-error or block the next wallet's
+          open. A loaded session is still flushed and closed.
+        implemented_by:
+          - frontend/src/lib/arkade/__tests__/arkade-session-service.integration.test.ts
+          - frontend/src/lib/wallet/__tests__/prepare-active-wallet-switch.test.ts
       - id: LIFE-ARK-BUMP-01
         description: >
           onchain_bumper_info runs at most one wallet-wide bumper Esplora scan

@@ -32,6 +32,7 @@ feature:
     - The card is visible only when isBarkEnabled and the app network is signet
     - Spendable and locked sats are read only after a successful Bark sync in this session
     - Activating or switching to another wallet clears the previous wallet's Bark balance, sync time, and pending-action placeholder before that wallet's own Bark session is shown
+    - Switching wallets while a Bark session is still opening drops that session immediately, so a stuck open cannot block the switch. A session that already opened is still closed
     - A failed sync does not replace the last shown spendable or locked amount
     - When locked sats are above zero, the dashboard headline is spendable plus locked and shows those two sub-lines
     - On mainnet with fiat denomination mode and a usable Bitcoin price, Bark balance amounts and board and exit amount entry use that fiat currency. Signet stays in bitcoin even when fiat mode is on

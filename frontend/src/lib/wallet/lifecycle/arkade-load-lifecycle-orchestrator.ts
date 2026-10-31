@@ -65,6 +65,11 @@ const arkadeSessionReuseState: ArkadeSessionReuseState = {
 const listeners = new Set<(next: ArkadeLoadLifecycleSnapshot) => void>()
 const inFlightLoadTracker = createInFlightLifecycleTracker()
 let lastLoadParams: ArkadeLoadParams | null = null
+let loadGeneration = 0
+
+function arkadeLoadWasSuperseded(generation: number): boolean {
+  return generation !== loadGeneration
+}
 
 function loadKey(params: ArkadeLoadParams): string {
   return `${params.walletId}:${params.networkMode}`
@@ -224,6 +229,7 @@ export function isArkadeLoadFailedForNetwork(networkMode: NetworkMode): boolean 
  * so a failed rail does not keep `load-error` / in-flight state from blocking other work.
  */
 export function forceResetArkadeLoadLifecycleForTeardown(): void {
+  loadGeneration += 1
   lastOpenedSessionKey = null
   lastLoadedAccountId = null
   inFlightLoadTracker.clearCurrent()
@@ -283,11 +289,15 @@ export async function orchestrateArkadeLoad(params: ArkadeLoadParams): Promise<v
   setSnapshot({ loadPhase: 'loading', networkMode, errorMessage: null })
 
   return inFlightLoadTracker.begin(key, async () => {
+    const generation = loadGeneration
     try {
       const { arkadeAccountId } = await runArkadeSessionOpenBody({
         walletId,
         networkMode,
       })
+      if (arkadeLoadWasSuperseded(generation)) {
+        return
+      }
       if (abandonArkadeLoadIfActiveWalletChanged(walletId)) {
         return
       }
@@ -309,6 +319,9 @@ export async function orchestrateArkadeLoad(params: ArkadeLoadParams): Promise<v
         arkadeAccountId,
       })
     } catch (error) {
+      if (arkadeLoadWasSuperseded(generation)) {
+        return
+      }
       const activeWalletChanged = abandonArkadeLoadIfActiveWalletChanged(walletId)
       terminateArkadeWorker()
       if (activeWalletChanged) {
@@ -334,6 +347,7 @@ export async function orchestrateArkadeRetryLoad(): Promise<void> {
 
 /** @internal Test-only reset */
 export function resetArkadeLoadLifecycleStateForTests(): void {
+  loadGeneration = 0
   snapshot = { loadPhase: 'not-configured', networkMode: null, errorMessage: null }
   inFlightLoadTracker.clearCurrent()
   lastLoadParams = null

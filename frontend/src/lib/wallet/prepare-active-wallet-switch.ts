@@ -1,4 +1,4 @@
-import { closeArkadeSession } from '@/lib/arkade/arkade-session-service'
+import { closeArkadeSessionForWalletSwitch } from '@/lib/arkade/arkade-session-service'
 import { tearDownArkadeWorkerAndClientState } from '@/lib/arkade/arkade-session-teardown'
 import { closeBarkSessionForWalletChange } from '@/lib/bark/bark-session-service'
 import { awaitInFlightWalletSecretsWrites } from '@/db/wallet-secrets-write-tracker'
@@ -11,11 +11,12 @@ import { useWalletStore } from '@/stores/walletStore'
 
 /**
  * Drop the Arkade worker even when flush or quiescence fails, so the next wallet
- * cannot observe the previous session.
+ * cannot observe the previous session. Session open that has not finished is
+ * aborted inside {@link closeArkadeSessionForWalletSwitch}.
  */
-async function closeArkadeSessionForWalletSwitch(): Promise<void> {
+async function leaveArkadeSessionForWalletSwitch(): Promise<void> {
   try {
-    await closeArkadeSession()
+    await closeArkadeSessionForWalletSwitch()
   } catch {
     tearDownArkadeWorkerAndClientState()
   }
@@ -31,7 +32,7 @@ async function closeArkadeSessionForWalletSwitch(): Promise<void> {
  */
 export async function prepareActiveWalletSwitch(walletId: number): Promise<void> {
   await awaitInFlightWalletSecretsWrites()
-  await closeArkadeSessionForWalletSwitch()
+  await leaveArkadeSessionForWalletSwitch()
   await closeBarkSessionForWalletChange()
   releasePreviousWalletDashboardSession(walletId)
   useLightningStore.getState().purgeLightningConnectionsFromMemory()

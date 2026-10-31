@@ -17,7 +17,9 @@ const mockLockWallet = vi.hoisted(() => vi.fn())
 
 const mockSetActiveWallet = vi.hoisted(() => vi.fn())
 
-const mockCloseArkadeSession = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+const mockCloseArkadeSessionForWalletSwitch = vi.hoisted(() =>
+  vi.fn().mockResolvedValue(undefined),
+)
 
 const mockCloseBarkSessionForWalletChange = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 
@@ -41,7 +43,8 @@ vi.mock('@/lib/wallet/onchain-dashboard-sync', () => ({
 }))
 
 vi.mock('@/lib/arkade/arkade-session-service', () => ({
-  closeArkadeSession: (...args: unknown[]) => mockCloseArkadeSession(...args),
+  closeArkadeSessionForWalletSwitch: (...args: unknown[]) =>
+    mockCloseArkadeSessionForWalletSwitch(...args),
 }))
 
 vi.mock('@/lib/bark/bark-session-service', () => ({
@@ -79,7 +82,7 @@ vi.mock('@/stores/walletStore', () => ({
 describe('prepareActiveWalletSwitch', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockCloseArkadeSession.mockResolvedValue(undefined)
+    mockCloseArkadeSessionForWalletSwitch.mockResolvedValue(undefined)
 
     vi.mocked(useLightningStore.getState).mockReturnValue({
       purgeLightningConnectionsFromMemory: mockPurgeLightningConnectionsFromMemory,
@@ -97,7 +100,7 @@ describe('prepareActiveWalletSwitch', () => {
     mockAwaitInFlightWalletSecretsWrites.mockImplementation(async () => {
       callOrder.push('awaitSecrets')
     })
-    mockCloseArkadeSession.mockImplementation(async () => {
+    mockCloseArkadeSessionForWalletSwitch.mockImplementation(async () => {
       callOrder.push('closeArkadeSession')
     })
     mockCloseBarkSessionForWalletChange.mockImplementation(async () => {
@@ -127,7 +130,7 @@ describe('prepareActiveWalletSwitch', () => {
 
     await prepareActiveWalletSwitch(42)
 
-    expect(mockCloseArkadeSession).toHaveBeenCalledOnce()
+    expect(mockCloseArkadeSessionForWalletSwitch).toHaveBeenCalledOnce()
     expect(mockReleasePreviousWalletDashboardSession).toHaveBeenCalledWith(42)
     expect(mockSyncAllRailLifecyclesWithLockPhase).toHaveBeenCalledWith('locked')
     expect(mockLockWallet).toHaveBeenCalledOnce()
@@ -148,7 +151,7 @@ describe('prepareActiveWalletSwitch', () => {
   })
 
   it('still switches wallets when closing the Arkade session fails', async () => {
-    mockCloseArkadeSession.mockRejectedValue(new Error('flush failed'))
+    mockCloseArkadeSessionForWalletSwitch.mockRejectedValue(new Error('flush failed'))
 
     await prepareActiveWalletSwitch(42)
 
