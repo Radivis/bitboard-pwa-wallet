@@ -444,8 +444,13 @@ where
         total_amount: Amount,
         to_address: &ArkAddress,
     ) -> Result<Amount, Error> {
-        let intent_fee =
-            self.eval_board_intent_fee(boarding_inputs, vtxo_inputs, vtxo_expiries, total_amount, to_address)?;
+        let intent_fee = self.eval_board_intent_fee(
+            boarding_inputs,
+            vtxo_inputs,
+            vtxo_expiries,
+            total_amount,
+            to_address,
+        )?;
         let to_amount = total_amount.checked_sub(intent_fee).ok_or_else(|| {
             Error::ad_hoc(format!(
                 "insufficient balance for boarding intent fee: {total_amount} < {intent_fee}"
@@ -471,12 +476,19 @@ where
             amount: gross_output_amount.to_sat(),
             script: to_address.to_p2tr_script_pubkey().to_string(),
         }];
-        self.eval_intent_fee(boarding_inputs, vtxo_inputs, vtxo_expiries, &offchain_outputs, &[])
+        self.eval_intent_fee(
+            boarding_inputs,
+            vtxo_inputs,
+            vtxo_expiries,
+            &offchain_outputs,
+            &[],
+        )
     }
 
     /// Full operator intent fee for a collaborative exit: every selected input, the on-chain
     /// payout, and Ark change when it is present. arkd rejects RegisterIntent when the reserved
     /// gap is only the flat on-chain output fee.
+    #[allow(clippy::too_many_arguments)]
     fn eval_offboard_intent_fee(
         &self,
         boarding_inputs: &[batch::OnChainInput],
@@ -1328,7 +1340,15 @@ where
         &self,
         server_info: &server::Info,
         now: i64,
-    ) -> Result<(Vec<batch::OnChainInput>, Vec<intent::Input>, Amount, HashMap<OutPoint, i64>), Error> {
+    ) -> Result<
+        (
+            Vec<batch::OnChainInput>,
+            Vec<intent::Input>,
+            Amount,
+            HashMap<OutPoint, i64>,
+        ),
+        Error,
+    > {
         let now = u64::try_from(now).map_err(|_| Error::ad_hoc("negative timestamp"))?;
 
         // Get all known boarding outputs.
@@ -1422,7 +1442,7 @@ where
                 let spend_selection = entry.spend_selection(SpendPathKind::Forfeit)?;
                 let outpoint = entry.vtxo().outpoint;
                 let expires_at = entry.vtxo().expires_at;
-                
+
                 vtxo_expiries.insert(outpoint, expires_at);
 
                 Ok(intent::Input::new_with_spend_selection(

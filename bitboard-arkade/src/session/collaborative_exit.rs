@@ -322,7 +322,7 @@ mod expiry_propagation_tests {
         //
         // This ensures the Mutinynet CEL expression "expiry - now() > 518656.0 ? amount * 0.002 : 0.0"
         // evaluates to a non-zero fee rather than 0, preventing INTENT_INSUFFICIENT_FEE rejections.
-        assert!(true, "This test documents the fix structure; see integration tests for end-to-end verification");
+        // This test documents the fix structure; see integration tests for end-to-end verification.
     }
 }
 
