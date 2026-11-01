@@ -505,74 +505,28 @@ where
     where
         R: Rng + CryptoRng + Clone,
     {
-        let (change_address, _) = self.get_offchain_address()?;
-
-        let (boarding_inputs, mut vtxo_inputs, mut total_amount) = self
-            .fetch_commitment_transaction_inputs(crate::utils::unix_now()?)
+        let prepared = self
+            .prepare_offboard_excluding_vtxos(rng, to_address, to_amount, exclude_vtxos)
             .await?;
+        self.register_prepared_offboard(rng, prepared).await
+    }
 
-        let excluded_amount = vtxo_inputs
-            .iter()
-            .filter(|input| exclude_vtxos.contains(&input.outpoint()))
-            .fold(Amount::ZERO, |acc, input| acc + input.amount());
-        vtxo_inputs.retain(|input| !exclude_vtxos.contains(&input.outpoint()));
-        total_amount = total_amount
-            .checked_sub(excluded_amount)
-            .unwrap_or(Amount::ZERO);
-
-        // The intent fee depends on the input/output set rather than on amounts, so estimate it
-        // against the gross (pre-fee) change and then deduct it to obtain the real change amount.
-        let gross_change = total_amount.checked_sub(to_amount).ok_or_else(|| {
-            Error::coin_select(format!(
-                "insufficient balance: {total_amount} < {to_amount} (send)"
-            ))
-        })?;
-        let intent_fee = self.eval_offboard_intent_fee(
-            &boarding_inputs,
-            &vtxo_inputs,
-            &to_address,
-            to_amount,
-            &change_address,
-            gross_change,
-        )?;
-
-        // Fee comes out of change, not the send amount.
-        let change_amount = gross_change.checked_sub(intent_fee).ok_or_else(|| {
-            Error::coin_select(format!(
-                "insufficient balance: {total_amount} < {to_amount} (send) + {intent_fee} (fee)"
-            ))
-        })?;
-
-        tracing::info!(
-            %to_address,
-            send_amount = %to_amount,
-            fee = %intent_fee,
-            change_address = %change_address.encode(),
-            %change_amount,
-            ?boarding_inputs,
-            "Attempting to collaboratively redeem outputs"
-        );
-
-        let outcome = self
-            .join_next_batch(
-                &mut rng.clone(),
-                boarding_inputs.clone(),
-                vtxo_inputs.clone(),
-                BatchOutputType::OffBoard {
-                    to_address: to_address.clone(),
-                    to_amount,
-                    change_address,
-                    change_amount,
-                },
-            )
-            .await
-            .context("Failed to join batch")?;
-
-        if let JoinBatchOutcome::Completed(commitment_txid) = &outcome {
-            tracing::info!(%commitment_txid, "Collaborative redeem success");
-        }
-
-        Ok(outcome)
+    /// Operator quote for the collaborative exit that [`Self::collaborative_redeem_excluding_vtxos`]
+    /// will register. The on-chain amount is the requested amount when Ark change can pay the fee.
+    pub async fn quote_collaborative_redeem_excluding_vtxos<R>(
+        &self,
+        rng: &mut R,
+        to_address: Address,
+        to_amount: Amount,
+        exclude_vtxos: &HashSet<OutPoint>,
+    ) -> Result<OffboardSettlement, Error>
+    where
+        R: Rng + CryptoRng + Clone,
+    {
+        Ok(self
+            .prepare_offboard_excluding_vtxos(rng, to_address, to_amount, exclude_vtxos)
+            .await?
+            .settlement)
     }
 
     /// Settle a selection of VTXOs into the next batch, generating UTXOs as
@@ -587,73 +541,199 @@ where
     where
         R: Rng + CryptoRng + Clone,
     {
-        let (change_address, _) = self.get_offchain_address()?;
+        let prepared = self
+            .prepare_offboard_vtxo_selection(rng, input_vtxos, to_address, to_amount)
+            .await?;
+        self.register_prepared_offboard(rng, prepared).await
+    }
 
+    /// Operator quote for [`Self::collaborative_redeem_vtxo_selection`].
+    pub async fn quote_collaborative_redeem_vtxo_selection<R>(
+        &self,
+        rng: &mut R,
+        input_vtxos: impl Iterator<Item = OutPoint> + Clone,
+        to_address: Address,
+        to_amount: Amount,
+    ) -> Result<OffboardSettlement, Error>
+    where
+        R: Rng + CryptoRng + Clone,
+    {
+        Ok(self
+            .prepare_offboard_vtxo_selection(rng, input_vtxos, to_address, to_amount)
+            .await?
+            .settlement)
+    }
+
+    async fn prepare_offboard_excluding_vtxos<R>(
+        &self,
+        rng: &mut R,
+        to_address: Address,
+        requested_onchain: Amount,
+        exclude_vtxos: &HashSet<OutPoint>,
+    ) -> Result<PreparedOffboard, Error>
+    where
+        R: Rng + CryptoRng + Clone,
+    {
+        let (change_address, _) = self.get_offchain_address()?;
+        let (boarding_inputs, mut vtxo_inputs, mut total_amount) = self
+            .fetch_commitment_transaction_inputs(crate::utils::unix_now()?)
+            .await?;
+        let excluded_amount = vtxo_inputs
+            .iter()
+            .filter(|input| exclude_vtxos.contains(&input.outpoint()))
+            .fold(Amount::ZERO, |acc, input| acc + input.amount());
+        vtxo_inputs.retain(|input| !exclude_vtxos.contains(&input.outpoint()));
+        total_amount = total_amount
+            .checked_sub(excluded_amount)
+            .unwrap_or(Amount::ZERO);
+        let settlement = self
+            .plan_offboard_via_operator(
+                rng,
+                &boarding_inputs,
+                &vtxo_inputs,
+                &to_address,
+                requested_onchain,
+                &change_address,
+                total_amount,
+            )
+            .await?;
+        Ok(PreparedOffboard {
+            boarding_inputs,
+            vtxo_inputs,
+            to_address,
+            change_address,
+            settlement,
+        })
+    }
+
+    async fn prepare_offboard_vtxo_selection<R>(
+        &self,
+        rng: &mut R,
+        input_vtxos: impl Iterator<Item = OutPoint> + Clone,
+        to_address: Address,
+        requested_onchain: Amount,
+    ) -> Result<PreparedOffboard, Error>
+    where
+        R: Rng + CryptoRng + Clone,
+    {
+        let (change_address, _) = self.get_offchain_address()?;
         let vtxo_inputs = self
             .selected_batch_settleable_vtxo_inputs(input_vtxos)
             .await?;
-
         if vtxo_inputs.is_empty() {
             return Err(Error::ad_hoc("no matching VTXO outpoints found"));
         }
-
-        // Check that total amount is sufficient
-        let total_input_amount = vtxo_inputs
+        let total_amount = vtxo_inputs
             .iter()
             .fold(Amount::ZERO, |acc, vtxo| acc + vtxo.amount());
+        let settlement = self
+            .plan_offboard_via_operator(
+                rng,
+                &[],
+                &vtxo_inputs,
+                &to_address,
+                requested_onchain,
+                &change_address,
+                total_amount,
+            )
+            .await?;
+        Ok(PreparedOffboard {
+            boarding_inputs: Vec::new(),
+            vtxo_inputs,
+            to_address,
+            change_address,
+            settlement,
+        })
+    }
 
-        // The intent fee depends on the input/output set rather than on amounts, so estimate it
-        // against the gross (pre-fee) change and then deduct it to obtain the real change amount.
-        let gross_change = total_input_amount.checked_sub(to_amount).ok_or_else(|| {
-            Error::coin_select(format!(
-                "insufficient VTXO amount: {total_input_amount} < {to_amount} (send)"
-            ))
-        })?;
-        let intent_fee = self.eval_offboard_intent_fee(
-            &[],
-            &vtxo_inputs,
-            &to_address,
-            to_amount,
-            &change_address,
-            gross_change,
-        )?;
-
-        // Fee comes out of change, not the send amount.
-        let change_amount = gross_change.checked_sub(intent_fee).ok_or_else(|| {
-            Error::coin_select(format!(
-                "insufficient VTXO amount: {total_input_amount} < {to_amount} (send) + {intent_fee} (fee)"
-            ))
-        })?;
-
+    async fn register_prepared_offboard<R>(
+        &self,
+        rng: &mut R,
+        prepared: PreparedOffboard,
+    ) -> Result<JoinBatchOutcome, Error>
+    where
+        R: Rng + CryptoRng + Clone,
+    {
+        let PreparedOffboard {
+            boarding_inputs,
+            vtxo_inputs,
+            to_address,
+            change_address,
+            settlement,
+        } = prepared;
         tracing::info!(
             %to_address,
-            send_amount = %to_amount,
-            fee = %intent_fee,
+            onchain_amount = %settlement.onchain_amount,
+            fee = %settlement.reserved_fee,
             change_address = %change_address.encode(),
-            %change_amount,
+            change_amount = %settlement.change_amount,
             "Attempting to collaboratively redeem outputs"
         );
-
         let outcome = self
             .join_next_batch(
                 &mut rng.clone(),
-                Vec::new(),
-                vtxo_inputs.clone(),
+                boarding_inputs,
+                vtxo_inputs,
                 BatchOutputType::OffBoard {
-                    to_address: to_address.clone(),
-                    to_amount,
+                    to_address,
+                    to_amount: settlement.onchain_amount,
                     change_address,
-                    change_amount,
+                    change_amount: settlement.change_amount,
                 },
             )
             .await
             .context("Failed to join batch")?;
-
         if let JoinBatchOutcome::Completed(commitment_txid) = &outcome {
             tracing::info!(%commitment_txid, "Collaborative redeem success");
         }
-
         Ok(outcome)
+    }
+
+    /// Quote `/v1/intent/estimate` on the pre-fee shape, then again on the shape
+    /// [`offboard_outputs_for_fee`] would register, at most [`MAX_OFFBOARD_OPERATOR_QUOTES`] times.
+    async fn plan_offboard_via_operator<R>(
+        &self,
+        rng: &mut R,
+        boarding_inputs: &[batch::OnChainInput],
+        vtxo_inputs: &[intent::Input],
+        to_address: &Address,
+        requested_onchain: Amount,
+        change_address: &ArkAddress,
+        total: Amount,
+    ) -> Result<OffboardSettlement, Error>
+    where
+        R: Rng + CryptoRng + Clone,
+    {
+        let dust = self.server_info()?.dust;
+        let mut settlement =
+            offboard_outputs_for_fee(total, requested_onchain, dust, Amount::ZERO)?;
+        for _ in 0..MAX_OFFBOARD_OPERATOR_QUOTES {
+            let quoted_fee = self
+                .estimate_offboard_intent_fee_via_operator(
+                    &mut rng.clone(),
+                    boarding_inputs.to_vec(),
+                    vtxo_inputs.to_vec(),
+                    to_address,
+                    settlement.onchain_amount,
+                    change_address,
+                    settlement.change_amount,
+                )
+                .await?;
+            let step = refine_offboard_settlement(
+                &settlement,
+                total,
+                requested_onchain,
+                dust,
+                quoted_fee,
+            )?;
+            if step.accepted {
+                return Ok(step.settlement);
+            }
+            settlement = step.settlement;
+        }
+        Err(Error::ad_hoc(format!(
+            "collaborative exit fee did not stabilize after {MAX_OFFBOARD_OPERATOR_QUOTES} operator quotes"
+        )))
     }
 
     pub(crate) async fn selected_batch_settleable_vtxo_inputs(
@@ -1308,6 +1388,54 @@ where
         };
 
         Ok((boarding_inputs, vtxo_inputs, total_amount))
+    }
+
+    /// Fee for an offboard intent, from the operator's `/v1/intent/estimate`.
+    ///
+    /// The signed estimate intent includes the VTXO, so the operator runs its CEL against the
+    /// real expiry. Mutinynet's offchain-input program is
+    /// `expiry - now() > 518656 ? amount * 0.002 : 0`. [`Self::eval_offboard_intent_fee`] passes
+    /// `expiry: None`, which `ark-fees` treats as 0, so that program returns 0 (GitHub #80).
+    ///
+    /// `to_amount` and `change_amount` are the outputs of the shape being quoted.
+    /// A zero `change_amount` omits the change output. The absolute value matches the UI
+    /// estimate (`SignedAmount::abs`).
+    async fn estimate_offboard_intent_fee_via_operator<R>(
+        &self,
+        rng: &mut R,
+        boarding_inputs: Vec<batch::OnChainInput>,
+        vtxo_inputs: Vec<intent::Input>,
+        to_address: &Address,
+        to_amount: Amount,
+        change_address: &ArkAddress,
+        change_amount: Amount,
+    ) -> Result<Amount, Error>
+    where
+        R: Rng + CryptoRng + Clone,
+    {
+        let prepared = self.prepare_intent(
+            rng,
+            boarding_inputs,
+            vtxo_inputs,
+            BatchOutputType::OffBoard {
+                to_address: to_address.clone(),
+                to_amount,
+                change_address: change_address.clone(),
+                change_amount,
+            },
+            PrepareIntentKind::EstimateFee,
+        )?;
+
+        let signed_amount = timeout_op(
+            self.inner.timeout,
+            self.network_client().estimate_fees(prepared.intent),
+        )
+        .await
+        .context("failed to estimate collaborative exit fee")??;
+
+        // `/v1/intent/estimate` returns a signed satoshi count. Callers subtract a positive fee.
+        let fee_sats = signed_amount.abs().to_sat() as u64;
+        Ok(Amount::from_sat(fee_sats))
     }
 
     /// Prepare an intent for batch registration or fee estimation.
@@ -2019,6 +2147,16 @@ where
     /// boarding settles do. The fee covers every input plus *both* the on-chain destination output
     /// and the off-chain change output, so the single-output estimate used for a plain on-chain send
     /// is far too low and arkd rejects the `RegisterIntent` with `INTENT_INSUFFICIENT_FEE`.
+    ///
+    /// Unused. Collaborative exit calls [`Self::estimate_offboard_intent_fee_via_operator`].
+    /// This evaluator sets every VTXO `expiry` and `birth` to `None` and hardcodes
+    /// [`ark_fees::VtxoType::Vtxo`]. `ark-fees` substitutes expiry 0. Mutinynet's offchain-input
+    /// program (`expiry - now() > 518656 ? amount * 0.002 : 0`) then returns 0, and arkd rejects
+    /// the intent with `INTENT_INSUFFICIENT_FEE` (GitHub #80).
+    #[allow(dead_code)]
+    #[deprecated(
+        note = "drops VTXO expiry, so CEL programs that branch on expiry return 0; use estimate_offboard_intent_fee_via_operator"
+    )]
     fn eval_offboard_intent_fee(
         &self,
         boarding_inputs: &[batch::OnChainInput],
@@ -2115,6 +2253,138 @@ pub(crate) struct PreparedIntent {
     pub onchain_inputs: Vec<batch::OnChainInput>,
     /// The original VTXO inputs (needed for forfeit signing).
     pub vtxo_inputs: Vec<intent::Input>,
+}
+
+/// Operator quotes used while settling one collaborative exit.
+pub const MAX_OFFBOARD_OPERATOR_QUOTES: usize = 3;
+
+/// On-chain output, Ark change, and the fee reserved between them.
+///
+/// `change_amount == 0` means the change output is omitted. `reserved_fee` is
+/// `total - onchain_amount - change_amount` for the inputs that were planned.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OffboardSettlement {
+    pub onchain_amount: Amount,
+    pub change_amount: Amount,
+    pub reserved_fee: Amount,
+}
+
+/// One step of [`plan_offboard_settlement`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OffboardPlanStep {
+    pub settlement: OffboardSettlement,
+    pub accepted: bool,
+}
+
+/// Failure of [`plan_offboard_settlement`].
+#[derive(Debug)]
+pub enum OffboardPlanError<E> {
+    Split(Error),
+    Quote(E),
+    FeeDidNotStabilize,
+}
+
+struct PreparedOffboard {
+    boarding_inputs: Vec<batch::OnChainInput>,
+    vtxo_inputs: Vec<intent::Input>,
+    to_address: Address,
+    change_address: ArkAddress,
+    settlement: OffboardSettlement,
+}
+
+/// Split a collaborative exit after one operator quote.
+///
+/// The requested on-chain amount is kept when the remainder pays the quote and leaves
+/// either no change or a change VTXO of at least `dust`. A sub-dust remainder is folded
+/// into the reserved fee. A remainder below the quote shrinks the on-chain output.
+pub fn offboard_outputs_for_fee(
+    total: Amount,
+    requested_onchain: Amount,
+    dust: Amount,
+    quoted_fee: Amount,
+) -> Result<OffboardSettlement, Error> {
+    let remainder = total.checked_sub(requested_onchain).ok_or_else(|| {
+        Error::coin_select(format!(
+            "insufficient balance: {total} < {requested_onchain} (send)"
+        ))
+    })?;
+
+    if remainder >= quoted_fee {
+        let change_amount = remainder - quoted_fee;
+        if change_amount == Amount::ZERO || change_amount >= dust {
+            return Ok(OffboardSettlement {
+                onchain_amount: requested_onchain,
+                change_amount,
+                reserved_fee: quoted_fee,
+            });
+        }
+        return Ok(OffboardSettlement {
+            onchain_amount: requested_onchain,
+            change_amount: Amount::ZERO,
+            reserved_fee: remainder,
+        });
+    }
+
+    let onchain_amount = total.checked_sub(quoted_fee).ok_or_else(|| {
+        Error::coin_select(format!(
+            "insufficient balance: {total} < {quoted_fee} (fee)"
+        ))
+    })?;
+    if onchain_amount < dust {
+        return Err(Error::ad_hoc(format!(
+            "cannot collaboratively exit into sub-dust output: {onchain_amount} < {dust}"
+        )));
+    }
+    Ok(OffboardSettlement {
+        onchain_amount,
+        change_amount: Amount::ZERO,
+        reserved_fee: quoted_fee,
+    })
+}
+
+/// Apply one operator quote to the settlement that was just quoted.
+pub fn refine_offboard_settlement(
+    current: &OffboardSettlement,
+    total: Amount,
+    requested_onchain: Amount,
+    dust: Amount,
+    quoted_fee: Amount,
+) -> Result<OffboardPlanStep, Error> {
+    let settlement = offboard_outputs_for_fee(total, requested_onchain, dust, quoted_fee)?;
+    let accepted = settlement.onchain_amount == current.onchain_amount
+        && settlement.change_amount == current.change_amount
+        && settlement.reserved_fee >= quoted_fee;
+    Ok(OffboardPlanStep {
+        settlement,
+        accepted,
+    })
+}
+
+/// Quote the pre-fee shape, then the shape that quote implies, up to
+/// [`MAX_OFFBOARD_OPERATOR_QUOTES`] times.
+///
+/// `quote_fee(onchain_amount, change_amount)` prices that exact output pair.
+/// A zero change amount means the change output is absent.
+pub fn plan_offboard_settlement<E>(
+    total: Amount,
+    requested_onchain: Amount,
+    dust: Amount,
+    mut quote_fee: impl FnMut(Amount, Amount) -> Result<Amount, E>,
+) -> Result<OffboardSettlement, OffboardPlanError<E>> {
+    let mut settlement = offboard_outputs_for_fee(total, requested_onchain, dust, Amount::ZERO)
+        .map_err(OffboardPlanError::Split)?;
+    for _ in 0..MAX_OFFBOARD_OPERATOR_QUOTES {
+        let quoted_fee = quote_fee(settlement.onchain_amount, settlement.change_amount)
+            .map_err(OffboardPlanError::Quote)?;
+        let step =
+            refine_offboard_settlement(&settlement, total, requested_onchain, dust, quoted_fee)
+                .map_err(OffboardPlanError::Split)?;
+        if step.accepted {
+            return Ok(step.settlement);
+        }
+        settlement = step.settlement;
+    }
+    Err(OffboardPlanError::FeeDidNotStabilize)
 }
 
 #[cfg(test)]
