@@ -1426,7 +1426,12 @@ where
             PrepareIntentKind::EstimateFee,
         )?;
 
-        let signed_amount = self.network_client().estimate_fees(prepared.intent).await?;
+        let signed_amount = timeout_op(
+            self.inner.timeout,
+            self.network_client().estimate_fees(prepared.intent),
+        )
+        .await
+        .context("failed to estimate collaborative exit fee")??;
 
         // `/v1/intent/estimate` returns a signed satoshi count. Callers subtract a positive fee.
         let fee_sats = signed_amount.abs().to_sat() as u64;

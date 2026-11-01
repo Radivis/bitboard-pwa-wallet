@@ -27,7 +27,11 @@ export function useCollaborativeExitFlow() {
   const signerMigrationHint = useWalletStore((walletState) => walletState.arkadeSignerMigrationHint)
   const balanceQuery = useArkadeBalanceQuery()
 
-  const [collabDestination, setCollabDestination] = useState('')
+  // The receive address is already known when this page opens. Starting from it
+  // lets the fee quote run on the first render. Filling it in an effect changes
+  // the query key after the quote has started, and that quote then stays on
+  // "Loading…" until the amount is edited.
+  const [collabDestination, setCollabDestination] = useState(currentAddress ?? '')
   const [collabAmountSats, setCollabAmountSats] = useState('')
 
   const collabAmountParse = parseCollaborativeExitAmountSats(collabAmountSats)
