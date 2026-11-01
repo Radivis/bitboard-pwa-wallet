@@ -457,6 +457,7 @@ dependencies = [
  "ark-client",
  "ark-core",
  "ark-delegator",
+ "ark-fees",
  "bip39",
  "bitboard-wasm-sleep",
  "bitcoin",

@@ -35,6 +35,7 @@ import type {
   ArkadeBalanceInfo,
   ArkadeBatchJoinResult,
   ArkadeBoardingStatus,
+  ArkadeCollaborativeExitFeeEstimateParams,
   ArkadePendingBatchIntent,
   ArkadeSignerMigrationResult,
   ArkadeVtxoOutpoint,
@@ -1425,12 +1426,19 @@ export function useArkadeCollaborativeExitFeeQuery(params: {
         : arkadeDisabledQueryKey('exit-fee-collaborative'),
     enabled,
     queryFn: () =>
-      withReadyArkadeWorker(() =>
-        getArkadeWorker().getCollaborativeExitFeeEstimate({
+      withReadyArkadeWorker(() => {
+        const estimateParams: ArkadeCollaborativeExitFeeEstimateParams = {
           destinationAddress: destinationTrimmed,
-          amountSats: params.amountSats,
-        }),
-      ),
+        }
+        if (params.amountSats != null) {
+          estimateParams.amountSats = params.amountSats
+        }
+        return getArkadeWorker().getCollaborativeExitFeeEstimate(estimateParams)
+      }),
+    // Field tracking can miss the settled quote, so the panel stays on Loading
+    // until some other state update (editing the amount) re-renders it.
+    notifyOnChangeProps: 'all',
+    placeholderData: keepPreviousData,
     staleTime: ARKADE_FEE_ESTIMATE_STALE_MS,
   })
 }

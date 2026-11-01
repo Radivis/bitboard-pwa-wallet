@@ -40,8 +40,8 @@ where
     ///
     /// # Returns
     ///
-    /// Returns the estimated fee as a [`SignedAmount`]. The fee will be deducted from
-    /// the total available balance when performing the actual redemption.
+    /// Returns the fee reserved on the intent that would be registered. Change pays that
+    /// fee when the leftover VTXO stays above dust; otherwise the on-chain output shrinks.
     ///
     /// # Errors
     ///
@@ -71,6 +71,10 @@ where
     /// Like [`Self::estimate_onchain_fees`], omitting the given VTXO outpoints.
     ///
     /// An empty `exclude_vtxos` set is equivalent to [`Self::estimate_onchain_fees`].
+    ///
+    /// The returned amount is the fee reserved on the intent that
+    /// [`Self::collaborative_redeem_excluding_vtxos`] would register, not the fee of the
+    /// pre-fee output shape.
     pub async fn estimate_onchain_fees_excluding_vtxos<R>(
         &self,
         rng: &mut R,
@@ -81,51 +85,10 @@ where
     where
         R: Rng + CryptoRng + Clone,
     {
-        let (change_address, _) = self.get_offchain_address()?;
-
-        let (boarding_inputs, mut vtxo_inputs, mut total_amount) = self
-            .fetch_commitment_transaction_inputs(crate::utils::unix_now()?)
+        let settlement = self
+            .quote_collaborative_redeem_excluding_vtxos(rng, to_address, to_amount, exclude_vtxos)
             .await?;
-        let excluded_amount = vtxo_inputs
-            .iter()
-            .filter(|input| exclude_vtxos.contains(&input.outpoint()))
-            .fold(Amount::ZERO, |acc, input| acc + input.amount());
-        vtxo_inputs.retain(|input| !exclude_vtxos.contains(&input.outpoint()));
-        total_amount = total_amount
-            .checked_sub(excluded_amount)
-            .unwrap_or(Amount::ZERO);
-
-        let change_amount = total_amount.checked_sub(to_amount).ok_or_else(|| {
-            Error::coin_select(format!(
-                "cannot afford to send {to_amount}, only have {total_amount}"
-            ))
-        })?;
-
-        tracing::info!(
-            %to_address,
-            gross_amount = %to_amount,
-            change_address = %change_address.encode(),
-            %change_amount,
-            ?boarding_inputs,
-            "Estimating fee to collaboratively redeem outputs"
-        );
-
-        let intent = self.prepare_intent(
-            &mut rng.clone(),
-            boarding_inputs,
-            vtxo_inputs,
-            BatchOutputType::OffBoard {
-                to_address,
-                to_amount,
-                change_address,
-                change_amount,
-            },
-            batch::PrepareIntentKind::EstimateFee,
-        )?;
-
-        let amount = self.network_client().estimate_fees(intent.intent).await?;
-
-        Ok(amount)
+        signed_reserved_fee(settlement.reserved_fee)
     }
 
     /// Estimates the fee to join the next batch and settle funds to an Ark address.
@@ -203,8 +166,9 @@ where
     ///
     /// # Returns
     ///
-    /// Returns the estimated fee as a [`SignedAmount`]. The fee will be deducted from
-    /// the total input amount, with any remainder going to change.
+    /// Returns the fee reserved on the intent that would be registered. Change is omitted
+    /// when it cannot cover that fee without a sub-dust VTXO, and the on-chain amount shrinks
+    /// instead.
     ///
     /// # Errors
     ///
@@ -223,52 +187,10 @@ where
     where
         R: Rng + CryptoRng + Clone,
     {
-        let (change_address, _) = self.get_offchain_address()?;
-
-        let vtxo_inputs = self
-            .selected_batch_settleable_vtxo_inputs(input_vtxos)
+        let settlement = self
+            .quote_collaborative_redeem_vtxo_selection(rng, input_vtxos, to_address, to_amount)
             .await?;
-
-        if vtxo_inputs.is_empty() {
-            return Err(Error::ad_hoc("no matching VTXO outpoints found"));
-        }
-
-        let total_input_amount = vtxo_inputs
-            .iter()
-            .fold(Amount::ZERO, |acc, vtxo| acc + vtxo.amount());
-
-        let change_amount = total_input_amount.checked_sub(to_amount).ok_or_else(|| {
-            Error::coin_select(format!(
-                "cannot afford to send {to_amount}, only have {total_input_amount}"
-            ))
-        })?;
-
-        tracing::info!(
-            %to_address,
-            %to_amount,
-            %total_input_amount,
-            change_address = %change_address.encode(),
-            %change_amount,
-            num_vtxos = vtxo_inputs.len(),
-            "Estimating fee to collaboratively redeem selected VTXOs"
-        );
-
-        let intent = self.prepare_intent(
-            &mut rng.clone(),
-            vec![], // No boarding inputs when using specific VTXOs
-            vtxo_inputs,
-            BatchOutputType::OffBoard {
-                to_address,
-                to_amount,
-                change_address,
-                change_amount,
-            },
-            batch::PrepareIntentKind::EstimateFee,
-        )?;
-
-        let amount = self.network_client().estimate_fees(intent.intent).await?;
-
-        Ok(amount)
+        signed_reserved_fee(settlement.reserved_fee)
     }
 
     /// Estimates the fee to join the next batch with specific VTXOs and settle to an Ark address.
@@ -337,4 +259,11 @@ where
 
         Ok(amount)
     }
+}
+
+fn signed_reserved_fee(fee: Amount) -> Result<SignedAmount, Error> {
+    let sats = i64::try_from(fee.to_sat()).map_err(|_| {
+        Error::ad_hoc("collaborative exit fee does not fit in a signed satoshi amount")
+    })?;
+    Ok(SignedAmount::from_sat(sats))
 }

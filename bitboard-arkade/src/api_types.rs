@@ -458,6 +458,9 @@ pub struct CollaborativeExitFeeEstimateDto {
     pub intent_fee_configured: IntentFeeConfiguredDto,
     pub estimated_total_fee_sats: Option<u64>,
     pub estimated_receive_sats: Option<u64>,
+    /// Ark change VTXO left after the reserved fee. Zero when the exit is a single on-chain output.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub change_sats: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub estimate_error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
