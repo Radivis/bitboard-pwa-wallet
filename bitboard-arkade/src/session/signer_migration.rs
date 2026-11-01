@@ -115,7 +115,8 @@ impl ArkadeSession {
         }
 
         if migration_complete {
-            let server_signer: XOnlyPublicKey = self.client.server_info()?.signer_pk.into();
+            let server_signer: XOnlyPublicKey =
+                self.client.server_info_snapshot()?.signer_pk.into();
             self.set_persisted_operator_identity(operator_identity_for_connected_signer(
                 server_signer,
                 self.network(),

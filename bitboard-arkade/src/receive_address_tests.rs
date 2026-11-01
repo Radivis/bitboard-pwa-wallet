@@ -1,7 +1,8 @@
 use std::str::FromStr;
 
 use ark_client::key_provider::{
-    Bip32KeyProvider, KeyProvider, KeypairIndex, display_receive_derivation_index,
+    Bip32KeyProvider, DiscoverableKeyProvider, KeyProvider, KeypairIndex,
+    display_receive_derivation_index,
 };
 use bitcoin::Network;
 use bitcoin::bip32::{DerivationPath, Xpriv};
@@ -82,8 +83,58 @@ fn peek_unchanged_after_mark_as_used() {
 
     let last_unused = provider
         .get_next_keypair(KeypairIndex::LastUnused)
-        .expect("last unused for change");
-    assert_ne!(last_unused.x_only_public_key().0, revealed_pk);
+        .expect("current receive key");
+    assert_eq!(last_unused.x_only_public_key().0, revealed_pk);
+    assert_eq!(
+        provider
+            .peek_next_derivation_index_value()
+            .expect("cursor unchanged"),
+        1
+    );
+}
+
+/// Session reopen hydrates the baseline contract key before `LastUnused`. That key is the current
+/// receive key and must not be treated as used.
+#[test]
+fn hydrated_current_receive_key_is_last_unused_without_advancing() {
+    let provider = test_bip32_key_provider_at_next_index(1);
+    provider
+        .cache_keypair_at_index(0)
+        .expect("hydrate current receive key");
+    let restored = provider
+        .get_next_keypair(KeypairIndex::LastUnused)
+        .expect("last unused");
+    let expected = provider.ensure_keypair_cached_at_index(0).expect("index 0");
+    assert_eq!(restored.x_only_public_key(), expected.x_only_public_key());
+    assert_eq!(
+        provider
+            .peek_next_derivation_index_value()
+            .expect("cursor unchanged"),
+        1
+    );
+}
+
+/// Cold provider: persisted `next_index` with an empty cache must return the current receive
+/// key and must not advance the cursor. That is what session open does via `LastUnused`.
+#[test]
+fn last_unused_restores_persisted_receive_key_without_advancing() {
+    let provider = test_bip32_key_provider_at_next_index(1);
+    let restored = provider
+        .get_next_keypair(KeypairIndex::LastUnused)
+        .expect("restore current receive key");
+    let expected = provider.ensure_keypair_cached_at_index(0).expect("index 0");
+    assert_eq!(restored.x_only_public_key(), expected.x_only_public_key());
+    assert_eq!(
+        provider
+            .peek_next_derivation_index_value()
+            .expect("cursor unchanged"),
+        1
+    );
+
+    let again = provider
+        .get_next_keypair(KeypairIndex::LastUnused)
+        .expect("second lookup");
+    assert_eq!(again.x_only_public_key(), restored.x_only_public_key());
 }
 
 /// Simulates reveal → export `offchain_next_derivation_index` → reopen → peek display key.

@@ -2,10 +2,7 @@ use anyhow::Result;
 use ark_client::error::Error;
 use ark_client::error::ErrorContext;
 use ark_client::wallet::Balance;
-use ark_client::wallet::BoardingWallet;
 use ark_client::wallet::OnchainWallet;
-use ark_client::wallet::Persistence;
-use ark_core::BoardingOutput;
 use ark_core::SelectedUtxo;
 use ark_core::UtxoCoinSelection;
 use bdk_esplora::EsploraAsyncExt;
@@ -36,27 +33,25 @@ use std::sync::RwLock;
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 mod utils;
 
-pub struct Wallet<DB>
-where
-    DB: Persistence,
-{
+pub struct Wallet<DB> {
+    // Retained so `new` / `new_from_xpriv` keep the same inputs. BDK holds the signing key.
+    #[allow(dead_code)]
     kp: Keypair,
+    #[allow(dead_code)]
     secp: Secp256k1<All>,
     inner: Arc<RwLock<BdkWallet>>,
     #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
     client: esplora_client::AsyncClient,
     #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
     client: esplora_client::AsyncClient<WebSleeper>,
+    #[allow(dead_code)]
     db: DB,
     completed_full_scan: AtomicBool,
     accumulated_changeset: RwLock<ChangeSet>,
     bumper_hydrate_fell_back_to_empty: bool,
 }
 
-impl<DB> Wallet<DB>
-where
-    DB: Persistence,
-{
+impl<DB> Wallet<DB> {
     pub fn new(
         kp: Keypair,
         secp: Secp256k1<All>,
@@ -276,7 +271,7 @@ where
 
 impl<DB> OnchainWallet for Wallet<DB>
 where
-    DB: Persistence + Send + Sync,
+    DB: Send + Sync,
 {
     fn get_onchain_address(&self) -> Result<Address, Error> {
         let info = self
@@ -404,47 +399,6 @@ where
             total_selected,
             change_amount,
         })
-    }
-}
-
-impl<DB> BoardingWallet for Wallet<DB>
-where
-    DB: Persistence,
-{
-    fn new_boarding_output(
-        &self,
-        server_pk: XOnlyPublicKey,
-        exit_delay: bitcoin::Sequence,
-        network: Network,
-    ) -> Result<BoardingOutput, Error> {
-        let sk = self.kp.secret_key();
-        let (owner_pk, _) = sk.public_key(&self.secp).x_only_public_key();
-
-        let boarding_output =
-            BoardingOutput::new(&self.secp, server_pk, owner_pk, exit_delay, network)?;
-
-        self.db
-            .save_boarding_output(sk, boarding_output.clone())
-            .context("Failed saving boarding output")?;
-
-        Ok(boarding_output)
-    }
-
-    fn get_boarding_outputs(&self) -> Result<Vec<BoardingOutput>, Error> {
-        self.db.load_boarding_outputs()
-    }
-
-    fn sign_for_pk(&self, pk: &XOnlyPublicKey, msg: &Message) -> Result<Signature, Error> {
-        let key = self
-            .db
-            .sk_for_pk(pk)
-            .with_context(|| format!("Failed retrieving SK for PK {pk}"))?;
-
-        let sig = self
-            .secp
-            .sign_schnorr_no_aux_rand(msg, &key.keypair(&self.secp));
-
-        Ok(sig)
     }
 }
 

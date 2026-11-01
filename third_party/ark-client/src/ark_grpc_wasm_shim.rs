@@ -5,16 +5,18 @@ use std::sync::Arc;
 
 use ark_core::asset::AssetId;
 use ark_core::intent;
+use ark_core::server::IndexerAuth;
 use ark_core::server::{
     self, indexer_spend_txid, ChainedTxType, FinalizeOffchainTxResponse, GetVtxosRequest,
-    IndexerPage, PendingTx, StreamEvent, SubmitOffchainTxResponse, SubscriptionResponse,
-    VirtualTxsResponse, VtxoChain, VtxoChains,
+    IndexerPage, PendingTx, StreamEvent, SubmitOffchainTxResponse, SubscriptionFilter,
+    SubscriptionResponse, VirtualTxsResponse, VtxoChain, VtxoChains,
 };
 use ark_rest::apis::ark_service_api::{
     ark_service_estimate_intent_fee, ark_service_get_pending_tx,
 };
 use ark_rest::apis::indexer_service_api::indexer_service_get_asset;
 use ark_rest::apis::indexer_service_api::indexer_service_get_vtxo_chain;
+use ark_rest::apis::indexer_service_api::indexer_service_update_subscription;
 use ark_rest::models::{EstimateIntentFeeRequest, GetPendingTxRequest, IndexerChainedTxType};
 use bitcoin::hex::FromHex;
 use bitcoin::secp256k1::PublicKey;
@@ -163,6 +165,55 @@ fn format_rest_request_error(rest_error: &ark_rest::Error) -> String {
         format!("batch event stream: {chain}")
     } else {
         chain
+    }
+}
+
+/// Indexer REST query credentials. A token and an intent proof are alternatives.
+struct IndexerAuthQuery<'a> {
+    token: Option<&'a str>,
+    intent_proof: Option<&'a str>,
+    intent_message: Option<&'a str>,
+}
+
+fn indexer_auth_query(auth: &Option<IndexerAuth>) -> IndexerAuthQuery<'_> {
+    match auth {
+        Some(IndexerAuth::Token(token)) => IndexerAuthQuery {
+            token: Some(token.as_str()),
+            intent_proof: None,
+            intent_message: None,
+        },
+        Some(IndexerAuth::Intent { proof, message }) => IndexerAuthQuery {
+            token: None,
+            intent_proof: Some(proof.as_str()),
+            intent_message: Some(message.as_str()),
+        },
+        None => IndexerAuthQuery {
+            token: None,
+            intent_proof: None,
+            intent_message: None,
+        },
+    }
+}
+
+fn rest_subscription_filter(filter: &SubscriptionFilter) -> ark_rest::models::SubscriptionFilter {
+    ark_rest::models::SubscriptionFilter {
+        expressions: Some(filter.expressions.clone()),
+        scripts: Some(ark_rest::models::ScriptFilter {
+            add: Some(
+                filter
+                    .add_scripts
+                    .iter()
+                    .map(|script| script.to_hex_string())
+                    .collect(),
+            ),
+            remove: Some(
+                filter
+                    .remove_scripts
+                    .iter()
+                    .map(|script| script.to_hex_string())
+                    .collect(),
+            ),
+        }),
     }
 }
 
@@ -376,18 +427,25 @@ impl Client {
         &self,
         outpoint: Option<OutPoint>,
         size_and_index: Option<(i32, i32)>,
+        auth: Option<IndexerAuth>,
+        page_token: Option<String>,
     ) -> Result<VtxoChainResponse, Error> {
         let outpoint = outpoint.ok_or_else(|| Error::conversion_message("missing outpoint"))?;
         let (page_size, page_index) = size_and_index
             .map(|(size, index)| (Some(size), Some(index)))
             .unwrap_or((None, None));
+        let auth_query = indexer_auth_query(&auth);
         let configuration = self.inner.configuration().map_err(map_rest_error)?;
         let response = indexer_service_get_vtxo_chain(
             &configuration,
             &outpoint.txid.to_string(),
             outpoint.vout as i32,
+            auth_query.token,
+            page_token.as_deref(),
             page_size,
             page_index,
+            auth_query.intent_proof,
+            auth_query.intent_message,
         )
         .await
         .map_err(map_apis_error)?;
@@ -399,9 +457,10 @@ impl Client {
         &self,
         txids: Vec<String>,
         size_and_index: Option<(i32, i32)>,
+        auth: Option<IndexerAuth>,
     ) -> Result<VirtualTxsResponse, Error> {
         self.inner
-            .get_virtual_txs(txids, size_and_index)
+            .get_virtual_txs(txids, size_and_index, auth)
             .await
             .map_err(map_rest_error)
     }
@@ -431,15 +490,32 @@ impl Client {
     pub async fn get_subscription(
         &self,
         subscription_id: String,
+        filter: Option<SubscriptionFilter>,
     ) -> Result<impl Stream<Item = Result<SubscriptionResponse, Error>> + Unpin, Error> {
         let stream = self
             .inner
-            .get_subscription(subscription_id)
+            .get_subscription(subscription_id, filter)
             .await
             .map_err(map_rest_error)?;
         Ok(stream
             .map(|result| result.map_err(map_rest_error))
             .boxed_local())
+    }
+
+    pub async fn update_subscription(
+        &self,
+        subscription_id: String,
+        filter: SubscriptionFilter,
+    ) -> Result<(), Error> {
+        let configuration = self.inner.configuration().map_err(map_rest_error)?;
+        let request = ark_rest::models::UpdateSubscriptionRequest {
+            subscription_id: Some(subscription_id),
+            filter: Some(rest_subscription_filter(&filter)),
+        };
+        indexer_service_update_subscription(&configuration, request)
+            .await
+            .map_err(map_apis_error)?;
+        Ok(())
     }
 
     pub async fn estimate_fees(&self, intent: intent::Intent) -> Result<SignedAmount, Error> {

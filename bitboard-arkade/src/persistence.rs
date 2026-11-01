@@ -2,7 +2,6 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use ark_client::Error;
-use ark_client::wallet::Persistence;
 use ark_core::BoardingOutput;
 use ark_core::server::{DeprecatedSignerStatus, Info, ServerSignerStatus};
 use bitcoin::secp256k1::Secp256k1;
@@ -58,7 +57,7 @@ fn unix_timestamp_now() -> i64 {
     }
 }
 pub const ARK_RS_ENGINE: &str = "ark-rs";
-pub const ARK_RS_SDK_VERSION: &str = "0.9.3";
+pub const ARK_RS_SDK_VERSION: &str = "0.12.0";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct OperatorIdentity {
@@ -817,8 +816,8 @@ fn outpoint_sets_overlap(
 #[derive(Clone, Default)]
 pub struct SharedPersistenceDb(pub Arc<JsonPersistenceDb>);
 
-impl Persistence for SharedPersistenceDb {
-    fn save_boarding_output(
+impl SharedPersistenceDb {
+    pub fn save_boarding_output(
         &self,
         sk: SecretKey,
         boarding_output: BoardingOutput,
@@ -826,17 +825,17 @@ impl Persistence for SharedPersistenceDb {
         self.0.save_boarding_output(sk, boarding_output)
     }
 
-    fn load_boarding_outputs(&self) -> Result<Vec<BoardingOutput>, Error> {
+    pub fn load_boarding_outputs(&self) -> Result<Vec<BoardingOutput>, Error> {
         self.0.load_boarding_outputs()
     }
 
-    fn sk_for_pk(&self, pk: &XOnlyPublicKey) -> Result<SecretKey, Error> {
+    pub fn sk_for_pk(&self, pk: &XOnlyPublicKey) -> Result<SecretKey, Error> {
         self.0.sk_for_pk(pk)
     }
 }
 
-impl Persistence for JsonPersistenceDb {
-    fn save_boarding_output(
+impl JsonPersistenceDb {
+    pub fn save_boarding_output(
         &self,
         sk: SecretKey,
         boarding_output: BoardingOutput,
@@ -857,7 +856,7 @@ impl Persistence for JsonPersistenceDb {
         Ok(())
     }
 
-    fn load_boarding_outputs(&self) -> Result<Vec<BoardingOutput>, Error> {
+    pub fn load_boarding_outputs(&self) -> Result<Vec<BoardingOutput>, Error> {
         let state = lock_persistence_result(&self.inner)?;
         let (network, server) = lock_persistence_result(&self.load_context)?
             .ok_or_else(|| Error::wallet("boarding load context not configured"))?;
@@ -870,7 +869,7 @@ impl Persistence for JsonPersistenceDb {
             .collect())
     }
 
-    fn sk_for_pk(&self, pk: &XOnlyPublicKey) -> Result<SecretKey, Error> {
+    pub fn sk_for_pk(&self, pk: &XOnlyPublicKey) -> Result<SecretKey, Error> {
         let state = lock_persistence_result(&self.inner)?;
         let hex_sk = state
             .secret_keys_by_owner_pk_hex

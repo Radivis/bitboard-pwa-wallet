@@ -24,7 +24,7 @@ impl ArkadeSession {
         server_pk_for_script: impl Fn(&ScriptBuf) -> Option<XOnlyPublicKey>,
     ) -> ArkResult<Vec<OutPoint>> {
         let now = current_unix_timestamp();
-        let server_info = self.client.server_info()?;
+        let server_info = self.client.server_info_snapshot()?;
         let exclude = self.spend_locked_outpoints();
         let spendable: Vec<CoinSelectVtxo> = vtxo_list
             .spendable_offchain_at(&server_info, now, server_pk_for_script)

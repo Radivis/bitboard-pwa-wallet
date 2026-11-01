@@ -105,7 +105,8 @@ impl ArkadeSession {
             .refresh_server_info()
             .await
             .map_err(ArkWasmError::Client)?;
-        let server_info = self.client.server_info()?;
+        self.persist_watched_boarding_outputs()?;
+        let server_info = self.client.server_info_snapshot()?;
         let new_digest = server_info.digest.clone();
 
         if self.should_block_sync_persist_for_operator_trust(&new_digest) {
@@ -144,14 +145,14 @@ impl ArkadeSession {
             .refresh_server_info()
             .await
             .map_err(ArkWasmError::Client)?;
-        let server_info = self.client.server_info()?;
+        let server_info = self.client.server_info_snapshot()?;
         if self.should_block_sync_persist_for_operator_trust(&server_info.digest) {
             self.stage_operator_trust_from_server_info(&server_info);
             return Ok(FullVtxoListReconcileResultDto::operator_trust_pending());
         }
 
         let now = current_unix_timestamp();
-        let (vtxo_list, script_map) = self.client.list_vtxos().await?;
+        let (vtxo_list, script_map) = self.client.list_vtxo_buckets().await?;
         let prior_snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot.clone();
         let previous_full_listed_at = prior_snapshot
             .as_ref()
@@ -221,8 +222,8 @@ impl ArkadeSession {
         key_discovery_warning: Option<String>,
         now: i64,
     ) -> ArkResult<(VtxoList, OperatorSyncResultDto)> {
-        let server_info = self.client.server_info()?;
-        let (vtxo_list, script_map) = self.client.list_vtxos().await?;
+        let server_info = self.client.server_info_snapshot()?;
+        let (vtxo_list, script_map) = self.client.list_vtxo_buckets().await?;
         let prior_snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot.clone();
         let all_points: Vec<VirtualTxOutPoint> = vtxo_list.all().cloned().collect();
         let mut snapshot = snapshot_from_virtual_tx_outpoints_with_script_lookup(
@@ -251,11 +252,11 @@ impl ArkadeSession {
             live_snapshot_outpoints(snapshot).into_iter().collect();
         let mut points = Vec::new();
         if !requested_live_outpoints.is_empty() {
-            let (list, _) = self
+            let list = self
                 .client
                 .list_vtxos_for_outpoints(requested_live_outpoints.iter().copied().collect())
                 .await?;
-            points.extend(list.all().cloned());
+            points.extend(list.all().map(|entry| entry.vtxo().clone()));
         }
         let recent_addresses = self.recent_offchain_addresses()?;
         if !recent_addresses.is_empty() {
@@ -273,7 +274,7 @@ impl ArkadeSession {
 
     fn recent_offchain_addresses(&self) -> ArkResult<Vec<ArkAddress>> {
         let next_index = self.client.peek_next_offchain_derivation_index();
-        let addresses = self.client.get_offchain_addresses()?;
+        let addresses = self.client.cached_offchain_addresses()?;
         Ok(addresses
             .into_iter()
             .filter_map(|(address, vtxo)| {
@@ -453,7 +454,7 @@ impl ArkadeSession {
             .refresh_server_info()
             .await
             .map_err(ArkWasmError::Client)?;
-        let server_info = self.client.server_info()?;
+        let server_info = self.client.server_info_snapshot()?;
         if !self.should_block_sync_persist_for_operator_trust(&server_info.digest) {
             return Ok(None);
         }

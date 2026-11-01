@@ -6,7 +6,7 @@ This crate implements `ark-client` on-chain wallet traits using [`bdk_wallet`](h
 
 ## Bitboard fork
 
-Vendored from [ark-bdk-wallet 0.9.3](https://github.com/arkade-os/rust-sdk/tree/master/crates/ark-bdk-wallet), applied via `[patch.crates-io]` in the workspace root `Cargo.toml`.
+Vendored from [ark-bdk-wallet 0.12.0](https://github.com/arkade-os/rust-sdk/tree/v0.12.0/ark-bdk-wallet), applied via `[patch.crates-io]` in the workspace root `Cargo.toml`. The Bitboard fork stays on BDK 2.3 and BIP84 (upstream 0.12 is still BDK 1 / BIP86).
 
 This crate has **few behavioral patches** relative to `ark-client` and `ark-rest`. The meaningful Bitboard-specific changes wire it to our other forks:
 
@@ -22,7 +22,7 @@ Esplora timeout behavior is documented in [`../esplora-client/README.md`](../esp
 
 ```toml
 [dependencies]
-ark-bdk-wallet = "0.9.3"
+ark-bdk-wallet = "0.12.0"
 ```
 
 ## Documentation

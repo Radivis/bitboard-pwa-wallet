@@ -129,7 +129,7 @@ impl ArkadeSession {
         self.ensure_operator_rpc_allowed()?;
         let fees = self
             .client
-            .server_info()?
+            .server_info_snapshot()?
             .fees
             .clone()
             .unwrap_or_else(empty_fee_info);

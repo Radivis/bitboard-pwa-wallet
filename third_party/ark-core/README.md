@@ -4,7 +4,7 @@ Core types and utilities for the Arkade protocol (vendored fork).
 
 ## Bitboard fork
 
-Vendored from [ark-core 0.9.3](https://github.com/arkade-os/rust-sdk/tree/master/crates/ark-core), applied via `[patch.crates-io]` in the workspace root `Cargo.toml`.
+Vendored from [ark-core 0.12.0](https://github.com/arkade-os/rust-sdk/tree/v0.12.0/ark-core), applied via `[patch.crates-io]` in the workspace root `Cargo.toml`.
 
 Upstream contribution target: [arkade-os/rust-sdk](https://github.com/arkade-os/rust-sdk).
 
@@ -14,5 +14,6 @@ Upstream contribution target: [arkade-os/rust-sdk](https://github.com/arkade-os/
 |------|---------|-----|---------------|
 | **VTXO bucket naming** | Upstream `spent()` bucket is not `is_spent=true`; it lumps in-progress unilateral exits (`is_unrolled && !is_spent`) with finalized outputs. | Add `exiting()` sub-bucket; rename concept to `unspendable()` (exiting + finalized). `spent()` kept as compat alias. | `src/vtxo_list.rs` |
 | **Unrolled vs recoverable** | `VtxoList::new` checked `is_recoverable` before `is_unrolled`, so expired exiting VTXOs landed in recoverable (contradicts arkd `recoverable_only`). | Classify `is_unrolled && !is_spent` into `exiting` before recoverable; `is_recoverable` returns false when `is_unrolled`. | `src/vtxo_list.rs`, `src/server.rs` |
+| **Intent expiry clock** | `prepare_delegate_psbts_at` called `SystemTime::now`, which panics on `wasm32-unknown-unknown`. | Unix seconds from `js_sys::Date` on wasm, `SystemTime` elsewhere. | `src/batch.rs` |
 
 Human testing overview: [`TESTING.md`](../../TESTING.md).

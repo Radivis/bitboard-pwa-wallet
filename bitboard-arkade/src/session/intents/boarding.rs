@@ -40,8 +40,7 @@ impl ArkadeSession {
         outpoint: OutPoint,
     ) -> ArkResult<bool> {
         let persistence = SharedPersistenceDb(std::sync::Arc::clone(&self.wallet_db));
-        let boarding_outputs =
-            ark_client::wallet::Persistence::load_boarding_outputs(&persistence)?;
+        let boarding_outputs = persistence.load_boarding_outputs()?;
         let now_secs = wasm_safe_now().as_secs();
 
         for boarding_output in boarding_outputs {

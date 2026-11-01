@@ -2,12 +2,12 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use ark_client::Blockchain;
-use ark_client::wallet::Persistence;
 use ark_core::ExplorerUtxo;
 use ark_core::history::Transaction;
 
 use crate::api_types::BoardingStatusDto;
 use crate::error::ArkResult;
+use crate::error::ArkWasmError;
 use crate::outpoint::OnchainOutPoint;
 use crate::persistence::SharedPersistenceDb;
 
@@ -17,13 +17,29 @@ use super::mappers::{
 };
 
 impl ArkadeSession {
+    pub(crate) fn persist_watched_boarding_outputs(&self) -> ArkResult<()> {
+        let rows = self
+            .client
+            .boarding_outputs_for_persistence()
+            .map_err(ArkWasmError::Client)?;
+        let persistence = SharedPersistenceDb(Arc::clone(&self.wallet_db));
+        for (secret_key, boarding_output) in rows {
+            persistence
+                .save_boarding_output(secret_key, boarding_output)
+                .map_err(ArkWasmError::Client)?;
+        }
+        Ok(())
+    }
+
     pub fn boarding_address(&self) -> ArkResult<String> {
-        Ok(self.client.get_boarding_address()?.to_string())
+        self.persist_watched_boarding_outputs()?;
+        Ok(self.client.cached_boarding_address()?.to_string())
     }
 
     pub async fn boarding_status(&self) -> ArkResult<BoardingStatusDto> {
+        self.persist_watched_boarding_outputs()?;
         let finalized_commitment_txid = self.reconcile_pending_batch_intents().await?;
-        let boarding_address = self.client.get_boarding_address()?.to_string();
+        let boarding_address = self.client.cached_boarding_address()?.to_string();
         let persistence = SharedPersistenceDb(Arc::clone(&self.wallet_db));
         let boarding_outputs = persistence.load_boarding_outputs()?;
         let tracked_addresses = self

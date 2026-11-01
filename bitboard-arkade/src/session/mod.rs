@@ -26,7 +26,7 @@ use std::time::Duration;
 use bumper_sync_policy::BumperWalletSyncPhase;
 
 use ark_bdk_wallet::Wallet as ArkBdkWallet;
-use ark_client::{Bip32KeyProvider, Client, InMemorySwapStorage};
+use ark_client::{Client, InMemorySwapStorage};
 use ark_delegator::DelegatorClient;
 use bitcoin::Network;
 
@@ -34,12 +34,14 @@ use crate::esplora_blockchain::EsploraBlockchain;
 use crate::network::NetworkMode;
 use crate::persistence::{JsonPersistenceDb, OperatorIdentity, SharedPersistenceDb};
 
+/// Sent as the client name on ark-client 0.9.3. OfflineClientConfig in 0.12.0 has no name field.
+#[allow(dead_code)]
 pub(crate) const CLIENT_NAME: &str = "bitboard-pwa-wallet";
 pub(crate) const BOLTZ_URL: &str = "https://api.boltz.exchange";
 pub(crate) const CLIENT_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub type BumperWallet = ArkBdkWallet<SharedPersistenceDb>;
-pub type ArkClient = Client<EsploraBlockchain, BumperWallet, InMemorySwapStorage, Bip32KeyProvider>;
+pub type ArkClient = Client<EsploraBlockchain, BumperWallet, InMemorySwapStorage>;
 
 pub struct ArkadeSession {
     client: ArkClient,

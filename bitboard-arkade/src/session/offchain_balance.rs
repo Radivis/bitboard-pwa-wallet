@@ -27,8 +27,8 @@ impl ArkadeSession {
             let mut buckets = OffchainBalanceBuckets::from_live(&live);
             let exclude_pipeline = self.pipeline_outpoints();
             if !exclude_pipeline.is_empty()
-                && let Ok((vtxo_list, script_map)) = self.client.list_vtxos().await
-                && let Ok(server_info) = self.client.server_info()
+                && let Ok((vtxo_list, script_map)) = self.client.list_vtxo_buckets().await
+                && let Ok(server_info) = self.client.server_info_snapshot()
             {
                 buckets.pending_recovery_due_to_expired_signer_sats =
                     pending_recovery_due_to_expired_signer_sats_excluding_unilateral_exit(
@@ -52,7 +52,7 @@ impl ArkadeSession {
         };
         let server_info = self
             .client
-            .server_info()
+            .server_info_snapshot()
             .map_err(crate::error::ArkWasmError::from)?;
         let records = self.wallet_db.vtxo_exit_records();
         offchain_balance_buckets_from_snapshot(
@@ -70,7 +70,7 @@ impl ArkadeSession {
     ) -> ArkResult<u64> {
         let server_info = self
             .client
-            .server_info()
+            .server_info_snapshot()
             .map_err(crate::error::ArkWasmError::from)?;
         let records = self.wallet_db.vtxo_exit_records();
         let buckets = offchain_balance_buckets_from_snapshot(

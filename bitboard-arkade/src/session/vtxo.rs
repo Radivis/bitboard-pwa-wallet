@@ -76,7 +76,7 @@ impl ArkadeSession {
     /// active unroll. Recover is **not** spend-locked: `funding_lost` stays recoverable if
     /// ark-core still classifies it. Post-unroll exiting VTXOs are kept out by vendored bucketing.
     pub(crate) async fn recoverable_vtxo_buckets(&self) -> ArkResult<RecoverableVtxoBuckets> {
-        let dust = self.client.server_info()?.dust;
+        let dust = self.client.server_info_snapshot()?.dust;
         let exclude_pipeline_outpoints = self.pipeline_outpoints();
         let persisted_snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot;
 
@@ -90,7 +90,7 @@ impl ArkadeSession {
         }
 
         if balance_vtxo_reads_use_operator_rpc(self.autonomous_mode())
-            && let Ok((vtxo_list, _)) = self.client.list_vtxos().await
+            && let Ok((vtxo_list, _)) = self.client.list_vtxo_buckets().await
         {
             return Ok(recoverable_vtxo_buckets_from_list(
                 &vtxo_list,
@@ -106,7 +106,7 @@ impl ArkadeSession {
         self.ensure_operator_rpc_allowed()?;
         let fees = self
             .client
-            .server_info()?
+            .server_info_snapshot()?
             .fees
             .clone()
             .unwrap_or_else(empty_fee_info);
@@ -125,7 +125,7 @@ impl ArkadeSession {
             });
         }
 
-        let (to_address, _) = self.client.get_offchain_address()?;
+        let (to_address, _) = self.client.peek_offchain_receive_address()?;
         let mut rng = OsRng;
         match self
             .client
@@ -232,8 +232,8 @@ impl ArkadeSession {
     }
 
     pub async fn list_vtxos(&self) -> ArkResult<VtxoListResultDto> {
-        let dust = self.client.server_info()?.dust;
-        let server_info = self.client.server_info()?;
+        let dust = self.client.server_info_snapshot()?.dust;
+        let server_info = self.client.server_info_snapshot()?;
         let now = current_unix_timestamp();
 
         if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref() {
@@ -257,7 +257,7 @@ impl ArkadeSession {
         }
 
         if !self.autonomous_mode()
-            && let Ok((vtxo_list, script_map)) = self.client.list_vtxos().await
+            && let Ok((vtxo_list, script_map)) = self.client.list_vtxo_buckets().await
         {
             let rows = map_vtxo_rows_from_list(
                 &vtxo_list,
@@ -576,7 +576,10 @@ impl ArkadeSession {
             return vtxo_list_from_snapshot(snapshot);
         }
         if !balance_vtxo_reads_use_operator_rpc(self.autonomous_mode()) {
-            return Ok(VtxoList::new(self.client.server_info()?.dust, Vec::new()));
+            return Ok(VtxoList::new(
+                self.client.server_info_snapshot()?.dust,
+                Vec::new(),
+            ));
         }
         let (vtxo_list, _) = self.client.list_spendable_vtxos().await?;
         Ok(vtxo_list)
@@ -862,6 +865,7 @@ mod recoverable_vtxo_tests {
             settled_by: None,
             ark_txid: None,
             assets: vec![],
+            depth: 0,
         }
     }
 
@@ -1042,6 +1046,7 @@ mod expiring_renew_outpoints_tests {
             settled_by: None,
             ark_txid: None,
             assets: vec![],
+            depth: 0,
         }
     }
 
@@ -1134,6 +1139,7 @@ mod vtxo_row_classification_tests {
             settled_by: None,
             ark_txid: None,
             assets: vec![],
+            depth: 0,
         }
     }
 
@@ -1291,6 +1297,7 @@ mod vtxo_row_classification_tests {
             settled_by: None,
             ark_txid: None,
             assets: vec![],
+            depth: 0,
         };
         let deprecated_pk = PublicKey::from_str(
             "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
@@ -1440,6 +1447,7 @@ mod vtxo_row_classification_tests {
             settled_by: None,
             ark_txid: None,
             assets: vec![],
+            depth: 0,
         };
         let vtxo_list = VtxoList::new(DUST, vec![vtxo]);
         let snapshot = OffchainVtxoSnapshot {

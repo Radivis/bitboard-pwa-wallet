@@ -28,7 +28,7 @@ use std::str::FromStr;
 ///
 /// Update this when the SDK intentionally targets a newer arkd compatibility
 /// baseline.
-pub const TARGET_ARKD_VERSION: &str = "0.9.9";
+pub const TARGET_ARKD_VERSION: &str = "0.9.15";
 
 /// Version of this SDK, as `rust-sdk/<crate version>`.
 ///
@@ -273,48 +273,37 @@ impl GetVtxosRequest {
         }
     }
 
-    pub fn spendable_only(self) -> Result<Self, Error> {
+    /// Restrict the request to the VTXOs matching `filter`. Only one filter can be set.
+    pub fn with_filter(self, filter: GetVtxosRequestFilter) -> Result<Self, Error> {
         if self.filter.is_some() {
             return Err(Error::ad_hoc("GetVtxosRequest filter already set"));
         }
 
         Ok(Self {
-            filter: Some(GetVtxosRequestFilter::Spendable),
+            filter: Some(filter),
             ..self
         })
+    }
+
+    pub fn spendable_only(self) -> Result<Self, Error> {
+        self.with_filter(GetVtxosRequestFilter::Spendable)
     }
 
     pub fn spent_only(self) -> Result<Self, Error> {
-        if self.filter.is_some() {
-            return Err(Error::ad_hoc("GetVtxosRequest filter already set"));
-        }
-
-        Ok(Self {
-            filter: Some(GetVtxosRequestFilter::Spent),
-            ..self
-        })
+        self.with_filter(GetVtxosRequestFilter::Spent)
     }
 
     pub fn recoverable_only(self) -> Result<Self, Error> {
-        if self.filter.is_some() {
-            return Err(Error::ad_hoc("GetVtxosRequest filter already set"));
-        }
-
-        Ok(Self {
-            filter: Some(GetVtxosRequestFilter::Recoverable),
-            ..self
-        })
+        self.with_filter(GetVtxosRequestFilter::Recoverable)
     }
 
     pub fn pending_only(self) -> Result<Self, Error> {
-        if self.filter.is_some() {
-            return Err(Error::ad_hoc("GetVtxosRequest filter already set"));
-        }
+        self.with_filter(GetVtxosRequestFilter::PendingOnly)
+    }
 
-        Ok(Self {
-            filter: Some(GetVtxosRequestFilter::PendingOnly),
-            ..self
-        })
+    /// Only VTXOs that are neither spent nor unrolled: the spendable and the recoverable ones.
+    pub fn renewable_only(self) -> Result<Self, Error> {
+        self.with_filter(GetVtxosRequestFilter::Renewable)
     }
 
     pub fn reference(&self) -> &GetVtxosRequestReference {
@@ -407,12 +396,13 @@ impl GetVtxosRequestReference {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GetVtxosRequestFilter {
     Spendable,
     Spent,
     Recoverable,
     PendingOnly,
+    Renewable,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -440,6 +430,10 @@ pub struct VirtualTxOutPoint {
     pub ark_txid: Option<Txid>,
     /// Assets carried by this VTXO.
     pub assets: Vec<Asset>,
+    /// Number of pre-confirmed transactions between this VTXO and the closest batch-tree leaf.
+    ///
+    /// Zero for VTXOs that are batch-tree leaves themselves.
+    pub depth: u32,
 }
 
 impl VirtualTxOutPoint {
@@ -448,12 +442,38 @@ impl VirtualTxOutPoint {
     /// Recoverable VTXOs can be settled, but they cannot be sent in an offchain transaction. To
     /// settle them, the original VTXO does not need to be forfeited, as the Arkade server already
     /// controls it.
+    ///
+    /// An unrolled VTXO is never recoverable: it is onchain, and the Arkade server does not take it
+    /// into a batch.
     pub fn is_recoverable(&self, dust: Amount) -> bool {
         if self.is_spent || self.is_unrolled {
             return false;
         }
 
         self.amount < dust || self.is_swept || self.is_expired()
+    }
+
+    /// Check if a VTXO should be treated as unspent wallet state.
+    pub fn is_unspent(&self, dust: Amount) -> bool {
+        self.is_recoverable(dust) || (!self.is_unrolled && !self.is_spent && !self.is_swept)
+    }
+
+    /// Check if a VTXO can be spent in an offchain transaction.
+    pub fn is_spendable_offchain(&self, dust: Amount) -> bool {
+        !self.is_recoverable(dust) && !self.is_unrolled && !self.is_spent && !self.is_swept
+    }
+
+    pub fn is_pre_confirmed_spendable(&self, dust: Amount) -> bool {
+        self.is_spendable_offchain(dust) && self.is_preconfirmed
+    }
+
+    pub fn is_confirmed_spendable(&self, dust: Amount) -> bool {
+        self.is_spendable_offchain(dust) && !self.is_preconfirmed
+    }
+
+    /// Check if a VTXO should be treated as spent wallet state.
+    pub fn is_spent_status(&self, dust: Amount) -> bool {
+        !self.is_recoverable(dust) && (self.is_unrolled || self.is_spent || self.is_swept)
     }
 
     /// Check if a VTXO has expired.
@@ -800,6 +820,35 @@ pub struct CommitmentTransaction {
 pub enum SubscriptionResponse {
     Event(Box<SubscriptionEvent>),
     Heartbeat,
+    SubscriptionStarted { subscription_id: String },
+}
+
+/// Filter for indexer subscriptions.
+///
+/// A tx event is dispatched to a subscription when any of its expressions evaluates to true on
+/// the event's tx, OR when the event carries a VTXO whose script is in the subscription's script
+/// set.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SubscriptionFilter {
+    /// CEL expressions evaluated against each indexed tx envelope. The indexer combines them
+    /// with OR. On update, the field's contents replace any previously set expressions, even
+    /// when the list is empty (which clears them entirely).
+    pub expressions: Vec<String>,
+    /// Scripts to add to the subscription's script set.
+    pub add_scripts: Vec<ScriptBuf>,
+    /// Scripts to remove from the subscription's script set.
+    pub remove_scripts: Vec<ScriptBuf>,
+}
+
+/// Proof of ownership for indexer queries that return transaction data.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum IndexerAuth {
+    /// Intent that directly proves ownership of the queried vtxo or transaction inputs. If
+    /// passed, the outpoint/txids request fields are ignored by the server.
+    Intent { proof: String, message: String },
+    /// A token returned by a previous `GetVtxoChain` or `GetVirtualTxs` call, which can be
+    /// recycled once ownership has already been proved.
+    Token(String),
 }
 
 #[derive(Clone, Debug)]
@@ -851,6 +900,9 @@ pub struct FinalizeOffchainTxResponse {}
 pub struct VirtualTxsResponse {
     pub txs: Vec<Psbt>,
     pub page: Option<IndexerPage>,
+    /// Token that can be recycled as [`IndexerAuth::Token`] for other indexer queries related to
+    /// the same vtxos/txs.
+    pub auth_token: Option<String>,
 }
 
 #[derive(Debug)]
@@ -1255,5 +1307,79 @@ mod tests {
             indexer_spend_txid(&format!("{txid}:10")).expect("outpoint vout 10"),
             txid
         );
+    }
+
+    // ── GetVtxosRequest filters ──────────────────────────────────────────────
+
+    #[test]
+    fn renewable_only_sets_the_renewable_filter() {
+        let request = GetVtxosRequest::new_for_outpoints(&[])
+            .renewable_only()
+            .unwrap();
+
+        assert_eq!(request.filter(), Some(&GetVtxosRequestFilter::Renewable));
+    }
+
+    #[test]
+    fn a_second_filter_is_rejected() {
+        let request = GetVtxosRequest::new_for_outpoints(&[])
+            .renewable_only()
+            .unwrap();
+
+        assert!(request.clone().spendable_only().is_err());
+        assert!(request
+            .with_filter(GetVtxosRequestFilter::Renewable)
+            .is_err());
+    }
+
+    // ── VirtualTxOutPoint status ─────────────────────────────────────────────
+
+    fn vtxo(amount: u64, is_swept: bool, is_unrolled: bool, expires_at: i64) -> VirtualTxOutPoint {
+        VirtualTxOutPoint {
+            outpoint: OutPoint::null(),
+            created_at: 0,
+            expires_at,
+            amount: Amount::from_sat(amount),
+            script: ScriptBuf::new(),
+            is_preconfirmed: false,
+            is_swept,
+            is_unrolled,
+            is_spent: false,
+            spent_by: None,
+            commitment_txids: Vec::new(),
+            settled_by: None,
+            ark_txid: None,
+            assets: Vec::new(),
+            depth: 0,
+        }
+    }
+
+    const DUST: Amount = Amount::from_sat(330);
+    const FAR_FUTURE: i64 = i64::MAX;
+
+    #[test]
+    fn unrolled_vtxo_is_never_recoverable() {
+        let sub_dust = vtxo(100, false, true, FAR_FUTURE);
+        let swept = vtxo(10_000, true, true, FAR_FUTURE);
+        let expired = vtxo(10_000, false, true, 0);
+
+        for vtxo in [sub_dust, swept, expired] {
+            assert!(!vtxo.is_recoverable(DUST));
+            assert!(!vtxo.is_unspent(DUST));
+            assert!(vtxo.is_spent_status(DUST));
+        }
+    }
+
+    #[test]
+    fn recoverable_vtxos_that_are_not_unrolled_stay_recoverable() {
+        let sub_dust = vtxo(100, false, false, FAR_FUTURE);
+        let swept = vtxo(10_000, true, false, FAR_FUTURE);
+        let expired = vtxo(10_000, false, false, 0);
+
+        for vtxo in [sub_dust, swept, expired] {
+            assert!(vtxo.is_recoverable(DUST));
+            assert!(vtxo.is_unspent(DUST));
+            assert!(!vtxo.is_spent_status(DUST));
+        }
     }
 }

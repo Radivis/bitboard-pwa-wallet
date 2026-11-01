@@ -1,13 +1,17 @@
 use std::cell::Cell;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use ark_bdk_wallet::Wallet as ArkBdkWallet;
 use ark_client::key_provider::display_receive_derivation_index;
-use ark_client::{Bip32KeyProvider, InMemorySwapStorage, OfflineClient};
+use ark_client::{
+    Bip32KeyProvider, BoltzReferralId, InMemorySwapStorage, OfflineClient, OfflineClientConfig,
+};
 use ark_delegator::DelegatorClient;
 use bip39::Mnemonic;
 use bitcoin::XOnlyPublicKey;
-use bitcoin::bip32::Xpriv;
+use bitcoin::bip32::{DerivationPath, Xpriv};
 use bitcoin::key::Secp256k1;
 
 use crate::error::{ArkResult, ArkWasmError};
@@ -20,7 +24,7 @@ use crate::persistence::{
 };
 
 use super::mappers::{current_unix_timestamp, parse_delegator_public_key};
-use super::{ArkClient, ArkadeSession, BOLTZ_URL, BumperWallet, CLIENT_NAME, CLIENT_TIMEOUT};
+use super::{ArkClient, ArkadeSession, BOLTZ_URL, BumperWallet, CLIENT_TIMEOUT};
 
 const BUMPER_WALLET_SYNC_MAX_ATTEMPTS: u32 = 3;
 const BUMPER_WALLET_SYNC_BASE_BACKOFF_MS: u64 = 1_000;
@@ -240,25 +244,26 @@ impl ArkadeSession {
 
         // Always Bip32KeyProvider — never StaticKeyProvider/new_with_keypair — so ark-client
         // receive peek/reveal paths use the indexed branch, not the static fallback.
-        let offline = OfflineClient::<
-            EsploraBlockchain,
-            BumperWallet,
-            InMemorySwapStorage,
-            Bip32KeyProvider,
-        >::new_with_bip32_at_index(
-            CLIENT_NAME.to_string(),
+        let key_provider = Arc::new(Bip32KeyProvider::new_with_index(
             xpriv,
-            None,
+            DerivationPath::from_str(ark_core::DEFAULT_DERIVATION_PATH)
+                .expect("default ark receive path"),
             offchain_next_derivation_index,
+        ));
+        let offline = OfflineClient::<EsploraBlockchain, BumperWallet, InMemorySwapStorage>::with_discoverable_key_provider(
+            OfflineClientConfig {
+                ark_server_url: arkade_server_url,
+                boltz_url: BOLTZ_URL.to_string(),
+                timeout: CLIENT_TIMEOUT,
+                server_info_ttl: Duration::from_secs(15 * 60),
+                boltz_referral_id: BoltzReferralId::Default,
+                delegator_pk: delegator_xonly,
+                historical_delegator_pks: Vec::new(),
+            },
+            key_provider,
             blockchain,
             Arc::clone(&wallet),
-            arkade_server_url,
             Arc::new(InMemorySwapStorage::new()),
-            BOLTZ_URL.to_string(),
-            None,
-            CLIENT_TIMEOUT,
-            delegator_xonly,
-            vec![],
         );
 
         let client = match connect_mode {
@@ -271,11 +276,13 @@ impl ArkadeSession {
             SessionOpenConnectMode::LiveOperator => offline.connect().await?,
         };
         if offchain_next_derivation_index > 0 {
-            let warm_through =
-                display_receive_derivation_index(offchain_next_derivation_index).saturating_add(1);
-            client.warm_offchain_receive_key_cache(warm_through)?;
+            // Cache older indices for signing. Leave the current receive index out: warming it
+            // marks the key used, and the next `LastUnused` call would mint a new address.
+            let current_receive_index =
+                display_receive_derivation_index(offchain_next_derivation_index);
+            client.warm_offchain_receive_key_cache(current_receive_index)?;
         }
-        let server_info = client.server_info()?;
+        let server_info = client.server_info_snapshot()?;
         let server_signer: XOnlyPublicKey = server_info.signer_pk.into();
         wallet_db.set_load_context(network, server_signer);
         // LIFE-ARK-LOAD-04 / UNLOCK-ARK-05: do not await or start bumper Esplora.
@@ -383,7 +390,7 @@ impl ArkadeSession {
 
     pub fn operator_signer_pk_hex(&self) -> String {
         self.client
-            .server_info()
+            .server_info_snapshot()
             .map(|server_info| server_info.signer_pk.x_only_public_key().0.to_string())
             .unwrap_or_else(|_| self.persisted_operator_identity().signer_pk_hex)
     }

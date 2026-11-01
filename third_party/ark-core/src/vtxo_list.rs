@@ -37,11 +37,11 @@ impl VtxoList {
                 exiting.push(virtual_tx_outpoint);
             } else if virtual_tx_outpoint.is_recoverable(dust) {
                 recoverable.push(virtual_tx_outpoint);
-            } else if virtual_tx_outpoint.is_spent || virtual_tx_outpoint.is_swept {
+            } else if virtual_tx_outpoint.is_spent_status(dust) {
                 finalized_unspendable.push(virtual_tx_outpoint);
-            } else if virtual_tx_outpoint.is_preconfirmed {
+            } else if virtual_tx_outpoint.is_pre_confirmed_spendable(dust) {
                 pre_confirmed.push(virtual_tx_outpoint);
-            } else {
+            } else if virtual_tx_outpoint.is_confirmed_spendable(dust) {
                 confirmed.push(virtual_tx_outpoint);
             }
         }
@@ -250,6 +250,7 @@ mod tests {
             settled_by: None,
             ark_txid: None,
             assets: vec![],
+            depth: 0,
         }
     }
 

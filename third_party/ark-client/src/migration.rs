@@ -1,13 +1,13 @@
 use crate::error::ErrorContext;
-use crate::key_provider::KeyProvider;
 use crate::swap_storage::SwapStorage;
 use crate::utils::timeout_op;
 use crate::utils::unix_now;
-use crate::wallet::BoardingWallet;
 use crate::wallet::OnchainWallet;
 use crate::Blockchain;
 use crate::Client;
 use crate::Error;
+use crate::GetVtxosRequestFilter;
+use crate::JoinBatchOutcome;
 use ark_core::server::DeprecatedSignerStatus;
 use ark_core::ExplorerUtxo;
 use bitcoin::Amount;
@@ -81,7 +81,7 @@ pub struct MigrationLegReport {
     /// The settlement error, if this leg's `settle_vtxos` call failed. Set independently of the
     /// other leg — a failure here does not prevent the other leg from running.
     pub error: Option<String>,
-    /// Intent registered with the operator; wait for the round instead of retrying RegisterIntent.
+    /// Set when the operator accepted the intent and the round did not finish in this call.
     pub waiting_intent: Option<crate::RegisteredBatchIntent>,
 }
 
@@ -324,12 +324,11 @@ pub struct DeprecatedSignerReport {
     pub next_sweep_eta: Option<i64>,
 }
 
-impl<B, W, S, K> Client<B, W, S, K>
+impl<B, W, S> Client<B, W, S>
 where
     B: Blockchain,
-    W: BoardingWallet + OnchainWallet,
+    W: OnchainWallet,
     S: SwapStorage + 'static,
-    K: KeyProvider,
 {
     /// Sweep VTXOs and boarding outputs minted under a *pre-cutoff* deprecated server signer to
     /// the current signer, then report what moved.
@@ -352,10 +351,6 @@ where
     ///
     /// When the server advertises no deprecated signers, returns an empty
     /// [`MigrationSkipReason::NothingMigratable`] report without touching the wallet.
-    ///
-    /// Compatibility wrapper around [`Self::migrate_deprecated_signer_vtxos_excluding`] with an
-    /// empty exclude set (omit nothing — original public API). Spend-lock callers must pass
-    /// tagged-or-later VTXOs to the excluding variant.
     pub async fn migrate_deprecated_signer_vtxos<R>(
         &self,
         rng: &mut R,
@@ -363,19 +358,15 @@ where
     where
         R: rand::Rng + rand::CryptoRng + Clone,
     {
-        // Empty set: exclude nothing. Same inputs as this method before the excluding variant.
         self.migrate_deprecated_signer_vtxos_excluding(rng, &HashSet::new())
             .await
     }
 
-    /// Like [`Self::migrate_deprecated_signer_vtxos`], omitting tagged VTXO outpoints.
-    ///
-    /// An empty `exclude_vtxo_outpoints` set is equivalent to
-    /// [`Self::migrate_deprecated_signer_vtxos`].
+    /// Same as [`Self::migrate_deprecated_signer_vtxos`], skipping outpoints the wallet must not spend.
     pub async fn migrate_deprecated_signer_vtxos_excluding<R>(
         &self,
         rng: &mut R,
-        exclude_vtxo_outpoints: &HashSet<OutPoint>,
+        exclude_outpoints: &HashSet<OutPoint>,
     ) -> Result<DeprecatedSignerMigrationReport, Error>
     where
         R: rand::Rng + rand::CryptoRng + Clone,
@@ -384,7 +375,7 @@ where
         // classification closure, and the leg sizing must all see the same
         // `deprecated_signers`/`vtxo_max_amount`/`dust` even if a concurrent digest-driven
         // `refresh_server_info` swaps the snapshot mid-call.
-        let server_info = self.server_info()?;
+        let server_info = self.server_info().await?;
         if server_info.deprecated_signers.is_empty() {
             return Ok(DeprecatedSignerMigrationReport::nothing_migratable());
         }
@@ -409,40 +400,55 @@ where
         // `fetch_commitment_transaction_inputs` already drops PAST-cutoff deprecated inputs (the
         // operator won't co-sign the old key). We narrow further to the PRE-cutoff deprecated
         // inputs, which is exactly the cooperatively-migratable set.
-        let (boarding_inputs, vtxo_inputs, _) =
-            self.fetch_commitment_transaction_inputs(now).await?;
+        let (boarding_inputs, vtxo_inputs, _) = self
+            .fetch_commitment_transaction_inputs(&server_info, now)
+            .await?;
 
-        // The VTXO inputs only expose their script pubkey, so resolve each one's signer via the
-        // script -> VTXO map (the same mapping `offchain_balance`/`settle_at` rely on).
-        let (_, script_map) = self.list_vtxos().await?;
+        let contract_vtxos = self
+            .list_vtxos_with_server_info(&server_info, Some(GetVtxosRequestFilter::Renewable))
+            .await?;
 
         // Build the candidate (outpoint, amount, signer, cutoff) list for the VTXO leg.
         let mut vtxo_candidates: Vec<MigrationVtxoRef> = Vec::new();
         for input in &vtxo_inputs {
-            if exclude_vtxo_outpoints.contains(&input.outpoint()) {
-                continue;
-            }
-            let Some(vtxo) = script_map.get(input.script_pubkey()) else {
+            let Some(contract_vtxo) = contract_vtxos
+                .all()
+                .find(|entry| entry.vtxo().outpoint == input.outpoint())
+            else {
                 tracing::debug!(
                     outpoint = %input.outpoint(),
-                    "Skipping VTXO with no spend info during migration"
+                    "Skipping VTXO with no contract during migration"
                 );
                 continue;
             };
-            if let Some(cutoff_date) = is_pre_cutoff_deprecated(vtxo.server_pk()) {
+            let signer_pk = contract_vtxo.server_pk()?;
+            if let Some(cutoff_date) = is_pre_cutoff_deprecated(signer_pk) {
                 vtxo_candidates.push(MigrationVtxoRef {
                     outpoint: input.outpoint(),
                     amount: input.amount(),
-                    signer_pk: vtxo.server_pk(),
+                    signer_pk,
                     cutoff_date,
                 });
             }
         }
 
         // Build the candidate list for the boarding leg.
+        let boarding_outputs_by_script = self
+            .boarding_outputs()?
+            .into_iter()
+            .map(|boarding_output| (boarding_output.script_pubkey(), boarding_output))
+            .collect::<HashMap<_, _>>();
         let mut boarding_candidates: Vec<MigrationVtxoRef> = Vec::new();
         for input in &boarding_inputs {
-            let signer_pk = input.boarding_output().server_pk();
+            let Some(boarding_output) = boarding_outputs_by_script.get(input.script_pubkey())
+            else {
+                tracing::debug!(
+                    outpoint = %input.outpoint(),
+                    "Skipping boarding input with no contract during migration"
+                );
+                continue;
+            };
+            let signer_pk = boarding_output.server_pk();
             if let Some(cutoff_date) = is_pre_cutoff_deprecated(signer_pk) {
                 boarding_candidates.push(MigrationVtxoRef {
                     outpoint: input.outpoint(),
@@ -452,6 +458,9 @@ where
                 });
             }
         }
+
+        vtxo_candidates.retain(|candidate| !exclude_outpoints.contains(&candidate.outpoint));
+        boarding_candidates.retain(|candidate| !exclude_outpoints.contains(&candidate.outpoint));
 
         if vtxo_candidates.is_empty() && boarding_candidates.is_empty() {
             tracing::debug!("No migratable deprecated-signer VTXOs or boarding outputs found");
@@ -469,10 +478,24 @@ where
 
         // Run each leg independently so a failure in one does not suppress the other.
         let vtxo_leg = self
-            .run_migration_leg(rng, vtxo_candidates, vtxo_max_amount, dust, true)
+            .run_migration_leg(
+                rng,
+                &server_info,
+                vtxo_candidates,
+                vtxo_max_amount,
+                dust,
+                true,
+            )
             .await?;
         let boarding_leg = self
-            .run_migration_leg(rng, boarding_candidates, vtxo_max_amount, dust, false)
+            .run_migration_leg(
+                rng,
+                &server_info,
+                boarding_candidates,
+                vtxo_max_amount,
+                dust,
+                false,
+            )
             .await?;
 
         Ok(DeprecatedSignerMigrationReport {
@@ -486,9 +509,8 @@ where
     ///
     /// This is observability only — it never moves funds and never calls settle or migrate. It is
     /// the read-only sibling of [`Self::migrate_deprecated_signer_vtxos`]. For each deprecated
-    /// signer it merges the wallet's VTXO holdings (resolved via the script -> VTXO map, like
-    /// [`Self::offchain_balance`]) and its on-chain boarding holdings (grouped by
-    /// [`BoardingOutput::server_pk`]) into one [`DeprecatedSignerReport`].
+    /// signer it merges the wallet's contract-annotated VTXO holdings and its on-chain boarding
+    /// holdings (grouped by their stored contract signer) into one [`DeprecatedSignerReport`].
     ///
     /// Signers under which the wallet holds neither VTXOs nor boarding outputs are omitted. When
     /// the server advertises no deprecated signers, returns an empty vector without touching the
@@ -500,7 +522,7 @@ where
     pub async fn deprecated_signer_status(&self) -> Result<Vec<DeprecatedSignerReport>, Error> {
         // Snapshot once (TOCTOU): the empty-check and every per-signer classification must see the
         // same `deprecated_signers`/`dust` even if a concurrent refresh swaps the snapshot.
-        let server_info = self.server_info()?;
+        let server_info = self.server_info().await?;
         if server_info.deprecated_signers.is_empty() {
             return Ok(Vec::new());
         }
@@ -508,8 +530,7 @@ where
         let now = unix_now()?;
         let dust = server_info.dust;
 
-        // Aggregate VTXO holdings per signer in a single pass over all unspent VTXOs, resolving the
-        // signer via the script -> VTXO map (the same mapping `offchain_balance` relies on).
+        // Aggregate VTXO holdings per signer in a single pass over all unspent VTXOs.
         #[derive(Default)]
         struct VtxoAgg {
             // Spendable (non-recoverable) VTXOs.
@@ -522,22 +543,22 @@ where
             next_sweep_eta: Option<i64>,
         }
 
-        let (vtxo_list, script_map) = self.list_vtxos().await.context("failed to list VTXOs")?;
+        let vtxo_list = self
+            .list_vtxos_with_server_info(&server_info, Some(GetVtxosRequestFilter::Renewable))
+            .await
+            .context("failed to list VTXOs")?;
         let mut vtxo_aggs: HashMap<XOnlyPublicKey, VtxoAgg> = HashMap::new();
-        for v in vtxo_list.all_unspent() {
-            let Some(vtxo) = script_map.get(&v.script) else {
-                continue;
-            };
-            let agg = vtxo_aggs.entry(vtxo.server_pk()).or_default();
-            if v.is_recoverable(dust) {
+        for entry in vtxo_list.all_unspent() {
+            let agg = vtxo_aggs.entry(entry.server_pk()?).or_default();
+            if entry.vtxo().is_recoverable(dust) {
                 agg.recoverable_count += 1;
-                agg.recoverable_value += v.amount;
+                agg.recoverable_value += entry.vtxo().amount;
             } else {
                 agg.spendable_count += 1;
-                agg.spendable_value += v.amount;
+                agg.spendable_value += entry.vtxo().amount;
                 agg.next_sweep_eta = Some(match agg.next_sweep_eta {
-                    Some(eta) => eta.min(v.expires_at),
-                    None => v.expires_at,
+                    Some(eta) => eta.min(entry.vtxo().expires_at),
+                    None => entry.vtxo().expires_at,
                 });
             }
         }
@@ -549,7 +570,7 @@ where
         // unilateral sweep).
         let mut boarding_aggs: HashMap<XOnlyPublicKey, (usize, Amount)> = HashMap::new();
         let mut seen_outpoints = HashSet::new();
-        for boarding_output in self.inner.wallet.get_boarding_outputs()? {
+        for boarding_output in self.boarding_outputs()? {
             let outpoints = timeout_op(
                 self.inner.timeout,
                 self.blockchain().find_outpoints(boarding_output.address()),
@@ -652,6 +673,7 @@ where
     async fn run_migration_leg<R>(
         &self,
         rng: &mut R,
+        server_info: &ark_core::server::Info,
         candidates: Vec<MigrationVtxoRef>,
         vtxo_max_amount: Option<Amount>,
         dust: Amount,
@@ -687,15 +709,17 @@ where
 
         let selected_outpoints: Vec<OutPoint> = selected.iter().map(|c| c.outpoint).collect();
         let settle_result = if is_vtxo_leg {
-            self.settle_vtxos(rng, &selected_outpoints, &[]).await
+            self.settle_vtxos_with_server_info(rng, server_info, &selected_outpoints, &[], true)
+                .await
         } else {
-            self.settle_vtxos(rng, &[], &selected_outpoints).await
+            self.settle_vtxos_with_server_info(rng, server_info, &[], &selected_outpoints, true)
+                .await
         };
 
         // Capture (rather than propagate) the settle error so the caller can still run the other
         // leg — a failure in one leg must not suppress the other.
         Ok(match settle_result {
-            Ok(Some(crate::JoinBatchOutcome::Completed(settle_txid))) => MigrationLegReport {
+            Ok(Some(JoinBatchOutcome::Completed(settle_txid))) => MigrationLegReport {
                 settle_txid: Some(settle_txid),
                 migrated: selected,
                 deferred,
@@ -704,10 +728,10 @@ where
                 error: None,
                 waiting_intent: None,
             },
-            Ok(Some(crate::JoinBatchOutcome::Waiting(intent))) => MigrationLegReport {
+            Ok(Some(JoinBatchOutcome::Waiting(intent))) => MigrationLegReport {
                 settle_txid: None,
-                migrated: Vec::new(),
-                deferred: selected.into_iter().chain(deferred).collect(),
+                migrated: selected,
+                deferred,
                 oversized,
                 skipped: None,
                 error: None,
@@ -719,29 +743,8 @@ where
                 deferred: selected.into_iter().chain(deferred).collect(),
                 oversized,
                 skipped: None,
-                error: Some("settle returned no matching inputs".to_string()),
+                error: Some("settlement found no inputs".to_string()),
                 waiting_intent: None,
-            },
-            Err(e) if e.is_duplicated_input() => MigrationLegReport {
-                settle_txid: None,
-                migrated: Vec::new(),
-                deferred: selected.into_iter().chain(deferred).collect(),
-                oversized,
-                skipped: None,
-                error: None,
-                waiting_intent: Some(crate::RegisteredBatchIntent {
-                    intent_id: String::new(),
-                    onchain_outpoints: if is_vtxo_leg {
-                        Vec::new()
-                    } else {
-                        selected_outpoints.clone()
-                    },
-                    vtxo_outpoints: if is_vtxo_leg {
-                        selected_outpoints.clone()
-                    } else {
-                        Vec::new()
-                    },
-                }),
             },
             Err(e) => {
                 tracing::warn!(error = %e, "Deprecated-signer migration leg failed to settle");

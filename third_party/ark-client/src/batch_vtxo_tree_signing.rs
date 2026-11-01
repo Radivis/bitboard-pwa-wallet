@@ -5,7 +5,6 @@
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 use crate::ark_grpc_wasm_shim::Client as NetworkClient;
 use crate::error::ErrorContext as _;
-use crate::wallet::BoardingWallet;
 use crate::wallet::OnchainWallet;
 use crate::Blockchain;
 use crate::Client;
@@ -88,12 +87,11 @@ impl VtxoBatchTreeSigningState {
     }
 }
 
-impl<B, W, S, K> Client<B, W, S, K>
+impl<B, W, S> Client<B, W, S>
 where
     B: Blockchain,
-    W: BoardingWallet + OnchainWallet,
+    W: OnchainWallet,
     S: SwapStorage + 'static,
-    K: crate::KeyProvider,
 {
     pub(super) async fn handle_vtxo_tree_tx_chunk<R>(
         &self,

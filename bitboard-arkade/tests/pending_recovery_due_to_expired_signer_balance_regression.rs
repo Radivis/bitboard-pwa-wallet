@@ -75,6 +75,7 @@ fn sample_confirmed_vtxo(amount_sats: u64, script: ScriptBuf) -> VirtualTxOutPoi
         settled_by: None,
         ark_txid: None,
         assets: vec![],
+        depth: 0,
     }
 }
 

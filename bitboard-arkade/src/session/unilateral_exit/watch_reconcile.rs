@@ -401,16 +401,16 @@ async fn reconcile_missing_survival(
     _prior_record: Option<&VirtualTxOutPointRecord>,
 ) -> ArkResult<ExitingVtxoReconcileOutcome> {
     let outpoint = VirtualOutPoint::parse(&probe.vtxo_txid, probe.vout)?.to_bitcoin_outpoint();
-    if let Ok((vtxo_list, _)) = session
+    if let Ok(vtxo_list) = session
         .client
         .list_vtxos_for_outpoints(vec![outpoint])
         .await
-        && let Some(virtual_tx_outpoint) = vtxo_list.all().find(|virtual_tx_outpoint| {
-            virtual_tx_outpoint.outpoint.txid == outpoint.txid
-                && virtual_tx_outpoint.outpoint.vout == outpoint.vout
+        && let Some(virtual_tx_outpoint) = vtxo_list.all().find(|entry| {
+            entry.vtxo().outpoint.txid == outpoint.txid
+                && entry.vtxo().outpoint.vout == outpoint.vout
         })
     {
-        return Ok(classify_operator_vtxo(virtual_tx_outpoint));
+        return Ok(classify_operator_vtxo(virtual_tx_outpoint.vtxo()));
     }
 
     let blockchain = session.client.blockchain();
@@ -500,6 +500,7 @@ mod tests {
             settled_by: None,
             ark_txid: None,
             assets: vec![],
+            depth: 0,
         }
     }
 

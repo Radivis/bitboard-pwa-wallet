@@ -96,7 +96,7 @@ impl ArkadeSession {
     pub(crate) fn offchain_script_map(
         &self,
     ) -> ArkResult<std::collections::HashMap<bitcoin::ScriptBuf, Vtxo>> {
-        let ark_addresses = self.client.get_offchain_addresses()?;
+        let ark_addresses = self.client.cached_offchain_addresses()?;
         Ok(ark_addresses
             .iter()
             .map(|(address, vtxo)| (address.to_p2tr_script_pubkey(), vtxo.clone()))
@@ -120,7 +120,7 @@ impl ArkadeSession {
     }
 
     pub(crate) fn persist_cached_operator_info_from_client(&self) -> ArkResult<()> {
-        let server_info = self.client.server_info()?;
+        let server_info = self.client.server_info_snapshot()?;
         self.wallet_db
             .set_cached_operator_info(CachedOperatorInfoRecord::from_server_info(&server_info));
         Ok(())

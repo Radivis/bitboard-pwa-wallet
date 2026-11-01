@@ -135,8 +135,7 @@ impl Error {
         }
     }
 
-    /// Returns `true` if this error chain contains a coin-selection failure (e.g. insufficient
-    /// batch-settleable inputs for a cooperative exit).
+    /// Returns `true` if this error chain contains a coin-selection failure.
     pub fn is_coin_select(&self) -> bool {
         let mut err = self;
         loop {
@@ -155,6 +154,10 @@ impl Error {
         self.to_string()
             .to_ascii_lowercase()
             .contains("duplicated input")
+            || self
+                .to_string()
+                .to_ascii_lowercase()
+                .contains("already registered by another intent")
     }
 
     /// Delete intent is idempotent; operators may report missing intents once already removed.
@@ -168,11 +171,10 @@ impl Error {
     pub fn is_intent_proof_no_operator_match(&self) -> bool {
         self.to_string()
             .to_ascii_lowercase()
-            .contains("no matching intents found for intent proof")
+            .contains("no matching intents found")
     }
 
-    /// `deleteIntent` is idempotent: the operator may already have dropped the intent
-    /// (expired, selected into a live round, or no cache row for the proven outpoints).
+    /// `deleteIntent` is idempotent: the operator may already have dropped the intent.
     pub fn is_idempotent_intent_delete_miss(&self) -> bool {
         self.is_intent_not_found() || self.is_intent_proof_no_operator_match()
     }
@@ -418,54 +420,5 @@ impl StdError for Error {
             .cause
             .as_ref()
             .map(|e| e as &(dyn StdError + 'static))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Error;
-
-    #[test]
-    fn is_coin_select_detects_coin_select_errors() {
-        let err = Error::coin_select("cannot afford to send 50_000 sats, only have 0 sats");
-        assert!(err.is_coin_select());
-    }
-
-    #[test]
-    fn is_coin_select_is_false_for_ad_hoc_errors() {
-        let err = Error::ad_hoc("no matching VTXO outpoints found");
-        assert!(!err.is_coin_select());
-    }
-
-    #[test]
-    fn is_duplicated_input_detects_arkd_duplicate_intent() {
-        let err = Error::ad_hoc(
-            "failed to push intent: duplicated input, abc:1 already registered by another intent",
-        );
-        assert!(err.is_duplicated_input());
-    }
-
-    #[test]
-    fn is_intent_not_found_detects_missing_operator_intent() {
-        let err = Error::ad_hoc("delete intent failed: intent not found");
-        assert!(err.is_intent_not_found());
-        assert!(!Error::ad_hoc("duplicated input").is_intent_not_found());
-    }
-
-    #[test]
-    fn is_intent_proof_no_operator_match_detects_valid_proof_without_intent() {
-        let err = Error::ad_hoc(
-            r#"INVALID_INTENT_PROOF (23): no matching intents found for intent proof"#,
-        );
-        assert!(err.is_intent_proof_no_operator_match());
-        assert!(!err.is_intent_not_found());
-        assert!(err.is_idempotent_intent_delete_miss());
-    }
-
-    #[test]
-    fn idempotent_intent_delete_miss_includes_intent_not_found() {
-        let err = Error::ad_hoc("delete intent failed: intent not found");
-        assert!(err.is_idempotent_intent_delete_miss());
-        assert!(!Error::ad_hoc("duplicated input").is_idempotent_intent_delete_miss());
     }
 }
