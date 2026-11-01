@@ -400,7 +400,7 @@ where
         // `fetch_commitment_transaction_inputs` already drops PAST-cutoff deprecated inputs (the
         // operator won't co-sign the old key). We narrow further to the PRE-cutoff deprecated
         // inputs, which is exactly the cooperatively-migratable set.
-        let (boarding_inputs, vtxo_inputs, _) = self
+        let (boarding_inputs, vtxo_inputs, _, _) = self
             .fetch_commitment_transaction_inputs(&server_info, now)
             .await?;
 

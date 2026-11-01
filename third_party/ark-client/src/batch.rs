@@ -115,7 +115,7 @@ where
         // Get off-chain address and send all funds to this address, no change output 🦄
         let (to_address, _) = self.get_offchain_address_with_server_info(&server_info)?;
 
-        let (boarding_inputs, vtxo_inputs, total_amount) = self
+        let (boarding_inputs, vtxo_inputs, total_amount, vtxo_expiries) = self
             .fetch_commitment_transaction_inputs(&server_info, now)
             .await?;
 
@@ -135,6 +135,7 @@ where
             server_info.dust,
             &boarding_inputs,
             &vtxo_inputs,
+            &vtxo_expiries,
             total_amount,
             &to_address,
         )?;
@@ -198,7 +199,7 @@ where
             .map(|entry| entry.vtxo().outpoint)
             .collect();
 
-        let (boarding_inputs, _, _) = self
+        let (boarding_inputs, _, _, _) = self
             .fetch_commitment_transaction_inputs(&server_info, crate::utils::unix_now()?)
             .await?;
         let boarding_outpoints: Vec<OutPoint> =
@@ -244,7 +245,7 @@ where
 
         let (to_address, _) = self.get_offchain_address_with_server_info(&server_info)?;
 
-        let (boarding_inputs, vtxo_inputs, mut total_amount) = self
+        let (boarding_inputs, vtxo_inputs, mut total_amount, vtxo_expiries) = self
             .fetch_commitment_transaction_inputs(&server_info, crate::utils::unix_now()?)
             .await?;
 
@@ -279,6 +280,7 @@ where
             server_info.dust,
             &boarding_inputs,
             &all_vtxo_inputs,
+            &vtxo_expiries,
             total_amount,
             &to_address,
         )?;
@@ -353,7 +355,7 @@ where
         // Get off-chain address and send all funds to this address, no change output.
         let (to_address, _) = self.get_offchain_address_with_server_info(server_info)?;
 
-        let (all_boarding_inputs, all_vtxo_inputs, _) = self
+        let (all_boarding_inputs, all_vtxo_inputs, _, vtxo_expiries) = self
             .fetch_commitment_transaction_inputs(server_info, crate::utils::unix_now()?)
             .await?;
 
@@ -393,6 +395,7 @@ where
             server_info.dust,
             &boarding_inputs,
             &vtxo_inputs,
+            &vtxo_expiries,
             total_amount,
             &to_address,
         )?;
@@ -437,11 +440,17 @@ where
         dust: Amount,
         boarding_inputs: &[batch::OnChainInput],
         vtxo_inputs: &[intent::Input],
+        vtxo_expiries: &HashMap<OutPoint, i64>,
         total_amount: Amount,
         to_address: &ArkAddress,
     ) -> Result<Amount, Error> {
-        let intent_fee =
-            self.eval_board_intent_fee(boarding_inputs, vtxo_inputs, total_amount, to_address)?;
+        let intent_fee = self.eval_board_intent_fee(
+            boarding_inputs,
+            vtxo_inputs,
+            vtxo_expiries,
+            total_amount,
+            to_address,
+        )?;
         let to_amount = total_amount.checked_sub(intent_fee).ok_or_else(|| {
             Error::ad_hoc(format!(
                 "insufficient balance for boarding intent fee: {total_amount} < {intent_fee}"
@@ -459,6 +468,7 @@ where
         &self,
         boarding_inputs: &[batch::OnChainInput],
         vtxo_inputs: &[intent::Input],
+        vtxo_expiries: &HashMap<OutPoint, i64>,
         gross_output_amount: Amount,
         to_address: &ArkAddress,
     ) -> Result<Amount, Error> {
@@ -466,16 +476,24 @@ where
             amount: gross_output_amount.to_sat(),
             script: to_address.to_p2tr_script_pubkey().to_string(),
         }];
-        self.eval_intent_fee(boarding_inputs, vtxo_inputs, &offchain_outputs, &[])
+        self.eval_intent_fee(
+            boarding_inputs,
+            vtxo_inputs,
+            vtxo_expiries,
+            &offchain_outputs,
+            &[],
+        )
     }
 
     /// Full operator intent fee for a collaborative exit: every selected input, the on-chain
     /// payout, and Ark change when it is present. arkd rejects RegisterIntent when the reserved
     /// gap is only the flat on-chain output fee.
+    #[allow(clippy::too_many_arguments)]
     fn eval_offboard_intent_fee(
         &self,
         boarding_inputs: &[batch::OnChainInput],
         vtxo_inputs: &[intent::Input],
+        vtxo_expiries: &HashMap<OutPoint, i64>,
         onchain_script: &str,
         onchain_amount: Amount,
         change_script: &str,
@@ -496,6 +514,7 @@ where
         self.eval_intent_fee(
             boarding_inputs,
             vtxo_inputs,
+            vtxo_expiries,
             &offchain_outputs,
             &onchain_outputs,
         )
@@ -505,6 +524,7 @@ where
         &self,
         boarding_inputs: &[batch::OnChainInput],
         vtxo_inputs: &[intent::Input],
+        vtxo_expiries: &HashMap<OutPoint, i64>,
         offchain_outputs: &[ark_fees::Output],
         onchain_outputs: &[ark_fees::Output],
     ) -> Result<Amount, Error> {
@@ -518,7 +538,7 @@ where
             .iter()
             .map(|input| ark_fees::OffchainInput {
                 amount: input.amount().to_sat(),
-                expiry: None,
+                expiry: vtxo_expiries.get(&input.outpoint()).copied(),
                 birth: None,
                 input_type: ark_fees::VtxoType::Vtxo,
                 weight: 1.0,
@@ -783,7 +803,7 @@ where
         let (to_address, _) = self.get_offchain_address_with_server_info(&server_info)?;
 
         // Simply collect all VTXOs that can be settled.
-        let (_, mut vtxo_inputs, _) = self
+        let (_, mut vtxo_inputs, _, _) = self
             .fetch_commitment_transaction_inputs(&server_info, crate::utils::unix_now()?)
             .await?;
         vtxo_inputs.retain(|input| !exclude_vtxos.contains(&input.outpoint()));
@@ -1315,12 +1335,20 @@ where
     }
 
     /// Get all the [`batch::OnChainInput`]s and [`batch::VtxoInput`]s that can be used to join an
-    /// upcoming batch.
+    /// upcoming batch. Returns inputs, total amount, and a map of VTXO outpoint to expiry timestamp.
     pub(crate) async fn fetch_commitment_transaction_inputs(
         &self,
         server_info: &server::Info,
         now: i64,
-    ) -> Result<(Vec<batch::OnChainInput>, Vec<intent::Input>, Amount), Error> {
+    ) -> Result<
+        (
+            Vec<batch::OnChainInput>,
+            Vec<intent::Input>,
+            Amount,
+            HashMap<OutPoint, i64>,
+        ),
+        Error,
+    > {
         let now = u64::try_from(now).map_err(|_| Error::ad_hoc("negative timestamp"))?;
 
         // Get all known boarding outputs.
@@ -1407,13 +1435,18 @@ where
             .iter()
             .fold(Amount::ZERO, |acc, entry| acc + entry.vtxo().amount);
 
+        let mut vtxo_expiries = HashMap::new();
         let vtxo_inputs = settleable_vtxos
             .into_iter()
             .map(|entry| {
                 let spend_selection = entry.spend_selection(SpendPathKind::Forfeit)?;
+                let outpoint = entry.vtxo().outpoint;
+                let expires_at = entry.vtxo().expires_at;
+
+                vtxo_expiries.insert(outpoint, expires_at);
 
                 Ok(intent::Input::new_with_spend_selection(
-                    entry.vtxo().outpoint,
+                    outpoint,
                     entry.exit_delay()?,
                     TxOut {
                         value: entry.vtxo().amount,
@@ -1428,7 +1461,7 @@ where
             })
             .collect::<Result<Vec<_>, Error>>()?;
 
-        Ok((boarding_inputs, vtxo_inputs, total_amount))
+        Ok((boarding_inputs, vtxo_inputs, total_amount, vtxo_expiries))
     }
 
     /// Prepare an intent for batch registration or fee estimation.
@@ -1659,7 +1692,7 @@ where
     /// cannot be deleted, so this retries for about one batch period before giving up.
     pub async fn delete_intents(&self, outpoints: &[OutPoint]) -> Result<(), Error> {
         let server_info = self.server_info().await?;
-        let (boarding_inputs, vtxo_inputs, _) = self
+        let (boarding_inputs, vtxo_inputs, _, _) = self
             .fetch_commitment_transaction_inputs(&server_info, crate::utils::unix_now()?)
             .await?;
 
@@ -1828,7 +1861,7 @@ where
     ) -> Result<PreparedOffboard, Error> {
         let server_info = self.server_info().await?;
         let (change_address, _) = self.get_offchain_address_with_server_info(&server_info)?;
-        let (boarding_inputs, mut vtxo_inputs, mut total_amount) = self
+        let (boarding_inputs, mut vtxo_inputs, mut total_amount, mut vtxo_expiries) = self
             .fetch_commitment_transaction_inputs(&server_info, crate::utils::unix_now()?)
             .await?;
         let excluded_amount = vtxo_inputs
@@ -1836,6 +1869,7 @@ where
             .filter(|input| exclude_vtxos.contains(&input.outpoint()))
             .fold(Amount::ZERO, |acc, input| acc + input.amount());
         vtxo_inputs.retain(|input| !exclude_vtxos.contains(&input.outpoint()));
+        vtxo_expiries.retain(|outpoint, _| !exclude_vtxos.contains(outpoint));
         total_amount = total_amount
             .checked_sub(excluded_amount)
             .unwrap_or(Amount::ZERO);
@@ -1849,6 +1883,7 @@ where
                 self.eval_offboard_intent_fee(
                     &boarding_inputs,
                     &vtxo_inputs,
+                    &vtxo_expiries,
                     &onchain_script,
                     onchain_amount,
                     &change_script,
