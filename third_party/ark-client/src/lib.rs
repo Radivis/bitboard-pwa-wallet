@@ -72,7 +72,10 @@ mod send_vtxo;
 mod unilateral_exit;
 mod utils;
 
-pub use crate::batch::{JoinBatchOutcome, RegisteredBatchIntent};
+pub use crate::batch::{
+    offboard_outputs_for_fee, plan_offboard_settlement, JoinBatchOutcome, OffboardPlanError,
+    OffboardSettlement, RegisteredBatchIntent,
+};
 pub use crate::batch_join_hooks::{
     is_batch_join_in_flight, set_batch_join_abort, set_on_intent_registered,
     OnIntentRegisteredHook, BATCH_JOIN_ABORTED_MESSAGE,
@@ -949,9 +952,9 @@ where
             .map_err(|_| Error::ad_hoc("client server state lock poisoned"))
     }
 
-    // Retained for parity with the upstream SDK: the off-board paths now reserve the full operator
-    // intent fee via `eval_offboard_intent_fee`, so this single-output estimate has no caller, but
-    // we keep it rather than diverge further from upstream.
+    // Retained for parity with the upstream SDK. Collaborative exit asks the operator via
+    // `estimate_offboard_intent_fee_via_operator`. This single-output helper has no caller; we
+    // keep it rather than diverge further from upstream.
     #[allow(dead_code)]
     fn eval_onchain_output_fee(&self, output: ark_fees::Output) -> Result<Amount, Error> {
         self.with_server_state(|state| state.fee_estimator.eval_onchain_output(output))?

@@ -80,6 +80,12 @@ function CollaborativeExitFeeEstimate({
               />
             </p>
           )}
+          {collaborativeFeeQuery.data.changeSats != null &&
+            collaborativeFeeQuery.data.changeSats > 0 && (
+              <p className="text-muted-foreground">
+                The operator fee is taken from the Ark change.
+              </p>
+            )}
           {collaborativeFeeQuery.data.estimateError && (
             <p className="text-amber-700 dark:text-amber-300">
               {formatCollaborativeExitEstimateError(collaborativeFeeQuery.data)}

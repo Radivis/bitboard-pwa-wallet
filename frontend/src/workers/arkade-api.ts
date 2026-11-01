@@ -385,6 +385,8 @@ export interface ArkadeCollaborativeExitFeeEstimate {
   }
   estimatedTotalFeeSats: number | null
   estimatedReceiveSats: number | null
+  /** Ark change left after the reserved fee. Zero when the exit has no change output. */
+  changeSats?: number | null
   estimateError?: string
   estimateErrorCode?: ArkadeCollaborativeExitEstimateErrorCode
 }
