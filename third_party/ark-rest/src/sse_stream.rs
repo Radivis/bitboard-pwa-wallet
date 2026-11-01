@@ -18,8 +18,7 @@ pub(crate) struct SseEventParser {
 
 impl SseEventParser {
     pub fn push_chunk(&mut self, chunk: &[u8]) -> Vec<String> {
-        self.line_buffer
-            .push_str(&String::from_utf8_lossy(chunk));
+        self.line_buffer.push_str(&String::from_utf8_lossy(chunk));
 
         let mut payloads = Vec::new();
 

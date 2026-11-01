@@ -396,6 +396,25 @@ mod offboard_settlement_tests {
     }
 
     #[test]
+    fn regtest_intent_fee_reserves_input_percent_plus_flat_onchain_output() {
+        let input_sats = 198_000;
+        let settlement = plan_offboard_settlement(
+            sat(input_sats),
+            sat(50_000),
+            sat(DUST),
+            |onchain, _change| {
+                let input_fee = (input_sats as f64 * 0.01).ceil() as u64;
+                let onchain_output_fee = if onchain > Amount::ZERO { 250 } else { 0 };
+                Ok::<_, ()>(sat(input_fee + onchain_output_fee))
+            },
+        )
+        .expect("regtest fee settles");
+        assert_eq!(settlement.onchain_amount, sat(50_000));
+        assert_eq!(settlement.reserved_fee, sat(1_980 + 250));
+        assert_eq!(settlement.change_amount, sat(input_sats - 50_000 - 2_230));
+    }
+
+    #[test]
     fn three_quotes_that_never_cover_the_shape_error() {
         let mut quotes = 0;
         let result =

@@ -462,6 +462,52 @@ where
         gross_output_amount: Amount,
         to_address: &ArkAddress,
     ) -> Result<Amount, Error> {
+        let offchain_outputs = [ark_fees::Output {
+            amount: gross_output_amount.to_sat(),
+            script: to_address.to_p2tr_script_pubkey().to_string(),
+        }];
+        self.eval_intent_fee(boarding_inputs, vtxo_inputs, &offchain_outputs, &[])
+    }
+
+    /// Full operator intent fee for a collaborative exit: every selected input, the on-chain
+    /// payout, and Ark change when it is present. arkd rejects RegisterIntent when the reserved
+    /// gap is only the flat on-chain output fee.
+    fn eval_offboard_intent_fee(
+        &self,
+        boarding_inputs: &[batch::OnChainInput],
+        vtxo_inputs: &[intent::Input],
+        onchain_script: &str,
+        onchain_amount: Amount,
+        change_script: &str,
+        change_amount: Amount,
+    ) -> Result<Amount, Error> {
+        let onchain_outputs = [ark_fees::Output {
+            amount: onchain_amount.to_sat(),
+            script: onchain_script.to_string(),
+        }];
+        let offchain_outputs = if change_amount > Amount::ZERO {
+            vec![ark_fees::Output {
+                amount: change_amount.to_sat(),
+                script: change_script.to_string(),
+            }]
+        } else {
+            Vec::new()
+        };
+        self.eval_intent_fee(
+            boarding_inputs,
+            vtxo_inputs,
+            &offchain_outputs,
+            &onchain_outputs,
+        )
+    }
+
+    fn eval_intent_fee(
+        &self,
+        boarding_inputs: &[batch::OnChainInput],
+        vtxo_inputs: &[intent::Input],
+        offchain_outputs: &[ark_fees::Output],
+        onchain_outputs: &[ark_fees::Output],
+    ) -> Result<Amount, Error> {
         let onchain_inputs: Vec<ark_fees::OnchainInput> = boarding_inputs
             .iter()
             .map(|input| ark_fees::OnchainInput {
@@ -478,15 +524,14 @@ where
                 weight: 1.0,
             })
             .collect();
-        let offchain_outputs = vec![ark_fees::Output {
-            amount: gross_output_amount.to_sat(),
-            script: to_address.to_p2tr_script_pubkey().to_string(),
-        }];
         let fee = self
             .with_server_state(|state| {
-                state
-                    .fee_estimator
-                    .eval(&offchain_inputs, &onchain_inputs, &offchain_outputs, &[])
+                state.fee_estimator.eval(
+                    &offchain_inputs,
+                    &onchain_inputs,
+                    offchain_outputs,
+                    onchain_outputs,
+                )
             })?
             .map_err(|error| Error::ad_hoc(error.to_string()))?;
         Ok(Amount::from_sat(fee.to_satoshis()))
@@ -503,35 +548,23 @@ where
     where
         R: Rng + CryptoRng + Clone,
     {
-        let server_info = self.server_info().await?;
-
-        let (change_address, _) = self.get_offchain_address_with_server_info(&server_info)?;
-
-        let (boarding_inputs, vtxo_inputs, total_amount) = self
-            .fetch_commitment_transaction_inputs(&server_info, crate::utils::unix_now()?)
+        let PreparedOffboard {
+            server_info,
+            boarding_inputs,
+            vtxo_inputs,
+            to_address,
+            change_address,
+            settlement,
+        } = self
+            .prepare_offboard_excluding_vtxos(to_address, to_amount, &HashSet::new())
             .await?;
-
-        let onchain_fee = self.eval_onchain_output_fee(ark_fees::Output {
-            amount: to_amount.to_sat(),
-            script: to_address.script_pubkey().to_string(),
-        })?;
-
-        // Fee comes out of change, not the send amount.
-        let change_amount = total_amount
-            .checked_sub(to_amount)
-            .and_then(|a| a.checked_sub(onchain_fee))
-            .ok_or_else(|| {
-                Error::coin_select(format!(
-                    "insufficient balance: {total_amount} < {to_amount} (send) + {onchain_fee} (fee)"
-                ))
-            })?;
 
         tracing::info!(
             %to_address,
-            send_amount = %to_amount,
-            fee = %onchain_fee,
+            send_amount = %settlement.onchain_amount,
+            fee = %settlement.reserved_fee,
             change_address = %change_address.encode(),
-            %change_amount,
+            change_amount = %settlement.change_amount,
             ?boarding_inputs,
             "Attempting to collaboratively redeem outputs"
         );
@@ -544,9 +577,9 @@ where
                 vtxo_inputs.clone(),
                 BatchOutputType::OffBoard {
                     to_address: to_address.clone(),
-                    to_amount,
+                    to_amount: settlement.onchain_amount,
                     change_address,
-                    change_amount,
+                    change_amount: settlement.change_amount,
                 },
                 false,
             )
@@ -1806,22 +1839,29 @@ where
         total_amount = total_amount
             .checked_sub(excluded_amount)
             .unwrap_or(Amount::ZERO);
-        let settlement = offboard_outputs_for_fee(
+        let onchain_script = to_address.script_pubkey().to_string();
+        let change_script = change_address.to_p2tr_script_pubkey().to_string();
+        let settlement = plan_offboard_settlement(
             total_amount,
             requested_onchain,
             server_info.dust,
-            Amount::ZERO,
-        )?;
-        let quoted_fee = self.eval_onchain_output_fee(ark_fees::Output {
-            amount: settlement.onchain_amount.to_sat(),
-            script: to_address.script_pubkey().to_string(),
+            |onchain_amount, change_amount| {
+                self.eval_offboard_intent_fee(
+                    &boarding_inputs,
+                    &vtxo_inputs,
+                    &onchain_script,
+                    onchain_amount,
+                    &change_script,
+                    change_amount,
+                )
+            },
+        )
+        .map_err(|error| match error {
+            OffboardPlanError::Split(error) | OffboardPlanError::Quote(error) => error,
+            OffboardPlanError::FeeDidNotStabilize => {
+                Error::ad_hoc("collaborative exit intent fee did not stabilize")
+            }
         })?;
-        let settlement = offboard_outputs_for_fee(
-            total_amount,
-            requested_onchain,
-            server_info.dust,
-            quoted_fee,
-        )?;
         Ok(PreparedOffboard {
             server_info,
             boarding_inputs,
