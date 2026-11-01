@@ -891,7 +891,7 @@ where
 
     /// Connect without calling the operator. Autonomous mode uses persisted operator info.
     pub async fn connect_with_cached_info(
-        mut self,
+        self,
         server_info: server::Info,
     ) -> Result<Client<B, W, S>, Error> {
         let fee_estimator = build_fee_estimator(&server_info)?;

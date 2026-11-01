@@ -829,6 +829,8 @@ impl SharedPersistenceDb {
         self.0.load_boarding_outputs()
     }
 
+    /// Owner key for a persisted boarding output. Spend paths have not called this yet.
+    #[allow(dead_code)]
     pub fn sk_for_pk(&self, pk: &XOnlyPublicKey) -> Result<SecretKey, Error> {
         self.0.sk_for_pk(pk)
     }
@@ -869,6 +871,8 @@ impl JsonPersistenceDb {
             .collect())
     }
 
+    /// Owner key stored beside a boarding output. Spend paths have not called this yet.
+    #[allow(dead_code)]
     pub fn sk_for_pk(&self, pk: &XOnlyPublicKey) -> Result<SecretKey, Error> {
         let state = lock_persistence_result(&self.inner)?;
         let hex_sk = state

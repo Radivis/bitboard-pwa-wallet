@@ -174,12 +174,15 @@ pub struct MissingBlocktimeCompletionInput {
 /// Result of completion coin selection over an explicit virtual-outpoint set.
 #[derive(Debug, Clone)]
 pub struct VtxoCompletionSelection {
+    /// Completion spends unrolled VTXOs. Boarding outputs are not selected here.
+    #[allow(dead_code)]
     pub onchain_inputs: Vec<unilateral_exit::OnChainInput>,
     pub vtxo_inputs: Vec<unilateral_exit::VtxoInput>,
     pub selected_amount: Amount,
     pub missing_blocktime_inputs: Vec<MissingBlocktimeCompletionInput>,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn try_select_one_claimable_utxo_for_virtual_outpoint(
     vtxo: &Vtxo,
     virtual_txid: Txid,

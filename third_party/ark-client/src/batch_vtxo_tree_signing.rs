@@ -1,6 +1,8 @@
 //! VTXO batch-tree musig2 signing (nonce submission + partial signatures).
 //!
-//! Shared by [`super::Client::join_next_batch`] and [`super::Client::settle_delegate`].
+//! 0.12 signs from `TreeNonces` inside `join_next_batch`, so this state machine is not called.
+//! It stays compiled so the double-sign guard can be wired again without reconstructing it.
+#![allow(dead_code, clippy::collapsible_if, clippy::too_many_arguments)]
 
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 use crate::ark_grpc_wasm_shim::Client as NetworkClient;

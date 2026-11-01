@@ -26,3 +26,9 @@ getrandom = { version = "0.2", features = ["wasm-bindgen", "js"] }
 getrandom2 = { package = "getrandom", version = "0.3.1", features = ["wasm_js"] }
 js-sys = "0.3"
 web-sys = { version = "0.3.77", features = ["Window", "Performance"] }
+
+# Upstream constructors and `StreamTransactionData` exceed Clippy's defaults.
+# Reshaping them would diverge from ark-core 0.12.0 without a behavior change.
+[lints.clippy]
+too_many_arguments = "allow"
+large_enum_variant = "allow"

@@ -20,9 +20,6 @@ impl MonotonicInstant {
         std::time::Duration::from_millis(delta_ms as u64)
     }
 }
-use std::pin::Pin;
-use std::task::Context;
-use std::task::Poll;
 use std::time::Duration;
 
 /// Spawn a detached task. Native uses `tokio::spawn`. Browser futures hold `JsFuture`, which is
@@ -44,6 +41,13 @@ where
 {
     tokio::spawn(WasmSendFuture(future))
 }
+
+#[cfg(target_arch = "wasm32")]
+use std::pin::Pin;
+#[cfg(target_arch = "wasm32")]
+use std::task::Context;
+#[cfg(target_arch = "wasm32")]
+use std::task::Poll;
 
 #[cfg(target_arch = "wasm32")]
 struct WasmSendFuture<F>(F);

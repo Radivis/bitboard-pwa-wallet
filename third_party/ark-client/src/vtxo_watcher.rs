@@ -790,6 +790,7 @@ async fn delegate_vtxos<B, W, S>(
 }
 
 /// Prepare, sign, and submit a single delegation group.
+#[allow(clippy::too_many_arguments)]
 async fn delegate_group<B, W, S>(
     client: &Client<B, W, S>,
     delegator: &DelegatorClient,
