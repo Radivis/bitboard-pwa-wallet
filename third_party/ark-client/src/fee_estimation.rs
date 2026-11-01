@@ -54,7 +54,7 @@ where
 
         let (change_address, _) = self.get_offchain_address_with_server_info(&server_info)?;
 
-        let (boarding_inputs, vtxo_inputs, total_amount) = self
+        let (boarding_inputs, vtxo_inputs, total_amount, _) = self
             .fetch_commitment_transaction_inputs(&server_info, crate::utils::unix_now()?)
             .await?;
 
@@ -126,7 +126,7 @@ where
     {
         let server_info = self.server_info().await?;
 
-        let (boarding_inputs, vtxo_inputs, total_amount) = self
+        let (boarding_inputs, vtxo_inputs, total_amount, _) = self
             .fetch_commitment_transaction_inputs(&server_info, crate::utils::unix_now()?)
             .await?;
 
