@@ -90,10 +90,7 @@ pub(crate) async fn release_exit_movement_lock(
             && movement
                 .subsystem
                 .is_subsystem(bark::subsystem::Subsystem::EXIT)
-            && movement
-                .input_vtxos
-                .iter()
-                .any(|input_id| *input_id == vtxo_id)
+            && movement.input_vtxos.contains(&vtxo_id)
     });
     if !held_by_this_exit {
         return Ok(());
