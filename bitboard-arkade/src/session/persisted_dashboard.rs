@@ -84,11 +84,10 @@ mod tests {
     use std::collections::HashMap;
     use std::str::FromStr;
 
-    use ark_client::{Blockchain, Error, SpendStatus, TxStatus};
     use ark_core::server::{DeprecatedSigner, Info};
     use bitcoin::hashes::Hash;
     use bitcoin::secp256k1::PublicKey;
-    use bitcoin::{Amount, Network, OutPoint, ScriptBuf, Transaction, Txid};
+    use bitcoin::{Amount, Network, OutPoint, ScriptBuf, Txid};
 
     use crate::offchain_snapshot::{
         offchain_balance_buckets_from_snapshot,
@@ -98,41 +97,16 @@ mod tests {
     use crate::session::vtxo::{RecoverableVtxoBuckets, RecoverableVtxoSummary};
 
     use super::balance_from_persisted_snapshot;
+    use crate::api_types::PersistedDashboardDto;
+    use crate::error::ArkResult;
+    use crate::session::ArkadeSession;
 
-    /// Blockchain that fails the test if a persisted read lists an address.
-    struct PanickingBlockchain;
-
-    impl Blockchain for PanickingBlockchain {
-        async fn find_outpoints(
-            &self,
-            _address: &bitcoin::Address,
-        ) -> Result<Vec<ark_core::ExplorerUtxo>, Error> {
-            panic!("persisted dashboard listed a boarding address");
-        }
-
-        async fn find_tx(&self, _txid: &Txid) -> Result<Option<Transaction>, Error> {
-            panic!("persisted dashboard fetched a transaction");
-        }
-
-        async fn get_tx_status(&self, _txid: &Txid) -> Result<TxStatus, Error> {
-            panic!("persisted dashboard fetched a transaction status");
-        }
-
-        async fn get_output_status(&self, _txid: &Txid, _vout: u32) -> Result<SpendStatus, Error> {
-            panic!("persisted dashboard fetched an output status");
-        }
-
-        async fn broadcast(&self, _tx: &Transaction) -> Result<(), Error> {
-            panic!("persisted dashboard broadcast a transaction");
-        }
-
-        async fn get_fee_rate(&self) -> Result<f64, Error> {
-            panic!("persisted dashboard fetched a fee rate");
-        }
-
-        async fn broadcast_package(&self, _txs: &[&Transaction]) -> Result<(), Error> {
-            panic!("persisted dashboard broadcast a package");
-        }
+    /// Session open publishes this read inside the 30-second race. An `async fn` would be
+    /// able to await a boarding scan or an indexer call.
+    #[test]
+    fn persisted_dashboard_stays_synchronous() {
+        let _read: fn(&ArkadeSession) -> ArkResult<PersistedDashboardDto> =
+            ArkadeSession::persisted_dashboard;
     }
 
     fn empty_recoverable() -> RecoverableVtxoBuckets {
@@ -188,8 +162,7 @@ mod tests {
     }
 
     #[test]
-    fn persisted_dashboard_with_snapshot_does_not_touch_the_blockchain() {
-        let _blockchain = PanickingBlockchain;
+    fn persisted_snapshot_balance_zeros_boarding_until_a_live_scan() {
         let script = ScriptBuf::from_bytes(vec![0x51]);
         let future_expiry = 2_000_000_000_i64;
         let vtxo = ark_core::server::VirtualTxOutPoint {

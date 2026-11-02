@@ -515,14 +515,14 @@ sequenceDiagram
   opt post-load or manual sync, snapshot already stored
     Note over Wasm: once per session, and again on manual sync
     Wasm->>Indexer: background discover_keys from index 0
-    Wasm->>Indexer: light catch-up merge
+    Wasm->>Indexer: catch-up merge of restored indices, not only the latest 60
     opt full reconcile already due
       Wasm->>Indexer: full VTXO list after discover_keys
     end
   end
 ```
 
-With a snapshot, the awaited sync does not call `discover_keys`. It derives the persisted cursor locally, then runs the light merge. The full restore from index 0 runs once in the background after that first light sync, and again on manual sync. It does not run on the dashboard poll. A failed restore sets a non-blocking warning and leaves the session open. The live dashboard and the balance and history queries still list persisted boarding addresses.
+With a snapshot, the awaited sync does not call `discover_keys`. It derives the persisted cursor locally, then runs the light merge. The full restore from index 0 runs once in the background after that first light sync, and again on manual sync. It does not run on the dashboard poll. Its catch-up merge includes every index at or above the pre-discovery cursor, so a cursor jump longer than 60 still lands those coins. The send guard stays set until that snapshot commits. A flight that starts in autonomous mode waits until autonomous mode ends. A failed restore sets a non-blocking warning and leaves the session open. The live dashboard and the balance and history queries still list persisted boarding addresses.
 
 **`sync-error`:** operator unreachable, or the live balance/history refresh failed. Serve the loaded envelope. The session and the worker stay up. `isStaleArkade` / operator-stale banner when the failure is not `sync-error`.
 

@@ -23,8 +23,12 @@ export interface BackgroundFullVtxoReconcileOutcome {
   operatorTrustPending?: boolean
   /** Gap restore failed. A later light sync must not clear this warning. */
   keyDiscoveryFailed?: boolean
-  /** Gap restore finished. Clears a previous key-discovery warning. */
+  /** Gap restore finished and its catch-up snapshot committed. Clears a previous key-discovery warning. */
   keyDiscoveryCompleted?: boolean
+  /** Catch-up merge saw an exiting-VTXO or materials warning. Discovery itself succeeded. */
+  exitingVtxoWarning?: string
+  /** Autonomous mode blocked this flight. Discovery stays due until autonomous mode ends. */
+  blockedByAutonomousMode?: boolean
 }
 
 export interface ArkadeAutonomousModeStatus {

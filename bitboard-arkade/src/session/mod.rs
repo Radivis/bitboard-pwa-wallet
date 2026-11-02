@@ -52,8 +52,8 @@ pub struct ArkadeSession {
     network_mode: NetworkMode,
     operator_identity: Mutex<OperatorIdentity>,
     autonomous_mode: Cell<bool>,
-    /// Set when the latest `discover_keys` failed. Cleared on the next success.
-    /// Sends then use a live spendable list instead of the offchain snapshot.
+    /// Set when `discover_keys` failed, and for the whole background restore until its
+    /// catch-up snapshot commits. Sends then use a live spendable list.
     offchain_key_discovery_failed: Cell<bool>,
     bumper_wallet_sync_phase: Cell<BumperWalletSyncPhase>,
     /// Serializes offchain snapshot merge and persist. HTTP stays outside this lock.

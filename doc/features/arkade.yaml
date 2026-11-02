@@ -342,8 +342,9 @@ feature:
           Balance and recoverable amounts read the offchain snapshot between full reconciles.
           They can lag a full operator history by 10 minutes (FULL_VTXO_LIST_RECONCILE_INTERVAL_SECS)
           plus the dashboard poll interval, including HD indices outside the recent light-sync window.
-          While a full reconcile is due, or while background key discovery has failed, send skips
-          snapshot coin selection and asks the operator for spendable VTXOs.
+          While a full reconcile is due, while background key discovery has failed, or while
+          that flight has not yet committed its catch-up snapshot, send skips snapshot coin
+          selection and asks the operator for spendable VTXOs.
       - id: ARK-SYNC-08
         description: >-
           With a snapshot, the awaited operator sync does not call discover_keys. It warms the
@@ -353,8 +354,11 @@ feature:
           own blocking discover_keys. Background discovery runs once after the first light sync
           of a session and again on manual sync, not on the dashboard poll and not in autonomous
           mode. When a full reconcile is already due, that same flight runs discover_keys and
-          then the full list. Coins above the persisted cursor, and a boarding deposit on an
-          address that is not already persisted, appear when that flight finishes.
+          then the full list. The catch-up lists every offchain index at or above the cursor
+          from before discover_keys, including indices outside the latest 60. Coins above the
+          persisted cursor, and a boarding deposit on an address that is not already persisted,
+          appear when that flight finishes. A flight that finds autonomous mode on is deferred
+          and runs when autonomous mode ends.
     operator_trust:
       - id: ARK-TRUST-01
         description: When operator digest differs from accepted cached_operator_info, sync does not persist offchain snapshot, VTXO exit records survival reconcile, materials prefetch, or accepted operator cache

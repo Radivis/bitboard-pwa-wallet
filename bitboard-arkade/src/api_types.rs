@@ -129,6 +129,9 @@ pub struct OperatorSyncResultDto {
 pub struct BackgroundKeyDiscoveryResultDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub key_discovery_warning: Option<String>,
+    /// Catch-up merge warning (exiting VTXOs, exit materials). Discovery itself succeeded.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sync_warning: Option<String>,
     pub key_discovery_completed: bool,
     pub operator_trust_pending: bool,
 }
@@ -141,9 +144,10 @@ pub struct FullVtxoListReconcileResultDto {
 }
 
 impl BackgroundKeyDiscoveryResultDto {
-    pub(crate) fn completed() -> Self {
+    pub(crate) fn completed_with_sync_warning(sync_warning: Option<String>) -> Self {
         Self {
             key_discovery_warning: None,
+            sync_warning,
             key_discovery_completed: true,
             operator_trust_pending: false,
         }
@@ -152,15 +156,19 @@ impl BackgroundKeyDiscoveryResultDto {
     pub(crate) fn failed(warning: String) -> Self {
         Self {
             key_discovery_warning: Some(warning),
+            sync_warning: None,
             key_discovery_completed: false,
             operator_trust_pending: false,
         }
     }
 
+    /// Discovery ran, but the catch-up snapshot was not persisted.
+    /// The send guard stays set and a previous key-discovery warning stays up.
     pub(crate) fn trust_pending() -> Self {
         Self {
             key_discovery_warning: None,
-            key_discovery_completed: true,
+            sync_warning: None,
+            key_discovery_completed: false,
             operator_trust_pending: true,
         }
     }

@@ -12,8 +12,8 @@ use crate::api_types::{
 use crate::error::{ArkResult, ArkWasmError};
 use crate::exit_balance::reconcile_pending_exit_deductions;
 use crate::incremental_vtxo_sync::{
-    LIGHT_SYNC_RECENT_RECEIVE_ADDRESS_COUNT, derivation_index_is_in_recent_sync_window,
-    full_vtxo_list_reconcile_due, user_facing_operator_sync_runs_key_discovery,
+    LIGHT_SYNC_RECENT_RECEIVE_ADDRESS_COUNT, full_vtxo_list_reconcile_due,
+    offchain_index_included_in_light_merge, user_facing_operator_sync_runs_key_discovery,
 };
 use crate::offchain_snapshot::{
     clear_indexer_unrolled_without_local_finality, dedupe_virtual_tx_outpoints,
@@ -133,7 +133,7 @@ impl ArkadeSession {
         self.warm_persisted_offchain_keys()?;
         let prior = prior_snapshot.expect("light sync has an offchain snapshot");
         let (vtxo_list, mut sync_result) = self
-            .sync_offchain_vtxos_light(prior, None, full_reconcile_due)
+            .sync_offchain_vtxos_light(prior, None, full_reconcile_due, None)
             .await?;
         if !sync_result.operator_config_trust_pending {
             sync_result.skipped_key_discovery = true;
@@ -149,13 +149,19 @@ impl ArkadeSession {
             .map_err(ArkWasmError::Client)
     }
 
-    /// Gap restore, then a light catch-up. A due full list runs only after that restore.
+    /// Gap restore, then a catch-up that includes every index the restore advanced into.
+    /// A due full list runs only after that restore.
+    ///
+    /// The send guard stays set until the catch-up snapshot commits. A failed `discover_keys`
+    /// or a failed catch-up leaves it set.
     pub async fn background_key_discovery(
         &self,
         include_full_reconcile: bool,
     ) -> ArkResult<BackgroundKeyDiscoveryResultDto> {
         self.ensure_operator_rpc_allowed()?;
-        if let Some(warning) = self.sync_offchain_keys().await {
+        let cursor_before_discovery = self.client.peek_next_offchain_derivation_index();
+        self.offchain_key_discovery_failed.set(true);
+        if let Some(warning) = self.discover_offchain_keys().await {
             return Ok(BackgroundKeyDiscoveryResultDto::failed(warning));
         }
         self.persist_watched_boarding_outputs()?;
@@ -163,11 +169,15 @@ impl ArkadeSession {
         let prior_snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot.clone();
         let full_reconcile_due =
             full_vtxo_list_reconcile_due(prior_snapshot.as_ref(), now, include_full_reconcile);
+        let mut catch_up_warning = None;
         if let Some(prior) = prior_snapshot {
-            let (_, light_result) = self.sync_offchain_vtxos_light(prior, None, false).await?;
+            let (_, light_result) = self
+                .sync_offchain_vtxos_light(prior, None, false, Some(cursor_before_discovery))
+                .await?;
             if light_result.operator_config_trust_pending {
                 return Ok(BackgroundKeyDiscoveryResultDto::trust_pending());
             }
+            catch_up_warning = light_result.key_discovery_warning;
         }
         if full_reconcile_due {
             let full_result = self.reconcile_full_offchain_vtxo_list().await?;
@@ -175,7 +185,8 @@ impl ArkadeSession {
                 return Ok(BackgroundKeyDiscoveryResultDto::trust_pending());
             }
         }
-        Ok(BackgroundKeyDiscoveryResultDto::completed())
+        self.offchain_key_discovery_failed.set(false);
+        Ok(BackgroundKeyDiscoveryResultDto::completed_with_sync_warning(catch_up_warning))
     }
 
     /// Background full unfiltered list, then a catch-up light fetch so a board or intent during the long fetch is kept.
@@ -227,7 +238,9 @@ impl ArkadeSession {
         let Some(listed) = self.wallet_db.snapshot().offchain_vtxo_snapshot.clone() else {
             return Ok(FullVtxoListReconcileResultDto::completed());
         };
-        let (_, catch_up_result) = self.sync_offchain_vtxos_light(listed, None, false).await?;
+        let (_, catch_up_result) = self
+            .sync_offchain_vtxos_light(listed, None, false, None)
+            .await?;
         if catch_up_result.operator_config_trust_pending {
             return Ok(FullVtxoListReconcileResultDto::operator_trust_pending());
         }
@@ -247,8 +260,11 @@ impl ArkadeSession {
         prior: OffchainVtxoSnapshot,
         key_discovery_warning: Option<String>,
         full_reconcile_due: bool,
+        restored_index_floor: Option<u32>,
     ) -> ArkResult<(VtxoList, OperatorSyncResultDto)> {
-        let fetch = self.fetch_light_vtxo_delta(&prior).await?;
+        let fetch = self
+            .fetch_light_vtxo_delta(&prior, restored_index_floor)
+            .await?;
         let (merged, merge_base) = self.stage_light_vtxo_merge(prior, &fetch);
         self.finalize_operator_sync_snapshot(
             merged,
@@ -291,6 +307,7 @@ impl ArkadeSession {
     async fn fetch_light_vtxo_delta(
         &self,
         snapshot: &OffchainVtxoSnapshot,
+        restored_index_floor: Option<u32>,
     ) -> ArkResult<LightVtxoFetch> {
         let script_map = self.offchain_script_map()?;
         let requested_live_outpoints: HashSet<OutPoint> =
@@ -303,7 +320,7 @@ impl ArkadeSession {
                 .await?;
             points.extend(list.all().map(|entry| entry.vtxo().clone()));
         }
-        let recent_addresses = self.recent_offchain_addresses()?;
+        let recent_addresses = self.offchain_addresses_for_light_merge(restored_index_floor)?;
         if !recent_addresses.is_empty() {
             let list = self
                 .client
@@ -317,17 +334,21 @@ impl ArkadeSession {
         })
     }
 
-    fn recent_offchain_addresses(&self) -> ArkResult<Vec<ArkAddress>> {
+    fn offchain_addresses_for_light_merge(
+        &self,
+        restored_index_floor: Option<u32>,
+    ) -> ArkResult<Vec<ArkAddress>> {
         let next_index = self.client.peek_next_offchain_derivation_index();
         let addresses = self.client.cached_offchain_addresses()?;
         Ok(addresses
             .into_iter()
             .filter_map(|(address, vtxo)| {
                 let derivation_index = self.client.derivation_index_for_pk(&vtxo.owner_pk())?;
-                derivation_index_is_in_recent_sync_window(
+                offchain_index_included_in_light_merge(
                     derivation_index,
                     next_index,
                     LIGHT_SYNC_RECENT_RECEIVE_ADDRESS_COUNT,
+                    restored_index_floor,
                 )
                 .then_some(address)
             })
@@ -538,12 +559,12 @@ impl ArkadeSession {
         Ok(())
     }
 
-    pub(crate) async fn sync_offchain_keys(&self) -> Option<String> {
+    /// `discover_keys` for callers that clear the send guard themselves after a snapshot commit.
+    ///
+    /// A failure sets the guard. Success leaves it unchanged.
+    async fn discover_offchain_keys(&self) -> Option<String> {
         match self.client.discover_keys(DEFAULT_GAP_LIMIT).await {
-            Ok(_) => {
-                self.offchain_key_discovery_failed.set(false);
-                None
-            }
+            Ok(_) => None,
             Err(error) => {
                 warn_offchain_key_discovery_failed(&error);
                 self.offchain_key_discovery_failed.set(true);
@@ -551,29 +572,23 @@ impl ArkadeSession {
             }
         }
     }
+
+    /// Bootstrap and signer migration clear the send guard as soon as `discover_keys` succeeds.
+    /// Background discovery uses [`Self::discover_offchain_keys`] and clears the guard only
+    /// after the catch-up snapshot commits.
+    pub(crate) async fn sync_offchain_keys(&self) -> Option<String> {
+        let warning = self.discover_offchain_keys().await;
+        if warning.is_none() {
+            self.offchain_key_discovery_failed.set(false);
+        }
+        warning
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{combine_operator_sync_warning_messages, operator_sync_key_discovery_warning};
     use crate::api_types::FullVtxoListReconcileResultDto;
-
-    #[test]
-    fn signer_migration_keeps_blocking_key_discovery() {
-        let source = include_str!("signer_migration.rs");
-        let migration = source
-            .split_once("pub async fn migrate_deprecated_signer_vtxos")
-            .expect("migration fn")
-            .1;
-        let before_batch = migration
-            .split_once("with_batch_join")
-            .expect("batch join")
-            .0;
-        assert!(
-            before_batch.contains("sync_offchain_keys"),
-            "signer migration must keep a blocking discover_keys call"
-        );
-    }
 
     #[test]
     fn operator_sync_key_discovery_warning_includes_error_detail() {

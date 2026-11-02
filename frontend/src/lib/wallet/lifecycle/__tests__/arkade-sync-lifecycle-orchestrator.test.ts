@@ -663,6 +663,65 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     expect(scheduleBackgroundKeyDiscovery).not.toHaveBeenCalled()
   })
 
+  it('an autonomous skip leaves the key-discovery warning in place', async () => {
+    syncWithOperator.mockResolvedValue({ skippedKeyDiscovery: true })
+    await orchestrateArkadeSyncThenSave(syncParams)
+    const onFinished = setOnBackgroundFullReconcileFinished.mock.lastCall?.[0] as
+      | ((
+          outcome: {
+            ok: boolean
+            warningMessage?: string
+            keyDiscoveryFailed?: boolean
+            keyDiscoveryCompleted?: boolean
+            skippedAutonomous?: boolean
+            exitingVtxoWarning?: string
+          },
+        ) => Promise<void>)
+      | undefined
+
+    await onFinished?.({
+      ok: false,
+      keyDiscoveryFailed: true,
+      warningMessage: 'Offchain receive keys could not be refreshed: indexer timeout',
+    })
+    await onFinished?.({ ok: true, skippedAutonomous: true })
+    expect(getArkadeSyncLifecycleSnapshot().warningMessages).toEqual([
+      'Offchain receive keys could not be refreshed: indexer timeout',
+    ])
+    expect(getArkadeSyncLifecycleSnapshot().syncPhase).toBe('not-syncing')
+  })
+
+  it('a background catch-up warning is shown without clearing a key-discovery failure', async () => {
+    syncWithOperator.mockResolvedValue({ skippedKeyDiscovery: true })
+    await orchestrateArkadeSyncThenSave(syncParams)
+    const onFinished = setOnBackgroundFullReconcileFinished.mock.lastCall?.[0] as
+      | ((
+          outcome: {
+            ok: boolean
+            warningMessage?: string
+            keyDiscoveryFailed?: boolean
+            keyDiscoveryCompleted?: boolean
+            exitingVtxoWarning?: string
+          },
+        ) => Promise<void>)
+      | undefined
+
+    await onFinished?.({
+      ok: false,
+      keyDiscoveryFailed: true,
+      warningMessage: 'Offchain receive keys could not be refreshed: indexer timeout',
+    })
+    await onFinished?.({
+      ok: true,
+      keyDiscoveryCompleted: false,
+      exitingVtxoWarning: 'an exiting VTXO could not be reconciled',
+    })
+    expect(getArkadeSyncLifecycleSnapshot().warningMessages).toEqual([
+      'Offchain receive keys could not be refreshed: indexer timeout',
+      'an exiting VTXO could not be reconciled',
+    ])
+  })
+
   it('failed background key discovery keeps its warning across a later light sync', async () => {
     syncWithOperator.mockResolvedValue({ skippedKeyDiscovery: true })
     await orchestrateArkadeSyncThenSave({ ...syncParams, syncKind: 'postLoad' })

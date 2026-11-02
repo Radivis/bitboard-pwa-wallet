@@ -271,6 +271,13 @@ function scheduleBackgroundWorkAfterUserFacingSync(
 async function handleBackgroundFullVtxoReconcileFinished(
   outcome: BackgroundFullVtxoReconcileOutcome,
 ): Promise<void> {
+  if (outcome.blockedByAutonomousMode) {
+    return
+  }
+  if (outcome.exitingVtxoWarning != null && outcome.exitingVtxoWarning !== '') {
+    warningSlots.exitingVtxo = outcome.exitingVtxoWarning
+    publishWarningSlots()
+  }
   if (outcome.keyDiscoveryFailed) {
     recordBackgroundKeyDiscoveryWarning(
       outcome.warningMessage ??
