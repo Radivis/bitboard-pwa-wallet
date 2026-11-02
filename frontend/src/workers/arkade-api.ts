@@ -12,6 +12,8 @@ export interface ArkadeOperatorSyncResult {
   operatorConfigTrustPending?: boolean
   /** When true, the host should run a background full VTXO list without blocking this sync. */
   fullReconcileDue?: boolean
+  /** The awaited sync warmed the persisted cursor and did not call discover_keys. */
+  skippedKeyDiscovery?: boolean
 }
 
 export interface BackgroundFullVtxoReconcileOutcome {
@@ -19,6 +21,10 @@ export interface BackgroundFullVtxoReconcileOutcome {
   warningMessage?: string
   /** Operator trust is pending, so this run did not complete a full list. */
   operatorTrustPending?: boolean
+  /** Gap restore failed. A later light sync must not clear this warning. */
+  keyDiscoveryFailed?: boolean
+  /** Gap restore finished. Clears a previous key-discovery warning. */
+  keyDiscoveryCompleted?: boolean
 }
 
 export interface ArkadeAutonomousModeStatus {
@@ -584,6 +590,11 @@ export interface ArkadeService {
   exportBumperWalletChangeset(): Promise<string>
   bumperWalletFullScanDone(): Promise<boolean>
   syncWithOperator(scheduleBackgroundFull?: boolean): Promise<ArkadeOperatorSyncResult>
+  /**
+   * Fire-and-forget gap restore. When `includeFullReconcile` is set, the full
+   * VTXO list runs in that same flight after discovery.
+   */
+  scheduleBackgroundKeyDiscovery(includeFullReconcile: boolean): void
   /** Fire-and-forget. A call during an in-flight reconcile queues one follow-up. */
   scheduleBackgroundFullVtxoReconcile(): void
   setOnBackgroundFullReconcileFinished(

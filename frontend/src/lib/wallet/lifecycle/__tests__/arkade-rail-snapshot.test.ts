@@ -9,7 +9,7 @@ vi.mock('@/lib/wallet/lifecycle/arkade-sync-lifecycle-orchestrator', () => ({
     syncPhase: 'not-syncing',
     railScope: null,
     errorMessage: null,
-    warningMessage: null,
+    warningMessages: [],
   })),
 }))
 
@@ -32,7 +32,7 @@ describe('arkade-rail-snapshot', () => {
       syncPhase: 'syncing',
       railScope: { walletId: 1, networkMode: 'mutinynet', arkadeAccountId: 'c1' },
       errorMessage: null,
-      warningMessage: null,
+      warningMessages: [],
     })
     vi.mocked(getArkadeSaveLifecycleSnapshot).mockReturnValue({
       savePhase: 'not-saving',

@@ -326,13 +326,13 @@ feature:
           full history list.
     operator_sync:
       - id: ARK-SYNC-01
-        description: When discover_keys fails during operator sync but list_vtxos succeeds, sync lifecycle records a warningMessage and dashboard/management show a non-blocking sync warning banner
+        description: When background discover_keys fails, sync lifecycle records that warning on its own and dashboard/management show a non-blocking sync warning banner. Key-discovery, exiting-VTXO, and background full-reconcile warnings stay in separate entries; clearing one leaves the others. The user-facing sync stays not-syncing
       - id: ARK-SYNC-02
-        description: A later successful sync without key-discovery failure clears warningMessage
+        description: Only a successful background discover_keys clears that key-discovery warning. A later light sync that did not run discover_keys leaves the warning in place
       - id: ARK-SYNC-03
         description: After operator sync, reconcile of unrolled+ VTXO exit records runs targeted lookups; non-blocking exitingVtxoWarning when indexer lag or ASP mismatch; never clear exiting state on full-list absence alone (ARK-EXIT-12)
       - id: ARK-SYNC-04
-        description: With a snapshot, operator sync upserts live outpoints plus the recent/gap scripts and does not replace history from a full unfiltered list on the user-facing path
+        description: With a snapshot, operator sync upserts live outpoints plus the latest 60 revealed receive indices and does not replace history from a full unfiltered list on the user-facing path
       - id: ARK-SYNC-05
         description: Blocking full list only when there is no snapshot. A full unfiltered list also runs in the background when full_listed_at is older than 10 minutes (including upgrade default 0) and after manual or migration sync. Ten minutes leaves room before the 15-minute idle auto-lock discards an in-flight scan. It must not block dashboard poll, persist-after-board/intent, or the manual-sync spinner beyond the light fetch
       - id: ARK-SYNC-06
@@ -342,8 +342,19 @@ feature:
           Balance and recoverable amounts read the offchain snapshot between full reconciles.
           They can lag a full operator history by 10 minutes (FULL_VTXO_LIST_RECONCILE_INTERVAL_SECS)
           plus the dashboard poll interval, including HD indices outside the recent light-sync window.
-          While a full reconcile is due, send skips snapshot coin selection and asks the operator
-          for spendable VTXOs.
+          While a full reconcile is due, or while background key discovery has failed, send skips
+          snapshot coin selection and asks the operator for spendable VTXOs.
+      - id: ARK-SYNC-08
+        description: >-
+          With a snapshot, the awaited operator sync does not call discover_keys. It warms the
+          local HD cache from the persisted offchain_next_derivation_index through the current
+          receive index without minting a new address, then runs the light merge. No snapshot
+          still blocks on discover_keys and then the full VTXO list. Signer migration keeps its
+          own blocking discover_keys. Background discovery runs once after the first light sync
+          of a session and again on manual sync, not on the dashboard poll and not in autonomous
+          mode. When a full reconcile is already due, that same flight runs discover_keys and
+          then the full list. Coins above the persisted cursor, and a boarding deposit on an
+          address that is not already persisted, appear when that flight finishes.
     operator_trust:
       - id: ARK-TRUST-01
         description: When operator digest differs from accepted cached_operator_info, sync does not persist offchain snapshot, VTXO exit records survival reconcile, materials prefetch, or accepted operator cache

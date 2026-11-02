@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { DashboardRailId } from '@/components/wallet/RailSyncControl'
@@ -6,7 +7,7 @@ export type RailLifecycleErrorBannerBlockProps = {
   rail: DashboardRailId
   variant: 'load' | 'sync' | 'sync-warning'
   title: string
-  errorMessage: string
+  errorMessage: ReactNode
   onRetry: () => void
   isRetrying?: boolean
   retryLabel?: string
@@ -34,7 +35,7 @@ export function RailLifecycleErrorBannerBlock({
         />
         <div className="min-w-0">
           <p className="text-sm font-medium text-foreground">{title}</p>
-          <p className="text-xs break-words text-muted-foreground">{errorMessage}</p>
+          <div className="text-xs break-words text-muted-foreground">{errorMessage}</div>
         </div>
       </div>
       <div className="flex shrink-0 items-center justify-end gap-2">

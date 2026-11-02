@@ -118,6 +118,19 @@ pub struct OperatorSyncResultDto {
     /// Host should run a background full VTXO list. User-facing sync already returned.
     #[serde(default)]
     pub full_reconcile_due: bool,
+    /// The awaited sync used the persisted cursor and did not call `discover_keys`.
+    #[serde(default)]
+    pub skipped_key_discovery: bool,
+}
+
+/// Result of background key discovery plus an optional full VTXO list in the same flight.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackgroundKeyDiscoveryResultDto {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key_discovery_warning: Option<String>,
+    pub key_discovery_completed: bool,
+    pub operator_trust_pending: bool,
 }
 
 /// Result of a background full VTXO list. `operator_trust_pending` is not a completed reconcile.
@@ -125,6 +138,32 @@ pub struct OperatorSyncResultDto {
 #[serde(rename_all = "camelCase")]
 pub struct FullVtxoListReconcileResultDto {
     pub operator_trust_pending: bool,
+}
+
+impl BackgroundKeyDiscoveryResultDto {
+    pub(crate) fn completed() -> Self {
+        Self {
+            key_discovery_warning: None,
+            key_discovery_completed: true,
+            operator_trust_pending: false,
+        }
+    }
+
+    pub(crate) fn failed(warning: String) -> Self {
+        Self {
+            key_discovery_warning: Some(warning),
+            key_discovery_completed: false,
+            operator_trust_pending: false,
+        }
+    }
+
+    pub(crate) fn trust_pending() -> Self {
+        Self {
+            key_discovery_warning: None,
+            key_discovery_completed: true,
+            operator_trust_pending: true,
+        }
+    }
 }
 
 impl FullVtxoListReconcileResultDto {

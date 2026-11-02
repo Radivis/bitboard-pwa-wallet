@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { proxyMarker } from 'comlink'
 
 const syncWithOperator = vi.fn()
+const scheduleBackgroundKeyDiscovery = vi.fn()
 const scheduleBackgroundFullVtxoReconcile = vi.fn()
 const setOnBackgroundFullReconcileFinished = vi.fn()
 const migrateDeprecatedSignerVtxos = vi.fn()
@@ -14,6 +15,7 @@ const loadPhaseRef = vi.hoisted(() => ({ phase: 'loaded' as string }))
 vi.mock('@/workers/arkade-factory', () => ({
   getArkadeWorker: () => ({
     syncWithOperator,
+    scheduleBackgroundKeyDiscovery,
     scheduleBackgroundFullVtxoReconcile,
     setOnBackgroundFullReconcileFinished,
     migrateDeprecatedSignerVtxos,
@@ -176,7 +178,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
         arkadeAccountId: 'conn-1',
       },
       errorMessage: 'operator down',
-      warningMessage: null,
+      warningMessages: [],
     })
     expect(orchestrateArkadeSave).not.toHaveBeenCalled()
   })
@@ -318,7 +320,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
         arkadeAccountId: 'conn-1',
       },
       errorMessage: 'operator down',
-      warningMessage: null,
+      warningMessages: [],
     })
   })
 
@@ -338,8 +340,9 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
         arkadeAccountId: 'conn-1',
       },
       errorMessage: null,
-      warningMessage:
+      warningMessages: [
         'Offchain receive keys could not be refreshed: indexer timeout. Balance may be incomplete until the next successful sync.',
+      ],
     })
     expect(orchestrateArkadeSave).toHaveBeenCalled()
   })
@@ -352,10 +355,10 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     syncWithOperator.mockResolvedValueOnce({})
     await orchestrateArkadeSyncThenSave(syncParams)
 
-    expect(getArkadeSyncLifecycleSnapshot().warningMessage).toBeNull()
+    expect(getArkadeSyncLifecycleSnapshot().warningMessages).toEqual([])
   })
 
-  it('merges exiting VTXO warning with key discovery warning', async () => {
+  it('keeps key discovery and exiting VTXO warnings as separate messages', async () => {
     syncWithOperator.mockResolvedValue({
       keyDiscoveryWarning: 'key warning',
       exitingVtxoWarning: 'exit warning',
@@ -363,9 +366,16 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
 
     await orchestrateArkadeSyncThenSave(syncParams)
 
-    expect(getArkadeSyncLifecycleSnapshot().warningMessage).toBe(
-      'key warning\nexit warning',
-    )
+    expect(getArkadeSyncLifecycleSnapshot().warningMessages).toEqual([
+      'key warning',
+      'exit warning',
+    ])
+
+    const onFinished = setOnBackgroundFullReconcileFinished.mock.lastCall?.[0] as
+      | ((outcome: { ok: boolean; keyDiscoveryCompleted?: boolean }) => Promise<void>)
+      | undefined
+    await onFinished?.({ ok: true, keyDiscoveryCompleted: true })
+    expect(getArkadeSyncLifecycleSnapshot().warningMessages).toEqual(['exit warning'])
   })
 
   it('signerMigration runs migrate before save and sync when complete', async () => {
@@ -461,7 +471,7 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
         arkadeAccountId: 'conn-1',
       },
       errorMessage: 'operator vtxos down',
-      warningMessage: null,
+      warningMessages: [],
     })
   })
 
@@ -573,20 +583,24 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
 
     await onFinished?.({ ok: false, warningMessage: 'first reconcile failure' })
     await onFinished?.({ ok: false, warningMessage: 'second reconcile failure' })
-    expect(getArkadeSyncLifecycleSnapshot().warningMessage).toBe(
+    expect(getArkadeSyncLifecycleSnapshot().warningMessages).toEqual([
       'second reconcile failure',
-    )
+    ])
 
     await onFinished?.({ ok: true })
-    expect(getArkadeSyncLifecycleSnapshot().warningMessage).toBeNull()
+    expect(getArkadeSyncLifecycleSnapshot().warningMessages).toEqual([])
 
     await onFinished?.({ ok: false, warningMessage: 'reconcile failed' })
     syncWithOperator.mockResolvedValueOnce({
       keyDiscoveryWarning: 'keys still stale',
     })
     await orchestrateArkadeSyncThenSave(syncParams)
+    expect(getArkadeSyncLifecycleSnapshot().warningMessages).toEqual([
+      'keys still stale',
+      'reconcile failed',
+    ])
     await onFinished?.({ ok: true })
-    expect(getArkadeSyncLifecycleSnapshot().warningMessage).toBe('keys still stale')
+    expect(getArkadeSyncLifecycleSnapshot().warningMessages).toEqual(['keys still stale'])
   })
 
   it('operator-trust-pending background reconcile keeps the reconcile warning and still saves', async () => {
@@ -607,8 +621,78 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
 
     await onFinished?.({ ok: true, operatorTrustPending: true })
 
-    expect(getArkadeSyncLifecycleSnapshot().warningMessage).toBe('reconcile failed')
+    expect(getArkadeSyncLifecycleSnapshot().warningMessages).toEqual(['reconcile failed'])
     expect(refreshArkadeStoreFromLoadedWasm).toHaveBeenCalledWith('conn-1', 1)
     expect(orchestrateArkadeSave).toHaveBeenCalled()
+  })
+
+  it('post-load and manual schedule background key discovery without waiting', async () => {
+    syncWithOperator.mockResolvedValue({
+      skippedKeyDiscovery: true,
+      fullReconcileDue: true,
+    })
+    let backgroundResolved = false
+    scheduleBackgroundKeyDiscovery.mockImplementation(
+      () =>
+        new Promise<void>(() => {
+          backgroundResolved = false
+        }).then(() => {
+          backgroundResolved = true
+        }),
+    )
+
+    await orchestrateArkadeSyncThenSave({ ...syncParams, syncKind: 'postLoad' })
+    expect(scheduleBackgroundKeyDiscovery).toHaveBeenCalledTimes(1)
+    expect(scheduleBackgroundKeyDiscovery).toHaveBeenCalledWith(true)
+    expect(scheduleBackgroundFullVtxoReconcile).not.toHaveBeenCalled()
+    expect(getArkadeSyncLifecycleSnapshot().syncPhase).toBe('not-syncing')
+    expect(backgroundResolved).toBe(false)
+
+    scheduleBackgroundKeyDiscovery.mockClear()
+    await orchestrateArkadeSyncThenSave({ ...syncParams, syncKind: 'postLoad' })
+    expect(scheduleBackgroundKeyDiscovery).not.toHaveBeenCalled()
+
+    await orchestrateArkadeSyncThenSave({ ...syncParams, syncKind: 'manual' })
+    expect(scheduleBackgroundKeyDiscovery).toHaveBeenCalledWith(true)
+
+    scheduleBackgroundKeyDiscovery.mockClear()
+    await orchestrateArkadeSyncThenSave({
+      ...syncParams,
+      syncKind: 'dashboardPoll',
+    })
+    expect(scheduleBackgroundKeyDiscovery).not.toHaveBeenCalled()
+  })
+
+  it('failed background key discovery keeps its warning across a later light sync', async () => {
+    syncWithOperator.mockResolvedValue({ skippedKeyDiscovery: true })
+    await orchestrateArkadeSyncThenSave({ ...syncParams, syncKind: 'postLoad' })
+    const onFinished = setOnBackgroundFullReconcileFinished.mock.lastCall?.[0] as
+      | ((
+          outcome: {
+            ok: boolean
+            warningMessage?: string
+            keyDiscoveryFailed?: boolean
+            keyDiscoveryCompleted?: boolean
+          },
+        ) => Promise<void>)
+      | undefined
+
+    await onFinished?.({
+      ok: false,
+      keyDiscoveryFailed: true,
+      warningMessage: 'Offchain receive keys could not be refreshed: indexer timeout',
+    })
+    expect(getArkadeSyncLifecycleSnapshot().syncPhase).toBe('not-syncing')
+    expect(getArkadeSyncLifecycleSnapshot().warningMessages).toEqual([
+      'Offchain receive keys could not be refreshed: indexer timeout',
+    ])
+
+    await orchestrateArkadeSyncThenSave({ ...syncParams, syncKind: 'dashboardPoll' })
+    expect(getArkadeSyncLifecycleSnapshot().warningMessages).toEqual([
+      'Offchain receive keys could not be refreshed: indexer timeout',
+    ])
+
+    await onFinished?.({ ok: true, keyDiscoveryCompleted: true })
+    expect(getArkadeSyncLifecycleSnapshot().warningMessages).toEqual([])
   })
 })

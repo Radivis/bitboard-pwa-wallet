@@ -208,7 +208,7 @@ vi.mock('@/hooks/useArkadeLifecycleSnapshots', () => ({
     syncPhase: 'not-syncing',
     railScope: null,
     errorMessage: null,
-    warningMessage: null,
+    warningMessages: [],
   }),
   useArkadeRailSnapshot: () => ({
     loadPhase: 'loaded',

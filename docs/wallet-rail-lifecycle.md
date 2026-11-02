@@ -495,11 +495,11 @@ sequenceDiagram
 
   par syncing phase, awaited in this order
     Sync->>Wasm: syncWithOperator
-    Wasm->>Indexer: discover_keys from derivation index 0
-    Note over Wasm,Esplora: each gap-20 batch lists offchain scripts, then find_outpoints on every candidate boarding address
     alt snapshot already stored
+      Wasm->>Wasm: warm keys from persisted derivation cursor
       Wasm->>Indexer: light merge, unspent outpoints plus recent receive window
     else no snapshot
+      Wasm->>Indexer: discover_keys from derivation index 0
       Wasm->>Indexer: blocking full VTXO list
     end
     Sync->>Wasm: live dashboard
@@ -512,12 +512,17 @@ sequenceDiagram
   end
 
   Sync-->>UI: not-syncing
-  opt full_listed_at older than 10 minutes
-    Wasm->>Indexer: background full VTXO list, does not hold syncing
+  opt post-load or manual sync, snapshot already stored
+    Note over Wasm: once per session, and again on manual sync
+    Wasm->>Indexer: background discover_keys from index 0
+    Wasm->>Indexer: light catch-up merge
+    opt full reconcile already due
+      Wasm->>Indexer: full VTXO list after discover_keys
+    end
   end
 ```
 
-`discover_keys` does not resume from `peek_next_derivation_index`. A warm wallet rewalks every gap batch on each operator sync. The light VTXO merge is the incremental path from v0.3.5, and it runs only after that restore returns. The three boarding listings are separate: key restore probes candidate addresses, the live dashboard lists persisted outputs, and each dashboard query lists them again.
+With a snapshot, the awaited sync does not call `discover_keys`. It derives the persisted cursor locally, then runs the light merge. The full restore from index 0 runs once in the background after that first light sync, and again on manual sync. It does not run on the dashboard poll. A failed restore sets a non-blocking warning and leaves the session open. The live dashboard and the balance and history queries still list persisted boarding addresses.
 
 **`sync-error`:** operator unreachable, or the live balance/history refresh failed. Serve the loaded envelope. The session and the worker stay up. `isStaleArkade` / operator-stale banner when the failure is not `sync-error`.
 

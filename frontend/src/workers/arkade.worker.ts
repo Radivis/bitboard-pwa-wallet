@@ -276,23 +276,40 @@ let onBackgroundFullReconcileFinished:
   | ((outcome: BackgroundFullVtxoReconcileOutcome) => void | Promise<void>)
   | null = null
 
-const scheduleBackgroundFullVtxoReconcileSingleFlight = createSingleFlightScheduler(async () => {
+let backgroundMaintenanceRunsDiscovery = false
+let backgroundMaintenanceRunsFullReconcile = false
+
+const runBackgroundMaintenanceSingleFlight = createSingleFlightScheduler(async () => {
+  const runDiscovery = backgroundMaintenanceRunsDiscovery
+  const runFullReconcile = backgroundMaintenanceRunsFullReconcile
+  backgroundMaintenanceRunsDiscovery = false
+  backgroundMaintenanceRunsFullReconcile = false
+  if (!runDiscovery && !runFullReconcile) {
+    return
+  }
+  if (runDiscovery && (await getAutonomousModeActive())) {
+    return
+  }
   const reconcileScope = captureOpenPersistScope()
   try {
-    const reconcileResult: unknown = await invokeWasmArkade((wasmModule) =>
-      wasmModule.arkade_reconcile_full_offchain_vtxo_list() as Promise<unknown>,
-    )
+    const reconcileResult: unknown = await invokeWasmArkade((wasmModule) => {
+      if (runDiscovery) {
+        return wasmModule.arkade_background_key_discovery(runFullReconcile)
+      }
+      return wasmModule.arkade_reconcile_full_offchain_vtxo_list() as Promise<unknown>
+    })
     if (!stampedPersistScopeStillMatchesOpenSession(reconcileScope, activeSessionParams)) {
       await onBackgroundFullReconcileFinished?.({
         ok: false,
-        warningMessage:
-          'Full VTXO reconcile was discarded because the wallet session changed',
+        warningMessage: runDiscovery
+          ? 'Background key discovery was discarded because the wallet session changed'
+          : 'Full VTXO reconcile was discarded because the wallet session changed',
       })
       return
     }
     await flushSdkPersistenceNowOrThrow(reconcileScope)
     await onBackgroundFullReconcileFinished?.(
-      backgroundFullReconcileFinishedOutcome(reconcileResult),
+      backgroundMaintenanceFinishedOutcome(reconcileResult, runDiscovery),
     )
   } catch (error) {
     const warningMessage =
@@ -300,6 +317,48 @@ const scheduleBackgroundFullVtxoReconcileSingleFlight = createSingleFlightSchedu
     await onBackgroundFullReconcileFinished?.({ ok: false, warningMessage })
   }
 })
+
+function scheduleBackgroundFullVtxoReconcileSingleFlight(): void {
+  backgroundMaintenanceRunsFullReconcile = true
+  runBackgroundMaintenanceSingleFlight()
+}
+
+function scheduleBackgroundKeyDiscoverySingleFlight(includeFullReconcile: boolean): void {
+  backgroundMaintenanceRunsDiscovery = true
+  if (includeFullReconcile) {
+    backgroundMaintenanceRunsFullReconcile = true
+  }
+  runBackgroundMaintenanceSingleFlight()
+}
+
+function backgroundMaintenanceFinishedOutcome(
+  wasmResult: unknown,
+  ranDiscovery: boolean,
+): BackgroundFullVtxoReconcileOutcome {
+  const keyDiscoveryWarning = keyDiscoveryWarningFromWasmResult(wasmResult)
+  if (ranDiscovery && keyDiscoveryWarning != null) {
+    return {
+      ok: false,
+      keyDiscoveryFailed: true,
+      warningMessage: keyDiscoveryWarning,
+    }
+  }
+  return {
+    ...backgroundFullReconcileFinishedOutcome(wasmResult),
+    keyDiscoveryCompleted: ranDiscovery,
+  }
+}
+
+function keyDiscoveryWarningFromWasmResult(wasmResult: unknown): string | null {
+  if (typeof wasmResult !== 'object' || wasmResult == null) {
+    return null
+  }
+  if (!('keyDiscoveryWarning' in wasmResult)) {
+    return null
+  }
+  const warning = wasmResult.keyDiscoveryWarning
+  return typeof warning === 'string' && warning !== '' ? warning : null
+}
 
 function scheduleBackgroundFullFromSyncResult(result: ArkadeOperatorSyncResult): void {
   if (shouldScheduleBackgroundFullVtxoReconcile(result.fullReconcileDue)) {
@@ -535,6 +594,10 @@ const arkadeService: ArkadeService = {
     )
     await awaitArkadeSyncQuiescence()
     return syncWithOperatorCore(scheduleBackgroundFull)
+  },
+
+  scheduleBackgroundKeyDiscovery(includeFullReconcile: boolean): void {
+    scheduleBackgroundKeyDiscoverySingleFlight(includeFullReconcile)
   },
 
   scheduleBackgroundFullVtxoReconcile(): void {

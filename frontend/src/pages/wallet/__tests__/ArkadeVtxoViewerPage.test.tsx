@@ -65,7 +65,7 @@ vi.mock('@/hooks/useArkadeLifecycleSnapshots', () => ({
   useArkadeLoadLifecycleSnapshot: () => ({ loadPhase: 'ready' }),
   useArkadeSyncLifecycleSnapshot: () => ({
     syncPhase: 'idle',
-    warningMessage: null,
+    warningMessages: [],
   }),
 }))
 
