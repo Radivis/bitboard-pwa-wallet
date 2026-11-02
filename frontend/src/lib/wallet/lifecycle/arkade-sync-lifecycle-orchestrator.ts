@@ -242,14 +242,33 @@ function ensureBackgroundFullReconcileFollowUp(): void {
   )
 }
 
+async function refreshLiveDashboardAfterOperatorAttempt(
+  scope: ArkadeRailScope,
+): Promise<void> {
+  await refreshArkadeStoreFromLoadedWasm(scope.arkadeAccountId, scope.walletId)
+}
+
 async function runArkadeOperatorSyncBody(
   scope: ArkadeRailScope,
   scheduleBackgroundFull: boolean,
 ): Promise<ArkadeOperatorSyncResult> {
   ensureBackgroundFullReconcileFollowUp()
   const worker = getArkadeWorker()
-  const syncResult = await worker.syncWithOperator(scheduleBackgroundFull)
-  await refreshArkadeStoreFromLoadedWasm(scope.arkadeAccountId, scope.walletId)
+  let syncResult: ArkadeOperatorSyncResult
+  try {
+    syncResult = await worker.syncWithOperator(scheduleBackgroundFull)
+  } catch (operatorError) {
+    try {
+      await refreshLiveDashboardAfterOperatorAttempt(scope)
+    } catch (refreshError) {
+      console.warn(
+        'Arkade live dashboard refresh failed after operator sync error',
+        refreshError,
+      )
+    }
+    throw operatorError
+  }
+  await refreshLiveDashboardAfterOperatorAttempt(scope)
   await invalidateOperatorTrustQueriesForScope(scope)
   if (shouldScheduleBackgroundFullVtxoReconcile(syncResult.fullReconcileDue)) {
     worker.scheduleBackgroundFullVtxoReconcile()

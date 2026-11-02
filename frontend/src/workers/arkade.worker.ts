@@ -25,6 +25,8 @@ import {
 } from '@/workers/arkade-worker-encrypted-payload'
 import type {
   ArkadeBalanceInfo,
+  ArkadeLiveDashboard,
+  ArkadePersistedDashboard,
   ArkadeBatchJoinResult,
   ArkadeBoardingStatus,
   ArkadeCollaborativeExitFeeEstimate,
@@ -664,6 +666,19 @@ const arkadeService: ArkadeService = {
   async getBalance(): Promise<ArkadeBalanceInfo> {
     return invokeWasmArkade(
       (wasmModule) => wasmModule.arkade_get_balance() as Promise<ArkadeBalanceInfo>,
+    )
+  },
+
+  async getPersistedDashboard(): Promise<ArkadePersistedDashboard> {
+    return invokeWasmArkade(
+      (wasmModule) =>
+        wasmModule.arkade_get_persisted_dashboard() as ArkadePersistedDashboard,
+    )
+  },
+
+  async getLiveDashboard(): Promise<ArkadeLiveDashboard> {
+    return invokeWasmArkade(
+      (wasmModule) => wasmModule.arkade_get_live_dashboard() as Promise<ArkadeLiveDashboard>,
     )
   },
 

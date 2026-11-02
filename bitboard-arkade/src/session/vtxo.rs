@@ -102,6 +102,23 @@ impl ArkadeSession {
         Ok(empty_recoverable_vtxo_buckets())
     }
 
+    /// Recoverable buckets from the persisted snapshot only. No operator list.
+    pub(crate) fn recoverable_vtxo_buckets_from_persisted_snapshot(
+        &self,
+    ) -> ArkResult<RecoverableVtxoBuckets> {
+        let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot else {
+            return Ok(empty_recoverable_vtxo_buckets());
+        };
+        let dust = self.client.server_info_snapshot()?.dust;
+        let exclude_pipeline_outpoints = self.pipeline_outpoints();
+        let vtxo_list = vtxo_list_from_snapshot(&snapshot)?;
+        Ok(recoverable_vtxo_buckets_from_list(
+            &vtxo_list,
+            dust,
+            &exclude_pipeline_outpoints,
+        ))
+    }
+
     pub async fn recoverable_vtxo_fee_estimate(&self) -> ArkResult<RecoverableVtxoFeeEstimateDto> {
         self.ensure_operator_rpc_allowed()?;
         let fees = self

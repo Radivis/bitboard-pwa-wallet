@@ -45,7 +45,9 @@ impl ArkadeSession {
         self.resolve_offchain_balance_buckets_from_snapshot()
     }
 
-    fn resolve_offchain_balance_buckets_from_snapshot(&self) -> ArkResult<OffchainBalanceBuckets> {
+    pub(crate) fn resolve_offchain_balance_buckets_from_snapshot(
+        &self,
+    ) -> ArkResult<OffchainBalanceBuckets> {
         let wallet_snapshot = self.wallet_db.snapshot();
         let Some(snapshot) = wallet_snapshot.offchain_vtxo_snapshot.as_ref() else {
             return Ok(OffchainBalanceBuckets::zero());

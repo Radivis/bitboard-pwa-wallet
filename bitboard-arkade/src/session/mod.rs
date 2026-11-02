@@ -11,6 +11,7 @@ mod operator_schedule;
 mod operator_trust;
 mod payments;
 mod pending_exit;
+mod persisted_dashboard;
 mod receive;
 mod signer_migration;
 mod sync;

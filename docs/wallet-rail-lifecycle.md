@@ -459,10 +459,10 @@ Lightning is optional — absence of connections is normal `not-configured`, not
 2. Read encrypted mnemonic + payload; resolve Arkade account
 3. `arkade_open_session` in arkade worker (hydrate Arkade SDK from `sdkPersistenceJson`, and the bumper BDK from the SegWit-0 descriptor-wallet changeset when one exists — not Esplora)
 4. `ensureArkadeAccount` (DB metadata)
-5. `refreshArkadeStoreFromLoadedWasm` — balance, payments, **receive address stable**
+5. `publishArkadeDashboardFromOpenSession` — offchain snapshot, persisted pending batch intents, local bumper balance, and a receive address from `peek_offchain_address`. Boarding spendable and pending sats are 0 until the post-load scan. This publish does not call `getBalance` or `getTransactionHistory`.
 6. Set `activeArkadeAccountId` when **load completes** (not when sync completes)
 
-Step 5 is inside the 30-second session-start race, so a boarding Esplora walk can fail the session after the WASM session has already opened. That is the open correction in [session start must not wait on scans](future/arkade-session-start-does-not-wait-on-scans.md): `loaded` comes from the persisted envelope, and the live balance and history refresh run with post-load sync.
+The 30-second session-start race covers steps 1–6. It does not wait on the boarding Esplora walk. After `loaded`, post-load sync refreshes from the operator and then from Esplora. A failure of that refresh is `sync-error` on the open session.
 
 Bumper BDK Esplora is **not** started on load (LIFE-ARK-LOAD-04). Session open hydrates the bumper from the `(network, segwit, 0)` descriptor row (or a live crypto export when that triple is loaded). The first `onchain_bumper_info` or exit proceed then syncs; that scan is incremental when `fullScanDone` was hydrated (LIFE-ARK-BUMP-01/02). Completing a unilateral exit does not wait for that scan: the complete page starts it in the background. Later bumper-info polls incremental-sync unused revealed SPKs into BDK and report confirmed only. After a wallet-wide bumper sync, Arkade persists that SegWit-0 row only when it is **not** the crypto slot (LIFE-ARK-BUMP-03).
 
@@ -471,15 +471,55 @@ Bumper BDK Esplora is **not** started on load (LIFE-ARK-LOAD-04). Session open h
 - UI queries and Receive page gate on `ArkadeLoadLifecycle === 'loaded'`
 - `activeArkadeAccountId` is set at load completion, not as a separate sync gate
 
-**`load-error`:** WASM open failure, persistence corrupt, secrets read failure.
+**`load-error`:** WASM open failure, persistence corrupt, secrets read failure, or the persisted dashboard cannot be published. A slow or failed Esplora scan is not `load-error`.
 
 ### SyncLifecycle
 
-**Work in `syncing`:** **operator sync only** — `syncWithOperator`, debounced background operator sync, dashboard poll sync.
+**Work in `syncing`:** operator sync (`syncWithOperator`, debounced background operator sync, dashboard poll sync), then the live balance and history refresh. That refresh is one boarding Esplora pass.
 
-Does **not** include session open or initial WASM hydration (those are load).
+Does **not** include session open or the persisted-dashboard publish (those are load). The bumper BDK incremental scan is also outside this phase: it starts on the first bumper-info or exit proceed, not on post-load sync.
 
-**`sync-error`:** operator unreachable — serve `loaded` WASM/local data; `isStaleArkade` / operator-stale banner.
+`loaded` enables the balance and history queries immediately. Their fetches are not inside the `syncing` phase, and they do not take the wallet writer lock that wraps post-load sync, so they call the same worker while that sync is in flight.
+
+```mermaid
+sequenceDiagram
+  participant UI
+  participant Sync as postLoadSync
+  participant Wasm as ArkadeSession
+  participant Esplora
+  participant Indexer as operator indexer
+
+  Note over UI,Wasm: loading, inside the 30s race
+  UI->>Wasm: open session and publish persisted envelope
+  UI-->>UI: loaded, boarding sats still 0
+
+  par syncing phase, awaited in this order
+    Sync->>Wasm: syncWithOperator
+    Wasm->>Indexer: discover_keys from derivation index 0
+    Note over Wasm,Esplora: each gap-20 batch lists offchain scripts, then find_outpoints on every candidate boarding address
+    alt snapshot already stored
+      Wasm->>Indexer: light merge, unspent outpoints plus recent receive window
+    else no snapshot
+      Wasm->>Indexer: blocking full VTXO list
+    end
+    Sync->>Wasm: live dashboard
+    Wasm->>Esplora: list each persisted boarding address, then one output status per UTXO
+  and queries enabled at loaded
+    UI->>Wasm: getBalance
+    Wasm->>Esplora: boarding address list again
+    UI->>Wasm: getTransactionHistory
+    Wasm->>Esplora: boarding address list again
+  end
+
+  Sync-->>UI: not-syncing
+  opt full_listed_at older than 10 minutes
+    Wasm->>Indexer: background full VTXO list, does not hold syncing
+  end
+```
+
+`discover_keys` does not resume from `peek_next_derivation_index`. A warm wallet rewalks every gap batch on each operator sync. The light VTXO merge is the incremental path from v0.3.5, and it runs only after that restore returns. The three boarding listings are separate: key restore probes candidate addresses, the live dashboard lists persisted outputs, and each dashboard query lists them again.
+
+**`sync-error`:** operator unreachable, or the live balance/history refresh failed. Serve the loaded envelope. The session and the worker stay up. `isStaleArkade` / operator-stale banner when the failure is not `sync-error`.
 
 ### SaveLifecycle
 

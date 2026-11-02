@@ -163,10 +163,30 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     expect(orchestrateArkadeSave).toHaveBeenCalled()
   })
 
-  it('sync failure sets sync-error without save', async () => {
+  it('sync failure sets sync-error without save and still refreshes the dashboard', async () => {
     syncWithOperator.mockRejectedValue(new Error('operator down'))
 
     await expect(orchestrateArkadeSyncThenSave(syncParams)).rejects.toThrow('operator down')
+    expect(refreshArkadeStoreFromLoadedWasm).toHaveBeenCalledWith('conn-1', 1)
+    expect(getArkadeSyncLifecycleSnapshot()).toEqual({
+      syncPhase: 'sync-error',
+      railScope: {
+        walletId: 1,
+        networkMode: 'mutinynet',
+        arkadeAccountId: 'conn-1',
+      },
+      errorMessage: 'operator down',
+      warningMessage: null,
+    })
+    expect(orchestrateArkadeSave).not.toHaveBeenCalled()
+  })
+
+  it('operator failure keeps the operator message when the live refresh also fails', async () => {
+    syncWithOperator.mockRejectedValue(new Error('operator down'))
+    refreshArkadeStoreFromLoadedWasm.mockRejectedValue(new Error('esplora down'))
+
+    await expect(orchestrateArkadeSyncThenSave(syncParams)).rejects.toThrow('operator down')
+    expect(getArkadeSyncLifecycleSnapshot().errorMessage).toBe('operator down')
     expect(getArkadeSyncLifecycleSnapshot().syncPhase).toBe('sync-error')
     expect(orchestrateArkadeSave).not.toHaveBeenCalled()
   })

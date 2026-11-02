@@ -70,6 +70,19 @@ export interface ArkadeBalanceInfo {
   pendingBatchIntents?: ArkadePendingBatchIntent[]
 }
 
+/** Balance, offchain history, and receive address from the open session envelope. */
+export interface ArkadePersistedDashboard {
+  balance: ArkadeBalanceInfo
+  payments: ArkadePaymentRow[]
+  receiveAddress: string
+}
+
+/** Live balance and history from one boarding address listing. */
+export interface ArkadeLiveDashboard {
+  balance: ArkadeBalanceInfo
+  payments: ArkadePaymentRow[]
+}
+
 export interface ArkadePendingBatchOutpoint {
   txid: string
   vout: number
@@ -618,6 +631,8 @@ export interface ArkadeService {
     onRegistered?: (intent: ArkadePendingBatchIntent) => void,
   ): Promise<ArkadeSignerMigrationResult>
   getBalance(): Promise<ArkadeBalanceInfo>
+  getPersistedDashboard(): Promise<ArkadePersistedDashboard>
+  getLiveDashboard(): Promise<ArkadeLiveDashboard>
   getAddress(): Promise<string>
   getNewAddress(): Promise<string>
   getBoardingAddress(): Promise<string>

@@ -4,7 +4,7 @@ import {
   ensureArkadeAccount,
   resolveArkadeEndpointsForAccount,
 } from '@/lib/arkade/arkade-accounts'
-import { refreshArkadeStoreFromLoadedWasm } from '@/lib/arkade/arkade-persistence-store-sync'
+import { publishArkadeDashboardFromOpenSession } from '@/lib/arkade/arkade-persistence-store-sync'
 import {
   getArkadeEndpoints,
   type ArkadeSupportedNetworkMode,
@@ -63,7 +63,7 @@ export async function tryReuseExistingArkadeSession(params: {
     if (useWalletStore.getState().activeWalletId !== params.walletId) {
       return null
     }
-    await refreshArkadeStoreFromLoadedWasm(params.account.id, params.walletId)
+    await publishArkadeDashboardFromOpenSession(params.account.id, params.walletId)
     if (useWalletStore.getState().activeWalletId !== params.walletId) {
       return null
     }
@@ -157,7 +157,7 @@ export async function hydrateArkadeDashboardAfterSessionOpen(params: {
     return
   }
   useWalletStore.getState().setLastOperatorSyncTime(null)
-  await refreshArkadeStoreFromLoadedWasm(params.arkadeAccountId, params.walletId)
+  await publishArkadeDashboardFromOpenSession(params.arkadeAccountId, params.walletId)
   if (params.abandonIf?.() || useWalletStore.getState().activeWalletId !== params.walletId) {
     return
   }

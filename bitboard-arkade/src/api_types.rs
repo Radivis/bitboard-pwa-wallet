@@ -89,6 +89,23 @@ pub struct BalanceDto {
     pub pending_batch_intents: Vec<PendingBatchIntentDto>,
 }
 
+/// Dashboard shown at session open, before any Esplora or operator list.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersistedDashboardDto {
+    pub balance: BalanceDto,
+    pub payments: Vec<PaymentRowDto>,
+    pub receive_address: String,
+}
+
+/// Live balance and history from one boarding address listing.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LiveDashboardDto {
+    pub balance: BalanceDto,
+    pub payments: Vec<PaymentRowDto>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OperatorSyncResultDto {
