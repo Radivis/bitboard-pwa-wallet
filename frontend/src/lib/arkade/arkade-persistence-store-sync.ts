@@ -50,11 +50,13 @@ export async function refreshArkadeStoreFromLoadedWasm(
   expectedWalletId?: number,
 ): Promise<void> {
   const worker = getArkadeWorker()
-  const [balance, payments, receiveAddress] = await Promise.all([
+  // Balance lists boarding addresses on Esplora. History repeats that list. Running them
+  // together saturates the browser connection pool and the session-start budget expires.
+  const [balance, receiveAddress] = await Promise.all([
     worker.getBalance(),
-    worker.getTransactionHistory(),
     worker.getAddress(),
   ])
+  const payments = await worker.getTransactionHistory()
   const walletStateBeforeWrite = useWalletStore.getState()
   if (
     expectedWalletId != null &&

@@ -58,28 +58,35 @@ impl ArkadeSession {
         let persistence = SharedPersistenceDb(std::sync::Arc::clone(&self.wallet_db));
         let boarding_outputs = persistence.load_boarding_outputs()?;
         let now_secs = wasm_safe_now().as_secs();
-
-        for boarding_output in boarding_outputs {
-            let found = self
-                .client
-                .blockchain()
-                .find_outpoints(boarding_output.address())
-                .await?;
-            for utxo in found {
-                if utxo.outpoint != outpoint {
-                    continue;
-                }
-                let Some(confirmation_blocktime) = utxo.confirmation_blocktime else {
-                    return Ok(false);
-                };
-                return Ok(is_past_arkd_cooperative_boarding_window(
-                    &boarding_output,
-                    confirmation_blocktime,
-                    now_secs,
-                ));
-            }
+        let Some(transaction) = self.client.blockchain().find_tx(&outpoint.txid).await? else {
+            return Ok(false);
+        };
+        let Some(output) = transaction.output.get(outpoint.vout as usize) else {
+            return Ok(false);
+        };
+        let Some(boarding_output) = boarding_outputs
+            .iter()
+            .find(|candidate| candidate.script_pubkey() == output.script_pubkey)
+        else {
+            return Ok(false);
+        };
+        let Some(confirmation_blocktime) = self
+            .client
+            .blockchain()
+            .get_tx_status(&outpoint.txid)
+            .await?
+            .confirmed_at
+        else {
+            return Ok(false);
+        };
+        if confirmation_blocktime < 0 {
+            return Ok(false);
         }
-        Ok(false)
+        Ok(is_past_arkd_cooperative_boarding_window(
+            boarding_output,
+            confirmation_blocktime as u64,
+            now_secs,
+        ))
     }
 
     /// Refuse a second boarding RegisterIntent while the previous one may still be in a round.

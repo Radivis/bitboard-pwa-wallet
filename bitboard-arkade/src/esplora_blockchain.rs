@@ -75,11 +75,21 @@ type EsploraAsyncClient = esplora_client::AsyncClient<crate::wasm_sleep::WasmSle
 #[cfg(not(target_arch = "wasm32"))]
 type EsploraAsyncClient = esplora_client::AsyncClient;
 
+/// One address's UTXOs, reused by balance and history so session start does not list the same
+/// boarding address several times.
+#[derive(Default)]
+struct AddressUtxoCache {
+    tip_height: Option<u32>,
+    tip_fetched_at_ms: u64,
+    by_address: HashMap<String, (u64, Vec<ExplorerUtxo>)>,
+}
+
 /// Esplora-backed [`Blockchain`] with confirmation and outspend caches.
 pub struct EsploraBlockchain {
     client: Arc<EsploraAsyncClient>,
     confirmation_cache: Mutex<ConfirmationCache>,
     outspend_cache: Arc<Mutex<OutspendCache>>,
+    address_utxo_cache: Arc<Mutex<AddressUtxoCache>>,
 }
 
 impl EsploraBlockchain {
@@ -113,6 +123,7 @@ impl EsploraBlockchain {
             client: Arc::new(client),
             confirmation_cache: Mutex::new(ConfirmationCache::default()),
             outspend_cache: Arc::new(Mutex::new(OutspendCache::default())),
+            address_utxo_cache: Arc::new(Mutex::new(AddressUtxoCache::default())),
         })
     }
 
@@ -122,11 +133,22 @@ impl EsploraBlockchain {
     }
 
     /// Unspent outputs for `address`, with confirmation depth filled in.
+    ///
+    /// A recent result for the same address is reused so balance and history do not each walk
+    /// every boarding address during session start.
     async fn find_outpoints_at(
         client: &EsploraAsyncClient,
+        cache: &Mutex<AddressUtxoCache>,
         address: &Address,
     ) -> Result<Vec<ExplorerUtxo>, ark_client::Error> {
-        collect_address_utxos(client, address).await
+        let address_key = address.to_string();
+        if let Some(cached) = fresh_address_utxos(cache, &address_key) {
+            return Ok(cached);
+        }
+        let tip_height = cached_or_fetched_tip_height(client, cache).await;
+        let utxos = collect_address_utxos(client, address, tip_height).await?;
+        store_address_utxos(cache, address_key, utxos.clone());
+        Ok(utxos)
     }
 
     /// Transaction bytes from `/tx/{txid}/raw`. When `/raw` is missing, fall back to JSON
@@ -441,8 +463,9 @@ macro_rules! impl_esplora_blockchain {
             > $($send_bound)*
             {
                 let client = Arc::clone(&self.client);
+                let cache = Arc::clone(&self.address_utxo_cache);
                 let address = address.clone();
-                async move { EsploraBlockchain::find_outpoints_at(&client, &address).await }
+                async move { EsploraBlockchain::find_outpoints_at(&client, &cache, &address).await }
             }
 
             /// Transaction bytes for `txid`. See [`EsploraBlockchain::find_tx_at`].
@@ -548,20 +571,60 @@ fn utxo_confirmations(status: &esplora_client::UtxoStatus, chain_tip_height: Opt
 
 /// Address UTXOs from Esplora. When a confirmed UTXO omits its block time, that time is
 /// filled from `/tx/{txid}/status`.
+fn fresh_address_utxos(
+    cache: &Mutex<AddressUtxoCache>,
+    address: &str,
+) -> Option<Vec<ExplorerUtxo>> {
+    let cache = cache
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let (fetched_at_ms, utxos) = cache.by_address.get(address)?;
+    let age_ms = now_ms().saturating_sub(*fetched_at_ms);
+    if age_ms < UNSPENT_OUTSPEND_CACHE_TTL_MS {
+        Some(utxos.clone())
+    } else {
+        None
+    }
+}
+
+fn store_address_utxos(cache: &Mutex<AddressUtxoCache>, address: String, utxos: Vec<ExplorerUtxo>) {
+    let mut cache = cache
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    cache.by_address.insert(address, (now_ms(), utxos));
+}
+
+async fn cached_or_fetched_tip_height(
+    client: &EsploraAsyncClient,
+    cache: &Mutex<AddressUtxoCache>,
+) -> Option<u32> {
+    {
+        let cache = cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let age_ms = now_ms().saturating_sub(cache.tip_fetched_at_ms);
+        if cache.tip_fetched_at_ms > 0 && age_ms < UNSPENT_OUTSPEND_CACHE_TTL_MS {
+            return cache.tip_height;
+        }
+    }
+    let tip_height = client.get_height().await.ok();
+    let mut cache = cache
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    cache.tip_height = tip_height;
+    cache.tip_fetched_at_ms = now_ms();
+    tip_height
+}
+
 async fn collect_address_utxos(
     client: &EsploraAsyncClient,
     address: &Address,
+    chain_tip_height: Option<u32>,
 ) -> Result<Vec<ExplorerUtxo>, ark_client::Error> {
     let utxos = client
         .get_address_utxos(address)
         .await
         .map_err(EsploraBlockchain::map_esplora_error)?;
-
-    let chain_tip_height = client
-        .get_height()
-        .await
-        .map_err(EsploraBlockchain::map_esplora_error)
-        .ok();
 
     let mut explorer_utxos = Vec::with_capacity(utxos.len());
     for utxo in utxos {

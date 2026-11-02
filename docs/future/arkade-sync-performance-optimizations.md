@@ -13,6 +13,7 @@ Related:
 - Poll interval: `ARKADE_BACKGROUND_OPERATOR_SYNC_MIN_INTERVAL_MS` (15s) in `frontend/src/lib/arkade/arkade-sync-timings.ts`
 - Snapshot: `OffchainVtxoSnapshot` in `bitboard-arkade/src/persistence.rs`
 - Feature contract: [doc/features/arkade.yaml](../../doc/features/arkade.yaml)
+- Session start still waits on the dashboard scan: [session start must not wait on scans](./arkade-session-start-does-not-wait-on-scans.md)
 
 ---
 

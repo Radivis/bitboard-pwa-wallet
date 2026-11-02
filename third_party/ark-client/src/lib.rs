@@ -146,6 +146,23 @@ pub use swap_storage::SwapStorage;
 /// assuming all used addresses have been found.
 pub const DEFAULT_GAP_LIMIT: u32 = 20;
 
+/// Max scripts or outpoints per GET `/v1/indexer/vtxos`.
+///
+/// Each reference is a repeated query param. A P2TR script is about 80 bytes in that string.
+/// Proxies return HTTP 431 when the request line exceeds their header buffer (often 8KiB).
+/// 40 references stay near 3.2KiB.
+const MAX_GET_VTXOS_REFS_PER_REQUEST: usize = 40;
+
+/// Browser HTTP/1.1 allows about 6 connections per host. Cap overlapping indexer GETs so a
+/// full list does not starve the rest of session sync.
+const MAX_GET_VTXOS_IN_FLIGHT: usize = 4;
+
+static INDEXER_LIST_PERMITS: tokio::sync::Semaphore =
+    tokio::sync::Semaphore::const_new(MAX_GET_VTXOS_IN_FLIGHT);
+
+const INDEXER_FETCH_RETRY_ATTEMPTS: u8 = 3;
+const INDEXER_FETCH_RETRY_BASE_DELAY: Duration = Duration::from_millis(250);
+
 /// Default Boltz `referralId` sent with swap creation requests when the caller does not
 /// provide one. Identifies traffic originating from this SDK.
 pub const DEFAULT_BOLTZ_REFERRAL_ID: &str = "arkade-rs-SDK";
@@ -2311,6 +2328,9 @@ where
     }
 
     /// Fetch all VTXOs for a request, handling pagination internally.
+    ///
+    /// Scripts and outpoints are split first so each GET stays under proxy URL limits
+    /// (HTTP 431). Each chunk is paged on its own.
     async fn fetch_all_vtxos(
         &self,
         request: GetVtxosRequest,
@@ -2319,7 +2339,51 @@ where
             return Ok(Vec::new());
         }
 
-        tracing::debug!(filter = ?request.filter(), "Fetching VTXOs");
+        tracing::debug!(
+            filter = ?request.filter(),
+            references = request.reference().len(),
+            "Fetching VTXOs"
+        );
+
+        let chunk_requests = request.split_references(MAX_GET_VTXOS_REFS_PER_REQUEST);
+        let chunk_results = futures::future::try_join_all(
+            chunk_requests
+                .into_iter()
+                .map(|chunk| async move { self.fetch_vtxo_chunk(chunk).await }),
+        )
+        .await?;
+        Ok(chunk_results.into_iter().flatten().collect())
+    }
+
+    async fn fetch_vtxo_chunk(
+        &self,
+        request: GetVtxosRequest,
+    ) -> Result<Vec<VirtualTxOutPoint>, Error> {
+        let mut last_error = None;
+        for attempt in 0..INDEXER_FETCH_RETRY_ATTEMPTS {
+            match self.fetch_vtxo_chunk_once(request.clone()).await {
+                Ok(vtxos) => return Ok(vtxos),
+                Err(error)
+                    if attempt + 1 < INDEXER_FETCH_RETRY_ATTEMPTS
+                        && indexer_fetch_error_is_transient(&error.to_string()) =>
+                {
+                    last_error = Some(error);
+                    sleep(INDEXER_FETCH_RETRY_BASE_DELAY * u32::from(attempt + 1)).await;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Err(last_error.unwrap_or_else(|| Error::ad_hoc("indexer VTXO fetch retries exhausted")))
+    }
+
+    async fn fetch_vtxo_chunk_once(
+        &self,
+        request: GetVtxosRequest,
+    ) -> Result<Vec<VirtualTxOutPoint>, Error> {
+        let _permit = INDEXER_LIST_PERMITS
+            .acquire()
+            .await
+            .map_err(|_| Error::ad_hoc("indexer list permit closed"))?;
 
         let mut all_vtxos = Vec::new();
         let mut cursor = 0;
@@ -2645,6 +2709,7 @@ mod digest_guard_tests {
     use std::convert::Infallible;
     use std::future::Future;
     use std::pin::Pin;
+    use std::sync::atomic::AtomicBool;
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
     use std::task::Context;
@@ -2665,6 +2730,8 @@ mod digest_guard_tests {
     struct MockState {
         get_info_calls: AtomicUsize,
         list_vtxos_calls: AtomicUsize,
+        list_vtxos_returns_empty: AtomicBool,
+        max_outpoints_in_one_request: AtomicUsize,
     }
 
     #[derive(Clone)]
@@ -2851,8 +2918,20 @@ mod digest_guard_tests {
             Box<dyn Future<Output = Result<tonic::Response<Self::Response>, tonic::Status>> + Send>,
         >;
 
-        fn call(&mut self, _request: tonic::Request<test_utils::GetVtxosRequest>) -> Self::Future {
+        fn call(&mut self, request: tonic::Request<test_utils::GetVtxosRequest>) -> Self::Future {
             self.state.list_vtxos_calls.fetch_add(1, Ordering::SeqCst);
+            let outpoint_count = request.get_ref().outpoints.len();
+            self.state
+                .max_outpoints_in_one_request
+                .fetch_max(outpoint_count, Ordering::SeqCst);
+            if self.state.list_vtxos_returns_empty.load(Ordering::SeqCst) {
+                return Box::pin(async {
+                    Ok(tonic::Response::new(test_utils::GetVtxosResponse {
+                        vtxos: Vec::new(),
+                        page: None,
+                    }))
+                });
+            }
             Box::pin(async {
                 Err(tonic::Status::failed_precondition(
                     "DIGEST_MISMATCH: invalid digest header",
@@ -2926,6 +3005,29 @@ mod digest_guard_tests {
             max_tx_weight: 0,
             max_op_return_outputs: 0,
         }
+    }
+
+    #[tokio::test]
+    async fn list_vtxos_splits_outpoints_before_the_indexer_header_limit() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+
+        let mock = MockArkServer::default();
+        mock.state
+            .list_vtxos_returns_empty
+            .store(true, Ordering::SeqCst);
+        let state = mock.state.clone();
+        let client = connect_test_client(mock).await;
+        let outpoints = (0..41)
+            .map(|index| {
+                let txid = Txid::from_str(&format!("{index:064x}")).expect("txid");
+                OutPoint::new(txid, 0)
+            })
+            .collect();
+
+        client.list_vtxos_for_outpoints(outpoints).await.unwrap();
+
+        assert_eq!(state.list_vtxos_calls.load(Ordering::SeqCst), 2);
+        assert!(state.max_outpoints_in_one_request.load(Ordering::SeqCst) <= 40);
     }
 
     #[tokio::test]
