@@ -620,9 +620,7 @@ fn remember_chain_tip(
     tip_height: Option<u32>,
     fetched_at_ms: u64,
 ) -> Option<u32> {
-    let Some(tip_height) = tip_height else {
-        return None;
-    };
+    let tip_height = tip_height?;
     let mut cache = cache
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
