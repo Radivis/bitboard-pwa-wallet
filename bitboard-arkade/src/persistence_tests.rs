@@ -10,10 +10,11 @@ use crate::persistence::{
     validate_operator_identity, vtxo_exit_record_key,
 };
 use crate::session::unilateral_exit::vtxo_exit::heal_vtxo_exit_records_from_legacy;
+use ark_core::BoardingOutput;
 use ark_core::server::{DeprecatedSigner, Info};
 use bitcoin::address::NetworkUnchecked;
-use bitcoin::secp256k1::PublicKey;
-use bitcoin::{Amount, Network, ScriptBuf, XOnlyPublicKey};
+use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
+use bitcoin::{Amount, Network, ScriptBuf, Sequence, XOnlyPublicKey};
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -1193,4 +1194,98 @@ fn published_v3_kitchen_sink_imports_heals_and_reexports_v12() {
     assert!(envelope.wallet_db.host_tx_observations.is_empty());
     assert!(envelope.wallet_db.unilateral_exit_frontend.is_none());
     assert!(!envelope.autonomous_mode);
+}
+
+fn boarding_output_for(server_hex: &str, owner_hex: &str) -> BoardingOutput {
+    let secp = Secp256k1::new();
+    BoardingOutput::new(
+        &secp,
+        xonly(server_hex),
+        xonly(owner_hex),
+        Sequence::from_consensus(144),
+        Network::Signet,
+    )
+    .expect("boarding output")
+}
+
+#[test]
+fn boarding_snapshot_round_trips_deprecated_signer() {
+    let current = boarding_output_for(PK_CURRENT, PK_UNKNOWN);
+    let deprecated = boarding_output_for(PK_DEPRECATED, PK_UNKNOWN);
+    let db = JsonPersistenceDb::default();
+    db.set_load_context(Network::Signet, xonly(PK_CURRENT));
+    let owner_secret = SecretKey::from_slice(&[2u8; 32]).expect("secret");
+    db.save_boarding_output(owner_secret, current.clone())
+        .expect("save current");
+    db.save_boarding_output(owner_secret, deprecated.clone())
+        .expect("save deprecated");
+
+    let loaded = db.load_boarding_outputs().expect("load both signers");
+    let addresses: Vec<String> = loaded
+        .iter()
+        .map(|output| output.address().to_string())
+        .collect();
+    assert!(addresses.contains(&current.address().to_string()));
+    assert!(addresses.contains(&deprecated.address().to_string()));
+    assert_eq!(
+        db.snapshot().boarding_outputs[1].server_pk_hex.as_deref(),
+        Some(xonly(PK_DEPRECATED).to_string().as_str())
+    );
+}
+
+#[test]
+fn boarding_snapshot_without_server_pk_reloads_with_the_current_signer() {
+    let current = boarding_output_for(PK_CURRENT, PK_UNKNOWN);
+    let db = JsonPersistenceDb::default();
+    db.set_load_context(Network::Signet, xonly(PK_CURRENT));
+    let owner_secret = SecretKey::from_slice(&[2u8; 32]).expect("secret");
+    db.save_boarding_output(owner_secret, current.clone())
+        .expect("save");
+    let mut healed = db.snapshot();
+    healed.boarding_outputs[0].server_pk_hex = None;
+    let legacy = JsonPersistenceDb::from_snapshot(healed);
+    legacy.set_load_context(Network::Signet, xonly(PK_CURRENT));
+    let loaded = legacy.load_boarding_outputs().expect("legacy row");
+    assert_eq!(loaded[0].address(), current.address());
+}
+
+#[test]
+fn boarding_snapshot_address_mismatch_is_an_error() {
+    let current = boarding_output_for(PK_CURRENT, PK_UNKNOWN);
+    let db = JsonPersistenceDb::default();
+    db.set_load_context(Network::Signet, xonly(PK_CURRENT));
+    let owner_secret = SecretKey::from_slice(&[2u8; 32]).expect("secret");
+    db.save_boarding_output(owner_secret, current)
+        .expect("save");
+    let mut corrupt = db.snapshot();
+    corrupt.boarding_outputs[0].address = "tb1qnot-the-boarding-address".to_string();
+    let broken = JsonPersistenceDb::from_snapshot(corrupt);
+    broken.set_load_context(Network::Signet, xonly(PK_CURRENT));
+    let error = broken
+        .load_boarding_outputs()
+        .expect_err("address mismatch");
+    assert!(error.to_string().contains("address mismatch"));
+}
+
+#[test]
+fn resaving_a_boarding_output_fills_in_a_missing_server_pk() {
+    let deprecated = boarding_output_for(PK_DEPRECATED, PK_UNKNOWN);
+    let db = JsonPersistenceDb::default();
+    db.set_load_context(Network::Signet, xonly(PK_CURRENT));
+    let owner_secret = SecretKey::from_slice(&[2u8; 32]).expect("secret");
+    db.save_boarding_output(owner_secret, deprecated.clone())
+        .expect("save");
+    let mut legacy = db.snapshot();
+    legacy.boarding_outputs[0].server_pk_hex = None;
+    let db = JsonPersistenceDb::from_snapshot(legacy);
+    db.set_load_context(Network::Signet, xonly(PK_CURRENT));
+    db.save_boarding_output(owner_secret, deprecated.clone())
+        .expect("heal");
+    assert_eq!(db.snapshot().boarding_outputs.len(), 1);
+    assert_eq!(
+        db.snapshot().boarding_outputs[0].server_pk_hex.as_deref(),
+        Some(deprecated.server_pk().to_string().as_str())
+    );
+    let loaded = db.load_boarding_outputs().expect("healed row loads");
+    assert_eq!(loaded[0].address(), deprecated.address());
 }

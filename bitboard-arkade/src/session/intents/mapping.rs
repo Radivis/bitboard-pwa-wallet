@@ -165,6 +165,7 @@ fn pending_batch_intent_lifecycle_phase_label(
     match phase {
         PendingBatchIntentLifecyclePhase::Processing => "processing",
         PendingBatchIntentLifecyclePhase::TimedOut => "timed_out",
+        PendingBatchIntentLifecyclePhase::ReregisterHold => "reregister_hold",
     }
 }
 

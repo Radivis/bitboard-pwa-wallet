@@ -105,10 +105,18 @@ export function hasPendingBatchIntent(
   return pendingIntents.length > 0
 }
 
+export function pendingIntentBlocksBoardingSettle(
+  intent: ArkadePendingBatchIntent,
+): boolean {
+  return (
+    intent.onchainOutpoints.length > 0 && intent.lifecyclePhase !== 'reregister_hold'
+  )
+}
+
 export function pendingOverlapsOnchain(
   pendingIntents: ArkadePendingBatchIntent[],
 ): boolean {
-  return pendingIntents.some((intent) => intent.onchainOutpoints.length > 0)
+  return pendingIntents.some(pendingIntentBlocksBoardingSettle)
 }
 
 export function hasPendingKind(

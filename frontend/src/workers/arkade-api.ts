@@ -82,7 +82,7 @@ export interface ArkadePendingBatchIntent {
   registeredAt: number
   onchainOutpoints: ArkadePendingBatchOutpoint[]
   vtxoOutpoints: ArkadePendingBatchOutpoint[]
-  lifecyclePhase?: 'processing' | 'timed_out'
+  lifecyclePhase?: 'processing' | 'timed_out' | 'reregister_hold'
   destinationAddress?: string
 }
 

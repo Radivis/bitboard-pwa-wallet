@@ -53,6 +53,10 @@ pub struct Input {
     /// Extra witness elements for spending (e.g., preimage for ArkNotes).
     /// When set, these are used instead of generating a signature.
     extra_witness: Option<Vec<Vec<u8>>>,
+    /// Indexer expiry (`expires_at`) for operator intent-fee programs. Not part of the proof.
+    intent_fee_expiry: Option<i64>,
+    /// Indexer birth (`created_at`) for operator intent-fee programs. Not part of the proof.
+    intent_fee_birth: Option<i64>,
 }
 
 impl Input {
@@ -78,6 +82,8 @@ impl Input {
             is_swept,
             assets,
             extra_witness: None,
+            intent_fee_expiry: None,
+            intent_fee_birth: None,
         }
     }
 
@@ -104,6 +110,8 @@ impl Input {
             assets,
             extra_witness: (!spend_selection.extra_witness.is_empty())
                 .then_some(spend_selection.extra_witness),
+            intent_fee_expiry: None,
+            intent_fee_birth: None,
         }
     }
 
@@ -131,7 +139,23 @@ impl Input {
             is_swept,
             assets,
             extra_witness: Some(extra_witness),
+            intent_fee_expiry: None,
+            intent_fee_birth: None,
         }
+    }
+
+    /// Record indexer timestamps so intent-fee CEL sees the same expiry and birth as arkd.
+    pub fn set_intent_fee_timestamps(&mut self, expiry: i64, birth: i64) {
+        self.intent_fee_expiry = Some(expiry);
+        self.intent_fee_birth = Some(birth);
+    }
+
+    pub fn intent_fee_expiry(&self) -> Option<i64> {
+        self.intent_fee_expiry
+    }
+
+    pub fn intent_fee_birth(&self) -> Option<i64> {
+        self.intent_fee_birth
     }
 
     pub fn script_pubkey(&self) -> &ScriptBuf {

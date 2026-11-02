@@ -16,8 +16,13 @@ use super::mapping::{latest_pending_record_of_kind, outpoint_record, parse_outpo
 #[derive(Debug)]
 pub(super) enum PendingBatchIntentResolution {
     StillPending,
-    Spent { spend_txid: String },
+    Spent {
+        spend_txid: String,
+    },
     BoardingWindowExpired,
+    /// Registration TTL has passed and the outpoint is still unspent. Keep the row so a new
+    /// RegisterIntent is refused until one operator session has elapsed.
+    BoardingReregisterHold,
     BoardingRegistrationExpired,
 }
 
@@ -50,6 +55,12 @@ impl ArkadeSession {
                 PendingBatchIntentResolution::Spent { spend_txid } => {
                     finalized_txid = Some(spend_txid);
                 }
+                PendingBatchIntentResolution::BoardingReregisterHold => {
+                    let mut held = record;
+                    held.lifecycle_phase =
+                        crate::persistence::PendingBatchIntentLifecyclePhase::ReregisterHold;
+                    remaining.push(held);
+                }
                 PendingBatchIntentResolution::BoardingWindowExpired
                 | PendingBatchIntentResolution::BoardingRegistrationExpired => {}
             }
@@ -76,6 +87,7 @@ impl ArkadeSession {
             record,
             chain_resolution,
             current_unix_timestamp(),
+            self.boarding_round_duration_seconds(),
         ))
     }
 
@@ -231,28 +243,50 @@ fn resolve_vtxo_pending_intent(
     }
 }
 
-/// A timed-out boarding intent is abandoned after the operator registration TTL
-/// only while its inputs are still unspent inside the cooperative window.
-/// A spent output keeps its commitment txid. A closed boarding window stays closed.
+/// A timed-out boarding intent stays on the outpoint after the registration TTL.
+///
+/// The next operator session is a re-register hold: the row remains, Settle can be offered,
+/// and a new RegisterIntent is refused. After that hold, an unspent input inside the
+/// cooperative window is dropped. A spent output keeps its commitment txid. A closed
+/// boarding window stays closed.
 fn apply_boarding_registration_expiry(
     record: &PendingBatchIntentRecord,
     chain_resolution: PendingBatchIntentResolution,
     now_unix_seconds: i64,
+    session_duration_seconds: i64,
 ) -> PendingBatchIntentResolution {
     if record.kind != PendingBatchIntentKind::Board {
         return chain_resolution;
     }
-    if record.lifecycle_phase != PendingBatchIntentLifecyclePhase::TimedOut {
+    if !matches!(
+        record.lifecycle_phase,
+        PendingBatchIntentLifecyclePhase::TimedOut
+            | PendingBatchIntentLifecyclePhase::ReregisterHold
+    ) {
         return chain_resolution;
     }
     if !matches!(chain_resolution, PendingBatchIntentResolution::StillPending) {
         return chain_resolution;
     }
     let registration_age_seconds = now_unix_seconds.saturating_sub(record.registered_at);
-    if registration_age_seconds >= BOARDING_REGISTER_INTENT_TTL_SECS {
+    let hold_seconds = super::boarding::boarding_reregister_hold_seconds(session_duration_seconds);
+    if registration_age_seconds >= BOARDING_REGISTER_INTENT_TTL_SECS + hold_seconds {
         return PendingBatchIntentResolution::BoardingRegistrationExpired;
     }
+    if registration_age_seconds >= BOARDING_REGISTER_INTENT_TTL_SECS {
+        return PendingBatchIntentResolution::BoardingReregisterHold;
+    }
     chain_resolution
+}
+
+impl ArkadeSession {
+    fn boarding_round_duration_seconds(&self) -> i64 {
+        self.client
+            .server_info_snapshot()
+            .ok()
+            .and_then(|info| i64::try_from(info.session_duration).ok())
+            .unwrap_or(0)
+    }
 }
 
 fn outpoint_records_equal(
@@ -397,7 +431,7 @@ mod tests {
     }
 
     #[test]
-    fn unspent_timed_out_boarding_expires_after_registration_ttl() {
+    fn unspent_timed_out_boarding_holds_reregister_at_registration_ttl() {
         let now = 1_700_000_000;
         let record = timed_out_intent_record(
             PendingBatchIntentKind::Board,
@@ -408,6 +442,26 @@ mod tests {
                 &record,
                 PendingBatchIntentResolution::StillPending,
                 now,
+                60,
+            ),
+            PendingBatchIntentResolution::BoardingReregisterHold
+        ));
+    }
+
+    #[test]
+    fn unspent_timed_out_boarding_expires_after_session_hold() {
+        let now = 1_700_000_000;
+        let session_duration_seconds = 60;
+        let record = timed_out_intent_record(
+            PendingBatchIntentKind::Board,
+            now - BOARDING_REGISTER_INTENT_TTL_SECS - session_duration_seconds,
+        );
+        assert!(matches!(
+            apply_boarding_registration_expiry(
+                &record,
+                PendingBatchIntentResolution::StillPending,
+                now,
+                session_duration_seconds,
             ),
             PendingBatchIntentResolution::BoardingRegistrationExpired
         ));
@@ -426,6 +480,7 @@ mod tests {
                 spend_txid: "commitment".into(),
             },
             now,
+            60,
         ) {
             PendingBatchIntentResolution::Spent { spend_txid } => {
                 assert_eq!(spend_txid, "commitment");
@@ -446,6 +501,7 @@ mod tests {
                 &record,
                 PendingBatchIntentResolution::StillPending,
                 now,
+                60,
             ),
             PendingBatchIntentResolution::StillPending
         ));
@@ -463,6 +519,7 @@ mod tests {
                 &record,
                 PendingBatchIntentResolution::BoardingWindowExpired,
                 now,
+                60,
             ),
             PendingBatchIntentResolution::BoardingWindowExpired
         ));
@@ -480,6 +537,7 @@ mod tests {
                 &record,
                 PendingBatchIntentResolution::StillPending,
                 now,
+                60,
             ),
             PendingBatchIntentResolution::StillPending
         ));

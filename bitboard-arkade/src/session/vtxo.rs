@@ -473,6 +473,7 @@ impl ArkadeSession {
             })?;
         let amount_sats = status.spendable_sats;
         let onchain = [boarding_outpoint.inner()];
+        self.ensure_boarding_reregister_allowed(&onchain).await?;
         if let Some(waiting) = self
             .existing_pending_batch_join_result(&onchain, &[])
             .await?

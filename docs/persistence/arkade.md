@@ -40,7 +40,7 @@ File: `bitboard-arkade/src/persistence.rs`
 | `BitboardArkadePersistence` | Top-level JSON envelope (`version`, `engine`, `operator_identity`, `autonomous_mode`, `wallet_db`) |
 | `WalletDbSnapshot` | Boarding outputs, secret keys, VTXO snapshot, exit watches, host-tx observations, VTXO exit records, operator trust |
 | `OffchainVtxoSnapshot` | VTXO list + unilateral exit materials map (keyed by host tx) |
-| `JsonPersistenceDb` | In-memory mutex-backed DB implementing ark-client `Persistence` |
+| `JsonPersistenceDb` | In-memory mutex-backed DB. Boarding rows store `server_pk_hex` so a deprecated signer reloads as the script that was watched; older rows omit it and reload with the current signer. An address that does not match the reconstructed script is an error. |
 
 **Current version:** `BITBOARD_ARKADE_PERSISTENCE_VERSION = 12`
 

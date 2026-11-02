@@ -47,6 +47,7 @@ use bitcoin::Address;
 use bitcoin::Amount;
 use bitcoin::OutPoint;
 use bitcoin::Psbt;
+use bitcoin::SignedAmount;
 use bitcoin::TxOut;
 use bitcoin::Txid;
 use bitcoin::XOnlyPublicKey;
@@ -516,13 +517,7 @@ where
             .collect();
         let offchain_inputs: Vec<ark_fees::OffchainInput> = vtxo_inputs
             .iter()
-            .map(|input| ark_fees::OffchainInput {
-                amount: input.amount().to_sat(),
-                expiry: None,
-                birth: None,
-                input_type: ark_fees::VtxoType::Vtxo,
-                weight: 1.0,
-            })
+            .map(offchain_fee_input_from_intent)
             .collect();
         let fee = self
             .with_server_state(|state| {
@@ -734,18 +729,24 @@ where
             .map(|entry| {
                 let spend_selection = entry.spend_selection(SpendPathKind::Forfeit)?;
 
-                Ok(intent::Input::new_with_spend_selection(
-                    entry.vtxo().outpoint,
-                    entry.exit_delay()?,
-                    TxOut {
-                        value: entry.vtxo().amount,
-                        script_pubkey: entry.script_pubkey(),
-                    },
-                    entry.tapscripts(),
-                    spend_selection,
-                    false,
-                    entry.vtxo().is_swept,
-                    entry.vtxo().assets.clone(),
+                let created_at = entry.vtxo().created_at;
+                let expires_at = entry.vtxo().expires_at;
+                Ok(with_vtxo_fee_timestamps(
+                    intent::Input::new_with_spend_selection(
+                        entry.vtxo().outpoint,
+                        entry.exit_delay()?,
+                        TxOut {
+                            value: entry.vtxo().amount,
+                            script_pubkey: entry.script_pubkey(),
+                        },
+                        entry.tapscripts(),
+                        spend_selection,
+                        false,
+                        entry.vtxo().is_swept,
+                        entry.vtxo().assets.clone(),
+                    ),
+                    created_at,
+                    expires_at,
                 ))
             })
             .collect::<Result<Vec<_>, Error>>()
@@ -1412,18 +1413,24 @@ where
             .map(|entry| {
                 let spend_selection = entry.spend_selection(SpendPathKind::Forfeit)?;
 
-                Ok(intent::Input::new_with_spend_selection(
-                    entry.vtxo().outpoint,
-                    entry.exit_delay()?,
-                    TxOut {
-                        value: entry.vtxo().amount,
-                        script_pubkey: entry.script_pubkey(),
-                    },
-                    entry.tapscripts(),
-                    spend_selection,
-                    false,
-                    entry.vtxo().is_swept,
-                    entry.vtxo().assets.clone(),
+                let created_at = entry.vtxo().created_at;
+                let expires_at = entry.vtxo().expires_at;
+                Ok(with_vtxo_fee_timestamps(
+                    intent::Input::new_with_spend_selection(
+                        entry.vtxo().outpoint,
+                        entry.exit_delay()?,
+                        TxOut {
+                            value: entry.vtxo().amount,
+                            script_pubkey: entry.script_pubkey(),
+                        },
+                        entry.tapscripts(),
+                        spend_selection,
+                        false,
+                        entry.vtxo().is_swept,
+                        entry.vtxo().assets.clone(),
+                    ),
+                    created_at,
+                    expires_at,
                 ))
             })
             .collect::<Result<Vec<_>, Error>>()?;
@@ -1872,6 +1879,48 @@ where
         })
     }
 
+    /// Ask arkd what this batch shape costs, and refuse to register when the reserved
+    /// gap is smaller than that quote. Local CEL is the quote the UI shows; this is the
+    /// operator's clock and indexer expiry.
+    async fn confirm_operator_intent_fee<R>(
+        &self,
+        rng: &mut R,
+        server_info: &server::Info,
+        prepared: &PreparedIntent,
+        onchain_inputs: Vec<batch::OnChainInput>,
+        vtxo_inputs: Vec<intent::Input>,
+        output_type: BatchOutputType,
+    ) -> Result<(), Error>
+    where
+        R: Rng + CryptoRng,
+    {
+        let reserved = reserved_intent_fee(
+            &prepared.onchain_inputs,
+            &prepared.vtxo_inputs,
+            &prepared.outputs,
+        );
+        let estimate = self.prepare_intent(
+            rng,
+            onchain_inputs,
+            vtxo_inputs,
+            output_type,
+            PrepareIntentKind::EstimateFee,
+            server_info.dust,
+        )?;
+        let operator_fee = timeout_op(
+            self.inner.timeout,
+            self.network_client().estimate_fees(estimate.intent),
+        )
+        .await
+        .context("failed to confirm intent fee with the operator")??;
+        if reserved_fee_covers_operator_quote(reserved, operator_fee) {
+            return Ok(());
+        }
+        Err(Error::ad_hoc(format!(
+            "operator intent fee {operator_fee} exceeds the reserved gap {reserved}"
+        )))
+    }
+
     pub(crate) async fn join_next_batch<R>(
         &self,
         rng: &mut R,
@@ -1884,6 +1933,9 @@ where
     where
         R: Rng + CryptoRng,
     {
+        let estimate_onchain_inputs = onchain_inputs.clone();
+        let estimate_vtxo_inputs = vtxo_inputs.clone();
+        let estimate_output_type = output_type.clone();
         let prepared = self.prepare_intent(
             rng,
             onchain_inputs,
@@ -1892,6 +1944,15 @@ where
             PrepareIntentKind::Register,
             server_info.dust,
         )?;
+        self.confirm_operator_intent_fee(
+            rng,
+            server_info,
+            &prepared,
+            estimate_onchain_inputs,
+            estimate_vtxo_inputs,
+            estimate_output_type,
+        )
+        .await?;
 
         let PreparedIntent {
             intent,
@@ -2661,4 +2722,178 @@ pub fn plan_offboard_settlement<E>(
         settlement = step.settlement;
     }
     Err(OffboardPlanError::FeeDidNotStabilize)
+}
+
+fn with_vtxo_fee_timestamps(
+    mut input: intent::Input,
+    created_at: i64,
+    expires_at: i64,
+) -> intent::Input {
+    input.set_intent_fee_timestamps(expires_at, created_at);
+    input
+}
+
+fn offchain_fee_input_from_intent(input: &intent::Input) -> ark_fees::OffchainInput {
+    ark_fees::OffchainInput {
+        amount: input.amount().to_sat(),
+        expiry: input.intent_fee_expiry(),
+        birth: input.intent_fee_birth(),
+        input_type: ark_fees::VtxoType::Vtxo,
+        weight: 1.0,
+    }
+}
+
+fn intent_output_amount(output: &intent::Output) -> Amount {
+    match output {
+        intent::Output::Offchain(tx_out)
+        | intent::Output::Onchain(tx_out)
+        | intent::Output::AssetPacket(tx_out) => tx_out.value,
+    }
+}
+
+fn reserved_intent_fee(
+    onchain_inputs: &[batch::OnChainInput],
+    vtxo_inputs: &[intent::Input],
+    outputs: &[intent::Output],
+) -> Amount {
+    let input_amount = onchain_inputs
+        .iter()
+        .fold(Amount::ZERO, |total, input| total + input.amount())
+        + vtxo_inputs
+            .iter()
+            .fold(Amount::ZERO, |total, input| total + input.amount());
+    let output_amount = outputs.iter().fold(Amount::ZERO, |total, output| {
+        total + intent_output_amount(output)
+    });
+    input_amount
+        .checked_sub(output_amount)
+        .unwrap_or(Amount::ZERO)
+}
+
+/// The reserved gap covers the operator quote when it is at least that quote.
+/// A non-positive operator fee is already covered.
+pub(crate) fn reserved_fee_covers_operator_quote(
+    reserved: Amount,
+    operator_fee: SignedAmount,
+) -> bool {
+    let operator_sats = operator_fee.to_sat();
+    if operator_sats <= 0 {
+        return true;
+    }
+    reserved.to_sat() >= operator_sats as u64
+}
+
+#[cfg(test)]
+mod intent_fee_timestamp_tests {
+    use super::offchain_fee_input_from_intent;
+    use super::reserved_fee_covers_operator_quote;
+    use super::with_vtxo_fee_timestamps;
+    use ark_core::Vtxo;
+    use ark_fees::Config;
+    use ark_fees::Estimator;
+    use bitcoin::secp256k1::PublicKey;
+    use bitcoin::secp256k1::Secp256k1;
+    use bitcoin::Amount;
+    use bitcoin::Network;
+    use bitcoin::OutPoint;
+    use bitcoin::SignedAmount;
+    use bitcoin::TxOut;
+    use std::str::FromStr;
+
+    const MUTINYNET_OFFCHAIN_INPUT_PROGRAM: &str =
+        "inputType == 'vtxo' && expiry - now() > 518656.0 ? amount * 0.002 : 0.0";
+    /// 2100-01-01T00:00:00Z. Stays more than 518656 seconds ahead of `now()`.
+    const VTXO_EXPIRY_INSIDE_MUTINYNET_FEE_WINDOW: i64 = 4_102_444_800;
+
+    fn ten_thousand_sat_vtxo_input(expiry: Option<i64>) -> ark_core::intent::Input {
+        let secp = Secp256k1::new();
+        let server = PublicKey::from_str(
+            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        )
+        .expect("server key")
+        .x_only_public_key()
+        .0;
+        let owner = PublicKey::from_str(
+            "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+        )
+        .expect("owner key")
+        .x_only_public_key()
+        .0;
+        let exit_delay = bitcoin::Sequence::from_seconds_ceil(86_400).expect("exit delay");
+        let vtxo =
+            Vtxo::new_default(&secp, server, owner, exit_delay, Network::Signet).expect("vtxo");
+        let (script, control_block) = vtxo.forfeit_spend_info().expect("forfeit spend info");
+        let input = ark_core::intent::Input::new(
+            OutPoint::default(),
+            exit_delay,
+            None,
+            TxOut {
+                value: Amount::from_sat(10_000),
+                script_pubkey: vtxo.script_pubkey(),
+            },
+            vtxo.tapscripts(),
+            (script, control_block),
+            false,
+            false,
+            Vec::new(),
+        );
+        match expiry {
+            Some(expires_at) => with_vtxo_fee_timestamps(input, 1_700_000_000, expires_at),
+            None => input,
+        }
+    }
+
+    #[test]
+    fn mutinynet_intent_fee_is_zero_until_vtxo_expiry_is_set() {
+        let estimator = Estimator::new(Config {
+            intent_offchain_input_program: MUTINYNET_OFFCHAIN_INPUT_PROGRAM.to_string(),
+            ..Config::default()
+        })
+        .expect("Mutinynet offchain-input CEL compiles");
+
+        let missing_expiry = offchain_fee_input_from_intent(&ten_thousand_sat_vtxo_input(None));
+        assert_eq!(
+            estimator
+                .eval_offchain_input(missing_expiry)
+                .expect("missing expiry evaluates")
+                .to_satoshis(),
+            0
+        );
+
+        let with_expiry = offchain_fee_input_from_intent(&ten_thousand_sat_vtxo_input(Some(
+            VTXO_EXPIRY_INSIDE_MUTINYNET_FEE_WINDOW,
+        )));
+        assert_eq!(
+            with_expiry.expiry,
+            Some(VTXO_EXPIRY_INSIDE_MUTINYNET_FEE_WINDOW)
+        );
+        assert_eq!(with_expiry.birth, Some(1_700_000_000));
+        assert_eq!(
+            estimator
+                .eval_offchain_input(with_expiry)
+                .expect("future expiry evaluates")
+                .to_satoshis(),
+            20
+        );
+    }
+
+    #[test]
+    fn reserved_gap_must_cover_a_positive_operator_quote() {
+        assert!(reserved_fee_covers_operator_quote(
+            Amount::from_sat(20),
+            SignedAmount::from_sat(20)
+        ));
+        assert!(!reserved_fee_covers_operator_quote(
+            Amount::from_sat(0),
+            SignedAmount::from_sat(20)
+        ));
+        assert!(reserved_fee_covers_operator_quote(
+            Amount::from_sat(0),
+            SignedAmount::from_sat(0)
+        ));
+        assert!(reserved_fee_covers_operator_quote(
+            Amount::from_sat(0),
+            SignedAmount::from_sat(-1)
+        ));
+    }
 }

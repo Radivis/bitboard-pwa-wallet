@@ -137,6 +137,15 @@ describe('arkade-pending-batch-intent', () => {
   it('pending_overlaps_onchain_and_kind_helpers', () => {
     expect(hasPendingBatchIntent([sampleIntent])).toBe(true)
     expect(pendingOverlapsOnchain([{ ...sampleIntent, onchainOutpoints: [{ txid: 'aa', vout: 1 }] }])).toBe(true)
+    expect(
+      pendingOverlapsOnchain([
+        {
+          ...sampleIntent,
+          onchainOutpoints: [{ txid: 'aa', vout: 1 }],
+          lifecyclePhase: 'reregister_hold',
+        },
+      ]),
+    ).toBe(false)
     expect(hasPendingKind([{ ...sampleIntent, kind: 'renew' }], 'renew')).toBe(true)
   })
 
