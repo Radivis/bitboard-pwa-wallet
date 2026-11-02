@@ -433,7 +433,7 @@ where
 
     /// Boarding intents must reserve the operator intent fee in the offchain output amount
     /// (inputs − outputs). arkd rejects RegisterIntent when the implicit fee is zero.
-    fn board_to_amount_after_intent_fee(
+    pub(crate) fn board_to_amount_after_intent_fee(
         &self,
         dust: Amount,
         boarding_inputs: &[batch::OnChainInput],
@@ -515,10 +515,12 @@ where
                 amount: input.amount().to_sat(),
             })
             .collect();
-        let offchain_inputs: Vec<ark_fees::OffchainInput> = vtxo_inputs
-            .iter()
-            .map(offchain_fee_input_from_intent)
-            .collect();
+        let mut offchain_inputs = Vec::with_capacity(vtxo_inputs.len());
+        for input in vtxo_inputs {
+            if let Some(fee_input) = offchain_fee_input_from_intent(input)? {
+                offchain_inputs.push(fee_input);
+            }
+        }
         let fee = self
             .with_server_state(|state| {
                 state.fee_estimator.eval(
@@ -610,44 +612,22 @@ where
     where
         R: Rng + CryptoRng + Clone,
     {
-        let server_info = self.server_info().await?;
-
-        let (change_address, _) = self.get_offchain_address_with_server_info(&server_info)?;
-
-        let vtxo_inputs = self
-            .selected_batch_settleable_vtxo_inputs(&server_info, input_vtxos)
+        let PreparedVtxoSelectionOffboard {
+            server_info,
+            vtxo_inputs,
+            to_address,
+            change_address,
+            settlement,
+        } = self
+            .prepare_offboard_vtxo_selection(input_vtxos, to_address, to_amount)
             .await?;
-
-        if vtxo_inputs.is_empty() {
-            return Err(Error::ad_hoc("no matching VTXO outpoints found"));
-        }
-
-        // Check that total amount is sufficient
-        let total_input_amount = vtxo_inputs
-            .iter()
-            .fold(Amount::ZERO, |acc, vtxo| acc + vtxo.amount());
-
-        let onchain_fee = self.eval_onchain_output_fee(ark_fees::Output {
-            amount: to_amount.to_sat(),
-            script: to_address.script_pubkey().to_string(),
-        })?;
-
-        // Fee comes out of change, not the send amount.
-        let change_amount = total_input_amount
-            .checked_sub(to_amount)
-            .and_then(|a| a.checked_sub(onchain_fee))
-            .ok_or_else(|| {
-                Error::coin_select(format!(
-                    "insufficient VTXO amount: {total_input_amount} < {to_amount} (send) + {onchain_fee} (fee)"
-                ))
-            })?;
 
         tracing::info!(
             %to_address,
-            send_amount = %to_amount,
-            fee = %onchain_fee,
+            send_amount = %settlement.onchain_amount,
+            fee = %settlement.reserved_fee,
             change_address = %change_address.encode(),
-            %change_amount,
+            change_amount = %settlement.change_amount,
             "Attempting to collaboratively redeem outputs"
         );
 
@@ -659,9 +639,9 @@ where
                 vtxo_inputs.clone(),
                 BatchOutputType::OffBoard {
                     to_address: to_address.clone(),
-                    to_amount,
+                    to_amount: settlement.onchain_amount,
                     change_address,
-                    change_amount,
+                    change_amount: settlement.change_amount,
                 },
                 false,
             )
@@ -726,29 +706,7 @@ where
 
         settleable
             .into_iter()
-            .map(|entry| {
-                let spend_selection = entry.spend_selection(SpendPathKind::Forfeit)?;
-
-                let created_at = entry.vtxo().created_at;
-                let expires_at = entry.vtxo().expires_at;
-                Ok(with_vtxo_fee_timestamps(
-                    intent::Input::new_with_spend_selection(
-                        entry.vtxo().outpoint,
-                        entry.exit_delay()?,
-                        TxOut {
-                            value: entry.vtxo().amount,
-                            script_pubkey: entry.script_pubkey(),
-                        },
-                        entry.tapscripts(),
-                        spend_selection,
-                        false,
-                        entry.vtxo().is_swept,
-                        entry.vtxo().assets.clone(),
-                    ),
-                    created_at,
-                    expires_at,
-                ))
-            })
+            .map(intent_input_from_annotated_vtxo)
             .collect::<Result<Vec<_>, Error>>()
     }
 
@@ -1410,29 +1368,7 @@ where
 
         let vtxo_inputs = settleable_vtxos
             .into_iter()
-            .map(|entry| {
-                let spend_selection = entry.spend_selection(SpendPathKind::Forfeit)?;
-
-                let created_at = entry.vtxo().created_at;
-                let expires_at = entry.vtxo().expires_at;
-                Ok(with_vtxo_fee_timestamps(
-                    intent::Input::new_with_spend_selection(
-                        entry.vtxo().outpoint,
-                        entry.exit_delay()?,
-                        TxOut {
-                            value: entry.vtxo().amount,
-                            script_pubkey: entry.script_pubkey(),
-                        },
-                        entry.tapscripts(),
-                        spend_selection,
-                        false,
-                        entry.vtxo().is_swept,
-                        entry.vtxo().assets.clone(),
-                    ),
-                    created_at,
-                    expires_at,
-                ))
-            })
+            .map(intent_input_from_annotated_vtxo)
             .collect::<Result<Vec<_>, Error>>()?;
 
         Ok((boarding_inputs, vtxo_inputs, total_amount))
@@ -1811,20 +1747,88 @@ where
     }
 
     /// Fee quote for [`Self::collaborative_redeem_excluding_vtxos`].
+    ///
+    /// `settlement.reserved_fee` is the gap [`Self::join_next_batch`] will reserve. The operator
+    /// `EstimateIntentFee` check still runs at register time.
     pub async fn quote_collaborative_redeem_excluding_vtxos<R>(
         &self,
         _rng: &mut R,
         to_address: Address,
         to_amount: Amount,
         exclude_vtxos: &HashSet<OutPoint>,
-    ) -> Result<OffboardSettlement, Error>
+    ) -> Result<CollaborativeRedeemQuote, Error>
     where
         R: Rng + CryptoRng + Clone,
     {
-        Ok(self
+        let prepared = self
             .prepare_offboard_excluding_vtxos(to_address, to_amount, exclude_vtxos)
-            .await?
-            .settlement)
+            .await?;
+        Ok(CollaborativeRedeemQuote {
+            settlement: prepared.settlement,
+            fees: prepared.server_info.fees,
+        })
+    }
+
+    /// Same reservation as [`Self::quote_collaborative_redeem_excluding_vtxos`], for an explicit
+    /// VTXO selection and no boarding inputs.
+    pub(crate) async fn prepare_offboard_vtxo_selection(
+        &self,
+        input_vtxos: impl IntoIterator<Item = OutPoint>,
+        to_address: Address,
+        requested_onchain: Amount,
+    ) -> Result<PreparedVtxoSelectionOffboard, Error> {
+        let server_info = self.server_info().await?;
+        let (change_address, _) = self.get_offchain_address_with_server_info(&server_info)?;
+        let vtxo_inputs = self
+            .selected_batch_settleable_vtxo_inputs(&server_info, input_vtxos)
+            .await?;
+        if vtxo_inputs.is_empty() {
+            return Err(Error::ad_hoc("no matching VTXO outpoints found"));
+        }
+        let total_input_amount = vtxo_inputs
+            .iter()
+            .fold(Amount::ZERO, |acc, input| acc + input.amount());
+        let onchain_script = to_address.script_pubkey().to_string();
+        let change_script = change_address.to_p2tr_script_pubkey().to_string();
+        let settlement = self.reserved_offboard_settlement(OffboardReservation {
+            boarding_inputs: &[],
+            vtxo_inputs: &vtxo_inputs,
+            total: total_input_amount,
+            requested_onchain,
+            dust: server_info.dust,
+            onchain_script: &onchain_script,
+            change_script: &change_script,
+        })?;
+        Ok(PreparedVtxoSelectionOffboard {
+            server_info,
+            vtxo_inputs,
+            to_address,
+            change_address,
+            settlement,
+        })
+    }
+
+    /// What [`Self::join_next_batch`] will reserve for this off-board shape.
+    fn reserved_offboard_settlement(
+        &self,
+        reservation: OffboardReservation<'_>,
+    ) -> Result<OffboardSettlement, Error> {
+        plan_offboard_settlement(
+            reservation.total,
+            reservation.requested_onchain,
+            reservation.dust,
+            |onchain_amount, change_amount| {
+                self.eval_offboard_intent_fee(
+                    reservation.boarding_inputs,
+                    reservation.vtxo_inputs,
+                    reservation.onchain_script,
+                    onchain_amount,
+                    reservation.change_script,
+                    change_amount,
+                )
+            },
+        )
+        .map_err(offboard_plan_error)
     }
 
     async fn prepare_offboard_excluding_vtxos(
@@ -1848,26 +1852,14 @@ where
             .unwrap_or(Amount::ZERO);
         let onchain_script = to_address.script_pubkey().to_string();
         let change_script = change_address.to_p2tr_script_pubkey().to_string();
-        let settlement = plan_offboard_settlement(
-            total_amount,
+        let settlement = self.reserved_offboard_settlement(OffboardReservation {
+            boarding_inputs: &boarding_inputs,
+            vtxo_inputs: &vtxo_inputs,
+            total: total_amount,
             requested_onchain,
-            server_info.dust,
-            |onchain_amount, change_amount| {
-                self.eval_offboard_intent_fee(
-                    &boarding_inputs,
-                    &vtxo_inputs,
-                    &onchain_script,
-                    onchain_amount,
-                    &change_script,
-                    change_amount,
-                )
-            },
-        )
-        .map_err(|error| match error {
-            OffboardPlanError::Split(error) | OffboardPlanError::Quote(error) => error,
-            OffboardPlanError::FeeDidNotStabilize => {
-                Error::ad_hoc("collaborative exit intent fee did not stabilize")
-            }
+            dust: server_info.dust,
+            onchain_script: &onchain_script,
+            change_script: &change_script,
         })?;
         Ok(PreparedOffboard {
             server_info,
@@ -2627,6 +2619,16 @@ pub enum OffboardPlanError<E> {
     FeeDidNotStabilize,
 }
 
+struct OffboardReservation<'a> {
+    boarding_inputs: &'a [batch::OnChainInput],
+    vtxo_inputs: &'a [intent::Input],
+    total: Amount,
+    requested_onchain: Amount,
+    dust: Amount,
+    onchain_script: &'a str,
+    change_script: &'a str,
+}
+
 struct PreparedOffboard {
     server_info: server::Info,
     boarding_inputs: Vec<batch::OnChainInput>,
@@ -2634,6 +2636,29 @@ struct PreparedOffboard {
     to_address: Address,
     change_address: ArkAddress,
     settlement: OffboardSettlement,
+}
+
+pub(crate) struct PreparedVtxoSelectionOffboard {
+    pub(crate) server_info: server::Info,
+    pub(crate) vtxo_inputs: Vec<intent::Input>,
+    pub(crate) to_address: Address,
+    pub(crate) change_address: ArkAddress,
+    pub(crate) settlement: OffboardSettlement,
+}
+
+/// Local reservation for a collaborative exit, plus the operator fee programs used to price it.
+pub struct CollaborativeRedeemQuote {
+    pub settlement: OffboardSettlement,
+    pub fees: Option<server::FeeInfo>,
+}
+
+fn offboard_plan_error(error: OffboardPlanError<Error>) -> Error {
+    match error {
+        OffboardPlanError::Split(error) | OffboardPlanError::Quote(error) => error,
+        OffboardPlanError::FeeDidNotStabilize => {
+            Error::ad_hoc("collaborative exit intent fee did not stabilize")
+        }
+    }
 }
 
 /// Split a collaborative exit after one fee quote.
@@ -2724,7 +2749,7 @@ pub fn plan_offboard_settlement<E>(
     Err(OffboardPlanError::FeeDidNotStabilize)
 }
 
-fn with_vtxo_fee_timestamps(
+pub(crate) fn with_vtxo_fee_timestamps(
     mut input: intent::Input,
     created_at: i64,
     expires_at: i64,
@@ -2733,14 +2758,57 @@ fn with_vtxo_fee_timestamps(
     input
 }
 
-fn offchain_fee_input_from_intent(input: &intent::Input) -> ark_fees::OffchainInput {
-    ark_fees::OffchainInput {
+fn intent_input_from_annotated_vtxo(
+    entry: &crate::contract::AnnotatedVtxo,
+) -> Result<intent::Input, Error> {
+    let spend_selection = entry.spend_selection(SpendPathKind::Forfeit)?;
+    let vtxo = entry.vtxo();
+    Ok(with_vtxo_fee_timestamps(
+        intent::Input::new_with_spend_selection(
+            vtxo.outpoint,
+            entry.exit_delay()?,
+            TxOut {
+                value: vtxo.amount,
+                script_pubkey: entry.script_pubkey(),
+            },
+            entry.tapscripts(),
+            spend_selection,
+            false,
+            vtxo.is_swept,
+            vtxo.assets.clone(),
+        ),
+        vtxo.created_at,
+        vtxo.expires_at,
+    ))
+}
+
+/// Indexer VTXOs must carry expiry and birth. Inputs that opted out (ArkNotes) are skipped.
+/// A VTXO with neither is an error, so a forgotten timestamp cannot quote as zero.
+fn offchain_fee_input_from_intent(
+    input: &intent::Input,
+) -> Result<Option<ark_fees::OffchainInput>, Error> {
+    if !input.includes_intent_fee() {
+        return Ok(None);
+    }
+    let expiry = input.intent_fee_expiry().ok_or_else(|| {
+        Error::ad_hoc(format!(
+            "VTXO {} is missing indexer expiry for the intent fee",
+            input.outpoint()
+        ))
+    })?;
+    let birth = input.intent_fee_birth().ok_or_else(|| {
+        Error::ad_hoc(format!(
+            "VTXO {} is missing indexer birth for the intent fee",
+            input.outpoint()
+        ))
+    })?;
+    Ok(Some(ark_fees::OffchainInput {
         amount: input.amount().to_sat(),
-        expiry: input.intent_fee_expiry(),
-        birth: input.intent_fee_birth(),
+        expiry: Some(expiry),
+        birth: Some(birth),
         input_type: ark_fees::VtxoType::Vtxo,
         weight: 1.0,
-    }
+    }))
 }
 
 fn intent_output_amount(output: &intent::Output) -> Amount {
@@ -2851,18 +2919,17 @@ mod intent_fee_timestamp_tests {
         })
         .expect("Mutinynet offchain-input CEL compiles");
 
-        let missing_expiry = offchain_fee_input_from_intent(&ten_thousand_sat_vtxo_input(None));
-        assert_eq!(
-            estimator
-                .eval_offchain_input(missing_expiry)
-                .expect("missing expiry evaluates")
-                .to_satoshis(),
-            0
-        );
+        let missing_expiry = offchain_fee_input_from_intent(&ten_thousand_sat_vtxo_input(None))
+            .expect_err("a VTXO without indexer expiry is not priced as zero");
+        assert!(missing_expiry
+            .to_string()
+            .contains("missing indexer expiry"));
 
         let with_expiry = offchain_fee_input_from_intent(&ten_thousand_sat_vtxo_input(Some(
             VTXO_EXPIRY_INSIDE_MUTINYNET_FEE_WINDOW,
-        )));
+        )))
+        .expect("expiry is priced")
+        .expect("indexed VTXO is included");
         assert_eq!(
             with_expiry.expiry,
             Some(VTXO_EXPIRY_INSIDE_MUTINYNET_FEE_WINDOW)

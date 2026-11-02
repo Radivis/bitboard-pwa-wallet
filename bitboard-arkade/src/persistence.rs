@@ -69,10 +69,6 @@ pub struct OperatorIdentity {
 pub struct BoardingOutputSnapshot {
     pub owner_pk_hex: String,
     pub exit_delay_consensus: u32,
-    /// Server signer this boarding script was built for. Absent on blobs saved before the
-    /// field existed; those rows reload with the current load-context signer.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub server_pk_hex: Option<String>,
     pub address: String,
 }
 
@@ -763,39 +759,31 @@ impl JsonPersistenceDb {
         BoardingOutputSnapshot {
             owner_pk_hex: boarding_output.owner_pk().to_string(),
             exit_delay_consensus: boarding_output.exit_delay().to_consensus_u32(),
-            server_pk_hex: Some(boarding_output.server_pk().to_string()),
             address: boarding_output.address().to_string(),
         }
     }
 
-    pub fn boarding_output_from_snapshot(
+    /// Rebuild a row with the current load-context signer.
+    ///
+    /// `Ok(None)` means the stored address belongs to some other server key. The watch derives
+    /// those scripts from live operator info; the snapshot does not keep a signer for them.
+    pub fn boarding_output_for_current_signer(
         snapshot: &BoardingOutputSnapshot,
-        fallback_server: XOnlyPublicKey,
+        server: XOnlyPublicKey,
         network: Network,
-    ) -> Result<BoardingOutput, Error> {
+    ) -> Result<Option<BoardingOutput>, Error> {
         let secp = Secp256k1::new();
         let owner: XOnlyPublicKey = snapshot
             .owner_pk_hex
             .parse()
             .map_err(|error| Error::wallet(format!("invalid owner pk: {error}")))?;
-        let server = match snapshot.server_pk_hex.as_deref() {
-            Some(server_pk_hex) => server_pk_hex
-                .parse()
-                .map_err(|error| Error::wallet(format!("invalid boarding server pk: {error}")))?,
-            None => fallback_server,
-        };
         let exit_delay = bitcoin::Sequence::from_consensus(snapshot.exit_delay_consensus);
         let boarding_output = BoardingOutput::new(&secp, server, owner, exit_delay, network)
             .map_err(|error| Error::wallet(error.to_string()))?;
         if boarding_output.address().to_string() != snapshot.address {
-            return Err(Error::wallet(format!(
-                "boarding output address mismatch for {}: persisted {} but reconstructed {}",
-                snapshot.owner_pk_hex,
-                snapshot.address,
-                boarding_output.address(),
-            )));
+            return Ok(None);
         }
-        Ok(boarding_output)
+        Ok(Some(boarding_output))
     }
 }
 
@@ -857,8 +845,12 @@ impl JsonPersistenceDb {
         boarding_output: BoardingOutput,
     ) -> Result<(), Error> {
         let owner_pk = boarding_output.owner_pk();
-        let snapshot = Self::boarding_output_to_snapshot(&boarding_output);
         let mut state = lock_persistence_result(&self.inner)?;
+        let current_server = lock_persistence_result(&self.load_context)?.map(|(_, server)| server);
+        if current_server.is_some_and(|server| boarding_output.server_pk() != server) {
+            return Ok(());
+        }
+        let snapshot = Self::boarding_output_to_snapshot(&boarding_output);
         state
             .secret_keys_by_owner_pk_hex
             .insert(owner_pk.to_string(), hex::encode(sk.secret_bytes()));
@@ -869,7 +861,6 @@ impl JsonPersistenceDb {
         {
             existing.owner_pk_hex = snapshot.owner_pk_hex;
             existing.exit_delay_consensus = snapshot.exit_delay_consensus;
-            existing.server_pk_hex = snapshot.server_pk_hex;
         } else {
             state.boarding_outputs.push(snapshot);
         }
@@ -877,14 +868,21 @@ impl JsonPersistenceDb {
     }
 
     pub fn load_boarding_outputs(&self) -> Result<Vec<BoardingOutput>, Error> {
-        let state = lock_persistence_result(&self.inner)?;
+        let mut state = lock_persistence_result(&self.inner)?;
         let (network, server) = lock_persistence_result(&self.load_context)?
             .ok_or_else(|| Error::wallet("boarding load context not configured"))?;
-        state
-            .boarding_outputs
-            .iter()
-            .map(|snapshot| Self::boarding_output_from_snapshot(snapshot, server, network))
-            .collect()
+        let mut loaded = Vec::new();
+        let mut dropped_indexes = Vec::new();
+        for (index, snapshot) in state.boarding_outputs.iter().enumerate() {
+            match Self::boarding_output_for_current_signer(snapshot, server, network)? {
+                Some(boarding_output) => loaded.push(boarding_output),
+                None => dropped_indexes.push(index),
+            }
+        }
+        for index in dropped_indexes.into_iter().rev() {
+            state.boarding_outputs.remove(index);
+        }
+        Ok(loaded)
     }
 
     /// Owner key stored beside a boarding output. Spend paths have not called this yet.

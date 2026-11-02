@@ -1010,33 +1010,45 @@ where
         let (refund_address, _) = self.get_offchain_address_with_server_info(&server_info)?;
         let refund_amount = swap_data.amount;
 
-        let vhtlc_input = intent::Input::new(
-            vhtlc_outpoint.outpoint,
-            parse_sequence_number(timeout_block_heights.unilateral_refund as i64)
-                .map_err(|e| Error::ad_hoc(format!("invalid unilateral refund timeout: {e}")))?,
-            Some(absolute::LockTime::from_consensus(
-                timeout_block_heights.refund,
-            )),
-            TxOut {
-                value: refund_amount,
-                script_pubkey,
-            },
-            vhtlc.tapscripts(),
-            (script_ver.0, control_block),
-            false,
-            true,
-            vhtlc_outpoint.assets,
-        );
+        let vtxo_inputs = vec![crate::batch::with_vtxo_fee_timestamps(
+            intent::Input::new(
+                vhtlc_outpoint.outpoint,
+                parse_sequence_number(timeout_block_heights.unilateral_refund as i64).map_err(
+                    |e| Error::ad_hoc(format!("invalid unilateral refund timeout: {e}")),
+                )?,
+                Some(absolute::LockTime::from_consensus(
+                    timeout_block_heights.refund,
+                )),
+                TxOut {
+                    value: refund_amount,
+                    script_pubkey,
+                },
+                vhtlc.tapscripts(),
+                (script_ver.0, control_block),
+                false,
+                true,
+                vhtlc_outpoint.assets.clone(),
+            ),
+            vhtlc_outpoint.created_at,
+            vhtlc_outpoint.expires_at,
+        )];
+        let to_amount = self.board_to_amount_after_intent_fee(
+            server_info.dust,
+            &[],
+            &vtxo_inputs,
+            refund_amount,
+            &refund_address,
+        )?;
 
         let commitment_txid = self
             .join_next_batch(
                 rng,
                 &server_info,
                 Vec::new(),
-                vec![vhtlc_input],
+                vtxo_inputs,
                 BatchOutputType::Board {
                     to_address: refund_address,
-                    to_amount: refund_amount,
+                    to_amount,
                 },
                 false,
             )

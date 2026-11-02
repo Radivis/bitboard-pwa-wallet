@@ -57,6 +57,8 @@ pub struct Input {
     intent_fee_expiry: Option<i64>,
     /// Indexer birth (`created_at`) for operator intent-fee programs. Not part of the proof.
     intent_fee_birth: Option<i64>,
+    /// False for inputs that are not indexer VTXOs, such as ArkNotes.
+    include_in_intent_fee: bool,
 }
 
 impl Input {
@@ -84,6 +86,7 @@ impl Input {
             extra_witness: None,
             intent_fee_expiry: None,
             intent_fee_birth: None,
+            include_in_intent_fee: true,
         }
     }
 
@@ -112,6 +115,7 @@ impl Input {
                 .then_some(spend_selection.extra_witness),
             intent_fee_expiry: None,
             intent_fee_birth: None,
+            include_in_intent_fee: true,
         }
     }
 
@@ -141,6 +145,7 @@ impl Input {
             extra_witness: Some(extra_witness),
             intent_fee_expiry: None,
             intent_fee_birth: None,
+            include_in_intent_fee: true,
         }
     }
 
@@ -148,6 +153,19 @@ impl Input {
     pub fn set_intent_fee_timestamps(&mut self, expiry: i64, birth: i64) {
         self.intent_fee_expiry = Some(expiry);
         self.intent_fee_birth = Some(birth);
+        self.include_in_intent_fee = true;
+    }
+
+    /// Leave this input out of the local intent-fee quote.
+    ///
+    /// ArkNotes are not indexer VTXOs. Pricing them with a missing expiry would quote 0 and
+    /// hide a forgotten timestamp on a real VTXO.
+    pub fn omit_from_intent_fee(&mut self) {
+        self.include_in_intent_fee = false;
+    }
+
+    pub fn includes_intent_fee(&self) -> bool {
+        self.include_in_intent_fee
     }
 
     pub fn intent_fee_expiry(&self) -> Option<i64> {

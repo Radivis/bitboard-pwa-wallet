@@ -86,8 +86,8 @@ mod unilateral_exit;
 mod utils;
 
 pub use crate::batch::{
-    offboard_outputs_for_fee, plan_offboard_settlement, JoinBatchOutcome, OffboardPlanError,
-    OffboardSettlement, RegisteredBatchIntent,
+    offboard_outputs_for_fee, plan_offboard_settlement, CollaborativeRedeemQuote, JoinBatchOutcome,
+    OffboardPlanError, OffboardSettlement, RegisteredBatchIntent,
 };
 pub use crate::batch_join_hooks::{
     is_batch_join_in_flight, set_batch_join_abort, set_on_intent_registered,
@@ -1157,12 +1157,6 @@ where
             .read()
             .map(|state| f(&state))
             .map_err(|_| Error::ad_hoc("client server state lock poisoned"))
-    }
-
-    fn eval_onchain_output_fee(&self, output: ark_fees::Output) -> Result<Amount, Error> {
-        self.with_server_state(|state| state.fee_estimator.eval_onchain_output(output))?
-            .map(|fee| Amount::from_sat(fee.to_satoshis()))
-            .map_err(Error::ad_hoc)
     }
 
     /// Force-fetch the latest Ark server `/info` and replace the cached server state.

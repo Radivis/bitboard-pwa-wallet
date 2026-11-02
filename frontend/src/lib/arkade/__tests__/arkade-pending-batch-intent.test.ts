@@ -12,6 +12,7 @@ import {
   pendingBatchIntentDestinationAddress,
   pendingBatchIntentKindLabel,
   pendingBatchIntentProcessingMessage,
+  pendingBatchIntentReregisterHoldMessage,
   pendingBatchIntentSucceededMessage,
   pendingBatchIntentTimedOutMessage,
   pendingBatchIntentWaitingMessage,
@@ -171,6 +172,12 @@ describe('arkade-pending-batch-intent', () => {
     }
     expect(pendingIntentBannerPhase(processingBoard)).toBe('processing')
     expect(pendingIntentBannerPhase(timedOutBoard)).toBe('timed_out')
+    expect(
+      pendingIntentBannerPhase({
+        ...timedOutBoard,
+        lifecyclePhase: 'reregister_hold',
+      }),
+    ).toBe('reregister_hold')
     expect(pendingIntentAllowsCancel(processingBoard)).toBe(false)
     expect(pendingIntentAllowsRetry(processingBoard)).toBe(false)
     expect(pendingIntentAllowsRetry(timedOutBoard, 1 + BOARDING_REGISTER_INTENT_TTL_SECS)).toBe(
@@ -228,6 +235,22 @@ describe('arkade-pending-batch-intent', () => {
         1_000 + BOARDING_REGISTER_INTENT_TTL_SECS,
       ),
     ).toBe('Retry')
+  })
+
+  it('reregister_hold_keeps_retry_disabled_after_the_registration_ttl', () => {
+    const heldBoard = {
+      ...sampleIntent,
+      intentId: 'intent-1',
+      onchainOutpoints: [{ txid: 'aa', vout: 1 }],
+      lifecyclePhase: 'reregister_hold' as const,
+      registeredAt: 1_000,
+    }
+    expect(pendingIntentBannerPhase(heldBoard)).toBe('reregister_hold')
+    expect(pendingIntentShowsRetry(heldBoard)).toBe(true)
+    expect(
+      pendingIntentAllowsRetry(heldBoard, 1_000 + BOARDING_REGISTER_INTENT_TTL_SECS + 60),
+    ).toBe(false)
+    expect(pendingBatchIntentReregisterHoldMessage()).toContain('not enough intent confirmations')
   })
 
   it('pending_intent_allows_retry_allows_boarding_after_ttl', () => {

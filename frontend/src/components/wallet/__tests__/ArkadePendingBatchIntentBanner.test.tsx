@@ -8,6 +8,7 @@ import { ArkadePanel } from '@/components/wallet/ArkadePanel'
 import type { ArkadePendingBatchIntent } from '@/workers/arkade-api'
 import {
   markPendingBatchIntentCancelled,
+  pendingOverlapsOnchain,
   resetPendingBatchIntentSessionTracking,
 } from '@/lib/arkade/arkade-pending-batch-intent'
 import { truncateAddress } from '@/lib/wallet/bitcoin-utils'
@@ -103,8 +104,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 
 vi.mock('@/hooks/useArkadeQueries', () => ({
   usePendingBatchIntents: () => pendingIntentsRef.current,
-  useHasPendingOnchainBatchIntent: () =>
-    pendingIntentsRef.current.some((intent) => intent.onchainOutpoints.length > 0),
+  useHasPendingOnchainBatchIntent: () => pendingOverlapsOnchain(pendingIntentsRef.current),
   useHasPendingBatchIntentKind: (kind: string) =>
     pendingIntentsRef.current.some((intent) => intent.kind === kind),
   useArkadeCancelPendingBatchIntentMutation: () => ({ mutate: vi.fn(), isPending: false }),
@@ -364,6 +364,32 @@ describe('ArkadePendingBatchIntentBanner', () => {
     expect(screen.queryByRole('button', { name: 'Settling…' })).not.toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'Recover now' })[0]).toBeDisabled()
     expect(screen.queryByRole('button', { name: 'Recovering…' })).not.toBeInTheDocument()
+  })
+
+  it('reregister_hold_shows_the_round_warning_and_disables_retry', () => {
+    pendingIntentsRef.current = [
+      {
+        ...samplePendingIntent,
+        lifecyclePhase: 'reregister_hold',
+      },
+    ]
+    renderWithProviders(
+      <>
+        <ArkadePendingBatchIntentBanner />
+        <ArkadeBoardPage />
+      </>,
+    )
+    const banners = screen.getAllByTestId('arkade-pending-batch-intent-banner')
+    expect(banners.length).toBeGreaterThan(0)
+    for (const banner of banners) {
+      expect(banner).toHaveAttribute('data-lifecycle-phase', 'reregister_hold')
+    }
+    expect(screen.getAllByText(/not enough intent confirmations/).length).toBeGreaterThan(0)
+    for (const retryButton of screen.getAllByRole('button', { name: 'Retry' })) {
+      expect(retryButton).toBeDisabled()
+    }
+    expect(screen.getByRole('button', { name: 'Settle boarding UTXO' })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
   })
 
   it('timed_out_boarding_shows_disabled_retry_during_cooldown', () => {

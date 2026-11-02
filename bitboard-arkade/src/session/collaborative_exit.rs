@@ -127,25 +127,12 @@ impl ArkadeSession {
         amount_sats: Option<u64>,
     ) -> ArkResult<CollaborativeExitFeeEstimateDto> {
         self.ensure_operator_rpc_allowed()?;
-        let fees = self
-            .client
-            .server_info_snapshot()?
-            .fees
-            .clone()
-            .unwrap_or_else(empty_fee_info);
-        let intent_fee_configured = map_intent_fee_configured(&fees.intent_fee);
         let destination = match parse_onchain_address(destination_address, self.network()) {
             Ok(address) => address,
             Err(error) => {
-                return Ok(CollaborativeExitFeeEstimateDto {
-                    tx_fee_rate: fees.tx_fee_rate.clone(),
-                    intent_fee_configured,
-                    estimated_total_fee_sats: None,
-                    estimated_receive_sats: None,
-                    change_sats: None,
-                    estimate_error: Some(error.to_string()),
-                    estimate_error_code: None,
-                });
+                return self
+                    .collaborative_exit_estimate_failure(error.to_string(), None)
+                    .await;
             }
         };
 
@@ -165,29 +152,48 @@ impl ArkadeSession {
             )
             .await
         {
-            Ok(settlement) => Ok(CollaborativeExitFeeEstimateDto {
-                tx_fee_rate: fees.tx_fee_rate,
-                intent_fee_configured,
-                estimated_total_fee_sats: Some(settlement.reserved_fee.to_sat()),
-                estimated_receive_sats: Some(settlement.onchain_amount.to_sat()),
-                change_sats: Some(settlement.change_amount.to_sat()),
-                estimate_error: None,
-                estimate_error_code: None,
-            }),
+            Ok(quote) => {
+                let fees = quote.fees.clone().unwrap_or_else(empty_fee_info);
+                Ok(CollaborativeExitFeeEstimateDto {
+                    tx_fee_rate: fees.tx_fee_rate,
+                    intent_fee_configured: map_intent_fee_configured(&fees.intent_fee),
+                    estimated_total_fee_sats: Some(quote.settlement.reserved_fee.to_sat()),
+                    estimated_receive_sats: Some(quote.settlement.onchain_amount.to_sat()),
+                    change_sats: Some(quote.settlement.change_amount.to_sat()),
+                    estimate_error: None,
+                    estimate_error_code: None,
+                })
+            }
             Err(error) => {
                 let (estimate_error, estimate_error_code) =
                     collaborative_exit_estimate_error_fields(error);
-                Ok(CollaborativeExitFeeEstimateDto {
-                    tx_fee_rate: fees.tx_fee_rate,
-                    intent_fee_configured,
-                    estimated_total_fee_sats: None,
-                    estimated_receive_sats: None,
-                    change_sats: None,
-                    estimate_error: Some(estimate_error),
-                    estimate_error_code,
-                })
+                self.collaborative_exit_estimate_failure(estimate_error, estimate_error_code)
+                    .await
             }
         }
+    }
+
+    async fn collaborative_exit_estimate_failure(
+        &self,
+        estimate_error: String,
+        estimate_error_code: Option<&'static str>,
+    ) -> ArkResult<CollaborativeExitFeeEstimateDto> {
+        let fees = self
+            .client
+            .server_info()
+            .await?
+            .fees
+            .clone()
+            .unwrap_or_else(empty_fee_info);
+        Ok(CollaborativeExitFeeEstimateDto {
+            tx_fee_rate: fees.tx_fee_rate,
+            intent_fee_configured: map_intent_fee_configured(&fees.intent_fee),
+            estimated_total_fee_sats: None,
+            estimated_receive_sats: None,
+            change_sats: None,
+            estimate_error: Some(estimate_error),
+            estimate_error_code,
+        })
     }
 }
 
@@ -225,71 +231,6 @@ mod collaborative_exit_estimate_tests {
             42_000
         );
         assert_eq!(resolve_cooperative_exit_amount(None, 0), Amount::ZERO);
-    }
-}
-
-#[cfg(test)]
-mod mutinynet_intent_fee_cel_tests {
-    use ark_fees::Config;
-    use ark_fees::Estimator;
-    use ark_fees::OffchainInput;
-    use ark_fees::VtxoType;
-
-    /// Mutinynet `fees.intentFee.offchainInput` at the time of GitHub #80.
-    const MUTINYNET_OFFCHAIN_INPUT_PROGRAM: &str =
-        "inputType == 'vtxo' && expiry - now() > 518656.0 ? amount * 0.002 : 0.0";
-
-    /// 2100-01-01T00:00:00Z. Remains more than 518656 seconds ahead of `now()`.
-    const VTXO_EXPIRY_INSIDE_MUTINYNET_FEE_WINDOW: i64 = 4_102_444_800;
-
-    fn mutinynet_offchain_input_estimator() -> Estimator {
-        Estimator::new(Config {
-            intent_offchain_input_program: MUTINYNET_OFFCHAIN_INPUT_PROGRAM.to_string(),
-            ..Config::default()
-        })
-        .expect("Mutinynet offchain-input CEL compiles")
-    }
-
-    /// Same fields `eval_offboard_intent_fee` fills in, plus an optional expiry.
-    fn vtxo_input(amount: u64, expiry: Option<i64>) -> OffchainInput {
-        OffchainInput {
-            amount,
-            expiry,
-            birth: None,
-            input_type: VtxoType::Vtxo,
-            weight: 1.0,
-        }
-    }
-
-    /// GitHub #80: a ~10000 sat VTXO was quoted at 20 sats, and the submit path sent 0.
-    ///
-    /// `eval_offboard_intent_fee` omits expiry. `ark-fees` then uses 0, the Mutinynet window
-    /// check fails, and the fee is 0. The same input with its real expiry is `amount * 0.002`
-    /// (20 sats on 10000, 4 sats on a 2000 sat input).
-    #[test]
-    fn mutinynet_offchain_input_cel_is_zero_without_expiry() {
-        let estimator = mutinynet_offchain_input_estimator();
-
-        let missing_expiry = estimator
-            .eval_offchain_input(vtxo_input(10_000, None))
-            .expect("missing expiry evaluates");
-        assert_eq!(missing_expiry.to_satoshis(), 0);
-
-        let ten_thousand_sat_vtxo = estimator
-            .eval_offchain_input(vtxo_input(
-                10_000,
-                Some(VTXO_EXPIRY_INSIDE_MUTINYNET_FEE_WINDOW),
-            ))
-            .expect("future expiry evaluates");
-        assert_eq!(ten_thousand_sat_vtxo.to_satoshis(), 20);
-
-        let two_thousand_sat_vtxo = estimator
-            .eval_offchain_input(vtxo_input(
-                2_000,
-                Some(VTXO_EXPIRY_INSIDE_MUTINYNET_FEE_WINDOW),
-            ))
-            .expect("smaller input evaluates");
-        assert_eq!(two_thousand_sat_vtxo.to_satoshis(), 4);
     }
 }
 

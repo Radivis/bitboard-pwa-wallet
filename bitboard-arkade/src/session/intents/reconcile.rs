@@ -280,7 +280,7 @@ fn apply_boarding_registration_expiry(
 }
 
 impl ArkadeSession {
-    fn boarding_round_duration_seconds(&self) -> i64 {
+    pub(super) fn boarding_round_duration_seconds(&self) -> i64 {
         self.client
             .server_info_snapshot()
             .ok()

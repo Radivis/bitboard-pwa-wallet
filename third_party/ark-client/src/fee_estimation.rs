@@ -22,7 +22,7 @@ where
     ///
     /// This function calculates the expected fee for moving funds from the Ark protocol
     /// back to a standard on-chain Bitcoin address through a collaborative redemption process.
-    /// The fee is estimated by creating a simulated intent and querying the Ark server.
+    /// The fee is the reserved gap the exit will register, not a separate operator quote.
     ///
     /// # Arguments
     ///
@@ -32,14 +32,17 @@ where
     ///
     /// # Returns
     ///
-    /// Returns the estimated fee as a [`SignedAmount`]. The fee will be deducted from
-    /// the total available balance when performing the actual redemption.
+    /// Returns the reserved gap [`Client::join_next_batch`](crate::Client::join_next_batch) will
+    /// use for this exit, as a [`SignedAmount`]. This is the same quote as
+    /// [`Client::quote_collaborative_redeem_excluding_vtxos`](crate::Client::quote_collaborative_redeem_excluding_vtxos).
+    /// The operator confirms that gap again before `RegisterIntent`.
     ///
     /// # Errors
     ///
     /// Returns an error if:
     /// - The available balance is insufficient for the requested amount
     /// - Failed to fetch VTXOs or boarding inputs
+    /// - A selected VTXO is missing indexer expiry
     /// - Failed to communicate with the Ark server
     pub async fn estimate_onchain_fees<R>(
         &self,
@@ -50,46 +53,17 @@ where
     where
         R: Rng + CryptoRng + Clone,
     {
-        let server_info = self.server_info().await?;
-
-        let (change_address, _) = self.get_offchain_address_with_server_info(&server_info)?;
-
-        let (boarding_inputs, vtxo_inputs, total_amount) = self
-            .fetch_commitment_transaction_inputs(&server_info, crate::utils::unix_now()?)
-            .await?;
-
-        let change_amount = total_amount.checked_sub(to_amount).ok_or_else(|| {
-            Error::coin_select(format!(
-                "cannot afford to send {to_amount}, only have {total_amount}"
-            ))
-        })?;
-
-        tracing::info!(
-            %to_address,
-            gross_amount = %to_amount,
-            change_address = %change_address.encode(),
-            %change_amount,
-            ?boarding_inputs,
-            "Estimating fee to collaboratively redeem outputs"
-        );
-
-        let intent = self.prepare_intent(
-            &mut rng.clone(),
-            boarding_inputs,
-            vtxo_inputs,
-            BatchOutputType::OffBoard {
+        let quote = self
+            .quote_collaborative_redeem_excluding_vtxos(
+                rng,
                 to_address,
                 to_amount,
-                change_address,
-                change_amount,
-            },
-            batch::PrepareIntentKind::EstimateFee,
-            server_info.dust,
-        )?;
-
-        let amount = self.network_client().estimate_fees(intent.intent).await?;
-
-        Ok(amount)
+                &std::collections::HashSet::new(),
+            )
+            .await?;
+        Ok(SignedAmount::from_sat(
+            quote.settlement.reserved_fee.to_sat() as i64,
+        ))
     }
 
     /// Estimates the fee to join the next batch and settle funds to an Ark address.
@@ -170,14 +144,15 @@ where
     ///
     /// # Returns
     ///
-    /// Returns the estimated fee as a [`SignedAmount`]. The fee will be deducted from
-    /// the total input amount, with any remainder going to change.
+    /// Returns the reserved gap for this VTXO selection. Same planner as
+    /// [`Client::collaborative_redeem_vtxo_selection`](crate::Client::collaborative_redeem_vtxo_selection).
     ///
     /// # Errors
     ///
     /// Returns an error if:
     /// - No matching VTXO outpoints are found
     /// - The total input amount is insufficient for the requested amount plus fees
+    /// - A selected VTXO is missing indexer expiry
     /// - Failed to fetch VTXOs
     /// - Failed to communicate with the Ark server
     pub async fn estimate_onchain_fees_vtxo_selection<R>(
@@ -190,55 +165,13 @@ where
     where
         R: Rng + CryptoRng + Clone,
     {
-        let server_info = self.server_info().await?;
-
-        let (change_address, _) = self.get_offchain_address_with_server_info(&server_info)?;
-
-        let vtxo_inputs = self
-            .selected_batch_settleable_vtxo_inputs(&server_info, input_vtxos)
+        let _ = rng;
+        let prepared = self
+            .prepare_offboard_vtxo_selection(input_vtxos, to_address, to_amount)
             .await?;
-
-        if vtxo_inputs.is_empty() {
-            return Err(Error::ad_hoc("no matching VTXO outpoints found"));
-        }
-
-        let total_input_amount = vtxo_inputs
-            .iter()
-            .fold(Amount::ZERO, |acc, vtxo| acc + vtxo.amount());
-
-        let change_amount = total_input_amount.checked_sub(to_amount).ok_or_else(|| {
-            Error::coin_select(format!(
-                "cannot afford to send {to_amount}, only have {total_input_amount}"
-            ))
-        })?;
-
-        tracing::info!(
-            %to_address,
-            %to_amount,
-            %total_input_amount,
-            change_address = %change_address.encode(),
-            %change_amount,
-            num_vtxos = vtxo_inputs.len(),
-            "Estimating fee to collaboratively redeem selected VTXOs"
-        );
-
-        let intent = self.prepare_intent(
-            &mut rng.clone(),
-            vec![], // No boarding inputs when using specific VTXOs
-            vtxo_inputs,
-            BatchOutputType::OffBoard {
-                to_address,
-                to_amount,
-                change_address,
-                change_amount,
-            },
-            batch::PrepareIntentKind::EstimateFee,
-            server_info.dust,
-        )?;
-
-        let amount = self.network_client().estimate_fees(intent.intent).await?;
-
-        Ok(amount)
+        Ok(SignedAmount::from_sat(
+            prepared.settlement.reserved_fee.to_sat() as i64,
+        ))
     }
 
     /// Estimates the fee to join the next batch with specific VTXOs and settle to an Ark address.
