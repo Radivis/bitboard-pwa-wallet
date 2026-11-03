@@ -41,6 +41,7 @@ const setActiveArkadeAccountIdMock = vi.hoisted(() => vi.fn())
 const setLastOperatorSyncTimeMock = vi.hoisted(() => vi.fn())
 const setArkadeSignerMigrationHintMock = vi.hoisted(() => vi.fn())
 const refreshArkadeStoreFromLoadedWasmMock = vi.hoisted(() => vi.fn())
+const publishArkadeDashboardFromPersistedEnvelopeMock = vi.hoisted(() => vi.fn())
 const findActiveArkadeAccountSummaryMock = vi.hoisted(() => vi.fn())
 const ensureArkadeAccountMock = vi.hoisted(() => vi.fn())
 const orchestrateArkadePostLoadSyncMock = vi.hoisted(() => vi.fn())
@@ -118,6 +119,8 @@ vi.mock('@/lib/arkade/arkade-accounts', async (importOriginal) => {
 vi.mock('@/lib/arkade/arkade-persistence-store-sync', () => ({
   refreshArkadeStoreFromLoadedWasm: (...args: unknown[]) =>
     refreshArkadeStoreFromLoadedWasmMock(...args),
+  publishArkadeDashboardFromPersistedEnvelope: (...args: unknown[]) =>
+    publishArkadeDashboardFromPersistedEnvelopeMock(...args),
   clearArkadeDashboardStore: (...args: unknown[]) =>
     clearArkadeDashboardStoreMock(...args),
 }))
@@ -173,6 +176,7 @@ describe('arkade-load-lifecycle-orchestrator', () => {
       createdAt: '2020-01-01T00:00:00.000Z',
     })
     refreshArkadeStoreFromLoadedWasmMock.mockResolvedValue(undefined)
+    publishArkadeDashboardFromPersistedEnvelopeMock.mockResolvedValue(undefined)
     orchestrateArkadePostLoadSyncMock.mockResolvedValue(undefined)
     closeArkadeSessionMock.mockResolvedValue(undefined)
   })
@@ -187,10 +191,10 @@ describe('arkade-load-lifecycle-orchestrator', () => {
     expect(workerMocks.openSession).not.toHaveBeenCalled()
   })
 
-  it('load success opens session and refreshes without operator sync in load body', async () => {
+  it('load success publishes the persisted envelope without the live Esplora refresh', async () => {
     const callOrder: string[] = []
-    refreshArkadeStoreFromLoadedWasmMock.mockImplementation(async () => {
-      callOrder.push('refresh')
+    publishArkadeDashboardFromPersistedEnvelopeMock.mockImplementation(async () => {
+      callOrder.push('publishEnvelope')
     })
     setActiveArkadeAccountIdMock.mockImplementation(() => {
       callOrder.push('setActive')
@@ -200,7 +204,8 @@ describe('arkade-load-lifecycle-orchestrator', () => {
 
     expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loaded')
     expect(workerMocks.openSession).toHaveBeenCalled()
-    expect(callOrder).toEqual(['refresh', 'setActive'])
+    expect(callOrder).toEqual(['publishEnvelope', 'setActive'])
+    expect(refreshArkadeStoreFromLoadedWasmMock).not.toHaveBeenCalled()
     expect(orchestrateArkadePostLoadSyncMock).toHaveBeenCalledWith(
       expect.objectContaining({
         walletId: 1,
@@ -227,7 +232,23 @@ describe('arkade-load-lifecycle-orchestrator', () => {
 
     expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loaded')
     expect(workerMocks.syncBumperWallet).not.toHaveBeenCalled()
-    expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalled()
+    expect(publishArkadeDashboardFromPersistedEnvelopeMock).toHaveBeenCalled()
+    expect(refreshArkadeStoreFromLoadedWasmMock).not.toHaveBeenCalled()
+  })
+
+  it('a hanging live dashboard refresh does not fail session start', async () => {
+    refreshArkadeStoreFromLoadedWasmMock.mockImplementation(
+      () => new Promise(() => undefined),
+    )
+
+    await orchestrateArkadeLoad({ walletId: 1, networkMode: 'mutinynet' })
+
+    expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loaded')
+    expect(terminateArkadeWorkerMock).not.toHaveBeenCalled()
+    expect(publishArkadeDashboardFromPersistedEnvelopeMock).toHaveBeenCalledWith(
+      TEST_ACCOUNT_ID,
+      1,
+    )
   })
 
   it('does not mark the rail loaded when the active wallet changed', async () => {
@@ -237,6 +258,7 @@ describe('arkade-load-lifecycle-orchestrator', () => {
 
     expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('not-configured')
     expect(workerMocks.openSession).not.toHaveBeenCalled()
+    expect(publishArkadeDashboardFromPersistedEnvelopeMock).not.toHaveBeenCalled()
     expect(refreshArkadeStoreFromLoadedWasmMock).not.toHaveBeenCalled()
   })
 

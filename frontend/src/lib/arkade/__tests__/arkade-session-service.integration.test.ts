@@ -48,6 +48,7 @@ const removeArkadeDashboardSyncQueriesMock = vi.hoisted(() => vi.fn())
 const clearArkadeDashboardStoreMock = vi.hoisted(() => vi.fn())
 const ensureArkadeEncryptedSecretsHostMock = vi.hoisted(() => vi.fn())
 const refreshArkadeStoreFromLoadedWasmMock = vi.hoisted(() => vi.fn())
+const publishArkadeDashboardFromPersistedEnvelopeMock = vi.hoisted(() => vi.fn())
 const setActiveArkadeAccountIdMock = vi.hoisted(() => vi.fn())
 const setLastOperatorSyncTimeMock = vi.hoisted(() => vi.fn())
 const setArkadeSignerMigrationHintMock = vi.hoisted(() => vi.fn())
@@ -146,6 +147,8 @@ vi.mock('@/lib/arkade/arkade-dashboard-sync', () => ({
 vi.mock('@/lib/arkade/arkade-persistence-store-sync', () => ({
   refreshArkadeStoreFromLoadedWasm: (...args: unknown[]) =>
     refreshArkadeStoreFromLoadedWasmMock(...args),
+  publishArkadeDashboardFromPersistedEnvelope: (...args: unknown[]) =>
+    publishArkadeDashboardFromPersistedEnvelopeMock(...args),
   clearArkadeDashboardStore: (...args: unknown[]) =>
     clearArkadeDashboardStoreMock(...args),
 }))
@@ -227,6 +230,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
       createdAt: '2020-01-01T00:00:00.000Z',
     })
     refreshArkadeStoreFromLoadedWasmMock.mockResolvedValue(undefined)
+    publishArkadeDashboardFromPersistedEnvelopeMock.mockResolvedValue(undefined)
     workerMocks.syncWithOperator.mockResolvedValue({})
     workerMocks.reconcileActiveAccountId.mockResolvedValue(undefined)
   })
@@ -260,8 +264,14 @@ describe('openArkadeSessionForWallet (integration)', () => {
         persistInitialSdkFromWasm: true,
       }),
     )
-    expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalledWith(TEST_ACCOUNT_ID, 7)
+    expect(publishArkadeDashboardFromPersistedEnvelopeMock).toHaveBeenCalledWith(
+      TEST_ACCOUNT_ID,
+      7,
+    )
     expect(setActiveArkadeAccountIdMock).toHaveBeenCalledWith(TEST_ACCOUNT_ID)
+    await vi.waitFor(() =>
+      expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalledWith(TEST_ACCOUNT_ID, 7),
+    )
     await vi.waitFor(() => expect(workerMocks.syncWithOperator).toHaveBeenCalled())
     expect(workerMocks.finalizePendingTransactions).toHaveBeenCalledTimes(1)
     expect(workerMocks.delegateSpendableVtxos).not.toHaveBeenCalled()
@@ -280,6 +290,9 @@ describe('openArkadeSessionForWallet (integration)', () => {
     }
     findActiveArkadeAccountSummaryMock.mockResolvedValue(persistedAccount)
     ensureArkadeAccountMock.mockResolvedValue(persistedAccount)
+    publishArkadeDashboardFromPersistedEnvelopeMock.mockImplementation(async () => {
+      hydrationOrder.push('publishArkadeDashboardFromPersistedEnvelope')
+    })
     refreshArkadeStoreFromLoadedWasmMock.mockImplementation(async () => {
       hydrationOrder.push('refreshArkadeStoreFromLoadedWasm')
     })
@@ -295,13 +308,20 @@ describe('openArkadeSessionForWallet (integration)', () => {
       networkMode: 'mutinynet',
     })
 
-    await vi.waitFor(() => expect(workerMocks.syncWithOperator).toHaveBeenCalled())
+    await vi.waitFor(() =>
+      expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalledWith(TEST_ACCOUNT_ID, 7),
+    )
 
-    expect(hydrationOrder.indexOf('setActiveArkadeAccountId')).toBeGreaterThanOrEqual(0)
+    expect(hydrationOrder.indexOf('publishArkadeDashboardFromPersistedEnvelope')).toBeGreaterThanOrEqual(0)
+    expect(hydrationOrder.indexOf('setActiveArkadeAccountId')).toBeGreaterThan(
+      hydrationOrder.indexOf('publishArkadeDashboardFromPersistedEnvelope'),
+    )
     expect(hydrationOrder.indexOf('syncWithOperator')).toBeGreaterThan(
       hydrationOrder.indexOf('setActiveArkadeAccountId'),
     )
-    expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalledWith(TEST_ACCOUNT_ID, 7)
+    expect(hydrationOrder.indexOf('refreshArkadeStoreFromLoadedWasm')).toBeGreaterThan(
+      hydrationOrder.indexOf('syncWithOperator'),
+    )
     expect(ensureArkadeAccountMock).toHaveBeenCalledWith(
       expect.objectContaining({
         persistInitialSdkFromWasm: false,

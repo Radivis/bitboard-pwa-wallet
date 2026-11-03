@@ -163,6 +163,19 @@ describe('arkade-sync-lifecycle-orchestrator', () => {
     expect(orchestrateArkadeSave).toHaveBeenCalled()
   })
 
+  it('live dashboard refresh failure is a sync warning and still saves', async () => {
+    refreshArkadeStoreFromLoadedWasm.mockRejectedValue(new Error('esplora timeout'))
+
+    await orchestrateArkadeSyncThenSave(syncParams)
+
+    expect(getArkadeSyncLifecycleSnapshot()).toMatchObject({
+      syncPhase: 'not-syncing',
+      errorMessage: null,
+      warningMessage: 'esplora timeout',
+    })
+    expect(orchestrateArkadeSave).toHaveBeenCalled()
+  })
+
   it('sync failure sets sync-error without save', async () => {
     syncWithOperator.mockRejectedValue(new Error('operator down'))
 

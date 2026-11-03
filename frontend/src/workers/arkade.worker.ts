@@ -36,6 +36,7 @@ import type {
   ArkadeOnchainBumperInfo,
   ArkadeOperatorSyncResult,
   ArkadePaymentRow,
+  ArkadePersistedDashboard,
   ArkadePendingBatchIntentActionParams,
   ArkadeRecoverableVtxoFeeEstimate,
   ArkadeSendParams,
@@ -664,6 +665,13 @@ const arkadeService: ArkadeService = {
   async getBalance(): Promise<ArkadeBalanceInfo> {
     return invokeWasmArkade(
       (wasmModule) => wasmModule.arkade_get_balance() as Promise<ArkadeBalanceInfo>,
+    )
+  },
+
+  async getPersistedDashboard(): Promise<ArkadePersistedDashboard> {
+    return invokeWasmArkade(
+      (wasmModule) =>
+        wasmModule.arkade_get_persisted_dashboard() as ArkadePersistedDashboard,
     )
   },
 

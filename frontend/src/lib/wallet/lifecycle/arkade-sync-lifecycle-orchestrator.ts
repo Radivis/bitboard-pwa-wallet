@@ -133,10 +133,12 @@ async function runArkadeSignerMigrationBody(
 
 function mergeArkadeSyncWarningMessages(
   syncResult: ArkadeOperatorSyncResult,
+  dashboardScanWarning: string | null,
 ): string | null {
   const parts = [
     syncResult.keyDiscoveryWarning,
     syncResult.exitingVtxoWarning,
+    dashboardScanWarning,
   ].filter((part): part is string => part != null && part !== '')
   if (parts.length === 0) {
     return null
@@ -147,12 +149,13 @@ function mergeArkadeSyncWarningMessages(
 function applySuccessfulArkadeSyncSnapshot(
   scope: ArkadeRailScope,
   syncResult: ArkadeOperatorSyncResult,
+  dashboardScanWarning: string | null,
 ): void {
   setSnapshot({
     syncPhase: 'not-syncing',
     railScope: scope,
     errorMessage: null,
-    warningMessage: mergeArkadeSyncWarningMessages(syncResult),
+    warningMessage: mergeArkadeSyncWarningMessages(syncResult, dashboardScanWarning),
   })
 }
 
@@ -242,19 +245,34 @@ function ensureBackgroundFullReconcileFollowUp(): void {
   )
 }
 
+async function refreshLiveDashboardAfterOperatorSync(
+  scope: ArkadeRailScope,
+): Promise<string | null> {
+  try {
+    await refreshArkadeStoreFromLoadedWasm(scope.arkadeAccountId, scope.walletId)
+    return null
+  } catch (error) {
+    console.warn('Arkade live dashboard refresh failed after operator sync', error)
+    return userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK)
+  }
+}
+
 async function runArkadeOperatorSyncBody(
   scope: ArkadeRailScope,
   scheduleBackgroundFull: boolean,
-): Promise<ArkadeOperatorSyncResult> {
+): Promise<{
+  syncResult: ArkadeOperatorSyncResult
+  dashboardScanWarning: string | null
+}> {
   ensureBackgroundFullReconcileFollowUp()
   const worker = getArkadeWorker()
   const syncResult = await worker.syncWithOperator(scheduleBackgroundFull)
-  await refreshArkadeStoreFromLoadedWasm(scope.arkadeAccountId, scope.walletId)
+  const dashboardScanWarning = await refreshLiveDashboardAfterOperatorSync(scope)
   await invalidateOperatorTrustQueriesForScope(scope)
   if (shouldScheduleBackgroundFullVtxoReconcile(syncResult.fullReconcileDue)) {
     worker.scheduleBackgroundFullVtxoReconcile()
   }
-  return syncResult
+  return { syncResult, dashboardScanWarning }
 }
 
 export function getArkadeSyncLifecycleSnapshot(): ArkadeSyncLifecycleSnapshot {
@@ -423,11 +441,11 @@ export async function orchestrateArkadeSyncThenSave(
               await orchestrateArkadeSave(toSaveParams(params))
             }
             try {
-              const syncResult = await runArkadeOperatorSyncBody(
+              const { syncResult, dashboardScanWarning } = await runArkadeOperatorSyncBody(
                 scope,
                 operatorSyncSchedulesBackgroundFull('signerMigration'),
               )
-              applySuccessfulArkadeSyncSnapshot(scope, syncResult)
+              applySuccessfulArkadeSyncSnapshot(scope, syncResult, dashboardScanWarning)
             } catch (syncError) {
               setSnapshot({
                 syncPhase: 'sync-error',
@@ -443,7 +461,7 @@ export async function orchestrateArkadeSyncThenSave(
             return
           }
 
-          const syncResult = await runArkadeOperatorSyncBody(
+          const { syncResult, dashboardScanWarning } = await runArkadeOperatorSyncBody(
             scope,
             operatorSyncSchedulesBackgroundFull(params.syncKind),
           )
@@ -451,7 +469,7 @@ export async function orchestrateArkadeSyncThenSave(
             clearArkadeSyncSnapshotIfItBelongsToWallet(params.walletId)
             return
           }
-          applySuccessfulArkadeSyncSnapshot(scope, syncResult)
+          applySuccessfulArkadeSyncSnapshot(scope, syncResult, dashboardScanWarning)
           try {
             await orchestrateArkadeSave(toSaveParams(params))
           } catch (saveError) {

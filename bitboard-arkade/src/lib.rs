@@ -364,6 +364,13 @@ fn arkade_export_persistence_json_internal() -> ArkResult<String> {
 }
 
 #[wasm_bindgen]
+pub fn arkade_get_persisted_dashboard() -> Result<JsValue, JsValue> {
+    map_js_error(with_session(|session| {
+        to_js_value(session.persisted_dashboard()?)
+    }))
+}
+
+#[wasm_bindgen]
 pub async fn arkade_get_balance() -> Result<JsValue, JsValue> {
     map_js_async(async {
         export_session_json(|session| async move { session.balance().await }).await

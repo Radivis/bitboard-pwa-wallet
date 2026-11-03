@@ -100,6 +100,20 @@ impl ArkadeSession {
         Ok(txid.to_string())
     }
 
+    /// Offchain history from the persisted snapshot. Skips boarding address scans.
+    pub(crate) fn transaction_history_from_persisted_envelope(
+        &self,
+    ) -> ArkResult<Vec<PaymentRowDto>> {
+        let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot else {
+            return Ok(Vec::new());
+        };
+        let transactions = offchain_history_from_snapshot(&snapshot, &[])?;
+        Ok(transactions
+            .into_iter()
+            .filter_map(map_history_row)
+            .collect())
+    }
+
     pub async fn transaction_history(&self) -> ArkResult<Vec<PaymentRowDto>> {
         let boarding_commitment_transactions = self.boarding_commitment_txids().await?;
         let mut transactions = self.boarding_history_transactions().await?;

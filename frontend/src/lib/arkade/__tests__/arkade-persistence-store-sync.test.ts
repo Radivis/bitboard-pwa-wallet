@@ -15,6 +15,13 @@ const getTransactionHistoryMock = vi.hoisted(() =>
   ]),
 )
 const getAddressMock = vi.hoisted(() => vi.fn().mockResolvedValue('tark1qreceive'))
+const getPersistedDashboardMock = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({
+    balance: { confirmedSats: 12_000, totalSats: 12_000 },
+    payments: [],
+    receiveAddress: 'tark1qenvelope',
+  }),
+)
 
 const setQueryDataMock = vi.hoisted(() => vi.fn())
 
@@ -23,6 +30,7 @@ vi.mock('@/workers/arkade-factory', () => ({
     getBalance: getBalanceMock,
     getTransactionHistory: getTransactionHistoryMock,
     getAddress: getAddressMock,
+    getPersistedDashboard: getPersistedDashboardMock,
   }),
 }))
 
@@ -32,13 +40,44 @@ vi.mock('@/lib/shared/app-query-client', () => ({
   },
 }))
 
-import { refreshArkadeStoreFromLoadedWasm } from '@/lib/arkade/arkade-persistence-store-sync'
+import {
+  publishArkadeDashboardFromPersistedEnvelope,
+  refreshArkadeStoreFromLoadedWasm,
+} from '@/lib/arkade/arkade-persistence-store-sync'
 import {
   arkadeAddressQueryKey,
   arkadeBalanceQueryKey,
   arkadeHistoryQueryKey,
 } from '@/lib/arkade/arkade-query-keys'
 import { useWalletStore } from '@/stores/walletStore'
+
+describe('publishArkadeDashboardFromPersistedEnvelope', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    useWalletStore.setState({
+      activeWalletId: 1,
+      networkMode: 'mutinynet',
+      activeArkadeAccountId: 'conn-1',
+      arkadeBalance: null,
+      arkadePayments: [],
+      arkadeReceiveAddress: null,
+    })
+  })
+
+  it('writes the envelope dashboard without the live balance or history reads', async () => {
+    await publishArkadeDashboardFromPersistedEnvelope('conn-1', 1)
+
+    expect(getPersistedDashboardMock).toHaveBeenCalled()
+    expect(getBalanceMock).not.toHaveBeenCalled()
+    expect(getTransactionHistoryMock).not.toHaveBeenCalled()
+    expect(getAddressMock).not.toHaveBeenCalled()
+    expect(useWalletStore.getState().arkadeReceiveAddress).toBe('tark1qenvelope')
+    expect(useWalletStore.getState().arkadeBalance).toEqual({
+      confirmedSats: 12_000,
+      totalSats: 12_000,
+    })
+  })
+})
 
 describe('refreshArkadeStoreFromLoadedWasm', () => {
   beforeEach(() => {

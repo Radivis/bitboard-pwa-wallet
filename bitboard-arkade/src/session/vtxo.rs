@@ -76,18 +76,12 @@ impl ArkadeSession {
     /// active unroll. Recover is **not** spend-locked: `funding_lost` stays recoverable if
     /// ark-core still classifies it. Post-unroll exiting VTXOs are kept out by vendored bucketing.
     pub(crate) async fn recoverable_vtxo_buckets(&self) -> ArkResult<RecoverableVtxoBuckets> {
+        if self.wallet_db.snapshot().offchain_vtxo_snapshot.is_some() {
+            return self.recoverable_vtxo_buckets_from_persisted_snapshot();
+        }
+
         let dust = self.client.server_info_snapshot()?.dust;
         let exclude_pipeline_outpoints = self.pipeline_outpoints();
-        let persisted_snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot;
-
-        if let Some(snapshot) = persisted_snapshot.as_ref() {
-            let vtxo_list = vtxo_list_from_snapshot(snapshot)?;
-            return Ok(recoverable_vtxo_buckets_from_list(
-                &vtxo_list,
-                dust,
-                &exclude_pipeline_outpoints,
-            ));
-        }
 
         if balance_vtxo_reads_use_operator_rpc(self.autonomous_mode())
             && let Ok((vtxo_list, _)) = self.client.list_vtxo_buckets().await
@@ -100,6 +94,22 @@ impl ArkadeSession {
         }
 
         Ok(empty_recoverable_vtxo_buckets())
+    }
+
+    /// Recoverable buckets from the persisted VTXO snapshot only. No operator list.
+    pub(crate) fn recoverable_vtxo_buckets_from_persisted_snapshot(
+        &self,
+    ) -> ArkResult<RecoverableVtxoBuckets> {
+        let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot else {
+            return Ok(empty_recoverable_vtxo_buckets());
+        };
+        let dust = self.client.server_info_snapshot()?.dust;
+        let vtxo_list = vtxo_list_from_snapshot(&snapshot)?;
+        Ok(recoverable_vtxo_buckets_from_list(
+            &vtxo_list,
+            dust,
+            &self.pipeline_outpoints(),
+        ))
     }
 
     pub async fn recoverable_vtxo_fee_estimate(&self) -> ArkResult<RecoverableVtxoFeeEstimateDto> {

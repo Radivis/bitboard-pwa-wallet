@@ -6,7 +6,11 @@ import {
 import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
 import { appQueryClient } from '@/lib/shared/app-query-client'
 import { getArkadeWorker } from '@/workers/arkade-factory'
-import type { ArkadeBalanceInfo, ArkadePaymentRow } from '@/workers/arkade-api'
+import type {
+  ArkadeBalanceInfo,
+  ArkadePaymentRow,
+  ArkadePersistedDashboard,
+} from '@/workers/arkade-api'
 import {
   getCommittedNetworkMode,
   useWalletStore,
@@ -40,23 +44,11 @@ function syncArkadeDashboardQueryCaches(params: {
   }
 }
 
-/**
- * Caller must ensure the Arkade WASM session is already open.
- * When `expectedWalletId` is set, skip the write if the active wallet changed
- * while the WASM read was in flight.
- */
-export async function refreshArkadeStoreFromLoadedWasm(
+function writeArkadeDashboardSnapshot(
+  dashboard: ArkadePersistedDashboard,
   arkadeAccountIdForQueryCache?: string,
   expectedWalletId?: number,
-): Promise<void> {
-  const worker = getArkadeWorker()
-  // Balance lists boarding addresses on Esplora. History repeats that list. Running them
-  // together saturates the browser connection pool and the session-start budget expires.
-  const [balance, receiveAddress] = await Promise.all([
-    worker.getBalance(),
-    worker.getAddress(),
-  ])
-  const payments = await worker.getTransactionHistory()
+): void {
   const walletStateBeforeWrite = useWalletStore.getState()
   if (
     expectedWalletId != null &&
@@ -65,24 +57,67 @@ export async function refreshArkadeStoreFromLoadedWasm(
     return
   }
   walletStateBeforeWrite.setArkadeDashboardState({
-    balance,
-    payments,
-    receiveAddress,
+    balance: dashboard.balance,
+    payments: dashboard.payments,
+    receiveAddress: dashboard.receiveAddress,
   })
 
   const walletState = useWalletStore.getState()
   const networkMode = getCommittedNetworkMode()
   const arkadeAccountId = arkadeAccountIdForQueryCache ?? walletState.activeArkadeAccountId
-  if (arkadeAccountId != null && walletState.activeWalletId != null) {
-    syncArkadeDashboardQueryCaches({
-      walletId: walletState.activeWalletId,
-      networkMode,
-      arkadeAccountId,
-      balance,
-      payments,
-      receiveAddress,
-    })
+  if (arkadeAccountId == null || walletState.activeWalletId == null) {
+    return
   }
+  syncArkadeDashboardQueryCaches({
+    walletId: walletState.activeWalletId,
+    networkMode,
+    arkadeAccountId,
+    balance: dashboard.balance,
+    payments: dashboard.payments,
+    receiveAddress: dashboard.receiveAddress,
+  })
+}
+
+/**
+ * Publish offchain snapshot, stored intents, and the local receive address.
+ * Does not list boarding addresses on Esplora. Session start awaits this before `loaded`.
+ */
+export async function publishArkadeDashboardFromPersistedEnvelope(
+  arkadeAccountIdForQueryCache?: string,
+  expectedWalletId?: number,
+): Promise<void> {
+  const dashboard = await getArkadeWorker().getPersistedDashboard()
+  writeArkadeDashboardSnapshot(
+    dashboard,
+    arkadeAccountIdForQueryCache,
+    expectedWalletId,
+  )
+}
+
+/**
+ * Caller must ensure the Arkade WASM session is already open.
+ * When `expectedWalletId` is set, skip the write if the active wallet changed
+ * while the WASM read was in flight.
+ *
+ * Balance lists boarding addresses on Esplora. History repeats that list, so it
+ * runs after balance and can reuse the address-UTXO cache. This belongs after
+ * `loaded`, with post-load sync, outside the session-start deadline.
+ */
+export async function refreshArkadeStoreFromLoadedWasm(
+  arkadeAccountIdForQueryCache?: string,
+  expectedWalletId?: number,
+): Promise<void> {
+  const worker = getArkadeWorker()
+  const [balance, receiveAddress] = await Promise.all([
+    worker.getBalance(),
+    worker.getAddress(),
+  ])
+  const payments = await worker.getTransactionHistory()
+  writeArkadeDashboardSnapshot(
+    { balance, payments, receiveAddress },
+    arkadeAccountIdForQueryCache,
+    expectedWalletId,
+  )
 }
 
 export function clearArkadeDashboardStore(): void {

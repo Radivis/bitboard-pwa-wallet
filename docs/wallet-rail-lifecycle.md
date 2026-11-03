@@ -459,10 +459,10 @@ Lightning is optional — absence of connections is normal `not-configured`, not
 2. Read encrypted mnemonic + payload; resolve Arkade account
 3. `arkade_open_session` in arkade worker (hydrate Arkade SDK from `sdkPersistenceJson`, and the bumper BDK from the SegWit-0 descriptor-wallet changeset when one exists — not Esplora)
 4. `ensureArkadeAccount` (DB metadata)
-5. `refreshArkadeStoreFromLoadedWasm` — balance, payments, **receive address stable**
+5. `publishArkadeDashboardFromPersistedEnvelope` — offchain snapshot, stored intents, **receive address stable**. Boarding sats stay at zero until the live refresh.
 6. Set `activeArkadeAccountId` when **load completes** (not when sync completes)
 
-Step 5 is inside the 30-second session-start race, so a boarding Esplora walk can fail the session after the WASM session has already opened. That is the open correction in [session start must not wait on scans](future/arkade-session-start-does-not-wait-on-scans.md): `loaded` comes from the persisted envelope, and the live balance and history refresh run with post-load sync.
+The live balance and history refresh (`refreshArkadeStoreFromLoadedWasm`) runs with post-load sync, outside the 30-second session-start race. A failure of that refresh is a sync warning. It leaves the session open and leaves the worker running. Boarding amounts update when that refresh finishes.
 
 Bumper BDK Esplora is **not** started on load (LIFE-ARK-LOAD-04). Session open hydrates the bumper from the `(network, segwit, 0)` descriptor row (or a live crypto export when that triple is loaded). The first `onchain_bumper_info` or exit proceed then syncs; that scan is incremental when `fullScanDone` was hydrated (LIFE-ARK-BUMP-01/02). Completing a unilateral exit does not wait for that scan: the complete page starts it in the background. Later bumper-info polls incremental-sync unused revealed SPKs into BDK and report confirmed only. After a wallet-wide bumper sync, Arkade persists that SegWit-0 row only when it is **not** the crypto slot (LIFE-ARK-BUMP-03).
 

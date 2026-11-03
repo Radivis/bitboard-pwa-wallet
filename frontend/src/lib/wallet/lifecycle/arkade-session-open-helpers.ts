@@ -4,7 +4,7 @@ import {
   ensureArkadeAccount,
   resolveArkadeEndpointsForAccount,
 } from '@/lib/arkade/arkade-accounts'
-import { refreshArkadeStoreFromLoadedWasm } from '@/lib/arkade/arkade-persistence-store-sync'
+import { publishArkadeDashboardFromPersistedEnvelope } from '@/lib/arkade/arkade-persistence-store-sync'
 import {
   getArkadeEndpoints,
   type ArkadeSupportedNetworkMode,
@@ -25,8 +25,8 @@ export type ArkadeSessionReuseState = {
 }
 
 /**
- * When the worker already has this wallet/network/account session open, refresh
- * dashboard state and skip a full reopen.
+ * When the worker already has this wallet/network/account session open, publish
+ * the persisted envelope and skip a full reopen.
  */
 export async function tryReuseExistingArkadeSession(params: {
   walletId: number
@@ -63,7 +63,7 @@ export async function tryReuseExistingArkadeSession(params: {
     if (useWalletStore.getState().activeWalletId !== params.walletId) {
       return null
     }
-    await refreshArkadeStoreFromLoadedWasm(params.account.id, params.walletId)
+    await publishArkadeDashboardFromPersistedEnvelope(params.account.id, params.walletId)
     if (useWalletStore.getState().activeWalletId !== params.walletId) {
       return null
     }
@@ -157,7 +157,7 @@ export async function hydrateArkadeDashboardAfterSessionOpen(params: {
     return
   }
   useWalletStore.getState().setLastOperatorSyncTime(null)
-  await refreshArkadeStoreFromLoadedWasm(params.arkadeAccountId, params.walletId)
+  await publishArkadeDashboardFromPersistedEnvelope(params.arkadeAccountId, params.walletId)
   if (params.abandonIf?.() || useWalletStore.getState().activeWalletId !== params.walletId) {
     return
   }

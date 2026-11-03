@@ -225,6 +225,15 @@ pub struct DelegateInfoDto {
     pub delegator_address: String,
 }
 
+/// Dashboard shown as soon as the session is open, before Esplora boarding scans.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersistedDashboardDto {
+    pub balance: BalanceDto,
+    pub payments: Vec<PaymentRowDto>,
+    pub receive_address: String,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PaymentRowDto {

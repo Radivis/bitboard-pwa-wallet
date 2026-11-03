@@ -188,6 +188,13 @@ export interface ArkadePaymentRow {
   memo?: string
 }
 
+/** Session-start dashboard. Boarding sats are filled in by the later live refresh. */
+export interface ArkadePersistedDashboard {
+  balance: ArkadeBalanceInfo
+  payments: ArkadePaymentRow[]
+  receiveAddress: string
+}
+
 export interface OpenArkadeSessionParams {
   encryptedMnemonic: EncryptedBlobForDb
   encryptedPayload: EncryptedBlobForDb
@@ -618,6 +625,8 @@ export interface ArkadeService {
     onRegistered?: (intent: ArkadePendingBatchIntent) => void,
   ): Promise<ArkadeSignerMigrationResult>
   getBalance(): Promise<ArkadeBalanceInfo>
+  /** Offchain snapshot, stored intents, and local receive address. No Esplora. */
+  getPersistedDashboard(): Promise<ArkadePersistedDashboard>
   getAddress(): Promise<string>
   getNewAddress(): Promise<string>
   getBoardingAddress(): Promise<string>

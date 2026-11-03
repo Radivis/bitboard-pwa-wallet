@@ -1,6 +1,8 @@
 # Arkade session start must not wait on scans
 
-Open. Two separate defects. The address-UTXO cache on this branch only touches the first.
+Defect 2 is fixed on this branch: session start publishes the persisted envelope and marks the rail `loaded` before any Esplora boarding scan. The live balance and history refresh runs with post-load sync. A scan error is a sync warning.
+
+Defect 1 is still open. The address-UTXO cache on this branch only touches that cost.
 
 The 30-second start budget is for opening the session. It is the wrong place to catch Esplora or the operator indexer up to the chain.
 
@@ -8,11 +10,12 @@ Related:
 
 - Load race: `raceSessionStart` in `frontend/src/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator.ts`
 - Deadline: `SESSION_START_TIMEOUT_MS` in `frontend/src/lib/wallet/lifecycle/session-start-timeout.ts`
-- Blocking refresh: `hydrateArkadeDashboardAfterSessionOpen` in `frontend/src/lib/wallet/lifecycle/arkade-session-open-helpers.ts`
-- Dashboard read: `refreshArkadeStoreFromLoadedWasm` in `frontend/src/lib/arkade/arkade-persistence-store-sync.ts`
+- Envelope publish: `publishArkadeDashboardFromPersistedEnvelope` in `frontend/src/lib/arkade/arkade-persistence-store-sync.ts`
+- Live refresh: `refreshArkadeStoreFromLoadedWasm`, called from post-load sync
+- Envelope read: `ArkadeSession::persisted_dashboard` in `bitboard-arkade/src/session/balance.rs`
 - Balance, including the boarding scan: `ArkadeSession::balance` in `bitboard-arkade/src/session/balance.rs`
 - Envelope: [Arkade persistence](../persistence/arkade.md)
-- Current load contract (still describes the blocking refresh): [wallet rail lifecycle](../wallet-rail-lifecycle.md#arkade-rail)
+- Load contract: [wallet rail lifecycle](../wallet-rail-lifecycle.md#arkade-rail)
 - Operator-indexer cost, a different path: [Arkade operator sync performance](./arkade-sync-performance-optimizations.md)
 
 ---
@@ -23,7 +26,7 @@ Related:
 2. Mark the rail `loaded` and show that persisted envelope.
 3. After `loaded`, refresh from the operator and from Esplora. Slowness or failure of that refresh is a sync warning. It leaves the session open and leaves the worker running.
 
-`orchestrateArkadePostLoadSync` already runs after `loadPhase: 'loaded'` and does not sit inside the 30-second race. The live dashboard read does not. It is awaited inside the race, before `loaded`.
+`orchestrateArkadePostLoadSync` runs after `loadPhase: 'loaded'` and does not sit inside the 30-second race. The live dashboard read runs there.
 
 ## What the envelope can already show
 
@@ -34,15 +37,13 @@ Related:
 | Boarding spendable / pending / expired sats | No. `boarding_status` computes them by listing every loaded address on Esplora. |
 | Pending batch intents, operator identity | Yes. |
 
-A returning wallet can show its offchain balance from the snapshot as soon as the session is open. Boarding amounts update when the post-load scan finishes. That scan stays on the dashboard. It moves out of session start.
-
-v0.3.6 already walked the boarding addresses during start, and it had no deadline, so a slow walk still opened the wallet. v0.3.7 wrapped that walk in the 30-second race. A walk that used to finish now fails the session and terminates the worker.
+A returning wallet shows its offchain balance from the snapshot as soon as the session is open. Boarding amounts update when the post-load scan finishes.
 
 ---
 
 ## Defect 1 — scans that still run are wasteful
 
-This is the cost of the live read. It matters once the read moves after `loaded`, and it is why the read currently blows the start budget.
+This is the cost of the live read. It now runs after `loaded`, so it no longer spends the session-start budget. It can still stall the first boarding amounts.
 
 Already on this branch:
 
@@ -60,37 +61,29 @@ Still paid on every live balance plus history:
 - History then calls `boarding_commitment_txids` and `boarding_history_transactions`. The address list can hit the 8-second cache. `get_output_status` per UTXO is a separate request and is not covered by that cache.
 - The browser allows about six connections per host. A stalled `fetch` is retried. One pass over a long boarding list can still exceed 30 seconds.
 
-The cache stops repeated listings. It does not remove the first listing from session start.
+The cache stops repeated listings. The first listing now runs after `loaded`.
 
 ## Defect 2 — session start waits on those scans
 
-A timeout here is `load-error`. `failArkadeSessionStart` terminates the worker and clears the dashboard, including when the WASM session had already opened.
+Fixed. `loaded` is published from `persisted_dashboard` (`arkade_get_persisted_dashboard`). That read is synchronous: offchain snapshot, stored pending intents, local receive address, boarding sats at zero. The 30-second race covers session open and that publish. It does not cover `refreshArkadeStoreFromLoadedWasm`.
 
 ```
 orchestrateArkadeLoad
   raceSessionStart                         // 30s, then terminate the worker
     runArkadeSessionOpenBody
-      openFreshArkadeWorkerSession         // session is open after this returns
+      openFreshArkadeWorkerSession
       hydrateArkadeDashboardAfterSessionOpen
-        refreshArkadeStoreFromLoadedWasm
-          getBalance                       // boarding_status → Esplora
-          getAddress                       // operator
-          getTransactionHistory            // boarding walks again
-  loadPhase = loaded                       // only if the refresh returned in time
-  orchestrateArkadePostLoadSync            // already outside the race
+        publishArkadeDashboardFromPersistedEnvelope
+  loadPhase = loaded
+  orchestrateArkadePostLoadSync            // live balance + history; scan error is a warning
 ```
 
-`getBalance` is the call that reaches Esplora, because `ArkadeSession::balance` always awaits `boarding_status`. Offchain buckets from the snapshot do not need that await.
+`ArkadeSession::balance` still awaits `boarding_status`. That call is the live refresh, after `loaded`.
 
 ---
 
 ## Work order
 
-1. Stop awaiting `refreshArkadeStoreFromLoadedWasm` before `loaded`. Publish the dashboard from the envelope: offchain snapshot, stored boarding rows, and a receive address when the open session can derive it locally. Set `activeArkadeAccountId` at that point.
-2. Run the live balance and history refresh with the post-load sync, outside the 30-second race. A scan error is a sync warning on a `loaded` rail.
-3. Then shrink the live scan: one boarding pass, and cover `get_output_status` if history still repeats it. The window-check change in defect 1 stays.
-
-Tests and the load steps in [wallet rail lifecycle](../wallet-rail-lifecycle.md#arkade-rail) currently require the refresh before `loaded`. Update them with step 1.
-
-- `frontend/src/lib/wallet/lifecycle/__tests__/arkade-load-lifecycle-orchestrator.test.ts`
-- `frontend/src/lib/wallet/lifecycle/__tests__/arkade-session-open-helpers.test.ts`
+1. Done. Session start publishes the envelope and sets `activeArkadeAccountId` before `loaded`.
+2. Done. The live balance and history refresh runs with post-load sync. A scan error is a sync warning on a `loaded` rail.
+3. Still open. Shrink the live scan: one boarding pass, and cover `get_output_status` if history still repeats it. The window-check change in defect 1 stays.
