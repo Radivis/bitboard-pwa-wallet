@@ -300,7 +300,7 @@ feature:
         implemented_by:
           - bitboard-bark/src/exit_seizure.rs
           - bitboard-bark/src/swept_vtxo_mark_hold.rs
-          - frontend/src/lib/bark/__tests__/hold-swept-vtxo-marks-until-notice.test.ts
+          - frontend/src/lib/bark/__tests__/hold-bark-envelope-until-companion-is-stored.test.ts
           - frontend/src/lib/bark/__tests__/bark-rail-metadata.test.ts
           - frontend/src/lib/wallet/lifecycle/__tests__/bark-sync-lifecycle-orchestrator.test.ts
           - frontend/src/lib/wallet/lifecycle/__tests__/bark-load-lifecycle-orchestrator.test.ts

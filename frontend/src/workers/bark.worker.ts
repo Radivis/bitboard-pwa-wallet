@@ -52,7 +52,7 @@ import {
   BARK_REGTEST_SERVER_URL,
   isE2eBarkRegtestControlEnabled,
 } from '@/lib/bark/e2e/bark-regtest-env'
-import { holdSweptVtxoMarksUntilNoticeIsStored } from '@/lib/bark/hold-swept-vtxo-marks-until-notice'
+import { holdBarkEnvelopeUntilCompanionIsStored } from '@/lib/bark/hold-bark-envelope-until-companion-is-stored'
 import { loadBitboardBarkWasm, type BitboardBarkWasm } from '@/lib/bark/load-bitboard-bark-wasm'
 import {
   assertBarkRecordEnvelopeWithinSizeLimit,
@@ -387,17 +387,19 @@ async function syncImpl(): Promise<BarkSyncResult> {
     walletId,
     async () => {
       const wasmModule = await getBarkWasm()
-      const { synced, merged } = await holdSweptVtxoMarksUntilNoticeIsStored({
-        barkSync: () => wasmModule.bark_sync(),
-        mergeNotice: () => mergeExitChainNoticeAfterSync(wasmModule, walletId),
-        commitSweptVtxoMarks: () => wasmModule.bark_commit_swept_vtxo_marks(),
-        revertSweptVtxoMarks: () => wasmModule.bark_revert_swept_vtxo_marks(),
+      const { edited, companion } = await holdBarkEnvelopeUntilCompanionIsStored({
+        editEnvelope: () => wasmModule.bark_sync(),
+        storeCompanion: () => mergeExitChainNoticeAfterSync(wasmModule, walletId),
+        commitEnvelope: () => wasmModule.bark_commit_swept_vtxo_marks(),
+        revertEnvelope: () => wasmModule.bark_revert_swept_vtxo_marks(),
+        revertFailureWarning:
+          'Bark could not restore swept coins after the seizure notice was not stored',
       })
       return {
         lastSuccessfulSyncAt: new Date().toISOString(),
-        refreshStatus: readBarkRefreshStatus(synced),
-        nextRefresh: merged.nextRefresh,
-        exitNodeSweepVtxoItems: merged.exitNodeSweepVtxoItems,
+        refreshStatus: readBarkRefreshStatus(edited),
+        nextRefresh: companion.nextRefresh,
+        exitNodeSweepVtxoItems: companion.exitNodeSweepVtxoItems,
       }
     },
     (result) => ({ lastSuccessfulSyncAt: result.lastSuccessfulSyncAt }),

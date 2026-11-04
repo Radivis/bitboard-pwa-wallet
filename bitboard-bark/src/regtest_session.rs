@@ -148,7 +148,7 @@ impl RegtestBarkWallet {
         if let Some(vtxo_key_gap_limit) = vtxo_key_gap_limit {
             config.vtxo_key_gap_limit = vtxo_key_gap_limit;
         }
-        let recovery_open = RecoveryOpen::begin(&store);
+        let recovery_open = RecoveryOpen::begin(&store)?;
         let persister = Arc::new(bark::persist::adaptor::StorageAdaptorWrapper::new(
             store.clone(),
         ));

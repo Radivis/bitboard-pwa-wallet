@@ -35,16 +35,9 @@ struct RecordMap {
 pub(crate) struct SharedRecordStore {
     records: Arc<Mutex<RecordMap>>,
     durable_flush: Arc<Mutex<Option<DurableFlushHook>>>,
-    /// While set, a durable partition write stays in memory and does not call the hook.
-    ///
-    /// An empty-envelope open uses this so a recovery scan cannot stamp wallet
-    /// properties through an exit-row flush before the scan result is known.
-    durable_flush_suppressed: Arc<Mutex<bool>>,
-}
-
-/// Restores durable flushes when dropped.
-pub(crate) struct DeferredDurableFlush {
-    suppressed: Arc<Mutex<bool>>,
+    /// How many [`crate::envelope_export_hold::EnvelopeExportHold`]s are alive.
+    /// A durable partition write stays in memory while the count is above zero.
+    envelope_export_holds: Arc<Mutex<u32>>,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -78,7 +71,7 @@ impl SharedRecordStore {
         let store = Self {
             records: Arc::new(Mutex::new(RecordMap::default())),
             durable_flush: Arc::new(Mutex::new(None)),
-            durable_flush_suppressed: Arc::new(Mutex::new(false)),
+            envelope_export_holds: Arc::new(Mutex::new(0)),
         };
         #[cfg(target_arch = "wasm32")]
         store.adopt_process_flush_hook();
@@ -165,28 +158,20 @@ impl SharedRecordStore {
         Ok(())
     }
 
-    /// Keeps durable writes in memory until the guard is dropped.
-    pub(crate) fn defer_durable_flushes(&self) -> DeferredDurableFlush {
-        if let Ok(mut suppressed) = self.durable_flush_suppressed.lock() {
-            *suppressed = true;
-        }
-        DeferredDurableFlush {
-            suppressed: Arc::clone(&self.durable_flush_suppressed),
-        }
+    /// Holds envelope export until the returned hold is dropped.
+    /// A poisoned hold lock returns an error, so the caller can avoid an edit
+    /// that a later durable write would export on its own.
+    pub(crate) fn hold_envelope_export(
+        &self,
+    ) -> Result<crate::envelope_export_hold::EnvelopeExportHold, String> {
+        crate::envelope_export_hold::EnvelopeExportHold::acquire(&self.envelope_export_holds)
     }
 
-    /// Keeps durable writes in memory until the guard is dropped.
-    /// A poisoned suppression lock returns an error, so the caller can avoid
-    /// a spent mark that a later durable write would export.
-    pub(crate) fn defer_durable_flushes_until_drop(&self) -> Result<DeferredDurableFlush, String> {
-        let mut suppressed = self
-            .durable_flush_suppressed
+    pub(crate) fn envelope_export_is_held(&self) -> bool {
+        self.envelope_export_holds
             .lock()
-            .map_err(|_| "Bark durable flush lock is poisoned".to_owned())?;
-        *suppressed = true;
-        Ok(DeferredDurableFlush {
-            suppressed: Arc::clone(&self.durable_flush_suppressed),
-        })
+            .map(|holds| *holds > 0)
+            .unwrap_or(false)
     }
 
     pub(crate) fn export_encoded_envelope(&self) -> Result<String, String> {
@@ -206,15 +191,8 @@ impl SharedRecordStore {
             .map_err(|_| "Bark record store lock is poisoned".to_owned())
     }
 
-    fn durable_flush_is_suppressed(&self) -> bool {
-        self.durable_flush_suppressed
-            .lock()
-            .map(|suppressed| *suppressed)
-            .unwrap_or(false)
-    }
-
     async fn flush_if_durable(&self, partition_id: u8) -> anyhow::Result<()> {
-        if !is_durable_partition(partition_id) || self.durable_flush_is_suppressed() {
+        if !is_durable_partition(partition_id) || self.envelope_export_is_held() {
             return Ok(());
         }
         let Some(hook) = self.durable_flush_hook()? else {
@@ -250,14 +228,6 @@ pub(crate) fn set_process_durable_flush_hook(hook: js_sys::Function) {
     PROCESS_DURABLE_FLUSH_HOOK.with(|slot| {
         *slot.borrow_mut() = Some(hook);
     });
-}
-
-impl Drop for DeferredDurableFlush {
-    fn drop(&mut self) {
-        if let Ok(mut suppressed) = self.suppressed.lock() {
-            *suppressed = false;
-        }
-    }
 }
 
 fn is_durable_partition(partition_id: u8) -> bool {
@@ -706,6 +676,40 @@ mod tests {
                     .is_none()
             );
         }
+    }
+
+    #[tokio::test]
+    async fn a_second_export_hold_keeps_the_envelope_unexported_until_both_are_dropped() {
+        let mut store = SharedRecordStore::empty();
+        let RecordedFlushes {
+            envelopes: flushed_envelopes,
+            hook,
+        } = flush_log();
+        store.set_durable_flush_hook(hook);
+        let first = store.hold_envelope_export().expect("first hold");
+        let second = store.hold_envelope_export().expect("second hold");
+        store
+            .put(record(partition::EXIT_VTXO, "exit", None, b"row"))
+            .await
+            .unwrap();
+        assert!(flushed_envelopes.lock().expect("flush log").is_empty());
+
+        drop(first);
+        store
+            .put(record(partition::EXIT_CHILD_TX, "child", None, b"child"))
+            .await
+            .unwrap();
+        assert!(
+            flushed_envelopes.lock().expect("flush log").is_empty(),
+            "one remaining hold still keeps the envelope in memory",
+        );
+
+        drop(second);
+        store
+            .put(record(partition::EXIT_VTXO, "later", None, b"later"))
+            .await
+            .unwrap();
+        assert_eq!(flushed_envelopes.lock().expect("flush log").len(), 1);
     }
 
     #[test]

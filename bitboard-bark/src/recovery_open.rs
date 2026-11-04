@@ -9,7 +9,8 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::record_store::{DeferredDurableFlush, SharedRecordStore};
+use crate::envelope_export_hold::EnvelopeExportHold;
+use crate::record_store::SharedRecordStore;
 
 /// Shown on the Bark session error screen. Retry opens the same empty envelope.
 pub(crate) const RECOVERY_SCAN_INCOMPLETE_MESSAGE: &str =
@@ -46,7 +47,7 @@ pub(crate) fn recovery_open_disposition(status: &bark::RecoveryStatus) -> Recove
 /// caller's end-of-open save.
 pub(crate) fn finish_deferred_recovery_open(
     store: &SharedRecordStore,
-    deferred_flush: DeferredDurableFlush,
+    deferred_flush: EnvelopeExportHold,
     disposition: RecoveryOpenDisposition,
 ) -> Result<(), String> {
     match disposition {
@@ -84,17 +85,21 @@ pub(crate) fn wallet_open_args(
 /// Empty-envelope opens defer durable flushes until [`Self::finish`].
 pub(crate) struct RecoveryOpen {
     status_slot: Arc<Mutex<Option<bark::RecoveryStatus>>>,
-    deferred_flush: Option<DeferredDurableFlush>,
+    deferred_flush: Option<EnvelopeExportHold>,
 }
 
 impl RecoveryOpen {
     /// Starts the window before `Wallet::open`. An existing record is left alone.
-    pub(crate) fn begin(store: &SharedRecordStore) -> Self {
-        let scan_may_create = !store.has_wallet_properties();
-        Self {
+    pub(crate) fn begin(store: &SharedRecordStore) -> Result<Self, String> {
+        let deferred_flush = if store.has_wallet_properties() {
+            None
+        } else {
+            Some(store.hold_envelope_export()?)
+        };
+        Ok(Self {
             status_slot: Arc::new(Mutex::new(None)),
-            deferred_flush: scan_may_create.then(|| store.defer_durable_flushes()),
-        }
+            deferred_flush,
+        })
     }
 
     pub(crate) fn callback(&self) -> Box<dyn FnOnce(bark::RecoveryStatus) + Send + Sync> {
@@ -187,7 +192,7 @@ mod tests {
     async fn dropped_empty_envelope_open_exports_no_properties_and_does_not_flush() {
         let mut store = SharedRecordStore::empty();
         let flushes = FlushLog::install(&mut store);
-        let recovery_open = RecoveryOpen::begin(&store);
+        let recovery_open = RecoveryOpen::begin(&store).expect("envelope hold");
         let report_failed_scan = recovery_open.callback();
         store.put(properties_record()).await.expect("properties");
         store.put(exit_record()).await.expect("exit row");
@@ -216,7 +221,7 @@ mod tests {
     async fn kept_empty_envelope_open_exports_properties_and_the_exit_row() {
         let mut store = SharedRecordStore::empty();
         let flushes = FlushLog::install(&mut store);
-        let recovery_open = RecoveryOpen::begin(&store);
+        let recovery_open = RecoveryOpen::begin(&store).expect("envelope hold");
         let report_finished_scan = recovery_open.callback();
         store.put(properties_record()).await.expect("properties");
         store.put(exit_record()).await.expect("exit row");
@@ -256,7 +261,7 @@ mod tests {
         store.put(properties_record()).await.expect("properties");
         assert!(store.has_wallet_properties());
         let flushes = FlushLog::install(&mut store);
-        let recovery_open = RecoveryOpen::begin(&store);
+        let recovery_open = RecoveryOpen::begin(&store).expect("envelope hold");
 
         store.put(exit_record()).await.expect("exit row");
         recovery_open.finish(&store).expect("existing record stays");

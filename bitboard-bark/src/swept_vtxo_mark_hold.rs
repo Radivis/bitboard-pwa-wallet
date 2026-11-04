@@ -1,16 +1,18 @@
 //! Holds swept-coin spent marks until the seizure notice is stored.
 //!
-//! A durable exit-row write exports the whole envelope. While this hold is
-//! active that export waits, so the spent mark is not saved before the notice.
+//! The export hold is [`crate::envelope_export_hold::EnvelopeExportHold`].
+//! This module keeps the previous coin states and puts them back when the
+//! notice is not stored. A durable exit-row write exports the whole envelope,
+//! so that export waits until the notice is stored.
 
 use std::cell::RefCell;
 
+use crate::envelope_export_hold::EnvelopeExportHold;
 use crate::exit_seizure::SweptVtxoPreviousState;
-use crate::record_store::DeferredDurableFlush;
 
 struct SweptVtxoMarkHold {
-    /// Kept so its drop allows durable flushes again.
-    _deferral: DeferredDurableFlush,
+    /// Kept so its drop allows the envelope export again.
+    _deferral: EnvelopeExportHold,
     previous: Vec<SweptVtxoPreviousState>,
 }
 
@@ -18,14 +20,13 @@ thread_local! {
     static SWEPT_VTXO_MARK_HOLD: RefCell<Option<SweptVtxoMarkHold>> = const { RefCell::new(None) };
 }
 
-/// Starts a hold. A second call keeps the first deferral and adds the coins.
-pub(crate) fn begin(deferral: DeferredDurableFlush, previous: Vec<SweptVtxoPreviousState>) {
+/// Starts a hold. A second call keeps the first hold and adds the coins.
+pub(crate) fn begin(deferral: EnvelopeExportHold, previous: Vec<SweptVtxoPreviousState>) {
     SWEPT_VTXO_MARK_HOLD.with(|slot| {
         let mut hold = slot.borrow_mut();
         if let Some(existing) = hold.as_mut() {
             existing.previous.extend(previous);
-            // Dropping this second guard would turn flushes back on.
-            std::mem::forget(deferral);
+            drop(deferral);
             return;
         }
         *hold = Some(SweptVtxoMarkHold {
@@ -117,9 +118,7 @@ mod tests {
         let mut store = SharedRecordStore::empty();
         let (envelopes, hook) = flush_log();
         store.set_durable_flush_hook(hook);
-        let deferral = store
-            .defer_durable_flushes_until_drop()
-            .expect("flush deferral");
+        let deferral = store.hold_envelope_export().expect("envelope hold");
         begin(deferral, vec![spent_coin()]);
 
         store
@@ -160,9 +159,7 @@ mod tests {
         let mut store = SharedRecordStore::empty();
         let (envelopes, hook) = flush_log();
         store.set_durable_flush_hook(hook);
-        let deferral = store
-            .defer_durable_flushes_until_drop()
-            .expect("flush deferral");
+        let deferral = store.hold_envelope_export().expect("envelope hold");
         begin(deferral, vec![spent_coin()]);
 
         add_previous(vec![spent_coin()]);

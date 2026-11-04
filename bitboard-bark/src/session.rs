@@ -161,7 +161,7 @@ async fn open_network_session(
     };
 
     install_record_store(store.clone())?;
-    let recovery_open = RecoveryOpen::begin(&store);
+    let recovery_open = RecoveryOpen::begin(&store)?;
     let persister = Arc::new(bark::persist::adaptor::StorageAdaptorWrapper::new(
         store.clone(),
     ));
@@ -266,15 +266,31 @@ pub async fn bark_open_regtest_session(
 }
 
 /// Exports the open network's record envelope. Plaintext stays in this worker.
-/// Refuses while swept coins are marked spent and the seizure notice is not stored yet.
+/// Refuses while an envelope edit is still uncommitted.
 #[wasm_bindgen]
 pub fn bark_export_record_envelope() -> Result<String, JsValue> {
-    if crate::swept_vtxo_mark_hold::is_held() {
+    if envelope_export_is_blocked() {
         return Err(JsValue::from_str(
-            "Bark swept coins are still waiting for the seizure notice",
+            "Bark envelope export is waiting for an uncommitted edit",
         ));
     }
     export_active_record_envelope().map_err(|err| JsValue::from_str(&err))
+}
+
+fn envelope_export_is_blocked() -> bool {
+    if crate::swept_vtxo_mark_hold::is_held() {
+        return true;
+    }
+    ACTIVE_RECORD_STORE.with(|slot| {
+        slot.try_borrow()
+            .ok()
+            .and_then(|current| {
+                current
+                    .as_ref()
+                    .map(|store| store.envelope_export_is_held())
+            })
+            .unwrap_or(false)
+    })
 }
 
 /// Persists a checkpoint, exit row, or exit child before that Bark write returns.
@@ -479,13 +495,13 @@ fn begin_swept_vtxo_mark_hold(
         crate::swept_vtxo_mark_hold::add_previous(previous);
         return Ok(());
     }
-    let deferral = defer_durable_flushes_for_swept_marks()?;
+    let deferral = hold_envelope_for_swept_marks_on_open_store()?;
     crate::swept_vtxo_mark_hold::begin(deferral, previous);
     Ok(())
 }
 
-fn defer_durable_flushes_for_swept_marks()
--> Result<crate::record_store::DeferredDurableFlush, String> {
+fn hold_envelope_for_swept_marks_on_open_store()
+-> Result<crate::envelope_export_hold::EnvelopeExportHold, String> {
     ACTIVE_RECORD_STORE.with(|slot| {
         let current = slot
             .try_borrow()
@@ -493,7 +509,7 @@ fn defer_durable_flushes_for_swept_marks()
         let store = current
             .as_ref()
             .ok_or_else(|| "Bark session is not open".to_owned())?;
-        store.defer_durable_flushes_until_drop()
+        store.hold_envelope_export()
     })
 }
 
