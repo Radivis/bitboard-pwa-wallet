@@ -61,7 +61,7 @@ feature:
     - When the server rejects an exit input as already spent, that VTXO is recorded as spent and the offboard checkpoint is dropped, so a later exit cannot select it
     - A bark.offboard movement is labeled as a Bark exit
     - A bark.round movement whose kind is refresh is labeled Bark refresh, including a failed row
-    - After Wallet sync succeeds, a delegated refresh is scheduled only when no round is already pending and Bark's selector finds coins that must refresh. When that selector stays idle, spendable dust coins are consolidated with one delegated refresh when their total covers the refresh fee and a non-dust output. A dust set that cannot pay stays idle and does not warn. A refresh fee that would leave a sub-dust output stays idle. Any other failure to schedule that consolidation uses the existing refresh warning. A pending round, a scheduled must-refresh, a scheduling warning, or coins locked in an emergency exit skips dust consolidation. The same notice covers a scheduled or pending consolidation
+    - After Wallet sync succeeds, a delegated refresh is scheduled only when no round is already pending and Bark's selector finds coins that must refresh. When that selector stays idle, spendable dust coins are consolidated with one delegated refresh when a set covers the refresh fee and a non-dust output. A coin the server rejects is left out and the rest are submitted. A set that cannot pay stays idle and does not warn, including when every smaller set also cannot pay. A refresh fee that would leave a sub-dust output stays idle. Any other failure to schedule that consolidation uses the existing refresh warning. A pending round, a scheduled must-refresh, or a scheduling warning skips dust consolidation. When an exit-locked coin is inside the refresh window, spendable dust is still consolidated and the card keeps the exit warning, including while that consolidation round is pending. The same notice covers a scheduled or pending consolidation
     - A scheduling failure keeps the last shown spendable amount and does not use the rail sync error banner
     - The Bark card shows a notice when a refresh was scheduled or is still pending, a warning when scheduling failed, and a separate warning when coins that must refresh are locked in an emergency exit
     - After a successful sync with spendable VTXOs, the dashboard Bark card and the management Bark card show a yellow notice at the top of the card content with the approximate time to unlock this wallet again
@@ -308,10 +308,13 @@ feature:
         implemented_by: bitboard-bark/src/refresh.rs
       - id: BARK-SYNC-13
         description: >
-          Dust consolidation is scheduled only from an idle maintenance refresh, and only
-          when the dust total meets the VTXO dust minimum. A refresh fee that leaves a
-          sub-dust output stays idle. Any other schedule error warns
-        implemented_by: bitboard-bark/src/refresh.rs
+          Dust consolidation runs from an idle maintenance refresh, and also while the
+          exit warning is showing. A coin the server rejects is dropped and the rest are
+          submitted. A set that cannot pay the refresh fee stays idle. Any other schedule
+          error warns. The card keeps the exit warning, including while that round is pending
+        implemented_by:
+          - bitboard-bark/src/refresh.rs
+          - bitboard-bark/src/session.rs
     metadata:
       - id: BARK-META-01
         description: A successful sync stamp keeps the fingerprint and receive index and writes an ISO timestamp

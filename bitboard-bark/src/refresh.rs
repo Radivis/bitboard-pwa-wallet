@@ -4,8 +4,10 @@
 //! submission while one is still pending would spend the same coins twice.
 //!
 //! When maintenance refresh stays idle, spendable dust can still be
-//! consolidated into one delegated refresh if the total meets the VTXO dust
-//! minimum. A refresh fee that would leave a sub-dust output stays idle.
+//! consolidated into one delegated refresh if some set meets the VTXO dust
+//! minimum after the refresh fee. A coin the server rejects is left out and
+//! the rest are submitted. An exit-locked coin inside the refresh window keeps
+//! the exit warning on the card while that consolidation still runs.
 
 use bitcoin_ext::{BlockDelta, BlockHeight};
 use serde::Serialize;
@@ -15,6 +17,11 @@ pub const BARK_REFRESH_SCHEDULED: &str = "scheduled";
 pub const BARK_REFRESH_PENDING: &str = "pending";
 pub const BARK_REFRESH_WARNING: &str = "warning";
 pub const BARK_REFRESH_EXIT_BLOCKED: &str = "exit_blocked";
+
+/// One consolidation drops server-rejected inputs and submits again, up to this many times.
+/// The same bound Bark uses for a maintenance refresh.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub const DUST_CONSOLIDATION_REJECTION_ATTEMPTS: usize = 10;
 
 /// True when `tip_height` is inside Bark's must-refresh expiry window.
 /// Bark refreshes once the tip is past `expiry_height - refresh_expiry_threshold`.
@@ -41,11 +48,69 @@ pub fn refresh_status_after_schedule(scheduled_round: bool) -> &'static str {
     }
 }
 
-/// Dust consolidation runs only after maintenance refresh found nothing due.
-/// A pending round, a scheduled refresh, a warning, or an exit block already
-/// owns the status the card shows.
+/// Dust consolidation runs after maintenance refresh found nothing due.
+/// A pending round, a scheduled refresh, or a warning already owns the status
+/// the card shows. An exit block is handled by the caller: it consolidates
+/// spendable dust and keeps the exit warning.
 pub fn should_schedule_dust_consolidation(maintenance_refresh_status: &str) -> bool {
     maintenance_refresh_status == BARK_REFRESH_IDLE
+}
+
+/// A stored round reports `pending`. An exit-locked coin inside the refresh
+/// window keeps the exit warning on the card while that round is still open.
+pub fn refresh_status_for_pending_round(exit_blocks_refresh: bool) -> &'static str {
+    if exit_blocks_refresh {
+        BARK_REFRESH_EXIT_BLOCKED
+    } else {
+        BARK_REFRESH_PENDING
+    }
+}
+
+/// Indexes of `(amount_sats, marginal_fee_sats)` to keep.
+///
+/// The full set is kept when its amount, after `base_fee_sats` and each coin's
+/// fee, is at least `dust_sats`. Otherwise a coin whose own fee exceeds its
+/// amount is dropped, worst first, until the rest can pay. A set that still
+/// cannot pay, or whose amount is below `dust_sats`, keeps nothing.
+pub fn payable_dust_indexes(
+    coins: &[(u64, u64)],
+    base_fee_sats: u64,
+    dust_sats: u64,
+) -> Vec<usize> {
+    let mut kept = (0..coins.len()).collect::<Vec<_>>();
+    loop {
+        if kept.is_empty() {
+            return Vec::new();
+        }
+        let total_amount = sat_sum(kept.iter().map(|index| coins[*index].0));
+        if total_amount < dust_sats {
+            return Vec::new();
+        }
+        let marginal_fees = sat_sum(kept.iter().map(|index| coins[*index].1));
+        let fee = base_fee_sats.saturating_add(marginal_fees);
+        if total_amount.saturating_sub(fee) >= dust_sats {
+            return kept;
+        }
+        let Some(worst_index) = worst_fee_over_amount(coins, &kept) else {
+            return Vec::new();
+        };
+        let (amount_sats, marginal_fee_sats) = coins[worst_index];
+        if marginal_fee_sats <= amount_sats {
+            return Vec::new();
+        }
+        kept.retain(|index| *index != worst_index);
+    }
+}
+
+fn sat_sum(amounts: impl Iterator<Item = u64>) -> u64 {
+    amounts.fold(0u64, u64::saturating_add)
+}
+
+fn worst_fee_over_amount(coins: &[(u64, u64)], kept: &[usize]) -> Option<usize> {
+    kept.iter().copied().max_by_key(|index| {
+        let (amount_sats, marginal_fee_sats) = coins[*index];
+        marginal_fee_sats.saturating_sub(amount_sats)
+    })
 }
 
 /// `dust_amounts_sats` are spendable coins already below the VTXO dust limit.
@@ -115,7 +180,8 @@ mod tests {
     use super::{
         BARK_REFRESH_EXIT_BLOCKED, BARK_REFRESH_IDLE, BARK_REFRESH_PENDING, BARK_REFRESH_SCHEDULED,
         BARK_REFRESH_WARNING, dust_total_meets_vtxo_dust, next_refresh_schedule_json,
-        refresh_status_after_dust_consolidation, refresh_status_after_schedule,
+        payable_dust_indexes, refresh_status_after_dust_consolidation,
+        refresh_status_after_schedule, refresh_status_for_pending_round,
         should_schedule_delegated_refresh, should_schedule_dust_consolidation,
         vtxo_is_inside_refresh_expiry_window,
     };
@@ -182,12 +248,44 @@ mod tests {
     }
 
     #[test]
+    fn a_pending_round_keeps_the_exit_warning_when_an_exit_blocks_refresh() {
+        assert_eq!(
+            refresh_status_for_pending_round(false),
+            BARK_REFRESH_PENDING
+        );
+        assert_eq!(
+            refresh_status_for_pending_round(true),
+            BARK_REFRESH_EXIT_BLOCKED
+        );
+    }
+
+    #[test]
     fn a_dust_total_below_the_vtxo_minimum_is_not_consolidated() {
         let below_dust = VTXO_DUST_SAT.saturating_sub(1);
         assert!(!dust_total_meets_vtxo_dust([]));
         assert!(!dust_total_meets_vtxo_dust([below_dust]));
         assert!(dust_total_meets_vtxo_dust([below_dust, 1]));
         assert!(dust_total_meets_vtxo_dust([VTXO_DUST_SAT]));
+    }
+
+    #[test]
+    fn a_payable_dust_set_is_kept_and_a_coin_whose_fee_exceeds_its_amount_is_dropped() {
+        let dust_sats = VTXO_DUST_SAT;
+        assert_eq!(
+            payable_dust_indexes(&[(200, 1), (200, 1), (200, 1)], 50, dust_sats),
+            vec![0, 1, 2]
+        );
+        assert_eq!(
+            payable_dust_indexes(&[(400, 1), (200, 500)], 0, dust_sats),
+            vec![0]
+        );
+        assert_eq!(
+            payable_dust_indexes(&[(500, 1), (400, 900), (400, 800)], 0, dust_sats),
+            vec![0]
+        );
+        assert!(payable_dust_indexes(&[(200, 1), (200, 1)], 100, dust_sats).is_empty());
+        assert!(payable_dust_indexes(&[(100, 1)], 0, dust_sats).is_empty());
+        assert!(payable_dust_indexes(&[], 0, dust_sats).is_empty());
     }
 
     #[test]

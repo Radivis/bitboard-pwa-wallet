@@ -1,4 +1,5 @@
 use std::cell::{Cell, RefCell};
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use bip39::Mnemonic;
@@ -9,11 +10,11 @@ use crate::board::clear_prepared_board_funding;
 use crate::record_store::SharedRecordStore;
 use crate::recovery_open::RecoveryOpen;
 use crate::refresh::{
-    BARK_REFRESH_EXIT_BLOCKED, BARK_REFRESH_IDLE, BARK_REFRESH_PENDING, BARK_REFRESH_WARNING,
-    dust_total_meets_vtxo_dust, next_refresh_schedule_json,
-    refresh_status_after_dust_consolidation, refresh_status_after_schedule,
-    should_schedule_delegated_refresh, should_schedule_dust_consolidation,
-    vtxo_is_inside_refresh_expiry_window,
+    BARK_REFRESH_EXIT_BLOCKED, BARK_REFRESH_IDLE, BARK_REFRESH_WARNING,
+    DUST_CONSOLIDATION_REJECTION_ATTEMPTS, dust_total_meets_vtxo_dust, next_refresh_schedule_json,
+    payable_dust_indexes, refresh_status_after_dust_consolidation, refresh_status_after_schedule,
+    refresh_status_for_pending_round, should_schedule_delegated_refresh,
+    should_schedule_dust_consolidation, vtxo_is_inside_refresh_expiry_window,
 };
 use crate::sync_gate::BarkSessionSyncGate;
 use crate::{
@@ -480,9 +481,10 @@ async fn sync_open_exits(wallet: &bark::Wallet) {
 /// only when that list is empty. Selector misses and schedule errors stay
 /// inside this status so the caller can still treat the sync as successful.
 ///
-/// An idle maintenance refresh then consolidates spendable dust, when that
-/// set can pay for one output. A pending round, a stored refresh, a warning,
-/// or an exit block keeps its status and does not open a second round.
+/// An idle maintenance refresh then consolidates spendable dust, when some
+/// set can pay for one output. A pending round, a stored refresh, or a warning
+/// keeps its status and does not open a second round. An exit block keeps the
+/// exit warning and still consolidates spendable dust.
 async fn delegated_refresh_status(wallet: &bark::Wallet) -> String {
     let pending_round_count = match wallet.pending_round_states().await {
         Ok(states) => states.len(),
@@ -494,9 +496,14 @@ async fn delegated_refresh_status(wallet: &bark::Wallet) -> String {
         }
     };
     if !should_schedule_delegated_refresh(pending_round_count) {
-        return BARK_REFRESH_PENDING.to_owned();
+        let exit_blocks_refresh = exit_locked_vtxo_blocks_refresh(wallet).await;
+        return refresh_status_for_pending_round(exit_blocks_refresh).to_owned();
     }
     let maintenance_status = maintenance_refresh_status(wallet).await;
+    if maintenance_status == BARK_REFRESH_EXIT_BLOCKED {
+        schedule_dust_consolidation(wallet).await;
+        return BARK_REFRESH_EXIT_BLOCKED.to_owned();
+    }
     if !should_schedule_dust_consolidation(&maintenance_status) {
         return maintenance_status;
     }
@@ -522,8 +529,9 @@ async fn maintenance_refresh_status(wallet: &bark::Wallet) -> String {
     }
 }
 
-/// One delegated refresh of every spendable coin below the VTXO dust limit.
-/// A total that cannot pay, or a fee that would leave a sub-dust output, stays idle.
+/// One delegated refresh of spendable coins below the VTXO dust limit.
+/// A set that cannot pay stays idle. A coin the server rejects is left out
+/// and the rest are submitted, so one rejection does not warn on every later sync.
 async fn schedule_dust_consolidation(wallet: &bark::Wallet) -> String {
     let dust_vtxos = match spendable_dust_vtxos(wallet).await {
         Ok(vtxos) => vtxos,
@@ -534,19 +542,113 @@ async fn schedule_dust_consolidation(wallet: &bark::Wallet) -> String {
             return BARK_REFRESH_WARNING.to_owned();
         }
     };
-    let dust_can_pay =
-        dust_total_meets_vtxo_dust(dust_vtxos.iter().map(|vtxo| vtxo.amount().to_sat()));
-    if !dust_can_pay {
-        return BARK_REFRESH_IDLE.to_owned();
-    }
-    match wallet.refresh_vtxos_delegated(dust_vtxos).await {
-        Ok(round) => refresh_status_after_dust_consolidation(Ok(round.is_some())).to_owned(),
-        Err(err) => {
-            let status = refresh_status_after_dust_consolidation(Err(&err));
-            warn_about_dust_consolidation(&err, status);
-            status.to_owned()
+    let mut excluded_vtxo_ids = HashSet::new();
+    for _ in 0..DUST_CONSOLIDATION_REJECTION_ATTEMPTS {
+        let candidates = dust_vtxos
+            .iter()
+            .filter(|vtxo| !excluded_vtxo_ids.contains(&vtxo.id()))
+            .cloned()
+            .collect::<Vec<_>>();
+        let payable = match payable_spendable_dust(wallet, candidates).await {
+            Ok(vtxos) => vtxos,
+            Err(err) => {
+                console_warn(&format!("Bark could not price dust consolidation: {err:#}"));
+                return BARK_REFRESH_WARNING.to_owned();
+            }
+        };
+        if payable.is_empty() {
+            return BARK_REFRESH_IDLE.to_owned();
+        }
+        match wallet.refresh_vtxos_delegated(payable).await {
+            Ok(round) => {
+                return refresh_status_after_dust_consolidation(Ok(round.is_some())).to_owned();
+            }
+            Err(err) => {
+                if finish_rejected_dust_attempt(&err, &mut excluded_vtxo_ids) {
+                    continue;
+                }
+                let status = refresh_status_after_dust_consolidation(Err(&err));
+                warn_about_dust_consolidation(&err, status);
+                return status.to_owned();
+            }
         }
     }
+    console_warn(
+        "Bark could not schedule dust consolidation after dropping coins the server rejected",
+    );
+    BARK_REFRESH_WARNING.to_owned()
+}
+
+/// `true` when this error named new inputs to leave out of the next submission.
+/// A submission that names none is finished: the caller reports that error.
+fn finish_rejected_dust_attempt(
+    err: &anyhow::Error,
+    excluded_vtxo_ids: &mut HashSet<bark::ark::VtxoId>,
+) -> bool {
+    let mut newly_excluded = 0;
+    for vtxo_id in rejected_dust_vtxo_ids(err) {
+        if excluded_vtxo_ids.insert(vtxo_id) {
+            newly_excluded += 1;
+        }
+    }
+    if newly_excluded == 0 {
+        return false;
+    }
+    console_warn(&format!(
+        "Bark left {newly_excluded} dust coin(s) out of consolidation after the server rejected them"
+    ));
+    true
+}
+
+fn rejected_dust_vtxo_ids(err: &anyhow::Error) -> Vec<bark::ark::VtxoId> {
+    use server_rpc::StatusExt;
+    for cause in err.chain() {
+        if let Some(status) = cause.downcast_ref::<server_rpc::tonic::Status>() {
+            return status.rejected_vtxos();
+        }
+    }
+    Vec::new()
+}
+
+/// The subset that still covers the refresh fee and a non-dust output.
+/// An empty result stays idle and does not submit a round, so no VTXO key is stored.
+async fn payable_spendable_dust(
+    wallet: &bark::Wallet,
+    dust_vtxos: Vec<bark::WalletVtxo>,
+) -> Result<Vec<bark::WalletVtxo>, anyhow::Error> {
+    if !dust_total_meets_vtxo_dust(dust_vtxos.iter().map(|vtxo| vtxo.amount().to_sat())) {
+        return Ok(Vec::new());
+    }
+    let ark_info = wallet.require_ark_info().await?;
+    let tip_height = wallet.chain().tip().await?;
+    let contributions = dust_vtxos
+        .iter()
+        .map(|vtxo| dust_coin_contribution(vtxo, &ark_info, tip_height))
+        .collect::<Vec<_>>();
+    let kept_indexes = payable_dust_indexes(
+        &contributions,
+        ark_info.fees.refresh.base_fee.to_sat(),
+        bark::ark::vtxo::VTXO_DUST_SAT,
+    );
+    Ok(kept_indexes
+        .into_iter()
+        .map(|index| dust_vtxos[index].clone())
+        .collect())
+}
+
+fn dust_coin_contribution(
+    vtxo: &bark::WalletVtxo,
+    ark_info: &bark::ark::ArkInfo,
+    tip_height: bitcoin_ext::BlockHeight,
+) -> (u64, u64) {
+    let fee_info = bark::ark::fees::VtxoFeeInfo::from_vtxo_and_tip(vtxo.as_ref(), tip_height);
+    let marginal_fee_sats = ark_info
+        .fees
+        .refresh
+        .calculate_no_base_fee([fee_info])
+        .map(|fee| fee.to_sat())
+        .unwrap_or(u64::MAX);
+    (vtxo.amount().to_sat(), marginal_fee_sats)
 }
 
 fn warn_about_dust_consolidation(err: &anyhow::Error, status: &str) {

@@ -45,6 +45,8 @@ wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
 bark-wallet = { version = "0.8.0", default-features = false, features = ["wasm-web"] }
+# Reads the VTXO ids a rejected round submission names. Already in the bark-wallet graph.
+bark-server-rpc = { version = "0.8.0", default-features = false }
 # BlockHeight and BlockDelta. Already in the bark graph. Default features pull bitcoind RPC.
 bark-bitcoin-ext = { version = "0.8.0", default-features = false }
 # Public type of Wallet::open / WalletSeed::new_from_mnemonic. Already in the bark graph.

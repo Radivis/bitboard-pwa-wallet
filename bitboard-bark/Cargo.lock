@@ -392,6 +392,7 @@ dependencies = [
  "ark-lib",
  "async-trait",
  "bark-bitcoin-ext 0.8.0",
+ "bark-server-rpc",
  "bark-wallet",
  "base64 0.22.1",
  "bip39",
