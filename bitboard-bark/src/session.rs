@@ -577,7 +577,7 @@ async fn exit_locked_vtxo_blocks_refresh(wallet: &bark::Wallet) -> bool {
     let Ok(tip_height) = wallet.chain().tip().await else {
         return false;
     };
-    let refresh_expiry_threshold = u32::from(wallet.config().vtxo_refresh_expiry_threshold);
+    let refresh_expiry_threshold = wallet.config().vtxo_refresh_expiry_threshold;
     let exits = wallet.exit_mgr().get_exit_vtxos().await;
     for exit in exits {
         let Some(movement_id) = exit.movement_id() else {

@@ -635,7 +635,7 @@ mod scan {
         for output in watched {
             match wallet
                 .chain()
-                .txs_spending_inputs([output.outpoint], 0)
+                .txs_spending_inputs([output.outpoint], 0u32.into())
                 .await
             {
                 Ok(result) => {

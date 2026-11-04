@@ -1,6 +1,8 @@
 //! Seed-recovery result for the open that creates a Bark record.
 //!
-//! bark-wallet reads the recovery mailbox only while creating the wallet.
+//! bark-wallet scans only while creating the wallet. That scan asks the server
+//! for the VTXOs of the seed's xpub, then reads the mailboxes for ids that
+//! lookup missed. A server without the xpub lookup falls back to the mailboxes.
 //! A failed or unfinished scan still returns a wallet. Keeping that record
 //! would make every later open skip the scan. This module drops that record
 //! unless the scan is retry-clean.
@@ -19,8 +21,10 @@ pub(crate) enum RecoveryOpenDisposition {
     Drop,
 }
 
-/// Keep a finished scan, including one that only leaves ids past the key gap.
-/// Drop when the scan failed or left ids that a later scan can still check.
+/// Keep a finished scan, including mailbox ids past the key gap and ids the
+/// server reported unknown. The xpub lookup is what finds coins past the gap
+/// on a server that offers it. Drop when the scan failed or left ids that a
+/// later scan can still check.
 pub(crate) fn recovery_open_disposition(status: &bark::RecoveryStatus) -> RecoveryOpenDisposition {
     match status {
         bark::RecoveryStatus::NotRun => RecoveryOpenDisposition::Keep,

@@ -26,6 +26,29 @@ pub struct RegtestBarkWallet {
 
 type ExitBumper = std::sync::Arc<tokio::sync::RwLock<dyn bark::onchain::OnchainWalletTrait>>;
 
+async fn exit_bumper_for_store(store: &SharedRecordStore) -> Result<ExitBumper, String> {
+    let persister = Arc::new(bark::persist::adaptor::StorageAdaptorWrapper::new(
+        store.clone(),
+    ));
+    Ok(Arc::new(tokio::sync::RwLock::new(
+        bark::onchain::OnchainWallet::load_or_create(Network::Regtest, [7u8; 64], persister)
+            .await
+            .map_err(|err| format!("{err:#}"))?,
+    )))
+}
+
+/// A new 12-word phrase. One test run uses the same phrase for both opens.
+pub fn fresh_regtest_mnemonic() -> String {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let entropy = nanos.to_le_bytes();
+    bip39::Mnemonic::from_entropy(&entropy)
+        .expect("128-bit entropy")
+        .to_string()
+}
+
 impl RegtestBarkWallet {
     /// Creates a wallet on an empty record store. The server must be up:
     /// `Wallet::open` handshakes before this returns.
@@ -40,6 +63,44 @@ impl RegtestBarkWallet {
             esplora_url,
             SharedRecordStore::empty(),
             None,
+            None,
+        )
+        .await
+    }
+
+    /// Empty envelope with an on-chain wallet, so a regtest can call `board_amount`.
+    pub async fn open_empty_with_exit_bumper(
+        mnemonic: &str,
+        server_url: &str,
+        esplora_url: &str,
+    ) -> Result<Self, String> {
+        let store = SharedRecordStore::empty();
+        let exit_bumper = exit_bumper_for_store(&store).await?;
+        Self::open_store(
+            mnemonic,
+            server_url,
+            esplora_url,
+            store,
+            Some(exit_bumper),
+            None,
+        )
+        .await
+    }
+
+    /// Empty envelope whose mailbox scan stops after `vtxo_key_gap_limit` unused keys.
+    pub async fn open_empty_with_vtxo_key_gap_limit(
+        mnemonic: &str,
+        server_url: &str,
+        esplora_url: &str,
+        vtxo_key_gap_limit: u32,
+    ) -> Result<Self, String> {
+        Self::open_store(
+            mnemonic,
+            server_url,
+            esplora_url,
+            SharedRecordStore::empty(),
+            None,
+            Some(vtxo_key_gap_limit),
         )
         .await
     }
@@ -52,7 +113,7 @@ impl RegtestBarkWallet {
         esplora_url: &str,
     ) -> Result<Self, String> {
         let store = SharedRecordStore::from_encoded_envelope(encoded_envelope)?;
-        Self::open_store(mnemonic, server_url, esplora_url, store, None).await
+        Self::open_store(mnemonic, server_url, esplora_url, store, None, None).await
     }
 
     /// Same envelope, plus a BDK wallet that can pay the exit child transaction.
@@ -63,16 +124,8 @@ impl RegtestBarkWallet {
         esplora_url: &str,
     ) -> Result<Self, String> {
         let store = SharedRecordStore::from_encoded_envelope(encoded_envelope)?;
-        let network = Network::Regtest;
-        let persister = Arc::new(bark::persist::adaptor::StorageAdaptorWrapper::new(
-            store.clone(),
-        ));
-        let bumper: ExitBumper = Arc::new(tokio::sync::RwLock::new(
-            bark::onchain::OnchainWallet::load_or_create(network, [7u8; 64], persister.clone())
-                .await
-                .map_err(|err| format!("{err:#}"))?,
-        ));
-        Self::open_store(mnemonic, server_url, esplora_url, store, Some(bumper)).await
+        let bumper = exit_bumper_for_store(&store).await?;
+        Self::open_store(mnemonic, server_url, esplora_url, store, Some(bumper), None).await
     }
 
     async fn open_store(
@@ -81,6 +134,7 @@ impl RegtestBarkWallet {
         esplora_url: &str,
         store: SharedRecordStore,
         exit_bumper: Option<ExitBumper>,
+        vtxo_key_gap_limit: Option<u32>,
     ) -> Result<Self, String> {
         let network = Network::Regtest;
         let parsed_mnemonic = bip39::Mnemonic::parse(mnemonic).map_err(|err| err.to_string())?;
@@ -91,6 +145,9 @@ impl RegtestBarkWallet {
         config.server_address = server_url.to_owned();
         config.esplora_address = Some(esplora_url.to_owned());
         config.user_agent = Some(format!("bitboard/{}", env!("CARGO_PKG_VERSION")));
+        if let Some(vtxo_key_gap_limit) = vtxo_key_gap_limit {
+            config.vtxo_key_gap_limit = vtxo_key_gap_limit;
+        }
         let recovery_open = RecoveryOpen::begin(&store);
         let persister = Arc::new(bark::persist::adaptor::StorageAdaptorWrapper::new(
             store.clone(),
@@ -173,6 +230,42 @@ impl RegtestBarkWallet {
         self.wallet.sync().await;
     }
 
+    /// Stores the next `count` VTXO keys and does not fund them.
+    pub async fn reveal_unused_vtxo_keys(&self, count: u32) -> Result<Vec<u32>, String> {
+        let mut indices = Vec::with_capacity(count as usize);
+        for _ in 0..count {
+            let (_keypair, index) = self
+                .wallet
+                .derive_store_next_keypair()
+                .await
+                .map_err(|err| format!("{err:#}"))?;
+            indices.push(index);
+        }
+        Ok(indices)
+    }
+
+    /// Boards the next unrevealed VTXO key from the attached on-chain wallet.
+    ///
+    /// Returns the boarded VTXO id and the key index `board_amount` stored.
+    pub async fn board_next_vtxo(&self, amount_sats: u64) -> Result<(String, u32), String> {
+        let (_keypair, index) = self
+            .wallet
+            .peek_next_keypair()
+            .await
+            .map_err(|err| format!("{err:#}"))?;
+        let pending = self
+            .wallet
+            .board_amount(Amount::from_sat(amount_sats))
+            .await
+            .map_err(|err| format!("{err:#}"))?;
+        let vtxo_id = pending
+            .vtxos
+            .first()
+            .ok_or("board returned no VTXO id")?
+            .to_string();
+        Ok((vtxo_id, index))
+    }
+
     pub async fn spendable_vtxo_ids(&self) -> Result<Vec<String>, String> {
         let vtxos = self
             .wallet
@@ -199,7 +292,7 @@ impl RegtestBarkWallet {
             .require_ark_info()
             .await
             .map_err(|err| format!("{err:#}"))?;
-        let expiry_height = 0;
+        let expiry_height = 0u32.into();
         let funding_script = bark::ark::board::BoardBuilder::new(
             keypair.public_key(),
             expiry_height,
@@ -219,7 +312,7 @@ impl RegtestBarkWallet {
         self.wallet
             .offboard_all(address)
             .await
-            .map(|txid| txid.to_string())
+            .map(|offboard| offboard.txid.to_string())
             .map_err(|err| format!("{err:#}"))
     }
 
@@ -232,7 +325,7 @@ impl RegtestBarkWallet {
         self.wallet
             .offboard_vtxos(selected, address)
             .await
-            .map(|txid| txid.to_string())
+            .map(|offboard| offboard.txid.to_string())
             .map_err(|err| format!("{err:#}"))
     }
 

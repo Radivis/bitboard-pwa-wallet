@@ -56,11 +56,15 @@ rust_invariants:
     description: Re-opening the dump after a claim broadcast does not drain those VTXOs again.
     test: bitboard-bark/tests/emergency_exit_claim_before_observation_regtest.rs
     run: BARK_REGTEST_BOARDED_FIXTURE=frontend/test-results/bark-boarded-fixture.json BARK_REGTEST_RUN=1 cargo test --features regtest-support --test emergency_exit_claim_before_observation_regtest -- --ignored --test-threads=1
+  - name: seed_recovery_past_gap_regtest
+    description: An empty-envelope open with vtxo_key_gap_limit 1 still spends a VTXO boarded at key index 3. Indices 0–2 stay unused, so the mailbox scan cannot reach that key. The server xpub lookup returns it first.
+    test: bitboard-bark/tests/seed_recovery_past_gap_regtest.rs
+    run: BARK_REGTEST_RUN=1 cargo test --features regtest-support --test seed_recovery_past_gap_regtest -- --ignored --test-threads=1
 
 infrastructure:
   stack: arkade-regtest
   profile: bark
-  image: docker.io/secondark/captaind:0.7.1
+  image: docker.io/secondark/captaind:0.8.0
   captaind: "http://localhost:3535"
   esplora: "http://localhost:7030/api"
   expiry:

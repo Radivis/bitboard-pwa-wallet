@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use bitcoin_ext::{BlockDelta, BlockHeight};
 use serde::Serialize;
 
 use crate::exit_address::ExitInputState;
@@ -8,6 +9,7 @@ pub const BARK_EXIT_UNKNOWN_VTXO: &str = "bark_exit_unknown_vtxo";
 pub const BARK_EXIT_DUST: &str = "bark_exit_dust";
 pub const BARK_EXIT_ALREADY_EXITED: &str = "bark_exit_already_exited";
 pub const BARK_EXIT_ALREADY_SPENT: &str = "bark_exit_already_spent";
+pub const BARK_EXIT_VTXO_SWEPT: &str = "bark_exit_vtxo_swept";
 pub const BARK_EXIT_NOTHING_STARTED: &str = "bark_exit_nothing_started";
 pub const BARK_EXIT_CANNOT_CANCEL: &str = "bark_exit_cannot_cancel";
 pub const BARK_EXIT_NOT_EXITING: &str = "bark_exit_not_exiting";
@@ -136,12 +138,13 @@ pub enum BarkEmergencyExitStateKind {
     ClaimInProgress,
     Claimed,
     VtxoAlreadySpent,
+    VtxoSwept,
     Canceled,
 }
 
 #[cfg(test)]
 impl BarkEmergencyExitStateKind {
-    pub const ALL: [BarkEmergencyExitStateKind; 8] = [
+    pub const ALL: [BarkEmergencyExitStateKind; 9] = [
         BarkEmergencyExitStateKind::Start,
         BarkEmergencyExitStateKind::Processing,
         BarkEmergencyExitStateKind::AwaitingDelta,
@@ -149,6 +152,7 @@ impl BarkEmergencyExitStateKind {
         BarkEmergencyExitStateKind::ClaimInProgress,
         BarkEmergencyExitStateKind::Claimed,
         BarkEmergencyExitStateKind::VtxoAlreadySpent,
+        BarkEmergencyExitStateKind::VtxoSwept,
         BarkEmergencyExitStateKind::Canceled,
     ];
 }
@@ -162,6 +166,7 @@ pub fn emergency_exit_state_json(kind: BarkEmergencyExitStateKind) -> &'static s
         BarkEmergencyExitStateKind::ClaimInProgress => "claimInProgress",
         BarkEmergencyExitStateKind::Claimed => "claimed",
         BarkEmergencyExitStateKind::VtxoAlreadySpent => "vtxoAlreadySpent",
+        BarkEmergencyExitStateKind::VtxoSwept => "vtxoSwept",
         BarkEmergencyExitStateKind::Canceled => "canceled",
     }
 }
@@ -169,9 +174,9 @@ pub fn emergency_exit_state_json(kind: BarkEmergencyExitStateKind) -> &'static s
 /// Block heights Bark records once every exit transaction has confirmed and the claim timelock is running.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AwaitingDeltaHeights {
-    pub tip_height: u32,
-    pub confirmed_height: u32,
-    pub claimable_height: u32,
+    pub tip_height: BlockHeight,
+    pub confirmed_height: BlockHeight,
+    pub claimable_height: BlockHeight,
 }
 
 /// `AwaitingDelta` carries the tip, the block that confirmed the exit, and the height where a claim can be signed.
@@ -250,11 +255,11 @@ struct EmergencyExitRowJson {
     state: &'static str,
     cancelable: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    tip_height: Option<u32>,
+    tip_height: Option<BlockHeight>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    confirmed_height: Option<u32>,
+    confirmed_height: Option<BlockHeight>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    claimable_height: Option<u32>,
+    claimable_height: Option<BlockHeight>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -416,8 +421,8 @@ pub(crate) fn exit_graph_tx_types(
     continuation_scripts: &[bitcoin::ScriptBuf],
     arkoor_pubkeys: &[Vec<bitcoin::secp256k1::PublicKey>],
     server_pubkey: bitcoin::secp256k1::PublicKey,
-    exit_delta: u16,
-    expiry_height: u32,
+    exit_delta: BlockDelta,
+    expiry_height: BlockHeight,
 ) -> Vec<ExitGraphTxType> {
     if arkoor_pubkeys.len() > continuation_scripts.len() {
         return vec![ExitGraphTxType::Tree; continuation_scripts.len()];
@@ -446,8 +451,8 @@ fn tx_type_for_hop(
     script: &bitcoin::ScriptBuf,
     arkoor_pubkeys: &[Vec<bitcoin::secp256k1::PublicKey>],
     server_pubkey: bitcoin::secp256k1::PublicKey,
-    exit_delta: u16,
-    expiry_height: u32,
+    exit_delta: BlockDelta,
+    expiry_height: BlockHeight,
 ) -> ExitGraphTxType {
     let Some(hop_index) = index.checked_sub(prefix_len) else {
         return ExitGraphTxType::Tree;
@@ -698,11 +703,11 @@ mod wasm {
         BARK_EXIT_CANNOT_CANCEL, BARK_EXIT_CLAIM_FEE, BARK_EXIT_CLAIM_MISSING_INPUTS,
         BARK_EXIT_DUST, BARK_EXIT_FAILED, BARK_EXIT_INSUFFICIENT_FUNDS, BARK_EXIT_NOT_CLAIMABLE,
         BARK_EXIT_NOT_EXITING, BARK_EXIT_NOTHING_STARTED, BARK_EXIT_UNKNOWN_VTXO,
-        BarkEmergencyExitStateKind, EmergencyExitCpfpRequestJson, EmergencyExitDrainJson,
-        EmergencyExitEstimateJson, EmergencyExitProgressJson, EmergencyExitRowJson,
-        awaiting_delta_heights, cpfp_requests_needing_first_child, encode_hex, exit_ids_grew,
-        fee_rate_from_sat_per_vb, fee_rate_sat_per_vb, format_bark_exit_error, json_string,
-        zero_estimate_json,
+        BARK_EXIT_VTXO_SWEPT, BarkEmergencyExitStateKind, EmergencyExitCpfpRequestJson,
+        EmergencyExitDrainJson, EmergencyExitEstimateJson, EmergencyExitProgressJson,
+        EmergencyExitRowJson, awaiting_delta_heights, cpfp_requests_needing_first_child,
+        encode_hex, exit_ids_grew, fee_rate_from_sat_per_vb, fee_rate_sat_per_vb,
+        format_bark_exit_error, json_string, zero_estimate_json,
     };
     use crate::exit_address::parse_receive_address;
     use crate::session::session_bitcoin_network;
@@ -714,6 +719,7 @@ mod wasm {
             bark::exit::ExitError::DustLimit { .. } => BARK_EXIT_DUST,
             bark::exit::ExitError::VtxoAlreadyExited { .. } => BARK_EXIT_ALREADY_EXITED,
             bark::exit::ExitError::VtxoAlreadySpent { .. } => BARK_EXIT_ALREADY_SPENT,
+            bark::exit::ExitError::VtxoSwept { .. } => BARK_EXIT_VTXO_SWEPT,
             bark::exit::ExitError::CannotCancelExit { .. } => BARK_EXIT_CANNOT_CANCEL,
             bark::exit::ExitError::NotExiting { .. } => BARK_EXIT_NOT_EXITING,
             bark::exit::ExitError::ExitTxAlreadyBroadcast { .. } => BARK_EXIT_ALREADY_BROADCAST,
@@ -760,6 +766,7 @@ mod wasm {
             bark::exit::ExitStateKind::VtxoAlreadySpent => {
                 BarkEmergencyExitStateKind::VtxoAlreadySpent
             }
+            bark::exit::ExitStateKind::VtxoSwept => BarkEmergencyExitStateKind::VtxoSwept,
             bark::exit::ExitStateKind::Canceled => BarkEmergencyExitStateKind::Canceled,
         }
     }
@@ -804,7 +811,13 @@ mod wasm {
             let estimate = map_exit_error(
                 wallet
                     .exit_mgr()
-                    .estimate_emergency_exit_fee(&vtxo_ids, wallet, Some(fee_rate), None)
+                    .estimate_emergency_exit_fee(
+                        &vtxo_ids,
+                        wallet,
+                        Some(fee_rate),
+                        None,
+                        Some(bark::exit::DEFAULT_BROADCAST_FEE_MARGIN),
+                    )
                     .await,
             )?;
             json_string(&EmergencyExitEstimateJson {
@@ -1114,10 +1127,10 @@ mod tests {
         BARK_EXIT_ALREADY_SPENT, BARK_EXIT_CANNOT_CANCEL, BARK_EXIT_CLAIM_FEE,
         BARK_EXIT_CLAIM_MISSING_INPUTS, BARK_EXIT_DUST, BARK_EXIT_FAILED,
         BARK_EXIT_INSUFFICIENT_FUNDS, BARK_EXIT_NOT_CLAIMABLE, BARK_EXIT_NOT_EXITING,
-        BARK_EXIT_NOTHING_STARTED, BARK_EXIT_UNKNOWN_VTXO, BarkEmergencyExitStateKind,
-        ExitGraphChain, ExitGraphChainStatus, ExitGraphTransactionKind, ExitGraphTransactionStatus,
-        ExitGraphTxType, awaiting_delta_heights, chain_anchor_transaction,
-        cpfp_requests_needing_first_child, emergency_exit_state_json,
+        BARK_EXIT_NOTHING_STARTED, BARK_EXIT_UNKNOWN_VTXO, BARK_EXIT_VTXO_SWEPT,
+        BarkEmergencyExitStateKind, ExitGraphChain, ExitGraphChainStatus, ExitGraphTransactionKind,
+        ExitGraphTransactionStatus, ExitGraphTxType, awaiting_delta_heights,
+        chain_anchor_transaction, cpfp_requests_needing_first_child, emergency_exit_state_json,
         exit_graph_transaction_from_bitcoin, exit_graph_tx_types, exit_ids_grew,
         fee_rate_from_sat_per_vb, fee_rate_sat_per_vb, merge_exit_graph, should_lock_exit_vtxo,
     };
@@ -1140,16 +1153,20 @@ mod tests {
         let confirmed_block = "90:0000000000000000000000000000000000000000000000000000000000000000"
             .parse()
             .expect("confirmed block");
-        let awaiting_delta = ExitState::new_awaiting_delta(100, confirmed_block, 40);
+        let awaiting_delta =
+            ExitState::new_awaiting_delta(100u32.into(), confirmed_block, 40u16.into());
         assert_eq!(
             awaiting_delta_heights(&awaiting_delta),
             Some(AwaitingDeltaHeights {
-                tip_height: 100,
-                confirmed_height: 90,
-                claimable_height: 130,
+                tip_height: bitcoin_ext::BlockHeight::new(100),
+                confirmed_height: bitcoin_ext::BlockHeight::new(90),
+                claimable_height: bitcoin_ext::BlockHeight::new(130),
             })
         );
-        assert_eq!(awaiting_delta_heights(&ExitState::new_start(100)), None);
+        assert_eq!(
+            awaiting_delta_heights(&ExitState::new_start(100u32.into())),
+            None
+        );
     }
 
     #[test]
@@ -1165,6 +1182,7 @@ mod tests {
                 "claimInProgress",
                 "claimed",
                 "vtxoAlreadySpent",
+                "vtxoSwept",
                 "canceled",
             ]
         );
@@ -1176,6 +1194,7 @@ mod tests {
         assert_eq!(BARK_EXIT_DUST, "bark_exit_dust");
         assert_eq!(BARK_EXIT_ALREADY_EXITED, "bark_exit_already_exited");
         assert_eq!(BARK_EXIT_ALREADY_SPENT, "bark_exit_already_spent");
+        assert_eq!(BARK_EXIT_VTXO_SWEPT, "bark_exit_vtxo_swept");
         assert_eq!(BARK_EXIT_NOTHING_STARTED, "bark_exit_nothing_started");
         assert_eq!(BARK_EXIT_CANNOT_CANCEL, "bark_exit_cannot_cancel");
         assert_eq!(BARK_EXIT_NOT_EXITING, "bark_exit_not_exiting");
@@ -1375,8 +1394,8 @@ mod tests {
     fn exit_graph_marks_a_checkpoint_hop_and_leaves_the_prefix_and_vtxo_hop_as_tree() {
         let user_pubkey = keypair_pubkey(1);
         let server_pubkey = keypair_pubkey(2);
-        let exit_delta = 24;
-        let expiry_height = 100;
+        let exit_delta = bitcoin_ext::BlockDelta::new(24);
+        let expiry_height = bitcoin_ext::BlockHeight::new(100);
         let checkpoint_script = bark::ark::ServerVtxoPolicy::new_checkpoint(user_pubkey)
             .script_pubkey(server_pubkey, exit_delta, expiry_height);
         let other_script = bitcoin::ScriptBuf::new();

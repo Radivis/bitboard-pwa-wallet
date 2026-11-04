@@ -7,6 +7,7 @@
 //! consolidated into one delegated refresh if the total meets the VTXO dust
 //! minimum. A refresh fee that would leave a sub-dust output stays idle.
 
+use bitcoin_ext::{BlockDelta, BlockHeight};
 use serde::Serialize;
 
 pub const BARK_REFRESH_IDLE: &str = "idle";
@@ -19,9 +20,9 @@ pub const BARK_REFRESH_EXIT_BLOCKED: &str = "exit_blocked";
 /// Bark refreshes once the tip is past `expiry_height - refresh_expiry_threshold`.
 /// An already-expired coin is inside that window.
 pub fn vtxo_is_inside_refresh_expiry_window(
-    tip_height: u32,
-    expiry_height: u32,
-    refresh_expiry_threshold: u32,
+    tip_height: BlockHeight,
+    expiry_height: BlockHeight,
+    refresh_expiry_threshold: BlockDelta,
 ) -> bool {
     tip_height > expiry_height.saturating_sub(refresh_expiry_threshold)
 }
@@ -83,13 +84,13 @@ fn refresh_fee_rejects_dust_consolidation(err: &anyhow::Error) -> bool {
 /// Bark must refresh once `tip > required_refresh_height`, so the refresh
 /// period starts one block after that height.
 pub fn next_refresh_schedule_json(
-    tip_height: Option<u32>,
-    required_refresh_height: Option<u32>,
+    tip_height: Option<BlockHeight>,
+    required_refresh_height: Option<BlockHeight>,
 ) -> Result<String, String> {
     let schedule = match (tip_height, required_refresh_height) {
         (Some(tip_height), Some(required_refresh_height)) => Some(NextRefreshScheduleJson {
             tip_height,
-            next_refresh_height: required_refresh_height.saturating_add(1),
+            next_refresh_height: required_refresh_height + BlockDelta::new(1),
         }),
         _ => None,
     };
@@ -99,8 +100,8 @@ pub fn next_refresh_schedule_json(
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct NextRefreshScheduleJson {
-    tip_height: u32,
-    next_refresh_height: u32,
+    tip_height: BlockHeight,
+    next_refresh_height: BlockHeight,
 }
 
 #[cfg(test)]
@@ -108,6 +109,8 @@ mod tests {
     use bark::ark::fees::FeeValidationError;
     use bark::ark::vtxo::{VTXO_DUST, VTXO_DUST_SAT};
     use bitcoin::Amount;
+
+    use bitcoin_ext::{BlockDelta, BlockHeight};
 
     use super::{
         BARK_REFRESH_EXIT_BLOCKED, BARK_REFRESH_IDLE, BARK_REFRESH_PENDING, BARK_REFRESH_SCHEDULED,
@@ -120,7 +123,11 @@ mod tests {
     #[test]
     fn next_refresh_schedule_starts_one_block_after_the_required_height() {
         assert_eq!(
-            next_refresh_schedule_json(Some(1_000), Some(1_100)).unwrap(),
+            next_refresh_schedule_json(
+                Some(BlockHeight::new(1_000)),
+                Some(BlockHeight::new(1_100))
+            )
+            .unwrap(),
             r#"{"tipHeight":1000,"nextRefreshHeight":1101}"#
         );
     }
@@ -128,11 +135,11 @@ mod tests {
     #[test]
     fn next_refresh_schedule_is_null_without_a_tip_or_a_required_height() {
         assert_eq!(
-            next_refresh_schedule_json(None, Some(1_100)).unwrap(),
+            next_refresh_schedule_json(None, Some(BlockHeight::new(1_100))).unwrap(),
             "null"
         );
         assert_eq!(
-            next_refresh_schedule_json(Some(1_000), None).unwrap(),
+            next_refresh_schedule_json(Some(BlockHeight::new(1_000)), None).unwrap(),
             "null"
         );
         assert_eq!(next_refresh_schedule_json(None, None).unwrap(), "null");
@@ -141,7 +148,11 @@ mod tests {
     #[test]
     fn next_refresh_schedule_reports_a_period_that_already_started() {
         assert_eq!(
-            next_refresh_schedule_json(Some(1_200), Some(1_100)).unwrap(),
+            next_refresh_schedule_json(
+                Some(BlockHeight::new(1_200)),
+                Some(BlockHeight::new(1_100))
+            )
+            .unwrap(),
             r#"{"tipHeight":1200,"nextRefreshHeight":1101}"#
         );
     }
@@ -238,27 +249,27 @@ mod tests {
 
     #[test]
     fn the_refresh_expiry_window_includes_a_coin_near_or_past_expiry() {
-        let expiry_height = 20;
-        let threshold = 12;
+        let expiry_height = BlockHeight::new(20);
+        let threshold = BlockDelta::new(12);
         assert!(!vtxo_is_inside_refresh_expiry_window(
-            8,
+            BlockHeight::new(8),
             expiry_height,
             threshold
         ));
         assert!(vtxo_is_inside_refresh_expiry_window(
-            9,
+            BlockHeight::new(9),
             expiry_height,
             threshold
         ));
         assert!(vtxo_is_inside_refresh_expiry_window(
-            25,
+            BlockHeight::new(25),
             expiry_height,
             threshold
         ));
         assert!(!vtxo_is_inside_refresh_expiry_window(
             expiry_height,
             expiry_height,
-            0
+            BlockDelta::ZERO
         ));
     }
 }

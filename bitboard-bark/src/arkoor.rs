@@ -85,7 +85,7 @@ pub async fn bark_send_arkoor(address: String, amount_sats: u64) -> Result<(), J
             .validate_arkoor_address(&destination)
             .await
             .map_err(arkoor_address_error_code)?;
-        wallet
+        let _movement_id = wallet
             .send_arkoor_payment(&destination, amount)
             .await
             .map_err(bark_error)?;
