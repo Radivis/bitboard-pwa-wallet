@@ -48,7 +48,7 @@ pub(crate) struct DeferredDurableFlush {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-type NativeDurableFlushHook = Arc<dyn Fn(String) -> Result<(), String> + Send + Sync>;
+pub(crate) type NativeDurableFlushHook = Arc<dyn Fn(String) -> Result<(), String> + Send + Sync>;
 
 #[derive(Clone)]
 enum DurableFlushHook {
@@ -173,6 +173,20 @@ impl SharedRecordStore {
         DeferredDurableFlush {
             suppressed: Arc::clone(&self.durable_flush_suppressed),
         }
+    }
+
+    /// Keeps durable writes in memory until the guard is dropped.
+    /// A poisoned suppression lock returns an error, so the caller can avoid
+    /// a spent mark that a later durable write would export.
+    pub(crate) fn defer_durable_flushes_until_drop(&self) -> Result<DeferredDurableFlush, String> {
+        let mut suppressed = self
+            .durable_flush_suppressed
+            .lock()
+            .map_err(|_| "Bark durable flush lock is poisoned".to_owned())?;
+        *suppressed = true;
+        Ok(DeferredDurableFlush {
+            suppressed: Arc::clone(&self.durable_flush_suppressed),
+        })
     }
 
     pub(crate) fn export_encoded_envelope(&self) -> Result<String, String> {

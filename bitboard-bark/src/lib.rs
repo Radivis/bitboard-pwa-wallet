@@ -35,6 +35,8 @@ mod refresh;
 pub mod regtest_session;
 #[cfg(any(test, target_arch = "wasm32"))]
 mod required_sync;
+#[cfg(any(test, target_arch = "wasm32"))]
+mod swept_vtxo_mark_hold;
 
 #[cfg(target_arch = "wasm32")]
 mod arkoor;

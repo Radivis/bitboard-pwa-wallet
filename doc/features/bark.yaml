@@ -70,6 +70,7 @@ feature:
     - The notice covers only the open wallet and network. It is cleared on lock, wallet switch, and session change
     - A confirmed spend of one output of an anchor transaction, by any transaction other than the first exit transaction of the branch through that output, is an anchor sweep. It records every unspent VTXO on that branch, with the spending transaction id and the spent output, and marks those coins spent before refresh is scheduled. The server already claimed that output after expiry, so renewal cannot restore them. The scan checks each output of an anchor transaction on its own, before hops. Only the branch through the swept output is left out of the hop seizure check. A branch through another output of the same anchor transaction is still checked
     - A confirmed spend of one output of a hot exit hop, when that output's next exit transaction is not yet confirmed, by any transaction other than that next exit transaction, records every remaining unspent VTXO whose history continues through that output as spent, before refresh is scheduled, and records the spending transaction id and the spent output. The recorded kind is checkpoint, leaf, or internal node, from the hop that was spent. A history can be recorded under more than one kind when more than one of its hops was seized. Two spends of the same kind stay two items, distinguished by the spent output. Another output of the same transaction is not recorded. A hop whose next exit transaction is already confirmed is not watched. The VTXO outpoint itself is not watched
+    - The spent mark from an anchor sweep or a hop seizure is saved only after that notice is stored. A sync that stops before the notice is stored leaves those coins spendable, so the next sync can record the notice
     - The wallet layout shows one banner. Each spent exit output is its own section. The warning names Bark VTXOs and that output's transaction id and output index. The section lists the affected Bark VTXO ids. Every section shows together. The Bark account stores one array of items, each with a VTXO id, a node kind of anchor, internal, leaf, or checkpoint, the spending transaction id, and the spent output. An item saved before the spent output existed is filled in on the next sync when that Bark VTXO can still be read, and then shows as its own section. When it cannot be read, it stays one section for that kind, with the kind-level warning. Each sync appends newly recorded items and leaves the others in place. A sync that records nothing removes nothing. Dismissing a section removes that spent output. Dismissing a section that has no spent output removes that kind. Lock, wallet switch, and session change hide the banner until that wallet is unlocked again
     - The VTXO list link and page exist only when isBarkEnabled and the network is signet or mainnet
     - The VTXO list is the local Bark database. It is not an operator snapshot
@@ -281,7 +282,10 @@ feature:
           can appear as more than one item. Two spends of the same kind stay two items,
           distinguished by the spent output. Another output of the same transaction is not
           recorded. A hop whose next exit transaction is already confirmed is not watched, and the
-          VTXO outpoint is not watched. The wallet layout shows one banner. Each spent exit output
+          VTXO outpoint is not watched. The spent mark from an anchor sweep or a hop
+          seizure is saved only after that notice is stored. A sync that stops before the
+          notice is stored leaves those coins spendable, so the next sync can record the
+          notice. The wallet layout shows one banner. Each spent exit output
           is a section whose warning names Bark VTXOs and that output's transaction id and output
           index, and lists the affected Bark VTXO ids. Every section shows together. The Bark
           account stores one array of items, each with a VTXO id, a node kind, the spending
@@ -295,6 +299,8 @@ feature:
           that wallet is unlocked again
         implemented_by:
           - bitboard-bark/src/exit_seizure.rs
+          - bitboard-bark/src/swept_vtxo_mark_hold.rs
+          - frontend/src/lib/bark/__tests__/hold-swept-vtxo-marks-until-notice.test.ts
           - frontend/src/lib/bark/__tests__/bark-rail-metadata.test.ts
           - frontend/src/lib/wallet/lifecycle/__tests__/bark-sync-lifecycle-orchestrator.test.ts
           - frontend/src/lib/wallet/lifecycle/__tests__/bark-load-lifecycle-orchestrator.test.ts

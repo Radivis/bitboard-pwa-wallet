@@ -10,7 +10,8 @@
 //! Only the branch through a swept output is left out of the hop seizure
 //! check. A branch through another output of that same transaction is still
 //! checked. Every recorded outcome marks those coins spent before
-//! refresh and keeps the transaction id of that spend. The VTXO outpoint itself
+//! refresh and keeps the transaction id of that spend. That spent mark is
+//! saved only after the notice is stored. The VTXO outpoint itself
 //! is never watched: Bark treats a spend of that output as the user's claim.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -352,6 +353,13 @@ fn insert_notice_items(
     }
 }
 
+/// State of a swept coin before it was marked spent, so a failed sync can put it back.
+#[derive(Clone)]
+pub(crate) struct SweptVtxoPreviousState {
+    pub vtxo_id: bark::ark::VtxoId,
+    pub state: bark::vtxo::VtxoState,
+}
+
 fn history_matches_outcome(history: &VtxoExitHistory, outcome: ExitChainOutcome) -> bool {
     match outcome {
         ExitChainOutcome::AnchorSweep(anchor) => history.anchor == anchor,
@@ -423,14 +431,23 @@ mod scan {
     }
 
     /// Best-effort. A wallet-store failure, or a chain read that does not cover
-    /// every watched output, leaves the previous lists in place and does not
-    /// mark any VTXO spent. A chain error is neither a sweep nor a seizure.
-    pub(crate) async fn record_exit_chain_notices(wallet: &bark::Wallet) {
+    /// every watched output, leaves the previous lists in place and returns no
+    /// coins to mark. A chain error is neither a sweep nor a seizure.
+    /// The caller marks the returned coins spent after durable flushes are held.
+    pub(crate) async fn record_exit_chain_notices(
+        wallet: &bark::Wallet,
+    ) -> Vec<super::SweptVtxoPreviousState> {
         match scan_exit_chain_notices(wallet).await {
-            Ok(recorded) => remember(recorded),
-            Err(err) => warn(&format!(
-                "Bark could not scan exit outputs for a sweep or seizure: {err}"
-            )),
+            Ok((recorded, previous)) => {
+                remember(recorded);
+                previous
+            }
+            Err(err) => {
+                warn(&format!(
+                    "Bark could not scan exit outputs for a sweep or seizure: {err}"
+                ));
+                Vec::new()
+            }
         }
     }
 
@@ -440,7 +457,7 @@ mod scan {
 
     async fn scan_exit_chain_notices(
         wallet: &bark::Wallet,
-    ) -> Result<RecordedExitChainNotices, String> {
+    ) -> Result<(RecordedExitChainNotices, Vec<super::SweptVtxoPreviousState>), String> {
         let unspent = wallet.vtxos().await.map_err(|err| err.to_string())?;
         let full_vtxos = wallet
             .get_full_vtxos(&unspent)
@@ -458,10 +475,35 @@ mod scan {
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect::<Vec<_>>();
-        if !spent_ids.is_empty() {
-            mark_ids_spent(wallet, &unspent, &spent_ids).await?;
+        Ok((recorded, previous_states(&unspent, &spent_ids)))
+    }
+
+    fn previous_states(
+        unspent: &[bark::vtxo::WalletVtxo],
+        ids: &[String],
+    ) -> Vec<super::SweptVtxoPreviousState> {
+        unspent
+            .iter()
+            .filter(|vtxo| ids.iter().any(|id| id == &vtxo.id().to_string()))
+            .map(|vtxo| super::SweptVtxoPreviousState {
+                vtxo_id: vtxo.id(),
+                state: vtxo.state.clone(),
+            })
+            .collect()
+    }
+
+    /// Marks the coins whose previous states were returned by the scan.
+    pub(crate) async fn mark_swept_vtxos(
+        wallet: &bark::Wallet,
+        previous: &[super::SweptVtxoPreviousState],
+    ) -> Result<(), String> {
+        if previous.is_empty() {
+            return Ok(());
         }
-        Ok(recorded)
+        wallet
+            .mark_vtxos_as_spent(previous.iter().map(|coin| coin.vtxo_id))
+            .await
+            .map_err(|err| err.to_string())
     }
 
     /// Fills in the spent output for VTXOs already stored on a notice. Those coins
@@ -632,24 +674,6 @@ mod scan {
         }
     }
 
-    async fn mark_ids_spent(
-        wallet: &bark::Wallet,
-        unspent: &[bark::vtxo::WalletVtxo],
-        ids: &[String],
-    ) -> Result<(), String> {
-        let matched = unspent
-            .iter()
-            .filter(|vtxo| ids.iter().any(|id| id == &vtxo.id().to_string()))
-            .collect::<Vec<_>>();
-        if matched.is_empty() {
-            return Ok(());
-        }
-        wallet
-            .mark_vtxos_as_spent(matched)
-            .await
-            .map_err(|err| err.to_string())
-    }
-
     #[wasm_bindgen::prelude::wasm_bindgen]
     extern "C" {
         #[wasm_bindgen(js_namespace = console, js_name = warn)]
@@ -664,7 +688,7 @@ mod scan {
 #[cfg(target_arch = "wasm32")]
 pub(crate) use scan::{
     backfill_exit_chain_notices_json, clear_exit_chain_notices, exit_chain_notices_json,
-    record_exit_chain_notices,
+    mark_swept_vtxos, record_exit_chain_notices,
 };
 
 #[cfg(test)]

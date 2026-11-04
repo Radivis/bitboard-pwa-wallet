@@ -200,6 +200,7 @@ async fn open_network_session(
 fn clear_session_sync_gate() {
     SESSION_SYNC_GATE.with(|gate| gate.borrow_mut().clear());
     crate::exit_seizure::clear_exit_chain_notices();
+    crate::swept_vtxo_mark_hold::release();
 }
 
 fn mark_session_synced() {
@@ -265,8 +266,14 @@ pub async fn bark_open_regtest_session(
 }
 
 /// Exports the open network's record envelope. Plaintext stays in this worker.
+/// Refuses while swept coins are marked spent and the seizure notice is not stored yet.
 #[wasm_bindgen]
 pub fn bark_export_record_envelope() -> Result<String, JsValue> {
+    if crate::swept_vtxo_mark_hold::is_held() {
+        return Err(JsValue::from_str(
+            "Bark swept coins are still waiting for the seizure notice",
+        ));
+    }
     export_active_record_envelope().map_err(|err| JsValue::from_str(&err))
 }
 
@@ -400,24 +407,147 @@ pub async fn bark_last_revealed_key_index() -> Result<JsValue, JsValue> {
 
 /// Syncs with the Bark server, scans exit outputs, and returns the refresh status.
 /// Skips the server while an emergency exit holds a pending round input.
+/// A swept coin is marked spent before refresh, and that mark stays out of the
+/// saved wallet until the seizure notice is stored.
 #[wasm_bindgen]
 pub async fn bark_sync() -> Result<String, JsValue> {
     let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
-    let operation_result = async {
-        crate::emergency_exit::lock_spendable_exit_vtxos(&wallet).await?;
-        crate::emergency_exit::release_unsigned_spends_of_exit_vtxos(&wallet).await?;
-        sync_bark_server_unless_exit_holds_a_round(&wallet).await?;
-        crate::exit_seizure::record_exit_chain_notices(&wallet).await;
-        crate::emergency_exit::lock_spendable_exit_vtxos(&wallet).await?;
-        let refresh_status = delegated_refresh_status(&wallet).await;
-        sync_open_exits(&wallet).await;
-        Ok(refresh_status)
+    let operation_result = sync_open_wallet(&wallet).await;
+    match finish_wallet_operation(wallet, operation_result) {
+        Ok(refresh_status) => {
+            mark_session_synced();
+            Ok(refresh_status)
+        }
+        Err(err) => {
+            revert_swept_marks_on_stored_wallet().await;
+            Err(JsValue::from_str(&err))
+        }
     }
-    .await;
-    let refresh_status =
-        finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))?;
-    mark_session_synced();
+}
+
+/// Drops the flush hold after the seizure notice is stored.
+/// The following envelope export then saves the spent marks.
+#[wasm_bindgen]
+pub fn bark_commit_swept_vtxo_marks() {
+    crate::swept_vtxo_mark_hold::release();
+}
+
+/// Puts swept coins back when the seizure notice was not stored.
+#[wasm_bindgen]
+pub async fn bark_revert_swept_vtxo_marks() -> Result<(), JsValue> {
+    if !crate::swept_vtxo_mark_hold::is_held() {
+        return Ok(());
+    }
+    let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
+    let operation_result = revert_held_swept_vtxo_marks(&wallet).await;
+    finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
+}
+
+async fn sync_open_wallet(wallet: &bark::Wallet) -> Result<String, String> {
+    crate::emergency_exit::lock_spendable_exit_vtxos(wallet).await?;
+    crate::emergency_exit::release_unsigned_spends_of_exit_vtxos(wallet).await?;
+    sync_bark_server_unless_exit_holds_a_round(wallet).await?;
+    let previous = crate::exit_seizure::record_exit_chain_notices(wallet).await;
+    if !previous.is_empty() {
+        begin_swept_vtxo_mark_hold(previous.clone())?;
+        if let Err(err) = crate::exit_seizure::mark_swept_vtxos(wallet, &previous).await {
+            let _ = revert_held_swept_vtxo_marks(wallet).await;
+            return Err(err);
+        }
+    }
+    let continued = sync_after_exit_chain_scan(wallet).await;
+    if continued.is_err() {
+        let _ = revert_held_swept_vtxo_marks(wallet).await;
+    }
+    continued
+}
+
+async fn sync_after_exit_chain_scan(wallet: &bark::Wallet) -> Result<String, String> {
+    crate::emergency_exit::lock_spendable_exit_vtxos(wallet).await?;
+    let refresh_status = delegated_refresh_status(wallet).await;
+    sync_open_exits(wallet).await;
     Ok(refresh_status)
+}
+
+fn begin_swept_vtxo_mark_hold(
+    previous: Vec<crate::exit_seizure::SweptVtxoPreviousState>,
+) -> Result<(), String> {
+    if previous.is_empty() {
+        return Ok(());
+    }
+    if crate::swept_vtxo_mark_hold::is_held() {
+        crate::swept_vtxo_mark_hold::add_previous(previous);
+        return Ok(());
+    }
+    let deferral = defer_durable_flushes_for_swept_marks()?;
+    crate::swept_vtxo_mark_hold::begin(deferral, previous);
+    Ok(())
+}
+
+fn defer_durable_flushes_for_swept_marks()
+-> Result<crate::record_store::DeferredDurableFlush, String> {
+    ACTIVE_RECORD_STORE.with(|slot| {
+        let current = slot
+            .try_borrow()
+            .map_err(|_| "Bark record store is already borrowed".to_owned())?;
+        let store = current
+            .as_ref()
+            .ok_or_else(|| "Bark session is not open".to_owned())?;
+        store.defer_durable_flushes_until_drop()
+    })
+}
+
+async fn revert_held_swept_vtxo_marks(wallet: &bark::Wallet) -> Result<(), String> {
+    let previous = crate::swept_vtxo_mark_hold::take_previous();
+    if previous.is_empty() {
+        crate::swept_vtxo_mark_hold::release();
+        return Ok(());
+    }
+    match restore_swept_vtxo_states(wallet, &previous).await {
+        Ok(()) => {
+            crate::swept_vtxo_mark_hold::release();
+            Ok(())
+        }
+        Err(err) => {
+            crate::swept_vtxo_mark_hold::put_previous_back(previous);
+            Err(err)
+        }
+    }
+}
+
+async fn restore_swept_vtxo_states(
+    wallet: &bark::Wallet,
+    previous: &[crate::exit_seizure::SweptVtxoPreviousState],
+) -> Result<(), String> {
+    let current = wallet.all_vtxos().await.map_err(bark_error)?;
+    for coin in previous {
+        let Some(vtxo) = current.iter().find(|vtxo| vtxo.id() == coin.vtxo_id) else {
+            continue;
+        };
+        if vtxo.state.kind() != bark::vtxo::VtxoStateKind::Spent {
+            continue;
+        }
+        wallet
+            .set_vtxo_states(
+                [coin.vtxo_id],
+                &coin.state,
+                &[bark::vtxo::VtxoStateKind::Spent],
+            )
+            .await
+            .map_err(bark_error)?;
+    }
+    Ok(())
+}
+
+async fn revert_swept_marks_on_stored_wallet() {
+    if !crate::swept_vtxo_mark_hold::is_held() {
+        return;
+    }
+    let Ok(wallet) = take_active_wallet() else {
+        return;
+    };
+    let operation_result = revert_held_swept_vtxo_marks(&wallet).await;
+    let _ = finish_wallet_operation(wallet, operation_result);
 }
 
 #[wasm_bindgen]

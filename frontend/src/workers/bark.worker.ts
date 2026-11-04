@@ -11,6 +11,7 @@ import {
 import {
   readBarkNextRefreshSchedule,
   readBarkRefreshStatus,
+  type BarkNextRefreshSchedule,
 } from '@/lib/bark/bark-refresh-status'
 import {
   barkArkoorSendDepsFromWasm,
@@ -51,6 +52,7 @@ import {
   BARK_REGTEST_SERVER_URL,
   isE2eBarkRegtestControlEnabled,
 } from '@/lib/bark/e2e/bark-regtest-env'
+import { holdSweptVtxoMarksUntilNoticeIsStored } from '@/lib/bark/hold-swept-vtxo-marks-until-notice'
 import { loadBitboardBarkWasm, type BitboardBarkWasm } from '@/lib/bark/load-bitboard-bark-wasm'
 import {
   assertBarkRecordEnvelopeWithinSizeLimit,
@@ -385,36 +387,45 @@ async function syncImpl(): Promise<BarkSyncResult> {
     walletId,
     async () => {
       const wasmModule = await getBarkWasm()
-      const refreshStatus = readBarkRefreshStatus(await wasmModule.bark_sync())
-      const nextRefresh = readBarkNextRefreshSchedule(
-        await wasmModule.bark_next_refresh_schedule(),
-      )
-      const network = requireOpenNetwork()
-      const stored = await readExitChainNoticesFromPayload(
-        encryptedPayloadDeps(),
-        walletId,
-        network,
-      )
-      const scanned = readBarkExitChainNotices(wasmModule.bark_exit_chain_notices())
-      const backfilled = await backfilledExitChainNotices(wasmModule, stored)
-      await mergeExitChainNoticeInPayload(encryptedPayloadDeps(), walletId, network, [
-        ...scanned,
-        ...backfilled,
-      ])
-      const exitNodeSweepVtxoItems = await readExitChainNoticesFromPayload(
-        encryptedPayloadDeps(),
-        walletId,
-        network,
-      )
+      const { synced, merged } = await holdSweptVtxoMarksUntilNoticeIsStored({
+        barkSync: () => wasmModule.bark_sync(),
+        mergeNotice: () => mergeExitChainNoticeAfterSync(wasmModule, walletId),
+        commitSweptVtxoMarks: () => wasmModule.bark_commit_swept_vtxo_marks(),
+        revertSweptVtxoMarks: () => wasmModule.bark_revert_swept_vtxo_marks(),
+      })
       return {
         lastSuccessfulSyncAt: new Date().toISOString(),
-        refreshStatus,
-        nextRefresh,
-        exitNodeSweepVtxoItems,
+        refreshStatus: readBarkRefreshStatus(synced),
+        nextRefresh: merged.nextRefresh,
+        exitNodeSweepVtxoItems: merged.exitNodeSweepVtxoItems,
       }
     },
     (result) => ({ lastSuccessfulSyncAt: result.lastSuccessfulSyncAt }),
   )
+}
+
+async function mergeExitChainNoticeAfterSync(
+  wasmModule: BitboardBarkWasm,
+  walletId: number,
+): Promise<{
+  nextRefresh: BarkNextRefreshSchedule | null
+  exitNodeSweepVtxoItems: BarkExitNodeSweepVtxoItem[]
+}> {
+  const nextRefresh = readBarkNextRefreshSchedule(await wasmModule.bark_next_refresh_schedule())
+  const network = requireOpenNetwork()
+  const stored = await readExitChainNoticesFromPayload(encryptedPayloadDeps(), walletId, network)
+  const scanned = readBarkExitChainNotices(wasmModule.bark_exit_chain_notices())
+  const backfilled = await backfilledExitChainNotices(wasmModule, stored)
+  await mergeExitChainNoticeInPayload(encryptedPayloadDeps(), walletId, network, [
+    ...scanned,
+    ...backfilled,
+  ])
+  const exitNodeSweepVtxoItems = await readExitChainNoticesFromPayload(
+    encryptedPayloadDeps(),
+    walletId,
+    network,
+  )
+  return { nextRefresh, exitNodeSweepVtxoItems }
 }
 
 async function backfilledExitChainNotices(
