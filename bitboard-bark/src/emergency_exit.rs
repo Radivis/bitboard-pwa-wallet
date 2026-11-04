@@ -723,6 +723,22 @@ pub(crate) fn chain_anchor_transaction(txid: &str) -> ExitGraphTransaction {
     }
 }
 
+/// Labels for one VTXO chain, and the tree length those labels used.
+pub(crate) struct ExitGraphClassification {
+    pub tx_types: Vec<ExitGraphTxType>,
+    /// Cosigned tree length. `None` when the arkoor list is longer than the
+    /// chain: every hop stays a tree transaction, and none is that tree's leaf.
+    pub tree_len: Option<usize>,
+}
+
+/// One walk of a VTXO's exit chain: graph transactions, including the chain
+/// anchor, and the hops the seizure scan watches.
+#[cfg(target_arch = "wasm32")]
+pub(crate) struct WalkedExitChain {
+    pub graph_transactions: Vec<ExitGraphTransaction>,
+    pub hops: Vec<crate::exit_seizure::ExitHop>,
+}
+
 /// Labels each hop of one VTXO's exit chain.
 ///
 /// `past_arkoor_pubkeys` is the out-of-round suffix. Earlier hops are the
@@ -734,24 +750,82 @@ pub(crate) fn exit_graph_tx_types(
     server_pubkey: bitcoin::secp256k1::PublicKey,
     exit_delta: BlockDelta,
     expiry_height: BlockHeight,
-) -> Vec<ExitGraphTxType> {
+) -> ExitGraphClassification {
     if arkoor_pubkeys.len() > continuation_scripts.len() {
-        return vec![ExitGraphTxType::Tree; continuation_scripts.len()];
+        return ExitGraphClassification {
+            tx_types: vec![ExitGraphTxType::Tree; continuation_scripts.len()],
+            tree_len: None,
+        };
     }
-    let prefix_len = continuation_scripts.len() - arkoor_pubkeys.len();
-    continuation_scripts
+    let tree_len = continuation_scripts.len() - arkoor_pubkeys.len();
+    let tx_types = continuation_scripts
         .iter()
         .enumerate()
         .map(|(index, script)| {
             tx_type_for_hop(
                 index,
-                prefix_len,
+                tree_len,
                 script,
                 arkoor_pubkeys,
                 server_pubkey,
                 exit_delta,
                 expiry_height,
             )
+        })
+        .collect();
+    ExitGraphClassification {
+        tx_types,
+        tree_len: Some(tree_len),
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn walk_vtxo_exit_chain<P: bark::ark::vtxo::Policy>(
+    vtxo: &bark::ark::Vtxo<bark::ark::vtxo::Full, P>,
+) -> WalkedExitChain {
+    let items: Vec<_> = vtxo.transactions().collect();
+    let continuation_scripts = continuation_scripts_of(&items);
+    let classification = exit_graph_tx_types(
+        &continuation_scripts,
+        &vtxo.past_arkoor_pubkeys(),
+        vtxo.server_pubkey(),
+        vtxo.exit_delta(),
+        vtxo.expiry_height(),
+    );
+    let mut graph_transactions = vec![chain_anchor_transaction(
+        &vtxo.chain_anchor().txid.to_string(),
+    )];
+    let mut hops = Vec::with_capacity(items.len());
+    for (index, (item, tx_type)) in items.iter().zip(classification.tx_types).enumerate() {
+        let mut transaction = exit_graph_transaction_from_bitcoin(&item.tx);
+        transaction.tx_type = tx_type;
+        graph_transactions.push(transaction);
+        hops.push(crate::exit_seizure::ExitHop {
+            txid: item.tx.compute_txid(),
+            output_index: item.output_idx as u32,
+            role: crate::exit_seizure::hop_role(
+                tx_type == ExitGraphTxType::Checkpoint,
+                index,
+                classification.tree_len,
+            ),
+        });
+    }
+    WalkedExitChain {
+        graph_transactions,
+        hops,
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn continuation_scripts_of(items: &[bark::ark::vtxo::VtxoTxIterItem]) -> Vec<bitcoin::ScriptBuf> {
+    items
+        .iter()
+        .map(|item| {
+            item.tx
+                .output
+                .get(item.output_idx)
+                .map(|output| output.script_pubkey.clone())
+                .unwrap_or_else(bitcoin::ScriptBuf::new)
         })
         .collect()
 }
@@ -778,39 +852,6 @@ fn tx_type_for_hop(
     } else {
         ExitGraphTxType::Tree
     }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn exit_graph_transactions_from_vtxo<P: bark::ark::vtxo::Policy>(
-    vtxo: &bark::ark::Vtxo<bark::ark::vtxo::Full, P>,
-) -> Vec<ExitGraphTransaction> {
-    let items: Vec<_> = vtxo.transactions().collect();
-    let continuation_scripts = items
-        .iter()
-        .map(|item| {
-            item.tx
-                .output
-                .get(item.output_idx)
-                .map(|output| output.script_pubkey.clone())
-                .unwrap_or_else(bitcoin::ScriptBuf::new)
-        })
-        .collect::<Vec<_>>();
-    let tx_types = exit_graph_tx_types(
-        &continuation_scripts,
-        &vtxo.past_arkoor_pubkeys(),
-        vtxo.server_pubkey(),
-        vtxo.exit_delta(),
-        vtxo.expiry_height(),
-    );
-    let mut transactions = vec![chain_anchor_transaction(
-        &vtxo.chain_anchor().txid.to_string(),
-    )];
-    transactions.extend(items.iter().zip(tx_types).map(|(item, tx_type)| {
-        let mut transaction = exit_graph_transaction_from_bitcoin(&item.tx);
-        transaction.tx_type = tx_type;
-        transaction
-    }));
-    transactions
 }
 
 /// Merges exit chains into one graph. The last transaction that is not the chain
@@ -1377,7 +1418,7 @@ mod wasm {
         };
         Ok(super::ExitGraphChain {
             vtxo_id: vtxo_id.to_string(),
-            transactions: super::exit_graph_transactions_from_vtxo(&full_vtxo),
+            transactions: super::walk_vtxo_exit_chain(&full_vtxo).graph_transactions,
             status,
         })
     }
@@ -1781,7 +1822,7 @@ mod tests {
         let checkpoint_script = bark::ark::ServerVtxoPolicy::new_checkpoint(user_pubkey)
             .script_pubkey(server_pubkey, exit_delta, expiry_height);
         let other_script = bitcoin::ScriptBuf::new();
-        let tx_types = exit_graph_tx_types(
+        let classified = exit_graph_tx_types(
             &[
                 other_script.clone(),
                 checkpoint_script.clone(),
@@ -1794,12 +1835,17 @@ mod tests {
         );
 
         assert_eq!(
-            tx_types,
+            classified.tx_types,
             vec![
                 ExitGraphTxType::Tree,
                 ExitGraphTxType::Checkpoint,
                 ExitGraphTxType::Tree,
             ]
+        );
+        assert_eq!(classified.tree_len, Some(1));
+        assert_eq!(
+            crate::exit_seizure::hop_role(false, 0, classified.tree_len),
+            crate::exit_seizure::ExitHopRole::Leaf,
         );
 
         let several_cosigners = exit_graph_tx_types(
@@ -1809,7 +1855,8 @@ mod tests {
             exit_delta,
             expiry_height,
         );
-        assert_eq!(several_cosigners, vec![ExitGraphTxType::Tree]);
+        assert_eq!(several_cosigners.tx_types, vec![ExitGraphTxType::Tree]);
+        assert_eq!(several_cosigners.tree_len, Some(0));
 
         let longer_arkoor_list = exit_graph_tx_types(
             &[checkpoint_script],
@@ -1818,7 +1865,12 @@ mod tests {
             exit_delta,
             expiry_height,
         );
-        assert_eq!(longer_arkoor_list, vec![ExitGraphTxType::Tree]);
+        assert_eq!(longer_arkoor_list.tx_types, vec![ExitGraphTxType::Tree]);
+        assert_eq!(longer_arkoor_list.tree_len, None);
+        assert_eq!(
+            crate::exit_seizure::hop_role(false, 0, longer_arkoor_list.tree_len),
+            crate::exit_seizure::ExitHopRole::Internal,
+        );
     }
 
     #[test]

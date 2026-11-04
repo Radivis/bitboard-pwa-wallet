@@ -8,7 +8,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::board::clear_prepared_board_funding;
 use crate::record_store::SharedRecordStore;
-use crate::recovery_open::RecoveryOpen;
+use crate::recovery_open::{RecoveryOpen, wallet_open_args};
 use crate::refresh::{
     BARK_REFRESH_EXIT_BLOCKED, BARK_REFRESH_IDLE, BARK_REFRESH_WARNING,
     DUST_CONSOLIDATION_REJECTION_ATTEMPTS, dust_total_meets_vtxo_dust, next_refresh_schedule_json,
@@ -169,17 +169,7 @@ async fn open_network_session(
         network,
         seed,
         config,
-        bark::OpenWalletArgs {
-            run_daemon: false,
-            onchain: None,
-            create_if_not_exists: true,
-            persister: Some(persister),
-            lock_manager: Some(Box::new(
-                bark::lock_manager::memory::MemoryLockManager::new(),
-            )),
-            on_recovery_finished: Some(recovery_open.callback()),
-            ..bark::OpenWalletArgs::default()
-        },
+        wallet_open_args(persister, Some(recovery_open.callback())),
     )
     .await;
     let wallet = match opened {

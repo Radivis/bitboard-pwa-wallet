@@ -63,11 +63,7 @@ export const useBarkExitChainNoticeStore = create<BarkExitChainNoticeState>((set
     set({ notice: null })
   },
   dismissNotice: async (walletId, networkMode, kind, spentOutput = null) => {
-    if (spentOutput == null) {
-      await getBarkWorker().clearExitChainNotice(kind)
-    } else {
-      await getBarkWorker().clearExitChainNotice(kind, spentOutput)
-    }
+    await getBarkWorker().clearExitChainNotice(kind, spentOutput)
     const current = get().notice
     if (!matchesNotice(current, walletId, networkMode) || current == null) return
     const exitNodeSweepVtxoItems = exitNodeSweepVtxoItemsWithoutSpend(

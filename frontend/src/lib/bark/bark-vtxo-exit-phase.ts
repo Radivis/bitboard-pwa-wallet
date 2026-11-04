@@ -72,6 +72,36 @@ const FRONTIER_PHASES_WITH_CONFIRMED_COUNT = new Set<BarkExitNodePhase>([
   BARK_EXIT_NODE_PHASE.awaitingConfirmation,
 ])
 
+/** Earlier entries win. Anchor, then internal, then leaf, then checkpoint. */
+const SWEEP_PHASE_RANK = [
+  {
+    nodeKind: 'anchor',
+    phaseKind: BARK_VTXO_EXIT_PHASE.anchorSwept,
+    label: 'anchor swept',
+  },
+  {
+    nodeKind: 'internal',
+    phaseKind: BARK_VTXO_EXIT_PHASE.internalSeized,
+    label: 'internal node seized',
+  },
+  {
+    nodeKind: 'leaf',
+    phaseKind: BARK_VTXO_EXIT_PHASE.leafSeized,
+    label: 'leaf seized',
+  },
+  {
+    nodeKind: 'checkpoint',
+    phaseKind: BARK_VTXO_EXIT_PHASE.checkpointSeized,
+    label: 'checkpoint seized',
+  },
+] as const satisfies readonly {
+  nodeKind: BarkExitNodeSweepKind
+  phaseKind: BarkVtxoExitPhaseKind
+  label: string
+}[]
+
+type SweepExitPhase = Extract<BarkVtxoExitPhase, { spenderTxids: readonly string[] }>
+
 export function resolveBarkVtxoExitPhase(params: {
   vtxoState: BarkVtxoState
   exitRow: BarkEmergencyExitRow | null
@@ -79,29 +109,14 @@ export function resolveBarkVtxoExitPhase(params: {
   unfundedParentTxids: ReadonlySet<string>
   sweepItems: readonly BarkExitNodeSweepVtxoItem[]
 }): BarkVtxoExitPhase | null {
-  if (hasSweepKind(params.sweepItems, 'anchor')) {
-    return {
-      kind: BARK_VTXO_EXIT_PHASE.anchorSwept,
-      spenderTxids: spenderTxidsForKind(params.sweepItems, 'anchor'),
-    }
-  }
-  if (hasSweepKind(params.sweepItems, 'internal')) {
-    return {
-      kind: BARK_VTXO_EXIT_PHASE.internalSeized,
-      spenderTxids: spenderTxidsForKind(params.sweepItems, 'internal'),
-    }
-  }
-  if (hasSweepKind(params.sweepItems, 'leaf')) {
-    return {
-      kind: BARK_VTXO_EXIT_PHASE.leafSeized,
-      spenderTxids: spenderTxidsForKind(params.sweepItems, 'leaf'),
-    }
-  }
-  if (hasSweepKind(params.sweepItems, 'checkpoint')) {
-    return {
-      kind: BARK_VTXO_EXIT_PHASE.checkpointSeized,
-      spenderTxids: spenderTxidsForKind(params.sweepItems, 'checkpoint'),
-    }
+  const winningSweep = SWEEP_PHASE_RANK.find((entry) =>
+    hasSweepKind(params.sweepItems, entry.nodeKind),
+  )
+  if (winningSweep != null) {
+    return sweepPhase(
+      winningSweep.phaseKind,
+      spenderTxidsForKind(params.sweepItems, winningSweep.nodeKind),
+    )
   }
   if (params.exitRow == null) {
     return params.vtxoState === 'exited' ? { kind: BARK_VTXO_EXIT_PHASE.claimed } : null
@@ -221,6 +236,7 @@ function timelockBlockProgress(
 
 function formatBarkVtxoExitPhaseCopy(phase: BarkVtxoExitPhase | null): string | null {
   if (phase == null) return null
+  if (isSweepPhase(phase)) return sweepPhaseCopy(phase)
   switch (phase.kind) {
     case BARK_VTXO_EXIT_PHASE.started:
       return 'started'
@@ -240,14 +256,6 @@ function formatBarkVtxoExitPhaseCopy(phase: BarkVtxoExitPhase | null): string | 
       return 'claim in progress'
     case BARK_VTXO_EXIT_PHASE.claimed:
       return 'claimed'
-    case BARK_VTXO_EXIT_PHASE.anchorSwept:
-      return withSpenderTxids('anchor swept', phase.spenderTxids)
-    case BARK_VTXO_EXIT_PHASE.internalSeized:
-      return withSpenderTxids('internal node seized', phase.spenderTxids)
-    case BARK_VTXO_EXIT_PHASE.leafSeized:
-      return withSpenderTxids('leaf seized', phase.spenderTxids)
-    case BARK_VTXO_EXIT_PHASE.checkpointSeized:
-      return withSpenderTxids('checkpoint seized', phase.spenderTxids)
   }
 }
 
@@ -273,16 +281,26 @@ function spenderTxidsForKind(
 }
 
 function spenderTxidsOfPhase(phase: BarkVtxoExitPhase | null): readonly string[] {
-  if (phase == null) return []
-  switch (phase.kind) {
-    case BARK_VTXO_EXIT_PHASE.anchorSwept:
-    case BARK_VTXO_EXIT_PHASE.internalSeized:
-    case BARK_VTXO_EXIT_PHASE.leafSeized:
-    case BARK_VTXO_EXIT_PHASE.checkpointSeized:
-      return phase.spenderTxids
-    default:
-      return []
-  }
+  if (phase != null && isSweepPhase(phase)) return phase.spenderTxids
+  return []
+}
+
+function sweepPhase(
+  phaseKind: (typeof SWEEP_PHASE_RANK)[number]['phaseKind'],
+  spenderTxids: readonly string[],
+): SweepExitPhase {
+  return { kind: phaseKind, spenderTxids }
+}
+
+function isSweepPhase(phase: BarkVtxoExitPhase): phase is SweepExitPhase {
+  return SWEEP_PHASE_RANK.some((entry) => entry.phaseKind === phase.kind)
+}
+
+function sweepPhaseCopy(phase: BarkVtxoExitPhase): string | null {
+  if (!isSweepPhase(phase)) return null
+  const label = SWEEP_PHASE_RANK.find((entry) => entry.phaseKind === phase.kind)?.label
+  if (label == null) return null
+  return withSpenderTxids(label, phase.spenderTxids)
 }
 
 function withSpenderTxids(label: string, spenderTxids: readonly string[]): string {

@@ -59,6 +59,28 @@ pub(crate) fn finish_deferred_recovery_open(
     }
 }
 
+/// Arguments shared by the wasm session and the regtest opener.
+///
+/// `onchain` stays unset. Callers that attach an on-chain wallet assign it
+/// after this returns. Error handling after `Wallet::open` stays at the call site.
+#[cfg(any(target_arch = "wasm32", feature = "regtest-support"))]
+pub(crate) fn wallet_open_args(
+    persister: Arc<bark::persist::adaptor::StorageAdaptorWrapper<SharedRecordStore>>,
+    on_recovery_finished: Option<Box<dyn FnOnce(bark::RecoveryStatus) + Send + Sync>>,
+) -> bark::OpenWalletArgs {
+    bark::OpenWalletArgs {
+        run_daemon: false,
+        onchain: None,
+        create_if_not_exists: true,
+        persister: Some(persister),
+        lock_manager: Some(Box::new(
+            bark::lock_manager::memory::MemoryLockManager::new(),
+        )),
+        on_recovery_finished,
+        ..bark::OpenWalletArgs::default()
+    }
+}
+
 /// Empty-envelope opens defer durable flushes until [`Self::finish`].
 pub(crate) struct RecoveryOpen {
     status_slot: Arc<Mutex<Option<bark::RecoveryStatus>>>,

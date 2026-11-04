@@ -41,15 +41,16 @@ pub struct ExitHop {
     pub role: ExitHopRole,
 }
 
-/// Role of one hop. `prefix_len` is the number of tree transactions before
-/// later hops. A checkpoint script wins over that position. The last tree
+/// Role of one hop. `tree_len` is the number of tree transactions before later
+/// hops. A checkpoint script wins over that position. The last tree
 /// transaction is the leaf. Every other non-checkpoint hop is an internal
-/// node, including a hop after the tree.
-pub fn hop_role(is_checkpoint: bool, index: usize, prefix_len: usize) -> ExitHopRole {
+/// node, including a hop after the tree. `None` means the tree length could
+/// not be measured, so no hop is a leaf.
+pub fn hop_role(is_checkpoint: bool, index: usize, tree_len: Option<usize>) -> ExitHopRole {
     if is_checkpoint {
         return ExitHopRole::Checkpoint;
     }
-    if index + 1 == prefix_len {
+    if tree_len == Some(index + 1) {
         return ExitHopRole::Leaf;
     }
     ExitHopRole::Internal
@@ -373,7 +374,7 @@ mod scan {
     use serde::Serialize;
 
     use super::{
-        ExitHop, ExitOutputSpend, VtxoExitHistory, exit_outcomes_from_spends,
+        ExitOutputSpend, VtxoExitHistory, exit_outcomes_from_spends,
         hop_outputs_after_anchor_check, split_exit_notices, watched_anchor_outputs,
     };
 
@@ -555,48 +556,11 @@ mod scan {
     }
 
     fn history_from_full_vtxo(vtxo: &bark::ark::Vtxo<bark::ark::vtxo::Full>) -> VtxoExitHistory {
-        let items = vtxo.transactions().collect::<Vec<_>>();
-        let continuation_scripts = items
-            .iter()
-            .map(|item| {
-                item.tx
-                    .output
-                    .get(item.output_idx)
-                    .map(|output| output.script_pubkey.clone())
-                    .unwrap_or_else(bitcoin::ScriptBuf::new)
-            })
-            .collect::<Vec<_>>();
-        let arkoor_pubkeys = vtxo.past_arkoor_pubkeys();
-        let tx_types = crate::emergency_exit::exit_graph_tx_types(
-            &continuation_scripts,
-            &arkoor_pubkeys,
-            vtxo.server_pubkey(),
-            vtxo.exit_delta(),
-            vtxo.expiry_height(),
-        );
-        let prefix_len = if arkoor_pubkeys.len() > items.len() {
-            items.len()
-        } else {
-            items.len() - arkoor_pubkeys.len()
-        };
-        let hops = items
-            .iter()
-            .zip(tx_types)
-            .enumerate()
-            .map(|(index, (item, tx_type))| ExitHop {
-                txid: item.tx.compute_txid(),
-                output_index: item.output_idx as u32,
-                role: super::hop_role(
-                    tx_type == crate::emergency_exit::ExitGraphTxType::Checkpoint,
-                    index,
-                    prefix_len,
-                ),
-            })
-            .collect();
+        let chain = crate::emergency_exit::walk_vtxo_exit_chain(vtxo);
         VtxoExitHistory {
             vtxo_id: vtxo.id().to_string(),
             anchor: vtxo.chain_anchor(),
-            hops,
+            hops: chain.hops,
         }
     }
 
@@ -1342,11 +1306,12 @@ mod tests {
 
     #[test]
     fn the_last_tree_transaction_is_a_leaf_and_other_non_checkpoint_hops_are_internal_nodes() {
-        assert_eq!(hop_role(true, 0, 3), ExitHopRole::Checkpoint);
-        assert_eq!(hop_role(false, 0, 3), ExitHopRole::Internal);
-        assert_eq!(hop_role(false, 1, 3), ExitHopRole::Internal);
-        assert_eq!(hop_role(false, 2, 3), ExitHopRole::Leaf);
-        assert_eq!(hop_role(false, 3, 3), ExitHopRole::Internal);
-        assert_eq!(hop_role(true, 3, 3), ExitHopRole::Checkpoint);
+        assert_eq!(hop_role(true, 0, Some(3)), ExitHopRole::Checkpoint);
+        assert_eq!(hop_role(false, 0, Some(3)), ExitHopRole::Internal);
+        assert_eq!(hop_role(false, 1, Some(3)), ExitHopRole::Internal);
+        assert_eq!(hop_role(false, 2, Some(3)), ExitHopRole::Leaf);
+        assert_eq!(hop_role(false, 3, Some(3)), ExitHopRole::Internal);
+        assert_eq!(hop_role(true, 3, Some(3)), ExitHopRole::Checkpoint);
+        assert_eq!(hop_role(false, 0, None), ExitHopRole::Internal);
     }
 }

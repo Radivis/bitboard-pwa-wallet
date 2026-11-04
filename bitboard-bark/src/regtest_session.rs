@@ -16,7 +16,7 @@ use bitcoin::{
 use crate::exit_address::spent_vtxo_ids_named_by_server;
 use crate::offboard_retirement::retire_offboard_if_server_spent_an_input;
 use crate::record_store::SharedRecordStore;
-use crate::recovery_open::RecoveryOpen;
+use crate::recovery_open::{RecoveryOpen, wallet_open_args};
 
 pub struct RegtestBarkWallet {
     wallet: bark::Wallet,
@@ -152,24 +152,11 @@ impl RegtestBarkWallet {
         let persister = Arc::new(bark::persist::adaptor::StorageAdaptorWrapper::new(
             store.clone(),
         ));
-        let wallet = bark::Wallet::open(
-            network,
-            seed,
-            config,
-            bark::OpenWalletArgs {
-                run_daemon: false,
-                onchain: exit_bumper.clone(),
-                create_if_not_exists: true,
-                persister: Some(persister),
-                lock_manager: Some(Box::new(
-                    bark::lock_manager::memory::MemoryLockManager::new(),
-                )),
-                on_recovery_finished: Some(recovery_open.callback()),
-                ..bark::OpenWalletArgs::default()
-            },
-        )
-        .await
-        .map_err(|err| format!("{err:#}"))?;
+        let mut open_args = wallet_open_args(persister, Some(recovery_open.callback()));
+        open_args.onchain = exit_bumper.clone();
+        let wallet = bark::Wallet::open(network, seed, config, open_args)
+            .await
+            .map_err(|err| format!("{err:#}"))?;
         recovery_open.finish(&store)?;
         Ok(Self {
             wallet,

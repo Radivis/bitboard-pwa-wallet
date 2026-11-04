@@ -145,10 +145,12 @@ impl SharedRecordStore {
 
     /// True when this store already has Bark wallet properties.
     ///
-    /// An open of that store does not run seed recovery. An empty store does.
+    /// An open of that store does not defer flushes. An empty store does.
+    /// A poisoned lock is not an existing wallet: the creating-open path then
+    /// drops a scan whose status was not recorded.
     pub(crate) fn has_wallet_properties(&self) -> bool {
         let Ok(records) = self.lock_records() else {
-            return true;
+            return false;
         };
         records
             .partitions
@@ -690,5 +692,19 @@ mod tests {
                     .is_none()
             );
         }
+    }
+
+    #[test]
+    fn a_poisoned_record_lock_is_not_an_existing_wallet() {
+        let store = SharedRecordStore::empty();
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _records = store.lock_records().expect("lock");
+            panic!("poison the record lock");
+        }));
+
+        assert!(
+            !store.has_wallet_properties(),
+            "an unreadable store takes the empty-envelope path",
+        );
     }
 }
