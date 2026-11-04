@@ -18,6 +18,7 @@ import {
 } from './helpers/bark-emergency-exit'
 import {
   expectBarkRailSyncFails,
+  expectNoBarkServerContactDuring,
   readDashboardBarkSpendableSats,
   readDashboardOnchainSats,
   restartCaptaind,
@@ -63,9 +64,7 @@ test.describe('Bark exit flows regtest @bark-exit-regtest', () => {
     // The child spends confirmed on-chain coins. The boarded VTXO's 330 sat
     // anchor is not enough, and the board change is not what coin selection saw.
     await fundConfirmedCoinsForExitChild(page)
-    await startEmergencyExitOfOneVtxo(page)
-    await progressEmergencyExitUntilClaimable(page)
-    await claimEmergencyExitUntilOnchainGain(page)
+    await exitOneVtxoWithoutContactingBarkServer(page)
     await triggerBarkRailSync(page)
     await expect(page.getByText('Bark emergency exit', { exact: true })).toBeVisible({
       timeout: 60_000,
@@ -81,9 +80,7 @@ test.describe('Bark exit flows regtest @bark-exit-regtest', () => {
     try {
       await reopenWalletInFreshBarkSession(page)
       await expectBarkRailSyncFails(page)
-      await startEmergencyExitOfOneVtxo(page)
-      await progressEmergencyExitUntilClaimable(page)
-      await claimEmergencyExitUntilOnchainGain(page)
+      await exitOneVtxoWithoutContactingBarkServer(page)
     } finally {
       await startCaptaind()
     }
@@ -98,6 +95,15 @@ async function reopenWalletInFreshBarkSession(page: Page): Promise<void> {
   await page.goto('/wallet')
   await unlockWalletViaUI(page)
   await waitForBarkLoadReady(page)
+}
+
+/** Review, progress, and claim. A request to captaind fails this test. */
+async function exitOneVtxoWithoutContactingBarkServer(page: Page): Promise<void> {
+  await expectNoBarkServerContactDuring(page, async () => {
+    await startEmergencyExitOfOneVtxo(page)
+    await progressEmergencyExitUntilClaimable(page)
+    await claimEmergencyExitUntilOnchainGain(page)
+  })
 }
 
 async function startEmergencyExitOfOneVtxo(page: Page): Promise<void> {

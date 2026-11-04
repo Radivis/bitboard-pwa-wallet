@@ -20,11 +20,78 @@ pub const BARK_EXIT_CLAIM_MISSING_INPUTS: &str = "bark_exit_claim_missing_inputs
 pub const BARK_EXIT_NOT_CLAIMABLE: &str = "bark_exit_not_claimable";
 pub const BARK_EXIT_FAILED: &str = "bark_exit_failed";
 
-/// A live exit reserves its coin only while Bark still lists that coin as spendable
-/// and the exit recorded a movement. Locked, spent, and exited coins stay as they are.
-/// An exit with no movement cannot name a holder, so it is not locked.
+/// A live exit reserves its coin while Bark still lists that coin as spendable
+/// and the exit recorded a movement. An exit with no movement cannot name a holder.
 pub fn should_lock_exit_vtxo(state: ExitInputState, has_exit_movement: bool) -> bool {
     has_exit_movement && state == ExitInputState::Spendable
+}
+
+/// Whose exit movement holds this coin.
+///
+/// `NotAnExit` is an unlocked coin, an action lock, or a movement that is not an emergency exit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExitCoinLock {
+    ThisExit,
+    AnotherExit,
+    NotAnExit,
+}
+
+/// What to do with one live exit's coin.
+///
+/// A spendable coin is locked under the exit. A coin this exit already holds
+/// stays there. A coin another exit holds is left alone. Any other lock is
+/// taken, so the operation that held it cannot spend the coin.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExitVtxoLockClaim {
+    LockUnderExit,
+    TakeFromCurrentHolder,
+    Leave,
+}
+
+pub fn exit_vtxo_lock_claim(
+    state: ExitInputState,
+    has_exit_movement: bool,
+    holder: ExitCoinLock,
+) -> ExitVtxoLockClaim {
+    let held_by_an_exit = match holder {
+        ExitCoinLock::ThisExit | ExitCoinLock::AnotherExit => true,
+        ExitCoinLock::NotAnExit => false,
+    };
+    if !has_exit_movement || held_by_an_exit {
+        return ExitVtxoLockClaim::Leave;
+    }
+    if should_lock_exit_vtxo(state, has_exit_movement) {
+        return ExitVtxoLockClaim::LockUnderExit;
+    }
+    match state {
+        ExitInputState::Locked => ExitVtxoLockClaim::TakeFromCurrentHolder,
+        ExitInputState::Spendable | ExitInputState::Spent | ExitInputState::Exited => {
+            ExitVtxoLockClaim::Leave
+        }
+    }
+}
+
+/// Forfeits are signed in the finish step, which leaves `ReadyForBroadcast`.
+/// Stopping earlier releases the inputs. Stopping later would drop a forfeit
+/// the server may already have.
+pub fn collaborative_exit_has_not_signed_forfeits(
+    progress: &bark::actions::offboard::Progress,
+) -> bool {
+    use bark::actions::offboard::Progress;
+    matches!(
+        progress,
+        Progress::Start
+            | Progress::SplitWithArkoor
+            | Progress::ArkoorRegistrationRequired { .. }
+            | Progress::ReadyForOffboard { .. }
+            | Progress::OffboardTxPrepared { .. }
+    )
+}
+
+/// Cosign is the step that locks the inputs and then asks the server to sign.
+/// Later phases already have signed VTXOs.
+pub fn arkoor_send_has_not_cosigned(progress: &bark::actions::arkoor_send::Progress) -> bool {
+    matches!(progress, bark::actions::arkoor_send::Progress::Cosigning)
 }
 
 fn exit_input_state(kind: bark::vtxo::VtxoStateKind) -> ExitInputState {
@@ -40,12 +107,19 @@ fn wallet_error(err: impl std::fmt::Display) -> String {
     format!("{err:#}")
 }
 
-/// Locks each live exit whose VTXO is still spendable, under that exit's movement.
-/// One exit at a time: each movement is its own holder, and a rejected holder
-/// fails the whole `lock_vtxos` call.
+/// Locks each live exit under that exit's movement.
+///
+/// A spendable coin is locked. A coin locked by a send, a refresh, or a
+/// collaborative exit is unlocked from that holder and locked here. A coin
+/// another exit already holds is left alone. One exit at a time: each
+/// movement is its own holder, and a rejected holder fails the call.
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) async fn lock_spendable_exit_vtxos(wallet: &bark::Wallet) -> Result<(), String> {
     let exits = wallet.exit_mgr().get_exit_vtxos().await;
+    if exits.is_empty() {
+        return Ok(());
+    }
+    let movements = wallet.history().await.map_err(wallet_error)?;
     for exit in exits {
         let Some(movement_id) = exit.movement_id() else {
             continue;
@@ -53,18 +127,255 @@ pub(crate) async fn lock_spendable_exit_vtxos(wallet: &bark::Wallet) -> Result<(
         let Ok(vtxo) = wallet.get_vtxo_by_id(exit.id()).await else {
             continue;
         };
-        if !should_lock_exit_vtxo(exit_input_state(vtxo.state.kind()), true) {
+        let exit_holder = bark::vtxo::VtxoLockHolder::Movement { id: movement_id };
+        let holder = exit_coin_lock(&vtxo.state, movement_id, &movements);
+        match exit_vtxo_lock_claim(exit_input_state(vtxo.state.kind()), true, holder) {
+            ExitVtxoLockClaim::Leave => {}
+            ExitVtxoLockClaim::LockUnderExit => {
+                wallet
+                    .lock_vtxos(std::iter::once(exit.id()), Some(exit_holder))
+                    .await
+                    .map_err(wallet_error)?;
+            }
+            ExitVtxoLockClaim::TakeFromCurrentHolder => {
+                move_vtxo_lock_to_exit(
+                    wallet,
+                    exit.id(),
+                    current_lock_holder(&vtxo.state),
+                    exit_holder,
+                )
+                .await?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn exit_coin_lock(
+    state: &bark::vtxo::VtxoState,
+    exit_movement_id: bark::movement::MovementId,
+    movements: &[bark::movement::Movement],
+) -> ExitCoinLock {
+    let Some(bark::vtxo::VtxoLockHolder::Movement { id }) = current_lock_holder(state) else {
+        return ExitCoinLock::NotAnExit;
+    };
+    if id == exit_movement_id {
+        return ExitCoinLock::ThisExit;
+    }
+    let held_by_another_exit = movements.iter().any(|movement| {
+        movement.id == id
+            && movement
+                .subsystem
+                .is_subsystem(bark::subsystem::Subsystem::EXIT)
+    });
+    if held_by_another_exit {
+        ExitCoinLock::AnotherExit
+    } else {
+        ExitCoinLock::NotAnExit
+    }
+}
+
+fn current_lock_holder(state: &bark::vtxo::VtxoState) -> Option<bark::vtxo::VtxoLockHolder> {
+    match state {
+        bark::vtxo::VtxoState::Locked { holder } => holder.clone(),
+        _ => None,
+    }
+}
+
+/// Unlocks `from`, then locks the exit. If the exit lock fails, the previous
+/// holder is restored so the coin is not left spendable.
+async fn move_vtxo_lock_to_exit(
+    wallet: &bark::Wallet,
+    vtxo_id: bark::ark::VtxoId,
+    from: Option<bark::vtxo::VtxoLockHolder>,
+    exit_holder: bark::vtxo::VtxoLockHolder,
+) -> Result<(), String> {
+    wallet
+        .unlock_vtxos(std::iter::once(vtxo_id), from.clone())
+        .await
+        .map_err(wallet_error)?;
+    if let Err(lock_error) = wallet
+        .lock_vtxos(std::iter::once(vtxo_id), Some(exit_holder))
+        .await
+    {
+        let restore_error = wallet
+            .lock_vtxos(std::iter::once(vtxo_id), from)
+            .await
+            .err()
+            .map(|err| format!("{err:#}"));
+        if let Some(restore_error) = restore_error {
+            return Err(format!(
+                "{:#}; restoring the previous lock also failed: {restore_error}",
+                lock_error
+            ));
+        }
+        return Err(wallet_error(lock_error));
+    }
+    Ok(())
+}
+
+/// Cancels rounds Bark can cancel, and stops spends that have not yet signed,
+/// before a whole-wallet exit selects every unspent coin.
+///
+/// A delegated round cannot be canceled. Its inputs are taken by the exit lock
+/// afterwards, and sync leaves that round alone while the exit holds them.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) async fn release_in_flight_spends_before_whole_wallet_exit(
+    wallet: &bark::Wallet,
+) -> Result<(), String> {
+    wallet
+        .cancel_all_pending_rounds()
+        .await
+        .map_err(wallet_error)?;
+    stop_unsigned_offboards(wallet, None).await?;
+    stop_uncosigned_arkoor_sends(wallet, None).await?;
+    Ok(())
+}
+
+/// Stops an unsigned spend whose inputs include a live exit, so a later sync
+/// cannot sign it. A signed forfeit or a cosigned Arkoor is left in place.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) async fn release_unsigned_spends_of_exit_vtxos(
+    wallet: &bark::Wallet,
+) -> Result<(), String> {
+    let exit_ids = wallet
+        .exit_mgr()
+        .get_exit_vtxos()
+        .await
+        .iter()
+        .map(|exit| exit.id())
+        .collect::<Vec<_>>();
+    if exit_ids.is_empty() {
+        return Ok(());
+    }
+    stop_unsigned_offboards(wallet, Some(&exit_ids)).await?;
+    stop_uncosigned_arkoor_sends(wallet, Some(&exit_ids)).await?;
+    Ok(())
+}
+
+/// True when a pending round still names an input this exit has locked.
+/// Syncing that round can forfeit the input once the server issues it.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) async fn pending_round_includes_exit_held_input(
+    wallet: &bark::Wallet,
+) -> Result<bool, String> {
+    let rounds = wallet.pending_round_states().await.map_err(wallet_error)?;
+    let movements = wallet.history().await.map_err(wallet_error)?;
+    for round in rounds {
+        for input in &round.state().participation().inputs {
+            let Ok(vtxo) = wallet.get_vtxo_by_id(input.id()).await else {
+                continue;
+            };
+            let Some(bark::vtxo::VtxoLockHolder::Movement { id }) =
+                current_lock_holder(&vtxo.state)
+            else {
+                continue;
+            };
+            let held_by_exit = movements.iter().any(|movement| {
+                movement.id == id
+                    && movement
+                        .subsystem
+                        .is_subsystem(bark::subsystem::Subsystem::EXIT)
+            });
+            if held_by_exit {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
+}
+
+async fn stop_unsigned_offboards(
+    wallet: &bark::Wallet,
+    only_these_inputs: Option<&[bark::ark::VtxoId]>,
+) -> Result<(), String> {
+    let pending = wallet.pending_offboards().await.map_err(wallet_error)?;
+    for offboard in pending {
+        if !collaborative_exit_has_not_signed_forfeits(&offboard.progress) {
             continue;
         }
+        if let Some(exit_ids) = only_these_inputs {
+            if !offboard_names_any(&offboard, exit_ids) {
+                continue;
+            }
+        }
         wallet
-            .lock_vtxos(
-                std::iter::once(exit.id()),
-                Some(bark::vtxo::VtxoLockHolder::Movement { id: movement_id }),
-            )
+            .stop_wallet_action(&offboard.id)
             .await
             .map_err(wallet_error)?;
     }
     Ok(())
+}
+
+async fn stop_uncosigned_arkoor_sends(
+    wallet: &bark::Wallet,
+    only_these_inputs: Option<&[bark::ark::VtxoId]>,
+) -> Result<(), String> {
+    let pending = wallet.pending_arkoor_sends().await.map_err(wallet_error)?;
+    for send in pending {
+        if !arkoor_send_has_not_cosigned(&send.progress) {
+            continue;
+        }
+        if let Some(exit_ids) = only_these_inputs {
+            if !send
+                .input_vtxo_ids
+                .iter()
+                .any(|input_id| exit_ids.contains(input_id))
+            {
+                continue;
+            }
+        }
+        wallet
+            .stop_wallet_action(&send.id())
+            .await
+            .map_err(wallet_error)?;
+    }
+    Ok(())
+}
+
+fn offboard_names_any(
+    offboard: &bark::actions::offboard::Offboard,
+    vtxo_ids: &[bark::ark::VtxoId],
+) -> bool {
+    offboard_named_ids(offboard).any(|named| vtxo_ids.contains(&named))
+}
+
+fn offboard_named_ids(
+    offboard: &bark::actions::offboard::Offboard,
+) -> impl Iterator<Item = bark::ark::VtxoId> + '_ {
+    let kind_ids = match &offboard.kind {
+        bark::actions::offboard::OffboardKind::OffboardWhole { input_vtxo_ids }
+        | bark::actions::offboard::OffboardKind::SendOnchain { input_vtxo_ids, .. } => {
+            input_vtxo_ids.as_slice()
+        }
+    };
+    let progress_ids: &[bark::ark::VtxoId] = match &offboard.progress {
+        bark::actions::offboard::Progress::ArkoorRegistrationRequired {
+            offboard_vtxo_ids,
+            change_vtxo_ids,
+        } => {
+            return kind_ids
+                .iter()
+                .chain(offboard_vtxo_ids)
+                .chain(change_vtxo_ids)
+                .copied()
+                .collect::<Vec<_>>()
+                .into_iter();
+        }
+        bark::actions::offboard::Progress::ReadyForOffboard {
+            offboard_vtxo_ids, ..
+        }
+        | bark::actions::offboard::Progress::OffboardTxPrepared {
+            offboard_vtxo_ids, ..
+        } => offboard_vtxo_ids,
+        _ => &[],
+    };
+    kind_ids
+        .iter()
+        .chain(progress_ids)
+        .copied()
+        .collect::<Vec<_>>()
+        .into_iter()
 }
 
 /// Releases the lock cancel left behind. Bark's cancel does not touch the VTXO.
@@ -838,6 +1149,7 @@ mod wasm {
             let requested = parse_vtxo_ids(vtxo_ids)?;
             let before = wallet.exit_mgr().get_exit_vtxo_ids().await;
             if requested.is_empty() {
+                super::release_in_flight_spends_before_whole_wallet_exit(wallet).await?;
                 map_anyhow_exit(wallet.exit_mgr().start_exit_for_entire_wallet().await)?;
             } else {
                 let mut selected_vtxos = Vec::with_capacity(requested.len());
@@ -1128,11 +1440,13 @@ mod tests {
         BARK_EXIT_CLAIM_MISSING_INPUTS, BARK_EXIT_DUST, BARK_EXIT_FAILED,
         BARK_EXIT_INSUFFICIENT_FUNDS, BARK_EXIT_NOT_CLAIMABLE, BARK_EXIT_NOT_EXITING,
         BARK_EXIT_NOTHING_STARTED, BARK_EXIT_UNKNOWN_VTXO, BARK_EXIT_VTXO_SWEPT,
-        BarkEmergencyExitStateKind, ExitGraphChain, ExitGraphChainStatus, ExitGraphTransactionKind,
-        ExitGraphTransactionStatus, ExitGraphTxType, awaiting_delta_heights,
-        chain_anchor_transaction, cpfp_requests_needing_first_child, emergency_exit_state_json,
-        exit_graph_transaction_from_bitcoin, exit_graph_tx_types, exit_ids_grew,
-        fee_rate_from_sat_per_vb, fee_rate_sat_per_vb, merge_exit_graph, should_lock_exit_vtxo,
+        BarkEmergencyExitStateKind, ExitCoinLock, ExitGraphChain, ExitGraphChainStatus,
+        ExitGraphTransactionKind, ExitGraphTransactionStatus, ExitGraphTxType, ExitVtxoLockClaim,
+        arkoor_send_has_not_cosigned, awaiting_delta_heights, chain_anchor_transaction,
+        collaborative_exit_has_not_signed_forfeits, cpfp_requests_needing_first_child,
+        emergency_exit_state_json, exit_graph_transaction_from_bitcoin, exit_graph_tx_types,
+        exit_ids_grew, exit_vtxo_lock_claim, fee_rate_from_sat_per_vb, fee_rate_sat_per_vb,
+        merge_exit_graph, should_lock_exit_vtxo,
     };
     use crate::exit_address::{ExitInputState, parse_signet_receive_address};
 
@@ -1144,6 +1458,74 @@ mod tests {
         assert!(!should_lock_exit_vtxo(ExitInputState::Locked, true));
         assert!(!should_lock_exit_vtxo(ExitInputState::Spent, true));
         assert!(!should_lock_exit_vtxo(ExitInputState::Exited, true));
+        assert!(!should_lock_exit_vtxo(ExitInputState::Spendable, false));
+    }
+
+    #[test]
+    fn a_lock_held_by_another_operation_is_taken_and_an_exit_lock_is_not() {
+        assert_eq!(
+            exit_vtxo_lock_claim(ExitInputState::Spendable, true, ExitCoinLock::NotAnExit),
+            ExitVtxoLockClaim::LockUnderExit,
+        );
+        assert_eq!(
+            exit_vtxo_lock_claim(ExitInputState::Locked, true, ExitCoinLock::NotAnExit),
+            ExitVtxoLockClaim::TakeFromCurrentHolder,
+        );
+        assert_eq!(
+            exit_vtxo_lock_claim(ExitInputState::Locked, true, ExitCoinLock::ThisExit),
+            ExitVtxoLockClaim::Leave,
+        );
+        assert_eq!(
+            exit_vtxo_lock_claim(ExitInputState::Locked, true, ExitCoinLock::AnotherExit),
+            ExitVtxoLockClaim::Leave,
+        );
+        assert_eq!(
+            exit_vtxo_lock_claim(ExitInputState::Spent, true, ExitCoinLock::NotAnExit),
+            ExitVtxoLockClaim::Leave,
+        );
+        assert_eq!(
+            exit_vtxo_lock_claim(ExitInputState::Exited, true, ExitCoinLock::NotAnExit),
+            ExitVtxoLockClaim::Leave,
+        );
+        assert_eq!(
+            exit_vtxo_lock_claim(ExitInputState::Locked, false, ExitCoinLock::NotAnExit),
+            ExitVtxoLockClaim::Leave,
+        );
+    }
+
+    #[test]
+    fn an_unsigned_collaborative_exit_can_be_stopped_and_a_signed_one_cannot() {
+        use bark::actions::offboard::Progress;
+
+        assert!(collaborative_exit_has_not_signed_forfeits(&Progress::Start));
+        assert!(collaborative_exit_has_not_signed_forfeits(
+            &Progress::SplitWithArkoor
+        ));
+        assert!(collaborative_exit_has_not_signed_forfeits(
+            &Progress::ReadyForOffboard {
+                offboard_vtxo_ids: Vec::new(),
+                prior_txid: None,
+            }
+        ));
+        assert!(!collaborative_exit_has_not_signed_forfeits(
+            &Progress::ReadyForBroadcast {
+                offboard_vtxo_ids: Vec::new(),
+                signed_offboard_tx: bitcoin::Transaction {
+                    version: bitcoin::transaction::Version::TWO,
+                    lock_time: bitcoin::absolute::LockTime::ZERO,
+                    input: Vec::new(),
+                    output: Vec::new(),
+                },
+                movement_id: bark::movement::MovementId::new(1),
+            }
+        ));
+    }
+
+    #[test]
+    fn an_arkoor_send_can_be_stopped_only_before_it_cosigns() {
+        use bark::actions::arkoor_send::Progress;
+
+        assert!(arkoor_send_has_not_cosigned(&Progress::Cosigning));
     }
 
     #[test]

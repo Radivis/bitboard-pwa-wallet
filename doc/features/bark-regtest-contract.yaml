@@ -23,7 +23,7 @@ contracts:
     tags: ["@bark-exit-regtest"]
     implemented_by: frontend/tests/e2e/bark-exit-flows-regtest.spec.ts
   - id: E2E-BARK-REG-05
-    description: Emergency exit of a selected VTXO. Progress mines between steps. Claimed funds arrive on-chain.
+    description: Emergency exit of a selected VTXO. From review through claim, the wallet does not contact the Bark server. Progress mines between steps. Claimed funds arrive on-chain.
     tags: ["@bark-exit-regtest"]
     implemented_by: frontend/tests/e2e/bark-exit-flows-regtest.spec.ts
   - id: E2E-BARK-REG-06
@@ -31,7 +31,7 @@ contracts:
     tags: ["@bark-refresh-regtest"]
     implemented_by: frontend/tests/e2e/bark-refresh-regtest.spec.ts
   - id: E2E-BARK-REG-07
-    description: With captaind stopped, a reloaded and unlocked wallet opens Bark from its stored records and its Bark sync fails. Emergency exit of a selected VTXO still starts, progresses, and claims. Claimed funds arrive on-chain.
+    description: With captaind stopped, a reloaded and unlocked wallet opens Bark from its stored records and its Bark sync fails. Emergency exit of a selected VTXO still starts, progresses, and claims, and that exit does not contact the Bark server. Claimed funds arrive on-chain.
     tags: ["@bark-exit-regtest"]
     implemented_by: frontend/tests/e2e/bark-exit-flows-regtest.spec.ts
 

@@ -407,58 +407,19 @@ pub async fn bark_last_revealed_key_index() -> Result<JsValue, JsValue> {
     }
 }
 
-/// Heartbeats the server, then runs `Wallet::sync`.
-/// `Wallet::sync` returns `()` and only logs sub-step failures, so a dead server
-/// is reported by `refresh_server` and does not mark this session as synced.
-///
-/// Mailbox, pending Arkoor, pending rounds, and pending boards must then succeed.
-/// The first of those errors fails this call and does not mark the session synced.
-/// `Wallet::sync` may already have logged that error. That log is not a second failure.
-/// Boards are checked once here. `sync_pending_boards` parks a board while it waits
-/// for confirmations.
-///
-/// After those steps, records an anchor sweep and a checkpoint seizure on the
-/// remaining coins, marks both spent, then schedules one delegated VTXO refresh
-/// when none is pending. Swept anchors are not refreshed: the server already
-/// claimed that output. When that refresh stays idle, spendable dust coins are
-/// consolidated with one delegated refresh when their total covers the refresh
-/// fee and a non-dust output. A set that cannot pay stays idle.
-/// A scheduling failure still marks this session synced and returns `warning`.
-/// The status is `idle`, `scheduled`, `pending`, or `warning`.
-///
-/// `sync_exits` then runs so Bark's chain source can see a claim. That error
-/// does not fail this call.
-///
-/// Live emergency exits are locked before refresh, so a coin that is still
-/// spendable cannot be selected into a round.
+/// Syncs with the Bark server, scans exit outputs, and returns the refresh status.
+/// Skips the server while an emergency exit holds a pending round input.
 #[wasm_bindgen]
 pub async fn bark_sync() -> Result<String, JsValue> {
     let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
     let operation_result = async {
         crate::emergency_exit::lock_spendable_exit_vtxos(&wallet).await?;
-        wallet.refresh_server().await.map_err(bark_error)?;
-        // Drive before `Wallet::sync` so this call sees a rejection. Sync drives
-        // the same checkpoint again and only logs the failure.
-        crate::pending_actions::continue_pending_offboards(&wallet).await;
-        wallet.sync().await;
-        crate::pending_actions::continue_pending_offboards(&wallet).await;
-        crate::required_sync::require_mailbox_arkoor_rounds_and_boards(
-            async { wallet.sync_mailbox().await.map_err(bark_error) },
-            async { wallet.sync_pending_arkoor_sends().await.map_err(bark_error) },
-            async {
-                wallet
-                    .sync_pending_rounds()
-                    .await
-                    .map(|_| ())
-                    .map_err(bark_error)
-            },
-            async { wallet.sync_pending_boards().await.map_err(bark_error) },
-        )
-        .await?;
+        crate::emergency_exit::release_unsigned_spends_of_exit_vtxos(&wallet).await?;
+        sync_bark_server_unless_exit_holds_a_round(&wallet).await?;
         crate::exit_seizure::record_exit_chain_notices(&wallet).await;
+        crate::emergency_exit::lock_spendable_exit_vtxos(&wallet).await?;
         let refresh_status = delegated_refresh_status(&wallet).await;
-        // A missed exit sync does not fail this session.
-        let _exit_sync = wallet.sync_exits().await;
+        sync_open_exits(&wallet).await;
         Ok(refresh_status)
     }
     .await;
@@ -472,6 +433,47 @@ pub async fn bark_sync() -> Result<String, JsValue> {
 extern "C" {
     #[wasm_bindgen(js_namespace = console, js_name = warn)]
     fn console_warn(s: &str);
+}
+
+/// Does not contact the server while an emergency exit holds a pending round input.
+/// A round sync would forfeit that coin.
+async fn sync_bark_server_unless_exit_holds_a_round(wallet: &bark::Wallet) -> Result<(), String> {
+    if crate::emergency_exit::pending_round_includes_exit_held_input(wallet).await? {
+        console_warn(
+            "Bark skipped the server sync because an emergency exit holds a pending round input",
+        );
+        return Ok(());
+    }
+    sync_bark_server(wallet).await
+}
+
+/// Heartbeat, then `Wallet::sync`, then mailbox, Arkoor, rounds, and boards.
+/// The first of those four errors fails the call. `Wallet::sync` only logs them.
+async fn sync_bark_server(wallet: &bark::Wallet) -> Result<(), String> {
+    wallet.refresh_server().await.map_err(bark_error)?;
+    // Drive before `Wallet::sync` so this call sees a rejection. Sync drives
+    // the same checkpoint again and only logs the failure.
+    crate::pending_actions::continue_pending_offboards(wallet).await;
+    wallet.sync().await;
+    crate::pending_actions::continue_pending_offboards(wallet).await;
+    crate::required_sync::require_mailbox_arkoor_rounds_and_boards(
+        async { wallet.sync_mailbox().await.map_err(bark_error) },
+        async { wallet.sync_pending_arkoor_sends().await.map_err(bark_error) },
+        async {
+            wallet
+                .sync_pending_rounds()
+                .await
+                .map(|_| ())
+                .map_err(bark_error)
+        },
+        async { wallet.sync_pending_boards().await.map_err(bark_error) },
+    )
+    .await
+}
+
+/// Chain progress of live exits. A failure leaves the refresh status in place.
+async fn sync_open_exits(wallet: &bark::Wallet) {
+    let _exit_sync = wallet.sync_exits().await;
 }
 
 /// `Wallet::sync` already resumes a stored delegated round. Submit another
