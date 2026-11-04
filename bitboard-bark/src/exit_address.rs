@@ -30,26 +30,19 @@ pub fn parse_signet_receive_address(address: &str) -> Result<Address, String> {
     parse_receive_address(address, Network::Signet)
 }
 
-/// Local state that decides whether a new exit may select a VTXO.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ExitInputState {
-    Spendable,
-    Locked,
-    Spent,
-    Exited,
-}
-
 /// A new exit selects spendable coins only. Spent and exited coins stay out.
 /// Bark applies the same cut through `spendable_vtxos` when an exit starts.
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 pub fn selectable_exit_vtxo_ids<'a>(
-    vtxos: impl IntoIterator<Item = (&'a str, ExitInputState)>,
+    vtxos: impl IntoIterator<Item = (&'a str, bark::vtxo::VtxoStateKind)>,
 ) -> Vec<&'a str> {
     vtxos
         .into_iter()
         .filter_map(|(id, state)| match state {
-            ExitInputState::Spendable => Some(id),
-            ExitInputState::Locked | ExitInputState::Spent | ExitInputState::Exited => None,
+            bark::vtxo::VtxoStateKind::Spendable => Some(id),
+            bark::vtxo::VtxoStateKind::Locked
+            | bark::vtxo::VtxoStateKind::Spent
+            | bark::vtxo::VtxoStateKind::Exited => None,
         })
         .collect()
 }
@@ -117,9 +110,8 @@ mod tests {
     use bitcoin::Network;
 
     use super::{
-        BARK_OFFBOARD_PARKED_PREFIX, ExitInputState, classify_offboard_failure,
-        parse_receive_address, parse_signet_receive_address, selectable_exit_vtxo_ids,
-        spent_vtxo_ids_named_by_server,
+        BARK_OFFBOARD_PARKED_PREFIX, classify_offboard_failure, parse_receive_address,
+        parse_signet_receive_address, selectable_exit_vtxo_ids, spent_vtxo_ids_named_by_server,
     };
 
     const SIGNET_ADDRESS: &str = "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx";
@@ -172,13 +164,13 @@ mod tests {
     #[test]
     fn a_new_exit_selects_spendable_vtxos_and_leaves_spent_ones_out() {
         let selected = selectable_exit_vtxo_ids([
-            ("spend:0", ExitInputState::Spendable),
+            ("spend:0", bark::vtxo::VtxoStateKind::Spendable),
             (
                 "33e7166f18ea847b5c2a20130d6eeb0504fd690bbe7c1015cdd08fa41db45e25:0",
-                ExitInputState::Spent,
+                bark::vtxo::VtxoStateKind::Spent,
             ),
-            ("locked:1", ExitInputState::Locked),
-            ("exited:2", ExitInputState::Exited),
+            ("locked:1", bark::vtxo::VtxoStateKind::Locked),
+            ("exited:2", bark::vtxo::VtxoStateKind::Exited),
         ]);
 
         assert_eq!(selected, ["spend:0"]);

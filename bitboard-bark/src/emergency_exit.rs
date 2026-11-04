@@ -3,8 +3,6 @@ use std::collections::HashSet;
 use bitcoin_ext::{BlockDelta, BlockHeight};
 use serde::Serialize;
 
-use crate::exit_address::ExitInputState;
-
 pub const BARK_EXIT_UNKNOWN_VTXO: &str = "bark_exit_unknown_vtxo";
 pub const BARK_EXIT_DUST: &str = "bark_exit_dust";
 pub const BARK_EXIT_ALREADY_EXITED: &str = "bark_exit_already_exited";
@@ -22,8 +20,8 @@ pub const BARK_EXIT_FAILED: &str = "bark_exit_failed";
 
 /// A live exit reserves its coin while Bark still lists that coin as spendable
 /// and the exit recorded a movement. An exit with no movement cannot name a holder.
-pub fn should_lock_exit_vtxo(state: ExitInputState, has_exit_movement: bool) -> bool {
-    has_exit_movement && state == ExitInputState::Spendable
+pub fn should_lock_exit_vtxo(state: bark::vtxo::VtxoStateKind, has_exit_movement: bool) -> bool {
+    has_exit_movement && state == bark::vtxo::VtxoStateKind::Spendable
 }
 
 /// Whose exit movement holds this coin.
@@ -49,7 +47,7 @@ pub enum ExitVtxoLockClaim {
 }
 
 pub fn exit_vtxo_lock_claim(
-    state: ExitInputState,
+    state: bark::vtxo::VtxoStateKind,
     has_exit_movement: bool,
     holder: ExitCoinLock,
 ) -> ExitVtxoLockClaim {
@@ -64,10 +62,10 @@ pub fn exit_vtxo_lock_claim(
         return ExitVtxoLockClaim::LockUnderExit;
     }
     match state {
-        ExitInputState::Locked => ExitVtxoLockClaim::TakeFromCurrentHolder,
-        ExitInputState::Spendable | ExitInputState::Spent | ExitInputState::Exited => {
-            ExitVtxoLockClaim::Leave
-        }
+        bark::vtxo::VtxoStateKind::Locked => ExitVtxoLockClaim::TakeFromCurrentHolder,
+        bark::vtxo::VtxoStateKind::Spendable
+        | bark::vtxo::VtxoStateKind::Spent
+        | bark::vtxo::VtxoStateKind::Exited => ExitVtxoLockClaim::Leave,
     }
 }
 
@@ -92,15 +90,6 @@ pub fn collaborative_exit_has_not_signed_forfeits(
 /// Later phases already have signed VTXOs.
 pub fn arkoor_send_has_not_cosigned(progress: &bark::actions::arkoor_send::Progress) -> bool {
     matches!(progress, bark::actions::arkoor_send::Progress::Cosigning)
-}
-
-fn exit_input_state(kind: bark::vtxo::VtxoStateKind) -> ExitInputState {
-    match kind {
-        bark::vtxo::VtxoStateKind::Spendable => ExitInputState::Spendable,
-        bark::vtxo::VtxoStateKind::Locked => ExitInputState::Locked,
-        bark::vtxo::VtxoStateKind::Spent => ExitInputState::Spent,
-        bark::vtxo::VtxoStateKind::Exited => ExitInputState::Exited,
-    }
 }
 
 fn wallet_error(err: impl std::fmt::Display) -> String {
@@ -129,7 +118,7 @@ pub(crate) async fn lock_spendable_exit_vtxos(wallet: &bark::Wallet) -> Result<(
         };
         let exit_holder = bark::vtxo::VtxoLockHolder::Movement { id: movement_id };
         let holder = exit_coin_lock(&vtxo.state, movement_id, &movements);
-        match exit_vtxo_lock_claim(exit_input_state(vtxo.state.kind()), true, holder) {
+        match exit_vtxo_lock_claim(vtxo.state.kind(), true, holder) {
             ExitVtxoLockClaim::Leave => {}
             ExitVtxoLockClaim::LockUnderExit => {
                 wallet
@@ -1489,47 +1478,90 @@ mod tests {
         exit_ids_grew, exit_vtxo_lock_claim, fee_rate_from_sat_per_vb, fee_rate_sat_per_vb,
         merge_exit_graph, should_lock_exit_vtxo,
     };
-    use crate::exit_address::{ExitInputState, parse_signet_receive_address};
+    use crate::exit_address::parse_signet_receive_address;
 
     const MAINNET_ADDRESS: &str = "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4";
 
     #[test]
     fn a_spendable_exit_with_a_movement_is_locked_and_other_states_are_not() {
-        assert!(should_lock_exit_vtxo(ExitInputState::Spendable, true));
-        assert!(!should_lock_exit_vtxo(ExitInputState::Locked, true));
-        assert!(!should_lock_exit_vtxo(ExitInputState::Spent, true));
-        assert!(!should_lock_exit_vtxo(ExitInputState::Exited, true));
-        assert!(!should_lock_exit_vtxo(ExitInputState::Spendable, false));
+        assert!(should_lock_exit_vtxo(
+            bark::vtxo::VtxoStateKind::Spendable,
+            true
+        ));
+        assert!(!should_lock_exit_vtxo(
+            bark::vtxo::VtxoStateKind::Locked,
+            true
+        ));
+        assert!(!should_lock_exit_vtxo(
+            bark::vtxo::VtxoStateKind::Spent,
+            true
+        ));
+        assert!(!should_lock_exit_vtxo(
+            bark::vtxo::VtxoStateKind::Exited,
+            true
+        ));
+        assert!(!should_lock_exit_vtxo(
+            bark::vtxo::VtxoStateKind::Spendable,
+            false
+        ));
     }
 
     #[test]
     fn a_lock_held_by_another_operation_is_taken_and_an_exit_lock_is_not() {
         assert_eq!(
-            exit_vtxo_lock_claim(ExitInputState::Spendable, true, ExitCoinLock::NotAnExit),
+            exit_vtxo_lock_claim(
+                bark::vtxo::VtxoStateKind::Spendable,
+                true,
+                ExitCoinLock::NotAnExit
+            ),
             ExitVtxoLockClaim::LockUnderExit,
         );
         assert_eq!(
-            exit_vtxo_lock_claim(ExitInputState::Locked, true, ExitCoinLock::NotAnExit),
+            exit_vtxo_lock_claim(
+                bark::vtxo::VtxoStateKind::Locked,
+                true,
+                ExitCoinLock::NotAnExit
+            ),
             ExitVtxoLockClaim::TakeFromCurrentHolder,
         );
         assert_eq!(
-            exit_vtxo_lock_claim(ExitInputState::Locked, true, ExitCoinLock::ThisExit),
+            exit_vtxo_lock_claim(
+                bark::vtxo::VtxoStateKind::Locked,
+                true,
+                ExitCoinLock::ThisExit
+            ),
             ExitVtxoLockClaim::Leave,
         );
         assert_eq!(
-            exit_vtxo_lock_claim(ExitInputState::Locked, true, ExitCoinLock::AnotherExit),
+            exit_vtxo_lock_claim(
+                bark::vtxo::VtxoStateKind::Locked,
+                true,
+                ExitCoinLock::AnotherExit
+            ),
             ExitVtxoLockClaim::Leave,
         );
         assert_eq!(
-            exit_vtxo_lock_claim(ExitInputState::Spent, true, ExitCoinLock::NotAnExit),
+            exit_vtxo_lock_claim(
+                bark::vtxo::VtxoStateKind::Spent,
+                true,
+                ExitCoinLock::NotAnExit
+            ),
             ExitVtxoLockClaim::Leave,
         );
         assert_eq!(
-            exit_vtxo_lock_claim(ExitInputState::Exited, true, ExitCoinLock::NotAnExit),
+            exit_vtxo_lock_claim(
+                bark::vtxo::VtxoStateKind::Exited,
+                true,
+                ExitCoinLock::NotAnExit
+            ),
             ExitVtxoLockClaim::Leave,
         );
         assert_eq!(
-            exit_vtxo_lock_claim(ExitInputState::Locked, false, ExitCoinLock::NotAnExit),
+            exit_vtxo_lock_claim(
+                bark::vtxo::VtxoStateKind::Locked,
+                false,
+                ExitCoinLock::NotAnExit
+            ),
             ExitVtxoLockClaim::Leave,
         );
     }
