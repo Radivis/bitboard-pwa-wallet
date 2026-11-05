@@ -37,10 +37,19 @@ describe('customEsploraMatchesWhitelistedBase', () => {
   it('matches default testnet4 base with trailing slash', () => {
     expect(
       customEsploraMatchesWhitelistedBase(
-        'https://blockstream.info/testnet4/api/',
+        'https://mempool.space/testnet4/api/',
         'testnet',
       ),
     ).toEqual({ providerId: 'default' })
+  })
+
+  it('matches blockstream testnet4 as the blockstream provider', () => {
+    expect(
+      customEsploraMatchesWhitelistedBase(
+        'https://blockstream.info/testnet4/api/',
+        'testnet',
+      ),
+    ).toEqual({ providerId: 'blockstream' })
   })
 
   it('matches blockstream mainnet', () => {
@@ -100,8 +109,10 @@ describe('getUpstreamBaseForEsploraProxy', () => {
     expect(getUpstreamBaseForEsploraProxy('evil', 'mainnet')).toBeNull()
   })
 
-  it('returns null for blockstream testnet (not configured)', () => {
-    expect(getUpstreamBaseForEsploraProxy('blockstream', 'testnet')).toBeNull()
+  it('resolves blockstream testnet4', () => {
+    expect(getUpstreamBaseForEsploraProxy('blockstream', 'testnet')).toBe(
+      ESPLORA_PROVIDER_BASES.blockstream.testnet,
+    )
   })
 
   it('resolves legacy testnet and has no legacy signet row', () => {

@@ -12,12 +12,13 @@ type ProviderBases = Partial<Record<EsploraProxyNetwork, string>>
 const ESPLORA_PROVIDER_BASES: Record<EsploraProviderId, ProviderBases> = {
   default: {
     mainnet: 'https://mempool.space/api',
-    testnet: 'https://blockstream.info/testnet4/api',
+    testnet: 'https://mempool.space/testnet4/api',
     signet: 'https://mempool.space/signet/api',
     mutinynet: 'https://mutinynet.com/api',
   },
   blockstream: {
     mainnet: 'https://blockstream.info/api',
+    testnet: 'https://blockstream.info/testnet4/api',
     signet: 'https://blockstream.info/signet/api',
   },
   legacy: {

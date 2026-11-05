@@ -12,14 +12,15 @@ type ProviderBases = Partial<Record<EsploraProxyNetwork, string>>
 export const ESPLORA_PROVIDER_BASES: Record<EsploraProviderId, ProviderBases> = {
   default: {
     mainnet: 'https://mempool.space/api',
-    /** Testnet4. Blockstream serves this chain; mempool.space/testnet4 often refuses the connection. */
-    testnet: 'https://blockstream.info/testnet4/api',
+    /** Testnet4. Blockstream's unauthenticated cap (700 requests/hour) 429s a full scan. */
+    testnet: 'https://mempool.space/testnet4/api',
     signet: 'https://mempool.space/signet/api',
     mutinynet: 'https://mutinynet.com/api',
   },
-  /** Public Blockstream Esplora mirrors (no testnet4 row — chain differs from app testnet). */
+  /** Public Blockstream Esplora mirrors. Testnet here is testnet4, not legacy testnet3. */
   blockstream: {
     mainnet: 'https://blockstream.info/api',
+    testnet: 'https://blockstream.info/testnet4/api',
     signet: 'https://blockstream.info/signet/api',
   },
   /**
