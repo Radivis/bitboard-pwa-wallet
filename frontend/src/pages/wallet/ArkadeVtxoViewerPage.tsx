@@ -119,7 +119,7 @@ export function ArkadeVtxoViewerPage() {
         rail="arkade"
         syncPhase={arkadeSyncSnapshot.syncPhase}
         loadPhase={arkadeLoadSnapshot.loadPhase}
-        warningMessage={arkadeSyncSnapshot.warningMessage}
+        warningMessages={arkadeSyncSnapshot.warningMessages}
         onRetry={() => arkadeManualSync.mutate()}
         isRetrying={arkadeRail.syncPhase === 'syncing' || arkadeManualSync.isPending}
       />

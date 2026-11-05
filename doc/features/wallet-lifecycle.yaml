@@ -137,11 +137,9 @@ feature:
     arkade:
       - id: LIFE-ARK-LOAD-01
         description: >
-          ArkadeLoadLifecycle loading includes session open, WASM hydration, and
-          the persisted-envelope dashboard (offchain snapshot, stored intents,
-          local receive address). The live Esplora balance and history refresh
-          runs after loaded, with post-load sync. A failure of that refresh is
-          a sync warning and leaves the session open.
+          ArkadeLoadLifecycle loading includes session open, WASM hydration,
+          and a persisted-dashboard publish. It does not call getBalance or
+          getTransactionHistory.
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-load-lifecycle-orchestrator.test.ts
       - id: LIFE-ARK-LOAD-02
         description: activeArkadeAccountId is set when ArkadeLoadLifecycle reaches loaded (not after sync)
@@ -152,11 +150,10 @@ feature:
       - id: LIFE-ARK-LOAD-04
         description: >
           Arkade loadPhase loaded (and Establishing Arkade session) must not wait
-          on bumper Esplora, boarding Esplora, or a bumper BDK full_scan. Operator
-          connect, persistence hydrate, and the persisted-envelope dashboard stay
-          on the load path. The live balance and history refresh runs with
-          post-load sync. Bumper Esplora starts on first onchain_bumper_info
-          or exit proceed/complete, not after loaded.
+          on bumper Esplora and must not start a bumper BDK full_scan. Operator
+          connect and persistence hydrate stay on the load path. The live
+          balance and history refresh does not. Bumper Esplora starts on first
+          onchain_bumper_info or exit proceed/complete, not after loaded.
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-load-lifecycle-orchestrator.test.ts
       - id: LIFE-ARK-LOAD-05
         description: >
@@ -172,8 +169,20 @@ feature:
           Arkade session start that does not finish within 30 seconds fails.
           The load error is "Arkade session start timed out", shown on the session
           error screen and reported by the session-open toast. A later completion
-          of that start does not clear the error.
+          of that start does not clear the error. The 30 seconds apply to opening
+          the session, not to the live balance or history refresh.
         implemented_by: frontend/src/lib/wallet/lifecycle/__tests__/arkade-load-lifecycle-orchestrator.test.ts
+      - id: LIFE-ARK-LOAD-07
+        description: >
+          A live balance or history refresh after loaded is sync-error on an
+          open session. It does not terminate the worker or set load-error.
+          At loaded, boarding spendable and pending sats are 0 until that
+          refresh. Pending batch intents come from the envelope without the
+          cooperative-window lookup. The receive address is already stable
+          from the local peek (LIFE-ARK-LOAD-03).
+        implemented_by:
+          - frontend/src/lib/wallet/lifecycle/__tests__/arkade-load-lifecycle-orchestrator.test.ts
+          - frontend/src/lib/wallet/lifecycle/__tests__/arkade-sync-lifecycle-orchestrator.test.ts
       - id: LIFE-ARK-BUMP-01
         description: >
           onchain_bumper_info runs at most one wallet-wide bumper Esplora scan

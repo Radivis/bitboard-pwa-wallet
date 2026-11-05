@@ -3,6 +3,7 @@ import {
   operatorSyncSchedulesBackgroundFull,
   persistAfterCriticalWithLightOperatorSync,
   shouldScheduleBackgroundFullVtxoReconcile,
+  shouldScheduleBackgroundKeyDiscovery,
 } from '@/lib/arkade/arkade-operator-sync-policy'
 
 describe('arkade-operator-sync-policy', () => {
@@ -11,6 +12,16 @@ describe('arkade-operator-sync-policy', () => {
     expect(operatorSyncSchedulesBackgroundFull('signerMigration')).toBe(true)
     expect(operatorSyncSchedulesBackgroundFull('dashboardPoll')).toBe(false)
     expect(operatorSyncSchedulesBackgroundFull('postLoad')).toBe(false)
+  })
+
+  it('schedules background key discovery once per session and again on manual sync', () => {
+    expect(shouldScheduleBackgroundKeyDiscovery('postLoad', false, true)).toBe(true)
+    expect(shouldScheduleBackgroundKeyDiscovery('postLoad', true, true)).toBe(false)
+    expect(shouldScheduleBackgroundKeyDiscovery('manual', true, true)).toBe(true)
+    expect(shouldScheduleBackgroundKeyDiscovery('dashboardPoll', false, true)).toBe(false)
+    expect(shouldScheduleBackgroundKeyDiscovery('signerMigration', false, true)).toBe(false)
+    expect(shouldScheduleBackgroundKeyDiscovery('postLoad', false, false)).toBe(false)
+    expect(shouldScheduleBackgroundKeyDiscovery('manual', false, undefined)).toBe(false)
   })
 
   it('schedules background full only when user-facing sync reports it due', () => {

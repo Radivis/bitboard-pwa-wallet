@@ -14,7 +14,7 @@ export const DEFAULT_ESPLORA_URLS: Record<NetworkMode, string> = {
   signet: 'https://mempool.space/signet/api',
   /** Mutinynet — fast custom signet used for Lightning and Arkade testing. */
   mutinynet: 'https://mutinynet.com/api',
-  testnet: 'https://blockstream.info/testnet4/api',
+  testnet: 'https://mempool.space/testnet4/api',
   mainnet: 'https://mempool.space/api',
 }
 

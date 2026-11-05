@@ -12,6 +12,8 @@ export interface ArkadeOperatorSyncResult {
   operatorConfigTrustPending?: boolean
   /** When true, the host should run a background full VTXO list without blocking this sync. */
   fullReconcileDue?: boolean
+  /** The awaited sync warmed the persisted cursor and did not call discover_keys. */
+  skippedKeyDiscovery?: boolean
 }
 
 export interface BackgroundFullVtxoReconcileOutcome {
@@ -19,6 +21,14 @@ export interface BackgroundFullVtxoReconcileOutcome {
   warningMessage?: string
   /** Operator trust is pending, so this run did not complete a full list. */
   operatorTrustPending?: boolean
+  /** Gap restore failed. A later light sync must not clear this warning. */
+  keyDiscoveryFailed?: boolean
+  /** Gap restore finished and its catch-up snapshot committed. Clears a previous key-discovery warning. */
+  keyDiscoveryCompleted?: boolean
+  /** Catch-up merge saw an exiting-VTXO or materials warning. Discovery itself succeeded. */
+  exitingVtxoWarning?: string
+  /** Autonomous mode blocked this flight. Discovery stays due until autonomous mode ends. */
+  blockedByAutonomousMode?: boolean
 }
 
 export interface ArkadeAutonomousModeStatus {
@@ -68,6 +78,19 @@ export interface ArkadeBalanceInfo {
   recoverablePendingOperatorSweepSats?: number
   recoverablePendingOperatorSweepVtxoCount?: number
   pendingBatchIntents?: ArkadePendingBatchIntent[]
+}
+
+/** Balance, offchain history, and receive address from the open session envelope. */
+export interface ArkadePersistedDashboard {
+  balance: ArkadeBalanceInfo
+  payments: ArkadePaymentRow[]
+  receiveAddress: string
+}
+
+/** Live balance and history from one boarding address listing. */
+export interface ArkadeLiveDashboard {
+  balance: ArkadeBalanceInfo
+  payments: ArkadePaymentRow[]
 }
 
 export interface ArkadePendingBatchOutpoint {
@@ -186,13 +209,6 @@ export interface ArkadePaymentRow {
   timestamp: number
   txid: string
   memo?: string
-}
-
-/** Session-start dashboard. Boarding sats are filled in by the later live refresh. */
-export interface ArkadePersistedDashboard {
-  balance: ArkadeBalanceInfo
-  payments: ArkadePaymentRow[]
-  receiveAddress: string
 }
 
 export interface OpenArkadeSessionParams {
@@ -578,6 +594,11 @@ export interface ArkadeService {
   exportBumperWalletChangeset(): Promise<string>
   bumperWalletFullScanDone(): Promise<boolean>
   syncWithOperator(scheduleBackgroundFull?: boolean): Promise<ArkadeOperatorSyncResult>
+  /**
+   * Fire-and-forget gap restore. When `includeFullReconcile` is set, the full
+   * VTXO list runs in that same flight after discovery.
+   */
+  scheduleBackgroundKeyDiscovery(includeFullReconcile: boolean): void
   /** Fire-and-forget. A call during an in-flight reconcile queues one follow-up. */
   scheduleBackgroundFullVtxoReconcile(): void
   setOnBackgroundFullReconcileFinished(
@@ -625,8 +646,8 @@ export interface ArkadeService {
     onRegistered?: (intent: ArkadePendingBatchIntent) => void,
   ): Promise<ArkadeSignerMigrationResult>
   getBalance(): Promise<ArkadeBalanceInfo>
-  /** Offchain snapshot, stored intents, and local receive address. No Esplora. */
   getPersistedDashboard(): Promise<ArkadePersistedDashboard>
+  getLiveDashboard(): Promise<ArkadeLiveDashboard>
   getAddress(): Promise<string>
   getNewAddress(): Promise<string>
   getBoardingAddress(): Promise<string>

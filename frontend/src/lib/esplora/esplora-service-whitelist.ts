@@ -12,14 +12,15 @@ type ProviderBases = Partial<Record<EsploraProxyNetwork, string>>
 export const ESPLORA_PROVIDER_BASES: Record<EsploraProviderId, ProviderBases> = {
   default: {
     mainnet: 'https://mempool.space/api',
-    /** Testnet4. Blockstream serves this chain; mempool.space/testnet4 often refuses the connection. */
-    testnet: 'https://blockstream.info/testnet4/api',
+    /** Testnet4. Blockstream's unauthenticated cap (700 requests/hour) 429s a full scan. */
+    testnet: 'https://mempool.space/testnet4/api',
     signet: 'https://mempool.space/signet/api',
     mutinynet: 'https://mutinynet.com/api',
   },
-  /** Public Blockstream Esplora mirrors (no testnet4 row — chain differs from app testnet). */
+  /** Public Blockstream Esplora mirrors. Testnet here is testnet4, not legacy testnet3. */
   blockstream: {
     mainnet: 'https://blockstream.info/api',
+    testnet: 'https://blockstream.info/testnet4/api',
     signet: 'https://blockstream.info/signet/api',
   },
   /**
@@ -130,6 +131,32 @@ export function getUpstreamBaseForEsploraProxy(
 
 export function isKnownEsploraProviderId(id: string): id is EsploraProviderId {
   return id === 'default' || id === 'blockstream' || id === 'legacy'
+}
+
+const ESPLORA_UPSTREAM_FAILOVER_STATUSES = new Set([429, 502, 503, 504])
+
+/** Public hosts answer with these when a full scan should try the other allowlisted mirror. */
+export function isEsploraUpstreamFailoverStatus(status: number): boolean {
+  return ESPLORA_UPSTREAM_FAILOVER_STATUSES.has(status)
+}
+
+/**
+ * Same-chain mirror when the preferred host does not connect or rate-limits.
+ * Mempool is preferred for testnet4 (Blockstream's 700/hour cap 429s a full scan).
+ * Blockstream is the mirror when Mempool itself is unreachable.
+ */
+export function esploraFallbackUpstreamBase(
+  providerId: string,
+  network: string,
+): string | null {
+  if (providerId !== 'default' || !isEsploraProxyNetwork(network)) return null
+  const preferredBase = ESPLORA_PROVIDER_BASES.default[network]
+  const blockstreamBase = ESPLORA_PROVIDER_BASES.blockstream[network]
+  if (preferredBase == null || blockstreamBase == null) return null
+  if (normalizeEsploraBaseUrl(preferredBase) === normalizeEsploraBaseUrl(blockstreamBase)) {
+    return null
+  }
+  return blockstreamBase
 }
 
 export type EsploraViteProxyEntry = {

@@ -91,7 +91,7 @@ describe('RailSyncWarningBanner', () => {
         rail="arkade"
         syncPhase="not-syncing"
         loadPhase="loaded"
-        warningMessage="Offchain receive keys could not be refreshed."
+        warningMessages={['Offchain receive keys could not be refreshed.']}
         onRetry={vi.fn()}
       />,
     )
@@ -101,13 +101,28 @@ describe('RailSyncWarningBanner', () => {
     expect(screen.getByText('Offchain receive keys could not be refreshed.')).toBeInTheDocument()
   })
 
+  it('renders each warning as its own paragraph', () => {
+    render(
+      <RailSyncWarningBanner
+        rail="arkade"
+        syncPhase="not-syncing"
+        loadPhase="loaded"
+        warningMessages={['key warning', 'exit warning']}
+        onRetry={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('key warning')).toBeInTheDocument()
+    expect(screen.getByText('exit warning')).toBeInTheDocument()
+  })
+
   it('hides when sync-error takes precedence', () => {
     render(
       <RailSyncWarningBanner
         rail="arkade"
         syncPhase="sync-error"
         loadPhase="loaded"
-        warningMessage="stale warning"
+        warningMessages={['stale warning']}
         onRetry={vi.fn()}
       />,
     )

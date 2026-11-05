@@ -89,6 +89,23 @@ pub struct BalanceDto {
     pub pending_batch_intents: Vec<PendingBatchIntentDto>,
 }
 
+/// Dashboard shown at session open, before any Esplora or operator list.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersistedDashboardDto {
+    pub balance: BalanceDto,
+    pub payments: Vec<PaymentRowDto>,
+    pub receive_address: String,
+}
+
+/// Live balance and history from one boarding address listing.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LiveDashboardDto {
+    pub balance: BalanceDto,
+    pub payments: Vec<PaymentRowDto>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OperatorSyncResultDto {
@@ -101,6 +118,22 @@ pub struct OperatorSyncResultDto {
     /// Host should run a background full VTXO list. User-facing sync already returned.
     #[serde(default)]
     pub full_reconcile_due: bool,
+    /// The awaited sync used the persisted cursor and did not call `discover_keys`.
+    #[serde(default)]
+    pub skipped_key_discovery: bool,
+}
+
+/// Result of background key discovery plus an optional full VTXO list in the same flight.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackgroundKeyDiscoveryResultDto {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key_discovery_warning: Option<String>,
+    /// Catch-up merge warning (exiting VTXOs, exit materials). Discovery itself succeeded.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sync_warning: Option<String>,
+    pub key_discovery_completed: bool,
+    pub operator_trust_pending: bool,
 }
 
 /// Result of a background full VTXO list. `operator_trust_pending` is not a completed reconcile.
@@ -108,6 +141,37 @@ pub struct OperatorSyncResultDto {
 #[serde(rename_all = "camelCase")]
 pub struct FullVtxoListReconcileResultDto {
     pub operator_trust_pending: bool,
+}
+
+impl BackgroundKeyDiscoveryResultDto {
+    pub(crate) fn completed_with_sync_warning(sync_warning: Option<String>) -> Self {
+        Self {
+            key_discovery_warning: None,
+            sync_warning,
+            key_discovery_completed: true,
+            operator_trust_pending: false,
+        }
+    }
+
+    pub(crate) fn failed(warning: String) -> Self {
+        Self {
+            key_discovery_warning: Some(warning),
+            sync_warning: None,
+            key_discovery_completed: false,
+            operator_trust_pending: false,
+        }
+    }
+
+    /// Discovery ran, but the catch-up snapshot was not persisted.
+    /// The send guard stays set and a previous key-discovery warning stays up.
+    pub(crate) fn trust_pending() -> Self {
+        Self {
+            key_discovery_warning: None,
+            sync_warning: None,
+            key_discovery_completed: false,
+            operator_trust_pending: true,
+        }
+    }
 }
 
 impl FullVtxoListReconcileResultDto {
@@ -223,15 +287,6 @@ pub struct DelegateInfoDto {
     pub pubkey: String,
     pub fee: u64,
     pub delegator_address: String,
-}
-
-/// Dashboard shown as soon as the session is open, before Esplora boarding scans.
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PersistedDashboardDto {
-    pub balance: BalanceDto,
-    pub payments: Vec<PaymentRowDto>,
-    pub receive_address: String,
 }
 
 #[derive(Debug, Serialize)]

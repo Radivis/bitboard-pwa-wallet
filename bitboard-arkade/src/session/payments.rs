@@ -100,23 +100,20 @@ impl ArkadeSession {
         Ok(txid.to_string())
     }
 
-    /// Offchain history from the persisted snapshot. Skips boarding address scans.
-    pub(crate) fn transaction_history_from_persisted_envelope(
-        &self,
-    ) -> ArkResult<Vec<PaymentRowDto>> {
-        let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot else {
-            return Ok(Vec::new());
-        };
-        let transactions = offchain_history_from_snapshot(&snapshot, &[])?;
-        Ok(transactions
-            .into_iter()
-            .filter_map(map_history_row)
-            .collect())
+    pub async fn transaction_history(&self) -> ArkResult<Vec<PaymentRowDto>> {
+        let scan = self.scan_persisted_boarding_outputs().await?;
+        self.payments_from_boarding_scan(&scan).await
     }
 
-    pub async fn transaction_history(&self) -> ArkResult<Vec<PaymentRowDto>> {
-        let boarding_commitment_transactions = self.boarding_commitment_txids().await?;
-        let mut transactions = self.boarding_history_transactions().await?;
+    /// History from one boarding scan: commitment lookups once per UTXO, then the snapshot.
+    pub(crate) async fn payments_from_boarding_scan(
+        &self,
+        scan: &super::boarding::BoardingAddressScan,
+    ) -> ArkResult<Vec<PaymentRowDto>> {
+        let boarding_commitment_transactions =
+            super::boarding::commitment_txids_from_boarding_scan(self.client.blockchain(), scan)
+                .await?;
+        let mut transactions = super::boarding::boarding_history_transactions_from_scan(scan);
 
         if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.clone() {
             let mut offchain =
@@ -148,4 +145,26 @@ impl ArkadeSession {
             delegator_address: info.delegator_address,
         })
     }
+}
+
+/// Offchain history from the snapshot. Boarding rows are omitted until a live scan.
+///
+/// Confirmed VTXOs without a commitment txid cannot be turned into history rows: the
+/// generator indexes `commitment_txids[0]`. Those snapshots return no payments here
+/// instead of panicking during session open.
+pub(crate) fn persisted_payments_from_snapshot(
+    snapshot: &crate::persistence::OffchainVtxoSnapshot,
+) -> ArkResult<Vec<PaymentRowDto>> {
+    let snapshot_history_is_safe = snapshot
+        .virtual_tx_outpoints
+        .iter()
+        .all(|record| record.is_preconfirmed || !record.commitment_txids.is_empty());
+    if !snapshot_history_is_safe {
+        return Ok(Vec::new());
+    }
+    let transactions = offchain_history_from_snapshot(snapshot, &[])?;
+    Ok(transactions
+        .into_iter()
+        .filter_map(map_history_row)
+        .collect())
 }

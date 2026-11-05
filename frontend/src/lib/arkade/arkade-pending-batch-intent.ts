@@ -2,7 +2,11 @@ import type {
   ArkadeBatchJoinResult,
   ArkadePendingBatchIntent,
 } from '@/workers/arkade-api'
-import { ARKADE_PENDING_BATCH_INTENT_POLL_MS } from '@/lib/arkade/arkade-query-timings'
+import {
+  ARKADE_BOARDING_STATUS_EMPTY_POLL_MS,
+  ARKADE_BOARDING_STATUS_REFETCH_MS,
+  ARKADE_PENDING_BATCH_INTENT_POLL_MS,
+} from '@/lib/arkade/arkade-query-timings'
 
 /** Keep in sync with `bitboard-arkade` `constants::BOARDING_REGISTER_INTENT_TTL_SECS`. */
 export const BOARDING_REGISTER_INTENT_TTL_SECS = 2 * 60
@@ -352,4 +356,34 @@ export function arkadeRefetchIntervalWithPendingBatchIntent(
     return ARKADE_PENDING_BATCH_INTENT_POLL_MS
   }
   return periodicInterval
+}
+
+export function boardingStatusHasNoDetectedUtxos(status: {
+  spendableSats: number
+  pendingSats: number
+  expiredSats: number
+} | undefined): boolean {
+  if (status == null) {
+    return true
+  }
+  return status.spendableSats === 0 && status.pendingSats === 0 && status.expiredSats === 0
+}
+
+/**
+ * Pending intents stay on the short intent poll. An open board page with nothing
+ * detected yet polls quickly enough to settle inside the cooperative window.
+ * Otherwise boarding status uses its own background interval.
+ */
+export function boardingStatusRefetchIntervalMs(options: {
+  hasPendingIntent: boolean
+  pollWhileEmpty: boolean
+  hasNoDetectedUtxos: boolean
+}): number {
+  if (options.hasPendingIntent) {
+    return ARKADE_PENDING_BATCH_INTENT_POLL_MS
+  }
+  if (options.pollWhileEmpty && options.hasNoDetectedUtxos) {
+    return ARKADE_BOARDING_STATUS_EMPTY_POLL_MS
+  }
+  return ARKADE_BOARDING_STATUS_REFETCH_MS
 }

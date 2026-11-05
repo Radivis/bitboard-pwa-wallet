@@ -20,10 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - If VTXOs during emergency exit are swept or seized, the spending txid is now surfaced
 - Implemented Bark dust VTXO consolidation
+- 30 second timeout for Arkade and Bark session start
 
 ### Changed
 - Bark VTXOs that are undergoing emergency exit are locked; spending, refreshing, or offboarding them requires the cancellation of the emergency exit
 - If Bark seed-recovery on a new device fails, it can be retried and the Bark session won't be opened until that retry succeeds
+- Used Rust Arkade SDK version bumped from 0.9.3 to 0.12.0
+- Regular/incremental Arkade sync skips key discovery and checks for the last 60 receive addresses; background sync still does complete key discovery and sync
+- Various performance improvements for Arkade sync
 
 ### Fixed
 - Historical Mutinynet Arkade accounts that still pointed at the Signet operator proxy are rewritten to the Mutinynet proxy on upgrade

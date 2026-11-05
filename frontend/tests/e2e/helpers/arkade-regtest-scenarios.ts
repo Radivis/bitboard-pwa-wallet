@@ -16,7 +16,7 @@ import {
 } from './arkade-management'
 import {
   goToReceiveArkadeMode,
-  readDashboardArkadeBalanceSats,
+  readDashboardArkadeOffchainSpendableSats,
   readReceiveArkadeAddress,
   sendArkadeOffchainPayment,
   triggerArkadeRailSync,
@@ -284,7 +284,9 @@ export async function prepareSignerMigrationScenario(page: Page): Promise<number
   const mnemonic = freshRegtestWalletMnemonic()
   await setupRegtestArkadeWallet(page, mnemonic)
   await fundAndBoardToArkade(page, boardSats)
-  const balanceBeforeRotate = await readDashboardArkadeBalanceSats(page)
+  // Headline spendable still includes the boarding output until Esplora shows it spent.
+  // That double count (VTXO + boarding) is not what migration preserves.
+  const balanceBeforeRotate = await readDashboardArkadeOffchainSpendableSats(page)
 
   const fixtureExportPath = resolveBoardedFixtureExportPath()
   if (fixtureExportPath) {

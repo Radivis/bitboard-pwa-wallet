@@ -1,36 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const getBalanceMock = vi.hoisted(() =>
-  vi.fn().mockResolvedValue({ confirmedSats: 47_000, totalSats: 47_000 }),
-)
-const getTransactionHistoryMock = vi.hoisted(() =>
-  vi.fn().mockResolvedValue([
-    {
-      direction: 'incoming',
-      amountSats: 5_000,
-      timestamp: 1_700_000_100,
-      txid: 'feedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedface',
-      memo: null,
-    },
-  ]),
-)
-const getAddressMock = vi.hoisted(() => vi.fn().mockResolvedValue('tark1qreceive'))
-const getPersistedDashboardMock = vi.hoisted(() =>
+const getLiveDashboardMock = vi.hoisted(() =>
   vi.fn().mockResolvedValue({
-    balance: { confirmedSats: 12_000, totalSats: 12_000 },
-    payments: [],
-    receiveAddress: 'tark1qenvelope',
+    balance: { confirmedSats: 47_000, totalSats: 47_000 },
+    payments: [
+      {
+        direction: 'incoming',
+        amountSats: 5_000,
+        timestamp: 1_700_000_100,
+        txid: 'feedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedface',
+        memo: null,
+      },
+    ],
   }),
 )
+const getAddressMock = vi.hoisted(() => vi.fn().mockResolvedValue('tark1qreceive'))
 
 const setQueryDataMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/workers/arkade-factory', () => ({
   getArkadeWorker: () => ({
-    getBalance: getBalanceMock,
-    getTransactionHistory: getTransactionHistoryMock,
+    getLiveDashboard: getLiveDashboardMock,
     getAddress: getAddressMock,
-    getPersistedDashboard: getPersistedDashboardMock,
   }),
 }))
 
@@ -40,44 +31,13 @@ vi.mock('@/lib/shared/app-query-client', () => ({
   },
 }))
 
-import {
-  publishArkadeDashboardFromPersistedEnvelope,
-  refreshArkadeStoreFromLoadedWasm,
-} from '@/lib/arkade/arkade-persistence-store-sync'
+import { refreshArkadeStoreFromLoadedWasm } from '@/lib/arkade/arkade-persistence-store-sync'
 import {
   arkadeAddressQueryKey,
   arkadeBalanceQueryKey,
   arkadeHistoryQueryKey,
 } from '@/lib/arkade/arkade-query-keys'
 import { useWalletStore } from '@/stores/walletStore'
-
-describe('publishArkadeDashboardFromPersistedEnvelope', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    useWalletStore.setState({
-      activeWalletId: 1,
-      networkMode: 'mutinynet',
-      activeArkadeAccountId: 'conn-1',
-      arkadeBalance: null,
-      arkadePayments: [],
-      arkadeReceiveAddress: null,
-    })
-  })
-
-  it('writes the envelope dashboard without the live balance or history reads', async () => {
-    await publishArkadeDashboardFromPersistedEnvelope('conn-1', 1)
-
-    expect(getPersistedDashboardMock).toHaveBeenCalled()
-    expect(getBalanceMock).not.toHaveBeenCalled()
-    expect(getTransactionHistoryMock).not.toHaveBeenCalled()
-    expect(getAddressMock).not.toHaveBeenCalled()
-    expect(useWalletStore.getState().arkadeReceiveAddress).toBe('tark1qenvelope')
-    expect(useWalletStore.getState().arkadeBalance).toEqual({
-      confirmedSats: 12_000,
-      totalSats: 12_000,
-    })
-  })
-})
 
 describe('refreshArkadeStoreFromLoadedWasm', () => {
   beforeEach(() => {

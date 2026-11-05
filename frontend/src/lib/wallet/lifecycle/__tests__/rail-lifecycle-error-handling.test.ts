@@ -105,7 +105,7 @@ vi.mock('@/lib/arkade/arkade-accounts', async (importOriginal) => {
 
 vi.mock('@/lib/arkade/arkade-persistence-store-sync', () => ({
   refreshArkadeStoreFromLoadedWasm: vi.fn().mockResolvedValue(undefined),
-  publishArkadeDashboardFromPersistedEnvelope: vi.fn().mockResolvedValue(undefined),
+  publishArkadeDashboardFromOpenSession: vi.fn().mockResolvedValue(undefined),
   clearArkadeDashboardStore: vi.fn(),
 }))
 

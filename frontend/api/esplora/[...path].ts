@@ -12,12 +12,13 @@ type ProviderBases = Partial<Record<EsploraProxyNetwork, string>>
 const ESPLORA_PROVIDER_BASES: Record<EsploraProviderId, ProviderBases> = {
   default: {
     mainnet: 'https://mempool.space/api',
-    testnet: 'https://blockstream.info/testnet4/api',
+    testnet: 'https://mempool.space/testnet4/api',
     signet: 'https://mempool.space/signet/api',
     mutinynet: 'https://mutinynet.com/api',
   },
   blockstream: {
     mainnet: 'https://blockstream.info/api',
+    testnet: 'https://blockstream.info/testnet4/api',
     signet: 'https://blockstream.info/signet/api',
   },
   legacy: {
@@ -79,7 +80,24 @@ function isProxiedUrlPathWithinAllowlistedBase(
 // Stay below Vercel Hobby's ~10s function cap so the proxy fails fast (502) instead of
 // FUNCTION_INVOCATION_TIMEOUT (504). WASM retries transient failures at higher layers.
 const UPSTREAM_TIMEOUT_MS = 9_000
+const PRIMARY_ATTEMPT_MS = 2_000
+/** Leaves room for the 2s probe under Vercel's function cap. */
+const FALLBACK_AFTER_PROBE_MS = 7_000
+const UNREACHABLE_COOLDOWN_MS = 60_000
 const MAX_POST_BODY_BYTES = 512_000
+
+const skipPreferredHostUntilMs = new Map<string, number>()
+const preferredHostHasAnswered = new Set<string>()
+
+function esploraFallbackBase(providerId: string, network: string): string | null {
+  if (providerId !== 'default') return null
+  if (network !== 'mainnet' && network !== 'testnet' && network !== 'signet') return null
+  return ESPLORA_PROVIDER_BASES.blockstream[network] ?? null
+}
+
+function isEsploraFailoverStatus(status: number): boolean {
+  return status === 429 || status === 502 || status === 503 || status === 504
+}
 
 // CORS headers for browser requests
 function setCorsHeaders(res: VercelResponse): void {
@@ -162,6 +180,18 @@ export default async function handler(
     res.status(400).send('Bad path')
     return
   }
+  const fallbackBase = esploraFallbackBase(providerId, network)
+  const fallbackTrim = fallbackBase?.replace(/\/$/, '') ?? null
+  const fallbackUrl =
+    fallbackTrim == null ? null : `${fallbackTrim}${pathSuffix}${url.search}`
+  if (
+    fallbackUrl != null &&
+    fallbackTrim != null &&
+    !isProxiedUrlPathWithinAllowlistedBase(fallbackUrl, fallbackTrim)
+  ) {
+    res.status(400).send('Bad path')
+    return
+  }
 
   const forwardHeaders: Record<string, string> = {}
   const accept = req.headers['accept']
@@ -173,7 +203,6 @@ export default async function handler(
   const init: RequestInit = {
     method,
     headers: forwardHeaders,
-    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
   }
   if (method === 'POST') {
     const chunks: Buffer[] = []
@@ -189,11 +218,42 @@ export default async function handler(
   }
 
   let upstream: Response
+  const preferredOnCooldown =
+    fallbackUrl != null && (skipPreferredHostUntilMs.get(baseTrim) ?? 0) > Date.now()
+  const attemptUpstream = (targetUrl: string, timeoutMs: number) =>
+    fetch(targetUrl, { ...init, signal: AbortSignal.timeout(timeoutMs) })
+
   try {
-    upstream = await fetch(upstreamUrl, init)
+    if (preferredOnCooldown && fallbackUrl != null) {
+      upstream = await attemptUpstream(fallbackUrl, UPSTREAM_TIMEOUT_MS)
+    } else {
+      upstream = await attemptUpstream(
+        upstreamUrl,
+        fallbackUrl == null || preferredHostHasAnswered.has(baseTrim)
+          ? UPSTREAM_TIMEOUT_MS
+          : PRIMARY_ATTEMPT_MS,
+      )
+      if (fallbackUrl != null && isEsploraFailoverStatus(upstream.status)) {
+        preferredHostHasAnswered.delete(baseTrim)
+        skipPreferredHostUntilMs.set(baseTrim, Date.now() + UNREACHABLE_COOLDOWN_MS)
+        upstream = await attemptUpstream(fallbackUrl, FALLBACK_AFTER_PROBE_MS)
+      } else {
+        preferredHostHasAnswered.add(baseTrim)
+      }
+    }
   } catch {
-    res.status(502).send('Upstream unreachable')
-    return
+    if (fallbackUrl == null) {
+      res.status(502).send('Upstream unreachable')
+      return
+    }
+    preferredHostHasAnswered.delete(baseTrim)
+    skipPreferredHostUntilMs.set(baseTrim, Date.now() + UNREACHABLE_COOLDOWN_MS)
+    try {
+      upstream = await attemptUpstream(fallbackUrl, FALLBACK_AFTER_PROBE_MS)
+    } catch {
+      res.status(502).send('Upstream unreachable')
+      return
+    }
   }
 
   const outHeaders: Record<string, string> = {}
