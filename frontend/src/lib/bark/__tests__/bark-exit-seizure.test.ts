@@ -157,6 +157,29 @@ describe('seizureBannerSections', () => {
     expect(formatBarkExitSeizureWarning(sections[2]!)).toContain('output 1')
     expect(formatBarkExitSeizureWarning(sections[2]!)).toContain(secondCheckpoint)
   })
+
+  it("uses each kind's own sentence once the spent output is known", () => {
+    const spentTxid = '11'.repeat(32)
+    expect(
+      formatBarkExitSeizureWarning({ kind: 'anchor', spentTxid, spentVout: 1 }),
+    ).toBe(
+      `The on-chain output backing these Bark VTXOs, txid ${spentTxid} output 1, was spent by the server after expiry. These Bark VTXOs are spent, and this wallet cannot recover them.`,
+    )
+    expect(
+      formatBarkExitSeizureWarning({ kind: 'internal', spentTxid, spentVout: 0 }),
+    ).toBe(
+      `The internal node from an emergency exit with txid ${spentTxid} output 0 was spent outside the next exit transaction. These Bark VTXOs are spent, and this wallet cannot recover them.`,
+    )
+    expect(formatBarkExitSeizureWarning({ kind: 'leaf', spentTxid, spentVout: 2 })).toBe(
+      `The leaf transaction from an emergency exit with txid ${spentTxid} output 2 was spent outside the next exit transaction. These Bark VTXOs are spent, and this wallet cannot recover them.`,
+    )
+    expect(
+      formatBarkExitSeizureWarning({ kind: 'internal', spentTxid: null, spentVout: null }),
+    ).toBe(BARK_INTERNAL_SEIZURE_WARNING)
+    expect(formatBarkExitSeizureWarning({ kind: 'leaf', spentTxid: null, spentVout: null })).toBe(
+      BARK_LEAF_SEIZURE_WARNING,
+    )
+  })
 })
 
 describe('seizure warnings', () => {

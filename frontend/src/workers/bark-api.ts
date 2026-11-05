@@ -162,6 +162,7 @@ export const BARK_EMERGENCY_EXIT_STATES = [
   'claimInProgress',
   'claimed',
   'vtxoAlreadySpent',
+  'vtxoSwept',
   'canceled',
 ] as const
 

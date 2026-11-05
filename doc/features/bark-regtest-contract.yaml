@@ -23,7 +23,7 @@ contracts:
     tags: ["@bark-exit-regtest"]
     implemented_by: frontend/tests/e2e/bark-exit-flows-regtest.spec.ts
   - id: E2E-BARK-REG-05
-    description: Emergency exit of a selected VTXO. Progress mines between steps. Claimed funds arrive on-chain.
+    description: Emergency exit of a selected VTXO. From review through claim, the wallet does not contact the Bark server. Progress mines between steps. Claimed funds arrive on-chain.
     tags: ["@bark-exit-regtest"]
     implemented_by: frontend/tests/e2e/bark-exit-flows-regtest.spec.ts
   - id: E2E-BARK-REG-06
@@ -31,7 +31,7 @@ contracts:
     tags: ["@bark-refresh-regtest"]
     implemented_by: frontend/tests/e2e/bark-refresh-regtest.spec.ts
   - id: E2E-BARK-REG-07
-    description: With captaind stopped, a reloaded and unlocked wallet opens Bark from its stored records and its Bark sync fails. Emergency exit of a selected VTXO still starts, progresses, and claims. Claimed funds arrive on-chain.
+    description: With captaind stopped, a reloaded and unlocked wallet opens Bark from its stored records and its Bark sync fails. Emergency exit of a selected VTXO still starts, progresses, and claims, and that exit does not contact the Bark server. Claimed funds arrive on-chain.
     tags: ["@bark-exit-regtest"]
     implemented_by: frontend/tests/e2e/bark-exit-flows-regtest.spec.ts
 
@@ -56,11 +56,15 @@ rust_invariants:
     description: Re-opening the dump after a claim broadcast does not drain those VTXOs again.
     test: bitboard-bark/tests/emergency_exit_claim_before_observation_regtest.rs
     run: BARK_REGTEST_BOARDED_FIXTURE=frontend/test-results/bark-boarded-fixture.json BARK_REGTEST_RUN=1 cargo test --features regtest-support --test emergency_exit_claim_before_observation_regtest -- --ignored --test-threads=1
+  - name: seed_recovery_past_gap_regtest
+    description: An empty-envelope open with vtxo_key_gap_limit 1 still spends a VTXO boarded at key index 3. Indices 0–2 stay unused, so the mailbox scan cannot reach that key. The server xpub lookup returns it first.
+    test: bitboard-bark/tests/seed_recovery_past_gap_regtest.rs
+    run: BARK_REGTEST_RUN=1 cargo test --features regtest-support --test seed_recovery_past_gap_regtest -- --ignored --test-threads=1
 
 infrastructure:
   stack: arkade-regtest
   profile: bark
-  image: docker.io/secondark/captaind:0.7.1
+  image: docker.io/secondark/captaind:0.8.0
   captaind: "http://localhost:3535"
   esplora: "http://localhost:7030/api"
   expiry:

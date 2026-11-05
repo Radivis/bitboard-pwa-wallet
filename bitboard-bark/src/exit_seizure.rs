@@ -10,7 +10,8 @@
 //! Only the branch through a swept output is left out of the hop seizure
 //! check. A branch through another output of that same transaction is still
 //! checked. Every recorded outcome marks those coins spent before
-//! refresh and keeps the transaction id of that spend. The VTXO outpoint itself
+//! refresh and keeps the transaction id of that spend. That spent mark is
+//! saved only after the notice is stored. The VTXO outpoint itself
 //! is never watched: Bark treats a spend of that output as the user's claim.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -41,15 +42,16 @@ pub struct ExitHop {
     pub role: ExitHopRole,
 }
 
-/// Role of one hop. `prefix_len` is the number of tree transactions before
-/// later hops. A checkpoint script wins over that position. The last tree
+/// Role of one hop. `tree_len` is the number of tree transactions before later
+/// hops. A checkpoint script wins over that position. The last tree
 /// transaction is the leaf. Every other non-checkpoint hop is an internal
-/// node, including a hop after the tree.
-pub fn hop_role(is_checkpoint: bool, index: usize, prefix_len: usize) -> ExitHopRole {
+/// node, including a hop after the tree. `None` means the tree length could
+/// not be measured, so no hop is a leaf.
+pub fn hop_role(is_checkpoint: bool, index: usize, tree_len: Option<usize>) -> ExitHopRole {
     if is_checkpoint {
         return ExitHopRole::Checkpoint;
     }
-    if index + 1 == prefix_len {
+    if tree_len == Some(index + 1) {
         return ExitHopRole::Leaf;
     }
     ExitHopRole::Internal
@@ -351,6 +353,13 @@ fn insert_notice_items(
     }
 }
 
+/// State of a swept coin before it was marked spent, so a failed sync can put it back.
+#[derive(Clone)]
+pub(crate) struct SweptVtxoPreviousState {
+    pub vtxo_id: bark::ark::VtxoId,
+    pub state: bark::vtxo::VtxoState,
+}
+
 fn history_matches_outcome(history: &VtxoExitHistory, outcome: ExitChainOutcome) -> bool {
     match outcome {
         ExitChainOutcome::AnchorSweep(anchor) => history.anchor == anchor,
@@ -373,7 +382,7 @@ mod scan {
     use serde::Serialize;
 
     use super::{
-        ExitHop, ExitOutputSpend, VtxoExitHistory, exit_outcomes_from_spends,
+        ExitOutputSpend, VtxoExitHistory, exit_outcomes_from_spends,
         hop_outputs_after_anchor_check, split_exit_notices, watched_anchor_outputs,
     };
 
@@ -422,14 +431,23 @@ mod scan {
     }
 
     /// Best-effort. A wallet-store failure, or a chain read that does not cover
-    /// every watched output, leaves the previous lists in place and does not
-    /// mark any VTXO spent. A chain error is neither a sweep nor a seizure.
-    pub(crate) async fn record_exit_chain_notices(wallet: &bark::Wallet) {
+    /// every watched output, leaves the previous lists in place and returns no
+    /// coins to mark. A chain error is neither a sweep nor a seizure.
+    /// The caller marks the returned coins spent after durable flushes are held.
+    pub(crate) async fn record_exit_chain_notices(
+        wallet: &bark::Wallet,
+    ) -> Vec<super::SweptVtxoPreviousState> {
         match scan_exit_chain_notices(wallet).await {
-            Ok(recorded) => remember(recorded),
-            Err(err) => warn(&format!(
-                "Bark could not scan exit outputs for a sweep or seizure: {err}"
-            )),
+            Ok((recorded, previous)) => {
+                remember(recorded);
+                previous
+            }
+            Err(err) => {
+                warn(&format!(
+                    "Bark could not scan exit outputs for a sweep or seizure: {err}"
+                ));
+                Vec::new()
+            }
         }
     }
 
@@ -439,7 +457,7 @@ mod scan {
 
     async fn scan_exit_chain_notices(
         wallet: &bark::Wallet,
-    ) -> Result<RecordedExitChainNotices, String> {
+    ) -> Result<(RecordedExitChainNotices, Vec<super::SweptVtxoPreviousState>), String> {
         let unspent = wallet.vtxos().await.map_err(|err| err.to_string())?;
         let full_vtxos = wallet
             .get_full_vtxos(&unspent)
@@ -457,10 +475,35 @@ mod scan {
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect::<Vec<_>>();
-        if !spent_ids.is_empty() {
-            mark_ids_spent(wallet, &unspent, &spent_ids).await?;
+        Ok((recorded, previous_states(&unspent, &spent_ids)))
+    }
+
+    fn previous_states(
+        unspent: &[bark::vtxo::WalletVtxo],
+        ids: &[String],
+    ) -> Vec<super::SweptVtxoPreviousState> {
+        unspent
+            .iter()
+            .filter(|vtxo| ids.iter().any(|id| id == &vtxo.id().to_string()))
+            .map(|vtxo| super::SweptVtxoPreviousState {
+                vtxo_id: vtxo.id(),
+                state: vtxo.state.clone(),
+            })
+            .collect()
+    }
+
+    /// Marks the coins whose previous states were returned by the scan.
+    pub(crate) async fn mark_swept_vtxos(
+        wallet: &bark::Wallet,
+        previous: &[super::SweptVtxoPreviousState],
+    ) -> Result<(), String> {
+        if previous.is_empty() {
+            return Ok(());
         }
-        Ok(recorded)
+        wallet
+            .mark_vtxos_as_spent(previous.iter().map(|coin| coin.vtxo_id))
+            .await
+            .map_err(|err| err.to_string())
     }
 
     /// Fills in the spent output for VTXOs already stored on a notice. Those coins
@@ -555,48 +598,11 @@ mod scan {
     }
 
     fn history_from_full_vtxo(vtxo: &bark::ark::Vtxo<bark::ark::vtxo::Full>) -> VtxoExitHistory {
-        let items = vtxo.transactions().collect::<Vec<_>>();
-        let continuation_scripts = items
-            .iter()
-            .map(|item| {
-                item.tx
-                    .output
-                    .get(item.output_idx)
-                    .map(|output| output.script_pubkey.clone())
-                    .unwrap_or_else(bitcoin::ScriptBuf::new)
-            })
-            .collect::<Vec<_>>();
-        let arkoor_pubkeys = vtxo.past_arkoor_pubkeys();
-        let tx_types = crate::emergency_exit::exit_graph_tx_types(
-            &continuation_scripts,
-            &arkoor_pubkeys,
-            vtxo.server_pubkey(),
-            vtxo.exit_delta(),
-            vtxo.expiry_height(),
-        );
-        let prefix_len = if arkoor_pubkeys.len() > items.len() {
-            items.len()
-        } else {
-            items.len() - arkoor_pubkeys.len()
-        };
-        let hops = items
-            .iter()
-            .zip(tx_types)
-            .enumerate()
-            .map(|(index, (item, tx_type))| ExitHop {
-                txid: item.tx.compute_txid(),
-                output_index: item.output_idx as u32,
-                role: super::hop_role(
-                    tx_type == crate::emergency_exit::ExitGraphTxType::Checkpoint,
-                    index,
-                    prefix_len,
-                ),
-            })
-            .collect();
+        let chain = crate::emergency_exit::walk_vtxo_exit_chain(vtxo);
         VtxoExitHistory {
             vtxo_id: vtxo.id().to_string(),
             anchor: vtxo.chain_anchor(),
-            hops,
+            hops: chain.hops,
         }
     }
 
@@ -633,11 +639,16 @@ mod scan {
     ) -> Result<BTreeMap<OutPoint, ExitOutputSpend>, String> {
         let mut spends = BTreeMap::new();
         for output in watched {
-            match wallet
+            // Bark 0.8 deprecates this for bitcoind, where it scans blocks.
+            // This WASM session uses Esplora, where the call is one outspend
+            // lookup. It is still the only ChainSource method that returns the
+            // spender txid, including a mempool spend.
+            #[allow(deprecated)]
+            let spending_inputs = wallet
                 .chain()
-                .txs_spending_inputs([output.outpoint], 0)
-                .await
-            {
+                .txs_spending_inputs([output.outpoint], 0u32.into())
+                .await;
+            match spending_inputs {
                 Ok(result) => {
                     spends.insert(
                         output.outpoint,
@@ -668,24 +679,6 @@ mod scan {
         }
     }
 
-    async fn mark_ids_spent(
-        wallet: &bark::Wallet,
-        unspent: &[bark::vtxo::WalletVtxo],
-        ids: &[String],
-    ) -> Result<(), String> {
-        let matched = unspent
-            .iter()
-            .filter(|vtxo| ids.iter().any(|id| id == &vtxo.id().to_string()))
-            .collect::<Vec<_>>();
-        if matched.is_empty() {
-            return Ok(());
-        }
-        wallet
-            .mark_vtxos_as_spent(matched)
-            .await
-            .map_err(|err| err.to_string())
-    }
-
     #[wasm_bindgen::prelude::wasm_bindgen]
     extern "C" {
         #[wasm_bindgen(js_namespace = console, js_name = warn)]
@@ -700,7 +693,7 @@ mod scan {
 #[cfg(target_arch = "wasm32")]
 pub(crate) use scan::{
     backfill_exit_chain_notices_json, clear_exit_chain_notices, exit_chain_notices_json,
-    record_exit_chain_notices,
+    mark_swept_vtxos, record_exit_chain_notices,
 };
 
 #[cfg(test)]
@@ -1342,11 +1335,12 @@ mod tests {
 
     #[test]
     fn the_last_tree_transaction_is_a_leaf_and_other_non_checkpoint_hops_are_internal_nodes() {
-        assert_eq!(hop_role(true, 0, 3), ExitHopRole::Checkpoint);
-        assert_eq!(hop_role(false, 0, 3), ExitHopRole::Internal);
-        assert_eq!(hop_role(false, 1, 3), ExitHopRole::Internal);
-        assert_eq!(hop_role(false, 2, 3), ExitHopRole::Leaf);
-        assert_eq!(hop_role(false, 3, 3), ExitHopRole::Internal);
-        assert_eq!(hop_role(true, 3, 3), ExitHopRole::Checkpoint);
+        assert_eq!(hop_role(true, 0, Some(3)), ExitHopRole::Checkpoint);
+        assert_eq!(hop_role(false, 0, Some(3)), ExitHopRole::Internal);
+        assert_eq!(hop_role(false, 1, Some(3)), ExitHopRole::Internal);
+        assert_eq!(hop_role(false, 2, Some(3)), ExitHopRole::Leaf);
+        assert_eq!(hop_role(false, 3, Some(3)), ExitHopRole::Internal);
+        assert_eq!(hop_role(true, 3, Some(3)), ExitHopRole::Checkpoint);
+        assert_eq!(hop_role(false, 0, None), ExitHopRole::Internal);
     }
 }

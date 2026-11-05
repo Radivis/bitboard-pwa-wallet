@@ -1,13 +1,16 @@
 //! Seed-recovery result for the open that creates a Bark record.
 //!
-//! bark-wallet reads the recovery mailbox only while creating the wallet.
+//! bark-wallet scans only while creating the wallet. That scan asks the server
+//! for the VTXOs of the seed's xpub, then reads the mailboxes for ids that
+//! lookup missed. A server without the xpub lookup falls back to the mailboxes.
 //! A failed or unfinished scan still returns a wallet. Keeping that record
 //! would make every later open skip the scan. This module drops that record
 //! unless the scan is retry-clean.
 
 use std::sync::{Arc, Mutex};
 
-use crate::record_store::{DeferredDurableFlush, SharedRecordStore};
+use crate::envelope_export_hold::EnvelopeExportHold;
+use crate::record_store::SharedRecordStore;
 
 /// Shown on the Bark session error screen. Retry opens the same empty envelope.
 pub(crate) const RECOVERY_SCAN_INCOMPLETE_MESSAGE: &str =
@@ -19,8 +22,10 @@ pub(crate) enum RecoveryOpenDisposition {
     Drop,
 }
 
-/// Keep a finished scan, including one that only leaves ids past the key gap.
-/// Drop when the scan failed or left ids that a later scan can still check.
+/// Keep a finished scan, including mailbox ids past the key gap and ids the
+/// server reported unknown. The xpub lookup is what finds coins past the gap
+/// on a server that offers it. Drop when the scan failed or left ids that a
+/// later scan can still check.
 pub(crate) fn recovery_open_disposition(status: &bark::RecoveryStatus) -> RecoveryOpenDisposition {
     match status {
         bark::RecoveryStatus::NotRun => RecoveryOpenDisposition::Keep,
@@ -42,7 +47,7 @@ pub(crate) fn recovery_open_disposition(status: &bark::RecoveryStatus) -> Recove
 /// caller's end-of-open save.
 pub(crate) fn finish_deferred_recovery_open(
     store: &SharedRecordStore,
-    deferred_flush: DeferredDurableFlush,
+    deferred_flush: EnvelopeExportHold,
     disposition: RecoveryOpenDisposition,
 ) -> Result<(), String> {
     match disposition {
@@ -55,20 +60,46 @@ pub(crate) fn finish_deferred_recovery_open(
     }
 }
 
+/// Arguments shared by the wasm session and the regtest opener.
+///
+/// `onchain` stays unset. Callers that attach an on-chain wallet assign it
+/// after this returns. Error handling after `Wallet::open` stays at the call site.
+#[cfg(any(target_arch = "wasm32", feature = "regtest-support"))]
+pub(crate) fn wallet_open_args(
+    persister: Arc<bark::persist::adaptor::StorageAdaptorWrapper<SharedRecordStore>>,
+    on_recovery_finished: Option<Box<dyn FnOnce(bark::RecoveryStatus) + Send + Sync>>,
+) -> bark::OpenWalletArgs {
+    bark::OpenWalletArgs {
+        run_daemon: false,
+        onchain: None,
+        create_if_not_exists: true,
+        persister: Some(persister),
+        lock_manager: Some(Box::new(
+            bark::lock_manager::memory::MemoryLockManager::new(),
+        )),
+        on_recovery_finished,
+        ..bark::OpenWalletArgs::default()
+    }
+}
+
 /// Empty-envelope opens defer durable flushes until [`Self::finish`].
 pub(crate) struct RecoveryOpen {
     status_slot: Arc<Mutex<Option<bark::RecoveryStatus>>>,
-    deferred_flush: Option<DeferredDurableFlush>,
+    deferred_flush: Option<EnvelopeExportHold>,
 }
 
 impl RecoveryOpen {
     /// Starts the window before `Wallet::open`. An existing record is left alone.
-    pub(crate) fn begin(store: &SharedRecordStore) -> Self {
-        let scan_may_create = !store.has_wallet_properties();
-        Self {
+    pub(crate) fn begin(store: &SharedRecordStore) -> Result<Self, String> {
+        let deferred_flush = if store.has_wallet_properties() {
+            None
+        } else {
+            Some(store.hold_envelope_export()?)
+        };
+        Ok(Self {
             status_slot: Arc::new(Mutex::new(None)),
-            deferred_flush: scan_may_create.then(|| store.defer_durable_flushes()),
-        }
+            deferred_flush,
+        })
     }
 
     pub(crate) fn callback(&self) -> Box<dyn FnOnce(bark::RecoveryStatus) + Send + Sync> {
@@ -161,7 +192,7 @@ mod tests {
     async fn dropped_empty_envelope_open_exports_no_properties_and_does_not_flush() {
         let mut store = SharedRecordStore::empty();
         let flushes = FlushLog::install(&mut store);
-        let recovery_open = RecoveryOpen::begin(&store);
+        let recovery_open = RecoveryOpen::begin(&store).expect("envelope hold");
         let report_failed_scan = recovery_open.callback();
         store.put(properties_record()).await.expect("properties");
         store.put(exit_record()).await.expect("exit row");
@@ -190,7 +221,7 @@ mod tests {
     async fn kept_empty_envelope_open_exports_properties_and_the_exit_row() {
         let mut store = SharedRecordStore::empty();
         let flushes = FlushLog::install(&mut store);
-        let recovery_open = RecoveryOpen::begin(&store);
+        let recovery_open = RecoveryOpen::begin(&store).expect("envelope hold");
         let report_finished_scan = recovery_open.callback();
         store.put(properties_record()).await.expect("properties");
         store.put(exit_record()).await.expect("exit row");
@@ -230,7 +261,7 @@ mod tests {
         store.put(properties_record()).await.expect("properties");
         assert!(store.has_wallet_properties());
         let flushes = FlushLog::install(&mut store);
-        let recovery_open = RecoveryOpen::begin(&store);
+        let recovery_open = RecoveryOpen::begin(&store).expect("envelope hold");
 
         store.put(exit_record()).await.expect("exit row");
         recovery_open.finish(&store).expect("existing record stays");

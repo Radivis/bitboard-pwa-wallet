@@ -20,29 +20,48 @@ export type BarkExitSpentOutput = {
   spentVout: number
 }
 
-export type BarkExitNodeSweepVtxoRow = {
-  vtxoId: string
-  spenderTxids: readonly string[]
-}
+/**
+ * One row per kind: the sentence stored before a spent output existed, the
+ * text before that output's txid, and the text after its vout.
+ */
+const SEIZURE_COPY = {
+  anchor: {
+    legacy:
+      'The on-chain output backing these Bark VTXOs was spent by the server after expiry. These Bark VTXOs are spent, and this wallet cannot recover them.',
+    beforeTxid: 'The on-chain output backing these Bark VTXOs, txid ',
+    afterOutput:
+      ', was spent by the server after expiry. These Bark VTXOs are spent, and this wallet cannot recover them.',
+  },
+  internal: {
+    legacy:
+      'An internal node on the exit path of these Bark VTXOs was spent outside the next exit transaction. These Bark VTXOs are spent, and this wallet cannot recover them.',
+    beforeTxid: 'The internal node from an emergency exit with txid ',
+    afterOutput:
+      ' was spent outside the next exit transaction. These Bark VTXOs are spent, and this wallet cannot recover them.',
+  },
+  leaf: {
+    legacy:
+      'A leaf transaction output on the exit path of these Bark VTXOs was spent outside the next exit transaction. These Bark VTXOs are spent, and this wallet cannot recover them.',
+    beforeTxid: 'The leaf transaction from an emergency exit with txid ',
+    afterOutput:
+      ' was spent outside the next exit transaction. These Bark VTXOs are spent, and this wallet cannot recover them.',
+  },
+  checkpoint: {
+    legacy:
+      'A checkpoint from an emergency exit was spent because the exit was not continued. These Bark VTXOs are spent, and this wallet cannot recover them.',
+    beforeTxid: 'The checkpoint from an emergency exit with txid ',
+    afterOutput:
+      ' was spent because the exit was not continued. These Bark VTXOs are spent, and this wallet cannot recover them.',
+  },
+} as const satisfies Record<
+  BarkExitNodeSweepKind,
+  { legacy: string; beforeTxid: string; afterOutput: string }
+>
 
-export const BARK_ANCHOR_SWEEP_WARNING =
-  'The on-chain output backing these Bark VTXOs was spent by the server after expiry. These Bark VTXOs are spent, and this wallet cannot recover them.'
-
-export const BARK_CHECKPOINT_SEIZURE_WARNING =
-  'A checkpoint from an emergency exit was spent because the exit was not continued. These Bark VTXOs are spent, and this wallet cannot recover them.'
-
-export const BARK_LEAF_SEIZURE_WARNING =
-  'A leaf transaction output on the exit path of these Bark VTXOs was spent outside the next exit transaction. These Bark VTXOs are spent, and this wallet cannot recover them.'
-
-export const BARK_INTERNAL_SEIZURE_WARNING =
-  'An internal node on the exit path of these Bark VTXOs was spent outside the next exit transaction. These Bark VTXOs are spent, and this wallet cannot recover them.'
-
-const LEGACY_SEIZURE_WARNING: Record<BarkExitNodeSweepKind, string> = {
-  anchor: BARK_ANCHOR_SWEEP_WARNING,
-  internal: BARK_INTERNAL_SEIZURE_WARNING,
-  leaf: BARK_LEAF_SEIZURE_WARNING,
-  checkpoint: BARK_CHECKPOINT_SEIZURE_WARNING,
-}
+export const BARK_ANCHOR_SWEEP_WARNING = SEIZURE_COPY.anchor.legacy
+export const BARK_INTERNAL_SEIZURE_WARNING = SEIZURE_COPY.internal.legacy
+export const BARK_LEAF_SEIZURE_WARNING = SEIZURE_COPY.leaf.legacy
+export const BARK_CHECKPOINT_SEIZURE_WARNING = SEIZURE_COPY.checkpoint.legacy
 
 const SEIZURE_SECTION_TEST_ID: Record<BarkExitNodeSweepKind, string> = {
   anchor: 'bark-exit-anchor-sweep',
@@ -192,13 +211,6 @@ export function mergeExitNodeSweepVtxoItems(
   return normalizeExitNodeSweepVtxoItems([...existing, ...incoming])
 }
 
-export function exitNodeSweepVtxoItemsWithoutKind(
-  items: readonly BarkExitNodeSweepVtxoItem[],
-  kind: BarkExitNodeSweepKind,
-): BarkExitNodeSweepVtxoItem[] {
-  return exitNodeSweepVtxoItemsWithoutSpend(items, kind, null)
-}
-
 /** Drops one spent output. A missing output drops the whole kind. */
 export function exitNodeSweepVtxoItemsWithoutSpend(
   items: readonly BarkExitNodeSweepVtxoItem[],
@@ -212,33 +224,6 @@ export function exitNodeSweepVtxoItemsWithoutSpend(
       item.spentTxid !== spentOutput.spentTxid ||
       item.spentVout !== spentOutput.spentVout,
   )
-}
-
-export function vtxoIdsForExitNodeSweepKind(
-  items: readonly BarkExitNodeSweepVtxoItem[],
-  kind: BarkExitNodeSweepKind,
-): string[] {
-  return vtxoRowsForExitNodeSweepKind(items, kind).map((row) => row.vtxoId)
-}
-
-/** One row per VTXO in a banner section, with every spending transaction of that kind. */
-export function vtxoRowsForExitNodeSweepKind(
-  items: readonly BarkExitNodeSweepVtxoItem[],
-  kind: BarkExitNodeSweepKind,
-): BarkExitNodeSweepVtxoRow[] {
-  const spenderTxidsByVtxoId = new Map<string, string[]>()
-  for (const item of items) {
-    if (item.nodeKind !== kind) continue
-    const spenderTxids = spenderTxidsByVtxoId.get(item.vtxoId) ?? []
-    if (item.spenderTxid != null && !spenderTxids.includes(item.spenderTxid)) {
-      spenderTxids.push(item.spenderTxid)
-    }
-    spenderTxidsByVtxoId.set(item.vtxoId, spenderTxids)
-  }
-  return [...spenderTxidsByVtxoId.entries()].map(([vtxoId, spenderTxids]) => ({
-    vtxoId,
-    spenderTxids,
-  }))
 }
 
 /** One section per spent exit output. Items without a spent output stay one section per kind. */
@@ -290,13 +275,14 @@ export function seizureBannerSections(
 export function barkExitSeizureWarningParts(
   section: Pick<BarkExitSeizureSection, 'kind' | 'spentTxid' | 'spentVout'>,
 ): BarkExitSeizureWarningParts {
+  const copy = SEIZURE_COPY[section.kind]
   if (section.spentTxid == null || section.spentVout == null) {
-    return { beforeTxid: LEGACY_SEIZURE_WARNING[section.kind], txid: null, afterTxid: '' }
+    return { beforeTxid: copy.legacy, txid: null, afterTxid: '' }
   }
   return {
-    beforeTxid: seizureWarningBeforeTxid(section.kind),
+    beforeTxid: copy.beforeTxid,
     txid: section.spentTxid,
-    afterTxid: ` output ${section.spentVout}${seizureWarningAfterOutput(section.kind)}`,
+    afterTxid: ` output ${section.spentVout}${copy.afterOutput}`,
   }
 }
 
@@ -306,18 +292,6 @@ export function formatBarkExitSeizureWarning(
   const parts = barkExitSeizureWarningParts(section)
   if (parts.txid == null) return parts.beforeTxid
   return `${parts.beforeTxid}${parts.txid}${parts.afterTxid}`
-}
-
-export function exitNodeSweepKindsByVtxoId(
-  items: readonly BarkExitNodeSweepVtxoItem[],
-): Map<string, ReadonlySet<BarkExitNodeSweepKind>> {
-  const kindsByVtxoId = new Map<string, Set<BarkExitNodeSweepKind>>()
-  for (const item of items) {
-    const kinds = kindsByVtxoId.get(item.vtxoId) ?? new Set<BarkExitNodeSweepKind>()
-    kinds.add(item.nodeKind)
-    kindsByVtxoId.set(item.vtxoId, kinds)
-  }
-  return kindsByVtxoId
 }
 
 const INVALID_SPENDER_TXID = Symbol('invalid-spender-txid')
@@ -389,30 +363,6 @@ function compareSeizureSections(left: BarkExitSeizureSection, right: BarkExitSei
     return left.spentTxid < right.spentTxid ? -1 : 1
   }
   return (left.spentVout ?? -1) - (right.spentVout ?? -1)
-}
-
-function seizureWarningBeforeTxid(kind: BarkExitNodeSweepKind): string {
-  switch (kind) {
-    case 'anchor':
-      return 'The on-chain output backing these Bark VTXOs, txid '
-    case 'internal':
-      return 'The internal node from an emergency exit with txid '
-    case 'leaf':
-      return 'The leaf transaction from an emergency exit with txid '
-    case 'checkpoint':
-      return 'The checkpoint from an emergency exit with txid '
-  }
-}
-
-function seizureWarningAfterOutput(kind: BarkExitNodeSweepKind): string {
-  switch (kind) {
-    case 'anchor':
-      return ', was spent by the server after expiry. These Bark VTXOs are spent, and this wallet cannot recover them.'
-    case 'internal':
-    case 'leaf':
-    case 'checkpoint':
-      return ' was spent because the exit was not continued. These Bark VTXOs are spent, and this wallet cannot recover them.'
-  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

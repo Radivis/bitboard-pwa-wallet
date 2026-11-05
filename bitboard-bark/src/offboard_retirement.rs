@@ -4,7 +4,7 @@
 
 //! Server already spent an offboard input. Record that locally and drop the checkpoint.
 
-use crate::exit_address::{ExitInputState, spent_vtxo_ids_named_by_server};
+use crate::exit_address::spent_vtxo_ids_named_by_server;
 
 fn bark_error(err: impl std::fmt::Display) -> String {
     format!("{err:#}")
@@ -12,18 +12,9 @@ fn bark_error(err: impl std::fmt::Display) -> String {
 
 fn exit_input_is_already_consumed(vtxo: &bark::WalletVtxo) -> bool {
     matches!(
-        exit_input_state(vtxo),
-        ExitInputState::Spent | ExitInputState::Exited
+        vtxo.state.kind(),
+        bark::vtxo::VtxoStateKind::Spent | bark::vtxo::VtxoStateKind::Exited
     )
-}
-
-fn exit_input_state(vtxo: &bark::WalletVtxo) -> ExitInputState {
-    match vtxo.state.kind() {
-        bark::vtxo::VtxoStateKind::Spendable => ExitInputState::Spendable,
-        bark::vtxo::VtxoStateKind::Locked => ExitInputState::Locked,
-        bark::vtxo::VtxoStateKind::Spent => ExitInputState::Spent,
-        bark::vtxo::VtxoStateKind::Exited => ExitInputState::Exited,
-    }
 }
 
 fn offboard_input_ids(offboard: &bark::actions::offboard::Offboard) -> Vec<String> {

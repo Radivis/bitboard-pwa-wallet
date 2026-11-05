@@ -1,3 +1,4 @@
+use bitcoin_ext::BlockHeight;
 use serde::Serialize;
 
 /// One local Bark VTXO, without the genesis chain.
@@ -5,7 +6,7 @@ use serde::Serialize;
 pub struct ListedBarkVtxo {
     pub id: String,
     pub amount_sats: u64,
-    pub expiry_height: u32,
+    pub expiry_height: BlockHeight,
     pub state: ListedBarkVtxoState,
     pub registered: bool,
 }
@@ -39,7 +40,7 @@ struct BarkVtxoLockHolderJson {
 struct BarkVtxoRowJson {
     id: String,
     amount_sats: u64,
-    expiry_height: u32,
+    expiry_height: BlockHeight,
     state: &'static str,
     lock_holder: Option<BarkVtxoLockHolderJson>,
     registered: bool,
@@ -54,13 +55,13 @@ pub fn listed_vtxos_to_json(vtxos: &[ListedBarkVtxo]) -> Result<String, String> 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct BarkVtxoListJson {
-    tip_height: Option<u32>,
+    tip_height: Option<BlockHeight>,
     vtxos: Vec<BarkVtxoRowJson>,
 }
 
 /// Rows plus the chain tip used to turn an expiry height into blocks remaining.
 pub fn vtxo_list_response_json(
-    tip_height: Option<u32>,
+    tip_height: Option<BlockHeight>,
     vtxos: &[ListedBarkVtxo],
 ) -> Result<String, String> {
     let payload = BarkVtxoListJson {
@@ -214,7 +215,7 @@ mod tests {
     #[test]
     fn vtxo_list_response_includes_the_chain_tip() {
         let json = vtxo_list_response_json(
-            Some(80),
+            Some(bitcoin_ext::BlockHeight::new(80)),
             &[listed(
                 "spend:0",
                 1_000,
@@ -249,7 +250,7 @@ mod tests {
         ListedBarkVtxo {
             id: id.to_owned(),
             amount_sats,
-            expiry_height,
+            expiry_height: bitcoin_ext::BlockHeight::new(expiry_height),
             state,
             registered,
         }

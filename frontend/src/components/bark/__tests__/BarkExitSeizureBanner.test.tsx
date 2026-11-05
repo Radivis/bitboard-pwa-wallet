@@ -95,7 +95,7 @@ describe('BarkExitSeizureBanner', () => {
       expect(screen.queryByTestId('bark-exit-anchor-sweep-ids')).not.toBeInTheDocument()
     })
     expect(screen.getByTestId('bark-exit-checkpoint-seizure-ids')).toHaveTextContent('vtxo-b')
-    expect(clearExitChainNotice).toHaveBeenCalledWith('anchor')
+    expect(clearExitChainNotice).toHaveBeenCalledWith('anchor', null)
     expect(barkExitChainNoticeItems(1, 'signet')).toEqual([
       { vtxoId: 'vtxo-internal', nodeKind: 'internal' },
       { vtxoId: 'vtxo-leaf', nodeKind: 'leaf' },

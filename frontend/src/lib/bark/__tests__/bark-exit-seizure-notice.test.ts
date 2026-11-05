@@ -78,7 +78,7 @@ describe('bark exit chain notice', () => {
     )
 
     await dismissNotice(1, 'signet', 'anchor')
-    expect(clearExitChainNotice).toHaveBeenCalledWith('anchor')
+    expect(clearExitChainNotice).toHaveBeenCalledWith('anchor', null)
     expect(barkExitChainNoticeItems(1, 'signet')).toEqual(items([['vtxo-b', 'checkpoint']]))
   })
 })
