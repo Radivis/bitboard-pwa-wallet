@@ -16,3 +16,14 @@ export function isE2eBarkRegtestControlEnabled(): boolean {
   if (env == null) return false
   return env.VITE_E2E_BARK_REGTEST === 'true' && Boolean(env.DEV)
 }
+
+/**
+ * A Bark sync progresses live emergency exits. The refresh regtest test sets this
+ * while it syncs coins that are still cancelable, so that sync can show the block
+ * without broadcasting the exit.
+ */
+export function e2eBarkSyncSettlesExits(): boolean {
+  if (!isE2eBarkRegtestControlEnabled()) return true
+  if (typeof window === 'undefined') return true
+  return window.__bitboardE2eSkipBarkExitSettle !== true
+}

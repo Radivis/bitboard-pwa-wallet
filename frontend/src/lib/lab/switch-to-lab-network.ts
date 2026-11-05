@@ -8,12 +8,18 @@ import {
 import { walletIsUnlockedOrSyncing } from '@/lib/wallet/wallet-unlocked-status'
 import { updateDescriptorWalletChangeset } from '@/lib/wallet/descriptor-wallet-manager'
 import { withWalletWriterLock } from '@/lib/shared/opfs-writer-lock'
+import { awaitOnchainLoadQuiescence } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
+import { awaitOnchainSaveQuiescence } from '@/lib/wallet/lifecycle/onchain-save-lifecycle-orchestrator'
+import { getOnchainSyncLifecycleSnapshot } from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
 import {
-  awaitOnchainQuiescenceBeforeDescriptorMutation,
   exportChangesetForPersistence,
+  exportChangesetForPersistenceBypass,
   shouldSkipOutgoingDescriptorSaveOnSyncError,
 } from '@/lib/wallet/lifecycle/onchain-descriptor-mutation-guard'
-import { loadDescriptorWalletWithoutSync } from '@/lib/wallet/wallet-utils'
+import {
+  loadDescriptorWalletWithoutSync,
+  ONCHAIN_BLOCKCHAIN_SCAN_TOAST_ID,
+} from '@/lib/wallet/wallet-utils'
 import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
 import { terminateLabWorker } from '@/workers/lab-factory'
 import { appQueryClient } from '@/lib/shared/app-query-client'
@@ -46,12 +52,22 @@ async function persistAndLoadLabWalletIfUnlockedOrSyncing(params: {
   if (!activeWalletId) return
 
   try {
-    await awaitOnchainQuiescenceBeforeDescriptorMutation()
+    // A stalled public Esplora scan must not keep the Lab button disabled.
+    // The scan does not hold the writer lock during HTTP, and its result is
+    // discarded when this load replaces the descriptor wallet.
+    await awaitOnchainLoadQuiescence()
+    await awaitOnchainSaveQuiescence()
+    if (getOnchainSyncLifecycleSnapshot().syncPhase === 'syncing') {
+      toast.dismiss(ONCHAIN_BLOCKCHAIN_SCAN_TOAST_ID)
+    }
 
     await withWalletWriterLock(async () => {
       if (!shouldSkipOutgoingDescriptorSaveOnSyncError()) {
         try {
-          const currentChangeset = await exportChangesetForPersistence()
+          const syncInProgress = getOnchainSyncLifecycleSnapshot().syncPhase === 'syncing'
+          const currentChangeset = syncInProgress
+            ? await exportChangesetForPersistenceBypass()
+            : await exportChangesetForPersistence()
           onPhase?.(savingPreviousNetworkMessage(previousNetworkMode))
           await updateDescriptorWalletChangeset({
             walletId: activeWalletId,

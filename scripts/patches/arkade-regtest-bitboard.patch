@@ -1,5 +1,5 @@
 diff --git a/lib/chain.mjs b/lib/chain.mjs
-index 2575622..1d95ac0 100644
+index 2575622..48ab3ce 100644
 --- a/lib/chain.mjs
 +++ b/lib/chain.mjs
 @@ -8,7 +8,7 @@
@@ -11,7 +11,7 @@ index 2575622..1d95ac0 100644
  import { waitFor, waitForOrFail } from './wait.mjs';
  
  const CLI = ['bitcoin-cli', '-regtest', '-rpcuser=admin1', '-rpcpassword=123'];
-@@ -24,6 +24,37 @@ function loadedWalletCount() {
+@@ -24,6 +24,57 @@ function loadedWalletCount() {
    }
  }
  
@@ -20,36 +20,56 @@ index 2575622..1d95ac0 100644
 +  return detail.includes('already exists') || detail.includes('database already exists');
 +}
 +
-+/** Load the node wallet after restart when wallet files exist on disk but are not loaded. */
-+function ensureBitcoinWalletLoaded() {
-+  if (loadedWalletCount() > 0) return true;
++// Create the named wallet, or load it when a restart left the files on disk.
++// Returns a failure detail only when this attempt did not load a wallet.
++function createOrLoadWallet() {
++  if (loadedWalletCount() > 0) return { ready: true };
 +
 +  const createResult = bitcoinCli(['createwallet', WALLET], { capture: true });
-+  if (loadedWalletCount() > 0) return true;
++  if (loadedWalletCount() > 0) return { ready: true };
 +
 +  if (walletAlreadyExistsError(createResult)) {
 +    const loadResult = bitcoinCli(['loadwallet', WALLET], { capture: true });
-+    if (loadResult.code === 0 && loadedWalletCount() > 0) return true;
-+    warn(`loadwallet ${WALLET} failed: ${loadResult.stderr || loadResult.stdout}`);
-+  } else if (createResult.code !== 0) {
-+    warn(`createwallet ${WALLET} failed: ${createResult.stderr || createResult.stdout}`);
++    if (loadResult.code === 0 && loadedWalletCount() > 0) return { ready: true };
++    return {
++      ready: false,
++      detail: `loadwallet ${WALLET} failed: ${loadResult.stderr || loadResult.stdout}`,
++    };
 +  }
-+
-+  return loadedWalletCount() > 0;
++  if (createResult.code !== 0) {
++    return {
++      ready: false,
++      detail: `createwallet ${WALLET} failed: ${createResult.stderr || createResult.stdout}`,
++    };
++  }
++  return { ready: false, detail: `createwallet ${WALLET} left no wallet loaded` };
 +}
 +
 +/** Wallet RPCs (mine, faucet, send) need a loaded wallet — not guaranteed after `docker compose up`. */
 +export async function ensureWalletReady() {
-+  return waitFor('Bitcoin Core wallet', () => ensureBitcoinWalletLoaded(), {
++  // Wait for the image's own wallet before creating one. Core 30 auto-creates
++  // the empty-named "" wallet; creating a second wallet while that is still
++  // happening makes every wallet RPC ambiguous.
++  const autoLoaded = await waitFor('Bitcoin Core wallet', () => loadedWalletCount() > 0, {
 +    attempts: 15,
 +    intervalMs: 2000,
 +  });
++  if (autoLoaded) return true;
++
++  let lastFailure = `createwallet ${WALLET} left no wallet loaded`;
++  const createdOrLoaded = await waitFor('Bitcoin Core wallet (created)', () => {
++    const result = createOrLoadWallet();
++    if (!result.ready && result.detail) lastFailure = result.detail;
++    return result.ready;
++  }, { attempts: 10, intervalMs: 2000 });
++  if (!createdOrLoaded) warn(lastFailure);
++  return createdOrLoaded;
 +}
 +
  export function bitcoinCli(args, opts = {}) {
    return dockerExec('bitcoin', [...CLI, ...args], opts);
  }
-@@ -36,7 +67,11 @@ export function getBalance() {
+@@ -36,7 +87,11 @@ export function getBalance() {
    return Number.isFinite(n) ? n : 0;
  }
  
@@ -62,7 +82,7 @@ index 2575622..1d95ac0 100644
    const r = bitcoinCli(['-generate', String(n)], { capture: true });
    if (r.code !== 0) warn(`mine ${n} failed: ${r.stderr || r.stdout}`);
    return r.code === 0;
-@@ -51,20 +86,11 @@ export async function bootstrapChain() {
+@@ -51,20 +106,11 @@ export async function bootstrapChain() {
    // Ensure EXACTLY ONE wallet is loaded, so bitcoin-cli (and Boltz) can route
    // wallet RPCs without an explicit -rpcwallet. The wrinkle: btcpay/Core images
    // differ — Core 30's image auto-creates the empty-named "" wallet on startup,
@@ -88,7 +108,7 @@ index 2575622..1d95ac0 100644
    }
  
    if (getBalance() >= 1) return;
-@@ -90,38 +116,99 @@ export async function bootstrapChain() {
+@@ -90,38 +136,99 @@ export async function bootstrapChain() {
  // NOT mine to confirm the send. Pass { confirm: true } to mine one block so the
  // send confirms immediately; otherwise it sits in the mempool until the next
  // block (the auto-miner, an explicit `mine`, or a later faucet --confirm).
@@ -181,7 +201,7 @@ index 2575622..1d95ac0 100644
 +  log(`Reorg: invalidating block ${located.target} (${located.hash.slice(0, 12)}…), re-mining ${depth + 1}...`);
 +  if (!invalidateBlock(located.hash)) return false;
 +  return await mine(depth + 1);
- }
++}
 +
 +// Same orphan point as `reorg`, then a longer coinbase-only branch. Mempool
 +// transactions from the orphaned blocks are not re-mined.
@@ -198,8 +218,7 @@ index 2575622..1d95ac0 100644
 +  );
 +  if (!invalidateBlock(located.hash)) return false;
 +  return await mineCoinbaseOnlyBlocks(replacementBlocks);
-+}
-\ No newline at end of file
+ }
 diff --git a/lib/compose.mjs b/lib/compose.mjs
 index dc00adf..96e5f9b 100644
 --- a/lib/compose.mjs
@@ -390,6 +409,65 @@ index 687eaad..623a533 100644
 +export function dockerExec(logicalContainer, argv, opts = {}) {
 +  return docker(['exec', resolveContainerName(logicalContainer), ...argv], opts);
  }
+diff --git a/lib/setup/arkd.mjs b/lib/setup/arkd.mjs
+index e0d9a1c..609ef04 100644
+--- a/lib/setup/arkd.mjs
++++ b/lib/setup/arkd.mjs
+@@ -77,8 +77,8 @@ async function setupWallet() {
+     return;
+   }
+   log(`Funding arkd server wallet at ${serverAddr} (21 txs for fee estimation)...`);
+-  for (let i = 0; i < 21; i++) faucet(serverAddr, 1);
+-  mine(1); // confirm the batch (faucet no longer mines per-tx)
++  for (let i = 0; i < 21; i++) await faucet(serverAddr, 1);
++  await mine(1); // confirm the batch (faucet no longer mines per-tx)
+   const { text: balance } = await fetchText(`${arkdAdminUrl()}/v1/admin/wallet/balance`);
+   log(`Server wallet balance: ${balance}`);
+ }
+diff --git a/lib/setup/boltz.mjs b/lib/setup/boltz.mjs
+index 347c250..acd938f 100644
+--- a/lib/setup/boltz.mjs
++++ b/lib/setup/boltz.mjs
+@@ -26,7 +26,7 @@ async function setupLndChannel() {
+   const addr = lncli('boltz-lnd', ['newaddress', 'p2wkh']).json?.address;
+   if (!addr) fail('Could not get boltz-lnd address');
+   log(`Funding boltz-lnd at ${addr}...`);
+-  faucet(addr, env('LND_FAUCET_AMOUNT', '2'), { confirm: true });
++  await faucet(addr, env('LND_FAUCET_AMOUNT', '2'), { confirm: true });
+   await sleep(10000);
+ 
+   const bal = parseInt(
+@@ -50,7 +50,7 @@ async function setupLndChannel() {
+   ]);
+ 
+   log('Mining 10 blocks to confirm channel...');
+-  mine(10);
++  await mine(10);
+   await sleep(10000);
+ 
+   // Push some liquidity so the channel is balanced for reverse swaps.
+@@ -67,7 +67,7 @@ async function fundBoltzCore() {
+   log('Funding Boltz Bitcoin Core wallet...');
+   const addr = bitcoinCli(['getnewaddress'], { capture: true }).stdout;
+   if (addr) {
+-    faucet(addr, 5, { confirm: true });
++    await faucet(addr, 5, { confirm: true });
+     log(`Boltz core wallet funded at ${addr}`);
+   } else {
+     warn('Could not get a Bitcoin Core address to fund Boltz');
+diff --git a/lib/setup/fulmine.mjs b/lib/setup/fulmine.mjs
+index 6732fee..b3ee6b1 100644
+--- a/lib/setup/fulmine.mjs
++++ b/lib/setup/fulmine.mjs
+@@ -71,7 +71,7 @@ async function setupWallet({ label, port, noteAmount }) {
+     });
+     if (!redeem.ok) warn(`${label} note redeem failed: HTTP ${redeem.status} ${redeem.text}`);
+   }
+-  mine(3); // confirm the round commitment tx
++  await mine(3); // confirm the round commitment tx
+   await sleep(3000);
+ 
+   log(`${label} wallet setup completed`);
 diff --git a/lib/setup/signer.mjs b/lib/setup/signer.mjs
 index 06bd4f5..13cd16e 100644
 --- a/lib/setup/signer.mjs
@@ -415,7 +493,7 @@ index 06bd4f5..13cd16e 100644
  }
  
 diff --git a/regtest.mjs b/regtest.mjs
-index 3a9717e..dc824a4 100644
+index 3a9717e..19f4eda 100644
 --- a/regtest.mjs
 +++ b/regtest.mjs
 @@ -9,27 +9,31 @@
@@ -507,7 +585,7 @@ index 3a9717e..dc824a4 100644
    const opts = parseArgs(argv);
    if (!opts.command) {
 -    fail('usage: node regtest.mjs <start|stop|clean|faucet|mine|reorg|rpc|ark|arkd|rotate-signer|set-signers|signer-info> [options]');
-+    fail('usage: node regtest.mjs <start|stop|clean|faucet|mine|reorg|reorg-excluding-mempool|rpc|ark|arkd|rotate-signer|set-signers|signer-info> [options]');
++    fail('usage: node regtest.mjs <start|stop|clean|faucet|mine|reorg|reorg-excluding-mempool|rpc|ark|arkd|rotate-signer|set-signers|signer-info|esplora-tip|esplora-tx> [options]');
    }
  
    // faucet/mine act on a running node and don't need override discovery, but

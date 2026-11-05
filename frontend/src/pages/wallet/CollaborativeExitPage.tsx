@@ -35,7 +35,7 @@ function CollaborativeExitFeeEstimate({
 }) {
   return (
     <>
-      {collaborativeFeeQuery.isLoading && (
+      {collaborativeFeeQuery.isLoading && collaborativeFeeQuery.data == null && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
           Loading fee estimate…
@@ -80,6 +80,12 @@ function CollaborativeExitFeeEstimate({
               />
             </p>
           )}
+          {collaborativeFeeQuery.data.changeSats != null &&
+            collaborativeFeeQuery.data.changeSats > 0 && (
+              <p className="text-muted-foreground">
+                The operator fee is taken from the Ark change.
+              </p>
+            )}
           {collaborativeFeeQuery.data.estimateError && (
             <p className="text-amber-700 dark:text-amber-300">
               {formatCollaborativeExitEstimateError(collaborativeFeeQuery.data)}
@@ -247,6 +253,7 @@ export function CollaborativeExitPage() {
     <ArkadeSessionGate
       loadPhase={arkadeLoadSnapshot.loadPhase}
       errorMessage={arkadeLoadSnapshot.errorMessage}
+      networkMode={arkadeLoadSnapshot.networkMode}
     >
       <CollaborativeExitReady />
     </ArkadeSessionGate>

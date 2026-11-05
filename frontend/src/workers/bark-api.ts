@@ -12,6 +12,7 @@ import type {
 import type {
   BarkExitNodeSweepKind,
   BarkExitNodeSweepVtxoItem,
+  BarkExitSpentOutput,
 } from '@/lib/bark/bark-exit-seizure'
 
 export type { PendingEmergencyClaim }
@@ -161,6 +162,7 @@ export const BARK_EMERGENCY_EXIT_STATES = [
   'claimInProgress',
   'claimed',
   'vtxoAlreadySpent',
+  'vtxoSwept',
   'canceled',
 ] as const
 
@@ -259,7 +261,10 @@ export interface BarkService {
     feeRateSatPerVb: number,
     excludeVtxoIds: string[],
   ): Promise<BarkEmergencyExitDrain>
-  clearExitChainNotice(kind: BarkExitNodeSweepKind): Promise<void>
+  clearExitChainNotice(
+    kind: BarkExitNodeSweepKind,
+    spentOutput?: BarkExitSpentOutput | null,
+  ): Promise<void>
   readPendingEmergencyClaim(): Promise<PendingEmergencyClaim | null>
   writePendingEmergencyClaim(pending: PendingEmergencyClaim | null): Promise<void>
   readProceedAutomatically(): Promise<boolean>

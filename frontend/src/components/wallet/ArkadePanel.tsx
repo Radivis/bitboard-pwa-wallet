@@ -104,7 +104,7 @@ export function ArkadePanel() {
           rail="arkade"
           syncPhase={arkadeSyncSnapshot.syncPhase}
           loadPhase={arkadeLoadSnapshot.loadPhase}
-          warningMessage={arkadeSyncSnapshot.warningMessage}
+          warningMessages={arkadeSyncSnapshot.warningMessages}
           onRetry={() => {
             if (!autonomousModeActive) {
               arkadeManualSync.mutate()
@@ -126,6 +126,7 @@ export function ArkadePanel() {
         <ArkadeSessionGate
           loadPhase={arkadeLoadSnapshot.loadPhase}
           errorMessage={arkadeLoadSnapshot.errorMessage}
+          networkMode={arkadeLoadSnapshot.networkMode}
           embedded
         >
           <>

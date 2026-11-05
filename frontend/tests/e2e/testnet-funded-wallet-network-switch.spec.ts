@@ -35,6 +35,80 @@ const appPassword = process.env.E2E_TESTNET_APP_PASSWORD
 /** Full Esplora full scan can exceed default action timeouts; toast must clear before balance is trustworthy. */
 const FULL_SCAN_TOAST_TIMEOUT_MS = 480_000
 
+const EXPLORER_UNREACHABLE_MESSAGE =
+  'Testnet full scan did not succeed. The dashboard still says the Bitcoin explorer could not be reached.'
+
+/** One full-scan attempt is a 30s request. Do not start another with less time than that. */
+const MIN_MS_TO_START_ANOTHER_SCAN = 45_000
+
+/**
+ * A timed-out `/blocks` dismisses the loading toast and leaves the
+ * "Initial sync did not finish" banner up. Sonner then hides its own toast,
+ * so waiting only for that toast treats a failed scan as a finished one.
+ * Retry through the banner until the scan settles or the existing scan budget ends.
+ * A still-visible "Scanning blockchain…" toast is polled until that deadline.
+ * One long `not.toBeVisible` wait fails the attempt when only a few seconds remain.
+ */
+async function waitUntilScanningToastClears(page: Page, deadline: number): Promise<void> {
+  const scanningToast = page.getByText(/Scanning blockchain/).first()
+  while (Date.now() < deadline) {
+    const remainingMs = deadline - Date.now()
+    try {
+      await expect(scanningToast).not.toBeVisible({
+        timeout: Math.min(5_000, remainingMs),
+      })
+      return
+    } catch (error) {
+      if (Date.now() >= deadline) {
+        throw new Error(EXPLORER_UNREACHABLE_MESSAGE, { cause: error })
+      }
+    }
+  }
+  throw new Error(EXPLORER_UNREACHABLE_MESSAGE)
+}
+
+async function waitForInitialOnchainScanReadyForBalance(page: Page): Promise<void> {
+  const deadline = Date.now() + FULL_SCAN_TOAST_TIMEOUT_MS
+  for (;;) {
+    if (Date.now() >= deadline) {
+      throw new Error(EXPLORER_UNREACHABLE_MESSAGE)
+    }
+    await waitUntilScanningToastClears(page, deadline)
+    const remainingMs = deadline - Date.now()
+    await waitForDashboardSyncButtonEnabled(page, remainingMs)
+    const initialSyncBanner = page.getByText('Initial sync did not finish')
+    if (await initialSyncBanner.isVisible()) {
+      if (deadline - Date.now() < MIN_MS_TO_START_ANOTHER_SCAN) {
+        throw new Error(EXPLORER_UNREACHABLE_MESSAGE)
+      }
+      // The toast has its own Retry action. The banner button is the one in main.
+      await page.getByRole('main').getByRole('button', { name: 'Retry', exact: true }).click()
+      await expect(initialSyncBanner).toBeHidden({ timeout: 15_000 })
+      await page
+        .getByText(/Scanning blockchain/)
+        .first()
+        .waitFor({ state: 'visible', timeout: 15_000 })
+        .catch(() => {})
+      continue
+    }
+    const railSyncFailed = page.getByText('On-chain sync failed')
+    if (await railSyncFailed.isVisible()) {
+      if (deadline - Date.now() < MIN_MS_TO_START_ANOTHER_SCAN) {
+        throw new Error(EXPLORER_UNREACHABLE_MESSAGE)
+      }
+      await page.getByRole('main').getByRole('button', { name: 'Sync again' }).click()
+      await page
+        .getByText(/Scanning blockchain/)
+        .first()
+        .waitFor({ state: 'visible', timeout: 15_000 })
+        .catch(() => {})
+      continue
+    }
+    await expectNoInitialWalletSyncErrorToast(page)
+    return
+  }
+}
+
 async function readDashboardOnchainSats(page: Page): Promise<number> {
   const loc = page.getByTestId('dashboard-onchain-balance-amount')
   await expect(loc).toBeVisible({ timeout: 30_000 })
@@ -70,9 +144,7 @@ test.describe('Funded testnet wallet (live Esplora)', () => {
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({
       timeout: 180_000,
     })
-    await waitForFullScanLoadingToastGone(page, FULL_SCAN_TOAST_TIMEOUT_MS)
-    await waitForDashboardSyncButtonEnabled(page, 300_000)
-    await expectNoInitialWalletSyncErrorToast(page)
+    await waitForInitialOnchainScanReadyForBalance(page)
 
     const expectedTestnetSats = await readDashboardOnchainSats(page)
     expect(

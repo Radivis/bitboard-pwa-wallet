@@ -35,6 +35,7 @@ import type {
   ArkadeBalanceInfo,
   ArkadeBatchJoinResult,
   ArkadeBoardingStatus,
+  ArkadeCollaborativeExitFeeEstimateParams,
   ArkadePendingBatchIntent,
   ArkadeSignerMigrationResult,
   ArkadeVtxoOutpoint,
@@ -61,6 +62,8 @@ import { readArkadeDashboardStateFromStore } from '@/lib/arkade/arkade-persisten
 import {
   abandonInFlightRegisteredIntents,
   arkadeRefetchIntervalWithPendingBatchIntent,
+  boardingStatusHasNoDetectedUtxos,
+  boardingStatusRefetchIntervalMs,
   hasPendingBatchIntent,
   hasPendingKind,
   pendingBatchIntentKey,
@@ -431,10 +434,10 @@ export function useArkadeBoardingAddressQuery() {
   })
 }
 
-export function useArkadeBoardingStatusQuery() {
+export function useArkadeBoardingStatusQuery(options?: { pollWhileEmpty?: boolean }) {
   const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
     useArkadeQueryBase()
-  const refetchInterval = usePeriodicSyncRefetchInterval('arkade')
+  const pollWhileEmpty = options?.pollWhileEmpty === true
 
   return useQuery({
     queryKey: walletScopedQueryKey(
@@ -447,10 +450,11 @@ export function useArkadeBoardingStatusQuery() {
     enabled: sessionReady,
     queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().getBoardingStatus()),
     refetchInterval: (query) =>
-      arkadeRefetchIntervalWithPendingBatchIntent(
-        hasPendingBatchIntent(query.state.data?.pendingBatchIntents ?? []),
-        refetchInterval,
-      ),
+      boardingStatusRefetchIntervalMs({
+        hasPendingIntent: hasPendingBatchIntent(query.state.data?.pendingBatchIntents ?? []),
+        pollWhileEmpty,
+        hasNoDetectedUtxos: boardingStatusHasNoDetectedUtxos(query.state.data),
+      }),
     staleTime: ARKADE_SESSION_POLL_STALE_MS,
   })
 }
@@ -1425,12 +1429,19 @@ export function useArkadeCollaborativeExitFeeQuery(params: {
         : arkadeDisabledQueryKey('exit-fee-collaborative'),
     enabled,
     queryFn: () =>
-      withReadyArkadeWorker(() =>
-        getArkadeWorker().getCollaborativeExitFeeEstimate({
+      withReadyArkadeWorker(() => {
+        const estimateParams: ArkadeCollaborativeExitFeeEstimateParams = {
           destinationAddress: destinationTrimmed,
-          amountSats: params.amountSats,
-        }),
-      ),
+        }
+        if (params.amountSats != null) {
+          estimateParams.amountSats = params.amountSats
+        }
+        return getArkadeWorker().getCollaborativeExitFeeEstimate(estimateParams)
+      }),
+    // Field tracking can miss the settled quote, so the panel stays on Loading
+    // until some other state update (editing the amount) re-renders it.
+    notifyOnChangeProps: 'all',
+    placeholderData: keepPreviousData,
     staleTime: ARKADE_FEE_ESTIMATE_STALE_MS,
   })
 }

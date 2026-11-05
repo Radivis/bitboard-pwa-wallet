@@ -4,6 +4,7 @@ import {
   awaitBarkLoadQuiescence,
   discardShownBarkLoadForSessionChange,
   forceResetBarkLoadLifecycleForTeardown,
+  getBarkLoadLifecycleSnapshot,
   orchestrateBarkLoad,
 } from '@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator'
 import {
@@ -52,8 +53,14 @@ export async function closeBarkSession(): Promise<void> {
 /**
  * Drop the previous wallet's Bark worker even when quiescence fails,
  * so the next wallet cannot observe that session.
+ * A session that has not finished opening is dropped immediately, so a stuck
+ * init cannot block the switch.
  */
 export async function closeBarkSessionForWalletChange(): Promise<void> {
+  if (getBarkLoadLifecycleSnapshot().loadPhase !== 'loaded') {
+    abortBarkSessionForNetworkSwitch()
+    return
+  }
   try {
     await closeBarkSession()
   } catch {

@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -116,13 +117,108 @@ export async function getRegtestNodeReceiveAddress(): Promise<string> {
 /**
  * Fund a wallet receive address on-chain and wait until Esplora reports confirmed UTXOs.
  */
+async function fetchConfirmedUtxoTxids(address: string): Promise<string[]> {
+  try {
+    const res = await fetch(`${ESPLORA_URL}/address/${address}/utxo`)
+    if (!res.ok) {
+      return []
+    }
+    const utxos: EsploraUtxo[] = await res.json()
+    return utxos.filter((utxo) => utxo.status.confirmed).map((utxo) => utxo.txid)
+  } catch {
+    return []
+  }
+}
+
 export async function fundRegtestWalletReceiveAddress(
   receiveAddress: string,
   sats: number = DEFAULT_FAUCET_SATS,
 ): Promise<void> {
+  const txidsAlreadyConfirmed = new Set(await fetchConfirmedUtxoTxids(receiveAddress))
   await fundRegtestAddress(receiveAddress, sats)
   await mineRegtestBlocks(1)
-  await waitForEsploraFundingReadyForBdkSync(receiveAddress, sats)
+  await waitForEsploraFundingReadyForBdkSync(
+    receiveAddress,
+    sats,
+    CONFIRMED_UTXO_WAIT_MS,
+    txidsAlreadyConfirmed,
+  )
+}
+
+const BECH32_CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l'
+
+function convertBech32Bits(
+  data: number[],
+  fromBits: number,
+  toBits: number,
+  pad: boolean,
+): number[] | null {
+  let accumulator = 0
+  let bitCount = 0
+  const converted: number[] = []
+  const maxValue = (1 << toBits) - 1
+  for (const value of data) {
+    accumulator = (accumulator << fromBits) | value
+    bitCount += fromBits
+    while (bitCount >= toBits) {
+      bitCount -= toBits
+      converted.push((accumulator >> bitCount) & maxValue)
+    }
+  }
+  if (pad) {
+    if (bitCount > 0) {
+      converted.push((accumulator << (toBits - bitCount)) & maxValue)
+    }
+    return converted
+  }
+  const leftoverBitsArePadding =
+    bitCount < fromBits && ((accumulator << (toBits - bitCount)) & maxValue) === 0
+  return leftoverBitsArePadding ? converted : null
+}
+
+/** Witness script BDK hashes for `GET /scripthash/{sha256(script)}/txs` (not byte-reversed). */
+function bdkScripthashHex(address: string): string {
+  const separatorIndex = address.lastIndexOf('1')
+  const payloadChars = address.slice(separatorIndex + 1).toLowerCase()
+  const fiveBitPayload = [...payloadChars].map((character) => {
+    const charsetIndex = BECH32_CHARSET.indexOf(character)
+    if (charsetIndex < 0) {
+      throw new Error(`Address ${address} is not bech32`)
+    }
+    return charsetIndex
+  })
+  if (fiveBitPayload.length < 7) {
+    throw new Error(`Address ${address} is not bech32`)
+  }
+  const witnessVersion = fiveBitPayload[0]
+  const witnessProgram = convertBech32Bits(fiveBitPayload.slice(1, -6), 5, 8, false)
+  if (witnessVersion == null || witnessProgram == null || witnessProgram.length === 0) {
+    throw new Error(`Address ${address} has no witness program`)
+  }
+  const script = Buffer.from([witnessVersion, witnessProgram.length, ...witnessProgram])
+  return createHash('sha256').update(script).digest('hex')
+}
+
+/**
+ * BDK incremental sync treats an empty `/scripthash/.../txs` body as an unused script.
+ * `/address/.../utxo` and `/address/.../txs` can be filled while that history is still empty,
+ * and a sync in that window stays at 0 with no error.
+ */
+async function bdkScripthashHistoryIncludesTxids(
+  address: string,
+  txids: string[],
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${ESPLORA_URL}/scripthash/${bdkScripthashHex(address)}/txs`)
+    if (!res.ok) {
+      return false
+    }
+    const txs: Array<{ txid?: string }> = await res.json()
+    const seen = new Set(txs.map((tx) => tx.txid).filter((txid): txid is string => txid != null))
+    return txids.every((txid) => seen.has(txid))
+  } catch {
+    return false
+  }
 }
 
 async function fetchEsploraTxStatus(txid: string): Promise<EsploraTxStatusSnapshot> {
@@ -150,13 +246,15 @@ async function fetchEsploraTxStatus(txid: string): Promise<EsploraTxStatusSnapsh
 }
 
 /**
- * Esplora's /address/.../utxo can show confirmed before /tx exposes block_hash + block_time.
- * BDK Esplora sync needs all three fields to anchor; otherwise the receive stays pending incoming.
+ * BDK incremental sync reads `/scripthash/{sha256(script)}/txs` (forward hash, not Electrum's
+ * reversed form). That history can lag `/address/.../utxo`. `/tx` must also have block_hash
+ * and block_time or the receive stays pending incoming. Wait for both before syncing.
  */
 export async function waitForEsploraFundingReadyForBdkSync(
   address: string,
   minConfirmedSats: number,
   timeoutMs: number = CONFIRMED_UTXO_WAIT_MS,
+  txidsAlreadyConfirmed: ReadonlySet<string> = new Set(),
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs
   let lastTxStatuses: EsploraTxStatusSnapshot[] = []
@@ -165,13 +263,22 @@ export async function waitForEsploraFundingReadyForBdkSync(
     const res = await fetch(`${ESPLORA_URL}/address/${address}/utxo`)
     if (res.ok) {
       const utxos: EsploraUtxo[] = await res.json()
-      const confirmedUtxos = utxos.filter((utxo) => utxo.status.confirmed)
-      const confirmedTotal = confirmedUtxos.reduce((sum, utxo) => sum + utxo.value, 0)
-      if (confirmedTotal >= minConfirmedSats && confirmedUtxos.length > 0) {
+      const newConfirmedUtxos = utxos.filter(
+        (utxo) => utxo.status.confirmed && !txidsAlreadyConfirmed.has(utxo.txid),
+      )
+      const newConfirmedTotal = newConfirmedUtxos.reduce((sum, utxo) => sum + utxo.value, 0)
+      if (newConfirmedTotal >= minConfirmedSats && newConfirmedUtxos.length > 0) {
         lastTxStatuses = await Promise.all(
-          confirmedUtxos.map((utxo) => fetchEsploraTxStatus(utxo.txid)),
+          newConfirmedUtxos.map((utxo) => fetchEsploraTxStatus(utxo.txid)),
         )
-        if (lastTxStatuses.every(isEsploraTxStatusReadyForBdkAnchor)) {
+        const anchorsReady = lastTxStatuses.every(isEsploraTxStatusReadyForBdkAnchor)
+        const historyReady =
+          anchorsReady &&
+          (await bdkScripthashHistoryIncludesTxids(
+            address,
+            newConfirmedUtxos.map((utxo) => utxo.txid),
+          ))
+        if (historyReady) {
           return
         }
       }
@@ -184,7 +291,7 @@ export async function waitForEsploraFundingReadyForBdkSync(
       ? lastTxStatuses.map(formatEsploraTxStatusForDiagnostic).join('\n')
       : '(no confirmed UTXOs observed)'
   throw new Error(
-    `Esplora funding not ready for BDK sync within ${timeoutMs}ms (need /tx status with block_height + block_hash + block_time).\n${statusLines}`,
+    `Esplora funding not ready for BDK sync within ${timeoutMs}ms (need /tx anchors and /scripthash/.../txs history).\n${statusLines}`,
   )
 }
 

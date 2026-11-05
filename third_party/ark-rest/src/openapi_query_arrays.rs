@@ -23,9 +23,6 @@ mod tests {
     fn repeated_simple_query_pairs_preserves_each_value() {
         let scripts = vec!["5120ab".to_string(), "5120cd".to_string()];
         let pairs = repeated_simple_query_pairs("scripts", &scripts);
-        assert_eq!(
-            pairs,
-            vec![("scripts", "5120ab"), ("scripts", "5120cd")]
-        );
+        assert_eq!(pairs, vec![("scripts", "5120ab"), ("scripts", "5120cd")]);
     }
 }

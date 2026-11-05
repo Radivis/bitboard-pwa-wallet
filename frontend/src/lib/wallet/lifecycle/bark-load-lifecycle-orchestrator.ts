@@ -29,6 +29,12 @@ import {
   LIFECYCLE_LOAD_ERROR_FALLBACK,
   userFacingLifecycleErrorMessage,
 } from '@/lib/shared/utils'
+import {
+  createSessionStartTimeout,
+  isSessionStartTimeoutError,
+  raceSessionStart,
+  SessionStartTimeoutError,
+} from '@/lib/wallet/lifecycle/session-start-timeout'
 
 export type { BarkLoadLifecycleSnapshot, BarkLoadParams } from '@/lib/wallet/lifecycle/bark-load-lifecycle-types'
 
@@ -46,6 +52,12 @@ let snapshot: BarkLoadLifecycleSnapshot = idleBarkLoadSnapshot()
 let lastLoadParams: Omit<BarkLoadParams, 'allowRetryFromError'> | null = null
 
 let sessionGeneration = 0
+let cancelBarkSessionStartTimeout: (() => void) | null = null
+
+function clearBarkSessionStartTimeout(): void {
+  cancelBarkSessionStartTimeout?.()
+  cancelBarkSessionStartTimeout = null
+}
 
 const listeners = new Set<(next: BarkLoadLifecycleSnapshot) => void>()
 const inFlightLoadTracker = createInFlightLifecycleTracker()
@@ -109,6 +121,7 @@ export function isBarkLoadFailedForNetwork(networkMode: NetworkMode): boolean {
 /** Clears Bark load lifecycle after the worker is gone. */
 export function forceResetBarkLoadLifecycleForTeardown(): void {
   bumpSessionGeneration()
+  clearBarkSessionStartTimeout()
   inFlightLoadTracker.clearCurrent()
   lastLoadParams = null
   setSnapshot(idleBarkLoadSnapshot())
@@ -148,6 +161,19 @@ export function rememberBarkReceiveKeyIndex(receiveKeyIndex: number): void {
     throw new Error('Bark session is not open')
   }
   setSnapshot({ ...current, receiveKeyIndex })
+}
+
+function failBarkSessionStart(networkMode: NetworkMode, error: unknown): never {
+  terminateBarkWorker()
+  forceResetBarkSyncLifecycleForTeardown()
+  stopEmergencyExitAutomation()
+  setSnapshot({
+    loadPhase: 'load-error',
+    networkMode,
+    errorMessage: userFacingLifecycleErrorMessage(error, LIFECYCLE_LOAD_ERROR_FALLBACK),
+    receiveKeyIndex: null,
+  })
+  throw error
 }
 
 async function openBarkWorkerSession(
@@ -212,6 +238,7 @@ export async function orchestrateBarkLoad(params: BarkLoadParams): Promise<void>
 
   return inFlightLoadTracker.begin(key, async () => {
     const generation = sessionGeneration
+    let sessionStartTimedOut = false
     prepareBarkSyncForSessionOpen(networkMode)
     setSnapshot({
       loadPhase: 'loading',
@@ -219,8 +246,21 @@ export async function orchestrateBarkLoad(params: BarkLoadParams): Promise<void>
       errorMessage: null,
       receiveKeyIndex: null,
     })
+    const sessionStartTimeout = createSessionStartTimeout('Bark', () => {
+      if (generation !== sessionGeneration) return
+      sessionStartTimedOut = true
+      bumpSessionGeneration()
+      terminateBarkWorker()
+    })
+    cancelBarkSessionStartTimeout = sessionStartTimeout.cancel
     try {
-      const opened = await openBarkWorkerSession(walletId, networkMode)
+      const opened = await raceSessionStart(
+        openBarkWorkerSession(walletId, networkMode),
+        sessionStartTimeout,
+      )
+      if (sessionStartTimedOut) {
+        throw new SessionStartTimeoutError('Bark')
+      }
       if (generation !== sessionGeneration) {
         return
       }
@@ -237,19 +277,21 @@ export async function orchestrateBarkLoad(params: BarkLoadParams): Promise<void>
       orchestrateBarkPostLoadSync({ walletId, networkMode })
       syncEmergencyExitAutomation(walletId, networkMode)
     } catch (error) {
+      if (sessionStartTimedOut || isSessionStartTimeoutError(error)) {
+        if (generation !== sessionGeneration && !sessionStartTimedOut) return
+        const timeoutError = isSessionStartTimeoutError(error)
+          ? error
+          : new SessionStartTimeoutError('Bark')
+        failBarkSessionStart(networkMode, timeoutError)
+      }
       if (generation !== sessionGeneration) {
         return
       }
-      terminateBarkWorker()
-      forceResetBarkSyncLifecycleForTeardown()
-      stopEmergencyExitAutomation()
-      setSnapshot({
-        loadPhase: 'load-error',
-        networkMode,
-        errorMessage: userFacingLifecycleErrorMessage(error, LIFECYCLE_LOAD_ERROR_FALLBACK),
-        receiveKeyIndex: null,
-      })
-      throw error
+      failBarkSessionStart(networkMode, error)
+    } finally {
+      if (cancelBarkSessionStartTimeout === sessionStartTimeout.cancel) {
+        cancelBarkSessionStartTimeout = null
+      }
     }
   })
 }
@@ -266,6 +308,7 @@ export function resetBarkLoadLifecycleStateForTests(): void {
   snapshot = idleBarkLoadSnapshot()
   lastLoadParams = null
   sessionGeneration = 0
+  clearBarkSessionStartTimeout()
   inFlightLoadTracker.clearCurrent()
   listeners.clear()
 }

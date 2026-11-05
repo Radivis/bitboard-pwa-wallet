@@ -48,6 +48,7 @@ const removeArkadeDashboardSyncQueriesMock = vi.hoisted(() => vi.fn())
 const clearArkadeDashboardStoreMock = vi.hoisted(() => vi.fn())
 const ensureArkadeEncryptedSecretsHostMock = vi.hoisted(() => vi.fn())
 const refreshArkadeStoreFromLoadedWasmMock = vi.hoisted(() => vi.fn())
+const publishArkadeDashboardFromOpenSessionMock = vi.hoisted(() => vi.fn())
 const setActiveArkadeAccountIdMock = vi.hoisted(() => vi.fn())
 const setLastOperatorSyncTimeMock = vi.hoisted(() => vi.fn())
 const setArkadeSignerMigrationHintMock = vi.hoisted(() => vi.fn())
@@ -146,6 +147,8 @@ vi.mock('@/lib/arkade/arkade-dashboard-sync', () => ({
 vi.mock('@/lib/arkade/arkade-persistence-store-sync', () => ({
   refreshArkadeStoreFromLoadedWasm: (...args: unknown[]) =>
     refreshArkadeStoreFromLoadedWasmMock(...args),
+  publishArkadeDashboardFromOpenSession: (...args: unknown[]) =>
+    publishArkadeDashboardFromOpenSessionMock(...args),
   clearArkadeDashboardStore: (...args: unknown[]) =>
     clearArkadeDashboardStoreMock(...args),
 }))
@@ -159,6 +162,7 @@ import {
   abortArkadeSessionForFactoryReset,
   abortArkadeSessionForNetworkSwitch,
   closeArkadeSession,
+  closeArkadeSessionForWalletSwitch,
   discardArkadeSessionForWalletDeletion,
   openArkadeSessionForWallet,
   refreshArkadeSessionAfterNetworkSwitch,
@@ -226,6 +230,7 @@ describe('openArkadeSessionForWallet (integration)', () => {
       createdAt: '2020-01-01T00:00:00.000Z',
     })
     refreshArkadeStoreFromLoadedWasmMock.mockResolvedValue(undefined)
+    publishArkadeDashboardFromOpenSessionMock.mockResolvedValue(undefined)
     workerMocks.syncWithOperator.mockResolvedValue({})
     workerMocks.reconcileActiveAccountId.mockResolvedValue(undefined)
   })
@@ -259,9 +264,12 @@ describe('openArkadeSessionForWallet (integration)', () => {
         persistInitialSdkFromWasm: true,
       }),
     )
-    expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalledWith(TEST_ACCOUNT_ID, 7)
+    expect(publishArkadeDashboardFromOpenSessionMock).toHaveBeenCalledWith(TEST_ACCOUNT_ID, 7)
     expect(setActiveArkadeAccountIdMock).toHaveBeenCalledWith(TEST_ACCOUNT_ID)
     await vi.waitFor(() => expect(workerMocks.syncWithOperator).toHaveBeenCalled())
+    await vi.waitFor(() =>
+      expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalledWith(TEST_ACCOUNT_ID, 7),
+    )
     expect(workerMocks.finalizePendingTransactions).toHaveBeenCalledTimes(1)
     expect(workerMocks.delegateSpendableVtxos).not.toHaveBeenCalled()
   })
@@ -279,8 +287,8 @@ describe('openArkadeSessionForWallet (integration)', () => {
     }
     findActiveArkadeAccountSummaryMock.mockResolvedValue(persistedAccount)
     ensureArkadeAccountMock.mockResolvedValue(persistedAccount)
-    refreshArkadeStoreFromLoadedWasmMock.mockImplementation(async () => {
-      hydrationOrder.push('refreshArkadeStoreFromLoadedWasm')
+    publishArkadeDashboardFromOpenSessionMock.mockImplementation(async () => {
+      hydrationOrder.push('publishArkadeDashboardFromOpenSession')
     })
     setActiveArkadeAccountIdMock.mockImplementation(() => {
       hydrationOrder.push('setActiveArkadeAccountId')
@@ -296,11 +304,17 @@ describe('openArkadeSessionForWallet (integration)', () => {
 
     await vi.waitFor(() => expect(workerMocks.syncWithOperator).toHaveBeenCalled())
 
-    expect(hydrationOrder.indexOf('setActiveArkadeAccountId')).toBeGreaterThanOrEqual(0)
+    expect(hydrationOrder.indexOf('publishArkadeDashboardFromOpenSession')).toBeGreaterThanOrEqual(0)
+    expect(hydrationOrder.indexOf('setActiveArkadeAccountId')).toBeGreaterThan(
+      hydrationOrder.indexOf('publishArkadeDashboardFromOpenSession'),
+    )
     expect(hydrationOrder.indexOf('syncWithOperator')).toBeGreaterThan(
       hydrationOrder.indexOf('setActiveArkadeAccountId'),
     )
-    expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalledWith(TEST_ACCOUNT_ID, 7)
+    expect(hydrationOrder).not.toContain('refreshArkadeStoreFromLoadedWasm')
+    await vi.waitFor(() =>
+      expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalledWith(TEST_ACCOUNT_ID, 7),
+    )
     expect(ensureArkadeAccountMock).toHaveBeenCalledWith(
       expect.objectContaining({
         persistInitialSdkFromWasm: false,
@@ -537,6 +551,73 @@ describe('openArkadeSessionForWallet (integration)', () => {
       networkMode: null,
       errorMessage: null,
     })
+  })
+
+  it('closeArkadeSessionForWalletSwitch returns during session open and ignores a later open failure', async () => {
+    let rejectOpen: (error: Error) => void = () => {}
+    workerMocks.openSession.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectOpen = reject
+        }),
+    )
+    getArkadeWorkerIfExistsMock.mockReturnValue(workerMocks)
+
+    const openPromise = openArkadeSessionForWallet({
+      walletId: 7,
+      networkMode: 'mutinynet',
+    })
+    await vi.waitFor(() =>
+      expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loading'),
+    )
+
+    await closeArkadeSessionForWalletSwitch()
+
+    expect(terminateArkadeWorkerMock).toHaveBeenCalled()
+    expect(workerMocks.flushSdkPersistence).not.toHaveBeenCalled()
+    expect(getArkadeLoadLifecycleSnapshot()).toEqual({
+      loadPhase: 'not-configured',
+      networkMode: null,
+      errorMessage: null,
+    })
+
+    rejectOpen(new Error('operator unreachable'))
+    await expect(openPromise).resolves.toBeUndefined()
+    expect(getArkadeLoadLifecycleSnapshot()).toEqual({
+      loadPhase: 'not-configured',
+      networkMode: null,
+      errorMessage: null,
+    })
+
+    walletState.activeWalletId = 8
+    workerMocks.openSession.mockResolvedValue({
+      arkadeAddress: 'tark1qnext',
+      operatorSignerPkHex: '02deadbeef',
+    })
+    await openArkadeSessionForWallet({
+      walletId: 8,
+      networkMode: 'mutinynet',
+    })
+
+    expect(workerMocks.openSession).toHaveBeenCalledWith(
+      expect.objectContaining({ walletId: 8 }),
+    )
+    expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loaded')
+  })
+
+  it('closeArkadeSessionForWalletSwitch flushes a loaded session', async () => {
+    await openArkadeSessionForWallet({
+      walletId: 7,
+      networkMode: 'mutinynet',
+    })
+    workerMocks.flushSdkPersistence.mockClear()
+    terminateArkadeWorkerMock.mockClear()
+
+    await closeArkadeSessionForWalletSwitch()
+
+    expect(workerMocks.flushSdkPersistence).toHaveBeenCalled()
+    expect(workerMocks.closeSession).toHaveBeenCalled()
+    expect(terminateArkadeWorkerMock).toHaveBeenCalled()
   })
 
   it('abortArkadeSessionForNetworkSwitch terminates without awaiting stuck session open', async () => {

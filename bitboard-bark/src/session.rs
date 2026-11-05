@@ -1,4 +1,5 @@
 use std::cell::{Cell, RefCell};
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use bip39::Mnemonic;
@@ -7,9 +8,13 @@ use wasm_bindgen::prelude::*;
 
 use crate::board::clear_prepared_board_funding;
 use crate::record_store::SharedRecordStore;
+use crate::recovery_open::{RecoveryOpen, wallet_open_args};
 use crate::refresh::{
-    BARK_REFRESH_PENDING, BARK_REFRESH_WARNING, next_refresh_schedule_json,
-    refresh_status_after_schedule, should_schedule_delegated_refresh,
+    BARK_REFRESH_EXIT_BLOCKED, BARK_REFRESH_IDLE, BARK_REFRESH_WARNING,
+    DUST_CONSOLIDATION_REJECTION_ATTEMPTS, dust_total_meets_vtxo_dust, next_refresh_schedule_json,
+    payable_dust_indexes, refresh_status_after_dust_consolidation, refresh_status_after_schedule,
+    refresh_status_for_pending_round, should_schedule_delegated_refresh,
+    should_schedule_dust_consolidation, vtxo_is_inside_refresh_expiry_window,
 };
 use crate::sync_gate::BarkSessionSyncGate;
 use crate::{
@@ -156,21 +161,15 @@ async fn open_network_session(
     };
 
     install_record_store(store.clone())?;
-    let persister = Arc::new(bark::persist::adaptor::StorageAdaptorWrapper::new(store));
+    let recovery_open = RecoveryOpen::begin(&store)?;
+    let persister = Arc::new(bark::persist::adaptor::StorageAdaptorWrapper::new(
+        store.clone(),
+    ));
     let opened = bark::Wallet::open(
         network,
         seed,
         config,
-        bark::OpenWalletArgs {
-            run_daemon: false,
-            onchain: None,
-            create_if_not_exists: true,
-            persister: Some(persister),
-            lock_manager: Some(Box::new(
-                bark::lock_manager::memory::MemoryLockManager::new(),
-            )),
-            ..bark::OpenWalletArgs::default()
-        },
+        wallet_open_args(persister, Some(recovery_open.callback())),
     )
     .await;
     let wallet = match opened {
@@ -181,6 +180,11 @@ async fn open_network_session(
             return Err(format!("{err:#}"));
         }
     };
+    if let Err(err) = recovery_open.finish(&store) {
+        clear_record_store();
+        clear_session_network();
+        return Err(err);
+    }
 
     let fingerprint = wallet.fingerprint().to_string();
     if let Err(err) = store_wallet(wallet) {
@@ -196,6 +200,7 @@ async fn open_network_session(
 fn clear_session_sync_gate() {
     SESSION_SYNC_GATE.with(|gate| gate.borrow_mut().clear());
     crate::exit_seizure::clear_exit_chain_notices();
+    crate::swept_vtxo_mark_hold::release();
 }
 
 fn mark_session_synced() {
@@ -261,9 +266,31 @@ pub async fn bark_open_regtest_session(
 }
 
 /// Exports the open network's record envelope. Plaintext stays in this worker.
+/// Refuses while an envelope edit is still uncommitted.
 #[wasm_bindgen]
 pub fn bark_export_record_envelope() -> Result<String, JsValue> {
+    if envelope_export_is_blocked() {
+        return Err(JsValue::from_str(
+            "Bark envelope export is waiting for an uncommitted edit",
+        ));
+    }
     export_active_record_envelope().map_err(|err| JsValue::from_str(&err))
+}
+
+fn envelope_export_is_blocked() -> bool {
+    if crate::swept_vtxo_mark_hold::is_held() {
+        return true;
+    }
+    ACTIVE_RECORD_STORE.with(|slot| {
+        slot.try_borrow()
+            .ok()
+            .and_then(|current| {
+                current
+                    .as_ref()
+                    .map(|store| store.envelope_export_is_held())
+            })
+            .unwrap_or(false)
+    })
 }
 
 /// Persists a checkpoint, exit row, or exit child before that Bark write returns.
@@ -394,59 +421,149 @@ pub async fn bark_last_revealed_key_index() -> Result<JsValue, JsValue> {
     }
 }
 
-/// Heartbeats the server, then runs `Wallet::sync`.
-/// `Wallet::sync` returns `()` and only logs sub-step failures, so a dead server
-/// is reported by `refresh_server` and does not mark this session as synced.
-///
-/// Mailbox, pending Arkoor, pending rounds, and pending boards must then succeed.
-/// The first of those errors fails this call and does not mark the session synced.
-/// `Wallet::sync` may already have logged that error. That log is not a second failure.
-/// Boards are checked once here. `sync_pending_boards` parks a board while it waits
-/// for confirmations.
-///
-/// After those steps, records an anchor sweep and a checkpoint seizure on the
-/// remaining coins, marks both spent, then schedules one delegated VTXO refresh
-/// when none is pending. Swept anchors are not refreshed: the server already
-/// claimed that output.
-/// A scheduling failure still marks this session synced and returns `warning`.
-/// The status is `idle`, `scheduled`, `pending`, or `warning`.
-///
-/// `sync_exits` then runs so Bark's chain source can see a claim. That error
-/// does not fail this call.
+/// Syncs with the Bark server, scans exit outputs, and returns the refresh status.
+/// Skips the server while an emergency exit holds a pending round input.
+/// A swept coin is marked spent before refresh, and that mark stays out of the
+/// saved wallet until the seizure notice is stored.
 #[wasm_bindgen]
 pub async fn bark_sync() -> Result<String, JsValue> {
     let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
-    let operation_result = async {
-        wallet.refresh_server().await.map_err(bark_error)?;
-        // Drive before `Wallet::sync` so this call sees a rejection. Sync drives
-        // the same checkpoint again and only logs the failure.
-        crate::pending_actions::continue_pending_offboards(&wallet).await;
-        wallet.sync().await;
-        crate::pending_actions::continue_pending_offboards(&wallet).await;
-        crate::required_sync::require_mailbox_arkoor_rounds_and_boards(
-            async { wallet.sync_mailbox().await.map_err(bark_error) },
-            async { wallet.sync_pending_arkoor_sends().await.map_err(bark_error) },
-            async {
-                wallet
-                    .sync_pending_rounds()
-                    .await
-                    .map(|_| ())
-                    .map_err(bark_error)
-            },
-            async { wallet.sync_pending_boards().await.map_err(bark_error) },
-        )
-        .await?;
-        crate::exit_seizure::record_exit_chain_notices(&wallet).await;
-        let refresh_status = delegated_refresh_status(&wallet).await;
-        // A missed exit sync does not fail this session.
-        let _exit_sync = wallet.sync_exits().await;
-        Ok(refresh_status)
+    let operation_result = sync_open_wallet(&wallet).await;
+    match finish_wallet_operation(wallet, operation_result) {
+        Ok(refresh_status) => {
+            mark_session_synced();
+            Ok(refresh_status)
+        }
+        Err(err) => {
+            revert_swept_marks_on_stored_wallet().await;
+            Err(JsValue::from_str(&err))
+        }
     }
-    .await;
-    let refresh_status =
-        finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))?;
-    mark_session_synced();
+}
+
+/// Drops the flush hold after the seizure notice is stored.
+/// The following envelope export then saves the spent marks.
+#[wasm_bindgen]
+pub fn bark_commit_swept_vtxo_marks() {
+    crate::swept_vtxo_mark_hold::release();
+}
+
+/// Puts swept coins back when the seizure notice was not stored.
+#[wasm_bindgen]
+pub async fn bark_revert_swept_vtxo_marks() -> Result<(), JsValue> {
+    if !crate::swept_vtxo_mark_hold::is_held() {
+        return Ok(());
+    }
+    let wallet = take_active_wallet().map_err(|err| JsValue::from_str(&err))?;
+    let operation_result = revert_held_swept_vtxo_marks(&wallet).await;
+    finish_wallet_operation(wallet, operation_result).map_err(|err| JsValue::from_str(&err))
+}
+
+async fn sync_open_wallet(wallet: &bark::Wallet) -> Result<String, String> {
+    crate::emergency_exit::lock_spendable_exit_vtxos(wallet).await?;
+    crate::emergency_exit::release_unsigned_spends_of_exit_vtxos(wallet).await?;
+    sync_bark_server_unless_exit_holds_a_round(wallet).await?;
+    let previous = crate::exit_seizure::record_exit_chain_notices(wallet).await;
+    if !previous.is_empty() {
+        begin_swept_vtxo_mark_hold(previous.clone())?;
+        if let Err(err) = crate::exit_seizure::mark_swept_vtxos(wallet, &previous).await {
+            let _ = revert_held_swept_vtxo_marks(wallet).await;
+            return Err(err);
+        }
+    }
+    let continued = sync_after_exit_chain_scan(wallet).await;
+    if continued.is_err() {
+        let _ = revert_held_swept_vtxo_marks(wallet).await;
+    }
+    continued
+}
+
+async fn sync_after_exit_chain_scan(wallet: &bark::Wallet) -> Result<String, String> {
+    crate::emergency_exit::lock_spendable_exit_vtxos(wallet).await?;
+    let refresh_status = delegated_refresh_status(wallet).await;
+    sync_open_exits(wallet).await;
     Ok(refresh_status)
+}
+
+fn begin_swept_vtxo_mark_hold(
+    previous: Vec<crate::exit_seizure::SweptVtxoPreviousState>,
+) -> Result<(), String> {
+    if previous.is_empty() {
+        return Ok(());
+    }
+    if crate::swept_vtxo_mark_hold::is_held() {
+        crate::swept_vtxo_mark_hold::add_previous(previous);
+        return Ok(());
+    }
+    let deferral = hold_envelope_for_swept_marks_on_open_store()?;
+    crate::swept_vtxo_mark_hold::begin(deferral, previous);
+    Ok(())
+}
+
+fn hold_envelope_for_swept_marks_on_open_store()
+-> Result<crate::envelope_export_hold::EnvelopeExportHold, String> {
+    ACTIVE_RECORD_STORE.with(|slot| {
+        let current = slot
+            .try_borrow()
+            .map_err(|_| "Bark record store is already borrowed".to_owned())?;
+        let store = current
+            .as_ref()
+            .ok_or_else(|| "Bark session is not open".to_owned())?;
+        store.hold_envelope_export()
+    })
+}
+
+async fn revert_held_swept_vtxo_marks(wallet: &bark::Wallet) -> Result<(), String> {
+    let previous = crate::swept_vtxo_mark_hold::take_previous();
+    if previous.is_empty() {
+        crate::swept_vtxo_mark_hold::release();
+        return Ok(());
+    }
+    match restore_swept_vtxo_states(wallet, &previous).await {
+        Ok(()) => {
+            crate::swept_vtxo_mark_hold::release();
+            Ok(())
+        }
+        Err(err) => {
+            crate::swept_vtxo_mark_hold::put_previous_back(previous);
+            Err(err)
+        }
+    }
+}
+
+async fn restore_swept_vtxo_states(
+    wallet: &bark::Wallet,
+    previous: &[crate::exit_seizure::SweptVtxoPreviousState],
+) -> Result<(), String> {
+    let current = wallet.all_vtxos().await.map_err(bark_error)?;
+    for coin in previous {
+        let Some(vtxo) = current.iter().find(|vtxo| vtxo.id() == coin.vtxo_id) else {
+            continue;
+        };
+        if vtxo.state.kind() != bark::vtxo::VtxoStateKind::Spent {
+            continue;
+        }
+        wallet
+            .set_vtxo_states(
+                [coin.vtxo_id],
+                &coin.state,
+                &[bark::vtxo::VtxoStateKind::Spent],
+            )
+            .await
+            .map_err(bark_error)?;
+    }
+    Ok(())
+}
+
+async fn revert_swept_marks_on_stored_wallet() {
+    if !crate::swept_vtxo_mark_hold::is_held() {
+        return;
+    }
+    let Ok(wallet) = take_active_wallet() else {
+        return;
+    };
+    let operation_result = revert_held_swept_vtxo_marks(&wallet).await;
+    let _ = finish_wallet_operation(wallet, operation_result);
 }
 
 #[wasm_bindgen]
@@ -455,9 +572,55 @@ extern "C" {
     fn console_warn(s: &str);
 }
 
+/// Does not contact the server while an emergency exit holds a pending round input.
+/// A round sync would forfeit that coin.
+async fn sync_bark_server_unless_exit_holds_a_round(wallet: &bark::Wallet) -> Result<(), String> {
+    if crate::emergency_exit::pending_round_includes_exit_held_input(wallet).await? {
+        console_warn(
+            "Bark skipped the server sync because an emergency exit holds a pending round input",
+        );
+        return Ok(());
+    }
+    sync_bark_server(wallet).await
+}
+
+/// Heartbeat, then `Wallet::sync`, then mailbox, Arkoor, rounds, and boards.
+/// The first of those four errors fails the call. `Wallet::sync` only logs them.
+async fn sync_bark_server(wallet: &bark::Wallet) -> Result<(), String> {
+    wallet.refresh_server().await.map_err(bark_error)?;
+    // Drive before `Wallet::sync` so this call sees a rejection. Sync drives
+    // the same checkpoint again and only logs the failure.
+    crate::pending_actions::continue_pending_offboards(wallet).await;
+    wallet.sync().await;
+    crate::pending_actions::continue_pending_offboards(wallet).await;
+    crate::required_sync::require_mailbox_arkoor_rounds_and_boards(
+        async { wallet.sync_mailbox().await.map_err(bark_error) },
+        async { wallet.sync_pending_arkoor_sends().await.map_err(bark_error) },
+        async {
+            wallet
+                .sync_pending_rounds()
+                .await
+                .map(|_| ())
+                .map_err(bark_error)
+        },
+        async { wallet.sync_pending_boards().await.map_err(bark_error) },
+    )
+    .await
+}
+
+/// Chain progress of live exits. A failure leaves the refresh status in place.
+async fn sync_open_exits(wallet: &bark::Wallet) {
+    let _exit_sync = wallet.sync_exits().await;
+}
+
 /// `Wallet::sync` already resumes a stored delegated round. Submit another
 /// only when that list is empty. Selector misses and schedule errors stay
 /// inside this status so the caller can still treat the sync as successful.
+///
+/// An idle maintenance refresh then consolidates spendable dust, when some
+/// set can pay for one output. A pending round, a stored refresh, or a warning
+/// keeps its status and does not open a second round. An exit block keeps the
+/// exit warning and still consolidates spendable dust.
 async fn delegated_refresh_status(wallet: &bark::Wallet) -> String {
     let pending_round_count = match wallet.pending_round_states().await {
         Ok(states) => states.len(),
@@ -469,10 +632,30 @@ async fn delegated_refresh_status(wallet: &bark::Wallet) -> String {
         }
     };
     if !should_schedule_delegated_refresh(pending_round_count) {
-        return BARK_REFRESH_PENDING.to_owned();
+        let exit_blocks_refresh = exit_locked_vtxo_blocks_refresh(wallet).await;
+        return refresh_status_for_pending_round(exit_blocks_refresh).to_owned();
     }
+    let maintenance_status = maintenance_refresh_status(wallet).await;
+    if maintenance_status == BARK_REFRESH_EXIT_BLOCKED {
+        schedule_dust_consolidation(wallet).await;
+        return BARK_REFRESH_EXIT_BLOCKED.to_owned();
+    }
+    if !should_schedule_dust_consolidation(&maintenance_status) {
+        return maintenance_status;
+    }
+    schedule_dust_consolidation(wallet).await
+}
+
+async fn maintenance_refresh_status(wallet: &bark::Wallet) -> String {
     match wallet.maybe_schedule_maintenance_refresh_delegated().await {
-        Ok(scheduled) => refresh_status_after_schedule(scheduled.is_some()).to_owned(),
+        Ok(scheduled) => {
+            let status = refresh_status_after_schedule(scheduled.is_some());
+            if status == BARK_REFRESH_IDLE && exit_locked_vtxo_blocks_refresh(wallet).await {
+                BARK_REFRESH_EXIT_BLOCKED.to_owned()
+            } else {
+                status.to_owned()
+            }
+        }
         Err(err) => {
             console_warn(&format!(
                 "Bark could not schedule maintenance refresh: {err:#}"
@@ -480,6 +663,186 @@ async fn delegated_refresh_status(wallet: &bark::Wallet) -> String {
             BARK_REFRESH_WARNING.to_owned()
         }
     }
+}
+
+/// One delegated refresh of spendable coins below the VTXO dust limit.
+/// A set that cannot pay stays idle. A coin the server rejects is left out
+/// and the rest are submitted, so one rejection does not warn on every later sync.
+async fn schedule_dust_consolidation(wallet: &bark::Wallet) -> String {
+    let dust_vtxos = match spendable_dust_vtxos(wallet).await {
+        Ok(vtxos) => vtxos,
+        Err(err) => {
+            console_warn(&format!(
+                "Bark could not read spendable VTXOs for dust consolidation: {err:#}"
+            ));
+            return BARK_REFRESH_WARNING.to_owned();
+        }
+    };
+    let mut excluded_vtxo_ids = HashSet::new();
+    for _ in 0..DUST_CONSOLIDATION_REJECTION_ATTEMPTS {
+        let candidates = dust_vtxos
+            .iter()
+            .filter(|vtxo| !excluded_vtxo_ids.contains(&vtxo.id()))
+            .cloned()
+            .collect::<Vec<_>>();
+        let payable = match payable_spendable_dust(wallet, candidates).await {
+            Ok(vtxos) => vtxos,
+            Err(err) => {
+                console_warn(&format!("Bark could not price dust consolidation: {err:#}"));
+                return BARK_REFRESH_WARNING.to_owned();
+            }
+        };
+        if payable.is_empty() {
+            return BARK_REFRESH_IDLE.to_owned();
+        }
+        match wallet.refresh_vtxos_delegated(payable).await {
+            Ok(round) => {
+                return refresh_status_after_dust_consolidation(Ok(round.is_some())).to_owned();
+            }
+            Err(err) => {
+                if finish_rejected_dust_attempt(&err, &mut excluded_vtxo_ids) {
+                    continue;
+                }
+                let status = refresh_status_after_dust_consolidation(Err(&err));
+                warn_about_dust_consolidation(&err, status);
+                return status.to_owned();
+            }
+        }
+    }
+    console_warn(
+        "Bark could not schedule dust consolidation after dropping coins the server rejected",
+    );
+    BARK_REFRESH_WARNING.to_owned()
+}
+
+/// `true` when this error named new inputs to leave out of the next submission.
+/// A submission that names none is finished: the caller reports that error.
+fn finish_rejected_dust_attempt(
+    err: &anyhow::Error,
+    excluded_vtxo_ids: &mut HashSet<bark::ark::VtxoId>,
+) -> bool {
+    let mut newly_excluded = 0;
+    for vtxo_id in rejected_dust_vtxo_ids(err) {
+        if excluded_vtxo_ids.insert(vtxo_id) {
+            newly_excluded += 1;
+        }
+    }
+    if newly_excluded == 0 {
+        return false;
+    }
+    console_warn(&format!(
+        "Bark left {newly_excluded} dust coin(s) out of consolidation after the server rejected them"
+    ));
+    true
+}
+
+fn rejected_dust_vtxo_ids(err: &anyhow::Error) -> Vec<bark::ark::VtxoId> {
+    use server_rpc::StatusExt;
+    for cause in err.chain() {
+        if let Some(status) = cause.downcast_ref::<server_rpc::tonic::Status>() {
+            return status.rejected_vtxos();
+        }
+    }
+    Vec::new()
+}
+
+/// The subset that still covers the refresh fee and a non-dust output.
+/// An empty result stays idle and does not submit a round, so no VTXO key is stored.
+async fn payable_spendable_dust(
+    wallet: &bark::Wallet,
+    dust_vtxos: Vec<bark::WalletVtxo>,
+) -> Result<Vec<bark::WalletVtxo>, anyhow::Error> {
+    if !dust_total_meets_vtxo_dust(dust_vtxos.iter().map(|vtxo| vtxo.amount().to_sat())) {
+        return Ok(Vec::new());
+    }
+    let ark_info = wallet.require_ark_info().await?;
+    let tip_height = wallet.chain().tip().await?;
+    let contributions = dust_vtxos
+        .iter()
+        .map(|vtxo| dust_coin_contribution(vtxo, &ark_info, tip_height))
+        .collect::<Vec<_>>();
+    let kept_indexes = payable_dust_indexes(
+        &contributions,
+        ark_info.fees.refresh.base_fee.to_sat(),
+        bark::ark::vtxo::VTXO_DUST_SAT,
+    );
+    Ok(kept_indexes
+        .into_iter()
+        .map(|index| dust_vtxos[index].clone())
+        .collect())
+}
+
+fn dust_coin_contribution(
+    vtxo: &bark::WalletVtxo,
+    ark_info: &bark::ark::ArkInfo,
+    tip_height: bitcoin_ext::BlockHeight,
+) -> (u64, u64) {
+    let fee_info = bark::ark::fees::VtxoFeeInfo::from_vtxo_and_tip(vtxo.as_ref(), tip_height);
+    let marginal_fee_sats = ark_info
+        .fees
+        .refresh
+        .calculate_no_base_fee([fee_info])
+        .map(|fee| fee.to_sat())
+        .unwrap_or(u64::MAX);
+    (vtxo.amount().to_sat(), marginal_fee_sats)
+}
+
+fn warn_about_dust_consolidation(err: &anyhow::Error, status: &str) {
+    if status == BARK_REFRESH_IDLE {
+        console_warn(&format!(
+            "Bark left dust unconsolidated because the refresh fee would leave a sub-dust output: {err:#}"
+        ));
+        return;
+    }
+    console_warn(&format!(
+        "Bark could not schedule dust consolidation: {err:#}"
+    ));
+}
+
+async fn spendable_dust_vtxos(
+    wallet: &bark::Wallet,
+) -> Result<Vec<bark::WalletVtxo>, anyhow::Error> {
+    let spendable_vtxos = wallet.spendable_vtxos().await?;
+    let dust_limit = bark::ark::vtxo::VTXO_DUST;
+    Ok(spendable_vtxos
+        .into_iter()
+        .filter(|vtxo| vtxo.amount() < dust_limit)
+        .collect())
+}
+
+/// A coin locked by its emergency-exit movement is invisible to Bark's refresh
+/// selector. When that coin is already inside the refresh window, say so instead
+/// of reporting that nothing was due.
+async fn exit_locked_vtxo_blocks_refresh(wallet: &bark::Wallet) -> bool {
+    let Ok(tip_height) = wallet.chain().tip().await else {
+        return false;
+    };
+    let refresh_expiry_threshold = wallet.config().vtxo_refresh_expiry_threshold;
+    let exits = wallet.exit_mgr().get_exit_vtxos().await;
+    for exit in exits {
+        let Some(movement_id) = exit.movement_id() else {
+            continue;
+        };
+        let Ok(vtxo) = wallet.get_vtxo_by_id(exit.id()).await else {
+            continue;
+        };
+        let locked_by_this_exit = matches!(
+            &vtxo.state,
+            bark::vtxo::VtxoState::Locked {
+                holder: Some(bark::vtxo::VtxoLockHolder::Movement { id }),
+            } if *id == movement_id
+        );
+        if locked_by_this_exit
+            && vtxo_is_inside_refresh_expiry_window(
+                tip_height,
+                vtxo.expiry_height(),
+                refresh_expiry_threshold,
+            )
+        {
+            return true;
+        }
+    }
+    false
 }
 
 /// Seized exit outputs from the last completed scan, as JSON
@@ -490,6 +853,21 @@ async fn delegated_refresh_status(wallet: &bark::Wallet) -> String {
 #[wasm_bindgen]
 pub fn bark_exit_chain_notices() -> String {
     crate::exit_seizure::exit_chain_notices_json()
+}
+
+/// Spent outputs for VTXO ids already stored on a notice. The JSON argument is a
+/// string array of VTXO ids. The result uses the same shape as
+/// `bark_exit_chain_notices`, including `spentTxid` and `spentVout`.
+/// A VTXO that can no longer be read is omitted. A chain read that does not
+/// cover every watched output fails this call and leaves the stored notice as it was.
+#[wasm_bindgen]
+pub async fn bark_backfill_exit_chain_notices(vtxo_ids_json: String) -> Result<String, JsValue> {
+    run_with_open_wallet(async |wallet| {
+        let vtxo_ids = serde_json::from_str::<Vec<String>>(&vtxo_ids_json)
+            .map_err(|err| format!("Bark exit notice VTXO ids are invalid: {err}"))?;
+        crate::exit_seizure::backfill_exit_chain_notices_json(wallet, &vtxo_ids).await
+    })
+    .await
 }
 
 /// Chain tip and the first block of the next refresh period, as JSON, or `null`.

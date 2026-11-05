@@ -54,7 +54,7 @@ impl ArkadeSession {
             .refresh_server_info()
             .await
             .map_err(ArkWasmError::Client)?;
-        let live_server_info = self.client.server_info()?;
+        let live_server_info = self.client.server_info_snapshot()?;
         if pending.digest != live_server_info.digest {
             self.stage_operator_trust_from_server_info(&live_server_info);
             return Err(ArkWasmError::OperatorTrustPendingDigestChanged);

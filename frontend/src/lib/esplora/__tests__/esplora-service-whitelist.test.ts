@@ -3,7 +3,9 @@ import {
   customEsploraMatchesWhitelistedBase,
   ESPLORA_PROVIDER_BASES,
   esploraViteProxyEntries,
+  esploraFallbackUpstreamBase,
   getUpstreamBaseForEsploraProxy,
+  isEsploraUpstreamFailoverStatus,
   isKnownEsploraProviderId,
   isWhitelistedEsploraBaseUrl,
   normalizeEsploraBaseUrl,
@@ -41,6 +43,15 @@ describe('customEsploraMatchesWhitelistedBase', () => {
         'testnet',
       ),
     ).toEqual({ providerId: 'default' })
+  })
+
+  it('matches blockstream testnet4 as the blockstream provider', () => {
+    expect(
+      customEsploraMatchesWhitelistedBase(
+        'https://blockstream.info/testnet4/api/',
+        'testnet',
+      ),
+    ).toEqual({ providerId: 'blockstream' })
   })
 
   it('matches blockstream mainnet', () => {
@@ -100,8 +111,28 @@ describe('getUpstreamBaseForEsploraProxy', () => {
     expect(getUpstreamBaseForEsploraProxy('evil', 'mainnet')).toBeNull()
   })
 
-  it('returns null for blockstream testnet (not configured)', () => {
-    expect(getUpstreamBaseForEsploraProxy('blockstream', 'testnet')).toBeNull()
+  it('resolves blockstream testnet4', () => {
+    expect(getUpstreamBaseForEsploraProxy('blockstream', 'testnet')).toBe(
+      ESPLORA_PROVIDER_BASES.blockstream.testnet,
+    )
+  })
+
+  it('falls back from default testnet4 to the blockstream mirror', () => {
+    expect(esploraFallbackUpstreamBase('default', 'testnet')).toBe(
+      'https://blockstream.info/testnet4/api',
+    )
+  })
+
+  it('has no fallback for mutinynet or an explicit blockstream choice', () => {
+    expect(esploraFallbackUpstreamBase('default', 'mutinynet')).toBeNull()
+    expect(esploraFallbackUpstreamBase('blockstream', 'testnet')).toBeNull()
+  })
+
+  it('treats rate limits and gateway errors as failover statuses', () => {
+    expect(isEsploraUpstreamFailoverStatus(429)).toBe(true)
+    expect(isEsploraUpstreamFailoverStatus(503)).toBe(true)
+    expect(isEsploraUpstreamFailoverStatus(200)).toBe(false)
+    expect(isEsploraUpstreamFailoverStatus(404)).toBe(false)
   })
 
   it('resolves legacy testnet and has no legacy signet row', () => {

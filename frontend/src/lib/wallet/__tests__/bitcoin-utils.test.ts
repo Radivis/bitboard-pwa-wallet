@@ -251,6 +251,7 @@ describe('parseBTC', () => {
     expect(parseBTC('1')).toBe(100_000_000)
     expect(parseBTC('0.5')).toBe(50_000_000)
     expect(parseBTC('0.00000001')).toBe(1)
+    expect(parseBTC('0.00493086')).toBe(493_086)
     expect(parseBTC('  0.1  ')).toBe(10_000_000)
   })
 

@@ -8,6 +8,7 @@ const setBalance = vi.fn()
 const setTransactions = vi.fn()
 const walletState = {
   activeWalletId: 1 as number | null,
+  networkMode: 'regtest' as const,
 }
 
 vi.mock('sonner', () => ({
@@ -33,6 +34,7 @@ vi.mock('@/stores/walletStore', () => ({
   useWalletStore: {
     getState: () => ({
       activeWalletId: walletState.activeWalletId,
+      networkMode: walletState.networkMode,
       setBalance,
       setTransactions,
     }),

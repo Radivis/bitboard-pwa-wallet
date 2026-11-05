@@ -100,6 +100,7 @@ vi.mock('@/db', () => ({
 
 vi.mock('@/workers/secrets-channel', () => ({
   ensureSecretsChannel: vi.fn().mockResolvedValue(undefined),
+  resetArkadeWorkerSecretsChannel: vi.fn(),
   resetBarkWorkerSecretsChannel: vi.fn(),
 }))
 
@@ -350,6 +351,7 @@ describe('CreateWalletPage', () => {
 
     await waitFor(() => {
       expect(dbMocks.mockPersistNewWalletWithSecrets).toHaveBeenCalled()
+      expect(mockNavigate).toHaveBeenCalledWith({ to: '/wallet' })
     })
     expect(dbMocks.mockMutateAsync).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'Main Wallet' }),
@@ -359,7 +361,6 @@ describe('CreateWalletPage', () => {
     expect(mockSetTransactions).toHaveBeenCalledWith([])
     expect(mockSetLastSyncTime).toHaveBeenCalledWith(null)
     expect(dbMocks.mockSetWalletNoMnemonicBackupFlag).toHaveBeenCalled()
-    expect(mockNavigate).toHaveBeenCalledWith({ to: '/wallet' })
     expect(screen.queryByText('Step 2 of 3')).not.toBeInTheDocument()
   })
 

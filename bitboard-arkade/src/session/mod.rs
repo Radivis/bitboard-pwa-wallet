@@ -11,6 +11,7 @@ mod operator_schedule;
 mod operator_trust;
 mod payments;
 mod pending_exit;
+mod persisted_dashboard;
 mod receive;
 mod signer_migration;
 mod sync;
@@ -26,7 +27,7 @@ use std::time::Duration;
 use bumper_sync_policy::BumperWalletSyncPhase;
 
 use ark_bdk_wallet::Wallet as ArkBdkWallet;
-use ark_client::{Bip32KeyProvider, Client, InMemorySwapStorage};
+use ark_client::{Client, InMemorySwapStorage};
 use ark_delegator::DelegatorClient;
 use bitcoin::Network;
 
@@ -34,12 +35,14 @@ use crate::esplora_blockchain::EsploraBlockchain;
 use crate::network::NetworkMode;
 use crate::persistence::{JsonPersistenceDb, OperatorIdentity, SharedPersistenceDb};
 
+/// Sent as the client name on ark-client 0.9.3. OfflineClientConfig in 0.12.0 has no name field.
+#[allow(dead_code)]
 pub(crate) const CLIENT_NAME: &str = "bitboard-pwa-wallet";
 pub(crate) const BOLTZ_URL: &str = "https://api.boltz.exchange";
 pub(crate) const CLIENT_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub type BumperWallet = ArkBdkWallet<SharedPersistenceDb>;
-pub type ArkClient = Client<EsploraBlockchain, BumperWallet, InMemorySwapStorage, Bip32KeyProvider>;
+pub type ArkClient = Client<EsploraBlockchain, BumperWallet, InMemorySwapStorage>;
 
 pub struct ArkadeSession {
     client: ArkClient,
@@ -49,8 +52,8 @@ pub struct ArkadeSession {
     network_mode: NetworkMode,
     operator_identity: Mutex<OperatorIdentity>,
     autonomous_mode: Cell<bool>,
-    /// Set when the latest `discover_keys` failed. Cleared on the next success.
-    /// Sends then use a live spendable list instead of the offchain snapshot.
+    /// Set when `discover_keys` failed, and for the whole background restore until its
+    /// catch-up snapshot commits. Sends then use a live spendable list.
     offchain_key_discovery_failed: Cell<bool>,
     bumper_wallet_sync_phase: Cell<BumperWalletSyncPhase>,
     /// Serializes offchain snapshot merge and persist. HTTP stays outside this lock.

@@ -630,6 +630,7 @@ mod tests {
             settled_by: None,
             ark_txid: None,
             assets: vec![],
+            depth: 0,
         };
         let eligible_vtxo = VirtualTxOutPoint {
             outpoint: OutPoint {
@@ -649,6 +650,7 @@ mod tests {
             settled_by: None,
             ark_txid: None,
             assets: vec![],
+            depth: 0,
         };
         assert!(!virtual_tx_outpoint_has_unilateral_exit_prepared(
             Some(&snapshot),
@@ -806,6 +808,7 @@ mod tests {
             settled_by: None,
             ark_txid: None,
             assets: vec![],
+            depth: 0,
         };
         assert!(virtual_tx_outpoint_has_unilateral_exit_prepared(
             Some(&snapshot),

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 import { renderWithProviders } from '@/test-utils/test-providers'
 import { BarkDashboardBalance } from '@/components/wallet/BarkDashboardBalance'
+import { BARK_EMERGENCY_EXIT_BLOCKS_ACTION } from '@/lib/bark/emergency-exit-blocks-action'
 import { useFiatDenominationStore } from '@/stores/fiatDenominationStore'
 import type { NetworkMode } from '@/stores/walletStore'
 import type { BarkNextRefreshObservation } from '@/lib/bark/bark-next-refresh-hint'
@@ -40,7 +41,7 @@ const syncSnapshot = vi.hoisted(() => ({
     lockedSats: null as number | null,
     exitingSats: null as number | null,
     lastSuccessfulSyncAt: null as string | null,
-    refreshStatus: 'idle' as 'idle' | 'scheduled' | 'pending' | 'warning',
+    refreshStatus: 'idle' as 'idle' | 'scheduled' | 'pending' | 'warning' | 'exit_blocked',
     nextRefresh: null as BarkNextRefreshObservation | null,
   },
 }))
@@ -405,6 +406,23 @@ describe('BarkDashboardBalance', () => {
     expect(screen.queryByTestId('wallet-sync-error-banner-bark')).not.toBeInTheDocument()
     expect(screen.queryByTestId('dashboard-bark-refresh-notice')).not.toBeInTheDocument()
     expect(screen.getByTestId('dashboard-bark-balance-amount')).toHaveTextContent('0.00050000')
+  })
+
+  it('DASH-BARK-20 shows the cancel sentence when refresh is blocked by an emergency exit', () => {
+    syncSnapshot.current = {
+      syncPhase: 'not-syncing',
+      networkMode: 'signet',
+      errorMessage: null,
+      spendableSats: 0,
+      lastSuccessfulSyncAt: '2024-03-01T12:00:00.000Z',
+      refreshStatus: 'exit_blocked',
+    }
+    renderWithProviders(<BarkDashboardBalance />)
+    expect(screen.getByTestId('dashboard-bark-refresh-warning')).toHaveTextContent(
+      BARK_EMERGENCY_EXIT_BLOCKS_ACTION,
+    )
+    expect(screen.queryByTestId('dashboard-bark-refresh-notice')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('wallet-sync-error-banner-bark')).not.toBeInTheDocument()
   })
 
   it('DASH-BARK-12 shows the embedded session loading screen while Bark is opening', () => {

@@ -23,7 +23,11 @@ interface StoredArkadeAccount {
 }
 ```
 
-`activeArkadeAccountIdByNetwork` selects which Arkade account is active per live network (`mainnet`, `testnet`, `signet`).
+`activeArkadeAccountIdByNetwork` selects which Arkade account is active per live network (`mainnet`, `signet`, `mutinynet`).
+
+v0.3.6 moved historical Arkade `signet` accounts to `mutinynet` but left `operatorUrl` on `/api/arkade/operator/signet`, which then forwarded to public Signet. The wallet migration `mutinynet-arkade-operator-url-repair` rewrites that proxy path to `/api/arkade/operator/mutinynet` for accounts already labeled `mutinynet`. The original `signet-network-split` migration does the same rewrite when it moves an account. Public Signet accounts, any other operator URL, and `sdkPersistenceJson` are left unchanged.
+
+The on-chain repair migration `signet-mutinynet-chain-repair` (see [`descriptor-wallet-switching.md`](../descriptor-wallet-switching.md#signet-and-mutinynet-share-a-genesis-block)) drops only descriptor rows; it does not inspect or change Arkade accounts. **Known gap:** an Arkade account created on public Signet by a pre-release build and then relabeled `mutinynet` by v0.3.6 keeps public Signet state under the Mutinynet label. Follow-up: a runtime check that compares the account's `operatorSignerPkHex` with the live operator's signer key and flags a mismatch instead of opening the session.
 
 **Size limit:** `sdkPersistenceJson` must not exceed 10 MB UTF-8 (`ARKADE_SDK_PERSISTENCE_JSON_MAX_BYTES` in `arkade-sdk-persistence-types.ts`).
 
@@ -36,7 +40,7 @@ File: `bitboard-arkade/src/persistence.rs`
 | `BitboardArkadePersistence` | Top-level JSON envelope (`version`, `engine`, `operator_identity`, `autonomous_mode`, `wallet_db`) |
 | `WalletDbSnapshot` | Boarding outputs, secret keys, VTXO snapshot, exit watches, host-tx observations, VTXO exit records, operator trust |
 | `OffchainVtxoSnapshot` | VTXO list + unilateral exit materials map (keyed by host tx) |
-| `JsonPersistenceDb` | In-memory mutex-backed DB implementing ark-client `Persistence` |
+| `JsonPersistenceDb` | In-memory mutex-backed DB. A boarding row stores the owner, exit delay, and address for the current operator signer. Rows whose address is another signer's script are dropped on load. The SDK watch rebuilds those scripts from live operator info; the snapshot does not store a signer. |
 
 **Current version:** `BITBOARD_ARKADE_PERSISTENCE_VERSION = 12`
 

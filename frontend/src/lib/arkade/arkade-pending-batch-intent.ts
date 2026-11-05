@@ -2,7 +2,11 @@ import type {
   ArkadeBatchJoinResult,
   ArkadePendingBatchIntent,
 } from '@/workers/arkade-api'
-import { ARKADE_PENDING_BATCH_INTENT_POLL_MS } from '@/lib/arkade/arkade-query-timings'
+import {
+  ARKADE_BOARDING_STATUS_EMPTY_POLL_MS,
+  ARKADE_BOARDING_STATUS_REFETCH_MS,
+  ARKADE_PENDING_BATCH_INTENT_POLL_MS,
+} from '@/lib/arkade/arkade-query-timings'
 
 /** Keep in sync with `bitboard-arkade` `constants::BOARDING_REGISTER_INTENT_TTL_SECS`. */
 export const BOARDING_REGISTER_INTENT_TTL_SECS = 2 * 60
@@ -24,6 +28,7 @@ export const ARKADE_INTENT_LIFECYCLE_PHASES = {
   submission: 'submission',
   processing: 'processing',
   timedOut: 'timed_out',
+  reregisterHold: 'reregister_hold',
   succeeded: 'succeeded',
 } as const
 
@@ -32,8 +37,12 @@ export type ArkadeIntentLifecyclePhase =
 
 export type ArkadePendingIntentPhase = Extract<
   ArkadeIntentLifecyclePhase,
-  'processing' | 'timed_out'
+  'processing' | 'timed_out' | 'reregister_hold'
 >
+
+/** Same copy as `BOARDING_REREGISTER_WHILE_INTENT_LIVE` in bitboard-arkade. */
+export const BOARDING_REREGISTER_HOLD_MESSAGE =
+  'A boarding intent for this output may still be in the operator\'s current round. Registering again can fail that round with "not enough intent confirmations". Wait for this round to finish, then settle again.'
 
 const cancelledPendingIntentKeys = new Set<string>()
 const inFlightRegisteredIntentKeys = new Set<string>()
@@ -105,10 +114,19 @@ export function hasPendingBatchIntent(
   return pendingIntents.length > 0
 }
 
+export function pendingIntentBlocksBoardingSettle(
+  intent: ArkadePendingBatchIntent,
+): boolean {
+  return (
+    intent.onchainOutpoints.length > 0 &&
+    intent.lifecyclePhase !== ARKADE_INTENT_LIFECYCLE_PHASES.reregisterHold
+  )
+}
+
 export function pendingOverlapsOnchain(
   pendingIntents: ArkadePendingBatchIntent[],
 ): boolean {
-  return pendingIntents.some((intent) => intent.onchainOutpoints.length > 0)
+  return pendingIntents.some(pendingIntentBlocksBoardingSettle)
 }
 
 export function hasPendingKind(
@@ -121,9 +139,13 @@ export function hasPendingKind(
 export function pendingIntentBannerPhase(
   intent: ArkadePendingBatchIntent,
 ): ArkadePendingIntentPhase {
-  return intent.lifecyclePhase === ARKADE_INTENT_LIFECYCLE_PHASES.processing
-    ? ARKADE_INTENT_LIFECYCLE_PHASES.processing
-    : ARKADE_INTENT_LIFECYCLE_PHASES.timedOut
+  if (intent.lifecyclePhase === ARKADE_INTENT_LIFECYCLE_PHASES.reregisterHold) {
+    return ARKADE_INTENT_LIFECYCLE_PHASES.reregisterHold
+  }
+  if (intent.lifecyclePhase === ARKADE_INTENT_LIFECYCLE_PHASES.processing) {
+    return ARKADE_INTENT_LIFECYCLE_PHASES.processing
+  }
+  return ARKADE_INTENT_LIFECYCLE_PHASES.timedOut
 }
 
 export function isIntentSubmitPhase(options: {
@@ -145,7 +167,11 @@ export function pendingIntentShowsRetry(intent: ArkadePendingBatchIntent): boole
   if (!isBoardingOnlyPendingIntent(intent)) {
     return true
   }
-  return pendingIntentBannerPhase(intent) === ARKADE_INTENT_LIFECYCLE_PHASES.timedOut
+  const phase = pendingIntentBannerPhase(intent)
+  return (
+    phase === ARKADE_INTENT_LIFECYCLE_PHASES.timedOut ||
+    phase === ARKADE_INTENT_LIFECYCLE_PHASES.reregisterHold
+  )
 }
 
 export function boardingRetryCooldownRemainingSeconds(
@@ -179,6 +205,9 @@ export function pendingIntentAllowsRetry(
   if (!isBoardingOnlyPendingIntent(intent)) {
     return true
   }
+  if (pendingIntentBannerPhase(intent) === ARKADE_INTENT_LIFECYCLE_PHASES.reregisterHold) {
+    return false
+  }
   if (pendingIntentBannerPhase(intent) !== ARKADE_INTENT_LIFECYCLE_PHASES.timedOut) {
     return false
   }
@@ -195,6 +224,10 @@ export function pendingBatchIntentWaitingMessage(kind: string): string {
 
 export function pendingBatchIntentTimedOutMessage(kind: string): string {
   return `Your ${pendingBatchIntentKindLabel(kind)} is still registered, but the batch round timed out before it completed.`
+}
+
+export function pendingBatchIntentReregisterHoldMessage(): string {
+  return BOARDING_REREGISTER_HOLD_MESSAGE
 }
 
 export function pendingBatchIntentDurationHint(): string {
@@ -323,4 +356,34 @@ export function arkadeRefetchIntervalWithPendingBatchIntent(
     return ARKADE_PENDING_BATCH_INTENT_POLL_MS
   }
   return periodicInterval
+}
+
+export function boardingStatusHasNoDetectedUtxos(status: {
+  spendableSats: number
+  pendingSats: number
+  expiredSats: number
+} | undefined): boolean {
+  if (status == null) {
+    return true
+  }
+  return status.spendableSats === 0 && status.pendingSats === 0 && status.expiredSats === 0
+}
+
+/**
+ * Pending intents stay on the short intent poll. An open board page with nothing
+ * detected yet polls quickly enough to settle inside the cooperative window.
+ * Otherwise boarding status uses its own background interval.
+ */
+export function boardingStatusRefetchIntervalMs(options: {
+  hasPendingIntent: boolean
+  pollWhileEmpty: boolean
+  hasNoDetectedUtxos: boolean
+}): number {
+  if (options.hasPendingIntent) {
+    return ARKADE_PENDING_BATCH_INTENT_POLL_MS
+  }
+  if (options.pollWhileEmpty && options.hasNoDetectedUtxos) {
+    return ARKADE_BOARDING_STATUS_EMPTY_POLL_MS
+  }
+  return ARKADE_BOARDING_STATUS_REFETCH_MS
 }

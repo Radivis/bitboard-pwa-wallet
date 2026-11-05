@@ -1,5 +1,68 @@
 use crate::Error;
+use std::future::Future;
+
+/// `std::time::Instant` panics on `wasm32-unknown-unknown`. Session open stamps this clock.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) use std::time::Instant as MonotonicInstant;
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct MonotonicInstant(f64);
+
+#[cfg(target_arch = "wasm32")]
+impl MonotonicInstant {
+    pub(crate) fn now() -> Self {
+        Self(js_sys::Date::now())
+    }
+
+    pub(crate) fn elapsed(&self) -> std::time::Duration {
+        let delta_ms = (js_sys::Date::now() - self.0).max(0.0);
+        std::time::Duration::from_millis(delta_ms as u64)
+    }
+}
 use std::time::Duration;
+
+/// Spawn a detached task. Native uses `tokio::spawn`. Browser futures hold `JsFuture`, which is
+/// not `Send`; wasm32 is single-threaded, so the wrapper is only compiled there.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn spawn_future<F>(future: F) -> tokio::task::JoinHandle<F::Output>
+where
+    F: Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    tokio::spawn(future)
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn spawn_future<F>(future: F) -> tokio::task::JoinHandle<F::Output>
+where
+    F: Future + 'static,
+    F::Output: Send + 'static,
+{
+    tokio::spawn(WasmSendFuture(future))
+}
+
+#[cfg(target_arch = "wasm32")]
+use std::pin::Pin;
+#[cfg(target_arch = "wasm32")]
+use std::task::Context;
+#[cfg(target_arch = "wasm32")]
+use std::task::Poll;
+
+#[cfg(target_arch = "wasm32")]
+struct WasmSendFuture<F>(F);
+
+#[cfg(target_arch = "wasm32")]
+unsafe impl<F> Send for WasmSendFuture<F> {}
+
+#[cfg(target_arch = "wasm32")]
+impl<F: Future> Future for WasmSendFuture<F> {
+    type Output = F::Output;
+
+    fn poll(self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Self::Output> {
+        unsafe { Pin::new_unchecked(&mut self.get_unchecked_mut().0).poll(context) }
+    }
+}
 
 /// Current time as Unix seconds. Uses `js_sys::Date` on wasm32, `std::time` elsewhere.
 pub(crate) fn unix_now() -> Result<i64, Error> {

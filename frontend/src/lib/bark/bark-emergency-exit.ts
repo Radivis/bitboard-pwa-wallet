@@ -30,6 +30,8 @@ export function barkEmergencyExitStateLabel(state: BarkEmergencyExitState): stri
       return 'Claimed'
     case 'vtxoAlreadySpent':
       return 'Already spent'
+    case 'vtxoSwept':
+      return 'Swept'
     case 'canceled':
       return 'Canceled'
   }

@@ -36,8 +36,9 @@ function buildExitFlow(overrides: Partial<ExitFlow>): ExitFlow {
           offchainOutput: false,
           onchainOutput: false,
         },
-        estimatedTotalFeeSats: 0,
+        estimatedTotalFeeSats: 20,
         estimatedReceiveSats: 280_603,
+        changeSats: 9_980,
       },
     },
     collaborativeExitMutation: { mutate: vi.fn(), isPending: false },
@@ -58,6 +59,7 @@ describe('CollaborativeExitPage', () => {
     ).not.toBeNull()
     expect(screen.getByText('Operator fees (estimate)')).toBeInTheDocument()
     expect(screen.getByText(/Estimated operator fee/i)).toBeInTheDocument()
+    expect(screen.getByText(/taken from the Ark change/i)).toBeInTheDocument()
   })
 
   it('enables Confirm exit when fee estimate returns non-funds estimateError', () => {

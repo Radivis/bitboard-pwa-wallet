@@ -2,7 +2,6 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use ark_client::Error;
-use ark_client::wallet::Persistence;
 use ark_core::BoardingOutput;
 use ark_core::server::{DeprecatedSignerStatus, Info, ServerSignerStatus};
 use bitcoin::secp256k1::Secp256k1;
@@ -58,7 +57,7 @@ fn unix_timestamp_now() -> i64 {
     }
 }
 pub const ARK_RS_ENGINE: &str = "ark-rs";
-pub const ARK_RS_SDK_VERSION: &str = "0.9.3";
+pub const ARK_RS_SDK_VERSION: &str = "0.12.0";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct OperatorIdentity {
@@ -360,6 +359,9 @@ pub enum PendingBatchIntentLifecyclePhase {
     Processing,
     #[default]
     TimedOut,
+    /// Registration TTL has passed, but the outpoint may still be popped into a live round.
+    /// Settle is allowed to be clicked; a new `RegisterIntent` is still refused.
+    ReregisterHold,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -761,11 +763,15 @@ impl JsonPersistenceDb {
         }
     }
 
-    pub fn boarding_output_from_snapshot(
+    /// Rebuild a row with the current load-context signer.
+    ///
+    /// `Ok(None)` means the stored address belongs to some other server key. The watch derives
+    /// those scripts from live operator info; the snapshot does not keep a signer for them.
+    pub fn boarding_output_for_current_signer(
         snapshot: &BoardingOutputSnapshot,
         server: XOnlyPublicKey,
         network: Network,
-    ) -> Result<BoardingOutput, Error> {
+    ) -> Result<Option<BoardingOutput>, Error> {
         let secp = Secp256k1::new();
         let owner: XOnlyPublicKey = snapshot
             .owner_pk_hex
@@ -775,14 +781,9 @@ impl JsonPersistenceDb {
         let boarding_output = BoardingOutput::new(&secp, server, owner, exit_delay, network)
             .map_err(|error| Error::wallet(error.to_string()))?;
         if boarding_output.address().to_string() != snapshot.address {
-            return Err(Error::wallet(format!(
-                "boarding output address mismatch for {}: persisted {} but reconstructed {}",
-                snapshot.owner_pk_hex,
-                snapshot.address,
-                boarding_output.address(),
-            )));
+            return Ok(None);
         }
-        Ok(boarding_output)
+        Ok(Some(boarding_output))
     }
 }
 
@@ -817,8 +818,8 @@ fn outpoint_sets_overlap(
 #[derive(Clone, Default)]
 pub struct SharedPersistenceDb(pub Arc<JsonPersistenceDb>);
 
-impl Persistence for SharedPersistenceDb {
-    fn save_boarding_output(
+impl SharedPersistenceDb {
+    pub fn save_boarding_output(
         &self,
         sk: SecretKey,
         boarding_output: BoardingOutput,
@@ -826,51 +827,67 @@ impl Persistence for SharedPersistenceDb {
         self.0.save_boarding_output(sk, boarding_output)
     }
 
-    fn load_boarding_outputs(&self) -> Result<Vec<BoardingOutput>, Error> {
+    pub fn load_boarding_outputs(&self) -> Result<Vec<BoardingOutput>, Error> {
         self.0.load_boarding_outputs()
     }
 
-    fn sk_for_pk(&self, pk: &XOnlyPublicKey) -> Result<SecretKey, Error> {
+    /// Owner key for a persisted boarding output. Spend paths have not called this yet.
+    #[allow(dead_code)]
+    pub fn sk_for_pk(&self, pk: &XOnlyPublicKey) -> Result<SecretKey, Error> {
         self.0.sk_for_pk(pk)
     }
 }
 
-impl Persistence for JsonPersistenceDb {
-    fn save_boarding_output(
+impl JsonPersistenceDb {
+    pub fn save_boarding_output(
         &self,
         sk: SecretKey,
         boarding_output: BoardingOutput,
     ) -> Result<(), Error> {
         let owner_pk = boarding_output.owner_pk();
-        let snapshot = Self::boarding_output_to_snapshot(&boarding_output);
         let mut state = lock_persistence_result(&self.inner)?;
+        let current_server = lock_persistence_result(&self.load_context)?.map(|(_, server)| server);
+        if current_server.is_some_and(|server| boarding_output.server_pk() != server) {
+            return Ok(());
+        }
+        let snapshot = Self::boarding_output_to_snapshot(&boarding_output);
         state
             .secret_keys_by_owner_pk_hex
             .insert(owner_pk.to_string(), hex::encode(sk.secret_bytes()));
-        if !state
+        if let Some(existing) = state
             .boarding_outputs
-            .iter()
-            .any(|row| row.address == snapshot.address)
+            .iter_mut()
+            .find(|row| row.address == snapshot.address)
         {
+            existing.owner_pk_hex = snapshot.owner_pk_hex;
+            existing.exit_delay_consensus = snapshot.exit_delay_consensus;
+        } else {
             state.boarding_outputs.push(snapshot);
         }
         Ok(())
     }
 
-    fn load_boarding_outputs(&self) -> Result<Vec<BoardingOutput>, Error> {
-        let state = lock_persistence_result(&self.inner)?;
+    pub fn load_boarding_outputs(&self) -> Result<Vec<BoardingOutput>, Error> {
+        let mut state = lock_persistence_result(&self.inner)?;
         let (network, server) = lock_persistence_result(&self.load_context)?
             .ok_or_else(|| Error::wallet("boarding load context not configured"))?;
-        Ok(state
-            .boarding_outputs
-            .iter()
-            .filter_map(|snapshot| {
-                Self::boarding_output_from_snapshot(snapshot, server, network).ok()
-            })
-            .collect())
+        let mut loaded = Vec::new();
+        let mut dropped_indexes = Vec::new();
+        for (index, snapshot) in state.boarding_outputs.iter().enumerate() {
+            match Self::boarding_output_for_current_signer(snapshot, server, network)? {
+                Some(boarding_output) => loaded.push(boarding_output),
+                None => dropped_indexes.push(index),
+            }
+        }
+        for index in dropped_indexes.into_iter().rev() {
+            state.boarding_outputs.remove(index);
+        }
+        Ok(loaded)
     }
 
-    fn sk_for_pk(&self, pk: &XOnlyPublicKey) -> Result<SecretKey, Error> {
+    /// Owner key stored beside a boarding output. Spend paths have not called this yet.
+    #[allow(dead_code)]
+    pub fn sk_for_pk(&self, pk: &XOnlyPublicKey) -> Result<SecretKey, Error> {
         let state = lock_persistence_result(&self.inner)?;
         let hex_sk = state
             .secret_keys_by_owner_pk_hex

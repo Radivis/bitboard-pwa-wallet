@@ -77,6 +77,7 @@ const mockShouldSkipOutgoingDescriptorSaveOnSyncError = vi.hoisted(() =>
 vi.mock('@/lib/wallet/lifecycle/onchain-descriptor-mutation-guard', () => ({
   awaitOnchainQuiescenceBeforeDescriptorMutation: vi.fn().mockResolvedValue(undefined),
   exportChangesetForPersistence: (...args: unknown[]) => mockExportChangeset(...args),
+  exportChangesetForPersistenceBypass: (...args: unknown[]) => mockExportChangeset(...args),
   shouldSkipOutgoingDescriptorSaveOnSyncError: (...args: unknown[]) =>
     mockShouldSkipOutgoingDescriptorSaveOnSyncError(...args),
 }))

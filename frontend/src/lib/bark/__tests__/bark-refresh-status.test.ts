@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { readBarkNextRefreshSchedule } from '@/lib/bark/bark-refresh-status'
+import { BARK_EMERGENCY_EXIT_BLOCKS_ACTION } from '@/lib/bark/emergency-exit-blocks-action'
+import {
+  barkRefreshWarningText,
+  readBarkNextRefreshSchedule,
+  readBarkRefreshStatus,
+} from '@/lib/bark/bark-refresh-status'
+
+describe('bark refresh status', () => {
+  it('reads exit_blocked and shows the cancel sentence', () => {
+    expect(readBarkRefreshStatus('exit_blocked')).toBe('exit_blocked')
+    expect(barkRefreshWarningText('exit_blocked')).toBe(BARK_EMERGENCY_EXIT_BLOCKS_ACTION)
+    expect(barkRefreshWarningText('warning')).toBe('Bark could not schedule a refresh.')
+  })
+})
 
 describe('readBarkNextRefreshSchedule', () => {
   it('reads the tip and the next refresh height', () => {

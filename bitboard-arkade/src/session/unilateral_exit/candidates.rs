@@ -327,7 +327,7 @@ impl ArkadeSession {
 
         let (vtxo_list, script_pubkey_to_vtxo) = autonomous_vtxo_list_and_script_map(self)?;
         let offchain_script_map = self.offchain_script_map().unwrap_or_default();
-        let dust = self.client.server_info()?.dust;
+        let dust = self.client.server_info_snapshot()?.dust;
         let operator_by_outpoint: HashMap<UnilateralExitOutpointKey, _> = vtxo_list
             .all()
             .map(|virtual_tx_outpoint| {

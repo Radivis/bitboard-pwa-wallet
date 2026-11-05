@@ -35,6 +35,7 @@ export function useSendFlowBark({
   const syncSnapshot = useBarkSyncLifecycleSnapshot()
   const barkSendMutation = useBarkSendMutation()
   const barkSpendableSats = barkAvailable ? syncSnapshot.spendableSats : null
+  const barkExitingSats = barkAvailable ? syncSnapshot.exitingSats : null
 
   const recipientFormatValid = useMemo(
     () =>
@@ -52,6 +53,7 @@ export function useSendFlowBark({
     normalizedRecipient,
     amountSats,
     barkSpendableSats,
+    barkExitingSats,
     barkFeeSats: BARK_SEND_FORM_FEE_SATS,
     networkMode,
   })

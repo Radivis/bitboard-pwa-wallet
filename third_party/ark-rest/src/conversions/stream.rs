@@ -14,6 +14,7 @@ use ark_core::server::TreeNoncesAggregatedEvent;
 use ark_core::server::TreeSignatureEvent;
 use ark_core::server::TreeSigningStartedEvent;
 use ark_core::server::TreeTxEvent;
+use ark_core::server::TreeTxNoncePks;
 use bitcoin::base64;
 use bitcoin::base64::Engine;
 use bitcoin::hex::FromHex;
@@ -47,6 +48,8 @@ impl TryFrom<models::GetEventStreamResponse> for StreamEvent {
             return Ok(StreamEvent::TreeSigningStarted(
                 tree_signing_started.try_into()?,
             ));
+        } else if let Some(tree_nonces) = response.tree_nonces {
+            return Ok(StreamEvent::TreeNonces(tree_nonces.try_into()?));
         } else if let Some(tree_nonces_aggregated) = response.tree_nonces_aggregated {
             return Ok(StreamEvent::TreeNoncesAggregated(
                 tree_nonces_aggregated.try_into()?,
@@ -195,6 +198,34 @@ impl TryFrom<models::TreeSigningStartedEvent> for TreeSigningStartedEvent {
     }
 }
 
+impl TryFrom<models::TreeNoncesEvent> for ark_core::server::TreeNoncesEvent {
+    type Error = ConversionError;
+
+    fn try_from(event: models::TreeNoncesEvent) -> Result<Self, Self::Error> {
+        let id = event
+            .id
+            .ok_or_else(|| ConversionError("Missing batch id".to_string()))?;
+        let txid_str = event
+            .txid
+            .ok_or_else(|| ConversionError("Missing txid".to_string()))?;
+        let txid =
+            Txid::from_str(&txid_str).map_err(|e| ConversionError(format!("Invalid txid: {e}")))?;
+        let nonces = TreeTxNoncePks::decode(
+            event
+                .nonces
+                .ok_or_else(|| ConversionError("Missing nonces".to_string()))?,
+        )
+        .map_err(|e| ConversionError(format!("Invalid nonces: {e}")))?;
+
+        Ok(ark_core::server::TreeNoncesEvent {
+            id,
+            topic: event.topic.unwrap_or_default(),
+            txid,
+            nonces,
+        })
+    }
+}
+
 impl TryFrom<models::TreeNoncesAggregatedEvent> for TreeNoncesAggregatedEvent {
     type Error = ConversionError;
 
@@ -321,5 +352,37 @@ impl TryFrom<models::TreeSignatureEvent> for TreeSignatureEvent {
             txid,
             signature,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn tree_nonces_sse_event_is_mapped() {
+        let mut nonces = HashMap::new();
+        nonces.insert(
+            "18845781f631c48f1c9709e23092067d06837f30aa0cd0544ac887fe91ddd166".to_string(),
+            "aa".repeat(66),
+        );
+        let response = models::GetEventStreamResponse {
+            tree_nonces: Some(models::TreeNoncesEvent {
+                id: Some("batch-1".to_string()),
+                nonces: Some(nonces),
+                topic: Some(vec!["vtxo".to_string()]),
+                txid: Some("11".repeat(32)),
+            }),
+            ..models::GetEventStreamResponse::default()
+        };
+
+        let error =
+            StreamEvent::try_from(response).expect_err("invalid nonce still enters the mapper");
+        let message = error.to_string();
+        assert!(
+            message.contains("Invalid nonces"),
+            "treeNonces must not be dropped as an unmapped event: {message}"
+        );
     }
 }

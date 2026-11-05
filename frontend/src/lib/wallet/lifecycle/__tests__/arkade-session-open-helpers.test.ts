@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const refreshArkadeStoreFromLoadedWasmMock = vi.hoisted(() => vi.fn())
+const publishArkadeDashboardFromOpenSessionMock = vi.hoisted(() => vi.fn())
 const setActiveArkadeAccountIdMock = vi.hoisted(() => vi.fn())
 const setLastOperatorSyncTimeMock = vi.hoisted(() => vi.fn())
 const setArkadeSignerMigrationHintMock = vi.hoisted(() => vi.fn())
@@ -37,8 +37,8 @@ vi.mock('@/stores/walletStore', () => ({
 }))
 
 vi.mock('@/lib/arkade/arkade-persistence-store-sync', () => ({
-  refreshArkadeStoreFromLoadedWasm: (...args: unknown[]) =>
-    refreshArkadeStoreFromLoadedWasmMock(...args),
+  publishArkadeDashboardFromOpenSession: (...args: unknown[]) =>
+    publishArkadeDashboardFromOpenSessionMock(...args),
 }))
 
 vi.mock('@/workers/arkade-factory', () => ({
@@ -109,7 +109,7 @@ describe('arkade-session-open-helpers', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     walletState.activeWalletId = 7
-    refreshArkadeStoreFromLoadedWasmMock.mockResolvedValue(undefined)
+    publishArkadeDashboardFromOpenSessionMock.mockResolvedValue(undefined)
     workerMocks.hasOpenSession.mockResolvedValue(true)
     workerMocks.reconcileActiveAccountId.mockResolvedValue(undefined)
     getArkadeWorkerIfExistsMock.mockReturnValue(workerMocks)
@@ -136,7 +136,7 @@ describe('arkade-session-open-helpers', () => {
     })
 
     expect(arkadeAccountId).toBe(TEST_ACCOUNT.id)
-    expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalledWith(TEST_ACCOUNT.id, 7)
+    expect(publishArkadeDashboardFromOpenSessionMock).toHaveBeenCalledWith(TEST_ACCOUNT.id, 7)
     expect(setActiveArkadeAccountIdMock).toHaveBeenCalledWith(TEST_ACCOUNT.id)
   })
 

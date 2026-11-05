@@ -16,7 +16,7 @@ export type RailSyncWarningBannerProps = {
   rail: DashboardRailId
   syncPhase: SyncLifecyclePhase
   loadPhase: LoadLifecyclePhase
-  warningMessage: string | null
+  warningMessages: readonly string[]
   onRetry: () => void
   isRetrying?: boolean
 }
@@ -25,12 +25,12 @@ export function RailSyncWarningBanner({
   rail,
   syncPhase,
   loadPhase,
-  warningMessage,
+  warningMessages,
   onRetry,
   isRetrying = false,
 }: RailSyncWarningBannerProps) {
   if (
-    warningMessage == null ||
+    warningMessages.length === 0 ||
     syncPhase === 'sync-error' ||
     syncPhase === 'syncing' ||
     loadPhase !== 'loaded'
@@ -43,7 +43,9 @@ export function RailSyncWarningBanner({
       rail={rail}
       variant="sync-warning"
       title={SYNC_WARNING_TITLES[rail]}
-      errorMessage={warningMessage}
+      errorMessage={warningMessages.map((message) => (
+        <p key={message}>{message}</p>
+      ))}
       onRetry={onRetry}
       isRetrying={isRetrying}
       retryLabel="Sync again"

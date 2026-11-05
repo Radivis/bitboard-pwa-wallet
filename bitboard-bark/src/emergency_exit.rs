@@ -1,11 +1,13 @@
 use std::collections::HashSet;
 
+use bitcoin_ext::{BlockDelta, BlockHeight};
 use serde::Serialize;
 
 pub const BARK_EXIT_UNKNOWN_VTXO: &str = "bark_exit_unknown_vtxo";
 pub const BARK_EXIT_DUST: &str = "bark_exit_dust";
 pub const BARK_EXIT_ALREADY_EXITED: &str = "bark_exit_already_exited";
 pub const BARK_EXIT_ALREADY_SPENT: &str = "bark_exit_already_spent";
+pub const BARK_EXIT_VTXO_SWEPT: &str = "bark_exit_vtxo_swept";
 pub const BARK_EXIT_NOTHING_STARTED: &str = "bark_exit_nothing_started";
 pub const BARK_EXIT_CANNOT_CANCEL: &str = "bark_exit_cannot_cancel";
 pub const BARK_EXIT_NOT_EXITING: &str = "bark_exit_not_exiting";
@@ -15,6 +17,393 @@ pub const BARK_EXIT_CLAIM_FEE: &str = "bark_exit_claim_fee";
 pub const BARK_EXIT_CLAIM_MISSING_INPUTS: &str = "bark_exit_claim_missing_inputs";
 pub const BARK_EXIT_NOT_CLAIMABLE: &str = "bark_exit_not_claimable";
 pub const BARK_EXIT_FAILED: &str = "bark_exit_failed";
+
+/// A live exit reserves its coin while Bark still lists that coin as spendable
+/// and the exit recorded a movement. An exit with no movement cannot name a holder.
+pub fn should_lock_exit_vtxo(state: bark::vtxo::VtxoStateKind, has_exit_movement: bool) -> bool {
+    has_exit_movement && state == bark::vtxo::VtxoStateKind::Spendable
+}
+
+/// Whose exit movement holds this coin.
+///
+/// `Unrelated` is an unlocked coin, an action lock, or a movement that is not an emergency exit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExitCoinLock {
+    This,
+    Another,
+    Unrelated,
+}
+
+/// What to do with one live exit's coin.
+///
+/// A spendable coin is locked under the exit. A coin this exit already holds
+/// stays there. A coin another exit holds is left alone. Any other lock is
+/// taken, so the operation that held it cannot spend the coin.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExitVtxoLockClaim {
+    LockUnderExit,
+    TakeFromCurrentHolder,
+    Leave,
+}
+
+pub fn exit_vtxo_lock_claim(
+    state: bark::vtxo::VtxoStateKind,
+    has_exit_movement: bool,
+    holder: ExitCoinLock,
+) -> ExitVtxoLockClaim {
+    let held_by_an_exit = match holder {
+        ExitCoinLock::This | ExitCoinLock::Another => true,
+        ExitCoinLock::Unrelated => false,
+    };
+    if !has_exit_movement || held_by_an_exit {
+        return ExitVtxoLockClaim::Leave;
+    }
+    if should_lock_exit_vtxo(state, has_exit_movement) {
+        return ExitVtxoLockClaim::LockUnderExit;
+    }
+    match state {
+        bark::vtxo::VtxoStateKind::Locked => ExitVtxoLockClaim::TakeFromCurrentHolder,
+        bark::vtxo::VtxoStateKind::Spendable
+        | bark::vtxo::VtxoStateKind::Spent
+        | bark::vtxo::VtxoStateKind::Exited => ExitVtxoLockClaim::Leave,
+    }
+}
+
+/// Forfeits are signed in the finish step, which leaves `ReadyForBroadcast`.
+/// Stopping earlier releases the inputs. Stopping later would drop a forfeit
+/// the server may already have.
+pub fn collaborative_exit_has_not_signed_forfeits(
+    progress: &bark::actions::offboard::Progress,
+) -> bool {
+    use bark::actions::offboard::Progress;
+    matches!(
+        progress,
+        Progress::Start
+            | Progress::SplitWithArkoor
+            | Progress::ArkoorRegistrationRequired { .. }
+            | Progress::ReadyForOffboard { .. }
+            | Progress::OffboardTxPrepared { .. }
+    )
+}
+
+/// Cosign is the step that locks the inputs and then asks the server to sign.
+/// Later phases already have signed VTXOs.
+pub fn arkoor_send_has_not_cosigned(progress: &bark::actions::arkoor_send::Progress) -> bool {
+    matches!(progress, bark::actions::arkoor_send::Progress::Cosigning)
+}
+
+fn wallet_error(err: impl std::fmt::Display) -> String {
+    format!("{err:#}")
+}
+
+/// Locks each live exit under that exit's movement.
+///
+/// A spendable coin is locked. A coin locked by a send, a refresh, or a
+/// collaborative exit is unlocked from that holder and locked here. A coin
+/// another exit already holds is left alone. One exit at a time: each
+/// movement is its own holder, and a rejected holder fails the call.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) async fn lock_spendable_exit_vtxos(wallet: &bark::Wallet) -> Result<(), String> {
+    let exits = wallet.exit_mgr().get_exit_vtxos().await;
+    if exits.is_empty() {
+        return Ok(());
+    }
+    let movements = wallet.history().await.map_err(wallet_error)?;
+    for exit in exits {
+        let Some(movement_id) = exit.movement_id() else {
+            continue;
+        };
+        let Ok(vtxo) = wallet.get_vtxo_by_id(exit.id()).await else {
+            continue;
+        };
+        let exit_holder = bark::vtxo::VtxoLockHolder::Movement { id: movement_id };
+        let holder = exit_coin_lock(&vtxo.state, movement_id, &movements);
+        match exit_vtxo_lock_claim(vtxo.state.kind(), true, holder) {
+            ExitVtxoLockClaim::Leave => {}
+            ExitVtxoLockClaim::LockUnderExit => {
+                wallet
+                    .lock_vtxos(std::iter::once(exit.id()), Some(exit_holder))
+                    .await
+                    .map_err(wallet_error)?;
+            }
+            ExitVtxoLockClaim::TakeFromCurrentHolder => {
+                move_vtxo_lock_to_exit(
+                    wallet,
+                    exit.id(),
+                    current_lock_holder(&vtxo.state),
+                    exit_holder,
+                )
+                .await?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn exit_coin_lock(
+    state: &bark::vtxo::VtxoState,
+    exit_movement_id: bark::movement::MovementId,
+    movements: &[bark::movement::Movement],
+) -> ExitCoinLock {
+    let Some(bark::vtxo::VtxoLockHolder::Movement { id }) = current_lock_holder(state) else {
+        return ExitCoinLock::Unrelated;
+    };
+    if id == exit_movement_id {
+        return ExitCoinLock::This;
+    }
+    let held_by_another_exit = movements.iter().any(|movement| {
+        movement.id == id
+            && movement
+                .subsystem
+                .is_subsystem(bark::subsystem::Subsystem::EXIT)
+    });
+    if held_by_another_exit {
+        ExitCoinLock::Another
+    } else {
+        ExitCoinLock::Unrelated
+    }
+}
+
+fn current_lock_holder(state: &bark::vtxo::VtxoState) -> Option<bark::vtxo::VtxoLockHolder> {
+    match state {
+        bark::vtxo::VtxoState::Locked { holder } => holder.clone(),
+        _ => None,
+    }
+}
+
+/// Unlocks `from`, then locks the exit. If the exit lock fails, the previous
+/// holder is restored so the coin is not left spendable.
+async fn move_vtxo_lock_to_exit(
+    wallet: &bark::Wallet,
+    vtxo_id: bark::ark::VtxoId,
+    from: Option<bark::vtxo::VtxoLockHolder>,
+    exit_holder: bark::vtxo::VtxoLockHolder,
+) -> Result<(), String> {
+    wallet
+        .unlock_vtxos(std::iter::once(vtxo_id), from.clone())
+        .await
+        .map_err(wallet_error)?;
+    if let Err(lock_error) = wallet
+        .lock_vtxos(std::iter::once(vtxo_id), Some(exit_holder))
+        .await
+    {
+        let restore_error = wallet
+            .lock_vtxos(std::iter::once(vtxo_id), from)
+            .await
+            .err()
+            .map(|err| format!("{err:#}"));
+        if let Some(restore_error) = restore_error {
+            return Err(format!(
+                "{:#}; restoring the previous lock also failed: {restore_error}",
+                lock_error
+            ));
+        }
+        return Err(wallet_error(lock_error));
+    }
+    Ok(())
+}
+
+/// Cancels rounds Bark can cancel, and stops spends that have not yet signed,
+/// before a whole-wallet exit selects every unspent coin.
+///
+/// A delegated round cannot be canceled. Its inputs are taken by the exit lock
+/// afterwards, and sync leaves that round alone while the exit holds them.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) async fn release_in_flight_spends_before_whole_wallet_exit(
+    wallet: &bark::Wallet,
+) -> Result<(), String> {
+    wallet
+        .cancel_all_pending_rounds()
+        .await
+        .map_err(wallet_error)?;
+    stop_unsigned_offboards(wallet, None).await?;
+    stop_uncosigned_arkoor_sends(wallet, None).await?;
+    Ok(())
+}
+
+/// Stops an unsigned spend whose inputs include a live exit, so a later sync
+/// cannot sign it. A signed forfeit or a cosigned Arkoor is left in place.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) async fn release_unsigned_spends_of_exit_vtxos(
+    wallet: &bark::Wallet,
+) -> Result<(), String> {
+    let exit_ids = wallet
+        .exit_mgr()
+        .get_exit_vtxos()
+        .await
+        .iter()
+        .map(|exit| exit.id())
+        .collect::<Vec<_>>();
+    if exit_ids.is_empty() {
+        return Ok(());
+    }
+    stop_unsigned_offboards(wallet, Some(&exit_ids)).await?;
+    stop_uncosigned_arkoor_sends(wallet, Some(&exit_ids)).await?;
+    Ok(())
+}
+
+/// True when a pending round still names an input this exit has locked.
+/// Syncing that round can forfeit the input once the server issues it.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) async fn pending_round_includes_exit_held_input(
+    wallet: &bark::Wallet,
+) -> Result<bool, String> {
+    let rounds = wallet.pending_round_states().await.map_err(wallet_error)?;
+    let movements = wallet.history().await.map_err(wallet_error)?;
+    for round in rounds {
+        for input in &round.state().participation().inputs {
+            let Ok(vtxo) = wallet.get_vtxo_by_id(input.id()).await else {
+                continue;
+            };
+            let Some(bark::vtxo::VtxoLockHolder::Movement { id }) =
+                current_lock_holder(&vtxo.state)
+            else {
+                continue;
+            };
+            let held_by_exit = movements.iter().any(|movement| {
+                movement.id == id
+                    && movement
+                        .subsystem
+                        .is_subsystem(bark::subsystem::Subsystem::EXIT)
+            });
+            if held_by_exit {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
+}
+
+async fn stop_unsigned_offboards(
+    wallet: &bark::Wallet,
+    only_these_inputs: Option<&[bark::ark::VtxoId]>,
+) -> Result<(), String> {
+    let pending = wallet.pending_offboards().await.map_err(wallet_error)?;
+    for offboard in pending {
+        if !collaborative_exit_has_not_signed_forfeits(&offboard.progress) {
+            continue;
+        }
+        if let Some(exit_ids) = only_these_inputs
+            && !offboard_names_any(&offboard, exit_ids)
+        {
+            continue;
+        }
+        wallet
+            .stop_wallet_action(&offboard.id)
+            .await
+            .map_err(wallet_error)?;
+    }
+    Ok(())
+}
+
+async fn stop_uncosigned_arkoor_sends(
+    wallet: &bark::Wallet,
+    only_these_inputs: Option<&[bark::ark::VtxoId]>,
+) -> Result<(), String> {
+    let pending = wallet.pending_arkoor_sends().await.map_err(wallet_error)?;
+    for send in pending {
+        if !arkoor_send_has_not_cosigned(&send.progress) {
+            continue;
+        }
+        if let Some(exit_ids) = only_these_inputs
+            && !send
+                .input_vtxo_ids
+                .iter()
+                .any(|input_id| exit_ids.contains(input_id))
+        {
+            continue;
+        }
+        wallet
+            .stop_wallet_action(&send.id())
+            .await
+            .map_err(wallet_error)?;
+    }
+    Ok(())
+}
+
+fn offboard_names_any(
+    offboard: &bark::actions::offboard::Offboard,
+    vtxo_ids: &[bark::ark::VtxoId],
+) -> bool {
+    offboard_named_ids(offboard).any(|named| vtxo_ids.contains(&named))
+}
+
+fn offboard_named_ids(
+    offboard: &bark::actions::offboard::Offboard,
+) -> impl Iterator<Item = bark::ark::VtxoId> + '_ {
+    let kind_ids = match &offboard.kind {
+        bark::actions::offboard::OffboardKind::OffboardWhole { input_vtxo_ids }
+        | bark::actions::offboard::OffboardKind::SendOnchain { input_vtxo_ids, .. } => {
+            input_vtxo_ids.as_slice()
+        }
+    };
+    let progress_ids: &[bark::ark::VtxoId] = match &offboard.progress {
+        bark::actions::offboard::Progress::ArkoorRegistrationRequired {
+            offboard_vtxo_ids,
+            change_vtxo_ids,
+        } => {
+            return kind_ids
+                .iter()
+                .chain(offboard_vtxo_ids)
+                .chain(change_vtxo_ids)
+                .copied()
+                .collect::<Vec<_>>()
+                .into_iter();
+        }
+        bark::actions::offboard::Progress::ReadyForOffboard {
+            offboard_vtxo_ids, ..
+        }
+        | bark::actions::offboard::Progress::OffboardTxPrepared {
+            offboard_vtxo_ids, ..
+        } => offboard_vtxo_ids,
+        _ => &[],
+    };
+    kind_ids
+        .iter()
+        .chain(progress_ids)
+        .copied()
+        .collect::<Vec<_>>()
+        .into_iter()
+}
+
+/// Releases the lock cancel left behind. Bark's cancel does not touch the VTXO.
+/// Only a movement lock whose history row is this exit and names this VTXO is released,
+/// so a send or refresh that holds the same coin keeps its lock.
+/// A retry is safe: cancel of an already-canceled exit succeeds, and unlock skips
+/// a coin that is no longer held by that movement.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) async fn release_exit_movement_lock(
+    wallet: &bark::Wallet,
+    vtxo_id: bark::ark::VtxoId,
+) -> Result<(), String> {
+    let Ok(vtxo) = wallet.get_vtxo_by_id(vtxo_id).await else {
+        return Ok(());
+    };
+    let movement_id = match &vtxo.state {
+        bark::vtxo::VtxoState::Locked {
+            holder: Some(bark::vtxo::VtxoLockHolder::Movement { id }),
+        } => *id,
+        _ => return Ok(()),
+    };
+    let movements = wallet.history().await.map_err(wallet_error)?;
+    let held_by_this_exit = movements.iter().any(|movement| {
+        movement.id == movement_id
+            && movement
+                .subsystem
+                .is_subsystem(bark::subsystem::Subsystem::EXIT)
+            && movement.input_vtxos.contains(&vtxo_id)
+    });
+    if !held_by_this_exit {
+        return Ok(());
+    }
+    wallet
+        .unlock_vtxos(
+            std::iter::once(vtxo_id),
+            Some(bark::vtxo::VtxoLockHolder::Movement { id: movement_id }),
+        )
+        .await
+        .map_err(wallet_error)
+}
 
 /// True when `after` contains an exit id that was not in `before`.
 pub fn exit_ids_grew(before: &[impl ToString], after: &[impl ToString]) -> bool {
@@ -48,12 +437,13 @@ pub enum BarkEmergencyExitStateKind {
     ClaimInProgress,
     Claimed,
     VtxoAlreadySpent,
+    VtxoSwept,
     Canceled,
 }
 
 #[cfg(test)]
 impl BarkEmergencyExitStateKind {
-    pub const ALL: [BarkEmergencyExitStateKind; 8] = [
+    pub const ALL: [BarkEmergencyExitStateKind; 9] = [
         BarkEmergencyExitStateKind::Start,
         BarkEmergencyExitStateKind::Processing,
         BarkEmergencyExitStateKind::AwaitingDelta,
@@ -61,6 +451,7 @@ impl BarkEmergencyExitStateKind {
         BarkEmergencyExitStateKind::ClaimInProgress,
         BarkEmergencyExitStateKind::Claimed,
         BarkEmergencyExitStateKind::VtxoAlreadySpent,
+        BarkEmergencyExitStateKind::VtxoSwept,
         BarkEmergencyExitStateKind::Canceled,
     ];
 }
@@ -74,6 +465,7 @@ pub fn emergency_exit_state_json(kind: BarkEmergencyExitStateKind) -> &'static s
         BarkEmergencyExitStateKind::ClaimInProgress => "claimInProgress",
         BarkEmergencyExitStateKind::Claimed => "claimed",
         BarkEmergencyExitStateKind::VtxoAlreadySpent => "vtxoAlreadySpent",
+        BarkEmergencyExitStateKind::VtxoSwept => "vtxoSwept",
         BarkEmergencyExitStateKind::Canceled => "canceled",
     }
 }
@@ -81,9 +473,9 @@ pub fn emergency_exit_state_json(kind: BarkEmergencyExitStateKind) -> &'static s
 /// Block heights Bark records once every exit transaction has confirmed and the claim timelock is running.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AwaitingDeltaHeights {
-    pub tip_height: u32,
-    pub confirmed_height: u32,
-    pub claimable_height: u32,
+    pub tip_height: BlockHeight,
+    pub confirmed_height: BlockHeight,
+    pub claimable_height: BlockHeight,
 }
 
 /// `AwaitingDelta` carries the tip, the block that confirmed the exit, and the height where a claim can be signed.
@@ -162,11 +554,11 @@ struct EmergencyExitRowJson {
     state: &'static str,
     cancelable: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    tip_height: Option<u32>,
+    tip_height: Option<BlockHeight>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    confirmed_height: Option<u32>,
+    confirmed_height: Option<BlockHeight>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    claimable_height: Option<u32>,
+    claimable_height: Option<BlockHeight>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -319,6 +711,22 @@ pub(crate) fn chain_anchor_transaction(txid: &str) -> ExitGraphTransaction {
     }
 }
 
+/// Labels for one VTXO chain, and the tree length those labels used.
+pub(crate) struct ExitGraphClassification {
+    pub tx_types: Vec<ExitGraphTxType>,
+    /// Cosigned tree length. `None` when the arkoor list is longer than the
+    /// chain: every hop stays a tree transaction, and none is that tree's leaf.
+    pub tree_len: Option<usize>,
+}
+
+/// One walk of a VTXO's exit chain: graph transactions, including the chain
+/// anchor, and the hops the seizure scan watches.
+#[cfg(target_arch = "wasm32")]
+pub(crate) struct WalkedExitChain {
+    pub graph_transactions: Vec<ExitGraphTransaction>,
+    pub hops: Vec<crate::exit_seizure::ExitHop>,
+}
+
 /// Labels each hop of one VTXO's exit chain.
 ///
 /// `past_arkoor_pubkeys` is the out-of-round suffix. Earlier hops are the
@@ -328,26 +736,84 @@ pub(crate) fn exit_graph_tx_types(
     continuation_scripts: &[bitcoin::ScriptBuf],
     arkoor_pubkeys: &[Vec<bitcoin::secp256k1::PublicKey>],
     server_pubkey: bitcoin::secp256k1::PublicKey,
-    exit_delta: u16,
-    expiry_height: u32,
-) -> Vec<ExitGraphTxType> {
+    exit_delta: BlockDelta,
+    expiry_height: BlockHeight,
+) -> ExitGraphClassification {
     if arkoor_pubkeys.len() > continuation_scripts.len() {
-        return vec![ExitGraphTxType::Tree; continuation_scripts.len()];
+        return ExitGraphClassification {
+            tx_types: vec![ExitGraphTxType::Tree; continuation_scripts.len()],
+            tree_len: None,
+        };
     }
-    let prefix_len = continuation_scripts.len() - arkoor_pubkeys.len();
-    continuation_scripts
+    let tree_len = continuation_scripts.len() - arkoor_pubkeys.len();
+    let tx_types = continuation_scripts
         .iter()
         .enumerate()
         .map(|(index, script)| {
             tx_type_for_hop(
                 index,
-                prefix_len,
+                tree_len,
                 script,
                 arkoor_pubkeys,
                 server_pubkey,
                 exit_delta,
                 expiry_height,
             )
+        })
+        .collect();
+    ExitGraphClassification {
+        tx_types,
+        tree_len: Some(tree_len),
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn walk_vtxo_exit_chain<P: bark::ark::vtxo::Policy>(
+    vtxo: &bark::ark::Vtxo<bark::ark::vtxo::Full, P>,
+) -> WalkedExitChain {
+    let items: Vec<_> = vtxo.transactions().collect();
+    let continuation_scripts = continuation_scripts_of(&items);
+    let classification = exit_graph_tx_types(
+        &continuation_scripts,
+        &vtxo.past_arkoor_pubkeys(),
+        vtxo.server_pubkey(),
+        vtxo.exit_delta(),
+        vtxo.expiry_height(),
+    );
+    let mut graph_transactions = vec![chain_anchor_transaction(
+        &vtxo.chain_anchor().txid.to_string(),
+    )];
+    let mut hops = Vec::with_capacity(items.len());
+    for (index, (item, tx_type)) in items.iter().zip(classification.tx_types).enumerate() {
+        let mut transaction = exit_graph_transaction_from_bitcoin(&item.tx);
+        transaction.tx_type = tx_type;
+        graph_transactions.push(transaction);
+        hops.push(crate::exit_seizure::ExitHop {
+            txid: item.tx.compute_txid(),
+            output_index: item.output_idx as u32,
+            role: crate::exit_seizure::hop_role(
+                tx_type == ExitGraphTxType::Checkpoint,
+                index,
+                classification.tree_len,
+            ),
+        });
+    }
+    WalkedExitChain {
+        graph_transactions,
+        hops,
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn continuation_scripts_of(items: &[bark::ark::vtxo::VtxoTxIterItem]) -> Vec<bitcoin::ScriptBuf> {
+    items
+        .iter()
+        .map(|item| {
+            item.tx
+                .output
+                .get(item.output_idx)
+                .map(|output| output.script_pubkey.clone())
+                .unwrap_or_else(bitcoin::ScriptBuf::new)
         })
         .collect()
 }
@@ -358,8 +824,8 @@ fn tx_type_for_hop(
     script: &bitcoin::ScriptBuf,
     arkoor_pubkeys: &[Vec<bitcoin::secp256k1::PublicKey>],
     server_pubkey: bitcoin::secp256k1::PublicKey,
-    exit_delta: u16,
-    expiry_height: u32,
+    exit_delta: BlockDelta,
+    expiry_height: BlockHeight,
 ) -> ExitGraphTxType {
     let Some(hop_index) = index.checked_sub(prefix_len) else {
         return ExitGraphTxType::Tree;
@@ -374,39 +840,6 @@ fn tx_type_for_hop(
     } else {
         ExitGraphTxType::Tree
     }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn exit_graph_transactions_from_vtxo<P: bark::ark::vtxo::Policy>(
-    vtxo: &bark::ark::Vtxo<bark::ark::vtxo::Full, P>,
-) -> Vec<ExitGraphTransaction> {
-    let items: Vec<_> = vtxo.transactions().collect();
-    let continuation_scripts = items
-        .iter()
-        .map(|item| {
-            item.tx
-                .output
-                .get(item.output_idx)
-                .map(|output| output.script_pubkey.clone())
-                .unwrap_or_else(bitcoin::ScriptBuf::new)
-        })
-        .collect::<Vec<_>>();
-    let tx_types = exit_graph_tx_types(
-        &continuation_scripts,
-        &vtxo.past_arkoor_pubkeys(),
-        vtxo.server_pubkey(),
-        vtxo.exit_delta(),
-        vtxo.expiry_height(),
-    );
-    let mut transactions = vec![chain_anchor_transaction(
-        &vtxo.chain_anchor().txid.to_string(),
-    )];
-    transactions.extend(items.iter().zip(tx_types).map(|(item, tx_type)| {
-        let mut transaction = exit_graph_transaction_from_bitcoin(&item.tx);
-        transaction.tx_type = tx_type;
-        transaction
-    }));
-    transactions
 }
 
 /// Merges exit chains into one graph. The last transaction that is not the chain
@@ -610,11 +1043,11 @@ mod wasm {
         BARK_EXIT_CANNOT_CANCEL, BARK_EXIT_CLAIM_FEE, BARK_EXIT_CLAIM_MISSING_INPUTS,
         BARK_EXIT_DUST, BARK_EXIT_FAILED, BARK_EXIT_INSUFFICIENT_FUNDS, BARK_EXIT_NOT_CLAIMABLE,
         BARK_EXIT_NOT_EXITING, BARK_EXIT_NOTHING_STARTED, BARK_EXIT_UNKNOWN_VTXO,
-        BarkEmergencyExitStateKind, EmergencyExitCpfpRequestJson, EmergencyExitDrainJson,
-        EmergencyExitEstimateJson, EmergencyExitProgressJson, EmergencyExitRowJson,
-        awaiting_delta_heights, cpfp_requests_needing_first_child, encode_hex, exit_ids_grew,
-        fee_rate_from_sat_per_vb, fee_rate_sat_per_vb, format_bark_exit_error, json_string,
-        zero_estimate_json,
+        BARK_EXIT_VTXO_SWEPT, BarkEmergencyExitStateKind, EmergencyExitCpfpRequestJson,
+        EmergencyExitDrainJson, EmergencyExitEstimateJson, EmergencyExitProgressJson,
+        EmergencyExitRowJson, awaiting_delta_heights, cpfp_requests_needing_first_child,
+        encode_hex, exit_ids_grew, fee_rate_from_sat_per_vb, fee_rate_sat_per_vb,
+        format_bark_exit_error, json_string, zero_estimate_json,
     };
     use crate::exit_address::parse_receive_address;
     use crate::session::session_bitcoin_network;
@@ -626,6 +1059,7 @@ mod wasm {
             bark::exit::ExitError::DustLimit { .. } => BARK_EXIT_DUST,
             bark::exit::ExitError::VtxoAlreadyExited { .. } => BARK_EXIT_ALREADY_EXITED,
             bark::exit::ExitError::VtxoAlreadySpent { .. } => BARK_EXIT_ALREADY_SPENT,
+            bark::exit::ExitError::VtxoSwept { .. } => BARK_EXIT_VTXO_SWEPT,
             bark::exit::ExitError::CannotCancelExit { .. } => BARK_EXIT_CANNOT_CANCEL,
             bark::exit::ExitError::NotExiting { .. } => BARK_EXIT_NOT_EXITING,
             bark::exit::ExitError::ExitTxAlreadyBroadcast { .. } => BARK_EXIT_ALREADY_BROADCAST,
@@ -672,6 +1106,7 @@ mod wasm {
             bark::exit::ExitStateKind::VtxoAlreadySpent => {
                 BarkEmergencyExitStateKind::VtxoAlreadySpent
             }
+            bark::exit::ExitStateKind::VtxoSwept => BarkEmergencyExitStateKind::VtxoSwept,
             bark::exit::ExitStateKind::Canceled => BarkEmergencyExitStateKind::Canceled,
         }
     }
@@ -716,7 +1151,13 @@ mod wasm {
             let estimate = map_exit_error(
                 wallet
                     .exit_mgr()
-                    .estimate_emergency_exit_fee(&vtxo_ids, wallet, Some(fee_rate), None)
+                    .estimate_emergency_exit_fee(
+                        &vtxo_ids,
+                        wallet,
+                        Some(fee_rate),
+                        None,
+                        Some(bark::exit::DEFAULT_BROADCAST_FEE_MARGIN),
+                    )
                     .await,
             )?;
             json_string(&EmergencyExitEstimateJson {
@@ -737,6 +1178,7 @@ mod wasm {
             let requested = parse_vtxo_ids(vtxo_ids)?;
             let before = wallet.exit_mgr().get_exit_vtxo_ids().await;
             if requested.is_empty() {
+                super::release_in_flight_spends_before_whole_wallet_exit(wallet).await?;
                 map_anyhow_exit(wallet.exit_mgr().start_exit_for_entire_wallet().await)?;
             } else {
                 let mut selected_vtxos = Vec::with_capacity(requested.len());
@@ -765,7 +1207,7 @@ mod wasm {
                     "Bark did not mark any VTXO for exit",
                 ));
             }
-            Ok(())
+            super::lock_spendable_exit_vtxos(wallet).await
         })
         .await
     }
@@ -781,6 +1223,7 @@ mod wasm {
     pub async fn bark_sync_exits() -> Result<String, JsValue> {
         run_with_open_wallet(async |wallet| {
             map_anyhow_exit(wallet.sync_exits().await)?;
+            super::lock_spendable_exit_vtxos(wallet).await?;
             json_string(&emergency_exit_rows(wallet).await?)
         })
         .await
@@ -830,6 +1273,7 @@ mod wasm {
     #[wasm_bindgen]
     pub async fn bark_progress_emergency_exits() -> Result<String, JsValue> {
         run_with_open_wallet(async |wallet| {
+            super::lock_spendable_exit_vtxos(wallet).await?;
             map_anyhow_exit(wallet.exit_mgr().progress_exits(wallet).await)?;
             let requests =
                 cpfp_requests_needing_first_child(wallet.exit_mgr().exits_needing_cpfp().await)
@@ -875,7 +1319,8 @@ mod wasm {
             let parsed_id = vtxo_id
                 .parse::<bark::ark::VtxoId>()
                 .map_err(|_| format_bark_exit_error(BARK_EXIT_UNKNOWN_VTXO, vtxo_id.trim()))?;
-            map_exit_error(wallet.exit_mgr().cancel_exit(parsed_id).await)
+            map_exit_error(wallet.exit_mgr().cancel_exit(parsed_id).await)?;
+            super::release_exit_movement_lock(wallet, parsed_id).await
         })
         .await
     }
@@ -961,7 +1406,7 @@ mod wasm {
         };
         Ok(super::ExitGraphChain {
             vtxo_id: vtxo_id.to_string(),
-            transactions: super::exit_graph_transactions_from_vtxo(&full_vtxo),
+            transactions: super::walk_vtxo_exit_chain(&full_vtxo).graph_transactions,
             status,
         })
     }
@@ -1023,16 +1468,133 @@ mod tests {
         BARK_EXIT_ALREADY_SPENT, BARK_EXIT_CANNOT_CANCEL, BARK_EXIT_CLAIM_FEE,
         BARK_EXIT_CLAIM_MISSING_INPUTS, BARK_EXIT_DUST, BARK_EXIT_FAILED,
         BARK_EXIT_INSUFFICIENT_FUNDS, BARK_EXIT_NOT_CLAIMABLE, BARK_EXIT_NOT_EXITING,
-        BARK_EXIT_NOTHING_STARTED, BARK_EXIT_UNKNOWN_VTXO, BarkEmergencyExitStateKind,
-        ExitGraphChain, ExitGraphChainStatus, ExitGraphTransactionKind, ExitGraphTransactionStatus,
-        ExitGraphTxType, awaiting_delta_heights, chain_anchor_transaction,
-        cpfp_requests_needing_first_child, emergency_exit_state_json,
-        exit_graph_transaction_from_bitcoin, exit_graph_tx_types, exit_ids_grew,
-        fee_rate_from_sat_per_vb, fee_rate_sat_per_vb, merge_exit_graph,
+        BARK_EXIT_NOTHING_STARTED, BARK_EXIT_UNKNOWN_VTXO, BARK_EXIT_VTXO_SWEPT,
+        BarkEmergencyExitStateKind, ExitCoinLock, ExitGraphChain, ExitGraphChainStatus,
+        ExitGraphTransactionKind, ExitGraphTransactionStatus, ExitGraphTxType, ExitVtxoLockClaim,
+        arkoor_send_has_not_cosigned, awaiting_delta_heights, chain_anchor_transaction,
+        collaborative_exit_has_not_signed_forfeits, cpfp_requests_needing_first_child,
+        emergency_exit_state_json, exit_graph_transaction_from_bitcoin, exit_graph_tx_types,
+        exit_ids_grew, exit_vtxo_lock_claim, fee_rate_from_sat_per_vb, fee_rate_sat_per_vb,
+        merge_exit_graph, should_lock_exit_vtxo,
     };
     use crate::exit_address::parse_signet_receive_address;
 
     const MAINNET_ADDRESS: &str = "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4";
+
+    #[test]
+    fn a_spendable_exit_with_a_movement_is_locked_and_other_states_are_not() {
+        assert!(should_lock_exit_vtxo(
+            bark::vtxo::VtxoStateKind::Spendable,
+            true
+        ));
+        assert!(!should_lock_exit_vtxo(
+            bark::vtxo::VtxoStateKind::Locked,
+            true
+        ));
+        assert!(!should_lock_exit_vtxo(
+            bark::vtxo::VtxoStateKind::Spent,
+            true
+        ));
+        assert!(!should_lock_exit_vtxo(
+            bark::vtxo::VtxoStateKind::Exited,
+            true
+        ));
+        assert!(!should_lock_exit_vtxo(
+            bark::vtxo::VtxoStateKind::Spendable,
+            false
+        ));
+    }
+
+    #[test]
+    fn a_lock_held_by_another_operation_is_taken_and_an_exit_lock_is_not() {
+        assert_eq!(
+            exit_vtxo_lock_claim(
+                bark::vtxo::VtxoStateKind::Spendable,
+                true,
+                ExitCoinLock::Unrelated
+            ),
+            ExitVtxoLockClaim::LockUnderExit,
+        );
+        assert_eq!(
+            exit_vtxo_lock_claim(
+                bark::vtxo::VtxoStateKind::Locked,
+                true,
+                ExitCoinLock::Unrelated
+            ),
+            ExitVtxoLockClaim::TakeFromCurrentHolder,
+        );
+        assert_eq!(
+            exit_vtxo_lock_claim(bark::vtxo::VtxoStateKind::Locked, true, ExitCoinLock::This),
+            ExitVtxoLockClaim::Leave,
+        );
+        assert_eq!(
+            exit_vtxo_lock_claim(
+                bark::vtxo::VtxoStateKind::Locked,
+                true,
+                ExitCoinLock::Another
+            ),
+            ExitVtxoLockClaim::Leave,
+        );
+        assert_eq!(
+            exit_vtxo_lock_claim(
+                bark::vtxo::VtxoStateKind::Spent,
+                true,
+                ExitCoinLock::Unrelated
+            ),
+            ExitVtxoLockClaim::Leave,
+        );
+        assert_eq!(
+            exit_vtxo_lock_claim(
+                bark::vtxo::VtxoStateKind::Exited,
+                true,
+                ExitCoinLock::Unrelated
+            ),
+            ExitVtxoLockClaim::Leave,
+        );
+        assert_eq!(
+            exit_vtxo_lock_claim(
+                bark::vtxo::VtxoStateKind::Locked,
+                false,
+                ExitCoinLock::Unrelated
+            ),
+            ExitVtxoLockClaim::Leave,
+        );
+    }
+
+    #[test]
+    fn an_unsigned_collaborative_exit_can_be_stopped_and_a_signed_one_cannot() {
+        use bark::actions::offboard::Progress;
+
+        assert!(collaborative_exit_has_not_signed_forfeits(&Progress::Start));
+        assert!(collaborative_exit_has_not_signed_forfeits(
+            &Progress::SplitWithArkoor
+        ));
+        assert!(collaborative_exit_has_not_signed_forfeits(
+            &Progress::ReadyForOffboard {
+                offboard_vtxo_ids: Vec::new(),
+                prior_txid: None,
+            }
+        ));
+        assert!(!collaborative_exit_has_not_signed_forfeits(
+            &Progress::ReadyForBroadcast {
+                offboard_vtxo_ids: Vec::new(),
+                signed_offboard_tx: bitcoin::Transaction {
+                    version: bitcoin::transaction::Version::TWO,
+                    lock_time: bitcoin::absolute::LockTime::ZERO,
+                    input: Vec::new(),
+                    output: Vec::new(),
+                },
+                movement_id: bark::movement::MovementId::new(1),
+            }
+        ));
+    }
+
+    #[test]
+    fn an_arkoor_send_can_be_stopped_only_before_it_cosigns() {
+        use bark::actions::arkoor_send::Progress;
+
+        assert!(arkoor_send_has_not_cosigned(&Progress::Cosigning));
+    }
 
     #[test]
     fn awaiting_delta_heights_come_from_the_confirmed_exit() {
@@ -1041,16 +1603,20 @@ mod tests {
         let confirmed_block = "90:0000000000000000000000000000000000000000000000000000000000000000"
             .parse()
             .expect("confirmed block");
-        let awaiting_delta = ExitState::new_awaiting_delta(100, confirmed_block, 40);
+        let awaiting_delta =
+            ExitState::new_awaiting_delta(100u32.into(), confirmed_block, 40u16.into());
         assert_eq!(
             awaiting_delta_heights(&awaiting_delta),
             Some(AwaitingDeltaHeights {
-                tip_height: 100,
-                confirmed_height: 90,
-                claimable_height: 130,
+                tip_height: bitcoin_ext::BlockHeight::new(100),
+                confirmed_height: bitcoin_ext::BlockHeight::new(90),
+                claimable_height: bitcoin_ext::BlockHeight::new(130),
             })
         );
-        assert_eq!(awaiting_delta_heights(&ExitState::new_start(100)), None);
+        assert_eq!(
+            awaiting_delta_heights(&ExitState::new_start(100u32.into())),
+            None
+        );
     }
 
     #[test]
@@ -1066,6 +1632,7 @@ mod tests {
                 "claimInProgress",
                 "claimed",
                 "vtxoAlreadySpent",
+                "vtxoSwept",
                 "canceled",
             ]
         );
@@ -1077,6 +1644,7 @@ mod tests {
         assert_eq!(BARK_EXIT_DUST, "bark_exit_dust");
         assert_eq!(BARK_EXIT_ALREADY_EXITED, "bark_exit_already_exited");
         assert_eq!(BARK_EXIT_ALREADY_SPENT, "bark_exit_already_spent");
+        assert_eq!(BARK_EXIT_VTXO_SWEPT, "bark_exit_vtxo_swept");
         assert_eq!(BARK_EXIT_NOTHING_STARTED, "bark_exit_nothing_started");
         assert_eq!(BARK_EXIT_CANNOT_CANCEL, "bark_exit_cannot_cancel");
         assert_eq!(BARK_EXIT_NOT_EXITING, "bark_exit_not_exiting");
@@ -1276,12 +1844,12 @@ mod tests {
     fn exit_graph_marks_a_checkpoint_hop_and_leaves_the_prefix_and_vtxo_hop_as_tree() {
         let user_pubkey = keypair_pubkey(1);
         let server_pubkey = keypair_pubkey(2);
-        let exit_delta = 24;
-        let expiry_height = 100;
+        let exit_delta = bitcoin_ext::BlockDelta::new(24);
+        let expiry_height = bitcoin_ext::BlockHeight::new(100);
         let checkpoint_script = bark::ark::ServerVtxoPolicy::new_checkpoint(user_pubkey)
             .script_pubkey(server_pubkey, exit_delta, expiry_height);
         let other_script = bitcoin::ScriptBuf::new();
-        let tx_types = exit_graph_tx_types(
+        let classified = exit_graph_tx_types(
             &[
                 other_script.clone(),
                 checkpoint_script.clone(),
@@ -1294,12 +1862,17 @@ mod tests {
         );
 
         assert_eq!(
-            tx_types,
+            classified.tx_types,
             vec![
                 ExitGraphTxType::Tree,
                 ExitGraphTxType::Checkpoint,
                 ExitGraphTxType::Tree,
             ]
+        );
+        assert_eq!(classified.tree_len, Some(1));
+        assert_eq!(
+            crate::exit_seizure::hop_role(false, 0, classified.tree_len),
+            crate::exit_seizure::ExitHopRole::Leaf,
         );
 
         let several_cosigners = exit_graph_tx_types(
@@ -1309,7 +1882,8 @@ mod tests {
             exit_delta,
             expiry_height,
         );
-        assert_eq!(several_cosigners, vec![ExitGraphTxType::Tree]);
+        assert_eq!(several_cosigners.tx_types, vec![ExitGraphTxType::Tree]);
+        assert_eq!(several_cosigners.tree_len, Some(0));
 
         let longer_arkoor_list = exit_graph_tx_types(
             &[checkpoint_script],
@@ -1318,7 +1892,12 @@ mod tests {
             exit_delta,
             expiry_height,
         );
-        assert_eq!(longer_arkoor_list, vec![ExitGraphTxType::Tree]);
+        assert_eq!(longer_arkoor_list.tx_types, vec![ExitGraphTxType::Tree]);
+        assert_eq!(longer_arkoor_list.tree_len, None);
+        assert_eq!(
+            crate::exit_seizure::hop_role(false, 0, longer_arkoor_list.tree_len),
+            crate::exit_seizure::ExitHopRole::Internal,
+        );
     }
 
     #[test]

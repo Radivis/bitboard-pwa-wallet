@@ -1,7 +1,7 @@
-# captaind 0.7.1 on the arkade-regtest bitcoind (service name `bitcoin`).
-# Based on bark 0.7.1 server/captaind.default.toml.
-# Core Lightning stays unset. Phase 1 keeps the 0.7.1 expiry defaults:
-#   vtxo_lifetime = 4320
+# captaind 0.8.0 on the arkade-regtest bitcoind (service name `bitcoin`).
+# Based on bark 0.8.0 server/captaind.default.toml.
+# Core Lightning stays unset. This profile shortens vtxo_lifetime. Other expiry defaults:
+#   vtxo_lifetime = 20
 #   vtxo_exit_delta = 144
 #   required_board_confirmations = 3
 #   min_board_amount = 20000 sat
@@ -89,6 +89,14 @@ otel_deployment_name = "my_regtest"
 # The maximum number of items we return to mailbox queries
 max_read_mailbox_items = 100
 
+# Number of child keys derived from a client xpub when it recovers its VTXOs
+# without the mailbox. Each key costs one EC multiplication per call.
+# Zero disables the rpc. Unset keeps captaind's default of 100000.
+
+# The maximum number of xpub recovery scans that run at once. Each scan holds
+# a database connection while it reads, and calls over the limit wait in a queue.
+max_concurrent_xpub_recoveries = 1
+
 
 ##########
 # ROUNDS #
@@ -149,8 +157,12 @@ cln_reconnect_interval = "10s"
 # Interval to double check on pending invoices
 invoice_check_interval = "3s"
 
-# The time we give xpay to try finish a payment
+# The time we give xpay to try finish a payment, unless the client asks for a
+# different time
 cln_xpay_timeout = "60s"
+
+# The longest time a client may ask us to give xpay to finish a payment
+cln_xpay_max_retry_for = "5m"
 
 # FIXME
 invoice_check_base_delay = "10s"

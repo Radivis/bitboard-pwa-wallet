@@ -72,3 +72,7 @@ pub const NETWORK_MODE_REGTEST: &str = "regtest";
 /// Matches ark-client `prepare_intent` Register `expire_at = now + 2 * 60` (ARK-UP-03).
 /// Keep the frontend `BOARDING_REGISTER_INTENT_TTL_SECS` in sync.
 pub const BOARDING_REGISTER_INTENT_TTL_SECS: i64 = 2 * 60;
+
+/// Extra hold after the registration TTL before a timed-out boarding intent may be registered
+/// again. Used when the operator did not advertise a session duration. One public-ASP round.
+pub const BOARDING_REREGISTER_MIN_HOLD_SECS: i64 = 60;
