@@ -9,8 +9,15 @@ export const ARKADE_DASHBOARD_STALE_MS = 30_000
 /** Boarding status, exit candidates, bumper info — session-bound data that changes during flows. */
 export const ARKADE_SESSION_POLL_STALE_MS = 15_000
 
-/** Boarding status background poll interval. */
+/** Boarding status background poll once UTXOs are already visible. */
 export const ARKADE_BOARDING_STATUS_REFETCH_MS = 30_000
+
+/**
+ * While the board page is open and no boarding UTXO is visible yet.
+ * arkd's cooperative window is about 30s of wall clock after confirmation, so a
+ * 30s poll would show the UTXO only after that window has closed.
+ */
+export const ARKADE_BOARDING_STATUS_EMPTY_POLL_MS = 2_000
 
 /** While a RegisterIntent is waiting for the operator, poll boarding/balance until spend. */
 export const ARKADE_PENDING_BATCH_INTENT_POLL_MS = 8_000

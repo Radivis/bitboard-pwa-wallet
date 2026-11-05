@@ -94,6 +94,20 @@ export async function readDashboardArkadeBalanceSats(page: Page): Promise<number
   return sats
 }
 
+/**
+ * Headline spendable minus boarding that is still on-chain.
+ * A settled board shows up here; an unspent boarding UTXO does not.
+ */
+export async function readDashboardArkadeOffchainSpendableSats(page: Page): Promise<number> {
+  const headlineSats = await readDashboardArkadeBalanceSats(page)
+  const boardingSpendable = page.getByTestId('arkade-balance-boarding-spendable')
+  if (!(await boardingSpendable.isVisible())) {
+    return headlineSats
+  }
+  const boardingSats = await satsFromFirstFormattedBitcoinDisplayInRoot(boardingSpendable)
+  return Math.max(0, headlineSats - (boardingSats ?? 0))
+}
+
 export async function waitForArkadeSyncIdle(
   page: Page,
   timeout = ARKADE_MOCK_UI_TIMEOUT_MS,
