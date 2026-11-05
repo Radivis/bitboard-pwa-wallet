@@ -133,6 +133,32 @@ export function isKnownEsploraProviderId(id: string): id is EsploraProviderId {
   return id === 'default' || id === 'blockstream' || id === 'legacy'
 }
 
+const ESPLORA_UPSTREAM_FAILOVER_STATUSES = new Set([429, 502, 503, 504])
+
+/** Public hosts answer with these when a full scan should try the other allowlisted mirror. */
+export function isEsploraUpstreamFailoverStatus(status: number): boolean {
+  return ESPLORA_UPSTREAM_FAILOVER_STATUSES.has(status)
+}
+
+/**
+ * Same-chain mirror when the preferred host does not connect or rate-limits.
+ * Mempool is preferred for testnet4 (Blockstream's 700/hour cap 429s a full scan).
+ * Blockstream is the mirror when Mempool itself is unreachable.
+ */
+export function esploraFallbackUpstreamBase(
+  providerId: string,
+  network: string,
+): string | null {
+  if (providerId !== 'default' || !isEsploraProxyNetwork(network)) return null
+  const preferredBase = ESPLORA_PROVIDER_BASES.default[network]
+  const blockstreamBase = ESPLORA_PROVIDER_BASES.blockstream[network]
+  if (preferredBase == null || blockstreamBase == null) return null
+  if (normalizeEsploraBaseUrl(preferredBase) === normalizeEsploraBaseUrl(blockstreamBase)) {
+    return null
+  }
+  return blockstreamBase
+}
+
 export type EsploraViteProxyEntry = {
   /** e.g. `/api/esplora/default/mainnet` */
   localPrefix: string
