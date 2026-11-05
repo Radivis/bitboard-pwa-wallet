@@ -639,11 +639,16 @@ mod scan {
     ) -> Result<BTreeMap<OutPoint, ExitOutputSpend>, String> {
         let mut spends = BTreeMap::new();
         for output in watched {
-            match wallet
+            // Bark 0.8 deprecates this for bitcoind, where it scans blocks.
+            // This WASM session uses Esplora, where the call is one outspend
+            // lookup. It is still the only ChainSource method that returns the
+            // spender txid, including a mempool spend.
+            #[allow(deprecated)]
+            let spending_inputs = wallet
                 .chain()
                 .txs_spending_inputs([output.outpoint], 0u32.into())
-                .await
-            {
+                .await;
+            match spending_inputs {
                 Ok(result) => {
                     spends.insert(
                         output.outpoint,

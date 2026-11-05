@@ -141,11 +141,13 @@ mod tests {
             .await
             .unwrap();
 
-        let flushed = envelopes.lock().expect("flush log");
-        assert_eq!(flushed.len(), 1);
+        let encoded_envelope = {
+            let flushed = envelopes.lock().expect("flush log");
+            assert_eq!(flushed.len(), 1);
+            flushed[0].clone()
+        };
         let restored =
-            SharedRecordStore::from_encoded_envelope(&flushed[0]).expect("flushed envelope");
-        drop(flushed);
+            SharedRecordStore::from_encoded_envelope(&encoded_envelope).expect("flushed envelope");
         let swept = restored
             .get(partition::VTXO, b"swept-coin")
             .await

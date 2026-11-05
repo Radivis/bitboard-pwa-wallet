@@ -26,12 +26,12 @@ pub fn should_lock_exit_vtxo(state: bark::vtxo::VtxoStateKind, has_exit_movement
 
 /// Whose exit movement holds this coin.
 ///
-/// `NotAnExit` is an unlocked coin, an action lock, or a movement that is not an emergency exit.
+/// `Unrelated` is an unlocked coin, an action lock, or a movement that is not an emergency exit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ExitCoinLock {
-    ThisExit,
-    AnotherExit,
-    NotAnExit,
+    This,
+    Another,
+    Unrelated,
 }
 
 /// What to do with one live exit's coin.
@@ -52,8 +52,8 @@ pub fn exit_vtxo_lock_claim(
     holder: ExitCoinLock,
 ) -> ExitVtxoLockClaim {
     let held_by_an_exit = match holder {
-        ExitCoinLock::ThisExit | ExitCoinLock::AnotherExit => true,
-        ExitCoinLock::NotAnExit => false,
+        ExitCoinLock::This | ExitCoinLock::Another => true,
+        ExitCoinLock::Unrelated => false,
     };
     if !has_exit_movement || held_by_an_exit {
         return ExitVtxoLockClaim::Leave;
@@ -146,10 +146,10 @@ fn exit_coin_lock(
     movements: &[bark::movement::Movement],
 ) -> ExitCoinLock {
     let Some(bark::vtxo::VtxoLockHolder::Movement { id }) = current_lock_holder(state) else {
-        return ExitCoinLock::NotAnExit;
+        return ExitCoinLock::Unrelated;
     };
     if id == exit_movement_id {
-        return ExitCoinLock::ThisExit;
+        return ExitCoinLock::This;
     }
     let held_by_another_exit = movements.iter().any(|movement| {
         movement.id == id
@@ -158,9 +158,9 @@ fn exit_coin_lock(
                 .is_subsystem(bark::subsystem::Subsystem::EXIT)
     });
     if held_by_another_exit {
-        ExitCoinLock::AnotherExit
+        ExitCoinLock::Another
     } else {
-        ExitCoinLock::NotAnExit
+        ExitCoinLock::Unrelated
     }
 }
 
@@ -283,10 +283,10 @@ async fn stop_unsigned_offboards(
         if !collaborative_exit_has_not_signed_forfeits(&offboard.progress) {
             continue;
         }
-        if let Some(exit_ids) = only_these_inputs {
-            if !offboard_names_any(&offboard, exit_ids) {
-                continue;
-            }
+        if let Some(exit_ids) = only_these_inputs
+            && !offboard_names_any(&offboard, exit_ids)
+        {
+            continue;
         }
         wallet
             .stop_wallet_action(&offboard.id)
@@ -305,14 +305,13 @@ async fn stop_uncosigned_arkoor_sends(
         if !arkoor_send_has_not_cosigned(&send.progress) {
             continue;
         }
-        if let Some(exit_ids) = only_these_inputs {
-            if !send
+        if let Some(exit_ids) = only_these_inputs
+            && !send
                 .input_vtxo_ids
                 .iter()
                 .any(|input_id| exit_ids.contains(input_id))
-            {
-                continue;
-            }
+        {
+            continue;
         }
         wallet
             .stop_wallet_action(&send.id())
@@ -1512,7 +1511,7 @@ mod tests {
             exit_vtxo_lock_claim(
                 bark::vtxo::VtxoStateKind::Spendable,
                 true,
-                ExitCoinLock::NotAnExit
+                ExitCoinLock::Unrelated
             ),
             ExitVtxoLockClaim::LockUnderExit,
         );
@@ -1520,23 +1519,19 @@ mod tests {
             exit_vtxo_lock_claim(
                 bark::vtxo::VtxoStateKind::Locked,
                 true,
-                ExitCoinLock::NotAnExit
+                ExitCoinLock::Unrelated
             ),
             ExitVtxoLockClaim::TakeFromCurrentHolder,
         );
         assert_eq!(
-            exit_vtxo_lock_claim(
-                bark::vtxo::VtxoStateKind::Locked,
-                true,
-                ExitCoinLock::ThisExit
-            ),
+            exit_vtxo_lock_claim(bark::vtxo::VtxoStateKind::Locked, true, ExitCoinLock::This),
             ExitVtxoLockClaim::Leave,
         );
         assert_eq!(
             exit_vtxo_lock_claim(
                 bark::vtxo::VtxoStateKind::Locked,
                 true,
-                ExitCoinLock::AnotherExit
+                ExitCoinLock::Another
             ),
             ExitVtxoLockClaim::Leave,
         );
@@ -1544,7 +1539,7 @@ mod tests {
             exit_vtxo_lock_claim(
                 bark::vtxo::VtxoStateKind::Spent,
                 true,
-                ExitCoinLock::NotAnExit
+                ExitCoinLock::Unrelated
             ),
             ExitVtxoLockClaim::Leave,
         );
@@ -1552,7 +1547,7 @@ mod tests {
             exit_vtxo_lock_claim(
                 bark::vtxo::VtxoStateKind::Exited,
                 true,
-                ExitCoinLock::NotAnExit
+                ExitCoinLock::Unrelated
             ),
             ExitVtxoLockClaim::Leave,
         );
@@ -1560,7 +1555,7 @@ mod tests {
             exit_vtxo_lock_claim(
                 bark::vtxo::VtxoStateKind::Locked,
                 false,
-                ExitCoinLock::NotAnExit
+                ExitCoinLock::Unrelated
             ),
             ExitVtxoLockClaim::Leave,
         );
