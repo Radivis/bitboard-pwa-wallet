@@ -351,3 +351,18 @@ export async function waitForDashboardArkadeBalanceAtLeast(
     expect(await readDashboardArkadeBalanceSats(page)).toBeGreaterThanOrEqual(minSats)
   }).toPass({ timeout })
 }
+
+/**
+ * Same floor as {@link waitForDashboardArkadeBalanceAtLeast}, ignoring boarding sats that are
+ * still inside the headline. A just-settled board can show both the new VTXO and the boarding
+ * output until the next scan sees that output spent.
+ */
+export async function waitForDashboardArkadeOffchainSpendableAtLeast(
+  page: Page,
+  minSats: number,
+  timeout = ARKADE_MOCK_UI_TIMEOUT_MS,
+): Promise<void> {
+  await expect(async () => {
+    expect(await readDashboardArkadeOffchainSpendableSats(page)).toBeGreaterThanOrEqual(minSats)
+  }).toPass({ timeout })
+}
