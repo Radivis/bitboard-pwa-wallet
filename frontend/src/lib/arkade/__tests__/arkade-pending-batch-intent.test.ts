@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   BOARDING_REGISTER_INTENT_TTL_SECS,
   arkadeRefetchIntervalWithPendingBatchIntent,
+  boardingStatusHasNoDetectedUtxos,
+  boardingStatusRefetchIntervalMs,
   classifyPendingIntentDisappearance,
   hasPendingBatchIntent,
   hasPendingKind,
@@ -23,7 +25,11 @@ import {
   pendingIntentShowsRetry,
   resetPendingBatchIntentSessionTracking,
 } from '@/lib/arkade/arkade-pending-batch-intent'
-import { ARKADE_PENDING_BATCH_INTENT_POLL_MS } from '@/lib/arkade/arkade-query-timings'
+import {
+  ARKADE_BOARDING_STATUS_EMPTY_POLL_MS,
+  ARKADE_BOARDING_STATUS_REFETCH_MS,
+  ARKADE_PENDING_BATCH_INTENT_POLL_MS,
+} from '@/lib/arkade/arkade-query-timings'
 import type { ArkadePendingBatchIntent } from '@/workers/arkade-api'
 
 const sampleIntent: ArkadePendingBatchIntent = {
@@ -133,6 +139,53 @@ describe('arkade-pending-batch-intent', () => {
     )
     expect(arkadeRefetchIntervalWithPendingBatchIntent(false, 30_000)).toBe(30_000)
     expect(arkadeRefetchIntervalWithPendingBatchIntent(false, false)).toBe(false)
+  })
+
+  it('polls an empty board page fast enough to catch a just-confirmed boarding UTXO', () => {
+    expect(boardingStatusHasNoDetectedUtxos(undefined)).toBe(true)
+    expect(
+      boardingStatusHasNoDetectedUtxos({
+        spendableSats: 0,
+        pendingSats: 0,
+        expiredSats: 0,
+      }),
+    ).toBe(true)
+    expect(
+      boardingStatusHasNoDetectedUtxos({
+        spendableSats: 200_000,
+        pendingSats: 0,
+        expiredSats: 0,
+      }),
+    ).toBe(false)
+
+    expect(
+      boardingStatusRefetchIntervalMs({
+        hasPendingIntent: false,
+        pollWhileEmpty: true,
+        hasNoDetectedUtxos: true,
+      }),
+    ).toBe(ARKADE_BOARDING_STATUS_EMPTY_POLL_MS)
+    expect(
+      boardingStatusRefetchIntervalMs({
+        hasPendingIntent: false,
+        pollWhileEmpty: true,
+        hasNoDetectedUtxos: false,
+      }),
+    ).toBe(ARKADE_BOARDING_STATUS_REFETCH_MS)
+    expect(
+      boardingStatusRefetchIntervalMs({
+        hasPendingIntent: false,
+        pollWhileEmpty: false,
+        hasNoDetectedUtxos: true,
+      }),
+    ).toBe(ARKADE_BOARDING_STATUS_REFETCH_MS)
+    expect(
+      boardingStatusRefetchIntervalMs({
+        hasPendingIntent: true,
+        pollWhileEmpty: true,
+        hasNoDetectedUtxos: true,
+      }),
+    ).toBe(ARKADE_PENDING_BATCH_INTENT_POLL_MS)
   })
 
   it('pending_overlaps_onchain_and_kind_helpers', () => {

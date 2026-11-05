@@ -27,10 +27,15 @@ import type {
   ArkadePostLoadSyncParams,
   ArkadeSyncLifecycleSnapshot,
   ArkadeSyncParams,
+  ArkadeSyncKind,
   ArkadeSyncThenSaveParams,
 } from '@/lib/wallet/lifecycle/arkade-sync-lifecycle-types'
 import type { ArkadeSaveParams } from '@/lib/wallet/lifecycle/arkade-save-lifecycle-types'
-import { operatorSyncSchedulesBackgroundFull, shouldScheduleBackgroundFullVtxoReconcile } from '@/lib/arkade/arkade-operator-sync-policy'
+import {
+  operatorSyncSchedulesBackgroundFull,
+  shouldScheduleBackgroundFullVtxoReconcile,
+  shouldScheduleBackgroundKeyDiscovery,
+} from '@/lib/arkade/arkade-operator-sync-policy'
 import type {
   ArkadeOperatorSyncResult,
   ArkadePendingBatchIntent,
@@ -58,7 +63,7 @@ let snapshot: ArkadeSyncLifecycleSnapshot = {
   syncPhase: 'not-configured',
   railScope: null,
   errorMessage: null,
-  warningMessage: null,
+  warningMessages: [],
 }
 
 let dashboardPollTimer: ReturnType<typeof setTimeout> | null = null
@@ -131,31 +136,53 @@ async function runArkadeSignerMigrationBody(
   return worker.migrateDeprecatedSignerVtxos(onIntentRegistered)
 }
 
-function mergeArkadeSyncWarningMessages(
-  syncResult: ArkadeOperatorSyncResult,
-  dashboardScanWarning: string | null,
-): string | null {
-  const parts = [
-    syncResult.keyDiscoveryWarning,
-    syncResult.exitingVtxoWarning,
-    dashboardScanWarning,
-  ].filter((part): part is string => part != null && part !== '')
-  if (parts.length === 0) {
+type ArkadeSyncWarningSlots = {
+  keyDiscovery: string | null
+  exitingVtxo: string | null
+  backgroundReconcile: string | null
+}
+
+function emptyWarningSlots(): ArkadeSyncWarningSlots {
+  return {
+    keyDiscovery: null,
+    exitingVtxo: null,
+    backgroundReconcile: null,
+  }
+}
+
+function nonEmptyWarning(message: string | null | undefined): string | null {
+  if (message == null || message === '') {
     return null
   }
-  return parts.join('\n')
+  return message
+}
+
+let warningSlots: ArkadeSyncWarningSlots = emptyWarningSlots()
+
+function activeWarningMessages(): string[] {
+  return [
+    warningSlots.keyDiscovery,
+    warningSlots.exitingVtxo,
+    warningSlots.backgroundReconcile,
+  ].filter((message): message is string => message != null)
 }
 
 function applySuccessfulArkadeSyncSnapshot(
   scope: ArkadeRailScope,
   syncResult: ArkadeOperatorSyncResult,
-  dashboardScanWarning: string | null,
 ): void {
+  const keyDiscoveryWarning = nonEmptyWarning(syncResult.keyDiscoveryWarning)
+  if (keyDiscoveryWarning != null) {
+    warningSlots.keyDiscovery = keyDiscoveryWarning
+  } else if (syncResult.skippedKeyDiscovery !== true) {
+    warningSlots.keyDiscovery = null
+  }
+  warningSlots.exitingVtxo = nonEmptyWarning(syncResult.exitingVtxoWarning)
   setSnapshot({
     syncPhase: 'not-syncing',
     railScope: scope,
     errorMessage: null,
-    warningMessage: mergeArkadeSyncWarningMessages(syncResult, dashboardScanWarning),
+    warningMessages: activeWarningMessages(),
   })
 }
 
@@ -180,33 +207,87 @@ async function invalidateOperatorTrustQueriesForScope(scope: ArkadeRailScope): P
   })
 }
 
-let lastBackgroundReconcileWarning: string | null = null
+let backgroundKeyDiscoveryScheduledThisSession = false
 
-function recordBackgroundReconcileWarning(warningMessage: string): void {
-  lastBackgroundReconcileWarning = warningMessage
+function publishWarningSlots(): void {
   const current = getArkadeSyncLifecycleSnapshot()
   setSnapshot({
     ...current,
-    warningMessage,
+    warningMessages: activeWarningMessages(),
   })
 }
 
-function clearBackgroundReconcileWarningIfCurrent(): void {
-  const current = getArkadeSyncLifecycleSnapshot()
-  const staleWarning = lastBackgroundReconcileWarning
-  lastBackgroundReconcileWarning = null
-  if (staleWarning == null || current.warningMessage !== staleWarning) {
+function recordBackgroundReconcileWarning(warningMessage: string): void {
+  warningSlots.backgroundReconcile = warningMessage
+  publishWarningSlots()
+}
+
+function clearBackgroundReconcileWarning(): void {
+  if (warningSlots.backgroundReconcile == null) {
     return
   }
-  setSnapshot({
-    ...current,
-    warningMessage: null,
-  })
+  warningSlots.backgroundReconcile = null
+  publishWarningSlots()
+}
+
+function recordBackgroundKeyDiscoveryWarning(warningMessage: string): void {
+  warningSlots.keyDiscovery = warningMessage
+  publishWarningSlots()
+}
+
+function clearBackgroundKeyDiscoveryWarning(): void {
+  if (warningSlots.keyDiscovery == null) {
+    return
+  }
+  warningSlots.keyDiscovery = null
+  publishWarningSlots()
+}
+
+function scheduleBackgroundWorkAfterUserFacingSync(
+  syncKind: ArkadeSyncKind,
+  syncResult: ArkadeOperatorSyncResult,
+): void {
+  const worker = getArkadeWorker()
+  if (
+    shouldScheduleBackgroundKeyDiscovery(
+      syncKind,
+      backgroundKeyDiscoveryScheduledThisSession,
+      syncResult.skippedKeyDiscovery,
+    )
+  ) {
+    if (syncKind === 'postLoad') {
+      backgroundKeyDiscoveryScheduledThisSession = true
+    }
+    worker.scheduleBackgroundKeyDiscovery(
+      shouldScheduleBackgroundFullVtxoReconcile(syncResult.fullReconcileDue),
+    )
+    return
+  }
+  if (shouldScheduleBackgroundFullVtxoReconcile(syncResult.fullReconcileDue)) {
+    worker.scheduleBackgroundFullVtxoReconcile()
+  }
 }
 
 async function handleBackgroundFullVtxoReconcileFinished(
   outcome: BackgroundFullVtxoReconcileOutcome,
 ): Promise<void> {
+  if (outcome.blockedByAutonomousMode) {
+    return
+  }
+  if (outcome.exitingVtxoWarning != null && outcome.exitingVtxoWarning !== '') {
+    warningSlots.exitingVtxo = outcome.exitingVtxoWarning
+    publishWarningSlots()
+  }
+  if (outcome.keyDiscoveryFailed) {
+    recordBackgroundKeyDiscoveryWarning(
+      outcome.warningMessage ??
+        'Offchain receive keys could not be refreshed. Balance may be incomplete until the next successful sync.',
+    )
+    return
+  }
+  if (outcome.keyDiscoveryCompleted) {
+    clearBackgroundKeyDiscoveryWarning()
+  }
   if (!outcome.ok) {
     recordBackgroundReconcileWarning(
       outcome.warningMessage ?? 'Full VTXO reconcile failed',
@@ -214,7 +295,7 @@ async function handleBackgroundFullVtxoReconcileFinished(
     return
   }
   if (!outcome.operatorTrustPending) {
-    clearBackgroundReconcileWarningIfCurrent()
+    clearBackgroundReconcileWarning()
   }
   const scope = getArkadeSyncLifecycleSnapshot().railScope
   if (scope == null) {
@@ -245,34 +326,37 @@ function ensureBackgroundFullReconcileFollowUp(): void {
   )
 }
 
-async function refreshLiveDashboardAfterOperatorSync(
+async function refreshLiveDashboardAfterOperatorAttempt(
   scope: ArkadeRailScope,
-): Promise<string | null> {
-  try {
-    await refreshArkadeStoreFromLoadedWasm(scope.arkadeAccountId, scope.walletId)
-    return null
-  } catch (error) {
-    console.warn('Arkade live dashboard refresh failed after operator sync', error)
-    return userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK)
-  }
+): Promise<void> {
+  await refreshArkadeStoreFromLoadedWasm(scope.arkadeAccountId, scope.walletId)
 }
 
 async function runArkadeOperatorSyncBody(
   scope: ArkadeRailScope,
   scheduleBackgroundFull: boolean,
-): Promise<{
-  syncResult: ArkadeOperatorSyncResult
-  dashboardScanWarning: string | null
-}> {
+  syncKind: ArkadeSyncKind,
+): Promise<ArkadeOperatorSyncResult> {
   ensureBackgroundFullReconcileFollowUp()
   const worker = getArkadeWorker()
-  const syncResult = await worker.syncWithOperator(scheduleBackgroundFull)
-  const dashboardScanWarning = await refreshLiveDashboardAfterOperatorSync(scope)
-  await invalidateOperatorTrustQueriesForScope(scope)
-  if (shouldScheduleBackgroundFullVtxoReconcile(syncResult.fullReconcileDue)) {
-    worker.scheduleBackgroundFullVtxoReconcile()
+  let syncResult: ArkadeOperatorSyncResult
+  try {
+    syncResult = await worker.syncWithOperator(scheduleBackgroundFull)
+  } catch (operatorError) {
+    try {
+      await refreshLiveDashboardAfterOperatorAttempt(scope)
+    } catch (refreshError) {
+      console.warn(
+        'Arkade live dashboard refresh failed after operator sync error',
+        refreshError,
+      )
+    }
+    throw operatorError
   }
-  return { syncResult, dashboardScanWarning }
+  await refreshLiveDashboardAfterOperatorAttempt(scope)
+  await invalidateOperatorTrustQueriesForScope(scope)
+  scheduleBackgroundWorkAfterUserFacingSync(syncKind, syncResult)
+  return syncResult
 }
 
 export function getArkadeSyncLifecycleSnapshot(): ArkadeSyncLifecycleSnapshot {
@@ -304,7 +388,8 @@ export async function awaitArkadeSyncQuiescence(): Promise<void> {
 
 /** Clears sync lifecycle after session teardown (see {@link closeArkadeSession}). */
 export function forceResetArkadeSyncLifecycleForTeardown(): void {
-  lastBackgroundReconcileWarning = null
+  warningSlots = emptyWarningSlots()
+  backgroundKeyDiscoveryScheduledThisSession = false
   clearDashboardPollSchedule()
   lastDashboardPollStartedAtMs = 0
   inFlightSyncTracker.clearCurrent()
@@ -312,7 +397,7 @@ export function forceResetArkadeSyncLifecycleForTeardown(): void {
     syncPhase: 'not-configured',
     railScope: null,
     errorMessage: null,
-    warningMessage: null,
+    warningMessages: [],
   })
 }
 
@@ -325,7 +410,7 @@ export function detachArkadeSyncSnapshotIfDifferentWallet(nextWalletId: number):
     syncPhase: 'not-configured',
     railScope: null,
     errorMessage: null,
-    warningMessage: null,
+    warningMessages: [],
   })
 }
 
@@ -341,7 +426,7 @@ function clearArkadeSyncSnapshotIfItBelongsToWallet(walletId: number): void {
     syncPhase: 'not-configured',
     railScope: null,
     errorMessage: null,
-    warningMessage: null,
+    warningMessages: [],
   })
 }
 
@@ -356,7 +441,7 @@ export function configureArkadeSyncForLoadedRail(scope: ArkadeRailScope): void {
     syncPhase: 'not-syncing',
     railScope: scope,
     errorMessage: null,
-    warningMessage: null,
+    warningMessages: [],
   })
   configureArkadeSaveForLoadedRail(scope)
 }
@@ -376,7 +461,7 @@ export function syncArkadeSyncLifecycleWithLockPhase(lockPhase: LockLifecyclePha
     syncPhase: 'not-configured',
     railScope: null,
     errorMessage: null,
-    warningMessage: null,
+    warningMessages: [],
   })
 }
 
@@ -428,7 +513,7 @@ export async function orchestrateArkadeSyncThenSave(
           syncPhase: 'syncing',
           railScope: scope,
           errorMessage: null,
-          warningMessage: null,
+          warningMessages: [],
         })
 
         try {
@@ -441,11 +526,12 @@ export async function orchestrateArkadeSyncThenSave(
               await orchestrateArkadeSave(toSaveParams(params))
             }
             try {
-              const { syncResult, dashboardScanWarning } = await runArkadeOperatorSyncBody(
+              const syncResult = await runArkadeOperatorSyncBody(
                 scope,
                 operatorSyncSchedulesBackgroundFull('signerMigration'),
+                'signerMigration',
               )
-              applySuccessfulArkadeSyncSnapshot(scope, syncResult, dashboardScanWarning)
+              applySuccessfulArkadeSyncSnapshot(scope, syncResult)
             } catch (syncError) {
               setSnapshot({
                 syncPhase: 'sync-error',
@@ -454,22 +540,23 @@ export async function orchestrateArkadeSyncThenSave(
                   syncError,
                   LIFECYCLE_SYNC_ERROR_FALLBACK,
                 ),
-                warningMessage: null,
+                warningMessages: [],
               })
               params.onSyncError?.(syncError)
             }
             return
           }
 
-          const { syncResult, dashboardScanWarning } = await runArkadeOperatorSyncBody(
+          const syncResult = await runArkadeOperatorSyncBody(
             scope,
             operatorSyncSchedulesBackgroundFull(params.syncKind),
+            params.syncKind,
           )
           if (!arkadeSyncTargetsActiveWallet(params.walletId)) {
             clearArkadeSyncSnapshotIfItBelongsToWallet(params.walletId)
             return
           }
-          applySuccessfulArkadeSyncSnapshot(scope, syncResult, dashboardScanWarning)
+          applySuccessfulArkadeSyncSnapshot(scope, syncResult)
           try {
             await orchestrateArkadeSave(toSaveParams(params))
           } catch (saveError) {
@@ -486,7 +573,7 @@ export async function orchestrateArkadeSyncThenSave(
             syncPhase: 'sync-error',
             railScope: scope,
             errorMessage: userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK),
-            warningMessage: null,
+            warningMessages: [],
           })
           params.onSyncError?.(error)
           if (throwOnError) {
@@ -594,11 +681,12 @@ export function resetArkadeSyncLifecycleStateForTests(): void {
     syncPhase: 'not-configured',
     railScope: null,
     errorMessage: null,
-    warningMessage: null,
+    warningMessages: [],
   }
   inFlightSyncTracker.clearCurrent()
   clearDashboardPollSchedule()
   lastDashboardPollStartedAtMs = 0
-  lastBackgroundReconcileWarning = null
+  warningSlots = emptyWarningSlots()
+  backgroundKeyDiscoveryScheduledThisSession = false
   listeners.clear()
 }

@@ -27,6 +27,7 @@ const arkadeLifecycleState = vi.hoisted(() => ({
   sync: {
     syncPhase: 'not-syncing' as const,
     errorMessage: null as string | null,
+    warningMessages: [] as string[],
   },
 }))
 
@@ -151,6 +152,7 @@ describe('ArkadeDashboardBalance', () => {
     arkadeLifecycleState.sync = {
       syncPhase: 'not-syncing',
       errorMessage: null,
+      warningMessages: [],
     }
     balanceQueryMock.mockReturnValue({
       isLoading: false,
@@ -333,6 +335,7 @@ describe('ArkadeDashboardBalance', () => {
     arkadeLifecycleState.sync = {
       syncPhase: 'sync-error',
       errorMessage: 'failed to get VTXOs for addresses',
+      warningMessages: [],
     }
     renderWithProviders(<ArkadeDashboardBalance />)
     expect(screen.getByTestId('wallet-sync-error-banner-arkade')).toBeInTheDocument()

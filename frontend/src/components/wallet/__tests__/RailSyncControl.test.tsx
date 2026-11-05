@@ -101,7 +101,7 @@ describe('RailSyncControl', () => {
         syncPhase="not-syncing"
         lastSyncedAt="2025-01-15T10:30:00.000Z"
         onSync={vi.fn()}
-        syncWarningMessage="Offchain receive keys could not be refreshed."
+        syncWarningMessages={['Offchain receive keys could not be refreshed.']}
         syncWarningDetailInBanner
       />,
     )

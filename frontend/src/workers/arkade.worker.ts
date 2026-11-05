@@ -25,6 +25,8 @@ import {
 } from '@/workers/arkade-worker-encrypted-payload'
 import type {
   ArkadeBalanceInfo,
+  ArkadeLiveDashboard,
+  ArkadePersistedDashboard,
   ArkadeBatchJoinResult,
   ArkadeBoardingStatus,
   ArkadeCollaborativeExitFeeEstimate,
@@ -36,7 +38,6 @@ import type {
   ArkadeOnchainBumperInfo,
   ArkadeOperatorSyncResult,
   ArkadePaymentRow,
-  ArkadePersistedDashboard,
   ArkadePendingBatchIntentActionParams,
   ArkadeRecoverableVtxoFeeEstimate,
   ArkadeSendParams,
@@ -79,7 +80,9 @@ import {
   shouldScheduleBackgroundFullVtxoReconcile,
 } from '@/lib/arkade/arkade-operator-sync-policy'
 import {
-  backgroundFullReconcileFinishedOutcome,
+  backgroundMaintenanceDeferral,
+  backgroundMaintenanceFinishedOutcome,
+  backgroundWorkAfterLeavingAutonomousMode,
   createSingleFlightScheduler,
 } from '@/lib/arkade/background-full-vtxo-reconcile'
 import { loadBitboardArkadeWasm } from '@/lib/arkade/load-bitboard-arkade-wasm'
@@ -275,23 +278,51 @@ let onBackgroundFullReconcileFinished:
   | ((outcome: BackgroundFullVtxoReconcileOutcome) => void | Promise<void>)
   | null = null
 
-const scheduleBackgroundFullVtxoReconcileSingleFlight = createSingleFlightScheduler(async () => {
+let backgroundMaintenanceRunsDiscovery = false
+let backgroundMaintenanceRunsFullReconcile = false
+let discoveryDeferredUntilAutonomousEnds = false
+let fullReconcileDeferredUntilAutonomousEnds = false
+
+const runBackgroundMaintenanceSingleFlight = createSingleFlightScheduler(async () => {
+  const runDiscovery = backgroundMaintenanceRunsDiscovery
+  const runFullReconcile = backgroundMaintenanceRunsFullReconcile
+  backgroundMaintenanceRunsDiscovery = false
+  backgroundMaintenanceRunsFullReconcile = false
+  if (!runDiscovery && !runFullReconcile) {
+    return
+  }
+  const deferral = backgroundMaintenanceDeferral({
+    runDiscovery,
+    runFullReconcile,
+    autonomousActive: await getAutonomousModeActive(),
+  })
+  if (deferral.defer) {
+    discoveryDeferredUntilAutonomousEnds = true
+    fullReconcileDeferredUntilAutonomousEnds =
+      fullReconcileDeferredUntilAutonomousEnds || deferral.fullReconcileDeferred
+    await onBackgroundFullReconcileFinished?.({ ok: true, blockedByAutonomousMode: true })
+    return
+  }
   const reconcileScope = captureOpenPersistScope()
   try {
-    const reconcileResult: unknown = await invokeWasmArkade((wasmModule) =>
-      wasmModule.arkade_reconcile_full_offchain_vtxo_list() as Promise<unknown>,
-    )
+    const reconcileResult: unknown = await invokeWasmArkade((wasmModule) => {
+      if (runDiscovery) {
+        return wasmModule.arkade_background_key_discovery(runFullReconcile)
+      }
+      return wasmModule.arkade_reconcile_full_offchain_vtxo_list() as Promise<unknown>
+    })
     if (!stampedPersistScopeStillMatchesOpenSession(reconcileScope, activeSessionParams)) {
       await onBackgroundFullReconcileFinished?.({
         ok: false,
-        warningMessage:
-          'Full VTXO reconcile was discarded because the wallet session changed',
+        warningMessage: runDiscovery
+          ? 'Background key discovery was discarded because the wallet session changed'
+          : 'Full VTXO reconcile was discarded because the wallet session changed',
       })
       return
     }
     await flushSdkPersistenceNowOrThrow(reconcileScope)
     await onBackgroundFullReconcileFinished?.(
-      backgroundFullReconcileFinishedOutcome(reconcileResult),
+      backgroundMaintenanceFinishedOutcome(reconcileResult, runDiscovery),
     )
   } catch (error) {
     const warningMessage =
@@ -299,6 +330,19 @@ const scheduleBackgroundFullVtxoReconcileSingleFlight = createSingleFlightSchedu
     await onBackgroundFullReconcileFinished?.({ ok: false, warningMessage })
   }
 })
+
+function scheduleBackgroundFullVtxoReconcileSingleFlight(): void {
+  backgroundMaintenanceRunsFullReconcile = true
+  runBackgroundMaintenanceSingleFlight()
+}
+
+function scheduleBackgroundKeyDiscoverySingleFlight(includeFullReconcile: boolean): void {
+  backgroundMaintenanceRunsDiscovery = true
+  if (includeFullReconcile) {
+    backgroundMaintenanceRunsFullReconcile = true
+  }
+  runBackgroundMaintenanceSingleFlight()
+}
 
 function scheduleBackgroundFullFromSyncResult(result: ArkadeOperatorSyncResult): void {
   if (shouldScheduleBackgroundFullVtxoReconcile(result.fullReconcileDue)) {
@@ -536,6 +580,10 @@ const arkadeService: ArkadeService = {
     return syncWithOperatorCore(scheduleBackgroundFull)
   },
 
+  scheduleBackgroundKeyDiscovery(includeFullReconcile: boolean): void {
+    scheduleBackgroundKeyDiscoverySingleFlight(includeFullReconcile)
+  },
+
   scheduleBackgroundFullVtxoReconcile(): void {
     scheduleBackgroundFullVtxoReconcileSingleFlight()
   },
@@ -556,7 +604,18 @@ const arkadeService: ArkadeService = {
       wasmModule.arkade_exit_autonomous_mode(),
     )) as ArkadeOperatorSyncResult
     await flushSdkPersistenceNowOrThrow()
-    scheduleBackgroundFullFromSyncResult(result ?? {})
+    const followUp = backgroundWorkAfterLeavingAutonomousMode({
+      discoveryWasDeferred: discoveryDeferredUntilAutonomousEnds,
+      fullReconcileWasDeferred: fullReconcileDeferredUntilAutonomousEnds,
+      fullReconcileDue: result?.fullReconcileDue,
+    })
+    discoveryDeferredUntilAutonomousEnds = false
+    fullReconcileDeferredUntilAutonomousEnds = false
+    if (followUp.scheduleKeyDiscovery) {
+      scheduleBackgroundKeyDiscoverySingleFlight(followUp.includeFullReconcile)
+    } else if (followUp.scheduleFullReconcileOnly) {
+      scheduleBackgroundFullVtxoReconcileSingleFlight()
+    }
   },
 
   async getAutonomousModeStatus(): Promise<ArkadeAutonomousModeStatus> {
@@ -672,6 +731,12 @@ const arkadeService: ArkadeService = {
     return invokeWasmArkade(
       (wasmModule) =>
         wasmModule.arkade_get_persisted_dashboard() as ArkadePersistedDashboard,
+    )
+  },
+
+  async getLiveDashboard(): Promise<ArkadeLiveDashboard> {
+    return invokeWasmArkade(
+      (wasmModule) => wasmModule.arkade_get_live_dashboard() as Promise<ArkadeLiveDashboard>,
     )
   },
 

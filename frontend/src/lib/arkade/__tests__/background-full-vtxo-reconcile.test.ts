@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   backgroundFullReconcileFinishedOutcome,
+  backgroundMaintenanceDeferral,
+  backgroundMaintenanceFinishedOutcome,
+  backgroundWorkAfterLeavingAutonomousMode,
   createSingleFlightScheduler,
 } from '@/lib/arkade/background-full-vtxo-reconcile'
 
@@ -13,6 +16,77 @@ describe('background full vtxo reconcile outcome', () => {
       ok: true,
     })
     expect(backgroundFullReconcileFinishedOutcome(undefined)).toEqual({ ok: true })
+  })
+
+  it('keeps a catch-up warning distinct from a failed discover_keys', () => {
+    expect(
+      backgroundMaintenanceFinishedOutcome(
+        {
+          keyDiscoveryCompleted: true,
+          syncWarning: 'an exiting VTXO could not be reconciled',
+        },
+        true,
+      ),
+    ).toEqual({
+      ok: true,
+      keyDiscoveryCompleted: true,
+      exitingVtxoWarning: 'an exiting VTXO could not be reconciled',
+    })
+    expect(
+      backgroundMaintenanceFinishedOutcome(
+        {
+          keyDiscoveryCompleted: false,
+          keyDiscoveryWarning: 'indexer timeout',
+        },
+        true,
+      ),
+    ).toEqual({
+      ok: false,
+      keyDiscoveryFailed: true,
+      warningMessage: 'indexer timeout',
+    })
+  })
+
+  it('defers discovery and a bundled full list while autonomous mode is on', () => {
+    expect(
+      backgroundMaintenanceDeferral({
+        runDiscovery: true,
+        runFullReconcile: true,
+        autonomousActive: true,
+      }),
+    ).toEqual({ defer: true, fullReconcileDeferred: true })
+    expect(
+      backgroundMaintenanceDeferral({
+        runDiscovery: false,
+        runFullReconcile: true,
+        autonomousActive: true,
+      }),
+    ).toEqual({ defer: false, fullReconcileDeferred: false })
+  })
+
+  it('runs deferred discovery when autonomous mode ends and keeps a due full list behind it', () => {
+    expect(
+      backgroundWorkAfterLeavingAutonomousMode({
+        discoveryWasDeferred: true,
+        fullReconcileWasDeferred: true,
+        fullReconcileDue: false,
+      }),
+    ).toEqual({
+      scheduleKeyDiscovery: true,
+      includeFullReconcile: true,
+      scheduleFullReconcileOnly: false,
+    })
+    expect(
+      backgroundWorkAfterLeavingAutonomousMode({
+        discoveryWasDeferred: false,
+        fullReconcileWasDeferred: false,
+        fullReconcileDue: true,
+      }),
+    ).toEqual({
+      scheduleKeyDiscovery: false,
+      includeFullReconcile: false,
+      scheduleFullReconcileOnly: true,
+    })
   })
 })
 

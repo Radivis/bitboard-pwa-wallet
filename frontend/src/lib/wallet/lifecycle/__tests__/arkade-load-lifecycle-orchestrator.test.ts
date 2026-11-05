@@ -41,7 +41,7 @@ const setActiveArkadeAccountIdMock = vi.hoisted(() => vi.fn())
 const setLastOperatorSyncTimeMock = vi.hoisted(() => vi.fn())
 const setArkadeSignerMigrationHintMock = vi.hoisted(() => vi.fn())
 const refreshArkadeStoreFromLoadedWasmMock = vi.hoisted(() => vi.fn())
-const publishArkadeDashboardFromPersistedEnvelopeMock = vi.hoisted(() => vi.fn())
+const publishArkadeDashboardFromOpenSessionMock = vi.hoisted(() => vi.fn())
 const findActiveArkadeAccountSummaryMock = vi.hoisted(() => vi.fn())
 const ensureArkadeAccountMock = vi.hoisted(() => vi.fn())
 const orchestrateArkadePostLoadSyncMock = vi.hoisted(() => vi.fn())
@@ -119,8 +119,8 @@ vi.mock('@/lib/arkade/arkade-accounts', async (importOriginal) => {
 vi.mock('@/lib/arkade/arkade-persistence-store-sync', () => ({
   refreshArkadeStoreFromLoadedWasm: (...args: unknown[]) =>
     refreshArkadeStoreFromLoadedWasmMock(...args),
-  publishArkadeDashboardFromPersistedEnvelope: (...args: unknown[]) =>
-    publishArkadeDashboardFromPersistedEnvelopeMock(...args),
+  publishArkadeDashboardFromOpenSession: (...args: unknown[]) =>
+    publishArkadeDashboardFromOpenSessionMock(...args),
   clearArkadeDashboardStore: (...args: unknown[]) =>
     clearArkadeDashboardStoreMock(...args),
 }))
@@ -176,7 +176,7 @@ describe('arkade-load-lifecycle-orchestrator', () => {
       createdAt: '2020-01-01T00:00:00.000Z',
     })
     refreshArkadeStoreFromLoadedWasmMock.mockResolvedValue(undefined)
-    publishArkadeDashboardFromPersistedEnvelopeMock.mockResolvedValue(undefined)
+    publishArkadeDashboardFromOpenSessionMock.mockResolvedValue(undefined)
     orchestrateArkadePostLoadSyncMock.mockResolvedValue(undefined)
     closeArkadeSessionMock.mockResolvedValue(undefined)
   })
@@ -191,10 +191,10 @@ describe('arkade-load-lifecycle-orchestrator', () => {
     expect(workerMocks.openSession).not.toHaveBeenCalled()
   })
 
-  it('load success publishes the persisted envelope without the live Esplora refresh', async () => {
+  it('load success publishes the envelope without a live refresh in the load body', async () => {
     const callOrder: string[] = []
-    publishArkadeDashboardFromPersistedEnvelopeMock.mockImplementation(async () => {
-      callOrder.push('publishEnvelope')
+    publishArkadeDashboardFromOpenSessionMock.mockImplementation(async () => {
+      callOrder.push('publish')
     })
     setActiveArkadeAccountIdMock.mockImplementation(() => {
       callOrder.push('setActive')
@@ -204,7 +204,7 @@ describe('arkade-load-lifecycle-orchestrator', () => {
 
     expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loaded')
     expect(workerMocks.openSession).toHaveBeenCalled()
-    expect(callOrder).toEqual(['publishEnvelope', 'setActive'])
+    expect(callOrder).toEqual(['publish', 'setActive'])
     expect(refreshArkadeStoreFromLoadedWasmMock).not.toHaveBeenCalled()
     expect(orchestrateArkadePostLoadSyncMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -232,23 +232,25 @@ describe('arkade-load-lifecycle-orchestrator', () => {
 
     expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loaded')
     expect(workerMocks.syncBumperWallet).not.toHaveBeenCalled()
-    expect(publishArkadeDashboardFromPersistedEnvelopeMock).toHaveBeenCalled()
+    expect(publishArkadeDashboardFromOpenSessionMock).toHaveBeenCalled()
     expect(refreshArkadeStoreFromLoadedWasmMock).not.toHaveBeenCalled()
   })
 
-  it('a hanging live dashboard refresh does not fail session start', async () => {
-    refreshArkadeStoreFromLoadedWasmMock.mockImplementation(
-      () => new Promise(() => undefined),
-    )
+  it('LIFE-ARK-LOAD-07 a live refresh that never returns does not fail session start', async () => {
+    vi.useFakeTimers()
+    refreshArkadeStoreFromLoadedWasmMock.mockImplementation(() => new Promise(() => {}))
+    try {
+      const loadPromise = orchestrateArkadeLoad({ walletId: 1, networkMode: 'mutinynet' })
+      await vi.advanceTimersByTimeAsync(SESSION_START_TIMEOUT_MS)
+      await loadPromise
 
-    await orchestrateArkadeLoad({ walletId: 1, networkMode: 'mutinynet' })
-
-    expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loaded')
-    expect(terminateArkadeWorkerMock).not.toHaveBeenCalled()
-    expect(publishArkadeDashboardFromPersistedEnvelopeMock).toHaveBeenCalledWith(
-      TEST_ACCOUNT_ID,
-      1,
-    )
+      expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loaded')
+      expect(terminateArkadeWorkerMock).not.toHaveBeenCalled()
+      expect(publishArkadeDashboardFromOpenSessionMock).toHaveBeenCalled()
+    } finally {
+      resetArkadeLoadLifecycleStateForTests()
+      vi.useRealTimers()
+    }
   })
 
   it('does not mark the rail loaded when the active wallet changed', async () => {
@@ -258,7 +260,7 @@ describe('arkade-load-lifecycle-orchestrator', () => {
 
     expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('not-configured')
     expect(workerMocks.openSession).not.toHaveBeenCalled()
-    expect(publishArkadeDashboardFromPersistedEnvelopeMock).not.toHaveBeenCalled()
+    expect(publishArkadeDashboardFromOpenSessionMock).not.toHaveBeenCalled()
     expect(refreshArkadeStoreFromLoadedWasmMock).not.toHaveBeenCalled()
   })
 

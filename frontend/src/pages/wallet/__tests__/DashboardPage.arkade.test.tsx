@@ -169,6 +169,7 @@ vi.mock('@/hooks/useArkadeLifecycleSnapshots', () => ({
   useArkadeSyncLifecycleSnapshot: () => ({
     syncPhase: 'not-syncing',
     errorMessage: null,
+    warningMessages: [],
   }),
 }))
 

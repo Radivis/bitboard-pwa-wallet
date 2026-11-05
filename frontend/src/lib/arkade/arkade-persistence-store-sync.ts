@@ -9,7 +9,6 @@ import { getArkadeWorker } from '@/workers/arkade-factory'
 import type {
   ArkadeBalanceInfo,
   ArkadePaymentRow,
-  ArkadePersistedDashboard,
 } from '@/workers/arkade-api'
 import {
   getCommittedNetworkMode,
@@ -44,54 +43,59 @@ function syncArkadeDashboardQueryCaches(params: {
   }
 }
 
-function writeArkadeDashboardSnapshot(
-  dashboard: ArkadePersistedDashboard,
-  arkadeAccountIdForQueryCache?: string,
-  expectedWalletId?: number,
-): void {
+function writeArkadeDashboardState(params: {
+  arkadeAccountIdForQueryCache?: string
+  expectedWalletId?: number
+  balance: ArkadeBalanceInfo
+  payments: ArkadePaymentRow[]
+  receiveAddress: string
+}): void {
   const walletStateBeforeWrite = useWalletStore.getState()
   if (
-    expectedWalletId != null &&
-    walletStateBeforeWrite.activeWalletId !== expectedWalletId
+    params.expectedWalletId != null &&
+    walletStateBeforeWrite.activeWalletId !== params.expectedWalletId
   ) {
     return
   }
   walletStateBeforeWrite.setArkadeDashboardState({
-    balance: dashboard.balance,
-    payments: dashboard.payments,
-    receiveAddress: dashboard.receiveAddress,
+    balance: params.balance,
+    payments: params.payments,
+    receiveAddress: params.receiveAddress,
   })
 
   const walletState = useWalletStore.getState()
   const networkMode = getCommittedNetworkMode()
-  const arkadeAccountId = arkadeAccountIdForQueryCache ?? walletState.activeArkadeAccountId
-  if (arkadeAccountId == null || walletState.activeWalletId == null) {
-    return
+  const arkadeAccountId =
+    params.arkadeAccountIdForQueryCache ?? walletState.activeArkadeAccountId
+  if (arkadeAccountId != null && walletState.activeWalletId != null) {
+    syncArkadeDashboardQueryCaches({
+      walletId: walletState.activeWalletId,
+      networkMode,
+      arkadeAccountId,
+      balance: params.balance,
+      payments: params.payments,
+      receiveAddress: params.receiveAddress,
+    })
   }
-  syncArkadeDashboardQueryCaches({
-    walletId: walletState.activeWalletId,
-    networkMode,
-    arkadeAccountId,
-    balance: dashboard.balance,
-    payments: dashboard.payments,
-    receiveAddress: dashboard.receiveAddress,
-  })
 }
 
 /**
- * Publish offchain snapshot, stored intents, and the local receive address.
- * Does not list boarding addresses on Esplora. Session start awaits this before `loaded`.
+ * Publish the open session's persisted envelope. Does not list boarding addresses.
+ * When `expectedWalletId` is set, skip the write if the active wallet changed
+ * while the read was in flight.
  */
-export async function publishArkadeDashboardFromPersistedEnvelope(
+export async function publishArkadeDashboardFromOpenSession(
   arkadeAccountIdForQueryCache?: string,
   expectedWalletId?: number,
 ): Promise<void> {
   const dashboard = await getArkadeWorker().getPersistedDashboard()
-  writeArkadeDashboardSnapshot(
-    dashboard,
+  writeArkadeDashboardState({
     arkadeAccountIdForQueryCache,
     expectedWalletId,
-  )
+    balance: dashboard.balance,
+    payments: dashboard.payments,
+    receiveAddress: dashboard.receiveAddress,
+  })
 }
 
 /**
@@ -99,25 +103,24 @@ export async function publishArkadeDashboardFromPersistedEnvelope(
  * When `expectedWalletId` is set, skip the write if the active wallet changed
  * while the WASM read was in flight.
  *
- * Balance lists boarding addresses on Esplora. History repeats that list, so it
- * runs after balance and can reuse the address-UTXO cache. This belongs after
- * `loaded`, with post-load sync, outside the session-start deadline.
+ * Balance and history share one boarding listing. The receive address is a local peek.
  */
 export async function refreshArkadeStoreFromLoadedWasm(
   arkadeAccountIdForQueryCache?: string,
   expectedWalletId?: number,
 ): Promise<void> {
   const worker = getArkadeWorker()
-  const [balance, receiveAddress] = await Promise.all([
-    worker.getBalance(),
+  const [dashboard, receiveAddress] = await Promise.all([
+    worker.getLiveDashboard(),
     worker.getAddress(),
   ])
-  const payments = await worker.getTransactionHistory()
-  writeArkadeDashboardSnapshot(
-    { balance, payments, receiveAddress },
+  writeArkadeDashboardState({
     arkadeAccountIdForQueryCache,
     expectedWalletId,
-  )
+    balance: dashboard.balance,
+    payments: dashboard.payments,
+    receiveAddress,
+  })
 }
 
 export function clearArkadeDashboardStore(): void {

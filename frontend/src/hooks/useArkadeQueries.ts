@@ -62,6 +62,8 @@ import { readArkadeDashboardStateFromStore } from '@/lib/arkade/arkade-persisten
 import {
   abandonInFlightRegisteredIntents,
   arkadeRefetchIntervalWithPendingBatchIntent,
+  boardingStatusHasNoDetectedUtxos,
+  boardingStatusRefetchIntervalMs,
   hasPendingBatchIntent,
   hasPendingKind,
   pendingBatchIntentKey,
@@ -432,10 +434,10 @@ export function useArkadeBoardingAddressQuery() {
   })
 }
 
-export function useArkadeBoardingStatusQuery() {
+export function useArkadeBoardingStatusQuery(options?: { pollWhileEmpty?: boolean }) {
   const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
     useArkadeQueryBase()
-  const refetchInterval = usePeriodicSyncRefetchInterval('arkade')
+  const pollWhileEmpty = options?.pollWhileEmpty === true
 
   return useQuery({
     queryKey: walletScopedQueryKey(
@@ -448,10 +450,11 @@ export function useArkadeBoardingStatusQuery() {
     enabled: sessionReady,
     queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().getBoardingStatus()),
     refetchInterval: (query) =>
-      arkadeRefetchIntervalWithPendingBatchIntent(
-        hasPendingBatchIntent(query.state.data?.pendingBatchIntents ?? []),
-        refetchInterval,
-      ),
+      boardingStatusRefetchIntervalMs({
+        hasPendingIntent: hasPendingBatchIntent(query.state.data?.pendingBatchIntents ?? []),
+        pollWhileEmpty,
+        hasNoDetectedUtxos: boardingStatusHasNoDetectedUtxos(query.state.data),
+      }),
     staleTime: ARKADE_SESSION_POLL_STALE_MS,
   })
 }

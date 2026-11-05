@@ -45,7 +45,7 @@ const workerMocks = vi.hoisted(() => ({
 const ensureArkadeAccountMock = vi.hoisted(() => vi.fn())
 const findActiveArkadeAccountSummaryMock = vi.hoisted(() => vi.fn())
 const refreshArkadeStoreFromLoadedWasmMock = vi.hoisted(() => vi.fn())
-const publishArkadeDashboardFromPersistedEnvelopeMock = vi.hoisted(() => vi.fn())
+const publishArkadeDashboardFromOpenSessionMock = vi.hoisted(() => vi.fn())
 const encryptedMnemonic = vi.hoisted(() => ({
   ciphertext: new Uint8Array([1, 2, 3]),
   iv: new Uint8Array([4, 5, 6]),
@@ -106,8 +106,8 @@ vi.mock('@/lib/arkade/arkade-accounts', async (importOriginal) => {
 vi.mock('@/lib/arkade/arkade-persistence-store-sync', () => ({
   refreshArkadeStoreFromLoadedWasm: (...args: unknown[]) =>
     refreshArkadeStoreFromLoadedWasmMock(...args),
-  publishArkadeDashboardFromPersistedEnvelope: (...args: unknown[]) =>
-    publishArkadeDashboardFromPersistedEnvelopeMock(...args),
+  publishArkadeDashboardFromOpenSession: (...args: unknown[]) =>
+    publishArkadeDashboardFromOpenSessionMock(...args),
   clearArkadeDashboardStore: vi.fn(),
 }))
 
@@ -166,7 +166,7 @@ describe('awaitArkadeLoadQuiescence (UNLOCK-ARK-03)', () => {
       operatorSignerPkHex: '02deadbeef',
     })
     refreshArkadeStoreFromLoadedWasmMock.mockResolvedValue(undefined)
-    publishArkadeDashboardFromPersistedEnvelopeMock.mockResolvedValue(undefined)
+    publishArkadeDashboardFromOpenSessionMock.mockResolvedValue(undefined)
     workerMocks.openSession.mockResolvedValue({
       arkadeAddress: 'tark1qtest',
       operatorSignerPkHex: '02deadbeef',
