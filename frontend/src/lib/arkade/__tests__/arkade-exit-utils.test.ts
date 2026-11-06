@@ -1,14 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import {
   ARKADE_TXID_DISPLAY_PREFIX_LENGTH,
+  COMPLETE_UNILATERAL_EXIT_SUCCESS_TOAST_MS,
+  blockchainExplorerTransactionUrl,
+  completeUnilateralExitSuccessToast,
   formatArkadeTxidToastSnippet,
   formatIntentFeePrograms,
   formatMissingBlocktimeCompletionWarning,
   formatMissingBlocktimeCompletionWarningLine,
   formatUnilateralExitCompleteWaitingBanner,
   formatUnilateralExitTimelock,
+  isUnilateralExitCompletionNotReadyError,
   parseCollaborativeExitAmountSats,
+  selectionCoveredByCompletionEstimate,
   unilateralExitCompleteTimelockMessage,
+  unilateralExitWaitingTimelockProgress,
 } from '@/lib/arkade/arkade-exit-utils'
 import { VTXO_EXIT_PHASE_COPY } from '@/lib/wallet/lifecycle/unilateral-exit/vtxo-exit-selectors'
 
@@ -55,7 +61,13 @@ describe('parseCollaborativeExitAmountSats', () => {
 
 describe('unilateral exit timelock display', () => {
   it('formats block-based operator delay', () => {
-    expect(formatUnilateralExitTimelock({ timelockBlocks: 20 })).toBe('20 block confirmations')
+    expect(formatUnilateralExitTimelock({ timelockBlocks: 20 }, 'mainnet')).toBe(
+      '20 blocks (about 3 hours and 20 minutes)',
+    )
+  })
+
+  it('omits the block approximation on regtest', () => {
+    expect(formatUnilateralExitTimelock({ timelockBlocks: 144 }, 'regtest')).toBe('144 blocks')
   })
 
   it('formats time-based operator delay', () => {
@@ -64,8 +76,8 @@ describe('unilateral exit timelock display', () => {
 
   it('describes waiting period on complete step', () => {
     expect(
-      unilateralExitCompleteTimelockMessage({ timelockBlocks: 144 }, false),
-    ).toContain('144 block confirmations')
+      unilateralExitCompleteTimelockMessage({ timelockBlocks: 144 }, false, 'signet'),
+    ).toContain('144 blocks (about 1 day)')
   })
 
   it('notes when timelock is already satisfied', () => {
@@ -101,8 +113,114 @@ describe('unilateral exit timelock display', () => {
         waitingCopyKinds: new Set([VTXO_EXIT_PHASE_COPY.waitingForTimelock]),
         timelock: { timelockBlocks: 144 },
         waitingTxidSnippets: ['aaaaaaaa…'],
+        networkMode: 'mainnet',
       }),
-    ).toContain('144 block confirmations')
+    ).toContain('144 blocks (about 1 day)')
+  })
+
+  it('counts down a time-based CSV instead of repeating the full delay', () => {
+    const nowUnixSeconds = 1_700_000_000
+    const banner = formatUnilateralExitCompleteWaitingBanner({
+      waitingCopyKinds: new Set([VTXO_EXIT_PHASE_COPY.waitingForTimelock]),
+      timelock: { timelockSeconds: 2_040 },
+      waitingTxidSnippets: ['aaaaaaaa…'],
+      csvReadyAtUnixSeconds: nowUnixSeconds + 120,
+      nowUnixSeconds,
+    })
+    expect(banner).toContain('ends in 2m 0s')
+    expect(banner).not.toContain('34 minutes')
+  })
+
+  it('counts down a multi-day CSV in days, hours, minutes, and seconds', () => {
+    const nowUnixSeconds = 1_700_000_000
+    const banner = formatUnilateralExitCompleteWaitingBanner({
+      waitingCopyKinds: new Set([VTXO_EXIT_PHASE_COPY.waitingForTimelock]),
+      timelock: { timelockSeconds: 200_000 },
+      waitingTxidSnippets: [],
+      csvReadyAtUnixSeconds: nowUnixSeconds + 183_845,
+      nowUnixSeconds,
+    })
+    expect(banner).toContain('ends in 2d 3h 4m 5s')
+  })
+
+  it('says the CSV has elapsed when the ready time is already past', () => {
+    const nowUnixSeconds = 1_700_000_000
+    const banner = formatUnilateralExitCompleteWaitingBanner({
+      waitingCopyKinds: new Set([VTXO_EXIT_PHASE_COPY.waitingForTimelock]),
+      timelock: { timelockSeconds: 2_040 },
+      waitingTxidSnippets: [],
+      csvReadyAtUnixSeconds: nowUnixSeconds - 5,
+      nowUnixSeconds,
+    })
+    expect(banner).toContain('has elapsed')
+  })
+
+  it('counts remaining block confirmations', () => {
+    const banner = formatUnilateralExitCompleteWaitingBanner({
+      waitingCopyKinds: new Set([VTXO_EXIT_PHASE_COPY.waitingForTimelock]),
+      timelock: { timelockBlocks: 144 },
+      waitingTxidSnippets: [],
+      csvConfirmationsRemaining: 3,
+      networkMode: 'signet',
+    })
+    expect(banner).toContain('Wait for 3 more blocks (about 30 minutes) before completing.')
+    expect(banner).not.toContain('144 blocks')
+  })
+})
+
+describe('complete unilateral exit readiness', () => {
+  it('treats the coin-select miss as not-ready rather than a failed complete', () => {
+    expect(
+      isUnilateralExitCompletionNotReadyError(
+        'Arkade client error: no matching unrolled VTXOs found for completion (listed 2, matched 2)',
+      ),
+    ).toBe(true)
+    expect(isUnilateralExitCompletionNotReadyError('bumper sync failed')).toBe(false)
+  })
+
+  it('covers the selection only when the estimate total matches and has no error', () => {
+    expect(
+      selectionCoveredByCompletionEstimate({
+        selectedTotalSats: 10_000,
+        estimatedSelectedTotalSats: 10_000,
+        estimateError: undefined,
+      }),
+    ).toBe(true)
+    expect(
+      selectionCoveredByCompletionEstimate({
+        selectedTotalSats: 10_000,
+        estimatedSelectedTotalSats: 0,
+        estimateError: 'no matching unrolled VTXOs found for completion',
+      }),
+    ).toBe(false)
+  })
+
+  it('uses the latest CSV ready time among waiting rows', () => {
+    expect(
+      unilateralExitWaitingTimelockProgress([
+        { canComplete: false, csvReadyAtUnixSeconds: 100 },
+        { canComplete: true, csvReadyAtUnixSeconds: 500 },
+        { canComplete: false, csvReadyAtUnixSeconds: 250, csvConfirmationsRemaining: 2 },
+      ]),
+    ).toEqual({ csvReadyAtUnixSeconds: 250, csvConfirmationsRemaining: 2 })
+  })
+
+  it('keeps the sweep txid on a success toast long enough to survive navigation', () => {
+    const txid = 'ef'.repeat(32)
+    const toastContent = completeUnilateralExitSuccessToast(txid)
+    expect(toastContent.title).toContain('completed')
+    expect(toastContent.options.description).toBe(txid)
+    expect(toastContent.options.duration).toBeGreaterThanOrEqual(
+      COMPLETE_UNILATERAL_EXIT_SUCCESS_TOAST_MS,
+    )
+  })
+
+  it('links mutinynet sweep transactions to the mutinynet explorer', () => {
+    const txid = 'ab'.repeat(32)
+    expect(blockchainExplorerTransactionUrl('mutinynet', txid)).toBe(
+      `https://mutinynet.com/tx/${txid}`,
+    )
+    expect(blockchainExplorerTransactionUrl('regtest', txid)).toBeNull()
   })
 })
 

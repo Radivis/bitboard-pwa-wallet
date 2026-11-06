@@ -21,18 +21,133 @@ use super::snapshot_ops::{
 };
 use super::topology::filter_exit_candidates_to_terminal_leaves;
 use crate::session::ArkadeSession;
-use crate::session::mappers::{map_exit_candidate, wasm_safe_now};
+use crate::session::mappers::{map_exit_candidate, unilateral_exit_timelock_parts, wasm_safe_now};
+
+/// Chain progress toward the operator CSV, using the same comparison as
+/// `Vtxo::can_be_claimed_unilaterally_by_owner` (strictly after a time lock; missing
+/// blocktime is treated as zero).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CsvTimelockProgress {
+    pub can_complete: bool,
+    pub ready_at_unix_seconds: Option<u64>,
+    pub confirmations_remaining: Option<u64>,
+}
+
+impl CsvTimelockProgress {
+    fn waiting_without_schedule() -> Self {
+        Self {
+            can_complete: false,
+            ready_at_unix_seconds: None,
+            confirmations_remaining: None,
+        }
+    }
+
+    fn claimable() -> Self {
+        Self {
+            can_complete: true,
+            ready_at_unix_seconds: None,
+            confirmations_remaining: None,
+        }
+    }
+}
+
+pub(crate) fn csv_timelock_progress(
+    now_seconds: u64,
+    confirmation_blocktime_seconds: Option<u64>,
+    confirmations: u64,
+    exit_delay: bitcoin::Sequence,
+) -> CsvTimelockProgress {
+    let (timelock_blocks, timelock_seconds) = unilateral_exit_timelock_parts(exit_delay);
+    if let Some(blocks) = timelock_blocks {
+        return block_csv_timelock_progress(confirmations, u64::from(blocks));
+    }
+    if let Some(seconds) = timelock_seconds {
+        return time_csv_timelock_progress(now_seconds, confirmation_blocktime_seconds, seconds);
+    }
+    CsvTimelockProgress::waiting_without_schedule()
+}
+
+fn block_csv_timelock_progress(confirmations: u64, required: u64) -> CsvTimelockProgress {
+    if confirmations >= required {
+        return CsvTimelockProgress::claimable();
+    }
+    CsvTimelockProgress {
+        can_complete: false,
+        ready_at_unix_seconds: None,
+        confirmations_remaining: Some(required - confirmations),
+    }
+}
+
+fn time_csv_timelock_progress(
+    now_seconds: u64,
+    confirmation_blocktime_seconds: Option<u64>,
+    timelock_seconds: u64,
+) -> CsvTimelockProgress {
+    let blocktime_seconds = confirmation_blocktime_seconds.unwrap_or(0);
+    let ready_at_unix_seconds = blocktime_seconds.saturating_add(timelock_seconds);
+    if now_seconds > ready_at_unix_seconds {
+        return CsvTimelockProgress::claimable();
+    }
+    CsvTimelockProgress {
+        can_complete: false,
+        ready_at_unix_seconds: confirmation_blocktime_seconds.map(|_| ready_at_unix_seconds),
+        confirmations_remaining: None,
+    }
+}
+
+fn earlier_csv_wait(
+    current: Option<CsvTimelockProgress>,
+    candidate: CsvTimelockProgress,
+) -> CsvTimelockProgress {
+    let Some(current) = current else {
+        return candidate;
+    };
+    if csv_wait_is_sooner(&candidate, &current) {
+        candidate
+    } else {
+        current
+    }
+}
+
+fn csv_wait_is_sooner(candidate: &CsvTimelockProgress, current: &CsvTimelockProgress) -> bool {
+    match (
+        candidate.ready_at_unix_seconds,
+        current.ready_at_unix_seconds,
+    ) {
+        (Some(candidate_ready), Some(current_ready)) => candidate_ready < current_ready,
+        (Some(_), None) => true,
+        (None, Some(_)) => false,
+        (None, None) => fewer_confirmations_remaining(candidate, current),
+    }
+}
+
+fn fewer_confirmations_remaining(
+    candidate: &CsvTimelockProgress,
+    current: &CsvTimelockProgress,
+) -> bool {
+    match (
+        candidate.confirmations_remaining,
+        current.confirmations_remaining,
+    ) {
+        (Some(candidate_remaining), Some(current_remaining)) => {
+            candidate_remaining < current_remaining
+        }
+        (Some(_), None) => true,
+        _ => false,
+    }
+}
 
 async fn vtxo_claimable_for_unilateral_completion(
     session: &ArkadeSession,
     vtxo: &Vtxo,
-) -> ArkResult<bool> {
+) -> ArkResult<CsvTimelockProgress> {
     let outpoints = session
         .client
         .blockchain()
         .find_outpoints(vtxo.address())
         .await?;
-    let now = wasm_safe_now();
+    let now_seconds = wasm_safe_now().as_secs();
+    let mut earliest_wait: Option<CsvTimelockProgress> = None;
     for explorer_utxo in outpoints {
         let ExplorerUtxo {
             confirmation_blocktime,
@@ -43,14 +158,18 @@ async fn vtxo_claimable_for_unilateral_completion(
         else {
             continue;
         };
-        let confirmation_blocktime = confirmation_blocktime
-            .map(std::time::Duration::from_secs)
-            .unwrap_or(std::time::Duration::ZERO);
-        if vtxo.can_be_claimed_unilaterally_by_owner(now, confirmation_blocktime, confirmations) {
-            return Ok(true);
+        let progress = csv_timelock_progress(
+            now_seconds,
+            confirmation_blocktime,
+            confirmations,
+            vtxo.exit_delay(),
+        );
+        if progress.can_complete {
+            return Ok(CsvTimelockProgress::claimable());
         }
+        earliest_wait = Some(earlier_csv_wait(earliest_wait, progress));
     }
-    Ok(false)
+    Ok(earliest_wait.unwrap_or_else(CsvTimelockProgress::waiting_without_schedule))
 }
 
 async fn resolve_vtxo_completion_claimable(
@@ -58,12 +177,12 @@ async fn resolve_vtxo_completion_claimable(
     virtual_tx_outpoint: &VirtualTxOutPoint,
     operator_script_map: &HashMap<ScriptBuf, Vtxo>,
     offchain_script_map: &HashMap<ScriptBuf, Vtxo>,
-) -> ArkResult<bool> {
+) -> ArkResult<CsvTimelockProgress> {
     let vtxo = operator_script_map
         .get(&virtual_tx_outpoint.script)
         .or_else(|| offchain_script_map.get(&virtual_tx_outpoint.script));
     let Some(vtxo) = vtxo else {
-        return Ok(false);
+        return Ok(CsvTimelockProgress::waiting_without_schedule());
     };
     vtxo_claimable_for_unilateral_completion(session, vtxo).await
 }
@@ -115,35 +234,58 @@ pub(crate) fn note_spent_pipeline_records_exited(
 struct ClaimabilityStatus {
     can_complete: bool,
     stamped_complete_ready: bool,
+    csv_ready_at_unix_seconds: Option<u64>,
+    csv_confirmations_remaining: Option<u64>,
 }
 
 impl ClaimabilityStatus {
     const ALREADY_COMPLETE_READY: Self = Self {
         can_complete: true,
         stamped_complete_ready: false,
+        csv_ready_at_unix_seconds: None,
+        csv_confirmations_remaining: None,
     };
     const NOT_ELIGIBLE: Self = Self {
         can_complete: false,
         stamped_complete_ready: false,
+        csv_ready_at_unix_seconds: None,
+        csv_confirmations_remaining: None,
     };
 }
 
 fn stamp_complete_ready_when_claimable(
     records: &mut BTreeMap<String, VtxoExitRecord>,
     key: &str,
-    can_complete: bool,
+    progress: CsvTimelockProgress,
 ) -> ClaimabilityStatus {
-    if can_complete && let Some(record) = records.get_mut(key) {
+    if progress.can_complete
+        && let Some(record) = records.get_mut(key)
+    {
         mark_record_complete_ready(record);
         return ClaimabilityStatus {
             can_complete: true,
             stamped_complete_ready: true,
+            csv_ready_at_unix_seconds: None,
+            csv_confirmations_remaining: None,
         };
     }
     ClaimabilityStatus {
-        can_complete,
+        can_complete: progress.can_complete,
         stamped_complete_ready: false,
+        csv_ready_at_unix_seconds: progress.ready_at_unix_seconds,
+        csv_confirmations_remaining: progress.confirmations_remaining,
     }
+}
+
+fn phase_shown_for_in_progress_row(
+    records: &BTreeMap<String, VtxoExitRecord>,
+    key: &str,
+    phase_before_overlay: VtxoExitPhase,
+) -> VtxoExitPhase {
+    records
+        .get(key)
+        .map(|record| record.phase)
+        .unwrap_or(phase_before_overlay)
 }
 
 async fn overlay_complete_ready_if_claimable(
@@ -151,7 +293,7 @@ async fn overlay_complete_ready_if_claimable(
     key: &str,
     phase: VtxoExitPhase,
     eligible_for_probe: bool,
-    claimable: impl std::future::Future<Output = ArkResult<bool>>,
+    claimable: impl std::future::Future<Output = ArkResult<CsvTimelockProgress>>,
 ) -> ArkResult<ClaimabilityStatus> {
     if phase == VtxoExitPhase::CompleteReady {
         return Ok(ClaimabilityStatus::ALREADY_COMPLETE_READY);
@@ -159,12 +301,8 @@ async fn overlay_complete_ready_if_claimable(
     if !eligible_for_probe {
         return Ok(ClaimabilityStatus::NOT_ELIGIBLE);
     }
-    let can_complete = claimable.await?;
-    Ok(stamp_complete_ready_when_claimable(
-        records,
-        key,
-        can_complete,
-    ))
+    let progress = claimable.await?;
+    Ok(stamp_complete_ready_when_claimable(records, key, progress))
 }
 
 fn pipeline_in_progress_row(
@@ -175,6 +313,8 @@ fn pipeline_in_progress_row(
     can_complete: bool,
     tagged_at: i64,
     phase: VtxoExitPhase,
+    csv_ready_at_unix_seconds: Option<u64>,
+    csv_confirmations_remaining: Option<u64>,
 ) -> UnilateralExitInProgressDto {
     UnilateralExitInProgressDto {
         id: format!("{txid}:{vout}"),
@@ -185,6 +325,8 @@ fn pipeline_in_progress_row(
         can_complete,
         started_at: Some(tagged_at),
         phase: Some(phase),
+        csv_ready_at_unix_seconds,
+        csv_confirmations_remaining,
     }
 }
 
@@ -241,7 +383,9 @@ async fn overlay_in_progress_row_for_record(
                 candidate.virtual_status_state,
                 claimability.can_complete,
                 record.tagged_at,
-                phase,
+                phase_shown_for_in_progress_row(records, key, phase),
+                claimability.csv_ready_at_unix_seconds,
+                claimability.csv_confirmations_remaining,
             ),
             claimability.stamped_complete_ready,
         )));
@@ -268,7 +412,7 @@ async fn overlay_in_progress_row_for_record(
                         )
                         .await
                     }
-                    Err(_) => Ok(false),
+                    Err(_) => Ok(CsvTimelockProgress::waiting_without_schedule()),
                 }
             },
         )
@@ -281,7 +425,9 @@ async fn overlay_in_progress_row_for_record(
                 virtual_status_state,
                 claimability.can_complete,
                 record.tagged_at,
-                phase,
+                phase_shown_for_in_progress_row(records, key, phase),
+                claimability.csv_ready_at_unix_seconds,
+                claimability.csv_confirmations_remaining,
             ),
             claimability.stamped_complete_ready,
         )));
@@ -296,6 +442,8 @@ async fn overlay_in_progress_row_for_record(
             phase == VtxoExitPhase::CompleteReady,
             record.tagged_at,
             phase,
+            None,
+            None,
         ),
         false,
     )))
@@ -472,7 +620,11 @@ mod tests {
         let key = vtxo_exit_record_key(&"aa".repeat(32), 0);
         let mut records = BTreeMap::from([(key.clone(), unrolled_record())]);
 
-        let claimability = stamp_complete_ready_when_claimable(&mut records, &key, true);
+        let claimability = stamp_complete_ready_when_claimable(
+            &mut records,
+            &key,
+            CsvTimelockProgress::claimable(),
+        );
 
         assert!(claimability.can_complete);
         assert!(claimability.stamped_complete_ready);
@@ -484,7 +636,11 @@ mod tests {
         let key = vtxo_exit_record_key(&"aa".repeat(32), 0);
         let mut records = BTreeMap::from([(key.clone(), unrolled_record())]);
 
-        let claimability = stamp_complete_ready_when_claimable(&mut records, &key, false);
+        let claimability = stamp_complete_ready_when_claimable(
+            &mut records,
+            &key,
+            CsvTimelockProgress::waiting_without_schedule(),
+        );
 
         assert!(!claimability.can_complete);
         assert!(!claimability.stamped_complete_ready);
@@ -501,11 +657,75 @@ mod tests {
             true,
             42,
             VtxoExitPhase::CompleteReady,
+            None,
+            None,
         );
         assert_eq!(row.id, format!("{}:1", "aa".repeat(32)));
         assert_eq!(row.vout, 1);
         assert!(row.can_complete);
         assert_eq!(row.started_at, Some(42));
         assert_eq!(row.phase, Some(VtxoExitPhase::CompleteReady));
+        assert_eq!(row.csv_ready_at_unix_seconds, None);
+    }
+
+    #[test]
+    fn time_csv_reports_ready_at_until_the_second_after_confirmation_plus_delay() {
+        let delay = bitcoin::Sequence::from_seconds_ceil(2_040).unwrap();
+        let (_, timelock_seconds) = crate::session::mappers::unilateral_exit_timelock_parts(delay);
+        let timelock_seconds = timelock_seconds.expect("time lock");
+        let confirmed_at = 1_700_000_000;
+
+        let waiting = csv_timelock_progress(
+            confirmed_at + timelock_seconds,
+            Some(confirmed_at),
+            40,
+            delay,
+        );
+        assert!(!waiting.can_complete);
+        assert_eq!(
+            waiting.ready_at_unix_seconds,
+            Some(confirmed_at + timelock_seconds),
+        );
+
+        let elapsed = csv_timelock_progress(
+            confirmed_at + timelock_seconds + 1,
+            Some(confirmed_at),
+            40,
+            delay,
+        );
+        assert!(elapsed.can_complete);
+        assert_eq!(elapsed.ready_at_unix_seconds, None);
+    }
+
+    #[test]
+    fn missing_blocktime_does_not_invent_a_countdown() {
+        let delay = bitcoin::Sequence::from_seconds_ceil(2_040).unwrap();
+        let progress = csv_timelock_progress(1_700_000_000, None, 40, delay);
+        assert!(progress.can_complete);
+        assert_eq!(progress.ready_at_unix_seconds, None);
+    }
+
+    #[test]
+    fn block_csv_reports_confirmations_still_required() {
+        let delay = bitcoin::Sequence::from_height(34);
+        let waiting = csv_timelock_progress(0, None, 10, delay);
+        assert!(!waiting.can_complete);
+        assert_eq!(waiting.confirmations_remaining, Some(24));
+
+        let ready = csv_timelock_progress(0, None, 34, delay);
+        assert!(ready.can_complete);
+        assert_eq!(ready.confirmations_remaining, None);
+    }
+
+    #[test]
+    fn stamped_complete_ready_is_the_phase_shown_on_the_complete_list() {
+        let key = vtxo_exit_record_key(&"aa".repeat(32), 0);
+        let mut records = BTreeMap::from([(key.clone(), unrolled_record())]);
+        stamp_complete_ready_when_claimable(&mut records, &key, CsvTimelockProgress::claimable());
+
+        assert_eq!(
+            phase_shown_for_in_progress_row(&records, &key, VtxoExitPhase::Unrolled),
+            VtxoExitPhase::CompleteReady,
+        );
     }
 }

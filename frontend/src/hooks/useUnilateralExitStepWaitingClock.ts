@@ -1,19 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { UNILATERAL_EXIT_WAITING_CLOCK_TICK_MS } from '@/lib/arkade/arkade-query-timings'
+import { formatDurationDaysHoursMinutesSeconds } from '@/lib/shared/format-duration'
 
 export function formatUnilateralExitStepWaitingDuration(elapsedSeconds: number): string {
-  if (elapsedSeconds < 60) {
-    return `${elapsedSeconds}s`
-  }
-  if (elapsedSeconds < 3_600) {
-    const minutes = Math.floor(elapsedSeconds / 60)
-    const seconds = elapsedSeconds % 60
-    return `${minutes}m ${seconds}s`
-  }
-  const hours = Math.floor(elapsedSeconds / 3_600)
-  const minutes = Math.floor((elapsedSeconds % 3_600) / 60)
-  const seconds = elapsedSeconds % 60
-  return `${hours}h ${minutes}m ${seconds}s`
+  return formatDurationDaysHoursMinutesSeconds(elapsedSeconds)
 }
 
 /** Wall-clock label for how long the current step has been waiting for confirmation. */

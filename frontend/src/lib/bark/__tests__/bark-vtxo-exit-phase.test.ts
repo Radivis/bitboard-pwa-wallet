@@ -40,8 +40,9 @@ function phaseLine(params: {
   unfundedParentTxids?: ReadonlySet<string>
   sweptNodeKinds?: readonly BarkExitNodeSweepKind[]
   sweepItems?: readonly BarkExitNodeSweepVtxoItem[]
+  networkMode?: 'signet' | 'mainnet' | 'regtest'
 }): string | null {
-  return formatBarkVtxoEmergencyExitPhaseLine(resolvedPhase(params))
+  return formatBarkVtxoEmergencyExitPhaseLine(resolvedPhase(params), params.networkMode)
 }
 
 function resolvedPhase(params: {
@@ -148,6 +149,23 @@ describe('resolveBarkVtxoExitPhase', () => {
     expect(
       phaseLine({
         vtxoState: 'exited',
+        networkMode: 'signet',
+        exitRow: exitRow('vtxo-1', 'awaitingDelta', {
+          tipHeight: 100,
+          confirmedHeight: 90,
+          claimableHeight: 130,
+        }),
+      }),
+    ).toBe(
+      'Emergency exit phase: waiting for timelock, 10 of 40 blocks (about 5 hours remaining)',
+    )
+  })
+
+  it('omits the timelock approximation when the network has no block interval', () => {
+    expect(
+      phaseLine({
+        vtxoState: 'exited',
+        networkMode: 'regtest',
         exitRow: exitRow('vtxo-1', 'awaitingDelta', {
           tipHeight: 100,
           confirmedHeight: 90,

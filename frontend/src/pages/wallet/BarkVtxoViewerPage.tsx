@@ -370,6 +370,7 @@ function BarkVtxoInventory({
                   graphNodes,
                   unfundedParentTxids: unfundedParentTxidSet,
                   sweepItems: sweepItemsByVtxoId.get(row.id) ?? EMPTY_SWEEP_ITEMS,
+                  networkMode,
                 })}
               />
             ))}
@@ -405,6 +406,7 @@ function barkVtxoExitPhaseProps(params: {
   graphNodes: readonly BarkExitGraphNode[] | null
   unfundedParentTxids: ReadonlySet<string>
   sweepItems: readonly BarkExitNodeSweepVtxoItem[]
+  networkMode: 'signet' | 'mainnet' | 'regtest'
 }): { emergencyExitPhaseLine: string | null; emergencyExitPhaseTitle: string | null } {
   const phase = resolveBarkVtxoExitPhase({
     vtxoState: params.row.state,
@@ -414,7 +416,7 @@ function barkVtxoExitPhaseProps(params: {
     sweepItems: params.sweepItems,
   })
   return {
-    emergencyExitPhaseLine: formatBarkVtxoEmergencyExitPhaseLine(phase),
+    emergencyExitPhaseLine: formatBarkVtxoEmergencyExitPhaseLine(phase, params.networkMode),
     emergencyExitPhaseTitle: formatBarkVtxoExitPhaseTitle(phase),
   }
 }

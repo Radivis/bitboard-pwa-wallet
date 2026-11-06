@@ -5,6 +5,7 @@ import { CompleteUnilateralExitContent } from '@/pages/wallet/CompleteUnilateral
 import { formatArkadeTxidToastSnippet } from '@/lib/arkade/arkade-exit-utils'
 import { BLOCKCHAIN_EXPLORER_UNREACHABLE_UI_MESSAGE } from '@/lib/shared/sanitize-error-for-ui'
 import { renderWithProviders } from '@/test-utils/test-providers'
+import { useWalletStore } from '@/stores/walletStore'
 import type { useCompleteUnilateralExitFlow } from '@/hooks/useCompleteUnilateralExitFlow'
 import type { ArkadeVtxoOutpoint } from '@/workers/arkade-api'
 
@@ -131,6 +132,7 @@ describe('CompleteUnilateralExitPage', () => {
   })
 
   it('shows operator timelock duration for waiting rows', () => {
+    useWalletStore.setState({ networkMode: 'signet', loadedDescriptorWallet: null })
     const waitingTxid = 'aa'.repeat(32)
     renderWithProviders(
       <CompleteUnilateralExitContent
@@ -152,7 +154,7 @@ describe('CompleteUnilateralExitPage', () => {
     )
 
     expect(screen.getByTestId('arkade-unilateral-complete-waiting')).toHaveTextContent(
-      /144 block confirmations/i,
+      /144 blocks \(about 1 day\)/i,
     )
   })
 
@@ -443,5 +445,61 @@ describe('CompleteUnilateralExitPage', () => {
     expect(screen.getByTestId('arkade-unilateral-complete-row-phase')).toHaveTextContent(
       /waiting for timelock/i,
     )
+  })
+
+  it('counts down the CSV instead of repeating the full operator delay', () => {
+    const waitingTxid = 'aa'.repeat(32)
+    const row = {
+      id: `${waitingTxid}:0`,
+      txid: waitingTxid,
+      vout: 0,
+      amountSats: 100_000,
+      canComplete: false,
+      virtualStatusState: 'unrolled' as const,
+      phase: 'unrolled' as const,
+      csvReadyAtUnixSeconds: Math.floor(Date.now() / 1000) + 120,
+    }
+    renderWithProviders(
+      <CompleteUnilateralExitContent
+        exitFlow={buildExitFlow({
+          inProgressQuery: { isLoading: false, data: [row], refetch: vi.fn() },
+          selectedInProgressOutpoints: [outpoint(waitingTxid)],
+          selectedInProgressRows: [row],
+          completionFeeQuery: { isLoading: false, data: undefined, refetch: vi.fn() },
+        })}
+      />,
+    )
+
+    expect(screen.getByTestId('arkade-unilateral-complete-waiting')).toHaveTextContent(
+      /ends in 2m 0s/i,
+    )
+    expect(screen.getByTestId('arkade-unilateral-complete-waiting')).not.toHaveTextContent(
+      /144 blocks/i,
+    )
+  })
+
+  it('hides the not-ready coin-select error while the CSV is still running', () => {
+    const waitingTxid = 'aa'.repeat(32)
+    renderWithProviders(
+      <CompleteUnilateralExitContent
+        exitFlow={buildExitFlow({
+          selectedInProgressOutpoints: [outpoint(waitingTxid)],
+          completionFeeQuery: {
+            isLoading: false,
+            data: {
+              selectedTotalSats: 0,
+              estimatedFeeSats: 0,
+              estimatedReceiveSats: 0,
+              feeRateSatPerVb: 1,
+              estimateError:
+                'Arkade client error: no matching unrolled VTXOs found for completion',
+            },
+          },
+        })}
+      />,
+    )
+
+    expect(screen.queryByText(/no matching unrolled VTXOs/i)).not.toBeInTheDocument()
+    expect(screen.queryByTestId('arkade-unilateral-completion-fee')).not.toBeInTheDocument()
   })
 })

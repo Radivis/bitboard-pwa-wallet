@@ -282,7 +282,7 @@ describe('BarkVtxoViewerPage', () => {
       'Emergency exit phase: started',
     )
     expect(screen.getByTestId('bark-vtxo-exit-phase-timelock:2')).toHaveTextContent(
-      'Emergency exit phase: waiting for timelock, 10 of 40 blocks',
+      'Emergency exit phase: waiting for timelock, 10 of 40 blocks (about 5 hours remaining)',
     )
     expect(screen.getByTestId('bark-vtxo-exit-phase-swept:5')).toHaveTextContent(
       `Emergency exit phase: anchor swept · ${anchorSpender}`,

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { scheduleBackgroundBumperWalletSync } from '@/lib/arkade/background-bumper-wallet-sync'
 import { isArkadeSupportedNetworkMode } from '@/lib/arkade/arkade-endpoints'
+import { selectionCoveredByCompletionEstimate } from '@/lib/arkade/arkade-exit-utils'
 import {
   useArkadeCompleteUnilateralExitMutation,
   useArkadeUnilateralExitCompletionFeeQuery,
@@ -40,7 +41,9 @@ export function useCompleteUnilateralExitFlow() {
   const { effectiveFeeRate: completionFeeRateSatPerVb, ...completionFeeRateUi } =
     completionFeeSelection
 
-  const inProgressQuery = useArkadeUnilateralExitsInProgressQuery(true)
+  const inProgressQuery = useArkadeUnilateralExitsInProgressQuery(true, {
+    refreshWhileUnfocused: true,
+  })
   const timelockQuery = useArkadeUnilateralExitTimelockQuery(true)
   const bumperInfoQuery = { data: timelockQuery.data }
 
@@ -53,14 +56,6 @@ export function useCompleteUnilateralExitFlow() {
       networkMode,
     })
   }, [activeWalletId, networkMode])
-
-  const completionFeeQuery = useArkadeUnilateralExitCompletionFeeQuery({
-    enabled: true,
-    vtxoOutpoints: selectedInProgressOutpoints,
-    destinationAddress: completeDestination,
-    feeRateSatPerVb: completionFeeRateSatPerVb,
-  })
-  const completeExitMutation = useArkadeCompleteUnilateralExitMutation()
 
   const selectedInProgressRows = useMemo(
     () =>
@@ -78,10 +73,28 @@ export function useCompleteUnilateralExitFlow() {
     () => selectedInProgressRows.reduce((total, row) => total + row.amountSats, 0),
     [selectedInProgressRows],
   )
+  const selectedReadyCount = useMemo(
+    () => selectedInProgressRows.filter((row) => row.canComplete).length,
+    [selectedInProgressRows],
+  )
 
+  const completionFeeQuery = useArkadeUnilateralExitCompletionFeeQuery({
+    enabled: true,
+    vtxoOutpoints: selectedInProgressOutpoints,
+    destinationAddress: completeDestination,
+    feeRateSatPerVb: completionFeeRateSatPerVb,
+    readinessRevision: selectedReadyCount,
+  })
+  const completeExitMutation = useArkadeCompleteUnilateralExitMutation()
+
+  const estimateCoversSelection = selectionCoveredByCompletionEstimate({
+    selectedTotalSats: selectedInProgressTotalSats,
+    estimatedSelectedTotalSats: completionFeeQuery.data?.selectedTotalSats,
+    estimateError: completionFeeQuery.data?.estimateError,
+  })
   const allSelectedCanComplete =
     selectedInProgressRows.length > 0 &&
-    selectedInProgressRows.every((row) => row.canComplete)
+    (selectedInProgressRows.every((row) => row.canComplete) || estimateCoversSelection)
 
   useEffect(() => {
     if (currentAddress) {
@@ -113,8 +126,11 @@ export function useCompleteUnilateralExitFlow() {
         destinationAddress: completeDestination.trim(),
         feeRateSatPerVb: completionFeeRateSatPerVb,
       })
-      .then(() => {
-        void navigate({ to: '/wallet/management' })
+      .then((sweepTxid) => {
+        void navigate({
+          to: '/wallet/management',
+          search: { completedExitTxid: sweepTxid },
+        })
       })
       .catch(() => {
         // Toast is handled by useArkadeCompleteUnilateralExitMutation.

@@ -92,7 +92,7 @@ feature:
       - id: ARK-EXIT-01
         description: Start unilateral exit lists only VTXOs that can start unroll; unrolled, complete_ready, exited, and funding_lost records are excluded. Tagged leftovers that are not yet unrolled remain startable after abort (ARK-EXIT-26/30). Concurrent second job stays a frontend selection lock.
       - id: ARK-EXIT-02
-        description: Complete unilateral exit page lists in-progress VTXOs from persisted VTXO exit records (tagged through complete_ready). Per-row copy is VTXO child phase (ARK-EXIT-32) when a child is spawned, otherwise the persisted record phase (same SoT HYDRATE reads): waiting for host transaction broadcast vs waiting for first confirmation vs waiting for 6 confirmations vs waiting for timelock vs ready to complete — not !canComplete as timelock. Complete RPC does not require in-progress membership (ARK-EXIT-31); this ID remains the Complete list. Complete-page errors use the same sanitized user-facing copy as the control page (ARK-EXIT-34).
+        description: Complete unilateral exit page lists in-progress VTXOs from persisted VTXO exit records (tagged through complete_ready). Per-row copy is VTXO child phase (ARK-EXIT-32) when a child is spawned, otherwise the persisted record phase (same SoT HYDRATE reads): waiting for host transaction broadcast vs waiting for first confirmation vs waiting for 6 confirmations vs waiting for timelock vs ready to complete — not !canComplete as timelock. Complete RPC does not require in-progress membership (ARK-EXIT-31); this ID remains the Complete list. Complete-page errors use the same sanitized user-facing copy as the control page (ARK-EXIT-34). The not-ready coin-select message is not shown as a failure while the CSV is still running (ARK-EXIT-37).
       - id: ARK-EXIT-03
         description: Complete unilateral exit supports multi-select batch completion with explicit virtual outpoints (txid + vout) and fee estimate scaled to selected inputs
       - id: ARK-EXIT-04
@@ -240,6 +240,22 @@ feature:
           lists pipeline VTXOs (ARK-EXIT-02) with can_complete; waiting-for-timelock rows remain
           listed but not submittable. Aborted or failed jobs' unrolled VTXOs remain claimable
           without a frontend job. funding_lost coins are not listed and not completable (ARK-EXIT-33).
+      - id: ARK-EXIT-37
+        description: >-
+          Complete unilateral exit refreshes in-progress VTXOs while the page is open,
+          including when the browser window is not focused, so a finished CSV timelock
+          enables Complete without a reload. The completion fee estimate is requested
+          again when that list reports newly completable rows, or once when a displayed
+          CSV countdown reaches zero. When
+          Esplora reports a confirmation time, the waiting copy counts down to that
+          CSV time in days, hours, minutes, and seconds and then clears; a block
+          CSV counts remaining blocks and, on a network with a target block
+          interval, an approximate duration in days, hours, and minutes. The
+          coin-select "no matching unrolled VTXOs" result is the waiting state, not a
+          failure, and its zero totals stay hidden. A successful complete shows a
+          success toast that includes the full sweep txid and keeps that txid on
+          Management until dismissed, with a copy action and an explorer link when the
+          network has a public explorer.
       - id: ARK-EXIT-32
         description: >-
           Job vs VTXO XState split (shipped). The job actor is a session-scoped host plus
@@ -515,10 +531,10 @@ feature:
         - Back to Management
         - empty state when no unilateral exit is in progress
       - requirements:
-        - Contracts ARK-EXIT-02, ARK-EXIT-03, ARK-EXIT-04, ARK-EXIT-31, and ARK-EXIT-34
+        - Contracts ARK-EXIT-02, ARK-EXIT-03, ARK-EXIT-04, ARK-EXIT-31, ARK-EXIT-34, and ARK-EXIT-37
         - Shown only when isArkadeEnabled and current network supports Arkade
         - Session load uses the full-page Arkade loading and error screens
-        - Successful claim returns to /wallet/management and does not clear the broadcast job
+        - Successful claim returns to /wallet/management with the sweep txid (ARK-EXIT-37) and does not clear the broadcast job
     - DashboardArkadeBlock:
       - description: "Separate Arkade balance on dashboard"
       - file: frontend/src/components/wallet/ArkadeDashboardBalance.tsx

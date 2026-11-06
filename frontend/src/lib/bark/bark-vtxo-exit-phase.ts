@@ -7,6 +7,11 @@ import type {
   BarkExitNodeSweepKind,
   BarkExitNodeSweepVtxoItem,
 } from '@/lib/bark/bark-exit-seizure'
+import {
+  blockDurationParts,
+  formatApproximateDurationPhrase,
+} from '@/lib/shared/block-duration'
+import type { NetworkMode } from '@/stores/walletStore'
 import type {
   BarkEmergencyExitRow,
   BarkExitGraphNode,
@@ -126,8 +131,9 @@ export function resolveBarkVtxoExitPhase(params: {
 
 export function formatBarkVtxoEmergencyExitPhaseLine(
   phase: BarkVtxoExitPhase | null,
+  networkMode?: NetworkMode | null,
 ): string | null {
-  const copy = formatBarkVtxoExitPhaseCopy(phase)
+  const copy = formatBarkVtxoExitPhaseCopy(phase, networkMode)
   if (copy == null) return null
   return `${EMERGENCY_EXIT_PHASE_LINE_PREFIX}${copy}`
 }
@@ -234,7 +240,10 @@ function timelockBlockProgress(
   return { elapsedBlocks, totalBlocks }
 }
 
-function formatBarkVtxoExitPhaseCopy(phase: BarkVtxoExitPhase | null): string | null {
+function formatBarkVtxoExitPhaseCopy(
+  phase: BarkVtxoExitPhase | null,
+  networkMode?: NetworkMode | null,
+): string | null {
   if (phase == null) return null
   if (isSweepPhase(phase)) return sweepPhaseCopy(phase)
   switch (phase.kind) {
@@ -249,7 +258,7 @@ function formatBarkVtxoExitPhaseCopy(phase: BarkVtxoExitPhase | null): string | 
     case BARK_VTXO_EXIT_PHASE.awaitingConfirmation:
       return withConfirmedCount('waiting for confirmation', phase.confirmedExitTransactions)
     case BARK_VTXO_EXIT_PHASE.awaitingTimelock:
-      return timelockCopy(phase.elapsedBlocks, phase.totalBlocks)
+      return timelockCopy(phase.elapsedBlocks, phase.totalBlocks, networkMode)
     case BARK_VTXO_EXIT_PHASE.claimable:
       return 'ready to claim'
     case BARK_VTXO_EXIT_PHASE.claimInProgress:
@@ -317,10 +326,21 @@ function withConfirmedCount(
   return `${base}, ${count.confirmed} of ${count.total} ${noun} confirmed`
 }
 
-function timelockCopy(elapsedBlocks: number | null, totalBlocks: number | null): string {
+function timelockCopy(
+  elapsedBlocks: number | null,
+  totalBlocks: number | null,
+  networkMode?: NetworkMode | null,
+): string {
   if (elapsedBlocks == null || totalBlocks == null) return 'waiting for timelock'
   const noun = totalBlocks === 1 ? 'block' : 'blocks'
-  return `waiting for timelock, ${elapsedBlocks} of ${totalBlocks} ${noun}`
+  const fraction = `waiting for timelock, ${elapsedBlocks} of ${totalBlocks} ${noun}`
+  const remainingBlocks = totalBlocks - elapsedBlocks
+  if (remainingBlocks <= 0) return fraction
+  const phrase = formatApproximateDurationPhrase(
+    blockDurationParts(remainingBlocks, networkMode),
+  )
+  if (phrase == null) return fraction
+  return `${fraction} (about ${phrase} remaining)`
 }
 
 function nodePhase(
