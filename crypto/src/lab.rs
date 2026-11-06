@@ -21,7 +21,8 @@ use bitcoin::{
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
-use crate::error::MapDisplayErrToJs;
+use crate::address_input::parse_bitcoin_address;
+use crate::error::{CryptoError, MapDisplayErrToJs};
 use crate::validation;
 
 /// Default lab coinbase subsidy (3.125 BTC in sats; current mainnet epoch). JS passes per-block subsidy into `lab_mine_block`.
@@ -248,10 +249,7 @@ pub fn lab_build_transaction(
 
     let mut output_vec: Vec<TxOut> = Vec::with_capacity(outputs.len());
     for output_spec in &outputs {
-        let parsed_output_address = Address::from_str(&output_spec.address)
-            .map_display_err_to_js()?
-            .require_network(Network::Regtest)
-            .map_display_err_to_js()?;
+        let parsed_output_address = parse_lab_regtest_address(&output_spec.address)?;
         output_vec.push(TxOut {
             value: Amount::from_sat(output_spec.amount_sats),
             script_pubkey: parsed_output_address.script_pubkey(),
@@ -537,18 +535,25 @@ pub fn lab_generate_keypair() -> Result<JsValue, JsValue> {
     serde_wasm_bindgen::to_value(&keypair_result).map_display_err_to_js()
 }
 
+fn parse_lab_regtest_address(address_str: &str) -> Result<Address, JsValue> {
+    parse_bitcoin_address(address_str, Network::Regtest)
+        .map_err(|error| JsValue::from_str(&lab_address_error_text(&error)))
+}
+
+fn lab_address_error_text(error: &CryptoError) -> String {
+    match error {
+        CryptoError::Transaction(message) => message.clone(),
+        other => other.to_string(),
+    }
+}
+
 /// Validates that an address is a valid P2WPKH or P2TR regtest address.
 #[wasm_bindgen]
 pub fn lab_validate_address(address_str: &str) -> Result<bool, JsValue> {
-    let address = match Address::from_str(address_str) {
-        Ok(parsed_address) => parsed_address,
-        Err(_) => return Ok(false),
+    let Ok(address) = parse_bitcoin_address(address_str, Network::Regtest) else {
+        return Ok(false);
     };
-    let regtest_address = match address.require_network(Network::Regtest) {
-        Ok(network_checked_address) => network_checked_address,
-        Err(_) => return Ok(false),
-    };
-    let script_pubkey = regtest_address.script_pubkey();
+    let script_pubkey = address.script_pubkey();
     Ok(script_pubkey.is_p2wpkh() || script_pubkey.is_p2tr())
 }
 
@@ -674,10 +679,7 @@ pub fn lab_block_effects(block_hex: &str) -> Result<JsValue, JsValue> {
 /// Extracts script_pubkey hex from a P2WPKH or P2TR address.
 #[wasm_bindgen]
 pub fn lab_address_to_script_pubkey_hex(address_str: &str) -> Result<String, JsValue> {
-    let address = Address::from_str(address_str)
-        .map_display_err_to_js()?
-        .require_network(Network::Regtest)
-        .map_display_err_to_js()?;
+    let address = parse_lab_regtest_address(address_str)?;
     let script_pubkey = address.script_pubkey();
     if !script_pubkey.is_p2wpkh() && !script_pubkey.is_p2tr() {
         return Err(JsValue::from_str(

@@ -23,6 +23,11 @@ pub const MSG_NO_ACTIVE_WALLET: &str = "No active wallet. Call create_wallet or 
 pub const MSG_WALLET_ALREADY_BORROWED: &str =
     "Wallet is already borrowed — likely a previous operation panicked";
 pub const MSG_WALLET_NOT_LOADED_FOR_LAB: &str = "No wallet loaded for lab. Load wallet first.";
+/// Shown when `Address::from_str` fails. Do not forward rust-bitcoin's Display:
+/// bech32 failures longer than 50 characters surface as "legacy address base58 string".
+pub const INVALID_BITCOIN_ADDRESS_MESSAGE: &str = "Invalid Bitcoin address (could not decode)";
+pub const BITCOIN_ADDRESS_NETWORK_MISMATCH_MESSAGE: &str =
+    "Bitcoin address is not valid for this network";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WasmCryptoErrorPayload {
@@ -171,6 +176,12 @@ impl From<bdk_wallet::chain::local_chain::CannotConnectError> for CryptoError {
 
 impl From<bitcoin::address::ParseError> for CryptoError {
     fn from(error: bitcoin::address::ParseError) -> Self {
-        CryptoError::Transaction(error.to_string())
+        let message = match error {
+            bitcoin::address::ParseError::NetworkValidation(_) => {
+                BITCOIN_ADDRESS_NETWORK_MISMATCH_MESSAGE.to_string()
+            }
+            _ => INVALID_BITCOIN_ADDRESS_MESSAGE.to_string(),
+        };
+        CryptoError::Transaction(message)
     }
 }

@@ -20,6 +20,7 @@ pub(crate) fn current_unix_time() -> u64 {
     }
 }
 
+pub mod address_input;
 pub mod blockchain;
 pub mod descriptors;
 pub mod error;

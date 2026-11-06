@@ -23,6 +23,60 @@ fn funded_wallet() -> bdk_wallet::Wallet {
 // --- Error case tests ---
 
 #[test]
+fn prepare_onchain_send_accepts_address_with_pasted_invisible_characters() {
+    let mut wallet = funded_wallet();
+    let mut polluted = String::from("\n`");
+    for (index, character) in VALID_SIGNET_ADDRESS.chars().enumerate() {
+        if index == 8 {
+            polluted.push('\u{200B}');
+        }
+        polluted.push(character);
+    }
+    polluted.push('`');
+    polluted.push('\u{FEFF}');
+
+    let outcome = transaction::prepare_onchain_send(
+        &mut wallet,
+        &polluted,
+        SEND_AMOUNT,
+        FEE_RATE,
+        Network::Testnet,
+        false,
+        None,
+    );
+    assert!(
+        outcome.is_ok(),
+        "pasted invisible characters must not block a valid address: {outcome:?}"
+    );
+}
+
+#[test]
+fn prepare_onchain_send_rejects_undecodable_bech32_without_legacy_wording() {
+    let mut wallet = funded_wallet();
+    let undecodable = format!("tb1q{}", "q".repeat(60));
+    let error = transaction::prepare_onchain_send(
+        &mut wallet,
+        &undecodable,
+        SEND_AMOUNT,
+        FEE_RATE,
+        Network::Testnet,
+        false,
+        None,
+    )
+    .expect_err("undecodable address must be rejected");
+
+    let message = error.to_string();
+    assert!(
+        message.contains("Invalid Bitcoin address (could not decode)"),
+        "unexpected message: {message}"
+    );
+    assert!(
+        !message.to_lowercase().contains("legacy address"),
+        "misleading legacy wording: {message}"
+    );
+}
+
+#[test]
 fn build_transaction_rejects_invalid_address() {
     let mut wallet = funded_wallet();
     let result = transaction::build_transaction(

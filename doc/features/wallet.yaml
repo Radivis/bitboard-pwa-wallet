@@ -171,7 +171,9 @@ feature:
               - return to compose step
       - requirements:
         - Wallet must be unlocked
-        - Address validation for the current network
+        - Address validation for the current network decodes the address (bech32 checksum and witness program), not only the prefix
+        - Pasted on-chain addresses with invisible characters (zero-width space, byte-order mark) or surrounding backticks are accepted when the underlying address is valid
+        - An on-chain recipient that cannot be decoded shows an invalid-address error and must not report "legacy address base58"
         - Insufficient funds must show clear error
         - When Lightning is enabled, accepted Lightning send recipients include BOLT11 invoices, Lightning addresses (user@domain), and LNURL-pay links (lnurl1…, lightning:LNURL…, lnurlp://…)
         - LNURL withdraw, auth/login, and channel requests must show an explicit unsupported error and must not pay

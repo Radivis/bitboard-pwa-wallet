@@ -69,6 +69,15 @@ describe('canBuildOnChainSend', () => {
     ).toBe(false)
   })
 
+  it('rejects a segwit prefix that does not decode', () => {
+    expect(
+      canBuildOnChainSend({
+        ...base,
+        normalizedRecipient: 'tb1qnot-a-real-address',
+      }),
+    ).toBe(false)
+  })
+
   it('rejects amount above balance', () => {
     expect(
       canBuildOnChainSend({ ...base, amountSats: 600_000 }),
