@@ -305,7 +305,7 @@ async fn overlay_complete_ready_if_claimable(
     Ok(stamp_complete_ready_when_claimable(records, key, progress))
 }
 
-fn pipeline_in_progress_row(
+struct PipelineInProgressRowParams {
     txid: String,
     vout: u32,
     amount_sats: u64,
@@ -315,6 +315,20 @@ fn pipeline_in_progress_row(
     phase: VtxoExitPhase,
     csv_ready_at_unix_seconds: Option<u64>,
     csv_confirmations_remaining: Option<u64>,
+}
+
+fn pipeline_in_progress_row(
+    PipelineInProgressRowParams {
+        txid,
+        vout,
+        amount_sats,
+        virtual_status_state,
+        can_complete,
+        tagged_at,
+        phase,
+        csv_ready_at_unix_seconds,
+        csv_confirmations_remaining,
+    }: PipelineInProgressRowParams,
 ) -> UnilateralExitInProgressDto {
     UnilateralExitInProgressDto {
         id: format!("{txid}:{vout}"),
@@ -376,17 +390,17 @@ async fn overlay_in_progress_row_for_record(
         )
         .await?;
         return Ok(Some((
-            pipeline_in_progress_row(
-                candidate.txid,
-                candidate.vout,
-                candidate.amount_sats,
-                candidate.virtual_status_state,
-                claimability.can_complete,
-                record.tagged_at,
-                phase_shown_for_in_progress_row(records, key, phase),
-                claimability.csv_ready_at_unix_seconds,
-                claimability.csv_confirmations_remaining,
-            ),
+            pipeline_in_progress_row(PipelineInProgressRowParams {
+                txid: candidate.txid,
+                vout: candidate.vout,
+                amount_sats: candidate.amount_sats,
+                virtual_status_state: candidate.virtual_status_state,
+                can_complete: claimability.can_complete,
+                tagged_at: record.tagged_at,
+                phase: phase_shown_for_in_progress_row(records, key, phase),
+                csv_ready_at_unix_seconds: claimability.csv_ready_at_unix_seconds,
+                csv_confirmations_remaining: claimability.csv_confirmations_remaining,
+            }),
             claimability.stamped_complete_ready,
         )));
     }
@@ -418,33 +432,33 @@ async fn overlay_in_progress_row_for_record(
         )
         .await?;
         return Ok(Some((
-            pipeline_in_progress_row(
+            pipeline_in_progress_row(PipelineInProgressRowParams {
                 txid,
                 vout,
-                snapshot_record.amount_sats,
+                amount_sats: snapshot_record.amount_sats,
                 virtual_status_state,
-                claimability.can_complete,
-                record.tagged_at,
-                phase_shown_for_in_progress_row(records, key, phase),
-                claimability.csv_ready_at_unix_seconds,
-                claimability.csv_confirmations_remaining,
-            ),
+                can_complete: claimability.can_complete,
+                tagged_at: record.tagged_at,
+                phase: phase_shown_for_in_progress_row(records, key, phase),
+                csv_ready_at_unix_seconds: claimability.csv_ready_at_unix_seconds,
+                csv_confirmations_remaining: claimability.csv_confirmations_remaining,
+            }),
             claimability.stamped_complete_ready,
         )));
     }
 
     Ok(Some((
-        pipeline_in_progress_row(
+        pipeline_in_progress_row(PipelineInProgressRowParams {
             txid,
             vout,
-            record.amount_sats,
-            VirtualStatusState::Unrolled,
-            phase == VtxoExitPhase::CompleteReady,
-            record.tagged_at,
+            amount_sats: record.amount_sats,
+            virtual_status_state: VirtualStatusState::Unrolled,
+            can_complete: phase == VtxoExitPhase::CompleteReady,
+            tagged_at: record.tagged_at,
             phase,
-            None,
-            None,
-        ),
+            csv_ready_at_unix_seconds: None,
+            csv_confirmations_remaining: None,
+        }),
         false,
     )))
 }
@@ -649,17 +663,17 @@ mod tests {
 
     #[test]
     fn pipeline_in_progress_row_uses_outpoint_id() {
-        let row = pipeline_in_progress_row(
-            "aa".repeat(32),
-            1,
-            50_000,
-            VirtualStatusState::Unrolled,
-            true,
-            42,
-            VtxoExitPhase::CompleteReady,
-            None,
-            None,
-        );
+        let row = pipeline_in_progress_row(PipelineInProgressRowParams {
+            txid: "aa".repeat(32),
+            vout: 1,
+            amount_sats: 50_000,
+            virtual_status_state: VirtualStatusState::Unrolled,
+            can_complete: true,
+            tagged_at: 42,
+            phase: VtxoExitPhase::CompleteReady,
+            csv_ready_at_unix_seconds: None,
+            csv_confirmations_remaining: None,
+        });
         assert_eq!(row.id, format!("{}:1", "aa".repeat(32)));
         assert_eq!(row.vout, 1);
         assert!(row.can_complete);
