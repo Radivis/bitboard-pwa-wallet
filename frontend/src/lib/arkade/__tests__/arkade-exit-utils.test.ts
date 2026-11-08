@@ -127,7 +127,7 @@ describe('unilateral exit timelock display', () => {
       csvReadyAtUnixSeconds: nowUnixSeconds + 120,
       nowUnixSeconds,
     })
-    expect(banner).toContain('ends in 2m 0s')
+    expect(banner).toContain('ends in 2 minutes 0 seconds')
     expect(banner).not.toContain('34 minutes')
   })
 
@@ -140,7 +140,7 @@ describe('unilateral exit timelock display', () => {
       csvReadyAtUnixSeconds: nowUnixSeconds + 183_845,
       nowUnixSeconds,
     })
-    expect(banner).toContain('ends in 2d 3h 4m 5s')
+    expect(banner).toContain('ends in 2 days 3 hours 4 minutes 5 seconds')
   })
 
   it('says the CSV has elapsed when the ready time is already past', () => {

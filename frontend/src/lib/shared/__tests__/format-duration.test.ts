@@ -13,12 +13,12 @@ describe('formatDurationDaysHoursMinutesSeconds', () => {
   })
 
   it('shows hours, minutes, and seconds under a day', () => {
-    expect(formatDurationDaysHoursMinutesSeconds(3_600)).toBe('1 hours 0 minutes 0 seconds')
-    expect(formatDurationDaysHoursMinutesSeconds(3_661)).toBe('1 hours 1 minutes 1 seconds')
+    expect(formatDurationDaysHoursMinutesSeconds(3_600)).toBe('1 hour 0 minutes 0 seconds')
+    expect(formatDurationDaysHoursMinutesSeconds(3_661)).toBe('1 hour 1 minute 1 second')
   })
 
   it('shows days together with hours, minutes, and seconds', () => {
-    expect(formatDurationDaysHoursMinutesSeconds(86_400)).toBe('1 days 0 hours 0 minutes 0 seconds')
+    expect(formatDurationDaysHoursMinutesSeconds(86_400)).toBe('1 day 0 hours 0 minutes 0 seconds')
     expect(formatDurationDaysHoursMinutesSeconds(183_845)).toBe('2 days 3 hours 4 minutes 5 seconds')
   })
 })

@@ -732,7 +732,7 @@ export function useArkadeRenewMutation() {
       toastBatchJoinResult(
         result,
         'renew',
-        'No expiring VTXOs to renew right now',
+        'No VTXOs are in the renewal window yet',
       )
       if (
         activeWalletId != null &&

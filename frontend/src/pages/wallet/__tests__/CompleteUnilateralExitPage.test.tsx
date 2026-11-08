@@ -471,7 +471,7 @@ describe('CompleteUnilateralExitPage', () => {
     )
 
     expect(screen.getByTestId('arkade-unilateral-complete-waiting')).toHaveTextContent(
-      /ends in 2m 0s/i,
+      /ends in 2 minutes 0 seconds/i,
     )
     expect(screen.getByTestId('arkade-unilateral-complete-waiting')).not.toHaveTextContent(
       /144 blocks/i,

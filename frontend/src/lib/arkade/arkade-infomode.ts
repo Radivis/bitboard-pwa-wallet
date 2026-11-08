@@ -123,12 +123,12 @@ export const ARKADE_DELEGATOR_FEE_INFOMODE = {
 
 export const ARKADE_RENEW_VTXOS_INFOMODE = {
   title: 'Renew VTXOs now',
-  text: 'Each virtual balance unit (VTXO) must be renewed before it expires, or it falls back to a slower on-chain path. Use this while unlocked if you want to renew manually instead of relying on the delegator.',
+  text: 'Each virtual balance unit (VTXO) must be renewed before it expires, or it falls back to a slower on-chain path. This renews VTXOs in the last 10% of their lifetime, and earlier when the operator no longer charges an early-renewal fee. On Mutinynet that fee drops to zero about six days before expiry, so a VTXO with a day left is already in the window. Use this while unlocked if you want to renew manually instead of relying on the delegator.',
 } as const
 
 export const ARKADE_VTXO_EXPIRY_INDICATOR_INFOMODE = {
   title: 'VTXO expiry',
-  text: 'Each offchain virtual balance unit (VTXO) has an expiry time. Renew before then to stay on the fast Arkade path. The date shown is the soonest expiry among your current VTXOs. Amber text means some are already in the renewal window.',
+  text: 'Each offchain virtual balance unit (VTXO) has an expiry time. Renew before then to stay on the fast Arkade path. The date shown is the soonest expiry among your current VTXOs, even before they can be renewed. Amber text means some are already in the renewal window: the last 10% of their lifetime, or sooner when the operator no longer charges an early-renewal fee.',
 } as const
 
 export const ARKADE_OPERATOR_BATCH_WINDOW_INFOMODE = {

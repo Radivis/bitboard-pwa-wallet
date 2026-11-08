@@ -20,6 +20,7 @@ hex = "0.4"
 bip39 = "2"
 bitcoin = { version = "0.32", default-features = false, features = ["std", "rand", "serde"] }
 ark-core = "0.12.0"
+ark-fees = "0.12.0"
 ark-bdk-wallet = { path = "../third_party/ark-bdk-wallet" }
 ark-delegator = "0.12.0"
 
@@ -63,7 +64,6 @@ version = "0.2"
 features = ["js"]
 
 [dev-dependencies]
-ark-fees = "0.12.0"
 bip39 = "2"
 getrandom = { version = "0.2", features = ["std"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
