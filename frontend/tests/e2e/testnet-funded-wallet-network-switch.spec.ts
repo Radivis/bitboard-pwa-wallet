@@ -38,6 +38,20 @@ const FULL_SCAN_TOAST_TIMEOUT_MS = 480_000
 const EXPLORER_UNREACHABLE_MESSAGE =
   'Testnet full scan did not succeed. The dashboard still says the Bitcoin explorer could not be reached.'
 
+/** Public Esplora caps are hourly. Clicking Retry spends the rest of the cap and still fails. */
+function rateLimitedExplorerDetail(bannerText: string): string | null {
+  const normalized = bannerText.replace(/\s+/g, ' ')
+  const lower = normalized.toLowerCase()
+  if (
+    normalized.includes('429') ||
+    lower.includes('too many requests') ||
+    lower.includes('rate exceeds')
+  ) {
+    return normalized
+  }
+  return null
+}
+
 /** One full-scan attempt is a 30s request. Do not start another with less time than that. */
 const MIN_MS_TO_START_ANOTHER_SCAN = 45_000
 
@@ -78,8 +92,17 @@ async function waitForInitialOnchainScanReadyForBalance(page: Page): Promise<voi
     await waitForDashboardSyncButtonEnabled(page, remainingMs)
     const initialSyncBanner = page.getByText('Initial sync did not finish')
     if (await initialSyncBanner.isVisible()) {
+      const bannerText = (
+        await page.getByRole('alert').filter({ hasText: 'Initial sync did not finish' }).innerText()
+      ).replace(/\s+/g, ' ')
+      const rateLimitedDetail = rateLimitedExplorerDetail(bannerText)
+      if (rateLimitedDetail != null) {
+        throw new Error(
+          `Esplora rate-limited this scan, so retrying it would keep failing. Dashboard said: ${rateLimitedDetail}`,
+        )
+      }
       if (deadline - Date.now() < MIN_MS_TO_START_ANOTHER_SCAN) {
-        throw new Error(EXPLORER_UNREACHABLE_MESSAGE)
+        throw new Error(`${EXPLORER_UNREACHABLE_MESSAGE} Dashboard said: ${bannerText}`)
       }
       // The toast has its own Retry action. The banner button is the one in main.
       await page.getByRole('main').getByRole('button', { name: 'Retry', exact: true }).click()

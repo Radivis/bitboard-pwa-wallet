@@ -133,17 +133,22 @@ export function isKnownEsploraProviderId(id: string): id is EsploraProviderId {
   return id === 'default' || id === 'blockstream' || id === 'legacy'
 }
 
-const ESPLORA_UPSTREAM_FAILOVER_STATUSES = new Set([429, 502, 503, 504])
+const ESPLORA_UPSTREAM_FAILOVER_STATUSES = new Set([502, 503, 504])
 
-/** Public hosts answer with these when a full scan should try the other allowlisted mirror. */
+/**
+ * Gateway failures only. HTTP 429 stays on the host that sent it: Blockstream's
+ * unauthenticated cap is 700 requests per hour, so a full scan moved there fails
+ * with Blockstream's rate-limit notice.
+ */
 export function isEsploraUpstreamFailoverStatus(status: number): boolean {
   return ESPLORA_UPSTREAM_FAILOVER_STATUSES.has(status)
 }
 
 /**
- * Same-chain mirror when the preferred host does not connect or rate-limits.
+ * Same-chain mirror when the preferred host does not connect or its gateway fails.
  * Mempool is preferred for testnet4 (Blockstream's 700/hour cap 429s a full scan).
- * Blockstream is the mirror when Mempool itself is unreachable.
+ * Blockstream is the mirror when Mempool itself is unreachable. A 429 stays on
+ * the host that sent it, so a rate-limited mirror does not replace Mempool.
  */
 export function esploraFallbackUpstreamBase(
   providerId: string,

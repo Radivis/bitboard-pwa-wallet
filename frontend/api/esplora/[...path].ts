@@ -96,7 +96,7 @@ function esploraFallbackBase(providerId: string, network: string): string | null
 }
 
 function isEsploraFailoverStatus(status: number): boolean {
-  return status === 429 || status === 502 || status === 503 || status === 504
+  return status === 502 || status === 503 || status === 504
 }
 
 // CORS headers for browser requests
@@ -234,9 +234,15 @@ export default async function handler(
           : PRIMARY_ATTEMPT_MS,
       )
       if (fallbackUrl != null && isEsploraFailoverStatus(upstream.status)) {
-        preferredHostHasAnswered.delete(baseTrim)
-        skipPreferredHostUntilMs.set(baseTrim, Date.now() + UNREACHABLE_COOLDOWN_MS)
-        upstream = await attemptUpstream(fallbackUrl, FALLBACK_AFTER_PROBE_MS)
+        const preferred = upstream
+        const fallback = await attemptUpstream(fallbackUrl, FALLBACK_AFTER_PROBE_MS)
+        if (fallback.status === 429) {
+          upstream = preferred
+        } else {
+          preferredHostHasAnswered.delete(baseTrim)
+          skipPreferredHostUntilMs.set(baseTrim, Date.now() + UNREACHABLE_COOLDOWN_MS)
+          upstream = fallback
+        }
       } else {
         preferredHostHasAnswered.add(baseTrim)
       }
@@ -246,10 +252,12 @@ export default async function handler(
       res.status(502).send('Upstream unreachable')
       return
     }
-    preferredHostHasAnswered.delete(baseTrim)
-    skipPreferredHostUntilMs.set(baseTrim, Date.now() + UNREACHABLE_COOLDOWN_MS)
     try {
       upstream = await attemptUpstream(fallbackUrl, FALLBACK_AFTER_PROBE_MS)
+      if (upstream.status !== 429) {
+        preferredHostHasAnswered.delete(baseTrim)
+        skipPreferredHostUntilMs.set(baseTrim, Date.now() + UNREACHABLE_COOLDOWN_MS)
+      }
     } catch {
       res.status(502).send('Upstream unreachable')
       return

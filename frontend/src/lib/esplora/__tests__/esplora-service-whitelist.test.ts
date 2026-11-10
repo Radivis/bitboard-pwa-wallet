@@ -128,8 +128,8 @@ describe('getUpstreamBaseForEsploraProxy', () => {
     expect(esploraFallbackUpstreamBase('blockstream', 'testnet')).toBeNull()
   })
 
-  it('treats rate limits and gateway errors as failover statuses', () => {
-    expect(isEsploraUpstreamFailoverStatus(429)).toBe(true)
+  it('fails over on gateway errors and keeps rate limits on the preferred host', () => {
+    expect(isEsploraUpstreamFailoverStatus(429)).toBe(false)
     expect(isEsploraUpstreamFailoverStatus(503)).toBe(true)
     expect(isEsploraUpstreamFailoverStatus(200)).toBe(false)
     expect(isEsploraUpstreamFailoverStatus(404)).toBe(false)

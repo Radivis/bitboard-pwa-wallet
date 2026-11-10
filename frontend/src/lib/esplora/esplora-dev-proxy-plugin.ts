@@ -9,16 +9,31 @@ import {
   isEsploraUpstreamFailoverStatus,
 } from './esplora-service-whitelist'
 
-/** Enough to notice a hung TCP connect without eating the WASM full-scan budget on every call. */
+/** Hung TCP only. A live Mempool history response often takes longer than this to send its body. */
 const PRIMARY_CONNECT_TIMEOUT_MS = 2_000
-/** After a failed preferred host, stay on the mirror so a scan does not pay the connect timeout per request. */
+/** After a preferred host that never connects, stay on the mirror so the scan does not pay the connect timeout per request. */
 const UNREACHABLE_COOLDOWN_MS = 60_000
-const FALLBACK_REQUEST_TIMEOUT_MS = 25_000
+/** Body budget after TCP connect. Stays under the WASM full-scan request timeout. */
+const RESPONSE_TIMEOUT_MS = 25_000
 const MAX_POST_BODY_BYTES = 512_000
 
+const PREFERRED_HOST_DOWN_CODES = new Set([
+  'ESPLORA_CONNECT_TIMEOUT',
+  'ECONNREFUSED',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'EHOSTUNREACH',
+  'ETIMEDOUT',
+])
+
 const skipPreferredHostUntilMs = new Map<string, number>()
-/** A preferred host that already answered can use the long timeout. The first probe stays short. */
-const preferredHostHasAnswered = new Set<string>()
+
+/** Connect failure or DNS/refusal. A slow body after TCP connect is not a dead host. */
+export function isEsploraPreferredHostDownError(error: unknown): boolean {
+  if (typeof error !== 'object' || error == null || !('code' in error)) return false
+  const code = error.code
+  return typeof code === 'string' && PREFERRED_HOST_DOWN_CODES.has(code)
+}
 
 type UpstreamResponse = {
   statusCode: number
@@ -80,39 +95,87 @@ function readRequestBody(req: IncomingMessage): Promise<Buffer> {
   })
 }
 
-function requestUpstream(
+function errorWithCode(message: string, code: string): Error {
+  const error = new Error(message)
+  Object.assign(error, { code })
+  return error
+}
+
+export function requestUpstream(
   targetUrl: string,
   method: string,
   headers: Record<string, string>,
   body: Buffer | null,
-  timeoutMs: number,
 ): Promise<UpstreamResponse> {
   const parsedTarget = new URL(targetUrl)
   const transport = parsedTarget.protocol === 'http:' ? httpRequest : httpsRequest
   return new Promise((resolve, reject) => {
-    const upstreamRequest = transport(
-      parsedTarget,
-      { method, headers, timeout: timeoutMs },
-      (upstreamResponse) => {
-        const chunks: Buffer[] = []
-        upstreamResponse.on('data', (chunk: Buffer) => {
-          chunks.push(chunk)
+    let settled = false
+    let responseTimeoutArmed = false
+    let connectTimer: ReturnType<typeof setTimeout> | undefined
+    let responseTimer: ReturnType<typeof setTimeout> | undefined
+
+    const clearTimers = () => {
+      clearTimeout(connectTimer)
+      clearTimeout(responseTimer)
+    }
+    const finishReject = (error: unknown) => {
+      if (settled) return
+      settled = true
+      clearTimers()
+      reject(error)
+    }
+    const finishResolve = (value: UpstreamResponse) => {
+      if (settled) return
+      settled = true
+      clearTimers()
+      resolve(value)
+    }
+    const armResponseTimeout = () => {
+      if (responseTimeoutArmed || settled) return
+      responseTimeoutArmed = true
+      clearTimeout(connectTimer)
+      responseTimer = setTimeout(() => {
+        upstreamRequest.destroy(
+          errorWithCode('Esplora upstream timed out', 'ESPLORA_RESPONSE_TIMEOUT'),
+        )
+      }, RESPONSE_TIMEOUT_MS)
+    }
+    const watchSocket = (socket: NodeJS.Socket) => {
+      if (socket.connecting) {
+        socket.once('connect', armResponseTimeout)
+        return
+      }
+      armResponseTimeout()
+    }
+
+    const upstreamRequest = transport(parsedTarget, { method, headers }, (upstreamResponse) => {
+      armResponseTimeout()
+      const chunks: Buffer[] = []
+      upstreamResponse.on('data', (chunk: Buffer) => {
+        chunks.push(chunk)
+      })
+      upstreamResponse.on('end', () => {
+        const contentTypeHeader = upstreamResponse.headers['content-type']
+        finishResolve({
+          statusCode: upstreamResponse.statusCode ?? 502,
+          contentType: typeof contentTypeHeader === 'string' ? contentTypeHeader : null,
+          body: Buffer.concat(chunks),
         })
-        upstreamResponse.on('end', () => {
-          const contentTypeHeader = upstreamResponse.headers['content-type']
-          resolve({
-            statusCode: upstreamResponse.statusCode ?? 502,
-            contentType: typeof contentTypeHeader === 'string' ? contentTypeHeader : null,
-            body: Buffer.concat(chunks),
-          })
-        })
-        upstreamResponse.on('error', reject)
-      },
-    )
-    upstreamRequest.on('timeout', () => {
-      upstreamRequest.destroy(new Error('Esplora upstream timed out'))
+      })
+      upstreamResponse.on('error', finishReject)
     })
-    upstreamRequest.on('error', reject)
+
+    connectTimer = setTimeout(() => {
+      upstreamRequest.destroy(
+        errorWithCode('Esplora upstream connect timed out', 'ESPLORA_CONNECT_TIMEOUT'),
+      )
+    }, PRIMARY_CONNECT_TIMEOUT_MS)
+    upstreamRequest.on('socket', watchSocket)
+    if (upstreamRequest.socket != null) {
+      watchSocket(upstreamRequest.socket)
+    }
+    upstreamRequest.on('error', finishReject)
     if (body != null && body.byteLength > 0) {
       upstreamRequest.write(body)
     }
@@ -141,33 +204,33 @@ async function fetchWithMirrorFallback(
   }
 
   if (preferredHostIsOnCooldown(route.preferredBase, Date.now())) {
-    return requestUpstream(fallbackUrl, method, headers, body, FALLBACK_REQUEST_TIMEOUT_MS)
+    return requestUpstream(fallbackUrl, method, headers, body)
   }
-
-  const preferredTimeoutMs = preferredHostHasAnswered.has(route.preferredBase)
-    ? FALLBACK_REQUEST_TIMEOUT_MS
-    : PRIMARY_CONNECT_TIMEOUT_MS
 
   try {
-    const preferredResponse = await requestUpstream(
-      preferredUrl,
-      method,
-      headers,
-      body,
-      preferredTimeoutMs,
-    )
+    const preferredResponse = await requestUpstream(preferredUrl, method, headers, body)
     if (!isEsploraUpstreamFailoverStatus(preferredResponse.statusCode)) {
-      preferredHostHasAnswered.add(route.preferredBase)
       return preferredResponse
     }
-  } catch {
-    preferredHostHasAnswered.delete(route.preferredBase)
-    // Preferred host did not connect. The mirror answers the same chain.
+    const fallbackResponse = await requestUpstream(fallbackUrl, method, headers, body)
+    if (fallbackResponse.statusCode === 429) {
+      return preferredResponse
+    }
+    markPreferredHostUnreachable(route.preferredBase)
+    return fallbackResponse
+  } catch (error) {
+    // A body timeout means Mempool accepted the connection. Falling over to
+    // Blockstream for the rest of the scan trips its hourly cap (HTTP 429).
+    if (!isEsploraPreferredHostDownError(error)) {
+      throw error
+    }
   }
 
-  markPreferredHostUnreachable(route.preferredBase)
-  preferredHostHasAnswered.delete(route.preferredBase)
-  return requestUpstream(fallbackUrl, method, headers, body, FALLBACK_REQUEST_TIMEOUT_MS)
+  const fallbackResponse = await requestUpstream(fallbackUrl, method, headers, body)
+  if (fallbackResponse.statusCode !== 429) {
+    markPreferredHostUnreachable(route.preferredBase)
+  }
+  return fallbackResponse
 }
 
 /**
