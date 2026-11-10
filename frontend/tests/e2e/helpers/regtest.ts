@@ -1,10 +1,10 @@
 import { execFile } from 'node:child_process'
-import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 
+import { bdkEsploraScripthashHex } from '@/lib/wallet/bdk-esplora-scripthash'
 import {
   formatEsploraTxStatusForDiagnostic,
   isEsploraTxStatusReadyForBdkAnchor,
@@ -145,60 +145,6 @@ export async function fundRegtestWalletReceiveAddress(
   )
 }
 
-const BECH32_CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l'
-
-function convertBech32Bits(
-  data: number[],
-  fromBits: number,
-  toBits: number,
-  pad: boolean,
-): number[] | null {
-  let accumulator = 0
-  let bitCount = 0
-  const converted: number[] = []
-  const maxValue = (1 << toBits) - 1
-  for (const value of data) {
-    accumulator = (accumulator << fromBits) | value
-    bitCount += fromBits
-    while (bitCount >= toBits) {
-      bitCount -= toBits
-      converted.push((accumulator >> bitCount) & maxValue)
-    }
-  }
-  if (pad) {
-    if (bitCount > 0) {
-      converted.push((accumulator << (toBits - bitCount)) & maxValue)
-    }
-    return converted
-  }
-  const leftoverBitsArePadding =
-    bitCount < fromBits && ((accumulator << (toBits - bitCount)) & maxValue) === 0
-  return leftoverBitsArePadding ? converted : null
-}
-
-/** Witness script BDK hashes for `GET /scripthash/{sha256(script)}/txs` (not byte-reversed). */
-function bdkScripthashHex(address: string): string {
-  const separatorIndex = address.lastIndexOf('1')
-  const payloadChars = address.slice(separatorIndex + 1).toLowerCase()
-  const fiveBitPayload = [...payloadChars].map((character) => {
-    const charsetIndex = BECH32_CHARSET.indexOf(character)
-    if (charsetIndex < 0) {
-      throw new Error(`Address ${address} is not bech32`)
-    }
-    return charsetIndex
-  })
-  if (fiveBitPayload.length < 7) {
-    throw new Error(`Address ${address} is not bech32`)
-  }
-  const witnessVersion = fiveBitPayload[0]
-  const witnessProgram = convertBech32Bits(fiveBitPayload.slice(1, -6), 5, 8, false)
-  if (witnessVersion == null || witnessProgram == null || witnessProgram.length === 0) {
-    throw new Error(`Address ${address} has no witness program`)
-  }
-  const script = Buffer.from([witnessVersion, witnessProgram.length, ...witnessProgram])
-  return createHash('sha256').update(script).digest('hex')
-}
-
 /**
  * BDK incremental sync treats an empty `/scripthash/.../txs` body as an unused script.
  * `/address/.../utxo` and `/address/.../txs` can be filled while that history is still empty,
@@ -209,7 +155,7 @@ async function bdkScripthashHistoryIncludesTxids(
   txids: string[],
 ): Promise<boolean> {
   try {
-    const res = await fetch(`${ESPLORA_URL}/scripthash/${bdkScripthashHex(address)}/txs`)
+    const res = await fetch(`${ESPLORA_URL}/scripthash/${bdkEsploraScripthashHex(address)}/txs`)
     if (!res.ok) {
       return false
     }
