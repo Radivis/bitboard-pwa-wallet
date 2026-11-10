@@ -1842,6 +1842,15 @@ where
         let (boarding_inputs, mut vtxo_inputs, mut total_amount) = self
             .fetch_commitment_transaction_inputs(&server_info, crate::utils::unix_now()?)
             .await?;
+        // arkd rejects an off-board intent that also spends a boarding output:
+        // INVALID_INTENT_PROOF (23) "cannot include onchain inputs and outputs".
+        // A settled VTXO is the cooperative input. A still-listed boarding UTXO
+        // (Esplora has not yet dropped the spent output) must not join this intent.
+        let boarding_amount = boarding_inputs
+            .iter()
+            .fold(Amount::ZERO, |acc, input| acc + input.amount());
+        let boarding_inputs = Vec::new();
+        total_amount = total_without_boarding_inputs(boarding_amount, total_amount);
         let excluded_amount = vtxo_inputs
             .iter()
             .filter(|input| exclude_vtxos.contains(&input.outpoint()))
@@ -2849,6 +2858,37 @@ pub(crate) fn reserved_fee_covers_operator_quote(
         return true;
     }
     reserved.to_sat() >= operator_sats as u64
+}
+
+/// Drop boarding value from a fetched input total.
+///
+/// An off-board intent creates an on-chain output. arkd rejects that intent when it
+/// also spends a boarding output, so the boarding amount cannot stay in the total.
+fn total_without_boarding_inputs(boarding_amount: Amount, fetched_total: Amount) -> Amount {
+    fetched_total
+        .checked_sub(boarding_amount)
+        .unwrap_or(Amount::ZERO)
+}
+
+#[cfg(test)]
+mod offboard_input_tests {
+    use super::total_without_boarding_inputs;
+    use bitcoin::Amount;
+
+    #[test]
+    fn collaborative_exit_total_excludes_a_still_listed_boarding_output() {
+        let vtxo_only =
+            total_without_boarding_inputs(Amount::from_sat(200_000), Amount::from_sat(398_000));
+        assert_eq!(vtxo_only, Amount::from_sat(198_000));
+    }
+
+    #[test]
+    fn boarding_amount_above_the_fetched_total_is_zero() {
+        assert_eq!(
+            total_without_boarding_inputs(Amount::from_sat(500), Amount::from_sat(100)),
+            Amount::ZERO
+        );
+    }
 }
 
 #[cfg(test)]
