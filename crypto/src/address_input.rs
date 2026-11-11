@@ -3,7 +3,7 @@
 //! rust-bitcoin reports some bech32 failures as `ParseError::LegacyAddressTooLong`,
 //! whose Display text is "legacy address base58 string". Strip paste junk first.
 //! Keep the stripped characters in sync with
-//! `frontend/src/lib/wallet/strip-pasted-invisible-characters.ts`.
+//! `frontend/src/lib/wallet/pasted-invisible-code-points.json`.
 
 use std::str::FromStr;
 
@@ -133,6 +133,47 @@ mod tests {
     fn witness_address(network: Network, version: WitnessVersion, program: &[u8]) -> String {
         let witness_program = WitnessProgram::new(version, program).expect("witness program");
         Address::from_witness_program(witness_program, network).to_string()
+    }
+
+    #[test]
+    fn pasted_invisible_characters_match_the_shared_vector() {
+        use std::collections::BTreeSet;
+
+        let fixture =
+            include_str!("../../frontend/src/lib/wallet/pasted-invisible-code-points.json");
+        let listed: Vec<String> = serde_json::from_str(fixture).expect("shared vector");
+        let expected: BTreeSet<u32> = listed
+            .iter()
+            .map(|hex| u32::from_str_radix(hex, 16).expect("hex code point"))
+            .collect();
+        assert_eq!(
+            expected.len(),
+            listed.len(),
+            "shared vector has a duplicate code point"
+        );
+        assert!(
+            expected.contains(&0x202E),
+            "shared vector must include a bidi override"
+        );
+        assert!(
+            expected.contains(&0x200B),
+            "shared vector must include a zero-width mark"
+        );
+        assert!(
+            expected.contains(&0x60),
+            "shared vector must include a backtick"
+        );
+
+        let stripped: BTreeSet<u32> = (0..=0x10FFFF)
+            .filter_map(char::from_u32)
+            .filter(|character| is_pasted_invisible_or_backtick(*character))
+            .map(|character| u32::from(character))
+            .collect();
+        assert_eq!(stripped, expected);
+
+        let address = "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx";
+        let polluted = format!("\u{202E}{}\u{200B}{}`", &address[..4], &address[4..]);
+        assert_eq!(sanitize_pasted_bitcoin_text(&polluted), address);
     }
 
     #[test]

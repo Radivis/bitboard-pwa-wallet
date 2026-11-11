@@ -1,8 +1,10 @@
 import type { NetworkMode } from '@/stores/walletStore'
-
-const SECONDS_PER_MINUTE = 60
-const SECONDS_PER_HOUR = 3_600
-const SECONDS_PER_DAY = 86_400
+import {
+  durationUnit,
+  SECONDS_PER_DAY,
+  SECONDS_PER_HOUR,
+  SECONDS_PER_MINUTE,
+} from '@/lib/shared/format-duration'
 
 /** Target interval on mainnet, signet, and testnet. */
 const TEN_MINUTE_BLOCK_SECONDS = 10 * SECONDS_PER_MINUTE
@@ -52,19 +54,15 @@ export function blockDurationParts(
   return { blockCount: count, days, hours, minutes, seconds }
 }
 
-function durationUnit(count: number, singular: string, plural: string): string {
-  return `${count} ${count === 1 ? singular : plural}`
-}
-
 /**
  * Days, hours, and minutes for display. Seconds stay off the phrase.
  * `null` when the network has no target interval, or the estimate is zero.
  */
 export function formatApproximateDurationPhrase(parts: BlockDurationParts): string | null {
   const pieces: string[] = []
-  if (parts.days > 0) pieces.push(durationUnit(parts.days, 'day', 'days'))
-  if (parts.hours > 0) pieces.push(durationUnit(parts.hours, 'hour', 'hours'))
-  if (parts.minutes > 0) pieces.push(durationUnit(parts.minutes, 'minute', 'minutes'))
+  if (parts.days > 0) pieces.push(durationUnit(parts.days, 'day'))
+  if (parts.hours > 0) pieces.push(durationUnit(parts.hours, 'hour'))
+  if (parts.minutes > 0) pieces.push(durationUnit(parts.minutes, 'minute'))
   if (pieces.length === 0) {
     return parts.seconds > 0 ? 'less than a minute' : null
   }

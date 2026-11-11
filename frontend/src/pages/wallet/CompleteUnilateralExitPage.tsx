@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
 import { Copy, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -23,7 +23,6 @@ import {
   isUnilateralExitCompletionNotReadyError,
   unilateralExitWaitingTimelockProgress,
 } from '@/lib/arkade/arkade-exit-utils'
-import { UNILATERAL_EXIT_WAITING_CLOCK_TICK_MS } from '@/lib/arkade/arkade-query-timings'
 import { userFacingErrorMessage } from '@/lib/shared/utils'
 import {
   includesArkadeVtxoOutpoint,
@@ -33,6 +32,7 @@ import {
 } from '@/workers/arkade-api'
 import { useArkadeLoadLifecycleSnapshot } from '@/hooks/useArkadeLifecycleSnapshots'
 import { useCompleteUnilateralExitFlow } from '@/hooks/useCompleteUnilateralExitFlow'
+import { useTickingUnixSeconds } from '@/hooks/useTickingUnixSeconds'
 import { useVtxoExitSnapshots } from '@/hooks/useUnilateralExitLifecycleSnapshot'
 import {
   formatVtxoExitPhaseCopy,
@@ -80,20 +80,6 @@ async function copyClipboardText(
   } catch {
     toast.error(failureMessage)
   }
-}
-
-function useTickingUnixSeconds(active: boolean): number {
-  const [nowUnixSeconds, setNowUnixSeconds] = useState(() => Math.floor(Date.now() / 1000))
-  useEffect(() => {
-    if (!active) {
-      return
-    }
-    const timer = window.setInterval(() => {
-      setNowUnixSeconds(Math.floor(Date.now() / 1000))
-    }, UNILATERAL_EXIT_WAITING_CLOCK_TICK_MS)
-    return () => window.clearInterval(timer)
-  }, [active])
-  return nowUnixSeconds
 }
 
 function selectedRowsWaitingBanner(params: {

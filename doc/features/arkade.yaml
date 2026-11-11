@@ -523,6 +523,7 @@ feature:
         - Back to Management
       - requirements:
         - Collaborative exit and fee estimates via bitboard-arkade WASM in arkade.worker
+        - A collaborative exit spends settled VTXOs only. A still-listed boarding output is left out of the off-board intent, and its amount is left out of the reserved total, because the operator rejects an off-board that also spends a boarding output
         - Shown only when isArkadeEnabled and current network supports Arkade
         - Session load uses the full-page Arkade loading and error screens
         - Successful submit, or an already-processing collaborative intent, returns to /wallet/management

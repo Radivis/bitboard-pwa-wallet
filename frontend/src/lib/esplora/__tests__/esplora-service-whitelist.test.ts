@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   customEsploraMatchesWhitelistedBase,
+  decideEsploraMirrorResponse,
   ESPLORA_PROVIDER_BASES,
   esploraViteProxyEntries,
   esploraFallbackUpstreamBase,
@@ -133,6 +134,24 @@ describe('getUpstreamBaseForEsploraProxy', () => {
     expect(isEsploraUpstreamFailoverStatus(503)).toBe(true)
     expect(isEsploraUpstreamFailoverStatus(200)).toBe(false)
     expect(isEsploraUpstreamFailoverStatus(404)).toBe(false)
+  })
+
+  it('keeps the preferred response when the mirror is rate limited', () => {
+    expect(decideEsploraMirrorResponse(502, 429)).toEqual({
+      useFallbackResponse: false,
+      markPreferredHostDown: false,
+    })
+    expect(decideEsploraMirrorResponse(null, 429)).toEqual({
+      useFallbackResponse: true,
+      markPreferredHostDown: false,
+    })
+  })
+
+  it('moves to the mirror after a gateway failure that the mirror can serve', () => {
+    expect(decideEsploraMirrorResponse(502, 200)).toEqual({
+      useFallbackResponse: true,
+      markPreferredHostDown: true,
+    })
   })
 
   it('resolves legacy testnet and has no legacy signet row', () => {

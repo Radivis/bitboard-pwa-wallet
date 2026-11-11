@@ -1,9 +1,15 @@
-import { request as httpRequest, type IncomingMessage, type ServerResponse } from 'node:http'
+import {
+  request as httpRequest,
+  type ClientRequest,
+  type IncomingMessage,
+  type ServerResponse,
+} from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import type { Plugin } from 'vite'
 import { isProxiedUrlPathWithinAllowlistedBase } from '../shared/validate-proxied-upstream-url'
 import {
   ESPLORA_SAME_ORIGIN_PROXY_PREFIX,
+  decideEsploraMirrorResponse,
   esploraFallbackUpstreamBase,
   getUpstreamBaseForEsploraProxy,
   isEsploraUpstreamFailoverStatus,
@@ -101,6 +107,52 @@ function errorWithCode(message: string, code: string): Error {
   return error
 }
 
+function attachUpstreamTimers(
+  upstreamRequest: ClientRequest,
+  isSettled: () => boolean,
+): { clearTimers: () => void; armResponseTimeout: () => void } {
+  let responseTimeoutArmed = false
+  let responseTimer: ReturnType<typeof setTimeout> | undefined
+  const connectTimer = setTimeout(() => {
+    if (isSettled()) return
+    upstreamRequest.destroy(
+      errorWithCode('Esplora upstream connect timed out', 'ESPLORA_CONNECT_TIMEOUT'),
+    )
+  }, PRIMARY_CONNECT_TIMEOUT_MS)
+
+  const armResponseTimeout = () => {
+    if (responseTimeoutArmed || isSettled()) return
+    responseTimeoutArmed = true
+    clearTimeout(connectTimer)
+    responseTimer = setTimeout(() => {
+      if (isSettled()) return
+      upstreamRequest.destroy(
+        errorWithCode('Esplora upstream timed out', 'ESPLORA_RESPONSE_TIMEOUT'),
+      )
+    }, RESPONSE_TIMEOUT_MS)
+  }
+  const watchSocket = (socket: NodeJS.Socket) => {
+    if (socket.connecting) {
+      socket.once('connect', armResponseTimeout)
+      return
+    }
+    armResponseTimeout()
+  }
+
+  upstreamRequest.on('socket', watchSocket)
+  if (upstreamRequest.socket != null) {
+    watchSocket(upstreamRequest.socket)
+  }
+
+  return {
+    clearTimers: () => {
+      clearTimeout(connectTimer)
+      clearTimeout(responseTimer)
+    },
+    armResponseTimeout,
+  }
+}
+
 export function requestUpstream(
   targetUrl: string,
   method: string,
@@ -111,14 +163,8 @@ export function requestUpstream(
   const transport = parsedTarget.protocol === 'http:' ? httpRequest : httpsRequest
   return new Promise((resolve, reject) => {
     let settled = false
-    let responseTimeoutArmed = false
-    let connectTimer: ReturnType<typeof setTimeout> | undefined
-    let responseTimer: ReturnType<typeof setTimeout> | undefined
-
-    const clearTimers = () => {
-      clearTimeout(connectTimer)
-      clearTimeout(responseTimer)
-    }
+    let clearTimers = () => {}
+    let armResponseTimeout = () => {}
     const finishReject = (error: unknown) => {
       if (settled) return
       settled = true
@@ -130,23 +176,6 @@ export function requestUpstream(
       settled = true
       clearTimers()
       resolve(value)
-    }
-    const armResponseTimeout = () => {
-      if (responseTimeoutArmed || settled) return
-      responseTimeoutArmed = true
-      clearTimeout(connectTimer)
-      responseTimer = setTimeout(() => {
-        upstreamRequest.destroy(
-          errorWithCode('Esplora upstream timed out', 'ESPLORA_RESPONSE_TIMEOUT'),
-        )
-      }, RESPONSE_TIMEOUT_MS)
-    }
-    const watchSocket = (socket: NodeJS.Socket) => {
-      if (socket.connecting) {
-        socket.once('connect', armResponseTimeout)
-        return
-      }
-      armResponseTimeout()
     }
 
     const upstreamRequest = transport(parsedTarget, { method, headers }, (upstreamResponse) => {
@@ -166,15 +195,9 @@ export function requestUpstream(
       upstreamResponse.on('error', finishReject)
     })
 
-    connectTimer = setTimeout(() => {
-      upstreamRequest.destroy(
-        errorWithCode('Esplora upstream connect timed out', 'ESPLORA_CONNECT_TIMEOUT'),
-      )
-    }, PRIMARY_CONNECT_TIMEOUT_MS)
-    upstreamRequest.on('socket', watchSocket)
-    if (upstreamRequest.socket != null) {
-      watchSocket(upstreamRequest.socket)
-    }
+    const timers = attachUpstreamTimers(upstreamRequest, () => settled)
+    clearTimers = timers.clearTimers
+    armResponseTimeout = timers.armResponseTimeout
     upstreamRequest.on('error', finishReject)
     if (body != null && body.byteLength > 0) {
       upstreamRequest.write(body)
@@ -191,7 +214,25 @@ function writeUpstreamResponse(res: ServerResponse, upstream: UpstreamResponse):
   res.end(upstream.body)
 }
 
-async function fetchWithMirrorFallback(
+function responseAfterMirrorDecision(
+  preferredBase: string,
+  preferredResponse: UpstreamResponse | null,
+  fallbackResponse: UpstreamResponse,
+): UpstreamResponse {
+  const decision = decideEsploraMirrorResponse(
+    preferredResponse == null ? null : preferredResponse.statusCode,
+    fallbackResponse.statusCode,
+  )
+  if (decision.markPreferredHostDown) {
+    markPreferredHostUnreachable(preferredBase)
+  }
+  if (decision.useFallbackResponse || preferredResponse == null) {
+    return fallbackResponse
+  }
+  return preferredResponse
+}
+
+export async function fetchWithMirrorFallback(
   route: { preferredBase: string; fallbackBase: string; esploraSubpath: string; search: string },
   method: string,
   headers: Record<string, string>,
@@ -213,11 +254,11 @@ async function fetchWithMirrorFallback(
       return preferredResponse
     }
     const fallbackResponse = await requestUpstream(fallbackUrl, method, headers, body)
-    if (fallbackResponse.statusCode === 429) {
-      return preferredResponse
-    }
-    markPreferredHostUnreachable(route.preferredBase)
-    return fallbackResponse
+    return responseAfterMirrorDecision(
+      route.preferredBase,
+      preferredResponse,
+      fallbackResponse,
+    )
   } catch (error) {
     // A body timeout means Mempool accepted the connection. Falling over to
     // Blockstream for the rest of the scan trips its hourly cap (HTTP 429).
@@ -227,10 +268,7 @@ async function fetchWithMirrorFallback(
   }
 
   const fallbackResponse = await requestUpstream(fallbackUrl, method, headers, body)
-  if (fallbackResponse.statusCode !== 429) {
-    markPreferredHostUnreachable(route.preferredBase)
-  }
-  return fallbackResponse
+  return responseAfterMirrorDecision(route.preferredBase, null, fallbackResponse)
 }
 
 /**

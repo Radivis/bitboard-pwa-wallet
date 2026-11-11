@@ -1839,18 +1839,11 @@ where
     ) -> Result<PreparedOffboard, Error> {
         let server_info = self.server_info().await?;
         let (change_address, _) = self.get_offchain_address_with_server_info(&server_info)?;
-        let (boarding_inputs, mut vtxo_inputs, mut total_amount) = self
+        let (fetched_boarding_inputs, mut vtxo_inputs, fetched_total) = self
             .fetch_commitment_transaction_inputs(&server_info, crate::utils::unix_now()?)
             .await?;
-        // arkd rejects an off-board intent that also spends a boarding output:
-        // INVALID_INTENT_PROOF (23) "cannot include onchain inputs and outputs".
-        // A settled VTXO is the cooperative input. A still-listed boarding UTXO
-        // (Esplora has not yet dropped the spent output) must not join this intent.
-        let boarding_amount = boarding_inputs
-            .iter()
-            .fold(Amount::ZERO, |acc, input| acc + input.amount());
-        let boarding_inputs = Vec::new();
-        total_amount = total_without_boarding_inputs(boarding_amount, total_amount);
+        let (boarding_inputs, mut total_amount) =
+            offboard_inputs_without_boarding(fetched_boarding_inputs, fetched_total);
         let excluded_amount = vtxo_inputs
             .iter()
             .filter(|input| exclude_vtxos.contains(&input.outpoint()))
@@ -2860,34 +2853,91 @@ pub(crate) fn reserved_fee_covers_operator_quote(
     reserved.to_sat() >= operator_sats as u64
 }
 
-/// Drop boarding value from a fetched input total.
+/// Boarding inputs and total passed into `reserved_offboard_settlement`.
 ///
-/// An off-board intent creates an on-chain output. arkd rejects that intent when it
-/// also spends a boarding output, so the boarding amount cannot stay in the total.
-fn total_without_boarding_inputs(boarding_amount: Amount, fetched_total: Amount) -> Amount {
-    fetched_total
+/// arkd rejects an off-board intent that also spends a boarding output:
+/// INVALID_INTENT_PROOF (23) "cannot include onchain inputs and outputs".
+/// A still-listed boarding UTXO is dropped, and its value leaves the total.
+fn offboard_inputs_without_boarding(
+    fetched_boarding_inputs: Vec<batch::OnChainInput>,
+    fetched_total: Amount,
+) -> (Vec<batch::OnChainInput>, Amount) {
+    let boarding_amount = fetched_boarding_inputs
+        .iter()
+        .fold(Amount::ZERO, |acc, input| acc + input.amount());
+    let total_without_boarding = fetched_total
         .checked_sub(boarding_amount)
-        .unwrap_or(Amount::ZERO)
+        .unwrap_or(Amount::ZERO);
+    (Vec::new(), total_without_boarding)
 }
 
 #[cfg(test)]
 mod offboard_input_tests {
-    use super::total_without_boarding_inputs;
+    use super::offboard_inputs_without_boarding;
+    use ark_core::batch::OnChainInput;
+    use ark_core::BoardingOutput;
+    use bitcoin::secp256k1::PublicKey;
+    use bitcoin::secp256k1::Secp256k1;
     use bitcoin::Amount;
+    use bitcoin::Network;
+    use bitcoin::OutPoint;
+    use bitcoin::Sequence;
+    use std::str::FromStr;
 
-    #[test]
-    fn collaborative_exit_total_excludes_a_still_listed_boarding_output() {
-        let vtxo_only =
-            total_without_boarding_inputs(Amount::from_sat(200_000), Amount::from_sat(398_000));
-        assert_eq!(vtxo_only, Amount::from_sat(198_000));
+    fn boarding_input(amount: Amount) -> OnChainInput {
+        let secp = Secp256k1::new();
+        let server = PublicKey::from_str(
+            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        )
+        .expect("server key")
+        .x_only_public_key()
+        .0;
+        let owner = PublicKey::from_str(
+            "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+        )
+        .expect("owner key")
+        .x_only_public_key()
+        .0;
+        let exit_delay = Sequence::from_seconds_ceil(86_400).expect("exit delay");
+        let boarding = BoardingOutput::new(&secp, server, owner, exit_delay, Network::Signet)
+            .expect("boarding output");
+        let (script, control_block) = boarding.forfeit_spend_info();
+        OnChainInput::new(
+            boarding.exit_delay(),
+            boarding.script_pubkey(),
+            boarding.tapscripts(),
+            (script, control_block),
+            owner,
+            amount,
+            OutPoint::default(),
+        )
     }
 
     #[test]
-    fn boarding_amount_above_the_fetched_total_is_zero() {
-        assert_eq!(
-            total_without_boarding_inputs(Amount::from_sat(500), Amount::from_sat(100)),
-            Amount::ZERO
+    fn collaborative_exit_drops_a_still_listed_boarding_output() {
+        let boarding_amount = Amount::from_sat(200_000);
+        let vtxo_amount = Amount::from_sat(198_000);
+        let (boarding_inputs, total) = offboard_inputs_without_boarding(
+            vec![boarding_input(boarding_amount)],
+            boarding_amount + vtxo_amount,
         );
+
+        assert!(
+            boarding_inputs.is_empty(),
+            "a still-listed boarding output must not be passed into the off-board settlement"
+        );
+        assert_eq!(total, vtxo_amount);
+    }
+
+    #[test]
+    fn boarding_amount_above_the_fetched_total_zeroes_the_offboard_total() {
+        let (boarding_inputs, total) = offboard_inputs_without_boarding(
+            vec![boarding_input(Amount::from_sat(500))],
+            Amount::from_sat(100),
+        );
+
+        assert!(boarding_inputs.is_empty());
+        assert_eq!(total, Amount::ZERO);
     }
 }
 

@@ -135,6 +135,9 @@ export function isKnownEsploraProviderId(id: string): id is EsploraProviderId {
 
 const ESPLORA_UPSTREAM_FAILOVER_STATUSES = new Set([502, 503, 504])
 
+/** Blockstream's unauthenticated cap. A 429 stays on the host that sent it. */
+export const ESPLORA_RATE_LIMIT_STATUS = 429
+
 /**
  * Gateway failures only. HTTP 429 stays on the host that sent it: Blockstream's
  * unauthenticated cap is 700 requests per hour, so a full scan moved there fails
@@ -142,6 +145,41 @@ const ESPLORA_UPSTREAM_FAILOVER_STATUSES = new Set([502, 503, 504])
  */
 export function isEsploraUpstreamFailoverStatus(status: number): boolean {
   return ESPLORA_UPSTREAM_FAILOVER_STATUSES.has(status)
+}
+
+export type EsploraMirrorDecision = {
+  /** When false, keep the preferred response. */
+  useFallbackResponse: boolean
+  markPreferredHostDown: boolean
+}
+
+/**
+ * Which response wins once both hosts have answered, and whether the preferred
+ * host goes on cooldown. `preferredStatus` is null when that host did not answer.
+ * A rate-limited mirror does not replace a failed preferred response and does
+ * not start the cooldown.
+ *
+ * Inlined in `frontend/api/esplora/[...path].ts` because Vercel functions cannot
+ * import this module. Keep that copy in sync.
+ */
+export function decideEsploraMirrorResponse(
+  preferredStatus: number | null,
+  fallbackStatus: number,
+): EsploraMirrorDecision {
+  const fallbackIsRateLimited = fallbackStatus === ESPLORA_RATE_LIMIT_STATUS
+  if (preferredStatus == null) {
+    return {
+      useFallbackResponse: true,
+      markPreferredHostDown: !fallbackIsRateLimited,
+    }
+  }
+  if (!isEsploraUpstreamFailoverStatus(preferredStatus)) {
+    return { useFallbackResponse: false, markPreferredHostDown: false }
+  }
+  if (fallbackIsRateLimited) {
+    return { useFallbackResponse: false, markPreferredHostDown: false }
+  }
+  return { useFallbackResponse: true, markPreferredHostDown: true }
 }
 
 /**

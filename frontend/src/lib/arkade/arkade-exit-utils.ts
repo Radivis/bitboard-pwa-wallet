@@ -2,7 +2,10 @@ import {
   blockDurationParts,
   formatApproximateDurationPhrase,
 } from '@/lib/shared/block-duration'
-import { formatDurationDaysHoursMinutesSeconds } from '@/lib/shared/format-duration'
+import {
+  formatCoarseDurationSeconds,
+  formatDurationDaysHoursMinutesSeconds,
+} from '@/lib/shared/format-duration'
 import type { NetworkMode } from '@/stores/walletStore'
 import {
   VTXO_EXIT_PHASE_COPY,
@@ -72,19 +75,6 @@ export type UnilateralExitTimelock = {
   timelockSeconds?: number | null
 }
 
-function formatDurationSeconds(totalSeconds: number): string {
-  if (totalSeconds < 3_600) {
-    const minutes = Math.max(1, Math.round(totalSeconds / 60))
-    return `${minutes} minute${minutes === 1 ? '' : 's'}`
-  }
-  if (totalSeconds < 86_400) {
-    const hours = Math.max(1, Math.round(totalSeconds / 3_600))
-    return `${hours} hour${hours === 1 ? '' : 's'}`
-  }
-  const days = Math.max(1, Math.round(totalSeconds / 86_400))
-  return `${days} day${days === 1 ? '' : 's'}`
-}
-
 function formatBlockCountAbout(
   blockCount: number,
   networkMode: NetworkMode | null | undefined,
@@ -116,7 +106,7 @@ export function formatUnilateralExitTimelock(
     return formatBlockCountAbout(timelock.timelockBlocks, networkMode)
   }
   if (timelock.timelockSeconds != null) {
-    return formatDurationSeconds(timelock.timelockSeconds)
+    return formatCoarseDurationSeconds(timelock.timelockSeconds)
   }
   return 'the operator CSV timelock'
 }
