@@ -43,19 +43,16 @@ function isValidWitnessProgramLength(
 }
 
 function decodeSegwit(address: string, codec: SegwitCodec): DecodedSegwit | null {
-  try {
-    const decoded = codec.decode(address)
-    const version = decoded.words[0]
-    if (version == null || version > MAX_WITNESS_VERSION) return null
-    const program = codec.fromWords(decoded.words.slice(1))
-    if (!isValidWitnessProgramLength(version, program.length)) return null
-    return {
-      humanReadablePart: decoded.prefix,
-      version,
-      programLength: program.length,
-    }
-  } catch {
-    return null
+  const decoded = codec.decodeUnsafe(address)
+  if (decoded == null) return null
+  const version = decoded.words[0]
+  if (version == null || version > MAX_WITNESS_VERSION) return null
+  const program = codec.fromWordsUnsafe(decoded.words.slice(1))
+  if (program == null || !isValidWitnessProgramLength(version, program.length)) return null
+  return {
+    humanReadablePart: decoded.prefix,
+    version,
+    programLength: program.length,
   }
 }
 

@@ -5,6 +5,7 @@ import {
   type ServerResponse,
 } from 'node:http'
 import { request as httpsRequest } from 'node:https'
+import type { Socket } from 'node:net'
 import type { Plugin } from 'vite'
 import { isProxiedUrlPathWithinAllowlistedBase } from '../shared/validate-proxied-upstream-url'
 import {
@@ -131,7 +132,7 @@ function attachUpstreamTimers(
       )
     }, RESPONSE_TIMEOUT_MS)
   }
-  const watchSocket = (socket: NodeJS.Socket) => {
+  const watchSocket = (socket: Socket) => {
     if (socket.connecting) {
       socket.once('connect', armResponseTimeout)
       return
