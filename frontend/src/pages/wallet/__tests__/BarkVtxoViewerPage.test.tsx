@@ -270,8 +270,9 @@ describe('BarkVtxoViewerPage', () => {
         },
       ],
     })
+    const anchorSpender = 'ab'.repeat(32)
     useBarkExitChainNoticeStore.getState().showNotice(1, 'signet', [
-      { vtxoId: 'swept:5', nodeKind: 'anchor' },
+      { vtxoId: 'swept:5', nodeKind: 'anchor', spenderTxid: anchorSpender },
       { vtxoId: 'seized:3', nodeKind: 'checkpoint' },
     ])
 
@@ -281,14 +282,16 @@ describe('BarkVtxoViewerPage', () => {
       'Emergency exit phase: started',
     )
     expect(screen.getByTestId('bark-vtxo-exit-phase-timelock:2')).toHaveTextContent(
-      'Emergency exit phase: waiting for timelock, 10 of 40 blocks',
+      'Emergency exit phase: waiting for timelock, 10 of 40 blocks (about 5 hours remaining)',
     )
     expect(screen.getByTestId('bark-vtxo-exit-phase-swept:5')).toHaveTextContent(
-      'Emergency exit phase: anchor swept',
+      `Emergency exit phase: anchor swept · ${anchorSpender}`,
     )
+    expect(screen.getByTestId('bark-vtxo-exit-phase-swept:5')).toHaveAttribute('title', anchorSpender)
     expect(screen.getByTestId('bark-vtxo-exit-phase-seized:3')).toHaveTextContent(
       'Emergency exit phase: checkpoint seized',
     )
+    expect(screen.getByTestId('bark-vtxo-exit-phase-seized:3')).not.toHaveAttribute('title')
     expect(screen.queryByTestId('bark-vtxo-card-claimed:4')).not.toBeInTheDocument()
   })
 

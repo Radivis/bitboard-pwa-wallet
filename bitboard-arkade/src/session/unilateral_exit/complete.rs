@@ -118,7 +118,7 @@ impl ArkadeSession {
 
     /// Operator unilateral-exit CSV delay from cached server info. Does not Esplora-scan.
     pub fn unilateral_exit_timelock(&self) -> ArkResult<UnilateralExitTimelockDto> {
-        let server_info = self.client.server_info()?;
+        let server_info = self.client.server_info_snapshot()?;
         let (unilateral_exit_timelock_blocks, unilateral_exit_timelock_seconds) =
             crate::session::mappers::unilateral_exit_timelock_parts(
                 server_info.unilateral_exit_delay,
@@ -154,7 +154,7 @@ impl ArkadeSession {
             .map_err(|error| ArkWasmError::Wallet(error.to_string()))?;
         let balance_sats =
             bumper_info_balance_sats(self.client.onchain_wallet_balance()?.confirmed.to_sat());
-        let server_info = self.client.server_info()?;
+        let server_info = self.client.server_info_snapshot()?;
         let (unilateral_exit_timelock_blocks, unilateral_exit_timelock_seconds) =
             crate::session::mappers::unilateral_exit_timelock_parts(
                 server_info.unilateral_exit_delay,

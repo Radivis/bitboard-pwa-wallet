@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
 import { Copy, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -19,6 +20,8 @@ import {
   formatMissingBlocktimeCompletionWarning,
   formatMissingBlocktimeCompletionWarningLine,
   formatUnilateralExitCompleteWaitingBanner,
+  isUnilateralExitCompletionNotReadyError,
+  unilateralExitWaitingTimelockProgress,
 } from '@/lib/arkade/arkade-exit-utils'
 import { userFacingErrorMessage } from '@/lib/shared/utils'
 import {
@@ -29,6 +32,7 @@ import {
 } from '@/workers/arkade-api'
 import { useArkadeLoadLifecycleSnapshot } from '@/hooks/useArkadeLifecycleSnapshots'
 import { useCompleteUnilateralExitFlow } from '@/hooks/useCompleteUnilateralExitFlow'
+import { useTickingUnixSeconds } from '@/hooks/useTickingUnixSeconds'
 import { useVtxoExitSnapshots } from '@/hooks/useUnilateralExitLifecycleSnapshot'
 import {
   formatVtxoExitPhaseCopy,
@@ -83,6 +87,8 @@ function selectedRowsWaitingBanner(params: {
   snapshots: VtxoExitChildSnapshotMap
   timelockBlocks: number | undefined
   timelockSeconds: number | undefined
+  nowUnixSeconds: number
+  networkMode: ReturnType<typeof selectCommittedNetworkMode>
 }): string | null {
   const waitingRows = params.selectedRows.filter((row) => !row.canComplete)
   if (waitingRows.length === 0) {
@@ -95,6 +101,7 @@ function selectedRowsWaitingBanner(params: {
       waitingCopyKinds.add(copyKind)
     }
   }
+  const timelockProgress = unilateralExitWaitingTimelockProgress(waitingRows)
   return formatUnilateralExitCompleteWaitingBanner({
     waitingCopyKinds,
     timelock: {
@@ -102,6 +109,10 @@ function selectedRowsWaitingBanner(params: {
       timelockSeconds: params.timelockSeconds,
     },
     waitingTxidSnippets: waitingRows.map((row) => formatArkadeTxidToastSnippet(row.txid)),
+    csvReadyAtUnixSeconds: timelockProgress.csvReadyAtUnixSeconds,
+    csvConfirmationsRemaining: timelockProgress.csvConfirmationsRemaining,
+    nowUnixSeconds: params.nowUnixSeconds,
+    networkMode: params.networkMode,
   })
 }
 
@@ -232,7 +243,8 @@ function CompleteUnilateralExitFeeDetails({
           Estimating completion fee…
         </div>
       )}
-      {completionFeeEstimate && (
+      {completionFeeEstimate &&
+        !isUnilateralExitCompletionNotReadyError(completionFeeEstimate.estimateError) && (
         <div
           className="space-y-1 rounded-md border bg-muted/40 p-2 text-xs"
           data-testid="arkade-unilateral-completion-fee"
@@ -296,13 +308,41 @@ export function CompleteUnilateralExitContent({ exitFlow }: CompleteUnilateralEx
     selectAllReadyInProgress,
     handleCompleteExit,
   } = exitFlow
+  const networkMode = useWalletStore(selectCommittedNetworkMode)
   const vtxoExitSnapshots = useVtxoExitSnapshots()
-  const waitingBanner = selectedRowsWaitingBanner({
-    selectedRows: selectedInProgressRows,
-    snapshots: vtxoExitSnapshots,
-    timelockBlocks: bumperInfoQuery.data?.unilateralExitTimelockBlocks,
-    timelockSeconds: bumperInfoQuery.data?.unilateralExitTimelockSeconds,
-  })
+  const timelockProgress = unilateralExitWaitingTimelockProgress(selectedInProgressRows)
+  const countdownActive =
+    timelockProgress.csvReadyAtUnixSeconds != null &&
+    timelockProgress.csvReadyAtUnixSeconds > Math.floor(Date.now() / 1000)
+  const nowUnixSeconds = useTickingUnixSeconds(countdownActive)
+  const refreshedAfterReadyAt = useRef<number | null>(null)
+  useEffect(() => {
+    const readyAt = timelockProgress.csvReadyAtUnixSeconds
+    if (readyAt == null || readyAt > nowUnixSeconds) {
+      return
+    }
+    if (refreshedAfterReadyAt.current === readyAt) {
+      return
+    }
+    refreshedAfterReadyAt.current = readyAt
+    void inProgressQuery.refetch()
+    void completionFeeQuery.refetch()
+  }, [
+    completionFeeQuery,
+    inProgressQuery,
+    nowUnixSeconds,
+    timelockProgress.csvReadyAtUnixSeconds,
+  ])
+  const waitingBanner = allSelectedCanComplete
+    ? null
+    : selectedRowsWaitingBanner({
+        selectedRows: selectedInProgressRows,
+        snapshots: vtxoExitSnapshots,
+        timelockBlocks: bumperInfoQuery.data?.unilateralExitTimelockBlocks,
+        timelockSeconds: bumperInfoQuery.data?.unilateralExitTimelockSeconds,
+        nowUnixSeconds,
+        networkMode,
+      })
 
   return (
     <div className="space-y-4">
@@ -431,6 +471,7 @@ export function CompleteUnilateralExitPage() {
     <ArkadeSessionGate
       loadPhase={arkadeLoadSnapshot.loadPhase}
       errorMessage={arkadeLoadSnapshot.errorMessage}
+      networkMode={arkadeLoadSnapshot.networkMode}
     >
       <CompleteUnilateralExitReady />
     </ArkadeSessionGate>

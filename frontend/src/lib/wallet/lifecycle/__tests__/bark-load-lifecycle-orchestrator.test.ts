@@ -86,6 +86,7 @@ import {
   orchestrateBarkRetryLoad,
   resetBarkLoadLifecycleStateForTests,
 } from '@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator'
+import { SESSION_START_TIMEOUT_MS } from '@/lib/wallet/lifecycle/session-start-timeout'
 
 describe('bark-load-lifecycle-orchestrator', () => {
   beforeEach(() => {
@@ -196,6 +197,34 @@ describe('bark-load-lifecycle-orchestrator', () => {
     expect(workerMocks.openSession).not.toHaveBeenCalled()
     expect(closeBarkSessionMock).toHaveBeenCalled()
     expect(orchestrateBarkPostLoadSyncMock).not.toHaveBeenCalled()
+  })
+
+  it('fails session start after 30 seconds', async () => {
+    vi.useFakeTimers()
+    workerMocks.openSession.mockImplementation(() => new Promise(() => {}))
+
+    try {
+      const loadPromise = orchestrateBarkLoad({ walletId: 1, networkMode: 'signet' })
+      const failure = expect(loadPromise).rejects.toThrow('Bark session start timed out')
+
+      await vi.advanceTimersByTimeAsync(SESSION_START_TIMEOUT_MS - 1)
+      expect(getBarkLoadLifecycleSnapshot().loadPhase).toBe('loading')
+
+      await vi.advanceTimersByTimeAsync(1)
+      await failure
+
+      expect(getBarkLoadLifecycleSnapshot()).toEqual({
+        loadPhase: 'load-error',
+        networkMode: 'signet',
+        errorMessage: 'Bark session start timed out',
+        receiveKeyIndex: null,
+      })
+      expect(terminateBarkWorkerMock).toHaveBeenCalled()
+      expect(orchestrateBarkPostLoadSyncMock).not.toHaveBeenCalled()
+    } finally {
+      resetBarkLoadLifecycleStateForTests()
+      vi.useRealTimers()
+    }
   })
 
   it('terminates the worker when open fails', async () => {

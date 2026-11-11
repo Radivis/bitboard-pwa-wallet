@@ -7,6 +7,11 @@ import type {
   BarkExitNodeSweepKind,
   BarkExitNodeSweepVtxoItem,
 } from '@/lib/bark/bark-exit-seizure'
+import {
+  blockDurationParts,
+  formatApproximateDurationPhrase,
+} from '@/lib/shared/block-duration'
+import type { NetworkMode } from '@/stores/walletStore'
 import type {
   BarkEmergencyExitRow,
   BarkExitGraphNode,
@@ -61,10 +66,10 @@ export type BarkVtxoExitPhase =
   | { kind: typeof BARK_VTXO_EXIT_PHASE.claimable }
   | { kind: typeof BARK_VTXO_EXIT_PHASE.claimInProgress }
   | { kind: typeof BARK_VTXO_EXIT_PHASE.claimed }
-  | { kind: typeof BARK_VTXO_EXIT_PHASE.anchorSwept }
-  | { kind: typeof BARK_VTXO_EXIT_PHASE.internalSeized }
-  | { kind: typeof BARK_VTXO_EXIT_PHASE.leafSeized }
-  | { kind: typeof BARK_VTXO_EXIT_PHASE.checkpointSeized }
+  | { kind: typeof BARK_VTXO_EXIT_PHASE.anchorSwept; spenderTxids: readonly string[] }
+  | { kind: typeof BARK_VTXO_EXIT_PHASE.internalSeized; spenderTxids: readonly string[] }
+  | { kind: typeof BARK_VTXO_EXIT_PHASE.leafSeized; spenderTxids: readonly string[] }
+  | { kind: typeof BARK_VTXO_EXIT_PHASE.checkpointSeized; spenderTxids: readonly string[] }
 
 const FRONTIER_PHASES_WITH_CONFIRMED_COUNT = new Set<BarkExitNodePhase>([
   BARK_EXIT_NODE_PHASE.awaitingBumperFunding,
@@ -72,17 +77,52 @@ const FRONTIER_PHASES_WITH_CONFIRMED_COUNT = new Set<BarkExitNodePhase>([
   BARK_EXIT_NODE_PHASE.awaitingConfirmation,
 ])
 
+/** Earlier entries win. Anchor, then internal, then leaf, then checkpoint. */
+const SWEEP_PHASE_RANK = [
+  {
+    nodeKind: 'anchor',
+    phaseKind: BARK_VTXO_EXIT_PHASE.anchorSwept,
+    label: 'anchor swept',
+  },
+  {
+    nodeKind: 'internal',
+    phaseKind: BARK_VTXO_EXIT_PHASE.internalSeized,
+    label: 'internal node seized',
+  },
+  {
+    nodeKind: 'leaf',
+    phaseKind: BARK_VTXO_EXIT_PHASE.leafSeized,
+    label: 'leaf seized',
+  },
+  {
+    nodeKind: 'checkpoint',
+    phaseKind: BARK_VTXO_EXIT_PHASE.checkpointSeized,
+    label: 'checkpoint seized',
+  },
+] as const satisfies readonly {
+  nodeKind: BarkExitNodeSweepKind
+  phaseKind: BarkVtxoExitPhaseKind
+  label: string
+}[]
+
+type SweepExitPhase = Extract<BarkVtxoExitPhase, { spenderTxids: readonly string[] }>
+
 export function resolveBarkVtxoExitPhase(params: {
   vtxoState: BarkVtxoState
   exitRow: BarkEmergencyExitRow | null
   graphNodes: readonly BarkExitGraphNode[] | null
   unfundedParentTxids: ReadonlySet<string>
-  sweptNodeKinds: ReadonlySet<BarkExitNodeSweepKind>
+  sweepItems: readonly BarkExitNodeSweepVtxoItem[]
 }): BarkVtxoExitPhase | null {
-  if (params.sweptNodeKinds.has('anchor')) return { kind: BARK_VTXO_EXIT_PHASE.anchorSwept }
-  if (params.sweptNodeKinds.has('internal')) return { kind: BARK_VTXO_EXIT_PHASE.internalSeized }
-  if (params.sweptNodeKinds.has('leaf')) return { kind: BARK_VTXO_EXIT_PHASE.leafSeized }
-  if (params.sweptNodeKinds.has('checkpoint')) return { kind: BARK_VTXO_EXIT_PHASE.checkpointSeized }
+  const winningSweep = SWEEP_PHASE_RANK.find((entry) =>
+    hasSweepKind(params.sweepItems, entry.nodeKind),
+  )
+  if (winningSweep != null) {
+    return sweepPhase(
+      winningSweep.phaseKind,
+      spenderTxidsForKind(params.sweepItems, winningSweep.nodeKind),
+    )
+  }
   if (params.exitRow == null) {
     return params.vtxoState === 'exited' ? { kind: BARK_VTXO_EXIT_PHASE.claimed } : null
   }
@@ -91,10 +131,18 @@ export function resolveBarkVtxoExitPhase(params: {
 
 export function formatBarkVtxoEmergencyExitPhaseLine(
   phase: BarkVtxoExitPhase | null,
+  networkMode?: NetworkMode | null,
 ): string | null {
-  const copy = formatBarkVtxoExitPhaseCopy(phase)
+  const copy = formatBarkVtxoExitPhaseCopy(phase, networkMode)
   if (copy == null) return null
   return `${EMERGENCY_EXIT_PHASE_LINE_PREFIX}${copy}`
+}
+
+/** Full spending transaction ids for a sweep or seizure phase, for the element title. */
+export function formatBarkVtxoExitPhaseTitle(phase: BarkVtxoExitPhase | null): string | null {
+  const spenderTxids = spenderTxidsOfPhase(phase)
+  if (spenderTxids.length === 0) return null
+  return spenderTxids.join(' ')
 }
 
 export function barkVtxoIdsKeptWhenFinished(params: {
@@ -192,8 +240,12 @@ function timelockBlockProgress(
   return { elapsedBlocks, totalBlocks }
 }
 
-function formatBarkVtxoExitPhaseCopy(phase: BarkVtxoExitPhase | null): string | null {
+function formatBarkVtxoExitPhaseCopy(
+  phase: BarkVtxoExitPhase | null,
+  networkMode?: NetworkMode | null,
+): string | null {
   if (phase == null) return null
+  if (isSweepPhase(phase)) return sweepPhaseCopy(phase)
   switch (phase.kind) {
     case BARK_VTXO_EXIT_PHASE.started:
       return 'started'
@@ -206,22 +258,63 @@ function formatBarkVtxoExitPhaseCopy(phase: BarkVtxoExitPhase | null): string | 
     case BARK_VTXO_EXIT_PHASE.awaitingConfirmation:
       return withConfirmedCount('waiting for confirmation', phase.confirmedExitTransactions)
     case BARK_VTXO_EXIT_PHASE.awaitingTimelock:
-      return timelockCopy(phase.elapsedBlocks, phase.totalBlocks)
+      return timelockCopy(phase.elapsedBlocks, phase.totalBlocks, networkMode)
     case BARK_VTXO_EXIT_PHASE.claimable:
       return 'ready to claim'
     case BARK_VTXO_EXIT_PHASE.claimInProgress:
       return 'claim in progress'
     case BARK_VTXO_EXIT_PHASE.claimed:
       return 'claimed'
-    case BARK_VTXO_EXIT_PHASE.anchorSwept:
-      return 'anchor swept'
-    case BARK_VTXO_EXIT_PHASE.internalSeized:
-      return 'internal node seized'
-    case BARK_VTXO_EXIT_PHASE.leafSeized:
-      return 'leaf seized'
-    case BARK_VTXO_EXIT_PHASE.checkpointSeized:
-      return 'checkpoint seized'
   }
+}
+
+function hasSweepKind(
+  items: readonly BarkExitNodeSweepVtxoItem[],
+  kind: BarkExitNodeSweepKind,
+): boolean {
+  return items.some((item) => item.nodeKind === kind)
+}
+
+function spenderTxidsForKind(
+  items: readonly BarkExitNodeSweepVtxoItem[],
+  kind: BarkExitNodeSweepKind,
+): string[] {
+  const spenderTxids = new Set<string>()
+  for (const item of items) {
+    if (item.nodeKind !== kind || item.spenderTxid == null || item.spenderTxid.length === 0) {
+      continue
+    }
+    spenderTxids.add(item.spenderTxid)
+  }
+  return [...spenderTxids].sort()
+}
+
+function spenderTxidsOfPhase(phase: BarkVtxoExitPhase | null): readonly string[] {
+  if (phase != null && isSweepPhase(phase)) return phase.spenderTxids
+  return []
+}
+
+function sweepPhase(
+  phaseKind: (typeof SWEEP_PHASE_RANK)[number]['phaseKind'],
+  spenderTxids: readonly string[],
+): SweepExitPhase {
+  return { kind: phaseKind, spenderTxids }
+}
+
+function isSweepPhase(phase: BarkVtxoExitPhase): phase is SweepExitPhase {
+  return SWEEP_PHASE_RANK.some((entry) => entry.phaseKind === phase.kind)
+}
+
+function sweepPhaseCopy(phase: BarkVtxoExitPhase): string | null {
+  if (!isSweepPhase(phase)) return null
+  const label = SWEEP_PHASE_RANK.find((entry) => entry.phaseKind === phase.kind)?.label
+  if (label == null) return null
+  return withSpenderTxids(label, phase.spenderTxids)
+}
+
+function withSpenderTxids(label: string, spenderTxids: readonly string[]): string {
+  if (spenderTxids.length === 0) return label
+  return `${label} · ${spenderTxids.join(' · ')}`
 }
 
 function withConfirmedCount(
@@ -233,10 +326,21 @@ function withConfirmedCount(
   return `${base}, ${count.confirmed} of ${count.total} ${noun} confirmed`
 }
 
-function timelockCopy(elapsedBlocks: number | null, totalBlocks: number | null): string {
+function timelockCopy(
+  elapsedBlocks: number | null,
+  totalBlocks: number | null,
+  networkMode?: NetworkMode | null,
+): string {
   if (elapsedBlocks == null || totalBlocks == null) return 'waiting for timelock'
   const noun = totalBlocks === 1 ? 'block' : 'blocks'
-  return `waiting for timelock, ${elapsedBlocks} of ${totalBlocks} ${noun}`
+  const fraction = `waiting for timelock, ${elapsedBlocks} of ${totalBlocks} ${noun}`
+  const remainingBlocks = totalBlocks - elapsedBlocks
+  if (remainingBlocks <= 0) return fraction
+  const phrase = formatApproximateDurationPhrase(
+    blockDurationParts(remainingBlocks, networkMode),
+  )
+  if (phrase == null) return fraction
+  return `${fraction} (about ${phrase} remaining)`
 }
 
 function nodePhase(

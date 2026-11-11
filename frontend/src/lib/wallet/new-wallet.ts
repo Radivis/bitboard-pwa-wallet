@@ -6,6 +6,7 @@ import {
   setWalletNoMnemonicBackupFlag,
   type SplitWalletSecretsEncryptedBlobs,
 } from '@/db'
+import { closeArkadeSessionForWalletSwitch } from '@/lib/arkade/arkade-session-service'
 import { closeBarkSessionForWalletChange } from '@/lib/bark/bark-session-service'
 import { suggestDefaultWalletName } from '@/lib/wallet/default-wallet-name'
 import { toBitcoinNetwork } from '@/lib/wallet/bitcoin-utils'
@@ -164,6 +165,7 @@ export async function persistAndActivateNewWallet(
     invalidateWalletRelatedQueriesAndNotifyOtherTabs(queryClient)
   }
 
+  await closeArkadeSessionForWalletSwitch()
   await closeBarkSessionForWalletChange()
   clearStaleDashboardState()
   activateNewWallet(walletId, firstAddress)

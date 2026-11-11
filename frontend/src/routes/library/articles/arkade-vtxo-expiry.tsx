@@ -37,6 +37,10 @@ export const article: LibraryArticle = {
         <p>
           <strong>Manual renew:</strong> In Management → Arkade, tap &quot;Renew VTXOs now&quot; while
           unlocked. Useful in labs, if you disabled the delegator, or to learn how renewal works.
+          The button renews VTXOs in the last 10% of their lifetime, and earlier when the operator
+          no longer charges an early-renewal fee. On Mutinynet that fee drops to zero about six
+          days before expiry, so a VTXO with a day left can be renewed. The earliest-expiry line
+          can show a date before that window opens.
         </p>
       </ArticleSection>
 

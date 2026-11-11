@@ -1,19 +1,20 @@
 use crate::persistence::{
-    BITBOARD_ARKADE_PERSISTENCE_VERSION, BitboardArkadePersistence, HostTxObservationRecord,
-    JsonPersistenceDb, MIN_SUPPORTED_ARKADE_PERSISTENCE_IMPORT_VERSION, OperatorIdentity,
-    OperatorSignerMigrationHint, PendingBatchIntentKind, PendingBatchIntentLifecyclePhase,
-    PendingBatchIntentRecord, PendingBatchOutpointRecord, PendingExitDeductionRecord,
-    PendingExitKind, UnilateralExitAutomationPrefsRecord, UnilateralExitFailureRecord,
-    UnilateralExitFrontendPersistence, UnilateralExitJobRecord, UnilateralExitLeafOutpointRecord,
-    VtxoExitPhase, VtxoExitRecord, network_label, operator_identity_for_connected_signer,
-    pending_batch_record_overlaps_outpoints, persisted_operator_identity_for_open,
-    validate_operator_identity, vtxo_exit_record_key,
+    BITBOARD_ARKADE_PERSISTENCE_VERSION, BitboardArkadePersistence, BoardingOutputSnapshot,
+    HostTxObservationRecord, JsonPersistenceDb, MIN_SUPPORTED_ARKADE_PERSISTENCE_IMPORT_VERSION,
+    OperatorIdentity, OperatorSignerMigrationHint, PendingBatchIntentKind,
+    PendingBatchIntentLifecyclePhase, PendingBatchIntentRecord, PendingBatchOutpointRecord,
+    PendingExitDeductionRecord, PendingExitKind, UnilateralExitAutomationPrefsRecord,
+    UnilateralExitFailureRecord, UnilateralExitFrontendPersistence, UnilateralExitJobRecord,
+    UnilateralExitLeafOutpointRecord, VtxoExitPhase, VtxoExitRecord, network_label,
+    operator_identity_for_connected_signer, pending_batch_record_overlaps_outpoints,
+    persisted_operator_identity_for_open, validate_operator_identity, vtxo_exit_record_key,
 };
 use crate::session::unilateral_exit::vtxo_exit::heal_vtxo_exit_records_from_legacy;
+use ark_core::BoardingOutput;
 use ark_core::server::{DeprecatedSigner, Info};
 use bitcoin::address::NetworkUnchecked;
-use bitcoin::secp256k1::PublicKey;
-use bitcoin::{Amount, Network, ScriptBuf, XOnlyPublicKey};
+use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
+use bitcoin::{Amount, Network, ScriptBuf, Sequence, XOnlyPublicKey};
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -1193,4 +1194,62 @@ fn published_v3_kitchen_sink_imports_heals_and_reexports_v12() {
     assert!(envelope.wallet_db.host_tx_observations.is_empty());
     assert!(envelope.wallet_db.unilateral_exit_frontend.is_none());
     assert!(!envelope.autonomous_mode);
+}
+
+fn boarding_output_for(server_hex: &str, owner_hex: &str) -> BoardingOutput {
+    let secp = Secp256k1::new();
+    BoardingOutput::new(
+        &secp,
+        xonly(server_hex),
+        xonly(owner_hex),
+        Sequence::from_consensus(144),
+        Network::Signet,
+    )
+    .expect("boarding output")
+}
+
+#[test]
+fn boarding_snapshot_keeps_only_the_current_signer() {
+    let current = boarding_output_for(PK_CURRENT, PK_UNKNOWN);
+    let deprecated = boarding_output_for(PK_DEPRECATED, PK_UNKNOWN);
+    let db = JsonPersistenceDb::default();
+    db.set_load_context(Network::Signet, xonly(PK_CURRENT));
+    let owner_secret = SecretKey::from_slice(&[2u8; 32]).expect("secret");
+    db.save_boarding_output(owner_secret, current.clone())
+        .expect("save current");
+    db.save_boarding_output(owner_secret, deprecated)
+        .expect("ignore other signer");
+
+    assert_eq!(db.snapshot().boarding_outputs.len(), 1);
+    let loaded = db.load_boarding_outputs().expect("load current signer");
+    assert_eq!(loaded.len(), 1);
+    assert_eq!(loaded[0].address(), current.address());
+}
+
+#[test]
+fn boarding_row_for_another_signer_is_dropped_on_load() {
+    let current = boarding_output_for(PK_CURRENT, PK_UNKNOWN);
+    let deprecated = boarding_output_for(PK_DEPRECATED, PK_UNKNOWN);
+    let db = JsonPersistenceDb::default();
+    db.set_load_context(Network::Signet, xonly(PK_CURRENT));
+    let owner_secret = SecretKey::from_slice(&[2u8; 32]).expect("secret");
+    db.save_boarding_output(owner_secret, current.clone())
+        .expect("save current");
+    let mut snapshot = db.snapshot();
+    snapshot.boarding_outputs.push(BoardingOutputSnapshot {
+        owner_pk_hex: deprecated.owner_pk().to_string(),
+        exit_delay_consensus: deprecated.exit_delay().to_consensus_u32(),
+        address: deprecated.address().to_string(),
+    });
+    let db = JsonPersistenceDb::from_snapshot(snapshot);
+    db.set_load_context(Network::Signet, xonly(PK_CURRENT));
+
+    let loaded = db.load_boarding_outputs().expect("session still loads");
+    assert_eq!(loaded.len(), 1);
+    assert_eq!(loaded[0].address(), current.address());
+    assert_eq!(db.snapshot().boarding_outputs.len(), 1);
+    assert_eq!(
+        db.snapshot().boarding_outputs[0].address,
+        current.address().to_string()
+    );
 }

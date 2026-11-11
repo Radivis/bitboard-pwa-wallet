@@ -20,11 +20,20 @@ vi.mock('@/workers/bark-factory', () => ({
 const awaitBarkLoadQuiescence = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const discardShownBarkLoadForSessionChange = vi.hoisted(() => vi.fn())
 const forceResetBarkLoadLifecycleForTeardown = vi.hoisted(() => vi.fn())
+const barkLoadPhase = vi.hoisted(() => ({
+  phase: 'loaded' as 'loaded' | 'loading' | 'not-configured' | 'load-error',
+}))
 
 vi.mock('@/lib/wallet/lifecycle/bark-load-lifecycle-orchestrator', () => ({
   awaitBarkLoadQuiescence: () => awaitBarkLoadQuiescence(),
   discardShownBarkLoadForSessionChange: () => discardShownBarkLoadForSessionChange(),
   forceResetBarkLoadLifecycleForTeardown: () => forceResetBarkLoadLifecycleForTeardown(),
+  getBarkLoadLifecycleSnapshot: () => ({
+    loadPhase: barkLoadPhase.phase,
+    networkMode: 'signet',
+    errorMessage: null,
+    receiveKeyIndex: null,
+  }),
   orchestrateBarkLoad: vi.fn(),
 }))
 
@@ -48,8 +57,11 @@ import { closeBarkSession, closeBarkSessionForWalletChange } from '@/lib/bark/ba
 describe('closeBarkSession', () => {
   beforeEach(() => {
     callOrder.length = 0
+    barkLoadPhase.phase = 'loaded'
     closeSession.mockResolvedValue(undefined)
     terminateBarkWorker.mockReset()
+    awaitBarkLoadQuiescence.mockReset().mockResolvedValue(undefined)
+    awaitBarkSyncQuiescence.mockReset().mockResolvedValue(undefined)
   })
 
   it('hides the previous balance before waiting, then closes and terminates the worker', async () => {
@@ -73,6 +85,18 @@ describe('closeBarkSession', () => {
 
     expect(terminateBarkWorker).toHaveBeenCalled()
     expect(forceResetBarkSyncLifecycleForTeardown).toHaveBeenCalled()
+    expect(removeBarkWalletQueries).toHaveBeenCalled()
+  })
+
+  it('drops a session that is still opening without waiting for it', async () => {
+    barkLoadPhase.phase = 'loading'
+    awaitBarkLoadQuiescence.mockImplementation(() => new Promise(() => {}))
+
+    await closeBarkSessionForWalletChange()
+
+    expect(awaitBarkLoadQuiescence).not.toHaveBeenCalled()
+    expect(terminateBarkWorker).toHaveBeenCalled()
+    expect(forceResetBarkLoadLifecycleForTeardown).toHaveBeenCalled()
     expect(removeBarkWalletQueries).toHaveBeenCalled()
   })
 })

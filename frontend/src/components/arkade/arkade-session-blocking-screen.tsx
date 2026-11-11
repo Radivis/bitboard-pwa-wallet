@@ -6,18 +6,26 @@ import {
   isArkadeSessionStillLoading,
 } from '@/components/arkade/arkade-session-load-phase'
 import type { LoadLifecyclePhase } from '@/lib/wallet/lifecycle/rail-lifecycle-types'
+import type { NetworkMode } from '@/stores/walletStore'
 
 /** Loading or error screen while the session is not ready. `null` once the session can render. */
 export function arkadeSessionBlockingScreen(
   loadPhase: LoadLifecyclePhase,
   errorMessage: string | null,
   embedded = false,
+  networkMode: NetworkMode | null = null,
 ): ReactElement | null {
   if (isArkadeSessionStillLoading(loadPhase)) {
     return <ArkadeSessionLoading embedded={embedded} />
   }
   if (isArkadeSessionLoadFailed(loadPhase)) {
-    return <ArkadeSessionLoadError embedded={embedded} errorMessage={errorMessage} />
+    return (
+      <ArkadeSessionLoadError
+        embedded={embedded}
+        errorMessage={errorMessage}
+        networkMode={networkMode}
+      />
+    )
   }
   return null
 }

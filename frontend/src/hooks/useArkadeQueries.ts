@@ -35,6 +35,7 @@ import type {
   ArkadeBalanceInfo,
   ArkadeBatchJoinResult,
   ArkadeBoardingStatus,
+  ArkadeCollaborativeExitFeeEstimateParams,
   ArkadePendingBatchIntent,
   ArkadeSignerMigrationResult,
   ArkadeVtxoOutpoint,
@@ -61,6 +62,8 @@ import { readArkadeDashboardStateFromStore } from '@/lib/arkade/arkade-persisten
 import {
   abandonInFlightRegisteredIntents,
   arkadeRefetchIntervalWithPendingBatchIntent,
+  boardingStatusHasNoDetectedUtxos,
+  boardingStatusRefetchIntervalMs,
   hasPendingBatchIntent,
   hasPendingKind,
   pendingBatchIntentKey,
@@ -79,6 +82,7 @@ import {
   ARKADE_FEE_ESTIMATE_STALE_MS,
   ARKADE_SESSION_POLL_STALE_MS,
   ARKADE_SLOW_METADATA_STALE_MS,
+  unilateralExitInProgressRefreshOptions,
   unilateralExitProgressIdlePollMs,
   unilateralExitProgressPollMs,
   UNILATERAL_EXIT_PROGRESS_IDLE_POLL_MS,
@@ -91,7 +95,10 @@ import {
   revertOptimisticExitBalanceDeduction,
   type ExitBalanceOptimisticContext,
 } from '@/lib/arkade/arkade-exit-balance-optimistic'
-import { formatArkadeTxidToastSnippet } from '@/lib/arkade/arkade-exit-utils'
+import {
+  completeUnilateralExitSuccessToast,
+  formatArkadeTxidToastSnippet,
+} from '@/lib/arkade/arkade-exit-utils'
 import { arkadeOffchainSpendableSats } from '@/lib/arkade/arkade-balance-display'
 import {
   isArkadeDelegatorConfigured,
@@ -431,10 +438,10 @@ export function useArkadeBoardingAddressQuery() {
   })
 }
 
-export function useArkadeBoardingStatusQuery() {
+export function useArkadeBoardingStatusQuery(options?: { pollWhileEmpty?: boolean }) {
   const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
     useArkadeQueryBase()
-  const refetchInterval = usePeriodicSyncRefetchInterval('arkade')
+  const pollWhileEmpty = options?.pollWhileEmpty === true
 
   return useQuery({
     queryKey: walletScopedQueryKey(
@@ -447,10 +454,11 @@ export function useArkadeBoardingStatusQuery() {
     enabled: sessionReady,
     queryFn: () => withReadyArkadeWorker(() => getArkadeWorker().getBoardingStatus()),
     refetchInterval: (query) =>
-      arkadeRefetchIntervalWithPendingBatchIntent(
-        hasPendingBatchIntent(query.state.data?.pendingBatchIntents ?? []),
-        refetchInterval,
-      ),
+      boardingStatusRefetchIntervalMs({
+        hasPendingIntent: hasPendingBatchIntent(query.state.data?.pendingBatchIntents ?? []),
+        pollWhileEmpty,
+        hasNoDetectedUtxos: boardingStatusHasNoDetectedUtxos(query.state.data),
+      }),
     staleTime: ARKADE_SESSION_POLL_STALE_MS,
   })
 }
@@ -724,7 +732,7 @@ export function useArkadeRenewMutation() {
       toastBatchJoinResult(
         result,
         'renew',
-        'No expiring VTXOs to renew right now',
+        'No VTXOs are in the renewal window yet',
       )
       if (
         activeWalletId != null &&
@@ -1180,9 +1188,17 @@ export function useArkadeBumperInfoQuery(
   })
 }
 
-export function useArkadeUnilateralExitsInProgressQuery(enabled: boolean) {
+export function useArkadeUnilateralExitsInProgressQuery(
+  enabled: boolean,
+  options?: { refreshWhileUnfocused?: boolean },
+) {
   const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
     useArkadeQueryBase()
+  const queryEnabled = enabled && sessionReady
+  const refreshOptions = unilateralExitInProgressRefreshOptions(
+    queryEnabled,
+    options?.refreshWhileUnfocused === true,
+  )
 
   return useQuery({
     queryKey: walletScopedQueryKey(
@@ -1192,7 +1208,7 @@ export function useArkadeUnilateralExitsInProgressQuery(enabled: boolean) {
       arkadeUnilateralExitsInProgressQueryKey,
       'unilateral-exits-in-progress',
     ),
-    enabled: enabled && sessionReady,
+    enabled: queryEnabled,
     queryFn: async () => {
       const rows = await withReadyArkadeWorker(() =>
         getArkadeWorker().listUnilateralExitsInProgress(),
@@ -1202,8 +1218,8 @@ export function useArkadeUnilateralExitsInProgressQuery(enabled: boolean) {
       )
       return sortArkadeVtxoOutpoints(rows)
     },
-    refetchInterval: enabled ? ARKADE_EXIT_CANDIDATES_POLL_MS : false,
-    staleTime: ARKADE_SESSION_POLL_STALE_MS,
+    ...refreshOptions,
+    staleTime: 0,
   })
 }
 
@@ -1212,6 +1228,8 @@ export function useArkadeUnilateralExitCompletionFeeQuery(params: {
   vtxoOutpoints: ArkadeVtxoOutpoint[]
   destinationAddress: string
   feeRateSatPerVb: number
+  /** Identity of selected rows WASM already marks claimable, so a swap of ready and waiting rows refetches the estimate. */
+  readinessRevision?: string
 }) {
   const { networkMode, activeWalletId, activeArkadeAccountId, sessionReady } =
     useArkadeQueryBase()
@@ -1230,14 +1248,17 @@ export function useArkadeUnilateralExitCompletionFeeQuery(params: {
       activeWalletId != null &&
       activeArkadeAccountId != null &&
       isArkadeSupportedNetworkMode(networkMode)
-        ? arkadeUnilateralExitCompletionFeeQueryKey(
-            activeWalletId,
-            networkMode,
-            activeArkadeAccountId,
-            sortedVtxoOutpoints,
-            destinationTrimmed,
-            params.feeRateSatPerVb,
-          )
+        ? [
+            ...arkadeUnilateralExitCompletionFeeQueryKey(
+              activeWalletId,
+              networkMode,
+              activeArkadeAccountId,
+              sortedVtxoOutpoints,
+              destinationTrimmed,
+              params.feeRateSatPerVb,
+            ),
+            params.readinessRevision ?? '',
+          ]
         : arkadeDisabledQueryKey('unilateral-completion-fee'),
     enabled,
     queryFn: () =>
@@ -1357,7 +1378,8 @@ export function useArkadeCompleteUnilateralExitMutation() {
       return txid
     },
     onSuccess: async (txid) => {
-      toast.success(`Exit completed on-chain (${formatArkadeTxidToastSnippet(txid)})`)
+      const successToast = completeUnilateralExitSuccessToast(txid)
+      toast.success(successToast.title, successToast.options)
       await import('@/lib/wallet/lifecycle/unilateral-exit/unilateral-exit-runtime').then(
         (runtime) => runtime.hydrateVtxoExitChildrenFromWasm(),
       )
@@ -1425,12 +1447,19 @@ export function useArkadeCollaborativeExitFeeQuery(params: {
         : arkadeDisabledQueryKey('exit-fee-collaborative'),
     enabled,
     queryFn: () =>
-      withReadyArkadeWorker(() =>
-        getArkadeWorker().getCollaborativeExitFeeEstimate({
+      withReadyArkadeWorker(() => {
+        const estimateParams: ArkadeCollaborativeExitFeeEstimateParams = {
           destinationAddress: destinationTrimmed,
-          amountSats: params.amountSats,
-        }),
-      ),
+        }
+        if (params.amountSats != null) {
+          estimateParams.amountSats = params.amountSats
+        }
+        return getArkadeWorker().getCollaborativeExitFeeEstimate(estimateParams)
+      }),
+    // Field tracking can miss the settled quote, so the panel stays on Loading
+    // until some other state update (editing the amount) re-renders it.
+    notifyOnChangeProps: 'all',
+    placeholderData: keepPreviousData,
     staleTime: ARKADE_FEE_ESTIMATE_STALE_MS,
   })
 }

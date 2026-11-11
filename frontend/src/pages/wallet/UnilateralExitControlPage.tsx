@@ -502,6 +502,8 @@ export function UnilateralExitControlPage() {
   const sessionBlockingScreen = arkadeSessionBlockingScreen(
     arkadeLoadSnapshot.loadPhase,
     arkadeLoadSnapshot.errorMessage,
+    false,
+    arkadeLoadSnapshot.networkMode,
   )
   if (sessionBlockingScreen) {
     return sessionBlockingScreen

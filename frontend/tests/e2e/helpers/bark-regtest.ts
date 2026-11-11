@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { promisify } from 'node:util'
-import { type Page, expect } from '@playwright/test'
+import { type Page, type Request, expect } from '@playwright/test'
 import { satsFromFirstFormattedBitcoinDisplayInRoot } from './bitcoin-amount-display'
 import { goToWalletTab } from './wallet-nav'
 
@@ -148,6 +148,64 @@ export async function exportBoardedBarkFixture(page: Page): Promise<{
     }
     return exportFn()
   })
+}
+
+const BARK_REGTEST_SERVER_PORT = '3535'
+
+/** Local captaind, a Bark gRPC-Web path, or the same-origin handshake notice. */
+export function isBarkServerContactUrl(rawUrl: string): boolean {
+  let url: URL
+  try {
+    url = new URL(rawUrl)
+  } catch {
+    return false
+  }
+  const host = url.hostname
+  const isLocalCaptaind =
+    (host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1') &&
+    url.port === BARK_REGTEST_SERVER_PORT
+  if (isLocalCaptaind) return true
+  return url.pathname.includes('/bark_server.') || url.pathname.startsWith('/api/bark/server-notice')
+}
+
+/**
+ * Runs `action` and fails when the page or its worker contacts the Bark server.
+ * A thrown action error is kept when no contact was recorded.
+ */
+export async function expectNoBarkServerContactDuring(
+  page: Page,
+  action: () => Promise<void>,
+): Promise<void> {
+  const contacted: string[] = []
+  const seen = new Set<string>()
+  const onRequest = (request: Request) => {
+    const url = request.url()
+    if (!isBarkServerContactUrl(url)) return
+    const line = `${request.method()} ${url}`
+    if (seen.has(line)) return
+    seen.add(line)
+    contacted.push(line)
+  }
+  const browserContext = page.context()
+  page.on('request', onRequest)
+  browserContext.on('request', onRequest)
+  let actionError: unknown
+  try {
+    await action()
+  } catch (err) {
+    actionError = err
+  } finally {
+    page.off('request', onRequest)
+    browserContext.off('request', onRequest)
+  }
+  if (contacted.length > 0) {
+    const contactError = new Error(
+      `Emergency exit contacted the Bark server:\n${contacted.join('\n')}`,
+    )
+    if (actionError instanceof Error) contactError.cause = actionError
+    throw contactError
+  }
+  if (actionError) throw actionError
 }
 
 export async function writeBoardedBarkFixture(

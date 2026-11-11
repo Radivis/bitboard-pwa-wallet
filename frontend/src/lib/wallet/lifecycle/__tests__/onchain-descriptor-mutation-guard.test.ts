@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { AddressType } from '@/stores/walletStore'
+import { AddressType, useWalletStore } from '@/stores/walletStore'
 import { BadLocalChainStateError } from '@/lib/shared/bad-local-chain-state-error'
 
 const awaitOnchainSyncQuiescence = vi.fn()
@@ -11,7 +11,7 @@ const syncSnapshot = {
   syncPhase: 'not-syncing' as 'not-syncing' | 'syncing' | 'sync-error',
   descriptorScope: null as null | {
     walletId: number
-    networkMode: 'testnet'
+    networkMode: 'testnet' | 'lab'
     addressType: AddressType
     accountId: number
   },
@@ -62,6 +62,7 @@ describe('onchain-descriptor-mutation-guard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     syncSnapshot.syncPhase = 'not-syncing'
+    syncSnapshot.descriptorScope = null
     syncSnapshot.errorMessage = null
     loadSnapshot.loadPhase = 'loaded'
     saveSnapshot.savePhase = 'not-saving'
@@ -79,6 +80,26 @@ describe('onchain-descriptor-mutation-guard', () => {
         OnchainDescriptorMutationBlockedError,
       )
       expect(exportChangeset).not.toHaveBeenCalled()
+    })
+
+    it('exports while a scan for a different loaded network is still in flight', async () => {
+      useWalletStore.setState({
+        activeWalletId: 1,
+        networkMode: 'lab',
+        addressType: AddressType.Taproot,
+        accountId: 0,
+      })
+      syncSnapshot.syncPhase = 'syncing'
+      syncSnapshot.descriptorScope = {
+        walletId: 1,
+        networkMode: 'testnet',
+        addressType: AddressType.Taproot,
+        accountId: 0,
+      }
+
+      await expect(exportChangesetForPersistence()).resolves.toBe('{"chain":{}}')
+      expect(awaitOnchainSyncQuiescence).not.toHaveBeenCalled()
+      expect(exportChangeset).toHaveBeenCalled()
     })
 
     it('rejects when loadPhase is loading', async () => {

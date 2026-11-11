@@ -113,6 +113,15 @@ import {
   reloadActiveLoadedDescriptorWalletWithEmptyChain,
   runFullScanDashboardWalletSync,
 } from '@/lib/wallet/wallet-utils'
+import {
+  WASM_CRYPTO_ERROR_CODE_ESPLORA_CHAIN_MISMATCH,
+  WASM_CRYPTO_ERROR_CODE_ESPLORA_NETWORK_MISMATCH,
+} from '@/lib/shared/wasm-crypto-error'
+
+/** Shape `rethrowWasmCryptoErrorForComlink` delivers to the main thread. */
+function wasmCryptoError(code: string, message: string): Error {
+  return new Error(JSON.stringify({ code, message }))
+}
 
 describe('runFullScanDashboardWalletSync repair path', () => {
   beforeEach(() => {
@@ -152,6 +161,47 @@ describe('runFullScanDashboardWalletSync repair path', () => {
       networkMode: 'mainnet',
       activeWalletId: 1,
     })
+
+    expect(orchestrateOnchainSyncThenSave).toHaveBeenCalledTimes(1)
+    expect(hoisted.loadWalletMock).not.toHaveBeenCalled()
+  })
+
+  it('reloads wallet with empty chain once when full scan hits an Esplora chain mismatch', async () => {
+    orchestrateOnchainSyncThenSave.mockImplementation(async () => {
+      hoisted.fullScanAttempt.n += 1
+      if (hoisted.fullScanAttempt.n === 1) {
+        throw wasmCryptoError(
+          WASM_CRYPTO_ERROR_CODE_ESPLORA_CHAIN_MISMATCH,
+          'Esplora chain mismatch: update forks from the saved chain at genesis',
+        )
+      }
+    })
+
+    await runFullScanDashboardWalletSync({
+      networkMode: 'mutinynet',
+      activeWalletId: 1,
+    })
+
+    expect(orchestrateOnchainSyncThenSave).toHaveBeenCalledTimes(2)
+    expect(hoisted.loadWalletMock).toHaveBeenCalledTimes(1)
+    expect(hoisted.loadWalletMock).toHaveBeenCalledWith(
+      expect.objectContaining({ useEmptyChain: true }),
+    )
+  })
+
+  it('does not wipe the chain when Esplora serves another network', async () => {
+    const networkMismatch = wasmCryptoError(
+      WASM_CRYPTO_ERROR_CODE_ESPLORA_NETWORK_MISMATCH,
+      'The Esplora server for Signet is on Mutinynet.',
+    )
+    orchestrateOnchainSyncThenSave.mockRejectedValue(networkMismatch)
+
+    await expect(
+      runFullScanDashboardWalletSync({
+        networkMode: 'signet',
+        activeWalletId: 1,
+      }),
+    ).rejects.toBe(networkMismatch)
 
     expect(orchestrateOnchainSyncThenSave).toHaveBeenCalledTimes(1)
     expect(hoisted.loadWalletMock).not.toHaveBeenCalled()

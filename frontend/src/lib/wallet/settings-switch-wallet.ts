@@ -17,9 +17,15 @@ import {
 import { refreshWalletStoreFromLoadedBdk } from '@/lib/wallet/onchain-bdk-store-sync'
 import { invalidateOnchainDashboardQueries } from '@/lib/wallet/onchain-dashboard-sync'
 import { withWalletWriterLock } from '@/lib/shared/opfs-writer-lock'
+import { awaitOnchainLoadQuiescence } from '@/lib/wallet/lifecycle/onchain-load-lifecycle-orchestrator'
+import { awaitOnchainSaveQuiescence } from '@/lib/wallet/lifecycle/onchain-save-lifecycle-orchestrator'
 import {
-  awaitOnchainQuiescenceBeforeDescriptorMutation,
+  getOnchainSyncLifecycleSnapshot,
+  isOnchainSyncInFlight,
+} from '@/lib/wallet/lifecycle/onchain-sync-lifecycle-orchestrator'
+import {
   exportChangesetForPersistence,
+  exportChangesetForPersistenceBypass,
   shouldSkipOutgoingDescriptorSaveOnSyncError,
 } from '@/lib/wallet/lifecycle/onchain-descriptor-mutation-guard'
 import {
@@ -82,14 +88,26 @@ export async function switchDescriptorWallet(params: {
   } = useWalletStore.getState()
 
   try {
-    await awaitOnchainQuiescenceBeforeDescriptorMutation()
+    // A stalled public scan must not keep the network buttons disabled.
+    // Loading the target wallet bumps the WASM generation, so a late update
+    // from this scan is discarded.
+    await awaitOnchainLoadQuiescence()
+    await awaitOnchainSaveQuiescence()
 
     await withWalletWriterLock(async () => {
       const skipOutgoingSave = shouldSkipOutgoingDescriptorSaveOnSyncError()
+      // Lock clears the snapshot while the request is still open. Phase is then
+      // `not-configured`, but the tracker is still busy. Waiting on it keeps the
+      // network buttons disabled for the whole scan.
+      const syncInProgress =
+        getOnchainSyncLifecycleSnapshot().syncPhase === 'syncing' ||
+        isOnchainSyncInFlight()
 
       if (!skipOutgoingSave) {
         try {
-          const currentChangeset = await exportChangesetForPersistence()
+          const currentChangeset = syncInProgress
+            ? await exportChangesetForPersistenceBypass()
+            : await exportChangesetForPersistence()
           onPhase?.(
             phaseContext === 'addressType'
               ? savingPreviousAddressTypeMessage(currentAddressType)
@@ -159,7 +177,9 @@ export async function switchDescriptorWallet(params: {
         const fullScanNeeded =
           !descriptorWallet.fullScanDone ||
           usedEmptyChainFallback
-        await syncLoadedDescriptorWalletWithEsplora({
+        // The scan keeps running after the switch resolves. Awaiting it held the
+        // network buttons disabled for as long as the public indexer took.
+        void syncLoadedDescriptorWalletWithEsplora({
           networkMode: targetNetworkMode,
           activeWalletId,
           targetNetwork,
@@ -167,8 +187,6 @@ export async function switchDescriptorWallet(params: {
           targetAccountId,
           fullScanNeeded,
         })
-        // Always return to `unlocked` so dashboard Sync/UX is usable. On `syncFailed`,
-        // an error toast was shown; chain data in WASM may still be stale.
       } else {
         setWalletStatus('unlocked')
       }

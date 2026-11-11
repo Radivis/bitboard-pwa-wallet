@@ -47,7 +47,7 @@ export function ArkadeBoardPage() {
   const arkadeLoadSnapshot = useArkadeLoadLifecycleSnapshot()
   const onboardMutation = useArkadeOnboardMutation()
   const boardingQuery = useArkadeBoardingAddressQuery()
-  const boardingStatusQuery = useArkadeBoardingStatusQuery()
+  const boardingStatusQuery = useArkadeBoardingStatusQuery({ pollWhileEmpty: true })
   const hasPendingOnchainBatchIntent = useHasPendingOnchainBatchIntent()
   const settleSubmitPhase = isIntentSubmitPhase({
     mutationPending: onboardMutation.isPending,
@@ -70,6 +70,8 @@ export function ArkadeBoardPage() {
   const sessionBlockingScreen = arkadeSessionBlockingScreen(
     arkadeLoadSnapshot.loadPhase,
     arkadeLoadSnapshot.errorMessage,
+    false,
+    arkadeLoadSnapshot.networkMode,
   )
   if (sessionBlockingScreen) {
     return sessionBlockingScreen

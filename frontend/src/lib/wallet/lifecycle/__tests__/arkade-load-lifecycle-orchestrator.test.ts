@@ -41,6 +41,7 @@ const setActiveArkadeAccountIdMock = vi.hoisted(() => vi.fn())
 const setLastOperatorSyncTimeMock = vi.hoisted(() => vi.fn())
 const setArkadeSignerMigrationHintMock = vi.hoisted(() => vi.fn())
 const refreshArkadeStoreFromLoadedWasmMock = vi.hoisted(() => vi.fn())
+const publishArkadeDashboardFromOpenSessionMock = vi.hoisted(() => vi.fn())
 const findActiveArkadeAccountSummaryMock = vi.hoisted(() => vi.fn())
 const ensureArkadeAccountMock = vi.hoisted(() => vi.fn())
 const orchestrateArkadePostLoadSyncMock = vi.hoisted(() => vi.fn())
@@ -118,6 +119,8 @@ vi.mock('@/lib/arkade/arkade-accounts', async (importOriginal) => {
 vi.mock('@/lib/arkade/arkade-persistence-store-sync', () => ({
   refreshArkadeStoreFromLoadedWasm: (...args: unknown[]) =>
     refreshArkadeStoreFromLoadedWasmMock(...args),
+  publishArkadeDashboardFromOpenSession: (...args: unknown[]) =>
+    publishArkadeDashboardFromOpenSessionMock(...args),
   clearArkadeDashboardStore: (...args: unknown[]) =>
     clearArkadeDashboardStoreMock(...args),
 }))
@@ -144,6 +147,7 @@ import {
   orchestrateArkadeLoad,
   resetArkadeLoadLifecycleStateForTests,
 } from '@/lib/wallet/lifecycle/arkade-load-lifecycle-orchestrator'
+import { SESSION_START_TIMEOUT_MS } from '@/lib/wallet/lifecycle/session-start-timeout'
 
 describe('arkade-load-lifecycle-orchestrator', () => {
   beforeEach(() => {
@@ -172,6 +176,7 @@ describe('arkade-load-lifecycle-orchestrator', () => {
       createdAt: '2020-01-01T00:00:00.000Z',
     })
     refreshArkadeStoreFromLoadedWasmMock.mockResolvedValue(undefined)
+    publishArkadeDashboardFromOpenSessionMock.mockResolvedValue(undefined)
     orchestrateArkadePostLoadSyncMock.mockResolvedValue(undefined)
     closeArkadeSessionMock.mockResolvedValue(undefined)
   })
@@ -186,10 +191,10 @@ describe('arkade-load-lifecycle-orchestrator', () => {
     expect(workerMocks.openSession).not.toHaveBeenCalled()
   })
 
-  it('load success opens session and refreshes without operator sync in load body', async () => {
+  it('load success publishes the envelope without a live refresh in the load body', async () => {
     const callOrder: string[] = []
-    refreshArkadeStoreFromLoadedWasmMock.mockImplementation(async () => {
-      callOrder.push('refresh')
+    publishArkadeDashboardFromOpenSessionMock.mockImplementation(async () => {
+      callOrder.push('publish')
     })
     setActiveArkadeAccountIdMock.mockImplementation(() => {
       callOrder.push('setActive')
@@ -199,7 +204,8 @@ describe('arkade-load-lifecycle-orchestrator', () => {
 
     expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loaded')
     expect(workerMocks.openSession).toHaveBeenCalled()
-    expect(callOrder).toEqual(['refresh', 'setActive'])
+    expect(callOrder).toEqual(['publish', 'setActive'])
+    expect(refreshArkadeStoreFromLoadedWasmMock).not.toHaveBeenCalled()
     expect(orchestrateArkadePostLoadSyncMock).toHaveBeenCalledWith(
       expect.objectContaining({
         walletId: 1,
@@ -226,7 +232,25 @@ describe('arkade-load-lifecycle-orchestrator', () => {
 
     expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loaded')
     expect(workerMocks.syncBumperWallet).not.toHaveBeenCalled()
-    expect(refreshArkadeStoreFromLoadedWasmMock).toHaveBeenCalled()
+    expect(publishArkadeDashboardFromOpenSessionMock).toHaveBeenCalled()
+    expect(refreshArkadeStoreFromLoadedWasmMock).not.toHaveBeenCalled()
+  })
+
+  it('LIFE-ARK-LOAD-07 a live refresh that never returns does not fail session start', async () => {
+    vi.useFakeTimers()
+    refreshArkadeStoreFromLoadedWasmMock.mockImplementation(() => new Promise(() => {}))
+    try {
+      const loadPromise = orchestrateArkadeLoad({ walletId: 1, networkMode: 'mutinynet' })
+      await vi.advanceTimersByTimeAsync(SESSION_START_TIMEOUT_MS)
+      await loadPromise
+
+      expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loaded')
+      expect(terminateArkadeWorkerMock).not.toHaveBeenCalled()
+      expect(publishArkadeDashboardFromOpenSessionMock).toHaveBeenCalled()
+    } finally {
+      resetArkadeLoadLifecycleStateForTests()
+      vi.useRealTimers()
+    }
   })
 
   it('does not mark the rail loaded when the active wallet changed', async () => {
@@ -236,6 +260,7 @@ describe('arkade-load-lifecycle-orchestrator', () => {
 
     expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('not-configured')
     expect(workerMocks.openSession).not.toHaveBeenCalled()
+    expect(publishArkadeDashboardFromOpenSessionMock).not.toHaveBeenCalled()
     expect(refreshArkadeStoreFromLoadedWasmMock).not.toHaveBeenCalled()
   })
 
@@ -275,6 +300,45 @@ describe('arkade-load-lifecycle-orchestrator', () => {
     expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loaded')
     expect(clearArkadeDashboardStoreMock).not.toHaveBeenCalled()
     expect(terminateArkadeWorkerMock).toHaveBeenCalled()
+  })
+
+  it('fails session start after 30 seconds and keeps that error if open finishes later', async () => {
+    vi.useFakeTimers()
+    let resolveOpen: (value: { arkadeAddress: string; operatorSignerPkHex: string }) => void =
+      () => {}
+    workerMocks.openSession.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveOpen = resolve
+        }),
+    )
+
+    try {
+      const loadPromise = orchestrateArkadeLoad({ walletId: 1, networkMode: 'mutinynet' })
+      const failure = expect(loadPromise).rejects.toThrow('Arkade session start timed out')
+
+      await vi.advanceTimersByTimeAsync(SESSION_START_TIMEOUT_MS - 1)
+      expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('loading')
+
+      await vi.advanceTimersByTimeAsync(1)
+      await failure
+
+      expect(getArkadeLoadLifecycleSnapshot()).toEqual({
+        loadPhase: 'load-error',
+        networkMode: 'mutinynet',
+        errorMessage: 'Arkade session start timed out',
+      })
+      expect(terminateArkadeWorkerMock).toHaveBeenCalled()
+
+      resolveOpen({ arkadeAddress: 'tark1qtest', operatorSignerPkHex: '02deadbeef' })
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(getArkadeLoadLifecycleSnapshot().loadPhase).toBe('load-error')
+      expect(setActiveArkadeAccountIdMock).not.toHaveBeenCalled()
+    } finally {
+      resetArkadeLoadLifecycleStateForTests()
+      vi.useRealTimers()
+    }
   })
 
   it('load failure sets load-error and tears down worker without leaving loading', async () => {

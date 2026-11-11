@@ -3,10 +3,24 @@ import { act, renderHook } from '@testing-library/react'
 import type { ArkadeUnilateralExitInProgressDto } from '@/workers/arkade-api'
 import { useWalletStore } from '@/stores/walletStore'
 
-const mutateAsync = vi.hoisted(() => vi.fn(async () => 'txid'))
+const mutateAsync = vi.hoisted(() => vi.fn(async () => 'ab'.repeat(32)))
+const completionFeeQueryState = vi.hoisted(() => ({
+  data: undefined as
+    | {
+        selectedTotalSats: number
+        estimatedFeeSats: number
+        estimatedReceiveSats: number
+        feeRateSatPerVb: number
+        estimateError?: string
+      }
+    | undefined,
+}))
 const scheduleBackgroundBumperWalletSync = vi.hoisted(() => vi.fn())
 const clearUnilateralExitJob = vi.hoisted(() => vi.fn())
 const navigate = vi.hoisted(() => vi.fn())
+const inProgressRows = vi.hoisted(
+  () => ({ current: [] as ArkadeUnilateralExitInProgressDto[] }),
+)
 const readyRow = vi.hoisted((): ArkadeUnilateralExitInProgressDto => {
   const readyTxid = 'bb'.repeat(32)
   return {
@@ -51,6 +65,10 @@ vi.mock('@/lib/arkade/background-bumper-wallet-sync', () => ({
   scheduleBackgroundBumperWalletSync,
 }))
 
+const completionFeeQueryParams = vi.hoisted(() => ({
+  current: undefined as { readinessRevision?: string } | undefined,
+}))
+
 vi.mock('@/hooks/useArkadeQueries', () => ({
   useArkadeUnilateralExitTimelockQuery: () => ({
     data: { unilateralExitTimelockBlocks: 144 },
@@ -60,10 +78,20 @@ vi.mock('@/hooks/useArkadeQueries', () => ({
     isPending: false,
     isError: false,
   }),
-  useArkadeUnilateralExitCompletionFeeQuery: () => ({ isLoading: false, data: undefined }),
+  useArkadeUnilateralExitCompletionFeeQuery: (params: {
+    readinessRevision?: string
+  }) => {
+    completionFeeQueryParams.current = params
+    return {
+      isLoading: false,
+      data: completionFeeQueryState.data,
+      refetch: vi.fn(),
+    }
+  },
   useArkadeUnilateralExitsInProgressQuery: () => ({
     isLoading: false,
-    data: [readyRow],
+    data: inProgressRows.current,
+    refetch: vi.fn(),
   }),
 }))
 
@@ -72,7 +100,9 @@ import { useCompleteUnilateralExitFlow } from '@/hooks/useCompleteUnilateralExit
 describe('useCompleteUnilateralExitFlow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mutateAsync.mockResolvedValue('txid')
+    mutateAsync.mockResolvedValue('ab'.repeat(32))
+    completionFeeQueryState.data = undefined
+    inProgressRows.current = [readyRow]
     useWalletStore.setState({
       networkMode: 'regtest',
       activeWalletId: 7,
@@ -103,7 +133,41 @@ describe('useCompleteUnilateralExitFlow', () => {
       }),
     )
     expect(clearUnilateralExitJob).not.toHaveBeenCalled()
-    expect(navigate).toHaveBeenCalledWith({ to: '/wallet/management' })
+    expect(navigate).toHaveBeenCalledWith({
+      to: '/wallet/management',
+      search: { completedExitTxid: 'ab'.repeat(32) },
+    })
+  })
+
+  it('keeps complete disabled when the fee estimate covers a row that is not claimable', () => {
+    const waitingTxid = 'cc'.repeat(32)
+    const waitingRow: ArkadeUnilateralExitInProgressDto = {
+      id: `${waitingTxid}:0`,
+      txid: waitingTxid,
+      vout: 0,
+      amountSats: 10_000,
+      canComplete: false,
+      virtualStatusState: 'unrolled',
+      phase: 'unrolled',
+    }
+    inProgressRows.current = [readyRow, waitingRow]
+    completionFeeQueryState.data = {
+      selectedTotalSats: 60_000,
+      estimatedFeeSats: 238,
+      estimatedReceiveSats: 59_762,
+      feeRateSatPerVb: 1.07,
+    }
+
+    const { result } = renderHook(() => useCompleteUnilateralExitFlow())
+    act(() => {
+      result.current.toggleInProgressSelection(readyRow)
+      result.current.toggleInProgressSelection(waitingRow)
+    })
+
+    expect(result.current.allSelectedCanComplete).toBe(false)
+    expect(completionFeeQueryParams.current?.readinessRevision).toBe(
+      `${readyRow.txid}:${readyRow.vout}`,
+    )
   })
 
   it('schedules the bumper scan in the background', () => {

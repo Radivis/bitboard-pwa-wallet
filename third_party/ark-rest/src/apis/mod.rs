@@ -46,9 +46,7 @@ impl<T> fmt::Display for Error<T> {
             Error::Reqwest(e) => ("reqwest", e.to_string()),
             Error::Serde(e) => ("serde", e.to_string()),
             Error::Io(e) => ("IO", e.to_string()),
-            Error::ResponseError(response) => {
-                ("response", format_response_error_display(response))
-            }
+            Error::ResponseError(response) => ("response", format_response_error_display(response)),
         };
         write!(f, "error in {}: {}", module, e)
     }

@@ -13,11 +13,13 @@ export function useSendFlowArkade({
   normalizedRecipient,
   amountSats,
   lightningAvailable,
+  onchainAddressValid,
 }: {
   networkMode: NetworkMode
   normalizedRecipient: string
   amountSats: number
   lightningAvailable: boolean
+  onchainAddressValid?: boolean
 }) {
   const arkadeAvailable = isArkadeActiveForNetworkMode(networkMode)
   const arkadeSendMode = useMemo(
@@ -35,8 +37,15 @@ export function useSendFlowArkade({
         networkMode,
         lightningAvailable,
         arkadeAvailable,
+        onchainAddressValid,
       }),
-    [normalizedRecipient, networkMode, lightningAvailable, arkadeAvailable],
+    [
+      normalizedRecipient,
+      networkMode,
+      lightningAvailable,
+      arkadeAvailable,
+      onchainAddressValid,
+    ],
   )
 
   const arkadeConfirmedBalanceSats = balanceQuery.data?.confirmedSats

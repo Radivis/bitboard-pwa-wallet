@@ -10,6 +10,9 @@ const mutate = vi.hoisted(() =>
   }),
 )
 const pendingBatchIntents = vi.hoisted(() => ({ current: [] as unknown[] }))
+const feeQueryCalls = vi.hoisted(
+  () => [] as Array<{ destinationAddress: string; amountSats?: number }>,
+)
 
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => navigate,
@@ -17,7 +20,16 @@ vi.mock('@tanstack/react-router', () => ({
 
 vi.mock('@/hooks/useArkadeQueries', () => ({
   useArkadeBalanceQuery: () => ({ data: { confirmedSats: 100_000, totalSats: 100_000 } }),
-  useArkadeCollaborativeExitFeeQuery: () => ({ isLoading: false, isError: false, data: undefined }),
+  useArkadeCollaborativeExitFeeQuery: (params: {
+    destinationAddress: string
+    amountSats?: number
+  }) => {
+    feeQueryCalls.push({
+      destinationAddress: params.destinationAddress,
+      amountSats: params.amountSats,
+    })
+    return { isLoading: false, isError: false, data: undefined }
+  },
   useArkadeCollaborativeExitMutation: () => ({ mutate, isPending: false }),
   useHasPendingBatchIntent: () => false,
   useHasPendingBatchIntentKind: () => false,
@@ -30,11 +42,18 @@ describe('useCollaborativeExitFlow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     pendingBatchIntents.current = []
+    feeQueryCalls.length = 0
     useWalletStore.setState({
       networkMode: 'regtest',
       currentAddress: 'bcrt1qtest',
       arkadeSignerMigrationHint: null,
     })
+  })
+
+  it('quotes the fee for the current receive address on the first render', () => {
+    renderHook(() => useCollaborativeExitFlow())
+
+    expect(feeQueryCalls[0]?.destinationAddress).toBe('bcrt1qtest')
   })
 
   it('returns to management after a successful submit', () => {

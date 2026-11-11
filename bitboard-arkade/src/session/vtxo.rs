@@ -76,7 +76,7 @@ impl ArkadeSession {
     /// active unroll. Recover is **not** spend-locked: `funding_lost` stays recoverable if
     /// ark-core still classifies it. Post-unroll exiting VTXOs are kept out by vendored bucketing.
     pub(crate) async fn recoverable_vtxo_buckets(&self) -> ArkResult<RecoverableVtxoBuckets> {
-        let dust = self.client.server_info()?.dust;
+        let dust = self.client.server_info_snapshot()?.dust;
         let exclude_pipeline_outpoints = self.pipeline_outpoints();
         let persisted_snapshot = self.wallet_db.snapshot().offchain_vtxo_snapshot;
 
@@ -90,7 +90,7 @@ impl ArkadeSession {
         }
 
         if balance_vtxo_reads_use_operator_rpc(self.autonomous_mode())
-            && let Ok((vtxo_list, _)) = self.client.list_vtxos().await
+            && let Ok((vtxo_list, _)) = self.client.list_vtxo_buckets().await
         {
             return Ok(recoverable_vtxo_buckets_from_list(
                 &vtxo_list,
@@ -102,11 +102,28 @@ impl ArkadeSession {
         Ok(empty_recoverable_vtxo_buckets())
     }
 
+    /// Recoverable buckets from the persisted snapshot only. No operator list.
+    pub(crate) fn recoverable_vtxo_buckets_from_persisted_snapshot(
+        &self,
+    ) -> ArkResult<RecoverableVtxoBuckets> {
+        let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot else {
+            return Ok(empty_recoverable_vtxo_buckets());
+        };
+        let dust = self.client.server_info_snapshot()?.dust;
+        let exclude_pipeline_outpoints = self.pipeline_outpoints();
+        let vtxo_list = vtxo_list_from_snapshot(&snapshot)?;
+        Ok(recoverable_vtxo_buckets_from_list(
+            &vtxo_list,
+            dust,
+            &exclude_pipeline_outpoints,
+        ))
+    }
+
     pub async fn recoverable_vtxo_fee_estimate(&self) -> ArkResult<RecoverableVtxoFeeEstimateDto> {
         self.ensure_operator_rpc_allowed()?;
         let fees = self
             .client
-            .server_info()?
+            .server_info_snapshot()?
             .fees
             .clone()
             .unwrap_or_else(empty_fee_info);
@@ -125,7 +142,7 @@ impl ArkadeSession {
             });
         }
 
-        let (to_address, _) = self.client.get_offchain_address()?;
+        let (to_address, _) = self.client.peek_offchain_receive_address()?;
         let mut rng = OsRng;
         match self
             .client
@@ -232,8 +249,8 @@ impl ArkadeSession {
     }
 
     pub async fn list_vtxos(&self) -> ArkResult<VtxoListResultDto> {
-        let dust = self.client.server_info()?.dust;
-        let server_info = self.client.server_info()?;
+        let dust = self.client.server_info_snapshot()?.dust;
+        let server_info = self.client.server_info_snapshot()?;
         let now = current_unix_timestamp();
 
         if let Some(snapshot) = self.wallet_db.snapshot().offchain_vtxo_snapshot.as_ref() {
@@ -257,7 +274,7 @@ impl ArkadeSession {
         }
 
         if !self.autonomous_mode()
-            && let Ok((vtxo_list, script_map)) = self.client.list_vtxos().await
+            && let Ok((vtxo_list, script_map)) = self.client.list_vtxo_buckets().await
         {
             let rows = map_vtxo_rows_from_list(
                 &vtxo_list,
@@ -283,6 +300,7 @@ impl ArkadeSession {
         let vtxo_list = self.vtxo_list_for_renew_selection().await?;
         let exclude_spend_locked_outpoints = self.spend_locked_outpoints();
         let now = current_unix_timestamp();
+        let early_renewal_fee_waiver = self.early_renewal_fee_waiver();
         let earliest_expires_at = vtxo_list
             .spendable_offchain()
             .filter(|virtual_tx_outpoint| {
@@ -293,9 +311,13 @@ impl ArkadeSession {
             })
             .map(|virtual_tx_outpoint| virtual_tx_outpoint.expires_at)
             .min();
-        let expiring_soon_count =
-            expiring_renew_outpoints_from_list(&vtxo_list, &exclude_spend_locked_outpoints, now)
-                .len() as u32;
+        let expiring_soon_count = expiring_renew_outpoints_from_list(
+            &vtxo_list,
+            &exclude_spend_locked_outpoints,
+            now,
+            &early_renewal_fee_waiver,
+        )
+        .len() as u32;
         Ok(VtxoExpiryStatusDto {
             earliest_expires_at,
             expiring_soon_count,
@@ -473,6 +495,7 @@ impl ArkadeSession {
             })?;
         let amount_sats = status.spendable_sats;
         let onchain = [boarding_outpoint.inner()];
+        self.ensure_boarding_reregister_allowed(&onchain).await?;
         if let Some(waiting) = self
             .existing_pending_batch_join_result(&onchain, &[])
             .await?
@@ -555,16 +578,31 @@ impl ArkadeSession {
             .await?;
         Ok(spend_status.spend_txid.is_some())
     }
+
     /// VTXOs in the renewal window for manual renew — excludes spend-locked unilateral-exit
     /// outpoints (`ARK-REC-08`), including `funding_lost`, and already-unrolled / exiting coins.
     async fn expiring_outpoints(&self) -> ArkResult<Vec<OutPoint>> {
         let vtxo_list = self.vtxo_list_for_renew_selection().await?;
         let exclude_spend_locked_outpoints = self.spend_locked_outpoints();
+        let early_renewal_fee_waiver = self.early_renewal_fee_waiver();
         Ok(expiring_renew_outpoints_from_list(
             &vtxo_list,
             &exclude_spend_locked_outpoints,
             current_unix_timestamp(),
+            &early_renewal_fee_waiver,
         ))
+    }
+
+    /// Offchain-input fee program from the last operator info. Empty when fees were not published.
+    fn early_renewal_fee_waiver(&self) -> EarlyRenewalFeeWaiver {
+        let offchain_input_program = self
+            .client
+            .server_info_snapshot()
+            .ok()
+            .and_then(|server_info| server_info.fees)
+            .and_then(|fees| fees.intent_fee.offchain_input)
+            .unwrap_or_default();
+        EarlyRenewalFeeWaiver::from_offchain_input_program(&offchain_input_program)
     }
 
     /// Prefer the persisted snapshot (sticky `is_unrolled` after a local unroll) so renew does not
@@ -576,21 +614,96 @@ impl ArkadeSession {
             return vtxo_list_from_snapshot(snapshot);
         }
         if !balance_vtxo_reads_use_operator_rpc(self.autonomous_mode()) {
-            return Ok(VtxoList::new(self.client.server_info()?.dust, Vec::new()));
+            return Ok(VtxoList::new(
+                self.client.server_info_snapshot()?.dust,
+                Vec::new(),
+            ));
         }
         let (vtxo_list, _) = self.client.list_spendable_vtxos().await?;
         Ok(vtxo_list)
     }
 }
 
-fn vtxo_is_in_self_renew_window(virtual_tx_outpoint: &VirtualTxOutPoint, now: i64) -> bool {
+const OFFCHAIN_RENEWAL_FEE_INPUT_WEIGHT: f64 = 1.0;
+
+/// Quoted operator offchain-input fee for a VTXO. A zero quote means renewal is free now.
+/// Mutinynet publishes `expiry - now() > 518656 ? amount * 0.002 : 0`, so a ~7-day VTXO
+/// becomes free to renew once about six days remain — well before the 10% last-chance slice.
+pub(crate) struct EarlyRenewalFeeWaiver {
+    estimator: Option<ark_fees::Estimator>,
+}
+
+impl EarlyRenewalFeeWaiver {
+    pub(crate) fn none() -> Self {
+        Self { estimator: None }
+    }
+
+    pub(crate) fn from_offchain_input_program(program: &str) -> Self {
+        let trimmed_program = program.trim();
+        if trimmed_program.is_empty() {
+            return Self::none();
+        }
+        let estimator = ark_fees::Estimator::new(ark_fees::Config {
+            intent_offchain_input_program: trimmed_program.to_string(),
+            ..ark_fees::Config::default()
+        })
+        .ok();
+        Self { estimator }
+    }
+
+    fn offchain_input_fee_is_zero(
+        &self,
+        amount_sats: u64,
+        created_at: i64,
+        expires_at: i64,
+    ) -> bool {
+        let Some(estimator) = &self.estimator else {
+            return false;
+        };
+        quoted_offchain_input_fee(estimator, amount_sats, created_at, expires_at)
+            .is_some_and(|quoted_fee| quoted_fee <= 0.0)
+    }
+}
+
+fn quoted_offchain_input_fee(
+    estimator: &ark_fees::Estimator,
+    amount_sats: u64,
+    created_at: i64,
+    expires_at: i64,
+) -> Option<f64> {
+    estimator
+        .eval_offchain_input(ark_fees::OffchainInput {
+            amount: amount_sats,
+            expiry: Some(expires_at),
+            birth: Some(created_at),
+            input_type: ark_fees::VtxoType::Vtxo,
+            weight: OFFCHAIN_RENEWAL_FEE_INPUT_WEIGHT,
+        })
+        .ok()
+        .map(|fee_amount| fee_amount.0)
+}
+
+fn vtxo_is_in_self_renew_window(
+    virtual_tx_outpoint: &VirtualTxOutPoint,
+    now: i64,
+    early_renewal_fee_waiver: &EarlyRenewalFeeWaiver,
+) -> bool {
     if virtual_tx_outpoint.expires_at <= 0 || virtual_tx_outpoint.created_at <= 0 {
         return false;
     }
     let total_lifetime = virtual_tx_outpoint.expires_at - virtual_tx_outpoint.created_at;
-    let remaining = virtual_tx_outpoint.expires_at - now;
-    remaining > 0
-        && (remaining as f64) < (total_lifetime as f64 * VTXO_SELF_RENEW_REMAINING_FRACTION)
+    let remaining_lifetime = virtual_tx_outpoint.expires_at - now;
+    if remaining_lifetime <= 0 {
+        return false;
+    }
+    if (remaining_lifetime as f64) < (total_lifetime as f64 * VTXO_SELF_RENEW_REMAINING_FRACTION) {
+        return true;
+    }
+    early_renewal_fee_waiver.offchain_input_fee_is_zero(
+        virtual_tx_outpoint.amount.to_sat(),
+        virtual_tx_outpoint.created_at,
+        virtual_tx_outpoint.expires_at,
+    )
 }
 
 /// Cooperative renew inputs: offchain-spendable VTXOs in the self-renew window, minus spend-locked
@@ -600,6 +713,7 @@ pub(crate) fn expiring_renew_outpoints_from_list(
     vtxo_list: &VtxoList,
     exclude_spend_locked_outpoints: &HashSet<UnilateralExitOutpointKey>,
     now: i64,
+    early_renewal_fee_waiver: &EarlyRenewalFeeWaiver,
 ) -> Vec<OutPoint> {
     vtxo_list
         .spendable_offchain()
@@ -610,7 +724,7 @@ pub(crate) fn expiring_renew_outpoints_from_list(
             if virtual_tx_outpoint.is_unrolled {
                 return false;
             }
-            vtxo_is_in_self_renew_window(virtual_tx_outpoint, now)
+            vtxo_is_in_self_renew_window(virtual_tx_outpoint, now, early_renewal_fee_waiver)
         })
         .map(|virtual_tx_outpoint| virtual_tx_outpoint.outpoint)
         .collect()
@@ -862,6 +976,7 @@ mod recoverable_vtxo_tests {
             settled_by: None,
             ark_txid: None,
             assets: vec![],
+            depth: 0,
         }
     }
 
@@ -1011,7 +1126,7 @@ mod expiring_renew_outpoints_tests {
     use bitcoin::hashes::Hash;
     use bitcoin::{Amount, OutPoint, ScriptBuf, Txid};
 
-    use super::expiring_renew_outpoints_from_list;
+    use super::{EarlyRenewalFeeWaiver, expiring_renew_outpoints_from_list};
     use crate::session::mappers::current_unix_timestamp;
 
     const DUST: Amount = Amount::from_sat(330);
@@ -1019,6 +1134,15 @@ mod expiring_renew_outpoints_tests {
     /// Remaining lifetime inside the 10% self-renew window for a 1-day VTXO.
     const IN_WINDOW_REMAINING_SECS: i64 = 3_600;
     const OUTSIDE_WINDOW_REMAINING_SECS: i64 = 43_200;
+    /// Mutinynet offchain-input program: 0.2% until remaining lifetime drops to 518656 seconds.
+    const MUTINYNET_OFFCHAIN_INPUT_PROGRAM: &str =
+        "inputType == 'vtxo' && expiry - now() > 518656.0 ? amount * 0.002 : 0.0";
+    /// About seven days, matching a Mutinynet VTXO created 2026-11-02 and expiring 2026-11-09.
+    const MUTINYNET_VTXO_LIFETIME_SECS: i64 = 7 * 86_400;
+    /// About 26 hours: outside the 10% slice of a 7-day VTXO, inside Mutinynet's zero-fee window.
+    const MUTINYNET_ONE_DAY_REMAINING_SECS: i64 = 26 * 3_600;
+    /// Still charged the 0.2% early-renewal fee (`expiry - now()` above 518656).
+    const MUTINYNET_STILL_CHARGED_REMAINING_SECS: i64 = 6 * 86_400 + 12 * 3_600;
 
     fn sample_vtp(
         vout: u32,
@@ -1042,11 +1166,46 @@ mod expiring_renew_outpoints_tests {
             settled_by: None,
             ark_txid: None,
             assets: vec![],
+            depth: 0,
         }
     }
 
     fn outpoints(vtxo_list: &ark_core::VtxoList, exclude: HashSet<OutPoint>) -> Vec<OutPoint> {
-        expiring_renew_outpoints_from_list(vtxo_list, &exclude, current_unix_timestamp())
+        outpoints_with_waiver(vtxo_list, exclude, &EarlyRenewalFeeWaiver::none())
+    }
+
+    fn outpoints_with_waiver(
+        vtxo_list: &ark_core::VtxoList,
+        exclude: HashSet<OutPoint>,
+        early_renewal_fee_waiver: &EarlyRenewalFeeWaiver,
+    ) -> Vec<OutPoint> {
+        expiring_renew_outpoints_from_list(
+            vtxo_list,
+            &exclude,
+            current_unix_timestamp(),
+            early_renewal_fee_waiver,
+        )
+    }
+
+    fn confirmed_vtxo(vout: u32, remaining_secs: i64, lifetime_secs: i64) -> VirtualTxOutPoint {
+        let expires_at = current_unix_timestamp() + remaining_secs;
+        VirtualTxOutPoint {
+            outpoint: OutPoint::new(Txid::from_byte_array([vout as u8; 32]), vout),
+            created_at: expires_at - lifetime_secs,
+            expires_at,
+            amount: Amount::from_sat(1_600_000),
+            script: ScriptBuf::new(),
+            is_preconfirmed: false,
+            is_swept: false,
+            is_unrolled: false,
+            is_spent: false,
+            spent_by: None,
+            commitment_txids: vec![],
+            settled_by: None,
+            ark_txid: None,
+            assets: vec![],
+            depth: 0,
+        }
     }
 
     #[test]
@@ -1086,6 +1245,77 @@ mod expiring_renew_outpoints_tests {
         let healthy = sample_vtp(0, OUTSIDE_WINDOW_REMAINING_SECS, true, false);
         let vtxo_list = ark_core::VtxoList::new(DUST, vec![healthy]);
         assert!(outpoints(&vtxo_list, HashSet::new()).is_empty());
+    }
+
+    #[test]
+    fn renew_includes_mutinynet_vtxo_in_zero_fee_window_before_ten_percent() {
+        let expiring_tomorrow = confirmed_vtxo(
+            0,
+            MUTINYNET_ONE_DAY_REMAINING_SECS,
+            MUTINYNET_VTXO_LIFETIME_SECS,
+        );
+        let expected = expiring_tomorrow.outpoint;
+        let vtxo_list = ark_core::VtxoList::new(DUST, vec![expiring_tomorrow]);
+        let waiver =
+            EarlyRenewalFeeWaiver::from_offchain_input_program(MUTINYNET_OFFCHAIN_INPUT_PROGRAM);
+
+        assert!(
+            outpoints(&vtxo_list, HashSet::new()).is_empty(),
+            "26 hours left on a 7-day VTXO is outside the 10% slice"
+        );
+        assert_eq!(
+            outpoints_with_waiver(&vtxo_list, HashSet::new(), &waiver),
+            vec![expected]
+        );
+    }
+
+    #[test]
+    fn renew_excludes_mutinynet_vtxo_still_charged_an_early_renewal_fee() {
+        let still_early = confirmed_vtxo(
+            0,
+            MUTINYNET_STILL_CHARGED_REMAINING_SECS,
+            MUTINYNET_VTXO_LIFETIME_SECS,
+        );
+        let vtxo_list = ark_core::VtxoList::new(DUST, vec![still_early]);
+        let waiver =
+            EarlyRenewalFeeWaiver::from_offchain_input_program(MUTINYNET_OFFCHAIN_INPUT_PROGRAM);
+
+        assert!(outpoints_with_waiver(&vtxo_list, HashSet::new(), &waiver).is_empty());
+    }
+
+    #[test]
+    fn renew_keeps_ten_percent_window_when_operator_fee_ignores_expiry() {
+        let outside_fraction = confirmed_vtxo(
+            0,
+            MUTINYNET_ONE_DAY_REMAINING_SECS,
+            MUTINYNET_VTXO_LIFETIME_SECS,
+        );
+        let inside_fraction = sample_vtp(1, IN_WINDOW_REMAINING_SECS, false, false);
+        let expected = inside_fraction.outpoint;
+        let vtxo_list = ark_core::VtxoList::new(DUST, vec![outside_fraction, inside_fraction]);
+        let flat_fee = EarlyRenewalFeeWaiver::from_offchain_input_program("amount * 0.002");
+
+        assert_eq!(
+            outpoints_with_waiver(&vtxo_list, HashSet::new(), &flat_fee),
+            vec![expected]
+        );
+    }
+
+    #[test]
+    fn renew_includes_vtxo_outside_ten_percent_when_quoted_fee_is_zero() {
+        let outside_fraction = confirmed_vtxo(
+            0,
+            MUTINYNET_ONE_DAY_REMAINING_SECS,
+            MUTINYNET_VTXO_LIFETIME_SECS,
+        );
+        let expected = outside_fraction.outpoint;
+        let vtxo_list = ark_core::VtxoList::new(DUST, vec![outside_fraction]);
+        let zero_fee = EarlyRenewalFeeWaiver::from_offchain_input_program("0.0");
+
+        assert_eq!(
+            outpoints_with_waiver(&vtxo_list, HashSet::new(), &zero_fee),
+            vec![expected]
+        );
     }
 }
 
@@ -1134,6 +1364,7 @@ mod vtxo_row_classification_tests {
             settled_by: None,
             ark_txid: None,
             assets: vec![],
+            depth: 0,
         }
     }
 
@@ -1291,6 +1522,7 @@ mod vtxo_row_classification_tests {
             settled_by: None,
             ark_txid: None,
             assets: vec![],
+            depth: 0,
         };
         let deprecated_pk = PublicKey::from_str(
             "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
@@ -1440,6 +1672,7 @@ mod vtxo_row_classification_tests {
             settled_by: None,
             ark_txid: None,
             assets: vec![],
+            depth: 0,
         };
         let vtxo_list = VtxoList::new(DUST, vec![vtxo]);
         let snapshot = OffchainVtxoSnapshot {

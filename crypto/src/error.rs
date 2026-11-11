@@ -12,11 +12,22 @@ pub const CODE_SERIALIZATION: &str = "serialization";
 pub const CODE_NO_ACTIVE_WALLET: &str = "no_active_wallet";
 pub const CODE_WALLET_ALREADY_BORROWED: &str = "wallet_already_borrowed";
 pub const CODE_WALLET_NOT_LOADED_FOR_LAB: &str = "wallet_not_loaded_for_lab";
+/// Matched by `frontend/src/lib/shared/wasm-crypto-error.ts`.
+pub const CODE_ESPLORA_NETWORK_MISMATCH: &str = "esplora_network_mismatch";
+/// Matched by `frontend/src/lib/shared/wasm-crypto-error.ts`.
+pub const CODE_ESPLORA_CHAIN_MISMATCH: &str = "esplora_chain_mismatch";
+/// Matched by `frontend/src/lib/shared/wasm-crypto-error.ts`.
+pub const CODE_SYNC_SUPERSEDED: &str = "sync_superseded";
 
 pub const MSG_NO_ACTIVE_WALLET: &str = "No active wallet. Call create_wallet or load_wallet first.";
 pub const MSG_WALLET_ALREADY_BORROWED: &str =
     "Wallet is already borrowed — likely a previous operation panicked";
 pub const MSG_WALLET_NOT_LOADED_FOR_LAB: &str = "No wallet loaded for lab. Load wallet first.";
+/// Shown when `Address::from_str` fails. Do not forward rust-bitcoin's Display:
+/// bech32 failures longer than 50 characters surface as "legacy address base58 string".
+pub const INVALID_BITCOIN_ADDRESS_MESSAGE: &str = "Invalid Bitcoin address (could not decode)";
+pub const BITCOIN_ADDRESS_NETWORK_MISMATCH_MESSAGE: &str =
+    "Bitcoin address is not valid for this network";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WasmCryptoErrorPayload {
@@ -60,6 +71,15 @@ pub enum CryptoError {
     Transaction(String),
     #[error("Serialization error: {0}")]
     Serialization(String),
+    /// The Esplora server serves a different network than the active wallet.
+    #[error("{0}")]
+    EsploraNetworkMismatch(String),
+    /// The Esplora chain cannot be reconciled with the wallet's saved local chain.
+    #[error("Esplora chain mismatch: {0}")]
+    EsploraChainMismatch(String),
+    /// An Esplora update arrived after `load_wallet` / `create_wallet` replaced the active wallet.
+    #[error("{0}")]
+    SyncSuperseded(String),
 }
 
 impl CryptoError {
@@ -71,6 +91,9 @@ impl CryptoError {
             CryptoError::Blockchain(_) => CODE_BLOCKCHAIN,
             CryptoError::Transaction(_) => CODE_TRANSACTION,
             CryptoError::Serialization(_) => CODE_SERIALIZATION,
+            CryptoError::EsploraNetworkMismatch(_) => CODE_ESPLORA_NETWORK_MISMATCH,
+            CryptoError::EsploraChainMismatch(_) => CODE_ESPLORA_CHAIN_MISMATCH,
+            CryptoError::SyncSuperseded(_) => CODE_SYNC_SUPERSEDED,
         }
     }
 
@@ -147,12 +170,18 @@ impl From<bdk_wallet::signer::SignerError> for CryptoError {
 
 impl From<bdk_wallet::chain::local_chain::CannotConnectError> for CryptoError {
     fn from(error: bdk_wallet::chain::local_chain::CannotConnectError) -> Self {
-        CryptoError::Blockchain(error.to_string())
+        CryptoError::EsploraChainMismatch(error.to_string())
     }
 }
 
 impl From<bitcoin::address::ParseError> for CryptoError {
     fn from(error: bitcoin::address::ParseError) -> Self {
-        CryptoError::Transaction(error.to_string())
+        let message = match error {
+            bitcoin::address::ParseError::NetworkValidation(_) => {
+                BITCOIN_ADDRESS_NETWORK_MISMATCH_MESSAGE.to_string()
+            }
+            _ => INVALID_BITCOIN_ADDRESS_MESSAGE.to_string(),
+        };
+        CryptoError::Transaction(message)
     }
 }

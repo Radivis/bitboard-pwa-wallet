@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 use bdk_wallet::chain::Merge;
 use bdk_wallet::{ChangeSet, KeychainKind, Wallet as BdkWallet};
@@ -20,6 +20,7 @@ pub(crate) fn current_unix_time() -> u64 {
     }
 }
 
+pub mod address_input;
 pub mod blockchain;
 pub mod descriptors;
 pub mod error;
@@ -29,6 +30,7 @@ use crate::error::{
     MapDisplayErrToJs, MapErrToJs, wasm_crypto_error,
 };
 pub mod esplora;
+pub mod esplora_network_identity;
 pub mod esplora_tx_anchor_reconcile;
 pub mod lab;
 pub mod lab_entity_wallet;
@@ -53,6 +55,10 @@ pub fn init() {
 
 thread_local! {
     static ACTIVE_WALLET: RefCell<Option<BdkWallet>> = const { RefCell::new(None) };
+    /// App network of `ACTIVE_WALLET`. BDK maps Signet and Mutinynet to the same network.
+    static ACTIVE_WALLET_NETWORK: Cell<Option<types::BitcoinNetwork>> = const { Cell::new(None) };
+    /// Bumps on every `create_wallet` / `load_wallet` so an in-flight scan cannot apply onto a replacement.
+    static ACTIVE_WALLET_GENERATION: Cell<u64> = const { Cell::new(0) };
     static ACCUMULATED_CHANGESET: RefCell<ChangeSet> = RefCell::new(ChangeSet::default());
     static EXTERNAL_DESCRIPTOR_FOR_LAB: RefCell<String> = const { RefCell::new(String::new()) };
     static INTERNAL_DESCRIPTOR_FOR_LAB: RefCell<String> = const { RefCell::new(String::new()) };
@@ -117,6 +123,15 @@ pub fn validate_mnemonic(mnemonic_str: &str) -> Result<bool, JsValue> {
         Ok(()) => Ok(true),
         Err(_) => Ok(false),
     }
+}
+
+/// Same parser the signer uses for a send destination. Returns false for an unknown network.
+#[wasm_bindgen]
+pub fn bitcoin_address_is_valid(raw: &str, network: &str) -> bool {
+    let Ok(bitcoin_network) = types::BitcoinNetwork::try_from(network) else {
+        return false;
+    };
+    address_input::parse_bitcoin_address(raw, bitcoin::Network::from(bitcoin_network)).is_ok()
 }
 
 #[wasm_bindgen]
@@ -194,10 +209,13 @@ pub fn create_wallet(
     address_type: &str,
     account_id: u32,
 ) -> Result<JsValue, JsValue> {
+    let bitcoin_network = types::BitcoinNetwork::try_from(network).map_err(JsValue::from)?;
     let (create_wallet_result, bdk_wallet, initial_changeset) =
         build_create_wallet_result(mnemonic_str, network, address_type, account_id)?;
 
     ACTIVE_WALLET.with(|wallet_cell| wallet_cell.replace(Some(bdk_wallet)));
+    ACTIVE_WALLET_NETWORK.with(|network_cell| network_cell.set(Some(bitcoin_network)));
+    bump_active_wallet_generation();
     ACCUMULATED_CHANGESET.with(|changeset_cell| *changeset_cell.borrow_mut() = initial_changeset);
     EXTERNAL_DESCRIPTOR_FOR_LAB.with(|descriptor_cell| {
         *descriptor_cell.borrow_mut() = create_wallet_result.external_descriptor.clone()
@@ -251,6 +269,8 @@ pub fn load_wallet(
     .map_err(JsValue::from)?;
 
     ACTIVE_WALLET.with(|wallet_cell| wallet_cell.replace(Some(bdk_wallet)));
+    ACTIVE_WALLET_NETWORK.with(|network_cell| network_cell.set(Some(bitcoin_network)));
+    bump_active_wallet_generation();
     ACCUMULATED_CHANGESET.with(|changeset_cell| *changeset_cell.borrow_mut() = changeset);
     EXTERNAL_DESCRIPTOR_FOR_LAB
         .with(|descriptor_cell| *descriptor_cell.borrow_mut() = external_descriptor.to_string());
@@ -327,6 +347,7 @@ fn to_js<T: serde::Serialize>(value: &T) -> Result<JsValue, JsValue> {
 #[wasm_bindgen]
 pub async fn sync_wallet(esplora_url: &str) -> Result<JsValue, JsValue> {
     let esplora_client = esplora::EsploraClient::for_sync(esplora_url).map_err(JsValue::from)?;
+    let wallet_generation = active_wallet_generation();
 
     let sync_request = with_wallet_mut(|wallet| {
         wallet::start_incremental_sync_request(wallet, current_unix_time())
@@ -340,9 +361,11 @@ pub async fn sync_wallet(esplora_url: &str) -> Result<JsValue, JsValue> {
         .map_display_err_to_js()?
         .into();
 
-    with_wallet_mut(|wallet| sync::apply_update(wallet, update).map_err(JsValue::from))??;
+    reject_sync_if_active_wallet_replaced(wallet_generation)?;
+    apply_esplora_update_to_active_wallet(update)?;
 
-    apply_esplora_anchor_reconcile_passes(&esplora_client).await?;
+    apply_esplora_anchor_reconcile_passes(&esplora_client, wallet_generation).await?;
+    reject_sync_if_active_wallet_replaced(wallet_generation)?;
 
     accumulate_staged_changes();
     build_sync_result()
@@ -356,8 +379,10 @@ const ANCHOR_RECONCILE_MAX_PASSES: usize = 2;
 
 async fn apply_esplora_anchor_reconcile_passes(
     esplora_client: &esplora::EsploraClient,
+    wallet_generation: u64,
 ) -> Result<(), JsValue> {
     for _ in 0..ANCHOR_RECONCILE_MAX_PASSES {
+        reject_sync_if_active_wallet_replaced(wallet_generation)?;
         let unconfirmed_txids: Vec<_> =
             with_wallet(esplora_tx_anchor_reconcile::list_txids_for_anchor_reconcile)?
                 .into_iter()
@@ -388,6 +413,7 @@ async fn apply_esplora_anchor_reconcile_passes(
             continue;
         };
 
+        reject_sync_if_active_wallet_replaced(wallet_generation)?;
         with_wallet_mut(|wallet| {
             sync::apply_update(wallet, reconcile_update).map_err(JsValue::from)
         })??;
@@ -401,6 +427,7 @@ async fn apply_esplora_anchor_reconcile_passes(
     }
 
     let stuck_txids = stuck_esplora_confirmed_untrusted_receives(esplora_client).await?;
+    reject_sync_if_active_wallet_replaced(wallet_generation)?;
     if !stuck_txids.is_empty() {
         let pending_sats = with_wallet(|wallet| wallet.balance().untrusted_pending.to_sat())?;
         return Err(JsValue::from(CryptoError::Blockchain(format!(
@@ -438,6 +465,7 @@ async fn stuck_esplora_confirmed_untrusted_receives(
 pub async fn full_scan_wallet(esplora_url: &str, stop_gap: usize) -> Result<JsValue, JsValue> {
     let esplora_client =
         esplora::EsploraClient::for_full_scan(esplora_url).map_err(JsValue::from)?;
+    let wallet_generation = active_wallet_generation();
 
     let scan_request = with_wallet(|wallet| wallet.start_full_scan_at(current_unix_time()))?;
 
@@ -449,10 +477,37 @@ pub async fn full_scan_wallet(esplora_url: &str, stop_gap: usize) -> Result<JsVa
         .map_display_err_to_js()?
         .into();
 
-    with_wallet_mut(|wallet| sync::apply_update(wallet, update).map_err(JsValue::from))??;
+    reject_sync_if_active_wallet_replaced(wallet_generation)?;
+    apply_esplora_update_to_active_wallet(update)?;
 
     accumulate_staged_changes();
     build_sync_result()
+}
+
+fn active_wallet_generation() -> u64 {
+    ACTIVE_WALLET_GENERATION.with(Cell::get)
+}
+
+fn bump_active_wallet_generation() {
+    ACTIVE_WALLET_GENERATION.with(|generation| {
+        generation.set(generation.get().wrapping_add(1));
+    });
+}
+
+fn reject_sync_if_active_wallet_replaced(captured_generation: u64) -> Result<(), JsValue> {
+    if active_wallet_generation() == captured_generation {
+        return Ok(());
+    }
+    Err(JsValue::from(CryptoError::SyncSuperseded(
+        "On-chain sync was discarded because the loaded wallet changed".to_string(),
+    )))
+}
+
+fn apply_esplora_update_to_active_wallet(update: bdk_wallet::Update) -> Result<(), JsValue> {
+    let app_network = ACTIVE_WALLET_NETWORK.with(Cell::get);
+    with_wallet_mut(|wallet| {
+        sync::apply_esplora_update(wallet, app_network, update).map_err(JsValue::from)
+    })?
 }
 
 fn build_sync_result() -> Result<JsValue, JsValue> {

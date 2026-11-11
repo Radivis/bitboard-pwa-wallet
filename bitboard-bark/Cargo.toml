@@ -1,5 +1,5 @@
 # Own workspace: the parent Cargo.lock unifies bitcoin-units to 0.1.2, and wasm-pack then fails
-# inside bark-wallet 0.7.1 with error[E0599]: no function or associated item named
+# inside bark-wallet 0.8.0 with error[E0599]: no function or associated item named
 # `from_sat_per_vb_u32` found for struct `FeeRate` (src/config.rs). bitcoin-units 0.1.2 does not
 # have that constructor. This workspace resolves bitcoin-units on its own. Do not vendor bark-wallet.
 
@@ -44,7 +44,11 @@ serde_json = "1"
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
-bark-wallet = { version = "0.7.1", default-features = false, features = ["wasm-web"] }
+bark-wallet = { version = "0.8.0", default-features = false, features = ["wasm-web"] }
+# Reads the VTXO ids a rejected round submission names. Already in the bark-wallet graph.
+bark-server-rpc = { version = "0.8.0", default-features = false }
+# BlockHeight and BlockDelta. Already in the bark graph. Default features pull bitcoind RPC.
+bark-bitcoin-ext = { version = "0.8.0", default-features = false }
 # Public type of Wallet::open / WalletSeed::new_from_mnemonic. Already in the bark graph.
 bip39 = "2.0"
 # Record store methods return anyhow::Result. Already in the bark graph.
@@ -56,7 +60,7 @@ base64 = "0.22"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # Enabled only by the regtest-support feature. The wasm target keeps wasm-web.
-bark-wallet = { version = "0.7.1", default-features = false, features = ["native", "onchain-bdk"], optional = true }
+bark-wallet = { version = "0.8.0", default-features = false, features = ["native", "onchain-bdk"], optional = true }
 bip39 = { version = "2.0", optional = true }
 anyhow = { version = "1", optional = true }
 async-trait = { version = "0.1", optional = true }
@@ -68,7 +72,11 @@ tokio = { version = "1", features = ["sync"], optional = true }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 tokio = { version = "1", features = ["macros", "rt", "sync"] }
 # Record-store unit tests. The product session stays wasm32.
-bark-wallet = { version = "0.7.1", default-features = false }
+bark-wallet = { version = "0.8.0", default-features = false }
+# Recovery-report fixtures. Already in the bark-wallet graph.
+ark-lib = "0.8.0"
+# BlockHeight and BlockDelta for the native unit tests. Already in the bark graph.
+bark-bitcoin-ext = { version = "0.8.0", default-features = false }
 anyhow = "1"
 async-trait = "0.1"
 postcard = { version = "1", features = ["use-std"] }
@@ -92,6 +100,10 @@ required-features = ["regtest-support"]
 
 [[test]]
 name = "emergency_exit_claim_before_observation_regtest"
+required-features = ["regtest-support"]
+
+[[test]]
+name = "seed_recovery_past_gap_regtest"
 required-features = ["regtest-support"]
 
 [package.metadata.wasm-pack.profile.release]

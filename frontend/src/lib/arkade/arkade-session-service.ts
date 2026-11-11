@@ -64,6 +64,23 @@ export async function discardArkadeSessionForWalletDeletion(): Promise<void> {
   await awaitInFlightWalletSecretsWrites()
 }
 
+/**
+ * Leave the Arkade session for another wallet.
+ * A session that has not finished opening is dropped immediately, so a stuck
+ * init cannot block the switch. A loaded session is closed so persistence can flush.
+ */
+export async function closeArkadeSessionForWalletSwitch(): Promise<void> {
+  if (getArkadeLoadLifecycleSnapshot().loadPhase !== 'loaded') {
+    await abortArkadeSessionForNetworkSwitch()
+    return
+  }
+  try {
+    await closeArkadeSession()
+  } catch {
+    tearDownArkadeWorkerAndClientState()
+  }
+}
+
 export async function closeArkadeSession(): Promise<void> {
   await awaitArkadeLoadQuiescence()
   await awaitArkadeSyncQuiescence()

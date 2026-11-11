@@ -9,10 +9,11 @@ import { SeedPhraseBackup } from '@/components/wallet/SeedPhraseBackup'
 import { LightningWallets } from '@/components/wallet/LightningWallets'
 import { ArkadePanel } from '@/components/wallet/ArkadePanel'
 import { BarkPanel } from '@/components/wallet/BarkPanel'
+import { CompletedUnilateralExitNotice } from '@/components/wallet/CompletedUnilateralExitNotice'
 
 export function ManagementPage() {
   const navigate = useNavigate({ from: '/wallet/management' })
-  const { openDelete } = useSearch({ from: '/wallet/management' })
+  const { openDelete, completedExitTxid } = useSearch({ from: '/wallet/management' })
   const activeWalletId = useWalletStore((walletState) => walletState.activeWalletId)
   const networkMode = useWalletStore((walletState) => walletState.networkMode)
   const isLightningEnabled = useFeatureStore((featureState) => featureState.isLightningEnabled)
@@ -25,6 +26,22 @@ export function ManagementPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Management" icon={SlidersHorizontal} />
+
+      {completedExitTxid != null && (
+        <CompletedUnilateralExitNotice
+          txid={completedExitTxid}
+          networkMode={networkMode}
+          onDismiss={() => {
+            void navigate({
+              search: (previous) => ({
+                ...previous,
+                completedExitTxid: undefined,
+              }),
+              replace: true,
+            })
+          }}
+        />
+      )}
 
       {activeWalletId ? (
         <>

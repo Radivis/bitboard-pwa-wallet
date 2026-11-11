@@ -35,10 +35,13 @@ struct RecordMap {
 pub(crate) struct SharedRecordStore {
     records: Arc<Mutex<RecordMap>>,
     durable_flush: Arc<Mutex<Option<DurableFlushHook>>>,
+    /// How many [`crate::envelope_export_hold::EnvelopeExportHold`]s are alive.
+    /// A durable partition write stays in memory while the count is above zero.
+    envelope_export_holds: Arc<Mutex<u32>>,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-type NativeDurableFlushHook = Arc<dyn Fn(String) -> Result<(), String> + Send + Sync>;
+pub(crate) type NativeDurableFlushHook = Arc<dyn Fn(String) -> Result<(), String> + Send + Sync>;
 
 #[derive(Clone)]
 enum DurableFlushHook {
@@ -68,6 +71,7 @@ impl SharedRecordStore {
         let store = Self {
             records: Arc::new(Mutex::new(RecordMap::default())),
             durable_flush: Arc::new(Mutex::new(None)),
+            envelope_export_holds: Arc::new(Mutex::new(0)),
         };
         #[cfg(target_arch = "wasm32")]
         store.adopt_process_flush_hook();
@@ -132,6 +136,44 @@ impl SharedRecordStore {
         });
     }
 
+    /// True when this store already has Bark wallet properties.
+    ///
+    /// An open of that store does not defer flushes. An empty store does.
+    /// A poisoned lock is not an existing wallet: the creating-open path then
+    /// drops a scan whose status was not recorded.
+    pub(crate) fn has_wallet_properties(&self) -> bool {
+        let Ok(records) = self.lock_records() else {
+            return false;
+        };
+        records
+            .partitions
+            .get(&partition::PROPERTIES)
+            .is_some_and(|rows| !rows.is_empty())
+    }
+
+    /// Drops every record without invoking the durable flush hook.
+    pub(crate) fn clear_records(&self) -> Result<(), String> {
+        let mut records = self.lock_records()?;
+        records.partitions.clear();
+        Ok(())
+    }
+
+    /// Holds envelope export until the returned hold is dropped.
+    /// A poisoned hold lock returns an error, so the caller can avoid an edit
+    /// that a later durable write would export on its own.
+    pub(crate) fn hold_envelope_export(
+        &self,
+    ) -> Result<crate::envelope_export_hold::EnvelopeExportHold, String> {
+        crate::envelope_export_hold::EnvelopeExportHold::acquire(&self.envelope_export_holds)
+    }
+
+    pub(crate) fn envelope_export_is_held(&self) -> bool {
+        self.envelope_export_holds
+            .lock()
+            .map(|holds| *holds > 0)
+            .unwrap_or(false)
+    }
+
     pub(crate) fn export_encoded_envelope(&self) -> Result<String, String> {
         let records = self.lock_records()?;
         let envelope = BarkRecordEnvelope {
@@ -150,7 +192,7 @@ impl SharedRecordStore {
     }
 
     async fn flush_if_durable(&self, partition_id: u8) -> anyhow::Result<()> {
-        if !is_durable_partition(partition_id) {
+        if !is_durable_partition(partition_id) || self.envelope_export_is_held() {
             return Ok(());
         }
         let Some(hook) = self.durable_flush_hook()? else {
@@ -634,5 +676,53 @@ mod tests {
                     .is_none()
             );
         }
+    }
+
+    #[tokio::test]
+    async fn a_second_export_hold_keeps_the_envelope_unexported_until_both_are_dropped() {
+        let mut store = SharedRecordStore::empty();
+        let RecordedFlushes {
+            envelopes: flushed_envelopes,
+            hook,
+        } = flush_log();
+        store.set_durable_flush_hook(hook);
+        let first = store.hold_envelope_export().expect("first hold");
+        let second = store.hold_envelope_export().expect("second hold");
+        store
+            .put(record(partition::EXIT_VTXO, "exit", None, b"row"))
+            .await
+            .unwrap();
+        assert!(flushed_envelopes.lock().expect("flush log").is_empty());
+
+        drop(first);
+        store
+            .put(record(partition::EXIT_CHILD_TX, "child", None, b"child"))
+            .await
+            .unwrap();
+        assert!(
+            flushed_envelopes.lock().expect("flush log").is_empty(),
+            "one remaining hold still keeps the envelope in memory",
+        );
+
+        drop(second);
+        store
+            .put(record(partition::EXIT_VTXO, "later", None, b"later"))
+            .await
+            .unwrap();
+        assert_eq!(flushed_envelopes.lock().expect("flush log").len(), 1);
+    }
+
+    #[test]
+    fn a_poisoned_record_lock_is_not_an_existing_wallet() {
+        let store = SharedRecordStore::empty();
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _records = store.lock_records().expect("lock");
+            panic!("poison the record lock");
+        }));
+
+        assert!(
+            !store.has_wallet_properties(),
+            "an unreadable store takes the empty-envelope path",
+        );
     }
 }

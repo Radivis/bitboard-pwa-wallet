@@ -10,6 +10,7 @@ use std::str::FromStr;
 use bdk_wallet::{KeychainKind, SignOptions};
 use bitcoin::{Address, Amount, FeeRate, Network, OutPoint, Psbt, ScriptBuf, TxOut, Txid, psbt};
 
+use crate::address_input::parse_bitcoin_address;
 use crate::error::CryptoError;
 use crate::lab::LabUtxoInput;
 use crate::transaction;
@@ -276,15 +277,8 @@ fn resolve_lab_send_inputs(
         ));
     }
 
-    let to_address = Address::from_str(to_address_str)
-        .map_err(|e| CryptoError::Transaction(e.to_string()))?
-        .require_network(Network::Regtest)
-        .map_err(|e| CryptoError::Transaction(e.to_string()))?;
-
-    let change_address = Address::from_str(change_address_str)
-        .map_err(|e| CryptoError::Transaction(e.to_string()))?
-        .require_network(Network::Regtest)
-        .map_err(|e| CryptoError::Transaction(e.to_string()))?;
+    let to_address = parse_bitcoin_address(to_address_str, Network::Regtest)?;
+    let change_address = parse_bitcoin_address(change_address_str, Network::Regtest)?;
 
     let satisfaction_weight = wallet
         .public_descriptor(KeychainKind::External)

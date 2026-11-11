@@ -28,4 +28,21 @@ describe('normalizeSendRecipient', () => {
     const lnurlp = 'lnurlp://pay.example.com/.well-known/lnurlp/user'
     expect(normalizeSendRecipient(lnurlp)).toBe(lnurlp)
   })
+
+  it('strips a zero-width space inside a bech32 address', () => {
+    const polluted = `${addr.slice(0, 12)}\u200B${addr.slice(12)}`
+    expect(normalizeSendRecipient(polluted)).toBe(addr)
+  })
+
+  it('strips a leading byte-order mark', () => {
+    expect(normalizeSendRecipient(`\uFEFF${addr}`)).toBe(addr)
+  })
+
+  it('strips surrounding markdown backticks and whitespace', () => {
+    expect(normalizeSendRecipient(`\n\`${addr}\`\n`)).toBe(addr)
+  })
+
+  it('strips a trailing non-breaking space', () => {
+    expect(normalizeSendRecipient(`${addr}\u00A0`)).toBe(addr)
+  })
 })

@@ -32,6 +32,7 @@ import {
   LIFECYCLE_SYNC_ERROR_FALLBACK,
   userFacingLifecycleErrorMessage,
 } from '@/lib/shared/utils'
+import { isSyncSupersededError } from '@/lib/shared/wasm-crypto-error'
 
 export type {
   OnchainSyncKind,
@@ -105,6 +106,26 @@ function onchainSyncTargetsActiveWallet(walletId: number): boolean {
   return useWalletStore.getState().activeWalletId === walletId
 }
 
+function onchainSyncMatchesLoadedDescriptor(
+  params: Pick<OnchainSyncParams, 'walletId' | 'networkMode' | 'addressType' | 'accountId'>,
+): boolean {
+  const state = useWalletStore.getState()
+  return (
+    state.activeWalletId === params.walletId &&
+    state.networkMode === params.networkMode &&
+    state.addressType === params.addressType &&
+    state.accountId === params.accountId
+  )
+}
+
+/** Lock ends the session. A scan that settles afterwards must not toast or save. */
+function onchainSyncStillForUnlockedDescriptor(
+  params: Pick<OnchainSyncParams, 'walletId' | 'networkMode' | 'addressType' | 'accountId'>,
+): boolean {
+  if (!onchainSyncMatchesLoadedDescriptor(params)) return false
+  return walletIsUnlockedOrSyncing(useWalletStore.getState().walletStatus)
+}
+
 function clearOnchainSyncSnapshotIfItBelongsToWallet(walletId: number): void {
   if (snapshot.descriptorScope?.walletId !== walletId) {
     return
@@ -140,6 +161,11 @@ export async function awaitOnchainSyncQuiescence(): Promise<void> {
   await inFlightSyncTracker.awaitQuiescence()
 }
 
+/** True while a scan's HTTP call is still running, even if lock cleared the snapshot. */
+export function isOnchainSyncInFlight(): boolean {
+  return inFlightSyncTracker.getCurrent() != null
+}
+
 /** Drop a sync snapshot that still describes a wallet the user has left. */
 export function detachOnchainSyncSnapshotIfDifferentWallet(nextWalletId: number): void {
   const scopeWalletId = snapshot.descriptorScope?.walletId
@@ -172,7 +198,10 @@ export function configureOnchainSyncForLoadedRail(scope: OnchainRailDescriptorSc
 }
 
 export function syncOnchainSyncLifecycleWithLockPhase(lockPhase: LockLifecyclePhase): void {
+  // A locked wallet must not keep `syncing` just because the HTTP call is still
+  // open. That snapshot was treated as an active session and hid the unlock dialog.
   if (
+    lockPhase !== 'locked' &&
     shouldSkipRailLifecycleResetForLockPhase(
       lockPhase,
       inFlightSyncTracker.getCurrent() != null,
@@ -206,24 +235,26 @@ export async function orchestrateOnchainSyncThenSave(
     if (!onchainSyncTargetsActiveWallet(params.walletId)) {
       return
     }
-    await withWalletWriterLock(async () => {
-      if (!onchainSyncTargetsActiveWallet(params.walletId)) {
+    assertCanStartOnchainSync(params)
+    const scope = descriptorScopeFromParams(params)
+    configureOnchainSyncForLoadedRail(scope)
+
+    setSnapshot({ syncPhase: 'syncing', descriptorScope: scope, errorMessage: null })
+
+    try {
+      // Esplora HTTP stays outside the writer lock so a network switch can load
+      // another descriptor while a public indexer is stalled.
+      await runEsploraSyncBody(params)
+      if (!onchainSyncStillForUnlockedDescriptor(params)) {
         clearOnchainSyncSnapshotIfItBelongsToWallet(params.walletId)
         return
       }
-      assertCanStartOnchainSync(params)
-      const scope = descriptorScopeFromParams(params)
-      configureOnchainSyncForLoadedRail(scope)
-
-      setSnapshot({ syncPhase: 'syncing', descriptorScope: scope, errorMessage: null })
-
-      try {
-        await runEsploraSyncBody(params)
-        if (!onchainSyncTargetsActiveWallet(params.walletId)) {
+      setSnapshot({ syncPhase: 'not-syncing', descriptorScope: scope, errorMessage: null })
+      await withWalletWriterLock(async () => {
+        if (!onchainSyncStillForUnlockedDescriptor(params)) {
           clearOnchainSyncSnapshotIfItBelongsToWallet(params.walletId)
           return
         }
-        setSnapshot({ syncPhase: 'not-syncing', descriptorScope: scope, errorMessage: null })
         try {
           await orchestrateOnchainSave(toSaveParams(params))
         } catch (saveError) {
@@ -231,30 +262,33 @@ export async function orchestrateOnchainSyncThenSave(
             throw saveError
           }
         }
-      } catch (error) {
-        if (!onchainSyncTargetsActiveWallet(params.walletId)) {
-          clearOnchainSyncSnapshotIfItBelongsToWallet(params.walletId)
-          return
-        }
-        setSnapshot({
-          syncPhase: 'sync-error',
-          descriptorScope: scope,
-          errorMessage: userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK),
-        })
-        if (params.networkMode !== 'lab') {
-          try {
-            await refreshWalletStoreFromLoadedBdk(params.walletId)
-            invalidateOnchainDashboardQueries()
-          } catch {
-            // Keep prior BDK-local store state when refresh fails.
-          }
-        }
-        params.onSyncError?.(error)
-        if (throwOnError) {
-          throw error
+      })
+    } catch (error) {
+      if (
+        !onchainSyncStillForUnlockedDescriptor(params) ||
+        isSyncSupersededError(error)
+      ) {
+        clearOnchainSyncSnapshotIfItBelongsToWallet(params.walletId)
+        return
+      }
+      setSnapshot({
+        syncPhase: 'sync-error',
+        descriptorScope: scope,
+        errorMessage: userFacingLifecycleErrorMessage(error, LIFECYCLE_SYNC_ERROR_FALLBACK),
+      })
+      if (params.networkMode !== 'lab') {
+        try {
+          await refreshWalletStoreFromLoadedBdk(params.walletId)
+          invalidateOnchainDashboardQueries()
+        } catch {
+          // Keep prior BDK-local store state when refresh fails.
         }
       }
-    })
+      params.onSyncError?.(error)
+      if (throwOnError) {
+        throw error
+      }
+    }
   })
 }
 

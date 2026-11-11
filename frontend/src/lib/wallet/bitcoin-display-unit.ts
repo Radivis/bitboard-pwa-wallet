@@ -1,4 +1,9 @@
-import { formatSats, MAX_SAFE_SATS, SATS_PER_BTC } from '@/lib/wallet/bitcoin-utils'
+import {
+  formatSats,
+  MAX_SAFE_SATS,
+  SATS_PER_BTC,
+  satsFromNonNegativeDecimalAmount,
+} from '@/lib/wallet/bitcoin-utils'
 import type { NetworkMode } from '@/stores/walletStore'
 
 export type LiveTestNetworkMode = 'testnet' | 'signet' | 'mutinynet' | 'regtest'
@@ -114,50 +119,14 @@ export function parseAmountToSatsFromBitcoinDisplayUnit(
   }
   const trimmed = amountStr.trim()
   switch (unit) {
-    case 'BTC': {
-      const parsedBtcAmount = parseFloat(trimmed)
-      if (
-        Number.isNaN(parsedBtcAmount) ||
-        !Number.isFinite(parsedBtcAmount) ||
-        parsedBtcAmount < 0
-      ) {
-        return 0
-      }
-      return clampSats(parsedBtcAmount * SATS_PER_BTC)
-    }
-    case 'mBTC': {
-      const parsedMBtcAmount = parseFloat(trimmed)
-      if (
-        Number.isNaN(parsedMBtcAmount) ||
-        !Number.isFinite(parsedMBtcAmount) ||
-        parsedMBtcAmount < 0
-      ) {
-        return 0
-      }
-      return clampSats(parsedMBtcAmount * SATS_PER_mBTC)
-    }
-    case 'uBTC': {
-      const parsedUBtcAmount = parseFloat(trimmed)
-      if (
-        Number.isNaN(parsedUBtcAmount) ||
-        !Number.isFinite(parsedUBtcAmount) ||
-        parsedUBtcAmount < 0
-      ) {
-        return 0
-      }
-      return clampSats(parsedUBtcAmount * SATS_PER_uBTC)
-    }
-    case 'ksat': {
-      const parsedKsatAmount = parseFloat(trimmed)
-      if (
-        Number.isNaN(parsedKsatAmount) ||
-        !Number.isFinite(parsedKsatAmount) ||
-        parsedKsatAmount < 0
-      ) {
-        return 0
-      }
-      return clampSats(parsedKsatAmount * SATS_PER_ksat)
-    }
+    case 'BTC':
+      return satsFromNonNegativeDecimalAmount(trimmed, 8) ?? 0
+    case 'mBTC':
+      return satsFromNonNegativeDecimalAmount(trimmed, 5) ?? 0
+    case 'uBTC':
+      return satsFromNonNegativeDecimalAmount(trimmed, 2) ?? 0
+    case 'ksat':
+      return satsFromNonNegativeDecimalAmount(trimmed, 3) ?? 0
     case 'sat': {
       const normalized = trimmed.replace(/,/g, '')
       const parsedSatAmount = parseInt(normalized, 10)
