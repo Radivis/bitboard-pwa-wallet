@@ -136,6 +136,55 @@ mod tests {
     }
 
     #[test]
+    fn legacy_mainnet_addresses_parse_only_on_mainnet() {
+        let pay_to_public_key_hash = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa";
+        let pay_to_script_hash = "33iFwdLuRpW1uK1RTRqsoi8rR4NpDzk66k";
+        parse_bitcoin_address(pay_to_public_key_hash, Network::Bitcoin).expect("mainnet p2pkh");
+        parse_bitcoin_address(pay_to_script_hash, Network::Bitcoin).expect("mainnet p2sh");
+        assert!(parse_bitcoin_address(pay_to_public_key_hash, Network::Signet).is_err());
+        assert!(parse_bitcoin_address(pay_to_script_hash, Network::Regtest).is_err());
+    }
+
+    #[test]
+    fn legacy_testnet_addresses_parse_on_test_kind_networks() {
+        let pay_to_public_key_hash = "mqkhEMH6NCeYjFybv7pvFC22MFeaNT9AQC";
+        let pay_to_script_hash = "2N3zXjbwdTcPsJiy8sUK9FhWJhqQCxA8Jjr";
+        for network in [Network::Testnet, Network::Signet, Network::Regtest] {
+            parse_bitcoin_address(pay_to_public_key_hash, network).expect("testnet p2pkh");
+            parse_bitcoin_address(pay_to_script_hash, network).expect("testnet p2sh");
+        }
+        assert!(parse_bitcoin_address(pay_to_public_key_hash, Network::Bitcoin).is_err());
+        assert!(parse_bitcoin_address(pay_to_script_hash, Network::Bitcoin).is_err());
+    }
+
+    #[test]
+    fn junk_legacy_prefix_is_rejected() {
+        assert!(parse_bitcoin_address("1", Network::Bitcoin).is_err());
+        assert!(parse_bitcoin_address("1not-an-address", Network::Bitcoin).is_err());
+    }
+
+    #[test]
+    fn worker_address_check_accepts_testnet_legacy_on_mutinynet() {
+        assert!(crate::bitcoin_address_is_valid(
+            "mqkhEMH6NCeYjFybv7pvFC22MFeaNT9AQC",
+            "mutinynet",
+        ));
+        assert!(crate::bitcoin_address_is_valid(
+            "mqkhEMH6NCeYjFybv7pvFC22MFeaNT9AQC",
+            "regtest",
+        ));
+        assert!(!crate::bitcoin_address_is_valid(
+            "mqkhEMH6NCeYjFybv7pvFC22MFeaNT9AQC",
+            "bitcoin",
+        ));
+        assert!(!crate::bitcoin_address_is_valid("1", "bitcoin"));
+        assert!(!crate::bitcoin_address_is_valid(
+            "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+            "not-a-network",
+        ));
+    }
+
+    #[test]
     fn undecodable_bech32_does_not_mention_legacy_base58() {
         let error = parse_bitcoin_address(&format!("tb1q{}", "q".repeat(60)), Network::Signet)
             .expect_err("undecodable address");

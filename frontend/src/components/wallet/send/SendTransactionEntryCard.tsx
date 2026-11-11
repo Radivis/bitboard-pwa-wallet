@@ -66,6 +66,7 @@ export function SendTransactionEntryCard({
   recipient,
   onRecipientChange,
   recipientFormatValid,
+  onchainAddressCheckPending = false,
   lightningAvailable,
   hasAnyLightningConnection,
   lightningRecipientOk,
@@ -126,6 +127,7 @@ export function SendTransactionEntryCard({
   recipient: string
   onRecipientChange: (value: string) => void
   recipientFormatValid: boolean
+  onchainAddressCheckPending?: boolean
   lightningAvailable: boolean
   hasAnyLightningConnection: boolean
   lightningRecipientOk: boolean
@@ -311,7 +313,7 @@ export function SendTransactionEntryCard({
                 })}
                 disabled={isPending}
               />
-              {recipient && !recipientFormatValid && (
+              {recipient && !recipientFormatValid && !onchainAddressCheckPending && (
                 <p className="text-xs text-destructive">
                   {sendRecipientFormatErrorMessage({
                     isLightningSendMode,

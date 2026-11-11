@@ -23,9 +23,13 @@ use super::topology::filter_exit_candidates_to_terminal_leaves;
 use crate::session::ArkadeSession;
 use crate::session::mappers::{map_exit_candidate, unilateral_exit_timelock_parts, wasm_safe_now};
 
-/// Chain progress toward the operator CSV, using the same comparison as
-/// `Vtxo::can_be_claimed_unilaterally_by_owner` (strictly after a time lock; missing
-/// blocktime is treated as zero).
+/// Chain progress toward the operator CSV for the in-progress list.
+///
+/// A time lock uses the same comparison as `Vtxo::can_be_claimed_unilaterally_by_owner`
+/// once a confirmation timestamp is known: claimable strictly after confirmation plus delay.
+/// A time lock with no confirmation timestamp has not started, so the row stays waiting
+/// and is not stamped `CompleteReady`. Completion coin-select still treats a missing
+/// blocktime as `Duration::ZERO` (ARK-EXIT-04).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct CsvTimelockProgress {
     pub can_complete: bool,
@@ -83,14 +87,16 @@ fn time_csv_timelock_progress(
     confirmation_blocktime_seconds: Option<u64>,
     timelock_seconds: u64,
 ) -> CsvTimelockProgress {
-    let blocktime_seconds = confirmation_blocktime_seconds.unwrap_or(0);
+    let Some(blocktime_seconds) = confirmation_blocktime_seconds else {
+        return CsvTimelockProgress::waiting_without_schedule();
+    };
     let ready_at_unix_seconds = blocktime_seconds.saturating_add(timelock_seconds);
     if now_seconds > ready_at_unix_seconds {
         return CsvTimelockProgress::claimable();
     }
     CsvTimelockProgress {
         can_complete: false,
-        ready_at_unix_seconds: confirmation_blocktime_seconds.map(|_| ready_at_unix_seconds),
+        ready_at_unix_seconds: Some(ready_at_unix_seconds),
         confirmations_remaining: None,
     }
 }
@@ -712,11 +718,19 @@ mod tests {
     }
 
     #[test]
-    fn missing_blocktime_does_not_invent_a_countdown() {
+    fn missing_blocktime_stays_waiting_and_does_not_stamp_complete_ready() {
         let delay = bitcoin::Sequence::from_seconds_ceil(2_040).unwrap();
         let progress = csv_timelock_progress(1_700_000_000, None, 40, delay);
-        assert!(progress.can_complete);
+        assert!(!progress.can_complete);
         assert_eq!(progress.ready_at_unix_seconds, None);
+        assert_eq!(progress.confirmations_remaining, None);
+
+        let key = vtxo_exit_record_key(&"aa".repeat(32), 0);
+        let mut records = BTreeMap::from([(key.clone(), unrolled_record())]);
+        let claimability = stamp_complete_ready_when_claimable(&mut records, &key, progress);
+        assert!(!claimability.can_complete);
+        assert!(!claimability.stamped_complete_ready);
+        assert_eq!(records[&key].phase, VtxoExitPhase::Unrolled);
     }
 
     #[test]

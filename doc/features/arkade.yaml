@@ -244,7 +244,10 @@ feature:
           validate_snapshot_completion_ready (is_unrolled && !is_spent) plus record phase must not
           be funding_lost plus Esplora can_be_claimed_unilaterally_by_owner. Complete unilateral exit page still
           lists pipeline VTXOs (ARK-EXIT-02) with can_complete; waiting-for-timelock rows remain
-          listed but not submittable. Aborted or failed jobs' unrolled VTXOs remain claimable
+          listed but not submittable. A time-based CSV with no confirmation blocktime stays
+          waiting on that list (can_complete false, no ready time) and is not stamped
+          complete_ready. Completion coin-select still uses the Duration::ZERO fallback
+          (ARK-EXIT-04). Aborted or failed jobs' unrolled VTXOs remain claimable
           without a frontend job. funding_lost coins are not listed and not completable (ARK-EXIT-33).
       - id: ARK-EXIT-37
         description: >-

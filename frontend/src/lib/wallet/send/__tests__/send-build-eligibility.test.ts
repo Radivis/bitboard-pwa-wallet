@@ -63,6 +63,17 @@ describe('canBuildOnChainSend', () => {
     expect(canBuildOnChainSend({ ...base, isBarkSendMode: true })).toBe(false)
   })
 
+  it('accepts a legacy address when the worker already accepted it', () => {
+    expect(
+      canBuildOnChainSend({
+        ...base,
+        normalizedRecipient: '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa',
+        networkMode: 'mainnet',
+        onchainAddressValid: true,
+      }),
+    ).toBe(true)
+  })
+
   it('rejects invalid address', () => {
     expect(
       canBuildOnChainSend({ ...base, normalizedRecipient: 'bad' }),

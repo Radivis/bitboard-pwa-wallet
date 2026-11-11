@@ -8,6 +8,7 @@ import { useWalletStore } from '@/stores/walletStore'
 import { useSendStore } from '@/stores/sendStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
+import { useOnchainAddressAccepted } from '@/hooks/useOnchainAddressAccepted'
 import { recipientAndAmountFromScannedPayload } from '@/lib/wallet/bip21'
 import { errorMessage } from '@/lib/shared/utils'
 import { formatAmountInputFromSats } from '@/lib/wallet/bitcoin-dust'
@@ -239,6 +240,9 @@ export function SendFlow() {
     }
   }, [recipient, setRecipient])
 
+  const { onchainAddressValid, onchainAddressCheckPending } =
+    useOnchainAddressAccepted(normalizedRecipient, networkMode)
+
   const {
     lightningAvailable,
     isLightningSendMode,
@@ -269,6 +273,7 @@ export function SendFlow() {
     connectedLightningWallets,
     normalizedRecipient,
     amountSats,
+    onchainAddressValid,
   })
 
   const {
@@ -285,6 +290,7 @@ export function SendFlow() {
     normalizedRecipient,
     amountSats,
     lightningAvailable,
+    onchainAddressValid,
   })
 
   const {
@@ -334,6 +340,7 @@ export function SendFlow() {
     isLabWithNoBalance: labWithNoBalance,
     useCustomFee,
     customFeeParsed,
+    onchainAddressValid,
   })
 
   const fiatRateOk = isSendFiatRateOk({
@@ -846,6 +853,7 @@ export function SendFlow() {
         recipient={recipient}
         onRecipientChange={setRecipient}
         recipientFormatValid={recipientFormatValidForUi}
+        onchainAddressCheckPending={onchainAddressCheckPending}
         lightningAvailable={lightningAvailable}
         hasAnyLightningConnection={hasAnyLightningConnection}
         lightningRecipientOk={lightningRecipientOk}

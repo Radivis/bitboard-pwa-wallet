@@ -171,7 +171,7 @@ feature:
               - return to compose step
       - requirements:
         - Wallet must be unlocked
-        - Address validation for the current network decodes the address (bech32 checksum and a standard witness program: version 0 of 20 or 32 bytes, or version 1 of 32 bytes), not only the prefix. The confirmed destination is the sanitized address.
+        - Address validation for the current network decodes the address, not only the prefix. Segwit requires a bech32 checksum and a standard witness program (version 0 of 20 or 32 bytes, or version 1 of 32 bytes). Legacy base58 checksum and version-byte checks run in the crypto worker with the same parser as send: mainnet uses 0x00 and 0x05; testnet, signet, Mutinynet, regtest, and lab use 0x6f and 0xc4. A string that looks like segwit but does not decode is rejected without asking the worker. The confirmed destination is the sanitized address.
         - Pasted on-chain addresses with invisible characters (zero-width space, byte-order mark) or surrounding backticks are accepted when the underlying address is valid
         - An on-chain recipient that cannot be decoded shows an invalid-address error and must not report "legacy address base58"
         - Insufficient funds must show clear error

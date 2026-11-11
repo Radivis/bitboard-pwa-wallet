@@ -207,6 +207,8 @@ vi.mock('@/lib/wallet/bitcoin-utils', () => ({
   MAX_SAFE_SATS: Number.MAX_SAFE_INTEGER,
   SATS_PER_BTC: 100_000_000,
   isValidAddress: (addr: string) => addr.startsWith('bc1'),
+  toBitcoinNetwork: (mode: string) =>
+    mode === 'mainnet' ? 'bitcoin' : mode === 'lab' ? 'regtest' : mode,
   truncateAddress: (a: string) => a.slice(0, 8),
 }))
 

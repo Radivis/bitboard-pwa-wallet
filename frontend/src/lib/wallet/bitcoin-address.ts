@@ -10,14 +10,9 @@ const SEGWIT_HUMAN_READABLE_PART_BY_NETWORK: Record<NetworkMode, string> = {
   lab: 'bcrt',
 }
 
-const LEGACY_ADDRESS_PREFIXES: Record<NetworkMode, readonly string[]> = {
-  mainnet: ['1', '3'],
-  testnet: ['m', 'n', '2'],
-  signet: [],
-  mutinynet: [],
-  regtest: [],
-  lab: [],
-}
+/** rust-bitcoin rejects a legacy string longer than this before checking the checksum. */
+const LEGACY_ADDRESS_MAX_LENGTH = 50
+const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
 
 const WITNESS_V0 = 0
 const WITNESS_V1 = 1
@@ -101,15 +96,35 @@ function looksLikeSegwitForNetwork(
 }
 
 /**
- * True when `address` decodes as segwit for `network`, or matches a legacy
- * prefix that this network still accepts. A string that looks like segwit
- * but fails checksum or program-length checks is invalid.
+ * True when `address` decodes as a standard segwit program for `network`.
+ * Legacy base58 is checked by the crypto worker (`bitcoin_address_is_valid`).
+ * A string that looks like segwit but fails checksum or program-length checks
+ * is invalid and is not sent to the worker.
  */
 export function isValidAddress(address: string, network: NetworkMode): boolean {
-  const humanReadablePart = SEGWIT_HUMAN_READABLE_PART_BY_NETWORK[network]
-  if (isValidSegwitAddress(address, humanReadablePart)) return true
-  if (looksLikeSegwitForNetwork(address, humanReadablePart)) return false
-  return LEGACY_ADDRESS_PREFIXES[network].some((prefix) =>
-    address.startsWith(prefix),
+  return isValidSegwitAddress(
+    address,
+    SEGWIT_HUMAN_READABLE_PART_BY_NETWORK[network],
   )
+}
+
+function isBase58Candidate(address: string): boolean {
+  if (address.length === 0 || address.length > LEGACY_ADDRESS_MAX_LENGTH) {
+    return false
+  }
+  for (const character of address) {
+    if (!BASE58_ALPHABET.includes(character)) return false
+  }
+  return true
+}
+
+/** True when only the crypto worker can decide whether this string is a payable address. */
+export function addressNeedsWorkerCheck(
+  address: string,
+  network: NetworkMode,
+): boolean {
+  const humanReadablePart = SEGWIT_HUMAN_READABLE_PART_BY_NETWORK[network]
+  if (isValidSegwitAddress(address, humanReadablePart)) return false
+  if (looksLikeSegwitForNetwork(address, humanReadablePart)) return false
+  return isBase58Candidate(address)
 }

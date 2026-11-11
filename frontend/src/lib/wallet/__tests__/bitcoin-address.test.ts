@@ -1,5 +1,6 @@
 import { bech32m } from '@scure/base'
 import { describe, expect, it } from 'vitest'
+import { addressNeedsWorkerCheck } from '../bitcoin-address'
 import { isValidAddress } from '../bitcoin-utils'
 import { normalizeSendRecipient } from '../send/normalize-send-recipient'
 
@@ -81,12 +82,34 @@ describe('isValidAddress', () => {
     expect(isValidAddress(futureVersion, 'mainnet')).toBe(false)
   })
 
-  it('still accepts a legacy mainnet prefix', () => {
+  it('leaves legacy addresses to the crypto worker', () => {
     expect(isValidAddress('1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa', 'mainnet')).toBe(
-      true,
-    )
-    expect(isValidAddress('1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa', 'signet')).toBe(
       false,
     )
+    expect(isValidAddress('mqkhEMH6NCeYjFybv7pvFC22MFeaNT9AQC', 'signet')).toBe(
+      false,
+    )
+  })
+})
+
+describe('addressNeedsWorkerCheck', () => {
+  it('asks the worker for a base58 candidate', () => {
+    expect(
+      addressNeedsWorkerCheck('1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa', 'mainnet'),
+    ).toBe(true)
+    expect(
+      addressNeedsWorkerCheck('mqkhEMH6NCeYjFybv7pvFC22MFeaNT9AQC', 'mutinynet'),
+    ).toBe(true)
+    expect(addressNeedsWorkerCheck('1', 'mainnet')).toBe(true)
+    expect(addressNeedsWorkerCheck('3', 'mainnet')).toBe(true)
+  })
+
+  it('does not ask the worker for segwit or a failed segwit string', () => {
+    expect(addressNeedsWorkerCheck(TESTNET_P2WPKH, 'signet')).toBe(false)
+    expect(addressNeedsWorkerCheck('tb1q', 'signet')).toBe(false)
+    expect(addressNeedsWorkerCheck('tb1qnot-a-real-address', 'mutinynet')).toBe(
+      false,
+    )
+    expect(addressNeedsWorkerCheck('1not-an-address', 'mainnet')).toBe(false)
   })
 })

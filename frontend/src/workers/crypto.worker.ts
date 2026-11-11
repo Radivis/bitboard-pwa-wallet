@@ -539,6 +539,15 @@ const cryptoService = {
     );
   },
 
+  async bitcoinAddressIsValid(
+    address: string,
+    network: BitcoinNetwork,
+  ): Promise<boolean> {
+    return invokeWasmCrypto((wasmModule) =>
+      wasmModule.bitcoin_address_is_valid(address, network),
+    );
+  },
+
   async prepareOnchainSendTransaction(params: {
     toAddress: string;
     amountSats: number;
