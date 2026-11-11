@@ -21,6 +21,7 @@ export type IsSendRecipientFormatValidWithArkadeInput = {
   networkMode: NetworkMode
   lightningAvailable: boolean
   arkadeAvailable: boolean
+  onchainAddressValid?: boolean
 }
 
 export function isSendRecipientFormatValidWithArkade({
@@ -28,12 +29,14 @@ export function isSendRecipientFormatValidWithArkade({
   networkMode,
   lightningAvailable,
   arkadeAvailable,
+  onchainAddressValid,
 }: IsSendRecipientFormatValidWithArkadeInput): boolean {
   return (
     isOnChainOrLightningRecipientFormatValid({
       normalizedRecipient,
       networkMode,
       lightningAvailable,
+      onchainAddressValid,
     }) ||
     (arkadeAvailable && isValidArkadeAddress(normalizedRecipient))
   )

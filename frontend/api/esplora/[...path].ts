@@ -95,8 +95,39 @@ function esploraFallbackBase(providerId: string, network: string): string | null
   return ESPLORA_PROVIDER_BASES.blockstream[network] ?? null
 }
 
-function isEsploraFailoverStatus(status: number): boolean {
-  return status === 429 || status === 502 || status === 503 || status === 504
+// Inlined from src/lib/esplora/esplora-service-whitelist.ts
+// (`isEsploraUpstreamFailoverStatus`, `decideEsploraMirrorResponse`).
+// Vercel functions cannot import `src/`. Keep this copy in sync.
+const ESPLORA_UPSTREAM_FAILOVER_STATUSES = new Set([502, 503, 504])
+const ESPLORA_RATE_LIMIT_STATUS = 429
+
+function isEsploraUpstreamFailoverStatus(status: number): boolean {
+  return ESPLORA_UPSTREAM_FAILOVER_STATUSES.has(status)
+}
+
+function decideEsploraMirrorResponse(
+  preferredStatus: number | null,
+  fallbackStatus: number,
+): { useFallbackResponse: boolean; markPreferredHostDown: boolean } {
+  const fallbackIsRateLimited = fallbackStatus === ESPLORA_RATE_LIMIT_STATUS
+  if (preferredStatus == null) {
+    return {
+      useFallbackResponse: true,
+      markPreferredHostDown: !fallbackIsRateLimited,
+    }
+  }
+  if (!isEsploraUpstreamFailoverStatus(preferredStatus)) {
+    return { useFallbackResponse: false, markPreferredHostDown: false }
+  }
+  if (fallbackIsRateLimited) {
+    return { useFallbackResponse: false, markPreferredHostDown: false }
+  }
+  return { useFallbackResponse: true, markPreferredHostDown: true }
+}
+
+function rememberPreferredHostFailure(preferredBase: string): void {
+  preferredHostHasAnswered.delete(preferredBase)
+  skipPreferredHostUntilMs.set(preferredBase, Date.now() + UNREACHABLE_COOLDOWN_MS)
 }
 
 // CORS headers for browser requests
@@ -233,10 +264,14 @@ export default async function handler(
           ? UPSTREAM_TIMEOUT_MS
           : PRIMARY_ATTEMPT_MS,
       )
-      if (fallbackUrl != null && isEsploraFailoverStatus(upstream.status)) {
-        preferredHostHasAnswered.delete(baseTrim)
-        skipPreferredHostUntilMs.set(baseTrim, Date.now() + UNREACHABLE_COOLDOWN_MS)
-        upstream = await attemptUpstream(fallbackUrl, FALLBACK_AFTER_PROBE_MS)
+      if (fallbackUrl != null && isEsploraUpstreamFailoverStatus(upstream.status)) {
+        const preferred = upstream
+        const fallback = await attemptUpstream(fallbackUrl, FALLBACK_AFTER_PROBE_MS)
+        const decision = decideEsploraMirrorResponse(preferred.status, fallback.status)
+        if (decision.markPreferredHostDown) {
+          rememberPreferredHostFailure(baseTrim)
+        }
+        upstream = decision.useFallbackResponse ? fallback : preferred
       } else {
         preferredHostHasAnswered.add(baseTrim)
       }
@@ -246,10 +281,12 @@ export default async function handler(
       res.status(502).send('Upstream unreachable')
       return
     }
-    preferredHostHasAnswered.delete(baseTrim)
-    skipPreferredHostUntilMs.set(baseTrim, Date.now() + UNREACHABLE_COOLDOWN_MS)
     try {
       upstream = await attemptUpstream(fallbackUrl, FALLBACK_AFTER_PROBE_MS)
+      const decision = decideEsploraMirrorResponse(null, upstream.status)
+      if (decision.markPreferredHostDown) {
+        rememberPreferredHostFailure(baseTrim)
+      }
     } catch {
       res.status(502).send('Upstream unreachable')
       return

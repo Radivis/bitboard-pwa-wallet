@@ -40,6 +40,28 @@ export const ARKADE_BUMPER_FUNDING_POLL_MS = 4_000
  */
 export const ARKADE_EXIT_CANDIDATES_POLL_MS = 5_000
 
+/**
+ * Complete-page VTXO readiness refresh. Claimability changes as the CSV elapses, and the
+ * global QueryClient does not refetch on focus, so this list keeps polling while the page
+ * is open even if the window is not focused. The completion fee estimate is not polled;
+ * it runs again when this list reports that more selected rows can be completed.
+ */
+export function unilateralExitInProgressRefreshOptions(
+  queryEnabled: boolean,
+  refreshWhileUnfocused: boolean,
+): {
+  refetchInterval: number | false
+  refetchIntervalInBackground: boolean
+  refetchOnWindowFocus: boolean
+} {
+  const refreshWhileThisPageIsOpen = queryEnabled && refreshWhileUnfocused
+  return {
+    refetchInterval: queryEnabled ? ARKADE_EXIT_CANDIDATES_POLL_MS : false,
+    refetchIntervalInBackground: refreshWhileThisPageIsOpen,
+    refetchOnWindowFocus: refreshWhileThisPageIsOpen,
+  }
+}
+
 /** Rarely changing metadata (boarding address, delegator info). */
 export const ARKADE_SLOW_METADATA_STALE_MS = 300_000
 

@@ -105,16 +105,21 @@ export type IsSendRecipientFormatValidInput = {
   normalizedRecipient: string
   networkMode: NetworkMode
   lightningAvailable: boolean
+  /** Combined segwit and worker result. Omitted callers use the synchronous segwit check. */
+  onchainAddressValid?: boolean
 }
 
 export function isSendRecipientFormatValid({
   normalizedRecipient,
   networkMode,
   lightningAvailable,
+  onchainAddressValid,
 }: IsSendRecipientFormatValidInput): boolean {
+  const addressValid =
+    onchainAddressValid ?? isValidAddress(normalizedRecipient, networkMode)
   return (
     normalizedRecipient.length > 0 &&
-    (isValidAddress(normalizedRecipient, networkMode) ||
+    (addressValid ||
       (lightningAvailable &&
         isValidLightningDestination(normalizedRecipient)))
   )

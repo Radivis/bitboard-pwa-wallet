@@ -181,19 +181,7 @@ export function parseBTC(btcString: string): number {
   return sats ?? 0
 }
 
-const ADDRESS_PREFIXES: Record<NetworkMode, string[]> = {
-  mainnet: ['bc1p', 'bc1q', '1', '3'],
-  testnet: ['tb1p', 'tb1q', 'm', 'n', '2'],
-  signet: ['tb1p', 'tb1q'],
-  mutinynet: ['tb1p', 'tb1q'],
-  regtest: ['bcrt1p', 'bcrt1q'],
-  lab: ['bcrt1q', 'bcrt1p'],
-}
-
-export function isValidAddress(address: string, network: NetworkMode): boolean {
-  const prefixes = ADDRESS_PREFIXES[network]
-  return prefixes.some((prefix) => address.startsWith(prefix))
-}
+export { isValidAddress } from '@/lib/wallet/bitcoin-address'
 
 /**
  * Validates an Esplora endpoint URL.

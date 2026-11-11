@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-## [0.3.7] - TBD
+## [0.3.7] - 2026-11-11
 
 ### Added
 - If VTXOs during emergency exit are swept or seized, the spending txid is now surfaced
@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Used Rust Arkade SDK version bumped from 0.9.3 to 0.12.0
 - Regular/incremental Arkade sync skips key discovery and checks for the last 60 receive addresses; background sync still does complete key discovery and sync
 - Various performance improvements for Arkade sync
+- Changed Arkade VTXO renewal policy: Additional to VTXOs in their last 10% of their expiry window, VTXOs with zero renewal fees get renewed
+- Improved onchain address validation, including validation of legacy addresses
 
 ### Fixed
 - Historical Mutinynet Arkade accounts that still pointed at the Signet operator proxy are rewritten to the Mutinynet proxy on upgrade

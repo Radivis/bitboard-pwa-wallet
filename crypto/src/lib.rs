@@ -20,6 +20,7 @@ pub(crate) fn current_unix_time() -> u64 {
     }
 }
 
+pub mod address_input;
 pub mod blockchain;
 pub mod descriptors;
 pub mod error;
@@ -122,6 +123,15 @@ pub fn validate_mnemonic(mnemonic_str: &str) -> Result<bool, JsValue> {
         Ok(()) => Ok(true),
         Err(_) => Ok(false),
     }
+}
+
+/// Same parser the signer uses for a send destination. Returns false for an unknown network.
+#[wasm_bindgen]
+pub fn bitcoin_address_is_valid(raw: &str, network: &str) -> bool {
+    let Ok(bitcoin_network) = types::BitcoinNetwork::try_from(network) else {
+        return false;
+    };
+    address_input::parse_bitcoin_address(raw, bitcoin::Network::from(bitcoin_network)).is_ok()
 }
 
 #[wasm_bindgen]

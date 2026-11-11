@@ -302,6 +302,10 @@ export interface ArkadeUnilateralExitInProgressDto {
   canComplete: boolean
   startedAt?: number
   phase?: ArkadeVtxoExitPhase
+  /** Unix seconds when a time-based CSV becomes spendable. Present only while waiting. */
+  csvReadyAtUnixSeconds?: number
+  /** Confirmations still required for a block-based CSV. Present only while waiting. */
+  csvConfirmationsRemaining?: number
 }
 
 export interface ArkadeMissingBlocktimeCompletionInput {

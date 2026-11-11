@@ -389,6 +389,12 @@ pub struct UnilateralExitInProgressDto {
     pub started_at: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub phase: Option<crate::persistence::VtxoExitPhase>,
+    /// Unix time when a time-based CSV becomes spendable. Set only while the row is waiting.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub csv_ready_at_unix_seconds: Option<u64>,
+    /// Confirmations still required for a block-based CSV. Set only while the row is waiting.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub csv_confirmations_remaining: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]

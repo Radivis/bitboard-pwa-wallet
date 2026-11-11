@@ -8,6 +8,7 @@ import { useWalletStore } from '@/stores/walletStore'
 import { useSendStore } from '@/stores/sendStore'
 import { useFeatureStore } from '@/stores/featureStore'
 import { useLabChainStateQuery } from '@/hooks/useLabChainStateQuery'
+import { useOnchainAddressAccepted } from '@/hooks/useOnchainAddressAccepted'
 import { recipientAndAmountFromScannedPayload } from '@/lib/wallet/bip21'
 import { errorMessage } from '@/lib/shared/utils'
 import { formatAmountInputFromSats } from '@/lib/wallet/bitcoin-dust'
@@ -42,6 +43,7 @@ import {
 } from '@/lib/wallet/send-review-summary'
 import { buildLabSendMutationParams } from '@/lib/lab/lab-send-submit'
 import { normalizeSendRecipient } from '@/lib/wallet/send/normalize-send-recipient'
+import { stripPastedInvisibleCharacters } from '@/lib/wallet/strip-pasted-invisible-characters'
 import { computeSendPageBalances } from '@/lib/wallet/send/send-page-balances'
 import {
   canBuildOnChainSend,
@@ -231,6 +233,16 @@ export function SendFlow() {
     [recipient],
   )
 
+  useEffect(() => {
+    const strippedRecipient = stripPastedInvisibleCharacters(recipient)
+    if (strippedRecipient !== recipient) {
+      setRecipient(strippedRecipient)
+    }
+  }, [recipient, setRecipient])
+
+  const { onchainAddressValid, onchainAddressCheckPending } =
+    useOnchainAddressAccepted(normalizedRecipient, networkMode)
+
   const {
     lightningAvailable,
     isLightningSendMode,
@@ -261,6 +273,7 @@ export function SendFlow() {
     connectedLightningWallets,
     normalizedRecipient,
     amountSats,
+    onchainAddressValid,
   })
 
   const {
@@ -277,6 +290,7 @@ export function SendFlow() {
     normalizedRecipient,
     amountSats,
     lightningAvailable,
+    onchainAddressValid,
   })
 
   const {
@@ -326,6 +340,7 @@ export function SendFlow() {
     isLabWithNoBalance: labWithNoBalance,
     useCustomFee,
     customFeeParsed,
+    onchainAddressValid,
   })
 
   const fiatRateOk = isSendFiatRateOk({
@@ -761,7 +776,7 @@ export function SendFlow() {
     return (
       <SendTransactionReviewStep
         networkMode={networkMode}
-        recipient={recipient}
+        recipient={normalizedRecipient}
         amountSats={amountSats}
         effectiveFeeRate={effectiveFeeRate}
         onchainDustWarning={onchainDustWarning}
@@ -838,6 +853,7 @@ export function SendFlow() {
         recipient={recipient}
         onRecipientChange={setRecipient}
         recipientFormatValid={recipientFormatValidForUi}
+        onchainAddressCheckPending={onchainAddressCheckPending}
         lightningAvailable={lightningAvailable}
         hasAnyLightningConnection={hasAnyLightningConnection}
         lightningRecipientOk={lightningRecipientOk}

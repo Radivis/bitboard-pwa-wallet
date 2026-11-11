@@ -53,7 +53,7 @@ test.describe('Arkade core flows regtest @arkade-regtest', () => {
     await prepareVtxoRenewalScenario(page)
     await page.getByRole('button', { name: 'Renew VTXOs now' }).click()
     await expect(
-      page.getByText(/VTXOs renewed|No expiring VTXOs to renew/i),
+      page.getByText(/VTXOs renewed|No VTXOs are in the renewal window yet/i),
     ).toBeVisible({ timeout: 120_000 })
   })
 })

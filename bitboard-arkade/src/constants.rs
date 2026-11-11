@@ -8,7 +8,9 @@ pub const DEFAULT_TX_FEE_RATE: &str = "1";
 pub const MIN_FEE_RATE_SAT_PER_VB: f64 = 0.1;
 pub const ESPLORA_FEE_ESTIMATE_BLOCK_TARGET: u16 = 1;
 
-/// Renew VTXOs when remaining lifetime drops below this fraction of total lifetime.
+/// Last-chance renew window: remaining lifetime below this fraction of total lifetime.
+/// An operator fee program can open renewal earlier, whenever the quoted offchain-input fee
+/// for that VTXO is zero. That wider window lives in `EarlyRenewalFeeWaiver`.
 pub const VTXO_SELF_RENEW_REMAINING_FRACTION: f64 = 0.10;
 
 /// Bitcoin witness scale factor (non-witness bytes count 4× toward block weight).
